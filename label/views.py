@@ -15,7 +15,7 @@ from .utils import get_food_types
 @login_required
 def post_list(request):
     search_query = request.GET.get('q', '')
-    posts = Post.objects.all()
+    posts = Post.objects.all().order_by('-create_date')  # 최신 등록 순
     if search_query:
         posts = posts.filter(title__icontains=search_query)
 
