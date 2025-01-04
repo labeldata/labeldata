@@ -1,5 +1,5 @@
 from django import forms
-from .models import Post, Comment
+from .models import Post, Comment, FoodType
 
 class PostForm(forms.ModelForm):
     class Meta:
@@ -15,9 +15,11 @@ class PostForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        food_types = kwargs.pop('food_types', [])
         super().__init__(*args, **kwargs)
-        self.fields['food_type'] = forms.ChoiceField(choices=[('', '--- 선택하세요 ---')] + [(ft, ft) for ft in food_types])
+        self.fields['food_type'] = forms.ChoiceField(
+            choices=[(ft.name, ft.name) for ft in FoodType.objects.all()],
+            required=True
+        )
 
 class CommentForm(forms.ModelForm):
     class Meta:

@@ -7,23 +7,34 @@
 <form method="get" class="mb-3">
     <input type="text" name="q" class="form-control" placeholder="검색어 입력" value="{{ request.GET.q }}">
 </form>
-<div class="row">
-    {% for post in page_obj %}
-        <div class="col-md-6 col-lg-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">{{ post.title }}</h5>
-                    <p class="card-text"><strong>식품유형:</strong> {{ post.food_type }}</p>
-                    <p class="card-text"><strong>제조사:</strong> {{ post.manufacturer }}</p>
-                    <a href="{% url 'label:post_detail' post.id %}" class="btn btn-primary btn-sm">자세히 보기</a>
-                </div>
-                <div class="card-footer text-muted">
-                    등록자: {{ post.author.username }} | 등록일: {{ post.create_date|date:"Y-m-d" }}
-                </div>
-            </div>
-        </div>
-    {% endfor %}
-</div>
+<table class="table table-bordered table-hover">
+    <thead class="table-light">
+        <tr>
+            <th>번호</th>
+            <th>제품명</th>
+            <th>식품유형</th>
+            <th>제조사</th>
+            <th>등록자</th>
+            <th>등록일</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for post in page_obj %}
+        <tr style="cursor: pointer;" onclick="location.href='{% url 'label:post_detail' post.id %}'">
+            <td>{{ forloop.counter }}</td>
+            <td>{{ post.title }}</td>
+            <td>{{ post.food_type }}</td>
+            <td>{{ post.manufacturer }}</td>
+            <td>{{ post.author.username }}</td>
+            <td>{{ post.create_date|date:"Y-m-d" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="6" class="text-center">게시물이 없습니다.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 <div class="d-flex justify-content-center mt-4">
     <nav>
         <ul class="pagination">

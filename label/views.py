@@ -1,15 +1,31 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.core.paginator import Paginator
 from django.utils.timezone import now
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from .models import Post, Comment
+from .models import Post, Comment, FoodType
 from .forms import PostForm, CommentForm
 from django.conf import settings
 import requests 
-from .utils import get_food_types
+from .utils import update_food_types_from_api, get_food_types  # utils.py에서 get_food_types 함수 가져오기
 
+#API 갱신 view
+def update_food_types(request):
+    if update_food_types_from_api():
+        messages.success(request, "식품유형 데이터가 성공적으로 갱신되었습니다.")
+    else:
+        messages.error(request, "식품유형 데이터를 가져오는 데 실패했습니다.")
+    return redirect('admin:label_foodtype_changelist')  # 관리자 페이지로 이동
+
+def get_food_types():
+    try:
+        # 데이터베이스에서 식품 유형 가져오기
+        return [food_type.name for food_type in FoodType.objects.all()]
+    except Exception as e:
+        print(f"Error fetching food types: {e}")
+        return []
 
 #post view
 @login_required
@@ -26,7 +42,6 @@ def post_list(request):
 
 @login_required
 def post_create(request):
-    food_types = get_food_types()
     if request.method == 'POST':
         form = PostForm(request.POST)
         if form.is_valid():
@@ -36,6 +51,10 @@ def post_create(request):
             return redirect('label:post_list')
     else:
         form = PostForm()
+
+    # API에서 가져온 식품유형 데이터
+    food_types = get_food_types()
+
     return render(request, 'label/post_form.html', {'form': form, 'food_types': food_types})
 
 @login_required
@@ -70,6 +89,13 @@ def post_delete(request, post_id):
         return redirect('label:post_list')
     post.delete()
     return redirect('label:post_list')
+
+@login_required
+def post_like(request, post_id):
+    post = get_object_or_404(Post, pk=post_id)
+    if request.user != post.author:
+        post.likers.add(request.user)
+    return redirect('label:post_detail', post_id=post_id)
 
 #comment view
 @login_required
@@ -135,3 +161,10 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('label:login')
+
+@login_required
+def post_unlike(request, post_id):
+    post = get_object_or_404(Post, pk=post_id)
+    if request.user != post.author:
+        post.likers.remove(request.user)
+    return redirect('label:post_detail', post_id=post_id)

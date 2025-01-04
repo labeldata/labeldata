@@ -15,4 +15,7 @@ urlpatterns = [
     path('signup/', views.signup, name='signup'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('update-food-types/', views.update_food_types, name='update_food_types'), #API 뷰뷰
+    path('post/<int:post_id>/like/', views.post_like, name='post_like'),
+    path('post/<int:post_id>/unlike/', views.post_unlike, name='post_unlike'),
 ]
