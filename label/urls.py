@@ -1,7 +1,18 @@
 from django.urls import path
-
 from . import views
 
+app_name = 'label'
+
 urlpatterns = [
-    path('', views.index),
+    path('', views.post_list, name='post_list'),
+    path('post/create/', views.post_create, name='post_create'),
+    path('post/<int:post_id>/', views.post_detail, name='post_detail'),
+    path('post/<int:post_id>/edit/', views.post_edit, name='post_edit'),
+    path('post/<int:post_id>/delete/', views.post_delete, name='post_delete'),
+    path('post/<int:post_id>/comment/', views.comment_create, name='comment_create'),
+    path('comment/<int:comment_id>/edit/', views.comment_edit, name='comment_edit'),
+    path('comment/<int:comment_id>/delete/', views.comment_delete, name='comment_delete'),
+    path('signup/', views.signup, name='signup'),
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
 ]

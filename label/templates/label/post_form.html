@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}게시글 작성{% endblock %}
+
+{% block content %}
+<h2>게시글 작성</h2>
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="mb-3">
+        <label for="food_type" class="form-label">식품유형</label>
+        <select name="food_type" id="food_type" class="form-select">
+            {% for food_type in food_types %}
+            <option value="{{ food_type }}" {% if form.food_type.value == food_type %}selected{% endif %}>
+                {{ food_type }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit" class="btn btn-success">저장</button>
+    <a href="{% url 'label:post_list' %}" class="btn btn-secondary">취소</a>
+</form>
+{% endblock %}
