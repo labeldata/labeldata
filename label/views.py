@@ -8,7 +8,8 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from .models import Post, Comment, FoodType
 from .forms import PostForm, CommentForm
 from django.conf import settings
-import requests 
+import requests
+#commit test
 from .utils import update_food_types_from_api, get_food_types  # utils.py에서 get_food_types 함수 가져오기
 
 #API 갱신 view
