@@ -3,46 +3,45 @@ from django.core.paginator import Paginator
 from django.utils.timezone import now
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from .models import Post, Comment, FoodType
+from .models import Post, Comment, FoodItem
 from .forms import PostForm, CommentForm
-from django.conf import settings
-import requests
-#commit test
-from .utils import update_food_types_from_api, get_food_types  # utils.py에서 get_food_types 함수 가져오기
+from .utils import update_food_types_from_api, get_food_types
+from django.contrib.auth import login
 
-#API 갱신 view
+
+# --- 관리자용 ---
 def update_food_types(request):
+    """식품유형 데이터 갱신"""
     if update_food_types_from_api():
         messages.success(request, "식품유형 데이터가 성공적으로 갱신되었습니다.")
     else:
         messages.error(request, "식품유형 데이터를 가져오는 데 실패했습니다.")
-    return redirect('admin:label_foodtype_changelist')  # 관리자 페이지로 이동
+    return redirect('admin:label_foodtype_changelist')
 
-def get_food_types():
-    try:
-        # 데이터베이스에서 식품 유형 가져오기
-        return [food_type.name for food_type in FoodType.objects.all()]
-    except Exception as e:
-        print(f"Error fetching food types: {e}")
-        return []
 
-#post view
+# --- 게시글 ---
 @login_required
 def post_list(request):
+    """게시글 목록"""
     search_query = request.GET.get('q', '')
-    posts = Post.objects.all().order_by('-create_date')  # 최신 등록 순
+    order = request.GET.get('order', '-create_date')  # 기본값: 최신순
+
+    # 정렬 적용
+    posts = Post.objects.all().order_by(order)
     if search_query:
         posts = posts.filter(title__icontains=search_query)
 
-    paginator = Paginator(posts, 10)
+    paginator = Paginator(posts, 10)  # 페이지당 10개
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    return render(request, 'label/post_list.html', {'page_obj': page_obj})
+
+    return render(request, 'label/post_list.html', {'page_obj': page_obj, 'order': order})
+
 
 @login_required
 def post_create(request):
+    """게시글 작성"""
     if request.method == 'POST':
         form = PostForm(request.POST)
         if form.is_valid():
@@ -53,13 +52,12 @@ def post_create(request):
     else:
         form = PostForm()
 
-    # API에서 가져온 식품유형 데이터
-    food_types = get_food_types()
+    return render(request, 'label/post_form.html', {'form': form})
 
-    return render(request, 'label/post_form.html', {'form': form, 'food_types': food_types})
 
 @login_required
 def post_detail(request, post_id):
+    """게시글 상세보기"""
     post = get_object_or_404(Post, pk=post_id)
     comments = post.comments.all()
     comment_form = CommentForm()
@@ -67,40 +65,64 @@ def post_detail(request, post_id):
         'post': post, 'comments': comments, 'comment_form': comment_form
     })
 
+
 @login_required
 def post_edit(request, post_id):
-    food_types = get_food_types()
+    """게시글 수정"""
     post = get_object_or_404(Post, pk=post_id)
     if request.user != post.author:
+        messages.error(request, "수정 권한이 없습니다.")
         return redirect('label:post_list')
+
     if request.method == 'POST':
         form = PostForm(request.POST, instance=post)
         if form.is_valid():
-            post = form.save(commit=False)
-            post.save()
+            post = form.save()
             return redirect('label:post_detail', post_id=post.id)
     else:
         form = PostForm(instance=post)
-    return render(request, 'label/post_form.html', {'form': form, 'food_types': food_types})
+
+    return render(request, 'label/post_form.html', {'form': form})
+
 
 @login_required
 def post_delete(request, post_id):
+    """게시글 삭제"""
     post = get_object_or_404(Post, pk=post_id)
     if request.user != post.author:
+        messages.error(request, "삭제 권한이 없습니다.")
         return redirect('label:post_list')
+
     post.delete()
+    messages.success(request, "게시글이 삭제되었습니다.")
     return redirect('label:post_list')
+
 
 @login_required
 def post_like(request, post_id):
+    """게시글 좋아요"""
     post = get_object_or_404(Post, pk=post_id)
     if request.user != post.author:
-        post.likers.add(request.user)
+        if request.user in post.likers.all():
+            post.likers.remove(request.user)
+        else:
+            post.likers.add(request.user)
     return redirect('label:post_detail', post_id=post_id)
 
-#comment view
+@login_required
+def post_unlike(request, post_id):
+    """
+    게시글 좋아요 취소
+    """
+    post = get_object_or_404(Post, pk=post_id)
+    if request.user != post.author:  # 본인이 작성한 게시글은 제외
+        post.likers.remove(request.user)  # 좋아요 관계에서 제거
+    return redirect('label:post_detail', post_id=post_id)
+
+# --- 댓글 ---
 @login_required
 def comment_create(request, post_id):
+    """댓글 작성"""
     post = get_object_or_404(Post, pk=post_id)
     if request.method == 'POST':
         form = CommentForm(request.POST)
@@ -108,15 +130,18 @@ def comment_create(request, post_id):
             comment = form.save(commit=False)
             comment.post = post
             comment.author = request.user
-            comment.create_date = now()
             comment.save()
     return redirect('label:post_detail', post_id=post.id)
 
+
 @login_required
 def comment_edit(request, comment_id):
+    """댓글 수정"""
     comment = get_object_or_404(Comment, pk=comment_id)
     if request.user != comment.author:
+        messages.error(request, "수정 권한이 없습니다.")
         return redirect('label:post_list')
+
     if request.method == 'POST':
         form = CommentForm(request.POST, instance=comment)
         if form.is_valid():
@@ -126,46 +151,22 @@ def comment_edit(request, comment_id):
             return redirect('label:post_detail', post_id=comment.post.id)
     else:
         form = CommentForm(instance=comment)
+
     return render(request, 'label/comment_form.html', {'form': form})
+
 
 @login_required
 def comment_delete(request, comment_id):
+    """댓글 삭제"""
     comment = get_object_or_404(Comment, pk=comment_id)
     if request.user != comment.author:
+        messages.error(request, "삭제 권한이 없습니다.")
         return redirect('label:post_list')
+
     comment.delete()
+    messages.success(request, "댓글이 삭제되었습니다.")
     return redirect('label:post_detail', post_id=comment.post.id)
 
-#user view
-def signup(request):
-    if request.method == 'POST':
-        form = UserCreationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            return redirect('label:post_list')
-    else:
-        form = UserCreationForm()
-    return render(request, 'label/signup.html', {'form': form})
-
-def login_view(request):
-    if request.method == 'POST':
-        form = AuthenticationForm(request, data=request.POST)
-        if form.is_valid():
-            user = form.get_user()
-            login(request, user)
-            return redirect('label:post_list')
-    else:
-        form = AuthenticationForm()
-    return render(request, 'label/login.html', {'form': form})
-
-def logout_view(request):
-    logout(request)
-    return redirect('label:login')
-
-@login_required
-def post_unlike(request, post_id):
-    post = get_object_or_404(Post, pk=post_id)
-    if request.user != post.author:
-        post.likers.remove(request.user)
-    return redirect('label:post_detail', post_id=post_id)
+def food_item_list(request):
+    items = FoodItem.objects.all().order_by("-report_date")
+    return render(request, "label/food_item_list.html", {"items": items})

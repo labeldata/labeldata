@@ -16,8 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.shortcuts import redirect
 
 urlpatterns = [
+    path('', lambda request: redirect('label:post_list')),  # label 앱의 게시판 목록으로 리다이렉트
+    path('common/', include('common.urls')),
     path('admin/', admin.site.urls),
     path('label/', include('label.urls')),
+    path('action/', include('action.urls')),
 ]

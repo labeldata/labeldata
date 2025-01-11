@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>품목 리스트</h1>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>제품명</th>
+            <th>제조사</th>
+            <th>보고 날짜</th>
+            <th>카테고리</th>
+            <th>상세</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr>
+            <td>{{ item.product_name }}</td>
+            <td>{{ item.manufacturer }}</td>
+            <td>{{ item.report_date }}</td>
+            <td>{{ item.category }}</td>
+            <td>{{ item.details }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block title %}행정처분 삭제{% endblock %}
+
+{% block content %}
+<h2>행정처분 삭제</h2>
+<p>정말로 "{{ action.company_name }}"의 행정처분을 삭제하시겠습니까?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">삭제</button>
+    <a href="{% url 'action:action_list' %}" class="btn btn-secondary">취소</a>
+</form>
+{% endblock %}

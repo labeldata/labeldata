@@ -1,17 +1,11 @@
 from django.contrib import admin
-from .models import FoodType
-from django.urls import reverse
-from django.utils.html import format_html
+from .models import Post
 
-@admin.register(FoodType)
-class FoodTypeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'created_at', 'updated_at', 'update_food_types_button')
-    search_fields = ('name',)
+@admin.register(Post)
+class PostAdmin(admin.ModelAdmin):
+    list_display = ("title", "is_api_data", "create_date")
 
-    def update_food_types_button(self, obj):
-        url = reverse('label:update_food_types')  # API 갱신 URL
-        return format_html('<a class="button" href="{}">API 데이터 갱신</a>', url)
-
-    update_food_types_button.short_description = "API 데이터 갱신"
-    update_food_types_button.allow_tags = True
-
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context["total_api_posts"] = Post.objects.filter(is_api_data=True).count()
+        return super().changelist_view(request, extra_context=extra_context)

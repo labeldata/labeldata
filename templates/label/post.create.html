@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}게시글 작성{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h2 class="mb-4">게시글 작성</h2>
+    <form method="post">
+        {% csrf_token %}
+        <div class="row g-3">
+            <!-- 제품명 -->
+            <div class="col-md-6">
+                <label for="id_title" class="form-label">제품명</label>
+                <input type="text" name="title" maxlength="200" required id="id_title" class="form-control" value="{{ form.title.value }}">
+            </div>
+            <!-- 식품유형 -->
+            <div class="col-md-6">
+                <label for="id_food_type" class="form-label">식품유형</label>
+                <select name="food_type" id="id_food_type" class="form-select" required>
+                    <option value="" selected>--- 선택하세요 ---</option>
+                    {% for food_type in food_types %}
+                        <option value="{{ food_type }}" {% if form.food_type.value == food_type %}selected{% endif %}>{{ food_type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <!-- 제조사 -->
+            <div class="col-md-6">
+                <label for="id_manufacturer" class="form-label">제조사</label>
+                <input type="text" name="manufacturer" maxlength="100" required id="id_manufacturer" class="form-control" value="{{ form.manufacturer.value }}">
+            </div>
+            <!-- 보관조건 -->
+            <div class="col-md-6">
+                <label for="id_storage_conditions" class="form-label">보관조건</label>
+                <input type="text" name="storage_conditions" maxlength="100" required id="id_storage_conditions" class="form-control" value="{{ form.storage_conditions.value }}">
+            </div>
+            <!-- 원재료명 -->
+            <div class="col-12">
+                <label for="id_ingredients" class="form-label">원재료명</label>
+                <textarea name="ingredients" cols="40" rows="3" required id="id_ingredients" class="form-control">{{ form.ingredients.value }}</textarea>
+            </div>
+            <!-- 기타 주의사항 -->
+            <div class="col-12">
+                <label for="id_precautions" class="form-label">기타 주의사항</label>
+                <textarea name="precautions" cols="40" rows="3" id="id_precautions" class="form-control">{{ form.precautions.value }}</textarea>
+            </div>
+        </div>
+        <div class="mt-4 d-flex justify-content-end">
+            <button type="submit" class="btn btn-success me-2">저장</button>
+            <a href="{% url 'label:post_list' %}" class="btn btn-secondary">취소</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

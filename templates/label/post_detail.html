@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}행정처분 목록{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">행정처분 목록</h2>
+
+<form method="get" class="mb-3">
+    <input type="text" name="q" class="form-control" placeholder="검색어 입력" value="{{ request.GET.q }}">
+</form>
+
+<table class="table table-bordered table-hover">
+    <thead class="table-light">
+        <tr>
+            <th>번호</th>
+            <th>업체명</th>
+            <th>인허가번호</th>
+            <th>행정처분명</th>
+            <th>행정처분일</th>
+            <th>등록자</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for action in page_obj %}
+        <tr style="cursor: pointer;" onclick="location.href='{% url 'action:action_detail' action.id %}'">
+            <td>{{ forloop.counter }}</td>
+            <td>{{ action.name }}</td>
+            <td>{{ action.registration_number }}</td>
+            <td>{{ action.action_name }}</td>
+            <td>{{ action.action_date|date:"Y-m-d" }}</td>
+            <td>{{ action.author.username }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="6" class="text-center">등록된 행정처분이 없습니다.</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="d-flex justify-content-center mt-4">
+    <nav>
+        <ul class="pagination">
+            {% for page in page_obj.paginator.page_range %}
+                <li class="page-item {% if page_obj.number == page %}active{% endif %}">
+                    <a class="page-link" href="?page={{ page }}">{{ page }}</a>
+                </li>
+            {% endfor %}
+        </ul>
+    </nav>
+</div>
+
+<a href="{% url 'action:action_create' %}" class="btn btn-success">새 행정처분 등록</a>
+{% endblock %}

@@ -1,0 +1,6 @@
+<!-- templates/admin/change_list.html -->
+{% extends "admin/change_list.html" %}
+{% block content %}
+<p><strong>API 데이터 총 건수:</strong> {{ total_api_posts }}</p>
+{{ block.super }}
+{% endblock %}

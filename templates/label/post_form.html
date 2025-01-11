@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}제품 등록/수정{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">제품 등록/수정</h2>
+<form method="post" class="needs-validation" novalidate>
+    {% csrf_token %}
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label for="id_title" class="form-label">제품명</label>
+            <input type="text" name="title" id="id_title" class="form-control" required value="{{ form.title.value }}">
+        </div>
+        <div class="col-md-6">
+            <label for="id_food_type" class="form-label">식품유형</label>
+            <select name="food_type" id="id_food_type" class="form-select" required>
+                <option value="">--- 선택하세요 ---</option>
+                {% for food_type in food_types %}
+                <option value="{{ food_type }}" {% if food_type == form.food_type.value %}selected{% endif %}>
+                    {{ food_type }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label for="id_manufacturer" class="form-label">제조사</label>
+            <input type="text" name="manufacturer" id="id_manufacturer" class="form-control" required value="{{ form.manufacturer.value }}">
+        </div>
+        <div class="col-md-6">
+            <label for="id_storage_conditions" class="form-label">보관조건</label>
+            <input type="text" name="storage_conditions" id="id_storage_conditions" class="form-control" required value="{{ form.storage_conditions.value }}">
+        </div>
+        <div class="col-12">
+            <label for="id_ingredients" class="form-label">원재료명</label>
+            <textarea name="ingredients" id="id_ingredients" class="form-control" rows="3" required>{{ form.ingredients.value }}</textarea>
+        </div>
+        <div class="col-12">
+            <label for="id_precautions" class="form-label">기타 주의사항</label>
+            <textarea name="precautions" id="id_precautions" class="form-control" rows="3">{{ form.precautions.value }}</textarea>
+        </div>
+    </div>
+    <div class="mt-4 d-flex justify-content-end">
+        <button type="submit" class="btn btn-success me-2">저장</button>
+        <a href="{% url 'label:post_list' %}" class="btn btn-secondary">취소</a>
+    </div>
+</form>
+{% endblock %}
