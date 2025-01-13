@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}제품 상세 정보{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm p-4">
+        <h2 class="mb-3">{{ food_item.product_name }}</h2>
+        <p><strong>제조사:</strong> {{ food_item.manufacturer_name }}</p>
+        <p><strong>분류:</strong> {{ food_item.category }}</p>
+        <p><strong>신고일:</strong> {{ food_item.report_date|date:"Y-m-d" }}</p>
+        <p><strong>추가 세부사항:</strong> {{ food_item.additional_details }}</p>
+
+        <h4 class="mt-4">관련 행정처분</h4>
+        <ul class="list-group">
+            {% for action in actions %}
+            <li class="list-group-item">{{ action.action_name }} ({{ action.action_date|date:"Y-m-d" }})</li>
+            {% empty %}
+            <li class="list-group-item text-muted">관련된 행정처분이 없습니다.</li>
+            {% endfor %}
+        </ul>
+        <a href="{% url 'main:home' %}" class="btn btn-secondary mt-4">돌아가기</a>
+    </div>
+</div>
+{% endblock %}

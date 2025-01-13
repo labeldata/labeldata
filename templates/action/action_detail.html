@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}행정처분 상세보기{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm p-4">
+    <div class="card-body">
+        <h2 class="card-title">{{ action.company_name }}</h2>
+        <p><strong>처분명:</strong> {{ action.action_name }}</p>
+        <p><strong>처분일:</strong> {{ action.action_date|date:"Y-m-d" }}</p>
+        <p><strong>세부 내용:</strong> {{ action.details }}</p>
+        <div class="d-flex justify-content-between mt-4">
+            <a href="{% url 'action:action_list' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> 목록으로
+            </a>
+            <form method="post" action="{% url 'action:action_delete' action.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-trash"></i> 삭제
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,75 +1,30 @@
-from django.shortcuts import render, get_object_or_404, redirect
-from django.core.paginator import Paginator
-from django.utils.timezone import now
-from django.contrib import messages
+from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from .models import Post, Comment, FoodItem
-from .forms import PostForm, CommentForm
-from .utils import update_food_types_from_api, get_food_types
-from django.contrib.auth import login
-
-
-# --- 관리자용 ---
-def update_food_types(request):
-    """식품유형 데이터 갱신"""
-    if update_food_types_from_api():
-        messages.success(request, "식품유형 데이터가 성공적으로 갱신되었습니다.")
-    else:
-        messages.error(request, "식품유형 데이터를 가져오는 데 실패했습니다.")
-    return redirect('admin:label_foodtype_changelist')
-
-
-# --- 게시글 ---
-@login_required
-def post_list(request):
-    """게시글 목록"""
-    search_query = request.GET.get('q', '')
-    order = request.GET.get('order', '-create_date')  # 기본값: 최신순
-
-    # 정렬 적용
-    posts = Post.objects.all().order_by(order)
-    if search_query:
-        posts = posts.filter(title__icontains=search_query)
-
-    paginator = Paginator(posts, 10)  # 페이지당 10개
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    return render(request, 'label/post_list.html', {'page_obj': page_obj, 'order': order})
-
+from django.contrib import messages
+from .models import Post, Comment, FoodItem, Label
+from .forms import PostForm, CommentForm, LabelForm
+from django.core.paginator import Paginator
 
 @login_required
 def post_create(request):
-    """게시글 작성"""
+    """게시글 생성"""
     if request.method == 'POST':
         form = PostForm(request.POST)
         if form.is_valid():
             post = form.save(commit=False)
             post.author = request.user
             post.save()
+            messages.success(request, "게시글이 생성되었습니다.")
             return redirect('label:post_list')
     else:
         form = PostForm()
-
     return render(request, 'label/post_form.html', {'form': form})
 
 
 @login_required
-def post_detail(request, post_id):
-    """게시글 상세보기"""
-    post = get_object_or_404(Post, pk=post_id)
-    comments = post.comments.all()
-    comment_form = CommentForm()
-    return render(request, 'label/post_detail.html', {
-        'post': post, 'comments': comments, 'comment_form': comment_form
-    })
-
-
-@login_required
-def post_edit(request, post_id):
+def post_edit(request, pk):
     """게시글 수정"""
-    post = get_object_or_404(Post, pk=post_id)
+    post = get_object_or_404(Post, pk=pk)
     if request.user != post.author:
         messages.error(request, "수정 권한이 없습니다.")
         return redirect('label:post_list')
@@ -77,53 +32,54 @@ def post_edit(request, post_id):
     if request.method == 'POST':
         form = PostForm(request.POST, instance=post)
         if form.is_valid():
-            post = form.save()
-            return redirect('label:post_detail', post_id=post.id)
+            form.save()
+            messages.success(request, "게시글이 수정되었습니다.")
+            return redirect('label:post_detail', pk=post.pk)
     else:
         form = PostForm(instance=post)
-
     return render(request, 'label/post_form.html', {'form': form})
 
 
 @login_required
-def post_delete(request, post_id):
+def post_delete(request, pk):
     """게시글 삭제"""
-    post = get_object_or_404(Post, pk=post_id)
+    post = get_object_or_404(Post, pk=pk)
     if request.user != post.author:
         messages.error(request, "삭제 권한이 없습니다.")
         return redirect('label:post_list')
 
-    post.delete()
-    messages.success(request, "게시글이 삭제되었습니다.")
-    return redirect('label:post_list')
+    if request.method == 'POST':
+        post.delete()
+        messages.success(request, "게시글이 삭제되었습니다.")
+        return redirect('label:post_list')
+
+    return render(request, 'label/post_confirm_delete.html', {'post': post})
+
+
+def post_list(request):
+    """게시글 목록"""
+    search_query = request.GET.get('q', '')
+    posts = Post.objects.filter(title__icontains=search_query) if search_query else Post.objects.all()
+    posts = posts.order_by('-create_date')
+    paginator = Paginator(posts, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'label/post_list.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+    })
+
+
+def post_detail(request, pk):
+    """게시글 상세보기"""
+    post = get_object_or_404(Post, pk=pk)
+    return render(request, 'label/post_detail.html', {'post': post})
 
 
 @login_required
-def post_like(request, post_id):
-    """게시글 좋아요"""
-    post = get_object_or_404(Post, pk=post_id)
-    if request.user != post.author:
-        if request.user in post.likers.all():
-            post.likers.remove(request.user)
-        else:
-            post.likers.add(request.user)
-    return redirect('label:post_detail', post_id=post_id)
-
-@login_required
-def post_unlike(request, post_id):
-    """
-    게시글 좋아요 취소
-    """
-    post = get_object_or_404(Post, pk=post_id)
-    if request.user != post.author:  # 본인이 작성한 게시글은 제외
-        post.likers.remove(request.user)  # 좋아요 관계에서 제거
-    return redirect('label:post_detail', post_id=post_id)
-
-# --- 댓글 ---
-@login_required
-def comment_create(request, post_id):
-    """댓글 작성"""
-    post = get_object_or_404(Post, pk=post_id)
+def comment_create(request, pk):
+    """댓글 생성"""
+    post = get_object_or_404(Post, pk=pk)
     if request.method == 'POST':
         form = CommentForm(request.POST)
         if form.is_valid():
@@ -131,7 +87,11 @@ def comment_create(request, post_id):
             comment.post = post
             comment.author = request.user
             comment.save()
-    return redirect('label:post_detail', post_id=post.id)
+            messages.success(request, "댓글이 작성되었습니다.")
+            return redirect('label:post_detail', pk=pk)
+    else:
+        form = CommentForm()
+    return render(request, 'label/comment_form.html', {'form': form})
 
 
 @login_required
@@ -145,13 +105,11 @@ def comment_edit(request, comment_id):
     if request.method == 'POST':
         form = CommentForm(request.POST, instance=comment)
         if form.is_valid():
-            comment = form.save(commit=False)
-            comment.modify_date = now()
-            comment.save()
-            return redirect('label:post_detail', post_id=comment.post.id)
+            form.save()
+            messages.success(request, "댓글이 수정되었습니다.")
+            return redirect('label:post_detail', pk=comment.post.pk)
     else:
         form = CommentForm(instance=comment)
-
     return render(request, 'label/comment_form.html', {'form': form})
 
 
@@ -163,10 +121,42 @@ def comment_delete(request, comment_id):
         messages.error(request, "삭제 권한이 없습니다.")
         return redirect('label:post_list')
 
-    comment.delete()
-    messages.success(request, "댓글이 삭제되었습니다.")
-    return redirect('label:post_detail', post_id=comment.post.id)
+    if request.method == 'POST':
+        comment.delete()
+        messages.success(request, "댓글이 삭제되었습니다.")
+        return redirect('label:post_detail', pk=comment.post.pk)
+
+    return render(request, 'label/comment_confirm_delete.html', {'comment': comment})
 
 def food_item_list(request):
-    items = FoodItem.objects.all().order_by("-report_date")
-    return render(request, "label/food_item_list.html", {"items": items})
+    """제품 목록"""
+    items = FoodItem.objects.all().order_by('-report_date')
+    paginator = Paginator(items, 10)  # 페이지네이션
+    page_obj = paginator.get_page(request.GET.get('page'))
+    
+    return render(request, 'label/food_item_list.html', {'page_obj': page_obj})
+
+@login_required
+def label_create_or_edit(request, pk=None):
+    """라벨 생성 및 수정"""
+    food_item = None
+    if not pk:
+        food_item_id = request.GET.get('food_item_id')
+        if not food_item_id:
+            return render(request, 'label/error.html', {'message': 'Food item ID가 필요합니다.'})
+        food_item = get_object_or_404(FoodItem, id=food_item_id)
+
+    label = get_object_or_404(Label, pk=pk) if pk else None
+
+    if request.method == "POST":
+        form = LabelForm(request.POST, instance=label)
+        if form.is_valid():
+            label = form.save(commit=False)
+            if not pk:
+                label.food_item = food_item
+            label.save()
+            return redirect('label:food_item_list')
+    else:
+        form = LabelForm(instance=label)
+
+    return render(request, 'label/label_form.html', {'form': form, 'food_item': food_item})

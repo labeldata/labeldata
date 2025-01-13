@@ -1,127 +1,80 @@
 import logging
 import requests
-import xml.etree.ElementTree as ET
-from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse, HttpResponse
-from django.contrib.auth import login, authenticate, logout
+from django.http import JsonResponse
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth import login, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib import messages
-from django.utils.timezone import now
-from label.models import Post
 from .models import ApiEndpoint
 
-logger = logging.getLogger(__name__)
-
-# ---- API 호출 관련 기능 ----
-
-def fetch_and_save_data(api_url, start_pos, end_pos):
-    """API 데이터를 호출하고 저장하는 함수"""
-    url = f"{api_url}/{start_pos}/{end_pos}"
-    logger.info(f"Fetching data from: {url}")
-    
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-    except requests.exceptions.Timeout:
-        logger.error("API 호출 시간 초과")
-        return {"error": "timeout"}
-    except requests.exceptions.RequestException as e:
-        logger.error(f"API 호출 실패: {e}")
-        return {"error": str(e)}
-
-    if "application/xml" in response.headers.get("Content-Type", ""):
-        try:
-            root = ET.fromstring(response.text)
-            items = root.findall(".//row")
-            saved_count = 0
-
-            for item in items:
-                product_name = item.find("PRDLST_NM").text if item.find("PRDLST_NM") else "Unknown"
-                manufacturer = item.find("BSSH_NM").text if item.find("BSSH_NM") else "Unknown"
-                unique_key = item.find("PRDLST_CD").text if item.find("PRDLST_CD") else None
-
-                if unique_key:
-                    _, created = Post.objects.get_or_create(
-                        unique_key=unique_key,
-                        defaults={
-                            "title": product_name,
-                            "api_data": {"manufacturer": manufacturer},
-                            "is_api_data": True,
-                            "create_date": now(),
-                        },
-                    )
-                    if created:
-                        saved_count += 1
-            return {"success": True, "saved_count": saved_count}
-        except ET.ParseError as e:
-            logger.error(f"XML 파싱 실패: {e}")
-            return {"error": "parse_error"}
-    else:
-        logger.error(f"Unexpected Content-Type: {response.headers.get('Content-Type')}")
-        return {"error": "invalid_content_type"}
-
-def call_api_endpoint(request, endpoint_id):
-    """API 데이터를 호출하고 누적 저장"""
-    endpoint = get_object_or_404(ApiEndpoint, pk=endpoint_id)
-    api_url = endpoint.url
-    batch_size = 1000
-    start_position = 1
-    total_saved = 0
-
-    while True:
-        end_position = start_position + batch_size - 1
-        result = fetch_and_save_data(api_url, start_position, end_position)
-
-        if "error" in result:
-            return JsonResponse({"error": result["error"], "total_saved": total_saved})
-
-        total_saved += result["saved_count"]
-
-        if result["saved_count"] == 0:
-            break
-
-        start_position = end_position + 1
-
-    logger.info(f"총 저장된 데이터: {total_saved}건")
-    return JsonResponse({"success": True, "total_saved": total_saved})
-
-
-# ---- 회원가입/로그인/로그아웃 관련 기능 ----
+logger = logging.getLogger(__name__)  # 로깅 객체 설정
 
 def signup(request):
-    """회원가입 처리"""
+    """회원가입"""
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
             login(request, user)
-            messages.success(request, "회원가입이 완료되었습니다!")
-            return redirect('label:post_list')  # 게시판으로 리다이렉트
-        else:
-            messages.error(request, "회원가입 중 문제가 발생했습니다.")
+            messages.success(request, "회원가입 완료!")
+            return redirect('label:post_list')
     else:
         form = UserCreationForm()
     return render(request, 'common/signup.html', {'form': form})
 
 
 def login_view(request):
-    """로그인 처리"""
+    """로그인"""
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
-            user = form.get_user()
-            login(request, user)
+            login(request, form.get_user())
             messages.success(request, "로그인 성공!")
             return redirect('label:post_list')
-        else:
-            messages.error(request, "로그인 정보가 잘못되었습니다.")
     else:
         form = AuthenticationForm()
     return render(request, 'common/login.html', {'form': form})
 
 
 def logout_view(request):
-    """로그아웃 처리"""
+    """로그아웃"""
     logout(request)
     messages.info(request, "로그아웃되었습니다.")
     return redirect('common:login')
+
+
+def call_api_endpoint(request, pk):
+    """API 데이터를 호출 및 저장"""
+    endpoint = get_object_or_404(ApiEndpoint, pk=pk)
+    start_position = 1
+    batch_size = 3
+    total_saved = 0
+
+    try:
+        while True:
+            # API URL 구성: {BASE_URL}/{API_KEY}/{SERVICE_NAME}/json/{START}/{END}
+            api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}"
+            logger.debug(f"Calling API: {api_url}")
+
+            response = requests.get(api_url)
+            response.raise_for_status()
+
+            data = response.json()
+            items = data.get(endpoint.service_name, {}).get("row", [])
+            total_saved += len(items)
+
+            for item in items:
+                logger.debug(f"Saving item: {item.get('PRDLST_NM')}")
+
+            if len(items) < batch_size:
+                break
+            start_position += batch_size
+
+        logger.info(f"총 저장된 데이터: {total_saved}")
+        return JsonResponse({"success": True, "total_saved": total_saved})
+    except requests.RequestException as e:
+        logger.error(f"API 호출 실패: {e}")
+        return JsonResponse({"error": str(e)}, status=500)
+    except ValueError as e:
+        logger.error(f"JSON 변환 실패: {e}")
+        return JsonResponse({"error": "Invalid JSON response"}, status=500)

@@ -1,20 +1,18 @@
 from django.db import models
+from common.models import AdministrativeAction
 
-class AdministrativeAction(models.Model):
-    name = models.CharField(max_length=255)  # 업체명
-    registration_number = models.CharField(max_length=100)  # 인허가번호
-    action_name = models.CharField(max_length=255)  # 행정처분명
-    action_date = models.DateField()  # 행정처분일
-    details = models.TextField(blank=True)  # 기타 내용
 
-    def __str__(self):
-        return self.name
-
-class ActionRecord(models.Model):
-    company_name = models.CharField(max_length=200)
-    infraction = models.TextField()
-    penalty = models.TextField()
-    date = models.DateField()
+class InfractionRecord(models.Model):
+    """위반 기록"""
+    administrative_action = models.ForeignKey(
+        AdministrativeAction,
+        on_delete=models.CASCADE,
+        related_name='infractions',
+        help_text="관련 행정처분"
+    )
+    infraction_details = models.TextField(help_text="위반 세부사항")
+    penalty_details = models.TextField(help_text="처벌 세부사항")
+    record_date = models.DateField(help_text="기록 날짜")
 
     def __str__(self):
-        return f"{self.company_name} - {self.date}"
+        return f"{self.administrative_action.action_name} - {self.record_date}"

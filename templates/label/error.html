@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block title %}오류 발생{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="alert alert-danger" role="alert">
+        <h2 class="text-danger">오류</h2>
+        <p>{{ message }}</p>
+    </div>
+    <a href="{% url 'label:food_item_list' %}" class="btn btn-primary">목록으로 돌아가기</a>
+</div>
+{% endblock %}

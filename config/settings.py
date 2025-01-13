@@ -1,12 +1,15 @@
 """
 Django settings for config project.
 """
-
+import os
 from pathlib import Path
 from decouple import config, UndefinedValueError
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+try:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+except NameError:
+    BASE_DIR = Path.cwd()
 
 # Load sensitive information from .env
 try:
@@ -25,9 +28,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'label',          # Label 앱
-    'bootstrap5',     # 부트스트랩 사용
+    'django_bootstrap5',  # django-bootstrap5 사용
     'action',         # Action 앱
     'common',         # Common 앱
+    'user_management',
 ]
 
 MIDDLEWARE = [
@@ -64,9 +68,9 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('DB_NAME', default='LabelData'),
+        'NAME': config('DB_NAME', default='labeldb'),
         'USER': config('DB_USER', default='root'),
-        'PASSWORD': config('DB_PASSWORD', default='0000'),
+        'PASSWORD': config('DB_PASSWORD', default='1201'),
         'HOST': config('DB_HOST', default='127.0.0.1'),
         'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
@@ -115,6 +119,6 @@ MEDIA_ROOT = BASE_DIR / 'media'  # 업로드된 파일 저장소
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Login settings
-LOGIN_URL = '/common/login/'
-LOGIN_REDIRECT_URL = '/'  # 로그인 후 이동할 URL
-LOGOUT_REDIRECT_URL = LOGIN_URL  # 로그아웃 후 이동할 URL
+LOGIN_URL = '/user-management/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = LOGIN_URL

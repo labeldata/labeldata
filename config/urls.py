@@ -1,27 +1,12 @@
-"""
-URL configuration for config project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
+# 수정된 config/urls.py
 from django.contrib import admin
 from django.urls import path, include
-from django.shortcuts import redirect
 
 urlpatterns = [
-    path('', lambda request: redirect('label:post_list')),  # label 앱의 게시판 목록으로 리다이렉트
-    path('common/', include('common.urls')),
-    path('admin/', admin.site.urls),
-    path('label/', include('label.urls')),
-    path('action/', include('action.urls')),
+    path('', include('main.urls')),  # 메인 앱 URL
+    path('common/', include('common.urls', namespace='common')),  # common 앱 URL
+    path('admin/', admin.site.urls),  # 관리자 페이지
+    path('label/', include('label.urls', namespace='label')),  # label 앱 URL
+    path('action/', include('action.urls', namespace='action')),  # action 앱 URL
+    path('user-management/', include('user_management.urls', namespace='user_management')),  # user_management 앱
 ]

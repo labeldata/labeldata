@@ -1,0 +1,11 @@
+<nav aria-label="페이지 탐색" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% for page in page_obj.paginator.page_range %}
+        <li class="page-item {% if page_obj.number == page %}active{% endif %}">
+            <a class="page-link" href="?page={{ page }}{% if query_params %}&{{ query_params }}{% endif %}">
+                {{ page }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</nav>

@@ -1,0 +1,25 @@
+<!-- signup.html -->
+{% extends 'base.html' %}
+
+{% block title %}회원가입{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="card shadow-sm p-4" style="max-width: 400px; width: 100%;">
+        <h2 class="text-center mb-4">회원가입</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+            <button type="submit" class="btn btn-primary w-100">회원가입</button>
+        </form>
+        <p class="text-center mt-3">
+            이미 계정이 있으신가요? <a href="{% url 'user_management:login' %}">로그인</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

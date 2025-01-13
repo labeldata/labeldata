@@ -1,5 +1,5 @@
 from django import forms
-from .models import Post, Comment, FoodType
+from .models import Post, Comment, FoodType, Label
 
 
 class PostForm(forms.ModelForm):
@@ -45,4 +45,22 @@ class CommentForm(forms.ModelForm):
                 'rows': 3,
                 'placeholder': '댓글을 입력하세요.'
             }),
+        }
+
+
+class LabelForm(forms.ModelForm):
+    """라벨 등록/수정 폼"""
+    class Meta:
+        model = Label
+        exclude = ['food_item']  # food_item은 폼에서 제외
+        fields = ['content_weight', 'manufacturer_address', 'storage_method']
+        labels = {
+            'content_weight': '내용량 (열량)',
+            'manufacturer_address': '제조원 소재지',
+            'storage_method': '보관방법',
+        }
+        widgets = {
+            'content_weight': forms.TextInput(attrs={'class': 'form-control'}),
+            'manufacturer_address': forms.TextInput(attrs={'class': 'form-control'}),
+            'storage_method': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }

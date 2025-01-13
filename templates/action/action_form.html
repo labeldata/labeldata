@@ -1,61 +1,21 @@
-{% extends 'common/base.html' %}
+{% extends 'base.html' %}
 
 {% block title %}행정처분 등록/수정{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">행정처분 등록/수정</h2>
-<form method="post" class="needs-validation" novalidate>
-    {% csrf_token %}
-    <div class="row g-3">
-        <!-- 업체명 -->
-        <div class="col-md-6">
-            <label for="id_name" class="form-label">업체명</label>
-            {{ form.name }}
-            <div class="invalid-feedback">업체명을 입력하세요.</div>
+<div class="card shadow-sm p-4">
+    <h2 class="card-title mb-4">행정처분 등록/수정</h2>
+    <form method="post" class="needs-validation" novalidate>
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="d-flex justify-content-end mt-4">
+            <button type="submit" class="btn btn-success me-2">
+                <i class="bi bi-save"></i> 저장
+            </button>
+            <a href="{% url 'action:action_list' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> 취소
+            </a>
         </div>
-        <!-- 인허가번호 -->
-        <div class="col-md-6">
-            <label for="id_registration_number" class="form-label">인허가번호</label>
-            {{ form.registration_number }}
-            <div class="invalid-feedback">인허가번호를 입력하세요.</div>
-        </div>
-        <!-- 행정처분명 -->
-        <div class="col-12">
-            <label for="id_action_name" class="form-label">행정처분명</label>
-            {{ form.action_name }}
-            <div class="invalid-feedback">행정처분명을 입력하세요.</div>
-        </div>
-        <!-- 행정처분일 -->
-        <div class="col-md-6">
-            <label for="id_action_date" class="form-label">행정처분일</label>
-            {{ form.action_date }}
-            <div class="invalid-feedback">행정처분일을 입력하세요.</div>
-        </div>
-        <!-- 기타 내용 -->
-        <div class="col-md-6">
-            <label for="id_details" class="form-label">기타 내용</label>
-            {{ form.details }}
-        </div>
-    </div>
-    <div class="mt-4 d-flex justify-content-end">
-        <button type="submit" class="btn btn-success me-2">저장</button>
-        <a href="{% url 'action:action_list' %}" class="btn btn-secondary">취소</a>
-    </div>
-</form>
-
-<script>
-    (function () {
-        'use strict';
-        const forms = document.querySelectorAll('.needs-validation');
-        Array.from(forms).forEach(function (form) {
-            form.addEventListener('submit', function (event) {
-                if (!form.checkValidity()) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-                form.classList.add('was-validated');
-            }, false);
-        });
-    })();
-</script>
+    </form>
+</div>
 {% endblock %}

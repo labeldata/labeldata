@@ -1,27 +1,53 @@
 {% extends 'base.html' %}
 
+{% block title %}제품 목록{% endblock %}
+
 {% block content %}
-<h1>품목 리스트</h1>
-<table class="table table-bordered">
-    <thead>
-        <tr>
-            <th>제품명</th>
-            <th>제조사</th>
-            <th>보고 날짜</th>
-            <th>카테고리</th>
-            <th>상세</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for item in items %}
-        <tr>
-            <td>{{ item.product_name }}</td>
-            <td>{{ item.manufacturer }}</td>
-            <td>{{ item.report_date }}</td>
-            <td>{{ item.category }}</td>
-            <td>{{ item.details }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="container my-4">
+    <h2 class="mb-4">제품 목록</h2>
+    <form method="get" action="{% url 'label:food_item_list' %}">
+        <div class="row g-2 align-items-center mb-3">
+            <div class="col-md-4">
+                <input type="text" name="product_name" class="form-control" placeholder="제품명" value="{{ request.GET.product_name }}">
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="manufacturer_name" class="form-control" placeholder="제조사" value="{{ request.GET.manufacturer_name }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">검색</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>제품명</th>
+                    <th>제조사</th>
+                    <th>분류</th>
+                    <th>상세보기</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.manufacturer_name }}</td>
+                    <td>{{ item.category }}</td>
+                    <td>
+                        <a href="{% url 'label:food_item_detail' item.pk %}" class="btn btn-sm btn-info">보기</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">제품이 없습니다.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% include 'includes/pagination.html' %}
+</div>
 {% endblock %}
