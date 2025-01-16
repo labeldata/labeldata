@@ -61,3 +61,6 @@ templates/
 │   ├── post_list.html
 ├── admin/                  # 관리자 페이지 관련 템플릿
 │   ├── change_list.html
+
+git status # 현재 상태 확인
+git add 파일명 or .

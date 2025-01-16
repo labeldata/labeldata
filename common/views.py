@@ -1,16 +1,21 @@
 import logging
 import requests
+import time
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib import messages
+from django.utils.timezone import now
 from .models import ApiEndpoint
+from label.models import FoodItem
 
-logger = logging.getLogger(__name__)  # 로깅 객체 설정
 
+# 로거 설정
+logger = logging.getLogger(__name__)
+
+# 회원가입
 def signup(request):
-    """회원가입"""
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
@@ -22,9 +27,8 @@ def signup(request):
         form = UserCreationForm()
     return render(request, 'common/signup.html', {'form': form})
 
-
+# 로그인
 def login_view(request):
-    """로그인"""
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
@@ -35,46 +39,94 @@ def login_view(request):
         form = AuthenticationForm()
     return render(request, 'common/login.html', {'form': form})
 
-
+# 로그아웃
 def logout_view(request):
-    """로그아웃"""
     logout(request)
     messages.info(request, "로그아웃되었습니다.")
     return redirect('common:login')
 
 
+
+
+logger = logging.getLogger(__name__)
+
 def call_api_endpoint(request, pk):
     """API 데이터를 호출 및 저장"""
     endpoint = get_object_or_404(ApiEndpoint, pk=pk)
     start_position = 1
-    batch_size = 3
+    batch_size = 100
     total_saved = 0
+
+    logger.info(f"Starting API call for endpoint: {endpoint.name}")
 
     try:
         while True:
-            # API URL 구성: {BASE_URL}/{API_KEY}/{SERVICE_NAME}/json/{START}/{END}
+            # API URL 구성
             api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}"
-            logger.debug(f"Calling API: {api_url}")
+            logger.info(f"Calling API at URL: {api_url}")
 
-            response = requests.get(api_url)
-            response.raise_for_status()
+            response = requests.get(api_url, timeout=10)  # Timeout 설정
+            logger.info(f"API Response Status: {response.status_code}")
 
-            data = response.json()
+            # API 응답 내용 기록
+            logger.debug(f"API Raw Response Text: {response.text[:500]}")
+
+            # 응답 상태 확인
+            if response.status_code != 200:
+                logger.error(f"Unexpected status code: {response.status_code}")
+                return JsonResponse({"error": f"Unexpected status code: {response.status_code}"}, status=500)
+
+            try:
+                # JSON 데이터 파싱
+                data = response.json()
+                logger.debug(f"Parsed JSON Data: {str(data)[:500]}")
+            except ValueError:
+                logger.error(f"Invalid JSON response: {response.text}")
+                return JsonResponse({"error": "Invalid JSON response"}, status=500)
+
+            # 예상 서비스 이름 확인
+            if endpoint.service_name not in data:
+                logger.error(f"Expected service name '{endpoint.service_name}' not found in response: {list(data.keys())}")
+                return JsonResponse({"error": f"Invalid service name: {endpoint.service_name}"}, status=500)
+
             items = data.get(endpoint.service_name, {}).get("row", [])
+            logger.info(f"Number of items fetched: {len(items)}")
+
+            # 데이터 저장 로직
+            for item in items:
+                try:
+                    FoodItem.objects.update_or_create(
+                        product_name=item.get('PRDLST_NM'),
+                        manufacturer_name=item.get('BSSH_NM'),
+                        defaults={
+                            'report_date': item.get('PRMS_DT'),
+                            'category': item.get('PRDLST_DCNM'),
+                            'additional_details': item.get('ETC'),
+                        }
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to save item {item.get('PRDLST_NM')}: {e}")
+
             total_saved += len(items)
 
-            for item in items:
-                logger.debug(f"Saving item: {item.get('PRDLST_NM')}")
-
-            if len(items) < batch_size:
+            if not items or len(items) < batch_size:
+                logger.info("No more items to fetch. Exiting loop.")
                 break
+
             start_position += batch_size
 
-        logger.info(f"총 저장된 데이터: {total_saved}")
+        # 호출 상태 업데이트
+        endpoint.last_called_at = now()
+        endpoint.last_status = "success"
+        endpoint.save()
+
+        logger.info(f"Total saved items: {total_saved}")
         return JsonResponse({"success": True, "total_saved": total_saved})
-    except requests.RequestException as e:
-        logger.error(f"API 호출 실패: {e}")
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API call failed: {e}")
+        endpoint.last_status = "failure"
+        endpoint.save()
         return JsonResponse({"error": str(e)}, status=500)
-    except ValueError as e:
-        logger.error(f"JSON 변환 실패: {e}")
-        return JsonResponse({"error": "Invalid JSON response"}, status=500)
+
+
