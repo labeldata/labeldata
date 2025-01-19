@@ -7,7 +7,7 @@
     <h2 class="card-title mb-4">행정처분 목록</h2>
     <div class="table-responsive">
         <table class="table table-hover align-middle">
-            <thead class="thead-dark">
+            <thead>
                 <tr>
                     <th>#</th>
                     <th>업체명</th>
@@ -16,26 +16,21 @@
                 </tr>
             </thead>
             <tbody>
-                {% for action in page_obj %}
-                <tr onclick="location.href='{% url 'action:action_detail' action.id %}'" style="cursor: pointer;">
+                {% for action in actions %}
+                <tr>
                     <td>{{ forloop.counter }}</td>
                     <td>{{ action.company_name }}</td>
                     <td>{{ action.action_name }}</td>
-                    <td>{{ action.action_date|date:"Y-m-d" }}</td>
+                    <td>{{ action.action_date }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4" class="text-center text-muted">등록된 처분이 없습니다.</td>
+                    <td colspan="4" class="text-center">등록된 처분이 없습니다.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-    <div class="d-flex justify-content-between mt-4">
-        <a href="{% url 'action:action_create' %}" class="btn btn-success">
-            <i class="bi bi-plus-circle"></i> 새 처분 등록
-        </a>
-        {% include 'includes/pagination.html' %}
-    </div>
+    <a href="{% url 'action:action_create' %}" class="btn btn-primary">새 처분 등록</a>
 </div>
 {% endblock %}

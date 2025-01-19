@@ -63,4 +63,6 @@ templates/
 │   ├── change_list.html
 
 git status # 현재 상태 확인
-git add 파일명 or .
+git add 파일명 or . # 파일 추가
+git commit -m "커밋 메시지" #커밋 생성
+git push origin main # 원격 저장소 푸시
