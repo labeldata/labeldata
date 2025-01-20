@@ -1,14 +1,18 @@
 <!-- base.html -->
 {% load static %}
+{% load django_bootstrap5 %}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}식품 데이터 포털{% endblock %}</title>
-    <!-- 로컬 Bootstrap CSS -->
+    <!-- 로컬 Bootstrap CSS 
     <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    -->
+    {% bootstrap_css %}
+    {% bootstrap_javascript %}
 </head>
 <body>
     <!-- Navbar -->
