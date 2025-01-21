@@ -130,7 +130,8 @@ def comment_delete(request, comment_id):
 
 def food_item_list(request):
     """제품 목록"""
-    items = FoodItem.objects.all().order_by('-report_date')
+    # items = FoodItem.objects.all().order_by('-report_date') #report_date 필드명 수정
+    items = FoodItem.objects.all().order_by('-last_updt_dtm')
     paginator = Paginator(items, 10)  # 페이지네이션
     page_obj = paginator.get_page(request.GET.get('page'))
     

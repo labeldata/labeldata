@@ -9,7 +9,8 @@ from label.forms import LabelForm
 def home(request):
     """메인 화면 및 통합 검색"""
     search_query = request.GET.get('q', '')
-    food_items = FoodItem.objects.filter(product_name__icontains=search_query).order_by('-report_date')
+    # food_items = FoodItem.objects.filter(product_name__icontains=search_query).order_by('-report_date') # product_name, report_date 변경경
+    food_items = FoodItem.objects.filter(prdlst_nm__icontains=search_query).order_by('-last_updt_dtm')
     actions = AdministrativeAction.objects.filter(action_name__icontains=search_query).order_by('-action_date')
 
     # 페이징 처리

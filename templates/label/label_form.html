@@ -6,7 +6,8 @@
 <div class="container mt-4">
     <h2>라벨 등록/수정</h2>
     {% if food_item %}
-    <p><strong>제품명:</strong> {{ food_item.product_name }}</p>
+    <p><strong>제품명:</strong> {{ food_item.prdlst_nm }}</p> 
+    {% comment %} product_name -> prdlst_nm 변경 {% endcomment %}
     {% endif %}
     <form method="post">
         {% csrf_token %}

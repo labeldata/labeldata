@@ -55,9 +55,9 @@ class FoodItem(models.Model):
     production = models.CharField(max_length=10, verbose_name="생산종료여부", null=True, blank=True)
     hieng_lntrt_dvs_yn = models.CharField(max_length=10, verbose_name="고열량저영양식품여부", null=True, blank=True)   #api 컬럼 명칭은 HIENG_LNTRT_DVS_NM -> yn으로 변경
     child_crtfc_yn = models.CharField(max_length=10, verbose_name="어린이기호식품품질인증여부", null=True, blank=True)
-    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", default="기본소비기한")
-    last_updt_dtm = models.CharField(max_length=8, verbose_name="최종수정일자", default="yyyymmdd")
-    induty_cd_nm = models.CharField(max_length=80, verbose_name="업종명", default="기본업종명")
+    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", default="기본소비기한", null=True, blank=True) # null 값 허용
+    last_updt_dtm = models.CharField(max_length=8, verbose_name="최종수정일자", default="yyyymmdd", null=True, blank=True) # null 값 허용
+    induty_cd_nm = models.CharField(max_length=80, verbose_name="업종명", default="기본업종명", null=True, blank=True) # null 값 허용
     qlity_mntnc_tmlmt_daycnt = models.CharField(max_length=100, verbose_name="품질유지기한일수", null=True, blank=True)
     usages = models.TextField(max_length=4000, verbose_name="용법", null=True, blank=True) #mysql usage - 키워드로 인해 변경
     prpos = models.CharField(max_length=200, verbose_name="용도", null=True, blank=True)
@@ -73,7 +73,10 @@ class FoodItem(models.Model):
         ]
 
     def __str__(self):
-        return self.product_name
+        # return self.product_name #product_name -> prdlst_nm 변경경
+        return self.prdlst_nm
+
+
 
 
 class Label(models.Model):
@@ -84,4 +87,5 @@ class Label(models.Model):
     storage_method = models.TextField(help_text="보관방법")
 
     def __str__(self):
-        return f"Label for {self.food_item.product_name}"
+        # return f"Label for {self.food_item.product_name}" #product_name -> prdlst_nm 변경경
+        return f"Label for {self.food_item.prdlst_nm}"
