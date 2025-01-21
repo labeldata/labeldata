@@ -23,7 +23,7 @@
                 {% for item in food_items %}
                 <a href="{% url 'main:food_item_detail' item.pk %}" class="list-group-item list-group-item-action">
                     {{ item.prdlst_nm }} - {{ item.manufacturer_name }}
-                    {% comment %} product_name -> prdlst_nm 변경경 {% endcomment %}
+                    {% comment %} product_name -> prdlst_nm 변경 {% endcomment %}
                 </a>
                 {% empty %}
                 <p class="text-muted">등록된 제품이 없습니다.</p>

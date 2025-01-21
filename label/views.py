@@ -130,12 +130,56 @@ def comment_delete(request, comment_id):
 
 def food_item_list(request):
     """제품 목록"""
-    # items = FoodItem.objects.all().order_by('-report_date') #report_date 필드명 수정
-    items = FoodItem.objects.all().order_by('-last_updt_dtm')
-    paginator = Paginator(items, 10)  # 페이지네이션
-    page_obj = paginator.get_page(request.GET.get('page'))
-    
-    return render(request, 'label/food_item_list.html', {'page_obj': page_obj})
+    '''
+    검색 조건 추가 및 페이징 개선
+    1. 검색 기능 추가: prdlst_nm로 제품명을 검색할 수 있도록 조건 추가.
+    2. 페이지네이션 범위 계산: current_page를 기준으로 앞뒤 5페이지 범위로 설정.
+    3. 템플릿에서 page_range와 검색 조건 search_query를 활용 가능하도록 컨텍스트에 포함.
+    '''
+
+    # 페이지당 항목 수 동적 처리
+    items_per_page = request.GET.get('items_per_page', 10)  # 기본값 10
+    try:
+        items_per_page = int(items_per_page)
+    except ValueError:
+        items_per_page = 10
+
+    search_query = request.GET.get('prdlst_nm', '').strip()
+    manufacturer_query = request.GET.get('bssh_nm', '').strip()
+
+    # 검색 조건 추가
+    search_query = request.GET.get('prdlst_nm', '').strip()
+    manufacturer_query = request.GET.get('bssh_nm', '').strip()
+
+    # 검색 조건 없는 경우 모든 데이터 조회
+    items = FoodItem.objects.all()
+
+    # LIKE 검색 조건 추가
+    if search_query:
+        items = items.filter(prdlst_nm__icontains=search_query)
+    if manufacturer_query:
+        items = items.filter(bssh_nm__icontains=manufacturer_query)
+
+    items = items.order_by('-last_updt_dtm')  # 최신순 정렬
+
+    paginator = Paginator(items, items_per_page)
+    current_page = request.GET.get('page', 1)
+    page_obj = paginator.get_page(current_page)
+
+    # 페이지네이션 범위 계산
+    current_page_num = page_obj.number
+    start_range = max(current_page_num - 5, 1)
+    end_range = min(current_page_num + 5, paginator.num_pages) + 1
+
+    page_range = range(start_range, end_range)
+
+    return render(request, 'label/food_item_list.html', {
+        'page_obj': page_obj,
+        'page_range': page_range,
+        'search_query': search_query,
+        'items_per_page': items_per_page,
+    })
+
 
 @login_required
 def label_create_or_edit(request, pk=None):

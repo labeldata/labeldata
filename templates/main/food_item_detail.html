@@ -6,9 +6,9 @@
 <div class="container mt-4">
     <div class="card shadow-sm p-4">
         <h2 class="mb-3">{{ food_item.prdlst_nm }}</h2>
-        {% comment %} product_name -> prdlst_nm 변경 {% endcomment %}
-        <p><strong>제조사:</strong> {{ food_item.manufacturer_name }}</p>
-        <p><strong>분류:</strong> {{ food_item.category }}</p>
+        {% comment %} food_item 필드명 변경경 {% endcomment %}
+        <p><strong>제조사:</strong> {{ food_item.bssh_nm }}</p>
+        <p><strong>식품유형</strong> {{ food_item.prdlst_dcnm }}</p>
         <p><strong>신고일:</strong> {{ food_item.report_date|date:"Y-m-d" }}</p>
         <p><strong>추가 세부사항:</strong> {{ food_item.additional_details }}</p>
 
