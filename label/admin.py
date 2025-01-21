@@ -36,6 +36,6 @@ class FoodTypeAdmin(BaseAdmin):
 @admin.register(FoodItem)
 class FoodItemAdmin(BaseAdmin):
     """FoodItem 모델 관리"""
-    list_display = ('product_name', 'manufacturer_name', 'report_date', 'category')
-    search_fields = ('product_name', 'manufacturer_name')
-    date_hierarchy = 'report_date'
+    #list_display = ('product_name', 'manufacturer_name', 'report_date', 'category')
+    #search_fields = ('product_name', 'manufacturer_name')
+    #date_hierarchy = 'report_date'
