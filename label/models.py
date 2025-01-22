@@ -12,15 +12,18 @@ class FoodType(models.Model):
         return self.name
 
 class Post(models.Model):
+
+    #외래키 연결 금지
+
     title = models.CharField(max_length=200)
     api_data = models.JSONField(null=True, blank=True, help_text="API에서 가져온 데이터")
     is_api_data = models.BooleanField(default=False, help_text="이 데이터가 API에서 가져온 데이터인지 여부")
-    food_type = models.ForeignKey(FoodType, on_delete=models.SET_NULL, null=True, blank=True, related_name='posts')
+    #food_type = models.ForeignKey(FoodType, on_delete=models.SET_NULL, null=True, blank=True, related_name='posts')
     manufacturer = models.CharField(max_length=100, db_index=True)
     ingredients = models.TextField()
     storage_conditions = models.CharField(max_length=100)
     precautions = models.TextField(blank=True, null=True)
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
+    #author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     create_date = models.DateTimeField(default=now)
     modify_date = models.DateTimeField(null=True, blank=True)
 
@@ -28,8 +31,10 @@ class Post(models.Model):
         return self.title
 
 class Comment(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
+    #외래키 연결 금지
+
+    #post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
+    #author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
     content = models.TextField(max_length=1000, help_text="댓글 내용 (최대 1000자)")
     create_date = models.DateTimeField(default=now)
     modify_date = models.DateTimeField(null=True, blank=True)
@@ -48,7 +53,7 @@ class FoodItem(models.Model):
     #컬럼명은 추후 변경할 수 있음. 현재는 api에서 받아오는 값으로 사용
     lcns_no = models.CharField(max_length=11, verbose_name = "인허가번호", help_text="영업에 대한 허가, 등록, 신고번호 11자리", db_index=True , null=True, blank=True)
     bssh_nm = models.CharField(max_length=100, verbose_name = "제조사명", default="기본제조사명")
-    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", help_text="영업등록 발급연도-영업장 등록번호-영업장 제품번호", db_index=True, null=True, blank=True)
+    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", help_text="영업등록 발급연도-영업장 등록번호-영업장 제품번호", db_index=True, primary_key=True)
     prms_dt = models.CharField(max_length=8, verbose_name="허가일자", help_text="yyyymmdd", default="yyyymmdd")
     prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", db_index=True, default="기본제품명")
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="품목유형명", default="기본품목유형명")
@@ -63,6 +68,7 @@ class FoodItem(models.Model):
     prpos = models.CharField(max_length=200, verbose_name="용도", null=True, blank=True)
     dispos = models.CharField(max_length=200, verbose_name="제품형태", null=True, blank=True)
     frmlc_mtrqlt = models.TextField(max_length=300, verbose_name="포장재질", null=True, blank=True)
+    update_datetime = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'Food_Item'
@@ -80,6 +86,8 @@ class FoodItem(models.Model):
 
 
 class Label(models.Model):
+
+    #외래키 연결 금지
 
     #food_item = models.ForeignKey(FoodItem, on_delete=models.CASCADE, related_name="labels", null=False)
     content_weight = models.CharField(max_length=50, help_text="내용량(열량)")

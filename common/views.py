@@ -54,7 +54,7 @@ def call_api_endpoint(request, pk):
     """API 데이터를 호출 및 저장"""
     endpoint = get_object_or_404(ApiEndpoint, pk=pk)
     start_position = 1
-    batch_size = 100
+    batch_size = 1000
     total_saved = 0
 
     logger.info(f"Starting API call for endpoint: {endpoint.name}")
@@ -63,12 +63,13 @@ def call_api_endpoint(request, pk):
         while True:
             # API URL 구성
             # api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}"
-            # 2025년 이후 자료만
-
-            api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}/CHNG_DT=20250101"
+            # 2025년 1월 21일 이후 자료만
+            change_date = "20250121"
+            
+            api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}/CHNG_DT={change_date}"
             logger.info(f"Calling API at URL: {api_url}")
 
-            response = requests.get(api_url, timeout=10)  # Timeout 설정
+            response = requests.get(api_url, timeout=30)  # Timeout 설정
             logger.info(f"API Response Status: {response.status_code}")
 
             # API 응답 내용 기록
@@ -98,26 +99,34 @@ def call_api_endpoint(request, pk):
             # 데이터 저장 로직
             for item in items:
                 try:
-                    FoodItem.objects.update_or_create(
-                        
-                        lcns_no=item.get("LCNS_NO"),
-                        bssh_nm=item.get("BSSH_NM"),
+                    ReceivedAPIItem, created =  FoodItem.objects.update_or_create(
+
+                        # 품목제조번호 기준으로 있으면 업데이트, 없으면 인서트
+                        # last_updt_dtm (최종 업데이트 일자) 까지 같이 검색해서 테스트했으나
+                        # 같은 날 여러 번 수정한 케이스의 경우를 체크할 수 없어서 품목제조번호 기준으로 무조건 업데이트 하도록 변경
                         prdlst_report_no=item.get("PRDLST_REPORT_NO"),
-                        prms_dt=item.get("PRMS_DT"),
-                        prdlst_nm=item.get("PRDLST_NM"),
-                        prdlst_dcnm=item.get("PRDLST_DCNM"),
-                        production=item.get("PRODUCTION"),
-                        hieng_lntrt_dvs_yn=item.get("HIENG_LNTRT_DVS_NM"),
-                        child_crtfc_yn=item.get("CHILD_CRTFC_YN"),
-                        pog_daycnt=item.get("POG_DAYCNT"),
-                        last_updt_dtm=item.get("LAST_UPDT_DTM"),
-                        induty_cd_nm=item.get("INDUTY_CD_NM"),
-                        qlity_mntnc_tmlmt_daycnt=item.get("QLITY_MNTNC_TMLMT_DAYCNT"),
-                        usages=item.get("USAGE"),
-                        prpos=item.get("PRPOS"),
-                        dispos=item.get("DISPOS"),
-                        frmlc_mtrqlt=item.get("FRMLC_MTRQLT")
+                        
+                        defaults={
+                            'lcns_no': item.get("LCNS_NO"),
+                            'bssh_nm': item.get("BSSH_NM"),
+                            'prms_dt': item.get("PRMS_DT"),
+                            'prdlst_nm': item.get("PRDLST_NM"),
+                            'prdlst_dcnm': item.get("PRDLST_DCNM"),
+                            'production': item.get("PRODUCTION"),
+                            'hieng_lntrt_dvs_yn': item.get("HIENG_LNTRT_DVS_NM"),
+                            'child_crtfc_yn': item.get("CHILD_CRTFC_YN"),
+                            'pog_daycnt': item.get("POG_DAYCNT"),
+                            'induty_cd_nm': item.get("INDUTY_CD_NM"),
+                            'qlity_mntnc_tmlmt_daycnt': item.get("QLITY_MNTNC_TMLMT_DAYCNT"),
+                            'usages': item.get("USAGE"),
+                            'prpos': item.get("PRPOS"),
+                            'dispos': item.get("DISPOS"),
+                            'frmlc_mtrqlt': item.get("FRMLC_MTRQLT"),
+                            'last_updt_dtm': item.get("LAST_UPDT_DTM"),
+                            'update_datetime': now()
+                        }
                     )
+                    # print(f"Created: {created} / 제품명 : {ReceivedAPIItem.prdlst_nm}")
                 except Exception as e:
                     logger.error(f"Failed to save item {item.get('PRDLST_NM')}: {e}")
 
