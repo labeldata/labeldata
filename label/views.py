@@ -147,20 +147,16 @@ def food_item_list(request):
     search_query = request.GET.get('prdlst_nm', '').strip()
     manufacturer_query = request.GET.get('bssh_nm', '').strip()
 
-    # 검색 조건 추가
+    # 검색 조건
+    # 제품명
     search_query = request.GET.get('prdlst_nm', '').strip()
+    # 제조사명
     manufacturer_query = request.GET.get('bssh_nm', '').strip()
 
     # 검색 조건 없는 경우 모든 데이터 조회
-    items = FoodItem.objects.all()
+    items = FoodItem.objects.filter(prdlst_nm__icontains=search_query, bssh_nm__icontains=manufacturer_query).order_by('-last_updt_dtm')
 
-    # LIKE 검색 조건 추가
-    if search_query:
-        items = items.filter(prdlst_nm__icontains=search_query)
-    if manufacturer_query:
-        items = items.filter(bssh_nm__icontains=manufacturer_query)
-
-    items = items.order_by('-last_updt_dtm')  # 최신순 정렬
+    #items = items.order_by('-last_updt_dtm')  # 최신순 정렬
 
     paginator = Paginator(items, items_per_page)
     current_page = request.GET.get('page', 1)
@@ -172,6 +168,8 @@ def food_item_list(request):
     end_range = min(current_page_num + 5, paginator.num_pages) + 1
 
     page_range = range(start_range, end_range)
+
+    #print(page_obj)
 
     return render(request, 'label/food_item_list.html', {
         'page_obj': page_obj,

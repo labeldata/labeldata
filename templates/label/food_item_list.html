@@ -39,13 +39,13 @@
                 </tr>
             </thead>
             <tbody>
-                {% for item in items %}
+                {% for item in page_obj %}
                 <tr>
                     <td>{{ item.prdlst_nm }}</td> <!-- 제품명 -->
                     <td>{{ item.bssh_nm }}</td> <!-- 제조사 -->
                     <td>{{ item.prdlst_dcnm }}</td> <!-- 식품유형 -->
                     <td>
-                        <a href="{% url 'label:food_item_detail' item.pk %}" class="btn btn-sm btn-info">보기</a>
+                        <a href="" class="btn btn-sm btn-info">보기</a>
                     </td>
                 </tr>
                 {% empty %}
