@@ -128,6 +128,31 @@ def comment_delete(request, comment_id):
 
     return render(request, 'label/comment_confirm_delete.html', {'comment': comment})
 
+@login_required
+def label_create_or_edit(request, pk=None):
+    """라벨 생성 및 수정"""
+    food_item = None
+    if not pk:
+        food_item_id = request.GET.get('food_item_id')
+        if not food_item_id:
+            return render(request, 'label/error.html', {'message': 'Food item ID가 필요합니다.'})
+        food_item = get_object_or_404(FoodItem, id=food_item_id)
+
+    label = get_object_or_404(Label, pk=pk) if pk else None
+
+    if request.method == "POST":
+        form = LabelForm(request.POST, instance=label)
+        if form.is_valid():
+            label = form.save(commit=False)
+            if not pk:
+                label.food_item = food_item
+            label.save()
+            return redirect('label:food_item_list')
+    else:
+        form = LabelForm(instance=label)
+
+    return render(request, 'label/label_form.html', {'form': form, 'food_item': food_item})
+
 def food_item_list(request):
     """제품 목록"""
     '''
@@ -154,7 +179,10 @@ def food_item_list(request):
     manufacturer_query = request.GET.get('bssh_nm', '').strip()
 
     # 검색 조건 없는 경우 모든 데이터 조회
-    items = FoodItem.objects.filter(prdlst_nm__icontains=search_query, bssh_nm__icontains=manufacturer_query).order_by('-last_updt_dtm')
+    items = FoodItem.objects.filter(
+        prdlst_nm__icontains=search_query, 
+        bssh_nm__icontains=manufacturer_query
+    ).order_by('-last_updt_dtm')
 
     #items = items.order_by('-last_updt_dtm')  # 최신순 정렬
 
@@ -178,28 +206,8 @@ def food_item_list(request):
         'items_per_page': items_per_page,
     })
 
-
-@login_required
-def label_create_or_edit(request, pk=None):
-    """라벨 생성 및 수정"""
-    food_item = None
-    if not pk:
-        food_item_id = request.GET.get('food_item_id')
-        if not food_item_id:
-            return render(request, 'label/error.html', {'message': 'Food item ID가 필요합니다.'})
-        food_item = get_object_or_404(FoodItem, id=food_item_id)
-
-    label = get_object_or_404(Label, pk=pk) if pk else None
-
-    if request.method == "POST":
-        form = LabelForm(request.POST, instance=label)
-        if form.is_valid():
-            label = form.save(commit=False)
-            if not pk:
-                label.food_item = food_item
-            label.save()
-            return redirect('label:food_item_list')
-    else:
-        form = LabelForm(instance=label)
-
-    return render(request, 'label/label_form.html', {'form': form, 'food_item': food_item})
+# 제품 상세보기 기능 추가
+def food_item_detail(request, prdlst_report_no):
+    """제품 상세 정보"""
+    item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
+    return render(request, 'label/food_item_detail.html', {'item': item})

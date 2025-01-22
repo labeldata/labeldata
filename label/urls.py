@@ -5,6 +5,7 @@ app_name = 'label'
 
 urlpatterns = [
     path('food-items/', views.food_item_list, name='food_item_list'),  # 제품 목록
+    path('food-item-detail/<str:prdlst_report_no>/', views.food_item_detail, name='food_item_detail'),  # 제품 상세 페이지
     path('', views.post_list, name='post_list'),
     path('label/create/', views.label_create_or_edit, name='label_create'),  # 표시사항 등록
     path('post/create/', views.post_create, name='post_create'),

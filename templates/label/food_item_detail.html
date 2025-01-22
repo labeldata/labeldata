@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제품 상세 정보</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-size: 14px;
+        }
+        .container {
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+<div class="container my-4">
+    <h4 class="mb-4 text-center">제품 상세 정보</h4>
+    <table class="table table-bordered">
+        <thead class="table-light">
+            <tr>
+                <th colspan="2">제품 정보</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th>품목보고번호</th>
+                <td>{{ item.prdlst_report_no }}</td>
+            </tr>
+            <tr>
+                <th>제품명</th>
+                <td>{{ item.prdlst_nm }}</td>
+            </tr>
+            <tr>
+                <th>식품유형</th>
+                <td>{{ item.prdlst_dcnm }}</td>
+            </tr>
+            <tr>
+                <th>제조사</th>
+                <td>{{ item.bssh_nm }}</td>
+            </tr>
+            <tr>
+                <th>소비기한</th>
+                <td>{{ item.pog_daycnt }}</td>
+            </tr>
+            <tr>
+                <th>포장재질</th>
+                <td>{{ item.frmlc_mtrqlt }}</td>
+            </tr>
+        </tbody>
+    </table>
+    <button class="btn btn-secondary mt-3 w-100" onclick="window.close()">닫기</button>
+</div>
+</body>
+</html>

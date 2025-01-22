@@ -30,6 +30,8 @@
 
     <div class="table-responsive">
         <table class="table table-bordered table-hover">
+
+{% comment %} 리스트 열 데이터 변경,추가가 및 행 클릭 시 상세페이지 연결 
             <thead class="table-light">
                 <tr>
                     <th>제품명</th>
@@ -53,7 +55,34 @@
                     <td colspan="4" class="text-center text-muted">제품이 없습니다.</td>
                 </tr>
                 {% endfor %}
-            </tbody>
+            </tbody> {% endcomment %}
+            <thead class="table-light">
+                <tr>
+                    <th>번호</th>
+                    <th>품목보고번호</th>
+                    <th>제품명</th>
+                    <th>식품유형</th>
+                    <th>소비기한</th>
+                    <th>제조사</th>
+                </tr>
+            </thead>
+            </thead>
+            <tbody>
+                {% for item in page_obj %}
+                <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">
+                    <td>{{ forloop.counter|add:page_obj.start_index }}</td>
+                    <td>{{ item.prdlst_report_no }}</td>
+                    <td>{{ item.prdlst_nm }}</td>
+                    <td>{{ item.prdlst_dcnm }}</td>
+                    <td>{{ item.pog_daycnt }}</td>
+                    <td>{{ item.bssh_nm }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">제품이 없습니다.</td>
+                </tr>
+                {% endfor %}
+            </tbody>          
         </table>
     </div>
 
@@ -91,6 +120,15 @@
             {% endif %}
         </ul>
     </div>
-    
 </div>
+
+<!-- 팝업용 스크립트 -->
+<script>
+    function openDetailPopup(reportNo) {
+        const url = `/label/food-item-detail/${reportNo}/`;
+        const popup = window.open(url, "제품 상세 정보", "width=600,height=400,resizable=yes,scrollbars=yes");
+        if (!popup) alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
+        return false; // 기본 동작 차단
+    }
+</script>
 {% endblock %}
