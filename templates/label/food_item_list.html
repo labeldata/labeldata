@@ -70,7 +70,9 @@
             <tbody>
                 {% for item in page_obj %}
                 <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">
-                    <td>{{ forloop.counter|add:page_obj.start_index }}</td>
+                    <!-- 번호를 page_obj.start_index와 forloop.counter를 이용하여 조정 -->
+                    <td>{{ forloop.counter|add:page_obj.start_index|add:-1 }}</td>
+                    {% comment %} <td>{{ forloop.counter|add:page_obj.start_index }}</td> {% endcomment %}
                     <td>{{ item.prdlst_report_no }}</td>
                     <td>{{ item.prdlst_nm }}</td>
                     <td>{{ item.prdlst_dcnm }}</td>
@@ -86,36 +88,45 @@
         </table>
     </div>
 
-    {% comment %} {% include 'includes/pagination.html' %} {% endcomment %}
     {% comment %} 
-    변경 요약:
-    맨 처음/맨 끝 이동 버튼 추가.
-    현재 페이지를 기준으로 5페이지 이전/이후로 이동할 수 있도록 동적 범위 제공.
-     prdlst_nm 검색어를 유지하면서 페이지를 이동하도록 쿼리 파라미터를 포함.
+    변경 요약: 페이징 기능 전체 개선선
     {% endcomment %}
     <div class="pagination-wrapper d-flex justify-content-between align-items-center mt-4">
         <ul class="pagination">
+            <!-- 맨 처음으로 이동 -->
             {% if page_obj.has_previous %}
                 <li class="page-item">
-                    <a class="page-link" href="?page=1&prdlst_nm={{ search_query }}">맨 처음</a>
+                    <a class="page-link" href="?page=1&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
+                        맨 처음
+                    </a>
                 </li>
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&prdlst_nm={{ search_query }}">이전</a>
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
+                        이전
+                    </a>
                 </li>
             {% endif %}
     
+            <!-- 현재 페이지 기준으로 동적 범위 생성 -->
             {% for page_num in page_range %}
                 <li class="page-item {% if page_num == page_obj.number %}active{% endif %}">
-                    <a class="page-link" href="?page={{ page_num }}&prdlst_nm={{ search_query }}">{{ page_num }}</a>
+                    <a class="page-link" href="?page={{ page_num }}&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
+                        {{ page_num }}
+                    </a>
                 </li>
             {% endfor %}
     
+            <!-- 다음 및 맨 끝으로 이동 -->
             {% if page_obj.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&prdlst_nm={{ search_query }}">다음</a>
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
+                        다음
+                    </a>
                 </li>
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ paginator.num_pages }}&prdlst_nm={{ search_query }}">맨 끝</a>
+                    <a class="page-link" href="?page={{ paginator.num_pages }}&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
+                        맨 끝
+                    </a>
                 </li>
             {% endif %}
         </ul>

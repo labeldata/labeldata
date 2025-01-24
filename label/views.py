@@ -153,7 +153,7 @@ def label_create_or_edit(request, pk=None):
 
     return render(request, 'label/label_form.html', {'form': form, 'food_item': food_item})
 
-def food_item_list(request):
+# def food_item_list(request):
     """제품 목록"""
     '''
     검색 조건 추가 및 페이징 개선
@@ -162,49 +162,88 @@ def food_item_list(request):
     3. 템플릿에서 page_range와 검색 조건 search_query를 활용 가능하도록 컨텍스트에 포함.
     '''
 
-    # 페이지당 항목 수 동적 처리
-    items_per_page = request.GET.get('items_per_page', 10)  # 기본값 10
+    # # 페이지당 항목 수 동적 처리
+    # items_per_page = request.GET.get('items_per_page', 10)  # 기본값 10
+    # try:
+    #     items_per_page = int(items_per_page)
+    # except ValueError:
+    #     items_per_page = 10
+
+    # search_query = request.GET.get('prdlst_nm', '').strip()
+    # manufacturer_query = request.GET.get('bssh_nm', '').strip()
+
+    # # 검색 조건
+    # # 제품명
+    # search_query = request.GET.get('prdlst_nm', '').strip()
+    # # 제조사명
+    # manufacturer_query = request.GET.get('bssh_nm', '').strip()
+
+    # # 검색 조건 없는 경우 모든 데이터 조회
+    # items = FoodItem.objects.filter(
+    #     prdlst_nm__icontains=search_query, 
+    #     bssh_nm__icontains=manufacturer_query
+    # ).order_by('-last_updt_dtm')
+
+    # #items = items.order_by('-last_updt_dtm')  # 최신순 정렬
+
+    # paginator = Paginator(items, items_per_page)
+    # current_page = request.GET.get('page', 1)
+    # page_obj = paginator.get_page(current_page)
+
+    # # 페이지네이션 범위 계산
+    # current_page_num = page_obj.number
+    # start_range = max(current_page_num - 5, 1)
+    # end_range = min(current_page_num + 5, paginator.num_pages) + 1
+
+    # page_range = range(start_range, end_range)
+
+    # #print(page_obj)
+
+    # return render(request, 'label/food_item_list.html', {
+    #     'page_obj': page_obj,
+    #     'page_range': page_range,
+    #     'search_query': search_query,
+    #     'items_per_page': items_per_page,
+    # })
+
+def food_item_list(request):
+    """제품 목록"""
+    search_query = request.GET.get("prdlst_nm", "").strip()
+    manufacturer_query = request.GET.get("bssh_nm", "").strip()
+    items_per_page = request.GET.get("items_per_page", 10)
+
     try:
         items_per_page = int(items_per_page)
     except ValueError:
         items_per_page = 10
 
-    search_query = request.GET.get('prdlst_nm', '').strip()
-    manufacturer_query = request.GET.get('bssh_nm', '').strip()
-
-    # 검색 조건
-    # 제품명
-    search_query = request.GET.get('prdlst_nm', '').strip()
-    # 제조사명
-    manufacturer_query = request.GET.get('bssh_nm', '').strip()
-
-    # 검색 조건 없는 경우 모든 데이터 조회
     items = FoodItem.objects.filter(
-        prdlst_nm__icontains=search_query, 
-        bssh_nm__icontains=manufacturer_query
-    ).order_by('-last_updt_dtm')
-
-    #items = items.order_by('-last_updt_dtm')  # 최신순 정렬
+        prdlst_nm__icontains=search_query,
+        bssh_nm__icontains=manufacturer_query,
+    ).order_by("-last_updt_dtm")
 
     paginator = Paginator(items, items_per_page)
-    current_page = request.GET.get('page', 1)
-    page_obj = paginator.get_page(current_page)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
 
-    # 페이지네이션 범위 계산
-    current_page_num = page_obj.number
-    start_range = max(current_page_num - 5, 1)
-    end_range = min(current_page_num + 5, paginator.num_pages) + 1
+    # 동적 페이지 범위 설정
+    current_page = page_obj.number
+    total_pages = paginator.num_pages
+    page_range = range(max(1, current_page - 5), min(total_pages + 1, current_page + 5))
 
-    page_range = range(start_range, end_range)
+    return render(
+        request,
+        "label/food_item_list.html",
+        {
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "page_range": page_range,
+            "search_query": search_query,
+            "items_per_page": items_per_page,
+            "manufacturer_query": manufacturer_query,
+        },
+    )
 
-    #print(page_obj)
-
-    return render(request, 'label/food_item_list.html', {
-        'page_obj': page_obj,
-        'page_range': page_range,
-        'search_query': search_query,
-        'items_per_page': items_per_page,
-    })
 
 # 제품 상세보기 기능 추가
 def food_item_detail(request, prdlst_report_no):

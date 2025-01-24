@@ -93,6 +93,8 @@ class Label(models.Model):
     content_weight = models.CharField(max_length=50, help_text="내용량(열량)")
     manufacturer_address = models.CharField(max_length=255, help_text="제조원 소재지")
     storage_method = models.TextField(help_text="보관방법")
+    rawmtrl_nm = models.TextField(max_length=1000, verbose_name="원재료명", null=True, blank=True)  # 원재료명
+    # 식품품목제조보고(원재료)/C002 API에서 추출 가능함.
 
     def __str__(self):
         # return f"Label for {self.food_item.product_name}" #product_name -> prdlst_nm 변경경
