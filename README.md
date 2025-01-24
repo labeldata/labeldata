@@ -81,3 +81,51 @@ git push origin main # 원격 저장소 푸시
 4. 행정처분 크롤링 기능 상세화 - 서초구
    1) 조회화면 생성, 검색 기능 설계(메인 화면)
  2) 지자체url 등록, 크롤링 항목을 개별 관리하는 메뉴
+
+
+ 행정처분 관련
+
+ 
+새올 전자민원창구 - 서울만은 아니고 전국에 많은 듯
+
+<a href="javascript:fncViewDtl('SNTX',
+						'5670123',
+						'2025',
+						'13',
+						'CMM')">일반음식점</a>
+
+<a href="javascript:fncViewDtl('CDFX',
+						'5670123',
+						'2025',
+						'100001',
+						'CMM')">노래연습장업</a>
+첫번째 인수?
+두번째 인수 - 지역코드? 서울의 경우 구마다 다른 듯
+세번째, 네번째 인수 - 연도, 행정처분번호
+
+
+
+행정처분 모델 - (지역명 or 지역코드, 행정처분번호)
+
+처분확정일자	varchar(10)		not null		yyyy-mm-dd
+업종명		varchar(80)		not null
+업소명		varchar(200)	not null
+소재지_도로명	varchar(300)
+소재지_지번명	varchar(300)
+처분사항		varchar(100)	not null
+
+행정처분 상세
+행정처분번호	varchar(20)		not null
+인허가번호		varchar(20)		not null
+대표자명		varchar(50)
+처분기간		varchar(30)
+안내사항		varchar(100)
+
+위반내용		longtext					\로 구분해서 다 한 곳에 (위반내용(0)차, 내용, 위반내용(0)차, 내용)
+
+처리부서		varchar(20)
+담당자		varchar(20)
+전화번호		varchar(15)
+이메일		varchar(40)
+
+
