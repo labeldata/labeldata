@@ -126,7 +126,7 @@ def call_api_endpoint(request, pk):
                             'update_datetime': now()
                         }
                     )
-                    # print(f"Created: {created} / 제품명 : {ReceivedAPIItem.prdlst_nm}")
+                    print(f"Created: {created} / 제품명 : {ReceivedAPIItem.prdlst_nm} 용도 : {ReceivedAPIItem.usages}")
                 except Exception as e:
                     logger.error(f"Failed to save item {item.get('PRDLST_NM')}: {e}")
 
