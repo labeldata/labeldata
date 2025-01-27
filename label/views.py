@@ -245,8 +245,16 @@ def food_item_list(request):
     )
 
 
-# 제품 상세보기 기능 추가
+# # 제품 상세보기 기능 추가
+# def food_item_detail(request, prdlst_report_no):
+#     """제품 상세 정보"""
+#     item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
+#     return render(request, 'label/food_item_detail.html', {'item': item})
+
 def food_item_detail(request, prdlst_report_no):
-    """제품 상세 정보"""
-    item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
-    return render(request, 'label/food_item_detail.html', {'item': item})
+    """FoodItem 상세 정보 팝업"""
+    food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
+    # 모델의 필드 이름과 값을 딕셔너리로 변환
+    item_data = {field.verbose_name: getattr(food_item, field.name, None)
+                 for field in FoodItem._meta.fields}
+    return render(request, 'label/food_item_detail.html', {'item': item_data})
