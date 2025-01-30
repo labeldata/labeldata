@@ -1,8 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CSRF Token 추가 -->
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>제품 상세 정보</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
@@ -12,6 +14,15 @@
         .container {
             max-width: 800px;
             margin: auto;
+        }
+        .button-group {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 15px;
+        }
+        .button-group button {
+            margin-left: 5px;
+            font-size: 12px;
         }
         .two-columns th {
             width: 25%;
@@ -23,55 +34,147 @@
     </style>
 </head>
 <body>
-<div class="container my-4">
-    <h4 class="mb-4 text-center">제품 상세 정보</h4>
-    <table class="table table-bordered">
-        <thead class="table-light">
-            <tr>
-                <th colspan="4">제품 정보</th>
-            </tr>
-        </thead>
-        <tbody class="two-columns">
-            <tr>
-                <th>품목보고번호</th>
-                <td>{{ item.품목제조번호 }}</td>
-                <th>허가일자</th>
-                <td>{{ item.허가일자 }}</td>
-            </tr>
-            <tr>
-                <th>제품명</th>
-                <td>{{ item.제품명 }}</td>
-                <th>식품유형</th>
-                <td>{{ item.품목유형명 }}</td>
-            </tr>
-            <tr>
-                <th>제조사</th>
-                <td>{{ item.제조사명 }}</td>
-                <th>업종명</th>
-                <td>{{ item.업종명 }}</td>
-            </tr>
-            <tr>
-                <th>소비기한</th>
-                <td>{{ item.소비기한 }}</td>
-                <th>용법</th>
-                <td>{{ item.용법 }}</td>
-            </tr>
-            <tr>
-                <th>원재료명</th>
-                <td colspan="3">{{ item.원재료명 }}</td>
-            </tr>
-            <tr>
-                <th>제품형태</th>
-                <td colspan="3">{{ item.제품형태 }}</td>
-            </tr>
-            <tr>
-                <th>포장재질</th>
-                <td colspan="3">{{ item.포장재질 }}</td>
-            </tr>
-        </tbody>
-    </table>
+    <div class="container my-4">
+        <h4 class="mb-4 text-center">제품 상세 정보</h4>
+        <div class="button-group">
+            <!-- 내원료 저장 버튼 -->
+            <button class="btn btn-success btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">내원료 저장</button>
+            <!-- 내제품 저장 버튼 -->
+            <button class="btn btn-primary btn-sm" onclick="saveMyProduct('{{ item.prdlst_report_no }}')">내제품 저장</button>
+        </div>
+        <table class="table table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th colspan="4">제품 정보</th>
+                </tr>
+            </thead>
+            <tbody class="two-columns">
+                <tr>
+                    <th>품목보고번호</th>
+                    <td>{{ item.prdlst_report_no }}</td>
+                    <th>허가일자</th>
+                    <td>{{ item.prms_dt }}</td>
+                </tr>
+                <tr>
+                    <th>제품명</th>
+                    <td>{{ item.prdlst_nm }}</td>
+                    <th>식품유형</th>
+                    <td>{{ item.prdlst_dcnm }}</td>
+                </tr>
+                <tr>
+                    <th>제조사</th>
+                    <td>{{ item.bssh_nm }}</td>
+                    <th>업종명</th>
+                    <td>{{ item.induty_cd_nm }}</td>
+                </tr>
+                <tr>
+                    <th>소비기한</th>
+                    <td>{{ item.pog_daycnt }}</td>
+                    <th>용법</th>
+                    <td>{{ item.usages }}</td>
+                </tr>
+                <tr>
+                    <th>원재료명</th>
+                    <td colspan="3">{{ item.rawmtrl_nm }}</td>
+                </tr>
+                <tr>
+                    <th>제품형태</th>
+                    <td colspan="3">{{ item.dispos }}</td>
+                </tr>
+                <tr>
+                    <th>포장재질</th>
+                    <td colspan="3">{{ item.frmlc_mtrqlt }}</td>
+                </tr>
+            </tbody>
+        </table>
 
-    <button class="btn btn-secondary mt-3 w-100" onclick="window.close()">닫기</button>
-</div>
+        <button class="btn btn-secondary mt-3 w-100" onclick="window.close()">닫기</button>
+    </div>
+
+    <!-- Bootstrap Modal -->
+    <div class="modal fade" id="responseModal" tabindex="-1" aria-labelledby="responseModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="responseModalLabel">알림</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body" id="modalMessage">
+                    <!-- 메시지가 여기에 삽입됩니다 -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">닫기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showResponseMessage(message) {
+            document.getElementById("modalMessage").innerText = message;
+            $("#responseModal").modal("show");
+        }
+
+        function saveMyProduct(reportNo) {
+            if (!reportNo) {
+                showResponseMessage("품목제조번호가 누락되었습니다.");
+                return;
+            }
+
+            const url = `/label/save-my-product/${reportNo}/`;
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrf-token]').getAttribute('content'),
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showResponseMessage('내제품으로 저장되었습니다.');
+                    setTimeout(() => window.location.href = "/label/my-products/", 2000);
+                } else {
+                    showResponseMessage('저장 실패: ' + (data.error || '알 수 없는 오류'));
+                }
+            }).catch(error => showResponseMessage('오류 발생: ' + error.message));
+        }
+
+        function saveToMyIngredients(reportNo) {
+            if (!reportNo) {
+                showResponseMessage("품목제조번호가 누락되었습니다.");
+                return;
+            }
+        
+            const url = `/label/save-to-my-ingredients/${reportNo}/`;
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrf-token]').getAttribute('content'),
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showResponseMessage("내원료로 저장되었습니다.");
+                } else {
+                    showResponseMessage("저장 실패: " + (data.error || "알 수 없는 오류"));
+                }
+            })
+            .catch(error => showResponseMessage("오류 발생: " + error.message));
+        }
+    </script>
+
+    <!-- Bootstrap JavaScript 추가 -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

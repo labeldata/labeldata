@@ -1,0 +1,242 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>표시사항 작성</title>
+
+    <!-- Bootstrap & Custom Styles -->
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+
+    {% comment %} <style>
+        /* 컨테이너 전체 높이 지정 */
+        .container-fluid {
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* 좌우 분할 화면 */
+        .left-panel, .right-panel {
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        /* 좌우 비율 설정 (기본값 50:50) */
+        .left-panel {
+            flex: 1;
+            background-color: #f8f9fa;
+        }
+
+        .right-panel {
+            flex: 1;
+            background-color: #ffffff;
+        }
+
+        /* 중간 드래그바 */
+        .drag-bar {
+            width: 5px;
+            heigth: 100vh;
+            background-color: #ccc;
+            cursor: ew-resize;
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+            .container-fluid {
+                flex-direction: row;
+            }
+            .drag-bar {
+                height: 5px;
+                width: 100%;
+                cursor: ns-resize;
+            }
+        }
+    </style> {% endcomment %}
+</head>
+<body>
+
+    <div class="container-fluid">
+        <!-- 좌측 데이터 입력 -->
+        <div class="left-panel">
+            <h4>📝 데이터 입력하기</h4>
+            <hr>
+            <form method="post">
+                {% csrf_token %}
+                <div class="form-group mb-3">
+                    <label for="prdlst_report_no" class="form-label">품목제조번호</label>
+                    <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value }}" readonly>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="prdlst_nm" class="form-label">제품명</label>
+                    <input type="text" name="prdlst_nm" class="form-control" value="{{ form.prdlst_nm.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="prdlst_dcnm" class="form-label">품목유형명</label>
+                    <input type="text" name="prdlst_dcnm" class="form-control" value="{{ form.prdlst_dcnm.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="bssh_nm" class="form-label">제조사명</label>
+                    <input type="text" name="bssh_nm" class="form-control" value="{{ form.bssh_nm.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="rawmtrl_nm" class="form-label">원재료명</label>
+                    <textarea name="rawmtrl_nm" class="form-control" rows="3">{{ form.rawmtrl_nm.value }}</textarea>
+            <!-- 알레르기 물질 선택 -->
+            <div class="form-group mb-3">
+                <label>알레르기 물질</label>
+                <div class="border p-2 d-flex flex-wrap gap-3">
+                    {% for allergen in allergens %}
+                    <div class="form-check" style="flex: 1 1 calc(33.33% - 10px);">
+                        <input class="form-check-input allergy-checkbox"
+                            type="checkbox" name="allergens" value="{{ allergen.id }}"
+                            id="allergy-{{ allergen.id }}"
+                            {% if allergen in form.allergens.value %}checked{% endif %}>
+                        <label class="form-check-label" for="allergy-{{ allergen.id }}">{{ allergen.name }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+                <div class="form-group mb-3">
+                    <label for="storage_method" class="form-label">보관방법</label>
+                    <textarea name="storage_method" class="form-control" rows="3">{{ form.storage_method.value }}</textarea>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="content_weight" class="form-label">내용량(열량)</label>
+                    <input type="text" name="content_weight" class="form-control" value="{{ form.content_weight.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="manufacturer_address" class="form-label">제조원 소재지</label>
+                    <input type="text" name="manufacturer_address" class="form-control" value="{{ form.manufacturer_address.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="origin" class="form-label">원산지</label>
+                    <input type="text" name="origin" class="form-control" value="{{ form.origin.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="importer_address" class="form-label">수입원 및 소재지</label>
+                    <input type="text" name="importer_address" class="form-control" value="{{ form.importer_address.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="distributor_name" class="form-label">유통전문판매원</label>
+                    <input type="text" name="distributor_name" class="form-control" value="{{ form.distributor_name.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="distributor_address" class="form-label">유통전문판매원 소재지</label>
+                    <input type="text" name="distributor_address" class="form-control" value="{{ form.distributor_address.value }}">
+                </div>
+                <div class="form-group mb-3">
+                    <label for="warnings" class="form-label">주의사항</label>
+                    <textarea name="warnings" class="form-control" rows="3">{{ form.warnings.value }}</textarea>
+                </div>
+                <div class="form-group mb-3">
+                    <label for="additional_info" class="form-label">기타 표시사항</label>
+                    <textarea name="additional_info" class="form-control" rows="3">{{ form.additional_info.value }}</textarea>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">저장</button>
+            </form>
+        </div>
+
+        <!-- 중간 드래그바 -->
+        <div class="drag-bar" id="drag-bar"></div>
+
+        <!-- 우측 표시사항 미리보기 -->
+        <div class="right-panel">
+            <h4>📋 미리보기</h4>
+            <hr>
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>항목명</th>
+                        <th>내용</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for field in form %}
+                        <!-- 알레르기 물질 미리보기를 특정 위치에 삽입 -->
+                        {% if field.name == "storage_method" %}  {# 원하는 위치 지정 #}
+                            <tr class="allergy-box d-none">
+                                <td><strong>알레르기 주의</strong></td>
+                                <td id="allergy-preview"></td>
+                            </tr>
+                        {% endif %}
+                
+                        <tr>
+                            <td>{{ field.label }}</td>
+                            <td><span id="preview-{{ field.name }}">{{ field.value }}</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        function updatePreview() {
+            document.querySelectorAll("input, textarea").forEach(input => {
+                const previewElement = document.getElementById("preview-" + input.name);
+                if (previewElement) {
+                    previewElement.textContent = input.value;
+                }
+            });
+
+            // ✅ 알레르기 물질 선택 반영
+            const selectedAllergens = Array.from(document.querySelectorAll(".allergy-checkbox:checked"))
+                                          .map(cb => cb.nextElementSibling.textContent);
+            const allergyPreview = document.getElementById("allergy-preview");
+            const allergyBox = document.querySelector(".allergy-box");
+
+            if (selectedAllergens.length > 0) {
+                allergyPreview.textContent = selectedAllergens.join(", ") + " 함유";
+                allergyBox.classList.remove("d-none");
+            } else {
+                allergyPreview.textContent = "";
+                allergyBox.classList.add("d-none");
+            }
+        }
+
+        document.querySelectorAll("input, textarea, .allergy-checkbox").forEach(input => {
+            input.addEventListener("input", updatePreview);
+        });
+
+        updatePreview();
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+    const leftPanel = document.querySelector(".left-panel");
+    const rightPanel = document.querySelector(".right-panel");
+    const dragBar = document.getElementById("drag-bar");
+
+    let isDragging = false;
+
+    dragBar.addEventListener("mousedown", (e) {
+        isDragging = true;
+        document.body.style.cursor = "ew-resize";
+    });
+
+    document.addEventListener("mousemove", (e){
+        if (!isDragging) return;
+
+        const containerWidth = document.querySelector(".container-fluid").offsetWidth;
+        const newLeftWidth = e.clientX / containerWidth * 100;
+        const minWidth = 25;
+        const maxWidth = 75;
+
+        if (newLeftWidth >= minWidth && newLeftWidth <= maxWidth) {
+            leftPanel.style.flex = `0 0 ${newLeftWidth}%`;
+            rightPanel.style.flex = `0 0 ${100 - newLeftWidth}%`;
+        }
+    });
+
+    document.addEventListener("mouseup", () {
+        isDragging = false;
+        document.body.style.cursor = "default";
+    });
+}); 
+    </script>

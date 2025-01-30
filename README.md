@@ -137,3 +137,19 @@ git push origin main # 원격 저장소 푸시
 4. 행정처분 크롤링 및 DB 저장까지 구현
 
 #나의 원재료를 어떻게 구현할 것인가? CRUD
+
+[User]
+    | 1:N
+[MyProduct] ---> [Label] ---> [LabelOrder]
+                       | 1:N
+                [MyIngredients] ---> [FoodItem] (데이터 원천)
+                       |
+                 [FrequentlyUsedText] (자주 사용하는 문구)
+
+
+[MyProduct]   --- (1:N) ---> [Label]   --- (1:N) ---> [MyIngredients]
+                        |
+                        |
+                        ---> (1:1) [LabelOrder]
+
+				 

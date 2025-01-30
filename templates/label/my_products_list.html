@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}내제품 관리{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">내제품 관리</h2>
+    <table class="table table-bordered table-hover">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>품목제조번호</th>
+                <th>제품명</th>
+                <th>식품유형</th>
+                <th>제조사</th>
+                <th>수정일</th>
+                <th>표시사항</th>  <!-- 표시사항 버튼 추가 -->
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ product.prdlst_report_no }}</td>
+                <td>{{ product.prdlst_nm }}</td>
+                <td>{{ product.prdlst_dcnm }}</td>
+                <td>{{ product.bssh_nm }}</td>
+                <td>{{ product.updated_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                    {% if product.label_created %}
+                        <a href="{% url 'label:label_creation' unique_key=product.unique_key %}" class="btn btn-sm btn-success"> 작성완료 </a>
+                    {% else %}
+                        <a href="{% url 'label:label_creation' unique_key=product.unique_key %}" class="btn btn-sm btn-warning"> 작성하기 </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center text-muted">내제품이 없습니다.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
