@@ -4,145 +4,145 @@ from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
-from .models import Post, Comment, FoodItem, Label, MyProduct, MyIngredients, LabelOrder, Allergen
-from .forms import PostForm, CommentForm, LabelCreationForm
+from .models import FoodItem, MyLabel, MyProduct, MyIngredient, Allergen
+from .forms import LabelCreationForm
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 import uuid
 
 
-@login_required
-def post_create(request):
-    """게시글 생성"""
-    if request.method == 'POST':
-        form = PostForm(request.POST)
-        if form.is_valid():
-            post = form.save(commit=False)
-            post.author = request.user
-            post.save()
-            messages.success(request, "게시글이 생성되었습니다.")
-            return redirect('label:post_list')
-    else:
-        form = PostForm()
-    return render(request, 'label/post_form.html', {'form': form})
+# @login_required
+# def post_create(request):
+#     """게시글 생성"""
+#     if request.method == 'POST':
+#         form = PostForm(request.POST)
+#         if form.is_valid():
+#             post = form.save(commit=False)
+#             post.author = request.user
+#             post.save()
+#             messages.success(request, "게시글이 생성되었습니다.")
+#             return redirect('label:post_list')
+#     else:
+#         form = PostForm()
+#     return render(request, 'label/post_form.html', {'form': form})
 
 
-@login_required
-def post_edit(request, pk):
-    """게시글 수정"""
-    post = get_object_or_404(Post, pk=pk)
-    if request.user != post.author:
-        messages.error(request, "수정 권한이 없습니다.")
-        return redirect('label:post_list')
+# @login_required
+# def post_edit(request, pk):
+#     """게시글 수정"""
+#     post = get_object_or_404(Post, pk=pk)
+#     if request.user != post.author:
+#         messages.error(request, "수정 권한이 없습니다.")
+#         return redirect('label:post_list')
 
-    if request.method == 'POST':
-        form = PostForm(request.POST, instance=post)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "게시글이 수정되었습니다.")
-            return redirect('label:post_detail', pk=post.pk)
-    else:
-        form = PostForm(instance=post)
-    return render(request, 'label/post_form.html', {'form': form})
-
-
-@login_required
-def post_delete(request, pk):
-    """게시글 삭제"""
-    post = get_object_or_404(Post, pk=pk)
-    if request.user != post.author:
-        messages.error(request, "삭제 권한이 없습니다.")
-        return redirect('label:post_list')
-
-    if request.method == 'POST':
-        post.delete()
-        messages.success(request, "게시글이 삭제되었습니다.")
-        return redirect('label:post_list')
-
-    return render(request, 'label/post_confirm_delete.html', {'post': post})
+#     if request.method == 'POST':
+#         form = PostForm(request.POST, instance=post)
+#         if form.is_valid():
+#             form.save()
+#             messages.success(request, "게시글이 수정되었습니다.")
+#             return redirect('label:post_detail', pk=post.pk)
+#     else:
+#         form = PostForm(instance=post)
+#     return render(request, 'label/post_form.html', {'form': form})
 
 
-def post_list(request):
-    """게시글 목록"""
-    search_query = request.GET.get('q', '')
-    posts = Post.objects.filter(title__icontains=search_query) if search_query else Post.objects.all()
-    posts = posts.order_by('-create_date')
-    paginator = Paginator(posts, 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
+# @login_required
+# def post_delete(request, pk):
+#     """게시글 삭제"""
+#     post = get_object_or_404(Post, pk=pk)
+#     if request.user != post.author:
+#         messages.error(request, "삭제 권한이 없습니다.")
+#         return redirect('label:post_list')
 
-    return render(request, 'label/post_list.html', {
-        'page_obj': page_obj,
-        'search_query': search_query,
-    })
+#     if request.method == 'POST':
+#         post.delete()
+#         messages.success(request, "게시글이 삭제되었습니다.")
+#         return redirect('label:post_list')
 
-
-def post_detail(request, pk):
-    """게시글 상세보기"""
-    post = get_object_or_404(Post, pk=pk)
-    return render(request, 'label/post_detail.html', {'post': post})
+#     return render(request, 'label/post_confirm_delete.html', {'post': post})
 
 
-@login_required
-def comment_create(request, pk):
-    """댓글 생성"""
-    post = get_object_or_404(Post, pk=pk)
-    if request.method == 'POST':
-        form = CommentForm(request.POST)
-        if form.is_valid():
-            comment = form.save(commit=False)
-            comment.post = post
-            comment.author = request.user
-            comment.save()
-            messages.success(request, "댓글이 작성되었습니다.")
-            return redirect('label:post_detail', pk=pk)
-    else:
-        form = CommentForm()
-    return render(request, 'label/comment_form.html', {'form': form})
+# def post_list(request):
+#     """게시글 목록"""
+#     search_query = request.GET.get('q', '')
+#     posts = Post.objects.filter(title__icontains=search_query) if search_query else Post.objects.all()
+#     posts = posts.order_by('-create_date')
+#     paginator = Paginator(posts, 10)
+#     page_obj = paginator.get_page(request.GET.get('page'))
+
+#     return render(request, 'label/post_list.html', {
+#         'page_obj': page_obj,
+#         'search_query': search_query,
+#     })
 
 
-@login_required
-def comment_edit(request, comment_id):
-    """댓글 수정"""
-    comment = get_object_or_404(Comment, pk=comment_id)
-    if request.user != comment.author:
-        messages.error(request, "수정 권한이 없습니다.")
-        return redirect('label:post_list')
-
-    if request.method == 'POST':
-        form = CommentForm(request.POST, instance=comment)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "댓글이 수정되었습니다.")
-            return redirect('label:post_detail', pk=comment.post.pk)
-    else:
-        form = CommentForm(instance=comment)
-    return render(request, 'label/comment_form.html', {'form': form})
+# def post_detail(request, pk):
+#     """게시글 상세보기"""
+#     post = get_object_or_404(Post, pk=pk)
+#     return render(request, 'label/post_detail.html', {'post': post})
 
 
-@login_required
-def comment_delete(request, comment_id):
-    """댓글 삭제"""
-    comment = get_object_or_404(Comment, pk=comment_id)
-    if request.user != comment.author:
-        messages.error(request, "삭제 권한이 없습니다.")
-        return redirect('label:post_list')
+# @login_required
+# def comment_create(request, pk):
+#     """댓글 생성"""
+#     post = get_object_or_404(Post, pk=pk)
+#     if request.method == 'POST':
+#         form = CommentForm(request.POST)
+#         if form.is_valid():
+#             comment = form.save(commit=False)
+#             comment.post = post
+#             comment.author = request.user
+#             comment.save()
+#             messages.success(request, "댓글이 작성되었습니다.")
+#             return redirect('label:post_detail', pk=pk)
+#     else:
+#         form = CommentForm()
+#     return render(request, 'label/comment_form.html', {'form': form})
 
-    if request.method == 'POST':
-        comment.delete()
-        messages.success(request, "댓글이 삭제되었습니다.")
-        return redirect('label:post_detail', pk=comment.post.pk)
 
-    return render(request, 'label/comment_confirm_delete.html', {'comment': comment})
+# @login_required
+# def comment_edit(request, comment_id):
+#     """댓글 수정"""
+#     comment = get_object_or_404(Comment, pk=comment_id)
+#     if request.user != comment.author:
+#         messages.error(request, "수정 권한이 없습니다.")
+#         return redirect('label:post_list')
+
+#     if request.method == 'POST':
+#         form = CommentForm(request.POST, instance=comment)
+#         if form.is_valid():
+#             form.save()
+#             messages.success(request, "댓글이 수정되었습니다.")
+#             return redirect('label:post_detail', pk=comment.post.pk)
+#     else:
+#         form = CommentForm(instance=comment)
+#     return render(request, 'label/comment_form.html', {'form': form})
+
+
+# @login_required
+# def comment_delete(request, comment_id):
+#     """댓글 삭제"""
+#     comment = get_object_or_404(Comment, pk=comment_id)
+#     if request.user != comment.author:
+#         messages.error(request, "삭제 권한이 없습니다.")
+#         return redirect('label:post_list')
+
+#     if request.method == 'POST':
+#         comment.delete()
+#         messages.success(request, "댓글이 삭제되었습니다.")
+#         return redirect('label:post_detail', pk=comment.post.pk)
+
+#     return render(request, 'label/comment_confirm_delete.html', {'comment': comment})
 
 
 # def food_item_list(request):
-    """제품 목록"""
-    '''
-    검색 조건 추가 및 페이징 개선
-    1. 검색 기능 추가: prdlst_nm로 제품명을 검색할 수 있도록 조건 추가.
-    2. 페이지네이션 범위 계산: current_page를 기준으로 앞뒤 5페이지 범위로 설정.
-    3. 템플릿에서 page_range와 검색 조건 search_query를 활용 가능하도록 컨텍스트에 포함.
-    '''
+    # """제품 목록"""
+    # '''
+    # 검색 조건 추가 및 페이징 개선
+    # 1. 검색 기능 추가: prdlst_nm로 제품명을 검색할 수 있도록 조건 추가.
+    # 2. 페이지네이션 범위 계산: current_page를 기준으로 앞뒤 5페이지 범위로 설정.
+    # 3. 템플릿에서 page_range와 검색 조건 search_query를 활용 가능하도록 컨텍스트에 포함.
+    # '''
 
     # # 페이지당 항목 수 동적 처리
     # items_per_page = request.GET.get('items_per_page', 10)  # 기본값 10
@@ -190,7 +190,7 @@ def comment_delete(request, comment_id):
 
 
 def food_item_list(request):
-    """제품 목록"""
+    # 제품 목록
     search_query = request.GET.get("prdlst_nm", "").strip()
     manufacturer_query = request.GET.get("bssh_nm", "").strip()
     items_per_page = request.GET.get("items_per_page", 10)
@@ -229,7 +229,7 @@ def food_item_list(request):
 
 
 def food_item_detail(request, prdlst_report_no):
-    """제품 상세 정보 팝업"""
+    # 제품 상세 정보 팝업
     food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
     my_product = MyProduct.objects.filter(prdlst_report_no=prdlst_report_no, user=request.user).first()
 
@@ -238,7 +238,7 @@ def food_item_detail(request, prdlst_report_no):
 
 @login_required
 def save_my_product(request, prdlst_report_no):
-    """FoodItem 데이터를 MyProduct로 복사"""
+    # FoodItem 데이터를 MyProduct로 복사
     if request.method != "POST":
         return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
 
@@ -285,7 +285,7 @@ def save_my_product(request, prdlst_report_no):
 
 @login_required
 def my_product_list(request):
-    """내제품 관리 페이지"""
+    # 내제품 관리 페이지
     products = MyProduct.objects.filter(user=request.user).order_by("-updated_at")
 
     # 🔹 unique_key가 없는 데이터가 있다면 UUID 자동 생성
@@ -299,7 +299,7 @@ def my_product_list(request):
 
 @login_required
 def label_creation(request, unique_key):
-    """표시사항 작성 및 수정"""
+    # 표시사항 작성 및 수정
     my_product = get_object_or_404(MyProduct, unique_key=unique_key, user=request.user)
     
     # 기존 Label이 있는지 확인
@@ -351,7 +351,7 @@ def label_creation(request, unique_key):
 @login_required
 @csrf_exempt  # fetch 요청에서 CSRF 문제를 해결
 def save_to_my_ingredients(request, prdlst_report_no=None):
-    """내원료 저장"""
+    # 내원료 저장
     if request.method != "POST":
         return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
 
@@ -388,24 +388,24 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
-@login_required
-@csrf_exempt
-def save_field_order(request):
-    """드래그 앤 드롭 필드 순서 저장"""
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            order = data.get("order", [])
+# @login_required
+# @csrf_exempt
+# def save_field_order(request):
+#     """드래그 앤 드롭 필드 순서 저장"""
+#     if request.method == "POST":
+#         try:
+#             data = json.loads(request.body)
+#             order = data.get("order", [])
 
-            if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
-                return JsonResponse({'success': False, 'error': 'Invalid order format'}, status=400)
+#             if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+#                 return JsonResponse({'success': False, 'error': 'Invalid order format'}, status=400)
 
-            # LabelOrder 업데이트
-            LabelOrder.objects.update_or_create(
-                user=request.user,
-                defaults={'order': json.dumps(order)}
-            )
-            return JsonResponse({'success': True, 'message': '필드 순서가 저장되었습니다.'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
-    return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=405)
+#             # LabelOrder 업데이트
+#             LabelOrder.objects.update_or_create(
+#                 user=request.user,
+#                 defaults={'order': json.dumps(order)}
+#             )
+#             return JsonResponse({'success': True, 'message': '필드 순서가 저장되었습니다.'})
+#         except Exception as e:
+#             return JsonResponse({'success': False, 'error': str(e)}, status=500)
+#     return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=405)

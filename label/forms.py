@@ -1,64 +1,50 @@
 from django import forms
-from .models import Post, Comment, FoodType, Label, FrequentlyUsedText, MyProduct, MyIngredients, Allergen
+from .models import MyLabel, MyIngredient, Allergen
+
+# ## 뭘 포스트 하는 건지 ???
+# class PostForm(forms.ModelForm):
+#     """게시글 등록/수정 폼"""
+#     food_type = forms.ModelChoiceField(
+#         queryset=FoodType.objects.all(),
+#         empty_label="--- 선택하세요 ---",
+#         required=True,
+#         label="식품유형",
+#         widget=forms.Select(attrs={'class': 'form-select'})
+#     )
+
+#     class Meta:
+#         model = Post
+#         fields = ['title', 'food_type', 'manufacturer', 'ingredients', 'storage_conditions', 'precautions']
+#         labels = {
+#             'title': '제품명',
+#             'manufacturer': '제조사',
+#             'ingredients': '원재료명',
+#             'storage_conditions': '보관조건',
+#             'precautions': '기타 주의사항',
+#         }
+#         widgets = {
+#             'title': forms.TextInput(attrs={'class': 'form-control'}),
+#             'manufacturer': forms.TextInput(attrs={'class': 'form-control'}),
+#             'ingredients': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+#             'storage_conditions': forms.TextInput(attrs={'class': 'form-control'}),
+#             'precautions': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+#         }
 
 
-class PostForm(forms.ModelForm):
-    """게시글 등록/수정 폼"""
-    food_type = forms.ModelChoiceField(
-        queryset=FoodType.objects.all(),
-        empty_label="--- 선택하세요 ---",
-        required=True,
-        label="식품유형",
-        widget=forms.Select(attrs={'class': 'form-select'})
-    )
 
-    class Meta:
-        model = Post
-        fields = ['title', 'food_type', 'manufacturer', 'ingredients', 'storage_conditions', 'precautions']
-        labels = {
-            'title': '제품명',
-            'manufacturer': '제조사',
-            'ingredients': '원재료명',
-            'storage_conditions': '보관조건',
-            'precautions': '기타 주의사항',
-        }
-        widgets = {
-            'title': forms.TextInput(attrs={'class': 'form-control'}),
-            'manufacturer': forms.TextInput(attrs={'class': 'form-control'}),
-            'ingredients': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-            'storage_conditions': forms.TextInput(attrs={'class': 'form-control'}),
-            'precautions': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-        }
-
-
-class CommentForm(forms.ModelForm):
-    """댓글 작성 폼"""
-    class Meta:
-        model = Comment
-        fields = ['content']
-        labels = {
-            'content': '댓글 내용',
-        }
-        widgets = {
-            'content': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 3,
-                'placeholder': '댓글을 입력하세요.'
-            }),
-        }
 
 
 class LabelForm(forms.ModelForm):
     """라벨 등록/수정 폼"""
     frequently_used_texts = forms.ModelChoiceField(
-        queryset=FrequentlyUsedText.objects.all(),
+        queryset=MyIngredient.objects.all(),
         required=False,
         label="자주 사용하는 문구",
         widget=forms.Select(attrs={'class': 'form-select'})
     )
 
     class Meta:
-        model = Label
+        model = MyLabel
         fields = ['content_weight', 'manufacturer_address', 'storage_method']
         labels = {
             'content_weight': '내용량 (열량)',
@@ -91,19 +77,19 @@ class LabelCreationForm(forms.ModelForm):
         label="알레르기 물질"
     )
     ingredients = forms.ModelMultipleChoiceField(
-        queryset=MyIngredients.objects.all(),
+        queryset=MyIngredient.objects.all(),
         required=False,
         widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
         label="원재료명"  # 추가됨
     )
 
     class Meta:
-        model = Label
+        model = MyLabel
         fields = [
             'prdlst_report_no', 'prdlst_nm', 'prdlst_dcnm', 'bssh_nm',
             'rawmtrl_nm', 'content_weight', 'manufacturer_address',
             'storage_method', 'distributor_name', 'distributor_address',
-            'warnings', 'additional_info', 'origin', 'importer_address', 
+            'cautions', 'additional_info', 'country_of_origin', 'importer_address', 
             'allergens', 'ingredients'  # 추가됨
         ]
         labels = {
@@ -117,9 +103,9 @@ class LabelCreationForm(forms.ModelForm):
             "storage_method": "보관방법",
             "distributor_name": "유통전문판매원",
             "distributor_address": "유통전문판매원 소재지",
-            "warnings": "주의사항",
+            "cautions": "주의사항",
             "additional_info": "기타 표시사항",
-            "origin": "원산지",
+            "country_of_origin": "원산지",
             "importer_address": "수입원 및 소재지",
             "allergens": "알레르기 물질",
             "ingredients": "원재료명"
@@ -129,7 +115,7 @@ class LabelCreationForm(forms.ModelForm):
 class MyIngredientsForm(forms.ModelForm):
     """내원료 저장 폼"""
     class Meta:
-        model = MyIngredients
+        model = MyIngredient
         fields = [
             'prdlst_report_no', 'prdlst_nm', 'bssh_nm',
             'prms_dt', 'prdlst_dcnm', 'pog_daycnt',
