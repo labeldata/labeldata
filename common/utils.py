@@ -12,11 +12,11 @@ API_URL = os.getenv("API_URL", "https://api.publicdata.go.kr/food-item")
 API_KEY = os.getenv("PUBLIC_API_KEY", "default-api-key")
 
 def fetch_food_data_from_api(query_params):
-    """
-    공공데이터 API에서 품목 제조보고 정보를 가져옴
-    :param query_params: dict, API 요청 파라미터
-    :return: dict, API 응답 데이터
-    """
+
+    # 공공데이터 API에서 품목 제조보고 정보를 가져옴
+    # :param query_params: dict, API 요청 파라미터
+    # :return: dict, API 응답 데이터
+
     # 캐싱 키 생성 (파라미터를 정렬하여 일관성 유지)
     cache_key = f"food_data_{'_'.join(f'{k}:{v}' for k, v in sorted(query_params.items()))}"
     cached_data = cache.get(cache_key)
@@ -43,10 +43,10 @@ def fetch_food_data_from_api(query_params):
         return {}
 
 def save_food_items(items):
-    """
-    API에서 가져온 데이터를 데이터베이스에 저장 또는 업데이트
-    :param items: list, API로부터 가져온 데이터
-    """
+    
+    # API에서 가져온 데이터를 데이터베이스에 저장 또는 업데이트
+    # :param items: list, API로부터 가져온 데이터
+    
     saved_count = 0
     for item in items:
         _, created = FoodItem.objects.update_or_create(

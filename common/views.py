@@ -153,7 +153,7 @@ logger = logging.getLogger(__name__)
 #         return JsonResponse({"error": str(e)}, status=500)
 
 def call_api_endpoint(request, pk):
-    """API 데이터를 호출 및 저장 또는 원재료명 업데이트"""
+    # API 데이터를 호출 및 저장 또는 원재료명 업데이트
     endpoint = get_object_or_404(ApiEndpoint, pk=pk)
     start_position = 1
     batch_size = 1000
@@ -165,7 +165,7 @@ def call_api_endpoint(request, pk):
     try:
         while True:
             # API URL 구성
-            change_date = "20250121"
+            change_date = "20250201"
             api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}/CHNG_DT={change_date}"
             logger.info(f"Calling API at URL: {api_url}")
 

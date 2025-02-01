@@ -203,7 +203,7 @@ def food_item_list(request):
     items = FoodItem.objects.filter(
         prdlst_nm__icontains=search_query,
         bssh_nm__icontains=manufacturer_query,
-    ).order_by("-last_updt_dtm")
+        ).order_by("-last_updt_dtm")
 
     paginator = Paginator(items, items_per_page)
     page_number = request.GET.get("page", 1)
