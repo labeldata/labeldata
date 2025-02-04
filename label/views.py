@@ -231,9 +231,9 @@ def food_item_list(request):
 def food_item_detail(request, prdlst_report_no):
     # 제품 상세 정보 팝업
     food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
-    my_product = MyProduct.objects.filter(prdlst_report_no=prdlst_report_no, user=request.user).first()
+    #my_product = MyProduct.objects.filter(prdlst_report_no=prdlst_report_no, user=request.user).first()
 
-    return render(request, 'label/food_item_detail.html', {'item': my_product if my_product else food_item,})
+    return render(request, 'label/food_item_detail.html', {'item': food_item, 'current_user': request.user, })
 
 
 @login_required
