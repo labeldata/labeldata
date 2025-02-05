@@ -12,7 +12,7 @@
                     <a href="{% url 'label:food_item_list' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list' %}active{% endif %}">제품 리스트</a>
                 </li>
                 <li class="nav-item">
-                    <a href="{% url 'label:my_product_list' %}" class="nav-link {% if request.resolver_match.url_name == 'my_product_list' %}active{% endif %}">내제품 관리</a>
+                    <a href="{% url 'label:my_label_list' %}" class="nav-link {% if request.resolver_match.url_name == 'my_label_list' %}active{% endif %}">내 표시사항 관리</a>
                 </li>
                 {% if user.is_authenticated %}
                 <li class="nav-item">

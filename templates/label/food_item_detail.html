@@ -37,10 +37,13 @@
     <div class="container my-4">
         <h4 class="mb-4 text-center">제품 상세 정보</h4>
         <div class="button-group">
-            <!-- 내원료 저장 버튼 -->
+            <!-- 내원료 저장 버튼 
             <button class="btn btn-success btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">내원료 저장</button>
-            <!-- 내제품 저장 버튼 -->
-            <button class="btn btn-primary btn-sm" onclick="saveMyProduct('{{ item.prdlst_report_no }}')">내제품 저장</button>
+            -->
+
+            <!-- 내 표시사항 저장 버튼 -->
+            <button class="btn btn-primary btn-sm" onclick="saveto_my_label('{{ item.prdlst_report_no }}')">내 표시사항으로 저장</button>
+
         </div>
         <table class="table table-bordered">
             <thead class="table-light">
@@ -117,30 +120,34 @@
             $("#responseModal").modal("show");
         }
 
-        function saveMyProduct(reportNo) {
-            if (!reportNo) {
-                showResponseMessage("품목제조번호가 누락되었습니다.");
-                return;
-            }
-
-            const url = `/label/save-my-product/${reportNo}/`;
-            fetch(url, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrf-token]').getAttribute('content'),
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showResponseMessage('내제품으로 저장되었습니다.');
-                    setTimeout(() => window.location.href = "/label/my-products/", 2000);
-                } else {
-                    showResponseMessage('저장 실패: ' + (data.error || '알 수 없는 오류'));
-                }
-            }).catch(error => showResponseMessage('오류 발생: ' + error.message));
+        function saveto_my_label(prdlst_report_no) {
+        if (!prdlst_report_no) {
+            alert("품목제조번호가 누락되었습니다.");
+            return;
         }
+
+        const url = `/label/saveto_my_label/${prdlst_report_no}/`;  // 여기서 prdlst_report_no는 실제 값이어야 합니다.
+        fetch(url, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
+                "Content-Type": "application/json"
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("내 표시사항으로 저장되었습니다.");
+            } else {
+                alert("저장 실패: " + (data.error || "알 수 없는 오류"));
+            }
+        })
+        .catch(error => {
+            alert("오류 발생: " + error.message);
+        });
+        }
+        
+        
 
         function saveToMyIngredients(reportNo) {
             if (!reportNo) {

@@ -18,9 +18,11 @@ urlpatterns = [
     # path('comment/<int:comment_id>/edit/', views.comment_edit, name='comment_edit'),
     # path('comment/<int:comment_id>/delete/', views.comment_delete, name='comment_delete'),
 
-    # 내제품 관리
-    path('my-products/', views.my_product_list, name='my_product_list'),
-    path('save-my-product/<str:prdlst_report_no>/', views.save_my_product, name='save_my_product'),
+    # 내 표시사항 관리
+    path('my-labels/', views.my_label_list, name='my_label_list'),
+    # 내 표시사항으로 저장 (saveto_my_label 뷰 호출)
+    path('saveto_my_label/<str:prdlst_report_no>/', views.saveto_my_label, name='saveto_my_label'),
+
 
     # 표시사항 작성
     path("label/create/", views.label_creation, name="label_creation"),
