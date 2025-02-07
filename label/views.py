@@ -150,8 +150,6 @@ def my_label_list(request):
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
 
-    # DEBUG: items에 어떤 데이터가 들어있는지 확인
-    print("DEBUG: MyLabel items:", list(items.values()))
 
     # 동적 페이지 범위 설정
     current_page = page_obj.number
