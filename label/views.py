@@ -68,7 +68,6 @@ FOODITEM_MYLABEL_MAPPING = {
     'rawmtrl_nm': 'rawmtrl_nm',
     # 추가 필드가 필요하면 여기에 넣으세요.
 }
-
 @login_required
 def saveto_my_label(request, prdlst_report_no):
     # FoodItem 데이터를 MyLabel로 복사 (내 표시사항으로 저장)
@@ -78,34 +77,57 @@ def saveto_my_label(request, prdlst_report_no):
     try:
         # 이미 존재하는 경우 체크
         existing_label = MyLabel.objects.filter(prdlst_report_no=prdlst_report_no, user_id=request.user).first()
-        if existing_label:
-            print("🔸 이미 내 라벨에 존재하는 제품")
-            return JsonResponse({'success': False, 'error': '이미 내 라벨에 저장된 항목입니다.'}, status=400)
+        
+        # POST 요청 본문에서 JSON 데이터를 파싱하여 confirm 플래그를 확인
+        data = {}
+        if request.body:
+            try:
+                data = json.loads(request.body)
+            except Exception:
+                data = {}
+        confirm_flag = data.get("confirm", False)
+        
+        # 기존 라벨이 있고, 아직 사용자의 확인(confirm)이 없는 경우
+        if existing_label and not confirm_flag:
+            print("이미 내 라벨에 존재하는 제품")
+            return JsonResponse({
+                'success': False,
+                'confirm_required': True,
+                'message': '이미 내 라벨에 저장된 항목입니다. 저장하시겠습니까?'
+            }, status=200)
         
         # FoodItem 조회
         food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
-        print(f"🔹 FoodItem 찾음: {food_item.prdlst_nm} ({food_item.prdlst_report_no})")
-       
-
+        print(f"FoodItem 찾음: {food_item.prdlst_nm} ({food_item.prdlst_report_no})")
+        
         # FOODITEM_MYLABEL_MAPPING을 사용하여 FoodItem의 데이터를 복사할 딕셔너리 생성
-        data = {}
+        data_mapping = {}
         for food_field, mylabel_field in FOODITEM_MYLABEL_MAPPING.items():
-            data[mylabel_field] = getattr(food_item, food_field, '')
-        # 필요하다면 기본값 처리 (예: 빈 문자열 대신 "미정" 등)
-
-        # MyLabel 생성 시 user, my_label_name 등 추가 필드를 함께 지정
+            data_mapping[mylabel_field] = getattr(food_item, food_field, '')
+        
+        # 만약 기존 라벨이 있고 사용자가 확인한 경우, 기존 레코드를 업데이트하는 대신 새 레코드를 생성
+        if existing_label and confirm_flag:
+            my_label = MyLabel.objects.create(
+                user_id=request.user,
+                my_label_name="임시 - " + food_item.prdlst_nm,
+                **data_mapping
+            )
+            print(f"MyLabel 저장 완료 (새로운 레코드): {my_label.prdlst_nm}")
+            return JsonResponse({'success': True, 'message': '내 표시사항으로 저장되었습니다.'})
+        
+        # 기존 라벨이 없으면 새 MyLabel 생성
         my_label = MyLabel.objects.create(
             user_id=request.user,
             my_label_name="임시 - " + food_item.prdlst_nm,
-            **data
+            **data_mapping
         )
-
-        print(f"✅ MyLabel 저장 완료: {my_label.prdlst_nm}")
+        print(f"MyLabel 저장 완료: {my_label.prdlst_nm}")
         return JsonResponse({'success': True, 'message': '내 표시사항으로 저장되었습니다.'})
-
+    
     except Exception as e:
-        print(f"❌ MyLabel 저장 실패: {str(e)}")
+        print(f"MyLabel 저장 실패: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 @login_required
 def my_label_list(request):
@@ -119,14 +141,17 @@ def my_label_list(request):
     except ValueError:
         items_per_page = 10
 
-    items = FoodItem.objects.filter(
+    items = MyLabel.objects.filter(
         prdlst_nm__icontains=search_query,
         bssh_nm__icontains=manufacturer_query,
-        ).order_by("-last_updt_dtm")
+        user_id=request.user).order_by("my_label_id")
 
     paginator = Paginator(items, items_per_page)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
+
+    # DEBUG: items에 어떤 데이터가 들어있는지 확인
+    print("DEBUG: MyLabel items:", list(items.values()))
 
     # 동적 페이지 범위 설정
     current_page = page_obj.number
@@ -135,7 +160,7 @@ def my_label_list(request):
 
     return render(
         request,
-        "label/food_item_list.html",
+        "label/my_label_list.html",
         {
             "page_obj": page_obj,
             "paginator": paginator,
