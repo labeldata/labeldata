@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- CSRF Token 추가 -->
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>제품 상세 정보</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
@@ -12,17 +11,14 @@
             font-size: 14px;
         }
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: auto;
         }
-        .button-group {
+        .header-row {
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 15px;
-        }
-        .button-group button {
-            margin-left: 5px;
-            font-size: 12px;
         }
         .two-columns th {
             width: 25%;
@@ -35,22 +31,11 @@
 </head>
 <body>
     <div class="container my-4">
-        <h4 class="mb-4 text-center">제품 상세 정보</h4>
-        <div class="button-group">
-            <!-- 내원료 저장 버튼 
-            <button class="btn btn-success btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">내원료 저장</button>
-            -->
-
-            <!-- 내 표시사항 저장 버튼 -->
-            <button class="btn btn-primary btn-sm" onclick="saveto_my_label('{{ item.prdlst_report_no }}')">내 표시사항으로 저장</button>
-
+        <div class="header-row">
+            <h5 class="m-0">제품 정보</h5>
+            <button class="btn btn-primary btn-sm" onclick="saveto_my_label('{{ item.prdlst_report_no }}')">표시사항 생성</button>
         </div>
         <table class="table table-bordered">
-            <thead class="table-light">
-                <tr>
-                    <th colspan="4">제품 정보</th>
-                </tr>
-            </thead>
             <tbody class="two-columns">
                 <tr>
                     <th>품목보고번호</th>
@@ -93,107 +78,5 @@
 
         <button class="btn btn-secondary mt-3 w-100" onclick="window.close()">닫기</button>
     </div>
-
-    <!-- Bootstrap Modal -->
-    <div class="modal fade" id="responseModal" tabindex="-1" aria-labelledby="responseModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="responseModalLabel">알림</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body" id="modalMessage">
-                    <!-- 메시지가 여기에 삽입됩니다 -->
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">닫기</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function saveto_my_label(prdlst_report_no) {
-        if (!prdlst_report_no) {
-            alert("품목제조번호가 누락되었습니다.");
-            return;
-        }
-
-        const sendRequest = (confirmFlag = false) => {
-            const url = `/label/saveto_my_label/${prdlst_report_no}/`;
-            // confirm 플래그가 true면 request body에 추가
-            const bodyData = confirmFlag ? JSON.stringify({ confirm: true }) : JSON.stringify({});
-            
-            fetch(url, {
-                method: "POST",
-                headers: {
-                    "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
-                    "Content-Type": "application/json"
-                },
-                body: bodyData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message);
-                } else if (data.confirm_required) {
-                    // 서버에서 확인이 필요하다는 응답이 온 경우
-                    if (confirm(data.message)) {
-                        // 사용자가 확인하면 confirm 플래그를 포함하여 다시 요청
-                        sendRequest(true);
-                    } else {
-                        alert("저장이 취소되었습니다.");
-                    }
-                } else {
-                    alert("저장 실패: " + (data.error || "알 수 없는 오류"));
-                }
-            })
-            .catch(error => {
-                alert("오류 발생: " + error.message);
-            });
-        };
-
-        // 최초 요청 (confirm 플래그 없이)
-        sendRequest();
-    }
-        
-        
-
-        function saveToMyIngredients(reportNo) {
-            if (!reportNo) {
-                showResponseMessage("품목제조번호가 누락되었습니다.");
-                return;
-            }
-        
-            const url = `/label/save-to-my-ingredients/${reportNo}/`;
-            fetch(url, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrf-token]').getAttribute('content'),
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    showResponseMessage("내원료로 저장되었습니다.");
-                } else {
-                    showResponseMessage("저장 실패: " + (data.error || "알 수 없는 오류"));
-                }
-            })
-            .catch(error => showResponseMessage("오류 발생: " + error.message));
-        }
-    </script>
-
-    <!-- Bootstrap JavaScript 추가 -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

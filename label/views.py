@@ -1,249 +1,218 @@
 import json
-from venv import logger  #지우지 말 것
 from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
-from .models import FoodItem, MyLabel, MyIngredient, Allergen
-from .forms import LabelCreationForm
+from django.db.models import Q
 from django.core.paginator import Paginator
 from django.http import JsonResponse
-import uuid
+from .models import FoodItem, MyLabel, MyIngredient, Allergen
+from .forms import LabelCreationForm
+from venv import logger  #지우지 말 것
 
 
+# 공통 함수: 검색 조건 생성
+def get_search_conditions(request, search_fields):
+    """
+    Request에서 검색 조건을 추출하고 Q 객체를 생성합니다.
+    """
+    search_conditions = Q()
+    search_values = {}
+    for field, query_param in search_fields.items():
+        value = request.GET.get(query_param, "").strip()
+        if value:
+            search_conditions &= Q(**{f"{field}__icontains": value})
+            search_values[query_param] = value
+    return search_conditions, search_values
 
-def food_item_list(request):
-    # 제품 목록
-    search_query = request.GET.get("prdlst_nm", "").strip()
-    manufacturer_query = request.GET.get("bssh_nm", "").strip()
-    items_per_page = request.GET.get("items_per_page", 10)
-
-    try:
-        items_per_page = int(items_per_page)
-    except ValueError:
-        items_per_page = 10
-
-    items = FoodItem.objects.filter(
-        prdlst_nm__icontains=search_query,
-        bssh_nm__icontains=manufacturer_query,
-        ).order_by("-last_updt_dtm")
-
-    paginator = Paginator(items, items_per_page)
-    page_number = request.GET.get("page", 1)
+def paginate_queryset(queryset, page_number, items_per_page):
+    """
+    페이징 처리를 수행합니다.
+    """
+    paginator = Paginator(queryset, items_per_page)
     page_obj = paginator.get_page(page_number)
-
-    # 동적 페이지 범위 설정
-    current_page = page_obj.number
-    total_pages = paginator.num_pages
-    page_range = range(max(1, current_page - 5), min(total_pages + 1, current_page + 5))
-
-    return render(
-        request,
-        "label/food_item_list.html",
-        {
-            "page_obj": page_obj,
-            "paginator": paginator,
-            "page_range": page_range,
-            "search_query": search_query,
-            "items_per_page": items_per_page,
-            "manufacturer_query": manufacturer_query,
-        },
-    )
+    page_range = range(max(1, page_obj.number - 5), min(paginator.num_pages + 1, page_obj.number + 5))
+    return paginator, page_obj, page_range
 
 
-def food_item_detail(request, prdlst_report_no):
-    # 제품 상세 정보 팝업
-    food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
-    #my_product_yn = MyProduct.objects.filter(prdlst_report_no=prdlst_report_no, user=request.user).first()
-
-    return render(request, 'label/food_item_detail.html', {'item': food_item,  })
-
-# FoodItem의 필드와 MyLabel의 필드명이 동일하다면 단순 매핑도 가능하고,
-# 만약 다르다면 아래와 같이 FoodItem의 필드명을 key, MyLabel의 필드명을 value로 지정합니다.
-FOODITEM_MYLABEL_MAPPING = {
-    'prdlst_report_no': 'prdlst_report_no',
-    'prdlst_nm': 'prdlst_nm',
-    'prdlst_dcnm': 'prdlst_dcnm',
-    'bssh_nm': 'bssh_nm',
-    'rawmtrl_nm': 'rawmtrl_nm',
-    # 추가 필드가 필요하면 여기에 넣으세요.
-}
 @login_required
-def saveto_my_label(request, prdlst_report_no):
-    # FoodItem 데이터를 MyLabel로 복사 (내 표시사항으로 저장)
-    if request.method != "POST":
-        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+def food_item_list(request):
+    # 검색 조건 필드 매핑
+    search_fields = {
+        "prdlst_nm": "prdlst_nm",
+        "bssh_nm": "bssh_nm",
+        "prdlst_dcnm": "prdlst_dcnm",
+        "pog_daycnt": "pog_daycnt",
+        "prdlst_report_no": "prdlst_report_no",
+    }
+    # 검색 조건 및 값 추출
+    search_conditions, search_values = get_search_conditions(request, search_fields)
 
-    try:
-        # 이미 존재하는 경우 체크
-        existing_label = MyLabel.objects.filter(prdlst_report_no=prdlst_report_no, user_id=request.user).first()
-        
-        # POST 요청 본문에서 JSON 데이터를 파싱하여 confirm 플래그를 확인
-        data = {}
-        if request.body:
-            try:
-                data = json.loads(request.body)
-            except Exception:
-                data = {}
-        confirm_flag = data.get("confirm", False)
-        
-        # 기존 라벨이 있고, 아직 사용자의 확인(confirm)이 없는 경우
-        if existing_label and not confirm_flag:
-            print("이미 내 라벨에 존재하는 제품")
-            return JsonResponse({
-                'success': False,
-                'confirm_required': True,
-                'message': '이미 내 라벨에 저장된 항목입니다. 저장하시겠습니까?'
-            }, status=200)
-        
-        # FoodItem 조회
-        food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
-        print(f"FoodItem 찾음: {food_item.prdlst_nm} ({food_item.prdlst_report_no})")
-        
-        # FOODITEM_MYLABEL_MAPPING을 사용하여 FoodItem의 데이터를 복사할 딕셔너리 생성
-        data_mapping = {}
-        for food_field, mylabel_field in FOODITEM_MYLABEL_MAPPING.items():
-            data_mapping[mylabel_field] = getattr(food_item, food_field, '')
-        
-        # 만약 기존 라벨이 있고 사용자가 확인한 경우, 기존 레코드를 업데이트하는 대신 새 레코드를 생성
-        if existing_label and confirm_flag:
-            my_label = MyLabel.objects.create(
-                user_id=request.user,
-                my_label_name="임시 - " + food_item.prdlst_nm,
-                **data_mapping
-            )
-            print(f"MyLabel 저장 완료 (새로운 레코드): {my_label.prdlst_nm}")
-            return JsonResponse({'success': True, 'message': '내 표시사항으로 저장되었습니다.'})
-        
-        # 기존 라벨이 없으면 새 MyLabel 생성
-        my_label = MyLabel.objects.create(
-            user_id=request.user,
-            my_label_name="임시 - " + food_item.prdlst_nm,
-            **data_mapping
-        )
-        print(f"MyLabel 저장 완료: {my_label.prdlst_nm}")
-        return JsonResponse({'success': True, 'message': '내 표시사항으로 저장되었습니다.'})
-    
-    except Exception as e:
-        print(f"MyLabel 저장 실패: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    # 정렬 및 페이징
+    sort_field = request.GET.get("sort", "prdlst_nm")
+    sort_order = request.GET.get("order", "asc")
+    items_per_page = int(request.GET.get("items_per_page", 10))
+    page_number = request.GET.get("page", 1)
+
+    if sort_order == "desc":
+        sort_field = f"-{sort_field}"
+
+    # 데이터 필터링
+    food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
+    paginator, page_obj, page_range = paginate_queryset(food_items, page_number, items_per_page)
+
+    # GET 파라미터에서 'page' 제거한 쿼리 문자열 (pagination 용)
+    querydict_page = request.GET.copy()
+    querydict_page.pop("page", None)
+    querystring_without_page = querydict_page.urlencode()
+
+    # GET 파라미터에서 'sort'와 'order' 제거한 쿼리 문자열 (정렬 링크 용)
+    querydict_sort = request.GET.copy()
+    querydict_sort.pop("sort", None)
+    querydict_sort.pop("order", None)
+    querystring_without_sort = querydict_sort.urlencode()
+
+    # 컨텍스트 생성
+    context = {
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "page_range": page_range,
+        "search_fields": [
+            {"name": "prdlst_report_no", "placeholder": "품목제조번호", "value": search_values.get("prdlst_report_no", "")},
+            {"name": "prdlst_nm", "placeholder": "제품명", "value": search_values.get("prdlst_nm", "")},
+            {"name": "prdlst_dcnm", "placeholder": "식품유형", "value": search_values.get("prdlst_dcnm", "")},
+            {"name": "bssh_nm", "placeholder": "제조사명", "value": search_values.get("bssh_nm", "")},
+            {"name": "pog_daycnt", "placeholder": "소비기한", "value": search_values.get("pog_daycnt", "")},
+        ],
+        "items_per_page": items_per_page,
+        "sort_field": sort_field,
+        "sort_order": sort_order,
+        "querystring_without_page": querystring_without_page,
+        "querystring_without_sort": querystring_without_sort,
+    }
+
+    return render(request, "label/food_item_list.html", context)
 
 
 @login_required
 def my_label_list(request):
-    # 제품 목록
-    search_query = request.GET.get("prdlst_nm", "").strip()
-    manufacturer_query = request.GET.get("bssh_nm", "").strip()
-    items_per_page = request.GET.get("items_per_page", 10)
+    # 검색 조건 필드 매핑
+    search_fields = {
+        "my_label_name": "my_label_name",
+        "prdlst_report_no": "prdlst_report_no",
+        "prdlst_nm": "prdlst_nm",
+        "prdlst_dcnm": "prdlst_dcnm",
+        "bssh_nm": "bssh_nm",
+    }
+    # 검색 조건 및 값 추출
+    search_conditions, search_values = get_search_conditions(request, search_fields)
 
-    try:
-        items_per_page = int(items_per_page)
-    except ValueError:
-        items_per_page = 10
-
-    items = MyLabel.objects.filter(
-        prdlst_nm__icontains=search_query,
-        bssh_nm__icontains=manufacturer_query,
-        user_id=request.user).order_by("my_label_id")
-
-    paginator = Paginator(items, items_per_page)
+    # 정렬 및 페이징
+    sort_field = request.GET.get("sort", "my_label_name")
+    sort_order = request.GET.get("order", "asc")
+    items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
-    page_obj = paginator.get_page(page_number)
 
+    if sort_order == "desc":
+        sort_field = f"-{sort_field}"
 
-    # 동적 페이지 범위 설정
-    current_page = page_obj.number
-    total_pages = paginator.num_pages
-    page_range = range(max(1, current_page - 5), min(total_pages + 1, current_page + 5))
+    # 데이터 필터링
+    labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by(sort_field)
+    paginator, page_obj, page_range = paginate_queryset(labels, page_number, items_per_page)
 
-    return render(
-        request,
-        "label/my_label_list.html",
-        {
-            "page_obj": page_obj,
-            "paginator": paginator,
-            "page_range": page_range,
-            "search_query": search_query,
-            "items_per_page": items_per_page,
-            "manufacturer_query": manufacturer_query,
-        },
-    )
+    # GET 파라미터에서 'sort'와 'order' 제거한 쿼리 문자열 (정렬 링크용)
+    querydict_sort = request.GET.copy()
+    querydict_sort.pop("sort", None)
+    querydict_sort.pop("order", None)
+    querystring_without_sort = querydict_sort.urlencode()
 
+    # 컨텍스트 생성
+    context = {
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "page_range": page_range,
+        "search_fields": [
+            {"name": "prdlst_report_no", "placeholder": "품목제조번호", "value": search_values.get("prdlst_report_no", "")},
+            {"name": "prdlst_nm", "placeholder": "제품명", "value": search_values.get("prdlst_nm", "")},
+            {"name": "my_label_name", "placeholder": "라벨명", "value": search_values.get("my_label_name", "")},
+            {"name": "prdlst_dcnm", "placeholder": "식품유형", "value": search_values.get("prdlst_dcnm", "")},
+            {"name": "bssh_nm", "placeholder": "제조사명", "value": search_values.get("bssh_nm", "")},
+        ],
+        "items_per_page": items_per_page,
+        "sort_field": sort_field,
+        "sort_order": sort_order,
+        "querystring_without_sort": querystring_without_sort,
+    }
+
+    return render(request, "label/my_label_list.html", context)
 
 
 @login_required
-def label_creation(request, unique_key):
-    # 표시사항 작성 및 수정
-    my_product = get_object_or_404(MyLabel, unique_key=unique_key, user=request.user)
+def food_item_detail(request, prdlst_report_no):
+    food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
+    return render(request, "label/food_item_detail.html", {"item": food_item})
+
+
+@login_required
+def saveto_my_label(request, prdlst_report_no):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
+
+    try:
+        existing_label = MyLabel.objects.filter(prdlst_report_no=prdlst_report_no, user_id=request.user).first()
+        data = json.loads(request.body) if request.body else {}
+        confirm_flag = data.get("confirm", False)
+
+        if existing_label and not confirm_flag:
+            return JsonResponse(
+                {"success": False, "confirm_required": True, "message": "이미 내 라벨에 저장된 항목입니다. 저장하시겠습니까?"}, status=200
+            )
+
+        food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
+        data_mapping = {field: getattr(food_item, field, "") for field in FOODITEM_MYLABEL_MAPPING.keys()}
+
+        if existing_label and confirm_flag:
+            my_label = MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
+            return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
+
+        MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
+        return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@login_required
+def label_creation(request, label_id):
+    label = get_object_or_404(MyLabel, my_label_id=label_id)
+    form = LabelCreationForm(request.POST or None, instance=label)
+    # FoodItem의 식품유형(prdlst_dcnm) 정보를 중복없이 가져오기
+    food_types = FoodItem.objects.values_list('prdlst_dcnm', flat=True).distinct().order_by('prdlst_dcnm')
     
-    # 기존 Label이 있는지 확인
-    label, created = MyLabel.objects.get_or_create(my_product=my_product)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "표시사항이 성공적으로 저장되었습니다.")
+        return redirect("label:my_label_list")
     
-    # 초기 데이터 설정
-    initial_data = {
-        "prdlst_report_no": my_product.prdlst_report_no,
-        "prdlst_nm": my_product.prdlst_nm,
-        "prdlst_dcnm": my_product.prdlst_dcnm,
-        "bssh_nm": my_product.bssh_nm,
-        "rawmtrl_nm": my_product.rawmtrl_nm,
-        "content_weight": my_product.content_weight,
-        "manufacturer_address": my_product.manufacturer_address,
-        "storage_method": my_product.storage_method,
-        "distributor_name": my_product.distributor_name,
-        "distributor_address": my_product.distributor_address,
-        "warnings": my_product.warnings,
-        "additional_info": my_product.additional_info,
-        "origin": my_product.origin,
-        "importer_address": my_product.importer_address,
-    }
-
-    # 기존 Label 데이터가 없을 경우, MyProduct 데이터를 기반으로 Label 생성
-    if created:
-        for field, value in initial_data.items():
-            setattr(label, field, value)
-        label.save()
-
-    if request.method == "POST":
-        form = LabelCreationForm(request.POST, instance=label)
-        if form.is_valid():
-            form.save()
-            my_product.label_created = True
-            my_product.save()
-            messages.success(request, "표시사항이 성공적으로 저장되었습니다.")
-            return redirect("label:my_product_list")
-    else:
-        form = LabelCreationForm(instance=label)
-
     return render(request, "label/label_creation.html", {
-        "form": form, 
-        "my_product": my_product, 
-        "allergens": Allergen.objects.all(), #  알레르기 물질 리스트 전달
-        "label": label
+        "form": form,
+        "label": label,
+        "food_types": food_types
     })
 
 
 @login_required
-@csrf_exempt  # fetch 요청에서 CSRF 문제를 해결
+@csrf_exempt
 def save_to_my_ingredients(request, prdlst_report_no=None):
-    # 내원료 저장
     if request.method != "POST":
-        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
-
-    if not prdlst_report_no:
-        return JsonResponse({'success': False, 'error': '품목제조번호가 없습니다.'}, status=400)
+        return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
 
     try:
-        # FoodItem 객체 가져오기
         food_item = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).first()
-        
         if not food_item:
-            print(f" 오류: 품목제조번호 {prdlst_report_no} 에 해당하는 FoodItem이 존재하지 않습니다.")
-            return JsonResponse({'success': False, 'error': '해당 품목제조번호에 대한 데이터를 찾을 수 없습니다.'}, status=404)
+            return JsonResponse({"success": False, "error": "해당 품목제조번호에 대한 데이터를 찾을 수 없습니다."}, status=404)
 
-        print(f" FoodItem 조회 성공: {food_item.prdlst_nm} ({food_item.prdlst_report_no})")
-
-        # MyIngredients 객체 생성
-        my_ingredient = MyIngredient.objects.create(
+        MyIngredient.objects.create(
             prdlst_report_no=food_item.prdlst_report_no,
             prdlst_nm=food_item.prdlst_nm or "미정",
             bssh_nm=food_item.bssh_nm or "미정",
@@ -254,32 +223,7 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
             rawmtrl_nm=food_item.rawmtrl_nm or "미정",
         )
 
-        print(f" MyIngredients 저장 완료: {my_ingredient.prdlst_nm} ({my_ingredient.prdlst_report_no})")
-        return JsonResponse({'success': True, 'message': '내원료로 저장되었습니다.'})
+        return JsonResponse({"success": True, "message": "내원료로 저장되었습니다."})
 
     except Exception as e:
-        print(f" 내원료 저장 중 오류 발생: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-
-# @login_required
-# @csrf_exempt
-# def save_field_order(request):
-#     """드래그 앤 드롭 필드 순서 저장"""
-#     if request.method == "POST":
-#         try:
-#             data = json.loads(request.body)
-#             order = data.get("order", [])
-
-#             if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
-#                 return JsonResponse({'success': False, 'error': 'Invalid order format'}, status=400)
-
-#             # LabelOrder 업데이트
-#             LabelOrder.objects.update_or_create(
-#                 user=request.user,
-#                 defaults={'order': json.dumps(order)}
-#             )
-#             return JsonResponse({'success': True, 'message': '필드 순서가 저장되었습니다.'})
-#         except Exception as e:
-#             return JsonResponse({'success': False, 'error': str(e)}, status=500)
-#     return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=405)
+        return JsonResponse({"success": False, "error": str(e)}, status=500)

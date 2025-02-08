@@ -1,145 +1,106 @@
-{% extends 'base.html' %}
-
+{% extends "base.html" %}
 {% block title %}제품 목록{% endblock %}
-
 {% block content %}
-<div class="container my-4">
-    <h2 class="mb-4">제품 목록</h2>
-    <form method="get" action="{% url 'label:food_item_list' %}">
-        {% comment %} 제품 리스트 조회 갯수 선택 기능 추가 {% endcomment %}
-        <div class="row g-2 align-items-center mb-3">
-            <div class="col-md-4">
-                <input type="text" name="prdlst_nm" class="form-control" placeholder="제품명" value="{{ request.GET.prdlst_nm }}">
-            </div>
-            <div class="col-md-4">
-                <input type="text" name="bssh_nm" class="form-control" placeholder="제조사" value="{{ request.GET.bssh_nm }}">
-            </div>
-            <div class="col-md-2">
-                <select name="items_per_page" class="form-select">
-                    <option value="10" {% if items_per_page == 10 %}selected{% endif %}>10개</option>
-                    <option value="20" {% if items_per_page == 20 %}selected{% endif %}>20개</option>
-                    <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50개</option>
-                    <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100개</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">검색</button>
-            </div>
-        </div>
-    </form>
+<div class="container mt-4">
+    <h2 class="mb-4">품목보고 조회 및 복사</h2>
 
+    <!-- 검색 조건 -->
+    {% include 'includes/search_filter.html' with action_url='label:food_item_list' search_fields=search_fields %}
+
+    <!-- 테이블 -->
     <div class="table-responsive">
-        <table class="table table-bordered table-hover">
-
-{% comment %} 리스트 열 데이터 변경,추가가 및 행 클릭 시 상세페이지 연결 
-            <thead class="table-light">
+        <table class="table table-bordered table-hover common-table">
+            <thead>
                 <tr>
-                    <th>제품명</th>
-                    <th>제조사</th>
-                    <th>식품유형</th>
-                    <th>상세보기</th>
+                    <th style="width: 5%;">번호</th>
+                    <th style="width: 16%;">
+                        품목제조번호
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▲</a>
+                            <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 16%;">
+                        제품명
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▲</a>
+                            <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 16%;">
+                        식품유형
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▲</a>
+                            <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 16%;">
+                        제조사명
+                        <span class="sort-buttons">
+                            <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▲</a>
+                            <a href="?sort=bssh_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 16%;">
+                        소비기한
+                        <span class="sort-buttons">
+                            <a href="?sort=pog_daycnt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▲</a>
+                            <a href="?sort=pog_daycnt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 15%;">
+                        최종수정일자
+                        <span class="sort-buttons">
+                            <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▲</a>
+                            <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}">▼</a>
+                        </span>
+                    </th>
                 </tr>
-            </thead>
-            <tbody>
-                {% for item in page_obj %}
-                <tr>
-                    <td>{{ item.prdlst_nm }}</td> <!-- 제품명 -->
-                    <td>{{ item.bssh_nm }}</td> <!-- 제조사 -->
-                    <td>{{ item.prdlst_dcnm }}</td> <!-- 식품유형 -->
-                    <td>
-                        <a href="" class="btn btn-sm btn-info">보기</a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" class="text-center text-muted">제품이 없습니다.</td>
-                </tr>
-                {% endfor %}
-            </tbody> {% endcomment %}
-            <thead class="table-light">
-                <tr>
-                    <th>번호</th>
-                    <th>품목보고번호</th>
-                    <th>제품명</th>
-                    <th>식품유형</th>
-                    <th>소비기한</th>
-                    <th>제조사</th>
-                </tr>
-            </thead>
             </thead>
             <tbody>
                 {% for item in page_obj %}
                 <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">
-                    <!-- 번호를 page_obj.start_index와 forloop.counter를 이용하여 조정 -->
-                    <td>{{ forloop.counter|add:page_obj.start_index|add:-1 }}</td>
-                    {% comment %} <td>{{ forloop.counter|add:page_obj.start_index }}</td> {% endcomment %}
+                    <td>{{ forloop.counter }}</td>
                     <td>{{ item.prdlst_report_no }}</td>
                     <td>{{ item.prdlst_nm }}</td>
                     <td>{{ item.prdlst_dcnm }}</td>
-                    <td>{{ item.pog_daycnt }}</td>
                     <td>{{ item.bssh_nm }}</td>
+                    <td>{{ item.pog_daycnt }}</td>
+                    <td>{{ item.update_datetime|date:"Y-m-d H:i" }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted">제품이 없습니다.</td>
+                    <td colspan="7" class="text-center text-muted">제품이 없습니다.</td>
                 </tr>
                 {% endfor %}
-            </tbody>          
+            </tbody>
         </table>
     </div>
 
-    {% comment %} 
-    변경 요약: 페이징 기능 전체 개선
-    {% endcomment %}
-    <div class="pagination-wrapper d-flex justify-content-between align-items-center mt-4">
-        <ul class="pagination">
-            <!-- 맨 처음으로 이동 -->
-            {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page=1&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
-                        맨 처음
-                    </a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
-                        이전
-                    </a>
-                </li>
-            {% endif %}
-    
-            <!-- 현재 페이지 기준으로 동적 범위 생성 -->
-            {% for page_num in page_range %}
-                <li class="page-item {% if page_num == page_obj.number %}active{% endif %}">
-                    <a class="page-link" href="?page={{ page_num }}&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
-                        {{ page_num }}
-                    </a>
-                </li>
-            {% endfor %}
-    
-            <!-- 다음 및 맨 끝으로 이동 -->
-            {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
-                        다음
-                    </a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ paginator.num_pages }}&prdlst_nm={{ search_query }}&bssh_nm={{ manufacturer_query }}&items_per_page={{ items_per_page }}">
-                        맨 끝
-                    </a>
-                </li>
-            {% endif %}
-        </ul>
-    </div>
+    <!-- 페이징 -->
+    {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
 </div>
 
-<!-- 팝업용 스크립트 -->
+<!-- 팝업 기능 -->
 <script>
     function openDetailPopup(reportNo) {
+        if (!reportNo) {
+            alert("유효한 품목제조번호가 없습니다.");
+            return;
+        }
         const url = `/label/food-item-detail/${reportNo}/`;
-        const popup = window.open(url, "제품 상세 정보", "width=600,height=400,resizable=yes,scrollbars=yes");
-        if (!popup) alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
-        return false; // 기본 동작 차단
+        const width = 600; // 가로 크기
+        const height = 600; // 세로 크기
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+        const popup = window.open(
+            url,
+            "제품 상세 정보",
+            `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
+        );
+        if (!popup || popup.closed || typeof popup.closed === "undefined") {
+            alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
+        }
     }
 </script>
 {% endblock %}

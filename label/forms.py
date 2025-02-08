@@ -86,13 +86,14 @@ class LabelCreationForm(forms.ModelForm):
     class Meta:
         model = MyLabel
         fields = [
-            'prdlst_report_no', 'prdlst_nm', 'prdlst_dcnm', 'bssh_nm',
-            'rawmtrl_nm', 'content_weight', 'manufacturer_address',
+            'my_label_name' , 'prdlst_report_no', 'prdlst_nm', 'prdlst_dcnm', 
+            'bssh_nm','rawmtrl_nm', 'content_weight', 'manufacturer_address',
             'storage_method', 'distributor_name', 'distributor_address',
             'cautions', 'additional_info', 'country_of_origin', 'importer_address', 
-            'allergens', 'ingredients'  # 추가됨
+            'allergens', 'ingredients',  # 추가됨
         ]
         labels = {
+            "my_label_name": "라벨명",
             "prdlst_report_no": "품목제조번호",
             "prdlst_nm": "제품명",
             "prdlst_dcnm": "식품유형",

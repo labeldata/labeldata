@@ -153,7 +153,7 @@ class MyLabel(models.Model):
     my_label_id = models.AutoField(primary_key=True)
     #키 = 유저id + 문서 종류 + 문서번호로 생성
     #my_label_key = models.CharField(max_length=50, unique=True, editable=False, verbose_name="내 표시사항 키", primary_key=True)
-    my_label_name = models.CharField(max_length=200, verbose_name="내 표시사항 이름")
+    my_label_name = models.CharField(max_length=200, verbose_name="라벨명")
 
     # 기존 필드
     prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", null=True, blank=True)
