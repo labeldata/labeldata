@@ -153,6 +153,18 @@ def food_item_detail(request, prdlst_report_no):
     return render(request, "label/food_item_detail.html", {"item": food_item})
 
 
+# FoodItem의 필드와 MyLabel의 필드명이 동일하다면 단순 매핑도 가능하고,
+# 만약 다르다면 아래와 같이 FoodItem의 필드명을 key, MyLabel의 필드명을 value로 지정합니다.
+FOODITEM_MYLABEL_MAPPING = {
+    'prdlst_report_no': 'prdlst_report_no',
+    'prdlst_nm': 'prdlst_nm',
+    'prdlst_dcnm': 'prdlst_dcnm',
+    'bssh_nm': 'bssh_nm',
+    'rawmtrl_nm': 'rawmtrl_nm',
+    # 추가 필드가 필요하면 여기에 넣으세요.
+}
+
+
 @login_required
 def saveto_my_label(request, prdlst_report_no):
     if request.method != "POST":
@@ -172,7 +184,7 @@ def saveto_my_label(request, prdlst_report_no):
         data_mapping = {field: getattr(food_item, field, "") for field in FOODITEM_MYLABEL_MAPPING.keys()}
 
         if existing_label and confirm_flag:
-            my_label = MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
+            MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
             return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
 
         MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
@@ -191,8 +203,9 @@ def label_creation(request, label_id):
     
     if request.method == "POST" and form.is_valid():
         form.save()
-        messages.success(request, "표시사항이 성공적으로 저장되었습니다.")
-        return redirect("label:my_label_list")
+        # messages.success(request, "표시사항이 성공적으로 저장되었습니다.")
+        # 현재 페이지를 새로 고침 (현재 URL로 리다이렉트)
+        return redirect(request.path + "?saved=1")
     
     return render(request, "label/label_creation.html", {
         "form": form,

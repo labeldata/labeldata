@@ -247,5 +247,8 @@
     margin-right: 1rem;
     font-size: 0.9rem;
     color: #6c757d;
+    transition: color 1s ease;
   }
-  
+  .highlight {
+    color: #007bff;  /* 파란색 */
+  }

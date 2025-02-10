@@ -12,23 +12,6 @@ from django.utils.timezone import now
 #     def __str__(self):
 #         return self.name
 
-# class Post(models.Model):
-
-#     #외래키 연결 금지
-#     title = models.CharField(max_length=200)
-#     api_data = models.JSONField(null=True, blank=True, help_text="API에서 가져온 데이터")
-#     is_api_data = models.BooleanField(default=False, help_text="이 데이터가 API에서 가져온 데이터인지 여부")
-#     #food_type = models.ForeignKey(FoodType, on_delete=models.SET_NULL, null=True, blank=True, related_name='posts')
-#     manufacturer = models.CharField(max_length=100, db_index=True)
-#     ingredients = models.TextField()
-#     storage_conditions = models.CharField(max_length=100)
-#     precautions = models.TextField(blank=True, null=True)
-#     #author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
-#     create_date = models.DateTimeField(default=now)
-#     modify_date = models.DateTimeField(null=True, blank=True)
-
-#     def __str__(self):
-#         return self.title
 
 
 class FoodItem(models.Model):
@@ -195,6 +178,20 @@ class MyLabel(models.Model):
     def __str__(self):
         return self.my_label_id
 
+class FoodType(models.Model):
+    
+    prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)
+    
+
+    class Meta:
+        db_table = "FoodType"
+        indexes = [
+            models.Index(fields=['prdlst_dcnm'], name='idx_prdlst_dcnm'),
+        ]
+
+    def __str__(self):
+        return self.prdlst_dcnm    
+    
 # 추후 업무에 필요한 모델은 추후 재 작성
 # class LabelOrder(models.Model):
 #     """표시사항 필드 순서 관리 모델"""

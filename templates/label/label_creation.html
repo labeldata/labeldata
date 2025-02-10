@@ -4,6 +4,20 @@
 {% block title %}표시사항 작성{% endblock %}
 
 {% block content %}
+{% if request.GET.saved %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var recentSpan = document.querySelector(".recent-update");
+        if (recentSpan) {
+            recentSpan.classList.add("highlight");
+            setTimeout(function() {
+                recentSpan.classList.remove("highlight");
+            }, 1000);
+        }
+    });
+</script>
+{% endif %}
+
 <!-- HTML 구조: 스타일은 전부 별도 CSS 파일(또는 아래 <style> 블록)에 포함 -->
 <div class="container mt-4">
   <div class="header-container">
@@ -151,4 +165,5 @@
     </div>
   </form>
 </div>
+
 {% endblock %}
