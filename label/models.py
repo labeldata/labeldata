@@ -182,7 +182,7 @@ class FoodType(models.Model):
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)
 
     class Meta:
-        db_table = "FoodType"
+        db_table = "Food_Type"
         indexes = [
             models.Index(fields=['prdlst_dcnm'], name='idx_prdlst_dcnm'),
         ]
