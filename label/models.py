@@ -2,7 +2,6 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils.timezone import now
 
-
 # class FoodType(models.Model):
 #     name = models.CharField(max_length=200, unique=True)
 #     created_at = models.DateTimeField(auto_now_add=True)
@@ -149,7 +148,7 @@ class MyLabel(models.Model):
     manufacturer_address = models.CharField(max_length=255, verbose_name="제조원 소재지", null=True, blank=True)
 
     # 추가 필드
-    country_of_origin = models.CharField(max_length=100, verbose_name="원산지", null=True, blank=True)
+    country_of_origin = models.CharField(max_length=2, verbose_name="원산지", null=True, blank=True)
     importer_address = models.CharField(max_length=255, verbose_name="수입원 및 소재지", null=True, blank=True)
 
     # 관계 설정
@@ -181,7 +180,6 @@ class MyLabel(models.Model):
 class FoodType(models.Model):
     
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)
-    
 
     class Meta:
         db_table = "FoodType"
@@ -192,12 +190,20 @@ class FoodType(models.Model):
     def __str__(self):
         return self.prdlst_dcnm    
     
-# 추후 업무에 필요한 모델은 추후 재 작성
-# class LabelOrder(models.Model):
-#     """표시사항 필드 순서 관리 모델"""
-#     label = models.OneToOneField(Label, on_delete=models.CASCADE, related_name="order", verbose_name="연결된 라벨")  # 변경됨
-#     order = models.TextField(verbose_name="필드 순서 (JSON 형식)")
-#     updated_at = models.DateTimeField(auto_now=True)
 
-#     def __str__(self):
-#         return f"{self.label.my_product.prdlst_nm}의 필드 순서"
+class CountryList(models.Model):
+    # 알레르기 물질 목록
+    country_code = models.CharField(max_length=3, verbose_name="국가코드 alpha3" , null=True, blank=True)
+    country_code2 = models.CharField(max_length=2, verbose_name="국가코드 alpha2" , primary_key=True)
+    numeric_code = models.CharField(max_length=3, verbose_name="국가코드 숫자" , null=True, blank=True)
+    country_name_en = models.CharField(max_length=50, verbose_name="영문 국가명" , null=True, blank=True)
+    country_name_ko = models.CharField(max_length=50, verbose_name="한글 국가명" , null=True, blank=True)
+
+    class Meta:
+        db_table = "country_list"
+        indexes = [
+            models.Index(fields=['country_code2'], name='idx_country_code2'),
+        ]
+        
+    def __str__(self):
+        return self.country_name_ko

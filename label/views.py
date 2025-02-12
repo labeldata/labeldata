@@ -6,9 +6,11 @@ from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
 from django.http import JsonResponse
-from .models import FoodItem, MyLabel, MyIngredient, Allergen
+from django.db.models import Subquery, OuterRef
+from .models import FoodItem, MyLabel, MyIngredient, CountryList
 from .forms import LabelCreationForm
 from venv import logger  #지우지 말 것
+
 
 
 # 공통 함수: 검색 조건 생성
@@ -197,9 +199,19 @@ def saveto_my_label(request, prdlst_report_no):
 @login_required
 def label_creation(request, label_id):
     label = get_object_or_404(MyLabel, my_label_id=label_id)
+    label = MyLabel.objects.annotate(
+        country_name_ko=Subquery(
+            CountryList.objects.filter(
+                country_code2=OuterRef('country_of_origin')
+            ).values('country_name_ko')[:1]
+        )
+    ).get(my_label_id=label_id)
+
+    
     form = LabelCreationForm(request.POST or None, instance=label)
     # FoodItem의 식품유형(prdlst_dcnm) 정보를 중복없이 가져오기
     food_types = FoodItem.objects.values_list('prdlst_dcnm', flat=True).distinct().order_by('prdlst_dcnm')
+    country_list = CountryList.objects.all()
     
     if request.method == "POST" and form.is_valid():
         form.save()
@@ -210,7 +222,8 @@ def label_creation(request, label_id):
     return render(request, "label/label_creation.html", {
         "form": form,
         "label": label,
-        "food_types": food_types
+        "food_types": food_types,
+        "country_list": country_list
     })
 
 
