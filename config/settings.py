@@ -30,7 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'label',          # Label 앱
     'django_bootstrap5',  # django-bootstrap5 사용
-    'action',         # Action 앱
+    'disposition',         # Action 앱
     'common',         # Common 앱
     'user_management',
 ]

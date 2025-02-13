@@ -6,12 +6,12 @@
 <div class="card shadow-sm p-4">
     <h2 class="card-title mb-4">행정처분 삭제</h2>
     <p>정말로 삭제하시겠습니까?</p>
-    <p><strong>업체명:</strong> {{ action.company_name }}</p>
-    <p><strong>처분명:</strong> {{ action.action_name }}</p>
+    <p><strong>업체명:</strong> {{ disposition.company_name }}</p>
+    <p><strong>처분명:</strong> {{ disposition.disposition_name }}</p>
     <form method="post">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger">삭제</button>
-        <a href="{% url 'action:action_list' %}" class="btn btn-secondary">취소</a>
+        <a href="{% url 'disposition:disposition_list' %}" class="btn btn-secondary">취소</a>
     </form>
 </div>
 {% endblock %}

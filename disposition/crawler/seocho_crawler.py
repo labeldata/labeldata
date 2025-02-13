@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-from action.models import AdministrativeAction
+from disposition.models import Administrativedisposition
 
 
 class SeochoCrawler:
@@ -25,8 +25,8 @@ class SeochoCrawler:
             if len(cols) < 5:
                 continue
 
-            AdministrativeAction.objects.create(
-                action_date=cols[0].get_text(strip=True),
+            Administrativedisposition.objects.create(
+                disposition_date=cols[0].get_text(strip=True),
                 industry=cols[1].get_text(strip=True),
                 business_name=cols[2].get_text(strip=True),
                 address=cols[3].get_text(strip=True),

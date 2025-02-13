@@ -1,7 +1,7 @@
 <header class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm fixed-top">
     <div class="container">
         <!-- 네비게이션 로고 및 브랜드 -->
-        <a class="navbar-brand me-4" href="/">식품 데이터 포털</a>
+        <a class="navbar-brand me-4" href="{% url 'main:home' %}">식품 데이터 포털</a>
         
         <!-- 네비게이션 메뉴: 좌측 정렬 -->
         <ul class="navbar-nav me-auto">
@@ -10,6 +10,9 @@
             </li>
             <li class="nav-item">
                 <a href="{% url 'label:my_label_list' %}" class="nav-link {% if request.resolver_match.url_name == 'my_label_list' %}active{% endif %}">표시사항 관리</a>
+            </li>
+            <li class="nav-item">
+                <a href="{% url 'disposition:list' %}" class="nav-link {% if request.resolver_match.url_name == 'disposition_list' %}active{% endif %}">행정처분</a>
             </li>
         </ul>
         
