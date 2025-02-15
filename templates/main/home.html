@@ -8,7 +8,7 @@
         <h2>통합 검색</h2>
         <form method="get" class="d-flex">
             <input type="text" name="q" class="form-control me-2" placeholder="검색어 입력" value="{{ request.GET.q }}">
-            <button type="submit" class="btn btn-primary">검색</button>
+            <button type="submit" class="btn btn-primary search-btn">검색</button>
         </form>
     </div>
 
@@ -23,7 +23,6 @@
                 {% for item in food_items %}
                 <a href="{% url 'main:food_item_detail' item.pk %}" class="list-group-item list-group-item-action">
                     {{ item.prdlst_nm }} - {{ item.manufacturer_name }}
-                    {% comment %} product_name -> prdlst_nm 변경 {% endcomment %}
                 </a>
                 {% empty %}
                 <p class="text-muted">등록된 제품이 없습니다.</p>

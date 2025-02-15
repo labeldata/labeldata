@@ -1,6 +1,5 @@
 <div class="pagination-wrapper">
     <ul class="pagination">
-        <!-- 이전 페이지 링크 -->
         {% if page_obj.has_previous %}
             <li class="page-item">
                 <a class="page-link" href="?page=1{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">처음</a>
@@ -9,15 +8,11 @@
                 <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">이전</a>
             </li>
         {% endif %}
-
-        <!-- 동적 페이지 번호 생성 -->
         {% for page_num in page_range %}
             <li class="page-item {% if page_num == page_obj.number %}active{% endif %}">
                 <a class="page-link" href="?page={{ page_num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ page_num }}</a>
             </li>
         {% endfor %}
-
-        <!-- 다음 페이지 링크 -->
         {% if page_obj.has_next %}
             <li class="page-item">
                 <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">다음</a>

@@ -1,9 +1,9 @@
-<header class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm fixed-top">
+<header class="navbar navbar-expand-lg navbar-dark shadow-sm fixed-top">
     <div class="container">
         <!-- 네비게이션 로고 및 브랜드 -->
         <a class="navbar-brand me-4" href="{% url 'main:home' %}">식품 데이터 포털</a>
         
-        <!-- 네비게이션 메뉴: 좌측 정렬 -->
+        <!-- 네비게이션 메뉴 -->
         <ul class="navbar-nav me-auto">
             <li class="nav-item">
                 <a href="{% url 'label:food_item_list' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list' %}active{% endif %}">제품 조회</a>
@@ -16,18 +16,14 @@
             </li>
         </ul>
         
-        <!-- 사용자 메뉴: 우측 정렬 -->
+        <!-- 사용자 메뉴 -->
         <div class="d-flex">
             {% if user.is_authenticated %}
-                <!-- 로그아웃 -->
-                <form action="{% url 'common:logout' %}" method="post" style="display:inline;">
+                <form action="{% url 'common:logout' %}" method="post" class="d-inline">
                     {% csrf_token %}
-                    <button type="submit" class="nav-link btn btn-link text-white" style="padding: 0; border: none; background: none;">
-                        로그아웃
-                    </button>
+                    <button type="submit" class="nav-link btn btn-link text-white" style="padding: 0;">로그아웃</button>
                 </form>
             {% else %}
-                <!-- 로그인 및 회원가입 -->
                 <a href="{% url 'user_management:login' %}" class="nav-link text-white d-inline">로그인</a>
                 <a href="{% url 'user_management:signup' %}" class="nav-link text-white d-inline ms-3">회원가입</a>
             {% endif %}

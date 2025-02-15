@@ -6,51 +6,54 @@
 {% block content %}
 {% if request.GET.saved %}
 <script>
-  document.addEventListener("DOMContentLoaded", function() {
-      var recentSpan = document.querySelector(".recent-update");
-      if (recentSpan) {
-          recentSpan.classList.add("highlight");
-          setTimeout(function() {
-              recentSpan.classList.remove("highlight");
-          }, 1000);
-      }
-  });
-
+document.addEventListener("DOMContentLoaded", function() {
+    var recentSpan = document.querySelector(".recent-update");
+    if (recentSpan) {
+        recentSpan.classList.add("highlight");
+        setTimeout(function() {
+            recentSpan.classList.remove("highlight");
+        }, 1000);
+    }
+});
 </script>
 {% endif %}
+
 <script>
 $(document).ready(function() {
-    // 기존 원산지 select2 초기화
     $('.select2-country').select2({
         placeholder: "국가를 검색하세요",
         allowClear: true,
         language: {
-            noResults: function() {
-                return "검색 결과가 없습니다";
-            }
+            noResults: function() { return "검색 결과가 없습니다"; }
         }
     });
-
-    // 식품유형 select2 초기화 추가
     $('.select2-food-type').select2({
         placeholder: "식품유형을 검색하세요",
         allowClear: true,
         language: {
-            noResults: function() {
-                return "검색 결과가 없습니다";
-            }
+            noResults: function() { return "검색 결과가 없습니다"; }
         }
     });
 });
+
+// textarea 자동 확장 기능
+document.addEventListener('input', function (event) {
+  if (event.target.classList.contains('auto-expand')) {
+    event.target.style.height = 'auto';
+    event.target.style.height = event.target.scrollHeight + 'px';
+  }
+}, false);
 </script>
-<!-- HTML 구조: 스타일은 전부 별도 CSS 파일(또는 아래 <style> 블록)에 포함 -->
-<div class="container mt-4">
-  <div class="header-container">
+
+<!-- 헤더 컨테이너: "표시사항 작성" 왼쪽, "최근 수정일 + 저장" 오른쪽 -->
+<div class="container mt-4" style="padding-bottom: 10px;">
+  <div class="header-container d-flex align-items-center justify-content-between" style="gap: 20px;">
+    <!-- 왼쪽: 표시사항 작성 -->
     <h2 class="mb-0">표시사항 작성</h2>
-    <div class="header-right">
-      <span class="recent-update">
-        최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}
-      </span>
+
+    <!-- 오른쪽: 최근 수정일, 저장 버튼 -->
+    <div class="d-flex align-items-center" style="gap: 20px;">
+      <span class="recent-update">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
       <button type="submit" form="labelForm" class="btn btn-primary">저장</button>
     </div>
   </div>
@@ -60,134 +63,202 @@ $(document).ready(function() {
   <form method="post" id="labelForm">
     {% csrf_token %}
 
-    <!-- 2열 그리드: 기본 입력 필드 -->
+    <!-- (1) 일반 항목: 4칸 구조 (15%,35%,15%,35%) -->
     <div class="form-grid">
       <!-- 라벨명 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_my_label_name" checked>
-        <label for="my_label_name">라벨명</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_my_label_name" checked>
+          <label for="my_label_name">라벨명</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="my_label_name" class="form-control" value="{{ form.my_label_name.value }}">
       </div>
+
       <!-- 품목제조번호 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_prdlst_report_no" checked>
-        <label for="prdlst_report_no">품목제조번호</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_prdlst_report_no" checked>
+          <label for="prdlst_report_no">품목제조번호</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value }}" readonly>
       </div>
+
       <!-- 제품명 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_prdlst_nm" checked>
-        <label for="prdlst_nm">제품명</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_prdlst_nm" checked>
+          <label for="prdlst_nm">제품명</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="prdlst_nm" class="form-control" value="{{ form.prdlst_nm.value }}">
       </div>
-      <!-- 식품유형 (목록 선택형 - datalist 방식) -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_prdlst_dcnm" checked>
-        <label for="prdlst_dcnm">식품유형</label>
-        <select name="prdlst_dcnm" class="form-control select2-food-type" style="width: 300px;">
-            <option value="">선택하세요</option>
-            {% for type in food_types %}
-                <option value="{{ type }}" {% if form.prdlst_dcnm.value == type %}selected{% endif %}>{{ type }}</option>
-            {% endfor %}
+
+      <!-- 식품유형 -->
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_prdlst_dcnm" checked>
+          <label for="prdlst_dcnm">식품유형</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
+        <select name="prdlst_dcnm" class="form-control select2-food-type">
+          <option value="">선택하세요</option>
+          {% for type in food_types %}
+            <option value="{{ type }}" {% if form.prdlst_dcnm.value == type %}selected{% endif %}>{{ type }}</option>
+          {% endfor %}
         </select>
       </div>
+
       <!-- 제조사명 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_bssh_nm" checked>
-        <label for="bssh_nm">제조사명</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_bssh_nm" checked>
+          <label for="bssh_nm">제조사명</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="bssh_nm" class="form-control" value="{{ form.bssh_nm.value }}">
       </div>
+
       <!-- 내용량(열량) -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_content_weight" checked>
-        <label for="content_weight">내용량(열량)</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_content_weight" checked>
+          <label for="content_weight">내용량(열량)</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="content_weight" class="form-control" value="{{ form.content_weight.value }}">
       </div>
+
       <!-- 제조원 소재지 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_manufacturer_address" checked>
-        <label for="manufacturer_address">제조원 소재지</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_manufacturer_address" checked>
+          <label for="manufacturer_address">제조원 소재지</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="manufacturer_address" class="form-control" value="{{ form.manufacturer_address.value }}">
       </div>
-      <!-- 원산지 (목록 선택) -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_country_of_origin" checked>
-        <label for="country_of_origin">원산지</label>
-        <select name="country_of_origin" class="form-control select2-country" style="width: 300px;">
-            <option value="">선택하세요</option>
-            {% for country in country_list %}
-                <option value="{{ country.country_code2 }}" {% if form.country_of_origin.value == country.country_code2 %}selected{% endif %}>{{ country.country_name_ko }}</option>
-            {% endfor %}
+
+      <!-- 원산지 -->
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_country_of_origin" checked>
+          <label for="country_of_origin">원산지</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
+        <select name="country_of_origin" class="form-control select2-country">
+          <option value="">선택하세요</option>
+          {% for country in country_list %}
+            <option value="{{ country.country_code2 }}" {% if form.country_of_origin.value == country.country_code2 %}selected{% endif %}>{{ country.country_name_ko }}</option>
+          {% endfor %}
         </select>
       </div>
+
       <!-- 수입원 및 소재지 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_importer_address" checked>
-        <label for="importer_address">수입원 및 소재지</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_importer_address" checked>
+          <label for="importer_address">수입원 및 소재지</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="importer_address" class="form-control" value="{{ form.importer_address.value }}">
       </div>
+
       <!-- 유통전문판매원 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_distributor_name" checked>
-        <label for="distributor_name">유통전문판매원</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_distributor_name" checked>
+          <label for="distributor_name">유통전문판매원</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="distributor_name" class="form-control" value="{{ form.distributor_name.value }}">
       </div>
+
       <!-- 유통전문판매원 소재지 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_distributor_address" checked>
-        <label for="distributor_address">유통전문판매원 소재지</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_distributor_address" checked>
+          <label for="distributor_address">유통전문판매원 소재지</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="distributor_address" class="form-control" value="{{ form.distributor_address.value }}">
       </div>
+
       <!-- 보관방법 -->
-      <div class="form-group">
-        <input type="checkbox" name="chk_storage_method" checked>
-        <label for="storage_method">보관방법</label>
+      <div>
+        <div class="grid-label-area">
+          <input type="checkbox" name="chk_storage_method" checked>
+          <label for="storage_method">보관방법</label>
+        </div>
+      </div>
+      <div class="grid-input-area">
         <input type="text" name="storage_method" class="form-control" value="{{ form.storage_method.value }}">
       </div>
     </div>
 
-    <!-- 원재료명 영역 -->
-    <div class="form-group wide-textarea" style="flex-direction: column; align-items: stretch;">
-      <div class="field-header">
-        <div class="left">
+    <!-- (2) 원재료명 (한 줄 전체: 15% : 85%) -->
+    <div class="full-row">
+      <div class="full-label">
+        <div style="display:flex; align-items:center; gap:5px;">
           <input type="checkbox" name="chk_rawmtrl_nm" checked>
           <label for="rawmtrl_nm">원재료명</label>
         </div>
-        <div class="button-right">
-          <button type="button" class="btn btn-secondary btn-sm auto-generate-btn">표로 상세정보 입력하기(원재료명 자동 생성)</button>
-        </div>
+        <button type="button" class="btn btn-secondary detail-btn" onclick="openIngredientPopup()">
+          상세입력
+        </button>
       </div>
-      <textarea name="rawmtrl_nm" class="form-control" rows="3">{{ form.rawmtrl_nm.value }}</textarea>
+      <div class="full-input">
+        <textarea name="rawmtrl_nm" rows="2" class="auto-expand form-control"
+                  placeholder="원재료명을 입력하세요">{{ form.rawmtrl_nm.value }}</textarea>
+      </div>
     </div>
 
-    <!-- 주의사항 및 기타 표시사항 영역 -->
-    <div class="form-grid">
-      <div class="form-group" style="flex-direction: column; align-items: stretch;">
-        <div class="field-header">
-          <div class="left">
-            <input type="checkbox" name="chk_cautions" checked>
-            <label for="cautions">주의사항</label>
-          </div>
-          <div class="button-right">
-            <button type="button" class="btn btn-secondary btn-sm common-text-btn">자주사용하는 문구</button>
-          </div>
+    <!-- (3) 주의사항 (한 줄 전체) -->
+    <div class="full-row">
+      <div class="full-label">
+        <div style="display:flex; align-items:center; gap:5px;">
+          <input type="checkbox" name="chk_cautions" checked>
+          <label for="cautions">주의사항</label>
         </div>
-        <textarea name="cautions" class="form-control" rows="3">{{ form.cautions.value }}</textarea>
       </div>
-      <div class="form-group" style="flex-direction: column; align-items: stretch;">
-        <div class="field-header">
-          <div class="left">
-            <input type="checkbox" name="chk_additional_info" checked>
-            <label for="additional_info">기타 표시사항</label>
-          </div>
-          <div class="button-right">
-            <button type="button" class="btn btn-secondary btn-sm common-text-btn">자주사용하는 문구</button>
-          </div>
+      <div class="full-input">
+        <textarea name="cautions" rows="2" class="auto-expand form-control"
+                  placeholder="주의사항을 입력하세요">{{ form.cautions.value }}</textarea>
+      </div>
+    </div>
+
+    <!-- (4) 기타 표시사항 (한 줄 전체) -->
+    <div class="full-row">
+      <div class="full-label">
+        <div style="display:flex; align-items:center; gap:5px;">
+          <input type="checkbox" name="chk_additional_info" checked>
+          <label for="additional_info">기타 표시사항</label>
         </div>
-        <textarea name="additional_info" class="form-control" rows="3">{{ form.additional_info.value }}</textarea>
+      </div>
+      <div class="full-input">
+        <textarea name="additional_info" rows="2" class="auto-expand form-control"
+                  placeholder="기타 표시사항을 입력하세요">{{ form.additional_info.value }}</textarea>
       </div>
     </div>
   </form>
 </div>
 
+<script>
+function openIngredientPopup() {
+  const url = `/label/ingredient-popup/?rawmtrl_nm={{ form.rawmtrl_nm.value|escapejs }}`;
+  window.open(url, 'IngredientPopup', 'width=1400,height=850,scrollbars=yes');
+}
+</script>
 {% endblock %}

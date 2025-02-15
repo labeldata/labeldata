@@ -253,3 +253,23 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
 
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+def ingredient_popup(request):
+    rawmtrl_nm = request.GET.get('rawmtrl_nm', '')
+    return render(request, 'label/ingredient_popup.html', {'rawmtrl_nm': rawmtrl_nm})
+
+
+def fetch_food_item(request, prdlst_report_no):
+    try:
+        food_item = FoodItem.objects.get(prdlst_report_no=prdlst_report_no)
+        data = {
+            'success': True,
+            'prdlst_nm': food_item.prdlst_nm,
+            'prdlst_dcnm': food_item.prdlst_dcnm,
+            'rawmtrl_nm': food_item.rawmtrl_nm,
+            'bssh_nm': food_item.bssh_nm,
+        }
+    except FoodItem.DoesNotExist:
+        data = {'success': False}
+    return JsonResponse(data)

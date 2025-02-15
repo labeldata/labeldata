@@ -1,0 +1,348 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>원재료 상세 정보</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+    <style>
+        .d-flex {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 12px;
+        }
+        .options-container {
+            position: relative;
+            background: #fff;
+            border: 1px solid #ced4da;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            padding: 5px;
+            width: 300px;
+        }
+        .options-container label {
+            display: block;
+            padding: 5px;
+            margin-bottom: 2px;
+            cursor: pointer;
+            text-align: left;
+        }
+        .options-container label:hover {
+            background: var(--table-hover-bg-color);
+        }
+        .options-container .btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container popup-container">
+    <div class="d-flex mb-3">
+        <button type="button" onclick="addIngredientRow()" class="btn btn-add btn-sm">행 추가</button>
+        <button type="button" onclick="removeSelectedRows()" class="btn btn-danger btn-sm">행 삭제</button>
+        <button type="button" onclick="checkOrigin()" class="btn btn-warning btn-sm me-2">원산지 검증</button>
+        <button type="button" onclick="saveIngredients()" class="btn btn-primary btn-sm me-2">저장</button>
+        <button type="button" onclick="window.close()" class="btn btn-secondary btn-sm">취소</button>
+    </div>
+
+    <div class="table-container">
+        <table class="table styled-table">
+            <thead>
+                <tr>
+                    <th style="width: 2%;"><input type="checkbox" id="select-all" class="form-check-input" /></th>
+                    <th style="width: 2%;">순서</th>
+                    <th style="width: 13%;">원재료명</th>
+                    <th style="width: 12%;">품목보고번호</th>
+                    <th style="width: 4%;">비율 (%)</th>
+                    <th style="width: 8%;">식품유형</th>
+                    <th style="width: 5%;">원산지</th>
+                    <th style="width: 30%;">원재료명(표시명)</th>
+                    <th style="width: 8%;">알레르기</th>
+                    <th style="width: 8%;">GMO</th>
+                    <th style="width: 8%;">제조사</th>
+                </tr>
+            </thead>
+            <tbody id="ingredient-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const rawMaterialsText = '{{ rawmtrl_nm|escapejs }}'.trim();
+    const rawMaterials = rawMaterialsText ? rawMaterialsText.split(',').map(item => item.trim()) : [];
+    const tbody = document.getElementById('ingredient-body');
+
+    // 드래그 정렬 기능
+    new Sortable(tbody, { animation: 150, handle: '.drag-handle', onEnd: updateTargetButtons });
+
+    // 데이터가 있는 만큼만 행 추가
+    rawMaterials.forEach((material, index) => {
+        addIngredientRow(material, index < 3);
+    });
+
+    // 전체선택 체크박스
+    document.getElementById('select-all').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('#ingredient-body .delete-checkbox');
+        checkboxes.forEach(checkbox => checkbox.checked = this.checked);
+    });
+
+    // textarea 자동 확장 기능
+    document.addEventListener('input', function (event) {
+        if (event.target.classList.contains('auto-expand')) {
+            event.target.style.height = 'auto';
+            event.target.style.height = event.target.scrollHeight + 'px';
+            updateTableHeight();
+        }
+    }, false);
+
+    // 클릭 외부 영역 감지
+    document.addEventListener('click', function(event) {
+        const optionsContainers = document.querySelectorAll('.options-container');
+        optionsContainers.forEach(container => {
+            if (!container.contains(event.target)) {
+                container.remove();
+            }
+        });
+    });
+});
+
+function addIngredientRow(material = '', isTarget = false) {
+    const tbody = document.getElementById('ingredient-body');
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>
+        <input type="checkbox" class="delete-checkbox form-check-input" />
+      </td>
+      <td class="drag-handle">☰</td>
+      <td>
+        <input type="text" value="${material}" readonly
+               class="form-control form-control-sm bordered-input auto-expand"
+               style="width:90%;" />
+      </td>
+      <td>
+        <input type="text"
+               class="form-control form-control-sm bordered-input auto-expand"
+               style="width:90%;"
+               placeholder="입력 후 Enter"
+               maxlength="15"
+               onkeypress="if(event.keyCode==13) fetchFoodItemData(this)">
+      </td>
+      <!-- 비율(%) 필드: 스피너 제거 (class="ratio-input") -->
+      <td>
+        <input type="number"
+               class="ratio-input form-control form-control-sm bordered-input"
+               style="width:70%;"
+               step="0.01"
+               min="0"
+               oninput="sortRows()"
+      </td>
+      <td>
+        <input type="text"
+               class="form-control form-control-sm bordered-input auto-expand"
+               style="width:85%;"
+               onkeypress="if(event.keyCode==13) validateFoodType(this)">
+      </td>
+      <td>
+        <button type="button" class="btn btn-target small-text target-button" style="display: none;">
+          표시대상
+        </button>
+      </td>
+      <td>
+        <textarea class="form-control form-control-sm bordered-input auto-expand"
+                  style="width:95%;"
+                  rows="1"
+                  oninput="autoExpandTextarea(this)"></textarea>
+      </td>
+      <td>
+        <input type="text"
+               class="form-control form-control-sm bordered-input auto-expand"
+               style="width:85%;"
+               onclick="showAllergyOptions(this)">
+      </td>
+      <td>
+        <input type="text"
+               class="form-control form-control-sm bordered-input auto-expand"
+               style="width:85%;"
+               onclick="showGMOOptions(this)">
+      </td>
+      <td>
+        <input type="text"
+               class="form-control form-control-sm bordered-input auto-expand"
+               style="width:85%;" />
+      </td>
+    `;
+    tbody.appendChild(row);
+    updateTargetButtons();
+    sortRows();
+}
+
+function updateTargetButtons() {
+    const rows = document.querySelectorAll('#ingredient-body tr');
+    rows.forEach((row, index) => {
+        const button = row.querySelector('.btn-target');
+        if (button) {
+            button.style.display = 'none';
+        }
+    });
+}
+
+function sortRows() {
+    const tbody = document.getElementById('ingredient-body');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+
+    rows.sort((a, b) => {
+        const aRatio = parseFloat(a.querySelector('.ratio-input').value) || 0;
+        const bRatio = parseFloat(b.querySelector('.ratio-input').value) || 0;
+        return bRatio - aRatio;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+    updateTargetButtons();
+}
+
+function updateTableHeight() {
+    const tableContainer = document.querySelector('.table-container');
+    tableContainer.style.height = 'auto';
+    tableContainer.style.height = tableContainer.scrollHeight + 'px';
+}
+
+function checkOrigin() {
+    const rows = document.querySelectorAll('#ingredient-body tr');
+    rows.forEach((row, index) => {
+        const button = row.querySelector('.btn-target');
+        if (button) {
+            button.style.display = index < 3 ? 'inline-block' : 'none';
+        }
+    });
+}
+
+// 품목보고번호 → 식품유형, 원재료명, 제조사 등 자동 입력
+function fetchFoodItemData(input) {
+    const prdlstReportNo = input.closest('tr').querySelector('input[maxlength="15"]').value;
+    if (!prdlstReportNo) return;
+
+    fetch(`/fetch-food-item/${prdlstReportNo}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const row = input.closest('tr');
+                row.querySelector('input[readonly]').value = data.prdlst_nm; 
+                // etc...
+            } else {
+                alert('품목제조번호를 찾을 수 없습니다.');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function validateFoodType(input) {
+    const foodType = input.value.trim();
+    if (!foodType) return;
+    fetch(`/validate-food-type/${foodType}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.valid) {
+                alert('식품 유형을 올바로 입력하세요');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function removeSelectedRows() {
+    document.querySelectorAll('#ingredient-body .delete-checkbox:checked')
+            .forEach(input => input.closest('tr').remove());
+    updateTargetButtons();
+}
+
+// 알레르기 옵션
+function showAllergyOptions(input) {
+    const options = [
+        '난류(가금류)', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우', '돼지고기',
+        '복숭아', '토마토', '아황산류', '호두', '닭고기', '쇠고기', '오징어', '조개류', '조개류(굴)',
+        '조개류(전복)', '조개류(홍합)', '잣'
+    ];
+    const container = document.createElement('div');
+    container.className = 'options-container';
+    const saveButton = document.createElement('button');
+    saveButton.textContent = '저장';
+    saveButton.className = 'btn btn-primary btn-sm';
+    saveButton.onclick = () => saveOptions(input, container);
+    container.appendChild(saveButton);
+
+    options.forEach(option => {
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = option;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(option));
+        container.appendChild(label);
+    });
+    input.parentNode.appendChild(container);
+
+    // 외부 클릭 감지
+    document.addEventListener('click', function(event) {
+        if (!container.contains(event.target) && event.target !== input) {
+            container.remove();
+        }
+    }, { once: true });
+}
+
+// GMO 옵션
+function showGMOOptions(input) {
+    const options = ['콩', '옥수수', '면화', '카놀라', '사탕무', '알팔파'];
+    const container = document.createElement('div');
+    container.className = 'options-container';
+    const saveButton = document.createElement('button');
+    saveButton.textContent = '저장';
+    saveButton.className = 'btn btn-primary btn-sm';
+    saveButton.onclick = () => saveOptions(input, container);
+    container.appendChild(saveButton);
+
+    options.forEach(option => {
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = option;
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(option));
+        container.appendChild(label);
+    });
+    input.parentNode.appendChild(container);
+
+    // 외부 클릭 감지
+    document.addEventListener('click', function(event) {
+        if (!container.contains(event.target) && event.target !== input) {
+            container.remove();
+        }
+    }, { once: true });
+}
+
+function saveOptions(input, container) {
+    const selectedOptions = Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(checkbox => checkbox.value)
+        .join(', ');
+    input.value = selectedOptions;
+    container.remove();
+}
+
+// textarea 자동 확장 기능
+function autoExpandTextarea(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = textarea.scrollHeight + 'px';
+}
+
+// 저장 로직 (예시)
+function saveIngredients() {
+    alert("저장 기능은 구현 예시입니다. 실제 로직을 추가하세요.");
+}
+</script>
+</body>
+</html>

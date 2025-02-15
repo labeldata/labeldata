@@ -148,7 +148,7 @@ class MyLabel(models.Model):
     manufacturer_address = models.CharField(max_length=255, verbose_name="제조원 소재지", null=True, blank=True)
 
     # 추가 필드
-    country_of_origin = models.CharField(max_length=2, verbose_name="원산지", null=True, blank=True)
+    country_of_origin = models.CharField(max_length=255, verbose_name="원산지", null=True, blank=True)
     importer_address = models.CharField(max_length=255, verbose_name="수입원 및 소재지", null=True, blank=True)
 
     # 관계 설정
@@ -192,7 +192,7 @@ class FoodType(models.Model):
     
 
 class CountryList(models.Model):
-    # 알레르기 물질 목록
+    # 국가명 목록, 외교부_국가표준코드_20250102.csv
     country_code = models.CharField(max_length=3, verbose_name="국가코드 alpha3" , null=True, blank=True)
     country_code2 = models.CharField(max_length=2, verbose_name="국가코드 alpha2" , primary_key=True)
     numeric_code = models.CharField(max_length=3, verbose_name="국가코드 숫자" , null=True, blank=True)
