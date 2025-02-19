@@ -59,7 +59,7 @@
             </thead>
             <tbody>
                 {% for label in page_obj %}
-                <tr onclick="location.href='{% url 'label:label_creation' label.my_label_id %}'" style="cursor: pointer;">
+                <tr data-url="{% url 'label:label_creation' label.my_label_id %}" onclick="location.href=this.dataset.url">
                     <td>{{ forloop.counter }}</td>
                     <td>{{ label.prdlst_report_no }}</td>
                     <td>{{ label.prdlst_nm }}</td>

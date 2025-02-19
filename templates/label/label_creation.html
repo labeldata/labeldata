@@ -257,8 +257,10 @@ document.addEventListener('input', function (event) {
 
 <script>
 function openIngredientPopup() {
-  const url = `/label/ingredient-popup/?rawmtrl_nm={{ form.rawmtrl_nm.value|escapejs }}`;
-  window.open(url, 'IngredientPopup', 'width=1400,height=850,scrollbars=yes');
+    const rawmtrl_nm = document.querySelector('textarea[name="rawmtrl_nm"]').value;
+    const label_id = '{{ label.my_label_id }}';
+    const url = `/label/ingredient-popup/?rawmtrl_nm=${encodeURIComponent(rawmtrl_nm)}&label_id=${label_id}`;
+    window.open(url, 'IngredientPopup', 'width=1400,height=850,scrollbars=yes');
 }
 </script>
 {% endblock %}

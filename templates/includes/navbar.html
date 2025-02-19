@@ -12,6 +12,9 @@
                 <a href="{% url 'label:my_label_list' %}" class="nav-link {% if request.resolver_match.url_name == 'my_label_list' %}active{% endif %}">표시사항 관리</a>
             </li>
             <li class="nav-item">
+                <a href="{% url 'label:my_ingredient_list' %}" class="nav-link {% if request.resolver_match.url_name == 'my_ingredient_list' %}active{% endif %}">내 원료 관리</a>
+            </li>
+            <li class="nav-item">
                 <a href="{% url 'disposition:list' %}" class="nav-link {% if request.resolver_match.url_name == 'disposition_list' %}active{% endif %}">행정처분</a>
             </li>
         </ul>

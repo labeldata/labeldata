@@ -64,7 +64,7 @@ class Allergen(models.Model):
 #개인 유저가 쓴다면 아래와 같이
 class MyPhrase(models.Model):
     # 자주 사용하는 문구 저장 모델
-    user_id = models.ForeignKey(User, related_name="user_phrase", on_delete=models.CASCADE, db_column="id", verbose_name="사용자 id")
+    user_id = models.ForeignKey(User, related_name="user_phrase", on_delete=models.CASCADE, db_column="user_id", verbose_name="사용자 id")
 
     #id = 자동생성
     my_phrase_id = models.AutoField(primary_key=True)
@@ -93,7 +93,7 @@ class MyPhrase(models.Model):
     
 class MyIngredient(models.Model):
     # 내 원료 저장 모델
-    user_id = models.ForeignKey(User, related_name="user_ingredient", on_delete=models.CASCADE, db_column="id", verbose_name="사용자 id")
+    user_id = models.ForeignKey(User, related_name="user_ingredient", on_delete=models.CASCADE, db_column="user_id", verbose_name="사용자 id")
 
     #id = 자동생성
     my_ingredient_id = models.AutoField(primary_key=True)
@@ -112,6 +112,10 @@ class MyIngredient(models.Model):
     induty_cd_nm = models.CharField(max_length=80, verbose_name="업종명", null=True, blank=True)
     hieng_lntrt_dvs_yn = models.CharField(max_length=10, verbose_name="고열량저영양식품여부", null=True, blank=True)
 
+    ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
+    ingredient_display_name = models.CharField(max_length=200, verbose_name="원료 표시명", null=True, blank=True)
+    search_name = models.CharField(max_length=200, verbose_name="검색 이름", unique=True)
+
     update_datetime = models.DateTimeField(auto_now=True)
 
     # 데이터 삭제시 db 삭제가 아니라 플래그 처리로 보이지만 않게
@@ -126,10 +130,20 @@ class MyIngredient(models.Model):
 
     def __str__(self):
         return self.my_ingredient_id
+    
+    def save(self, *args, **kwargs):
+        """search_name이 비어 있을 경우, 기본값으로 id 사용"""
+        if not self.search_name:  
+            super().save(*args, **kwargs)  # 먼저 저장하여 ID 생성
+            self.search_name = str(self.my_ingredient_id)  # ID 값으로 설정
+            super().save(update_fields=['search_name'])  # 다시 저장 (무한루프 방지)
+
+        else:
+            super().save(*args, **kwargs)
   
 class MyLabel(models.Model):
     # 표시사항 모델
-    user_id = models.ForeignKey(User, related_name="user_label", on_delete=models.CASCADE, db_column="id", verbose_name="사용자 id")
+    user_id = models.ForeignKey(User, related_name="user_label", on_delete=models.CASCADE, db_column="user_id", verbose_name="사용자 id")
 
     #id = 자동생성
     my_label_id = models.AutoField(primary_key=True)
@@ -168,6 +182,20 @@ class MyLabel(models.Model):
     delete_datetime = models.CharField(max_length=8, verbose_name="삭제일자", help_text="yyyymmdd", default="")
     delete_YN = models.CharField(max_length=1, verbose_name="내 제품 삭제 여부", default="N" )
 
+    # ManyToMany 관계 설정
+    ingredients = models.ManyToManyField(
+        'MyIngredient',  # 문자열로 참조하여 순환 참조 방지
+        through='LabelIngredientRelation',
+        through_fields=('label', 'ingredient'),
+        related_name='labels',
+        verbose_name="연결된 원재료"
+    )
+
+    # 캐싱 필드 1: 쉼표로 구분된 원재료 ID 목록 (비정규화)
+    ingredient_ids_str = models.CharField(max_length=1000, verbose_name="원재료 ID 목록", null=True, blank=True, help_text="쉼표(,)로 구분")
+    # 캐싱 필드 2: JSON 형태의 원재료 ID 목록 - 추후 사용
+    # ingredient_ids_json = models.JSONField(verbose_name="원재료 ID 목록 (JSON)", null=True, blank=True)
+
     class Meta:
         db_table = "my_label"
         indexes = [
@@ -175,7 +203,28 @@ class MyLabel(models.Model):
         ]
 
     def __str__(self):
-        return self.my_label_id
+        return self.my_label_name
+    
+    def update_ingredient_ids(self):
+        """
+        ManyToMany 관계(ingredients) 기반으로 캐싱 필드를 업데이트.
+        """
+        # ingredients 필드에서 모든 원재료 ID를 가져옴
+        ids = list(self.ingredients.values_list('my_ingredient_id', flat=True))
+        # 쉼표 구분 문자열 업데이트
+        self.ingredient_ids_str = ",".join(map(str, ids))
+        # JSON 필드 업데이트
+        self.ingredient_ids_json = ids
+        self.save(update_fields=["ingredient_ids_str", "ingredient_ids_json"])
+
+    def get_ingredient_queryset(self):
+        """
+        캐싱 필드가 있으면 이를 사용하여 MyIngredient 객체들을 조회하고,
+        그렇지 않으면 ManyToMany 관계를 통해 조회합니다.
+        """
+        if self.ingredient_ids_json:
+            return MyIngredient.objects.filter(my_ingredient_id__in=self.ingredient_ids_json)
+        return self.ingredients.all()
 
 class FoodType(models.Model):
     
@@ -207,3 +256,39 @@ class CountryList(models.Model):
         
     def __str__(self):
         return self.country_name_ko
+
+class LabelIngredientRelation(models.Model):
+    # 기본 관계 필드
+    label = models.ForeignKey(MyLabel, on_delete=models.CASCADE, related_name='ingredient_relations')
+    ingredient = models.ForeignKey(
+        'MyIngredient', 
+        on_delete=models.CASCADE, 
+        related_name='label_relations',
+        to_field='my_ingredient_id'  # my_ingredient_id를 외래 키로 사용
+    )
+    
+    # 추가 필드들
+    prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", null=True, blank=True)
+    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", null=True, blank=True)
+    ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
+    prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, null=True, blank=True)
+    country_of_origin = models.CharField(max_length=255, verbose_name="원산지", null=True, blank=True)
+    ingredient_display_name = models.CharField(max_length=200, verbose_name="원료 표시명", null=True, blank=True)
+
+    allergen = models.CharField(max_length=200, verbose_name="알레르기 물질", null=True, blank=True)
+    gmo = models.CharField(max_length=200, verbose_name="GMO 여부", null=True, blank=True)
+    bssh_nm = models.CharField(max_length=100, verbose_name="제조사명", null=True, blank=True)
+    
+    # 메타데이터
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "label_ingredient_relation"
+        unique_together = ('label', 'ingredient')
+        ordering = ['ingredient_ratio']
+        verbose_name = "라벨-원료 관계"
+        verbose_name_plural = "라벨-원료 관계들"
+
+    def __str__(self):
+        return f"{self.label.my_label_name} - {self.ingredient.my_ingredient_name}"
