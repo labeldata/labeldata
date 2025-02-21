@@ -221,7 +221,8 @@ document.addEventListener('input', function (event) {
       </div>
       <div class="full-input">
         <textarea name="rawmtrl_nm" rows="2" class="auto-expand form-control"
-                  placeholder="원재료명을 입력하세요">{{ form.rawmtrl_nm.value }}</textarea>
+                  placeholder="원재료명을 입력하세요"
+        >{{ form.rawmtrl_nm.value|default:'' }}</textarea>
       </div>
     </div>
 
@@ -262,5 +263,30 @@ function openIngredientPopup() {
     const url = `/label/ingredient-popup/?rawmtrl_nm=${encodeURIComponent(rawmtrl_nm)}&label_id=${label_id}`;
     window.open(url, 'IngredientPopup', 'width=1400,height=850,scrollbars=yes');
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const rawmtrlTextarea = document.querySelector('textarea[name="rawmtrl_nm"]');
+    const ingredientCreateYN = "{{ label.ingredient_create_YN }}";
+
+    function updateTextareaState() {
+        console.log('Updating state:', ingredientCreateYN === 'Y');  // 디버깅 로그
+        rawmtrlTextarea.disabled = (ingredientCreateYN === 'Y');
+        if (ingredientCreateYN === 'Y') {
+            rawmtrlTextarea.classList.add('disabled-textarea');
+        } else {
+            rawmtrlTextarea.classList.remove('disabled-textarea');
+        }
+    }
+    
+    updateTextareaState();
+});
 </script>
+
+<!-- 스타일 추가 -->
+<style>
+.disabled-textarea {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+</style>
 {% endblock %}

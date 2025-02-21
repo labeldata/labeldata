@@ -131,7 +131,7 @@ def call_api_endpoint(request, pk):
     try:
         while True:
             # 예: 2025년 2월 1일 이후 자료만 가져옴
-            change_date = "20250201"
+            change_date = "20250211"
             api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}/CHNG_DT={change_date}"
             logger.info(f"Calling API at URL: {api_url}")
 

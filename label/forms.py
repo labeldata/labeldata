@@ -70,48 +70,31 @@ class LabelForm(forms.ModelForm):
 
 class LabelCreationForm(forms.ModelForm):
     """표시사항 작성 폼"""
-    allergens = forms.ModelMultipleChoiceField(
-        queryset=Allergen.objects.all(),
-        required=False,
-        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
-        label="알레르기 물질"
-    )
-    ingredients = forms.ModelMultipleChoiceField(
-        queryset=MyIngredient.objects.all(),
-        required=False,
-        widget=forms.CheckboxSelectMultiple(attrs={"class": "form-check-input"}),
-        label="원재료명"  # 추가됨
-    )
-
     class Meta:
         model = MyLabel
         fields = [
-            'my_label_name' , 'prdlst_report_no', 'prdlst_nm', 'prdlst_dcnm', 
-            'bssh_nm','rawmtrl_nm', 'content_weight', 'manufacturer_address',
-            'storage_method', 'distributor_name', 'distributor_address',
-            'cautions', 'additional_info', 'country_of_origin', 'importer_address', 
-            'allergens', 'ingredients',  # 추가됨
+            'my_label_name',
+            'prdlst_report_no',
+            'prdlst_nm',
+            'prdlst_dcnm',
+            'bssh_nm',
+            'rawmtrl_nm',
+            'storage_method',
+            'content_weight',
+            'manufacturer_address',
+            'country_of_origin',
+            'importer_address',
+            'distributor_name',
+            'distributor_address',
+            'cautions',
+            'additional_info',
         ]
-        labels = {
-            "my_label_name": "라벨명",
-            "prdlst_report_no": "품목제조번호",
-            "prdlst_nm": "제품명",
-            "prdlst_dcnm": "식품유형",
-            "bssh_nm": "제조사명",
-            "rawmtrl_nm": "원재료명",
-            "content_weight": "내용량 (열량)",
-            "manufacturer_address": "제조원 소재지",
-            "storage_method": "보관방법",
-            "distributor_name": "유통전문판매원",
-            "distributor_address": "유통전문판매원 소재지",
-            "cautions": "주의사항",
-            "additional_info": "기타 표시사항",
-            "country_of_origin": "원산지",
-            "importer_address": "수입원 및 소재지",
-            "allergens": "알레르기 물질",
-            "ingredients": "원재료명"
+        widgets = {
+            'rawmtrl_nm': forms.Textarea(attrs={'rows': 2, 'class': 'auto-expand form-control'}),
+            'cautions': forms.Textarea(attrs={'rows': 2, 'class': 'auto-expand form-control'}),
+            'additional_info': forms.Textarea(attrs={'rows': 2, 'class': 'auto-expand form-control'}),
         }
-        
+
 
 class MyIngredientsForm(forms.ModelForm):
     """내원료 저장 폼"""

@@ -49,12 +49,42 @@
             border-color: #5a32a3;
             color: #fff;
         }
+        .table-container {
+            min-height: 400px; /* 최소 높이 설정 */
+            height: auto !important;
+        }
+        
+        .styled-table {
+            width: 100%;
+            table-layout: fixed; /* 테이블 레이아웃 고정 */
+        }
+    
+        .styled-table th {
+            width: auto;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    
+        /* 각 열의 너비 고정 */
+        .styled-table th:nth-child(1) { width: 2%; }
+        .styled-table th:nth-child(2) { width: 2%; }
+        .styled-table th:nth-child(3) { width: 13%; }
+        .styled-table th:nth-child(4) { width: 12%; }
+        .styled-table th:nth-child(5) { width: 6%; }
+        .styled-table th:nth-child(6) { width: 8%; }
+        .styled-table th:nth-child(7) { width: 28%; }
+        .styled-table th:nth-child(8) { width: 8%; }
+        .styled-table th:nth-child(9) { width: 8%; }
+        .styled-table th:nth-child(10) { width: 8%; }
     </style>
 </head>
 <body>
 <div class="container popup-container">
     <div class="d-flex mb-3">
-        <button type="button" onclick="connectMyIngredient()" class="btn btn-purple btn-sm me-2">내 원료 연결</button>
+        <!-- 검색 입력란 추가 -->
+        <input type="text" id="search-input" class="form-control form-control-sm me-2" placeholder="검색어 입력">
+        <button type="button" onclick="addMyIngredientFromSearch()" class="btn btn-purple btn-sm me-2">내 원료 연결</button>
         <button type="button" onclick="addIngredientRow()" class="btn btn-add btn-sm">행 추가</button>
         <button type="button" onclick="removeSelectedRows()" class="btn btn-danger btn-sm">행 삭제</button>
         <button type="button" onclick="checkOrigin()" class="btn btn-warning btn-sm me-2">원산지 검증</button>
@@ -72,7 +102,6 @@
                     <th style="width: 12%;">품목보고번호</th>
                     <th style="width: 6%;">비율 (%)</th>
                     <th style="width: 8%;">식품유형</th>
-                    <th style="width: 5%;">원산지</th>
                     <th style="width: 28%;">원재료명(표시명)</th>
                     <th style="width: 8%;">알레르기</th>
                     <th style="width: 8%;">GMO</th>
@@ -128,22 +157,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, false);
 
-    // keypress 이벤트 리스너 추가 (엔터키 감지)
-    document.addEventListener('keypress', function (event) {
-        if (event.key === 'Enter' && !event.shiftKey) {  // shift + enter는 제외
-            const textarea = event.target;
-            // 원재료명(표시명) textarea인 경우에만 검색 실행
-            if (textarea.classList.contains('auto-expand') && 
-                textarea.closest('td').cellIndex === 7) {  // 원재료명(표시명) 열의 인덱스
-                event.preventDefault();  // 엔터키의 기본 동작(줄바꿈) 방지
-                const searchName = textarea.value.trim();
-                if (searchName) {
-                    searchMyIngredient(textarea);
-                }
-            }
-        }
-    }, false);
-
     // 클릭 외부 영역 감지
     document.addEventListener('click', function(event) {
         const optionsContainers = document.querySelectorAll('.options-container');
@@ -165,79 +178,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-function addIngredientRow(material = '', isTarget = false) {
-    const tbody = document.getElementById('ingredient-body');
+// addIngredientRow 함수 수정
+function addIngredientRow(material = '') {
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td>
-        <input type="checkbox" class="delete-checkbox form-check-input" />
-      </td>
-      <td class="drag-handle">☰</td>
-      <td>
-        <input type="text" value="${material}" readonly
-               class="form-control form-control-sm bordered-input auto-expand"
-               style="width:90%;" />
-      </td>
-      <td>
-        <input type="text"
-               class="form-control form-control-sm bordered-input auto-expand"
-               style="width:90%;"
-               placeholder="입력 후 Enter"
-               maxlength="15"
-               onkeypress="if(event.keyCode==13) fetchFoodItemData(this)">
-      </td>
-      <td>
-        <input type="number"
-               class="ratio-input form-control form-control-sm bordered-input"
-               style="width:75%;"
-               step="0.1"
-               min="0"
-               max="100"
-               oninput="validateRatioInput(this)"
-               onkeydown="if(event.key === 'Enter') { event.preventDefault(); sortRows(); }">
-      </td>
-      <td>
-        <input type="text"
-               class="form-control form-control-sm bordered-input auto-expand"
-               style="width:85%;"
-               placeholder="입력 후 Enter"
-               onkeypress="if(event.keyCode==13) validateFoodType(this)">
-      </td>
-      <td>
-        <button type="button" class="btn btn-target small-text target-button" style="display: none;">
-          표시대상
-        </button>
-      </td>
-      <td>
-        <textarea class="form-control form-control-sm bordered-input auto-expand"
-                  style="width:95%;"
-                  rows="1"
-                  placeholder="입력 후 Enter로 내 원료 검색"
-                  oninput="autoExpandTextarea(this)"></textarea>
-      </td>
-      <td>
-        <input type="text"
-               class="form-control form-control-sm bordered-input auto-expand"
-               style="width:85%;"
-               onclick="showAllergyOptions(this)">
-      </td>
-      <td>
-        <input type="text"
-               class="form-control form-control-sm bordered-input auto-expand"
-               style="width:85%;"
-               onclick="showGMOOptions(this)">
-      </td>
-      <td>
-        <input type="text"
-               class="form-control form-control-sm bordered-input auto-expand"
-               style="width:85%;" />
-      </td>
+        <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
+        <td class="drag-handle">☰</td>
+        <td><input type="text" value="${material}" class="form-control form-control-sm"></td>
+        <td><input type="text" maxlength="15" class="form-control form-control-sm"></td>
+        <td><input type="text" class="ratio-input form-control form-control-sm"></td>
+        <td><input type="text" class="form-control form-control-sm" onkeypress="return validateFoodType(event)"></td>
+        <td><textarea class="auto-expand form-control form-control-sm" 
+                      placeholder="Enter키로 내 원료 검색">${material}</textarea></td>
+        <td><input type="text" onclick="showAllergyOptions(this)" class="form-control form-control-sm" readonly></td>
+        <td><input type="text" onclick="showGMOOptions(this)" class="form-control form-control-sm" readonly></td>
+        <td><input type="text" class="form-control form-control-sm"></td>
     `;
-    
-    tbody.insertBefore(row, tbody.firstChild);
-    updateTargetButtons();
-    
-    return row;
+    document.getElementById('ingredient-body').appendChild(row);
 }
 
 function updateTargetButtons() {
@@ -406,7 +363,7 @@ function autoExpandTextarea(textarea) {
     textarea.style.height = textarea.scrollHeight + 'px';
 }
 
-// 저장 로직 (예시)
+// saveIngredients 함수 수정
 function saveIngredients() {
     const rows = document.querySelectorAll('#ingredient-body tr');
     const ingredients = [];
@@ -414,18 +371,46 @@ function saveIngredients() {
     const labelId = urlParams.get('label_id');
     
     rows.forEach(row => {
-        const ingredient = {
-            ingredient_name: row.querySelector('input[readonly]').value,
-            ratio: row.querySelector('.ratio-input').value,
-            food_type: row.querySelector('input[onkeypress*="validateFoodType"]').value,
-            origin: row.querySelector('.btn-target').style.display === 'inline-block' ? '표시대상' : '',
-            display_name: row.querySelector('textarea.auto-expand').value,
-            allergen: row.querySelector('input[onclick*="showAllergyOptions"]').value,
-            gmo: row.querySelector('input[onclick*="showGMOOptions"]').value,
-            manufacturer: row.querySelector('td:last-child input').value
-        };
-        ingredients.push(ingredient);
+        try {
+            // 각 요소 존재 여부 확인 후 값 가져오기
+            const ingredientNameInput = row.querySelector('td:nth-child(3) input');
+            const prdlstReportInput = row.querySelector('input[maxlength="15"]');
+            const ratioInput = row.querySelector('.ratio-input');
+            const foodTypeInput = row.querySelector('input[onkeypress*="validateFoodType"]');
+            const displayNameTextarea = row.querySelector('textarea.auto-expand');
+            const allergenInput = row.querySelector('input[onclick*="showAllergyOptions"]');
+            const gmoInput = row.querySelector('input[onclick*="showGMOOptions"]');
+            const manufacturerInput = row.querySelector('td:last-child input');
+
+            // 각 요소가 존재하는지 확인하고 값 가져오기
+            const ingredient = {
+                ingredient_name: ingredientNameInput ? ingredientNameInput.value : '',
+                prdlst_report_no: prdlstReportInput ? prdlstReportInput.value : '',
+                ratio: ratioInput ? (parseFloat(ratioInput.value) || 0) : 0,
+                food_type: foodTypeInput ? foodTypeInput.value : '',
+                display_name: displayNameTextarea ? displayNameTextarea.value : '',
+                allergen: allergenInput ? allergenInput.value : '',
+                gmo: gmoInput ? gmoInput.value : '',
+                manufacturer: manufacturerInput ? manufacturerInput.value : ''
+            };
+
+            // ingredient_name이 있는 경우에만 추가
+            if (ingredient.ingredient_name) {
+                ingredients.push(ingredient);
+            }
+        } catch (error) {
+            console.error('Row processing error:', error);
+        }
     });
+
+    if (ingredients.length === 0) {
+        alert('저장할 원재료가 없습니다.');
+        return;
+    }
+
+    // 디버깅을 위한 로그 추가
+    console.log('Saving ingredients:', ingredients);
+    console.log('Label ID:', labelId);
 
     fetch(`/label/save-ingredients-to-label/${labelId}/`, {
         method: 'POST',
@@ -451,94 +436,12 @@ function saveIngredients() {
     });
 }
 
-function connectMyIngredient() {
-    // 체크된 행들을 가져옴
-    const checkedRows = document.querySelectorAll('#ingredient-body .delete-checkbox:checked');
-    
-    if (checkedRows.length === 0) {
-        alert('연결할 원재료를 선택해주세요.');
-        return;
-    }
-
-    // 체크된 각 행의 원재료 표시명을 수집
-    const display_names = Array.from(checkedRows).map(checkbox => {
-        const row = checkbox.closest('tr');
-        const displayNameInput = row.querySelector('textarea.auto-expand');
-        return displayNameInput.value.trim();  // 원재료명 대신 표시명 사용
-    }).filter(name => name !== '');  // 빈 값 제외
-
-    if (display_names.length === 0) {
-        alert('원재료 표시명을 입력해주세요.');
-        return;
-    }
-
-    // 서버에 체크된 원재료들의 존재 여부 확인 요청
-    fetch('/label/check-my-ingredients/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify({ display_names: display_names })  // ingredients -> display_names로 변경
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // 각 원재료에 대한 정보를 행에 적용
-            data.ingredients.forEach(ingredient => {
-                const row = Array.from(checkedRows).find(checkbox => {
-                    const displayNameInput = checkbox.closest('tr').querySelector('textarea.auto-expand');
-                    return displayNameInput.value.trim() === ingredient.ingredient_display_name;
-                })?.closest('tr');
-                
-                if (row) {
-                    // 원재료명 입력 (추가)
-                    const ingredientNameInput = row.querySelector('input[readonly]');
-                    if (ingredientNameInput) {
-                        ingredientNameInput.value = ingredient.my_ingredient_name;
-                    }
-                    
-                    // 품목보고번호 입력
-                    row.querySelector('input[maxlength="15"]').value = ingredient.prdlst_report_no || '';
-                    
-                    // 식품유형 입력
-                    row.querySelector('input[onkeypress*="validateFoodType"]').value = ingredient.prdlst_dcnm || '';
-                    
-                    // 제조사 입력
-                    row.querySelector('td:last-child input').value = ingredient.bssh_nm || '';
-                    
-                    // 비율(%) 입력
-                    const ratioInput = row.querySelector('.ratio-input');
-                    if (ratioInput && ingredient.ingredient_ratio) {
-                        ratioInput.value = ingredient.ingredient_ratio;
-                    }
-                    
-                    // 체크박스 해제
-                    row.querySelector('.delete-checkbox').checked = false;
-                }
-            });
-
-            // 연결되지 않은 원재료가 있다면 알림
-            const notFound = data.not_found_ingredients;
-            if (notFound.length > 0) {
-                alert(`다음 원재료 표시명은 내 원료에서 찾을 수 없습니다:\n${notFound.join('\n')}`);
-            }
-        } else {
-            alert('원재료 연결 중 오류가 발생했습니다.');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('원재료 연결 중 오류가 발생했습니다.');
-    });
-}
-
 // CSRF 토큰을 가져오는 함수
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
         const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
+        for (let i = 0; cookies.length; i++) {
             const cookie = cookies[i].trim();
             if (cookie.substring(0, name.length + 1) === (name + '=')) {
                 cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
@@ -549,28 +452,30 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// 원재료 검색 함수
+// searchMyIngredient 함수 수정
 function searchMyIngredient(textarea) {
     const searchName = textarea.value.trim();
     const row = textarea.closest('tr');
     
-    fetch('/label/check-my-ingredients/', {
+    console.log("검색어:", searchName); // 디버깅 로그
+
+    fetch('/label/check-ingredient-display-name/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken')
         },
-        body: JSON.stringify({ search_name: searchName })
+        body: JSON.stringify({ ingredient_name: searchName })
     })
     .then(response => response.json())
     .then(data => {
+        console.log("검색 결과:", data); // 디버깅 로그
         if (data.success && data.ingredient) {
-            // 검색 결과가 있을 경우 확인 창 표시
             if (confirm('검색된 내 원료 데이터를 불러오시겠습니까?')) {
                 // 원재료명 입력
-                const ingredientNameInput = row.querySelector('input[readonly]');
+                const ingredientNameInput = row.querySelector('td:nth-child(3) input');
                 if (ingredientNameInput) {
-                    ingredientNameInput.value = data.ingredient.my_ingredient_name;
+                    ingredientNameInput.value = data.ingredient.ingredient_name;
                 }
                 
                 // 품목보고번호 입력
@@ -588,17 +493,16 @@ function searchMyIngredient(textarea) {
                     ratioInput.value = data.ingredient.ingredient_ratio;
                 }
 
-                // 원재료 표시명 입력
-                if (data.ingredient.ingredient_display_name) {
-                    textarea.value = data.ingredient.ingredient_display_name;
+                // 원재료명(표시명) 입력에 rawmtrl_nm 사용
+                if (data.ingredient.rawmtrl_nm) {
+                    textarea.value = data.ingredient.rawmtrl_nm;
                     autoExpandTextarea(textarea);
                 }
 
-                // 데이터 입력 후 정렬 실행
                 sortRows();
+                updateTableHeight();
             }
         } else {
-            // 검색 결과가 없을 경우 알림 표시
             alert('해당하는 원료를 찾을 수 없습니다.');
         }
     })
@@ -608,28 +512,32 @@ function searchMyIngredient(textarea) {
     });
 }
 
-// 저장된 데이터로 행 추가하는 함수
+// addIngredientRowWithData 함수 수정
 function addIngredientRowWithData(ingredient) {
     const row = document.createElement('tr');
     row.innerHTML = `
         <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
         <td class="drag-handle">☰</td>
-        <td><input type="text" class="form-control form-control-sm bordered-input" value="${ingredient.ingredient_name}" readonly></td>
+        <td><input type="text" 
+                   class="form-control form-control-sm bordered-input" 
+                   value="${ingredient.ingredient_name}"></td>
         <td><input type="text" 
                    class="form-control form-control-sm bordered-input" 
                    value="${ingredient.prdlst_report_no}" 
-                   maxlength="15" 
-                   placeholder="입력 후 Enter"
-                   onkeypress="if(event.keyCode==13) fetchFoodItemData(this)"></td>
-        <td><input type="number" class="ratio-input form-control form-control-sm bordered-input" value="${ingredient.ratio}" step="1" min="0" max="100"></td>
-        <td><input type="text" class="form-control form-control-sm bordered-input" value="${ingredient.food_type}" onkeypress="if(event.keyCode==13) validateFoodType(this)"></td>
-        <td><button type="button" class="btn btn-target small-text" style="display: ${ingredient.origin === '표시대상' ? 'inline-block' : 'none'}">표시대상</button></td>
+                   maxlength="15"></td>
+        <td><input type="number" class="ratio-input form-control form-control-sm bordered-input" 
+                   value="${ingredient.ratio}" step="1" min="0" max="100"></td>
+        <td><input type="text" class="form-control form-control-sm bordered-input" 
+                   value="${ingredient.food_type}"></td>
         <td><textarea class="form-control form-control-sm bordered-input auto-expand" 
-                      placeholder="입력 후 Enter로 내 원료 검색"
-                      oninput="autoExpandTextarea(this)">${ingredient.display_name === ingredient.ingredient_name ? '' : ingredient.display_name}</textarea></td>
-        <td><input type="text" class="form-control form-control-sm bordered-input" onclick="showAllergyOptions(this)" value="${ingredient.allergen}" readonly></td>
-        <td><input type="text" class="form-control form-control-sm bordered-input" onclick="showGMOOptions(this)" value="${ingredient.gmo}" readonly></td>
-        <td><input type="text" class="form-control form-control-sm bordered-input" value="${ingredient.manufacturer}"></td>
+                      placeholder="Enter키로 내 원료 검색"
+                      oninput="autoExpandTextarea(this)">${ingredient.display_name || ''}</textarea></td>
+        <td><input type="text" class="form-control form-control-sm bordered-input" 
+                   onclick="showAllergyOptions(this)" value="${ingredient.allergen}" readonly></td>
+        <td><input type="text" class="form-control form-control-sm bordered-input" 
+                   onclick="showGMOOptions(this)" value="${ingredient.gmo}" readonly></td>
+        <td><input type="text" class="form-control form-control-sm bordered-input" 
+                   value="${ingredient.manufacturer}"></td>
     `;
     document.getElementById('ingredient-body').appendChild(row);
     updateTargetButtons();
@@ -643,6 +551,44 @@ function validateRatioInput(input) {
         value = Math.min(Math.max(value, 0), 100);
         input.value = value.toFixed(1);
     }
+}
+
+function addMyIngredientFromSearch() {
+    const searchInput = document.getElementById('search-input');
+    const searchValue = searchInput.value.trim();
+    
+    if (!searchValue) {
+        alert('검색어를 입력해주세요.');
+        return;
+    }
+    
+    console.log("검색어:", searchValue); // 디버깅 로그
+    
+    fetch('/label/search-ingredient-add-row/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ ingredient_name: searchValue })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("검색 결과:", data); // 디버깅 로그
+        if (data.success && data.ingredient) {
+            // 반환받은 데이터로 새 행 추가
+            // 추가할 데이터 형식은 addIngredientRowWithData 함수에서 사용되는 형식과 일치해야 합니다.
+            addIngredientRowWithData(data.ingredient);
+            // 검색 입력란 초기화
+            searchInput.value = '';
+        } else {
+            alert(data.error || '검색 결과가 없습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('검색 중 오류가 발생했습니다.');
+    });
 }
 </script>
 </body>
