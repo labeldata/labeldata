@@ -70,7 +70,7 @@
   <!-- 상단 헤더 영역 -->
   <div class="header-row">
     <!-- 제목 -->
-    <h5 class="m-0">제품 상세 정보</h5>
+    <h4 class="m-0">제품 상세 정보</h4>
     <!-- 버튼 그룹: 내원료 저장(초록), 표시사항 생성(파란), 저장(파란), 닫기(회색) -->
     <div class="button-group-level">
       <button type="button" class="btn btn-success btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">
@@ -254,6 +254,16 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+const width = 1000; // 가로 크기
+const height = 600; // 세로 크기
+const left = (screen.width - width) / 2;
+const top = (screen.height - height) / 2;
+const popup = window.open(
+    url,
+    "제품 상세 정보",
+    `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
+);
 </script>
 </body>
 </html>

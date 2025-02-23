@@ -114,7 +114,7 @@ class MyIngredient(models.Model):
 
     ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
     ingredient_display_name = models.CharField(max_length=200, verbose_name="원료 표시명", null=True, blank=True)
-    search_name = models.CharField(max_length=200, verbose_name="검색 이름", unique=True)
+    search_name = models.CharField(max_length=200, verbose_name="검색 이름", unique=True, null=True, blank=True)
 
     update_datetime = models.DateTimeField(auto_now=True)
 

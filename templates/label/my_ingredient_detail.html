@@ -1,92 +1,168 @@
-{% extends 'base.html' %}
 {% load static %}
-
-{% block content %}
-<div class="container my-3">
-    <div class="row mb-3">
-        <div class="col">
-            <h2 class="border-bottom py-2">{% if mode == 'create' %}내 원료 등록{% else %}내 원료 수정{% endif %}</h2>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>내원료 상세 정보</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .popup-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+        }
+        /* 상단 헤더: 좌측 제목, 우측 버튼 그룹 */
+        .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .header-row h5 {
+            margin: 0;
+        }
+        .button-group-level {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        /* table 디자인 (food_item_detail 참고) */
+        .two-columns {
+            width: 100%;
+            table-layout: fixed;
+        }
+        .two-columns th,
+        .two-columns td {
+            vertical-align: top;
+            word-wrap: break-word;
+            white-space: normal;
+            padding: 10px;
+        }
+        /* 각 행은 4열 구성: label(20%), input(30%) / label(20%), input(30%) */
+        .two-columns th:nth-child(1) { width: 20%; }
+        .two-columns td:nth-child(2) { width: 30%; }
+        .two-columns th:nth-child(3) { width: 20%; }
+        .two-columns td:nth-child(4) { width: 30%; }
+    </style>
+</head>
+<body>
+<div class="container mt-4 popup-container">
+    <!-- 상단 헤더 영역 -->
+    <div class="header-row">
+        <h5>{% if mode == 'create' %}내원료 등록{% else %}내원료 수정{% endif %}</h5>
+        <div class="button-group-level">
+            <button type="submit" form="ingredientForm" class="btn btn-primary btn-sm">저장</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">취소</button>
+            {% if mode == 'edit' %}
+            <button type="button" class="btn btn-danger btn-sm" onclick="confirmDelete()">삭제</button>
+            {% endif %}
         </div>
     </div>
-
-    <form method="post" id="ingredientForm">
-        {% csrf_token %}
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <div class="form-group mb-3">
-                    <label for="my_ingredient_name">내 원료명 *</label>
-                    <input type="text" class="form-control" id="my_ingredient_name" name="my_ingredient_name" 
-                           value="{{ ingredient.my_ingredient_name|default:'' }}" required>
-                </div>
-                <div class="form-group mb-3">
-                    <label for="prdlst_report_no">품목제조번호</label>
-                    <input type="text" class="form-control" id="prdlst_report_no" name="prdlst_report_no" 
-                           value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15">
-                </div>
-                <div class="form-group mb-3">
-                    <label for="prdlst_dcnm">식품유형</label>
-                    <input type="text" class="form-control" id="prdlst_dcnm" name="prdlst_dcnm" 
-                           value="{{ ingredient.prdlst_dcnm|default:'' }}">
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="form-group mb-3">
-                    <label for="ingredient_display_name">원료 표시명</label>
-                    <input type="text" class="form-control" id="ingredient_display_name" name="ingredient_display_name" 
-                           value="{{ ingredient.ingredient_display_name|default:'' }}">
-                </div>
-                <div class="form-group mb-3">
-                    <label for="bssh_nm">제조사명</label>
-                    <input type="text" class="form-control" id="bssh_nm" name="bssh_nm" 
-                           value="{{ ingredient.bssh_nm|default:'' }}">
-                </div>
-                <div class="form-group mb-3">
-                    <label for="search_name">검색용 이름</label>
-                    <input type="text" class="form-control" id="search_name" name="search_name" 
-                           value="{{ ingredient.search_name|default:'' }}">
-                </div>
-            </div>
-        </div>
-
-        <div class="row mb-3">
-            <div class="col">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <button type="submit" class="btn btn-primary">저장</button>
-                        <button type="button" class="btn btn-secondary" onclick="history.back()">취소</button>
-                    </div>
-                    {% if mode == 'edit' %}
-                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">삭제</button>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </form>
+    <div class="card shadow-sm p-4">
+        <form method="post" id="ingredientForm">
+            {% csrf_token %}
+            <table class="table table-bordered two-columns">
+                <tbody>
+                    <tr data-url="{% url 'label:my_ingredient_detail' ingredient.my_ingredient_id %}" onclick="window.open(this.dataset.url, 'ingredientPopup', 'width=1000,height=1000,scrollbars=yes')">
+                        <th>내원료명</th>
+                        <td>
+                            <input type="text" class="form-control" name="my_ingredient_name" id="my_ingredient_name" value="{{ ingredient.my_ingredient_name|default:'' }}" required>
+                        </td>
+                        <th>품목제조번호</th>
+                        <td>
+                            <input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no" value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15">
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>식품유형</th>
+                        <td>
+                            <input type="text" class="form-control" name="prdlst_dcnm" id="prdlst_dcnm" value="{{ ingredient.prdlst_dcnm|default:'' }}">
+                        </td>
+                        <th>제조사명</th>
+                        <td>
+                            <input type="text" class="form-control" name="bssh_nm" id="bssh_nm" value="{{ ingredient.bssh_nm|default:'' }}">
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>원료 표시명</th>
+                        <td colspan="3">
+                            <textarea class="auto-expand form-control form-control-sm"
+                                      name="ingredient_display_name"
+                                      id="ingredient_display_name"
+                                      placeholder="원료 표시명을 입력하세요">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>알레르기</th>
+                        <td colspan="3">
+                            <input type="text" class="form-control" name="allergy_info" id="allergy_info" placeholder="알레르기 선택" value="{{ ingredient.allergy_info|default:'' }}" readonly onclick="showAllergyOptions(this)">
+                        </td>
+                    <tr>
+                        <th>GMO</th>
+                        <td colspan="3">
+                            <input type="text" class="form-control" name="gmo_info" id="gmo_info" placeholder="GMO 선택" value="{{ ingredient.gmo_info|default:'' }}" readonly onclick="showGMOOptions(this)">
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </form>
+    </div>
 </div>
 
+<!-- 공통 옵션 선택 스크립트 로드 -->
+<script src="{% static 'js/ingredient_options.js' %}"></script>
 <script>
 function confirmDelete() {
-    if (confirm('정말로 이 원료를 삭제하시겠습니까?')) {
-        // 삭제 기능 구현 예정
-        alert('삭제 기능은 준비 중입니다.');
+    if (confirm('정말 삭제하시겠습니까?')) {
+        deleteMyIngredient();
     }
+}
+
+function deleteMyIngredient() {
+    const myIngredientId = "{{ ingredient.my_ingredient_id }}";
+
+    fetch(`/label/delete-my-ingredient/${myIngredientId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('내 원료가 성공적으로 삭제되었습니다.');
+            if (window.opener) {
+                window.opener.location.reload();
+            }
+            window.close();
+        } else {
+            alert(data.error || '삭제에 실패했습니다.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('삭제 중 오류가 발생했습니다.');
+    });
 }
 
 document.getElementById('ingredientForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    saveMyIngredient();  // saveMyIngredient 함수 호출
+    saveMyIngredient();
 });
 
-// 저장 기능 구현
 function saveMyIngredient() {
     const formData = {
-        my_ingredient_id: "{{ ingredient.my_ingredient_id }}", // 현재 원료의 ID
-        my_ingredient_name: document.querySelector('input[name="my_ingredient_name"]').value,
-        prdlst_report_no: document.querySelector('input[name="prdlst_report_no"]').value,
-        prdlst_dcnm: document.querySelector('input[name="prdlst_dcnm"]').value,
-        ingredient_display_name: document.querySelector('input[name="ingredient_display_name"]').value,
-        bssh_nm: document.querySelector('input[name="bssh_nm"]').value,
-        search_name: document.querySelector('input[name="search_name"]').value
+        my_ingredient_id: "{{ ingredient.my_ingredient_id }}",
+        my_ingredient_name: document.getElementById("my_ingredient_name").value,
+        prdlst_report_no: document.getElementById("prdlst_report_no").value,
+        prdlst_dcnm: document.getElementById("prdlst_dcnm").value,
+        ingredient_display_name: document.getElementById("ingredient_display_name").value,
+        allergy_info: document.getElementById("allergy_info").value,
+        gmo_info: document.getElementById("gmo_info").value,
+        bssh_nm: document.getElementById("bssh_nm").value
     };
 
     fetch('/label/save-my-ingredient/', {
@@ -101,7 +177,7 @@ function saveMyIngredient() {
     .then(data => {
         if (data.success) {
             alert('내 원료가 성공적으로 저장되었습니다.');
-            location.reload();
+            window.close();
         } else {
             alert(data.error || '저장에 실패했습니다.');
         }
@@ -112,7 +188,6 @@ function saveMyIngredient() {
     });
 }
 
-// CSRF 토큰을 가져오는 함수
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -128,4 +203,5 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
-{% endblock %} 
+</body>
+</html>

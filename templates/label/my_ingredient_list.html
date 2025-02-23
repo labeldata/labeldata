@@ -1,197 +1,73 @@
-{% extends 'base.html' %}
-{% load static %}
+{% extends "base.html" %}
+{% block title %}내원료 관리{% endblock %}
 
 {% block content %}
-<div class="container my-3">
-    <div class="row">
-        <div class="col">
-            <h2 class="border-bottom py-2">내 원료 목록</h2>
-        </div>
-    </div>
+<div class="container mt-4">
+    <h2 class="mb-4">내원료 조회 및 수정</h2>
 
-    <!-- 검색 폼 -->
-    <div class="row my-3">
-        <div class="col">
-            <form id="searchForm" method="get" class="d-flex flex-wrap gap-2">
-                {% for field in search_fields %}
-                <div class="form-group">
-                    <input type="text" name="{{ field.name }}" value="{{ field.value }}"
-                           class="form-control form-control-sm" placeholder="{{ field.placeholder }}">
-                </div>
+    {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list' search_fields=search_fields %}
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover common-table">
+            <thead>
+                <tr>
+                    <th style="width: 5%;">번호</th>
+                    <th style="width: 13%;">
+                        내원료명
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">
+                        품목제조번호
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">
+                        식품유형
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 45%;">
+                        원재료명
+                        <span class="sort-buttons">
+                            <a href="?sort=rawmtrl_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=rawmtrl_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">
+                        제조사명
+                        <span class="sort-buttons">
+                            <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=bssh_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ingredient in page_obj %}
+                <tr data-url="{% url 'label:my_ingredient_detail' ingredient.my_ingredient_id %}" onclick="window.open(this.dataset.url, 'ingredientPopup', 'width=1000,height=600,scrollbars=yes')">
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
+                    <td>{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
+                    <td>{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
+                    <td>{{ ingredient.rawmtrl_nm|default_if_none:'' }}</td>
+                    <td>{{ ingredient.bssh_nm|default_if_none:'' }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center">등록된 원료가 없습니다.</td>
+                </tr>
                 {% endfor %}
-                <div class="form-group">
-                    <select name="items_per_page" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="10" {% if items_per_page == 10 %}selected{% endif %}>10개씩 보기</option>
-                        <option value="30" {% if items_per_page == 30 %}selected{% endif %}>30개씩 보기</option>
-                        <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50개씩 보기</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-primary btn-sm">검색</button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="clearSearch()">초기화</button>
-            </form>
-        </div>
+            </tbody>
+        </table>
     </div>
 
-    <!-- 목록 테이블 -->
-    <div class="row">
-        <div class="col">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>
-                            <a href="?sort=my_ingredient_name&order={% if sort_field == 'my_ingredient_name' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&{{ querystring_without_sort }}">
-                                내 원료명
-                                {% if sort_field == 'my_ingredient_name' %}
-                                    {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
-                                {% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a href="?sort=prdlst_report_no&order={% if sort_field == 'prdlst_report_no' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&{{ querystring_without_sort }}">
-                                품목제조번호
-                                {% if sort_field == 'prdlst_report_no' %}
-                                    {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
-                                {% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a href="?sort=prdlst_dcnm&order={% if sort_field == 'prdlst_dcnm' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&{{ querystring_without_sort }}">
-                                식품유형
-                                {% if sort_field == 'prdlst_dcnm' %}
-                                    {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
-                                {% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a href="?sort=bssh_nm&order={% if sort_field == 'bssh_nm' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&{{ querystring_without_sort }}">
-                                제조사명
-                                {% if sort_field == 'bssh_nm' %}
-                                    {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
-                                {% endif %}
-                            </a>
-                        </th>
-                        <th>
-                            <a href="?sort=ingredient_display_name&order={% if sort_field == 'ingredient_display_name' and sort_order == 'asc' %}desc{% else %}asc{% endif %}&{{ querystring_without_sort }}">
-                                원료 표시명
-                                {% if sort_field == 'ingredient_display_name' %}
-                                    {% if sort_order == 'asc' %}↑{% else %}↓{% endif %}
-                                {% endif %}
-                            </a>
-                        </th>
-                        <th>관리</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ingredient in page_obj %}
-                    <tr class="clickable-row" data-url="{% url 'label:my_ingredient_detail' ingredient.my_ingredient_id %}">
-                        <td>{{ ingredient.my_ingredient_name }}</td>
-                        <td>{{ ingredient.prdlst_report_no }}</td>
-                        <td>{{ ingredient.prdlst_dcnm }}</td>
-                        <td>{{ ingredient.bssh_nm }}</td>
-                        <td>{{ ingredient.ingredient_display_name }}</td>
-                        <td onclick="event.stopPropagation()">
-                            <button type="button" class="btn btn-sm btn-primary" 
-                                    data-url="{% url 'label:my_ingredient_detail' ingredient.my_ingredient_id %}">수정</button>
-                            <button type="button" class="btn btn-sm btn-danger" 
-                                    onclick="deleteIngredient('{{ ingredient.my_ingredient_id }}')">삭제</button>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="6" class="text-center">등록된 원료가 없습니다.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- 페이지네이션 -->
-    {% if page_obj.has_other_pages %}
-    <div class="row mt-3">
-        <div class="col">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page=1&{{ querystring_without_page }}">처음</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}&{{ querystring_without_page }}">이전</a>
-                </li>
-                {% endif %}
-
-                {% for i in page_range %}
-                <li class="page-item {% if page_obj.number == i %}active{% endif %}">
-                    <a class="page-link" href="?page={{ i }}&{{ querystring_without_page }}">{{ i }}</a>
-                </li>
-                {% endfor %}
-
-                {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}&{{ querystring_without_page }}">다음</a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&{{ querystring_without_page }}">마지막</a>
-                </li>
-                {% endif %}
-            </ul>
-        </div>
-    </div>
-    {% endif %}
+    {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
 </div>
-
-<script>
-function clearSearch() {
-    const form = document.getElementById('searchForm');
-    const inputs = form.querySelectorAll('input[type="text"]');
-    inputs.forEach(input => input.value = '');
-    form.submit();
-}
-
-function editIngredient(id) {
-    // 수정 기능 구현 예정
-    alert('수정 기능은 준비 중입니다.');
-}
-
-function deleteIngredient(id) {
-    if (confirm('정말로 이 원료를 삭제하시겠습니까?')) {
-        // 삭제 기능 구현 예정
-        alert('삭제 기능은 준비 중입니다.');
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    // 행 클릭 이벤트
-    const rows = document.querySelectorAll('.clickable-row');
-    rows.forEach(row => {
-        row.addEventListener('click', function() {
-            const url = this.dataset.url;
-            if (url) {
-                window.location.href = url;
-            }
-        });
-    });
-
-    // 수정 버튼 클릭 이벤트
-    const editButtons = document.querySelectorAll('.btn-primary');
-    editButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const url = this.dataset.url;
-            if (url) {
-                window.location.href = url;
-            }
-        });
-    });
-});
-</script>
-
-<!-- CSS 추가 -->
-<style>
-.clickable-row {
-    cursor: pointer;
-}
-.clickable-row:hover {
-    background-color: #f8f9fa;
-}
-</style>
-{% endblock %} 
+{% endblock %}
