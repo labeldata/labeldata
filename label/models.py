@@ -115,6 +115,7 @@ class MyIngredient(models.Model):
     ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
     ingredient_display_name = models.CharField(max_length=200, verbose_name="원료 표시명", null=True, blank=True)
 
+
     update_datetime = models.DateTimeField(auto_now=True)
 
     # 데이터 삭제시 db 삭제가 아니라 플래그 처리로 보이지만 않게
