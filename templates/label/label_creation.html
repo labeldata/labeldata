@@ -221,8 +221,7 @@ document.addEventListener('input', function (event) {
       </div>
       <div class="full-input">
         <textarea name="rawmtrl_nm" rows="2" class="auto-expand form-control"
-                  placeholder="원재료명을 입력하세요"
-        >{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+          placeholder="원재료명을 입력하세요" {% if disable_rawmtrl %}disabled{% endif %}>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
       </div>
     </div>
 
@@ -269,7 +268,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const ingredientCreateYN = "{{ label.ingredient_create_YN }}";
 
     function updateTextareaState() {
-        console.log('Updating state:', ingredientCreateYN === 'Y');  // 디버깅 로그
         rawmtrlTextarea.disabled = (ingredientCreateYN === 'Y');
         if (ingredientCreateYN === 'Y') {
             rawmtrlTextarea.classList.add('disabled-textarea');

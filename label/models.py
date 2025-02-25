@@ -114,7 +114,6 @@ class MyIngredient(models.Model):
 
     ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
     ingredient_display_name = models.CharField(max_length=200, verbose_name="원료 표시명", null=True, blank=True)
-    search_name = models.CharField(max_length=200, verbose_name="검색 이름", unique=True)
 
     update_datetime = models.DateTimeField(auto_now=True)
 
@@ -133,13 +132,7 @@ class MyIngredient(models.Model):
     
     def save(self, *args, **kwargs):
         """search_name이 비어 있을 경우, 기본값으로 id 사용"""
-        if not self.search_name:  
-            super().save(*args, **kwargs)  # 먼저 저장하여 ID 생성
-            self.search_name = str(self.my_ingredient_id)  # ID 값으로 설정
-            super().save(update_fields=['search_name'])  # 다시 저장 (무한루프 방지)
-
-        else:
-            super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
   
 class MyLabel(models.Model):
     # 표시사항 모델
@@ -193,7 +186,7 @@ class MyLabel(models.Model):
     )
 
     # 캐싱 필드 1: 쉼표로 구분된 원재료 ID 목록 (비정규화)
-    ingredient_ids_str = models.CharField(max_length=1000, verbose_name="원재료 ID 목록", null=True, blank=True, help_text="쉼표(,)로 구분")
+    # ingredient_ids_str = models.CharField(max_length=1000, verbose_name="원재료 ID 목록", null=True, blank=True, help_text="쉼표(,)로 구분")
     # 캐싱 필드 2: JSON 형태의 원재료 ID 목록 - 추후 사용
     # ingredient_ids_json = models.JSONField(verbose_name="원재료 ID 목록 (JSON)", null=True, blank=True)
 
@@ -259,6 +252,9 @@ class CountryList(models.Model):
         return self.country_name_ko
 
 class LabelIngredientRelation(models.Model):
+    # 새로운 기본키 필드 (라벨ID와 원재료ID를 조합)
+    relation_id = models.CharField(max_length=255, primary_key=True, editable=False)
+    
     # 기본 관계 필드
     label = models.ForeignKey(MyLabel, on_delete=models.CASCADE, related_name='ingredient_relations')
     ingredient = models.ForeignKey(
@@ -269,16 +265,10 @@ class LabelIngredientRelation(models.Model):
     )
     
     # 추가 필드들
-    prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", null=True, blank=True)
-    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", null=True, blank=True)
     ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
-    prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, null=True, blank=True)
-    country_of_origin = models.CharField(max_length=255, verbose_name="원산지", null=True, blank=True)
-    ingredient_display_name = models.CharField(max_length=200, verbose_name="원료 표시명", null=True, blank=True)
 
     allergen = models.CharField(max_length=200, verbose_name="알레르기 물질", null=True, blank=True)
     gmo = models.CharField(max_length=200, verbose_name="GMO 여부", null=True, blank=True)
-    bssh_nm = models.CharField(max_length=100, verbose_name="제조사명", null=True, blank=True)
     
     # 메타데이터
     created_at = models.DateTimeField(auto_now_add=True)
@@ -290,6 +280,12 @@ class LabelIngredientRelation(models.Model):
         ordering = ['ingredient_ratio']
         verbose_name = "라벨-원료 관계"
         verbose_name_plural = "라벨-원료 관계들"
+
+    def save(self, *args, **kwargs):
+        # label과 ingredient가 모두 설정된 후에 relation_id를 생성합니다.
+        if not self.relation_id and self.label_id and self.ingredient_id:
+            self.relation_id = f"{self.label_id}a{self.ingredient_id}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.label.my_label_name} - {self.ingredient.my_ingredient_name}"

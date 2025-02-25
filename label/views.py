@@ -200,6 +200,7 @@ def saveto_my_label(request, prdlst_report_no):
 
 @login_required
 def label_creation(request, label_id=None):
+    disable_rawmtrl = False
     if label_id:
         label = get_object_or_404(MyLabel, my_label_id=label_id)
         
@@ -207,24 +208,35 @@ def label_creation(request, label_id=None):
             form = LabelCreationForm(request.POST, instance=label)
             if form.is_valid():
                 label = form.save(commit=False)
-                
-                # ingredient_create_YN = 'Y'인 경우 원재료명 처리
-                if label.ingredient_create_YN == 'Y' and label.ingredient_ids_str:
-                    raw_materials = [name.strip() for name in label.ingredient_ids_str.split(',')]
-                    label.rawmtrl_nm = ', '.join(raw_materials)
-                # 'N'인 경우 form에서 입력된 rawmtrl_nm 사용
-                
-                # label_create_YN 업데이트
-                label.label_create_YN = 'Y'
+                # 관계 테이블에 연결된 데이터가 있으면 원재료명(rawmtrl_nm)을 갱신
+                if label.ingredient_relations.exists():
+                    raw_materials = [
+                        relation.ingredient.prdlst_nm 
+                        for relation in label.ingredient_relations.all()
+                        if relation.ingredient.prdlst_nm  # 실제 값이 있는 경우만
+                    ]
+                    if raw_materials:
+                        # join 후 앞뒤 공백 제거
+                        label.rawmtrl_nm = ', '.join(raw_materials).strip()
+                # elif label.ingredient_ids_str:
+                #     raw_materials = [name.strip() for name in label.ingredient_ids_str.split(',')]
+                #     label.rawmtrl_nm = ', '.join(raw_materials)
                 label.save()
                 
                 messages.success(request, '저장되었습니다.')
                 return redirect('label:label_creation', label_id=label.my_label_id)
         else:
-            # GET 요청 시 기존 로직
-            if label.ingredient_create_YN == 'Y' and label.ingredient_ids_str:
-                raw_materials = [name.strip() for name in label.ingredient_ids_str.split(',')]
-                label.rawmtrl_nm = ', '.join(raw_materials)
+            # GET 요청 시: 관계 데이터가 있고 실제로 원재료명이 존재하면 입력란을 disable 처리
+            if label.ingredient_relations.exists():
+                raw_materials = [
+                    relation.ingredient.prdlst_nm 
+                    for relation in label.ingredient_relations.all()
+                    if relation.ingredient.prdlst_nm  # 실제 값이 있는 경우만
+                ]
+                if raw_materials:
+                    label.rawmtrl_nm = ', '.join(raw_materials).strip()
+                    disable_rawmtrl = True  # 실제 데이터가 있는 경우에만 disable 처리
+            print(label.rawmtrl_nm)
             form = LabelCreationForm(instance=label)
     else:
         if request.method == 'POST':
@@ -232,7 +244,6 @@ def label_creation(request, label_id=None):
             if form.is_valid():
                 label = form.save(commit=False)
                 label.user_id = request.user
-                label.label_create_YN = 'Y'
                 label.save()
                 
                 messages.success(request, '저장되었습니다.')
@@ -240,12 +251,14 @@ def label_creation(request, label_id=None):
         else:
             form = LabelCreationForm()
             label = None
+        disable_rawmtrl = False
 
     context = {
         'form': form,
         'label': label,
         'food_types': FoodType.objects.all(),
-        'country_list': CountryList.objects.all()
+        'country_list': CountryList.objects.all(),
+        'disable_rawmtrl': disable_rawmtrl,  # 템플릿으로 전달할 플래그
     }
     return render(request, 'label/label_creation.html', context)
 
@@ -376,15 +389,15 @@ def fetch_food_item(request, prdlst_report_no):
 def check_my_ingredients(request):
     try:
         data = json.loads(request.body)
-        search_name = data.get('search_name', '').strip()
+        prdlst_nm = data.get('prdlst_nm', '').strip()
         
-        if not search_name:
+        if not prdlst_nm:
             return JsonResponse({'success': False, 'error': '검색어가 없습니다.'})
         
-        # search_name으로 검색하여 원재료 찾기
+        # prdlst_nm 검색하여 원재료 찾기
         found_ingredient = MyIngredient.objects.filter(
             user_id=request.user,
-            search_name=search_name,
+            prdlst_nm=prdlst_nm,
             delete_YN='N'
         ).values(
             'my_ingredient_name',
@@ -394,7 +407,6 @@ def check_my_ingredients(request):
             'prdlst_dcnm', 
             'bssh_nm',
             'ingredient_ratio',
-            'search_name',
             'rawmtrl_nm'          # 원재료명(표시명)에 사용
         ).first()
         
@@ -623,17 +635,6 @@ def save_my_ingredient(request):
                 })
             
             # 검색용 이름 중복 체크
-            search_name = data.get('search_name')
-            if search_name:
-                existing_ingredient = MyIngredient.objects.filter(
-                    search_name=search_name
-                ).exclude(my_ingredient_id=data.get('my_ingredient_id')).first()
-                
-                if existing_ingredient:
-                    return JsonResponse({
-                        'success': False,
-                        'error': '이미 존재하는 검색용 이름입니다. 다른 검색용 이름을 입력해주세요.'
-                    })
             
             # 현재 내 원료 정보 업데이트
             my_ingredient = MyIngredient.objects.filter(
@@ -644,8 +645,7 @@ def save_my_ingredient(request):
                 prdlst_report_no=data.get('prdlst_report_no'),
                 prdlst_dcnm=data.get('prdlst_dcnm'),
                 ingredient_display_name=data.get('ingredient_display_name'),
-                bssh_nm=data.get('bssh_nm'),
-                search_name=search_name
+                bssh_nm=data.get('bssh_nm')
             )
             
             return JsonResponse({
@@ -669,60 +669,39 @@ def save_my_ingredient(request):
 @csrf_exempt
 def search_ingredient_add_row(request):
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Invalid request method'})
+        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
     
     try:
         data = json.loads(request.body)
-        search_ingredient_name = data.get('ingredient_name', '').strip()
-        print("Received ingredient_name:", search_ingredient_name)  # 디버깅 로그
+        name = data.get('ingredient_name', '').strip()
+        report = data.get('prdlst_report_no', '').strip()
+        food_type = data.get('food_type', '').strip()
+        manufacturer = data.get('manufacturer', '').strip()
         
-        if not search_ingredient_name:
-            return JsonResponse({
-                'success': False, 
-                'error': '검색어를 입력해야합니다.'
-            })
+        qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
+        if name:
+            qs = qs.filter(prdlst_nm__icontains=name)
+        if report:
+            qs = qs.filter(prdlst_report_no__icontains=report)
+        if food_type:
+            qs = qs.filter(prdlst_dcnm__icontains=food_type)
+        if manufacturer:
+            qs = qs.filter(bssh_nm__icontains=manufacturer)
         
-        # search_name 필드로 검색합니다.
-        ingredient = MyIngredient.objects.filter(
-            user_id=request.user,
-            search_name=search_ingredient_name,  # 변경: my_ingredient_name -> search_name
-            delete_YN='N'
-        ).values(
-            'prdlst_nm',
+        # 여러 건 리스트로 반환 (각 결과에 대해 필요한 필드만)
+        ingredients = list(qs.values(
+            'prdlst_nm',         # 원료명
             'prdlst_report_no',
-            'prdlst_dcnm', 
-            'rawmtrl_nm',
-            'bssh_nm'
-            ).first()
+            'prdlst_dcnm',       # 식품유형
+            'bssh_nm',           # 제조사
+        ))
+
         
-        if ingredient:
-            # rawmtrl_nm이 없는 경우 빈 문자열 반환
-            if ingredient['rawmtrl_nm'] is None:
-                ingredient['rawmtrl_nm'] = ''
-            ingredient_data = {
-                'ingredient_name': ingredient['prdlst_nm'],
-                'prdlst_report_no': ingredient['prdlst_report_no'] or '',
-                'food_type': ingredient['prdlst_dcnm'] or '',
-                'display_name': ingredient['rawmtrl_nm'],
-                'manufacturer': ingredient['bssh_nm'] or '',
-                'ratio': '',
-                'allergen': '',
-                'gmo': ''
-            }
-            print(ingredient_data)
-            return JsonResponse({
-                'success': True,
-                'ingredient': ingredient_data
-            })
+        
+        if ingredients:
+            print(ingredients)
+            return JsonResponse({'success': True,'ingredients': ingredients})
         else:
-            return JsonResponse({
-                'success': False,
-                'error': '해당하는 원료를 찾을 수 없습니다.'
-            })
-            
+            return JsonResponse({'success': False, 'error': '검색 결과가 없습니다.'})
     except Exception as e:
-        print("Error in search_ingredient_add_row:", str(e))
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        })
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
