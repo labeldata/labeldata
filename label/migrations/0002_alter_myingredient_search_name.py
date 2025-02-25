@@ -10,9 +10,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name='myingredient',
-            name='search_name',
-            field=models.CharField(blank=True, max_length=200, null=True, unique=True, verbose_name='검색 이름'),
-        ),
+        # 더 이상 search_name 필드를 수정할 필요가 없으므로 빈 리스트로 만듭니다.
     ]
