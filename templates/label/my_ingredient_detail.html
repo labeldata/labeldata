@@ -51,7 +51,15 @@
 <div class="container mt-4 popup-container">
     <!-- 상단 헤더 영역 -->
     <div class="header-row">
-        <h5>{% if mode == 'create' %}내원료 등록{% else %}내원료 수정{% endif %}</h5>
+        <h5>{% if mode == 'create' %}내 원료 등록{% else %}내 원료 수정{% endif %}</h5>
+        <tr>
+            <th>내 원료명</th>
+            <td colspan="3">
+                <input type="text" class="form-control" name="my_ingredient_name" id="my_ingredient_name" 
+                       value="{{ ingredient.my_ingredient_name|default:'' }}" required 
+                       style="max-width: 200px;">
+            </td>
+        </tr>
         <div class="button-group-level">
             <button type="submit" form="ingredientForm" class="btn btn-primary btn-sm">저장</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">취소</button>
@@ -66,11 +74,11 @@
             <table class="table table-bordered two-columns">
                 <tbody>
                     <tr data-url="{% url 'label:my_ingredient_detail' ingredient.my_ingredient_id %}" onclick="window.open(this.dataset.url, 'ingredientPopup', 'width=1000,height=1000,scrollbars=yes')">
-                        <th>내원료명</th>
+                        <th>원재료명</th>
                         <td>
-                            <input type="text" class="form-control" name="my_ingredient_name" id="my_ingredient_name" value="{{ ingredient.my_ingredient_name|default:'' }}" required>
+                            <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm" value="{{ ingredient.prdlst_nm|default:'' }}">
                         </td>
-                        <th>품목제조번호</th>
+                        <th>품목보고번호</th>
                         <td>
                             <input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no" value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15">
                         </td>
@@ -86,12 +94,12 @@
                         </td>
                     </tr>
                     <tr>
-                        <th>원료 표시명</th>
+                        <th>원재료 표시명</th>
                         <td colspan="3">
                             <textarea class="auto-expand form-control form-control-sm"
                                       name="ingredient_display_name"
                                       id="ingredient_display_name"
-                                      placeholder="원료 표시명을 입력하세요">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
+                                      placeholder="원재료 표시명을 입력하세요">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
                         </td>
                     </tr>
                     <tr>
