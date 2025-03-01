@@ -12,6 +12,7 @@ from .forms import LabelCreationForm
 from venv import logger  #지우지 말 것
 from django.utils.safestring import mark_safe
 from django.utils.timezone import now
+from django.views.decorators.csrf import csrf_exempt
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -578,3 +579,113 @@ def search_ingredient_add_row(request):
             return JsonResponse({'success': False, 'error': '검색 결과가 없습니다.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# @login_required
+# @csrf_exempt
+# def verify_ingredients(request):
+#     if request.method != "POST":
+#         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
+#     try:
+#         data = json.loads(request.body)
+#         ingredient = data.get("ingredient", [])
+#         print(ingredient)
+#         results = []  # 각 원재료 행별 존재 여부(예: true: 이미 존재)
+#         for ing in ingredient:
+#             print("1")
+#             prdlst_report_no = ing.get("prdlst_report_no", "").strip()
+#             if prdlst_report_no:
+#                 exists = MyIngredient.objects.filter(
+#                     user_id=request.user,
+#                     prdlst_report_no=prdlst_report_no,
+#                     delete_YN="N"
+#                 ).exists()
+#             else:
+#                 exists = MyIngredient.objects.filter(
+#                     user_id=request.user,
+#                     prdlst_nm=ing.get("ingredient_name", "").strip(),
+#                     prdlst_dcnm=ing.get("food_type", "").strip(),
+#                     ingredient_display_name=ing.get("display_name", "").strip(),
+#                     delete_YN="N"
+#                 ).exists()
+#             results.append(exists)
+
+            
+#         return JsonResponse({"success": True, "results": results})
+#     except Exception as e:
+#         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@login_required
+@csrf_exempt
+def verify_ingredients(request):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
+    try:
+        data = json.loads(request.body)
+        # ingredient 키에 해당하는 데이터가 전달되었는지 확인
+        ing_data = data.get("ingredient", {})
+        # 만약 ing_data가 리스트라면, 단일 항목만 전달하는 것으로 간주하고 dict로 변환합니다.
+        if isinstance(ing_data, list):
+            if len(ing_data) == 1:
+                ing_data = ing_data[0]
+            else:
+                # 여러 항목이 넘어오면 에러를 반환하거나 원하는 방식으로 처리합니다.
+                return JsonResponse({"success": False, "error": "Expected a single ingredient dictionary."}, status=400)
+        
+        # 이제 ing_data는 dict로 보장됩니다.
+        print("Received ingredient data:", ing_data)
+        results = []  # 결과 값을 저장할 리스트
+        
+        # 단일 dict이므로 한 번만 처리합니다.
+        prdlst_report_no = str(ing_data.get("prdlst_report_no", "")).strip()
+        print("prdlst_report_no:", prdlst_report_no)
+        
+        if prdlst_report_no:
+            # 품목보고번호가 있는 경우 해당 번호를 기준으로 MyIngredient 레코드를 검색합니다.
+            qs = MyIngredient.objects.filter(
+                user_id=request.user,
+                prdlst_report_no=prdlst_report_no,
+                delete_YN="N"
+            )
+            if qs.exists():
+                # 검색된 레코드의 필요한 필드들만 values()로 가져옵니다.
+                record = qs.values(
+                    "my_ingredient_id",
+                    "my_ingredient_name",
+                    "prdlst_report_no",
+                    "prdlst_nm",
+                    "prdlst_dcnm",
+                    "ingredient_display_name",
+                    "delete_YN"
+                ).first()
+                results.append(record)
+            else:
+                results.append({})
+        else:
+            # 품목보고번호가 없으면 원재료명, 식품유형, 원재료(표시명)를 기준으로 검색합니다.
+            qs = MyIngredient.objects.filter(
+                user_id=request.user,
+                prdlst_nm=ing_data.get("ingredient_name", "").strip(),
+                prdlst_dcnm=ing_data.get("food_type", "").strip(),
+                ingredient_display_name=ing_data.get("display_name", "").strip(),
+                delete_YN="N"
+            )
+            if qs.exists():
+                record = qs.values(
+                    "my_ingredient_id",
+                    "my_ingredient_name",
+                    "prdlst_report_no",
+                    "prdlst_nm",
+                    "prdlst_dcnm",
+                    "ingredient_display_name",
+                    "delete_YN"
+                ).first()
+                results.append(record)
+            else:
+                results.append({})
+        print("Results:", results)
+        return JsonResponse({"success": True, "results": results})
+    except Exception as e:
+        print("Error in verify_ingredients:", str(e))
+        return JsonResponse({"success": False, "error": str(e)}, status=500)

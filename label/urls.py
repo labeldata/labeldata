@@ -31,4 +31,7 @@ urlpatterns = [
     path('save-ingredients-to-label/<int:label_id>/', views.save_ingredients_to_label, name='save_ingredients_to_label'),
     path('search-ingredient-add-row/', views.search_ingredient_add_row, name='search_ingredient_add_row'),
     #path('delete-my-ingredient/<int:my_ingredient_id>/', views.delete_my_ingredient, name='delete_my_ingredient'),
+    # verify_ingredients URL 추가
+    path('verify-ingredients/', views.verify_ingredients, name='verify_ingredients'),
+    
 ]

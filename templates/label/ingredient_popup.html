@@ -121,13 +121,14 @@
         </div>
     </div>
 
-    <!-- 상단 툴바: 기존 검색 입력 및 행/삭제, 저장 관련 버튼 -->
+    <!-- 파일: ingredient_popup.html 내 상단 툴바 부분 -->
     <div class="d-flex mb-3">
         <input type="text" id="search-input" class="form-control form-control-sm me-2" placeholder="검색어 입력">
-        <!-- 버튼을 클릭하면 모달을 띄워 검색하도록 변경 -->
         <button type="button" class="btn btn-purple btn-sm me-2" data-bs-toggle="modal" data-bs-target="#ingredientSearchModal">검색</button>
         <button type="button" onclick="addIngredientRow()" class="btn btn-add btn-sm">행 추가</button>
         <button type="button" onclick="removeSelectedRows()" class="btn btn-danger btn-sm">행 삭제</button>
+        <!-- 기존 원산지 검증 버튼 뒤에 추가 -->
+        <button type="button" onclick="verifyRows()" class="btn btn-info btn-sm me-2">검증</button>
         <button type="button" onclick="checkOrigin()" class="btn btn-warning btn-sm me-2">원산지 검증</button>
         <button type="button" onclick="saveIngredients()" class="btn btn-primary btn-sm me-2">저장</button>
         <button type="button" onclick="window.close()" class="btn btn-secondary btn-sm">취소</button>
@@ -482,8 +483,9 @@ function searchMyIngredient(textarea) {
 
 // 파일: ingredient_popup.html 내 addIngredientRowWithData 함수 수정
 function addIngredientRowWithData(ingredient, fromModal = false) {
-    // if fromModal is true, use modal-only readonly 클래스, 아니면 기존 클래스는 적용하지 않음
     const readonlyClass = fromModal ? "modal-readonly-field" : "";
+    // fromModal가 true일 때만 readonly 속성을 추가하고, 아니면 빈 문자열로 처리
+    const readonlyAttr = fromModal ? "readonly" : "";
     const row = document.createElement('tr');
     row.innerHTML = `
         <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
@@ -491,39 +493,39 @@ function addIngredientRowWithData(ingredient, fromModal = false) {
         <td>
             <div class="d-flex flex-column">
                 <input type="text" value="${ingredient.ingredient_name}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="원재료명" readonly>
+                       class="form-control form-control-sm ${readonlyClass}" placeholder="원재료명" ${readonlyAttr}>
                 <input type="text" value="${ingredient.ratio || ''}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="비율 (%)" readonly>
+                       class="form-control form-control-sm ${readonlyClass}" placeholder="비율 (%)" ${readonlyAttr}>
             </div>
         </td>
         <td>
             <div class="d-flex flex-column">
                 <input type="text" value="${ingredient.prdlst_report_no}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="품목보고번호" readonly>
+                       class="form-control form-control-sm ${readonlyClass}" placeholder="품목보고번호" ${readonlyAttr}>
                 <input type="text" value="${ingredient.food_type}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="식품유형" readonly>
+                       class="form-control form-control-sm ${readonlyClass}" placeholder="식품유형" ${readonlyAttr}>
             </div>
         </td>
         <td>
             <textarea class="form-control form-control-sm bordered-input auto-expand ${readonlyClass}" 
-                      placeholder="원재료 표시명" readonly>${ingredient.display_name || ingredient.ingredient_name}</textarea>
+                      placeholder="원재료 표시명" ${readonlyAttr}>${ingredient.display_name || ingredient.ingredient_name}</textarea>
         </td>
         <td>
             <input type="text" class="form-control form-control-sm bordered-input ${readonlyClass}" 
-                   onclick="showAllergyOptions(this)" value="${ingredient.allergen}" readonly>
+                   onclick="showAllergyOptions(this)" value="${ingredient.allergen}" ${readonlyAttr}>
         </td>
         <td>
             <input type="text" class="form-control form-control-sm bordered-input ${readonlyClass}" 
-                   onclick="showGMOOptions(this)" value="${ingredient.gmo}" readonly>
+                   onclick="showGMOOptions(this)" value="${ingredient.gmo}" ${readonlyAttr}>
         </td>
         <td>
             <input type="text" class="form-control form-control-sm bordered-input ${readonlyClass}" 
-                   value="${ingredient.manufacturer}" readonly>
+                   value="${ingredient.manufacturer}" ${readonlyAttr}>
         </td>
         <td>
             <div class="d-flex flex-column">
                 <button type="button" class="btn btn-sm btn-secondary mb-1" onclick="editRow(this)">수정</button>
-                <button type="button" class="btn btn-sm btn-info" onclick="loadRow(this)">불러오기</button>
+                <button type="button" class="btn btn-sm btn-info" disabled onclick="loadRow(this)">불러오기</button>
             </div>
         </td>
     `;
@@ -573,6 +575,77 @@ function editRow(button) {
         field.classList.remove('modal-readonly-field');
     });
 }
+// 불러오기 버튼 활성화 예시
+function enableLoadButton(button) {
+    button.removeAttribute('disabled');
+}
+function verifyRows() {
+    const rows = document.querySelectorAll('#ingredient-body tr');
+    const promises = [];
+    
+    rows.forEach((row, index) => {
+        // 각 행에서 데이터 추출 (테이블 헤더 순서에 맞춤)
+        const ingName = row.querySelector('td:nth-child(3) input')?.value || "";
+        const ratio = row.querySelector('td:nth-child(3) input:nth-of-type(2)')?.value || "";
+        const reportNo = row.querySelector('td:nth-child(4) input')?.value || "";
+        const foodType = row.querySelector('td:nth-child(4) input:nth-of-type(2)')?.value || "";
+        const displayName = row.querySelector('td:nth-child(5) textarea')?.value || "";
+        const allergen = row.querySelector('td:nth-child(6) input')?.value || "";
+        const gmo = row.querySelector('td:nth-child(7) input')?.value || "";
+        const manufacturer = row.querySelector('td:nth-child(8) input')?.value || "";
+        
+        const ingredient = {
+            ingredient_name: ingName,
+            ratio: ratio,
+            prdlst_report_no: reportNo,
+            food_type: foodType,
+            display_name: displayName,
+            allergen: allergen,
+            gmo: gmo,
+            manufacturer: manufacturer
+        };
+        
+        // 각 행에 대해 개별 fetch 요청 (ingredient 단일 객체를 전송)
+        const p = fetch('/label/verify-ingredients/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ ingredient: ingredient })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && typeof data.results !== "undefined") {
+                if (data.results) {
+                    // 이미 존재하는 경우: 해당 행의 모든 입력 필드를 readonly로 만들고 스타일 적용
+                    row.querySelectorAll('input, textarea').forEach(field => {
+                        field.setAttribute('readonly', true);
+                        field.classList.add('modal-readonly-field');
+                    });
+                    // 예를 들어 불러오기 버튼 활성화 (버튼이 있다면)
+                    const loadBtn = row.querySelector('button.btn-info');
+                    if (loadBtn) {
+                        loadBtn.removeAttribute('disabled');
+                    }
+                }
+            } else {
+                console.error('Row ' + index + ' 검증 오류: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            console.error('Row ' + index + ' 처리 중 오류: ' + error.message);
+        });
+        
+        promises.push(p);
+    });
+    
+    // 모든 행에 대한 fetch 요청이 완료되면 최종 메시지 표시
+    Promise.all(promises).then(() => {
+        alert('모든 행에 대해 개별 검증이 완료되었습니다.');
+    });
+}
+
 
 </script>
 
