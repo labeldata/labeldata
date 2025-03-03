@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <title>내원료 상세 정보</title>
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <style>
         .popup-container {
             max-width: 1000px;
@@ -62,9 +62,9 @@
         </tr>
         <div class="button-group-level">
             <button type="submit" form="ingredientForm" class="btn btn-primary btn-sm">저장</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">취소</button>
+            <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">닫기</button>
             {% if mode == 'edit' %}
-            <button type="button" class="btn btn-danger btn-sm" onclick="confirmDelete()">삭제</button>
+            <button type="button" class="btn btn-warning btn-sm" onclick="confirmDelete()">삭제</button>
             {% endif %}
         </div>
     </div>

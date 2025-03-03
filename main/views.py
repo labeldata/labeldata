@@ -48,3 +48,4 @@ def crawl_dispositions(request, setting_id):
     # 크롤링 로직 구현
     messages.success(request, f'{setting.location} 지역의 행정처분 정보 크롤링이 시작되었습니다.')
     return redirect('admin:disposition_crawlingsetting_changelist')
+

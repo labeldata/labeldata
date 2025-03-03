@@ -2,29 +2,63 @@
    1. Global Variables & Base Styles
    ==================================================== */
 :root {
-    --primary-color: #2a5d9f; /* 기존 색상 유지 */
-    --secondary-color: #f8f9fa;
-    --text-color: #343a40;
-    --btn-color: #2a5d9f;
-    --btn-secondary-color: #6c757d;
-    --navbar-bg-color: #2a5d9f;
-    --highlight-color: #e67e22;
-    --table-header-bg-color: #e9ecef;
-    --table-hover-bg-color: #f1f3f5;
-    --pagination-bg-color: #2a5d9f;
-    --pagination-active-bg-color: #1a3d6f;
+    --primary-color: #023047;         /* 기본 주색상 */
+    --secondary-color: #6c757d;       /* 보조 색상 */
+    --text-color: #343a40;            /* 본문 텍스트 색상 */
+    --btn-color: #2667ff;        /* (1) 주요 버튼색 */
+    --btn-secondary-color: #1e96fc;  /* (2) 세컨더리 버튼색 */
+    --btn-cancel-color: #6c757d;     /* (3) 취소 버튼색 */
+    --navbar-bg-color: #023047;       /* 네비게이션 바 배경 */
+    --highlight-color: #e67e22;       /* 하이라이트 색상 */
+    --table-header-bg-color: #e9ecef; /* 테이블 헤더 배경 */
+    --table-hover-bg-color: #e9ecef;  /* 테이블 Hover 배경 */
+    --pagination-color: #023047;      /* 페이지네이션 색상 (오탈자 수정) */
+    --footer-bg-color: #d9dcd6;       /* 푸터 배경색 */
 }
 
-body {
-    font-family: 'Arial', sans-serif;
-    background-color: var(--secondary-color);
-    color: var(--text-color);
-    margin: 0;
-    overflow-y: scroll;
+/* 웹폰트 예시 */
+@font-face {
+  font-family: 'NanumSquare';
+  src: url("{% static 'fonts/NanumSquareR.otf' %}") format("opentype"),
+       url("{% static 'fonts/NanumSquareR.ttf' %}") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
 }
 
 /* ====================================================
-   2. Container & Navbar
+   2. Global Reset & Layout
+   ==================================================== */
+/* html, body 전체 높이 100% */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+/* body를 flex 컨테이너로 하여
+   내용이 많으면 스크롤, 푸터는 하단 고정 가능 */
+body {
+    display: flex;
+    flex-direction: column;
+    font-family: 'NanumSquare', sans-serif;
+    background-color: #f9f9f9;
+    color: var(--text-color);
+    overflow-y: auto; /* 내용이 많아지면 스크롤 */
+}
+
+/* main 또는 .content 등에 flex: 1 적용하여
+   본문이 늘어나면 스크롤이 생기도록 */
+main.container,
+.content {
+    flex: 1 0 auto;
+    margin-top: 60px;   /* fixed-top navbar 높이만큼 여백 */
+    padding-top: 10px;  /* 기존 스타일 */
+    padding-bottom: 80px; /* 푸터 높이+여백만큼 */
+}
+
+/* ====================================================
+   3. Navbar Styles
    ==================================================== */
 .navbar {
     background-color: var(--navbar-bg-color) !important;
@@ -32,74 +66,81 @@ body {
 }
 .navbar a {
     color: #fff;
+    text-decoration: none;
+}
+.navbar a:hover {
+    text-decoration: none;
+    border-bottom: 2px solid var(--btn-color);
+}
+.navbar-brand,
+.navbar-nav .nav-item:not(.logout) {
+    margin-right: 2rem !important; /* 여백 조정 */
 }
 
 /* ====================================================
-   3. Table & Common Table Styles
+   4. Footer (하단 고정)
+   ==================================================== */
+.footer {
+    position: fixed;       /* 화면 하단 고정 */
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--footer-bg-color);
+    color: var(--navbar-bg-color);
+    padding: 0.3rem 0;
+    text-align: center;
+    z-index: 10;           /* 필요한 경우 */
+}
+
+/* ====================================================
+   5. Table & Common Table Styles
    ==================================================== */
 .table,
 .common-table {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed; /* 기본적으로 고정 레이아웃 유지 */
+    table-layout: fixed; /* 고정 레이아웃 */
 }
-
 .table th,
 .table td,
 .common-table th,
 .common-table td {
     white-space: normal;
-    word-wrap: break-word; /* 긴 텍스트 줄바꿈 */
+    word-wrap: break-word;
     text-overflow: clip;
     font-size: 0.8rem;
+    line-height: 1.5;  
     border: 1px solid #ccc;
-    padding: 8px; /* 표의 패딩 줄이기 */
+    padding: 8px;
     text-align: center;
-    vertical-align: middle; /* 중간으로 정렬 */
+    vertical-align: middle;
 }
-
 .table th,
 .common-table th {
     background-color: var(--table-header-bg-color);
     color: var(--text-color);
     font-weight: bold;
 }
-
-.table th:first-child,
-.table td:first-child {
-    width: 5%;
-}
-
 .table tr:hover {
-    background-color: var(--table-hover-bg-color);
+    background-color: #e3f2fd !important; /* 호버 시 배경색 변경 */
     cursor: pointer;
 }
 
-.common-table th,
-.common-table td {
-    text-align: left;
-}
-
-/* 2열 테이블 (특정 페이지에서 사용) */
-.two-columns th {
-    width: 25%;
-    background-color: var(--table-header-bg-color);
-}
-.two-columns td {
-    width: 25%;
-}
-
-/* 
-   [추가] 고정 비율이 필요한 테이블에 .table-fixed-ratio를 붙여서
-   각 <th style="width:...">로 비율 지정.
-   예: 1:1:5:5:1:3:2:10:3:3:3 (합 37)
-*/
+.table tbody td {
+    color: #343a40 !important; /* 본문 텍스트 색상으로 */
+  }
 .table-fixed-ratio {
     table-layout: fixed !important;
 }
+/* 좀 더 구체적인 선택자 (우선순위 ↑) */
+.table-hover tbody tr:hover td,
+.table-hover tbody tr:hover th {
+  background-color: #e3f2fd !important; /* 배경색 */
+  color: #343a40 !important;           /* 텍스트 색상 */
+}
 
 /* ====================================================
-   4. Pagination Styles
+   6. Pagination Styles
    ==================================================== */
 .pagination-wrapper {
     display: flex;
@@ -110,105 +151,112 @@ body {
     margin: 0 5px;
 }
 .pagination .page-link {
-    color: var(--pagination-bg-color);
+    color: var(--pagination-color);
     text-decoration: none;
+    
 }
 .pagination .page-item.active .page-link {
-    background-color: var(--pagination-active-bg-color);
+    background-color: var(--pagination-color);
     color: #fff;
-    border-color: var(--pagination-active-bg-color);
+    border-color: var(--pagination-color);
 }
 
 /* ====================================================
-   5. Popup & Button Group
+   7. Buttons
    ==================================================== */
-.popup-container {
-    max-width: 1800px !important;
-    margin: 0 auto;
-    padding: 20px;
-    box-sizing: border-box;
-    background-color: #fff;
-}
-.popup-container h5 {
-    font-size: 1.2rem;
-    margin-bottom: 15px;
-    text-align: left;
-}
-.header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end; /* 아래쪽을 기준으로 정렬 */
-    padding-bottom: 5px; /* 상단 패딩 줄이기 */
-    position: sticky;
-    top: 0;
-    background-color: white;
-    z-index: 1000;
-}
-.button-group-center {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-bottom: 5px; /* 버튼과 표 사이 간격 줄이기 */
-}
-/* [추가] 테이블 위에 버튼 배치 시 사용 */
-.button-group-top {
-    display: flex;
-    justify-content: flex-end;
-    gap: 20px; /* 버튼 간격 넓힘 */
-    margin-bottom: 10px;
-}
-
-.popup-controls,
-.button-group {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-bottom: 15px;
-}
-
-.button-group .btn,
+/* 통합된 .btn 기본 스타일 */
 .btn {
-    font-size: 0.9rem;
+    display: inline-block;
+    font-weight: 400;
+    text-align: center;
+    vertical-align: middle;
+    cursor: pointer;
+    background-color: transparent; /* base */
+    border: 1px solid transparent;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    border-radius: 0.25rem;
+    transition: color 0.15s ease-in-out,
+                background-color 0.15s ease-in-out,
+                border-color 0.15s ease-in-out,
+                box-shadow 0.15s ease-in-out;
+    color: #212529;
+}
+
+.btn-default {
+    background-color: #e9ecef;  /* 기본 배경색 */
+    color: var(--text-color);   /* 기본 텍스트 색상 */
+    border: 1px solid #ced4da;
+}
+
+.btn-default:hover {
+    background-color: #d0d5d8;  /* 호버 시 약간 어두운 배경색 */
+    color: #212529;             /* 호버 시 텍스트 색상 (진하게) */
+    border-color: #b0b7bd;
+}
+
+/* 자주 쓰는 변형 */
+.btn-primary {
+    color: #fff;
     background-color: var(--btn-color);
-    border: none;
+    border-color: var(--btn-color);
+  }
+  
+  .btn-secondary {
     color: #fff;
-    border-radius: 5px;
-    padding: 0.5rem 0.5rem;
-}
-
-.btn-secondary {
     background-color: var(--btn-secondary-color);
-    border: none;
+    border-color: var(--btn-secondary-color);
+  }
+  
+  /* 새로 만든 .btn-cancel (기존 2번 사용을 3번으로 교체) */
+  .btn-cancel {
     color: #fff;
-    border-radius: 5px;
+    background-color: var(--btn-cancel-color);
+    border-color: var(--btn-cancel-color);
+  }
+.btn-warning {
+    color: #212529;
+    background-color: #ffbc42;
+    border-color: #ffbc42;
+}
+/* 크기 변형 */
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.btn-primary:hover {
+    background-color: #1f55cc; /* var(--btn-color) (#2667ff)의 어두운 변형 */
+    border-color: #1f55cc;
+    color: #fff;
+}
+
+.btn-secondary:hover {
+    background-color: #1678d0; /* var(--btn-secondary-color) (#1e96fc)의 어두운 변형 */
+    border-color: #1678d0;
+    color: #fff;
+}
+
+.btn-cancel:hover {
+    background-color: #565e64; /* var(--btn-cancel-color) (#6c757d)의 어두운 변형 */
+    border-color: #565e64;
+    color: #fff;
+}
+
+.btn-warning:hover {
+    background-color: #e0a935; /* #ffbc42의 어두운 변형 */
+    border-color: #e0a935;
+    color: #212529;
 }
 
 /* ====================================================
-   6. Responsive Styles
-   ==================================================== */
-@media (max-width: 768px) {
-    .table th,
-    .table td {
-        font-size: 0.8rem;
-    }
-    .popup-container {
-        max-width: 90%;
-    }
-    .button-group {
-        justify-content: center;
-    }
-}
-
-/* ====================================================
-   7. Form & Input Group Styles
+   8. Form & Input Group
    ==================================================== */
 .form-group {
     display: flex;
     align-items: center;
     margin-bottom: 5px !important;
-}
-.form-group input[type="checkbox"] {
-    margin-right: 0.4em;
 }
 .form-group label {
     flex: 0 0 100px;
@@ -216,338 +264,220 @@ body {
     text-align: left;
     font-size: 0.8rem;
 }
-.form-group input[type="text"],
-.form-group textarea,
-.form-group select {
-    flex: 1;
-}
-.input-group .search-btn {
-    font-size: 0.7rem;
-    padding: 0.25rem 0.5rem;
+
+/* 통합된 .form-control */
+.form-control,
+.form-select {
+  font-size: 0.8rem;     /* 표준 폰트 크기 */
+  line-height: 1.5;    /* 표준 라인 높이 */
+  color: #495057;      /* 동일 텍스트 색상 */
+  height: auto;        /* 높이 통일 (auto) */
 }
 
-/* ====================================================
-   8. 2열 그리드 Layout
-   ==================================================== */
-.form-grid {
-    display: grid;
-    grid-template-columns: 15% 35% 15% 35%;
-    gap: 10px;
-    margin-bottom: 10px;
-}
+/* form-select 가로 사이즈 50% */
+.form-select {
+    width: 50% !important;
+  }
 
-.grid-label-area {
+/* 검색 버튼(.search-filter-btn.btn-primary) 가로 사이즈 2배, 텍스트 중앙정렬 */
+.search-filter-btn.btn-primary {
+    width: 70px;
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-weight: bold;
-}
-.grid-input-area {
-    display: flex;
-    align-items: center;
-}
-
-/* 한 줄 전체(원재료명, 주의사항, 기타 표시사항) - 15% : 85% */
-.full-row {
-    grid-column: 1 / 5; /* 4칸 전체 사용 */
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-.full-label {
-    flex: 0 0 15%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 5px;
-    font-weight: bold;
-}
-.full-input {
-    flex: 0 0 85%;
-    display: flex;
-    align-items: flex-start;
-    width: 100%;
-}
-
-/* textarea 자동 확장 */
-.auto-expand {
-    resize: none;
-    overflow-y: hidden;
-    min-height:20px;
-    line-height: 1.4;
-    width: 100%;
-}
-
-/* 상세입력 버튼 (예시) */
-.detail-btn {
-    font-size: 0.7rem;
-    padding: 2px 5px;
-    text-align: center;
-}
-
-/* ====================================================
-   9. Additional & Ingredient Popup Styles
-   ==================================================== */
-
-/* [추가] 대상 버튼 크기 50% 축소 */
-.btn-target {
-    background-color: var(--btn-color); /* 다른 버튼의 파란색으로 통일 */
-    color: yellow; /* 텍스트 색상 노란색으로 변경 */
-    border: none; /* 테두리 제거 */
-    font-size: 0.6rem; /* 글자 크기 작게 */
-    width: 50px; /* 버튼 너비 고정 */
-    height: 20px; /* 버튼 높이 고정 */
-    padding: 0; /* 패딩 제거 */
-}
-.target-button {
-    height: 20px; /* 버튼 높이 조정 */
-}
-.large-checkbox {
-    width: 20px;
-    height: 20px;
-}
-.search-btn {
-    font-size: 14px;
-    height: 38px; /* 검색 세트에 있는 버튼과 같은 높이로 설정 */
-    white-space: nowrap; /* 글자를 한 줄로 표시 */
-}
-.small-btn {
-    font-size: 10px;
-    padding: 2px 5px;
-}
-.input-group-append {
-    display: flex;
-    align-items: center;
-}
-.wide-input {
-    width: 100%;
-}
-.options-container {
-    position: relative;
-    background: #fff;
-    border: 1px solid #ced4da;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 1000;
-    padding: 5px; /* 약간의 내부 여백 */
-    width: 300px; /* 넓게 열리도록 설정 */
-}
-.options-container label {
-    display: block;
-    padding: 5px;
-    margin-bottom: 2px;
-    cursor: pointer;
-    text-align: left;
-}
-.options-container label:hover {
-    background: var(--table-hover-bg-color);
-}
-.options-container .btn {
-    position: sticky;
-    top: 0; /* 상단에 고정 */
-    width: 100%;
-    text-align: left;
-}
+    justify-content: center;
+  }
 
 .form-control {
     display: block;
     width: 100%;
     padding: 0.3rem 0.6rem;
-    font-size: 0.8rem;
-    font-weight: 400;
-    line-height: 1.5;
-    color: #495057;
     background-color: #fff;
     background-clip: padding-box;
     border: 1px solid #ced4da;
     border-radius: 0.25rem;
     transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-    overflow: visible; /* overflow 속성을 visible로 변경 */
-    text-overflow: clip; /* text-overflow 속성을 clip으로 변경 */
-    white-space: normal; /* white-space 속성을 normal로 변경 */
-    border: none; /* 테두리 제거 */
+    /* 중복된 속성 제거 */
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    /* 기존에 border: none; 이 있었으나
+       실제 테두리가 필요하면 삭제하지 않는 것이 자연스러움 */
 }
 .form-control:focus {
     white-space: normal;
     height: auto;
+    outline: 0;
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25);
 }
-.form-control-sm {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    border-radius: 0.2rem;
-}
-.auto-expand {
+
+/* ====================================================
+   9. Home & Search Sections
+   ==================================================== */
+.full-container {
+    position: relative;
+    min-height: 80vh;
     overflow: hidden;
-    resize: none; /* 크기 조정 불가능 */
-    min-height: 38px; /* 최소 높이 설정 */
-    line-height: 1.4;
+}
+.central-search {
+    position: absolute;
+    top: 30%; 
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 800px;
     width: 100%;
-}
-.auto-expand:focus {
-    resize: vertical; /* 포커스 시 세로 크기 조정 가능 */
-}
-.btn-danger {
-    background-color: #dc3545; /* 부드러운 붉은 색 */
-    color: white;
-    border: none; /* 테두리 제거 */
-}
-.btn-warning {
-    background-color: #ffc107; /* 부드러운 붉은 색 */
-    color: #212529;
-    border: none; /* 테두리 제거 */
-}
-.btn-add {
-    background-color: #28a745; /* 짙은 녹색 계열 */
-    color: white;
-    border: none; /* 테두리 제거 */
-}
-.table-container {
-    margin-top: 5px; /* 표와의 간격 줄이기 */
-    overflow: hidden; /* overflow 속성을 hidden으로 설정 */
-    height: 600px;
-    overflow-y: auto;
-    border: 1px solid #ccc;
-}
-
-/* 통합 검색 필터 등 */
-.search-filter-btn {
-    height: 38px;
-    min-width: 70px;
-    border-radius: 5px;
-}
-.footer {
-  background-color: var(--secondary-color);
-  color: var(--text-color);
-}
-.fixed-width-150 {
-  width: 150px;
-}
-
-/* 
-   [추가] 라벨 폭 고정(또는 최소 폭)으로 2번째 항목도 동일 정렬 
-   grid-label-area 내 label을 일정 너비로 맞춤
-*/
-.grid-label-area {
-  display: flex;
-  align-items: center;
-  gap: 5px; /* 기존 gap 유지 */
-}
-.grid-label-area label {
-  display: inline-block;
-  min-width: 80px; /* 예: 80px (원하는 크기에 맞게 조정) */
-  text-align: left; /* 라벨 텍스트 왼쪽 정렬 */
-}
-.form-check-input {
-    transform: scale(1); /* 체크박스 크기 기본값으로 조정 */
-}
-.table th, .table td {
-    padding: 8px; /* 표의 패딩 줄이기 */
     text-align: center;
-    vertical-align: middle;
 }
-.table th {
-    background-color: #e9ecef;
+.central-search form {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.central-search input.form-control {
+    line-height: 60px;
+    padding: 0 1.5rem;
+    background-color: #e3f2fd;
+    border-radius: 1rem;
+    font-size: 1em;
+    font-family: inherit;
+}
+.central-search input.form-control::placeholder {
+    font-size: 1em;
+    line-height: 60px;
+    color: var(--secondary-color);
+}
+.central-search button.search-btn {
+    height: 60px;
+    padding: 0 2rem;
+    border: none;
+    font-weight: bold;
+    font-size: 1.2rem;
+    border-radius: 1rem;
+    white-space: nowrap; 
+}
+    
+.central-search input.form-control:focus {
+    border: none; /* 테두리 제거 */
+    outline: none;
+    box-shadow: 0 0.1rem 0 0 var(--btn-color);
+}
+
+/* ====================================================
+   10. Info Section & Boxes
+   ==================================================== */
+.info-section {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    background: none;
+    padding: 10px 0;
+    /* 만약 화면 전체 스크롤을 의도한다면
+       position: absolute; 대신 일반 흐름 사용 권장 */
+}
+.info-box {
+    width: 80%;
+    color: var(--text-color);
+    text-align: center;
+    padding: 10px;
+    border: 1.5px solid #ccc;
+    margin: 0 auto;
+    border-radius: 1rem;
+}
+/* info-box 내부 링크 스타일 */
+.info-box a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: none;
+}
+
+/* 전역 링크에서 밑줄 제거를 원한다면 (주의: !important 최소화 권장) */
+a,
+a:link,
+a:visited,
+a:hover,
+a:active {
+    text-decoration: none;
+    border-bottom: none;
+}
+
+.info-box h3 {
+    margin-bottom: 20px;
+}
+.registration-info {
+    display: inline-block;
+    font-size: 2.5rem;
     font-weight: bold;
 }
-
-/* 새로고침 버튼 크기 조정 */
-.refresh-btn {
-    width: 50%; /* 가로 사이즈를 검색 버튼의 50%로 줄임 */
+.registration-info span {
+    margin: 0 0.1rem; /* 세로/가로 간격 조정 */
+}
+.registration-info .info-line {
+    margin-bottom: 0.1rem;
+}
+.info-header {
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-bottom: 0.2rem;
+}
+.registration-info .label,
+.registration-info .unit {
+    font-weight: normal;
+    font-size: 0.4em;
+}
+.registration-info .number {
+    font-weight: bold;
+    font-size: 0.8em;
+    margin: 0 0.2rem;
 }
 
-/* 상/하 이동 버튼 색상 변경 */
-.move-up-btn, .move-down-btn {
-    background-color: #d3d3d3; /* 회색으로 변경 */
-    border: none; /* 테두리 제거 */
-    color: #000; /* 텍스트 색상 검정으로 변경 */
+/* info-box 테두리 색상 및 hover 효과 */
+.info-section .row > .col-md-4:nth-child(1) .info-box {
+    border-color: #73fbd3;
+}
+.info-section .row > .col-md-4:nth-child(2) .info-box {
+    border-color: #44e5e7;
+}
+.info-section .row > .col-md-4:nth-child(3) .info-box {
+    border-color: #5c7aff;
+}
+.info-section .row > .col-md-4:nth-child(1) .info-box:hover {
+    background-color: rgba(115, 251, 211, 0.1);
+}
+.info-section .row > .col-md-4:nth-child(2) .info-box:hover {
+    background-color: rgba(68, 229, 231, 0.1);
+}
+.info-section .row > .col-md-4:nth-child(3) .info-box:hover {
+    background-color: rgba(92, 122, 255, 0.1);
+}
+.info-section .col-md-4 {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
 }
 
-/* 소트 버튼 색상 복원 */
-.sort-btn {
-    color: inherit; /* 부모 요소의 색상 상속 */
+/* ====================================================
+   11. Additional Classes
+   ==================================================== */
+/* .wrapper, .content (flex layout) - 예시
+   만약 <div class="wrapper"><div class="content"> 구조를 쓴다면 */
+.wrapper {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+}
+.content {
+    flex: 1;
 }
 
-.d-flex {
-    flex-wrap: nowrap !important;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 12px;
-}
-
-.bordered-input {
-    border: 1px solid #ced4da;
-}
-
-.btn {
-    display: inline-block;
-    font-weight: 400;
-    color: #212529;
-    text-align: center;
-    vertical-align: middle;
-    cursor: pointer;
-    background-color: transparent;
-    border: 1px solid transparent;
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    border-radius: 0.25rem;
-    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-.btn-primary {
-    color: #fff;
-    background-color: #007bff;
-    border-color: #007bff;
-}
-.btn-sm {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    border-radius: 0.2rem;
-}
-.small-text {
-    font-size: 0.875rem;
-}
-.btn-secondary {
-    color: #fff;
-    background-color: #6c757d;
-    border-color: #6c757d;
-}
-.btn-danger {
-    color: #fff;
-    background-color: #dc3545;
-    border-color: #dc3545;
-}
-.btn-warning {
-    color: #212529;
-    background-color: #ffc107;
-    border-color: #ffc107;
-}
-.btn-add {
-    color: #fff;
-    background-color: #28a745;
-    border-color: #28a745;
-}
-
-.auto-expand {
-    overflow: hidden;
-    resize: none;
-    min-height: 38px;
-    line-height: 1.4;
-    width: 100%;
-}
-.auto-expand:focus {
-    resize: vertical;
-}
-
+/* 기타 버튼, 팝업, 테이블 컨테이너 등 */
 .table-container {
     margin-top: 5px;
-    overflow: hidden;
+    overflow: hidden; /* 필요 시 scroll */
     height: 600px;
     overflow-y: auto;
     border: 1px solid #ccc;
 }
-
 .options-container {
     position: relative;
     background: #fff;
@@ -574,3 +504,37 @@ body {
     width: 100%;
     text-align: left;
 }
+
+/* 체크박스, 라디오 크기 조정 */
+.form-check-input {
+    transform: scale(1);
+}
+
+/* 상/하 이동 버튼 */
+.move-up-btn, .move-down-btn {
+    background-color: #d3d3d3;
+    border: none;
+    color: #000;
+}
+
+/* 정렬 버튼 */
+.sort-btn {
+    color: inherit;
+}
+
+/* d-flex 조정 */
+.d-flex {
+    flex-wrap: nowrap !important;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+}
+
+/* 기타 유틸 */
+.bordered-input {
+    border: 1px solid #ced4da;
+}
+.fixed-width-150 {
+    width: 150px;
+}
+

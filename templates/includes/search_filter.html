@@ -1,32 +1,41 @@
 {% url action_url as target_url %}
 <form method="get" action="{{ target_url }}">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <!-- 검색 조건 필터 (한 줄 배치) -->
-        <div class="d-flex align-items-center flex-fill">
-            {% for field in search_fields %}
-                <div class="me-3 flex-fill">
-                    <input 
-                        type="text" 
-                        name="{{ field.name }}" 
-                        class="form-control" 
-                        placeholder="{{ field.placeholder }}" 
-                        value="{{ field.value }}">
-                </div>
-            {% endfor %}
-            <!-- 페이지 당 항목 선택 -->
-            <div class="me-3 fixed-width-150">
-                <select name="items_per_page" class="form-select">
-                    <option value="10" {% if items_per_page == 10 %}selected{% endif %}>10개</option>
-                    <option value="20" {% if items_per_page == 20 %}selected{% endif %}>20개</option>
-                    <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50개</option>
-                    <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100개</option>
-                </select>
-            </div>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <!-- 왼쪽 검색 조건 -->
+    <div class="d-flex align-items-center flex-fill">
+      {% for field in search_fields %}
+        <div class="me-3 flex-fill">
+          <input 
+            type="text" 
+            name="{{ field.name }}" 
+            class="form-control" 
+            placeholder="{{ field.placeholder }}" 
+            value="{{ field.value }}">
         </div>
-        <!-- 검색 버튼과 초기화 버튼 -->
-        <div class="d-flex align-items-center">
-            <button type="submit" class="btn btn-primary search-filter-btn me-2">검색</button>
-            <button type="button" class="btn btn-secondary search-filter-btn refresh-btn" onclick="location.href='{{ target_url }}'">&#x21BA;</button>
-        </div>
+      {% endfor %}
+      <!-- 페이지 당 항목 선택 -->
+      <div class="me-3 fixed-width-150">
+        <!-- form-select 가로 폭은 style.css에서 50% 적용 -->
+        <select name="items_per_page" class="form-select">
+          <option value="10"  {% if items_per_page == 10  %}selected{% endif %}>10개</option>
+          <option value="20"  {% if items_per_page == 20  %}selected{% endif %}>20개</option>
+          <option value="50"  {% if items_per_page == 50  %}selected{% endif %}>50개</option>
+          <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100개</option>
+        </select>
+      </div>
     </div>
+
+    <!-- 오른쪽: 검색 버튼 & 새로고침 버튼 -->
+    <div class="d-flex align-items-center">
+      <!-- 검색 버튼 (search-filter-btn, .btn-primary) -->
+      <button type="submit" class="btn btn-primary search-filter-btn me-2">
+        검색
+      </button>
+      <!-- 새로고침 버튼 (기존 유지) -->
+      <button type="button" class="btn btn-cancel search-filter-btn"
+              onclick="location.href='{{ target_url }}'">
+        &#x21BA;
+      </button>
+    </div>
+  </div>
 </form>

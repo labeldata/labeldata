@@ -13,6 +13,7 @@ from venv import logger  #지우지 말 것
 from django.utils.safestring import mark_safe
 from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_exempt
+from datetime import datetime, timedelta
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -556,11 +557,11 @@ def search_ingredient_add_row(request):
         if name:
             qs = qs.filter(prdlst_nm__icontains=name)
         if report:
-            qs = qs.filter(prdlst_report_no__icontains=report)
+            qs = qs.filter(prdlst_report_no__icontains(report))
         if food_type:
-            qs = qs.filter(prdlst_dcnm__icontains=food_type)
+            qs = qs.filter(prdlst_dcnm__icontains(food_type))
         if manufacturer:
-            qs = qs.filter(bssh_nm__icontains=manufacturer)
+            qs = qs.filter(bssh_nm__icontains(manufacturer))
         
         # 여러 건 리스트로 반환 (각 결과에 대해 필요한 필드만)
         ingredients = list(qs.values(
@@ -689,3 +690,21 @@ def verify_ingredients(request):
     except Exception as e:
         print("Error in verify_ingredients:", str(e))
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+@login_required
+def food_items_count(request):
+    total = FoodItem.objects.count()
+    one_week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
+    new_count = FoodItem.objects.filter(last_updt_dtm__gte=one_week_ago).count()
+    total_formatted = f"{total:,}"  # 예: 1,234
+    return JsonResponse({'total': total_formatted, 'new': new_count})
+
+@login_required
+def my_labels_count(request):
+    # 사용자의 MyLabel 총 건수
+    total = MyLabel.objects.filter(user_id=request.user).count()
+    # 최근 1주일 이내 갱신된 MyLabel 건수 (update_datetime은 DateTimeField)
+    one_week_ago = datetime.now() - timedelta(days=7)
+    new_count = MyLabel.objects.filter(user_id=request.user, update_datetime__gte=one_week_ago).count()
+    total_formatted = f"{total:,}"  # 3자리마다 쉼표 추가
+    return JsonResponse({'total': total_formatted, 'new': new_count})

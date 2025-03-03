@@ -33,5 +33,5 @@ urlpatterns = [
     #path('delete-my-ingredient/<int:my_ingredient_id>/', views.delete_my_ingredient, name='delete_my_ingredient'),
     # verify_ingredients URL 추가
     path('verify-ingredients/', views.verify_ingredients, name='verify_ingredients'),
-    
+    path('api/food-items/count/', views.food_items_count, name='food_items_count'),
 ]

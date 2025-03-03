@@ -7,8 +7,8 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>제품 상세 정보</title>
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}">
 
   <style>
     /* 팝업 컨테이너 크기 */
@@ -73,13 +73,18 @@
     <h4 class="m-0">제품 상세 정보</h4>
     <!-- 버튼 그룹: 내원료 저장(초록), 표시사항 생성(파란), 저장(파란), 닫기(회색) -->
     <div class="button-group-level">
-      <button type="button" class="btn btn-success btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">
-        내원료 저장
-      </button>
-      <button type="button" class="btn btn-primary btn-sm" onclick="saveto_my_label('{{ item.prdlst_report_no }}')">
-        표시사항 생성
-      </button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">
+    <!-- 내원료 저장 (크기는 유지, 색상만 파랑으로 통일) -->
+    <button type="button" class="btn btn-secondary btn-sm me-2"
+            onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">
+      내원료 저장
+    </button>
+
+    <!-- 표시사항 생성 (이미 btn-primary, 그대로) -->
+    <button type="button" class="btn btn-primary btn-sm"
+            onclick="saveto_my_label('{{ item.prdlst_report_no }}')">
+      표시사항 생성
+    </button>
+      <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">
         닫기
       </button>
     </div>

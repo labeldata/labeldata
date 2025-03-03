@@ -11,16 +11,16 @@
         <table class="table table-bordered table-hover common-table">
             <thead>
                 <tr>
-                    <th style="width: 5%;">번호</th>
-                    <th style="width: 13%;">
-                        원재료명
+                    <th style="width: 3%;">번호</th>
+                    <th style="width: 10%;">
+                        품목제조번호
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
                     <th style="width: 10%;">
-                        품목보고번호
+                        원재료명
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
@@ -33,14 +33,14 @@
                             <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th style="width: 45%;">
+                    <th style="width: 40%;">
                         원재료 표시명
                         <span class="sort-buttons">
                             <a href="?sort=rawmtrl_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=rawmtrl_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th style="width: 10%;">
+                    <th style="width: 15%;">
                         제조사
                         <span class="sort-buttons">
                             <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
@@ -53,8 +53,8 @@
                 {% for ingredient in page_obj %}
                 <tr data-url="{% url 'label:my_ingredient_detail' ingredient.my_ingredient_id %}" onclick="window.open(this.dataset.url, 'ingredientPopup', 'width=1000,height=600,scrollbars=yes')">
                     <td>{{ forloop.counter }}</td>
-                    <td>{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
                     <td>{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
+                    <td>{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
                     <td>{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
                     <td>{{ ingredient.rawmtrl_nm|default_if_none:'' }}</td>
                     <td>{{ ingredient.bssh_nm|default_if_none:'' }}</td>

@@ -12,44 +12,44 @@
         <table class="table table-bordered table-hover common-table">
             <thead>
                 <tr>
-                    <th>번호</th>
-                    <th>
+                    <th style="width: 3%;">번호</th>
+                    <th style="width: 10%;">
                         품목제조번호
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th>
+                    <th style="width: 20%;">
                         제품명
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th>
+                    <th style="width: 20%;">
                         라벨명
                         <span class="sort-buttons">
                             <a href="?sort=my_label_name&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=my_label_name&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th>
+                    <th style="width: 10%;">
                         식품유형
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th>
+                    <th style="width: 15%;">
                         제조사명
                         <span class="sort-buttons">
                             <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=bssh_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th>
-                        수정일
+                    <th style="width: 10%;">
+                        최종수정일자
                         <span class="sort-buttons">
                             <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
