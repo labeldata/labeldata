@@ -14,6 +14,8 @@ from django.utils.safestring import mark_safe
 from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime, timedelta
+from rapidfuzz import fuzz  # rapidfuzz 라이브러리 import
+
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -159,7 +161,8 @@ FOODITEM_MYLABEL_MAPPING = {
 
 
 @login_required
-def saveto_my_label(request, prdlst_report_no):
+def save_to_my_label(request, prdlst_report_no):
+    print("1")
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
 
@@ -294,49 +297,30 @@ def ingredient_popup(request):
                 'prdlst_report_no': relation.ingredient.prdlst_report_no or '',
                 'ratio': float(relation.ingredient_ratio) if relation.ingredient_ratio else '',
                 'food_type': relation.ingredient.prdlst_dcnm or '',
-                'origin': relation.country_of_origin or '',
+                #'origin': relation.country_of_origin or '',
                 'display_name': relation.ingredient.ingredient_display_name,
-                'allergen': relation.allergen or '',
-                'gmo': relation.gmo or '',
+                #'allergen': relation.ingredient.allergen or '',
+                #'gmo': relation.ingredient.gmo or '',
                 'manufacturer': relation.ingredient.bssh_nm or ''
             })
         if not relations.exists() and rawmtrl_nm:
             raw_materials = [rm.strip() for rm in rawmtrl_nm.split(',') if rm.strip()]
             for material in raw_materials:
-                if material not in saved_ingredient_names:
-                    my_ingredient = MyIngredient.objects.filter(
-                        user_id=request.user,
-                        my_ingredient_name=material,
-                        delete_YN='N'
-                    ).first()
-                    if my_ingredient:
-                        ingredients_data.append({
-                            'ingredient_name': my_ingredient.my_ingredient_name,
-                            'prdlst_report_no': my_ingredient.prdlst_report_no or '',
-                            'ratio': float(my_ingredient.ingredient_ratio) if my_ingredient.ingredient_ratio else '',
-                            'food_type': my_ingredient.prdlst_dcnm or '',
-                            'origin': '',
-                            'display_name': my_ingredient.ingredient_display_name or my_ingredient.my_ingredient_name,
-                            'allergen': '',
-                            'gmo': '',
-                            'manufacturer': my_ingredient.bssh_nm or ''
-                        })
-                    else:
-                        ingredients_data.append({
-                            'ingredient_name': material,
-                            'prdlst_report_no': '',
-                            'ratio': '',
-                            'food_type': '',
-                            'origin': '',
-                            'display_name': material,
-                            'allergen': '',
-                            'gmo': '',
-                            'manufacturer': ''
-                        })
-
+                ingredients_data.append({
+                    'ingredient_name': material,
+                    'prdlst_report_no': '',
+                    'ratio': '',
+                    'food_type': '',
+                    'origin': '',
+                    'display_name': material,
+                    'allergen': '',
+                    'gmo': '',
+                    'manufacturer': ''
+                })
+    
     context = {
-        'rawmtrl_nm': rawmtrl_nm,
-        'saved_ingredients': mark_safe(json.dumps(ingredients_data, ensure_ascii=False))
+        #'saved_ingredients': mark_safe(json.dumps(ingredients_data, ensure_ascii=False))
+        'saved_ingredients': ingredients_data
     }
     return render(request, 'label/ingredient_popup.html', context)
 
@@ -355,42 +339,52 @@ def fetch_food_item(request, prdlst_report_no):
         data = {'success': False}
     return JsonResponse(data)
 
-
 @login_required
 @csrf_exempt
-def check_my_ingredients(request):
+def check_my_ingredient(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
     try:
         data = json.loads(request.body)
-        prdlst_nm = data.get('prdlst_nm', '').strip()
+        prdlst_report_no = data.get('prdlst_report_no', '').strip()
+        food_type = data.get('food_type', '').strip()
+        display_name = data.get('display_name', '').strip()
         
-        if not prdlst_nm:
-            return JsonResponse({'success': False, 'error': '검색어가 없습니다.'})
-        
-        # prdlst_nm 검색하여 원재료 찾기
-        found_ingredient = MyIngredient.objects.filter(
-            user_id=request.user,
-            prdlst_nm=prdlst_nm,
-            delete_YN='N'
-        ).values(
-            'my_ingredient_name',
-            'prdlst_nm',
-            'ingredient_display_name',
-            'prdlst_report_no', 
-            'prdlst_dcnm', 
-            'bssh_nm',
-            'ingredient_ratio',
-            'rawmtrl_nm'          # 원재료명(표시명)에 사용
-        ).first()
-        if found_ingredient:
-            if found_ingredient['rawmtrl_nm'] is None:
-                found_ingredient['rawmtrl_nm'] = ''
-            return JsonResponse({'success': True, 'ingredient': found_ingredient})
+        # 우선 DB에서 기본 필터링 적용: 품목보고번호가 있다면 기초 필터를 그대로, 없으면 검색 범위를 넓게 가져옵니다.
+        if prdlst_report_no:
+            qs = MyIngredient.objects.filter(
+                user_id=request.user,
+                prdlst_report_no=prdlst_report_no,
+                delete_YN='N'
+            )
+            existing_ingredients = list(qs.values())
         else:
-            return JsonResponse({'success': False, 'error': '해당하는 원료를 찾을 수 없습니다.'})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
-        
+            qs = MyIngredient.objects.filter(
+                user_id=request.user,
+                prdlst_dcnm=food_type,
+                delete_YN='N'
+            )
+            # 후보 데이터를 모두 가져옵니다.
+            candidates = list(qs.values())
+            # rapidfuzz를 사용한 유사도 계산
+            threshold = 70  # 유사도 임계값 (0-100 사이의 점수, 상황에 따라 조절)
+            filtered = []
+            for ingredient in candidates:
+                candidate_name = ingredient.get('ingredient_display_name', '')
+                # 예시로 fuzz.ratio 사용 (간단한 비교)
+                score = fuzz.ratio(candidate_name.lower(), display_name.lower())
+                if score >= threshold:
+                    ingredient['similarity'] = score
+                    filtered.append(ingredient)
+            # 유사도 점수가 높은 순으로 정렬
+            existing_ingredients = sorted(filtered, key=lambda x: x['similarity'], reverse=True)
 
+        exists = len(existing_ingredients) > 0
+        return JsonResponse({'exists': exists, 'ingredients': existing_ingredients})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+    
 @login_required
 def my_ingredient_list(request):
     search_fields = {
@@ -498,18 +492,6 @@ def save_ingredients_to_label(request, label_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'저장 중 오류가 발생했습니다: {str(e)}'})
 
-@login_required
-def save_food_item(request, prdlst_report_no):
-    try:
-        food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
-        SavedFoodItem.objects.get_or_create(
-            user=request.user,
-            food_item=food_item,
-            defaults={'saved_at': now()}
-        )
-        return JsonResponse({'success': True, 'message': '제품이 성공적으로 저장되었습니다.'})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 def save_my_ingredient(request):
@@ -557,11 +539,11 @@ def search_ingredient_add_row(request):
         if name:
             qs = qs.filter(prdlst_nm__icontains=name)
         if report:
-            qs = qs.filter(prdlst_report_no__icontains(report))
+            qs = qs.filter(prdlst_report_no__icontains=report)
         if food_type:
-            qs = qs.filter(prdlst_dcnm__icontains(food_type))
+            qs = qs.filter(prdlst_dcnm__icontains=food_type)
         if manufacturer:
-            qs = qs.filter(bssh_nm__icontains(manufacturer))
+            qs = qs.filter(bssh_nm__icontains=manufacturer)
         
         # 여러 건 리스트로 반환 (각 결과에 대해 필요한 필드만)
         ingredients = list(qs.values(
@@ -574,47 +556,11 @@ def search_ingredient_add_row(request):
         
         
         if ingredients:
-            print(ingredients)
             return JsonResponse({'success': True,'ingredients': ingredients})
         else:
             return JsonResponse({'success': False, 'error': '검색 결과가 없습니다.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-
-# @login_required
-# @csrf_exempt
-# def verify_ingredients(request):
-#     if request.method != "POST":
-#         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
-#     try:
-#         data = json.loads(request.body)
-#         ingredient = data.get("ingredient", [])
-#         print(ingredient)
-#         results = []  # 각 원재료 행별 존재 여부(예: true: 이미 존재)
-#         for ing in ingredient:
-#             print("1")
-#             prdlst_report_no = ing.get("prdlst_report_no", "").strip()
-#             if prdlst_report_no:
-#                 exists = MyIngredient.objects.filter(
-#                     user_id=request.user,
-#                     prdlst_report_no=prdlst_report_no,
-#                     delete_YN="N"
-#                 ).exists()
-#             else:
-#                 exists = MyIngredient.objects.filter(
-#                     user_id=request.user,
-#                     prdlst_nm=ing.get("ingredient_name", "").strip(),
-#                     prdlst_dcnm=ing.get("food_type", "").strip(),
-#                     ingredient_display_name=ing.get("display_name", "").strip(),
-#                     delete_YN="N"
-#                 ).exists()
-#             results.append(exists)
-
-            
-#         return JsonResponse({"success": True, "results": results})
-#     except Exception as e:
-#         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 
 @login_required
@@ -708,3 +654,30 @@ def my_labels_count(request):
     new_count = MyLabel.objects.filter(user_id=request.user, update_datetime__gte=one_week_ago).count()
     total_formatted = f"{total:,}"  # 3자리마다 쉼표 추가
     return JsonResponse({'total': total_formatted, 'new': new_count})
+
+
+
+@login_required
+@csrf_exempt
+def register_my_ingredient(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        MyIngredient.objects.create(
+            user_id=request.user,
+            prdlst_nm=data.get('ingredient_name', ''),
+            prdlst_report_no=data.get('prdlst_report_no', ''),
+            prdlst_dcnm=data.get('food_type', ''),
+            ingredient_display_name=data.get('display_name', ''),
+            #allergen=data.get('allergen', ''),
+            #gmo=data.get('gmo', ''),
+            bssh_nm=data.get('manufacturer', ''),
+            delete_YN='N'
+        )
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+

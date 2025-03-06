@@ -74,14 +74,13 @@
     <!-- 버튼 그룹: 내원료 저장(초록), 표시사항 생성(파란), 저장(파란), 닫기(회색) -->
     <div class="button-group-level">
     <!-- 내원료 저장 (크기는 유지, 색상만 파랑으로 통일) -->
-    <button type="button" class="btn btn-secondary btn-sm me-2"
-            onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">
+    <button type="button" class="btn btn-secondary btn-sm me-2" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">
       내원료 저장
     </button>
 
     <!-- 표시사항 생성 (이미 btn-primary, 그대로) -->
     <button type="button" class="btn btn-primary btn-sm"
-            onclick="saveto_my_label('{{ item.prdlst_report_no }}')">
+            onclick="saveToMyLabel('{{ item.prdlst_report_no }}')">
       표시사항 생성
     </button>
       <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">
@@ -151,14 +150,15 @@
 
 <!-- 표시사항 생성 및 내원료 저장을 위한 JS 함수 -->
 <script>
-function saveto_my_label(prdlst_report_no) {
+function saveToMyLabel(prdlst_report_no) {
+  console.log("saveToMyLabel 호출됨", prdlst_report_no);
     if (!prdlst_report_no) {
         alert("품목제조번호가 누락되었습니다.");
         return;
     }
 
     const sendRequest = (confirmFlag = false) => {
-        const url = `/label/saveto_my_label/${prdlst_report_no}/`;
+        const url = `/label/save-to-my-label/${prdlst_report_no}/`;
         // confirm 플래그가 true면 request body에 추가
         const bodyData = confirmFlag ? JSON.stringify({ confirm: true }) : JSON.stringify({});
         
@@ -196,6 +196,7 @@ function saveto_my_label(prdlst_report_no) {
 }
 
 function saveToMyIngredients(prdlst_report_no) {
+    console.log("saveToMyIngredients 호출됨", prdlst_report_no);
     fetch(`/label/save-to-my-ingredients/${prdlst_report_no}/`, {
         method: 'POST',
         headers: {
@@ -263,12 +264,12 @@ function getCookie(name) {
 const width = 1000; // 가로 크기
 const height = 600; // 세로 크기
 const left = (screen.width - width) / 2;
-const top = (screen.height - height) / 2;
-const popup = window.open(
-    url,
-    "제품 상세 정보",
-    `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
-);
+const topPosition = (screen.height - height) / 2; // 'top'을 'topPosition'으로 변경
+// const popup = window.open(
+//     url,
+//     "제품 상세 정보",
+//     `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${topPosition},left=${left}`
+// );
 </script>
 </body>
 </html>
