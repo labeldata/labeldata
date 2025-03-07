@@ -75,22 +75,47 @@ function addIngredientRows(rawMaterialNames) {
     });
 }
 
-// addIngredientRow 함수 수정
+// 원재료명을 ,로 구분하여 각 행으로 추가하는 기존 코드 대신,
+// 아래와 같이 다른 행과 동일한 레이아웃으로 행을 추가하도록 수정합니다.
 function addIngredientRow(material = '') {
     const row = document.createElement('tr');
     row.innerHTML = `
-        <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
+        <td>
+            <input type="checkbox" class="delete-checkbox form-check-input">
+        </td>
         <td class="drag-handle">☰</td>
-        <td><input type="text" value="${material}" class="form-control form-control-sm"></td>
-        <td><input type="text" maxlength="15" class="form-control form-control-sm"></td>
-        <td><input type="text" class="ratio-input form-control form-control-sm"></td>
-        <td><input type="text" class="form-control form-control-sm" onkeypress="return validateFoodType(event)"></td>
-        <td><textarea class="auto-expand form-control form-control-sm">${material}</textarea></td>
-        <td><input type="text" onclick="showAllergyOptions(this)" class="form-control form-control-sm" readonly></td>
-        <td><input type="text" onclick="showGMOOptions(this)" class="form-control form-control-sm" readonly></td>
-        <td><input type="text" class="form-control form-control-sm"></td>
+        <td>
+            <div class="d-flex flex-column">
+                <input type="text" value="${material}" class="form-control form-control-sm" placeholder="원재료명">
+                <input type="text" class="form-control form-control-sm" placeholder="비율 (%)">
+            </div>
+        </td>
+        <td>
+            <div class="d-flex flex-column">
+                <input type="text" class="form-control form-control-sm" placeholder="품목보고번호" maxlength="15">
+                <input type="text" class="form-control form-control-sm" placeholder="식품유형">
+            </div>
+        </td>
+        <td>
+            <textarea class="form-control form-control-sm auto-expand" placeholder="원재료 표시명">${material}</textarea>
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm" placeholder="" onclick="showAllergyOptions(this)">
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm" placeholder="" onclick="showGMOOptions(this)">
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm" placeholder="제조사">
+        </td>
+        <td>
+            <div class="d-flex flex-column">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="registerMyIngredient(this)">등록</button>
+            </div>
+        </td>
     `;
     document.getElementById('ingredient-body').appendChild(row);
+    updateTargetButtons();
 }
 
 function updateTargetButtons() {
@@ -261,7 +286,7 @@ function addIngredientRowWithData(ingredient, fromModal = false) {
                 <input type="text" value="${ingredient.ingredient_name}" 
                        class="form-control form-control-sm ${readonlyClass}" placeholder="원재료명" ${readonlyAttr}>
                 <input type="text" value="${ingredient.ratio || ''}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="비율 (%)" ${readonlyAttr}>
+                       class="form-control form-control-sm ratio-input ${readonlyClass}" placeholder="비율 (%)" ${readonlyAttr}>
             </div>
         </td>
         <td>
@@ -290,8 +315,7 @@ function addIngredientRowWithData(ingredient, fromModal = false) {
         </td>
         <td>
             <div class="d-flex flex-column">
-                <button type="button" class="btn btn-sm btn-default" onclick="registerMyIngredient(this)">등록</button>
-                <button type="button" class="btn btn-sm btn-default" disabled onclick="loadRow(this)">불러오기</button>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="registerMyIngredient(this)">등록</button>
             </div>
         </td>
     `;
@@ -333,18 +357,8 @@ function addMyIngredientFromSearch() {
         alert('검색 중 오류가 발생했습니다.');
     });
 }
-function editRow(button) {
-    const row = button.closest('tr');
-    // 행 안의 input과 textarea 모두에서 readonly 속성 제거 및 스타일 클래스 삭제
-    row.querySelectorAll('input, textarea').forEach(field => {
-        field.removeAttribute('readonly');
-        field.classList.remove('modal-readonly-field');
-    });
-}
-// 불러오기 버튼 활성화 예시
-function enableLoadButton(button) {
-    button.removeAttribute('disabled');
-}
+
+
 function verifyRows() {
     const rows = document.querySelectorAll('#ingredient-body tr');
     const promises = [];
@@ -386,14 +400,16 @@ function verifyRows() {
                 if (data.results) {
                     // 이미 존재하는 경우: 해당 행의 모든 입력 필드를 readonly로 만들고 스타일 적용
                     row.querySelectorAll('input, textarea').forEach(field => {
-                        field.setAttribute('readonly', true);
-                        field.classList.add('modal-readonly-field');
+                        if (!field.classList.contains('ratio-input')) {
+                            field.setAttribute('readonly', true);
+                            field.classList.add('modal-readonly-field');
+                        }
                     });
                     // 예를 들어 불러오기 버튼 활성화 (버튼이 있다면)
-                    const loadBtn = row.querySelector('button.btn-default');
-                    if (loadBtn) {
-                        loadBtn.removeAttribute('disabled');
-                    }
+                    // const loadBtn = row.querySelector('button.btn-secondary');
+                    // if (loadBtn) {
+                    //     loadBtn.removeAttribute('disabled');
+                    // }
                 }
             } else {
                 console.error('Row ' + index + ' 검증 오류: ' + (data.error || '알 수 없는 오류'));
@@ -471,8 +487,10 @@ function registerMyIngredient(button) {
                     alert("원료가 등록되었습니다.");
                     // 등록이 완료되면 해당 행을 비활성화하고 배경색을 회색으로 변경
                     row.querySelectorAll('input, textarea').forEach(field => {
-                        field.setAttribute('readonly', true);
-                        field.classList.add('modal-readonly-field');
+                        if (!field.classList.contains('ratio-input')) {
+                            field.setAttribute('readonly', true);
+                            field.classList.add('modal-readonly-field');
+                        }
                     });
                     row.style.backgroundColor = '#e9ecef'; // 배경색 회색으로 변경
                     button.setAttribute('disabled', true); // 등록 버튼 비활성화
@@ -608,8 +626,10 @@ function showExistingIngredientsModal(ingredients) {
                 
                 // 모든 input, textarea readonly 처리 및 등록 버튼 비활성화
                 window.currentRow.querySelectorAll('input, textarea').forEach(field => {
-                    field.setAttribute('readonly', true);
-                    field.classList.add('modal-readonly-field');
+                    if (!field.classList.contains('ratio-input')) {
+                        field.setAttribute('readonly', true);
+                        field.classList.add('modal-readonly-field');
+                    }
                 });
                 const regBtn = window.currentRow.querySelector('button[onclick*="registerMyIngredient"]');
                 if (regBtn) { regBtn.disabled = true; }
@@ -694,8 +714,10 @@ function registerNewIngredient() {
             alert("신규 원료가 등록되었습니다.");
             // 등록 후 등록 행 데이터를 비활성화 및 스타일 적용
             window.currentRow.querySelectorAll('input, textarea').forEach(field => {
-                field.setAttribute('readonly', true);
-                field.classList.add('modal-readonly-field');
+                if (!field.classList.contains('ratio-input')) {
+                    field.setAttribute('readonly', true);
+                    field.classList.add('modal-readonly-field');
+                }
             });
             // 등록 버튼 비활성화 (필요하다면)
             const regBtn = window.currentRow.querySelector('button[onclick*="registerMyIngredient"]');
@@ -746,11 +768,12 @@ function saveIngredients() {
         return;
     }
     
-    // 모든 행의 입력 필드가 readonly 상태 (비활성화)인지 확인
+    // 모든 행의 입력 필드가 readonly 상태 (비활성화)인지 확인 (비율 칸 제외)
     const rows = document.querySelectorAll('#ingredient-body tr');
     let allDisabled = true;
     rows.forEach(row => {
-        const fields = row.querySelectorAll('input, textarea');
+        // ratio-input 클래스를 가진 입력 필드는 제외
+        const fields = row.querySelectorAll('input:not(.ratio-input), textarea');
         fields.forEach(field => {
             if (!field.hasAttribute('readonly')) {
                 allDisabled = false;

@@ -220,14 +220,13 @@ def label_creation(request, label_id=None):
             # GET 요청 시: 관계 데이터가 있고 실제로 원재료명이 존재하면 입력란을 disable 처리
             if label.ingredient_relations.exists():
                 raw_materials = [
-                    relation.ingredient.prdlst_nm 
+                    relation.ingredient.ingredient_display_name 
                     for relation in label.ingredient_relations.all()
-                    if relation.ingredient.prdlst_nm  # 실제 값이 있는 경우만
+                    if relation.ingredient.ingredient_display_name  # 값이 있는 경우만
                 ]
                 if raw_materials:
                     label.rawmtrl_nm = ', '.join(raw_materials).strip()
                     disable_rawmtrl = True  # 실제 데이터가 있는 경우에만 disable 처리
-            print(label.rawmtrl_nm)
             form = LabelCreationForm(instance=label)
     else:
         if request.method == 'POST':
@@ -444,7 +443,6 @@ def my_ingredient_detail(request, ingredient_id=None):
     }
     return render(request, 'label/my_ingredient_detail.html', context)
 
-
 @login_required
 @csrf_exempt
 def save_ingredients_to_label(request, label_id):
@@ -457,7 +455,9 @@ def save_ingredients_to_label(request, label_id):
         label.ingredient_create_YN = 'Y'
         ingredient_names = []
         processed_ingredient_ids = []
-        for ingredient_data in ingredients_data:
+        
+        # ingredients_data 순서를 기준으로 순번(relation_sequence) 저장
+        for sequence, ingredient_data in enumerate(ingredients_data, start=1):
             if not ingredient_data.get('ingredient_name'):
                 continue
             ingredient_name = ingredient_data['ingredient_name']
@@ -481,8 +481,9 @@ def save_ingredients_to_label(request, label_id):
                 ingredient_id=my_ingredient.my_ingredient_id,
                 defaults={
                     'ingredient_ratio': ratio,
-                    'allergen': ingredient_data.get('allergen', ''),
-                    'gmo': ingredient_data.get('gmo', ''),
+                    #'allergen': ingredient_data.get('allergen', ''),
+                    #'gmo': ingredient_data.get('gmo', ''),
+                    'relation_sequence': sequence  # 순번 저장
                 }
             )
         LabelIngredientRelation.objects.filter(label_id=label.my_label_id).exclude(ingredient_id__in=processed_ingredient_ids).delete()
@@ -491,8 +492,7 @@ def save_ingredients_to_label(request, label_id):
         return JsonResponse({'success': True, 'message': '저장되었습니다.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'저장 중 오류가 발생했습니다: {str(e)}'})
-
-
+    
 @login_required
 def save_my_ingredient(request):
     if request.method == 'POST':

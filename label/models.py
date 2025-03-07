@@ -268,8 +268,7 @@ class LabelIngredientRelation(models.Model):
     # 추가 필드들
     ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
 
-    allergen = models.CharField(max_length=200, verbose_name="알레르기 물질", null=True, blank=True)
-    gmo = models.CharField(max_length=200, verbose_name="GMO 여부", null=True, blank=True)
+    relation_sequence = models.IntegerField(verbose_name="원재료 순서", default=1)
     
     # 메타데이터
     created_at = models.DateTimeField(auto_now_add=True)
