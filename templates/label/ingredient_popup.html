@@ -50,30 +50,26 @@
         <div class="modal-dialog modal-xl"> <!-- modal-xl 클래스로 최대 폭 -->
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="existingIngredientsModalLabel">기존 원료</h5>
+                    <h5 class="modal-title" id="existingIngredientsModalLabel">내원료 조회</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
                 </div>
                 <div class="modal-body" id="existing-ingredients-modal-body">
                     <!-- showExistingIngredientsModal 함수에서 내용이 채워집니다 -->
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-primary me-2" onclick="registerNewIngredient()">신규로 등록하기</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" class="btn btn-primary me-2" onclick="registerNewIngredient()">신규 등록</button>
+                    <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">닫기</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- 상단 툴바 부분 -->
-    <div class="d-flex mb-3">
-        <!-- <input type="text" id="search-input" class="form-control form-control-sm me-2" placeholder="검색어 입력"> -->
-        <button type="button" class="btn btn-secondary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#ingredientSearchModal">검색</button>
+    <div class="d-flex mb-1 mt-3 gap-3"> <!-- 상단 마진 추가 (mt-3), 하단 마진 줄임 (mb-1), 버튼 간격 동일하게 (gap-4) -->
+        <button type="button" class="btn btn-default btn-sm" data-bs-toggle="modal" data-bs-target="#ingredientSearchModal">내원료 검색</button>
         <button type="button" onclick="addIngredientRow()" class="btn btn-default btn-sm">행 추가</button>
         <button type="button" onclick="removeSelectedRows()" class="btn btn-default btn-sm">행 삭제</button>
-        <!-- 기존 원산지 검증 버튼 뒤에 추가 -->
-        <!-- <button type="button" onclick="verifyRows()" class="btn btn-default btn-sm me-2">검증</button> -->
-        <!-- <button type="button" onclick="checkOrigin()" class="btn btn-default btn-sm me-2">원산지 검증</button> -->
-        <button type="button" onclick="saveIngredients()" class="btn btn-primary btn-sm me-2">저장</button>
+        <button type="button" onclick="saveIngredients()" class="btn btn-primary btn-sm">저장</button>
         <button type="button" onclick="window.close()" class="btn btn-cancel btn-sm">닫기</button>
     </div>
 

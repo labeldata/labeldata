@@ -523,7 +523,7 @@ function showExistingIngredientsModal(ingredients) {
         // 등록 행 데이터 추출 (셀의 input/textarea 값을 가져옴)
         const currentData = {
             ingredient_name: window.currentRow.querySelector('td:nth-child(3) input:first-of-type')?.value || "",
-            ratio: window.currentRow.querySelector('td:nth-child(3) input:nth-of-type(2)')?.value || "",
+            // ratio: window.currentRow.querySelector('td:nth-child(3) input:nth-of-type(2)')?.value || "",
             prdlst_report_no: window.currentRow.querySelector('td:nth-child(4) input:first-of-type')?.value || "",
             food_type: window.currentRow.querySelector('td:nth-child(4) input:nth-of-type(2)')?.value || "",
             display_name: window.currentRow.querySelector('td:nth-child(5) textarea')?.value || "",
@@ -532,12 +532,11 @@ function showExistingIngredientsModal(ingredients) {
 
         // 등록 행을 강조하는 별도 헤더 또는 항목으로 추가
         const currentRowDiv = document.createElement('div');
-        currentRowDiv.classList.add('list-group-item', 'bg-warning'); // 배경색으로 강조 (원하는 스타일로 수정)
+        currentRowDiv.classList.add('list-group-item', 'highlight-color'); // 배경색으로 강조 (원하는 스타일로 수정)
         currentRowDiv.innerHTML = `
             <div><strong>등록 행 데이터</strong></div>
             <div class="d-flex">
                 <div class="flex-fill"><strong>원료명:</strong> ${currentData.ingredient_name}</div>
-                <div class="flex-fill"><strong>비율:</strong> ${currentData.ratio}</div>
                 <div class="flex-fill"><strong>품목보고번호:</strong> ${currentData.prdlst_report_no}</div>
                 <div class="flex-fill"><strong>식품유형:</strong> ${currentData.food_type}</div>
                 <div class="flex-fill"><strong>제조사:</strong> ${currentData.manufacturer}</div>
@@ -613,7 +612,7 @@ function showExistingIngredientsModal(ingredients) {
         buttonContainer.classList.add('text-end');
         const selectButton = document.createElement('button');
         selectButton.type = 'button';
-        selectButton.classList.add('btn', 'btn-sm', 'btn-primary');
+        selectButton.classList.add('btn', 'btn-sm', 'btn-secondary');
         selectButton.textContent = '선택';
         selectButton.addEventListener('click', () => {
             console.log('선택된 원료:', ingredient);

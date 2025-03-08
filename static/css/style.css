@@ -9,7 +9,7 @@
     --btn-secondary-color: #1e96fc;  /* (2) 세컨더리 버튼색 */
     --btn-cancel-color: #6c757d;     /* (3) 취소 버튼색 */
     --navbar-bg-color: #023047;       /* 네비게이션 바 배경 */
-    --highlight-color: #e67e22;       /* 하이라이트 색상 */
+    --highlight-color: #caf0f8;       /* 하이라이트 색상 */
     --table-header-bg-color: #e9ecef; /* 테이블 헤더 배경 */
     --table-hover-bg-color: #e9ecef;  /* 테이블 Hover 배경 */
     --pagination-color: #023047;      /* 페이지네이션 색상 (오탈자 수정) */
@@ -600,3 +600,7 @@ a:active {
 .styled-table th:nth-child(8) { width: 8%; }
 .styled-table th:nth-child(9) { width: 8%; }
 .styled-table th:nth-child(10) { width: 8%; }
+
+.highlight-color {
+    background-color: var(--highlight-color); /* 원하는 색상으로 변경 */
+}
