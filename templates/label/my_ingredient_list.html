@@ -3,7 +3,10 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2 class="mb-4">내원료 조회 및 수정</h2>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+         <h2 class="mb-0">내원료 조회 및 수정</h2>
+         <a href="{% url 'label:my_ingredient_list_combined' %}" class="btn btn-default">한 페이지로 보기</a>
+    </div>
 
     {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list' search_fields=search_fields %}
 
@@ -13,28 +16,28 @@
                 <tr>
                     <th style="width: 3%;">번호</th>
                     <th style="width: 10%;">
-                        품목제조번호
+품목제조번호
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
                     <th style="width: 10%;">
-                        원재료명
+원재료명
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
                     <th style="width: 10%;">
-                        식품유형
+식품유형
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
                     <th style="width: 40%;">
-                        원재료 표시명
+원재료 표시명
                         <span class="sort-buttons">
                             <a href="?sort=rawmtrl_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=rawmtrl_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>

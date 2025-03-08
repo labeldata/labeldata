@@ -425,6 +425,55 @@ def my_ingredient_list(request):
     }
     return render(request, 'label/my_ingredient_list.html', context)
 
+@login_required
+def my_ingredient_list_combined(request):
+    # 검색 필드 정의 (검색 시 활용할 파라미터)
+    search_fields = {
+        'my_ingredient_name': 'my_ingredient_name',
+        'prdlst_report_no': 'prdlst_report_no',
+        'prdlst_dcnm': 'prdlst_dcnm',
+        'bssh_nm': 'bssh_nm',
+        'ingredient_display_name': 'ingredient_display_name',
+    }
+    # GET 파라미터로부터 검색 조건 추출
+    search_conditions, search_values = get_search_conditions(request, search_fields)
+    # 삭제되지 않은 현재 사용자의 원료만 조회
+    search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
+    
+    # 정렬 설정
+    sort_field, sort_order = process_sorting(request, 'my_ingredient_name')
+    # 페이징 처리 관련 변수 설정
+    items_per_page = int(request.GET.get('items_per_page', 10))
+    page_number = request.GET.get('page', 1)
+    
+    # 쿼리셋 생성
+    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+    paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
+    querystring_without_page = get_querystring_without(request, ['page'])
+    querydict_sort = request.GET.copy()
+    querydict_sort.pop('sort', None)
+    querydict_sort.pop('order', None)
+    querystring_without_sort = querydict_sort.urlencode()
+    
+    context = {
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'page_range': page_range,
+        # 템플릿에서 검색 필터 폼을 그리기 위한 항목 리스트
+        'search_fields': [
+            {'name': 'my_ingredient_name', 'placeholder': '내 원료명', 'value': search_values.get('my_ingredient_name', '')},
+            {'name': 'prdlst_report_no', 'placeholder': '품목제조번호', 'value': search_values.get('prdlst_report_no', '')},
+            {'name': 'prdlst_dcnm', 'placeholder': '식품유형', 'value': search_values.get('prdlst_dcnm', '')},
+            {'name': 'bssh_nm', 'placeholder': '제조사명', 'value': search_values.get('bssh_nm', '')},
+            {'name': 'ingredient_display_name', 'placeholder': '원료 표시명', 'value': search_values.get('ingredient_display_name', '')},
+        ],
+        'items_per_page': items_per_page,
+        'sort_field': sort_field.lstrip('-'),
+        'sort_order': sort_order,
+        'querystring_without_page': querystring_without_page,
+        'querystring_without_sort': querystring_without_sort,
+    }
+    return render(request, 'label/my_ingredient_list_combined.html', context)
 
 @login_required
 def my_ingredient_detail(request, ingredient_id=None):
@@ -433,15 +482,16 @@ def my_ingredient_detail(request, ingredient_id=None):
     else:
         ingredient = None
 
-    if request.method == 'POST':
-        # POST 처리 로직은 추후 구현
-        pass
-
     context = {
         'ingredient': ingredient,
         'mode': 'edit' if ingredient else 'create'
     }
-    return render(request, 'label/my_ingredient_detail.html', context)
+    
+    # AJAX 요청인지 확인 (Django 5에서는 request.headers 사용)
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'label/my_ingredient_detail_partial.html', context)
+    else:
+        return render(request, 'label/my_ingredient_detail.html', context)
 
 @login_required
 @csrf_exempt

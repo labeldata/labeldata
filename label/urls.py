@@ -26,6 +26,7 @@ urlpatterns = [
     path('check-my-ingredient/', views.check_my_ingredient, name='check_my_ingredient'),
     path('register-my-ingredient/', views.register_my_ingredient, name='register_my_ingredient'),
     path('my-ingredient-list/', views.my_ingredient_list, name='my_ingredient_list'),
+    path('my-ingredient-list-combined/', views.my_ingredient_list_combined, name='my_ingredient_list_combined'),
     path('my-ingredient-detail/<int:ingredient_id>/', views.my_ingredient_detail, name='my_ingredient_detail'),
     path('my-ingredient-detail/', views.my_ingredient_detail, name='my_ingredient_create'),
     #path('save-ingredients/<int:label_id>/', views.save_ingredients_to_label, name='save_ingredients_to_label'),

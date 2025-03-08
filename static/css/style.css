@@ -135,8 +135,20 @@ main.container,
 /* 좀 더 구체적인 선택자 (우선순위 ↑) */
 .table-hover tbody tr:hover td,
 .table-hover tbody tr:hover th {
-  background-color: #e3f2fd !important; /* 배경색 */
+  background-color: #e9ecef !important; /* 배경색 */
   color: #343a40 !important;           /* 텍스트 색상 */
+}
+
+.single-column-table {
+    width: 100%;       /* 테이블 전체 폭 사용 */
+    table-layout: auto; /* 콘텐츠에 맞춰 열 너비 조절 */
+}
+.single-column-table th {
+    width: 20%;        /* 1:3 비율 중 1 */
+    white-space: nowrap; /* 내용이 넘칠 경우 줄바꿈 대신 폭 확장(필요 시) */
+}
+.single-column-table td {
+    width: 80%;        /* 1:3 비율 중 3 */
 }
 
 /* ====================================================

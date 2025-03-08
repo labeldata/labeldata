@@ -1,48 +1,6 @@
 {% load static %}
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <title>내원료 상세 정보</title>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    <style>
-        .popup-container {
-            width: 100%;
-            padding: 20px;
-            background-color: #fff;
-        }
-        /* 상단 헤더: 좌측 제목, 우측 버튼 그룹 */
-        .header-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1rem;
-        }
-        .header-row h5 {
-            margin: 0;
-        }
-        .button-group-level {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        /* 한 줄에 한 항목씩, 1:3 비율 */
-        .single-column-table {
-            width: 100%;
-            table-layout: auto; /* auto로 설정해 내용에 맞춰 열 폭 결정 */
-        }
-        .single-column-table th {
-            width: 20%;         /* 1:3 비율 중 1 */
-            white-space: nowrap;/* 길면 줄바꿈 대신 폭 확장 (필요 시) */
-        }
-        .single-column-table td {
-            width: 80%;         /* 1:3 비율 중 3 */
-        }
-    </style>
-</head>
-<body>
-<div class="container mt-4 popup-container">
+<!-- 상세보기 내용만 포함 (전체 문서 구조 제거) -->
+<div class="mt-4 popup-container">
     <!-- 상단 헤더 영역 -->
     <div class="header-row">
         <h5>{% if mode == 'create' %}내 원료 등록{% else %}내 원료 수정{% endif %}</h5>
@@ -60,7 +18,6 @@
             {% csrf_token %}
             <table class="table table-bordered single-column-table">
                 <tbody>
-                    <!-- 1) 내 원료명 -->
                     <tr>
                         <th>내 원료명</th>
                         <td>
@@ -68,7 +25,6 @@
                                    value="{{ ingredient.my_ingredient_name|default:'' }}" required>
                         </td>
                     </tr>
-                    <!-- 2) 원재료명 -->
                     <tr>
                         <th>원재료명</th>
                         <td>
@@ -76,7 +32,6 @@
                                    value="{{ ingredient.prdlst_nm|default:'' }}">
                         </td>
                     </tr>
-                    <!-- 3) 품목보고번호 -->
                     <tr>
                         <th>품목보고번호</th>
                         <td>
@@ -84,7 +39,6 @@
                                    value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15">
                         </td>
                     </tr>
-                    <!-- 4) 식품유형 -->
                     <tr>
                         <th>식품유형</th>
                         <td>
@@ -92,7 +46,6 @@
                                    value="{{ ingredient.prdlst_dcnm|default:'' }}">
                         </td>
                     </tr>
-                    <!-- 5) 제조사명 -->
                     <tr>
                         <th>제조사명</th>
                         <td>
@@ -100,7 +53,6 @@
                                    value="{{ ingredient.bssh_nm|default:'' }}">
                         </td>
                     </tr>
-                    <!-- 6) 원재료 표시명 -->
                     <tr>
                         <th>원재료 표시명</th>
                         <td>
@@ -110,7 +62,6 @@
                                       placeholder="원재료 표시명을 입력하세요">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
                         </td>
                     </tr>
-                    <!-- 7) 알레르기 -->
                     <tr>
                         <th>알레르기</th>
                         <td>
@@ -120,7 +71,6 @@
                                    readonly onclick="showAllergyOptions(this)">
                         </td>
                     </tr>
-                    <!-- 8) GMO -->
                     <tr>
                         <th>GMO</th>
                         <td>
@@ -226,5 +176,3 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
-</body>
-</html>
