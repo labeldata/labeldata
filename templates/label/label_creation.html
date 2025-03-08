@@ -49,6 +49,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     updateTextareaState();
 });
+
+function openPreviewPopup(){
+    // 미리보기 URL: 라벨 ID를 쿼리스트링으로 전달 (해당 URL에 맞게 라우팅 및 템플릿 구현 필요)
+    const previewUrl = `/label/preview/?label_id={{ label.my_label_id }}`;
+    window.open(previewUrl, 'previewPopup', 'width=1400,height=850,scrollbars=yes');
+}
 </script>
 
 <!-- 상단 헤더 -->
@@ -58,6 +64,27 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="d-flex align-items-center" style="gap: 20px;">
       <span class="recent-update">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
       <button type="submit" form="labelForm" class="btn btn-primary">저장</button>
+      <button type="button" class="btn btn-default preview-btn" onclick="openPreviewPopup()">미리보기</button>
+      <!-- filepath: /c:/projects/v1/templates/label/label_creation.html -->
+      <script>
+        function openPreviewPopup() {
+            const labelId = "{{ label.my_label_id }}";
+            if (!labelId) {
+                alert("라벨이 저장되지 않았습니다.");
+                return;
+            }
+        
+            const checkedFields = document.querySelectorAll("input[type='checkbox']:checked");
+            let queryString = new URLSearchParams();
+            
+            checkedFields.forEach((checkbox) => {
+                queryString.append(checkbox.name, "true");
+            });
+        
+            const previewUrl = `/label/preview/?label_id=${labelId}&${queryString.toString()}`;
+            window.open(previewUrl, 'previewPopup', 'width=1400,height=850,scrollbars=yes');
+        }
+        </script>
     </div>
   </div>
 </div>

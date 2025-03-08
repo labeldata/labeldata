@@ -1,0 +1,69 @@
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+
+<div class="container mt-4">
+    <h2 class="mb-4">라벨 미리보기</h2>
+    
+    <div class="preview-container">
+        <div id="preview-area" class="preview-box">
+            <ul id="sortable-list" class="list-group">
+                <!-- 동적으로 항목이 추가됨 -->
+            </ul>
+        </div>
+    </div>
+</div>
+
+<style>
+    .preview-container {
+        border: 2px solid #007bff;
+        padding: 20px;
+        min-height: 500px;
+        background-color: #f8f9fa;
+        resize: both;
+        overflow: auto;
+    }
+
+    .sortable-item {
+        padding: 10px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        background-color: white;
+        cursor: grab;
+        border-radius: 4px;
+    }
+</style>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const labelId = "{{ label.my_label_id }}";
+  
+      if (!labelId) {
+          alert("라벨 ID가 제공되지 않았습니다.");
+          return;
+      }
+  
+      fetch(`/label/preview-data/${labelId}/`)
+          .then(response => response.json())
+          .then(data => {
+              const sortableList = document.getElementById("sortable-list");
+              sortableList.innerHTML = "";
+  
+              Object.keys(data).forEach(key => {
+                  const listItem = document.createElement("li");
+                  listItem.classList.add("list-group-item", "sortable-item");
+                  listItem.setAttribute("data-key", key);
+                  listItem.innerHTML = `<strong>${data[key].label}:</strong> ${data[key].value}`;
+                  sortableList.appendChild(listItem);
+              });
+  
+              new Sortable(sortableList, {
+                  animation: 150,
+                  onEnd: function (evt) {
+                      console.log("순서 변경됨", evt);
+                  }
+              });
+          })
+          .catch(error => console.error("데이터 로딩 실패:", error));
+  });
+  </script>
