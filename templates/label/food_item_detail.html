@@ -9,89 +9,20 @@
   <title>제품 상세 정보</title>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
-
-  <style>
-    /* 팝업 컨테이너 크기 */
-    .popup-container {
-      max-width: 1200px; /* 필요 시 더 크게 조정 가능 */
-    }
-
-    /* 헤더 영역을 한 줄로 배치 */
-    .header-row {
-      display: flex;
-      align-items: center;     /* 수직 정렬 (중앙) */
-      justify-content: space-between; /* 제목 왼쪽, 버튼 그룹 오른쪽 */
-      margin-bottom: 1rem;
-    }
-    .header-row h5 {
-      margin: 0;
-    }
-
-    /* 버튼 그룹: 같은 레벨에 버튼 3개 배치 */
-    .button-group-level {
-      display: flex;
-      align-items: center;
-      gap: 5px; /* 버튼 사이 간격 */
-    }
-
-    /* 4열 테이블 레이아웃 (two-columns) */
-    .two-columns {
-      width: 100%;
-      table-layout: fixed; /* 열 너비를 고정 레이아웃으로 처리 */
-    }
-    .two-columns th,
-    .two-columns td {
-      vertical-align: top;
-      word-wrap: break-word; /* 긴 단어 줄바꿈 */
-      white-space: normal;   /* 여러 줄로 표시 */
-      padding: 10px;         /* 셀 안쪽 여백 */
-    }
-    /* 항목(라벨) 열: 20%, 값 열: 30% */
-    .two-columns th:nth-child(1),
-    .two-columns td:nth-child(1) {
-      width: 20%;
-    }
-    .two-columns th:nth-child(2),
-    .two-columns td:nth-child(2) {
-      width: 30%;
-    }
-    .two-columns th:nth-child(3),
-    .two-columns td:nth-child(3) {
-      width: 20%;
-    }
-    .two-columns th:nth-child(4),
-    .two-columns td:nth-child(4) {
-      width: 30%;
-    }
-  </style>
 </head>
 <body>
 <div class="container mt-4 popup-container">
   <!-- 상단 헤더 영역 -->
   <div class="header-row">
-    <!-- 제목 -->
-    <h4 class="m-0">제품 상세 정보</h4>
-    <!-- 버튼 그룹: 내원료 저장(초록), 표시사항 생성(파란), 저장(파란), 닫기(회색) -->
+    <h5>제품 상세 정보</h5>
     <div class="button-group-level">
-    <!-- 내원료 저장 (크기는 유지, 색상만 파랑으로 통일) -->
-    <button type="button" class="btn btn-secondary btn-sm me-2" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">
-      내원료 저장
-    </button>
-
-    <!-- 표시사항 생성 (이미 btn-primary, 그대로) -->
-    <button type="button" class="btn btn-primary btn-sm"
-            onclick="saveToMyLabel('{{ item.prdlst_report_no }}')">
-      표시사항 생성
-    </button>
-      <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">
-        닫기
-      </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">내원료 저장</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveToMyLabel('{{ item.prdlst_report_no }}')">표시사항 생성</button>
+        <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">닫기</button>
     </div>
   </div>
 
   <div class="card shadow-sm p-4">
-    <!-- 제품명은 표시하지 않는다고 하셨으므로 제거했습니다. -->
-
     <!-- 4열 테이블 -->
     <table class="table table-bordered two-columns">
       <tbody>
@@ -134,7 +65,7 @@
       </tbody>
     </table>
 
-    <!-- 행정처분 정보 (없으면 대체 메시지) -->
+    <!-- 행정처분 정보 -->
     <h4 class="mt-4">관련 행정처분</h4>
     <ul class="list-group">
       {% if actions %}

@@ -1,19 +1,17 @@
 {% load static %}
 <!-- 상세보기 내용만 포함 (전체 문서 구조 제거) -->
-<div class="mt-4 popup-container">
+<div class="popup-container" id="ingredient-detail-container-partial">
     <!-- 상단 헤더 영역 -->
     <div class="header-row">
-        <h5>{% if mode == 'create' %}내 원료 등록{% else %}내 원료 수정{% endif %}</h5>
+        <h5>내원료 상세보기</h5>
         <div class="button-group-level">
             <button type="submit" form="ingredientForm" class="btn btn-primary btn-sm">저장</button>
-            <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">닫기</button>
-            {% if mode == 'edit' %}
-            <button type="button" class="btn btn-warning btn-sm" onclick="confirmDelete()">삭제</button>
-            {% endif %}
+            <button type="button" class="btn btn-cancel btn-sm" id="closeBtn">닫기</button>
+            {% if mode == 'edit' %}<button type="button" class="btn btn-warning btn-sm" id="deleteBtn">삭제</button>{% endif %}
         </div>
     </div>
 
-    <div class="card shadow-sm p-4">
+    <div>
         <form method="post" id="ingredientForm">
             {% csrf_token %}
             <table class="table table-bordered single-column-table">
@@ -86,93 +84,130 @@
     </div>
 </div>
 
-<script src="{% static 'js/ingredient_options.js' %}"></script>
 <script>
-function confirmDelete() {
-    if (confirm('정말 삭제하시겠습니까?')) {
+    /* IIFE로 스코프 보호 + window에 함수 바인딩 */
+    (function() {
+      function isPopupMode() {
+        return !!window.opener;
+      }
+    
+      function confirmDelete() {
+        if (!confirm('정말 삭제하시겠습니까?')) return;
         deleteMyIngredient();
-    }
-}
-
-function deleteMyIngredient() {
-    const myIngredientId = "{{ ingredient.my_ingredient_id }}";
-    fetch(`/label/delete-my-ingredient/${myIngredientId}/`, {
-        method: 'POST',
-        headers: {
+      }
+    
+      function deleteMyIngredient() {
+        const myIngredientId = "{{ ingredient.my_ingredient_id }}";
+        fetch(`/label/delete-my-ingredient/${myIngredientId}/`, {
+          method: 'POST',
+          headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken')
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('내 원료가 성공적으로 삭제되었습니다.');
-            if (window.opener) {
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+              alert('내 원료가 성공적으로 삭제되었습니다.');
+              if (isPopupMode()) {
                 window.opener.location.reload();
+                window.close();
+              } else {
+                // 한 페이지 모드
+                location.reload();
+              }
+            } else {
+              alert(data.error || '삭제에 실패했습니다.');
             }
-            window.close();
+          })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('삭제 중 오류가 발생했습니다.');
+        });
+      }
+    
+      function closeDetail() {
+        if (isPopupMode()) {
+          window.opener.location.reload();
+          window.close();
         } else {
-            alert(data.error || '삭제에 실패했습니다.');
+          const container = document.getElementById('ingredient-detail-container');
+          if (container) container.innerHTML = '';
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('삭제 중 오류가 발생했습니다.');
-    });
-}
-
-document.getElementById('ingredientForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    saveMyIngredient();
-});
-
-function saveMyIngredient() {
-    const formData = {
-        my_ingredient_id: "{{ ingredient.my_ingredient_id }}",
-        my_ingredient_name: document.getElementById("my_ingredient_name").value,
-        prdlst_report_no: document.getElementById("prdlst_report_no").value,
-        prdlst_dcnm: document.getElementById("prdlst_dcnm").value,
-        ingredient_display_name: document.getElementById("ingredient_display_name").value,
-        allergy_info: document.getElementById("allergy_info").value,
-        gmo_info: document.getElementById("gmo_info").value,
-        bssh_nm: document.getElementById("bssh_nm").value
-    };
-
-    fetch('/label/save-my-ingredient/', {
-        method: 'POST',
-        headers: {
+      }
+    
+      function saveMyIngredient() {
+        const formData = {
+          my_ingredient_id: "{{ ingredient.my_ingredient_id }}",
+          my_ingredient_name: document.getElementById("my_ingredient_name").value,
+          prdlst_nm: document.getElementById("prdlst_nm").value,
+          prdlst_report_no: document.getElementById("prdlst_report_no").value,
+          prdlst_dcnm: document.getElementById("prdlst_dcnm").value,
+          ingredient_display_name: document.getElementById("ingredient_display_name").value,
+          allergy_info: document.getElementById("allergy_info").value,
+          gmo_info: document.getElementById("gmo_info").value,
+          bssh_nm: document.getElementById("bssh_nm").value
+        };
+    
+        fetch('/label/save-my-ingredient/', {
+          method: 'POST',
+          headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify(formData)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('내 원료가 성공적으로 저장되었습니다.');
-            window.close();
-        } else {
-            alert(data.error || '저장에 실패했습니다.');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('저장 중 오류가 발생했습니다.');
-    });
-}
-
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
+          },
+          body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+              alert('내 원료가 성공적으로 저장되었습니다.');
+              if (isPopupMode()) {
+                window.opener.location.reload();
+                window.close();
+              } else {
+                location.reload();
+              }
+            } else {
+              alert(data.error || '저장에 실패했습니다.');
+            }
+          })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('저장 중 오류가 발생했습니다.');
+        });
+      }
+    
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
             const cookie = cookies[i].trim();
             if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
             }
+          }
         }
-    }
-    return cookieValue;
-}
-</script>
+        return cookieValue;
+      }
+    
+      // 이벤트 등록
+      const ingredientForm = document.getElementById('ingredientForm');
+      if (ingredientForm) {
+        ingredientForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          saveMyIngredient();
+        });
+      }
+      const closeBtn = document.getElementById('closeBtn');
+      if (closeBtn) closeBtn.addEventListener('click', closeDetail);
+    
+      const deleteBtn = document.getElementById('deleteBtn');
+      if (deleteBtn) deleteBtn.addEventListener('click', confirmDelete);
+    
+      // 전역 바인딩(HTML onclick="confirmDelete()" 대응)
+      window.confirmDelete = confirmDelete;
+      window.closeDetail = closeDetail;
+    })();
+    </script>

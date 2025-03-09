@@ -574,6 +574,20 @@ def save_my_ingredient(request):
 
 @login_required
 @csrf_exempt
+def delete_my_ingredient(request, ingredient_id):
+    if request.method == 'POST':
+        try:
+            ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
+            ingredient.delete_YN = 'Y'
+            ingredient.save()
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    else:
+        return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+@login_required
+@csrf_exempt
 def search_ingredient_add_row(request):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)

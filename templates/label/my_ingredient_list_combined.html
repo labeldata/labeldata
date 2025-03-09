@@ -2,50 +2,65 @@
 {% block title %}내원료 관리 - 한 페이지로 보기{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<style>
+  /* 예시: 최대폭을 기존 사이트와 맞추기 */
+  .custom-max-width {
+    max-width: 1320px; /* 원하는 사이즈 */
+    margin: 0 auto;
+  }
+  .row.full-height {
+    height: 100%; 
+  }
+  .combined-left-panel,
+  .combined-right-panel {
+    height: 100%;
+    overflow-y: auto;
+  }
+</style>
+
+<div class="container-fluid custom-max-width mt-4">
+    <!-- 상단 헤더/검색 필터 영역 -->
     <div class="d-flex justify-content-between align-items-center mb-4">
          <h2 class="mb-0">내원료 조회 및 수정</h2>
          <a href="{% url 'label:my_ingredient_list' %}" class="btn btn-default">전체 페이지로 보기</a>
     </div>
 
-    {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list' search_fields=search_fields %}
+    {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list_combined' search_fields=search_fields %}
 
-    <div class="row">
-        <!-- 좌측: 내원료 리스트 (검색기능 및 페이지네이션 유지) -->
-        <div class="col-md-6" style="border-right: 1px solid #ccc;">
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover common-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 6%;">번호</th>
-                            <th style="width: 15%;">품목제조번호</th>
-                            <th style="width: 20%;">원재료명</th>
-                            <th style="width: 20%;">식품유형</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for ingredient in page_obj %}
-                        <tr onclick="loadIngredientDetail('{{ ingredient.my_ingredient_id }}')">
-                            <td>{{ forloop.counter }}</td>
-                            <td>{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
-                            <td>{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
-                            <td>{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="4" class="text-center">등록된 원료가 없습니다.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <div class="row full-height">
+        <!-- 좌측: 내원료 리스트 -->
+        <div class="col-md-6 combined-left-panel" style="border-right: 1px solid #ccc;">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th style="width: 6%;">번호</th>
+                        <th style="width: 15%;">품목제조번호</th>
+                        <th style="width: 20%;">원재료명</th>
+                        <th style="width: 20%;">식품유형</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ingredient in page_obj %}
+                    <tr onclick="loadIngredientDetail('{{ ingredient.my_ingredient_id }}')">
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
+                        <td>{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
+                        <td>{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center">등록된 원료가 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
         </div>
 
-        <!-- 우측: 내원료 상세 조회 및 수정 (클릭 시 상세정보가 Ajax로 로드됨) -->
-        <div class="col-md-6">
+        <!-- 우측: 내원료 상세 (AJAX 로드) -->
+        <div class="col-md-6 combined-detail combined-right-panel">
             <div id="ingredient-detail-container">
-                <!-- 상세 정보가 여기에 로드됩니다 -->
+                <!-- 여기에 partial이 삽입됨 -->
             </div>
         </div>
     </div>
@@ -53,14 +68,28 @@
 
 <script>
 function loadIngredientDetail(ingredientId) {
-    fetch(`/label/my-ingredient-detail/${ingredientId}/`)
-        .then(response => response.text())
-        .then(html => {
-            document.getElementById('ingredient-detail-container').innerHTML = html;
-        })
-        .catch(error => {
-            console.error('Error loading ingredient detail:', error);
-        });
+  fetch(`/label/my-ingredient-detail/${ingredientId}/`, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+    .then(response => response.text())
+    .then(html => {
+      const container = document.getElementById('ingredient-detail-container');
+      container.innerHTML = html;
+      
+      // (중요) innerHTML로 삽입 시, <script>가 자동 실행되지 않으므로 아래 로직 필요
+      // script 태그를 다시 실행해주는 예시
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      const scriptTags = tempDiv.querySelectorAll('script');
+      scriptTags.forEach(oldScript => {
+        const newScript = document.createElement('script');
+        newScript.textContent = oldScript.textContent;
+        // 복사하려면 src, type 등도 필요하면 추가
+        document.body.appendChild(newScript);
+        document.body.removeChild(newScript);
+      });
+    })
+    .catch(error => {
+      console.error('Error loading ingredient detail:', error);
+    });
 }
 </script>
 {% endblock %}
