@@ -1,6 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     const savedIngredients = JSON.parse(document.getElementById('saved-ingredients-data').textContent);
+    const hasRelations = document.querySelector('.popup-container').dataset.hasRelations === 'true';  // 플래그를 JS 변수로 전달
+    
+
     const urlParams = new URLSearchParams(window.location.search);
     const labelId = urlParams.get('label_id');
 
@@ -15,15 +18,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
         // 서버에서 전달받은 JSON 문자열을 파싱
-        if (savedIngredients && savedIngredients.length > 0) {
+        if (hasRelations) {
             savedIngredients.forEach(ingredient => {
                 addIngredientRowWithData(ingredient);
             });
             sortRows(); // 비율에 따라 정렬
         } else {
             // 관계 테이블에 데이터가 없을 때 원재료명을 ,로 구분하여 각 행으로 추가
-            const rawMaterialNames = '{{ rawmtrl_nm|escapejs }}';
-            addIngredientRows(rawMaterialNames);
+            // const rawMaterialNames = '{{ ingredient_name|escapejs }}';
+            // addIngredientRows(rawMaterialNames);
+            console.log("savedIngredients:", savedIngredients);  // savedIngredients 출력
+            addIngredientRows(savedIngredients);
         }
     } catch (error) {
         console.error('데이터 파싱 오류:', error);
@@ -65,13 +70,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// 원재료명을 ,로 구분하여 각 행으로 추가하는 함수
-function addIngredientRows(rawMaterialNames) {
-    if (!rawMaterialNames) return;
+// savedIngredients 배열을 받아 각 객체의 ingredient_name을 사용하여 행을 추가하는 함수
+function addIngredientRows(savedIngredients) {
+    if (!savedIngredients || savedIngredients.length === 0) return;
 
-    const materials = rawMaterialNames.split(',');
-    materials.forEach(material => {
-        addIngredientRow(material.trim());
+    savedIngredients.forEach(ingredient => {
+        addIngredientRow(ingredient.ingredient_name.trim());
     });
 }
 
@@ -87,7 +91,7 @@ function addIngredientRow(material = '') {
         <td>
             <div class="d-flex flex-column">
                 <input type="text" value="${material}" class="form-control form-control-sm" placeholder="원재료명">
-                <input type="text" class="form-control form-control-sm" placeholder="비율 (%)">
+                <input type="text" class="form-control form-control-sm ratio-input" placeholder="비율 (%)">
             </div>
         </td>
         <td>
@@ -111,11 +115,21 @@ function addIngredientRow(material = '') {
         <td>
             <div class="d-flex flex-column">
                 <button type="button" class="btn btn-sm btn-secondary" onclick="registerMyIngredient(this)">등록</button>
+                <input type="hidden" class="my-ingredient-id">
             </div>
         </td>
     `;
     document.getElementById('ingredient-body').appendChild(row);
     updateTargetButtons();
+
+    // 새로 추가된 비율 입력 필드에 이벤트 리스너 추가
+    const ratioInput = row.querySelector('.ratio-input');
+    ratioInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            sortRows();
+        }
+    });
 }
 
 function updateTargetButtons() {
@@ -273,10 +287,12 @@ function searchMyIngredient(textarea) {
 }
 
 // 파일: ingredient_popup.html 내 addIngredientRowWithData 함수 수정
-function addIngredientRowWithData(ingredient, fromModal = false) {
+function addIngredientRowWithData(ingredient, fromModal = true) {
     const readonlyClass = fromModal ? "modal-readonly-field" : "";
     // fromModal가 true일 때만 readonly 속성을 추가하고, 아니면 빈 문자열로 처리
     const readonlyAttr = fromModal ? "readonly" : "";
+    const disabledAttr = fromModal ? "disabled" : ""; // fromModal이 true일 때 등록 버튼 비활성화
+
     const row = document.createElement('tr');
     row.innerHTML = `
         <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
@@ -286,7 +302,7 @@ function addIngredientRowWithData(ingredient, fromModal = false) {
                 <input type="text" value="${ingredient.ingredient_name}" 
                        class="form-control form-control-sm ${readonlyClass}" placeholder="원재료명" ${readonlyAttr}>
                 <input type="text" value="${ingredient.ratio || ''}" 
-                       class="form-control form-control-sm ratio-input ${readonlyClass}" placeholder="비율 (%)" ${readonlyAttr}>
+                       class="form-control form-control-sm ratio-input" placeholder="비율 (%)">
             </div>
         </td>
         <td>
@@ -315,7 +331,8 @@ function addIngredientRowWithData(ingredient, fromModal = false) {
         </td>
         <td>
             <div class="d-flex flex-column">
-                <button type="button" class="btn btn-sm btn-secondary" onclick="registerMyIngredient(this)">등록</button>
+                <button type="button" class="btn btn-sm btn-secondary " onclick="registerMyIngredient(this)" ${disabledAttr}>등록</button>
+                <input type="hidden" class="my-ingredient-id" value="${ingredient.my_ingredient_id}">
             </div>
         </td>
     `;
@@ -465,6 +482,7 @@ function registerMyIngredient(button) {
             showExistingIngredientsModal(data.ingredients);
         } else {
             const ingredientData = {
+                my_ingredient_id: my_ingredient_id,
                 ingredient_name: row.querySelector('td:nth-child(3) input')?.value.trim() || "",
                 prdlst_report_no: prdlst_report_no,
                 food_type: food_type,
@@ -509,6 +527,7 @@ function registerMyIngredient(button) {
         alert("조회 중 오류가 발생했습니다.");
     });
 }
+
 function showExistingIngredientsModal(ingredients) {
     const modalBody = document.getElementById('existing-ingredients-modal-body');
     modalBody.innerHTML = ''; // 기존 내용 초기화
@@ -523,7 +542,6 @@ function showExistingIngredientsModal(ingredients) {
         // 등록 행 데이터 추출 (셀의 input/textarea 값을 가져옴)
         const currentData = {
             ingredient_name: window.currentRow.querySelector('td:nth-child(3) input:first-of-type')?.value || "",
-            // ratio: window.currentRow.querySelector('td:nth-child(3) input:nth-of-type(2)')?.value || "",
             prdlst_report_no: window.currentRow.querySelector('td:nth-child(4) input:first-of-type')?.value || "",
             food_type: window.currentRow.querySelector('td:nth-child(4) input:nth-of-type(2)')?.value || "",
             display_name: window.currentRow.querySelector('td:nth-child(5) textarea')?.value || "",
@@ -601,10 +619,18 @@ function showExistingIngredientsModal(ingredients) {
         manufacturerInput.style.flex = '1';
         manufacturerInput.value = ingredient.bssh_nm || '';
 
+        // 숨겨진 my_ingredient_id 필드 추가
+        const myIngredientIdInput = document.createElement('input');
+        myIngredientIdInput.type = 'hidden';
+        myIngredientIdInput.classList.add('my-ingredient-id');
+        myIngredientIdInput.value = ingredient.my_ingredient_id || '';
+
+
         inputContainer.appendChild(ingredientInput);
         inputContainer.appendChild(reportInput);
         inputContainer.appendChild(foodTypeInput);
         inputContainer.appendChild(manufacturerInput);
+        inputContainer.appendChild(myIngredientIdInput); // 숨겨진 필드 추가
         firstLine.appendChild(inputContainer);
 
         const buttonContainer = document.createElement('div');
@@ -622,6 +648,8 @@ function showExistingIngredientsModal(ingredients) {
                 window.currentRow.querySelector('td:nth-child(4) input:nth-of-type(2)').value = foodTypeInput.value;
                 window.currentRow.querySelector('td:nth-child(5) textarea').value = displayInput.value;
                 window.currentRow.querySelector('td:nth-child(8) input').value = manufacturerInput.value;
+                window.currentRow.querySelector('.my-ingredient-id').value = myIngredientIdInput.value; // my_ingredient_id 설정
+                
                 
                 // 모든 input, textarea readonly 처리 및 등록 버튼 비활성화
                 window.currentRow.querySelectorAll('input, textarea').forEach(field => {
@@ -663,6 +691,9 @@ function showExistingIngredientsModal(ingredients) {
     existingIngredientsModal.show();
 }
 
+
+
+
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -685,6 +716,7 @@ function registerNewIngredient() {
     }
     // 현재 행에서 데이터를 추출합니다.
     const ingredientData = {
+        my_ingredient_id: row.querySelector('.my-ingredient-id')?.value.trim() || "",
         ingredient_name: window.currentRow.querySelector('td:nth-child(3) input:first-of-type')?.value.trim() || "",
         ratio: window.currentRow.querySelector('td:nth-child(3) input:nth-of-type(2)')?.value.trim() || "",
         prdlst_report_no: window.currentRow.querySelector('td:nth-child(4) input:first-of-type')?.value.trim() || "",
@@ -737,26 +769,6 @@ function registerNewIngredient() {
     });
 }
 
-// 저장 버튼 클릭 시 호출되는 함수 내, 행 전체가 readonly 상태인지 확인하는 함수 예시
-function verifyAllRowsDisabled() {
-    const rows = document.querySelectorAll('#ingredient-body tr');
-    let allDisabled = true;
-    rows.forEach(row => {
-        const fields = row.querySelectorAll('input, textarea');
-        fields.forEach(field => {
-            if (!field.hasAttribute('readonly')) {
-                allDisabled = false;
-            }
-        });
-    });
-    if (allDisabled) {
-        console.log("모든 행이 비활성화 되어있습니다.");
-        alert("모든 행이 비활성화 되어있습니다.");
-    } else {
-        console.log("비활성화되지 않은 행이 있습니다.");
-        alert("비활성화되지 않은 행이 있습니다.");
-    }
-}
 
 function saveIngredients() {
     // URL에서 label_id 값 가져오기
@@ -771,11 +783,12 @@ function saveIngredients() {
     const rows = document.querySelectorAll('#ingredient-body tr');
     let allDisabled = true;
     rows.forEach(row => {
-        // ratio-input 클래스를 가진 입력 필드는 제외
-        const fields = row.querySelectorAll('input:not(.ratio-input), textarea');
+        // ratio-input, checkbox, hidden 클래스를 가진 입력 필드는 제외
+        const fields = row.querySelectorAll('input:not(.ratio-input):not([type="checkbox"]):not([type="hidden"]), textarea');
         fields.forEach(field => {
             if (!field.hasAttribute('readonly')) {
                 allDisabled = false;
+                console.log("비활성화되지 않은 필드:", field); // 비활성화되지 않은 필드 출력
             }
         });
     });
@@ -793,7 +806,8 @@ function saveIngredients() {
             prdlst_report_no: row.querySelector('td:nth-child(4) input:first-of-type')?.value.trim() || "",
             food_type: row.querySelector('td:nth-child(4) input:nth-of-type(2)')?.value.trim() || "",
             display_name: row.querySelector('td:nth-child(5) textarea')?.value.trim() || "",
-            manufacturer: row.querySelector('td:nth-child(8) input')?.value.trim() || ""
+            manufacturer: row.querySelector('td:nth-child(8) input')?.value.trim() || "",
+            my_ingredient_id: row.querySelector('.my-ingredient-id')?.value.trim() || ""
         };
         ingredients.push(ingredient);
     });

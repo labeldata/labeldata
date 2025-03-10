@@ -162,7 +162,6 @@ FOODITEM_MYLABEL_MAPPING = {
 
 @login_required
 def save_to_my_label(request, prdlst_report_no):
-    print("1")
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
 
@@ -200,8 +199,8 @@ def label_creation(request, label_id=None):
             form = LabelCreationForm(request.POST, instance=label)
             if form.is_valid():
                 label = form.save(commit=False)
-                # 관계 테이블에 연결된 데이터가 있으면 원재료명(rawmtrl_nm)을 갱신
-                if label.ingredient_relations.exists():
+                # 관계 테이블에 연결된 데이터가 있으면 원재료명(rawmtrl_nm)을 업데이트하지 않음
+                if not label.ingredient_relations.exists():
                     raw_materials = [
                         relation.ingredient.prdlst_nm 
                         for relation in label.ingredient_relations.all()
@@ -210,9 +209,6 @@ def label_creation(request, label_id=None):
                     if raw_materials:
                         # join 후 앞뒤 공백 제거
                         label.rawmtrl_nm = ', '.join(raw_materials).strip()
-                # elif label.ingredient_ids_str:
-                #     raw_materials = [name.strip() for name in label.ingredient_ids_str.split(',')]
-                #     label.rawmtrl_nm = ', '.join(raw_materials)
                 label.save()
                 messages.success(request, '저장되었습니다.')
                 return redirect('label:label_creation', label_id=label.my_label_id)
@@ -220,13 +216,14 @@ def label_creation(request, label_id=None):
             # GET 요청 시: 관계 데이터가 있고 실제로 원재료명이 존재하면 입력란을 disable 처리
             if label.ingredient_relations.exists():
                 raw_materials = [
-                    relation.ingredient.ingredient_display_name 
-                    for relation in label.ingredient_relations.all()
+                    relation.ingredient.ingredient_display_name
+                    for relation in label.ingredient_relations.all().order_by('relation_sequence')
                     if relation.ingredient.ingredient_display_name  # 값이 있는 경우만
                 ]
                 if raw_materials:
                     label.rawmtrl_nm = ', '.join(raw_materials).strip()
-                    disable_rawmtrl = True  # 실제 데이터가 있는 경우에만 disable 처리
+                    
+                disable_rawmtrl = True  # 실제 데이터가 있는 경우에만 disable 처리
             form = LabelCreationForm(instance=label)
     else:
         if request.method == 'POST':
@@ -240,7 +237,6 @@ def label_creation(request, label_id=None):
         else:
             form = LabelCreationForm()
             label = None
-        disable_rawmtrl = False
 
     context = {
         'form': form,
@@ -286,12 +282,14 @@ def ingredient_popup(request):
     label_id = request.GET.get('label_id')
     
     ingredients_data = []
+    has_relations = False
     if label_id:
         relations = LabelIngredientRelation.objects.filter(label_id=label_id).select_related('ingredient')
         saved_ingredient_names = set()
         for relation in relations:
             saved_ingredient_names.add(relation.ingredient.my_ingredient_name)
             ingredients_data.append({
+                'my_ingredient_id': relation.ingredient.my_ingredient_id,
                 'ingredient_name': relation.ingredient.my_ingredient_name,
                 'prdlst_report_no': relation.ingredient.prdlst_report_no or '',
                 'ratio': float(relation.ingredient_ratio) if relation.ingredient_ratio else '',
@@ -302,6 +300,8 @@ def ingredient_popup(request):
                 #'gmo': relation.ingredient.gmo or '',
                 'manufacturer': relation.ingredient.bssh_nm or ''
             })
+        if relations.exists():
+            has_relations = True  # 관계 데이터가 있는 경우 플래그 설정
         if not relations.exists() and rawmtrl_nm:
             raw_materials = [rm.strip() for rm in rawmtrl_nm.split(',') if rm.strip()]
             for material in raw_materials:
@@ -316,10 +316,11 @@ def ingredient_popup(request):
                     'gmo': '',
                     'manufacturer': ''
                 })
-    
+    print(ingredients_data, has_relations)
     context = {
         #'saved_ingredients': mark_safe(json.dumps(ingredients_data, ensure_ascii=False))
-        'saved_ingredients': ingredients_data
+        'saved_ingredients': ingredients_data,
+        'has_relations': has_relations  # 플래그를 템플릿으로 전달
     }
     return render(request, 'label/ingredient_popup.html', context)
 
@@ -356,7 +357,15 @@ def check_my_ingredient(request):
                 prdlst_report_no=prdlst_report_no,
                 delete_YN='N'
             )
-            existing_ingredients = list(qs.values())
+            # 필요한 필드만 선택하여 리스트로 변환
+            existing_ingredients = list(qs.values(
+                'my_ingredient_id',  # 추가된 부분: my_ingredient_id 필드 포함
+                'prdlst_nm',
+                'prdlst_report_no',
+                'prdlst_dcnm',
+                'bssh_nm',
+                'ingredient_display_name'
+            ))
         else:
             qs = MyIngredient.objects.filter(
                 user_id=request.user,
@@ -364,7 +373,14 @@ def check_my_ingredient(request):
                 delete_YN='N'
             )
             # 후보 데이터를 모두 가져옵니다.
-            candidates = list(qs.values())
+            candidates = list(qs.values(
+                'my_ingredient_id',  # 추가된 부분: my_ingredient_id 필드 포함
+                'prdlst_nm',
+                'prdlst_report_no',
+                'prdlst_dcnm',
+                'bssh_nm',
+                'ingredient_display_name'
+            ))
             # rapidfuzz를 사용한 유사도 계산
             threshold = 70  # 유사도 임계값 (0-100 사이의 점수, 상황에 따라 조절)
             filtered = []
@@ -378,11 +394,11 @@ def check_my_ingredient(request):
             # 유사도 점수가 높은 순으로 정렬
             existing_ingredients = sorted(filtered, key=lambda x: x['similarity'], reverse=True)
 
+        print(existing_ingredients)
         exists = len(existing_ingredients) > 0
         return JsonResponse({'exists': exists, 'ingredients': existing_ingredients})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-    
     
 @login_required
 def my_ingredient_list(request):
@@ -492,7 +508,7 @@ def my_ingredient_detail(request, ingredient_id=None):
         return render(request, 'label/my_ingredient_detail_partial.html', context)
     else:
         return render(request, 'label/my_ingredient_detail.html', context)
-
+   
 @login_required
 @csrf_exempt
 def save_ingredients_to_label(request, label_id):
@@ -502,42 +518,26 @@ def save_ingredients_to_label(request, label_id):
         data = json.loads(request.body)
         ingredients_data = data.get('ingredients', [])
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-        label.ingredient_create_YN = 'Y'
-        ingredient_names = []
-        processed_ingredient_ids = []
-        
+
+        # 기존 관계 삭제
+        LabelIngredientRelation.objects.filter(label_id=label.my_label_id).delete()
+
+        print(ingredients_data)
         # ingredients_data 순서를 기준으로 순번(relation_sequence) 저장
         for sequence, ingredient_data in enumerate(ingredients_data, start=1):
-            if not ingredient_data.get('ingredient_name'):
-                continue
-            ingredient_name = ingredient_data['ingredient_name']
-            ingredient_names.append(ingredient_name)
-            my_ingredient, created = MyIngredient.objects.get_or_create(
-                user_id=request.user,
-                my_ingredient_name=ingredient_name,
-                defaults={
-                    'delete_YN': 'N',
-                    'prdlst_report_no': ingredient_data.get('prdlst_report_no', ''),
-                    'ingredient_display_name': ingredient_data.get('display_name', ''),
-                }
-            )
-            processed_ingredient_ids.append(my_ingredient.my_ingredient_id)
             try:
                 ratio = float(ingredient_data.get('ratio', 0))
             except (ValueError, TypeError):
                 ratio = 0
+
             LabelIngredientRelation.objects.update_or_create(
                 label_id=label.my_label_id,
-                ingredient_id=my_ingredient.my_ingredient_id,
+                ingredient_id=ingredient_data['my_ingredient_id'],
                 defaults={
                     'ingredient_ratio': ratio,
-                    #'allergen': ingredient_data.get('allergen', ''),
-                    #'gmo': ingredient_data.get('gmo', ''),
                     'relation_sequence': sequence  # 순번 저장
                 }
             )
-        LabelIngredientRelation.objects.filter(label_id=label.my_label_id).exclude(ingredient_id__in=processed_ingredient_ids).delete()
-        label.ingredient_ids_str = ','.join(ingredient_names)
         label.save()
         return JsonResponse({'success': True, 'message': '저장되었습니다.'})
     except Exception as e:
@@ -578,6 +578,9 @@ def delete_my_ingredient(request, ingredient_id):
     if request.method == 'POST':
         try:
             ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
+            # 관계 테이블의 데이터 삭제
+            LabelIngredientRelation.objects.filter(ingredient_id=ingredient.my_ingredient_id).delete()
+            # 원료 삭제 (delete_YN을 'Y'로 설정)
             ingredient.delete_YN = 'Y'
             ingredient.save()
             return JsonResponse({'success': True})
@@ -645,12 +648,10 @@ def verify_ingredients(request):
                 return JsonResponse({"success": False, "error": "Expected a single ingredient dictionary."}, status=400)
         
         # 이제 ing_data는 dict로 보장됩니다.
-        print("Received ingredient data:", ing_data)
         results = []  # 결과 값을 저장할 리스트
         
         # 단일 dict이므로 한 번만 처리합니다.
         prdlst_report_no = str(ing_data.get("prdlst_report_no", "")).strip()
-        print("prdlst_report_no:", prdlst_report_no)
         
         if prdlst_report_no:
             # 품목보고번호가 있는 경우 해당 번호를 기준으로 MyIngredient 레코드를 검색합니다.
@@ -695,7 +696,7 @@ def verify_ingredients(request):
                 results.append(record)
             else:
                 results.append({})
-        print("Results:", results)
+        print(results)
         return JsonResponse({"success": True, "results": results})
     except Exception as e:
         print("Error in verify_ingredients:", str(e))

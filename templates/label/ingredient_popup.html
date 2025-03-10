@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
-<div class="container popup-container">
+<div class="container popup-container" data-has-relations="{{ has_relations|yesno:'true,false' }}">
     <!-- 모달 다이얼로그: 내 원료 검색 -->
     <div class="modal fade" id="ingredientSearchModal" tabindex="-1" aria-labelledby="ingredientSearchModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl"><!-- modal-xl로 크기 확대 -->

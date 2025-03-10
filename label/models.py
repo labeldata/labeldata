@@ -221,6 +221,12 @@ class MyLabel(models.Model):
             return MyIngredient.objects.filter(my_ingredient_id__in=self.ingredient_ids_json)
         return self.ingredients.all()
 
+    def get_related_ingredient_names(self):
+        """
+        연결된 모든 원재료의 prdlst_nm을 쉼표로 구분하여 반환합니다.
+        """
+        return ", ".join(self.ingredients.values_list('prdlst_nm', flat=True))
+
 class FoodType(models.Model):
     
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)

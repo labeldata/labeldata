@@ -34,21 +34,21 @@ function openIngredientPopup() {
     window.open(url, 'IngredientPopup', 'width=1400,height=850,scrollbars=yes');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const rawmtrlTextarea = document.querySelector('textarea[name="rawmtrl_nm"]');
-    const ingredientCreateYN = "{{ label.ingredient_create_YN }}";
+// document.addEventListener('DOMContentLoaded', function() {
+//     const rawmtrlTextarea = document.querySelector('textarea[name="rawmtrl_nm"]');
+//     const ingredientCreateYN = "{{ label.ingredient_create_YN }}";
 
-    function updateTextareaState() {
-        if (ingredientCreateYN === 'Y') {
-            rawmtrlTextarea.disabled = true;
-            rawmtrlTextarea.classList.add('disabled-textarea');
-        } else {
-            rawmtrlTextarea.disabled = false;
-            rawmtrlTextarea.classList.remove('disabled-textarea');
-        }
-    }
-    updateTextareaState();
-});
+//     function updateTextareaState() {
+//         if (ingredientCreateYN === 'Y') {
+//             rawmtrlTextarea.disabled = true;
+//             rawmtrlTextarea.classList.add('disabled-textarea');
+//         } else {
+//             rawmtrlTextarea.disabled = false;
+//             rawmtrlTextarea.classList.remove('disabled-textarea');
+//         }
+//     }
+//     updateTextareaState();
+// });
 
 function openPreviewPopup(){
     // 미리보기 URL: 라벨 ID를 쿼리스트링으로 전달 (해당 URL에 맞게 라우팅 및 템플릿 구현 필요)
