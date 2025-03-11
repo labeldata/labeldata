@@ -316,7 +316,6 @@ def ingredient_popup(request):
                     'gmo': '',
                     'manufacturer': ''
                 })
-    print(ingredients_data, has_relations)
     context = {
         #'saved_ingredients': mark_safe(json.dumps(ingredients_data, ensure_ascii=False))
         'saved_ingredients': ingredients_data,
@@ -394,7 +393,6 @@ def check_my_ingredient(request):
             # 유사도 점수가 높은 순으로 정렬
             existing_ingredients = sorted(filtered, key=lambda x: x['similarity'], reverse=True)
 
-        print(existing_ingredients)
         exists = len(existing_ingredients) > 0
         return JsonResponse({'exists': exists, 'ingredients': existing_ingredients})
     except Exception as e:
@@ -522,7 +520,6 @@ def save_ingredients_to_label(request, label_id):
         # 기존 관계 삭제
         LabelIngredientRelation.objects.filter(label_id=label.my_label_id).delete()
 
-        print(ingredients_data)
         # ingredients_data 순서를 기준으로 순번(relation_sequence) 저장
         for sequence, ingredient_data in enumerate(ingredients_data, start=1):
             try:
@@ -618,17 +615,16 @@ def search_ingredient_add_row(request):
             'prdlst_report_no',
             'prdlst_dcnm',       # 식품유형
             'bssh_nm',           # 제조사
+            'ingredient_display_name',  # 원료 표시명
+            'my_ingredient_id'
         ))
 
-        
-        
         if ingredients:
-            return JsonResponse({'success': True,'ingredients': ingredients})
+            return JsonResponse({'success': True, 'ingredients': ingredients})
         else:
             return JsonResponse({'success': False, 'error': '검색 결과가 없습니다.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
 
 @login_required
 @csrf_exempt
@@ -696,10 +692,8 @@ def verify_ingredients(request):
                 results.append(record)
             else:
                 results.append({})
-        print(results)
         return JsonResponse({"success": True, "results": results})
     except Exception as e:
-        print("Error in verify_ingredients:", str(e))
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
 @login_required

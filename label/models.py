@@ -168,6 +168,8 @@ class MyLabel(models.Model):
     cautions = models.TextField(verbose_name="주의사항", null=True, blank=True)
     additional_info = models.TextField(verbose_name="기타 표시사항", null=True, blank=True)
 
+    recommended_label_data = models.CharField(max_length=200, verbose_name="권장 표시사항", null=True, blank=True)
+
     create_datetime = models.DateTimeField(auto_now_add=True)
     update_datetime = models.DateTimeField(auto_now=True)
     label_create_YN = models.CharField(max_length=1, verbose_name="표시 사항 작성 여부", default="N" )

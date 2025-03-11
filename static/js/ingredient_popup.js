@@ -70,6 +70,147 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+function searchMyIngredientInModal() {
+    const ingredientName = document.getElementById('modalSearchInput1').value.trim();
+    const reportNo = document.getElementById('modalSearchInput2').value.trim();
+    const foodType = document.getElementById('modalSearchInput3').value.trim();
+    const manufacturer = document.getElementById('modalSearchInput4').value.trim();
+
+    const searchParams = {
+        ingredient_name: ingredientName,
+        prdlst_report_no: reportNo,
+        food_type: foodType,
+        manufacturer: manufacturer
+    };
+
+    fetch('/label/search-ingredient-add-row/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(searchParams)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("검색 결과 데이터:", data); // 서버로부터 받은 데이터를 콘솔에 출력
+
+        const resultsDiv = document.getElementById('modalSearchResults');
+        resultsDiv.innerHTML = '';  // 기존 검색 결과 초기화
+
+        if (data.success && data.ingredients && data.ingredients.length > 0) {
+            const container = document.createElement('div');
+            container.classList.add('list-group');
+            container.style.maxWidth = '100%';
+            container.style.width = '100%';
+
+            // 검색 결과(기존 원료) 데이터 행 생성
+            data.ingredients.forEach(ingredient => {
+                const rowContainer = document.createElement('div');
+                rowContainer.classList.add('list-group-item', 'mb-2');
+
+                const firstLine = document.createElement('div');
+                firstLine.classList.add('d-flex', 'justify-content-between', 'align-items-center');
+
+                const inputContainer = document.createElement('div');
+                inputContainer.classList.add('d-flex', 'flex-grow-1');
+                inputContainer.style.gap = '0.5rem';
+
+                const ingredientInput = document.createElement('input');
+                ingredientInput.type = 'text';
+                ingredientInput.classList.add('form-control', 'form-control-sm');
+                ingredientInput.style.flex = '1';
+                ingredientInput.value = ingredient.prdlst_nm || '';
+
+                const reportInput = document.createElement('input');
+                reportInput.type = 'text';
+                reportInput.classList.add('form-control', 'form-control-sm');
+                reportInput.style.flex = '1';
+                reportInput.value = ingredient.prdlst_report_no || '';
+
+                const foodTypeInput = document.createElement('input');
+                foodTypeInput.type = 'text';
+                foodTypeInput.classList.add('form-control', 'form-control-sm');
+                foodTypeInput.style.flex = '1';
+                foodTypeInput.value = ingredient.prdlst_dcnm || '';
+
+                const manufacturerInput = document.createElement('input');
+                manufacturerInput.type = 'text';
+                manufacturerInput.classList.add('form-control', 'form-control-sm');
+                manufacturerInput.style.flex = '1';
+                manufacturerInput.value = ingredient.bssh_nm || '';
+
+                // 숨겨진 my_ingredient_id 필드 추가
+                const myIngredientIdInput = document.createElement('input');
+                myIngredientIdInput.type = 'hidden';
+                myIngredientIdInput.classList.add('my-ingredient-id');
+                myIngredientIdInput.value = ingredient.my_ingredient_id || '';
+
+                inputContainer.appendChild(ingredientInput);
+                inputContainer.appendChild(reportInput);
+                inputContainer.appendChild(foodTypeInput);
+                inputContainer.appendChild(manufacturerInput);
+                inputContainer.appendChild(myIngredientIdInput); // 숨겨진 필드 추가
+                firstLine.appendChild(inputContainer);
+
+                const buttonContainer = document.createElement('div');
+                buttonContainer.style.width = '100px';
+                buttonContainer.classList.add('text-end');
+                const selectButton = document.createElement('button');
+                selectButton.type = 'button';
+                selectButton.classList.add('btn', 'btn-sm', 'btn-secondary');
+                selectButton.textContent = '선택';
+                selectButton.addEventListener('click', () => {
+                    selectIngredient(ingredient, selectButton);
+                });
+                buttonContainer.appendChild(selectButton);
+                firstLine.appendChild(buttonContainer);
+
+                const secondLine = document.createElement('div');
+                secondLine.classList.add('mt-2');
+                const displayInput = document.createElement('input');
+                displayInput.type = 'text';
+                displayInput.classList.add('form-control', 'form-control-sm');
+                displayInput.value = ingredient.ingredient_display_name || '';
+                secondLine.appendChild(displayInput);
+
+                rowContainer.appendChild(firstLine);
+                rowContainer.appendChild(secondLine);
+                container.appendChild(rowContainer);
+            });
+
+            resultsDiv.appendChild(container);
+        } else {
+            resultsDiv.innerHTML = '<div>검색 결과가 없습니다.</div>';
+        }
+    })
+    .catch(error => {
+        console.error('검색 중 오류가 발생했습니다:', error);
+        alert('검색 중 오류가 발생했습니다.');
+    });
+}
+
+function selectIngredient(ingredient, button) {
+    console.log('선택된 원료:', ingredient);
+
+    // 필드 이름을 다시 파싱하여 새로운 객체 생성
+    const parsedIngredient = {
+        ingredient_name: ingredient.prdlst_nm,
+        prdlst_report_no: ingredient.prdlst_report_no,
+        food_type: ingredient.prdlst_dcnm,
+        manufacturer: ingredient.bssh_nm,
+        display_name: ingredient.ingredient_display_name,
+        my_ingredient_id: ingredient.my_ingredient_id
+    };
+
+    addIngredientRowWithData(parsedIngredient, true);
+
+    // 모달 닫기
+    const modalEl = document.getElementById('ingredientSearchModal');
+    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+    modalInstance.hide();
+}
+
 // savedIngredients 배열을 받아 각 객체의 ingredient_name을 사용하여 행을 추가하는 함수
 function addIngredientRows(savedIngredients) {
     if (!savedIngredients || savedIngredients.length === 0) return;
@@ -79,8 +220,6 @@ function addIngredientRows(savedIngredients) {
     });
 }
 
-// 원재료명을 ,로 구분하여 각 행으로 추가하는 기존 코드 대신,
-// 아래와 같이 다른 행과 동일한 레이아웃으로 행을 추가하도록 수정합니다.
 function addIngredientRow(material = '') {
     const row = document.createElement('tr');
     row.innerHTML = `
@@ -130,6 +269,8 @@ function addIngredientRow(material = '') {
             sortRows();
         }
     });
+
+    return row; // 추가된 행을 반환
 }
 
 function updateTargetButtons() {
@@ -229,62 +370,6 @@ function getCookie(name) {
     return cookieValue;
 }
 
-function searchMyIngredient(textarea) {
-    const searchName = textarea.value.trim();
-    const row = textarea.closest('tr');
-    
-    console.log("검색어:", searchName);
-    
-    fetch('/label/check-ingredient-display-name/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify({ ingredient_name: searchName })
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log('데이터:', data);
-        const resultsDiv = document.getElementById('modalSearchResults');
-        resultsDiv.innerHTML = '';
-        if (data.success && data.ingredients && data.ingredients.length > 0) {
-            let html = '<div>';
-            data.ingredients.forEach((ingredient, index) => {
-                html += `
-                    <div class="d-flex align-items-center border p-2 mb-2">
-                        <div class="flex-grow-1">
-                            <div>
-                                <span><strong>원료명:</strong> ${ingredient.prdlst_nm}</span><br>
-                                <span><strong>비율:</strong> ${ingredient.ingredient_ratio || ''}</span>
-                            </div>
-                            <div class="mt-2">
-                                <span><strong>품목제조번호:</strong> ${ingredient.prdlst_report_no}</span><br>
-                                <span><strong>식품유형:</strong> ${ingredient.prdlst_dcnm}</span>
-                            </div>
-                            <div class="mt-2">
-                                <span><strong>제조사:</strong> ${ingredient.bssh_nm}</span>
-                            </div>
-                        </div>
-                        <div>
-                            <button type="button" class="btn btn-sm btn-primary" onclick="setIngredientFromModal(${index})">추가</button>
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            resultsDiv.innerHTML = html;
-            // 저장할 검색 결과들을 전역 변수에 저장 (후에 선택 시 사용)
-            window.searchResults = data.ingredients;
-        } else {
-            resultsDiv.innerHTML = `<div>${data.error || '검색 결과가 없습니다.'}</div>`;
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('검색 중 오류가 발생했습니다.');
-    });
-}
 
 // 파일: ingredient_popup.html 내 addIngredientRowWithData 함수 수정
 function addIngredientRowWithData(ingredient, fromModal = true) {
@@ -692,23 +777,6 @@ function showExistingIngredientsModal(ingredients) {
 }
 
 
-
-
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
-
 function registerNewIngredient() {
     if (!window.currentRow) {
         alert("등록할 행의 데이터가 없습니다.");
@@ -838,3 +906,4 @@ function saveIngredients() {
         alert("저장 중 오류가 발생했습니다.");
     });
 }
+
