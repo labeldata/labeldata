@@ -1,71 +1,39 @@
 from django import forms
-from .models import MyLabel, MyIngredient, Allergen
+from .models import MyLabel, MyIngredient
 
-# ## 뭘 포스트 하는 건지 ???
-# class PostForm(forms.ModelForm):
-#     """게시글 등록/수정 폼"""
-#     food_type = forms.ModelChoiceField(
-#         queryset=FoodType.objects.all(),
-#         empty_label="--- 선택하세요 ---",
-#         required=True,
-#         label="식품유형",
+
+# class LabelForm(forms.ModelForm):
+#     """라벨 등록/수정 폼"""
+#     frequently_used_texts = forms.ModelChoiceField(
+#         queryset=MyIngredient.objects.all(),
+#         required=False,
+#         label="자주 사용하는 문구",
 #         widget=forms.Select(attrs={'class': 'form-select'})
 #     )
 
 #     class Meta:
-#         model = Post
-#         fields = ['title', 'food_type', 'manufacturer', 'ingredients', 'storage_conditions', 'precautions']
+#         model = MyLabel
+#         fields = ['content_weight', 'manufacturer_address', 'storage_method']
 #         labels = {
-#             'title': '제품명',
-#             'manufacturer': '제조사',
-#             'ingredients': '원재료명',
-#             'storage_conditions': '보관조건',
-#             'precautions': '기타 주의사항',
+#             'content_weight': '내용량 (열량)',
+#             'manufacturer_address': '제조원 소재지',
+#             'storage_method': '보관방법',
 #         }
 #         widgets = {
-#             'title': forms.TextInput(attrs={'class': 'form-control'}),
-#             'manufacturer': forms.TextInput(attrs={'class': 'form-control'}),
-#             'ingredients': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-#             'storage_conditions': forms.TextInput(attrs={'class': 'form-control'}),
-#             'precautions': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+#             'content_weight': forms.TextInput(attrs={'class': 'form-control'}),
+#             'manufacturer_address': forms.TextInput(attrs={'class': 'form-control'}),
+#             'storage_method': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
 #         }
 
-
-
-
-
-class LabelForm(forms.ModelForm):
-    """라벨 등록/수정 폼"""
-    frequently_used_texts = forms.ModelChoiceField(
-        queryset=MyIngredient.objects.all(),
-        required=False,
-        label="자주 사용하는 문구",
-        widget=forms.Select(attrs={'class': 'form-select'})
-    )
-
-    class Meta:
-        model = MyLabel
-        fields = ['content_weight', 'manufacturer_address', 'storage_method']
-        labels = {
-            'content_weight': '내용량 (열량)',
-            'manufacturer_address': '제조원 소재지',
-            'storage_method': '보관방법',
-        }
-        widgets = {
-            'content_weight': forms.TextInput(attrs={'class': 'form-control'}),
-            'manufacturer_address': forms.TextInput(attrs={'class': 'form-control'}),
-            'storage_method': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-        }
-
-    def save(self, commit=True):
-        instance = super().save(commit=False)
-        # 자주 사용하는 문구를 선택한 경우 해당 데이터를 storage_method에 추가
-        frequently_used_text = self.cleaned_data.get('frequently_used_texts')
-        if frequently_used_text:
-            instance.storage_method = f"{instance.storage_method}\n{frequently_used_text.text}".strip()
-        if commit:
-            instance.save()
-        return instance
+#     def save(self, commit=True):
+#         instance = super().save(commit=False)
+#         # 자주 사용하는 문구를 선택한 경우 해당 데이터를 storage_method에 추가
+#         frequently_used_text = self.cleaned_data.get('frequently_used_texts')
+#         if frequently_used_text:
+#             instance.storage_method = f"{instance.storage_method}\n{frequently_used_text.text}".strip()
+#         if commit:
+#             instance.save()
+#         return instance
 
 
 class LabelCreationForm(forms.ModelForm):
@@ -97,13 +65,13 @@ class LabelCreationForm(forms.ModelForm):
 
 
 class MyIngredientsForm(forms.ModelForm):
-    """내원료 저장 폼"""
+    """내 원료 저장 폼"""
     class Meta:
         model = MyIngredient
         fields = [
             'prdlst_report_no', 'prdlst_nm', 'bssh_nm',
             'prms_dt', 'prdlst_dcnm', 'pog_daycnt',
-            'frmlc_mtrqlt', 'rawmtrl_nm'
+            'frmlc_mtrqlt', 'rawmtrl_nm', 'allergens', 'gmo'  # 필드 추가
         ]
         labels = {
             'prdlst_report_no': '품목제조번호',
@@ -114,6 +82,8 @@ class MyIngredientsForm(forms.ModelForm):
             'pog_daycnt': '소비기한',
             'frmlc_mtrqlt': '포장재질',
             'rawmtrl_nm': '원재료명',
+            'allergens': '알레르기',  # 레이블 추가
+            'gmo': 'GMO'  # 레이블 추가
         }
         widgets = {
             'prdlst_report_no': forms.TextInput(attrs={'readonly': True, 'class': 'form-control'}),
@@ -124,4 +94,6 @@ class MyIngredientsForm(forms.ModelForm):
             'pog_daycnt': forms.TextInput(attrs={'class': 'form-control'}),
             'frmlc_mtrqlt': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'rawmtrl_nm': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'allergens': forms.Textarea(attrs={'class': 'form-control'}),  # 위젯 추가
+            'gmo': forms.TextInput(attrs={'class': 'form-control'})  # 위젯 추가
         }

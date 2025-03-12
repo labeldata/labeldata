@@ -599,3 +599,48 @@ a:active {
     margin: 0;
     padding: 10px;  /* 필요에 따라 조정 */
 }
+
+/* 알레르기 옵션 스타일 */
+.allergy-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start; /* 왼쪽 정렬 */
+    width: 20%;
+    margin-bottom: 5px; 
+}
+
+/* 마지막 줄의 필드들이 왼쪽으로 정렬되도록 설정 */
+#allergySelection {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start; /* 왼쪽 정렬 */
+}
+
+/* 접기/펼치기 버튼 고정 크기 */
+#allergyToggleButton {
+    width: 80px; /* 원하는 너비로 설정 */
+    height: 30px; /* 원하는 높이로 설정 */
+}
+
+
+/* gmo 옵션 스타일 */
+.gmo-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start; /* 왼쪽 정렬 */
+    width: 20%; 
+    margin-bottom: 5px; 
+}
+
+/* 마지막 줄의 필드들이 왼쪽으로 정렬되도록 설정 */
+#gmoSelection {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start; /* 왼쪽 정렬 */
+}
+
+/* 접기/펼치기 버튼 고정 크기 */
+#gmoToggleButton {
+    width: 80px; /* 원하는 너비로 설정 */
+    height: 30px; /* 원하는 높이로 설정 */
+}

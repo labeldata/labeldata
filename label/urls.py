@@ -22,7 +22,6 @@ urlpatterns = [
     
     # 내원료 관리
     path('save-to-my-ingredients/<str:prdlst_report_no>/', views.save_to_my_ingredients, name='save_to_my_ingredients'),
-    #path('check-my-ingredients/', views.check_my_ingredients, name='check_my_ingredients'),
     path('check-my-ingredient/', views.check_my_ingredient, name='check_my_ingredient'),
     path('register-my-ingredient/', views.register_my_ingredient, name='register_my_ingredient'),
     path('my-ingredient-list/', views.my_ingredient_list, name='my_ingredient_list'),
@@ -30,11 +29,8 @@ urlpatterns = [
     path('my-ingredient-detail/<int:ingredient_id>/', views.my_ingredient_detail, name='my_ingredient_detail'),
     path('my-ingredient-detail/', views.my_ingredient_detail, name='my_ingredient_create'),
     path('delete-my-ingredient/<int:ingredient_id>/', views.delete_my_ingredient, name='delete_my_ingredient'),
-    #path('save-ingredients/<int:label_id>/', views.save_ingredients_to_label, name='save_ingredients_to_label'),
-    path('save-my-ingredient/', views.save_my_ingredient, name='save_my_ingredient'),
     path('save-ingredients-to-label/<int:label_id>/', views.save_ingredients_to_label, name='save_ingredients_to_label'),
     path('search-ingredient-add-row/', views.search_ingredient_add_row, name='search_ingredient_add_row'),
-    #path('delete-my-ingredient/<int:my_ingredient_id>/', views.delete_my_ingredient, name='delete_my_ingredient'),
     # verify_ingredients URL 추가
     path('verify-ingredients/', views.verify_ingredients, name='verify_ingredients'),
     path('api/food-items/count/', views.food_items_count, name='food_items_count'),

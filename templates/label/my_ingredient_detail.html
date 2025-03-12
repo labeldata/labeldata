@@ -3,7 +3,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>내원료 상세 정보</title>
+    <title>내 원료 상세 정보</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
@@ -11,7 +11,7 @@
 <div class="container mt-4 popup-container">
     <!-- 상단 헤더 영역 -->
     <div class="header-row">
-        <h5>내원료 상세보기</h5>
+        <h5>내 원료 상세보기</h5>
         <div class="button-group-level">
             <button type="submit" form="ingredientForm" class="btn btn-primary btn-sm">저장</button>
             <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">닫기</button>
@@ -20,19 +20,12 @@
             {% endif %}
         </div>
     </div>
-
     <div class="card shadow-sm p-4">
         <form method="post" id="ingredientForm">
             {% csrf_token %}
+            <input type="hidden" name="my_ingredient_id" id="my_ingredient_id" value="{{ ingredient.my_ingredient_id }}">
             <table class="table table-bordered single-column-table">
                 <tbody>
-                    <tr>
-                        <th>내 원료명</th>
-                        <td>
-                            <input type="text" class="form-control" name="my_ingredient_name" id="my_ingredient_name"
-                                   value="{{ ingredient.my_ingredient_name|default:'' }}" required>
-                        </td>
-                    </tr>
                     <tr>
                         <th>원재료명</th>
                         <td>
@@ -73,19 +66,35 @@
                     <tr>
                         <th>알레르기</th>
                         <td>
-                            <input type="text" class="form-control" name="allergy_info" id="allergy_info"
-                                   placeholder="알레르기 선택"
-                                   value="{{ ingredient.allergy_info|default:'' }}"
-                                   readonly onclick="showAllergyOptions(this)">
+                            <input type="text" class="form-control" name="allergens" id="allergens"
+                                value="{{ ingredient.allergens|default:'' }}"
+                                readonly>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>알레르기 선택</th>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div id="allergySelection" class="mt-2"></div> <!-- 알레르기 선택 칸 추가 -->
+                                <button type="button" id="allergyToggleButton" class="btn btn-secondary btn-sm ml-2" onclick="toggleAllergySelection()">펼치기</button>
+                            </div>
                         </td>
                     </tr>
                     <tr>
                         <th>GMO</th>
                         <td>
-                            <input type="text" class="form-control" name="gmo_info" id="gmo_info"
-                                   placeholder="GMO 선택"
-                                   value="{{ ingredient.gmo_info|default:'' }}"
-                                   readonly onclick="showGMOOptions(this)">
+                            <input type="text" class="form-control" name="gmo" id="gmo"
+                                value="{{ ingredient.gmo|default:'' }}"
+                                readonly>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>GMO 선택</th>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div id="gmoSelection" class="mt-2"></div>
+                                <button type="button" id="gmoToggleButton" class="btn btn-secondary btn-sm ml-2" onclick="toggleGmoSelection()">펼치기</button>
+                            </div>
                         </td>
                     </tr>
                 </tbody>
@@ -95,89 +104,12 @@
 </div>
 
 <script src="{% static 'js/ingredient_options.js' %}"></script>
-<script>
-function confirmDelete() {
-    if (confirm('정말 삭제하시겠습니까?')) {
-        deleteMyIngredient();
-    }
-}
-function deleteMyIngredient() {
-    const myIngredientId = "{{ ingredient.my_ingredient_id }}";
-    fetch(`/label/delete-my-ingredient/${myIngredientId}/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('내 원료가 성공적으로 삭제되었습니다.');
-            if (window.opener) {
-                window.opener.location.reload();
-            }
-            window.close();
-        } else {
-            alert(data.error || '삭제에 실패했습니다.');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('삭제 중 오류가 발생했습니다.');
+<script src="{% static 'js/ingredient_detail.js' %}"></script>
+<!-- <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        showAllergyOptions();
+        showGmoOptions();
     });
-}
-document.getElementById('ingredientForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    saveMyIngredient();
-});
-function saveMyIngredient() {
-    const formData = {
-        my_ingredient_id: "{{ ingredient.my_ingredient_id }}",
-        my_ingredient_name: document.getElementById("my_ingredient_name").value,
-        prdlst_report_no: document.getElementById("prdlst_report_no").value,
-        prdlst_dcnm: document.getElementById("prdlst_dcnm").value,
-        ingredient_display_name: document.getElementById("ingredient_display_name").value,
-        allergy_info: document.getElementById("allergy_info").value,
-        gmo_info: document.getElementById("gmo_info").value,
-        bssh_nm: document.getElementById("bssh_nm").value
-    };
-    fetch('/label/save-my-ingredient/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify(formData)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('내 원료가 성공적으로 저장되었습니다.');
-            window.close();
-        } else {
-            alert(data.error || '저장에 실패했습니다.');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('저장 중 오류가 발생했습니다.');
-    });
-}
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
-</script>
+</script> -->
 </body>
 </html>

@@ -2,19 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils.timezone import now
 
-# class FoodType(models.Model):
-#     name = models.CharField(max_length=200, unique=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
-#     updated_at = models.DateTimeField(auto_now=True)
-#     is_active = models.BooleanField(default=True, help_text="활성 상태")
-
-#     def __str__(self):
-#         return self.name
-
-
-
 class FoodItem(models.Model):
-        
     #컬럼명은 추후 변경할 수 있음. 현재는 api에서 받아오는 값으로 사용
     lcns_no = models.CharField(max_length=11, verbose_name = "인허가번호", help_text="영업에 대한 허가, 등록, 신고번호 11자리", db_index=True , null=True, blank=True)
     bssh_nm = models.CharField(max_length=100, verbose_name = "제조사명", default="기본제조사명")
@@ -46,21 +34,7 @@ class FoodItem(models.Model):
 
     def __str__(self):
         return self.prdlst_report_no
-
-class Allergen(models.Model):
-    # 알레르기 물질 목록
-    allergen_name = models.CharField(max_length=50, unique=True, verbose_name="알레르기 물질")
-
-    class Meta:
-        db_table = "allergen"
-        indexes = [
-            #models.Index(fields=['lcns_no'], name='idx_lcns_no'),
-        ]
-
-    def __str__(self):
-        return self.allergen_name     
-
-    
+   
 #개인 유저가 쓴다면 아래와 같이
 class MyPhrase(models.Model):
     # 자주 사용하는 문구 저장 모델
@@ -99,22 +73,24 @@ class MyIngredient(models.Model):
     my_ingredient_id = models.AutoField(primary_key=True)
     #키 = 유저id + 문서 종류 + 문서번호로 생성
     #my_ingredient_key = models.CharField(max_length=50, unique=True, editable=False, verbose_name="내 원료키", primary_key=True)
-    my_ingredient_name = models.CharField(max_length=200, verbose_name="내 원료명")
+    #my_ingredient_name = models.CharField(max_length=200, verbose_name="내 원료명")
     
     prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", null=True, blank=True)
-    prdlst_nm = models.CharField(max_length=200, verbose_name="제품명")
+    prdlst_nm = models.CharField(max_length=200, verbose_name="원료명")
     bssh_nm = models.CharField(max_length=100, verbose_name="제조사명")
     prms_dt = models.CharField(max_length=8, verbose_name="허가일자", null=True, blank=True)
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", null=True, blank=True)
     pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", null=True, blank=True)
     frmlc_mtrqlt = models.TextField(max_length=300, verbose_name="포장재질", null=True, blank=True)
-    rawmtrl_nm = models.TextField(max_length=1000, verbose_name="원재료명", null=True, blank=True)
+    rawmtrl_nm = models.TextField(max_length=1000, verbose_name="하위 원료", null=True, blank=True)
     induty_cd_nm = models.CharField(max_length=80, verbose_name="업종명", null=True, blank=True)
     hieng_lntrt_dvs_yn = models.CharField(max_length=10, verbose_name="고열량저영양식품여부", null=True, blank=True)
 
-    ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
-    ingredient_display_name = models.CharField(max_length=200, verbose_name="원료 표시명", null=True, blank=True)
+    #ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
+    ingredient_display_name = models.CharField(max_length=1000, verbose_name="원료 표시명", null=True, blank=True)
 
+    allergens = models.CharField(max_length=1000, verbose_name="알레르기 물질", null=True, blank=True)
+    gmo =  models.CharField(max_length=500, verbose_name="GMO", null=True, blank=True)
 
     update_datetime = models.DateTimeField(auto_now=True)
 
@@ -188,11 +164,6 @@ class MyLabel(models.Model):
         verbose_name="연결된 원재료"
     )
 
-    # 캐싱 필드 1: 쉼표로 구분된 원재료 ID 목록 (비정규화)
-    # ingredient_ids_str = models.CharField(max_length=1000, verbose_name="원재료 ID 목록", null=True, blank=True, help_text="쉼표(,)로 구분")
-    # 캐싱 필드 2: JSON 형태의 원재료 ID 목록 - 추후 사용
-    # ingredient_ids_json = models.JSONField(verbose_name="원재료 ID 목록 (JSON)", null=True, blank=True)
-
     class Meta:
         db_table = "my_label"
         indexes = [
@@ -202,17 +173,17 @@ class MyLabel(models.Model):
     def __str__(self):
         return self.my_label_name
     
-    def update_ingredient_ids(self):
-        """
-        ManyToMany 관계(ingredients) 기반으로 캐싱 필드를 업데이트.
-        """
-        # ingredients 필드에서 모든 원재료 ID를 가져옴
-        ids = list(self.ingredients.values_list('my_ingredient_id', flat=True))
-        # 쉼표 구분 문자열 업데이트
-        self.ingredient_ids_str = ",".join(map(str, ids))
-        # JSON 필드 업데이트
-        self.ingredient_ids_json = ids
-        self.save(update_fields=["ingredient_ids_str", "ingredient_ids_json"])
+    # def update_ingredient_ids(self):
+    #     """
+    #     ManyToMany 관계(ingredients) 기반으로 캐싱 필드를 업데이트.
+    #     """
+    #     # ingredients 필드에서 모든 원재료 ID를 가져옴
+    #     ids = list(self.ingredients.values_list('my_ingredient_id', flat=True))
+    #     # 쉼표 구분 문자열 업데이트
+    #     self.ingredient_ids_str = ",".join(map(str, ids))
+    #     # JSON 필드 업데이트
+    #     self.ingredient_ids_json = ids
+    #     self.save(update_fields=["ingredient_ids_str", "ingredient_ids_json"])
 
     def get_ingredient_queryset(self):
         """
@@ -231,6 +202,8 @@ class MyLabel(models.Model):
 
 class FoodType(models.Model):
     
+    food_group = models.CharField(max_length=100, verbose_name="식품군", default='default_group')
+    food_category = models.CharField(max_length=100, verbose_name="식품분류", default='default_category')
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)
 
     class Meta:
@@ -242,7 +215,6 @@ class FoodType(models.Model):
     def __str__(self):
         return self.prdlst_dcnm    
     
-
 class CountryList(models.Model):
     # 국가명 목록, 외교부_국가표준코드_20250102.csv
     country_code = models.CharField(max_length=3, verbose_name="국가코드 alpha3" , null=True, blank=True)
@@ -275,7 +247,6 @@ class LabelIngredientRelation(models.Model):
     
     # 추가 필드들
     ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
-
     relation_sequence = models.IntegerField(verbose_name="원재료 순서", default=1)
     
     # 메타데이터
