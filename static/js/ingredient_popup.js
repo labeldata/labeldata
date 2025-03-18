@@ -220,59 +220,6 @@ function addIngredientRows(savedIngredients) {
     });
 }
 
-function addIngredientRow(material = '') {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-        <td>
-            <input type="checkbox" class="delete-checkbox form-check-input">
-        </td>
-        <td class="drag-handle">☰</td>
-        <td>
-            <div class="d-flex flex-column">
-                <input type="text" value="${material}" class="form-control form-control-sm" placeholder="원재료명">
-                <input type="text" class="form-control form-control-sm ratio-input" placeholder="비율 (%)">
-            </div>
-        </td>
-        <td>
-            <div class="d-flex flex-column">
-                <input type="text" class="form-control form-control-sm" placeholder="품목보고번호" maxlength="15">
-                <input type="text" class="form-control form-control-sm" placeholder="식품유형">
-            </div>
-        </td>
-        <td>
-            <textarea class="form-control form-control-sm auto-expand" placeholder="원재료 표시명">${material}</textarea>
-        </td>
-        <td>
-            <input type="text" class="form-control form-control-sm" placeholder="" onclick="showAllergyOptions(this)">
-        </td>
-        <td>
-            <input type="text" class="form-control form-control-sm" placeholder="" onclick="showGMOOptions(this)">
-        </td>
-        <td>
-            <input type="text" class="form-control form-control-sm" placeholder="제조사">
-        </td>
-        <td>
-            <div class="d-flex flex-column">
-                <button type="button" class="btn btn-sm btn-secondary" onclick="registerMyIngredient(this)">등록</button>
-                <input type="hidden" class="my-ingredient-id">
-            </div>
-        </td>
-    `;
-    document.getElementById('ingredient-body').appendChild(row);
-    updateTargetButtons();
-
-    // 새로 추가된 비율 입력 필드에 이벤트 리스너 추가
-    const ratioInput = row.querySelector('.ratio-input');
-    ratioInput.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            sortRows();
-        }
-    });
-
-    return row; // 추가된 행을 반환
-}
-
 function updateTargetButtons() {
     const rows = document.querySelectorAll('#ingredient-body tr');
     rows.forEach((row, index) => {
@@ -370,59 +317,67 @@ function getCookie(name) {
     return cookieValue;
 }
 
-
-// 파일: ingredient_popup.html 내 addIngredientRowWithData 함수 수정
-function addIngredientRowWithData(ingredient, fromModal = true) {
-    const readonlyClass = fromModal ? "modal-readonly-field" : "";
-    // fromModal가 true일 때만 readonly 속성을 추가하고, 아니면 빈 문자열로 처리
-    const readonlyAttr = fromModal ? "readonly" : "";
-    const disabledAttr = fromModal ? "disabled" : ""; // fromModal이 true일 때 등록 버튼 비활성화
-
+// 일반 행 추가 함수
+function addIngredientRow(material = '') {
     const row = document.createElement('tr');
     row.innerHTML = `
-        <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
+        <td>
+            <input type="checkbox" class="delete-checkbox form-check-input">
+        </td>
         <td class="drag-handle">☰</td>
         <td>
             <div class="d-flex flex-column">
-                <input type="text" value="${ingredient.ingredient_name}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="원재료명" ${readonlyAttr}>
-                <input type="text" value="${ingredient.ratio || ''}" 
-                       class="form-control form-control-sm ratio-input" placeholder="비율 (%)">
+                <input type="text" value="${material}" class="form-control form-control-sm" placeholder="원재료명">
+                <input type="text" class="form-control form-control-sm ratio-input" placeholder="비율 (%)">
             </div>
         </td>
         <td>
             <div class="d-flex flex-column">
-                <input type="text" value="${ingredient.prdlst_report_no}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="품목보고번호" ${readonlyAttr}>
-                <input type="text" value="${ingredient.food_type}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="식품유형" ${readonlyAttr}>
+                <input type="text" class="form-control form-control-sm" placeholder="품목보고번호" maxlength="15">
+                <input type="text" class="form-control form-control-sm" placeholder="식품유형">
             </div>
         </td>
         <td>
-            <textarea class="form-control form-control-sm bordered-input auto-expand ${readonlyClass}" 
-                      placeholder="원재료 표시명" ${readonlyAttr}>${ingredient.display_name || ingredient.ingredient_name}</textarea>
+            <textarea class="form-control form-control-sm auto-expand" placeholder="원재료 표시명">${material}</textarea>
         </td>
         <td>
-            <input type="text" class="form-control form-control-sm bordered-input ${readonlyClass}" 
-                   onclick="showAllergyOptions(this)" value="${ingredient.allergen}" ${readonlyAttr}>
-        </td>
-        <td>
-            <input type="text" class="form-control form-control-sm bordered-input ${readonlyClass}" 
-                   onclick="showGMOOptions(this)" value="${ingredient.gmo}" ${readonlyAttr}>
-        </td>
-        <td>
-            <input type="text" class="form-control form-control-sm bordered-input ${readonlyClass}" 
-                   value="${ingredient.manufacturer}" ${readonlyAttr}>
+            <textarea class="form-control form-control-sm auto-expand notes-input" placeholder="참고사항"></textarea>
         </td>
         <td>
             <div class="d-flex flex-column">
-                <button type="button" class="btn btn-sm btn-secondary " onclick="registerMyIngredient(this)" ${disabledAttr}>등록</button>
-                <input type="hidden" class="my-ingredient-id" value="${ingredient.my_ingredient_id}">
+                <div class="d-flex align-items-center mb-1">
+                    <input type="hidden" class="allergen-input" value="">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openAllergyModal(this)">+</button>
+                </div>
+                <div class="d-flex align-items-center">
+                    <input type="hidden" class="gmo-input" value="">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openGmoModal(this)">+</button>
+                </div>
+            </div>
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm" placeholder="제조사">
+        </td>
+        <td>
+            <div class="d-flex flex-column">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="registerMyIngredient(this)">등록</button>
+                <input type="hidden" class="my-ingredient-id">
             </div>
         </td>
     `;
     document.getElementById('ingredient-body').appendChild(row);
     updateTargetButtons();
+
+    // 새로 추가된 비율 입력 필드에 이벤트 리스너 추가
+    const ratioInput = row.querySelector('.ratio-input');
+    ratioInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            sortRows();
+        }
+    });
+
+    return row; // 추가된 행을 반환
 }
 
 function addMyIngredientFromSearch() {
@@ -838,35 +793,91 @@ function registerNewIngredient() {
 }
 
 
+// 기존 데이터로 행 추가 함수
+function addIngredientRowWithData(ingredient, fromModal = true) {
+    const readonlyClass = fromModal ? "modal-readonly-field" : "";
+    const readonlyAttr = fromModal ? "readonly" : "";
+    const disabledAttr = fromModal ? "disabled" : "";
+
+    // 알레르기와 GMO 항목 개수 계산
+    const allergenCount = ingredient.allergen ? ingredient.allergen.split(',').length : 0;
+    const gmoCount = ingredient.gmo ? ingredient.gmo.split(',').length : 0;
+
+    // 읽기 전용 버튼 클래스 및 이벤트 핸들러 설정
+    const viewOnlyClass = fromModal ? "btn-outline-secondary" : "btn-outline-primary";
+    
+    // 여기가 중요합니다: 이벤트 핸들러 문자열 설정
+    const allergyClickEvent = fromModal 
+        ? `onclick="showReadOnlyInfo(this, 'allergen')"`
+        : `onclick="openAllergyModal(this)"`;
+    const gmoClickEvent = fromModal 
+        ? `onclick="showReadOnlyInfo(this, 'gmo')"`
+        : `onclick="openGmoModal(this)"`;
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
+        <td class="drag-handle">☰</td>
+        <td>
+            <div class="d-flex flex-column">
+                <input type="text" value="${ingredient.ingredient_name}" 
+                       class="form-control form-control-sm ${readonlyClass}" placeholder="원재료명" ${readonlyAttr}>
+                <input type="text" value="${ingredient.ratio || ''}" 
+                       class="form-control form-control-sm ratio-input" placeholder="비율 (%)">
+            </div>
+        </td>
+        <td>
+            <div class="d-flex flex-column">
+                <input type="text" value="${ingredient.prdlst_report_no}" 
+                       class="form-control form-control-sm ${readonlyClass}" placeholder="품목보고번호" ${readonlyAttr}>
+                <input type="text" value="${ingredient.food_type}" 
+                       class="form-control form-control-sm ${readonlyClass}" placeholder="식품유형" ${readonlyAttr}>
+            </div>
+        </td>
+        <td>
+            <textarea class="form-control form-control-sm bordered-input auto-expand ${readonlyClass}" 
+                      placeholder="원재료 표시명" ${readonlyAttr}>${ingredient.display_name || ingredient.ingredient_name}</textarea>
+        </td>
+        <td>
+            <textarea class="form-control form-control-sm auto-expand notes-input" 
+                      placeholder="참고사항">${ingredient.notes || ''}</textarea>
+        </td>
+        <td>
+            <div class="d-flex flex-column">
+                <div class="d-flex align-items-center mb-1">
+                    <input type="hidden" class="allergen-input" value="${ingredient.allergen || ''}">
+                    <button type="button" class="btn btn-sm ${viewOnlyClass} allergen-btn" ${allergyClickEvent}>
+                        + ${allergenCount > 0 ? ' (' + allergenCount + ')' : ''}
+                    </button>
+                </div>
+                <div class="d-flex align-items-center">
+                    <input type="hidden" class="gmo-input" value="${ingredient.gmo || ''}">
+                    <button type="button" class="btn btn-sm ${viewOnlyClass} gmo-btn" ${gmoClickEvent}>
+                        + ${gmoCount > 0 ? ' (' + gmoCount + ')' : ''}
+                    </button>
+                </div>
+            </div>
+        </td>
+        <td>
+            <input type="text" class="form-control form-control-sm bordered-input ${readonlyClass}" 
+                   value="${ingredient.manufacturer}" ${readonlyAttr}>
+        </td>
+        <td>
+            <div class="d-flex flex-column">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="registerMyIngredient(this)" ${disabledAttr}>등록</button>
+                <input type="hidden" class="my-ingredient-id" value="${ingredient.my_ingredient_id}">
+            </div>
+        </td>
+    `;
+    document.getElementById('ingredient-body').appendChild(row);
+    updateTargetButtons();
+}
+
+// 원재료 저장 함수
 function saveIngredients() {
-    // URL에서 label_id 값 가져오기
-    const urlParams = new URLSearchParams(window.location.search);
-    const labelId = urlParams.get('label_id');
-    if (!labelId) {
-        alert("라벨 ID를 찾을 수 없습니다.");
-        return;
-    }
-    
-    // 모든 행의 입력 필드가 readonly 상태 (비활성화)인지 확인 (비율 칸 제외)
     const rows = document.querySelectorAll('#ingredient-body tr');
-    let allDisabled = true;
-    rows.forEach(row => {
-        // ratio-input, checkbox, hidden 클래스를 가진 입력 필드는 제외
-        const fields = row.querySelectorAll('input:not(.ratio-input):not([type="checkbox"]):not([type="hidden"]), textarea');
-        fields.forEach(field => {
-            if (!field.hasAttribute('readonly')) {
-                allDisabled = false;
-                console.log("비활성화되지 않은 필드:", field); // 비활성화되지 않은 필드 출력
-            }
-        });
-    });
-    if (!allDisabled) {
-        alert("모든 행이 비활성화되어 있지 않습니다. 저장 전에 모든 행이 등록(비활성화) 상태인지 확인해주세요.");
-        return;
-    }
-    
-    // 각 행의 데이터를 배열로 모음
     const ingredients = [];
+    
     rows.forEach(row => {
         const ingredient = {
             ingredient_name: row.querySelector('td:nth-child(3) input:first-of-type')?.value.trim() || "",
@@ -874,11 +885,16 @@ function saveIngredients() {
             prdlst_report_no: row.querySelector('td:nth-child(4) input:first-of-type')?.value.trim() || "",
             food_type: row.querySelector('td:nth-child(4) input:nth-of-type(2)')?.value.trim() || "",
             display_name: row.querySelector('td:nth-child(5) textarea')?.value.trim() || "",
+            //notes: row.querySelector('td:nth-child(6) textarea')?.value.trim() || "",  // 참고사항 필드 추가
+            allergen: row.querySelector('.allergen-input')?.value.trim() || "",
+            gmo: row.querySelector('.gmo-input')?.value.trim() || "",
             manufacturer: row.querySelector('td:nth-child(8) input')?.value.trim() || "",
             my_ingredient_id: row.querySelector('.my-ingredient-id')?.value.trim() || ""
         };
         ingredients.push(ingredient);
     });
+    
+    // 나머지 코드는 동일하게 유지
     console.log("저장할 원료 데이터:", ingredients);
     
     // CSRF 토큰 가져오기
@@ -907,3 +923,294 @@ function saveIngredients() {
     });
 }
 
+// 원산지 관리 함수 추가 (기본 구조만 구현)
+function validateOrigin() {
+    // 선택된 행이 있는지 확인
+    const selectedRows = document.querySelectorAll('#ingredient-body .delete-checkbox:checked');
+    if (selectedRows.length === 0) {
+        alert('원산지를 설정할 행을 선택해주세요.');
+        return;
+    }
+    
+    // 여기에 원산지 관련 기능을 나중에 추가할 수 있습니다.
+    alert('원산지 관리 기능이 준비 중입니다.');
+}
+
+// 현재 열린 모달에 연결된 행 요소를 저장하는 변수
+let currentModalRow = null;
+
+// 알레르기 모달 열기 함수 수정
+function openAllergyModal(button) {
+    // 현재 행 저장
+    currentModalRow = button.closest('tr');
+    
+    // 현재 행의 원재료명 가져오기
+    const ingredientName = currentModalRow.querySelector('td:nth-child(3) input:first-of-type')?.value || "원재료";
+    
+    // 모달 제목 업데이트
+    const modalTitle = document.getElementById('allergyModalLabel');
+    if (modalTitle) {
+        modalTitle.textContent = `알레르기 항목 선택 - ${ingredientName}`;
+    }
+    
+    // 알레르기 옵션 표시
+    const allergyOptions = document.getElementById('allergyOptions');
+    allergyOptions.innerHTML = ''; // 기존 옵션 초기화
+    
+    // 알레르기 항목 목록
+    const allergyItems = [
+        '난류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우', 
+        '돼지고기', '복숭아', '토마토', '아황산류', '호두', '닭고기', '쇠고기', '오징어', '조개류'
+    ];
+    
+    // 현재 행의 알레르기 입력 필드 값 가져오기
+    const allergyInput = currentModalRow.querySelector('.allergen-input');
+    const currentAllergies = allergyInput ? allergyInput.value.split(',').map(item => item.trim()).filter(Boolean) : [];
+    
+    // 알레르기 항목에 대한 체크박스 생성
+    allergyItems.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'form-check form-check-inline';
+        
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.className = 'form-check-input';
+        input.id = `allergy-${item}`;
+        input.value = item;
+        input.checked = currentAllergies.includes(item);
+        
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.htmlFor = `allergy-${item}`;
+        label.textContent = item;
+        
+        div.appendChild(input);
+        div.appendChild(label);
+        allergyOptions.appendChild(div);
+    });
+    
+    // 선택된 알레르기 초기화
+    document.getElementById('selectedAllergies').value = currentAllergies.join(', ');
+    
+    // 체크박스 변경 시 선택된 알레르기 업데이트
+    allergyOptions.addEventListener('change', updateSelectedAllergies);
+    
+    // 모달 표시
+    const allergyModal = new bootstrap.Modal(document.getElementById('allergyModal'));
+    allergyModal.show();
+}
+
+// 선택된 알레르기 업데이트
+function updateSelectedAllergies() {
+    const selectedAllergies = [];
+    document.querySelectorAll('#allergyOptions input:checked').forEach(checkbox => {
+        selectedAllergies.push(checkbox.value);
+    });
+    document.getElementById('selectedAllergies').value = selectedAllergies.join(', ');
+}
+
+// 알레르기 적용
+function applyAllergies() {
+    if (!currentModalRow) return;
+    
+    const selectedAllergies = document.getElementById('selectedAllergies').value;
+    const allergyInput = currentModalRow.querySelector('.allergen-input');
+    const allergyButton = currentModalRow.querySelector('.allergen-btn');  // 클래스 선택자 사용
+    
+    if (allergyInput) {
+        allergyInput.value = selectedAllergies;
+    }
+    
+    if (allergyButton) {
+        // 버튼 텍스트 업데이트: 선택된 항목 수만 표시
+        const selectedCount = selectedAllergies ? selectedAllergies.split(',').length : 0;
+        if (selectedCount > 0) {
+            allergyButton.textContent = `+ (${selectedCount})`;
+        } else {
+            allergyButton.textContent = '+';
+        }
+    }
+    
+    // 모달 닫기
+    const allergyModal = bootstrap.Modal.getInstance(document.getElementById('allergyModal'));
+    allergyModal.hide();
+}
+
+
+// GMO 모달 열기 함수 수정
+function openGmoModal(button) {
+    // 현재 행 저장
+    currentModalRow = button.closest('tr');
+    
+    // 현재 행의 원재료명 가져오기
+    const ingredientName = currentModalRow.querySelector('td:nth-child(3) input:first-of-type')?.value || "원재료";
+    
+    // 모달 제목 업데이트
+    const modalTitle = document.getElementById('gmoModalLabel');
+    if (modalTitle) {
+        modalTitle.textContent = `GMO 항목 선택 - ${ingredientName}`;
+    }
+    
+    // GMO 옵션 표시
+    const gmoOptions = document.getElementById('gmoOptions');
+    gmoOptions.innerHTML = ''; // 기존 옵션 초기화
+    
+    // GMO 항목 목록
+    const gmoItems = [
+        '콩', '옥수수', '면화', '카놀라', '사탕무', '알팔파', 'GMO 없음'
+    ];
+    
+    // 현재 행의 GMO 입력 필드 값 가져오기
+    const gmoInput = currentModalRow.querySelector('.gmo-input');
+    const currentGmos = gmoInput ? gmoInput.value.split(',').map(item => item.trim()).filter(Boolean) : [];
+    
+    // GMO 항목에 대한 체크박스 생성
+    gmoItems.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'form-check form-check-inline';
+        
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.className = 'form-check-input';
+        input.id = `gmo-${item}`;
+        input.value = item;
+        input.checked = currentGmos.includes(item);
+        
+        // GMO 없음이 선택되면 다른 항목을 비활성화하는 이벤트 처리
+        if (item === 'GMO 없음') {
+            input.addEventListener('change', function() {
+                if (this.checked) {
+                    // 현재 항목이 'GMO 없음'이고 체크됐을 때 다른 항목 해제
+                    document.querySelectorAll('#gmoOptions input[type="checkbox"]').forEach(checkbox => {
+                        if (checkbox.value !== item) {
+                            checkbox.checked = false;
+                        }
+                    });
+                }
+            });
+        } else {
+            // 일반 GMO 항목이 선택되면 'GMO 없음'을 해제
+            input.addEventListener('change', function() {
+                if (this.checked) {
+                    document.querySelectorAll('#gmoOptions input[type="checkbox"]').forEach(checkbox => {
+                        if (checkbox.value === 'GMO 없음') {
+                            checkbox.checked = false;
+                        }
+                    });
+                }
+            });
+        }
+        
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.htmlFor = `gmo-${item}`;
+        label.textContent = item;
+        
+        div.appendChild(input);
+        div.appendChild(label);
+        gmoOptions.appendChild(div);
+    });
+    
+    // 선택된 GMO 초기화
+    document.getElementById('selectedGmos').value = currentGmos.join(', ');
+    
+    // 체크박스 변경 시 선택된 GMO 업데이트
+    gmoOptions.addEventListener('change', updateSelectedGmos);
+    
+    // 모달 표시
+    const gmoModal = new bootstrap.Modal(document.getElementById('gmoModal'));
+    gmoModal.show();
+}
+
+// 선택된 GMO 업데이트
+function updateSelectedGmos() {
+    const selectedGmos = [];
+    document.querySelectorAll('#gmoOptions input:checked').forEach(checkbox => {
+        selectedGmos.push(checkbox.value);
+    });
+    document.getElementById('selectedGmos').value = selectedGmos.join(', ');
+}
+
+// GMO 적용
+function applyGmos() {
+    if (!currentModalRow) return;
+    
+    const selectedGmos = document.getElementById('selectedGmos').value;
+    const gmoInput = currentModalRow.querySelector('.gmo-input');
+    const gmoButton = currentModalRow.querySelector('.gmo-btn');  // 클래스 선택자 사용
+    
+    if (gmoInput) {
+        gmoInput.value = selectedGmos;
+    }
+    
+    if (gmoButton) {
+        // 버튼 텍스트 업데이트: 선택된 항목 수만 표시
+        const selectedCount = selectedGmos ? selectedGmos.split(',').length : 0;
+        if (selectedCount > 0) {
+            gmoButton.textContent = `+ (${selectedCount})`;
+        } else {
+            gmoButton.textContent = '+';
+        }
+    }
+    
+    // 모달 닫기
+    const gmoModal = bootstrap.Modal.getInstance(document.getElementById('gmoModal'));
+    gmoModal.hide();
+}
+
+// 읽기 전용 알레르기/GMO 정보를 보여주는 함수 수정
+function showReadOnlyInfo(button, type) {
+    const row = button.closest('tr');
+    let value = '';
+    let title = '';
+    
+    if (type === 'allergen') {
+        value = row.querySelector('.allergen-input').value;
+        title = '알레르기 정보';
+    } else if (type === 'gmo') {
+        value = row.querySelector('.gmo-input').value;
+        title = 'GMO 정보';
+    }
+    
+    // 원재료명 가져오기
+    const ingredientName = row.querySelector('td:nth-child(3) input:first-of-type')?.value || "원재료";
+    
+    // 값이 없는 경우 메시지 표시
+    if (!value) {
+        value = '정보 없음';
+    }
+    
+    // 모달 제목과 내용 업데이트
+    const modalTitle = document.getElementById('readOnlyInfoModalLabel');
+    if (modalTitle) {
+        modalTitle.textContent = title;
+    }
+    
+    // 원재료명 표시
+    const infoIngredientName = document.getElementById('infoIngredientName');
+    if (infoIngredientName) {
+        infoIngredientName.textContent = `${ingredientName}`;
+    }
+
+    // 정보 내용 표시 (줄바꿈 처리)
+    const infoContent = document.getElementById('infoContent');
+    if (infoContent) {
+        // 알레르기나 GMO 항목을 리스트로 표시
+        if (value !== '정보 없음') {
+            const items = value.split(',').map(item => item.trim()).filter(Boolean);
+            if (items.length > 0) {
+                // 항목들을 불릿 포인트로 표시
+                const listHTML = items.map(item => `<li>${item}</li>`).join('');
+                infoContent.innerHTML = `<ul class="mb-0">${listHTML}</ul>`;
+            } else {
+                infoContent.textContent = value;
+            }
+        } else {
+            infoContent.textContent = value;
+        }
+    }
+    
+    // 모달 표시
+    const readOnlyInfoModal = new bootstrap.Modal(document.getElementById('readOnlyInfoModal'));
+    readOnlyInfoModal.show();
+}

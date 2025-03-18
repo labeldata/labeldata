@@ -294,8 +294,8 @@ def ingredient_popup(request):
                 'food_type': relation.ingredient.prdlst_dcnm or '',
                 #'origin': relation.country_of_origin or '',
                 'display_name': relation.ingredient.ingredient_display_name,
-                #'allergen': relation.ingredient.allergen or '',
-                #'gmo': relation.ingredient.gmo or '',
+                'allergen': relation.ingredient.allergens or '',
+                'gmo': relation.ingredient.gmo or '',
                 'manufacturer': relation.ingredient.bssh_nm or ''
             })
         if relations.exists():
