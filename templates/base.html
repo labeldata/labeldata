@@ -16,15 +16,21 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}?after">
     {% block extra_head %}{% endblock %}
     <style>
-        /* (1) main-content가 고정 높이를 가지도록 설정 */
+        /* 수정된 main-content 스타일 */
         .main-content {
-          /* 헤더(고정 navbar) 높이 약 60px, 푸터 높이 약 40px 가정 */
-          height: calc(100vh - 60px - 40px); 
+          /* 헤더(고정 navbar) 높이 약 60px 가정 */
           margin-top: 60px;   /* 네비바 공간 확보 */
-          margin-bottom: 40px;/* 푸터 공간 확보 */
-          overflow: hidden;   /* body에 스크롤 생기지 않도록 숨김 */
+          min-height: calc(100vh - 60px - 40px); /* 최소 높이만 설정하고 자동 확장 가능 */
+          padding-bottom: 40px; /* 푸터 공간 확보 (margin 대신 padding 사용) */
+          overflow: auto;     /* 내용물이 넘칠 경우 스크롤 허용 */
           display: flex;      /* 내부에서 flex 레이아웃 가능 */
           flex-direction: column;
+        }
+        
+        /* 필요한 경우 내부 컨테이너에 스크롤 설정 */
+        .scroll-container {
+          overflow-y: auto;
+          flex-grow: 1;
         }
      </style>
 </head>
