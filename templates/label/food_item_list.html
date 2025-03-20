@@ -2,7 +2,7 @@
 {% block title %}제품 목록{% endblock %}
 {% block content %}
 <div class="container mt-4">
-    <h2 class="mb-4">품목보고 조회 및 복사</h2>
+    <h2 class="mb-4">품목 조회 및 복사</h2>
 
     <!-- 검색 조건 -->
     {% include 'includes/search_filter.html' with action_url='label:food_item_list' search_fields=search_fields %}
@@ -14,7 +14,7 @@
                 <tr>
                     <th style="width: 3%;">번호</th>
                     <th style="width: 10%;">
-                        품목제조번호
+                        품목보고번호
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
@@ -85,7 +85,7 @@
 <script>
     function openDetailPopup(reportNo) {
         if (!reportNo) {
-            alert("유효한 품목제조번호가 없습니다.");
+            alert("유효한 품목보고번호가 없습니다.");
             return;
         }
         const url = `/label/food-item-detail/${reportNo}/`;
