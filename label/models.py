@@ -6,7 +6,7 @@ class FoodItem(models.Model):
     #컬럼명은 추후 변경할 수 있음. 현재는 api에서 받아오는 값으로 사용
     lcns_no = models.CharField(max_length=11, verbose_name = "인허가번호", help_text="영업에 대한 허가, 등록, 신고번호 11자리", db_index=True , null=True, blank=True)
     bssh_nm = models.CharField(max_length=100, verbose_name = "제조사명", default="기본제조사명")
-    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", help_text="영업등록 발급연도-영업장 등록번호-영업장 제품번호", db_index=True, primary_key=True)
+    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", help_text="영업등록 발급연도-영업장 등록번호-영업장 제품번호", db_index=True, primary_key=True)
     prms_dt = models.CharField(max_length=8, verbose_name="허가일자", help_text="yyyymmdd", default="yyyymmdd")
     prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", db_index=True, default="기본제품명")
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="품목유형명", default="기본품목유형명")
@@ -75,7 +75,7 @@ class MyIngredient(models.Model):
     #my_ingredient_key = models.CharField(max_length=50, unique=True, editable=False, verbose_name="내 원료키", primary_key=True)
     #my_ingredient_name = models.CharField(max_length=200, verbose_name="내 원료명")
     
-    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", null=True, blank=True)
+    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", null=True, blank=True)
     prdlst_nm = models.CharField(max_length=200, verbose_name="원료명")
     bssh_nm = models.CharField(max_length=100, verbose_name="제조사명")
     prms_dt = models.CharField(max_length=8, verbose_name="허가일자", null=True, blank=True)
@@ -122,38 +122,55 @@ class MyLabel(models.Model):
     my_label_name = models.CharField(max_length=200, verbose_name="라벨명")
 
     # 기존 필드
-    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목제조번호", null=True, blank=True)
+    prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", null=True, blank=True)
+    #food_type = models.CharField(max_length=100, verbose_name="식품유형", null=True, blank=True)
+
     prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", null=True, blank=True)
-    prdlst_dcnm = models.CharField(max_length=100, verbose_name="품목유형명", null=True, blank=True)
-    bssh_nm = models.CharField(max_length=100, verbose_name="제조사명", null=True, blank=True)
-    rawmtrl_nm = models.TextField(max_length=1000, verbose_name="원재료명", null=True, blank=True)
-    storage_method = models.TextField(verbose_name="보관방법", null=True, blank=True)
-    content_weight = models.CharField(max_length=50, verbose_name="내용량(열량)", null=True, blank=True)
-    manufacturer_address = models.CharField(max_length=255, verbose_name="제조원 소재지", null=True, blank=True)
+    ingredient_info = models.TextField(max_length=1000, verbose_name="성분명 및 함량", null=True, blank=True)
 
-    # 추가 필드
+    content_weight = models.CharField(max_length=50, verbose_name="내용량", null=True, blank=True)
+    weight_calorie = models.CharField(max_length=50, verbose_name="내용량(열량)", null=True, blank=True)
+
+    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", null=True, blank=True)
     country_of_origin = models.CharField(max_length=255, verbose_name="원산지", null=True, blank=True)
-    importer_address = models.CharField(max_length=255, verbose_name="수입원 및 소재지", null=True, blank=True)
 
-    # 관계 설정
-    #allergens = models.ManyToManyField(Allergen, blank=True, verbose_name="알레르기 물질")
-    #ingredients = models.ManyToManyField(MyIngredients, blank=True, related_name="labels", verbose_name="연결된 원재료")  # 추가됨
+    storage_method = models.CharField(max_length=300, verbose_name="보관방법", null=True, blank=True)
+    frmlc_mtrqlt = models.TextField(max_length=300, verbose_name="포장재질", null=True, blank=True)
 
-    distributor_name = models.CharField(max_length=200, verbose_name="유통전문판매원", null=True, blank=True)
-    distributor_address = models.CharField(max_length=255, verbose_name="유통전문판매원 소재지", null=True, blank=True)
-    cautions = models.TextField(verbose_name="주의사항", null=True, blank=True)
-    additional_info = models.TextField(verbose_name="기타 표시사항", null=True, blank=True)
+    bssh_nm = models.CharField(max_length=500, verbose_name="제조원 소재지", null=True, blank=True)
+    #manufacturer_etc = models.CharField(max_length=500, verbose_name="제조원 외", null=True, blank=True)
+    distributor_address = models.CharField(max_length=500, verbose_name="유통전문판매원 소재지", null=True, blank=True)
+    repacker_address = models.CharField(max_length=500, verbose_name="소분원 소재지", null=True, blank=True)
+    importer_address = models.CharField(max_length=500, verbose_name="수입원 소재지", null=True, blank=True)
 
-    recommended_label_data = models.CharField(max_length=200, verbose_name="권장 표시사항", null=True, blank=True)
+    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", default="기본소비기한", null=True, blank=True)
 
+    rawmtrl_nm = models.TextField(max_length=1000, verbose_name="원재료명", null=True, blank=True)
+    rawmtrl_nm_display = models.TextField(max_length=1000, verbose_name="원재료명(표시)", null=True, blank=True)
+    
+    cautions = models.TextField(max_length=1000, verbose_name="주의사항", null=True, blank=True)
+    additional_info = models.TextField(max_length=1000, verbose_name="기타 표시사항", null=True, blank=True)
+
+    #relevant_regulations = models.TextField(verbose_name="식품유형별 관련규정", null=True, blank=True)
+
+    calories = models.CharField(max_length=10, verbose_name="칼로리", null=True, blank=True)
+    natriums = models.CharField(max_length=10, verbose_name="나트륨", null=True, blank=True)
+    carbohydrates = models.CharField(max_length=10, verbose_name="탄수화물", null=True, blank=True)
+    sugars = models.CharField(max_length=10, verbose_name="당류", null=True, blank=True)
+    fats = models.CharField(max_length=10, verbose_name="지방", null=True, blank=True)
+    trans_fats = models.CharField(max_length=10, verbose_name="트랜스지방", null=True, blank=True)
+    saturated_fats = models.CharField(max_length=10, verbose_name="포화지방", null=True, blank=True)
+    cholesterols = models.CharField(max_length=10, verbose_name="콜레스테롤", null=True, blank=True)
+    proteins = models.CharField(max_length=10, verbose_name="단백질", null=True, blank=True)
+    
     create_datetime = models.DateTimeField(auto_now_add=True)
     update_datetime = models.DateTimeField(auto_now=True)
-    label_create_YN = models.CharField(max_length=1, verbose_name="표시 사항 작성 여부", default="N" )
-    ingredient_create_YN = models.CharField(max_length=1, verbose_name="원재료 작성 여부", default="N" )
+    label_create_YN = models.CharField(max_length=1, verbose_name="표시사항 작성여부", default="N" )
+    #ingredient_create_YN = models.CharField(max_length=1, verbose_name="원재료 작성 여부", default="N" )
 
     # 데이터 삭제시 db 삭제가 아니라 플래그 처리로 보이지만 않게
     delete_datetime = models.CharField(max_length=8, verbose_name="삭제일자", help_text="yyyymmdd", default="")
-    delete_YN = models.CharField(max_length=1, verbose_name="내 제품 삭제 여부", default="N" )
+    delete_YN = models.CharField(max_length=1, verbose_name="표시사항 삭제 여부", default="N" )
 
     # ManyToMany 관계 설정
     ingredients = models.ManyToManyField(
@@ -203,13 +220,35 @@ class MyLabel(models.Model):
 class FoodType(models.Model):
     
     food_group = models.CharField(max_length=100, verbose_name="식품군", default='default_group')
-    food_category = models.CharField(max_length=100, verbose_name="식품분류", default='default_category')
-    prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)
+    #food_category = models.CharField(max_length=100, verbose_name="식품분류", default='default_category')
+    food_type = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)
+
+    weight_calorie = models.CharField(max_length=1, verbose_name="내용량(열량)", null=True, blank=True)
+    prdlst_report_no = models.CharField(max_length=1, verbose_name="품목보고번호", null=True, blank=True)
+    frmlc_mtrqlt = models.CharField(max_length=1, verbose_name="포장재질", null=True, blank=True)
+    pog_daycnt  = models.CharField(max_length=1, verbose_name="소비기한", null=True, blank=True)
+
+    rawmtrl_nm = models.CharField(max_length=1, verbose_name="원재료명", null=True, blank=True)
+    storage_method = models.CharField(max_length=1, verbose_name="보관방법", null=True, blank=True)
+
+    calories = models.CharField(max_length=1, verbose_name="칼로리", null=True, blank=True)
+    natriums = models.CharField(max_length=1, verbose_name="나트륨", null=True, blank=True)
+    carbohydrates = models.CharField(max_length=1, verbose_name="탄수화물", null=True, blank=True)
+    sugars = models.CharField(max_length=1, verbose_name="당류", null=True, blank=True)
+    fats = models.CharField(max_length=1, verbose_name="지방", null=True, blank=True)
+    trans_fats = models.CharField(max_length=1, verbose_name="트랜스지방", null=True, blank=True)
+    saturated_fats = models.CharField(max_length=1, verbose_name="포화지방", null=True, blank=True)
+    cholesterols = models.CharField(max_length=1, verbose_name="콜레스테롤", null=True, blank=True)
+    proteins = models.CharField(max_length=1, verbose_name="단백질", null=True, blank=True)
+
+    cautions = models.CharField(max_length=1, verbose_name="주의사항", null=True, blank=True)
+
+    type_check = models.CharField(max_length=1, verbose_name="구분", null=True, blank=True)
 
     class Meta:
         db_table = "Food_Type"
         indexes = [
-            models.Index(fields=['prdlst_dcnm'], name='idx_prdlst_dcnm'),
+            models.Index(fields=['food_type'], name='idx_food_type'),
         ]
 
     def __str__(self):
