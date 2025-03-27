@@ -260,7 +260,7 @@ class FoodType(models.Model):
         ]
 
     def __str__(self):
-        return self.prdlst_dcnm    
+        return self.food_type 
     
 class CountryList(models.Model):
     # 국가명 목록, 외교부_국가표준코드_20250102.csv
