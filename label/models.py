@@ -119,6 +119,14 @@ class MyLabel(models.Model):
     my_label_id = models.AutoField(primary_key=True)
     #키 = 유저id + 문서 종류 + 문서번호로 생성
     #my_label_key = models.CharField(max_length=50, unique=True, editable=False, verbose_name="내 표시사항 키", primary_key=True)
+
+    food_group = models.CharField(max_length=100, verbose_name="식품군", null=True, blank=True)
+    food_type = models.CharField(max_length=100, verbose_name="식품유형", null=True, blank=True)
+
+    preservation_type = models.CharField(max_length=100, verbose_name="장기보존식품", null=True, blank=True)
+    processing_method = models.CharField(max_length=100, verbose_name="제조방법", null=True, blank=True)
+    processing_condition = models.CharField(max_length=100, verbose_name="제조방법 조건", null=True, blank=True)
+
     my_label_name = models.CharField(max_length=200, verbose_name="라벨명")
 
     # 기존 필드
