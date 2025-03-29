@@ -159,8 +159,6 @@ class MyLabel(models.Model):
     cautions = models.TextField(max_length=1000, verbose_name="주의사항", null=True, blank=True)
     additional_info = models.TextField(max_length=1000, verbose_name="기타 표시사항", null=True, blank=True)
 
-    #relevant_regulations = models.TextField(verbose_name="식품유형별 관련규정", null=True, blank=True)
-
     calories = models.CharField(max_length=10, verbose_name="칼로리", null=True, blank=True)
     natriums = models.CharField(max_length=10, verbose_name="나트륨", null=True, blank=True)
     carbohydrates = models.CharField(max_length=10, verbose_name="탄수화물", null=True, blank=True)
@@ -234,24 +232,27 @@ class FoodType(models.Model):
     weight_calorie = models.CharField(max_length=1, verbose_name="내용량(열량)", null=True, blank=True)
     prdlst_report_no = models.CharField(max_length=1, verbose_name="품목보고번호", null=True, blank=True)
     frmlc_mtrqlt = models.CharField(max_length=1, verbose_name="포장재질", null=True, blank=True)
-    pog_daycnt  = models.CharField(max_length=1, verbose_name="소비기한", null=True, blank=True)
+    pog_daycnt  = models.CharField(max_length=50, verbose_name="소비기한", null=True, blank=True)
 
     rawmtrl_nm = models.CharField(max_length=1, verbose_name="원재료명", null=True, blank=True)
     storage_method = models.CharField(max_length=1, verbose_name="보관방법", null=True, blank=True)
 
-    calories = models.CharField(max_length=1, verbose_name="칼로리", null=True, blank=True)
-    natriums = models.CharField(max_length=1, verbose_name="나트륨", null=True, blank=True)
-    carbohydrates = models.CharField(max_length=1, verbose_name="탄수화물", null=True, blank=True)
-    sugars = models.CharField(max_length=1, verbose_name="당류", null=True, blank=True)
-    fats = models.CharField(max_length=1, verbose_name="지방", null=True, blank=True)
-    trans_fats = models.CharField(max_length=1, verbose_name="트랜스지방", null=True, blank=True)
-    saturated_fats = models.CharField(max_length=1, verbose_name="포화지방", null=True, blank=True)
-    cholesterols = models.CharField(max_length=1, verbose_name="콜레스테롤", null=True, blank=True)
-    proteins = models.CharField(max_length=1, verbose_name="단백질", null=True, blank=True)
+    nutritions = models.CharField(max_length=1, verbose_name="영양성분", null=True, blank=True)
+    #calories = models.CharField(max_length=1, verbose_name="칼로리", null=True, blank=True)
+    #natriums = models.CharField(max_length=1, verbose_name="나트륨", null=True, blank=True)
+    #carbohydrates = models.CharField(max_length=1, verbose_name="탄수화물", null=True, blank=True)
+    #sugars = models.CharField(max_length=1, verbose_name="당류", null=True, blank=True)
+    #fats = models.CharField(max_length=1, verbose_name="지방", null=True, blank=True)
+    #trans_fats = models.CharField(max_length=1, verbose_name="트랜스지방", null=True, blank=True)
+    #saturated_fats = models.CharField(max_length=1, verbose_name="포화지방", null=True, blank=True)
+    #cholesterols = models.CharField(max_length=1, verbose_name="콜레스테롤", null=True, blank=True)
+    #proteins = models.CharField(max_length=1, verbose_name="단백질", null=True, blank=True)
 
     cautions = models.CharField(max_length=1, verbose_name="주의사항", null=True, blank=True)
 
     type_check = models.CharField(max_length=1, verbose_name="구분", null=True, blank=True)
+
+    relevant_regulations = models.TextField(verbose_name="식품유형별 관련규정", null=True, blank=True)
 
     class Meta:
         db_table = "Food_Type"
