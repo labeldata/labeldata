@@ -10,39 +10,37 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
-// ------------------ 초기화 & 그룹 체크박스 로직 ------------------
 function initCheckBoxGroups() {
   // 장기보존식품 그룹: 1개만 선택
-  $('.grp-long-shelf').on('click', function(e) {
-    let alreadyChecked = $(this).data('alreadyChecked') || false;
-    if (alreadyChecked) {
-       $(this).prop('checked', false).data('alreadyChecked', false);
+  $('.grp-long-shelf').on('change', function(e) {
+    if (this.checked) {
+      $('.grp-long-shelf').not(this).prop('checked', false).data('alreadyChecked', false);
+      $(this).data('alreadyChecked', true);
     } else {
-       // 다른 항목 해제
-       $('.grp-long-shelf').not(this).prop('checked', false).data('alreadyChecked', false);
-       $(this).prop('checked', true).data('alreadyChecked', true);
+      $(this).data('alreadyChecked', false);
     }
-    e.stopPropagation();
+    updateSummary(); // 요약 갱신
   });
 
   // 제조방법 그룹: 1개만 선택 (조건 제외)
-  $('.grp-sterilization').on('click', function(e) {
-    if (this.id === "chk_sterilization_other") return; // 조건은 별도
-    let alreadyChecked = $(this).data('alreadyChecked') || false;
-    if (alreadyChecked) {
-       $(this).prop('checked', false).data('alreadyChecked', false);
+  $('.grp-sterilization').on('change', function(e) {
+    if (this.id === "chk_sterilization_other") return;
+
+    if (this.checked) {
+      $('.grp-sterilization').not('#chk_sterilization_other').not(this)
+        .prop('checked', false).data('alreadyChecked', false);
+      $(this).data('alreadyChecked', true);
     } else {
-       $('.grp-sterilization').not('#chk_sterilization_other').not(this)
-           .prop('checked', false).data('alreadyChecked', false);
-       $(this).prop('checked', true).data('alreadyChecked', true);
+      $(this).data('alreadyChecked', false);
     }
-    // 조건 체크박스 활성화: 살균 or 멸균 체크 시
+
+    // 조건 체크박스 활성화 여부
     if ($("#chk_sanitized").is(":checked") || $("#chk_aseptic").is(":checked")) {
-        $("#chk_sterilization_other").prop("disabled", false);
+      $("#chk_sterilization_other").prop("disabled", false);
     } else {
-        $("#chk_sterilization_other").prop("disabled", true).prop("checked", false).data("alreadyChecked", false);
+      $("#chk_sterilization_other").prop("disabled", true).prop("checked", false);
     }
-    e.stopPropagation();
+    updateSummary(); // 요약 갱신
   });
 }
 
@@ -61,29 +59,65 @@ function initSingleSelectGroup(selector, exceptionId = null) {
 }
 
 function getCheckedLabel(selector) {
-    const checked = $(selector).filter(':checked');
-    if (checked.length) {
-        return checked.closest('.form-check').find('label').text();
-    }
-    return null;
+  const checked = $(selector).filter(':checked');
+  if (checked.length) {
+      const id = checked.attr('id');
+      const label = $(`label[for="${id}"]`).text();
+      return label || null;
+  }
+  return null;
 }
 
 // ------------------ 식품유형 요약 업데이트 ------------------
 function updateSummary() {
-    const summaries = [];
-    const foodSmall = $('#food_type_small option:selected').text();
-    if (foodSmall && foodSmall !== "소분류") summaries.push(foodSmall);
+  const summaries = [];
 
-    const longShelf = getCheckedLabel('.grp-long-shelf');
-    if (longShelf) summaries.push(longShelf);
+  // 소분류
+  const foodSmall = $('#food_type_small option:selected').text();
+  if (foodSmall && foodSmall !== "소분류") summaries.push(foodSmall);
 
-    const manufacturing = getCheckedLabel('.grp-sterilization:not(#chk_sterilization_other)');
-    if (manufacturing) summaries.push(manufacturing);
+  // 장기보존식품 변환 처리
+  const longShelfId = $('.grp-long-shelf:checked').attr('id');
+  let isFrozenHeated = false;
+  if (longShelfId === "chk_frozen_heated") {
+      summaries.push("가열하여 섭취하는 냉동식품");
+      isFrozenHeated = true;
+  } else if (longShelfId === "chk_frozen_nonheated") {
+      summaries.push("가열하지 않고 섭취하는 냉동식품");
+  } else if (longShelfId === "chk_retort") {
+      summaries.push("레토르트식품");
+  } else {
+      const longShelfLabel = getCheckedLabel('.grp-long-shelf');
+      if (longShelfLabel) summaries.push(longShelfLabel);
+  }
 
-    const manufacturingOther = $("input[name='sterilization_other_detail']").val();
-    if (manufacturingOther) summaries.push(manufacturingOther);
+  // 제조방법 체크 항목 확인 및 변환
+  const methodLabels = {
+      "chk_sanitized": "살균제품",
+      "chk_aseptic": "멸균제품",
+      "chk_yutang": "유탕.유처리제품"
+  };
 
-    $('#selected-info').text("식품유형 : " + summaries.join(" | "));
+  let methodChecked = false;
+
+  $(".grp-sterilization:checked").each(function () {
+      const methodId = $(this).attr("id");
+      if (methodLabels[methodId]) {
+          summaries.push(methodLabels[methodId]);
+          methodChecked = true;
+      }
+  });
+
+  // 조건 상세
+  const manufacturingOther = $("input[name='sterilization_other_detail']").val();
+  if (manufacturingOther) summaries.push(manufacturingOther);
+
+  // ✅ 변경된 조건: 가열하여 섭취하는 냉동식품 + 제조방법 모두 미체크 => 비살균제품
+  if (isFrozenHeated && !methodChecked) {
+      summaries.push("비살균제품");
+  }
+
+  $('#selected-info').text("식품유형 : " + summaries.join(" | "));
 }
 
 // ------------------ 영양성분 계산 로직 ------------------
@@ -179,21 +213,35 @@ $(document).ready(function() {
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    const toggleBtn = document.getElementById("toggleManufacturerBtn");
-    const collapse = document.getElementById("other-manufacturers");
+    const toggleBtn = document.getElementById("toggleFoodTypeBtn");
+    const section = document.getElementById("food-type-section");
+  
+    toggleBtn.addEventListener("click", function () {
+      const isHidden = section.style.display === "none";
+      section.style.display = isHidden ? "block" : "none";
+      toggleBtn.innerText = isHidden ? "▲" : "▼";
+      toggleBtn.setAttribute("title", isHidden ? "접기" : "펼치기");
+    });
 
-    collapse.addEventListener("shown.bs.collapse", function () {
-      toggleBtn.innerText = "▲";
-      toggleBtn.setAttribute("title", "접기");
-    });  
-    initSingleSelectGroup('.grp-long-shelf');
-    initSingleSelectGroup('.grp-sterilization', 'chk_sterilization_other');
+    // ✅ 수정: 체크박스 초기화 및 요약 업데이트 한 곳에서 처리
+    updateSummary();
 
-    collapse.addEventListener("hidden.bs.collapse", function () {
-      toggleBtn.innerText = "▼";
-      toggleBtn.setAttribute("title", "펼치기");
+    // ✅ 이벤트 바인딩 통합
+    $('.select2-food-type').on('change', updateSummary);
+    $('.grp-long-shelf, .grp-sterilization, #chk_sterilization_other').on('change', updateSummary);
+    $('input[name="sterilization_other_detail"]').on('input', updateSummary);
+  });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const regulationPanel = document.getElementById("regulationPanel");
+    const toggleRegulationBtn = document.getElementById("toggleRegulationBtn");
+  
+    toggleRegulationBtn.addEventListener("click", function () {
+      regulationPanel.classList.toggle("collapsed");
+      toggleRegulationBtn.innerText = "〓";
     });
   });
+  
 </script>
 
 <!-- 상단 헤더 -->
@@ -209,19 +257,19 @@ $(document).ready(function() {
 </div>
 
 <!-- 식품유형/장기보존/제조방법 선택 영역 -->
-<div class="container mb-2">
+<div id="food-type-section" class="container mb-2">
   <div class="d-flex align-items-center" style="gap:20px; width:100%;">
     <!-- 식품유형 -->
-    <div class="selectable-item" style="flex:1; max-width:33%;">
+    <div class="selectable-item" style="flex:1; max-width:30%;">
       <label class="form-label" style="font-size:0.8rem; font-weight:bold;">식품유형</label>
       <div class="d-flex" style="gap:5px; width:100%;">
-        <select id="food_type_large" name="food_type_large" class="form-control select2-food-type" style="width:40%;">
+        <select id="food_type_large" name="food_type_large" class="form-control select2-food-type" style="width:50%;">
            <option value="">대분류</option>
            {% for lt in large_food_types %}
            <option value="{{ lt }}" {% if form.food_type_large.value == lt %}selected{% endif %}>{{ lt }}</option>
            {% endfor %}
         </select>
-        <select id="food_type_small" name="prdlst_dcnm" class="form-control select2-food-type" style="width:60%;">
+        <select id="food_type_small" name="prdlst_dcnm" class="form-control select2-food-type" style="width:50%;">
            <option value="">소분류</option>
            {% for t in food_types %}
            <option value="{{ t }}" {% if form.prdlst_dcnm.value == t %}selected{% endif %}>{{ t }}</option>
@@ -231,12 +279,12 @@ $(document).ready(function() {
     </div>
     
     <!-- 장기보존식품 -->
-    <div style="flex:1; max-width:33%; display: flex; flex-direction: column; align-items: flex-start;">
-      <div style="display: flex; align-items: center; margin-left: 0;">
+    <div style="flex:1; max-width:30%; display: flex; flex-direction: column; align-items: flex-start;">
+      <div style="display: flex; align-items: center; margin-left: 10;">
          <input type="checkbox" id="dummy_long_shelf" style="visibility:hidden; width:18px; margin-right:5px;">
          <label class="form-label" style="font-size:0.8rem; font-weight:bold; margin:0;">장기보존식품</label>
       </div>
-      <div class="d-flex align-items-center" style="gap:10px; width:100%;">
+      <div class="d-flex" style="gap:10px; flex-wrap: nowrap; width:100%;">
         <div class="form-check" style="margin:0;">
           <input type="checkbox" id="chk_frozen_heated" name="chk_long_shelf" class="form-check-input grp-long-shelf">
           <label for="chk_frozen_heated" class="form-check-label" style="font-size:0.8rem;">냉동(가열)</label>
@@ -262,7 +310,7 @@ $(document).ready(function() {
          <input type="checkbox" id="dummy_manufacturing" style="visibility:hidden; width:18px; margin-right:5px;">
          <label class="form-label" style="font-size:0.8rem; font-weight:bold; margin:0;">제조방법</label>
       </div>
-      <div class="d-flex align-items-center" style="gap:10px; flex-wrap: nowrap; width:100%;">
+      <div class="d-flex" style="gap:10px; flex-wrap: nowrap; width:100%;">
         <div class="form-check" style="margin:0;">
           <input type="checkbox" id="chk_sanitized" name="grp_sterilization" class="form-check-input grp-sterilization">
           <label for="chk_sanitized" class="form-check-label" style="font-size:0.8rem;">살균</label>
@@ -288,15 +336,23 @@ $(document).ready(function() {
 <hr class="mb-2">
 
 <!-- 식품유형 요약 -->
-<div class="container mb-2">
-  <div id="selected-info" style="font-weight:bold; font-size:0.9rem;"></div>
+<div class="container mb-2 d-flex justify-content-between align-items-center">
+  <div class="d-flex align-items-center" style="gap: 5px;">
+    <button id="toggleFoodTypeBtn" class="btn btn-sm btn-outline-secondary" type="button" title="접기">▲</button>
+    <div id="selected-info" style="font-weight:bold; font-size:0.9rem;">식품유형 :</div>
+  </div>
+  <!-- 접기 버튼: 좌측 패널의 상단에 위치 -->
+  <button id="toggleRegulationBtn" class="btn btn-sm btn-outline-secondary" type="button"
+  title="접기/펼치기" style="font-size: 1rem; padding: 1px 6px;">
+  〓
+  </button>
 </div>
 
 <!-- 본문 좌우 패널 영역 -->
 <div class="container">
-  <div class="layout-container" style="display: flex; gap: 20px;">
+  <div class="layout-container" style="display: flex; gap: 20px; align-items: flex-start;">
     <!-- 좌측: 입력 패널 -->
-    <div class="left-panel" style="flex: 7;">
+    <div class="left-panel flex-grow-1 position-relative" style="flex-basis: 70%;">
       <form method="post" id="labelForm">
         {% csrf_token %}
 
@@ -437,8 +493,8 @@ $(document).ready(function() {
       </div>
 
       <!-- 제조원 소재지 입력 + 펼치기 버튼 -->
-      <div class="d-flex align-items-center mb-1" style="gap:5px;">
-        <div style="width:10%; min-width:109px;">
+      <div class="d-flex align-items-center mb-2" style="gap:5px;">
+        <div style="width:9.6%; min-width:110px;">
           <div class="form-check">
             <input type="checkbox" id="chk_bssh_nm" name="chk_bssh_nm" class="form-check-input" {% if form.chk_bssh_nm.value == "Y" %}checked{% endif %}>
             <label for="chk_bssh_nm" class="m-0">제조원 소재지</label>
@@ -446,9 +502,9 @@ $(document).ready(function() {
         </div>
         <!-- 펼치기/접기 버튼 -->
         <div style="min-width:1px;">
-        <button type="button" class="btn btn-outline-secondary" id="toggleManufacturerBtn" data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false" aria-controls="other-manufacturers" style="font-size: 1rem; padding: 1px 1px;" title="펼치기">▼</button>
+        <button type="button" class="btn btn-outline-secondary" id="toggleManufacturerBtn" data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false" aria-controls="other-manufacturers" style="font-size: 0.9rem; padding: 1px 1px;" title="펼치기">▼</button>
         </div>
-        <div style="width:85%;">
+        <div style="width:90.4%;">
           <input type="text" name="bssh_nm" class="form-control" style="flex:1;" value="{{ form.bssh_nm.value }}">
         </div>
       </div>
@@ -457,12 +513,12 @@ $(document).ready(function() {
       <div class="collapse mb-2" id="other-manufacturers">
         <!-- 유통전문판매원 -->
         <div class="d-flex align-items-center mb-2" style="gap:5px;">
-          <div style="width:15%; min-width:120px;">
+          <div style="width:11.1%; min-width:130px;">
             <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address"
                   class="form-check-input" {% if form.chk_distributor_address.value == "Y" %}checked{% endif %}>
             <label for="chk_distributor_address" class="m-0">유통전문판매원</label>
           </div>
-          <div style="width:85%;">
+          <div style="width:88.9%;">
             <input type="text" name="distributor_address" class="form-control"
                   value="{{ form.distributor_address.value }}">
           </div>
@@ -470,12 +526,12 @@ $(document).ready(function() {
 
         <!-- 소분원 -->
         <div class="d-flex align-items-center mb-2" style="gap:5px;">
-          <div style="width:15%; min-width:120px;">
+          <div style="width:11.1%; min-width:130px;">
             <input type="checkbox" id="chk_repacker_address" name="chk_repacker_address"
                   class="form-check-input" {% if form.chk_repacker_address.value == "Y" %}checked{% endif %}>
             <label for="chk_repacker_address" class="m-0">소분원</label>
           </div>
-          <div style="width:85%;">
+          <div style="width:88.9%;">
             <input type="text" name="repacker_address" class="form-control"
                   value="{{ form.repacker_address.value }}">
           </div>
@@ -483,12 +539,12 @@ $(document).ready(function() {
 
         <!-- 수입원 -->
         <div class="d-flex align-items-center mb-2" style="gap:5px;">
-          <div style="width:15%; min-width:120px;">
+          <div style="width:11.1%; min-width:130px;">
             <input type="checkbox" id="chk_importer_address" name="chk_importer_address"
                   class="form-check-input" {% if form.chk_importer_address.value == "Y" %}checked{% endif %}>
             <label for="chk_importer_address" class="m-0">수입원</label>
           </div>
-          <div style="width:85%;">
+          <div style="width:88.9%;">
             <input type="text" name="importer_address" class="form-control"
                   value="{{ form.importer_address.value }}">
           </div>
@@ -497,13 +553,13 @@ $(document).ready(function() {
       
       <!-- 소비기한/품질유지기한/제조연월일/생산연도 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
-        <div style="width:15%; min-width:120px;">
+        <div style="width:12.25%; min-width:130px;">
           <input type="checkbox" id="chk_date_info" name="chk_date_info" class="form-check-input" {% if form.chk_date_info.value == "Y" %}checked{% endif %}>
           <label for="chk_date_info" class="m-0">소비기한</label>
         </div>
-        <div style="width:85%;">
+        <div style="width:97.75%;">
           <div class="d-flex" style="gap:5px;">
-            <select name="date_option" class="form-control" style="width:25%;">
+            <select name="date_option" class="form-control" style="width:20%;">
               <option value="소비기한" {% if form.date_option.value == "소비기한" or not form.date_option.value %}selected{% endif %}>소비기한</option>
               <option value="품질유지기한" {% if form.date_option.value == "품질유지기한" %}selected{% endif %}>품질유지기한</option>
               <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
@@ -516,14 +572,14 @@ $(document).ready(function() {
       
       <!-- 원재료명(표시) -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
-        <div style="width:10%; min-width:109px;">
+        <div style="width:9.6%; min-width:110px;">
           <input type="checkbox" id="chk_rawmtrl_nm_display" name="chk_rawmtrl_nm_display" class="form-check-input" {% if form.chk_rawmtrl_nm_display.value == "Y" %}checked{% endif %}>
           <label for="chk_rawmtrl_nm_display" class="m-0">원재료명(표시)</label>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" style="font-size: 1rem; padding: 2px 2px;" onclick="handleIngredientPopup()" title="상세입력">✚</button>
+          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="handleIngredientPopup()" title="상세입력">✚</button>
         </div>
-        <div style="width:85%;">
+        <div style="width:90.4%;">
           <textarea name="rawmtrl_nm_display" class="form-control" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value }}</textarea>
         </div>
       </div>
@@ -531,13 +587,13 @@ $(document).ready(function() {
       <!-- 원재료명 (참고) -->
       <div class="collapse mb-2" id="rawmtrl_nm_section">
         <div class="d-flex align-items-center" style="gap:5px;">
-          <div style="width:15%; min-width:125px;">
+          <div style="width:11%; min-width:130px;">
             <div class="form-check">
               <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" {% if form.chk_rawmtrl_nm.value == "Y" %}checked{% endif %}>
               <label for="chk_rawmtrl_nm" class="m-0">원재료명(참고)</label>
             </div>
           </div>
-          <div style="width:85%;">
+          <div style="width:89%;">
             <textarea name="rawmtrl_nm" class="form-control disabled-textarea" style="flex:1;" placeholder="원재료명을 입력하세요" readonly>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
           </div>
         </div>  
@@ -545,49 +601,49 @@ $(document).ready(function() {
 
       <!-- 주의사항 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
-        <div style="width:10%; min-width:109px;">
+        <div style="width:9%; min-width:105px;">
           <div class="form-check">
           <input type="checkbox" id="chk_cautions" name="chk_cautions" class="form-check-input" {% if form.chk_cautions.value == "Y" %}checked{% endif %}>
           <label for="chk_cautions" class="m-0">주의사항</label>
           </div>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" style="font-size: -.8rem; padding: 1px 1px;" onclick="openIngredientPopup()" title="자주 사용하는 문구">📝</button>
+          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="openIngredientPopup()" title="자주 사용하는 문구">📝</button>
         </div>
-        <div style="width:85%;">
+        <div style="width:91%;">
           <textarea name="cautions" rows="2" class="auto-expand form-control" placeholder="주의사항을 입력하세요">{{ form.cautions.value }}</textarea>
         </div>
       </div>
       <!-- 기타 표시사항 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
-        <div style="width:10%; min-width:109px;">
+        <div style="width:9%; min-width:105px;">
           <div class="form-check">
           <input type="checkbox" id="chk_additional_info" name="chk_additional_info" class="form-check-input" {% if form.chk_additional_info.value == "Y" %}checked{% endif %}>
-          <label for="chk_additional_info" class="m-0">기타 표시사항</label>
+          <label for="chk_additional_info" class="m-0">기타표시사항</label>
           </div>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.8rem; padding: 1px 1px;" onclick="openIngredientPopup()" title="자주 사용하는 문구">📝</button>
+          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="openIngredientPopup()" title="자주 사용하는 문구">📝</button>
         </div>
-        <div style="width:85%;">
+        <div style="width:91%;">
           <textarea name="additional_info" rows="2" class="auto-expand form-control" placeholder="기타 표시사항을 입력하세요">{{ form.additional_info.value }}</textarea>
         </div>
       </div>      
       
       <!-- 영양성분 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
-        <div style="width:10%; min-width:100px;">
+        <div style="width:9%; min-width:105px;">
           <div class="form-check">
           <input type="checkbox" id="chk_calories" name="chk_calories" class="form-check-input">
-          <label for="chk_calories" class="form-check-label m-0">칼로리</label>
+          <label for="chk_calories" class="form-check-label m-0">영양성분</label>
           </div>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" style="font-size: 1rem; padding: 1px 1px;" onclick="runNutritionCalculator()" title="계산하기">🧮</button>
+          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="runNutritionCalculator()" title="계산하기">🧮</button>
         </div>
 
         <!-- 우측: 입력 표 -->
-        <div style="width:85%;">
+        <div style="width:91%;">
           <table class="table table-bordered table-sm mb-2" style="font-size:0.75rem; table-layout: fixed;">
             <tbody>
               <tr>
@@ -634,10 +690,11 @@ $(document).ready(function() {
       </form>
     </div>
 
-    <!-- 우측: 관련 규정 영역 -->
-    <div class="right-panel" style="flex: 3; padding-left:5px; display: flex; flex-direction: column;">
-      <label class="m-0">관련 규정(표시기준 등)</label>
-      <textarea name="related_regulations" class="form-control" style="flex:1; height: 100%;" placeholder="각 항목에 대한 관련 규정을 입력하세요">{{ form.related_regulations.value }}</textarea>
+    <!-- 우측 규정 패널 -->
+    <div id="regulationPanel" class="right-panel collapsible-panel show">
+      <textarea name="related_regulations" class="form-control"
+                style="height: 100%; min-height: 500px;"
+                placeholder="식품 유형별 관련 규정을 확인하세요.">{{ form.related_regulations.value }}</textarea>
     </div>
   </div>
 </div>
@@ -681,5 +738,50 @@ input[type=number] {
   font-size: 0.75rem;
   padding: 4px 6px;
 }
+
+/* 상단 고정 영역 */
+.sticky-top-bar {
+  position: sticky;
+  top: 0;
+  background-color: white;
+  z-index: 1020;
+  padding-top: 10px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+/* 우측 슬라이딩 패널 */
+.collapsible-panel {
+  width: 100%;
+  max-width: 30%;
+  transition: max-width 0.3s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.collapsible-panel.collapsed {
+  max-width: 0;
+  padding: 0;
+}
+
+/* 토글 버튼 위치 조정 */
+.toggle-right-panel-btn {
+  position: absolute;
+  top: -5px;
+  right: -15px;
+  z-index: 1050;
+  font-size: 1rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  border: 1px solid #ced4da;
+}
+
+/* 토글 버튼 고정 */
+#toggleRegulationBtn {
+  margin-left: auto;
+  margin-right: 0;
+  font-weight: bold;
+}
+
 </style>
 {% endblock %}
