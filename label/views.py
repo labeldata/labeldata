@@ -774,5 +774,48 @@ def register_my_ingredient(request):
     
 def nutrition_calculator_popup(request):
     return render(request, 'label/nutrition_calculator_popup.html')
+
+def duplicate_label(request, label_id):
+    original = get_object_or_404(MyLabel, my_label_id=label_id)  
+    original.pk = None  # 
+    original.my_label_name += " (복사본)"
+    original.save()
+    return redirect('label:label_creation', label_id=original.my_label_id)
+
+def delete_label(request, label_id):
+    label = get_object_or_404(MyLabel, my_label_id=label_id)
+    label.delete()
+    return redirect('label:my_label_list')
+
+@login_required
+@csrf_exempt
+def bulk_copy_labels(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            ids = data.get("label_ids", [])
+            for label_id in ids:
+                original = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+                new_label = MyLabel.objects.get(pk=original.pk)
+                new_label.pk = None  # 새로운 PK 생성
+                new_label.my_label_name += " (복사본)"
+                new_label.save()
+            return JsonResponse({"success": True})
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)})
+    return JsonResponse({"success": False, "error": "Invalid request method"})
+
+@login_required
+@csrf_exempt
+def bulk_delete_labels(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            ids = data.get("label_ids", [])
+            MyLabel.objects.filter(my_label_id__in=ids, user_id=request.user).delete()
+            return JsonResponse({"success": True})
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)})
+    return JsonResponse({"success": False, "error": "Invalid request method"})
     
 

@@ -10,6 +10,27 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
+
+function copyLabel(labelId) {
+  if (!labelId) {
+    alert("복사할 라벨이 없습니다.");
+    return;
+  }
+  if (confirm("현재 라벨을 복사하시겠습니까?")) {
+    window.location.href = `/label/duplicate/${labelId}/`;
+  }
+}
+
+function deleteLabel(labelId) {
+  if (!labelId) {
+    alert("삭제할 라벨이 없습니다.");
+    return;
+  }
+  if (confirm("정말로 이 라벨을 삭제하시겠습니까? 복구할 수 없습니다.")) {
+    window.location.href = `/label/delete/${labelId}/`;
+  }
+}
+
 function initCheckBoxGroups() {
   // 장기보존식품 그룹: 1개만 선택
   $('.grp-long-shelf').on('change', function(e) {
@@ -219,13 +240,16 @@ document.addEventListener("DOMContentLoaded", function () {
 <div class="container mt-4" style="padding-bottom: 10px;">
   <div class="d-flex align-items-center justify-content-between" style="gap: 20px;">
     <h2 class="mb-0">표시사항 작성</h2>
-    <div class="d-flex align-items-center" style="gap: 20px;">
+    <div class="d-flex align-items-center" style="gap: 10px;">
       <span class="recent-update">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
       <button type="submit" form="labelForm" class="btn btn-primary">저장</button>
-      <button type="button" class="btn btn-default preview-btn" onclick="openPreviewPopup()">미리보기</button>
+      <button type="button" class="btn btn-outline-secondary" onclick="openPreviewPopup()">미리보기</button>
+      <button type="button" class="btn btn-outline-info" onclick="copyLabel('{{ label.my_label_id }}')">복사</button>
+      <button type="button" class="btn btn-outline-danger" onclick="deleteLabel('{{ label.my_label_id }}')">삭제</button>
     </div>
   </div>
 </div>
+
 
 <!-- 식품유형/장기보존/제조방법 선택 영역 -->
 <div id="food-type-section" class="container mb-2" style="display:block;">
