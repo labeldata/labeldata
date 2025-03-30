@@ -9,232 +9,12 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-<script>
+<!-- 외부 CSS 및 JS 파일 로드 -->
+<link href="{% static 'css/label_creation.css' %}" rel="stylesheet" />
+<script src="{% static 'js/label_creation.js' %}"></script>
 
-function copyLabel(labelId) {
-  if (!labelId) {
-    alert("복사할 라벨이 없습니다.");
-    return;
-  }
-  if (confirm("현재 라벨을 복사하시겠습니까?")) {
-    window.location.href = `/label/duplicate/${labelId}/`;
-  }
-}
-
-function deleteLabel(labelId) {
-  if (!labelId) {
-    alert("삭제할 라벨이 없습니다.");
-    return;
-  }
-  if (confirm("정말로 이 라벨을 삭제하시겠습니까? 복구할 수 없습니다.")) {
-    window.location.href = `/label/delete/${labelId}/`;
-  }
-}
-
-function initCheckBoxGroups() {
-  // 장기보존식품 그룹: 1개만 선택
-  $('.grp-long-shelf').on('change', function(e) {
-    if (this.checked) {
-      $('.grp-long-shelf').not(this).prop('checked', false).data('alreadyChecked', false);
-      $(this).data('alreadyChecked', true);
-    } else {
-      $(this).data('alreadyChecked', false);
-    }
-    updateSummary(); // 요약 갱신
-  });
-
-  // 제조방법 그룹: 1개만 선택 (조건 제외)
-  $('.grp-sterilization').on('change', function(e) {
-    if (this.id === "chk_sterilization_other") return;
-
-    if (this.checked) {
-      $('.grp-sterilization').not('#chk_sterilization_other').not(this)
-        .prop('checked', false).data('alreadyChecked', false);
-      $(this).data('alreadyChecked', true);
-    } else {
-      $(this).data('alreadyChecked', false);
-    }
-
-    // 조건 체크박스 활성화 여부
-    if ($("#chk_sanitized").is(":checked") || $("#chk_aseptic").is(":checked")) {
-      $("#chk_sterilization_other").prop("disabled", false);
-    } else {
-      $("#chk_sterilization_other").prop("disabled", true).prop("checked", false);
-    }
-    updateSummary(); // 요약 갱신
-  });
-}
-
-function initSingleSelectGroup(selector, exceptionId = null) {
-    $(selector).on('click', function (e) {
-        if (this.id === exceptionId) return;
-        const alreadyChecked = $(this).data('alreadyChecked') || false;
-        if (alreadyChecked) {
-            $(this).prop('checked', false).data('alreadyChecked', false);
-        } else {
-            $(selector).not(this).prop('checked', false).data('alreadyChecked', false);
-            $(this).prop('checked', true).data('alreadyChecked', true);
-        }
-        e.stopPropagation();
-    });
-}
-
-function getCheckedLabel(selector) {
-  const checked = $(selector).filter(':checked');
-  if (checked.length) {
-      const id = checked.attr('id');
-      const label = $(`label[for="${id}"]`).text();
-      return label || null;
-  }
-  return null;
-}
-
-// ------------------ 식품유형 요약 업데이트 ------------------
-function updateSummary() {
-  const summaries = [];
-
-  // 소분류
-  const foodSmall = $('#food_type_small option:selected').text();
-  if (foodSmall && foodSmall !== "소분류") summaries.push(foodSmall);
-
-  // 장기보존식품 변환 처리
-  const longShelfId = $('.grp-long-shelf:checked').attr('id');
-  let isFrozenHeated = false;
-  if (longShelfId === "chk_frozen_heated") {
-      summaries.push("가열하여 섭취하는 냉동식품");
-      isFrozenHeated = true;
-  } else if (longShelfId === "chk_frozen_nonheated") {
-      summaries.push("가열하지 않고 섭취하는 냉동식품");
-  } else if (longShelfId === "chk_retort") {
-      summaries.push("레토르트식품");
-  } else {
-      const longShelfLabel = getCheckedLabel('.grp-long-shelf');
-      if (longShelfLabel) summaries.push(longShelfLabel);
-  }
-
-  // 제조방법 체크 항목 확인 및 변환
-  const methodLabels = {
-      "chk_sanitized": "살균제품",
-      "chk_aseptic": "멸균제품",
-      "chk_yutang": "유탕.유처리제품"
-  };
-
-  let methodChecked = false;
-
-  $(".grp-sterilization:checked").each(function () {
-      const methodId = $(this).attr("id");
-      if (methodLabels[methodId]) {
-          summaries.push(methodLabels[methodId]);
-          methodChecked = true;
-      }
-  });
-
-  // 조건 상세
-  const manufacturingOther = $("input[name='sterilization_other_detail']").val();
-  if (manufacturingOther) summaries.push(manufacturingOther);
-
-  // ✅ 변경된 조건: 가열하여 섭취하는 냉동식품 + 제조방법 모두 미체크 => 비살균제품
-  if (isFrozenHeated && !methodChecked) {
-      summaries.push("비살균제품");
-  }
-
-  $('#selected-info').text("식품유형 : " + summaries.join(" | "));
-}
-
-// ------------------ 팝업 로직 ------------------
-function handleIngredientPopup() {
-  // 팝업 열기
-  openIngredientPopup();
-
-  // 원재료명(참고) 섹션 표시
-  const rawmtrlSection = document.getElementById('rawmtrl_nm_section');
-  if (rawmtrlSection.classList.contains('collapse')) {
-    rawmtrlSection.classList.add('show'); // 펼치기
-  }
-}
-
-function openIngredientPopup() {
-  const rawmtrlNmDisplay = document.querySelector('textarea[name="rawmtrl_nm_display"]').value || "";
-  const labelId = '{{ label.my_label_id }}';
-  const url = `/label/ingredient-popup/?rawmtrl_nm_display=${encodeURIComponent(rawmtrlNmDisplay)}&label_id=${labelId}`;
-  window.open(url, 'IngredientPopup', 'width=1400,height=900,scrollbars=yes');
-}
-
-function openPreviewPopup() {
-  const labelId = "{{ label.my_label_id }}";
-  if (!labelId) {
-    alert("라벨이 저장되지 않았습니다.");
-    return;
-  }
-  // 선택된 체크박스만 쿼리스트링에 반영
-  const checkedFields = document.querySelectorAll("input[type='checkbox']:checked");
-  let queryString = new URLSearchParams();
-  checkedFields.forEach((chk) => {
-    queryString.append(chk.name, "true");
-  });
-  const previewUrl = `/label/preview/?label_id=${labelId}&${queryString.toString()}`;
-  window.open(previewUrl, 'previewPopup', 'width=1400,height=900,scrollbars=yes');
-}
-
-// ------------------ Document Ready ------------------
-$(document).ready(function() {
-  // Select2 초기화
-  // 체크박스 그룹 초기화
-  initCheckBoxGroups();
-  // 요약 업데이트
-  updateSummary();
-  $('.select2-food-type, input[type="checkbox"], input[name="sterilization_other_detail"]')
-    .on('change input', updateSummary);
-});
-
-// 기존의 중복된 DOMContentLoaded 이벤트 핸들러들을 하나로 통합
-document.addEventListener("DOMContentLoaded", function () {
-  // 식품유형 섹션 토글
-  const foodTypeBtn = document.getElementById("toggleFoodTypeBtn");
-  const foodTypeSection = document.querySelector("#food-type-section");
-  
-  if (foodTypeBtn && foodTypeSection) {
-    foodTypeBtn.addEventListener("click", function () {
-      const isHidden = foodTypeSection.style.display === "none";
-      foodTypeSection.style.display = isHidden ? "block" : "none";
-      foodTypeBtn.innerText = isHidden ? "∧" : "∨";
-      foodTypeBtn.setAttribute("title", isHidden ? "접기" : "펼치기");
-    });
-  }
-
-  // 규정 패널 토글
-  const regulationBtn = document.getElementById("toggleRegulationBtn");
-  const regulationPanel = document.getElementById("regulationPanel");
-  
-  if (regulationBtn && regulationPanel) {
-    regulationBtn.addEventListener("click", function () {
-      const isCollapsed = regulationPanel.classList.toggle("collapsed");
-      regulationBtn.innerHTML = isCollapsed ? "❮" : "❯";
-      regulationBtn.setAttribute("title", isCollapsed ? "펼치기" : "접기");
-    });
-  }
-
-  // 제조원 정보 토글
-  const manufacturerBtn = document.getElementById("toggleManufacturerBtn");
-  const manufacturerCollapse = document.getElementById("other-manufacturers");
-  
-  if (manufacturerBtn && manufacturerCollapse) {
-    manufacturerCollapse.addEventListener("shown.bs.collapse", function () {
-      manufacturerBtn.innerText = "∧";
-      manufacturerBtn.setAttribute("title", "접기");
-    });
-
-    manufacturerCollapse.addEventListener("hidden.bs.collapse", function () {
-      manufacturerBtn.innerText = "∨";
-      manufacturerBtn.setAttribute("title", "펼치기");
-    });
-  }
-
-  // 초기화
-  updateSummary();
-});
-
-</script>
+<!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
+<input type="hidden" id="label_id" value="{{ label.my_label_id }}">
 
 <!-- 상단 헤더 -->
 <div class="container mt-4" style="padding-bottom: 10px;">
@@ -244,12 +24,11 @@ document.addEventListener("DOMContentLoaded", function () {
       <span class="recent-update">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
       <button type="submit" form="labelForm" class="btn btn-primary">저장</button>
       <button type="button" class="btn btn-outline-secondary" onclick="openPreviewPopup()">미리보기</button>
-      <button type="button" class="btn btn-outline-info" onclick="copyLabel('{{ label.my_label_id }}')">복사</button>
-      <button type="button" class="btn btn-outline-danger" onclick="deleteLabel('{{ label.my_label_id }}')">삭제</button>
+      <button type="button" class="btn btn-outline-info" onclick="copyLabel(document.getElementById('label_id').value)">복사</button>
+      <button type="button" class="btn btn-outline-danger" onclick="deleteLabel(document.getElementById('label_id').value)">삭제</button>
     </div>
   </div>
 </div>
-
 
 <!-- 식품유형/장기보존/제조방법 선택 영역 -->
 <div id="food-type-section" class="container mb-2" style="display:block;">
@@ -632,19 +411,46 @@ document.addEventListener("DOMContentLoaded", function () {
           </div>
         </div>
         <div style="min-width:1px;">
+          <!-- 영양성분 계산기 버튼 -->
           <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;"
-                  onclick="window.open('/label/nutrition-popup/', 'nutritionPopup', 'width=900,height=600')" title="영양성분 계산기">
-            🧮
+          onclick="openNutritionCalculator()" title="영양성분 계산기">
+          🧮
           </button>
         </div>
         <div style="width:91%;">
-          <textarea id="nutritions"
-          name="nutritions"
+          <textarea id="nutrition_text"
+          name="nutrition_text"
           class="form-control"
           rows="2"
           placeholder="영양성분 계산기를 통해 입력하세요."
-          readonly>{{ form.nutritions.value }}</textarea>
+          readonly>{{ form.nutrition_text.value }}</textarea>
         </div>
+      </div>
+
+      <!-- 영양성분 hidden 필드 -->
+      <div style="display: none;">
+        <input type="hidden" name="serving_size" value="{{ form.serving_size.value }}">
+        <input type="hidden" name="serving_size_unit" value="{{ form.serving_size_unit.value }}">
+        <input type="hidden" name="units_per_package" value="{{ form.units_per_package.value }}">
+        <input type="hidden" name="nutrition_display_unit" value="{{ form.nutrition_display_unit.value }}">
+        <input type="hidden" name="calories" value="{{ form.calories.value }}">
+        <input type="hidden" name="calories_unit" value="{{ form.calories_unit.value }}">
+        <input type="hidden" name="natriums" value="{{ form.natriums.value }}">
+        <input type="hidden" name="natriums_unit" value="{{ form.natriums_unit.value }}">
+        <input type="hidden" name="carbohydrates" value="{{ form.carbohydrates.value }}">
+        <input type="hidden" name="carbohydrates_unit" value="{{ form.carbohydrates_unit.value }}">
+        <input type="hidden" name="sugars" value="{{ form.sugars.value }}">
+        <input type="hidden" name="sugars_unit" value="{{ form.sugars_unit.value }}">
+        <input type="hidden" name="fats" value="{{ form.fats.value }}">
+        <input type="hidden" name="fats_unit" value="{{ form.fats_unit.value }}">
+        <input type="hidden" name="trans_fats" value="{{ form.trans_fats.value }}">
+        <input type="hidden" name="trans_fats_unit" value="{{ form.trans_fats_unit.value }}">
+        <input type="hidden" name="saturated_fats" value="{{ form.saturated_fats.value }}">
+        <input type="hidden" name="saturated_fats_unit" value="{{ form.saturated_fats_unit.value }}">
+        <input type="hidden" name="cholesterols" value="{{ form.cholesterols.value }}">
+        <input type="hidden" name="cholesterols_unit" value="{{ form.cholesterols_unit.value }}">
+        <input type="hidden" name="proteins" value="{{ form.proteins.value }}">
+        <input type="hidden" name="proteins_unit" value="{{ form.proteins_unit.value }}">
       </div>
 
       </form>
@@ -659,89 +465,4 @@ document.addEventListener("DOMContentLoaded", function () {
   </div>
 </div>
 
-<!-- 스타일 -->
-<style>
-label, .form-control {
-  font-size: 0.8rem !important;
-  color: #495057 !important;
-}
-/* Select2 기본 스타일 */
-.select2-container--default .select2-selection--single {
-  height: auto !important;
-  font-size: 0.8rem !important;
-  color: #495057 !important;
-  border: 1px solid #ced4da !important;
-  border-radius: 0.25rem !important;
-  padding: 0.3rem 0.6rem !important;
-}
-.select2-selection__rendered {
-  line-height: 1.5 !important;
-}
-/* 숫자 입력 필드 스피너 제거 */
-input[type=number]::-webkit-inner-spin-button,
-input[type=number]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type=number] {
-  -moz-appearance: textfield;
-}
-/* 표 셀 패딩 최소화 */
-.table-bordered td, .table-bordered th {
-  padding: 0.2rem;
-}
-.disabled-textarea {
-  background-color: #e9ecef;
-  cursor: not-allowed;
-}
-.detail-btn {
-  font-size: 0.75rem;
-  padding: 4px 6px;
-}
-
-/* 상단 고정 영역 */
-.sticky-top-bar {
-  position: sticky;
-  top: 0;
-  background-color: white;
-  z-index: 1020;
-  padding-top: 10px;
-  border-bottom: 1px solid #dee2e6;
-}
-
-/* 우측 슬라이딩 패널 */
-.collapsible-panel {
-  width: 100%;
-  max-width: 30%;
-  transition: max-width 0.3s ease;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.collapsible-panel.collapsed {
-  max-width: 0;
-  padding: 0;
-}
-
-/* 토글 버튼 위치 조정 */
-.toggle-right-panel-btn {
-  position: absolute;
-  top: -5px;
-  right: -15px;
-  z-index: 1050;
-  font-size: 1rem;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background-color: #f8f9fa;
-  border: 1px solid #ced4da;
-}
-
-/* 토글 버튼 고정 */
-#toggleRegulationBtn {
-  margin-left: auto;
-  margin-right: 0;
-  font-weight: bold;
-}
-
-</style>
 {% endblock %}

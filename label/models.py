@@ -159,15 +159,41 @@ class MyLabel(models.Model):
     cautions = models.TextField(max_length=1000, verbose_name="주의사항", null=True, blank=True)
     additional_info = models.TextField(max_length=1000, verbose_name="기타 표시사항", null=True, blank=True)
 
+    #영양성분 관련 컬럼
+    nutrition_text = models.TextField(max_length=1000, verbose_name="영양성분 표시", null=True, blank=True)
+    
+    serving_size = models.CharField(max_length=10, verbose_name="단위 내용량", null=True, blank=True)
+    serving_size_unit = models.CharField(max_length=10, verbose_name="단위 내용량 단위", null=True, blank=True)
+
+    units_per_package = models.CharField(max_length=10, verbose_name="포장 당 갯수", null=True, blank=True)
+    nutrition_display_unit = models.CharField(max_length=10, verbose_name="영양성분 표시 단위", null=True, blank=True)
+
     calories = models.CharField(max_length=10, verbose_name="칼로리", null=True, blank=True)
+    calories_unit = models.CharField(max_length=10, verbose_name="칼로리 단위", null=True, blank=True)
+
     natriums = models.CharField(max_length=10, verbose_name="나트륨", null=True, blank=True)
+    natriums_unit = models.CharField(max_length=10, verbose_name="나트륨 단위", null=True, blank=True)
+
     carbohydrates = models.CharField(max_length=10, verbose_name="탄수화물", null=True, blank=True)
+    carbohydrates_unit = models.CharField(max_length=10, verbose_name="탄수화물 단위", null=True, blank=True)
+
     sugars = models.CharField(max_length=10, verbose_name="당류", null=True, blank=True)
+    sugars_unit = models.CharField(max_length=10, verbose_name="당류 단위", null=True, blank=True)
+
     fats = models.CharField(max_length=10, verbose_name="지방", null=True, blank=True)
+    fats_unit = models.CharField(max_length=10, verbose_name="지방 단위", null=True, blank=True)
+
     trans_fats = models.CharField(max_length=10, verbose_name="트랜스지방", null=True, blank=True)
+    trans_fats_unit = models.CharField(max_length=10, verbose_name="트랜스지방 단위", null=True, blank=True)
+
     saturated_fats = models.CharField(max_length=10, verbose_name="포화지방", null=True, blank=True)
+    saturated_fats_unit = models.CharField(max_length=10, verbose_name="포화지방 단위", null=True, blank=True)
+
     cholesterols = models.CharField(max_length=10, verbose_name="콜레스테롤", null=True, blank=True)
+    cholesterols_unit = models.CharField(max_length=10, verbose_name="콜레스테롤 단위", null=True, blank=True)
+
     proteins = models.CharField(max_length=10, verbose_name="단백질", null=True, blank=True)
+    proteins_unit = models.CharField(max_length=10, verbose_name="단백질 단위", null=True, blank=True)
     
     create_datetime = models.DateTimeField(auto_now_add=True)
     update_datetime = models.DateTimeField(auto_now=True)

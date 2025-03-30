@@ -772,8 +772,89 @@ def register_my_ingredient(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
     
+
+
+@login_required
 def nutrition_calculator_popup(request):
-    return render(request, 'label/nutrition_calculator_popup.html')
+    """영양성분 계산기 팝업 뷰"""
+    label_id = request.GET.get('label_id')
+    
+    # 기본 빈 데이터 초기화
+    nutrition_data = {
+        'serving_size': '',
+        'serving_size_unit': 'g',
+        'units_per_package': '1',
+        'display_unit': 'unit',
+        'nutrients': {}
+    }
+    
+    # 라벨 ID가 있으면 영양성분 데이터 가져오기
+    if label_id:
+        try:
+            label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+            
+            # 영양성분 데이터 준비
+            nutrition_data = {
+                'serving_size': label.serving_size,
+                'serving_size_unit': label.serving_size_unit or 'g',
+                'units_per_package': label.units_per_package or '1',
+                'display_unit': label.nutrition_display_unit or 'unit',
+                'nutrients': {
+                    'calorie': {
+                        'value': label.calories,
+                        'unit': label.calories_unit or 'kcal'
+                    },
+                    'natrium': {
+                        'value': label.natriums,
+                        'unit': label.natriums_unit or 'mg'
+                    },
+                    'carbohydrate': {
+                        'value': label.carbohydrates,
+                        'unit': label.carbohydrates_unit or 'g'
+                    },
+                    'sugar': {
+                        'value': label.sugars,
+                        'unit': label.sugars_unit or 'g'
+                    },
+                    'afat': {
+                        'value': label.fats,
+                        'unit': label.fats_unit or 'g'
+                    },
+                    'transfat': {
+                        'value': label.trans_fats,
+                        'unit': label.trans_fats_unit or 'g'
+                    },
+                    'satufat': {
+                        'value': label.saturated_fats,
+                        'unit': label.saturated_fats_unit or 'g'
+                    },
+                    'cholesterol': {
+                        'value': label.cholesterols,
+                        'unit': label.cholesterols_unit or 'mg'
+                    },
+                    'protein': {
+                        'value': label.proteins,
+                        'unit': label.proteins_unit or 'g'
+                    }
+                }
+            }
+        except Exception as e:
+            print(f"영양성분 데이터 로딩 중 오류: {str(e)}")
+    
+    # None 값을 빈 문자열로 변환 (JSON 직렬화 오류 방지)
+    for key, value in nutrition_data.items():
+        if value is None:
+            nutrition_data[key] = ''
+    
+    for nutrient_name, nutrient_data in nutrition_data.get('nutrients', {}).items():
+        for key, value in nutrient_data.items():
+            if value is None:
+                nutrient_data[key] = ''
+    
+    context = {
+        'nutrition_data': json.dumps(nutrition_data)
+    }
+    return render(request, 'label/nutrition_calculator_popup.html', context)
 
 def duplicate_label(request, label_id):
     original = get_object_or_404(MyLabel, my_label_id=label_id)  
@@ -818,4 +899,53 @@ def bulk_delete_labels(request):
             return JsonResponse({"success": False, "error": str(e)})
     return JsonResponse({"success": False, "error": "Invalid request method"})
     
+
+@login_required
+@csrf_exempt
+def save_nutrition(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        label_id = data.get('label_id')
+        
+        # 라벨 ID로 해당 라벨 조회
+        label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+        
+        # 영양성분 관련 필드 업데이트
+        label.serving_size = data.get('serving_size', '')
+        label.serving_size_unit = data.get('serving_size_unit', '')
+        label.units_per_package = data.get('units_per_package', '')
+        label.nutrition_display_unit = data.get('nutrition_display_unit', '')
+        
+        # 영양성분 텍스트 필드에 nutritions 값 설정 (중요!)
+        label.nutrition_text = data.get('nutritions', '')
+        
+        # 각 영양소 값 업데이트
+        label.calories = data.get('calories', '')
+        label.calories_unit = data.get('calories_unit', '')
+        label.natriums = data.get('natriums', '')
+        label.natriums_unit = data.get('natriums_unit', '')
+        label.carbohydrates = data.get('carbohydrates', '')
+        label.carbohydrates_unit = data.get('carbohydrates_unit', '')
+        label.sugars = data.get('sugars', '')
+        label.sugars_unit = data.get('sugars_unit', '')
+        label.fats = data.get('fats', '')
+        label.fats_unit = data.get('fats_unit', '')
+        label.trans_fats = data.get('trans_fats', '')
+        label.trans_fats_unit = data.get('trans_fats_unit', '')
+        label.saturated_fats = data.get('saturated_fats', '')
+        label.saturated_fats_unit = data.get('saturated_fats_unit', '')
+        label.cholesterols = data.get('cholesterols', '')
+        label.cholesterols_unit = data.get('cholesterols_unit', '')
+        label.proteins = data.get('proteins', '')
+        label.proteins_unit = data.get('proteins_unit', '')
+        
+        # 변경사항 저장
+        label.save()
+        
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 

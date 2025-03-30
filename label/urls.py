@@ -22,6 +22,8 @@ urlpatterns = [
     path('label-creation/<int:label_id>/', views.label_creation, name='label_creation'),
     path('ingredient-popup/', views.ingredient_popup, name='ingredient_popup'),
     path('nutrition-popup/', views.nutrition_calculator_popup, name='nutrition_popup'),
+    path('nutrition-calculator-popup/', views.nutrition_calculator_popup, name='nutrition_calculator_popup'),
+    path('save-nutrition/', views.save_nutrition, name='save_nutrition'),
     path('duplicate/<int:label_id>/', views.duplicate_label, name='duplicate_label'),
     path('delete/<int:label_id>/', views.delete_label, name='delete_label'),
     
