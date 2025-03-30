@@ -772,4 +772,7 @@ def register_my_ingredient(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
     
+def nutrition_calculator_popup(request):
+    return render(request, 'label/nutrition_calculator_popup.html')
+    
 

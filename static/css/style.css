@@ -272,7 +272,7 @@ main.container,
   height: auto;
 }
 .form-select {
-    width: 50% !important;
+    width: 20% 
 }
 .search-filter-btn.btn-primary {
     width: 70px;
@@ -643,4 +643,50 @@ a:active {
 #gmoToggleButton {
     width: 80px; /* 원하는 너비로 설정 */
     height: 30px; /* 원하는 높이로 설정 */
+}
+
+
+/* 좌측 패널의 항목 / 입력필드 / 단위 칸 비율 조정 */
+.input-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .input-label {
+    flex: 0 0 30%; /* 항목: 3 */
+    margin: 0;
+    font-weight: bold;
+    text-align: left;
+  }
+  
+  .form-control {
+    flex: 0 0 50%; /* 입력필드: 5 */
+    min-width: 0;
+  }
+  
+  .input-unit {
+    flex: 0 0 20%; /* 단위: 2 */
+    text-align: center;
+  }
+
+/* 토글 버튼 스타일 */
+#toggleFoodTypeBtn, #toggleRegulationBtn {
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  line-height: 1;
+  font-size: 1rem;
+  font-weight: bold;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.toggle-btn {
+  transition: transform 0.3s ease;
+}
+
+.toggle-btn.collapsed {
+  transform: rotate(180deg);
 }

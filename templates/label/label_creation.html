@@ -120,49 +120,6 @@ function updateSummary() {
   $('#selected-info').text("식품유형 : " + summaries.join(" | "));
 }
 
-// ------------------ 영양성분 계산 로직 ------------------
-function roundXdigit(value, step, unit, min=0, lmin=0) {
-  if (value < min) return "0";
-  if (value < lmin) return lmin + unit + " 이하";
-
-  let remainder = value % step;
-  let result = remainder <= step/2 ? value - remainder : value - remainder + step;
-  result = step >= 1 ? parseInt(result) : parseFloat(result.toFixed(1));
-  return result + unit;
-}
-
-function divideroundXdigit(mid, value, step1, step2, unit, min=0, lmin=0) {
-  return (value <= mid)
-    ? roundXdigit(value, step1, unit, min, lmin)
-    : roundXdigit(value, step2, unit, min, lmin);
-}
-
-function percentcalculate(value, limit) {
-  return Math.round((value / limit) * 100);
-}
-
-function runNutritionCalculator() {
-    const fields = [
-        { id: "calorie", unit: "kcal", step: 5 },
-        { id: "natrium", unit: "mg", step: 5, limit: 2000 },
-        { id: "sugar", unit: "g", step: 0.5, limit: 100 },
-        { id: "carbohydrate", unit: "g", step: 0.5, limit: 324 },
-        { id: "afat", unit: "g", step: 0.1, limit: 54 },
-        { id: "transfat", unit: "g", step: 0.1 },
-        { id: "satufat", unit: "g", step: 0.1, limit: 15 },
-        { id: "cholesterol", unit: "mg", step: 5, limit: 300 },
-        { id: "protein", unit: "g", step: 0.5, limit: 55 },
-    ];
-
-    fields.forEach(field => {
-        const value = parseFloat(document.getElementById(field.id).value || "0");
-        const result = field.limit
-            ? `${roundXdigit(value, field.step, field.unit)} (${percentcalculate(value, field.limit)}%)`
-            : roundXdigit(value, field.step, field.unit);
-        document.getElementById(`result_${field.id}`).innerText = result;
-    });
-}
-
 // ------------------ 팝업 로직 ------------------
 function handleIngredientPopup() {
   // 팝업 열기
@@ -179,7 +136,7 @@ function openIngredientPopup() {
   const rawmtrlNmDisplay = document.querySelector('textarea[name="rawmtrl_nm_display"]').value || "";
   const labelId = '{{ label.my_label_id }}';
   const url = `/label/ingredient-popup/?rawmtrl_nm_display=${encodeURIComponent(rawmtrlNmDisplay)}&label_id=${labelId}`;
-  window.open(url, 'IngredientPopup', 'width=1400,height=850,scrollbars=yes');
+  window.open(url, 'IngredientPopup', 'width=1400,height=900,scrollbars=yes');
 }
 
 function openPreviewPopup() {
@@ -195,7 +152,7 @@ function openPreviewPopup() {
     queryString.append(chk.name, "true");
   });
   const previewUrl = `/label/preview/?label_id=${labelId}&${queryString.toString()}`;
-  window.open(previewUrl, 'previewPopup', 'width=1400,height=850,scrollbars=yes');
+  window.open(previewUrl, 'previewPopup', 'width=1400,height=900,scrollbars=yes');
 }
 
 // ------------------ Document Ready ------------------
@@ -209,39 +166,53 @@ $(document).ready(function() {
     .on('change input', updateSummary);
 });
 
-</script>
-
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    const toggleBtn = document.getElementById("toggleFoodTypeBtn");
-    const section = document.getElementById("food-type-section");
+// 기존의 중복된 DOMContentLoaded 이벤트 핸들러들을 하나로 통합
+document.addEventListener("DOMContentLoaded", function () {
+  // 식품유형 섹션 토글
+  const foodTypeBtn = document.getElementById("toggleFoodTypeBtn");
+  const foodTypeSection = document.querySelector("#food-type-section");
   
-    toggleBtn.addEventListener("click", function () {
-      const isHidden = section.style.display === "none";
-      section.style.display = isHidden ? "block" : "none";
-      toggleBtn.innerText = isHidden ? "▲" : "▼";
-      toggleBtn.setAttribute("title", isHidden ? "접기" : "펼치기");
+  if (foodTypeBtn && foodTypeSection) {
+    foodTypeBtn.addEventListener("click", function () {
+      const isHidden = foodTypeSection.style.display === "none";
+      foodTypeSection.style.display = isHidden ? "block" : "none";
+      foodTypeBtn.innerText = isHidden ? "∧" : "∨";
+      foodTypeBtn.setAttribute("title", isHidden ? "접기" : "펼치기");
+    });
+  }
+
+  // 규정 패널 토글
+  const regulationBtn = document.getElementById("toggleRegulationBtn");
+  const regulationPanel = document.getElementById("regulationPanel");
+  
+  if (regulationBtn && regulationPanel) {
+    regulationBtn.addEventListener("click", function () {
+      const isCollapsed = regulationPanel.classList.toggle("collapsed");
+      regulationBtn.innerHTML = isCollapsed ? "❮" : "❯";
+      regulationBtn.setAttribute("title", isCollapsed ? "펼치기" : "접기");
+    });
+  }
+
+  // 제조원 정보 토글
+  const manufacturerBtn = document.getElementById("toggleManufacturerBtn");
+  const manufacturerCollapse = document.getElementById("other-manufacturers");
+  
+  if (manufacturerBtn && manufacturerCollapse) {
+    manufacturerCollapse.addEventListener("shown.bs.collapse", function () {
+      manufacturerBtn.innerText = "∧";
+      manufacturerBtn.setAttribute("title", "접기");
     });
 
-    // ✅ 수정: 체크박스 초기화 및 요약 업데이트 한 곳에서 처리
-    updateSummary();
-
-    // ✅ 이벤트 바인딩 통합
-    $('.select2-food-type').on('change', updateSummary);
-    $('.grp-long-shelf, .grp-sterilization, #chk_sterilization_other').on('change', updateSummary);
-    $('input[name="sterilization_other_detail"]').on('input', updateSummary);
-  });
-
-  document.addEventListener("DOMContentLoaded", function () {
-    const regulationPanel = document.getElementById("regulationPanel");
-    const toggleRegulationBtn = document.getElementById("toggleRegulationBtn");
-  
-    toggleRegulationBtn.addEventListener("click", function () {
-      regulationPanel.classList.toggle("collapsed");
-      toggleRegulationBtn.innerText = "〓";
+    manufacturerCollapse.addEventListener("hidden.bs.collapse", function () {
+      manufacturerBtn.innerText = "∨";
+      manufacturerBtn.setAttribute("title", "펼치기");
     });
-  });
-  
+  }
+
+  // 초기화
+  updateSummary();
+});
+
 </script>
 
 <!-- 상단 헤더 -->
@@ -257,19 +228,19 @@ $(document).ready(function() {
 </div>
 
 <!-- 식품유형/장기보존/제조방법 선택 영역 -->
-<div id="food-type-section" class="container mb-2">
+<div id="food-type-section" class="container mb-2" style="display:block;">
   <div class="d-flex align-items-center" style="gap:20px; width:100%;">
     <!-- 식품유형 -->
-    <div class="selectable-item" style="flex:1; max-width:30%;">
+    <div class="selectable-item" style="flex:1; max-width:25%;">
       <label class="form-label" style="font-size:0.8rem; font-weight:bold;">식품유형</label>
       <div class="d-flex" style="gap:5px; width:100%;">
-        <select id="food_type_large" name="food_type_large" class="form-control select2-food-type" style="width:50%;">
+        <select id="food_type_large" name="food_type_large" class="form-control select2-food-type" style="width:40%;">
            <option value="">대분류</option>
            {% for lt in large_food_types %}
            <option value="{{ lt }}" {% if form.food_type_large.value == lt %}selected{% endif %}>{{ lt }}</option>
            {% endfor %}
         </select>
-        <select id="food_type_small" name="prdlst_dcnm" class="form-control select2-food-type" style="width:50%;">
+        <select id="food_type_small" name="prdlst_dcnm" class="form-control select2-food-type" style="width:60%;">
            <option value="">소분류</option>
            {% for t in food_types %}
            <option value="{{ t }}" {% if form.prdlst_dcnm.value == t %}selected{% endif %}>{{ t }}</option>
@@ -277,14 +248,14 @@ $(document).ready(function() {
         </select>
       </div>
     </div>
-    
+
     <!-- 장기보존식품 -->
-    <div style="flex:1; max-width:30%; display: flex; flex-direction: column; align-items: flex-start;">
-      <div style="display: flex; align-items: center; margin-left: 10;">
+    <div style="flex:1; max-width:28%; display: flex; flex-direction: column; align-items: flex-start;">
+      <div style="display: flex; align-items: center; margin-left: 0;">
          <input type="checkbox" id="dummy_long_shelf" style="visibility:hidden; width:18px; margin-right:5px;">
          <label class="form-label" style="font-size:0.8rem; font-weight:bold; margin:0;">장기보존식품</label>
       </div>
-      <div class="d-flex" style="gap:10px; flex-wrap: nowrap; width:100%;">
+      <div class="d-flex align-items-center" style="gap:10px; width:100%;">
         <div class="form-check" style="margin:0;">
           <input type="checkbox" id="chk_frozen_heated" name="chk_long_shelf" class="form-check-input grp-long-shelf">
           <label for="chk_frozen_heated" class="form-check-label" style="font-size:0.8rem;">냉동(가열)</label>
@@ -303,14 +274,15 @@ $(document).ready(function() {
         </div>
       </div>
     </div>
+    
 
     <!-- 제조방법 -->
-    <div style="flex:1; max-width:33%; display: flex; flex-direction: column; align-items: flex-start;">
+    <div style="flex:1; max-width:47%; display: flex; flex-direction: column; align-items: flex-start;">
       <div style="display: flex; align-items: center; margin-left: 0;">
          <input type="checkbox" id="dummy_manufacturing" style="visibility:hidden; width:18px; margin-right:5px;">
          <label class="form-label" style="font-size:0.8rem; font-weight:bold; margin:0;">제조방법</label>
       </div>
-      <div class="d-flex" style="gap:10px; flex-wrap: nowrap; width:100%;">
+      <div class="d-flex align-items-center" style="gap:10px; flex-wrap: nowrap; width:100%;">
         <div class="form-check" style="margin:0;">
           <input type="checkbox" id="chk_sanitized" name="grp_sterilization" class="form-check-input grp-sterilization">
           <label for="chk_sanitized" class="form-check-label" style="font-size:0.8rem;">살균</label>
@@ -337,15 +309,13 @@ $(document).ready(function() {
 
 <!-- 식품유형 요약 -->
 <div class="container mb-2 d-flex justify-content-between align-items-center">
+  <div id="selected-info" style="font-weight:bold; font-size:0.9rem;">식품유형 :</div>
   <div class="d-flex align-items-center" style="gap: 5px;">
-    <button id="toggleFoodTypeBtn" class="btn btn-sm btn-outline-secondary" type="button" title="접기">▲</button>
-    <div id="selected-info" style="font-weight:bold; font-size:0.9rem;">식품유형 :</div>
+    <!-- 식품유형 접기/펼치기 버튼 (굵은 ∧ ∨ 사용) -->
+    <button id="toggleFoodTypeBtn" class="btn btn-sm btn-outline-secondary" type="button" title="접기" style="font-size: 1rem;">∧</button>
+    <!-- 우측 패널 접기/펼치기 버튼 -->
+    <button id="toggleRegulationBtn" class="btn btn-sm btn-outline-secondary" title="접기" style="font-size: 1rem;">❯</button>
   </div>
-  <!-- 접기 버튼: 좌측 패널의 상단에 위치 -->
-  <button id="toggleRegulationBtn" class="btn btn-sm btn-outline-secondary" type="button"
-  title="접기/펼치기" style="font-size: 1rem; padding: 1px 6px;">
-  〓
-  </button>
 </div>
 
 <!-- 본문 좌우 패널 영역 -->
@@ -363,20 +333,19 @@ $(document).ready(function() {
           <div style="width:10%; min-width:110px;">
             <input type="checkbox" id="chk_label_nm" name="chk_label_nm" class="form-check-input" {% if form.chk_label_nm.value == "Y" %}checked{% endif %}>
             <label for="chk_label_nm" class="m-0">라벨명</label>
-
           </div>
-          <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
+          <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="label_nm" class="form-control" value="{{ form.label_nm.value }}">
+            <input type="text" name="my_label_name" class="form-control" value="{{ form.my_label_name.value }}">
           </div>
         </div>
         <!-- 식품유형 -->
         <div class="d-flex align-items-center" style="flex:1; gap:5px;">
           <div style="width:10%; min-width:110px;">
             <input type="checkbox" id="chk_prdlst_dcnm" name="chk_prdlst_dcnm" class="form-check-input" {% if form.chk_prdlst_dcnm.value == "Y" %}checked{% endif %}>
-          <label for="chk_prdlst_dcnm" class="m-0">식품유형</label>
+            <label for="chk_prdlst_dcnm" class="m-0">식품유형</label>
           </div>
-          <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
+          <div style="width:5%;"></div>
           <div style="width:85%;">
             <input type="text" name="prdlst_dcnm" class="form-control" value="{{ form.prdlst_dcnm.value }}">
           </div>
@@ -389,9 +358,9 @@ $(document).ready(function() {
         <div class="d-flex align-items-center" style="flex:1; gap:5px;">
           <div style="width:10%; min-width:110px;">
             <input type="checkbox" id="chk_prdlst_nm" name="chk_prdlst_nm" class="form-check-input" {% if form.chk_prdlst_nm.value == "Y" %}checked{% endif %}>
-          <label for="chk_prdlst_nm" class="m-0">제품명</label>
+            <label for="chk_prdlst_nm" class="m-0">제품명</label>
           </div>
-          <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
+          <div style="width:5%;"></div>
           <div style="width:85%;">
             <input type="text" name="prdlst_nm" class="form-control" value="{{ form.prdlst_nm.value }}">
           </div>
@@ -400,11 +369,11 @@ $(document).ready(function() {
         <div class="d-flex align-items-center" style="flex:1; gap:5px;">
           <div style="width:10%; min-width:110px;">
             <input type="checkbox" id="chk_ingredients_info" name="chk_ingredients_info" class="form-check-input" {% if form.chk_ingredients_info.value == "Y" %}checked{% endif %}>
-          <label for="chk_ingredients_info" class="m-0">성분명 및 함량</label>
+            <label for="chk_ingredients_info" class="m-0">성분명 및 함량</label>
           </div>
-          <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
+          <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="ingredients_info" class="form-control" value="{{ form.ingredients_info.value }}">
+            <input type="text" name="ingredient_info" class="form-control" value="{{ form.ingredient_info.value }}">
           </div>
         </div>
       </div>
@@ -492,17 +461,16 @@ $(document).ready(function() {
         </div>
       </div>
 
-      <!-- 제조원 소재지 입력 + 펼치기 버튼 -->
+      <!-- 제조원 소재지 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
         <div style="width:9.6%; min-width:110px;">
-          <div class="form-check">
-            <input type="checkbox" id="chk_bssh_nm" name="chk_bssh_nm" class="form-check-input" {% if form.chk_bssh_nm.value == "Y" %}checked{% endif %}>
-            <label for="chk_bssh_nm" class="m-0">제조원 소재지</label>
-          </div>
+          <input type="checkbox" id="chk_manufacturer_info" name="chk_manufacturer_info" class="form-check-input">
+          <label for="chk_manufacturer_info" class="m-0">제조원 소재지</label>
         </div>
-        <!-- 펼치기/접기 버튼 -->
         <div style="min-width:1px;">
-        <button type="button" class="btn btn-outline-secondary" id="toggleManufacturerBtn" data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false" aria-controls="other-manufacturers" style="font-size: 0.9rem; padding: 1px 1px;" title="펼치기">▼</button>
+          <button type="button" class="btn btn-outline-secondary" id="toggleManufacturerBtn"
+            data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
+            aria-controls="other-manufacturers" style="font-size: 1rem; padding: 2px 1px;" title="펼치기">∨</button>
         </div>
         <div style="width:90.4%;">
           <input type="text" name="bssh_nm" class="form-control" style="flex:1;" value="{{ form.bssh_nm.value }}">
@@ -553,19 +521,20 @@ $(document).ready(function() {
       
       <!-- 소비기한/품질유지기한/제조연월일/생산연도 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
-        <div style="width:12.25%; min-width:130px;">
+        <div style="width:11.6%; min-width:137px;">
           <input type="checkbox" id="chk_date_info" name="chk_date_info" class="form-check-input" {% if form.chk_date_info.value == "Y" %}checked{% endif %}>
           <label for="chk_date_info" class="m-0">소비기한</label>
         </div>
-        <div style="width:97.75%;">
+        
+        <div style="width:88.4%;">
           <div class="d-flex" style="gap:5px;">
-            <select name="date_option" class="form-control" style="width:20%;">
-              <option value="소비기한" {% if form.date_option.value == "소비기한" or not form.date_option.value %}selected{% endif %}>소비기한</option>
-              <option value="품질유지기한" {% if form.date_option.value == "품질유지기한" %}selected{% endif %}>품질유지기한</option>
-              <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
-              <option value="생산연도" {% if form.date_option.value == "생산연도" %}selected{% endif %}>생산연도</option>
-            </select>
-            <input type="text" name="date_info_text" class="form-control" style="width:80%;" value="{{ form.date_info_text.value }}">
+        <select name="date_option" class="form-control select2-date-option" style="width:50%;">
+          <option value="소비기한" {% if form.date_option.value == "소비기한" or not form.date_option.value %}selected{% endif %}>소비기한</option>
+          <option value="품질유지기한" {% if form.date_option.value == "품질유지기한" %}selected{% endif %}>품질유지기한</option>
+          <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
+          <option value="생산연도" {% if form.date_option.value == "생산연도" %}selected{% endif %}>생산연도</option>
+        </select>
+        <input type="text" name="pog_daycnt" class="form-control" placeholder="None" value="{{ form.form.pog_daycnt.value }}">
           </div>
         </div>
       </div>
@@ -580,7 +549,7 @@ $(document).ready(function() {
           <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="handleIngredientPopup()" title="상세입력">✚</button>
         </div>
         <div style="width:90.4%;">
-          <textarea name="rawmtrl_nm_display" class="form-control" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value }}</textarea>
+          <textarea name="rawmtrl_nm_display" class="form-control" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value }}</textarea>
         </div>
       </div>
 
@@ -628,62 +597,29 @@ $(document).ready(function() {
         <div style="width:91%;">
           <textarea name="additional_info" rows="2" class="auto-expand form-control" placeholder="기타 표시사항을 입력하세요">{{ form.additional_info.value }}</textarea>
         </div>
-      </div>      
-      
+      </div>    
+
       <!-- 영양성분 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
         <div style="width:9%; min-width:105px;">
           <div class="form-check">
-          <input type="checkbox" id="chk_calories" name="chk_calories" class="form-check-input">
-          <label for="chk_calories" class="form-check-label m-0">영양성분</label>
+            <input type="checkbox" id="chk_calories" name="chk_calories" class="form-check-input" {% if form.chk_calories.value == "Y" %}checked{% endif %}>
+            <label for="chk_calories" class="form-check-label m-0">영양성분</label>
           </div>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="runNutritionCalculator()" title="계산하기">🧮</button>
+          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;"
+                  onclick="window.open('/label/nutrition-popup/', 'nutritionPopup', 'width=900,height=600')" title="영양성분 계산기">
+            🧮
+          </button>
         </div>
-
-        <!-- 우측: 입력 표 -->
         <div style="width:91%;">
-          <table class="table table-bordered table-sm mb-2" style="font-size:0.75rem; table-layout: fixed;">
-            <tbody>
-              <tr>
-                <th style="width:6%;">항목</th>
-                <td style="width:10%;">칼로리</td>
-                <td style="width:10%;">나트륨</td>
-                <td style="width:10%;">탄수화물</td>
-                <td style="width:10%;">당류</td>
-                <td style="width:10%;">지방</td>
-                <td style="width:10%;">트랜스지방</td>
-                <td style="width:10%;">포화지방</td>
-                <td style="width:10%;">콜레스테롤</td>
-                <td style="width:10%;">단백질</td>
-              </tr>
-              <tr>
-                <th>입력</th>
-                <td><input type="number" id="calories" name="calories" class="form-control form-control-sm" step="any"></td>
-                <td><input type="number" id="natriums" name="natriums" class="form-control form-control-sm" step="any"></td>
-                <td><input type="number" id="carbohydrates" name="carbohydrates" class="form-control form-control-sm" step="any"></td>
-                <td><input type="number" id="sugars" name="sugars" class="form-control form-control-sm" step="any"></td>
-                <td><input type="number" id="fats" name="fats" class="form-control form-control-sm" step="any"></td>
-                <td><input type="number" id="trans_fats" name="trans_fats" class="form-control form-control-sm" step="any"></td>
-                <td><input type="number" id="saturated_fats" name="saturated_fats" class="form-control form-control-sm" step="any"></td>
-                <td><input type="number" id="cholesterols" name="cholesterols" class="form-control form-control-sm" step="any"></td>
-                <td><input type="number" id="proteins" name="proteins" class="form-control form-control-sm" step="any"></td>
-              </tr>
-              <tr>
-                <th>표시</th>
-                <td id="result_calories"></td>
-                <td id="result_natriums"></td>
-                <td id="result_carbohydrates"></td>
-                <td id="result_sugars"></td>
-                <td id="result_fats"></td>
-                <td id="result_trans_fats"></td>
-                <td id="result_saturated_fats"></td>
-                <td id="result_cholesterols"></td>
-                <td id="result_proteins"></td>
-              </tr>
-            </tbody>
-          </table>
+          <textarea id="nutritions"
+          name="nutritions"
+          class="form-control"
+          rows="2"
+          placeholder="영양성분 계산기를 통해 입력하세요."
+          readonly>{{ form.nutritions.value }}</textarea>
         </div>
       </div>
 

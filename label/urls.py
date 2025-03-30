@@ -19,6 +19,7 @@ urlpatterns = [
     # path('label-creation/<uuid:unique_key>/', views.label_creation, name='label_creation_uuid'),
     path('label-creation/<int:label_id>/', views.label_creation, name='label_creation'),
     path('ingredient-popup/', views.ingredient_popup, name='ingredient_popup'),
+    path('nutrition-popup/', views.nutrition_calculator_popup, name='nutrition_popup'),
     
     # 내원료 관리
     path('save-to-my-ingredients/<str:prdlst_report_no>/', views.save_to_my_ingredients, name='save_to_my_ingredients'),
