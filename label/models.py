@@ -161,7 +161,7 @@ class MyLabel(models.Model):
 
     #영양성분 관련 컬럼
     nutrition_text = models.TextField(max_length=1000, verbose_name="영양성분 표시", null=True, blank=True)
-    
+
     serving_size = models.CharField(max_length=10, verbose_name="단위 내용량", null=True, blank=True)
     serving_size_unit = models.CharField(max_length=10, verbose_name="단위 내용량 단위", null=True, blank=True)
 
@@ -222,18 +222,6 @@ class MyLabel(models.Model):
     def __str__(self):
         return self.my_label_name
     
-    # def update_ingredient_ids(self):
-    #     """
-    #     ManyToMany 관계(ingredients) 기반으로 캐싱 필드를 업데이트.
-    #     """
-    #     # ingredients 필드에서 모든 원재료 ID를 가져옴
-    #     ids = list(self.ingredients.values_list('my_ingredient_id', flat=True))
-    #     # 쉼표 구분 문자열 업데이트
-    #     self.ingredient_ids_str = ",".join(map(str, ids))
-    #     # JSON 필드 업데이트
-    #     self.ingredient_ids_json = ids
-    #     self.save(update_fields=["ingredient_ids_str", "ingredient_ids_json"])
-
     def get_ingredient_queryset(self):
         """
         캐싱 필드가 있으면 이를 사용하여 MyIngredient 객체들을 조회하고,
@@ -255,8 +243,11 @@ class FoodType(models.Model):
     #food_category = models.CharField(max_length=100, verbose_name="식품분류", default='default_category')
     food_type = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)
 
+    prdlst_dcnm = models.CharField(max_length=1, verbose_name="식품유형명", null=True, blank=True)
+
     weight_calorie = models.CharField(max_length=1, verbose_name="내용량(열량)", null=True, blank=True)
     prdlst_report_no = models.CharField(max_length=1, verbose_name="품목보고번호", null=True, blank=True)
+    country_of_origin = models.CharField(max_length=1, verbose_name="원산지", null=True, blank=True)
     frmlc_mtrqlt = models.CharField(max_length=1, verbose_name="포장재질", null=True, blank=True)
     pog_daycnt  = models.CharField(max_length=50, verbose_name="소비기한", null=True, blank=True)
 
@@ -264,19 +255,10 @@ class FoodType(models.Model):
     storage_method = models.CharField(max_length=1, verbose_name="보관방법", null=True, blank=True)
 
     nutritions = models.CharField(max_length=1, verbose_name="영양성분", null=True, blank=True)
-    #calories = models.CharField(max_length=1, verbose_name="칼로리", null=True, blank=True)
-    #natriums = models.CharField(max_length=1, verbose_name="나트륨", null=True, blank=True)
-    #carbohydrates = models.CharField(max_length=1, verbose_name="탄수화물", null=True, blank=True)
-    #sugars = models.CharField(max_length=1, verbose_name="당류", null=True, blank=True)
-    #fats = models.CharField(max_length=1, verbose_name="지방", null=True, blank=True)
-    #trans_fats = models.CharField(max_length=1, verbose_name="트랜스지방", null=True, blank=True)
-    #saturated_fats = models.CharField(max_length=1, verbose_name="포화지방", null=True, blank=True)
-    #cholesterols = models.CharField(max_length=1, verbose_name="콜레스테롤", null=True, blank=True)
-    #proteins = models.CharField(max_length=1, verbose_name="단백질", null=True, blank=True)
 
     cautions = models.CharField(max_length=1, verbose_name="주의사항", null=True, blank=True)
 
-    type_check = models.CharField(max_length=1, verbose_name="구분", null=True, blank=True)
+    type_check = models.CharField(max_length=10, verbose_name="구분", null=True, blank=True)
 
     relevant_regulations = models.TextField(verbose_name="식품유형별 관련규정", null=True, blank=True)
 

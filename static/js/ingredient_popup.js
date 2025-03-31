@@ -921,6 +921,17 @@ function saveIngredients() {
         console.error("저장 요청 오류:", error);
         alert("저장 중 오류가 발생했습니다.");
     });
+    
+    // 부모 창 갱신
+    if (window.opener) {
+        // 페이지 새로고침 (필요한 경우)
+        window.opener.location.reload();
+        
+        // 또는 함수 호출 (새로고침 없이 특정 부분만 업데이트)
+        // window.opener.updateIngredientSection();
+    }
+    
+    window.close();
 }
 
 // 원산지 관리 함수 추가 (기본 구조만 구현)

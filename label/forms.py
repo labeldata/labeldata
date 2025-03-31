@@ -7,8 +7,13 @@ class LabelCreationForm(forms.ModelForm):
         model = MyLabel
         fields = [
             'my_label_name',
+            'food_group',
+            'food_type',
             'prdlst_dcnm',
             'prdlst_nm',
+            'preservation_type',
+            'processing_method',
+            'processing_condition',
             'ingredient_info',
             'content_weight',
             'weight_calorie',

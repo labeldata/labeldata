@@ -37,17 +37,21 @@
     <div class="selectable-item" style="flex:1; max-width:25%;">
       <label class="form-label" style="font-size:0.8rem; font-weight:bold;">식품유형</label>
       <div class="d-flex" style="gap:5px; width:100%;">
-        <select id="food_type_large" name="food_type_large" class="form-control select2-food-type" style="width:40%;">
-           <option value="">대분류</option>
-           {% for lt in large_food_types %}
-           <option value="{{ lt }}" {% if form.food_type_large.value == lt %}selected{% endif %}>{{ lt }}</option>
-           {% endfor %}
+        <select id="food_group" name="food_group" class="form-control select2-food-type" style="width:40%;">
+          <option value="">대분류</option>
+          {% for group in food_groups %}
+          <option value="{{ group }}" {% if label.food_group == group %}selected{% endif %}>{{ group }}</option>
+          {% endfor %}
         </select>
-        <select id="food_type_small" name="prdlst_dcnm" class="form-control select2-food-type" style="width:60%;">
-           <option value="">소분류</option>
-           {% for t in food_types %}
-           <option value="{{ t }}" {% if form.prdlst_dcnm.value == t %}selected{% endif %}>{{ t }}</option>
-           {% endfor %}
+        <select id="food_type" name="food_type" class="form-control select2-food-type" style="width:60%;">
+          <option value="">소분류</option>
+          {% for type in food_types %}
+          <option value="{{ type.food_type }}" 
+                  data-group="{{ type.food_group }}" 
+                  {% if label.food_type == type.food_type %}selected{% endif %}>
+            {{ type.food_type }}
+          </option>
+          {% endfor %}
         </select>
       </div>
     </div>
@@ -60,19 +64,19 @@
       </div>
       <div class="d-flex align-items-center" style="gap:10px; width:100%;">
         <div class="form-check" style="margin:0;">
-          <input type="checkbox" id="chk_frozen_heated" name="chk_long_shelf" class="form-check-input grp-long-shelf">
+          <input type="checkbox" id="chk_frozen_heated" name="preservation_type" value="frozen_heated" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "frozen_heated" %}checked{% endif %}>
           <label for="chk_frozen_heated" class="form-check-label" style="font-size:0.8rem;">냉동(가열)</label>
         </div>
         <div class="form-check" style="margin:0;">
-          <input type="checkbox" id="chk_frozen_nonheated" name="chk_long_shelf" class="form-check-input grp-long-shelf">
+          <input type="checkbox" id="chk_frozen_nonheated" name="preservation_type" value="frozen_nonheated" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "frozen_nonheated" %}checked{% endif %}>
           <label for="chk_frozen_nonheated" class="form-check-label" style="font-size:0.8rem;">냉동(비가열)</label>
         </div>
         <div class="form-check" style="margin:0;">
-          <input type="checkbox" id="chk_canned" name="chk_long_shelf" class="form-check-input grp-long-shelf">
+          <input type="checkbox" id="chk_canned" name="preservation_type" value="canned" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "canned" %}checked{% endif %}>
           <label for="chk_canned" class="form-check-label" style="font-size:0.8rem;">통.병조림</label>
         </div>
         <div class="form-check" style="margin:0;">
-          <input type="checkbox" id="chk_retort" name="chk_long_shelf" class="form-check-input grp-long-shelf">
+          <input type="checkbox" id="chk_retort" name="preservation_type" value="retort" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "retort" %}checked{% endif %}>
           <label for="chk_retort" class="form-check-label" style="font-size:0.8rem;">레토르트</label>
         </div>
       </div>
@@ -87,22 +91,22 @@
       </div>
       <div class="d-flex align-items-center" style="gap:10px; flex-wrap: nowrap; width:100%;">
         <div class="form-check" style="margin:0;">
-          <input type="checkbox" id="chk_sanitized" name="grp_sterilization" class="form-check-input grp-sterilization">
+          <input type="checkbox" id="chk_sanitized" name="processing_method" value="sanitized" class="form-check-input grp-sterilization" {% if form.processing_method.value == "sanitized" %}checked{% endif %}>
           <label for="chk_sanitized" class="form-check-label" style="font-size:0.8rem;">살균</label>
         </div>
         <div class="form-check" style="margin:0;">
-          <input type="checkbox" id="chk_aseptic" name="grp_sterilization" class="form-check-input grp-sterilization">
+          <input type="checkbox" id="chk_aseptic" name="processing_method" value="aseptic" class="form-check-input grp-sterilization" {% if form.processing_method.value == "aseptic" %}checked{% endif %}>
           <label for="chk_aseptic" class="form-check-label" style="font-size:0.8rem;">멸균</label>
         </div>
         <div class="form-check" style="margin:0;">
-          <input type="checkbox" id="chk_yutang" name="grp_sterilization" class="form-check-input grp-sterilization">
+          <input type="checkbox" id="chk_yutang" name="processing_method" value="yutang" class="form-check-input grp-sterilization" {% if form.processing_method.value == "yutang" %}checked{% endif %}>
           <label for="chk_yutang" class="form-check-label" style="font-size:0.8rem;">유탕/유처리</label>
         </div>
         <div class="form-check" style="margin:0;">
-          <input type="checkbox" id="chk_sterilization_other" name="grp_sterilization_other" class="form-check-input">
+          <input type="checkbox" id="chk_sterilization_other" name="chk_sterilization_other" class="form-check-input" {% if form.processing_condition.value %}checked{% endif %}>
           <label for="chk_sterilization_other" class="form-check-label" style="font-size:0.8rem;">조건</label>
         </div>
-        <input type="text" name="sterilization_other_detail" class="form-control" placeholder="조건 상세" style="width:120px;" value="{{ form.sterilization_other_detail.value }}">
+        <input type="text" name="processing_condition" class="form-control" placeholder="조건 상세" style="width:120px;" value="{{ form.processing_condition.value }}">
       </div>
     </div>
   </div>
@@ -128,6 +132,15 @@
     <div class="left-panel flex-grow-1 position-relative" style="flex-basis: 70%;">
       <form method="post" id="labelForm">
         {% csrf_token %}
+        
+        <!-- 식품유형 hidden 필드 추가 -->
+        <input type="hidden" id="hidden_food_group" name="food_group" value="{{ label.food_group }}">
+        <input type="hidden" id="hidden_food_type" name="food_type" value="{{ label.food_type }}">
+        
+        <!-- 장기보존식품, 제조방법 hidden 필드 추가 -->
+        <input type="hidden" id="hidden_preservation_type" name="preservation_type" value="{{ label.preservation_type }}">
+        <input type="hidden" id="hidden_processing_method" name="processing_method" value="{{ label.processing_method }}">
+        <input type="hidden" id="hidden_processing_condition" name="processing_condition" value="{{ label.processing_condition }}">
 
       <!-- 라벨명 + 식품유형 한 줄 구성 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
@@ -356,8 +369,9 @@
         </div>
       </div>
 
-      <!-- 원재료명 (참고) -->
-      <div class="collapse mb-2" id="rawmtrl_nm_section">
+      <!-- 원재료명 (참고) - ingredient_relations가 있을 때만 표시 -->
+      {% if has_ingredient_relations %}
+      <div class="mb-2" id="rawmtrl_nm_section">
         <div class="d-flex align-items-center" style="gap:5px;">
           <div style="width:11%; min-width:130px;">
             <div class="form-check">
@@ -370,6 +384,7 @@
           </div>
         </div>  
       </div>
+      {% endif %}
 
       <!-- 주의사항 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">

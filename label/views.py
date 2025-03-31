@@ -189,39 +189,63 @@ def save_to_my_label(request, prdlst_report_no):
 
 @login_required
 def label_creation(request, label_id=None):
-    disable_rawmtrl = False
+    has_ingredient_relations = False
+    form = None  # form 변수를 함수 시작 부분에서 초기화
+    
     if label_id:
-        label = get_object_or_404(MyLabel, my_label_id=label_id)
+        label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+        
+        # 관계 테이블 존재 여부 확인
+        has_ingredient_relations = label.ingredient_relations.exists()
         
         if request.method == 'POST':
             form = LabelCreationForm(request.POST, instance=label)
             if form.is_valid():
                 label = form.save(commit=False)
-                # 관계 테이블에 연결된 데이터가 있으면 원재료명(rawmtrl_nm)을 업데이트하지 않음
-                if not label.ingredient_relations.exists():
-                    raw_materials = [
-                        relation.ingredient.prdlst_nm 
-                        for relation in label.ingredient_relations.all()
-                        if relation.ingredient.prdlst_nm  # 실제 값이 있는 경우만
-                    ]
+                
+                # 원재료명(참고) 필드 업데이트 - 관계 테이블에서 원재료 가져오기
+                if has_ingredient_relations:
+                    raw_materials = []
+                    for relation in label.ingredient_relations.all().order_by('relation_sequence'):
+                        if relation.ingredient.ingredient_display_name:
+                            # 비율 부분을 제거하고 원재료명만 추가
+                            raw_materials.append(relation.ingredient.ingredient_display_name)
+                    
+                    # 콤마로 구분된 원재료명 참고 문자열 생성
                     if raw_materials:
-                        # join 후 앞뒤 공백 제거
-                        label.rawmtrl_nm = ', '.join(raw_materials).strip()
+                        label.rawmtrl_nm = ", ".join(raw_materials)
+                
+                # 식품유형 값 설정
+                label.food_group = request.POST.get('food_group', '')
+                label.food_type = request.POST.get('food_type', '')
+                
+                # 장기보존식품 설정 (radio로 동작하는 체크박스)
+                label.preservation_type = request.POST.get('preservation_type', '')
+                
+                # 제조방법 설정 (radio로 동작하는 체크박스)
+                label.processing_method = request.POST.get('processing_method', '')
+                
+                # 조건 상세 설정
+                label.processing_condition = request.POST.get('processing_condition', '')
+                
                 label.save()
                 messages.success(request, '저장되었습니다.')
                 return redirect('label:label_creation', label_id=label.my_label_id)
         else:
-            # GET 요청 시: 관계 데이터가 있고 실제로 원재료명이 존재하면 입력란을 disable 처리
-            if label.ingredient_relations.exists():
-                raw_materials = [
-                    relation.ingredient.ingredient_display_name
-                    for relation in label.ingredient_relations.all().order_by('relation_sequence')
-                    if relation.ingredient.ingredient_display_name  # 값이 있는 경우만
-                ]
+            # GET 요청 시: 관계 데이터가 있으면 원재료명(참고) 필드를 자동으로 채움
+            if has_ingredient_relations:
+                raw_materials = []
+                for relation in label.ingredient_relations.all().order_by('relation_sequence'):
+                    if relation.ingredient.ingredient_display_name:
+                        # 비율 부분을 제거하고 원재료명만 추가
+                        raw_materials.append(relation.ingredient.ingredient_display_name)
+                
+                # 원재료명(참고) 필드 값 설정
                 if raw_materials:
-                    label.rawmtrl_nm = ', '.join(raw_materials).strip()
-                    
-                disable_rawmtrl = True  # 실제 데이터가 있는 경우에만 disable 처리
+                    label.rawmtrl_nm = ", ".join(raw_materials)
+                    # 이미 저장된 라벨이므로 변경사항 바로 저장
+                    label.save(update_fields=['rawmtrl_nm'])
+
             form = LabelCreationForm(instance=label)
     else:
         if request.method == 'POST':
@@ -229,6 +253,20 @@ def label_creation(request, label_id=None):
             if form.is_valid():
                 label = form.save(commit=False)
                 label.user_id = request.user
+                
+                # 식품유형 값 설정
+                label.food_group = request.POST.get('food_group', '')
+                label.food_type = request.POST.get('food_type', '')
+                
+                # 장기보존식품 설정
+                label.preservation_type = request.POST.get('preservation_type', '')
+                
+                # 제조방법 설정
+                label.processing_method = request.POST.get('processing_method', '')
+                
+                # 조건 상세 설정
+                label.processing_condition = request.POST.get('processing_condition', '')
+                
                 label.save()
                 messages.success(request, '저장되었습니다.')
                 return redirect('label:label_creation', label_id=label.my_label_id)
@@ -236,12 +274,19 @@ def label_creation(request, label_id=None):
             form = LabelCreationForm()
             label = None
 
+    # 식품유형 대분류 목록 조회
+    food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
+    
+    # 식품유형 소분류 목록 조회 (대분류 정보 포함)
+    food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
+    
     context = {
-        'form': form,
-        'label': label,
-        'food_types': FoodType.objects.all(),
+        'form': form,  # 이제 form은 항상 할당되어 있음
+        'label': label if 'label' in locals() else None,  # label 변수가 있는지 확인
+        'food_types': food_types,  # 대분류 정보 포함
+        'food_groups': food_groups,
         'country_list': CountryList.objects.all(),
-        'disable_rawmtrl': disable_rawmtrl,  # 템플릿으로 전달할 플래그
+        'has_ingredient_relations': has_ingredient_relations,
     }
     return render(request, 'label/label_creation.html', context)
 
@@ -948,4 +993,42 @@ def save_nutrition(request):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+def food_types_by_group(request):
+    """대분류에 해당하는 소분류 목록을 반환"""
+    group = request.GET.get('group', '')
+    
+    if group:
+        food_types = FoodType.objects.filter(food_group=group).values('food_type', 'food_group').order_by('food_type')
+    else:
+        food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
+    
+    return JsonResponse({
+        'success': True,
+        'food_types': list(food_types)
+    })
+
+@login_required
+def get_food_group(request):
+    """소분류에 해당하는 대분류를 반환"""
+    food_type = request.GET.get('food_type', '')
+    
+    if food_type:
+        try:
+            food_group = FoodType.objects.filter(food_type=food_type).values_list('food_group', flat=True).first()
+            return JsonResponse({
+                'success': True,
+                'food_group': food_group or ''
+            })
+        except FoodType.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': '해당하는 식품유형을 찾을 수 없습니다.'
+            })
+    else:
+        return JsonResponse({
+            'success': False,
+            'error': '식품유형이 제공되지 않았습니다.'
+        })
 
