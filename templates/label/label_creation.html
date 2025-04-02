@@ -13,6 +13,30 @@
 <link href="{% static 'css/label_creation.css' %}" rel="stylesheet" />
 <script src="{% static 'js/label_creation.js' %}"></script>
 
+<script>
+  function openPhrasePopup() {
+    const width = 1100;
+    const height = 800;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+    
+    // URL을 phrase_popup으로 변경
+    window.open('/label/phrases/', 'phrasePopup', 
+        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`);
+}
+
+// 버튼에 이벤트 핸들러 연결
+document.addEventListener('DOMContentLoaded', function() {
+    // 주의사항과 기타표시사항의 버튼을 모두 선택
+    const phraseButtons = document.querySelectorAll('[onclick="openPhrasePopup()"]');
+    phraseButtons.forEach(button => {
+        button.onclick = function() {
+            openPhrasePopup();
+        };
+    });
+});
+</script>
+
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
 <input type="hidden" id="label_id" value="{{ label.my_label_id }}">
 
@@ -410,7 +434,7 @@
           </div>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="openIngredientPopup()" title="자주 사용하는 문구">📝</button>
+          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="openPhrasePopup()" title="자주 사용하는 문구">📝</button>
         </div>
         <div style="width:91%;">
           <textarea name="cautions" rows="2" class="auto-expand form-control" placeholder="주의사항을 입력하세요">{{ form.cautions.value }}</textarea>
@@ -425,7 +449,7 @@
           </div>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="openIngredientPopup()" title="자주 사용하는 문구">📝</button>
+          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="openPhrasePopup()" title="자주 사용하는 문구">📝</button>
         </div>
         <div style="width:91%;">
           <textarea name="additional_info" rows="2" class="auto-expand form-control" placeholder="기타 표시사항을 입력하세요">{{ form.additional_info.value }}</textarea>

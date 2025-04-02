@@ -26,6 +26,9 @@ urlpatterns = [
     path('save-nutrition/', views.save_nutrition, name='save_nutrition'),
     path('duplicate/<int:label_id>/', views.duplicate_label, name='duplicate_label'),
     path('delete/<int:label_id>/', views.delete_label, name='delete_label'),
+    path('phrases/', views.phrase_popup, name='phrase_popup'),  # 추가
+    path('phrases/reorder/', views.reorder_phrases, name='reorder_phrases'),
+
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
     path('get-food-group/', views.get_food_group, name='get_food_group'),
     path('food-type-settings/', views.food_type_settings, name='food_type_settings'),

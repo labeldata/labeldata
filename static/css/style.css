@@ -567,7 +567,6 @@ a:active {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
-    background-color: #fff;
 }
 
 /* 헤더 영역: 제목과 버튼 그룹을 한 줄에 배치 */
@@ -689,4 +688,27 @@ a:active {
 
 .toggle-btn.collapsed {
   transform: rotate(180deg);
+}
+
+/* 문구 팝업 전용 스타일 */
+.phrase-popup .container-fluid {
+    padding: 20px;
+}
+
+.phrase-popup .panel-header {
+    padding: 0 0 15px 0;
+}
+
+.phrase-popup .nav-tabs .nav-link {
+    color: #495057;
+}
+
+.phrase-popup .nav-tabs .nav-link.active {
+    color: var(--btn-color);
+}
+
+.phrase-popup .phrase-example {
+    background-color: #fff;
+    padding: 15px;
+    border-radius: 4px;
 }

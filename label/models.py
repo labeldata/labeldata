@@ -35,35 +35,83 @@ class FoodItem(models.Model):
     def __str__(self):
         return self.prdlst_report_no
    
-#개인 유저가 쓴다면 아래와 같이
 class MyPhrase(models.Model):
     # 자주 사용하는 문구 저장 모델
-    user_id = models.ForeignKey(User, related_name="user_phrase", on_delete=models.CASCADE, db_column="user_id", verbose_name="사용자 id")
+    user_id = models.ForeignKey(
+        User, 
+        related_name="user_phrase", 
+        on_delete=models.CASCADE, 
+        db_column="user_id", 
+        verbose_name="사용자 id"
+    )
 
-    #id = 자동생성
+    # 자동 생성되는 기본 키
     my_phrase_id = models.AutoField(primary_key=True)
-    #키 = 유저id + 문서 종류 + 문서번호로 생성
-    #my_phrase_key = models.CharField(max_length=50, unique=True, verbose_name="내 문구키", primary_key=True)
-    my_phrase_name = models.CharField(max_length=200, verbose_name="내 문구명")
+    
+    # 문구 기본 정보
+    my_phrase_name = models.CharField(
+        max_length=200, 
+        verbose_name="내 문구명"
+    )
+    
+    # 카테고리 필드 - choices 추가
+    category_name = models.CharField(
+        max_length=100, 
+        verbose_name="문구 카테고리",
+        choices=[
+            ('cautions', '주의사항'),
+            ('additional', '기타표시사항')
+        ]
+    )
 
-    category_name = models.CharField(max_length=100, verbose_name="문구 카테고리")  # 예: '주의사항', '기타 표시사항'
-    comment_content = models.TextField(max_length=1000, verbose_name="문구 내용")
+    # 문구 내용
+    comment_content = models.TextField(
+        max_length=1000, 
+        verbose_name="문구 내용"
+    )
 
-    #create_datetime = models.DateTimeField(auto_now_add=True)
-    update_datetime = models.DateTimeField(auto_now=True)
+    # 시간 관련 필드
+    create_datetime = models.DateTimeField(
+        auto_now_add=True,
+        null=True,  # null 허용으로 변경
+        verbose_name="생성일시"
+    )
+    update_datetime = models.DateTimeField(
+        auto_now=True,
+        verbose_name="수정일시"
+    )
 
-    # 데이터 삭제시 db 삭제가 아니라 플래그 처리로 보이지만 않게
-    delete_datetime = models.CharField(max_length=8, verbose_name="삭제일자", help_text="yyyymmdd", default="")
-    delete_YN = models.CharField(max_length=1, verbose_name="내 제품 삭제 여부" )
+    # 삭제 관련 필드
+    delete_datetime = models.CharField(
+        max_length=8, 
+        verbose_name="삭제일자", 
+        help_text="yyyymmdd", 
+        default="",
+        blank=True
+    )
+    delete_YN = models.CharField(
+        max_length=1, 
+        verbose_name="삭제 여부",
+        default='N'
+    )
+
+    # 표시 순서
+    display_order = models.IntegerField(default=0)
 
     class Meta:
         db_table = "my_comment_storage"
-        indexes = [
-            #models.Index(fields=['lcns_no'], name='idx_lcns_no'),
-        ]
+        ordering = ['display_order', '-update_datetime']
 
     def __str__(self):
-        return self.my_phrase_id
+        return f"{self.my_phrase_name}"
+
+    def soft_delete(self):
+        """소프트 삭제 메서드"""
+        from datetime import datetime
+        self.delete_datetime = datetime.now().strftime('%Y%m%d')
+        self.delete_YN = 'Y'
+        self.save()
+        
     
 class MyIngredient(models.Model):
     # 내 원료 저장 모델
