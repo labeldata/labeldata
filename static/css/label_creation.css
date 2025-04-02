@@ -33,9 +33,38 @@ input[type=number] {
   padding: 0.2rem;
 }
 
-.disabled-textarea {
-  background-color: #e9ecef;
-  cursor: not-allowed;
+/* 비활성화된 필드 스타일 명확히 */
+.disabled-textarea,
+input[disabled],
+textarea[disabled] {
+  background-color: #e9ecef !important;
+  cursor: text !important;  /* 드래그 가능함을 표시 */
+  opacity: 0.7 !important;
+  /* pointer-events: none 제거 */
+  color: #000000 !important;
+  border-color: #ced4da !important;
+  
+  /* 드래그는 허용하되 편집은 불가능 */
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+}
+
+/* 비활성화된 필드의 포커스 스타일 무효화 */
+.disabled-textarea:focus,
+input[disabled]:focus,
+textarea[disabled]:focus {
+  box-shadow: none !important;
+  outline: none !important;
+  border-color: #ced4da !important;
+}
+
+/* 체크박스 비활성화 스타일 */
+input[type="checkbox"][disabled] + label {
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+  color: #6c757d !important;
 }
 
 .detail-btn {

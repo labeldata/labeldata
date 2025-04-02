@@ -28,6 +28,7 @@ urlpatterns = [
     path('delete/<int:label_id>/', views.delete_label, name='delete_label'),
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
     path('get-food-group/', views.get_food_group, name='get_food_group'),
+    path('food-type-settings/', views.food_type_settings, name='food_type_settings'),
     
     # 내원료 관리
     path('save-to-my-ingredients/<str:prdlst_report_no>/', views.save_to_my_ingredients, name='save_to_my_ingredients'),

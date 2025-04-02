@@ -3,6 +3,28 @@ from .models import MyLabel, MyIngredient
 
 class LabelCreationForm(forms.ModelForm):
     """표시사항 작성 폼"""
+    # 체크박스 필드 정의 수정
+    chk_label_nm = forms.CharField(max_length=2, required=False, initial='N')
+    chk_prdlst_nm = forms.CharField(max_length=2, required=False, initial='Y')  # 기본값 Y로 변경
+    chk_ingredients_info = forms.CharField(max_length=2, required=False, initial='N')
+    chk_content_weight = forms.CharField(max_length=2, required=False, initial='Y')  # 기본값 Y로 변경
+    chk_manufacturer_info = forms.CharField(max_length=2, required=False, initial='Y')
+    chk_distributor_address = forms.CharField(max_length=2, required=False, initial='N')
+    chk_repacker_address = forms.CharField(max_length=2, required=False, initial='N')
+    chk_importer_address = forms.CharField(max_length=2, required=False, initial='N')
+    chk_date_info = forms.CharField(max_length=2, required=False, initial='Y')
+    chk_rawmtrl_nm = forms.CharField(max_length=2, required=False, initial='N')
+    chk_prdlst_dcnm = forms.CharField(max_length=2, required=False, initial='N')
+    chk_weight_calorie = forms.CharField(max_length=2, required=False, initial='N')
+    chk_prdlst_report_no = forms.CharField(max_length=2, required=False, initial='N')
+    chk_country_of_origin = forms.CharField(max_length=2, required=False, initial='N')
+    chk_storage_method = forms.CharField(max_length=2, required=False, initial='N')
+    chk_frmlc_mtrqlt = forms.CharField(max_length=2, required=False, initial='N')
+    chk_rawmtrl_nm_display = forms.CharField(max_length=2, required=False, initial='N')
+    chk_cautions = forms.CharField(max_length=2, required=False, initial='N')
+    chk_additional_info = forms.CharField(max_length=2, required=False, initial='N')
+    chk_calories = forms.CharField(max_length=2, required=False, initial='N')
+
     class Meta:
         model = MyLabel
         fields = [
@@ -42,6 +64,27 @@ class LabelCreationForm(forms.ModelForm):
             'proteins', 'proteins_unit',
             'serving_size', 'serving_size_unit',
             'units_per_package', 'nutrition_display_unit',
+            # 체크박스 필드 포함
+            'chk_label_nm',
+            'chk_prdlst_nm',
+            'chk_ingredients_info',
+            'chk_content_weight',
+            'chk_manufacturer_info',
+            'chk_distributor_address',
+            'chk_repacker_address',
+            'chk_importer_address',
+            'chk_date_info',
+            'chk_rawmtrl_nm',
+            'chk_prdlst_dcnm',
+            'chk_weight_calorie',
+            'chk_prdlst_report_no',
+            'chk_country_of_origin',
+            'chk_storage_method',
+            'chk_frmlc_mtrqlt',
+            'chk_rawmtrl_nm_display',
+            'chk_cautions',
+            'chk_additional_info',
+            'chk_calories',
         ]
         widgets = {
             'rawmtrl_nm': forms.Textarea(attrs={'rows': 2, 'class': 'auto-expand form-control'}),

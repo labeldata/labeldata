@@ -37,13 +37,13 @@
     <div class="selectable-item" style="flex:1; max-width:25%;">
       <label class="form-label" style="font-size:0.8rem; font-weight:bold;">식품유형</label>
       <div class="d-flex" style="gap:5px; width:100%;">
-        <select id="food_group" name="food_group" class="form-control select2-food-type" style="width:40%;">
+        <select id="food_group" name="food_group" class="form-control" style="width:40%;">
           <option value="">대분류</option>
           {% for group in food_groups %}
           <option value="{{ group }}" {% if label.food_group == group %}selected{% endif %}>{{ group }}</option>
           {% endfor %}
         </select>
-        <select id="food_type" name="food_type" class="form-control select2-food-type" style="width:60%;">
+        <select id="food_type" name="food_type" class="form-control" style="width:60%;">
           <option value="">소분류</option>
           {% for type in food_types %}
           <option value="{{ type.food_type }}" 
@@ -147,7 +147,9 @@
         <!-- 라벨명 -->
         <div class="d-flex align-items-center" style="flex:1; gap:5px;">
           <div style="width:10%; min-width:110px;">
-            <input type="checkbox" id="chk_label_nm" name="chk_label_nm" class="form-check-input" {% if form.chk_label_nm.value == "Y" %}checked{% endif %}>
+            <!-- 라벨명 체크박스 -->
+            <input type="checkbox" id="chk_label_nm" name="chk_label_nm" class="form-check-input" 
+                   {% if form.chk_label_nm.value == "Y" %}checked{% endif %}>
             <label for="chk_label_nm" class="m-0">라벨명</label>
           </div>
           <div style="width:5%;"></div>
@@ -173,7 +175,9 @@
         <!-- 제품명 -->
         <div class="d-flex align-items-center" style="flex:1; gap:5px;">
           <div style="width:10%; min-width:110px;">
-            <input type="checkbox" id="chk_prdlst_nm" name="chk_prdlst_nm" class="form-check-input" {% if form.chk_prdlst_nm.value == "Y" %}checked{% endif %}>
+            <!-- 제품명 체크박스 -->
+            <input type="checkbox" id="chk_prdlst_nm" name="chk_prdlst_nm" class="form-check-input" 
+                   {% if form.chk_prdlst_nm.value == "Y" %}checked{% endif %}>
             <label for="chk_prdlst_nm" class="m-0">제품명</label>
           </div>
           <div style="width:5%;"></div>
@@ -184,7 +188,9 @@
         <!-- 성분명 및 함량 -->
         <div class="d-flex align-items-center" style="flex:1; gap:5px;">
           <div style="width:10%; min-width:110px;">
-            <input type="checkbox" id="chk_ingredients_info" name="chk_ingredients_info" class="form-check-input" {% if form.chk_ingredients_info.value == "Y" %}checked{% endif %}>
+            <!-- 성분명 및 함량 체크박스 -->
+            <input type="checkbox" id="chk_ingredients_info" name="chk_ingredients_info" class="form-check-input" 
+                   {% if form.chk_ingredients_info.value == "Y" %}checked{% endif %}>
             <label for="chk_ingredients_info" class="m-0">성분명 및 함량</label>
           </div>
           <div style="width:5%;"></div>
@@ -199,7 +205,9 @@
         <!-- 내용량 -->
         <div class="d-flex align-items-center" style="flex:1; gap:5px;">
           <div style="width:10%; min-width:110px;">
-            <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" {% if form.chk_content_weight.value == "Y" %}checked{% endif %}>
+            <!-- 내용량 체크박스 -->
+            <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" 
+                   {% if form.chk_content_weight.value == "Y" %}checked{% endif %}>
             <label for="chk_content_weight" class="m-0">내용량</label>
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
@@ -280,7 +288,9 @@
       <!-- 제조원 소재지 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
         <div style="width:9.6%; min-width:110px;">
-          <input type="checkbox" id="chk_manufacturer_info" name="chk_manufacturer_info" class="form-check-input">
+          <!-- 제조원 소재지 체크박스 -->
+          <input type="checkbox" id="chk_manufacturer_info" name="chk_manufacturer_info" class="form-check-input" 
+                 {% if form.chk_manufacturer_info.value == "Y" %}checked{% endif %}>
           <label for="chk_manufacturer_info" class="m-0">제조원 소재지</label>
         </div>
         <div style="min-width:1px;">
@@ -298,8 +308,9 @@
         <!-- 유통전문판매원 -->
         <div class="d-flex align-items-center mb-2" style="gap:5px;">
           <div style="width:11.1%; min-width:130px;">
-            <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address"
-                  class="form-check-input" {% if form.chk_distributor_address.value == "Y" %}checked{% endif %}>
+            <!-- 유통전문 판매원 체크박스 -->
+            <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address" class="form-check-input" 
+                   {% if form.chk_distributor_address.value == "Y" %}checked{% endif %}>
             <label for="chk_distributor_address" class="m-0">유통전문판매원</label>
           </div>
           <div style="width:88.9%;">
@@ -311,8 +322,9 @@
         <!-- 소분원 -->
         <div class="d-flex align-items-center mb-2" style="gap:5px;">
           <div style="width:11.1%; min-width:130px;">
-            <input type="checkbox" id="chk_repacker_address" name="chk_repacker_address"
-                  class="form-check-input" {% if form.chk_repacker_address.value == "Y" %}checked{% endif %}>
+            <!-- 소분원 체크박스 -->
+            <input type="checkbox" id="chk_repacker_address" name="chk_repacker_address" class="form-check-input" 
+                   {% if form.chk_repacker_address.value == "Y" %}checked{% endif %}>
             <label for="chk_repacker_address" class="m-0">소분원</label>
           </div>
           <div style="width:88.9%;">
@@ -324,8 +336,9 @@
         <!-- 수입원 -->
         <div class="d-flex align-items-center mb-2" style="gap:5px;">
           <div style="width:11.1%; min-width:130px;">
-            <input type="checkbox" id="chk_importer_address" name="chk_importer_address"
-                  class="form-check-input" {% if form.chk_importer_address.value == "Y" %}checked{% endif %}>
+            <!-- 수입원 체크박스 -->
+            <input type="checkbox" id="chk_importer_address" name="chk_importer_address" class="form-check-input" 
+                   {% if form.chk_importer_address.value == "Y" %}checked{% endif %}>
             <label for="chk_importer_address" class="m-0">수입원</label>
           </div>
           <div style="width:88.9%;">
@@ -350,7 +363,7 @@
           <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
           <option value="생산연도" {% if form.date_option.value == "생산연도" %}selected{% endif %}>생산연도</option>
         </select>
-        <input type="text" name="pog_daycnt" class="form-control" placeholder="None" value="{{ form.form.pog_daycnt.value }}">
+        <input type="text" name="pog_daycnt" class="form-control" placeholder="None" value="{{ form.pog_daycnt.value }}">
           </div>
         </div>
       </div>
@@ -375,12 +388,14 @@
         <div class="d-flex align-items-center" style="gap:5px;">
           <div style="width:11%; min-width:130px;">
             <div class="form-check">
-              <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" {% if form.chk_rawmtrl_nm.value == "Y" %}checked{% endif %}>
+              <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" 
+                     {% if form.chk_rawmtrl_nm.value == "Y" %}checked{% endif %} disabled>
               <label for="chk_rawmtrl_nm" class="m-0">원재료명(참고)</label>
             </div>
           </div>
           <div style="width:89%;">
-            <textarea name="rawmtrl_nm" class="form-control disabled-textarea" style="flex:1;" placeholder="원재료명을 입력하세요" readonly>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+            <textarea name="rawmtrl_nm" class="form-control disabled-textarea" style="flex:1;" 
+                      placeholder="원재료명을 입력하세요" disabled readonly>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
           </div>
         </div>  
       </div>

@@ -190,100 +190,104 @@ def save_to_my_label(request, prdlst_report_no):
 @login_required
 def label_creation(request, label_id=None):
     has_ingredient_relations = False
-    form = None  # form 변수를 함수 시작 부분에서 초기화
     
     if label_id:
+        # 기존 라벨 편집
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-        
-        # 관계 테이블 존재 여부 확인
         has_ingredient_relations = label.ingredient_relations.exists()
         
+        # 내 원료에 연결된 원재료명 가져오기
+        if has_ingredient_relations:
+            # 내 원료 관계 조회 (순서대로)
+            relations = LabelIngredientRelation.objects.filter(
+                label_id=label.my_label_id
+            ).select_related('ingredient').order_by('relation_sequence')
+            
+            # 원재료명 정보를 생성 (순서대로)
+            ingredients_info = []
+            for relation in relations:
+                ingredient = relation.ingredient
+                # 원재료명 또는 원재료 표시명을 사용 (비율 제외)
+                ingredient_name = ingredient.ingredient_display_name or ingredient.prdlst_nm or ""
+                ingredients_info.append(ingredient_name)
+            
+            # 콤마로 연결하여 원재료명(참고) 필드에 설정
+            label.rawmtrl_nm = ", ".join(ingredients_info)
+        
         if request.method == 'POST':
+            # POST 요청 처리
             form = LabelCreationForm(request.POST, instance=label)
-            if form.is_valid():
-                label = form.save(commit=False)
-                
-                # 원재료명(참고) 필드 업데이트 - 관계 테이블에서 원재료 가져오기
-                if has_ingredient_relations:
-                    raw_materials = []
-                    for relation in label.ingredient_relations.all().order_by('relation_sequence'):
-                        if relation.ingredient.ingredient_display_name:
-                            # 비율 부분을 제거하고 원재료명만 추가
-                            raw_materials.append(relation.ingredient.ingredient_display_name)
-                    
-                    # 콤마로 구분된 원재료명 참고 문자열 생성
-                    if raw_materials:
-                        label.rawmtrl_nm = ", ".join(raw_materials)
-                
-                # 식품유형 값 설정
-                label.food_group = request.POST.get('food_group', '')
-                label.food_type = request.POST.get('food_type', '')
-                
-                # 장기보존식품 설정 (radio로 동작하는 체크박스)
-                label.preservation_type = request.POST.get('preservation_type', '')
-                
-                # 제조방법 설정 (radio로 동작하는 체크박스)
-                label.processing_method = request.POST.get('processing_method', '')
-                
-                # 조건 상세 설정
-                label.processing_condition = request.POST.get('processing_condition', '')
-                
-                label.save()
-                messages.success(request, '저장되었습니다.')
-                return redirect('label:label_creation', label_id=label.my_label_id)
-        else:
-            # GET 요청 시: 관계 데이터가 있으면 원재료명(참고) 필드를 자동으로 채움
-            if has_ingredient_relations:
-                raw_materials = []
-                for relation in label.ingredient_relations.all().order_by('relation_sequence'):
-                    if relation.ingredient.ingredient_display_name:
-                        # 비율 부분을 제거하고 원재료명만 추가
-                        raw_materials.append(relation.ingredient.ingredient_display_name)
-                
-                # 원재료명(참고) 필드 값 설정
-                if raw_materials:
-                    label.rawmtrl_nm = ", ".join(raw_materials)
-                    # 이미 저장된 라벨이므로 변경사항 바로 저장
-                    label.save(update_fields=['rawmtrl_nm'])
-
-            form = LabelCreationForm(instance=label)
-    else:
-        if request.method == 'POST':
-            form = LabelCreationForm(request.POST)
+            
+            # 디버깅 로그
+            print("POST 데이터:", request.POST)
+            print("food_group:", request.POST.get('food_group'))
+            print("food_type:", request.POST.get('food_type'))
+            
             if form.is_valid():
                 label = form.save(commit=False)
                 label.user_id = request.user
                 
-                # 식품유형 값 설정
-                label.food_group = request.POST.get('food_group', '')
-                label.food_type = request.POST.get('food_type', '')
+                # hidden 필드에서 식품유형 정보 가져오기
+                label.food_group = request.POST.get('food_group')
+                label.food_type = request.POST.get('food_type')
                 
-                # 장기보존식품 설정
-                label.preservation_type = request.POST.get('preservation_type', '')
-                
-                # 제조방법 설정
-                label.processing_method = request.POST.get('processing_method', '')
-                
-                # 조건 상세 설정
-                label.processing_condition = request.POST.get('processing_condition', '')
-                
+                # 변경 사항 저장
                 label.save()
-                messages.success(request, '저장되었습니다.')
+                messages.success(request, '표시사항이 성공적으로 수정되었습니다.')
                 return redirect('label:label_creation', label_id=label.my_label_id)
+            else:
+                print("폼 오류:", form.errors)
+                messages.error(request, '입력 정보에 오류가 있습니다.')
         else:
+            # GET 요청 처리
+            form = LabelCreationForm(instance=label)
+    else:
+        # 새 라벨 생성
+        if request.method == 'POST':
+            # POST 요청 처리
+            form = LabelCreationForm(request.POST)
+            
+            # 디버깅 로그
+            print("POST 데이터:", request.POST)
+            print("food_group:", request.POST.get('food_group'))
+            print("food_type:", request.POST.get('food_type'))
+            
+            if form.is_valid():
+                label = form.save(commit=False)
+                label.user_id = request.user
+                
+                # hidden 필드에서 식품유형 정보 가져오기
+                label.food_group = request.POST.get('food_group')
+                label.food_type = request.POST.get('food_type')
+                
+                # 변경 사항 저장
+                label.save()
+                messages.success(request, '새 표시사항이 성공적으로 작성되었습니다.')
+                return redirect('label:label_creation', label_id=label.my_label_id)
+            else:
+                print("폼 오류:", form.errors)
+                messages.error(request, '입력 정보에 오류가 있습니다.')
+        else:
+            # GET 요청 처리
             form = LabelCreationForm()
-            label = None
-
+    
     # 식품유형 대분류 목록 조회
     food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
     
-    # 식품유형 소분류 목록 조회 (대분류 정보 포함)
-    food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
+    # 소분류 목록 필터링 (초기 로드 시)
+    current_food_group = getattr(label, 'food_group', '') if label_id else ''
+    
+    if current_food_group:
+        # 선택된 대분류가 있는 경우 해당 대분류에 속하는 소분류만 가져옴
+        food_types = FoodType.objects.filter(food_group=current_food_group).values('food_type', 'food_group').order_by('food_type')
+    else:
+        # 대분류가 선택되지 않은 경우 모든 소분류 가져옴
+        food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
     
     context = {
-        'form': form,  # 이제 form은 항상 할당되어 있음
-        'label': label if 'label' in locals() else None,  # label 변수가 있는지 확인
-        'food_types': food_types,  # 대분류 정보 포함
+        'form': form,
+        'label': label if label_id else None,
+        'food_types': food_types,
         'food_groups': food_groups,
         'country_list': CountryList.objects.all(),
         'has_ingredient_relations': has_ingredient_relations,
@@ -392,16 +396,14 @@ def check_my_ingredient(request):
         food_type = data.get('food_type', '').strip()
         display_name = data.get('display_name', '').strip()
         
-        # 우선 DB에서 기본 필터링 적용: 품목보고번호가 있다면 기초 필터를 그대로, 없으면 검색 범위를 넓게 가져옵니다.
         if prdlst_report_no:
             qs = MyIngredient.objects.filter(
                 user_id=request.user,
                 prdlst_report_no=prdlst_report_no,
                 delete_YN='N'
             )
-            # 필요한 필드만 선택하여 리스트로 변환
             existing_ingredients = list(qs.values(
-                'my_ingredient_id',  # 추가된 부분: my_ingredient_id 필드 포함
+                'my_ingredient_id',
                 'prdlst_nm',
                 'prdlst_report_no',
                 'prdlst_dcnm',
@@ -414,26 +416,22 @@ def check_my_ingredient(request):
                 prdlst_dcnm=food_type,
                 delete_YN='N'
             )
-            # 후보 데이터를 모두 가져옵니다.
             candidates = list(qs.values(
-                'my_ingredient_id',  # 추가된 부분: my_ingredient_id 필드 포함
+                'my_ingredient_id',
                 'prdlst_nm',
                 'prdlst_report_no',
                 'prdlst_dcnm',
                 'bssh_nm',
                 'ingredient_display_name'
             ))
-            # rapidfuzz를 사용한 유사도 계산
-            threshold = 70  # 유사도 임계값 (0-100 사이의 점수, 상황에 따라 조절)
+            threshold = 70
             filtered = []
             for ingredient in candidates:
                 candidate_name = ingredient.get('ingredient_display_name', '')
-                # 예시로 fuzz.ratio 사용 (간단한 비교)
                 score = fuzz.ratio(candidate_name.lower(), display_name.lower())
                 if score >= threshold:
                     ingredient['similarity'] = score
                     filtered.append(ingredient)
-            # 유사도 점수가 높은 순으로 정렬
             existing_ingredients = sorted(filtered, key=lambda x: x['similarity'], reverse=True)
 
         exists = len(existing_ingredients) > 0
@@ -444,7 +442,6 @@ def check_my_ingredient(request):
 @login_required
 def my_ingredient_list(request):
     search_fields = {
-        #'my_ingredient_name': 'my_ingredient_name',
         'prdlst_nm': 'prdlst_nm',
         'prdlst_report_no': 'prdlst_report_no',
         'prdlst_dcnm': 'prdlst_dcnm',
@@ -485,7 +482,6 @@ def my_ingredient_list(request):
 
 @login_required
 def my_ingredient_list_combined(request):
-    # 검색 필드 정의 (검색 시 활용할 파라미터)
     search_fields = {
         'prdlst_nm': 'prdlst_nm',
         'prdlst_report_no': 'prdlst_report_no',
@@ -493,18 +489,13 @@ def my_ingredient_list_combined(request):
         'bssh_nm': 'bssh_nm',
         'ingredient_display_name': 'ingredient_display_name',
     }
-    # GET 파라미터로부터 검색 조건 추출
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    # 삭제되지 않은 현재 사용자의 원료만 조회
     search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
     
-    # 정렬 설정
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
-    # 페이징 처리 관련 변수 설정
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
     
-    # 쿼리셋 생성
     my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
     querystring_without_page = get_querystring_without(request, ['page'])
@@ -517,7 +508,6 @@ def my_ingredient_list_combined(request):
         'page_obj': page_obj,
         'paginator': paginator,
         'page_range': page_range,
-        # 템플릿에서 검색 필터 폼을 그리기 위한 항목 리스트
         'search_fields': [
             {'name': 'prdlst_nm', 'placeholder': '원재료명', 'value': search_values.get('prdlst_nm', '')},
             {'name': 'prdlst_report_no', 'placeholder': '품목제조번호', 'value': search_values.get('prdlst_report_no', '')},
@@ -536,26 +526,21 @@ def my_ingredient_list_combined(request):
 @login_required
 def my_ingredient_detail(request, ingredient_id=None):
     if ingredient_id:
-        # 기존 원료 수정
         ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
         mode = 'edit'
     else:
-        # 새 원료 생성
-        ingredient = MyIngredient(user_id=request.user, delete_YN='N')  # 기본값으로 객체 생성
+        ingredient = MyIngredient(user_id=request.user, delete_YN='N')
         mode = 'create'
 
     if request.method == 'POST':
-        # JSON 요청 처리
         if request.headers.get('content-type') == 'application/json':
             try:
                 data = json.loads(request.body)
                 my_ingredient_id = data.get('my_ingredient_id')
                 
                 if my_ingredient_id:
-                    # 기존 원료 수정
                     ingredient = get_object_or_404(MyIngredient, my_ingredient_id=my_ingredient_id, user_id=request.user)
                     
-                # 원료 데이터 업데이트
                 ingredient.prdlst_nm = data.get('prdlst_nm', '')
                 ingredient.prdlst_report_no = data.get('prdlst_report_no', '')
                 ingredient.prdlst_dcnm = data.get('prdlst_dcnm', '')
@@ -575,14 +560,12 @@ def my_ingredient_detail(request, ingredient_id=None):
             except Exception as e:
                 return JsonResponse({'success': False, 'error': str(e)})
         
-        # 일반 폼 제출 처리
         form = MyIngredientsForm(request.POST, instance=ingredient)
         if form.is_valid():
             new_ingredient = form.save(commit=False)
             new_ingredient.user_id = request.user
             new_ingredient.save()
             
-            # AJAX 요청인 경우 JSON 응답
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({
                     'success': True, 
@@ -590,11 +573,9 @@ def my_ingredient_detail(request, ingredient_id=None):
                     'ingredient_id': new_ingredient.my_ingredient_id
                 })
             
-            # 일반 요청인 경우 리다이렉트
             messages.success(request, '저장되었습니다.')
             return redirect('label:my_ingredient_detail', ingredient_id=new_ingredient.my_ingredient_id)
         else:
-            # 폼이 유효하지 않은 경우
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 errors = {field: str(error) for field, error in form.errors.items()}
                 return JsonResponse({'success': False, 'errors': errors})
@@ -607,7 +588,6 @@ def my_ingredient_detail(request, ingredient_id=None):
         'mode': mode
     }
     
-    # AJAX 요청인지 확인
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return render(request, 'label/my_ingredient_detail_partial.html', context)
     else:
@@ -623,10 +603,8 @@ def save_ingredients_to_label(request, label_id):
         ingredients_data = data.get('ingredients', [])
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
 
-        # 기존 관계 삭제
         LabelIngredientRelation.objects.filter(label_id=label.my_label_id).delete()
 
-        # ingredients_data 순서를 기준으로 순번(relation_sequence) 저장
         for sequence, ingredient_data in enumerate(ingredients_data, start=1):
             try:
                 ratio = float(ingredient_data.get('ratio', 0))
@@ -638,7 +616,7 @@ def save_ingredients_to_label(request, label_id):
                 ingredient_id=ingredient_data['my_ingredient_id'],
                 defaults={
                     'ingredient_ratio': ratio,
-                    'relation_sequence': sequence  # 순번 저장
+                    'relation_sequence': sequence
                 }
             )
         label.save()
@@ -653,9 +631,7 @@ def delete_my_ingredient(request, ingredient_id):
     if request.method == 'POST':
         try:
             ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
-            # 관계 테이블의 데이터 삭제
             LabelIngredientRelation.objects.filter(ingredient_id=ingredient.my_ingredient_id).delete()
-            # 원료 삭제 (delete_YN을 'Y'로 설정)
             ingredient.delete_YN = 'Y'
             ingredient.save()
             return JsonResponse({'success': True})
@@ -687,13 +663,12 @@ def search_ingredient_add_row(request):
         if manufacturer:
             qs = qs.filter(bssh_nm__icontains=manufacturer)
         
-        # 여러 건 리스트로 반환 (각 결과에 대해 필요한 필드만)
         ingredients = list(qs.values(
-            'prdlst_nm',         # 원료명
+            'prdlst_nm',
             'prdlst_report_no',
-            'prdlst_dcnm',       # 식품유형
-            'bssh_nm',           # 제조사
-            'ingredient_display_name',  # 원료 표시명
+            'prdlst_dcnm',
+            'bssh_nm',
+            'ingredient_display_name',
             'my_ingredient_id'
         ))
 
@@ -711,34 +686,26 @@ def verify_ingredients(request):
         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
     try:
         data = json.loads(request.body)
-        # ingredient 키에 해당하는 데이터가 전달되었는지 확인
         ing_data = data.get("ingredient", {})
-        # 만약 ing_data가 리스트라면, 단일 항목만 전달하는 것으로 간주하고 dict로 변환합니다.
         if isinstance(ing_data, list):
             if len(ing_data) == 1:
                 ing_data = ing_data[0]
             else:
-                # 여러 항목이 넘어오면 에러를 반환하거나 원하는 방식으로 처리합니다.
                 return JsonResponse({"success": False, "error": "Expected a single ingredient dictionary."}, status=400)
         
-        # 이제 ing_data는 dict로 보장됩니다.
-        results = []  # 결과 값을 저장할 리스트
+        results = []
         
-        # 단일 dict이므로 한 번만 처리합니다.
         prdlst_report_no = str(ing_data.get("prdlst_report_no", "")).strip()
         
         if prdlst_report_no:
-            # 품목보고번호가 있는 경우 해당 번호를 기준으로 MyIngredient 레코드를 검색합니다.
             qs = MyIngredient.objects.filter(
                 user_id=request.user,
                 prdlst_report_no=prdlst_report_no,
                 delete_YN="N"
             )
             if qs.exists():
-                # 검색된 레코드의 필요한 필드들만 values()로 가져옵니다.
                 record = qs.values(
                     "my_ingredient_id",
-                    #"my_ingredient_name",
                     "prdlst_report_no",
                     "prdlst_nm",
                     "prdlst_dcnm",
@@ -749,7 +716,6 @@ def verify_ingredients(request):
             else:
                 results.append({})
         else:
-            # 품목보고번호가 없으면 원재료명, 식품유형, 원재료(표시명)를 기준으로 검색합니다.
             qs = MyIngredient.objects.filter(
                 user_id=request.user,
                 prdlst_nm=ing_data.get("ingredient_name", "").strip(),
@@ -760,7 +726,6 @@ def verify_ingredients(request):
             if qs.exists():
                 record = qs.values(
                     "my_ingredient_id",
-                    #"my_ingredient_name",
                     "prdlst_report_no",
                     "prdlst_nm",
                     "prdlst_dcnm",
@@ -779,17 +744,15 @@ def food_items_count(request):
     total = FoodItem.objects.count()
     one_week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
     new_count = FoodItem.objects.filter(last_updt_dtm__gte=one_week_ago).count()
-    total_formatted = f"{total:,}"  # 예: 1,234
+    total_formatted = f"{total:,}"
     return JsonResponse({'total': total_formatted, 'new': new_count})
 
 @login_required
 def my_labels_count(request):
-    # 사용자의 MyLabel 총 건수
     total = MyLabel.objects.filter(user_id=request.user).count()
-    # 최근 1주일 이내 갱신된 MyLabel 건수 (update_datetime은 DateTimeField)
     one_week_ago = datetime.now() - timedelta(days=7)
     new_count = MyLabel.objects.filter(user_id=request.user, update_datetime__gte=one_week_ago).count()
-    total_formatted = f"{total:,}"  # 3자리마다 쉼표 추가
+    total_formatted = f"{total:,}"
     return JsonResponse({'total': total_formatted, 'new': new_count})
 
 
@@ -808,8 +771,6 @@ def register_my_ingredient(request):
             prdlst_report_no=data.get('prdlst_report_no', ''),
             prdlst_dcnm=data.get('food_type', ''),
             ingredient_display_name=data.get('display_name', ''),
-            #allergen=data.get('allergen', ''),
-            #gmo=data.get('gmo', ''),
             bssh_nm=data.get('manufacturer', ''),
             delete_YN='N'
         )
@@ -821,10 +782,8 @@ def register_my_ingredient(request):
 
 @login_required
 def nutrition_calculator_popup(request):
-    """영양성분 계산기 팝업 뷰"""
     label_id = request.GET.get('label_id')
     
-    # 기본 빈 데이터 초기화
     nutrition_data = {
         'serving_size': '',
         'serving_size_unit': 'g',
@@ -833,12 +792,10 @@ def nutrition_calculator_popup(request):
         'nutrients': {}
     }
     
-    # 라벨 ID가 있으면 영양성분 데이터 가져오기
     if label_id:
         try:
             label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
             
-            # 영양성분 데이터 준비
             nutrition_data = {
                 'serving_size': label.serving_size,
                 'serving_size_unit': label.serving_size_unit or 'g',
@@ -886,7 +843,6 @@ def nutrition_calculator_popup(request):
         except Exception as e:
             print(f"영양성분 데이터 로딩 중 오류: {str(e)}")
     
-    # None 값을 빈 문자열로 변환 (JSON 직렬화 오류 방지)
     for key, value in nutrition_data.items():
         if value is None:
             nutrition_data[key] = ''
@@ -903,7 +859,7 @@ def nutrition_calculator_popup(request):
 
 def duplicate_label(request, label_id):
     original = get_object_or_404(MyLabel, my_label_id=label_id)  
-    original.pk = None  # 
+    original.pk = None  
     original.my_label_name += " (복사본)"
     original.save()
     return redirect('label:label_creation', label_id=original.my_label_id)
@@ -923,7 +879,7 @@ def bulk_copy_labels(request):
             for label_id in ids:
                 original = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
                 new_label = MyLabel.objects.get(pk=original.pk)
-                new_label.pk = None  # 새로운 PK 생성
+                new_label.pk = None  
                 new_label.my_label_name += " (복사본)"
                 new_label.save()
             return JsonResponse({"success": True})
@@ -955,19 +911,15 @@ def save_nutrition(request):
         data = json.loads(request.body)
         label_id = data.get('label_id')
         
-        # 라벨 ID로 해당 라벨 조회
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
         
-        # 영양성분 관련 필드 업데이트
         label.serving_size = data.get('serving_size', '')
         label.serving_size_unit = data.get('serving_size_unit', '')
         label.units_per_package = data.get('units_per_package', '')
         label.nutrition_display_unit = data.get('nutrition_display_unit', '')
         
-        # 영양성분 텍스트 필드에 nutritions 값 설정 (중요!)
         label.nutrition_text = data.get('nutritions', '')
         
-        # 각 영양소 값 업데이트
         label.calories = data.get('calories', '')
         label.calories_unit = data.get('calories_unit', '')
         label.natriums = data.get('natriums', '')
@@ -987,7 +939,6 @@ def save_nutrition(request):
         label.proteins = data.get('proteins', '')
         label.proteins_unit = data.get('proteins_unit', '')
         
-        # 변경사항 저장
         label.save()
         
         return JsonResponse({'success': True})
@@ -996,12 +947,13 @@ def save_nutrition(request):
 
 @login_required
 def food_types_by_group(request):
-    """대분류에 해당하는 소분류 목록을 반환"""
     group = request.GET.get('group', '')
     
     if group:
+        # 대분류가 있으면 해당 대분류의 소분류만 반환
         food_types = FoodType.objects.filter(food_group=group).values('food_type', 'food_group').order_by('food_type')
     else:
+        # 대분류가 없으면 모든 소분류 반환
         food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
     
     return JsonResponse({
@@ -1011,7 +963,6 @@ def food_types_by_group(request):
 
 @login_required
 def get_food_group(request):
-    """소분류에 해당하는 대분류를 반환"""
     food_type = request.GET.get('food_type', '')
     
     if food_type:
@@ -1030,5 +981,67 @@ def get_food_group(request):
         return JsonResponse({
             'success': False,
             'error': '식품유형이 제공되지 않았습니다.'
+        })
+
+@login_required
+def food_type_settings(request):
+    food_type = request.GET.get('food_type', '')
+    
+    if not food_type:
+        return JsonResponse({
+            'success': False,
+            'error': '식품유형이 제공되지 않았습니다.'
+        })
+    
+    try:
+        ft = FoodType.objects.filter(food_type=food_type).first()
+        
+        if not ft:
+            return JsonResponse({
+                'success': False,
+                'error': '해당 식품유형을 찾을 수 없습니다.'
+            })
+        
+        settings = {}
+        
+        checkbox_fields = [
+            'prdlst_dcnm', 'rawmtrl_nm', 'nutritions', 'cautions', 'frmlc_mtrqlt',
+            'pog_daycnt', 'storage_method', 'weight_calorie', 'country_of_origin',
+            'additional_info', 'prdlst_report_no'
+        ]
+        
+        for field in checkbox_fields:
+            if hasattr(ft, field):
+                value = getattr(ft, field, 'N') or 'N'
+                settings[field] = value
+        
+        pog_daycnt_value = ft.pog_daycnt
+        
+        if pog_daycnt_value:
+            if ',' in pog_daycnt_value:
+                options = [option.strip() for option in pog_daycnt_value.split(',') if option.strip()]
+                if options:
+                    settings['pog_daycnt_options'] = options
+                    settings['pog_daycnt'] = 'Y'  # 옵션이 있으면 활성화
+                else:
+                    settings['pog_daycnt'] = 'N'  # 옵션이 없으면 비활성화
+            else:
+                settings['pog_daycnt'] = pog_daycnt_value  # 직접 값 사용
+                settings['pog_daycnt_options'] = [pog_daycnt_value] if pog_daycnt_value != 'D' else []
+        else:
+            settings['pog_daycnt'] = 'N'  # 값이 없으면 비활성화
+        
+        # 관련 규정 정보 추가
+        if hasattr(ft, 'relevant_regulations'):
+            settings['relevant_regulations'] = ft.relevant_regulations or ""
+        
+        return JsonResponse({
+            'success': True,
+            'settings': settings
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
         })
 
