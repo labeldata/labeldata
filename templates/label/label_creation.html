@@ -13,30 +13,6 @@
 <link href="{% static 'css/label_creation.css' %}" rel="stylesheet" />
 <script src="{% static 'js/label_creation.js' %}"></script>
 
-<script>
-  function openPhrasePopup() {
-    const width = 1100;
-    const height = 800;
-    const left = (screen.width - width) / 2;
-    const top = (screen.height - height) / 2;
-    
-    // URL을 phrase_popup으로 변경
-    window.open('/label/phrases/', 'phrasePopup', 
-        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`);
-}
-
-// 버튼에 이벤트 핸들러 연결
-document.addEventListener('DOMContentLoaded', function() {
-    // 주의사항과 기타표시사항의 버튼을 모두 선택
-    const phraseButtons = document.querySelectorAll('[onclick="openPhrasePopup()"]');
-    phraseButtons.forEach(button => {
-        button.onclick = function() {
-            openPhrasePopup();
-        };
-    });
-});
-</script>
-
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
 <input type="hidden" id="label_id" value="{{ label.my_label_id }}">
 

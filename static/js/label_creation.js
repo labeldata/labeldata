@@ -26,8 +26,14 @@ function initCheckBoxGroups() {
     if (this.checked) {
       $('.grp-long-shelf').not(this).prop('checked', false).data('alreadyChecked', false);
       $(this).data('alreadyChecked', true);
+      
+      // 선택된 값을 hidden 필드에 설정
+      $('#hidden_preservation_type').val(this.value);
+      console.log('장기보존식품 설정:', this.value);
     } else {
       $(this).data('alreadyChecked', false);
+      // 체크 해제 시 hidden 필드도 비움
+      $('#hidden_preservation_type').val('');
     }
     updateSummary(); // 요약 갱신
   });
@@ -40,8 +46,14 @@ function initCheckBoxGroups() {
       $('.grp-sterilization').not('#chk_sterilization_other').not(this)
         .prop('checked', false).data('alreadyChecked', false);
       $(this).data('alreadyChecked', true);
+      
+      // 선택된 값을 hidden 필드에 설정
+      $('#hidden_processing_method').val(this.value);
+      console.log('제조방법 설정:', this.value);
     } else {
       $(this).data('alreadyChecked', false);
+      // 체크 해제 시 hidden 필드도 비움
+      $('#hidden_processing_method').val('');
     }
 
     // 조건 체크박스 활성화 여부
@@ -49,8 +61,26 @@ function initCheckBoxGroups() {
       $("#chk_sterilization_other").prop("disabled", false);
     } else {
       $("#chk_sterilization_other").prop("disabled", true).prop("checked", false);
+      // 조건이 비활성화되면 조건 값도 비움
+      $('input[name="processing_condition"]').val('');
+      $('#hidden_processing_condition').val('');
     }
     updateSummary(); // 요약 갱신
+  });
+
+  // 조건 체크박스 및 텍스트 입력 필드 이벤트 핸들러 추가
+  $("#chk_sterilization_other").on('change', function() {
+    if (!this.checked) {
+      // 체크 해제 시 조건 입력 필드 비움
+      $('input[name="processing_condition"]').val('');
+      $('#hidden_processing_condition').val('');
+    }
+  });
+
+  // 조건 텍스트 입력 시 hidden 필드 업데이트
+  $('input[name="processing_condition"]').on('input', function() {
+    $('#hidden_processing_condition').val(this.value);
+    console.log('조건 설정:', this.value);
   });
 }
 
@@ -702,6 +732,21 @@ function prepareFormData() {
       console.log(`체크박스 ${checkboxName} 값 설정: ${value}`);
     }
   });
+  
+  // 장기보존식품, 제조방법, 조건 값 확인 및 설정
+  const preservationType = $('.grp-long-shelf:checked').val() || '';
+  const processingMethod = $('.grp-sterilization:checked').not('#chk_sterilization_other').val() || '';
+  const processingCondition = $('input[name="processing_condition"]').val() || '';
+  
+  $('#hidden_preservation_type').val(preservationType);
+  $('#hidden_processing_method').val(processingMethod);
+  $('#hidden_processing_condition').val(processingCondition);
+  
+  console.log('폼 제출 준비:', {
+    preservationType,
+    processingMethod,
+    processingCondition
+  });
 }
 
 // Document Ready 이벤트 핸들러 정리 (중복 제거)
@@ -882,4 +927,27 @@ $(document).ready(function() {
   }
 
   console.log("문서 로딩 완료 및 초기화 작업 완료");
+});
+
+
+function openPhrasePopup() {
+  const width = 1100;
+  const height = 800;
+  const left = (screen.width - width) / 2;
+  const top = (screen.height - height) / 2;
+  
+  // URL을 phrase_popup으로 변경
+  window.open('/label/phrases/', 'phrasePopup', 
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`);
+}
+
+// 버튼에 이벤트 핸들러 연결
+document.addEventListener('DOMContentLoaded', function() {
+  // 주의사항과 기타표시사항의 버튼을 모두 선택
+  const phraseButtons = document.querySelectorAll('[onclick="openPhrasePopup()"]');
+  phraseButtons.forEach(button => {
+      button.onclick = function() {
+          openPhrasePopup();
+      };
+  });
 });
