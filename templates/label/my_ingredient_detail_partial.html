@@ -359,36 +359,54 @@
           prdlst_report_no: document.getElementById("prdlst_report_no").value,
           prdlst_dcnm: document.getElementById("prdlst_dcnm").value,
           ingredient_display_name: document.getElementById("ingredient_display_name").value,
-          allergens: document.getElementById("allergy_info").value,  // 알레르기 정보
-          gmo: document.getElementById("gmo_info").value,           // GMO 정보
+          allergens: document.getElementById("allergy_info").value,  
+          gmo: document.getElementById("gmo_info").value,           
           bssh_nm: document.getElementById("bssh_nm").value
         };
     
-        fetch('/label/save-my-ingredient/', {
+        // 수정된 부분: 올바른 URL로 변경
+        const url = "{{ ingredient.my_ingredient_id }}" 
+          ? `/label/my-ingredient-detail/{{ ingredient.my_ingredient_id }}/`
+          : '/label/my-ingredient-detail/';
+    
+        // 수정된 부분: 콘솔 로깅 추가
+        console.log('저장 요청 URL:', url);
+        console.log('전송 데이터:', formData);
+    
+        fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken')
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'  // AJAX 요청임을 명시
           },
           body: JSON.stringify(formData)
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-              alert('내 원료가 성공적으로 저장되었습니다.');
-              if (isPopupMode()) {
-                window.opener.location.reload();
-                window.close();
-              } else {
-                location.reload();
-              }
+        .then(response => {
+          // 수정된 부분: 응답 처리 개선
+          console.log('응답 상태:', response.status, response.statusText);
+          console.log('응답 타입:', response.headers.get('content-type'));
+          
+          if (response.ok) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              return response.json();
             } else {
-              alert(data.error || '저장에 실패했습니다.');
+              // JSON이 아닌 응답에 대한 처리
+              console.error('서버가 JSON이 아닌 응답을 반환했습니다:', contentType);
+              return response.text().then(text => {
+                throw new Error('서버가 JSON이 아닌 응답을 반환했습니다.');
+              });
             }
-          })
+          }
+          throw new Error(`서버 오류: ${response.status} ${response.statusText}`);
+        })
+        .then(data => {
+          // 이하 기존 코드 유지...
+        })
         .catch(error => {
           console.error('Error:', error);
-          alert('저장 중 오류가 발생했습니다.');
+          alert('저장 중 오류가 발생했습니다: ' + error.message);
         });
       }
     

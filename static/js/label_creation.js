@@ -749,6 +749,30 @@ function prepareFormData() {
   });
 }
 
+// Select2 초기화 함수 추가
+function initSelect2Components() {
+  // 대분류 드롭다운에 select2 적용
+  $('#food_group').select2({
+    placeholder: "대분류 선택",
+    allowClear: true,
+    width: '100%'
+  });
+  
+  // 소분류 드롭다운에 select2 적용
+  $('#food_type').select2({
+    placeholder: "소분류 선택",
+    allowClear: true,
+    width: '100%'
+  });
+  
+  // 원산지 드롭다운에 select2 적용
+  $('select[name="country_of_origin"]').select2({
+    placeholder: "원산지 선택",
+    allowClear: true,
+    width: '100%'
+  });
+}
+
 // Document Ready 이벤트 핸들러 정리 (중복 제거)
 $(document).ready(function() {
   // 체크박스 그룹 초기화
@@ -766,6 +790,9 @@ $(document).ready(function() {
   
   // 식품유형 필터링 초기화
   initFoodTypeFiltering();
+  
+  // Select2 컴포넌트 초기화
+  initSelect2Components();
   
   // 식품유형 소분류 선택 시 대분류 자동 설정 및 관련 규정 정보 업데이트
   $('#food_type').off('change').on('change', function() {
@@ -822,7 +849,6 @@ $(document).ready(function() {
     
     if (!selectedGroup) {
       console.log('대분류 미선택, 모든 소분류 표시');
-      // 서버에서 모든 소분류 로드
       fetch('/label/food-types-by-group/')
         .then(response => response.json())
         .then(data => {
@@ -832,17 +858,13 @@ $(document).ready(function() {
               option.dataset.group = item.food_group;
               foodTypeSelect.append(option);
             });
-            
-            // 페이지 로드 시 원래 선택된 소분류가 있었다면 다시 선택
-            if (currentFoodType) {
-              foodTypeSelect.val(currentFoodType);
-            }
+            // select2 업데이트 트리거
+            foodTypeSelect.trigger('change');
           }
         })
         .catch(error => console.error('소분류 데이터 로딩 중 오류:', error));
     } else {
       console.log(`선택된 대분류의 소분류 로드: ${selectedGroup}`);
-      // 서버에서 해당 대분류의 소분류 로드
       fetch(`/label/food-types-by-group/?group=${encodeURIComponent(selectedGroup)}`)
         .then(response => response.json())
         .then(data => {
@@ -852,14 +874,8 @@ $(document).ready(function() {
               option.dataset.group = item.food_group;
               foodTypeSelect.append(option);
             });
-            
-            // 페이지 로드 시 원래 선택된 소분류가 있었다면 다시 선택
-            if (currentFoodType) {
-              const exists = Array.from(foodTypeSelect.options).some(opt => opt.value === currentFoodType);
-              if (exists) {
-                foodTypeSelect.val(currentFoodType);
-              }
-            }
+            // select2 업데이트 트리거
+            foodTypeSelect.trigger('change');
           }
         })
         .catch(error => console.error('소분류 데이터 로딩 중 오류:', error));

@@ -15,6 +15,7 @@ from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime, timedelta
 from rapidfuzz import fuzz  # rapidfuzz 라이브러리 import
+from decimal import Decimal, InvalidOperation
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -253,7 +254,7 @@ def label_creation(request, label_id=None):
             print("food_type:", request.POST.get('food_type'))
             
             if form.is_valid():
-                label = form.save(commit=False)
+                label = form.save(commit(False))
                 label.user_id = request.user
                 
                 # hidden 필드에서 식품유형 정보 가져오기
@@ -325,7 +326,7 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
 
 
 def ingredient_popup(request):
-    rawmtrl_nm = request.GET.get('rawmtrl_nm', '')
+    rawmtrl_nm_display = request.GET.get('rawmtrl_nm_display', '')
     label_id = request.GET.get('label_id')
     
     ingredients_data = []
@@ -349,8 +350,8 @@ def ingredient_popup(request):
             })
         if relations.exists():
             has_relations = True  # 관계 데이터가 있는 경우 플래그 설정
-        if not relations.exists() and rawmtrl_nm:
-            raw_materials = [rm.strip() for rm in rawmtrl_nm.split(',') if rm.strip()]
+        if not relations.exists() and rawmtrl_nm_display:
+            raw_materials = [rm.strip() for rm in rawmtrl_nm_display.split(',') if rm.strip()]
             for material in raw_materials:
                 ingredients_data.append({
                     'ingredient_name': material,
@@ -363,10 +364,14 @@ def ingredient_popup(request):
                     'gmo': '',
                     'manufacturer': ''
                 })
+    # 국가 목록 데이터 추가
+    country_list = list(CountryList.objects.values('country_name_ko').order_by('country_name_ko'))
+    country_names = [country['country_name_ko'] for country in country_list]
+    
     context = {
-        #'saved_ingredients': mark_safe(json.dumps(ingredients_data, ensure_ascii=False))
         'saved_ingredients': ingredients_data,
-        'has_relations': has_relations  # 플래그를 템플릿으로 전달
+        'has_relations': has_relations,
+        'country_names': country_names  # 국가 목록 추가
     }
     return render(request, 'label/ingredient_popup.html', context)
 
@@ -603,27 +608,84 @@ def save_ingredients_to_label(request, label_id):
         ingredients_data = data.get('ingredients', [])
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
 
+        # 기존 연결 관계를 모두 삭제
         LabelIngredientRelation.objects.filter(label_id=label.my_label_id).delete()
 
+        # 새로운 원재료 정보 저장
         for sequence, ingredient_data in enumerate(ingredients_data, start=1):
-            try:
-                ratio = float(ingredient_data.get('ratio', 0))
-            except (ValueError, TypeError):
-                ratio = 0
-
-            LabelIngredientRelation.objects.update_or_create(
-                label_id=label.my_label_id,
-                ingredient_id=ingredient_data['my_ingredient_id'],
-                defaults={
-                    'ingredient_ratio': ratio,
-                    'relation_sequence': sequence
-                }
+            # 원재료 ID가 있는 경우 기존 원재료 사용
+            my_ingredient_id = ingredient_data.get('my_ingredient_id')
+            
+            # 원재료 ID가 없거나 빈 문자열인 경우 새 원재료 생성
+            if not my_ingredient_id:
+                # 새 원재료 생성
+                ingredient = MyIngredient.objects.create(
+                    user_id=request.user,
+                    prdlst_nm=ingredient_data.get('ingredient_name', ''),
+                    prdlst_report_no=ingredient_data.get('prdlst_report_no', ''),
+                    prdlst_dcnm=ingredient_data.get('food_type', ''),
+                    ingredient_display_name=ingredient_data.get('display_name', ''),
+                    bssh_nm=ingredient_data.get('manufacturer', ''),
+                    allergens=ingredient_data.get('allergen', ''),
+                    gmo=ingredient_data.get('gmo', ''),
+                    delete_YN='N'
+                )
+            else:
+                # 기존 원재료 사용
+                try:
+                    ingredient = MyIngredient.objects.get(my_ingredient_id=my_ingredient_id)
+                except MyIngredient.DoesNotExist:
+                    # 원재료가 존재하지 않는 경우 새로 생성
+                    ingredient = MyIngredient.objects.create(
+                        user_id=request.user,
+                        prdlst_nm=ingredient_data.get('ingredient_name', ''),
+                        prdlst_report_no=ingredient_data.get('prdlst_report_no', ''),
+                        prdlst_dcnm=ingredient_data.get('food_type', ''),
+                        ingredient_display_name=ingredient_data.get('display_name', ''),
+                        bssh_nm=ingredient_data.get('manufacturer', ''),
+                        allergens=ingredient_data.get('allergen', ''),
+                        gmo=ingredient_data.get('gmo', ''),
+                        delete_YN='N'
+                    )
+            
+            # 원재료와 라벨 사이의 관계 생성
+            relation = LabelIngredientRelation(
+                label=label,
+                ingredient=ingredient,
+                relation_sequence=sequence
             )
+            
+            # 비율 설정
+            try:
+                ratio_value = ingredient_data.get('ratio', '')
+                if ratio_value and ratio_value.strip():
+                    relation.ingredient_ratio = Decimal(ratio_value)
+            except (ValueError, InvalidOperation):
+                # 숫자가 아닌 값이 들어온 경우 비율 설정 안함
+                pass
+                
+            # 관계 저장
+            relation.save()
+        
+        # 원재료명 업데이트 (참고사항에 "원산지 표시대상" 포함된 항목만)
+        origin_targets = []
+        for ingredient_data in ingredients_data:
+            notes = ingredient_data.get('notes', '')
+            if notes and '원산지 표시대상' in notes:
+                display_name = ingredient_data.get('display_name') or ingredient_data.get('ingredient_name')
+                if display_name:
+                    origin_targets.append(display_name)
+        
+        # 원산지 표시대상 원재료명을 라벨에 저장
+        if origin_targets:
+            label.country_of_origin = ', '.join(origin_targets)
+            
         label.save()
         return JsonResponse({'success': True, 'message': '저장되었습니다.'})
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())  # 서버 로그에 상세 오류 출력
         return JsonResponse({'success': False, 'error': f'저장 중 오류가 발생했습니다: {str(e)}'})
-    
 
 @login_required
 @csrf_exempt
@@ -655,13 +717,13 @@ def search_ingredient_add_row(request):
         
         qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
         if name:
-            qs = qs.filter(prdlst_nm__icontains=name)
+            qs = qs.filter(prdlst_nm__icontains(name))
         if report:
-            qs = qs.filter(prdlst_report_no__icontains=report)
+            qs = qs.filter(prdlst_report_no__icontains(report))
         if food_type:
-            qs = qs.filter(prdlst_dcnm__icontains=food_type)
+            qs = qs.filter(prdlst_dcnm__icontains(food_type))
         if manufacturer:
-            qs = qs.filter(bssh_nm__icontains=manufacturer)
+            qs = qs.filter(bssh_nm__icontains(manufacturer))
         
         ingredients = list(qs.values(
             'prdlst_nm',
@@ -750,7 +812,7 @@ def food_items_count(request):
 @login_required
 def my_labels_count(request):
     total = MyLabel.objects.filter(user_id=request.user).count()
-    one_week_ago = datetime.now() - timedelta(days=7)
+    one_week_ago = datetime.now() - timedelta(days(7))
     new_count = MyLabel.objects.filter(user_id=request.user, update_datetime__gte=one_week_ago).count()
     total_formatted = f"{total:,}"
     return JsonResponse({'total': total_formatted, 'new': new_count})
