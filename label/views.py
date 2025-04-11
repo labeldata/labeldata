@@ -254,7 +254,7 @@ def label_creation(request, label_id=None):
             print("food_type:", request.POST.get('food_type'))
             
             if form.is_valid():
-                label = form.save(commit(False))
+                label = form.save(commit=False)
                 label.user_id = request.user
                 
                 # hidden 필드에서 식품유형 정보 가져오기
@@ -717,13 +717,13 @@ def search_ingredient_add_row(request):
         
         qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
         if name:
-            qs = qs.filter(prdlst_nm__icontains(name))
+            qs = qs.filter(prdlst_nm__icontains=name)
         if report:
-            qs = qs.filter(prdlst_report_no__icontains(report))
+            qs = qs.filter(prdlst_report_no__icontains=report)
         if food_type:
-            qs = qs.filter(prdlst_dcnm__icontains(food_type))
+            qs = qs.filter(prdlst_dcnm__icontains=food_type)
         if manufacturer:
-            qs = qs.filter(bssh_nm__icontains(manufacturer))
+            qs = qs.filter(bssh_nm__icontains=manufacturer)
         
         ingredients = list(qs.values(
             'prdlst_nm',
@@ -812,11 +812,18 @@ def food_items_count(request):
 @login_required
 def my_labels_count(request):
     total = MyLabel.objects.filter(user_id=request.user).count()
-    one_week_ago = datetime.now() - timedelta(days(7))
+    one_week_ago = datetime.now() - timedelta(days=7)
     new_count = MyLabel.objects.filter(user_id=request.user, update_datetime__gte=one_week_ago).count()
     total_formatted = f"{total:,}"
     return JsonResponse({'total': total_formatted, 'new': new_count})
 
+@login_required
+def my_ingredients_count(request):
+    total = MyIngredient.objects.filter(user_id=request.user, delete_YN='N').count()
+    one_week_ago = datetime.now() - timedelta(days=7)
+    new_count = MyIngredient.objects.filter(user_id=request.user, delete_YN='N', update_datetime__gte=one_week_ago).count()
+    total_formatted = f"{total:,}"
+    return JsonResponse({'total': total_formatted, 'new': new_count})
 
 
 @login_required
