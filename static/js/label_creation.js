@@ -31,7 +31,6 @@ function initCheckBoxGroups() {
       
       // 선택된 값을 hidden 필드에 설정
       $('#hidden_preservation_type').val(this.value);
-      console.log('장기보존식품 설정:', this.value);
     } else {
       $(this).data('alreadyChecked', false);
       // 체크 해제 시 hidden 필드도 비움
@@ -51,7 +50,6 @@ function initCheckBoxGroups() {
       
       // 선택된 값을 hidden 필드에 설정
       $('#hidden_processing_method').val(this.value);
-      console.log('제조방법 설정:', this.value);
     } else {
       $(this).data('alreadyChecked', false);
       // 체크 해제 시 hidden 필드도 비움
@@ -82,7 +80,6 @@ function initCheckBoxGroups() {
   // 조건 텍스트 입력 시 hidden 필드 업데이트
   $('input[name="processing_condition"]').on('input', function() {
     $('#hidden_processing_condition').val(this.value);
-    console.log('조건 설정:', this.value);
   });
 }
 
@@ -328,27 +325,24 @@ function initFoodTypeFiltering() {
   const initialFoodGroup = $('#food_group').val();
   const initialFoodType = $('#food_type').val();
   
-  console.log(`페이지 로드 시 초기값 - 대분류: ${initialFoodGroup}, 소분류: ${initialFoodType}`);
-  
+  // hidden 필드에 초기값 설정
   $('#hidden_food_group').val(initialFoodGroup);
   $('#hidden_food_type').val(initialFoodType);
   
   if (initialFoodType && (!initialFoodGroup || initialFoodGroup === '')) {
+    // 소분류에 대응하는 대분류 찾기
     console.log(`소분류는 있지만 대분류가 없음. 소분류: ${initialFoodType}`);
     const selectedOption = $('#food_type option:selected');
     const group = selectedOption.data('group');
     
     if (group) {
-      console.log(`소분류 ${initialFoodType}에 대한 대분류 찾음: ${group}`);
       $('#food_group').val(group);
       $('#hidden_food_group').val(group);
     } else {
-      console.log('대분류 정보가 없어 서버에서 조회 시도');
       fetch(`/label/get-food-group/?food_type=${encodeURIComponent(initialFoodType)}`)
         .then(response => response.json())
         .then(data => {
           if (data.success && data.food_group) {
-            console.log(`서버에서 대분류 정보 수신: ${data.food_group}`);
             $('#food_group').val(data.food_group);
             $('#hidden_food_group').val(data.food_group);
           }
@@ -358,12 +352,11 @@ function initFoodTypeFiltering() {
   }
   
   if (initialFoodGroup && (!initialFoodType || initialFoodType === '')) {
-    console.log(`대분류는 있지만 소분류가 없음. 대분류: ${initialFoodGroup}`);
     fetch(`/label/food-types-by-group/?group=${encodeURIComponent(initialFoodGroup)}`)
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          console.log(`대분류 ${initialFoodGroup}에 대한 소분류 ${data.food_types.length}개 로드됨`);
+          // 소분류 드롭다운 갱신
           const foodTypeSelect = $('#food_type');
           foodTypeSelect.empty().append('<option value="">소분류</option>');
           data.food_types.forEach(item => {
@@ -377,7 +370,6 @@ function initFoodTypeFiltering() {
   }
   
   if (initialFoodType) {
-    console.log(`초기 소분류 ${initialFoodType}에 대한 설정 적용`);
     updateCheckboxesByFoodType(initialFoodType)
       .catch(err => console.error('초기 체크박스 설정 중 오류:', err));
   }
@@ -386,13 +378,10 @@ function initFoodTypeFiltering() {
 function updateCheckboxesByFoodType(foodType) {
   if (!foodType) return Promise.resolve();
   
-  console.log(`식품유형 ${foodType}에 따른 설정 시작`);
-  
   return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
     .then(response => response.json())
     .then(data => {
       if (data.success) {
-        console.log('서버에서 받은 설정:', data.settings);
         const settings = data.settings;
         
         const fieldMappings = {
@@ -407,8 +396,6 @@ function updateCheckboxesByFoodType(foodType) {
           const checkbox = document.getElementById(checkboxId);
           
           if (checkbox) {
-            console.log(`필드 ${field} (${checkboxId}) 값: ${value}`); 
-            
             if (value === 'Y') {
               checkbox.checked = true;
               checkbox.disabled = false;
@@ -432,12 +419,10 @@ function updateCheckboxesByFoodType(foodType) {
         });
         
         if (settings.pog_daycnt_options !== undefined) {
-          console.log('소비기한 옵션 업데이트:', settings.pog_daycnt_options);
           updateDateDropdownOptions(settings.pog_daycnt_options);
         }
         
         if (settings.relevant_regulations !== undefined) {
-          console.log('관련 규정 정보 업데이트');
           const regulationsTextarea = document.querySelector('textarea[name="related_regulations"]');
           if (regulationsTextarea) {
             regulationsTextarea.value = settings.relevant_regulations;
@@ -449,7 +434,6 @@ function updateCheckboxesByFoodType(foodType) {
       return false;
     })
     .catch(error => {
-      console.error('체크박스 설정 로딩 중 오류:', error);
       return false;
     });
 }
@@ -476,14 +460,10 @@ function updateDateDropdown(value) {
 function updateDateDropdownOptions(options) {
   const dateOptions = document.querySelector('select[name="date_option"]');
   if (!dateOptions) {
-    console.error('소비기한 드롭다운을 찾을 수 없습니다.');
     return;
   }
-  
-  console.log('소비기한 드롭다운 옵션 업데이트 시작:', options);
-  
+    
   const currentValue = dateOptions.value;
-  console.log('현재 선택된 값:', currentValue);
   
   if (!dateOptions.dataset.originalOptions) {
     dateOptions.dataset.originalOptions = dateOptions.innerHTML;
@@ -507,9 +487,7 @@ function updateDateDropdownOptions(options) {
       dateOptions.value = options[0];
     }
     
-    console.log('소비기한 드롭다운 업데이트 완료. 새 값:', dateOptions.value);
   } else {
-    console.log('유효한 소비기한 옵션이 없습니다. 기본 옵션으로 복원');
     
     if (dateOptions.dataset.originalOptions) {
       dateOptions.innerHTML = dateOptions.dataset.originalOptions;
@@ -535,8 +513,6 @@ function updateDateDropdownOptions(options) {
 }
 
 function initCheckboxFieldToggle() {
-  console.log('체크박스-필드 매핑 초기화');
-  
   const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="chk_"]');
   
   checkboxes.forEach(function(checkbox) {
@@ -547,7 +523,6 @@ function initCheckboxFieldToggle() {
     checkbox.setAttribute('data-initialized', 'true');
     
     const fieldName = checkbox.id.replace('chk_', '');
-    console.log(`체크박스 설정 중: ${checkbox.id} -> ${fieldName}`);
     
     if (fieldName === 'rawmtrl_nm') {
       checkbox.disabled = true;
@@ -563,8 +538,6 @@ function initCheckboxFieldToggle() {
     
     if (relatedFields.length > 0) {
       checkbox.addEventListener('change', function() {
-        console.log(`체크박스 ${this.id} 상태 변경: ${this.checked}`);
-        
         relatedFields.forEach(function(field) {
           if (checkbox.dataset.forcedDisabled === "true") {
             field.disabled = true;
@@ -573,9 +546,7 @@ function initCheckboxFieldToggle() {
             field.disabled = false;
             field.classList.remove('disabled-textarea');
           }
-          
-          console.log(`필드 ${field.name || field.id} 상태: disabled=${field.disabled}, forcedDisabled=${checkbox.dataset.forcedDisabled}`);
-        });
+         });
       });
       
       relatedFields.forEach(function(field) {
@@ -587,12 +558,8 @@ function initCheckboxFieldToggle() {
           field.classList.remove('disabled-textarea');
         }
       });
-    } else {
-      console.warn(`체크박스 ${checkbox.id}에 대한 관련 필드를 찾을 수 없음`);
     }
   });
-  
-  console.log('체크박스-필드 매핑 초기화 완료');
 }
 
 function findRelatedFields(fieldName) {
@@ -650,8 +617,7 @@ function setDefaultCheckboxes() {
   };
   
   if (!$('#label_id').val() || $('#label_id').val() === '') {
-    console.log("새 라벨 생성 시 기본 체크박스 설정 적용");
-    
+
     Object.keys(defaultChecked).forEach(checkboxId => {
       const checkbox = document.getElementById(checkboxId);
       if (checkbox && !checkbox.disabled) {
@@ -686,8 +652,6 @@ function prepareFormData() {
       } else {
         hiddenField.val(value);
       }
-      
-      console.log(`체크박스 ${checkboxName} 값 설정: ${value}`);
     }
   });
   
@@ -698,16 +662,39 @@ function prepareFormData() {
   $('#hidden_preservation_type').val(preservationType);
   $('#hidden_processing_method').val(processingMethod);
   $('#hidden_processing_condition').val(processingCondition);
+
+}
+
+// Select2 초기화 함수 추가
+function initSelect2Components() {
+  // 대분류 드롭다운에 select2 적용
+  $('#food_group').select2({
+    placeholder: "대분류 선택",
+    allowClear: true,
+    width: '100%'
+  });
   
-  console.log('폼 제출 준비:', {
-    preservationType,
-    processingMethod,
-    processingCondition
+  // 소분류 드롭다운에 select2 적용
+  $('#food_type').select2({
+    placeholder: "소분류 선택",
+    allowClear: true,
+    width: '100%'
+  });
+  
+  // 원산지 드롭다운에 select2 적용
+  $('select[name="country_of_origin"]').select2({
+    placeholder: "원산지 선택",
+    allowClear: true,
+    width: '100%'
   });
 }
 
 // Document Ready 이벤트 핸들러
 $(document).ready(function() {
+  
+  // Select2 컴포넌트 초기화
+  initSelect2Components();
+  
   initCheckBoxGroups();
   updateSummary();
   $('.select2-food-type, input[type="checkbox"], input[name="sterilization_other_detail"]')
@@ -719,20 +706,16 @@ $(document).ready(function() {
     const selectedOption = this.options[this.selectedIndex];
     if (selectedOption && selectedOption.value) {
       const group = selectedOption.dataset.group;
-      console.log(`소분류 선택: ${selectedOption.value}, 대분류: ${group}`);
       
       if (group) {
-        $('#food_group').val(group);
+        $('#food_group').val(group).trigger('change.select2');
         $('#hidden_food_group').val(group);
-        console.log(`대분류 자동 설정: ${group}`);
       } else if (!group) {
-        console.log('대분류 정보 없음, 서버에서 조회 시도');
         fetch(`/label/get-food-group/?food_type=${encodeURIComponent(selectedOption.value)}`)
           .then(response => response.json())
           .then(data => {
             if (data.success && data.food_group) {
-              console.log(`서버에서 대분류 정보 수신: ${data.food_group}`);
-              $('#food_group').val(data.food_group);
+              $('#food_group').val(data.food_group).trigger('change.select2');
               $('#hidden_food_group').val(data.food_group);
               selectedOption.dataset.group = data.food_group;
             }
@@ -747,11 +730,14 @@ $(document).ready(function() {
   
   $('#food_group').off('change').on('change', function() {
     const selectedGroup = this.value;
-    console.log(`대분류 선택: ${selectedGroup}`);
     
     $('#hidden_food_group').val(selectedGroup);
     
     const foodTypeSelect = $('#food_type');
+    
+    // 소분류 비우고 기본 옵션 추가
+    foodTypeSelect.empty();
+    foodTypeSelect.append(new Option('소분류', ''));
     const currentFoodType = $('#food_type').val();
     foodTypeSelect.empty().append('<option value="">소분류</option>');
     
@@ -766,6 +752,8 @@ $(document).ready(function() {
               option.dataset.group = item.food_group;
               foodTypeSelect.append(option);
             });
+            // 소분류 select2 업데이트 - 초기화 후 다시 적용
+            foodTypeSelect.val(null).trigger('change.select2');
             if (currentFoodType) {
               foodTypeSelect.val(currentFoodType);
             }
@@ -783,6 +771,8 @@ $(document).ready(function() {
               option.dataset.group = item.food_group;
               foodTypeSelect.append(option);
             });
+            // 소분류 select2 업데이트 - 초기화 후 다시 적용
+            foodTypeSelect.val(null).trigger('change.select2');
             if (currentFoodType) {
               const exists = Array.from(foodTypeSelect.options).some(opt => opt.value === currentFoodType);
               if (exists) {
@@ -800,12 +790,16 @@ $(document).ready(function() {
   initCheckboxFieldToggle();
   
   $("#labelForm").off('submit').on('submit', function() {
+    
+    // 식품유형 값 최종 확인 및 설정
     console.log("폼 제출 시작: 데이터 처리");
     const selectedFoodGroup = $('#food_group').val();
     const selectedFoodType = $('#food_type').val();
     $('#hidden_food_group').val(selectedFoodGroup);
     $('#hidden_food_type').val(selectedFoodType);
     prepareFormData();
+    
+    return true; // 폼 제출 계속 진행
     console.log("폼 제출 준비 완료");
     return true;
   });
@@ -813,12 +807,12 @@ $(document).ready(function() {
   $('#food_group').on('change', function() {
     const selectedValue = $(this).val();
     $('#hidden_food_group').val(selectedValue);
-    console.log(`대분류 변경: ${selectedValue}, hidden 값: ${$('#hidden_food_group').val()}`);
   });
   
   $('#food_type').on('change', function() {
     const selectedValue = $(this).val();
     $('#hidden_food_type').val(selectedValue);
+    
     console.log(`소분류 변경: ${selectedValue}, hidden 값: ${$('#hidden_food_type').val()}`);
     if (selectedValue) {
       updateCheckboxesByFoodType(selectedValue)
@@ -840,7 +834,6 @@ $(document).ready(function() {
     });
   }
 
-  console.log("문서 로딩 완료 및 초기화 작업 완료");
 });
 
 document.addEventListener('DOMContentLoaded', function() {

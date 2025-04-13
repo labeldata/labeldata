@@ -41,8 +41,8 @@
 <!-- 식품유형/장기보존/제조방법 선택 영역 -->
 <div id="food-type-section" class="container mb-2" style="display:block;">
   <div class="d-flex align-items-center" style="gap:20px; width:100%;">
-    <!-- 식품유형 -->
-    <div class="selectable-item" style="flex:1; max-width:30%;">
+    <!-- 식품유형 드롭다운 수정 -->
+    <div class="selectable-item" style="flex:1; max-width:25%;">
       <label class="form-label" style="font-size:0.8rem; font-weight:bold;">식품유형</label>
       <div class="d-flex" style="gap:5px; width:100%;">
         <select id="food_group" name="food_group" class="form-control" style="width:50%;">
@@ -524,5 +524,66 @@
     </div>
   </div>
 </div>
+
+<script>
+  $(document).ready(function() {
+    // select2 초기화
+    $('#food_group').select2({
+      placeholder: "대분류 선택",
+      allowClear: true,
+      width: 'resolve'
+    });
+
+    $('#food_type').select2({
+      placeholder: "소분류 선택",
+      allowClear: true,
+      width: 'resolve'
+    });
+
+    // 대분류 변경 시 소분류 업데이트
+    $('#food_group').on('change', function() {
+      const selectedGroup = $(this).val();
+      const foodTypeSelect = $('#food_type');
+
+      // 소분류 초기화
+      foodTypeSelect.empty().append('<option value="">소분류</option>');
+
+      if (selectedGroup) {
+        // 서버에서 소분류 데이터 가져오기
+        $.ajax({
+          url: `/label/food-types-by-group/?group=${encodeURIComponent(selectedGroup)}`,
+          method: 'GET',
+          success: function(data) {
+            if (data.success) {
+              data.food_types.forEach(item => {
+                const option = new Option(item.food_type, item.food_type);
+                $(option).attr('data-group', item.food_group);
+                foodTypeSelect.append(option);
+              });
+              // select2 UI 업데이트
+              foodTypeSelect.val(null).trigger('change.select2');
+            }
+          },
+          error: function() {
+            console.error('소분류 데이터를 가져오는 중 오류 발생');
+          }
+        });
+      } else {
+        // 대분류 선택 해제 시 소분류 초기화
+        foodTypeSelect.val(null).trigger('change.select2');
+      }
+    });
+
+    // 소분류 변경 시 대분류 자동 설정
+    $('#food_type').on('change', function() {
+      const selectedOption = $(this).find(':selected');
+      const group = selectedOption.data('group');
+
+      if (group) {
+        $('#food_group').val(group).trigger('change.select2');
+      }
+    });
+  });
+</script>
 
 {% endblock %}
