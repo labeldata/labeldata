@@ -1,49 +1,77 @@
-3/8 회의록
+function fetchKoreanLabelingByDateRange() {
+  const serviceKey = 'W%2Fa0WaIQ8wchtXd0%2F8ULXkcbd5KQ%2BM2AkNERlMgwDJpuFHGEtzVOjnRG%2BoAjJ4Nu5gpveEmfEEOD8CvRPPlyCA%3D%3D';
+  const baseUrl = 'https://apis.data.go.kr/1471000/IprtFoodPrdtKoreanLabelingItem/getIprtFoodPrdtKoreanLabelingItem';
+  const numOfRows = 100;
+  const maxPages = 300; // 최대 페이지 수
+  const sheetName = '수입식품';
 
-윤)
-- Mylabel 모델 : 로직으로 생성되는 표준/권장 표시사항 필드 추가
-- 알레르기 및 GMO 추가 작업
-- 관계 테이블 원료id 추적 확인
-- 등록 모달창 선택 시 비율 비활성화 해제
-전) 
-- Mylabel 모델 : 식품유형별 체크항목 정리(유탕, 유처리 등)
-- 주의사항 자주사용하는 문구 기능 추가
-- 완료) 원재료 페이지 추가(리스트 + 상세보기 한페이지에)
-  : 원재료 조회 및 수정 페이지 추가 및 버튼 연결(한페이지로 보기 <->전체 페이지로 보기)
-  : 원재료 상세보기는 항목별로 한줄에 보이도록 수정
-  : 한페이지로 보기에서 상세보기를 선택하면 body 부분이 줄어드는 현상이 있는데 원인을 못찾고 있음. css, 상세보기 부분 분리 등을 손대봤는데 해결 못함. 
-  -> 한페이지로 보기의 화면크기가 줄어드는 문제 개선,
-  -> 새로고침 시 전체보기 페이지로 이동하는 부분 한페이지로 연결
-  -> 저장,닫기,삭제 기능 정상 작동(데이터 저장 및 화면 새로고침) 
-완료) 표시사항 생성-원재료 상세입력- 상단 툴박스 버튼 색상 변경, 상하,좌우 간격 조정
-- 완료) 원료 등록-내원료 조회 모달 수정 
-  : 배경색, 버튼색 변경, 등록 행 데이터 중 비율 삭제, 상단 명칭 변경(내원료 조회), 저장 버튼명 변경(신규 등록)
-※ 내원료 이름 삭제
+  // ✅ 수동 날짜 설정
+  const startDate = '20200101';
+  const endDate = '20250325';
 
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName) || SpreadsheetApp.getActiveSpreadsheet().insertSheet(sheetName);
+  let headerWritten = sheet.getLastRow() > 0;
+  let headers = headerWritten ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0] : [];
 
-3/16 회의록
+  let allRows = []; // 데이터를 한 번에 저장할 배열
 
-- 원산지 : 원재료 상세 정보 페이지에 검증버튼 추가, 검증 시 비율,유형을 기준으로 검증대상 선정 후 원산지(국가명) 포함여부 확인, 검증이 완료되어야만 저장됨.
-# 로직은 별도로 전달 
+  for (let pageNo = 1; pageNo <= maxPages; pageNo++) {
+    const url = `${baseUrl}?serviceKey=${serviceKey}&pageNo=${pageNo}&numOfRows=${numOfRows}`;
+    Logger.log(`🔄 페이지 ${pageNo} 호출 중...`);
 
-- 알레르기/GMO : 신규는 + 버튼, 저장 후 갯수만 표시, +는 모달 버튼으로 구현
-- 참고사항 칸 추가(식품첨가물 표시명, 원산지 순위와 표시여부/1순위(적합))
+    try {
+      const response = UrlFetchApp.fetch(url, {
+        method: 'get',
+        muteHttpExceptions: true,
+        headers: { accept: '*/*' }
+      });
 
-- 표시사항 작성
- : 항목명 선택 시에도 체크박스 선택 연동되도록
- : 원산지) 외국산(라트라아산, 벨기에산, 호주산, 캐나다산)
+      const xml = response.getContentText();
+      const document = XmlService.parse(xml);
+      const root = document.getRootElement();
+      const body = root.getChild('body');
+      const items = body?.getChild('items')?.getChildren('item');
+      if (!items || items.length === 0) break;
 
-- 원료 조회 및 수정
- : 한 페이지로 보기 첫화면에 빈 내원료 상세보기 와 신규 저장버튼 만들기
- : 내원료 -> 원료 명칭 수정
+      let rows = [];
 
-- 네비 순서 변경
- 제품 조회 / 원료 조회 / 표시사항 작성
+      for (let i = 0; i < items.length; i++) {
+        let obj = {};
+        items[i].getChildren().forEach(child => {
+          obj[child.getName()] = child.getText();
+        });
 
-# 로직 만들기
-1. 식품첨가물 변환, 표4,5,6 체크 및 예시 알려주기 칸 생성
-   신규 등록할 때만 알려준다.
-2. 원산지 로직
-   : 예시도 기재할 것. 국가코드가 없는 경우들...
-3. 식품유형-항목 매칭
-4. 표시사항 작성 페이지 분할 및 재배치
+        const category = obj['DCL_PRDUCT_SE_CD_NM'];
+        const procsDate = obj['PROCS_DTM'];
+
+        if (category !== '가공식품' && category !== '식품첨가물') continue;
+        if (!procsDate || procsDate < startDate || procsDate > endDate) continue;
+
+        if (!headerWritten) headers = Object.keys(obj);
+        rows.push(headers.map(h => obj[h] || ""));
+      }
+
+      if (rows.length > 0) {
+        allRows = allRows.concat(rows); // 데이터 누적
+        Logger.log(`✅ 페이지 ${pageNo} 저장 완료 (${rows.length}건)`);
+      } else {
+        Logger.log(`⚠️ 페이지 ${pageNo}: 필터 통과 항목 없음`);
+      }
+
+    } catch (e) {
+      Logger.log(`❌ 오류 발생 - 페이지 ${pageNo}: ${e}`);
+      break;
+    }
+  }
+
+  // 데이터를 한 번에 시트에 추가
+  if (allRows.length > 0) {
+    if (!headerWritten) {
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    }
+    sheet.getRange(sheet.getLastRow() + 1, 1, allRows.length, headers.length).setValues(allRows);
+    Logger.log(`✅ ${allRows.length}개의 데이터 입력 완료`);
+  } else {
+    Logger.log("입력할 데이터가 없습니다.");
+  }
+}

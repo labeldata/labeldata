@@ -13,12 +13,10 @@ urlpatterns = [
     path('my-labels/', views.my_label_list, name='my_label_list'),
     path('bulk-copy-labels/', views.bulk_copy_labels, name='bulk_copy_labels'),
     path('bulk-delete-labels/', views.bulk_delete_labels, name='bulk_delete_labels'),
-    # 내 표시사항으로 저장 (saveto_my_label 뷰 호출)
     path('save-to-my-label/<str:prdlst_report_no>/', views.save_to_my_label, name='save_to_my_label'),
 
     # 표시사항 작성
     path("label/create/", views.label_creation, name="label_creation"),
-    # path('label-creation/<uuid:unique_key>/', views.label_creation, name='label_creation_uuid'),
     path('label-creation/<int:label_id>/', views.label_creation, name='label_creation'),
     path('ingredient-popup/', views.ingredient_popup, name='ingredient_popup'),
     path('nutrition-popup/', views.nutrition_calculator_popup, name='nutrition_popup'),
@@ -29,6 +27,7 @@ urlpatterns = [
     path('phrases/manage/', views.manage_phrases, name='manage_phrase'),
     path('phrases/reorder/', views.reorder_phrases, name='reorder_phrases'),
     path('phrases/', views.phrase_popup, name='phrase_popup'),
+    path('phrases/suggestions/', views.phrase_suggestions, name='phrase_suggestions'),  # 추가
 
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
     path('get-food-group/', views.get_food_group, name='get_food_group'),
@@ -45,7 +44,6 @@ urlpatterns = [
     path('delete-my-ingredient/<int:ingredient_id>/', views.delete_my_ingredient, name='delete_my_ingredient'),
     path('save-ingredients-to-label/<int:label_id>/', views.save_ingredients_to_label, name='save_ingredients_to_label'),
     path('search-ingredient-add-row/', views.search_ingredient_add_row, name='search_ingredient_add_row'),
-    # verify_ingredients URL 추가
     path('verify-ingredients/', views.verify_ingredients, name='verify_ingredients'),
     path('api/food-items/count/', views.food_items_count, name='food_items_count'),
 ]

@@ -1,7 +1,5 @@
-/* ====================================================
-   1. Global Variables & Base Styles
-   ==================================================== */
-   :root {
+/* 1. Global Variables & Base Styles */
+:root {
     --primary-color: #023047;
     --secondary-color: #6c757d;
     --text-color: #343a40;
@@ -14,47 +12,46 @@
     --table-hover-bg-color: #e9ecef;
     --pagination-color: #023047;
     --footer-bg-color: #d9dcd6;
-}
-
-/* 웹폰트 설정 */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-
-/* ====================================================
-   2. Global Reset & Layout
-   ==================================================== */
-html, body {
-    height: 100%;
+  }
+  
+  /* 웹폰트 */
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+  
+  /* 2. Global Reset & Layout */
+  html, body {
+    min-height: 100vh;
     margin: 0;
     padding: 0;
-}
-
-body {
+  }
+  
+  body {
     display: flex;
     flex-direction: column;
     font-family: 'Noto Sans KR', sans-serif;
     background-color: #f9f9f9;
     color: var(--text-color);
-    overflow-y: auto;
-}
-
-.main-content {
-    height: calc(100vh - 60px - 40px);
+  }
+  
+  /* 메인 콘텐츠 영역 */
+  .main-content {
+    flex: 1;
     margin-top: 60px;
-    margin-bottom: 40px;
-    overflow-x: hidden;
-    overflow-y: auto;
+    padding-bottom: 20px;
+    overflow: auto;
     display: flex;
     flex-direction: column;
-}
-
-main.container,
-.content {
-    flex: 1 0 auto;
-    margin-top: 60px;
-    padding-top: 10px;
-    padding-bottom: 80px;
-}
-
+  }
+  
+  /* Footer: 본문 뒤에 배치 */
+  .footer {
+    background-color: var(--footer-bg-color);
+    color: var(--navbar-bg-color);
+    padding: 0.3rem 0;
+    text-align: center;
+    z-index: 10;
+    margin-top: 20px;
+  }
+  
 /* ====================================================
    3. Navbar Styles
    ==================================================== */
@@ -73,21 +70,6 @@ main.container,
 .navbar-brand,
 .navbar-nav .nav-item:not(.logout) {
     margin-right: 2rem !important;
-}
-
-/* ====================================================
-   4. Footer (하단 고정)
-   ==================================================== */
-.footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: var(--footer-bg-color);
-    color: var(--navbar-bg-color);
-    padding: 0.3rem 0;
-    text-align: center;
-    z-index: 10;
 }
 
 /* ====================================================

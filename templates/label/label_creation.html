@@ -11,31 +11,15 @@
 
 <!-- 외부 CSS 및 JS 파일 로드 -->
 <link href="{% static 'css/label_creation.css' %}" rel="stylesheet" />
+<!-- 자주 사용하는 문구 데이터 삽입 -->
+<script id="phrases-data" type="application/json">
+  {{ phrases_json|safe }}
+</script>
+<script id="regulations-data" type="application/json">
+    {{ regulations_json|safe }}
+</script>
 <script src="{% static 'js/label_creation.js' %}"></script>
 
-<script>
-  function openPhrasePopup() {
-    const width = 600;
-    const height = 800;
-    const left = (screen.width - width) / 2;
-    const top = (screen.height - height) / 2;
-    
-    // URL을 phrase_popup으로 변경
-    window.open('/label/phrases/', 'phrasePopup', 
-        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`);
-}
-
-// 버튼에 이벤트 핸들러 연결
-document.addEventListener('DOMContentLoaded', function() {
-    // 주의사항과 기타표시사항의 버튼을 모두 선택
-    const phraseButtons = document.querySelectorAll('[onclick="openPhrasePopup()"]');
-    phraseButtons.forEach(button => {
-        button.onclick = function() {
-            openPhrasePopup();
-        };
-    });
-});
-</script>
 
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
 <input type="hidden" id="label_id" value="{{ label.my_label_id }}">
@@ -142,9 +126,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="container mb-2 d-flex justify-content-between align-items-center">
   <div id="selected-info" style="font-weight:bold; font-size:0.9rem;">식품유형 :</div>
   <div class="d-flex align-items-center" style="gap: 5px;">
-    <!-- 자주 사용하는 문구 버튼 추가 -->
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openPhrasePopup()" title="자주 사용하는 문구">
-      자주 사용하는 문구
+    <!-- 내문구 관리 버튼 -->
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openPhrasePopup()" title="내문구 관리">
+      내문구 관리
     </button>
     <!-- 식품유형 접기/펼치기 버튼 -->
     <button id="toggleFoodTypeBtn" class="btn btn-sm btn-outline-secondary" type="button" title="접기" style="font-size: 1rem;">∧</button>
@@ -182,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="my_label_name" class="form-control auto-expand" value="{{ form.my_label_name.value }}">
+            <input type="text" name="my_label_name" class="form-control auto-expand" placeholder="라벨명을 입력하세요." value="{{ form.my_label_name.value }}">
           </div>
         </div>
         <!-- 식품유형 -->
@@ -193,7 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="prdlst_dcnm" class="form-control auto-expand" value="{{ form.prdlst_dcnm.value }}">
+            <input type="text" name="prdlst_dcnm" class="form-control auto-expand" placeholder="상단의 식품유형을 참고하여 입력하세요." value="{{ form.prdlst_dcnm.value }}">
           </div>
         </div>
       </div>
@@ -210,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="prdlst_nm" class="form-control auto-expand" value="{{ form.prdlst_nm.value }}">
+            <input type="text" name="prdlst_nm" class="form-control auto-expand" placeholder="제품명을 입력하세요." value="{{ form.prdlst_nm.value }}">
           </div>
         </div>
         <!-- 성분명 및 함량 -->
@@ -223,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="ingredient_info" class="form-control auto-expand" value="{{ form.ingredient_info.value }}">
+            <input type="text" name="ingredient_info" class="form-control auto-expand" placeholder="제품명에 원재료명을 사용한 경우 입력하세요." value="{{ form.ingredient_info.value }}">
           </div>
         </div>
       </div>
@@ -240,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="content_weight" class="form-control auto-expand" value="{{ form.content_weight.value }}">
+            <input type="text" name="content_weight" class="form-control auto-expand" placeholder="내용량을 입력하세요." value="{{ form.content_weight.value }}">
           </div>
         </div>
         <!-- 내용량(열량) -->
@@ -251,7 +235,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="weight_calorie" class="form-control auto-expand" value="{{ form.weight_calorie.value }}">
+            <input type="text" name="weight_calorie" class="form-control auto-expand" placeholder="내용량(열량) 형식으로 입력하세요." value="{{ form.weight_calorie.value }}">
           </div>
         </div>
       </div>
@@ -297,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="storage_method" class="form-control auto-expand" value="{{ form.storage_method.value }}">
+            <input type="text" name="storage_method" class="form-control auto-expand" placeholder="보관방법을 입력하거나 내문구를 선택하세요." value="{{ form.storage_method.value }}">
           </div>
         </div>
         <!-- 용기.포장재질 -->
@@ -308,7 +292,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" value="{{ form.frmlc_mtrqlt.value }}">
+            <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" placeholder="용기.포장재질을 입력하거나 내문구를 선택하세요."value="{{ form.frmlc_mtrqlt.value }}">
           </div>
         </div>
       </div>
@@ -327,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function() {
             aria-controls="other-manufacturers" style="font-size: 1rem; padding: 2px 1px;" title="펼치기">∨</button>
         </div>
         <div style="width:90.4%;">
-          <input type="text" name="bssh_nm" class="form-control auto-expand" style="flex:1;" value="{{ form.bssh_nm.value }}">
+          <input type="text" name="bssh_nm" class="form-control auto-expand"  placeholder="제조원을 입력하거나 내문구를 선택하세요."value="{{ form.bssh_nm.value }}">
         </div>
       </div>
 
@@ -335,14 +319,14 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="collapse mb-2" id="other-manufacturers">
         <!-- 유통전문판매원 -->
         <div class="d-flex align-items-center mb-2" style="gap:5px;">
-          <div style="width:11.1%; min-width:130px;">
+          <div style="width:11.1%; min-width:125px;">
             <!-- 유통전문 판매원 체크박스 -->
             <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address" class="form-check-input" 
                    {% if form.chk_distributor_address.value == "Y" %}checked{% endif %}>
             <label for="chk_distributor_address" class="m-0">유통전문판매원</label>
           </div>
           <div style="width:88.9%;">
-            <input type="text" name="distributor_address" class="form-control auto-expand"
+            <input type="text" name="distributor_address" class="form-control auto-expand" placeholder="유통전문판매원을 입력하거나 내문구를 선택하세요."
                   value="{{ form.distributor_address.value }}">
           </div>
         </div>
@@ -356,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <label for="chk_repacker_address" class="m-0">소분원</label>
           </div>
           <div style="width:88.9%;">
-            <input type="text" name="repacker_address" class="form-control auto-expand"
+            <input type="text" name="repacker_address" class="form-control auto-expand" placeholder="소분원을 입력하거나 내문구를 선택하세요."
                   value="{{ form.repacker_address.value }}">
           </div>
         </div>
@@ -370,7 +354,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <label for="chk_importer_address" class="m-0">수입원</label>
           </div>
           <div style="width:88.9%;">
-            <input type="text" name="importer_address" class="form-control auto-expand"
+            <input type="text" name="importer_address" class="form-control auto-expand" placeholder="수입원을 입력하거나 내문구를 선택하세요."
                   value="{{ form.importer_address.value }}">
           </div>
         </div>
@@ -378,7 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       <!-- 소비기한/품질유지기한/제조연월일/생산연도 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">
-        <div style="width:11.6%; min-width:137px;">
+        <div style="width:11.6%; min-width:130px;">
           <input type="checkbox" id="chk_date_info" name="chk_date_info" class="form-check-input" {% if form.chk_date_info.value == "Y" %}checked{% endif %}>
           <label for="chk_date_info" class="m-0">소비기한</label>
         </div>
@@ -391,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
           <option value="생산연도" {% if form.date_option.value == "생산연도" %}selected{% endif %}>생산연도</option>
         </select>
-        <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="None" value="{{ form.pog_daycnt.value }}">
+        <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value }}">
           </div>
         </div>
       </div>
@@ -406,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="handleIngredientPopup()" title="상세입력">✚</button>
         </div>
         <div style="width:90.4%;">
-          <textarea name="rawmtrl_nm_display" class="form-control auto-expand" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value }}</textarea>
+          <textarea name="rawmtrl_nm_display" class="form-control auto-expand" rows="2" placeholder="원재료명(표시)을 입력하세요"> {{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value }}</textarea>
         </div>
       </div>
 
@@ -440,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div style="width:89%;">
           <textarea name="cautions" 
             class="form-control auto-expand" 
-            placeholder="주의사항을 입력하세요">{{ form.cautions.value }}</textarea>
+            placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.cautions.value }}</textarea>
         </div>
       </div>
       <!-- 기타 표시사항 -->
@@ -454,7 +438,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div style="width:89%;">
           <textarea name="additional_info" 
             class="form-control auto-expand" 
-            placeholder="기타 표시사항을 입력하세요">{{ form.additional_info.value }}</textarea>
+            placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.additional_info.value }}</textarea>
           </div>
       </div>    
 
@@ -511,11 +495,32 @@ document.addEventListener('DOMContentLoaded', function() {
       </form>
     </div>
 
-    <!-- 우측 규정 패널 -->
+    <!-- 우측 패널 탭 구조 -->
     <div id="regulationPanel" class="right-panel collapsible-panel show">
-      <textarea name="related_regulations" class="form-control"
-                style="height: 100%; min-height: 500px;"
-                placeholder="식품 유형별 관련 규정을 확인하세요.">{{ form.related_regulations.value }}</textarea>
+      <!-- 탭 메뉴 -->
+      <ul class="nav nav-tabs" id="phraseTab" role="tablist">
+        <li class="nav-item" role="presentation">
+          <a class="nav-link active" id="regulation-tab" data-bs-toggle="tab" href="#regulation-content">식품유형별 규정</a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a class="nav-link" id="myphrases-tab" data-bs-toggle="tab" href="#myphrases-content">항목별 문구 및 규정</a>
+        </li>
+      </ul>
+
+      <!-- 탭 내용 -->
+      <div class="tab-content p-2" style="height:100%;">
+        <!-- 관련규정 -->
+        <div class="tab-pane fade show active" id="regulation-content" role="tabpanel">
+          <textarea name="related_regulations" readonly class="form-control">...</textarea>
+        </div>
+        <!-- 내문구 -->
+        <div class="tab-pane fade" id="myphrases-content" role="tabpanel">
+          <div id="myPhraseContainer" style="max-height:400px; overflow-y:auto;">
+            <!-- 규정 정보는 JS로 동적 추가 -->
+            <div id="myPhraseList" class="d-flex flex-column gap-2"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

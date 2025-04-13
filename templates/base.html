@@ -3,49 +3,46 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}식품 데이터 포털{% endblock %}</title>
-    <!-- jQuery first -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <!-- Select2 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <!-- Select2 JS -->
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    {% bootstrap_css %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}?after">
-    {% block extra_head %}{% endblock %}
-    <style>
-        /* 수정된 main-content 스타일 */
-        .main-content {
-          /* 헤더(고정 navbar) 높이 약 60px 가정 */
-          margin-top: 60px;   /* 네비바 공간 확보 */
-          min-height: calc(100vh - 60px - 40px); /* 최소 높이만 설정하고 자동 확장 가능 */
-          padding-bottom: 40px; /* 푸터 공간 확보 (margin 대신 padding 사용) */
-          overflow: auto;     /* 내용물이 넘칠 경우 스크롤 허용 */
-          display: flex;      /* 내부에서 flex 레이아웃 가능 */
-          flex-direction: column;
-        }
-        
-        /* 필요한 경우 내부 컨테이너에 스크롤 설정 */
-        .scroll-container {
-          overflow-y: auto;
-          flex-grow: 1;
-        }
-     </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}식품 데이터 포털{% endblock %}</title>
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- Select2 CSS & JS -->
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  {% bootstrap_css %}
+  <!-- 메인 CSS -->
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20250413">
+  {% block extra_head %}{% endblock %}
+  <style>
+    /* main-content 영역: flex-grow를 이용하여 남은 공간 모두 차지 */
+    .main-content {
+      flex: 1;
+      margin-top: 60px; /* 네비게이션 높이 */
+      padding-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
+    }
+    /* body에 최소 높이 보장 */
+    html, body {
+      min-height: 100vh;
+    }
+  </style>
 </head>
 <body>
-    <!-- Navbar -->
-    {% include 'includes/navbar.html' %}
+  <!-- Navbar -->
+  {% include 'includes/navbar.html' %}
 
-    <!-- Main Content -->
-    <main class="container-fluid main-content">
-        {% block content %}{% endblock %}
-    </main>
+  <!-- Main Content -->
+  <main class="container-fluid main-content">
+    {% block content %}{% endblock %}
+  </main>
 
-    <!-- Footer -->
-    {% include 'includes/footer.html' %}
+  <!-- Footer (여기서는 고정하지 않고, 내용 뒤에 배치) -->
+  {% include 'includes/footer.html' %}
 
-    {% bootstrap_javascript %}
+  {% bootstrap_javascript %}
 </body>
 </html>

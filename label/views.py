@@ -6,18 +6,13 @@ from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
 from django.http import JsonResponse
-from django.db.models import Subquery, OuterRef
+from django.utils.timezone import now
+from django.views.decorators.cache import never_cache
 from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase
 from .forms import LabelCreationForm, MyIngredientsForm
-from venv import logger  #지우지 말 것
+from venv import logger  # 지우지 않음
 from django.utils.safestring import mark_safe
-from django.utils.timezone import now
-import copy
-from django.views.decorators.csrf import csrf_exempt
-from datetime import datetime, timedelta
-from rapidfuzz import fuzz  # rapidfuzz 라이브러리 import
-from django.views.decorators.cache import never_cache
-from .constants import DEFAULT_PHRASES
+from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS  # FIELD_REGULATIONS 추가
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -286,7 +281,25 @@ def label_creation(request, label_id=None):
     else:
         # 대분류가 선택되지 않은 경우 모든 소분류 가져옴
         food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
-    
+        
+    # 자주 사용하는 문구 불러오기
+    user_phrases = MyPhrase.objects.filter(user_id=request.user, delete_YN='N').order_by('category_name', 'display_order')
+
+    phrases_data = {}
+    for phrase in user_phrases:
+        category = phrase.category_name
+        if category not in phrases_data:
+            phrases_data[category] = []
+        phrases_data[category].append({
+            'id': phrase.my_phrase_id,
+            'name': phrase.my_phrase_name,
+            'content': phrase.comment_content,
+            'note': phrase.note or '',
+            'order': phrase.display_order
+        })
+
+    phrases_json = json.dumps(phrases_data, ensure_ascii=False)
+
     context = {
         'form': form,
         'label': label if label_id else None,
@@ -294,6 +307,8 @@ def label_creation(request, label_id=None):
         'food_groups': food_groups,
         'country_list': CountryList.objects.all(),
         'has_ingredient_relations': has_ingredient_relations,
+        'phrases_json': phrases_json,  
+        'regulations_json': json.dumps(FIELD_REGULATIONS, ensure_ascii=False)  # 추가
     }
     return render(request, 'label/label_creation.html', context)
 
@@ -1066,54 +1081,86 @@ CATEGORY_CHOICES = [
 def manage_phrases(request):
     """문구 추가/수정/삭제 처리"""
     if request.method != 'POST':
+        logger.warning("Invalid method received in manage_phrases")
         return JsonResponse({'success': False, 'error': 'Invalid method'})
-    
+
     try:
         data = json.loads(request.body)
-        action = data.get('action')
+        logger.info(f"Received data: {data}")
 
-        if action == 'add':
-            # 신규 문구 추가
-            phrase = MyPhrase.objects.create(
-                user_id=request.user,
-                my_phrase_name=data.get('name'),
-                category_name=data.get('category'),
-                comment_content=data.get('content'),
-                note=data.get('note'),
-                display_order=MyPhrase.objects.filter(
+        # 단일 객체 요청인지 배열 요청인지 확인
+        if isinstance(data, list):
+            # 배열 요청 처리
+            for item in data:
+                action = item.get('action')
+                if action == 'add':
+                    phrase = MyPhrase.objects.create(
+                        user_id=request.user,
+                        my_phrase_name=item.get('name'),
+                        category_name=item.get('category'),
+                        comment_content=item.get('content'),
+                        note=item.get('note'),
+                        display_order=MyPhrase.objects.filter(
+                            user_id=request.user,
+                            category_name=item.get('category')
+                        ).count()
+                    )
+                    logger.info(f"Added phrase: {phrase.my_phrase_id}")
+                elif action == 'update':
+                    phrase = get_object_or_404(MyPhrase, my_phrase_id=item.get('id'), user_id=request.user)
+                    phrase.my_phrase_name = item.get('name')
+                    phrase.comment_content = item.get('content')
+                    phrase.note = item.get('note')
+                    phrase.save()
+                    logger.info(f"Updated phrase: {phrase.my_phrase_id}")
+                elif action == 'delete':
+                    phrase = get_object_or_404(MyPhrase, my_phrase_id=item.get('id'), user_id=request.user)
+                    phrase.soft_delete()  # 소프트 삭제 메서드 사용
+                    logger.info(f"Soft deleted phrase: {phrase.my_phrase_id}")
+            return JsonResponse({'success': True})
+        else:
+            # 기존 단일 객체 요청 처리
+            action = data.get('action')
+            if action == 'add':
+                phrase = MyPhrase.objects.create(
                     user_id=request.user,
-                    category_name=data.get('category')
-                ).count()
-            )
-            return JsonResponse({'success': True, 'id': phrase.my_phrase_id})
+                    my_phrase_name=data.get('name'),
+                    category_name=data.get('category'),
+                    comment_content=data.get('content'),
+                    note=data.get('note'),
+                    display_order=MyPhrase.objects.filter(
+                        user_id=request.user,
+                        category_name=data.get('category')
+                    ).count()
+                )
+                logger.info(f"Added phrase: {phrase.my_phrase_id}")
+                return JsonResponse({'success': True, 'id': phrase.my_phrase_id})
+            elif action == 'update':
+                phrase = get_object_or_404(MyPhrase, my_phrase_id=data.get('id'), user_id=request.user)
+                phrase.my_phrase_name = data.get('name')
+                phrase.comment_content = data.get('content')
+                phrase.note = data.get('note')
+                phrase.save()
+                logger.info(f"Updated phrase: {phrase.my_phrase_id}")
+                return JsonResponse({'success': True})
+            elif action == 'delete':
+                phrase = get_object_or_404(MyPhrase, my_phrase_id=data.get('id'), user_id=request.user)
+                phrase.soft_delete()
+                logger.info(f"Soft deleted phrase: {phrase.my_phrase_id}")
+                return JsonResponse({'success': True})
+            logger.warning(f"Invalid action received: {action}")
+            return JsonResponse({'success': False, 'error': 'Invalid action'})
 
-        elif action == 'update':
-            # 기존 문구 수정
-            phrase = MyPhrase.objects.get(
-                my_phrase_id=data.get('id'),
-                user_id=request.user
-            )
-            phrase.my_phrase_name = data.get('name')
-            phrase.comment_content = data.get('content')
-            phrase.note = data.get('note')
-            phrase.save()
-            return JsonResponse({'success': True})
-
-        elif action == 'delete':
-            # 문구 삭제
-            phrase = MyPhrase.objects.get(
-                my_phrase_id=data.get('id'),
-                user_id=request.user
-            )
-            phrase.delete_YN = 'Y'
-            phrase.delete_datetime = now().strftime('%Y%m%d')
-            phrase.save()
-            return JsonResponse({'success': True})
-
-        return JsonResponse({'success': False, 'error': 'Invalid action'})
-
+    except MyPhrase.DoesNotExist:
+        logger.error("Phrase not found")
+        return JsonResponse({'success': False, 'error': '문구를 찾을 수 없습니다.'})
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON data")
+        return JsonResponse({'success': False, 'error': '잘못된 데이터 형식입니다.'})
     except Exception as e:
+        logger.error(f"manage_phrases error: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
+    
 
 @login_required
 @csrf_exempt
@@ -1125,6 +1172,7 @@ def reorder_phrases(request):
     try:
         data = json.loads(request.body)
         updates = data.get('updates', [])
+        logger.info(f"Reordering phrases: {updates}")
         
         for update in updates:
             phrase = MyPhrase.objects.get(
@@ -1136,61 +1184,32 @@ def reorder_phrases(request):
             
         return JsonResponse({'success': True})
     except Exception as e:
+        logger.error(f"reorder_phrases error: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
-@login_required 
+@login_required
 @never_cache
 def phrase_popup(request):
     """자주 사용하는 문구 팝업"""
-    print("Phrases popup called")
-    
-    # 1. 기본 문구 데이터 초기화
     phrases_data = {}
     
-    # 2. 각 카테고리별 기본 문구 초기화 
-    for category, phrases in DEFAULT_PHRASES.items():
-        phrases_data[category] = [
-            {
-                'id': None,
-                'name': phrase['name'],
-                'content': phrase['content'],
-                'note': phrase.get('note', ''),
-                'order': phrase.get('order', 0),
-                'is_custom': False,
-                'is_default': True
-            } for phrase in phrases
-        ]
-    
-    # 3. 사용자 저장 문구 조회 (삭제되지 않은 것만)
     user_phrases = MyPhrase.objects.filter(
         user_id=request.user, 
         delete_YN='N'
     ).order_by('category_name', 'display_order')
-    print(f"Found {user_phrases.count()} user phrases")
     
-    # 4. 사용자 문구를 카테고리별로 추가 
     for phrase in user_phrases:
         category = phrase.category_name
         if category not in phrases_data:
             phrases_data[category] = []
-        
         phrases_data[category].append({
             'id': phrase.my_phrase_id,
             'name': phrase.my_phrase_name,
             'content': phrase.comment_content,
             'note': phrase.note or '',
             'order': phrase.display_order,
-            'is_custom': True,
-            'is_default': False
+            'is_custom': True
         })
-    
-    # 5. 각 카테고리 내에서 정렬 (기본 문구 먼저, 그 다음 사용자 문구 순서대로)
-    for category in phrases_data:
-        phrases_data[category].sort(key=lambda x: (
-            not x.get('is_default', False),  # 기본 문구 먼저
-            x.get('order', 0),               # 그 다음 순서대로
-            x.get('name', '')                # 마지막으로 이름순
-        ))
     
     context = {
         'phrases_json': json.dumps(phrases_data, ensure_ascii=False),
@@ -1198,3 +1217,17 @@ def phrase_popup(request):
     }
     
     return render(request, 'label/phrase_popup.html', context)
+
+@login_required
+def phrase_suggestions(request):
+    """추천 문구 제공"""
+    try:
+        category = request.GET.get('category')
+        if not category:
+            return JsonResponse({'success': False, 'error': '카테고리가 제공되지 않았습니다.'})
+        suggestions = DEFAULT_PHRASES.get(category, [])
+        logger.info(f"Fetching suggestions for category: {category}, found: {len(suggestions)} items")
+        return JsonResponse({'success': True, 'suggestions': suggestions})
+    except Exception as e:
+        logger.error(f"phrase_suggestions error: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})

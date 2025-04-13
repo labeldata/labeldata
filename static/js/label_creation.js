@@ -1,3 +1,5 @@
+window.phrasesData = JSON.parse(document.getElementById('phrases-data').textContent);
+
 // ------------------ 라벨 관리 기능 ------------------
 function copyLabel(labelId) {
   if (!labelId) {
@@ -197,6 +199,43 @@ function openPreviewPopup() {
   window.open(previewUrl, 'previewPopup', 'width=1400,height=900,scrollbars=yes');
 }
 
+window.addEventListener('message', function(e) {
+  if (e.data.type === 'applyPhrases') {
+    console.log('Received phrases from popup:', e.data.phrases);
+    const phrases = e.data.phrases;
+    const categoryMapping = {
+      'storage': 'storage_method',
+      'package': 'frmlc_mtrqlt',
+      'manufacturer': 'bssh_nm',
+      'distributor': 'distributor_address',
+      'repacker': 'repacker_address',
+      'importer': 'importer_address',
+      'expiry': 'pog_daycnt',
+      'cautions': 'cautions',
+      'additional': 'additional_info'
+    };
+
+    Object.keys(phrases).forEach(category => {
+      const mappedCategory = categoryMapping[category] || category;
+      const textarea = document.querySelector(`textarea[name="${mappedCategory}"]`);
+      if (textarea) {
+        if (Array.isArray(phrases[category]) && phrases[category].length > 0) {
+          const contents = phrases[category].map(p => p.content).join('\n');
+          textarea.value = contents;
+          updateTextareaHeight(textarea);
+          console.log(`Updated ${mappedCategory} with:`, contents);
+        } else if (phrases[category] && phrases[category][0]) {
+          textarea.value = phrases[category][0].content;
+          updateTextareaHeight(textarea);
+          console.log(`Updated ${mappedCategory} with:`, phrases[category][0].content);
+        }
+      } else {
+        console.warn(`Textarea for category ${mappedCategory} not found`);
+      }
+    });
+  }
+});
+
 // ------------------ 토글 버튼 로직 ------------------
 function initToggleButtons() {
   // 식품유형 섹션 토글
@@ -242,9 +281,7 @@ function initToggleButtons() {
 }
 
 // ------------------ 영양성분 데이터 처리 ------------------
-// nutrition_calculator.js에서 전달한 영양성분 데이터를 처리하는 함수
 function updateNutritionFields(data) {
-  // hidden 필드들에 영양성분 데이터 설정
   if (data) {
     const fieldMap = {
       serving_size: "serving_size",
@@ -271,52 +308,33 @@ function updateNutritionFields(data) {
       proteins_unit: "proteins_unit"
     };
     
-    // 각 필드에 값 설정
     Object.keys(fieldMap).forEach(key => {
       const field = document.querySelector(`input[name="${fieldMap[key]}"]`);
       if (field && data[key] !== undefined) {
         field.value = data[key];
       }
     });
-    
-    // 영양성분 체크박스 자동 선택 부분 제거 (주석 처리)
-    // const nutritionCheckbox = document.getElementById("chk_calories");
-    // if (nutritionCheckbox) {
-    //   nutritionCheckbox.checked = true;
-    // }
   }
 }
 
-// 영양성분 계산기 팝업 함수
 function openNutritionCalculator() {
-    // 현재 라벨 ID
     const labelId = document.getElementById('label_id').value;
-    
-    // 현재 라벨 ID를 쿼리 파라미터로 전달
     const url = `/label/nutrition-calculator-popup/?label_id=${labelId}`;
-    
-    // 팝업 창 열기
-    const popup = window.open(url, 'NutritionCalculator', 'width=1100,height=800,scrollbars=yes');
-  }
+    window.open(url, 'NutritionCalculator', 'width=1100,height=900,scrollbars=yes');
+}
 
 // ------------------ 식품유형 대분류-소분류 연동 기능 ------------------
-// initFoodTypeFiltering 함수 수정 - 페이지 로드 시 초기화
 function initFoodTypeFiltering() {
-  // 초기 값 설정
   const initialFoodGroup = $('#food_group').val();
   const initialFoodType = $('#food_type').val();
   
   console.log(`페이지 로드 시 초기값 - 대분류: ${initialFoodGroup}, 소분류: ${initialFoodType}`);
   
-  // hidden 필드에 초기값 설정
   $('#hidden_food_group').val(initialFoodGroup);
   $('#hidden_food_type').val(initialFoodType);
   
-  // 소분류가 있지만 대분류가 선택되지 않은 경우 대분류를 자동으로 설정
   if (initialFoodType && (!initialFoodGroup || initialFoodGroup === '')) {
     console.log(`소분류는 있지만 대분류가 없음. 소분류: ${initialFoodType}`);
-    
-    // 소분류에 대응하는 대분류 찾기
     const selectedOption = $('#food_type option:selected');
     const group = selectedOption.data('group');
     
@@ -325,7 +343,6 @@ function initFoodTypeFiltering() {
       $('#food_group').val(group);
       $('#hidden_food_group').val(group);
     } else {
-      // 대분류 정보가 없는 경우 서버에서 조회
       console.log('대분류 정보가 없어 서버에서 조회 시도');
       fetch(`/label/get-food-group/?food_type=${encodeURIComponent(initialFoodType)}`)
         .then(response => response.json())
@@ -340,21 +357,15 @@ function initFoodTypeFiltering() {
     }
   }
   
-  // 대분류가 있지만 소분류가 선택되지 않은 경우 소분류 목록 필터링
   if (initialFoodGroup && (!initialFoodType || initialFoodType === '')) {
     console.log(`대분류는 있지만 소분류가 없음. 대분류: ${initialFoodGroup}`);
-    
-    // 대분류에 해당하는 소분류 목록 로드
     fetch(`/label/food-types-by-group/?group=${encodeURIComponent(initialFoodGroup)}`)
       .then(response => response.json())
       .then(data => {
         if (data.success) {
           console.log(`대분류 ${initialFoodGroup}에 대한 소분류 ${data.food_types.length}개 로드됨`);
-          
-          // 소분류 드롭다운 갱신
           const foodTypeSelect = $('#food_type');
           foodTypeSelect.empty().append('<option value="">소분류</option>');
-          
           data.food_types.forEach(item => {
             const option = new Option(item.food_type, item.food_type);
             option.dataset.group = item.food_group;
@@ -365,7 +376,6 @@ function initFoodTypeFiltering() {
       .catch(error => console.error('소분류 데이터 로딩 중 오류:', error));
   }
   
-  // 페이지 로드 시 이미 선택된 식품유형에 대해 체크박스 설정 적용
   if (initialFoodType) {
     console.log(`초기 소분류 ${initialFoodType}에 대한 설정 적용`);
     updateCheckboxesByFoodType(initialFoodType)
@@ -373,8 +383,6 @@ function initFoodTypeFiltering() {
   }
 }
 
-// ------------------ 식품유형에 따른 체크박스 설정 ------------------
-// updateCheckboxesByFoodType 함수 수정 - 소비기한 드롭다운 옵션 업데이트 부분 추가
 function updateCheckboxesByFoodType(foodType) {
   if (!foodType) return Promise.resolve();
   
@@ -393,7 +401,6 @@ function updateCheckboxesByFoodType(foodType) {
           'nutritions': 'chk_calories'
         };
         
-        // Y는 체크, N은 체크 해제, D는 필드 비활성화
         Object.keys(settings).forEach(field => {
           const value = settings[field];
           const checkboxId = fieldMappings[field] || `chk_${field}`;
@@ -405,34 +412,30 @@ function updateCheckboxesByFoodType(foodType) {
             if (value === 'Y') {
               checkbox.checked = true;
               checkbox.disabled = false;
-              checkbox.dataset.forcedDisabled = "false"; // 강제 비활성화 아님
+              checkbox.dataset.forcedDisabled = "false";
             } else if (value === 'N') {
               checkbox.checked = false;
               checkbox.disabled = false;
-              checkbox.dataset.forcedDisabled = "false"; // 강제 비활성화 아님
+              checkbox.dataset.forcedDisabled = "false";
             } else if (value === 'D') {
               checkbox.checked = false;
               checkbox.disabled = true;
-              checkbox.dataset.forcedDisabled = "true"; // 강제 비활성화
+              checkbox.dataset.forcedDisabled = "true";
             }
             
-            // change 이벤트 발생시켜 관련 필드 상태 갱신
             checkbox.dispatchEvent(new Event('change'));
           }
           
-          // 소비기한 드롭다운 필터링
           if (field === 'pog_daycnt' && settings.pog_daycnt) {
             updateDateDropdown(settings.pog_daycnt);
           }
         });
         
-        // 소비기한 드롭다운 옵션 업데이트
         if (settings.pog_daycnt_options !== undefined) {
           console.log('소비기한 옵션 업데이트:', settings.pog_daycnt_options);
           updateDateDropdownOptions(settings.pog_daycnt_options);
         }
         
-        // 관련 규정 정보 설정
         if (settings.relevant_regulations !== undefined) {
           console.log('관련 규정 정보 업데이트');
           const regulationsTextarea = document.querySelector('textarea[name="related_regulations"]');
@@ -451,31 +454,25 @@ function updateCheckboxesByFoodType(foodType) {
     });
 }
 
-// 소비기한 드롭다운 필터링 함수 추가
 function updateDateDropdown(value) {
   const dateOptions = document.querySelector('select[name="date_option"]');
   if (!dateOptions) return;
   
-  // 모든 옵션 활성화 초기화
   Array.from(dateOptions.options).forEach(option => {
     option.disabled = false;
   });
   
-  // 값에 따라 필터링
   if (value === 'D') {
-    // 모든 옵션 비활성화
     Array.from(dateOptions.options).forEach(option => {
       option.disabled = true;
     });
     dateOptions.value = '';
     dateOptions.disabled = true;
   } else if (value === 'Y') {
-    // 모든 옵션 활성화
     dateOptions.disabled = false;
   }
 }
 
-// 소비기한 드롭다운 옵션 업데이트 함수 수정
 function updateDateDropdownOptions(options) {
   const dateOptions = document.querySelector('select[name="date_option"]');
   if (!dateOptions) {
@@ -485,21 +482,18 @@ function updateDateDropdownOptions(options) {
   
   console.log('소비기한 드롭다운 옵션 업데이트 시작:', options);
   
-  // 기존 선택된 값 저장
   const currentValue = dateOptions.value;
   console.log('현재 선택된 값:', currentValue);
   
-  // 이전 옵션 저장 (최초 1회만)
   if (!dateOptions.dataset.originalOptions) {
     dateOptions.dataset.originalOptions = dateOptions.innerHTML;
   }
   
-  // 값이 있고 유효한 배열이면 드롭다운 옵션 교체
   if (options && Array.isArray(options) && options.length > 0) {
-    dateOptions.innerHTML = ''; // 기존 옵션 모두 제거
+    dateOptions.innerHTML = '';
     
     options.forEach(option => {
-      if (!option) return; // 빈 옵션은 건너뜀
+      if (!option) return;
       
       const optionElement = document.createElement('option');
       optionElement.value = option;
@@ -507,7 +501,6 @@ function updateDateDropdownOptions(options) {
       dateOptions.appendChild(optionElement);
     });
     
-    // 이전에 선택한 값이 새 옵션 목록에 있으면 그 값을 선택, 없으면 첫 번째 옵션 선택
     if (options.includes(currentValue)) {
       dateOptions.value = currentValue;
     } else if (options.length > 0) {
@@ -516,13 +509,11 @@ function updateDateDropdownOptions(options) {
     
     console.log('소비기한 드롭다운 업데이트 완료. 새 값:', dateOptions.value);
   } else {
-    // 옵션이 없거나 유효하지 않은 경우 원래 옵션으로 복원
     console.log('유효한 소비기한 옵션이 없습니다. 기본 옵션으로 복원');
     
     if (dateOptions.dataset.originalOptions) {
       dateOptions.innerHTML = dateOptions.dataset.originalOptions;
     } else {
-      // 기본 옵션 설정
       const defaultOptions = [
         {value: '소비기한', text: '소비기한'},
         {value: '품질유지기한', text: '품질유지기한'},
@@ -540,59 +531,45 @@ function updateDateDropdownOptions(options) {
     }
   }
   
-  // 드롭다운 활성화
   dateOptions.disabled = false;
 }
 
-// 체크박스와 관련 입력 필드 활성화/비활성화 함수 완전 재작성
-// 체크박스-필드 토글 함수 수정에서 원재료명(참고) 체크박스 특별 처리 추가
 function initCheckboxFieldToggle() {
   console.log('체크박스-필드 매핑 초기화');
   
-  // 체크박스 목록
   const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="chk_"]');
   
-  // 각 체크박스에 이벤트 핸들러 연결
   checkboxes.forEach(function(checkbox) {
-    // 이벤트 핸들러 등록 표시
     if (checkbox.getAttribute('data-initialized') === 'true') {
       return;
     }
     
     checkbox.setAttribute('data-initialized', 'true');
     
-    // 체크박스 ID에서 필드 이름 추출
     const fieldName = checkbox.id.replace('chk_', '');
     console.log(`체크박스 설정 중: ${checkbox.id} -> ${fieldName}`);
     
-    // 원재료명(참고) 체크박스는 항상 비활성화
     if (fieldName === 'rawmtrl_nm') {
-      // 체크박스와 텍스트영역 모두 비활성화
       checkbox.disabled = true;
       const textarea = document.querySelector('textarea[name="rawmtrl_nm"]');
       if (textarea) {
         textarea.disabled = true;
         textarea.classList.add('disabled-textarea');
       }
-      return; // 이 체크박스에 대한 추가 처리 중단
+      return;
     }
     
-    // 나머지 코드는 그대로 유지...
     let relatedFields = findRelatedFields(fieldName);
     
     if (relatedFields.length > 0) {
-      // 체크박스 변경 이벤트 핸들러
       checkbox.addEventListener('change', function() {
         console.log(`체크박스 ${this.id} 상태 변경: ${this.checked}`);
         
-        // 체크박스 상태에 따라 입력 필드 활성화/비활성화
         relatedFields.forEach(function(field) {
-          // 강제 비활성화된 체크박스인 경우에만 필드를 비활성화
           if (checkbox.dataset.forcedDisabled === "true") {
             field.disabled = true;
             field.classList.add('disabled-textarea');
           } else {
-            // 강제 비활성화가 아닌 경우, 체크 여부와 관계없이 항상 활성화
             field.disabled = false;
             field.classList.remove('disabled-textarea');
           }
@@ -601,14 +578,11 @@ function initCheckboxFieldToggle() {
         });
       });
       
-      // 초기 상태 설정
       relatedFields.forEach(function(field) {
-        // 체크박스가 강제 비활성화된 경우에만 필드를 비활성화
         if (checkbox.dataset.forcedDisabled === "true") {
           field.disabled = true;
           field.classList.add('disabled-textarea');
         } else {
-          // 강제 비활성화가 아닌 경우, 체크 여부와 관계없이 항상 활성화
           field.disabled = false;
           field.classList.remove('disabled-textarea');
         }
@@ -621,9 +595,7 @@ function initCheckboxFieldToggle() {
   console.log('체크박스-필드 매핑 초기화 완료');
 }
 
-// 체크박스 필드명에 해당하는 입력 필드들을 찾는 함수 개선
 function findRelatedFields(fieldName) {
-  // 체크박스 ID와 관련 입력 필드의 매핑 테이블
   const fieldMappings = {
     'label_nm': ['input[name="my_label_name"]'],
     'prdlst_dcnm': ['input[name="prdlst_dcnm"]'],
@@ -647,11 +619,9 @@ function findRelatedFields(fieldName) {
     'calories': ['textarea[name="nutrition_text"]']
   };
   
-  // 매핑 테이블에서 필드 이름에 해당하는 선택자 가져오기
   const selectors = fieldMappings[fieldName] || [];
   const fields = [];
   
-  // 각 선택자에 해당하는 HTML 요소 찾기
   selectors.forEach(function(selector) {
     const elements = document.querySelectorAll(selector);
     elements.forEach(function(el) {
@@ -662,61 +632,49 @@ function findRelatedFields(fieldName) {
   return fields;
 }
 
-// 기본 체크박스 값 설정 함수 수정 (기존 함수 교체)
 function setDefaultCheckboxes() {
-  // 항상 설정해야 하는 기본 체크박스 값
   const defaultChecked = {
-    'chk_prdlst_nm': true,          // 제품명 - 체크함
-    'chk_content_weight': true,      // 내용량 - 체크함
-    'chk_manufacturer_info': true,   // 제조원 소재지 - 체크함
-    'chk_date_info': true            // 소비기한 - 체크함
+    'chk_prdlst_nm': true,
+    'chk_content_weight': true,
+    'chk_manufacturer_info': true,
+    'chk_date_info': true
   };
   
   const defaultUnchecked = {
-    'chk_label_nm': false,           // 라벨명 - 체크 안함
-    'chk_ingredients_info': false,   // 성분명 및 함량 - 체크 안함
-    'chk_distributor_address': false,// 유통전문 판매원 - 체크 안함
-    'chk_repacker_address': false,   // 소분원 - 체크 안함
-    'chk_importer_address': false,   // 수입원 - 체크 안함
-    'chk_rawmtrl_nm': false          // 원재료명(참고) - 체크 안함
+    'chk_label_nm': false,
+    'chk_ingredients_info': false,
+    'chk_distributor_address': false,
+    'chk_repacker_address': false,
+    'chk_importer_address': false,
+    'chk_rawmtrl_nm': false
   };
   
-  // 새 라벨 생성인 경우에만 적용
   if (!$('#label_id').val() || $('#label_id').val() === '') {
     console.log("새 라벨 생성 시 기본 체크박스 설정 적용");
     
-    // 체크해야 하는 체크박스 처리
     Object.keys(defaultChecked).forEach(checkboxId => {
       const checkbox = document.getElementById(checkboxId);
       if (checkbox && !checkbox.disabled) {
         checkbox.checked = defaultChecked[checkboxId];
-        // change 이벤트 발생시켜 관련 필드 상태 갱신
         checkbox.dispatchEvent(new Event('change'));
       }
     });
     
-    // 체크 해제해야 하는 체크박스 처리
     Object.keys(defaultUnchecked).forEach(checkboxId => {
       const checkbox = document.getElementById(checkboxId);
       if (checkbox && !checkbox.disabled) {
         checkbox.checked = defaultUnchecked[checkboxId];
-        // change 이벤트 발생시켜 관련 필드 상태 갱신
         checkbox.dispatchEvent(new Event('change'));
       }
     });
   }
 }
 
-// 폼 제출 이벤트에서 체크박스 값을 Y/N으로 변환
 function prepareFormData() {
-  // 체크박스 값 처리
   $('input[type="checkbox"]').each(function() {
     const checkboxName = $(this).attr('name');
     if (checkboxName && checkboxName.startsWith('chk_')) {
-      // 체크박스가 체크되어 있으면 'Y', 아니면 'N'으로 설정
       const value = $(this).prop('checked') ? 'Y' : 'N';
-      
-      // hidden 필드 찾기 또는 생성
       let hiddenField = $(`input[type="hidden"][name="${checkboxName}"]`);
       if (hiddenField.length === 0) {
         hiddenField = $('<input>').attr({
@@ -733,7 +691,6 @@ function prepareFormData() {
     }
   });
   
-  // 장기보존식품, 제조방법, 조건 값 확인 및 설정
   const preservationType = $('.grp-long-shelf:checked').val() || '';
   const processingMethod = $('.grp-sterilization:checked').not('#chk_sterilization_other').val() || '';
   const processingCondition = $('input[name="processing_condition"]').val() || '';
@@ -749,25 +706,15 @@ function prepareFormData() {
   });
 }
 
-// Document Ready 이벤트 핸들러 정리 (중복 제거)
+// Document Ready 이벤트 핸들러
 $(document).ready(function() {
-  // 체크박스 그룹 초기화
   initCheckBoxGroups();
-  
-  // 요약 업데이트
   updateSummary();
-  
-  // 이벤트 리스너 연결
   $('.select2-food-type, input[type="checkbox"], input[name="sterilization_other_detail"]')
     .on('change input', updateSummary);
-  
-  // 토글 버튼 초기화
   initToggleButtons();
-  
-  // 식품유형 필터링 초기화
   initFoodTypeFiltering();
   
-  // 식품유형 소분류 선택 시 대분류 자동 설정 및 관련 규정 정보 업데이트
   $('#food_type').off('change').on('change', function() {
     const selectedOption = this.options[this.selectedIndex];
     if (selectedOption && selectedOption.value) {
@@ -775,12 +722,10 @@ $(document).ready(function() {
       console.log(`소분류 선택: ${selectedOption.value}, 대분류: ${group}`);
       
       if (group) {
-        // 대분류 값을 숨겨진 대분류 select와 hidden 필드에 설정
         $('#food_group').val(group);
         $('#hidden_food_group').val(group);
         console.log(`대분류 자동 설정: ${group}`);
       } else if (!group) {
-        // 대분류 정보가 없는 경우 서버에서 조회
         console.log('대분류 정보 없음, 서버에서 조회 시도');
         fetch(`/label/get-food-group/?food_type=${encodeURIComponent(selectedOption.value)}`)
           .then(response => response.json())
@@ -789,40 +734,29 @@ $(document).ready(function() {
               console.log(`서버에서 대분류 정보 수신: ${data.food_group}`);
               $('#food_group').val(data.food_group);
               $('#hidden_food_group').val(data.food_group);
-              
-              // 현재 선택된 소분류에 대분류 정보 저장
               selectedOption.dataset.group = data.food_group;
             }
           })
           .catch(error => console.error('대분류 조회 중 오류:', error));
       }
       
-      // 식품유형에 따른 설정 업데이트 (체크박스, 소비기한, 관련 규정 등)
       updateCheckboxesByFoodType(selectedOption.value);
       updateSummary();
     }
   });
   
-  // 대분류 선택 시 소분류 필터링 코드 개선
   $('#food_group').off('change').on('change', function() {
     const selectedGroup = this.value;
     console.log(`대분류 선택: ${selectedGroup}`);
     
-    // hidden 필드에 값 설정
     $('#hidden_food_group').val(selectedGroup);
     
-    // 소분류 드롭다운 초기화
     const foodTypeSelect = $('#food_type');
-    
-    // 현재 선택된 소분류 값 저장
     const currentFoodType = $('#food_type').val();
-    
-    // 소분류 비우고 기본 옵션 추가
     foodTypeSelect.empty().append('<option value="">소분류</option>');
     
     if (!selectedGroup) {
       console.log('대분류 미선택, 모든 소분류 표시');
-      // 서버에서 모든 소분류 로드
       fetch('/label/food-types-by-group/')
         .then(response => response.json())
         .then(data => {
@@ -832,8 +766,6 @@ $(document).ready(function() {
               option.dataset.group = item.food_group;
               foodTypeSelect.append(option);
             });
-            
-            // 페이지 로드 시 원래 선택된 소분류가 있었다면 다시 선택
             if (currentFoodType) {
               foodTypeSelect.val(currentFoodType);
             }
@@ -842,7 +774,6 @@ $(document).ready(function() {
         .catch(error => console.error('소분류 데이터 로딩 중 오류:', error));
     } else {
       console.log(`선택된 대분류의 소분류 로드: ${selectedGroup}`);
-      // 서버에서 해당 대분류의 소분류 로드
       fetch(`/label/food-types-by-group/?group=${encodeURIComponent(selectedGroup)}`)
         .then(response => response.json())
         .then(data => {
@@ -852,8 +783,6 @@ $(document).ready(function() {
               option.dataset.group = item.food_group;
               foodTypeSelect.append(option);
             });
-            
-            // 페이지 로드 시 원래 선택된 소분류가 있었다면 다시 선택
             if (currentFoodType) {
               const exists = Array.from(foodTypeSelect.options).some(opt => opt.value === currentFoodType);
               if (exists) {
@@ -868,28 +797,19 @@ $(document).ready(function() {
     updateSummary();
   });
   
-  // 체크박스-필드 토글 초기화
   initCheckboxFieldToggle();
   
-  // 폼 제출 이벤트 핸들러 - 중복 없이 한 번만 정의
   $("#labelForm").off('submit').on('submit', function() {
     console.log("폼 제출 시작: 데이터 처리");
-    
-    // 식품유형 값 최종 확인 및 설정
     const selectedFoodGroup = $('#food_group').val();
     const selectedFoodType = $('#food_type').val();
-    
     $('#hidden_food_group').val(selectedFoodGroup);
     $('#hidden_food_type').val(selectedFoodType);
-    
-    // 체크박스 값 처리
     prepareFormData();
-    
     console.log("폼 제출 준비 완료");
-    return true; // 폼 제출 계속 진행
+    return true;
   });
   
-  // 식품유형 값 동기화
   $('#food_group').on('change', function() {
     const selectedValue = $(this).val();
     $('#hidden_food_group').val(selectedValue);
@@ -900,27 +820,21 @@ $(document).ready(function() {
     const selectedValue = $(this).val();
     $('#hidden_food_type').val(selectedValue);
     console.log(`소분류 변경: ${selectedValue}, hidden 값: ${$('#hidden_food_type').val()}`);
-    
     if (selectedValue) {
-      // 식품유형에 따른 체크박스 설정 적용
       updateCheckboxesByFoodType(selectedValue)
         .catch(err => console.error('체크박스 설정 적용 중 오류:', err));
     }
   });
   
-  // 초기 값 설정
   $('#hidden_food_group').val($('#food_group').val());
   $('#hidden_food_type').val($('#food_type').val());
   
-  // 페이지 로드 시 이미 선택된 식품유형에 대해 체크박스 설정 적용
   const selectedFoodType = $('#food_type').val();
   if (selectedFoodType) {
     updateCheckboxesByFoodType(selectedFoodType)
       .catch(err => console.error('초기 체크박스 설정 중 오류:', err));
   } else {
-    // 식품유형이 선택되지 않은 경우 기본 체크박스 설정 적용
     setDefaultCheckboxes();
-    // 체크박스 상태에 따라 필드 활성화/비활성화 초기화
     document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(function(checkbox) {
       checkbox.dispatchEvent(new Event('change'));
     });
@@ -930,62 +844,39 @@ $(document).ready(function() {
 });
 
 document.addEventListener('DOMContentLoaded', function() {
-  // 모든 자동 확장 텍스트 영역 초기화
   function initAutoExpand() {
       document.querySelectorAll('textarea.form-control, textarea.auto-expand').forEach(textarea => {
-          // 초기 높이 조정
           adjustHeight(textarea);
-          
-          // 입력 이벤트에 대한 리스너
-          textarea.addEventListener('input', function() {
-              adjustHeight(this);
-          });
-
-          // 값 변경 이벤트에 대한 리스너
-          textarea.addEventListener('change', function() {
-              adjustHeight(this);
-          });
+          textarea.addEventListener('input', function() { adjustHeight(this); });
+          textarea.addEventListener('change', function() { adjustHeight(this); });
       });
   }
 
-  // 높이 조정 함수
   function adjustHeight(element) {
       element.style.height = '38px';
       element.style.height = element.scrollHeight + 'px';
   }
 
-  // 초기화 실행
   initAutoExpand();
 
-  // 문구 팝업에서 내용이 추가될 때 높이 조정
   window.updateTextareaHeight = function(textarea) {
-      if (textarea) {
-          adjustHeight(textarea);
-      }
+      if (textarea) adjustHeight(textarea);
   };
 
-  // MutationObserver를 사용하여 동적으로 추가되는 텍스트영역 감시
   const observer = new MutationObserver(function(mutations) {
       mutations.forEach(function(mutation) {
           mutation.addedNodes.forEach(function(node) {
-              if (node.nodeType === 1) { // Element 노드인 경우
+              if (node.nodeType === 1) {
                   const textareas = node.querySelectorAll('textarea.form-control, textarea.auto-expand');
-                  textareas.forEach(textarea => {
-                      adjustHeight(textarea);
-                  });
+                  textareas.forEach(textarea => adjustHeight(textarea));
               }
           });
       });
   });
 
-  // 문서 전체를 감시
-  observer.observe(document.body, {
-      childList: true,
-      subtree: true
-  });
+  observer.observe(document.body, { childList: true, subtree: true });
 });
 
-// 부모 창의 textarea 업데이트 함수 수정
 function updateParentTextarea(category, content) {
   if (window.opener) {
       const textarea = window.opener.document.querySelector(`[name="${category}"]`);
@@ -996,25 +887,407 @@ function updateParentTextarea(category, content) {
   }
 }
 
-
 function openPhrasePopup() {
   const width = 1100;
-  const height = 800;
+  const height = 900;
   const left = (screen.width - width) / 2;
   const top = (screen.height - height) / 2;
-  
-  // URL을 phrase_popup으로 변경
   window.open('/label/phrases/', 'phrasePopup', 
       `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`);
 }
 
-// 버튼에 이벤트 핸들러 연결
-document.addEventListener('DOMContentLoaded', function() {
-  // 주의사항과 기타표시사항의 버튼을 모두 선택
-  const phraseButtons = document.querySelectorAll('[onclick="openPhrasePopup()"]');
-  phraseButtons.forEach(button => {
-      button.onclick = function() {
-          openPhrasePopup();
-      };
+// ------------------ 내문구 탭 기능 (툴팁 + 즐겨찾기 정렬 + 디자인 동기화) ------------------
+
+let phraseInsertMode = 'append';
+let lastFocusedFieldName = null;
+
+function getCategoryFromFieldName(fieldName) {
+  const mapping = {
+    'storage_method': 'storage',
+    'frmlc_mtrqlt': 'package',
+    'bssh_nm': 'manufacturer',
+    'distributor_address': 'distributor',
+    'repacker_address': 'repacker',
+    'importer_address': 'importer',
+    'pog_daycnt': 'expiry',
+    'cautions': 'cautions',
+    'additional_info': 'additional'
+  };
+  return mapping[fieldName] || null;
+}
+
+// 수정된 renderMyPhrasesForFocusedField 함수
+function renderMyPhrasesForFocusedField() {
+  // [수정] 기본 필드 설정 및 디버깅 로그 추가
+  const fieldName = lastFocusedFieldName || 'prdlst_nm'; // 기본값 설정
+  console.log(`Rendering phrases for field: ${fieldName}`); // 디버깅 로그
+  
+  const category = getCategoryFromFieldName(fieldName);
+  const listContainer = document.getElementById('myPhraseList');
+  
+  // [수정] 오류 핸들링 강화
+  if (!category || !window.phrasesData) {
+      if (listContainer) {
+          listContainer.innerHTML = '<div class="text-muted" style="font-size: 0.8rem;">문구 데이터를 로드할 수 없습니다.</div>';
+      }
+      console.warn(`Invalid category: ${category} or phrasesData missing`);
+      return;
+  }
+  if (!listContainer) {
+      console.warn('myPhraseList container not found');
+      return;
+  }
+
+  // [수정] 로딩 상태 표시
+  listContainer.innerHTML = '<div class="loading" style="font-size: 0.8rem;">로딩 중...</div>';
+
+  // 다중 선택 가능한 카테고리 확인
+  const isMultiSelect = ['cautions', 'additional'].includes(category);
+
+  // 현재 입력된 값 가져오기
+  const textarea = document.querySelector(`textarea[name="${fieldName}"]`) ||
+                  document.querySelector(`input[name="${fieldName}"]`);
+  const currentValues = textarea ? textarea.value.split('\n').map(v => v.trim()).filter(Boolean) : [];
+
+  const phraseList = window.phrasesData[category] || [];
+  // [수정] 빈 데이터 메시지 개선
+  if (!phraseList.length) {
+      listContainer.innerHTML = '<div class="text-muted" style="font-size: 0.8rem;">저장된 문구가 없습니다. 문구 관리에서 추가하세요.</div>';
+      return;
+  }
+
+  // 즐겨찾기 우선 정렬
+  const sortedPhrases = [...phraseList].sort((a, b) => {
+      const aFav = a.note && a.note.includes('★') ? -1 : 0;
+      const bFav = b.note && b.note.includes('★') ? -1 : 0;
+      return aFav - bFav;
   });
+
+  // [수정] 성능 최적화: 기존 항목 재사용 및 트랜지션 동기화
+  setTimeout(() => { // 트랜지션 동기화
+      const existingItems = new Map(Array.from(listContainer.children).map(item => [item.textContent, item]));
+      listContainer.innerHTML = '';
+      
+      sortedPhrases.forEach(p => {
+          let div;
+          if (existingItems.has(p.content)) {
+              div = existingItems.get(p.content); // 기존 항목 재사용
+          } else {
+              div = document.createElement('div');
+              div.className = 'phrase-item';
+              div.textContent = p.content;
+              div.style.padding = '6px 8px';
+              div.style.border = '1px solid #ccc';
+              div.style.borderRadius = '4px';
+              div.style.cursor = 'pointer';
+              div.style.fontSize = '0.8rem';
+              div.style.transition = 'background-color 0.2s';
+              div.style.marginBottom = '4px';
+
+              // 클릭 이벤트
+              div.addEventListener('click', () => {
+                  if (!textarea) return;
+                  if (isMultiSelect) {
+                      const values = textarea.value.split('\n').map(v => v.trim()).filter(Boolean);
+                      const index = values.indexOf(p.content);
+                      if (index === -1) {
+                          values.push(p.content);
+                          div.style.backgroundColor = '#d0ebff';
+                      } else {
+                          values.splice(index, 1);
+                          div.style.backgroundColor = '#fff';
+                      }
+                      textarea.value = values.join('\n');
+                  } else {
+                      if (textarea.value === p.content) {
+                          textarea.value = '';
+                          div.style.backgroundColor = '#fff';
+                      } else {
+                          textarea.value = p.content;
+                          listContainer.querySelectorAll('.phrase-item').forEach(item => {
+                              item.style.backgroundColor = '#fff';
+                          });
+                          div.style.backgroundColor = '#d0ebff';
+                      }
+                  }
+                  updateTextareaHeight(textarea);
+              });
+          }
+
+          // 선택 상태 반영
+          const isSelected = currentValues.includes(p.content);
+          div.style.backgroundColor = isSelected ? '#d0ebff' : '#fff';
+          if (p.note) div.title = p.note;
+
+          listContainer.appendChild(div);
+      });
+  }, 300); // 트랜지션 대기
+}
+
+// [수정] 포커스 이벤트에 디바운싱 추가 및 관련 코드 통합
+document.addEventListener('DOMContentLoaded', () => {
+  // [수정] 포커스 이벤트 디바운싱
+  let focusTimeout;
+  document.querySelectorAll('textarea, input[type="text"]').forEach(el => {
+      el.addEventListener('focus', function () {
+          clearTimeout(focusTimeout);
+          focusTimeout = setTimeout(() => { // 디바운싱
+              lastFocusedFieldName = this.getAttribute('name');
+              const myTab = document.getElementById('myphrases-tab');
+              if (myTab && myTab.classList.contains('active')) {
+                  renderMyPhrasesForFocusedField();
+              }
+          }, 100); // 100ms 지연
+      });
+  });
+
+
+  // 탭 색상 스타일 통일: 선택된 탭은 파란색 텍스트
+  const tabButtons = document.querySelectorAll('#phraseTab .nav-link');
+  tabButtons.forEach(btn => {
+    btn.style.fontSize = '0.8rem';
+    btn.addEventListener('shown.bs.tab', () => {
+      tabButtons.forEach(b => b.style.color = '');
+      btn.style.color = '#0d6efd';
+    });
+    if (btn.classList.contains('active')) {
+      btn.style.color = '#0d6efd';
+    } else {
+      btn.style.color = '';
+    }
+  });
+
+  const myTab = document.getElementById('myphrases-tab');
+  if (myTab) {
+    myTab.addEventListener('click', () => {
+      renderMyPhrasesForFocusedField();
+    });
+  }
 });
+
+// 규정 정보 표시 함수
+function showRegulationInfo(fieldName) {
+    const container = document.getElementById('myPhraseContainer');
+    if (!container) return;
+
+    const existingMsg = container.querySelector('.text-muted');
+    if (existingMsg) existingMsg.remove();
+    
+    const existingInfo = container.querySelector('.regulation-info');
+    if (existingInfo) existingInfo.remove();
+
+    const fieldMapping = {
+        'my_label_name': 'label_nm',
+        'prdlst_dcnm': 'prdlst_dcnm',
+        'prdlst_nm': 'prdlst_nm',
+        'ingredient_info': 'ingredients_info',
+        'content_weight': 'content_weight',
+        'storage_method': 'storage',
+        'frmlc_mtrqlt': 'package',
+        'bssh_nm': 'manufacturer',
+        'distributor_address': 'distributor',
+        'pog_daycnt': 'expiry',
+        'weight_calorie': 'weight_calorie',
+        'rawmtrl_nm_display': 'rawmtrl_nm',
+        'cautions': 'cautions',
+        'additional_info': 'additional'
+    };
+
+    const mappedField = fieldMapping[fieldName] || fieldName;
+    const regulationInfo = regulations[mappedField];
+
+    if (regulationInfo) {
+        const infoContainer = document.createElement('div');
+        infoContainer.className = 'regulation-info';
+        
+        const lines = regulationInfo.split('\n');
+        infoContainer.innerHTML = lines.map(line => 
+            line.trim() ? `<p class="mb-1">${line}</p>` : '<br>'
+        ).join('');
+        
+        const phraseList = document.getElementById('myPhraseList');
+        container.appendChild(infoContainer);
+    }
+}
+
+// 입력 필드 focus 이벤트에 규정 표시 추가
+document.querySelectorAll('input[type="text"], textarea').forEach(el => {
+    el.addEventListener('focus', function() {
+        const fieldName = this.getAttribute('name');
+        if (fieldName) {
+            showRegulationInfo(fieldName);
+        }
+    });
+});
+
+// label_creation.js
+let regulations = {};
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('regulations-data')) {
+        regulations = JSON.parse(document.getElementById('regulations-data').textContent);
+    }
+
+    // [수정] 포커스 이벤트 디바운싱 (중복 이벤트 방지)
+    let focusTimeout;
+    document.querySelectorAll('textarea, input[type="text"]').forEach(el => {
+        el.addEventListener('focus', function() {
+            clearTimeout(focusTimeout);
+            focusTimeout = setTimeout(() => {
+                lastFocusedFieldName = this.getAttribute('name');
+                const fieldName = lastFocusedFieldName;
+                const myPhrasesTab = document.querySelector('#myphrases-tab');
+                if (myPhrasesTab && myPhrasesTab.classList.contains('active')) {
+                    renderMyPhrasesForFocusedField();
+                    showRegulationInfo(fieldName);
+                }
+            }, 100); // 100ms 지연
+        });
+    });
+});
+
+// 내문구 탭 클릭 이벤트에 규정 정보 표시 추가
+document.querySelector('#myphrases-tab').addEventListener('shown.bs.tab', () => {
+    if (lastFocusedFieldName) {
+        renderMyPhrasesForFocusedField();
+        showRegulationInfo(lastFocusedFieldName);
+    }
+});
+
+// [수정] 관련규정 박스 크기 동적 조절 함수
+function adjustRegulationBoxHeight(textarea) {
+  if (!textarea) return;
+  const container = document.getElementById('regulation-content');
+  if (!container) {
+    console.warn('Regulation content container not found');
+    return;
+  }
+  textarea.style.height = 'auto';
+  const tabContent = container.closest('.tab-content');
+  const maxHeight = tabContent ? tabContent.clientHeight * 0.9 : window.innerHeight * 0.6;
+  const scrollHeight = textarea.scrollHeight + 10;
+  container.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+  container.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+  textarea.style.height = '100%';
+  textarea.style.resize = 'none';
+}
+
+// [수정] initAutoExpand에서 관련규정 입력 이벤트 제거
+document.addEventListener('DOMContentLoaded', function() {
+  function initAutoExpand() {
+    document.querySelectorAll('textarea.form-control, textarea.auto-expand').forEach(textarea => {
+      adjustHeight(textarea);
+      if (textarea.name !== 'related_regulations') { // [수정] 관련규정 제외
+        textarea.addEventListener('input', function() {
+          adjustHeight(this);
+        });
+        textarea.addEventListener('change', function() {
+          adjustHeight(this);
+        });
+      }
+    });
+  }
+
+  function adjustHeight(element) {
+    element.style.height = '380px';
+    element.style.height = element.scrollHeight + 'px';
+  }
+
+  initAutoExpand();
+
+  window.updateTextareaHeight = function(textarea) {
+    if (textarea) {
+      adjustHeight(textarea);
+      if (textarea.name === 'related_regulations') {
+        adjustRegulationBoxHeight(textarea);
+      }
+    }
+  };
+
+  const observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      mutation.addedNodes.forEach(function(node) {
+        if (node.nodeType === 1) {
+          const textareas = node.querySelectorAll('textarea.form-control, textarea.auto-expand');
+          textareas.forEach(textarea => {
+            adjustHeight(textarea);
+            if (textarea.name === 'related_regulations') {
+              adjustRegulationBoxHeight(textarea);
+            }
+          });
+        }
+      });
+    });
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // [수정] 관련규정 textarea 초기화
+  const regulationTextarea = document.querySelector('textarea[name="related_regulations"]');
+  if (regulationTextarea) {
+    regulationTextarea.style.fontSize = '0.8rem';
+    adjustRegulationBoxHeight(regulationTextarea);
+  }
+});
+
+// [수정] updateCheckboxesByFoodType에서 박스 크기 조절
+function updateCheckboxesByFoodType(foodType) {
+  if (!foodType) return Promise.resolve();
+  console.log(`식품유형 ${foodType}에 따른 설정 시작`);
+  return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        console.log('서버에서 받은 설정:', data.settings);
+        const settings = data.settings;
+        const fieldMappings = {
+          'prdlst_dcnm': 'chk_prdlst_dcnm',
+          'rawmtrl_nm': 'chk_rawmtrl_nm_display',
+          'nutritions': 'chk_calories'
+        };
+        Object.keys(settings).forEach(field => {
+          const value = settings[field];
+          const checkboxId = fieldMappings[field] || `chk_${field}`;
+          const checkbox = document.getElementById(checkboxId);
+          if (checkbox) {
+            console.log(`필드 ${field} (${checkboxId}) 값: ${value}`);
+            if (value === 'Y') {
+              checkbox.checked = true;
+              checkbox.disabled = false;
+              checkbox.dataset.forcedDisabled = "false";
+            } else if (value === 'N') {
+              checkbox.checked = false;
+              checkbox.disabled = false;
+              checkbox.dataset.forcedDisabled = "false";
+            } else if (value === 'D') {
+              checkbox.checked = false;
+              checkbox.disabled = true;
+              checkbox.dataset.forcedDisabled = "true";
+            }
+            checkbox.dispatchEvent(new Event('change'));
+          }
+          if (field === 'pog_daycnt' && settings.pog_daycnt) {
+            updateDateDropdown(settings.pog_daycnt);
+          }
+        });
+        if (settings.pog_daycnt_options !== undefined) {
+          console.log('소비기한 옵션 업데이트:', settings.pog_daycnt_options);
+          updateDateDropdownOptions(settings.pog_daycnt_options);
+        }
+        if (settings.relevant_regulations !== undefined) {
+          console.log('관련 규정 정보 업데이트');
+          const regulationsTextarea = document.querySelector('textarea[name="related_regulations"]');
+          if (regulationsTextarea) {
+            regulationsTextarea.value = settings.relevant_regulations;
+            adjustRegulationBoxHeight(regulationsTextarea);
+          }
+        }
+        return true;
+      }
+      return false;
+    })
+    .catch(error => {
+      console.error('체크박스 설정 로딩 중 오류:', error);
+      return false;
+    });
+}
