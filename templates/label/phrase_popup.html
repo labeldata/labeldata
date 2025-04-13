@@ -4,622 +4,102 @@
   <meta charset="UTF-8">
   <title>자주 사용하는 문구</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="/static/css/style.css" rel="stylesheet">
+  <link href="/static/css/popup.css" rel="stylesheet">
   <style>
-    /* 전체 레이아웃 */
-    .container-fluid {
-        max-width: 1100px;
-        height: calc(100vh + 200px);
-        padding: 20px;
+    /* 팝업 헤더: 좌측에 제목과 기존 버튼, 우측에 '적용하기' 버튼 고정 */
+    .phrase-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      position: relative;
     }
-
-    .row {
-        margin: 0;
-        height: 100%;
+    .action-buttons-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-
-    /* 패널 공통 스타일 */
-    .col-panel {
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
+    .action-buttons-right {
+      position: absolute;
+      top: 0;
+      right: 0;
     }
-
-    .left-panel {
-        border-right: 1px solid #dee2e6;
+    .popup-title {
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-right: 20px;
     }
-
-    /* 패널 헤더 */
-    .panel-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-    }
-
-    .panel-header h5 {
-        font-size: 1rem;
-        font-weight: 500;
-        color: #212529;
-        margin: 0;
-    }
-
-    /* 탭 스타일 */
-    .nav-tabs {
-        border-bottom: 1px solid #dee2e6;
-    }
-
-    .nav-tabs .nav-link {
-        font-size: 0.875rem;
-        color: #495057;
-        padding: 8px 16px;
-    }
-
-    .nav-tabs .nav-link.active {
-        color: var(--primary);
-        border-color: #dee2e6 #dee2e6 #fff;
-    }
-
-    /* 문구 리스트 */
-    .phrase-list {
-        flex: 1;
-        overflow-y: auto;
-        padding: 10px 0;
-    }
-
-    .phrase-item {
-        padding: 8px 12px;
-        margin-bottom: 6px;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .phrase-item.selected {
-        background-color: #cce5ff;
-        border-color: #b8daff;
-    }
-
-
-    /* 알레르기 섹션 */
-    .allergen-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 10px 0;
-        margin-bottom: 15px;
-    }
-    
-    .allergen-title {
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #495057;
-    }
-    
-    .allergen-controls {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .allergen-buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 6px;  /* 세로 8px, 가로 6px 간격 */
-        margin-top: 15px;
-    }
-    
-    .allergen-btn {
-        font-size: 0.75rem;
-        padding: 4px 12px;
-        border: 1px solid #dee2e6;
-        border-radius: 15px;
-        background-color: #fff;
-        color: #495057;
-        cursor: pointer;
-        transition: all 0.2s;
-        flex: 0 0 auto;  /* 버튼 크기 고정 */
-    }
-
-    .allergen-btn.active {
-        background-color: #cce5ff;
-        border-color: #b8daff;
-    }
-
-    .allergen-count {
-        font-size: 0.875rem;  /* 전체 선택 버튼과 동일한 크기 */
-        color: #495057;
-        padding: 4px 8px;
-        display: flex;
-        align-items: center;
-    }
-
   </style>
 </head>
 <body>
-  <!-- CSRF 토큰 및 문구 데이터 -->
-  <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-  <input type="hidden" id="phrases-data" value="{{ phrases_json|escapejs }}">
-  <div class="container-fluid">
-    <div class="row">
-      <!-- 좌측 패널 -->
-      <div class="col-md-6" style="padding-right: 15px; border-right: 1px solid #ccc;">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="mb-0">자주 사용하는 문구</h5>
-          <div class="action-buttons">
-            <button type="button" class="btn btn-default btn-sm" onclick="addNewPhrase()">신규</button>
-            <button type="button" class="btn btn-default btn-sm" onclick="startEdit()">수정</button>
-            <button type="button" class="btn btn-default btn-sm" onclick="startDelete()">삭제</button>
-          </div>
-        </div>
-        <hr>
-        <!-- 탭 메뉴 수정 -->
-        <ul class="nav nav-tabs">
-            <li class="nav-item">
-                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#cautions-tab">
-                    주의사항
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#allergens-tab">
-                    알레르기
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#additional-tab">
-                    기타표시사항
-                </button>
-            </li>
-        </ul>
-
-        <!-- 탭 내용 수정 -->
-        <div class="tab-content flex-grow-1">
-            <div class="tab-pane fade show active" id="cautions-tab">
-                <div id="cautionsPhraseList" class="phrase-list"></div>
-            </div>
-            <div class="tab-pane fade" id="allergens-tab">
-                <div class="allergen-header">
-                    <div class="allergen-title">알레르기 혼입 가능성</div>
-                    <div class="allergen-controls">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAllAllergens()">
-                            전체 선택
-                        </button>
-                        <span class="allergen-count"><span id="selectedAllergenCount">0</span>성분</span>
-                    </div>
-                </div>
-                <div id="allergenButtons" class="allergen-buttons"></div>
-            </div>
-            <div class="tab-pane fade" id="additional-tab">
-                <div id="additionalPhraseList" class="phrase-list"></div>
-            </div>
-        </div>
-      </div>
-
-      <!-- 우측 패널 -->
-      <div class="col-md-6" >
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h5 class="mb-0">표시사항 예시</h5>
-          <div class="popup-toolbar-right">
-            <button type="button" class="btn btn-primary btn-sm" onclick="saveToParent()">
-              저장
-            </button>
-          </div>
-        </div>
-        <hr>
-        
-        <div class="phrase-example">
-            <!-- 주의사항 입력 영역 -->
-            <div class="mb-4">
-                <label class="form-label">주의사항</label>
-                <textarea id="cautionsText" class="form-control" rows="8">{{ cautions_default|default:"" }}</textarea>
-            </div>
-
-            <!-- 기타표시사항 입력 영역 -->
-            <div class="mb-3">
-                <label class="form-label">기타표시사항</label>
-                <textarea id="additionalText" class="form-control" rows="8">{{ additional_default|default:"" }}</textarea>
-            </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- CSRF 토큰 -->
+  {% csrf_token %}
   
-  <!-- 문구 추가/수정 모달 -->
-  <div class="modal fade" id="phraseModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">문구 편집</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <input type="hidden" id="editPhraseId">
-          <div class="mb-3">
-            <label class="form-label">분류</label>
-            <select id="phraseCategory" class="form-select">
-              <option value="cautions">주의사항</option>
-              <option value="additional">기타표시사항</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">문구 내용</label>
-            <textarea id="phraseContent" class="form-control" rows="3"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-          <button type="button" class="btn btn-primary" onclick="savePhrase()">저장</button>
-        </div>
-      </div>
-    </div>
-  </div>
-      
-  <!-- Bootstrap JS 및 Sortable.js -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
-  
+  <!-- JSON 데이터를 안전하게 삽입 -->
+  <script id="phrases-data" type="application/json">
+    {{ phrases_json|safe }}
+  </script>
   <script>
-    // 서버에서 전달받은 문구 데이터(JSON)
-    let phrases = {{ phrases_json|safe }};
-    let editMode = false, deleteMode = false;
-    
-    // 드래그 앤 드롭 (필요시)
-    function initSortable() {
-      const containers = document.querySelectorAll('.phrase-list');
-      containers.forEach(container => {
-        new Sortable(container, {
-          animation: 150,
-          onEnd: async function(evt) {
-            const items = evt.to.querySelectorAll('.phrase-item');
-            const updates = Array.from(items).map((item, index) => ({
-              id: item.dataset.phraseId,
-              order: index
-            }));
-            try {
-              const response = await fetch('/label/phrases/reorder/', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-CSRFToken': getCSRFToken()
-                },
-                body: JSON.stringify({ updates })
-              });
-              if (!response.ok) throw new Error('Reorder failed');
-            } catch (error) {
-              console.error('Error:', error);
-            }
-          }
-        });
-      });
-    }
-    
-    // 수정/삭제 모드 시작
-    function startEdit() {
-      editMode = true;
-      deleteMode = false;
-      alert('수정할 문구를 선택하세요.');
-    }
-    function startDelete() {
-      deleteMode = true;
-      editMode = false;
-      alert('삭제할 문구를 선택하세요.');
-    }
-    // 문구 클릭 이벤트 수정
-    function handlePhraseClick(phraseElement) {
-        if (editMode) {
-            editPhrase(
-                phraseElement.dataset.phraseId,
-                phraseElement.dataset.content,
-                phraseElement.closest('.tab-pane').id.includes('cautions') ? 'cautions' : 'additional'
-            );
-            editMode = false;
-        } else if (deleteMode) {
-            if (confirm('선택한 문구를 삭제하시겠습니까?')) {
-                deletePhrase(phraseElement.dataset.phraseId);
-            }
-            deleteMode = false;
-        } else {
-            // 선택 상태 토글
-            phraseElement.classList.toggle('selected');
-            
-            // 즉시 적용
-            const category = phraseElement.closest('.tab-pane').id.includes('cautions') ? 'cautions' : 'additional';
-            const isSelected = phraseElement.classList.contains('selected');
-            
-            if (isSelected) {
-                addPhraseToTextarea(category, phraseElement.dataset.content);
-            } else {
-                removePhraseFromTextarea(category, phraseElement.dataset.content);
-            }
-        }
-    }
-
-    // 텍스트영역에 문구 추가
-    function addPhraseToTextarea(category, content) {
-        const textarea = document.getElementById(`${category}Text`);
-        let currentTexts = textarea.value ? textarea.value.split(' | ') : [];
-        
-        // 중복 체크
-        if (!currentTexts.includes(content)) {
-            currentTexts.push(content);
-            textarea.value = currentTexts.join(' | ');
-        }
-    }
-
-    // 텍스트영역에서 문구 제거
-    function removePhraseFromTextarea(category, content) {
-        const textarea = document.getElementById(`${category}Text`);
-        let currentTexts = textarea.value ? textarea.value.split(' | ') : [];
-        
-        // 알레르기 문구는 제외하고 필터링
-        currentTexts = currentTexts.filter(text => 
-            text !== content && 
-            !text.includes('본 제품은') && 
-            !text.includes('유전자 변형')
-        );
-        
-        textarea.value = currentTexts.join(' | ');
-    }
-
-    // 문구 목록 렌더링
-    function renderCategoryPhrases(containerId, phrases) {
-      const container = document.getElementById(containerId);
-      container.innerHTML = '';
-      if (!phrases) return;
-      phrases.sort((a, b) => a.display_order - b.display_order);
-      phrases.forEach(phrase => {
-        const div = document.createElement('div');
-        div.className = 'phrase-item';
-        div.dataset.phraseId = phrase.my_phrase_id;
-        div.dataset.content = phrase.comment_content;
-        div.innerHTML = `<span class="phrase-content">${phrase.comment_content}</span>`;
-        div.addEventListener('click', function() {
-          handlePhraseClick(this);
-        });
-        container.appendChild(div);
-      });
-    }
-    function renderPhraseLists() {
-      renderCategoryPhrases('cautionsPhraseList', phrases.cautions);
-      renderCategoryPhrases('additionalPhraseList', phrases.additional);
-    }
-    
-    document.addEventListener('DOMContentLoaded', function() {
-      renderPhraseLists();
-      initSortable();
-      if(typeof loadParentData === "function") loadParentData();
-    });
-    
-    // CSRF 토큰
-    function getCSRFToken() {
-      return document.querySelector('[name=csrfmiddlewaretoken]').value;
-    }
-    
-    // 현재 활성 탭을 확인하여 분류 반환
-    function getActiveCategory() {
-      const activeTab = document.querySelector('.nav-tabs .nav-link.active');
-      if (activeTab && activeTab.dataset.bsTarget === '#additional-tab') {
-        return 'additional';
-      }
-      return 'cautions';
-    }
-    
-    // 새 문구 추가 (활성 탭 기준)
-    function addNewPhrase() {
-      const category = getActiveCategory();
-      const modal = new bootstrap.Modal(document.getElementById('phraseModal'));
-      document.getElementById('editPhraseId').value = '';
-      document.getElementById('phraseContent').value = '';
-      document.getElementById('phraseCategory').value = category;
-      modal.show();
-    }
-    
-    // 문구 수정
-    function editPhrase(id, content, category) {
-      const modal = new bootstrap.Modal(document.getElementById('phraseModal'));
-      document.getElementById('editPhraseId').value = id;
-      document.getElementById('phraseContent').value = content;
-      document.getElementById('phraseCategory').value = category;
-      modal.show();
-    }
-    
-    // 문구 삭제
-    async function deletePhrase(id) {
-      if (!confirm('선택한 문구를 삭제하시겠습니까?')) return;
+    console.log('Template rendered with data:', document.getElementById('phrases-data')?.textContent);
+  </script>
+  
+  <div class="container-fluid phrase-popup">
+    <header class="phrase-header">
+      <div class="action-buttons-left">
+        <span class="popup-title">자주 사용하는 문구</span>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addNewPhrase()">신규</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="startEdit()">수정</button>
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="startDelete()">삭제</button>
+      </div>
+      <div class="action-buttons-right">
+        <button type="button" class="btn btn-primary btn-sm" onclick="applyChanges()">적용하기</button>
+      </div>
+    </header>
+    <hr>
+  
+    <!-- 탭 -->
+    <nav>
+      <ul class="nav nav-tabs" role="tablist">
+        {% for category_code, category_name in categories %}
+        <li class="nav-item" role="presentation">
+          <button class="nav-link {% if forloop.first %}active{% endif %}"
+                  data-bs-toggle="tab"
+                  data-bs-target="#{{ category_code }}-tab"
+                  type="button"
+                  role="tab">
+            {{ category_name }}
+          </button>
+        </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  
+    <!-- 탭 콘텐츠 -->
+    <div class="tab-content mt-3">
+      {% for category_code, category_name in categories %}
+      <section class="tab-pane fade {% if forloop.first %}show active{% endif %}"
+               id="{{ category_code }}-tab"
+               role="tabpanel">
+        <div id="{{ category_code }}PhraseList" class="phrase-list"></div>
+      </section>
+      {% endfor %}
+    </div>
+  </div>
+  
+  <!-- 스크립트 -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/static/js/phrase_popup.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
       try {
-        const response = await fetch('/label/phrases/manage/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-          },
-          body: JSON.stringify({ action: 'delete', id: id })
-        });
-        const data = await response.json();
-        if (data.success) {
-          location.reload();
-        } else {
-          alert('삭제 중 오류가 발생했습니다.');
-        }
+        const phrasesData = JSON.parse(document.getElementById('phrases-data').textContent);
+        console.log('문구 데이터 카테고리:', Object.keys(phrasesData));
+        renderPhraseLists(phrasesData);
       } catch (error) {
-        console.error('Error:', error);
-        alert('삭제 중 오류가 발생했습니다.');
+        console.error('문구 데이터 파싱 오류:', error);
       }
-    }
-    
-    // 문구 저장
-    async function savePhrase() {
-      const modal = bootstrap.Modal.getInstance(document.getElementById('phraseModal'));
-      const id = document.getElementById('editPhraseId').value;
-      const content = document.getElementById('phraseContent').value.trim();
-      const category = document.getElementById('phraseCategory').value;
-      if (!content) {
-        alert('문구 내용을 입력해주세요.');
-        return;
-      }
-      try {
-        const response = await fetch('/label/phrases/manage/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-          },
-          body: JSON.stringify({
-            action: id ? 'update' : 'add',
-            id: id,
-            name: content.substring(0, 50),
-            content: content,
-            category: category
-          })
-        });
-        const data = await response.json();
-        if (data.success) {
-          modal.hide();
-          location.reload();
-        } else {
-          alert('저장 중 오류가 발생했습니다.');
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        alert('저장 중 오류가 발생했습니다.');
-      }
-    }
-    
-    // 보내기/되돌리기: 현재 활성 탭 기준으로 적용 및 제거
-    function sendPhrase() {
-      const category = getActiveCategory();
-      applySelectedPhrases(category);
-    }
-    function revertPhrase() {
-      const category = getActiveCategory();
-      removeSelectedPhrases(category);
-    }
-    
-    // 선택된 문구 적용
-    function applySelectedPhrases(category) {
-      const container = document.getElementById(category === 'cautions' ? 'cautionsPhraseList' : 'additionalPhraseList');
-      const selectedItems = container.querySelectorAll('.phrase-item.selected');
-      const textarea = document.getElementById(category === 'cautions' ? 'cautionsText' : 'additionalText');
-      let currentTexts = textarea.value ? textarea.value.split(' | ') : [];
-      let selectedTexts = Array.from(selectedItems).map(item => item.dataset.content);
-      let uniqueTexts = [...new Set([...currentTexts, ...selectedTexts])].filter(text => text.trim());
-      textarea.value = uniqueTexts.join(' | ');
-      selectedItems.forEach(item => item.classList.add('selected'));
-    }
-    
-    // 선택된 문구 제거
-    function removeSelectedPhrases(category) {
-      const textarea = document.getElementById(category === 'cautions' ? 'cautionsText' : 'additionalText');
-      if (!textarea.value) return;
-      const lines = textarea.value.split(' | ');
-      // 알레르기 관련 문구는 유지
-      const allergyLines = lines.filter(line => line.includes('본 제품은') || line.includes('유전자 변형'));
-      textarea.value = allergyLines.length > 0 ? allergyLines.join(' | ') : '';
-      document.querySelectorAll(`#${category === 'cautions' ? 'cautionsPhraseList' : 'additionalPhraseList'} .phrase-item`).forEach(item => {
-        item.classList.remove('selected');
-      });
-    }
-    
-    // 부모 창에 저장
-    function saveToParent() {
-      const cautionsText = document.getElementById('cautionsText').value;
-      const additionalText = document.getElementById('additionalText').value;
-      if (window.opener && !window.opener.closed) {
-        if (cautionsText && window.opener.document.querySelector('[name="cautions"]')) {
-          window.opener.document.querySelector('[name="cautions"]').value = cautionsText;
-        }
-        if (additionalText && window.opener.document.querySelector('[name="additional_info"]')) {
-          window.opener.document.querySelector('[name="additional_info"]').value = additionalText;
-        }
-        window.close();
-      }
-    }
-    
-    // 알레르기 버튼 관련
-    let allergenState = { active: false, items: [] };
-    function updateAllergenState() {
-        const activeButtons = document.querySelectorAll('.allergen-btn.active');
-        allergenState.items = Array.from(activeButtons).map(btn => btn.dataset.allergen);
-    }
-
-    function toggleAllAllergens() {
-        const btns = document.querySelectorAll('.allergen-btn:not(.disabled)');
-        const allSelected = Array.from(btns).every(btn => btn.classList.contains('active'));
-        
-        btns.forEach(btn => {
-            btn.classList.toggle('active', !allSelected);
-        });
-        
-        updateAllergenState();
-        updateCautionsText();
-        updateCounters();
-    }
-
-    function toggleAllergen(btn) {
-        btn.classList.toggle('active');
-        updateAllergenState();
-        updateCautionsText();
-        updateCounters();
-    }
-
-    function updateCautionsText() {
-        const textarea = document.getElementById('cautionsText');
-        let currentTexts = textarea.value ? textarea.value.split(' | ').filter(text => 
-            !text.includes('동일한 제조시설에서 제조되었습니다')
-        ) : [];
-        
-        // 알레르기 문구 추가
-        if (allergenState.items.length > 0) {
-            const allergenText = `본 제품은 ${allergenState.items.join(', ')}를 사용하는 제품과 동일한 제조시설에서 제조되었습니다.`;
-            currentTexts.push(allergenText);
-        }
-        
-        textarea.value = currentTexts.join(' | ');
-    }
-
-    function updateCounters() {
-        const activeCount = document.querySelectorAll('.allergen-btn.active').length;
-        const disabledCount = document.querySelectorAll('.allergen-btn.disabled').length;
-        document.getElementById('selectedAllergenCount').textContent = activeCount + disabledCount;
-    }
-
-    // 알레르기 버튼 생성 및 초기화
-    const ALLERGENS = ['난류(가금류)', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우',
-                         '돼지고기', '복숭아', '토마토', '아황산류', '호두', '닭고기', '쇠고기', '오징어',
-                         '조개류', '조개류(굴)', '조개류(전복)', '조개류(홍합)', '잣'];
-    function initAllergenButtons() {
-      const container = document.getElementById('allergenButtons');
-      container.innerHTML = `
-        <div class="allergen-list"></div>
-      `;
-      const buttonContainer = container.querySelector('.allergen-list');
-      const parentAllergens = window.opener ?
-          Array.from(window.opener.document.querySelectorAll('[name="allergen_list[]"]:checked')).map(el => el.value) : [];
-      ALLERGENS.forEach(allergen => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'allergen-btn';
-        btn.textContent = allergen;
-        btn.dataset.allergen = allergen;
-        if (parentAllergens.includes(allergen)) {
-          btn.classList.add('disabled');
-          btn.disabled = true;
-          btn.title = '원재료 상세입력에서 이미 선택됨';
-        } else {
-          btn.onclick = () => toggleAllergen(btn);
-        }
-        buttonContainer.appendChild(btn);
-      });
-    }
-    document.addEventListener('DOMContentLoaded', function() {
-      renderPhraseLists();
-      initAllergenButtons();
-      if (typeof loadParentData === "function") loadParentData();
-      updateCounters();
     });
   </script>
 </body>

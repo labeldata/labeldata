@@ -35,32 +35,33 @@ class FoodItem(models.Model):
     def __str__(self):
         return self.prdlst_report_no
    
+CATEGORY_CHOICES = [
+    ('storage', '보관방법'),
+    ('package', '용기.포장재질'),
+    ('manufacturer', '제조원 소재지'),
+    ('distributor', '유통전문판매원'),
+    ('repacker', '소분원'),
+    ('importer', '수입원'),
+    ('expiry', '소비기한'),
+    ('cautions', '주의사항'),
+    ('additional', '기타표시사항'),
+]
+
 class MyPhrase(models.Model):
-    # 자주 사용하는 문구 저장 모델
     user_id = models.ForeignKey(User, related_name="user_phrase", on_delete=models.CASCADE, db_column="user_id", verbose_name="사용자 id")
-
-    # 자동 생성되는 기본 키
     my_phrase_id = models.AutoField(primary_key=True)
-    
-    # 문구 기본 정보
     my_phrase_name = models.CharField(max_length=200, verbose_name="내 문구명")
-    
-    # 카테고리 필드 - choices 추가
-    category_name = models.CharField(max_length=100, verbose_name="문구 카테고리",
-                                     choices=[('cautions', '주의사항'), ('additional', '기타표시사항')])
-
-    # 문구 내용
+    category_name = models.CharField(
+        max_length=100,
+        verbose_name="문구 카테고리",
+        choices=CATEGORY_CHOICES  # 올바른 키워드 인자
+    )
     comment_content = models.TextField(max_length=1000, verbose_name="문구 내용")
-
-    # 시간 관련 필드
+    note = models.CharField(max_length=200, verbose_name="사용조건", null=True, blank=True)  # 새로운 필드 추가
     create_datetime = models.DateTimeField(auto_now_add=True, null=True, verbose_name="생성일시")
     update_datetime = models.DateTimeField(auto_now=True, verbose_name="수정일시")
-
-    # 삭제 관련 필드
     delete_datetime = models.CharField(max_length=8, verbose_name="삭제일자", help_text="yyyymmdd", default="", blank=True)
     delete_YN = models.CharField(max_length=1, verbose_name="삭제 여부", default='N')
-
-    # 표시 순서
     display_order = models.IntegerField(default=0)
 
     class Meta:
@@ -251,27 +252,23 @@ class MyLabel(models.Model):
         return ", ".join(self.ingredients.values_list('prdlst_nm', flat=True))
 
 class FoodType(models.Model):
-    
+    # 기본 필드
     food_group = models.CharField(max_length=100, verbose_name="식품군", default='default_group')
-    #food_category = models.CharField(max_length=100, verbose_name="식품분류", default='default_category')
-    food_type = models.CharField(max_length=100, verbose_name="식품유형", db_index=True, primary_key=True)
+    food_type = models.CharField(max_length=100, verbose_name="식품유형", primary_key=True, default='default_food_type')
 
-    prdlst_dcnm = models.CharField(max_length=1, verbose_name="식품유형명", null=True, blank=True)
+    # Nullable 필드로 변경
+    prdlst_dcnm = models.CharField(max_length=10, verbose_name="식품유형명", null=True, blank=True)
+    weight_calorie = models.CharField(max_length=10, verbose_name="내용량(열량)", null=True, blank=True)
+    prdlst_report_no = models.CharField(max_length=10, verbose_name="품목보고번호", null=True, blank=True)
+    country_of_origin = models.CharField(max_length=10, verbose_name="원산지", null=True, blank=True)
+    frmlc_mtrqlt = models.CharField(max_length=10, verbose_name="포장재질", null=True, blank=True)
+    pog_daycnt = models.CharField(max_length=50, verbose_name="소비기한", null=True, blank=True)
+    rawmtrl_nm = models.CharField(max_length=10, verbose_name="원재료명", null=True, blank=True)
+    storage_method = models.CharField(max_length=10, verbose_name="보관방법", null=True, blank=True)
+    nutritions = models.CharField(max_length=10, verbose_name="영양성분", null=True, blank=True)
+    cautions = models.CharField(max_length=10, verbose_name="주의사항", null=True, blank=True)
+    type_check = models.CharField(max_length=50, verbose_name="구분", null=True, blank=True)
 
-    weight_calorie = models.CharField(max_length=1, verbose_name="내용량(열량)", null=True, blank=True)
-    prdlst_report_no = models.CharField(max_length=1, verbose_name="품목보고번호", null=True, blank=True)
-    country_of_origin = models.CharField(max_length=1, verbose_name="원산지", null=True, blank=True)
-    frmlc_mtrqlt = models.CharField(max_length=1, verbose_name="포장재질", null=True, blank=True)
-    pog_daycnt  = models.CharField(max_length=50, verbose_name="소비기한", null=True, blank=True)
-
-    rawmtrl_nm = models.CharField(max_length=1, verbose_name="원재료명", null=True, blank=True)
-    storage_method = models.CharField(max_length=1, verbose_name="보관방법", null=True, blank=True)
-
-    nutritions = models.CharField(max_length=1, verbose_name="영양성분", null=True, blank=True)
-
-    cautions = models.CharField(max_length=1, verbose_name="주의사항", null=True, blank=True)
-
-    type_check = models.CharField(max_length=10, verbose_name="구분", null=True, blank=True)
 
     relevant_regulations = models.TextField(verbose_name="식품유형별 관련규정", null=True, blank=True)
 
@@ -282,7 +279,7 @@ class FoodType(models.Model):
         ]
 
     def __str__(self):
-        return self.food_type 
+        return self.food_type
     
 class CountryList(models.Model):
     # 국가명 목록, 외교부_국가표준코드_20250102.csv
@@ -302,9 +299,14 @@ class CountryList(models.Model):
         return self.country_name_ko
 
 class LabelIngredientRelation(models.Model):
-    # 새로운 기본키 필드 (라벨ID와 원재료ID를 조합)
-    relation_id = models.CharField(max_length=255, primary_key=True, editable=False)
-    
+    # 기본키 필드 수정
+    relation_id = models.CharField(
+        max_length=255, 
+        primary_key=True, 
+        editable=False,
+        default='default_relation'  # 기본값 추가
+    )
+
     # 기본 관계 필드
     label = models.ForeignKey(MyLabel, on_delete=models.CASCADE, related_name='ingredient_relations')
     ingredient = models.ForeignKey(
@@ -330,9 +332,12 @@ class LabelIngredientRelation(models.Model):
         verbose_name_plural = "라벨-원료 관계들"
 
     def save(self, *args, **kwargs):
-        # label과 ingredient가 모두 설정된 후에 relation_id를 생성합니다.
-        if not self.relation_id and self.label_id and self.ingredient_id:
-            self.relation_id = f"{self.label_id}a{self.ingredient_id}"
+        # relation_id 생성 로직 개선
+        if not self.relation_id or self.relation_id == 'default_relation':
+            if self.label_id and self.ingredient_id:
+                self.relation_id = f"{self.label_id}a{self.ingredient_id}"
+            else:
+                self.relation_id = f"temp_{timezone.now().strftime('%Y%m%d%H%M%S')}"
         super().save(*args, **kwargs)
 
     def __str__(self):

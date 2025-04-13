@@ -12,9 +12,12 @@ from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  #지우지 말 것
 from django.utils.safestring import mark_safe
 from django.utils.timezone import now
+import copy
 from django.views.decorators.csrf import csrf_exempt
 from datetime import datetime, timedelta
 from rapidfuzz import fuzz  # rapidfuzz 라이브러리 import
+from django.views.decorators.cache import never_cache
+from .constants import DEFAULT_PHRASES
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -253,7 +256,7 @@ def label_creation(request, label_id=None):
             print("food_type:", request.POST.get('food_type'))
             
             if form.is_valid():
-                label = form.save(commit=False)
+                label = form.save(commit(False))
                 label.user_id = request.user
                 
                 # hidden 필드에서 식품유형 정보 가져오기
@@ -655,13 +658,13 @@ def search_ingredient_add_row(request):
         
         qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
         if name:
-            qs = qs.filter(prdlst_nm__icontains=name)
+            qs = qs.filter(prdlst_nm__icontains(name))
         if report:
-            qs = qs.filter(prdlst_report_no__icontains=report)
+            qs = qs.filter(prdlst_report_no__icontains(report))
         if food_type:
-            qs = qs.filter(prdlst_dcnm__icontains=food_type)
+            qs = qs.filter(prdlst_dcnm__icontains(food_type))
         if manufacturer:
-            qs = qs.filter(bssh_nm__icontains=manufacturer)
+            qs = qs.filter(bssh_nm__icontains(manufacturer))
         
         ingredients = list(qs.values(
             'prdlst_nm',
@@ -1046,270 +1049,152 @@ def food_type_settings(request):
         })
 
 
-@login_required
-def phrase_popup(request):
-    """자주 사용하는 문구 팝업 뷰"""
-    # 사용자의 기존 문구 조회
-    user_phrases = MyPhrase.objects.filter(
-        user_id=request.user,
-        delete_YN='N'
-    ).order_by('-update_datetime')
-
-    # 기본 문구 데이터 정의 (업데이트됨)
-    default_phrases = {
-        'cautions': [
-            {'name': '부정불량식품신고', 'content': '부정.불량식품신고는 국번없이 1399', 'order': 1},
-            {'name': '조사처리식품', 'content': '이 식품은 감마선/전자선으로 조사처리한 제품입니다.', 'order': 2},
-            {'name': '카페인', 'content': '어린이, 임산부, 카페인 민감자는 섭취에 주의해 주시기 바랍니다. 고카페인 함유', 'order': 3},
-            {'name': '주류경고문구', 'content': '경고 : 지나친 음주는 뇌졸중, 기억력 손상이나 치매를 유발합니다. 임신 중 음주는 기형아 출생 위험을 높입니다. 19세 미만 판매 금지', 'order': 4},
-            {'name': '질식방지', 'content': '얼려서 드시지 마십시오. 한 번에 드실 경우 질식 위험이 있으니 잘 씹어 드십시오. 5세 이하 어린이 및 노약자는 섭취를 금하여 주십시오.', 'order': 5},
-            {'name': '캔주의사항', 'content': '개봉 시 캔 절단부분에 손이 닿지 않도록 각별히 주의하십시오.', 'order': 6},
-            {'name': '씨제거주의', 'content': '기계로 씨를 제거하는 과정에서 씨 또는 씨의 일부가 남아있을 수 있으니 주의해서 드세요.', 'order': 7},
-            {'name': '조리방법', 'content': '반드시 익혀드세요. 조리 후 섭취하세요.', 'order': 8},
-            {'name': '전자레인지주의', 'content': '이 제품은 전자레인지 사용이 불가합니다.', 'order': 9},
-        ],
-        'additional': [
-            {'name': '반품교환장소', 'content': '반품 및 교환장소 : 구입처 및 본사', 'order': 1},
-            {'name': '소비자분쟁해결기준', 'content': '본 제품은 소비자 분쟁해결기준에 의거 교환 또는 보상 받을 수 있습니다.', 'order': 2},
-            {'name': '재냉동금지', 'content': '이 제품은 냉동식품을 해동한 제품이니 재냉동시키지 마시길 바랍니다.', 'order': 3},
-            {'name': '해동방법', 'content': '조리 시 해동방법 : 자연 해동 후 식품 등 제조에 사용', 'order': 4},
-            {'name': '알코올첨가', 'content': '이 제품에는 알코올이 포함되어 있습니다. 알코올 함량 ○○%', 'order': 5},
-            {'name': '유산균함유', 'content': '유산균 100,000,000(1억) CFU/g, 유산균 1억 CFU/g', 'order': 6},
-        ]
-    }
-    
-    # 사용자가 처음 접속하는 경우에만 기본 문구 생성
-    if not user_phrases.exists():
-        for category, phrases in default_phrases.items():
-            for phrase in phrases:
-                # 알레르기, GMO 관련 문구는 제외하고 생성
-                if not any(keyword in phrase['content'].lower() for keyword in ['알레르기', 'gmo']):
-                    MyPhrase.objects.create(
-                        user_id=request.user,
-                        my_phrase_name=phrase['name'],
-                        category_name=category,
-                        comment_content=phrase['content'],
-                        delete_YN='N',
-                        display_order=phrase['order']
-                    )
-
-        # 기본 문구 생성 후 다시 조회
-        user_phrases = MyPhrase.objects.filter(
-            user_id=request.user,
-            delete_YN='N'
-        ).order_by('-update_datetime')
-
-    # 템플릿에 전달할 데이터 준비
-    cautions_phrases = list(user_phrases.filter(category_name='cautions').values(
-        'my_phrase_id', 'my_phrase_name', 'comment_content'
-    ))
-    additional_phrases = list(user_phrases.filter(category_name='additional').values(
-        'my_phrase_id', 'my_phrase_name', 'comment_content'
-    ))
-
-    context = {
-        'phrases_json': json.dumps({
-            'cautions': cautions_phrases,
-            'additional': additional_phrases
-        }, ensure_ascii=False)
-    }
-    return render(request, 'label/phrase_popup.html', context)
+CATEGORY_CHOICES = [
+    ('storage', '보관방법'),
+    ('package', '용기.포장재질'),
+    ('manufacturer', '제조원 소재지'),
+    ('distributor', '유통전문판매원'),
+    ('repacker', '소분원'),
+    ('importer', '수입원'),
+    ('expiry', '소비기한'),
+    ('cautions', '주의사항'),
+    ('additional', '기타표시사항'),
+]
 
 @login_required
 @csrf_exempt
 def manage_phrases(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            action = data.get('action')
-            phrase_id = data.get('id')
-
-            if action == 'delete':
-                try:
-                    phrase = MyPhrase.objects.get(
-                        my_phrase_id=phrase_id,
-                        user_id=request.user
-                    )
-                    phrase.delete_YN = 'Y'
-                    phrase.save()
-                    return JsonResponse({'success': True})
-                except MyPhrase.DoesNotExist:
-                    return JsonResponse({'success': False, 'error': '문구를 찾을 수 없습니다.'})
-            elif action == 'add':
-                MyPhrase.objects.create(
-                    user_id=request.user,
-                    my_phrase_name=data.get('name'),
-                    category_name=data.get('category'),
-                    comment_content=data.get('content'),
-                    delete_YN='N'
-                )
-            elif action == 'update':
-                phrase = get_object_or_404(MyPhrase, 
-                    my_phrase_id=data.get('id'),
-                    user_id=request.user
-                )
-                phrase.my_phrase_name = data.get('name')
-                phrase.category_name = data.get('category')
-                phrase.comment_content = data.get('content')
-                phrase.save()
-            
-            return JsonResponse({'success': True})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+    """문구 추가/수정/삭제 처리"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
     
-    return JsonResponse({'success': False, 'error': '잘못된 요청입니다.'})
+    try:
+        data = json.loads(request.body)
+        action = data.get('action')
+
+        if action == 'add':
+            # 신규 문구 추가
+            phrase = MyPhrase.objects.create(
+                user_id=request.user,
+                my_phrase_name=data.get('name'),
+                category_name=data.get('category'),
+                comment_content=data.get('content'),
+                note=data.get('note'),
+                display_order=MyPhrase.objects.filter(
+                    user_id=request.user,
+                    category_name=data.get('category')
+                ).count()
+            )
+            return JsonResponse({'success': True, 'id': phrase.my_phrase_id})
+
+        elif action == 'update':
+            # 기존 문구 수정
+            phrase = MyPhrase.objects.get(
+                my_phrase_id=data.get('id'),
+                user_id=request.user
+            )
+            phrase.my_phrase_name = data.get('name')
+            phrase.comment_content = data.get('content')
+            phrase.note = data.get('note')
+            phrase.save()
+            return JsonResponse({'success': True})
+
+        elif action == 'delete':
+            # 문구 삭제
+            phrase = MyPhrase.objects.get(
+                my_phrase_id=data.get('id'),
+                user_id=request.user
+            )
+            phrase.delete_YN = 'Y'
+            phrase.delete_datetime = now().strftime('%Y%m%d')
+            phrase.save()
+            return JsonResponse({'success': True})
+
+        return JsonResponse({'success': False, 'error': 'Invalid action'})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 @csrf_exempt
 def reorder_phrases(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            updates = data.get('updates', [])
+    """문구 순서 변경 처리"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
+    
+    try:
+        data = json.loads(request.body)
+        updates = data.get('updates', [])
+        
+        for update in updates:
+            phrase = MyPhrase.objects.get(
+                my_phrase_id=update['id'],
+                user_id=request.user
+            )
+            phrase.display_order = update['order']
+            phrase.save()
             
-            for update in updates:
-                phrase = MyPhrase.objects.get(
-                    my_phrase_id=update['id'],
-                    user_id=request.user
-                )
-                phrase.display_order = update['order']
-                phrase.save()
-            
-            return JsonResponse({'success': True})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
-@login_required
+@login_required 
+@never_cache
 def phrase_popup(request):
-    """자주 사용하는 문구 팝업 뷰"""
-    # 사용자의 기존 문구 조회
-    user_phrases = MyPhrase.objects.filter(
-        user_id=request.user,
-        delete_YN='N'
-    ).order_by('-update_datetime')
-
-    # 기본 문구 데이터 정의 (업데이트됨)
-    default_phrases = {
-        'cautions': [
-            {'name': '부정불량식품신고', 'content': '부정.불량식품신고는 국번없이 1399', 'order': 1},
-            {'name': '조사처리식품', 'content': '이 식품은 감마선/전자선으로 조사처리한 제품입니다.', 'order': 2},
-            {'name': '카페인', 'content': '어린이, 임산부, 카페인 민감자는 섭취에 주의해 주시기 바랍니다. 고카페인 함유', 'order': 3},
-            {'name': '주류경고문구', 'content': '경고 : 지나친 음주는 뇌졸중, 기억력 손상이나 치매를 유발합니다. 임신 중 음주는 기형아 출생 위험을 높입니다. 19세 미만 판매 금지', 'order': 4},
-            {'name': '질식방지', 'content': '얼려서 드시지 마십시오. 한 번에 드실 경우 질식 위험이 있으니 잘 씹어 드십시오. 5세 이하 어린이 및 노약자는 섭취를 금하여 주십시오.', 'order': 5},
-            {'name': '캔주의사항', 'content': '개봉 시 캔 절단부분에 손이 닿지 않도록 각별히 주의하십시오.', 'order': 6},
-            {'name': '씨제거주의', 'content': '기계로 씨를 제거하는 과정에서 씨 또는 씨의 일부가 남아있을 수 있으니 주의해서 드세요.', 'order': 7},
-            {'name': '조리방법', 'content': '반드시 익혀드세요. 조리 후 섭취하세요.', 'order': 8},
-            {'name': '전자레인지주의', 'content': '이 제품은 전자레인지 사용이 불가합니다.', 'order': 9},
-        ],
-        'additional': [
-            {'name': '반품교환장소', 'content': '반품 및 교환장소 : 구입처 및 본사', 'order': 1},
-            {'name': '소비자분쟁해결기준', 'content': '본 제품은 소비자 분쟁해결기준에 의거 교환 또는 보상 받을 수 있습니다.', 'order': 2},
-            {'name': '재냉동금지', 'content': '이 제품은 냉동식품을 해동한 제품이니 재냉동시키지 마시길 바랍니다.', 'order': 3},
-            {'name': '해동방법', 'content': '조리 시 해동방법 : 자연 해동 후 식품 등 제조에 사용', 'order': 4},
-            {'name': '알코올첨가', 'content': '이 제품에는 알코올이 포함되어 있습니다. 알코올 함량 ○○%', 'order': 5},
-            {'name': '유산균함유', 'content': '유산균 100,000,000(1억) CFU/g, 유산균 1억 CFU/g', 'order': 6},
+    """자주 사용하는 문구 팝업"""
+    print("Phrases popup called")
+    
+    # 1. 기본 문구 데이터 초기화
+    phrases_data = {}
+    
+    # 2. 각 카테고리별 기본 문구 초기화 
+    for category, phrases in DEFAULT_PHRASES.items():
+        phrases_data[category] = [
+            {
+                'id': None,
+                'name': phrase['name'],
+                'content': phrase['content'],
+                'note': phrase.get('note', ''),
+                'order': phrase.get('order', 0),
+                'is_custom': False,
+                'is_default': True
+            } for phrase in phrases
         ]
-    }
     
-    # 사용자가 처음 접속하는 경우에만 기본 문구 생성
-    if not user_phrases.exists():
-        for category, phrases in default_phrases.items():
-            for phrase in phrases:
-                # 알레르기, GMO 관련 문구는 제외하고 생성
-                if not any(keyword in phrase['content'].lower() for keyword in ['알레르기', 'gmo']):
-                    MyPhrase.objects.create(
-                        user_id=request.user,
-                        my_phrase_name=phrase['name'],
-                        category_name=category,
-                        comment_content=phrase['content'],
-                        delete_YN='N',
-                        display_order=phrase['order']
-                    )
-
-        # 기본 문구 생성 후 다시 조회
-        user_phrases = MyPhrase.objects.filter(
-            user_id=request.user,
-            delete_YN='N'
-        ).order_by('-update_datetime')
-
-    # 템플릿에 전달할 데이터 준비
-    cautions_phrases = list(user_phrases.filter(category_name='cautions').values(
-        'my_phrase_id', 'my_phrase_name', 'comment_content'
-    ))
-    additional_phrases = list(user_phrases.filter(category_name='additional').values(
-        'my_phrase_id', 'my_phrase_name', 'comment_content'
-    ))
-
+    # 3. 사용자 저장 문구 조회 (삭제되지 않은 것만)
+    user_phrases = MyPhrase.objects.filter(
+        user_id=request.user, 
+        delete_YN='N'
+    ).order_by('category_name', 'display_order')
+    print(f"Found {user_phrases.count()} user phrases")
+    
+    # 4. 사용자 문구를 카테고리별로 추가 
+    for phrase in user_phrases:
+        category = phrase.category_name
+        if category not in phrases_data:
+            phrases_data[category] = []
+        
+        phrases_data[category].append({
+            'id': phrase.my_phrase_id,
+            'name': phrase.my_phrase_name,
+            'content': phrase.comment_content,
+            'note': phrase.note or '',
+            'order': phrase.display_order,
+            'is_custom': True,
+            'is_default': False
+        })
+    
+    # 5. 각 카테고리 내에서 정렬 (기본 문구 먼저, 그 다음 사용자 문구 순서대로)
+    for category in phrases_data:
+        phrases_data[category].sort(key=lambda x: (
+            not x.get('is_default', False),  # 기본 문구 먼저
+            x.get('order', 0),               # 그 다음 순서대로
+            x.get('name', '')                # 마지막으로 이름순
+        ))
+    
     context = {
-        'phrases_json': json.dumps({
-            'cautions': cautions_phrases,
-            'additional': additional_phrases
-        }, ensure_ascii=False)
+        'phrases_json': json.dumps(phrases_data, ensure_ascii=False),
+        'categories': CATEGORY_CHOICES
     }
-    return render(request, 'label/phrase_popup.html', context)
-
-@login_required
-@csrf_exempt
-def manage_phrases(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            action = data.get('action')
-            phrase_id = data.get('id')
-
-            if action == 'delete':
-                try:
-                    phrase = MyPhrase.objects.get(
-                        my_phrase_id=phrase_id,
-                        user_id=request.user
-                    )
-                    phrase.delete_YN = 'Y'
-                    phrase.save()
-                    return JsonResponse({'success': True})
-                except MyPhrase.DoesNotExist:
-                    return JsonResponse({'success': False, 'error': '문구를 찾을 수 없습니다.'})
-            elif action == 'add':
-                MyPhrase.objects.create(
-                    user_id=request.user,
-                    my_phrase_name=data.get('name'),
-                    category_name=data.get('category'),
-                    comment_content=data.get('content'),
-                    delete_YN='N'
-                )
-            elif action == 'update':
-                phrase = get_object_or_404(MyPhrase, 
-                    my_phrase_id=data.get('id'),
-                    user_id=request.user
-                )
-                phrase.my_phrase_name = data.get('name')
-                phrase.category_name = data.get('category')
-                phrase.comment_content = data.get('content')
-                phrase.save()
-            
-            return JsonResponse({'success': True})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
     
-    return JsonResponse({'success': False, 'error': '잘못된 요청입니다.'})
-
-@login_required
-@csrf_exempt
-def reorder_phrases(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            updates = data.get('updates', [])
-            
-            for update in updates:
-                phrase = MyPhrase.objects.get(
-                    my_phrase_id=update['id'],
-                    user_id=request.user
-                )
-                phrase.display_order = update['order']
-                phrase.save()
-            
-            return JsonResponse({'success': True})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    return render(request, 'label/phrase_popup.html', context)

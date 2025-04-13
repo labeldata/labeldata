@@ -929,6 +929,73 @@ $(document).ready(function() {
   console.log("문서 로딩 완료 및 초기화 작업 완료");
 });
 
+document.addEventListener('DOMContentLoaded', function() {
+  // 모든 자동 확장 텍스트 영역 초기화
+  function initAutoExpand() {
+      document.querySelectorAll('textarea.form-control, textarea.auto-expand').forEach(textarea => {
+          // 초기 높이 조정
+          adjustHeight(textarea);
+          
+          // 입력 이벤트에 대한 리스너
+          textarea.addEventListener('input', function() {
+              adjustHeight(this);
+          });
+
+          // 값 변경 이벤트에 대한 리스너
+          textarea.addEventListener('change', function() {
+              adjustHeight(this);
+          });
+      });
+  }
+
+  // 높이 조정 함수
+  function adjustHeight(element) {
+      element.style.height = '38px';
+      element.style.height = element.scrollHeight + 'px';
+  }
+
+  // 초기화 실행
+  initAutoExpand();
+
+  // 문구 팝업에서 내용이 추가될 때 높이 조정
+  window.updateTextareaHeight = function(textarea) {
+      if (textarea) {
+          adjustHeight(textarea);
+      }
+  };
+
+  // MutationObserver를 사용하여 동적으로 추가되는 텍스트영역 감시
+  const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+          mutation.addedNodes.forEach(function(node) {
+              if (node.nodeType === 1) { // Element 노드인 경우
+                  const textareas = node.querySelectorAll('textarea.form-control, textarea.auto-expand');
+                  textareas.forEach(textarea => {
+                      adjustHeight(textarea);
+                  });
+              }
+          });
+      });
+  });
+
+  // 문서 전체를 감시
+  observer.observe(document.body, {
+      childList: true,
+      subtree: true
+  });
+});
+
+// 부모 창의 textarea 업데이트 함수 수정
+function updateParentTextarea(category, content) {
+  if (window.opener) {
+      const textarea = window.opener.document.querySelector(`[name="${category}"]`);
+      if (textarea) {
+          textarea.value = content;
+          window.opener.updateTextareaHeight(textarea);
+      }
+  }
+}
+
 
 function openPhrasePopup() {
   const width = 1100;

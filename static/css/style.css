@@ -2,29 +2,22 @@
    1. Global Variables & Base Styles
    ==================================================== */
    :root {
-    --primary-color: #023047;         /* 기본 주색상 */
-    --secondary-color: #6c757d;       
-    --text-color: #343a40;            
-    --btn-color: #2667ff;        
-    --btn-secondary-color: #1e96fc;  
-    --btn-cancel-color: #6c757d;     
-    --navbar-bg-color: #023047;       
-    --highlight-color: #caf0f8;       
-    --table-header-bg-color: #e9ecef; 
-    --table-hover-bg-color: #e9ecef;  
-    --pagination-color: #023047;      
-    --footer-bg-color: #d9dcd6;       
+    --primary-color: #023047;
+    --secondary-color: #6c757d;
+    --text-color: #343a40;
+    --btn-color: #2667ff;
+    --btn-secondary-color: #1e96fc;
+    --btn-cancel-color: #6c757d;
+    --navbar-bg-color: #023047;
+    --highlight-color: #caf0f8;
+    --table-header-bg-color: #e9ecef;
+    --table-hover-bg-color: #e9ecef;
+    --pagination-color: #023047;
+    --footer-bg-color: #d9dcd6;
 }
 
-/* 웹폰트 예시 */
-@font-face {
-  font-family: 'NanumSquare';
-  src: url("{% static 'fonts/NanumSquareR.otf' %}") format("opentype"),
-       url("{% static 'fonts/NanumSquareR.ttf' %}") format("truetype");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
+/* 웹폰트 설정 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
 
 /* ====================================================
    2. Global Reset & Layout
@@ -38,7 +31,7 @@ html, body {
 body {
     display: flex;
     flex-direction: column;
-    font-family: 'NanumSquare', sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     background-color: #f9f9f9;
     color: var(--text-color);
     overflow-y: auto;
@@ -48,11 +41,11 @@ body {
     height: calc(100vh - 60px - 40px);
     margin-top: 60px;
     margin-bottom: 40px;
-    overflow-x: hidden; /* 수평 스크롤은 숨기고 */
-    overflow-y: auto;   /* 세로 스크롤은 가능하게 */
+    overflow-x: hidden;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-  }
+}
 
 main.container,
 .content {
@@ -114,7 +107,7 @@ main.container,
     word-wrap: break-word;
     text-overflow: clip;
     font-size: 0.8rem;
-    line-height: 1.5;  
+    line-height: 1.5;
     border: 1px solid #ccc;
     padding: 8px;
     text-align: center;
@@ -138,8 +131,8 @@ main.container,
 }
 .table-hover tbody tr:hover td,
 .table-hover tbody tr:hover th {
-  background-color: #e9ecef !important;
-  color: #343a40 !important;
+    background-color: #e9ecef !important;
+    color: #343a40 !important;
 }
 .single-column-table {
     width: 100%;
@@ -266,13 +259,13 @@ main.container,
 }
 .form-control,
 .form-select {
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: #495057;
-  height: auto;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: #495057;
+    height: auto;
 }
 .form-select {
-    width: 20% 
+    width: 20%;
 }
 .search-filter-btn.btn-primary {
     width: 70px;
@@ -311,7 +304,7 @@ main.container,
 }
 .central-search {
     position: absolute;
-    top: 30%; 
+    top: 30%;
     left: 50%;
     transform: translate(-50%, -50%);
     max-width: 800px;
@@ -343,7 +336,7 @@ main.container,
     font-weight: bold;
     font-size: 1.2rem;
     border-radius: 1rem;
-    white-space: nowrap; 
+    white-space: nowrap;
 }
 .central-search input.form-control:focus {
     border: none;
@@ -352,7 +345,7 @@ main.container,
 }
 
 /* ====================================================
-   10. Info Section & Boxes
+   10. Info Section & Boxes (메인 하단 정보 영역)
    ==================================================== */
 .info-section {
     position: absolute;
@@ -447,268 +440,4 @@ a:active {
 }
 .content {
     flex: 1;
-}
-.table-container {
-    margin-top: 5px;
-    overflow: hidden;
-    height: 600px;
-    overflow-y: auto;
-    border: 1px solid #ccc;
-}
-.options-container {
-    position: relative;
-    background: #fff;
-    border: 1px solid #ced4da;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 1000;
-    padding: 5px;
-    width: 300px;
-}
-.options-container label {
-    display: block;
-    padding: 5px;
-    margin-bottom: 2px;
-    cursor: pointer;
-    text-align: left;
-}
-.options-container label:hover {
-    background: var(--table-hover-bg-color);
-}
-.options-container .btn {
-    position: sticky;
-    top: 0;
-    width: 100%;
-    text-align: left;
-}
-.form-check-input {
-    transform: scale(1);
-}
-.move-up-btn, .move-down-btn {
-    background-color: #d3d3d3;
-    border: none;
-    color: #000;
-}
-.sort-btn {
-    color: inherit;
-}
-.d-flex {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 12px;
-}
-.bordered-input {
-    border: 1px solid #ced4da;
-}
-.fixed-width-150 {
-    width: 150px;
-}
-.modal-readonly-field {
-    background-color: #e9ecef;
-}
-.options-container {
-    background: #fff;
-    border: 1px solid #ced4da;
-    max-height: 200px;
-    overflow-y: auto;
-    z-index: 1000;
-    padding: 5px;
-    width: 300px;
-}
-.options-container label {
-    display: block;
-    padding: 5px;
-    margin-bottom: 2px;
-    cursor: pointer;
-    text-align: left;
-}
-.options-container label:hover {
-    background: var(--table-hover-bg-color);
-}
-.options-container .btn {
-    display: block;
-    width: 100%;
-    text-align: left;
-    margin-top: 10px;
-}
-.table-container {
-    min-height: 400px;
-    height: auto !important;
-}
-.styled-table {
-    width: 100%;
-    table-layout: fixed;
-}
-.styled-table th {
-    width: auto;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.styled-table th:nth-child(1) { width: 2%; }
-.styled-table th:nth-child(2) { width: 2%; }
-.styled-table th:nth-child(3) { width: 13%; }
-.styled-table th:nth-child(4) { width: 12%; }
-.styled-table th:nth-child(5) { width: 6%; }
-.styled-table th:nth-child(6) { width: 8%; }
-.styled-table th:nth-child(7) { width: 28%; }
-.styled-table th:nth-child(8) { width: 8%; }
-.styled-table th:nth-child(9) { width: 8%; }
-.styled-table th:nth-child(10) { width: 8%; }
-.highlight-color {
-    background-color: var(--highlight-color);
-}
-
-/* ===== Detail Page 공통 스타일 ===== */
-
-/* 팝업 컨테이너: 두 페이지 공통 */
-.popup-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
-}
-
-/* 헤더 영역: 제목과 버튼 그룹을 한 줄에 배치 */
-.header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding: 0 10px;
-}
-
-/* 제목 태그(h4, h5)의 여백 제거 */
-.header-row h4,
-.header-row h5 {
-    margin: 0;
-}
-
-/* 버튼 그룹: 버튼들 사이 간격 및 중앙 정렬 */
-.button-group-level {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-/* ===== Combined View에서 상세 화면 오버라이드 ===== */
-/* combined-detail 클래스가 적용된 부모 내의 popup-container는 최대너비와 중앙정렬을 해제 */
-.combined-detail .popup-container {
-    max-width: 100%;
-    margin: 0;
-    padding: 10px;  /* 필요에 따라 조정 */
-}
-
-/* 알레르기 옵션 스타일 */
-.allergy-option {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start; /* 왼쪽 정렬 */
-    width: 20%;
-    margin-bottom: 5px; 
-}
-
-/* 마지막 줄의 필드들이 왼쪽으로 정렬되도록 설정 */
-#allergySelection {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start; /* 왼쪽 정렬 */
-}
-
-/* 접기/펼치기 버튼 고정 크기 */
-#allergyToggleButton {
-    width: 80px; /* 원하는 너비로 설정 */
-    height: 30px; /* 원하는 높이로 설정 */
-}
-
-
-/* gmo 옵션 스타일 */
-.gmo-option {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start; /* 왼쪽 정렬 */
-    width: 20%; 
-    margin-bottom: 5px; 
-}
-
-/* 마지막 줄의 필드들이 왼쪽으로 정렬되도록 설정 */
-#gmoSelection {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start; /* 왼쪽 정렬 */
-}
-
-/* 접기/펼치기 버튼 고정 크기 */
-#gmoToggleButton {
-    width: 80px; /* 원하는 너비로 설정 */
-    height: 30px; /* 원하는 높이로 설정 */
-}
-
-
-/* 좌측 패널의 항목 / 입력필드 / 단위 칸 비율 조정 */
-.input-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  
-  .input-label {
-    flex: 0 0 30%; /* 항목: 3 */
-    margin: 0;
-    font-weight: bold;
-    text-align: left;
-  }
-  
-  .form-control {
-    flex: 0 0 50%; /* 입력필드: 5 */
-    min-width: 0;
-  }
-  
-  .input-unit {
-    flex: 0 0 20%; /* 단위: 2 */
-    text-align: center;
-  }
-
-/* 토글 버튼 스타일 */
-#toggleFoodTypeBtn, #toggleRegulationBtn {
-  min-width: 24px;
-  height: 24px;
-  padding: 0;
-  line-height: 1;
-  font-size: 1rem;
-  font-weight: bold;
-  text-align: center;
-  vertical-align: middle;
-}
-
-.toggle-btn {
-  transition: transform 0.3s ease;
-}
-
-.toggle-btn.collapsed {
-  transform: rotate(180deg);
-}
-
-/* 문구 팝업 전용 스타일 */
-.phrase-popup .container-fluid {
-    padding: 20px;
-}
-
-.phrase-popup .panel-header {
-    padding: 0 0 15px 0;
-}
-
-.phrase-popup .nav-tabs .nav-link {
-    color: #495057;
-}
-
-.phrase-popup .nav-tabs .nav-link.active {
-    color: var(--btn-color);
-}
-
-.phrase-popup .phrase-example {
-    background-color: #fff;
-    padding: 15px;
-    border-radius: 4px;
 }
