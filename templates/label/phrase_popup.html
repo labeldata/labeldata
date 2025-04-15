@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>내문구 관리</title>
+  <title>내 문구 관리</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="/static/css/popup.css" rel="stylesheet">
@@ -25,9 +25,9 @@
       gap: 10px;
     }
     .popup-title {
-      font-size: 0.8rem;
+      font-size: 1.2rem;
       font-weight: bold;
-      margin-right: 10px;
+      color: #495057;
     }
     .suggestion-modal {
       position: fixed;
@@ -79,12 +79,6 @@
       background-color: transparent;
       border: 1px solid #ced4da;
     }
-    .nav-tabs .nav-link {
-      font-size: 0.8rem;
-    }
-    .nav-tabs .nav-link.active {
-      color: #0d6efd;
-    }
   </style>
 </head>
 <body>
@@ -94,7 +88,7 @@
   </script>
   <div class="container-fluid phrase-popup">
     <header class="phrase-header">
-      <div class="popup-title">내문구 관리</div>
+      <div class="popup-title">내 문구 관리</div>
       <div class="action-buttons-right">
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="addNewPhrase()">신규</button>
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="startEdit()">수정</button>

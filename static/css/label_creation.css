@@ -118,17 +118,6 @@
     line-height: 1.5 !important;
   }
   
-  /* 숫자 입력 필드 스피너 제거 */
-  input[type=number]::-webkit-inner-spin-button,
-  input[type=number]::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  
-  input[type=number] {
-    -moz-appearance: textfield;
-  }
-  
   /* 표 셀 패딩 최소화 */
   .table-bordered td,
   .table-bordered th {
@@ -220,7 +209,7 @@
     background-color: #f8f9fa;
     padding: 15px;
     margin-bottom: 15px;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     line-height: 1.5;
     color: #495057;
     white-space: pre-line;
@@ -271,4 +260,29 @@
     box-sizing: border-box;
   }
 
-  
+.select2-container--default .select2-results__option {
+    font-size: 0.8rem;  /* 드롭다운 옵션도 동일한 크기 */
+}
+
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: #a0a6ab;  /* 더 옅은 색상의 플레이스홀더 */
+}
+
+/* 입력 필드 플레이스홀더 스타일 */
+input::placeholder,
+textarea::placeholder {
+    color: #a0a6ab !important;  /* 더 옅은 색상 */
+    opacity: 1;
+}
+
+/* 탭 스타일 초기화 */
+.nav-tabs .nav-link {
+    color: #6c757d;  /* 기본 탭 색상 */
+    font-size: 0.8rem;
+}
+
+/* textarea 기본 높이 설정 */
+textarea.form-control {
+    height: auto;
+}
+

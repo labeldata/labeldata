@@ -1,4 +1,3 @@
-<!-- 영양성분 계산 팝업 페이지 (nutrition_calculator_popup.html) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -6,24 +5,68 @@
   <title>영양성분 계산기</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="/static/css/style.css" rel="stylesheet">
   <link href="/static/css/popup.css" rel="stylesheet">
+  <style>
+    body {
+      font-size: 0.8rem;
+      font-family: 'Noto Sans KR', sans-serif;
+    }
+    .nutrient-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .nutrient-row label {
+      min-width: 100px;
+      font-weight: 500;
+      margin: 0;
+    }
+    .nutrient-row .form-control,
+    .nutrient-row .form-select {
+      flex: 1;
+      font-size: 0.8rem;
+    }
+    .nutrient-row .input-unit {
+      white-space: nowrap;
+      margin-left: 4px;
+    }
+    .popup-title {
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: #495057;
+    }
+    .nutrition-tab-content {
+      display: none;
+    }
+    .nutrition-tab-content.active {
+      display: block;
+    }
+    .result-card,
+    .result-card .table,
+    .result-card .summary-header,
+    .result-card .summary-footer {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.8rem;
+      color: #495057;
+      font-weight: 500;
+    }
+  </style>
 </head>
 <body>
-<div class="container-fluid" style="max-width: 1100px; height: calc(100vh + 200px);">
+<div class="container-fluid" style="max-width: 1100px;">
   <div class="row">
-    <!-- 좌측 패널 -->
     <div class="col-md-6" style="padding-right: 15px; border-right: 1px solid #ccc;">
       <div class="d-flex justify-content-between align-items-center mb-2">
-        <h5 class="mb-0">영양성분 입력</h5>
-        <div class="popup-toolbar-left">
-          <button type="button" class="btn btn-default btn-sm" onclick="calculateNutrition()">계산</button>
-          <button type="button" class="btn btn-default btn-sm" onclick="resetForm()">초기화</button>
+        <div class="popup-title">영양성분 입력</div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-primary btn-sm" onclick="calculateNutrition()">계산</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetForm()">초기화</button>
         </div>
       </div>
       <hr>
       <div class="nutrient-row">
-        <label class="input-label">단위내용량</label>
+        <label>단위내용량</label>
         <input type="number" id="base_amount" class="form-control" placeholder="예: 100">
         <select class="form-select input-unit" id="base_amount_unit">
           <option value="g" selected>g</option>
@@ -31,20 +74,18 @@
         </select>
       </div>
       <div class="nutrient-row">
-        <label class="input-label">포장 당 갯수</label>
+        <label>포장 당 갯수</label>
         <input type="number" id="servings_per_package" class="form-control" placeholder="예: 1">
         <span class="input-unit">개</span>
       </div>
       <hr>
       <div id="nutrient-inputs"></div>
     </div>
-
-    <!-- 우측 패널 -->
     <div class="col-md-6" style="padding-left: 15px;">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h5 class="mb-0">계산 결과</h5>
-        <div class="popup-toolbar-right">
-          <select id="tabSelector" class="form-select form-select-sm" style="width: auto;" onchange="updateNutritionSummaryText()">
+        <div class="d-flex gap-2">
+          <select id="tabSelector" class="form-select form-select-sm" style="width: auto;">
             <option value="total">총 내용량당</option>
             <option value="unit">단위내용량당</option>
             <option value="100g">100g(ml)당</option>
@@ -54,52 +95,44 @@
       </div>
       <hr>
       <ul class="nav nav-tabs mb-3" id="resultTab" role="tablist">
-        <li class="nav-item">
-          <button class="nav-link active" data-target="#result-total" onclick="switchResultTab('total')">총 내용량당</button>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="total-tab" data-bs-toggle="tab" data-bs-target="#result-total" data-tab="total" type="button" role="tab" aria-controls="result-total" aria-selected="true">총 내용량당</button>
         </li>
-        <li class="nav-item">
-          <button class="nav-link" data-target="#result-unit" onclick="switchResultTab('unit')">단위내용량당</button>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="unit-tab" data-bs-toggle="tab" data-bs-target="#result-unit" data-tab="unit" type="button" role="tab" aria-controls="result-unit" aria-selected="false">단위내용량당</button>
         </li>
-        <li class="nav-item">
-          <button class="nav-link" data-target="#result-100g" onclick="switchResultTab('100g')">100g(ml)당</button>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="100g-tab" data-bs-toggle="tab" data-bs-target="#result-100g" data-tab="100g" type="button" role="tab" aria-controls="result-100g" aria-selected="false">100g(ml)당</button>
         </li>
       </ul>
-      <div id="result-total" class="nutrition-tab-content active">
-        <div class="result-card" id="resultBoxTotal"></div>
-      </div>
-      <div id="result-unit" class="nutrition-tab-content">
-        <div class="result-card" id="resultBoxUnit"></div>
-      </div>
-      <div id="result-100g" class="nutrition-tab-content">
-        <div class="result-card" id="resultBox100g"></div>
+      <div class="tab-content">
+        <div id="result-total" class="tab-pane fade show active" role="tabpanel" aria-labelledby="total-tab">
+          <div class="result-card" id="resultBoxTotal"></div>
+        </div>
+        <div id="result-unit" class="tab-pane fade" role="tabpanel" aria-labelledby="unit-tab">
+          <div class="result-card" id="resultBoxUnit"></div>
+        </div>
+        <div id="result-100g" class="tab-pane fade" role="tabpanel" aria-labelledby="100g-tab">
+          <div class="result-card" id="resultBox100g"></div>
+        </div>
       </div>
     </div>
   </div>
 </div>
-
-<!-- 외부 JS 파일 참조 -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/js/nutrition_calculator.js"></script>
-
-<!-- 데이터 로드 스크립트 -->
 <script>
-  // 계산기가 초기화된 후 데이터 로드
   document.addEventListener('nutrition-calculator-ready', function() {
-    // Django 템플릿 변수를 안전하게 처리
-    var nutritionDataJSON = "{{ nutrition_data|escapejs }}";
-    var nutritionData = {};
-    
-    // JSON 문자열이 비어있지 않은 경우에만 파싱
-    if (nutritionDataJSON && nutritionDataJSON !== "{}") {
+    const dataStr = "{{ nutrition_data|escapejs }}";
+    if (dataStr && dataStr !== "{}") {
       try {
-        nutritionData = JSON.parse(nutritionDataJSON);
+        const data = JSON.parse(dataStr);
+        if (data && Object.keys(data).length > 0) {
+          loadExistingData(data);
+        }
       } catch (e) {
-        console.error("영양성분 데이터 파싱 오류:", e);
+        console.error("영양성분 데이터 오류:", e);
       }
-    }
-    
-    // 데이터가 있을 경우 로드 함수 호출
-    if (nutritionData && Object.keys(nutritionData).length > 0) {
-      loadExistingData(nutritionData);
     }
   });
 </script>
