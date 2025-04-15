@@ -114,7 +114,7 @@
           <input type="checkbox" id="chk_sterilization_other" name="chk_sterilization_other" class="form-check-input" {% if form.processing_condition.value %}checked{% endif %}>
           <label for="chk_sterilization_other" class="form-check-label" style="font-size:0.8rem;">조건</label>
         </div>
-        <input type="text" name="processing_condition" class="form-control" placeholder="조건 상세" style="width:120px;" value="{{ form.processing_condition.value }}">
+        <input type="text" name="processing_condition" class="form-control" placeholder="조건 상세" style="width:120px;" value="{{ form.processing_condition.value|default:'' }}">
       </div>
     </div>
   </div>
@@ -126,9 +126,9 @@
 <div class="container mb-2 d-flex justify-content-between align-items-center">
   <div id="selected-info" style="font-weight:bold; font-size:0.9rem;">식품유형 :</div>
   <div class="d-flex align-items-center" style="gap: 5px;">
-    <!-- 내문구 관리 버튼 -->
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openPhrasePopup()" title="내문구 관리">
-      내문구 관리
+    <!-- 내 문구 관리 버튼 -->
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openPhrasePopup()" title="내 문구 관리">
+      내 문구 관리
     </button>
     <!-- 식품유형 접기/펼치기 버튼 -->
     <button id="toggleFoodTypeBtn" class="btn btn-sm btn-outline-secondary" type="button" title="접기" style="font-size: 1rem;">∧</button>
@@ -166,7 +166,7 @@
           </div>
           <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="my_label_name" class="form-control auto-expand" placeholder="라벨명을 입력하세요." value="{{ form.my_label_name.value }}">
+            <input type="text" name="my_label_name" class="form-control auto-expand" placeholder="라벨명을 입력하세요." value="{{ form.my_label_name.value|default:'' }}">
           </div>
         </div>
         <!-- 식품유형 -->
@@ -177,7 +177,7 @@
           </div>
           <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="prdlst_dcnm" class="form-control auto-expand" placeholder="상단의 식품유형을 참고하여 입력하세요." value="{{ form.prdlst_dcnm.value }}">
+            <input type="text" name="prdlst_dcnm" class="form-control auto-expand" placeholder="상단의 식품유형을 참고하여 입력하세요." value="{{ form.prdlst_dcnm.value|default:'' }}">
           </div>
         </div>
       </div>
@@ -194,7 +194,7 @@
           </div>
           <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="prdlst_nm" class="form-control auto-expand" placeholder="제품명을 입력하세요." value="{{ form.prdlst_nm.value }}">
+            <input type="text" name="prdlst_nm" class="form-control auto-expand" placeholder="제품명을 입력하세요." value="{{ form.prdlst_nm.value|default:'' }}">
           </div>
         </div>
         <!-- 성분명 및 함량 -->
@@ -207,7 +207,7 @@
           </div>
           <div style="width:5%;"></div>
           <div style="width:85%;">
-            <input type="text" name="ingredient_info" class="form-control auto-expand" placeholder="제품명에 원재료명을 사용한 경우 입력하세요." value="{{ form.ingredient_info.value }}">
+            <input type="text" name="ingredient_info" class="form-control auto-expand" placeholder="제품명에 원재료명을 사용한 경우 입력하세요." value="{{ form.ingredient_info.value|default:'' }}">
           </div>
         </div>
       </div>
@@ -224,7 +224,7 @@
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="content_weight" class="form-control auto-expand" placeholder="내용량을 입력하세요." value="{{ form.content_weight.value }}">
+            <input type="text" name="content_weight" class="form-control auto-expand" placeholder="내용량을 입력하세요." value="{{ form.content_weight.value|default:'' }}">
           </div>
         </div>
         <!-- 내용량(열량) -->
@@ -235,7 +235,7 @@
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="weight_calorie" class="form-control auto-expand" placeholder="내용량(열량) 형식으로 입력하세요." value="{{ form.weight_calorie.value }}">
+            <input type="text" name="weight_calorie" class="form-control auto-expand" placeholder="내용량(열량) 형식으로 입력하세요." value="{{ form.weight_calorie.value|default:'' }}">
           </div>
         </div>
       </div>
@@ -250,7 +250,7 @@
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value }}">
+            <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}">
           </div>
         </div>
         <!-- 원산지 -->
@@ -281,7 +281,7 @@
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="storage_method" class="form-control auto-expand" placeholder="보관방법을 입력하거나 내문구를 선택하세요." value="{{ form.storage_method.value }}">
+            <input type="text" name="storage_method" class="form-control auto-expand" placeholder="보관방법을 입력하거나 내문구를 선택하세요." value="{{ form.storage_method.value|default:'' }}">
           </div>
         </div>
         <!-- 용기.포장재질 -->
@@ -292,7 +292,7 @@
           </div>
           <div style="width:5%;"></div> <!-- 버튼 영역 (비어 있음) -->
           <div style="width:85%;">
-            <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" placeholder="용기.포장재질을 입력하거나 내문구를 선택하세요."value="{{ form.frmlc_mtrqlt.value }}">
+            <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" placeholder="용기.포장재질을 입력하거나 내문구를 선택하세요."value="{{ form.frmlc_mtrqlt.value|default:'' }}">
           </div>
         </div>
       </div>
@@ -311,7 +311,7 @@
             aria-controls="other-manufacturers" style="font-size: 1rem; padding: 2px 1px;" title="펼치기">∨</button>
         </div>
         <div style="width:90.4%;">
-          <input type="text" name="bssh_nm" class="form-control auto-expand"  placeholder="제조원을 입력하거나 내문구를 선택하세요."value="{{ form.bssh_nm.value }}">
+          <input type="text" name="bssh_nm" class="form-control auto-expand"  placeholder="제조원을 입력하거나 내문구를 선택하세요."value="{{ form.bssh_nm.value|default:'' }}">
         </div>
       </div>
 
@@ -327,7 +327,7 @@
           </div>
           <div style="width:88.9%;">
             <input type="text" name="distributor_address" class="form-control auto-expand" placeholder="유통전문판매원을 입력하거나 내문구를 선택하세요."
-                  value="{{ form.distributor_address.value }}">
+                  value="{{ form.distributor_address.value|default:'' }}">
           </div>
         </div>
 
@@ -341,7 +341,7 @@
           </div>
           <div style="width:88.9%;">
             <input type="text" name="repacker_address" class="form-control auto-expand" placeholder="소분원을 입력하거나 내문구를 선택하세요."
-                  value="{{ form.repacker_address.value }}">
+                  value="{{ form.repacker_address.value|default:'' }}">
           </div>
         </div>
 
@@ -355,7 +355,7 @@
           </div>
           <div style="width:88.9%;">
             <input type="text" name="importer_address" class="form-control auto-expand" placeholder="수입원을 입력하거나 내문구를 선택하세요."
-                  value="{{ form.importer_address.value }}">
+                  value="{{ form.importer_address.value|default:'' }}">
           </div>
         </div>
       </div>
@@ -375,7 +375,7 @@
           <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
           <option value="생산연도" {% if form.date_option.value == "생산연도" %}selected{% endif %}>생산연도</option>
         </select>
-        <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value }}">
+        <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value|default:'' }}">
           </div>
         </div>
       </div>
@@ -390,7 +390,7 @@
           <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="handleIngredientPopup()" title="상세입력">✚</button>
         </div>
         <div style="width:90.4%;">
-          <textarea name="rawmtrl_nm_display" class="form-control auto-expand" rows="2" placeholder="원재료명(표시)을 입력하세요"> {{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value }}</textarea>
+          <textarea name="rawmtrl_nm_display" class="form-control auto-expand" rows="2" placeholder="원재료명(표시)을 입력하세요"> {{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
         </div>
       </div>
 
@@ -424,7 +424,7 @@
         <div style="width:89%;">
           <textarea name="cautions" 
             class="form-control auto-expand" 
-            placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.cautions.value }}</textarea>
+            placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.cautions.value|default:'' }}</textarea>
         </div>
       </div>
       <!-- 기타 표시사항 -->
@@ -438,7 +438,7 @@
         <div style="width:89%;">
           <textarea name="additional_info" 
             class="form-control auto-expand" 
-            placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.additional_info.value }}</textarea>
+            placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.additional_info.value|default:'' }}</textarea>
           </div>
       </div>    
 
@@ -462,34 +462,34 @@
             name="nutrition_text"
             class="form-control auto-expand"
             placeholder="영양성분 계산기를 통해 입력하세요."
-            readonly>{{ form.nutrition_text.value }}</textarea>
+            readonly>{{ form.nutrition_text.value|default:'' }}</textarea>
         </div>
       </div>
 
       <!-- 영양성분 hidden 필드 -->
       <div style="display: none;">
-        <input type="hidden" name="serving_size" value="{{ form.serving_size.value }}">
-        <input type="hidden" name="serving_size_unit" value="{{ form.serving_size_unit.value }}">
-        <input type="hidden" name="units_per_package" value="{{ form.units_per_package.value }}">
-        <input type="hidden" name="nutrition_display_unit" value="{{ form.nutrition_display_unit.value }}">
-        <input type="hidden" name="calories" value="{{ form.calories.value }}">
-        <input type="hidden" name="calories_unit" value="{{ form.calories_unit.value }}">
-        <input type="hidden" name="natriums" value="{{ form.natriums.value }}">
-        <input type="hidden" name="natriums_unit" value="{{ form.natriums_unit.value }}">
-        <input type="hidden" name="carbohydrates" value="{{ form.carbohydrates.value }}">
-        <input type="hidden" name="carbohydrates_unit" value="{{ form.carbohydrates_unit.value }}">
-        <input type="hidden" name="sugars" value="{{ form.sugars.value }}">
-        <input type="hidden" name="sugars_unit" value="{{ form.sugars_unit.value }}">
-        <input type="hidden" name="fats" value="{{ form.fats.value }}">
-        <input type="hidden" name="fats_unit" value="{{ form.fats_unit.value }}">
-        <input type="hidden" name="trans_fats" value="{{ form.trans_fats.value }}">
-        <input type="hidden" name="trans_fats_unit" value="{{ form.trans_fats_unit.value }}">
-        <input type="hidden" name="saturated_fats" value="{{ form.saturated_fats.value }}">
-        <input type="hidden" name="saturated_fats_unit" value="{{ form.saturated_fats_unit.value }}">
-        <input type="hidden" name="cholesterols" value="{{ form.cholesterols.value }}">
-        <input type="hidden" name="cholesterols_unit" value="{{ form.cholesterols_unit.value }}">
-        <input type="hidden" name="proteins" value="{{ form.proteins.value }}">
-        <input type="hidden" name="proteins_unit" value="{{ form.proteins_unit.value }}">
+        <input type="hidden" name="serving_size" value="{{ form.serving_size.value|default:'' }}">
+        <input type="hidden" name="serving_size_unit" value="{{ form.serving_size_unit.value|default:'' }}">
+        <input type="hidden" name="units_per_package" value="{{ form.units_per_package.value|default:'' }}">
+        <input type="hidden" name="nutrition_display_unit" value="{{ form.nutrition_display_unit.value|default:'' }}">
+        <input type="hidden" name="calories" value="{{ form.calories.value|default:'' }}">
+        <input type="hidden" name="calories_unit" value="{{ form.calories_unit.value|default:'' }}">
+        <input type="hidden" name="natriums" value="{{ form.natriums.value|default:'' }}">
+        <input type="hidden" name="natriums_unit" value="{{ form.natriums_unit.value|default:'' }}">
+        <input type="hidden" name="carbohydrates" value="{{ form.carbohydrates.value|default:'' }}">
+        <input type="hidden" name="carbohydrates_unit" value="{{ form.carbohydrates_unit.value|default:'' }}">
+        <input type="hidden" name="sugars" value="{{ form.sugars.value|default:'' }}">
+        <input type="hidden" name="sugars_unit" value="{{ form.sugars_unit.value|default:'' }}">
+        <input type="hidden" name="fats" value="{{ form.fats.value|default:'' }}">
+        <input type="hidden" name="fats_unit" value="{{ form.fats_unit.value|default:'' }}">
+        <input type="hidden" name="trans_fats" value="{{ form.trans_fats.value|default:'' }}">
+        <input type="hidden" name="trans_fats_unit" value="{{ form.trans_fats_unit.value|default:'' }}">
+        <input type="hidden" name="saturated_fats" value="{{ form.saturated_fats.value|default:'' }}">
+        <input type="hidden" name="saturated_fats_unit" value="{{ form.saturated_fats_unit.value|default:'' }}">
+        <input type="hidden" name="cholesterols" value="{{ form.cholesterols.value|default:'' }}">
+        <input type="hidden" name="cholesterols_unit" value="{{ form.cholesterols_unit.value|default:'' }}">
+        <input type="hidden" name="proteins" value="{{ form.proteins.value|default:'' }}">
+        <input type="hidden" name="proteins_unit" value="{{ form.proteins_unit.value|default:'' }}">
       </div>
 
       </form>

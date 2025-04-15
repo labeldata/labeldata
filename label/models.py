@@ -1,21 +1,22 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils.timezone import now
+from django.utils import timezone  # timezone 모듈 import 추가
 
 class FoodItem(models.Model):
     #컬럼명은 추후 변경할 수 있음. 현재는 api에서 받아오는 값으로 사용
     lcns_no = models.CharField(max_length=11, verbose_name = "인허가번호", help_text="영업에 대한 허가, 등록, 신고번호 11자리", db_index=True , null=True, blank=True)
-    bssh_nm = models.CharField(max_length=100, verbose_name = "제조사명", default="기본제조사명")
+    bssh_nm = models.CharField(max_length=100, verbose_name = "제조사명", default="")
     prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", help_text="영업등록 발급연도-영업장 등록번호-영업장 제품번호", db_index=True, primary_key=True)
-    prms_dt = models.CharField(max_length=8, verbose_name="허가일자", help_text="yyyymmdd", default="yyyymmdd")
-    prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", db_index=True, default="기본제품명")
-    prdlst_dcnm = models.CharField(max_length=100, verbose_name="품목유형명", default="기본품목유형명")
+    prms_dt = models.CharField(max_length=8, verbose_name="허가일자", help_text="yyyymmdd", default="")
+    prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", db_index=True, default="")
+    prdlst_dcnm = models.CharField(max_length=100, verbose_name="품목유형명", default="")
     production = models.CharField(max_length=10, verbose_name="생산종료여부", null=True, blank=True)
     hieng_lntrt_dvs_yn = models.CharField(max_length=10, verbose_name="고열량저영양식품여부", null=True, blank=True)   #api 컬럼 명칭은 HIENG_LNTRT_DVS_NM -> yn으로 변경
     child_crtfc_yn = models.CharField(max_length=10, verbose_name="어린이기호식품품질인증여부", null=True, blank=True)
-    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", default="기본소비기한", null=True, blank=True) # null 값 허용
-    last_updt_dtm = models.CharField(max_length=8, verbose_name="최종수정일자", default="yyyymmdd", null=True, blank=True) # null 값 허용
-    induty_cd_nm = models.CharField(max_length=80, verbose_name="업종명", default="기본업종명", null=True, blank=True) # null 값 허용
+    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", null=True, blank=True) # null 값 허용
+    last_updt_dtm = models.CharField(max_length=8, verbose_name="최종수정일자", null=True, blank=True) # null 값 허용
+    induty_cd_nm = models.CharField(max_length=80, verbose_name="업종명", null=True, blank=True) # null 값 허용
     qlity_mntnc_tmlmt_daycnt = models.CharField(max_length=100, verbose_name="품질유지기한일수", null=True, blank=True)
     usages = models.TextField(max_length=4000, verbose_name="용법", null=True, blank=True) #mysql usage - 키워드로 인해 변경
     prpos = models.CharField(max_length=200, verbose_name="용도", null=True, blank=True)
@@ -165,7 +166,7 @@ class MyLabel(models.Model):
     repacker_address = models.CharField(max_length=500, verbose_name="소분원 소재지", null=True, blank=True)
     importer_address = models.CharField(max_length=500, verbose_name="수입원 소재지", null=True, blank=True)
 
-    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", default="기본소비기한", null=True, blank=True)
+    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", null=True, blank=True)
 
     rawmtrl_nm = models.TextField(max_length=1000, verbose_name="원재료명", null=True, blank=True)
     rawmtrl_nm_display = models.TextField(max_length=1000, verbose_name="원재료명(표시)", null=True, blank=True)
@@ -337,7 +338,7 @@ class LabelIngredientRelation(models.Model):
             if self.label_id and self.ingredient_id:
                 self.relation_id = f"{self.label_id}a{self.ingredient_id}"
             else:
-                self.relation_id = f"temp_{timezone.now().strftime('%Y%m%d%H%M%S')}"
+                self.relation_id = f"temp_{timezone.now().strftime('%Y%m%d%H%M%S')}"  # timezone 사용
         super().save(*args, **kwargs)
 
     def __str__(self):

@@ -14,6 +14,8 @@ from venv import logger  # 지우지 않음
 from django.utils.safestring import mark_safe
 from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS  # FIELD_REGULATIONS 추가
 from decimal import Decimal, InvalidOperation
+from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
+from rapidfuzz import fuzz  # fuzzywuzzy 대신 rapidfuzz 사용
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -223,7 +225,7 @@ def label_creation(request, label_id=None):
             print("food_type:", request.POST.get('food_type'))
             
             if form.is_valid():
-                label = form.save(commit=False)
+                label = form.save(commit=False)  # commit=False를 올바르게 사용
                 label.user_id = request.user
                 
                 # hidden 필드에서 식품유형 정보 가져오기
@@ -252,7 +254,7 @@ def label_creation(request, label_id=None):
             print("food_type:", request.POST.get('food_type'))
             
             if form.is_valid():
-                label = form.save(commit(False))
+                label = form.save(commit=False)  # commit=False를 올바르게 사용
                 label.user_id = request.user
                 
                 # hidden 필드에서 식품유형 정보 가져오기
@@ -735,13 +737,13 @@ def search_ingredient_add_row(request):
         
         qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
         if name:
-            qs = qs.filter(prdlst_nm__icontains(name))
+            qs = qs.filter(prdlst_nm__icontains=name)
         if report:
-            qs = qs.filter(prdlst_report_no__icontains(report))
+            qs = qs.filter(prdlst_report_no__icontains=report)
         if food_type:
-            qs = qs.filter(prdlst_dcnm__icontains(food_type))
+            qs = qs.filter(prdlst_dcnm__icontains=food_type)
         if manufacturer:
-            qs = qs.filter(bssh_nm__icontains(manufacturer))
+            qs = qs.filter(bssh_nm__icontains=manufacturer)
         
         ingredients = list(qs.values(
             'prdlst_nm',
