@@ -343,3 +343,31 @@ class LabelIngredientRelation(models.Model):
 
     def __str__(self):
         return f"{self.label.my_label_name} - {self.ingredient.my_ingredient_name}"
+    
+
+class ImportedFood(models.Model):
+
+    dcl_prduct_se_cd_nm = models.CharField(max_length=100, verbose_name="제품구분", null=True, blank=True)
+    bsn_ofc_name = models.CharField(max_length=100, verbose_name="수입업체명")
+    prduct_korean_nm = models.CharField(max_length=100, verbose_name="제품명(한글)")
+    prduct_nm = models.TextField(verbose_name="제품명(영문)", null=True, blank=True)
+    expirde_dtm = models.CharField(max_length=50, verbose_name="유통기한", help_text="yyyymmdd", null=True, blank=True)
+    procs_dtm = models.CharField(max_length=8, verbose_name="수입신고일자", help_text="yyyymmdd", null=True, blank=True)
+    ovsmnfst_nm = models.CharField(max_length=300, verbose_name="해외제조업소", null=True, blank=True)
+    itm_nm = models.CharField(max_length=100, verbose_name="품목", null=True, blank=True)
+    xport_ntncd_nm = models.CharField(max_length=100, verbose_name="수출국", null=True, blank=True)
+    mnf_ntncn_nm = models.CharField(max_length=100, verbose_name="제조국", null=True, blank=True)
+    korlabel = models.TextField(verbose_name="한글표시사항", null=True, blank=True)
+    irdnt_nm = models.TextField(verbose_name="원재료명", null=True, blank=True)
+    expirde_bdgin_dtm = models.CharField(max_length=8, verbose_name="유통기한", help_text="yyyymmdd", null=True, blank=True)
+    expirde_end_dtm = models.CharField(max_length=8, verbose_name="소비기한", help_text="yyyymmdd", null=True, blank=True)
+
+    class Meta:
+        db_table = "imported_food"
+        indexes = [
+            models.Index(fields=["bsn_ofc_name"], name="idx_bsn_ofc_name"),
+            models.Index(fields=["itm_nm"], name="idx_itm_nm")
+        ]
+
+    def __str__(self):
+        return self.prduct_korean_nm

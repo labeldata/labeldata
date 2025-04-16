@@ -29,7 +29,11 @@ class ApiEndpoint(models.Model):
         related_name='endpoints',
         help_text="API 키"
     )
-    service_name = models.CharField(max_length=50, help_text="서비스 이름 (예: I1250)")
+    service_name = models.CharField(
+        max_length=50,
+        help_text="서비스 이름 (예: I1250)",
+        null=True, blank=True  # 필수 아님으로 변경
+    )
 
     def __str__(self):
         return self.name
