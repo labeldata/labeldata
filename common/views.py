@@ -251,85 +251,90 @@ def call_imported_food_api_endpoint(request, pk):
     base_url = endpoint.url
     num_of_rows = 100
     max_pages = 100
-    start_date = '20220101'
-    end_date = '20250430'
+    start_date = '20250101'
+    end_date = '20251201'
     total_saved = 0
     headers = None
 
     session = requests.Session()
     debug_responses = []
 
+    categories = ["가공식품", "식품첨가물"]
+
     try:
-        for page_no in range(1, max_pages + 1):
-            url = (
-                f"{base_url}?serviceKey={service_key}"
-                f"&pageNo={page_no}&numOfRows={num_of_rows}&type=json"
-                f"&procsDtmStart={start_date}&procsDtmEnd={end_date}"
-            )
-            print(url)
-            logger.info(f"ImportedFood API 요청: {url}")
-            response = session.get(url, timeout=60)
-            debug_responses.append({
-                "page": page_no,
-                "status_code": response.status_code,
-                "text_head": response.text[:1000]
-            })
-            if response.status_code != 200:
-                logger.error(f"Unexpected status code: {response.status_code}")
-                break
-
-            try:
-                data = response.json()
-            except Exception as e:
-                logger.error(f"JSON 파싱 오류: {e}")
-                break
-
-            body = data.get("body", {})
-            items_container = body.get("items", [])
-            if isinstance(items_container, dict):
-                items = items_container.get("item", [])
-            elif isinstance(items_container, list):
-                items = items_container
-            else:
-                items = []
-
-            if isinstance(items, dict):
-                items = [items]
-
-            if items and isinstance(items[0], dict) and "item" in items[0]:
-                items = [i["item"] for i in items if isinstance(i, dict) and "item" in i]
-
-            if not items:
-                logger.info(f"No more items at page {page_no}.")
-                break
-
-            for obj in items:
-                # 중복 체크 기준 필드 (strip, None 처리, 모두 str로 변환)
-                lookup = dict(
-                    bsn_ofc_name=(obj.get('BSN_OFC_NM') or '').strip(),
-                    prduct_korean_nm=(obj.get('PRDUCT_KOREAN_NM') or '').strip(),
-                    procs_dtm=(obj.get('PROCS_DTM') or '').strip(),
-                    ovsmnfst_nm=(obj.get('OVSMNFST_NM') or '').strip(),
+        for category in categories:
+            for page_no in range(1, max_pages + 1):
+                url = (
+                    f"{base_url}?serviceKey={service_key}"
+                    f"&pageNo={page_no}&numOfRows={num_of_rows}&type=json"
+                    f"&dclPrductSeCdNm={category}"
+                    f"&procsDtmStart={start_date}&procsDtmEnd={end_date}"
                 )
-                # defaults에서 lookup에 포함된 필드는 제거 (중복 방지)
-                defaults = {
-                    model_field: obj.get(api_field, '')
-                    for model_field, api_field in field_mapping.items()
-                    if model_field not in lookup
-                }
-                # DB에도 동일하게 strip해서 비교
-                qs = ModelClass.objects.filter(
-                    bsn_ofc_name=lookup['bsn_ofc_name'],
-                    prduct_korean_nm=lookup['prduct_korean_nm'],
-                    procs_dtm=lookup['procs_dtm'],
-                    ovsmnfst_nm=lookup['ovsmnfst_nm'],
-                )
-                if qs.exists():
-                    qs.update(**defaults)
+                print(url)
+                logger.info(f"ImportedFood API 요청: {url}")
+                response = session.get(url, timeout=60)
+                debug_responses.append({
+                    "category": category,
+                    "page": page_no,
+                    "status_code": response.status_code,
+                    "text_head": response.text[:1000]
+                })
+                if response.status_code != 200:
+                    logger.error(f"Unexpected status code: {response.status_code}")
+                    break
+
+                try:
+                    data = response.json()
+                except Exception as e:
+                    logger.error(f"JSON 파싱 오류: {e}")
+                    break
+
+                body = data.get("body", {})
+                items_container = body.get("items", [])
+                if isinstance(items_container, dict):
+                    items = items_container.get("item", [])
+                elif isinstance(items_container, list):
+                    items = items_container
                 else:
-                    ModelClass.objects.create(**lookup, **defaults)
-                    total_saved += 1
-            logger.info(f"Page {page_no} 저장 완료")
+                    items = []
+
+                if isinstance(items, dict):
+                    items = [items]
+
+                if items and isinstance(items[0], dict) and "item" in items[0]:
+                    items = [i["item"] for i in items if isinstance(i, dict) and "item" in i]
+
+                if not items:
+                    logger.info(f"No more items at page {page_no} for category {category}.")
+                    break
+
+                for obj in items:
+                    # 중복 체크 기준 필드 (strip, None 처리, 모두 str로 변환)
+                    lookup = dict(
+                        bsn_ofc_name=(obj.get('BSN_OFC_NM') or '').strip(),
+                        prduct_korean_nm=(obj.get('PRDUCT_KOREAN_NM') or '').strip(),
+                        procs_dtm=(obj.get('PROCS_DTM') or '').strip(),
+                        ovsmnfst_nm=(obj.get('OVSMNFST_NM') or '').strip(),
+                    )
+                    # defaults에서 lookup에 포함된 필드는 제거 (중복 방지)
+                    defaults = {
+                        model_field: obj.get(api_field, '')
+                        for model_field, api_field in field_mapping.items()
+                        if model_field not in lookup
+                    }
+                    # DB에도 동일하게 strip해서 비교
+                    qs = ModelClass.objects.filter(
+                        bsn_ofc_name=lookup['bsn_ofc_name'],
+                        prduct_korean_nm=lookup['prduct_korean_nm'],
+                        procs_dtm=lookup['procs_dtm'],
+                        ovsmnfst_nm=lookup['ovsmnfst_nm'],
+                    )
+                    if qs.exists():
+                        qs.update(**defaults)
+                    else:
+                        ModelClass.objects.create(**lookup, **defaults)
+                        total_saved += 1
+                logger.info(f"Page {page_no} 저장 완료 (category={category})")
         endpoint.last_called_at = now()
         endpoint.last_status = "success"
         endpoint.save()

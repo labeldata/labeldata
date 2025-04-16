@@ -349,7 +349,7 @@ class ImportedFood(models.Model):
 
     dcl_prduct_se_cd_nm = models.CharField(max_length=100, verbose_name="제품구분", null=True, blank=True)
     bsn_ofc_name = models.CharField(max_length=100, verbose_name="수입업체명")
-    prduct_korean_nm = models.CharField(max_length=100, verbose_name="제품명(한글)")
+    prduct_korean_nm = models.CharField(max_length=300, verbose_name="제품명(한글)")
     prduct_nm = models.TextField(verbose_name="제품명(영문)", null=True, blank=True)
     expirde_dtm = models.CharField(max_length=50, verbose_name="유통기한", help_text="yyyymmdd", null=True, blank=True)
     procs_dtm = models.CharField(max_length=8, verbose_name="수입신고일자", help_text="yyyymmdd", null=True, blank=True)
