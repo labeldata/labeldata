@@ -130,6 +130,27 @@ function sendNutritionDataToParent() {
       const baseAmount = document.getElementById('base_amount').value;
       const baseUnit = document.getElementById('base_amount_unit').value;
       const servings = document.getElementById('servings_per_package').value;
+
+      // nutrition_items 데이터를 배열 형식으로 준비
+      const nutritionItems = [];
+      nutrients.forEach(n => {
+        const val = document.getElementById(`input_${n.id}`)?.value;
+        const unit = document.getElementById(`unit_${n.id}`)?.value;
+        if (val && !isNaN(parseFloat(val))) {
+          const formattedValue = `${comma(parseFloat(val))}${unit}`;
+          let dv = '';
+          if (n.limit) {
+            const percent = Math.round((parseFloat(val) / n.limit) * 100);
+            dv = `${percent}%`;
+          }
+          nutritionItems.push({
+            label: n.label,
+            value: formattedValue,
+            dv: dv
+          });
+        }
+      });
+
       const nutritionValues = {};
       nutrients.forEach(n => {
         const val = document.getElementById(`input_${n.id}`)?.value;
@@ -138,6 +159,7 @@ function sendNutritionDataToParent() {
           nutritionValues[n.id] = { value: val, unit: unit };
         }
       });
+
       const fieldMapping = {
         'base_amount': 'serving_size',
         'base_amount_unit': 'serving_size_unit',
@@ -153,10 +175,19 @@ function sendNutritionDataToParent() {
         'cholesterol': 'cholesterols',
         'protein': 'proteins'
       };
+
+      // 부모 창의 폼 필드에 데이터 설정
       window.opener.document.querySelector('input[name="serving_size"]').value = baseAmount;
       window.opener.document.querySelector('input[name="serving_size_unit"]').value = baseUnit;
       window.opener.document.querySelector('input[name="units_per_package"]').value = servings;
       window.opener.document.querySelector('input[name="nutrition_display_unit"]').value = displayUnit;
+
+      // nutrition_items 데이터를 부모 창에 전달
+      const nutritionItemsInput = window.opener.document.querySelector('input[name="nutrition_items"]');
+      if (nutritionItemsInput) {
+        nutritionItemsInput.value = JSON.stringify(nutritionItems);
+      }
+
       Object.keys(nutritionValues).forEach(key => {
         const formFieldName = fieldMapping[key];
         if (formFieldName) {
@@ -166,6 +197,7 @@ function sendNutritionDataToParent() {
           if (unitField) unitField.value = nutritionValues[key].unit;
         }
       });
+
       const labelId = window.opener.document.getElementById('label_id')?.value;
       if (labelId) {
         const nutritionData = {
@@ -175,6 +207,7 @@ function sendNutritionDataToParent() {
           units_per_package: servings,
           nutrition_display_unit: displayUnit,
           nutritions: window.nutritionText,
+          nutrition_items: nutritionItems // nutrition_items 추가
         };
         Object.keys(nutritionValues).forEach(key => {
           const formFieldName = fieldMapping[key];
@@ -183,6 +216,7 @@ function sendNutritionDataToParent() {
             nutritionData[`${formFieldName}_unit`] = nutritionValues[key].unit;
           }
         });
+
         fetch('/label/save-nutrition/', {
           method: 'POST',
           headers: {

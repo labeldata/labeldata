@@ -116,14 +116,6 @@ document.addEventListener('DOMContentLoaded', function () {
     openPopup('/label/phrases/', 'phrasePopup', 1100, 900);
   };
 
-  window.openPreviewPopup = function () {
-    const labelId = document.getElementById('label_id')?.value;
-    if (!labelId) return alert('라벨이 저장되지 않았습니다.');
-    const queryString = new URLSearchParams();
-    document.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => queryString.append(chk.name, 'true'));
-    openPopup(`/label/preview/?label_id=${labelId}&${queryString.toString()}`, 'previewPopup', 1400, 900);
-  };
-
   window.addEventListener('message', function (e) {
     if (e.data.type !== 'applyPhrases') return;
     console.log('문구 적용 메시지 수신:', e.data);
@@ -872,4 +864,57 @@ document.addEventListener('DOMContentLoaded', function () {
 
     updateSummary();
   });
+});
+
+// 미리보기 팝업 함수 추가
+window.openPreviewPopup = function() {
+    const form = document.getElementById("labelForm");
+    if (!form) {
+        console.error("Label form not found");
+        return;
+    }
+
+    // 폼 데이터 수집
+    const formData = new FormData(form);
+    const queryParams = new URLSearchParams();
+
+    // 체크박스 상태 추가
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        queryParams.append(checkbox.name, checkbox.checked ? "true" : "false");
+        console.log(`Checkbox ${checkbox.name}: ${checkbox.checked}`);
+    });
+
+    // 일반 입력 필드 데이터 추가
+    formData.forEach((value, key) => {
+        if (value) {
+            queryParams.append(key, value);
+            console.log(`Form field ${key}: ${value}`);
+        }
+    });
+
+    const url = `/label/preview/?${queryParams.toString()}`;
+    console.log("Preview URL:", url);
+
+    const width = 1100;
+    const height = 900;
+    const left = (window.innerWidth - width) / 2;
+    const top = (window.innerHeight - height) / 2;
+
+    const popup = window.open(
+        url, 
+        "previewPopup",
+        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
+    );
+
+    if (!popup) {
+        alert("팝업이 차단되었습니다. 팝업 차단을 해제해주세요.");
+    }
+};
+
+// 이벤트 리스너 등록
+$(document).ready(function() {
+    // 미리보기 버튼 이벤트 리스너
+    $('.preview-btn').on('click', function() {
+        window.openPreviewPopup();
+    });
 });

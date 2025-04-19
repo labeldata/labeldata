@@ -5,7 +5,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
 from django.db.models import Q
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.core.exceptions import ObjectDoesNotExist
+from django.http import JsonResponse, HttpResponseBadRequest
 from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
 from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase
@@ -16,6 +17,7 @@ from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS  # FIELD_REGULATIONS �
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
 from rapidfuzz import fuzz  # fuzzywuzzy 대신 rapidfuzz 사용
+from django.core.serializers.json import DjangoJSONEncoder
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -727,7 +729,7 @@ def delete_my_ingredient(request, ingredient_id):
 def search_ingredient_add_row(request):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
-    
+
     try:
         data = json.loads(request.body)
         name = data.get('ingredient_name', '').strip()
@@ -739,11 +741,11 @@ def search_ingredient_add_row(request):
         if name:
             qs = qs.filter(prdlst_nm__icontains=name)
         if report:
-            qs = qs.filter(prdlst_report_no__icontains=report)
+            qs = qs.filter(prdlst_report_no__icontains=report)  
         if food_type:
-            qs = qs.filter(prdlst_dcnm__icontains=food_type)
+            qs = qs.filter(prdlst_dcnm__icontains(food_type))    
         if manufacturer:
-            qs = qs.filter(bssh_nm__icontains=manufacturer)
+            qs = qs.filter(bssh_nm__icontains(manufacturer))     
         
         ingredients = list(qs.values(
             'prdlst_nm',
@@ -832,7 +834,7 @@ def food_items_count(request):
 @login_required
 def my_labels_count(request):
     total = MyLabel.objects.filter(user_id=request.user).count()
-    one_week_ago = datetime.now() - timedelta(days=7)
+    one_week_ago = datetime.now() - timedelta(days(7))
     new_count = MyLabel.objects.filter(user_id=request.user, update_datetime__gte=one_week_ago).count()
     total_formatted = f"{total:,}"
     return JsonResponse({'total': total_formatted, 'new': new_count})
@@ -1302,3 +1304,79 @@ def phrase_suggestions(request):
     except Exception as e:
         logger.error(f"phrase_suggestions error: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def preview_popup(request):
+    try:
+        # preview_items 생성
+        preview_items = []
+        fields = [
+            ('my_label_name', 'chk_label_nm', '라벨명'),
+            ('prdlst_dcnm', 'chk_prdlst_dcnm', '식품유형'),
+            ('prdlst_nm', 'chk_prdlst_nm', '제품명'),
+            ('ingredient_info', 'chk_ingredients_info', '성분명 및 함량'),
+            ('content_weight', 'chk_content_weight', '내용량'),
+            ('weight_calorie', 'chk_weight_calorie', '내용량(열량)'),
+            ('prdlst_report_no', 'chk_prdlst_report_no', '품목보고번호'),
+            ('country_of_origin', 'chk_country_of_origin', '원산지'),
+            ('storage_method', 'chk_storage_method', '보관방법'),
+            ('frmlc_mtrqlt', 'chk_frmlc_mtrqlt', '포장재질'),
+            ('bssh_nm', 'chk_manufacturer_info', '제조원 소재지'),
+            ('distributor_address', 'chk_distributor_address', '유통전문판매원'),
+            ('repacker_address', 'chk_repacker_address', '소분원'),
+            ('importer_address', 'chk_importer_address', '수입원'),
+            ('pog_daycnt', 'chk_date_info', '소비기한'),
+            ('rawmtrl_nm_display', 'chk_rawmtrl_nm_display', '원재료명'),
+            ('cautions', 'chk_cautions', '주의사항'),
+            ('additional_info', 'chk_additional_info', '기타표시사항')
+        ]
+
+        for idx, (field_name, checkbox_name, label) in enumerate(fields):
+            if request.GET.get(checkbox_name) == 'true':
+                value = request.GET.get(field_name)
+                if value and value.lower() != 'none':
+                    preview_items.append({
+                        'id': f'item_{idx}',
+                        'label': label,
+                        'value': value
+                    })
+
+        # 영양성분 데이터 준비
+        nutrition_items = []
+        if request.GET.get('chk_calories') == 'true':
+            nutrition_fields = [
+                ('calories', '열량', 'calories_unit'),
+                ('natriums', '나트륨', 'natriums_unit'),
+                ('carbohydrates', '탄수화물', 'carbohydrates_unit'),
+                ('sugars', '당류', 'sugars_unit'),
+                ('fats', '지방', 'fats_unit'),
+                ('trans_fats', '트랜스지방', 'trans_fats_unit'),
+                ('saturated_fats', '포화지방', 'saturated_fats_unit'),
+                ('cholesterols', '콜레스테롤', 'cholesterols_unit'),
+                ('proteins', '단백질', 'proteins_unit')
+            ]
+            
+            for field, label, unit_field in nutrition_fields:
+                value = request.GET.get(field)
+                unit = request.GET.get(unit_field, '')
+                if value and value.lower() != 'none':
+                    nutrition_items.append({
+                        'label': label,
+                        'value': f"{value} {unit}",
+                        'dv': ''  # 일일권장량 대비 비율은 필요시 추가
+                    })
+
+        context = {
+            'preview_items': json.dumps(preview_items, ensure_ascii=False),
+            'nutrition_items': json.dumps(nutrition_items, ensure_ascii=False),
+            'allergens': json.dumps([], ensure_ascii=False),  # 알레르기 유발물질 목록
+            'origins': json.dumps([], ensure_ascii=False)     # 원산지 목록
+        }
+
+        print("Preview context:", context)  # 디버깅용
+        return render(request, 'label/label_preview.html', context)
+
+    except Exception as e:
+        print(f"Preview error: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)

@@ -27,7 +27,8 @@ urlpatterns = [
     path('phrases/manage/', views.manage_phrases, name='manage_phrase'),
     path('phrases/reorder/', views.reorder_phrases, name='reorder_phrases'),
     path('phrases/', views.phrase_popup, name='phrase_popup'),
-    path('phrases/suggestions/', views.phrase_suggestions, name='phrase_suggestions'),  # 추가
+    path('phrases/suggestions/', views.phrase_suggestions, name='phrase_suggestions'),
+    path('preview/', views.preview_popup, name='preview_popup'),
 
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
     path('get-food-group/', views.get_food_group, name='get_food_group'),

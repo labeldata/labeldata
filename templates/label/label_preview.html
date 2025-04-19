@@ -1,69 +1,664 @@
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
-
-<div class="container mt-4">
-    <h2 class="mb-4">라벨 미리보기</h2>
-    
-    <div class="preview-container">
-        <div id="preview-area" class="preview-box">
-            <ul id="sortable-list" class="list-group">
-                <!-- 동적으로 항목이 추가됨 -->
-            </ul>
-        </div>
-    </div>
+<!DOCTYPE html>
+{% load static %}
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>라벨 미리보기</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{% static 'css/popup.css' %}" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-beautiful-dnd@13/dist/react-beautiful-dnd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="{% static 'js/label_preview.js' %}"></script>
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.8rem;
+      color: #495057;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .popup-title {
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: #495057;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
+      margin-bottom: 10px;
+    }
+    .setting-row label {
+      min-width: 50px;
+      font-weight: 500;
+      margin: 0;
+    }
+    .setting-row .form-control {
+      font-size: 0.8rem;
+      max-width: 50px;
+    }
+    .setting-row .form-select {
+      font-size: 0.8rem;
+      max-width: 100px;
+    }
+    .preview-container {
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 20px;
+      background-color: #fff;
+    }
+    .highlight-allergen {
+      background-color: #fff4e6;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .highlight-origin {
+      font-weight: bold;
+    }
+    .draggable.dragging {
+      background-color: #f8f9fa;
+      border-left: 3px solid #2667ff;
+    }
+    .droppable.is-over {
+      background-color: #f1f3f5;
+      border: 2px dashed #2667ff;
+    }
+    .nutrition-table {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.8rem;
+      color: #495057;
+      font-weight: 500;
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .nutrition-table th, .nutrition-table td {
+      border: 1px solid #dee2e6;
+      padding: 6px;
+    }
+    .nutrition-table th {
+      background-color: #e9ecef;
+      font-weight: 600;
+    }
+    .summary-header, .summary-footer {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.8rem;
+      color: #495057;
+      font-weight: 500;
+      margin: 10px 0;
+    }
+    .preview-container .droppable {
+      min-height: 100px;
+    }
+    .preview-container .draggable {
+      padding: 8px;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+      margin-bottom: 8px;
+    }
+    .preview-container .draggable.dragging {
+      background-color: #e9ecef;
+      border-left: 3px solid #2667ff;
+    }
+    .preview-container.horizontal {
+      display: flex;
+      gap: 24px;
+    }
+    .preview-container.horizontal .section {
+      width: 50%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+    .preview-container.vertical {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .preview-container.vertical .section {
+      width: 100%;
+    }
+    .preview-container .paragraph-view {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .preview-container .paragraph-view .draggable {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .preview-container table td:first-child {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 150px;
+    }
+    .preview-container table td[colspan="2"]:first-child {
+      width: 30%;
+      max-width: 200px;
+      min-width: 100px;
+    }
+    .preview-container table td[colspan="2"]:not(:first-child) {
+      width: 70%;
+      max-width: none;
+    }
+    .preview-container table td:not([colspan]) {
+      width: 25%;
+      max-width: 150px;
+      box-sizing: border-box;
+    }
+    .preview-container table td[colspan="2"] {
+      border-right: none;
+    }
+    @media (max-width: 768px) {
+      .preview-container.horizontal {
+        flex-direction: column;
+      }
+      .preview-container.horizontal .section {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="container-fluid" style="max-width: 1100px; padding: 30px;">
+  <div id="root"></div>
 </div>
 
-<style>
-    .preview-container {
-        border: 2px solid #007bff;
-        padding: 20px;
-        min-height: 500px;
-        background-color: #f8f9fa;
-        resize: both;
-        overflow: auto;
-    }
+<!-- JSON 데이터를 HTML에 삽입 -->
+{{ allergens | json_script:"allergens-data" }}
+{{ origins | json_script:"origins-data" }}
+{{ preview_items | json_script:"preview-items-data" }}
+{{ nutrition_items | json_script:"nutrition-items-data" }}
 
-    .sortable-item {
-        padding: 10px;
-        margin-bottom: 10px;
-        border: 1px solid #ddd;
-        background-color: white;
-        cursor: grab;
-        border-radius: 4px;
-    }
-</style>
-
-<script>
-  document.addEventListener("DOMContentLoaded", function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const labelId = "{{ label.my_label_id }}";
+<script type="text/babel">
+  {% verbatim %}
+  const { useState, useEffect, useRef } = React;
+  const { DragDropContext, Droppable, Draggable } = window.ReactBeautifulDnd;
+  const { jsPDF } = window.jspdf;
   
-      if (!labelId) {
-          alert("라벨 ID가 제공되지 않았습니다.");
-          return;
+  // JSON 데이터 파싱
+  let allergenList = [];
+  let originList = [];
+  let previewItems = [];
+  let nutritionItems = [];
+  let formData = {};
+  
+  // JSON 데이터 파싱 부분 수정
+try {
+  const previewData = document.getElementById('preview-items-data');
+  const nutritionData = document.getElementById('nutrition-items-data');
+  const allergensData = document.getElementById('allergens-data');
+  const originsData = document.getElementById('origins-data');
+
+  console.log('Raw preview data:', {
+      preview_items: previewData?.textContent,
+      nutrition_items: nutritionData?.textContent,
+      allergens: allergensData?.textContent,
+      origins: originsData?.textContent
+  });
+
+  allergenList = JSON.parse(allergensData?.textContent || '[]');
+  originList = JSON.parse(originsData?.textContent || '[]');
+  previewItems = JSON.parse(previewData?.textContent || '[]');
+  nutritionItems = JSON.parse(nutritionData?.textContent || '[]');
+
+  // 데이터 검증 로깅
+  console.log('Parsed data:', {
+      previewItems_length: previewItems.length,
+      nutritionItems_length: nutritionItems.length,
+      allergenList_length: allergenList.length,
+      originList_length: originList.length
+  });
+
+} catch (e) {
+  console.error('JSON 파싱 오류:', e);
+  console.error('Error details:', e.message);
+}
+  
+  const PreviewPopup = () => {
+      const defaultSettings = {
+          layout: 'horizontal',
+          fontSize: 10,
+          letterSpacing: 5,
+          fontStretch: 90,
+          dimensions: { width: 27, height: 10 },
+          isTableView: true
+      };
+  
+      const [items, setItems] = useState(Array.isArray(previewItems) ? previewItems : []);
+      const [nutrition, setNutrition] = useState(Array.isArray(nutritionItems) ? nutritionItems : []);
+      const [layout, setLayout] = useState(defaultSettings.layout);
+      const [fontSize, setFontSize] = useState(defaultSettings.fontSize);
+      const [letterSpacing, setLetterSpacing] = useState(defaultSettings.letterSpacing);
+      const [fontStretch, setFontStretch] = useState(defaultSettings.fontStretch);
+      const [isTableView, setIsTableView] = useState(defaultSettings.isTableView);
+      const [dimensions, setDimensions] = useState(defaultSettings.dimensions);
+      const contentRef = useRef(null);
+  
+      // 텍스트 너비 계산
+      const getTextWidth = (text, fontSize) => {
+          if (!text) return 0;
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          context.font = `${fontSize}px 'Noto Sans KR', sans-serif`;
+          return context.measureText(text).width;
+      };
+  
+      // 텍스트 줄 수 계산
+      const getTextLineCount = (text, fontSize, maxWidth) => {
+          if (!text) return 1;
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          context.font = `${fontSize}px 'Noto Sans KR', sans-serif`;
+          const words = text.split(' ');
+          let line = '';
+          let lineCount = 1;
+          let currentWidth = 0;
+  
+          for (let word of words) {
+              const wordWidth = context.measureText(word + ' ').width;
+              if (currentWidth + wordWidth > maxWidth) {
+                  lineCount++;
+                  currentWidth = wordWidth;
+                  line = word + ' ';
+              } else {
+                  currentWidth += wordWidth;
+                  line += word + ' ';
+              }
+          }
+          return lineCount;
+      };
+  
+      useEffect(() => {
+          try {
+              const savedSettings = localStorage.getItem('labelPreviewSettings');
+              if (savedSettings) {
+                  const parsed = JSON.parse(savedSettings);
+                  setLayout(parsed.layout || defaultSettings.layout);
+                  setFontSize(Number(parsed.fontSize) || defaultSettings.fontSize);
+                  setLetterSpacing(Number(parsed.letterSpacing) || defaultSettings.letterSpacing);
+                  setFontStretch(Number(parsed.fontStretch) || defaultSettings.fontStretch);
+                  setDimensions(parsed.dimensions || defaultSettings.dimensions);
+                  setIsTableView(parsed.isTableView !== undefined ? parsed.isTableView : defaultSettings.isTableView);
+              }
+          } catch (e) {
+              console.error('설정 로드 실패:', e);
+          }
+      }, []);
+  
+      const onDragEnd = (result) => {
+          if (!result.destination) return;
+          if (!Array.isArray(items)) {
+              console.warn('items가 배열이 아님, previewItems로 재설정');
+              setItems(Array.isArray(previewItems) ? previewItems : []);
+              return;
+          }
+          const reordered = Array.from(items);
+          const [moved] = reordered.splice(result.source.index, 1);
+          reordered.splice(result.destination.index, 0, moved);
+          setItems(reordered);
+      };
+  
+      const saveSettings = () => {
+          try {
+              const settings = {
+                  layout,
+                  fontSize,
+                  letterSpacing,
+                  fontStretch,
+                  dimensions,
+                  isTableView
+              };
+              localStorage.setItem('labelPreviewSettings', JSON.stringify(settings));
+              alert('설정이 저장되었습니다.');
+          } catch (e) {
+              console.error('설정 저장 실패:', e);
+              alert('설정 저장에 실패했습니다.');
+          }
+      };
+  
+      const downloadPDF = async () => {
+          try {
+              const canvas = await html2canvas(contentRef.current, { scale: 2 });
+              const pdf = new jsPDF('p', 'mm', 'a4');
+              const imgData = canvas.toDataURL('image/png');
+              const imgWidth = 180;
+              const imgHeight = (canvas.height * imgWidth) / canvas.width;
+              pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+              pdf.save('label_preview.pdf');
+          } catch (e) {
+              console.error('PDF 생성 실패:', e);
+              alert('PDF 생성에 실패했습니다.');
+          }
+      };
+  
+      const highlightText = (text) => {
+          if (!text) return '';
+          let highlighted = text;
+          allergenList.forEach((allergen) => {
+              highlighted = highlighted.replace(new RegExp(`\\b${allergen}\\b`, 'g'), `<span class='highlight-allergen'>${allergen}</span>`);
+          });
+          originList.forEach((origin) => {
+              highlighted = highlighted.replace(new RegExp(`\\b${origin}\\b`, 'g'), `<span class="highlight-origin">${origin}</span>`);
+          });
+          return highlighted;
+      };
+  
+      // 항목 쌍으로 묶기
+      const pairedItems = [];
+      if (Array.isArray(items)) {
+          const tableWidth = 500;
+          const maxWidthPerItem = tableWidth * 0.5;
+          const cellWidth = tableWidth * 0.25;
+  
+          for (let i = 0; i < items.length; i++) {
+              const item1 = items[i];
+              if (!item1 || !item1.label || !item1.value) {
+                  console.warn(`유효하지 않은 항목 at index ${i}:`, item1);
+                  continue;
+              }
+  
+              const text1 = item1.label + (item1.value || '');
+              const width1 = getTextWidth(text1, fontSize);
+              const lineCount1 = getTextLineCount(item1.value || '', fontSize, cellWidth);
+  
+              if (width1 >= maxWidthPerItem || lineCount1 >= 2) {
+                  pairedItems.push([item1]);
+                  continue;
+              }
+  
+              const item2 = items[i + 1];
+              if (item2 && item2.label && item2.value) {
+                  const text2 = item2.label + (item2.value || '');
+                  const width2 = getTextWidth(text2, fontSize);
+                  const lineCount2 = getTextLineCount(item2.value || '', fontSize, cellWidth);
+  
+                  if (width2 <= maxWidthPerItem && lineCount2 < 2) {
+                      pairedItems.push([item1, item2]);
+                      i++;
+                      continue;
+                  }
+              }
+  
+              pairedItems.push([item1]);
+          }
       }
   
-      fetch(`/label/preview-data/${labelId}/`)
-          .then(response => response.json())
-          .then(data => {
-              const sortableList = document.getElementById("sortable-list");
-              sortableList.innerHTML = "";
+      return (
+          <div>
+              <div className="header">
+                  <div className="popup-title">한글 표시사항 미리보기</div>
+                  <div className="action-buttons">
+                      <button onClick={saveSettings} className="btn btn-outline-primary btn-sm">설정 저장</button>
+                      <button onClick={downloadPDF} className="btn btn-outline-primary btn-sm">PDF 저장</button>
+                      <button onClick={() => window.close()} className="btn btn-outline-secondary btn-sm">닫기</button>
+                  </div>
+              </div>
+              <hr />
+              <section className="mb-3">
+                  <div className="setting-row">
+                      <div className="d-flex align-items-center gap-3 flex-wrap">
+                          <div className="d-flex align-items-center gap-2">
+                              <label>뷰 선택</label>
+                              <select
+                                  value={isTableView ? 'table' : 'paragraph'}
+                                  onChange={(e) => setIsTableView(e.target.value === 'table')}
+                                  className="form-select form-select-sm"
+                              >
+                                  <option value="table">표 뷰</option>
+                                  <option value="paragraph">단락 뷰</option>
+                              </select>
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                              <label>레이아웃</label>
+                              <select value={layout} onChange={(e) => setLayout(e.target.value)} className="form-select form-select-sm">
+                                  <option value="horizontal">좌우 배치</option>
+                                  <option value="vertical">상하 배치</option>
+                              </select>
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                              <label>폰트 크기(px)</label>
+                              <input
+                                  type="number"
+                                  value={fontSize}
+                                  onChange={(e) => setFontSize(Number(e.target.value))}
+                                  className="form-control form-control-sm"
+                                  min="8"
+                                  max="20"
+                              />
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                              <label>자간(%)</label>
+                              <input
+                                  type="number"
+                                  value={letterSpacing}
+                                  onChange={(e) => setLetterSpacing(Number(e.target.value))}
+                                  className="form-control form-control-sm"
+                                  min="0"
+                                  max="20"
+                              />
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                              <label>장평(%)</label>
+                              <input
+                                  type="number"
+                                  value={fontStretch}
+                                  onChange={(e) => setFontStretch(Number(e.target.value))}
+                                  className="form-control form-control-sm"
+                                  min="50"
+                                  max="150"
+                              />
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                              <label>가로(cm)</label>
+                              <input
+                                  type="number"
+                                  value={dimensions.width}
+                                  onChange={(e) => setDimensions({ ...dimensions, width: Number(e.target.value) })}
+                                  className="form-control form-control-sm"
+                                  min="4"
+                                  max="30"
+                              />
+                          </div>
+                          <div className="d-flex align-items-center gap-2">
+                              <label>세로(cm)</label>
+                              <input
+                                  type="number"
+                                  value={dimensions.height}
+                                  onChange={(e) => setDimensions({ ...dimensions, height: Number(e.target.value) })}
+                                  className="form-control form-control-sm"
+                                  min="3"
+                                  max="20"
+                              />
+                          </div>
+                      </div>
+                  </div>
+              </section>
+              <hr />
+              <section className="bg-white rounded-4 shadow">
+                  <div className={`preview-container ${layout}`} ref={contentRef} style={{ width: `${dimensions.width}cm`, height: `${dimensions.height}cm` }}>
+                      <div className="section">
+                          <h6 className="font-weight-bold mb-2">식품위생법에 의한 한글표시사항</h6>
+                          <DragDropContext onDragEnd={onDragEnd}>
+                              <Droppable droppableId="infoList">
+                                  {(provided, snapshot) => (
+                                      <div
+                                          ref={provided.innerRef}
+                                          {...provided.droppableProps}
+                                          className={`droppable ${snapshot.isDraggingOver ? 'is-over' : ''}`}
+                                      >
+                                          {isTableView ? (
+                                              <table className="w-100 border">
+                                                  <tbody>
+                                                      {pairedItems.length > 0 ? (
+                                                          pairedItems.map((pair, pairIndex) => (
+                                                              <tr key={pairIndex}>
+                                                                  <Draggable
+                                                                      key={pair[0].id}
+                                                                      draggableId={String(pair[0].id)}
+                                                                      index={pairIndex * 2}
+                                                                  >
+                                                                      {(prov, snap) => (
+                                                                          <td
+                                                                              ref={prov.innerRef}
+                                                                              {...prov.draggableProps}
+                                                                              {...prov.dragHandleProps}
+                                                                              className={`border p-2 ${snap.isDragging ? 'dragging' : ''}`}
+                                                                              colSpan={pair[1] ? 1 : 2}
+                                                                              style={{
+                                                                                  fontSize: `${fontSize}px`,
+                                                                                  letterSpacing: `${letterSpacing}%`,
+                                                                                  fontStretch: `${fontStretch}%`,
+                                                                              }}
+                                                                          >
+                                                                              {pair[0].label}
+                                                                          </td>
+                                                                      )}
+                                                                  </Draggable>
+                                                                  <td
+                                                                      className="border p-2"
+                                                                      colSpan={pair[1] ? 1 : 2}
+                                                                      style={{
+                                                                          fontSize: `${fontSize}px`,
+                                                                          letterSpacing: `${letterSpacing}%`,
+                                                                          fontStretch: `${fontStretch}%`,
+                                                                      }}
+                                                                      dangerouslySetInnerHTML={{ __html: highlightText(pair[0].value) }}
+                                                                  />
+                                                                  {pair[1] && (
+                                                                      <>
+                                                                          <Draggable
+                                                                              key={pair[1].id}
+                                                                              draggableId={String(pair[1].id)}
+                                                                              index={pairIndex * 2 + 1}
+                                                                          >
+                                                                              {(prov, snap) => (
+                                                                                  <td
+                                                                                      ref={prov.innerRef}
+                                                                                      {...prov.draggableProps}
+                                                                                      {...prov.dragHandleProps}
+                                                                                      className={`border p-2 ${snap.isDragging ? 'dragging' : ''}`}
+                                                                                      style={{
+                                                                                          fontSize: `${fontSize}px`,
+                                                                                          letterSpacing: `${letterSpacing}%`,
+                                                                                          fontStretch: `${fontStretch}%`,
+                                                                                      }}
+                                                                                  >
+                                                                                      {pair[1].label}
+                                                                                  </td>
+                                                                              )}
+                                                                          </Draggable>
+                                                                          <td
+                                                                              className="border p-2"
+                                                                              style={{
+                                                                                  fontSize: `${fontSize}px`,
+                                                                                  letterSpacing: `${letterSpacing}%`,
+                                                                                  fontStretch: `${fontStretch}%`,
+                                                                              }}
+                                                                              dangerouslySetInnerHTML={{ __html: highlightText(pair[1].value) }}
+                                                                          />
+                                                                      </>
+                                                                  )}
+                                                              </tr>
+                                                          ))
+                                                      ) : (
+                                                          <tr>
+                                                              <td colSpan="2">표시사항 데이터가 없습니다.</td>
+                                                          </tr>
+                                                      )}
+                                                      {provided.placeholder}
+                                                  </tbody>
+                                              </table>
+                                          ) : (
+                                              <div className="paragraph-view">
+                                                  {Array.isArray(items) && items.length > 0 ? (
+                                                      items.map((item, index) => (
+                                                          <Draggable key={item.id} draggableId={String(item.id)} index={index}>
+                                                              {(prov, snap) => (
+                                                                  <div
+                                                                      ref={prov.innerRef}
+                                                                      {...prov.draggableProps}
+                                                                      {...prov.dragHandleProps}
+                                                                      className={`border p-2 rounded ${snap.isDragging ? 'dragging' : ''}`}
+                                                                      style={{
+                                                                          fontSize: `${fontSize}px`,
+                                                                          letterSpacing: `${letterSpacing}%`,
+                                                                          fontStretch: `${fontStretch}%`,
+                                                                      }}
+                                                                  >
+                                                                      <strong>{item.label}:</strong>{' '}
+                                                                      <span dangerouslySetInnerHTML={{ __html: highlightText(item.value) }} />
+                                                                  </div>
+                                                              )}
+                                                          </Draggable>
+                                                      ))
+                                                  ) : (
+                                                      <div>표시사항 데이터가 없습니다.</div>
+                                                  )}
+                                                  {provided.placeholder}
+                                              </div>
+                                          )}
+                                      </div>
+                                  )}
+                              </Droppable>
+                          </DragDropContext>
+                      </div>
+                      <div className="section">
+                          <h6 className="font-weight-bold mb-2">영양성분</h6>
+                          <div className="summary-header">
+                              총 내용량당 영양성분
+                              {formData.serving_size && ` (1회 제공량: ${formData.serving_size} ${formData.serving_size_unit || ''})`}
+                              {formData.units_per_package && `, 총 ${formData.units_per_package}회 제공`}
+                          </div>
+                          <table className="nutrition-table">
+                              <thead>
+                                  <tr>
+                                      <th>성분</th>
+                                      <th>함량</th>
+                                      <th>기준치</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {Array.isArray(nutrition) && nutrition.length > 0 ? (
+                                      nutrition.map((n, idx) => (
+                                          <tr key={idx}>
+                                              <td>{n.label || '알 수 없음'}</td>
+                                              <td>{n.value || '-'}</td>
+                                              <td>{n.dv || '-'}</td>
+                                          </tr>
+                                      ))
+                                  ) : (
+                                      <tr>
+                                          <td colSpan="3">영양성분 데이터가 없습니다.</td>
+                                      </tr>
+                                  )}
+                              </tbody>
+                          </table>
+                          <div className="summary-footer">* 1일 영양성분 기준치에 대한 비율(%)은 2,000kcal 기준입니다.</div>
+                      </div>
+                  </div>
+              </section>
+          </div>
+      );
+  };
   
-              Object.keys(data).forEach(key => {
-                  const listItem = document.createElement("li");
-                  listItem.classList.add("list-group-item", "sortable-item");
-                  listItem.setAttribute("data-key", key);
-                  listItem.innerHTML = `<strong>${data[key].label}:</strong> ${data[key].value}`;
-                  sortableList.appendChild(listItem);
-              });
-  
-              new Sortable(sortableList, {
-                  animation: 150,
-                  onEnd: function (evt) {
-                      console.log("순서 변경됨", evt);
-                  }
-              });
-          })
-          .catch(error => console.error("데이터 로딩 실패:", error));
-  });
-  </script>
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(<PreviewPopup />);
+  {% endverbatim %}
+</script>
+</body>
+</html>

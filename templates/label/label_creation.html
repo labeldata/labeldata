@@ -4,8 +4,13 @@
 {% block title %}표시사항 작성{% endblock %}
 
 {% block content %}
-<!-- jQuery & Select2 -->
+<!-- jQuery 먼저 로드 -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- 그 다음 label_creation.js 로드 -->
+<script src="{% static 'js/label_creation.js' %}"></script>
+
+<!-- jQuery & Select2 -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
@@ -18,7 +23,6 @@
 <script id="regulations-data" type="application/json">
     {{ regulations_json|safe }}
 </script>
-<script src="{% static 'js/label_creation.js' %}"></script>
 
 
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
@@ -31,7 +35,7 @@
     <div class="d-flex align-items-center" style="gap: 10px;">
       <span class="recent-update">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
       <button type="submit" form="labelForm" class="btn btn-primary">저장</button>
-      <button type="button" class="btn btn-outline-secondary" onclick="openPreviewPopup()">미리보기</button>
+      <button type="button" class="btn btn-outline-secondary preview-btn">미리보기</button>
       <button type="button" class="btn btn-outline-info" onclick="copyLabel(document.getElementById('label_id').value)">복사</button>
       <button type="button" class="btn btn-outline-danger" onclick="deleteLabel(document.getElementById('label_id').value)">삭제</button>
     </div>
