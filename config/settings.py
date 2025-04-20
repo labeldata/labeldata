@@ -14,9 +14,12 @@ except NameError:
 
 # Load sensitive information from .env
 try:
-    SECRET_KEY = config('DJANGO_SECRET_KEY', default='your-default-secret-key')
-    DEBUG = config('DJANGO_DEBUG', default=True, cast=bool)
-    ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='127.0.0.1').split(',')
+    # SECRET_KEY = config('DJANGO_SECRET_KEY', default='your-default-secret-key')
+    # DEBUG = config('DJANGO_DEBUG', default=True, cast=bool)
+    # ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='127.0.0.1').split(',')
+    DEBUG = False
+    ALLOWED_HOSTS = ['labeldata.pythonanywhere.com']
+
 except UndefinedValueError as e:
     raise Exception("Missing environment variable: {}".format(e))
 
@@ -67,16 +70,24 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 DATABASES = {
+    # 'default': {
+    #     'ENGINE': 'django.db.backends.mysql',
+    #     'NAME': config('DB_NAME', default='labeldb'),
+    #     'USER': config('DB_USER', default='labeldata'),
+    #     'PASSWORD': config('DB_PASSWORD', default='labeldata1!'),
+    #     'HOST': config('DB_HOST', default='127.0.0.1'),
+    #     'PORT': config('DB_PORT', default='3306'),
+    #     'OPTIONS': {
+    #         'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"
+    #     },
+    # }
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('DB_NAME', default='labeldb'),
-        'USER': config('DB_USER', default='labeldata'),
-        'PASSWORD': config('DB_PASSWORD', default='labeldata1!'),
-        'HOST': config('DB_HOST', default='127.0.0.1'),
-        'PORT': config('DB_PORT', default='3306'),
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"
-        },
+        'NAME': 'labeldata$labeldb',
+        'USER': 'labeldata',
+        'PASSWORD': 'vmfhwprxm123!',
+        'HOST': 'yourusername.mysql.pythonanywhere-services.com',
+        'PORT': '3306',
     }
 }
 
