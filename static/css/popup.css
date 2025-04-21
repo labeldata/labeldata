@@ -184,3 +184,107 @@ label,
 .phrase-popup .delete-btn:hover {
   background-color: #c82333;
 }
+
+/* ====================================================
+   7. 표시사항 미리보기 스타일 (추가)
+==================================================== */
+.preview-container {
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 20px;
+  background-color: #fff;
+}
+
+.preview-container.horizontal {
+  display: flex;
+  gap: 24px;
+}
+
+.preview-container.horizontal .section {
+  width: 50%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.preview-container.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.preview-container.vertical .section {
+  width: 100%;
+}
+
+/* 항목명 1줄 제한 */
+.preview-container table td:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+/* 단독 행의 항목명 */
+.preview-container table td[colspan="2"]:first-child {
+  width: 30%;
+  max-width: 200px;
+  min-width: 100px;
+}
+
+/* 단독 행의 내용 */
+.preview-container table td[colspan="2"]:not(:first-child) {
+  width: 70%;
+  max-width: none;
+}
+
+/* 쌍 행의 셀 */
+.preview-container table td:not([colspan]) {
+  width: 25%;
+  max-width: 150px;
+  box-sizing: border-box;
+}
+
+/* 단독 행의 우측 테두리 제거 */
+.preview-container table td[colspan="2"] {
+  border-right: none;
+}
+
+@media (max-width: 768px) {
+  .preview-container.horizontal {
+    flex-direction: column;
+  }
+  .preview-container.horizontal .section {
+    width: 100%;
+  }
+}
+
+.nutrition-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.nutrition-table th,
+.nutrition-table td {
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.nutrition-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.long-content {
+    width: 75%;
+}
+
+.standard-content {
+    width: 25%;
+}
+
+.border-cell {
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
+}

@@ -37,6 +37,13 @@ class FoodItem(models.Model):
         return self.prdlst_report_no
    
 CATEGORY_CHOICES = [
+    ('label_name', '라벨명'),
+    ('food_type', '식품유형'),
+    ('product_name', '제품명'),
+    ('ingredient_info', '성분명 및 함량'),
+    ('content_weight', '내용량'),
+    ('weight_calorie', '내용량(열량)'),
+    ('report_no', '품목보고번호'),
     ('storage', '보관방법'),
     ('package', '용기.포장재질'),
     ('manufacturer', '제조원 소재지'),
@@ -135,8 +142,8 @@ class MyLabel(models.Model):
     #키 = 유저id + 문서 종류 + 문서번호로 생성
     #my_label_key = models.CharField(max_length=50, unique=True, editable=False, verbose_name="내 표시사항 키", primary_key=True)
 
-    food_group = models.CharField(max_length=100, verbose_name="식품군", null=True, blank=True)
-    food_type = models.CharField(max_length=100, verbose_name="식품유형", null=True, blank=True)
+    food_group = models.CharField(max_length=100, verbose_name="식품 대분류", null=True, blank=True)
+    food_type = models.CharField(max_length=100, verbose_name="식품 소분류", null=True, blank=True)
 
     preservation_type = models.CharField(max_length=100, verbose_name="장기보존식품", null=True, blank=True)
     processing_method = models.CharField(max_length=100, verbose_name="제조방법", null=True, blank=True)

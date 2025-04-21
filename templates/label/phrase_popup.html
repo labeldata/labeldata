@@ -1,3 +1,4 @@
+<!-- phrase_popup.html -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -12,12 +13,6 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 10px;
-      position: relative;
-    }
-    .action-buttons-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
     }
     .action-buttons-right {
       display: flex;
@@ -40,34 +35,37 @@
       z-index: 1000;
       max-height: 80vh;
       overflow-y: auto;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
     .suggestion-modal ul {
       list-style: none;
       padding: 0;
+      margin-bottom: 10px;
     }
     .suggestion-modal li {
-      padding: 5px;
+      padding: 8px;
       cursor: pointer;
+      border-bottom: 1px solid #eee;
     }
     .suggestion-modal li:hover {
       background: #f0f0f0;
     }
-    .phrase-item.selected {
-      border-left: 4px solid #2667ff;
-      background-color: #f8f9fa;
-    }
     .phrase-item {
-      padding: 5px;
+      padding: 8px;
       cursor: pointer;
       transition: background-color 0.2s;
     }
     .phrase-item:hover {
       background-color: #f1f3f5;
     }
+    .phrase-item.selected {
+      border-left: 4px solid #2667ff;
+      background-color: #f8f9fa;
+    }
     .input-container {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 8px;
     }
     .phrase-name, .phrase-content, .phrase-note {
       background-color: transparent;
@@ -76,8 +74,23 @@
     .phrase-name:not(:disabled), 
     .phrase-content:not(:disabled), 
     .phrase-note:not(:disabled) {
-      background-color: transparent;
+      background-color: white;
       border: 1px solid #ced4da;
+    }
+    .nav-tabs {
+      flex-wrap: wrap;
+      gap: 0.25rem 0.5rem;
+      border-bottom: none;
+      padding-bottom: 0.5rem;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .nav-tabs .nav-item {
+      margin-bottom: 0;
+    }
+    .nav-tabs .nav-link {
+      margin-bottom: -1px;
+      white-space: nowrap;
     }
   </style>
 </head>

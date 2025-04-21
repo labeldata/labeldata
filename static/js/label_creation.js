@@ -116,14 +116,6 @@ document.addEventListener('DOMContentLoaded', function () {
     openPopup('/label/phrases/', 'phrasePopup', 1100, 900);
   };
 
-  window.openPreviewPopup = function () {
-    const labelId = document.getElementById('label_id')?.value;
-    if (!labelId) return alert('라벨이 저장되지 않았습니다.');
-    const queryString = new URLSearchParams();
-    document.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => queryString.append(chk.name, 'true'));
-    openPopup(`/label/preview/?label_id=${labelId}&${queryString.toString()}`, 'previewPopup', 1400, 900);
-  };
-
   window.addEventListener('message', function (e) {
     if (e.data.type !== 'applyPhrases') return;
     console.log('문구 적용 메시지 수신:', e.data);
@@ -703,6 +695,13 @@ document.addEventListener('DOMContentLoaded', function () {
   // ------------------ 내문구 탭 기능 ------------------
   function getCategoryFromFieldName(fieldName) {
     const mapping = {
+        my_label_name: 'label_name',          // 추가
+        prdlst_dcnm: 'food_type',            // 추가
+        prdlst_nm: 'product_name',           // 추가
+        ingredient_info: 'ingredient_info',   // 추가
+        content_weight: 'content_weight',     // 추가
+        weight_calorie: 'weight_calorie',     // 추가
+        prdlst_report_no: 'report_no',       // 추가
       storage_method: 'storage',
       frmlc_mtrqlt: 'package',
       bssh_nm: 'manufacturer',
@@ -797,6 +796,7 @@ document.addEventListener('DOMContentLoaded', function () {
       prdlst_nm: 'prdlst_nm',
       ingredient_info: 'ingredients_info',
       content_weight: 'content_weight',
+      prdlst_report_no: 'report_no',  
       storage_method: 'storage',
       frmlc_mtrqlt: 'package',
       bssh_nm: 'manufacturer',
@@ -872,4 +872,133 @@ document.addEventListener('DOMContentLoaded', function () {
 
     updateSummary();
   });
+});
+
+// 미리보기 팝업 함수 추가
+window.openPreviewPopup = function() {
+    const form = document.getElementById("labelForm");
+    if (!form) {
+        console.error("Label form not found");
+        return;
+    }
+
+    // 라벨 ID 가져오기
+    const labelId = document.getElementById('label_id')?.value;
+    if (!labelId) {
+        alert('라벨을 먼저 저장해주세요.');
+        return;
+        }
+
+    // URL 생성
+    const url = `/label/preview/?label_id=${labelId}`;
+    console.log("Opening preview URL:", url);
+
+    // 팝업 설정
+    const width = 1100;
+    const height = 900;
+    const left = (window.innerWidth - width) / 2;
+    const top = (window.innerHeight - height) / 2;
+
+    // 팝업 열기
+    const popup = window.open(
+        url, 
+        "previewPopup",
+        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
+    );
+
+    if (!popup) {
+        alert("팝업이 차단되었습니다. 팝업 차단을 해제해주세요.");
+    }
+};
+
+// 이벤트 리스너 등록
+$(document).ready(function() {
+    // 미리보기 버튼 이벤트 리스너
+    $('.preview-btn').on('click', function() {
+        window.openPreviewPopup();
+    });
+});
+
+function saveCheckboxStates() {
+    const checkboxStates = {};
+    // 체크박스 상태 저장
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkboxStates[checkbox.id] = {
+            checked: checkbox.checked,
+            name: checkbox.name,
+            value: checkbox.value || ''
+        };
+    });
+    
+    // localStorage에 저장
+    try {
+        const labelId = document.getElementById('label_id')?.value;
+        if (labelId) {
+            localStorage.setItem(`checkboxStates_${labelId}`, JSON.stringify(checkboxStates));
+        }
+    } catch (e) {
+        console.error('체크박스 상태 저장 실패:', e);
+    }
+}
+
+function restoreCheckboxStates() {
+    try {
+        const labelId = document.getElementById('label_id')?.value;
+        if (!labelId) return;
+
+        const savedStates = localStorage.getItem(`checkboxStates_${labelId}`);
+        if (savedStates) {
+            const checkboxStates = JSON.parse(savedStates);
+            Object.keys(checkboxStates).forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox) {
+                    checkbox.checked = checkboxStates[id].checked;
+                    // 체크박스 상태에 따른 UI 업데이트
+                    if (checkbox.dispatchEvent) {
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.error('체크박스 상태 복원 실패:', e);
+    }
+}
+
+// 폼 제출 시 체크박스 상태도 함께 전송
+document.getElementById('labelForm').addEventListener('submit', function() {
+    const checkboxData = {};
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkboxData[checkbox.name] = checkbox.checked ? 'Y' : 'N';
+    });
+
+    // 히든 필드 추가 또는 업데이트
+    Object.keys(checkboxData).forEach(name => {
+        let hiddenField = this.querySelector(`input[type="hidden"][name="${name}_state"]`);
+        if (!hiddenField) {
+            hiddenField = document.createElement('input');
+            hiddenField.type = 'hidden';
+            hiddenField.name = `${name}_state`;
+            this.appendChild(hiddenField);
+        }
+        hiddenField.value = checkboxData[name];
+    });
+});
+
+// 저장 버튼 클릭 시 체크박스 상태 저장
+document.querySelector('button[type="submit"]').addEventListener('click', function() {
+    saveCheckboxStates();
+});
+
+// 페이지 로드 시 체크박스 상태 복원
+document.addEventListener('DOMContentLoaded', function() {
+    // ... 기존 초기화 코드 ...
+    restoreCheckboxStates();
+});
+
+// 탭 변경 시 체크박스 상태 저장
+document.querySelectorAll('.nav-link').forEach(tab => {
+    tab.addEventListener('show.bs.tab', function() {
+        saveCheckboxStates();
+    });
 });

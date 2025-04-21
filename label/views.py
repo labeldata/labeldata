@@ -190,6 +190,32 @@ def save_to_my_label(request, prdlst_report_no):
 
 @login_required
 def label_creation(request, label_id=None):
+    if request.method == 'POST':
+        # 체크박스 상태 처리
+        checkbox_states = {}
+        for key, value in request.POST.items():
+            if key.endswith('_state'):
+                original_name = key.replace('_state', '')
+                checkbox_states[original_name] = value
+        
+        if label_id:
+            label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+            form = LabelCreationForm(request.POST, instance=label)
+        else:
+            form = LabelCreationForm(request.POST)
+
+        if form.is_valid():
+            label = form.save(commit=False)
+            label.user_id = request.user
+            
+            # 체크박스 상태 저장
+            for field_name, state in checkbox_states.items():
+                if hasattr(label, field_name):
+                    setattr(label, field_name, state)
+            
+            label.save()
+            return redirect('label:label_creation', label_id=label.my_label_id)
+    
     has_ingredient_relations = False
     
     if label_id:
@@ -1136,6 +1162,13 @@ def food_type_settings(request):
 
 
 CATEGORY_CHOICES = [
+    ('label_name', '라벨명'),
+    ('food_type', '식품유형'),
+    ('product_name', '제품명'),
+    ('ingredient_info', '성분명 및 함량'),
+    ('content_weight', '내용량'),
+    ('weight_calorie', '내용량(열량)'),
+    ('report_no', '품목보고번호'),
     ('storage', '보관방법'),
     ('package', '용기.포장재질'),
     ('manufacturer', '제조원 소재지'),
@@ -1152,74 +1185,54 @@ CATEGORY_CHOICES = [
 def manage_phrases(request):
     """문구 추가/수정/삭제 처리"""
     if request.method != 'POST':
-        logger.warning("Invalid method received in manage_phrases")
         return JsonResponse({'success': False, 'error': 'Invalid method'})
 
     try:
         data = json.loads(request.body)
-        logger.info(f"Received data: {data}")
+        action = data.get('action')
 
-        # 단일 객체 요청인지 배열 요청인지 확인
-        if isinstance(data, list):
-            # 배열 요청 처리
-            for item in data:
-                action = item.get('action')
-                if action == 'add':
-                    phrase = MyPhrase.objects.create(
-                        user_id=request.user,
-                        my_phrase_name=item.get('name'),
-                        category_name=item.get('category'),
-                        comment_content=item.get('content'),
-                        note=item.get('note'),
-                        display_order=MyPhrase.objects.filter(
-                            user_id=request.user,
-                            category_name=item.get('category')
-                        ).count()
-                    )
-                    logger.info(f"Added phrase: {phrase.my_phrase_id}")
-                elif action == 'update':
-                    phrase = get_object_or_404(MyPhrase, my_phrase_id=item.get('id'), user_id=request.user)
-                    phrase.my_phrase_name = item.get('name')
-                    phrase.comment_content = item.get('content')
-                    phrase.note = item.get('note')
-                    phrase.save()
-                    logger.info(f"Updated phrase: {phrase.my_phrase_id}")
-                elif action == 'delete':
-                    phrase = get_object_or_404(MyPhrase, my_phrase_id=item.get('id'), user_id=request.user)
-                    phrase.soft_delete()  # 소프트 삭제 메서드 사용
-                    logger.info(f"Soft deleted phrase: {phrase.my_phrase_id}")
-            return JsonResponse({'success': True})
-        else:
-            # 기존 단일 객체 요청 처리
-            action = data.get('action')
-            if action == 'add':
-                phrase = MyPhrase.objects.create(
-                    user_id=request.user,
-                    my_phrase_name=data.get('name'),
-                    category_name=data.get('category'),
-                    comment_content=data.get('content'),
-                    note=data.get('note'),
-                    display_order=MyPhrase.objects.filter(
-                        user_id=request.user,
-                        category_name=data.get('category')
-                    ).count()
+        if action == 'create':
+            # 신규 문구 생성
+            new_phrase = MyPhrase.objects.create(
+                user_id=request.user,
+                my_phrase_name=data.get('my_phrase_name'),
+                category_name=data.get('category_name'),
+                comment_content=data.get('comment_content'),
+                note=data.get('note', ''),
+                delete_YN='N'
+            )
+            return JsonResponse({
+                'success': True,
+                'message': '문구가 저장되었습니다.',
+                'id': new_phrase.my_phrase_id
+            })
+
+        elif action == 'update':
+            # 기존 문구 수정 로직
+            changes = data if isinstance(data, list) else [data]
+            for change in changes:
+                phrase = MyPhrase.objects.get(
+                    my_phrase_id=change['id'],
+                    user_id=request.user
                 )
-                logger.info(f"Added phrase: {phrase.my_phrase_id}")
-                return JsonResponse({'success': True, 'id': phrase.my_phrase_id})
-            elif action == 'update':
-                phrase = get_object_or_404(MyPhrase, my_phrase_id=data.get('id'), user_id=request.user)
-                phrase.my_phrase_name = data.get('name')
-                phrase.comment_content = data.get('content')
-                phrase.note = data.get('note')
+                phrase.my_phrase_name = change.get('name', phrase.my_phrase_name)
+                phrase.comment_content = change.get('content', phrase.comment_content)
+                phrase.note = change.get('note', phrase.note)
                 phrase.save()
-                logger.info(f"Updated phrase: {phrase.my_phrase_id}")
-                return JsonResponse({'success': True})
-            elif action == 'delete':
-                phrase = get_object_or_404(MyPhrase, my_phrase_id=data.get('id'), user_id=request.user)
-                phrase.soft_delete()
-                logger.info(f"Soft deleted phrase: {phrase.my_phrase_id}")
-                return JsonResponse({'success': True})
-            logger.warning(f"Invalid action received: {action}")
+            return JsonResponse({'success': True})
+
+        elif action == 'delete':
+            # 문구 삭제 로직
+            phrase = MyPhrase.objects.get(
+                my_phrase_id=data['id'],
+                user_id=request.user
+            )
+            phrase.delete_YN = 'Y'
+            phrase.delete_datetime = timezone.now().strftime('%Y%m%d')
+            phrase.save()
+            return JsonResponse({'success': True})
+
+        else:
             return JsonResponse({'success': False, 'error': 'Invalid action'})
 
     except MyPhrase.DoesNotExist:
@@ -1264,15 +1277,20 @@ def phrase_popup(request):
     """자주 사용하는 문구 팝업"""
     phrases_data = {}
     
+    # 사용자 문구만 가져오기
     user_phrases = MyPhrase.objects.filter(
         user_id=request.user, 
         delete_YN='N'
     ).order_by('category_name', 'display_order')
     
+    # CATEGORY_CHOICES에서 정의된 모든 카테고리에 대한 빈 리스트 초기화
+    categories = CATEGORY_CHOICES
+    for category_code, _ in categories:
+        phrases_data[category_code] = []
+    
+    # 사용자 문구 추가
     for phrase in user_phrases:
         category = phrase.category_name
-        if category not in phrases_data:
-            phrases_data[category] = []
         phrases_data[category].append({
             'id': phrase.my_phrase_id,
             'name': phrase.my_phrase_name,
@@ -1281,10 +1299,10 @@ def phrase_popup(request):
             'order': phrase.display_order,
             'is_custom': True
         })
-    
+
     context = {
-        'phrases_json': json.dumps(phrases_data, ensure_ascii=False),
-        'categories': CATEGORY_CHOICES
+        'phrases_json': json.dumps(phrases_data),
+        'categories': categories  # CATEGORY_CHOICES 전체 전달
     }
     
     return render(request, 'label/phrase_popup.html', context)
@@ -1297,8 +1315,186 @@ def phrase_suggestions(request):
         if not category:
             return JsonResponse({'success': False, 'error': '카테고리가 제공되지 않았습니다.'})
         suggestions = DEFAULT_PHRASES.get(category, [])
-        logger.info(f"Fetching suggestions for category: {category}, found: {len(suggestions)} items")
         return JsonResponse({'success': True, 'suggestions': suggestions})
     except Exception as e:
         logger.error(f"phrase_suggestions error: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+def preview_popup(request):
+    """표시사항 미리보기 팝업"""
+    label_id = request.GET.get('label_id')
+    
+    if not label_id:
+        return JsonResponse({'success': False, 'error': '라벨 ID가 제공되지 않았습니다.'})
+    
+    try:
+        label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+        
+        # 미리보기 항목 구성
+        preview_items = []
+        field_mappings = [
+            ('my_label_name', '라벨명'),
+            ('prdlst_dcnm', '식품유형'),
+            ('prdlst_nm', '제품명'),
+            ('ingredient_info', '성분명 및 함량'),
+            ('content_weight', '내용량'),
+            ('weight_calorie', '내용량(열량)'),
+            ('prdlst_report_no', '품목보고번호'),
+            ('country_of_origin', '원산지'),
+            ('storage_method', '보관방법'),
+            ('frmlc_mtrqlt', '포장재질'),
+            ('bssh_nm', '제조원 소재지'),
+            ('distributor_address', '유통전문판매원'),
+            ('repacker_address', '소분원'),
+            ('importer_address', '수입원'),
+            ('pog_daycnt', '소비기한'),
+            ('rawmtrl_nm_display', '원재료명'),
+            ('cautions', '주의사항'),
+            ('additional_info', '기타표시사항')
+        ]
+
+        for field, label_text in field_mappings:
+            value = getattr(label, field)
+            if value:
+                preview_items.append({
+                    'id': len(preview_items) + 1,
+                    'label': label_text,
+                    'value': value
+                })
+
+        # 영양성분 정보 구성
+        nutrition_items = []
+        if label.nutrition_text:
+            nutrition_fields = [
+                ('calories', '열량', 'kcal'),
+                ('natriums', '나트륨', 'mg'),
+                ('carbohydrates', '탄수화물', 'g'),
+                ('sugars', '당류', 'g'),
+                ('fats', '지방', 'g'),
+                ('trans_fats', '트랜스지방', 'g'),
+                ('saturated_fats', '포화지방', 'g'),
+                ('cholesterols', '콜레스테롤', 'mg'),
+                ('proteins', '단백질', 'g')
+            ]
+            
+            for field, label_text, unit in nutrition_fields:
+                value = getattr(label, field)
+                if value:
+                    unit_value = getattr(label, f'{field}_unit', unit)
+                    nutrition_items.append({
+                        'label': label_text,
+                        'value': f'{value}{unit_value}',
+                        'dv': ''  # 영양성분 기준치 대비 비율 (필요한 경우 계산)
+                    })
+
+        # 알레르기 유발물질과 원산지 표시대상 목록
+        allergens = []  # 알레르기 유발물질 목록
+        origins = []    # 원산지 표시대상 목록
+        
+        # 연결된 원재료에서 알레르기 유발물질과 원산지 표시대상 추출
+        ingredient_relations = label.ingredient_relations.select_related('ingredient')
+        for relation in ingredient_relations:
+            if relation.ingredient.allergens:
+                allergens.extend(relation.ingredient.allergens.split(','))
+            # 원산지 표시대상 로직 추가 (필요한 경우)
+
+        context = {
+            'preview_items': preview_items,
+            'nutrition_items': nutrition_items,
+            'allergens': list(set(allergens)),  # 중복 제거
+            'origins': list(set(origins))       # 중복 제거
+        }
+        
+        return render(request, 'label/label_preview.html', context)
+        
+    except MyLabel.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '라벨을 찾을 수 없습니다.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def bulk_copy_labels(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': '잘못된 요청 방식입니다.'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        label_ids = data.get('label_ids', [])
+        if not label_ids:
+            return JsonResponse({'success': False, 'error': '선택된 라벨이 없습니다.'}, status=400)
+
+        copied_labels = []
+        for label_id in label_ids:
+            original_label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+            
+            # 라벨 복사
+            new_label = MyLabel.objects.create(
+                user_id=request.user,
+                my_label_name=f"{original_label.my_label_name} (복사본)",
+                food_group=original_label.food_group,
+                food_type=original_label.food_type,
+                preservation_type=original_label.preservation_type,
+                processing_method=original_label.processing_method,
+                processing_condition=original_label.processing_condition,
+                prdlst_dcnm=original_label.prdlst_dcnm,
+                prdlst_nm=original_label.prdlst_nm,
+                prdlst_report_no=original_label.prdlst_report_no,
+                rawmtrl_nm=original_label.rawmtrl_nm,
+                rawmtrl_nm_display=original_label.rawmtrl_nm_display,
+                content_weight=original_label.content_weight,
+                storage_method=original_label.storage_method,
+                country_of_origin=original_label.country_of_origin,
+                frmlc_mtrqlt=original_label.frmlc_mtrqlt,
+                bssh_nm=original_label.bssh_nm,
+                distributor_address=original_label.distributor_address,
+                repacker_address=original_label.repacker_address,
+                importer_address=original_label.importer_address,
+                cautions=original_label.cautions,
+                additional_info=original_label.additional_info,
+                label_create_YN='Y',
+                ingredient_create_YN=original_label.ingredient_create_YN,
+                delete_YN='N'
+            )
+            copied_labels.append(new_label.my_label_id)
+
+        return JsonResponse({
+            'success': True, 
+            'message': f'{len(copied_labels)}개의 라벨이 복사되었습니다.',
+            'copied_labels': copied_labels
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+@csrf_exempt
+def bulk_delete_labels(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': '잘못된 요청 방식입니다.'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        label_ids = data.get('label_ids', [])
+        if not label_ids:
+            return JsonResponse({'success': False, 'error': '선택된 라벨이 없습니다.'}, status=400)
+
+        # 실제 삭제가 아닌 flag 처리
+        current_time = now().strftime('%Y%m%d')
+        deleted_count = MyLabel.objects.filter(
+            my_label_id__in=label_ids,
+            user_id=request.user
+        ).update(
+            delete_YN='Y',
+            delete_datetime=current_time
+        )
+
+        return JsonResponse({
+            'success': True, 
+            'message': f'{deleted_count}개의 라벨이 삭제되었습니다.',
+            'deleted_count': deleted_count
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
