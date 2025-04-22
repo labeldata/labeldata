@@ -92,6 +92,25 @@ DEFAULT_PHRASES = {
     ]
 }
 
+CATEGORY_CHOICES = [
+    ('label_name', '라벨명'),
+    ('food_type', '식품유형'),
+    ('product_name', '제품명'),
+    ('ingredient_info', '성분명 및 함량'),
+    ('content_weight', '내용량'),
+    ('weight_calorie', '내용량(열량)'),
+    ('report_no', '품목보고번호'),
+    ('storage', '보관방법'),
+    ('package', '용기.포장재질'),
+    ('manufacturer', '제조원 소재지'),
+    ('distributor', '유통전문판매원'),
+    ('repacker', '소분원'),
+    ('importer', '수입원'),
+    ('expiry', '소비기한'),
+    ('cautions', '주의사항'),
+    ('additional', '기타표시사항'),
+]
+
 FIELD_REGULATIONS = {
     'label_nm': '''
     [라벨명 관련 규정]

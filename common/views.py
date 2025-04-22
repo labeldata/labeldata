@@ -1,8 +1,5 @@
 import logging
 import requests
-import urllib.parse
-import time
-import xml.etree.ElementTree as ET
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
@@ -10,7 +7,7 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib import messages
 from django.utils.timezone import now
 from .models import ApiEndpoint
-from label.models import FoodItem, ImportedFood
+from v1.label.models import FoodItem, ImportedFood
 
 
 # 로거 설정

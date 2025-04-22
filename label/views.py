@@ -16,6 +16,7 @@ from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS  # FIELD_REGULATIONS �
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
 from rapidfuzz import fuzz  # fuzzywuzzy 대신 rapidfuzz 사용
+from django.utils import timezone  # 추가
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)

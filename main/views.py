@@ -1,8 +1,8 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from disposition.models import AdministrativeDisposition, CrawlingSetting  # import 경로 수정
-from disposition.forms import DispositionForm  # import 경로 수정
+from v1.disposition.models import AdministrativeDisposition, CrawlingSetting  # import 경로 수정
+from v1.disposition.forms import DispositionForm  # import 경로 수정
 
 def home(request):
     return render(request, 'main/home.html')

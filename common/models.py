@@ -1,5 +1,6 @@
 from django.db import models
 
+
 class ApiKey(models.Model):
     """API 키를 관리하는 모델"""
     key = models.CharField(max_length=100, unique=True)

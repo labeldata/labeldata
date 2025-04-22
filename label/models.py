@@ -1,7 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.utils.timezone import now
 from django.utils import timezone  # timezone 모듈 import 추가
+from .constants import CATEGORY_CHOICES
+
 
 class FoodItem(models.Model):
     #컬럼명은 추후 변경할 수 있음. 현재는 api에서 받아오는 값으로 사용
@@ -36,24 +37,6 @@ class FoodItem(models.Model):
     def __str__(self):
         return self.prdlst_report_no
    
-CATEGORY_CHOICES = [
-    ('label_name', '라벨명'),
-    ('food_type', '식품유형'),
-    ('product_name', '제품명'),
-    ('ingredient_info', '성분명 및 함량'),
-    ('content_weight', '내용량'),
-    ('weight_calorie', '내용량(열량)'),
-    ('report_no', '품목보고번호'),
-    ('storage', '보관방법'),
-    ('package', '용기.포장재질'),
-    ('manufacturer', '제조원 소재지'),
-    ('distributor', '유통전문판매원'),
-    ('repacker', '소분원'),
-    ('importer', '수입원'),
-    ('expiry', '소비기한'),
-    ('cautions', '주의사항'),
-    ('additional', '기타표시사항'),
-]
 
 class MyPhrase(models.Model):
     user_id = models.ForeignKey(User, related_name="user_phrase", on_delete=models.CASCADE, db_column="user_id", verbose_name="사용자 id")

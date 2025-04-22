@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 
-app_name = 'disposition'
+app_name = 'v1.disposition'
 
 urlpatterns = [
     path('list/', views.disposition_list, name='list'),

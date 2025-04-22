@@ -2,7 +2,7 @@ import os
 import logging
 import requests
 from django.core.cache import cache
-from label.models import FoodItem
+from v1.label.models import FoodItem
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
