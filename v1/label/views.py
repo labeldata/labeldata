@@ -8,7 +8,7 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
-from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase
+from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive
 from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  # 지우지 않음
 from django.utils.safestring import mark_safe
@@ -418,7 +418,10 @@ def ingredient_popup(request):
     context = {
         'saved_ingredients': ingredients_data,
         'has_relations': has_relations,
-        'country_names': country_names  # 국가 목록 추가
+        'country_names': country_names,  # 국가 목록 추가
+        'food_types': list(FoodType.objects.all().values('food_type')),
+        'agricultural_products': list(AgriculturalProduct.objects.all().values('name_kr')),
+        'food_additives': list(FoodAdditive.objects.all().values('name_kr'))
     }
     return render(request, 'label/ingredient_popup.html', context)
 

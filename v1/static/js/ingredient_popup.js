@@ -4,24 +4,53 @@ let originValidated = false;
 let currentModalRow = null;
 let countryNames = []; // 국가명 목록
 
+// select2 옵션 데이터 준비
+let foodTypeOptions = [];
+let agriProductOptions = [];
+let foodAdditiveOptions = [];
+
+function getFoodTypeSelectOptions() {
+    if (foodTypeOptions.length === 0) {
+        try {
+            const foodTypes = JSON.parse(document.getElementById('food-types-data').textContent || '[]');
+            foodTypeOptions = (foodTypes || []).map(ft => ({ id: ft.food_type, text: ft.food_type })).filter(opt => opt.id);
+        } catch (e) { foodTypeOptions = []; }
+        try {
+            const agriProducts = JSON.parse(document.getElementById('agricultural-products-data').textContent || '[]');
+            agriProductOptions = (agriProducts || []).map(ap => ({ id: ap.name_kr, text: ap.name_kr })).filter(opt => opt.id);
+        } catch (e) { agriProductOptions = []; }
+        try {
+            const foodAdditives = JSON.parse(document.getElementById('food-additives-data').textContent || '[]');
+            foodAdditiveOptions = (foodAdditives || []).map(fa => ({ id: fa.name_kr, text: fa.name_kr })).filter(opt => opt.id);
+        } catch (e) { foodAdditiveOptions = []; }
+    }
+    const allOptions = [...foodTypeOptions, ...agriProductOptions, ...foodAdditiveOptions];
+    return allOptions;
+}
+
+function createFoodTypeSelect(selectedValue = "") {
+    const select = document.createElement('select');
+    select.className = 'form-control form-control-sm food-type-select';
+    select.style.width = '100%';
+    // 옵션은 select2에서 동적으로 적용
+    if (selectedValue) select.setAttribute('data-selected', selectedValue);
+    return select;
+}
+
 // 문서 로드시 초기화 코드
 document.addEventListener('DOMContentLoaded', function() {
     // URL에서 label_id 파라미터 추출
     const urlParams = new URLSearchParams(window.location.search);
     labelId = urlParams.get('label_id');
-    console.log('라벨 ID:', labelId);
     
     if (!labelId) {
-        console.error('라벨 ID가 URL에 없습니다.');
         alert('라벨 ID를 찾을 수 없습니다. 창을 닫고 다시 시도해주세요.');
     }
 
     // 국가명 목록 초기화
     try {
         countryNames = JSON.parse(document.getElementById('country-names-data').textContent || '[]');
-        console.log('국가명 목록 로드됨:', countryNames.length + '개');
     } catch (error) {
-        console.error('국가명 목록 로드 실패:', error);
         countryNames = [];
     }
 
@@ -48,12 +77,9 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             sortRows(); // 비율에 따라 정렬
         } else {
-            console.log("savedIngredients:", savedIngredients);
             addIngredientRows(savedIngredients);
         }
-    } catch (error) {
-        console.error('데이터 파싱 오류:', error);
-    }
+    } catch (error) {}
 
     // input 이벤트 리스너는 자동 확장 기능만 담당
     document.addEventListener('input', function (event) {
@@ -85,6 +111,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 저장 버튼 초기 비활성화
     updateSaveButtonState();
+
+    // 모달 검색 식품유형 select2 적용
+    const modalFoodTypeSelect = document.getElementById('modalSearchInput3');
+    if (modalFoodTypeSelect) {
+        $(modalFoodTypeSelect).select2({
+            data: getFoodTypeSelectOptions(),
+            width: '100%',
+            placeholder: '식품유형 선택',
+            allowClear: true
+        });
+    }
 });
 
 // 원산지 버튼 기능 구현
@@ -135,7 +172,6 @@ function sortRowsByRatio() {
     updateRowNumbers();
     updateTargetButtons();
     
-    console.log('비율에 따라 정렬 완료');
     return rows; // 정렬된 행 반환
 }
 
@@ -182,12 +218,10 @@ function markOriginTargets() {
     if (ratios[0] >= 98) {
         // 첫 번째 원료의 비율이 98% 이상인 경우
         markRowAsOriginTarget(rows[0], 1); // 1순위
-        console.log('원산지 표시대상: 첫 번째 원료만 (98% 이상)');
     } else if (rows.length >= 2 && (ratios[0] + ratios[1] >= 98)) {
         // 첫 번째 + 두 번째 원료의 합이 98% 이상인 경우
         markRowAsOriginTarget(rows[0], 1); // 1순위
         markRowAsOriginTarget(rows[1], 2); // 2순위
-        console.log('원산지 표시대상: 첫 번째, 두 번째 원료 (합계 98% 이상)');
     } else {
         // 그 외의 경우: 첫 번째, 두 번째, 세 번째 원료
         markRowAsOriginTarget(rows[0], 1); // 1순위
@@ -199,7 +233,6 @@ function markOriginTargets() {
         if (rows.length >= 3) {
             markRowAsOriginTarget(rows[2], 3); // 3순위
         }
-        console.log('원산지 표시대상: 첫 번째, 두 번째, 세 번째 원료');
     }
 }
 
@@ -319,7 +352,7 @@ function saveIngredients() {
             ingredient_name: row.querySelector('td:nth-child(3) input:first-of-type')?.value.trim() || "",
             ratio: row.querySelector('.ratio-input')?.value.trim() || "",
             prdlst_report_no: row.querySelector('td:nth-child(4) input:first-of-type')?.value.trim() || "",
-            food_type: row.querySelector('td:nth-child(4) input:nth-of-type(2)')?.value.trim() || "",
+            food_type: row.querySelector('.food-type-select')?.value.trim() || "",
             display_name: row.querySelector('td:nth-child(5) textarea')?.value.trim() || "",
             notes: notes,  // 참고사항 필드 추가
             allergen: row.querySelector('.allergen-input')?.value.trim() || "",
@@ -331,11 +364,8 @@ function saveIngredients() {
         ingredients.push(ingredient);
     });
 
-    console.log('저장할 원재료 데이터:', ingredients);
-
     // CSRF 토큰 가져오기
     const csrftoken = getCookie('csrftoken');
-    console.log('CSRF 토큰 확인:', csrftoken ? '토큰 있음' : '토큰 없음');
 
     // 서버에 데이터 전송
     fetch(`/label/save-ingredients-to-label/${labelId}/`, {
@@ -348,7 +378,6 @@ function saveIngredients() {
     })
     .then(response => {
         if (!response.ok) {
-            console.error('응답 상태 오류:', response.status, response.statusText);
             throw new Error(`HTTP 오류: ${response.status}`);
         }
         return response.json();
@@ -368,7 +397,6 @@ function saveIngredients() {
         }
     })
     .catch(error => {
-        console.error('저장 중 오류 발생:', error);
         alert('저장 중 오류가 발생했습니다. 개발자 도구 콘솔에서 자세한 정보를 확인하세요.');
     });
 }
@@ -378,7 +406,7 @@ function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
         const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {  // 수정된 부분: i < cookies.length
+        for (let i = 0; i < cookies.length; i++) {
             const cookie = cookies[i].trim();
             if (cookie.substring(0, name.length + 1) === (name + '=')) {
                 cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
@@ -406,7 +434,7 @@ function addIngredientRow(material = '') {
         <td>
             <div class="d-flex flex-column">
                 <input type="text" class="form-control form-control-sm" placeholder="품목보고번호" maxlength="15">
-                <input type="text" class="form-control form-control-sm" placeholder="식품유형">
+                <div class="food-type-select-container"></div>
             </div>
         </td>
         <td>
@@ -438,7 +466,23 @@ function addIngredientRow(material = '') {
         </td>
     `;
     document.getElementById('ingredient-body').appendChild(row);
-    
+
+    // 식품유형 select2 적용
+    const foodTypeContainer = row.querySelector('.food-type-select-container');
+    const select = createFoodTypeSelect();
+    foodTypeContainer.appendChild(select);
+    $(select).select2({
+        data: getFoodTypeSelectOptions(),
+        width: '100%',
+        placeholder: '식품유형 선택',
+        allowClear: true
+    });
+
+    // 기존 값이 있으면 선택
+    if (select.dataset.selected) {
+        $(select).val(select.dataset.selected).trigger('change');
+    }
+
     // 입력 변경 시 원산지 검증 무효화
     const ratioInput = row.querySelector('.ratio-input');
     if (ratioInput) {
@@ -448,20 +492,15 @@ function addIngredientRow(material = '') {
                 sortRows();
             }
         });
-        
         ratioInput.addEventListener('input', function() {
             originValidated = false;
             updateSaveButtonState();
         });
     }
-
     updateTargetButtons();
-
-    // 원산지 검증 무효화
     originValidated = false;
     updateSaveButtonState();
-
-    return row; // 추가된 행을 반환
+    return row;
 }
 
 // savedIngredients 배열을 받아 각 객체의 ingredient_name을 사용하여 행을 추가하는 함수 수정
@@ -476,7 +515,6 @@ function addIngredientRows(savedIngredients) {
         if (displayName.includes(',')) {
             // 쉼표로 분리하여 각각의 원재료로 행 추가
             const ingredientNames = displayName.split(',').map(name => name.trim()).filter(name => name);
-            console.log('쉼표로 분리된 원재료:', ingredientNames);
             
             ingredientNames.forEach(name => {
                 addIngredientRow(name);
@@ -531,8 +569,7 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
             <div class="d-flex flex-column">
                 <input type="text" value="${ingredient.prdlst_report_no}" 
                        class="form-control form-control-sm ${readonlyClass}" placeholder="품목보고번호" ${readonlyAttr}>
-                <input type="text" value="${ingredient.food_type}" 
-                       class="form-control form-control-sm ${readonlyClass}" placeholder="식품유형" ${readonlyAttr}>
+                <div class="food-type-select-container"></div>
             </div>
         </td>
         <td>
@@ -571,13 +608,23 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
         </td>
     `;
     document.getElementById('ingredient-body').appendChild(row);
-
+    // 식품유형 select2 적용
+    const foodTypeContainer = row.querySelector('.food-type-select-container');
+    const select = createFoodTypeSelect(ingredient.food_type);
+    foodTypeContainer.appendChild(select);
+    $(select).select2({
+        data: getFoodTypeSelectOptions(),
+        width: '100%',
+        placeholder: '식품유형 선택',
+        allowClear: true
+    });
+    if (ingredient.food_type) {
+        $(select).val(ingredient.food_type).trigger('change');
+    }
     // 원산지 검증 무효화
     originValidated = false;
     updateSaveButtonState();
-    
     updateTargetButtons();
-    
     return row;
 }
 
@@ -898,8 +945,6 @@ function searchMyIngredientInModal() {
     })
     .then(response => response.json())
     .then(data => {
-        console.log("검색 결과 데이터:", data);
-
         const resultsDiv = document.getElementById('modalSearchResults');
         resultsDiv.innerHTML = '';  // 기존 검색 결과 초기화
 
@@ -990,14 +1035,11 @@ function searchMyIngredientInModal() {
         }
     })
     .catch(error => {
-        console.error('검색 중 오류가 발생했습니다:', error);
         alert('검색 중 오류가 발생했습니다.');
     });
 }
 
 function selectIngredient(ingredient, button) {
-    console.log('선택된 원료:', ingredient);
-
     // 필드 이름을 다시 파싱하여 새로운 객체 생성
     const parsedIngredient = {
         ingredient_name: ingredient.prdlst_nm,
@@ -1020,7 +1062,7 @@ function registerMyIngredient(button) {
     const row = button.closest('tr');
     const prdlstReportInput = row.querySelector('td:nth-child(4) input');
     const prdlst_report_no = prdlstReportInput ? prdlstReportInput.value.trim() : "";
-    const foodTypeInput = row.querySelector('td:nth-child(4) input:nth-of-type(2)');
+    const foodTypeInput = row.querySelector('.food-type-select');
     const food_type = foodTypeInput ? foodTypeInput.value.trim() : "";
     const displayNameArea = row.querySelector('td:nth-child(5) textarea');
     const display_name = displayNameArea ? displayNameArea.value.trim() : "";
@@ -1035,8 +1077,6 @@ function registerMyIngredient(button) {
         criteria = { food_type: food_type, display_name: display_name };
     }
     
-    console.log("조회 조건:", criteria);
-    
     fetch('/label/check-my-ingredient/', {
         method: 'POST',
         headers: {
@@ -1047,7 +1087,6 @@ function registerMyIngredient(button) {
     })
     .then(response => response.json())
     .then(data => {
-        console.log("조회 결과:", data);
         if (data.exists) {
             alert("이미 해당 조건에 해당하는 원료가 존재합니다.");
             showExistingIngredientsModal(data.ingredients);
@@ -1061,7 +1100,6 @@ function registerMyIngredient(button) {
                 display_name: display_name,
                 manufacturer: row.querySelector('td:nth-child(8) input')?.value.trim() || ""
             };
-            console.log("등록 데이터:", ingredientData);
             fetch('/label/register-my-ingredient/', {
                 method: 'POST',
                 headers: {
@@ -1072,7 +1110,6 @@ function registerMyIngredient(button) {
             })
             .then(response => response.json())
             .then(regData => {
-                console.log("등록 결과:", regData);
                 if (regData.success) {
                     alert("원료가 등록되었습니다.");
                     // 등록이 완료되면 해당 행을 비활성화하고 배경색을 회색으로 변경
@@ -1089,13 +1126,11 @@ function registerMyIngredient(button) {
                 }
             })
             .catch(error => {
-                console.error("등록 요청 오류:", error);
                 alert("등록 중 오류가 발생했습니다.");
             });
         }
     })
     .catch(error => {
-        console.error("조회 오류:", error);
         alert("조회 중 오류가 발생했습니다.");
     });
 }
@@ -1115,7 +1150,7 @@ function showExistingIngredientsModal(ingredients) {
         const currentData = {
             ingredient_name: window.currentRow.querySelector('td:nth-child(3) input:first-of-type')?.value || "",
             prdlst_report_no: window.currentRow.querySelector('td:nth-child(4) input:first-of-type')?.value || "",
-            food_type: window.currentRow.querySelector('td:nth-child(4) input:nth-of-type(2)')?.value || "",
+            food_type: window.currentRow.querySelector('.food-type-select')?.value || "",
             display_name: window.currentRow.querySelector('td:nth-child(5) textarea')?.value || "",
             manufacturer: window.currentRow.querySelector('td:nth-child(8) input')?.value || ""
         };
@@ -1212,11 +1247,10 @@ function showExistingIngredientsModal(ingredients) {
         selectButton.classList.add('btn', 'btn-sm', 'btn-secondary');
         selectButton.textContent = '선택';
         selectButton.addEventListener('click', () => {
-            console.log('선택된 원료:', ingredient);
             if (window.currentRow) {
                 window.currentRow.querySelector('td:nth-child(3) input:first-of-type').value = ingredientInput.value;
                 window.currentRow.querySelector('td:nth-child(4) input:first-of-type').value = reportInput.value;
-                window.currentRow.querySelector('td:nth-child(4) input:nth-of-type(2)').value = foodTypeInput.value;
+                window.currentRow.querySelector('.food-type-select').value = foodTypeInput.value;
                 window.currentRow.querySelector('td:nth-child(5) textarea').value = displayInput.value;
                 window.currentRow.querySelector('td:nth-child(8) input').value = manufacturerInput.value;
                 window.currentRow.querySelector('.my-ingredient-id').value = myIngredientIdInput.value; // my_ingredient_id 설정
@@ -1273,12 +1307,10 @@ function registerNewIngredient() {
         ingredient_name: window.currentRow.querySelector('td:nth-child(3) input:first-of-type')?.value.trim() || "",
         ratio: window.currentRow.querySelector('td:nth-child(3) input:nth-of-type(2)')?.value.trim() || "",
         prdlst_report_no: window.currentRow.querySelector('td:nth-child(4) input:first-of-type')?.value.trim() || "",
-        food_type: window.currentRow.querySelector('td:nth-child(4) input:nth-of-type(2)')?.value.trim() || "",
+        food_type: window.currentRow.querySelector('.food-type-select')?.value.trim() || "",
         display_name: window.currentRow.querySelector('td:nth-child(5) textarea')?.value.trim() || "",
         manufacturer: window.currentRow.querySelector('td:nth-child(8) input')?.value.trim() || ""
     };
-    
-    console.log("신규 등록 데이터:", ingredientData);
     
     // CSRF 토큰을 가져옵니다.
     const csrftoken = getCookie('csrftoken');
@@ -1317,7 +1349,6 @@ function registerNewIngredient() {
         }
     })
     .catch(error => {
-        console.error("등록 요청 오류:", error);
         alert("등록 중 오류가 발생했습니다.");
     });
 }
