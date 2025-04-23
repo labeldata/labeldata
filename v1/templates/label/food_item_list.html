@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}제품 목록{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">품목 조회 및 복사</h2>
+
+    <!-- 검색 조건 -->
+    {% include 'includes/search_filter.html' with action_url='label:food_item_list' search_fields=search_fields %}
+
+    <!-- 테이블 -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover common-table">
+            <thead>
+                <tr>
+                    <th style="width: 3%;">번호</th>
+                    <th style="width: 10%;">
+                        품목보고번호
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 20%;">
+                        제품명
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">
+                        식품유형
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 20%;">
+                        제조사명
+                        <span class="sort-buttons">
+                            <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=bssh_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 15%;">
+                        소비기한
+                        <span class="sort-buttons">
+                            <a href="?sort=pog_daycnt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=pog_daycnt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">
+                        최종수정일자
+                        <span class="sort-buttons">
+                            <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in page_obj %}
+                <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ item.prdlst_report_no }}</td>
+                    <td>{{ item.prdlst_nm }}</td>
+                    <td>{{ item.prdlst_dcnm }}</td>
+                    <td>{{ item.bssh_nm }}</td>
+                    <td>{{ item.pog_daycnt }}</td>
+                    <td>{{ item.update_datetime|date:"Y-m-d H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted">제품이 없습니다.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 페이징 -->
+    {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
+</div>
+
+<!-- 팝업 기능 -->
+<script>
+    function openDetailPopup(reportNo) {
+        if (!reportNo) {
+            alert("유효한 품목보고번호가 없습니다.");
+            return;
+        }
+        const url = `/label/food-item-detail/${reportNo}/`;
+        const width = 1000; // 가로 크기
+        const height = 600; // 세로 크기
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+        const popup = window.open(
+            url,
+            "제품 상세 정보",
+            `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
+        );
+        if (!popup || popup.closed || typeof popup.closed === "undefined") {
+            alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
+        }
+    }
+</script>
+{% endblock %}
