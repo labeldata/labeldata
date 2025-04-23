@@ -218,6 +218,26 @@ class MyLabel(models.Model):
         verbose_name="연결된 원재료"
     )
 
+    # 체크박스 상태 저장용 필드 (라벨명 이후 항목)
+    chckd_prdlst_dcnm = models.CharField(max_length=1, default='N', verbose_name='식품유형 체크')
+    chckd_prdlst_nm = models.CharField(max_length=1, default='N', verbose_name='제품명 체크')
+    chckd_ingredient_info = models.CharField(max_length=1, default='N', verbose_name='성분명 및 함량 체크')
+    chckd_content_weight = models.CharField(max_length=1, default='N', verbose_name='내용량 체크')
+    chckd_weight_calorie = models.CharField(max_length=1, default='N', verbose_name='내용량(열량) 체크')
+    chckd_prdlst_report_no = models.CharField(max_length=1, default='N', verbose_name='품목보고번호 체크')
+    chckd_country_of_origin = models.CharField(max_length=1, default='N', verbose_name='원산지 체크')
+    chckd_storage_method = models.CharField(max_length=1, default='N', verbose_name='보관방법 체크')
+    chckd_frmlc_mtrqlt = models.CharField(max_length=1, default='N', verbose_name='용기.포장재질 체크')
+    chckd_bssh_nm = models.CharField(max_length=1, default='N', verbose_name='제조원 소재지 체크')
+    chckd_distributor_address = models.CharField(max_length=1, default='N', verbose_name='유통전문판매원 체크')
+    chckd_repacker_address = models.CharField(max_length=1, default='N', verbose_name='소분원 체크')
+    chckd_importer_address = models.CharField(max_length=1, default='N', verbose_name='수입원 체크')
+    chckd_pog_daycnt = models.CharField(max_length=1, default='N', verbose_name='소비기한 체크')
+    chckd_rawmtrl_nm_display = models.CharField(max_length=1, default='N', verbose_name='원재료명(표시) 체크')
+    chckd_cautions = models.CharField(max_length=1, default='N', verbose_name='주의사항 체크')
+    chckd_additional_info = models.CharField(max_length=1, default='N', verbose_name='기타표시사항 체크')
+    chckd_nutrition_text = models.CharField(max_length=1, default='N', verbose_name='영양성분 체크')
+
     class Meta:
         db_table = "my_label"
         indexes = [
@@ -361,3 +381,61 @@ class ImportedFood(models.Model):
 
     def __str__(self):
         return self.prduct_korean_nm
+
+class FoodAdditive(models.Model):
+    
+    category = models.CharField(max_length=100, verbose_name="식품첨가물 대분류")
+    name_kr = models.CharField(max_length=200, verbose_name="식품첨가물 명칭(한글)", primary_key=True, default='default_name_kr')
+    alias_4 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표4 명칭+용도")
+    alias_5 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표5 명칭 또는 간략명")
+    alias_6 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표6 명칭 또는 간략명 또는 용도")
+
+    short_name = models.CharField(max_length=200, blank=True, null=True, verbose_name="간략명")
+    main_purpose = models.CharField(max_length=200, blank=True, null=True, verbose_name="주용도")
+
+    color_agent = models.CharField(max_length=10, blank=True, null=True, verbose_name="착색료")
+    sweetener = models.CharField(max_length=10, blank=True, null=True, verbose_name="감미료")
+    nutrient_enhancer = models.CharField(max_length=10, blank=True, null=True, verbose_name="영양강화제")
+    preservative = models.CharField(max_length=10, blank=True, null=True, verbose_name="보존료")
+    antioxidant = models.CharField(max_length=10, blank=True, null=True, verbose_name="산화방지제")
+    bleaching_agent = models.CharField(max_length=10, blank=True, null=True, verbose_name="표백제")
+    color_fixative = models.CharField(max_length=10, blank=True, null=True, verbose_name="발색제")
+    stabilizer = models.CharField(max_length=10, blank=True, null=True, verbose_name="안정제")
+    emulsifier = models.CharField(max_length=10, blank=True, null=True, verbose_name="유화제")
+    thickener = models.CharField(max_length=10, blank=True, null=True, verbose_name="증점제")
+    coagulant = models.CharField(max_length=10, blank=True, null=True, verbose_name="응고제")
+    leavening_agent = models.CharField(max_length=10, blank=True, null=True, verbose_name="팽창제")
+    sterilizer = models.CharField(max_length=10, blank=True, null=True, verbose_name="살균제")
+    coating_agent = models.CharField(max_length=10, blank=True, null=True, verbose_name="피막제")
+
+    notes = models.TextField(blank=True, null=True, verbose_name="비고")
+
+    class Meta:
+        db_table = "food_additives"
+        indexes = [
+            models.Index(fields=["name_kr"], name="idx_foodadditive_name_kr"),
+        ]
+
+    def __str__(self):
+        return self.name_kr
+
+class AgriculturalProduct(models.Model):
+    # 농수산물 모델
+    serial_number = models.CharField(max_length=20, verbose_name="고유번호")
+    category = models.CharField(max_length=50, verbose_name="구분")
+    item_type = models.CharField(max_length=50, verbose_name="품목 분류")
+    name_kr = models.CharField(max_length=100, verbose_name="명칭")
+    name_etc = models.CharField(max_length=200, blank=True, null=True, verbose_name="기타 명칭")
+    scientific_name = models.CharField(max_length=300, blank=True, null=True, verbose_name="학명 또는 특성")
+    used_parts = models.CharField(max_length=200, blank=True, null=True, verbose_name="사용부위")
+    usage_condition = models.TextField(blank=True, null=True, verbose_name="제조 사용 조건")
+
+    class Meta:
+        db_table = "agricultural_product"
+        indexes = [
+            models.Index(fields=["name_kr"], name="idx_agri_name_kr_index")
+        ]
+
+    def __str__(self):
+        return self.name_kr
+
