@@ -238,8 +238,6 @@ class MyLabel(models.Model):
     chckd_additional_info = models.CharField(max_length=1, default='N', verbose_name='기타표시사항 체크')
     chckd_nutrition_text = models.CharField(max_length=1, default='N', verbose_name='영양성분 체크')
 
-    chckd_testf = models.CharField(max_length=1, default='N', verbose_name='영양성분 체크')
-
     class Meta:
         db_table = "my_label"
         indexes = [
