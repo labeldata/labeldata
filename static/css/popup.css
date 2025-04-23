@@ -1,0 +1,290 @@
+/* ====================================================
+   1. Global Variables & Base Styles
+==================================================== */
+:root {
+  --primary-color: #023047;
+  --secondary-color: #6c757d;
+  --text-color: #495057;
+  --btn-color: #2667ff;
+  --btn-secondary-color: #1e96fc;
+  --btn-cancel-color: #6c757d;
+  --navbar-bg-color: #023047;
+  --highlight-color: #caf0f8;
+  --table-header-bg-color: #e9ecef;
+  --table-hover-bg-color: #e9ecef;
+  --pagination-color: #023047;
+  --footer-bg-color: #d9dcd6;
+  --delete-btn-color: #dc3545;
+}
+/* 웹폰트 설정 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+/* ====================================================
+   2. Global Reset & Base Layout for Popup
+==================================================== */
+body {
+  padding: 30px 20px 70px 20px;
+  font-size: 0.8rem;
+  color: var(--text-color);
+  font-family: 'Noto Sans KR', sans-serif;
+}
+label,
+.form-control,
+.form-select {
+  font-size: 0.8rem;
+  color: var(--text-color);
+}
+
+.nav-tabs .nav-link {
+  font-size: 0.8rem;
+  padding: 8px 16px;
+  color: #6c757d;
+}
+.nav-tabs .nav-link.active {
+  color: #0d6efd;
+  background-color: #fff;
+  border-bottom: 2px solid #0d6efd;
+}
+
+/* ====================================================
+   3. 팝업 전용 레이아웃 및 문구 리스트 스타일
+==================================================== */
+.phrase-popup .container-fluid {
+  padding: 20px;
+  max-width: 500px;
+  margin: auto;
+  box-sizing: border-box;
+}
+
+.phrase-popup .nav-tabs .nav-link {
+  font-size: 0.8rem;
+  padding: 8px 16px;
+  color: var(--text-color);
+}
+.phrase-popup .nav-tabs .nav-link.active {
+  color: var(--btn-color);
+}
+
+.phrase-popup .phrase-list {
+  margin: 0;
+  padding: 0;
+}
+
+.phrase-popup .phrase-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.phrase-popup .phrase-item:hover {
+  background-color: #f8f9fa;
+}
+.phrase-popup .phrase-item.selected {
+  background-color: #73a1e2cc;
+}
+
+/* 적용된 문구에만 파란 선 표시 */
+.phrase-popup .applied-phrase {
+  border-left: 3px solid var(--btn-color);
+}
+
+/* ====================================================
+   4. 신규/수정 입력 행 스타일
+==================================================== */
+.phrase-popup .new-input-row,
+.phrase-popup .edit-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px dashed #ccc;
+  margin-bottom: 8px;
+  background-color: #fafafa;
+}
+
+.phrase-popup .input-container {
+  display: flex;
+  flex: 1;
+  gap: 10px;
+}
+
+.phrase-popup .input-container .phrase-name {
+  flex: 1; /* 1 비율 */
+  font-size: 0.8rem;
+  padding: 4px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+
+.phrase-popup .input-container .phrase-content {
+  flex: 3; /* 3 비율 */
+  font-size: 0.8rem;
+  padding: 4px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+
+.phrase-popup .input-container .phrase-note {
+  flex: 1; /* 1 비율 */
+  font-size: 0.8rem;
+  padding: 4px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+
+.phrase-popup .button-container {
+  display: flex;
+  flex-direction: row; /* 가로 배치로 변경 */
+  gap: 4px;
+  align-items: center;
+}
+
+/* ====================================================
+   5. 헤더 및 액션 버튼 스타일
+==================================================== */
+.phrase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  position: relative;
+}
+.action-buttons-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.popup-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+.action-buttons-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+/* ====================================================
+   6. 삭제 버튼 스타일
+==================================================== */
+.phrase-popup .delete-btn {
+  background-color: var(--delete-btn-color);
+  border: none;
+  color: white;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.phrase-popup .delete-btn:hover {
+  background-color: #c82333;
+}
+
+/* ====================================================
+   7. 표시사항 미리보기 스타일 (추가)
+==================================================== */
+.preview-container {
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 20px;
+  background-color: #fff;
+}
+
+.preview-container.horizontal {
+  display: flex;
+  gap: 24px;
+}
+
+.preview-container.horizontal .section {
+  width: 50%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.preview-container.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.preview-container.vertical .section {
+  width: 100%;
+}
+
+/* 항목명 1줄 제한 */
+.preview-container table td:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+/* 단독 행의 항목명 */
+.preview-container table td[colspan="2"]:first-child {
+  width: 30%;
+  max-width: 200px;
+  min-width: 100px;
+}
+
+/* 단독 행의 내용 */
+.preview-container table td[colspan="2"]:not(:first-child) {
+  width: 70%;
+  max-width: none;
+}
+
+/* 쌍 행의 셀 */
+.preview-container table td:not([colspan]) {
+  width: 25%;
+  max-width: 150px;
+  box-sizing: border-box;
+}
+
+/* 단독 행의 우측 테두리 제거 */
+.preview-container table td[colspan="2"] {
+  border-right: none;
+}
+
+@media (max-width: 768px) {
+  .preview-container.horizontal {
+    flex-direction: column;
+  }
+  .preview-container.horizontal .section {
+    width: 100%;
+  }
+}
+
+.nutrition-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.nutrition-table th,
+.nutrition-table td {
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.nutrition-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.long-content {
+    width: 75%;
+}
+
+.standard-content {
+    width: 25%;
+}
+
+.border-cell {
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
+}

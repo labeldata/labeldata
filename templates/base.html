@@ -1,0 +1,48 @@
+{% load static %}
+{% load django_bootstrap5 %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}식품 데이터 포털{% endblock %}</title>
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- Select2 CSS & JS -->
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  {% bootstrap_css %}
+  <!-- 메인 CSS -->
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20250413">
+  {% block extra_head %}{% endblock %}
+  <style>
+    /* main-content 영역: flex-grow를 이용하여 남은 공간 모두 차지 */
+    .main-content {
+      flex: 1;
+      margin-top: 60px; /* 네비게이션 높이 */
+      padding-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
+    }
+    /* body에 최소 높이 보장 */
+    html, body {
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  {% include 'includes/navbar.html' %}
+
+  <!-- Main Content -->
+  <main class="container-fluid main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer (여기서는 고정하지 않고, 내용 뒤에 배치) -->
+  {% include 'includes/footer.html' %}
+
+  {% bootstrap_javascript %}
+</body>
+</html>

@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+{% block title %}원료 관리{% endblock %}
+
+{% block content %}
+<style>
+  /* 예시: 최대폭을 기존 사이트와 맞추기 */
+  .custom-max-width {
+    max-width: 1320px; /* 원하는 사이즈 */
+    margin: 0 auto;
+  }
+  .row.full-height {
+    height: 100%; 
+  }
+  .combined-left-panel,
+  .combined-right-panel {
+    height: 100%;
+    overflow-y: auto;
+  }
+  .placeholder-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    min-height: 300px;
+    color: #6c757d;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+  }
+  .placeholder-content i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+  /* 선택된 행의 스타일 추가 - !important 사용 */
+  .ingredient-row.selected {
+    background-color: #536675 !important; /* !important로 우선순위 강제 지정 */
+    color: white !important; /* 텍스트도 흰색으로 변경하여 가독성 개선 */
+    font-weight: 500 !important; /* 약간 굵게 */
+  }
+  
+  /* 선택된 행에 hover 효과도 덮어쓰기 */
+  .table-hover .ingredient-row.selected:hover {
+    background-color: #455568 !important; /* 호버 시 약간 더 어두운 색상 */
+    color: white !important;
+  }
+</style>
+
+<div class="container-fluid custom-max-width mt-4">
+    <!-- 상단 헤더/검색 필터 영역 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+         <h2 class="mb-0">원료 조회 및 수정</h2>
+         <div>
+             <button id="newIngredientBtn" class="btn btn-success me-2">신규 원료 등록</button>
+             <a href="{% url 'label:my_ingredient_list' %}" class="btn btn-default">전체 페이지로 보기</a>
+         </div>
+    </div>
+
+    {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list_combined' search_fields=search_fields %}
+
+    <div class="row full-height">
+        <!-- 좌측: 내원료 리스트 -->
+        <div class="col-md-6 combined-left-panel" style="border-right: 1px solid #ccc;">
+            <table class="table table-hover" id="ingredientTable">
+                <thead>
+                    <tr>
+                        <th style="width: 6%;">번호</th>
+                        <th style="width: 15%;">품목보고번호</th>
+                        <th style="width: 20%;">원재료명</th>
+                        <th style="width: 20%;">식품유형</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ingredient in page_obj %}
+                    <tr class="ingredient-row" data-ingredient-id="{{ ingredient.my_ingredient_id }}" onclick="loadIngredientDetail('{{ ingredient.my_ingredient_id }}', this)">
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
+                        <td>{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
+                        <td>{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center">등록된 원료가 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
+        </div>
+
+        <!-- 우측: 내원료 상세 (AJAX 로드) -->
+        <div class="col-md-6 combined-detail combined-right-panel">
+            <div id="ingredient-detail-container">
+                <!-- 초기에는 빈 상태, 페이지 로드 시 AJAX로 빈 양식이 로드됨 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 페이지 로드 시 빈 양식 로드
+document.addEventListener('DOMContentLoaded', function() {
+    loadNewIngredientForm();
+    
+    // URL에서 선택된 ID 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedId = urlParams.get('selected');
+    
+    if (selectedId) {
+        // 타이머로 지연시켜 모든 DOM이 로드된 후 실행
+        setTimeout(() => {
+            const rows = document.querySelectorAll(`.ingredient-row[data-ingredient-id="${selectedId}"]`);
+            if (rows.length > 0) {
+                // 선택된 행 표시
+                rows[0].classList.add('selected');
+                rows[0].style.backgroundColor = '#536675';
+                rows[0].style.color = 'white';
+                
+                // 상세 정보 로드
+                fetch(`/label/my-ingredient-detail/${selectedId}/`, {
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                })
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('ingredient-detail-container').innerHTML = html;
+                    // 스크립트 태그 실행...
+                });
+            }
+        }, 100);
+    }
+});
+
+// 신규 원료 등록 버튼 클릭 시 빈 양식 로드 및 선택 해제
+document.getElementById('newIngredientBtn').addEventListener('click', function() {
+    loadNewIngredientForm();
+    clearSelectedRow();
+});
+
+// 선택된 행 표시 해제 함수
+function clearSelectedRow() {
+    const selectedRows = document.querySelectorAll('.ingredient-row.selected');
+    selectedRows.forEach(row => {
+        row.classList.remove('selected');
+    });
+}
+
+// 빈 양식을 로드하는 함수
+function loadNewIngredientForm() {
+    // 로딩 표시
+    const container = document.getElementById('ingredient-detail-container');
+    container.innerHTML = '<div class="d-flex justify-content-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    
+    // 기존 my_ingredient_detail 뷰를 활용하되 ingredient_id 없이 호출
+    fetch('/label/my-ingredient-detail/', {
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+    })
+    .then(response => response.text())
+    .then(html => {
+        container.innerHTML = html;
+        
+        // 스크립트 태그 실행
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        const scriptTags = tempDiv.querySelectorAll('script');
+        scriptTags.forEach(oldScript => {
+            const newScript = document.createElement('script');
+            newScript.textContent = oldScript.textContent;
+            document.body.appendChild(newScript);
+            document.body.removeChild(newScript);
+        });
+    })
+    .catch(error => {
+        console.error('Error loading new ingredient form:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger m-3">
+                <h5>오류가 발생했습니다</h5>
+                <p>양식을 불러오는 중 문제가 발생했습니다. 다시 시도해 주세요.</p>
+            </div>`;
+    });
+}
+
+// 선택된 행 상태를 URL에 저장하고 새로고침 없이 업데이트
+function loadIngredientDetail(ingredientId, rowElement) {
+    // URL 업데이트 (페이지 이동 없이)
+    const url = new URL(window.location);
+    url.searchParams.set('selected', ingredientId);
+    window.history.pushState({}, '', url);
+    
+    // 기존 행 선택 로직
+    clearSelectedRow();
+    
+    if (rowElement) {
+        rowElement.classList.add('selected');
+        // 인라인 스타일도 직접 추가
+        rowElement.style.backgroundColor = '#536675';
+        rowElement.style.color = 'white';
+    } else {
+        const rows = document.querySelectorAll(`.ingredient-row[data-ingredient-id="${ingredientId}"]`);
+        if (rows.length > 0) {
+            rows[0].classList.add('selected');
+            // 인라인 스타일도 직접 추가
+            rows[0].style.backgroundColor = '#536675';
+            rows[0].style.color = 'white';
+        }
+    }
+    
+    // 상세 정보 로드 로직
+    const container = document.getElementById('ingredient-detail-container');
+    container.innerHTML = '<div class="d-flex justify-content-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    
+    fetch(`/label/my-ingredient-detail/${ingredientId}/`, {
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+    })
+    .then(response => response.text())
+    .then(html => {
+        container.innerHTML = html;
+        
+        // 스크립트 태그 실행
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        const scriptTags = tempDiv.querySelectorAll('script');
+        scriptTags.forEach(oldScript => {
+            const newScript = document.createElement('script');
+            newScript.textContent = oldScript.textContent;
+            document.body.appendChild(newScript);
+            document.body.removeChild(newScript);
+        });
+    })
+    .catch(error => {
+        console.error('Error loading ingredient detail:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger m-3">
+                <h5>오류가 발생했습니다</h5>
+                <p>원료 정보를 불러오는 중 문제가 발생했습니다. 다시 시도해 주세요.</p>
+            </div>`;
+    });
+}
+
+// 페이지네이션 이후에도 선택 상태를 유지하기 위한 기능
+function checkUrlForSelection() {
+    // URL에서 ingredient_id 파라미터 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedId = urlParams.get('selected');
+    
+    if (selectedId) {
+        // 해당 ID의 행이 있으면 선택
+        const rows = document.querySelectorAll(`.ingredient-row[data-ingredient-id="${selectedId}"]`);
+        if (rows.length > 0) {
+            loadIngredientDetail(selectedId, rows[0]);
+        }
+    }
+}
+
+// 저장 후 호출할 함수 (my_ingredient_detail_partial.html에서)
+function onSaveSuccess(ingredientId) {
+    // 목록 갱신 (AJAX)
+    fetch('/label/refresh-ingredient-list/', {
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+    })
+    .then(response => response.text())
+    .then(html => {
+        document.querySelector('.combined-left-panel table tbody').innerHTML = html;
+        
+        // 저장된 원료 행 선택
+        if (ingredientId) {
+            const rows = document.querySelectorAll(`.ingredient-row[data-ingredient-id="${ingredientId}"]`);
+            if (rows.length > 0) {
+                clearSelectedRow();
+                rows[0].classList.add('selected');
+                rows[0].style.backgroundColor = '#536675';
+                rows[0].style.color = 'white';
+            }
+        }
+    });
+}
+
+// my_ingredient_detail_partial.html에서 사용할 수 있도록 전역에 노출
+window.loadNewIngredientForm = loadNewIngredientForm;
+</script>
+{% endblock %}

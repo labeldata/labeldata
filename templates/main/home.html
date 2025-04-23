@@ -1,0 +1,93 @@
+<!-- home.html -->
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}메인 화면{% endblock %}
+
+{% block content %}
+<div class="full-container">
+  <!-- 통합 검색 영역 -->
+  <div class="central-search">
+    <form method="get">
+      <input type="text" name="q" class="form-control me-2" placeholder="검색어를 입력하세요." value="{{ request.GET.q }}">
+      <button type="submit" class="btn btn-primary search-btn">검색</button>
+    </form>
+  </div>
+
+  <!-- 하단 정보 영역 -->
+  <div class="info-section">
+    <div class="container">
+      <div class="row">
+        <!-- 제품 조회 (품목보고 -> 제품 조회) -->
+        <div class="col-md-4">
+          <a href="{% url 'label:food_item_list' %}">
+            <div class="info-box">
+              <h3 class="info-header">제품 조회</h3>
+              <div class="registration-info">
+                <div class="info-line">
+                   <span id="foodItemsTotal" class="number">-</span> 
+                   <span class="label">건(누적)</span>
+                </div>
+                <div class="info-line"> 
+                   <span id="foodItemsNew" class="number">-</span> 
+                   <span class="label">건(신규)</span>
+                </div>
+              </div>
+            </div>
+          </a>
+        </div>
+        <!-- 표시사항 관리 -->
+        <div class="col-md-4">
+          <a href="{% url 'label:my_label_list' %}">
+            <div class="info-box">
+              {# 이미지 삭제됨 #}
+              <h3 class="info-header">표시사항</h3>
+              <div class="registration-info">
+                <div class="info-line">
+                   <span id="myLabelTotal" class="number">-</span> 
+                   <span class="label">건(누적)</span>
+                </div>
+                <div class="info-line">
+                  <span id="myLabelTotal" class="number">-</span> 
+                  <span class="label">건(신규)</span>
+               </div>
+              </div>
+            </div>
+          </a>
+        </div>
+        <!-- 행정처분 -->
+        <div class="col-md-4">
+          <a href="{% url 'disposition:list' %}">
+            <div class="info-box">
+              {# 이미지 삭제됨 #}
+              <h3 class="info-header">행정처분</h3>
+              <div class="registration-info">
+                <div class="info-line">
+                   <span id="actionTotal" class="number">-</span> 
+                   <span class="label">건(누적)</span>
+                </div>
+                <div class="info-line">
+                  <span id="actionTotal" class="number">-</span> 
+                  <span class="label">건(신규)</span>
+               </div>
+              </div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 자바스크립트를 통해 실시간(혹은 페이지 로드 시) 건수 업데이트 -->
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  fetch("{% url 'label:food_items_count' %}")
+    .then(response => response.json())
+    .then(data => {
+       document.getElementById("foodItemsTotal").innerText = data.total;
+    })
+    .catch(error => console.error("Error fetching food items count:", error));
+});
+</script>
+
+{% endblock %}
