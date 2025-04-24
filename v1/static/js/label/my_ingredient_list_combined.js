@@ -19,6 +19,7 @@ function loadIngredientDetail(ingredientId, row) {
     .then(response => response.text())
     .then(html => {
         document.getElementById('ingredient-detail-container').innerHTML = html;
+        reloadPartialScript();
     });
 }
 
@@ -31,6 +32,7 @@ function loadNewIngredientForm() {
     .then(html => {
         document.getElementById('ingredient-detail-container').innerHTML = html;
         clearSelectedRow();
+        reloadPartialScript();
     });
 }
 
@@ -40,6 +42,28 @@ function clearSelectedRow() {
         el.style.backgroundColor = '';
         el.style.color = '';
     });
+}
+
+// 동적으로 partial JS와 옵션 JS를 다시 로드
+function reloadPartialScript() {
+    // 기존 partial script 제거
+    const oldPartialScript = document.getElementById('partial-script');
+    if (oldPartialScript) oldPartialScript.remove();
+    // 기존 옵션 script 제거
+    const oldOptionScript = document.getElementById('option-script');
+    if (oldOptionScript) oldOptionScript.remove();
+
+    // partial script 추가
+    const partialScript = document.createElement('script');
+    partialScript.id = 'partial-script';
+    partialScript.src = '/static/js/label/my_ingredient_detail_partial.js?v=' + Date.now();
+    document.body.appendChild(partialScript);
+
+    // 옵션 script 추가
+    const optionScript = document.createElement('script');
+    optionScript.id = 'option-script';
+    optionScript.src = '/static/js/label/my_ingredient_options.js?v=' + Date.now();
+    document.body.appendChild(optionScript);
 }
 
 document.addEventListener('DOMContentLoaded', function() {

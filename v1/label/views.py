@@ -640,9 +640,12 @@ def my_ingredient_detail(request, ingredient_id=None):
     context = {
         'ingredient': ingredient,
         'form': form,
-        'mode': mode
+        'mode': mode,
+        'food_types': list(FoodType.objects.all().values('food_type')),
+        'agricultural_products': list(AgriculturalProduct.objects.all().values('name_kr')),
+        'food_additives': list(FoodAdditive.objects.all().values('name_kr')),
     }
-    
+
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return render(request, 'label/my_ingredient_detail_partial.html', context)
     else:

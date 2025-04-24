@@ -33,8 +33,7 @@
                     <tr>
                         <th>식품유형</th>
                         <td>
-                            <input type="text" class="form-control" name="prdlst_dcnm" id="prdlst_dcnm"
-                                   value="{{ ingredient.prdlst_dcnm|default:'' }}">
+                            <select id="foodTypeSelect" name="prdlst_dcnm" class="form-control form-control-sm" style="width:100%" data-selected="{{ ingredient.prdlst_dcnm|default:'' }}"></select>
                         </td>
                     </tr>
                     <tr>
@@ -61,7 +60,7 @@
                                      placeholder="알레르기 선택"
                                      value="{{ ingredient.allergens|default:'' }}"
                                      readonly>
-                              <button type="button" class="btn btn-outline-secondary ms-2" onclick="toggleAllergySelection()">
+                              <button type="button" class="btn btn-outline-secondary ms-2" id="allergyToggleButton" onclick="toggleAllergySelection()">
                                   선택
                               </button>
                           </div>
@@ -86,7 +85,7 @@
                                        placeholder="GMO 선택"
                                        value="{{ ingredient.gmo|default:'' }}"
                                        readonly>
-                                <button type="button" class="btn btn-outline-secondary ms-2" onclick="toggleGMOSelection()">
+                                <button type="button" class="btn btn-outline-secondary ms-2" id="gmoToggleButton" onclick="toggleGmoSelection()">
                                     선택
                                 </button>
                             </div>
@@ -106,4 +105,11 @@
     </div>
 </div>
 
+<!-- food_types, agricultural_products, food_additives 데이터 전달 -->
+{{ food_types|json_script:"food-types-data" }}
+{{ agricultural_products|json_script:"agricultural-products-data" }}
+{{ food_additives|json_script:"food-additives-data" }}
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="{% static 'js/label/my_ingredient_detail_partial.js' %}"></script>
