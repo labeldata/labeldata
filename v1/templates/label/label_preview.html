@@ -13,20 +13,8 @@
   <script src="https://cdn.jsdelivr.net/npm/react-beautiful-dnd@13/dist/react-beautiful-dnd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="{% static 'js/label_preview.js' %}"></script>
+  <script src="{% static 'js/label/label_preview.js' %}"></script>
 
-  <!-- 데이터 디버깅용 스크립트 추가 -->
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('Preview Data:', {
-            items: {{ preview_items|safe }},
-            nutrition: {{ nutrition_items|safe }},
-            allergens: {{ allergens|safe }},
-            origins: {{ origins|safe }}
-        });
-    });
-    </script>
-    
   <style>
     body {
       font-family: 'Noto Sans KR', sans-serif;
