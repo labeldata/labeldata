@@ -82,7 +82,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ------------------ 팝업 로직 ------------------
   window.openPopup = function (url, name, width = 1100, height = 900) {
-    console.log(`팝업 열기 시도: url=${url}, name=${name}, width=${width}, height=${height}`);
     const left = (screen.width - width) / 2;
     const top = (screen.height - height) / 2;
     const popup = window.open(url, name, `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`);
@@ -95,30 +94,24 @@ document.addEventListener('DOMContentLoaded', function () {
   window.handleIngredientPopup = function () {
     const rawmtrlNmDisplay = document.querySelector('textarea[name="rawmtrl_nm_display"]')?.value || '';
     const labelId = document.getElementById('label_id')?.value || '';
-    console.log(`원재료명 팝업: rawmtrlNmDisplay=${rawmtrlNmDisplay}, labelId=${labelId}`);
     openPopup(`/label/ingredient-popup/?rawmtrl_nm_display=${encodeURIComponent(rawmtrlNmDisplay)}&label_id=${labelId}`, 'IngredientPopup', 1400, 900);
-
     const rawmtrlSection = document.getElementById('rawmtrl_nm_section');
     if (rawmtrlSection?.classList.contains('collapse')) {
-      console.log('원재료명 섹션 펼침');
       rawmtrlSection.classList.add('show');
     }
   };
 
   window.openNutritionCalculator = function () {
     const labelId = document.getElementById('label_id')?.value || '';
-    console.log(`영양성분 계산기 팝업: labelId=${labelId}`);
     openPopup(`/label/nutrition-calculator-popup/?label_id=${labelId}`, 'NutritionCalculator', 1100, 900);
   };
 
   window.openPhrasePopup = function () {
-    console.log('내문구 관리 팝업');
     openPopup('/label/phrases/', 'phrasePopup', 1100, 900);
   };
 
   window.addEventListener('message', function (e) {
     if (e.data.type !== 'applyPhrases') return;
-    console.log('문구 적용 메시지 수신:', e.data);
     const phrases = e.data.phrases;
     const categoryMapping = {
       storage: 'storage_method',
@@ -138,7 +131,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (textarea && phrases[category]?.length) {
         textarea.value = phrases[category].map(p => p.content).join('\n');
         updateTextareaHeight(textarea);
-        console.log(`문구 적용: ${mappedCategory}`);
       }
     });
   });
@@ -173,7 +165,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     $('#chk_sterilization_other').on('change', function () {
-      console.log('chk_sterilization_other 변경:', this.checked);
       updateSummary();
       const conditionInput = $('input[name="processing_condition"]');
       conditionInput.prop('disabled', !this.checked);
@@ -186,7 +177,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     $('input[name="processing_condition"]').on('input change', function () {
       const value = this.value.trim();
-      console.log('processing_condition 입력:', value);
       $('#hidden_processing_condition').val(value);
       if ($('#chk_sterilization_other').is(':checked')) {
         updateSummary();
@@ -195,7 +185,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateSterilizationOther() {
       const isActive = $('#chk_sanitized').is(':checked') || $('#chk_aseptic').is(':checked');
-      console.log('updateSterilizationOther:', isActive);
       $('#chk_sterilization_other').prop('disabled', !isActive).prop('checked', isActive ? $('#chk_sterilization_other').prop('checked') : false);
       if (!isActive) {
         $('input[name="processing_condition"], #hidden_processing_condition').val('');
@@ -221,11 +210,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ------------------ 식품유형 요약 업데이트 ------------------
   function updateSummary() {
-    console.log('updateSummary 호출');
     const summaries = [];
     const foodSmall = $('#food_type option:selected').text();
     if (foodSmall && foodSmall !== '소분류') {
-      console.log('소분류 추가:', foodSmall);
       summaries.push(foodSmall);
     }
 
@@ -234,16 +221,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (longShelfId === 'chk_frozen_heated') {
       summaries.push('가열하여 섭취하는 냉동식품');
       isFrozenHeated = true;
-      console.log('장기보존: 냉동(가열)');
     } else if (longShelfId === 'chk_frozen_nonheated') {
       summaries.push('가열하지 않고 섭취하는 냉동식품');
-      console.log('장기보존: 냉동(비가열)');
     } else if (longShelfId === 'chk_canned') {
       summaries.push('통.병조림');
-      console.log('장기보존: 통.병조림');
     } else if (longShelfId === 'chk_retort') {
       summaries.push('레토르트식품');
-      console.log('장기보존: 레토르트');
     }
 
     const methodLabels = {
@@ -257,7 +240,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (methodLabels[methodId]) {
         summaries.push(methodLabels[methodId]);
         methodChecked = true;
-        console.log('제조방법 추가:', methodLabels[methodId]);
       }
     });
 
@@ -266,17 +248,14 @@ document.addEventListener('DOMContentLoaded', function () {
       if (conditionValue) {
         summaries.push(conditionValue);
         methodChecked = true;
-        console.log('조건 추가:', conditionValue);
       }
     }
 
     if (isFrozenHeated && !methodChecked) {
       summaries.push('비살균제품');
-      console.log('비살균제품 추가');
     }
 
     const summaryText = '식품유형 : ' + (summaries.length ? summaries.join(' | ') : '');
-    console.log('최종 요약:', summaryText);
     $('#selected-info').text(summaryText);
   }
 
@@ -384,30 +363,24 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   
     function updateFoodTypes(group, currentType) {
-      console.log(`updateFoodTypes 호출: group=${group}, currentType=${currentType}`);
       foodType.empty().append('<option value="">소분류</option>');
       const url = group ? `/label/food-types-by-group/?group=${encodeURIComponent(group)}` : '/label/food-types/';
       fetch(url)
         .then(response => response.json())
         .then(data => {
           if (data.success) {
-            console.log('소분류 데이터:', data.food_types);
             data.food_types.forEach(item => {
               const option = new Option(item.food_type, item.food_type);
               option.dataset.group = item.food_group;
               foodType.append(option);
             });
             foodType.val(currentType && data.food_types.some(t => t.food_type === currentType) ? currentType : null).trigger('change.select2');
-          } else {
-            console.error('소분류 데이터 로드 실패:', data);
           }
-        })
-        .catch(error => console.error('소분류 데이터 로딩 중 오류:', error));
+        });
     }
   
     foodGroup.on('change', function () {
       const group = this.value;
-      console.log(`대분류 변경: ${group}`);
       updateHiddenFields();
       updateFoodTypes(group, foodType.val());
       updateSummary();
@@ -416,79 +389,62 @@ document.addEventListener('DOMContentLoaded', function () {
     foodType.on('change', function () {
       const selectedOption = this.options[this.selectedIndex];
       const foodTypeValue = selectedOption?.value;
-      console.log(`소분류 변경: ${foodTypeValue}`);
       updateHiddenFields();
       if (foodTypeValue) {
         const group = selectedOption.dataset.group;
         if (group && foodGroup.val() !== group) {
-          console.log(`대분류 자동 설정: ${group}`);
           foodGroup.val(group).trigger('change.select2');
           hiddenFoodGroup.val(group);
         } else if (!group) {
-          console.log('대분류 조회 시작:', foodTypeValue);
           fetch(`/label/get-food-group/?food_type=${encodeURIComponent(foodTypeValue)}`)
             .then(response => response.json())
             .then(data => {
               if (data.success && data.food_group) {
-                console.log(`대분류 조회 성공: ${data.food_group}`);
                 foodGroup.val(data.food_group).trigger('change.select2');
                 hiddenFoodGroup.val(data.food_group);
                 selectedOption.dataset.group = data.food_group;
-              } else {
-                console.warn('대분류 없음:', foodTypeValue);
               }
-            })
-            .catch(error => console.error('대분류 조회 중 오류:', error));
+            });
         }
         updateCheckboxesByFoodType(foodTypeValue);
       }
       updateSummary();
     });
   
-    // 초기화: 대분류가 없으면 모든 소분류 로드
     updateHiddenFields();
     const initialFoodType = foodType.val();
     const initialFoodGroup = foodGroup.val();
-    console.log(`초기화: foodType=${initialFoodType}, foodGroup=${initialFoodGroup}`);
     if (initialFoodType) {
       const group = foodType.find('option:selected').data('group');
       if (group) {
-        console.log(`초기 대분류 설정: ${group}`);
         foodGroup.val(group).trigger('change.select2');
         hiddenFoodGroup.val(group);
         updateCheckboxesByFoodType(initialFoodType);
       } else {
-        console.log('초기 대분류 조회:', initialFoodType);
         fetch(`/label/get-food-group/?food_type=${encodeURIComponent(initialFoodType)}`)
           .then(response => response.json())
           .then(data => {
             if (data.success && data.food_group) {
-              console.log(`초기 대분류 설정: ${data.food_group}`);
               foodGroup.val(data.food_group).trigger('change.select2');
               hiddenFoodGroup.val(data.food_group);
               updateCheckboxesByFoodType(initialFoodType);
             }
-          })
-          .catch(error => console.error('초기 대분류 조회 중 오류:', error));
+          });
       }
     } else {
-      console.log('초기 모든 소분류 로드');
-      updateFoodTypes('', initialFoodType); // 대분류 없이 모든 소분류 로드
+      updateFoodTypes('', initialFoodType);
       setDefaultCheckboxes();
     }
   }
 
   function updateCheckboxesByFoodType(foodType) {
     if (!foodType) return Promise.resolve();
-    console.log(`체크박스 업데이트 시작: foodType=${foodType}`);
     return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
       .then(response => response.json())
       .then(data => {
         if (!data.success || !data.settings) {
-          console.error('API 응답 오류:', data);
           return;
         }
-        console.log('API 응답 데이터:', data.settings);
         const settings = data.settings;
         const fieldMappings = {
           prdlst_dcnm: 'chk_prdlst_dcnm',
@@ -516,40 +472,32 @@ document.addEventListener('DOMContentLoaded', function () {
           const checkboxId = fieldMappings[field] || `chk_${field}`;
           const checkbox = document.getElementById(checkboxId);
           if (checkbox) {
-            console.log(`체크박스 처리: ${checkboxId}, value=${value}`);
             checkbox.checked = value === 'Y';
             checkbox.disabled = value === 'D';
             checkbox.dataset.forcedDisabled = value === 'D' ? 'true' : 'false';
             checkbox.dispatchEvent(new Event('change'));
-          } else {
-            console.warn(`체크박스 없음: ${checkboxId}`);
           }
           if (field === 'pog_daycnt') {
-            console.log(`pog_daycnt 처리: ${settings.pog_daycnt}`);
             updateDateDropdown(settings.pog_daycnt);
           }
         });
 
         if (settings.pog_daycnt_options !== undefined) {
-          console.log('pog_daycnt_options 처리:', settings.pog_daycnt_options);
           updateDateDropdownOptions(settings.pog_daycnt_options);
         }
         if (settings.relevant_regulations !== undefined) {
           const textarea = document.querySelector('textarea[name="related_regulations"]');
           if (textarea) {
-            console.log('relevant_regulations 설정:', settings.relevant_regulations);
             textarea.value = settings.relevant_regulations;
             updateTextareaHeight(textarea);
           }
         }
-      })
-      .catch(error => console.error('체크박스 설정 로딩 중 오류:', error));
+      });
   }
 
   function updateDateDropdown(value) {
     const dateOptions = document.querySelector('select[name="date_option"]');
     if (!dateOptions) return;
-    console.log(`updateDateDropdown: value=${value}`);
     dateOptions.disabled = value === 'D';
     Array.from(dateOptions.options).forEach(option => (option.disabled = value === 'D'));
     if (value === 'D') dateOptions.value = '';
@@ -561,7 +509,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const currentValue = dateOptions.value;
     if (!dateOptions.dataset.originalOptions) dateOptions.dataset.originalOptions = dateOptions.innerHTML;
 
-    console.log(`updateDateDropdownOptions: options=${options}`);
     dateOptions.innerHTML = '';
     if (options?.length) {
       options.forEach(option => {
@@ -598,14 +545,11 @@ document.addEventListener('DOMContentLoaded', function () {
       additional_info: ['textarea[name="additional_info"]'],
       calories: ['textarea[name="nutrition_text"]']
     };
-
     document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(checkbox => {
       if (checkbox.dataset.initialized === 'true') return;
       checkbox.dataset.initialized = 'true';
-
       const fieldName = checkbox.id.replace('chk_', '');
       if (fieldName === 'rawmtrl_nm') {
-        console.log('rawmtrl_nm 체크박스 비활성화');
         checkbox.disabled = true;
         const textarea = document.querySelector('textarea[name="rawmtrl_nm"]');
         if (textarea) {
@@ -614,21 +558,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         return;
       }
-
       const relatedFields = fieldMappings[fieldName]?.map(sel => document.querySelector(sel)).filter(Boolean) || [];
       if (!relatedFields.length) {
-        console.warn(`관련 필드 없음: ${fieldName}`);
         return;
       }
-
       function updateFields() {
-        console.log(`updateFields 호출: ${checkbox.id}, forcedDisabled=${checkbox.dataset.forcedDisabled}`);
         relatedFields.forEach(field => {
           field.disabled = checkbox.dataset.forcedDisabled === 'true';
           field.classList.toggle('disabled-textarea', field.disabled);
         });
       }
-
       checkbox.addEventListener('change', updateFields);
       updateFields();
     });
@@ -638,7 +577,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const labelId = $('#label_id').val();
     const foodType = $('#food_type').val();
     if (labelId || foodType) {
-      console.log('setDefaultCheckboxes 스킵: labelId 또는 foodType 존재');
       return;
     }
     const defaults = {
@@ -654,13 +592,11 @@ document.addEventListener('DOMContentLoaded', function () {
       chk_rawmtrl_nm: false
     };
 
-    console.log('setDefaultCheckboxes 실행');
     Object.keys(defaults).forEach(id => {
       const checkbox = document.getElementById(id);
       if (checkbox && !checkbox.disabled) {
         checkbox.checked = defaults[id];
         checkbox.dispatchEvent(new Event('change'));
-        console.log(`기본값 설정: ${id}=${defaults[id]}`);
       }
     });
   }
@@ -695,22 +631,22 @@ document.addEventListener('DOMContentLoaded', function () {
   // ------------------ 내문구 탭 기능 ------------------
   function getCategoryFromFieldName(fieldName) {
     const mapping = {
-        my_label_name: 'label_name',          // 추가
-        prdlst_dcnm: 'food_type',            // 추가
-        prdlst_nm: 'product_name',           // 추가
-        ingredient_info: 'ingredient_info',   // 추가
-        content_weight: 'content_weight',     // 추가
-        weight_calorie: 'weight_calorie',     // 추가
-        prdlst_report_no: 'report_no',       // 추가
+      my_label_name: 'label_name',          // 추가
+      prdlst_dcnm: 'food_type',            // 추가
+      prdlst_nm: 'product_name',           // 추가
+      ingredient_info: 'ingredient_info',   // 추가
+      content_weight: 'content_weight',     // 추가
+      weight_calorie: 'weight_calorie',     // 추가
+      prdlst_report_no: 'report_no',       // 추가
       storage_method: 'storage',
       frmlc_mtrqlt: 'package',
       bssh_nm: 'manufacturer',
-      distributor_address: 'distributor',
-      repacker_address: 'repacker',
-      importer_address: 'importer',
-      pog_daycnt: 'expiry',
+      distributor: 'distributor',
+      repacker: 'repacker',
+      importer: 'importer',
+      expiry: 'pog_daycnt',
       cautions: 'cautions',
-      additional_info: 'additional'
+      additional: 'additional'
     };
     return mapping[fieldName] || null;
   }
@@ -724,7 +660,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    listContainer.innerHTML = '<div class="loading" style="font-size: 0.8rem;">로딩 중...</div>';
+    listContainer.innerHTML = '';
     const isMultiSelect = ['cautions', 'additional'].includes(category);
     const textarea = document.querySelector(`textarea[name="${fieldName}"], input[name="${fieldName}"]`);
     const currentValues = textarea ? textarea.value.split('\n').map(v => v.trim()).filter(Boolean) : [];
@@ -737,51 +673,47 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const sortedPhrases = [...phraseList].sort((a, b) => (b.note?.includes('★') ? 1 : 0) - (a.note?.includes('★') ? 1 : 0));
 
-    setTimeout(() => {
-      listContainer.innerHTML = '';
-      sortedPhrases.forEach(p => {
-        const div = document.createElement('div');
-        div.className = 'phrase-item';
-        div.textContent = p.content;
-        Object.assign(div.style, {
-          padding: '6px 8px',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '0.8rem',
-          transition: 'background-color 0.2s',
-          marginBottom: '4px'
-        });
-
-        div.addEventListener('click', () => {
-          if (!textarea) return;
-          if (isMultiSelect) {
-            const values = textarea.value.split('\n').map(v => v.trim()).filter(Boolean);
-            const index = values.indexOf(p.content);
-            if (index === -1) {
-              values.push(p.content);
-              div.style.backgroundColor = '#d0ebff';
-            } else {
-              values.splice(index, 1);
-              div.style.backgroundColor = '#fff';
-            }
-            textarea.value = values.join('\n');
-          } else {
-            // 단일 선택: 그대로 설정 후 스타일 변경
-            const isSelected = textarea.value === p.content;
-            textarea.value = isSelected ? '' : p.content;
-            listContainer.querySelectorAll('.phrase-item').forEach(item => {
-              item.style.backgroundColor = item.textContent === textarea.value ? '#d0ebff' : '#fff';
-            });
-          }
-          updateTextareaHeight(textarea);
-        });
-
-        div.style.backgroundColor = currentValues.includes(p.content) ? '#d0ebff' : '#fff';
-        if (p.note) div.title = p.note;
-        listContainer.appendChild(div);
+    sortedPhrases.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'phrase-item';
+      div.textContent = p.content;
+      Object.assign(div.style, {
+        padding: '6px 8px',
+        border: '1px solid #ccc',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '0.8rem',
+        transition: 'background-color 0.2s',
+        marginBottom: '4px'
       });
-    }, 300);
+
+      div.addEventListener('click', () => {
+        if (!textarea) return;
+        if (isMultiSelect) {
+          const values = textarea.value.split('\n').map(v => v.trim()).filter(Boolean);
+          const index = values.indexOf(p.content);
+          if (index === -1) {
+            values.push(p.content);
+            div.style.backgroundColor = '#d0ebff';
+          } else {
+            values.splice(index, 1);
+            div.style.backgroundColor = '#fff';
+          }
+          textarea.value = values.join('\n');
+        } else {
+          const isSelected = textarea.value === p.content;
+          textarea.value = isSelected ? '' : p.content;
+          listContainer.querySelectorAll('.phrase-item').forEach(item => {
+            item.style.backgroundColor = item.textContent === textarea.value ? '#d0ebff' : '#fff';
+          });
+        }
+        updateTextareaHeight(textarea);
+      });
+
+      div.style.backgroundColor = currentValues.includes(p.content) ? '#d0ebff' : '#fff';
+      if (p.note) div.title = p.note;
+      listContainer.appendChild(div);
+    });
   }
 
   function showRegulationInfo(fieldName) {
@@ -829,11 +761,16 @@ document.addEventListener('DOMContentLoaded', function () {
     initCheckboxFieldToggle();
     initAutoExpand();
 
-    $('#labelForm').on('submit', function () {
-      $('#hidden_food_group').val($('#food_group').val());
-      $('#hidden_food_type').val($('#food_type').val());
-      prepareFormData();
-      return true;
+    $('#labelForm').on('submit', function (event) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const autoSubmit = urlParams.get('autoSubmit');
+      
+      if (autoSubmit !== 'true') {
+        $('#hidden_food_group').val($('#food_group').val());
+        $('#hidden_food_type').val($('#food_type').val());
+        prepareFormData();
+      }
+      return autoSubmit !== 'true';
     });
 
     $('.select2-food-type, input[type="checkbox"], input[name="processing_condition"]').on('change input', updateSummary);
@@ -872,133 +809,4 @@ document.addEventListener('DOMContentLoaded', function () {
 
     updateSummary();
   });
-});
-
-// 미리보기 팝업 함수 추가
-window.openPreviewPopup = function() {
-    const form = document.getElementById("labelForm");
-    if (!form) {
-        console.error("Label form not found");
-        return;
-    }
-
-    // 라벨 ID 가져오기
-    const labelId = document.getElementById('label_id')?.value;
-    if (!labelId) {
-        alert('라벨을 먼저 저장해주세요.');
-        return;
-        }
-
-    // URL 생성
-    const url = `/label/preview/?label_id=${labelId}`;
-    console.log("Opening preview URL:", url);
-
-    // 팝업 설정
-    const width = 1100;
-    const height = 900;
-    const left = (window.innerWidth - width) / 2;
-    const top = (window.innerHeight - height) / 2;
-
-    // 팝업 열기
-    const popup = window.open(
-        url, 
-        "previewPopup",
-        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
-    );
-
-    if (!popup) {
-        alert("팝업이 차단되었습니다. 팝업 차단을 해제해주세요.");
-    }
-};
-
-// 이벤트 리스너 등록
-$(document).ready(function() {
-    // 미리보기 버튼 이벤트 리스너
-    $('.preview-btn').on('click', function() {
-        window.openPreviewPopup();
-    });
-});
-
-function saveCheckboxStates() {
-    const checkboxStates = {};
-    // 체크박스 상태 저장
-    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-        checkboxStates[checkbox.id] = {
-            checked: checkbox.checked,
-            name: checkbox.name,
-            value: checkbox.value || ''
-        };
-    });
-    
-    // localStorage에 저장
-    try {
-        const labelId = document.getElementById('label_id')?.value;
-        if (labelId) {
-            localStorage.setItem(`checkboxStates_${labelId}`, JSON.stringify(checkboxStates));
-        }
-    } catch (e) {
-        console.error('체크박스 상태 저장 실패:', e);
-    }
-}
-
-function restoreCheckboxStates() {
-    try {
-        const labelId = document.getElementById('label_id')?.value;
-        if (!labelId) return;
-
-        const savedStates = localStorage.getItem(`checkboxStates_${labelId}`);
-        if (savedStates) {
-            const checkboxStates = JSON.parse(savedStates);
-            Object.keys(checkboxStates).forEach(id => {
-                const checkbox = document.getElementById(id);
-                if (checkbox) {
-                    checkbox.checked = checkboxStates[id].checked;
-                    // 체크박스 상태에 따른 UI 업데이트
-                    if (checkbox.dispatchEvent) {
-                        checkbox.dispatchEvent(new Event('change'));
-                    }
-                }
-            });
-        }
-    } catch (e) {
-        console.error('체크박스 상태 복원 실패:', e);
-    }
-}
-
-// 폼 제출 시 체크박스 상태도 함께 전송
-document.getElementById('labelForm').addEventListener('submit', function() {
-    const checkboxData = {};
-    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-        checkboxData[checkbox.name] = checkbox.checked ? 'Y' : 'N';
-    });
-
-    // 히든 필드 추가 또는 업데이트
-    Object.keys(checkboxData).forEach(name => {
-        let hiddenField = this.querySelector(`input[type="hidden"][name="${name}_state"]`);
-        if (!hiddenField) {
-            hiddenField = document.createElement('input');
-            hiddenField.type = 'hidden';
-            hiddenField.name = `${name}_state`;
-            this.appendChild(hiddenField);
-        }
-        hiddenField.value = checkboxData[name];
-    });
-});
-
-// 저장 버튼 클릭 시 체크박스 상태 저장
-document.querySelector('button[type="submit"]').addEventListener('click', function() {
-    saveCheckboxStates();
-});
-
-// 페이지 로드 시 체크박스 상태 복원
-document.addEventListener('DOMContentLoaded', function() {
-    // ... 기존 초기화 코드 ...
-    restoreCheckboxStates();
-});
-
-// 탭 변경 시 체크박스 상태 저장
-document.querySelectorAll('.nav-link').forEach(tab => {
-    tab.addEventListener('show.bs.tab', function() {
-        saveCheckboxStates();
-    });
 });
