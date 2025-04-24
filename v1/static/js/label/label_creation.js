@@ -110,6 +110,33 @@ document.addEventListener('DOMContentLoaded', function () {
     openPopup('/label/phrases/', 'phrasePopup', 1100, 900);
   };
 
+  window.openPreviewPopup = function() {
+    const form = document.getElementById("labelForm");
+    if (!form) {
+        console.error("Label form not found");
+        return;
+    }
+    const labelId = document.getElementById('label_id')?.value;
+    if (!labelId) {
+        alert('라벨을 먼저 저장해주세요.');
+        return;
+    }
+    const url = `/label/preview/?label_id=${labelId}`;
+    console.log("Opening preview URL:", url);
+    const width = 1100;
+    const height = 900;
+    const left = (window.innerWidth - width) / 2;
+    const top = (window.innerHeight - height) / 2;
+    const popup = window.open(
+        url, 
+        "previewPopup",
+        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
+    );
+    if (!popup) {
+        alert("팝업이 차단되었습니다. 팝업 차단을 해제해주세요.");
+    }
+  };
+
   window.addEventListener('message', function (e) {
     if (e.data.type !== 'applyPhrases') return;
     const phrases = e.data.phrases;
@@ -620,6 +647,47 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#hidden_processing_condition').val($('input[name="processing_condition"]').val() || '');
   }
 
+  function saveCheckboxStates() {
+    const checkboxStates = {};
+    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+        checkboxStates[checkbox.id] = {
+            checked: checkbox.checked,
+            name: checkbox.name,
+            value: checkbox.value || ''
+        };
+    });
+    try {
+        const labelId = document.getElementById('label_id')?.value;
+        if (labelId) {
+            localStorage.setItem(`checkboxStates_${labelId}`, JSON.stringify(checkboxStates));
+        }
+    } catch (e) {
+        console.error('체크박스 상태 저장 실패:', e);
+    }
+  }
+
+  function restoreCheckboxStates() {
+    try {
+        const labelId = document.getElementById('label_id')?.value;
+        if (!labelId) return;
+        const savedStates = localStorage.getItem(`checkboxStates_${labelId}`);
+        if (savedStates) {
+            const checkboxStates = JSON.parse(savedStates);
+            Object.keys(checkboxStates).forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox) {
+                    checkbox.checked = checkboxStates[id].checked;
+                    if (checkbox.dispatchEvent) {
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.error('체크박스 상태 복원 실패:', e);
+    }
+  }
+
   // ------------------ Select2 초기화 ------------------
   function initSelect2Components() {
     $('#food_group').select2({ placeholder: '대분류 선택', allowClear: true, width: '100%' });
@@ -807,6 +875,21 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.style.color = btn.classList.contains('active') ? '#0d6efd' : '';
     });
 
+    $('.preview-btn').on('click', function() {
+        window.openPreviewPopup();
+    });
+
+    document.querySelector('button[type="submit"]').addEventListener('click', function() {
+        saveCheckboxStates();
+    });
+
+    document.querySelectorAll('.nav-link').forEach(tab => {
+        tab.addEventListener('show.bs.tab', function() {
+            saveCheckboxStates();
+        });
+    });
+
+    restoreCheckboxStates();
     updateSummary();
   });
 });
