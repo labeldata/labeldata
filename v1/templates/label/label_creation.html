@@ -32,8 +32,6 @@
       <span class="recent-update">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
       <button type="submit" form="labelForm" class="btn btn-primary">저장</button>
       <button type="button" class="btn btn-outline-secondary" onclick="openPreviewPopup()">미리보기</button>
-      <button type="button" class="btn btn-outline-info" onclick="copyLabel(document.getElementById('label_id').value)">복사</button>
-      <button type="button" class="btn btn-outline-danger" onclick="deleteLabel(document.getElementById('label_id').value)">삭제</button>
     </div>
   </div>
 </div>
@@ -131,9 +129,9 @@
       내 문구 관리
     </button>
     <!-- 식품유형 접기/펼치기 버튼 -->
-    <button id="toggleFoodTypeBtn" class="btn btn-sm btn-outline-secondary" type="button" title="접기" style="font-size: 1rem;">∧</button>
+    <button id="toggleFoodTypeBtn" class="btn btn-icon" type="button" title="접기" style="font-size: 1rem;">∧</button>
     <!-- 우측 패널 접기/펼치기 버튼 -->
-    <button id="toggleRegulationBtn" class="btn btn-sm btn-outline-secondary" title="접기" style="font-size: 1rem;">❯</button>
+    <button id="toggleRegulationBtn" class="btn btn-icon" title="접기" style="font-size: 1rem;">❯</button>
   </div>
 </div>
 
@@ -306,7 +304,8 @@
           <label for="chk_manufacturer_info" class="m-0">제조원 소재지</label>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" id="toggleManufacturerBtn"
+          <!-- 제조원 소재지 접기/펼치기 버튼 -->
+          <button type="button" class="btn btn-icon" id="toggleManufacturerBtn"
             data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
             aria-controls="other-manufacturers" style="font-size: 1rem; padding: 2px 1px;" title="펼치기">∨</button>
         </div>
@@ -387,7 +386,8 @@
           <label for="chk_rawmtrl_nm_display" class="m-0">원재료명(표시)</label>
         </div>
         <div style="min-width:1px;">
-          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;" onclick="handleIngredientPopup()" title="상세입력">✚</button>
+          <!-- 원재료명(표시) 상세입력 버튼 -->
+          <button type="button" class="btn btn-icon" style="font-size: 0.9rem; padding: 1px 1px;" onclick="handleIngredientPopup()" title="상세입력">✚</button>
         </div>
         <div style="width:90.4%;">
           <textarea name="rawmtrl_nm_display" class="form-control auto-expand" rows="2" placeholder="원재료명(표시)을 입력하세요"> {{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
@@ -452,7 +452,7 @@
         </div>
         <div style="min-width:1px;">
           <!-- 영양성분 계산기 버튼 -->
-          <button type="button" class="btn btn-outline-secondary" style="font-size: 0.9rem; padding: 1px 1px;"
+          <button type="button" class="btn btn-icon" style="font-size: 0.9rem; padding: 1px 1px;"
           onclick="openNutritionCalculator()" title="영양성분 계산기">
           🧮
           </button>

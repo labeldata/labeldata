@@ -12,46 +12,40 @@
     --table-hover-bg-color: #e9ecef;
     --pagination-color: #023047;
     --footer-bg-color: #d9dcd6;
-  }
-  
-  /* 웹폰트 */
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-  
-  /* 2. Global Reset & Layout */
-  html, body {
+}
+/* 웹폰트 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+/* 2. Global Reset & Layout */
+html, body {
     min-height: 100vh;
     margin: 0;
     padding: 0;
-  }
-  
-  body {
+}
+body {
     display: flex;
     flex-direction: column;
     font-family: 'Noto Sans KR', sans-serif;
     background-color: #f9f9f9;
     color: var(--text-color);
-  }
-  
-  /* 메인 콘텐츠 영역 */
-  .main-content {
+}
+/* 메인 콘텐츠 영역 */
+.main-content {
     flex: 1;
     margin-top: 60px;
     padding-bottom: 20px;
     overflow: auto;
     display: flex;
     flex-direction: column;
-  }
-  
-  /* Footer: 본문 뒤에 배치 */
-  .footer {
+}
+/* Footer: 본문 뒤에 배치 */
+.footer {
     background-color: var(--footer-bg-color);
     color: var(--navbar-bg-color);
     padding: 0.3rem 0;
     text-align: center;
     z-index: 10;
     margin-top: 20px;
-  }
-  
+}
 /* ====================================================
    3. Navbar Styles
    ==================================================== */
@@ -71,12 +65,12 @@
 .navbar-nav .nav-item:not(.logout) {
     margin-right: 2rem !important;
 }
-
 /* ====================================================
    5. Table & Common Table Styles
    ==================================================== */
 .table,
-.common-table {
+.common-table,
+.nutrition-table {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
@@ -84,50 +78,54 @@
 .table th,
 .table td,
 .common-table th,
-.common-table td {
-    white-space: normal;
-    word-wrap: break-word;
-    text-overflow: clip;
+.common-table td,
+.nutrition-table th,
+.nutrition-table td {
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 0.8rem;
     line-height: 1.5;
     border: 1px solid #ccc;
     padding: 8px;
-    text-align: center;
     vertical-align: middle;
 }
 .table th,
-.common-table th {
+.common-table th,
+.nutrition-table th {
     background-color: var(--table-header-bg-color);
     color: var(--text-color);
-    font-weight: bold;
+    font-weight: 600;
+    text-align: center;
+    width: 15%;
 }
-.table tr:hover {
-    background-color: #e3f2fd !important;
-    cursor: pointer;
+.nutrition-table td[colspan="3"] {
+    width: 85%;
 }
-.table tbody td {
-    color: #343a40 !important;
+.nutrition-table tr td:not([colspan]) {
+    width: 35%;
 }
-.table-fixed-ratio {
-    table-layout: fixed !important;
-}
-.table-hover tbody tr:hover td,
-.table-hover tbody tr:hover th {
-    background-color: #e9ecef !important;
-    color: #343a40 !important;
-}
-.single-column-table {
+/* 입력 필드 스타일 통일 */
+.nutrition-table input.form-control,
+.nutrition-table select.form-control,
+.nutrition-table textarea.form-control {
     width: 100%;
-    table-layout: auto;
+    padding: 6px 8px;
+    font-size: 0.8rem;
+    line-height: 1.5;
 }
-.single-column-table th {
-    width: 20%;
-    white-space: nowrap;
+/* 알레르기/GMO 행 스타일 */
+.nutrition-table tr.allergy-row td,
+.nutrition-table tr.gmo-row td {
+    padding: 12px;
 }
-.single-column-table td {
-    width: 80%;
+.nutrition-table tr.allergy-row .form-control,
+.nutrition-table tr.gmo-row .form-control {
+    width: calc(100% - 70px);  /* 버튼 너비만큼 공간 확보 */
 }
-
+.nutrition-table tr.allergy-row .btn,
+.nutrition-table tr.gmo-row .btn {
+    width: 60px;
+    margin-left: 10px;
+}
 /* ====================================================
    6. Pagination Styles
    ==================================================== */
@@ -148,7 +146,6 @@
     color: #fff;
     border-color: var(--pagination-color);
 }
-
 /* ====================================================
    7. Buttons
    ==================================================== */
@@ -224,58 +221,46 @@
     border-color: #e0a935;
     color: #212529;
 }
-
-/* ====================================================
-   8. Form & Input Group
-   ==================================================== */
-.form-group {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px !important;
+/* Outline 버튼 스타일 추가 */
+.btn-outline-primary {
+    color: var(--btn-color);
+    border-color: var(--btn-color);
+    background-color: transparent;
 }
-.form-group label {
-    flex: 0 0 100px;
-    font-weight: bold;
-    text-align: left;
-    font-size: 0.8rem;
+.btn-outline-primary:hover {
+    background-color: var(--btn-color);
+    color: #fff;
 }
-.form-control,
-.form-select {
-    font-size: 0.8rem;
-    line-height: 1.5;
+.btn-outline-secondary {
+    color: var(--btn-secondary-color);
+    border-color: var(--btn-secondary-color);
+    background-color: transparent;
+}
+.btn-outline-secondary:hover {
+    background-color: var(--btn-secondary-color);
+    color: #fff;
+}
+.btn-outline-danger {
+    color: #dc3545;
+    border-color: #dc3545;
+    background-color: transparent;
+}
+.btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: #fff;
+}
+/* 아이콘 버튼 스타일 */
+.btn-icon {
+    border: none;
+    background: none;
+    color: #6c757d;
+    padding: 2px 4px;
+    line-height: 1;
+}
+.btn-icon:hover {
     color: #495057;
-    height: auto;
+    background-color: rgba(108, 117, 125, 0.1);
 }
-.form-select {
-    width: 20%;
-}
-.search-filter-btn.btn-primary {
-    width: 70px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.form-control {
-    display: block;
-    width: 100%;
-    padding: 0.3rem 0.6rem;
-    background-color: #fff;
-    background-clip: padding-box;
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: normal;
-}
-.form-control:focus {
-    white-space: normal;
-    height: auto;
-    outline: 0;
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25);
-}
-
 /* ====================================================
    9. Home & Search Sections
    ==================================================== */
@@ -325,7 +310,6 @@
     outline: none;
     box-shadow: 0 0.1rem 0 0 var(--btn-color);
 }
-
 /* ====================================================
    10. Info Section & Boxes (메인 하단 정보 영역)
    ==================================================== */
@@ -349,14 +333,6 @@
 }
 .info-box a {
     color: inherit;
-    text-decoration: none;
-    border-bottom: none;
-}
-a,
-a:link,
-a:visited,
-a:hover,
-a:active {
     text-decoration: none;
     border-bottom: none;
 }
@@ -389,6 +365,7 @@ a:active {
     font-size: 0.8em;
     margin: 0 0.2rem;
 }
+/* 정보 박스 테두리 색상 */
 .info-section .row > .col-md-4:nth-child(1) .info-box {
     border-color: #73fbd3;
 }
@@ -398,6 +375,7 @@ a:active {
 .info-section .row > .col-md-4:nth-child(3) .info-box {
     border-color: #5c7aff;
 }
+/* 호버 효과 */
 .info-section .row > .col-md-4:nth-child(1) .info-box:hover {
     background-color: rgba(115, 251, 211, 0.1);
 }
@@ -411,15 +389,25 @@ a:active {
     padding-left: 0.25rem !important;
     padding-right: 0.25rem !important;
 }
-
 /* ====================================================
-   11. Additional Classes
+   11. Panel Header Styles
    ==================================================== */
-.wrapper {
+.panel-header {
     display: flex;
-    flex-direction: column;
-    min-height: 100%;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0;
 }
-.content {
-    flex: 1;
+
+.panel-title {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin: 0;
+}
+
+.panel-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
 }

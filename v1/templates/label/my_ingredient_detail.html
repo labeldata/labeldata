@@ -5,26 +5,29 @@
     <meta charset="UTF-8">
     <title>원료 상세 정보</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/popup.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-<div class="container mt-4 popup-container">
-    <!-- 상단 헤더 영역 -->
-    <div class="header-row">
-        <h5>원료 상세</h5>
-        <div class="button-group-level">
-            <button type="submit" form="ingredientForm" class="btn btn-primary btn-sm">저장</button>
-            <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">닫기</button>
+<div class="container mt-4 phrase-popup">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="popup-title">원료 상세 정보</div>
+        <div class="d-flex gap-2">
+            <button type="submit" form="ingredientForm" class="btn btn-outline-primary btn-sm">저장</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
             {% if mode == 'edit' %}
-            <button type="button" class="btn btn-warning btn-sm" onclick="confirmDelete()">삭제</button>
+            <button type="button" class="btn btn-outline-warning btn-sm" onclick="confirmDelete()">삭제</button>
             {% endif %}
         </div>
     </div>
-    <div class="card shadow-sm p-4">
+
+    <hr />
+
+    <div class="preview-container">
         <form method="post" id="ingredientForm">
             {% csrf_token %}
             <input type="hidden" name="my_ingredient_id" id="my_ingredient_id" value="{{ ingredient.my_ingredient_id }}">
-            <table class="table table-bordered single-column-table">
+            <table class="nutrition-table ingredient-form-table">
                 <tbody>
                     <tr>
                         <th>원재료명</th>
@@ -66,34 +69,26 @@
                     <tr>
                         <th>알레르기</th>
                         <td>
-                            <input type="text" class="form-control" name="allergens" id="allergens"
-                                value="{{ ingredient.allergens|default:'' }}"
-                                readonly>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>알레르기 선택</th>
-                        <td>
                             <div class="d-flex align-items-center">
-                                <div id="allergySelection" class="mt-2"></div> <!-- 알레르기 선택 칸 추가 -->
-                                <button type="button" id="allergyToggleButton" class="btn btn-secondary btn-sm ml-2" onclick="toggleAllergySelection()">펼치기</button>
+                                <input type="text" class="form-control" name="allergens" id="allergens" value="{{ ingredient.allergens|default:'' }}" readonly>
+                                <button type="button" id="allergyToggleButton" class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleAllergySelection()">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div id="allergySelection" style="display: none; margin-top: 5px;">
                             </div>
                         </td>
                     </tr>
                     <tr>
                         <th>GMO</th>
                         <td>
-                            <input type="text" class="form-control" name="gmo" id="gmo"
-                                value="{{ ingredient.gmo|default:'' }}"
-                                readonly>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>GMO 선택</th>
-                        <td>
                             <div class="d-flex align-items-center">
-                                <div id="gmoSelection" class="mt-2"></div>
-                                <button type="button" id="gmoToggleButton" class="btn btn-secondary btn-sm ml-2" onclick="toggleGmoSelection()">펼치기</button>
+                                <input type="text" class="form-control" name="gmo" id="gmo" value="{{ ingredient.gmo|default:'' }}" readonly>
+                                <button type="button" id="gmoToggleButton" class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleGmoSelection()">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div id="gmoSelection" style="display: none; margin-top: 5px;">
                             </div>
                         </td>
                     </tr>

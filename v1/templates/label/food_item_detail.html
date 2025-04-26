@@ -3,28 +3,27 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <!-- CSRF Token 메타태그 (fetch POST 요청 시 사용) -->
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>제품 상세 정보</title>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="{% static 'css/popup.css' %}">
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
 <body>
-<div class="container mt-4 popup-container">
-  <!-- 상단 헤더 영역 -->
-  <div class="header-row">
-    <h5>제품 상세 정보</h5>
-    <div class="button-group-level">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">내원료 저장</button>
-        <button type="button" class="btn btn-primary btn-sm" onclick="saveToMyLabel('{{ item.prdlst_report_no }}')">표시사항 생성</button>
-        <button type="button" class="btn btn-cancel btn-sm" onclick="window.close()">닫기</button>
+<div class="container mt-4 phrase-popup">
+  <div class="header">
+    <div class="popup-title">제품 상세 정보</div>
+    <div class="action-buttons">
+      <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">내원료 저장</button>
+      <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyLabel('{{ item.prdlst_report_no }}')">표시사항 생성</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
     </div>
   </div>
+  <hr />
 
-  <div class="card shadow-sm p-4">
-    <!-- 4열 테이블 -->
-    <table class="table table-bordered two-columns">
+  <div class="preview-container">
+    <table class="nutrition-table">
       <tbody>
         <tr>
           <th>품목보고번호</th>
@@ -47,8 +46,8 @@
         <tr>
           <th>소비기한</th>
           <td>{{ item.pog_daycnt }}</td>
-          <th>용법</th>
-          <td>{{ item.usages }}</td>
+          <th>포장재질</th>
+          <td>{{ item.frmlc_mtrqlt }}</td>
         </tr>
         <tr>
           <th>원재료명</th>
@@ -59,26 +58,26 @@
           <td colspan="3">{{ item.dispos }}</td>
         </tr>
         <tr>
-          <th>포장재질</th>
-          <td colspan="3">{{ item.frmlc_mtrqlt }}</td>
+          <th>용법</th>
+          <td colspan="3">{{ item.usages }}</td>
         </tr>
       </tbody>
     </table>
 
-    <!-- 행정처분 정보 -->
-    <h4 class="mt-4">관련 행정처분</h4>
-    <ul class="list-group">
-      {% if actions %}
-        {% for action in actions %}
-          <li class="list-group-item">{{ action.action_name }} ({{ action.action_date|date:'Y-m-d' }})</li>
-        {% endfor %}
-      {% else %}
-        <li class="list-group-item text-muted">관련된 행정처분이 없습니다.</li>
-      {% endif %}
-    </ul>
+    <div class="mt-4">
+      <h6 class="preview-title mb-2">관련 행정처분</h6>
+      <ul class="list-group">
+        {% if actions %}
+          {% for action in actions %}
+            <li class="list-group-item">{{ action.action_name }} ({{ action.action_date|date:'Y-m-d' }})</li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">관련된 행정처분이 없습니다.</li>
+        {% endif %}
+      </ul>
+    </div>
   </div>
 </div>
-
 <script src="{% static 'js/label/food_item_detail.js' %}"></script>
 </body>
 </html>

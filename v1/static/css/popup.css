@@ -15,28 +15,29 @@
   --pagination-color: #023047;
   --footer-bg-color: #d9dcd6;
   --delete-btn-color: #dc3545;
+  --border-color: #dee2e6;
+  --font-size-base: 0.8rem;
+  --font-size-title: 1.2rem;
 }
-/* 웹폰트 설정 */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
 
 /* ====================================================
    2. Global Reset & Base Layout for Popup
 ==================================================== */
 body {
   padding: 30px 20px 70px 20px;
-  font-size: 0.8rem;
+  font-size: var(--font-size-base);
   color: var(--text-color);
   font-family: 'Noto Sans KR', sans-serif;
 }
 label,
 .form-control,
 .form-select {
-  font-size: 0.8rem;
+  font-size: var(--font-size-base);
   color: var(--text-color);
 }
 
 .nav-tabs .nav-link {
-  font-size: 0.8rem;
+  font-size: var(--font-size-base);
   padding: 8px 16px;
   color: #6c757d;
 }
@@ -47,126 +48,69 @@ label,
 }
 
 /* ====================================================
-   3. 팝업 전용 레이아웃 및 문구 리스트 스타일
+   3. Common Components
 ==================================================== */
-.phrase-popup .container-fluid {
-  padding: 20px;
-  max-width: 500px;
-  margin: auto;
-  box-sizing: border-box;
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
 }
 
-.phrase-popup .nav-tabs .nav-link {
-  font-size: 0.8rem;
-  padding: 8px 16px;
-  color: var(--text-color);
-}
-.phrase-popup .nav-tabs .nav-link.active {
-  color: var(--btn-color);
-}
-
-.phrase-popup .phrase-list {
-  margin: 0;
-  padding: 0;
-}
-
-.phrase-popup .phrase-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  margin-bottom: 8px;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-.phrase-popup .phrase-item:hover {
-  background-color: #f8f9fa;
-}
-.phrase-popup .phrase-item.selected {
-  background-color: #73a1e2cc;
-}
-
-/* 적용된 문구에만 파란 선 표시 */
-.phrase-popup .applied-phrase {
-  border-left: 3px solid var(--btn-color);
-}
-
-/* ====================================================
-   4. 신규/수정 입력 행 스타일
-==================================================== */
-.phrase-popup .new-input-row,
-.phrase-popup .edit-input-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border: 1px dashed #ccc;
-  margin-bottom: 8px;
-  background-color: #fafafa;
-}
-
-.phrase-popup .input-container {
-  display: flex;
-  flex: 1;
-  gap: 10px;
-}
-
-.phrase-popup .input-container .phrase-name {
-  flex: 1; /* 1 비율 */
-  font-size: 0.8rem;
-  padding: 4px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-}
-
-.phrase-popup .input-container .phrase-content {
-  flex: 3; /* 3 비율 */
-  font-size: 0.8rem;
-  padding: 4px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-}
-
-.phrase-popup .input-container .phrase-note {
-  flex: 1; /* 1 비율 */
-  font-size: 0.8rem;
-  padding: 4px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-}
-
-.phrase-popup .button-container {
-  display: flex;
-  flex-direction: row; /* 가로 배치로 변경 */
-  gap: 4px;
-  align-items: center;
-}
-
-/* ====================================================
-   5. 헤더 및 액션 버튼 스타일
-==================================================== */
-.phrase-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  position: relative;
-}
-.action-buttons-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 .popup-title {
-  font-size: 1.2rem;
-  font-weight: bold;
+    font-size: var(--font-size-title);
+    font-weight: 500;
+    color: var(--text-color);
+    margin: 0;
+    padding: 0;
 }
-.action-buttons-right {
-  position: absolute;
-  top: 0;
-  right: 0;
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+}
+
+/* 나머지 스타일은 style.css를 따르도록 제거 */
+.nutrition-table {
+    /* 스타일 제거하고 style.css 상속 */
+}
+
+/* ====================================================
+   4. 입력 폼 테이블 스타일 (NEW)
+==================================================== */
+.ingredient-form-table th, .ingredient-form-table td {
+  padding: 4px 8px;
+  height: 48px;
+  vertical-align: middle;
+}
+.ingredient-form-table th {
+  width: 20%;
+  background-color: var(--table-header-bg-color);
+  font-weight: 500;
+}
+.ingredient-form-table td { width: 80%; }
+.ingredient-form-table .form-control, .ingredient-form-table .form-control-sm {
+  height: 32px;
+  padding: 4px 8px;
+}
+.ingredient-form-table textarea.form-control {
+  height: auto;
+  min-height: 32px;
+}
+
+/* ====================================================
+   5. 알레르기/GMO 선택 영역 (NEW)
+==================================================== */
+#allergySelection, #gmoSelection {
+  background-color: #f8f9fa;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 5px;
+  margin-top: 5px;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 /* ====================================================
@@ -176,7 +120,7 @@ label,
   background-color: var(--delete-btn-color);
   border: none;
   color: white;
-  font-size: 0.8rem;
+  font-size: var(--font-size-base);
   padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -258,33 +202,39 @@ label,
   }
 }
 
-.nutrition-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1rem;
+/* ====================================================
+   8. 상세정보 & 미리보기 팝업 공통 스타일
+==================================================== */
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  margin-bottom: 10px;
 }
 
-.nutrition-table th,
-.nutrition-table td {
-    border: 1px solid #dee2e6;
-    padding: 0.5rem;
-    text-align: left;
+.setting-row label {
+  min-width: 50px;
+  font-weight: 500;
+  margin: 0;
 }
 
-.nutrition-table th {
-    background-color: #f8f9fa;
-    font-weight: 600;
+.setting-row .form-control {
+  font-size: 0.8rem;
+  max-width: 50px;
 }
 
-.long-content {
-    width: 75%;
+.setting-row .form-select {
+  font-size: 0.8rem;
+  max-width: 100px;
 }
 
-.standard-content {
-    width: 25%;
+.highlight-allergen {
+  background-color: #fff4e6;
+  padding: 2px 4px;
+  border-radius: 4px;
 }
 
-.border-cell {
-    border: 1px solid #dee2e6;
-    padding: 0.5rem;
+.highlight-origin {
+  font-weight: bold;
 }
