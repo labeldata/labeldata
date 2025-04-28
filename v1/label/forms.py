@@ -99,30 +99,34 @@ class MyIngredientsForm(forms.ModelForm):
         model = MyIngredient
         fields = [
             'prdlst_report_no', 'prdlst_nm', 'bssh_nm',
-            'prms_dt', 'prdlst_dcnm', 'pog_daycnt',
-            'frmlc_mtrqlt', 'rawmtrl_nm', 'allergens', 'gmo'  # 필드 추가
+            'prms_dt', 'food_category', 'prdlst_dcnm', 'pog_daycnt',
+            'frmlc_mtrqlt', 'rawmtrl_nm', 'allergens', 'gmo', 'ingredient_display_name'  # ingredient_display_name 필드 추가
         ]
         labels = {
             'prdlst_report_no': '품목제조번호',
             'prdlst_nm': '제품명',
             'bssh_nm': '제조사명',
             'prms_dt': '허가일자',
+            'food_category': '식품 구분',
             'prdlst_dcnm': '식품유형',
             'pog_daycnt': '소비기한',
             'frmlc_mtrqlt': '포장재질',
             'rawmtrl_nm': '원재료명',
-            'allergens': '알레르기',  # 레이블 추가
-            'gmo': 'GMO'  # 레이블 추가
+            'allergens': '알레르기',
+            'gmo': 'GMO',
+            'ingredient_display_name': '원재료 표시명'  # 레이블 추가
         }
         widgets = {
             'prdlst_report_no': forms.TextInput(attrs={'readonly': True, 'class': 'form-control'}),
             'prdlst_nm': forms.TextInput(attrs={'readonly': True, 'class': 'form-control'}),
             'bssh_nm': forms.TextInput(attrs={'readonly': True, 'class': 'form-control'}),
             'prms_dt': forms.TextInput(attrs={'readonly': True, 'class': 'form-control'}),
+            'food_category': forms.Select(attrs={'class': 'form-control form-control-sm'}),
             'prdlst_dcnm': forms.TextInput(attrs={'readonly': True, 'class': 'form-control'}),
             'pog_daycnt': forms.TextInput(attrs={'class': 'form-control'}),
             'frmlc_mtrqlt': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
             'rawmtrl_nm': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
-            'allergens': forms.Textarea(attrs={'class': 'form-control'}),  # 위젯 추가
-            'gmo': forms.TextInput(attrs={'class': 'form-control'})  # 위젯 추가
+            'allergens': forms.Textarea(attrs={'class': 'form-control'}),
+            'gmo': forms.TextInput(attrs={'class': 'form-control'}),
+            'ingredient_display_name': forms.Textarea(attrs={'class': 'form-control'})  # 위젯 추가
         }

@@ -67,8 +67,15 @@ function reloadPartialScript() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // 페이지 진입 시 빈 폼 로드
-    loadNewIngredientForm();
+    // 첫 번째 원료 행 자동 선택 및 상세 로드
+    const firstRow = document.querySelector('.ingredient-row');
+    if (firstRow) {
+        const ingredientId = firstRow.getAttribute('data-ingredient-id');
+        loadIngredientDetail(ingredientId, firstRow);
+    } else {
+        // 원료가 없으면 빈 폼 로드
+        loadNewIngredientForm();
+    }
     // 신규 등록 버튼 이벤트
     document.getElementById('newIngredientBtn').addEventListener('click', loadNewIngredientForm);
 });

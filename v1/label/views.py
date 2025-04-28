@@ -12,7 +12,7 @@ from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredien
 from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  # 지우지 않음
 from django.utils.safestring import mark_safe
-from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS  # FIELD_REGULATIONS 추가
+from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS, CATEGORY_CHOICES  # FIELD_REGULATIONS 및 CATEGORY_CHOICES 추가
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
 from rapidfuzz import fuzz  # fuzzywuzzy 대신 rapidfuzz 사용
@@ -580,54 +580,27 @@ def my_ingredient_list_combined(request):
 
 @login_required
 def my_ingredient_detail(request, ingredient_id=None):
-    if ingredient_id:
-        ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
+    # POST일 때 my_ingredient_id 우선 활용
+    my_ingredient_id = request.POST.get('my_ingredient_id') or ingredient_id
+    if my_ingredient_id:
+        ingredient = get_object_or_404(MyIngredient, my_ingredient_id=my_ingredient_id, user_id=request.user)
         mode = 'edit'
     else:
         ingredient = MyIngredient(user_id=request.user, delete_YN='N')
         mode = 'create'
 
     if request.method == 'POST':
-        if request.headers.get('content-type') == 'application/json':
-            try:
-                data = json.loads(request.body)
-                my_ingredient_id = data.get('my_ingredient_id')
-                
-                if my_ingredient_id:
-                    ingredient = get_object_or_404(MyIngredient, my_ingredient_id=my_ingredient_id, user_id=request.user)
-                    
-                ingredient.prdlst_nm = data.get('prdlst_nm', '')
-                ingredient.prdlst_report_no = data.get('prdlst_report_no', '')
-                ingredient.prdlst_dcnm = data.get('prdlst_dcnm', '')
-                ingredient.bssh_nm = data.get('bssh_nm', '')
-                ingredient.ingredient_display_name = data.get('ingredient_display_name', '')
-                ingredient.allergens = data.get('allergens', '')
-                ingredient.gmo = data.get('gmo', '')
-                ingredient.user_id = request.user
-                ingredient.delete_YN = 'N'
-                
-                ingredient.save()
-                return JsonResponse({
-                    'success': True, 
-                    'message': '내 원료가 성공적으로 저장되었습니다.',
-                    'ingredient_id': ingredient.my_ingredient_id
-                })
-            except Exception as e:
-                return JsonResponse({'success': False, 'error': str(e)})
-        
         form = MyIngredientsForm(request.POST, instance=ingredient)
         if form.is_valid():
             new_ingredient = form.save(commit=False)
             new_ingredient.user_id = request.user
             new_ingredient.save()
-            
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({
                     'success': True, 
                     'message': '내 원료가 성공적으로 저장되었습니다.',
                     'ingredient_id': new_ingredient.my_ingredient_id
                 })
-            
             messages.success(request, '저장되었습니다.')
             return redirect('label:my_ingredient_detail', ingredient_id=new_ingredient.my_ingredient_id)
         else:
@@ -1167,25 +1140,6 @@ def food_type_settings(request):
             'error': str(e)
         })
 
-
-CATEGORY_CHOICES = [
-    ('label_name', '라벨명'),
-    ('food_type', '식품유형'),
-    ('product_name', '제품명'),
-    ('ingredient_info', '성분명 및 함량'),
-    ('content_weight', '내용량'),
-    ('weight_calorie', '내용량(열량)'),
-    ('report_no', '품목보고번호'),
-    ('storage', '보관방법'),
-    ('package', '용기.포장재질'),
-    ('manufacturer', '제조원 소재지'),
-    ('distributor', '유통전문판매원'),
-    ('repacker', '소분원'),
-    ('importer', '수입원'),
-    ('expiry', '소비기한'),
-    ('cautions', '주의사항'),
-    ('additional', '기타표시사항'),
-]
 
 @login_required
 @csrf_exempt

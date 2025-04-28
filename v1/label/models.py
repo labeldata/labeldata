@@ -81,9 +81,10 @@ class MyIngredient(models.Model):
     #my_ingredient_name = models.CharField(max_length=200, verbose_name="내 원료명")
     
     prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", null=True, blank=True)
-    prdlst_nm = models.CharField(max_length=200, verbose_name="원료명")
-    bssh_nm = models.CharField(max_length=100, verbose_name="제조사명")
+    prdlst_nm = models.CharField(max_length=200, verbose_name="원료명", null=True, blank=True)
+    bssh_nm = models.CharField(max_length=100, verbose_name="제조사명", null=True, blank=True)
     prms_dt = models.CharField(max_length=8, verbose_name="허가일자", null=True, blank=True)
+    food_category = models.CharField(max_length=100, verbose_name="식품구분", null=True, blank=True)
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="식품유형", null=True, blank=True)
     pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", null=True, blank=True)
     frmlc_mtrqlt = models.TextField(max_length=300, verbose_name="포장재질", null=True, blank=True)

@@ -13,6 +13,9 @@
     <div>
         <form method="post" id="ingredientForm">
             {% csrf_token %}
+            <!-- 숨겨진 원료 ID 필드 추가 -->
+            <input type="hidden" id="my_ingredient_id" name="my_ingredient_id" value="{{ ingredient.my_ingredient_id|default:'' }}">
+            
             <table class="nutrition-table">
                 <tbody>
                     <tr>
@@ -22,12 +25,12 @@
                         <td><input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no" value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15"></td>
                     </tr>
                     <tr>
-                        <th>식품구분</th>
+                        <th>식품 구분</th>
                         <td>
-                            <select class="form-control form-control-sm" name="food_type" id="foodCategorySelect">
-                                <option value="processed">가공식품</option>
-                                <option value="agricultural">농수산물</option>
-                                <option value="additive">식품첨가물</option>
+                            <select class="form-control form-control-sm" name="food_category" id="foodCategorySelect">
+                                <option value="processed" {% if ingredient.food_category == "processed" or not ingredient.food_category %}selected{% endif %}>가공식품</option>
+                                <option value="agricultural" {% if ingredient.food_category == "agricultural" %}selected{% endif %}>농수산물</option>
+                                <option value="additive" {% if ingredient.food_category == "additive" %}selected{% endif %}>식품첨가물</option>
                             </select>
                         </td>
                         <th>식품유형</th>

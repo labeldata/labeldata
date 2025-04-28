@@ -10,7 +10,10 @@ function updateAllergyInfo() {
     });
     
     // 선택된 알레르기를 단일 문자열로 결합하여 필드에 설정
-    document.getElementById('allergens').value = selectedAllergies.join(', ');
+    var allergyField = document.getElementById('allergy_info') || document.getElementById('allergens');
+    if (allergyField) {
+        allergyField.value = selectedAllergies.join(', ');
+    }
 }
 window.updateAllergyInfo = updateAllergyInfo;
 
@@ -26,7 +29,10 @@ function updateGmoInfo() {
     });
     
     // 선택된 GMO 정보를 필드에 설정
-    document.getElementById('gmo_info').value = selectedGmo;
+    var gmoField = document.getElementById('gmo_info') || document.getElementById('gmo');
+    if (gmoField) {
+        gmoField.value = selectedGmo;
+    }
 }
 window.updateGmoInfo = updateGmoInfo;
 

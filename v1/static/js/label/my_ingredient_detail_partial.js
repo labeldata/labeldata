@@ -43,10 +43,15 @@ function saveMyIngredient() {
     const my_ingredient_id_elem = document.getElementById("my_ingredient_id");
     const my_ingredient_id = my_ingredient_id_elem ? parseInt(my_ingredient_id_elem.value, 10) : null;
     const formData = new FormData(document.getElementById("ingredientForm"));
-    let url = window.location.pathname;
-    if (!my_ingredient_id) {
+    let url;
+    
+    // ID가 있으면 해당 URL로 요청 (PUT/수정), 없으면 신규 생성 URL로 요청
+    if (my_ingredient_id) {
+        url = `/label/my-ingredient-detail/${my_ingredient_id}/`;
+    } else {
         url = '/label/my-ingredient-detail/';
     }
+    
     fetch(url, {
         method: 'POST',
         body: formData,
@@ -115,12 +120,32 @@ function initFoodTypeSelect() {
         console.error('[initFoodTypeSelect] #foodTypeSelect not found');
         return;
     }
-    // 옵션 구성
-    const options = [
-        ...foodTypes.map(ft => ({ id: ft.food_type, text: ft.food_type })),
-        ...agriProducts.map(ap => ({ id: ap.name_kr, text: ap.name_kr })),
-        ...foodAdditives.map(fa => ({ id: fa.name_kr, text: fa.name_kr }))
-    ];
+
+    // 현재 식품 구분 값을 가져옴
+    const foodCategorySelect = document.getElementById('foodCategorySelect');
+    const currentFoodCategory = foodCategorySelect ? foodCategorySelect.value : 'processed';
+    
+    // 식품 구분에 따라 옵션 필터링
+    let options = [];
+    
+    switch (currentFoodCategory) {
+        case 'processed': // 가공식품
+            options = foodTypes.map(ft => ({ id: ft.food_type, text: ft.food_type }));
+            break;
+        case 'agricultural': // 농수산물
+            options = agriProducts.map(ap => ({ id: ap.name_kr, text: ap.name_kr }));
+            break;
+        case 'additive': // 식품첨가물
+            options = foodAdditives.map(fa => ({ id: fa.name_kr, text: fa.name_kr }));
+            break;
+        default:
+            options = [
+                ...foodTypes.map(ft => ({ id: ft.food_type, text: ft.food_type })),
+                ...agriProducts.map(ap => ({ id: ap.name_kr, text: ap.name_kr })),
+                ...foodAdditives.map(fa => ({ id: fa.name_kr, text: fa.name_kr }))
+            ];
+    }
+    
     // 옵션을 select에 직접 추가
     select.innerHTML = '<option></option>';
     options.forEach(opt => {
@@ -129,12 +154,14 @@ function initFoodTypeSelect() {
         option.textContent = opt.text;
         select.appendChild(option);
     });
+    
     // select2 적용
     $(select).select2({
         width: '100%',
         placeholder: '식품유형 선택',
         allowClear: true
     });
+    
     // 기존 값이 있으면 선택
     const currentValue = select.getAttribute('data-selected') || select.value;
     if (currentValue) {
@@ -142,8 +169,30 @@ function initFoodTypeSelect() {
     }
 }
 
-// 알레르기, GMO, 폼 이벤트 등 기타 함수는 기존 <script> 코드에서 추가로 복사해 넣으세요.
-// 예: toggleAllergySelection, toggleGMOSelection, updateAllergyInfo, updateGMOInfo 등
+// 알레르기와 GMO 옵션 초기화 함수
+function initAllergyAndGmoOptions() {
+    // showAllergyOptions와 showGmoOptions를 window에서 가져와 실행
+    if (typeof window.showAllergyOptions === 'function') {
+        window.showAllergyOptions();
+    }
+    if (typeof window.showGmoOptions === 'function') {
+        window.showGmoOptions();
+    }
+    // 초기 상태를 접혀있게 설정
+    if (typeof window.initializeSelections === 'function') {
+        window.initializeSelections();
+    }
+}
+
+// 식품 구분 선택 변경시 식품유형 드롭다운 갱신
+function setupFoodCategoryChangeEvent() {
+    const foodCategorySelect = document.getElementById('foodCategorySelect');
+    if (foodCategorySelect) {
+        foodCategorySelect.addEventListener('change', function() {
+            initFoodTypeSelect();
+        });
+    }
+}
 
 // DOMContentLoaded 또는 즉시 실행 패턴으로 이벤트 바인딩
 function onReady(fn) {
@@ -156,5 +205,35 @@ function onReady(fn) {
 
 onReady(function() {
     initFoodTypeSelect();
-    // ...기존 코드 참고하여 필요 함수 바인딩...
+    setupFoodCategoryChangeEvent();
+    initAllergyAndGmoOptions(); // 알레르기와 GMO 옵션 초기화
+    
+    // 폼 submit 이벤트 바인딩 (partial에서도 반드시 필요)
+    var form = document.getElementById('ingredientForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (typeof updateAllergyInfo === 'function') updateAllergyInfo();
+            if (typeof updateGmoInfo === 'function') updateGmoInfo();
+            saveMyIngredient();
+        });
+    }
+
+    // 삭제 버튼 이벤트 바인딩 
+    var deleteBtn = document.getElementById('deleteBtn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', confirmDelete);
+    }
+    
+    // 초기화 버튼 이벤트 바인딩
+    var closeBtn = document.getElementById('closeBtn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            if(confirm('입력 내용을 초기화하시겠습니까?')) {
+                form.reset();
+                initFoodTypeSelect(); // 식품유형도 초기화
+                initAllergyAndGmoOptions();
+            }
+        });
+    }
 });
