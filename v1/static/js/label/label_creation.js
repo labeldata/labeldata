@@ -391,7 +391,9 @@ document.addEventListener('DOMContentLoaded', function () {
   
     function updateFoodTypes(group, currentType) {
       foodType.empty().append('<option value="">소분류</option>');
-      const url = group ? `/label/food-types-by-group/?group=${encodeURIComponent(group)}` : '/label/food-types/';
+      // 대분류가 비어있어도 전체 식품유형 데이터를 불러옴
+      const url = `/label/food-types-by-group/?group=${encodeURIComponent(group || '')}`;
+      
       fetch(url)
         .then(response => response.json())
         .then(data => {
@@ -441,6 +443,7 @@ document.addEventListener('DOMContentLoaded', function () {
     updateHiddenFields();
     const initialFoodType = foodType.val();
     const initialFoodGroup = foodGroup.val();
+    
     if (initialFoodType) {
       const group = foodType.find('option:selected').data('group');
       if (group) {
@@ -459,6 +462,7 @@ document.addEventListener('DOMContentLoaded', function () {
           });
       }
     } else {
+      // 대분류와 소분류가 모두 선택되지 않은 초기 상태에서도 전체 데이터를 로드
       updateFoodTypes('', initialFoodType);
       setDefaultCheckboxes();
     }
