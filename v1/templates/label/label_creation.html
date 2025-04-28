@@ -151,6 +151,27 @@
         <input type="hidden" id="hidden_preservation_type" name="preservation_type" value="{{ label.preservation_type }}">
         <input type="hidden" id="hidden_processing_method" name="processing_method" value="{{ label.processing_method }}">
         <input type="hidden" id="hidden_processing_condition" name="processing_condition" value="{{ label.processing_condition }}">
+        
+        <!-- 체크박스 상태 저장용 hidden 필드 -->
+        <input type="hidden" name="chckd_label_nm" value="{{ label.chckd_label_nm|default:'N' }}">
+        <input type="hidden" name="chckd_prdlst_dcnm" value="{{ label.chckd_prdlst_dcnm|default:'N' }}">
+        <input type="hidden" name="chckd_prdlst_nm" value="{{ label.chckd_prdlst_nm|default:'Y' }}">
+        <input type="hidden" name="chckd_ingredients_info" value="{{ label.chckd_ingredients_info|default:'N' }}">
+        <input type="hidden" name="chckd_content_weight" value="{{ label.chckd_content_weight|default:'Y' }}">
+        <input type="hidden" name="chckd_weight_calorie" value="{{ label.chckd_weight_calorie|default:'N' }}">
+        <input type="hidden" name="chckd_prdlst_report_no" value="{{ label.chckd_prdlst_report_no|default:'N' }}">
+        <input type="hidden" name="chckd_country_of_origin" value="{{ label.chckd_country_of_origin|default:'N' }}">
+        <input type="hidden" name="chckd_storage_method" value="{{ label.chckd_storage_method|default:'N' }}">
+        <input type="hidden" name="chckd_frmlc_mtrqlt" value="{{ label.chckd_frmlc_mtrqlt|default:'N' }}">
+        <input type="hidden" name="chckd_manufacturer_info" value="{{ label.chckd_manufacturer_info|default:'Y' }}">
+        <input type="hidden" name="chckd_distributor_address" value="{{ label.chckd_distributor_address|default:'N' }}">
+        <input type="hidden" name="chckd_repacker_address" value="{{ label.chckd_repacker_address|default:'N' }}">
+        <input type="hidden" name="chckd_importer_address" value="{{ label.chckd_importer_address|default:'N' }}">
+        <input type="hidden" name="chckd_date_info" value="{{ label.chckd_date_info|default:'Y' }}">
+        <input type="hidden" name="chckd_rawmtrl_nm_display" value="{{ label.chckd_rawmtrl_nm_display|default:'N' }}">
+        <input type="hidden" name="chckd_cautions" value="{{ label.chckd_cautions|default:'N' }}">
+        <input type="hidden" name="chckd_additional_info" value="{{ label.chckd_additional_info|default:'N' }}">
+        <input type="hidden" name="chckd_nutrition_text" value="{{ label.chckd_nutrition_text|default:'N' }}">
 
       <!-- 라벨명 + 식품유형 한 줄 구성 -->
       <div class="d-flex align-items-center mb-2" style="gap:5px;">

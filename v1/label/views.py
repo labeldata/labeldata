@@ -192,13 +192,6 @@ def save_to_my_label(request, prdlst_report_no):
 @login_required
 def label_creation(request, label_id=None):
     if request.method == 'POST':
-        # 체크박스 상태 처리
-        checkbox_states = {}
-        for key, value in request.POST.items():
-            if key.endswith('_state'):
-                original_name = key.replace('_state', '')
-                checkbox_states[original_name] = value
-        
         if label_id:
             label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
             form = LabelCreationForm(request.POST, instance=label)
@@ -209,10 +202,12 @@ def label_creation(request, label_id=None):
             label = form.save(commit=False)
             label.user_id = request.user
             
-            # 체크박스 상태 저장
-            for field_name, state in checkbox_states.items():
-                if hasattr(label, field_name):
-                    setattr(label, field_name, state)
+            # 체크박스 상태 처리 수정
+            for field_name in form.cleaned_data:
+                if field_name.startswith('chk_'):
+                    model_field = 'chckd_' + field_name[4:]  # chk_ -> chckd_
+                    if hasattr(label, model_field):
+                        setattr(label, model_field, 'Y' if form.cleaned_data[field_name] else 'N')
             
             label.save()
             return redirect('label:label_creation', label_id=label.my_label_id)

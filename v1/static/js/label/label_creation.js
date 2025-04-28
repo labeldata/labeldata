@@ -378,6 +378,87 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ------------------ 식품유형 대분류-소분류 연동 ------------------
+  function updateCheckboxesByFoodType(foodType, forceUpdate) {
+    if (!foodType) return Promise.resolve();
+    
+    // 초기 로드 여부 확인 및 강제 업데이트 플래그 적용
+    const isInitialLoad = window.checkboxesLoadedFromDB === true;
+    const shouldForceUpdate = forceUpdate === true;
+    
+    console.log("1 - forceUpdate:", shouldForceUpdate);
+  
+    return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
+      .then(response => response.json())
+      .then(data => {
+        if (!data.success || !data.settings) {
+          return;
+        }
+        const settings = data.settings;
+        console.log("2 - forceUpdate:", shouldForceUpdate);
+        
+        // 규정 정보와 소비기한 옵션은 항상 업데이트
+        if (settings.relevant_regulations !== undefined) {
+          const textarea = document.querySelector('textarea[name="related_regulations"]');
+          if (textarea) {
+            textarea.value = settings.relevant_regulations;
+            updateTextareaHeight(textarea);
+          }
+        }
+        
+        if (settings.pog_daycnt_options !== undefined) {
+          updateDateDropdownOptions(settings.pog_daycnt_options);
+        }
+        
+        // 초기 로드가 아니거나 강제 업데이트 플래그가 설정된 경우 체크박스 업데이트
+        if (!isInitialLoad || shouldForceUpdate) {
+          console.log("Updating checkboxes based on food type:", foodType);
+          
+          const fieldMappings = {
+            prdlst_dcnm: 'chk_prdlst_dcnm',
+            rawmtrl_nm: 'chk_rawmtrl_nm_display',
+            nutritions: 'chk_calories',
+            prdlst_nm: 'chk_prdlst_nm',
+            ingredients_info: 'chk_ingredients_info',
+            content_weight: 'chk_content_weight',
+            weight_calorie: 'chk_weight_calorie',
+            prdlst_report_no: 'chk_prdlst_report_no',
+            country_of_origin: 'chk_country_of_origin',
+            storage_method: 'chk_storage_method',
+            frmlc_mtrqlt: 'chk_frmlc_mtrqlt',
+            manufacturer_info: 'chk_manufacturer_info',
+            distributor_address: 'chk_distributor_address',
+            repacker_address: 'chk_repacker_address',
+            importer_address: 'chk_importer_address',
+            date_info: 'chk_date_info',
+            cautions: 'chk_cautions',
+            additional_info: 'chk_additional_info'
+          };
+  
+          Object.keys(settings).forEach(field => {
+            const value = settings[field];
+            const checkboxId = fieldMappings[field] || `chk_${field}`;
+            const checkbox = document.getElementById(checkboxId);
+            if (checkbox) {
+              checkbox.checked = value === 'Y';
+              checkbox.disabled = value === 'D';
+              checkbox.dataset.forcedDisabled = value === 'D' ? 'true' : 'false';
+              checkbox.dispatchEvent(new Event('change'));
+            }
+            if (field === 'pog_daycnt') {
+              updateDateDropdown(settings.pog_daycnt);
+            }
+          });
+        }
+      })
+      .finally(() => {
+        // 함수가 완료된 후 플래그 변경
+        if (isInitialLoad) {
+          console.log("Initial load completed, setting flag to false");
+          window.checkboxesLoadedFromDB = false;
+        }
+      });
+  }
+  
   function initFoodTypeFiltering() {
     const foodGroup = $('#food_group');
     const foodType = $('#food_type');
@@ -435,7 +516,11 @@ document.addEventListener('DOMContentLoaded', function () {
               }
             });
         }
-        updateCheckboxesByFoodType(foodTypeValue);
+        
+        console.log("Food type changed to:", foodTypeValue);
+        
+        // 강제 업데이트 플래그를 직접 함수에 전달
+        updateCheckboxesByFoodType(foodTypeValue, true);
       }
       updateSummary();
     });
@@ -449,7 +534,10 @@ document.addEventListener('DOMContentLoaded', function () {
       if (group) {
         foodGroup.val(group).trigger('change.select2');
         hiddenFoodGroup.val(group);
-        updateCheckboxesByFoodType(initialFoodType);
+        if (window.checkboxesLoadedFromDB === undefined) {
+          window.checkboxesLoadedFromDB = true;
+        }
+        updateCheckboxesByFoodType(initialFoodType, false);
       } else {
         fetch(`/label/get-food-group/?food_type=${encodeURIComponent(initialFoodType)}`)
           .then(response => response.json())
@@ -457,73 +545,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success && data.food_group) {
               foodGroup.val(data.food_group).trigger('change.select2');
               hiddenFoodGroup.val(data.food_group);
-              updateCheckboxesByFoodType(initialFoodType);
+              updateCheckboxesByFoodType(initialFoodType, false);
             }
           });
       }
     } else {
-      // 대분류와 소분류가 모두 선택되지 않은 초기 상태에서도 전체 데이터를 로드
       updateFoodTypes('', initialFoodType);
       setDefaultCheckboxes();
     }
-  }
-
-  function updateCheckboxesByFoodType(foodType) {
-    if (!foodType) return Promise.resolve();
-    return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
-      .then(response => response.json())
-      .then(data => {
-        if (!data.success || !data.settings) {
-          return;
-        }
-        const settings = data.settings;
-        const fieldMappings = {
-          prdlst_dcnm: 'chk_prdlst_dcnm',
-          rawmtrl_nm: 'chk_rawmtrl_nm_display',
-          nutritions: 'chk_calories',
-          prdlst_nm: 'chk_prdlst_nm',
-          ingredients_info: 'chk_ingredients_info',
-          content_weight: 'chk_content_weight',
-          weight_calorie: 'chk_weight_calorie',
-          prdlst_report_no: 'chk_prdlst_report_no',
-          country_of_origin: 'chk_country_of_origin',
-          storage_method: 'chk_storage_method',
-          frmlc_mtrqlt: 'chk_frmlc_mtrqlt',
-          manufacturer_info: 'chk_manufacturer_info',
-          distributor_address: 'chk_distributor_address',
-          repacker_address: 'chk_repacker_address',
-          importer_address: 'chk_importer_address',
-          date_info: 'chk_date_info',
-          cautions: 'chk_cautions',
-          additional_info: 'chk_additional_info'
-        };
-
-        Object.keys(settings).forEach(field => {
-          const value = settings[field];
-          const checkboxId = fieldMappings[field] || `chk_${field}`;
-          const checkbox = document.getElementById(checkboxId);
-          if (checkbox) {
-            checkbox.checked = value === 'Y';
-            checkbox.disabled = value === 'D';
-            checkbox.dataset.forcedDisabled = value === 'D' ? 'true' : 'false';
-            checkbox.dispatchEvent(new Event('change'));
-          }
-          if (field === 'pog_daycnt') {
-            updateDateDropdown(settings.pog_daycnt);
-          }
-        });
-
-        if (settings.pog_daycnt_options !== undefined) {
-          updateDateDropdownOptions(settings.pog_daycnt_options);
-        }
-        if (settings.relevant_regulations !== undefined) {
-          const textarea = document.querySelector('textarea[name="related_regulations"]');
-          if (textarea) {
-            textarea.value = settings.relevant_regulations;
-            updateTextareaHeight(textarea);
-          }
-        }
-      });
   }
 
   function updateDateDropdown(value) {
@@ -576,6 +605,26 @@ document.addEventListener('DOMContentLoaded', function () {
       additional_info: ['textarea[name="additional_info"]'],
       calories: ['textarea[name="nutrition_text"]']
     };
+    
+    // DB에 저장된 체크박스 상태 불러오기
+    function loadCheckboxStates() {
+      console.log("Loading checkbox states from DB");
+      const checkboxStates = {};
+      document.querySelectorAll('input[type="hidden"][name^="chckd_"]').forEach(hiddenField => {
+        const fieldName = hiddenField.name.replace('chckd_', '');
+        const checkboxId = `chk_${fieldName}`;
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox) {
+          const isChecked = hiddenField.value === 'Y';
+          console.log(`Setting ${checkboxId} to ${isChecked ? 'checked' : 'unchecked'}`);
+          checkbox.checked = isChecked;
+          checkbox.dispatchEvent(new Event('change'));
+          checkboxStates[checkboxId] = isChecked;
+        }
+      });
+      return checkboxStates;
+    }
+    
     document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(checkbox => {
       if (checkbox.dataset.initialized === 'true') return;
       checkbox.dataset.initialized = 'true';
@@ -599,50 +648,70 @@ document.addEventListener('DOMContentLoaded', function () {
           field.classList.toggle('disabled-textarea', field.disabled);
         });
       }
-      checkbox.addEventListener('change', updateFields);
+      checkbox.addEventListener('change', function() {
+        updateFields();
+        const hiddenFieldName = `chckd_${fieldName}`;
+        let hiddenField = document.querySelector(`input[type="hidden"][name="${hiddenFieldName}"]`);
+        if (hiddenField) {
+          hiddenField.value = this.checked ? 'Y' : 'N';
+        }
+      });
       updateFields();
     });
+    
+    // DB에 저장된 체크박스 상태 로드
+    window.checkboxesLoadedFromDB = true;
+    window.forceUpdateCheckboxes = false; // 강제 업데이트 모드 초기값 설정
+    loadCheckboxStates();
+    
+    console.log("Checkbox initialization completed, checkboxesLoadedFromDB =", window.checkboxesLoadedFromDB);
   }
 
   function setDefaultCheckboxes() {
-    const labelId = $('#label_id').val();
-    const foodType = $('#food_type').val();
-    if (labelId || foodType) {
+    if (window.checkboxesLoadedFromDB || $('#label_id').val()) {
       return;
     }
-    const defaults = {
-      chk_prdlst_nm: true,
-      chk_content_weight: true,
-      chk_manufacturer_info: true,
-      chk_date_info: true,
-      chk_label_nm: false,
-      chk_ingredients_info: false,
-      chk_distributor_address: false,
-      chk_repacker_address: false,
-      chk_importer_address: false,
-      chk_rawmtrl_nm: false
-    };
+    
+    const foodType = $('#food_type').val();
+    
+    if (!foodType) {
+      const defaults = {
+        chk_prdlst_nm: true,
+        chk_content_weight: true,
+        chk_manufacturer_info: true,
+        chk_date_info: true,
+        chk_label_nm: false,
+        chk_ingredients_info: false,
+        chk_distributor_address: false,
+        chk_repacker_address: false,
+        chk_importer_address: false,
+        chk_rawmtrl_nm: false
+      };
 
-    Object.keys(defaults).forEach(id => {
-      const checkbox = document.getElementById(id);
-      if (checkbox && !checkbox.disabled) {
-        checkbox.checked = defaults[id];
-        checkbox.dispatchEvent(new Event('change'));
-      }
-    });
+      Object.keys(defaults).forEach(id => {
+        const checkbox = document.getElementById(id);
+        if (checkbox && !checkbox.disabled) {
+          checkbox.checked = defaults[id];
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+    }
   }
 
   function prepareFormData() {
-    $('input[type="checkbox"]').each(function () {
-      const name = $(this).attr('name');
-      if (name?.startsWith('chk_')) {
-        let hiddenField = $(`input[type="hidden"][name="${name}"]`);
-        if (!hiddenField.length) {
-          hiddenField = $('<input>').attr({ type: 'hidden', name, value: $(this).prop('checked') ? 'Y' : 'N' });
-          $(this).after(hiddenField);
-        } else {
-          hiddenField.val($(this).prop('checked') ? 'Y' : 'N');
+    document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(function(checkbox) {
+      const id = checkbox.id;
+      if (id?.startsWith('chk_')) {
+        const fieldName = id.replace('chk_', '');
+        const hiddenFieldName = `chckd_${fieldName}`;
+        let hiddenField = document.querySelector(`input[type="hidden"][name="${hiddenFieldName}"]`);
+        if (!hiddenField) {
+          hiddenField = document.createElement('input');
+          hiddenField.type = 'hidden';
+          hiddenField.name = hiddenFieldName;
+          checkbox.parentNode.appendChild(hiddenField);
         }
+        hiddenField.value = checkbox.checked ? 'Y' : 'N';
       }
     });
 
@@ -829,8 +898,8 @@ document.addEventListener('DOMContentLoaded', function () {
     initSelect2Components();
     initCheckBoxGroups();
     initToggleButtons();
-    initFoodTypeFiltering();
     initCheckboxFieldToggle();
+    initFoodTypeFiltering();
     initAutoExpand();
 
     $('#labelForm').on('submit', function (event) {
