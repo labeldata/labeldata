@@ -1454,3 +1454,26 @@ def bulk_delete_labels(request):
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+def my_ingredient_table_partial(request):
+    search_fields = {
+        'prdlst_nm': 'prdlst_nm',
+        'prdlst_report_no': 'prdlst_report_no',
+        'prdlst_dcnm': 'prdlst_dcnm',
+        'bssh_nm': 'bssh_nm',
+        'ingredient_display_name': 'ingredient_display_name',
+    }
+    search_conditions, search_values = get_search_conditions(request, search_fields)
+    search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
+    sort_field, sort_order = process_sorting(request, 'prdlst_nm')
+    items_per_page = int(request.GET.get('items_per_page', 10))
+    page_number = request.GET.get('page', 1)
+    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+    paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
+    context = {
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'page_range': page_range,
+    }
+    return render(request, 'label/_my_ingredient_table.html', context)

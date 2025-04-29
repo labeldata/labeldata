@@ -44,14 +44,11 @@ function saveMyIngredient() {
     const my_ingredient_id = my_ingredient_id_elem ? parseInt(my_ingredient_id_elem.value, 10) : null;
     const formData = new FormData(document.getElementById("ingredientForm"));
     let url;
-    
-    // ID가 있으면 해당 URL로 요청 (PUT/수정), 없으면 신규 생성 URL로 요청
     if (my_ingredient_id) {
         url = `/label/my-ingredient-detail/${my_ingredient_id}/`;
     } else {
         url = '/label/my-ingredient-detail/';
     }
-    
     fetch(url, {
         method: 'POST',
         body: formData,
@@ -71,11 +68,21 @@ function saveMyIngredient() {
     })
     .then(data => {
         if (data.success) {
-            alert('내 원료가 성공적으로 저장되었습니다.');
-            if (window.opener) {
-                window.opener.location.reload();
-            }
-            window.close();
+            // 왼쪽 리스트 갱신 및 신규 원료 상세 표시
+            fetch('/label/my-ingredient-table-partial/')
+                .then(res => res.text())
+                .then(tableHtml => {
+                    const tbody = document.querySelector('#ingredientTable tbody');
+                    if (tbody) {
+                        tbody.innerHTML = tableHtml;
+                        if (data.ingredient_id) {
+                            const newRow = document.querySelector(`.ingredient-row[data-ingredient-id='${data.ingredient_id}']`);
+                            if (newRow) {
+                                loadIngredientDetail(data.ingredient_id, newRow);
+                            }
+                        }
+                    }
+                });
         } else {
             alert(data.error || '저장에 실패했습니다.');
         }
