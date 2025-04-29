@@ -34,17 +34,18 @@
     font-size: 3rem;
     margin-bottom: 1rem;
   }
-  /* 선택된 행의 스타일 추가 - !important 사용 */
+  /* 선택된 행의 스타일 강화 */
   .ingredient-row.selected {
-    background-color: #536675 !important; /* !important로 우선순위 강제 지정 */
-    color: white !important; /* 텍스트도 흰색으로 변경하여 가독성 개선 */
-    font-weight: 500 !important; /* 약간 굵게 */
+    background-color: #2d6cdf !important;
+    color: #fff !important;
+    font-weight: 700 !important;
+    border-left: 6px solid #ffb300 !important;
+    box-shadow: 0 2px 8px rgba(45,108,223,0.08);
+    transition: background 0.2s, box-shadow 0.2s;
   }
-  
-  /* 선택된 행에 hover 효과도 덮어쓰기 */
   .table-hover .ingredient-row.selected:hover {
-    background-color: #455568 !important; /* 호버 시 약간 더 어두운 색상 */
-    color: white !important;
+    background-color: #1b4e99 !important;
+    color: #fff !important;
   }
 </style>
 
