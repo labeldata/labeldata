@@ -211,3 +211,74 @@ FIELD_REGULATIONS = {
     - 소비자가 오인•혼동하지 않도록 명확히 표시
     '''
 }
+
+# 미리보기 기본 설정
+PREVIEW_DEFAULT_SETTINGS = {
+    'layout': {
+        'width': 10,  # cm
+        'height': 10, # cm
+        'area': 100,  # cm²
+        'min_width': 4,
+        'max_width': 30,
+        'min_height': 3,
+        'max_height': 20
+    },
+    'font': {
+        'family': 'Noto Sans KR',
+        'available_fonts': [
+            {'name': 'Noto Sans KR', 'label': '노토 산스'},
+            {'name': 'Nanum Gothic', 'label': '나눔고딕'},
+            {'name': 'Nanum Myeongjo', 'label': '나눔명조'}
+        ],
+        'size': {
+            'default': 10,
+            'min': 6,
+            'max': 72,
+            'product_name': 16,
+            'origin': 14,
+            'content_weight': 12,
+            'general': 10
+        }
+    },
+    'spacing': {
+        'letter': {
+            'default': -5,
+            'min': -10,
+            'max': 10
+        },
+        'line': {
+            'default': 1.2,
+            'min': 1.0,
+            'max': 3.0
+        }
+    },
+    'regulations': {
+        'area_thresholds': {
+            'small': 100,
+            'standard': 100
+        },
+        'font_size': {
+            'small': 12,   # 100cm² 미만일 때
+            'standard': 10  # 100cm² 이상일 때
+        }
+    }
+}
+
+# 규정 검증을 위한 상수
+REGULATIONS = {
+    'area_thresholds': {
+        'small': 100,    # 100cm² 미만
+        'medium': 3000,  # 3000cm² 미만
+        'large': 3000    # 3000cm² 이상
+    },
+    'font_size': {
+        'product_name': {'min': 16, 'small_area_min': 10},
+        'origin': {'min': 14, 'small_area_min': 10},
+        'content_weight': {'min': 12, 'small_area_min': 10},
+        'general': {'min': 10, 'small_area_min': 10}
+    },
+    'spacing': {
+        'letter': {'min': -5},
+        'word': {'min': 90, 'small_area_min': 50}
+    }
+}
