@@ -181,8 +181,8 @@
                         <div class="settings-item">
                             <label class="form-label">레이아웃</label>
                             <select class="form-select form-select-sm" id="layoutSelect">
-                                <option value="vertical">세로형</option>
-                                <option value="horizontal">가로형</option>
+                                <option value="vertical" {% if label.prv_layout == "vertical" %}selected{% endif %}>세로형</option>
+                                <option value="horizontal" {% if label.prv_layout == "horizontal" %}selected{% endif %}>가로형</option>
                             </select>
                         </div>
                     </div>
@@ -195,45 +195,44 @@
                         <div class="settings-item">
                             <label class="form-label required">가로 (cm)</label>
                             <input type="number" class="form-control form-control-sm" id="widthInput" 
-                                   value="10" min="4" max="30" step="1">
+                                   value="{{ label.prv_width|default:'10' }}" min="4" max="30" step="1">
                         </div>
                     </div>
                     <div class="settings-row">
                         <div class="settings-item" style="display: flex; align-items: center; gap: 6px;">
                             <label class="form-label required">세로 (cm)</label>
-                            <input type="number" class="form-control form-control-sm" id="heightInput" value="10" min="3" max="20" step="1" style="width: 80px;">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" id="autoHeightBtn" style="margin-left: 4px;">자동 맞춤</button>
+                            <input type="number" class="form-control form-control-sm" id="heightInput" value="{{ label.prv_length|default:'10' }}" min="3" max="20" step="1" style="width: 80px;">
                         </div>
                     </div>
                     <div class="settings-row">
                         <div class="settings-item">
                             <label class="form-label">글꼴</label>
                             <select class="form-select form-select-sm" id="fontFamilySelect">
-                                <option value="'Noto Sans KR'">노토 산스</option>
-                                <option value="'Nanum Gothic'">나눔고딕</option>
-                                <option value="'Nanum Myeongjo'">나눔명조</option>
+                                <option value="'Noto Sans KR'" {% if label.prv_font == "'Noto Sans KR'" %}selected{% endif %}>노토 산스</option>
+                                <option value="'Nanum Gothic'" {% if label.prv_font == "'Nanum Gothic'" %}selected{% endif %}>나눔고딕</option>
+                                <option value="'Nanum Myeongjo'" {% if label.prv_font == "'Nanum Myeongjo'" %}selected{% endif %}>나눔명조</option>
                             </select>
                         </div>
                     </div>
                     <div class="settings-row">
                         <div class="settings-item">
-                            <label class="form-label">크기 (pt)</label>
+                            <label class="form-label">글자 크기 (pt)</label>
                             <input type="number" class="form-control form-control-sm" id="fontSizeInput" 
-                                   value="10" min="6" max="72" step="1">
+                                   value="{{ label.prv_font_size|default:'10' }}" min="10" max="72" step="1">
                         </div>
                     </div>
                     <div class="settings-row">
                         <div class="settings-item">
                             <label class="form-label">자간 (%)</label>
                             <input type="number" class="form-control form-control-sm" id="letterSpacingInput" 
-                                   value="-5" min="-10" max="10" step="1">
+                                   value="{{ label.prv_letter_spacing|default:'-5' }}" min="-5" max="10" step="1">
                         </div>
                     </div>
                     <div class="settings-row">
                         <div class="settings-item">
                             <label class="form-label">줄간격</label>
                             <input type="number" class="form-control form-control-sm" id="lineHeightInput" 
-                                   value="1.2" min="1.0" max="3.0" step="0.1">
+                                   value="{{ label.prv_line_spacing|default:'1.2' }}" min="1" max="3.0" step="0.1">
                         </div>
                     </div>
                 </div>
@@ -270,6 +269,14 @@
             <div class="preview-header-box">
                 <div class="header-text">식품위생법에 따른 한글표시사항</div>
             </div>
+            
+            <!-- CSRF 토큰을 미리보기 팝업에도 전달 -->
+            <form style="display:none;">
+              {% csrf_token %}
+            </form>
+            
+            <!-- label_id hidden input 추가 -->
+            <input type="hidden" name="label_id" value="{{ label.my_label_id }}">
             
             <table class="preview-table">
                 <tbody>

@@ -239,6 +239,14 @@ class MyLabel(models.Model):
     chckd_additional_info = models.CharField(max_length=1, default='N', verbose_name='기타표시사항 체크')
     chckd_nutrition_text = models.CharField(max_length=1, default='N', verbose_name='영양성분 체크')
 
+    prv_layout = models.CharField(max_length=10, verbose_name="레이아웃", null=True, blank=True)
+    prv_width = models.CharField(max_length=10, verbose_name="가로", null=True, blank=True)
+    prv_length = models.CharField(max_length=10, verbose_name="세로", null=True, blank=True)
+    prv_font = models.CharField(max_length=100, verbose_name="글꼴", null=True, blank=True)
+    prv_font_size = models.CharField(max_length=10, verbose_name="글꼴 크기", null=True, blank=True)
+    prv_letter_spacing = models.CharField(max_length=10, verbose_name="자간", null=True, blank=True)
+    prv_line_spacing = models.CharField(max_length=10, verbose_name="행간", null=True, blank=True)
+
     class Meta:
         db_table = "my_label"
         indexes = [

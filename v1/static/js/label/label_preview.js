@@ -187,30 +187,6 @@ document.addEventListener('DOMContentLoaded', function () {
         updateArea();
     }
 
-    // 최종 수정일 표시 함수 수정
-    function updateLastModifiedDate() {
-        const dateElement = document.getElementById('lastModifiedDate');
-        if (dateElement && window.opener) {
-            try {
-                const updateDatetime = window.opener.document.querySelector('[name="update_datetime"]')?.value;
-                const date = updateDatetime ? new Date(updateDatetime) : new Date();
-                
-                const formattedDate = date.toLocaleString('ko-KR', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false
-                }).replace(/\./g, '-');
-
-                dateElement.textContent = `최종 수정일: ${formattedDate}`;
-                dateElement.style.display = 'block';
-            } catch (error) {
-                console.error('최종 수정일 업데이트 실패:', error);
-            }
-        }
-    }
 
     function updateArea() {
         const width = parseFloat(document.getElementById('widthInput').value) || 0;
@@ -236,13 +212,75 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function enforceInputMinMax() {
+        const fontSizeInput = document.getElementById('fontSizeInput');
+        const letterSpacingInput = document.getElementById('letterSpacingInput');
+        const lineHeightInput = document.getElementById('lineHeightInput');
+        if (fontSizeInput && fontSizeInput.value < 10) fontSizeInput.value = 10;
+        if (letterSpacingInput && letterSpacingInput.value < -5) letterSpacingInput.value = -5;
+        if (lineHeightInput && lineHeightInput.value < 1) lineHeightInput.value = 1;
+
+        // 수동 입력 시에도 최솟값 자동 보정
+        if (fontSizeInput) {
+            fontSizeInput.addEventListener('input', function() {
+                if (parseFloat(this.value) < 10) this.value = 10;
+            });
+        }
+        if (letterSpacingInput) {
+            letterSpacingInput.addEventListener('input', function() {
+                if (parseFloat(this.value) < -5) this.value = -5;
+            });
+        }
+        if (lineHeightInput) {
+            lineHeightInput.addEventListener('input', function() {
+                if (parseFloat(this.value) < 1) this.value = 1;
+            });
+        }
+    }
+
     setupEventListeners();
     setTimeout(updatePreviewStyles, 100);
     setupAreaCalculation();
     setTimeout(updateArea, 100);
-    setupValidationListeners();
+    enforceInputMinMax();
 });
 
+// 규정 검증 시 입력값을 서버에 저장하는 함수 추가
+function savePreviewSettingsToServer() {
+    
+    const labelId = document.querySelector('input[name="label_id"]')?.value;
+    console.log(labelId);
+    if (!labelId) return;
+    const data = {
+        label_id: labelId,
+        layout: document.getElementById('layoutSelect')?.value,
+        width: document.getElementById('widthInput')?.value,
+        length: document.getElementById('heightInput')?.value,
+        font: document.getElementById('fontFamilySelect')?.value,
+        font_size: document.getElementById('fontSizeInput')?.value,
+        letter_spacing: document.getElementById('letterSpacingInput')?.value,
+        line_spacing: document.getElementById('lineHeightInput')?.value
+    };
+    fetch('/label/save_preview_settings/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': (document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(res => {
+        if (!res.success) {
+            alert('미리보기 설정 저장 실패: ' + (res.error || '')); 
+        }
+    })
+    .catch(err => {
+        alert('미리보기 설정 저장 중 오류 발생: ' + err);
+    });
+}
+
+// 기존 validateSettings 함수 내에서 저장 함수 호출
 function validateSettings() {
     const width = parseFloat(document.getElementById('widthInput').value);
     const height = parseFloat(document.getElementById('heightInput').value);
@@ -256,41 +294,41 @@ function validateSettings() {
     let errors = [];
     
     // 면적별 검증
-    if (area < 100) {
-        if (fontSize < 12) {
-            errors.push('100cm² 미만의 표시면적: 글자 크기가 12pt 이상이어야 합니다.');
-            errorFields.add('fontSizeInput');
-        }
-    } else if (area >= 100) {
-        const requiredSizes = {
-            'product-name': 16,
-            'origin-text': 14,
-            'content-weight': 12
-        };
-        document.querySelectorAll('.preview-table td').forEach(td => {
-            const className = td.className;
-            const computedSize = parseFloat(window.getComputedStyle(td).fontSize);
-            if (requiredSizes[className]) {
-                if (computedSize < requiredSizes[className]) {
-                    errors.push(`${className}: 글자 크기가 ${requiredSizes[className]}pt 이상이어야 합니다.`);
-                    errorFields.add('fontSizeInput');
-                }
-            } else if (computedSize < 10) {
-                errors.push('일반 항목: 글자 크기가 10pt 이상이어야 합니다.');
-                errorFields.add('fontSizeInput');
-            }
-        });
-    }
-    if (letterSpacing < -5) {
-        errors.push('자간은 -5% 이상이어야 합니다.');
-        errorFields.add('letterSpacingInput');
-    }
-    if (lineHeight < 1) {
-        errors.push('줄간격은 1 이상이어야 합니다.');
-        errorFields.add('lineHeightInput');
-    }
-    if (width < 4 || width > 30) errorFields.add('widthInput');
-    if (height < 3 || height > 20) errorFields.add('heightInput');
+    // if (area < 100) {
+    //     if (fontSize < 12) {
+    //         errors.push('100cm² 미만의 표시면적: 글자 크기가 12pt 이상이어야 합니다.');
+    //         errorFields.add('fontSizeInput');
+    //     }
+    // } else if (area >= 100) {
+    //     const requiredSizes = {
+    //         'product-name': 16,
+    //         'origin-text': 14,
+    //         'content-weight': 12
+    //     };
+    //     document.querySelectorAll('.preview-table td').forEach(td => {
+    //         const className = td.className;
+    //         const computedSize = parseFloat(window.getComputedStyle(td).fontSize);
+    //         if (requiredSizes[className]) {
+    //             if (computedSize < requiredSizes[className]) {
+    //                 errors.push(`${className}: 글자 크기가 ${requiredSizes[className]}pt 이상이어야 합니다.`);
+    //                 errorFields.add('fontSizeInput');
+    //             }
+    //         } else if (computedSize < 10) {
+    //             errors.push('일반 항목: 글자 크기가 10pt 이상이어야 합니다.');
+    //             errorFields.add('fontSizeInput');
+    //         }
+    //     });
+    // }
+    // if (letterSpacing < -5) {
+    //     errors.push('자간은 -5% 이상이어야 합니다.');
+    //     errorFields.add('letterSpacingInput');
+    // }
+    // if (lineHeight < 1) {
+    //     errors.push('줄간격은 1 이상이어야 합니다.');
+    //     errorFields.add('lineHeightInput');
+    // }
+    // if (width < 4 || width > 30) errorFields.add('widthInput');
+    // if (height < 3 || height > 20) errorFields.add('heightInput');
 
     // 필드별로 is-invalid 및 is-valid 처리
     ['widthInput', 'heightInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput'].forEach(id => {
@@ -310,21 +348,9 @@ function validateSettings() {
         alert('규정 검증 결과:\n\n' + errors.join('\n'));
         return false;
     } else {
+        // 규정 검증 통과 시 서버에 저장
+        savePreviewSettingsToServer();
         alert('모든 규정을 준수하고 있습니다.');
         return true;
     }
-}
-
-function setupValidationListeners() {
-    // width, height, fontSize, letterSpacing, lineHeight는 엔터 입력 시만 검증
-    ['widthInput', 'heightInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput'].forEach(id => {
-        const element = document.getElementById(id);
-        if (element) {
-            element.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    validateSettings(); // is-invalid 처리는 validateSettings에서만!
-                }
-            });
-        }
-    });
 }

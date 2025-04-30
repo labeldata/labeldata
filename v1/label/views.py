@@ -8,6 +8,7 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_POST
 from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive
 from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  # 지우지 않음
@@ -1356,6 +1357,7 @@ def preview_popup(request):
             # 원산지 표시대상 로직 추가 (필요한 경우)
 
         context = {
+            'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
             'nutrition_items': nutrition_items,
             'allergens': list(set(allergens)),  # 중복 제거
@@ -1477,3 +1479,24 @@ def my_ingredient_table_partial(request):
         'page_range': page_range,
     }
     return render(request, 'label/_my_ingredient_table.html', context)
+
+@require_POST
+@login_required
+def save_preview_settings(request):
+    """미리보기 설정(prv_*) 저장"""
+    try:
+        data = json.loads(request.body)
+        label_id = data.get('label_id')
+        label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+        # 입력값 저장
+        label.prv_layout = data.get('layout')
+        label.prv_width = data.get('width')
+        label.prv_length = data.get('length')
+        label.prv_font = data.get('font')
+        label.prv_font_size = data.get('font_size')
+        label.prv_letter_spacing = data.get('letter_spacing')
+        label.prv_line_spacing = data.get('line_spacing')
+        label.save()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
