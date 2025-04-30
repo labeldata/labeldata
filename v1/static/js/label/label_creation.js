@@ -4,6 +4,50 @@ let regulations = {};
 let lastFocusedFieldName = null;
 let phraseInsertMode = 'append';
 
+// ------------------ 체크박스 필드 매핑 (전역) ------------------
+const fieldMappings = {
+  // updateCheckboxesByFoodType에서 사용하는 id 매핑
+  prdlst_dcnm: 'chk_prdlst_dcnm',
+  rawmtrl_nm: 'chk_rawmtrl_nm_display',
+  nutritions: 'chk_calories',
+  prdlst_nm: 'chk_prdlst_nm',
+  ingredients_info: 'chk_ingredients_info',
+  content_weight: 'chk_content_weight',
+  weight_calorie: 'chk_weight_calorie',
+  prdlst_report_no: 'chk_prdlst_report_no',
+  country_of_origin: 'chk_country_of_origin',
+  storage_method: 'chk_storage_method',
+  frmlc_mtrqlt: 'chk_frmlc_mtrqlt',
+  manufacturer_info: 'chk_manufacturer_info',
+  distributor_address: 'chk_distributor_address',
+  repacker_address: 'chk_repacker_address',
+  importer_address: 'chk_importer_address',
+  date_info: 'chk_date_info',
+  cautions: 'chk_cautions',
+  additional_info: 'chk_additional_info',
+  // initCheckboxFieldToggle에서 사용하는 필드 매핑 (배열 형태)
+  label_nm: ['input[name="my_label_name"]'],
+  prdlst_dcnm_arr: ['input[name="prdlst_dcnm"]'],
+  prdlst_nm_arr: ['input[name="prdlst_nm"]'],
+  ingredients_info_arr: ['input[name="ingredient_info"]'],
+  content_weight_arr: ['input[name="content_weight"]'],
+  weight_calorie_arr: ['input[name="weight_calorie"]'],
+  prdlst_report_no_arr: ['input[name="prdlst_report_no"]'],
+  country_of_origin_arr: ['select[name="country_of_origin"]'],
+  storage_method_arr: ['input[name="storage_method"]'],
+  frmlc_mtrqlt_arr: ['input[name="frmlc_mtrqlt"]'],
+  manufacturer_info_arr: ['input[name="bssh_nm"]'],
+  distributor_address_arr: ['input[name="distributor_address"]'],
+  repacker_address_arr: ['input[name="repacker_address"]'],
+  importer_address_arr: ['input[name="importer_address"]'],
+  date_info_arr: ['input[name="pog_daycnt"]', 'select[name="date_option"]'],
+  rawmtrl_nm_display_arr: ['textarea[name="rawmtrl_nm_display"]'],
+  rawmtrl_nm_arr: ['textarea[name="rawmtrl_nm"]'],
+  cautions_arr: ['textarea[name="cautions"]'],
+  additional_info_arr: ['textarea[name="additional_info"]'],
+  calories_arr: ['textarea[name="nutrition_text"]']
+};
+
 // DOMContentLoaded 이벤트로 초기화 보장
 document.addEventListener('DOMContentLoaded', function () {
   // 데이터 초기화
@@ -113,7 +157,6 @@ document.addEventListener('DOMContentLoaded', function () {
   window.openPreviewPopup = function() {
     const form = document.getElementById("labelForm");
     if (!form) {
-        console.error("Label form not found");
         return;
     }
     const labelId = document.getElementById('label_id')?.value;
@@ -122,7 +165,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
     const url = `/label/preview/?label_id=${labelId}`;
-    console.log("Opening preview URL:", url);
     const width = 1100;
     const height = 900;
     const left = (window.innerWidth - width) / 2;
@@ -218,21 +260,6 @@ document.addEventListener('DOMContentLoaded', function () {
         updateSummary();
       }
     }
-  }
-
-  function initSingleSelectGroup(selector, exceptionId = null) {
-    $(selector).on('click', function (e) {
-      if (this.id === exceptionId) return;
-      const alreadyChecked = $(this).data('alreadyChecked') || false;
-      $(selector).not(this).prop('checked', false).data('alreadyChecked', false);
-      $(this).prop('checked', !alreadyChecked).data('alreadyChecked', !alreadyChecked);
-      e.stopPropagation();
-    });
-  }
-
-  function getCheckedLabel(selector) {
-    const checked = $(selector).filter(':checked');
-    return checked.length ? $(`label[for="${checked.attr('id')}"]`).text() || null : null;
   }
 
   // ------------------ 식품유형 요약 업데이트 ------------------
@@ -343,50 +370,13 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // ------------------ 영양성분 데이터 처리 ------------------
-  function updateNutritionFields(data) {
-    if (!data) return;
-    const fieldMap = {
-      serving_size: 'serving_size',
-      serving_size_unit: 'serving_size_unit',
-      units_per_package: 'units_per_package',
-      nutrition_display_unit: 'nutrition_display_unit',
-      calories: 'calories',
-      calories_unit: 'calories_unit',
-      natriums: 'natriums',
-      natriums_unit: 'natriums_unit',
-      carbohydrates: 'carbohydrates',
-      carbohydrates_unit: 'carbohydrates_unit',
-      sugars: 'sugars',
-      sugars_unit: 'sugars_unit',
-      fats: 'fats',
-      fats_unit: 'fats_unit',
-      trans_fats: 'trans_fats',
-      trans_fats_unit: 'trans_fats_unit',
-      saturated_fats: 'saturated_fats',
-      saturated_fats_unit: 'saturated_fats_unit',
-      cholesterols: 'cholesterols',
-      cholesterols_unit: 'cholesterols_unit',
-      proteins: 'proteins',
-      proteins_unit: 'proteins_unit'
-    };
-
-    Object.keys(fieldMap).forEach(key => {
-      const field = document.querySelector(`input[name="${fieldMap[key]}"]`);
-      if (field && data[key] !== undefined) field.value = data[key];
-    });
-  }
-
   // ------------------ 식품유형 대분류-소분류 연동 ------------------
-  function updateCheckboxesByFoodType(foodType, forceUpdate) {
+  function updateCheckboxesByFoodType(foodType) {
     if (!foodType) return Promise.resolve();
     
     // 초기 로드 여부 확인 및 강제 업데이트 플래그 적용
     const isInitialLoad = window.checkboxesLoadedFromDB === true;
-    const shouldForceUpdate = forceUpdate === true;
     
-    console.log("1 - forceUpdate:", shouldForceUpdate);
-  
     return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
       .then(response => response.json())
       .then(data => {
@@ -394,7 +384,6 @@ document.addEventListener('DOMContentLoaded', function () {
           return;
         }
         const settings = data.settings;
-        console.log("2 - forceUpdate:", shouldForceUpdate);
         
         // 규정 정보와 소비기한 옵션은 항상 업데이트
         if (settings.relevant_regulations !== undefined) {
@@ -410,30 +399,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         
         // 초기 로드가 아니거나 강제 업데이트 플래그가 설정된 경우 체크박스 업데이트
-        if (!isInitialLoad || shouldForceUpdate) {
-          console.log("Updating checkboxes based on food type:", foodType);
-          
-          const fieldMappings = {
-            prdlst_dcnm: 'chk_prdlst_dcnm',
-            rawmtrl_nm: 'chk_rawmtrl_nm_display',
-            nutritions: 'chk_calories',
-            prdlst_nm: 'chk_prdlst_nm',
-            ingredients_info: 'chk_ingredients_info',
-            content_weight: 'chk_content_weight',
-            weight_calorie: 'chk_weight_calorie',
-            prdlst_report_no: 'chk_prdlst_report_no',
-            country_of_origin: 'chk_country_of_origin',
-            storage_method: 'chk_storage_method',
-            frmlc_mtrqlt: 'chk_frmlc_mtrqlt',
-            manufacturer_info: 'chk_manufacturer_info',
-            distributor_address: 'chk_distributor_address',
-            repacker_address: 'chk_repacker_address',
-            importer_address: 'chk_importer_address',
-            date_info: 'chk_date_info',
-            cautions: 'chk_cautions',
-            additional_info: 'chk_additional_info'
-          };
-  
+        if (!isInitialLoad) {
           Object.keys(settings).forEach(field => {
             const value = settings[field];
             const checkboxId = fieldMappings[field] || `chk_${field}`;
@@ -453,7 +419,6 @@ document.addEventListener('DOMContentLoaded', function () {
       .finally(() => {
         // 함수가 완료된 후 플래그 변경
         if (isInitialLoad) {
-          console.log("Initial load completed, setting flag to false");
           window.checkboxesLoadedFromDB = false;
         }
       });
@@ -516,11 +481,8 @@ document.addEventListener('DOMContentLoaded', function () {
               }
             });
         }
-        
-        console.log("Food type changed to:", foodTypeValue);
-        
         // 강제 업데이트 플래그를 직접 함수에 전달
-        updateCheckboxesByFoodType(foodTypeValue, true);
+        updateCheckboxesByFoodType(foodTypeValue);
       }
       updateSummary();
     });
@@ -537,7 +499,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (window.checkboxesLoadedFromDB === undefined) {
           window.checkboxesLoadedFromDB = true;
         }
-        updateCheckboxesByFoodType(initialFoodType, false);
+        updateCheckboxesByFoodType(initialFoodType);
       } else {
         fetch(`/label/get-food-group/?food_type=${encodeURIComponent(initialFoodType)}`)
           .then(response => response.json())
@@ -545,13 +507,12 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success && data.food_group) {
               foodGroup.val(data.food_group).trigger('change.select2');
               hiddenFoodGroup.val(data.food_group);
-              updateCheckboxesByFoodType(initialFoodType, false);
+              updateCheckboxesByFoodType(initialFoodType);
             }
           });
       }
     } else {
       updateFoodTypes('', initialFoodType);
-      setDefaultCheckboxes();
     }
   }
 
@@ -583,48 +544,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ------------------ 체크박스 필드 토글 ------------------
   function initCheckboxFieldToggle() {
-    const fieldMappings = {
-      label_nm: ['input[name="my_label_name"]'],
-      prdlst_dcnm: ['input[name="prdlst_dcnm"]'],
-      prdlst_nm: ['input[name="prdlst_nm"]'],
-      ingredients_info: ['input[name="ingredient_info"]'],
-      content_weight: ['input[name="content_weight"]'],
-      weight_calorie: ['input[name="weight_calorie"]'],
-      prdlst_report_no: ['input[name="prdlst_report_no"]'],
-      country_of_origin: ['select[name="country_of_origin"]'],
-      storage_method: ['input[name="storage_method"]'],
-      frmlc_mtrqlt: ['input[name="frmlc_mtrqlt"]'],
-      manufacturer_info: ['input[name="bssh_nm"]'],
-      distributor_address: ['input[name="distributor_address"]'],
-      repacker_address: ['input[name="repacker_address"]'],
-      importer_address: ['input[name="importer_address"]'],
-      date_info: ['input[name="pog_daycnt"]', 'select[name="date_option"]'],
-      rawmtrl_nm_display: ['textarea[name="rawmtrl_nm_display"]'],
-      rawmtrl_nm: ['textarea[name="rawmtrl_nm"]'],
-      cautions: ['textarea[name="cautions"]'],
-      additional_info: ['textarea[name="additional_info"]'],
-      calories: ['textarea[name="nutrition_text"]']
-    };
-    
-    // DB에 저장된 체크박스 상태 불러오기
-    function loadCheckboxStates() {
-      console.log("Loading checkbox states from DB");
-      const checkboxStates = {};
-      document.querySelectorAll('input[type="hidden"][name^="chckd_"]').forEach(hiddenField => {
-        const fieldName = hiddenField.name.replace('chckd_', '');
-        const checkboxId = `chk_${fieldName}`;
-        const checkbox = document.getElementById(checkboxId);
-        if (checkbox) {
-          const isChecked = hiddenField.value === 'Y';
-          console.log(`Setting ${checkboxId} to ${isChecked ? 'checked' : 'unchecked'}`);
-          checkbox.checked = isChecked;
-          checkbox.dispatchEvent(new Event('change'));
-          checkboxStates[checkboxId] = isChecked;
-        }
-      });
-      return checkboxStates;
-    }
-    
     document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(checkbox => {
       if (checkbox.dataset.initialized === 'true') return;
       checkbox.dataset.initialized = 'true';
@@ -638,7 +557,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         return;
       }
-      const relatedFields = fieldMappings[fieldName]?.map(sel => document.querySelector(sel)).filter(Boolean) || [];
+      const relatedFields = fieldMappings[`${fieldName}_arr`]?.map(sel => document.querySelector(sel)).filter(Boolean) || [];
       if (!relatedFields.length) {
         return;
       }
@@ -661,41 +580,8 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // DB에 저장된 체크박스 상태 로드
     window.checkboxesLoadedFromDB = true;
-    window.forceUpdateCheckboxes = false; // 강제 업데이트 모드 초기값 설정
-    loadCheckboxStates();
     
     console.log("Checkbox initialization completed, checkboxesLoadedFromDB =", window.checkboxesLoadedFromDB);
-  }
-
-  function setDefaultCheckboxes() {
-    if (window.checkboxesLoadedFromDB || $('#label_id').val()) {
-      return;
-    }
-    
-    const foodType = $('#food_type').val();
-    
-    if (!foodType) {
-      const defaults = {
-        chk_prdlst_nm: true,
-        chk_content_weight: true,
-        chk_manufacturer_info: true,
-        chk_date_info: true,
-        chk_label_nm: false,
-        chk_ingredients_info: false,
-        chk_distributor_address: false,
-        chk_repacker_address: false,
-        chk_importer_address: false,
-        chk_rawmtrl_nm: false
-      };
-
-      Object.keys(defaults).forEach(id => {
-        const checkbox = document.getElementById(id);
-        if (checkbox && !checkbox.disabled) {
-          checkbox.checked = defaults[id];
-          checkbox.dispatchEvent(new Event('change'));
-        }
-      });
-    }
   }
 
   function prepareFormData() {
@@ -736,28 +622,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     } catch (e) {
         console.error('체크박스 상태 저장 실패:', e);
-    }
-  }
-
-  function restoreCheckboxStates() {
-    try {
-        const labelId = document.getElementById('label_id')?.value;
-        if (!labelId) return;
-        const savedStates = localStorage.getItem(`checkboxStates_${labelId}`);
-        if (savedStates) {
-            const checkboxStates = JSON.parse(savedStates);
-            Object.keys(checkboxStates).forEach(id => {
-                const checkbox = document.getElementById(id);
-                if (checkbox) {
-                    checkbox.checked = checkboxStates[id].checked;
-                    if (checkbox.dispatchEvent) {
-                        checkbox.dispatchEvent(new Event('change'));
-                    }
-                }
-            });
-        }
-    } catch (e) {
-        console.error('체크박스 상태 복원 실패:', e);
     }
   }
 
@@ -892,6 +756,43 @@ document.addEventListener('DOMContentLoaded', function () {
       container.appendChild(infoContainer);
     }
   }
+  function applyDbCheckboxStates() {
+    document.querySelectorAll('input[type="hidden"][name^="chckd_"]').forEach(hiddenField => {
+      const fieldName = hiddenField.name.replace('chckd_', '');
+      const checkboxId = `chk_${fieldName}`;
+      const checkbox = document.getElementById(checkboxId);
+      if (checkbox) {
+        checkbox.checked = hiddenField.value === 'Y';
+        // change 이벤트를 발생시키지 않음 (이벤트 미발생 방식)
+      }
+    });
+  }
+
+  function handlePhraseTabActivation() {
+    if (lastFocusedFieldName) {
+      renderMyPhrasesForFocusedField();
+      showRegulationInfo(lastFocusedFieldName);
+    }
+  }
+
+  function setPhraseTabNavStyles() {
+    document.querySelectorAll('#phraseTab .nav-link').forEach(btn => {
+      btn.style.fontSize = '0.8rem';
+      btn.style.color = btn.classList.contains('active') ? '#0d6efd' : '';
+      btn.addEventListener('shown.bs.tab', () => {
+        document.querySelectorAll('#phraseTab .nav-link').forEach(b => (b.style.color = ''));
+        btn.style.color = '#0d6efd';
+      });
+    });
+  }
+
+  function bindSaveCheckboxOnTabShow() {
+    document.querySelectorAll('.nav-link').forEach(tab => {
+      tab.addEventListener('show.bs.tab', function() {
+        saveCheckboxStates();
+      });
+    });
+  }
 
   // ------------------ 초기화 및 이벤트 바인딩 ------------------
   $(document).ready(function () {
@@ -901,6 +802,8 @@ document.addEventListener('DOMContentLoaded', function () {
     initCheckboxFieldToggle();
     initFoodTypeFiltering();
     initAutoExpand();
+
+    //applyDbCheckboxStates();
 
     $('#labelForm').on('submit', function (event) {
       const urlParams = new URLSearchParams(window.location.search);
@@ -922,8 +825,7 @@ document.addEventListener('DOMContentLoaded', function () {
         window.focusTimeout = setTimeout(() => {
           lastFocusedFieldName = this.getAttribute('name');
           if (document.querySelector('#myphrases-tab.active')) {
-            renderMyPhrasesForFocusedField();
-            showRegulationInfo(lastFocusedFieldName);
+            handlePhraseTabActivation();
           }
         }, 100);
       });
@@ -931,38 +833,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const myPhrasesTab = document.querySelector('#myphrases-tab');
     if (myPhrasesTab) {
-      myPhrasesTab.addEventListener('shown.bs.tab', () => {
-        if (lastFocusedFieldName) {
-          renderMyPhrasesForFocusedField();
-          showRegulationInfo(lastFocusedFieldName);
-        }
-      });
+      myPhrasesTab.addEventListener('shown.bs.tab', handlePhraseTabActivation);
     }
 
-    document.querySelectorAll('#phraseTab .nav-link').forEach(btn => {
-      btn.style.fontSize = '0.8rem';
-      btn.addEventListener('shown.bs.tab', () => {
-        document.querySelectorAll('#phraseTab .nav-link').forEach(b => (b.style.color = ''));
-        btn.style.color = '#0d6efd';
-      });
-      btn.style.color = btn.classList.contains('active') ? '#0d6efd' : '';
-    });
+    setPhraseTabNavStyles();
+    bindSaveCheckboxOnTabShow();
 
     $('.preview-btn').on('click', function() {
-        window.openPreviewPopup();
+      window.openPreviewPopup();
     });
 
     document.querySelector('button[type="submit"]').addEventListener('click', function() {
-        saveCheckboxStates();
+      saveCheckboxStates();
     });
 
-    document.querySelectorAll('.nav-link').forEach(tab => {
-        tab.addEventListener('show.bs.tab', function() {
-            saveCheckboxStates();
-        });
-    });
-
-    restoreCheckboxStates();
     updateSummary();
   });
 });

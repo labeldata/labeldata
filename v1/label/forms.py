@@ -7,23 +7,23 @@ class LabelCreationForm(forms.ModelForm):
     chk_label_nm = forms.BooleanField(required=False, initial=False)
     chk_prdlst_dcnm = forms.BooleanField(required=False, initial=False)
     chk_prdlst_nm = forms.BooleanField(required=False, initial=True)  # 기본값 True
-    chk_ingredients_info = forms.BooleanField(required=False, initial=False)
+    chk_ingredient_info = forms.BooleanField(required=False, initial=False)
     chk_content_weight = forms.BooleanField(required=False, initial=True)  # 기본값 True
     chk_weight_calorie = forms.BooleanField(required=False, initial=False)
     chk_prdlst_report_no = forms.BooleanField(required=False, initial=False)
     chk_country_of_origin = forms.BooleanField(required=False, initial=False)
     chk_storage_method = forms.BooleanField(required=False, initial=False)
     chk_frmlc_mtrqlt = forms.BooleanField(required=False, initial=False)
-    chk_manufacturer_info = forms.BooleanField(required=False, initial=True)  # 기본값 True
+    chk_bssh_nm = forms.BooleanField(required=False, initial=True)  # 제조원 소재지
     chk_distributor_address = forms.BooleanField(required=False, initial=False)
     chk_repacker_address = forms.BooleanField(required=False, initial=False)
     chk_importer_address = forms.BooleanField(required=False, initial=False)
-    chk_date_info = forms.BooleanField(required=False, initial=True)  # 기본값 True
+    chk_pog_daycnt = forms.BooleanField(required=False, initial=True)  # 소비기한
     chk_rawmtrl_nm = forms.BooleanField(required=False, initial=False)
     chk_rawmtrl_nm_display = forms.BooleanField(required=False, initial=False)
     chk_cautions = forms.BooleanField(required=False, initial=False)
     chk_additional_info = forms.BooleanField(required=False, initial=False)
-    chk_calories = forms.BooleanField(required=False, initial=False)
+    chk_nutrition_text = forms.BooleanField(required=False, initial=False)
 
     class Meta:
         model = MyLabel
@@ -68,23 +68,23 @@ class LabelCreationForm(forms.ModelForm):
             'chk_label_nm',
             'chk_prdlst_dcnm',
             'chk_prdlst_nm',
-            'chk_ingredients_info',
+            'chk_ingredient_info',
             'chk_content_weight',
             'chk_weight_calorie',
             'chk_prdlst_report_no',
             'chk_country_of_origin',
             'chk_storage_method',
             'chk_frmlc_mtrqlt',
-            'chk_manufacturer_info',
+            'chk_bssh_nm',
             'chk_distributor_address',
             'chk_repacker_address',
             'chk_importer_address',
-            'chk_date_info',
+            'chk_pog_daycnt',
             'chk_rawmtrl_nm',
             'chk_rawmtrl_nm_display',
             'chk_cautions',
             'chk_additional_info',
-            'chk_calories',
+            'chk_nutrition_text',
         ]
         widgets = {
             'rawmtrl_nm': forms.Textarea(attrs={'rows': 2, 'class': 'auto-expand form-control'}),
