@@ -130,79 +130,6 @@ label,
 }
 
 /* ====================================================
-   7. 표시사항 미리보기 스타일 (추가)
-==================================================== */
-.preview-container {
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  padding: 20px;
-  background-color: #fff;
-}
-
-.preview-container.horizontal {
-  display: flex;
-  gap: 24px;
-}
-
-.preview-container.horizontal .section {
-  width: 50%;
-  box-sizing: border-box;
-  min-width: 0;
-}
-
-.preview-container.vertical {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.preview-container.vertical .section {
-  width: 100%;
-}
-
-/* 항목명 1줄 제한 */
-.preview-container table td:first-child {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 150px;
-}
-
-/* 단독 행의 항목명 */
-.preview-container table td[colspan="2"]:first-child {
-  width: 30%;
-  max-width: 200px;
-  min-width: 100px;
-}
-
-/* 단독 행의 내용 */
-.preview-container table td[colspan="2"]:not(:first-child) {
-  width: 70%;
-  max-width: none;
-}
-
-/* 쌍 행의 셀 */
-.preview-container table td:not([colspan]) {
-  width: 25%;
-  max-width: 150px;
-  box-sizing: border-box;
-}
-
-/* 단독 행의 우측 테두리 제거 */
-.preview-container table td[colspan="2"] {
-  border-right: none;
-}
-
-@media (max-width: 768px) {
-  .preview-container.horizontal {
-    flex-direction: column;
-  }
-  .preview-container.horizontal .section {
-    width: 100%;
-  }
-}
-
-/* ====================================================
    8. 상세정보 & 미리보기 팝업 공통 스타일
 ==================================================== */
 .setting-row {
@@ -237,4 +164,67 @@ label,
 
 .highlight-origin {
   font-weight: bold;
+}
+
+/* ====================================================
+   9. 영양성분 계산기 팝업 스타일
+==================================================== */
+.calculator-popup .row::after { left: 50%; }
+.calculator-popup .col-md-6 { width: 50% !important; }
+
+.calculator-popup {
+  width: 1100px !important;
+  margin: 0 auto;
+}
+
+.calculator-popup .container-fluid {
+  width: 100%;
+  max-width: none !important;
+  padding: 0;
+}
+
+.calculator-popup .row {
+  margin: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+}
+
+.calculator-popup .row::after {
+  content: '';
+  position: absolute;
+  left: 49.5%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--border-color);
+}
+
+.calculator-popup .col-md-6 {
+  width: 49.5% !important;
+  padding: 20px;
+}
+
+.calculator-popup .nutrient-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.calculator-popup .nutrient-row label {
+  width: 30%;
+  min-width: 120px;
+}
+
+.calculator-popup .nutrient-row .form-control {
+  width: 50%;
+  flex: 2;
+}
+
+.calculator-popup .nutrient-row .form-select.input-unit {
+  width: 20%;
+  flex: 1;
+  min-width: 80px;
 }

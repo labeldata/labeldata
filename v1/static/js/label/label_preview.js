@@ -16,6 +16,18 @@ document.addEventListener('DOMContentLoaded', function () {
         console.error("Error parsing data:", error);
     }
 
+    // 작성일시 정보 가져오기
+    const updateDateTime = document.getElementById('update_datetime')?.value;
+    
+    // 푸터 텍스트 업데이트
+    const footerText = document.querySelector('.footer-text');
+    if (footerText) {
+        footerText.innerHTML = `
+            labeldata.com 에서 관련법규에 따라 작성되었습니다.
+            <span class="creator-info">[${updateDateTime}]</span>
+        `;
+    }
+
     // 팝업 유틸리티 함수
     window.openPreviewPopup = function () {
         try {
@@ -75,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function () {
         height: 10,
         fontSize: 10,
         letterSpacing: -5,
-        lineHeight: 1.2,
+        lineHeight: 1,
         fontFamily: "'Noto Sans KR'"
     };
 
@@ -88,7 +100,7 @@ document.addEventListener('DOMContentLoaded', function () {
             height: parseFloat(document.getElementById('heightInput').value) || 10,
             fontSize: parseFloat(document.getElementById('fontSizeInput').value) || 10,
             letterSpacing: parseInt(document.getElementById('letterSpacingInput').value) || -5,
-            lineHeight: parseFloat(document.getElementById('lineHeightInput').value) || 1.2,
+            lineHeight: parseFloat(document.getElementById('lineHeightInput').value) || 1,
             fontFamily: document.getElementById('fontFamilySelect').value || "'Noto Sans KR'"
         };
 
@@ -96,7 +108,7 @@ document.addEventListener('DOMContentLoaded', function () {
             width: ${settings.width}cm;
             min-width: ${settings.width}cm;
             position: relative;
-            padding: 20px;
+            padding: 10px;
             background: #fff;
             border: 1px solid #dee2e6;
             overflow-x: auto;
@@ -238,11 +250,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // 기존의 setupEventListeners, updatePreviewStyles 등 함수 호출
     setupEventListeners();
     setTimeout(updatePreviewStyles, 100);
     setupAreaCalculation();
     setTimeout(updateArea, 100);
     enforceInputMinMax();
+
+    // PDF 저장 버튼 이벤트 리스너 안전하게 바인딩
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
+    if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', exportToPDF);
+    }
 });
 
 // 팝업에서 부모로부터 체크박스 상태를 받아 적용
@@ -274,7 +293,7 @@ const FIELD_LABELS = {
     repacker_address: '소분원',
     importer_address: '수입원',
     pog_daycnt: '소비기한',
-    rawmtrl_nm_display: '원재료명(표시)',
+    rawmtrl_nm_display: '원재료명',  // '원재료명(표시)'에서 '원재료명'으로 변경
     cautions: '주의사항',
     additional_info: '기타표시사항',
     nutrition_text: '영양성분'
@@ -289,9 +308,85 @@ window.addEventListener('message', function(e) {
             if (FIELD_LABELS[field]) {
                 const tr = document.createElement('tr');
                 const th = document.createElement('th');
-                th.textContent = FIELD_LABELS[field];
                 const td = document.createElement('td');
-                td.textContent = value;
+                
+                th.textContent = FIELD_LABELS[field];
+
+                // 원재료명 처리
+                if (field === 'rawmtrl_nm_display') {
+                    const allergenMatch = value.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/);
+                    const gmoMatch = value.match(/\[GMO\s*성분\s*:[^\]]+\]/);  // GMO 정규식 수정
+                    
+                    // 컨테이너 생성
+                    const container = document.createElement('div');
+                    container.style.position = 'relative';
+                    container.style.width = '100%';
+                    
+                    // 메인 텍스트 추출 및 설정
+                    let mainText = value
+                        .replace(/\[알레르기 성분\s*:[^\]]+\]/, '')
+                        .replace(/\[GMO\s*성분\s*:[^\]]+\]/, '')  // GMO 텍스트 제거 패턴 수정
+                        .trim();
+                    
+                    // 메인 텍스트 div
+                    const mainDiv = document.createElement('div');
+                    mainDiv.textContent = mainText;
+                    container.appendChild(mainDiv);
+                    
+                    // 알레르기 성분 처리
+                    if (allergenMatch) {
+                        const allergens = allergenMatch[1].trim();
+                        const allergenDiv = document.createElement('div');
+                        allergenDiv.textContent = `${allergens} 함유`;
+                        allergenDiv.style.cssText = `
+                            margin-top: 8px;
+                            text-align: right;
+                            background-color: var(--primary-color);
+                            color: white;
+                            padding: 4px 8px;
+                            display: inline-block;
+                            margin-left: auto;
+                            font-size: 0.9em;
+                            float: right;
+                            clear: both;
+                        `;
+                        container.appendChild(allergenDiv);
+                    }
+                    
+                    // GMO 성분 처리
+                    if (gmoMatch) {
+                        const gmo = gmoMatch[1].trim();
+                        const gmoDiv = document.createElement('div');
+                        gmoDiv.textContent = `${gmo} 함유`;
+                        gmoDiv.style.cssText = `
+                            margin-top: 8px;
+                            text-align: right;
+                            background-color: var(--primary-color);
+                            color: white;
+                            padding: 4px 8px;
+                            display: inline-block;
+                            margin-left: auto;
+                            font-size: 0.9em;
+                            float: right;
+                            clear: both;
+                        `;
+                        container.appendChild(gmoDiv);
+                    }
+                    
+                    td.appendChild(container);
+                } else if (field === 'country_of_origin') {
+                    // 원산지 값 처리
+                    const select = window.opener.document.querySelector('select[name="country_of_origin"]');
+                    if (select) {
+                        const selectedOption = select.options[select.selectedIndex];
+                        td.textContent = selectedOption ? selectedOption.text : value;
+                    } else {
+                        td.textContent = value;
+                    }
+                } else {
+                    td.textContent = value;
+                }
+                
                 tr.appendChild(th);
                 tr.appendChild(td);
                 tbody.appendChild(tr);
@@ -409,3 +504,229 @@ function validateSettings() {
         return true;
     }
 }
+
+// 세로 길이 자동 계산 함수
+function calculateHeight() {
+    const width = parseFloat(document.getElementById('widthInput').value);
+    const fontSize = parseFloat(document.getElementById('fontSizeInput').value);
+    const letterSpacing = parseFloat(document.getElementById('letterSpacingInput').value);
+    const lineHeight = parseFloat(document.getElementById('lineHeightInput').value);
+    
+    // 표 내용의 실제 높이 계산
+    const table = document.getElementById('previewTableBody');
+    const contentHeight = table.offsetHeight;
+    
+    // 헤더와 푸터 높이 추가
+    const totalHeight = (contentHeight + 80) / 28.35; // px를 cm로 변환 (1cm = 28.35px)
+    
+    // heightInput 업데이트
+    const heightInput = document.getElementById('heightInput');
+    heightInput.value = Math.ceil(totalHeight);
+    
+    // 면적 계산 및 표시
+    updateArea(width, totalHeight);
+}
+
+// 입력값 변경 이벤트에 계산 함수 연결
+const widthInput = document.getElementById("widthInput");
+if (widthInput) widthInput.addEventListener("change", calculateHeight);
+document.getElementById('fontSizeInput').addEventListener('change', calculateHeight);
+document.getElementById('letterSpacingInput').addEventListener('change', calculateHeight);
+document.getElementById('lineHeightInput').addEventListener('change', calculateHeight);
+
+// 초기 로드 시 계산
+window.addEventListener('load', calculateHeight);
+
+// PDF 저장 함수 수정
+
+// 함수 선언문으로 변경하여 호이스팅 보장
+async function exportToPDF() {
+    try {
+        const content = document.getElementById('previewContent');
+        if (!content) throw new Error('미리보기 내용을 찾을 수 없습니다.');
+
+        // 사용자 설정 파싱
+        let settings = {};
+        const settingsEl = document.getElementById('default-settings-data');
+        if (settingsEl) {
+            try { settings = JSON.parse(settingsEl.textContent); } catch {}
+        }
+
+        // 설정된 크기 (mm 기준)
+        const widthMm = settings.widthMm || 100;
+        const heightMm = settings.heightMm || 100;
+
+        // 제품명 추출 (파일명 생성용)
+        let productName = '제품명';
+        document.querySelectorAll('#previewTableBody tr').forEach(tr => {
+            if (tr.querySelector('th')?.textContent.trim() === '제품명') {
+                const td = tr.querySelector('td');
+                if (td) productName = td.textContent.trim();
+            }
+        });
+
+        // 업데이트 일자
+        const rawDate = document.getElementById('update_datetime')?.value || new Date().toISOString();
+        const formattedDate = rawDate.slice(0, 10).replace(/-/g, '');
+
+        // 파일명 생성
+        const sanitizedName = productName.replace(/[^\w가-힣]/g, '_').slice(0, 20);
+        const fileName = `LABELDATA_${sanitizedName}_${formattedDate}.pdf`;
+
+        // 고화질 캔버스
+        const canvas = await html2canvas(content, {
+            scale: 3,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: '#fff',
+        });
+        const imgData = canvas.toDataURL('image/png');
+
+        // PDF 생성 (mm 단위 페이지 크기)
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', [widthMm, heightMm]);
+        pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm);
+        pdf.save(fileName);
+    } catch (err) {
+        console.error("PDF 저장 중 오류", err);
+        alert("PDF 저장 실패: " + err.message);
+    }
+}
+
+// 영양성분 데이터 수신 및 표시
+window.addEventListener('message', function(e) {
+  if (e.data?.type === 'nutritionData') {
+    const data = e.data.data;
+    window.nutritionData = data; // 데이터 저장
+    
+    // 설정값 표시
+    document.getElementById('servingSizeDisplay').value = 
+      `${comma(data.servingSize)}${data.servingUnit}`;
+    document.getElementById('servingsPerPackageDisplay').value = 
+      `${comma(data.servingsPerPackage)}${data.servingUnitText}`;
+    
+    // 영양성분 탭으로 전환
+    const nutritionTab = document.querySelector('[data-bs-target="#nutrition-tab"]');
+    const tabInstance = new bootstrap.Tab(nutritionTab);
+    tabInstance.show();
+    
+    // 미리보기 업데이트
+    updateNutritionDisplay(data);
+  }
+});
+
+function updateNutritionDisplay(data) {
+  const displayUnit = document.getElementById('nutritionDisplayUnit').value;
+  const nutritionPreview = document.getElementById('nutritionPreview');
+  const header = nutritionPreview.querySelector('.nutrition-header');
+  const valueHeader = nutritionPreview.querySelector('.nutrition-value-header');
+  
+  // 헤더 텍스트 설정
+  let headerText = '';
+  switch(displayUnit) {
+    case 'total':
+      headerText = `총 내용량 ${comma(data.totalWeight)}${data.servingUnit} ` +
+        `(${comma(data.servingSize)}${data.servingUnit} × ${comma(data.servingsPerPackage)}${data.servingUnitText})`;
+      valueHeader.textContent = '총 내용량당';
+      break;
+    case 'unit':
+      headerText = `1${data.servingUnitText}(${comma(data.servingSize)}${data.servingUnit})당`;
+      valueHeader.textContent = `1${data.servingUnitText}당`;
+      break;
+    case '100g':
+      headerText = `100${data.servingUnit}당`;
+      valueHeader.textContent = `100${data.servingUnit}당`;
+      break;
+  }
+  header.textContent = headerText;
+  
+  // 표 내용 업데이트
+  const tbody = document.getElementById('nutritionTableBody');
+  tbody.innerHTML = data.values.map(item => {
+    const percentage = item.limit ? Math.round((item.value / item.limit) * 100) : '';
+    return `
+      <tr>
+        <td>${item.label}</td>
+        <td>${comma(item.value)}${item.unit}</td>
+        <td>${percentage ? percentage + '%' : '-'}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  // 영양성분 영역 표시
+  nutritionPreview.style.display = 'block';
+}
+
+// 표시 단위 변경 이벤트 처리
+document.getElementById('nutritionDisplayUnit')?.addEventListener('change', function() {
+  if (window.nutritionData) {
+    updateNutritionDisplay(window.nutritionData);
+  }
+});
+
+// 영양성분 데이터 수신 및 표시
+window.addEventListener('message', function(e) {
+  if (e.data?.type === 'nutritionData') {
+    const data = e.data.data;
+    window.nutritionData = data;
+
+    // 설정값 표시 업데이트
+    document.getElementById('servingSizeDisplay').value = 
+      `${comma(data.servingSize)}${data.servingSizeUnit}`;
+    document.getElementById('servingsPerPackageDisplay').value = 
+      `${comma(data.servingsPerPackage)}${data.servingUnitText}`;
+    document.getElementById('nutritionDisplayUnit').value = data.displayUnit;
+    
+    // 영양성분 탭으로 전환
+    const nutritionTab = document.querySelector('[data-bs-target="#nutrition-tab"]');
+    const tabInstance = new bootstrap.Tab(nutritionTab);
+    tabInstance.show();
+    
+    // 미리보기 업데이트
+    updateNutritionDisplay(data);
+  }
+});
+
+// 영양성분 데이터 수신 및 표시
+window.addEventListener('message', function(e) {
+  if (e.data?.type === 'nutritionData') {
+    const data = e.data.data;
+    
+    // 헤더 업데이트
+    const headerText = `총 내용량 ${comma(data.totalWeight)}${data.servingUnit} ` +
+      `(${comma(data.servingSize)}${data.servingUnit}×${data.servingsPerPackage}${data.servingUnitText})`;
+    document.querySelector('.nutrition-header').textContent = headerText;
+    
+    // 표 내용 업데이트
+    const tbody = document.getElementById('nutritionTableBody');
+    tbody.innerHTML = data.values.map(item => {
+      const percentage = item.limit ? Math.round((item.value / item.limit) * 100) : '';
+      return `
+        <tr>
+          <td>${item.label}</td>
+          <td>${comma(item.value)}${item.unit}</td>
+          <td>${percentage ? percentage + '%' : '-'}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+});
+
+// 영양성분 데이터 수신 시 처리
+window.addEventListener('message', function(e) {
+  if (e.data?.type === 'nutritionData') {
+    const data = e.data.data;
+    window.nutritionData = data;
+    
+    // 설정값 표시 업데이트
+    document.getElementById('servingSizeDisplay').value = 
+      `${comma(data.servingSize)}${data.servingUnit}`;
+    document.getElementById('servingsPerPackageDisplay').value = 
+      `${comma(data.servingsPerPackage)}${data.servingUnitText}`;
+    document.getElementById('nutritionDisplayUnit').value = data.displayUnit;
+
+    // 영양성분 미리보기 영역 표시 및 업데이트
+    document.getElementById('nutritionPreview').style.display = 'block';
+    updateNutritionDisplay(data);
+  }
+});

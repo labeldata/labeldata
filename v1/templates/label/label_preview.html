@@ -1,3 +1,4 @@
+<!-- templates/label/label_preview.html -->
 <!DOCTYPE html>
 {% load static %}
 <html lang="ko">
@@ -8,152 +9,178 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&display=swap" rel="stylesheet">
   <link href="{% static 'css/popup.css' %}" rel="stylesheet">
+
+  <!-- React & DnD 등 -->
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-beautiful-dnd@13/dist/react-beautiful-dnd.min.js"></script>
+
+  <!-- PDF 라이브러리 -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+  <!-- Bootstrap JS 및 미리보기 스크립트 -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{% static 'js/label/label_preview.js' %}"></script>
+
   <style>
-  .preview-container {
-    min-height: 500px;
-    display: flex;
-    gap: 20px;
-  }
+    .preview-container {
+      display: flex;
+      gap: 20px;
+      min-height: 500px;
+    }
 
-  .settings-panel {
-    flex: 0 0 200px;  /* 300px에서 200px로 축소 */
-    padding: 15px;
-    border-right: 1px solid #dee2e6;
-  }
+    .settings-panel {
+      flex: 0 0 200px;
+      padding: 15px;
+      border-right: 1px solid #dee2e6;
+    }
 
-  .settings-item {
-    margin-bottom: 10px; /* 간격 조정 */
-    width: 100%;        /* 전체 너비 사용 */
-  }
+    .preview-panel {
+      flex: 1;
+      padding: 15px;
+      overflow: visible;
+    }
 
-  /* 설정 입력칸 세로 배치 스타일 */
-  .settings-row {
-    display: block;     /* flex에서 block으로 변경 */
-    margin-bottom: 15px;
-  }
+    /* 미리보기 콘텐츠 상/하단 동일 패딩 설정 */
+    .preview-content {
+      border: 1px solid #dee2e6;
+      background-color: #ffffff;
+      padding: 20px;
+      margin: 0;
+      min-height: 400px;
+    }
 
-  .area-info {
-    text-align: right;
-    color: #6c757d;
-    font-size: 0.9rem;
-    margin: 5px 0;
-  }
+    /* 헤더박스 스타일: 배경색, 여백 복원 */
+    .preview-header-box {
+      background-color: var(--primary-color) !important;
+      color: #ffffff !important;
+      padding: 8px 12px;
+      margin-bottom: 0;  /* 간격 제거 */
+      width: 100%;
+      display: block;
+    }
+    .preview-header-box .header-text {
+      margin: 0;
+      line-height: 1.2;
+      font-weight: bold;
+    }
 
-  /* 테이블 스타일 추가 */
-  .preview-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0;
-  }
-  
-  .preview-table th,
-  .preview-table td {
-    border: 1px solid #dee2e6;
-    padding: 8px;
-  }
-  
-  .preview-table th {
-    background-color: #f8f9fa;
-    width: 120px;  /* 항목명 너비 고정 */
-    text-align: center;
-  }
-  
-  .preview-table td {
-    width: auto;  /* 나머지 공간 자동 조정 */
-  }
-  
-  /* 헤더/푸터 텍스트 스타일 */
-  .header-text {
-    text-align: center;
-    font-size: 14pt;
-    font-weight: bold;
-    margin-bottom: 1rem;
-  }
-  
-  .footer-text {
-    text-align: right;
-    font-size: 8pt;
-    color: #6c757d;
-    margin-top: 1rem;
-  }
+    /* 푸터와 콘텐츠 사이 간격 제어 */
+    .footer-text {
+      text-align: right;
+      font-size: 7.5pt;
+      color: #6c757d;
+      margin: 12px 0 8px 0;  /* 상단/하단 마진 조정 */
+      padding: 0;
+    }
 
-  .preview-header-box {
-    background-color: var(--primary-color);
-    color: white;
-    padding: 8px 12px;
-    margin-bottom: 0;  /* 표와의 간격 제거 */
-    display: inline-block;  /* 컨텐츠에 맞게 너비 조절 */
-    width: 100%;  /* 전체 너비 사용 */
-}
+    /* 표 스타일 통합 및 상단 마진 조정 */
+    .preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0;  /* 마진 제거 */
+      table-layout: auto;
+    }
+    .preview-table th,
+    .preview-table td {
+      border: 1px solid #dee2e6;
+      padding: 4px 8px;
+      vertical-align: middle;
+      word-break: break-all;
+    }
+    .preview-table th {
+      background-color: #f8f9fa;
+      text-align: center;
+      font-weight: 500;
+      white-space: nowrap;
+    }
 
-.preview-header-box .header-text {
-    margin: 0;  /* 마진 제거 */
-    line-height: 1.2;  /* 줄간격 최소화 */
-}
+    /* 헤더 스타일 */
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 15px;
+      margin: 0;
+      border-bottom: 1px solid #dee2e6;
+      background-color: #f8f9fa;
+    }
+    .preview-title {
+      font-size: 1.2rem;
+      font-weight: 500;
+      margin: 0;
+    }
+    .preview-actions {
+      display: flex;
+      gap: 8px;
+    }
 
-.preview-table {
-    margin-top: 0;  /* 상단 마진 제거 */
-}
+    /* 설정 패널 내부 아이템 */
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .settings-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      margin: 0;
+    }
+    .settings-item label {
+      flex: 0 0 65px;
+      margin: 0;
+      font-size: var(--font-size-base);
+    }
+    .settings-item .form-control,
+    .settings-item .form-select {
+      flex: 1;
+      min-width: 100px;
+      max-width: 120px;
+    }
+    /* 인라인 스타일 제거: heightInput은 JS로 제어 */
+    #heightInput { width: auto !important; }
 
-/* 헤더 스타일 수정 */
-.preview-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-    padding: 10px 15px;
-    border-bottom: 1px solid #dee2e6;
-    background-color: #f8f9fa;
-}
+    /* 알레르기 강조 스타일 */
+    .preview-table .allergen-text {
+      display: inline-block;
+      margin-left: auto;
+      margin-top: 8px;
+      padding: 4px 8px;
+      background-color: var(--primary-color);
+      color: #ffffff;
+      font-size: 0.9em;
+    }
 
-.preview-title {
-    font-size: 1.2rem;
-    font-weight: 500;
-    margin: 0;
-}
+    /* 레이아웃 선택 완전 숨김 */
+    .layout-select,
+    .settings-row.mb-3.layout-select {
+      display: none !important;
+    }
 
-.preview-actions {
-    display: flex;
-    gap: 8px;
-}
-
-/* 미리보기 영역 자동 조절 스타일 수정 */
-.preview-panel {
-    flex: 1;
-    padding: 15px;
-    overflow: visible;  /* 스크롤 제거 */
-}
-
-.preview-content {
-    border: 1px solid #dee2e6;
-    padding: 20px;
-    min-height: 400px;
-    height: auto;
-    width: auto;
-    overflow: visible;  /* 스크롤 제거 */
-}
-  </style>
+    /* 탭 네비게이션과 설정 사이 간격 */
+    .nav-tabs {
+      margin-bottom: 1.5rem !important;
+    }
+</style>
+    
   <!-- 폰트 추가 -->
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
 <!-- 헤더 구조 수정 -->
-<div class="preview-header">
-    <div class="preview-title">미리보기</div>
-    <div class="preview-actions">
-        <button class="btn btn-outline-primary btn-sm" id="validateButton">규정 검증</button>
-        <button class="btn btn-outline-secondary btn-sm" onclick="exportToPDF()">PDF 저장</button>
-        <button class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
-    </div>
-</div>
+  <div class="preview-header">
+      <div class="preview-title">미리보기</div>
+      <div class="preview-actions">
+          <button class="btn btn-outline-primary btn-sm" id="validateButton">규정 검증</button>
+          <button class="btn btn-outline-secondary btn-sm" id="exportPdfBtn">PDF 저장</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
+      </div>
+  </div>
 
 <div class="preview-container">
     <!-- 왼쪽 설정 패널 -->
@@ -163,7 +190,7 @@
         </button>
         
         <!-- 탭 네비게이션 추가 -->
-        <ul class="nav nav-tabs nav-fill mb-3" role="tablist">
+        <ul class="nav nav-tabs nav-fill mb=3" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#content-tab">표시사항</button>
             </li>
@@ -176,11 +203,11 @@
             <!-- 표시사항 탭 -->
             <div class="tab-pane fade show active" id="content-tab">
                 <div class="settings-group">
-                    <!-- 레이아웃 선택 추가 -->
-                    <div class="settings-row mb-3">
+                    <!-- 레이아웃 선택 추가 - 임시 숨김 처리 -->
+                    <div class="settings-row mb-3 layout-select">
                         <div class="settings-item">
                             <label class="form-label">레이아웃</label>
-                            <select class="form-select form-select-sm" id="layoutSelect">
+                            <select class="form-select form-select-sm" id="layoutSelect" disabled>
                                 <option value="vertical" {% if label.prv_layout == "vertical" %}selected{% endif %}>세로형</option>
                                 <option value="horizontal" {% if label.prv_layout == "horizontal" %}selected{% endif %}>가로형</option>
                             </select>
@@ -188,20 +215,22 @@
                     </div>
                     
                     <!-- 기존 설정들 -->
-                    <div class="area-info text-primary mb-2">
+                    <div class="area-info text-primary mb=2">
                         정보표시면 면적: <span id="areaDisplay">100</span> cm²
                     </div>
                     <div class="settings-row">
                         <div class="settings-item">
-                            <label class="form-label required">가로 (cm)</label>
+                            <label class="form-label required">가로(cm)</label>
                             <input type="number" class="form-control form-control-sm" id="widthInput" 
                                    value="{{ label.prv_width|default:'10' }}" min="4" max="30" step="1">
                         </div>
                     </div>
+                    <!-- 세로 입력 필드 수정 -->
                     <div class="settings-row">
-                        <div class="settings-item" style="display: flex; align-items: center; gap: 6px;">
-                            <label class="form-label required">세로 (cm)</label>
-                            <input type="number" class="form-control form-control-sm" id="heightInput" value="{{ label.prv_length|default:'10' }}" min="3" max="20" step="1" style="width: 80px;">
+                        <div class="settings-item">
+                            <label class="form-label required">세로</label>
+                            <input type="number" class="form-control form-control-sm" id="heightInput" 
+                                   value="{{ label.prv_length|default:'10' }}" disabled>
                         </div>
                     </div>
                     <div class="settings-row">
@@ -216,14 +245,14 @@
                     </div>
                     <div class="settings-row">
                         <div class="settings-item">
-                            <label class="form-label">글자 크기 (pt)</label>
+                            <label class="form-label">크기(pt)</label>
                             <input type="number" class="form-control form-control-sm" id="fontSizeInput" 
                                    value="{{ label.prv_font_size|default:'10' }}" min="10" max="72" step="1">
                         </div>
                     </div>
                     <div class="settings-row">
                         <div class="settings-item">
-                            <label class="form-label">자간 (%)</label>
+                            <label class="form-label">자간(%)</label>
                             <input type="number" class="form-control form-control-sm" id="letterSpacingInput" 
                                    value="{{ label.prv_letter_spacing|default:'-5' }}" min="-5" max="10" step="1">
                         </div>
@@ -240,21 +269,27 @@
             
             <!-- 영양성분 탭 -->
             <div class="tab-pane fade" id="nutrition-tab">
-                <div class="nutrition-settings">
+                <div class="settings-group">
+                    <!-- 영양성분 설정 표시 영역 -->
                     <div class="settings-row">
                         <div class="settings-item">
-                            <label class="form-label">1회 제공량</label>
-                            <input type="number" class="form-control form-control-sm" id="servingSizeInput" 
-                                   value="100" min="0" max="1000" step="1">
+                            <label class="form-label">단위내용량</label>
+                            <input type="text" id="servingSizeDisplay" class="form-control form-control-sm" readonly disabled>
                         </div>
                     </div>
                     <div class="settings-row">
                         <div class="settings-item">
-                            <label class="form-label">단위</label>
-                            <select class="form-select form-select-sm" id="servingUnitSelect">
-                                <option value="g">g</option>
-                                <option value="ml">ml</option>
-                                <option value="개">개</option>
+                            <label class="form-label">포장당 갯수</label>
+                            <input type="text" id="servingsPerPackageDisplay" class="form-control form-control-sm" readonly disabled>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="settings-item">
+                            <label class="form-label">표시 단위</label>
+                            <select id="nutritionDisplayUnit" class="form-select form-select-sm">
+                                <option value="total">총 내용량당</option>
+                                <option value="unit">단위내용량당</option>
+                                <option value="100g">100g(ml)당</option>
                             </select>
                         </div>
                     </div>
@@ -275,59 +310,39 @@
               {% csrf_token %}
             </form>
             
-            <!-- label_id hidden input 추가 -->
+            <!-- label_id와 작성일시 정보를 위한 hidden input 추가 -->
             <input type="hidden" name="label_id" value="{{ label.my_label_id }}">
-            
+            <input type="hidden" id="update_datetime" name="update_datetime" value="{{ label.update_datetime|date:'Y-m-d H:i' }}">
+
             <table class="preview-table">
                 <tbody id="previewTableBody"></tbody>
             </table>
             <div class="footer-text">
-                본 라벨은 식품위생법 및 농수산물 원산지 표시법을 준수합니다.
-                <span id="lastModifiedDate" class="text-muted" style="float: right; font-size: 0.9em;"></span>
+                labeldata.com 에서 관련법규에 따라 작성되었습니다.
+                <span class="creator-info">[{{ label.update_datetime|date:"Y-m-d H:i" }}]</span>
+            </div>
+            
+            <!-- 영양성분 미리보기 영역 추가 -->
+            <div id="nutritionPreview" class="mt-4" style="display: none;">
+                <hr>
+                <h6 class="mb-3">■ 영양성분</h6>
+                <div class="nutrition-header mb-2"></div>
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%">항목</th>
+                            <th class="nutrition-value-header" style="width: 45%">함량</th>
+                            <th style="width: 30%">%영양성분 기준치</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nutritionTableBody"></tbody>
+                </table>
+                <div class="nutrition-footer text-muted small">※ 1일 영양성분 기준치에 대한 비율(%)</div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 스타일 수정 -->
-<style>
-/* 미리보기 헤더박스 스타일 수정 */
-.preview-header-box {
-    background-color: var(--primary-color) !important;
-    color: #ffffff !important;
-    padding: 8px 12px;
-    margin-bottom: 0;
-    width: 100%;
-    position: relative;
-    z-index: 1;
-}
-
-.preview-header-box .header-text {
-    margin: 0;
-    line-height: 1.2;
-    color: #ffffff !important;
-    opacity: 1 !important;
-    font-weight: bold !important;
-}
-
-/* 미리보기 컨텐츠 영역 수정 */
-.preview-content {
-    border: 1px solid #dee2e6;
-    padding: 20px;
-    min-height: 400px;
-    height: auto;
-    width: auto;
-    background-color: #ffffff;
-    position: relative;
-    overflow: visible;
-}
-
-/* 푸터 여백 추가 */
-.footer-text {
-    margin: 20px 0 !important;
-    padding-bottom: 10px;
-}
-</style>
 
 </body>
 </html>
