@@ -159,7 +159,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!form) {
         return;
     }
-    const labelId = document.getElementById('label_id')?.value;
+    let labelId = null;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('label_id')) {
+        labelId = urlParams.get('label_id');
+    } else {
+        labelId = document.getElementById('label_id')?.value;
+    }
     if (!labelId) {
         alert('라벨을 먼저 저장해주세요.');
         return;
@@ -176,7 +182,22 @@ document.addEventListener('DOMContentLoaded', function () {
     );
     if (!popup) {
         alert("팝업이 차단되었습니다. 팝업 차단을 해제해주세요.");
+        return;
     }
+    // 체크된 필드만 값과 함께 postMessage로 전달
+    setTimeout(() => {
+        const checked = {};
+        document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(cb => {
+            if (cb.checked) {
+                // 필드명 추출 (예: chk_prdlst_nm → prdlst_nm)
+                const field = cb.id.replace('chk_', '');
+                // 값은 입력/textarea/select에서 가져옴
+                const input = document.querySelector(`[name="${field}"]`);
+                if (input) checked[field] = input.value;
+            }
+        });
+        popup.postMessage({ type: 'previewCheckedFields', checked }, '*');
+    }, 500);
   };
 
   window.addEventListener('message', function (e) {

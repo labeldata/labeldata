@@ -245,6 +245,61 @@ document.addEventListener('DOMContentLoaded', function () {
     enforceInputMinMax();
 });
 
+// 팝업에서 부모로부터 체크박스 상태를 받아 적용
+window.addEventListener('message', function(e) {
+    if (e.data?.type === 'previewCheckbox' && e.data.checked) {
+        Object.entries(e.data.checked).forEach(([id, value]) => {
+            const cb = document.getElementById(id);
+            if (cb && typeof value === 'boolean') {
+                cb.checked = value;
+            }
+        });
+    }
+});
+
+// 체크된 필드만 표에 동적으로 렌더링
+const FIELD_LABELS = {
+    my_label_name: '라벨명',
+    prdlst_dcnm: '식품유형',
+    prdlst_nm: '제품명',
+    ingredient_info: '성분명 및 함량',
+    content_weight: '내용량',
+    weight_calorie: '내용량(열량)',
+    prdlst_report_no: '품목보고번호',
+    country_of_origin: '원산지',
+    storage_method: '보관방법',
+    frmlc_mtrqlt: '용기.포장재질',
+    bssh_nm: '제조원 소재지',
+    distributor_address: '유통전문판매원',
+    repacker_address: '소분원',
+    importer_address: '수입원',
+    pog_daycnt: '소비기한',
+    rawmtrl_nm_display: '원재료명(표시)',
+    cautions: '주의사항',
+    additional_info: '기타표시사항',
+    nutrition_text: '영양성분'
+};
+
+window.addEventListener('message', function(e) {
+    if (e.data?.type === 'previewCheckedFields' && e.data.checked) {
+        const tbody = document.getElementById('previewTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        Object.entries(e.data.checked).forEach(([field, value]) => {
+            if (FIELD_LABELS[field]) {
+                const tr = document.createElement('tr');
+                const th = document.createElement('th');
+                th.textContent = FIELD_LABELS[field];
+                const td = document.createElement('td');
+                td.textContent = value;
+                tr.appendChild(th);
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+            }
+        });
+    }
+});
+
 // 규정 검증 시 입력값을 서버에 저장하는 함수 추가
 function savePreviewSettingsToServer() {
     

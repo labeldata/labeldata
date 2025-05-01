@@ -279,16 +279,7 @@
             <input type="hidden" name="label_id" value="{{ label.my_label_id }}">
             
             <table class="preview-table">
-                <tbody>
-                    {% for item in preview_items %}
-                    <tr>
-                        <th>{{ item.label }}</th>
-                        <td class="{% if item.label == '제품명' %}product-name{% elif item.label == '원산지' %}origin-text{% endif %}">
-                            {{ item.value }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
+                <tbody id="previewTableBody"></tbody>
             </table>
             <div class="footer-text">
                 본 라벨은 식품위생법 및 농수산물 원산지 표시법을 준수합니다.
