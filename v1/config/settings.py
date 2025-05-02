@@ -107,10 +107,15 @@ USE_TZ = True
 
 # Static files
 STATIC_URL = '/static/'
-STATIC_ROOT = config('STATIC_ROOT', default='d:/projects/labeldata/staticfiles')  # 정적 파일 수집 경로
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',  # 앱 외부의 정적 파일 경로
-]
+# 운영/개발 환경 구분
+if DEBUG:
+    STATICFILES_DIRS = [
+        BASE_DIR / 'static'  # 개발 중: 정적 파일 폴더 (수동 관리용)
+    ]
+    STATIC_ROOT = config('STATIC_ROOT', default='d:/projects/labeldata/staticfiles')
+else:
+    STATICFILES_DIRS = []  # 운영에서는 STATIC_ROOT에 수집만 하므로 제외
+    STATIC_ROOT = config('STATIC_ROOT', default='/home/labeldata/mysite/staticfiles')
 
 # Media files
 MEDIA_URL = '/media/'
