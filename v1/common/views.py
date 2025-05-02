@@ -132,16 +132,19 @@ def build_defaults(field_mapping, item):
 def call_api_endpoint(request, pk):
     """API 데이터를 호출하여 저장 (서비스별 매핑 정보를 SERVICE_MAPPING으로 관리)"""
     endpoint = get_object_or_404(ApiEndpoint, pk=pk)
-    start_position = 1
+    start_position = endpoint.last_start_position or 1
     batch_size = 1000
     total_saved = 0
 
     logger.info(f"Starting API call for endpoint: {endpoint.name}")
 
+    # 시작일자(YYYYMMDD) 사용
+    change_date = endpoint.start_date or "20250101"
+
     # service_name이 없으면(예: 수입식품) 별도 처리
     if not endpoint.service_name:
-        # 수입식품 API 호출로 위임
-        return call_imported_food_api_endpoint(request, pk)
+        # 수입식품 API 호출로 위임 (start_date 전달)
+        return call_imported_food_api_endpoint(request, pk, start_date=change_date)
 
     service_info = SERVICE_MAPPING.get(endpoint.service_name)
     if not service_info:
@@ -153,8 +156,7 @@ def call_api_endpoint(request, pk):
 
     try:
         while True:
-            # 예: 2025년 2월 1일 이후 자료만 가져옴
-            change_date = "20250211"
+            # CHNG_DT에 시작일자 사용
             api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}/CHNG_DT={change_date}"
             logger.info(f"Calling API at URL: {api_url}")
 
@@ -169,6 +171,36 @@ def call_api_endpoint(request, pk):
             try:
                 data = response.json()
                 logger.debug(f"Parsed JSON Data: {str(data)[:500]}")
+
+                result = data.get(endpoint.service_name, {}).get("RESULT", {})
+                code = result.get("CODE", "")
+                message = result.get("MSG", "")
+
+                logger.warning(f"API 응답 코드: {code} - {message} 호출 키: {endpoint.api_key.key}")
+
+                # 종료 조건 처리
+                if code == "INFO-200":
+                    logger.info("해당하는 데이터가 없습니다. 종료합니다.")
+                    break
+
+                if code == "INFO-300":
+                    logger.warning("유효 호출 건수 초과. 이어받기를 위해 중단.")
+                    endpoint.last_start_position = start_position
+                    endpoint.last_status = "failure"
+                    endpoint.save()
+                    return JsonResponse({"error": "호출건수 초과로 중단됨", "code": code, "message": message}, status=429)
+
+                if code in ("INFO-100", "INFO-400"):
+                    endpoint.last_status = "failure"
+                    endpoint.save()
+                    return JsonResponse({"error": "인증/권한 오류", "code": code, "message": message}, status=403)
+
+                if code.startswith("ERROR-") or code == "":
+                    endpoint.last_start_position = start_position
+                    endpoint.last_status = "failure"
+                    endpoint.save()
+                    return JsonResponse({"error": f"API 오류 발생", "code": code, "message": message}, status=500)
+
             except ValueError:
                 logger.error(f"Invalid JSON response: {response.text}")
                 return JsonResponse({"error": "Invalid JSON response"}, status=500)
@@ -191,7 +223,6 @@ def call_api_endpoint(request, pk):
                         **{unique_field_name: unique_value},
                         defaults=defaults
                     )
-                    print(f"Created: {created} / 제품명 : {instance.prdlst_nm if hasattr(instance, 'prdlst_nm') else 'N/A'}")
                 except Exception as e:
                     logger.error(f"Failed to save item {item.get('PRDLST_NM')}: {e}")
 
@@ -202,6 +233,8 @@ def call_api_endpoint(request, pk):
                 break
 
             start_position += batch_size
+            endpoint.last_start_position = start_position
+            endpoint.save()
 
         # 호출 상태 업데이트
         endpoint.last_called_at = now()
@@ -213,11 +246,13 @@ def call_api_endpoint(request, pk):
 
     except requests.exceptions.RequestException as e:
         logger.error(f"API call failed: {e}")
+        endpoint.last_start_position = start_position
         endpoint.last_status = "failure"
         endpoint.save()
         return JsonResponse({"error": str(e)}, status=500)
 
-def call_imported_food_api_endpoint(request, pk):
+
+def call_imported_food_api_endpoint(request, pk, start_date=None):
     """
     수입식품(ImportedFood) API 데이터를 호출하여 저장
     """
@@ -248,7 +283,8 @@ def call_imported_food_api_endpoint(request, pk):
     base_url = endpoint.url
     num_of_rows = 100
     max_pages = 100
-    start_date = '20250101'
+    # 시작일자 사용
+    procs_dtm_start = start_date or endpoint.start_date or '20250101'
     end_date = '20251201'
     total_saved = 0
     headers = None
@@ -265,9 +301,8 @@ def call_imported_food_api_endpoint(request, pk):
                     f"{base_url}?serviceKey={service_key}"
                     f"&pageNo={page_no}&numOfRows={num_of_rows}&type=json"
                     f"&dclPrductSeCdNm={category}"
-                    f"&procsDtmStart={start_date}&procsDtmEnd={end_date}"
+                    f"&procsDtmStart={procs_dtm_start}&procsDtmEnd={end_date}"
                 )
-                print(url)
                 logger.info(f"ImportedFood API 요청: {url}")
                 response = session.get(url, timeout=60)
                 debug_responses.append({

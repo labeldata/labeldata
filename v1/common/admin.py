@@ -17,7 +17,7 @@ class ApiKeyAdmin(BaseAdmin):
 @admin.register(ApiEndpoint)
 class ApiEndpointAdmin(BaseAdmin):
     # ApiEndpoint 모델 관리
-    list_display = ('name', 'service_name', 'short_url', 'call_frequency_minutes', 'last_called_at', 'trigger_action')
+    list_display = ('name', 'service_name', 'short_url', 'start_date', 'last_called_at', 'last_start_position', 'trigger_action')
     search_fields = ('name', 'url', 'service_name')
     readonly_fields = ('last_called_at',)
 

@@ -14,7 +14,14 @@ class ApiEndpoint(models.Model):
     """API 엔드포인트를 관리하는 모델"""
     name = models.CharField(max_length=255, help_text="API 이름")
     url = models.URLField(max_length=500, help_text="API URL")
-    call_frequency_minutes = models.IntegerField(default=1440, help_text="호출 주기 (분 단위)")
+    start_date = models.CharField(
+        max_length=8,
+        help_text="시작일자(YYYYMMDD)",
+        null=True,
+        blank=True,
+        default=""
+    )
+    call_frequency_minutes = models.IntegerField(default=1440, help_text="호출 주기 (분 단위)")  # <- 나중에 삭제 가능
     last_called_at = models.DateTimeField(null=True, blank=True, help_text="마지막 호출 시간")
     last_status = models.CharField(
         max_length=50,
@@ -34,6 +41,10 @@ class ApiEndpoint(models.Model):
         max_length=50,
         help_text="서비스 이름 (예: I1250)",
         null=True, blank=True  # 필수 아님으로 변경
+    )
+    last_start_position = models.IntegerField(
+        default=1,
+        help_text="마지막 요청 시작 위치 (중단 후 이어받기용)"
     )
 
     def __str__(self):
