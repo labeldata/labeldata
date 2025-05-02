@@ -115,7 +115,7 @@ if DEBUG:
     STATIC_ROOT = config('STATIC_ROOT', default='d:/projects/labeldata/staticfiles')
 else:
     STATICFILES_DIRS = [
-        BASE_DIR / 'v1' / 'static',  # 운영 중: 정적 파일 폴더 (수동 관리용)
+        BASE_DIR / 'static',  # 운영 중: 정적 파일 폴더 (수동 관리용)
     ]  # 운영에서는 STATIC_ROOT에 수집만 하므로 제외
     STATIC_ROOT = config('STATIC_ROOT', default='/home/labeldata/mysite/staticfiles')
 
