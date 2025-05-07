@@ -657,48 +657,52 @@ document.addEventListener('DOMContentLoaded', function () {
   // ------------------ 내문구 탭 기능 ------------------
   function getCategoryFromFieldName(fieldName) {
     const mapping = {
-      my_label_name: 'label_name',          // 추가
-      prdlst_dcnm: 'food_type',            // 추가
-      prdlst_nm: 'product_name',           // 추가
-      ingredient_info: 'ingredient_info',   // 추가
-      content_weight: 'content_weight',     // 추가
-      weight_calorie: 'weight_calorie',     // 추가
-      prdlst_report_no: 'report_no',       // 추가
-      storage_method: 'storage',
-      frmlc_mtrqlt: 'package',
-      bssh_nm: 'manufacturer',
-      distributor: 'distributor',
-      repacker: 'repacker',
-      importer: 'importer',
-      expiry: 'pog_daycnt',
-      cautions: 'cautions',
-      additional: 'additional'
+      my_label_name: 'label_name',          // 라벨명
+      prdlst_dcnm: 'food_type',            // 식품유형
+      prdlst_nm: 'product_name',           // 제품명
+      ingredient_info: 'ingredient_info',   // 성분명 및 함량
+      content_weight: 'content_weight',     // 내용량
+      weight_calorie: 'weight_calorie',     // 내용량(열량)
+      prdlst_report_no: 'report_no',       // 품목보고번호
+      storage_method: 'storage',            // 보관방법
+      frmlc_mtrqlt: 'package',             // 용기.포장재질
+      bssh_nm: 'manufacturer',             // 제조원 소재지
+      distributor_address: 'distributor',   // 유통전문판매원
+      repacker_address: 'repacker',        // 소분원
+      importer_address: 'importer',         // 수입원
+      pog_daycnt: 'expiry',                // 소비기한
+      cautions: 'cautions',                // 주의사항
+      additional_info: 'additional'         // 기타표시사항
     };
     return mapping[fieldName] || null;
   }
-
+  
   function renderMyPhrasesForFocusedField() {
     const fieldName = lastFocusedFieldName || 'prdlst_nm';
+    console.log('Rendering phrases for field:', fieldName); // Debugging
     const category = getCategoryFromFieldName(fieldName);
+    console.log('Mapped category:', category); // Debugging
     const listContainer = document.getElementById('myPhraseList');
     if (!listContainer || !category || !phrasesData) {
+      console.warn('Missing required elements:', { listContainer, category, phrasesData }); // Debugging
       if (listContainer) listContainer.innerHTML = '<div class="text-muted" style="font-size: 0.8rem;">문구 데이터를 로드할 수 없습니다.</div>';
       return;
     }
-
+  
     listContainer.innerHTML = '';
     const isMultiSelect = ['cautions', 'additional'].includes(category);
     const textarea = document.querySelector(`textarea[name="${fieldName}"], input[name="${fieldName}"]`);
     const currentValues = textarea ? textarea.value.split('\n').map(v => v.trim()).filter(Boolean) : [];
-
+  
     const phraseList = phrasesData[category] || [];
+    console.log('Phrases for category:', phraseList); // Debugging
     if (!phraseList.length) {
       listContainer.innerHTML = '<div class="text-muted" style="font-size: 0.8rem;">저장된 문구가 없습니다. 문구 관리에서 추가하세요.</div>';
       return;
     }
-
+  
     const sortedPhrases = [...phraseList].sort((a, b) => (b.note?.includes('★') ? 1 : 0) - (a.note?.includes('★') ? 1 : 0));
-
+  
     sortedPhrases.forEach(p => {
       const div = document.createElement('div');
       div.className = 'phrase-item';
@@ -712,7 +716,7 @@ document.addEventListener('DOMContentLoaded', function () {
         transition: 'background-color 0.2s',
         marginBottom: '4px'
       });
-
+  
       div.addEventListener('click', () => {
         if (!textarea) return;
         if (isMultiSelect) {
@@ -735,7 +739,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         updateTextareaHeight(textarea);
       });
-
+  
       div.style.backgroundColor = currentValues.includes(p.content) ? '#d0ebff' : '#fff';
       if (p.note) div.title = p.note;
       listContainer.appendChild(div);

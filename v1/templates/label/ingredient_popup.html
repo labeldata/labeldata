@@ -71,6 +71,21 @@
             margin: 5px 0;
             word-break: break-all;
         }
+        /* Uniform sizing for modal search inputs and select */
+        #modalSearchInput1, #modalSearchInput2, #modalSearchInput3, #modalSearchInput4, #modalSearchInputFoodCategory {
+            height: 32px;
+            width: 100%;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+        }
+        /* Search button styling */
+        #ingredientSearchModal .btn-primary.search-btn {
+            height: 32px;
+            line-height: 1.5;
+            padding: 4px 12px;
+            font-size: 0.8rem;
+            margin-right: 5px;
+        }
     </style>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -81,38 +96,38 @@
     <div class="modal fade" id="ingredientSearchModal" tabindex="-1" aria-labelledby="ingredientSearchModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header d-flex align-items-center">
                     <h5 class="modal-title" id="ingredientSearchModalLabel">원료 검색</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+                    <div class="ms-auto d-flex align-items-center">
+                        <button type="button" class="btn btn-primary search-btn" onclick="searchMyIngredientInModal()">검색</button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+                    </div>
                 </div>
                 <div class="modal-body">
                     <div class="row g-2 align-items-end">
                         <div class="col">
-                            <label for="modalSearchInput1" class="form-label">원재료명</label>
+                            <label for="modalSearchInput1" class="form-label d-none">원재료명</label>
                             <input type="text" id="modalSearchInput1" class="form-control" placeholder="원재료명">
                         </div>
                         <div class="col">
-                            <label for="modalSearchInput2" class="form-label">품목보고번호</label>
+                            <label for="modalSearchInput2" class="form-label d-none">품목보고번호</label>
                             <input type="text" id="modalSearchInput2" class="form-control" placeholder="품목보고번호">
                         </div>
                         <div class="col">
-                            <label for="modalSearchInputFoodCategory" class="form-label">식품 구분</label>
+                            <label for="modalSearchInputFoodCategory" class="form-label d-none">식품 구분</label>
                             <select id="modalSearchInputFoodCategory" class="form-select"></select>
                         </div>
                         <div class="col">
-                            <label for="modalSearchInput3" class="form-label">식품유형</label>
+                            <label for="modalSearchInput3" class="form-label d-none">식품유형</label>
                             <input type="text" id="modalSearchInput3" class="form-control" placeholder="식품유형" />
                         </div>
                         <div class="col">
-                            <label for="modalSearchInput4" class="form-label">제조사</label>
+                            <label for="modalSearchInput4" class="form-label d-none">제조사</label>
                             <input type="text" id="modalSearchInput4" class="form-control" placeholder="제조사">
-                        </div>
-                        <div class="col-auto">
-                            <button type="button" class="btn btn-primary" onclick="searchMyIngredientInModal()">검색</button>
                         </div>
                     </div>
                     <div id="modalSearchResults" style="margin-top: 15px;">
-                        <div class="list-group-item bg-light font-weight-bold">
+                        <div class="list-group-item bg-light font-weight-bold d-none" id="searchResultsHeader">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div class="d-flex flex-grow-1">
                                     <div class="flex-fill"><strong>원료명</strong></div>
