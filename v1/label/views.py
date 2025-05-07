@@ -222,21 +222,42 @@ def label_creation(request, label_id=None):
         
         # 내 원료에 연결된 원재료명 가져오기
         if has_ingredient_relations:
-            # 내 원료 관계 조회 (순서대로)
             relations = LabelIngredientRelation.objects.filter(
                 label_id=label.my_label_id
             ).select_related('ingredient').order_by('relation_sequence')
             
             # 원재료명 정보를 생성 (순서대로)
             ingredients_info = []
+            allergens_set = set()
+            gmo_set = set()
             for relation in relations:
                 ingredient = relation.ingredient
                 # 원재료명 또는 원재료 표시명을 사용 (비율 제외)
                 ingredient_name = ingredient.ingredient_display_name or ingredient.prdlst_nm or ""
                 ingredients_info.append(ingredient_name)
+                # 알레르기/GMO 수집
+                if ingredient.allergens:
+                    for a in ingredient.allergens.split(','):
+                        a = a.strip()
+                        if a:
+                            allergens_set.add(a)
+                if ingredient.gmo:
+                    for g in ingredient.gmo.split(','):
+                        g = g.strip()
+                        if g:
+                            gmo_set.add(g)
             
             # 콤마로 연결하여 원재료명(참고) 필드에 설정
-            label.rawmtrl_nm = ", ".join(ingredients_info)
+            rawmtrl_nm_str = ", ".join(ingredients_info)
+            # 알레르기/GMO 요약 추가
+            summary_parts = []
+            if allergens_set:
+                summary_parts.append(f"알레르기 성분 : {', '.join(sorted(allergens_set))}")
+            if gmo_set:
+                summary_parts.append(f"GMO 성분 : {', '.join(sorted(gmo_set))}")
+            if summary_parts:
+                rawmtrl_nm_str += f"  [" + " / ".join(summary_parts) + "]"
+            label.rawmtrl_nm = rawmtrl_nm_str
         
         if request.method == 'POST':
             # POST 요청 처리
@@ -376,20 +397,20 @@ def ingredient_popup(request):
     has_relations = False
     if label_id:
         relations = LabelIngredientRelation.objects.filter(label_id=label_id).select_related('ingredient')
-        #saved_ingredient_names = set()
         for relation in relations:
-            #saved_ingredient_names.add(relation.ingredient.my_ingredient_name)
+            ingredient = relation.ingredient
+            food_category = getattr(ingredient, 'food_category', None) or getattr(ingredient, 'food_group', None) or ''
             ingredients_data.append({
-                'my_ingredient_id': relation.ingredient.my_ingredient_id,
-                'ingredient_name': relation.ingredient.prdlst_nm,
-                'prdlst_report_no': relation.ingredient.prdlst_report_no or '',
+                'my_ingredient_id': ingredient.my_ingredient_id,
+                'ingredient_name': ingredient.prdlst_nm,
+                'prdlst_report_no': ingredient.prdlst_report_no or '',
                 'ratio': float(relation.ingredient_ratio) if relation.ingredient_ratio else '',
-                'food_type': relation.ingredient.prdlst_dcnm or '',
-                #'origin': relation.country_of_origin or '',
-                'display_name': relation.ingredient.ingredient_display_name,
-                'allergen': relation.ingredient.allergens or '',
-                'gmo': relation.ingredient.gmo or '',
-                'manufacturer': relation.ingredient.bssh_nm or ''
+                'food_type': ingredient.prdlst_dcnm or '',
+                'food_category': food_category,
+                'display_name': ingredient.ingredient_display_name,
+                'allergen': ingredient.allergens or '',
+                'gmo': ingredient.gmo or '',
+                'manufacturer': ingredient.bssh_nm or ''
             })
         if relations.exists():
             has_relations = True  # 관계 데이터가 있는 경우 플래그 설정

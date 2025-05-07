@@ -62,7 +62,8 @@ function updateSummarySection() {
         .join(', ');
     document.getElementById('summary-display-names').textContent = displayNames || '없음';
     
-    const allergens = [];
+    // 중복 제거를 위한 Set 사용
+    const allergensSet = new Set();
     const shellfishCollected = new Set();
     const shellfishPattern = /^조개류\(([^)]+)\)$/;
 
@@ -75,31 +76,32 @@ function updateSummarySection() {
                 const items = match[1].split(',').map(item => item.trim()).filter(item => item);
                 items.forEach(item => shellfishCollected.add(item));
             } else if (allergen.includes('조개류')) {
-                allergens.push(allergen);
+                allergensSet.add(allergen);
             } else {
-                allergens.push(allergen);
+                allergensSet.add(allergen);
             }
         });
     });
 
     if (shellfishCollected.size > 0) {
         const shellfishStr = `조개류(${Array.from(shellfishCollected).join(', ')})`;
-        allergens.push(shellfishStr);
+        allergensSet.add(shellfishStr);
     }
 
-    const gmos = [];
+    // GMO 중복 제거
+    const gmosSet = new Set();
     rows.forEach(row => {
         const gmoInput = row.querySelector('.gmo-input')?.value || '';
         const gmoList = gmoInput.split(',').map(item => item.trim()).filter(item => item);
-        gmos.push(...gmoList);
+        gmoList.forEach(gmo => gmosSet.add(gmo));
     });
 
     const allergenGmoText = [];
-    if (allergens.length > 0) {
-        allergenGmoText.push(allergens.join(', '));
+    if (allergensSet.size > 0) {
+        allergenGmoText.push(Array.from(allergensSet).join(', '));
     }
-    if (gmos.length > 0) {
-        allergenGmoText.push(gmos.join(', '));
+    if (gmosSet.size > 0) {
+        allergenGmoText.push(Array.from(gmosSet).join(', '));
     }
     document.getElementById('summary-allergens-gmo').textContent = allergenGmoText.length > 0 ? allergenGmoText.join(' / ') : '없음';
 }
@@ -503,7 +505,7 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
         <td><input type="text" value="${ingredient.ingredient_name || ''}" class="form-control form-control-sm ingredient-name-input modal-readonly-field" readonly></td>
         <td><input type="text" value="${ingredient.ratio || ''}" class="form-control form-control-sm ratio-input"></td>
         <td><input type="text" value="${foodCategoryDisplay}" data-food-category="${foodCategory}" class="form-control form-control-sm food-category-input modal-readonly-field" readonly></td>
-        <td><div class="food-type-select-container"></div></td>
+        <td><input type="text" value="${ingredient.food_type || ''}" class="form-control form-control-sm modal-readonly-field" readonly></td>
         <td><textarea class="form-control form-control-sm display-name-input modal-readonly-field" readonly>${ingredient.display_name || ingredient.ingredient_name || ''}</textarea></td>
         <td>
             <input type="hidden" class="allergen-input" value="${ingredient.allergen || ''}">
@@ -521,20 +523,6 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
         <input type="hidden" class="my-ingredient-id" value="${ingredient.my_ingredient_id || ''}">
     `;
     document.getElementById('ingredient-body').appendChild(row);
-
-    const foodTypeContainer = row.querySelector('.food-type-select-container');
-    const select = createFoodTypeSelect(ingredient.food_type);
-    foodTypeContainer.appendChild(select);
-    $(select).select2({
-        data: getFoodTypeSelectOptions(foodCategory),
-        width: '100%',
-        placeholder: '식품유형',
-        allowClear: false,
-        disabled: true
-    });
-    if (ingredient.food_type) {
-        $(select).val(ingredient.food_type).trigger('change');
-    }
 
     const ratioInput = row.querySelector('.ratio-input');
     if (ratioInput) {
