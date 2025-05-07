@@ -32,6 +32,7 @@ class FoodItem(models.Model):
             models.Index(fields=["lcns_no"], name="idx_lcns_no"),
             models.Index(fields=["prdlst_report_no"], name="idx_prdlst_report_no"),
             models.Index(fields=["prdlst_nm"], name="idx_prdlst_nm"),
+            models.Index(fields=["last_updt_dtm"], name="idx_last_updt_dtm"),  # 추가
         ]
 
     def __str__(self):

@@ -3,20 +3,83 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>원재료 상세 정보</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Sortable JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
-    <!-- Bootstrap CSS (모달 사용) -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    <!-- select2 CSS -->
+    <!-- Select2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/popup.css' %}">
+    <style>
+        .popup-container {
+            padding: 15px;
+        }
+        .popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .popup-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #495057;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .styled-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .styled-table th,
+        .styled-table td {
+            border: 1px solid #dee2e6;
+            padding: 4px 8px;
+            vertical-align: middle;
+            word-break: break-all;
+        }
+        .styled-table th {
+            background-color: #f8f9fa;
+            text-align: center;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .table-container {
+            margin-top: 10px;
+        }
+        .modal-readonly-field {
+            background-color: #e9ecef;
+        }
+        .summary-section {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        .summary-section label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .summary-section p {
+            margin: 5px 0;
+            word-break: break-all;
+        }
+    </style>
+    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
-<div class="container popup-container" data-has-relations="{{ has_relations|yesno:'true,false' }}">
+<div class="container-fluid popup-container" data-has-relations="{{ has_relations|yesno:'true,false' }}">
     <!-- 모달 다이얼로그: 내 원료 검색 -->
     <div class="modal fade" id="ingredientSearchModal" tabindex="-1" aria-labelledby="ingredientSearchModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl"><!-- modal-xl로 크기 확대 -->
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="ingredientSearchModalLabel">원료 검색</h5>
@@ -25,96 +88,69 @@
                 <div class="modal-body">
                     <div class="row g-2 align-items-end">
                         <div class="col">
+                            <label for="modalSearchInput1" class="form-label">원재료명</label>
                             <input type="text" id="modalSearchInput1" class="form-control" placeholder="원재료명">
                         </div>
                         <div class="col">
+                            <label for="modalSearchInput2" class="form-label">품목보고번호</label>
                             <input type="text" id="modalSearchInput2" class="form-control" placeholder="품목보고번호">
                         </div>
                         <div class="col">
+                            <label for="modalSearchInputFoodCategory" class="form-label">식품 구분</label>
+                            <select id="modalSearchInputFoodCategory" class="form-select"></select>
+                        </div>
+                        <div class="col">
+                            <label for="modalSearchInput3" class="form-label">식품유형</label>
                             <select id="modalSearchInput3" class="form-control select2" placeholder="식품유형"></select>
                         </div>
                         <div class="col">
+                            <label for="modalSearchInput4" class="form-label">제조사</label>
                             <input type="text" id="modalSearchInput4" class="form-control" placeholder="제조사">
                         </div>
                         <div class="col-auto">
                             <button type="button" class="btn btn-primary" onclick="searchMyIngredientInModal()">검색</button>
                         </div>
                     </div>
-                    <div id="modalSearchResults" style="margin-top: 15px;"></div>
+                    <div id="modalSearchResults" style="margin-top: 15px;">
+                        <div class="list-group-item bg-light font-weight-bold">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex flex-grow-1">
+                                    <div class="flex-fill"><strong>원료명</strong></div>
+                                    <div class="flex-fill"><strong>품목보고번호</strong></div>
+                                    <div class="flex-fill"><strong>식품구분</strong></div>
+                                    <div class="flex-fill"><strong>식품유형</strong></div>
+                                    <div class="flex-fill"><strong>제조사</strong></div>
+                                </div>
+                                <div style="width: 100px;" class="text-end"><strong>행동</strong></div>
+                            </div>
+                            <div class="mt-2">
+                                <strong>원재료 표시명</strong>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- 기존 원료 조회 모달 -->
     <div class="modal fade" id="existing-ingredients-modal" tabindex="-1" aria-labelledby="existingIngredientsModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl"> <!-- modal-xl 클래스로 최대 폭 -->
+        <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="existingIngredientsModalLabel">원료 조회</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
                 </div>
-                <div class="modal-body" id="existing-ingredients-modal-body">
-                    <!-- showExistingIngredientsModal 함수에서 내용이 채워집니다 -->
-                </div>
+                <div class="modal-body" id="existing-ingredients-modal-body"></div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary me-2" onclick="registerNewIngredient()">신규 등록</button>
-                    <button type="button" class="btn btn-cancel" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 알레르기 모달 -->
-    <div class="modal fade" id="allergyModal" tabindex="-1" aria-labelledby="allergyModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="allergyModalLabel">알레르기 항목 선택</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="allergyOptions" class="d-flex flex-wrap gap-2">
-                        <!-- 알레르기 옵션들은 JavaScript에서 동적으로 추가됩니다 -->
-                    </div>
-                    <div class="mt-3">
-                        <label for="selectedAllergies" class="form-label">선택된 알레르기:</label>
-                        <input type="text" id="selectedAllergies" class="form-control" readonly>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" onclick="applyAllergies()">적용</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- GMO 모달 -->
-    <div class="modal fade" id="gmoModal" tabindex="-1" aria-labelledby="gmoModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="gmoModalLabel">GMO 항목 선택</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="gmoOptions" class="d-flex flex-wrap gap-2">
-                        <!-- GMO 옵션들은 JavaScript에서 동적으로 추가됩니다 -->
-                    </div>
-                    <div class="mt-3">
-                        <label for="selectedGmos" class="form-label">선택된 GMO:</label>
-                        <input type="text" id="selectedGmos" class="form-control" readonly>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" onclick="applyGmos()">적용</button>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-        <!-- 읽기 전용 정보 모달 추가 (알레르기/GMO 정보) -->
+    <!-- 읽기 전용 정보 모달 -->
     <div class="modal fade" id="readOnlyInfoModal" tabindex="-1" aria-labelledby="readOnlyInfoModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -133,29 +169,39 @@
         </div>
     </div>
 
-    <!-- 상단 툴바 부분 -->
-    <div class="d-flex mb-1 mt-3 gap-3"> <!-- 상단 마진 추가 (mt-3), 하단 마진 줄임 (mb-1), 버튼 간격 동일하게 (gap-4) -->
-        <button type="button" class="btn btn-default btn-sm" data-bs-toggle="modal" data-bs-target="#ingredientSearchModal">내원료 검색</button>
-        <button type="button" onclick="addIngredientRow()" class="btn btn-default btn-sm">행 추가</button>
-        <button type="button" onclick="removeSelectedRows()" class="btn btn-default btn-sm">행 삭제</button>
-        <button type="button" onclick="validateOrigin()" class="btn btn-default btn-sm">원산지</button>
-        <button type="button" onclick="saveIngredients()" class="btn btn-primary btn-sm">저장</button>
-        <button type="button" onclick="window.close()" class="btn btn-cancel btn-sm">닫기</button>
+    <!-- 상단 툴바 -->
+    <div class="popup-header">
+        <div class="popup-title">원재료 상세 정보</div>
+        <div class="action-buttons">
+            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#ingredientSearchModal">내원료 추가</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="removeSelectedRows()">선택 삭제</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="saveIngredients()">저장</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
+        </div>
+    </div>
+    <hr>
+
+    <!-- 요약 섹션 -->
+    <div class="summary-section">
+        <p><label>원재료 표시명:</label> <span id="summary-display-names">없음</span></p>
+        <p><label>알레르기/GMO 성분:</label> <span id="summary-allergens-gmo">없음</span></p>
     </div>
 
+    <!-- 테이블 -->
     <div class="table-container">
         <table class="table styled-table">
             <thead>
                 <tr>
                     <th style="width: 2%;"><input type="checkbox" id="select-all" class="form-check-input" /></th>
                     <th style="width: 2%;">순서</th>
-                    <th style="width: 15%;">원재료명 / 비율</th> <!-- 25%에서 15%로 줄임 -->
-                    <th style="width: 15%;">품목보고번호 / 식품유형</th> <!-- 20%에서 15%로 줄임 -->
-                    <th style="width: 20%;">원재료명(표시명)</th> <!-- 28%에서 20%로 줄임 -->
-                    <th style="width: 13%;">참고사항</th> <!-- 새로운 참고사항 열 추가 -->
-                    <th style="width: 10%;">알레르기 / GMO</th>
-                    <th style="width: 8%;">제조사</th>
-                    <th style="width: 8%;">행동</th>
+                    <th style="width: 15%;">원재료명</th>
+                    <th style="width: 6%;">비율</th>
+                    <th style="width: 10%;">식품 구분</th>
+                    <th style="width: 10%;">식품유형</th>
+                    <th style="width: 40%;">원재료 표시명</th>
+                    <th style="width: 5%;">알레르기</th>
+                    <th style="width: 5%;">GMO</th>
+                    <th style="width: 5%;">원산지</th>
                 </tr>
             </thead>
             <tbody id="ingredient-body"></tbody>
@@ -163,9 +209,9 @@
     </div>
 </div>
 
-<!-- Bootstrap JS (모달 동작을 위함) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-<!-- select2 JS -->
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Select2 JS -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 {{ saved_ingredients|json_script:"saved-ingredients-data" }}
 {{ country_names|json_script:"country-names-data" }}
