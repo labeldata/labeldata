@@ -4,7 +4,7 @@ from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, F
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.utils.timezone import now
@@ -456,7 +456,7 @@ def ingredient_popup(request):
         'has_relations': has_relations,
         'country_names': country_names,  # 국가 목록 추가
         'food_types': list(FoodType.objects.all().values('food_type')),
-        'agricultural_products': list(AgriculturalProduct.objects.all().values('name_kr')),
+        'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
         'food_additives': list(FoodAdditive.objects.all().values('name_kr'))
     }
     return render(request, 'label/ingredient_popup.html', context)
@@ -651,7 +651,7 @@ def my_ingredient_detail(request, ingredient_id=None):
         'form': form,
         'mode': mode,
         'food_types': list(FoodType.objects.all().values('food_type')),
-        'agricultural_products': list(AgriculturalProduct.objects.all().values('name_kr')),
+        'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
         'food_additives': list(FoodAdditive.objects.all().values('name_kr')),
     }
 

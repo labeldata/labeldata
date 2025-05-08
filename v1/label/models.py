@@ -303,7 +303,6 @@ class FoodType(models.Model):
         return self.food_type
     
 class CountryList(models.Model):
-    # 국가명 목록, 외교부_국가표준코드_20250102.csv
     country_code = models.CharField(max_length=3, verbose_name="국가코드 alpha3" , null=True, blank=True)
     country_code2 = models.CharField(max_length=2, verbose_name="국가코드 alpha2" , primary_key=True)
     numeric_code = models.CharField(max_length=3, verbose_name="국가코드 숫자" , null=True, blank=True)
@@ -324,8 +323,7 @@ class LabelIngredientRelation(models.Model):
     relation_id = models.CharField(
         max_length=255, 
         primary_key=True, 
-        editable=False,
-        default='default_relation'  # 기본값 추가
+        editable=False
     )
 
     # 기본 관계 필드
@@ -395,7 +393,7 @@ class ImportedFood(models.Model):
 class FoodAdditive(models.Model):
     
     category = models.CharField(max_length=100, verbose_name="식품첨가물 대분류")
-    name_kr = models.CharField(max_length=200, verbose_name="식품첨가물 명칭(한글)", primary_key=True, default='default_name_kr')
+    name_kr = models.CharField(max_length=200, verbose_name="식품첨가물 명칭(한글)", primary_key=True)
     alias_4 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표4 명칭+용도")
     alias_5 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표5 명칭 또는 간략명")
     alias_6 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표6 명칭 또는 간략명 또는 용도")
@@ -431,21 +429,22 @@ class FoodAdditive(models.Model):
 
 class AgriculturalProduct(models.Model):
     # 농수산물 모델
-    serial_number = models.CharField(max_length=20, verbose_name="고유번호")
-    category = models.CharField(max_length=50, verbose_name="구분")
-    item_type = models.CharField(max_length=50, verbose_name="품목 분류")
-    name_kr = models.CharField(max_length=100, verbose_name="명칭")
-    name_etc = models.CharField(max_length=200, blank=True, null=True, verbose_name="기타 명칭")
-    scientific_name = models.CharField(max_length=300, blank=True, null=True, verbose_name="학명 또는 특성")
-    used_parts = models.CharField(max_length=200, blank=True, null=True, verbose_name="사용부위")
-    usage_condition = models.TextField(blank=True, null=True, verbose_name="제조 사용 조건")
+    lclas_nm = models.CharField(max_length=500, blank=True, null=True, verbose_name="대분류")
+    mlsfc_nm = models.CharField(max_length=500, blank=True, null=True, verbose_name="중분류")
+    rprsnt_rawmtrl_nm = models.CharField(max_length=500, verbose_name="명칭")
+    rawmtrl_ncknm = models.CharField(max_length=500, blank=True, null=True, verbose_name="이명")
+    eng_nm = models.CharField(max_length=500, blank=True, null=True, verbose_name="영문명")
+    scnm = models.TextField(blank=True, null=True, verbose_name="학명")
+    regn_cd_nm = models.CharField(max_length=500, blank=True, null=True, verbose_name="부위명")
+    rawmtrl_stats_cd_nm = models.CharField(max_length=500, blank=True, null=True, verbose_name="상태명")
+    use_cnd_nm = models.TextField(blank=True, null=True, verbose_name="사용 조건")
 
     class Meta:
         db_table = "agricultural_product"
         indexes = [
-            models.Index(fields=["name_kr"], name="idx_agri_name_kr_index")
+            models.Index(fields=["rprsnt_rawmtrl_nm"], name="idx_rprsnt_rawmtrl_nm")
         ]
 
     def __str__(self):
-        return self.name_kr
+        return self.rprsnt_rawmtrl_nm
 

@@ -1,5 +1,6 @@
 import logging
 import requests
+import xml.etree.ElementTree as ET
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
@@ -7,7 +8,7 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib import messages
 from django.utils.timezone import now
 from .models import ApiEndpoint
-from v1.label.models import FoodItem, ImportedFood
+from v1.label.models import FoodItem, ImportedFood, AgriculturalProduct
 
 
 # 로거 설정
@@ -103,6 +104,21 @@ SERVICE_MAPPING = {
             'expirde_end_dtm': 'EXPIRDE_END_DTM',
         }
     },
+    'AGRICULTURAL_PRODUCT': {
+        'model': AgriculturalProduct,
+        'fields': {
+            'unique_key': ('rprsnt_rawmtrl_nm', 'RPRSNT_RAWMTRL_NM'),
+            'lclas_nm': ('lclas_nm', 'LCLAS_NM'),
+            'mlsfc_nm': ('mlsfc_nm', 'MLSFC_NM'),
+            'rprsnt_rawmtrl_nm': ('rprsnt_rawmtrl_nm', 'RPRSNT_RAWMTRL_NM'),
+            'rawmtrl_ncknm': ('rawmtrl_ncknm', 'RAWMTRL_NCKNM'),
+            'eng_nm': ('eng_nm', 'ENG_NM'),
+            'scnm': ('scnm', 'SCNM'),
+            'regn_cd_nm': ('regn_cd_nm', 'REGN_CD_NM'),
+            'rawmtrl_stats_cd_nm': ('rawmtrl_stats_cd_nm', 'RAWMTRL_STATS_CD_NM'),
+            'use_cnd_nm': ('use_cnd_nm', 'USE_CND_NM'),
+        }
+    },
     # 다른 서비스나 모델이 추가되면 아래와 같이 확장하면 됨.
     # 'SERVICE_NAME': {
     #     'model': SomeOtherModel,
@@ -117,16 +133,19 @@ def build_defaults(field_mapping, item):
     """
     주어진 field_mapping 정보를 사용하여 defaults 딕셔너리를 생성합니다.
     field_mapping: (모델 필드명, API 응답 키) 튜플들이 포함된 딕셔너리
+    unique_key에 해당하는 필드는 defaults에서 제외합니다.
     """
     defaults = {}
+    unique_field_name = None
+    if 'unique_key' in field_mapping:
+        unique_field_name = field_mapping['unique_key'][0]
     for model_field, mapping_tuple in field_mapping.items():
-        # 'unique_key'는 lookup용이므로 defaults에는 포함하지 않습니다.
         if model_field == 'unique_key':
             continue
         model_field_name, api_key = mapping_tuple
-        # API 응답에 해당 키가 없으면 빈 문자열을 기본값으로 사용합니다.
+        if unique_field_name and model_field_name == unique_field_name:
+            continue  # lookup에 이미 사용된 필드는 defaults에서 제외
         defaults[model_field_name] = item.get(api_key, '')
-    defaults['update_datetime'] = now()
     return defaults
 
 def call_api_endpoint(request, pk):
@@ -141,10 +160,12 @@ def call_api_endpoint(request, pk):
     # 시작일자(YYYYMMDD) 사용
     change_date = endpoint.start_date or "20250101"
 
-    # service_name이 없으면(예: 수입식품) 별도 처리
-    if not endpoint.service_name:
+    # service_name이 없거나 특정 서비스명일 때 별도 처리
+    if not endpoint.service_name or endpoint.service_name == "IMPORTED_FOOD":
         # 수입식품 API 호출로 위임 (start_date 전달)
         return call_imported_food_api_endpoint(request, pk, start_date=change_date)
+    elif endpoint.service_name == "AGRICULTURAL_PRODUCT":
+        return call_agricultural_product_api_endpoint(request, pk)
 
     service_info = SERVICE_MAPPING.get(endpoint.service_name)
     if not service_info:
@@ -259,25 +280,11 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     endpoint = get_object_or_404(ApiEndpoint, pk=pk)
     logger.info(f"Starting ImportedFood API call for endpoint: {endpoint.name}")
 
-    from label.models import ImportedFood
+    
 
     ModelClass = ImportedFood
-    field_mapping = {
-        'dcl_prduct_se_cd_nm': 'DCL_PRDUCT_SE_CD_NM',
-        'bsn_ofc_name': 'BSN_OFC_NAME',
-        'prduct_korean_nm': 'PRDUCT_KOREAN_NM',
-        'prduct_nm': 'PRDUCT_NM',
-        'expirde_dtm': 'EXPIRDE_DTM',
-        'procs_dtm': 'PROCS_DTM',
-        'ovsmnfst_nm': 'OVSMNFST_NM',
-        'itm_nm': 'ITM_NM',
-        'xport_ntncd_nm': 'XPORT_NTNCD_NM',
-        'mnf_ntncn_nm': 'MNF_NTNCN_NM',
-        'korlabel': 'KORLABEL',
-        'irdnt_nm': 'IRDNT_NM',
-        'expirde_bdgin_dtm': 'EXPIRDE_BEGIN_DTM',
-        'expirde_end_dtm': 'EXPIRDE_END_DTM',
-    }
+    # SERVICE_MAPPING의 필드 매핑 재사용
+    field_mapping = SERVICE_MAPPING['IMPORTED_FOOD']['fields']
 
     service_key = endpoint.api_key.key
     base_url = endpoint.url
@@ -378,6 +385,92 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
         })
     except Exception as e:
         logger.error(f"ImportedFood API call failed: {e}")
+        endpoint.last_status = "failure"
+        endpoint.save()
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+def call_agricultural_product_api_endpoint(request, pk):
+    """
+    농수산물(AgriculturalProduct) API 데이터를 호출하여 저장
+    """
+    endpoint = get_object_or_404(ApiEndpoint, pk=pk)
+    logger.info(f"Starting AgriculturalProduct API call for endpoint: {endpoint.name}")
+
+    ModelClass = AgriculturalProduct
+    field_mapping = SERVICE_MAPPING['AGRICULTURAL_PRODUCT']['fields']
+
+    service_key = endpoint.api_key.key
+    base_url = endpoint.url
+    num_of_rows = 100
+    max_pages = 100
+    total_saved = 0
+    session = requests.Session()
+    debug_responses = []
+
+    try:
+        for page_no in range(1, max_pages + 1):
+            params = {
+                'serviceKey': service_key,
+                'rprsnt_rawmtrl_nm': '',
+                'pageNo': str(page_no),
+                'numOfRows': str(num_of_rows),
+                'type': 'json'
+            }
+            logger.info(f"AgriculturalProduct API 요청: {base_url} params={params}")
+            response = session.get(base_url, params=params, timeout=60)
+            debug_responses.append({
+                "page": page_no,
+                "status_code": response.status_code,
+                "text_head": response.text[:1000]
+            })
+            if response.status_code != 200:
+                logger.error(f"Unexpected status code: {response.status_code}")
+                break
+
+            try:
+                data = response.json()
+            except Exception as e:
+                logger.error(f"JSON 파싱 오류: {e}")
+                break
+
+            body = data.get("body", {})
+            items = body.get("items", [])
+            if isinstance(items, dict):
+                items = items.get("item", [])
+            elif isinstance(items, list):
+                pass  # 이미 리스트
+            else:
+                items = []
+            if isinstance(items, dict):
+                items = [items]
+            if not items:
+                logger.info(f"No more items at page {page_no}.")
+                break
+
+            for obj in items:
+                unique_field_name, unique_api_key = field_mapping['unique_key']
+                unique_value = (obj.get(unique_api_key, '') or '').strip()
+                lookup = {unique_field_name: unique_value}
+                defaults = build_defaults(field_mapping, obj)
+                qs = ModelClass.objects.filter(**lookup)
+                if qs.exists():
+                    qs.update(**defaults)
+                else:
+                    ModelClass.objects.create(**lookup, **defaults)
+                    total_saved += 1
+            logger.info(f"Page {page_no} 저장 완료")
+        endpoint.last_called_at = now()
+        endpoint.last_status = "success"
+        endpoint.save()
+        logger.info(f"Total AgriculturalProduct saved: {total_saved}")
+        return JsonResponse({
+            "success": True,
+            "total_saved": total_saved,
+            "debug_responses": debug_responses[:3]
+        })
+    except Exception as e:
+        logger.error(f"AgriculturalProduct API call failed: {e}")
         endpoint.last_status = "failure"
         endpoint.save()
         return JsonResponse({"error": str(e)}, status=500)
