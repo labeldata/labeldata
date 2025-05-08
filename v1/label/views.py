@@ -776,6 +776,7 @@ def search_ingredient_add_row(request):
         report = data.get('prdlst_report_no', '').strip()
         food_type = data.get('food_type', '').strip()
         manufacturer = data.get('manufacturer', '').strip()
+        food_category = data.get('food_category', '').strip()
         
         qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
         if name:
@@ -786,6 +787,8 @@ def search_ingredient_add_row(request):
             qs = qs.filter(prdlst_dcnm__icontains=food_type)
         if manufacturer:
             qs = qs.filter(bssh_nm__icontains=manufacturer)
+        if food_category:
+            qs = qs.filter(food_category=food_category)
         
         ingredients = list(qs.values(
             'prdlst_nm',
@@ -793,7 +796,8 @@ def search_ingredient_add_row(request):
             'prdlst_dcnm',
             'bssh_nm',
             'ingredient_display_name',
-            'my_ingredient_id'
+            'my_ingredient_id',
+            'food_category',  # 식품 구분 필드 추가
         ))
 
         if ingredients:

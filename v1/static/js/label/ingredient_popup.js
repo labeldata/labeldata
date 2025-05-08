@@ -158,48 +158,86 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 식품 구분 드롭다운 초기화
     const modalFoodCategorySelect = document.getElementById('modalSearchInputFoodCategory');
+    const modalFoodTypeSelect = document.getElementById('modalSearchInput3');
     if (modalFoodCategorySelect) {
-        $(modalFoodCategorySelect).select2({
-            data: [
-                { id: '', text: '모든 식품 구분' },
-                { id: 'processed', text: '가공식품' },
-                { id: 'agricultural', text: '농수산물' },
-                { id: 'additive', text: '식품첨가물' },
-                { id: '정제수', text: '정제수' }
-            ],
-            width: '100%',
-            placeholder: '식품 구분 선택',
-            allowClear: true
+        // select2 제거: 일반 select로만 사용
+        // 옵션만 직접 추가
+        modalFoodCategorySelect.innerHTML = '';
+        const categories = [
+            { id: '', text: '모든 식품 구분' },
+            { id: 'processed', text: '가공식품' },
+            { id: 'agricultural', text: '농수산물' },
+            { id: 'additive', text: '식품첨가물' },
+            { id: '정제수', text: '정제수' }
+        ];
+        categories.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.id;
+            option.textContent = opt.text;
+            modalFoodCategorySelect.appendChild(option);
         });
-        $(modalFoodCategorySelect).val(null).trigger('change');
+        modalFoodCategorySelect.value = '';
     }
 
-    // 식품 유형 드롭다운 초기화
-    const modalFoodTypeSelect = document.getElementById('modalSearchInput3');
+    // 식품유형 드롭다운: 처음에는 전체(가공식품+농수산물+첨가물) 옵션
     if (modalFoodTypeSelect) {
         $(modalFoodTypeSelect).select2({
             data: getFoodTypeSelectOptions(),
             width: '100%',
             placeholder: '식품유형 선택',
-            allowClear: true
+            allowClear: true,
+            dropdownParent: $('#ingredientSearchModal')
         });
         $(modalFoodTypeSelect).val(null).trigger('change');
     }
 
-    // 식품 구분 변경 시 식품 유형 갱신
-    if (modalFoodCategorySelect && modalFoodTypeSelect) {
-        $(modalFoodCategorySelect).on('change', function() {
-            const foodCategory = $(this).val();
-            $(modalFoodTypeSelect).select2('destroy');
-            $(modalFoodTypeSelect).select2({
-                data: getFoodTypeSelectOptions(foodCategory),
-                width: '100%',
-                placeholder: '식품유형 선택',
-                allowClear: true
-            });
-            $(modalFoodTypeSelect).val(null).trigger('change');
+    // 식품유형 선택 시 식품 구분 자동 선택
+    if (modalFoodTypeSelect && modalFoodCategorySelect) {
+        $(modalFoodTypeSelect).on('change', function() {
+            const selectedType = $(this).val();
+            let matchedCategory = '';
+            // 모든 옵션에서 해당 식품유형이 어느 카테고리인지 찾기
+            if (selectedType) {
+                if (foodTypeOptions.some(opt => opt.id === selectedType)) {
+                    matchedCategory = 'processed';
+                } else if (agriProductOptions.some(opt => opt.id === selectedType)) {
+                    matchedCategory = 'agricultural';
+                } else if (foodAdditiveOptions.some(opt => opt.id === selectedType)) {
+                    matchedCategory = 'additive';
+                } else if (selectedType === '정제수') {
+                    matchedCategory = '정제수';
+                }
+            }
+            if (matchedCategory) {
+                modalFoodCategorySelect.value = matchedCategory;
+            }
         });
     }
+
+    // 식품 구분 선택 시 식품유형 필터링
+    if (modalFoodCategorySelect && modalFoodTypeSelect) {
+        modalFoodCategorySelect.addEventListener('change', function() {
+            const foodCategory = this.value;
+            $(modalFoodTypeSelect).empty();
+            const options = getFoodTypeSelectOptions(foodCategory);
+            options.forEach(opt => {
+                const option = new Option(opt.text, opt.id, false, false);
+                $(modalFoodTypeSelect).append(option);
+            });
+            $(modalFoodTypeSelect).val(null).trigger('change.select2');
+        });
+    }
+
+    // 모달 닫힐 때 입력값, 드롭다운, 검색결과 초기화
+    $('#ingredientSearchModal').on('hidden.bs.modal', function () {
+        $('#modalSearchInput1').val('');
+        $('#modalSearchInput2').val('');
+        $('#modalSearchInput3').val('');
+        $('#modalSearchInput4').val('');
+        document.getElementById('modalSearchInputFoodCategory').value = '';
+        $('#modalSearchInput3').val(null).trigger('change.select2');
+        $('#modalSearchResults').empty();
+    });
 });
 
 function attachRatioInputListeners() {
