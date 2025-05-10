@@ -431,7 +431,7 @@ class AgriculturalProduct(models.Model):
     # 농수산물 모델
     lclas_nm = models.CharField(max_length=500, blank=True, null=True, verbose_name="대분류")
     mlsfc_nm = models.CharField(max_length=500, blank=True, null=True, verbose_name="중분류")
-    rprsnt_rawmtrl_nm = models.CharField(max_length=500, verbose_name="명칭")
+    rprsnt_rawmtrl_nm = models.CharField(max_length=500, null=True, blank=True, verbose_name="명칭")
     rawmtrl_ncknm = models.CharField(max_length=500, blank=True, null=True, verbose_name="이명")
     eng_nm = models.CharField(max_length=500, blank=True, null=True, verbose_name="영문명")
     scnm = models.TextField(blank=True, null=True, verbose_name="학명")
