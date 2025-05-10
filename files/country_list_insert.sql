@@ -1,17 +1,7 @@
 
 
-use labeldb;
 
-CREATE TABLE country_list (
-    country_code VARCHAR(3),
-    country_code2 CHAR(2) PRIMARY KEY,
-    numeric_code CHAR(3),
-    country_name_en VARCHAR(50),
-    country_name_ko VARCHAR(50)
-);
-
-
-INSERT INTO country_list (country_code, country_code2, numeric_code, country_name_en, country_name_ko) VALUES
+INSERT INTO labeldata$labeldb.country_list (country_code, country_code2, numeric_code, country_name_en, country_name_ko) VALUES
 ('GHA', 'GH', '288', 'Ghana', '가나'),
 ('GAB', 'GA', '266', 'Gabon', '가봉'),
 ('GUY', 'GY', '328', 'Guyana', '가이아나'),
@@ -255,4 +245,7 @@ INSERT INTO country_list (country_code, country_code2, numeric_code, country_nam
 ('PCN', 'PN', '612', 'Pitcairn Islands', '핏케언 섬'),
 ('HUN', 'HU', '348', 'Hungary', '헝가리'),
 ('AUS', 'AU', '36', 'Australia', '호주'),
-('HKG', 'HK', '344', 'Hongkong', '홍콩');
+('HKG', 'HK', '344', 'Hongkong', '홍콩')
+('997', 'z7', '', '', '국산'),
+('998', 'z8', '', '', '국내산'),
+('999', 'z9', '', '', '외국산');

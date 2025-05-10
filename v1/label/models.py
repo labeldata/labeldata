@@ -294,7 +294,7 @@ class FoodType(models.Model):
     relevant_regulations = models.TextField(verbose_name="식품유형별 관련규정", null=True, blank=True)
 
     class Meta:
-        db_table = "Food_Type"
+        db_table = "food_type"
         indexes = [
             models.Index(fields=['food_type'], name='idx_food_type'),
         ]
