@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.utils.timezone import now
 from .models import ApiEndpoint
 from v1.label.models import FoodItem, ImportedFood, AgriculturalProduct
-
+from datetime import datetime
 
 # 로거 설정
 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ def call_api_endpoint(request, pk):
     logger.info(f"Starting API call for endpoint: {endpoint.name}")
 
     # 시작일자(YYYYMMDD) 사용
-    change_date = endpoint.start_date or "20250101"
+    change_date = endpoint.start_date or datetime.now().strftime("%Y%m%d")
 
     # service_name이 없거나 특정 서비스명일 때 별도 처리
     if not endpoint.service_name or endpoint.service_name == "IMPORTED_FOOD":
@@ -181,7 +181,7 @@ def call_api_endpoint(request, pk):
             api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}/CHNG_DT={change_date}"
             logger.info(f"Calling API at URL: {api_url}")
 
-            response = requests.get(api_url, timeout=300)
+            response = requests.get(api_url, timeout=60)
             logger.info(f"API Response Status: {response.status_code}")
             logger.debug(f"API Raw Response Text: {response.text[:500]}")
 
@@ -232,7 +232,7 @@ def call_api_endpoint(request, pk):
 
             items = data.get(endpoint.service_name, {}).get("row", [])
             logger.info(f"Number of items fetched: {len(items)}")
-
+            print(f"Page 저장 완료: {start_position} ~ {start_position + batch_size - 1}")
             for item in items:
                 try:
                     # 고유 키(lookup) 필드: 모델 필드명과 API 응답 키를 사용
@@ -263,6 +263,7 @@ def call_api_endpoint(request, pk):
         endpoint.save()
 
         logger.info(f"Total saved items: {total_saved}")
+        print(f"[{endpoint.name}] API 호출 종료 - 저장된 항목 수: {total_saved}")
         return JsonResponse({"success": True, "total_saved": total_saved})
 
     except requests.exceptions.RequestException as e:
@@ -280,8 +281,6 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     endpoint = get_object_or_404(ApiEndpoint, pk=pk)
     logger.info(f"Starting ImportedFood API call for endpoint: {endpoint.name}")
 
-    
-
     ModelClass = ImportedFood
     # SERVICE_MAPPING의 필드 매핑 재사용
     field_mapping = SERVICE_MAPPING['IMPORTED_FOOD']['fields']
@@ -291,8 +290,8 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     num_of_rows = 100
     max_pages = 100
     # 시작일자 사용
-    procs_dtm_start = start_date or endpoint.start_date or '20250101'
-    end_date = '20251201'
+    procs_dtm_start = start_date or endpoint.start_date or datetime.now().strftime("%Y%m%d")
+    end_date = '21251201'
     total_saved = 0
     headers = None
 
@@ -374,10 +373,12 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                         ModelClass.objects.create(**lookup, **defaults)
                         total_saved += 1
                 logger.info(f"Page {page_no} 저장 완료 (category={category})")
+                print(f"Page {page_no} 저장 완료 (category={category})")
         endpoint.last_called_at = now()
         endpoint.last_status = "success"
         endpoint.save()
         logger.info(f"Total ImportedFood saved: {total_saved}")
+        print(f"[{endpoint.name}] API 호출 종료 - 저장된 항목 수: {total_saved}")
         return JsonResponse({
             "success": True,
             "total_saved": total_saved,
@@ -460,10 +461,12 @@ def call_agricultural_product_api_endpoint(request, pk):
                     ModelClass.objects.create(**lookup, **defaults)
                     total_saved += 1
             logger.info(f"Page {page_no} 저장 완료")
+            print(f"Page {page_no} 저장 완료")
         endpoint.last_called_at = now()
         endpoint.last_status = "success"
         endpoint.save()
         logger.info(f"Total AgriculturalProduct saved: {total_saved}")
+        print(f"[{endpoint.name}] API 호출 종료 - 저장된 항목 수: {total_saved}")
         return JsonResponse({
             "success": True,
             "total_saved": total_saved,
