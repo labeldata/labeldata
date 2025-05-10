@@ -288,7 +288,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     service_key = endpoint.api_key.key
     base_url = endpoint.url
     num_of_rows = 100
-    max_pages = 100
+    max_pages = 1000
     # 시작일자 사용
     procs_dtm_start = start_date or endpoint.start_date or datetime.now().strftime("%Y%m%d")
     end_date = '21251201'
