@@ -283,7 +283,22 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     logger.info(f"Starting ImportedFood API call for endpoint: {endpoint.name}")
 
     ModelClass = ImportedFood
-    field_mapping = SERVICE_MAPPING['IMPORTED_FOOD']['fields']
+    field_mapping = {
+        'dcl_prduct_se_cd_nm': 'DCL_PRDUCT_SE_CD_NM',
+        'bsn_ofc_name': 'BSN_OFC_NM',
+        'prduct_korean_nm': 'PRDUCT_KOREAN_NM',
+        'prduct_nm': 'PRDUCT_NM',
+        'expirde_dtm': 'EXPIRDE_DTM',
+        'procs_dtm': 'PROCS_DTM',
+        'ovsmnfst_nm': 'OVSMNFST_NM',
+        'itm_nm': 'ITM_NM',
+        'xport_ntncd_nm': 'XPORT_NTNCD_NM',
+        'mnf_ntncn_nm': 'MNF_NTNCN_NM',
+        'korlabel': 'KORLABEL',
+        'irdnt_nm': 'IRDNT_NM',
+        'expirde_bdgin_dtm': 'EXPIRDE_BDGIN_DTM',
+        'expirde_end_dtm': 'EXPIRDE_END_DTM',
+    }
 
     service_key = endpoint.api_key.key
     base_url = endpoint.url
@@ -310,12 +325,12 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                 # 최대 3회 재시도
                 for attempt in range(3):
                     try:
-                        response = session.get(url, timeout=60)  # timeout은 자유롭게 조정
-                        break  # 요청 성공 시 반복 탈출
+                        response = session.get(url, timeout=60)
+                        break  # 성공 시 반복 탈출
                     except requests.exceptions.RequestException as e:
                         logger.warning(f"{url} 요청 실패 (시도 {attempt + 1}/3): {e}")
                         if attempt < 2:
-                            time.sleep(5)  # 다음 시도 전 5초 대기
+                            time.sleep(5)
                         else:
                             raise Exception(f"최대 재시도 횟수 초과: {url}")
 
@@ -331,9 +346,12 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                     break
 
                 try:
+                    if not response.text.strip().startswith("{"):
+                        raise ValueError("응답이 JSON 형식이 아닙니다.")
                     data = response.json()
                 except Exception as e:
                     logger.error(f"JSON 파싱 오류: {e}")
+                    logger.error(f"응답 내용:\n{response.text[:500]}")
                     break
 
                 body = data.get("body", {})
@@ -349,17 +367,18 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                     items = [items]
                 if items and isinstance(items[0], dict) and "item" in items[0]:
                     items = [i["item"] for i in items if isinstance(i, dict) and "item" in i]
+
                 if not items:
                     logger.info(f"No more items at page {page_no} for category {category}.")
                     break
 
                 for obj in items:
-                    lookup = dict(
-                        bsn_ofc_name=(obj.get('BSN_OFC_NM') or '').strip(),
-                        prduct_korean_nm=(obj.get('PRDUCT_KOREAN_NM') or '').strip(),
-                        procs_dtm=(obj.get('PROCS_DTM') or '').strip(),
-                        ovsmnfst_nm=(obj.get('OVSMNFST_NM') or '').strip(),
-                    )
+                    lookup = {
+                        'bsn_ofc_name': (obj.get('BSN_OFC_NM') or '').strip(),
+                        'prduct_korean_nm': (obj.get('PRDUCT_KOREAN_NM') or '').strip(),
+                        'procs_dtm': (obj.get('PROCS_DTM') or '').strip(),
+                        'ovsmnfst_nm': (obj.get('OVSMNFST_NM') or '').strip(),
+                    }
                     defaults = {
                         model_field: obj.get(api_field, '')
                         for model_field, api_field in field_mapping.items()
@@ -371,6 +390,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                     else:
                         ModelClass.objects.create(**lookup, **defaults)
                         total_saved += 1
+
                 logger.info(f"Page {page_no} 저장 완료 (category={category})")
                 print(f"Page {page_no} 저장 완료 (category={category})")
 
@@ -389,7 +409,6 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
         endpoint.last_status = "failure"
         endpoint.save()
         return JsonResponse({"error": str(e)}, status=500)
-
 
 def call_agricultural_product_api_endpoint(request, pk):
     """
