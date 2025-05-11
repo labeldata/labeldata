@@ -1,6 +1,7 @@
 import logging
 import requests
 import xml.etree.ElementTree as ET
+import time
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
@@ -282,22 +283,17 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     logger.info(f"Starting ImportedFood API call for endpoint: {endpoint.name}")
 
     ModelClass = ImportedFood
-    # SERVICE_MAPPING의 필드 매핑 재사용
     field_mapping = SERVICE_MAPPING['IMPORTED_FOOD']['fields']
 
     service_key = endpoint.api_key.key
     base_url = endpoint.url
     num_of_rows = 100
     max_pages = 1000
-    # 시작일자 사용
     procs_dtm_start = start_date or endpoint.start_date or datetime.now().strftime("%Y%m%d")
     end_date = '21251201'
     total_saved = 0
-    headers = None
-
     session = requests.Session()
     debug_responses = []
-
     categories = ["가공식품", "식품첨가물"]
 
     try:
@@ -310,13 +306,26 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                     f"&procsDtmStart={procs_dtm_start}&procsDtmEnd={end_date}"
                 )
                 logger.info(f"ImportedFood API 요청: {url}")
-                response = session.get(url, timeout=60)
+
+                # 최대 3회 재시도
+                for attempt in range(3):
+                    try:
+                        response = session.get(url, timeout=60)  # timeout은 자유롭게 조정
+                        break  # 요청 성공 시 반복 탈출
+                    except requests.exceptions.RequestException as e:
+                        logger.warning(f"{url} 요청 실패 (시도 {attempt + 1}/3): {e}")
+                        if attempt < 2:
+                            time.sleep(5)  # 다음 시도 전 5초 대기
+                        else:
+                            raise Exception(f"최대 재시도 횟수 초과: {url}")
+
                 debug_responses.append({
                     "category": category,
                     "page": page_no,
                     "status_code": response.status_code,
                     "text_head": response.text[:1000]
                 })
+
                 if response.status_code != 200:
                     logger.error(f"Unexpected status code: {response.status_code}")
                     break
@@ -338,35 +347,25 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
 
                 if isinstance(items, dict):
                     items = [items]
-
                 if items and isinstance(items[0], dict) and "item" in items[0]:
                     items = [i["item"] for i in items if isinstance(i, dict) and "item" in i]
-
                 if not items:
                     logger.info(f"No more items at page {page_no} for category {category}.")
                     break
 
                 for obj in items:
-                    # 중복 체크 기준 필드 (strip, None 처리, 모두 str로 변환)
                     lookup = dict(
                         bsn_ofc_name=(obj.get('BSN_OFC_NM') or '').strip(),
                         prduct_korean_nm=(obj.get('PRDUCT_KOREAN_NM') or '').strip(),
                         procs_dtm=(obj.get('PROCS_DTM') or '').strip(),
                         ovsmnfst_nm=(obj.get('OVSMNFST_NM') or '').strip(),
                     )
-                    # defaults에서 lookup에 포함된 필드는 제거 (중복 방지)
                     defaults = {
                         model_field: obj.get(api_field, '')
                         for model_field, api_field in field_mapping.items()
                         if model_field not in lookup
                     }
-                    # DB에도 동일하게 strip해서 비교
-                    qs = ModelClass.objects.filter(
-                        bsn_ofc_name=lookup['bsn_ofc_name'],
-                        prduct_korean_nm=lookup['prduct_korean_nm'],
-                        procs_dtm=lookup['procs_dtm'],
-                        ovsmnfst_nm=lookup['ovsmnfst_nm'],
-                    )
+                    qs = ModelClass.objects.filter(**lookup)
                     if qs.exists():
                         qs.update(**defaults)
                     else:
@@ -374,6 +373,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                         total_saved += 1
                 logger.info(f"Page {page_no} 저장 완료 (category={category})")
                 print(f"Page {page_no} 저장 완료 (category={category})")
+
         endpoint.last_called_at = now()
         endpoint.last_status = "success"
         endpoint.save()
