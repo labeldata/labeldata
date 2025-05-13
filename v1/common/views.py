@@ -157,12 +157,11 @@ def call_api_endpoint(request, pk):
     batch_size = 1000
     total_saved = 0
 
-    logger.info(f"Starting API call for endpoint: {endpoint.name}, change_date: {change_date}")
-
     # 시작일자(YYYYMMDD) 사용
     change_date = endpoint.start_date or datetime.now().strftime("%Y%m%d")
+    logger.info(f"Starting API call for endpoint: {endpoint.name}, change_date: {change_date}")
 
-    # service_name이 없거나 특정 서비스명일 때 별도 처리
+        # service_name이 없거나 특정 서비스명일 때 별도 처리
     if not endpoint.service_name or endpoint.service_name == "IMPORTED_FOOD":
         # 수입식품 API 호출로 위임 (start_date 전달)
         return call_imported_food_api_endpoint(request, pk, start_date=change_date)
