@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.utils.timezone import now
 from .models import ApiEndpoint
 from v1.label.models import FoodItem, ImportedFood, AgriculturalProduct
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.db import close_old_connections  # 추가
 
 # 로거 설정
@@ -158,7 +158,12 @@ def call_api_endpoint(request, pk):
     total_saved = 0
 
     # 시작일자(YYYYMMDD) 사용
-    change_date = endpoint.start_date or datetime.now().strftime("%Y%m%d")
+    if endpoint.start_date == 0:
+        change_date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+    elif endpoint.start_date == 1:
+        change_date = datetime.now().strftime("%Y%m%d")
+    else:
+        change_date = endpoint.start_date or datetime.now().strftime("%Y%m%d")
     logger.info(f"Starting API call for endpoint: {endpoint.name}, change_date: {change_date}")
 
         # service_name이 없거나 특정 서비스명일 때 별도 처리
@@ -305,7 +310,12 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     base_url = endpoint.url
     num_of_rows = 100
     max_pages = 1000
-    procs_dtm_start = start_date or endpoint.start_date or datetime.now().strftime("%Y%m%d")
+    if endpoint.start_date == 0:
+        procs_dtm_start = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+    elif endpoint.start_date == 1:
+        procs_dtm_start = datetime.now().strftime("%Y%m%d")
+    else:
+        procs_dtm_start = endpoint.start_date or datetime.now().strftime("%Y%m%d")
     end_date = '21251201'
     total_saved = 0
     session = requests.Session()
