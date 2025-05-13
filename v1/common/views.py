@@ -11,6 +11,7 @@ from django.utils.timezone import now
 from .models import ApiEndpoint
 from v1.label.models import FoodItem, ImportedFood, AgriculturalProduct
 from datetime import datetime
+from django.db import close_old_connections  # 추가
 
 # 로거 설정
 logger = logging.getLogger(__name__)
@@ -235,6 +236,7 @@ def call_api_endpoint(request, pk):
             logger.info(f"Number of items fetched: {len(items)}")
             print(f"Page 저장 완료: {start_position} ~ {start_position + batch_size - 1}")
             for item in items:
+                close_old_connections()  # DB 연결 유지
                 try:
                     # 고유 키(lookup) 필드: 모델 필드명과 API 응답 키를 사용
                     unique_field_name, unique_api_key = field_mapping['unique_key']
@@ -373,6 +375,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                     break
 
                 for obj in items:
+                    close_old_connections()  # DB 연결 유지
                     lookup = {
                         'bsn_ofc_name': (obj.get('BSN_OFC_NM') or '').strip(),
                         'prduct_korean_nm': (obj.get('PRDUCT_KOREAN_NM') or '').strip(),
@@ -469,6 +472,7 @@ def call_agricultural_product_api_endpoint(request, pk):
                 break
 
             for obj in items:
+                close_old_connections()  # DB 연결 유지
                 unique_field_name, unique_api_key = field_mapping['unique_key']
                 unique_value = (obj.get(unique_api_key, '') or '').strip()
                 lookup = {unique_field_name: unique_value}
