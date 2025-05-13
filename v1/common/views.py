@@ -157,7 +157,7 @@ def call_api_endpoint(request, pk):
     batch_size = 1000
     total_saved = 0
 
-    logger.info(f"Starting API call for endpoint: {endpoint.name}")
+    logger.info(f"Starting API call for endpoint: {endpoint.name}, change_date: {change_date}")
 
     # 시작일자(YYYYMMDD) 사용
     change_date = endpoint.start_date or datetime.now().strftime("%Y%m%d")
@@ -233,8 +233,8 @@ def call_api_endpoint(request, pk):
                 return JsonResponse({"error": f"Invalid service name: {endpoint.service_name}"}, status=500)
 
             items = data.get(endpoint.service_name, {}).get("row", [])
-            logger.info(f"Number of items fetched: {len(items)}")
-            print(f"Page 저장 완료: {start_position} ~ {start_position + batch_size - 1}")
+            logger.info(f"Number of items fetched: {len(items)} (change_date: {change_date})")
+            print(f"Page 저장 완료: {start_position} ~ {start_position + batch_size - 1}, change_date: {change_date}")
             for item in items:
                 close_old_connections()  # DB 연결 유지
                 try:
@@ -265,8 +265,8 @@ def call_api_endpoint(request, pk):
         endpoint.last_status = "success"
         endpoint.save()
 
-        logger.info(f"Total saved items: {total_saved}")
-        print(f"[{endpoint.name}] API 호출 종료 - 저장된 항목 수: {total_saved}")
+        logger.info(f"Total saved items: {total_saved}, change_date: {change_date}")
+        print(f"[{endpoint.name}] API 호출 종료 - 저장된 항목 수: {total_saved}, change_date: {change_date}")
         return JsonResponse({"success": True, "total_saved": total_saved})
 
     except requests.exceptions.RequestException as e:
