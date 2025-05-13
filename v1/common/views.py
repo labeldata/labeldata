@@ -157,10 +157,15 @@ def call_api_endpoint(request, pk):
     batch_size = 1000
     total_saved = 0
 
-    # 시작일자(YYYYMMDD) 사용
-    if endpoint.start_date == 0:
+    # 시작일자(YYYYMMDD) 사용 (자료형 안전하게 변환)
+    try:
+        start_date_int = int(endpoint.start_date)
+    except (TypeError, ValueError):
+        start_date_int = None
+
+    if start_date_int == 0:
         change_date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-    elif endpoint.start_date == 1:
+    elif start_date_int == 1:
         change_date = datetime.now().strftime("%Y%m%d")
     else:
         change_date = endpoint.start_date or datetime.now().strftime("%Y%m%d")
@@ -310,12 +315,20 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     base_url = endpoint.url
     num_of_rows = 100
     max_pages = 1000
-    if endpoint.start_date == 0:
+
+    # procs_dtm_start도 동일하게 처리
+    try:
+        start_date_int = int(endpoint.start_date)
+    except (TypeError, ValueError):
+        start_date_int = None
+
+    if start_date_int == 0:
         procs_dtm_start = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
-    elif endpoint.start_date == 1:
+    elif start_date_int == 1:
         procs_dtm_start = datetime.now().strftime("%Y%m%d")
     else:
         procs_dtm_start = endpoint.start_date or datetime.now().strftime("%Y%m%d")
+
     end_date = '21251201'
     total_saved = 0
     session = requests.Session()
