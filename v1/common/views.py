@@ -204,6 +204,14 @@ def call_api_endpoint(request, pk):
                 return JsonResponse({"error": f"Unexpected status code: {response.status_code}"}, status=500)
 
             try:
+                if not response.text.strip().startswith("{"):
+                    if response.text.strip().startswith("<OpenAPI_ServiceResponse"):
+                        logger.error("OpenAPI XML 에러 응답, 페이지 건너뜀")
+                        continue  # XML 에러 응답은 무시하고 다음 페이지로
+                    else:
+                        logger.error("알 수 없는 비JSON 응답, 페이지 건너뜀")
+                        continue
+
                 data = response.json()
                 logger.debug(f"Parsed JSON Data: {str(data)[:500]}")
 
@@ -374,7 +382,12 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
 
                 try:
                     if not response.text.strip().startswith("{"):
-                        raise ValueError("응답이 JSON 형식이 아닙니다.")
+                        if response.text.strip().startswith("<OpenAPI_ServiceResponse"):
+                            logger.error("OpenAPI XML 에러 응답, 페이지 건너뜀")
+                            continue  # XML 에러 응답은 무시하고 다음 페이지로
+                        else:
+                            logger.error("알 수 없는 비JSON 응답, 페이지 건너뜀")
+                            continue
                     data = response.json()
                 except Exception as e:
                     logger.error(f"JSON 파싱 오류: {e}")
@@ -477,6 +490,13 @@ def call_agricultural_product_api_endpoint(request, pk):
                 break
 
             try:
+                if not response.text.strip().startswith("{"):
+                    if response.text.strip().startswith("<OpenAPI_ServiceResponse"):
+                        logger.error("OpenAPI XML 에러 응답, 페이지 건너뜀")
+                        continue  # XML 에러 응답은 무시하고 다음 페이지로
+                    else:
+                        logger.error("알 수 없는 비JSON 응답, 페이지 건너뜀")
+                        continue
                 data = response.json()
             except Exception as e:
                 logger.error(f"JSON 파싱 오류: {e}")
