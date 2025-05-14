@@ -188,10 +188,12 @@ def build_defaults(field_mapping, item):
 def call_api_endpoint(request, pk):
     """API 데이터를 호출하여 저장 (서비스별 매핑 정보를 SERVICE_MAPPING으로 관리)"""
     endpoint = get_object_or_404(ApiEndpoint, pk=pk)
-    # 매일 배치 시작 시 start_position을 1로 초기화
-    endpoint.last_start_position = 1
-    endpoint.save()
-    start_position = 1
+    # 플래그가 'Y'일 때만 start_position을 1로 초기화
+    if endpoint.use_reset_start_position == 'Y':
+        endpoint.last_start_position = 1
+        endpoint.save()
+    # 이어받기: last_start_position에서 시작
+    start_position = endpoint.last_start_position
     batch_size = 1000
     total_saved = 0
 

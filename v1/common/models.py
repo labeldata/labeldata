@@ -46,6 +46,12 @@ class ApiEndpoint(models.Model):
         default=1,
         help_text="마지막 요청 시작 위치 (중단 후 이어받기용)"
     )
+    use_reset_start_position = models.CharField(
+        max_length=1,
+        choices=[('Y', '초기화'), ('N', '유지')],
+        default='Y',
+        help_text='API 호출 시 last_start_position을 1로 초기화할지 여부 (Y: 초기화, N: 유지)'
+    )
 
     def __str__(self):
         return self.name
