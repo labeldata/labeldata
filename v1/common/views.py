@@ -227,12 +227,28 @@ def call_api_endpoint(request, pk):
     field_mapping = service_info['fields']
 
     try:
+        retry_count = 0
+        max_retries = 3
         while True:
             # CHNG_DT에 시작일자 사용
             api_url = f"{endpoint.url}/{endpoint.api_key.key}/{endpoint.service_name}/json/{start_position}/{start_position + batch_size - 1}/CHNG_DT={change_date}"
             logger.info(f"Calling API at URL: {api_url}")
 
-            response = requests.get(api_url, timeout=60)
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(api_url, timeout=60)
+                    break
+                except requests.exceptions.RequestException as e:
+                    logger.warning(f"API 요청 실패 (시도 {attempt + 1}/{max_retries}): {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(3)
+                    else:
+                        logger.error(f"API 요청 최대 재시도 초과: {api_url}")
+                        endpoint.last_start_position = start_position
+                        endpoint.last_status = "failure"
+                        endpoint.save()
+                        return JsonResponse({"error": str(e)}, status=500)
+
             logger.info(f"API Response Status: {response.status_code}")
             logger.debug(f"API Raw Response Text: {response.text[:500]}")
 
@@ -257,6 +273,19 @@ def call_api_endpoint(request, pk):
                 message = result.get("MSG", "")
 
                 logger.warning(f"API 응답 코드: {code} - {message} 호출 키: {endpoint.api_key.key}")
+
+                # ERROR-500 재시도 로직
+                if code == "ERROR-500":
+                    retry_count += 1
+                    logger.warning(f"API 서버 오류: {message} (code: {code}), 재시도 {retry_count}/{max_retries}")
+                    if retry_count < max_retries:
+                        time.sleep(3)
+                        continue
+                    else:
+                        endpoint.last_start_position = start_position
+                        endpoint.last_status = "failure"
+                        endpoint.save()
+                        return JsonResponse({"error": f"API 서버 오류: {message}", "code": code}, status=500)
 
                 # 종료 조건 처리
                 if code == "INFO-200":
