@@ -87,6 +87,41 @@ SERVICE_MAPPING = {
             # 필요에 따라 다른 컬럼도 추가 가능
         },
     },
+    'I1310': {
+        'model': FoodItem,
+        'fields': {
+            'unique_key': ('prdlst_report_no', 'PRDLST_REPORT_NO'),
+            'lcns_no': ('lcns_no', 'LCNS_NO'),
+            'bssh_nm': ('bssh_nm', 'BSSH_NM'),
+            'prms_dt': ('prms_dt', 'PRMS_DT'),
+            'prdlst_nm': ('prdlst_nm', 'PRDLST_NM'),
+            'prdlst_dcnm': ('prdlst_dcnm', 'PRDLST_DCNM'),
+            'production': ('production', 'PRODUCTION'),
+            'hieng_lntrt_dvs_yn': ('hieng_lntrt_dvs_yn', 'HIENG_LNTRT_DVS_NM'),
+            'child_crtfc_yn': ('child_crtfc_yn', 'CHILD_CRTFC_YN'),
+            'pog_daycnt': ('pog_daycnt', 'POG_DAYCNT'),
+            'induty_cd_nm': ('induty_cd_nm', 'INDUTY_CD_NM'),
+            'qlity_mntnc_tmlmt_daycnt': ('qlity_mntnc_tmlmt_daycnt', 'QLITY_MNTNC_TMLMT_DAYCNT'),
+            'usages': ('usages', 'USAGE'),
+            'prpos': ('prpos', 'PRPOS'),
+            'dispos': ('dispos', 'DISPOS'),
+            'frmlc_mtrqlt': ('frmlc_mtrqlt', 'FRMLC_MTRQLT'),
+            'last_updt_dtm': ('last_updt_dtm', 'LAST_UPDT_DTM'),
+        },
+    },
+    'C006': {
+        'model': FoodItem,
+        'fields': {
+            'unique_key': ('prdlst_report_no', 'PRDLST_REPORT_NO'),
+            'lcns_no': ('lcns_no', 'LCNS_NO'),
+            'bssh_nm': ('bssh_nm', 'BSSH_NM'),
+            'prms_dt': ('prms_dt', 'PRMS_DT'),
+            'prdlst_nm': ('prdlst_nm', 'PRDLST_NM'),
+            'rawmtrl_nm': ('rawmtrl_nm', 'RAWMTRL_NM'),
+            # 예시로 C002에서는 추가로 custom_field를 업데이트한다고 가정
+            # 필요에 따라 다른 컬럼도 추가 가능
+        },
+    },
     'IMPORTED_FOOD': {
         'model': ImportedFood,  # 반드시 label.models.ImportedFood를 사용해야 함
         'fields': {
