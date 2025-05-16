@@ -1277,21 +1277,25 @@ def reorder_phrases(request):
 def phrase_popup(request):
     """자주 사용하는 문구 팝업"""
     phrases_data = {}
-    
+    # CATEGORY_CHOICES에서 정의된 모든 카테고리에 대한 빈 리스트 초기화
+    categories = CATEGORY_CHOICES
+    for category_code, _ in categories:
+        phrases_data[category_code] = []
     # 사용자 문구만 가져오기
     user_phrases = MyPhrase.objects.filter(
         user_id=request.user, 
         delete_YN='N'
     ).order_by('category_name', 'display_order')
-    
-    # CATEGORY_CHOICES에서 정의된 모든 카테고리에 대한 빈 리스트 초기화
-    categories = CATEGORY_CHOICES
-    for category_code, _ in categories:
-        phrases_data[category_code] = []
-    
-    # 사용자 문구 추가
+    # 사용자 문구 추가 (카테고리 유효성 체크)
     for phrase in user_phrases:
         category = phrase.category_name
+        if category not in phrases_data:
+            # 로그 남기기 (선택)
+            try:
+                logger.warning(f"Unknown category in MyPhrase: {category}")
+            except Exception:
+                pass
+            continue  # 유효하지 않은 카테고리는 무시
         phrases_data[category].append({
             'id': phrase.my_phrase_id,
             'name': phrase.my_phrase_name,
@@ -1300,12 +1304,10 @@ def phrase_popup(request):
             'order': phrase.display_order,
             'is_custom': True
         })
-
     context = {
         'phrases_json': json.dumps(phrases_data),
         'categories': categories  # CATEGORY_CHOICES 전체 전달
     }
-    
     return render(request, 'label/phrase_popup.html', context)
 
 @login_required
