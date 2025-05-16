@@ -529,6 +529,17 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// 특수문자 HTML escape 함수 추가
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 function addIngredientRowWithData(ingredient, fromModal = true) {
     const allergenCount = ingredient.allergen ? ingredient.allergen.split(',').length : 0;
     const gmoCount = ingredient.gmo ? ingredient.gmo.split(',').length : 0;
@@ -540,25 +551,25 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
     row.innerHTML = `
         <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
         <td class="drag-handle">☰</td>
-        <td><input type="text" value="${ingredient.ingredient_name || ''}" class="form-control form-control-sm ingredient-name-input modal-readonly-field" readonly></td>
-        <td><input type="text" value="${ingredient.ratio || ''}" class="form-control form-control-sm ratio-input"></td>
-        <td><input type="text" value="${foodCategoryDisplay}" data-food-category="${foodCategory}" class="form-control form-control-sm food-category-input modal-readonly-field" readonly></td>
-        <td><input type="text" value="${ingredient.food_type || ''}" class="form-control form-control-sm modal-readonly-field" readonly></td>
-        <td><textarea class="form-control form-control-sm display-name-input modal-readonly-field" readonly>${ingredient.display_name || ingredient.ingredient_name || ''}</textarea></td>
+        <td><input type="text" value="${escapeHtml(ingredient.ingredient_name || '')}" class="form-control form-control-sm ingredient-name-input modal-readonly-field" readonly></td>
+        <td><input type="text" value="${escapeHtml(ingredient.ratio || '')}" class="form-control form-control-sm ratio-input"></td>
+        <td><input type="text" value="${escapeHtml(foodCategoryDisplay)}" data-food-category="${escapeHtml(foodCategory)}" class="form-control form-control-sm food-category-input modal-readonly-field" readonly></td>
+        <td><input type="text" value="${escapeHtml(ingredient.food_type || '')}" class="form-control form-control-sm modal-readonly-field" readonly></td>
+        <td><textarea class="form-control form-control-sm display-name-input modal-readonly-field" readonly>${escapeHtml(ingredient.display_name || ingredient.ingredient_name || '')}</textarea></td>
         <td>
-            <input type="hidden" class="allergen-input" value="${ingredient.allergen || ''}">
+            <input type="hidden" class="allergen-input" value="${escapeHtml(ingredient.allergen || '')}">
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showReadOnlyInfo(this, 'allergen')">
                 + ${allergenCount > 0 ? '(' + allergenCount + ')' : ''}
             </button>
         </td>
         <td>
-            <input type="hidden" class="gmo-input" value="${ingredient.gmo || ''}">
+            <input type="hidden" class="gmo-input" value="${escapeHtml(ingredient.gmo || '')}">
             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showReadOnlyInfo(this, 'gmo')">
                 + ${gmoCount > 0 ? '(' + gmoCount + ')' : ''}
             </button>
         </td>
         <td class="origin-cell"></td>
-        <input type="hidden" class="my-ingredient-id" value="${ingredient.my_ingredient_id || ''}">
+        <input type="hidden" class="my-ingredient-id" value="${escapeHtml(ingredient.my_ingredient_id || '')}">
     `;
     document.getElementById('ingredient-body').appendChild(row);
 
@@ -772,6 +783,7 @@ function selectIngredient(ingredient, button) {
         prdlst_report_no: ingredient.prdlst_report_no,
         food_category: foodCategory || 'processed',
         food_type: ingredient.prdlst_dcnm || (foodCategory === '정제수' ? '정제수' : ''),
+        // display_name: ingredient.ingredient_display_name || ingredient.prdlst_nm,
         display_name: ingredient.ingredient_display_name,
         allergen: ingredient.allergens || '',
         gmo: ingredient.gmo || '',

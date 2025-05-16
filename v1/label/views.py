@@ -1514,7 +1514,7 @@ def my_ingredient_table_partial(request):
         'paginator': paginator,
         'page_range': page_range,
     }
-    return render(request, 'label/_my_ingredient_table.html', context)
+    return render(request, 'label/my_ingredient_table.html', context)
 
 @require_POST
 @login_required
