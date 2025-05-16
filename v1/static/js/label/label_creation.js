@@ -136,9 +136,8 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
   window.handleIngredientPopup = function () {
-    const rawmtrlNmDisplay = document.querySelector('textarea[name="rawmtrl_nm_display"]')?.value || '';
     const labelId = document.getElementById('label_id')?.value || '';
-    openPopup(`/label/ingredient-popup/?rawmtrl_nm_display=${encodeURIComponent(rawmtrlNmDisplay)}&label_id=${labelId}`, 'IngredientPopup', 1400, 900);
+    openPopup(`/label/ingredient-popup/?label_id=${labelId}`, 'IngredientPopup', 1400, 900);
     const rawmtrlSection = document.getElementById('rawmtrl_nm_section');
     if (rawmtrlSection?.classList.contains('collapse')) {
       rawmtrlSection.classList.add('show');

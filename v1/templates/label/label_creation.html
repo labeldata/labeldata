@@ -18,7 +18,7 @@
 <script id="regulations-data" type="application/json">
     {{ regulations_json|safe }}
 </script>
-<script src="{% static 'js/label/label_creation.js' %}"></script>
+<script src="{% static 'js/label/label_creation.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
 
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
