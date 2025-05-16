@@ -409,9 +409,7 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
 
 
 def ingredient_popup(request):
-    rawmtrl_nm_display = request.GET.get('rawmtrl_nm_display', '')
     label_id = request.GET.get('label_id')
-    
     ingredients_data = []
     has_relations = False
     if label_id:
@@ -433,24 +431,9 @@ def ingredient_popup(request):
             })
         if relations.exists():
             has_relations = True  # 관계 데이터가 있는 경우 플래그 설정
-        if not relations.exists() and rawmtrl_nm_display:
-            raw_materials = [rm.strip() for rm in rawmtrl_nm_display.split(',') if rm.strip()]
-            for material in raw_materials:
-                ingredients_data.append({
-                    'ingredient_name': material,
-                    'prdlst_report_no': '',
-                    'ratio': '',
-                    'food_type': '',
-                    'origin': '',
-                    'display_name': material,
-                    'allergen': '',
-                    'gmo': '',
-                    'manufacturer': ''
-                })
     # 국가 목록 데이터 추가
     country_list = list(CountryList.objects.values('country_name_ko').order_by('country_name_ko'))
     country_names = [country['country_name_ko'] for country in country_list]
-    
     context = {
         'saved_ingredients': ingredients_data,
         'has_relations': has_relations,

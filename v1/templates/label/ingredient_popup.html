@@ -233,6 +233,6 @@
 {{ food_types|json_script:"food-types-data" }}
 {{ agricultural_products|json_script:"agricultural-products-data" }}
 {{ food_additives|json_script:"food-additives-data" }}
-<script src="{% static 'js/label/ingredient_popup.js' %}"></script>
+<script src="{% static 'js/label/ingredient_popup.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 </body>
 </html>

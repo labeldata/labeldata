@@ -394,10 +394,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // ------------------ 식품유형 대분류-소분류 연동 ------------------
   function updateCheckboxesByFoodType(foodType) {
     if (!foodType) return Promise.resolve();
-    
-    // 초기 로드 여부 확인 및 강제 업데이트 플래그 적용
-    const isInitialLoad = window.checkboxesLoadedFromDB === true;
-    
     return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
       .then(response => response.json())
       .then(data => {
@@ -405,7 +401,6 @@ document.addEventListener('DOMContentLoaded', function () {
           return;
         }
         const settings = data.settings;
-        
         // 규정 정보와 소비기한 옵션은 항상 업데이트
         if (settings.relevant_regulations !== undefined) {
           const textarea = document.querySelector('textarea[name="related_regulations"]');
@@ -414,34 +409,24 @@ document.addEventListener('DOMContentLoaded', function () {
             updateTextareaHeight(textarea);
           }
         }
-        
         if (settings.pog_daycnt_options !== undefined) {
           updateDateDropdownOptions(settings.pog_daycnt_options);
         }
-        
-        // 초기 로드가 아니거나 강제 업데이트 플래그가 설정된 경우 체크박스 업데이트
-        if (!isInitialLoad) {
-          Object.keys(settings).forEach(field => {
-            const value = settings[field];
-            const checkboxId = fieldMappings[field] || `chk_${field}`;
-            const checkbox = document.getElementById(checkboxId);
-            if (checkbox) {
-              checkbox.checked = value === 'Y';
-              checkbox.disabled = value === 'D';
-              checkbox.dataset.forcedDisabled = value === 'D' ? 'true' : 'false';
-              checkbox.dispatchEvent(new Event('change'));
-            }
-            if (field === 'pog_daycnt') {
-              updateDateDropdown(settings.pog_daycnt);
-            }
-          });
-        }
-      })
-      .finally(() => {
-        // 함수가 완료된 후 플래그 변경
-        if (isInitialLoad) {
-          window.checkboxesLoadedFromDB = false;
-        }
+        // 체크박스 업데이트 항상 실행
+        Object.keys(settings).forEach(field => {
+          const value = settings[field];
+          const checkboxId = fieldMappings[field] || `chk_${field}`;
+          const checkbox = document.getElementById(checkboxId);
+          if (checkbox) {
+            checkbox.checked = value === 'Y';
+            checkbox.disabled = value === 'D';
+            checkbox.dataset.forcedDisabled = value === 'D' ? 'true' : 'false';
+            checkbox.dispatchEvent(new Event('change'));
+          }
+          if (field === 'pog_daycnt') {
+            updateDateDropdown(settings.pog_daycnt);
+          }
+        });
       });
   }
   

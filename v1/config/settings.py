@@ -3,6 +3,7 @@ Django settings for config project.
 """
 from pathlib import Path
 from decouple import config, UndefinedValueError
+import datetime
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 
@@ -19,6 +20,8 @@ try:
 
 except UndefinedValueError as e:
     raise Exception("Missing environment variable: {}".format(e))
+
+STATIC_BUILD_DATE = datetime.datetime.now().strftime('%Y%m%d%H%M')
 
 # Application definition
 INSTALLED_APPS = [
@@ -58,6 +61,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'v1.common.context_processors.static_build_date',
             ],
         },
     },
