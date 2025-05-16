@@ -73,4 +73,5 @@
 
     {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
 </div>
+<script src="{% static 'js/label/my_ingredient_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

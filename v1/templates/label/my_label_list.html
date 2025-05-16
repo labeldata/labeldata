@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 {% load static %}
 {% block title %}표시사항 관리{% endblock %}
@@ -90,5 +89,5 @@
 </div>
 
 <!-- 분리된 JS 파일을 불러옵니다. -->
-<script src="{% static 'js/label/my_label_list.js' %}"></script>
+<script src="{% static 'js/label/my_label_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

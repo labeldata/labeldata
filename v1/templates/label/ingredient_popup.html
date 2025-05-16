@@ -12,7 +12,7 @@
     <!-- Select2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{% static 'css/popup.css' %}">
+    <link rel="stylesheet" href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}">
     <style>
         .popup-container {
             padding: 15px;

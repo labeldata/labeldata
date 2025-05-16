@@ -7,8 +7,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>제품 상세 정보</title>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-  <link rel="stylesheet" href="{% static 'css/popup.css' %}">
-  <link rel="stylesheet" href="{% static 'css/style.css' %}">
+  <link rel="stylesheet" href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}">
+  <link rel="stylesheet" href="{% static 'css/style.css' %}?v={{ STATIC_BUILD_DATE }}">
 </head>
 <body>
 <div class="container mt-4 phrase-popup">
@@ -78,6 +78,6 @@
     </div>
   </div>
 </div>
-<script src="{% static 'js/label/food_item_detail.js' %}"></script>
+<script src="{% static 'js/label/food_item_detail.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 </body>
 </html>

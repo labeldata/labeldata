@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <!-- 외부 CSS 및 JS 파일 로드 -->
-<link href="{% static 'css/label_creation.css' %}" rel="stylesheet" />
+<link href="{% static 'css/label_creation.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
 <!-- 자주 사용하는 문구 데이터 삽입 -->
 <script id="phrases-data" type="application/json">
   {{ phrases_json|safe }}
