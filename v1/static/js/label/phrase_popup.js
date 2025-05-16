@@ -250,6 +250,11 @@ async function saveNewPhrase() {
     const content = contentInput.value.trim();
     const note = noteInput.value.trim();
 
+    // 카테고리 유효성 검사 추가
+    if (!currentActiveTab || currentActiveTab.trim() === '') {
+        alert('카테고리(탭)가 올바르지 않습니다. 다시 시도해 주세요.');
+        return;
+    }
     if (!name || !content) {
         alert('문구명과 내용은 필수 입력항목입니다.');
         return;
@@ -376,6 +381,7 @@ async function saveChanges() {
 function queueEditPhrase(item) {
     const phraseId = item.dataset.id;
     const category = item.dataset.category;
+    if (!category || category.trim() === '') return; // 방어 코드 추가
     const original = phrasesData[category].find(p => p.id == phraseId);
     const updatedPhrase = {
         action: 'update',

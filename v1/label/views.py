@@ -1174,13 +1174,16 @@ def manage_phrases(request):
     try:
         data = json.loads(request.body)
         action = data.get('action')
+        category_name = data.get('category_name', '').strip()
+        if not category_name:
+            return JsonResponse({'success': False, 'error': '카테고리 값이 올바르지 않습니다.'})
 
         if action == 'create':
             # 신규 문구 생성
             new_phrase = MyPhrase.objects.create(
                 user_id=request.user,
                 my_phrase_name=data.get('my_phrase_name'),
-                category_name=data.get('category_name'),
+                category_name=category_name,
                 comment_content=data.get('comment_content'),
                 note=data.get('note', ''),
                 delete_YN='N'
@@ -1195,6 +1198,9 @@ def manage_phrases(request):
             # 기존 문구 수정 로직
             changes = data if isinstance(data, list) else [data]
             for change in changes:
+                category_name = change.get('category_name', '').strip()
+                if not category_name:
+                    return JsonResponse({'success': False, 'error': '카테고리 값이 올바르지 않습니다.'})
                 phrase = MyPhrase.objects.get(
                     my_phrase_id=change['id'],
                     user_id=request.user
@@ -1202,6 +1208,7 @@ def manage_phrases(request):
                 phrase.my_phrase_name = change.get('name', phrase.my_phrase_name)
                 phrase.comment_content = change.get('content', phrase.comment_content)
                 phrase.note = change.get('note', phrase.note)
+                phrase.category_name = category_name
                 phrase.save()
             return JsonResponse({'success': True})
 
