@@ -1392,12 +1392,59 @@ def preview_popup(request):
                 allergens.extend(relation.ingredient.allergens.split(','))
             # 원산지 표시대상 로직 추가 (필요한 경우)
 
+        # 영양성분 데이터 nutrition_data (계산기와 동일 구조)
+        nutrition_data = {
+            'serving_size': label.serving_size or '',
+            'serving_size_unit': label.serving_size_unit or 'g',
+            'units_per_package': label.units_per_package or '1',
+            'display_unit': label.nutrition_display_unit or 'unit',
+            'nutrients': {
+                'calorie': {
+                    'value': label.calories,
+                    'unit': label.calories_unit or 'kcal'
+                },
+                'natrium': {
+                    'value': label.natriums,
+                    'unit': label.natriums_unit or 'mg'
+                },
+                'carbohydrate': {
+                    'value': label.carbohydrates,
+                    'unit': label.carbohydrates_unit or 'g'
+                },
+                'sugar': {
+                    'value': label.sugars,
+                    'unit': label.sugars_unit or 'g'
+                },
+                'afat': {
+                    'value': label.fats,
+                    'unit': label.fats_unit or 'g'
+                },
+                'transfat': {
+                    'value': label.trans_fats,
+                    'unit': label.trans_fats_unit or 'g'
+                },
+                'satufat': {
+                    'value': label.saturated_fats,
+                    'unit': label.saturated_fats_unit or 'g'
+                },
+                'cholesterol': {
+                    'value': label.cholesterols,
+                    'unit': label.cholesterols_unit or 'mg'
+                },
+                'protein': {
+                    'value': label.proteins,
+                    'unit': label.proteins_unit or 'g'
+                }
+            }
+        }
+
         context = {
             'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
             'nutrition_items': nutrition_items,
             'allergens': list(set(allergens)),  # 중복 제거
-            'origins': list(set(origins))       # 중복 제거
+            'origins': list(set(origins)),       # 중복 제거
+            'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False)
         }
         
         return render(request, 'label/label_preview.html', context)

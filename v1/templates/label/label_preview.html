@@ -270,7 +270,6 @@
             <!-- 영양성분 탭 -->
             <div class="tab-pane fade" id="nutrition-tab">
                 <div class="settings-group">
-                    <!-- 영양성분 설정 표시 영역 -->
                     <div class="settings-row">
                         <div class="settings-item">
                             <label class="form-label">단위내용량</label>
@@ -287,9 +286,9 @@
                         <div class="settings-item">
                             <label class="form-label">표시 단위</label>
                             <select id="nutritionDisplayUnit" class="form-select form-select-sm">
-                                <option value="total">총 내용량당</option>
-                                <option value="unit">단위내용량당</option>
-                                <option value="100g">100g(ml)당</option>
+                                <option value="unit">단위내용량</option>
+                                <option value="total">총내용량</option>
+                                <option value="100g">100g당</option>
                             </select>
                         </div>
                     </div>
@@ -317,11 +316,6 @@
             <table class="preview-table">
                 <tbody id="previewTableBody"></tbody>
             </table>
-            <div class="footer-text">
-                labeldata.com 에서 관련법규에 따라 작성되었습니다.
-                <span class="creator-info">[{{ label.update_datetime|date:"Y-m-d H:i" }}]</span>
-            </div>
-            
             <!-- 영양성분 미리보기 영역 추가 -->
             <div id="nutritionPreview" class="mt-4" style="display: none;">
                 <hr>
@@ -330,19 +324,24 @@
                 <table class="table table-sm table-bordered">
                     <thead>
                         <tr>
-                            <th style="width: 25%">항목</th>
-                            <th class="nutrition-value-header" style="width: 45%">함량</th>
-                            <th style="width: 30%">%영양성분 기준치</th>
+                            <th style="width: 35%">항목</th>
+                            <th class="nutrition-value-header" style="width: 65%">단위내용량당</th>
                         </tr>
                     </thead>
                     <tbody id="nutritionTableBody"></tbody>
                 </table>
                 <div class="nutrition-footer text-muted small">※ 1일 영양성분 기준치에 대한 비율(%)</div>
             </div>
+            <div class="footer-text">
+                labeldata.com 에서 관련법규에 따라 작성되었습니다.
+                <span class="creator-info">[{{ label.update_datetime|date:"Y-m-d H:i" }}]</span>
+            </div>
         </div>
     </div>
 </div>
 
+<!-- nutrition_data를 JS로 전달 -->
+<script id="nutrition-data" type="application/json">{{ nutrition_data|safe }}</script>
 
 </body>
 </html>

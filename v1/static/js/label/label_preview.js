@@ -262,6 +262,121 @@ document.addEventListener('DOMContentLoaded', function () {
     if (exportPdfBtn) {
         exportPdfBtn.addEventListener('click', exportToPDF);
     }
+
+    // nutrition_data를 읽어 영양성분 탭에 값 세팅 및 미리보기 결과 렌더
+    try {
+        const nutritionDataRaw = document.getElementById('nutrition-data')?.textContent;
+        if (nutritionDataRaw) {
+            const nutritionData = JSON.parse(nutritionDataRaw);
+            console.log('nutritionData:', nutritionData);
+            // 예시 데이터 삽입 (nutrients가 없거나 비어 있으면)
+            if (!nutritionData.nutrients || Object.keys(nutritionData.nutrients).length === 0) {
+                nutritionData.nutrients = {
+                    calorie: { value: 0, unit: 'kcal' },
+                    natrium: { value: 0, unit: 'mg' },
+                    carbohydrate: { value: 0, unit: 'g' },
+                    sugar: { value: 0, unit: 'g' },
+                    afat: { value: 0.1, unit: 'g' },
+                    transfat: { value: 0.1, unit: 'g' },
+                    satufat: { value: 0.1, unit: 'g' },
+                    cholesterol: { value: 0, unit: 'mg' },
+                    protein: { value: 0, unit: 'g' }
+                };
+                console.warn('nutrients 데이터가 없어 예시 데이터로 대체합니다.');
+            }
+            // 영양성분 탭 input/select 값 세팅
+            if (nutritionData.serving_size && nutritionData.serving_size_unit) {
+                document.getElementById('servingSizeDisplay').value = `${nutritionData.serving_size}${nutritionData.serving_size_unit}`;
+            }
+            if (nutritionData.units_per_package) {
+                document.getElementById('servingsPerPackageDisplay').value = nutritionData.units_per_package;
+            }
+            if (nutritionData.display_unit) {
+                document.getElementById('nutritionDisplayUnit').value = nutritionData.display_unit;
+            }
+            // 오른쪽 미리보기 패널에 계산기와 동일하게 결과 렌더
+            // nutritionData를 계산기와 동일한 구조로 변환
+            const data = {
+                servingSize: nutritionData.serving_size,
+                servingUnit: nutritionData.serving_size_unit,
+                servingsPerPackage: nutritionData.units_per_package,
+                servingUnitText: nutritionData.serving_size_unit === 'ml' ? '개' : '개', // 필요시 조정
+                displayUnit: nutritionData.display_unit,
+                totalWeight: nutritionData.serving_size * nutritionData.units_per_package,
+                values: []
+            };
+            // nutrients -> values 변환 (calorie 포함, 순서 고정)
+            const nutrientOrder = [
+                'natrium', 'carbohydrate', 'sugar', 'afat', 'transfat', 'satufat', 'cholesterol', 'protein'
+            ];
+            const nutrientLabels = {
+                calorie: '열량', natrium: '나트륨', carbohydrate: '탄수화물', sugar: '당류', afat: '지방', transfat: '트랜스지방', satufat: '포화지방', cholesterol: '콜레스테롤', protein: '단백질'
+            };
+            const nutrientLimits = {
+                natrium: 2000, carbohydrate: 324, sugar: 100, afat: 54, satufat: 15, cholesterol: 300, protein: 55
+            };
+            // 열량(칼로리) 별도 저장
+            let calorieValue = null, calorieUnit = '';
+            if (nutritionData.nutrients && nutritionData.nutrients.calorie) {
+                calorieValue = nutritionData.nutrients.calorie.value;
+                calorieUnit = nutritionData.nutrients.calorie.unit || 'kcal';
+            }
+            // 나머지 항목 표로 변환
+            if (nutritionData.nutrients) {
+                for (const key of nutrientOrder) {
+                    // 값이 없어도 무조건 표에 표시 (없으면 0)
+                    const n = nutritionData.nutrients[key] || {};
+                    data.values.push({
+                        label: nutrientLabels[key] || key,
+                        value: (n.value !== undefined && n.value !== null) ? parseFloat(n.value) : 0,
+                        unit: n.unit || '',
+                        limit: nutrientLimits[key] || null
+                    });
+                }
+            }
+            data.calorie = calorieValue;
+            data.calorieUnit = calorieUnit;
+            console.log('nutritionData.values:', data.values);
+            if (!data.values || data.values.length === 0) {
+                console.warn('영양성분 데이터가 비어 있습니다.');
+            }
+            // 미리보기 표 렌더
+            window.nutritionData = data;
+            updateNutritionDisplay(data);
+            // 미리보기 영역 보이기
+            document.getElementById('nutritionPreview').style.display = 'block';
+        } else {
+            console.warn('nutrition-data 스크립트 태그가 비어 있습니다.');
+        }
+    } catch (e) {
+        console.error('영양성분 데이터 파싱 오류:', e);
+    }
+
+    // 탭 전환 시 미리보기 화면 토글 처리
+    function handleTabSwitch() {
+        const activeTab = document.querySelector('.nav-link.active[data-bs-toggle="tab"]');
+        const previewTable = document.querySelector('.preview-table');
+        const nutritionPreview = document.getElementById('nutritionPreview');
+        const headerBox = document.querySelector('.preview-header-box');
+        if (!activeTab) return;
+        if (activeTab.getAttribute('data-bs-target') === '#nutrition-tab') {
+            // 영양성분 탭: 영양성분 표만 보이기
+            if (previewTable) previewTable.style.display = 'none';
+            if (headerBox) headerBox.style.display = 'none';
+            if (nutritionPreview) nutritionPreview.style.display = 'block';
+        } else {
+            // 표시사항 탭: 기존 표만 보이기
+            if (previewTable) previewTable.style.display = '';
+            if (headerBox) headerBox.style.display = '';
+            if (nutritionPreview) nutritionPreview.style.display = 'none';
+        }
+    }
+    // 탭 버튼에 이벤트 리스너 등록
+    document.querySelectorAll('.nav-link[data-bs-toggle="tab"]').forEach(tabBtn => {
+        tabBtn.addEventListener('shown.bs.tab', handleTabSwitch);
+    });
+    // 페이지 로드시 활성 탭에 맞게 토글 적용
+    handleTabSwitch();
 });
 
 // 팝업에서 부모로부터 체크박스 상태를 받아 적용
@@ -530,9 +645,15 @@ function calculateHeight() {
 // 입력값 변경 이벤트에 계산 함수 연결
 const widthInput = document.getElementById("widthInput");
 if (widthInput) widthInput.addEventListener("change", calculateHeight);
-document.getElementById('fontSizeInput').addEventListener('change', calculateHeight);
-document.getElementById('letterSpacingInput').addEventListener('change', calculateHeight);
-document.getElementById('lineHeightInput').addEventListener('change', calculateHeight);
+
+const fontSizeInput = document.getElementById('fontSizeInput');
+if (fontSizeInput) fontSizeInput.addEventListener('change', calculateHeight);
+
+const letterSpacingInput = document.getElementById('letterSpacingInput');
+if (letterSpacingInput) letterSpacingInput.addEventListener('change', calculateHeight);
+
+const lineHeightInput = document.getElementById('lineHeightInput');
+if (lineHeightInput) lineHeightInput.addEventListener('change', calculateHeight);
 
 // 초기 로드 시 계산
 window.addEventListener('load', calculateHeight);
@@ -593,6 +714,15 @@ async function exportToPDF() {
     }
 }
 
+// 천 단위 콤마 함수 (숫자 포맷팅)
+function comma(x) {
+  if (x === null || x === undefined) return '';
+  // 소수점 이하가 있으면 소수점 앞부분만 콤마 처리
+  const parts = x.toString().split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.join('.');
+}
+
 // 영양성분 데이터 수신 및 표시
 window.addEventListener('message', function(e) {
   if (e.data?.type === 'nutritionData') {
@@ -620,40 +750,54 @@ function updateNutritionDisplay(data) {
   const nutritionPreview = document.getElementById('nutritionPreview');
   const header = nutritionPreview.querySelector('.nutrition-header');
   const valueHeader = nutritionPreview.querySelector('.nutrition-value-header');
-  
   // 헤더 텍스트 설정
   let headerText = '';
+  let calorieText = '';
   switch(displayUnit) {
     case 'total':
-      headerText = `총 내용량 ${comma(data.totalWeight)}${data.servingUnit} ` +
-        `(${comma(data.servingSize)}${data.servingUnit} × ${comma(data.servingsPerPackage)}${data.servingUnitText})`;
+      headerText = `총 내용량 ${comma(data.totalWeight)}${data.servingUnit} (${comma(data.servingSize)}${data.servingUnit} × ${comma(data.servingsPerPackage)}${data.servingUnitText})`;
       valueHeader.textContent = '총 내용량당';
+      if (data.calorie !== null) calorieText = `${comma(data.calorie)}${data.calorieUnit}`;
       break;
     case 'unit':
       headerText = `1${data.servingUnitText}(${comma(data.servingSize)}${data.servingUnit})당`;
       valueHeader.textContent = `1${data.servingUnitText}당`;
+      if (data.calorie !== null) calorieText = `1${data.servingUnitText}당 ${comma(data.calorie)}${data.calorieUnit}`;
       break;
     case '100g':
       headerText = `100${data.servingUnit}당`;
       valueHeader.textContent = `100${data.servingUnit}당`;
+      if (data.calorie !== null) calorieText = `100${data.servingUnit}당 ${comma(data.calorie)}${data.calorieUnit}`;
       break;
   }
   header.textContent = headerText;
-  
   // 표 내용 업데이트
   const tbody = document.getElementById('nutritionTableBody');
-  tbody.innerHTML = data.values.map(item => {
+  // 열량(칼로리) 별도 표시
+  let calorieRow = '';
+  if (calorieText) {
+    calorieRow = `<tr><td colspan="3" style="text-align:left;font-weight:500;">${calorieText}</td></tr>`;
+  }
+  tbody.innerHTML = calorieRow + data.values.map(item => {
     const percentage = item.limit ? Math.round((item.value / item.limit) * 100) : '';
     return `
       <tr>
         <td>${item.label}</td>
-        <td>${comma(item.value)}${item.unit}</td>
+        <td>${comma(item.value)}${item.unit}${percentage ? ` (${percentage}%)` : ''}</td>
         <td>${percentage ? percentage + '%' : '-'}</td>
       </tr>
     `;
   }).join('');
-  
-  // 영양성분 영역 표시
+  // 안내문(footnote) 추가
+  let footnote = nutritionPreview.querySelector('.nutrition-footnote');
+  if (!footnote) {
+    footnote = document.createElement('div');
+    footnote.className = 'nutrition-footnote';
+    nutritionPreview.appendChild(footnote);
+  }
+  footnote.textContent = '※ 1일 영양성분 기준치에 대한 비율(%)은 2,000 kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.';
+  footnote.style.cssText = 'margin-top:12px;font-size:0.95em;color:#666;';
+  // 미리보기 영역 표시
   nutritionPreview.style.display = 'block';
 }
 
