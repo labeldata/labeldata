@@ -118,3 +118,22 @@ const topPosition = (screen.height - height) / 2; // 'top'을 'topPosition'으�
 //     "제품 상세 정보",
 //     `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${topPosition},left=${left}`
 // );
+
+// 수입식품 상세 팝업 열기 함수 (제품 목록에서 사용)
+function openImportedDetailPopup(id) {
+    if (!id) {
+        alert("수입식품 ID가 없습니다.");
+        return;
+    }
+    // 수입식품 상세는 id(pk)로 접근
+    const width = 1000;
+    const height = 600;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+    const url = `/label/food-item-detail/${id}/`;
+    window.open(
+        url,
+        "수입식품 상세 정보",
+        `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
+    );
+}

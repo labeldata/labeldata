@@ -17,3 +17,21 @@ function openDetailPopup(reportNo) {
         alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
     }
 }
+
+// 수입식품 상세 팝업 열기 함수 (제품 목록에서 사용)
+function openImportedDetailPopup(id) {
+    if (!id) {
+        alert("수입식품 ID가 없습니다.");
+        return;
+    }
+    const width = 1000;
+    const height = 600;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+    const url = `/label/food-item-detail/${id}/`;
+    window.open(
+        url,
+        "수입식품 상세 정보",
+        `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
+    );
+}

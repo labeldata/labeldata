@@ -745,59 +745,80 @@ window.addEventListener('message', function(e) {
   }
 });
 
+// updateNutritionDisplay 함수: 팝업과 동일하게 CSS class 및 구조 적용
 function updateNutritionDisplay(data) {
-  const displayUnit = document.getElementById('nutritionDisplayUnit').value;
   const nutritionPreview = document.getElementById('nutritionPreview');
-  const header = nutritionPreview.querySelector('.nutrition-header');
-  const valueHeader = nutritionPreview.querySelector('.nutrition-value-header');
-  // 헤더 텍스트 설정
-  let headerText = '';
-  let calorieText = '';
-  switch(displayUnit) {
-    case 'total':
-      headerText = `총 내용량 ${comma(data.totalWeight)}${data.servingUnit} (${comma(data.servingSize)}${data.servingUnit} × ${comma(data.servingsPerPackage)}${data.servingUnitText})`;
-      valueHeader.textContent = '총 내용량당';
-      if (data.calorie !== null) calorieText = `${comma(data.calorie)}${data.calorieUnit}`;
-      break;
-    case 'unit':
-      headerText = `1${data.servingUnitText}(${comma(data.servingSize)}${data.servingUnit})당`;
-      valueHeader.textContent = `1${data.servingUnitText}당`;
-      if (data.calorie !== null) calorieText = `1${data.servingUnitText}당 ${comma(data.calorie)}${data.calorieUnit}`;
-      break;
-    case '100g':
-      headerText = `100${data.servingUnit}당`;
-      valueHeader.textContent = `100${data.servingUnit}당`;
-      if (data.calorie !== null) calorieText = `100${data.servingUnit}당 ${comma(data.calorie)}${data.calorieUnit}`;
-      break;
-  }
-  header.textContent = headerText;
-  // 표 내용 업데이트
-  const tbody = document.getElementById('nutritionTableBody');
-  // 열량(칼로리) 별도 표시
-  let calorieRow = '';
-  if (calorieText) {
-    calorieRow = `<tr><td colspan="3" style="text-align:left;font-weight:500;">${calorieText}</td></tr>`;
-  }
-  tbody.innerHTML = calorieRow + data.values.map(item => {
-    const percentage = item.limit ? Math.round((item.value / item.limit) * 100) : '';
-    return `
+  if (!nutritionPreview) return;
+
+  // 표시단위 텍스트
+  const displayUnit = data.displayUnit || 'unit';
+  const servingUnit = data.servingUnit || 'g';
+  const servingUnitText = data.servingUnitText || '개';
+  const totalWeight = data.totalWeight || (data.servingSize * data.servingsPerPackage);
+  const tabMap = {
+    total: `총 내용량 ${comma(totalWeight)}${servingUnit}`,
+    unit: `단위내용량 ${comma(data.servingSize)}${servingUnit}`,
+    '100g': `100${servingUnit}당`
+  };
+
+  // 열량(칼로리) 텍스트
+  let kcal = data.calorie !== undefined && data.calorie !== null ? data.calorie : '';
+  let kcalUnit = data.calorieUnit || 'kcal';
+
+  // 상단 미리보기 박스 (팝업과 동일한 클래스/스타일)
+  const previewBox = `
+    <div class="nutrition-preview-box">
+      <div class="nutrition-preview-title">영양정보</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;">
+        <span class="nutrition-preview-total-small">${tabMap[displayUnit]}</span>
+        <span class="nutrition-preview-kcal">${kcal !== '' ? comma(kcal) + kcalUnit : ''}</span>
+      </div>
+    </div>
+  `;
+
+  // 표 헤더
+  const tableHeader = `
+    <thead>
       <tr>
-        <td>${item.label}</td>
-        <td>${comma(item.value)}${item.unit}${percentage ? ` (${percentage}%)` : ''}</td>
-        <td>${percentage ? percentage + '%' : '-'}</td>
+        <th class="nutrition-preview-small" style="text-align:left;">${tabMap[displayUnit]}</th>
+        <th class="nutrition-preview-small" style="text-align:right;">1일 영양성분 기준치에 대한 비율</th>
       </tr>
-    `;
-  }).join('');
-  // 안내문(footnote) 추가
-  let footnote = nutritionPreview.querySelector('.nutrition-footnote');
-  if (!footnote) {
-    footnote = document.createElement('div');
-    footnote.className = 'nutrition-footnote';
-    nutritionPreview.appendChild(footnote);
-  }
-  footnote.textContent = '※ 1일 영양성분 기준치에 대한 비율(%)은 2,000 kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.';
-  footnote.style.cssText = 'margin-top:12px;font-size:0.95em;color:#666;';
-  // 미리보기 영역 표시
+    </thead>
+  `;
+
+  // 표 본문
+  const indentIds = ['당류', '트랜스지방', '포화지방'];
+  let rows = '';
+  (data.values || []).forEach(item => {
+    const indent = indentIds.includes(item.label);
+    const percent = item.limit ? Math.round(item.value / item.limit * 100) : '';
+    rows += `<tr>
+      <td class="nutrient-label${indent ? ' nutrient-label-indent' : ''}">
+        <strong>${item.label}</strong> <span class="nutrient-value">${comma(item.value)}${item.unit}</span>
+      </td>
+      <td class="nutrient-percent" style="text-align:right;">${percent !== '' ? `<strong>${percent}</strong>%` : ''}</td>
+    </tr>`;
+  });
+
+  // 안내문구(표 내부 마지막 tr, 작은 글씨)
+  rows += `
+    <tr>
+      <td colspan="2" class="nutrition-preview-footer-inside">
+        <strong>1일 영양성분 기준치에 대한 비율(%)</strong>은 2000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.
+      </td>
+    </tr>
+  `;
+
+  // 표 전체 (팝업과 동일한 클래스/스타일)
+  const tableHtml = `
+    <table class="nutrition-preview-table">
+      ${tableHeader}
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+
+  // 렌더링
+  nutritionPreview.innerHTML = previewBox + tableHtml;
   nutritionPreview.style.display = 'block';
 }
 

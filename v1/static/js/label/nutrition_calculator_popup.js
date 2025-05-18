@@ -36,16 +36,59 @@ function comma(x) {
   return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-function getKcalValue() {
-  const val = parseFloat(document.getElementById('input_calorie')?.value || "0");
-  return isNaN(val) ? 0 : round((val * parseFloat(document.getElementById('base_amount').value)) / 100, 5);
+// 한국 식품표시기준 반올림 규정 적용 함수 (열량은 1회 제공량 기준으로만 구간 반올림)
+function roundKoreanNutrition(value, type, context) {
+  if (type === 'kcal') {
+    if (context && context.isKcalPerServing) {
+      if (value < 5) return 0;
+      if (value <= 50) return Math.round(value / 5) * 5; // 2.5 → 5
+      return Math.round(value / 10) * 10; // 55 → 60
+    } else {
+      return Math.floor(value);
+    }
+  }
+  if (type === 'mg') {
+    if (value < 5) return 0;
+    if (value <= 140) return Math.round(value / 5) * 5;
+    return Math.round(value / 10) * 10;
+  }
+  if (type === 'g') {
+    if (value < 0.5) return 0;
+    if (value <= 5) return Math.round(value * 10) / 10; // 2.55 → 2.6
+    return Math.round(value); // 5.5 → 6
+  }
+  return value;
 }
 
-function calculateNutrition() {
+function getKcalValue(type, baseAmount, servings, val) {
+  // type: 'total', 'unit', '100g'
+  // val: 100g(ml)당 열량
+  if (isNaN(val) || isNaN(baseAmount)) return 0;
+  let raw = 0;
+  let context = {};
+  if (type === 'total') {
+    raw = (val * baseAmount * servings) / 100;
+    context.isKcalPerServing = true;
+    return roundKoreanNutrition(raw, 'kcal', context);
+  } else if (type === 'unit') {
+    raw = (val * baseAmount) / 100;
+    context.isKcalPerServing = true;
+    return roundKoreanNutrition(raw, 'kcal', context);
+  } else {
+    // 100g(ml)당
+    raw = val;
+    context.isKcalPerServing = false;
+    return roundKoreanNutrition(raw, 'kcal', context);
+  }
+}
+
+function calculateNutrition(tabType) {
   const baseAmount = parseFloat(document.getElementById('base_amount').value);
   const servings = parseInt(document.getElementById('servings_per_package').value);
   if (!baseAmount || baseAmount <= 0 || !servings || servings <= 0) {
-    alert("1회 제공량과 포장 갯수는 양수로 입력해주세요.");
+    document.getElementById('resultBoxTotal').innerHTML = '';
+    document.getElementById('resultBoxUnit').innerHTML = '';
+    document.getElementById('resultBox100g').innerHTML = '';
     return;
   }
   document.getElementById('resultBoxTotal').innerHTML = '';
@@ -54,47 +97,136 @@ function calculateNutrition() {
 
   const baseUnit = document.getElementById('base_amount_unit').value;
   const totalWeight = baseAmount * servings;
-  const kcal = getKcalValue();
+  const kcalPer100g = parseFloat(document.getElementById('input_calorie')?.value || "0");
 
-  const totalHeader = `<div class="summary-header">총 내용량 ${comma(totalWeight)}${baseUnit}<br>${comma(kcal)} kcal</div>`;
-  const unitHeader = `<div class="summary-header">총 내용량 ${comma(totalWeight)}${baseUnit} (${comma(baseAmount)}${baseUnit} × ${comma(servings)}조각)<br>1조각(${baseAmount}${baseUnit})당 ${comma(kcal)} kcal</div>`;
-  const g100Header = `<div class="summary-header">총 내용량 ${comma(totalWeight)}${baseUnit}<br>100${baseUnit}당 ${comma(kcal)} kcal</div>`;
-  const footer = `<div class="summary-footer">※ 1일 영양성분 기준치에 대한 비율(%)은 2,000 kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.</div>`;
-
-  const resultBoxes = {
-    total: totalHeader + `<table class="table table-sm table-bordered text-center align-middle mt-2"><thead class="table-light"><tr><th>항목</th><th>총 내용량당</th></tr></thead><tbody>`,
-    unit: unitHeader + `<table class="table table-sm table-bordered text-center align-middle mt-2"><thead class="table-light"><tr><th>항목</th><th>단위내용량당</th></tr></thead><tbody>`,
-    '100g': g100Header + `<table class="table table-sm table-bordered text-center align-middle mt-2"><thead class="table-light"><tr><th>항목</th><th>100${baseUnit}당</th></tr></thead><tbody>`
+  // 탭별 총내용량 텍스트
+  const tabMap = {
+    total: `총 내용량 ${comma(totalWeight)}${baseUnit}`,
+    unit: `단위내용량 ${comma(baseAmount)}${baseUnit}`,
+    '100g': `100${baseUnit}당`
   };
 
-  let summaryText = [`총 내용량: ${comma(totalWeight)}${baseUnit}`, `열량: ${comma(kcal)}kcal`];
+  // 현재 탭
+  const currentTab = tabType || document.getElementById('tabSelector').value;
 
+  // 열량 계산 (반올림 규정에 맞게)
+  let kcal = 0;
+  if (currentTab === 'total') {
+    kcal = getKcalValue('total', baseAmount, servings, kcalPer100g);
+  } else if (currentTab === 'unit') {
+    kcal = getKcalValue('unit', baseAmount, servings, kcalPer100g);
+  } else {
+    kcal = getKcalValue('100g', baseAmount, servings, kcalPer100g);
+  }
+
+  // 상단(검정) 미리보기 박스: 한 줄, 총 내용량(작게) + 열량(크게) 오른쪽 정렬, "영양정보" 크게
+  const previewBox = `
+    <div class="nutrition-preview-box" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between;">
+      <div class="nutrition-preview-title" style="margin-bottom:0;font-size:2rem;">영양정보</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;">
+        <span class="nutrition-preview-total-small" style="font-size:0.95rem;font-weight:500;color:#fff;">${tabMap[currentTab]}</span>
+        <span class="nutrition-preview-kcal" style="font-size:1.15rem;font-weight:700;color:#fff;line-height:1;">${comma(kcal)}kcal</span>
+      </div>
+    </div>
+  `;
+
+  // 하단(흰색) 표 스타일
+  const tableStyle = 'background:#fff;color:#222;border-radius:0 0 6px 6px;width:320px;margin:0 auto 16px auto;';
+  const thSmall = 'class="nutrition-preview-small" style="font-size:0.95rem;font-weight:500;background:#fff;padding:8px 0 6px 0;color:#222;border-bottom:2.5px solid #222;text-align:left;"';
+  const thRightSmall = 'class="nutrition-preview-small" style="font-size:0.95rem;font-weight:500;background:#fff;padding:8px 0 6px 0;color:#222;border-bottom:2.5px solid #222;text-align:right;"';
+  const tdLabelClass = 'style="font-weight:700;text-align:left;padding:6px 0 6px 0;"';
+  const tdLabelIndentClass = 'style="font-weight:700;text-align:left;padding:6px 0 6px 24px;"';
+  const tdValueClass = 'style="font-weight:400;text-align:left;padding:6px 0 6px 0;"';
+  const tdPercentClass = 'style="font-weight:700;text-align:right;padding:6px 0 6px 0;"';
+
+  // 표 본문 (탭별)
+  function makeRows(type) {
+    let rows = '';
+    nutrients.forEach(n => {
+      if (n.id === 'calorie') return;
+      const val = parseFloat(document.getElementById(`input_${n.id}`).value);
+      const unit = document.getElementById(`unit_${n.id}`).value;
+      if (isNaN(val)) return;
+      let value = 0, percent = '';
+      let roundType = 'g';
+      if (n.id === 'natrium' || n.id === 'cholesterol') roundType = 'mg';
+      else if (n.id === 'carbohydrate' || n.id === 'sugar' || n.id === 'afat' || n.id === 'transfat' || n.id === 'satufat' || n.id === 'protein') roundType = 'g';
+
+      if (type === 'total') {
+        let raw = (val * baseAmount * servings) / 100;
+        value = roundKoreanNutrition(raw, roundType);
+        percent = n.limit ? Math.round(value / n.limit * 100) : '';
+      } else if (type === 'unit') {
+        let raw = (val * baseAmount) / 100;
+        value = roundKoreanNutrition(raw, roundType);
+        percent = n.limit ? Math.round(value / n.limit * 100) : '';
+      } else {
+        let raw = val;
+        value = roundKoreanNutrition(raw, roundType);
+        percent = n.limit ? Math.round(value / n.limit * 100) : '';
+      }
+      const indent = (n.id === 'sugar' || n.id === 'transfat' || n.id === 'satufat');
+      // 항목명 굵게, 실측값은 한 칸 띄우고 일반글씨
+      rows += `<tr>
+        <td ${indent ? tdLabelIndentClass : tdLabelClass}><strong>${n.label}</strong> <span ${tdValueClass}>${comma(value)}${unit}</span></td>
+        <td ${tdPercentClass}>${percent !== '' ? `<strong>${percent}</strong>%` : ''}</td>
+      </tr>`;
+    });
+    // 안내문구(표 내부 마지막 tr, 작은 글씨)
+    rows += `
+      <tr>
+        <td colspan="2" class="nutrition-preview-footer-inside">
+          <strong>1일 영양성분 기준치에 대한 비율(%)</strong>은 2000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.
+        </td>
+      </tr>
+    `;
+    return rows;
+  }
+
+  // 표 헤더 (비율 문구는 헤더에만, 작은 글씨)
+  const tableHeader = `
+    <thead>
+      <tr>
+        <th ${thSmall}>${tabMap[currentTab]}</th>
+        <th ${thRightSmall}>1일 영양성분 기준치에 대한 비율</th>
+      </tr>
+    </thead>
+  `;
+
+  // 최종 렌더링 (탭별)
+  document.getElementById('resultBoxTotal').innerHTML =
+    previewBox +
+    `<table class="nutrition-preview-table" style="${tableStyle}">
+      ${tableHeader}
+      <tbody>${makeRows('total')}</tbody>
+    </table>`;
+
+  document.getElementById('resultBoxUnit').innerHTML =
+    previewBox +
+    `<table class="nutrition-preview-table" style="${tableStyle}">
+      ${tableHeader}
+      <tbody>${makeRows('unit')}</tbody>
+    </table>`;
+
+  document.getElementById('resultBox100g').innerHTML =
+    previewBox +
+    `<table class="nutrition-preview-table" style="${tableStyle}">
+      ${tableHeader}
+      <tbody>${makeRows('100g')}</tbody>
+    </table>`;
+
+  let summaryText = [`총 내용량: ${comma(totalWeight)}${baseUnit}`, `열량: ${comma(kcal)}kcal`];
   nutrients.forEach(n => {
     if (n.id === 'calorie') return;
     const val = parseFloat(document.getElementById(`input_${n.id}`).value);
     const unit = document.getElementById(`unit_${n.id}`).value;
     if (isNaN(val)) return;
-    const perUnit = round((val * baseAmount) / 100, n.step);
-    const total = round(perUnit * servings, n.step);
-    const percentUnit = n.limit ? ` (${Math.round(perUnit / n.limit * 100)}%)` : '';
-    const percentTotal = n.limit ? ` (${Math.round(total / n.limit * 100)}%)` : '';
-    const percent100g = n.limit ? ` (${Math.round(val / n.limit * 100)}%)` : '';
-
-    resultBoxes.total += `<tr><td>${n.label}</td><td>${comma(total)}${unit}${percentTotal}</td></tr>`;
-    resultBoxes.unit += `<tr><td>${n.label}</td><td>${comma(perUnit)}${unit}${percentUnit}</td></tr>`;
-    resultBoxes['100g'] += `<tr><td>${n.label}</td><td>${comma(val)}${unit}${percent100g}</td></tr>`;
-
     summaryText.push(`${n.label}: ${comma(val)}${unit}`);
   });
-
-  document.getElementById('resultBoxTotal').innerHTML = resultBoxes.total + '</tbody></table>' + footer;
-  document.getElementById('resultBoxUnit').innerHTML = resultBoxes.unit + '</tbody></table>' + footer;
-  document.getElementById('resultBox100g').innerHTML = resultBoxes['100g'] + '</tbody></table>' + footer;
-
   window.nutritionSummaryValue = summaryText.join(', ');
   updateNutritionSummaryText();
 
-  const currentTab = document.getElementById('tabSelector').value;
+  // 탭 전환
   switchResultTab(currentTab);
 }
 
@@ -282,17 +414,35 @@ function loadExistingData(data) {
 
 function initNutritionCalculator() {
   buildInputForm();
+
+  // 셀렉트박스, 입력값, 단위 변경 시 실시간 계산
   document.getElementById('tabSelector').addEventListener('change', (e) => {
-    switchResultTab(e.target.value);
+    calculateNutrition(e.target.value);
   });
   document.querySelectorAll('#resultTab .nav-link').forEach(btn => {
     btn.addEventListener('shown.bs.tab', () => {
       const type = btn.getAttribute('data-tab');
       document.getElementById('tabSelector').value = type;
+      calculateNutrition(type);
       updateNutritionSummaryText();
     });
   });
-  switchResultTab('total');
+
+  // 모든 input/select에 입력/변경 이벤트 연결
+  document.querySelectorAll(
+    '#nutrient-inputs input, #nutrient-inputs select, #base_amount, #base_amount_unit, #servings_per_package'
+  ).forEach(el => {
+    el.addEventListener('input', () => {
+      calculateNutrition(document.getElementById('tabSelector').value);
+    });
+    el.addEventListener('change', () => {
+      calculateNutrition(document.getElementById('tabSelector').value);
+    });
+  });
+
+  // 탭 변경 시에도 실시간 반영
+  document.getElementById('tabSelector').dispatchEvent(new Event('change'));
+
   const event = new CustomEvent('nutrition-calculator-ready');
   document.dispatchEvent(event);
 }

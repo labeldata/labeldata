@@ -1,39 +1,60 @@
 {% url action_url as target_url %}
 <form method="get" action="{{ target_url }}">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <!-- 왼쪽 검색 조건 -->
-    <div class="d-flex align-items-center flex-fill">
-      {% for field in search_fields %}
-        <div class="me-3 flex-fill">
-          <input 
-            type="text" 
-            name="{{ field.name }}" 
-            class="form-control" 
-            placeholder="{{ field.placeholder }}" 
-            value="{{ field.value }}">
+  <div class="d-flex align-items-center justify-content-between mb-3" style="font-size: 0.8rem;">
+    <div class="d-flex align-items-center flex-fill flex-nowrap gap-2 w-100" style="font-size: 0.8rem;">
+      {% if page_type == "product" %}
+        <div style="min-width:110px;max-width:120px;flex:0 0 120px;">
+          <select name="food_category" class="form-select" style="font-size: 0.8rem;">
+            <option value="processed" {% if food_category == "processed" %}selected{% endif %}>가공식품</option>
+            <option value="additive" {% if food_category == "additive" %}selected{% endif %}>식품첨가물</option>
+            <option value="imported" {% if food_category == "imported" %}selected{% endif %}>수입식품</option>
+          </select>
         </div>
-      {% endfor %}
-      <!-- 페이지 당 항목 선택 -->
-      <div class="me-3 fixed-width-150">
-        <!-- form-select 가로 폭은 style.css에서 50% 적용 -->
-        <select name="items_per_page" class="form-select">
-          <option value="10"  {% if items_per_page == 10  %}selected{% endif %}>10개</option>
-          <option value="20"  {% if items_per_page == 20  %}selected{% endif %}>20개</option>
-          <option value="50"  {% if items_per_page == 50  %}selected{% endif %}>50개</option>
-          <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100개</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- 오른쪽: 검색 버튼 & 새로고침 버튼 -->
-    <div class="d-flex align-items-center">
-      <!-- 검색 버튼 (search-filter-btn, .btn-primary) -->
-      <button type="submit" class="btn btn-primary search-filter-btn me-2">
+        {% if food_category == "imported" %}
+          <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
+          <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">
+          <input type="text" name="xport_ntncd_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="수출국" value="{{ search_values.xport_ntncd_nm|default_if_none:'' }}">
+          <input type="text" name="bsn_ofc_name" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="수입업체" value="{{ search_values.bsn_ofc_name|default_if_none:'' }}">
+          <input type="text" name="bssh_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제조사명" value="{{ search_values.bssh_nm|default_if_none:'' }}">
+          <input type="text" name="pog_daycnt" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="소비기한" value="{{ search_values.pog_daycnt|default_if_none:'' }}">
+        {% else %}
+          <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="품목보고번호" value="{{ search_values.prdlst_report_no|default_if_none:'' }}">
+          <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
+          <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">
+          <input type="text" name="bssh_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제조사명" value="{{ search_values.bssh_nm|default_if_none:'' }}">
+          <input type="text" name="pog_daycnt" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="소비기한" value="{{ search_values.pog_daycnt|default_if_none:'' }}">
+        {% endif %}
+      {% elif page_type == "ingredient" %}
+        <div style="min-width:110px;max-width:120px;flex:0 0 120px;">
+          <select name="food_category" class="form-select" style="font-size: 0.8rem;">
+            <option value="" {% if not food_category %}selected{% endif %}>구분 전체</option>
+            <option value="processed" {% if food_category == "processed" %}selected{% endif %}>가공식품</option>
+            <option value="additive" {% if food_category == "additive" %}selected{% endif %}>식품첨가물</option>
+            <option value="agricultural" {% if food_category == "agricultural" %}selected{% endif %}>농수산물</option>
+          </select>
+        </div>
+        <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="품목보고번호" value="{{ search_values.prdlst_report_no|default_if_none:'' }}">
+        <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
+        <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">
+        <input type="text" name="bssh_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제조사명" value="{{ search_values.bssh_nm|default_if_none:'' }}">
+        <input type="text" name="ingredient_display_name" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원료 표시명" value="{{ search_values.ingredient_display_name|default_if_none:'' }}">
+      {% elif page_type == "label" %}
+        <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="품목보고번호" value="{{ search_values.prdlst_report_no|default_if_none:'' }}">
+        <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
+        <input type="text" name="my_label_name" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="라벨명" value="{{ search_values.my_label_name|default_if_none:'' }}">
+        <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">
+        <input type="text" name="bssh_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제조사명" value="{{ search_values.bssh_nm|default_if_none:'' }}">
+      {% endif %}
+      <select name="items_per_page" class="form-select" style="font-size: 0.8rem; width:110px; min-width:100px;">
+        <option value="10"  {% if items_per_page == 10  %}selected{% endif %}>10개</option>
+        <option value="20"  {% if items_per_page == 20  %}selected{% endif %}>20개</option>
+        <option value="50"  {% if items_per_page == 50  %}selected{% endif %}>50개</option>
+        <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100개</option>
+      </select>
+      <button type="submit" class="btn btn-primary search-filter-btn ms-2" style="font-size: 0.8rem; min-width:60px;">
         검색
       </button>
-      <!-- 새로고침 버튼 (기존 유지) -->
-      <button type="button" class="btn btn-cancel search-filter-btn"
-              onclick="location.href='{{ target_url }}'">
+      <button type="button" class="btn btn-cancel search-filter-btn ms-1" onclick="location.href='{{ target_url }}'" style="font-size: 0.8rem; min-width:60px;">
         &#x21BA;
       </button>
     </div>

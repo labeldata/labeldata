@@ -10,7 +10,7 @@ from django.http import JsonResponse
 from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
-from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive
+from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive, ImportedFood
 from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  # 지우지 않음
 from django.utils.safestring import mark_safe
@@ -70,6 +70,7 @@ def get_querystring_without(request, keys):
 
 @login_required
 def food_item_list(request):
+    food_category = request.GET.get("food_category", "processed")
     search_fields = {
         "prdlst_nm": "prdlst_nm",
         "bssh_nm": "bssh_nm",
@@ -82,8 +83,37 @@ def food_item_list(request):
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
 
-    food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
-    paginator, page_obj, page_range = paginate_queryset(food_items, page_number, items_per_page)
+    imported_mode = False
+    imported_items = []
+    if food_category == "additive":
+        search_conditions &= Q(induty_cd_nm="식품첨가물제조업")
+        food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
+    elif food_category == "imported":
+        imported_mode = True
+        imported_search_fields = {
+            "prduct_korean_nm": "prdlst_nm",
+            "itm_nm": "prdlst_dcnm",
+            "xport_ntncd_nm": "xport_ntncd_nm",
+            "bsn_ofc_name": "bsn_ofc_name",
+            "ovsmnfst_nm": "bssh_nm",
+            "expirde_dtm": "pog_daycnt",
+        }
+        imported_conditions = Q()
+        imported_search_values = {}
+        for model_field, query_param in imported_search_fields.items():
+            value = request.GET.get(query_param, "").strip()
+            if value:
+                imported_conditions &= Q(**{f"{model_field}__icontains": value})
+                imported_search_values[query_param] = value
+        imported_items = ImportedFood.objects.filter(imported_conditions).order_by("prduct_korean_nm")
+        paginator, page_obj, page_range = paginate_queryset(imported_items, page_number, items_per_page)
+        search_values = imported_search_values
+    else:
+        search_conditions &= ~Q(induty_cd_nm="식품첨가물제조업")
+        food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
+
+    if not imported_mode:
+        paginator, page_obj, page_range = paginate_queryset(food_items, page_number, items_per_page)
 
     querystring_without_page = get_querystring_without(request, ["page"])
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
@@ -92,18 +122,15 @@ def food_item_list(request):
         "page_obj": page_obj,
         "paginator": paginator,
         "page_range": page_range,
-        "search_fields": [
-            {"name": "prdlst_report_no", "placeholder": "품목제조번호", "value": search_values.get("prdlst_report_no", "")},
-            {"name": "prdlst_nm", "placeholder": "제품명", "value": search_values.get("prdlst_nm", "")},
-            {"name": "prdlst_dcnm", "placeholder": "식품유형", "value": search_values.get("prdlst_dcnm", "")},
-            {"name": "bssh_nm", "placeholder": "제조사명", "value": search_values.get("bssh_nm", "")},
-            {"name": "pog_daycnt", "placeholder": "소비기한", "value": search_values.get("pog_daycnt", "")},
-        ],
+        "search_values": search_values,
+        "food_category": food_category,
         "items_per_page": items_per_page,
         "sort_field": sort_field,
         "sort_order": sort_order,
         "querystring_without_page": querystring_without_page,
         "querystring_without_sort": querystring_without_sort,
+        "imported_mode": imported_mode,
+        "imported_items": page_obj if imported_mode else [],
     }
 
     return render(request, "label/food_item_list.html", context)
@@ -149,8 +176,43 @@ def my_label_list(request):
 
 @login_required
 def food_item_detail(request, prdlst_report_no):
+    """
+    제품 상세 팝업: 가공식품/식품첨가물/수입식품 모두 지원.
+    - 수입식품: ImportedFood에서 제품명(한글) 또는 pk로 조회
+    - 일반식품: FoodItem에서 품목보고번호로 조회
+    """
+    # 수입식품: ImportedFood의 prduct_korean_nm 또는 pk(일반적으로 id)로 조회
+    imported_item = None
+    imported_mode = False
+
+    # 우선 ImportedFood에서 prdlst_report_no와 일치하는 prduct_korean_nm이 있는지 확인
+    try:
+        imported_item = ImportedFood.objects.get(prduct_korean_nm=prdlst_report_no)
+        imported_mode = True
+    except ImportedFood.DoesNotExist:
+        # 혹시 pk(id)로 접근하는 경우도 지원
+        try:
+            imported_item = ImportedFood.objects.get(pk=prdlst_report_no)
+            imported_mode = True
+        except (ImportedFood.DoesNotExist, ValueError):
+            imported_item = None
+            imported_mode = False
+
+    if imported_mode and imported_item:
+        context = {
+            "item": imported_item,
+            "imported_mode": True,
+        }
+        return render(request, "label/food_item_detail.html", context)
+
+    # 일반식품
     food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
-    return render(request, "label/food_item_detail.html", {"item": food_item})
+    context = {
+        "item": food_item,
+        "imported_mode": False,
+        # "actions": ... # 필요시 추가
+    }
+    return render(request, "label/food_item_detail.html", context)
 
 
 FOODITEM_MYLABEL_MAPPING = {
@@ -390,22 +452,114 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
         if not food_item:
             return JsonResponse({"success": False, "error": "해당 품목제조번호에 대한 데이터를 찾을 수 없습니다."}, status=404)
 
+        prdlst_dcnm = (food_item.prdlst_dcnm or "").strip()
+        # 가공식품(푸드타입에 존재) 여부 체크
+        if prdlst_dcnm and FoodType.objects.filter(food_type=prdlst_dcnm).exists():
+            food_category = "processed"
+        else:
+            food_category = "additive"
+
+        # ------------------- 식품첨가물 표시명 추천 로직 (중복 없이 or로 통합, Y 등 불필요값 제거) -------------------
+        ingredient_display_name = food_item.prdlst_nm or "미정"
+        if food_category == "additive":
+            try:
+                additive = FoodAdditive.objects.get(name_kr=prdlst_dcnm)
+                display_candidates = set()
+                table_types = set()
+                # 명칭(주용도) - 표4, 표6
+                if additive.name_kr and additive.main_purpose:
+                    display_candidates.add(f"{additive.name_kr}({additive.main_purpose})")
+                # 명칭 - 표4, 표5, 표6
+                if additive.name_kr:
+                    display_candidates.add(additive.name_kr)
+                # 간략명 - 표5, 표6 (여러 개일 수 있음)
+                if additive.short_name:
+                    for s in str(additive.short_name).split(","):
+                        s = s.strip()
+                        if s and s not in {"Y", "N", "-"}:
+                            display_candidates.add(s)
+                # 주용도 - 표6 (여러 개일 수 있음)
+                if additive.main_purpose:
+                    for s in str(additive.main_purpose).split(","):
+                        s = s.strip()
+                        if s and s not in {"Y", "N", "-"}:
+                            display_candidates.add(s)
+                # alias_4, alias_5, alias_6에 콤마로 여러개가 있을 수 있으므로, 각 alias에서 명칭/간략명/용도 추출
+                if additive.alias_4:
+                    table_types.add("4")
+                    for val in str(additive.alias_4).split(","):
+                        val = val.strip()
+                        if val and val not in {"Y", "N", "-"}:
+                            display_candidates.add(val)
+                if additive.alias_5:
+                    table_types.add("5")
+                    for val in str(additive.alias_5).split(","):
+                        val = val.strip()
+                        if val and val not in {"Y", "N", "-"}:
+                            display_candidates.add(val)
+                if additive.alias_6:
+                    table_types.add("6")
+                    for val in str(additive.alias_6).split(","):
+                        val = val.strip()
+                        if val and val not in {"Y", "N", "-"}:
+                            display_candidates.add(val)
+                # 중복 없이, 명칭(주용도) > 명칭 > 간략명 > 주용도 > 기타 순서로 정렬
+                ordered = []
+                # 명칭(주용도)
+                if additive.name_kr and additive.main_purpose:
+                    nm_purp = f"{additive.name_kr}({additive.main_purpose})"
+                    if nm_purp in display_candidates:
+                        ordered.append(nm_purp)
+                        display_candidates.discard(nm_purp)
+                # 명칭
+                if additive.name_kr and additive.name_kr in display_candidates:
+                    ordered.append(additive.name_kr)
+                    display_candidates.discard(additive.name_kr)
+                # 간략명
+                if additive.short_name:
+                    for s in str(additive.short_name).split(","):
+                        s = s.strip()
+                        if s and s in display_candidates:
+                            ordered.append(s)
+                            display_candidates.discard(s)
+                # 주용도
+                if additive.main_purpose:
+                    for s in str(additive.main_purpose).split(","):
+                        s = s.strip()
+                        if s and s in display_candidates:
+                            ordered.append(s)
+                            display_candidates.discard(s)
+                # 나머지(표4/5/6 alias 등에서 온 기타)
+                for val in sorted(display_candidates):
+                    ordered.append(val)
+                if ordered:
+                    ingredient_display_name = " or ".join(ordered)
+                # 안내문구 항상 추가
+                if table_types:
+                    tables = [f"표 {t}" for t in sorted(table_types)]
+                    ingredient_display_name += f"\n※ 이 식품첨가물은 {', '.join(tables)}에 해당하는 원료입니다."
+            except FoodAdditive.DoesNotExist:
+                pass
+        # -------------------------------------------------------------------
+
         MyIngredient.objects.create(
             user_id=request.user,
-            #my_ingredient_name=f"임시 - {food_item.prdlst_nm}",
             prdlst_report_no=food_item.prdlst_report_no,
             prdlst_nm=food_item.prdlst_nm or "미정",
             bssh_nm=food_item.bssh_nm or "미정",
             prms_dt=food_item.prms_dt or "00000000",
+            food_category=food_category,
             prdlst_dcnm=food_item.prdlst_dcnm or "미정",
             pog_daycnt=food_item.pog_daycnt or "0",
             frmlc_mtrqlt=food_item.frmlc_mtrqlt or "미정",
             rawmtrl_nm=food_item.rawmtrl_nm or "미정",
+            ingredient_display_name=ingredient_display_name,
             delete_YN="N"
         )
         return JsonResponse({"success": True, "message": "내원료로 저장되었습니다."})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
 
 
 def ingredient_popup(request):
@@ -565,11 +719,16 @@ def my_ingredient_list_combined(request):
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
     search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
-    
+
+    # 식품구분(카테고리) 검색 지원
+    food_category = request.GET.get('food_category', '').strip()
+    if food_category:
+        search_conditions &= Q(food_category=food_category)
+
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
-    
+
     my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
     querystring_without_page = get_querystring_without(request, ['page'])
@@ -577,7 +736,7 @@ def my_ingredient_list_combined(request):
     querydict_sort.pop('sort', None)
     querydict_sort.pop('order', None)
     querystring_without_sort = querydict_sort.urlencode()
-    
+
     context = {
         'page_obj': page_obj,
         'paginator': paginator,

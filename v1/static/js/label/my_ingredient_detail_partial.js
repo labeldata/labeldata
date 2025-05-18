@@ -38,17 +38,31 @@ function deleteMyIngredient() {
     });
 }
 
-// 폼 저장 함수
+// 폼 저장 함수 (검색 조건 유지, 테이블 컬럼 순서 맞춤)
 function saveMyIngredient() {
     const my_ingredient_id_elem = document.getElementById("my_ingredient_id");
     const my_ingredient_id = my_ingredient_id_elem ? parseInt(my_ingredient_id_elem.value, 10) : null;
-    const formData = new FormData(document.getElementById("ingredientForm"));
+    const formElem = document.getElementById("ingredientForm");
+    const formData = new FormData(formElem);
     let url;
     if (my_ingredient_id) {
         url = `/label/my-ingredient-detail/${my_ingredient_id}/`;
     } else {
         url = '/label/my-ingredient-detail/';
     }
+
+    // 검색 조건 쿼리스트링 추출 (ingredientTable이 있는 페이지에서만 동작)
+    let queryString = '';
+    const searchForm = document.querySelector('form[action*="my_ingredient_list_combined"]');
+    if (searchForm) {
+        const params = new URLSearchParams(new FormData(searchForm));
+        queryString = '?' + params.toString();
+    } else {
+        // fallback: 현재 URL에서 쿼리스트링만 추출
+        const qs = window.location.search;
+        if (qs) queryString = qs;
+    }
+
     fetch(url, {
         method: 'POST',
         body: formData,
@@ -68,8 +82,8 @@ function saveMyIngredient() {
     })
     .then(data => {
         if (data.success) {
-            // 왼쪽 리스트 갱신 및 신규 원료 상세 표시
-            fetch('/label/my-ingredient-table-partial/')
+            // 왼쪽 리스트 갱신 및 신규 원료 상세 표시 (검색 조건 유지)
+            fetch('/label/my-ingredient-table-partial/' + queryString)
                 .then(res => res.text())
                 .then(tableHtml => {
                     const tbody = document.querySelector('#ingredientTable tbody');
