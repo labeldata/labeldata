@@ -52,9 +52,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0;
     padding: 0.5rem 0 0.5rem 0;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: none; /* 구분선 제거 */
   }
   .left-panel-title {
     font-size: 1.1rem;
@@ -83,6 +83,17 @@
     border-color: #1f55cc;
     color: #fff;
   }
+  .ellipsis-cell {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: pointer;
+  }
+  .table th, .table td {
+    vertical-align: middle !important;
+  }
 </style>
 
 <div class="container-fluid custom-max-width mt-4">
@@ -95,7 +106,7 @@
          </div> -->
     </div>
 
-    {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list_combined' page_type='ingredient' search_values=search_values food_category=request.GET.food_category|default_if_none:'' items_per_page=items_per_page %}
+    {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list_combined' page_type='ingredient' search_values=search_values food_category=request.GET.food_category|default_if_none:'' items_per_page=items_per_page extra_fields="allergens,gmo" %}
 
     <div class="row full-height">
         <!-- 좌측: 내원료 리스트 -->
@@ -106,10 +117,11 @@
                     <button id="newIngredientBtn" class="btn btn-outline-primary btn-sm" type="button">신규 원료</button>
                 </div>
             </div>
+            <hr style="margin: 16px 0 0 0; border-top: 1px solid #dee2e6;">
             <table class="table table-hover" id="ingredientTable">
                 <thead>
                     <tr>
-                        <th style="width: 5%;">번호</th>
+                        <th class="text-center align-middle" style="width: 5%;">번호</th>
                         <th style="width: 10%;">식품구분</th>
                         <th style="width: 15%;">품목보고번호
                             <span class="sort-buttons">
@@ -128,14 +140,13 @@
                                 <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                                 <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                             </span>
-                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for ingredient in page_obj %}
                     <tr class="ingredient-row" data-ingredient-id="{{ ingredient.my_ingredient_id }}" onclick="loadIngredientDetail('{{ ingredient.my_ingredient_id }}', this)">
-                        <td>{{ forloop.counter }}</td>
-                        <td>
+                        <td class="text-center align-middle ellipsis-cell" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                        <td class="ellipsis-cell" title="{% if ingredient.food_category == 'additive' %}식품첨가물{% elif ingredient.food_category == 'agricultural' %}농수산물{% elif ingredient.food_category == 'processed' %}가공식품{% else %}미분류{% endif %}">
                             {% if ingredient.food_category == 'additive' %}
                                 식품첨가물
                             {% elif ingredient.food_category == 'agricultural' %}
@@ -146,9 +157,9 @@
                                 미분류
                             {% endif %}
                         </td>
-                        <td>{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
-                        <td>{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
-                        <td>{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
+                        <td class="ellipsis-cell" title="{{ ingredient.prdlst_report_no|default_if_none:'' }}">{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
+                        <td class="ellipsis-cell" title="{{ ingredient.prdlst_nm|default_if_none:'' }}">{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
+                        <td class="ellipsis-cell" title="{{ ingredient.prdlst_dcnm|default_if_none:'' }}">{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
                     </tr>
                     {% empty %}
                     <tr>

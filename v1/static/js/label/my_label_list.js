@@ -113,3 +113,39 @@ function createPostForm(action, ids) {
     });
     return form;
 }
+
+function downloadSelectedLabelsExcel() {
+    const selected = getSelectedIds();
+    if (selected.length === 0) {
+        alert("엑셀로 다운로드할 항목을 선택하세요.");
+        return;
+    }
+    // 서버에 POST로 선택된 ID를 보내고, 엑셀 파일을 다운로드
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    fetch('/label/export-labels-excel/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({label_ids: selected})
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('엑셀 다운로드 실패');
+        return response.blob();
+    })
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'labels.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(error => {
+        alert('엑셀 다운로드 중 오류가 발생했습니다.');
+        console.error(error);
+    });
+}

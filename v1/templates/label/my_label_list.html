@@ -7,59 +7,73 @@
     <div class="d-flex justify-content-between align-items-center mb-4" style="padding-bottom: 10px;">
       <h2 class="mb-0">표시사항 조회 및 수정</h2>
       <div class="d-flex" style="gap: 10px;">
-        <button type="button" class="btn btn-outline-info" onclick="bulkCopy()">선택 복사</button>
-        <button type="button" class="btn btn-outline-danger" onclick="bulkDelete()">선택 삭제</button>
+        <!-- 엑셀 다운로드 버튼 추가 -->
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="downloadSelectedLabelsExcel()">다운로드</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="bulkCopy()">복사</button>
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="bulkDelete()">삭제</button>
       </div>
     </div>
     
     {% include 'includes/search_filter.html' with action_url='label:my_label_list' page_type='label' search_values=search_values items_per_page=items_per_page %}
 
     <div class="table-responsive">
-        <table class="table table-bordered table-hover common-table">
+        <table class="table table-bordered table-hover common-table align-middle">
             <thead>
                 <tr>
-                    <th style="width: 3%;"><input type="checkbox" id="check-all"></th>
-                    <th style="width: 3%;">번호</th>
-                    <th style="width: 10%;">
-                        품목보고번호
+                    <th class="text-center align-middle" style="width: 3%;"><input type="checkbox" id="check-all"></th>
+                    <th class="text-center align-middle" style="width: 3%;">번호</th>
+                    <th style="width: 10%;">작성일
+                        <span class="sort-buttons">
+                            <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">품목보고번호
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th style="width: 20%;">
-                        제품명
+                    <th style="width: 15%;">제품명
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th style="width: 20%;">
-                        라벨명
+                    <th style="width: 15%;">라벨명
                         <span class="sort-buttons">
                             <a href="?sort=my_label_name&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=my_label_name&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th style="width: 10%;">
-                        식품유형
+                    <th style="width: 10%;">식품유형
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th style="width: 15%;">
-                        제조사명
+                    <th style="width: 10%;">제조사명
                         <span class="sort-buttons">
                             <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=bssh_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th style="width: 10%;">
-                        최종수정일자
+                    <th style="width: 8%;">보관조건
                         <span class="sort-buttons">
-                            <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
-                            <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                            <a href="?sort=storage_method&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=storage_method&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 8%;">포장재질
+                        <span class="sort-buttons">
+                            <a href="?sort=frmlc_mtrqlt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=frmlc_mtrqlt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 8%;">소비기한
+                        <span class="sort-buttons">
+                            <a href="?sort=pog_daycnt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=pog_daycnt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
                 </tr>
@@ -67,18 +81,25 @@
             <tbody>
                 {% for label in page_obj %}
                 <tr data-url="{% url 'label:label_creation' label.my_label_id %}" onclick="location.href=this.dataset.url">
-                    <td><input type="checkbox" class="check-item" value="{{ label.my_label_id }}"></td>
-                    <td>{{ forloop.counter }}</td>
-                    <td>{{ label.prdlst_report_no }}</td>
-                    <td>{{ label.prdlst_nm }}</td>
-                    <td>{{ label.my_label_name }}</td>
-                    <td>{{ label.prdlst_dcnm }}</td>
-                    <td>{{ label.bssh_nm }}</td>
-                    <td>{{ label.update_datetime|date:"Y-m-d H:i" }}</td>
+                    <td class="text-center align-middle"><input type="checkbox" class="check-item" value="{{ label.my_label_id }}"></td>
+                    <td class="text-center align-middle">{{ forloop.counter }}</td>
+                    <td class="ellipsis-cell" title="{{ label.update_datetime|date:'Y-m-d H:i' }}">
+                        {% if label.update_datetime %}
+                            {{ label.update_datetime|date:"Y-m-d H:i" }}
+                        {% endif %}
+                    </td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_report_no }}">{{ label.prdlst_report_no }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_nm }}">{{ label.prdlst_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ label.my_label_name }}">{{ label.my_label_name }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_dcnm }}">{{ label.prdlst_dcnm }}</td>
+                    <td class="ellipsis-cell" title="{{ label.bssh_nm }}">{{ label.bssh_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ label.storage_method }}">{{ label.storage_method }}</td>
+                    <td class="ellipsis-cell" title="{{ label.frmlc_mtrqlt }}">{{ label.frmlc_mtrqlt }}</td>
+                    <td class="ellipsis-cell" title="{{ label.pog_daycnt }}">{{ label.pog_daycnt }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted">표시사항이 없습니다.</td>
+                    <td colspan="11" class="text-center text-muted">표시사항이 없습니다.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -88,6 +109,20 @@
     {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
 </div>
 
-<!-- 분리된 JS 파일을 불러옵니다. -->
+<style>
+/* 한 줄만 보이고 넘치면 ... 처리, 마우스오버시 title로 전체 표시 */
+.ellipsis-cell {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: pointer;
+}
+.table th, .table td {
+    vertical-align: middle !important;
+}
+</style>
+
 <script src="{% static 'js/label/my_label_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

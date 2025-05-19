@@ -48,4 +48,7 @@ urlpatterns = [
     path('verify-ingredients/', views.verify_ingredients, name='verify_ingredients'),
     path('my-ingredient-table-partial/', views.my_ingredient_table_partial, name='my_ingredient_table_partial'),
     path('api/food-items/count/', views.food_items_count, name='food_items_count'),
+
+    # 엑셀 다운로드
+    path('export-labels-excel/', views.export_labels_excel, name='export_labels_excel'),
 ]

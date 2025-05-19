@@ -12,51 +12,50 @@
         <table class="table table-bordered table-hover common-table">
             <thead>
                 <tr>
-                    <th style="width: 3%;">번호</th>
-                    <th style="width: 15%;">
-                        제품명
+                    <th class="text-center align-middle" style="width: 3%;">번호</th>
+                    <th style="width: 15%;">제품명
                         <span class="sort-buttons">
                             <a href="?sort=prduct_korean_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=prduct_korean_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 7%;">
-                        식품유형
+                    <th style="width: 7%;">식품유형
                         <span class="sort-buttons">
                             <a href="?sort=itm_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=itm_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 5%;">
-                        수출국
+                    <th style="width: 7%;">수출국
                         <span class="sort-buttons">
                             <a href="?sort=xport_ntncd_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=xport_ntncd_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 10%;">
-                        수입업체명
+                    <th style="width: 10%;">수입업체명
                         <span class="sort-buttons">
                             <a href="?sort=bsn_ofc_name&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=bsn_ofc_name&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 15%;">
-                        제조사명
+                    <th style="width: 15%;">제조사명
                         <span class="sort-buttons">
                             <a href="?sort=ovsmnfst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=ovsmnfst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 10%;">
-                        소비기한
+                    <th style="width: 15%;">원재료명
+                        <span class="sort-buttons">
+                            <a href="?sort=rawmtrl_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
+                            <a href="?sort=rawmtrl_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">소비기한
                         <span class="sort-buttons">
                             <a href="?sort=expirde_dtm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=expirde_dtm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 5%;">
-                        수입일
+                    <th style="width: 7%;">수입일
                         <span class="sort-buttons">
                             <a href="?sort=procs_dtm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=procs_dtm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
@@ -67,18 +66,19 @@
             <tbody>
                 {% for item in imported_items %}
                 <tr onclick="openImportedDetailPopup('{{ item.id }}')" style="cursor: pointer;">
-                    <td>{{ forloop.counter }}</td>
-                    <td>{{ item.prduct_korean_nm }}</td>
-                    <td>{{ item.itm_nm }}</td>
-                    <td>{{ item.xport_ntncd_nm }}</td>
-                    <td>{{ item.bsn_ofc_name }}</td>
-                    <td>{{ item.ovsmnfst_nm }}</td>
-                    <td>{{ item.expirde_dtm }}</td>
-                    <td>{{ item.procs_dtm }}</td>
+                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prduct_korean_nm }}">{{ item.prduct_korean_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.itm_nm }}">{{ item.itm_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.xport_ntncd_nm }}">{{ item.xport_ntncd_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.bsn_ofc_name }}">{{ item.bsn_ofc_name }}</td>
+                    <td class="ellipsis-cell" title="{{ item.ovsmnfst_nm }}">{{ item.ovsmnfst_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.irdnt_nm }}">{{ item.irdnt_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.expirde_dtm }}">{{ item.expirde_dtm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.procs_dtm }}">{{ item.procs_dtm }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="8" class="text-center text-muted">수입식품이 없습니다.</td>
+                    <td colspan="9" class="text-center text-muted">수입식품이 없습니다.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -87,7 +87,7 @@
         <table class="table table-bordered table-hover common-table">
             <thead>
                 <tr>
-                    <th style="width: 3%;">번호</th>
+                    <th class="text-center align-middle" style="width: 4%;">번호</th>
                     <th style="width: 10%;">품목보고번호
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
@@ -106,19 +106,31 @@
                             <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 20%;">제조사명
+                    <th style="width: 15%;">제조사명
                         <span class="sort-buttons">
                             <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=bssh_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 15%;">소비기한
+                    <th style="width: 10%;">소비기한
                         <span class="sort-buttons">
                             <a href="?sort=pog_daycnt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=pog_daycnt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
-                    <th style="width: 10%;">최종수정일자
+                    <th style="width: 10%;">포장재질
+                        <span class="sort-buttons">
+                            <a href="?sort=frmlc_mtrqlt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
+                            <a href="?sort=frmlc_mtrqlt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 15%;">원재료명
+                        <span class="sort-buttons">
+                            <a href="?sort=rawmtrl_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
+                            <a href="?sort=rawmtrl_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">최종수정일
                         <span class="sort-buttons">
                             <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
                             <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
@@ -129,17 +141,19 @@
             <tbody>
                 {% for item in page_obj %}
                 <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">
-                    <td>{{ forloop.counter }}</td>
-                    <td>{{ item.prdlst_report_no }}</td>
-                    <td>{{ item.prdlst_nm }}</td>
-                    <td>{{ item.prdlst_dcnm }}</td>
-                    <td>{{ item.bssh_nm }}</td>
-                    <td>{{ item.pog_daycnt }}</td>
-                    <td>{{ item.update_datetime|date:"Y-m-d H:i" }}</td>
+                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prdlst_report_no }}">{{ item.prdlst_report_no }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prdlst_nm }}">{{ item.prdlst_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prdlst_dcnm }}">{{ item.prdlst_dcnm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.bssh_nm }}">{{ item.bssh_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.pog_daycnt }}">{{ item.pog_daycnt }}</td>
+                    <td class="ellipsis-cell" title="{{ item.frmlc_mtrqlt }}">{{ item.frmlc_mtrqlt }}</td>
+                    <td class="ellipsis-cell" title="{{ item.rawmtrl_nm }}">{{ item.rawmtrl_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ item.update_datetime|date:"Y-m-d H:i" }}">{{ item.update_datetime|date:"Y-m-d H:i" }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted">제품이 없습니다.</td>
+                    <td colspan="9" class="text-center text-muted">제품이 없습니다.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -151,15 +165,16 @@
 </div>
 
 <style>
-/* 파란색 버튼과 동일한 색상으로 소팅 화살표 */
-.sort-btn.sort-blue {
-    color: #2667ff !important;
-    font-weight: bold;
-    text-decoration: none;
+.ellipsis-cell {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: pointer;
 }
-.sort-btn.sort-blue:hover {
-    color: #1f55cc !important;
-    text-decoration: underline;
+.table th, .table td {
+    vertical-align: middle !important;
 }
 </style>
 

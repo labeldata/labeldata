@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
 from django.db.models import Q, F
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
@@ -19,6 +19,8 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
 from rapidfuzz import fuzz  # fuzzywuzzy 대신 rapidfuzz 사용
 from django.utils import timezone  # 추가
+import openpyxl
+from openpyxl.utils import get_column_letter
 
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
@@ -71,14 +73,27 @@ def get_querystring_without(request, keys):
 @login_required
 def food_item_list(request):
     food_category = request.GET.get("food_category", "processed")
+    # 기본 검색 필드
     search_fields = {
         "prdlst_nm": "prdlst_nm",
         "bssh_nm": "bssh_nm",
         "prdlst_dcnm": "prdlst_dcnm",
         "pog_daycnt": "pog_daycnt",
         "prdlst_report_no": "prdlst_report_no",
+        "frmlc_mtrqlt": "frmlc_mtrqlt",   # 포장재질
+        "rawmtrl_nm": "rawmtrl_nm",       # 원재료명
     }
-    search_conditions, search_values = get_search_conditions(request, search_fields)
+    # 수입식품은 포장재질 제외, 원재료명 포함
+    imported_search_fields = {
+        "prduct_korean_nm": "prdlst_nm",
+        "itm_nm": "prdlst_dcnm",
+        "xport_ntncd_nm": "xport_ntncd_nm",
+        "bsn_ofc_name": "bsn_ofc_name",
+        "ovsmnfst_nm": "bssh_nm",
+        "expirde_dtm": "pog_daycnt",
+        "rawmtrl_nm": "rawmtrl_nm",  # 원재료명
+        # "frmlc_mtrqlt": "frmlc_mtrqlt",  # 제외
+    }
     sort_field, sort_order = process_sorting(request, "prdlst_nm")
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
@@ -86,20 +101,15 @@ def food_item_list(request):
     imported_mode = False
     imported_items = []
     if food_category == "additive":
+        # 가공식품/첨가물: 포장재질, 원재료명 포함
+        search_conditions, search_values = get_search_conditions(request, search_fields)
         search_conditions &= Q(induty_cd_nm="식품첨가물제조업")
         food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
     elif food_category == "imported":
         imported_mode = True
-        imported_search_fields = {
-            "prduct_korean_nm": "prdlst_nm",
-            "itm_nm": "prdlst_dcnm",
-            "xport_ntncd_nm": "xport_ntncd_nm",
-            "bsn_ofc_name": "bsn_ofc_name",
-            "ovsmnfst_nm": "bssh_nm",
-            "expirde_dtm": "pog_daycnt",
-        }
         imported_conditions = Q()
         imported_search_values = {}
+        # 수입식품: 포장재질 제외, 원재료명 포함
         for model_field, query_param in imported_search_fields.items():
             value = request.GET.get(query_param, "").strip()
             if value:
@@ -109,6 +119,8 @@ def food_item_list(request):
         paginator, page_obj, page_range = paginate_queryset(imported_items, page_number, items_per_page)
         search_values = imported_search_values
     else:
+        # 가공식품: 포장재질, 원재료명 포함
+        search_conditions, search_values = get_search_conditions(request, search_fields)
         search_conditions &= ~Q(induty_cd_nm="식품첨가물제조업")
         food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
 
@@ -144,8 +156,13 @@ def my_label_list(request):
         "prdlst_nm": "prdlst_nm",
         "prdlst_dcnm": "prdlst_dcnm",
         "bssh_nm": "bssh_nm",
+        "storage_method": "storage_method",
+        "frmlc_mtrqlt": "frmlc_mtrqlt",
+        "pog_daycnt": "pog_daycnt",  # 소비기한 검색 추가
+        # "allergens": "allergens",  # 완전 삭제
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
+    # 알레르기 검색 관련 코드 완전 삭제
     sort_field, sort_order = process_sorting(request, "my_label_name")
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
@@ -164,6 +181,9 @@ def my_label_list(request):
             {"name": "my_label_name", "placeholder": "라벨명", "value": search_values.get("my_label_name", "")},
             {"name": "prdlst_dcnm", "placeholder": "식품유형", "value": search_values.get("prdlst_dcnm", "")},
             {"name": "bssh_nm", "placeholder": "제조사명", "value": search_values.get("bssh_nm", "")},
+            {"name": "storage_method", "placeholder": "보관조건", "value": search_values.get("storage_method", "")},
+            {"name": "frmlc_mtrqlt", "placeholder": "포장재질", "value": search_values.get("frmlc_mtrqlt", "")},
+            {"name": "pog_daycnt", "placeholder": "소비기한", "value": search_values.get("pog_daycnt", "")},
         ],
         "items_per_page": items_per_page,
         "sort_field": sort_field,
@@ -294,12 +314,52 @@ def label_creation(request, label_id=None):
             allergens_set = set()
             shellfish_collected = set()
             shellfish_pattern = re.compile(r'^조개류\(([^)]+)\)$')  # 조개류 패턴 정규식
-            
+
+            # 향료/동일 용도 카운터
+            flavor_counter = {}
+            purpose_counter = {}
+
             for relation in relations:
                 ingredient = relation.ingredient
-                # 원재료명 또는 원재료 표시명을 사용 (비율 제외)
-                ingredient_name = ingredient.ingredient_display_name or ingredient.prdlst_nm or ""
-                ingredients_info.append(ingredient_name)
+                food_category = getattr(ingredient, 'food_category', None) or getattr(ingredient, 'food_group', None) or ''
+                display_name = ingredient.ingredient_display_name or ingredient.prdlst_nm or ""
+                food_type = ingredient.prdlst_dcnm or ""
+                ratio = None
+                try:
+                    ratio = float(relation.ingredient_ratio) if relation.ingredient_ratio is not None else None
+                except Exception:
+                    ratio = None
+
+                # 혼합제제(식품첨가물) 처리
+                if food_category == 'additive' and '혼합제제' in display_name:
+                    ingredients_info.append(f"혼합제제[{display_name}]")
+                    continue
+
+                # 향료/동일 용도(영양강화제 등) 번호 붙이기
+                # 향료: "향료" 또는 "향료(00향)" 형태
+                if food_category == 'additive' and (display_name.startswith('향료') or re.match(r'^향료(\(.+\))?$', display_name)):
+                    flavor_counter[display_name] = flavor_counter.get(display_name, 0) + 1
+                    count = flavor_counter[display_name]
+                    suffix = f"{count}" if count > 1 else ""
+                    ingredients_info.append(f"향료{suffix}{display_name[2:] if display_name.startswith('향료') else ''}")
+                    continue
+                # 동일 용도(예: 영양강화제, 산화방지제 등) 번호 붙이기
+                m = re.match(r'^([가-힣]+제)(\(.+\))?$', display_name)
+                if food_category == 'additive' and m:
+                    purpose = m.group(1)
+                    purpose_counter[purpose] = purpose_counter.get(purpose, 0) + 1
+                    count = purpose_counter[purpose]
+                    suffix = f"{count}" if count > 1 else ""
+                    ingredients_info.append(f"{purpose}{suffix}{m.group(2) or ''}")
+                    continue
+
+                # 일반 규칙
+                if (food_category == 'additive') or (ratio is not None and ratio >= 5):
+                    summary_item = display_name
+                else:
+                    summary_item = food_type or display_name
+                if summary_item:
+                    ingredients_info.append(summary_item)
                 # 알레르기/GMO 수집
                 if ingredient.allergens:
                     allergen_list = ingredient.allergens.split(',')
@@ -459,89 +519,104 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
         else:
             food_category = "additive"
 
-        # ------------------- 식품첨가물 표시명 추천 로직 (중복 없이 or로 통합, Y 등 불필요값 제거) -------------------
+        # ------------------- 식품첨가물 표시명 추천 로직 (향료/혼합제제/동일 용도) -------------------
         ingredient_display_name = food_item.prdlst_nm or "미정"
         if food_category == "additive":
-            try:
-                additive = FoodAdditive.objects.get(name_kr=prdlst_dcnm)
-                display_candidates = set()
-                table_types = set()
-                # 명칭(주용도) - 표4, 표6
-                if additive.name_kr and additive.main_purpose:
-                    display_candidates.add(f"{additive.name_kr}({additive.main_purpose})")
-                # 명칭 - 표4, 표5, 표6
-                if additive.name_kr:
-                    display_candidates.add(additive.name_kr)
-                # 간략명 - 표5, 표6 (여러 개일 수 있음)
-                if additive.short_name:
-                    for s in str(additive.short_name).split(","):
-                        s = s.strip()
-                        if s and s not in {"Y", "N", "-"}:
-                            display_candidates.add(s)
-                # 주용도 - 표6 (여러 개일 수 있음)
-                if additive.main_purpose:
-                    for s in str(additive.main_purpose).split(","):
-                        s = s.strip()
-                        if s and s not in {"Y", "N", "-"}:
-                            display_candidates.add(s)
-                # alias_4, alias_5, alias_6에 콤마로 여러개가 있을 수 있으므로, 각 alias에서 명칭/간략명/용도 추출
-                if additive.alias_4:
-                    table_types.add("4")
-                    for val in str(additive.alias_4).split(","):
-                        val = val.strip()
-                        if val and val not in {"Y", "N", "-"}:
-                            display_candidates.add(val)
-                if additive.alias_5:
-                    table_types.add("5")
-                    for val in str(additive.alias_5).split(","):
-                        val = val.strip()
-                        if val and val not in {"Y", "N", "-"}:
-                            display_candidates.add(val)
-                if additive.alias_6:
-                    table_types.add("6")
-                    for val in str(additive.alias_6).split(","):
-                        val = val.strip()
-                        if val and val not in {"Y", "N", "-"}:
-                            display_candidates.add(val)
-                # 중복 없이, 명칭(주용도) > 명칭 > 간략명 > 주용도 > 기타 순서로 정렬
-                ordered = []
-                # 명칭(주용도)
-                if additive.name_kr and additive.main_purpose:
-                    nm_purp = f"{additive.name_kr}({additive.main_purpose})"
-                    if nm_purp in display_candidates:
-                        ordered.append(nm_purp)
-                        display_candidates.discard(nm_purp)
-                # 명칭
-                if additive.name_kr and additive.name_kr in display_candidates:
-                    ordered.append(additive.name_kr)
-                    display_candidates.discard(additive.name_kr)
-                # 간략명
-                if additive.short_name:
-                    for s in str(additive.short_name).split(","):
-                        s = s.strip()
-                        if s and s in display_candidates:
-                            ordered.append(s)
-                            display_candidates.discard(s)
-                # 주용도
-                if additive.main_purpose:
-                    for s in str(additive.main_purpose).split(","):
-                        s = s.strip()
-                        if s and s in display_candidates:
-                            ordered.append(s)
-                            display_candidates.discard(s)
-                # 나머지(표4/5/6 alias 등에서 온 기타)
-                for val in sorted(display_candidates):
-                    ordered.append(val)
-                if ordered:
-                    ingredient_display_name = " or ".join(ordered)
-                # 안내문구 항상 추가
-                if table_types:
-                    tables = [f"표 {t}" for t in sorted(table_types)]
-                    ingredient_display_name += f"\n※ 이 식품첨가물은 {', '.join(tables)}에 해당하는 원료입니다."
-            except FoodAdditive.DoesNotExist:
-                pass
+            # 향료 처리
+            if '향료' in prdlst_dcnm:
+                m = re.search(r'(.+?)향', food_item.prdlst_nm or "")
+                flavor_name = m.group(1).strip() if m else ""
+                if flavor_name:
+                    ingredient_display_name = f"향료 or 향료({flavor_name}향)"
+                else:
+                    ingredient_display_name = "향료"
+            # 혼합제제 처리
+            elif '혼합제제' in prdlst_dcnm or '혼합제제' in (food_item.prdlst_nm or ""):
+                ingredient_display_name = f"혼합제제[{food_item.prdlst_nm or prdlst_dcnm}]"
+            else:
+                try:
+                    additive = FoodAdditive.objects.get(name_kr=prdlst_dcnm)
+                    display_candidates = set()
+                    table_types = set()
+                    # 명칭(주용도) - 표4, 표6
+                    if additive.name_kr and additive.main_purpose:
+                        display_candidates.add(f"{additive.name_kr}({additive.main_purpose})")
+                    # 명칭 - 표4, 표5, 표6
+                    if additive.name_kr:
+                        display_candidates.add(additive.name_kr)
+                    # 간략명 - 표5, 표6 (여러 개일 수 있음)
+                    if additive.short_name:
+                        for s in str(additive.short_name).split(","):
+                            s = s.strip()
+                            if s and s not in {"Y", "N", "-"}:
+                                display_candidates.add(s)
+                    # 주용도 - 표6 (여러 개일 수 있음)
+                    if additive.main_purpose:
+                        for s in str(additive.main_purpose).split(","):
+                            s = s.strip()
+                            if s and s not in {"Y", "N", "-"}:
+                                display_candidates.add(s)
+                    # alias_4, alias_5, alias_6에 콤마로 여러개가 있을 수 있으므로, 각 alias에서 명칭/간략명/용도 추출
+                    if additive.alias_4:
+                        table_types.add("4")
+                        for val in str(additive.alias_4).split(","):
+                            val = val.strip()
+                            if val and val not in {"Y", "N", "-"}:
+                                display_candidates.add(val)
+                    if additive.alias_5:
+                        table_types.add("5")
+                        for val in str(additive.alias_5).split(","):
+                            val = val.strip()
+                            if val and val not in {"Y", "N", "-"}:
+                                display_candidates.add(val)
+                    if additive.alias_6:
+                        table_types.add("6")
+                        for val in str(additive.alias_6).split(","):
+                            val = val.strip()
+                            if val and val not in {"Y", "N", "-"}:
+                                display_candidates.add(val)
+                    # 중복 없이, 명칭(주용도) > 명칭 > 간략명 > 주용도 > 기타 순서로 정렬
+                    ordered = []
+                    # 명칭(주용도)
+                    if additive.name_kr and additive.main_purpose:
+                        nm_purp = f"{additive.name_kr}({additive.main_purpose})"
+                        if nm_purp in display_candidates:
+                            ordered.append(nm_purp)
+                            display_candidates.discard(nm_purp)
+                    # 명칭
+                    if additive.name_kr and additive.name_kr in display_candidates:
+                        ordered.append(additive.name_kr)
+                        display_candidates.discard(additive.name_kr)
+                    # 간략명
+                    if additive.short_name:
+                        for s in str(additive.short_name).split(","):
+                            s = s.strip()
+                            if s and s in display_candidates:
+                                ordered.append(s)
+                                display_candidates.discard(s)
+                    # 주용도
+                    if additive.main_purpose:
+                        for s in str(additive.main_purpose).split(","):
+                            s = s.strip()
+                            if s and s in display_candidates:
+                                ordered.append(s)
+                                display_candidates.discard(s)
+                    # 나머지(표4/5/6 alias 등에서 온 기타)
+                    for val in sorted(display_candidates):
+                        ordered.append(val)
+                    if ordered:
+                        ingredient_display_name = " or ".join(ordered)
+                    # 안내문구 항상 추가
+                    if table_types:
+                        tables = [f"표 {t}" for t in sorted(table_types)]
+                        ingredient_display_name += f"\n※ 이 식품첨가물은 {', '.join(tables)}에 해당하는 원료입니다."
+                except FoodAdditive.DoesNotExist:
+                    pass
         # -------------------------------------------------------------------
 
+        # created_at 필드는 모델에서 auto_now_add=True로 정의되어 있어야 하며,
+        # 만약 그렇지 않다면 마이그레이션 및 모델 수정을 먼저 해야 합니다.
+        # 아래에서는 created_at을 전달하지 않고 생성합니다.
         MyIngredient.objects.create(
             user_id=request.user,
             prdlst_report_no=food_item.prdlst_report_no,
@@ -725,6 +800,16 @@ def my_ingredient_list_combined(request):
     if food_category:
         search_conditions &= Q(food_category=food_category)
 
+    # 알레르기, GMO 검색조건 추가
+    allergens = request.GET.get('allergens', '').strip()
+    if allergens:
+        search_conditions &= Q(allergens__icontains=allergens)
+        search_values['allergens'] = allergens
+    gmo = request.GET.get('gmo', '').strip()
+    if gmo:
+        search_conditions &= Q(gmo__icontains=gmo)
+        search_values['gmo'] = gmo
+
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
@@ -747,6 +832,8 @@ def my_ingredient_list_combined(request):
             {'name': 'prdlst_dcnm', 'placeholder': '식품유형', 'value': search_values.get('prdlst_dcnm', '')},
             {'name': 'bssh_nm', 'placeholder': '제조사명', 'value': search_values.get('bssh_nm', '')},
             {'name': 'ingredient_display_name', 'placeholder': '원료 표시명', 'value': search_values.get('ingredient_display_name', '')},
+            {'name': 'allergens', 'placeholder': '알레르기', 'value': search_values.get('allergens', '')},
+            {'name': 'gmo', 'placeholder': 'GMO', 'value': search_values.get('gmo', '')},
         ],
         'items_per_page': items_per_page,
         'sort_field': sort_field.lstrip('-'),
@@ -795,6 +882,7 @@ def my_ingredient_detail(request, ingredient_id=None):
         'food_types': list(FoodType.objects.all().values('food_type')),
         'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
         'food_additives': list(FoodAdditive.objects.all().values('name_kr')),
+
     }
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -1615,87 +1703,84 @@ def preview_popup(request):
 
 @login_required
 @csrf_exempt
-def bulk_copy_labels(request):
+def export_labels_excel(request):
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': '잘못된 요청 방식입니다.'}, status=405)
-    
+        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
     try:
         data = json.loads(request.body)
         label_ids = data.get('label_ids', [])
         if not label_ids:
             return JsonResponse({'success': False, 'error': '선택된 라벨이 없습니다.'}, status=400)
+        labels = MyLabel.objects.filter(my_label_id__in=label_ids, user_id=request.user, delete_YN='N').order_by('my_label_id')
+        if not labels.exists():
+            return JsonResponse({'success': False, 'error': '다운로드할 데이터가 없습니다.'}, status=400)
 
-        copied_labels = []
-        for label_id in label_ids:
-            original_label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-            
-            # 라벨 복사
-            new_label = MyLabel.objects.create(
-                user_id=request.user,
-                my_label_name=f"{original_label.my_label_name} (복사본)",
-                food_group=original_label.food_group,
-                food_type=original_label.food_type,
-                preservation_type=original_label.preservation_type,
-                processing_method=original_label.processing_method,
-                processing_condition=original_label.processing_condition,
-                prdlst_dcnm=original_label.prdlst_dcnm,
-                prdlst_nm=original_label.prdlst_nm,
-                prdlst_report_no=original_label.prdlst_report_no,
-                rawmtrl_nm=original_label.rawmtrl_nm,
-                rawmtrl_nm_display=original_label.rawmtrl_nm_display,
-                content_weight=original_label.content_weight,
-                storage_method=original_label.storage_method,
-                country_of_origin=original_label.country_of_origin,
-                frmlc_mtrqlt=original_label.frmlc_mtrqlt,
-                bssh_nm=original_label.bssh_nm,
-                distributor_address=original_label.distributor_address,
-                repacker_address=original_label.repacker_address,
-                importer_address=original_label.importer_address,
-                cautions=original_label.cautions,
-                additional_info=original_label.additional_info,
-                label_create_YN='Y',
-                ingredient_create_YN=original_label.ingredient_create_YN,
-                delete_YN='N'
-            )
-            copied_labels.append(new_label.my_label_id)
+        import openpyxl
+        from openpyxl.styles import Font
 
-        return JsonResponse({
-            'success': True, 
-            'message': f'{len(copied_labels)}개의 라벨이 복사되었습니다.',
-            'copied_labels': copied_labels
-        })
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "표시사항"
 
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        headers = [
+            '번호', '품목보고번호', '제품명', '라벨명', '식품유형', '제조사명', '최종수정일자',
+            '성분명 및 함량', '내용량', '내용량(열량)', '원산지', '보관방법', '포장재질',
+            '유통전문판매원', '소분원', '수입원', '소비기한', '원재료명(표시)', '원재료명(참고)', '주의사항', '기타표시사항', '영양성분'
 
-@login_required
-@csrf_exempt
-def bulk_delete_labels(request):
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': '잘못된 요청 방식입니다.'}, status=405)
-    
-    try:
-        data = json.loads(request.body)
-        label_ids = data.get('label_ids', [])
-        if not label_ids:
-            return JsonResponse({'success': False, 'error': '선택된 라벨이 없습니다.'}, status=400)
+        ]
+        ws.append(headers)
 
-        # 실제 삭제가 아닌 flag 처리
-        current_time = now().strftime('%Y%m%d')
-        deleted_count = MyLabel.objects.filter(
-            my_label_id__in=label_ids,
-            user_id=request.user
-        ).update(
-            delete_YN='Y',
-            delete_datetime=current_time
-        )
+        font = Font(size=10)
+        ws.column_dimensions[openpyxl.utils.get_column_letter(1)].width = 4
+       
+        for col_idx in range(2, len(headers) + 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = 10
+        for col in ws.iter_cols(min_row=1, max_row=1, max_col=len(headers)):
+            for cell in col:
+                cell.font = font
 
-        return JsonResponse({
-            'success': True, 
-            'message': f'{deleted_count}개의 라벨이 삭제되었습니다.',
-            'deleted_count': deleted_count
-        })
+        for idx, label in enumerate(labels, start=1):
+            update_dt = ''
+            if label.update_datetime:
+                update_dt = label.update_datetime.strftime('%y-%m-%d %H:%M')
+            row = [
+                idx,
+                label.prdlst_report_no,
+                label.prdlst_nm,
+                label.my_label_name,
+                label.prdlst_dcnm,
+                label.bssh_nm,
+                update_dt,
+                label.ingredient_info,
+                label.content_weight,
+                label.weight_calorie,
+                label.country_of_origin,
+                label.storage_method,
+                label.frmlc_mtrqlt,
+                label.distributor_address,
+                label.repacker_address,
+                label.importer_address,
+                label.pog_daycnt,
+                label.rawmtrl_nm_display,
+                label.rawmtrl_nm,
+                label.cautions,
+                label.additional_info,
+                label.nutrition_text,
+            ]
+            ws.append(row)
+            for cell in ws[ws.max_row]:
+                cell.font = font
 
+        # 파일명: LabelData_표시사항_사용자ID_다운받은년월일.xlsx
+        today_str = now().strftime('%y%m%d')
+        user_id = getattr(request.user, 'id', None)
+        if not user_id:
+            user_id = getattr(request.user, 'pk', 'user')
+        filename = f'LabelData_표시사항_{user_id}_{today_str}.xlsx'
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        wb.save(response)
+        return response
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
