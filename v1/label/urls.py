@@ -51,4 +51,7 @@ urlpatterns = [
 
     # 엑셀 다운로드
     path('export-labels-excel/', views.export_labels_excel, name='export_labels_excel'),
+
+    # 수입식품 개수 조회
+    path('imported_food_count/', views.imported_food_count, name='imported_food_count'),
 ]

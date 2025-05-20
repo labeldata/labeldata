@@ -1,7 +1,7 @@
 {% url action_url as target_url %}
-<form method="get" action="{{ target_url }}">
-  <div class="d-flex align-items-center justify-content-between mb-3" style="font-size: 0.8rem;">
-    <div class="d-flex align-items-center flex-fill flex-nowrap gap-2 w-100" style="font-size: 0.8rem;">
+<form method="get" action="{{ target_url }}" style="width:100%;max-width:100%;">
+  <div class="search-filter-row d-flex align-items-center mb-3" style="font-size: 0.8rem; width:100%; max-width:100%;">
+    <div class="search-filter-inner d-flex align-items-center flex-nowrap gap-2 w-100 justify-content-between" style="font-size: 0.8rem; width:100%; max-width:100%; overflow-x:auto;">
       {% if page_type == "product" %}
         <div style="min-width:110px;max-width:120px;flex:0 0 120px;">
           <select name="food_category" id="foodCategorySelect" class="form-select" style="font-size: 0.8rem;"

@@ -56,53 +56,109 @@ function createFoodTypeSelect(selectedValue = "") {
 function updateSummarySection() {
     const rows = Array.from(document.querySelectorAll('#ingredient-body tr'));
 
-    // 향료/동일 용도 번호 붙이기 위한 카운터
-    const flavorCounts = {};
-    const purposeCounts = {};
-
-    // 혼합제제/향료/동일 용도 처리
     const summaryDisplayNames = [];
-    rows.forEach((row, idx) => {
+    rows.forEach((row) => {
         const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
         const foodCategory = row.querySelector('.food-category-input')?.dataset.foodCategory || '';
-        const displayName = row.querySelector('.display-name-input')?.value.trim() || ingredientName;
+        const displayNameRaw = row.querySelector('.display-name-input')?.value.trim() || ingredientName;
         const foodType = row.querySelector('.food-type-select')?.value.trim() ||
             row.querySelector('.form-control[readonly].modal-readonly-field:not(.ingredient-name-input):not(.display-name-input)')?.value.trim() || '';
         const ratioStr = row.querySelector('.ratio-input')?.value.trim();
         const ratio = parseFloat(ratioStr);
 
-        // 혼합제제(식품첨가물) 처리
-        if (foodCategory === 'additive' && /혼합제제/.test(displayName)) {
-            summaryDisplayNames.push(`혼합제제[${displayName}]`);
-            return;
+        // 식품첨가물 안내문구 제거
+        let displayName = displayNameRaw;
+        if (foodCategory === 'additive' && displayName) {
+            const idx = displayName.indexOf('※ 이 식품첨가물은');
+            if (idx !== -1) {
+                displayName = displayName.substring(0, idx).trim();
+            }
         }
 
-        // 향료/동일 용도(영양강화제 등) 번호 붙이기
-        // 향료: "향료" 또는 "향료(00향)" 형태
-        let matched = displayName.match(/^(향료)(\(.+\))?$/) || displayName.match(/^(향료\(.+\))$/);
-        if (foodCategory === 'additive' && matched) {
-            flavorCounts[displayName] = (flavorCounts[displayName] || 0) + 1;
-            const count = flavorCounts[displayName];
-            summaryDisplayNames.push(`향료${count > 1 ? `\u2460`.charAt(count - 1) || `(${count})` : ''}${matched[2] || ''}`);
-            return;
-        }
-        // 동일 용도(예: 영양강화제, 산화방지제 등) 번호 붙이기
-        // "영양강화제", "산화방지제" 등으로 시작하는 경우
-        let purposeMatch = displayName.match(/^([가-힣]+제)(\(.+\))?$/);
-        if (foodCategory === 'additive' && purposeMatch) {
-            const purpose = purposeMatch[1];
-            purposeCounts[purpose] = (purposeCounts[purpose] || 0) + 1;
-            const count = purposeCounts[purpose];
-            summaryDisplayNames.push(`${purpose}${count > 1 ? `\u2460`.charAt(count - 1) || `(${count})` : ''}${purposeMatch[2] || ''}`);
-            return;
-        }
-
-        // 일반 규칙
-        if (
-            (foodCategory === 'additive') ||
-            (ratioStr && !isNaN(ratio) && ratio >= 5)
-        ) {
+        // 1. 식품첨가물: 안내문구 제외한 표시명 그대로
+        if (foodCategory === 'additive') {
             summaryDisplayNames.push(displayName);
+            return;
+        }
+
+        // 2. 농수산물: 식품유형만 표시, 5% 이상이면 식품유형[원재료 표시명 최대 5개]
+        if (foodCategory === 'agricultural') {
+            if (ratioStr && !isNaN(ratio) && ratio >= 5) {
+                // 대괄호 안에 표시명 5개까지, 괄호 안 쉼표는 제외
+                let items = [];
+                let count = 0;
+                let str = displayName;
+                let i = 0;
+                let len = str.length;
+                let buffer = '';
+                let inParen = 0;
+                while (i < len && count < 5) {
+                    let ch = str[i];
+                    if (ch === '(' || ch === '[' || ch === '{') {
+                        inParen++;
+                        buffer += ch;
+                    } else if (ch === ')' || ch === ']' || ch === '}') {
+                        inParen = Math.max(0, inParen - 1);
+                        buffer += ch;
+                    } else if (ch === ',' && inParen === 0) {
+                        if (buffer.trim()) {
+                            items.push(buffer.trim());
+                            count += 1;
+                        }
+                        buffer = '';
+                    } else {
+                        buffer += ch;
+                    }
+                    i++;
+                }
+                if (count < 5 && buffer.trim()) {
+                    items.push(buffer.trim());
+                }
+                summaryDisplayNames.push(`${foodType}[${items.join(', ')}]`);
+            } else {
+                summaryDisplayNames.push(foodType || displayName);
+            }
+            return;
+        }
+
+        // 3. 정제수: 식품유형만 표시
+        if (foodCategory === '정제수') {
+            summaryDisplayNames.push(foodType || displayName);
+            return;
+        }
+
+        // 4. 나머지(가공식품 등): 식품유형만 표시, 5% 이상이면 식품유형[원재료 표시명 최대 5개]
+        if (ratioStr && !isNaN(ratio) && ratio >= 5) {
+            let items = [];
+            let count = 0;
+            let str = displayName;
+            let i = 0;
+            let len = str.length;
+            let buffer = '';
+            let inParen = 0;
+            while (i < len && count < 5) {
+                let ch = str[i];
+                if (ch === '(' || ch === '[' || ch === '{') {
+                    inParen++;
+                    buffer += ch;
+                } else if (ch === ')' || ch === ']' || ch === '}') {
+                    inParen = Math.max(0, inParen - 1);
+                    buffer += ch;
+                } else if (ch === ',' && inParen === 0) {
+                    if (buffer.trim()) {
+                        items.push(buffer.trim());
+                        count += 1;
+                    }
+                    buffer = '';
+                } else {
+                    buffer += ch;
+                }
+                i++;
+            }
+            if (count < 5 && buffer.trim()) {
+                items.push(buffer.trim());
+            }
+            summaryDisplayNames.push(`${foodType}[${items.join(', ')}]`);
         } else {
             summaryDisplayNames.push(foodType || displayName);
         }

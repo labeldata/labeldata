@@ -17,38 +17,37 @@
   <div class="info-section">
     <div class="container">
       <div class="row">
-        <!-- 제품 조회 (품목보고 -> 제품 조회) -->
+        <!-- 국내제품 조회 -->
         <div class="col-md-4">
           <a href="{% url 'label:food_item_list' %}">
             <div class="info-box">
-              <h3 class="info-header">제품 조회</h3>
+              <h3 class="info-header">국내제품</h3>
               <div class="registration-info">
                 <div class="info-line">
-                   <span id="foodItemsTotal" class="number">-</span> 
+                   <span id="domesticTotal" class="number">-</span> 
                    <span class="label">건(누적)</span>
                 </div>
                 <div class="info-line"> 
-                   <span id="foodItemsNew" class="number">-</span> 
-                   <span class="label">건(신규)</span>
+                   <span id="domesticNew" class="number">-</span> 
+                   <span class="label">건(최근 1주일)</span>
                 </div>
               </div>
             </div>
           </a>
         </div>
-        <!-- 표시사항 관리 -->
+        <!-- 수입제품(표시사항) -->
         <div class="col-md-4">
           <a href="{% url 'label:my_label_list' %}">
             <div class="info-box">
-              {# 이미지 삭제됨 #}
-              <h3 class="info-header">표시사항</h3>
+              <h3 class="info-header">수입제품</h3>
               <div class="registration-info">
                 <div class="info-line">
-                   <span id="myLabelTotal" class="number">-</span> 
+                   <span id="importedTotal" class="number">-</span> 
                    <span class="label">건(누적)</span>
                 </div>
                 <div class="info-line">
-                  <span id="myLabelTotal" class="number">-</span> 
-                  <span class="label">건(신규)</span>
+                  <span id="importedNew" class="number">-</span> 
+                  <span class="label">건(최근 1주일)</span>
                </div>
               </div>
             </div>
@@ -80,14 +79,46 @@
 
 <!-- 자바스크립트를 통해 실시간(혹은 페이지 로드 시) 건수 업데이트 -->
 <script>
+function formatNumberWithCommas(num) {
+  if (typeof num === "number") num = num.toString();
+  return num.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+function setNumberAndClass(id, value) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.innerText = formatNumberWithCommas(value);
+  if (parseInt(value.toString().replace(/,/g, '')) >= 1000000) {
+    el.classList.add("number-small");
+  } else {
+    el.classList.remove("number-small");
+  }
+}
 document.addEventListener("DOMContentLoaded", function(){
+  // 국내제품(국내 FoodItem)
   fetch("{% url 'label:food_items_count' %}")
     .then(response => response.json())
     .then(data => {
-       document.getElementById("foodItemsTotal").innerText = data.total;
+       setNumberAndClass("domesticTotal", data.total);
+       setNumberAndClass("domesticNew", data.new);
     })
     .catch(error => console.error("Error fetching food items count:", error));
+
+  // 수입제품(ImportedFood)
+  fetch("{% url 'label:imported_food_count' %}")
+    .then(response => response.json())
+    .then(data => {
+       setNumberAndClass("importedTotal", data.total);
+       setNumberAndClass("importedNew", data.new);
+    })
+    .catch(error => console.error("Error fetching imported food count:", error));
 });
 </script>
+<style>
+/* 100만건 이상일 때 숫자 크기 줄이기 */
+.number-small {
+  font-size: 1.2em !important;
+  letter-spacing: -1px;
+}
+</style>
 
 {% endblock %}

@@ -1175,8 +1175,8 @@ def food_items_count(request):
     total = FoodItem.objects.count()
     one_week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
     new_count = FoodItem.objects.filter(last_updt_dtm__gte=one_week_ago).count()
-    total_formatted = f"{total:,}"
-    return JsonResponse({'total': total_formatted, 'new': new_count})
+    # 쉼표 없는 정수로 반환
+    return JsonResponse({'total': total, 'new': new_count})
 
 @login_required
 def my_labels_count(request):
@@ -1901,3 +1901,16 @@ def save_preview_settings(request):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+    
+@login_required
+def imported_food_count(request):
+    total = ImportedFood.objects.count()
+    one_week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
+    # expirde_dtm, expirde_end_dtm, procs_dtm 중 하나라도 최근 1주일 이내인 경우 신규로 간주
+    new_count = ImportedFood.objects.filter(
+        Q(expirde_dtm__gte=one_week_ago) |
+        Q(expirde_end_dtm__gte=one_week_ago) |
+        Q(procs_dtm__gte=one_week_ago)
+    ).count()
+    # 쉼표 없는 정수로 반환
+    return JsonResponse({'total': total, 'new': new_count})
