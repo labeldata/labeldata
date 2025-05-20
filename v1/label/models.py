@@ -7,15 +7,15 @@ from .constants import CATEGORY_CHOICES
 class FoodItem(models.Model):
     #컬럼명은 추후 변경할 수 있음. 현재는 api에서 받아오는 값으로 사용
     lcns_no = models.CharField(max_length=11, verbose_name = "인허가번호", help_text="영업에 대한 허가, 등록, 신고번호 11자리", db_index=True , null=True, blank=True)
-    bssh_nm = models.CharField(max_length=100, verbose_name = "제조사명", default="")
+    bssh_nm = models.CharField(max_length=100, verbose_name = "제조사명", db_index=True, default="")
     prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", help_text="영업등록 발급연도-영업장 등록번호-영업장 제품번호", db_index=True, primary_key=True)
     prms_dt = models.CharField(max_length=8, verbose_name="허가일자", help_text="yyyymmdd", default="")
     prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", db_index=True, default="")
-    prdlst_dcnm = models.CharField(max_length=100, verbose_name="품목유형명", default="")
+    prdlst_dcnm = models.CharField(max_length=100, verbose_name="품목유형명", db_index=True, default="")
     production = models.CharField(max_length=10, verbose_name="생산종료여부", null=True, blank=True)
     hieng_lntrt_dvs_yn = models.CharField(max_length=10, verbose_name="고열량저영양식품여부", null=True, blank=True)   #api 컬럼 명칭은 HIENG_LNTRT_DVS_NM -> yn으로 변경
     child_crtfc_yn = models.CharField(max_length=10, verbose_name="어린이기호식품품질인증여부", null=True, blank=True)
-    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", null=True, blank=True) # null 값 허용
+    pog_daycnt = models.CharField(max_length=200, verbose_name="소비기한", db_index=True, null=True, blank=True) # null 값 허용
     last_updt_dtm = models.CharField(max_length=8, verbose_name="최종수정일자", null=True, blank=True) # null 값 허용
     induty_cd_nm = models.CharField(max_length=80, verbose_name="업종명", null=True, blank=True) # null 값 허용
     qlity_mntnc_tmlmt_daycnt = models.CharField(max_length=100, verbose_name="품질유지기한일수", null=True, blank=True)
@@ -366,19 +366,19 @@ class LabelIngredientRelation(models.Model):
 class ImportedFood(models.Model):
 
     dcl_prduct_se_cd_nm = models.CharField(max_length=100, verbose_name="제품구분", null=True, blank=True)
-    bsn_ofc_name = models.CharField(max_length=100, verbose_name="수입업체명")
-    prduct_korean_nm = models.CharField(max_length=300, verbose_name="제품명(한글)")
+    bsn_ofc_name = models.CharField(max_length=100, verbose_name="수입업체명", db_index=True)
+    prduct_korean_nm = models.CharField(max_length=300, verbose_name="제품명(한글)", db_index=True)
     prduct_nm = models.TextField(verbose_name="제품명(영문)", null=True, blank=True)
-    expirde_dtm = models.CharField(max_length=50, verbose_name="유통기한", help_text="yyyymmdd", null=True, blank=True)
+    expirde_dtm = models.CharField(max_length=50, verbose_name="유통기한", db_index=True, help_text="yyyymmdd", null=True, blank=True)
     procs_dtm = models.CharField(max_length=8, verbose_name="수입신고일자", help_text="yyyymmdd", null=True, blank=True)
-    ovsmnfst_nm = models.CharField(max_length=300, verbose_name="해외제조업소", null=True, blank=True)
-    itm_nm = models.CharField(max_length=100, verbose_name="품목", null=True, blank=True)
-    xport_ntncd_nm = models.CharField(max_length=100, verbose_name="수출국", null=True, blank=True)
+    ovsmnfst_nm = models.CharField(max_length=300, verbose_name="해외제조업소", db_index=True, null=True, blank=True)
+    itm_nm = models.CharField(max_length=100, verbose_name="품목", db_index=True, null=True, blank=True)
+    xport_ntncd_nm = models.CharField(max_length=100, verbose_name="수출국", db_index=True, null=True, blank=True)
     mnf_ntncn_nm = models.CharField(max_length=100, verbose_name="제조국", null=True, blank=True)
     korlabel = models.TextField(verbose_name="한글표시사항", null=True, blank=True)
     irdnt_nm = models.TextField(verbose_name="원재료명", null=True, blank=True)
     expirde_bdgin_dtm = models.CharField(max_length=8, verbose_name="유통기한", help_text="yyyymmdd", null=True, blank=True)
-    expirde_end_dtm = models.CharField(max_length=8, verbose_name="소비기한", help_text="yyyymmdd", null=True, blank=True)
+    expirde_end_dtm = models.CharField(max_length=8, verbose_name="소비기한", db_index=True, help_text="yyyymmdd", null=True, blank=True)
 
     class Meta:
         db_table = "imported_food"

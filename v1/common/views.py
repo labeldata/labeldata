@@ -126,7 +126,7 @@ SERVICE_MAPPING = {
         'model': ImportedFood,  # 반드시 label.models.ImportedFood를 사용해야 함
         'fields': {
             'dcl_prduct_se_cd_nm': 'DCL_PRDUCT_SE_CD_NM',
-            'bsn_ofc_name': 'BSN_OFC_NM',
+            'bsn_ofc_name': 'BSN_OFC_NAME',
             'prduct_korean_nm': 'PRDUCT_KOREAN_NM',
             'prduct_nm': 'PRDUCT_NM',
             'expirde_dtm': 'EXPIRDE_DTM',
@@ -373,7 +373,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     ModelClass = ImportedFood
     field_mapping = {
         'dcl_prduct_se_cd_nm': 'DCL_PRDUCT_SE_CD_NM',
-        'bsn_ofc_name': 'BSN_OFC_NM',
+        'bsn_ofc_name': 'BSN_OFC_NAME',
         'prduct_korean_nm': 'PRDUCT_KOREAN_NM',
         'prduct_nm': 'PRDUCT_NM',
         'expirde_dtm': 'EXPIRDE_DTM',
@@ -481,7 +481,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                 for obj in items:
                     close_old_connections()  # DB 연결 유지
                     lookup = {
-                        'bsn_ofc_name': (obj.get('BSN_OFC_NM') or '').strip(),
+                        'bsn_ofc_name': (obj.get('BSN_OFC_NAME') or '').strip(),
                         'prduct_korean_nm': (obj.get('PRDUCT_KOREAN_NM') or '').strip(),
                         'procs_dtm': (obj.get('PROCS_DTM') or '').strip(),
                         'ovsmnfst_nm': (obj.get('OVSMNFST_NM') or '').strip(),
