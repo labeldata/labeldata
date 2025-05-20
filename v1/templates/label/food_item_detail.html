@@ -110,8 +110,8 @@
     <div class="popup-title">제품 상세 정보</div>
     <div class="action-buttons">
       {% if imported_mode %}
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyIngredients('')">내원료 저장</button>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyLabel('')">표시사항 생성</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyIngredients('{{ item.id }}')">내원료 저장</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyLabel('{{ item.id }}')">표시사항 생성</button>
       {% else %}
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}')">내원료 저장</button>
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyLabel('{{ item.prdlst_report_no }}')">표시사항 생성</button>

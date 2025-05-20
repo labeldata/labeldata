@@ -250,25 +250,58 @@ def save_to_my_label(request, prdlst_report_no):
         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
 
     try:
-        existing_label = MyLabel.objects.filter(prdlst_report_no=prdlst_report_no, user_id=request.user).first()
+        # 수입식품/일반식품 분기
+        is_imported = False
+        food_item = None
+        imported_item = None
+        if prdlst_report_no and str(prdlst_report_no).isdigit():
+            imported_item = ImportedFood.objects.filter(pk=prdlst_report_no).first()
+            if not imported_item:
+                return JsonResponse({"success": False, "error": "해당 수입식품 ID에 대한 데이터를 찾을 수 없습니다."}, status=404)
+            is_imported = True
+        else:
+            food_item = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).first()
+            if not food_item:
+                return JsonResponse({"success": False, "error": "해당 품목제조번호에 대한 데이터를 찾을 수 없습니다."}, status=404)
+
         data = json.loads(request.body) if request.body else {}
         confirm_flag = data.get("confirm", False)
 
+        if is_imported:
+            # 수입식품 라벨 중복 체크(제품명+수입업체명+사용자)
+            existing_label = MyLabel.objects.filter(prdlst_nm=imported_item.prduct_korean_nm, bssh_nm=imported_item.bsn_ofc_name, user_id=request.user).first()
+            if existing_label and not confirm_flag:
+                return JsonResponse({
+                    "success": False,
+                    "confirm_required": True,
+                    "message": "이미 내 라벨에 저장된 수입식품입니다. 저장하시겠습니까?"
+                }, status=200)
+            # 저장
+            MyLabel.objects.create(
+                user_id=request.user,
+                my_label_name=f"임시 - {imported_item.prduct_korean_nm}",
+                prdlst_nm=imported_item.prduct_korean_nm or "미정",
+                prdlst_dcnm=imported_item.itm_nm or "미정",
+                bssh_nm=imported_item.bsn_ofc_name or "미정",
+                pog_daycnt=imported_item.expirde_dtm or imported_item.expirde_end_dtm or "",
+                rawmtrl_nm=imported_item.irdnt_nm or "미정",
+                importer_address=imported_item.bsn_ofc_name or "",
+                country_of_origin=imported_item.xport_ntncd_nm or imported_item.mnf_ntncn_nm or "",
+                # 기타 필드는 필요시 추가
+            )
+            return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
+        # 기존(일반식품) 로직
+        existing_label = MyLabel.objects.filter(prdlst_report_no=prdlst_report_no, user_id=request.user).first()
         if existing_label and not confirm_flag:
             return JsonResponse(
                 {"success": False, "confirm_required": True, "message": "이미 내 라벨에 저장된 항목입니다. 저장하시겠습니까?"}, status=200
             )
-
-        food_item = get_object_or_404(FoodItem, prdlst_report_no=prdlst_report_no)
         data_mapping = {field: getattr(food_item, field, "") for field in FOODITEM_MYLABEL_MAPPING.keys()}
-
         if existing_label and confirm_flag:
             MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
             return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
-
         MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
         return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
-
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
@@ -508,17 +541,49 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
 
     try:
-        food_item = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).first()
-        if not food_item:
-            return JsonResponse({"success": False, "error": "해당 품목제조번호에 대한 데이터를 찾을 수 없습니다."}, status=404)
+        # 분기: 숫자면 수입식품(ImportedFood), 아니면 일반식품(FoodItem)
+        is_imported = False
+        food_item = None
+        imported_item = None
+        if prdlst_report_no and str(prdlst_report_no).isdigit():
+            # 수입식품: pk(id)로 조회
+            from .models import ImportedFood
+            imported_item = ImportedFood.objects.filter(pk=prdlst_report_no).first()
+            if not imported_item:
+                return JsonResponse({"success": False, "error": "해당 수입식품 ID에 대한 데이터를 찾을 수 없습니다."}, status=404)
+            is_imported = True
+        else:
+            food_item = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).first()
+            if not food_item:
+                return JsonResponse({"success": False, "error": "해당 품목제조번호에 대한 데이터를 찾을 수 없습니다."}, status=404)
 
+        if is_imported:
+            # 수입식품 → MyIngredient 변환 및 저장
+            MyIngredient.objects.create(
+                user_id=request.user,
+                prdlst_report_no=None,  # 수입식품은 별도 관리
+                prdlst_nm=imported_item.prduct_korean_nm or "미정",
+                bssh_nm=imported_item.bsn_ofc_name or "미정",
+                prms_dt="",  # 수입식품은 허가일자 없음
+                food_category="imported",
+                prdlst_dcnm=imported_item.itm_nm or "미정",
+                pog_daycnt=imported_item.expirde_dtm or imported_item.expirde_end_dtm or "",
+                frmlc_mtrqlt="",  # 수입식품은 포장재질 없음
+                rawmtrl_nm=imported_item.irdnt_nm or "미정",
+                ingredient_display_name=imported_item.prduct_korean_nm or "미정",
+                allergens="",
+                gmo="",
+                delete_YN="N"
+            )
+            return JsonResponse({"success": True, "message": "내원료로 저장되었습니다."})
+        # ...existing code...
         prdlst_dcnm = (food_item.prdlst_dcnm or "").strip()
         # 가공식품(푸드타입에 존재) 여부 체크
         if prdlst_dcnm and FoodType.objects.filter(food_type=prdlst_dcnm).exists():
             food_category = "processed"
         else:
             food_category = "additive"
-
+        # ...existing code...
         # ------------------- 식품첨가물 표시명 추천 로직 (향료/혼합제제/동일 용도) -------------------
         ingredient_display_name = food_item.prdlst_nm or "미정"
         if food_category == "additive":
@@ -614,9 +679,6 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
                     pass
         # -------------------------------------------------------------------
 
-        # created_at 필드는 모델에서 auto_now_add=True로 정의되어 있어야 하며,
-        # 만약 그렇지 않다면 마이그레이션 및 모델 수정을 먼저 해야 합니다.
-        # 아래에서는 created_at을 전달하지 않고 생성합니다.
         MyIngredient.objects.create(
             user_id=request.user,
             prdlst_report_no=food_item.prdlst_report_no,
@@ -631,7 +693,7 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
             ingredient_display_name=ingredient_display_name,
             delete_YN="N"
         )
-        return JsonResponse({"success": True, "message": "내원료로 저장되었습니다."})
+        return JsonResponse({"success": True, "message": "내 원료로 저장되었습니다."})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
