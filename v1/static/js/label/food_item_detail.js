@@ -1,56 +1,61 @@
-function saveToMyLabel(prdlst_report_no) {
-  console.log("saveToMyLabel 호출됨", prdlst_report_no);
-    if (!prdlst_report_no) {
-        alert("품목보고번호가 누락되었습니다.");
-        return;
-    }
+function saveToMyLabel(prdlst_report_no, imported_mode) {
+  console.log("saveToMyLabel 호출됨", prdlst_report_no, imported_mode);
+  if (!prdlst_report_no) {
+    alert("품목보고번호가 누락되었습니다.");
+    return;
+  }
 
-    const sendRequest = (confirmFlag = false) => {
-        const url = `/label/save-to-my-label/${prdlst_report_no}/`;
-        // confirm 플래그가 true면 request body에 추가
-        const bodyData = confirmFlag ? JSON.stringify({ confirm: true }) : JSON.stringify({});
-        
-        fetch(url, {
-            method: "POST",
-            headers: {
-                "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
-                "Content-Type": "application/json"
-            },
-            body: bodyData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-            } else if (data.confirm_required) {
-                // 이미 저장된 라벨이 있을 경우
-                if (confirm(data.message)) {
-                    // 사용자가 확인하면 다시 요청
-                    sendRequest(true);
-                } else {
-                    alert("저장이 취소되었습니다.");
-                }
-            } else {
-                alert("저장 실패: " + (data.error || "알 수 없는 오류"));
-            }
-        })
-        .catch(error => {
-            alert("오류 발생: " + error.message);
-        });
-    };
+  const sendRequest = (confirmFlag = false) => {
+    const url = `/label/save-to-my-label/${prdlst_report_no}/`;
+    // imported_mode와 confirm 플래그를 body에 포함
+    const bodyData = JSON.stringify(
+      confirmFlag
+        ? { confirm: true, imported_mode: imported_mode }
+        : { imported_mode: imported_mode }
+    );
 
-    // 최초 요청 (confirm 플래그 없이)
-    sendRequest();
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": document.querySelector('meta[name="csrf-token"]').getAttribute("content"),
+        "Content-Type": "application/json"
+      },
+      body: bodyData
+    })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert(data.message);
+        } else if (data.confirm_required) {
+          // 이미 저장된 라벨이 있을 경우
+          if (confirm(data.message)) {
+            // 사용자가 확인하면 다시 요청
+            sendRequest(true);
+          } else {
+            alert("저장이 취소되었습니다.");
+          }
+        } else {
+          alert("저장 실패: " + (data.error || "알 수 없는 오류"));
+        }
+      })
+      .catch(error => {
+        alert("오류 발생: " + error.message);
+      });
+  };
+
+  // 최초 요청 (confirm 플래그 없이)
+  sendRequest();
 }
 
-function saveToMyIngredients(prdlst_report_no) {
-    console.log("saveToMyIngredients 호출됨", prdlst_report_no);
+function saveToMyIngredients(prdlst_report_no, imported_mode) {
+    console.log("saveToMyIngredients 호출됨", prdlst_report_no, imported_mode);
     fetch(`/label/save-to-my-ingredients/${prdlst_report_no}/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCookie('csrftoken'),
             'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({ imported_mode: imported_mode })
     })
     .then(response => response.json())
     .then(data => {
