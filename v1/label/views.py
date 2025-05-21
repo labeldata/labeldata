@@ -266,8 +266,6 @@ def save_to_my_label(request, prdlst_report_no):
         imported_mode = to_bool(data.get("imported_mode", False))
         confirm_flag = data.get("confirm", False)
 
-        print(imported_mode)
-
         if imported_mode:
             imported_item = ImportedFood.objects.filter(pk=prdlst_report_no).first()
             if not imported_item:
@@ -558,8 +556,6 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
         food_item = None
         imported_item = None
 
-        print(imported_mode)
-
         if imported_mode:
             imported_item = ImportedFood.objects.filter(pk=prdlst_report_no).first()
             if not imported_item:
@@ -825,7 +821,8 @@ def my_ingredient_list(request):
         'ingredient_display_name': 'ingredient_display_name',
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
+    # 기존: search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
+    search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
@@ -866,7 +863,8 @@ def my_ingredient_list_combined(request):
         'ingredient_display_name': 'ingredient_display_name',
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
+    # 기존: search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
+    search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
 
     # 식품구분(카테고리) 검색 지원
     food_category = request.GET.get('food_category', '').strip()
@@ -1081,7 +1079,8 @@ def search_ingredient_add_row(request):
         manufacturer = data.get('manufacturer', '').strip()
         food_category = data.get('food_category', '').strip()
         
-        qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
+        # 기존: qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
+        qs = MyIngredient.objects.filter(delete_YN='N').filter(Q(user_id=request.user) | Q(user_id__isnull=True))
         if name:
             qs = qs.filter(prdlst_nm__icontains=name)
         if report:
@@ -1868,7 +1867,8 @@ def my_ingredient_table_partial(request):
         'ingredient_display_name': 'ingredient_display_name',
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
+    # 기존: search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
+    search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)

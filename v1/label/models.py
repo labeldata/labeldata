@@ -73,7 +73,15 @@ class MyPhrase(models.Model):
     
 class MyIngredient(models.Model):
     # 내 원료 저장 모델
-    user_id = models.ForeignKey(User, related_name="user_ingredient", on_delete=models.CASCADE, db_column="user_id", verbose_name="사용자 id")
+    user_id = models.ForeignKey(
+        User,
+        related_name="user_ingredient",
+        on_delete=models.CASCADE,
+        db_column="user_id",
+        verbose_name="사용자 id",
+        null=True,    # 추가
+        blank=True    # 추가
+    )
 
     #id = 자동생성
     my_ingredient_id = models.AutoField(primary_key=True)

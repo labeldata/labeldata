@@ -61,8 +61,8 @@ function updateSummarySection() {
         const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
         const foodCategory = row.querySelector('.food-category-input')?.dataset.foodCategory || '';
         const displayNameRaw = row.querySelector('.display-name-input')?.value.trim() || ingredientName;
-        const foodType = row.querySelector('.food-type-select')?.value.trim() ||
-            row.querySelector('.form-control[readonly].modal-readonly-field:not(.ingredient-name-input):not(.display-name-input)')?.value.trim() || '';
+        // 정확히 식품유형만 가져오도록 수정
+        const foodType = row.querySelector('td:nth-child(6) input, .food-type-input')?.value.trim() || '';
         const ratioStr = row.querySelector('.ratio-input')?.value.trim();
         const ratio = parseFloat(ratioStr);
 
@@ -75,13 +75,11 @@ function updateSummarySection() {
             }
         }
 
-        // 1. 식품첨가물: 안내문구 제외한 표시명 그대로
         if (foodCategory === 'additive') {
             summaryDisplayNames.push(displayName);
             return;
         }
 
-        // 2. 농수산물: 식품유형만 표시, 5% 이상이면 식품유형[원재료 표시명 최대 5개]
         if (foodCategory === 'agricultural') {
             if (ratioStr && !isNaN(ratio) && ratio >= 5) {
                 // 대괄호 안에 표시명 5개까지, 괄호 안 쉼표는 제외
@@ -121,13 +119,11 @@ function updateSummarySection() {
             return;
         }
 
-        // 3. 정제수: 식품유형만 표시
         if (foodCategory === '정제수') {
             summaryDisplayNames.push(foodType || displayName);
             return;
         }
 
-        // 4. 나머지(가공식품 등): 식품유형만 표시, 5% 이상이면 식품유형[원재료 표시명 최대 5개]
         if (ratioStr && !isNaN(ratio) && ratio >= 5) {
             let items = [];
             let count = 0;
@@ -165,7 +161,7 @@ function updateSummarySection() {
     });
 
     document.getElementById('summary-display-names').textContent = summaryDisplayNames.length > 0 ? summaryDisplayNames.join(', ') : '없음';
-    
+
     // 중복 제거를 위한 Set 사용
     const allergensSet = new Set();
     const shellfishCollected = new Set();
@@ -680,7 +676,7 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
         <td><input type="text" value="${escapeHtml(ingredient.ingredient_name || '')}" class="form-control form-control-sm ingredient-name-input modal-readonly-field" readonly></td>
         <td><input type="text" value="${escapeHtml(ingredient.ratio || '')}" class="form-control form-control-sm ratio-input"></td>
         <td><input type="text" value="${escapeHtml(foodCategoryDisplay)}" data-food-category="${escapeHtml(foodCategory)}" class="form-control form-control-sm food-category-input modal-readonly-field" readonly></td>
-        <td><input type="text" value="${escapeHtml(ingredient.food_type || '')}" class="form-control form-control-sm modal-readonly-field" readonly></td>
+        <td><input type="text" value="${escapeHtml(ingredient.food_type || '')}" class="form-control form-control-sm food-type-input modal-readonly-field" readonly></td>
         <td><textarea class="form-control form-control-sm display-name-input modal-readonly-field" readonly>${escapeHtml(ingredient.display_name || ingredient.ingredient_name || '')}</textarea></td>
         <td>
             <input type="hidden" class="allergen-input" value="${escapeHtml(ingredient.allergen || '')}">
