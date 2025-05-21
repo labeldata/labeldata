@@ -19,17 +19,17 @@
       <div class="row">
         <!-- 국내제품 조회 -->
         <div class="col-md-4">
-          <a href="{% url 'label:food_item_list' %}">
+          <a href="{% url 'label:food_item_list' %}?food_category=domestic">
             <div class="info-box">
               <h3 class="info-header">국내제품</h3>
               <div class="registration-info">
                 <div class="info-line">
                    <span id="domesticTotal" class="number">-</span> 
-                   <span class="label">건(누적)</span>
+                   <span class="label">(누적)</span>
                 </div>
                 <div class="info-line"> 
                    <span id="domesticNew" class="number">-</span> 
-                   <span class="label">건(최근 1주일)</span>
+                   <span class="label">(최근 1주일)</span>
                 </div>
               </div>
             </div>
@@ -37,17 +37,17 @@
         </div>
         <!-- 수입제품(표시사항) -->
         <div class="col-md-4">
-          <a href="{% url 'label:my_label_list' %}">
+          <a href="{% url 'label:food_item_list' %}?food_category=imported">
             <div class="info-box">
               <h3 class="info-header">수입제품</h3>
               <div class="registration-info">
                 <div class="info-line">
                    <span id="importedTotal" class="number">-</span> 
-                   <span class="label">건(누적)</span>
+                   <span class="label">(누적)</span>
                 </div>
                 <div class="info-line">
                   <span id="importedNew" class="number">-</span> 
-                  <span class="label">건(최근 1주일)</span>
+                  <span class="label">(최근 1주일)</span>
                </div>
               </div>
             </div>
@@ -62,11 +62,11 @@
               <div class="registration-info">
                 <div class="info-line">
                    <span id="actionTotal" class="number">-</span> 
-                   <span class="label">건(누적)</span>
+                   <span class="label">(누적)</span>
                 </div>
                 <div class="info-line">
                   <span id="actionTotal" class="number">-</span> 
-                  <span class="label">건(신규)</span>
+                  <span class="label">(최근 1주일)</span>
                </div>
               </div>
             </div>

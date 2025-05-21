@@ -6,9 +6,8 @@
         <div style="min-width:110px;max-width:120px;flex:0 0 120px;">
           <select name="food_category" id="foodCategorySelect" class="form-select" style="font-size: 0.8rem;"
             onchange="this.form.submit()">
-            <option value="processed" {% if food_category == "processed" %}selected{% endif %}>가공식품</option>
-            <option value="additive" {% if food_category == "additive" %}selected{% endif %}>식품첨가물</option>
-            <option value="imported" {% if food_category == "imported" %}selected{% endif %}>수입식품</option>
+            <option value="domestic" {% if food_category == "domestic" %}selected{% endif %}>국내제품</option>
+            <option value="imported" {% if food_category == "imported" %}selected{% endif %}>수입제품</option>
           </select>
         </div>
         {% if food_category == "imported" %}

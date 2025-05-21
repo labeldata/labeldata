@@ -82,18 +82,18 @@ def to_bool(val):
 
 @login_required
 def food_item_list(request):
-    food_category = request.GET.get("food_category", "processed")
-    # 기본 검색 필드
+    # 국내제품/수입제품 구분
+    food_category = request.GET.get("food_category", "domestic")
+    # 검색 필드
     search_fields = {
         "prdlst_nm": "prdlst_nm",
         "bssh_nm": "bssh_nm",
         "prdlst_dcnm": "prdlst_dcnm",
         "pog_daycnt": "pog_daycnt",
         "prdlst_report_no": "prdlst_report_no",
-        "frmlc_mtrqlt": "frmlc_mtrqlt",   # 포장재질
-        "rawmtrl_nm": "rawmtrl_nm",       # 원재료명
+        "frmlc_mtrqlt": "frmlc_mtrqlt",
+        "rawmtrl_nm": "rawmtrl_nm",
     }
-    # 수입식품은 포장재질 제외, 원재료명 포함
     imported_search_fields = {
         "prduct_korean_nm": "prdlst_nm",
         "itm_nm": "prdlst_dcnm",
@@ -101,8 +101,7 @@ def food_item_list(request):
         "bsn_ofc_name": "bsn_ofc_name",
         "ovsmnfst_nm": "bssh_nm",
         "expirde_dtm": "pog_daycnt",
-        "rawmtrl_nm": "rawmtrl_nm",  # 원재료명
-        # "frmlc_mtrqlt": "frmlc_mtrqlt",  # 제외
+        "rawmtrl_nm": "rawmtrl_nm",
     }
     sort_field, sort_order = process_sorting(request, "prdlst_nm")
     items_per_page = int(request.GET.get("items_per_page", 10))
@@ -110,16 +109,10 @@ def food_item_list(request):
 
     imported_mode = False
     imported_items = []
-    if food_category == "additive":
-        # 가공식품/첨가물: 포장재질, 원재료명 포함
-        search_conditions, search_values = get_search_conditions(request, search_fields)
-        search_conditions &= Q(induty_cd_nm="식품첨가물제조업")
-        food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
-    elif food_category == "imported":
+    if food_category == "imported":
         imported_mode = True
         imported_conditions = Q()
         imported_search_values = {}
-        # 수입식품: 포장재질 제외, 원재료명 포함
         for model_field, query_param in imported_search_fields.items():
             value = request.GET.get(query_param, "").strip()
             if value:
@@ -129,12 +122,9 @@ def food_item_list(request):
         paginator, page_obj, page_range = paginate_queryset(imported_items, page_number, items_per_page)
         search_values = imported_search_values
     else:
-        # 가공식품: 포장재질, 원재료명 포함
+        # 국내제품: FoodItem 전체 (가공식품/첨가물 구분 없이)
         search_conditions, search_values = get_search_conditions(request, search_fields)
-        search_conditions &= ~Q(induty_cd_nm="식품첨가물제조업")
         food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
-
-    if not imported_mode:
         paginator, page_obj, page_range = paginate_queryset(food_items, page_number, items_per_page)
 
     querystring_without_page = get_querystring_without(request, ["page"])
@@ -919,7 +909,9 @@ def my_ingredient_detail(request, ingredient_id=None):
     # POST일 때 my_ingredient_id 우선 활용
     my_ingredient_id = request.POST.get('my_ingredient_id') or ingredient_id
     if my_ingredient_id:
-        ingredient = get_object_or_404(MyIngredient, my_ingredient_id=my_ingredient_id, user_id=request.user)
+        # user_id는 request.user 또는 None도 허용 (공용 원료 지원)
+        ingredient = get_object_or_404(MyIngredient, my_ingredient_id=my_ingredient_id)
+        # 기존: user_id=request.user
         mode = 'edit'
     else:
         ingredient = MyIngredient(user_id=request.user, delete_YN='N')
@@ -931,9 +923,10 @@ def my_ingredient_detail(request, ingredient_id=None):
             new_ingredient = form.save(commit=False)
             new_ingredient.user_id = request.user
             new_ingredient.save()
+            # AJAX 요청 시 ingredient_id 항상 반환
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({
-                    'success': True, 
+                    'success': True,
                     'message': '내 원료가 성공적으로 저장되었습니다.',
                     'ingredient_id': new_ingredient.my_ingredient_id
                 })
@@ -941,8 +934,9 @@ def my_ingredient_detail(request, ingredient_id=None):
             return redirect('label:my_ingredient_detail', ingredient_id=new_ingredient.my_ingredient_id)
         else:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                # 폼 에러를 문자열로 반환
                 errors = {field: str(error) for field, error in form.errors.items()}
-                return JsonResponse({'success': False, 'errors': errors})
+                return JsonResponse({'success': False, 'errors': errors, 'message': '입력값 오류'})
     else:
         form = MyIngredientsForm(instance=ingredient)
 
@@ -953,7 +947,6 @@ def my_ingredient_detail(request, ingredient_id=None):
         'food_types': list(FoodType.objects.all().values('food_type')),
         'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
         'food_additives': list(FoodAdditive.objects.all().values('name_kr')),
-
     }
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -1688,7 +1681,7 @@ def preview_popup(request):
                 ('trans_fats', '트랜스지방', 'g'),
                 ('saturated_fats', '포화지방', 'g'),
                 ('cholesterols', '콜레스테롤', 'mg'),
-                ('proteins', '단백질', 'g')
+                               ('proteins', '단백질', 'g')
             ]
             
             for field, label_text, unit in nutrition_fields:
