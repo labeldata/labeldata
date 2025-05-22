@@ -23,11 +23,6 @@
             align-items: center;
             margin-bottom: 10px;
         }
-        .popup-title {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #495057;
-        }
         .action-buttons {
             display: flex;
             gap: 10px;
@@ -265,11 +260,16 @@
 
     <!-- 상단 툴바 -->
     <div class="popup-header">
-        <div class="popup-title">원재료 상세 정보</div>
+        <div class="popup-title">
+            원재료 상세 정보
+            <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="linkedLabelsBtn">
+                연결된 원료(00품목) 조회
+            </button>
+        </div>
         <div class="action-buttons">
-            <button type="button" class="btn btn-primary btn-sm" onclick="saveIngredients()">저장</button>
             <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#ingredientSearchModal">추가</button>
             <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSelectedRows()">삭제</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="saveIngredients()">저장</button>
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
         </div>
     </div>

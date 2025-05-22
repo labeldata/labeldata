@@ -115,8 +115,13 @@ document.addEventListener("DOMContentLoaded", function(){
 </script>
 <style>
 /* 100만건 이상일 때 숫자 크기 줄이기 */
+.number {
+  font-size: clamp(1.2rem, 2.5vw, 2.5rem);
+  font-weight: bold;
+  transition: font-size 0.2s;
+}
 .number-small {
-  font-size: 1.2em !important;
+  font-size: clamp(1rem, 2vw, 1.5rem) !important;
   letter-spacing: -1px;
 }
 </style>

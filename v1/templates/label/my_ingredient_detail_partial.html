@@ -1,10 +1,15 @@
 {% load static %}
 <div class="popup-container" id="ingredient-detail-container-partial">
     <div class="panel-header">
-        <h5 class="panel-title">원료 수정</h5>
+        <h5 class="panel-title">
+            원료 수정
+            <button type="button" class="btn btn-outline-cancel btn-sm ms-2" id="linkedLabelsBtn">
+                연결된 표시사항(00품목) 조회
+            </button>
+        </h5>
         <div class="panel-actions">
             <button type="submit" form="ingredientForm" class="btn btn-outline-primary btn-sm">저장</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="closeBtn">초기화</button>
+            <button type="button" class="btn btn-outline-cancel btn-sm" id="closeBtn">초기화</button>
             {% if mode == 'edit' %}<button type="button" class="btn btn-outline-danger btn-sm" id="deleteBtn">삭제</button>{% endif %}
         </div>
     </div>
@@ -54,7 +59,7 @@
                                        placeholder="알레르기 선택"
                                        value="{{ ingredient.allergens|default:'' }}"
                                        readonly>
-                                <button type="button" class="btn btn-outline-secondary" id="allergyToggleButton" onclick="toggleAllergySelection()">
+                                <button type="button" class="btn btn-outline-cancel" id="allergyToggleButton" onclick="toggleAllergySelection()">
                                     선택
                                 </button>
                             </div>
@@ -75,7 +80,7 @@
                                        placeholder="GMO 선택"
                                        value="{{ ingredient.gmo|default:'' }}"
                                        readonly>
-                                <button type="button" class="btn btn-outline-secondary" id="gmoToggleButton" onclick="toggleGmoSelection()">
+                                <button type="button" class="btn btn-outline-cancel" id="gmoToggleButton" onclick="toggleGmoSelection()">
                                     선택
                                 </button>
                             </div>

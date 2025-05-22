@@ -4,7 +4,7 @@
     --secondary-color: #6c757d;
     --text-color: #343a40;
     --btn-color: #2667ff;
-    --btn-secondary-color: #1e96fc;
+    --btn-secondary-color: #1e96fc; /* 하늘색! */
     --btn-cancel-color: #6c757d;
     --navbar-bg-color: #023047;
     --highlight-color: #caf0f8;
@@ -247,6 +247,17 @@ body {
 }
 .btn-outline-danger:hover {
     background-color: #dc3545;
+    color: #fff;
+}
+/* 취소(중립) 아웃라인 버튼 스타일 */
+.btn-outline-cancel {
+    color: var(--btn-cancel-color);
+    border-color: var(--btn-cancel-color);
+    background-color: transparent;
+}
+.btn-outline-cancel:hover,
+.btn-outline-cancel:focus {
+    background-color: var(--btn-cancel-color);
     color: #fff;
 }
 /* 아이콘 버튼 스타일 */

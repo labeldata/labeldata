@@ -282,7 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // ------------------ 식품유형 요약 업데이트 ------------------
+  // ------------------ 식품유형 요약 업데이트 (적용 버튼에서만 동작) ------------------
   function updateSummary() {
     const summaries = [];
     const foodSmall = $('#food_type option:selected').text();
@@ -330,7 +330,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const summaryText = '식품유형 : ' + (summaries.length ? summaries.join(' | ') : '');
-    $('#selected-info').text(summaryText);
+    // 적용 버튼 시에만 summary-step1에 표시
+    $('#summary-step1').text(summaryText).attr('title', summaryText);
   }
 
   // ------------------ 토글 버튼 초기화 ------------------
@@ -858,4 +859,38 @@ document.addEventListener('DOMContentLoaded', function () {
 
     updateSummary();
   });
+
+  function step1Apply() {
+    // 적용 버튼 클릭 시에만 요약 표시
+    updateSummary();
+    document.getElementById('step1-body').style.display = 'none';
+    document.getElementById('applyStep1Btn').style.display = 'none';
+    document.getElementById('expandStep1Btn').style.display = '';
+  }
+
+  function step1Expand() {
+    document.getElementById('step1-body').style.display = '';
+    document.getElementById('applyStep1Btn').style.display = '';
+    document.getElementById('expandStep1Btn').style.display = 'none';
+    // 펼치기 시 요약 숨김
+    const summaryEl = document.getElementById('summary-step1');
+    summaryEl.innerText = '';
+    summaryEl.title = '';
+  }
+
+  // Step1 적용/펼치기 버튼 이벤트 바인딩
+  const applyBtn = document.getElementById('applyStep1Btn');
+  const expandBtn = document.getElementById('expandStep1Btn');
+  if (applyBtn) applyBtn.onclick = step1Apply;
+  if (expandBtn) expandBtn.onclick = step1Expand;
+
+  // 최초 로드시 step1-body는 펼쳐짐, 요약은 빈 값
+  document.getElementById('step1-body').style.display = '';
+  document.getElementById('applyStep1Btn').style.display = '';
+  document.getElementById('expandStep1Btn').style.display = 'none';
+  const summaryEl = document.getElementById('summary-step1');
+  if (summaryEl) {
+    summaryEl.innerText = '';
+    summaryEl.title = '';
+  }
 });
