@@ -24,10 +24,14 @@ function deleteMyIngredient() {
     .then(data => {
         if (data.success) {
             alert('내 원료가 성공적으로 삭제되었습니다.');
+            // 부모창 새로고침
             if (window.opener) {
                 window.opener.location.reload();
+            } else if (window.parent && window.parent !== window) {
+                window.parent.location.reload();
             }
-            window.close();
+            // 현재창 새로고침
+            window.location.reload();
         } else {
             alert(data.error || '삭제에 실패했습니다.');
         }
@@ -35,6 +39,43 @@ function deleteMyIngredient() {
     .catch(error => {
         console.error('Error:', error);
         alert('삭제 중 오류가 발생했습니다.');
+    });
+}
+
+// 삭제 버튼 클릭 이벤트 핸들러 (partial에서 사용)
+function handleDeleteIngredientPartial(ingredientId) {
+    if (!ingredientId) {
+        alert('삭제할 원료 ID가 없습니다.');
+        return;
+    }
+    if (!confirm('정말로 이 원료를 삭제하시겠습니까?')) {
+        return;
+    }
+    fetch(`/label/delete-my-ingredient/${ingredientId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // 부모창 새로고침
+            if (window.opener) {
+                window.opener.location.reload();
+            } else if (window.parent && window.parent !== window) {
+                window.parent.location.reload();
+            }
+            // 현재 partial 창 새로고침
+            window.location.reload();
+        } else {
+            alert(data.error || '삭제에 실패했습니다.');
+        }
+    })
+    .catch(err => {
+        alert('삭제 중 오류가 발생했습니다.');
+        console.error(err);
     });
 }
 
@@ -107,7 +148,7 @@ function saveMyIngredient() {
     });
 }
 
-// 쿠키에서 CSRF 토큰 가져오기
+// CSRF 토큰 가져오기 유틸
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
