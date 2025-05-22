@@ -102,3 +102,16 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="{% static 'js/label/my_ingredient_detail_partial.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script>
+// 원료 상세 데이터 최초 로드시 window.originalIngredientData에 값 저장 (JSON 안전하게)
+window.originalIngredientData = {
+    prdlst_nm: "{{ ingredient.prdlst_nm|default:''|escapejs }}",
+    prdlst_report_no: "{{ ingredient.prdlst_report_no|default:''|escapejs }}",
+    food_category: "{{ ingredient.food_category|default:''|escapejs }}",
+    prdlst_dcnm: "{{ ingredient.prdlst_dcnm|default:''|escapejs }}",
+    bssh_nm: "{{ ingredient.bssh_nm|default:''|escapejs }}",
+    ingredient_display_name: `{{ ingredient.ingredient_display_name|default:''|escapejs }}`,
+    allergens: "{{ ingredient.allergens|default:''|escapejs }}",
+    gmo: "{{ ingredient.gmo|default:''|escapejs }}"
+};
+</script>

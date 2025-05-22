@@ -159,15 +159,28 @@ def my_label_list(request):
         "storage_method": "storage_method",
         "frmlc_mtrqlt": "frmlc_mtrqlt",
         "pog_daycnt": "pog_daycnt",  # 소비기한 검색 추가
-        # "allergens": "allergens",  # 완전 삭제
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    # 알레르기 검색 관련 코드 완전 삭제
     sort_field, sort_order = process_sorting(request, "my_label_name")
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
 
-    labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by(sort_field)
+    # ingredient_id 파라미터가 있으면 해당 원료와 연결된 표시사항만 필터링
+    ingredient_id = request.GET.get("ingredient_id")
+    ingredient_name = None
+    if ingredient_id:
+        # LabelIngredientRelation에서 해당 ingredient_id와 연결된 label id만 추출
+        linked_label_ids = LabelIngredientRelation.objects.filter(ingredient_id=ingredient_id).values_list("label_id", flat=True)
+        labels = MyLabel.objects.filter(user_id=request.user, my_label_id__in=linked_label_ids).filter(search_conditions).order_by(sort_field)
+        # 원재료명 조회 (존재하지 않을 수도 있으니 예외처리)
+        try:
+            ingredient_obj = MyIngredient.objects.get(my_ingredient_id=ingredient_id)
+            ingredient_name = ingredient_obj.prdlst_nm or ingredient_obj.ingredient_display_name or ingredient_id
+        except MyIngredient.DoesNotExist:
+            ingredient_name = ingredient_id
+    else:
+        labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by(sort_field)
+
     paginator, page_obj, page_range = paginate_queryset(labels, page_number, items_per_page)
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
 
@@ -189,6 +202,8 @@ def my_label_list(request):
         "sort_field": sort_field,
         "sort_order": sort_order,
         "querystring_without_sort": querystring_without_sort,
+        "ingredient_id": ingredient_id,  # 템플릿에서 안내문구 표시용
+        "ingredient_name": ingredient_name,  # 템플릿에서 원재료명 표시용
     }
 
     return render(request, "label/my_label_list.html", context)
@@ -1907,3 +1922,12 @@ def imported_food_count(request):
     ).count()
     # 쉼표 없는 정수로 반환
     return JsonResponse({'total': total, 'new': new_count})
+
+@login_required
+@csrf_exempt
+def linked_labels_count(request, ingredient_id):
+    """
+    특정 내원료(ingredient_id)와 연결된 표시사항(LabelIngredientRelation) 개수 반환
+    """
+    count = LabelIngredientRelation.objects.filter(ingredient_id=ingredient_id).count()
+    return JsonResponse({'count': count})

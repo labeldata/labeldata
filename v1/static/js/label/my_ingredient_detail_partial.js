@@ -92,6 +92,25 @@ function saveMyIngredient() {
         url = '/label/my-ingredient-detail/';
     }
 
+    // 변경 감지: 기존 값과 formData 비교 (간단 예시, 실제로는 더 정교하게 구현 가능)
+    let isChanged = false;
+    if (my_ingredient_id) {
+        // 기존 값과 input 값 비교 (예: 원재료명, 제조사명 등)
+        const original = window.originalIngredientData || {};
+        if (
+            original.prdlst_nm !== formData.get('prdlst_nm') ||
+            original.prdlst_report_no !== formData.get('prdlst_report_no') ||
+            original.food_category !== formData.get('food_category') ||
+            original.prdlst_dcnm !== formData.get('prdlst_dcnm') ||
+            original.bssh_nm !== formData.get('bssh_nm') ||
+            original.ingredient_display_name !== formData.get('ingredient_display_name') ||
+            original.allergens !== formData.get('allergens') ||
+            original.gmo !== formData.get('gmo')
+        ) {
+            isChanged = true;
+        }
+    }
+
     // 검색 조건 쿼리스트링 추출 (ingredientTable이 있는 페이지에서만 동작)
     let queryString = '';
     const searchForm = document.querySelector('form[action*="my_ingredient_list_combined"]');
@@ -104,6 +123,25 @@ function saveMyIngredient() {
         if (qs) queryString = qs;
     }
 
+    // 연결된 표시사항 개수 확인 및 모달 표시
+    if (my_ingredient_id && isChanged) {
+        fetch(`/label/linked-labels-count/${my_ingredient_id}/`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.count > 0) {
+                showLinkedLabelsModal(data.count, function() {
+                    doSaveMyIngredient(url, formData, queryString);
+                });
+            } else {
+                doSaveMyIngredient(url, formData, queryString);
+            }
+        });
+    } else {
+        doSaveMyIngredient(url, formData, queryString);
+    }
+}
+
+function doSaveMyIngredient(url, formData, queryString) {
     fetch(url, {
         method: 'POST',
         body: formData,
@@ -144,7 +182,54 @@ function saveMyIngredient() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('저장 중 오류가 발생했습니다.');
+        alert('저장 중 오류가 발생했습니다.1');
+    });
+}
+
+function showLinkedLabelsModal(count, onConfirm) {
+    // 기존 모달이 있으면 제거
+    const oldModal = document.getElementById('linkedLabelsModal');
+    if (oldModal) oldModal.remove();
+    // 모달 생성 및 표시
+    const modalHtml = `
+    <div class="modal fade" id="linkedLabelsModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header"><h5 class="modal-title">연결된 표시사항 확인</h5></div>
+          <div class="modal-body">
+            <p>${count}개의 연결된 표시사항이 있습니다.<br>저장하시겠습니까?</p>
+          </div>
+          <div class="modal-footer justify-content-between">
+            <div>
+              <button type="button" class="btn btn-outline-secondary" id="linkedLabelsListBtn">리스트보기</button>
+            </div>
+            <div>
+              <button type="button" class="btn btn-primary" id="linkedLabelsYesBtn">예</button>
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">아니오</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById('linkedLabelsModal'));
+    modal.show();
+    document.getElementById('linkedLabelsListBtn').onclick = function() {
+        // 현재 원료 id를 가져와서 쿼리스트링에 추가
+        const my_ingredient_id = document.getElementById('my_ingredient_id')?.value;
+        if (my_ingredient_id) {
+            window.location.href = '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
+        } else {
+            window.location.href = '/label/my-labels/';
+        }
+    };
+    document.getElementById('linkedLabelsYesBtn').onclick = function() {
+        modal.hide();
+        onConfirm();
+        document.getElementById('linkedLabelsModal').remove();
+    };
+    document.getElementById('linkedLabelsModal').addEventListener('hidden.bs.modal', function() {
+        document.getElementById('linkedLabelsModal').remove();
     });
 }
 

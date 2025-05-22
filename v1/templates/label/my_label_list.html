@@ -13,7 +13,14 @@
         <button type="button" class="btn btn-outline-danger btn-sm" onclick="bulkDelete()">삭제</button>
       </div>
     </div>
-    
+    {% if ingredient_id %}
+    <div class="alert alert-info d-flex justify-content-between align-items-center" style="margin-bottom: 16px;">
+      <div>
+        <b>원재료명: {{ ingredient_name }}</b>와(과) 연결된 표시사항만 표시 중입니다.
+      </div>
+      <a href="/label/my-labels/" class="btn btn-outline-secondary btn-sm">전체 목록 보기</a>
+    </div>
+    {% endif %}
     {% include 'includes/search_filter.html' with action_url='label:my_label_list' page_type='label' search_values=search_values items_per_page=items_per_page %}
 
     <div class="table-responsive">

@@ -54,4 +54,7 @@ urlpatterns = [
 
     # 수입식품 개수 조회
     path('imported_food_count/', views.imported_food_count, name='imported_food_count'),
+
+    # linked_labels_count API
+    path('linked-labels-count/<int:ingredient_id>/', views.linked_labels_count, name='linked_labels_count'),
 ]

@@ -130,6 +130,7 @@ function showUnsavedChangesModal() {
               <p>변경사항이 있습니다.<br>저장하지 않고 이동하겠습니까?</p>
             </div>
             <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" id="unsaved-list-btn">리스트보기</button>
               <button type="button" class="btn btn-secondary" id="unsaved-discard-btn" data-bs-dismiss="modal">이동하기</button>
               <button type="button" class="btn btn-light" data-bs-dismiss="modal">유지하기</button>
             </div>
@@ -138,6 +139,10 @@ function showUnsavedChangesModal() {
         `;
         document.body.appendChild(modal);
     }
+    // 리스트보기 버튼 이벤트
+    document.getElementById('unsaved-list-btn').onclick = function() {
+        window.location.href = '/label/my-ingredient-list/';
+    };
     // 저장 버튼 제거, 이동/돌아가기만 남김
     document.getElementById('unsaved-discard-btn').onclick = function() {
         setDetailDirty(false);
@@ -185,7 +190,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: formData,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
-            .then(res => res.json())
+            .then(res => {
+                if (res.headers.get('content-type') && res.headers.get('content-type').includes('application/json')) {
+                    return res.json();
+                } else {
+                    return { success: true };
+                }
+            })
             .then(data => {
                 if (data.success) {
                     setDetailDirty(false);
@@ -203,10 +214,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         pendingRowElement = null;
                     }
                 } else {
-                    alert(data.message || '저장 중 오류가 발생했습니다.');
+                    alert(data.message || '저장 중 오류가 발생했습니다.2');
                 }
             })
-            .catch(() => alert('저장 중 오류가 발생했습니다.'));
+            .catch(() => alert('저장 중 오류가 발생했습니다.3'));
         }
     }, true);
 });
