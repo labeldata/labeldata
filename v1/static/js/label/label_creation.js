@@ -875,14 +875,21 @@ document.addEventListener('DOMContentLoaded', function () {
       linkedBtn.onclick = function() {
         var labelId = document.getElementById('label_id')?.value;
         if (labelId) {
-          // 연결된 원료 개수 확인 후 이동 또는 얼럿
           fetch('/label/linked-ingredient-count/' + encodeURIComponent(labelId) + '/')
-            .then(res => res.json())
+            .then(res => {
+              if (!res.ok) throw new Error('Network response was not ok');
+              return res.json();
+            })
             .then(data => {
-              if (data.count && data.count > 0) {
-                window.location.href = '/label/my-ingredient-list-combined/?label_id=' + encodeURIComponent(labelId);
+              // count가 0이면 얼럿, 1 이상이면 이동
+              if (typeof data.count === 'number') {
+                if (data.count > 0) {
+                  window.location.href = '/label/my-ingredient-list-combined/?label_id=' + encodeURIComponent(labelId);
+                } else {
+                  alert('연결된 원료가 없습니다.');
+                }
               } else {
-                alert('연결된 원료가 없습니다.');
+                alert('연결된 원료 정보를 확인할 수 없습니다.');
               }
             })
             .catch(() => alert('연결된 원료 정보를 확인할 수 없습니다.'));

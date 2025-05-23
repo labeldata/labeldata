@@ -1951,3 +1951,7 @@ def linked_labels_count(request, ingredient_id):
     """
     count = LabelIngredientRelation.objects.filter(ingredient_id=ingredient_id).count()
     return JsonResponse({'count': count})
+
+def linked_ingredient_count(request, label_id):
+    count = LabelIngredientRelation.objects.filter(label_id=label_id).count()
+    return JsonResponse({'count': count})
