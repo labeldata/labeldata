@@ -435,12 +435,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const foodType = $('#food_type');
     const hiddenFoodGroup = $('#hidden_food_group');
     const hiddenFoodType = $('#hidden_food_type');
-  
+    let pendingFoodType = null; // 적용 대기 중인 소분류 값
+
     function updateHiddenFields() {
       hiddenFoodGroup.val(foodGroup.val());
       hiddenFoodType.val(foodType.val());
     }
-  
+
     function updateFoodTypes(group, currentType) {
       foodType.empty().append('<option value="">소분류</option>');
       // 대분류가 비어있어도 전체 식품유형 데이터를 불러옴
@@ -459,14 +460,15 @@ document.addEventListener('DOMContentLoaded', function () {
           }
         });
     }
-  
+
     foodGroup.on('change', function () {
       const group = this.value;
       updateHiddenFields();
       updateFoodTypes(group, foodType.val());
       updateSummary();
     });
-  
+
+    // 소분류 변경 시 체크박스 즉시 변경 X, pendingFoodType에만 저장
     foodType.on('change', function () {
       const selectedOption = this.options[this.selectedIndex];
       const foodTypeValue = selectedOption?.value;
@@ -487,12 +489,14 @@ document.addEventListener('DOMContentLoaded', function () {
               }
             });
         }
-        // 강제 업데이트 플래그를 직접 함수에 전달
-        updateCheckboxesByFoodType(foodTypeValue);
+        // updateCheckboxesByFoodType(foodTypeValue); // 즉시 호출 제거
+        pendingFoodType = foodTypeValue; // 적용 대기
+      } else {
+        pendingFoodType = null;
       }
       updateSummary();
     });
-  
+
     updateHiddenFields();
     const initialFoodType = foodType.val();
     const initialFoodGroup = foodGroup.val();
@@ -506,6 +510,7 @@ document.addEventListener('DOMContentLoaded', function () {
           window.checkboxesLoadedFromDB = true;
         }
         updateCheckboxesByFoodType(initialFoodType);
+        pendingFoodType = initialFoodType;
       } else {
         fetch(`/label/get-food-group/?food_type=${encodeURIComponent(initialFoodType)}`)
           .then(response => response.json())
@@ -514,12 +519,20 @@ document.addEventListener('DOMContentLoaded', function () {
               foodGroup.val(data.food_group).trigger('change.select2');
               hiddenFoodGroup.val(data.food_group);
               updateCheckboxesByFoodType(initialFoodType);
+              pendingFoodType = initialFoodType;
             }
           });
       }
     } else {
       updateFoodTypes('', initialFoodType);
     }
+
+    // step1 적용 버튼에서만 체크박스 반영
+    window.applyStep1FoodType = function() {
+      if (pendingFoodType) {
+        updateCheckboxesByFoodType(pendingFoodType);
+      }
+    };
   }
 
   function updateDateDropdown(value) {
@@ -872,16 +885,16 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('step1-body').style.display = '';
     document.getElementById('applyStep1Btn').style.display = '';
     document.getElementById('expandStep1Btn').style.display = 'none';
-    // 펼치기 시 요약 숨김
-    const summaryEl = document.getElementById('summary-step1');
-    summaryEl.innerText = '';
-    summaryEl.title = '';
+    // 펼치기 시 요약 숨김 코드 제거 (summary-step1 텍스트를 지우지 않음)
   }
 
   // Step1 적용/펼치기 버튼 이벤트 바인딩
   const applyBtn = document.getElementById('applyStep1Btn');
   const expandBtn = document.getElementById('expandStep1Btn');
-  if (applyBtn) applyBtn.onclick = step1Apply;
+  if (applyBtn) applyBtn.onclick = function() {
+    if (typeof window.applyStep1FoodType === 'function') window.applyStep1FoodType();
+    step1Apply();
+  };
   if (expandBtn) expandBtn.onclick = step1Expand;
 
   // 최초 로드시 step1-body는 펼쳐짐, 요약은 빈 값
