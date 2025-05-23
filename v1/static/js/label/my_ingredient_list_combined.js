@@ -173,12 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('newIngredientBtn').addEventListener('click', loadNewIngredientForm);
 
     // 좌측 행 클릭 이벤트 바인딩
-    document.querySelectorAll('.ingredient-row').forEach(row => {
-        row.onclick = function() {
-            const ingredientId = this.getAttribute('data-ingredient-id');
-            handleIngredientRowClick(ingredientId, this);
-        };
-    });
+    bindIngredientRowClickEvents();
 
     // 우측 패널 폼이 동적으로 로드될 때마다 AJAX 저장 이벤트 바인딩
     document.body.addEventListener('submit', function(e) {
@@ -223,5 +218,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }, true);
 });
 
+// 좌측 행 클릭 이벤트 바인딩 함수 (AJAX로 리스트 갱신 시에도 사용)
+function bindIngredientRowClickEvents() {
+    document.querySelectorAll('.ingredient-row').forEach(row => {
+        row.onclick = function() {
+            const ingredientId = this.getAttribute('data-ingredient-id');
+            handleIngredientRowClick(ingredientId, this);
+        };
+    });
+}
+
 // my_ingredient_detail_partial.html에서 사용할 수 있도록 전역에 노출
 window.loadNewIngredientForm = loadNewIngredientForm;
+window.bindIngredientRowClickEvents = bindIngredientRowClickEvents;

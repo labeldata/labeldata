@@ -154,6 +154,10 @@ function doSaveMyIngredient(url, formData, queryString) {
                     const tbody = document.querySelector('#ingredientTable tbody');
                     if (tbody) {
                         tbody.innerHTML = tableHtml;
+                        // 리스트 갱신 후 클릭 이벤트 재바인딩
+                        if (typeof window.bindIngredientRowClickEvents === 'function') {
+                            window.bindIngredientRowClickEvents();
+                        }
                         if (data.ingredient_id) {
                             const newRow = document.querySelector(`.ingredient-row[data-ingredient-id='${data.ingredient_id}']`);
                             if (newRow) {
@@ -162,6 +166,8 @@ function doSaveMyIngredient(url, formData, queryString) {
                         }
                     }
                 });
+            // 저장 성공 후 변경 감지 플래그 해제
+            if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
         } else {
             alert(data.error || '저장에 실패했습니다.');
         }
@@ -331,6 +337,10 @@ function onReady(fn) {
 }
 
 onReady(function() {
+    // window.setDetailDirty를 항상 전역에 노출 (dirty 감지 정상화)
+    if (typeof window.setDetailDirty !== 'function' && typeof setDetailDirty === 'function') {
+        window.setDetailDirty = setDetailDirty;
+    }
     initFoodTypeSelect();
     setupFoodCategoryChangeEvent();
     initAllergyAndGmoOptions(); // 알레르기와 GMO 옵션 초기화
@@ -360,6 +370,8 @@ onReady(function() {
                 form.reset();
                 initFoodTypeSelect(); // 식품유형도 초기화
                 initAllergyAndGmoOptions();
+                // 초기화 후 변경 감지 플래그 해제
+                if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
             }
         });
     }
