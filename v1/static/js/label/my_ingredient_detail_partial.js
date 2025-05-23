@@ -213,10 +213,14 @@ function updateLinkedLabelsButton(my_ingredient_id) {
         .then(res => res.json())
         .then(data => {
             btn.innerHTML = `연결된 표시사항(<span id="linkedLabelsCount">${data.count}</span>품목) 조회`;
+            btn.onclick = function() {
+                if (data.count && data.count > 0) {
+                    window.location.href = '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
+                } else {
+                    alert('연결된 표시사항이 없습니다.');
+                }
+            };
         });
-    btn.onclick = function() {
-        window.location.href = '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
-    };
 }
 
 // CSRF 토큰 가져오기 유틸
