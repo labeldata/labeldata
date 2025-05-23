@@ -41,7 +41,7 @@
   <div class="card">
     <!-- Step1 헤더: 좌측(타이틀), 중앙(요약), 우측(버튼) -->
     <div class="card-header d-flex align-items-center" id="step1-summary-bar" style="gap: 1rem; flex-wrap:nowrap;">
-      <strong>Step1. 기본정보 설정</strong>
+      <strong>1. 기본정보 설정</strong>
       <!-- summary가 한줄로 이어지도록 flex-grow, min-width, overflow 스타일 강화 -->
       <span id="summary-step1"
             class="ms-2"
@@ -147,10 +147,10 @@
 <div class="container mt-4" id="step2-card">
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <strong>Step2. 상세 입력</strong>
+      <strong>2. 상세 입력</strong>
       <div class="d-flex align-items-center" style="gap: 8px;">
         <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="linkedLabelsBtn">
-                연결된 원료(00품목) 조회
+                연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
         </button>
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="openPhrasePopup()" title="내 문구 관리">
           내 문구 관리

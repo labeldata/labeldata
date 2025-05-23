@@ -98,12 +98,21 @@
 
 <div class="container-fluid custom-max-width mt-4">
     <!-- 상단 헤더/검색 필터 영역 -->
+    {% if label_id and label_name %}
+    <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <b>
+          <a href="/label/label-creation/{{ label_id }}/" style="text-decoration:underline; color:inherit;">
+            라벨명: {{ label_name }}
+          </a>
+        </b>과(와) 연결된 표시사항만 표시 중입니다.
+      </div>
+      <a href="/label/my-ingredient-list-combined/" class="btn btn-outline-secondary btn-sm">전체 원료 목록 보기</a>
+    </div>
+    {% endif %}
+
     <div class="d-flex justify-content-between align-items-center mb-4">
          <h2 class="mb-0">원료 조회 및 수정</h2>
-         <!-- 전체 페이지로 보기 버튼 제거 -->
-         <!-- <div>
-             <a href="{% url 'label:my_ingredient_list' %}" class="btn btn-default">전체 페이지로 보기</a>
-         </div> -->
     </div>
 
     {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list_combined' page_type='ingredient' search_values=search_values food_category=request.GET.food_category|default_if_none:'' items_per_page=items_per_page extra_fields="allergens,gmo" %}

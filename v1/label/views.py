@@ -349,7 +349,9 @@ def label_creation(request, label_id=None):
         # 기존 라벨 편집
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
         has_ingredient_relations = label.ingredient_relations.exists()
-        
+        # 연결된 원료 개수 구하기
+        count_ingredient_relations = LabelIngredientRelation.objects.filter(label_id=label.my_label_id).count()
+
         # 내 원료에 연결된 원재료명 가져오기
         if has_ingredient_relations:
             relations = LabelIngredientRelation.objects.filter(
@@ -543,6 +545,7 @@ def label_creation(request, label_id=None):
         'country_list': CountryList.objects.all(),
         'has_ingredient_relations': has_ingredient_relations,
         'phrases_json': phrases_json,  
+        'count_ingredient_relations': count_ingredient_relations,
         'regulations_json': json.dumps(FIELD_REGULATIONS, ensure_ascii=False)  # 추가
     }
     return render(request, 'label/label_creation.html', context)
@@ -860,6 +863,7 @@ def my_ingredient_list(request):
 
 @login_required
 def my_ingredient_list_combined(request):
+    label_id = request.GET.get('label_id')
     search_fields = {
         'prdlst_nm': 'prdlst_nm',
         'prdlst_report_no': 'prdlst_report_no',
@@ -868,7 +872,6 @@ def my_ingredient_list_combined(request):
         'ingredient_display_name': 'ingredient_display_name',
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    # 기존: search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
     search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
 
     # 식품구분(카테고리) 검색 지원
@@ -890,7 +893,21 @@ def my_ingredient_list_combined(request):
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
 
-    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+    if label_id:
+        # 라벨에 연결된 원료만 조회
+        ingredient_ids = LabelIngredientRelation.objects.filter(label_id=label_id).values_list('ingredient_id', flat=True)
+        my_ingredients = MyIngredient.objects.filter(my_ingredient_id__in=ingredient_ids).filter(search_conditions).order_by(sort_field)
+        # 라벨명 가져오기
+        label_name = None
+        try:
+            label_obj = MyLabel.objects.get(my_label_id=label_id)
+            label_name = label_obj.my_label_name
+        except MyLabel.DoesNotExist:
+            label_name = None
+    else:
+        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+        label_name = None
+
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
     querystring_without_page = get_querystring_without(request, ['page'])
     querydict_sort = request.GET.copy()
@@ -916,6 +933,8 @@ def my_ingredient_list_combined(request):
         'sort_order': sort_order,
         'querystring_without_page': querystring_without_page,
         'querystring_without_sort': querystring_without_sort,
+        'label_id': label_id,  # 현재 연결된 라벨 ID(있으면 전달)
+        'label_name': label_name,  # 라벨명(있으면 전달)
     }
     return render(request, 'label/my_ingredient_list_combined.html', context)
 
@@ -1658,6 +1677,7 @@ def preview_popup(request):
             ('prdlst_dcnm', '식품유형'),
             ('prdlst_nm', '제품명'),
             ('ingredient_info', '성분명 및 함량'),
+           
             ('content_weight', '내용량'),
             ('weight_calorie', '내용량(열량)'),
             ('prdlst_report_no', '품목보고번호'),

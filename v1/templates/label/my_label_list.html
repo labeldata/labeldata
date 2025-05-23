@@ -18,7 +18,10 @@
       <div>
         <b>원재료명: {{ ingredient_name }}</b>와(과) 연결된 표시사항만 표시 중입니다.
       </div>
-      <a href="/label/my-labels/" class="btn btn-outline-secondary btn-sm">전체 목록 보기</a>
+      <div class="d-flex" style="gap:8px;">
+        <a href="/label/my-labels/" class="btn btn-outline-secondary btn-sm">전체 목록 보기</a>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.history.back()">이전 페이지로 돌아가기</button>
+      </div>
     </div>
     {% endif %}
     {% include 'includes/search_filter.html' with action_url='label:my_label_list' page_type='label' search_values=search_values items_per_page=items_per_page %}

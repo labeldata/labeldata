@@ -870,6 +870,16 @@ document.addEventListener('DOMContentLoaded', function () {
       saveCheckboxStates();
     });
 
+    const linkedBtn = document.getElementById('linkedLabelsBtn');
+    if (linkedBtn) {
+      linkedBtn.onclick = function() {
+        var labelId = document.getElementById('label_id')?.value;
+        if (labelId) {
+          window.location.href = '/label/my-ingredient-list-combined/?label_id=' + encodeURIComponent(labelId);
+        }
+      };
+    }
+
     updateSummary();
   });
 
