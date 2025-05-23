@@ -123,22 +123,8 @@ function saveMyIngredient() {
         if (qs) queryString = qs;
     }
 
-    // 연결된 표시사항 개수 확인 및 모달 표시
-    if (my_ingredient_id && isChanged) {
-        fetch(`/label/linked-labels-count/${my_ingredient_id}/`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.count > 0) {
-                showLinkedLabelsModal(data.count, function() {
-                    doSaveMyIngredient(url, formData, queryString);
-                });
-            } else {
-                doSaveMyIngredient(url, formData, queryString);
-            }
-        });
-    } else {
-        doSaveMyIngredient(url, formData, queryString);
-    }
+    // 연결된 표시사항 모달 없이 바로 저장
+    doSaveMyIngredient(url, formData, queryString);
 }
 
 function doSaveMyIngredient(url, formData, queryString) {
@@ -186,51 +172,45 @@ function doSaveMyIngredient(url, formData, queryString) {
     });
 }
 
-function showLinkedLabelsModal(count, onConfirm) {
-    // 기존 모달이 있으면 제거
-    const oldModal = document.getElementById('linkedLabelsModal');
-    if (oldModal) oldModal.remove();
-    // 모달 생성 및 표시
-    const modalHtml = `
-    <div class="modal fade" id="linkedLabelsModal" tabindex="-1">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header"><h5 class="modal-title">연결된 표시사항 확인</h5></div>
-          <div class="modal-body">
-            <p>${count}개의 연결된 표시사항이 있습니다.<br>저장하시겠습니까?</p>
-          </div>
-          <div class="modal-footer justify-content-between">
-            <div>
-              <button type="button" class="btn btn-outline-secondary" id="linkedLabelsListBtn">리스트보기</button>
-            </div>
-            <div>
-              <button type="button" class="btn btn-primary" id="linkedLabelsYesBtn">예</button>
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">아니오</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>`;
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('linkedLabelsModal'));
-    modal.show();
-    document.getElementById('linkedLabelsListBtn').onclick = function() {
-        // 현재 원료 id를 가져와서 쿼리스트링에 추가
-        const my_ingredient_id = document.getElementById('my_ingredient_id')?.value;
-        if (my_ingredient_id) {
-            window.location.href = '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
-        } else {
-            window.location.href = '/label/my-labels/';
-        }
+// 원료 상세 상단에 연결된 표시사항 조회 버튼 추가 함수
+function addLinkedLabelsButton(my_ingredient_id) {
+    if (!my_ingredient_id) return;
+    fetch(`/label/linked-labels-count/${my_ingredient_id}/`)
+        .then(res => res.json())
+        .then(data => {
+            // 기존 버튼 있으면 제거
+            const oldBtn = document.getElementById('linkedLabelsViewBtn');
+            if (oldBtn) oldBtn.remove();
+            // 버튼 생성
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-outline-info btn-sm ms-2';
+            btn.id = 'linkedLabelsViewBtn';
+            btn.innerHTML = `연결된 표시사항(<span id="linkedLabelsCount">${data.count}</span>품목) 조회`;
+            btn.onclick = function() {
+                // 리스트보기와 동일하게 이동
+                window.location.href = '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
+            };
+            // '원료 수정' 텍스트 옆에 삽입 (예시: id가 ingredientTitle인 요소 옆)
+            const titleElem = document.getElementById('ingredientEditTitle') || document.querySelector('.ingredient-edit-title');
+            if (titleElem) {
+                titleElem.insertAdjacentElement('afterend', btn);
+            }
+        });
+}
+
+// 연결된 표시사항(00품목) 조회 버튼 텍스트 및 이벤트 설정
+function updateLinkedLabelsButton(my_ingredient_id) {
+    const btn = document.getElementById('linkedLabelsBtn');
+    if (!btn || !my_ingredient_id) return;
+    fetch(`/label/linked-labels-count/${my_ingredient_id}/`)
+        .then(res => res.json())
+        .then(data => {
+            btn.innerHTML = `연결된 표시사항(<span id="linkedLabelsCount">${data.count}</span>품목) 조회`;
+        });
+    btn.onclick = function() {
+        window.location.href = '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
     };
-    document.getElementById('linkedLabelsYesBtn').onclick = function() {
-        modal.hide();
-        onConfirm();
-        document.getElementById('linkedLabelsModal').remove();
-    };
-    document.getElementById('linkedLabelsModal').addEventListener('hidden.bs.modal', function() {
-        document.getElementById('linkedLabelsModal').remove();
-    });
 }
 
 // CSRF 토큰 가져오기 유틸
@@ -383,4 +363,9 @@ onReady(function() {
             }
         });
     }
+
+    // 연결된 표시사항 버튼 텍스트 및 이벤트 연결
+    const my_ingredient_id_elem = document.getElementById('my_ingredient_id');
+    const my_ingredient_id = my_ingredient_id_elem ? parseInt(my_ingredient_id_elem.value, 10) : null;
+    updateLinkedLabelsButton(my_ingredient_id);
 });
