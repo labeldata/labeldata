@@ -10,11 +10,17 @@ function setDetailDirty(dirty) {
     isDetailDirty = dirty;
 }
 function bindDetailChangeDetection() {
-    const container = document.getElementById('ingredient-detail-container');
-    if (!container) return;
-    container.querySelectorAll('input, textarea, select').forEach(el => {
-        el.addEventListener('change', () => setDetailDirty(true));
-        el.addEventListener('input', () => setDetailDirty(true));
+    // id가 바뀔 수 있으므로 두 컨테이너 모두에서 바인딩 시도
+    const containers = [
+        document.getElementById('ingredient-detail-container'),
+        document.getElementById('ingredient-detail-container-partial')
+    ];
+    containers.forEach(container => {
+        if (!container) return;
+        container.querySelectorAll('input, textarea, select').forEach(el => {
+            el.addEventListener('change', () => setDetailDirty(true));
+            el.addEventListener('input', () => setDetailDirty(true));
+        });
     });
 }
 
@@ -130,7 +136,6 @@ function showUnsavedChangesModal() {
               <p>변경사항이 있습니다.<br>저장하지 않고 이동하겠습니까?</p>
             </div>
             <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" id="unsaved-list-btn">리스트보기</button>
               <button type="button" class="btn btn-secondary" id="unsaved-discard-btn" data-bs-dismiss="modal">이동하기</button>
               <button type="button" class="btn btn-light" data-bs-dismiss="modal">유지하기</button>
             </div>
@@ -139,10 +144,6 @@ function showUnsavedChangesModal() {
         `;
         document.body.appendChild(modal);
     }
-    // 리스트보기 버튼 이벤트
-    document.getElementById('unsaved-list-btn').onclick = function() {
-        window.location.href = '/label/my-ingredient-list/';
-    };
     // 저장 버튼 제거, 이동/돌아가기만 남김
     document.getElementById('unsaved-discard-btn').onclick = function() {
         setDetailDirty(false);
