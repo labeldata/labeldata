@@ -730,26 +730,8 @@ function removeSelectedRows() {
 // 내원료 추가 모달: 선택 시 모달 닫지 않음
 function selectIngredient(ingredient, button) {
     const foodCategory = ingredient.food_category;
-    // 향료 복사 시 "향료 or 향료(00향)" 모두 표시
-    let displayName = ingredient.ingredient_display_name;
-    if (
-        foodCategory === 'additive' &&
-        displayName &&
-        /^향료(\(.+\))?$/.test(displayName)
-    ) {
-        let flavorText = '';
-        if (!/\(.+\)/.test(displayName) && ingredient.prdlst_nm) {
-            const m = ingredient.prdlst_nm.match(/(.+?)향/);
-            if (m && m[1]) {
-                flavorText = `향료(${m[1].trim()}향)`;
-            }
-        }
-        if (flavorText) {
-            displayName = `향료 or ${flavorText}`;
-        } else {
-            displayName = "향료";
-        }
-    }
+    // 추천문구는 뷰에서 완성되어 내려오므로 그대로 사용
+    let displayName = ingredient.ingredient_display_name || ingredient.prdlst_nm || '';
     const parsedIngredient = {
         ingredient_name: ingredient.prdlst_nm,
         prdlst_report_no: ingredient.prdlst_report_no,
