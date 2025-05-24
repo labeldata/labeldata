@@ -36,9 +36,12 @@ function comma(x) {
   return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+// 한국 식품표시기준 반올림 규정 적용 함수 (열량은 1회 제공량 기준으로만 가까운 5kcal로 조정)
 function roundKoreanNutrition(value, type, context) {
   if (type === 'kcal') {
-    return value < 5 ? 0 : Math.round(value / 5) * 5;
+    // 5kcal 미만은 0, 5kcal 단위로 "가장 가까운" 5의 배수로 조정 (2.5 이상은 올림, 미만은 내림)
+    if (value < 5) return 0;
+    return Math.round(value / 5) * 5;
   }
   if (type === 'mg') {
     if (value < 5) return 0;

@@ -933,4 +933,22 @@ document.addEventListener('DOMContentLoaded', function () {
     summaryEl.innerText = '';
     summaryEl.title = '';
   }
+
+  // 식품유형 요약 버튼 클릭 시 스텝2의 식품유형 필드(아래 input[name="prdlst_dcnm"])에 요약 결과 입력
+  const summaryBtn = document.getElementById('summary-step1');
+  if (summaryBtn) {
+    summaryBtn.addEventListener('click', function () {
+      // 요약 텍스트에서 "식품유형 :" 접두어 제거
+      let summaryText = summaryBtn.textContent.trim();
+      if (summaryText.startsWith('식품유형 :')) {
+        summaryText = summaryText.replace(/^식품유형\s*:/, '').trim();
+      }
+      // 아래 필드에 입력
+      const foodTypeFields = document.querySelectorAll('input[name="prdlst_dcnm"].form-control.auto-expand');
+      foodTypeFields.forEach(field => {
+        field.value = summaryText;
+        field.focus();
+      });
+    });
+  }
 });
