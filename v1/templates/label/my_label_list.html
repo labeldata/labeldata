@@ -32,22 +32,10 @@
                 <tr>
                     <th class="text-center align-middle" style="width: 3%;"><input type="checkbox" id="check-all"></th>
                     <th class="text-center align-middle" style="width: 4%;">번호</th>
-                    <th style="width: 10%;">작성일
-                        <span class="sort-buttons">
-                            <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
-                            <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
-                        </span>
-                    </th>
-                    <th style="width: 10%;">품목보고번호
+                    <th style="width: 10%;">품보 신고
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
-                        </span>
-                    </th>
-                    <th style="width: 15%;">제품명
-                        <span class="sort-buttons">
-                            <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
-                            <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
                     <th style="width: 15%;">라벨명
@@ -56,10 +44,22 @@
                             <a href="?sort=my_label_name&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
+                    <th style="width: 15%;">제품명
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
                     <th style="width: 10%;">식품유형
                         <span class="sort-buttons">
                             <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
                             <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                        </span>
+                    </th>
+                    <th style="width: 10%;">품목보고번호
+                        <span class="sort-buttons">
+                            <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
                     <th style="width: 10%;">제조사명
@@ -80,10 +80,10 @@
                             <a href="?sort=frmlc_mtrqlt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
-                    <th style="width: 8%;">소비기한
+                    <th style="width: 10%;">작성일
                         <span class="sort-buttons">
-                            <a href="?sort=pog_daycnt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
-                            <a href="?sort=pog_daycnt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
+                            <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▲</a>
+                            <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn">▼</a>
                         </span>
                     </th>
                 </tr>
@@ -93,19 +93,19 @@
                 <tr data-url="{% url 'label:label_creation' label.my_label_id %}" onclick="location.href=this.dataset.url">
                     <td class="text-center align-middle"><input type="checkbox" class="check-item" value="{{ label.my_label_id }}"></td>
                     <td class="text-center align-middle">{{ forloop.counter }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_report_no }}">{{ label.prdlst_report_no }}</td>
+                    <td class="ellipsis-cell" title="{{ label.my_label_name }}">{{ label.my_label_name }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_nm }}">{{ label.prdlst_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_dcnm }}">{{ label.prdlst_dcnm }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_report_no }}">{{ label.prdlst_report_no }}</td>
+                    <td class="ellipsis-cell" title="{{ label.bssh_nm }}">{{ label.bssh_nm }}</td>
+                    <td class="ellipsis-cell" title="{{ label.storage_method }}">{{ label.storage_method }}</td>
+                    <td class="ellipsis-cell" title="{{ label.frmlc_mtrqlt }}">{{ label.frmlc_mtrqlt }}</td>
                     <td class="ellipsis-cell" title="{{ label.update_datetime|date:'Y-m-d H:i' }}">
                         {% if label.update_datetime %}
                             {{ label.update_datetime|date:"Y-m-d H:i" }}
                         {% endif %}
                     </td>
-                    <td class="ellipsis-cell" title="{{ label.prdlst_report_no }}">{{ label.prdlst_report_no }}</td>
-                    <td class="ellipsis-cell" title="{{ label.prdlst_nm }}">{{ label.prdlst_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ label.my_label_name }}">{{ label.my_label_name }}</td>
-                    <td class="ellipsis-cell" title="{{ label.prdlst_dcnm }}">{{ label.prdlst_dcnm }}</td>
-                    <td class="ellipsis-cell" title="{{ label.bssh_nm }}">{{ label.bssh_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ label.storage_method }}">{{ label.storage_method }}</td>
-                    <td class="ellipsis-cell" title="{{ label.frmlc_mtrqlt }}">{{ label.frmlc_mtrqlt }}</td>
-                    <td class="ellipsis-cell" title="{{ label.pog_daycnt }}">{{ label.pog_daycnt }}</td>
                 </tr>
                 {% empty %}
                 <tr>

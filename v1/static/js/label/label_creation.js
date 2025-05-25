@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', function () {
       summaries.push('비살균제품');
     }
 
-    const summaryText = '식품유형 : ' + (summaries.length ? summaries.join(' | ') : '');
+    const summaryText = '식품유형 자동 입력 : ' + (summaries.length ? summaries.join(' | ') : '');
     // 적용 버튼 시에만 summary-step1에 표시
     $('#summary-step1').text(summaryText).attr('title', summaryText);
   }
@@ -938,11 +938,16 @@ document.addEventListener('DOMContentLoaded', function () {
   const summaryBtn = document.getElementById('summary-step1');
   if (summaryBtn) {
     summaryBtn.addEventListener('click', function () {
-      // 요약 텍스트에서 "식품유형 :" 접두어 제거
+      // 버튼 텍스트에서 "식품유형 자동 입력 :" 또는 "식품유형 :" 접두어 제거
       let summaryText = summaryBtn.textContent.trim();
-      if (summaryText.startsWith('식품유형 :')) {
-        summaryText = summaryText.replace(/^식품유형\s*:/, '').trim();
-      }
+      summaryText = summaryText.replace(/^식품유형( 자동 입력)?\s*:/, '').trim();
+
+      // | 앞뒤 공백만 정리 (중복 공백은 그대로 두고, | 기준으로만 트림)
+      summaryText = summaryText
+        .split('|')
+        .map(s => s.trim())
+        .join(' | ');
+
       // 아래 필드에 입력
       const foodTypeFields = document.querySelectorAll('input[name="prdlst_dcnm"].form-control.auto-expand');
       foodTypeFields.forEach(field => {

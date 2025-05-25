@@ -10,7 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <!-- 외부 CSS 및 JS 파일 로드 -->
-<link href="{% static 'css/label_creation.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
+<link href="{% static 'css/style.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
 <!-- 자주 사용하는 문구 데이터 삽입 -->
 <script id="phrases-data" type="application/json">
   {{ phrases_json|safe }}
@@ -20,58 +20,53 @@
 </script>
 <script src="{% static 'js/label/label_creation.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
-
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
 <input type="hidden" id="label_id" value="{{ label.my_label_id }}">
 
 <!-- 상단 헤더 -->
 <div class="container mt-4" style="padding-bottom: 10px;">
-  <div class="d-flex align-items-center justify-content-between" style="gap: 20px;">
-    <h2 class="mb-0">표시사항 작성</h2>
-    <!-- 라벨명 입력 필드: 가운데 정렬 -->
-    <div class="flex-grow-1 d-flex justify-content-center align-items-center" style="gap: 18px; margin-left: -300px;">
-      <label for="my_label_name" class="mb-0" style="font-size:1.2rem; font-weight:500; color:#495057;">라벨명</label>
-      <input type="text" id="my_label_name" name="my_label_name"
-             class="form-control auto-expand"
-             placeholder="라벨명을 입력하세요."
-             value="{{ form.my_label_name.value|default:'' }}"
-             style="font-size:1.2rem; font-weight:500; color:#495057; min-width:220px; max-width:320px; height:2.2rem; padding:2px 12px;">
+  <div class="d-flex align-items-center label-header-row" style="gap: 10px;">
+    <div class="d-flex align-items-center label-header-group" style="gap: 10px;">
+      <h2 class="mb-0" style="flex-shrink:0;">표시사항 작성</h2>
+      <div style="display:flex; align-items:center; flex-shrink:0;">
+        <label for="my_label_name" class="mb-0"
+          style="font-size:1rem; font-weight:500; color:#495057; margin-left:25px; margin-right:4px; min-width:90px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block;">
+          라벨명
+        </label>
+        <input type="text" id="my_label_name" name="my_label_name"
+               class="form-control auto-expand"
+               placeholder="라벨명을 입력하세요."
+               value="{{ form.my_label_name.value|default:'' }}"
+               style="font-size:1rem; font-weight:500; color:#495057; min-width:300px; max-width:45ch; height:2.2rem; padding:2px 12px;">
+      </div>
     </div>
-    <div class="d-flex align-items-center" style="gap: 10px;">
-      <span class="recent-update">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
+    <div class="d-flex align-items-center ms-auto label-header-actions" style="gap: 10px;">
+      <span class="recent-update label-header-date" style="margin-right:8px;">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
       <button type="submit" form="labelForm" class="btn btn-primary">저장</button>
       <button type="button" class="btn btn-outline-primary" onclick="openPreviewPopup()">미리보기</button>
     </div>
   </div>
 </div>
 
-<!-- Step1. 기본 설정 (요약 + 적용/펼치기 버튼 한 줄) -->
+<!-- Step1. 기본 설정 -->
 <div class="container mt-4" id="step1-row">
   <div class="card">
-    <!-- Step1 헤더: 좌측(타이틀), 중앙(요약), 우측(버튼) -->
     <div class="card-header d-flex align-items-center" id="step1-summary-bar" style="gap: 1rem; flex-wrap:nowrap;">
       <strong>1. 기본정보 설정</strong>
-      <!-- summary가 한줄로 이어지도록 flex-grow, min-width, overflow 스타일 강화 -->
-      <!-- 식품유형 요약 전체를 버튼으로, 왼쪽 정렬 및 텍스트 크기만큼만 버튼 크기 -->
       <button id="summary-step1"
               type="button"
-              class="btn btn-outline-secondary btn-sm ms-2"
+              class="btn btn-outline-cancel btn-sm ms-2"
               style="font-weight:bold; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; margin-left:10px; display:inline-block; padding: 2px 10px; text-align:left;">
-        <!-- JS에서 값이 동적으로 들어감 -->
       </button>
       <div class="ms-auto d-flex align-items-center" style="gap: 0.5rem;">
-        <button type="button" class="btn btn-primary btn-sm" id="applyStep1Btn">적용 후 접기</button>
+        <button type="button" class="btn btn-primary btn-sm" id="applyStep1Btn">필수항목 적용 후 접기</button>
         <button type="button" class="btn btn-outline-primary btn-sm" id="expandStep1Btn" style="display:none;">펼치기</button>
       </div>
     </div>
-    <!-- Step1 본문: 식품유형/장기보존/제조방법 -->
     <div class="card-body" id="step1-body">
       <div id="food-type-section" class="mb-2">
-        <!-- 2열 레이아웃: 왼쪽(식품유형/장기보존), 오른쪽(제조방법/조건) -->
         <div class="row" style="gap:0;">
-          <!-- 왼쪽: 식품유형, 장기보존식품 -->
           <div class="col-md-6" style="padding-right:16px;">
-            <!-- 식품유형 한줄 -->
             <div class="d-flex align-items-center mb-2 flex-nowrap">
               <label class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">식품유형</label>
               <div class="d-flex flex-nowrap" style="gap:5px; width:100%; min-width:0;">
@@ -93,7 +88,6 @@
                 </select>
               </div>
             </div>
-            <!-- 장기보존식품 한줄 -->
             <div class="d-flex align-items-center mb-2 flex-nowrap">
               <label class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">장기보존식품</label>
               <div class="d-flex flex-wrap align-items-center" style="gap:10px;">
@@ -116,9 +110,7 @@
               </div>
             </div>
           </div>
-          <!-- 오른쪽: 제조방법, 조건 -->
           <div class="col-md-6" style="padding-left:16px;">
-            <!-- 제조방법 체크박스 한줄 -->
             <div class="d-flex align-items-center mb-2 flex-nowrap">
               <label class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">제조방법</label>
               <div class="d-flex flex-nowrap align-items-center" style="gap:10px; width:100%; min-width:0;">
@@ -140,7 +132,6 @@
                 </div>
               </div>
             </div>
-            <!-- 조건 상세 입력 한줄 -->
             <div class="d-flex align-items-center mb-2 flex-nowrap">
               <label class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px; visibility:hidden;">조건상세</label>
               <input type="text" name="processing_condition" class="form-control"
@@ -161,7 +152,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
       <strong>2. 상세 입력</strong>
       <div class="d-flex align-items-center" style="gap: 8px;">
-        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="linkedLabelsBtn">
+        <button type="button" class="btn btn-outline-cancel btn-sm ms-2" id="linkedLabelsBtn">
                 연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
         </button>
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="openPhrasePopup()" title="내 문구 관리">
@@ -170,23 +161,15 @@
       </div>
     </div>
     <div class="card-body">
-      <!-- 본문 좌우 패널 영역 -->
       <div class="layout-container" style="display: flex; gap: 20px; align-items: flex-start;">
-        <!-- 좌측: 입력 패널 -->
         <div class="left-panel flex-grow-1 position-relative" style="flex-basis: 70%;">
           <form method="post" id="labelForm">
             {% csrf_token %}
-            
-            <!-- 식품유형 hidden 필드 추가 -->
             <input type="hidden" id="hidden_food_group" name="food_group" value="{{ label.food_group }}">
             <input type="hidden" id="hidden_food_type" name="food_type" value="{{ label.food_type }}">
-            
-            <!-- 장기보존식품, 제조방법 hidden 필드 추가 -->
             <input type="hidden" id="hidden_preservation_type" name="preservation_type" value="{{ label.preservation_type }}">
             <input type="hidden" id="hidden_processing_method" name="processing_method" value="{{ label.processing_method }}">
             <input type="hidden" id="hidden_processing_condition" name="processing_condition" value="{{ label.processing_condition }}">
-            
-            <!-- 체크박스 상태 저장용 hidden 필드 -->
             <input type="hidden" name="chckd_label_nm" value="{{ label.chckd_label_nm|default:'N' }}">
             <input type="hidden" name="chckd_prdlst_dcnm" value="{{ label.chckd_prdlst_dcnm|default:'N' }}">
             <input type="hidden" name="chckd_prdlst_nm" value="{{ label.chckd_prdlst_nm|default:'Y' }}">
@@ -207,330 +190,278 @@
             <input type="hidden" name="chckd_additional_info" value="{{ label.chckd_additional_info|default:'N' }}">
             <input type="hidden" name="chckd_nutrition_text" value="{{ label.chckd_nutrition_text|default:'N' }}">
 
-          <!-- 순서 조정된 입력 필드 -->
-          <!-- 제품명 | 식품유형 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <!-- 제품명 -->
-            <div class="d-flex align-items-center" style="flex:1; gap:5px;">
-              <div style="width:10%; min-width:110px;">
-                <!-- 제품명 체크박스 -->
-                <input type="checkbox" id="chk_prdlst_nm" name="chk_prdlst_nm" class="form-check-input" 
-                       {% if label.chckd_prdlst_nm == "Y" %}checked{% endif %}>
-                <label for="chk_prdlst_nm" class="m-0">제품명</label>
+            <!-- 제품명 | 성분명 및 함량 -->
+            <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_prdlst_nm" name="chk_prdlst_nm" class="form-check-input" 
+                         {% if label.chckd_prdlst_nm == "Y" %}checked{% endif %}>
+                  <label for="chk_prdlst_nm" class="m-0">제품명</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="prdlst_nm" class="form-control auto-expand" placeholder="제품명을 입력하세요." value="{{ form.prdlst_nm.value|default:'' }}">
+                </div>
               </div>
-              <div style="width:5%;"></div>
-              <div style="width:85%;">
-                <input type="text" name="prdlst_nm" class="form-control auto-expand" placeholder="제품명을 입력하세요." value="{{ form.prdlst_nm.value|default:'' }}">
-              </div>
-            </div>
-            <!-- 식품유형 -->
-            <div class="d-flex align-items-center" style="flex:1; gap:5px;">
-              <div style="width:10%; min-width:110px;">
-                <input type="checkbox" id="chk_prdlst_dcnm" name="chk_prdlst_dcnm" class="form-check-input" {% if label.chckd_prdlst_dcnm == "Y" %}checked{% endif %}>
-                <label for="chk_prdlst_dcnm" class="m-0">식품유형</label>
-              </div>
-              <div style="width:5%;"></div>
-              <div style="width:85%;">
-                <input type="text" name="prdlst_dcnm" class="form-control auto-expand" placeholder="상단의 식품유형을 참고하여 입력하세요." value="{{ form.prdlst_dcnm.value|default:'' }}">
-              </div>
-            </div>
-          </div>
-
-          <!-- 성분명 및 함량 | 품목보고번호 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <!-- 성분명 및 함량 -->
-            <div class="d-flex align-items-center" style="flex:1; gap:5px;">
-              <div style="width:10%; min-width:110px;">
-                <!-- 성분명 및 함량 체크박스 -->
-                <input type="checkbox" id="chk_ingredient_info" name="chk_ingredient_info" class="form-check-input" 
-                       {% if label.chckd_ingredient_info == "Y" %}checked{% endif %}>
-                <label for="chk_ingredient_info" class="m-0">성분명 및 함량</label>
-              </div>
-              <div style="width:5%;"></div>
-              <div style="width:85%;">
-                <input type="text" name="ingredient_info" class="form-control auto-expand" placeholder="제품명에 원재료명을 사용한 경우 입력하세요." value="{{ form.ingredient_info.value|default:'' }}">
-              </div>
-            </div>
-            <!-- 품목보고번호 -->
-            <div class="d-flex align-items-center" style="flex:1; gap:5px;">
-              <div style="width:10%; min-width:110px;">
-                <input type="checkbox" id="chk_prdlst_report_no" name="chk_prdlst_report_no" class="form-check-input" {% if label.chckd_prdlst_report_no == "Y" %}checked{% endif %}>
-                <label for="chk_prdlst_report_no" class="m-0">품목보고번호</label>
-              </div>
-              <div style="width:5%;"></div>
-              <div style="width:85%;">
-                <div class="d-flex align-items-center" style="gap:6px;">
-                  <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}" style="width:calc(100% - 90px); min-width:0;">
-                  <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" style="width:80px;">번호검증</button>
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_ingredient_info" name="chk_ingredient_info" class="form-check-input" {% if label.chckd_ingredient_info == "Y" %}checked{% endif %}>
+                  <label for="chk_ingredient_info" class="m-0">성분명 및 함량</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="ingredient_info" class="form-control auto-expand" placeholder="제품명에 원재료명을 사용한 경우 입력하세요." value="{{ form.ingredient_info.value|default:'' }}">
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- 내용량 | 원산지 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <!-- 내용량 -->
-            <div class="d-flex align-items-center" style="flex:1; gap:5px;">
-              <div style="width:10%; min-width:110px;">
-                <!-- 내용량 체크박스 -->
-                <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" 
-                       {% if label.chckd_content_weight == "Y" %}checked{% endif %}>
-                <label for="chk_content_weight" class="m-0">내용량</label>
+            <!-- 식품유형 | 품목보고번호 -->
+            <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_prdlst_dcnm" name="chk_prdlst_dcnm" class="form-check-input" {% if label.chckd_prdlst_dcnm == "Y" %}checked{% endif %}>
+                  <label for="chk_prdlst_dcnm" class="m-0">식품유형</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="prdlst_dcnm" class="form-control auto-expand" placeholder="상단의 식품유형을 참고하여 입력하세요." value="{{ form.prdlst_dcnm.value|default:'' }}">
+                </div>
               </div>
-              <div style="width:5%;"></div>
-              <div style="width:85%;">
-                <input type="text" name="content_weight" class="form-control auto-expand" placeholder="내용량을 입력하세요." value="{{ form.content_weight.value|default:'' }}">
-              </div>
-            </div>
-            <!-- 원산지 -->
-            <div class="d-flex align-items-center" style="flex:1; gap:5px;">
-              <div style="width:10%; min-width:110px;">
-                <input type="checkbox" id="chk_country_of_origin" name="chk_country_of_origin" class="form-check-input" {% if label.chckd_country_of_origin == "Y" %}checked{% endif %}>
-                <label for="chk_country_of_origin" class="m-0">원산지</label>
-              </div>
-              <div style="width:5%;"></div>
-              <div style="width:85%;">
-                <div class="d-flex align-items-center" style="gap:6px;">
-                  <select name="country_of_origin" class="form-control select2-country" style="width:100%; min-width:0;">
-                    <option value="">선택하세요</option>
-                    {% for c in country_list %}
-                    <option value="{{ c.country_code2 }}" {% if form.country_of_origin.value == c.country_code2 %}selected{% endif %}>{{ c.country_name_ko }}</option>
-                    {% endfor %}
-                  </select>
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_prdlst_report_no" name="chk_prdlst_report_no" class="form-check-input" {% if label.chckd_prdlst_report_no == "Y" %}checked{% endif %}>
+                  <label for="chk_prdlst_report_no" class="m-0">품목보고번호</label>
+                </div>
+                <div style="width:85%;">
+                  <div class="input-container">
+                    <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn">번호검증</button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- 보관방법 | 용기.포장재질 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <!-- 보관방법 -->
-            <div class="d-flex align-items-center" style="flex:1; gap:5px;">
-              <div style="width:10%; min-width:110px;">
-                <input type="checkbox" id="chk_storage_method" name="chk_storage_method" class="form-check-input" {% if label.chckd_storage_method == "Y" %}checked{% endif %}>
-                <label for="chk_storage_method" class="m-0">보관방법</label>
+            <!-- 내용량 | 원산지 -->
+            <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" 
+                         {% if label.chckd_content_weight == "Y" %}checked{% endif %}>
+                  <label for="chk_content_weight" class="m-0">내용량</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="content_weight" class="form-control auto-expand" placeholder="내용량을 입력하세요." value="{{ form.content_weight.value|default:'' }}">
+                </div>
               </div>
-              <div style="width:5%;"></div>
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_country_of_origin" name="chk_country_of_origin" class="form-check-input" {% if label.chckd_country_of_origin == "Y" %}checked{% endif %}>
+                  <label for="chk_country_of_origin" class="m-0">원산지</label>
+                </div>
+                 <div style="width:85%;">
+                  <div class="input-container">
+                    <select name="country_of_origin" class="form-control select2-country">
+                      <option value="">선택하세요</option>
+                      {% for c in country_list %}
+                      <option value="{{ c.country_code2 }}" {% if form.country_of_origin.value == c.country_code2 %}selected{% endif %}>{{ c.country_name_ko }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 보관방법 | 용기.포장재질 -->
+            <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_storage_method" name="chk_storage_method" class="form-check-input" {% if label.chckd_storage_method == "Y" %}checked{% endif %}>
+                  <label for="chk_storage_method" class="m-0">보관방법</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="storage_method" class="form-control auto-expand" placeholder="보관방법을 입력하거나 내문구를 선택하세요." value="{{ form.storage_method.value|default:'' }}">
+                </div>
+              </div>
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_frmlc_mtrqlt" name="chk_frmlc_mtrqlt" class="form-check-input" {% if label.chckd_frmlc_mtrqlt == "Y" %}checked{% endif %}>
+                  <label for="chk_frmlc_mtrqlt" class="m-0">용기.포장재질</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" placeholder="용기.포장재질을 입력하거나 내문구를 선택하세요." value="{{ form.frmlc_mtrqlt.value|default:'' }}">
+                </div>
+              </div>
+            </div>
+            <!-- 제조원 소재지 -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:15%; min-width:130px;">
+                <input type="checkbox" id="chk_bssh_nm" name="chk_bssh_nm" class="form-check-input" 
+                       {% if label.chckd_bssh_nm == "Y" %}checked{% endif %}>
+                <label for="chk_bssh_nm" class="m-0">제조원 소재지</label>
+              </div>
+              <div style="width:85%; display:flex; align-items:center;">
+                <input type="text" name="bssh_nm" class="form-control auto-expand" placeholder="제조원을 입력하거나 내문구를 선택하세요." value="{{ form.bssh_nm.value|default:'' }}">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="toggleManufacturerBtn"
+                  data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
+                  aria-controls="other-manufacturers" style="font-size:0.9rem; padding:2px 8px; min-width:0; white-space:nowrap; margin-left:6px;">
+                  ∨
+                </button>
+              </div>
+            </div>
+            <!-- 접힘 영역 -->
+            <div class="collapse mb-2" id="other-manufacturers">
+              <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address" class="form-check-input" 
+                         {% if label.chckd_distributor_address == "Y" %}checked{% endif %}>
+                  <label for="chk_distributor_address" class="m-0">유통전문판매원</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="distributor_address" class="form-control auto-expand" placeholder="유통전문판매원을 입력하거나 내문구를 선택하세요."
+                        value="{{ form.distributor_address.value|default:'' }}">
+                </div>
+              </div>
+              <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_repacker_address" name="chk_repacker_address" class="form-check-input" 
+                         {% if label.chckd_repacker_address == "Y" %}checked{% endif %}>
+                  <label for="chk_repacker_address" class="m-0">소분원</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="repacker_address" class="form-control auto-expand" placeholder="소분원을 입력하거나 내문구를 선택하세요."
+                        value="{{ form.repacker_address.value|default:'' }}">
+                </div>
+              </div>
+              <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_importer_address" name="chk_importer_address" class="form-check-input" 
+                         {% if label.chckd_importer_address == "Y" %}checked{% endif %}>
+                  <label for="chk_importer_address" class="m-0">수입원</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="importer_address" class="form-control auto-expand" placeholder="수입원을 입력하거나 내문구를 선택하세요."
+                        value="{{ form.importer_address.value|default:'' }}">
+                </div>
+              </div>
+            </div>
+            <!-- 소비기한/품질유지기한/제조연월일/생산연도 -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+              <div style="width:15%; min-width:130px; display:flex; align-items:center;">
+                <input type="checkbox" id="chk_pog_daycnt" name="chk_pog_daycnt" class="form-check-input" {% if label.chckd_pog_daycnt == "Y" %}checked{% endif %}>
+                <!-- 체크박스와 셀렉트박스 사이 간격 추가 (margin-left:8px) -->
+                <select name="date_option" class="form-control select2-date-option" style="width:100%; min-width:110px;">
+                  <option value="소비기한" {% if form.date_option.value == "소비기한" or not form.date_option.value %}selected{% endif %}>소비기한</option>
+                  <option value="품질유지기한" {% if form.date_option.value == "품질유지기한" %}selected{% endif %}>품질유지기한</option>
+                  <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
+                  <option value="생산연도" {% if form.date_option.value == "생산연도" %}selected{% endif %}>생산연도</option>
+                </select>
+              </div>
               <div style="width:85%;">
-                <input type="text" name="storage_method" class="form-control auto-expand" placeholder="보관방법을 입력하거나 내문구를 선택하세요." value="{{ form.storage_method.value|default:'' }}">
+                <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value|default:'' }}">
               </div>
             </div>
-            <!-- 용기.포장재질 -->
-            <div class="d-flex align-items-center" style="flex:1; gap:5px;">
-              <div style="width:10%; min-width:110px;">
-                <input type="checkbox" id="chk_frmlc_mtrqlt" name="chk_frmlc_mtrqlt" class="form-check-input" {% if label.chckd_frmlc_mtrqlt == "Y" %}checked{% endif %}>
-                <label for="chk_frmlc_mtrqlt" class="m-0">용기.포장재질</label>
+            <!-- 원재료명(표시) -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:15%; min-width:130px;">
+                <input type="checkbox" id="chk_rawmtrl_nm_display" name="chk_rawmtrl_nm_display" class="form-check-input" {% if label.chckd_rawmtrl_nm_display == "Y" %}checked{% endif %}>
+                <label for="chk_rawmtrl_nm_display" class="m-0">원재료명(표시)</label>
               </div>
-              <div style="width:5%;"></div>
               <div style="width:85%;">
-                <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" placeholder="용기.포장재질을 입력하거나 내문구를 선택하세요."value="{{ form.frmlc_mtrqlt.value|default:'' }}">
+                <div class="input-container">
+                  <textarea name="rawmtrl_nm_display" class="form-control auto-expand textarea" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
+                  <button type="button" class="btn btn-outline-primary btn-sm" onclick="handleIngredientPopup()">표로 입력</button>
+                </div>
               </div>
             </div>
-          </div>
-
-          <!-- 제조원 소재지 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <div style="width:9.6%; min-width:110px;">
-              <!-- 제조원 소재지 체크박스 -->
-              <input type="checkbox" id="chk_bssh_nm" name="chk_bssh_nm" class="form-check-input" 
-                     {% if label.chckd_bssh_nm == "Y" %}checked{% endif %}>
-              <label for="chk_bssh_nm" class="m-0">제조원 소재지</label>
+            <!-- 원재료명 (참고) -->
+            {% if has_ingredient_relations %}
+            <div class="mb-2" id="rawmtrl_nm_section">
+              <div class="d-flex align-items-center" style="gap:5px;">
+                <div style="width:15%; min-width:130px;">
+                  <div class="form-check">
+                    <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" 
+                           {% if label.chckd_rawmtrl_nm == "Y" %}checked{% endif %} disabled>
+                    <label for="chk_rawmtrl_nm" class="m-0">원재료명(참고)</label>
+                  </div>
+                </div>
+                <div style="width:85%;">
+                  <div class="input-container">
+                    <textarea name="rawmtrl_nm" class="form-control auto-expand textarea disabled-textarea" rows="2" 
+                              placeholder="원재료명을 입력하세요" disabled readonly>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+                  </div>
+                </div>
+              </div>  
             </div>
-            <div style="min-width:1px;">
-              <!-- 제조원 소재지 접기/펼치기 버튼 -->
-              <button type="button" class="btn btn-icon" id="toggleManufacturerBtn"
-                data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
-                aria-controls="other-manufacturers" style="font-size: 1rem; padding: 2px 1px;" title="펼치기">∨</button>
-            </div>
-            <div style="width:90.4%;">
-              <input type="text" name="bssh_nm" class="form-control auto-expand"  placeholder="제조원을 입력하거나 내문구를 선택하세요."value="{{ form.bssh_nm.value|default:'' }}">
-            </div>
-          </div>
-
-          <!-- 접힘 영역 (항목들 한 줄 정렬) -->
-          <div class="collapse mb-2" id="other-manufacturers">
-            <!-- 유통전문판매원 -->
+            {% endif %}
+            <!-- 주의사항 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-              <div style="width:11.1%; min-width:130px;">
-                <!-- 유통전문 판매원 체크박스 -->
-                <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address" class="form-check-input" 
-                       {% if label.chckd_distributor_address == "Y" %}checked{% endif %}>
-                <label for="chk_distributor_address" class="m-0">유통전문판매원</label>
-              </div>
-              <div style="width:88.9%;">
-                <input type="text" name="distributor_address" class="form-control auto-expand" placeholder="유통전문판매원을 입력하거나 내문구를 선택하세요."
-                      value="{{ form.distributor_address.value|default:'' }}">
-              </div>
-            </div>
-
-            <!-- 소분원 -->
-            <div class="d-flex align-items-center mb-2" style="gap:5px;">
-              <div style="width:11.1%; min-width:130px;">
-                <!-- 소분원 체크박스 -->
-                <input type="checkbox" id="chk_repacker_address" name="chk_repacker_address" class="form-check-input" 
-                       {% if label.chckd_repacker_address == "Y" %}checked{% endif %}>
-                <label for="chk_repacker_address" class="m-0">소분원</label>
-              </div>
-              <div style="width:88.9%;">
-                <input type="text" name="repacker_address" class="form-control auto-expand" placeholder="소분원을 입력하거나 내문구를 선택하세요."
-                      value="{{ form.repacker_address.value|default:'' }}">
-              </div>
-            </div>
-
-            <!-- 수입원 -->
-            <div class="d-flex align-items-center mb-2" style="gap:5px;">
-              <div style="width:11.1%; min-width:130px;">
-                <!-- 수입원 체크박스 -->
-                <input type="checkbox" id="chk_importer_address" name="chk_importer_address" class="form-check-input" 
-                       {% if label.chckd_importer_address == "Y" %}checked{% endif %}>
-                <label for="chk_importer_address" class="m-0">수입원</label>
-              </div>
-              <div style="width:88.9%;">
-                <input type="text" name="importer_address" class="form-control auto-expand" placeholder="수입원을 입력하거나 내문구를 선택하세요."
-                      value="{{ form.importer_address.value|default:'' }}">
-              </div>
-            </div>
-          </div>
-          
-          <!-- 소비기한/품질유지기한/제조연월일/생산연도 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <div style="width:11.6%; min-width:130px;">
-              <input type="checkbox" id="chk_pog_daycnt" name="chk_pog_daycnt" class="form-check-input" {% if label.chckd_pog_daycnt == "Y" %}checked{% endif %}>
-              <label for="chk_pog_daycnt" class="m-0">소비기한</label>
-            </div>
-            
-            <div style="width:88.4%;">
-              <div class="d-flex" style="gap:5px;">
-            <select name="date_option" class="form-control select2-date-option" style="width:50%;">
-              <option value="소비기한" {% if form.date_option.value == "소비기한" or not form.date_option.value %}selected{% endif %}>소비기한</option>
-              <option value="품질유지기한" {% if form.date_option.value == "품질유지기한" %}selected{% endif %}>품질유지기한</option>
-              <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
-              <option value="생산연도" {% if form.date_option.value == "생산연도" %}selected{% endif %}>생산연도</option>
-            </select>
-            <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value|default:'' }}">
-              </div>
-            </div>
-          </div>
-          
-          <!-- 원재료명(표시) -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <div style="width:9.6%; min-width:110px;">
-              <input type="checkbox" id="chk_rawmtrl_nm_display" name="chk_rawmtrl_nm_display" class="form-check-input" {% if label.chckd_rawmtrl_nm_display == "Y" %}checked{% endif %}>
-              <label for="chk_rawmtrl_nm_display" class="m-0">원재료명(표시)</label>
-            </div>
-            <div style="min-width:1px;">
-              <!-- 원재료명(표시) 상세입력 버튼 -->
-              <button type="button" class="btn btn-icon" style="font-size: 0.9rem; padding: 1px 1px;" onclick="handleIngredientPopup()" title="상세입력">✚</button>
-            </div>
-            <div style="width:90.4%;">
-              <textarea name="rawmtrl_nm_display" class="form-control auto-expand" rows="2" placeholder="원재료명(표시)을 입력하세요"> {{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
-            </div>
-          </div>
-
-          <!-- 원재료명 (참고) - ingredient_relations가 있을 때만 표시 -->
-          {% if has_ingredient_relations %}
-          <div class="mb-2" id="rawmtrl_nm_section">
-            <div class="d-flex align-items-center" style="gap:5px;">
-              <div style="width:11%; min-width:130px;">
+                <div style="width:15%; min-width:130px;">
                 <div class="form-check">
-                  <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" 
-                         {% if label.chckd_rawmtrl_nm == "Y" %}checked{% endif %} disabled>
-                  <label for="chk_rawmtrl_nm" class="m-0">원재료명(참고)</label>
+                  <input type="checkbox" id="chk_cautions" name="chk_cautions" class="form-check-input" {% if label.chckd_cautions == "Y" %}checked{% endif %}>
+                  <label for="chk_cautions" class="m-0">주의사항</label>
                 </div>
               </div>
-              <div style="width:89%;">
-                <textarea name="rawmtrl_nm" class="form-control auto-expand disabled-textarea" style="flex:1;" 
-                          placeholder="원재료명을 입력하세요" disabled readonly>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
-              </div>
-            </div>  
-          </div>
-          {% endif %}
-
-          <!-- 주의사항 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <div style="width:11%; min-width:130px;">
-              <div class="form-check">
-              <input type="checkbox" id="chk_cautions" name="chk_cautions" class="form-check-input" {% if label.chckd_cautions == "Y" %}checked{% endif %}>
-              <label for="chk_cautions" class="m-0">주의사항</label>
+              <div style="width:85%;">
+                <div class="input-container">
+                  <textarea name="cautions" class="form-control auto-expand textarea" rows="2" 
+                            placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.cautions.value|default:'' }}</textarea>
+                </div>
               </div>
             </div>
-            <div style="width:89%;">
-              <textarea name="cautions" 
-                class="form-control auto-expand" 
-                placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.cautions.value|default:'' }}</textarea>
-            </div>
-          </div>
-          <!-- 기타 표시사항 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <div style="width:11%; min-width:130px;">
-              <div class="form-check">
-              <input type="checkbox" id="chk_additional_info" name="chk_additional_info" class="form-check-input" {% if label.chckd_additional_info == "Y" %}checked{% endif %}>
-              <label for="chk_additional_info" class="m-0">기타표시사항</label>
+            <!-- 기타 표시사항 -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:15%; min-width:130px;">
+                <div class="form-check">
+                  <input type="checkbox" id="chk_additional_info" name="chk_additional_info" class="form-check-input" {% if label.chckd_additional_info == "Y" %}checked{% endif %}>
+                  <label for="chk_additional_info" class="m-0">기타표시사항</label>
+                </div>
+              </div>
+              <div style="width:85%;">
+                <div class="input-container">
+                  <textarea name="additional_info" class="form-control auto-expand textarea" rows="2" 
+                            placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.additional_info.value|default:'' }}</textarea>
+                </div>
+              </div>
+            </div>    
+            <!-- 영양성분 -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:12%; min-width:130px;">
+                <div class="form-check">
+                  <input type="checkbox" id="chk_nutrition_text" name="chk_nutrition_text" class="form-check-input" {% if label.chckd_nutrition_text == "Y" %}checked{% endif %}>
+                  <label for="chk_nutrition_text" class="form-check-label m-0">영양성분</label>
+                </div>
+              </div>
+              <div style="width:88%;">
+                <div class="input-container">
+                  <textarea id="nutrition_text" name="nutrition_text" class="form-control auto-expand textarea" rows="2" 
+                            placeholder="영양성분 계산기를 통해 입력하세요." readonly>{{ form.nutrition_text.value|default:'' }}</textarea>
+                  <button type="button" class="btn btn-outline-primary btn-sm" onclick="openNutritionCalculator()">계산기</button>
+                </div>
               </div>
             </div>
-            <div style="width:89%;">
-              <textarea name="additional_info" 
-                class="form-control auto-expand" 
-                placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.additional_info.value|default:'' }}</textarea>
-              </div>
-          </div>    
-
-          <!-- 영양성분 -->
-          <div class="d-flex align-items-center mb-2" style="gap:5px;">
-            <div style="width:9%; min-width:105px;">
-              <div class="form-check">
-                <input type="checkbox" id="chk_nutrition_text" name="chk_nutrition_text" class="form-check-input" {% if label.chckd_nutrition_text == "Y" %}checked{% endif %}>
-                <label for="chk_nutrition_text" class="form-check-label m-0">영양성분</label>
-              </div>
+            <!-- 영양성분 hidden 필드 -->
+            <div style="display: none;">
+              <input type="hidden" name="serving_size" value="{{ form.serving_size.value|default:'' }}">
+              <input type="hidden" name="serving_size_unit" value="{{ form.serving_size_unit.value|default:'' }}">
+              <input type="hidden" name="units_per_package" value="{{ form.units_per_package.value|default:'' }}">
+              <input type="hidden" name="nutrition_display_unit" value="{{ form.nutrition_display_unit.value|default:'' }}">
+              <input type="hidden" name="calories" value="{{ form.calories.value|default:'' }}">
+              <input type="hidden" name="calories_unit" value="{{ form.calories_unit.value|default:'' }}">
+              <input type="hidden" name="natriums" value="{{ form.natriums.value|default:'' }}">
+              <input type="hidden" name="natriums_unit" value="{{ form.natriums_unit.value|default:'' }}">
+              <input type="hidden" name="carbohydrates" value="{{ form.carbohydrates.value|default:'' }}">
+              <input type="hidden" name="carbohydrates_unit" value="{{ form.carbohydrates_unit.value|default:'' }}">
+              <input type="hidden" name="sugars" value="{{ form.sugars.value|default:'' }}">
+              <input type="hidden" name="sugars_unit" value="{{ form.sugars_unit.value|default:'' }}">
+              <input type="hidden" name="fats" value="{{ form.fats.value|default:'' }}">
+              <input type="hidden" name="fats_unit" value="{{ form.fats_unit.value|default:'' }}">
+              <input type="hidden" name="trans_fats" value="{{ form.trans_fats.value|default:'' }}">
+              <input type="hidden" name="trans_fats_unit" value="{{ form.trans_fats_unit.value|default:'' }}">
+              <input type="hidden" name="saturated_fats" value="{{ form.saturated_fats.value|default:'' }}">
+              <input type="hidden" name="saturated_fats_unit" value="{{ form.saturated_fats_unit.value|default:'' }}">
+              <input type="hidden" name="cholesterols" value="{{ form.cholesterols.value|default:'' }}">
+              <input type="hidden" name="cholesterols_unit" value="{{ form.cholesterols_unit.value|default:'' }}">
+              <input type="hidden" name="proteins" value="{{ form.proteins.value|default:'' }}">
+              <input type="hidden" name="proteins_unit" value="{{ form.proteins_unit.value|default:'' }}">
             </div>
-            <div style="min-width:1px;">
-              <!-- 영양성분 계산기 버튼 -->
-              <button type="button" class="btn btn-icon" style="font-size: 0.9rem; padding: 1px 1px;"
-              onclick="openNutritionCalculator()" title="영양성분 계산기">
-              🧮
-              </button>
-            </div>
-            <div style="width:91%;">
-              <textarea id="nutrition_text"
-                name="nutrition_text"
-                class="form-control auto-expand"
-                placeholder="영양성분 계산기를 통해 입력하세요."
-                readonly>{{ form.nutrition_text.value|default:'' }}</textarea>
-            </div>
-          </div>
-
-          <!-- 영양성분 hidden 필드 -->
-          <div style="display: none;">
-            <input type="hidden" name="serving_size" value="{{ form.serving_size.value|default:'' }}">
-            <input type="hidden" name="serving_size_unit" value="{{ form.serving_size_unit.value|default:'' }}">
-            <input type="hidden" name="units_per_package" value="{{ form.units_per_package.value|default:'' }}">
-            <input type="hidden" name="nutrition_display_unit" value="{{ form.nutrition_display_unit.value|default:'' }}">
-            <input type="hidden" name="calories" value="{{ form.calories.value|default:'' }}">
-            <input type="hidden" name="calories_unit" value="{{ form.calories_unit.value|default:'' }}">
-            <input type="hidden" name="natriums" value="{{ form.natriums.value|default:'' }}">
-            <input type="hidden" name="natriums_unit" value="{{ form.natriums_unit.value|default:'' }}">
-            <input type="hidden" name="carbohydrates" value="{{ form.carbohydrates.value|default:'' }}">
-            <input type="hidden" name="carbohydrates_unit" value="{{ form.carbohydrates_unit.value|default:'' }}">
-            <input type="hidden" name="sugars" value="{{ form.sugars.value|default:'' }}">
-            <input type="hidden" name="sugars_unit" value="{{ form.sugars_unit.value|default:'' }}">
-            <input type="hidden" name="fats" value="{{ form.fats.value|default:'' }}">
-            <input type="hidden" name="fats_unit" value="{{ form.fats_unit.value|default:'' }}">
-            <input type="hidden" name="trans_fats" value="{{ form.trans_fats.value|default:'' }}">
-            <input type="hidden" name="trans_fats_unit" value="{{ form.trans_fats_unit.value|default:'' }}">
-            <input type="hidden" name="saturated_fats" value="{{ form.saturated_fats.value|default:'' }}">
-            <input type="hidden" name="saturated_fats_unit" value="{{ form.saturated_fats_unit.value|default:'' }}">
-            <input type="hidden" name="cholesterols" value="{{ form.cholesterols.value|default:'' }}">
-            <input type="hidden" name="cholesterols_unit" value="{{ form.cholesterols_unit.value|default:'' }}">
-            <input type="hidden" name="proteins" value="{{ form.proteins.value|default:'' }}">
-            <input type="hidden" name="proteins_unit" value="{{ form.proteins_unit.value|default:'' }}">
-          </div>
-
           </form>
         </div>
-
         <!-- 우측 패널 탭 구조 -->
         <div id="regulationPanel" class="right-panel collapsible-panel show">
-          <!-- 탭 메뉴 -->
           <ul class="nav nav-tabs" id="phraseTab" role="tablist">
             <li class="nav-item" role="presentation">
               <a class="nav-link active" id="regulation-tab" data-bs-toggle="tab" href="#regulation-content">식품유형별 규정</a>
@@ -539,17 +470,12 @@
               <a class="nav-link" id="myphrases-tab" data-bs-toggle="tab" href="#myphrases-content">항목별 문구 및 규정</a>
             </li>
           </ul>
-
-          <!-- 탭 내용 -->
           <div class="tab-content p-2" style="height:100%;">
-            <!-- 관련규정 -->
             <div class="tab-pane fade show active" id="regulation-content" role="tabpanel">
               <textarea name="related_regulations" readonly class="form-control">...</textarea>
             </div>
-            <!-- 내문구 -->
             <div class="tab-pane fade" id="myphrases-content" role="tabpanel">
               <div id="myPhraseContainer" style="max-height:400px; overflow-y:auto;">
-                <!-- 규정 정보는 JS로 동적 추가 -->
                 <div id="myPhraseList" class="d-flex flex-column gap-2"></div>
               </div>
             </div>
