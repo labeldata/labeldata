@@ -1,5 +1,3 @@
-// my_label_list.html에서 분리한 스크립트 코드
-
 document.addEventListener("DOMContentLoaded", function () {
     const checkAll = document.getElementById("check-all");
 
@@ -31,8 +29,7 @@ function bulkDelete() {
         return;
     }
     if (confirm("선택한 라벨을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.")) {
-        // URL을 'bulk-delete/'에서 'bulk-delete-labels/'로 수정
-        fetch('/label/bulk-delete-labels/', {  // 여기를 수정
+        fetch('/label/bulk-delete-labels/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -62,7 +59,7 @@ function bulkCopy() {
         return;
     }
     if (confirm("선택한 라벨을 복사하시겠습니까?")) {
-        fetch('/label/bulk-copy-labels/', {  // URL이 올바름
+        fetch('/label/bulk-copy-labels/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -120,6 +117,13 @@ function downloadSelectedLabelsExcel() {
         alert("엑셀로 다운로드할 항목을 선택하세요.");
         return;
     }
+    // Generate filename with format LABELDATA_표시사항 데이터_YYMMDD
+    const today = new Date();
+    const year = today.getFullYear().toString().slice(-2); // Last two digits of year
+    const month = String(today.getMonth() + 1).padStart(2, '0'); // Month (0-11, so +1)
+    const day = String(today.getDate()).padStart(2, '0'); // Day
+    const fileName = `LABELDATA_표시사항 데이터_${year}${month}${day}.xlsx`;
+
     // 서버에 POST로 선택된 ID를 보내고, 엑셀 파일을 다운로드
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     fetch('/label/export-labels-excel/', {
@@ -138,7 +142,7 @@ function downloadSelectedLabelsExcel() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'labels.xlsx';
+        a.download = fileName; // Use the dynamically generated filename
         document.body.appendChild(a);
         a.click();
         a.remove();

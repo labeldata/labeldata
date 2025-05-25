@@ -120,10 +120,10 @@
                     <th style="width: 15%;">원재료명
                         <!-- 정렬 버튼 제거 -->
                     </th>
-                    <th style="width: 10%;">최종수정일
+                    <th style="width: 10%;">허가일자
                         <span class="sort-buttons">
-                            <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
-                            <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
+                            <a href="?sort=prms_dt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
+                            <a href="?sort=prms_dt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
                         </span>
                     </th>
                 </tr>
@@ -139,7 +139,7 @@
                     <td class="ellipsis-cell" title="{{ item.pog_daycnt }}">{{ item.pog_daycnt }}</td>
                     <td class="ellipsis-cell" title="{{ item.frmlc_mtrqlt }}">{{ item.frmlc_mtrqlt }}</td>
                     <td class="ellipsis-cell" title="{{ item.rawmtrl_nm }}">{{ item.rawmtrl_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.update_datetime|date:"Y-m-d H:i" }}">{{ item.update_datetime|date:"Y-m-d H:i" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prms_dt }}">{{ item.prms_dt }}</td>
                 </tr>
                 {% empty %}
                 <tr>

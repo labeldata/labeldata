@@ -103,13 +103,14 @@ def food_item_list(request):
         "expirde_dtm": "pog_daycnt",
         "rawmtrl_nm": "rawmtrl_nm",
     }
-    sort_field, sort_order = process_sorting(request, "prdlst_nm")
-    items_per_page = int(request.GET.get("items_per_page", 10))
-    page_number = request.GET.get("page", 1)
-
-    imported_mode = False
-    imported_items = []
+    # 정렬조건 변경
     if food_category == "imported":
+        # 수입제품: 수입일자 내림차순, 식품유형 오름차순(가나다순)
+        sort_field, sort_order = process_sorting(request, "expirde_dtm")
+        sort_field = "-expirde_dtm"
+        items_per_page = int(request.GET.get("items_per_page", 10))
+        page_number = request.GET.get("page", 1)
+
         imported_mode = True
         imported_conditions = Q()
         imported_search_values = {}
@@ -118,13 +119,17 @@ def food_item_list(request):
             if value:
                 imported_conditions &= Q(**{f"{model_field}__icontains": value})
                 imported_search_values[query_param] = value
-        imported_items = ImportedFood.objects.filter(imported_conditions).order_by("prduct_korean_nm")
+        imported_items = ImportedFood.objects.filter(imported_conditions).order_by("-expirde_dtm", "itm_nm")
         paginator, page_obj, page_range = paginate_queryset(imported_items, page_number, items_per_page)
         search_values = imported_search_values
     else:
-        # 국내제품: FoodItem 전체 (가공식품/첨가물 구분 없이)
+        # 국내제품: 허가일자 내림차순, 식품유형 오름차순(가나다순)
+        sort_field, sort_order = process_sorting(request, "prms_dt")
+        sort_field = "-prms_dt"
+        items_per_page = int(request.GET.get("items_per_page", 10))
+        page_number = request.GET.get("page", 1)
         search_conditions, search_values = get_search_conditions(request, search_fields)
-        food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
+        food_items = FoodItem.objects.filter(search_conditions).order_by('-prms_dt', 'prdlst_dcnm')
         paginator, page_obj, page_range = paginate_queryset(food_items, page_number, items_per_page)
 
     querystring_without_page = get_querystring_without(request, ["page"])
@@ -141,8 +146,8 @@ def food_item_list(request):
         "sort_order": sort_order,
         "querystring_without_page": querystring_without_page,
         "querystring_without_sort": querystring_without_sort,
-        "imported_mode": imported_mode,
-        "imported_items": page_obj if imported_mode else [],
+        "imported_mode": imported_mode if food_category == "imported" else False,
+        "imported_items": page_obj if food_category == "imported" else [],
     }
 
     return render(request, "label/food_item_list.html", context)
@@ -161,25 +166,24 @@ def my_label_list(request):
         "pog_daycnt": "pog_daycnt",  # 소비기한 검색 추가
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    sort_field, sort_order = process_sorting(request, "my_label_name")
+    # 표시사항 관리: 작성일 내림차순, 라벨명 오름차순(가나다순)
+    sort_field, sort_order = process_sorting(request, "create_datetime")
+    sort_field = "-create_datetime"
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
 
-    # ingredient_id 파라미터가 있으면 해당 원료와 연결된 표시사항만 필터링
     ingredient_id = request.GET.get("ingredient_id")
     ingredient_name = None
     if ingredient_id:
-        # LabelIngredientRelation에서 해당 ingredient_id와 연결된 label id만 추출
         linked_label_ids = LabelIngredientRelation.objects.filter(ingredient_id=ingredient_id).values_list("label_id", flat=True)
-        labels = MyLabel.objects.filter(user_id=request.user, my_label_id__in=linked_label_ids).filter(search_conditions).order_by(sort_field)
-        # 원재료명 조회 (존재하지 않을 수도 있으니 예외처리)
+        labels = MyLabel.objects.filter(user_id=request.user, my_label_id__in=linked_label_ids).filter(search_conditions).order_by("-create_datetime", "my_label_name")
         try:
             ingredient_obj = MyIngredient.objects.get(my_ingredient_id=ingredient_id)
             ingredient_name = ingredient_obj.prdlst_nm or ingredient_obj.ingredient_display_name or ingredient_id
         except MyIngredient.DoesNotExist:
             ingredient_name = ingredient_id
     else:
-        labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by(sort_field)
+        labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by("-create_datetime", "my_label_name")
 
     paginator, page_obj, page_range = paginate_queryset(labels, page_number, items_per_page)
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
@@ -851,7 +855,8 @@ def my_ingredient_list(request):
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
-    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+    # 원료관리: 식품구분 오름차순(가나다순), 식품유형 오름차순(가나다순), 원재료명 오름차순
+    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('food_category', 'prdlst_dcnm', 'prdlst_nm')
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
     querystring_without_page = get_querystring_without(request, ['page'])
     querydict_sort = request.GET.copy()
@@ -913,7 +918,7 @@ def my_ingredient_list_combined(request):
     if label_id:
         # 라벨에 연결된 원료만 조회
         ingredient_ids = LabelIngredientRelation.objects.filter(label_id=label_id).values_list('ingredient_id', flat=True)
-        my_ingredients = MyIngredient.objects.filter(my_ingredient_id__in=ingredient_ids).filter(search_conditions).order_by(sort_field)
+        my_ingredients = MyIngredient.objects.filter(my_ingredient_id__in=ingredient_ids).filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
         # 라벨명 가져오기
         label_name = None
         try:
@@ -922,7 +927,7 @@ def my_ingredient_list_combined(request):
         except MyLabel.DoesNotExist:
             label_name = None
     else:
-        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
         label_name = None
 
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
@@ -1626,13 +1631,14 @@ def reorder_phrases(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
-@never_cache
+
 def phrase_popup(request):
     """자주 사용하는 문구 팝업"""
     phrases_data = {}
     # CATEGORY_CHOICES에서 정의된 모든 카테고리에 대한 빈 리스트 초기화
     categories = CATEGORY_CHOICES
     for category_code, _ in categories:
+       
         phrases_data[category_code] = []
     # 사용자 문구만 가져오기
     user_phrases = MyPhrase.objects.filter(
@@ -1640,6 +1646,7 @@ def phrase_popup(request):
         delete_YN='N'
     ).order_by('category_name', 'display_order')
     # 사용자 문구 추가 (카테고리 유효성 체크)
+
     for phrase in user_phrases:
         category = phrase.category_name
         if category not in phrases_data:
@@ -1919,7 +1926,7 @@ def my_ingredient_table_partial(request):
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
-    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
     context = {
         'page_obj': page_obj,
