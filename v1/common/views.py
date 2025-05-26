@@ -400,7 +400,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
         start_date_int = None
 
     if start_date_int == 0:
-        procs_dtm_start = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+        procs_dtm_start = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
     elif start_date_int == 1:
         procs_dtm_start = datetime.now().strftime("%Y%m%d")
     else:
