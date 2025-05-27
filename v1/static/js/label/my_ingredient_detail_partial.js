@@ -92,25 +92,6 @@ function saveMyIngredient() {
         url = '/label/my-ingredient-detail/';
     }
 
-    // 변경 감지: 기존 값과 formData 비교 (간단 예시, 실제로는 더 정교하게 구현 가능)
-    let isChanged = false;
-    if (my_ingredient_id) {
-        // 기존 값과 input 값 비교 (예: 원재료명, 제조사명 등)
-        const original = window.originalIngredientData || {};
-        if (
-            original.prdlst_nm !== formData.get('prdlst_nm') ||
-            original.prdlst_report_no !== formData.get('prdlst_report_no') ||
-            original.food_category !== formData.get('food_category') ||
-            original.prdlst_dcnm !== formData.get('prdlst_dcnm') ||
-            original.bssh_nm !== formData.get('bssh_nm') ||
-            original.ingredient_display_name !== formData.get('ingredient_display_name') ||
-            original.allergens !== formData.get('allergens') ||
-            original.gmo !== formData.get('gmo')
-        ) {
-            isChanged = true;
-        }
-    }
-
     // 검색 조건 쿼리스트링 추출 (ingredientTable이 있는 페이지에서만 동작)
     let queryString = '';
     const searchForm = document.querySelector('form[action*="my_ingredient_list_combined"]');
@@ -123,11 +104,58 @@ function saveMyIngredient() {
         if (qs) queryString = qs;
     }
 
-    // 연결된 표시사항 모달 없이 바로 저장
-    doSaveMyIngredient(url, formData, queryString);
+    // 저장 버튼 비활성화(중복 저장 방지)
+    const saveBtn = document.querySelector('button[type="submit"][form="ingredientForm"]');
+    if (saveBtn) saveBtn.disabled = true;
+
+    // 원재료명 필수값 체크
+    const prdlst_nm = formData.get('prdlst_nm')?.trim();
+    if (!prdlst_nm) {
+        alert('원재료명은 필수 입력값입니다.');
+        if (saveBtn) saveBtn.disabled = false;
+        document.getElementById('prdlst_nm').focus();
+        return;
+    }
+
+    // 원재료명 중복 체크 (신규 등록 시에만)
+    if (!my_ingredient_id && prdlst_nm) {
+        fetch('/label/check-my-ingredient/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ prdlst_nm })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.exists) {
+                if (!confirm('동일한 이름의 원료가 이미 존재합니다. 그래도 저장하시겠습니까?')) {
+                    if (saveBtn) saveBtn.disabled = false;
+                    return;
+                } else {
+                    // 중복 무시 의도 전달
+                    formData.append('ignore_duplicate', 'Y');
+                }
+            }
+            doSaveMyIngredient(url, formData, queryString, function() {
+                if (saveBtn) saveBtn.disabled = false;
+            });
+        })
+        .catch(() => {
+            if (saveBtn) saveBtn.disabled = false;
+            alert('중복 체크 중 오류가 발생했습니다.');
+        });
+        return;
+    }
+    // 기존 원료 수정 또는 원재료명 미입력 시 바로 저장
+    doSaveMyIngredient(url, formData, queryString, function() {
+        if (saveBtn) saveBtn.disabled = false;
+    });
 }
 
-function doSaveMyIngredient(url, formData, queryString) {
+// doSaveMyIngredient에 콜백 추가
+function doSaveMyIngredient(url, formData, queryString, doneCallback) {
     fetch(url, {
         method: 'POST',
         body: formData,
@@ -175,6 +203,9 @@ function doSaveMyIngredient(url, formData, queryString) {
     .catch(error => {
         console.error('Error:', error);
         alert('저장 중 오류가 발생했습니다.1');
+    })
+    .finally(() => {
+        if (typeof doneCallback === 'function') doneCallback();
     });
 }
 

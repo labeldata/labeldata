@@ -790,55 +790,16 @@ def fetch_food_item(request, prdlst_report_no):
 @csrf_exempt
 def check_my_ingredient(request):
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+        return JsonResponse({'exists': False, 'error': 'Invalid request method'}, status=400)
     try:
         data = json.loads(request.body)
-        prdlst_report_no = data.get('prdlst_report_no', '').strip()
-        food_type = data.get('food_type', '').strip()
-        display_name = data.get('display_name', '').strip()
-        
-        if prdlst_report_no:
-            qs = MyIngredient.objects.filter(
-                user_id=request.user,
-                prdlst_report_no=prdlst_report_no,
-                delete_YN='N'
-            )
-            existing_ingredients = list(qs.values(
-                'my_ingredient_id',
-                'prdlst_nm',
-                'prdlst_report_no',
-                'prdlst_dcnm',
-                'bssh_nm',
-                'ingredient_display_name'
-            ))
-        else:
-            qs = MyIngredient.objects.filter(
-                user_id=request.user,
-                prdlst_dcnm=food_type,
-                delete_YN='N'
-            )
-            candidates = list(qs.values(
-                'my_ingredient_id',
-                'prdlst_nm',
-                'prdlst_report_no',
-                'prdlst_dcnm',
-                'bssh_nm',
-                'ingredient_display_name'
-            ))
-            threshold = 70
-            filtered = []
-            for ingredient in candidates:
-                candidate_name = ingredient.get('ingredient_display_name', '')
-                score = fuzz.ratio(candidate_name.lower(), display_name.lower())
-                if score >= threshold:
-                    ingredient['similarity'] = score
-                    filtered.append(ingredient)
-            existing_ingredients = sorted(filtered, key=lambda x: x['similarity'], reverse=True)
-
-        exists = len(existing_ingredients) > 0
-        return JsonResponse({'exists': exists, 'ingredients': existing_ingredients})
+        prdlst_nm = data.get('prdlst_nm', '').strip()
+        exists = False
+        if prdlst_nm:
+            exists = MyIngredient.objects.filter(user_id=request.user, prdlst_nm=prdlst_nm, delete_YN='N').exists()
+        return JsonResponse({'exists': exists})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'exists': False, 'error': str(e)}, status=500)
     
 @login_required
 def my_ingredient_list(request):
@@ -967,13 +928,32 @@ def my_ingredient_detail(request, ingredient_id=None):
     if my_ingredient_id:
         # user_id는 request.user 또는 None도 허용 (공용 원료 지원)
         ingredient = get_object_or_404(MyIngredient, my_ingredient_id=my_ingredient_id)
-        # 기존: user_id=request.user
         mode = 'edit'
     else:
         ingredient = MyIngredient(user_id=request.user, delete_YN='N')
         mode = 'create'
 
     if request.method == 'POST':
+        # 공용 원료(user_id=None)는 수정 불가
+        if getattr(ingredient, 'user_id', None) is None:
+            msg = '공용 원료는 수정할 수 없습니다.'
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': msg})
+            else:
+                messages.error(request, msg)
+                return redirect('label:my_ingredient_detail', ingredient_id=ingredient.my_ingredient_id)
+        # 중복 체크: 신규 등록(생성)일 때만 동일한 이름의 내 원료가 이미 존재하면 에러 반환
+        prdlst_nm = request.POST.get('prdlst_nm', '').strip()
+        ignore_duplicate = request.POST.get('ignore_duplicate', '').upper() == 'Y'
+        if prdlst_nm and mode == 'create' and not ignore_duplicate:
+            duplicate_qs = MyIngredient.objects.filter(user_id=request.user, prdlst_nm=prdlst_nm, delete_YN='N')
+            if duplicate_qs.exists():
+                msg = '동일한 이름의 원료가 이미 존재합니다.'
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': msg}, status=400)
+                else:
+                    messages.error(request, msg)
+                    return redirect('label:my_ingredient_detail', ingredient_id=ingredient.my_ingredient_id)
         form = MyIngredientsForm(request.POST, instance=ingredient)
         if form.is_valid():
             new_ingredient = form.save(commit=False)
@@ -1025,6 +1005,26 @@ def save_ingredients_to_label(request, label_id):
 
         # 새로운 원재료 정보 저장
         for sequence, ingredient_data in enumerate(ingredients_data, start=1):
+            # "정제수"는 공용 MyIngredient(user_id=None, prdlst_nm='정제수')와만 연결
+            if ingredient_data.get('ingredient_name') == "정제수":
+                ingredient = MyIngredient.objects.filter(user_id=None, prdlst_nm="정제수", delete_YN='N').first()
+                if not ingredient:
+                    # 공용 정제수 원료가 없으면 이 원료는 건너뜀
+                    continue
+                relation = LabelIngredientRelation(
+                    label=label,
+                    ingredient=ingredient,
+                    relation_sequence=sequence
+                )
+                try:
+                    ratio_value = ingredient_data.get('ratio', '')
+                    if ratio_value and ratio_value.strip():
+                        relation.ingredient_ratio = Decimal(ratio_value)
+                except (ValueError, InvalidOperation):
+                    pass
+                relation.save()
+                continue
+
             # 원재료 ID가 있는 경우 기존 원재료 사용
             my_ingredient_id = ingredient_data.get('my_ingredient_id')
             
@@ -1095,9 +1095,7 @@ def save_ingredients_to_label(request, label_id):
         label.save()
         return JsonResponse({'success': True, 'message': '저장되었습니다.'})
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())  # 서버 로그에 상세 오류 출력
-        return JsonResponse({'success': False, 'error': f'저장 중 오류가 발생했습니다: {str(e)}'})
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
 @csrf_exempt
@@ -1105,6 +1103,9 @@ def delete_my_ingredient(request, ingredient_id):
     if request.method == 'POST':
         try:
             ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
+            # 공용 원료(user_id=None)는 삭제 불가
+            if getattr(ingredient, 'user_id', None) is None:
+                return JsonResponse({'success': False, 'error': '공용 원료는 삭제할 수 없습니다.'})
             LabelIngredientRelation.objects.filter(ingredient_id=ingredient.my_ingredient_id).delete()
             ingredient.delete_YN = 'Y'
             ingredient.save()
@@ -1251,9 +1252,13 @@ def register_my_ingredient(request):
     
     try:
         data = json.loads(request.body)
+        prdlst_nm = data.get('ingredient_name', '').strip()
+        # 중복 체크: 동일한 이름의 내 원료가 이미 존재하면 에러 반환
+        if MyIngredient.objects.filter(user_id=request.user, prdlst_nm=prdlst_nm, delete_YN='N').exists():
+            return JsonResponse({'success': False, 'error': '동일한 이름의 원료가 이미 존재합니다.'}, status=400)
         MyIngredient.objects.create(
             user_id=request.user,
-            prdlst_nm=data.get('ingredient_name', ''),
+            prdlst_nm=prdlst_nm,
             prdlst_report_no=data.get('prdlst_report_no', ''),
             prdlst_dcnm=data.get('food_type', ''),
             ingredient_display_name=data.get('display_name', ''),
@@ -1597,6 +1602,7 @@ def manage_phrases(request):
     except MyPhrase.DoesNotExist:
         logger.error("Phrase not found")
         return JsonResponse({'success': False, 'error': '문구를 찾을 수 없습니다.'})
+
     except json.JSONDecodeError:
         logger.error("Invalid JSON data")
         return JsonResponse({'success': False, 'error': '잘못된 데이터 형식입니다.'})
@@ -1978,6 +1984,14 @@ def linked_labels_count(request, ingredient_id):
     count = LabelIngredientRelation.objects.filter(ingredient_id=ingredient_id).count()
     return JsonResponse({'count': count})
 
+@login_required
+@csrf_exempt
 def linked_ingredient_count(request, label_id):
-    count = LabelIngredientRelation.objects.filter(label_id=label_id).count()
-    return JsonResponse({'count': count})
+    """
+    Returns the count of ingredients linked to a given label (MyLabel).
+    """
+    try:
+        count = LabelIngredientRelation.objects.filter(label_id=label_id).count()
+        return JsonResponse({'count': count})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
