@@ -43,9 +43,79 @@ DEFAULT_PHRASES = {
         {'name': '개봉 후 보관', 'content': '개봉 후에는 냉장 보관하고 가급적 빨리 섭취하십시오.', 'note': '유지 안정성 낮은 제품', 'order': 4}
     ],
     'package': [
-        {'name': '일반포장재', 'content': '내포장재: PE/PP, 외포장재: PE/PP', 'note': '플라스틱 포장 제품', 'order': 1},
-        {'name': '캔포장', 'content': '알루미늄 캔', 'note': '캔 제품', 'order': 2},
-        {'name': '종이포장', 'content': '내포장재: 알루미늄 호일, 외포장재: 종이', 'note': '종이 + 알루미늄 복합 포장', 'order': 3}
+        {
+            'name': '플라스틱 PE 포장',
+            'content': '폴리에틸렌(PE)',
+            'note': '단일재질 플라스틱 필름 또는 용기',
+            'order': 1,
+            'recycling_mark': '플라스틱(PE)',
+            'keywords': ['폴리에틸렌', 'pe', '플라스틱 pe', 'pe 필름']  # 매칭 키워드
+        },
+        {
+            'name': '플라스틱 PP 포장',
+            'content': '폴리프로필렌(PP)',
+            'note': '단일재질 플라스틱 용기 또는 트레이',
+            'order': 2,
+            'recycling_mark': '플라스틱(PP)',
+            'keywords': ['폴리프로필렌', 'pp', '플라스틱 pp', 'pp 용기']
+        },
+        {
+            'name': 'PET 병 포장',
+            'content': '폴리에틸렌테레프탈레이트(PET)',
+            'note': '단일재질 PET 병',
+            'order': 3,
+            'recycling_mark': '플라스틱(PET)',
+            'keywords': ['pet', '폴리에틸렌테레프탈레이트', '플라스틱 pet', 'pet 병']
+        },
+        {
+            'name': '유리 포장',
+            'content': '유리',
+            'note': '단일재질 유리병',
+            'order': 4,
+            'recycling_mark': '유리',
+            'keywords': ['유리', '유리병', '글라스']
+        },
+        {
+            'name': '알루미늄 캔 포장',
+            'content': '알루미늄',
+            'note': '단일재질 알루미늄 캔',
+            'order': 5,
+            'recycling_mark': '금속(알루미늄)',
+            'keywords': ['알루미늄', '알루미늄 캔', '알캔']
+        },
+        {
+            'name': '철 캔 포장',
+            'content': '철',
+            'note': '단일재질 철제 캔 또는 드럼',
+            'order': 6,
+            'recycling_mark': '금속(철)',
+            'keywords': ['철', '철 캔', '스틸']
+        },
+        {
+            'name': '종이 포장',
+            'content': '종이',
+            'note': '단일재질 종이 포장 또는 티백',
+            'order': 7,
+            'recycling_mark': '종이',
+            'keywords': ['종이', '페이퍼', '카드보드']
+        },
+        {
+            'name': '플라스틱 복합 포장',
+            'content': '내포장재: 폴리에틸렌(PE), 외포장재: 종이',
+            'note': '식품용 플라스틱 필름 및 종이 박스 포장',
+            'order': 8,
+            'recycling_mark': '복합재질(분리배출 요망)',
+            'keywords': ['복합', '플라스틱+종이', 'pe+종이', '다층']
+        },
+        # 기타 포장재질
+        {
+            'name': '기타 포장',
+            'content': '기타',
+            'note': '분류 불가능한 포장재질',
+            'order': 9,
+            'recycling_mark': '기타',
+            'keywords': ['기타', '미분류', '그 외']
+        }
     ],
     'manufacturer': [
         {'name': '제조원기본', 'content': '제조원: (주)식품제조 / 경기도 성남시 분당구 판교로 000', 'note': '직접 제조하는 경우', 'order': 1},

@@ -1,4 +1,3 @@
-<!-- templates/label/label_preview.html -->
 <!DOCTYPE html>
 {% load static %}
 <html lang="ko">
@@ -8,19 +7,20 @@
   <title>라벨 미리보기</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
   <link href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
 
-  <!-- React & DnD 등 -->
+  <!-- React & DnD -->
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-beautiful-dnd@13/dist/react-beautiful-dnd.min.js"></script>
 
-  <!-- PDF 라이브러리 -->
+  <!-- PDF Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
-  <!-- Bootstrap JS 및 미리보기 스크립트 -->
+  <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{% static 'js/label/label_preview.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
@@ -43,21 +43,20 @@
       overflow: visible;
     }
 
-    /* 미리보기 콘텐츠 상/하단 동일 패딩 설정 */
     .preview-content {
       border: 1px solid #dee2e6;
       background-color: #ffffff;
       padding: 20px;
       margin: 0;
       min-height: 400px;
+      position: relative;
     }
 
-    /* 헤더박스 스타일: 배경색, 여백 복원 */
     .preview-header-box {
       background-color: var(--primary-color) !important;
       color: #ffffff !important;
       padding: 8px 12px;
-      margin-bottom: 0;  /* 간격 제거 */
+      margin-bottom: 0;
       width: 100%;
       display: block;
     }
@@ -67,20 +66,18 @@
       font-weight: bold;
     }
 
-    /* 푸터와 콘텐츠 사이 간격 제어 */
     .footer-text {
       text-align: right;
       font-size: 7.5pt;
       color: #6c757d;
-      margin: 12px 0 8px 0;  /* 상단/하단 마진 조정 */
+      margin: 12px 0 8px 0;
       padding: 0;
     }
 
-    /* 표 스타일 통합 및 상단 마진 조정 */
     .preview-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 0;  /* 마진 제거 */
+      margin: 0;
       table-layout: auto;
     }
     .preview-table th,
@@ -97,7 +94,6 @@
       white-space: nowrap;
     }
 
-    /* 헤더 스타일 */
     .preview-header {
       display: flex;
       justify-content: space-between;
@@ -117,7 +113,6 @@
       gap: 8px;
     }
 
-    /* 설정 패널 내부 아이템 */
     .settings-row {
       display: flex;
       align-items: center;
@@ -142,10 +137,8 @@
       min-width: 100px;
       max-width: 120px;
     }
-    /* 인라인 스타일 제거: heightInput은 JS로 제어 */
     #heightInput { width: auto !important; }
 
-    /* 알레르기 강조 스타일 */
     .preview-table .allergen-text {
       display: inline-block;
       margin-left: auto;
@@ -156,192 +149,203 @@
       font-size: 0.9em;
     }
 
-    /* 레이아웃 선택 완전 숨김 */
     .layout-select,
     .settings-row.mb-3.layout-select {
       display: none !important;
     }
 
-    /* 탭 네비게이션과 설정 사이 간격 */
     .nav-tabs {
       margin-bottom: 1.5rem !important;
     }
-</style>
-    
-  <!-- 폰트 추가 -->
-  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+
+    /* 분리배출마크 UI 스타일 */
+    #recyclingMarkUiBox .settings-item {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #recyclingMarkControls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    #recyclingMarkSelect {
+      flex: 1;
+      max-width: 100%;
+    }
+    #addRecyclingMarkBtn {
+      white-space: nowrap;
+    }
+    #recyclingMarkRecommendText {
+      font-size: 0.9rem;
+      color: #6c757d;
+      margin-top: 5px;
+      width: 100%;
+      text-align: left;
+    }
+  </style>
 </head>
 <body>
-<!-- 헤더 구조 수정 -->
   <div class="preview-header">
-      <div class="preview-title">미리보기</div>
-      <div class="preview-actions">
-          <button class="btn btn-outline-primary btn-sm" id="validateButton">규정 검증</button>
-          <button class="btn btn-outline-primary btn-sm" id="exportPdfBtn">PDF 저장</button>
-          <button class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
-      </div>
+    <div class="preview-title">미리보기</div>
+    <div class="preview-actions">
+      <button class="btn btn-outline-primary btn-sm" id="validateButton">규정 검증</button>
+      <button class="btn btn-outline-primary btn-sm" id="exportPdfBtn">PDF 저장</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
+    </div>
   </div>
 
-<div class="preview-container">
+  <div class="preview-container">
     <!-- 왼쪽 설정 패널 -->
     <div class="settings-panel">
-        <button class="btn btn-outline-primary btn-sm w-100 mb-3" onclick="resetSettings()">
-            <i class="bi bi-arrow-counterclockwise"></i> 설정 초기화
-        </button>
-        
-        <!-- 탭 네비게이션 추가 -->
-        <ul class="nav nav-tabs nav-fill mb=3" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#content-tab">표시사항</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#nutrition-tab">영양성분</button>
-            </li>
-        </ul>
-        
-        <div class="tab-content">
-            <!-- 표시사항 탭 -->
-            <div class="tab-pane fade show active" id="content-tab">
-                <div class="settings-group">
-                    <!-- 레이아웃 선택 추가 - 임시 숨김 처리 -->
-                    <div class="settings-row mb-3 layout-select">
-                        <div class="settings-item">
-                            <label class="form-label">레이아웃</label>
-                            <select class="form-select form-select-sm" id="layoutSelect" disabled>
-                                <option value="vertical" {% if label.prv_layout == "vertical" %}selected{% endif %}>세로형</option>
-                                <option value="horizontal" {% if label.prv_layout == "horizontal" %}selected{% endif %}>가로형</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- 기존 설정들 -->
-                    <div class="area-info text-primary mb=2">
-                        정보표시면 면적: <span id="areaDisplay">100</span> cm²
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label required">가로(cm)</label>
-                            <input type="number" class="form-control form-control-sm" id="widthInput" 
-                                   value="{{ label.prv_width|default:'10' }}" min="4" max="30" step="1">
-                        </div>
-                    </div>
-                    <!-- 세로 입력 필드 수정 -->
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label required">세로</label>
-                            <input type="number" class="form-control form-control-sm" id="heightInput" 
-                                   value="{{ label.prv_length|default:'10' }}" disabled>
-                        </div>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label">글꼴</label>
-                            <select class="form-select form-select-sm" id="fontFamilySelect">
-                                <option value="'Noto Sans KR'" {% if label.prv_font == "'Noto Sans KR'" %}selected{% endif %}>노토 산스</option>
-                                <option value="'Nanum Gothic'" {% if label.prv_font == "'Nanum Gothic'" %}selected{% endif %}>나눔고딕</option>
-                                <option value="'Nanum Myeongjo'" {% if label.prv_font == "'Nanum Myeongjo'" %}selected{% endif %}>나눔명조</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label">크기(pt)</label>
-                            <input type="number" class="form-control form-control-sm" id="fontSizeInput" 
-                                   value="{{ label.prv_font_size|default:'10' }}" min="10" max="72" step="1">
-                        </div>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label">자간(%)</label>
-                            <input type="number" class="form-control form-control-sm" id="letterSpacingInput" 
-                                   value="{{ label.prv_letter_spacing|default:'-5' }}" min="-5" max="10" step="1">
-                        </div>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label">줄간격</label>
-                            <input type="number" class="form-control form-control-sm" id="lineHeightInput" 
-                                   value="{{ label.prv_line_spacing|default:'1.2' }}" min="1" max="3.0" step="0.1">
-                        </div>
-                    </div>
-                </div>
+      <button class="btn btn-outline-primary btn-sm w-100 mb-3" onclick="resetSettings()">
+        <i class="bi bi-arrow-counterclockwise"></i> 설정 초기화
+      </button>
+      
+      <ul class="nav nav-tabs nav-fill mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#content-tab">표시사항</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#nutrition-tab">영양성분</button>
+        </li>
+      </ul>
+      
+      <div class="tab-content">
+        <!-- 표시사항 탭 -->
+        <div class="tab-pane fade show active" id="content-tab">
+          <div class="settings-group">
+            <div class="settings-row mb-3 layout-select">
+              <div class="settings-item">
+                <label class="form-label">레이아웃</label>
+                <select class="form-select form-select-sm" id="layoutSelect" disabled>
+                  <option value="vertical" {% if label.prv_layout == "vertical" %}selected{% endif %}>세로형</option>
+                  <option value="horizontal" {% if label.prv_layout == "horizontal" %}selected{% endif %}>가로형</option>
+                </select>
+              </div>
             </div>
             
-            <!-- 영양성분 탭 -->
-            <div class="tab-pane fade" id="nutrition-tab">
-                <div class="settings-group">
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label">단위내용량</label>
-                            <input type="text" id="servingSizeDisplay" class="form-control form-control-sm" readonly disabled>
-                        </div>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label">포장당 갯수</label>
-                            <input type="text" id="servingsPerPackageDisplay" class="form-control form-control-sm" readonly disabled>
-                        </div>
-                    </div>
-                    <div class="settings-row">
-                        <div class="settings-item">
-                            <label class="form-label">표시 단위</label>
-                            <select id="nutritionDisplayUnit" class="form-select form-select-sm">
-                                <option value="unit">단위내용량</option>
-                                <option value="total">총내용량</option>
-                                <option value="100g">100g당</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
+            <div class="area-info text-primary mb-2">
+              정보표시면 면적: <span id="areaDisplay">100</span> cm²
             </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label required">가로(cm)</label>
+                <input type="number" class="form-control form-control-sm" id="widthInput" 
+                       value="{{ label.prv_width|default:'10' }}" min="4" max="30" step="1">
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label required">세로</label>
+                <input type="number" class="form-control form-control-sm" id="heightInput" 
+                       value="{{ label.prv_length|default:'10' }}" disabled>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">글꼴</label>
+                <select class="form-select form-select-sm" id="fontFamilySelect">
+                  <option value="'Noto Sans KR'" {% if label.prv_font == "'Noto Sans KR'" %}selected{% endif %}>노토 산스</option>
+                  <option value="'Nanum Gothic'" {% if label.prv_font == "'Nanum Gothic'" %}selected{% endif %}>나눔고딕</option>
+                  <option value="'Nanum Myeongjo'" {% if label.prv_font == "'Nanum Myeongjo'" %}selected{% endif %}>나눔명조</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">크기(pt)</label>
+                <input type="number" class="form-control form-control-sm" id="fontSizeInput" 
+                       value="{{ label.prv_font_size|default:'10' }}" min="10" max="72" step="1">
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">자간(%)</label>
+                <input type="number" class="form-control form-control-sm" id="letterSpacingInput" 
+                       value="{{ label.prv_letter_spacing|default:'-5' }}" min="-5" max="10" step="1">
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">줄간격</label>
+                <input type="number" class="form-control form-control-sm" id="lineHeightInput" 
+                       value="{{ label.prv_line_spacing|default:'1.2' }}" min="1" max="3.0" step="0.1">
+              </div>
+            </div>
+          </div>
         </div>
+        
+        <!-- 영양성분 탭 -->
+        <div class="tab-pane fade" id="nutrition-tab">
+          <div class="settings-group">
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">단위내용량</label>
+                <input type="text" id="servingSizeDisplay" class="form-control form-control-sm" readonly disabled>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">포장당 갯수</label>
+                <input type="text" id="servingsPerPackageDisplay" class="form-control form-control-sm" readonly disabled>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">표시 단위</label>
+                <select id="nutritionDisplayUnit" class="form-select form-select-sm">
+                  <option value="unit">단위내용량</option>
+                  <option value="total">총내용량</option>
+                  <option value="100g">100g당</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 오른쪽 미리보기 패널 -->
     <div class="preview-panel">
-        <div id="previewContent" class="preview-content">
-            <div class="preview-header-box">
-                <div class="header-text">식품위생법에 따른 한글표시사항</div>
-            </div>
-            
-            <!-- CSRF 토큰을 미리보기 팝업에도 전달 -->
-            <form style="display:none;">
-              {% csrf_token %}
-            </form>
-            
-            <!-- label_id와 작성일시 정보를 위한 hidden input 추가 -->
-            <input type="hidden" name="label_id" value="{{ label.my_label_id }}">
-            <input type="hidden" id="update_datetime" name="update_datetime" value="{{ label.update_datetime|date:'Y-m-d H:i' }}">
-
-            <table class="preview-table">
-                <tbody id="previewTableBody"></tbody>
-            </table>
-            <!-- 영양성분 미리보기 영역 추가 -->
-            <div id="nutritionPreview" class="mt-4" style="display: none;">
-                <hr>
-                <h6 class="mb-3">■ 영양성분</h6>
-                <div class="nutrition-header mb-2"></div>
-                <table class="table table-sm table-bordered">
-                    <thead>
-                        <tr>
-                            <th style="width: 35%">항목</th>
-                            <th class="nutrition-value-header" style="width: 65%">단위내용량당</th>
-                        </tr>
-                    </thead>
-                    <tbody id="nutritionTableBody"></tbody>
-                </table>
-                <div class="nutrition-footer text-muted small">※ 1일 영양성분 기준치에 대한 비율(%)</div>
-            </div>
-            <div class="footer-text">
-                labeldata.com 에서 관련법규에 따라 작성되었습니다.
-                <span class="creator-info">[{{ label.update_datetime|date:"Y-m-d H:i" }}]</span>
-            </div>
+      <div id="previewContent" class="preview-content">
+        <div class="preview-header-box">
+          <div class="header-text">식품위생법에 따른 한글표시사항</div>
         </div>
+        
+        <form style="display:none;">
+          {% csrf_token %}
+        </form>
+        
+        <input type="hidden" name="label_id" value="{{ label.my_label_id }}">
+        <input type="hidden" id="update_datetime" name="update_datetime" value="{{ label.update_datetime|date:'Y-m-d H:i' }}">
+
+        <table class="preview-table">
+          <tbody id="previewTableBody"></tbody>
+        </table>
+        <div id="nutritionPreview" class="mt-4" style="display: none;">
+          <hr>
+          <h6 class="mb-3">■ 영양성분</h6>
+          <div class="nutrition-header mb-2"></div>
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th style="width: 35%">항목</th>
+                <th class="nutrition-value-header" style="width: 65%">단위내용량당</th>
+              </tr>
+            </thead>
+            <tbody id="nutritionTableBody"></tbody>
+          </table>
+          <div class="nutrition-footer text-muted small">※ 1일 영양성분 기준치에 대한 비율(%)</div>
+        </div>
+        <div class="footer-text">
+          labeldata.com 에서 관련법규에 따라 작성되었습니다.
+          <span class="creator-info">[{{ label.update_datetime|date:"Y-m-d H:i" }}]</span>
+        </div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- nutrition_data를 JS로 전달 -->
-<script id="nutrition-data" type="application/json">{{ nutrition_data|safe }}</script>
-
+  <script id="nutrition-data" type="application/json">{{ nutrition_data|safe }}</script>
 </body>
 </html>
