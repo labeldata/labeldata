@@ -10,6 +10,8 @@ from django.http import JsonResponse, HttpResponse
 from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+import json
 from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive, ImportedFood
 from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  # 지우지 않음
@@ -351,7 +353,16 @@ def label_creation(request, label_id=None):
                     model_field = 'chckd_' + field_name[4:]  # chk_ -> chckd_
                     if hasattr(label, model_field):
                         setattr(label, model_field, 'Y' if form.cleaned_data[field_name] else 'N')
-            
+
+            # 품목보고번호 변경 시 검증여부 N으로 초기화
+            if label_id:
+                orig_label = MyLabel.objects.get(my_label_id=label_id)
+                if orig_label.prdlst_report_no != label.prdlst_report_no:
+                    label.report_no_verify_YN = 'N'
+            else:
+                # 신규 생성 시에도 무조건 N
+                label.report_no_verify_YN = 'N'
+
             label.save()
             return redirect('label:label_creation', label_id=label.my_label_id)
     
@@ -1617,7 +1628,6 @@ def manage_phrases(request):
     except Exception as e:
         logger.error(f"manage_phrases error: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
-    
 
 @login_required
 @csrf_exempt
@@ -2025,3 +2035,25 @@ def verify_report_no(request):
         return JsonResponse({'verified': True})
     else:
         return JsonResponse({'verified': False})
+
+@csrf_exempt
+@require_POST
+@login_required
+def update_report_no(request):
+    try:
+        data = json.loads(request.body)
+        label_id = data.get('label_id')
+        prdlst_report_no = data.get('prdlst_report_no', '').strip()
+        if not label_id or not prdlst_report_no:
+            return JsonResponse({'success': False, 'error': '필수값 누락'}, status=400)
+        label = MyLabel.objects.get(my_label_id=label_id)
+        # 품목보고번호가 변경된 경우에만 업데이트
+        if label.prdlst_report_no != prdlst_report_no:
+            label.prdlst_report_no = prdlst_report_no
+            label.report_no_verify_YN = 'N'
+            label.save(update_fields=['prdlst_report_no', 'report_no_verify_YN'])
+        return JsonResponse({'success': True})
+    except MyLabel.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Label not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

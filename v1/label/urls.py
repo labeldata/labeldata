@@ -61,4 +61,7 @@ urlpatterns = [
 
     # verify-report-no API
     path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
+
+    # update-report-no API
+    path('update-report-no/', views.update_report_no, name='update_report_no'),
 ]

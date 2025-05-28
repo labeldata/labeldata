@@ -165,6 +165,7 @@
         <div class="left-panel flex-grow-1 position-relative" style="flex-basis: 70%;">
           <form method="post" id="labelForm">
             {% csrf_token %}
+            <input type="hidden" name="my_label_name" id="my_label_name_hidden" value="{{ form.my_label_name.value|default:'' }}">
             <input type="hidden" id="hidden_food_group" name="food_group" value="{{ label.food_group }}">
             <input type="hidden" id="hidden_food_type" name="food_type" value="{{ label.food_type }}">
             <input type="hidden" id="hidden_preservation_type" name="preservation_type" value="{{ label.preservation_type }}">
@@ -485,4 +486,17 @@
     </div>
   </div>
 </div>
+<script>
+// 저장 버튼 클릭 또는 form submit 시 상단 라벨명 input 값을 form 내부 hidden input에 복사
+(function() {
+  const form = document.getElementById('labelForm');
+  const topInput = document.getElementById('my_label_name');
+  const hiddenInput = document.getElementById('my_label_name_hidden');
+  if (form && topInput && hiddenInput) {
+    form.addEventListener('submit', function() {
+      hiddenInput.value = topInput.value;
+    });
+  }
+})();
+</script>
 {% endblock %}

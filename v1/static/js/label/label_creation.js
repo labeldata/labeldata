@@ -995,7 +995,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     btn.disabled = true;
-    btn.textContent = '검증 중...';
+    btn.textContent = '저장 중...';
     const reportNo = document.querySelector('input[name="prdlst_report_no"]')?.value?.trim();
     if (!reportNo) {
       alert('품목보고번호를 입력하세요.');
@@ -1003,13 +1003,28 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.textContent = '번호검증';
       return;
     }
-    fetch(`/label/verify-report-no/`, {
+    // 1. 먼저 품목보고번호 저장 및 검증여부 N으로 초기화
+    fetch('/label/update-report-no/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRFToken': getCookie('csrftoken')
       },
       body: JSON.stringify({ label_id: labelId, prdlst_report_no: reportNo })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.error || '저장 실패');
+      // 2. 저장 성공 시 검증 진행
+      btn.textContent = '검증 중...';
+      return fetch('/label/verify-report-no/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ label_id: labelId, prdlst_report_no: reportNo })
+      });
     })
     .then(res => res.json())
     .then(data => {
@@ -1023,8 +1038,8 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.classList.add('btn-danger');
       }
     })
-    .catch(() => {
-      alert('검증 중 오류가 발생했습니다.');
+    .catch(err => {
+      alert('저장 또는 검증 중 오류가 발생했습니다. ' + (err.message || ''));
       btn.textContent = '번호검증';
     })
     .finally(() => {
