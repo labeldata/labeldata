@@ -107,12 +107,10 @@ def food_item_list(request):
     }
     # 정렬조건 변경
     if food_category == "imported":
-        # 수입제품: 수입일자 내림차순, 식품유형 오름차순(가나다순)
-        sort_field, sort_order = process_sorting(request, "expirde_dtm")
-        sort_field = "-expirde_dtm"
+        # 수입제품: 단일 컬럼 정렬만 허용 (기본: -expirde_dtm)
+        sort_field, sort_order = process_sorting(request, "-expirde_dtm")
         items_per_page = int(request.GET.get("items_per_page", 10))
         page_number = request.GET.get("page", 1)
-
         imported_mode = True
         imported_conditions = Q()
         imported_search_values = {}
@@ -121,17 +119,18 @@ def food_item_list(request):
             if value:
                 imported_conditions &= Q(**{f"{model_field}__icontains": value})
                 imported_search_values[query_param] = value
-        imported_items = ImportedFood.objects.filter(imported_conditions).order_by("-expirde_dtm", "itm_nm")
+        # 단일 컬럼 정렬 적용
+        imported_items = ImportedFood.objects.filter(imported_conditions).order_by(sort_field)
         paginator, page_obj, page_range = paginate_queryset(imported_items, page_number, items_per_page)
         search_values = imported_search_values
     else:
-        # 국내제품: 허가일자 내림차순, 식품유형 오름차순(가나다순)
-        sort_field, sort_order = process_sorting(request, "prms_dt")
-        sort_field = "-prms_dt"
+        # 국내제품: 단일 컬럼 정렬만 허용 (기본: -prms_dt)
+        sort_field, sort_order = process_sorting(request, "-prms_dt")
         items_per_page = int(request.GET.get("items_per_page", 10))
         page_number = request.GET.get("page", 1)
         search_conditions, search_values = get_search_conditions(request, search_fields)
-        food_items = FoodItem.objects.filter(search_conditions).order_by('-prms_dt', 'prdlst_dcnm')
+        # 단일 컬럼 정렬 적용
+        food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
         paginator, page_obj, page_range = paginate_queryset(food_items, page_number, items_per_page)
 
     querystring_without_page = get_querystring_without(request, ["page"])
@@ -1596,7 +1595,7 @@ def manage_phrases(request):
                 phrase = MyPhrase.objects.get(
                     my_phrase_id=change['id'],
                     user_id=request.user
-                )
+                               )
                 phrase.my_phrase_name = change.get('name', phrase.my_phrase_name)
                 phrase.comment_content = change.get('content', phrase.comment_content)
                 phrase.note = change.get('note', phrase.note)

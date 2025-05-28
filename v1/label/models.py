@@ -9,7 +9,7 @@ class FoodItem(models.Model):
     lcns_no = models.CharField(max_length=11, verbose_name = "인허가번호", help_text="영업에 대한 허가, 등록, 신고번호 11자리", db_index=True , null=True, blank=True)
     bssh_nm = models.CharField(max_length=100, verbose_name = "제조사명", db_index=True, default="")
     prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", help_text="영업등록 발급연도-영업장 등록번호-영업장 제품번호", db_index=True, primary_key=True)
-    prms_dt = models.CharField(max_length=8, verbose_name="허가일자", help_text="yyyymmdd", default="")
+    prms_dt = models.CharField(max_length=8, verbose_name="허가일자", db_index=True, help_text="yyyymmdd", default="")
     prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", db_index=True, default="")
     prdlst_dcnm = models.CharField(max_length=100, verbose_name="품목유형명", db_index=True, default="")
     production = models.CharField(max_length=10, verbose_name="생산종료여부", null=True, blank=True)
