@@ -174,6 +174,14 @@ def my_label_list(request):
 
     ingredient_id = request.GET.get("ingredient_id")
     ingredient_name = None
+
+    # 품보 신고 상태 필터 추가
+    prdlst_report_status = request.GET.get("prdlst_report_status", "").strip()
+    if prdlst_report_status == "completed":
+        search_conditions &= Q(report_no_verify_YN="Y")
+    elif prdlst_report_status == "pending":
+        search_conditions &= Q(report_no_verify_YN="N")
+
     if ingredient_id:
         linked_label_ids = LabelIngredientRelation.objects.filter(ingredient_id=ingredient_id).values_list("label_id", flat=True)
         labels = MyLabel.objects.filter(user_id=request.user, my_label_id__in=linked_label_ids).filter(search_conditions).order_by("-create_datetime", "my_label_name")
@@ -1589,7 +1597,7 @@ def manage_phrases(request):
             # 문구 삭제 로직
             phrase = MyPhrase.objects.get(
                 my_phrase_id=data['id'],
-                user_id=request.user
+                               user_id=request.user
             )
             phrase.delete_YN = 'Y'
             phrase.delete_datetime = timezone.now().strftime('%Y%m%d')
@@ -2017,4 +2025,3 @@ def verify_report_no(request):
         return JsonResponse({'verified': True})
     else:
         return JsonResponse({'verified': False})
-    

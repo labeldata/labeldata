@@ -93,7 +93,13 @@
                 <tr data-url="{% url 'label:label_creation' label.my_label_id %}" onclick="location.href=this.dataset.url">
                     <td class="text-center align-middle"><input type="checkbox" class="check-item" value="{{ label.my_label_id }}"></td>
                     <td class="text-center align-middle">{{ forloop.counter }}</td>
-                    <td class="ellipsis-cell" title="{{ label.prdlst_report_no }}">{{ label.prdlst_report_no }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_report_no }}">
+                        {% if label.report_no_verify_YN == 'Y' %}
+                            <span class="badge bg-success">신고 완료</span>
+                        {% else %}
+                            <span class="badge bg-secondary">신고 대기</span>
+                        {% endif %}
+                    </td>
                     <td class="ellipsis-cell" title="{{ label.my_label_name }}">{{ label.my_label_name }}</td>
                     <td class="ellipsis-cell" title="{{ label.prdlst_nm }}">{{ label.prdlst_nm }}</td>
                     <td class="ellipsis-cell" title="{{ label.prdlst_dcnm }}">{{ label.prdlst_dcnm }}</td>

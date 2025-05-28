@@ -47,9 +47,8 @@
       {% elif page_type == "label" %}
         <select name="prdlst_report_status" class="form-select flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;">
           <option value="">품보 신고 전체</option>
-          <option value="completed" {% if search_values.prdlst_report_status == "completed" %}selected{% endif %}>신고 완료</option>
-          <option value="pending" {% if search_values.prdlst_report_status == "pending" %}selected{% endif %}>신고 대기</option>
-          <option value="none" {% if search_values.prdlst_report_status == "none" %}selected{% endif %}>번호 미등록</option>
+          <option value="completed" {% if search_values.report_no_verify_YN == "Y" %}selected{% endif %}>신고 완료</option>
+          <option value="pending" {% if search_values.report_no_verify_YN == "N" %}selected{% endif %}>신고 대기</option>
         </select>
         <input type="text" name="my_label_name" class="form-control flex-grow-1"
                style="font-size: 0.8rem; min-width:110px; max-width:180px;"
