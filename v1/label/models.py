@@ -215,6 +215,8 @@ class MyLabel(models.Model):
     label_create_YN = models.CharField(max_length=1, verbose_name="표시사항 작성여부", default="N" )
     #ingredient_create_YN = models.CharField(max_length=1, verbose_name="원재료 작성 여부", default="N" )
 
+    report_no_verify_YN = models.CharField(max_length=1, verbose_name="품목보고번호 검증 여부", default="N" )
+
     # 데이터 삭제시 db 삭제가 아니라 플래그 처리로 보이지만 않게
     delete_datetime = models.CharField(max_length=8, verbose_name="삭제일자", help_text="yyyymmdd", default="")
     delete_YN = models.CharField(max_length=1, verbose_name="표시사항 삭제 여부", default="N" )
