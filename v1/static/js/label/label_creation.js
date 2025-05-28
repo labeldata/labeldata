@@ -1,3 +1,18 @@
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
 // 전역 데이터 초기화
 let phrasesData = {};
 let regulations = {};
@@ -59,6 +74,22 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ------------------ 공통 유틸리티 함수 ------------------
+  // CSRF 토큰 쿠키값을 얻는 함수 (Django 공식)
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
   function adjustHeight(element, maxHeight = Infinity) {
     if (!element) return;
     element.style.height = 'auto';  // 기본 높이 제거
@@ -599,8 +630,6 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // DB에 저장된 체크박스 상태 로드
     window.checkboxesLoadedFromDB = true;
-    
-    console.log("Checkbox initialization completed, checkboxesLoadedFromDB =", window.checkboxesLoadedFromDB);
   }
 
   function prepareFormData() {
@@ -677,9 +706,7 @@ document.addEventListener('DOMContentLoaded', function () {
   
   function renderMyPhrasesForFocusedField() {
     const fieldName = lastFocusedFieldName || 'prdlst_nm';
-    console.log('Rendering phrases for field:', fieldName); // Debugging
     const category = getCategoryFromFieldName(fieldName);
-    console.log('Mapped category:', category); // Debugging
     const listContainer = document.getElementById('myPhraseList');
     if (!listContainer || !category || !phrasesData) {
       console.warn('Missing required elements:', { listContainer, category, phrasesData }); // Debugging
@@ -693,7 +720,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const currentValues = textarea ? textarea.value.split('\n').map(v => v.trim()).filter(Boolean) : [];
   
     const phraseList = phrasesData[category] || [];
-    console.log('Phrases for category:', phraseList); // Debugging
     if (!phraseList.length) {
       listContainer.innerHTML = '<div class="text-muted" style="font-size: 0.8rem;">저장된 문구가 없습니다. 문구 관리에서 추가하세요.</div>';
       return;
@@ -956,4 +982,53 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   }
+
+  // ------------------ 품목보고번호 검증 기능 ------------------
+  window.verifyReportNo = function(labelId) {
+    const btn = document.getElementById('verifyReportNoBtn');
+    if (!btn) return;
+    // 상태 복구: 검증완료/검증실패 상태에서 클릭 시 초기화
+    if (btn.textContent === '검증완료' || btn.textContent === '검증실패') {
+      btn.textContent = '번호검증';
+      btn.classList.remove('btn-success', 'btn-danger');
+      btn.classList.add('btn-outline-primary');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '검증 중...';
+    const reportNo = document.querySelector('input[name="prdlst_report_no"]')?.value?.trim();
+    if (!reportNo) {
+      alert('품목보고번호를 입력하세요.');
+      btn.disabled = false;
+      btn.textContent = '번호검증';
+      return;
+    }
+    fetch(`/label/verify-report-no/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({ label_id: labelId, prdlst_report_no: reportNo })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.verified) {
+        btn.textContent = '검증완료';
+        btn.classList.remove('btn-outline-primary', 'btn-danger');
+        btn.classList.add('btn-success');
+      } else {
+        btn.textContent = '검증실패';
+        btn.classList.remove('btn-outline-primary', 'btn-success');
+        btn.classList.add('btn-danger');
+      }
+    })
+    .catch(() => {
+      alert('검증 중 오류가 발생했습니다.');
+      btn.textContent = '번호검증';
+    })
+    .finally(() => {
+      btn.disabled = false;
+    });
+  };
 });

@@ -1995,3 +1995,26 @@ def linked_ingredient_count(request, label_id):
         return JsonResponse({'count': count})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+@require_POST
+@login_required
+def verify_report_no(request):
+    import json
+    data = json.loads(request.body)
+    label_id = data.get('label_id')
+    prdlst_report_no = data.get('prdlst_report_no', '').strip()
+    if not label_id or not prdlst_report_no:
+        return JsonResponse({'verified': False, 'error': '필수값 누락'})
+    try:
+        label = MyLabel.objects.get(pk=label_id, user_id=request.user)
+    except MyLabel.DoesNotExist:
+        return JsonResponse({'verified': False, 'error': '라벨을 찾을 수 없습니다.'})
+    exists = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).exists()
+    if exists:
+        label.report_no_verify_YN = 'Y'
+        label.save(update_fields=['report_no_verify_YN'])
+        return JsonResponse({'verified': True})
+    else:
+        return JsonResponse({'verified': False})
+    

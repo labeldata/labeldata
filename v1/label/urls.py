@@ -58,4 +58,7 @@ urlpatterns = [
     # linked_labels_count API
     path('linked-labels-count/<int:ingredient_id>/', views.linked_labels_count, name='linked_labels_count'),
     path('linked-ingredient-count/<int:label_id>/', views.linked_ingredient_count, name='linked_ingredient_count'),
+
+    # verify-report-no API
+    path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
 ]

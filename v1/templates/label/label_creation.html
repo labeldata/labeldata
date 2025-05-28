@@ -231,7 +231,7 @@
                 <div style="width:85%;">
                   <div class="input-container">
                     <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}">
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn">번호검증</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo(document.getElementById('label_id')?.value)">번호검증</button>
                   </div>
                 </div>
               </div>
