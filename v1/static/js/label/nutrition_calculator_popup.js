@@ -361,6 +361,34 @@ function resetForm() {
   window.nutritionSummaryValue = '';
 }
 
+function resetFormAndParent() {
+  resetForm();
+  // 부모창 데이터도 초기화
+  if (window.opener) {
+    try {
+      const textarea = window.opener.document.getElementById("nutrition_text") ||
+        window.opener.document.querySelector('textarea[name="nutrition_text"]');
+      if (textarea) textarea.value = '';
+      const fields = [
+        "serving_size", "serving_size_unit", "units_per_package", "nutrition_display_unit",
+        "calories", "calories_unit", "natriums", "natriums_unit", "carbohydrates", "carbohydrates_unit",
+        "sugars", "sugars_unit", "fats", "fats_unit", "trans_fats", "trans_fats_unit",
+        "saturated_fats", "saturated_fats_unit", "cholesterols", "cholesterols_unit",
+        "proteins", "proteins_unit"
+      ];
+      fields.forEach(name => {
+        const el = window.opener.document.querySelector(`input[name="${name}"]`);
+        if (el) el.value = '';
+      });
+    } catch (e) {
+      // 무시
+    }
+  }
+}
+
+// HTML에서 호출 가능하도록 전역 등록
+window.resetFormAndParent = resetFormAndParent;
+
 function loadExistingData(data) {
   if (!data || Object.keys(data).length === 0) return;
   console.log("로드할 영양성분 데이터:", data);
