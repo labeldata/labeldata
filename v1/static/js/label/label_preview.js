@@ -82,13 +82,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 { value: '유리', label: '유리', img: '/static/img/recycle_glass.png' },
                 { value: '도포첩합', label: '도포첩합', img: '/static/img/recycle_coated.png' }
             ]
-        },
-        {
-            group: '기타',
-            options: [
-                { value: '미표시', label: '미표시', img: null }
-            ]
         }
+        // '기타' 그룹 및 '미표시' 옵션 완전히 제거
     ];
 
     // value → 이미지 매핑
@@ -101,11 +96,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 포장재질 텍스트로 추천 분리배출마크 구하기
     function recommendRecyclingMarkByMaterial(materialText) {
-        if (!materialText) return '미표시';
+        if (!materialText) return null;
         const text = materialText.toLowerCase().trim();
         for (const group of recyclingMarkGroups) {
             for (const opt of group.options) {
-                if (opt.value === '미표시') continue;
                 const base = opt.label.replace(/\(.+\)/, '').toLowerCase();
                 if (text.includes(base) || text.includes(opt.label.toLowerCase())) {
                     return opt.value;
@@ -124,16 +118,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (text.includes('팩') && text.includes('멸균')) return '멸균팩';
         if (text.includes('팩')) return '일반팩';
         if (text.includes('도포') || text.includes('첩합') || text.includes('코팅')) return '도포첩합';
-        return '미표시';
+        return null;
     }
 
     // 분리배출마크 UI 생성 및 삽입
     function renderRecyclingMarkUI() {
         const contentTab = document.querySelector('#content-tab .settings-group');
-        if (!contentTab) {
-            console.error('Content tab settings-group not found');
-            return;
-        }
+        if (!contentTab) return;
         if (document.getElementById('recyclingMarkUiBox')) return;
 
         const uiBox = document.createElement('div');
@@ -160,19 +151,34 @@ document.addEventListener('DOMContentLoaded', function () {
         const select = document.getElementById('recyclingMarkSelect');
         if (select) {
             select.addEventListener('change', function() {
-                const recommendSpan = document.getElementById('recyclingMarkRecommend');
-                if (recommendSpan) {
-                    recommendSpan.textContent = this.value || '미표시';
+                // 버튼 텍스트를 항상 '적용'으로 초기화
+                const btn = document.getElementById('addRecyclingMarkBtn');
+                if (btn) {
+                    btn.textContent = '적용';
+                    btn.classList.remove('btn-danger');
+                    btn.classList.add('btn-outline-primary');
                 }
             });
         }
 
-        // 적용 버튼 이벤트
+        // 적용/해제 버튼 이벤트
         const addBtn = document.getElementById('addRecyclingMarkBtn');
         if (addBtn) {
             addBtn.addEventListener('click', function() {
-                if (select) {
-                    setRecyclingMark(select.value, true);
+                const markValue = document.getElementById('recyclingMarkSelect').value;
+                const previewContent = document.getElementById('previewContent');
+                let img = document.getElementById('recyclingMarkImage');
+                if (addBtn.textContent === '적용') {
+                    setRecyclingMark(markValue);
+                    addBtn.textContent = '해제';
+                    addBtn.classList.remove('btn-outline-primary');
+                    addBtn.classList.add('btn-danger');
+                } else {
+                    // 해제 동작: 이미지 제거
+                    if (img) img.remove();
+                    addBtn.textContent = '적용';
+                    addBtn.classList.remove('btn-danger');
+                    addBtn.classList.add('btn-outline-primary');
                 }
             });
         }
@@ -198,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!previewContent) return;
 
         let img = document.getElementById('recyclingMarkImage');
-        if (markValue === '미표시' || !markObj.img) {
+        if (!markObj.img) {
             if (img) img.remove();
             return;
         }
@@ -207,12 +213,11 @@ document.addEventListener('DOMContentLoaded', function () {
             img = document.createElement('img');
             img.id = 'recyclingMarkImage';
             img.style.position = 'absolute';
-            img.style.zIndex = '100';
-            img.style.width = '60px';
-            img.style.height = 'auto';
+            img.style.right = '20px';
+            img.style.bottom = '20px';
+            img.style.width = '48px';
+            img.style.height = '48px';
             img.style.cursor = 'move';
-            img.style.userSelect = 'none';
-            img.draggable = false;
             previewContent.appendChild(img);
         }
 
@@ -222,8 +227,6 @@ document.addEventListener('DOMContentLoaded', function () {
         img.style.display = 'block';
 
         if (auto) {
-            img.style.left = '';
-            img.style.top = '';
             img.style.right = '20px';
             img.style.bottom = '20px';
         }
@@ -231,32 +234,23 @@ document.addEventListener('DOMContentLoaded', function () {
         // 드래그 로직
         img.onmousedown = function(e) {
             e.preventDefault();
-            img.style.zIndex = '999';
             let shiftX = e.clientX - img.getBoundingClientRect().left;
             let shiftY = e.clientY - img.getBoundingClientRect().top;
-
             function moveAt(pageX, pageY) {
                 const rect = previewContent.getBoundingClientRect();
-                let x = pageX - rect.left - shiftX;
-                let y = pageY - rect.top - shiftY;
-                x = Math.max(0, Math.min(x, rect.width - img.offsetWidth));
-                y = Math.max(0, Math.min(y, rect.height - img.offsetHeight));
-                img.style.left = x + 'px';
-                img.style.top = y + 'px';
+                img.style.left = (pageX - rect.left - shiftX) + 'px';
+                img.style.top = (pageY - rect.top - shiftY) + 'px';
                 img.style.right = '';
                 img.style.bottom = '';
             }
-
             function onMouseMove(e) {
                 moveAt(e.pageX, e.pageY);
             }
-
             document.addEventListener('mousemove', onMouseMove);
-            document.onmouseup = function() {
-                img.style.zIndex = '100';
+            document.addEventListener('mouseup', function mouseUpHandler() {
                 document.removeEventListener('mousemove', onMouseMove);
-                document.onmouseup = null;
-            };
+                document.removeEventListener('mouseup', mouseUpHandler);
+            });
         };
         img.ondragstart = () => false;
     }
