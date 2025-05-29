@@ -344,7 +344,7 @@
               <div style="width:15%; min-width:130px; display:flex; align-items:center;">
                 <input type="checkbox" id="chk_pog_daycnt" name="chk_pog_daycnt" class="form-check-input" {% if label.chckd_pog_daycnt == "Y" %}checked{% endif %}>
                 <!-- 체크박스와 셀렉트박스 사이 간격 추가 (margin-left:8px) -->
-                <select name="date_option" class="form-control select2-date-option" style="width:100%; min-width:110px;">
+                <select name="date_option" class="form-control select2-date-option" style="width:80%; min-width:90px; max-width:180px;">
                   <option value="소비기한" {% if form.date_option.value == "소비기한" or not form.date_option.value %}selected{% endif %}>소비기한</option>
                   <option value="품질유지기한" {% if form.date_option.value == "품질유지기한" %}selected{% endif %}>품질유지기한</option>
                   <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>

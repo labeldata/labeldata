@@ -678,7 +678,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#food_group').select2({ placeholder: '대분류 선택', allowClear: true, width: '100%' });
     $('#food_type').select2({ placeholder: '소분류 선택', allowClear: true, width: '100%' });
     $('select[name="country_of_origin"]').select2({ placeholder: '대외무역법에 따른 가공국을 선택하세요.', allowClear: true, width: '100%' });
-    $('select[name="date_option"]').select2({ placeholder: '옵션 선택', allowClear: true, width: '100%' });
+    // 소비기한/품질유지기한 드롭다운(select[name="date_option"])에는 select2를 적용하지 않음 (검색 기능 제거)
   }
 
   // ------------------ 내문구 탭 기능 ------------------
