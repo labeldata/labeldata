@@ -1697,7 +1697,7 @@ def phrase_popup(request):
             'name': phrase.my_phrase_name,
             'content': phrase.comment_content,
             'note': phrase.note or '',
-                       'order': phrase.display_order,
+            'order': phrase.display_order,
             'is_custom': True
         })
     context = {
@@ -2068,3 +2068,28 @@ def update_report_no(request):
         return JsonResponse({'success': False, 'error': 'Label not found'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+def phrases_data_api(request):
+    """내 문구 데이터 JSON 반환 (AJAX)"""
+    phrases_data = {}
+    categories = CATEGORY_CHOICES
+    for category_code, _ in categories:
+        phrases_data[category_code] = []
+    user_phrases = MyPhrase.objects.filter(
+        user_id=request.user,
+        delete_YN='N'
+    ).order_by('category_name', 'display_order')
+    for phrase in user_phrases:
+        category = phrase.category_name
+        if category not in phrases_data:
+            continue
+        phrases_data[category].append({
+            'id': phrase.my_phrase_id,
+            'name': phrase.my_phrase_name,
+            'content': phrase.comment_content,
+            'note': phrase.note or '',
+            'order': phrase.display_order,
+            'is_custom': True
+        })
+    return JsonResponse({'success': True, 'phrases': phrases_data})

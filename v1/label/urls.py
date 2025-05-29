@@ -64,4 +64,7 @@ urlpatterns = [
 
     # update-report-no API
     path('update-report-no/', views.update_report_no, name='update_report_no'),
+
+    # 추가된 URL 패턴
+    path('phrases-data/', views.phrases_data_api, name='phrases_data'),
 ]

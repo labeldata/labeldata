@@ -843,6 +843,36 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // 내문구 탭 강제 새로고침 함수
+  function reloadPhraseTab() {
+    // 문구 데이터 새로고침 (AJAX)
+    fetch('/label/phrases-data/', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      credentials: 'same-origin'
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.phrases) {
+          phrasesData = data.phrases;
+          renderMyPhrasesForFocusedField();
+        } else {
+          const listContainer = document.getElementById('myPhraseList');
+          if (listContainer) {
+            listContainer.innerHTML = '<div class="text-danger" style="font-size:0.8rem;">문구 데이터를 불러오지 못했습니다.</div>';
+          }
+        }
+      })
+      .catch(() => {
+        const listContainer = document.getElementById('myPhraseList');
+        if (listContainer) {
+          listContainer.innerHTML = '<div class="text-danger" style="font-size:0.8rem;">문구 데이터를 불러오지 못했습니다.</div>';
+        }
+      });
+  }
+
   // ------------------ 초기화 및 이벤트 바인딩 ------------------
   $(document).ready(function () {
     initSelect2Components();
@@ -880,9 +910,10 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
-    const myPhrasesTab = document.querySelector('#myphrases-tab');
+    const myPhrasesTab = document.getElementById('myphrases-tab');
     if (myPhrasesTab) {
-      myPhrasesTab.addEventListener('shown.bs.tab', handlePhraseTabActivation);
+      myPhrasesTab.addEventListener('shown.bs.tab', reloadPhraseTab);
+      myPhrasesTab.addEventListener('click', reloadPhraseTab);
     }
 
     setPhraseTabNavStyles();
@@ -1046,4 +1077,14 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.disabled = false;
     });
   };
+
+  // '항목별 문구 및 규정' 탭 클릭 시 강제 새로고침
+  document.addEventListener('DOMContentLoaded', function () {
+    var myPhrasesTab = document.getElementById('myphrases-tab');
+    if (myPhrasesTab) {
+      myPhrasesTab.addEventListener('click', function () {
+        reloadPhraseTab();
+      });
+    }
+  });
 });
