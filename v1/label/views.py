@@ -394,6 +394,9 @@ def label_creation(request, label_id=None):
                 ingredient = relation.ingredient
                 food_category = getattr(ingredient, 'food_category', None) or getattr(ingredient, 'food_group', None) or ''
                 display_name = ingredient.ingredient_display_name or ingredient.prdlst_nm or ""
+                # display_name이 콤마로 여러 개일 때 최대 5개까지만 표시 (팝업과 동일)
+                if display_name and "," in display_name:
+                    display_name = ", ".join([x.strip() for x in display_name.split(",")][:5])
                 food_type = ingredient.prdlst_dcnm or ""
                 ratio = None
                 try:
@@ -424,9 +427,17 @@ def label_creation(request, label_id=None):
                     ingredients_info.append(f"{purpose}{suffix}{m.group(2) or ''}")
                     continue
 
-                # 일반 규칙
-                if (food_category == 'additive') or (ratio is not None and ratio >= 5):
-                    summary_item = display_name
+                # 정제수는 식품유형만 표시(팝업과 동일)
+                if display_name == '정제수':
+                    summary_item = food_type or display_name
+                # 팝업과 동일하게: 첨가물 또는 비율 5% 이상이면 식품유형[원재료명], 그 외는 식품유형만 표시
+                elif (food_category == 'additive') or (ratio is not None and ratio >= 5):
+                    if food_type and display_name:
+                        summary_item = f"{food_type}[{display_name}]"
+                    elif food_type:
+                        summary_item = food_type
+                    else:
+                        summary_item = display_name
                 else:
                     summary_item = food_type or display_name
                 if summary_item:
@@ -1574,6 +1585,7 @@ def manage_phrases(request):
             new_phrase = MyPhrase.objects.create(
                 user_id=request.user,
                 my_phrase_name=data.get('my_phrase_name'),
+               
                 category_name=category_name,
                 comment_content=data.get('comment_content'),
                 note=data.get('note', ''),
