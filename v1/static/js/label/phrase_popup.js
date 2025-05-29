@@ -403,9 +403,13 @@ function queueEditPhrase(item) {
 
 // 삭제 대기열 추가
 function queueDeletePhrase(phraseId, button) {
+    // category_name을 반드시 포함
+    const item = button.closest('.phrase-item');
+    const category = item?.dataset.category || currentActiveTab;
     pendingChanges.deletes.push({
         action: 'delete',
-        id: phraseId
+        id: phraseId,
+        category_name: category
     });
     button.closest('.phrase-item').remove();
 }
