@@ -99,14 +99,13 @@
                         {% else %}
                             <span class="badge bg-secondary">신고 대기</span>
                         {% endif %}
-                    </td>
-                    <td class="ellipsis-cell" title="{{ label.my_label_name }}">{{ label.my_label_name }}</td>
-                    <td class="ellipsis-cell" title="{{ label.prdlst_nm }}">{{ label.prdlst_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ label.prdlst_dcnm }}">{{ label.prdlst_dcnm }}</td>
-                    <td class="ellipsis-cell" title="{{ label.prdlst_report_no }}">{{ label.prdlst_report_no }}</td>
-                    <td class="ellipsis-cell" title="{{ label.bssh_nm }}">{{ label.bssh_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ label.storage_method }}">{{ label.storage_method }}</td>
-                    <td class="ellipsis-cell" title="{{ label.frmlc_mtrqlt }}">{{ label.frmlc_mtrqlt }}</td>
+                    </td>                    <td class="ellipsis-cell" title="{{ label.my_label_name|default:'' }}">{{ label.my_label_name|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_nm|default:'' }}">{{ label.prdlst_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_dcnm|default:'' }}">{{ label.prdlst_dcnm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ label.prdlst_report_no|default:'' }}">{{ label.prdlst_report_no|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ label.bssh_nm|default:'' }}">{{ label.bssh_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ label.storage_method|default:'' }}">{{ label.storage_method|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ label.frmlc_mtrqlt|default:'' }}">{{ label.frmlc_mtrqlt|default:"" }}</td>
                     <td class="ellipsis-cell" title="{{ label.update_datetime|date:'Y-m-d H:i' }}">
                         {% if label.update_datetime %}
                             {{ label.update_datetime|date:"Y-m-d H:i" }}

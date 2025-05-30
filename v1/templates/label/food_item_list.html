@@ -61,16 +61,15 @@
             </thead>
             <tbody>
                 {% for item in imported_items %}
-                <tr onclick="openImportedDetailPopup('{{ item.id }}')" style="cursor: pointer;">
-                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prduct_korean_nm }}">{{ item.prduct_korean_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.itm_nm }}">{{ item.itm_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.xport_ntncd_nm }}">{{ item.xport_ntncd_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.bsn_ofc_name }}">{{ item.bsn_ofc_name }}</td>
-                    <td class="ellipsis-cell" title="{{ item.ovsmnfst_nm }}">{{ item.ovsmnfst_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.irdnt_nm }}">{{ item.irdnt_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.expirde_dtm }}">{{ item.expirde_dtm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.procs_dtm }}">{{ item.procs_dtm }}</td>
+                <tr onclick="openImportedDetailPopup('{{ item.id }}')" style="cursor: pointer;">                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prduct_korean_nm|default:'' }}">{{ item.prduct_korean_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.itm_nm|default:'' }}">{{ item.itm_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.xport_ntncd_nm|default:'' }}">{{ item.xport_ntncd_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.bsn_ofc_name|default:'' }}">{{ item.bsn_ofc_name|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.ovsmnfst_nm|default:'' }}">{{ item.ovsmnfst_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.irdnt_nm|default:'' }}">{{ item.irdnt_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.expirde_dtm|default:'' }}">{{ item.expirde_dtm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.procs_dtm|default:'' }}">{{ item.procs_dtm|default:"" }}</td>
                 </tr>
                 {% empty %}
                 <tr>
@@ -130,16 +129,15 @@
             </thead>
             <tbody>
                 {% for item in page_obj %}
-                <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">
-                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prdlst_report_no }}">{{ item.prdlst_report_no }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prdlst_nm }}">{{ item.prdlst_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prdlst_dcnm }}">{{ item.prdlst_dcnm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.bssh_nm }}">{{ item.bssh_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.pog_daycnt }}">{{ item.pog_daycnt }}</td>
-                    <td class="ellipsis-cell" title="{{ item.frmlc_mtrqlt }}">{{ item.frmlc_mtrqlt }}</td>
-                    <td class="ellipsis-cell" title="{{ item.rawmtrl_nm }}">{{ item.rawmtrl_nm }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prms_dt }}">{{ item.prms_dt }}</td>
+                <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prdlst_report_no|default:'' }}">{{ item.prdlst_report_no|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prdlst_nm|default:'' }}">{{ item.prdlst_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prdlst_dcnm|default:'' }}">{{ item.prdlst_dcnm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.bssh_nm|default:'' }}">{{ item.bssh_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.pog_daycnt|default:'' }}">{{ item.pog_daycnt|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.frmlc_mtrqlt|default:'' }}">{{ item.frmlc_mtrqlt|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.rawmtrl_nm|default:'' }}">{{ item.rawmtrl_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.prms_dt|default:'' }}">{{ item.prms_dt|default:"" }}</td>
                 </tr>
                 {% empty %}
                 <tr>

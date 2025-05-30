@@ -125,43 +125,42 @@
     <div class="detail-flex-container">
       <!-- 왼쪽: 제품 상세 정보 (1:3 비율) -->
       <div class="detail-left-panel">
-        <table class="nutrition-table">
-          <tbody>
+        <table class="nutrition-table">          <tbody>
             <tr>
               <th>제품명</th>
-              <td>{{ item.prduct_korean_nm }}</td>
+              <td>{{ item.prduct_korean_nm|default:"" }}</td>
             </tr>
             <tr>
               <th>제품명(영문)</th>
-              <td>{{ item.prduct_nm }}</td>
+              <td>{{ item.prduct_nm|default:"" }}</td>
             </tr>
             <tr>
               <th>식품유형</th>
-              <td>{{ item.itm_nm }}</td>
+              <td>{{ item.itm_nm|default:"" }}</td>
             </tr>
             <tr>
               <th>수출국</th>
-              <td>{{ item.xport_ntncd_nm }}</td>
+              <td>{{ item.xport_ntncd_nm|default:"" }}</td>
             </tr>
             <tr>
               <th>수입업체</th>
-              <td>{{ item.bsn_ofc_name }}</td>
+              <td>{{ item.bsn_ofc_name|default:"" }}</td>
             </tr>
             <tr>
               <th>제조사명</th>
-              <td>{{ item.ovsmnfst_nm }}</td>
+              <td>{{ item.ovsmnfst_nm|default:"" }}</td>
             </tr>
             <tr>
               <th>원재료명</th>
-              <td>{{ item.irdnt_nm }}</td>
+              <td>{{ item.irdnt_nm|default:"" }}</td>
             </tr>
             <tr>
               <th>소비기한</th>
-              <td>{{ item.expirde_dtm }}</td>
+              <td>{{ item.expirde_dtm|default:"" }}</td>
             </tr>
             <tr>
               <th>수입일</th>
-              <td>{{ item.procs_dtm }}</td>
+              <td>{{ item.procs_dtm|default:"" }}</td>
             </tr>
           </tbody>
         </table>
@@ -176,43 +175,42 @@
     </div>
     {% else %}
     <!-- ...existing code for 일반식품 상세 테이블... -->
-    <table class="nutrition-table">
-      <tbody>
+    <table class="nutrition-table">      <tbody>
         <tr>
           <th style="width:20%;">품목보고번호</th>
-          <td style="width:60%;">{{ item.prdlst_report_no }}</td>
+          <td style="width:60%;">{{ item.prdlst_report_no|default:"" }}</td>
           <th style="width:20%;">허가일자</th>
-          <td style="width:60%;">{{ item.prms_dt }}</td>
+          <td style="width:60%;">{{ item.prms_dt|default:"" }}</td>
         </tr>
         <tr>
           <th style="width:20%;">제품명</th>
-          <td style="width:60%;">{{ item.prdlst_nm }}</td>
+          <td style="width:60%;">{{ item.prdlst_nm|default:"" }}</td>
           <th style="width:20%;">식품유형</th>
-          <td style="width:60%;">{{ item.prdlst_dcnm }}</td>
+          <td style="width:60%;">{{ item.prdlst_dcnm|default:"" }}</td>
         </tr>
         <tr>
           <th style="width:20%;">제조사</th>
-          <td style="width:60%;">{{ item.bssh_nm }}</td>
+          <td style="width:60%;">{{ item.bssh_nm|default:"" }}</td>
           <th style="width:20%;">업종명</th>
-          <td style="width:60%;">{{ item.induty_cd_nm }}</td>
+          <td style="width:60%;">{{ item.induty_cd_nm|default:"" }}</td>
         </tr>
         <tr>
           <th style="width:20%;">소비기한</th>
-          <td style="width:60%;">{{ item.pog_daycnt }}</td>
+          <td style="width:60%;">{{ item.pog_daycnt|default:"" }}</td>
           <th style="width:20%;">포장재질</th>
-          <td style="width:60%;">{{ item.frmlc_mtrqlt }}</td>
+          <td style="width:60%;">{{ item.frmlc_mtrqlt|default:"" }}</td>
         </tr>
         <tr>
           <th style="width:20%;">원재료명</th>
-          <td colspan="3" style="width:80%;">{{ item.rawmtrl_nm }}</td>
+          <td colspan="3" style="width:80%;">{{ item.rawmtrl_nm|default:"" }}</td>
         </tr>
         <tr>
           <th style="width:20%;">제품형태</th>
-          <td colspan="3" style="width:80%;">{{ item.dispos }}</td>
+          <td colspan="3" style="width:80%;">{{ item.dispos|default:"" }}</td>
         </tr>
         <tr>
           <th style="width:20%;">용법</th>
-          <td colspan="3" style="width:80%;">{{ item.usages }}</td>
+          <td colspan="3" style="width:80%;">{{ item.usages|default:"" }}</td>
         </tr>
       </tbody>
     </table>
