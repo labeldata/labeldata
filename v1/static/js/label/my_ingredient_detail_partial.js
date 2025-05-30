@@ -1,4 +1,5 @@
 // my_ingredient_detail_partial.html에서 분리된 스크립트
+// my_ingredient_detail_partial.html에서 분리된 스크립트 (수정됨)
 // 삭제 확인 및 삭제 함수
 function confirmDelete() {
     if (confirm('정말 삭제하시겠습니까?')) {
@@ -199,10 +200,9 @@ function doSaveMyIngredient(url, formData, queryString, doneCallback) {
         } else {
             alert(data.error || '저장에 실패했습니다.');
         }
-    })
-    .catch(error => {
+    })    .catch(error => {
         console.error('Error:', error);
-        alert('저장 중 오류가 발생했습니다.1');
+        alert('저장 중 오류가 발생했습니다.');
     })
     .finally(() => {
         if (typeof doneCallback === 'function') doneCallback();
@@ -254,6 +254,10 @@ function updateLinkedLabelsButton(my_ingredient_id) {
         });
 }
 
+// 네임스페이스를 사용하여 전역 변수 충돌 방지
+window.IngredientDetailPartial = window.IngredientDetailPartial || {};
+window.IngredientDetailPartial.isSyncing = false;
+
 // CSRF 토큰 가져오기 유틸
 function getCookie(name) {
     let cookieValue = null;
@@ -275,66 +279,92 @@ function initFoodTypeSelect() {
     const foodTypesRaw = document.getElementById('food-types-data')?.textContent;
     const agriProductsRaw = document.getElementById('agricultural-products-data')?.textContent;
     const foodAdditivesRaw = document.getElementById('food-additives-data')?.textContent;
+    
     let foodTypes = [], agriProducts = [], foodAdditives = [];
     try {
         foodTypes = JSON.parse(foodTypesRaw || '[]');
         agriProducts = JSON.parse(agriProductsRaw || '[]');
-        foodAdditives = JSON.parse(foodAdditivesRaw || '[]');
-    } catch (e) {
-        console.error('[initFoodTypeSelect] JSON parse error:', e);
-    }
-    const select = document.getElementById('foodTypeSelect');
-    if (!select) {
-        console.error('[initFoodTypeSelect] #foodTypeSelect not found');
+        foodAdditives = JSON.parse(foodAdditivesRaw || '[]');    } catch (e) {
         return;
     }
-
-    // 현재 식품 구분 값을 가져옴
-    const foodCategorySelect = document.getElementById('foodCategorySelect');
-    const currentFoodCategory = foodCategorySelect ? foodCategorySelect.value : 'processed';
+    
+    const select = document.getElementById('foodTypeSelect');
+    if (!select) {
+        return;
+    }
+    
+    // 현재 식품 구분 값을 가져옴 - ingredient form 내부에서만 찾기
+    const ingredientForm = document.getElementById('ingredientForm');
+    const foodCategorySelect = ingredientForm ? ingredientForm.querySelector('#foodCategorySelect') : null;
+    const currentFoodCategory = foodCategorySelect ? foodCategorySelect.value : 'processed';    const actualFoodCategory = currentFoodCategory || 'processed';
     
     // 식품 구분에 따라 옵션 필터링
     let options = [];
     
-    switch (currentFoodCategory) {
-        case 'processed': // 가공식품
-            options = foodTypes.map(ft => ({ id: ft.food_type, text: ft.food_type }));
-            break;
-        case 'agricultural': // 농수산물
-            options = agriProducts.map(ap => ({ id: ap.name_kr, text: ap.name_kr }));
-            break;
-        case 'additive': // 식품첨가물
-            options = foodAdditives.map(fa => ({ id: fa.name_kr, text: fa.name_kr }));
-            break;
-        default:
-            options = [
-                ...foodTypes.map(ft => ({ id: ft.food_type, text: ft.food_type })),
-                ...agriProducts.map(ap => ({ id: ap.name_kr, text: ap.name_kr })),
-                ...foodAdditives.map(fa => ({ id: fa.name_kr, text: fa.name_kr }))
-            ];
-    }
+    if (actualFoodCategory === 'processed') {
+        options = foodTypes.map(ft => {
+            if (ft.food_type) {
+                return { id: ft.food_type, text: ft.food_type, category: 'processed' };
+            }
+            return null;
+        }).filter(Boolean);
+    } else if (actualFoodCategory === 'agricultural') {
+        options = agriProducts.map(ap => {
+            const name = ap.name_kr;
+            if (name) {
+                return { id: name, text: name, category: 'agricultural' };
+            }
+            return null;
+        }).filter(Boolean);
+    } else if (actualFoodCategory === 'additive') {
+        options = foodAdditives.map(fa => {
+            const name = fa.name_kr;
+            if (name) {
+                return { id: name, text: name, category: 'additive' };
+            }
+            return null;
+        }).filter(Boolean);    }
     
     // 옵션을 select에 직접 추가
     select.innerHTML = '<option></option>';
     options.forEach(opt => {
+        if (!opt.id || !opt.text) return; // id/text가 없으면 추가하지 않음
         const option = document.createElement('option');
         option.value = opt.id;
-        option.textContent = opt.text;
+        option.text = opt.text;
+        option.setAttribute('data-category', opt.category);
         select.appendChild(option);
     });
-    
-    // select2 적용
+
+    // select2 중복 바인딩 방지
+    if ($(select).data('select2')) {
+        $(select).off('change.foodtype');
+        $(select).select2('destroy');
+    }
     $(select).select2({
         width: '100%',
         placeholder: '식품유형 선택',
         allowClear: true
-    });
-    
-    // 기존 값이 있으면 선택
+    });    // 기존 값이 있으면 선택
     const currentValue = select.getAttribute('data-selected') || select.value;
     if (currentValue) {
-        $(select).val(currentValue).trigger('change');
-    }
+        $(select).val(currentValue).trigger('change.select2');
+    } else {
+        $(select).val(null).trigger('change.select2');
+    }    // select2 change 이벤트: 식품유형 선택 시 식품 구분 자동 선택
+    $(select).on('change.foodtype', function (e) {
+        if (window.IngredientDetailPartial.isSyncing) return;
+        const selectedOption = select.options[select.selectedIndex];
+        if (!selectedOption) return;
+        const selectedCategory = selectedOption.getAttribute('data-category');
+        if (!selectedCategory) return;        if (foodCategorySelect && foodCategorySelect.value !== selectedCategory) {
+            window.IngredientDetailPartial.isSyncing = true;
+            foodCategorySelect.value = selectedCategory;
+            initFoodTypeSelect();
+            $(select).val(selectedOption.value).trigger('change.select2');
+            window.IngredientDetailPartial.isSyncing = false;
+        }
+    });
 }
 
 // 알레르기와 GMO 옵션 초기화 함수
@@ -354,12 +384,27 @@ function initAllergyAndGmoOptions() {
 
 // 식품 구분 선택 변경시 식품유형 드롭다운 갱신
 function setupFoodCategoryChangeEvent() {
-    const foodCategorySelect = document.getElementById('foodCategorySelect');
+    // 더 구체적으로 ingredient form 내부의 foodCategorySelect를 찾음
+    const ingredientForm = document.getElementById('ingredientForm');
+    const foodCategorySelect = ingredientForm ? ingredientForm.querySelector('#foodCategorySelect') : null;
+    
     if (foodCategorySelect) {
-        foodCategorySelect.addEventListener('change', function() {
-            initFoodTypeSelect();
-        });
+        // 기존 onchange 속성 제거 (다른 스크립트에서 추가했을 수 있음)
+        if (foodCategorySelect.hasAttribute('onchange')) {
+            foodCategorySelect.removeAttribute('onchange');
+        }
+        
+        // 기존 이벤트 리스너 제거 (중복 방지)
+        foodCategorySelect.removeEventListener('change', handleFoodCategoryChange);        foodCategorySelect.addEventListener('change', handleFoodCategoryChange);
     }
+}
+
+// 식품 구분 변경 핸들러
+function handleFoodCategoryChange() {
+    if (window.IngredientDetailPartial.isSyncing) {
+        return;
+    }
+    initFoodTypeSelect();
 }
 
 // DOMContentLoaded 또는 즉시 실행 패턴으로 이벤트 바인딩
@@ -372,10 +417,16 @@ function onReady(fn) {
 }
 
 onReady(function() {
+    // DOM 요소들이 존재하는지 확인
+    const foodCategorySelect = document.getElementById('foodCategorySelect');
+    const foodTypeSelect = document.getElementById('foodTypeSelect');
+    const ingredientForm = document.getElementById('ingredientForm');
+    
     // window.setDetailDirty를 항상 전역에 노출 (dirty 감지 정상화)
     if (typeof window.setDetailDirty !== 'function' && typeof setDetailDirty === 'function') {
         window.setDetailDirty = setDetailDirty;
     }
+    
     initFoodTypeSelect();
     setupFoodCategoryChangeEvent();
     initAllergyAndGmoOptions(); // 알레르기와 GMO 옵션 초기화
