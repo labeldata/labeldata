@@ -41,6 +41,38 @@ document.addEventListener('DOMContentLoaded', function () {
         fontFamily: "'Noto Sans KR'"
     };
 
+    // 규정 상수
+    const REGULATIONS = {
+        area_thresholds: {
+            small: 100,
+            medium: 3000,
+            large: 3000
+        },
+        font_size: {
+            product_name: { min: 16, small_area_min: 10 },
+            origin: { min: 14, small_area_min: 10 },
+            content_weight: { min: 12, small_area_min: 10 },
+            general: { min: 10, small_area_min: 10 }
+        },
+        storage_conditions: {
+            frozen: { temp: "-18℃ 이하", phrases: ["냉동 보관 (-18℃ 이하)", "해동 후 재냉동 금지"] },
+            refrigerated: { temp: "0~10℃", phrases: ["냉장 보관 (0~10℃)", "개봉 후 냉장 보관"] },
+            room_temp: { temp: "직사광선을 피하고 서늘한 곳", phrases: ["직사광선을 피하고 서늘한 곳에 보관"] }
+        },
+        food_type_phrases: {
+            "과ㆍ채가공품(살균제품/산성통조림)": ["캔주의"],
+            "유함유가공품": ["알레르기 주의"],
+            "고카페인": ["어린이, 임산부, 카페인 민감자는 섭취에 주의"],
+            "젤리/곤약": ["질식주의"],
+            "방사선 조사": ["감마선/전자선으로 조사처리"],
+            "냉동식품": ["해동 후 재냉동 금지"]
+        },
+        expiry_limits: {
+            frozen: 24, // 냉동식품: 최대 24개월
+            default: 12 // 기타: 최대 12개월
+        }
+    };
+
     // 분리배출마크 구분값 및 이미지 매핑
     const recyclingMarkGroups = [
         {
@@ -83,7 +115,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 { value: '도포첩합', label: '도포첩합', img: '/static/img/recycle_coated.png' }
             ]
         }
-        // '기타' 그룹 및 '미표시' 옵션 완전히 제거
     ];
 
     // value → 이미지 매핑
@@ -151,7 +182,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const select = document.getElementById('recyclingMarkSelect');
         if (select) {
             select.addEventListener('change', function() {
-                // 버튼 텍스트를 항상 '적용'으로 초기화
                 const btn = document.getElementById('addRecyclingMarkBtn');
                 if (btn) {
                     btn.textContent = '적용';
@@ -174,7 +204,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     addBtn.classList.remove('btn-outline-primary');
                     addBtn.classList.add('btn-danger');
                 } else {
-                    // 해제 동작: 이미지 제거
                     if (img) img.remove();
                     addBtn.textContent = '적용';
                     addBtn.classList.remove('btn-danger');
@@ -192,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (recommendSpan) {
             recommendSpan.textContent = recommended;
         }
-        if (select) {
+        if (select && recommended) {
             select.value = recommended;
         }
     }
@@ -527,7 +556,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 체크된 필드 렌더링
     const FIELD_LABELS = {
-        my_label_name: '라벨명',
         prdlst_dcnm: '식품유형',
         prdlst_nm: '제품명',
         ingredient_info: '성분명 및 함량',
@@ -548,13 +576,18 @@ document.addEventListener('DOMContentLoaded', function () {
         nutrition_text: '영양성분'
     };
 
+    // 필드 데이터 저장소
+    let checkedFields = {};
+
+    // 입력 데이터 반영 (테스트용)
     window.addEventListener('message', function(e) {
         if (e.data?.type === 'previewCheckedFields' && e.data.checked) {
+            checkedFields = e.data.checked;
             const tbody = document.getElementById('previewTableBody');
             if (!tbody) return;
 
             tbody.innerHTML = '';
-            Object.entries(e.data.checked).forEach(([field, value]) => {
+            Object.entries(checkedFields).forEach(([field, value]) => {
                 if (FIELD_LABELS[field] && value) {
                     const tr = document.createElement('tr');
                     const th = document.createElement('th');
@@ -607,7 +640,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             // 포장재질 기반 추천
-            const frmlc = e.data.checked.frmlc_mtrqlt || '';
+            const frmlc = checkedFields.frmlc_mtrqlt || '';
             renderRecyclingMarkUI();
             updateRecyclingMarkUI(frmlc);
         }
@@ -648,62 +681,587 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // 규정 검증
-    function validateSettings() {
-        const width = parseFloat(document.getElementById('widthInput').value);
-        const height = parseFloat(document.getElementById('heightInput').value);
-        const area = width * height;
-        const fontSize = parseFloat(document.getElementById('fontSizeInput').value);
-        const letterSpacing = parseInt(document.getElementById('letterSpacingInput').value);
-        const lineHeight = parseFloat(document.getElementById('lineHeightInput').value);
+    // 농수산물 목록
+    const farmSeafoodItems = [
+    "쌀", "찹쌀", "현미", "벼", "밭벼", "찰벼", "보리", "보리쌀", "밀", "밀쌀", "호밀", "귀리", "옥수수", "조", "수수", "메밀", "기장", "율무",
+    "콩", "팥", "녹두", "완두", "강낭콩", "동부", "기타콩",
+    "감자", "고구마", "야콘",
+    "참깨", "들깨", "땅콩", "해바라기", "유채", "고추씨",
+    "수박", "참외", "메론", "딸기", "토마토", "방울토마토", "호박", "오이",
+    "배추", "양배추", "고구마줄기", "토란줄기", "쑥", "건 무청", "시래기", "무말랭이", "무", "알타리무", "순무", "당근", "우엉", "연근", "양파", "대파", "쪽파", "실파",
+    "건고추", "마늘", "생강", "풋고추", "꽈리고추", "홍고추", "피망", "단고추", "브로코리", "녹색꽃양배추", "파프리카",
+    "갈근", "감초", "강활", "건강", "결명자", "구기자", "금은화", "길경", "당귀", "독활", "두충", "만삼", "맥문동", "모과", "목단", "반하", "방풍", "복령", "복분자", "백수오", "백지", "백출", "비자", "사삼", "양유", "더덕", "산수유", "산약", "산조인", "산초", "소자", "시호", "오가피", "오미자", "오배자", "우슬", "황정", "층층갈고리둥굴레", "옥죽", "외유", "둥굴레", "음양곽", "익모초", "작약", "진피", "지모", "지황", "차전자", "창출", "천궁", "천마", "치자", "택사", "패모", "하수오", "황기", "황백", "황금", "행인", "향부자", "현삼", "후박", "홍화씨", "고본", "소엽", "형개", "치커리", "헛개",
+    "녹용", "녹각",
+    "사과", "애플", "배", "포도", "복숭아", "단감", "떫은감", "곶감", "자두", "살구", "참다래", "파인애플", "감귤", "만감", "한라봉", "레몬", "탄제린", "오렌지", "청견", "자몽", "금감", "유자", "버찌", "매실", "앵두", "무화과", "바나나", "블루베리", "석류", "오디",
+    "밤", "대추", "잣", "호두", "은행", "도토리",
+    "영지버섯", "팽이버섯", "목이버섯", "석이버섯", "운지버섯", "송이버섯", "표고버섯", "양송이버섯", "느타리버섯", "상황버섯", "아가리쿠스", "동충하초", "새송이버섯", "싸리버섯", "능이버섯",
+    "수삼", "산양삼", "장뇌삼", "산삼배양근", "묘삼",
+    "고사리", "취나물", "고비", "두릅", "죽순", "도라지", "더덕", "마",
+    "쇠고기", "한우", "육우", "젖소", "양고기", "염소", "돼지고기", "멧돼지", "닭고기", "오리고기", "사슴고기", "토끼고기", "칠면조고기", "메추리고기", "말고기", "육류의 부산물",
+    "국화", "카네이션", "장미", "백합", "글라디올러스", "튜울립", "거베라", "아이리스", "프리지아", "칼라", "안개꽃",
+    "벌꿀", "건조누에", "프로폴리스",
+    "계란", "오리알", "메추리알",
+    "뽕잎", "누에번데기", "초콜릿", "치즈",
+    "고등어", "명태", "갈치", "조기", "참치", "연어", "대구", "방어", "참돔", "새우", "오징어", "낙지", "홍합", "바지락", "전복", "게",
+    "다시마", "미역", "김", "톳", "매생이", "어묵", "가리비 관자"
+    ];
 
-        const errorFields = new Set();
-        let errors = [];
+    // 사용금지 문구
+    const forbiddenPhrases = ['천연', '자연', '슈퍼', '생명'];
 
-        // 최소 면적 규정 (예: 40cm²)
-        if (area < 40) {
-            errors.push('정보표시면 면적은 최소 40cm² 이상이어야 합니다.');
-            errorFields.add('widthInput');
-            errorFields.add('heightInput');
-        }
+    // 검증 헬퍼 함수들
+    // 1. 농수산물 명칭은 제품명에서만 확인
+    function checkFarmSeafoodCompliance() {
+        const errors = [];
+        const suggestions = [];
+        const productName = checkedFields.prdlst_nm || '';
+        const ingredientInfo = checkedFields.ingredient_info || '';
+        const rawmtrlNm = checkedFields.rawmtrl_nm_display || '';
 
-        // 최소 글꼴 크기 (10pt)
-        if (fontSize < 10) {
-            errors.push('글꼴 크기는 최소 10pt 이상이어야 합니다.');
-            errorFields.add('fontSizeInput');
-        }
+        // 제품명에 포함된 농수산물명 추출
+        const foundItems = farmSeafoodItems.filter(item => productName.includes(item));
 
-        // 분리배출마크 크기 검증 (최소 8mm)
-        const markImg = document.getElementById('recyclingMarkImage');
-        if (markImg) {
-            const mmWidth = markImg.offsetWidth / 3.78; // 1cm ≈ 37.8px
-            if (mmWidth < 8) {
-                errors.push('분리배출마크는 가로 8mm 이상이어야 합니다.');
-                errorFields.add('recyclingMarkSelect');
+        // 성분명 및 함량(ingredient_info)에서 각 농수산물명에 대해 % 포함 여부 확인
+        let ingredientInfoMissing = false;
+        foundItems.forEach(item => {
+            // item을 포함하는 단어(예: 사과즙, 사과잼 등)도 모두 포함
+            // 한글, 영문, 숫자, /, (, ), %, 공백 등 포함
+            const regexWord = new RegExp(`${item}[\\w가-힣/()%··\\s-]*`, 'gi');
+            let match;
+            let foundAny = false;
+            while ((match = regexWord.exec(ingredientInfo)) !== null) {
+                foundAny = true;
+                const word = match[0];
+                // "사과즙 20%" 또는 "사과즙(국산) 20%" 등 다양한 형태 허용
+                // 1. 함량(%) 포함 여부
+                if (!/([0-9]+(\.[0-9]+)?\s*%)/.test(word)) {
+                    ingredientInfoMissing = true;
+                }
             }
-        }
-
-        ['widthInput', 'heightInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                if (errorFields.has(id)) {
-                    element.classList.add('is-invalid');
-                    element.classList.remove('is-valid');
-                } else {
-                    element.classList.add('is-valid');
-                    element.classList.remove('is-invalid');
+            // ingredientInfo에 item을 포함하는 단어가 하나도 없으면, 기존 방식으로 검사
+            if (!foundAny && ingredientInfo) {
+                if (!new RegExp(`${item}\\s*([\\d.]+%)`).test(ingredientInfo)) {
+                    ingredientInfoMissing = true;
                 }
             }
         });
 
-        if (errors.length > 0) {
-            alert('규정 검증 오류:\n\n' + errors.join('\n'));
-            return false;
+        // 성분명 및 함량이 없거나, 제품명에 포함된 농수산물의 함량(%)이 모두 없는 경우
+        if ((!ingredientInfo || ingredientInfoMissing) && rawmtrlNm && foundItems.length > 0) {
+            errors.push(`주표시면에 제품명에 포함된 "${foundItems.join(', ')}"의 함량(%)을 추가하세요.`);
         } else {
-            savePreviewSettings();
-            alert('모든 규정을 준수하고 있습니다.');
-            return true;
+            // 성분명 및 함량에 농수산물별로 %가 없는 경우만 개별 메시지
+            foundItems.forEach(item => {
+                const regexWord = new RegExp(`${item}[\\w가-힣/()%··\\s-]*`, 'gi');
+                let match;
+                let foundAny = false;
+                while ((match = regexWord.exec(ingredientInfo)) !== null) {
+                    foundAny = true;
+                    const word = match[0];
+                    if (!/([0-9]+(\.[0-9]+)?\s*%)/.test(word)) {
+                        errors.push(`성분명 및 함량에 "${word}"의 함량(%)을 추가하세요.`);
+                    }
+                }
+                if (!foundAny && ingredientInfo) {
+                    if (!new RegExp(`${item}\\s*([\\d.]+%)`).test(ingredientInfo)) {
+                        errors.push(`성분명 및 함량에 "${item}"의 함량(%)을 추가하세요.`);
+                    }
+                }
+            });
         }
+
+        // 원재료명(rawmtrl_nm_display)에서 각 농수산물명에 대해 %와 원산지 포함 여부 확인
+        foundItems.forEach(item => {
+            const rawList = rawmtrlNm.split(/\s*,\s*/);
+            rawList.forEach((raw, idx) => {
+                // item을 포함하는 단어(예: 사과즙, 사과잼 등)도 모두 포함 (단어 경계 없이 포함만 체크)
+                if (raw.includes(item)) {
+                    // 함량(%) 체크: 100% 또는 20% 등
+                    const hasPercent = /([0-9]+(\.[0-9]+)?\s*%)/.test(raw);
+                    // 원산지 체크: (국산), (미국산), /국산, /미국산 등도 허용
+                    // 1. 괄호 안에 '산'이 포함된 경우
+                    let hasOrigin = /\([^)산]*[가-힣]+산[^)]*\)/.test(raw) || /\([^)]+산[^)]*\)/.test(raw);
+                    // 2. /국산, /미국산, /중국산 등은 "산"이 포함된 경우로 허용
+                    if (!hasOrigin) {
+                        hasOrigin = /\/\s*[가-힣]+산/.test(raw);
+                    }
+                    // 3. "사과/국산"처럼 "/"로 구분된 경우도 허용
+                    if (!hasOrigin) {
+                        hasOrigin = new RegExp(`${item}\\s*\\/\\s*[가-힣]+산`).test(raw);
+                    }
+                    // 4. "사과/국산"처럼 "/"로 구분된 경우도 허용 (예외: "사과즙(미국산/100%)" 등)
+                    if (!hasOrigin) {
+                        hasOrigin = /[가-힣]+\/[가-힣]+산/.test(raw);
+                    }
+                    if (!hasPercent && !hasOrigin) {
+                        errors.push(`원재료명에 표시된 ${idx + 1}번째 원료(${raw})의 함량(%)과 원산지를 모두 추가하세요.`);
+                    } else if (!hasPercent) {
+                        errors.push(`원재료명에 표시된 ${idx + 1}번째 원료(${raw})의 함량(%)을 추가하세요.`);
+                    } else if (!hasOrigin) {
+                        errors.push(`원재료명에 표시된 ${idx + 1}번째 원료(${raw})의 원산지를 추가하세요.`);
+                    }
+                }
+            });
+        });
+
+        return { errors, suggestions: [] };
+    }
+
+    // 2. 알레르기 성분 중복: 중복된 성분을 모두 한 줄에 표시
+    function checkAllergenDuplication() {
+        const errors = [];
+        const suggestions = [];
+        const rawmtrl = checkedFields.rawmtrl_nm_display || '';
+        const cautions = checkedFields.cautions || '';
+        const allergenMatch = rawmtrl.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/i);
+        if (allergenMatch) {
+            const allergens = allergenMatch[1].split(',').map(a => a.trim().toLowerCase());
+            const duplicated = allergens.filter(allergen => cautions.toLowerCase().includes(allergen));
+            if (duplicated.length > 0) {
+                errors.push(`주의사항에 원재료명의 알레르기 성분이 중복 표시되었습니다: ${duplicated.join(', ')}`);
+            }
+        }
+        return { errors, suggestions };
+    }
+
+    // 3. 냉동식품 문구 및 온도, 보관조건, 필수 문구 통합
+    function checkFoodTypePhrasesUnified() {
+        const errors = [];
+        const suggestions = [];
+        const storageMethod = (checkedFields.storage_method || '').trim();
+        const foodType      = (checkedFields.prdlst_dcnm || '').trim();
+        const cautions      = (checkedFields.cautions || '').trim();
+        const additional    = (checkedFields.additional_info || '').trim();
+
+        // 온도 표시 검증 함수
+        function hasFrozenTemp() {
+            return (
+                storageMethod.includes('-18℃') ||
+                cautions.includes('-18℃') ||
+                additional.includes('-18℃')
+            );
+        }
+        function hasRefrigerateTemp() {
+            const regex = /냉장보관\s*\(?\d+\s*~\s*\d+℃/;
+            return (
+                regex.test(storageMethod) ||
+                regex.test(cautions) ||
+                regex.test(additional)
+            );
+        }
+
+        // 냉동 검증
+        if (storageMethod.includes('냉동')) {
+            if (!foodType.includes('냉동')) {
+                errors.push('냉동제품은 식품유형에 "냉동"을 표시해야 합니다.');
+            }
+            if (!cautions.includes('냉동') && !additional.includes('냉동')) {
+                errors.push('냉동제품은 주의사항 또는 기타표시사항에 "냉동"을 표시해야 합니다.');
+            }
+            if (!hasFrozenTemp()) {
+                errors.push('냉동제품은 보관방법, 주의사항 또는 기타표시사항에 "-18℃ 이하"를 표시해야 합니다.');
+            }
+            // 해동 후 재냉동 금지
+            const hasRefreezeProhibit = 
+                cautions.includes('해동 후 재냉동 금지') ||
+                additional.includes('해동 후 재냉동 금지');
+            if (!hasRefreezeProhibit) {
+                errors.push('냉동제품은 기타표시사항에 "해동 후 재냉동 금지"를 표시해야 합니다.');
+            }
+        }
+
+        // 냉장 검증
+        if (storageMethod.includes('냉장')) {
+            if (!cautions.includes('냉장') && !additional.includes('냉장')) {
+                errors.push('냉장제품은 주의사항 또는 기타표시사항에 "냉장"을 표시해야 합니다.');
+            }
+            if (!hasRefrigerateTemp()) {
+                errors.push('냉장제품은 보관방법, 주의사항 또는 기타표시사항에 "0~10℃"를 표시해야 합니다.');
+            }
+        }
+
+        // 즉석조리식품: 조리방법
+        if (foodType.includes("즉석조리") || foodType.includes("즉석 식품")) {
+            const hasCooking = cautions.includes("조리방법") || additional.includes("조리방법");
+            if (!hasCooking) {
+                errors.push('즉석조리식품은 기타표시사항에 "조리방법"을 표시해야 합니다.');
+            }
+        }
+
+        // 유제품: 지방함량/멸균방식/냉장보관(℃ 범위)
+        const dairyKeywords = ["우유", "치즈", "발효유", "요구르트", "유제품"];
+        const isDairy = dairyKeywords.some(keyword => foodType.includes(keyword));
+        if (isDairy) {
+            const hasFatRegex = /지방.*\(\s*%\s*\)/;
+            const hasFat = hasFatRegex.test(cautions) || hasFatRegex.test(additional);
+            if (!hasFat) {
+                errors.push('조건: 유제품 | 항목: 주의사항/기타표시사항 | 문구: "지방함량(%)"');
+            }
+            const hasSteril = /멸균/.test(cautions) || /멸균/.test(additional);
+            if (!hasSteril) {
+                errors.push('조건: 유제품 | 항목: 주의사항/기타표시사항 | 문구: "멸균방식"');
+            }
+            if (!hasRefrigerateTemp()) {
+                errors.push('조건: 유제품 | 항목: 보관방법/주의사항/기타표시사항 | 문구: "냉장보관(0~10℃)"');
+            }
+        }
+
+        // 필수 문구 (REGULATIONS.food_type_phrases)
+        let requiredPhrases = [];
+        Object.keys(REGULATIONS.food_type_phrases).forEach(key => {
+            if (foodType.includes(key)) {
+                requiredPhrases = requiredPhrases.concat(REGULATIONS.food_type_phrases[key]);
+            }
+        });
+        // "해동 후 재냉동 금지"는 위에서 이미 처리하므로 중복 방지
+        requiredPhrases = requiredPhrases.filter(phrase => phrase !== "해동 후 재냉동 금지");
+        requiredPhrases.forEach(phrase => {
+            if (!cautions.includes(phrase) && !additional.includes(phrase)) {
+                errors.push(`조건: 식품유형("${foodType}") | 항목: 주의사항/기타표시사항 | 문구: "${phrase}"`);
+            }
+        });
+
+        // 1399 문구
+        const reportPhrase = "부정·불량식품신고는 국번없이 1399";
+        const hasReport = cautions.includes("1399") || additional.includes("1399");
+        if (!hasReport) {
+            errors.push('모든 식품에는 "부정불량식품신고는 국번없이 1399"를 표시해야 합니다.');
+        }
+
+        return { errors, suggestions };
+    }
+
+    // 4. 사용 금지 문구
+    function checkForbiddenPhrases() {
+        const errors = [];
+        const suggestions = [];
+        const fieldsToCheck = [
+            'prdlst_nm', 'ingredient_info', 'rawmtrl_nm_display', 'cautions', 'additional_info'
+        ];
+        fieldsToCheck.forEach(field => {
+            let value = (checkedFields[field] || '').toString();
+            forbiddenPhrases.forEach(phrase => {
+                // "원재료명"에 "천연"이 포함된 경우, 에러/수정제안 및 사용조건 안내를 반드시 표시
+                if (value && value.match(new RegExp(phrase, 'i'))) {
+                    if (field === 'rawmtrl_nm_display' && phrase === '천연') {
+                        // 에러/수정제안 및 사용조건 안내
+                        let msg = `<strong>"${FIELD_LABELS[field]}" 항목에 사용 금지 문구 "${phrase}"가 표시되어 있습니다.</strong>`;
+                        let suggestion = `<strong style="color:#222;">"${FIELD_LABELS[field]}" 항목에 "${phrase}" 문구를 표시하려면 반드시 사용 조건에 맞게 표시하세요.</strong><br>` +
+                            '<span style="color:#888;">사용 조건:<br>' +
+                            '① 원료 중에 합성향료·합성착색료·방부제 등 어떠한 인공 화학 성분도 전혀 포함되어 있지 않아야 함<br>' +
+                            '② 최소한의 물리적 가공(세척·절단·동결·건조 등)만 거친 상태여야 함<br>' +
+                            '③ “천연”과 유사한 의미로 오인될 수 있는 “자연산(naturel)” 등의 외국어 사용도 동일 기준 적용<br>' +
+                            '④ 식품유형별로 별도 금지 사항(「식품등의 표시기준」의 개별 고시 규정)이 있는 경우, 그 규정에 따라 추가 제한이 있음<br>' +
+                            '⑤ 예: 설탕에는 “천연설탕”이라는 표현이 불가<br>' +
+                            '⑥ 영업소 명칭 또는 등록상표에 포함된 경우는 허용<br>' +
+                            '⑦ “천연향료” 등 고시된 허용 목록 내 용어만 예외적으로 허용</span>';
+                        errors.push(`${msg}<br>${suggestion}`);
+                        // value에서 "천연" 및 유사 영문 제거
+                        value = value.replace(/천연/gi, '').replace(/natural/gi, '').replace(/naturel/gi, '');
+                        checkedFields[field] = value.trim();
+                        return;
+                    }
+                    // ...기존 자연 등 다른 문구 처리...
+                    let msg = `<strong>"${FIELD_LABELS[field]}" 항목에 사용 금지 문구 "${phrase}"가 표시되어 있습니다.</strong>`;
+                    let suggestion = `<strong style="color:#222;">"${FIELD_LABELS[field]}"에서 "${phrase}" 문구를 삭제하세요.</strong>`;
+                    if (field === 'rawmtrl_nm_display' && phrase === '자연') {
+                        suggestion = `<strong style="color:#222;">"${FIELD_LABELS[field]}" 항목에 "${phrase}" 문구를 표시하려면 반드시 사용 조건에 맞게 표시하세요.</strong><br>` +
+                            '<span style="color:#888;">사용 조건:<br>' +
+                            '① “자연”이라는 용어는 가공되지 않은 농산물·임산물·수산물·축산물에 대해서만 허용<br>' +
+                            '② 수확하여 세척·포장만 거친 원물(raw agricultural/seafood/livestock products)에만 허용<br>' +
+                            '③ 이미 “가공식품”으로 분류된 상태라면 “자연” 표기가 불가능<br>' +
+                            '④ 유전자변형식품, 나노식품 등은 “자연” 표기가 금지됨<br>' +
+                            '⑤ 영업소 명칭 또는 등록상표에 포함된 경우는 허용<br>' +
+                            '⑥ 단, 제품명(product name) 자체에 “천연”·“자연”을 붙일 수는 없음</span>';
+                    }
+                    errors.push(`${msg}<br>${suggestion}`);
+                }
+            });
+        });
+        return { errors, suggestions: [] };
+    }
+
+    // 5. 분리배출마크
+    function checkRecyclingMarkCompliance() {
+        const errors = [];
+        const suggestions = [];
+        const packageMaterial = checkedFields.frmlc_mtrqlt || '';
+        const select = document.getElementById('recyclingMarkSelect');
+        const selectedMark = select ? select.value : '';
+        const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);
+        if (selectedMark && selectedMark !== '미표시' && selectedMark !== recommendedMark) {
+            errors.push(
+                `포장재질("${packageMaterial}")과 분리배출마크("${selectedMark}")가 일치하지 않습니다. 사용된 포장재질과 분리배출마크를 재확인하세요.`
+            );
+        }
+        return { errors, suggestions: [] };
+    }
+
+    // 6. 소비기한
+    function checkExpiryCompliance() {
+        const errors = [];
+        const suggestions = [];
+        const storageMethod = checkedFields.storage_method || '';
+        const foodType = checkedFields.prdlst_dcnm || '';
+        const expiry = checkedFields.pog_daycnt || '';
+        const isFrozen = storageMethod.toLowerCase().includes('냉동') || 
+                        foodType.toLowerCase().includes('냉동') || 
+                        foodType.toLowerCase().includes('냉동식품');
+        const maxMonths = isFrozen ? REGULATIONS.expiry_limits.frozen : REGULATIONS.expiry_limits.default;
+        const expiryMatch = expiry.match(/(\d+)개월/);
+        if (expiryMatch && parseInt(expiryMatch[1]) > maxMonths) {
+            errors.push(`소비기한 부적합: ${isFrozen ? "냉동식품은 24개월 이내" : "12개월 이내"}로 설정하세요 («식품 등의 표시기준» 제4조).`);
+            suggestions.push(`소비기한을 ${maxMonths}개월 이내로 수정하세요.`);
+        }
+        return { errors, suggestions };
+    }
+
+    // --- 검증 모달창 및 validateSettings ---
+    // 이전 결과 캐시
+    let cachedValidation = null;
+
+    function showValidationModal() {
+        let modal = document.getElementById('validationModal');
+        if (modal) {
+            try {
+                bootstrap.Modal.getInstance(modal)?.hide();
+            } catch (e) {}
+            setTimeout(() => {
+                if (modal.parentNode) modal.parentNode.removeChild(modal);
+            }, 0);
+            modal = null;
+        }
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'validationModal';
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">규정 검증</h5>
+                            <button type="button" class="btn btn-outline-dark btn-sm" data-bs-dismiss="modal" style="min-width:80px; margin-left:auto;">닫기</button>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table table-bordered" id="validationResultTable" style="margin-bottom:0;">
+                                <thead>
+                                    <tr>
+                                        <th style="width:15%;">검증 항목</th>
+                                        <th style="width:5%;">결과</th>
+                                        <th style="width:70%;">수정 제안</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="validationResultBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        setTimeout(() => {
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+        }, 0);
+        return modal;
+    }
+
+    async function validateSettings() {
+        const width = parseFloat(document.getElementById('widthInput').value) || 0;
+        const height = parseFloat(document.getElementById('heightInput').value) || 0;
+        const area = width * height;
+        const fontSize = parseFloat(document.getElementById('fontSizeInput').value) || 10;
+        const packageMaterial = (checkedFields.frmlc_mtrqlt || '');
+        const select = document.getElementById('recyclingMarkSelect');
+        const selectedMark = select ? select.value : '';
+        const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);
+
+        // 캐시된 결과가 있으면 재사용(표시면 면적, 글꼴 크기, 분리배출마크 제외)
+        let cached = cachedValidation;
+        let now = Date.now();
+        let useCache = false;
+        if (
+            cached &&
+            cached._cacheTime &&
+            // 표시면 면적, 글꼴 크기, 분리배출마크 관련 값이 변하지 않았으면 캐시 사용
+            cached._width === width &&
+            cached._height === height &&
+            cached._fontSize === fontSize &&
+            cached._selectedMark === selectedMark &&
+            cached._recommendedMark === recommendedMark
+        ) {
+            useCache = true;
+        }
+
+        // 검증 항목 순서 및 매핑
+        const validationItems = [
+            {
+                label: '표시면 면적',
+                check: () => ({
+                    ok: area >= 40,
+                    errors: area < 40 ? [
+                        `<strong style="color:#222;">표시면 면적은 최소 40cm² 이상이어야 합니다 («식품 등의 표시기준» 제4조).</strong>`
+                    ] : [],
+                    suggestions: area < 40 ? [
+                        `<strong style="color:#222;">면적을 40cm² 이상으로 조정하세요.</strong>`
+                    ] : []
+                }),
+                always: true
+            },
+            {
+                label: '글꼴 크기',
+                check: () => ({
+                    ok: fontSize >= REGULATIONS.font_size.general.min,
+                    errors: fontSize < REGULATIONS.font_size.general.min ? [
+                        `<strong style="color:#222;">글꼴 크기는 최소 ${REGULATIONS.font_size.general.min}pt 이상이어야 합니다 («식품 등의 표시기준» 제6조).</strong>`
+                    ] : [],
+                    suggestions: fontSize < REGULATIONS.font_size.general.min ? [
+                        `<strong style="color:#222;">글꼴 크기를 ${REGULATIONS.font_size.general.min}pt 이상으로 조정하세요.</strong>`
+                    ] : []
+                }),
+                always: true
+            },
+            {
+                label: '제품명 성분 표시',
+                check: () => {
+                    const result = checkFarmSeafoodCompliance();
+                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    return result;
+                }
+            },
+            {
+                label: '필수 문구',
+                check: () => {
+                    const result = checkFoodTypePhrasesUnified();
+                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    return result;
+                }
+            },
+            {
+                label: '사용금지 문구',
+                check: () => checkForbiddenPhrases()
+            },
+            {
+                label: '알레르기 중복 표시',
+                check: () => {
+                    const result = checkAllergenDuplication();
+                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    return result;
+                }
+            },
+            {
+                label: '분리배출마크',
+                check: () => {
+                    const result = checkRecyclingMarkCompliance();
+                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    return result;
+                },
+                always: true
+            },
+            {
+                label: '소비기한',
+                check: () => {
+                    const result = checkExpiryCompliance();
+                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
+                    return result;
+                }
+            }
+        ];
+
+        // 캐시가 있으면 표시면 면적/글꼴 크기/분리배출마크만 새로 계산, 나머지는 캐시 사용
+        let results = [];
+        if (useCache) {
+            for (let i = 0; i < validationItems.length; i++) {
+                const item = validationItems[i];
+                if (item.always) {
+                    results.push(item.check());
+                } else {
+                    results.push(cached.results[i]);
+                }
+            }
+        } else {
+            results = validationItems.map(item => item.check());
+            // 캐시 저장(항상 새로 계산되는 항목 값도 저장)
+            cachedValidation = {
+                _cacheTime: Date.now(),
+                _width: width,
+                _height: height,
+                _fontSize: fontSize,
+                _selectedMark: selectedMark,
+                _recommendedMark: recommendedMark,
+                results
+            };
+        }
+
+        const modal = showValidationModal();
+        const tbody = modal.querySelector('#validationResultBody');
+        tbody.innerHTML = '';
+
+        // 입력 필드 상태 초기화
+        [
+            'widthInput','heightInput','fontSizeInput','letterSpacingInput','lineHeightInput',
+            'recyclingMarkSelect','ingredient_info','country_of_origin','prdlst_nm',
+            'rawmtrl_nm_display','cautions','additional_info','storage_method','pog_daycnt'
+        ].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.classList.remove('is-valid','is-invalid');
+            }
+        });
+
+        let hasErrors = false;
+
+        // tbody에 모든 검증 항목을 한 번에 추가 (tr을 누적해서 innerHTML로 할당)
+        let rowsHtml = '';
+        for (let i = 0; i < validationItems.length; i++) {
+            const item = validationItems[i];
+            const result = results[i];
+
+            rowsHtml += `<tr>`;
+
+            // 항목명
+            rowsHtml += `<td>${item.label}</td>`;
+
+            // 결과
+            if (!result.errors || result.errors.length === 0) {
+                rowsHtml += `<td><span class="text-success">OK</span></td>`;
+            } else {
+                rowsHtml += `<td><span class="text-danger">Error</span></td>`;
+                hasErrors = true;
+            }
+
+            // 에러/수정제안
+            let msg = '';
+            if (result.errors && result.errors.length > 0) msg += result.errors.join('<br>');
+            if (result.suggestions && result.suggestions.length > 0) {
+                if (msg) msg += ' | ';
+                msg += result.suggestions.join('<br>');
+            }
+            rowsHtml += `<td>${msg}</td>`;
+
+            rowsHtml += `</tr>`;
+        }
+        tbody.innerHTML = rowsHtml;
+
+        // 입력 필드에 유효/비유효 클래스 추가 (간단화)
+        [
+            'widthInput','heightInput','fontSizeInput','letterSpacingInput','lineHeightInput',
+            'recyclingMarkSelect','ingredient_info','country_of_origin','prdlst_nm',
+            'rawmtrl_nm_display','cautions','additional_info','storage_method','pog_daycnt'
+        ].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                if (hasErrors) element.classList.remove('is-valid');
+                else element.classList.add('is-valid');
+            }
+        });
+
+        return !hasErrors;
     }
 
     // PDF 저장
@@ -729,7 +1287,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const sanitizedName = productName.replace(/[^\w가-힣]/g, '_').slice(0, 20);
             const fileName = `LABELDATA_${sanitizedName}_${formattedDateTime}.pdf`;
 
-            // Canvas 생성
             const canvas = await html2canvas(content, {
                 scale: 3,
                 useCORS: true,
@@ -744,11 +1301,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const pdf = new jsPDF('p', 'mm', [widthMm, heightMm]);
             pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm);
 
-            // 분리배출 마크 추가
             if (markImage && markImage.src) {
                 const previewRect = content.getBoundingClientRect();
                 const markRect = markImage.getBoundingClientRect();
-                const pxToMm = (px) => px * 0.264583; // 1px ≈ 0.264583mm
+                const pxToMm = (px) => px * 0.264583;
                 let x = markRect.left - previewRect.left;
                 let y = markRect.top - previewRect.top;
                 x = pxToMm(x);
@@ -859,6 +1415,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tabInstance.show();
             updateNutritionDisplay(data);
         }
+   
     });
 
     document.getElementById('nutritionDisplayUnit')?.addEventListener('change', function() {
@@ -880,312 +1437,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const heightInput = document.getElementById('heightInput');
         heightInput.value = Math.ceil(totalHeight);
         updateArea();
-    }
-
-    // 필드 데이터 저장소
-    let checkedFields = {};
-
-    // 농수산물 목록
-    const farmSeafoodItems = [
-            "쌀", "찹쌀", "현미", "벼", "밭벼", "찰벼",
-        "보리", "보리쌀", "밀", "밀쌀", "호밀", "귀리",
-        "옥수수", "조", "수수", "메밀", "기장", "율무",
-        "콩", "팥", "녹두", "완두", "강낭콩", "동부", "기타콩",
-        "감자", "고구마", "야콘",
-        "참깨", "들깨", "땅콩", "해바라기", "유채", "고추씨",
-        "수박", "참외", "메론", "딸기", "토마토", "방울토마토",
-        "호박", "오이",
-        "배추·양배추", "고구마줄기", "토란줄기", "쑥", "건 무청(시래기)",
-        "무말랭이", "무·알타리무·순무", "당근", "우엉", "연근",
-        "양파", "대파·쪽파·실파", "건고추", "마늘", "생강", "풋고추", "꽈리고추", "홍고추",
-        "피망(단고추)", "브로코리(녹색꽃양배추)", "파프리카",
-        "갈근", "감초", "강활", "건강", "결명자", "구기자", "금은화", "길경", "당귀", "독활",
-        "두충", "만삼", "맥문동", "모과", "목단", "반하", "방풍", "복령", "복분자", "백수오",
-        "백지", "백출", "비자", "사삼", "양유(더덕)", "산수유", "산약", "산조인", "산초", "소자",
-        "시호", "오가피", "오미자", "오배자", "우슬", "황정(층층갈고리둥굴레)", "옥죽/외유(둥굴레)",
-        "음양곽", "익모초", "작약", "진피", "지모", "지황", "차전자", "창출", "천궁", "천마",
-        "치자", "택사", "패모", "하수오", "황기", "황백", "황금", "행인", "향부자", "현삼",
-        "후박", "홍화씨", "고본", "소엽", "형개", "치커리(뿌리)", "헛개", "녹용", "녹각",
-        "사과", "배", "포도", "복숭아", "단감", "떫은감", "곶감", "자두", "살구", "참다래",
-        "파인애플", "감귤", "만감(한라봉 포함)", "레몬", "탄제린", "오렌지(청견 포함)", "자몽",
-        "금감", "유자", "버찌", "매실", "앵두", "무화과", "모과", "바나나", "블루베리", "석류", "오디",
-        "밤", "대추", "잣", "호두", "은행", "도토리",
-        "영지버섯", "팽이버섯", "목이버섯", "석이버섯", "운지버섯", "송이버섯", "표고버섯",
-        "양송이버섯", "느타리버섯", "상황버섯", "아가리쿠스", "동충하초", "새송이버섯", "싸리버섯", "능이버섯",
-        "수삼(산양삼, 장뇌삼, 산삼배양근 포함)", "묘삼(식용)",
-        "고사리", "취나물", "고비", "두릅", "죽순", "도라지", "더덕", "마",
-        "쇠고기(한우, 육우, 젖소)", "양고기(염소 포함)", "돼지고기(멧돼지 포함)",
-        "닭고기", "오리고기", "사슴고기", "토끼고기", "칠면조고기", "육류의 부산물",
-        "메추리고기", "말고기",
-        "국화", "카네이션", "장미", "백합", "글라디올러스", "튜울립", "거베라", "아이리스",
-        "프리지아", "칼라", "안개꽃",
-        "벌꿀", "건조누에", "프로폴리스", "식용란(닭, 오리 및 메추리의 알)", "뽕잎", "누에번데기",
-        "초콜릿", "치즈"
-    ];
-
-    // 사용 금지 문구
-    const forbiddenPhrases = ['천연', '자연', '슈퍼', '생명'];
-
-    // 검증 헬퍼 함수들
-    function checkFarmSeafoodCompliance() {
-        const errors = [];
-        const ingredientInfo = checkedFields.ingredient_info || '';
-        const rawmtrlInfo = checkedFields.rawmtrl_nm_display || '';
-        const countryOfOrigin = checkedFields.country_of_origin || '';
-        const combinedText = (ingredientInfo + ' ' + rawmtrlInfo).toLowerCase();
-        const foundItems = farmSeafoodItems.filter(item => combinedText.includes(item.toLowerCase()));
-        if (foundItems.length > 0) {
-            foundItems.forEach(item => {
-                const contentRegex = new RegExp(`${item}\\s*(\\d+\\.?\\d*%)`, 'i');
-                const hasContent = contentRegex.test(ingredientInfo) || contentRegex.test(rawmtrlInfo);
-                const originRegex = new RegExp(`${item}\\s*\\(([^)]+)\\)`, 'i');
-                const hasOrigin = originRegex.test(ingredientInfo) || originRegex.test(rawmtrlInfo) ||
-                                 countryOfOrigin.toLowerCase().includes(item.toLowerCase());
-                if (!hasContent) {
-                    errors.push(`농수산물 "${item}"의 함량이 표시되지 않았습니다.`);
-                }
-                if (!hasOrigin) {
-                    errors.push(`농수산물 "${item}"의 원산지가 표시되지 않았습니다.`);
-                }
-            });
-        }
-        return errors;
-    }
-
-    function checkRecyclingMarkCompliance() {
-        const errors = [];
-        const packageMaterial = checkedFields.frmlc_mtrqlt || '';
-        const select = document.getElementById('recyclingMarkSelect');
-        const selectedMark = select ? select.value : '';
-        const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);
-        if (selectedMark && selectedMark !== '미표시' && selectedMark !== recommendedMark) {
-            errors.push(`포장재질("${packageMaterial}")과 분리배출마크("${selectedMark}")가 일치하지 않습니다. 추천: "${recommendedMark}"`);
-        }
-        return errors;
-    }
-
-    function checkForbiddenPhrases() {
-        const errors = [];
-        const fieldsToCheck = [
-            'prdlst_nm', 'ingredient_info', 'rawmtrl_nm_display', 'cautions', 'additional_info'
-        ];
-        fieldsToCheck.forEach(field => {
-            const value = (checkedFields[field] || '').toString();
-            forbiddenPhrases.forEach(phrase => {
-                // 금지문구가 한글/영문/공백/괄호 등과 함께 포함되어도 감지
-                if (value && value.match(new RegExp(phrase, 'i'))) {
-                    errors.push(`"${FIELD_LABELS[field]}"에 사용 금지 문구 "${phrase}"가 포함되어 있습니다.`);
-                }
-            });
-        });
-        return errors;
-    }
-
-    function checkAllergenDuplication() {
-        const errors = [];
-        const rawmtrl = checkedFields.rawmtrl_nm_display || '';
-        const cautions = checkedFields.cautions || '';
-        const allergenMatch = rawmtrl.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/i);
-        if (allergenMatch) {
-            const allergens = allergenMatch[1].split(',').map(a => a.trim().toLowerCase());
-            allergens.forEach(allergen => {
-                if (cautions.toLowerCase().includes(allergen)) {
-                    errors.push(`주의사항에 원재료명의 알레르기 성분 "${allergen}"가 중복 표시되었습니다.`);
-                }
-            });
-        }
-        return errors;
-    }
-
-    function showValidationModal() {
-        let modal = document.getElementById('validationModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'validationModal';
-            modal.className = 'modal fade';
-            modal.innerHTML = `
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">규정 검증 진행 상황</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p id="validationStatus">검증 시작 중...</p>
-                            <ul id="validationLog" style="list-style: none; padding-left: 0;"></ul>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-        const bsModal = new bootstrap.Modal(modal);
-        bsModal.show();
-        return modal;
-    }
-
-    function updateValidationLog(modal, index, item, result) {
-        const logList = modal.querySelector('#validationLog');
-        const li = document.createElement('li');
-        li.innerHTML = `
-            ${index + 1}. ${item.name} (${item.rule}): 
-            <span class="${result.status === 'OK' ? 'text-success' : 'text-danger'}">
-                ${result.status === 'OK' ? 'OK' : `오류: ${result.message}`}
-            </span>
-        `;
-        logList.appendChild(li);
-    }
-
-    function updateValidationStatus(modal, message, isSuccess) {
-        const status = modal.querySelector('#validationStatus');
-        status.innerHTML = `<strong>${message}</strong>`;
-        status.className = isSuccess ? 'text-success' : 'text-danger';
-    }
-
-    function delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    // 규정 검증
-    async function validateSettings() {
-        const width = parseFloat(document.getElementById('widthInput').value) || 0;
-        const height = parseFloat(document.getElementById('heightInput').value) || 0;
-        const area = width * height;
-        const fontSize = parseFloat(document.getElementById('fontSizeInput').value) || 10;
-        const letterSpacing = parseInt(document.getElementById('letterSpacingInput').value) || 0;
-        const lineHeight = parseFloat(document.getElementById('lineHeightInput').value) || 1.2;
-
-        const errorFields = new Set();
-        const validationItems = [
-            {
-                name: '정보표시면 면적',
-                rule: '최소 40cm² 이상',
-                id: 'widthInput, heightInput',
-                check: () => ({
-                    status: area >= 40 ? 'OK' : 'ERROR',
-                    message: area < 40 ? '정보표시면 면적은 최소 40cm² 이상이어야 합니다.' : ''
-                })
-            },
-            {
-                name: '글꼴 크기',
-                rule: '최소 10pt 이상',
-                id: 'fontSizeInput',
-                check: () => ({
-                    status: fontSize >= 10 ? 'OK' : 'ERROR',
-                    message: fontSize < 10 ? '글꼴 크기는 최소 10pt 이상이어야 합니다.' : ''
-                })
-            },
-            {
-                name: '분리배출마크 크기',
-                rule: '가로 최소 8mm 이상',
-                id: 'recyclingMarkSelect',
-                check: () => {
-                    const markImg = document.getElementById('recyclingMarkImage');
-                    if (!markImg) return { status: 'OK', message: '' };
-                    const mmWidth = markImg.offsetWidth / 3.78;
-                    return {
-                        status: mmWidth >= 8 ? 'OK' : 'ERROR',
-                        message: mmWidth < 8 ? '분리배출마크는 가로 8mm 이상이어야 합니다.' : ''
-                    };
-                }
-            },
-            {
-                name: '농수산물 함량 및 원산지',
-                rule: '농수산물 포함 시 함량(%)과 원산지 표시',
-                check: () => {
-                    const errors = checkFarmSeafoodCompliance();
-                    return {
-                        status: errors.length === 0 ? 'OK' : 'ERROR',
-                        message: errors.join('; ')
-                    };
-                }
-            },
-            {
-                name: '포장재질과 분리배출마크',
-                rule: '포장재질과 선택된 분리배출마크 일치',
-                id: 'recyclingMarkSelect',
-                check: () => {
-                    const errors = checkRecyclingMarkCompliance();
-                    return {
-                        status: errors.length === 0 ? 'OK' : 'ERROR',
-                        message: errors.join('; ')
-                    };
-                }
-            },
-            {
-                name: '사용 금지 문구',
-                rule: '"천연", "자연" 등 금지 문구 미포함',
-                check: () => {
-                    const errors = checkForbiddenPhrases();
-                    return {
-                        status: errors.length === 0 ? 'OK' : 'ERROR',
-                        message: errors.join('; ')
-                    };
-                }
-            },
-            {
-                name: '알레르기 성분 중복',
-                rule: '원재료명과 주의사항 간 알레르기 성분 중복 금지',
-                check: () => {
-                    const errors = checkAllergenDuplication();
-                    return {
-                        status: errors.length === 0 ? 'OK' : 'ERROR',
-                        message: errors.join('; ')
-                    };
-                }
-            }
-        ];
-
-        const modal = showValidationModal();
-        const logList = modal.querySelector('#validationLog');
-        logList.innerHTML = '';
-
-        // 입력 필드 초기화
-        ['widthInput', 'heightInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.classList.remove('is-valid', 'is-invalid');
-            }
-        });
-
-        let hasErrors = false;
-
-        for (let i = 0; i < validationItems.length; i++) {
-            const item = validationItems[i];
-            const result = item.check();
-            if (result.status === 'ERROR') {
-                hasErrors = true;
-                if (item.id) {
-                    item.id.split(',').forEach(id => errorFields.add(id.trim()));
-                }
-            }
-            updateValidationLog(modal, i, item, result);
-            await delay(100);
-        }
-
-        // 입력 필드 상태 업데이트
-        ['widthInput', 'heightInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                if (errorFields.has(id)) {
-                    element.classList.add('is-invalid');
-                } else {
-                    element.classList.add('is-valid');
-                }
-            }
-        });
-
-        if (hasErrors) {
-            updateValidationStatus(modal, '규정 검증 실패: 위 항목을 수정하세요.', false);
-            return false;
-        } else {
-            updateValidationStatus(modal, '모든 규정을 준수했습니다.', true);
-            savePreviewSettings();
-            return true;
-        }
     }
 
     // 초기화
