@@ -1039,16 +1039,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">규정 검증</h5>
-                            <button type="button" class="btn btn-outline-dark btn-sm" data-bs-dismiss="modal" style="min-width:80px; margin-left:auto;">닫기</button>
+                            <h5 class="modal-title">규정 검증 결과</h5>
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal" style="min-width:80px; margin-left:auto;">닫기</button>
                         </div>
                         <div class="modal-body">
                             <table class="table table-bordered" id="validationResultTable" style="margin-bottom:0;">
                                 <thead>
                                     <tr>
                                         <th style="width:15%;">검증 항목</th>
-                                        <th style="width:5%;">결과</th>
-                                        <th style="width:70%;">수정 제안</th>
+                                        <th style="width:10%;">검증 상태</th>
+                                        <th style="width:65%;">검증 결과 및 수정 제안</th>
                                     </tr>
                                 </thead>
                                 <tbody id="validationResultBody"></tbody>
