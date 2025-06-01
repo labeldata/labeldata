@@ -25,11 +25,11 @@
               <div class="registration-info">
                 <div class="info-line">
                    <span id="domesticTotal" class="number">-</span> 
-                   <span class="label">(누적)</span>
+                   <span class="label" id="domesticLabel">(누적)</span>
                 </div>
                 <div class="info-line"> 
                    <span id="domesticNew" class="number">-</span> 
-                   <span class="label">(최근 1주일)</span>
+                   <span class="label" id="domesticLabel">(최근 1주일)</span>
                 </div>
               </div>
             </div>
@@ -43,11 +43,11 @@
               <div class="registration-info">
                 <div class="info-line">
                    <span id="importedTotal" class="number">-</span> 
-                   <span class="label">(누적)</span>
+                   <span class="label" id="importedLabel">(누적)</span>
                 </div>
                 <div class="info-line">
                   <span id="importedNew" class="number">-</span> 
-                  <span class="label">(최근 1주일)</span>
+                  <span class="label" id="importedLabel">(최근 1주일)</span>
                </div>
               </div>
             </div>
@@ -83,23 +83,36 @@ function formatNumberWithCommas(num) {
   if (typeof num === "number") num = num.toString();
   return num.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
-function setNumberAndClass(id, value) {
+
+function setNumberAndClass(id, value, labelId) {
   var el = document.getElementById(id);
-  if (!el) return;
+  var labelEl = document.getElementById(labelId);
+  if (!el || !labelEl) return;
+  
+  // 원래 텍스트를 초기화
+  if (!labelEl.dataset.originalText) {
+    labelEl.dataset.originalText = labelEl.innerText;
+  }
+
   el.innerText = formatNumberWithCommas(value);
   if (parseInt(value.toString().replace(/,/g, '')) >= 1000000) {
     el.classList.add("number-small");
+    labelEl.innerText = labelEl.innerText.slice(0, 2); // 문자 줄이기
+  } else if (parseInt(value.toString().replace(/,/g, '')) >= 100000) {
+    labelEl.innerText = labelEl.innerText.slice(0, 3); // 문자 줄이기
   } else {
     el.classList.remove("number-small");
+    labelEl.innerText = labelEl.dataset.originalText; // 원래 텍스트 복원
   }
 }
+
 document.addEventListener("DOMContentLoaded", function(){
   // 국내제품(국내 FoodItem)
   fetch("{% url 'label:food_items_count' %}")
     .then(response => response.json())
     .then(data => {
-       setNumberAndClass("domesticTotal", data.total);
-       setNumberAndClass("domesticNew", data.new);
+       setNumberAndClass("domesticTotal", data.total, "domesticLabel");
+       setNumberAndClass("domesticNew", data.new, "domesticLabel");
     })
     .catch(error => console.error("Error fetching food items count:", error));
 
@@ -107,8 +120,8 @@ document.addEventListener("DOMContentLoaded", function(){
   fetch("{% url 'label:imported_food_count' %}")
     .then(response => response.json())
     .then(data => {
-       setNumberAndClass("importedTotal", data.total);
-       setNumberAndClass("importedNew", data.new);
+       setNumberAndClass("importedTotal", data.total, "importedLabel");
+       setNumberAndClass("importedNew", data.new, "importedLabel");
     })
     .catch(error => console.error("Error fetching imported food count:", error));
 });
@@ -123,6 +136,10 @@ document.addEventListener("DOMContentLoaded", function(){
 .number-small {
   font-size: clamp(1rem, 2vw, 1.5rem) !important;
   letter-spacing: -1px;
+}
+.label {
+  font-size: 1rem;
+  font-weight: normal;
 }
 </style>
 
