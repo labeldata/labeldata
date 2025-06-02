@@ -44,8 +44,7 @@ const fieldMappings = {
   label_nm: ['input[name="my_label_name"]'],
   prdlst_dcnm_arr: ['input[name="prdlst_dcnm"]'],
   prdlst_nm_arr: ['input[name="prdlst_nm"]'],
-  ingredients_info_arr: ['input[name="ingredient_info"]'],
-  content_weight_arr: ['input[name="content_weight"]'],
+  ingredients_info_arr: ['input[name="ingredient_info"]'],  content_weight_arr: ['input[name="content_weight"]', 'input[name="weight_calorie"]'],
   weight_calorie_arr: ['input[name="weight_calorie"]'],
   prdlst_report_no_arr: ['input[name="prdlst_report_no"]'],
   country_of_origin_arr: ['select[name="country_of_origin"]'],
@@ -442,8 +441,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (settings.pog_daycnt_options !== undefined) {
           updateDateDropdownOptions(settings.pog_daycnt_options);
-        }
-        // 체크박스 업데이트 항상 실행
+        }        // 체크박스 업데이트 항상 실행
         Object.keys(settings).forEach(field => {
           const value = settings[field];
           const checkboxId = fieldMappings[field] || `chk_${field}`;
@@ -457,8 +455,27 @@ document.addEventListener('DOMContentLoaded', function () {
           if (field === 'pog_daycnt') {
             updateDateDropdown(settings.pog_daycnt);
           }
-        });
-      });
+          // 내용량 타입 자동 선택 로직
+          if (field === 'weight_calorie') {
+            updateContentTypeByFoodType(value);
+          }
+        });      });
+  }
+  // 식품유형에 따른 내용량 타입 자동 선택
+  function updateContentTypeByFoodType(weightCalorieValue) {
+    const contentTypeSelect = document.getElementById('content_type_select');
+    if (!contentTypeSelect) return;
+
+    // weight_calorie 값에 따라 드롭다운 선택
+    // Y: 내용량(열량) 선택, N/D: 내용량 선택
+    if (weightCalorieValue === 'Y') {
+      contentTypeSelect.value = 'weight_calorie';
+    } else if (weightCalorieValue === 'N' || weightCalorieValue === 'D') {
+      contentTypeSelect.value = 'content_weight';
+    }
+
+    // 드롭다운 변경 이벤트 발생시켜 필드 업데이트
+    contentTypeSelect.dispatchEvent(new Event('change'));
   }
   
   function initFoodTypeFiltering() {
@@ -591,13 +608,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     dateOptions.disabled = false;
   }
-
   // ------------------ 체크박스 필드 토글 ------------------
   function initCheckboxFieldToggle() {
     document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(checkbox => {
       if (checkbox.dataset.initialized === 'true') return;
       checkbox.dataset.initialized = 'true';
       const fieldName = checkbox.id.replace('chk_', '');
+      
+      // 원재료명(참고) 필드는 항상 비활성화
       if (fieldName === 'rawmtrl_nm') {
         checkbox.disabled = true;
         const textarea = document.querySelector('textarea[name="rawmtrl_nm"]');
@@ -607,13 +625,48 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         return;
       }
+        // 내용량 필드는 특별 처리 (드롭다운과 두 개의 입력 필드)
+      if (fieldName === 'content_weight') {
+        const contentTypeSelect = document.getElementById('content_type_select');
+        const contentWeightInput = document.getElementById('content_weight_input');
+        const weightCalorieInput = document.getElementById('weight_calorie_input');
+        
+        function updateContentFields() {
+          const isDisabled = !checkbox.checked;
+          if (contentTypeSelect) {
+            contentTypeSelect.disabled = isDisabled;
+            contentTypeSelect.classList.toggle('disabled-textarea', isDisabled);
+          }
+          if (contentWeightInput) {
+            contentWeightInput.disabled = isDisabled;
+            contentWeightInput.classList.toggle('disabled-textarea', isDisabled);
+          }
+          if (weightCalorieInput) {
+            weightCalorieInput.disabled = isDisabled;
+            weightCalorieInput.classList.toggle('disabled-textarea', isDisabled);
+          }
+        }
+        
+        checkbox.addEventListener('change', function() {
+          updateContentFields();
+          // 내용량 관련 hidden 필드 업데이트는 드롭다운 change 이벤트에서 처리
+          const contentTypeSelect = document.getElementById('content_type_select');
+          if (contentTypeSelect) {
+            contentTypeSelect.dispatchEvent(new Event('change'));
+          }
+        });
+        
+        updateContentFields();
+        return;
+      }
+      
       const relatedFields = fieldMappings[`${fieldName}_arr`]?.map(sel => document.querySelector(sel)).filter(Boolean) || [];
       if (!relatedFields.length) {
         return;
       }
       function updateFields() {
         relatedFields.forEach(field => {
-          field.disabled = checkbox.dataset.forcedDisabled === 'true';
+          field.disabled = !checkbox.checked || checkbox.dataset.forcedDisabled === 'true';
           field.classList.toggle('disabled-textarea', field.disabled);
         });
       }

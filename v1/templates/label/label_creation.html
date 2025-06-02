@@ -235,18 +235,22 @@
                     <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo(document.getElementById('label_id')?.value)">번호검증</button>
                   </div>
                 </div>
-              </div>
-            </div>
-            <!-- 내용량 | 원산지 -->
+              </div>            </div>            <!-- 내용량 | 원산지 -->
             <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
               <div class="d-flex align-items-center flex-equal">
-                <div style="width:15%; min-width:130px;">
+                <div style="width:15%; min-width:130px; display:flex; align-items:center;">
                   <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" 
-                         {% if label.chckd_content_weight == "Y" %}checked{% endif %}>
-                  <label for="chk_content_weight" class="m-0">내용량</label>
+                         {% if label.chckd_content_weight == "Y" or label.chckd_weight_calorie == "Y" %}checked{% endif %}>
+                  <select id="content_type_select" class="form-control select2-content-type" style="width:80%; min-width:90px; max-width:180px;">
+                    <option value="content_weight" {% if label.chckd_content_weight == "Y" and label.chckd_weight_calorie != "Y" %}selected{% endif %}>내용량</option>
+                    <option value="weight_calorie" {% if label.chckd_weight_calorie == "Y" %}selected{% endif %}>내용량(열량)</option>
+                  </select>
                 </div>
                 <div style="width:85%;">
-                  <input type="text" name="content_weight" class="form-control auto-expand" placeholder="내용량을 입력하세요." value="{{ form.content_weight.value|default:'' }}">
+                  <div class="input-container">
+                    <input type="text" id="content_weight_input" name="content_weight" class="form-control auto-expand" placeholder="내용량을 입력하세요." value="{{ form.content_weight.value|default:'' }}">
+                    <input type="text" id="weight_calorie_input" name="weight_calorie" class="form-control auto-expand" placeholder="내용량(열량)을 입력하세요." value="{{ form.weight_calorie.value|default:'' }}" style="display: none;">
+                  </div>
                 </div>
               </div>
               <div class="d-flex align-items-center flex-equal">
@@ -496,6 +500,70 @@
     form.addEventListener('submit', function() {
       hiddenInput.value = topInput.value;
     });
+  }
+})();
+
+// 내용량 타입 변경 처리
+(function() {
+  const contentTypeSelect = document.getElementById('content_type_select');
+  const contentWeightInput = document.getElementById('content_weight_input');
+  const weightCalorieInput = document.getElementById('weight_calorie_input');
+  const contentWeightCheckbox = document.getElementById('chk_content_weight');  function updateContentTypeDisplay() {
+    const selectedType = contentTypeSelect.value;
+    const isChecked = contentWeightCheckbox.checked;
+    
+    if (selectedType === 'content_weight') {
+      contentWeightInput.style.display = 'block';
+      weightCalorieInput.style.display = 'none';
+      
+      // 체크박스 상태 업데이트
+      const hiddenContentWeight = document.querySelector('input[name="chckd_content_weight"]');
+      const hiddenWeightCalorie = document.querySelector('input[name="chckd_weight_calorie"]');
+      if (hiddenContentWeight) hiddenContentWeight.value = isChecked ? 'Y' : 'N';
+      if (hiddenWeightCalorie) hiddenWeightCalorie.value = 'N';
+      
+      // 필드 활성화/비활성화 상태 업데이트
+      contentWeightInput.disabled = !isChecked;
+      contentWeightInput.classList.toggle('disabled-textarea', !isChecked);
+      
+    } else if (selectedType === 'weight_calorie') {
+      contentWeightInput.style.display = 'none';
+      weightCalorieInput.style.display = 'block';
+      
+      // 체크박스 상태 업데이트
+      const hiddenContentWeight = document.querySelector('input[name="chckd_content_weight"]');
+      const hiddenWeightCalorie = document.querySelector('input[name="chckd_weight_calorie"]');
+      if (hiddenContentWeight) hiddenContentWeight.value = 'N';
+      if (hiddenWeightCalorie) hiddenWeightCalorie.value = isChecked ? 'Y' : 'N';
+      
+      // 필드 활성화/비활성화 상태 업데이트
+      weightCalorieInput.disabled = !isChecked;
+      weightCalorieInput.classList.toggle('disabled-textarea', !isChecked);
+    }
+  }
+  // 이벤트 리스너 등록
+  if (contentTypeSelect) {
+    contentTypeSelect.addEventListener('change', updateContentTypeDisplay);
+  }
+  
+  if (contentWeightCheckbox) {
+    contentWeightCheckbox.addEventListener('change', function() {
+      updateContentTypeDisplay();
+      // 드롭다운 필드도 체크박스 상태에 따라 활성화/비활성화
+      if (contentTypeSelect) {
+        contentTypeSelect.disabled = !this.checked;
+        contentTypeSelect.classList.toggle('disabled-textarea', !this.checked);
+      }
+    });
+  }
+
+  // 초기 상태 설정
+  updateContentTypeDisplay();
+  
+  // 드롭다운도 체크박스 상태에 따라 초기 설정
+  if (contentTypeSelect && contentWeightCheckbox) {
+    contentTypeSelect.disabled = !contentWeightCheckbox.checked;
+    contentTypeSelect.classList.toggle('disabled-textarea', !contentWeightCheckbox.checked);
   }
 })();
 </script>
