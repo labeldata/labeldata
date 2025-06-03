@@ -594,33 +594,106 @@ function saveIngredients() {
     const gmosSet = new Set();
 
     const summaryParts = [];
-    const summaryDisplayNames = [];
-
-    document.querySelectorAll('#ingredient-body tr').forEach((row, index) => {
+    const summaryDisplayNames = [];    document.querySelectorAll('#ingredient-body tr').forEach((row, index) => {
         const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
         const foodCategoryInput = row.querySelector('.food-category-input');
         const foodCategory = foodCategoryInput?.dataset.foodCategory || '';
-        const displayName = row.querySelector('.display-name-input')?.value.trim() || ingredientName;
+        const displayNameRaw = row.querySelector('.display-name-input')?.value.trim() || ingredientName;
         const foodType = row.querySelector('.food-type-select')?.value.trim() ||
                          row.querySelector('.form-control[readonly].modal-readonly-field:not(.ingredient-name-input):not(.display-name-input)')?.value.trim() || '';
         const ratioStr = row.querySelector('.ratio-input')?.value.trim();
         const ratio = parseFloat(ratioStr);
         const allergenInput = row.querySelector('.allergen-input')?.value.trim() || '';
         const gmoInput = row.querySelector('.gmo-input')?.value.trim() || '';
+        
+        // 식품첨가물의 경우 "※ 이 식품첨가물은..." 텍스트 제거
+        let displayName = displayNameRaw;
+        if (foodCategory === 'additive' && displayName) {
+            const idx = displayName.indexOf('※ 이 식품첨가물은');
+            if (idx !== -1) {
+                displayName = displayName.substring(0, idx).trim();
+            }
+        }
+        
         allergenInput.split(',').map(item => item.trim()).filter(Boolean).forEach(item => allergensSet.add(item));
         gmoInput.split(',').map(item => item.trim()).filter(Boolean).forEach(item => gmosSet.add(item));
-        if (displayName) displayNames.push(displayName);
-
-        let summaryItem = '';
-        if (
-            (foodCategory === 'additive') ||
-            (ratioStr && !isNaN(ratio) && ratio >= 5)
-        ) {
-            summaryItem = displayName;
+        if (displayName) displayNames.push(displayName);        // updateSummarySection과 동일한 로직 적용
+        if (foodCategory === 'additive') {
+            summaryDisplayNames.push(displayName);
+        } else if (foodCategory === 'agricultural') {
+            if (ratioStr && !isNaN(ratio) && ratio >= 5) {
+                let items = [];
+                let count = 0;
+                let str = displayName;
+                let i = 0;
+                let len = str.length;
+                let buffer = '';
+                let inParen = 0;
+                while (i < len && count < 5) {
+                    let ch = str[i];
+                    if (ch === '(' || ch === '[' || ch === '{') {
+                        inParen++;
+                        buffer += ch;
+                    } else if (ch === ')' || ch === ']' || ch === '}') {
+                        inParen = Math.max(0, inParen - 1);
+                        buffer += ch;
+                    } else if (ch === ',' && inParen === 0) {
+                        if (buffer.trim()) {
+                            items.push(buffer.trim());
+                            count += 1;
+                        }
+                        buffer = '';
+                    } else {
+                        buffer += ch;
+                    }
+                    i++;
+                }
+                if (count < 5 && buffer.trim()) {
+                    items.push(buffer.trim());
+                }
+                summaryDisplayNames.push(`${foodType}[${items.join(', ')}]`);
+            } else {
+                summaryDisplayNames.push(foodType || displayName);
+            }
+        } else if (foodCategory === '정제수') {
+            summaryDisplayNames.push(foodType || displayName);
         } else {
-            summaryItem = foodType || displayName;
+            // 가공식품 처리
+            if (ratioStr && !isNaN(ratio) && ratio >= 5) {
+                let items = [];
+                let count = 0;
+                let str = displayName;
+                let i = 0;
+                let len = str.length;
+                let buffer = '';
+                let inParen = 0;
+                while (i < len && count < 5) {
+                    let ch = str[i];
+                    if (ch === '(' || ch === '[' || ch === '{') {
+                        inParen++;
+                        buffer += ch;
+                    } else if (ch === ')' || ch === ']' || ch === '}') {
+                        inParen = Math.max(0, inParen - 1);
+                        buffer += ch;
+                    } else if (ch === ',' && inParen === 0) {
+                        if (buffer.trim()) {
+                            items.push(buffer.trim());
+                            count += 1;
+                        }
+                        buffer = '';
+                    } else {
+                        buffer += ch;
+                    }
+                    i++;
+                }
+                if (count < 5 && buffer.trim()) {
+                    items.push(buffer.trim());
+                }
+                summaryDisplayNames.push(`${foodType}[${items.join(', ')}]`);
+            } else {
+                summaryDisplayNames.push(foodType || displayName);
+            }
         }
-        if (summaryItem) summaryDisplayNames.push(summaryItem);
 
         const ingredient = {
             ingredient_name: ingredientName || "",
