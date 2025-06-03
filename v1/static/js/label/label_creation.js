@@ -460,22 +460,41 @@ document.addEventListener('DOMContentLoaded', function () {
             updateContentTypeByFoodType(value);
           }
         });      });
-  }
-  // 식품유형에 따른 내용량 타입 자동 선택
+  }  // 식품유형에 따른 내용량 타입 자동 설정
   function updateContentTypeByFoodType(weightCalorieValue) {
-    const contentTypeSelect = document.getElementById('content_type_select');
-    if (!contentTypeSelect) return;
+    const contentTypeDisplay = document.getElementById('content_type_display');
+    const contentTypeValue = document.getElementById('content_type_value');
+    if (!contentTypeDisplay || !contentTypeValue) return;
 
-    // weight_calorie 값에 따라 드롭다운 선택
-    // Y: 내용량(열량) 선택, N/D: 내용량 선택
+    // weight_calorie 값에 따라 표시 텍스트와 값 설정
+    // Y: 내용량(열량) 표시, N/D: 내용량 표시
+    // 모든 데이터는 content_weight 필드에만 저장
     if (weightCalorieValue === 'Y') {
-      contentTypeSelect.value = 'weight_calorie';
+      contentTypeDisplay.textContent = '내용량(열량)';
+      contentTypeValue.value = 'weight_calorie';
     } else if (weightCalorieValue === 'N' || weightCalorieValue === 'D') {
-      contentTypeSelect.value = 'content_weight';
+      contentTypeDisplay.textContent = '내용량';
+      contentTypeValue.value = 'content_weight';
     }
 
-    // 드롭다운 변경 이벤트 발생시켜 필드 업데이트
-    contentTypeSelect.dispatchEvent(new Event('change'));
+    // 체크박스 상태에 따른 표시 업데이트 (disabled 상태일 때는 회색으로)
+    updateContentTypeVisibility();
+  }
+  
+  // 내용량 타입 표시 상태 업데이트
+  function updateContentTypeVisibility() {
+    const checkbox = document.getElementById('chk_content_weight');
+    const contentTypeDisplay = document.getElementById('content_type_display');
+    
+    if (checkbox && contentTypeDisplay) {
+      if (checkbox.checked) {
+        contentTypeDisplay.style.color = '#495057';
+        contentTypeDisplay.style.opacity = '1';
+      } else {
+        contentTypeDisplay.style.color = '#6c757d';
+        contentTypeDisplay.style.opacity = '0.6';
+      }
+    }
   }
   
   function initFoodTypeFiltering() {
@@ -624,36 +643,23 @@ document.addEventListener('DOMContentLoaded', function () {
           textarea.classList.add('disabled-textarea');
         }
         return;
-      }
-        // 내용량 필드는 특별 처리 (드롭다운과 두 개의 입력 필드)
+      }        // 내용량 필드는 특별 처리 (텍스트 표시와 입력 필드)
       if (fieldName === 'content_weight') {
-        const contentTypeSelect = document.getElementById('content_type_select');
+        const contentTypeDisplay = document.getElementById('content_type_display');
         const contentWeightInput = document.getElementById('content_weight_input');
-        const weightCalorieInput = document.getElementById('weight_calorie_input');
         
         function updateContentFields() {
           const isDisabled = !checkbox.checked;
-          if (contentTypeSelect) {
-            contentTypeSelect.disabled = isDisabled;
-            contentTypeSelect.classList.toggle('disabled-textarea', isDisabled);
-          }
           if (contentWeightInput) {
             contentWeightInput.disabled = isDisabled;
             contentWeightInput.classList.toggle('disabled-textarea', isDisabled);
           }
-          if (weightCalorieInput) {
-            weightCalorieInput.disabled = isDisabled;
-            weightCalorieInput.classList.toggle('disabled-textarea', isDisabled);
-          }
+          // 텍스트 표시 상태도 업데이트
+          updateContentTypeVisibility();
         }
         
         checkbox.addEventListener('change', function() {
           updateContentFields();
-          // 내용량 관련 hidden 필드 업데이트는 드롭다운 change 이벤트에서 처리
-          const contentTypeSelect = document.getElementById('content_type_select');
-          if (contentTypeSelect) {
-            contentTypeSelect.dispatchEvent(new Event('change'));
-          }
         });
         
         updateContentFields();
@@ -1130,7 +1136,6 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.disabled = false;
     });
   };
-
   // '항목별 문구 및 규정' 탭 클릭 시 강제 새로고침
   document.addEventListener('DOMContentLoaded', function () {
     var myPhrasesTab = document.getElementById('myphrases-tab');
@@ -1139,5 +1144,80 @@ document.addEventListener('DOMContentLoaded', function () {
         reloadPhraseTab();
       });
     }
+  });
+
+  // 라벨명 동기화 함수
+  function initializeLabelNameSync() {
+    const form = document.getElementById('labelForm');
+    const topInput = document.getElementById('my_label_name');
+    const hiddenInput = document.getElementById('my_label_name_hidden');
+    if (form && topInput && hiddenInput) {
+      form.addEventListener('submit', function() {
+        hiddenInput.value = topInput.value;
+      });
+    }
+  }
+
+  // 내용량 필드 초기화 및 설정
+  function initializeContentWeightFields() {
+    const contentWeightInput = document.getElementById('content_weight_input');
+    const contentWeightCheckbox = document.getElementById('chk_content_weight');
+    const contentTypeDisplay = document.getElementById('content_type_display');
+    
+    // 초기 상태 설정
+    function updateContentFieldsState() {
+      if (contentWeightCheckbox && contentWeightInput) {
+        const isChecked = contentWeightCheckbox.checked;
+        contentWeightInput.disabled = !isChecked;
+        contentWeightInput.classList.toggle('disabled-textarea', !isChecked);
+        
+        // 텍스트 표시 상태 업데이트
+        if (contentTypeDisplay) {
+          if (isChecked) {
+            contentTypeDisplay.style.color = '#495057';
+            contentTypeDisplay.style.opacity = '1';
+          } else {
+            contentTypeDisplay.style.color = '#6c757d';
+            contentTypeDisplay.style.opacity = '0.6';
+          }
+        }
+        
+        // hidden 필드 값 설정 - 모든 데이터는 content_weight 필드에만 저장
+        const hiddenContentWeight = document.querySelector('input[name="chckd_content_weight"]');
+        const hiddenWeightCalorie = document.querySelector('input[name="chckd_weight_calorie"]');
+        if (hiddenContentWeight) hiddenContentWeight.value = isChecked ? 'Y' : 'N';
+        if (hiddenWeightCalorie) hiddenWeightCalorie.value = 'N'; // 항상 N으로 설정
+      }
+    }
+    
+    // 체크박스 변경 이벤트
+    if (contentWeightCheckbox) {
+      contentWeightCheckbox.addEventListener('change', function() {
+        updateContentFieldsState();
+      });
+    }
+    
+    // 초기 상태 설정
+    updateContentFieldsState();
+    
+    // 페이지 로드 시 식품유형에 따른 내용량 타입 초기 설정
+    const foodTypeSelect = document.getElementById('food_type');
+    if (foodTypeSelect && foodTypeSelect.value) {
+      // 선택된 식품유형의 weight_calorie 값 확인
+      const selectedOption = foodTypeSelect.options[foodTypeSelect.selectedIndex];
+      if (selectedOption && selectedOption.dataset.weightCalorie) {
+        const weightCalorieValue = selectedOption.dataset.weightCalorie;
+        // JavaScript 함수 호출하여 내용량 타입 설정
+        if (typeof updateContentTypeByFoodType === 'function') {
+          updateContentTypeByFoodType(weightCalorieValue);
+        }
+      }
+    }
+  }
+
+  // DOM 로드 완료 시 초기화 함수들 실행
+  document.addEventListener('DOMContentLoaded', function() {
+    initializeLabelNameSync();
+    initializeContentWeightFields();
   });
 });

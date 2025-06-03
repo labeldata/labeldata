@@ -237,14 +237,11 @@
                 </div>
               </div>            </div>            <!-- 내용량 | 원산지 -->
             <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
-              <div class="d-flex align-items-center flex-equal">
-                <div style="width:15%; min-width:130px; display:flex; align-items:center;">
+              <div class="d-flex align-items-center flex-equal">                <div style="width:15%; min-width:130px; display:flex; align-items:center;">
                   <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" 
                          {% if label.chckd_content_weight == "Y" or label.chckd_weight_calorie == "Y" %}checked{% endif %}>
-                  <select id="content_type_select" class="form-control select2-content-type" style="width:80%; min-width:90px; max-width:180px;">
-                    <option value="content_weight" {% if label.chckd_content_weight == "Y" and label.chckd_weight_calorie != "Y" %}selected{% endif %}>내용량</option>
-                    <option value="weight_calorie" {% if label.chckd_weight_calorie == "Y" %}selected{% endif %}>내용량(열량)</option>
-                  </select>
+                  <span id="content_type_display" class="content-type-label" style="margin-left: 8px; font-size: 0.9rem; color: #495057; min-width: 90px;">내용량</span>
+                  <input type="hidden" id="content_type_value" name="content_type" value="content_weight">
                 </div>
                 <div style="width:85%;">
                   <div class="input-container">
@@ -486,85 +483,8 @@
             </div>
           </div>
         </div>
-      </div>
+      </div>    
     </div>
   </div>
 </div>
-<script>
-// 저장 버튼 클릭 또는 form submit 시 상단 라벨명 input 값을 form 내부 hidden input에 복사
-(function() {
-  const form = document.getElementById('labelForm');
-  const topInput = document.getElementById('my_label_name');
-  const hiddenInput = document.getElementById('my_label_name_hidden');
-  if (form && topInput && hiddenInput) {
-    form.addEventListener('submit', function() {
-      hiddenInput.value = topInput.value;
-    });
-  }
-})();
-
-// 내용량 타입 변경 처리
-(function() {
-  const contentTypeSelect = document.getElementById('content_type_select');
-  const contentWeightInput = document.getElementById('content_weight_input');
-  const weightCalorieInput = document.getElementById('weight_calorie_input');
-  const contentWeightCheckbox = document.getElementById('chk_content_weight');  function updateContentTypeDisplay() {
-    const selectedType = contentTypeSelect.value;
-    const isChecked = contentWeightCheckbox.checked;
-    
-    if (selectedType === 'content_weight') {
-      contentWeightInput.style.display = 'block';
-      weightCalorieInput.style.display = 'none';
-      
-      // 체크박스 상태 업데이트
-      const hiddenContentWeight = document.querySelector('input[name="chckd_content_weight"]');
-      const hiddenWeightCalorie = document.querySelector('input[name="chckd_weight_calorie"]');
-      if (hiddenContentWeight) hiddenContentWeight.value = isChecked ? 'Y' : 'N';
-      if (hiddenWeightCalorie) hiddenWeightCalorie.value = 'N';
-      
-      // 필드 활성화/비활성화 상태 업데이트
-      contentWeightInput.disabled = !isChecked;
-      contentWeightInput.classList.toggle('disabled-textarea', !isChecked);
-      
-    } else if (selectedType === 'weight_calorie') {
-      contentWeightInput.style.display = 'none';
-      weightCalorieInput.style.display = 'block';
-      
-      // 체크박스 상태 업데이트
-      const hiddenContentWeight = document.querySelector('input[name="chckd_content_weight"]');
-      const hiddenWeightCalorie = document.querySelector('input[name="chckd_weight_calorie"]');
-      if (hiddenContentWeight) hiddenContentWeight.value = 'N';
-      if (hiddenWeightCalorie) hiddenWeightCalorie.value = isChecked ? 'Y' : 'N';
-      
-      // 필드 활성화/비활성화 상태 업데이트
-      weightCalorieInput.disabled = !isChecked;
-      weightCalorieInput.classList.toggle('disabled-textarea', !isChecked);
-    }
-  }
-  // 이벤트 리스너 등록
-  if (contentTypeSelect) {
-    contentTypeSelect.addEventListener('change', updateContentTypeDisplay);
-  }
-  
-  if (contentWeightCheckbox) {
-    contentWeightCheckbox.addEventListener('change', function() {
-      updateContentTypeDisplay();
-      // 드롭다운 필드도 체크박스 상태에 따라 활성화/비활성화
-      if (contentTypeSelect) {
-        contentTypeSelect.disabled = !this.checked;
-        contentTypeSelect.classList.toggle('disabled-textarea', !this.checked);
-      }
-    });
-  }
-
-  // 초기 상태 설정
-  updateContentTypeDisplay();
-  
-  // 드롭다운도 체크박스 상태에 따라 초기 설정
-  if (contentTypeSelect && contentWeightCheckbox) {
-    contentTypeSelect.disabled = !contentWeightCheckbox.checked;
-    contentTypeSelect.classList.toggle('disabled-textarea', !contentWeightCheckbox.checked);
-  }
-})();
-</script>
 {% endblock %}
