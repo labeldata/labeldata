@@ -153,11 +153,12 @@ function calculateNutrition(tabType) {
       } else {
         let raw = val;
         value = roundKoreanNutrition(raw, roundType);
-        percent = n.limit ? Math.round(value / n.limit * 100) : '';
-      }
+        percent = n.limit ? Math.round(value / n.limit * 100) : '';      }
       const indent = n.id === 'sugar' || n.id === 'transfat' || n.id === 'satufat';
+      const tdClass = indent ? tdLabelIndentClass : tdLabelClass;
+      const indentClass = indent ? ' nutrient-label-indent' : '';
       rows += `<tr>
-        <td ${indent ? tdLabelIndentClass : tdLabelClass}><strong>${n.label}</strong> <span ${tdValueClass}>${comma(value)}${unit}</span></td>
+        <td ${tdClass} class="${indentClass}"><strong>${n.label}</strong> <span ${tdValueClass}>${comma(value)}${unit}</span></td>
         <td ${tdPercentClass}>${percent !== '' ? `<strong>${percent}</strong>%` : ''}</td>
       </tr>`;
     });
@@ -179,24 +180,23 @@ function calculateNutrition(tabType) {
       </tr>
     </thead>
   `;
-
   document.getElementById('resultBoxTotal').innerHTML =
     previewBox +
-    `<table class="nutrition-preview-table" style="${tableStyle}">
+    `<table class="nutrition-preview-table table" style="${tableStyle}">
       ${tableHeader}
       <tbody>${makeRows('total')}</tbody>
     </table>`;
 
   document.getElementById('resultBoxUnit').innerHTML =
     previewBox +
-    `<table class="nutrition-preview-table" style="${tableStyle}">
+    `<table class="nutrition-preview-table table" style="${tableStyle}">
       ${tableHeader}
       <tbody>${makeRows('unit')}</tbody>
     </table>`;
 
   document.getElementById('resultBox100g').innerHTML =
     previewBox +
-    `<table class="nutrition-preview-table" style="${tableStyle}">
+    `<table class="nutrition-preview-table table" style="${tableStyle}">
       ${tableHeader}
       <tbody>${makeRows('100g')}</tbody>
     </table>`;

@@ -1319,79 +1319,165 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('PDF 저장 오류:', e);
             alert('PDF 저장 실패: ' + e.message);
         }
-    }
-
-    // 천 단위 콤마
+    }    // 천 단위 콤마
     function comma(x) {
         if (x === undefined || x === null) return '';
         return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
 
-    // 영양성분 표시
+    // 한국 식품표시기준 반올림 규정 적용 (계산기와 동일)
+    function roundKoreanNutrition(value, type, context) {
+        if (type === 'kcal') {
+            // 5kcal 미만은 0, 5kcal 단위로 "가장 가까운" 5의 배수로 조정
+            if (value < 5) return 0;
+            return Math.round(value / 5) * 5;
+        }
+        if (type === 'mg') {
+            if (value < 5) return 0;
+            if (value <= 140) return Math.round(value / 5) * 5;
+            return Math.round(value / 10) * 10;
+        }
+        if (type === 'g') {
+            if (value < 0.5) return 0;
+            if (value <= 5) return Math.round(value * 10) / 10;
+            return Math.round(value);
+        }
+        return value;
+    }    // 계산기의 영양성분 값 계산 로직 적용 (완전 동일)
+    function calculateNutrientValue(type, baseAmount, servings, val100g, displayUnit) {
+        if (isNaN(val100g) || isNaN(baseAmount)) return 0;
+        let raw = 0;
+        
+        if (displayUnit === 'total') {
+            raw = (val100g * baseAmount * servings) / 100;
+        } else if (displayUnit === 'unit') {
+            raw = (val100g * baseAmount) / 100;
+        } else {
+            raw = val100g;
+        }
+        return roundKoreanNutrition(raw, type);
+    }
+
+    // 계산기의 열량 전용 계산 함수 (완전 동일)
+    function getKcalValue(type, baseAmount, servings, val) {
+        if (isNaN(val) || isNaN(baseAmount)) return 0;
+        let raw = 0;
+        let context = {};
+        if (type === 'total') {
+            raw = (val * baseAmount * servings) / 100;
+            context.isKcalPerServing = true;
+            return roundKoreanNutrition(raw, 'kcal', context);
+        } else if (type === 'unit') {
+            raw = (val * baseAmount) / 100;
+            context.isKcalPerServing = true;
+            return roundKoreanNutrition(raw, 'kcal', context);
+        } else {
+            raw = val;
+            context.isKcalPerServing = false;
+            return roundKoreanNutrition(raw, 'kcal', context);
+        }
+    }    // 영양성분 표시 (계산기와 완전히 동일한 로직 적용)
     function updateNutritionDisplay(data) {
         const nutritionPreview = document.getElementById('nutritionPreview');
         if (!nutritionPreview) return;
 
         const displayUnit = data.displayUnit || 'unit';
         const servingUnit = data.servingUnit || 'g';
-        const servingUnitText = data.servingUnitText || '個';
-        const totalWeight = data.totalWeight || (data.servingSize * data.servingsPerPackage);
+        const servingSize = data.servingSize || 100;
+        const servingsPerPackage = data.servingsPerPackage || 1;
+        const totalWeight = servingSize * servingsPerPackage;
 
+        // 계산기와 동일한 표시 형식 매핑
         const tabMap = {
-            total: `총 ${comma(totalWeight)}${servingUnit}`,
-            unit: `단위 ${comma(data.servingSize)}${servingUnit}`,
+            total: `총 내용량 ${comma(totalWeight)}${servingUnit}`,
+            unit: `단위내용량 ${comma(servingSize)}${servingUnit}`,
             '100g': `100${servingUnit}당`
         };
 
-        let kcal = data.calorie !== undefined && data.calorie !== null ? data.calorie : '';
-        const kcalUnit = data.calorieUnit || 'kcal';
+        const tabMapShort = {
+            total: `총 내용량`,
+            unit: `단위내용량`,
+            '100g': `100${servingUnit}당`
+        };
 
+        // 열량 계산 (계산기와 완전히 동일한 로직)
+        let kcal = 0;
+        if (data.calorie !== undefined && data.calorie !== null) {
+            kcal = getKcalValue(displayUnit, servingSize, servingsPerPackage, data.calorie);
+        }
+
+        // 계산기와 동일한 미리보기 박스 구조
         const previewBox = `
-            <div class="nutrition-preview-box">
-                <div class="nutrition-preview-title">영양정보</div>
-                <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                    <span class="nutrition-preview-total-size">${tabMap[displayUnit]}</span>
-                    <span class="nutrition-value">${kcal ? comma(kcal) + kcalUnit : ''}</span>
+            <div class="nutrition-preview-box" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between;">
+                <div class="nutrition-preview-title" style="margin-bottom:0;font-size:2rem;">영양정보</div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;">
+                    <span class="nutrition-preview-total-small" style="font-size:0.95rem;font-weight:500;color:#fff;">${tabMap[displayUnit]}</span>
+                    <span class="nutrition-preview-kcal" style="font-size:1.15rem;font-weight:700;color:#fff;line-height:1;">${comma(kcal)}kcal</span>
                 </div>
             </div>
         `;
 
+        // 계산기와 완전히 동일한 테이블 스타일 변수들
+        const tableStyle = 'background:#fff;color:#222;border-radius:0 0 6px 6px;width:320px;margin:0 auto 16px auto;font-size:10pt;line-height:1.5;';
+        const thSmall = 'class="nutrition-preview-small" style="font-size:0.95rem;font-weight:500;background:#fff;padding:8px 0 6px 0;color:#222;border-bottom:2px solid #000;text-align:left;"';
+        const thRightSmall = 'class="nutrition-preview-small" style="font-size:0.95rem;font-weight:500;background:#fff;padding:8px 0 6px 0;color:#222;border-bottom:2px solid #000;text-align:right;"';
+        const tdLabelClass = 'style="font-weight:700;text-align:left;padding:6px 0 6px 0;"';
+        const tdLabelIndentClass = 'style="font-weight:700;text-align:left;padding:6px 0 6px 24px;"';
+        const tdValueClass = 'style="font-weight:400;text-align:left;padding:6px 0 6px 0;"';
+        const tdPercentClass = 'style="font-weight:700;text-align:right;padding:6px 0 6px 0;"';
+
         const tableHeader = `
             <thead>
                 <tr>
-                    <th class="nutrition-preview-label" style="width: 35%; text-align: left;">${tabMap[displayUnit]}</th>
-                    <th class="nutrition-preview-value" style="width: 65%; text-align: right;">1일 기준치 비율</th>
+                    <th ${thSmall}>${tabMapShort[displayUnit]}</th>
+                    <th ${thRightSmall}>1일 영양성분 기준치에 대한 비율</th>
                 </tr>
             </thead>
-        `;
-
+        `;        // 계산기와 동일한 들여쓰기 항목 정의
         const indentItems = ['당류', '트랜스지방', '포화지방'];
+        
         let rows = '';
         (data.values || []).forEach(item => {
-            const indent = indentItems.includes(item.label);
-            const percent = item.limit ? Math.round((item.value / item.limit) * 100) : '';
-            rows += `
-                <tr>
-                    <td class="nutrient-label ${indent ? 'nutrient-label-indent' : ''}">
-                        <strong>${item.label}</strong> <span class="nutrient-value">${comma(item.value)}${item.unit}</span>
-                    </td>
-                    <td class="nutrient-progress" style="text-align: right;">
-                        ${percent ? `<strong>${percent}%</strong>` : ''}
-                    </td>
-                </tr>
-            `;
+            if (!item.value && item.value !== 0) return; // 값이 없으면 표시하지 않음
+            if (item.label === '열량') return; // 열량은 별도 표시
+            
+            // 계산기와 동일한 반올림 타입 결정
+            const roundType = (item.label === '나트륨' || item.label === '콜레스테롤') ? 'mg' : 'g';
+            
+            // 계산기와 완전히 동일한 값 계산 로직
+            let value = 0;
+            if (displayUnit === 'total') {
+                let raw = (item.value * servingSize * servingsPerPackage) / 100;
+                value = roundKoreanNutrition(raw, roundType);
+            } else if (displayUnit === 'unit') {
+                let raw = (item.value * servingSize) / 100;
+                value = roundKoreanNutrition(raw, roundType);
+            } else {
+                let raw = item.value;
+                value = roundKoreanNutrition(raw, roundType);
+            }
+            
+            const indent = indentItems.includes(item.label);            const percent = item.limit ? Math.round((value / item.limit) * 100) : '';            
+            
+            // 들여쓰기 적용: 당류, 트랜스지방, 포화지방은 24px 들여쓰기 (CSS 클래스 사용)
+            // 비율은 오른쪽 정렬로 표시
+            // 계산기와 동일한 포맷: 영양성분명은 bold, 값은 별도 span, 비율도 bold
+            const tdClass = indent ? tdLabelIndentClass : tdLabelClass;
+            const indentClass = indent ? ' nutrient-label-indent' : '';            rows += `<tr>
+                <td ${tdClass} class="${indentClass}"><strong>${item.label}</strong> <span ${tdValueClass}>${comma(value)}${item.unit}</span></td>
+                <td ${tdPercentClass}>${percent !== '' ? `<strong>${percent}</strong>%` : ''}</td>
+            </tr>`;
         });
 
+        // 계산기와 완전히 동일한 하단 텍스트
         rows += `
             <tr>
-                <td colspan="2" class="nutrition-preview-footer-text">
-                    <strong>1일 영양성분 기준치에 대한 비율(%)</strong>은 2,000kcal 기준입니다. 개인의 필요에 따라 다를 수 있습니다.
+                <td colspan="2" class="nutrition-preview-footer-inside">
+                    <strong>1일 영양성분 기준치에 대한 비율(%)</strong>은 2000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.
                 </td>
             </tr>
-        `;
-
-        const tableHtml = `
-            <table class="nutrition-preview-table table table-sm table-bordered">
+        `;        const tableHtml = `
+            <table class="nutrition-preview-table table" style="${tableStyle}">
                 ${tableHeader}
                 <tbody>${rows}</tbody>
             </table>
