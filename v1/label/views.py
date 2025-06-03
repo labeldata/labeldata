@@ -769,7 +769,8 @@ def ingredient_popup(request):
     ingredients_data = []
     has_relations = False
     if label_id:
-        relations = LabelIngredientRelation.objects.filter(label_id=label_id).select_related('ingredient')
+        # relation_sequence 순서로 명시적 정렬 (모델의 기본 ordering 무시)
+        relations = LabelIngredientRelation.objects.filter(label_id=label_id).select_related('ingredient').order_by('relation_sequence')
         for relation in relations:
             ingredient = relation.ingredient
             food_category = getattr(ingredient, 'food_category', None) or getattr(ingredient, 'food_group', None) or ''

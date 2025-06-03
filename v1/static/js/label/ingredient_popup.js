@@ -260,14 +260,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.delete-checkbox').forEach(checkbox => {
             checkbox.checked = isChecked;
         });
-    });
-
-    if (hasRelations && savedIngredients.length > 0) {
+    });    if (hasRelations && savedIngredients.length > 0) {
         savedIngredients.forEach(ingredient => {
             console.log(`Adding saved ingredient: ${ingredient.ingredient_name}, food_category: ${ingredient.food_category}`);
             addIngredientRowWithData(ingredient);
         });
-        sortRowsByRatio();
+        // 초기 로드 시: 비율이 있으면 비율로 정렬, 없으면 relation_sequence 순서 유지
+        sortRowsInitialLoad();
     }
 
     attachRatioInputListeners();
@@ -425,6 +424,31 @@ function sortRowsByRatio() {
     attachRatioInputListeners();
 }
 
+// 초기 로드 시 정렬: 비율이 있으면 비율 기준, 없으면 relation_sequence 순서 유지
+function sortRowsInitialLoad() {
+    const tbody = document.getElementById('ingredient-body');
+    const rows = Array.from(tbody.getElementsByTagName('tr'));
+    
+    // 비율이 있는 행이 있는지 확인
+    const hasRatios = rows.some(row => {
+        const ratioValue = row.querySelector('.ratio-input')?.value.trim();
+        return ratioValue && !isNaN(parseFloat(ratioValue)) && parseFloat(ratioValue) > 0;
+    });
+    
+    if (hasRatios) {
+        // 비율이 있으면 비율 기준으로 정렬
+        console.log('비율이 있어서 비율 기준으로 정렬합니다.');
+        sortRowsByRatio();
+    } else {
+        // 비율이 없으면 relation_sequence 순서 유지 (이미 DB에서 정렬된 상태)
+        console.log('비율이 없어서 relation_sequence 순서를 유지합니다.');
+        updateRowNumbers();
+        markOriginTargets();
+        updateSummarySection();
+        attachRatioInputListeners();
+    }
+}
+
 function updateRowNumbers() {
     const rows = document.querySelectorAll('#ingredient-body tr');
     rows.forEach((row, index) => {
@@ -477,20 +501,31 @@ function markOriginTargets() {
         originValidated = false;
         updateSaveButtonState();
         return;
-    }
+    }    // 원산지 표시대상 결정: 현재 테이블 순서 그대로 상위 3개 행에 순위 부여
+    // 비율 기준으로 별도 정렬하지 않고, 현재 순서 기준으로 원산지 순위 매김
+    const ratiosWithRows = eligibleRows.map((row, index) => ({
+        row: row,
+        ratio: parseFloat(row.querySelector('.ratio-input')?.value) || 0,
+        currentPosition: index + 1
+    }));
 
-    const ratios = eligibleRows.map(row => parseFloat(row.querySelector('.ratio-input')?.value) || 0);
+    // 98% 규칙 적용 시에만 비율을 고려, 그 외에는 현재 순서 기준
+    const hasHighRatio = ratiosWithRows.some(item => item.ratio >= 98);
+    const topTwoRatioSum = ratiosWithRows.length >= 2 ? 
+        ratiosWithRows[0].ratio + ratiosWithRows[1].ratio : 0;
 
-    // 상위 3순위 또는 98% 규칙 적용
-    if (ratios[0] >= 98) {
-        markRowAsOriginTarget(eligibleRows[0], 1);
-    } else if (eligibleRows.length >= 2 && (ratios[0] + ratios[1] >= 98)) {
-        markRowAsOriginTarget(eligibleRows[0], 1);
-        markRowAsOriginTarget(eligibleRows[1], 2);
+    if (hasHighRatio && ratiosWithRows[0].ratio >= 98) {
+        // 1순위가 98% 이상인 경우
+        markRowAsOriginTarget(ratiosWithRows[0].row, 1);
+    } else if (ratiosWithRows.length >= 2 && topTwoRatioSum >= 98) {
+        // 상위 2개 합이 98% 이상인 경우
+        markRowAsOriginTarget(ratiosWithRows[0].row, 1);
+        markRowAsOriginTarget(ratiosWithRows[1].row, 2);
     } else {
-        if (eligibleRows[0]) markRowAsOriginTarget(eligibleRows[0], 1);
-        if (eligibleRows.length >= 2 && eligibleRows[1]) markRowAsOriginTarget(eligibleRows[1], 2);
-        if (eligibleRows.length >= 3 && eligibleRows[2]) markRowAsOriginTarget(eligibleRows[2], 3);
+        // 일반적인 경우: 현재 순서 기준으로 상위 3개
+        if (ratiosWithRows[0]) markRowAsOriginTarget(ratiosWithRows[0].row, 1);
+        if (ratiosWithRows.length >= 2 && ratiosWithRows[1]) markRowAsOriginTarget(ratiosWithRows[1].row, 2);
+        if (ratiosWithRows.length >= 3 && ratiosWithRows[2]) markRowAsOriginTarget(ratiosWithRows[2].row, 3);
     }
     originValidated = eligibleRows.length > 0;
     updateSaveButtonState();
