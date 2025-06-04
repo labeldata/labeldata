@@ -15,7 +15,7 @@
                 <a href="{% url 'label:my_label_list' %}" class="nav-link {% if request.resolver_match.url_name == 'my_label_list' %}active{% endif %}">표시사항 관리</a>
             </li>
             <li class="nav-item me-3">
-                <a href="#" class="nav-link" onclick="alert('행정처분 조회, 알림 기능을 개발하고 있어요. 잠시만 기다려주세요.'); return false;">행정처분</a>
+                <a href="{% url 'board:list' %}" class="nav-link {% if request.resolver_match.url_name == 'list' %}active{% endif %}">게시판</a>
             </li>
         </ul>
         

@@ -10,6 +10,7 @@ urlpatterns = [
     path('label/', include('v1.label.urls', namespace='label')),  # label 앱 URL
     path('disposition/', include('v1.disposition.urls', namespace='disposition')),  # disposition 앱 URL
     path('user-management/', include('v1.user_management.urls', namespace='user_management')),  # user_management 앱
+    path('board/', include('v1.board.urls', namespace='board')),  # Register 'board' namespace
 ]
 
 # 개발 환경에서 static 파일 서빙

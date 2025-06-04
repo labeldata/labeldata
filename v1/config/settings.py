@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'v1.disposition',         # Action 앱
     'v1.common',         # Common 앱
     'v1.user_management',
+    'v1.board',          # Ensure the board app is registered
 ]
 
 MIDDLEWARE = [

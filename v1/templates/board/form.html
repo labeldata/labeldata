@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <h2 class="text-center">{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}</h2>
+        <form id="post-form" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="post-item mb-3">
+                <label for="id_category" class="form-label">구분</label>
+                <div class="input-container">
+                    {% if user.is_authenticated and user.is_staff %}
+                        {{ form.category }}
+                    {% else %}
+                        <select name="category" class="form-select" id="id_category" required>
+                            <option value="문의하기" {% if form.instance.category == '문의하기' %}selected{% endif %}>문의하기</option>
+                            <option value="요청하기" {% if form.instance.category == '요청하기' %}selected{% endif %}>요청하기</option>
+                        </select>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="post-item mb-3">
+                <label for="id_title" class="form-label">제목</label>
+                <div class="input-container">
+                    {{ form.title }}
+                </div>
+            </div>
+            <div class="post-item mb-3">
+                <label for="id_content" class="form-label">내용</label>
+                <div class="input-container">
+                    {{ form.content }}
+                </div>
+            </div>
+            <div class="post-item mb-3">
+                <label for="id_attachment" class="form-label">첨부파일</label>
+                <div class="input-container">
+                    {{ form.attachment }}
+                    {% if form.instance.attachment %}
+                        <small class="text-muted">현재 파일: {{ form.instance.attachment.name }}</small>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="post-item mb-3">
+                <label for="id_is_public" class="form-label">비공개</label>
+                <div class="input-container">
+                    <input type="checkbox" name="is_public" id="id_is_public" {% if not form.instance.is_public %}checked{% endif %}>
+                    <small class="text-muted">(체크 시 비공개로 설정됩니다)</small>
+                </div>
+            </div>
+            {% if not user.is_authenticated and not form.instance.pk %}
+            <div class="post-item mb-3">
+                <label for="id_password" class="form-label">비밀번호</label>
+                <div class="input-container">
+                    {{ form.password }}
+                    <small class="text-muted">(숫자 4자리, 비공개 시 필수)</small>
+                </div>
+            </div>
+            {% endif %}
+            <div class="d-flex justify-content-end gap-2">
+                <button type="submit" class="btn btn-outline-primary btn-sm">저장</button>
+                <a href="{% url 'board:list' %}" class="btn btn-outline-secondary btn-sm">취소</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

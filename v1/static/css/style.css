@@ -12,6 +12,11 @@
     --table-hover-bg-color: #e9ecef;
     --pagination-color: #023047;
     --footer-bg-color: #d9dcd6;
+    --danger-color: #dc3545;
+    --success-color: #28a745;
+    --border-color: #dee2e6;
+    --bg-color: #f8f9fa;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 /* 웹폰트 */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -32,7 +37,7 @@ body {
 .main-content {
     flex: 1;
     margin-top: 60px;
-    padding-bottom: 20px;
+    padding-bottom: 10px; /* 기존 20px에서 반으로 줄임 */
     overflow: auto;
     display: flex;
     flex-direction: column;
@@ -192,6 +197,11 @@ body {
     background-color: var(--btn-cancel-color);
     border-color: var(--btn-cancel-color);
 }
+.btn-danger {
+    color: #fff;
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
 .btn-warning {
     color: #212529;
     background-color: #ffbc42;
@@ -215,6 +225,10 @@ body {
     background-color: #565e64;
     border-color: #565e64;
     color: #fff;
+}
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #c82333;
 }
 .btn-warning:hover {
     background-color: #e0a935;
@@ -241,12 +255,12 @@ body {
     color: #fff;
 }
 .btn-outline-danger {
-    color: #dc3545;
-    border-color: #dc3545;
+    color: var(--danger-color);
+    border-color: var(--danger-color);
     background-color: transparent;
 }
 .btn-outline-danger:hover {
-    background-color: #dc3545;
+    background-color: var(--danger-color);
     color: #fff;
 }
 .btn-outline-cancel {
@@ -324,7 +338,7 @@ body {
    ==================================================== */
 .info-section {
     position: absolute;
-    bottom: 0;
+    bottom: -50px; /* 위로 100px 올리도록 설정 */
     left: 50%;
     transform: translateX(-50%);
     width: 80%;
@@ -910,4 +924,137 @@ select.form-control.select2-date-option {
     font-size: 0.85rem !important;
     font-weight: 400 !important;
     color: #495057 !important;
+}
+
+/* 카드 스타일 개선 */
+.card {
+    background: var(--bg-color);
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+}
+
+/* 댓글 스타일 개선 */
+.comment-item {
+    margin-bottom: 1rem;
+    padding: 12px 0;
+}
+.comment-details {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.comment-details .author {
+    width: 20%;
+    font-weight: 500;
+}
+.comment-details .content {
+    width: 60%;
+}
+.comment-details .date {
+    width: 20%;
+    font-size: 0.9rem;
+    color: var(--btn-cancel-color);
+}
+.comment-list, .comment-container {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+.empty-comment {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100px;
+    color: var(--btn-cancel-color);
+    background-color: var(--bg-color);
+    border-radius: 0.25rem;
+    padding: 1rem;
+    text-align: center;
+}
+
+/* 반응형 디자인 개선 */
+@media (max-width: 700px) {
+    .container {
+        padding: 0.5rem;
+    }
+    .card {
+        padding: 1rem;
+    }
+    .form-label, .form-control, .form-select, .form-control-plaintext {
+        font-size: 0.8rem;
+    }
+    .post-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .post-item .form-label {
+        width: 100%; /* 모바일에서 레이블도 전체 너비 사용 */
+        margin-bottom: 0.25rem;
+    }
+    .post-item .form-control,
+    .post-item .form-select {
+        width: 100%; /* 모바일에서 입력 필드도 전체 너비 사용 */
+    }
+    .comment-details {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .comment-details .author,
+    .comment-details .content,
+    .comment-details .date {
+        width: 100%;
+    }
+    .table th, .table td {
+        padding: 8px;
+        font-size: 0.8rem;
+    }
+    .btn {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.8rem;
+    }
+    h2 {
+        font-size: 1.25rem;
+    }
+    h3, h5 {
+        font-size: 1rem;
+    }
+}
+
+/* .post-item 레이아웃 조정 */
+.post-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.post-item .form-label {
+    width: 120px; /* 고정 너비 */
+    margin-bottom: 0;
+}
+.post-item .form-control,
+.post-item .form-select {
+    flex: 1; /* 남은 공간을 채움 */
+    width: 100%; /* 기본 너비 */
+    max-width: 600px; /* 넓은 화면에서 최대 너비 제한 */
+}
+/* 반응형 디자인 */
+@media (max-width: 700px) {
+    .post-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .post-item .form-label {
+        width: 100%; /* 모바일에서 레이블도 전체 너비 사용 */
+        margin-bottom: 0.25rem;
+    }
+    .post-item .form-control,
+    .post-item .form-select {
+        width: 100%; /* 모바일에서 입력 필드도 전체 너비 사용 */
+    }
 }
