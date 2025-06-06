@@ -942,8 +942,7 @@ select.form-control.select2-date-option {
 }
 .comment-details {
     display: flex;
-    align-items: center;
-    gap: 1rem;
+    flex-direction: column;
 }
 .comment-details .author {
     width: 20%;
@@ -1057,4 +1056,39 @@ select.form-control.select2-date-option {
     .post-item .form-select {
         width: 100%; /* 모바일에서 입력 필드도 전체 너비 사용 */
     }
+}
+.post-content {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--text-color);
+}
+
+.badge {
+    margin-right: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.form-check-input[type="radio"] {
+    margin-right: 0.5rem;
+}
+
+.form-check-label {
+    margin-right: 1rem;
+}
+
+.form-check {
+    margin-right: 1.5rem;
+}
+
+.form-check-inline {
+    margin-right: 1.5rem;
+}
+
+.attachment-icon {
+    font-size: 1rem;
+    color: var(--primary-color);
+}
+
+.table th, .table td {
+    vertical-align: middle;
 }

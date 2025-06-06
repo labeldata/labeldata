@@ -1,75 +1,96 @@
 {% extends 'base.html' %}
-{% load static %}
-{% block title %}게시글 상세보기{% endblock %}
+{% load static django_bootstrap5 %}
+{% block title %}게시글 상세보기 - {{ object.title }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="card">
-        <h2 class="text-center">{{ object.title }}</h2>
-        <div class="post-item mb-2">
-            <span class="form-label">작성자</span>
-            <span class="form-control-plaintext">{{ object.author.username|default:"비회원" }}</span>
+    {% bootstrap_messages %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="mb-0">
+                {% if object.is_notice %}<span class="badge bg-warning text-dark">공지</span>{% endif %}
+                {% if object.is_public %}
+                    <span class="badge bg-success text-white">공개</span>
+                {% else %}
+                    <span class="badge bg-secondary text-white">비공개</span>
+                {% endif %}
+                {{ object.title }}
+            </h2>
         </div>
-        <div class="post-item mb-2">
-            <span class="form-label">작성일</span>
-            <span class="form-control-plaintext">{{ object.created_at|date:"Y-m-d H:i" }}</span>
-        </div>
-        <div class="post-item mb-2">
-            <span class="form-label">내용</span>
-            <span class="form-control-plaintext">{{ object.content|linebreaks }}</span>
-        </div>
-        {% if object.attachment %}
-        <div class="post-item mb-2">
-            <span class="form-label">첨부</span>
-            <a href="{{ object.attachment.url }}" class="form-control-plaintext text-primary" download>{{ object.attachment.name }}</a>
-        </div>
-        {% endif %}
-        <div class="d-flex justify-content-end gap-2 mt-4">
-            <a href="{% url 'board:list' %}" class="btn btn-outline-cancel btn-sm">목록으로 가기</a>
-            <a href="{% url 'board:update' object.pk %}" class="btn btn-outline-primary btn-sm">수정</a>
-            <a href="{% url 'board:delete' object.pk %}" class="btn btn-outline-danger btn-sm">삭제</a>
-        </div>
-    </div>
-
-    <div class="card comment-list">
-        <h5>댓글</h5>
-        {% for comment in object.comments.all %}
-        <div class="comment-item mb-2">
-            <div class="comment-details">
-                <span class="author">{{ comment.author.username|default:"비회원" }}</span>
-                <span class="content">{{ comment.content }}</span>
-                <span class="date">{{ comment.created_at|date:"Y-m-d H:i" }}</span>
+        <div class="card-body">
+            <div class="mb-3">
+                <span class="fw-bold">작성자:</span> {{ object.author.username }}
             </div>
-            {% if user.is_staff %}
-            <div class="d-flex justify-content-end gap-2 mt-2">
-                <a href="{% url 'board:edit_comment' comment.pk %}" class="btn btn-outline-primary btn-sm">수정</a>
-                <form method="post" action="{% url 'board:delete_comment' comment.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline-danger btn-sm">삭제</button>
-                </form>
+            <div class="mb-3">
+                <span class="fw-bold">작성일:</span> {{ object.created_at|date:"Y-m-d H:i" }}
+            </div>
+            <div class="mb-3">
+                <span class="fw-bold">조회수:</span> {{ object.views }}
+            </div>
+            <div class="mb-3">
+                <span class="fw-bold">내용:</span>
+                <p class="post-content">{{ object.content|linebreaks }}</p>
+            </div>
+            {% if object.attachment %}
+            <div class="mb-3">
+                <span class="fw-bold">첨부파일:</span>
+                <a href="{{ object.attachment.url }}" class="text-primary" download>{{ object.attachment.name }}</a>
             </div>
             {% endif %}
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'board:list' %}" class="btn btn-outline-secondary btn-sm">목록</a>
+                {% if object.author == user or user.is_staff %}
+                <a href="{% url 'board:update' object.pk %}" class="btn btn-outline-primary btn-sm">수정</a>
+                <a href="{% url 'board:delete' object.pk %}" class="btn btn-outline-danger btn-sm">삭제</a>
+                {% endif %}
+            </div>
         </div>
-        {% empty %}
-        <div class="empty-comment">
-            <i class="bi bi-chat-left-text" style="font-size: 2rem;"></i>
-            <p class="text-muted">댓글이 없습니다.</p>
-        </div>
-        {% endfor %}
     </div>
-
-    {% if user.is_staff %}
-    <div class="card comment-container">
-        <h5>댓글 작성</h5>
-        <form method="post" action="{% url 'board:add_comment' object.pk %}">
-            {% csrf_token %}
-            <div class="mb-3">
-                <textarea name="content" class="form-control" rows="3" placeholder="댓글을 입력하세요..." required></textarea>
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>댓글</h5>
+        </div>
+        <div class="card-body">
+            {% for comment in object.comments.all %}
+            <div class="comment-item mb-3 border-top pt-3">
+                <div class="comment-details d-flex flex-column">
+                    <div class="mb-1">
+                        <span class="fw-bold">{{ comment.author.username|default:"익명" }}</span>
+                        <span class="text-muted small">({{ comment.created_at|date:"Y-m-d H:i" }})</span>
+                    </div>
+                    <p class="comment-content mb-1">{{ comment.content|linebreaks }}</p>
+                    {% if comment.author == user or user.is_staff %}
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'board:edit_comment' comment.pk %}" class="btn btn-outline-primary btn-sm">수정</a>
+                        <form method="post" action="{% url 'board:delete_comment' comment.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger btn-sm">삭제</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-            <div class="d-flex justify-content-end">
-                <button type="submit" class="btn btn-outline-primary btn-sm">댓글 작성</button>
-            </div>
-        </form>
+            {% empty %}
+            <p class="text-muted">댓글이 없습니다.</p>
+            {% endfor %}
+        </div>
+    </div>
+    {% if user.is_authenticated %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>댓글 작성</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'board:add_comment' object.pk %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <textarea name="content" class="form-control" rows="3" placeholder="댓글을 입력하세요..." required></textarea>
+                </div>
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary btn-sm">등록</button>
+                </div>
+            </form>
+        </div>
     </div>
     {% endif %}
 </div>

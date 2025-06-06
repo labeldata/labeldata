@@ -1,149 +1,82 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static django_bootstrap5 %}
 {% block title %}게시판 목록{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="toast-container position-fixed top-0 end-0 p-3">
-        <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header">
-                <strong class="me-auto">오류</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-            <div class="toast-body">
-                비밀번호가 일치하지 않습니다.
-            </div>
-        </div>
-    </div>
-
+<div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="mb-0">게시판</h3>
+        <h2>게시판</h2>
         <a href="{% url 'board:create' %}" class="btn btn-outline-primary btn-sm">새 글 작성</a>
     </div>
-
-    <div class="card">
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th style="width: 5%;">번호</th>
-                        <th style="width: 10%;">구분</th>
-                        <th style="width: 40%;">제목</th>
-                        <th style="width: 10%;">작성자</th>
-                        <th style="width: 10%;">작성일</th>
-                        <th style="width: 5%;">조회수</th>
-                        <th style="width: 10%;">댓글</th>
-                        <th style="width: 10%;">첨부파일</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for board in boards %}
-                    <tr onclick="navigateToDetail('{{ board.pk }}', {{ board.is_public|lower }}, '{{ board.author }}', '{{ request.user.username }}')">
-                        <td title="{{ forloop.counter }}">{{ forloop.counter }}</td>
-                        <td>{{ board.category }}</td>
-                        <td>
-                            <span class="badge rounded-pill {% if board.is_public %}text-bg-success{% else %}text-bg-danger{% endif %} me-2">
-                                {% if board.is_public %}공개{% else %}비공개{% endif %}
-                            </span>
-                            <span title="{{ board.title }}">{{ board.title }}</span>
-                        </td>
-                        <td>{{ board.author|default:'비회원' }}</td>
-                        <td title="{{ board.created_at|date:'Y-m-d H:i' }}">{{ board.created_at|date:'Y-m-d' }}</td>
-                        <td title="{{ board.views }}">{{ board.views }}</td>
-                        <td>
-                            {% if board.comments.exists %}
-                                <span class="badge text-bg-success">등록</span>
-                            {% else %}
-                                <span class="text-muted">미등록</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if board.attachment %}
-                                <span class="badge text-bg-success">있음</span>
-                            {% else %}
-                                <span class="text-muted">없음</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="text-center text-muted">게시물이 없습니다.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    {% bootstrap_messages %}
+    <div class="card mb-4">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th scope="col" style="width: 10%; text-align: center;">번호</th>
+                    <th scope="col" style="width: 10%; text-align: center;">카테고리</th>
+                    <th scope="col" style="width: 20%;">제목</th>
+                    <th scope="col" style="width: 10%; text-align: center;">작성자</th>
+                    <th scope="col" style="width: 10%; text-align: center;">작성일</th>
+                    <th scope="col" style="width: 10%; text-align: center;">조회수</th>
+                    <th scope="col" style="width: 10%; text-align: center;">댓글수</th>
+                    <th scope="col" style="width: 10%; text-align: center;">첨부파일</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for board in boards %}
+                <tr class="{% if board.is_notice %}table-warning{% endif %}" onclick="location.href='{% url 'board:detail' board.pk %}'" style="cursor: pointer;">
+                    <td style="width: 5%; text-align: center;">{{ forloop.counter }}</td>
+                    <td style="width: 10%; text-align: center;">{{ board.category }}</td>
+                    <td style="width: 50%;">
+                        {% if board.is_notice %}<span class="badge bg-warning text-dark">공지</span>{% endif %}
+                        {% if board.is_public %}
+                            <span class="badge bg-success text-white">공개</span>
+                        {% else %}
+                            <span class="badge bg-secondary text-white">비공개</span>
+                        {% endif %}
+                        {{ board.title }}
+                    </td>
+                    <td style="width: 10%; text-align: center;">{{ board.author.username }}</td>
+                    <td style="width: 10%; text-align: center;">{{ board.created_at|date:"Y-m-d" }}</td>
+                    <td style="width: 5%; text-align: center;">{{ board.views }}</td>
+                    <td style="width: 5%; text-align: center;">{{ board.comments.count }}</td>
+                    <td style="width: 5%; text-align: center;">
+                        {% if board.attachment %}
+                            <img src="{% static 'icons/attachment-icon.png' %}" alt="첨부파일" class="attachment-icon" style="width: 16px; height: 16px;">
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center">게시글이 없습니다.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-
-    {% include 'includes/pagination.html' %}
-
-    <div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="passwordModalLabel">비밀번호 입력</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="passwordForm">
-                        <div class="mb-3">
-                            <label for="passwordInput" class="form-label">비밀번호 (숫자 4자리)</label>
-                            <input type="password" class="form-control" id="passwordInput" pattern="\d{4}" required>
-                            <div id="passwordError" class="text-danger mt-2" style="display: none;"></div>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-outline-primary btn-sm">확인</button>
-                            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-dismiss="modal">취소</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+    <div class="d-flex justify-content-between align-items-center">
+        {% if is_paginated %}
+        <nav aria-label="Page navigation">
+            <ul class="pagination">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">이전</a>
+                </li>
+                {% endif %}
+                {% for num in page_obj.paginator.page_range %}
+                <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                </li>
+                {% endfor %}
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">다음</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
     </div>
-
-    <script>
-        let currentBoardId = null;
-
-        function navigateToDetail(id, isPublic, author, currentUser) {
-            if (isPublic || (author && author === currentUser)) {
-                window.location.href = `/board/${id}/`;
-            } else if (!isPublic && !currentUser) {
-                currentBoardId = id;
-                $('#passwordModal').modal('show');
-                $('#passwordError').hide();
-                $('#passwordInput').val('');
-            } else {
-                window.location.href = `/board/${id}/`;
-            }
-        }
-
-        $('#passwordForm').on('submit', function(e) {
-            e.preventDefault();
-            const password = $('#passwordInput').val();
-            if (password) {
-                $.ajax({
-                    url: `/board/${currentBoardId}/check-password/`,
-                    method: 'POST',
-                    data: {
-                        password: password,
-                        csrfmiddlewaretoken: '{{ csrf_token }}'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            $('#passwordModal').modal('hide');
-                            window.location.href = `/board/${currentBoardId}/?password=${encodeURIComponent(password)}`;
-                        } else {
-                            $('#passwordModal').modal('hide');
-                            $('#errorToast').toast('show');
-                        }
-                    },
-                    error: function() {
-                        $('#passwordModal').modal('hide');
-                        $('#errorToast').toast('show');
-                    }
-                });
-            }
-        });
-    </script>
 </div>
 {% endblock %}

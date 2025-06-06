@@ -6,7 +6,6 @@ from decouple import config, UndefinedValueError
 import datetime
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-
 try:
     BASE_DIR = Path(__file__).resolve().parent.parent
 except NameError:
@@ -33,10 +32,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_bootstrap5',  # django-bootstrap5 사용
     'v1.label',          # Label 앱
-    'v1.disposition',         # Action 앱
+    'v1.disposition',    # Action 앱
     'v1.common',         # Common 앱
     'v1.user_management',
-    'v1.board',          # Ensure the board app is registered
+    'v1.board',          # Board 앱
 ]
 
 MIDDLEWARE = [
@@ -54,7 +53,7 @@ ROOT_URLCONF = 'v1.config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],  # 프로젝트 전역 템플릿 디렉터리
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -103,30 +102,26 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = config('LANGUAGE_CODE', default='ko-kr')
-
 TIME_ZONE = config('TIME_ZONE', default='Asia/Seoul')
-
 USE_I18N = True
-
 USE_TZ = True
 
 # Static files
 STATIC_URL = '/static/'
-# 운영/개발 환경 구분
 if DEBUG:
     STATICFILES_DIRS = [
-        BASE_DIR / 'static'  # 개발 중: 정적 파일 폴더 (수동 관리용)
+        BASE_DIR / 'static'
     ]
     STATIC_ROOT = config('STATIC_ROOT', default='d:/projects/labeldata/staticfiles')
 else:
     STATICFILES_DIRS = [
-        BASE_DIR / 'static',  # 운영 중: 정적 파일 폴더 (수동 관리용)
-    ]  # 운영에서는 STATIC_ROOT에 수집만 하므로 제외
+        BASE_DIR / 'static',
+    ]
     STATIC_ROOT = config('STATIC_ROOT', default='/home/labeldata/mysite/staticfiles')
 
 # Media files
 MEDIA_URL = '/media/'
-MEDIA_ROOT = config('MEDIA_ROOT', default='d:/projects/labeldata/media')  # 업로드된 파일 저장소
+MEDIA_ROOT = config('MEDIA_ROOT', default='d:/projects/labeldata/media')
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -135,3 +130,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/user-management/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = LOGIN_URL
+
+# Security settings
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
+CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)

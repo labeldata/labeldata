@@ -1,20 +1,24 @@
 {% extends 'base.html' %}
+{% load static django_bootstrap5 %}
 {% block title %}댓글 수정{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <div class="card">
-        <h3>댓글 수정</h3>
-        <form method="post">
-            {% csrf_token %}
-            <div class="form-group mb-3">
-                <textarea name="content" class="form-control" rows="3" required>{{ comment.content }}</textarea>
-            </div>
-            <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary btn-sm">저장</button>
-                <a href="{% url 'board:detail' comment.board.pk %}" class="btn btn-secondary btn-sm">취소</a>
-            </div>
-        </form>
+    <h2>댓글 수정</h2>
+    {% bootstrap_messages %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <textarea name="content" class="form-control" rows="3" required>{{ comment.content }}</textarea>
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'board:detail' comment.board.pk %}" class="btn btn-outline-secondary btn-sm">취소</a>
+                    <button type="submit" class="btn btn-primary btn-sm">저장</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}

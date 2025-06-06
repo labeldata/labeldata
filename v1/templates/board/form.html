@@ -1,68 +1,75 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static django_bootstrap5 %}
 {% block title %}{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="card">
-        <h2 class="text-center">{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}</h2>
-        <form id="post-form" method="post" enctype="multipart/form-data">
-            {% csrf_token %}
-            <div class="post-item mb-3">
-                <label for="id_category" class="form-label">구분</label>
-                <div class="input-container">
-                    {% if user.is_authenticated and user.is_staff %}
-                        {{ form.category }}
-                    {% else %}
-                        <select name="category" class="form-select" id="id_category" required>
-                            <option value="문의하기" {% if form.instance.category == '문의하기' %}selected{% endif %}>문의하기</option>
-                            <option value="요청하기" {% if form.instance.category == '요청하기' %}selected{% endif %}>요청하기</option>
-                        </select>
+<div class="container mt-3">
+    <h2>{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}</h2>
+    {% bootstrap_messages %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex gap-3">
+                        {% for radio in form.is_public %}
+                        <div class="form-check form-check">
+                            {{ radio.tag }}
+                            <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if form.is_notice %}
+                    <div class="form-check ms-4">
+                        {{ form.is_notice }}
+                        <label class="form-check-label" for="{{ form.is_notice.id_for_label }}">공지사항</label>
+                    </div>
+                    {% endif %}
+                    <div class="flex-grow-1"></div> <!-- 빈 공간으로 공지사항을 중간쯤 배치 -->
+                    {% if form.is_public.errors %}
+                        <div class="invalid-feedback d-block">{{ form.is_public.errors }}</div>
+                    {% endif %}
+                    {% if form.is_notice.errors %}
+                        <div class="invalid-feedback d-block">{{ form.is_notice.errors }}</div>
                     {% endif %}
                 </div>
-            </div>
-            <div class="post-item mb-3">
-                <label for="id_title" class="form-label">제목</label>
-                <div class="input-container">
+                <div class="mb-3">
+                    <label for="{{ form.category.id_for_label }}" class="form-label">카테고리</label>
+                    {{ form.category }}
+                    {% if form.category.errors %}
+                        <div class="invalid-feedback d-block">{{ form.category.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <label for="{{ form.title.id_for_label }}" class="form-label">제목</label>
                     {{ form.title }}
-                </div>
-            </div>
-            <div class="post-item mb-3">
-                <label for="id_content" class="form-label">내용</label>
-                <div class="input-container">
-                    {{ form.content }}
-                </div>
-            </div>
-            <div class="post-item mb-3">
-                <label for="id_attachment" class="form-label">첨부파일</label>
-                <div class="input-container">
-                    {{ form.attachment }}
-                    {% if form.instance.attachment %}
-                        <small class="text-muted">현재 파일: {{ form.instance.attachment.name }}</small>
+                    {% if form.title.errors %}
+                        <div class="invalid-feedback d-block">{{ form.title.errors }}</div>
                     {% endif %}
                 </div>
-            </div>
-            <div class="post-item mb-3">
-                <label for="id_is_public" class="form-label">비공개</label>
-                <div class="input-container">
-                    <input type="checkbox" name="is_public" id="id_is_public" {% if not form.instance.is_public %}checked{% endif %}>
-                    <small class="text-muted">(체크 시 비공개로 설정됩니다)</small>
+                <div class="mb-3">
+                    <label for="{{ form.content.id_for_label }}" class="form-label">내용</label>
+                    {{ form.content }}
+                    {% if form.content.errors %}
+                        <div class="invalid-feedback d-block">{{ form.content.errors }}</div>
+                    {% endif %}
                 </div>
-            </div>
-            {% if not user.is_authenticated and not form.instance.pk %}
-            <div class="post-item mb-3">
-                <label for="id_password" class="form-label">비밀번호</label>
-                <div class="input-container">
-                    {{ form.password }}
-                    <small class="text-muted">(숫자 4자리, 비공개 시 필수)</small>
+                <div class="mb-3">
+                    <label for="{{ form.attachment.id_for_label }}" class="form-label">첨부파일</label>
+                    {{ form.attachment }}
+                    {% if form.attachment.errors %}
+                        <div class="invalid-feedback d-block">{{ form.attachment.errors }}</div>
+                    {% endif %}
+                    {% if form.instance.attachment %}
+                        <p class="mt-2">현재 첨부파일: <a href="{{ form.instance.attachment.url }}">{{ form.instance.attachment.name }}</a></p>
+                    {% endif %}
                 </div>
-            </div>
-            {% endif %}
-            <div class="d-flex justify-content-end gap-2">
-                <button type="submit" class="btn btn-outline-primary btn-sm">저장</button>
-                <a href="{% url 'board:list' %}" class="btn btn-outline-secondary btn-sm">취소</a>
-            </div>
-        </form>
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'board:list' %}" class="btn btn-outline-secondary btn-sm">취소</a>
+                    <button type="submit" class="btn btn-primary btn-sm">저장</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 {% endblock %}

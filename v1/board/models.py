@@ -1,26 +1,34 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 
 class Board(models.Model):
     CATEGORY_CHOICES = [
-        ('공지사항', '공지사항'),
         ('문의하기', '문의하기'),
         ('요청하기', '요청하기'),
     ]
 
-    title = models.CharField(max_length=100)
+    title = models.CharField(max_length=255)
     content = models.TextField()
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='문의하기')
     is_public = models.BooleanField(default=True)
-    password = models.CharField(max_length=4, blank=True, null=True)
     attachment = models.FileField(upload_to='attachments/', blank=True, null=True)
     views = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    author = models.ForeignKey(User, on_delete=models.CASCADE)  # 필수 필드
+    is_notice = models.BooleanField(default=False)
 
     def __str__(self):
         return self.title
+
+    def clean(self):
+        if self.is_notice and not self.author.is_staff:
+            raise ValidationError('공지사항은 관리자만 작성할 수 있습니다.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 class Comment(models.Model):
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name='comments')
@@ -31,3 +39,7 @@ class Comment(models.Model):
 
     def __str__(self):
         return f'Comment by {self.author} on {self.board}'
+
+    def clean(self):
+        if not self.content.strip():
+            raise ValidationError('댓글 내용은 비어 있을 수 없습니다.')
