@@ -4,12 +4,15 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, FileResponse
 from django.db.models import Case, When, Value, IntegerField, Q
 from django.contrib import messages
 from .models import Board, Comment
 from django import forms
 import logging
+from urllib.parse import quote
+import mimetypes
+import os
 
 # 디버깅용 로거 설정
 logger = logging.getLogger(__name__)
@@ -207,3 +210,18 @@ def delete_comment(request, pk):
         messages.success(request, '댓글이 삭제되었습니다.')
         return redirect('board:detail', pk=board_pk)
     return HttpResponseForbidden()
+
+def download_file(request, file_path):
+    # 파일 이름 추출 및 안전한 이름으로 변환
+    file_name = os.path.basename(file_path)
+    safe_name = quote(file_name)  # 한글 및 특수 문자 인코딩
+
+    # 파일의 Content-Type 추론
+    content_type, _ = mimetypes.guess_type(file_path)
+    if not content_type:
+        content_type = 'application/octet-stream'  # 기본값
+
+    # 파일 응답 생성
+    response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+    response['Content-Disposition'] = f'attachment; filename*=UTF-8\'\'{safe_name}'
+    return response
