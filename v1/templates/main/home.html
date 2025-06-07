@@ -1,132 +1,136 @@
-<!-- home.html -->
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}메인 화면{% endblock %}
 
 {% block content %}
-<div class="full-container">
-    <!-- 시스템 소개 영역 -->
-    <div class="system-intro">
-        <div class="intro-box">
-            <h1 class="intro-title">Label 연구소에서 표시사항을 관리하세요.</h1>
-            <p class="intro-description">식품 표시사항을 쉽게 제작하기 위해 아래와 같은 기능을 제공합니다.</p>
-            <ul class="intro-list">
-                <li>제품 조회 : 식약처 제공 제품 정보 검색, 내원료와 표시사항에 저장</li>
-                <li>원료 관리 : 저장된 원료의 상세 정보 입력</li>
-                <li>표시사항 관리 : 표시사항 작성, 검증, 미리보기, 저장</li>
-                <ul>
-                    <li>1. 식품유형 및 제조방법 선택, 관련 규정 및 필수 항목 확인</li>
-                    <li>2. 항목별 자주 사용하는 문구 저장 및 불러오기</li>
-                    <li>3. 내원료를 불러와 함량에 맞게 배치</li>
-                    <li>4. 영양성분 계산기를 사용하여 입력</li>
-                    <li>5. 입력된 데이터 확인 및 저장</li>
-                    <li>6. 미리보기에서 표시사항 서식 설정 및 분리배출 마크 배치</li>
-                    <li>7. 규정 검증 기능으로 표시사항 적합성 확인</li>
-                    <li>8. PDF 저장 및 엑셀 다운로드 기능으로 공유</li>
+<!-- 시스템 소개 영역 -->
+<div class="system-intro">
+    <div class="intro-box">
+        <h1 class="intro-title">식품 데이터 포털에 오신 것을 환영합니다.</h1>
+        <p class="intro-description">
+            표시사항을 제작하기 위한 다양한 기능을 제공합니다.<br>
+            <a href="{% url 'board:detail' pk=2 %}" class="manual-link">시스템 사용자 매뉴얼을 확인해 보세요.</a>
+        </p>
+        <ul class="intro-list">
+            <li>제품 조회: 국내외 식품 정보 검색 및 저장(내 원료, 표시사항)</li>
+            <li>원료 관리: 내 원료 저장, 상세정보 입력(표시명, 알레르기 등)</li>
+            <li>표시사항 관리: 표시사항 작성, 규정검증, 미리보기, 다운로드
+                <ul class="sub-list">
+                    <li>식품유형에 따른 필수 항목 추천</li>
+                    <li>자주 사용하는 문구 추천 및 불러오기</li>
+                    <li>원료 함량에 따른 원재료명 자동 생성·검증</li>
+                    <li>영양성분 계산기</li>
+                    <li>서식 미리보기 및 규정 검증</li>
+                    <li>PDF 저장 및 엑셀 다운로드</li>
                 </ul>
-                </li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- 매뉴얼 바로가기 영역 -->
-    <div class="manual-section">
-        <div class="container">
-            <div class="row justify-content-center">
-                <!-- 매뉴얼 1 -->
-                <div class="col-md-5 manual-box">
-                    <div class="manual-content">
-                        <h3 class="manual-header">매뉴얼 1(제작 중)</h3>
-                        <p class="manual-description">제품 조회 및 원료 관리</p>
-                    </div>
-                </div>
-                <!-- 매뉴얼 2 -->
-                <div class="col-md-5 manual-box">
-                    <div class="manual-content">
-                        <h3 class="manual-header">매뉴얼 2(제작 중)</h3>
-                        <p class="manual-description">표시사항 작성 방법</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+            </li>
+            <li class="highlight-feature">
+                <span>새로운 기능 곧 공개! </span>
+                <a href="{% url 'board:list' %}" class="cta-button">게시판에서 아이디어 공유해주세요 😊</a>
+            </li>
+        </ul>
     </div>
 </div>
 
 <style>
 .system-intro {
-    height: auto;
+    background-color: #f8fafc;
+    padding: 2rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: #f8f9fa;
     margin-top: 4rem;
-    padding: 2rem;
     border-radius: 10px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    min-height: auto;
 }
 
 .intro-box {
-    text-align: center;
     max-width: 800px;
+    text-align: center;
 }
 
 .intro-title {
     font-size: clamp(1.5rem, 3vw, 2.5rem);
-    font-weight: bold;
-    color: #343a40;
+    font-weight: 700;
+    color: #1a3c34;
     margin-bottom: 1rem;
 }
 
 .intro-description {
     font-size: clamp(1rem, 2vw, 1.5rem);
-    color: #495057;
+    color: #4a5568;
     margin-bottom: 1.5rem;
-}
-
-.intro-list {
-    text-align: left;
-    font-size: clamp(0.9rem, 1.5vw, 1.2rem);
-    color: #212529;
     line-height: 1.6;
 }
 
-.intro-list ul {
-    margin-left: 1.5rem;
+.manual-link {
+    color: #38b2ac;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.manual-link:hover {
+    color: #319795;
+    text-decoration: underline;
+}
+
+.intro-list {
+    list-style: none;
+    padding: 0;
+    text-align: left;
+    font-size: clamp(0.9rem, 1.5vw, 1.2rem);
+    color: #2d3748;
+    line-height: 1.6;
 }
 
 .intro-list li {
     margin-bottom: 0.5rem;
 }
 
-.manual-section {
-    margin-top: 2rem;
+.sub-list {
+    margin-top: 0.5rem;
+    margin-left: 1.5rem;
+    list-style-type: disc;
 }
 
-.manual-box {
-    text-align: center;
+.sub-list li {
+    font-size: clamp(0.85rem, 1.4vw, 1rem);
+    color: #4a5568;
+}
+
+.highlight-feature {
+    background-color: #e6fffa;
     padding: 1rem;
-    border: 1px solid #dee2e6;
-    border-radius: 10px;
-    background-color: #ffffff;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
+    border-radius: 8px;
+    margin-top: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.manual-box:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+.highlight-feature span {
+    font-size: clamp(1rem, 1.5vw, 1.1rem);
+    font-weight: 600;
+    color: #2b6cb0;
 }
 
-.manual-header {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: #343a40;
-    margin-bottom: 0.5rem;
+.cta-button {
+    display: inline-block;
+    background-color: #38b2ac;
+    color: white;
+    padding: 0.625rem 1.25rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: clamp(0.9rem, 1.5vw, 1rem);
+    transition: background-color 0.3s ease;
 }
 
-.manual-description {
-    font-size: 1rem;
-    color: #495057;
+.cta-button:hover {
+    background-color: #319795;
 }
 </style>
 {% endblock %}
