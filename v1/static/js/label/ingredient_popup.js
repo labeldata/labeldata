@@ -491,18 +491,31 @@ function markOriginTargets() {
         row.style.border = '';
     });
 
+    // 예외 항목 배열 (식품유형 포함)
+    const excludedFoodTypes = [
+        "정제수", "설탕", "당류가공품", "당시럽류", "포도당", "과당", "기타과당", "기타설탕",
+        "기타 엿", "덱스트린", "물엿", "올리고당", "올리고당가공품", "발효식초", "주정"
+    ];
+
+    // 필터링 로직
     const eligibleRows = rows.filter(row => {
         const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
         const foodCategory = row.querySelector('.food-category-input')?.dataset.foodCategory.trim();
-        return ingredientName !== '정제수' && foodCategory !== 'additive';
+        const foodType = row.querySelector('.food-type-input')?.value.trim();
+
+        return (
+            !excludedFoodTypes.includes(foodType) && // 예외 식품유형 제외
+            foodCategory !== 'additive'             // 식품첨가물 제외
+        );
     });
 
     if (eligibleRows.length === 0) {
         originValidated = false;
         updateSaveButtonState();
         return;
-    }    // 원산지 표시대상 결정: 현재 테이블 순서 그대로 상위 3개 행에 순위 부여
-    // 비율 기준으로 별도 정렬하지 않고, 현재 순서 기준으로 원산지 순위 매김
+    }
+
+    // 원산지 표시대상 결정: 현재 테이블 순서 그대로 상위 3개 행에 순위 부여
     const ratiosWithRows = eligibleRows.map((row, index) => ({
         row: row,
         ratio: parseFloat(row.querySelector('.ratio-input')?.value) || 0,
