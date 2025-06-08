@@ -6,10 +6,10 @@
 <!-- 시스템 소개 영역 -->
 <div class="system-intro">
     <div class="intro-box">
-        <h1 class="intro-title">식품 데이터 포털에 오신 것을 환영합니다.</h1>
+        <h1 class="intro-title">"간편한 표시사항 연구소"에 오신 것을 환영합니다.</h1>
         <p class="intro-description">
             표시사항을 제작하기 위한 다양한 기능을 제공합니다.<br>
-            <a href="{% url 'board:detail' pk=2 %}" class="manual-link">시스템 사용자 매뉴얼을 확인해 보세요.</a>
+            <a href="{% url 'board:detail' pk=2 %}" class="manual-link">「시스템 사용자 매뉴얼」을 클릭해 보세요.</a>
         </p>
         <ul class="intro-list">
             <li>제품 조회: 국내외 식품 정보 검색 및 저장(내 원료, 표시사항)</li>
@@ -55,6 +55,7 @@
     font-weight: 700;
     color: #1a3c34;
     margin-bottom: 1rem;
+    white-space: nowrap; /* 줄바꿈 방지 */
 }
 
 .intro-description {
