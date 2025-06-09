@@ -7,8 +7,10 @@ charset-normalizer==3.4.1
 cryptography==44.0.2
 Django==5.1.6
 django-bootstrap5==25.1
+et_xmlfile==2.0.0
 idna==3.10
 mysqlclient==2.2.7
+openpyxl==3.1.5
 pillow==11.1.0
 pycparser==2.22
 pyOpenSSL==25.0.0
