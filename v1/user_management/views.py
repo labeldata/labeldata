@@ -12,6 +12,10 @@ def signup(request):
             login(request, user)
             messages.success(request, "회원가입 완료!")
             return redirect('main:home')  # 메인 화면으로 리디렉션
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{error}")
     else:
         form = UserCreationForm()
     return render(request, 'user_management/signup.html', {'form': form})
@@ -24,6 +28,8 @@ def login_view(request):
             login(request, form.get_user())
             messages.success(request, "로그인 성공!")
             return redirect('main:home')  # 메인 화면으로 리디렉션
+        else:
+            messages.error(request, "아이디 또는 비밀번호가 올바르지 않습니다.")
     else:
         form = AuthenticationForm()
     return render(request, 'user_management/login.html', {'form': form})

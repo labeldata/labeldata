@@ -16,14 +16,14 @@
                             {{ form.is_hidden }}
                             <label class="form-check-label" for="{{ form.is_hidden.id_for_label }}">비밀글</label>
                         </div>
+                        {% if user.is_staff %}
+                        <div class="form-check ms-4">
+                            {{ form.is_notice }}
+                            <label class="form-check-label" for="{{ form.is_notice.id_for_label }}">공지사항</label>
+                        </div>
+                        {% endif %}
                     </div>
-                    {% if form.is_notice %}
-                    <div class="form-check ms-4">
-                        {{ form.is_notice }}
-                        <label class="form-check-label" for="{{ form.is_notice.id_for_label }}">공지사항</label>
-                    </div>
-                    {% endif %}
-                    <div class="flex-grow-1"></div> <!-- 빈 공간으로 공지사항을 중간쯤 배치 -->
+                    <div class="flex-grow-1"></div>
                     {% if form.is_hidden.errors %}
                         <div class="invalid-feedback d-block">{{ form.is_hidden.errors }}</div>
                     {% endif %}

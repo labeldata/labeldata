@@ -9,13 +9,9 @@ from django.db.models import Case, When, Value, IntegerField, Q
 from django.contrib import messages
 from .models import Board, Comment
 from django import forms
-import logging
 from urllib.parse import quote
 import mimetypes
 import os
-
-# 디버깅용 로거 설정
-logger = logging.getLogger(__name__)
 
 class BoardForm(forms.ModelForm):
     is_hidden = forms.BooleanField(
@@ -46,9 +42,9 @@ class BoardForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        # 관리자가 아닌 경우에도 is_notice 필드를 유지하도록 수정
+        # 관리자가 아닌 경우 is_notice 필드를 제거
         if not self.user or not self.user.is_staff:
-            self.fields['is_notice'].widget.attrs['disabled'] = True  # 비활성화 처리
+            self.fields.pop('is_notice', None)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -117,10 +113,6 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
             form.instance.is_notice = False
         messages.success(self.request, '게시글이 등록되었습니다.')
         return super().form_valid(form)
-
-    def form_invalid(self, form):
-        logger.error(f"Form invalid: {form.errors}")
-        return super().form_invalid(form)
 
 class BoardUpdateView(LoginRequiredMixin, UpdateView):
     model = Board
