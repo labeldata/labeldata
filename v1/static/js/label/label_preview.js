@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // 기본 설정
     const DEFAULT_SETTINGS = {
         width: 10,
-        height: 10,
+        height: 11, // 11cm 고정
         fontSize: 10,
         letterSpacing: -5,
         lineHeight: 1.2,
@@ -1267,57 +1267,83 @@ document.addEventListener('DOMContentLoaded', function () {
     // PDF 저장
     async function exportToPDF() {
         try {
-            const content = document.getElementById('previewContent');
-            if (!content) throw new Error('미리보기 콘텐츠를 찾을 수 없습니다.');
-
-            const widthMm = (parseFloat(document.getElementById('widthInput').value) || 10) * 10;
-            const heightMm = (parseFloat(document.getElementById('heightInput').value) || 10) * 10;
-            const markImage = document.getElementById('recyclingMarkImage');
-
-            let productName = '제품명';
-            document.querySelectorAll('#previewTableBody tr').forEach(tr => {
-                if (tr.querySelector('th')?.textContent.trim() === '제품명') {
-                    const td = tr.querySelector('td');
-                    if (td) productName = td.textContent.trim();
-                }
-            });
-
-            const rawDateTime = document.getElementById('update_datetime').value || new Date().toISOString();
-            const formattedDateTime = rawDateTime.slice(0, 8).replace(/-/g, '');
-            const sanitizedName = productName.replace(/[^\w가-힣]/g, '_').slice(0, 20);
-            const fileName = `LABELDATA_${sanitizedName}_${formattedDateTime}.pdf`;
-
-            const canvas = await html2canvas(content, {
-                scale: 3,
-                useCORS: true,
-                allowTaint: true,
-                backgroundColor: '#fff',
-                width: content.offsetWidth,
-                height: content.offsetHeight
-            });
-            const imgData = canvas.toDataURL('image/png');
-
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', [widthMm, heightMm]);
-            pdf.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm);
-
-            if (markImage && markImage.src) {
-                const previewRect = content.getBoundingClientRect();
-                const markRect = markImage.getBoundingClientRect();
-                const pxToMm = (px) => px * 0.264583;
-                let x = markRect.left - previewRect.left;
-                let y = markRect.top - previewRect.top;
-                x = pxToMm(x);
-                y = pxToMm(y);
-                const w = pxToMm(markImage.offsetWidth);
-                const h = pxToMm(markImage.offsetHeight);
-                pdf.addImage(markImage.src, 'PNG', x, y, w, h);
+            const previewContent = document.getElementById('previewContent');
+            if (!previewContent) {
+                alert('미리보기 내용을 찾을 수 없습니다.');
+                return;
             }
 
+            // 현재 설정된 가로/세로 길이 가져오기
+            const width = parseFloat(document.getElementById('widthInput').value) || 10;
+            const height = 11; // 세로는 항상 11cm로 고정
+            
+            // cm를 pt로 변환 (1cm = 28.35pt)
+            const widthPt = width * 28.35;
+            const heightPt = height * 28.35;
+            
+            // 최소 크기 보장
+            const minWidthPt = 283.5; // 10cm
+            const minHeightPt = 311.85; // 11cm
+            
+            // PDF 페이지 크기 결정 (실제 라벨 크기에 맞춤)
+            const pdfWidth = Math.max(widthPt, minWidthPt);
+            const pdfHeight = Math.max(heightPt, minHeightPt);
+
+            // html2canvas 옵션 설정
+            const canvas = await html2canvas(previewContent, {
+                scale: 3, // 고해상도를 위해 스케일 증가
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                width: previewContent.scrollWidth,
+                height: previewContent.scrollHeight,
+                scrollX: 0,
+                scrollY: 0,
+                logging: false // 로깅 비활성화
+            });
+
+            // jsPDF 인스턴스 생성 (커스텀 페이지 크기)
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+                orientation: width > height ? 'landscape' : 'portrait',
+                unit: 'pt',
+                format: [pdfWidth, pdfHeight]
+            });
+
+            // 캔버스를 이미지로 변환
+            const imgData = canvas.toDataURL('image/png', 1.0);
+            
+            // 이미지 크기 계산
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            
+            // PDF 페이지에 맞게 이미지 크기 조정
+            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+            const scaledWidth = imgWidth * ratio;
+            const scaledHeight = imgHeight * ratio;
+            
+            // 이미지를 PDF 중앙에 배치
+            const x = (pdfWidth - scaledWidth) / 2;
+            const y = (pdfHeight - scaledHeight) / 2;
+
+            // PDF에 이미지 추가 (최고 품질)
+            pdf.addImage(imgData, 'PNG', x, y, scaledWidth, scaledHeight, undefined, 'FAST');
+
+            // 파일명 생성
+            const today = new Date();
+            const dateStr = today.getFullYear().toString().substr(-2) + 
+                           (today.getMonth() + 1).toString().padStart(2, '0') + 
+                           today.getDate().toString().padStart(2, '0');
+            
+            const labelName = document.querySelector('.header-text')?.textContent || '라벨';
+            const fileName = `${labelName}_${dateStr}.pdf`;
+
+            // PDF 저장
             pdf.save(fileName);
-        } catch (e) {
-            console.error('PDF 저장 오류:', e);
-            alert('PDF 저장 실패: ' + e.message);
+
+        } catch (error) {
+            console.error('PDF 저장 중 오류:', error);
+            alert('PDF 저장 중 오류가 발생했습니다: ' + error.message);
         }
     }    // 천 단위 콤마
     function comma(x) {

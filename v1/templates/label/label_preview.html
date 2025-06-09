@@ -26,31 +26,177 @@
   <script src="{% static 'js/label/label_preview.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
   <style>
+    /* 전체 레이아웃을 세로 분할로 변경 */
+    .modal-dialog {
+      max-width: 1600px !important; /* 최대 너비를 더 크게 조정 */
+      width: 98% !important;
+      height: 90vh !important;
+      max-height: 90vh !important;
+    }
+
+    .modal-content {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-body {
+      flex: 1;
+      overflow: hidden;
+      padding: 0;
+    }
+
     .preview-container {
       display: flex;
-      gap: 20px;
-      min-height: 500px;
+      height: 100%;
+      gap: 0;
     }
 
+    /* 왼쪽 설정 패널 */
     .settings-panel {
-      flex: 0 0 200px;
-      padding: 15px;
+      flex: 0 0 300px; /* 패널 너비를 더 크게 조정 */
+      padding: 20px;
       border-right: 1px solid #dee2e6;
+      overflow-y: auto;
+      background-color: #f8f9fa;
     }
 
+    /* 오른쪽 미리보기 패널 */
     .preview-panel {
       flex: 1;
-      padding: 15px;
-      overflow: visible;
+      padding: 20px;
+      overflow: auto;
+      background-color: #ffffff;
+      min-width: 0; /* flexbox에서 최소 너비 제한 해제 */
     }
 
-    .preview-content {
+    #previewContent {
+      margin: 0 auto;
+      box-sizing: border-box;
+      max-width: none; /* 최대 너비 제한 완전 해제 */
+      background: white;
       border: 1px solid #dee2e6;
-      background-color: #ffffff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       padding: 20px;
-      margin: 0;
+      /* 가로 스크롤을 위한 설정 */
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    /* 미리보기 콘텐츠 기본 스타일 */
+    .preview-content {
       min-height: 400px;
-      position: relative;
+      font-family: 'Noto Sans KR', sans-serif;
+      line-height: 1.6;
+      /* 긴 가로 길이 지원 */
+      min-width: fit-content;
+      width: auto;
+    }
+
+    /* 가로 스크롤 스타일 개선 */
+    .preview-panel::-webkit-scrollbar {
+      height: 8px;
+      width: 8px;
+    }
+
+    .preview-panel::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+
+    .preview-panel::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 4px;
+    }
+
+    .preview-panel::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+
+    /* 반응형 처리 */
+    @media (max-width: 1400px) {
+      .modal-dialog {
+        width: 99% !important;
+      }
+      
+      .settings-panel {
+        flex: 0 0 280px;
+      }
+    }
+
+    @media (max-width: 1200px) {
+      .settings-panel {
+        flex: 0 0 250px;
+      }
+    }
+
+    @media (max-width: 992px) {
+      .preview-container {
+        flex-direction: column;
+      }
+      
+      .settings-panel {
+        flex: none;
+        border-right: none;
+        border-bottom: 1px solid #dee2e6;
+        max-height: 200px;
+      }
+      
+      .preview-panel {
+        flex: 1;
+      }
+    }
+
+    /* 설정 패널 스타일 */
+    .settings-group {
+      margin-bottom: 25px;
+    }
+
+    .settings-group h6 {
+      color: #495057;
+      font-weight: 600;
+      margin-bottom: 15px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    .settings-item {
+      margin-bottom: 15px;
+    }
+
+    .form-label {
+      font-weight: 500;
+      color: #495057;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+    }
+
+    .form-control-sm {
+      font-size: 0.875rem;
+    }
+
+    /* 세로 길이 입력 필드 스타일 */
+    #heightInput {
+      background-color: #f8f9fa !important;
+      cursor: not-allowed !important;
+    }
+
+    /* 모달 헤더 스타일 */
+    .modal-header {
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      padding: 15px 20px;
+    }
+
+    .modal-title {
+      font-weight: 600;
+      color: #495057;
+    }
+
+    /* 버튼 스타일 */
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.875rem;
     }
 
     .preview-header-box {
@@ -95,66 +241,6 @@
       white-space: nowrap;
     }
 
-    .preview-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 15px;
-      margin: 0;
-      border-bottom: 1px solid #dee2e6;
-      background-color: #f8f9fa;
-    }
-    .preview-title {
-      font-size: 1.2rem;
-      font-weight: 500;
-      margin: 0;
-    }
-    .preview-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    .settings-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-    .settings-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      margin: 0;
-    }
-    .settings-item label {
-      flex: 0 0 65px;
-      margin: 0;
-      font-size: var(--font-size-base);
-    }
-    .settings-item .form-control,
-    .settings-item .form-select {
-      flex: 1;
-      min-width: 100px;
-      max-width: 120px;
-    }
-    #heightInput { width: auto !important; }
-
-    .preview-table .allergen-text {
-      display: inline-block;
-      margin-left: auto;
-      margin-top: 8px;
-      padding: 4px 8px;
-      background-color: var(--primary-color);
-      color: #ffffff;
-      font-size: 0.9em;
-    }
-
-    .layout-select,
-    .settings-row.mb-3.layout-select {
-      display: none !important;
-    }
-
     .nav-tabs {
       margin-bottom: 1.5rem !important;
     }
@@ -184,11 +270,17 @@
       width: 100%;
       text-align: left;
     }
+
+    /* 미리보기 헤더 버튼 오른쪽 정렬 */
+    .preview-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
   <div class="preview-header">
-    <div class="preview-title">미리보기</div>
     <div class="preview-actions">
       <button class="btn btn-outline-primary btn-sm" id="validateButton">규정 검증</button>
       <button class="btn btn-outline-primary btn-sm" id="exportPdfBtn">PDF 저장</button>
