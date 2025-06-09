@@ -56,6 +56,18 @@
                         <p class="mt-2">현재 첨부파일: <a href="{{ form.instance.attachment.url }}">{{ form.instance.attachment.name }}</a></p>
                     {% endif %}
                 </div>
+                <div class="mb-3">
+                    <label for="{{ form.image.id_for_label }}" class="form-label">이미지 첨부</label>
+                    {{ form.image }}
+                    {% if form.image.errors %}
+                        <div class="invalid-feedback d-block">{{ form.image.errors }}</div>
+                    {% endif %}
+                    {% if form.instance.image %}
+                        <div class="mt-2">
+                            <img src="{{ form.instance.image.url }}" alt="첨부 이미지" style="max-width: 200px; max-height: 200px;">
+                        </div>
+                    {% endif %}
+                </div>
                 {% endif %}
                 <div class="d-flex justify-content-end gap-2">
                     <a href="{% url 'board:list' %}" class="btn btn-outline-secondary btn-sm">취소</a>

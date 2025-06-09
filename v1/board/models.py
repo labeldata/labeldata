@@ -7,6 +7,7 @@ class Board(models.Model):
     content = models.TextField()
     is_hidden = models.BooleanField(default=False)
     attachment = models.FileField(upload_to='board_files/', blank=True, null=True)
+    image = models.ImageField(upload_to='board_images/', blank=True, null=True)  # 이미지 첨부 필드 추가
     views = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -24,28 +24,36 @@ class BoardForm(forms.ModelForm):
         required=False,
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
+    image = forms.ImageField(
+        label='이미지 첨부',
+        required=False,
+        widget=forms.ClearableFileInput(attrs={'class': 'form-control'})
+    )
 
     class Meta:
         model = Board
-        fields = ['is_hidden', 'is_notice', 'title', 'content', 'attachment']
+        fields = ['is_hidden', 'is_notice', 'title', 'content', 'attachment', 'image']  # image 추가
         labels = {
             'title': '제목',
             'content': '내용',
             'attachment': '첨부파일',
+            'image': '이미지 첨부',
         }
         widgets = {
             'content': forms.Textarea(attrs={'rows': 5, 'class': 'form-control'}),
             'title': forms.TextInput(attrs={'class': 'form-control'}),
             'attachment': forms.FileInput(attrs={'class': 'form-control'}),
+            'image': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        # 관리자가 아닌 경우 is_notice 필드와 attachment 필드를 제거
+        # 관리자가 아닌 경우 is_notice, attachment, image 필드 제거
         if not self.user or not self.user.is_staff:
             self.fields.pop('is_notice', None)
             self.fields.pop('attachment', None)
+            self.fields.pop('image', None)  # 이미지 필드도 관리자만
 
     def clean(self):
         cleaned_data = super().clean()
@@ -53,6 +61,10 @@ class BoardForm(forms.ModelForm):
         # 공지사항 등록/수정 시 관리자 검증
         if is_notice and (not self.user or not self.user.is_staff):
             raise forms.ValidationError('공지사항은 관리자만 작성할 수 있습니다.')
+        # 이미지 첨부도 관리자만 허용
+        if not self.user or not self.user.is_staff:
+            if 'image' in self.cleaned_data and self.cleaned_data['image']:
+                raise forms.ValidationError('이미지 첨부는 관리자만 사용할 수 있습니다.')
         return cleaned_data
 
 class BoardListView(ListView):
@@ -110,11 +122,11 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
         # 현재 로그인한 사용자를 author로 설정
         form.instance.author = self.request.user
         
-        # 관리자가 아닌 경우 공지사항 필드 강제 설정
+        # 관리자가 아닌 경우 공지사항, 첨부파일, 이미지 업로드 방지
         if not self.request.user.is_staff:
             form.instance.is_notice = False
-            # 일반 유저의 첨부파일 업로드 방지
             form.instance.attachment = None
+            form.instance.image = None  # 이미지도 None 처리
         
         # 공지사항 권한 검증
         if form.instance.is_notice and not self.request.user.is_staff:
@@ -153,11 +165,12 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
             messages.error(self.request, '공지사항은 관리자만 수정할 수 있습니다.')
             return self.form_invalid(form)
         
-        # 일반 유저의 경우 첨부파일 수정 방지
+        # 일반 유저의 경우 첨부파일/이미지 수정 방지
         if not self.request.user.is_staff:
-            # 기존 첨부파일을 유지
-            original_attachment = self.get_object().attachment
-            form.instance.attachment = original_attachment
+            # 기존 첨부파일/이미지 유지
+            original = self.get_object()
+            form.instance.attachment = original.attachment
+            form.instance.image = original.image  # 이미지도 기존 값 유지
         
         messages.success(self.request, '게시글이 수정되었습니다.')
         return super().form_valid(form)

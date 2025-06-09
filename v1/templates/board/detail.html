@@ -38,6 +38,12 @@
                 <a href="{{ object.attachment.url }}" class="text-primary" download>{{ object.attachment.name }}</a>
             </div>
             {% endif %}
+            {% if object.image %}
+            <div class="mb-3">
+                <span class="fw-bold">첨부 이미지:</span><br>
+                <img src="{{ object.image.url }}" alt="첨부 이미지" style="max-width: 400px; max-height: 400px;">
+            </div>
+            {% endif %}
             <div class="d-flex justify-content-end gap-2">
                 <a href="{% url 'board:list' %}" class="btn btn-outline-secondary btn-sm">목록</a>
                 {% if object.author == user or user.is_staff %}
