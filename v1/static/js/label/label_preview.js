@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const footerText = document.querySelector('.footer-text');
     if (footerText && updateDateTime) {
         footerText.innerHTML = `
-            labeldata.com 에서 관련법규에 따라 작성되었습니다.
+            간편한 표시사항 연구소에서 관련 법규에 따라 작성되었습니다.
             <span class="creator-info">[${updateDateTime}]</span>
         `;
     }
