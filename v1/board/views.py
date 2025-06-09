@@ -18,11 +18,10 @@ import os
 logger = logging.getLogger(__name__)
 
 class BoardForm(forms.ModelForm):
-    is_public = forms.ChoiceField(
-        label='공개/비공개',
-        choices=[(True, '공개'), (False, '비공개')],
-        widget=forms.RadioSelect(attrs={'class': 'form-check-input'}),
-        initial=True
+    is_hidden = forms.BooleanField(
+        label='비밀글',
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
     is_notice = forms.BooleanField(
         label='공지사항',
@@ -32,7 +31,7 @@ class BoardForm(forms.ModelForm):
 
     class Meta:
         model = Board
-        fields = ['is_public', 'is_notice', 'title', 'content', 'attachment']
+        fields = ['is_hidden', 'is_notice', 'title', 'content', 'attachment']
         labels = {
             'title': '제목',
             'content': '내용',
@@ -76,10 +75,10 @@ class BoardListView(ListView):
         if self.request.user.is_authenticated:
             if not self.request.user.is_staff:
                 queryset = queryset.filter(
-                    Q(is_public=True) | Q(author=self.request.user)
+                    Q(is_hidden=False) | Q(author=self.request.user)
                 )
         else:
-            queryset = queryset.filter(is_public=True)
+            queryset = queryset.filter(is_hidden=False)
         return queryset
 
 class BoardDetailView(DetailView):
@@ -88,8 +87,8 @@ class BoardDetailView(DetailView):
 
     def get(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if not self.object.is_public and request.user != self.object.author and not request.user.is_staff:
-            return HttpResponseForbidden('비공개 게시글은 작성자 또는 관리자만 볼 수 있습니다.')
+        if self.object.is_hidden and request.user != self.object.author and not request.user.is_staff:
+            return HttpResponseForbidden('비밀글은 작성자 또는 관리자만 볼 수 있습니다.')
         
         # 작성자 본인이 아닌 경우에만 조회수 증가
         if request.user != self.object.author:

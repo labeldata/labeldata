@@ -9,10 +9,8 @@
         <div class="card-header">
             <h2 class="mb-0">
                 {% if object.is_notice %}<span class="badge bg-warning text-dark">공지</span>{% endif %}
-                {% if object.is_public %}
-                    <span class="badge bg-success text-white">공개</span>
-                {% else %}
-                    <span class="badge bg-secondary text-white">비공개</span>
+                {% if object.is_hidden %}
+                    <span class="badge bg-secondary text-white">비밀글</span>
                 {% endif %}
                 {{ object.title }}
             </h2>

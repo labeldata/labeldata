@@ -12,12 +12,10 @@
                 {% csrf_token %}
                 <div class="mb-3 d-flex align-items-center justify-content-between">
                     <div class="d-flex gap-3">
-                        {% for radio in form.is_public %}
-                        <div class="form-check form-check">
-                            {{ radio.tag }}
-                            <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                        <div class="form-check">
+                            {{ form.is_hidden }}
+                            <label class="form-check-label" for="{{ form.is_hidden.id_for_label }}">비밀글</label>
                         </div>
-                        {% endfor %}
                     </div>
                     {% if form.is_notice %}
                     <div class="form-check ms-4">
@@ -26,8 +24,8 @@
                     </div>
                     {% endif %}
                     <div class="flex-grow-1"></div> <!-- 빈 공간으로 공지사항을 중간쯤 배치 -->
-                    {% if form.is_public.errors %}
-                        <div class="invalid-feedback d-block">{{ form.is_public.errors }}</div>
+                    {% if form.is_hidden.errors %}
+                        <div class="invalid-feedback d-block">{{ form.is_hidden.errors }}</div>
                     {% endif %}
                     {% if form.is_notice.errors %}
                         <div class="invalid-feedback d-block">{{ form.is_notice.errors }}</div>
