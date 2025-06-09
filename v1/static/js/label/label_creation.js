@@ -1017,6 +1017,26 @@ document.addEventListener('DOMContentLoaded', function () {
     updateSummary();
   });
 
+  // 저장/미리보기 버튼 비활성화 및 스피너 표시
+  const saveBtn = document.getElementById('saveBtn');
+  const previewBtn = document.getElementById('previewBtn');
+  const savingSpinner = document.getElementById('savingSpinner');
+  const form = document.getElementById('labelForm') || document.querySelector('form');
+
+  if (form && saveBtn && previewBtn && savingSpinner) {
+    form.addEventListener('submit', function() {
+      saveBtn.disabled = true;
+      previewBtn.disabled = true;
+      savingSpinner.style.display = '';
+    });
+
+    // 저장 완료 후(redirect 없이 ajax라면) 아래 코드로 복구 필요
+    // 예시: 저장 ajax 콜백에서
+    // saveBtn.disabled = false;
+    // previewBtn.disabled = false;
+    // savingSpinner.style.display = 'none';
+  }
+
   function step1Apply() {
     // 적용 버튼 클릭 시에만 요약 표시
     updateSummary();
