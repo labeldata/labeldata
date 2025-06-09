@@ -29,15 +29,10 @@ class BoardForm(forms.ModelForm):
         required=False,
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
-    category = forms.ChoiceField(
-        label='카테고리',
-        choices=Board.CATEGORY_CHOICES,
-        widget=forms.Select(attrs={'class': 'form-select'})
-    )
 
     class Meta:
         model = Board
-        fields = ['is_public', 'is_notice', 'category', 'title', 'content', 'attachment']
+        fields = ['is_public', 'is_notice', 'title', 'content', 'attachment']
         labels = {
             'title': '제목',
             'content': '내용',

@@ -3,14 +3,8 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 
 class Board(models.Model):
-    CATEGORY_CHOICES = [
-        ('문의하기', '문의하기'),
-        ('요청하기', '요청하기'),
-    ]
-
     title = models.CharField(max_length=255)
     content = models.TextField()
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='문의하기')
     is_public = models.BooleanField(default=True)
     attachment = models.FileField(upload_to='attachments/', blank=True, null=True)
     views = models.PositiveIntegerField(default=0)

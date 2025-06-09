@@ -14,20 +14,18 @@
             <thead>
                 <tr>
                     <th scope="col" style="width: 10%; text-align: center;">번호</th>
-                    <th scope="col" style="width: 10%; text-align: center;">카테고리</th>
-                    <th scope="col" style="width: 20%;">제목</th>
-                    <th scope="col" style="width: 10%; text-align: center;">작성자</th>
+                    <th scope="col" style="width: 50%;">제목</th>
+                    <th scope="col" style="width: 15%; text-align: center;">작성자</th>
                     <th scope="col" style="width: 10%; text-align: center;">작성일</th>
-                    <th scope="col" style="width: 10%; text-align: center;">조회수</th>
-                    <th scope="col" style="width: 10%; text-align: center;">댓글수</th>
-                    <th scope="col" style="width: 10%; text-align: center;">첨부파일</th>
+                    <th scope="col" style="width: 5%; text-align: center;">조회수</th>
+                    <th scope="col" style="width: 5%; text-align: center;">댓글수</th>
+                    <th scope="col" style="width: 5%; text-align: center;">첨부파일</th>
                 </tr>
             </thead>
             <tbody>
                 {% for board in boards %}
                 <tr class="{% if board.is_notice %}table-warning{% endif %}" onclick="location.href='{% url 'board:detail' board.pk %}'" style="cursor: pointer;">
-                    <td style="width: 5%; text-align: center;">{{ forloop.counter }}</td>
-                    <td style="width: 10%; text-align: center;">{{ board.category }}</td>
+                    <td style="width: 10%; text-align: center;">{{ forloop.counter }}</td>
                     <td style="width: 50%;">
                         {% if board.is_notice %}<span class="badge bg-warning text-dark">공지</span>{% endif %}
                         {% if board.is_public %}
@@ -37,7 +35,7 @@
                         {% endif %}
                         {{ board.title }}
                     </td>
-                    <td style="width: 10%; text-align: center;">{{ board.author.username }}</td>
+                    <td style="width: 15%; text-align: center;">{{ board.author.username }}</td>
                     <td style="width: 10%; text-align: center;">{{ board.created_at|date:"Y-m-d" }}</td>
                     <td style="width: 5%; text-align: center;">{{ board.views }}</td>
                     <td style="width: 5%; text-align: center;">{{ board.comments.count }}</td>
@@ -49,7 +47,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="8" class="text-center">게시글이 없습니다.</td>
+                    <td colspan="7" class="text-center">게시글이 없습니다.</td>
                 </tr>
                 {% endfor %}
             </tbody>
