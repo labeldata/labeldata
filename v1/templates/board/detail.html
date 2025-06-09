@@ -30,7 +30,7 @@
             </div>
             <div class="mb-3">
                 <span class="fw-bold">내용:</span>
-                <p class="post-content">{{ object.content|linebreaks }}</p>
+                <p class="post-content">{{ object.content|linebreaks|urlize }}</p>
             </div>
             {% if object.attachment %}
             <div class="mb-3">
@@ -59,7 +59,7 @@
                         <span class="fw-bold">{{ comment.author.username|default:"익명" }}</span>
                         <span class="text-muted small">({{ comment.created_at|date:"Y-m-d H:i" }})</span>
                     </div>
-                    <p class="comment-content mb-1">{{ comment.content|linebreaks }}</p>
+                    <p class="comment-content mb-1">{{ comment.content|linebreaks|urlize }}</p>
                     {% if comment.author == user or user.is_staff %}
                     <div class="d-flex justify-content-end gap-2">
                         <a href="{% url 'board:edit_comment' comment.pk %}" class="btn btn-outline-primary btn-sm">수정</a>
