@@ -166,40 +166,52 @@ class BoardDeleteView(LoginRequiredMixin, DeleteView):
 @require_POST
 def add_comment(request, pk):
     board = get_object_or_404(Board, pk=pk)
+    
+    # 관리자만 댓글 작성 가능
+    if not request.user.is_staff:
+        messages.error(request, '답변은 관리자만 작성할 수 있습니다.')
+        return redirect('board:detail', pk=pk)
+    
     content = request.POST.get('content', '').strip()
     if not content:
-        messages.error(request, '댓글 내용을 입력하세요.')
+        messages.error(request, '답변 내용을 입력하세요.')
         return redirect('board:detail', pk=pk)
     Comment.objects.create(board=board, author=request.user, content=content)
-    messages.success(request, '댓글이 등록되었습니다.')
+    messages.success(request, '답변이 등록되었습니다.')
     return redirect('board:detail', pk=pk)
 
 @login_required
 def edit_comment(request, pk):
     comment = get_object_or_404(Comment, pk=pk)
-    if comment.author == request.user or request.user.is_staff:
-        if request.method == 'POST':
-            content = request.POST.get('content', '').strip()
-            if not content:
-                messages.error(request, '댓글 내용을 입력하세요.')
-                return render(request, 'board/edit_comment.html', {'comment': comment})
-            comment.content = content
-            comment.save()
-            messages.success(request, '댓글이 수정되었습니다.')
-            return redirect('board:detail', pk=comment.board.pk)
-        return render(request, 'board/edit_comment.html', {'comment': comment})
-    return HttpResponseForbidden()
+    
+    # 관리자만 댓글 수정 가능
+    if not request.user.is_staff:
+        return HttpResponseForbidden('답변은 관리자만 수정할 수 있습니다.')
+    
+    if request.method == 'POST':
+        content = request.POST.get('content', '').strip()
+        if not content:
+            messages.error(request, '답변 내용을 입력하세요.')
+            return render(request, 'board/edit_comment.html', {'comment': comment})
+        comment.content = content
+        comment.save()
+        messages.success(request, '답변이 수정되었습니다.')
+        return redirect('board:detail', pk=comment.board.pk)
+    return render(request, 'board/edit_comment.html', {'comment': comment})
 
 @login_required
 @require_POST
 def delete_comment(request, pk):
     comment = get_object_or_404(Comment, pk=pk)
-    if comment.author == request.user or request.user.is_staff:
-        board_pk = comment.board.pk
-        comment.delete()
-        messages.success(request, '댓글이 삭제되었습니다.')
-        return redirect('board:detail', pk=board_pk)
-    return HttpResponseForbidden()
+    
+    # 관리자만 댓글 삭제 가능
+    if not request.user.is_staff:
+        return HttpResponseForbidden('답변은 관리자만 삭제할 수 있습니다.')
+    
+    board_pk = comment.board.pk
+    comment.delete()
+    messages.success(request, '답변이 삭제되었습니다.')
+    return redirect('board:detail', pk=board_pk)
 
 def download_file(request, file_path):
     # 파일 이름 추출 및 안전한 이름으로 변환

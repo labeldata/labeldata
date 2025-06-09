@@ -18,7 +18,7 @@
                     <th scope="col" style="width: 15%; text-align: center;">작성자</th>
                     <th scope="col" style="width: 10%; text-align: center;">작성일</th>
                     <th scope="col" style="width: 5%; text-align: center;">조회수</th>
-                    <th scope="col" style="width: 5%; text-align: center;">댓글수</th>
+                    <th scope="col" style="width: 5%; text-align: center;">답변</th>
                     <th scope="col" style="width: 5%; text-align: center;">첨부파일</th>
                 </tr>
             </thead>
@@ -36,7 +36,15 @@
                     <td style="width: 15%; text-align: center;">{{ board.author.username }}</td>
                     <td style="width: 10%; text-align: center;">{{ board.created_at|date:"Y-m-d" }}</td>
                     <td style="width: 5%; text-align: center;">{{ board.views }}</td>
-                    <td style="width: 5%; text-align: center;">{{ board.comments.count }}</td>
+                    <td style="width: 5%; text-align: center;">
+                        {% if not board.is_notice %}
+                            {% if board.comments.count > 0 %}
+                                <span class="badge bg-success">답변완료</span>
+                            {% else %}
+                                <span class="badge bg-warning">확인중</span>
+                            {% endif %}
+                        {% endif %}
+                    </td>
                     <td style="width: 5%; text-align: center;">
                         {% if board.attachment %}
                             <img src="{% static 'icons/attachment-icon.png' %}" alt="첨부파일" class="attachment-icon" style="width: 16px; height: 16px;">
