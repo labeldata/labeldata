@@ -64,6 +64,9 @@ v1/main/migrations/
 v1/user_management/migrations/
 **/migrations/
 
+# Django media files
+media/
+
 # Flask stuff:
 instance/
 .webassets-cache
