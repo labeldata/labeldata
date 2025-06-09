@@ -90,8 +90,12 @@ class BoardDetailView(DetailView):
         self.object = self.get_object()
         if not self.object.is_public and request.user != self.object.author and not request.user.is_staff:
             return HttpResponseForbidden('비공개 게시글은 작성자 또는 관리자만 볼 수 있습니다.')
-        self.object.views += 1
-        self.object.save()
+        
+        # 작성자 본인이 아닌 경우에만 조회수 증가
+        if request.user != self.object.author:
+            self.object.views += 1
+            self.object.save()
+        
         context = self.get_context_data()
         return self.render_to_response(context)
 
