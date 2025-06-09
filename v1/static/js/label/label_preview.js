@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function () {
             table.style.cssText = `
                 width: 100%;
                 border-collapse: collapse;
-                table-layout: auto;
+                table-layout: fixed;
                 margin: 0;
                 word-break: break-all;
                 white-space: normal;
@@ -348,12 +348,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 cell.style.backgroundColor = '#f8f9fa';
                 cell.style.textAlign = 'center';
                 cell.style.fontWeight = '500';
-                // 한 줄 고정 (가로 길이와 무관하게)
                 cell.style.whiteSpace = 'nowrap';
                 cell.style.textOverflow = 'ellipsis';
                 cell.style.overflow = 'hidden';
-                cell.style.maxWidth = '180px';
-                cell.style.minWidth = '120px';
+                cell.style.width = '100px';
+                cell.style.minWidth = '100px';
+                cell.style.maxWidth = '100px';
             }
         });
 
@@ -1506,7 +1506,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </tr>`;
         });
 
-        // 계산기와 완전히 동일한 하단 텍스트
+        // 계산기와 동일한 하단 텍스트
         rows += `
             <tr>
                 <td colspan="2" class="nutrition-preview-footer-inside">
@@ -1564,7 +1564,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 초기화
     setupEventListeners();
+    // 최초 로드시에도 고정 사이즈 및 th 사이즈 적용
+    updatePreviewStyles();
     setTimeout(updatePreviewStyles, 100);
+    setTimeout(updatePreviewStyles, 500); // 추가로 한번 더 실행
     setupAreaCalculation();
     setTimeout(updateArea, 100);
     enforceInputMinMax();

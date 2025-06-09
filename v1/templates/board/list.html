@@ -39,9 +39,9 @@
                     <td style="width: 5%; text-align: center;">
                         {% if not board.is_notice %}
                             {% if board.comments.count > 0 %}
-                                <span class="badge bg-success">답변완료</span>
+                                <span class="badge bg-success">완료</span>
                             {% else %}
-                                <span class="badge bg-warning">확인중</span>
+                                <span class="badge bg-warning">대기</span>
                             {% endif %}
                         {% endif %}
                     </td>
