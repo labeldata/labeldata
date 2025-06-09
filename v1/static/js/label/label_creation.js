@@ -1086,14 +1086,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     btn.disabled = true;
     btn.textContent = '저장 중...';
-    const reportNo = document.querySelector('input[name="prdlst_report_no"]')?.value?.trim();
+    const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
+    let reportNo = reportNoInput?.value?.trim();
     if (!reportNo) {
       alert('품목보고번호를 입력하세요.');
       btn.disabled = false;
       btn.textContent = '번호검증';
       return;
     }
-    // 1. 먼저 품목보고번호 저장 및 검증여부 N으로 초기화
+
+    // 검증용 번호: 하이픈(-)을 제거한 값
+    const verifyReportNo = reportNo.replace(/-/g, '');
+
+    // 1. 먼저 품목보고번호 저장 및 검증여부 N으로 초기화 (원본 값으로 저장)
     fetch('/label/update-report-no/', {
       method: 'POST',
       headers: {
@@ -1105,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(res => res.json())
     .then(data => {
       if (!data.success) throw new Error(data.error || '저장 실패');
-      // 2. 저장 성공 시 검증 진행
+      // 2. 저장 성공 시 검증 진행 (하이픈 제거된 값으로 검증)
       btn.textContent = '검증 중...';
       return fetch('/label/verify-report-no/', {
         method: 'POST',
@@ -1113,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', function () {
           'Content-Type': 'application/json',
           'X-CSRFToken': getCookie('csrftoken')
         },
-        body: JSON.stringify({ label_id: labelId, prdlst_report_no: reportNo })
+        body: JSON.stringify({ label_id: labelId, prdlst_report_no: verifyReportNo })
       });
     })
     .then(res => res.json())
