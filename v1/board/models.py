@@ -6,7 +6,7 @@ class Board(models.Model):
     title = models.CharField(max_length=255)
     content = models.TextField()
     is_hidden = models.BooleanField(default=False)
-    attachment = models.FileField(upload_to='attachments/', blank=True, null=True)
+    attachment = models.FileField(upload_to='board_files/', blank=True, null=True)
     views = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

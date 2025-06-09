@@ -42,9 +42,10 @@ class BoardForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        # 관리자가 아닌 경우 is_notice 필드를 제거
+        # 관리자가 아닌 경우 is_notice 필드와 attachment 필드를 제거
         if not self.user or not self.user.is_staff:
             self.fields.pop('is_notice', None)
+            self.fields.pop('attachment', None)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -111,6 +112,8 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
         # 관리자가 아닌 경우 공지사항 필드 강제 설정
         if not self.request.user.is_staff:
             form.instance.is_notice = False
+            # 일반 유저의 첨부파일 업로드 방지
+            form.instance.attachment = None
         messages.success(self.request, '게시글이 등록되었습니다.')
         return super().form_valid(form)
 
@@ -138,6 +141,11 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
+        # 일반 유저의 경우 첨부파일 수정 방지
+        if not self.request.user.is_staff:
+            # 기존 첨부파일을 유지
+            original_attachment = self.get_object().attachment
+            form.instance.attachment = original_attachment
         messages.success(self.request, '게시글이 수정되었습니다.')
         return super().form_valid(form)
 
