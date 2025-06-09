@@ -423,7 +423,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ------------------ 식품유형 대분류-소분류 연동 ------------------
   function updateCheckboxesByFoodType(foodType) {
-    if (!foodType) return Promise.resolve();
+    if (!foodType)
     return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
       .then(response => response.json())
       .then(data => {
@@ -576,7 +576,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (window.checkboxesLoadedFromDB === undefined) {
           window.checkboxesLoadedFromDB = true;
         }
-        updateCheckboxesByFoodType(initialFoodType);
+        // updateCheckboxesByFoodType(initialFoodType); // 즉시 호출 제거
         pendingFoodType = initialFoodType;
       } else {
         fetch(`/label/get-food-group/?food_type=${encodeURIComponent(initialFoodType)}`)
@@ -585,7 +585,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success && data.food_group) {
               foodGroup.val(data.food_group).trigger('change.select2');
               hiddenFoodGroup.val(data.food_group);
-              updateCheckboxesByFoodType(initialFoodType);
+              // updateCheckboxesByFoodType(initialFoodType); // 즉시 호출 제거
               pendingFoodType = initialFoodType;
             }
           });
@@ -602,6 +602,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
   }
 
+  // ------------------ 날짜 드롭다운 업데이트 ------------------
   function updateDateDropdown(value) {
     const dateOptions = document.querySelector('select[name="date_option"]');
     if (!dateOptions) return;
