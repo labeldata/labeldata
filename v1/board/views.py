@@ -109,11 +109,18 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
     def form_valid(self, form):
         # 현재 로그인한 사용자를 author로 설정
         form.instance.author = self.request.user
+        
         # 관리자가 아닌 경우 공지사항 필드 강제 설정
         if not self.request.user.is_staff:
             form.instance.is_notice = False
             # 일반 유저의 첨부파일 업로드 방지
             form.instance.attachment = None
+        
+        # 공지사항 권한 검증
+        if form.instance.is_notice and not self.request.user.is_staff:
+            messages.error(self.request, '공지사항은 관리자만 작성할 수 있습니다.')
+            return self.form_invalid(form)
+        
         messages.success(self.request, '게시글이 등록되었습니다.')
         return super().form_valid(form)
 
@@ -141,11 +148,17 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
+        # 공지사항 권한 검증
+        if form.instance.is_notice and not self.request.user.is_staff:
+            messages.error(self.request, '공지사항은 관리자만 수정할 수 있습니다.')
+            return self.form_invalid(form)
+        
         # 일반 유저의 경우 첨부파일 수정 방지
         if not self.request.user.is_staff:
             # 기존 첨부파일을 유지
             original_attachment = self.get_object().attachment
             form.instance.attachment = original_attachment
+        
         messages.success(self.request, '게시글이 수정되었습니다.')
         return super().form_valid(form)
 

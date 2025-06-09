@@ -16,14 +16,6 @@ class Board(models.Model):
     def __str__(self):
         return self.title
 
-    def clean(self):
-        if self.is_notice and not self.author.is_staff:
-            raise ValidationError('공지사항은 관리자만 작성할 수 있습니다.')
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-
 class Comment(models.Model):
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
