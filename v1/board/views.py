@@ -29,10 +29,16 @@ class BoardForm(forms.ModelForm):
         required=False,
         widget=forms.ClearableFileInput(attrs={'class': 'form-control'})
     )
+    delete_attachment = forms.BooleanField(
+        label='첨부파일 삭제', required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    delete_image = forms.BooleanField(
+        label='이미지 삭제', required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
 
     class Meta:
         model = Board
-        fields = ['is_hidden', 'is_notice', 'title', 'content', 'attachment', 'image']  # image 추가
+        fields = ['is_hidden', 'is_notice', 'title', 'content', 'attachment', 'image']  # 폼 필드에는 삭제필드 미포함
         labels = {
             'title': '제목',
             'content': '내용',
@@ -54,6 +60,10 @@ class BoardForm(forms.ModelForm):
             self.fields.pop('is_notice', None)
             self.fields.pop('attachment', None)
             self.fields.pop('image', None)  # 이미지 필드도 관리자만
+        # 삭제 체크박스는 수정폼에서만 노출
+        if not self.instance.pk or not self.user or not self.user.is_staff:
+            self.fields.pop('delete_attachment', None)
+            self.fields.pop('delete_image', None)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -171,6 +181,16 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
             original = self.get_object()
             form.instance.attachment = original.attachment
             form.instance.image = original.image  # 이미지도 기존 값 유지
+        # 첨부파일/이미지 삭제 처리 (관리자만)
+        if self.request.user.is_staff:
+            if form.cleaned_data.get('delete_attachment'):
+                if form.instance.attachment:
+                    form.instance.attachment.delete(save=False)
+                form.instance.attachment = None
+            if form.cleaned_data.get('delete_image'):
+                if form.instance.image:
+                    form.instance.image.delete(save=False)
+                form.instance.image = None
         
         messages.success(self.request, '게시글이 수정되었습니다.')
         return super().form_valid(form)
