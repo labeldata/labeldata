@@ -348,7 +348,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 cell.style.backgroundColor = '#f8f9fa';
                 cell.style.textAlign = 'center';
                 cell.style.fontWeight = '500';
-                cell.style.whiteSpace = 'normal';
+                // 한 줄 고정 (가로 길이와 무관하게)
+                cell.style.whiteSpace = 'nowrap';
+                cell.style.textOverflow = 'ellipsis';
+                cell.style.overflow = 'hidden';
+                cell.style.maxWidth = '180px';
+                cell.style.minWidth = '120px';
             }
         });
 
@@ -1449,7 +1454,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
         `;
 
-        // 계산기와 완전히 동일한 테이블 스타일 변수들
+        // 계산기와 동일한 테이블 스타일 변수들
         const tableStyle = 'background:#fff;color:#222;border-radius:0 0 6px 6px;width:320px;margin:0 auto 16px auto;font-size:10pt;line-height:1.5;';
         const thSmall = 'class="nutrition-preview-small" style="font-size:0.95rem;font-weight:500;background:#fff;padding:8px 0 6px 0;color:#222;border-bottom:2px solid #000;text-align:left;"';
         const thRightSmall = 'class="nutrition-preview-small" style="font-size:0.95rem;font-weight:500;background:#fff;padding:8px 0 6px 0;color:#222;border-bottom:2px solid #000;text-align:right;"';
