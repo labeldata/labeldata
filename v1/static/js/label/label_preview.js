@@ -307,6 +307,8 @@ document.addEventListener('DOMContentLoaded', function () {
             border: 1px solid #dee2e6;
             overflow: visible;
             box-sizing: border-box;
+            word-break: break-all;
+            white-space: normal;
         `;
 
         const table = previewContent.querySelector('.preview-table');
@@ -317,6 +319,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 table-layout: auto;
                 margin: 0;
                 word-break: break-all;
+                white-space: normal;
             `;
         }
 
@@ -325,6 +328,8 @@ document.addEventListener('DOMContentLoaded', function () {
             font-family: ${settings.fontFamily};
             letter-spacing: ${settings.letterSpacing / 100}em;
             line-height: ${settings.lineHeight};
+            word-break: break-all;
+            white-space: normal;
         `;
 
         const cells = previewContent.querySelectorAll('th, td');
@@ -337,12 +342,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 word-break: break-all;
                 overflow-wrap: break-word;
                 text-align: left;
+                white-space: normal;
             `;
             if (cell.tagName === 'TH') {
                 cell.style.backgroundColor = '#f8f9fa';
                 cell.style.textAlign = 'center';
                 cell.style.fontWeight = '500';
-                cell.style.whiteSpace = 'nowrap';
+                cell.style.whiteSpace = 'normal';
             }
         });
 
