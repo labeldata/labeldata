@@ -748,7 +748,7 @@ document.addEventListener('DOMContentLoaded', function () {
       my_label_name: 'label_name',          // 라벨명
       prdlst_dcnm: 'food_type',            // 식품유형
       prdlst_nm: 'product_name',           // 제품명
-      ingredient_info: 'ingredient_info',   // 성분명 및 함량
+      ingredient_info: 'ingredient_info',   // 특정성분 함량
       content_weight: 'content_weight',     // 내용량
       weight_calorie: 'weight_calorie',     // 내용량(열량)
       prdlst_report_no: 'report_no',       // 품목보고번호

@@ -569,7 +569,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const FIELD_LABELS = {
         prdlst_dcnm: '식품유형',
         prdlst_nm: '제품명',
-        ingredient_info: '성분명 및 함량',
+        ingredient_info: '특정성분 함량',
         content_weight: '내용량',
         weight_calorie: '내용량(열량)',
         prdlst_report_no: '품목보고번호',
@@ -765,7 +765,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // 제품명에 포함된 농수산물명 추출
         const foundItems = farmSeafoodItems.filter(item => productName.includes(item));
 
-        // 성분명 및 함량(ingredient_info)에서 각 농수산물명에 대해 % 포함 여부 확인
+        // 특정성분 함량(ingredient_info)에서 각 농수산물명에 대해 % 포함 여부 확인
         let ingredientInfoMissing = false;
         foundItems.forEach(item => {
             // item을 포함하는 단어(예: 사과즙, 사과잼 등)도 모두 포함
@@ -790,11 +790,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // 성분명 및 함량이 없거나, 제품명에 포함된 농수산물의 함량(%)이 모두 없는 경우
+        // 특정성분 함량이 없거나, 제품명에 포함된 농수산물의 함량(%)이 모두 없는 경우
         if ((!ingredientInfo || ingredientInfoMissing) && rawmtrlNm && foundItems.length > 0) {
             errors.push(`주표시면에 제품명에 포함된 "${foundItems.join(', ')}"의 함량(%)을 추가하세요.`);
         } else {
-            // 성분명 및 함량에 농수산물별로 %가 없는 경우만 개별 메시지
+            // 특정성분 함량에 농수산물별로 %가 없는 경우만 개별 메시지
             foundItems.forEach(item => {
                 const regexWord = new RegExp(`${item}[\\w가-힣/()%··\\s-]*`, 'gi');
                 let match;
@@ -803,12 +803,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     foundAny = true;
                     const word = match[0];
                     if (!/([0-9]+(\.[0-9]+)?\s*%)/.test(word)) {
-                        errors.push(`성분명 및 함량에 "${word}"의 함량(%)을 추가하세요.`);
+                        errors.push(`특정성분 함량에 "${word}"의 함량(%)을 추가하세요.`);
                     }
                 }
                 if (!foundAny && ingredientInfo) {
                     if (!new RegExp(`${item}\\s*([\\d.]+%)`).test(ingredientInfo)) {
-                        errors.push(`성분명 및 함량에 "${item}"의 함량(%)을 추가하세요.`);
+                        errors.push(`특정성분 함량에 "${item}"의 함량(%)을 추가하세요.`);
                     }
                 }
             });

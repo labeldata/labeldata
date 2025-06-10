@@ -206,10 +206,10 @@
               <div class="d-flex align-items-center flex-equal">
                 <div style="width:15%; min-width:130px;">
                   <input type="checkbox" id="chk_ingredient_info" name="chk_ingredient_info" class="form-check-input" {% if label.chckd_ingredient_info == "Y" %}checked{% endif %}>
-                  <label for="chk_ingredient_info" class="m-0">성분명 및 함량</label>
+                  <label for="chk_ingredient_info" class="m-0">특정성분 함량</label>
                 </div>
                 <div style="width:85%;">
-                  <input type="text" name="ingredient_info" class="form-control auto-expand" placeholder="제품명에 원재료명을 사용한 경우 입력하세요." value="{{ form.ingredient_info.value|default:'' }}">
+                  <input type="text" name="ingredient_info" class="form-control auto-expand" placeholder="제품명에 표시한 경우 : 예) 레몬즙 5%" value="{{ form.ingredient_info.value|default:'' }}">
                 </div>
               </div>
             </div>
