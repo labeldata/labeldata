@@ -423,7 +423,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ------------------ 식품유형 대분류-소분류 연동 ------------------
   function updateCheckboxesByFoodType(foodType) {
-    if (!foodType)
+    if (!foodType) return;
+    
     return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
       .then(response => response.json())
       .then(data => {
@@ -441,7 +442,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (settings.pog_daycnt_options !== undefined) {
           updateDateDropdownOptions(settings.pog_daycnt_options);
-        }        // 체크박스 업데이트 항상 실행
+        }
+        
+        // 체크박스 업데이트 항상 실행
         Object.keys(settings).forEach(field => {
           const value = settings[field];
           const checkboxId = fieldMappings[field] || `chk_${field}`;
@@ -459,7 +462,8 @@ document.addEventListener('DOMContentLoaded', function () {
           if (field === 'weight_calorie') {
             updateContentTypeByFoodType(value);
           }
-        });      });
+        });
+      });
   }  // 식품유형에 따른 내용량 타입 자동 설정
   function updateContentTypeByFoodType(weightCalorieValue) {
     const contentTypeDisplay = document.getElementById('content_type_display');
@@ -556,7 +560,6 @@ document.addEventListener('DOMContentLoaded', function () {
               }
             });
         }
-        // updateCheckboxesByFoodType(foodTypeValue); // 즉시 호출 제거
         pendingFoodType = foodTypeValue; // 적용 대기
       } else {
         pendingFoodType = null;
@@ -576,7 +579,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (window.checkboxesLoadedFromDB === undefined) {
           window.checkboxesLoadedFromDB = true;
         }
-        // updateCheckboxesByFoodType(initialFoodType); // 즉시 호출 제거
         pendingFoodType = initialFoodType;
       } else {
         fetch(`/label/get-food-group/?food_type=${encodeURIComponent(initialFoodType)}`)
@@ -585,7 +587,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (data.success && data.food_group) {
               foodGroup.val(data.food_group).trigger('change.select2');
               hiddenFoodGroup.val(data.food_group);
-              // updateCheckboxesByFoodType(initialFoodType); // 즉시 호출 제거
               pendingFoodType = initialFoodType;
             }
           });
@@ -594,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function () {
       updateFoodTypes('', initialFoodType);
     }
 
-    // step1 적용 버튼에서만 체크박스 반영
+    // 전역 함수로 노출하여 적용 버튼에서 호출할 수 있도록 함
     window.applyStep1FoodType = function() {
       if (pendingFoodType) {
         updateCheckboxesByFoodType(pendingFoodType);
@@ -1056,7 +1057,10 @@ document.addEventListener('DOMContentLoaded', function () {
   const applyBtn = document.getElementById('applyStep1Btn');
   const expandBtn = document.getElementById('expandStep1Btn');
   if (applyBtn) applyBtn.onclick = function() {
-    if (typeof window.applyStep1FoodType === 'function') window.applyStep1FoodType();
+    // 적용 버튼 클릭 시 체크박스 업데이트 실행
+    if (typeof window.applyStep1FoodType === 'function') {
+      window.applyStep1FoodType();
+    }
     step1Apply();
   };
   if (expandBtn) expandBtn.onclick = step1Expand;
