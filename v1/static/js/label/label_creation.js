@@ -950,6 +950,13 @@ document.addEventListener('DOMContentLoaded', function () {
       const autoSubmit = urlParams.get('autoSubmit');
       
       if (autoSubmit !== 'true') {
+        // 최종 동기화
+        const topInput = document.getElementById('my_label_name_top');
+        const hiddenInput = document.getElementById('my_label_name_hidden');
+        if (topInput && hiddenInput) {
+          hiddenInput.value = topInput.value;
+        }
+        
         $('#hidden_food_group').val($('#food_group').val());
         $('#hidden_food_type').val($('#food_type').val());
         prepareFormData();
@@ -1179,12 +1186,32 @@ document.addEventListener('DOMContentLoaded', function () {
   // 라벨명 동기화 함수
   function initializeLabelNameSync() {
     const form = document.getElementById('labelForm');
-    const topInput = document.getElementById('my_label_name');
+    const topInput = document.getElementById('my_label_name_top');
     const hiddenInput = document.getElementById('my_label_name_hidden');
+    
     if (form && topInput && hiddenInput) {
-      form.addEventListener('submit', function() {
+      // 상단 입력 필드 변경 시 숨겨진 필드도 동기화
+      topInput.addEventListener('input', function() {
         hiddenInput.value = topInput.value;
       });
+      
+      // 폼 제출 전 최종 동기화
+      form.addEventListener('submit', function(e) {
+        // 폼 제출 직전에 라벨명 동기화
+        hiddenInput.value = topInput.value;
+      });
+      
+      // 초기값 동기화 - 양방향
+      if (topInput.value && !hiddenInput.value) {
+        hiddenInput.value = topInput.value;
+      } else if (hiddenInput.value && !topInput.value) {
+        topInput.value = hiddenInput.value;
+      }
+      
+      // 페이지 로드 시 값이 모두 있는 경우 상단 필드 우선
+      if (topInput.value) {
+        hiddenInput.value = topInput.value;
+      }
     }
   }
 

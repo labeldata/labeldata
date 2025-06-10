@@ -353,16 +353,53 @@ def label_creation(request, label_id=None):
         else:
             form = LabelCreationForm(request.POST)
 
+        # 라벨명을 POST 데이터에서 직접 추출하여 폼에 설정
+        my_label_name = request.POST.get('my_label_name', '').strip()
+        if my_label_name:
+            # POST 데이터를 복사하여 수정
+            post_data = request.POST.copy()
+            post_data['my_label_name'] = my_label_name
+            
+            # 폼을 새로 생성하여 라벨명이 포함되도록 함
+            if label_id:
+                form = LabelCreationForm(post_data, instance=label)
+            else:
+                form = LabelCreationForm(post_data)
+
         if form.is_valid():
             label = form.save(commit=False)
             label.user_id = request.user
             
-            # 체크박스 상태 처리 수정
-            for field_name in form.cleaned_data:
-                if field_name.startswith('chk_'):
-                    model_field = 'chckd_' + field_name[4:]  # chk_ -> chckd_
-                    if hasattr(label, model_field):
-                        setattr(label, model_field, 'Y' if form.cleaned_data[field_name] else 'N')
+            # 라벨명 다시 한번 확인하여 설정
+            if my_label_name:
+                label.my_label_name = my_label_name
+            
+            # hidden 필드에서 식품유형 정보 가져오기
+            label.food_group = request.POST.get('food_group')
+            label.food_type = request.POST.get('food_type')
+            
+            # 체크박스 상태 처리
+            checkbox_fields = [field for field in request.POST.keys() if field.startswith('chk_')]
+            for field_name in checkbox_fields:
+                model_field = 'chckd_' + field_name[4:]  # chk_ -> chckd_
+                if hasattr(label, model_field):
+                    setattr(label, model_field, 'Y')
+            
+            # 체크되지 않은 체크박스는 N으로 설정
+            all_checkbox_fields = [
+                'chckd_prdlst_dcnm', 'chckd_prdlst_nm', 'chckd_ingredient_info',
+                'chckd_content_weight', 'chckd_weight_calorie', 'chckd_prdlst_report_no',
+                'chckd_country_of_origin', 'chckd_storage_method', 'chckd_frmlc_mtrqlt',
+                'chckd_bssh_nm', 'chckd_distributor_address', 'chckd_repacker_address',
+                'chckd_importer_address', 'chckd_pog_daycnt', 'chckd_rawmtrl_nm_display',
+                'chckd_cautions', 'chckd_additional_info', 'chckd_nutrition_text'
+            ]
+            
+            for field_name in all_checkbox_fields:
+                if hasattr(label, field_name):
+                    corresponding_checkbox = 'chk_' + field_name[6:]  # chckd_ -> chk_
+                    if corresponding_checkbox not in checkbox_fields:
+                        setattr(label, field_name, 'N')
 
             # 품목보고번호 변경 시 검증여부 N으로 초기화
             if label_id:
@@ -374,231 +411,222 @@ def label_creation(request, label_id=None):
                 label.report_no_verify_YN = 'N'
 
             label.save()
+            messages.success(request, f'표시사항이 성공적으로 저장되었습니다. (라벨명: {label.my_label_name})')
             return redirect('label:label_creation', label_id=label.my_label_id)
-    
-    has_ingredient_relations = False
-    
-    if label_id:
-        # 기존 라벨 편집
-        label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-        has_ingredient_relations = label.ingredient_relations.exists()
-        # 연결된 원료 개수 구하기
-        count_ingredient_relations = LabelIngredientRelation.objects.filter(label_id=label.my_label_id).count()
+        else:
+            messages.error(request, '입력 정보에 오류가 있습니다.')
+    else:
+        has_ingredient_relations = False
+        
+        if label_id:
+            # 기존 라벨 편집
+            label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+            has_ingredient_relations = label.ingredient_relations.exists()
+            # 연결된 원료 개수 구하기
+            count_ingredient_relations = LabelIngredientRelation.objects.filter(label_id=label.my_label_id).count()
 
-        # 내 원료에 연결된 원재료명 가져오기
-        if has_ingredient_relations:
-            relations = LabelIngredientRelation.objects.filter(
-                label_id=label.my_label_id
-            ).select_related('ingredient').order_by('relation_sequence')
-            
-            # 원재료명 정보를 생성 (순서대로)
-            ingredients_info = []
-            allergens_set = set()
-            gmo_set = set()
-            shellfish_collected = set()
-            shellfish_pattern = re.compile(r'^조개류\(([^)]+)\)$')  # 조개류 패턴 정규식
+            # 내 원료에 연결된 원재료명 가져오기
+            if has_ingredient_relations:
+                relations = LabelIngredientRelation.objects.filter(
+                    label_id=label.my_label_id
+                ).select_related('ingredient').order_by('relation_sequence')
+                
+                # 원재료명 정보를 생성 (순서대로)
+                ingredients_info = []
+                allergens_set = set()
+                gmo_set = set()
+                shellfish_collected = set()
+                shellfish_pattern = re.compile(r'^조개류\(([^)]+)\)$')  # 조개류 패턴 정규식
 
-            # 향료/동일 용도 카운터
-            flavor_counter = {}
-            purpose_counter = {}
+                # 향료/동일 용도 카운터
+                flavor_counter = {}
+                purpose_counter = {}
 
-            for relation in relations:
-                ingredient = relation.ingredient
-                food_category = getattr(ingredient, 'food_category', None) or getattr(ingredient, 'food_group', None) or ''
-                display_name = ingredient.ingredient_display_name or ingredient.prdlst_nm or ""
-                # display_name이 콤마로 여러 개일 때 최대 5개까지만 표시 (팝업과 동일)
-                if display_name and "," in display_name:
-                    display_name = ", ".join([x.strip() for x in display_name.split(",")][:5])
-                food_type = ingredient.prdlst_dcnm or ""
-                ratio = None
-                try:
-                    ratio = float(relation.ingredient_ratio) if relation.ingredient_ratio is not None else None
-                except Exception:
+                for relation in relations:
+                    ingredient = relation.ingredient
+                    food_category = getattr(ingredient, 'food_category', None) or getattr(ingredient, 'food_group', None) or ''
+                    display_name = ingredient.ingredient_display_name or ingredient.prdlst_nm or ""
+                    # display_name이 콤마로 여러 개일 때 최대 5개까지만 표시 (팝업과 동일)
+                    if display_name and "," in display_name:
+                        display_name = ", ".join([x.strip() for x in display_name.split(",")][:5])
+                    food_type = ingredient.prdlst_dcnm or ""
                     ratio = None
+                    try:
+                        ratio = float(relation.ingredient_ratio) if relation.ingredient_ratio is not None else None
+                    except Exception:
+                        ratio = None
 
-                # 혼합제제(식품첨가물) 처리
-                if food_category == 'additive' and '혼합제제' in display_name:
-                    ingredients_info.append(f"혼합제제[{display_name}]")
-                    continue
+                    # 혼합제제(식품첨가물) 처리
+                    if food_category == 'additive' and '혼합제제' in display_name:
+                        ingredients_info.append(f"혼합제제[{display_name}]")
+                        continue
 
-                # 향료/동일 용도(영양강화제 등) 번호 붙이기
-                # 향료: "향료" 또는 "향료(00향)" 형태
-                if food_category == 'additive' and (display_name.startswith('향료') or re.match(r'^향료(\(.+\))?$', display_name)):
-                    flavor_counter[display_name] = flavor_counter.get(display_name, 0) + 1
-                    count = flavor_counter[display_name]
-                    suffix = f"{count}" if count > 1 else ""
-                    ingredients_info.append(f"향료{suffix}{display_name[2:] if display_name.startswith('향료') else ''}")
-                    continue
-                # 동일 용도(예: 영양강화제, 산화방지제 등) 번호 붙이기
-                m = re.match(r'^([가-힣]+제)(\(.+\))?$', display_name)
-                if food_category == 'additive' and m:
-                    purpose = m.group(1)
-                    purpose_counter[purpose] = purpose_counter.get(purpose, 0) + 1
-                    count = purpose_counter[purpose]
-                    suffix = f"{count}" if count > 1 else ""
-                    ingredients_info.append(f"{purpose}{suffix}{m.group(2) or ''}")
-                    continue
+                    # 향료/동일 용도(영양강화제 등) 번호 붙이기
+                    # 향료: "향료" 또는 "향료(00향)" 형태
+                    if food_category == 'additive' and (display_name.startswith('향료') or re.match(r'^향료(\(.+\))?$', display_name)):
+                        flavor_counter[display_name] = flavor_counter.get(display_name, 0) + 1
+                        count = flavor_counter[display_name]
+                        suffix = f"{count}" if count > 1 else ""
+                        ingredients_info.append(f"향료{suffix}{display_name[2:] if display_name.startswith('향료') else ''}")
+                        continue
+                    # 동일 용도(예: 영양강화제, 산화방지제 등) 번호 붙이기
+                    m = re.match(r'^([가-힣]+제)(\(.+\))?$', display_name)
+                    if food_category == 'additive' and m:
+                        purpose = m.group(1)
+                        purpose_counter[purpose] = purpose_counter.get(purpose, 0) + 1
+                        count = purpose_counter[purpose]
+                        suffix = f"{count}" if count > 1 else ""
+                        ingredients_info.append(f"{purpose}{suffix}{m.group(2) or ''}")
+                        continue
 
-                # 정제수는 식품유형만 표시(팝업과 동일)
-                if display_name == '정제수':
-                    summary_item = food_type or display_name
-                # 팝업과 동일하게: 첨가물 또는 비율 5% 이상이면 식품유형[원재료명], 그 외는 식품유형만 표시
-                elif (food_category == 'additive') or (ratio is not None and ratio >= 5):
-                    if food_type and display_name:
-                        summary_item = f"{food_type}[{display_name}]"
-                    elif food_type:
-                        summary_item = food_type
-                    else:
-                        summary_item = display_name
-                else:
-                    summary_item = food_type or display_name
-                if summary_item:
-                    ingredients_info.append(summary_item)
-                # 알레르기/GMO 수집
-                if ingredient.allergens:
-                    allergen_list = ingredient.allergens.split(',')
-                    for allergen in allergen_list:
-                        allergen = allergen.strip() if allergen else ""
-                        if not allergen:
-                            continue
-                        match = shellfish_pattern.match(allergen)
-                        if match:
-                            # 조개류(홍합,전복) 형태 처리
-                            items = [item.strip() for item in match.group(1).split(',') if item.strip()]
-                            shellfish_collected.update(items)
-                        elif '조개류' in allergen:
-                            allergens_set.add(allergen)
+                    # 정제수는 식품유형만 표시(팝업과 동일)
+                    if display_name == '정제수':
+                        summary_item = food_type or display_name
+                    # 팝업과 동일하게: 첨가물 또는 비율 5% 이상이면 식품유형[원재료명], 그 외는 식품유형만 표시
+                    elif (food_category == 'additive') or (ratio is not None and ratio >= 5):
+                        if food_type and display_name:
+                            summary_item = f"{food_type}[{display_name}]"
+                        elif food_type:
+                            summary_item = food_type
                         else:
-                            allergens_set.add(allergen)
-                if ingredient.gmo:
-                    for g in ingredient.gmo.split(','):
-                        g = g.strip() if g else ""
-                        if g:
-                            gmo_set.add(g)  # GMO를 별도 집합에 추가
-            
-            # 조개류 항목이 있으면 통합
-            if shellfish_collected:
-                shellfish_str = f"조개류({', '.join(sorted(shellfish_collected))})"
-                allergens_set.add(shellfish_str)
-            
-            # 콤마로 연결하여 원재료명(참고) 필드에 설정
-            rawmtrl_nm_str = ", ".join(ingredients_info)
-            # 알레르기/GMO 요약 추가 (각각 별도 대괄호로 분리)
-            summary_parts = []
-            if allergens_set:
-                # 문자열로 안전하게 변환
-                allergens_list = [str(allergen) for allergen in sorted(allergens_set) if allergen]
-                if allergens_list:
-                    summary_parts.append(f"[알레르기 성분: {', '.join(allergens_list)}]")
-            if gmo_set:
-                # 문자열로 안전하게 변환
-                gmo_list = [str(gmo) for gmo in sorted(gmo_set) if gmo]
-                if gmo_list:
-                    summary_parts.append(f"[GMO: {', '.join(gmo_list)}]")
-            if summary_parts:
-                rawmtrl_nm_str += f"  {' '.join(summary_parts)}"
-            label.rawmtrl_nm = rawmtrl_nm_str
-        
-        if request.method == 'POST':
-            # POST 요청 처리
-            form = LabelCreationForm(request.POST, instance=label)
-            
-            # 디버깅 로그
-            print("POST 데이터:", request.POST)
-            print("food_group:", request.POST.get('food_group'))
-            print("food_type:", request.POST.get('food_type'))
-            
-            if form.is_valid():
-                label = form.save(commit=False)  # commit=False를 올바르게 사용
-                label.user_id = request.user
+                            summary_item = display_name
+                    else:
+                        summary_item = food_type or display_name
+                    if summary_item:
+                        ingredients_info.append(summary_item)
+                    # 알레르기/GMO 수집
+                    if ingredient.allergens:
+                        allergen_list = ingredient.allergens.split(',')
+                        for allergen in allergen_list:
+                            allergen = allergen.strip() if allergen else ""
+                            if not allergen:
+                                continue
+                            match = shellfish_pattern.match(allergen)
+                            if match:
+                                # 조개류(홍합,전복) 형태 처리
+                                items = [item.strip() for item in match.group(1).split(',') if item.strip()]
+                                shellfish_collected.update(items)
+                            elif '조개류' in allergen:
+                                allergens_set.add(allergen)
+                            else:
+                                allergens_set.add(allergen)
+                    if ingredient.gmo:
+                        for g in ingredient.gmo.split(','):
+                            g = g.strip() if g else ""
+                            if g:
+                                gmo_set.add(g)  # GMO를 별도 집합에 추가
                 
-                # hidden 필드에서 식품유형 정보 가져오기
-                label.food_group = request.POST.get('food_group')
-                label.food_type = request.POST.get('food_type')
+                # 조개류 항목이 있으면 통합
+                if shellfish_collected:
+                    shellfish_str = f"조개류({', '.join(sorted(shellfish_collected))})"
+                    allergens_set.add(shellfish_str)
                 
-                # 변경 사항 저장
-                label.save()
-                messages.success(request, '표시사항이 성공적으로 수정되었습니다.')
-                return redirect('label:label_creation', label_id=label.my_label_id)
+                # 콤마로 연결하여 원재료명(참고) 필드에 설정
+                rawmtrl_nm_str = ", ".join(ingredients_info)
+                # 알레르기/GMO 요약 추가 (각각 별도 대괄호로 분리)
+                summary_parts = []
+                if allergens_set:
+                    # 문자열로 안전하게 변환
+                    allergens_list = [str(allergen) for allergen in sorted(allergens_set) if allergen]
+                    if allergens_list:
+                        summary_parts.append(f"[알레르기 성분: {', '.join(allergens_list)}]")
+                if gmo_set:
+                    # 문자열로 안전하게 변환
+                    gmo_list = [str(gmo) for gmo in sorted(gmo_set) if gmo]
+                    if gmo_list:
+                        summary_parts.append(f"[GMO: {', '.join(gmo_list)}]")
+                if summary_parts:
+                    rawmtrl_nm_str += f"  {' '.join(summary_parts)}"
+                label.rawmtrl_nm = rawmtrl_nm_str
+            
+            if request.method == 'POST':
+                # POST 요청 처리
+                form = LabelCreationForm(request.POST, instance=label)
+                
+                if form.is_valid():
+                    label = form.save(commit=False)  # commit=False를 올바르게 사용
+                    label.user_id = request.user
+                    
+                    # hidden 필드에서 식품유형 정보 가져오기
+                    label.food_group = request.POST.get('food_group')
+                    label.food_type = request.POST.get('food_type')
+                    
+                    # 변경 사항 저장
+                    label.save()
+                    messages.success(request, '표시사항이 성공적으로 수정되었습니다.')
+                    return redirect('label:label_creation', label_id=label.my_label_id)
+                else:
+                    messages.error(request, '입력 정보에 오류가 있습니다.')
             else:
-                print("폼 오류:", form.errors)
-                messages.error(request, '입력 정보에 오류가 있습니다.')
+                # GET 요청 처리
+                form = LabelCreationForm(instance=label)
         else:
-            # GET 요청 처리
-            form = LabelCreationForm(instance=label)
-    else:
-        # 새 라벨 생성
-        if request.method == 'POST':
-            # POST 요청 처리
-            form = LabelCreationForm(request.POST)
-            
-            # 디버깅 로그
-            print("POST 데이터:", request.POST)
-            print("food_group:", request.POST.get('food_group'))
-            print("food_type:", request.POST.get('food_type'))
-            
-            if form.is_valid():
-                label = form.save(commit=False)  # commit=False를 올바르게 사용
-                label.user_id = request.user
+            # 새 라벨 생성
+            if request.method == 'POST':
+                # POST 요청 처리
+                form = LabelCreationForm(request.POST)
                 
-                # hidden 필드에서 식품유형 정보 가져오기
-                label.food_group = request.POST.get('food_group')
-                label.food_type = request.POST.get('food_type')
-                
-                # 변경 사항 저장
-                label.save()
-                messages.success(request, '새 표시사항이 성공적으로 작성되었습니다.')
-                return redirect('label:label_creation', label_id=label.my_label_id)
+                if form.is_valid():
+                    label = form.save(commit=False)  # commit=False를 올바르게 사용
+                    label.user_id = request.user
+                    
+                    # hidden 필드에서 식품유형 정보 가져오기
+                    label.food_group = request.POST.get('food_group')
+                    label.food_type = request.POST.get('food_type')
+                    
+                    # 변경 사항 저장
+                    label.save()
+                    messages.success(request, '새 표시사항이 성공적으로 작성되었습니다.')
+                    return redirect('label:label_creation', label_id=label.my_label_id)
+                else:
+                    messages.error(request, '입력 정보에 오류가 있습니다.')
             else:
-                print("폼 오류:", form.errors)
-                messages.error(request, '입력 정보에 오류가 있습니다.')
-        else:
-            # GET 요청 처리
-            form = LabelCreationForm()
-    
-    # 식품유형 대분류 목록 조회
-    food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
-    
-    # 소분류 목록 필터링 (초기 로드 시)
-    current_food_group = getattr(label, 'food_group', '') if label_id else ''
-    
-    if current_food_group:
-        # 선택된 대분류가 있는 경우 해당 대분류에 속하는 소분류만 가져옴
-        food_types = FoodType.objects.filter(food_group=current_food_group).values('food_type', 'food_group').order_by('food_type')
-    else:
-        # 대분류가 선택되지 않은 경우 모든 소분류 가져옴
-        food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
+                # GET 요청 처리
+                form = LabelCreationForm()
         
-    # 자주 사용하는 문구 불러오기
-    user_phrases = MyPhrase.objects.filter(user_id=request.user, delete_YN='N').order_by('category_name', 'display_order')
+        # 식품유형 대분류 목록 조회
+        food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
+        
+        # 소분류 목록 필터링 (초기 로드 시)
+        current_food_group = getattr(label, 'food_group', '') if label_id else ''
+        
+        if current_food_group:
+            # 선택된 대분류가 있는 경우 해당 대분류에 속하는 소분류만 가져옴
+            food_types = FoodType.objects.filter(food_group=current_food_group).values('food_type', 'food_group').order_by('food_type')
+        else:
+            # 대분류가 선택되지 않은 경우 모든 소분류 가져옴
+            food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
+            
+        # 자주 사용하는 문구 불러오기
+        user_phrases = MyPhrase.objects.filter(user_id=request.user, delete_YN='N').order_by('category_name', 'display_order')
 
-    phrases_data = {}
-    for phrase in user_phrases:
-        category = phrase.category_name
-        if category not in phrases_data:
-            phrases_data[category] = []
-        phrases_data[category].append({
-            'id': phrase.my_phrase_id,
-            'name': phrase.my_phrase_name,
-            'content': phrase.comment_content,
-            'note': phrase.note or '',
-            'order': phrase.display_order
-        })
+        phrases_data = {}
+        for phrase in user_phrases:
+            category = phrase.category_name
+            if category not in phrases_data:
+                phrases_data[category] = []
+            phrases_data[category].append({
+                'id': phrase.my_phrase_id,
+                'name': phrase.my_phrase_name,
+                'content': phrase.comment_content,
+                'note': phrase.note or '',
+                'order': phrase.display_order
+            })
 
-    phrases_json = json.dumps(phrases_data, ensure_ascii=False)
+        phrases_json = json.dumps(phrases_data, ensure_ascii=False)
 
-    context = {
-        'form': form,
-        'label': label if label_id else None,
-        'food_types': food_types,
-        'food_groups': food_groups,
-        'country_list': CountryList.objects.all(),
-        'has_ingredient_relations': has_ingredient_relations,
-        'phrases_json': phrases_json,  
-        'count_ingredient_relations': count_ingredient_relations,
-        'regulations_json': json.dumps(FIELD_REGULATIONS, ensure_ascii=False)  # 추가
-    }
-    return render(request, 'label/label_creation.html', context)
+        context = {
+            'form': form,
+            'label': label if label_id else None,
+            'food_types': food_types,
+            'food_groups': food_groups,
+            'country_list': CountryList.objects.all(),
+            'has_ingredient_relations': has_ingredient_relations,
+            'phrases_json': phrases_json,  
+            'count_ingredient_relations': count_ingredient_relations,
+            'regulations_json': json.dumps(FIELD_REGULATIONS, ensure_ascii=False)  # 추가
+        }
+        return render(request, 'label/label_creation.html', context)
 
 
 @login_required
@@ -1515,6 +1543,7 @@ def get_food_group(request):
             return JsonResponse({
                 'success': True,
                 'food_group': food_group or ''
+           
             })
         except FoodType.DoesNotExist:
             return JsonResponse({
@@ -1536,6 +1565,7 @@ def food_type_settings(request):
             'success': False,
             'error': '식품유형이 제공되지 않았습니다.'
         })
+
     
     try:
         ft = FoodType.objects.filter(food_type=food_type).first()
