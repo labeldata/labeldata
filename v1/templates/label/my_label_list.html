@@ -91,7 +91,9 @@
             <tbody>
                 {% for label in page_obj %}
                 <tr data-url="{% url 'label:label_creation' label.my_label_id %}" onclick="location.href=this.dataset.url">
-                    <td class="text-center align-middle"><input type="checkbox" class="check-item" value="{{ label.my_label_id }}"></td>
+                    <td class="checkbox-cell" onclick="event.stopPropagation(); toggleCheckbox(this);">
+                        <input type="checkbox" class="check-item" value="{{ label.my_label_id }}">
+                    </td>
                     <td class="text-center align-middle">{{ forloop.counter }}</td>
                     <td class="ellipsis-cell" title="{{ label.prdlst_report_no }}">
                         {% if label.report_no_verify_YN == 'Y' %}
@@ -136,6 +138,24 @@
 }
 .table th, .table td {
     vertical-align: middle !important;
+}
+
+/* 체크박스 셀 스타일 개선 */
+.checkbox-cell {
+    cursor: pointer;
+    padding: 8px !important;
+    text-align: center;
+    vertical-align: middle;
+    position: relative;
+}
+
+.checkbox-cell input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.checkbox-cell:hover {
+    background-color: #f8f9fa;
 }
 
 /* 검색 필드 포커스 및 입력 효과 */

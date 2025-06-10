@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.querySelectorAll("tr[data-url]").forEach(row => {
     row.addEventListener("click", function (e) {
-        if (!e.target.classList.contains("check-item")) {
+        if (!e.target.classList.contains("check-item") && !e.target.closest(".checkbox-cell")) {
         window.location.href = this.dataset.url;
         }
     });
@@ -48,6 +48,14 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 });
+
+// 체크박스 셀 클릭 시 체크박스 토글 함수
+function toggleCheckbox(cell) {
+    const checkbox = cell.querySelector('.check-item');
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+    }
+}
 
 function bulkDelete() {
     const selected = getSelectedIds();
