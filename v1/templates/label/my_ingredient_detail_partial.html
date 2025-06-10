@@ -2,9 +2,13 @@
 <div class="popup-container" id="ingredient-detail-container-partial">
     <div class="panel-header">
         <h5 class="panel-title">
-            원료 수정
+            {% if mode == "create" %}
+              원료 등록
+            {% else %}
+              원료 수정
+            {% endif %}
             <button type="button" class="btn btn-outline-cancel btn-sm ms-2" id="linkedLabelsBtn">
-                연결된 표시사항(00품목) 조회
+                연결된 표시사항(0품목) 조회
             </button>
         </h5>
         <div class="panel-actions">

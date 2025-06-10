@@ -9,93 +9,100 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-<div class="container mt-4 phrase-popup">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <div class="popup-title">원료 상세 정보</div>
-        <div class="d-flex gap-2">
-            <button type="submit" form="ingredientForm" class="btn btn-outline-primary btn-sm">저장</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
-            {% if mode == 'edit' %}
-            <button type="button" class="btn btn-outline-warning btn-sm" onclick="confirmDelete()">삭제</button>
-            {% endif %}
-        </div>
-    </div>
+<div class="container mt-4">
+  <h2>
+    {% if mode == "create" %}
+      원료 등록
+    {% else %}
+      원료 수정
+    {% endif %}
+  </h2>
+  <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="popup-title">원료 상세 정보</div>
+      <div class="d-flex gap-2">
+          <button type="submit" form="ingredientForm" class="btn btn-outline-primary btn-sm">저장</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
+          {% if mode == 'edit' %}
+          <button type="button" class="btn btn-outline-warning btn-sm" onclick="confirmDelete()">삭제</button>
+          {% endif %}
+      </div>
+  </div>
 
-    <hr />
+  <hr />
 
-    <div class="preview-container">
-        <form method="post" id="ingredientForm">
-            {% csrf_token %}
-            <input type="hidden" name="my_ingredient_id" id="my_ingredient_id" value="{{ ingredient.my_ingredient_id }}">
-            <table class="nutrition-table ingredient-form-table">
-                <tbody>
-                    <tr>
-                        <th>원재료명</th>
-                        <td>
-                            <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm"
-                                   value="{{ ingredient.prdlst_nm|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>품목보고번호</th>
-                        <td>
-                            <input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no"
-                                   value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15">
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>식품유형</th>
-                        <td>
-                            <input type="text" class="form-control" name="prdlst_dcnm" id="prdlst_dcnm"
-                                   value="{{ ingredient.prdlst_dcnm|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>제조사명</th>
-                        <td>
-                            <input type="text" class="form-control" name="bssh_nm" id="bssh_nm"
-                                   value="{{ ingredient.bssh_nm|default:'' }}">
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>원재료 표시명</th>
-                        <td>
-                            <textarea class="auto-expand form-control form-control-sm"
-                                      name="ingredient_display_name"
-                                      id="ingredient_display_name"
-                                      placeholder="원재료 표시명을 입력하세요">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>알레르기</th>
-                        <td>
-                            <div class="d-flex align-items-center">
-                                <input type="text" class="form-control" name="allergens" id="allergens" value="{{ ingredient.allergens|default:'' }}" readonly>
-                                <button type="button" id="allergyToggleButton" class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleAllergySelection()">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                            <div id="allergySelection" style="display: none; margin-top: 5px;">
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th>GMO</th>
-                        <td>
-                            <div class="d-flex align-items-center">
-                                <input type="text" class="form-control" name="gmo" id="gmo" value="{{ ingredient.gmo|default:'' }}" readonly>
-                                <button type="button" id="gmoToggleButton" class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleGmoSelection()">
-                                    <i class="fas fa-plus"></i>
-                                </button>
-                            </div>
-                            <div id="gmoSelection" style="display: none; margin-top: 5px;">
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </form>
-    </div>
+  <div class="preview-container">
+      <form method="post" id="ingredientForm">
+          {% csrf_token %}
+          <input type="hidden" name="my_ingredient_id" id="my_ingredient_id" value="{{ ingredient.my_ingredient_id }}">
+          <table class="nutrition-table ingredient-form-table">
+              <tbody>
+                  <tr>
+                      <th>원재료명</th>
+                      <td>
+                          <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm"
+                                 value="{{ ingredient.prdlst_nm|default:'' }}">
+                      </td>
+                  </tr>
+                  <tr>
+                      <th>품목보고번호</th>
+                      <td>
+                          <input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no"
+                                 value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15">
+                      </td>
+                  </tr>
+                  <tr>
+                      <th>식품유형</th>
+                      <td>
+                          <input type="text" class="form-control" name="prdlst_dcnm" id="prdlst_dcnm"
+                                 value="{{ ingredient.prdlst_dcnm|default:'' }}">
+                      </td>
+                  </tr>
+                  <tr>
+                      <th>제조사명</th>
+                      <td>
+                          <input type="text" class="form-control" name="bssh_nm" id="bssh_nm"
+                                 value="{{ ingredient.bssh_nm|default:'' }}">
+                      </td>
+                  </tr>
+                  <tr>
+                      <th>원재료 표시명</th>
+                      <td>
+                          <textarea class="auto-expand form-control form-control-sm"
+                                    name="ingredient_display_name"
+                                    id="ingredient_display_name"
+                                    placeholder="원재료 표시명을 입력하세요">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
+                      </td>
+                  </tr>
+                  <tr>
+                      <th>알레르기</th>
+                      <td>
+                          <div class="d-flex align-items-center">
+                              <input type="text" class="form-control" name="allergens" id="allergens" value="{{ ingredient.allergens|default:'' }}" readonly>
+                              <button type="button" id="allergyToggleButton" class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleAllergySelection()">
+                                  <i class="fas fa-plus"></i>
+                              </button>
+                          </div>
+                          <div id="allergySelection" style="display: none; margin-top: 5px;">
+                          </div>
+                      </td>
+                  </tr>
+                  <tr>
+                      <th>GMO</th>
+                      <td>
+                          <div class="d-flex align-items-center">
+                              <input type="text" class="form-control" name="gmo" id="gmo" value="{{ ingredient.gmo|default:'' }}" readonly>
+                              <button type="button" id="gmoToggleButton" class="btn btn-outline-secondary btn-sm ms-2" onclick="toggleGmoSelection()">
+                                  <i class="fas fa-plus"></i>
+                              </button>
+                          </div>
+                          <div id="gmoSelection" style="display: none; margin-top: 5px;">
+                          </div>
+                      </td>
+                  </tr>
+              </tbody>
+          </table>
+      </form>
+  </div>
 </div>
 
 <script src="{% static 'js/label/my_ingredient_options.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
