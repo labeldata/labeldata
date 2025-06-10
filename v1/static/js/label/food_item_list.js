@@ -1,3 +1,31 @@
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInputs = document.querySelectorAll('.form-control');
+    
+    // 초기 로드 시 입력값이 있는 필드에 클래스 추가
+    searchInputs.forEach(function(input) {
+        checkInputValue(input);
+    });
+    
+    // 입력 이벤트 리스너 추가
+    searchInputs.forEach(function(input) {
+        input.addEventListener('input', function() {
+            checkInputValue(this);
+        });
+        
+        input.addEventListener('change', function() {
+            checkInputValue(this);
+        });
+    });
+    
+    function checkInputValue(input) {
+        if (input.value.trim() !== '') {
+            input.classList.add('has-value');
+        } else {
+            input.classList.remove('has-value');
+        }
+    }
+});
+
 function openDetailPopup(reportNo) {
     if (!reportNo) {
         alert("유효한 품목보고번호가 없습니다.");
