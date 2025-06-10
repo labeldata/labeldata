@@ -88,6 +88,16 @@
     </div>
   </div>
 </form>
+
+<!-- 검색 결과 건수 표시 영역: 항상 공간 확보, 투명도 조절 -->
+<div class="mb-2" style="min-height:1.7em;">
+  {% if search_result_count is not None %}
+    <span class="text-primary fw-bold">{{ search_result_count }}</span>건 검색되었습니다.
+  {% else %}
+    <span style="opacity:0;">0건 검색되었습니다.</span>
+  {% endif %}
+</div>
+
 <script>
   // 검색조건 입력값을 localStorage에 저장/복원 (검색 버튼 클릭 시)
   document.addEventListener('DOMContentLoaded', function() {

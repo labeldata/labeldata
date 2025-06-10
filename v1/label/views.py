@@ -121,6 +121,7 @@ def food_item_list(request):
                 imported_search_values[query_param] = value
         # 단일 컬럼 정렬 적용
         imported_items = ImportedFood.objects.filter(imported_conditions).order_by(sort_field)
+        total_count = imported_items.count()
         paginator, page_obj, page_range = paginate_queryset(imported_items, page_number, items_per_page)
         search_values = imported_search_values
     else:
@@ -131,10 +132,15 @@ def food_item_list(request):
         search_conditions, search_values = get_search_conditions(request, search_fields)
         # 단일 컬럼 정렬 적용
         food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
+        total_count = food_items.count()
         paginator, page_obj, page_range = paginate_queryset(food_items, page_number, items_per_page)
 
     querystring_without_page = get_querystring_without(request, ["page"])
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
+
+    # 검색 조건이 있는지 확인
+    has_search_conditions = any(search_values.values())
+    search_result_count = total_count if has_search_conditions else None
 
     context = {
         "page_obj": page_obj,
@@ -149,10 +155,10 @@ def food_item_list(request):
         "querystring_without_sort": querystring_without_sort,
         "imported_mode": imported_mode if food_category == "imported" else False,
         "imported_items": page_obj if food_category == "imported" else [],
+        "search_result_count": search_result_count,  # 검색 결과 건수 추가
     }
 
     return render(request, "label/food_item_list.html", context)
-
 
 @login_required
 def my_label_list(request):
@@ -194,8 +200,13 @@ def my_label_list(request):
     else:
         labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by("-create_datetime", "my_label_name")
 
+    total_count = labels.count()
     paginator, page_obj, page_range = paginate_queryset(labels, page_number, items_per_page)
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
+
+    # 검색 조건이 있는지 확인
+    has_search_conditions = any(search_values.values()) or prdlst_report_status
+    search_result_count = total_count if has_search_conditions else None
 
     context = {
         "page_obj": page_obj,
@@ -215,12 +226,12 @@ def my_label_list(request):
         "sort_field": sort_field,
         "sort_order": sort_order,
         "querystring_without_sort": querystring_without_sort,
-        "ingredient_id": ingredient_id,  # 템플릿에서 안내문구 표시용
-        "ingredient_name": ingredient_name,  # 템플릿에서 원재료명 표시용
+        "ingredient_id": ingredient_id,
+        "ingredient_name": ingredient_name,
+        "search_result_count": search_result_count,  # 검색 결과 건수 추가
     }
 
     return render(request, "label/my_label_list.html", context)
-
 
 @login_required
 def food_item_detail(request, prdlst_report_no):
@@ -921,12 +932,17 @@ def my_ingredient_list_combined(request):
         my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
         label_name = None
 
+    total_count = my_ingredients.count()
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
     querystring_without_page = get_querystring_without(request, ['page'])
     querydict_sort = request.GET.copy()
     querydict_sort.pop('sort', None)
     querydict_sort.pop('order', None)
     querystring_without_sort = querydict_sort.urlencode()
+
+    # 검색 조건이 있는지 확인
+    has_search_conditions = any(search_values.values()) or food_category
+    search_result_count = total_count if has_search_conditions else None
 
     context = {
         'page_obj': page_obj,
@@ -946,8 +962,9 @@ def my_ingredient_list_combined(request):
         'sort_order': sort_order,
         'querystring_without_page': querystring_without_page,
         'querystring_without_sort': querystring_without_sort,
-        'label_id': label_id,  # 현재 연결된 라벨 ID(있으면 전달)
-        'label_name': label_name,  # 라벨명(있으면 전달)
+        'label_id': label_id,
+        'label_name': label_name,
+        'search_result_count': search_result_count,  # 검색 결과 건수 추가
     }
     return render(request, 'label/my_ingredient_list_combined.html', context)
 
