@@ -394,6 +394,7 @@ def label_creation(request, label_id=None):
             # 원재료명 정보를 생성 (순서대로)
             ingredients_info = []
             allergens_set = set()
+            gmo_set = set()
             shellfish_collected = set()
             shellfish_pattern = re.compile(r'^조개류\(([^)]+)\)$')  # 조개류 패턴 정규식
 
@@ -473,7 +474,7 @@ def label_creation(request, label_id=None):
                     for g in ingredient.gmo.split(','):
                         g = g.strip() if g else ""
                         if g:
-                            allergens_set.add(g)  # GMO를 알레르기 집합에 추가 (필요 시 분리)
+                            gmo_set.add(g)  # GMO를 별도 집합에 추가
             
             # 조개류 항목이 있으면 통합
             if shellfish_collected:
@@ -482,15 +483,20 @@ def label_creation(request, label_id=None):
             
             # 콤마로 연결하여 원재료명(참고) 필드에 설정
             rawmtrl_nm_str = ", ".join(ingredients_info)
-            # 알레르기/GMO 요약 추가
+            # 알레르기/GMO 요약 추가 (각각 별도 대괄호로 분리)
             summary_parts = []
             if allergens_set:
                 # 문자열로 안전하게 변환
                 allergens_list = [str(allergen) for allergen in sorted(allergens_set) if allergen]
                 if allergens_list:
-                    summary_parts.append(f"알레르기 성분: {', '.join(allergens_list)}")
+                    summary_parts.append(f"[알레르기 성분: {', '.join(allergens_list)}]")
+            if gmo_set:
+                # 문자열로 안전하게 변환
+                gmo_list = [str(gmo) for gmo in sorted(gmo_set) if gmo]
+                if gmo_list:
+                    summary_parts.append(f"[GMO: {', '.join(gmo_list)}]")
             if summary_parts:
-                rawmtrl_nm_str += f"  [{' / '.join(summary_parts)}]"
+                rawmtrl_nm_str += f"  {' '.join(summary_parts)}"
             label.rawmtrl_nm = rawmtrl_nm_str
         
         if request.method == 'POST':
