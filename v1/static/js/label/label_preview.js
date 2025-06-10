@@ -607,31 +607,64 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     if (field === 'rawmtrl_nm_display') {
                         const allergenMatch = value.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/);
-                        const gmoMatch = value.match(/\[GMO\s*성분\s*:[^\]]+\]/);
+                        const gmoMatch = value.match(/\[GMO\s*성분\s*:\s*([^\]]+)\]/);
                         const container = document.createElement('div');
                         container.style.position = 'relative';
                         container.style.width = '100%';
+
                         let mainText = value
                             .replace(/\[알레르기 성분\s*:[^\]]+\]/, '')
                             .replace(/\[GMO\s*성분\s*:[^\]]+\]/, '')
                             .trim();
+
+                        if (!mainText) {
+                            mainText = '원재료 정보 없음';
+                        }
+
                         const mainDiv = document.createElement('div');
-                        mainDiv.textContent = mainText;
+                        mainDiv.innerHTML = mainText
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;'); // HTML 태그 이스케이프
                         container.appendChild(mainDiv);
+
                         if (allergenMatch) {
                             const allergens = allergenMatch[1].trim();
                             const allergenDiv = document.createElement('div');
                             allergenDiv.textContent = `${allergens} 함유`;
-                            allergenDiv.className = 'allergen-text';
+                            allergenDiv.style.cssText = `
+                                margin-top: 8px;
+                                text-align: right;
+                                background-color: black;
+                                color: white;
+                                padding: 4px 8px;
+                                display: inline-block;
+                                margin-left: auto;
+                                font-size: 0.9em;
+                                float: right;
+                                clear: both;
+                            `;
                             container.appendChild(allergenDiv);
                         }
+
                         if (gmoMatch) {
-                            const gmo = gmoMatch[0].trim();
+                            const gmo = gmoMatch[1].trim();
                             const gmoDiv = document.createElement('div');
-                            gmoDiv.textContent = gmo;
-                            gmoDiv.className = 'allergen-text';
+                            gmoDiv.textContent = `${gmo}(GMO)`;
+                            gmoDiv.style.cssText = `
+                                margin-top: 8px;
+                                text-align: right;
+                                background-color: black;
+                                color: white;
+                                padding: 4px 8px;
+                                display: inline-block;
+                                margin-left: auto;
+                                font-size: 0.9em;
+                                float: right;
+                                clear: both;
+                            `;
                             container.appendChild(gmoDiv);
                         }
+
                         td.appendChild(container);
                     } else if (field === 'country_of_origin') {
                         const select = window.opener?.document.querySelector('select[name="country_of_origin"]');
