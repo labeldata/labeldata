@@ -255,6 +255,103 @@ function bindIngredientRowClickEvents() {
     });
 }
 
+// 페이지네이션 정보 업데이트 함수 개선
+window.updatePaginationInfo = function(currentPage, totalPages, itemCount, totalItems) {
+    // 현재 페이지 정보 업데이트
+    const currentPageElements = document.querySelectorAll('.pagination .page-item.active .page-link');
+    currentPageElements.forEach(el => {
+        el.textContent = currentPage;
+    });
+    
+    // 페이지 번호 버튼들 업데이트
+    const pagination = document.querySelector('.pagination');
+    if (pagination) {
+        // 기존 페이지 번호 버튼들 제거 (이전/다음 버튼 제외)
+        const pageItems = pagination.querySelectorAll('.page-item:not(.page-prev):not(.page-next)');
+        pageItems.forEach(item => {
+            if (!item.classList.contains('page-prev') && !item.classList.contains('page-next')) {
+                item.remove();
+            }
+        });
+        
+        // 새로운 페이지 번호 버튼들 생성
+        const prevButton = pagination.querySelector('.page-prev');
+        const nextButton = pagination.querySelector('.page-next');
+        
+        // 페이지 범위 계산
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const pageItem = document.createElement('li');
+            pageItem.className = `page-item ${i === currentPage ? 'active' : ''}`;
+            
+            const pageLink = document.createElement('a');
+            pageLink.className = 'page-link';
+            pageLink.href = '#';
+            pageLink.textContent = i;
+            pageLink.onclick = function(e) {
+                e.preventDefault();
+                goToPage(i);
+            };
+            
+            pageItem.appendChild(pageLink);
+            
+            if (nextButton) {
+                pagination.insertBefore(pageItem, nextButton);
+            } else {
+                pagination.appendChild(pageItem);
+            }
+        }
+        
+        // 이전/다음 버튼 상태 업데이트
+        if (prevButton) {
+            prevButton.classList.toggle('disabled', currentPage <= 1);
+        }
+        if (nextButton) {
+            nextButton.classList.toggle('disabled', currentPage >= totalPages);
+        }
+    }
+    
+    // 페이지 정보 텍스트 업데이트
+    const pageInfo = document.querySelector('.page-info');
+    if (pageInfo && totalItems !== undefined) {
+        const startItem = ((currentPage - 1) * itemCount) + 1;
+        const endItem = Math.min(currentPage * itemCount, totalItems);
+        pageInfo.textContent = `${startItem}-${endItem} / ${totalItems}개`;
+    }
+};
+
+// 페이지 이동 함수
+function goToPage(pageNumber) {
+    const currentUrl = new URL(window.location);
+    currentUrl.searchParams.set('page', pageNumber);
+    
+    // AJAX로 페이지 이동
+    fetch(`/label/my-ingredient-table-partial/${currentUrl.search}`)
+        .then(res => res.text())
+        .then(tableHtml => {
+            const tbody = document.querySelector('#ingredientTable tbody');
+            if (tbody) {
+                tbody.innerHTML = tableHtml;
+                
+                // 클릭 이벤트 재바인딩
+                if (typeof window.bindIngredientRowClickEvents === 'function') {
+                    window.bindIngredientRowClickEvents();
+                }
+                
+                // 페이지네이션 정보 업데이트
+                updatePaginationFromServer(currentUrl.search);
+                
+                // URL 업데이트 (브라우저 히스토리에 추가하지 않음)
+                window.history.replaceState({}, '', currentUrl.toString());
+            }
+        })
+        .catch(error => {
+            console.error('Error loading page:', error);
+        });
+}
+
 // my_ingredient_detail_partial.html에서 사용할 수 있도록 전역에 노출
 window.loadNewIngredientForm = loadNewIngredientForm;
 window.bindIngredientRowClickEvents = bindIngredientRowClickEvents;

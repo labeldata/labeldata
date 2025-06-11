@@ -67,4 +67,6 @@ urlpatterns = [
 
     # 추가된 URL 패턴
     path('phrases-data/', views.phrases_data_api, name='phrases_data'),
+    path('my-ingredient-calculate-page/', views.my_ingredient_calculate_page, name='my_ingredient_calculate_page'),
+    path('my-ingredient-pagination-info/', views.my_ingredient_pagination_info, name='my_ingredient_pagination_info'),
 ]

@@ -155,7 +155,7 @@ function saveMyIngredient() {
     });
 }
 
-// doSaveMyIngredient에 콜백 추가
+// doSaveMyIngredient 함수 수정
 function doSaveMyIngredient(url, formData, queryString, doneCallback) {
     fetch(url, {
         method: 'POST',
@@ -176,36 +176,122 @@ function doSaveMyIngredient(url, formData, queryString, doneCallback) {
     })
     .then(data => {
         if (data.success) {
-            // 왼쪽 리스트 갱신 및 신규 원료 상세 표시 (검색 조건 유지)
-            fetch('/label/my-ingredient-table-partial/' + queryString)
-                .then(res => res.text())
-                .then(tableHtml => {
-                    const tbody = document.querySelector('#ingredientTable tbody');
-                    if (tbody) {
-                        tbody.innerHTML = tableHtml;
-                        // 리스트 갱신 후 클릭 이벤트 재바인딩
-                        if (typeof window.bindIngredientRowClickEvents === 'function') {
-                            window.bindIngredientRowClickEvents();
-                        }
-                        if (data.ingredient_id) {
-                            const newRow = document.querySelector(`.ingredient-row[data-ingredient-id='${data.ingredient_id}']`);
-                            if (newRow) {
-                                loadIngredientDetail(data.ingredient_id, newRow);
-                            }
-                        }
-                    }
+            // 신규 등록된 원료의 페이지 계산 및 이동
+            if (data.ingredient_id && !document.getElementById('my_ingredient_id').value) {
+                // 신규 등록의 경우 해당 원료가 있는 페이지 계산
+                calculateIngredientPage(data.ingredient_id, queryString, function(targetPage) {
+                    const urlParams = new URLSearchParams(queryString.replace('?', ''));
+                    urlParams.set('page', targetPage);
+                    const finalQueryString = '?' + urlParams.toString();
+                    
+                    // 해당 페이지로 리스트 갱신
+                    updateIngredientListAndSelect(finalQueryString, data.ingredient_id);
                 });
+            } else {
+                // 수정의 경우 현재 페이지에서 리스트 갱신
+                updateIngredientListAndSelect(queryString, data.ingredient_id);
+            }
+            
             // 저장 성공 후 변경 감지 플래그 해제
             if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
         } else {
             alert(data.error || '저장에 실패했습니다.');
         }
-    })    .catch(error => {
+    })
+    .catch(error => {
         console.error('Error:', error);
         alert('저장 중 오류가 발생했습니다.');
     })
     .finally(() => {
         if (typeof doneCallback === 'function') doneCallback();
+    });
+}
+
+// 신규 등록된 원료의 페이지 위치 계산
+function calculateIngredientPage(ingredientId, queryString, callback) {
+    // 현재 검색 조건으로 전체 리스트를 가져와서 해당 원료의 위치 계산
+    const searchParams = new URLSearchParams(queryString.replace('?', ''));
+    searchParams.delete('page'); // 페이지 파라미터 제거
+    const searchQueryString = searchParams.toString();
+    
+    fetch(`/label/my-ingredient-calculate-page/?ingredient_id=${ingredientId}&${searchQueryString}`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            callback(data.page || 1);
+        } else {
+            callback(1); // 오류 시 첫 번째 페이지로
+        }
+    })
+    .catch(error => {
+        console.error('Error calculating page:', error);
+        callback(1); // 오류 시 첫 번째 페이지로
+    });
+}
+
+// 리스트 갱신 및 원료 선택
+function updateIngredientListAndSelect(queryString, ingredientId) {
+    fetch('/label/my-ingredient-table-partial/' + queryString)
+        .then(res => res.text())
+        .then(tableHtml => {
+            const tbody = document.querySelector('#ingredientTable tbody');
+            if (tbody) {
+                tbody.innerHTML = tableHtml;
+                
+                // 리스트 갱신 후 클릭 이벤트 재바인딩
+                if (typeof window.bindIngredientRowClickEvents === 'function') {
+                    window.bindIngredientRowClickEvents();
+                }
+                
+                // 신규 등록된 원료 선택
+                if (ingredientId) {
+                    const targetRow = document.querySelector(`.ingredient-row[data-ingredient-id='${ingredientId}']`);
+                    if (targetRow) {
+                        loadIngredientDetail(ingredientId, targetRow);
+                    } else {
+                        // 해당 행이 없으면 첫 번째 행 선택
+                        const firstRow = document.querySelector('.ingredient-row');
+                        if (firstRow) {
+                            const firstIngredientId = firstRow.getAttribute('data-ingredient-id');
+                            loadIngredientDetail(firstIngredientId, firstRow);
+                        }
+                    }
+                }
+                
+                // 페이지네이션 정보 업데이트
+                if (typeof window.updatePaginationInfo === 'function') {
+                    const currentPageMatch = queryString.match(/page=(\d+)/);
+                    const currentPage = currentPageMatch ? parseInt(currentPageMatch[1]) : 1;
+                    // 페이지네이션 정보는 서버에서 전달받아야 함
+                    updatePaginationFromServer(queryString);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error updating ingredient list:', error);
+        });
+}
+
+// 서버에서 페이지네이션 정보 가져오기
+function updatePaginationFromServer(queryString) {
+    fetch(`/label/my-ingredient-pagination-info/${queryString}`, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && typeof window.updatePaginationInfo === 'function') {
+            window.updatePaginationInfo(data.current_page, data.total_pages, data.item_count);
+        }
+    })
+    .catch(error => {
+        console.error('Error updating pagination info:', error);
     });
 }
 

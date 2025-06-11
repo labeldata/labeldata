@@ -2158,3 +2158,106 @@ def phrases_data_api(request):
             'is_custom': True
         })
     return JsonResponse({'success': True, 'phrases': phrases_data})
+
+@login_required
+def my_ingredient_calculate_page(request):
+    """신규 등록된 원료의 페이지 위치 계산"""
+    ingredient_id = request.GET.get('ingredient_id')
+    if not ingredient_id:
+        return JsonResponse({'success': False, 'error': '원료 ID가 필요합니다.'})
+    
+    try:
+        # 검색 조건 가져오기
+        search_fields = {
+            'prdlst_nm': 'prdlst_nm',
+            'prdlst_report_no': 'prdlst_report_no',
+            'prdlst_dcnm': 'prdlst_dcnm',
+            'bssh_nm': 'bssh_nm',
+            'ingredient_display_name': 'ingredient_display_name',
+        }
+        search_conditions, search_values = get_search_conditions(request, search_fields)
+        search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
+
+        # 식품구분(카테고리) 검색 지원
+        food_category = request.GET.get('food_category', '').strip()
+        if food_category:
+            search_conditions &= Q(food_category=food_category)
+
+        # 알레르기, GMO 검색조건 추가
+        allergens = request.GET.get('allergens', '').strip()
+        if allergens:
+            search_conditions &= Q(allergens__icontains=allergens)
+        gmo = request.GET.get('gmo', '').strip()
+        if gmo:
+            search_conditions &= Q(gmo__icontains=gmo)
+        
+        items_per_page = int(request.GET.get('items_per_page', 10))
+        
+        # 전체 원료 리스트에서 해당 원료의 위치 찾기
+        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
+        
+        # 해당 원료의 인덱스 찾기
+        ingredient_index = None
+        for index, ingredient in enumerate(my_ingredients):
+            if str(ingredient.my_ingredient_id) == str(ingredient_id):
+                ingredient_index = index
+                break
+        
+        if ingredient_index is not None:
+            # 페이지 계산 (0부터 시작하는 인덱스를 1부터 시작하는 페이지로 변환)
+            target_page = (ingredient_index // items_per_page) + 1
+            return JsonResponse({
+                'success': True, 
+                'page': target_page,
+                'index': ingredient_index,
+                'total_items': my_ingredients.count()
+            })
+        else:
+            return JsonResponse({'success': False, 'error': '해당 원료를 찾을 수 없습니다.'})
+            
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+def my_ingredient_pagination_info(request):
+    """페이지네이션 정보 반환"""
+    try:
+        search_fields = {
+            'prdlst_nm': 'prdlst_nm',
+            'prdlst_report_no': 'prdlst_report_no',
+            'prdlst_dcnm': 'prdlst_dcnm',
+            'bssh_nm': 'bssh_nm',
+            'ingredient_display_name': 'ingredient_display_name',
+        }
+        search_conditions, search_values = get_search_conditions(request, search_fields)
+        search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
+
+        # 식품구분(카테고리) 검색 지원
+        food_category = request.GET.get('food_category', '').strip()
+        if food_category:
+            search_conditions &= Q(food_category=food_category)
+
+        # 알레르기, GMO 검색조건 추가
+        allergens = request.GET.get('allergens', '').strip()
+        if allergens:
+            search_conditions &= Q(allergens__icontains=allergens)
+        gmo = request.GET.get('gmo', '').strip()
+        if gmo:
+            search_conditions &= Q(gmo__icontains=gmo)
+        
+        items_per_page = int(request.GET.get('items_per_page', 10))
+        page_number = request.GET.get('page', 1)
+        
+        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
+        paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
+        
+        return JsonResponse({
+            'success': True,
+            'current_page': page_obj.number,
+            'total_pages': paginator.num_pages,
+            'item_count': len(page_obj.object_list),
+            'total_items': paginator.count
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
