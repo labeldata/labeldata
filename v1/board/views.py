@@ -121,7 +121,6 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
     model = Board
     form_class = BoardForm
     template_name = 'board/form.html'
-    success_url = reverse_lazy('board:list')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -136,21 +135,22 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
         if not self.request.user.is_staff:
             form.instance.is_notice = False
             form.instance.attachment = None
-            form.instance.image = None  # 이미지도 None 처리
+            form.instance.image = None
         
         # 공지사항 권한 검증
         if form.instance.is_notice and not self.request.user.is_staff:
             messages.error(self.request, '공지사항은 관리자만 작성할 수 있습니다.')
             return self.form_invalid(form)
         
-        messages.success(self.request, '게시글이 등록되었습니다.')
         return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('board:detail', kwargs={'pk': self.object.pk})
 
 class BoardUpdateView(LoginRequiredMixin, UpdateView):
     model = Board
     form_class = BoardForm
     template_name = 'board/form.html'
-    success_url = reverse_lazy('board:list')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -177,10 +177,10 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
         
         # 일반 유저의 경우 첨부파일/이미지 수정 방지
         if not self.request.user.is_staff:
-            # 기존 첨부파일/이미지 유지
             original = self.get_object()
             form.instance.attachment = original.attachment
-            form.instance.image = original.image  # 이미지도 기존 값 유지
+            form.instance.image = original.image
+        
         # 첨부파일/이미지 삭제 처리 (관리자만)
         if self.request.user.is_staff:
             if form.cleaned_data.get('delete_attachment'):
@@ -192,8 +192,10 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
                     form.instance.image.delete(save=False)
                 form.instance.image = None
         
-        messages.success(self.request, '게시글이 수정되었습니다.')
         return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse_lazy('board:detail', kwargs={'pk': self.object.pk})
 
 class BoardDeleteView(LoginRequiredMixin, DeleteView):
     model = Board
