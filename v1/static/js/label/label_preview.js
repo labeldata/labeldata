@@ -590,6 +590,42 @@ document.addEventListener('DOMContentLoaded', function () {
     // 필드 데이터 저장소
     let checkedFields = {};
 
+    // 국가명 볼드 처리 함수
+    function boldCountryNames(text, countryList) {
+        if (!text || !countryList) return text;
+        
+        let processedText = text;
+        
+        // 국가명 목록을 길이 순으로 정렬 (긴 이름부터 처리하여 중복 매칭 방지)
+        const sortedCountries = countryList.sort((a, b) => b.length - a.length);
+        
+        sortedCountries.forEach(country => {
+            if (!country) return;
+            
+            // 국가명을 정확히 매칭하는 정규식 (단어 경계 고려)
+            const regex = new RegExp(`(${country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            processedText = processedText.replace(regex, '<strong>$1</strong>');
+        });
+        
+        return processedText;
+    }
+
+    // 국가명 목록 초기화 (페이지 로드 시) - 먼저 선언
+    let countryList = [];
+    const countryListScript = document.getElementById('country-list-data');
+    if (countryListScript) {
+        try {
+            const countryListText = countryListScript.textContent;
+            console.log("Country list raw data:", countryListText); // 디버깅용
+            countryList = JSON.parse(countryListText);
+            console.log("Country list parsed:", countryList); // 디버깅용
+        } catch (e) {
+            console.error('국가명 목록 파싱 오류:', e);
+            console.error('Raw content:', countryListScript.textContent);
+            countryList = [];
+        }
+    }
+
     // 입력 데이터 반영 (테스트용)
     window.addEventListener('message', function(e) {
         if (e.data?.type === 'previewCheckedFields' && e.data.checked) {
@@ -609,8 +645,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         const allergenMatch = value.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/);
                         const gmoMatch = value.match(/\[GMO\s*성분\s*:\s*([^\]]+)\]/);
                         const container = document.createElement('div');
-                        container.style.position = 'relative';
-                        container.style.width = '100%';
+                        container.style.cssText = `
+                            position: relative;
+                            width: 100%;
+                            overflow: hidden;
+                        `;
 
                         let mainText = value
                             .replace(/\[알레르기 성분\s*:[^\]]+\]/, '')
@@ -621,61 +660,87 @@ document.addEventListener('DOMContentLoaded', function () {
                             mainText = '원재료 정보 없음';
                         }
 
+                        // 국가명 볼드 처리 적용
+                        const processedText = boldCountryNames(mainText, countryList);
+
                         const mainDiv = document.createElement('div');
-                        mainDiv.innerHTML = mainText
+                        mainDiv.innerHTML = processedText
                             .replace(/</g, '&lt;')
-                            .replace(/>/g, '&gt;'); // HTML 태그 이스케이프
+                            .replace(/>/g, '&gt;')
+                            .replace(/&lt;strong&gt;/g, '<strong>')
+                            .replace(/&lt;\/strong&gt;/g, '</strong>');
+                        mainDiv.style.cssText = `
+                            margin-bottom: 8px;
+                            word-break: break-all;
+                        `;
                         container.appendChild(mainDiv);
 
+                        // 알레르기 성분 표시
                         if (allergenMatch) {
                             const allergens = allergenMatch[1].trim();
                             const allergenDiv = document.createElement('div');
                             allergenDiv.textContent = `${allergens} 함유`;
                             allergenDiv.style.cssText = `
-                                margin-top: 8px;
-                                text-align: right;
-                                background-color: black;
-                                color: white;
+                                background-color: #000 !important;
+                                color: #fff !important;
                                 padding: 4px 8px;
+                                font-size: 9pt;
+                                font-weight: bold;
+                                text-align: center;
+                                margin-top: 8px;
                                 display: inline-block;
-                                margin-left: auto;
-                                font-size: 0.9em;
                                 float: right;
                                 clear: both;
+                                border-radius: 2px;
                             `;
                             container.appendChild(allergenDiv);
                         }
 
+                        // GMO 성분 표시
                         if (gmoMatch) {
                             const gmo = gmoMatch[1].trim();
                             const gmoDiv = document.createElement('div');
                             gmoDiv.textContent = `${gmo}(GMO)`;
                             gmoDiv.style.cssText = `
-                                margin-top: 8px;
-                                text-align: right;
-                                background-color: black;
-                                color: white;
+                                background-color: #000 !important;
+                                color: #fff !important;
                                 padding: 4px 8px;
+                                font-size: 9pt;
+                                font-weight: bold;
+                                text-align: center;
+                                margin-top: 8px;
                                 display: inline-block;
-                                margin-left: auto;
-                                font-size: 0.9em;
                                 float: right;
                                 clear: both;
+                                border-radius: 2px;
                             `;
                             container.appendChild(gmoDiv);
                         }
+
+                        // 플로트 클리어를 위한 클리어픽스
+                        const clearDiv = document.createElement('div');
+                        clearDiv.style.cssText = 'clear: both;';
+                        container.appendChild(clearDiv);
 
                         td.appendChild(container);
                     } else if (field === 'country_of_origin') {
                         const select = window.opener?.document.querySelector('select[name="country_of_origin"]');
                         if (select) {
                             const selectedOption = select.options[select.selectedIndex];
-                            td.textContent = selectedOption ? selectedOption.text : value;
+                            let displayText = selectedOption ? selectedOption.text : value;
+                            // 원산지 필드에도 국가명 볼드 처리 적용
+                            displayText = boldCountryNames(displayText, countryList);
+                            td.innerHTML = displayText;
+                        } else {
+                            td.innerHTML = boldCountryNames(value, countryList);
+                        }
+                    } else {
+                        // 다른 필드들도 국가명이 포함된 경우 볼드 처리
+                        if (typeof value === 'string') {
+                            td.innerHTML = boldCountryNames(value, countryList);
                         } else {
                             td.textContent = value;
                         }
-                    } else {
-                        td.textContent = value;
                     }
                     tr.appendChild(th);
                     tr.appendChild(td);
@@ -1402,6 +1467,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (value < 5) return 0;
             return Math.round(value / 5) * 5;
         }
+       
+
         if (type === 'mg') {
             if (value < 5) return 0;
             if (value <= 140) return Math.round(value / 5) * 5;

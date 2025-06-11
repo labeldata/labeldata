@@ -1906,13 +1906,19 @@ def preview_popup(request):
             }
         }
 
+        # 국가명 목록 추가 - 안전한 JSON 변환
+        country_list = list(CountryList.objects.all().values_list('country_name_ko', flat=True))
+        # None 값 제거 및 빈 문자열 제거
+        country_list = [country for country in country_list if country and country.strip()]
+        
         context = {
             'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
             'nutrition_items': nutrition_items,
             'allergens': list(set(allergens)),  # 중복 제거
             'origins': list(set(origins)),       # 중복 제거
-            'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False)
+            'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
+            'country_list': json.dumps(country_list, ensure_ascii=False)  # JSON 직렬화
         }
         
         return render(request, 'label/label_preview.html', context)
