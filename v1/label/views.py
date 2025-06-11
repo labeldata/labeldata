@@ -411,7 +411,7 @@ def label_creation(request, label_id=None):
                 label.report_no_verify_YN = 'N'
 
             label.save()
-            messages.success(request, f'표시사항이 성공적으로 저장되었습니다. (라벨명: {label.my_label_name})')
+            # 모든 메시지 제거
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
             messages.error(request, '입력 정보에 오류가 있습니다.')
@@ -553,7 +553,7 @@ def label_creation(request, label_id=None):
                     
                     # 변경 사항 저장
                     label.save()
-                    messages.success(request, '표시사항이 성공적으로 수정되었습니다.')
+                    # 메시지 제거
                     return redirect('label:label_creation', label_id=label.my_label_id)
                 else:
                     messages.error(request, '입력 정보에 오류가 있습니다.')
@@ -576,7 +576,7 @@ def label_creation(request, label_id=None):
                     
                     # 변경 사항 저장
                     label.save()
-                    messages.success(request, '새 표시사항이 성공적으로 작성되었습니다.')
+                    # 메시지 제거
                     return redirect('label:label_creation', label_id=label.my_label_id)
                 else:
                     messages.error(request, '입력 정보에 오류가 있습니다.')
@@ -803,6 +803,7 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
             ingredient_display_name=ingredient_display_name,
             delete_YN="N"
         )
+        # 메시지 제거 - JSON 응답만 반환
         return JsonResponse({"success": True, "message": "내 원료로 저장되었습니다."})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
@@ -1047,7 +1048,7 @@ def my_ingredient_detail(request, ingredient_id=None):
                     'message': '내 원료가 성공적으로 저장되었습니다.',
                     'ingredient_id': new_ingredient.my_ingredient_id
                 })
-            messages.success(request, '저장되었습니다.')
+            # 메시지 제거
             return redirect('label:my_ingredient_detail', ingredient_id=new_ingredient.my_ingredient_id)
         else:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -1174,6 +1175,7 @@ def save_ingredients_to_label(request, label_id):
             label.country_of_origin = ', '.join(origin_targets)
             
         label.save()
+        # 메시지 제거 - JSON 응답만 반환
         return JsonResponse({'success': True, 'message': '저장되었습니다.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -1346,6 +1348,7 @@ def register_my_ingredient(request):
             bssh_nm=data.get('manufacturer', ''),
             delete_YN='N'
         )
+        # 메시지 제거 - JSON 응답만 반환
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -1568,7 +1571,7 @@ def food_type_settings(request):
 
     
     try:
-        ft = FoodType.objects.filter(food_type=food_type).first()
+        ft = FoodType.objectsfilter(food_type=food_type).first()
         
         if not ft:
             return JsonResponse({
@@ -1639,12 +1642,12 @@ def manage_phrases(request):
             new_phrase = MyPhrase.objects.create(
                 user_id=request.user,
                 my_phrase_name=data.get('my_phrase_name'),
-               
                 category_name=category_name,
                 comment_content=data.get('comment_content'),
                 note=data.get('note', ''),
                 delete_YN='N'
             )
+            # 메시지 제거 - JSON 응답만 반환
             return JsonResponse({
                 'success': True,
                 'message': '문구가 저장되었습니다.',
@@ -1667,6 +1670,7 @@ def manage_phrases(request):
                 phrase.note = change.get('note', phrase.note)
                 phrase.category_name = category_name
                 phrase.save()
+            # 메시지 제거 - JSON 응답만 반환
             return JsonResponse({'success': True})
 
         elif action == 'delete':
@@ -1678,6 +1682,7 @@ def manage_phrases(request):
             phrase.delete_YN = 'Y'
             phrase.delete_datetime = timezone.now().strftime('%Y%m%d')
             phrase.save()
+            # 메시지 제거 - JSON 응답만 반환
             return JsonResponse({'success': True})
 
         else:
