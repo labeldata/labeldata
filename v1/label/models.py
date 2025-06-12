@@ -381,7 +381,7 @@ class ImportedFood(models.Model):
     prduct_nm = models.TextField(verbose_name="제품명(영문)", null=True, blank=True)
     expirde_dtm = models.CharField(max_length=50, verbose_name="유통기한", db_index=True, help_text="yyyymmdd", null=True, blank=True)
     procs_dtm = models.CharField(max_length=8, verbose_name="수입신고일자", help_text="yyyymmdd", null=True, blank=True)
-    ovsmnfst_nm = models.CharField(max_length=300, verbose_name="해외제조업소", db_index=True, null=True, blank=True)
+    ovsmnfst_nm = models.CharField(max_length=500, verbose_name="해외제조업소", db_index=True, null=True, blank=True)
     itm_nm = models.CharField(max_length=100, verbose_name="품목", db_index=True, null=True, blank=True)
     xport_ntncd_nm = models.CharField(max_length=100, verbose_name="수출국", db_index=True, null=True, blank=True)
     mnf_ntncn_nm = models.CharField(max_length=100, verbose_name="제조국", null=True, blank=True)
