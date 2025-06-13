@@ -74,7 +74,7 @@ function showGmoOptions() {
     if (!optionsContainer) return;
     optionsContainer.innerHTML = '';
     const currentGmo = document.getElementById('gmo_info').value.trim();
-    const gmoOptions = ['콩', '옥수수', '면화', '카놀라', '사탕무', '알팔파'];
+    const gmoOptions = ['대두', '옥수수', '면화', '카놀라', '사탕무', '알팔파'];
     gmoOptions.forEach(option => {
         const div = document.createElement('div');
         div.className = 'form-check form-check-inline mb-1';
