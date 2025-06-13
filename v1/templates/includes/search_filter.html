@@ -1,5 +1,5 @@
 {% url action_url as target_url %}
-<form method="get" action="{{ target_url }}" style="width:100%;max-width:100%;">
+<form id="searchFilterForm" method="get" action="{{ target_url }}" style="width:100%;max-width:100%;">
   <div class="search-filter-row d-flex align-items-center mb-3" style="font-size: 0.8rem; width:100%; max-width:100%;">
     <div class="search-filter-inner d-flex align-items-center flex-nowrap gap-2 w-100 justify-content-between" style="font-size: 0.8rem; width:100%; max-width:100%; overflow-x:auto;">
       {% if page_type == "product" %}
@@ -137,4 +137,121 @@
       foodCategorySelect.value = "{{ food_category|escapejs }}";
     }
   });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // 검색 폼을 찾습니다. ID 'searchFilterForm'를 우선적으로 사용하거나, #content 내의 첫 번째 form을 사용합니다.
+    // 이 스크립트가 올바르게 동작하려면 검색 폼에 ID (예: "searchFilterForm")를 부여하는 것이 가장 좋습니다.
+    const filterForm = document.getElementById('searchFilterForm') || document.querySelector('#content form'); 
+    
+    if (!filterForm) {
+        // console.warn('검색 필터 폼을 찾을 수 없습니다. 검색 폼에 "searchFilterForm"과 같은 ID가 있는지 또는 이 인클루드 내용의 기본 폼인지 확인하세요.');
+        return;
+    }
+
+    const searchInputs = filterForm.querySelectorAll('input[type="text"], input[type="search"], input[type="number"], select');
+
+    function applyHasValueClassToAll() {
+        searchInputs.forEach(input => {
+            const value = input.value;
+            if (value && String(value).trim() !== '') {
+                input.classList.add('has-value');
+            } else {
+                input.classList.remove('has-value');
+            }
+        });
+    }
+
+    function clearSearchFields() {
+        searchInputs.forEach(input => {
+            if (input.tagName === 'SELECT') {
+                // select 요소의 경우, value="" 옵션 또는 첫 번째 옵션으로 설정합니다.
+                const defaultOption = input.querySelector('option[value=""]');
+                if (defaultOption) {
+                    input.value = "";
+                } else if (input.options.length > 0 && !input.multiple) {
+                    input.selectedIndex = 0; 
+                } else if (input.multiple) {
+                    Array.from(input.options).forEach(option => option.selected = false);
+                } else {
+                     input.value = ""; // 비어있거나 특이한 select 요소에 대한 대비책
+                }
+            } else {
+                input.value = ''; // 텍스트 기반 입력 필드 초기화
+            }
+        });
+        applyHasValueClassToAll(); // 스타일 업데이트
+    }
+
+    function applyFiltersFromUrlOrClearFields() {
+        const urlParams = new URLSearchParams(window.location.search);
+        let hasAnyRelevantQueryParamInUrl = false;
+
+        searchInputs.forEach(input => {
+            const inputName = input.name;
+            if (inputName && urlParams.has(inputName)) {
+                const urlValue = urlParams.get(inputName);
+                // URL 파라미터가 존재하면 값을 설정합니다 (값이 비어 있어도). 그 후 스타일을 적용합니다.
+                input.value = urlValue;
+                if (urlValue.trim() !== '') {
+                    hasAnyRelevantQueryParamInUrl = true;
+                }
+            } else if (inputName) {
+                // URL에 해당 파라미터가 없으면 필드를 비웁니다 (bfcache 시나리오 대비).
+                if (input.tagName === 'SELECT') {
+                    const defaultOption = input.querySelector('option[value=""]');
+                    input.value = defaultOption ? "" : (input.options.length > 0 && !input.multiple ? input.options[0].value : "");
+                } else {
+                    input.value = '';
+                }
+            }
+        });
+        
+        // 알려진 검색 입력 이름 중 하나라도 URL 파라미터에 비어 있지 않은 값으로 존재하는지 확인합니다.
+        let foundActiveSearchParam = false;
+        for (const input of searchInputs) {
+            if (input.name && urlParams.has(input.name) && urlParams.get(input.name).trim() !== '') {
+                foundActiveSearchParam = true;
+                break;
+            }
+        }
+
+        if (!foundActiveSearchParam) {
+            // URL에 활성 검색 파라미터가 없으면 모든 검색 필드를 비웁니다.
+            // 이는 "?page=2"와 같이 검색어 없이 페이지로 이동하는 경우를 처리합니다.
+            clearSearchFields();
+        }
+        
+        applyHasValueClassToAll(); // 필드 설정/초기화 후 스타일 업데이트
+    }
+
+    // 초기 로드: URL에서 필터를 적용하거나 필드를 비웁니다.
+    applyFiltersFromUrlOrClearFields();
+
+    // bfcache (뒤로/앞으로 가기 캐시) 처리
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) { // 페이지가 bfcache에서 복원된 경우
+            applyFiltersFromUrlOrClearFields();
+        }
+    });
+
+    // 초기화 버튼 기능
+    const resetButton = document.getElementById('resetSearchFilters'); // 이 ID가 초기화 버튼의 ID와 일치하는지 확인하세요.
+    if (resetButton) {
+        resetButton.addEventListener('click', function (e) {
+            e.preventDefault(); // submit 버튼인 경우 기본 폼 제출 방지
+            clearSearchFields();
+            // 모든 쿼리 파라미터를 제거하고 현재 페이지의 기본 경로로 이동합니다.
+            window.location.href = window.location.pathname; 
+        });
+    }
+
+    // 스타일링 (has-value 클래스)을 위한 input/change 리스너 추가
+    searchInputs.forEach(input => {
+        input.addEventListener('input', applyHasValueClassToAll);
+        input.addEventListener('change', applyHasValueClassToAll); // select 요소용
+    });
+
+});
 </script>
