@@ -602,8 +602,11 @@ document.addEventListener('DOMContentLoaded', function () {
         sortedCountries.forEach(country => {
             if (!country) return;
             
-            // 국가명을 정확히 매칭하는 정규식 (단어 경계 고려)
-            const regex = new RegExp(`(${country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            // 국가명과 선택적으로 뒤따르는 " 산" 또는 "산"을 매칭하는 정규식
+            // 예: "호주" -> "호주산", "호주 산" / "미국" -> "미국산", "미국 산"
+            const escapedCountry = country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(${escapedCountry}(\\s*산)?)`, 'gi');
+            // $1은 전체 매칭된 부분(예: "호주산")을 참조
             processedText = processedText.replace(regex, '<strong>$1</strong>');
         });
         
@@ -657,7 +660,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             .trim();
 
                         if (!mainText) {
-                            mainText = '원재료 정보 없음';
+                            // mainText가 비어있으면 빈 문자열로 처리 (null 또는 undefined 방지)
+                            mainText = '';
                         }
 
                         // 국가명 볼드 처리 적용
@@ -724,16 +728,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
                         td.appendChild(container);
                     } else if (field === 'country_of_origin') {
-                        const select = window.opener?.document.querySelector('select[name="country_of_origin"]');
-                        if (select) {
-                            const selectedOption = select.options[select.selectedIndex];
-                            let displayText = selectedOption ? selectedOption.text : value;
-                            // 원산지 필드에도 국가명 볼드 처리 적용
-                            displayText = boldCountryNames(displayText, countryList);
-                            td.innerHTML = displayText;
-                        } else {
-                            td.innerHTML = boldCountryNames(value, countryList);
-                        }
+                        // 원산지 필드도 동일하게 국가명 볼드 처리
+                        const processedOriginText = boldCountryNames(value, countryList);
+                        td.innerHTML = processedOriginText
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/&lt;strong&gt;/g, '<strong>')
+                            .replace(/&lt;\/strong&gt;/g, '</strong>');
                     } else {
                         // 다른 필드들도 국가명이 포함된 경우 볼드 처리
                         if (typeof value === 'string') {
