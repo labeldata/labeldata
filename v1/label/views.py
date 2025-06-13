@@ -114,15 +114,22 @@ def food_item_list(request):
         imported_mode = True
         imported_conditions = Q()
         imported_search_values = {}
+        has_search_params = False # 검색 파라미터 유무 플래그 추가
         for model_field, query_param in imported_search_fields.items():
             value = request.GET.get(query_param, "").strip()
             if value:
                 imported_conditions &= Q(**{f"{model_field}__icontains": value})
                 imported_search_values[query_param] = value
-        # 단일 컬럼 정렬 적용
-        imported_items = ImportedFood.objects.filter(imported_conditions).order_by(sort_field)
-        total_count = imported_items.count()
-        paginator, page_obj, page_range = paginate_queryset(imported_items, page_number, items_per_page)
+                has_search_params = True # 검색 파라미터가 하나라도 있으면 True
+        
+        if has_search_params:
+            # 단일 컬럼 정렬 적용
+            imported_items_qs = ImportedFood.objects.filter(imported_conditions).order_by(sort_field)
+        else:
+            imported_items_qs = ImportedFood.objects.none() # 검색 조건 없으면 빈 쿼리셋
+
+        total_count = imported_items_qs.count()
+        paginator, page_obj, page_range = paginate_queryset(imported_items_qs, page_number, items_per_page)
         search_values = imported_search_values
     else:
         # 국내제품: 단일 컬럼 정렬만 허용 (기본: -prms_dt)
@@ -130,17 +137,25 @@ def food_item_list(request):
         items_per_page = int(request.GET.get("items_per_page", 10))
         page_number = request.GET.get("page", 1)
         search_conditions, search_values = get_search_conditions(request, search_fields)
-        # 단일 컬럼 정렬 적용
-        food_items = FoodItem.objects.filter(search_conditions).order_by(sort_field)
-        total_count = food_items.count()
-        paginator, page_obj, page_range = paginate_queryset(food_items, page_number, items_per_page)
+        has_search_params = any(search_values.values()) # 검색 파라미터 유무 확인
+
+        if has_search_params:
+            # 단일 컬럼 정렬 적용
+            food_items_qs = FoodItem.objects.filter(search_conditions).order_by(sort_field)
+        else:
+            food_items_qs = FoodItem.objects.none() # 검색 조건 없으면 빈 쿼리셋
+            
+        total_count = food_items_qs.count()
+        paginator, page_obj, page_range = paginate_queryset(food_items_qs, page_number, items_per_page)
+        # imported_mode 변수를 domestic 케이스에서도 정의
+        imported_mode = False 
 
     querystring_without_page = get_querystring_without(request, ["page"])
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
 
-    # 검색 조건이 있는지 확인
-    has_search_conditions = any(search_values.values())
-    search_result_count = total_count if has_search_conditions else None
+    # 검색 조건이 있는지 확인 (위에서 이미 계산된 has_search_params 사용)
+    # search_result_count는 total_count를 사용하되, 검색 조건이 있었을 때만 의미가 있음
+    search_result_count = total_count if has_search_params else None
 
     context = {
         "page_obj": page_obj,
@@ -149,13 +164,13 @@ def food_item_list(request):
         "search_values": search_values,
         "food_category": food_category,
         "items_per_page": items_per_page,
-        "sort_field": sort_field,
+        "sort_field": sort_field.lstrip('-') if isinstance(sort_field, str) else sort_field, # 정렬 필드에서 '-' 제거
         "sort_order": sort_order,
         "querystring_without_page": querystring_without_page,
         "querystring_without_sort": querystring_without_sort,
-        "imported_mode": imported_mode if food_category == "imported" else False,
-        "imported_items": page_obj if food_category == "imported" else [],
-        "search_result_count": search_result_count,  # 검색 결과 건수 추가
+        "imported_mode": imported_mode, # food_category 값에 따라 설정된 imported_mode 사용
+        "imported_items": page_obj if imported_mode else [], # imported_mode가 True일 때만 imported_items 전달
+        "search_result_count": search_result_count,
     }
 
     return render(request, "label/food_item_list.html", context)
@@ -1065,6 +1080,7 @@ def my_ingredient_detail(request, ingredient_id=None):
         'food_types': list(FoodType.objects.all().values('food_type')),
         'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
         'food_additives': list(FoodAdditive.objects.all().values('name_kr')),
+
     }
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
