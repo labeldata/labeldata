@@ -8,13 +8,11 @@ let lastActiveTabId = localStorage.getItem('lastActiveTab') || null;
 
 // 카테고리 매핑
 const categoryMapping = {
-    'label_name': '라벨명',
-    'food_type': '식품유형',
     'product_name': '제품명',
-    'ingredient_info': '성분명 및 함량',
-    'content_weight': '내용량',
-    'weight_calorie': '내용량(열량)',
+    'ingredient_info': '특정 성분 함량',
+    'food_type': '식품유형',
     'report_no': '품목보고번호',
+    'content_weight': '내용량',
     'storage': '보관방법',
     'package': '용기.포장재질',
     'manufacturer': '제조원 소재지',
