@@ -12,6 +12,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 import json
+from django.conf import settings  # Django settings import 추가
 from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive, ImportedFood
 from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  # 지우지 않음
@@ -1650,8 +1651,14 @@ def manage_phrases(request):
         data = json.loads(request.body)
         action = data.get('action')
         category_name = data.get('category_name', '').strip()
-        if not category_name:
-            return JsonResponse({'success': False, 'error': '카테고리 값이 올바르지 않습니다.'})
+        
+        # 유효한 카테고리인지 확인
+        valid_categories = [choice[0] for choice in CATEGORY_CHOICES]
+        if not category_name or category_name not in valid_categories:
+            return JsonResponse({
+                'success': False, 
+                'error': f'카테고리 값이 올바르지 않습니다. 받은 값: "{category_name}", 유효한 값: {valid_categories}'
+            })
 
         if action == 'create':
             # 신규 문구 생성
@@ -1661,9 +1668,9 @@ def manage_phrases(request):
                 category_name=category_name,
                 comment_content=data.get('comment_content'),
                 note=data.get('note', ''),
+                display_order=data.get('order', 0),  # display_order 추가
                 delete_YN='N'
             )
-            # 메시지 제거 - JSON 응답만 반환
             return JsonResponse({
                 'success': True,
                 'message': '문구가 저장되었습니다.',
@@ -1674,46 +1681,45 @@ def manage_phrases(request):
             # 기존 문구 수정 로직
             changes = data if isinstance(data, list) else [data]
             for change in changes:
-                category_name = change.get('category_name', '').strip()
-                if not category_name:
-                    return JsonResponse({'success': False, 'error': '카테고리 값이 올바르지 않습니다.'})
+                category_name_change = change.get('category_name', '').strip()
+                if not category_name_change or category_name_change not in valid_categories:
+                    return JsonResponse({
+                        'success': False, 
+                        'error': f'카테고리 값이 올바르지 않습니다. 받은 값: "{category_name_change}", 유효한 값: {valid_categories}'
+                    })
+                
                 phrase = MyPhrase.objects.get(
                     my_phrase_id=change['id'],
                     user_id=request.user
-                               )
-                phrase.my_phrase_name = change.get('name', phrase.my_phrase_name)
-                phrase.comment_content = change.get('content', phrase.comment_content)
+                )
+                phrase.my_phrase_name = change.get('my_phrase_name', phrase.my_phrase_name)
+                phrase.comment_content = change.get('comment_content', phrase.comment_content)
                 phrase.note = change.get('note', phrase.note)
-                phrase.category_name = category_name
+                phrase.category_name = category_name_change
+                phrase.display_order = change.get('order', phrase.display_order)  # display_order 업데이트
                 phrase.save()
-            # 메시지 제거 - JSON 응답만 반환
             return JsonResponse({'success': True})
 
         elif action == 'delete':
             # 문구 삭제 로직
             phrase = MyPhrase.objects.get(
                 my_phrase_id=data['id'],
-                               user_id=request.user
+                user_id=request.user
             )
             phrase.delete_YN = 'Y'
             phrase.delete_datetime = timezone.now().strftime('%Y%m%d')
             phrase.save()
-            # 메시지 제거 - JSON 응답만 반환
             return JsonResponse({'success': True})
 
         else:
             return JsonResponse({'success': False, 'error': 'Invalid action'})
 
     except MyPhrase.DoesNotExist:
-        logger.error("Phrase not found")
         return JsonResponse({'success': False, 'error': '문구를 찾을 수 없습니다.'})
-
     except json.JSONDecodeError:
-        logger.error("Invalid JSON data")
         return JsonResponse({'success': False, 'error': '잘못된 데이터 형식입니다.'})
     except Exception as e:
-        logger.error(f"manage_phrases error: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': f'오류 발생: {str(e)}'})
 
 @login_required
 @csrf_exempt
@@ -1745,39 +1751,59 @@ def reorder_phrases(request):
 def phrase_popup(request):
     """자주 사용하는 문구 팝업"""
     phrases_data = {}
-    # CATEGORY_CHOICES에서 정의된 모든 카테고리에 대한 빈 리스트 초기화
     categories = CATEGORY_CHOICES
+    
+    # CATEGORY_CHOICES에서 정의된 모든 카테고리에 대한 빈 리스트 초기화
     for category_code, _ in categories:
-       
         phrases_data[category_code] = []
-    # 사용자 문구만 가져오기
+    
+    # 사용자 문구만 가져오기 (display_order 순으로 정렬)
     user_phrases = MyPhrase.objects.filter(
         user_id=request.user, 
         delete_YN='N'
-    ).order_by('category_name', 'display_order')
-    # 사용자 문구 추가 (카테고리 유효성 체크)
+    ).order_by('category_name', 'display_order', 'my_phrase_name')
+
+    # 유효한 카테고리 코드 목록 생성
+    valid_categories = {choice[0] for choice in CATEGORY_CHOICES}
 
     for phrase in user_phrases:
         category = phrase.category_name
+        
+        # 유효한 카테고리가 아닌 경우 처리
+        if category not in valid_categories:
+            # 로그는 개발 환경에서만 출력하도록 제한
+            if hasattr(settings, 'DEBUG') and settings.DEBUG:
+                try:
+                    print(f"Warning: Unknown category in MyPhrase: {category} (ID: {phrase.my_phrase_id})")
+                except Exception:
+                    pass
+            
+            # 알 수 없는 카테고리는 'additional'로 분류하거나 건너뛰기
+            # 옵션 1: 건너뛰기 (현재 방식)
+            continue
+            
+            # 옵션 2: 'additional' 카테고리로 분류
+            # if 'additional' in phrases_data:
+            #     category = 'additional'
+            # else:
+            #     continue
+        
+        # phrases_data에 해당 카테고리가 없으면 초기화 (동적 카테고리 지원)
         if category not in phrases_data:
-            # 로그 남기기 (선택)
-            try:
-                logger.warning(f"Unknown category in MyPhrase: {category}")
-            except Exception:
-                pass
-            continue  # 유효하지 않은 카테고리는 무시
+            phrases_data[category] = []
+            
         phrases_data[category].append({
             'id': phrase.my_phrase_id,
-
             'name': phrase.my_phrase_name,
             'content': phrase.comment_content,
             'note': phrase.note or '',
-            'order': phrase.display_order,
+            'order': phrase.display_order or 0,
             'is_custom': True
         })
+    
     context = {
         'phrases_json': json.dumps(phrases_data),
-        'categories': categories  # CATEGORY_CHOICES 전체 전달
+        'categories': categories
     }
     return render(request, 'label/phrase_popup.html', context)
 
@@ -2170,8 +2196,7 @@ def phrases_data_api(request):
             'name': phrase.my_phrase_name,
             'content': phrase.comment_content,
             'note': phrase.note or '',
-            'order': phrase.display_order,
-            'is_custom': True
+            'order': phrase.display_order
         })
     return JsonResponse({'success': True, 'phrases': phrases_data})
 

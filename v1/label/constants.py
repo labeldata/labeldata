@@ -167,28 +167,22 @@ DEFAULT_PHRASES = {
 }
 
 CATEGORY_CHOICES = [
-    ('prdlst_nm', '제품명'),
-    ('ingredient_info', '특정 성분 함량'), # 기존 명칭 변경 유지
-    ('prdlst_dcnm', '식품유형'),
-    ('prdlst_report_no', '품목보고번호'),
+    ('label_name', '라벨명'),
+    ('food_type', '식품유형'),
+    ('product_name', '제품명'),
+    ('ingredient_info', '성분명 및 함량'),
     ('content_weight', '내용량'),
-    # --- 여기까지 순서 변경 ---
-    # ('my_label_name', '라벨명'), # 라벨명 탭 제거됨
-    # ('weight_calorie', '내용량(열량)'), # 내용량(열량) 탭 제거됨
-    ('country_of_origin', '원산지'),
-    ('storage_method', '보관방법'),
-    ('frmlc_mtrqlt', '포장재질'),
-    ('bssh_nm', '제조원 소재지'),
-    ('distributor_address', '유통전문판매원'),
-    ('repacker_address', '소분원'),
-    ('importer_address', '수입원'),
-    ('pog_daycnt', '소비기한'),
-    ('rawmtrl_nm_display', '원재료명(표시)'),
-    # ('rawmtrl_nm', '원재료명(참고)'), # 이 항목이 탭으로 사용되지 않았다면 그대로 둡니다.
+    ('weight_calorie', '내용량(열량)'),
+    ('report_no', '품목보고번호'),
+    ('storage', '보관방법'),
+    ('package', '용기.포장재질'),
+    ('manufacturer', '제조원 소재지'),
+    ('distributor', '유통전문판매원'),
+    ('repacker', '소분원'),
+    ('importer', '수입원'),
+    ('expiry', '소비기한'),
     ('cautions', '주의사항'),
-    ('additional_info', '기타표시사항'),
-    ('nutrition_text', '영양성분'),
-    # 다른 카테고리가 있다면 여기에 계속됩니다.
+    ('additional', '기타표시사항')
 ]
 
 FIELD_REGULATIONS = {
@@ -296,7 +290,7 @@ FIELD_REGULATIONS = {
 PREVIEW_DEFAULT_SETTINGS = {
     'layout': {
         'width': 10,  # cm
-        'height': 10, # cm
+        'height': 10,
         'area': 100,  # cm²
         'min_width': 4,
         'max_width': 30,

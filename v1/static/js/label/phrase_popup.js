@@ -128,6 +128,9 @@ function renderPhrases(category, phraseList) {
     const container = document.getElementById(`${category}PhraseList`);
     if (!container) return;
 
+    // 편집 모드 클래스 토글
+    container.classList.toggle('editing-mode', isEditingMode);
+
     container.innerHTML = '';
     const list = document.createElement('div');
     list.className = 'd-flex flex-column gap-2';
@@ -141,10 +144,15 @@ function renderPhrases(category, phraseList) {
         list.appendChild(empty);
     }
 
+    // 정렬: display_order 순서대로
     phraseList.sort((a, b) => {
-        const afav = a.note && a.note.includes('★') ? -1 : 0;
-        const bfav = b.note && b.note.includes('★') ? -1 : 0;
-        return afav - bfav || (a.order || 0) - (b.order || 0);
+        const orderA = parseInt(a.order, 10) || 999;
+        const orderB = parseInt(b.order, 10) || 999;
+        
+        if (orderA === orderB) {
+            return (a.name || '').localeCompare(b.name || '');
+        }
+        return orderA - orderB;
     });
 
     phraseList.forEach((p, index) => {
@@ -153,13 +161,25 @@ function renderPhrases(category, phraseList) {
         item.dataset.id = p.id;
         item.dataset.category = category;
         item.dataset.index = index;
+        item.dataset.order = p.order || 0;
+
+        // 편집 모드에서만 드래그 가능하게 설정
+        if (isEditingMode) {
+            item.classList.add('draggable');
+            item.draggable = true;
+        }
+
+        // 순서 표시 (편집 모드에서만, 그리고 order가 있을 때만)
+        const orderDisplay = isEditingMode && p.order > 0 ? 
+            `<span class="order-indicator">${p.order}</span>` : '';
 
         item.innerHTML = `
             <div class="input-container d-flex align-items-center gap-2">
+                <span class="drag-handle">⋮⋮</span>
+                ${orderDisplay}
                 <input type="text" class="form-control phrase-name" name="edit-name" value="${p.name}" ${isEditingMode ? '' : 'disabled'}>
                 <input type="text" class="form-control phrase-content" name="edit-content" value="${p.content}" ${isEditingMode ? '' : 'disabled'}>
                 <input type="text" class="form-control phrase-note" name="edit-note" value="${p.note || ''}" ${isEditingMode ? '' : 'disabled'}>
-                <button class="btn btn-sm btn-outline-warning toggle-fav">${p.note?.includes('★') ? '★' : '☆'}</button>
                 ${isEditingMode ? `<button class="btn btn-sm btn-danger delete-btn">×</button>` : ''}
             </div>
         `;
@@ -168,29 +188,273 @@ function renderPhrases(category, phraseList) {
 
     container.appendChild(list);
 
+    // 이벤트 리스너 추가
+    setupEventListeners(list);
+    
+    // 드래그 앤 드롭 이벤트 설정 (편집 모드에서만)
+    if (isEditingMode) {
+        setupDragAndDrop(list);
+    }
+}
+
+// 이벤트 리스너 설정 (편집 모드가 아닐 때용)
+function setupEventListeners(list) {
+    // 삭제 버튼 이벤트
     list.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const id = btn.closest('.phrase-item').dataset.id;
-            queueDeletePhrase(id, btn);
-        }, { once: true });
+        btn.onclick = function(e) {
+            e.stopPropagation();
+            const id = this.closest('.phrase-item').dataset.id;
+            queueDeletePhrase(id, this);
+        };
     });
 
+    // 입력 필드 이벤트
     list.querySelectorAll('.phrase-name, .phrase-content, .phrase-note').forEach(input => {
-        input.addEventListener('input', () => {
+        input.oninput = function(e) {
+            e.stopPropagation();
             if (!isEditingMode) return;
-            queueEditPhrase(input.closest('.phrase-item'));
-        }, { once: true });
+            queueEditPhrase(this.closest('.phrase-item'));
+        };
     });
+}
 
-    list.querySelectorAll('.toggle-fav').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const item = btn.closest('.phrase-item');
-            const id = item.dataset.id;
-            const cat = item.dataset.category;
-            const phrase = phrasesData[cat].find(p => p.id == id);
-            phrase.note = phrase.note?.includes('★') ? phrase.note.replace('★', '').trim() : `★ ${phrase.note || ''}`.trim();
-            saveFavorite(phrase);
-        }, { once: true });
+// 드래그 앤 드롭 설정 - 완전히 새로운 방식
+function setupDragAndDrop(list) {
+    const items = list.querySelectorAll('.phrase-item.draggable');
+    
+    // 전역 변수로 드래그 상태 관리
+    let isDragging = false;
+    let draggedElement = null;
+    let placeholder = null;
+    let startY = 0;
+    
+    items.forEach((item, index) => {
+        const dragHandle = item.querySelector('.drag-handle');
+        if (!dragHandle) return;
+        
+        // 드래그 핸들에 mousedown 이벤트
+        dragHandle.onmousedown = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            isDragging = true;
+            draggedElement = item;
+            startY = e.clientY;
+            
+            // 드래그 중 스타일
+            item.classList.add('dragging');
+            
+            // placeholder 생성 및 초기 위치 설정
+            placeholder = document.createElement('div');
+            placeholder.className = 'drag-placeholder';
+            placeholder.style.height = item.offsetHeight + 'px';
+            placeholder.innerHTML = '<div style="text-align: center; color: #6c757d; padding: 10px;">여기에 놓기</div>';
+            
+            // placeholder를 드래그된 요소 바로 다음에 삽입
+            item.parentNode.insertBefore(placeholder, item.nextSibling);
+            
+            // 전역 이벤트 리스너 등록
+            document.onmousemove = handleMouseMove;
+            document.onmouseup = handleMouseUp;
+            
+            // 드래그 중 선택 방지
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'grabbing';
+        };
+    });
+    
+    function handleMouseMove(e) {
+        if (!isDragging || !draggedElement || !placeholder) return;
+        
+        const mouseY = e.clientY;
+        
+        // 현재 마우스 위치에서 가장 가까운 드롭 가능한 위치 찾기
+        const allItems = list.querySelectorAll('.phrase-item:not(.dragging):not(.new-input-row)');
+        let targetElement = null;
+        let insertPosition = 'after'; // 'before' 또는 'after'
+        let minDistance = Infinity;
+        
+        // 각 아이템과의 거리 계산
+        allItems.forEach(itemEl => {
+            const rect = itemEl.getBoundingClientRect();
+            const itemTop = rect.top;
+            const itemBottom = rect.bottom;
+            const itemCenter = itemTop + (rect.height / 2);
+            
+            // 마우스가 아이템 위쪽에 있는 경우
+            if (mouseY <= itemCenter) {
+                const distance = Math.abs(mouseY - itemTop);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    targetElement = itemEl;
+                    insertPosition = 'before';
+                }
+            }
+            // 마우스가 아이템 아래쪽에 있는 경우
+            else {
+                const distance = Math.abs(mouseY - itemBottom);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    targetElement = itemEl;
+                    insertPosition = 'after';
+                }
+            }
+        });
+        
+        // placeholder 위치 업데이트
+        if (targetElement) {
+            try {
+                if (insertPosition === 'before') {
+                    targetElement.parentNode.insertBefore(placeholder, targetElement);
+                } else {
+                    targetElement.parentNode.insertBefore(placeholder, targetElement.nextSibling);
+                }
+            } catch (error) {
+                // 에러 발생 시 무시
+            }
+        } else {
+            // 타겟이 없으면 리스트 끝에 배치
+            try {
+                list.appendChild(placeholder);
+            } catch (error) {
+                // 에러 발생 시 무시
+            }
+        }
+    }
+    
+    function handleMouseUp(e) {
+        if (!isDragging) return;
+        
+        // 드래그 종료
+        isDragging = false;
+        
+        // 스타일 원복
+        if (draggedElement) {
+            draggedElement.classList.remove('dragging');
+        }
+        
+        // placeholder 위치에 드래그된 요소 이동
+        if (placeholder && placeholder.parentNode && draggedElement) {
+            const originalPosition = Array.from(list.children).indexOf(draggedElement);
+            const newPosition = Array.from(list.children).indexOf(placeholder);
+            
+            // placeholder 위치에 요소 삽입
+            placeholder.parentNode.insertBefore(draggedElement, placeholder);
+            
+            // placeholder 제거
+            placeholder.remove();
+            
+            // 위치가 실제로 변경되었는지 확인
+            if (originalPosition !== newPosition) {
+                updateItemOrderOnly(list);
+            }
+        } else if (placeholder) {
+            // placeholder만 제거
+            placeholder.remove();
+        }
+        
+        // 전역 이벤트 리스너 제거
+        document.onmousemove = null;
+        document.onmouseup = null;
+        
+        // 선택 방지 해제
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        
+        // 변수 초기화
+        draggedElement = null;
+        placeholder = null;
+        startY = 0;
+    }
+}
+
+// 재렌더링 없는 순서 업데이트 함수 - 수정
+function updateItemOrderOnly(list) {
+    const items = list.querySelectorAll('.phrase-item:not(.new-input-row)');
+    const category = list.dataset.category;
+    
+    let hasChanges = false;
+    
+    items.forEach((item, index) => {
+        const id = item.dataset.id;
+        if (!id) return;
+        
+        const phrase = phrasesData[category]?.find(p => p.id == id);
+        if (!phrase) return;
+        
+        const newOrder = index + 1;
+        const oldOrder = parseInt(phrase.order) || 0;
+        
+        // 순서가 실제로 변경된 경우만 업데이트
+        if (oldOrder !== newOrder) {
+            phrase.order = newOrder;
+            item.dataset.order = newOrder;
+            hasChanges = true;
+            
+            // 순서 표시 업데이트 (DOM만 수정, 재렌더링 없음)
+            let orderIndicator = item.querySelector('.order-indicator');
+            if (orderIndicator) {
+                orderIndicator.textContent = newOrder;
+            } else if (isEditingMode && newOrder > 0) {
+                // 편집 모드에서 순서 표시 요소가 없고 order가 0보다 크면 생성
+                const container = item.querySelector('.input-container');
+                const dragHandle = container && container.querySelector('.drag-handle');
+                if (dragHandle && dragHandle.nextElementSibling) {
+                    const newIndicator = document.createElement('span');
+                    newIndicator.className = 'order-indicator';
+                    newIndicator.textContent = newOrder;
+                    dragHandle.parentNode.insertBefore(newIndicator, dragHandle.nextSibling);
+                }
+            }
+            
+            // 편집 대기열에 추가
+            queueEditPhrase(item);
+        }
+    });
+}
+
+// 기존 updateItemOrder 함수는 그대로 유지 (다른 곳에서 사용할 수 있음)
+function updateItemOrder(list) {
+    const items = list.querySelectorAll('.phrase-item:not(.new-input-row)');
+    const category = list.dataset.category;
+    
+    let hasChanges = false;
+    
+    items.forEach((item, index) => {
+        const id = item.dataset.id;
+        if (!id) return;
+        
+        const phrase = phrasesData[category]?.find(p => p.id == id);
+        if (!phrase) return;
+        
+        const newOrder = index + 1;
+        const oldOrder = parseInt(phrase.order) || 0;
+        
+        // 순서가 실제로 변경된 경우만 업데이트
+        if (oldOrder !== newOrder) {
+            phrase.order = newOrder;
+            item.dataset.order = newOrder;
+            hasChanges = true;
+            
+            // 순서 표시 업데이트
+            let orderIndicator = item.querySelector('.order-indicator');
+            if (orderIndicator) {
+                orderIndicator.textContent = newOrder;
+            } else if (isEditingMode) {
+                // 편집 모드에서 순서 표시 요소가 없으면 생성
+                const container = item.querySelector('.input-container');
+                const dragHandle = container && container.querySelector('.drag-handle');
+                if (dragHandle) {
+                    const newIndicator = document.createElement('span');
+                    newIndicator.className = 'order-indicator';
+                    newIndicator.textContent = newOrder;
+                    dragHandle.insertAdjacentElement('afterend', newIndicator);
+                }
+            }
+            
+            // 편집 대기열에 추가
+            queueEditPhrase(item);
+        }
     });
 }
 
@@ -250,7 +514,6 @@ async function saveNewPhrase() {
     const content = contentInput.value.trim();
     const note = noteInput.value.trim();
 
-    // 카테고리 유효성 검사 추가
     if (!currentActiveTab || currentActiveTab.trim() === '') {
         alert('카테고리(탭)가 올바르지 않습니다. 다시 시도해 주세요.');
         return;
@@ -280,7 +543,8 @@ async function saveNewPhrase() {
                 my_phrase_name: name,
                 category_name: currentActiveTab,
                 comment_content: content,
-                note: note
+                note: note,
+                order: 0 // 신규 문구는 기본 order 0
             })
         });
 
@@ -381,8 +645,10 @@ async function saveChanges() {
 function queueEditPhrase(item) {
     const phraseId = item.dataset.id;
     const category = item.dataset.category;
-    if (!category || category.trim() === '') return; // 방어 코드 추가
-    const original = phrasesData[category].find(p => p.id == phraseId);
+    if (!category || category.trim() === '') return;
+    
+    const currentOrder = parseInt(item.dataset.order, 10) || 0;
+
     const updatedPhrase = {
         action: 'update',
         id: phraseId,
@@ -390,7 +656,7 @@ function queueEditPhrase(item) {
         comment_content: item.querySelector('[name="edit-content"]').value,
         note: item.querySelector('[name="edit-note"]').value,
         category_name: category,
-        order: Number(item.dataset.index) || original?.order || 0
+        order: currentOrder
     };
 
     const existingIndex = pendingChanges.updates.findIndex(p => p.id === phraseId);
@@ -412,41 +678,6 @@ function queueDeletePhrase(phraseId, button) {
         category_name: category
     });
     button.closest('.phrase-item').remove();
-}
-
-// 즐겨찾기 저장
-function saveFavorite(phrase) {
-    if (isEditingMode) {
-        const dummyItem = document.createElement('div');
-        dummyItem.dataset.id = phrase.id;
-        dummyItem.dataset.category = phrase.category;
-        dummyItem.dataset.index = phrasesData[phrase.category].findIndex(p => p.id == phrase.id);
-        dummyItem.innerHTML = `
-            <input name="edit-name" value="${phrase.name}">
-            <input name="edit-content" value="${phrase.content}">
-            <input name="edit-note" value="${phrase.note}">
-        `;
-        queueEditPhrase(dummyItem);
-        renderCurrentTab();
-    } else {
-        fetch('/label/phrases/manage/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-            },
-            body: JSON.stringify({
-                action: 'update',
-                id: phrase.id,
-                my_phrase_name: phrase.name,
-                comment_content: phrase.content,
-                note: phrase.note,
-                category_name: phrase.category
-            })
-        }).then(res => res.json()).then(data => {
-            if (data.success) reloadPopupData();
-        });
-    }
 }
 
 // 팝업 데이터 새로고침

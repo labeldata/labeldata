@@ -55,8 +55,11 @@
     }
     .phrase-item {
       padding: 8px;
-      cursor: pointer;
-      transition: background-color 0.2s;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      background-color: #fff;
     }
     .phrase-item:hover {
       background-color: #f1f3f5;
@@ -65,6 +68,111 @@
       border-left: 4px solid #2667ff;
       background-color: #f8f9fa;
     }
+    .phrase-item.draggable {
+      cursor: move;
+      border: 1px solid #e9ecef;
+      position: relative;
+      user-select: none; /* 텍스트 선택 방지 */
+    }
+    .phrase-item.draggable:hover {
+      border-color: #007bff;
+      box-shadow: 0 2px 4px rgba(0,123,255,0.25);
+    }
+    /* 드래그 중 스타일 개선 */
+    .phrase-item.dragging {
+      opacity: 0.8;
+      transform: rotate(2deg) scale(1.02);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      background-color: #e3f2fd;
+      z-index: 1000;
+      border: 2px solid #007bff;
+      position: relative;
+      pointer-events: none;
+    }
+    
+    /* 드래그 placeholder 개선 */
+    .drag-placeholder {
+      background: linear-gradient(45deg, #e3f2fd 25%, transparent 25%), 
+                  linear-gradient(-45deg, #e3f2fd 25%, transparent 25%), 
+                  linear-gradient(45deg, transparent 75%, #e3f2fd 75%), 
+                  linear-gradient(-45deg, transparent 75%, #e3f2fd 75%);
+      background-size: 12px 12px;
+      background-position: 0 0, 0 6px, 6px -6px, -6px 0px;
+      border: 3px dashed #007bff;
+      border-radius: 8px;
+      margin: 4px 0;
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: placeholderPulse 1.5s ease-in-out infinite;
+      transition: all 0.2s ease;
+      color: #007bff;
+      font-weight: 600;
+      font-size: 0.9em;
+      box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    }
+    
+    @keyframes placeholderPulse {
+      0%, 100% { 
+        border-color: #007bff;
+        background-color: rgba(227, 242, 253, 0.4);
+        transform: scale(1);
+      }
+      50% { 
+        border-color: #0056b3;
+        background-color: rgba(227, 242, 253, 0.7);
+        transform: scale(1.02);
+      }
+    }
+    
+    /* 드래그 핸들 개선 */
+    .drag-handle {
+      display: none;
+      cursor: grab;
+      color: #6c757d;
+      font-size: 1.4em;
+      margin-right: 8px;
+      user-select: none;
+      padding: 6px 4px;
+      border-radius: 3px;
+      transition: all 0.2s;
+      background-color: transparent;
+    }
+    
+    .drag-handle:hover {
+      color: #007bff;
+      background-color: #f8f9fa;
+      transform: scale(1.1);
+    }
+    
+    .drag-handle:active {
+      cursor: grabbing;
+      transform: scale(0.95);
+      background-color: #e9ecef;
+    }
+    
+    .editing-mode .drag-handle {
+      display: inline-block;
+    }
+    
+    /* 드래그 중 전체 페이지 커서 */
+    body.dragging {
+      cursor: grabbing !important;
+    }
+    
+    body.dragging * {
+      cursor: grabbing !important;
+    }
+    
+    /* 드래그 중 텍스트 선택 방지 강화 */
+    .dragging-active {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      -moz-user-select: none !important;
+      -ms-user-select: none !important;
+    }
+    
     .input-container {
       display: flex;
       align-items: center;
@@ -94,6 +202,24 @@
     .nav-tabs .nav-link {
       margin-bottom: -1px;
       white-space: nowrap;
+    }
+    .order-indicator {
+      display: inline-block;
+      min-width: 20px;
+      height: 20px;
+      line-height: 20px;
+      text-align: center;
+      background-color: #007bff;
+      color: white;
+      border-radius: 50%;
+      font-size: 0.8em;
+      font-weight: bold;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+    /* 드래그 중일 때 다른 요소들의 포인터 이벤트 비활성화 */
+    .phrase-item.dragging * {
+      pointer-events: none;
     }
   </style>
 </head>
