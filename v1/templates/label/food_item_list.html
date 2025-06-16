@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}제품 목록{% endblock %}
+{% block title %}제품 조회{% endblock %}
 {% block content %}
 <div class="container mt-4">
-    <h2 class="mb-4">품목 조회 및 복사</h2>
+    <h2 class="mb-4">제품 조회 및 복사</h2>
 
     {% include 'includes/search_filter.html' with action_url='label:food_item_list' page_type='product' search_values=search_values food_category=food_category items_per_page=items_per_page show_food_category=False %}
 
