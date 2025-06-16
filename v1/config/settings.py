@@ -14,11 +14,15 @@ except NameError:
 # Load sensitive information from .env
 try:
     SECRET_KEY = config('DJANGO_SECRET_KEY', default='your-secret-key')
-    DEBUG = config('DJANGO_DEBUG', default=True, cast=bool)
+    DEBUG = config('DJANGO_DEBUG', default=True, cast=bool)  # 원래대로 복원
     ALLOWED_HOSTS = config('DJANGO_ALLOWED_HOSTS', default='127.0.0.1,localhost').split(',')
 
 except UndefinedValueError as e:
     raise Exception("Missing environment variable: {}".format(e))
+
+# 커스텀 에러 페이지 테스트를 위한 설정 (개발 시에만 사용)
+# 실제 운영에서는 DEBUG=False로 설정하면 자동으로 커스텀 에러 페이지가 작동합니다
+SHOW_CUSTOM_ERROR_PAGES = config('SHOW_CUSTOM_ERROR_PAGES', default=False, cast=bool)
 
 STATIC_BUILD_DATE = datetime.datetime.now().strftime('%Y%m%d%H%M')
 
@@ -106,17 +110,17 @@ TIME_ZONE = config('TIME_ZONE', default='Asia/Seoul')
 USE_I18N = True
 USE_TZ = True
 
-# Static files
+# Static files 설정 개선
 STATIC_URL = '/static/'
+
+# DEBUG 상태와 관계없이 정적 파일 경로 설정
+STATICFILES_DIRS = [
+    BASE_DIR / 'static'
+]
+
 if DEBUG:
-    STATICFILES_DIRS = [
-        BASE_DIR / 'static'
-    ]
     STATIC_ROOT = config('STATIC_ROOT', default='d:/projects/labeldata/staticfiles')
 else:
-    STATICFILES_DIRS = [
-        BASE_DIR / 'static',
-    ]
     STATIC_ROOT = config('STATIC_ROOT', default='/home/labeldata/mysite/staticfiles')
 
 # Media files
@@ -135,3 +139,22 @@ LOGOUT_REDIRECT_URL = LOGIN_URL
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': 'django_errors.log',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+    },
+}

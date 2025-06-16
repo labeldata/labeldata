@@ -12,6 +12,11 @@ from .models import ApiEndpoint
 from v1.label.models import FoodItem, ImportedFood, AgriculturalProduct
 from datetime import datetime, timedelta
 from django.db import close_old_connections  # 추가
+from django.http import HttpResponseNotFound, HttpResponseForbidden, HttpResponseServerError
+from django.conf import settings
+from django.http import Http404
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.decorators import login_required  # 추가
 
 # 로거 설정
 logger = logging.getLogger(__name__)
@@ -611,3 +616,51 @@ def call_agricultural_product_api_endpoint(request, pk):
         endpoint.last_status = "failure"
         endpoint.save()
         return JsonResponse({"error": str(e)}, status=500)
+
+def custom_404(request, exception):
+    """커스텀 404 에러 페이지 - 403도 통합 처리"""
+    return render(request, '404.html', status=404)
+
+def custom_403(request, exception):
+    """403 에러를 404로 위장 (보안상 이유)"""
+    # 보안을 위해 403도 404로 처리
+    return render(request, '404.html', status=404)
+
+def custom_500(request):
+    """커스텀 500 에러 페이지"""
+    return render(request, '500.html', status=500)
+
+# 사용자 친화적인 403 처리가 필요한 경우를 위한 별도 뷰
+def permission_denied_view(request):
+    """명시적으로 403을 보여주고 싶은 경우 사용"""
+    return render(request, '403.html', status=403)
+
+def test_404(request):
+    """404 에러 페이지 테스트 (개발용)"""
+    # 개발 환경에서도 커스텀 404 페이지를 강제로 표시
+    return render(request, '404.html', status=404)
+
+def test_403(request):
+    """403 에러 페이지 테스트 (개발용)"""
+    # 개발 환경에서도 커스텀 403 페이지를 강제로 표시
+    return render(request, '403.html', status=403)
+
+def test_500(request):
+    """500 에러 페이지 테스트 (개발용)"""
+    # 개발 환경에서도 커스텀 500 페이지를 강제로 표시
+    return render(request, '500.html', status=500)
+
+@login_required
+def show_404_page(request):
+    """404 에러 페이지 직접 표시 (개발용)"""
+    return render(request, '404.html', status=404)
+
+@login_required
+def show_403_page(request):
+    """403 에러 페이지 직접 표시 (개발용)"""
+    return render(request, '403.html', status=403)
+
+@login_required
+def show_500_page(request):
+    """500 에러 페이지 직접 표시 (개발용)"""
+    return render(request, '500.html', status=500)

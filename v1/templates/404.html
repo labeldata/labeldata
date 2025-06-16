@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}페이지를 찾을 수 없습니다{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="text-center">
+                <!-- 404 에러 아이콘 -->
+                <div class="mb-4">
+                    <i class="fas fa-search text-warning" style="font-size: 4rem;"></i>
+                </div>
+                
+                <!-- 404 타이틀 -->
+                <h1 class="display-4 text-warning mb-3">404</h1>
+                <h2 class="mb-3">페이지를 찾을 수 없습니다</h2>
+                
+                <!-- 설명 메시지 -->
+                <p class="text-muted mb-4">
+                    요청하신 페이지가 존재하지 않거나 접근할 수 없습니다.<br>
+                    주소를 다시 확인하거나 로그인이 필요할 수 있습니다.
+                </p>
+                
+                <!-- 요청 경로 표시 (선택사항) -->
+                {% if request.path %}
+                <div class="alert alert-light border mb-4">
+                    <small class="text-muted">
+                        <strong>요청 경로:</strong> {{ request.path }}
+                    </small>
+                </div>
+                {% endif %}
+                
+                <!-- 버튼 그룹 -->
+                <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center mb-4">
+                    <button onclick="history.back()" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>
+                        돌아가기
+                    </button>
+                    <a href="/" class="btn btn-primary">
+                        <i class="fas fa-home me-1"></i>
+                        홈으로 이동
+                    </a>
+                    {% if not user.is_authenticated %}
+                    <a href="{% url 'user_management:login' %}" class="btn btn-success">
+                        <i class="fas fa-sign-in-alt me-1"></i>
+                        로그인
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'label:food_item_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-search me-1"></i>
+                        식품 검색
+                    </a>
+                </div>
+                
+                <!-- 추가 도움말 -->
+                <div class="mt-4 pt-3 border-top text-muted small">
+                    <p class="mb-1">
+                        <strong>도움이 필요하신가요?</strong>
+                    </p>
+                    <p class="mb-0">
+                        로그인이 필요하거나 문제가 지속되면 관리자에게 문의해 주세요.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.btn {
+    min-width: 120px;
+}
+
+@media (max-width: 576px) {
+    .display-4 {
+        font-size: 3rem;
+    }
+    .btn {
+        min-width: 100%;
+    }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>서버 오류 발생</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .btn { min-width: 120px; }
+        @media (max-width: 576px) {
+            .display-4 { font-size: 3rem; }
+            .btn { min-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 col-lg-6">
+                <div class="text-center">
+                    <!-- 500 에러 아이콘 -->
+                    <div class="mb-4">
+                        <i class="fas fa-server text-danger" style="font-size: 4rem;"></i>
+                    </div>
+                    
+                    <!-- 500 타이틀 -->
+                    <h1 class="display-4 text-danger mb-3">500</h1>
+                    <h2 class="mb-3">서버 오류가 발생했습니다</h2>
+                    
+                    <!-- 설명 메시지 -->
+                    <p class="text-muted mb-4">
+                        일시적인 서버 오류가 발생했습니다.<br>
+                        잠시 후 다시 시도해 주세요.
+                    </p>
+                    
+                    <!-- 버튼 그룹 -->
+                    <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center mb-4">
+                        <button onclick="history.back()" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>
+                            돌아가기
+                        </button>
+                        <a href="/" class="btn btn-primary">
+                            <i class="fas fa-home me-1"></i>
+                            홈으로 이동
+                        </a>
+                        <button onclick="location.reload()" class="btn btn-outline-primary">
+                            <i class="fas fa-redo me-1"></i>
+                            새로고침
+                        </button>
+                    </div>
+                    
+                    <!-- 추가 도움말 -->
+                    <div class="mt-4 pt-3 border-top text-muted small">
+                        <p class="mb-1">
+                            <strong>문제가 지속되는 경우</strong>
+                        </p>
+                        <p class="mb-0">
+                            관리자에게 문의해 주세요.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
