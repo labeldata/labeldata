@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- 사이트맵은 검색엔진이 웹사이트의 구조를 이해하도록 돕는 파일입니다. -->
+  
+  <!-- 메인 페이지 URL을 정의합니다 -->
+  <url>
+    <loc>https://labeldata.pythonanywhere.com/</loc>
+  </url>
+
+  <!-- 게시판 목록 URL을 정의합니다 -->
+  <url>
+    <loc>https://labeldata.pythonanywhere.com/board/</loc>
+  </url>
+
+  <!-- 로그인 후 확인할 수 있는 메뉴 URL을 정의합니다 -->
+  <url>
+    <loc>https://labeldata.pythonanywhere.com/label/food-items/</loc>
+  </url>
+  <url>
+    <loc>https://labeldata.pythonanywhere.com/label/my-ingredient-list-combined/</loc>
+  </url>
+  <url>
+    <loc>https://labeldata.pythonanywhere.com/label/my-labels/</loc>
+  </url>
+</urlset>
