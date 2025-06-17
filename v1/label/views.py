@@ -189,10 +189,8 @@ def my_label_list(request):
         "pog_daycnt": "pog_daycnt",  # 소비기한 검색 추가
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    
-    # 정렬 처리 수정 - 기본값을 "-update_datetime"로 변경하고 실제 정렬 적용
+    # 표시사항 관리: 작성일 내림차순, 라벨명 오름차순(가나다순)
     sort_field, sort_order = process_sorting(request, "-update_datetime")
-    
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
 
@@ -240,7 +238,7 @@ def my_label_list(request):
             {"name": "pog_daycnt", "placeholder": "소비기한", "value": search_values.get("pog_daycnt", "")},
         ],
         "items_per_page": items_per_page,
-        "sort_field": sort_field.lstrip('-') if sort_field.startswith('-') else sort_field,
+        "sort_field": sort_field,
         "sort_order": sort_order,
         "querystring_without_sort": querystring_without_sort,
         "ingredient_id": ingredient_id,
@@ -910,7 +908,7 @@ def my_ingredient_list(request):
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
     # 원료관리: 식품구분 오름차순(가나다순), 식품유형 오름차순(가나다순), 원재료명 오름차순
-    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('food_category', 'prdlst_dcnm', 'prdlst_nm')
+    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
     querystring_without_page = get_querystring_without(request, ['page'])
     querydict_sort = request.GET.copy()
@@ -972,7 +970,7 @@ def my_ingredient_list_combined(request):
     if label_id:
         # 라벨에 연결된 원료만 조회
         ingredient_ids = LabelIngredientRelation.objects.filter(label_id=label_id).values_list('ingredient_id', flat=True)
-        my_ingredients = MyIngredient.objects.filter(my_ingredient_id__in=ingredient_ids).filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
+        my_ingredients = MyIngredient.objects.filter(my_ingredient_id__in=ingredient_ids).filter(search_conditions).order_by(sort_field)
         # 라벨명 가져오기
         label_name = None
         try:
@@ -981,7 +979,7 @@ def my_ingredient_list_combined(request):
         except MyLabel.DoesNotExist:
             label_name = None
     else:
-        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
+        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
         label_name = None
 
     total_count = my_ingredients.count()
@@ -2067,10 +2065,8 @@ def my_ingredient_table_partial(request):
     # 기존: search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
     search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
-    items_per_page = int(request.GET.get('items_per_page', 10))
-    page_number = request.GET.get('page', 1)
-    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
-    paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
+    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+    paginator, page_obj, page_range = paginate_queryset(my_ingredients, request.GET.get('page', 1), request.GET.get('items_per_page', 10))
     context = {
         'page_obj': page_obj,
         'paginator': paginator,
@@ -2290,7 +2286,7 @@ def my_ingredient_pagination_info(request):
         items_per_page = int(request.GET.get('items_per_page', 10))
         page_number = request.GET.get('page', 1)
         
-        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
+        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
         paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
         
         return JsonResponse({
