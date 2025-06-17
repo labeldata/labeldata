@@ -189,9 +189,10 @@ def my_label_list(request):
         "pog_daycnt": "pog_daycnt",  # 소비기한 검색 추가
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    # 표시사항 관리: 작성일 내림차순, 라벨명 오름차순(가나다순)
-    sort_field, sort_order = process_sorting(request, "create_datetime")
-    sort_field = "-create_datetime"
+    
+    # 정렬 처리 수정 - 기본값을 "-update_datetime"로 변경하고 실제 정렬 적용
+    sort_field, sort_order = process_sorting(request, "-update_datetime")
+    
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
 
@@ -207,14 +208,14 @@ def my_label_list(request):
 
     if ingredient_id:
         linked_label_ids = LabelIngredientRelation.objects.filter(ingredient_id=ingredient_id).values_list("label_id", flat=True)
-        labels = MyLabel.objects.filter(user_id=request.user, my_label_id__in=linked_label_ids).filter(search_conditions).order_by("-create_datetime", "my_label_name")
+        labels = MyLabel.objects.filter(user_id=request.user, my_label_id__in=linked_label_ids).filter(search_conditions).order_by(sort_field)
         try:
             ingredient_obj = MyIngredient.objects.get(my_ingredient_id=ingredient_id)
             ingredient_name = ingredient_obj.prdlst_nm or ingredient_obj.ingredient_display_name or ingredient_id
         except MyIngredient.DoesNotExist:
             ingredient_name = ingredient_id
     else:
-        labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by("-create_datetime", "my_label_name")
+        labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by(sort_field)
 
     total_count = labels.count()
     paginator, page_obj, page_range = paginate_queryset(labels, page_number, items_per_page)
@@ -239,7 +240,7 @@ def my_label_list(request):
             {"name": "pog_daycnt", "placeholder": "소비기한", "value": search_values.get("pog_daycnt", "")},
         ],
         "items_per_page": items_per_page,
-        "sort_field": sort_field,
+        "sort_field": sort_field.lstrip('-') if sort_field.startswith('-') else sort_field,
         "sort_order": sort_order,
         "querystring_without_sort": querystring_without_sort,
         "ingredient_id": ingredient_id,

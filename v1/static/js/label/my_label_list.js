@@ -47,6 +47,65 @@ document.addEventListener("DOMContentLoaded", function () {
             input.classList.remove('has-value');
         }
     }
+
+    // 현재 정렬 상태 표시
+    function updateSortButtonsDisplay() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentSort = urlParams.get('sort');
+        const currentOrder = urlParams.get('order');
+
+        // 모든 정렬 버튼 초기화
+        document.querySelectorAll('.sort-btn').forEach(btn => {
+            btn.classList.remove('sort-blue');
+        });
+
+        // 현재 정렬된 버튼 강조
+        if (currentSort && currentOrder) {
+            const activeButton = document.querySelector(`.sort-btn[href*="sort=${currentSort}&order=${currentOrder}"]`);
+            if (activeButton) {
+                activeButton.classList.add('sort-blue');
+            }
+        }
+    }
+
+    // 정렬 버튼 클릭 이벤트 처리
+    document.querySelectorAll('.sort-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // href에서 정렬 정보 추출
+            const href = this.getAttribute('href');
+            if (!href) return;
+            
+            // 기존 href의 정렬 파라미터 추출
+            const urlMatch = href.match(/\?(.+)$/);
+            if (!urlMatch) return;
+            
+            const params = new URLSearchParams(urlMatch[1]);
+            const sortField = params.get('sort');
+            const sortOrder = params.get('order');
+            
+            if (!sortField || !sortOrder) return;
+            
+            console.log('Sort button clicked:', sortField, sortOrder);
+            
+            // 현재 URL의 모든 파라미터 유지하면서 정렬 파라미터만 변경
+            const currentParams = new URLSearchParams(window.location.search);
+            currentParams.set('sort', sortField);
+            currentParams.set('order', sortOrder);
+            currentParams.set('page', '1'); // 정렬 시 첫 페이지로
+            
+            const newUrl = `${window.location.pathname}?${currentParams.toString()}`;
+            console.log('Navigating to:', newUrl);
+            
+            // 페이지 이동
+            window.location.href = newUrl;
+        });
+    });
+
+    // 초기 정렬 상태 표시
+    updateSortButtonsDisplay();
 });
 
 // 체크박스 셀 클릭 시 체크박스 토글 함수
