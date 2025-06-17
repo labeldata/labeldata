@@ -150,24 +150,46 @@
                 <thead>
                     <tr>
                         <th class="text-center align-middle" style="width: 5%;">번호</th>
-                        <th style="width: 10%;">식품구분</th>
-                        <th style="width: 15%;">품목보고번호
+                        <th style="width: 12%;">식품구분
                             <span class="sort-buttons">
-                                <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
-                                <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
+                                <a href="?sort=food_category&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
+                                    <i class="fas fa-caret-up"></i>
+                                </a>
+                                <a href="?sort=food_category&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
+                                    <i class="fas fa-caret-down"></i>
+                                </a>
                             </span>
                         </th>
-                        <th style="width: 25%;">원재료명
+                        <th style="width: 18%;">품목보고번호
                             <span class="sort-buttons">
-                                <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
-                                <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
+                                <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
+                                    <i class="fas fa-caret-up"></i>
+                                </a>
+                                <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
+                                    <i class="fas fa-caret-down"></i>
+                                </a>
+                            </span>
+                        </th>
+                        <th style="width: 30%;">원재료명
+                            <span class="sort-buttons">
+                                <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
+                                    <i class="fas fa-caret-up"></i>
+                                </a>
+                                <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
+                                    <i class="fas fa-caret-down"></i>
+                                </a>
                             </span>
                         </th>
                         <th style="width: 15%;">식품유형
                             <span class="sort-buttons">
-                                <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▲</a>
-                                <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn sort-blue">▼</a>
+                                <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
+                                    <i class="fas fa-caret-up"></i>
+                                </a>
+                                <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
+                                    <i class="fas fa-caret-down"></i>
+                                </a>
                             </span>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
