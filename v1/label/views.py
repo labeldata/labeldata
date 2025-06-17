@@ -191,6 +191,9 @@ def my_label_list(request):
     search_conditions, search_values = get_search_conditions(request, search_fields)
     # 표시사항 관리: 작성일 내림차순, 라벨명 오름차순(가나다순)
     sort_field, sort_order = process_sorting(request, "-update_datetime")
+    # ↓ 추가: report_no_verify_yn → report_no_verify_YN로 변환
+    if sort_field.lstrip('-') == 'report_no_verify_yn':
+        sort_field = sort_field.replace('report_no_verify_yn', 'report_no_verify_YN')
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
 
@@ -905,6 +908,9 @@ def my_ingredient_list(request):
     # 기존: search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
     search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
+    # ↓ 추가: report_no_verify_yn → report_no_verify_YN로 변환
+    if sort_field.lstrip('-') == 'report_no_verify_yn':
+        sort_field = sort_field.replace('report_no_verify_yn', 'report_no_verify_YN')
     items_per_page = int(request.GET.get('items_per_page', 10))
     page_number = request.GET.get('page', 1)
     # 원료관리: 식품구분 오름차순(가나다순), 식품유형 오름차순(가나다순), 원재료명 오름차순
