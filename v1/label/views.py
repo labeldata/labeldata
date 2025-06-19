@@ -2288,13 +2288,16 @@ def my_ingredient_pagination_info(request):
         gmo = request.GET.get('gmo', '').strip()
         if gmo:
             search_conditions &= Q(gmo__icontains=gmo)
-        
+
         items_per_page = int(request.GET.get('items_per_page', 10))
         page_number = request.GET.get('page', 1)
-        
+        sort_field, sort_order = process_sorting(request, 'prdlst_nm')
+        if sort_field.lstrip('-') == 'report_no_verify_yn':
+            sort_field = sort_field.replace('report_no_verify_yn', 'report_no_verify_YN')
+
         my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
         paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
-        
+
         return JsonResponse({
             'success': True,
             'current_page': page_obj.number,
