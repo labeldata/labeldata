@@ -1,0 +1,33 @@
+<!-- signup_done.html -->
+{% extends 'base.html' %}
+
+{% block title %}회원가입 완료{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh; background-color: #f8f9fa;">
+    <div class="card shadow-sm p-5" style="max-width: 500px; width: 100%; border-radius: 10px;">
+        <div class="text-center">
+            <div class="mb-4">
+                <i class="fas fa-envelope-open-text fa-4x text-success"></i>
+            </div>
+            <h2 class="mb-3" style="font-weight: 700; color: #343a40;">이메일 인증 요청</h2>
+            <p class="mb-4" style="color: #6c757d; font-size: 1.1rem; line-height: 1.6;">
+                회원가입이 거의 완료되었습니다!<br>
+                입력하신 이메일 주소로 인증 링크를 발송했습니다.
+            </p>
+            <div class="alert alert-info" role="alert">
+                <strong>다음 단계:</strong><br>
+                1. 이메일함을 확인하세요<br>
+                2. 인증 링크를 클릭하세요<br>
+                3. 인증 완료 후 로그인하세요
+            </div>
+            <p class="text-muted small mt-3">
+                이메일이 보이지 않나요? 스팸함도 확인해보세요.
+            </p>
+            <a href="{% url 'user_management:login' %}" class="btn btn-outline-primary mt-3">
+                로그인 페이지로 이동
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
