@@ -1204,7 +1204,13 @@ def save_ingredients_to_label(request, label_id):
 
 @login_required
 @csrf_exempt
+@login_required
+@csrf_exempt
 def delete_my_ingredient(request, ingredient_id):
+    # 게스트 사용자는 삭제 불가
+    if request.user.username == 'guest@labeasylabel.com':
+        return JsonResponse({'success': False, 'error': '게스트 계정은 삭제 기능을 사용할 수 없습니다.'})
+        
     if request.method == 'POST':
         try:
             ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
@@ -1462,6 +1468,11 @@ def duplicate_label(request, label_id):
     return redirect('label:label_creation', label_id=original.my_label_id)
 
 def delete_label(request, label_id):
+    # 게스트 사용자는 삭제 불가
+    if request.user.username == 'guest@labeasylabel.com':
+        messages.error(request, '게스트 계정은 삭제 기능을 사용할 수 없습니다.')
+        return redirect('label:my_label_list')
+        
     label = get_object_or_404(MyLabel, my_label_id=label_id)
     label.delete()
     return redirect('label:my_label_list')
@@ -1486,7 +1497,13 @@ def bulk_copy_labels(request):
 
 @login_required
 @csrf_exempt
+@login_required
+@csrf_exempt
 def bulk_delete_labels(request):
+    # 게스트 사용자는 삭제 불가
+    if request.user.username == 'guest@labeasylabel.com':
+        return JsonResponse({"success": False, "error": "게스트 계정은 삭제 기능을 사용할 수 없습니다."})
+        
     if request.method == "POST":
         try:
             data = json.loads(request.body)

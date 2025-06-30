@@ -10,7 +10,9 @@
         <!-- 엑셀 다운로드 버튼 추가 -->
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="downloadSelectedLabelsExcel()">다운로드</button>
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="bulkCopy()">복사</button>
+        {% if user.username != 'guest@labeasylabel.com' %}
         <button type="button" class="btn btn-outline-danger btn-sm" onclick="bulkDelete()">삭제</button>
+        {% endif %}
       </div>
     </div>
     {% if ingredient_id %}

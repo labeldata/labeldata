@@ -14,7 +14,7 @@
         <div class="panel-actions">
             <button type="submit" form="ingredientForm" class="btn btn-outline-primary btn-sm">저장</button>
             <button type="button" class="btn btn-outline-cancel btn-sm" id="closeBtn">초기화</button>
-            {% if mode == 'edit' %}<button type="button" class="btn btn-outline-danger btn-sm" id="deleteBtn">삭제</button>{% endif %}
+            {% if mode == 'edit' and user.username != 'guest@labeasylabel.com' %}<button type="button" class="btn btn-outline-danger btn-sm" id="deleteBtn">삭제</button>{% endif %}
         </div>
     </div>
     <hr />
