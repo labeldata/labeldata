@@ -99,17 +99,21 @@ def verify_email(request):
     return render(request, 'user_management/verify_result.html', context)
 
 def login_view(request):
-    """로그인 (이메일 인증된 계정만 허용)"""
+    """로그인 (이메일 인증된 계정만 허용, Guest 로그인 지원)"""
     if request.method == 'POST':
-        email = request.POST.get('username', '').strip()
-        password = request.POST.get('password')
+        # Guest 로그인 처리
+        if request.POST.get('guest_login') == '1':
+            email = 'guest@labeasylabel.com'
+            password = 'rptmxmfhrmdls1!'
+        else:
+            email = request.POST.get('username', '').strip()
+            password = request.POST.get('password')
         user = authenticate(request, username=email, password=password)
         if user is not None:
             if hasattr(user, 'profile') and not user.profile.is_email_verified:
                 messages.error(request, "이메일 인증이 완료되어야 로그인할 수 있습니다.")
             else:
                 login(request, user)
-                messages.success(request, "로그인 성공!")
                 return redirect('main:home')
         else:
             messages.error(request, "아이디 또는 비밀번호가 올바르지 않습니다.")
@@ -175,4 +179,5 @@ def password_reset_confirm(request):
 def signup_done_view(request):
     """회원가입 완료 페이지 (테스트용)"""
     messages.info(request, "이메일 인증 링크가 발송되었습니다. 이메일을 확인하세요.")
+    return render(request, 'user_management/signup_done.html')
     return render(request, 'user_management/signup_done.html')

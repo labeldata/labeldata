@@ -26,7 +26,13 @@
                 <input type="password" id="id_password" name="password" class="form-control" placeholder="비밀번호를 입력하세요">
             </div>
             <button type="submit" class="btn btn-outline-primary w-100 mt-3" style="font-size: 1rem; padding: 10px;">로그인</button>
-        </form>        <p class="text-center mt-4" style="font-size: 0.9rem; color: #6c757d;">
+        </form>
+        <form method="post" action="" class="mt-2">
+            {% csrf_token %}
+            <input type="hidden" name="guest_login" value="1">
+            <button type="submit" class="btn btn-secondary w-100" style="font-size: 1rem; padding: 10px;">Guest로 시작하기</button>
+        </form>
+        <p class="text-center mt-4" style="font-size: 0.9rem; color: #6c757d;">
             계정이 없으신가요? <a href="{% url 'user_management:signup' %}" style="color: #007bff; text-decoration: none;">회원가입</a>
         </p>
         <p class="text-center" style="font-size: 0.9rem; color: #6c757d;">
