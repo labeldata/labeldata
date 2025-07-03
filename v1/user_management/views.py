@@ -1,8 +1,9 @@
 from django.shortcuts import render, redirect
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, PasswordChangeForm
+from django.contrib.auth import login, logout, authenticate, update_session_auth_hash
 from django.contrib import messages
 from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
 from .models import UserProfile
 from django.utils.crypto import get_random_string
 from django.core.mail import send_mail
@@ -180,4 +181,20 @@ def signup_done_view(request):
     """회원가입 완료 페이지 (테스트용)"""
     messages.info(request, "이메일 인증 링크가 발송되었습니다. 이메일을 확인하세요.")
     return render(request, 'user_management/signup_done.html')
-    return render(request, 'user_management/signup_done.html')
+
+@login_required
+def change_password(request):
+    """비밀번호 변경"""
+    if request.method == 'POST':
+        form = PasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)  # 비밀번호 변경 후에도 로그인 상태 유지
+            messages.success(request, '비밀번호가 성공적으로 변경되었습니다.')
+            return redirect('user_management:change_password')
+        else:
+            messages.error(request, '비밀번호 변경에 실패했습니다. 입력 내용을 확인해주세요.')
+    else:
+        form = PasswordChangeForm(request.user)
+    
+    return render(request, 'user_management/change_password.html', {'form': form})

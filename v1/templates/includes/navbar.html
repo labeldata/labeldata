@@ -22,7 +22,7 @@
         <!-- 사용자 메뉴 -->
         <div class="d-flex align-items-center">
             {% if user.is_authenticated %}
-                <span class="text-white me-3" id="username-display"></span>
+                <a href="{% url 'user_management:change_password' %}" class="text-white me-3 text-decoration-none" id="username-display" title="비밀번호 변경"></a>
                 <form action="{% url 'common:logout' %}" method="post" class="d-inline">
                     {% csrf_token %}
                     <button type="submit" class="nav-link btn btn-link text-white" style="padding: 0;">로그아웃</button>
@@ -100,6 +100,16 @@
 .btn-link.nav-link:hover {
     color: #20c997 !important; /* 더 밝은 청록색 */
     text-decoration: none;
+}
+
+/* 사용자명 링크 스타일 */
+#username-display {
+    transition: color 0.3s ease;
+}
+
+#username-display:hover {
+    color: #20c997 !important; /* 더 밝은 청록색 */
+    text-decoration: underline !important;
 }
 </style>
 
