@@ -20,8 +20,9 @@
         </ul>
         
         <!-- 사용자 메뉴 -->
-        <div class="d-flex">
+        <div class="d-flex align-items-center">
             {% if user.is_authenticated %}
+                <span class="text-white me-3" id="username-display"></span>
                 <form action="{% url 'common:logout' %}" method="post" class="d-inline">
                     {% csrf_token %}
                     <button type="submit" class="nav-link btn btn-link text-white" style="padding: 0;">로그아웃</button>
@@ -101,3 +102,16 @@
     text-decoration: none;
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const usernameDisplay = document.getElementById('username-display');
+    if (usernameDisplay) {
+        const userEmail = '{{ user.email|escapejs }}';
+        if (userEmail) {
+            const username = userEmail.split('@')[0];
+            usernameDisplay.textContent = username + '님';
+        }
+    }
+});
+</script>
