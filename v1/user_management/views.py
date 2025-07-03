@@ -185,6 +185,11 @@ def signup_done_view(request):
 @login_required
 def change_password(request):
     """비밀번호 변경"""
+    # Guest 사용자는 비밀번호 변경 불가
+    if request.user.email == 'guest@labeasylabel.com':
+        messages.error(request, 'Guest 계정은 비밀번호를 변경할 수 없습니다.')
+        return redirect('main:home')
+    
     if request.method == 'POST':
         form = PasswordChangeForm(request.user, request.POST)
         if form.is_valid():
