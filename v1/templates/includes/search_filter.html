@@ -79,8 +79,10 @@
         <option value="50"  {% if items_per_page == 50  %}selected{% endif %}>50개</option>
         <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100개</option>
       </select>
-      <button type="submit" class="btn btn-primary search-filter-btn ms-2" style="font-size: 0.8rem; min-width:60px;">
-        검색
+      <button type="submit" class="btn btn-primary search-filter-btn ms-2" id="searchBtn" style="font-size: 0.8rem; min-width:60px;">
+        <span class="btn-text">검색</span>
+        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+        <span class="loading-text d-none">검색중...</span>
       </button>
       <button type="button" class="btn btn-cancel search-filter-btn ms-1" id="searchResetBtn" onclick="location.href='{{ target_url }}'" style="font-size: 0.8rem; min-width:30px; max-width:40px;">
         &#x21BA;
@@ -97,6 +99,45 @@
     <span style="opacity:0;">0건 검색되었습니다.</span>
   {% endif %}
 </div>
+
+<!-- 로딩 오버레이 -->
+<div id="loadingOverlay" class="d-none">
+  <div class="loading-content">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">로딩중...</span>
+    </div>
+    <div class="mt-2">검색 중입니다...</div>
+  </div>
+</div>
+
+<style>
+#loadingOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.8);
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-content {
+  text-align: center;
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* 검색 버튼 상태 스타일 */
+#searchBtn.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+</style>
 
 <script>
   // 검색조건 입력값을 localStorage에 저장/복원 (검색 버튼 클릭 시)

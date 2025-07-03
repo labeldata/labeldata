@@ -17,6 +17,69 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // 검색 폼 제출 이벤트 처리
+    const searchForm = document.getElementById('searchFilterForm');
+    const searchBtn = document.getElementById('searchBtn');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const foodCategorySelect = document.getElementById('foodCategorySelect');
+    
+    if (searchForm && searchBtn) {
+        searchForm.addEventListener('submit', function(e) {
+            // 로딩 상태 시작
+            showLoadingState();
+        });
+    }
+    
+    // 카테고리 변경 시에도 로딩 표시
+    if (foodCategorySelect) {
+        foodCategorySelect.addEventListener('change', function() {
+            showLoadingState();
+        });
+    }
+    
+    // 페이지 로드 완료 시 로딩 상태 숨김
+    window.addEventListener('load', function() {
+        hideLoadingState();
+    });
+    
+    function showLoadingState() {
+        // 검색 버튼 상태 변경
+        if (searchBtn) {
+            searchBtn.classList.add('loading');
+            const btnText = searchBtn.querySelector('.btn-text');
+            const spinner = searchBtn.querySelector('.spinner-border');
+            const loadingText = searchBtn.querySelector('.loading-text');
+            
+            if (btnText) btnText.classList.add('d-none');
+            if (spinner) spinner.classList.remove('d-none');
+            if (loadingText) loadingText.classList.remove('d-none');
+        }
+        
+        // 오버레이 표시
+        if (loadingOverlay) {
+            loadingOverlay.classList.remove('d-none');
+        }
+    }
+    
+    function hideLoadingState() {
+        // 검색 버튼 상태 복구
+        if (searchBtn) {
+            searchBtn.classList.remove('loading');
+            const btnText = searchBtn.querySelector('.btn-text');
+            const spinner = searchBtn.querySelector('.spinner-border');
+            const loadingText = searchBtn.querySelector('.loading-text');
+            
+            if (btnText) btnText.classList.remove('d-none');
+            if (spinner) spinner.classList.add('d-none');
+            if (loadingText) loadingText.classList.add('d-none');
+        }
+        
+        // 오버레이 숨김
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('d-none');
+        }
+    }
+    
     function checkInputValue(input) {
         if (input.value.trim() !== '') {
             input.classList.add('has-value');
@@ -51,19 +114,31 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             e.stopPropagation();
             
+            // 로딩 상태 시작
+            showLoadingState();
+            
             // href에서 정렬 정보 추출
             const href = this.getAttribute('href');
-            if (!href) return;
+            if (!href) {
+                hideLoadingState();
+                return;
+            }
             
             // 기존 href의 정렬 파라미터 추출
             const urlMatch = href.match(/\?(.+)$/);
-            if (!urlMatch) return;
+            if (!urlMatch) {
+                hideLoadingState();
+                return;
+            }
             
             const params = new URLSearchParams(urlMatch[1]);
             const sortField = params.get('sort');
             const sortOrder = params.get('order');
             
-            if (!sortField || !sortOrder) return;
+            if (!sortField || !sortOrder) {
+                hideLoadingState();
+                return;
+            }
             
             console.log('Sort button clicked:', sortField, sortOrder);
             
@@ -83,6 +158,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 초기 정렬 상태 표시
     updateSortButtonsDisplay();
+    
+    // 페이지네이션 링크에 로딩 상태 추가
+    document.querySelectorAll('.pagination a').forEach(link => {
+        link.addEventListener('click', function(e) {
+            // 현재 페이지가 아닌 경우에만 로딩 표시
+            if (!this.closest('.page-item').classList.contains('active')) {
+                showLoadingState();
+            }
+        });
+    });
 });
 
 function openDetailPopup(reportNo) {
