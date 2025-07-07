@@ -1626,7 +1626,7 @@ def food_type_settings(request):
 
     
     try:
-        ft = FoodType.objectsfilter(food_type=food_type).first()
+        ft = FoodType.objects.filter(food_type=food_type).first()
         
         if not ft:
             return JsonResponse({

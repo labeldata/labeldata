@@ -425,44 +425,71 @@ document.addEventListener('DOMContentLoaded', function () {
   function updateCheckboxesByFoodType(foodType) {
     if (!foodType) return;
     
+    console.log('updateCheckboxesByFoodType called with:', foodType);
+    
     return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
       .then(response => response.json())
       .then(data => {
+        console.log('API response:', data);
+        
         if (!data.success || !data.settings) {
+          console.error('API error:', data.error || 'No settings returned');
           return;
         }
+        
         const settings = data.settings;
-        // 규정 정보와 소비기한 옵션은 항상 업데이트
+        
+        // 규정 정보 업데이트 - 여러 가능한 선택자로 시도
         if (settings.relevant_regulations !== undefined) {
-          const textarea = document.querySelector('textarea[name="related_regulations"]');
+          const textarea = document.querySelector('textarea[name="related_regulations"]') || 
+                          document.querySelector('#regulation-content textarea') ||
+                          document.querySelector('#regulationPanel textarea');
+          
           if (textarea) {
-            textarea.value = settings.relevant_regulations;
-            updateTextareaHeight(textarea);
+            console.log('Found regulations textarea, updating with:', settings.relevant_regulations);
+            textarea.value = settings.relevant_regulations || '해당 식품유형에 대한 규정 정보가 없습니다.';
+            if (typeof updateTextareaHeight === 'function') {
+              updateTextareaHeight(textarea);
+            }
+          } else {
+            console.warn('Regulations textarea not found');
           }
         }
+        
+        // 날짜 옵션 업데이트
         if (settings.pog_daycnt_options !== undefined) {
+          console.log('Updating date options:', settings.pog_daycnt_options);
           updateDateDropdownOptions(settings.pog_daycnt_options);
         }
         
         // 체크박스 업데이트 항상 실행
         Object.keys(settings).forEach(field => {
+          if (field === 'relevant_regulations' || field === 'pog_daycnt_options') return;
+          
           const value = settings[field];
           const checkboxId = fieldMappings[field] || `chk_${field}`;
           const checkbox = document.getElementById(checkboxId);
+          
           if (checkbox) {
+            console.log(`Updating checkbox ${checkboxId}: ${value}`);
             checkbox.checked = value === 'Y';
             checkbox.disabled = value === 'D';
             checkbox.dataset.forcedDisabled = value === 'D' ? 'true' : 'false';
             checkbox.dispatchEvent(new Event('change'));
           }
+          
           if (field === 'pog_daycnt') {
             updateDateDropdown(settings.pog_daycnt);
           }
+          
           // 내용량 타입 자동 선택 로직
           if (field === 'weight_calorie') {
             updateContentTypeByFoodType(value);
           }
         });
+      })
+      .catch(error => {
+        console.error('Error updating checkboxes:', error);
       });
   }  // 식품유형에 따른 내용량 타입 자동 설정
   function updateContentTypeByFoodType(weightCalorieValue) {
@@ -606,28 +633,53 @@ document.addEventListener('DOMContentLoaded', function () {
   // ------------------ 날짜 드롭다운 업데이트 ------------------
   function updateDateDropdown(value) {
     const dateOptions = document.querySelector('select[name="date_option"]');
-    if (!dateOptions) return;
+    if (!dateOptions) {
+      console.warn('Date options select not found in updateDateDropdown');
+      return;
+    }
+    
+    console.log('updateDateDropdown called with value:', value);
+    
     dateOptions.disabled = value === 'D';
     Array.from(dateOptions.options).forEach(option => (option.disabled = value === 'D'));
-    if (value === 'D') dateOptions.value = '';
+    if (value === 'D') {
+      dateOptions.value = '';
+    }
+    
+    console.log('Date dropdown state updated - disabled:', dateOptions.disabled);
   }
 
   function updateDateDropdownOptions(options) {
     const dateOptions = document.querySelector('select[name="date_option"]');
-    if (!dateOptions) return;
+    if (!dateOptions) {
+      console.warn('Date options select not found');
+      return;
+    }
+    
+    console.log('Updating date dropdown with options:', options);
+    
     const currentValue = dateOptions.value;
-    if (!dateOptions.dataset.originalOptions) dateOptions.dataset.originalOptions = dateOptions.innerHTML;
+    if (!dateOptions.dataset.originalOptions) {
+      dateOptions.dataset.originalOptions = dateOptions.innerHTML;
+    }
 
     dateOptions.innerHTML = '';
     if (options?.length) {
       options.forEach(option => {
-        if (option) dateOptions.append(new Option(option, option));
+        if (option) {
+          const optionElement = new Option(option, option);
+          if (currentValue === option) optionElement.selected = true;
+          dateOptions.append(optionElement);
+        }
       });
-      dateOptions.value = options.includes(currentValue) ? currentValue : options[0] || '';
+      if (!options.includes(currentValue) && options[0]) {
+        dateOptions.value = options[0];
+      }
     } else {
       dateOptions.innerHTML = dateOptions.dataset.originalOptions || '';
     }
     dateOptions.disabled = false;
+    console.log('Date dropdown updated successfully');
   }
   // ------------------ 체크박스 필드 토글 ------------------
   function initCheckboxFieldToggle() {
