@@ -415,7 +415,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
     total_saved = 0
     session = requests.Session()
     debug_responses = []
-    categories = ["가공식품", "식품첨가물"]
+    categories = ["가공식품", "식품첨가물", "축산물"]
 
     try:
         for category in categories:
