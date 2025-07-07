@@ -49,26 +49,52 @@ function saveToMyLabel(prdlst_report_no, imported_mode) {
 
 function saveToMyIngredients(prdlst_report_no, imported_mode) {
     console.log("saveToMyIngredients 호출됨", prdlst_report_no, imported_mode);
-    fetch(`/label/save-to-my-ingredients/${prdlst_report_no}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCookie('csrftoken'),
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ imported_mode: imported_mode })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert("내원료로 저장되었습니다.");
-        } else {
-            alert(data.error || '내원료 저장에 실패했습니다.');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('내원료 저장 중 오류가 발생했습니다.');
-    });
+    if (!prdlst_report_no) {
+        alert("품목보고번호가 누락되었습니다.");
+        return;
+    }
+
+    const sendRequest = (confirmFlag = false) => {
+        const url = `/label/save-to-my-ingredients/${prdlst_report_no}/`;
+        // imported_mode와 confirm 플래그를 body에 포함
+        const bodyData = JSON.stringify(
+            confirmFlag
+                ? { confirm: true, imported_mode: imported_mode }
+                : { imported_mode: imported_mode }
+        );
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: bodyData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message || "내원료로 저장되었습니다.");
+            } else if (data.confirm_required) {
+                // 이미 저장된 내원료가 있을 경우
+                if (confirm(data.message)) {
+                    // 사용자가 확인하면 다시 요청
+                    sendRequest(true);
+                } else {
+                    alert("저장이 취소되었습니다.");
+                }
+            } else {
+                alert("저장 실패: " + (data.error || "알 수 없는 오류"));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('내원료 저장 중 오류가 발생했습니다.');
+        });
+    };
+
+    // 최초 요청 (confirm 플래그 없이)
+    sendRequest();
 }
 
 function saveItem(prdlst_report_no) {

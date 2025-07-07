@@ -656,6 +656,7 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
     try:
         data = json.loads(request.body) if request.body else {}
         imported_mode = to_bool(data.get("imported_mode", False))
+        confirm = data.get("confirm", False)
 
         food_item = None
         imported_item = None
@@ -686,6 +687,21 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
             else:
                 food_category = "additive"
             bssh_nm_value = food_item.bssh_nm or "미정"
+
+        # 중복 확인 로직 추가
+        if not confirm:
+            existing_ingredient = MyIngredient.objects.filter(
+                user_id=request.user,
+                prdlst_nm=prdlst_nm,
+                delete_YN='N'
+            ).first()
+            
+            if existing_ingredient:
+                return JsonResponse({
+                    "success": False,
+                    "confirm_required": True,
+                    "message": f"동일한 이름의 내원료 '{prdlst_nm}'가 이미 존재합니다. 그래도 저장하시겠습니까?"
+                })
 
         # ------------------- 추천 로직 통합 -------------------
         mixture_types = [
