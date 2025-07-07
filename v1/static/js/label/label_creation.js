@@ -401,6 +401,24 @@ document.addEventListener('DOMContentLoaded', function () {
       const sectionEl = document.getElementById(section);
       if (!btnEl || !sectionEl) return;
 
+      // other-manufacturers 섹션의 경우 체크박스 상태에 따라 초기 표시 상태 결정
+      if (section === 'other-manufacturers') {
+        const distributorCheckbox = document.getElementById('chk_distributor_address');
+        const repackerCheckbox = document.getElementById('chk_repacker_address');
+        const importerCheckbox = document.getElementById('chk_importer_address');
+        
+        const shouldExpand = (distributorCheckbox && distributorCheckbox.checked) ||
+                            (repackerCheckbox && repackerCheckbox.checked) ||
+                            (importerCheckbox && importerCheckbox.checked);
+        
+        if (shouldExpand) {
+          // Bootstrap collapse로 펼치기
+          sectionEl.classList.add('show');
+          btnEl.innerText = showText;
+          btnEl.setAttribute('title', showTitle);
+        }
+      }
+
       if (toggleFn) {
         btnEl.addEventListener('click', () => {
           const isHidden = sectionEl.style.display === 'none' || sectionEl.classList.contains('collapsed');
@@ -447,7 +465,7 @@ document.addEventListener('DOMContentLoaded', function () {
           
           if (textarea) {
             console.log('Found regulations textarea, updating with:', settings.relevant_regulations);
-            textarea.value = settings.relevant_regulations || '해당 식품유형에 대한 규정 정보가 없습니다.';
+            textarea.value = settings.relevant_regulations || '해당 식품유형에 관련된 규정이 없습니다.';
             if (typeof updateTextareaHeight === 'function') {
               updateTextareaHeight(textarea);
             }
