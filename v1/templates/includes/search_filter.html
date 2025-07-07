@@ -45,10 +45,10 @@
         <input type="text" name="allergens" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="알레르기" value="{{ search_values.allergens|default_if_none:'' }}">
         <input type="text" name="gmo" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="GMO" value="{{ search_values.gmo|default_if_none:'' }}">
       {% elif page_type == "label" %}
-        <select name="prdlst_report_status" class="form-select flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;">
+        <select name="prdlst_report_status" class="form-select flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" onchange="this.form.submit()">
           <option value="">품보 신고 전체</option>
-          <option value="completed" {% if search_values.report_no_verify_YN == "Y" %}selected{% endif %}>신고 완료</option>
-          <option value="pending" {% if search_values.report_no_verify_YN == "N" %}selected{% endif %}>신고 대기</option>
+          <option value="completed" {% if prdlst_report_status == "completed" %}selected{% endif %}>신고 완료</option>
+          <option value="pending" {% if prdlst_report_status == "pending" %}selected{% endif %}>신고 대기</option>
         </select>
         <input type="text" name="my_label_name" class="form-control flex-grow-1"
                style="font-size: 0.8rem; min-width:110px; max-width:180px;"
@@ -94,9 +94,9 @@
 <!-- 검색 결과 건수 표시 영역: 항상 공간 확보, 투명도 조절 -->
 <div class="mb-2" style="min-height:1.7em;">
   {% if search_result_count is not None %}
-    <span class="text-primary fw-bold">{{ search_result_count }}</span>건 검색되었습니다.
+    <span class="text-primary fw-bold">{{ search_result_count }}</span>건이 조회되었습니다.
   {% else %}
-    <span style="opacity:0;">0건 검색되었습니다.</span>
+    <span style="opacity:0;">0건이 조회되었습니다.</span>
   {% endif %}
 </div>
 

@@ -222,9 +222,8 @@ def my_label_list(request):
     paginator, page_obj, page_range = paginate_queryset(labels, page_number, items_per_page)
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
 
-    # 검색 조건이 있는지 확인
-    has_search_conditions = any(search_values.values()) or prdlst_report_status
-    search_result_count = total_count if has_search_conditions else None
+    # 항상 총 건수 표시 (검색 조건 유무와 관계없이)
+    search_result_count = total_count
 
     context = {
         "page_obj": page_obj,
@@ -247,6 +246,7 @@ def my_label_list(request):
         "ingredient_id": ingredient_id,
         "ingredient_name": ingredient_name,
         "search_result_count": search_result_count,  # 검색 결과 건수 추가
+        "prdlst_report_status": prdlst_report_status,  # 품보 신고 상태 추가
     }
 
     return render(request, "label/my_label_list.html", context)
