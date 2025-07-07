@@ -17,21 +17,21 @@ function updateAllergyInfo() {
 }
 window.updateAllergyInfo = updateAllergyInfo;
 
-// GMO 정보를 업데이트하는 함수
+// GMO 정보를 업데이트하는 함수 (체크박스용)
 function updateGmoInfo() {
-    const gmoOptions = document.querySelectorAll('#gmoSelection input[type="radio"]');
-    let selectedGmo = '';
+    const gmoOptions = document.querySelectorAll('#gmoSelection input[type="checkbox"]');
+    let selectedGmos = [];
     
     gmoOptions.forEach(option => {
         if (option.checked) {
-            selectedGmo = option.value;
+            selectedGmos.push(option.value);
         }
     });
     
-    // 선택된 GMO 정보를 필드에 설정
+    // 선택된 GMO 정보를 필드에 설정 (콤마로 구분)
     var gmoField = document.getElementById('gmo_info') || document.getElementById('gmo');
     if (gmoField) {
-        gmoField.value = selectedGmo;
+        gmoField.value = selectedGmos.join(', ');
     }
 }
 window.updateGmoInfo = updateGmoInfo;
@@ -68,23 +68,24 @@ function showAllergyOptions() {
 }
 window.showAllergyOptions = showAllergyOptions;
 
-// GMO 옵션 표시 함수
+// GMO 옵션 표시 함수 (체크박스용)
 function showGmoOptions() {
     const optionsContainer = document.getElementById('gmoOptions');
     if (!optionsContainer) return;
     optionsContainer.innerHTML = '';
     const currentGmo = document.getElementById('gmo_info').value.trim();
+    const currentGmos = currentGmo ? currentGmo.split(',').map(g => g.trim()) : [];
     const gmoOptions = ['대두', '옥수수', '면화', '카놀라', '사탕무', '알팔파'];
     gmoOptions.forEach(option => {
         const div = document.createElement('div');
         div.className = 'form-check form-check-inline mb-1';
         const input = document.createElement('input');
-        input.type = 'radio';
+        input.type = 'checkbox';
         input.className = 'form-check-input';
         input.name = 'gmo-option';
         input.id = `gmo-${option}`;
         input.value = option;
-        input.checked = currentGmo === option;
+        input.checked = currentGmos.includes(option);
         input.onchange = updateGmoInfo;
         const label = document.createElement('label');
         label.className = 'form-check-label';

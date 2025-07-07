@@ -1,4 +1,24 @@
 {% load static %}
+<style>
+  /* 알레르기/GMO 필드 회색 배경 */
+  .readonly-bg {
+    background-color: #e9ecef !important;
+    border-color: #ced4da !important;
+  }
+  
+  .readonly-bg:focus {
+    background-color: #e9ecef !important;
+    border-color: #ced4da !important;
+    box-shadow: 0 0 0 0.2rem rgba(206, 212, 218, 0.25) !important;
+  }
+  
+  /* 더 구체적인 선택자로 우선순위 높이기 */
+  #allergy_info.readonly-bg,
+  #gmo_info.readonly-bg {
+    background-color: #e9ecef !important;
+    color: #6c757d !important;
+  }
+</style>
 <div class="popup-container" id="ingredient-detail-container-partial">
     <div class="panel-header">
         <h5 class="panel-title">
@@ -59,7 +79,7 @@
                         <th>알레르기</th>
                         <td colspan="3">
                             <div class="d-flex">
-                                <input type="text" class="form-control" name="allergens" id="allergy_info"
+                                <input type="text" class="form-control readonly-bg" name="allergens" id="allergy_info"
                                        placeholder="알레르기 선택"
                                        value="{{ ingredient.allergens|default:'' }}"
                                        readonly>
@@ -80,7 +100,7 @@
                         <th>GMO</th>
                         <td colspan="3">
                             <div class="d-flex">
-                                <input type="text" class="form-control" name="gmo" id="gmo_info"
+                                <input type="text" class="form-control readonly-bg" name="gmo" id="gmo_info"
                                        placeholder="GMO 선택"
                                        value="{{ ingredient.gmo|default:'' }}"
                                        readonly>
