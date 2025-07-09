@@ -17,7 +17,7 @@
           <input type="text" name="bsn_ofc_name" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="수입업체" value="{{ search_values.bsn_ofc_name|default_if_none:'' }}">
           <input type="text" name="bssh_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제조사명" value="{{ search_values.bssh_nm|default_if_none:'' }}">
           <input type="text" name="pog_daycnt" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="소비기한" value="{{ search_values.pog_daycnt|default_if_none:'' }}">
-          <input type="text" name="rawmtrl_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명" value="{{ search_values.rawmtrl_nm|default_if_none:'' }}">
+          <input type="text" name="rawmtrl_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명 (,=OR / +=AND)" value="{{ search_values.rawmtrl_nm|default_if_none:'' }}">
         {% else %}
           <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="품목보고번호" value="{{ search_values.prdlst_report_no|default_if_none:'' }}">
           <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
@@ -25,7 +25,7 @@
           <input type="text" name="bssh_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제조사명" value="{{ search_values.bssh_nm|default_if_none:'' }}">
           <input type="text" name="pog_daycnt" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="소비기한" value="{{ search_values.pog_daycnt|default_if_none:'' }}">
           <input type="text" name="frmlc_mtrqlt" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="포장재질" value="{{ search_values.frmlc_mtrqlt|default_if_none:'' }}">
-          <input type="text" name="rawmtrl_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명" value="{{ search_values.rawmtrl_nm|default_if_none:'' }}">
+          <input type="text" name="rawmtrl_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명 (,=OR / +=AND)" value="{{ search_values.rawmtrl_nm|default_if_none:'' }}">
         {% endif %}
       {% elif page_type == "ingredient" %}
         <div style="min-width:110px;max-width:120px;flex:0 0 120px;">

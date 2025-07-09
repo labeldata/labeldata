@@ -37,7 +37,34 @@ def get_search_conditions(request, search_fields):
     for field, query_param in search_fields.items():
         value = request.GET.get(query_param, "").strip()
         if value:
-            search_conditions &= Q(**{f"{field}__icontains": value})
+            # 원재료명 검색에서 쉼표로 구분된 검색 지원
+            if field == "rawmtrl_nm":
+                # 플러스(+)로 구분하여 AND 검색
+                if '+' in value:
+                    # 플러스로 구분된 경우 AND 검색 (모든 조건이 만족되어야 함)
+                    search_terms = [term.strip() for term in value.split('+') if term.strip()]
+                    if search_terms:
+                        # 각 검색어에 대해 AND 조건으로 LIKE 검색
+                        rawmtrl_conditions = Q()
+                        for term in search_terms:
+                            rawmtrl_conditions &= Q(**{f"{field}__icontains": term})
+                        search_conditions &= rawmtrl_conditions
+                # 쉼표로 구분하여 OR 검색
+                elif ',' in value:
+                    # 여러 검색어가 있는 경우 OR 검색
+                    search_terms = [term.strip() for term in value.split(',') if term.strip()]
+                    if search_terms:
+                        # 각 검색어에 대해 OR 조건으로 LIKE 검색
+                        rawmtrl_conditions = Q()
+                        for term in search_terms:
+                            rawmtrl_conditions |= Q(**{f"{field}__icontains": term})
+                        search_conditions &= rawmtrl_conditions
+                else:
+                    # 단일 검색어인 경우 기존 LIKE 검색
+                    search_conditions &= Q(**{f"{field}__icontains": value})
+            else:
+                # 다른 필드는 기존 방식 유지
+                search_conditions &= Q(**{f"{field}__icontains": value})
             search_values[query_param] = value
     return search_conditions, search_values
 
