@@ -37,33 +37,33 @@ def get_search_conditions(request, search_fields):
     for field, query_param in search_fields.items():
         value = request.GET.get(query_param, "").strip()
         if value:
-            # 원재료명 검색에서 쉼표로 구분된 검색 지원
-            if field == "rawmtrl_nm":
+            # 원료 표시명, 알레르기, GMO 검색에서 쉼표/플러스 구분 검색 지원
+            if field in ["ingredient_display_name", "allergens", "gmo"]:
                 # 플러스(+)로 구분하여 AND 검색
                 if '+' in value:
                     # 플러스로 구분된 경우 AND 검색 (모든 조건이 만족되어야 함)
                     search_terms = [term.strip() for term in value.split('+') if term.strip()]
                     if search_terms:
                         # 각 검색어에 대해 AND 조건으로 LIKE 검색
-                        rawmtrl_conditions = Q()
+                        field_conditions = Q()
                         for term in search_terms:
-                            rawmtrl_conditions &= Q(**{f"{field}__icontains": term})
-                        search_conditions &= rawmtrl_conditions
+                            field_conditions &= Q(**{f"{field}__icontains": term})
+                        search_conditions &= field_conditions
                 # 쉼표로 구분하여 OR 검색
                 elif ',' in value:
                     # 여러 검색어가 있는 경우 OR 검색
                     search_terms = [term.strip() for term in value.split(',') if term.strip()]
                     if search_terms:
                         # 각 검색어에 대해 OR 조건으로 LIKE 검색
-                        rawmtrl_conditions = Q()
+                        field_conditions = Q()
                         for term in search_terms:
-                            rawmtrl_conditions |= Q(**{f"{field}__icontains": term})
-                        search_conditions &= rawmtrl_conditions
+                            field_conditions |= Q(**{f"{field}__icontains": term})
+                        search_conditions &= field_conditions
                 else:
                     # 단일 검색어인 경우 기존 LIKE 검색
                     search_conditions &= Q(**{f"{field}__icontains": value})
             else:
-                # 다른 필드는 기존 방식 유지
+                # 다른 필드는 기존 방식 유지 (원재료명 포함)
                 search_conditions &= Q(**{f"{field}__icontains": value})
             search_values[query_param] = value
     return search_conditions, search_values
@@ -993,6 +993,8 @@ def my_ingredient_list_combined(request):
         'prdlst_dcnm': 'prdlst_dcnm',
         'bssh_nm': 'bssh_nm',
         'ingredient_display_name': 'ingredient_display_name',
+        'allergens': 'allergens',
+        'gmo': 'gmo',
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
     search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
@@ -1001,16 +1003,6 @@ def my_ingredient_list_combined(request):
     food_category = request.GET.get('food_category', '').strip()
     if food_category:
         search_conditions &= Q(food_category=food_category)
-
-    # 알레르기, GMO 검색조건 추가
-    allergens = request.GET.get('allergens', '').strip()
-    if allergens:
-        search_conditions &= Q(allergens__icontains=allergens)
-        search_values['allergens'] = allergens
-    gmo = request.GET.get('gmo', '').strip()
-    if gmo:
-        search_conditions &= Q(gmo__icontains=gmo)
-        search_values['gmo'] = gmo
 
     sort_field, sort_order = process_sorting(request, 'prdlst_nm')
     items_per_page = int(request.GET.get('items_per_page', 10))

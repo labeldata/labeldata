@@ -235,33 +235,6 @@
     border-color: #007bff !important;
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
 }
-
-/* 원재료명 검색 필드에 쉼표가 포함된 경우 특별 스타일 */
-input[name="rawmtrl_nm"]:not(:placeholder-shown) {
-    position: relative;
-}
-
-input[name="rawmtrl_nm"]:focus {
-    background-color: #f8f9fa !important;
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-}
-
-/* 툴팁 스타일 향상 */
-input[name="rawmtrl_nm"][title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    top: 100%;
-    left: 0;
-    background: #333;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    z-index: 1000;
-    margin-top: 5px;
-}
 </style>
 
 <script src="{% static 'js/label/food_item_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>

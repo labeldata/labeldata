@@ -309,6 +309,40 @@ document.addEventListener('DOMContentLoaded', function() {
             input.classList.add('has-value');
         }
     });
+    
+    // 원료 표시명, 알레르기, GMO 검색 필드에 대한 도움말 추가
+    const searchFields = ['ingredient_display_name', 'allergens', 'gmo'];
+    
+    searchFields.forEach(fieldName => {
+        const inputs = document.querySelectorAll(`input[name="${fieldName}"]`);
+        inputs.forEach(function(input) {
+            // 포커스 시 도움말 표시
+            input.addEventListener('focus', function() {
+                let fieldLabel = '';
+                if (fieldName === 'ingredient_display_name') fieldLabel = '원료 표시명';
+                else if (fieldName === 'allergens') fieldLabel = '알레르기';
+                else if (fieldName === 'gmo') fieldLabel = 'GMO';
+                
+                this.setAttribute('title', `${fieldLabel} OR 검색: 쉼표(,)로 구분 (예: 사과, 밀가루)\n${fieldLabel} AND 검색: 플러스(+)로 구분 (예: 사과 + 밀가루)`);
+            });
+            
+            // 입력 중에도 도움말 유지
+            input.addEventListener('input', function() {
+                let fieldLabel = '';
+                if (fieldName === 'ingredient_display_name') fieldLabel = '원료 표시명';
+                else if (fieldName === 'allergens') fieldLabel = '알레르기';
+                else if (fieldName === 'gmo') fieldLabel = 'GMO';
+                
+                if (this.value.includes('+')) {
+                    this.setAttribute('title', `${fieldLabel} AND 검색: 모든 항목이 포함된 원료를 찾습니다.`);
+                } else if (this.value.includes(',')) {
+                    this.setAttribute('title', `${fieldLabel} OR 검색: 하나라도 포함된 원료를 찾습니다.`);
+                } else {
+                    this.setAttribute('title', `${fieldLabel} OR 검색: 쉼표(,)로 구분 (예: 사과, 밀가루)\n${fieldLabel} AND 검색: 플러스(+)로 구분 (예: 사과 + 밀가루)`);
+                }
+            });
+        });
+    });
 });
 
 // 좌측 행 클릭 이벤트 바인딩 함수 (AJAX로 리스트 갱신 시에도 사용)

@@ -17,7 +17,7 @@
           <input type="text" name="bsn_ofc_name" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="수입업체" value="{{ search_values.bsn_ofc_name|default_if_none:'' }}">
           <input type="text" name="bssh_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제조사명" value="{{ search_values.bssh_nm|default_if_none:'' }}">
           <input type="text" name="pog_daycnt" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="소비기한" value="{{ search_values.pog_daycnt|default_if_none:'' }}">
-          <input type="text" name="rawmtrl_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명 (,=OR / +=AND)" value="{{ search_values.rawmtrl_nm|default_if_none:'' }}">
+          <input type="text" name="rawmtrl_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명" value="{{ search_values.rawmtrl_nm|default_if_none:'' }}">
         {% else %}
           <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="품목보고번호" value="{{ search_values.prdlst_report_no|default_if_none:'' }}">
           <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
@@ -41,9 +41,9 @@
         <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
         <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">
         <input type="text" name="bssh_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제조사명" value="{{ search_values.bssh_nm|default_if_none:'' }}">
-        <input type="text" name="ingredient_display_name" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원료 표시명" value="{{ search_values.ingredient_display_name|default_if_none:'' }}">
-        <input type="text" name="allergens" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="알레르기" value="{{ search_values.allergens|default_if_none:'' }}">
-        <input type="text" name="gmo" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="GMO" value="{{ search_values.gmo|default_if_none:'' }}">
+        <input type="text" name="ingredient_display_name" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원료 표시명 (,=OR / +=AND)" value="{{ search_values.ingredient_display_name|default_if_none:'' }}">
+        <input type="text" name="allergens" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="알레르기 (,=OR / +=AND)" value="{{ search_values.allergens|default_if_none:'' }}">
+        <input type="text" name="gmo" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="GMO (,=OR / +=AND)" value="{{ search_values.gmo|default_if_none:'' }}">
       {% elif page_type == "label" %}
         <select name="prdlst_report_status" class="form-select flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" onchange="this.form.submit()">
           <option value="">품보 신고 전체</option>

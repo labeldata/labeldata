@@ -6,27 +6,6 @@ document.addEventListener('DOMContentLoaded', function() {
         checkInputValue(input);
     });
     
-    // 원재료명 검색 필드에 대한 도움말 추가
-    const rawmtrlInputs = document.querySelectorAll('input[name="rawmtrl_nm"]');
-    rawmtrlInputs.forEach(function(input) {
-        // 포커스 시 도움말 표시
-        input.addEventListener('focus', function() {
-            this.setAttribute('title', 'OR 검색: 쉼표(,)로 구분 (예: 사과, 밀가루)\nAND 검색: 플러스(+)로 구분 (예: 사과 + 밀가루)');
-        });
-        
-        // 입력 중에도 도움말 유지
-        input.addEventListener('input', function() {
-            checkInputValue(this);
-            if (this.value.includes('+')) {
-                this.setAttribute('title', 'AND 검색: 모든 재료가 포함된 제품을 찾습니다.');
-            } else if (this.value.includes(',')) {
-                this.setAttribute('title', 'OR 검색: 하나라도 포함된 제품을 찾습니다.');
-            } else {
-                this.setAttribute('title', 'OR 검색: 쉼표(,)로 구분 (예: 사과, 밀가루)\nAND 검색: 플러스(+)로 구분 (예: 사과 + 밀가루)');
-            }
-        });
-    });
-    
     // 입력 이벤트 리스너 추가
     searchInputs.forEach(function(input) {
         input.addEventListener('input', function() {

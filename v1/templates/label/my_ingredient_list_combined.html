@@ -113,6 +113,35 @@
     border-color: #007bff !important;
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
   }
+
+  /* 원료 표시명, 알레르기, GMO 검색 필드에 대한 특별 스타일 */
+  input[name="ingredient_display_name"]:focus,
+  input[name="allergens"]:focus,
+  input[name="gmo"]:focus {
+    background-color: #f8f9fa !important;
+    border-color: #007bff !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+  }
+
+  /* 툴팁 스타일 향상 */
+  input[name="ingredient_display_name"][title]:hover::after,
+  input[name="allergens"][title]:hover::after,
+  input[name="gmo"][title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #333;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: pre-line;
+    z-index: 1000;
+    margin-top: 5px;
+    max-width: 250px;
+    word-wrap: break-word;
+  }
 </style>
 
 <div class="container-fluid custom-max-width mt-4">
