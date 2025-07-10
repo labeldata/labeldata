@@ -143,7 +143,14 @@ SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
 # 임시 세션 설정 - 데이터베이스 권한 문제 해결을 위해 파일 기반 세션 사용
 # 운영 환경에서는 데이터베이스 권한 문제 해결 후 기본 설정으로 되돌릴 것
 SESSION_ENGINE = 'django.contrib.sessions.backends.file'
-SESSION_FILE_PATH = '/tmp/django_sessions'  # 세션 파일 저장 경로
+if DEBUG:
+    SESSION_FILE_PATH = str(BASE_DIR / 'sessions')  # 개발 환경
+else:
+    SESSION_FILE_PATH = '/home/labeldata/mysite/sessions'  # PythonAnywhere 환경
+
+# 세션 디렉토리 자동 생성
+import os
+os.makedirs(SESSION_FILE_PATH, exist_ok=True)
 
 # 조회수 기능 활성화 여부 (데이터베이스 권한 문제 시 False로 설정)
 ENABLE_VIEW_COUNT = config('ENABLE_VIEW_COUNT', default=True, cast=bool)
