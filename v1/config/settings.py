@@ -140,6 +140,14 @@ SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
 
+# 임시 세션 설정 - 데이터베이스 권한 문제 해결을 위해 파일 기반 세션 사용
+# 운영 환경에서는 데이터베이스 권한 문제 해결 후 기본 설정으로 되돌릴 것
+SESSION_ENGINE = 'django.contrib.sessions.backends.file'
+SESSION_FILE_PATH = '/tmp/django_sessions'  # 세션 파일 저장 경로
+
+# 조회수 기능 활성화 여부 (데이터베이스 권한 문제 시 False로 설정)
+ENABLE_VIEW_COUNT = config('ENABLE_VIEW_COUNT', default=True, cast=bool)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

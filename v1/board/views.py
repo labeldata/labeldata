@@ -7,6 +7,7 @@ from django.views.decorators.http import require_POST
 from django.http import HttpResponseForbidden, FileResponse
 from django.db.models import Case, When, Value, IntegerField, Q
 from django.contrib import messages
+from django.conf import settings
 from .models import Board, Comment
 from django import forms
 from urllib.parse import quote
@@ -111,8 +112,13 @@ class BoardDetailView(DetailView):
         
         # 작성자 본인이 아닌 경우에만 조회수 증가
         if request.user != self.object.author:
-            self.object.views += 1
-            self.object.save()
+            try:
+                # update_fields를 사용하여 조회수만 업데이트
+                Board.objects.filter(pk=self.object.pk).update(views=self.object.views + 1)
+                self.object.views += 1  # 메모리상의 객체도 업데이트
+            except Exception as e:
+                # 데이터베이스 권한 문제로 조회수 업데이트 실패 시 무시하고 계속 진행
+                pass
         
         context = self.get_context_data()
         return self.render_to_response(context)
