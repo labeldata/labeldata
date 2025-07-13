@@ -137,7 +137,7 @@
                         {% if label.report_no_verify_YN == 'Y' %}
                             <span class="badge bg-success">신고 완료</span>
                         {% else %}
-                            <span class="badge bg-secondary">신고 대기</span>
+                            <span class="badge bg-secondary">미확인</span>
                         {% endif %}
                     </td>                    <td class="ellipsis-cell" title="{{ label.my_label_name|default:'' }}">{{ label.my_label_name|default:"" }}</td>
                     <td class="ellipsis-cell" title="{{ label.prdlst_nm|default:'' }}">{{ label.prdlst_nm|default:"" }}</td>

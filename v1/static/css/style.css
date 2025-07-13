@@ -102,6 +102,58 @@ body {
     text-align: center;
     width: 15%;
 }
+
+/* 정렬 버튼 간격 추가 */
+.sort-buttons {
+    margin-left: 6px !important;
+    display: inline-flex;
+    gap: 0.15rem;
+    vertical-align: middle;
+}
+
+/* 번호 컬럼 전용 스타일 - 텍스트 잘림 방지 */
+/* 제품 조회 리스트의 번호 컬럼 (첫 번째 컬럼) */
+.table th:first-child,
+.table td:first-child,
+.common-table th:first-child,
+.common-table td:first-child {
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    padding: 8px 4px !important; /* 좌우 패딩 줄임 */
+    text-align: center !important;
+    min-width: 50px !important;
+    max-width: none !important;
+}
+
+/* 표시사항 관리 리스트의 번호 컬럼 (두 번째 컬럼, 체크박스 다음) */
+.table th:nth-child(2),
+.table td:nth-child(2),
+.common-table th:nth-child(2),
+.common-table td:nth-child(2) {
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    padding: 8px 4px !important; /* 좌우 패딩 줄임 */
+    text-align: center !important;
+    min-width: 50px !important;
+    max-width: none !important;
+}
+
+/* 번호 컬럼에는 ellipsis-cell 클래스 효과 제거 */
+.table th:first-child.ellipsis-cell,
+.table td:first-child.ellipsis-cell,
+.table th:nth-child(2).ellipsis-cell,
+.table td:nth-child(2).ellipsis-cell,
+.common-table th:first-child.ellipsis-cell,
+.common-table td:first-child.ellipsis-cell,
+.common-table th:nth-child(2).ellipsis-cell,
+.common-table td:nth-child(2).ellipsis-cell {
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+}
 .nutrition-table td[colspan="3"] {
     width: 85%;
 }
