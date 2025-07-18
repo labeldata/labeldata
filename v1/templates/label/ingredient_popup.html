@@ -177,6 +177,14 @@
             color: #fff !important;
             cursor: default;
         }
+        /* 모달 검색 결과 필드 읽기 전용 처리 */
+        #modalSearchResults input,
+        #modalSearchResults select,
+        #modalSearchResults textarea {
+            pointer-events: none;
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+        }
     </style>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -267,9 +275,7 @@
         </div>
         <div class="action-buttons">
             <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#ingredientSearchModal">추가</button>
-            {% if user.username != 'guest@labeasylabel.com' %}
             <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeSelectedRows()">삭제</button>
-            {% endif %}
             <button type="button" class="btn btn-primary btn-sm" onclick="saveIngredients()">저장</button>
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
         </div>
