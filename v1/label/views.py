@@ -17,7 +17,7 @@ from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredien
 from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  # 지우지 않음
 from django.utils.safestring import mark_safe
-from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS, CATEGORY_CHOICES  # FIELD_REGULATIONS 및 CATEGORY_CHOICES 추가
+from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS, CATEGORY_CHOICES, EXPIRY_RECOMMENDATION
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
 from rapidfuzz import fuzz  # fuzzywuzzy 대신 rapidfuzz 사용
@@ -1239,8 +1239,6 @@ def save_ingredients_to_label(request, label_id):
 
 @login_required
 @csrf_exempt
-@login_required
-@csrf_exempt
 def delete_my_ingredient(request, ingredient_id):
     # 게스트 사용자는 삭제 불가
     if request.user.username == 'guest@labeasylabel.com':
@@ -1412,6 +1410,8 @@ def register_my_ingredient(request):
             delete_YN='N'
         )
         # 메시지 제거 - JSON 응답만 반환
+        return JsonResponse({'success': True})
+    except Exception as e:
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
@@ -2017,7 +2017,9 @@ def preview_popup(request):
             'allergens': list(set(allergens)),  # 중복 제거
             'origins': list(set(origins)),       # 중복 제거
             'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
-            'country_list': json.dumps(country_list, ensure_ascii=False)  # JSON 직렬화
+            'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
+            'expiry_recommendation_json': json.dumps(EXPIRY_RECOMMENDATION, ensure_ascii=False)  # 소비기한 권장 데이터 추가
+
         }
         
         return render(request, 'label/label_preview.html', context)

@@ -875,7 +875,7 @@ document.addEventListener('DOMContentLoaded', function () {
       div.addEventListener('click', () => {
         if (!textarea) return;
         if (isMultiSelect) {
-          const values = textarea.value.split('\n').map(v => v.trim()).filter(Boolean);
+          const values = textarea.value.split(' | ').map(v => v.trim()).filter(Boolean);
           const index = values.indexOf(p.content);
           if (index === -1) {
             values.push(p.content);
@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', function () {
             values.splice(index, 1);
             div.style.backgroundColor = '#fff';
           }
-          textarea.value = values.join('\n');
+          textarea.value = values.join(' | ');
         } else {
           const isSelected = textarea.value === p.content;
           textarea.value = isSelected ? '' : p.content;

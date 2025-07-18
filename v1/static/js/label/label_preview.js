@@ -68,10 +68,24 @@ document.addEventListener('DOMContentLoaded', function () {
             "냉동식품": ["해동 후 재냉동 금지"]
         },
         expiry_limits: {
-            frozen: 24, // 냉동식품: 최대 24개월
-            default: 12 // 기타: 최대 12개월
-        }
+            frozen: 48, // 냉동식품: 최대 48개월
+            default: 36 // 기타: 최대 36개월
+        },
+        // 아래 expiry_recommendation 객체가 백엔드로부터 전달되어야 합니다.
+        expiry_recommendation: {} // 초기에는 비워둠
     };
+
+    // 백엔드에서 전달된 소비기한 권장 데이터를 REGULATIONS 객체에 주입
+    try {
+        const expiryDataElement = document.getElementById('expiry-recommendation-data');
+        if (expiryDataElement) {
+            const expiryData = JSON.parse(expiryDataElement.textContent);
+            REGULATIONS.expiry_recommendation = expiryData;
+        }
+    } catch (e) {
+        console.error('소비기한 권장 데이터 파싱 오류:', e);
+    }
+
 
     // 분리배출마크 구분값 및 이미지 매핑
     const recyclingMarkGroups = [
@@ -749,6 +763,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
 
+            // 테이블 내용 생성 후 스타일 즉시 적용 (레이아웃 깨짐 방지)
+            updatePreviewStyles();
+
             // 포장재질 기반 추천
             const frmlc = checkedFields.frmlc_mtrqlt || '';
             renderRecyclingMarkUI();
@@ -926,9 +943,27 @@ document.addEventListener('DOMContentLoaded', function () {
         const allergenMatch = rawmtrl.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/i);
         if (allergenMatch) {
             const allergens = allergenMatch[1].split(',').map(a => a.trim().toLowerCase());
-            const duplicated = allergens.filter(allergen => cautions.toLowerCase().includes(allergen));
-            if (duplicated.length > 0) {
-                errors.push(`주의사항에 원재료명의 알레르기 성분이 중복 표시되었습니다: ${duplicated.join(', ')}`);
+            const cautionsLower = cautions.toLowerCase();
+            const finalDuplicatedMessages = [];
+
+            // 일반 알레르기 성분 및 '알류' 포함하여 한번에 검사
+            allergens.forEach(allergen => {
+                if (allergen === '알류') {
+                    const eggRelatedTerms = ['알류', '난류', '계란', '메츄리알', '오리알', '달걀'];
+                    const foundEggTerms = eggRelatedTerms.filter(term => cautionsLower.includes(term));
+                    
+                    if (foundEggTerms.length > 0) {
+                        finalDuplicatedMessages.push(`알류(${foundEggTerms.join(', ')})`);
+                    }
+                } else {
+                    if (cautionsLower.includes(allergen)) {
+                        finalDuplicatedMessages.push(allergen);
+                    }
+                }
+            });
+
+            if (finalDuplicatedMessages.length > 0) {
+                errors.push(`주의사항에 원재료명의 알레르기 성분이 중복 표시되었습니다: ${finalDuplicatedMessages.join(', ')}`);
             }
         }
         return { errors, suggestions };
@@ -943,52 +978,53 @@ document.addEventListener('DOMContentLoaded', function () {
         const cautions      = (checkedFields.cautions || '').trim();
         const additional    = (checkedFields.additional_info || '').trim();
 
-        // 온도 표시 검증 함수
-        function hasFrozenTemp() {
-            return (
-                storageMethod.includes('-18℃') ||
-                cautions.includes('-18℃') ||
-                additional.includes('-18℃')
-            );
-        }
-        function hasRefrigerateTemp() {
-            const regex = /냉장보관\s*\(?\d+\s*~\s*\d+℃/;
-            return (
-                regex.test(storageMethod) ||
-                regex.test(cautions) ||
-                regex.test(additional)
-            );
-        }
+        // --- 신규 검증 로직 ---
 
-        // 냉동 검증
-        if (storageMethod.includes('냉동')) {
-            if (!foodType.includes('냉동')) {
-                errors.push('냉동제품은 식품유형에 "냉동"을 표시해야 합니다.');
+        // 1. 냉동 조건 검증
+        const isFrozenStorage = (() => {
+            if (storageMethod.includes('냉동')) return true;
+            const tempRegex = /(-?\d+(\.\d+)?)\s*(℃|도)/g;
+            let match;
+            while ((match = tempRegex.exec(storageMethod)) !== null) {
+                const tempValue = parseFloat(match[1]);
+                if (!isNaN(tempValue) && tempValue <= -18) {
+                    return true; // -18도 이하 온도가 있으면 냉동으로 간주
+                }
             }
-            if (!cautions.includes('냉동') && !additional.includes('냉동')) {
-                errors.push('냉동제품은 주의사항 또는 기타표시사항에 "냉동"을 표시해야 합니다.');
-            }
-            if (!hasFrozenTemp()) {
-                errors.push('냉동제품은 보관방법, 주의사항 또는 기타표시사항에 "-18℃ 이하"를 표시해야 합니다.');
-            }
-            // 해동 후 재냉동 금지
-            const hasRefreezeProhibit = 
-                cautions.includes('해동 후 재냉동 금지') ||
-                additional.includes('해동 후 재냉동 금지');
-            if (!hasRefreezeProhibit) {
-                errors.push('냉동제품은 기타표시사항에 "해동 후 재냉동 금지"를 표시해야 합니다.');
+            return false;
+        })();
+
+        if (isFrozenStorage) {
+            const hasRequiredFrozenKeywords = cautions.includes('해동') || cautions.includes('재냉동') || additional.includes('해동') || additional.includes('재냉동');
+            if (!hasRequiredFrozenKeywords) {
+                errors.push('냉동 보관 제품은 주의사항 또는 기타표시사항에 "해동" 또는 "재냉동" 관련 문구를 포함해야 합니다.');
             }
         }
 
-        // 냉장 검증
-        if (storageMethod.includes('냉장')) {
-            if (!cautions.includes('냉장') && !additional.includes('냉장')) {
-                errors.push('냉장제품은 주의사항 또는 기타표시사항에 "냉장"을 표시해야 합니다.');
+        // 2. 냉장 조건 검증
+        const isRefrigeratedStorage = (() => {
+            if (storageMethod.includes('냉장')) return true;
+            const rangeRegex = /(\d+(\.\d+)?)\s*~\s*(\d+(\.\d+)?)\s*(℃|도)/g;
+            let match;
+            while ((match = rangeRegex.exec(storageMethod)) !== null) {
+                const startTemp = parseFloat(match[1]);
+                const endTemp = parseFloat(match[3]);
+                // 0~10도 범위 내의 온도이면 냉장으로 간주
+                if (!isNaN(startTemp) && !isNaN(endTemp) && startTemp >= 0 && endTemp <= 10) {
+                    return true;
+                }
             }
-            if (!hasRefrigerateTemp()) {
-                errors.push('냉장제품은 보관방법, 주의사항 또는 기타표시사항에 "0~10℃"를 표시해야 합니다.');
+            return false;
+        })();
+
+        if (isRefrigeratedStorage) {
+            const hasRequiredRefrigeratedKeywords = cautions.includes('개봉') || cautions.includes('섭취') || additional.includes('개봉') || additional.includes('섭취');
+            if (!hasRequiredRefrigeratedKeywords) {
+                errors.push('냉장 보관 제품은 주의사항 또는 기타표시사항에 "개봉" 또는 "섭취" 관련 문구를 포함해야 합니다.');
             }
         }
+
+        // --- 이하 기존 로직 유지 ---
 
         // 즉석조리식품: 조리방법
         if (foodType.includes("즉석조리") || foodType.includes("즉석 식품")) {
@@ -1096,6 +1132,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const errors = [];
         const suggestions = [];
         const packageMaterial = checkedFields.frmlc_mtrqlt || '';
+
+        if (!packageMaterial) {
+            errors.push('포장재질을 표시하세요.');
+            return { errors, suggestions: [] };
+        }
+
         const select = document.getElementById('recyclingMarkSelect');
         const selectedMark = select ? select.value : '';
         const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);
@@ -1111,20 +1153,71 @@ document.addEventListener('DOMContentLoaded', function () {
     function checkExpiryCompliance() {
         const errors = [];
         const suggestions = [];
-        const storageMethod = checkedFields.storage_method || '';
-        const foodType = checkedFields.prdlst_dcnm || '';
-        const expiry = checkedFields.pog_daycnt || '';
-        const isFrozen = storageMethod.toLowerCase().includes('냉동') || 
-                        foodType.toLowerCase().includes('냉동') || 
-                        foodType.toLowerCase().includes('냉동식품');
-        const maxMonths = isFrozen ? REGULATIONS.expiry_limits.frozen : REGULATIONS.expiry_limits.default;
-        const expiryMatch = expiry.match(/(\d+)개월/);
-        if (expiryMatch && parseInt(expiryMatch[1]) > maxMonths) {
-            errors.push(`소비기한 부적합: ${isFrozen ? "냉동식품은 24개월 이내" : "12개월 이내"}로 설정하세요 («식품 등의 표시기준» 제4조).`);
-            suggestions.push(`소비기한을 ${maxMonths}개월 이내로 수정하세요.`);
+        const foodType = (checkedFields.prdlst_dcnm || '').trim();
+        const expiry = (checkedFields.pog_daycnt || '').trim();
+        const storageMethod = (checkedFields.storage_method || '').trim();
+
+        if (!expiry || !foodType) {
+            return { errors, suggestions };
         }
+
+        // 냉동식품 또는 장기보존식품(통조림, 레토르트)은 검증에서 제외
+        const isFrozen = storageMethod.toLowerCase().includes('냉동') || foodType.toLowerCase().includes('냉동');
+        const isLongTermStorage = foodType.includes('통조림') || foodType.includes('병조림') || foodType.includes('레토르트');
+
+        if (isFrozen || isLongTermStorage) {
+            return { errors, suggestions }; // 검증 대상이 아니므로 종료
+        }
+
+        // 1. 식품유형에 맞는 권장 소비기한 찾기
+        const recommendationKeys = Object.keys(REGULATIONS.expiry_recommendation || {}).sort((a, b) => b.length - a.length);
+        let recommendation = null;
+        for (const key of recommendationKeys) {
+            if (foodType.includes(key)) {
+                recommendation = REGULATIONS.expiry_recommendation[key];
+                break;
+            }
+        }
+
+        if (!recommendation || typeof recommendation.shelf_life !== 'number') {
+            return { errors, suggestions }; // 검증 대상이 아니면 종료
+        }
+
+        // 2. 입력된 소비기한을 '일' 단위로 변환
+        let totalDays = 0;
+        const yearMatch = expiry.match(/(\d+)\s*년/);
+        const monthMatch = expiry.match(/(\d+)\s*개월/);
+        const dayMatch = expiry.match(/(\d+)\s*일/);
+
+        if (yearMatch) {
+            totalDays = parseInt(yearMatch[1], 10) * 365;
+        } else if (monthMatch) {
+            totalDays = parseInt(monthMatch[1], 10) * 30;
+        } else if (dayMatch) {
+            totalDays = parseInt(dayMatch[1], 10);
+        }
+
+        if (totalDays === 0) {
+            return { errors, suggestions }; // 유효한 기간이 아니면 종료
+        }
+
+        // 3. 권장 소비기한을 '일' 단위로 변환
+        let recommendedDays = 0;
+        if (recommendation.unit === 'months') {
+            recommendedDays = recommendation.shelf_life * 30;
+        } else if (recommendation.unit === 'days') {
+            recommendedDays = recommendation.shelf_life;
+        }
+
+        // 4. 비교 및 오류 메시지 생성
+        if (recommendedDays > 0 && totalDays > recommendedDays) {
+            const unitText = recommendation.unit === 'months' ? '개월' : '일';
+            const suggestionMsg = `권장 소비기한(${recommendation.shelf_life}${unitText})을 초과하였습니다. 설정 근거를 반드시 확인하시기 바랍니다.`;
+            suggestions.push(suggestionMsg);
+        }
+
         return { errors, suggestions };
-    }
+    }    
 
     // --- 검증 모달창 및 validateSettings ---
     // 이전 결과 캐시
@@ -1339,9 +1432,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // 결과
             if (!result.errors || result.errors.length === 0) {
-                rowsHtml += `<td><span class="text-success">OK</span></td>`;
+                rowsHtml += `<td><span class="text-success">적합</span></td>`;
             } else {
-                rowsHtml += `<td><span class="text-danger">Error</span></td>`;
+                rowsHtml += `<td><span class="text-danger">재검토</span></td>`;
                 hasErrors = true;
             }
 
