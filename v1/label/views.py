@@ -13,11 +13,12 @@ from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 import json
 from django.conf import settings  # Django settings import 추가
-from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive, ImportedFood
+from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive, ImportedFood, ExpiryRecommendation
 from .forms import LabelCreationForm, MyIngredientsForm
 from venv import logger  # 지우지 않음
 from django.utils.safestring import mark_safe
-from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS, CATEGORY_CHOICES, EXPIRY_RECOMMENDATION
+from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS, CATEGORY_CHOICES
+from django.core.cache import cache
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
 from rapidfuzz import fuzz  # fuzzywuzzy 대신 rapidfuzz 사용
@@ -28,6 +29,29 @@ from openpyxl.utils import get_column_letter
 # ------------------------------------------
 # 헬퍼 함수들 (반복되는 코드 최적화)
 # ------------------------------------------
+
+def get_expiry_recommendations():
+    """
+    ExpiryRecommendation 데이터를 캐시와 함께 가져오는 헬퍼 함수
+    캐시 타임아웃: 1시간
+    """
+    cache_key = 'expiry_recommendations_dict'
+    cached_data = cache.get(cache_key)
+    
+    if cached_data is not None:
+        return cached_data
+    
+    # DB에서 데이터를 가져와서 딕셔너리 형태로 변환
+    recommendations = {}
+    for item in ExpiryRecommendation.objects.all():
+        recommendations[item.food_type] = {
+            'shelf_life': item.shelf_life,
+            'unit': item.unit
+        }
+    
+    # 1시간 동안 캐시
+    cache.set(cache_key, recommendations, 3600)
+    return recommendations
 def get_search_conditions(request, search_fields):
     """
     Request에서 검색 조건을 추출하고 Q 객체를 생성합니다.
@@ -2018,7 +2042,7 @@ def preview_popup(request):
             'origins': list(set(origins)),       # 중복 제거
             'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
             'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
-            'expiry_recommendation_json': json.dumps(EXPIRY_RECOMMENDATION, ensure_ascii=False)  # 소비기한 권장 데이터 추가
+            'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False)  # 소비기한 권장 데이터 추가
 
         }
         

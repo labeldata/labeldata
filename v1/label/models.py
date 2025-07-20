@@ -458,3 +458,25 @@ class AgriculturalProduct(models.Model):
     def __str__(self):
         return self.rprsnt_rawmtrl_nm
 
+
+class ExpiryRecommendation(models.Model):
+    """소비기한 권장 정보 모델"""
+    food_type = models.CharField(max_length=100, verbose_name="식품유형", primary_key=True)
+    shelf_life = models.CharField(max_length=10, verbose_name="권장 소비기한", help_text="숫자 또는 '제품별'")
+    unit = models.CharField(max_length=10, verbose_name="단위", null=True, blank=True, help_text="months, days 등")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일시")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="수정일시")
+
+    class Meta:
+        db_table = "expiry_recommendation"
+        indexes = [
+            models.Index(fields=["food_type"], name="idx_expiry_food_type"),
+        ]
+        verbose_name = "소비기한 권장정보"
+        verbose_name_plural = "소비기한 권장정보"
+
+    def __str__(self):
+        if self.unit:
+            return f"{self.food_type}: {self.shelf_life}{self.unit}"
+        return f"{self.food_type}: {self.shelf_life}"
+
