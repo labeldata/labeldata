@@ -44,13 +44,18 @@ function roundKoreanNutrition(value, type, context) {
     return Math.round(value / 5) * 5;
   }
   if (type === 'mg') {
+    // 5mg 미만은 0, 5mg 이상 140mg 이하는 5mg 단위, 140mg 초과는 10mg 단위로 반올림
     if (value < 5) return 0;
     if (value <= 140) return Math.round(value / 5) * 5;
     return Math.round(value / 10) * 10;
   }
   if (type === 'g') {
+    // 0.5g 미만은 0으로 표시
     if (value < 0.5) return 0;
-    if (value <= 5) return Math.round(value * 10) / 10;
+    // [수정] 5g 미만은 소수점 첫째 자리까지, 5g 이상은 정수로 표시
+    if (value < 5) {
+      return Math.round(value * 10) / 10;
+    }
     return Math.round(value);
   }
   return value;

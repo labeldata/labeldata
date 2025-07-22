@@ -346,6 +346,9 @@ document.addEventListener('DOMContentLoaded', function() {
         $('#modalSearchInput3').val(null).trigger('change.select2');
         $('#modalSearchResults').empty();
     });
+
+    // [수정] 마지막에 비율 합계 초기 계산 및 표시
+    updateAndValidateRatios();
 });
 
 function attachRatioInputListeners() {
@@ -361,6 +364,7 @@ function attachRatioInputListeners() {
             updateSaveButtonState();
             updateSummarySection();
             markOriginTargets();
+            updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
         });
         
         input.addEventListener('keydown', function(event) {
@@ -422,6 +426,7 @@ function sortRowsByRatio() {
     markOriginTargets();
     updateSummarySection();
     attachRatioInputListeners();
+    updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
 }
 
 // 초기 로드 시 정렬: 비율이 있으면 비율 기준, 없으면 relation_sequence 순서 유지
@@ -591,6 +596,12 @@ function findCountriesInText(text) {
 }
 
 function saveIngredients() {
+    // [수정] 저장 전 비율 합계 유효성 검사
+    if (!updateAndValidateRatios()) {
+        alert('원료 비율의 총합이 100%를 초과합니다. 확인 후 다시 저장해주세요.');
+        return;
+    }
+
     if (!originValidated) {
         alert('원산지 표시대상이 설정되지 않았습니다. 비율을 입력하고 데이터를 확인해주세요.');
         return;
@@ -870,6 +881,7 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
             updateSaveButtonState();
             updateSummarySection();
             markOriginTargets();
+            updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
         });
         ratioInput.addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
@@ -884,6 +896,7 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
     markOriginTargets();
     updateSummarySection();
     attachRatioInputListeners();
+    updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
 }
 
 function removeSelectedRows() {
@@ -893,6 +906,7 @@ function removeSelectedRows() {
     markOriginTargets();
     updateSummarySection();
     attachRatioInputListeners();
+    updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
 }
 
 function selectIngredient(ingredient, button) {
@@ -1218,4 +1232,54 @@ function searchMyIngredientInModal() {
         alert('검색 중 오류가 발생했습니다.');
         console.error('Search error:', error);
     });
+}
+
+// [추가] 원료 비율의 합을 계산하고 100% 초과 시 경고를 표시하는 함수
+function updateAndValidateRatios() {
+    const ratioInputs = document.querySelectorAll('.ratio-input');
+    let totalRatio = 0;
+
+    ratioInputs.forEach(input => {
+        const ratio = parseFloat(input.value) || 0;
+        totalRatio += ratio;
+    });
+
+    const ratioSumElement = document.getElementById('ratio-sum');
+    if (ratioSumElement) {
+        ratioSumElement.textContent = totalRatio.toFixed(2);
+    }
+
+    const isValid = totalRatio <= 100;
+    const ratioSumContainer = document.getElementById('ratio-sum-container');
+
+    // 모든 비율 입력 칸의 스타일을 먼저 초기화
+    ratioInputs.forEach(input => {
+        input.style.border = ''; // 테두리 초기화
+        input.style.backgroundColor = '';
+        input.style.fontWeight = '';
+        input.style.color = '';
+    });
+
+    if (isValid) {
+        // 합계가 유효하면 합계 컨테이너의 경고 스타일 제거
+        if (ratioSumContainer) {
+            ratioSumContainer.classList.remove('text-danger', 'fw-bold');
+        }
+    } else {
+        // 합계가 100%를 초과하면, 값이 있는 칸에만 경고 스타일 적용
+        ratioInputs.forEach(input => {
+            if (input.value.trim() !== '') {
+                input.style.border = '1px solid #d32f2f'; // 빨간색 테두리
+                input.style.backgroundColor = '#fff3cd'; // 노란색 배경
+                input.style.fontWeight = 'bold'; // 굵은 글씨
+                input.style.color = '#d32f2f'; // 빨간색 글씨
+            }
+        });
+        // 합계 컨테이너에 경고 스타일 적용
+        if (ratioSumContainer) {
+            ratioSumContainer.classList.add('text-danger', 'fw-bold');
+        }
+    }
+
+    return isValid;
 }

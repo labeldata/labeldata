@@ -423,8 +423,9 @@
             <!-- 영양성분 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
                 <div style="width:12%; min-width:130px;">
+                <!-- [수정] 체크박스를 숨기고, 라벨만 표시하도록 변경 -->
                 <div class="form-check">
-                  <input type="checkbox" id="chk_nutrition_text" name="chk_nutrition_text" class="form-check-input" {% if label.chckd_nutrition_text == "Y" %}checked{% endif %}>
+                  <input type="checkbox" id="chk_nutrition_text" name="chk_nutrition_text" class="form-check-input" {% if label.chckd_nutrition_text == "Y" %}checked{% endif %} style="display: none;">
                   <label for="chk_nutrition_text" class="form-check-label m-0">영양성분</label>
                 </div>
               </div>
