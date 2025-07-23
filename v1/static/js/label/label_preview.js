@@ -1018,9 +1018,13 @@ document.addEventListener('DOMContentLoaded', function () {
         })();
 
         if (isRefrigeratedStorage) {
-            const hasRequiredRefrigeratedKeywords = cautions.includes('개봉') || cautions.includes('섭취') || additional.includes('개봉') || additional.includes('섭취');
-            if (!hasRequiredRefrigeratedKeywords) {
-                errors.push('냉장 보관 제품은 주의사항 또는 기타표시사항에 "개봉" 또는 "섭취" 관련 문구를 포함해야 합니다.');
+            const combinedText = cautions + additional;
+            // '개봉' 키워드와 ('냉장' 또는 '빨리' 또는 '빠른 시일') 키워드가 모두 있어야 통과
+            const hasOpeningKeyword = combinedText.includes('개봉');
+            const hasStorageKeyword = combinedText.includes('냉장') || combinedText.includes('빨리') || combinedText.includes('빠른 시일');
+
+            if (!(hasOpeningKeyword && hasStorageKeyword)) {
+                errors.push('냉장 보관 제품은 주의사항 또는 기타표시사항에 "개봉 후 냉장 보관 및 빠른 섭취" 관련 문구를 포함해야 합니다.');
             }
         }
 

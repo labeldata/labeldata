@@ -706,9 +706,10 @@ document.addEventListener('DOMContentLoaded', function () {
       checkbox.dataset.initialized = 'true';
       const fieldName = checkbox.id.replace('chk_', '');
       
-      // 원재료명(참고) 필드는 항상 비활성화
+      // [수정] 원재료명(참고) 필드는 항상 비활성화하고 체크박스는 숨김
       if (fieldName === 'rawmtrl_nm') {
-        checkbox.disabled = true;
+        checkbox.style.display = 'none'; // 체크박스를 화면에 보이지 않게 처리
+        checkbox.disabled = true; // 기능적으로도 비활성화 상태 유지
         const textarea = document.querySelector('textarea[name="rawmtrl_nm"]');
         if (textarea) {
           textarea.disabled = true;
