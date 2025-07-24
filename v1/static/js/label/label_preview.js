@@ -836,99 +836,31 @@ document.addEventListener('DOMContentLoaded', function () {
     // 사용금지 문구
     const forbiddenPhrases = ['천연', '자연', '슈퍼', '생명'];
 
-    // 검증 헬퍼 함수들
-    // 1. 농수산물 명칭은 제품명에서만 확인
+    // [수정] 제품명 성분 표시 검증 로직 (checkFarmSeafoodCompliance)
     function checkFarmSeafoodCompliance() {
         const errors = [];
-        const suggestions = [];
         const productName = checkedFields.prdlst_nm || '';
         const ingredientInfo = checkedFields.ingredient_info || '';
-        const rawmtrlNm = checkedFields.rawmtrl_nm_display || '';
 
-        // 제품명에 포함된 농수산물명 추출
-        const foundItems = farmSeafoodItems.filter(item => productName.includes(item));
+        // 제품명에 포함된 농수산물명 추출 (긴 이름부터 처리하여 '돼지고기'가 '고기'보다 먼저 잡히도록 함)
+        const foundItems = farmSeafoodItems
+            .filter(item => productName.includes(item))
+            .sort((a, b) => b.length - a.length);
 
-        // 특정성분 함량(ingredient_info)에서 각 농수산물명에 대해 % 포함 여부 확인
-        let ingredientInfoMissing = false;
-        foundItems.forEach(item => {
-            // item을 포함하는 단어(예: 사과즙, 사과잼 등)도 모두 포함
-            // 한글, 영문, 숫자, /, (, ), %, 공백 등 포함
-            const regexWord = new RegExp(`${item}[\\w가-힣/()%··\\s-]*`, 'gi');
-            let match;
-            let foundAny = false;
-            while ((match = regexWord.exec(ingredientInfo)) !== null) {
-                foundAny = true;
-                const word = match[0];
-                // "사과즙 20%" 또는 "사과즙(국산) 20%" 등 다양한 형태 허용
-                // 1. 함량(%) 포함 여부
-                if (!/([0-9]+(\.[0-9]+)?\s*%)/.test(word)) {
-                    ingredientInfoMissing = true;
-                }
-            }
-            // ingredientInfo에 item을 포함하는 단어가 하나도 없으면, 기존 방식으로 검사
-            if (!foundAny && ingredientInfo) {
-                if (!new RegExp(`${item}\\s*([\\d.]+%)`).test(ingredientInfo)) {
-                    ingredientInfoMissing = true;
-                }
-            }
-        });
-
-        // 특정성분 함량이 없거나, 제품명에 포함된 농수산물의 함량(%)이 모두 없는 경우
-        if ((!ingredientInfo || ingredientInfoMissing) && rawmtrlNm && foundItems.length > 0) {
-            errors.push(`주표시면에 제품명에 포함된 "${foundItems.join(', ')}"의 함량(%)을 추가하세요.`);
-        } else {
-            // 특정성분 함량에 농수산물별로 %가 없는 경우만 개별 메시지
-            foundItems.forEach(item => {
-                const regexWord = new RegExp(`${item}[\\w가-힣/()%··\\s-]*`, 'gi');
-                let match;
-                let foundAny = false;
-                while ((match = regexWord.exec(ingredientInfo)) !== null) {
-                    foundAny = true;
-                    const word = match[0];
-                    if (!/([0-9]+(\.[0-9]+)?\s*%)/.test(word)) {
-                        errors.push(`특정성분 함량에 "${word}"의 함량(%)을 추가하세요.`);
-                    }
-                }
-                if (!foundAny && ingredientInfo) {
-                    if (!new RegExp(`${item}\\s*([\\d.]+%)`).test(ingredientInfo)) {
-                        errors.push(`특정성분 함량에 "${item}"의 함량(%)을 추가하세요.`);
-                    }
-                }
-            });
+        if (foundItems.length === 0) {
+            return { errors: [], suggestions: [] }; // 검증 대상이 없으면 종료
         }
 
-        // 원재료명(rawmtrl_nm_display)에서 각 농수산물명에 대해 %와 원산지 포함 여부 확인
         foundItems.forEach(item => {
-            const rawList = rawmtrlNm.split(/\s*,\s*/);
-            rawList.forEach((raw, idx) => {
-                // item을 포함하는 단어(예: 사과즙, 사과잼 등)도 모두 포함 (단어 경계 없이 포함만 체크)
-                if (raw.includes(item)) {
-                    // 함량(%) 체크: 100% 또는 20% 등
-                    const hasPercent = /([0-9]+(\.[0-9]+)?\s*%)/.test(raw);
-                    // 원산지 체크: (국산), (미국산), /국산, /미국산 등도 허용
-                    // 1. 괄호 안에 '산'이 포함된 경우
-                    let hasOrigin = /\([^)산]*[가-힣]+산[^)]*\)/.test(raw) || /\([^)]+산[^)]*\)/.test(raw);
-                    // 2. /국산, /미국산, /중국산 등은 "산"이 포함된 경우로 허용
-                    if (!hasOrigin) {
-                        hasOrigin = /\/\s*[가-힣]+산/.test(raw);
-                    }
-                    // 3. "사과/국산"처럼 "/"로 구분된 경우도 허용
-                    if (!hasOrigin) {
-                        hasOrigin = new RegExp(`${item}\\s*\\/\\s*[가-힣]+산`).test(raw);
-                    }
-                    // 4. "사과/국산"처럼 "/"로 구분된 경우도 허용 (예외: "사과즙(미국산/100%)" 등)
-                    if (!hasOrigin) {
-                        hasOrigin = /[가-힣]+\/[가-힣]+산/.test(raw);
-                    }
-                    if (!hasPercent && !hasOrigin) {
-                        errors.push(`원재료명에 표시된 ${idx + 1}번째 원료(${raw})의 함량(%)과 원산지를 모두 추가하세요.`);
-                    } else if (!hasPercent) {
-                        errors.push(`원재료명에 표시된 ${idx + 1}번째 원료(${raw})의 함량(%)을 추가하세요.`);
-                    } else if (!hasOrigin) {
-                        errors.push(`원재료명에 표시된 ${idx + 1}번째 원료(${raw})의 원산지를 추가하세요.`);
-                    }
-                }
-            });
+            // '특정성분 함량' 필드에 해당 성분명과 함량(%)이 모두 포함되어 있는지 확인
+            // 정규식: 성분명 + (0개 이상의 문자, 단 쉼표 제외) + 숫자 + %
+            // 예: "사과 100%", "사과(국산) 100%" 모두 통과
+            const complianceRegex = new RegExp(`${item}[^,]*\\d+(\\.\\d+)?\\s*%`);
+            
+            // 검증 실패 시 오류 추가
+            if (!complianceRegex.test(ingredientInfo)) {
+                errors.push(`제품명에 사용된 '${item}'의 함량을 '특정성분 함량' 항목에 표시하세요 (예: ${item} 100%).`);
+            }
         });
 
         return { errors, suggestions: [] };
@@ -1020,11 +952,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isRefrigeratedStorage) {
             const combinedText = cautions + additional;
             // '개봉' 키워드와 ('냉장' 또는 '빨리' 또는 '빠른 시일') 키워드가 모두 있어야 통과
-            const hasOpeningKeyword = combinedText.includes('개봉');
-            const hasStorageKeyword = combinedText.includes('냉장') || combinedText.includes('빨리') || combinedText.includes('빠른 시일');
+            const hasOpeningKeyword = combinedText.includes('개봉') || combinedText.includes('구매');
+            const hasStorageKeyword = combinedText.includes('냉장') || combinedText.includes('섭취') || combinedText.includes('취식');
 
             if (!(hasOpeningKeyword && hasStorageKeyword)) {
-                errors.push('냉장 보관 제품은 주의사항 또는 기타표시사항에 "개봉 후 냉장 보관 및 빠른 섭취" 관련 문구를 포함해야 합니다.');
+                errors.push('냉장 보관 제품은 주의사항 또는 기타표시사항에 "개봉/구매 후 냉장 보관 및 빠른 섭취/취식" 관련 문구를 포함해야 합니다.');
             }
         }
 
@@ -1573,7 +1505,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return Math.round(value / 10) * 10;
         }
         if (type === 'g') {
-            if (value < 0.5) return 0;
+            if (value <  0.5) return 0;
             if (value <= 5) return Math.round(value * 10) / 10;
             return Math.round(value);
         }
