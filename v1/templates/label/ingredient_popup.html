@@ -185,6 +185,18 @@
             background-color: #e9ecef;
             border: 1px solid #ced4da;
         }
+        
+        /* 클릭 가능한 알레르기/GMO 링크 스타일 */
+        .allergen-gmo-link {
+            color: #007bff;
+            cursor: pointer;
+            text-decoration: underline;
+            font-weight: 500;
+        }
+        .allergen-gmo-link:hover {
+            color: #0056b3;
+            text-decoration: none;
+        }
     </style>
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -260,6 +272,35 @@
                 <div class="modal-body">
                     <h6 id="infoIngredientName" class="mb-3"></h6>
                     <div id="infoContent" class="mb-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 알레르기/GMO 상세 정보 모달 -->
+    <div class="modal fade" id="allergenGmoDetailModal" tabindex="-1" aria-labelledby="allergenGmoDetailModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="allergenGmoDetailModalLabel">상세 정보</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm">
+                            <thead>
+                                <tr id="allergenGmoTableHeader">
+                                    <!-- 동적으로 생성될 헤더 -->
+                                </tr>
+                            </thead>
+                            <tbody id="allergenGmoTableBody">
+                                <!-- 동적으로 생성될 내용 -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>

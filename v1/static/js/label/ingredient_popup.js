@@ -196,21 +196,23 @@ function updateSummarySection() {
         });
     });
 
-    // 알레르기/GMO 텍스트 생성 (숫자 포함)
+    // 알레르기/GMO 텍스트 생성 (숫자 포함, 클릭 가능한 링크로)
     const allergenGmoText = [];
     if (allergenCount.size > 0) {
         const allergenTexts = Array.from(allergenCount.entries()).map(([allergen, count]) => {
-            return count > 1 ? `${allergen}(${count})` : allergen;
+            const displayText = count > 1 ? `${allergen}(${count})` : allergen;
+            return `<span class="allergen-gmo-link" onclick="showAllergenGmoDetail('allergen', '${escapeForAttribute(allergen)}')">${escapeHtml(displayText)}</span>`;
         });
-        allergenGmoText.push(`알레르기: ${allergenTexts.join(', ')}`);
+        allergenGmoText.push(`<span class="allergen-gmo-link" onclick="showAllergenGmoDetail('allergen', 'all')">전체</span> : ${allergenTexts.join(', ')}`);
     }
     if (gmoCount.size > 0) {
         const gmoTexts = Array.from(gmoCount.entries()).map(([gmo, count]) => {
-            return count > 1 ? `${gmo}(${count})` : gmo;
+            const displayText = count > 1 ? `${gmo}(${count})` : gmo;
+            return `<span class="allergen-gmo-link" onclick="showAllergenGmoDetail('gmo', '${escapeForAttribute(gmo)}')">${escapeHtml(displayText)}</span>`;
         });
-        allergenGmoText.push(`GMO: ${gmoTexts.join(', ')}`);
+        allergenGmoText.push(`<span class="allergen-gmo-link" onclick="showAllergenGmoDetail('gmo', 'all')">전체</span> : ${gmoTexts.join(', ')}`);
     }
-    document.getElementById('summary-allergens-gmo').textContent = allergenGmoText.length > 0 ? allergenGmoText.join(' / ') : '없음';
+    document.getElementById('summary-allergens-gmo').innerHTML = allergenGmoText.length > 0 ? allergenGmoText.join(' / ') : '없음';
 }
 
 // 문서 로드시 초기화 코드
@@ -836,6 +838,10 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
     console.log(`Adding ingredient row: ${ingredient.ingredient_name}, food_category: ${foodCategory}, displayed as: ${foodCategoryDisplay}`);
 
     const row = document.createElement('tr');
+    // 알레르기/GMO 정보를 data 속성으로 저장
+    row.dataset.allergen = ingredient.allergen || ingredient.allergens || '';
+    row.dataset.gmo = ingredient.gmo || '';
+    
     row.innerHTML = `
         <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
         <td class="order-cell">&#x2195; </td>
@@ -1259,4 +1265,180 @@ function updateAndValidateRatios() {
     }
 
     return isValid;
+}
+
+// HTML 특수문자 이스케이프 함수
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 속성값을 위한 이스케이프 함수
+function escapeForAttribute(text) {
+    return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+// 알레르기 유발성분/GMO 상세 모달 표시
+function showAllergenGmoDetail(type, component) {
+    console.log(`Opening modal for ${type} - ${component}`);
+    
+    // 현재 테이블의 모든 행의 데이터 확인
+    const tbody = document.getElementById('ingredient-body');
+    const rows = tbody.getElementsByTagName('tr');
+    console.log('Current table data:');
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const nameInput = row.querySelector('.ingredient-name-input');
+        const name = nameInput ? nameInput.value : 'Unknown';
+        console.log(`Row ${i}: ${name}, allergen: ${row.dataset.allergen}, gmo: ${row.dataset.gmo}`);
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('allergenGmoDetailModal'));
+    const title = type === 'allergen' ? '알레르기 유발성분' : 'GMO';
+    const modalTitle = document.querySelector('#allergenGmoDetailModal .modal-title');
+    modalTitle.textContent = component === 'all' ? `${title} 전체` : `${title}: ${component}`;
+    
+    // 모달 테이블 생성
+    createAllergenGmoTable(type, component);
+    
+    modal.show();
+}
+
+// 알레르기/GMO 상세 테이블 생성
+function createAllergenGmoTable(type, component) {
+    const headerElement = document.getElementById('allergenGmoTableHeader');
+    const bodyElement = document.getElementById('allergenGmoTableBody');
+    
+    if (!headerElement || !bodyElement) {
+        console.error('모달 테이블 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 헤더 생성
+    headerElement.innerHTML = `
+        <th style="width: 30%;">원재료명</th>
+        <th style="width: 20%;">식품구분</th>
+        <th style="width: 25%;">식품유형</th>
+        <th style="width: 25%;">${type === 'allergen' ? '알레르기' : 'GMO'}</th>
+    `;
+    
+    // 데이터 필터링 및 정렬
+    const filteredIngredients = filterIngredientsByComponent(type, component);
+    
+    // 바디 생성
+    let bodyHtml = '';
+    filteredIngredients.forEach((ingredient) => {
+        const componentValue = type === 'allergen' ? ingredient.allergen_info : ingredient.gmo_info;
+        bodyHtml += `
+            <tr>
+                <td>${escapeHtml(ingredient.name)}</td>
+                <td>${escapeHtml(ingredient.food_category_display)}</td>
+                <td>${escapeHtml(ingredient.food_type)}</td>
+                <td>${escapeHtml(componentValue || '-')}</td>
+            </tr>
+        `;
+    });
+    
+    bodyElement.innerHTML = bodyHtml;
+}
+
+// 성분을 알레르기/GMO로 필터링
+function filterIngredientsByComponent(type, component) {
+    const tbody = document.getElementById('ingredient-body');
+    if (!tbody) {
+        console.error('ingredient-body 테이블을 찾을 수 없습니다.');
+        return [];
+    }
+    
+    const rows = tbody.getElementsByTagName('tr');
+    const filteredIngredients = [];
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const cells = row.getElementsByTagName('td');
+        
+        if (cells.length > 0) {
+            // 셀 인덱스: 0=체크박스, 1=순서, 2=원재료명, 3=비율, 4=식품구분, 5=식품유형, 6=원재료표시명, 7=원산지
+            const nameInput = cells[2].querySelector('input');
+            const name = nameInput ? nameInput.value.trim() : cells[2].textContent.trim();
+            
+            const foodCategoryInput = cells[4].querySelector('input');
+            const foodCategory = foodCategoryInput?.dataset.foodCategory || '';
+            const foodCategoryDisplay = foodCategoryInput?.value || '';
+            
+            const foodTypeInput = cells[5].querySelector('input');
+            const foodType = foodTypeInput ? foodTypeInput.value.trim() : cells[5].textContent.trim();
+            
+            // 행의 data 속성에서 알레르기/GMO 정보 가져오기
+            const allergen = row.dataset.allergen || '';
+            const gmo = row.dataset.gmo || '';
+            
+            const targetValue = type === 'allergen' ? allergen : gmo;
+            
+            // 필터링 조건
+            if (component === 'all') {
+                // 해당 타입의 성분이 있는 모든 원재료
+                if (targetValue && targetValue !== '-' && targetValue !== '') {
+                    filteredIngredients.push({
+                        name: name,
+                        food_category_display: foodCategoryDisplay,
+                        food_type: foodType,
+                        allergen_info: allergen,
+                        gmo_info: gmo
+                    });
+                }
+            } else {
+                // 특정 성분을 포함하는 원재료만 (쉼표로 구분된 여러 성분 중에서 찾기)
+                if (targetValue) {
+                    let hasComponent = false;
+                    
+                    if (type === 'allergen') {
+                        // 알레르기 성분의 경우 조개류(새우, 게) 같은 복합 성분도 처리
+                        const componentList = targetValue.split(',').map(item => item.trim());
+                        
+                        // 정확히 일치하는 성분 찾기
+                        if (componentList.includes(component)) {
+                            hasComponent = true;
+                        } else {
+                            // 조개류(새우, 게) 형태의 성분에서 개별 성분 찾기
+                            for (const item of componentList) {
+                                if (item.includes('(') && item.includes(')')) {
+                                    const match = item.match(/^([^(]+)\(([^)]+)\)$/);
+                                    if (match) {
+                                        const mainType = match[1].trim();
+                                        const subItems = match[2].split(',').map(sub => sub.trim());
+                                        if (component === mainType || subItems.includes(component)) {
+                                            hasComponent = true;
+                                            break;
+                                        }
+                                    }
+                                } else if (item === component) {
+                                    hasComponent = true;
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        // GMO의 경우 단순 비교
+                        const componentList = targetValue.split(',').map(item => item.trim());
+                        hasComponent = componentList.includes(component);
+                    }
+                    
+                    if (hasComponent) {
+                        filteredIngredients.push({
+                            name: name,
+                            food_category_display: foodCategoryDisplay,
+                            food_type: foodType,
+                            allergen_info: allergen,
+                            gmo_info: gmo
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    console.log(`Filtered ingredients for ${type} - ${component}:`, filteredIngredients);
+    return filteredIngredients;
 }
