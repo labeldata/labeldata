@@ -159,7 +159,8 @@ function updateSummarySection() {
 
     document.getElementById('summary-display-names').textContent = summaryDisplayNames.length > 0 ? summaryDisplayNames.join(', ') : '없음';
 
-    const allergensSet = new Set();
+    // 알레르기 성분 카운트 (숫자로 표시)
+    const allergenCount = new Map();
     const shellfishCollected = new Set();
     const shellfishPattern = /^조개류\(([^)]+)\)$/;
 
@@ -172,55 +173,44 @@ function updateSummarySection() {
                 const items = match[1].split(',').map(item => item.trim()).filter(item => item);
                 items.forEach(item => shellfishCollected.add(item));
             } else if (allergen.includes('조개류')) {
-                allergensSet.add(allergen);
+                allergenCount.set(allergen, (allergenCount.get(allergen) || 0) + 1);
             } else {
-                allergensSet.add(allergen);
+                allergenCount.set(allergen, (allergenCount.get(allergen) || 0) + 1);
             }
         });
     });
 
+    // 조개류 통합 처리
     if (shellfishCollected.size > 0) {
         const shellfishStr = `조개류(${Array.from(shellfishCollected).join(', ')})`;
-        allergensSet.add(shellfishStr);
+        allergenCount.set(shellfishStr, (allergenCount.get(shellfishStr) || 0) + 1);
     }
 
-    const gmosSet = new Set();
+    // GMO 성분 카운트 (숫자로 표시)
+    const gmoCount = new Map();
     rows.forEach(row => {
         const gmoInput = row.querySelector('.gmo-input')?.value || '';
         const gmoList = gmoInput.split(',').map(item => item.trim()).filter(item => item);
-        gmoList.forEach(gmo => gmosSet.add(gmo));
+        gmoList.forEach(gmo => {
+            gmoCount.set(gmo, (gmoCount.get(gmo) || 0) + 1);
+        });
     });
 
+    // 알레르기/GMO 텍스트 생성 (숫자 포함)
     const allergenGmoText = [];
-    if (allergensSet.size > 0) {
-        allergenGmoText.push(Array.from(allergensSet).join(', '));
+    if (allergenCount.size > 0) {
+        const allergenTexts = Array.from(allergenCount.entries()).map(([allergen, count]) => {
+            return count > 1 ? `${allergen}(${count})` : allergen;
+        });
+        allergenGmoText.push(`알레르기: ${allergenTexts.join(', ')}`);
     }
-    if (gmosSet.size > 0) {
-        allergenGmoText.push(Array.from(gmosSet).join(', '));
+    if (gmoCount.size > 0) {
+        const gmoTexts = Array.from(gmoCount.entries()).map(([gmo, count]) => {
+            return count > 1 ? `${gmo}(${count})` : gmo;
+        });
+        allergenGmoText.push(`GMO: ${gmoTexts.join(', ')}`);
     }
     document.getElementById('summary-allergens-gmo').textContent = allergenGmoText.length > 0 ? allergenGmoText.join(' / ') : '없음';
-}
-
-// 알레르기/GMO 버튼 텍스트 업데이트 함수
-function updateAllergenGmoButtons(row) {
-    const allergenInput = row.querySelector('.allergen-input');
-    const gmoInput = row.querySelector('.gmo-input');
-    const allergenButton = row.querySelector('td:nth-child(8) button');
-    const gmoButton = row.querySelector('td:nth-child(9) button');
-
-    if (allergenInput && allergenButton) {
-        const allergenCount = allergenInput.value
-            ? allergenInput.value.split(',').map(item => item.trim()).filter(item => item).length
-            : 0;
-        allergenButton.innerHTML = `+ ${allergenCount > 0 ? '(' + allergenCount + ')' : ''}`;
-    }
-
-    if (gmoInput && gmoButton) {
-        const gmoCount = gmoInput.value
-            ? gmoInput.value.split(',').map(item => item.trim()).filter(item => item).length
-            : 0;
-        gmoButton.innerHTML = `+ ${gmoCount > 0 ? '(' + gmoCount + ')' : ''}`;
-    }
 }
 
 // 문서 로드시 초기화 코드
@@ -854,25 +844,12 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
         <td><input type="text" value="${escapeHtml(foodCategoryDisplay)}" data-food-category="${escapeHtml(foodCategory)}" class="form-control form-control-sm food-category-input modal-readonly-field" readonly></td>
         <td><input type="text" value="${escapeHtml(ingredient.food_type || '')}" class="form-control form-control-sm food-type-input modal-readonly-field" readonly></td>
         <td><textarea class="form-control form-control-sm display-name-input modal-readonly-field" readonly>${escapeHtml(ingredient.display_name || ingredient.ingredient_name || '')}</textarea></td>
-        <td>
-            <input type="hidden" class="allergen-input" value="${escapeHtml(ingredient.allergen || ingredient.allergens || '')}">
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showReadOnlyInfo(this, 'allergen')">
-                +
-            </button>
-        </td>
-        <td>
-            <input type="hidden" class="gmo-input" value="${escapeHtml(ingredient.gmo || '')}">
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showReadOnlyInfo(this, 'gmo')">
-                +
-            </button>
-        </td>
         <td class="origin-cell"></td>
+        <input type="hidden" class="allergen-input" value="${escapeHtml(ingredient.allergen || ingredient.allergens || '')}">
+        <input type="hidden" class="gmo-input" value="${escapeHtml(ingredient.gmo || '')}">
         <input type="hidden" class="my-ingredient-id" value="${escapeHtml(ingredient.my_ingredient_id || '')}">
     `;
     document.getElementById('ingredient-body').appendChild(row);
-
-    // 알레르기/GMO 버튼 즉시 업데이트
-    updateAllergenGmoButtons(row);
 
     const ratioInput = row.querySelector('.ratio-input');
     if (ratioInput) {
