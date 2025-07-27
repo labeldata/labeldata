@@ -13,8 +13,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const footerText = document.querySelector('.footer-text');
     if (footerText && updateDateTime) {
         footerText.innerHTML = `
-            간편한 표시사항 연구소에서 관련 법규에 따라 작성되었습니다.
-            <span class="creator-info">[${updateDateTime}]</span>
+            <span style="font-size: 7pt;">
+                간편한 표시사항 연구소에서 관련 법규에 따라 작성되었습니다.
+                <span class="creator-info">[${updateDateTime}]</span>
+            </span>
         `;
     }
 
@@ -603,6 +605,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 필드 데이터 저장소
     let checkedFields = {};
+    const tbody = document.getElementById('previewTableBody');
+    let dataLoaded = false; // 데이터 로딩 상태 플래그
+
+    // [추가] 로딩 상태 초기화 및 타임아웃 설정
+    if (tbody) {
+        // 1. 초기 "로딩 중" 메시지 표시
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="2" style="text-align:center; padding: 20px; color: #6c757d;">
+                    로딩 중입니다...
+                </td>
+            </tr>
+        `;
+
+        // 2. 로딩 실패 처리를 위한 타임아웃 설정
+        setTimeout(() => {
+            if (!dataLoaded) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="2" style="text-align:center; padding: 20px; color: #dc3545; font-weight: bold;">
+                            로딩에 실패하였습니다. 다시 시도해주세요.
+                        </td>
+                    </tr>
+                `;
+            }
+        }, 5000); // 5초 후에도 데이터가 로드되지 않으면 실패로 간주
+    }
+
 
     // 국가명 볼드 처리 함수
     function boldCountryNames(text, countryList) {
@@ -646,11 +676,12 @@ document.addEventListener('DOMContentLoaded', function () {
     // 입력 데이터 반영 (테스트용)
     window.addEventListener('message', function(e) {
         if (e.data?.type === 'previewCheckedFields' && e.data.checked) {
+            dataLoaded = true; // 데이터 로딩 성공 플래그 설정
             checkedFields = e.data.checked;
-            const tbody = document.getElementById('previewTableBody');
+            // const tbody = document.getElementById('previewTableBody'); // 상단에서 이미 정의됨
             if (!tbody) return;
 
-            tbody.innerHTML = '';
+            tbody.innerHTML = ''; // 로딩 또는 에러 메시지 제거
             Object.entries(checkedFields).forEach(([field, value]) => {
                 if (FIELD_LABELS[field] && value) {
                     const tr = document.createElement('tr');
@@ -952,7 +983,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (isRefrigeratedStorage) {
             const combinedText = cautions + additional;
             // '개봉' 키워드와 ('냉장' 또는 '빨리' 또는 '빠른 시일') 키워드가 모두 있어야 통과
-            const hasOpeningKeyword = combinedText.includes('개봉') || combinedText.includes('구매');
+            const hasOpeningKeyword = combinedText.includes('개봉') || combinedText.includes('구매') || combinedText.includes('구입');
             const hasStorageKeyword = combinedText.includes('냉장') || combinedText.includes('섭취') || combinedText.includes('취식');
 
             if (!(hasOpeningKeyword && hasStorageKeyword)) {
