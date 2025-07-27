@@ -128,6 +128,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 { value: '일반팩', label: '일반팩', img: '/static/img/recycle_pack_general.png' },
                 { value: '멸균팩', label: '멸균팩', img: '/static/img/recycle_pack_sterile.png' },
                 { value: '유리', label: '유리', img: '/static/img/recycle_glass.png' },
+                // [삭제] 복합재질 항목을 데이터에서 제거합니다.
+                // { value: '복합재질', label: '복합재질', img: '/static/img/recycle_composite.png', isComposite: true },
                 { value: '도포첩합', label: '도포첩합', img: '/static/img/recycle_coated.png' }
             ]
         }
@@ -177,6 +179,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const uiBox = document.createElement('div');
         uiBox.id = 'recyclingMarkUiBox';
         uiBox.className = 'settings-row';
+        // [수정] 복합재질 텍스트 입력 필드 추가
         uiBox.innerHTML = `
             <div class="settings-item">
                 <label class="form-label" for="recyclingMarkSelect">분리배출마크</label>
@@ -190,11 +193,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     </select>
                     <button id="addRecyclingMarkBtn" type="button" class="btn btn-outline-primary btn-sm">적용</button>
                 </div>
+                <!-- [수정] 추가 텍스트 입력 상자 (기본 숨김) -->
+                <div id="additionalTextInputBox" style="display: none; margin-top: 8px;">
+                    <label for="additionalRecyclingText" class="form-label" style="font-size: 0.8rem;">복합재질</label>
+                    <div style="display: flex;">
+                        <input type="text" id="additionalRecyclingText" class="form-control form-control-sm" placeholder="예: 본체(종이)/뚜껑(PP)">
+                        <button id="addRecyclingTextBtn" type="button" class="btn btn-secondary btn-sm" style="margin-left: 4px; white-space: nowrap;">추가</button>
+                    </div>
+                </div>
             </div>
         `;
         contentTab.appendChild(uiBox);
 
-        // 셀렉트박스 변경 이벤트
+        // [수정] 셀렉트박스 변경 시 복합재질 입력창 표시/숨김 처리
         const select = document.getElementById('recyclingMarkSelect');
         if (select) {
             select.addEventListener('change', function() {
@@ -212,18 +223,41 @@ document.addEventListener('DOMContentLoaded', function () {
         if (addBtn) {
             addBtn.addEventListener('click', function() {
                 const markValue = document.getElementById('recyclingMarkSelect').value;
-                const previewContent = document.getElementById('previewContent');
-                let img = document.getElementById('recyclingMarkImage');
+                const additionalInputBox = document.getElementById('additionalTextInputBox');
                 if (addBtn.textContent === '적용') {
                     setRecyclingMark(markValue);
                     addBtn.textContent = '해제';
                     addBtn.classList.remove('btn-outline-primary');
                     addBtn.classList.add('btn-danger');
+                    if (additionalInputBox) additionalInputBox.style.display = 'block';
                 } else {
-                    if (img) img.remove();
+                    // [수정] 컨테이너 전체를 제거하도록 변경
+                    const container = document.getElementById('recyclingMarkContainer');
+                    if (container) container.remove();
                     addBtn.textContent = '적용';
                     addBtn.classList.remove('btn-danger');
                     addBtn.classList.add('btn-outline-primary');
+                    if (additionalInputBox) additionalInputBox.style.display = 'none';
+                }
+            });
+        }
+
+        // [추가] 텍스트 추가 버튼 이벤트
+        const addTextBtn = document.getElementById('addRecyclingTextBtn');
+        if (addTextBtn) {
+            addTextBtn.addEventListener('click', function() {
+                const textInput = document.getElementById('additionalRecyclingText');
+                const text = textInput.value.trim();
+                if (text) {
+                    // [수정] '/'를 기준으로 텍스트를 분리하여 각 줄을 추가
+                    const lines = text.split('/');
+                    lines.forEach(line => {
+                        const trimmedLine = line.trim();
+                        if (trimmedLine) {
+                            addTextToRecyclingMark(trimmedLine);
+                        }
+                    });
+                    textInput.value = ''; // 입력 필드 초기화
                 }
             });
         }
@@ -242,62 +276,102 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 미리보기 영역에 마크 추가 및 드래그
+    // [추가] 분리배출 마크에 텍스트 라인 추가
+    function addTextToRecyclingMark(text) {
+        const container = document.getElementById('recyclingMarkContainer');
+        const image = document.getElementById('recyclingMarkImage');
+        if (!container || !image) return;
+
+        const textDiv = document.createElement('div');
+        textDiv.textContent = text;
+        textDiv.style.cssText = `
+            font-weight: 500;
+            color: #000;
+            line-height: 1.1;
+            word-break: keep-all;
+            text-align: center;
+        `;
+        container.appendChild(textDiv);
+
+        // 폰트 크기 자동 조절
+        const imageWidth = image.offsetWidth;
+        let fontSize = 6; // pt 단위
+        textDiv.style.fontSize = `${fontSize}pt`;
+
+        // 텍스트 너비가 이미지 너비보다 크면 폰트 크기를 줄임
+        while (textDiv.scrollWidth > imageWidth && fontSize > 4) {
+            fontSize -= 0.5;
+            textDiv.style.fontSize = `${fontSize}pt`;
+        }
+    }
+
+    // [수정] 미리보기 영역에 마크(이미지+텍스트) 추가 및 드래그
     function setRecyclingMark(markValue, auto = false) {
-        const markObj = recyclingMarkMap[markValue] || recyclingMarkGroups[0].options[0];
+        const markObj = recyclingMarkMap[markValue];
         const previewContent = document.getElementById('previewContent');
-        if (!previewContent) return;
+        if (!previewContent || !markObj) return;
 
-        let img = document.getElementById('recyclingMarkImage');
-        if (!markObj.img) {
-            if (img) img.remove();
-            return;
+        // 컨테이너를 찾거나 새로 생성
+        let container = document.getElementById('recyclingMarkContainer');
+        if (container) container.remove(); // 기존 컨테이너가 있으면 제거하고 새로 생성
+
+        container = document.createElement('div');
+        container.id = 'recyclingMarkContainer';
+        container.style.position = 'absolute';
+        container.style.width = '60px'; // 컨테이너 너비 고정
+        container.style.cursor = 'move';
+        container.style.textAlign = 'center';
+        
+        // 컨테이너 내부에 이미지와 텍스트 영역 추가
+        container.innerHTML = `
+            <img id="recyclingMarkImage" style="width: 100%; height: auto; display: block;">
+        `;
+        previewContent.appendChild(container);
+
+        const img = container.querySelector('#recyclingMarkImage');
+
+        // 이미지 설정
+        if (markObj.img) {
+            img.src = markObj.img;
+            img.alt = markObj.label;
+            img.style.display = 'block';
+        } else {
+            img.style.display = 'none';
         }
 
-        if (!img) {
-            img = document.createElement('img');
-            img.id = 'recyclingMarkImage';
-            img.style.position = 'absolute';
-            img.style.right = '20px';
-            img.style.bottom = '20px';
-            img.style.width = '48px';
-            img.style.height = '48px';
-            img.style.cursor = 'move';
-            previewContent.appendChild(img);
-        }
-
-        img.src = markObj.img;
-        img.alt = markObj.label;
-        img.title = markObj.label;
-        img.style.display = 'block';
-
+        // 자동 위치 설정
         if (auto) {
-            img.style.right = '20px';
-            img.style.bottom = '20px';
+            container.style.right = '20px';
+            container.style.bottom = '20px';
+            container.style.left = '';
+            container.style.top = '';
         }
 
-        // 드래그 로직
-        img.onmousedown = function(e) {
+        // 드래그 로직 (컨테이너에 적용)
+        container.onmousedown = function(e) {
             e.preventDefault();
-            let shiftX = e.clientX - img.getBoundingClientRect().left;
-            let shiftY = e.clientY - img.getBoundingClientRect().top;
+            let shiftX = e.clientX - container.getBoundingClientRect().left;
+            let shiftY = e.clientY - container.getBoundingClientRect().top;
+            
             function moveAt(pageX, pageY) {
                 const rect = previewContent.getBoundingClientRect();
-                img.style.left = (pageX - rect.left - shiftX) + 'px';
-                img.style.top = (pageY - rect.top - shiftY) + 'px';
-                img.style.right = '';
-                img.style.bottom = '';
+                container.style.left = (pageX - rect.left - shiftX) + 'px';
+                container.style.top = (pageY - rect.top - shiftY) + 'px';
+                container.style.right = '';
+                container.style.bottom = '';
             }
+
             function onMouseMove(e) {
                 moveAt(e.pageX, e.pageY);
             }
+            
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', function mouseUpHandler() {
                 document.removeEventListener('mousemove', onMouseMove);
                 document.removeEventListener('mouseup', mouseUpHandler);
             });
         };
-        img.ondragstart = () => false;
+        container.ondragstart = () => false;
     }
 
     // 미리보기 스타일 업데이트
@@ -1449,6 +1523,8 @@ document.addEventListener('DOMContentLoaded', function () {
             
             // cm를 pt로 변환 (1cm = 28.35pt)
             const widthPt = width * 28.35;
+           
+
             const heightPt = height * 28.35;
             
             // 최소 크기 보장
@@ -1471,30 +1547,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 scrollY: 0,
                 logging: false // 로깅 비활성화
             });
-
-            // jsPDF 인스턴스 생성 (커스텀 페이지 크기)
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF({
-                orientation: width > height ? 'landscape' : 'portrait',
-                unit: 'pt',
-                format: [pdfWidth, pdfHeight]
-            });
-
-            // 캔버스를 이미지로 변환
-            const imgData = canvas.toDataURL('image/png', 1.0);
-            
-            // 이미지 크기 계산
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-            
-            // PDF 페이지에 맞게 이미지 크기 조정
-            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-            const scaledWidth = imgWidth * ratio;
-            const scaledHeight = imgHeight * ratio;
-            
-            // 이미지를 PDF 중앙에 배치
-            const x = (pdfWidth - scaledWidth) / 2;
-            const y = (pdfHeight - scaledHeight) / 2;
 
             // PDF에 이미지 추가 (최고 품질)
             pdf.addImage(imgData, 'PNG', x, y, scaledWidth, scaledHeight, undefined, 'FAST');
