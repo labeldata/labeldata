@@ -1511,6 +1511,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // PDF 저장
     async function exportToPDF() {
         try {
+            const { jsPDF } = window.jspdf;
             const previewContent = document.getElementById('previewContent');
             if (!previewContent) {
                 alert('미리보기 내용을 찾을 수 없습니다.');
@@ -1519,21 +1520,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // 현재 설정된 가로/세로 길이 가져오기
             const width = parseFloat(document.getElementById('widthInput').value) || 10;
-            const height = 11; // 세로는 항상 11cm로 고정
+            const height = parseFloat(document.getElementById('heightInput').value) || 11;
             
             // cm를 pt로 변환 (1cm = 28.35pt)
             const widthPt = width * 28.35;
-           
-
             const heightPt = height * 28.35;
-            
-            // 최소 크기 보장
-            const minWidthPt = 283.5; // 10cm
-            const minHeightPt = 311.85; // 11cm
-            
-            // PDF 페이지 크기 결정 (실제 라벨 크기에 맞춤)
-            const pdfWidth = Math.max(widthPt, minWidthPt);
-            const pdfHeight = Math.max(heightPt, minHeightPt);
 
             // html2canvas 옵션 설정
             const canvas = await html2canvas(previewContent, {
@@ -1548,8 +1539,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 logging: false // 로깅 비활성화
             });
 
-            // PDF에 이미지 추가 (최고 품질)
-            pdf.addImage(imgData, 'PNG', x, y, scaledWidth, scaledHeight, undefined, 'FAST');
+            const imgData = canvas.toDataURL('image/png');
+            
+            // PDF 생성 (가로, 세로 방향 및 단위, 크기 설정)
+            const orientation = widthPt > heightPt ? 'l' : 'p'; // 가로가 길면 landscape
+            const pdf = new jsPDF(orientation, 'pt', [widthPt, heightPt]);
+
+            // PDF에 이미지 추가 (이미지를 PDF 크기에 맞춤)
+            pdf.addImage(imgData, 'PNG', 0, 0, widthPt, heightPt);
 
             // 파일명 생성
             const today = new Date();
