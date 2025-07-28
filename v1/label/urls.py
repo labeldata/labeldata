@@ -47,6 +47,7 @@ urlpatterns = [
     path('search-ingredient-add-row/', views.search_ingredient_add_row, name='search_ingredient_add_row'),
     path('verify-ingredients/', views.verify_ingredients, name='verify_ingredients'),
     path('my-ingredient-table-partial/', views.my_ingredient_table_partial, name='my_ingredient_table_partial'),
+    path('get-additive-regulation/', views.get_additive_regulation, name='get_additive_regulation'),
     path('api/food-items/count/', views.food_items_count, name='food_items_count'),
 
     # 엑셀 다운로드

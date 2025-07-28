@@ -75,6 +75,12 @@
                             <textarea class="auto-expand form-control" name="ingredient_display_name" id="ingredient_display_name" placeholder="원재료 표시명을 입력하세요">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
                         </td>
                     </tr>
+                    <tr id="display-regulation-row">
+                        <th>표시규정</th>
+                        <td colspan="3">
+                            <textarea class="auto-expand form-control readonly-bg" id="display_regulation_display" placeholder="식품첨가물 표시규정 정보" readonly></textarea>
+                        </td>
+                    </tr>
                     <tr class="allergy-row">
                         <th>알레르기</th>
                         <td colspan="3">

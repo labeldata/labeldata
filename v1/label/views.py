@@ -864,9 +864,6 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
                     ordered.append(val)
                 if ordered:
                     ingredient_display_name = " or ".join(ordered)
-                if table_types:
-                    tables = [f"표 {t}" for t in sorted(table_types)]
-                    ingredient_display_name += f"\n※ 이 식품첨가물은 {', '.join(tables)}에 해당하는 원료입니다."
             except FoodAdditive.DoesNotExist:
                 ingredient_display_name = rawmtrl_nm or "미정"
         else:
@@ -2392,5 +2389,44 @@ def my_ingredient_pagination_info(request):
             'total_items': paginator.count
         })
         
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@csrf_exempt
+def get_additive_regulation(request):
+    """식품첨가물의 표시규정 정보 조회"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    
+    try:
+        data = json.loads(request.body)
+        food_type = data.get('food_type', '').strip()
+        
+        if not food_type:
+            return JsonResponse({'success': True, 'regulation': ''})
+        
+        try:
+            additive = FoodAdditive.objects.get(name_kr=food_type)
+            table_types = set()
+            
+            if additive.alias_4:
+                table_types.add("4")
+            if additive.alias_5:
+                table_types.add("5")
+            if additive.alias_6:
+                table_types.add("6")
+            
+            regulation = ""
+            if table_types:
+                tables = [f"표 {t}" for t in sorted(table_types)]
+                regulation = f"이 식품첨가물은 {', '.join(tables)}에 해당하는 원료입니다."
+            
+            return JsonResponse({'success': True, 'regulation': regulation})
+            
+        except FoodAdditive.DoesNotExist:
+            return JsonResponse({'success': True, 'regulation': ''})
+    
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
