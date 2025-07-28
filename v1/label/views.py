@@ -2421,7 +2421,13 @@ def get_additive_regulation(request):
             regulation = ""
             if table_types:
                 tables = [f"표 {t}" for t in sorted(table_types)]
-                regulation = f"이 식품첨가물은 {', '.join(tables)}에 해당하는 원료입니다."
+                regulation_text = f"이 식품첨가물은 {', '.join(tables)}에 해당하는 원료입니다."
+                
+                # short_name이 있으면 앞에 표시
+                if additive.short_name and additive.short_name.strip() and additive.short_name.strip() not in ["Y", "N", "-"]:
+                    regulation = f"{additive.short_name.strip()}\n{regulation_text}"
+                else:
+                    regulation = regulation_text
             
             return JsonResponse({'success': True, 'regulation': regulation})
             
