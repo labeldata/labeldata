@@ -883,10 +883,9 @@ document.addEventListener('DOMContentLoaded', function () {
                             .replace(/&lt;strong&gt;/g, '<strong>')
                             .replace(/&lt;\/strong&gt;/g, '</strong>');
                     } else {
-                        // 다른 필드들도 국가 코드 변환 후 국가명이 포함된 경우 볼드 처리
+                        // 다른 필드들은 국가 코드 변환 없이 국가명이 포함된 경우만 볼드 처리
                         if (typeof value === 'string') {
-                            const convertedValue = convertCountryCodeToKorean(value);
-                            td.innerHTML = boldCountryNames(convertedValue, countryList);
+                            td.innerHTML = boldCountryNames(value, countryList);
                         } else {
                             td.textContent = value;
                         }
