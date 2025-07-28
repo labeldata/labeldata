@@ -8,6 +8,33 @@ document.addEventListener('DOMContentLoaded', function () {
         console.error("Error parsing data:", error);
     }
 
+    // 국가 매핑 데이터 로드
+    let countryMapping = {};
+    try {
+        const countryMappingElement = document.getElementById('country-mapping-data');
+        if (countryMappingElement) {
+            countryMapping = JSON.parse(countryMappingElement.textContent);
+            console.log("Country mapping loaded:", countryMapping);
+        }
+    } catch (error) {
+        console.error("Error loading country mapping:", error);
+    }
+
+    // 국가 코드를 한글명으로 변환하는 함수
+    function convertCountryCodeToKorean(text) {
+        if (!text || !countryMapping) return text;
+        
+        // 국가 코드 패턴 찾기 (대문자 2글자)
+        return text.replace(/\b[A-Z]{2}\b/g, function(match) {
+            const koreanName = countryMapping[match];
+            if (koreanName) {
+                console.log(`국가 코드 변환: ${match} -> ${koreanName}`);
+                return koreanName;
+            }
+            return match; // 변환할 수 없으면 원본 반환
+        });
+    }
+
     // 작성일시 정보 설정
     const updateDateTime = document.getElementById('update_datetime')?.value;
     const footerText = document.querySelector('.footer-text');
@@ -847,17 +874,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
                         td.appendChild(container);
                     } else if (field === 'country_of_origin') {
-                        // 원산지 필드도 동일하게 국가명 볼드 처리
-                        const processedOriginText = boldCountryNames(value, countryList);
+                        // 원산지 필드: 국가 코드를 한글명으로 변환 후 국가명 볼드 처리
+                        const convertedValue = convertCountryCodeToKorean(value);
+                        const processedOriginText = boldCountryNames(convertedValue, countryList);
                         td.innerHTML = processedOriginText
                             .replace(/</g, '&lt;')
                             .replace(/>/g, '&gt;')
                             .replace(/&lt;strong&gt;/g, '<strong>')
                             .replace(/&lt;\/strong&gt;/g, '</strong>');
                     } else {
-                        // 다른 필드들도 국가명이 포함된 경우 볼드 처리
+                        // 다른 필드들도 국가 코드 변환 후 국가명이 포함된 경우 볼드 처리
                         if (typeof value === 'string') {
-                            td.innerHTML = boldCountryNames(value, countryList);
+                            const convertedValue = convertCountryCodeToKorean(value);
+                            td.innerHTML = boldCountryNames(convertedValue, countryList);
                         } else {
                             td.textContent = value;
                         }

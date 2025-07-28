@@ -2034,6 +2034,13 @@ def preview_popup(request):
         # None 값 제거 및 빈 문자열 제거
         country_list = [country for country in country_list if country and country.strip()]
         
+        # 국가 코드 매핑 데이터 추가 (country_code2 -> 한글명)
+        country_mapping = {}
+        country_data = CountryList.objects.all().values('country_code2', 'country_name_ko')
+        for country in country_data:
+            if country['country_code2'] and country['country_name_ko']:
+                country_mapping[country['country_code2']] = country['country_name_ko']
+        
         context = {
             'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
@@ -2042,6 +2049,7 @@ def preview_popup(request):
             'origins': list(set(origins)),       # 중복 제거
             'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
             'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
+            'country_mapping': json.dumps(country_mapping, ensure_ascii=False),  # 국가 코드 매핑 추가
             'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False)  # 소비기한 권장 데이터 추가
 
         }
