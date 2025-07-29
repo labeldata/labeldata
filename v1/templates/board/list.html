@@ -14,17 +14,17 @@
             <thead>
                 <tr>
                     <th scope="col" style="width: 10%; text-align: center;">번호</th>
-                    <th scope="col" style="width: 60%;">제목</th>
+                    <th scope="col" style="width: 55%; text-align: center;">제목</th>
                     <th scope="col" style="width: 15%; text-align: center;">작성자</th>
                     <th scope="col" style="width: 10%; text-align: center;">작성일</th>
-                    <th scope="col" style="width: 5%; text-align: center;">답변</th>
+                    <th scope="col" style="width: 10%; text-align: center; white-space: nowrap;">답변</th>
                 </tr>
             </thead>
             <tbody>
                 {% for board in boards %}
                 <tr class="{% if board.is_notice %}table-warning{% endif %} board-row" data-url="{% url 'board:detail' board.pk %}" style="cursor: pointer;">
                     <td style="width: 10%; text-align: center;">{{ forloop.counter }}</td>
-                    <td style="width: 60%;">
+                    <td style="width: 55%; text-align: center;">
                         {% if board.is_notice %}<span class="badge bg-warning text-dark">공지</span>{% endif %}
                         {% if board.is_hidden %}
                             <span class="badge bg-secondary text-white">비밀글</span>
@@ -36,7 +36,7 @@
                     </td>
                     <td style="width: 15%; text-align: center;">{{ board.author.username }}</td>
                     <td style="width: 10%; text-align: center;">{{ board.created_at|date:"Y-m-d" }}</td>
-                    <td style="width: 5%; text-align: center;">
+                    <td style="width: 10%; text-align: center;">
                         {% if not board.is_notice %}
                             {% if board.comments.count > 0 %}
                                 <span class="badge bg-success">완료</span>
