@@ -16,8 +16,17 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}">
     <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
         .popup-container {
             padding: 15px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
         .popup-header {
             display: flex;
@@ -49,6 +58,13 @@
         }
         .table-container {
             margin-top: 10px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .table-container .table-responsive {
+            overflow-y: auto;
         }
         .modal-readonly-field {
             background-color: #e9ecef;
@@ -339,7 +355,7 @@
                 총 비율: <span id="ratio-sum">0.00</span>%
             </div>
         </div>
-        <div class="table-responsive" style="max-height: 400px; min-height: 200px;">
+        <div class="table-responsive">
             <table class="table styled-table">
                 <thead>
                     <tr>
