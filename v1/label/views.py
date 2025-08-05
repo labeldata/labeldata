@@ -383,7 +383,7 @@ def save_to_my_label(request, prdlst_report_no):
                     "message": "이미 내 라벨에 저장된 수입식품입니다. 저장하시겠습니까?"
                 }, status=200)
             # 저장
-            MyLabel.objects.create(
+            new_label = MyLabel.objects.create(
                 user_id=request.user,
                 my_label_name=f"임시 - {imported_item.prduct_korean_nm}",
                 prdlst_nm=imported_item.prduct_korean_nm or "미정",
@@ -395,7 +395,11 @@ def save_to_my_label(request, prdlst_report_no):
                 country_of_origin=imported_item.xport_ntncd_nm or imported_item.mnf_ntncn_nm or "",
                 # 기타 필드는 필요시 추가
             )
-            return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
+            return JsonResponse({
+                "success": True, 
+                "message": "내 표시사항으로 저장되었습니다.",
+                "label_name": new_label.my_label_name
+            })
 
         # 일반식품 로직
         existing_label = MyLabel.objects.filter(prdlst_report_no=prdlst_report_no, user_id=request.user).first()
@@ -404,11 +408,22 @@ def save_to_my_label(request, prdlst_report_no):
                 {"success": False, "confirm_required": True, "message": "이미 내 라벨에 저장된 항목입니다. 저장하시겠습니까?"}, status=200
             )
         data_mapping = {field: getattr(food_item, field, "") for field in FOODITEM_MYLABEL_MAPPING.keys()}
+        label_name = f"임시 - {food_item.prdlst_nm}"
+        
         if existing_label and confirm_flag:
-            MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
-            return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
-        MyLabel.objects.create(user_id=request.user, my_label_name=f"임시 - {food_item.prdlst_nm}", **data_mapping)
-        return JsonResponse({"success": True, "message": "내 표시사항으로 저장되었습니다."})
+            new_label = MyLabel.objects.create(user_id=request.user, my_label_name=label_name, **data_mapping)
+            return JsonResponse({
+                "success": True, 
+                "message": "내 표시사항으로 저장되었습니다.",
+                "label_name": new_label.my_label_name
+            })
+        
+        new_label = MyLabel.objects.create(user_id=request.user, my_label_name=label_name, **data_mapping)
+        return JsonResponse({
+            "success": True, 
+            "message": "내 표시사항으로 저장되었습니다.",
+            "label_name": new_label.my_label_name
+        })
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 

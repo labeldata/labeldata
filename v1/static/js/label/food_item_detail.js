@@ -25,7 +25,11 @@ function saveToMyLabel(prdlst_report_no, imported_mode) {
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          alert(data.message);
+          // 커스텀 모달로 성공 메시지 표시 (저장된 라벨명 포함)
+          showLabelSuccessModal(
+            data.message || "내 표시사항으로 저장되었습니다.",
+            data.label_name
+          );
         } else if (data.confirm_required) {
           // 이미 저장된 라벨이 있을 경우
           if (confirm(data.message)) {
@@ -144,7 +148,7 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// 커스텀 성공 모달 표시 함수
+// 커스텀 성공 모달 표시 함수 (내원료용)
 function showSuccessModal(message, ingredientName = null) {
     document.getElementById('successMessage').textContent = message;
     $('#successModal').modal('show');
@@ -163,6 +167,33 @@ function showSuccessModal(message, ingredientName = null) {
         
         // 모달 닫기
         $('#successModal').modal('hide');
+        
+        // 현재 창도 닫기 (옵션)
+        setTimeout(() => {
+            window.close();
+        }, 300);
+    };
+}
+
+// 커스텀 성공 모달 표시 함수 (표시사항용)
+function showLabelSuccessModal(message, labelName = null) {
+    document.getElementById('labelSuccessMessage').textContent = message;
+    $('#labelSuccessModal').modal('show');
+    
+    // "저장된 표시사항 보러가기" 버튼 클릭 이벤트
+    document.getElementById('goToLabelBtn').onclick = function() {
+        // 표시사항 관리 페이지로 이동 (새 탭에서) - 저장된 라벨명으로 검색
+        let labelListUrl = '/label/my-labels/';
+        
+        // 저장된 라벨명이 있으면 검색 파라미터로 추가
+        if (labelName) {
+            labelListUrl += `?my_label_name=${encodeURIComponent(labelName)}`;
+        }
+        
+        window.open(labelListUrl, '_blank');
+        
+        // 모달 닫기
+        $('#labelSuccessModal').modal('hide');
         
         // 현재 창도 닫기 (옵션)
         setTimeout(() => {

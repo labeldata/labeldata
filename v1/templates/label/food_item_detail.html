@@ -232,7 +232,7 @@
   </div>
 </div>
 
-<!-- 커스텀 성공 모달 -->
+<!-- 커스텀 성공 모달 (내원료용) -->
 <div class="modal fade" id="successModal" tabindex="-1" role="dialog" aria-labelledby="successModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered" role="document">
     <div class="modal-content">
@@ -248,6 +248,27 @@
       <div class="modal-footer justify-content-center">
         <button type="button" class="btn btn-secondary" data-dismiss="modal">확인</button>
         <button type="button" class="btn btn-primary" id="goToIngredientBtn">저장된 원료 보러가기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 커스텀 성공 모달 (표시사항용) -->
+<div class="modal fade" id="labelSuccessModal" tabindex="-1" role="dialog" aria-labelledby="labelSuccessModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title" id="labelSuccessModalLabel">저장 완료</h5>
+      </div>
+      <div class="modal-body">
+        <div class="text-center">
+          <i class="fas fa-check-circle text-success" style="font-size: 3rem; margin-bottom: 15px;"></i>
+          <p id="labelSuccessMessage" class="mb-0">내 표시사항으로 성공적으로 저장되었습니다.</p>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">확인</button>
+        <button type="button" class="btn btn-primary" id="goToLabelBtn">저장된 표시사항 보러가기</button>
       </div>
     </div>
   </div>
