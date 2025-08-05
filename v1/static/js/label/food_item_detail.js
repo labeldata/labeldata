@@ -74,7 +74,11 @@ function saveToMyIngredients(prdlst_report_no, imported_mode) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(data.message || "내원료로 저장되었습니다.");
+                // 커스텀 모달로 성공 메시지 표시 (저장된 원료명 포함)
+                showSuccessModal(
+                    data.message || "내원료로 저장되었습니다.", 
+                    data.ingredient_name
+                );
             } else if (data.confirm_required) {
                 // 이미 저장된 내원료가 있을 경우
                 if (confirm(data.message)) {
@@ -138,6 +142,33 @@ function getCookie(name) {
         }
     }
     return cookieValue;
+}
+
+// 커스텀 성공 모달 표시 함수
+function showSuccessModal(message, ingredientName = null) {
+    document.getElementById('successMessage').textContent = message;
+    $('#successModal').modal('show');
+    
+    // "저장된 원료 보러가기" 버튼 클릭 이벤트
+    document.getElementById('goToIngredientBtn').onclick = function() {
+        // 원료 관리 페이지로 이동 (새 탭에서) - 저장된 원료명으로 검색
+        let ingredientListUrl = '/label/my-ingredient-list-combined/';
+        
+        // 저장된 원료명이 있으면 검색 파라미터로 추가
+        if (ingredientName) {
+            ingredientListUrl += `?prdlst_nm=${encodeURIComponent(ingredientName)}`;
+        }
+        
+        window.open(ingredientListUrl, '_blank');
+        
+        // 모달 닫기
+        $('#successModal').modal('hide');
+        
+        // 현재 창도 닫기 (옵션)
+        setTimeout(() => {
+            window.close();
+        }, 300);
+    };
 }
 
 const width = 1000; // 가로 크기

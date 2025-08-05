@@ -7,6 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>제품 상세 정보</title>
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <link rel="stylesheet" href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}">
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
   <style>
@@ -230,6 +231,30 @@
     {% endif %}
   </div>
 </div>
+
+<!-- 커스텀 성공 모달 -->
+<div class="modal fade" id="successModal" tabindex="-1" role="dialog" aria-labelledby="successModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title" id="successModalLabel">저장 완료</h5>
+      </div>
+      <div class="modal-body">
+        <div class="text-center">
+          <i class="fas fa-check-circle text-success" style="font-size: 3rem; margin-bottom: 15px;"></i>
+          <p id="successMessage" class="mb-0">내 원료로 성공적으로 저장되었습니다.</p>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-center">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">확인</button>
+        <button type="button" class="btn btn-primary" id="goToIngredientBtn">저장된 원료 보러가기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="{% static 'js/label/food_item_detail.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 </body>
 </html>

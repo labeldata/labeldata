@@ -871,7 +871,7 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
             ingredient_display_name = rawmtrl_nm or "미정"
         # ---------------------------------------------------
 
-        MyIngredient.objects.create(
+        new_ingredient = MyIngredient.objects.create(
             user_id=request.user,
             prdlst_report_no=None if imported_mode else food_item.prdlst_report_no,
             prdlst_nm=prdlst_nm or "미정",
@@ -885,8 +885,12 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
             ingredient_display_name=ingredient_display_name,
             delete_YN="N"
         )
-        # 메시지 제거 - JSON 응답만 반환
-        return JsonResponse({"success": True, "message": "내 원료로 저장되었습니다."})
+        # 메시지 제거 - JSON 응답만 반환 (저장된 원료명 포함)
+        return JsonResponse({
+            "success": True, 
+            "message": "내 원료로 저장되었습니다.",
+            "ingredient_name": new_ingredient.prdlst_nm
+        })
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
 
