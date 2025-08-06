@@ -236,18 +236,15 @@
 <div class="modal fade" id="successModal" tabindex="-1" role="dialog" aria-labelledby="successModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered" role="document">
     <div class="modal-content">
-      <div class="modal-header bg-success text-white">
+      <div class="modal-header">
         <h5 class="modal-title" id="successModalLabel">저장 완료</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
-      <div class="modal-body">
-        <div class="text-center">
-          <i class="fas fa-check-circle text-success" style="font-size: 3rem; margin-bottom: 15px;"></i>
-          <p id="successMessage" class="mb-0">내 원료로 성공적으로 저장되었습니다.</p>
-        </div>
-      </div>
-      <div class="modal-footer justify-content-center">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">확인</button>
-        <button type="button" class="btn btn-primary" id="goToIngredientBtn">저장된 원료 보러가기</button>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">확인</button>
+        <button type="button" class="btn btn-primary btn-sm" id="goToIngredientBtn">저장된 원료로 이동하기</button>
       </div>
     </div>
   </div>
@@ -257,18 +254,15 @@
 <div class="modal fade" id="labelSuccessModal" tabindex="-1" role="dialog" aria-labelledby="labelSuccessModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered" role="document">
     <div class="modal-content">
-      <div class="modal-header bg-success text-white">
+      <div class="modal-header">
         <h5 class="modal-title" id="labelSuccessModalLabel">저장 완료</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
       </div>
-      <div class="modal-body">
-        <div class="text-center">
-          <i class="fas fa-check-circle text-success" style="font-size: 3rem; margin-bottom: 15px;"></i>
-          <p id="labelSuccessMessage" class="mb-0">내 표시사항으로 성공적으로 저장되었습니다.</p>
-        </div>
-      </div>
-      <div class="modal-footer justify-content-center">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">확인</button>
-        <button type="button" class="btn btn-primary" id="goToLabelBtn">저장된 표시사항 보러가기</button>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">확인</button>
+        <button type="button" class="btn btn-primary btn-sm" id="goToLabelBtn">저장된 표시사항으로 이동하기</button>
       </div>
     </div>
   </div>

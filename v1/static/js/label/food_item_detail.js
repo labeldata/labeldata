@@ -25,11 +25,7 @@ function saveToMyLabel(prdlst_report_no, imported_mode) {
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          // 커스텀 모달로 성공 메시지 표시 (저장된 라벨명 포함)
-          showLabelSuccessModal(
-            data.message || "내 표시사항으로 저장되었습니다.",
-            data.label_name
-          );
+          $('#labelSuccessModal').modal('show');
         } else if (data.confirm_required) {
           // 이미 저장된 라벨이 있을 경우
           if (confirm(data.message)) {
@@ -78,11 +74,7 @@ function saveToMyIngredients(prdlst_report_no, imported_mode) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // 커스텀 모달로 성공 메시지 표시 (저장된 원료명 포함)
-                showSuccessModal(
-                    data.message || "내원료로 저장되었습니다.", 
-                    data.ingredient_name
-                );
+                $('#successModal').modal('show');
             } else if (data.confirm_required) {
                 // 이미 저장된 내원료가 있을 경우
                 if (confirm(data.message)) {
@@ -148,69 +140,28 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// 커스텀 성공 모달 표시 함수 (내원료용)
-function showSuccessModal(message, ingredientName = null) {
-    document.getElementById('successMessage').textContent = message;
-    $('#successModal').modal('show');
-    
-    // "저장된 원료 보러가기" 버튼 클릭 이벤트
-    document.getElementById('goToIngredientBtn').onclick = function() {
-        // 원료 관리 페이지로 이동 (새 탭에서) - 저장된 원료명으로 검색
-        let ingredientListUrl = '/label/my-ingredient-list-combined/';
-        
-        // 저장된 원료명이 있으면 검색 파라미터로 추가
-        if (ingredientName) {
-            ingredientListUrl += `?prdlst_nm=${encodeURIComponent(ingredientName)}`;
-        }
-        
-        window.open(ingredientListUrl, '_blank');
-        
-        // 모달 닫기
-        $('#successModal').modal('hide');
-        
-        // 현재 창도 닫기 (옵션)
-        setTimeout(() => {
-            window.close();
-        }, 300);
-    };
+// 새 탭에서 URL 열기
+function openInNewTab(url) {
+  if (window.opener) {
+    window.opener.open(url, '_blank');
+  } else {
+    window.open(url, '_blank');
+  }
 }
 
-// 커스텀 성공 모달 표시 함수 (표시사항용)
-function showLabelSuccessModal(message, labelName = null) {
-    document.getElementById('labelSuccessMessage').textContent = message;
-    $('#labelSuccessModal').modal('show');
-    
-    // "저장된 표시사항 보러가기" 버튼 클릭 이벤트
-    document.getElementById('goToLabelBtn').onclick = function() {
-        // 표시사항 관리 페이지로 이동 (새 탭에서) - 저장된 라벨명으로 검색
-        let labelListUrl = '/label/my-labels/';
-        
-        // 저장된 라벨명이 있으면 검색 파라미터로 추가
-        if (labelName) {
-            labelListUrl += `?my_label_name=${encodeURIComponent(labelName)}`;
-        }
-        
-        window.open(labelListUrl, '_blank');
-        
-        // 모달 닫기
-        $('#labelSuccessModal').modal('hide');
-        
-        // 현재 창도 닫기 (옵션)
-        setTimeout(() => {
-            window.close();
-        }, 300);
-    };
-}
+document.addEventListener('DOMContentLoaded', function() {
+  // 내원료 이동 버튼 클릭 시 새 탭으로 열기
+  document.getElementById('goToIngredientBtn').addEventListener('click', function() {
+    openInNewTab('/label/my-ingredient-list-combined/');
+    $('#successModal').modal('hide');
+  });
 
-const width = 1000; // 가로 크기
-const height = 600; // 세로 크기
-const left = (screen.width - width) / 2;
-const topPosition = (screen.height - height) / 2; // 'top'을 'topPosition'으로 변경
-// const popup = window.open(
-//     url,
-//     "제품 상세 정보",
-//     `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${topPosition},left=${left}`
-// );
+  // 표시사항 이동 버튼 클릭 시 새 탭으로 열기
+  document.getElementById('goToLabelBtn').addEventListener('click', function() {
+    openInNewTab('/label/my-labels/');
+    $('#labelSuccessModal').modal('hide');
+  });
+});
 
 // 수입식품 상세 팝업 열기 함수 (제품 목록에서 사용)
 function openImportedDetailPopup(id) {
