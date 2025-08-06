@@ -56,72 +56,60 @@ function createFoodTypeSelect(selectedValue = "") {
 function updateSummarySection() {
     const rows = Array.from(document.querySelectorAll('#ingredient-body tr'));
 
-    const summaryDisplayNames = [];
-    rows.forEach((row) => {
-        const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
-        const foodCategory = row.querySelector('.food-category-input')?.dataset.foodCategory || '';
-        const displayNameRaw = row.querySelector('.display-name-input')?.value.trim() || ingredientName;
-        const foodType = row.querySelector('td:nth-child(6) input, .food-type-input')?.value.trim() || '';
+    // 1. 모든 행의 데이터를 객체 배열로 추출
+    const ingredientsData = rows.map(row => {
         const ratioStr = row.querySelector('.ratio-input')?.value.trim();
-        const ratio = parseFloat(ratioStr);
+        return {
+            ingredientName: row.querySelector('.ingredient-name-input')?.value.trim(),
+            foodCategory: row.querySelector('.food-category-input')?.dataset.foodCategory || '',
+            displayName: row.querySelector('.display-name-input')?.value.trim(),
+            foodType: row.querySelector('td:nth-child(6) input, .food-type-input')?.value.trim() || '',
+            ratio: parseFloat(ratioStr) || 0,
+            ratioStr: ratioStr,
+            allergen: row.querySelector('.allergen-input')?.value || '',
+            gmo: row.querySelector('.gmo-input')?.value || ''
+        };
+    });
 
-        let displayName = displayNameRaw;
-        if (foodCategory === 'additive' && displayName) {
-            const idx = displayName.indexOf('※ 이 식품첨가물은');
+    // 2. 식품유형(foodType)을 기준으로 그룹화하여 중복 찾기
+    const foodTypeGroups = new Map();
+    ingredientsData.forEach(data => {
+        if (data.foodType) {
+            if (!foodTypeGroups.has(data.foodType)) {
+                foodTypeGroups.set(data.foodType, []);
+            }
+            foodTypeGroups.get(data.foodType).push(data);
+        }
+    });
+
+    // 3. 중복된 그룹에 대해 함량(ratio) 순으로 정렬하고 번호 부여
+    foodTypeGroups.forEach((items, foodType) => {
+        if (items.length > 1) {
+            items.sort((a, b) => b.ratio - a.ratio);
+            items.forEach((item, index) => {
+                item.summaryFoodType = `${foodType}${String.fromCodePoint(9312 + index)}`;
+            });
+        }
+    });
+
+    // 4. 최종 요약 표시명 배열 생성
+    const summaryDisplayNames = ingredientsData.map(data => {
+        const foodType = data.summaryFoodType || data.foodType; // 번호가 부여된 식품유형 사용
+        let displayName = data.displayName || data.ingredientName;
+
+        if (data.foodCategory === 'additive' && displayName) {
+            const idx = displayName.indexOf('※');
             if (idx !== -1) {
                 displayName = displayName.substring(0, idx).trim();
             }
+            return displayName;
         }
 
-        if (foodCategory === 'additive') {
-            summaryDisplayNames.push(displayName);
-            return;
+        if (data.foodCategory === '정제수') {
+            return foodType || displayName;
         }
 
-        if (foodCategory === 'agricultural') {
-            if (ratioStr && !isNaN(ratio) && ratio >= 5) {
-                let items = [];
-                let count = 0;
-                let str = displayName;
-                let i = 0;
-                let len = str.length;
-                let buffer = '';
-                let inParen = 0;
-                while (i < len && count < 5) {
-                    let ch = str[i];
-                    if (ch === '(' || ch === '[' || ch === '{') {
-                        inParen++;
-                        buffer += ch;
-                    } else if (ch === ')' || ch === ']' || ch === '}') {
-                        inParen = Math.max(0, inParen - 1);
-                        buffer += ch;
-                    } else if (ch === ',' && inParen === 0) {
-                        if (buffer.trim()) {
-                            items.push(buffer.trim());
-                            count += 1;
-                        }
-                        buffer = '';
-                    } else {
-                        buffer += ch;
-                    }
-                    i++;
-                }
-                if (count < 5 && buffer.trim()) {
-                    items.push(buffer.trim());
-                }
-                summaryDisplayNames.push(`${foodType}[${items.join(', ')}]`);
-            } else {
-                summaryDisplayNames.push(foodType || displayName);
-            }
-            return;
-        }
-
-        if (foodCategory === '정제수') {
-            summaryDisplayNames.push(foodType || displayName);
-            return;
-        }
-
-        if (ratioStr && !isNaN(ratio) && ratio >= 5) {
+        if ((data.foodCategory === 'processed' || data.foodCategory === 'agricultural') && data.ratioStr && !isNaN(data.ratio) && data.ratio >= 5) {
             let items = [];
             let count = 0;
             let str = displayName;
@@ -131,16 +119,13 @@ function updateSummarySection() {
             let inParen = 0;
             while (i < len && count < 5) {
                 let ch = str[i];
-                if (ch === '(' || ch === '[' || ch === '{') {
-                    inParen++;
-                    buffer += ch;
-                } else if (ch === ')' || ch === ']' || ch === '}') {
-                    inParen = Math.max(0, inParen - 1);
-                    buffer += ch;
-                } else if (ch === ',' && inParen === 0) {
+                if (ch === '(' || ch === '[' || ch === '{') inParen++;
+                else if (ch === ')' || ch === ']' || ch === '}') inParen = Math.max(0, inParen - 1);
+                
+                if (ch === ',' && inParen === 0) {
                     if (buffer.trim()) {
                         items.push(buffer.trim());
-                        count += 1;
+                        count++;
                     }
                     buffer = '';
                 } else {
@@ -151,52 +136,45 @@ function updateSummarySection() {
             if (count < 5 && buffer.trim()) {
                 items.push(buffer.trim());
             }
-            summaryDisplayNames.push(`${foodType}[${items.join(', ')}]`);
+            return `${foodType}[${items.join(', ')}]`;
         } else {
-            summaryDisplayNames.push(foodType || displayName);
+            return foodType || displayName;
         }
     });
 
-    document.getElementById('summary-display-names').textContent = summaryDisplayNames.length > 0 ? summaryDisplayNames.join(', ') : '없음';
+    document.getElementById('summary-display-names').textContent = summaryDisplayNames.filter(Boolean).join(', ') || '없음';
 
-    // 알레르기 성분 카운트 (숫자로 표시)
+    // 5. 알레르기 및 GMO 정보 요약
     const allergenCount = new Map();
     const shellfishCollected = new Set();
     const shellfishPattern = /^조개류\(([^)]+)\)$/;
 
-    rows.forEach(row => {
-        const allergenInput = row.querySelector('.allergen-input')?.value || '';
-        const allergenList = allergenInput.split(',').map(item => item.trim()).filter(item => item);
+    ingredientsData.forEach(data => {
+        const allergenList = data.allergen.split(',').map(item => item.trim()).filter(Boolean);
         allergenList.forEach(allergen => {
             const match = allergen.match(shellfishPattern);
             if (match) {
-                const items = match[1].split(',').map(item => item.trim()).filter(item => item);
+                const items = match[1].split(',').map(item => item.trim()).filter(Boolean);
                 items.forEach(item => shellfishCollected.add(item));
-            } else if (allergen.includes('조개류')) {
-                allergenCount.set(allergen, (allergenCount.get(allergen) || 0) + 1);
             } else {
                 allergenCount.set(allergen, (allergenCount.get(allergen) || 0) + 1);
             }
         });
     });
 
-    // 조개류 통합 처리
     if (shellfishCollected.size > 0) {
         const shellfishStr = `조개류(${Array.from(shellfishCollected).join(', ')})`;
         allergenCount.set(shellfishStr, (allergenCount.get(shellfishStr) || 0) + 1);
     }
 
-    // GMO 성분 카운트 (숫자로 표시)
     const gmoCount = new Map();
-    rows.forEach(row => {
-        const gmoInput = row.querySelector('.gmo-input')?.value || '';
-        const gmoList = gmoInput.split(',').map(item => item.trim()).filter(item => item);
+    ingredientsData.forEach(data => {
+        const gmoList = data.gmo.split(',').map(item => item.trim()).filter(Boolean);
         gmoList.forEach(gmo => {
             gmoCount.set(gmo, (gmoCount.get(gmo) || 0) + 1);
         });
     });
 
-    // 알레르기/GMO 텍스트 생성 (숫자 포함, 클릭 가능한 링크로)
     const allergenGmoText = [];
     if (allergenCount.size > 0) {
         const allergenTexts = Array.from(allergenCount.entries()).map(([allergen, count]) => {

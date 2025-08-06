@@ -771,119 +771,29 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
 
         # ------------------- 추천 로직 통합 -------------------
         mixture_types = [
-            "L-글루탐산나트륨제제",
-            "면류첨가알칼리제",
-            "발색제제",
-            "보존료제제",
-            "사카린나트륨제제",
-            "타르색소제제",
-            "팽창제제",
-            "향료제제",
-            "혼합제제",
+            "L-글루탐산나트륨제제", "면류첨가알칼리제", "발색제제", "보존료제제",
+            "사카린나트륨제제", "타르색소제제", "팽창제제", "향료제제", "혼합제제",
         ]
         ingredient_display_name = prdlst_nm or "미정"
-        # 1. 향료, 천연향료, 합성향료 (단, "향료제제"는 제외)
+        prdlst_dcnm_for_save = prdlst_dcnm
+
+        # 1. 혼합제제류(지정된 식품유형 포함)는 "식품유형[원재료명]"으로 표시
         if (
-            food_category == "additive"
-            and any(x in prdlst_dcnm for x in ["향료", "천연향료", "합성향료"])
-            and "향료제제" not in prdlst_dcnm
-        ):
-            # 천연향료/합성향료는 식품유형을 '향료'로 저장
-            if any(x in prdlst_dcnm for x in ["천연향료", "합성향료"]):
-                prdlst_dcnm_for_save = "향료"
-                # 00향 추출은 제품명(prdlst_nm)에서, 한글만 추출(띄어쓰기, 영문, 숫자 제외)
-                m = re.search(r'([가-힣]+)향', prdlst_nm)
-                flavor_name = m.group(1).strip() if m else ""
-                if flavor_name:
-                    ingredient_display_name = f"{prdlst_dcnm} or {prdlst_dcnm}({flavor_name}향)"
-                else:
-                    ingredient_display_name = prdlst_dcnm
-            else:
-                prdlst_dcnm_for_save = prdlst_dcnm
-                m = re.search(r'([가-힣]+)향', prdlst_nm)
-                flavor_name = m.group(1).strip() if m else ""
-                if flavor_name:
-                    ingredient_display_name = f"향료 or 향료({flavor_name}향)"
-                else:
-                    ingredient_display_name = "향료"
-        # 2. 혼합제제류(지정된 식품유형 포함)는 "식품유형[원재료명]"으로 표시
-        elif (
             food_category == "additive"
             and any(mix in prdlst_dcnm for mix in mixture_types)
         ):
+            ingredient_display_name = f"{prdlst_dcnm}[{rawmtrl_nm}]" if rawmtrl_nm and rawmtrl_nm != "미정" else prdlst_dcnm
             prdlst_dcnm_for_save = prdlst_dcnm
-            ingredient_display_name = f"{prdlst_dcnm}[{rawmtrl_nm}]" if rawmtrl_nm else prdlst_dcnm
-        # 3. 표4,5,6 추천 로직 (위 두 조건에 해당하지 않는 식품첨가물만)
+
+        # 2. 기타 식품첨가물: 원재료명을 기본 표시명으로 저장
         elif food_category == "additive":
+            ingredient_display_name = rawmtrl_nm or prdlst_dcnm or "미정"
             prdlst_dcnm_for_save = prdlst_dcnm
-            try:
-                additive = FoodAdditive.objects.get(name_kr=prdlst_dcnm)
-                display_candidates = set()
-                table_types = set()
-                # 명칭(주용도)
-                if additive.name_kr and additive.main_purpose:
-                    display_candidates.add(f"{additive.name_kr}({additive.main_purpose})")
-                if additive.name_kr:
-                    display_candidates.add(additive.name_kr)
-                if additive.short_name:
-                    for s in str(additive.short_name).split(","):
-                        s = s.strip()
-                        if s and s not in {"Y", "N", "-"}:
-                            display_candidates.add(s)
-                if additive.main_purpose:
-                    for s in str(additive.main_purpose).split(","):
-                        s = s.strip()
-                        if s and s not in {"Y", "N", "-"}:
-                            display_candidates.add(s)
-                if additive.alias_4:
-                    table_types.add("4")
-                    for val in str(additive.alias_4).split(","):
-                        val = val.strip()
-                        if val and val not in {"Y", "N", "-"}:
-                            display_candidates.add(val)
-                if additive.alias_5:
-                    table_types.add("5")
-                    for val in str(additive.alias_5).split(","):
-                        val = val.strip()
-                        if val and val not in {"Y", "N", "-"}:
-                            display_candidates.add(val)
-                if additive.alias_6:
-                    table_types.add("6")
-                    for val in str(additive.alias_6).split(","):
-                        val = val.strip()
-                        if val and val not in {"Y", "N", "-"}:
-                            display_candidates.add(val)
-                # 정렬
-                ordered = []
-                if additive.name_kr and additive.main_purpose:
-                    nm_purp = f"{additive.name_kr}({additive.main_purpose})"
-                    if nm_purp in display_candidates:
-                        ordered.append(nm_purp)
-                        display_candidates.discard(nm_purp)
-                if additive.name_kr and additive.name_kr in display_candidates:
-                    ordered.append(additive.name_kr)
-                    display_candidates.discard(additive.name_kr)
-                if additive.short_name:
-                    for s in str(additive.short_name).split(","):
-                        s = s.strip()
-                        if s and s in display_candidates:
-                            ordered.append(s)
-                            display_candidates.discard(s)
-                if additive.main_purpose:
-                    for s in str(additive.main_purpose).split(","):
-                        s = s.strip()
-                        if s and s in display_candidates:
-                            ordered.append(s)
-                            display_candidates.discard(s)
-                for val in sorted(display_candidates):
-                    ordered.append(val)
-                if ordered:
-                    ingredient_display_name = " or ".join(ordered)
-            except FoodAdditive.DoesNotExist:
-                ingredient_display_name = rawmtrl_nm or "미정"
+        
+        # 3. 가공식품 또는 위에서 처리되지 않은 원료
         else:
-            prdlst_dcnm_for_save = prdlst_dcnm
             ingredient_display_name = rawmtrl_nm or "미정"
+            prdlst_dcnm_for_save = prdlst_dcnm
         # ---------------------------------------------------
 
         new_ingredient = MyIngredient.objects.create(
@@ -2418,40 +2328,92 @@ def get_additive_regulation(request):
     """식품첨가물의 표시규정 정보 조회"""
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
-    
+
     try:
         data = json.loads(request.body)
         food_type = data.get('food_type', '').strip()
-        
+        prdlst_nm = data.get('prdlst_nm', '').strip() # prdlst_nm 추가
+
         if not food_type:
             return JsonResponse({'success': True, 'regulation': ''})
-        
-        try:
-            additive = FoodAdditive.objects.get(name_kr=food_type)
-            table_types = set()
+
+       # 1. 향료, 천연향료, 합성향료 추천 로직
+        if food_type in ["향료", "천연향료", "합성향료"] and "향료제제" not in food_type:
+            m = re.search(r'([가-힣\s]+)\s*향', prdlst_nm) # 정규식 수정 (공백 포함)
+            flavor_name = m.group(1).strip() if m else ""
             
-            if additive.alias_4:
-                table_types.add("4")
-            if additive.alias_5:
-                table_types.add("5")
-            if additive.alias_6:
-                table_types.add("6")
-            
-            regulation = ""
-            if table_types:
-                tables = [f"표 {t}" for t in sorted(table_types)]
-                regulation_text = f"이 식품첨가물은 {', '.join(tables)}에 해당하는 원료입니다."
-                
-                # short_name이 있으면 앞에 표시
-                if additive.short_name and additive.short_name.strip() and additive.short_name.strip() not in ["Y", "N", "-"]:
-                    regulation = f"{additive.short_name.strip()}\n{regulation_text}"
+            # 식품유형이 '향료'인 경우
+            if food_type == "향료":
+                if flavor_name:
+                    recommendation = f"향료 or 향료({flavor_name}향)"
                 else:
-                    regulation = regulation_text
+                    recommendation = "향료 or 향료(OO향)" # 문구 추출 실패 시 예시 제공
+                regulation = f"※ 식품첨가물의 유형이 \"향료\"인 경우에는 다음과 같이 표시할 수 있다.\n     추천문구 : {recommendation}"
+            # 식품유형이 '천연향료' 또는 '합성향료'인 경우
+            else:
+                if flavor_name:
+                    regulation = f"{food_type} or {food_type}({flavor_name}향)"
+                else:
+                    regulation = food_type
             
             return JsonResponse({'success': True, 'regulation': regulation})
+
+        # 2. 기타 식품첨가물 (표 정보 포함)
+        try:
+            additive = FoodAdditive.objects.get(name_kr=food_type)
             
+            table_lines = []
+            applicable_tables = []
+            
+            # 표 4, 5, 6 해당 여부 확인 및 문구 생성
+            if str(additive.alias_4).strip().upper() == 'Y':
+                applicable_tables.append("4")
+                if additive.name_kr and additive.main_purpose:
+                    rec = f"{additive.name_kr}({additive.main_purpose})"
+                    table_lines.append(f"    표4(명칭+용도) : {rec}")
+
+            if str(additive.alias_5).strip().upper() == 'Y':
+                applicable_tables.append("5")
+                parts = []
+                if additive.name_kr:
+                    parts.append(additive.name_kr)
+                if additive.main_purpose:
+                    for p in str(additive.main_purpose).split(','):
+                        p = p.strip()
+                        if p and p not in {"Y", "N", "-"}:
+                            parts.append(p)
+                if parts:
+                    rec = " or ".join(parts)
+                    table_lines.append(f"    표5(명칭or용도) : {rec}")
+
+            if str(additive.alias_6).strip().upper() == 'Y':
+                applicable_tables.append("6")
+                parts = []
+                if additive.name_kr:
+                    parts.append(additive.name_kr)
+                if additive.short_name:
+                    for s in str(additive.short_name).split(','):
+                        s = s.strip()
+                        if s and s not in {"Y", "N", "-"}:
+                            parts.append(s)
+                if parts:
+                    rec = " or ".join(parts)
+                    table_lines.append(f"    표6(명칭or간략명) : {rec}")
+
+            # 표 정보가 있으면 새로운 형식으로 반환
+            if table_lines:
+                table_numbers = ", ".join(applicable_tables)
+                header = f"※ 식품첨가물공전 표 {table_numbers}에 해당되어 다음과 같이 표시할 수 있다."
+                regulation = header + "\n" + "\n".join(table_lines)
+            
+            # 표 정보가 없으면 빈 문자열 반환
+            else:
+                regulation = ""
+
+            return JsonResponse({'success': True, 'regulation': regulation})
+
         except FoodAdditive.DoesNotExist:
             return JsonResponse({'success': True, 'regulation': ''})
-    
+
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
