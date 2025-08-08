@@ -104,6 +104,9 @@ class MyIngredient(models.Model):
     #ingredient_ratio = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="원료 비율(%)", null=True, blank=True)
     ingredient_display_name = models.CharField(max_length=1000, verbose_name="원료 표시명", null=True, blank=True)
 
+    # 요약 타입 추가 Y : foodType, N : ingredientName
+    summary_type_flag = models.CharField(max_length=1, verbose_name="요약 타입", default='Y')
+
     allergens = models.CharField(max_length=1000, verbose_name="알레르기 물질", null=True, blank=True)
     gmo =  models.CharField(max_length=500, verbose_name="GMO", null=True, blank=True)
 

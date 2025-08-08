@@ -841,7 +841,8 @@ def ingredient_popup(request):
                 'display_name': ingredient.ingredient_display_name,
                 'allergen': ingredient.allergens or '',
                 'gmo': ingredient.gmo or '',
-                'manufacturer': ingredient.bssh_nm or ''
+                'manufacturer': ingredient.bssh_nm or '',
+                'summary_type_flag': ingredient.summary_type_flag or 'Y'  # Y: 식품유형, N: 원재료명
             })
         if relations.exists():
             has_relations = True  # 관계 데이터가 있는 경우 플래그 설정
@@ -1129,12 +1130,16 @@ def save_ingredients_to_label(request, label_id):
                     bssh_nm=ingredient_data.get('manufacturer', ''),
                     allergens=ingredient_data.get('allergen', ''),
                     gmo=ingredient_data.get('gmo', ''),
+                    summary_type_flag=ingredient_data.get('summary_type_flag', 'Y'),  # summary_type_flag 추가
                     delete_YN='N'
                 )
             else:
                 # 기존 원재료 사용
                 try:
                     ingredient = MyIngredient.objects.get(my_ingredient_id=my_ingredient_id)
+                    # 기존 원재료의 summary_type_flag 업데이트
+                    ingredient.summary_type_flag = ingredient_data.get('summary_type_flag', 'Y')
+                    ingredient.save()
                 except MyIngredient.DoesNotExist:
                     # 원재료가 존재하지 않는 경우 새로 생성
                     ingredient = MyIngredient.objects.create(
@@ -1146,6 +1151,7 @@ def save_ingredients_to_label(request, label_id):
                         bssh_nm=ingredient_data.get('manufacturer', ''),
                         allergens=ingredient_data.get('allergen', ''),
                         gmo=ingredient_data.get('gmo', ''),
+                        summary_type_flag=ingredient_data.get('summary_type_flag', 'Y'),  # summary_type_flag 추가
                         delete_YN='N'
                     )
             

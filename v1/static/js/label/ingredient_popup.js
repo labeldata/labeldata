@@ -606,6 +606,7 @@ function saveIngredients() {
         const allergenInput = row.querySelector('.allergen-input')?.value.trim() || '';
         const gmoInput = row.querySelector('.gmo-input')?.value.trim() || '';
         const summaryType = row.querySelector('.summary-type-radio:checked')?.value || 'foodType'; // 요약 방식 값 가져오기
+        const summaryTypeFlag = summaryType === 'foodType' ? 'Y' : 'N'; // DB 저장용 플래그 변환
         
         let displayName = displayNameRaw;
 
@@ -700,6 +701,7 @@ function saveIngredients() {
             origin: row.querySelector('.origin-cell')?.textContent.trim() || "",
             my_ingredient_id: ingredientName !== '정제수' ? row.querySelector('.my-ingredient-id')?.value.trim() || "" : "",
             summary_type: summaryType, // 저장할 객체에 추가
+            summary_type_flag: summaryTypeFlag, // DB 저장용 Y/N 플래그 추가
             order: index + 1
         };
         ingredients.push(ingredient);
@@ -822,7 +824,9 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
     row.dataset.gmo = ingredient.gmo || '';
     
     const uniqueId = `summary-type-${Date.now()}-${Math.random()}`;
-    const summaryType = ingredient.summary_type || 'foodType'; // 저장된 값 또는 기본값
+    // DB의 summary_type_flag 값에 따라 라디오 버튼 설정 (Y: 식품유형, N: 원재료명)
+    const summaryTypeFlag = ingredient.summary_type_flag || 'Y'; // 기본값 Y
+    const summaryType = summaryTypeFlag === 'Y' ? 'foodType' : 'ingredientName';
 
     row.innerHTML = `
         <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
