@@ -67,7 +67,8 @@ function updateSummarySection() {
             ratio: parseFloat(ratioStr) || 0,
             ratioStr: ratioStr,
             allergen: row.querySelector('.allergen-input')?.value || '',
-            gmo: row.querySelector('.gmo-input')?.value || ''
+            gmo: row.querySelector('.gmo-input')?.value || '',
+            summaryType: row.querySelector('.summary-type-radio:checked')?.value || 'foodType' // 요약 방식 선택 값 추가
         };
     });
 
@@ -94,19 +95,23 @@ function updateSummarySection() {
 
     // 4. 최종 요약 표시명 배열 생성
     const summaryDisplayNames = ingredientsData.map(data => {
-        const foodType = data.summaryFoodType || data.foodType; // 번호가 부여된 식품유형 사용
         let displayName = data.displayName || data.ingredientName;
 
+        // 요약의 기본이 되는 이름 결정 (식품유형 또는 원재료명)
+        let baseName;
+        if (data.summaryType === 'ingredientName') {
+            baseName = data.ingredientName;
+        } else { // 'foodType'
+            baseName = data.summaryFoodType || data.foodType; // 번호가 부여된 식품유형 사용
+        }
+
+        // 식품 분류 및 함량에 따른 표시 규칙 적용
         if (data.foodCategory === 'additive' && displayName) {
-            const idx = displayName.indexOf('※');
-            if (idx !== -1) {
-                displayName = displayName.substring(0, idx).trim();
-            }
             return displayName;
         }
 
         if (data.foodCategory === '정제수') {
-            return foodType || displayName;
+            return baseName || displayName;
         }
 
         if ((data.foodCategory === 'processed' || data.foodCategory === 'agricultural') && data.ratioStr && !isNaN(data.ratio) && data.ratio >= 5) {
@@ -136,9 +141,9 @@ function updateSummarySection() {
             if (count < 5 && buffer.trim()) {
                 items.push(buffer.trim());
             }
-            return `${foodType}[${items.join(', ')}]`;
+            return `${baseName}[${items.join(', ')}]`;
         } else {
-            return foodType || displayName;
+            return baseName || displayName;
         }
     });
 
@@ -588,7 +593,8 @@ function saveIngredients() {
     const gmosSet = new Set();
 
     const summaryParts = [];
-    const summaryDisplayNames = [];    document.querySelectorAll('#ingredient-body tr').forEach((row, index) => {
+    const summaryDisplayNames = [];    
+    document.querySelectorAll('#ingredient-body tr').forEach((row, index) => {
         const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
         const foodCategoryInput = row.querySelector('.food-category-input');
         const foodCategory = foodCategoryInput?.dataset.foodCategory || '';
@@ -599,16 +605,10 @@ function saveIngredients() {
         const ratio = parseFloat(ratioStr);
         const allergenInput = row.querySelector('.allergen-input')?.value.trim() || '';
         const gmoInput = row.querySelector('.gmo-input')?.value.trim() || '';
+        const summaryType = row.querySelector('.summary-type-radio:checked')?.value || 'foodType'; // 요약 방식 값 가져오기
         
-        // 식품첨가물의 경우 "※ 이 식품첨가물은..." 텍스트 제거
         let displayName = displayNameRaw;
-        if (foodCategory === 'additive' && displayName) {
-            const idx = displayName.indexOf('※ 이 식품첨가물은');
-            if (idx !== -1) {
-                displayName = displayName.substring(0, idx).trim();
-            }
-        }
-        
+
         allergenInput.split(',').map(item => item.trim()).filter(Boolean).forEach(item => allergensSet.add(item));
         gmoInput.split(',').map(item => item.trim()).filter(Boolean).forEach(item => gmosSet.add(item));
         if (displayName) displayNames.push(displayName);        // updateSummarySection과 동일한 로직 적용
@@ -699,6 +699,7 @@ function saveIngredients() {
             gmo: gmoInput,
             origin: row.querySelector('.origin-cell')?.textContent.trim() || "",
             my_ingredient_id: ingredientName !== '정제수' ? row.querySelector('.my-ingredient-id')?.value.trim() || "" : "",
+            summary_type: summaryType, // 저장할 객체에 추가
             order: index + 1
         };
         ingredients.push(ingredient);
@@ -820,6 +821,9 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
     row.dataset.allergen = ingredient.allergen || ingredient.allergens || '';
     row.dataset.gmo = ingredient.gmo || '';
     
+    const uniqueId = `summary-type-${Date.now()}-${Math.random()}`;
+    const summaryType = ingredient.summary_type || 'foodType'; // 저장된 값 또는 기본값
+
     row.innerHTML = `
         <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
         <td class="order-cell">&#x2195; </td>
@@ -827,13 +831,35 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
         <td><input type="text" value="${escapeHtml(ingredient.ratio || '')}" class="form-control form-control-sm ratio-input"></td>
         <td><input type="text" value="${escapeHtml(foodCategoryDisplay)}" data-food-category="${escapeHtml(foodCategory)}" class="form-control form-control-sm food-category-input modal-readonly-field" readonly></td>
         <td><input type="text" value="${escapeHtml(ingredient.food_type || '')}" class="form-control form-control-sm food-type-input modal-readonly-field" readonly></td>
-        <td><textarea class="form-control form-control-sm display-name-input modal-readonly-field" readonly>${escapeHtml(ingredient.display_name || ingredient.ingredient_name || '')}</textarea></td>
+        
+        <!-- 원재료 표시명과 요약 방식 라디오 버튼을 한 셀에 통합 (버튼이 왼쪽) -->
+        <td>
+            <div class="d-flex align-items-center">
+                <div style="flex-shrink: 0; margin-right: 10px;">
+                    <div class="form-check">
+                        <input class="form-check-input summary-type-radio" type="radio" name="${uniqueId}" value="foodType" ${summaryType === 'foodType' ? 'checked' : ''}>
+                        <label class="form-check-label" style="font-size: 0.8rem;">식품유형</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input summary-type-radio" type="radio" name="${uniqueId}" value="ingredientName" ${summaryType === 'ingredientName' ? 'checked' : ''}>
+                        <label class="form-check-label" style="font-size: 0.8rem;">원재료명</label>
+                    </div>
+                </div>
+                <textarea class="form-control form-control-sm display-name-input modal-readonly-field" readonly style="flex-grow: 1;">${escapeHtml(ingredient.display_name || ingredient.ingredient_name || '')}</textarea>
+            </div>
+        </td>
+        
         <td class="origin-cell"></td>
         <input type="hidden" class="allergen-input" value="${escapeHtml(ingredient.allergen || ingredient.allergens || '')}">
         <input type="hidden" class="gmo-input" value="${escapeHtml(ingredient.gmo || '')}">
         <input type="hidden" class="my-ingredient-id" value="${escapeHtml(ingredient.my_ingredient_id || '')}">
     `;
     document.getElementById('ingredient-body').appendChild(row);
+
+    // 요약 방식 라디오 버튼에 이벤트 리스너 추가
+    row.querySelectorAll('.summary-type-radio').forEach(radio => {
+        radio.addEventListener('change', updateSummarySection);
+    });
 
     const ratioInput = row.querySelector('.ratio-input');
     if (ratioInput) {
