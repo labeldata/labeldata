@@ -59,8 +59,16 @@ function updateSummarySection() {
     // 1. 모든 행의 데이터를 객체 배열로 추출
     const ingredientsData = rows.map(row => {
         const ratioStr = row.querySelector('.ratio-input')?.value.trim();
+        const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
+        
+        // 정제수일 때는 라디오 버튼이 없으므로 기본값 사용
+        let summaryType = 'foodType';
+        if (ingredientName !== '정제수') {
+            summaryType = row.querySelector('.summary-type-radio:checked')?.value || 'foodType';
+        }
+        
         return {
-            ingredientName: row.querySelector('.ingredient-name-input')?.value.trim(),
+            ingredientName: ingredientName,
             foodCategory: row.querySelector('.food-category-input')?.dataset.foodCategory || '',
             displayName: row.querySelector('.display-name-input')?.value.trim(),
             foodType: row.querySelector('td:nth-child(6) input, .food-type-input')?.value.trim() || '',
@@ -68,7 +76,7 @@ function updateSummarySection() {
             ratioStr: ratioStr,
             allergen: row.querySelector('.allergen-input')?.value || '',
             gmo: row.querySelector('.gmo-input')?.value || '',
-            summaryType: row.querySelector('.summary-type-radio:checked')?.value || 'foodType' // 요약 방식 선택 값 추가
+            summaryType: summaryType // 요약 방식 선택 값 추가
         };
     });
 
@@ -605,7 +613,13 @@ function saveIngredients() {
         const ratio = parseFloat(ratioStr);
         const allergenInput = row.querySelector('.allergen-input')?.value.trim() || '';
         const gmoInput = row.querySelector('.gmo-input')?.value.trim() || '';
-        const summaryType = row.querySelector('.summary-type-radio:checked')?.value || 'foodType'; // 요약 방식 값 가져오기
+        
+        // 정제수일 때는 라디오 버튼이 없으므로 기본값 사용
+        let summaryType = 'foodType';
+        if (ingredientName !== '정제수') {
+            summaryType = row.querySelector('.summary-type-radio:checked')?.value || 'foodType';
+        }
+        
         const summaryTypeFlag = summaryType === 'foodType' ? 'Y' : 'N'; // DB 저장용 플래그 변환
         
         let displayName = displayNameRaw;
@@ -828,6 +842,22 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
     const summaryTypeFlag = ingredient.summary_type_flag || 'Y'; // 기본값 Y
     const summaryType = summaryTypeFlag === 'Y' ? 'foodType' : 'ingredientName';
 
+    // 정제수인지 확인
+    const isWater = ingredient.ingredient_name === '정제수';
+    
+    // 라디오 버튼 HTML - 정제수가 아닐 때만 표시
+    const radioButtonsHtml = isWater ? '' : `
+        <div style="flex-shrink: 0; margin-right: 10px;">
+            <div class="form-check">
+                <input class="form-check-input summary-type-radio" type="radio" name="${uniqueId}" value="foodType" ${summaryType === 'foodType' ? 'checked' : ''}>
+                <label class="form-check-label" style="font-size: 0.8rem;">식품유형</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input summary-type-radio" type="radio" name="${uniqueId}" value="ingredientName" ${summaryType === 'ingredientName' ? 'checked' : ''}>
+                <label class="form-check-label" style="font-size: 0.8rem;">원재료명</label>
+            </div>
+        </div>`;
+
     row.innerHTML = `
         <td><input type="checkbox" class="delete-checkbox form-check-input"></td>
         <td class="order-cell">&#x2195; </td>
@@ -839,16 +869,7 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
         <!-- 원재료 표시명과 요약 방식 라디오 버튼을 한 셀에 통합 (버튼이 왼쪽) -->
         <td>
             <div class="d-flex align-items-center">
-                <div style="flex-shrink: 0; margin-right: 10px;">
-                    <div class="form-check">
-                        <input class="form-check-input summary-type-radio" type="radio" name="${uniqueId}" value="foodType" ${summaryType === 'foodType' ? 'checked' : ''}>
-                        <label class="form-check-label" style="font-size: 0.8rem;">식품유형</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input summary-type-radio" type="radio" name="${uniqueId}" value="ingredientName" ${summaryType === 'ingredientName' ? 'checked' : ''}>
-                        <label class="form-check-label" style="font-size: 0.8rem;">원재료명</label>
-                    </div>
-                </div>
+                ${radioButtonsHtml}
                 <textarea class="form-control form-control-sm display-name-input modal-readonly-field" readonly style="flex-grow: 1;">${escapeHtml(ingredient.display_name || ingredient.ingredient_name || '')}</textarea>
             </div>
         </td>
