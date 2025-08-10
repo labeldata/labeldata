@@ -70,4 +70,8 @@ urlpatterns = [
     path('phrases-data/', views.phrases_data_api, name='phrases_data'),
     path('my-ingredient-calculate-page/', views.my_ingredient_calculate_page, name='my_ingredient_calculate_page'),
     path('my-ingredient-pagination-info/', views.my_ingredient_pagination_info, name='my_ingredient_pagination_info'),
+
+    # --- [신규] 엑셀 다운로드/업로드 URL 추가 ---
+    path('my-ingredients/download/', views.download_my_ingredients_excel, name='download_my_ingredients_excel'),
+    path('my-ingredients/upload/', views.upload_my_ingredients_excel, name='upload_my_ingredients_excel'),
 ]

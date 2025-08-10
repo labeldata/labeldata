@@ -1,34 +1,44 @@
 import json
 import re  # 정규식 처리를 위해 추가
-from django.shortcuts import redirect, render, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib import messages
-from django.db.models import Q, F
-from django.core.paginator import Paginator
-from django.http import JsonResponse, HttpResponse
-from django.utils.timezone import now
-from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_POST
-from django.http import JsonResponse
-import json
-from django.conf import settings  # Django settings import 추가
-from .models import FoodItem, MyLabel, MyIngredient, CountryList, LabelIngredientRelation, FoodType, MyPhrase, AgriculturalProduct, FoodAdditive, ImportedFood, ExpiryRecommendation
-from .forms import LabelCreationForm, MyIngredientsForm
-from venv import logger  # 지우지 않음
-from django.utils.safestring import mark_safe
-from .constants import DEFAULT_PHRASES, FIELD_REGULATIONS, CATEGORY_CHOICES
-from django.core.cache import cache
-from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
-from rapidfuzz import fuzz  # fuzzywuzzy 대신 rapidfuzz 사용
-from django.utils import timezone  # 추가
-import openpyxl
-from openpyxl.utils import get_column_letter
+from decimal import Decimal, InvalidOperation
+from urllib.parse import quote  # 파일명 인코딩을 위해 추가
 
-# ------------------------------------------
-# 헬퍼 함수들 (반복되는 코드 최적화)
-# ------------------------------------------
+# --- [수정] Third-Party Libraries ---
+import openpyxl
+from openpyxl.styles import Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation 
+
+# --- [수정] Django Imports ---
+from django.conf import settings  # Django settings import 추가
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
+from django.core.paginator import Paginator
+from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
+from django.db.models import F, Q
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone  # 추가
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+
+# --- [수정] Local Application Imports ---
+from .constants import CATEGORY_CHOICES, DEFAULT_PHRASES, FIELD_REGULATIONS
+from .forms import LabelCreationForm, MyIngredientsForm
+from .models import (AgriculturalProduct, CountryList, ExpiryRecommendation,
+                     FoodAdditive, FoodItem, FoodType, ImportedFood,
+                     LabelIngredientRelation, MyIngredient, MyLabel, MyPhrase)
+from venv import logger  # 지우지 않음
+
+# --- [추가] 엑셀 처리를 위한 상수 정의 ---
+ALLERGEN_LIST = [
+    "메밀", "밀", "대두", "호두", "땅콩", "복숭아", "토마토", "돼지고기",
+    "난류(가금류)", "우유", "닭고기", "쇠고기", "새우", "고등어", "홍합",
+    "전복", "굴", "조개류", "게", "오징어", "아황산류", "잣"
+]
+GMO_LIST = ["대두", "옥수수", "면화", "카놀라", "사탕무", "알팔파"]
 
 def get_expiry_recommendations():
     """
@@ -1013,10 +1023,11 @@ def my_ingredient_list_combined(request):
 @login_required
 def my_ingredient_detail(request, ingredient_id=None):
     # POST일 때 my_ingredient_id 우선 활용
-    my_ingredient_id = request.POST.get('my_ingredient_id') or ingredient_id
-    if my_ingredient_id:
+    # my_ingredient_id -> ingredient_id 로 수정하여 NameError 해결
+    current_ingredient_id = request.POST.get('my_ingredient_id') or ingredient_id
+    if current_ingredient_id:
         # user_id는 request.user 또는 None도 허용 (공용 원료 지원)
-        ingredient = get_object_or_404(MyIngredient, my_ingredient_id=my_ingredient_id)
+        ingredient = get_object_or_404(MyIngredient, my_ingredient_id=current_ingredient_id)
         mode = 'edit'
     else:
         ingredient = MyIngredient(user_id=request.user, delete_YN='N')
@@ -1367,8 +1378,7 @@ def register_my_ingredient(request):
         )
         # 메시지 제거 - JSON 응답만 반환
         return JsonResponse({'success': True})
-    except Exception as e:
-        return JsonResponse({'success': True})
+    # 중복된 except 블록을 하나로 합쳐서 올바르게 오류를 처리합니다.
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
     
@@ -1994,89 +2004,6 @@ def preview_popup(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
-@csrf_exempt
-def export_labels_excel(request):
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
-    try:
-        data = json.loads(request.body)
-        label_ids = data.get('label_ids', [])
-        if not label_ids:
-            return JsonResponse({'success': False, 'error': '선택된 라벨이 없습니다.'}, status=400)
-        labels = MyLabel.objects.filter(my_label_id__in=label_ids, user_id=request.user, delete_YN='N').order_by('my_label_id')
-        if not labels.exists():
-            return JsonResponse({'success': False, 'error': '다운로드할 데이터가 없습니다.'}, status=400)
-
-        import openpyxl
-        from openpyxl.styles import Font
-
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "표시사항"
-
-        headers = [
-            '번호', '품목보고번호', '제품명', '라벨명', '식품유형', '제조사명', '최종수정일자',
-            '성분명 및 함량', '내용량', '내용량(열량)', '원산지', '보관방법', '포장재질',
-            '유통전문판매원', '소분원', '수입원', '소비기한', '원재료명(표시)', '원재료명(참고)', '주의사항', '기타표시사항', '영양성분'
-
-        ]
-        ws.append(headers)
-
-        font = Font(size=10)
-        ws.column_dimensions[openpyxl.utils.get_column_letter(1)].width = 4
-       
-        for col_idx in range(2, len(headers) + 1):
-            ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = 10
-        for col in ws.iter_cols(min_row=1, max_row=1, max_col=len(headers)):
-            for cell in col:
-                cell.font = font
-
-        for idx, label in enumerate(labels, start=1):
-            update_dt = ''
-            if label.update_datetime:
-                update_dt = label.update_datetime.strftime('%y-%m-%d %H:%M')
-            row = [
-                idx,
-                label.prdlst_report_no,
-                label.prdlst_nm,
-                label.my_label_name,
-                label.prdlst_dcnm,
-                label.bssh_nm,
-                update_dt,
-                label.ingredient_info,
-                label.content_weight,
-                label.weight_calorie,
-                label.country_of_origin,
-                label.storage_method,
-                label.frmlc_mtrqlt,
-                label.distributor_address,
-                label.repacker_address,
-                label.importer_address,
-                label.pog_daycnt,
-                label.rawmtrl_nm_display,
-                label.rawmtrl_nm,
-                label.cautions,
-                label.additional_info,
-                label.nutrition_text,
-            ]
-            ws.append(row)
-            for cell in ws[ws.max_row]:
-                cell.font = font
-
-        # 파일명: LabelData_표시사항_사용자ID_다운받은년월일.xlsx
-        today_str = now().strftime('%y%m%d')
-        user_id = getattr(request.user, 'id', None)
-        if not user_id:
-            user_id = getattr(request.user, 'pk', 'user')
-        filename = f'LabelData_표시사항_{user_id}_{today_str}.xlsx'
-        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        wb.save(response)
-        return response
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-@login_required
 def my_ingredient_table_partial(request):
     search_fields = {
         'prdlst_nm': 'prdlst_nm',
@@ -2423,3 +2350,303 @@ def get_additive_regulation(request):
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+@csrf_exempt
+def export_labels_excel(request):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+    try:
+        data = json.loads(request.body)
+        label_ids = data.get('label_ids', [])
+        if not label_ids:
+            return JsonResponse({'success': False, 'error': '선택된 라벨이 없습니다.'}, status=400)
+        labels = MyLabel.objects.filter(my_label_id__in=label_ids, user_id=request.user).order_by('my_label_id')
+        if not labels.exists():
+            return JsonResponse({'success': False, 'error': '다운로드할 데이터가 없습니다.'}, status=400)
+
+        # --- [수정] 원산지 영문/코드 -> 한글 변환을 위한 통합 매핑 생성 ---
+        country_map = {}
+        for country in CountryList.objects.all():
+            if country.country_name_ko:
+                # 영문명 -> 한글명
+                if hasattr(country, 'country_name_en') and country.country_name_en:
+                    country_map[country.country_name_en] = country.country_name_ko
+                # 2자리 코드 -> 한글명
+                if hasattr(country, 'country_code2') and country.country_code2:
+                    country_map[country.country_code2] = country.country_name_ko
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "표시사항"
+
+        headers = [
+            '번호', '품목보고번호', '제품명', '라벨명', '식품유형', '제조사명', '최종수정일자',
+            '성분명 및 함량', '내용량', '내용량(열량)', '원산지', '보관방법', '포장재질',
+            '유통전문판매원', '소분원', '수입원', '소비기한', '원재료명(표시)', '원재료명(참고)', '주의사항', '기타표시사항', '영양성분'
+        ]
+        ws.append(headers)
+
+        # --- 디자인 서식 적용 ---
+        header_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+        font_size_9 = Font(size=9)
+        ws.freeze_panes = 'E2' # 1행 및 A-D열 고정
+
+        for cell in ws[1]:
+            cell.fill = header_fill
+
+        ws.column_dimensions['A'].width = 5
+        ws.column_dimensions['B'].width = 13
+        ws.column_dimensions['C'].width = 20
+        ws.column_dimensions['D'].width = 20
+        ws.column_dimensions['E'].width = 13
+        ws.column_dimensions['F'].width = 20
+        ws.column_dimensions['G'].width = 12
+        ws.column_dimensions['R'].width = 25
+        ws.column_dimensions['S'].width = 25
+        ws.column_dimensions['T'].width = 25
+        ws.column_dimensions['U'].width = 25
+
+        for idx, label in enumerate(labels, start=1):
+            update_dt = ''
+            if label.update_datetime:
+                update_dt = label.update_datetime.strftime('%y-%m-%d %H:%M')
+
+            # --- [수정] 원산지 한글 변환 로직 ---
+            country_of_origin_ko = []
+            if label.country_of_origin:
+                origin_list = [origin.strip() for origin in label.country_of_origin.split(',')]
+                for origin_item in origin_list:
+                    # 통합된 country_map을 사용하여 한글명 조회, 없으면 원본 사용
+                    country_of_origin_ko.append(country_map.get(origin_item, origin_item))
+            country_of_origin_display = ', '.join(country_of_origin_ko)
+
+            row = [
+                idx, label.prdlst_report_no, label.prdlst_nm, label.my_label_name,
+                label.prdlst_dcnm, label.bssh_nm, update_dt, label.ingredient_info,
+                label.content_weight, label.weight_calorie, country_of_origin_display,
+                label.storage_method, label.frmlc_mtrqlt, label.distributor_address,
+                label.repacker_address, label.importer_address, label.pog_daycnt,
+                label.rawmtrl_nm_display, label.rawmtrl_nm, label.cautions,
+                label.additional_info, label.nutrition_text,
+            ]
+            ws.append(row)
+
+        # 모든 셀에 폰트 크기 적용
+        for row in ws.iter_rows():
+            for cell in row:
+                cell.font = font_size_9
+
+        # 파일명에서 사용자 ID 제거
+        today_str = timezone.now().strftime('%y%m%d')
+        filename = f'LabelData_표시사항_{today_str}.xlsx'
+        
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        encoded_filename = quote(filename)
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
+        
+        wb.save(response)
+        return response
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+       
+@login_required
+def download_my_ingredients_excel(request):
+    """
+    현재 사용자의 '내 원료' 목록을 엑셀 파일로 다운로드합니다.
+    """
+    # ... (기존의 queryset 필터링 로직은 그대로 유지) ...
+    search_fields = {
+        'prdlst_nm': 'prdlst_nm',
+        'prdlst_report_no': 'prdlst_report_no',
+        'prdlst_dcnm': 'prdlst_dcnm',
+        'bssh_nm': 'bssh_nm',
+        'ingredient_display_name': 'ingredient_display_name',
+    }
+    search_conditions, _ = get_search_conditions(request, search_fields)
+    search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user.id) | Q(user_id__isnull=True))
+    food_category = request.GET.get('food_category', '').strip()
+    if food_category:
+        search_conditions &= Q(food_category=food_category)
+    queryset = MyIngredient.objects.filter(search_conditions).order_by('prdlst_nm')
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = '내 원료 목록'
+
+    headers = ['원료명', '품목보고번호', '식품구분', '식품유형', '원료표시명', '제조사'] + ALLERGEN_LIST + GMO_LIST
+    sheet.append(headers)
+
+    # --- 디자인 서식 적용 ---
+    header_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+    font_size_9 = Font(size=9)
+    sheet.freeze_panes = 'A2'
+
+    for cell in sheet[1]:
+        cell.fill = header_fill
+
+    # 열 너비 설정
+    sheet.column_dimensions['A'].width = 20
+    sheet.column_dimensions['B'].width = 13
+    sheet.column_dimensions['C'].width = 10
+    sheet.column_dimensions['D'].width = 13
+    sheet.column_dimensions['E'].width = 20
+    sheet.column_dimensions['F'].width = 20
+
+    # 식품구분 드롭다운 목록 설정
+    food_category_options = '"가공식품,식품첨가물,농수산물,정제수"'
+    food_category_dv = DataValidation(type="list", formula1=food_category_options, allow_blank=True)
+    sheet.add_data_validation(food_category_dv)
+    food_category_dv.add('C2:C1000')
+
+    # --- [수정] 알레르기/GMO 드롭다운 목록 설정 ---
+    allergen_gmo_dv = DataValidation(type="list", formula1='"O"', allow_blank=True)
+    sheet.add_data_validation(allergen_gmo_dv)
+
+    # 알레르기/GMO 열 너비 설정 및 드롭다운 적용
+    start_col = 7 # G열부터 시작
+    for i in range(len(ALLERGEN_LIST) + len(GMO_LIST)):
+        col_letter = get_column_letter(start_col + i)
+        sheet.column_dimensions[col_letter].width = 3
+        allergen_gmo_dv.add(f'{col_letter}2:{col_letter}1000') # 드롭다운 적용
+
+    # 데이터 추가
+    food_category_map = {'processed': '가공식품', 'additive': '식품첨가물', 'agricultural': '농수산물', 'water': '정제수'}
+    for ingredient in queryset:
+        current_allergens = [a.strip() for a in (ingredient.allergens or "").split(',') if a.strip()]
+        current_gmos = [g.strip() for g in (ingredient.gmo or "").split(',') if g.strip()]
+        
+        row_data = [
+            ingredient.prdlst_nm,
+            ingredient.prdlst_report_no,
+            food_category_map.get(ingredient.food_category, ingredient.food_category),
+            ingredient.prdlst_dcnm,
+            ingredient.ingredient_display_name,
+            ingredient.bssh_nm,
+        ]
+        for allergen in ALLERGEN_LIST:
+            row_data.append('O' if allergen in current_allergens else '')
+        for gmo in GMO_LIST:
+            row_data.append('O' if gmo in current_gmos else '')
+        
+        sheet.append(row_data)
+
+    # 모든 셀에 폰트 크기 적용
+    for row in sheet.iter_rows():
+        for cell in row:
+            cell.font = font_size_9
+
+    # 파일명에서 사용자 ID 제거
+    today_str = timezone.now().strftime('%y%m%d')
+    filename = f'LabelData_내원료_{today_str}.xlsx'
+    
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    encoded_filename = quote(filename)
+    response['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
+
+    workbook.save(response)
+    return response
+
+@login_required
+@transaction.atomic
+def upload_my_ingredients_excel(request):
+    """
+    업로드된 엑셀 파일을 파싱하여 '내 원료'를 일괄 생성/수정합니다.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'POST 요청만 가능합니다.'})
+
+    excel_file = request.FILES.get('excel_file')
+    if not excel_file:
+        return JsonResponse({'success': False, 'message': '엑셀 파일이 없습니다.'})
+
+    try:
+        workbook = openpyxl.load_workbook(excel_file)
+        sheet = workbook.active
+        
+        success_count = 0
+        failure_count = 0
+        failure_details = {} # 실패 사유별 건수 저장
+        
+        headers = [cell.value for cell in sheet[1]]
+        reverse_food_category_map = {'가공식품': 'processed', '식품첨가물': 'additive', '농수산물': 'agricultural', '정제수': 'water'}
+        
+        for index, row_cells in enumerate(sheet.iter_rows(min_row=2), start=2):
+            row = [cell.value for cell in row_cells]
+            if not any(row):
+                continue
+
+            row_dict = dict(zip(headers, row))
+            prdlst_nm = row_dict.get('원료명')
+
+            if not prdlst_nm:
+                failure_count += 1
+                failure_details['원료명 누락'] = failure_details.get('원료명 누락', 0) + 1
+                continue
+
+            try:
+                food_category_kr = row_dict.get('식품구분', '')
+                food_category_code = reverse_food_category_map.get(food_category_kr, food_category_kr)
+                prdlst_dcnm = row_dict.get('식품유형', '')
+                prdlst_report_no = row_dict.get('품목보고번호', '')
+                bssh_nm = row_dict.get('제조사', '')
+
+                filter_conditions = {
+                    'user_id': request.user,
+                    'prdlst_nm': prdlst_nm,
+                    'food_category': food_category_code or '',
+                    'prdlst_dcnm': prdlst_dcnm or '',
+                    'prdlst_report_no': prdlst_report_no or '',
+                    'bssh_nm': bssh_nm or ''
+                }
+                
+                if MyIngredient.objects.filter(**filter_conditions).exists():
+                    failure_count += 1
+                    failure_details['동일원료'] = failure_details.get('동일원료', 0) + 1
+                    continue
+
+                allergens = [h for h in ALLERGEN_LIST if str(row_dict.get(h, '')).strip().upper() == 'O']
+                gmos = [h for h in GMO_LIST if str(row_dict.get(h, '')).strip().upper() == 'O']
+
+                MyIngredient.objects.create(
+                    user_id=request.user,
+                    prdlst_nm=prdlst_nm,
+                    prdlst_report_no=prdlst_report_no or '',
+                    food_category=food_category_code or '',
+                    prdlst_dcnm=prdlst_dcnm or '',
+                    ingredient_display_name=row_dict.get('원료표시명', prdlst_nm),
+                    bssh_nm=bssh_nm or '',
+                    allergens=','.join(allergens),
+                    gmo=','.join(gmos),
+                    delete_YN='N',
+                    update_datetime=timezone.now()
+                )
+                success_count += 1
+
+            except Exception as e:
+                failure_count += 1
+                failure_details['처리 오류'] = failure_details.get('처리 오류', 0) + 1
+                continue
+
+        # --- [수정] 최종 결과 메시지 생성 로직 ---
+        message = f"성공 {success_count}건, 실패 {failure_count}건"
+        if failure_count > 0:
+            detail_parts = [f"{reason} {count}건" for reason, count in failure_details.items()]
+            # 상세 사유를 기본 메시지에 추가
+            message += f" ({', '.join(detail_parts)})"
+
+        # 처리 오류가 있었다면 전체 롤백
+        if failure_details.get('처리 오류', 0) > 0:
+            transaction.set_rollback(True)
+            return JsonResponse({
+                'success': False, 
+                'message': f"오류가 발생하여 전체 업로드가 취소되었습니다. ({message})"
+            })
+
+        return JsonResponse({
+            'success': True, 
+            'message': message
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'파일 처리 중 심각한 오류가 발생했습니다: {str(e)}'})

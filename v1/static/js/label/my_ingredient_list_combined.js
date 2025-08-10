@@ -216,6 +216,87 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(() => alert('저장 중 오류가 발생했습니다.3'));
         }
     }, true);
+    
+    // --- [신규] 엑셀 다운로드/업로드 기능 추가 ---
+
+    const downloadBtn = document.getElementById('downloadExcelBtn');
+    const uploadBtn = document.getElementById('uploadExcelBtn');
+    const fileInput = document.getElementById('excelUploadInput');
+
+    // 1. 엑셀 다운로드 버튼 이벤트
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            const currentParams = new URLSearchParams(window.location.search);
+            currentParams.delete('page');
+            const downloadUrl = `/label/my-ingredients/download/?${currentParams.toString()}`;
+            window.location.href = downloadUrl;
+        });
+    }
+
+    // 2. 엑셀 업로드 버튼 이벤트
+    if (uploadBtn && fileInput) {
+        uploadBtn.addEventListener('click', function() {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', function() {
+            if (this.files.length === 0) return;
+
+            const file = this.files[0];
+            const formData = new FormData();
+            formData.append('excel_file', file);
+
+            uploadBtn.textContent = '업로드 중...';
+            uploadBtn.disabled = true;
+
+            fetch('/label/my-ingredients/upload/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message || '엑셀 파일이 성공적으로 업로드되었습니다. 페이지를 새로고침합니다.');
+                    window.location.reload();
+                } else {
+                    let errorMessage = data.message || '업로드 중 오류가 발생했습니다.';
+                    if (data.errors && data.errors.length > 0) {
+                        errorMessage += '\n\n[오류 상세]\n' + data.errors.join('\n');
+                    }
+                    alert(errorMessage);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('업로드 중 심각한 오류가 발생했습니다. 콘솔을 확인해주세요.');
+            })
+            .finally(() => {
+                uploadBtn.textContent = '엑셀 업로드';
+                uploadBtn.disabled = false;
+                fileInput.value = '';
+            });
+        });
+    }
+    
+    // CSRF 토큰을 가져오는 헬퍼 함수
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
 
     // 검색 입력 필드 효과 처리
     const searchInputs = document.querySelectorAll('.form-control');
