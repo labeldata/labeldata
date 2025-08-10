@@ -10,8 +10,6 @@
         <p class="intro-description">
             표시사항을 제작하기 위한 다양한 기능을 제공합니다.
         </p>
-
-        {% if not user.is_authenticated %}
         <!-- [수정] 튜토리얼 시작 영역 통합 -->
         <div id="start-tutorial-area">
             <h2 class="tutorial-area-title">「시스템 튜토리얼 바로가기」</h2>
@@ -30,8 +28,6 @@
                 </li>
             </ul>
         </div>
-        {% endif %}
-
         <div class="highlight-feature">
             <span>새로운 기능 곧 공개! </span>
             <a href="{% url 'board:list' %}" class="cta-button">게시판에서 아이디어 공유해주세요 😊</a>
