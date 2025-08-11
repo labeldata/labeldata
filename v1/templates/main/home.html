@@ -177,11 +177,10 @@ document.addEventListener('DOMContentLoaded', function() {
         { element: '#nav-label-management', title: '3-1. 표시사항 관리 : 표시사항 작성 대상 선택', image: "{% static 'img/tutorial/step-3-1.png' %}", description: '새로운 표시사항을 만들거나, 기존에 저장된 표시사항을 복사하여 수정할 수 있습니다.' },
         { element: '#nav-label-management', title: '3-2. 표시사항 관리 : 필수항목 자동 추천', image: "{% static 'img/tutorial/step-3-2.png' %}", description: '식품유형을 선택하면 관련 규정에 따른 필수 표시항목이 자동으로 추천됩니다.' },
         { element: '#nav-label-management', title: '3-3. 표시사항 관리 : 자주 사용하는 문구 설정', image: "{% static 'img/tutorial/step-3-3.png' %}", description: '보관방법, 주의사항 등 자주 사용하는 문구를 저장해두고 간편하게 불러올 수 있습니다.' },
-        { element: '#nav-label-management', title: '3-4. 표시사항 관리 : 원재료명 자동 생성', image: "{% static 'img/tutorial/step-3-4.png' %}", description: '원료와 함량을 표 형태로 입력하면, 규정에 맞는 원재료명 표시 예시가 자동으로 생성됩니다.' },
-        { element: '#nav-label-management', title: '3-5. 표시사항 관리 : 미리보기 및 설정 조정', image: "{% static 'img/tutorial/step-3-5.png' %}", description: '작성된 내용을 실제 서식처럼 미리보고, 글자 크기나 분리배출 마크 등을 설정할 수 있습니다.' },
-        { element: '#nav-label-management', title: '3-6. 표시사항 관리 : 규정 검증 및 PDF 저장', image: "{% static 'img/tutorial/step-3-6.png' %}", description: '완성된 표시사항이 규정에 맞는지 검증하고, 결과를 PDF 파일로 저장할 수 있습니다.' },
-        { element: '#nav-label-management', title: '3-7. 표시사항 관리 : 리스트에서 엑셀 다운로드', image: "{% static 'img/tutorial/step-3-7.png' %}", description: '관리하는 모든 표시사항 목록을 엑셀 파일로 다운로드하여 관리할 수 있습니다. 튜토리얼을 종료합니다.' }
-    ];
+        { element: '#nav-label-management', title: '3-4. 표시사항 관리 : 원재료명 자동 생성', image: "{% static 'img/tutorial/step-3-4.png' %}", description: '원료와 함량을 ①추가, ② 비율 입력, ③ 표시규칙 조정하면 원재료명 예시가 자동으로 생성됩니다.' },
+        { element: '#nav-label-management', title: '3-5. 표시사항 관리 : 미리보기 및 설정 조정', image: "{% static 'img/tutorial/step-3-5.png' %}", description: '작성된 표시사항을 미리보기에서 ①설정 변경하고. ②분리배출 마크 추가 등을 할 수 있습니다.' },
+        { element: '#nav-label-management', title: '3-6. 표시사항 관리 : 규정 검증 및 PDF 저장', image: "{% static 'img/tutorial/step-3-6.png' %}", description: '완성된 표시사항이 ①규정에 맞는지 검증하고, 결과를 ②PDF 파일로 저장하여 공유할 수 있습니다.' },
+        { element: '#nav-label-management', title: '3-7. 표시사항 관리 : 리스트에서 조회,관리', image: "{% static 'img/tutorial/step-3-7.png' %}", description: '작성된 표시사항을 ①품목보고 여부, ②다운로드, 수정, 삭제, 를 확인할 수 있습니다.' }    ];
 
     let currentStep = 0;
     let highlightedElement = null;
