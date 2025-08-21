@@ -7,11 +7,12 @@
     <div class="d-flex justify-content-between align-items-center mb-4" style="padding-bottom: 10px;">
       <h2 class="mb-0">표시사항 조회 및 수정</h2>
       <div class="d-flex" style="gap: 10px;">
-        <!-- 엑셀 다운로드 버튼 추가 -->
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="downloadSelectedLabelsExcel()">다운로드</button>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="bulkCopy()">복사</button>
+        <!-- 신규 작성 버튼 추가 -->
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="createNewLabel()">신규 작성</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="bulkCopy()">선택 복사</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="downloadSelectedLabelsExcel()">선택 다운로드</button>
         {% if user.username != 'guest@labeasylabel.com' %}
-        <button type="button" class="btn btn-outline-danger btn-sm" onclick="bulkDelete()">삭제</button>
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="bulkDelete()">선택 삭제</button>
         {% endif %}
       </div>
     </div>

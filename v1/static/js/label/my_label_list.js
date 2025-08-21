@@ -108,6 +108,43 @@ document.addEventListener("DOMContentLoaded", function () {
     updateSortButtonsDisplay();
 });
 
+/**
+ * [신규] '신규 작성' 버튼 클릭 시 호출됩니다.
+ * 서버에 새로운 표시사항 생성을 요청하고, 반환된 URL로 이동합니다.
+ */
+function createNewLabel() {
+    if (confirm("새로운 표시사항을 작성하시겠습니까?")) {
+        // 서버의 생성 처리 URL로 POST 요청을 보냅니다.
+        fetch('/label/create-new/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({}) // 필요 시 초기 데이터 전송
+        })
+        .then(response => {
+            if (!response.ok) {
+                // 서버에서 에러 메시지를 보냈을 경우를 대비
+                return response.json().then(err => { throw new Error(err.error || '서버 응답 오류'); });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success && data.redirect_url) {
+                // 성공 시, 서버가 알려준 편집 페이지 URL로 이동합니다.
+                window.location.href = data.redirect_url;
+            } else {
+                alert('신규 표시사항 생성에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert(`신규 표시사항 생성 중 오류가 발생했습니다: ${error.message}`);
+        });
+    }
+}
+
 // 체크박스 셀 클릭 시 체크박스 토글 함수
 function toggleCheckbox(cell) {
     const checkbox = cell.querySelector('.check-item');

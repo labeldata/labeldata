@@ -11,6 +11,7 @@ urlpatterns = [
 
     # 내 표시사항 관리
     path('my-labels/', views.my_label_list, name='my_label_list'),
+    path('create-new/', views.create_new_label, name='create_new_label'),
     path('bulk-copy-labels/', views.bulk_copy_labels, name='bulk_copy_labels'),
     path('bulk-delete-labels/', views.bulk_delete_labels, name='bulk_delete_labels'),
     path('save-to-my-label/<str:prdlst_report_no>/', views.save_to_my_label, name='save_to_my_label'),

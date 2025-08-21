@@ -20,6 +20,7 @@ from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
 from django.db.models import F, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse # [추가] URL 생성을 위해 import
 from django.utils import timezone  # 추가
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -313,6 +314,50 @@ def my_label_list(request):
     return render(request, "label/my_label_list.html", context)
 
 @login_required
+@require_POST # POST 요청만 허용
+def create_new_label(request):
+    """
+    [신규] '신규 작성' 요청을 받아 새 표시사항을 생성하고 편집 페이지로 리디렉션합니다.
+    라벨명은 "임시 - 제품명 - N" 형식으로 자동 생성됩니다.
+    """
+    try:
+        base_name = "임시 - 제품명"
+        
+        # 현재 사용자의 "임시 - 제품명 - X" 라벨들을 조회
+        existing_labels = MyLabel.objects.filter(
+            user_id=request.user,
+            my_label_name__startswith=base_name
+        ).values_list('my_label_name', flat=True)
+
+        max_num = 0
+        # 정규식을 사용하여 이름에서 숫자 부분을 추출하고 최대값을 찾음
+        pattern = re.compile(rf'^{re.escape(base_name)}\s*-\s*(\d+)$')
+        for name in existing_labels:
+            match = pattern.match(name)
+            if match:
+                num = int(match.group(1))
+                if num > max_num:
+                    max_num = num
+        
+        # 새 라벨 이름 생성 (최대값 + 1)
+        new_label_name = f"{base_name} - {max_num + 1}"
+
+        # 새 라벨 객체 생성
+        new_label = MyLabel.objects.create(
+            user_id=request.user,
+            my_label_name=new_label_name
+        )
+
+        # 생성된 라벨의 편집 페이지 URL 생성
+        redirect_url = reverse('label:label_creation', kwargs={'label_id': new_label.my_label_id})
+
+        return JsonResponse({'success': True, 'redirect_url': redirect_url})
+
+    except Exception as e:
+        # 예외 발생 시 에러 메시지 반환
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
 def food_item_detail(request, prdlst_report_no):
     """
     제품 상세 팝업: 가공식품/식품첨가물/수입식품 모두 지원.
@@ -436,6 +481,7 @@ def save_to_my_label(request, prdlst_report_no):
         })
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
 
 
 @login_required
