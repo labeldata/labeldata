@@ -1,283 +1,399 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}메인 화면{% endblock %}
+{% block title %}간편한 표시사항 연구소{% endblock %}
 
 {% block content %}
-<!-- 시스템 소개 영역 -->
-<div class="system-intro">
-    <div class="intro-box">
-        <h1 class="intro-title">"간편한 표시사항 연구소"에 오신 것을 환영합니다.</h1>
-        <p class="intro-description">
-            표시사항을 제작하기 위한 다양한 기능을 제공합니다.
-        </p>
-        <!-- [수정] 튜토리얼 시작 영역 통합 -->
-        <div id="start-tutorial-area">
-            <h2 class="tutorial-area-title">「시스템 튜토리얼 바로가기」</h2>
-            <ul class="intro-list">
-                <li>제품 조회: 국내외 식품 정보 검색 및 저장(내 원료, 표시사항)</li>
-                <li>원료 관리: 내 원료 저장, 상세정보 입력(표시명, 알레르기 등)</li>
-                <li>표시사항 관리: 표시사항 작성, 규정검증, 미리보기, 다운로드
-                    <ul class="sub-list">
-                        <li>식품유형에 따른 필수 항목 추천</li>
-                        <li>자주 사용하는 문구 추천 및 불러오기</li>
-                        <li>원료 함량에 따른 원재료명 자동 생성·검증</li>
-                        <li>영양성분 계산기</li>
-                        <li>서식 미리보기 및 규정 검증</li>
-                        <li>PDF 저장 및 엑셀 다운로드</li>
-                    </ul>
-                </li>
-            </ul>
+<main class="home-container">
+    <!-- 메인 소개 섹션 -->
+    <section class="intro-section">
+        <header class="intro-header">
+            <h1 class="intro-title">"간편한 표시사항 연구소"에 오신 것을 환영합니다.</h1>
+            <p class="intro-description">복잡한 표시사항 작성, 이제 쉽고 빠르게 해결하세요.</p>
+        </header>
+        
+        <div class="home-actions">
+            <button id="start-tutorial-btn" class="action-btn tutorial-btn">
+                <span class="btn-icon">🚀</span>
+                <span class="btn-text">주요 기능 둘러보기</span>
+            </button>
+            <button id="create-new-label-btn" class="action-btn create-btn">
+                <span class="btn-icon">✨</span>
+                <span class="btn-text">표시사항 신규 작성</span>
+            </button>
         </div>
-        <div class="highlight-feature">
-            <span>새로운 기능 곧 공개! </span>
-            <a href="{% url 'board:list' %}" class="cta-button">게시판에서 아이디어 공유해주세요 😊</a>
-        </div>
-    </div>
-</div>
+    </section>
+
+    <!-- 하단 기능 제안 섹션 -->
+    <section class="highlight-feature">
+        <span>새로운 기능이 필요하신가요?</span>
+        <a href="{% url 'board:list' %}" class="cta-button">게시판에 아이디어를 공유해주세요 😊</a>
+    </section>
+</main>
 
 <!-- 튜토리얼 오버레이 UI -->
 <div id="tutorial-overlay" style="display: none;">
-    <button id="tutorial-close-btn" class="tutorial-btn">&times;</button>
-    <button id="tutorial-prev-btn" class="tutorial-btn tutorial-nav-btn">&lt;</button>
-    <button id="tutorial-next-btn" class="tutorial-btn tutorial-nav-btn">&gt;</button>
-
-    <div class="tutorial-content-main">
-        <div id="tutorial-text-content">
+    <div class="tutorial-dialog">
+        <header class="tutorial-header">
             <h3 id="tutorial-title"></h3>
+            <button id="tutorial-close-btn" class="tutorial-btn-close" aria-label="튜토리얼 닫기">&times;</button>
+        </header>
+        <div class="tutorial-body">
+            <img id="tutorial-image" src="" alt="튜토리얼 단계별 예시 화면">
             <p id="tutorial-description"></p>
         </div>
-        <img id="tutorial-image" src="" alt="튜토리얼 단계별 예시 화면">
+        <footer class="tutorial-footer">
+            <button id="tutorial-prev-btn" class="tutorial-nav-btn">&lt; 이전</button>
+            <div id="tutorial-progress-bar"></div>
+            <button id="tutorial-next-btn" class="tutorial-nav-btn">다음 &gt;</button>
+        </footer>
     </div>
-
-    <div id="tutorial-progress-bar"></div>
 </div>
 
-
 <style>
-/* --- 기존 스타일 --- */
-.system-intro {
-    background-color: #f8fafc; padding: 2rem; display: flex; align-items: center; justify-content: center;
-    margin-top: 4rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); min-height: auto;
+/* --- 기본 레이아웃 및 색상 변수 --- */
+:root {
+    --primary-color: #38b2ac;
+    --primary-dark: #319795;
+    --primary-light: #e6fffa;
+    --text-dark: #2d3748;
+    --text-light: #4a5568;
+    --bg-light: #f7fafc;
+    --border-color: #e2e8f0;
 }
-.intro-box { max-width: 800px; text-align: center; }
+
+.home-container {
+    max-width: 1100px;
+    margin: 4rem auto;
+    padding: 0 1rem;
+}
+
+/* --- 소개 섹션 --- */
+.intro-section {
+    background-color: var(--bg-light);
+    padding: 3rem 2rem;
+    border-radius: 16px;
+    text-align: center;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
+}
 .intro-title {
-    font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 700; color: #1a3c34;
-    margin-bottom: 1rem; white-space: nowrap;
+    font-size: clamp(1.8rem, 4vw, 2.5rem);
+    font-weight: 800;
+    color: var(--text-dark);
+    margin-bottom: 0.75rem;
 }
 .intro-description {
-    font-size: clamp(1rem, 2vw, 1.2rem); color: #4a5568; margin-bottom: 2rem; line-height: 1.6;
+    font-size: clamp(1.1rem, 2.5vw, 1.25rem);
+    color: var(--text-light);
+    margin-bottom: 3rem;
 }
 
-/* [추가] 튜토리얼 시작 영역 스타일 */
-#start-tutorial-area {
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 1.5rem;
-    margin-bottom: 2rem;
+/* --- 액션 버튼 --- */
+.home-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    justify-content: center;
+}
+.action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 300px;
+    height: 220px;
+    padding: 2rem;
+    border-radius: 16px;
+    border: none;
     cursor: pointer;
-    transition: box-shadow 0.3s ease, transform 0.3s ease;
-    background-color: #f0fdfa; /* [수정] 배경색 추가 */
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
 }
-#start-tutorial-area:hover {
-    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-    transform: translateY(-5px);
+.action-btn:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 25px rgba(0,0,0,0.12);
 }
-.tutorial-area-title {
-    font-size: 1.5rem; /* [수정] 폰트 크기 증가 */
-    color: #38b2ac;
-    font-weight: 700; /* [수정] 폰트 굵기 증가 */
-    margin-top: 0;
+.action-btn .btn-icon {
+    font-size: 3.5rem;
     margin-bottom: 1rem;
+    transition: transform 0.3s ease;
+}
+.action-btn:hover .btn-icon {
+    transform: scale(1.1);
+}
+.action-btn .btn-text {
+    font-size: 1.5rem;
+    font-weight: 700;
 }
 
-.intro-list { list-style: none; padding: 0; text-align: left; font-size: clamp(0.9rem, 1.5vw, 1.1rem); color: #2d3748; line-height: 1.6; }
-.intro-list li { margin-bottom: 0.5rem; }
-.sub-list { margin-top: 0.5rem; margin-left: 1.5rem; list-style-type: disc; }
-.sub-list li { font-size: clamp(0.85rem, 1.4vw, 1rem); color: #4a5568; }
+.tutorial-btn {
+    background: linear-gradient(145deg, #ffffff, #f0fdfa);
+    color: var(--primary-dark);
+    border: 2px solid var(--primary-color);
+}
+.create-btn {
+    background: linear-gradient(145deg, var(--primary-color), var(--primary-dark));
+    color: white;
+}
+
+/* --- 하단 기능 제안 섹션 --- */
 .highlight-feature {
-    background-color: #e6fffa; padding: 1rem; border-radius: 8px; display: flex;
-    align-items: center; justify-content: space-between; flex-wrap: wrap; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-top: 3rem;
+    padding: 1.25rem 2rem;
+    background-color: var(--primary-light);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
 }
-.highlight-feature span { font-size: clamp(1rem, 1.5vw, 1.1rem); font-weight: 600; color: #2b6cb0; }
-.cta-button {
-    display: inline-block; background-color: #38b2ac; color: white; padding: 0.625rem 1.25rem;
-    border-radius: 6px; text-decoration: none; font-size: clamp(0.9rem, 1.5vw, 1rem); transition: background-color 0.3s ease;
-    border: none; cursor: pointer;
-}
-.cta-button:hover { background-color: #319795; }
-
-/* --- 튜토리얼 오버레이 스타일 --- */
-/* [추가] 튜토리얼 설명 강조 스타일 */
-.highlight-text {
-    color: #ffeb3b; /* 노란색 */
+.highlight-feature span {
+    font-size: 1.1rem;
     font-weight: 600;
+    color: var(--primary-dark);
 }
+.cta-button {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.3s ease;
+}
+.cta-button:hover { background-color: var(--primary-dark); }
 
-.tutorial-highlight {
-    position: relative;
-    z-index: 1001;
-    box-shadow: 0 0 0 3px #38b2ac;
-    border-radius: 5px;
-    transition: box-shadow 0.3s ease-in-out;
-}
+/* --- 튜토리얼 오버레이 --- */
 #tutorial-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: rgba(0, 0, 0, 0.85); z-index: 1000; display: flex;
-    align-items: center; justify-content: center; flex-direction: column;
-    padding-top: 70px; box-sizing: border-box;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
 }
-.tutorial-btn { background: none; border: none; color: white; cursor: pointer; font-family: 'Arial', sans-serif; }
-#tutorial-close-btn {
-    position: absolute; top: 40px; right: 30px; font-size: 3rem;
-    opacity: 0.8; transition: opacity 0.2s;
+.tutorial-dialog {
+    background-color: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    width: 100%;
+    max-width: 800px;
+    max-height: 95vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
-#tutorial-close-btn:hover { opacity: 1; }
+.tutorial-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+#tutorial-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-dark);
+}
+.tutorial-btn-close {
+    font-size: 2rem;
+    font-weight: 300;
+    background: none;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0.5rem;
+}
+.tutorial-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    text-align: center;
+}
+#tutorial-image {
+    max-width: 100%;
+    height: auto;
+    max-height: 50vh;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    object-fit: contain;
+}
+#tutorial-description {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: var(--text-dark);
+}
+.highlight-text {
+    color: var(--primary-dark);
+    font-weight: 700;
+}
+.tutorial-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-light);
+}
 .tutorial-nav-btn {
-    position: absolute; top: 50%; transform: translateY(-50%); font-size: 3rem;
-    padding: 10px 20px; border-radius: 10px; background-color: rgba(0, 0, 0, 0.3);
-    transition: background-color 0.2s;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s;
 }
-.tutorial-nav-btn:hover { background-color: rgba(0, 0, 0, 0.5); }
-#tutorial-prev-btn { left: 20px; }
-#tutorial-next-btn { right: 20px; }
-.tutorial-content-main {
-    max-width: 70vw; max-height: calc(85vh - 70px); display: flex;
-    flex-direction: column; align-items: center;
-}
-#tutorial-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
-#tutorial-text-content {
-    color: white; text-align: center; margin-bottom: 20px; background-color: rgba(0, 0, 0, 0.4);
-    padding: 15px; border-radius: 8px; width: 100%; box-sizing: border-box;
-}
-#tutorial-title { margin: 0 0 10px 0; font-size: 1.5rem; }
-#tutorial-description { margin: 0; font-size: 1.1rem; line-height: 1.5; }
-#tutorial-progress-bar { position: absolute; bottom: 30px; display: flex; gap: 8px; }
+.tutorial-nav-btn:hover { background-color: var(--primary-dark); }
+.tutorial-nav-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+
+#tutorial-progress-bar { display: flex; gap: 8px; }
 .progress-dot {
-    width: 12px; height: 12px; border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.4); transition: background-color 0.3s;
+    width: 10px; height: 10px; border-radius: 50%;
+    background-color: #ccc;
+    cursor: pointer;
+    transition: background-color 0.3s;
 }
-.progress-dot.active { background-color: white; }
+.progress-dot.active { background-color: var(--primary-color); }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // [수정] 튜토리얼 시작 버튼을 새로운 영역으로 변경
-    const startBtn = document.getElementById('start-tutorial-area');
-    if (!startBtn) return;
 
-    const overlay = document.getElementById('tutorial-overlay');
-    const closeBtn = document.getElementById('tutorial-close-btn');
-    const nextBtn = document.getElementById('tutorial-next-btn');
-    const prevBtn = document.getElementById('tutorial-prev-btn');
-    
-    const titleEl = document.getElementById('tutorial-title');
-    const imageEl = document.getElementById('tutorial-image');
-    const descriptionEl = document.getElementById('tutorial-description');
-    const progressBar = document.getElementById('tutorial-progress-bar');
+    // --- 유틸리티 함수 ---
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
 
-    // [수정] 구문 오류 수정 및 오타 교정
-    const tutorialSteps = [
-        { element: '#nav-food-item-list', title: '제품 조회(1) : 국내/수입제품 검색', image: "{% static 'img/tutorial/step-1-1.png' %}", 
-        description: '국내외 150만 건의 표시사항을 <span class="highlight-text">①조건 검색, ②품목 선택</span> 후 상세 정보를 확인할 수 있습니다.' },
-        { element: '#nav-food-item-list', title: '제품 조회(2) : 원료, 제품 저장', image: "{% static 'img/tutorial/step-1-2.png' %}", 
-        description: '제품 정보는 <span class="highlight-text">①내원료 저장, ②표시사항 생성</span> 버튼으로 쉽게 복사하여 사용할 수 있습니다.' },
-        { element: '#nav-ingredient-management', title: '원료 관리(1) : 상세정보 관리', image: "{% static 'img/tutorial/step-2-1.png' %}", 
-        description: '원료 리스트에서 <span class="highlight-text">①선택 후 ②상세정보 입력, ③저장</span>하면 표시사항 작성할 때 불러올 수 있습니다.' +
-        '<br>※식품첨가물은 관련 규정에 따라 표시문구를 추천해줍니다.' },
-        { element: '#nav-ingredient-management', title: '원료 관리(2) : 신규등록, 엑셀 다운/업로드', image: "{% static 'img/tutorial/step-2-2.png' %}", 
-        description: '원료 정보는 <span class="highlight-text">①엑셀 다운로드 및 일괄 업로드, ②신규 추가</span>도 가능하며, <span class="highlight-text">③연결된 표시사항을 직접 조회</span>할 수도 있습니다.' +
-        '<br>※엑셀 업로드 시에는 다운받은 양식에 데이터를 입력하여 업로드하여야 합니다.' },
-        { element: '#nav-label-management', title: '표시사항 관리(1) : 다운로드,복사,삭제, 품보신고 검증', image: "{% static 'img/tutorial/step-3-1.png' %}", 
-        description: '표시사항 리스트를 선택하여 <span class="highlight-text">①엑셀 다운로드, 복사, 삭제</span>를 할 수 있고, <br>표시사항에 입력한 품목보고번호의 <span class="highlight-text">②실제 신고 여부도 실시간으로 확인</span> 가능합니다.' },
-        { element: '#nav-label-management', title: '표시사항 관리(2) : 식품유형별 필수항목 자동 추천', image: "{% static 'img/tutorial/step-3-2.png' %}", 
-        description: '표시사항 작성 화면에서 <span class="highlight-text">①식품유형 선택, ②제조방법 및 장기보존 선택, ③필수항목 적용 후 접기</span> 버튼을 클릭하면,' +
-        '<br> "상세 입력" 화면의 필수 항목이 자동 체크되고, 오른쪽 패널에서는 식품유형별 관련 규정도 표시됩니다.' },
-        { element: '#nav-label-management', title: '표시사항 관리(3) : 상세정보 입력', image: "{% static 'img/tutorial/step-3-3.png' %}", 
-        description: '각 항목의 입력필드를 선택하면 오른쪽 패널에 <span class="highlight-text">①관련 규정 표시</span>되고 및 <span class="highlight-text">①자주 사용하는 문구 등록 및 선택하여 쉽게 입력</span>할 수 있습니다. ' +
-        '<br>품목보고번호를 입력하고 번호검증 기능을 통해<span class="highlight-text">②사용 여부를 실시간 확인</span>할 수 있습니다.' +
-        '<br>원료 관리에서 등록한 원료를 "표로 입력" 버튼을 클릭하여 <span class="highlight-text">③원재료명 자동 추천 기능</span>을 사용할 수 있습니다.' },        
-        { element: '#nav-label-management', title: '표시사항 관리(4) : 원재료 표시명 추천', image: "{% static 'img/tutorial/step-3-4.png' %}", description: '등록된 원료를 검색하여 <span class="highlight-text">①추가, ② 비율 입력이나 순서 변경, ③ 표시규칙 선택</span>하면 <br> 원재료 표시명 및 알레르기/GMO 성분이 자동으로 생성되고, 식품유형 및 함량에 따른 원산지 표시대상과 국가명 포함 여부를 나타내줍니다.' },
-        { element: '#nav-label-management', title: '표시사항 관리(5) : 표시사항 미리보기', image: "{% static 'img/tutorial/step-3-5.png' %}", 
-        description: '표시사항 작성 화면의 우측 상단 "미리보기" 버튼을 클릭하면 한글표시사항의<span class="highlight-text">①크기 설정 변경</span>하고, <span class="highlight-text">②분리배출 마크 추가</span> 등을 할 수 있습니다.' },
-        { element: '#nav-label-management', title: '표시사항 관리(6) : 규정 검증 및 PDF 저장', image: "{% static 'img/tutorial/step-3-6.png' %}", 
-        description: '완성된 표시사항이 <span class="highlight-text">①규정에 맞는지 검증</span>하고, 결과를 <span class="highlight-text">②PDF 파일로 저장</span>하여 공유할 수 있습니다.' }
-    ];
-
-    let currentStep = 0;
-    let highlightedElement = null;
-
-    function createProgressBar() {
-        progressBar.innerHTML = '';
-        tutorialSteps.forEach((_, index) => {
-            const dot = document.createElement('div');
-            dot.classList.add('progress-dot');
-            dot.dataset.index = index;
-            dot.addEventListener('click', () => showStep(index));
-            progressBar.appendChild(dot);
+    // --- 신규 표시사항 작성 기능 ---
+    const createNewLabelBtn = document.getElementById('create-new-label-btn');
+    if (createNewLabelBtn) {
+        createNewLabelBtn.addEventListener('click', () => {
+            if (confirm("새로운 표시사항을 작성하시겠습니까?")) {
+                fetch("{% url 'label:create_new_label' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({})
+                })
+                .then(response => {
+                    if (!response.ok) return response.json().then(err => { throw new Error(err.error || '서버 응답 오류'); });
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.redirect_url) {
+                        window.location.href = data.redirect_url;
+                    } else {
+                        alert('신규 표시사항 생성에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert(`신규 표시사항 생성 중 오류가 발생했습니다: ${error.message}`);
+                });
+            }
         });
     }
 
-    function showStep(stepIndex) {
-        if (stepIndex < 0 || stepIndex >= tutorialSteps.length) {
-            return;
+    // --- 튜토리얼 기능 ---
+    const tutorialModule = {
+        // DOM 요소
+        elements: {
+            overlay: document.getElementById('tutorial-overlay'),
+            startBtn: document.getElementById('start-tutorial-btn'),
+            closeBtn: document.getElementById('tutorial-close-btn'),
+            nextBtn: document.getElementById('tutorial-next-btn'),
+            prevBtn: document.getElementById('tutorial-prev-btn'),
+            title: document.getElementById('tutorial-title'),
+            image: document.getElementById('tutorial-image'),
+            description: document.getElementById('tutorial-description'),
+            progressBar: document.getElementById('tutorial-progress-bar'),
+        },
+        // 튜토리얼 데이터
+        steps: [
+            { title: '제품 조회(1) : 국내/수입제품 검색', image: "{% static 'img/tutorial/step-1-1.png' %}", description: '국내외 150만 건의 표시사항을 <span class="highlight-text">①조건 검색, ②품목 선택</span> 후 상세 정보를 확인할 수 있습니다.' },
+            { title: '제품 조회(2) : 원료, 제품 저장', image: "{% static 'img/tutorial/step-1-2.png' %}", description: '제품 정보는 <span class="highlight-text">①내원료 저장, ②표시사항 생성</span> 버튼으로 쉽게 복사하여 사용할 수 있습니다.' },
+            { title: '원료 관리(1) : 상세정보 관리', image: "{% static 'img/tutorial/step-2-1.png' %}", description: '원료 리스트에서 <span class="highlight-text">①선택 후 ②상세정보 입력, ③저장</span>하면 표시사항 작성할 때 불러올 수 있습니다.<br>※식품첨가물은 관련 규정에 따라 표시문구를 추천해줍니다.' },
+            { title: '원료 관리(2) : 신규등록, 엑셀 다운/업로드', image: "{% static 'img/tutorial/step-2-2.png' %}", description: '원료 정보는 <span class="highlight-text">①엑셀 다운로드 및 일괄 업로드, ②신규 추가</span>도 가능하며, <span class="highlight-text">③연결된 표시사항을 직접 조회</span>할 수도 있습니다.<br>※엑셀 업로드 시에는 다운받은 양식에 데이터를 입력하여 업로드하여야 합니다.' },
+            { title: '표시사항 관리(1) : 다운로드,복사,삭제, 품보신고 검증', image: "{% static 'img/tutorial/step-3-1.png' %}", description: '표시사항 리스트를 선택하여 <span class="highlight-text">①엑셀 다운로드, 복사, 삭제</span>를 할 수 있고, <br>표시사항에 입력한 품목보고번호의 <span class="highlight-text">②실제 신고 여부도 실시간으로 확인</span> 가능합니다.' },
+            { title: '표시사항 관리(2) : 식품유형별 필수항목 자동 추천', image: "{% static 'img/tutorial/step-3-2.png' %}", description: '표시사항 작성 화면에서 <span class="highlight-text">①식품유형 선택, ②제조방법 및 장기보존 선택, ③필수항목 적용 후 접기</span> 버튼을 클릭하면,<br> "상세 입력" 화면의 필수 항목이 자동 체크되고, 오른쪽 패널에서는 식품유형별 관련 규정도 표시됩니다.' },
+            { title: '표시사항 관리(3) : 상세정보 입력', image: "{% static 'img/tutorial/step-3-3.png' %}", description: '각 항목의 입력필드를 선택하면 오른쪽 패널에 <span class="highlight-text">①관련 규정 표시</span>되고 및 <span class="highlight-text">①자주 사용하는 문구 등록 및 선택하여 쉽게 입력</span>할 수 있습니다. <br>품목보고번호를 입력하고 번호검증 기능을 통해<span class="highlight-text">②사용 여부를 실시간 확인</span>할 수 있습니다.<br>원료 관리에서 등록한 원료를 "표로 입력" 버튼을 클릭하여 <span class="highlight-text">③원재료명 자동 추천 기능</span>을 사용할 수 있습니다.' },        
+            { title: '표시사항 관리(4) : 원재료 표시명 추천', image: "{% static 'img/tutorial/step-3-4.png' %}", description: '등록된 원료를 검색하여 <span class="highlight-text">①추가, ② 비율 입력이나 순서 변경, ③ 표시규칙 선택</span>하면 <br> 원재료 표시명 및 알레르기/GMO 성분이 자동으로 생성되고, 식품유형 및 함량에 따른 원산지 표시대상과 국가명 포함 여부를 나타내줍니다.' },
+            { title: '표시사항 관리(5) : 표시사항 미리보기', image: "{% static 'img/tutorial/step-3-5.png' %}", description: '표시사항 작성 화면의 우측 상단 "미리보기" 버튼을 클릭하면 한글표시사항의<span class="highlight-text">①크기 설정 변경</span>하고, <span class="highlight-text">②분리배출 마크 추가</span> 등을 할 수 있습니다.' },
+            { title: '표시사항 관리(6) : 규정 검증 및 PDF 저장', image: "{% static 'img/tutorial/step-3-6.png' %}", description: '완성된 표시사항이 <span class="highlight-text">①규정에 맞는지 검증</span>하고, 결과를 <span class="highlight-text">②PDF 파일로 저장</span>하여 공유할 수 있습니다.' }
+        ],
+        currentStep: 0,
+
+        init() {
+            if (!this.elements.startBtn) return;
+            this.elements.startBtn.addEventListener('click', () => this.start());
+            this.elements.closeBtn.addEventListener('click', () => this.end());
+            this.elements.nextBtn.addEventListener('click', () => this.showStep(this.currentStep + 1));
+            this.elements.prevBtn.addEventListener('click', () => this.showStep(this.currentStep - 1));
+            document.addEventListener('keydown', (e) => this.handleKeyPress(e));
+        },
+        start() {
+            this.createProgressBar();
+            this.elements.overlay.style.display = 'flex';
+            this.showStep(0);
+        },
+        end() {
+            this.elements.overlay.style.display = 'none';
+        },
+        showStep(index) {
+            if (index < 0 || index >= this.steps.length) return;
+            this.currentStep = index;
+            const step = this.steps[index];
+            
+            this.elements.title.textContent = step.title;
+            this.elements.image.src = step.image;
+            this.elements.description.innerHTML = step.description;
+
+            this.elements.prevBtn.disabled = index === 0;
+            this.elements.nextBtn.disabled = index === this.steps.length - 1;
+
+            this.updateProgressBar();
+        },
+        handleKeyPress(e) {
+            if (this.elements.overlay.style.display !== 'flex') return;
+            if (e.key === 'ArrowRight') this.showStep(this.currentStep + 1);
+            else if (e.key === 'ArrowLeft') this.showStep(this.currentStep - 1);
+            else if (e.key === 'Escape') this.end();
+        },
+        createProgressBar() {
+            this.elements.progressBar.innerHTML = '';
+            this.steps.forEach((_, index) => {
+                const dot = document.createElement('div');
+                dot.classList.add('progress-dot');
+                dot.dataset.index = index;
+                dot.addEventListener('click', () => this.showStep(index));
+                this.elements.progressBar.appendChild(dot);
+            });
+        },
+        updateProgressBar() {
+            this.elements.progressBar.querySelectorAll('.progress-dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index === this.currentStep);
+            });
         }
-        currentStep = stepIndex;
-        const step = tutorialSteps[stepIndex];
+    };
 
-        if (highlightedElement) {
-            highlightedElement.classList.remove('tutorial-highlight');
-        }
-        const targetElement = document.querySelector(step.element);
-        if (targetElement) {
-            highlightedElement = targetElement;
-            targetElement.classList.add('tutorial-highlight');
-        }
-
-        titleEl.textContent = step.title;
-        imageEl.src = step.image;
-        // [수정] textContent를 innerHTML로 변경하여 span 태그가 적용되도록 함
-        descriptionEl.innerHTML = step.description;
-
-        prevBtn.style.display = stepIndex > 0 ? 'block' : 'none';
-        nextBtn.style.display = stepIndex < tutorialSteps.length - 1 ? 'block' : 'none';
-
-        document.querySelectorAll('.progress-dot').forEach((dot, index) => {
-            dot.classList.toggle('active', index === currentStep);
-        });
-    }
-
-    function handleKeyPress(e) {
-        if (e.key === 'ArrowRight') {
-            showStep(currentStep + 1);
-        } else if (e.key === 'ArrowLeft') {
-            showStep(currentStep - 1);
-        } else if (e.key === 'Escape') {
-            endTutorial();
-        }
-    }
-
-    function startTutorial(e) {
-        e.preventDefault();
-        createProgressBar();
-        overlay.style.display = 'flex';
-        document.addEventListener('keydown', handleKeyPress);
-        showStep(0);
-    }
-
-    function endTutorial() {
-        overlay.style.display = 'none';
-        if (highlightedElement) {
-            highlightedElement.classList.remove('tutorial-highlight');
-            highlightedElement = null;
-        }
-        document.removeEventListener('keydown', handleKeyPress);
-        currentStep = 0;
-    }
-
-    startBtn.addEventListener('click', startTutorial);
-    closeBtn.addEventListener('click', endTutorial);
-    nextBtn.addEventListener('click', () => showStep(currentStep + 1));
-    prevBtn.addEventListener('click', () => showStep(currentStep - 1));
+    tutorialModule.init();
 });
 </script>
 
