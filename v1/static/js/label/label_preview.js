@@ -174,19 +174,31 @@ document.addEventListener('DOMContentLoaded', function () {
     function recommendRecyclingMarkByMaterial(materialText) {
         if (!materialText) return null;
         const text = materialText.toLowerCase().trim();
-        for (const group of recyclingMarkGroups) {
-            for (const opt of group.options) {
-                const base = opt.label.replace(/\(.+\)/, '').toLowerCase();
-                if (text.includes(base) || text.includes(opt.label.toLowerCase())) {
-                    return opt.value;
-                }
+
+        // [수정] 우선순위 키워드 기반 추천 로직
+        // 1. PET 계열 (무색페트 우선)
+        if (text.includes('pet') || text.includes('페트')) {
+            if (text.includes('무색')) {
+                return '무색페트';
             }
+            return '플라스틱(PET)';
         }
-        if (text.includes('pet')) return '플라스틱(PET)';
-        if (text.includes('hdpe')) return '플라스틱(HDPE)';
-        if (text.includes('ldpe')) return '플라스틱(LDPE)';
-        if (text.includes('pp')) return '플라스틱(PP)';
-        if (text.includes('ps')) return '플라스틱(PS)';
+
+        // 2. 폴리에틸렌(PE) 계열 (HDPE 우선)
+        if (text.includes('hdpe') || text.includes('고밀도')) {
+            return '플라스틱(HDPE)';
+        }
+        if (text.includes('ldpe') || text.includes('저밀도')) {
+            return '플라스틱(LDPE)';
+        }
+        if (text.includes('폴리에틸렌') || text.includes('pe')) {
+            // 특정 밀도 언급이 없으면 HDPE를 기본으로 추천
+            return '플라스틱(HDPE)';
+        }
+
+        // 3. 기타 재질
+        if (text.includes('pp') || text.includes('폴리프로필렌')) return '플라스틱(PP)';
+        if (text.includes('ps') || text.includes('폴리스티렌')) return '플라스틱(PS)';
         if (text.includes('철')) return '캔류(철)';
         if (text.includes('알미늄') || text.includes('알루미늄')) return '캔류(알미늄)';
         if (text.includes('종이')) return '종이';
@@ -194,9 +206,20 @@ document.addEventListener('DOMContentLoaded', function () {
         if (text.includes('팩') && text.includes('멸균')) return '멸균팩';
         if (text.includes('팩')) return '일반팩';
         if (text.includes('도포') || text.includes('첩합') || text.includes('코팅')) return '도포첩합';
-        return null;
-    }
+        
+        // 4. 비닐류 (위에서 플라스틱으로 잡히지 않은 경우)
+        if (text.includes('비닐')) {
+            if (text.includes('other')) return '비닐류(OTHER)';
+            return '비닐류(LDPE)'; // 비닐류의 가장 일반적인 기본값
+        }
 
+        // 5. 일반적인 '플라스틱' 또는 'other'
+        if (text.includes('other')) return '플라스틱(OTHER)';
+        if (text.includes('플라스틱')) return '플라스틱(OTHER)';
+
+        return null; // 일치하는 항목이 없을 경우
+    }
+    
     // 분리배출마크 UI 생성 및 삽입
     function renderRecyclingMarkUI() {
         const contentTab = document.querySelector('#content-tab .settings-group');
@@ -366,8 +389,28 @@ document.addEventListener('DOMContentLoaded', function () {
             img.style.display = 'none';
         }
 
-        // 자동 위치 설정
-        if (auto) {
+        // [수정] 자동 위치 설정: 제품명 행의 우측 상단에 배치
+        const thElements = previewContent.querySelectorAll('th');
+        let productNameRow = null;
+        thElements.forEach(th => {
+            if (th.textContent.trim() === '제품명') {
+                productNameRow = th.parentElement; // <tr> element
+            }
+        });
+
+        if (productNameRow) {
+            const previewRect = previewContent.getBoundingClientRect();
+            const rowRect = productNameRow.getBoundingClientRect();
+            
+            // 제품명 행의 상단에 맞춤
+            const topPosition = rowRect.top - previewRect.top;
+            
+            container.style.top = `${topPosition}px`;
+            container.style.right = '25px'; // 우측 여백
+            container.style.left = '';
+            container.style.bottom = '';
+        } else {
+            // 제품명 행을 찾지 못할 경우의 기본 위치 (예: 우측 하단)
             container.style.right = '20px';
             container.style.bottom = '20px';
             container.style.left = '';
@@ -1200,22 +1243,75 @@ document.addEventListener('DOMContentLoaded', function () {
     function checkRecyclingMarkCompliance() {
         const errors = [];
         const suggestions = [];
-        const packageMaterial = checkedFields.frmlc_mtrqlt || '';
+        const packageMaterial = (checkedFields.frmlc_mtrqlt || '').toLowerCase();
+        const select = document.getElementById('recyclingMarkSelect');
+        const selectedMark = select ? select.value : '';
 
         if (!packageMaterial) {
             errors.push('포장재질을 표시하세요.');
-            return { errors, suggestions: [] };
+            return { errors, suggestions };
         }
 
-        const select = document.getElementById('recyclingMarkSelect');
-        const selectedMark = select ? select.value : '';
-        const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);
-        if (selectedMark && selectedMark !== '미표시' && selectedMark !== recommendedMark) {
+        // 사용자가 마크를 선택하지 않았으면 검증하지 않음
+        if (!selectedMark || selectedMark === '미표시') {
+            return { errors, suggestions };
+        }
+
+        // 마크와 재질 키워드 간의 호환성 검증 헬퍼 함수
+        const isCompatible = (mark, materialKeywords) => {
+            return materialKeywords.some(keyword => packageMaterial.includes(keyword));
+        };
+
+        let compatible = false;
+        switch (selectedMark) {
+            case '무색페트':
+            case '플라스틱(PET)':
+                // [수정] '무색페트' 또는 'PET' 선택 시, 'pet' 또는 '페트'가 포함되면 통과
+                compatible = isCompatible(selectedMark, ['pet', '페트']);
+                break;
+            case '플라스틱(LDPE)':
+            case '플라스틱(HDPE)':
+                // LDPE 또는 HDPE 선택 시, '폴리에틸렌' 또는 'pe'가 포함되면 통과
+                compatible = isCompatible(selectedMark, ['ldpe', 'hdpe', '폴리에틸렌', 'pe']);
+                break;
+            case '플라스틱(PP)':
+                compatible = isCompatible(selectedMark, ['pp', '피피', '폴리프로필렌']);
+                break;
+            case '플라스틱(PS)':
+                compatible = isCompatible(selectedMark, ['ps', '피에스', '폴리스티렌']);
+                break;
+            case '캔류(철)':
+                compatible = isCompatible(selectedMark, ['철', 'steel']);
+                break;
+            case '캔류(알미늄)':
+                compatible = isCompatible(selectedMark, ['알미늄', '알루미늄', 'aluminum', 'al']);
+                break;
+            case '종이':
+                compatible = isCompatible(selectedMark, ['종이', 'paper']);
+                break;
+            case '유리':
+                compatible = isCompatible(selectedMark, ['유리', 'glass']);
+                break;
+            case '일반팩':
+                compatible = packageMaterial.includes('팩') && !packageMaterial.includes('멸균');
+                break;
+            case '멸균팩':
+                compatible = packageMaterial.includes('멸균');
+                break;
+            default:
+                // 기타 마크들은 기존 추천 로직을 활용하여 검증
+                const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);
+                compatible = (selectedMark === recommendedMark);
+                break;
+        }
+
+        if (!compatible) {
             errors.push(
-                `포장재질("${packageMaterial}")과 분리배출마크("${selectedMark}")가 일치하지 않습니다. 사용된 포장재질과 분리배출마크를 재확인하세요.`
+                `포장재질("${checkedFields.frmlc_mtrqlt}")과 분리배출마크("${selectedMark}")가 일치하지 않습니다. 사용된 포장재질과 분리배출마크를 재확인하세요.`
             );
         }
-        return { errors, suggestions: [] };
+
+        return { errors, suggestions };
     }
 
     // 6. 소비기한
