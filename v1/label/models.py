@@ -234,22 +234,22 @@ class MyLabel(models.Model):
     )
 
     # 체크박스 상태 저장용 필드 (라벨명 이후 항목)
-    chckd_prdlst_dcnm = models.CharField(max_length=1, default='N', verbose_name='식품유형 체크')
+    chckd_prdlst_dcnm = models.CharField(max_length=1, default='Y', verbose_name='식품유형 체크') # 필수값 추가
     chckd_prdlst_nm = models.CharField(max_length=1, default='Y', verbose_name='제품명 체크')
     chckd_ingredient_info = models.CharField(max_length=1, default='N', verbose_name='특정성분 함량 체크')
     chckd_content_weight = models.CharField(max_length=1, default='Y', verbose_name='내용량 체크')
     chckd_weight_calorie = models.CharField(max_length=1, default='N', verbose_name='내용량(열량) 체크')
-    chckd_prdlst_report_no = models.CharField(max_length=1, default='N', verbose_name='품목보고번호 체크')
+    chckd_prdlst_report_no = models.CharField(max_length=1, default='Y', verbose_name='품목보고번호 체크') # 필수값 추가
     chckd_country_of_origin = models.CharField(max_length=1, default='N', verbose_name='원산지 체크')
     chckd_storage_method = models.CharField(max_length=1, default='N', verbose_name='보관방법 체크')
-    chckd_frmlc_mtrqlt = models.CharField(max_length=1, default='N', verbose_name='용기.포장재질 체크')
+    chckd_frmlc_mtrqlt = models.CharField(max_length=1, default='Y', verbose_name='용기.포장재질 체크') # 필수값 추가
     chckd_bssh_nm = models.CharField(max_length=1, default='Y', verbose_name='제조원 소재지 체크')
     chckd_distributor_address = models.CharField(max_length=1, default='N', verbose_name='유통전문판매원 체크')
     chckd_repacker_address = models.CharField(max_length=1, default='N', verbose_name='소분원 체크')
     chckd_importer_address = models.CharField(max_length=1, default='N', verbose_name='수입원 체크')
     chckd_pog_daycnt = models.CharField(max_length=1, default='Y', verbose_name='소비기한 체크')
-    chckd_rawmtrl_nm_display = models.CharField(max_length=1, default='N', verbose_name='원재료명(표시) 체크')
-    chckd_cautions = models.CharField(max_length=1, default='N', verbose_name='주의사항 체크')
+    chckd_rawmtrl_nm_display = models.CharField(max_length=1, default='Y', verbose_name='원재료명(표시) 체크') # 필수값 추가
+    chckd_cautions = models.CharField(max_length=1, default='Y', verbose_name='주의사항 체크') # 필수값 추가
     chckd_additional_info = models.CharField(max_length=1, default='N', verbose_name='기타표시사항 체크')
     chckd_nutrition_text = models.CharField(max_length=1, default='N', verbose_name='영양성분 체크')
 
