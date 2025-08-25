@@ -31,7 +31,9 @@
                         {% endif %}
                         {{ board.title }}
                         {% if board.attachment %}
-                            <img src="{% static 'img/attachment-icon.png' %}" alt="첨부파일" class="attachment-icon ms-1" style="width: 16px; height: 16px;">
+                            <a href="{% url 'board:download_file' board.pk %}" onclick="event.stopPropagation();" title="첨부파일 다운로드">
+                                <img src="{% static 'img/attachment-icon.png' %}" alt="첨부파일" class="attachment-icon ms-1" style="width: 16px; height: 16px;">
+                            </a>
                         {% endif %}
                     </td>
                     <td style="width: 15%; text-align: center;">{{ board.author.username }}</td>

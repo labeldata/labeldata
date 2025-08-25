@@ -271,17 +271,33 @@ def delete_comment(request, pk):
     messages.success(request, '답변이 삭제되었습니다.')
     return redirect('board:detail', pk=board_pk)
 
-def download_file(request, file_path):
-    # 파일 이름 추출 및 안전한 이름으로 변환
-    file_name = os.path.basename(file_path)
-    safe_name = quote(file_name)  # 한글 및 특수 문자 인코딩
+def download_file(request, pk):
+    board = get_object_or_404(Board, pk=pk)
+    
+    # 첨부파일이 없는 경우
+    if not board.attachment:
+        return HttpResponseForbidden('첨부파일이 없습니다.')
+    
+    # 비밀글인 경우 권한 확인
+    if board.is_hidden and request.user != board.author and not request.user.is_staff:
+        return HttpResponseForbidden('비밀글의 첨부파일은 작성자 또는 관리자만 다운로드할 수 있습니다.')
+    
+    try:
+        # 파일 경로 가져오기
+        file_path = board.attachment.path
+        
+        # 파일 이름 추출 및 안전한 이름으로 변환
+        file_name = os.path.basename(board.attachment.name)
+        safe_name = quote(file_name)  # 한글 및 특수 문자 인코딩
 
-    # 파일의 Content-Type 추론
-    content_type, _ = mimetypes.guess_type(file_path)
-    if not content_type:
-        content_type = 'application/octet-stream'  # 기본값
+        # 파일의 Content-Type 추론
+        content_type, _ = mimetypes.guess_type(file_path)
+        if not content_type:
+            content_type = 'application/octet-stream'  # 기본값
 
-    # 파일 응답 생성
-    response = FileResponse(open(file_path, 'rb'), content_type=content_type)
-    response['Content-Disposition'] = f'attachment; filename*=UTF-8\'\'{safe_name}'
-    return response
+        # 파일 응답 생성
+        response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename*=UTF-8\'\'{safe_name}'
+        return response
+    except FileNotFoundError:
+        return HttpResponseForbidden('파일을 찾을 수 없습니다.')

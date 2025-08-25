@@ -35,7 +35,7 @@
             {% if object.attachment %}
             <div class="mb-3">
                 <span class="fw-bold">첨부파일:</span>
-                <a href="{{ object.attachment.url }}" class="text-primary" download>{{ object.attachment.name }}</a>
+                <a href="{% url 'board:download_file' object.pk %}" class="text-primary">{{ object.attachment.name|truncatechars:50 }}</a>
             </div>
             {% endif %}
             {% if object.image %}
