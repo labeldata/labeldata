@@ -16,10 +16,20 @@
                 <span class="btn-icon">🚀</span>
                 <span class="btn-text">주요 기능 둘러보기</span>
             </button>
-            <button id="create-new-label-btn" class="action-btn create-btn">
-                <span class="btn-icon">✨</span>
-                <span class="btn-text">표시사항 신규 작성</span>
-            </button>
+
+            {% if user.is_authenticated %}
+                {# 로그인 사용자: 클릭 시 JS로 새 라벨 생성 #}
+                <button id="create-new-label-btn" class="action-btn create-btn">
+                    <span class="btn-icon">✨</span>
+                    <span class="btn-text">표시사항 신규 작성</span>
+                </button>
+            {% else %}
+                {# 비로그인 사용자: 클릭 시 로그인 페이지로 이동 #}
+                <a href="/user-management/login/" class="action-btn create-btn" style="text-decoration: none;">
+                    <span class="btn-icon">✨</span>
+                    <span class="btn-text">표시사항 신규 작성</span>
+                </a>
+            {% endif %}
         </div>
     </section>
 
@@ -294,7 +304,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .then(response => {
                     if (!response.ok) return response.json().then(err => { throw new Error(err.error || '서버 응답 오류'); });
-                    return response.json();
+                    return response.json;
                 })
                 .then(data => {
                     if (data.success && data.redirect_url) {
