@@ -288,6 +288,7 @@
 <body>
   <div class="preview-header">
     <div class="preview-actions">
+      <button class="btn btn-outline-success btn-sm" id="saveSettingsBtn">설정 저장</button>
       <button class="btn btn-outline-primary btn-sm" id="validateButton">규정 검증</button>
       <button class="btn btn-outline-primary btn-sm" id="exportPdfBtn">PDF 저장</button>
       <button class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
@@ -448,5 +449,16 @@
   <script id="nutrition-data" type="application/json">{{ nutrition_data|safe }}</script>
   <script id="country-list-data" type="application/json">{{ country_list|safe }}</script>
   <script id="country-mapping-data" type="application/json">{{ country_mapping|safe }}</script>
+  <script id="preview-settings-data" type="application/json">
+    {
+      "recycling_mark": {
+        "enabled": {% if label.prv_recycling_mark_enabled == 'Y' %}true{% else %}false{% endif %},
+        "type": "{{ label.prv_recycling_mark_type|default:'' }}",
+        "position_x": "{{ label.prv_recycling_mark_position_x|default:'0' }}",
+        "position_y": "{{ label.prv_recycling_mark_position_y|default:'0' }}",
+        "text": "{{ label.prv_recycling_mark_text|default:'' }}"
+      }
+    }
+  </script>
 </body>
 </html>

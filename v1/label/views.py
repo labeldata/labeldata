@@ -2077,9 +2077,11 @@ def save_preview_settings(request):
     """미리보기 설정(prv_*) 저장"""
     try:
         data = json.loads(request.body)
+        
         label_id = data.get('label_id')
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-        # 입력값 저장
+        
+        # 기본 미리보기 설정 저장
         label.prv_layout = data.get('layout')
         label.prv_width = data.get('width')
         label.prv_length = data.get('length')
@@ -2087,6 +2089,16 @@ def save_preview_settings(request):
         label.prv_font_size = data.get('font_size')
         label.prv_letter_spacing = data.get('letter_spacing')
         label.prv_line_spacing = data.get('line_spacing')
+        
+        # 분리배출마크 설정 저장
+        recycling_mark = data.get('recycling_mark', {})
+        
+        label.prv_recycling_mark_enabled = 'Y' if recycling_mark.get('enabled') else 'N'
+        label.prv_recycling_mark_type = recycling_mark.get('type')
+        label.prv_recycling_mark_position_x = recycling_mark.get('position_x')
+        label.prv_recycling_mark_position_y = recycling_mark.get('position_y')
+        label.prv_recycling_mark_text = recycling_mark.get('text')
+        
         label.save()
         return JsonResponse({'success': True})
     except Exception as e:

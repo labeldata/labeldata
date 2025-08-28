@@ -1,11 +1,12 @@
 document.addEventListener('DOMContentLoaded', function () {
-    // 디버깅 데이터 로드 확인
-    console.log("Checking data elements...");
+    // 영양성분 데이터 확인
     try {
         const nutritionItems = document.getElementById('nutrition-data')?.textContent;
-        console.log("Nutrition items:", nutritionItems ? JSON.parse(nutritionItems) : null);
+        if (nutritionItems) {
+            JSON.parse(nutritionItems);
+        }
     } catch (error) {
-        console.error("Error parsing data:", error);
+        console.error("Error parsing nutrition data:", error);
     }
 
     // 국가 매핑 데이터 로드
@@ -807,12 +808,9 @@ document.addEventListener('DOMContentLoaded', function () {
     if (countryListScript) {
         try {
             const countryListText = countryListScript.textContent;
-            console.log("Country list raw data:", countryListText); // 디버깅용
             countryList = JSON.parse(countryListText);
-            console.log("Country list parsed:", countryList); // 디버깅용
         } catch (e) {
             console.error('국가명 목록 파싱 오류:', e);
-            console.error('Raw content:', countryListScript.textContent);
             countryList = [];
         }
     }
@@ -952,7 +950,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // 설정 저장
     function savePreviewSettings() {
         const labelId = document.querySelector('input[name="label_id"]')?.value;
-        if (!labelId) return;
+        if (!labelId) {
+            console.warn('label_id를 찾을 수 없습니다.');
+            return;
+        }
+
+        // 분리배출마크 정보 수집
+        const recyclingMarkInfo = getCurrentRecyclingMarkInfo();
 
         const data = {
             label_id: labelId,
@@ -962,7 +966,8 @@ document.addEventListener('DOMContentLoaded', function () {
             font: document.getElementById('fontFamilySelect').value || "'Noto Sans KR'",
             font_size: parseFloat(document.getElementById('fontSizeInput').value) || 10,
             letter_spacing: parseInt(document.getElementById('letterSpacingInput').value) || -5,
-            line_spacing: parseFloat(document.getElementById('lineHeightInput').value) || 1.2
+            line_spacing: parseFloat(document.getElementById('lineHeightInput').value) || 1.2,
+            recycling_mark: recyclingMarkInfo
         };
 
         fetch('/label/save_preview_settings/', {
@@ -975,13 +980,148 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .then(res => res.json())
         .then(res => {
-            if (!res.success) {
+            if (res.success) {
+                // 성공 메시지 표시
+                const saveBtn = document.getElementById('saveSettingsBtn');
+                const originalText = saveBtn.textContent;
+                saveBtn.textContent = '저장완료';
+                saveBtn.classList.remove('btn-outline-success');
+                saveBtn.classList.add('btn-success');
+                
+                setTimeout(() => {
+                    saveBtn.textContent = originalText;
+                    saveBtn.classList.remove('btn-success');
+                    saveBtn.classList.add('btn-outline-success');
+                }, 2000);
+            } else {
                 alert('미리보기 설정 저장 실패: ' + (res.error || ''));
             }
         })
         .catch(err => {
+            console.error('저장 에러:', err);
             alert('미리보기 설정 저장 에러: ' + err);
         });
+    }
+
+    // 저장된 미리보기 설정 로드
+    function loadSavedPreviewSettings() {
+        try {
+            const settingsScript = document.getElementById('preview-settings-data');
+            if (!settingsScript) return;
+            
+            const settings = JSON.parse(settingsScript.textContent);
+            const recyclingMark = settings.recycling_mark;
+            
+            // 분리배출마크 설정 복원
+            if (recyclingMark && recyclingMark.enabled && recyclingMark.type) {
+                // 분리배출마크 UI가 완전히 로드된 후 실행되도록 더 긴 딜레이 적용
+                setTimeout(() => {
+                    restoreRecyclingMark(recyclingMark);
+                }, 1500); // 1.5초 딜레이로 증가
+            }
+        } catch (error) {
+            console.error('저장된 설정 로드 중 오류:', error);
+        }
+    }
+
+    // 분리배출마크 복원
+    function restoreRecyclingMark(markData) {
+        if (!markData.type) return;
+        
+        // 분리배출마크 설정 (기존 setRecyclingMark 함수 활용)
+        // markData.type에서 실제 값 찾기
+        let markValue = markData.type;
+        
+        // recyclingMarkMap에서 해당 타입 찾기
+        const foundEntry = Object.entries(recyclingMarkMap).find(([key, value]) => {
+            const imageName = value.img.split('/').pop().replace('.png', '');
+            return imageName === markData.type || key === markData.type;
+        });
+        
+        if (foundEntry) {
+            markValue = foundEntry[0];
+            
+            // 셀렉트 박스에서 해당 값 선택
+            const selectElement = document.getElementById('recyclingMarkSelect');
+            if (selectElement) {
+                selectElement.value = markValue;
+            }
+            
+            // 분리배출마크 설정
+            setRecyclingMark(markValue, false);
+            
+            // 버튼 텍스트를 "해제"로 변경
+            setTimeout(() => {
+                const addBtn = document.getElementById('addRecyclingMarkBtn');
+                if (addBtn) {
+                    addBtn.textContent = '해제';
+                    addBtn.classList.remove('btn-outline-primary');
+                    addBtn.classList.add('btn-danger');
+                }
+                
+                // 추가 텍스트 입력 박스도 표시
+                const additionalInputBox = document.getElementById('additionalTextInputBox');
+                if (additionalInputBox) {
+                    additionalInputBox.style.display = 'block';
+                }
+            }, 50);
+            
+            // 위치 설정 (약간의 딜레이 후)
+            setTimeout(() => {
+                const markElement = document.getElementById('recyclingMarkContainer');
+                if (markElement) {
+                    if (markData.position_x.startsWith('right:')) {
+                        markElement.style.right = markData.position_x.replace('right:', '') + 'px';
+                        markElement.style.left = 'auto';
+                    } else {
+                        markElement.style.left = markData.position_x + 'px';
+                        markElement.style.right = 'auto';
+                    }
+                    markElement.style.top = markData.position_y + 'px';
+                }
+                
+                // 추가 텍스트 설정
+                if (markData.text) {
+                    addTextToRecyclingMark(markData.text);
+                }
+            }, 100);
+        } else {
+            console.warn('분리배출마크 타입을 찾을 수 없음:', markData.type);
+        }
+    }
+
+    // 현재 분리배출마크 정보 수집
+    function getCurrentRecyclingMarkInfo() {
+        const markElement = document.getElementById('recyclingMarkContainer');
+        if (!markElement) {
+            return {
+                enabled: false,
+                type: null,
+                position_x: null,
+                position_y: null,
+                text: null
+            };
+        }
+
+        const style = markElement.style;
+        const imgElement = markElement.querySelector('#recyclingMarkImage');
+        const textElement = markElement.querySelector('.recycling-text');
+        
+        // 이미지 src에서 파일명 추출
+        let markType = null;
+        if (imgElement && imgElement.src) {
+            const srcParts = imgElement.src.split('/');
+            const fileName = srcParts[srcParts.length - 1];
+            markType = fileName.replace('.png', '');
+        }
+        
+        return {
+            enabled: true,
+            type: markType,
+            position_x: style.left ? style.left.replace('px', '') : (style.right ? 'right:' + style.right.replace('px', '') : '0'),
+            position_y: style.top ? style.top.replace('px', '') : '0',
+            text: textElement ? textElement.textContent : null
+        };
     }
 
     // 농수산물 목록
@@ -1905,10 +2045,20 @@ document.addEventListener('DOMContentLoaded', function () {
     setupAreaCalculation();
     setTimeout(updateArea, 100);
     enforceInputMinMax();
+    
+    // 저장된 설정 로드
+    loadSavedPreviewSettings();
     const exportPdfBtn = document.getElementById('exportPdfBtn');
     if (exportPdfBtn) {
         exportPdfBtn.addEventListener('click', exportToPDF);
     }
+    
+    // 설정 저장 버튼 이벤트 추가
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', savePreviewSettings);
+    }
+    
     const widthInput = document.getElementById('widthInput');
     if (widthInput) widthInput.addEventListener('change', calculateHeight);
     const fontSizeInput = document.getElementById('fontSizeInput');

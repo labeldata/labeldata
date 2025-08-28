@@ -253,6 +253,7 @@ class MyLabel(models.Model):
     chckd_additional_info = models.CharField(max_length=1, default='N', verbose_name='기타표시사항 체크')
     chckd_nutrition_text = models.CharField(max_length=1, default='N', verbose_name='영양성분 체크')
 
+    # 미리보기 설정 저장용 필드들
     prv_layout = models.CharField(max_length=10, verbose_name="레이아웃", null=True, blank=True)
     prv_width = models.CharField(max_length=10, verbose_name="가로", null=True, blank=True)
     prv_length = models.CharField(max_length=10, verbose_name="세로", null=True, blank=True)
@@ -260,6 +261,13 @@ class MyLabel(models.Model):
     prv_font_size = models.CharField(max_length=10, verbose_name="글꼴 크기", null=True, blank=True)
     prv_letter_spacing = models.CharField(max_length=10, verbose_name="자간", null=True, blank=True)
     prv_line_spacing = models.CharField(max_length=10, verbose_name="행간", null=True, blank=True)
+    
+    # 분리배출마크 설정
+    prv_recycling_mark_enabled = models.CharField(max_length=1, verbose_name="분리배출마크 적용여부", default='N', null=True, blank=True)
+    prv_recycling_mark_type = models.CharField(max_length=50, verbose_name="분리배출마크 종류", null=True, blank=True)
+    prv_recycling_mark_position_x = models.CharField(max_length=10, verbose_name="분리배출마크 X좌표", null=True, blank=True)
+    prv_recycling_mark_position_y = models.CharField(max_length=10, verbose_name="분리배출마크 Y좌표", null=True, blank=True)
+    prv_recycling_mark_text = models.CharField(max_length=200, verbose_name="분리배출마크 추가텍스트", null=True, blank=True)
 
     class Meta:
         db_table = "my_label"
