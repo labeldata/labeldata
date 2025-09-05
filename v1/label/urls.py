@@ -75,4 +75,21 @@ urlpatterns = [
     # --- [신규] 엑셀 다운로드/업로드 URL 추가 ---
     path('my-ingredients/download/', views.download_my_ingredients_excel, name='download_my_ingredients_excel'),
     path('my-ingredients/upload/', views.upload_my_ingredients_excel, name='upload_my_ingredients_excel'),
+    
+    # OCR 관련 URL
+    path('ocr-process/', views.ocr_process, name='ocr_process'),
+    path('ocr-history/', views.ocr_history, name='ocr_history'),
+    
+    # 추천 시스템 API 패턴
+    path('api/recommendations/', views.get_smart_recommendations, name='smart_recommendations'),
+    path('api/popular-values/', views.get_popular_values, name='popular_values'),
+    path('api/test-recommendations/', views.test_recommendation_system, name='test_recommendations'),
+    
+    # 자동 입력 추천 API 패턴
+    path('api/auto-fill/', views.get_auto_fill_suggestions, name='auto_fill_suggestions'),
+    path('api/smart-auto-fill/', views.get_smart_auto_fill, name='smart_auto_fill'),
+    
+    # 저장된 문구 API 패턴
+    path('api/phrases/', views.get_phrases_api, name='phrases_api'),
+    path('api/recent-usage/', views.get_recent_usage_api, name='recent_usage_api'),
 ]

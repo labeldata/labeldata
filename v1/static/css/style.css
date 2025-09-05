@@ -1,3 +1,6 @@
+/* 웹폰트 - @import 규칙은 반드시 파일 최상단에 위치해야 함 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
 /* 1. Global Variables & Base Styles */
 :root {
     --primary-color: #023047;
@@ -18,8 +21,6 @@
     --bg-color: #f8f9fa;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
-/* 웹폰트 */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
 /* 2. Global Reset & Layout */
 html, body {
     min-height: 100vh;

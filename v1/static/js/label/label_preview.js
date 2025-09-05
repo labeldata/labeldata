@@ -1,12 +1,18 @@
 document.addEventListener('DOMContentLoaded', function () {
+    console.log('🚀 미리보기 페이지 로드 시작');
+    
     // 영양성분 데이터 확인
     try {
         const nutritionItems = document.getElementById('nutrition-data')?.textContent;
         if (nutritionItems) {
-            JSON.parse(nutritionItems);
+            console.log('✅ 영양성분 데이터 원시값:', nutritionItems.substring(0, 200) + '...');
+            const parsed = JSON.parse(nutritionItems);
+            console.log('✅ 영양성분 데이터 파싱 성공:', parsed);
+        } else {
+            console.warn('⚠️ 영양성분 데이터 요소가 없습니다');
         }
     } catch (error) {
-        console.error("Error parsing nutrition data:", error);
+        console.error("❌ 영양성분 데이터 파싱 오류:", error);
     }
 
     // 국가 매핑 데이터 로드
@@ -15,10 +21,25 @@ document.addEventListener('DOMContentLoaded', function () {
         const countryMappingElement = document.getElementById('country-mapping-data');
         if (countryMappingElement) {
             countryMapping = JSON.parse(countryMappingElement.textContent);
-            console.log("Country mapping loaded:", countryMapping);
+            console.log("✅ 국가 매핑 데이터 로드 성공:", Object.keys(countryMapping).length, "개");
+        } else {
+            console.warn("⚠️ 국가 매핑 데이터 요소가 없습니다");
         }
     } catch (error) {
-        console.error("Error loading country mapping:", error);
+        console.error("❌ 국가 매핑 데이터 로드 오류:", error);
+    }
+
+    // 만료일 추천 데이터 확인
+    try {
+        const expiryElement = document.getElementById('expiry-recommendation-data');
+        if (expiryElement) {
+            const expiryData = JSON.parse(expiryElement.textContent);
+            console.log("✅ 만료일 추천 데이터 로드 성공:", expiryData);
+        } else {
+            console.warn("⚠️ 만료일 추천 데이터 요소가 없습니다");
+        }
+    } catch (error) {
+        console.error("❌ 만료일 추천 데이터 로드 오류:", error);
     }
 
     // 국가 코드를 한글명으로 변환하는 함수
@@ -627,76 +648,149 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 영양성분 데이터 처리
+    // 영양성분 데이터 처리 - 개선된 오류 처리
     try {
+        console.log('🔍 영양성분 데이터 처리 시작');
         const nutritionDataRaw = document.getElementById('nutrition-data')?.textContent;
-        if (nutritionDataRaw) {
-            const nutritionData = JSON.parse(nutritionDataRaw);
-            if (!nutritionData.nutrients || Object.keys(nutritionData.nutrients).length === 0) {
-                nutritionData.nutrients = {
-                    calorie: { value: 0, unit: 'kcal' },
-                    natrium: { value: 0, unit: 'mg' },
-                    carbohydrate: { value: 0, unit: 'g' },
-                    sugar: { value: 0, unit: 'g' },
-                    afat: { value: 0.1, unit: 'g' },
-                    transfat: { value: 0.1, unit: 'g' },
-                    satufat: { value: 0.1, unit: 'g' },
-                    cholesterol: { value: 0, unit: 'mg' },
-                    protein: { value: 0, unit: 'g' }
-                };
-            }
-            if (nutritionData.serving_size && nutritionData.serving_size_unit) {
-                document.getElementById('servingSizeDisplay').value = `${nutritionData.serving_size}${nutritionData.serving_size_unit}`;
-            }
-            if (nutritionData.units_per_package) {
-                document.getElementById('servingsPerPackageDisplay').value = nutritionData.units_per_package;
-            }
-            if (nutritionData.display_unit) {
-                document.getElementById('nutritionDisplayUnit').value = nutritionData.display_unit;
-            }
-            const data = {
-                servingSize: nutritionData.serving_size,
-                servingUnit: nutritionData.serving_size_unit,
-                servingsPerPackage: nutritionData.units_per_package,
-                servingUnitText: nutritionData.serving_size_unit === 'ml' ? '개' : '개',
-                displayUnit: nutritionData.display_unit || 'unit',
-                totalWeight: nutritionData.serving_size * nutritionData.units_per_package,
-                values: []
-            };
-            const nutrientOrder = [
-                'natrium', 'carbohydrate', 'sugar', 'afat', 'transfat', 'satufat', 'cholesterol', 'protein'
-            ];
-            const nutrientLabels = {
-                calorie: '열량', natrium: '나트륨', carbohydrate: '탄수화물', sugar: '당류', 
-                afat: '지방', transfat: '트랜스지방', satufat: '포화지방', cholesterol: '콜레스테롤', protein: '단백질'
-            };
-            const nutrientLimits = {
-                natrium: 2000, carbohydrate: 324, sugar: 100, afat: 54, satufat: 15, cholesterol: 300, protein: 55
-            };
-            let calorieValue = null, calorieUnit = '';
-            if (nutritionData.nutrients && nutritionData.nutrients.calorie) {
-                calorieValue = nutritionData.nutrients.calorie.value;
-                calorieUnit = nutritionData.nutrients.calorie.unit || 'kcal';
-            }
-            if (nutritionData.nutrients) {
-                for (const key of nutrientOrder) {
-                    const n = nutritionData.nutrients[key] || {};
-                    data.values.push({
-                        label: nutrientLabels[key] || key,
-                        value: (n.value !== undefined && n.value !== null) ? parseFloat(n.value) : 0,
-                        unit: n.unit || '',
-                        limit: nutrientLimits[key] || null
-                    });
-                }
-            }
-            data.calorie = calorieValue;
-            data.calorieUnit = calorieUnit;
-            window.nutritionData = data;
-            updateNutritionDisplay(data);
-            document.getElementById('nutritionPreview').style.display = 'block';
+        
+        if (!nutritionDataRaw) {
+            console.warn('⚠️ 영양성분 데이터가 없습니다');
+            return;
         }
+        
+        console.log('📄 영양성분 원시 데이터 길이:', nutritionDataRaw.length);
+        console.log('📄 영양성분 원시 데이터 샘플:', nutritionDataRaw.substring(0, 100));
+        
+        const nutritionData = JSON.parse(nutritionDataRaw);
+        console.log('✅ 영양성분 데이터 파싱 성공:', nutritionData);
+        
+        // 기본값 보장
+        if (!nutritionData.nutrients || Object.keys(nutritionData.nutrients).length === 0) {
+            console.log('🔧 기본 영양성분 데이터 설정');
+            nutritionData.nutrients = {
+                calorie: { value: 0, unit: 'kcal' },
+                natrium: { value: 0, unit: 'mg' },
+                carbohydrate: { value: 0, unit: 'g' },
+                sugar: { value: 0, unit: 'g' },
+                afat: { value: 0.1, unit: 'g' },
+                transfat: { value: 0.1, unit: 'g' },
+                satufat: { value: 0.1, unit: 'g' },
+                cholesterol: { value: 0, unit: 'mg' },
+                protein: { value: 0, unit: 'g' }
+            };
+        }
+        
+        // 서빙 사이즈 표시 업데이트
+        if (nutritionData.serving_size && nutritionData.serving_size_unit) {
+            const servingSizeElement = document.getElementById('servingSizeDisplay');
+            if (servingSizeElement) {
+                servingSizeElement.value = `${nutritionData.serving_size}${nutritionData.serving_size_unit}`;
+                console.log('✅ 서빙 사이즈 설정:', servingSizeElement.value);
+            } else {
+                console.warn('⚠️ servingSizeDisplay 요소를 찾을 수 없습니다');
+            }
+        }
+        
+        // 추가 영양성분 정보 설정
+        if (nutritionData.units_per_package) {
+            const servingsElement = document.getElementById('servingsPerPackageDisplay');
+            if (servingsElement) {
+                servingsElement.value = nutritionData.units_per_package;
+            }
+        }
+        
+        if (nutritionData.display_unit) {
+            const displayUnitElement = document.getElementById('nutritionDisplayUnit');
+            if (displayUnitElement) {
+                displayUnitElement.value = nutritionData.display_unit;
+            }
+        }
+        
+        // 영양성분 데이터 구조화
+        const data = {
+            servingSize: nutritionData.serving_size,
+            servingUnit: nutritionData.serving_size_unit,
+            servingsPerPackage: nutritionData.units_per_package,
+            servingUnitText: nutritionData.serving_size_unit === 'ml' ? '개' : '개',
+            displayUnit: nutritionData.display_unit || 'unit',
+            totalWeight: nutritionData.serving_size * nutritionData.units_per_package,
+            values: []
+        };
+        
+        const nutrientOrder = [
+            'natrium', 'carbohydrate', 'sugar', 'afat', 'transfat', 'satufat', 'cholesterol', 'protein'
+        ];
+        const nutrientLabels = {
+            calorie: '열량', natrium: '나트륨', carbohydrate: '탄수화물', sugar: '당류', 
+            afat: '지방', transfat: '트랜스지방', satufat: '포화지방', cholesterol: '콜레스테롤', protein: '단백질'
+        };
+        const nutrientLimits = {
+            natrium: 2000, carbohydrate: 324, sugar: 100, afat: 54, satufat: 15, cholesterol: 300, protein: 55
+        };
+        
+        let calorieValue = null, calorieUnit = '';
+        if (nutritionData.nutrients && nutritionData.nutrients.calorie) {
+            calorieValue = nutritionData.nutrients.calorie.value;
+            calorieUnit = nutritionData.nutrients.calorie.unit || 'kcal';
+        }
+        
+        if (nutritionData.nutrients) {
+            for (const key of nutrientOrder) {
+                const n = nutritionData.nutrients[key] || {};
+                data.values.push({
+                    label: nutrientLabels[key] || key,
+                    value: (n.value !== undefined && n.value !== null) ? parseFloat(n.value) : 0,
+                    unit: n.unit || '',
+                    limit: nutrientLimits[key] || null
+                });
+            }
+        }
+        
+        data.calorie = calorieValue;
+        data.calorieUnit = calorieUnit;
+        window.nutritionData = data;
+        updateNutritionDisplay(data);
+        
+        // 영양성분은 영양성분 탭이 활성화될 때만 표시
+        console.log('✅ 영양성분 데이터 로드 완료 (탭 전환 시 표시됨)');
     } catch (e) {
-        console.error('영양성분 데이터 파싱 오류:', e);
+        console.error('❌ 영양성분 데이터 처리 중 오류:', e);
+        console.log('🔄 백업 데이터 로드 시도...');
+        
+        // 오류 발생 시 백업 로직: DOM에서 직접 데이터 추출
+        try {
+            const backupData = {
+                serving_size: document.getElementById('serving_size')?.value || '100',
+                serving_size_unit: document.getElementById('serving_size_unit')?.value || 'g',
+                units_per_package: document.getElementById('units_per_package')?.value || '1',
+                display_unit: document.getElementById('nutrition_display_unit')?.value || 'unit',
+                nutrients: {
+                    calorie: { value: document.getElementById('calories')?.value || '0', unit: 'kcal' },
+                    natrium: { value: document.getElementById('natriums')?.value || '0', unit: 'mg' },
+                    carbohydrate: { value: document.getElementById('carbohydrates')?.value || '0', unit: 'g' },
+                    sugar: { value: document.getElementById('sugars')?.value || '0', unit: 'g' },
+                    afat: { value: document.getElementById('fats')?.value || '0', unit: 'g' },
+                    transfat: { value: document.getElementById('trans_fats')?.value || '0', unit: 'g' },
+                    satufat: { value: document.getElementById('saturated_fats')?.value || '0', unit: 'g' },
+                    cholesterol: { value: document.getElementById('cholesterols')?.value || '0', unit: 'mg' },
+                    protein: { value: document.getElementById('proteins')?.value || '0', unit: 'g' }
+                }
+            };
+            
+            console.log('✅ 백업 데이터 로드 성공:', backupData);
+            
+            // 백업 데이터로 UI 업데이트 시도
+            const servingSizeElement = document.getElementById('servingSizeDisplay');
+            if (servingSizeElement) {
+                servingSizeElement.value = `${backupData.serving_size}${backupData.serving_size_unit}`;
+            }
+            
+        } catch (backupError) {
+            console.error('❌ 백업 데이터 로드도 실패:', backupError);
+        }
+        
+        // 백업 데이터 로드 완료
+        console.log('✅ 백업 영양성분 데이터 로드 완료 (탭 전환 시 표시됨)');
     }
 
     // 탭 전환 처리
@@ -724,6 +818,25 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.nav-link[data-bs-toggle="tab"]').forEach(btn => {
         btn.addEventListener('shown.bs.tab', handleTabSwitch);
     });
+    
+    // 페이지 로드 시 초기 탭 상태 설정
+    function initializeTabState() {
+        const nutritionPreview = document.getElementById('nutritionPreview');
+        const previewTable = document.querySelector('.preview-table');
+        const headerBox = document.querySelector('.preview-header-box');
+        const markImage = document.getElementById('recyclingMarkImage');
+        
+        // 기본적으로 표시사항 탭이 활성화되어 있으므로
+        if (nutritionPreview) nutritionPreview.style.display = 'none';
+        if (previewTable) previewTable.style.display = 'table';
+        if (headerBox) headerBox.style.display = 'block';
+        if (markImage) markImage.style.display = 'block';
+        
+        console.log('✅ 초기 탭 상태 설정 완료 - 표시사항 탭 표시');
+    }
+    
+    // 초기화 실행
+    initializeTabState();
     handleTabSwitch();
 
     // 체크된 필드 렌더링
@@ -1814,12 +1927,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // 파일명 생성
             const today = new Date();
-            const dateStr = today.getFullYear().toString().substr(-2) + 
-                           (today.getMonth() + 1).toString().padStart(2, '0') + 
-                           today.getDate().toString().padStart(2, '0');
+            const year = today.getFullYear().toString();
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const day = today.getDate().toString().padStart(2, '0');
+            const dateStr = `${year}${month}${day}`;
             
-            const labelName = document.querySelector('.header-text')?.textContent || '라벨';
-            const fileName = `${labelName}_${dateStr}.pdf`;
+            // 제품명 가져오기 (checkedFields에서)
+            const productName = (checkedFields.prdlst_nm || '').trim();
+            
+            // 파일명 구성: 한글표시사항_제품명_연월일
+            let fileName = '한글표시사항';
+            
+            if (productName) {
+                fileName += `_${productName}`;
+            }
+            
+            fileName += `_${dateStr}.pdf`;
+            
+            // 파일명에서 특수문자 제거 (파일시스템에서 허용되지 않는 문자들)
+            fileName = fileName.replace(/[<>:"/\\|?*]/g, '_');
 
             // PDF 저장
             pdf.save(fileName);
@@ -1995,6 +2121,16 @@ document.addEventListener('DOMContentLoaded', function () {
         `;
 
         nutritionPreview.innerHTML = previewBox + tableHtml;
+        
+        // 현재 영양성분 탭이 활성화되어 있을 때만 표시
+        const activeTab = document.querySelector('.nav-link.active[data-bs-toggle="tab"]');
+        if (activeTab && activeTab.getAttribute('data-bs-target') === '#nutrition-tab') {
+            nutritionPreview.style.display = 'block';
+            console.log('✅ 영양성분 탭이 활성화되어 있어 영양성분 표시');
+        } else {
+            nutritionPreview.style.display = 'none';
+            console.log('ℹ️ 영양성분 탭이 비활성화되어 있어 영양성분 숨김');
+        }
     }
 
     // 영양성분 데이터 수신
@@ -2068,4 +2204,47 @@ document.addEventListener('DOMContentLoaded', function () {
     const lineHeightInput = document.getElementById('lineHeightInput');
     if (lineHeightInput) lineHeightInput.addEventListener('change', calculateHeight);
     window.addEventListener('load', calculateHeight);
+    
+    // DOM 요소들의 존재 여부 확인 및 초기화
+    console.log('🔍 DOM 요소 존재 여부 확인');
+    const criticalElements = [
+        'nutrition-data',
+        'country-mapping-data', 
+        'expiry-recommendation-data',
+        'nutritionPreview',
+        'servingSizeDisplay',
+        'servingsPerPackageDisplay',
+        'nutritionDisplayUnit'
+    ];
+    
+    criticalElements.forEach(elementId => {
+        const element = document.getElementById(elementId);
+        if (element) {
+            console.log(`✅ ${elementId}: 존재함`);
+        } else {
+            console.warn(`⚠️ ${elementId}: 찾을 수 없음`);
+        }
+    });
+    
+    // 초기화 완료 표시
+    console.log('🎉 미리보기 페이지 초기화 완료');
+    
+    // 페이지 로드 후 탭 상태 확인
+    setTimeout(() => {
+        console.log('🔄 지연 후 탭 상태 재검사');
+        const activeTab = document.querySelector('.nav-link.active');
+        if (activeTab) {
+            console.log('✅ 활성 탭:', activeTab.textContent.trim());
+            console.log('✅ 탭 타겟:', activeTab.getAttribute('data-bs-target'));
+        } else {
+            console.warn('⚠️ 활성 탭을 찾을 수 없음');
+        }
+        
+        // 현재 영양성분 표시 상태 확인
+        const nutritionPreview = document.getElementById('nutritionPreview');
+        if (nutritionPreview) {
+            console.log('ℹ️ 영양성분 표시 상태:', nutritionPreview.style.display);
+        }
+    }, 1000);
+
 });

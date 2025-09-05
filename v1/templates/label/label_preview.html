@@ -6,10 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>라벨 미리보기</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
   <link href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
   <link href="{% static 'css/nutrition_preview_fix.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
+  <link href="{% static 'css/label_creation_modern.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
 
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
@@ -283,15 +285,97 @@
       justify-content: flex-end;
       gap: 10px;
     }
+
+    /* 영양성분표 스타일 */
+    .nutrition-result-table {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: white;
+      overflow: hidden;
+      width: 100%;
+    }
+    
+    /* 기본형 영양성분표 스타일 */
+    .nutrition-table-basic {
+      border: 3px solid #000;
+      border-collapse: collapse;
+      width: 100%;
+      background: white;
+    }
+    
+    .nutrition-table-basic .nutrition-header {
+      background: #000;
+      color: white;
+      text-align: center;
+      padding: 8px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    
+    .nutrition-table-basic .nutrition-subheader {
+      background: #000;
+      color: white;
+      text-align: center;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-bottom: 1px solid white;
+    }
+    
+    .nutrition-table-basic thead th {
+      background: #000;
+      color: white;
+      text-align: center;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-bottom: 1px solid white;
+      font-weight: bold;
+    }
+    
+    .nutrition-table-basic tbody tr td {
+      border-bottom: 1px solid #000;
+      padding: 3px 8px;
+      font-size: 11px;
+      vertical-align: middle;
+    }
+    
+    .nutrition-table-basic .nutrition-name {
+      font-weight: bold;
+      text-align: left;
+      width: 60%;
+    }
+    
+    .nutrition-table-basic .nutrition-value {
+      text-align: right;
+      font-weight: bold;
+      width: 40%;
+    }
+    
+    .nutrition-table-basic .nutrition-indent {
+      padding-left: 20px !important;
+    }
+    
+    .nutrition-table-basic .nutrition-footer {
+      font-size: 9px;
+      padding: 6px 8px;
+      text-align: center;
+      border-top: 1px solid #000;
+    }
   </style>
 </head>
 <body>
   <div class="preview-header">
     <div class="preview-actions">
-      <button class="btn btn-outline-success btn-sm" id="saveSettingsBtn">설정 저장</button>
-      <button class="btn btn-outline-primary btn-sm" id="validateButton">규정 검증</button>
-      <button class="btn btn-outline-primary btn-sm" id="exportPdfBtn">PDF 저장</button>
-      <button class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
+      <button class="btn btn-outline-success btn-sm" id="saveSettingsBtn">
+        <i class="fas fa-save me-1"></i>설정 저장
+      </button>
+      <button class="btn btn-outline-primary btn-sm" id="validateButton">
+        <i class="fas fa-check-circle me-1"></i>규정 검증
+      </button>
+      <button class="btn btn-outline-primary btn-sm" id="exportPdfBtn">
+        <i class="fas fa-file-pdf me-1"></i>PDF 저장
+      </button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="window.close()">
+        <i class="fas fa-times me-1"></i>닫기
+      </button>
     </div>
   </div>
 
@@ -424,14 +508,15 @@
           <tbody id="previewTableBody"></tbody>
         </table>
         <div id="nutritionPreview" class="mt-4" style="display: none;">
-          <hr>
-          <h6 class="mb-3">■ 영양성분</h6>
+          <div class="preview-header-box">
+            <div class="header-text">영양성분 표시</div>
+          </div>
           <div class="nutrition-header mb-2"></div>
-          <table class="table table-sm table-bordered">
+          <table class="nutrition-table-basic">
             <thead>
               <tr>
-                <th style="width: 35%">항목</th>
-                <th class="nutrition-value-header" style="width: 65%">단위내용량당</th>
+                <th style="width: 60%">항목</th>
+                <th style="width: 40%">단위내용량당</th>
               </tr>
             </thead>
             <tbody id="nutritionTableBody"></tbody>

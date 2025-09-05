@@ -1,12 +1,20 @@
 <!-- login.html -->
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}로그인{% endblock %}
 
 {% block content %}
+<!-- 모던 스타일 적용 -->
+<link href="{% static 'css/label_creation_modern.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
+
 <div class="d-flex justify-content-center align-items-center" style="min-height: 80vh; background-color: #f8f9fa;">
     <div class="card shadow-sm p-5" style="max-width: 450px; width: 100%; border-radius: 10px;">
-        <h2 class="text-center mb-4" style="font-weight: 700; color: #343a40;">로그인</h2>
+        <div class="text-center mb-4">
+            <i class="fas fa-user-circle fa-3x text-primary mb-3"></i>
+            <h2 style="font-weight: 700; color: #343a40;">로그인</h2>
+            <p class="text-muted">계정에 로그인하세요</p>
+        </div>
         
         {% if messages %}
             {% for message in messages %}

@@ -179,6 +179,286 @@ document.addEventListener('DOMContentLoaded', function () {
     openPopup(`/label/nutrition-calculator-popup/?label_id=${labelId}`, 'NutritionCalculator', 1100, 900);
   };
 
+  // DOMContentLoaded 이벤트 리스너 추가
+  document.addEventListener('DOMContentLoaded', function() {
+    // 페이지 로드 시 영양성분 필드 상태 확인
+    checkNutritionFieldStatus();
+  });
+
+  // 영양성분 필드 상태 확인 및 설정
+  function checkNutritionFieldStatus() {
+    const nutritionTextField = document.querySelector('textarea[name="nutrition_text"]');
+    const nutritionCheckbox = document.querySelector('input[name="chk_nutrition_text"]');
+    const nutritionButton = document.querySelector('button[onclick="handleNutritionTablePopup()"]');
+    
+    if (nutritionTextField && nutritionTextField.value.trim() !== '') {
+      // 기존에 영양성분 데이터가 있으면 읽기 전용으로 설정
+      nutritionTextField.readOnly = true;
+      nutritionTextField.style.backgroundColor = '#f8f9fa';
+      nutritionTextField.style.cursor = 'not-allowed';
+      
+      // 버튼 텍스트를 "수정"으로 변경
+      if (nutritionButton) {
+        nutritionButton.innerHTML = '<i class="fas fa-edit me-1"></i>영양성분 수정';
+        nutritionButton.title = '영양성분 수정';
+      }
+    }
+  }
+  window.handleNutritionTablePopup = function () {
+    const labelId = document.getElementById('label_id')?.value || '';
+    
+    // 기존 영양성분 데이터 수집
+    const existingData = collectExistingNutritionData();
+    
+    // 제품명 추가
+    const productNameField = document.querySelector('input[name="prdlst_nm"]');
+    if (productNameField && productNameField.value.trim()) {
+      existingData.product_name = productNameField.value.trim();
+    }
+    
+    // 팝업 URL에 기존 데이터 파라미터 추가
+    let url = `/label/nutrition-calculator-popup/?label_id=${labelId}`;
+    if (existingData && Object.keys(existingData).length > 0) {
+      const params = new URLSearchParams();
+      Object.keys(existingData).forEach(key => {
+        if (existingData[key]) {
+          params.append(key, existingData[key]);
+        }
+      });
+      url += '&' + params.toString();
+    }
+    
+    openPopup(url, 'NutritionCalculator', 1100, 900);
+  };
+
+  // 기존 영양성분 데이터 수집
+  function collectExistingNutritionData() {
+    const data = {};
+    
+    // hidden 필드에서 기존 데이터 수집
+    const fieldMapping = {
+      // 기본 설정값
+      'serving_size': 'serving_size',
+      'serving_size_unit': 'serving_size_unit', 
+      'units_per_package': 'units_per_package',
+      'nutrition_style': 'nutrition_style',
+      'nutrition_display_type': 'nutrition_display_type',
+      'nutrition_base_amount': 'nutrition_base_amount',
+      'nutrition_base_amount_unit': 'nutrition_base_amount_unit',
+      // 영양성분 (메인 페이지 필드명 -> URL 파라미터명)
+      'calories': 'calories',
+      'natriums': 'natriums',
+      'carbohydrates': 'carbohydrates',
+      'sugars': 'sugars',
+      'fats': 'fats',
+      'trans_fats': 'trans_fats',
+      'saturated_fats': 'saturated_fats',
+      'cholesterols': 'cholesterols',
+      'proteins': 'proteins'
+    };
+    
+    Object.keys(fieldMapping).forEach(fieldName => {
+      const field = document.querySelector(`input[name="${fieldName}"]`);
+      if (field && field.value && field.value.trim() !== '') {
+        data[fieldMapping[fieldName]] = field.value.trim();
+      }
+    });
+    
+    console.log('기존 영양성분 데이터 수집:', data);
+    return data;
+  }
+
+  // 영양성분 데이터 업데이트 처리
+  function handleNutritionDataUpdate(data) {
+    console.log('영양성분 데이터 수신:', data);
+    
+    // 기본 설정 데이터 저장
+    if (data.settings) {
+      console.log('기본 설정 데이터 처리:', data.settings);
+      // 기본 정보 필드 업데이트
+      const servingSizeField = document.querySelector('input[name="serving_size"]');
+      const servingSizeUnitField = document.querySelector('input[name="serving_size_unit"]');
+      const unitsPerPackageField = document.querySelector('input[name="units_per_package"]');
+      const nutritionStyleField = document.querySelector('input[name="nutrition_style"]');
+      const nutritionDisplayTypeField = document.querySelector('input[name="nutrition_display_type"]');
+      const nutritionBaseAmountField = document.querySelector('input[name="nutrition_base_amount"]');
+      const nutritionBaseAmountUnitField = document.querySelector('input[name="nutrition_base_amount_unit"]');
+      
+      console.log('필드 찾기 결과:', {
+        servingSizeField, servingSizeUnitField, unitsPerPackageField,
+        nutritionStyleField, nutritionDisplayTypeField, nutritionBaseAmountField, nutritionBaseAmountUnitField
+      });
+      
+      if (servingSizeField) servingSizeField.value = data.settings.base_amount || '';
+      if (servingSizeUnitField) servingSizeUnitField.value = data.settings.base_amount_unit || 'g';
+      if (unitsPerPackageField) unitsPerPackageField.value = data.settings.servings_per_package || '1';
+      if (nutritionStyleField) nutritionStyleField.value = data.settings.nutrition_style || '';
+      if (nutritionDisplayTypeField) nutritionDisplayTypeField.value = data.settings.display_type || '';
+      if (nutritionBaseAmountField) nutritionBaseAmountField.value = data.settings.base_amount || '';
+      if (nutritionBaseAmountUnitField) nutritionBaseAmountUnitField.value = data.settings.base_amount_unit || 'g';
+    }
+    
+    // 포맷된 영양성분 데이터를 hidden 필드에 저장
+    if (data.formattedData) {
+      console.log('포맷된 영양성분 데이터 처리:', data.formattedData);
+      const nutritionMapping = {
+        'calories': 'calories',
+        'sodium': 'natriums',
+        'carbohydrate': 'carbohydrates',
+        'sugars': 'sugars',
+        'fat': 'fats',
+        'trans_fat': 'trans_fats',
+        'saturated_fat': 'saturated_fats',
+        'cholesterol': 'cholesterols',
+        'protein': 'proteins'
+      };
+      
+      Object.keys(nutritionMapping).forEach(key => {
+        if (data.formattedData[key]) {
+          const fieldName = nutritionMapping[key];
+          const valueField = document.querySelector(`input[name="${fieldName}"]`);
+          const unitField = document.querySelector(`input[name="${fieldName}_unit"]`);
+          
+          console.log(`${key} -> ${fieldName}:`, { valueField, unitField, value: data.formattedData[key] });
+          
+          if (valueField) valueField.value = data.formattedData[key].value || '';
+          if (unitField) unitField.value = data.formattedData[key].unit || '';
+        }
+      });
+    }
+    
+    // 영양성분 텍스트 필드에 결과 HTML을 텍스트로 변환하여 저장
+    if (data.resultHTML) {
+      console.log('영양성분 텍스트 처리:', data.resultHTML);
+      const nutritionTextField = document.querySelector('textarea[name="nutrition_text"]');
+      console.log('영양성분 텍스트 필드:', nutritionTextField);
+      
+      if (nutritionTextField) {
+        // 포맷된 데이터를 쉼표로 구분된 형태로 변환
+        const nutritionItems = [];
+        
+        // 기준 정보 추가
+        if (data.settings && data.settings.base_amount) {
+          const baseInfo = `기준: ${data.settings.base_amount}${data.settings.base_amount_unit || 'g'}당`;
+          if (data.settings.servings_per_package && data.settings.servings_per_package !== '1') {
+            nutritionItems.push(`${baseInfo} (총 ${data.settings.servings_per_package}회분)`);
+          } else {
+            nutritionItems.push(baseInfo);
+          }
+        }
+        
+        if (data.formattedData) {
+          // 순서대로 정렬
+          const orderedKeys = Object.keys(data.formattedData).sort((a, b) => {
+            return data.formattedData[a].order - data.formattedData[b].order;
+          });
+          
+          orderedKeys.forEach(key => {
+            const item = data.formattedData[key];
+            if (item.value !== undefined && item.value !== null && item.value !== '') {
+              const valueStr = typeof item.value === 'number' ? item.value.toString() : item.value;
+              nutritionItems.push(`${item.label} ${valueStr}${item.unit || ''}`);
+            }
+          });
+        }
+        
+        const nutritionText = nutritionItems.join(', ');
+        nutritionTextField.value = nutritionText;
+        console.log('쉼표로 구분된 영양성분 텍스트:', nutritionText);
+        
+        // 텍스트 필드를 읽기 전용으로 설정
+        nutritionTextField.readOnly = true;
+        nutritionTextField.style.backgroundColor = '#f8f9fa';
+        nutritionTextField.style.cursor = 'not-allowed';
+        
+        // 텍스트 영역 높이 자동 조정
+        if (window.updateTextareaHeight) {
+          updateTextareaHeight(nutritionTextField);
+        }
+        
+        // 영양성분 체크박스 자동 체크
+        const nutritionCheckbox = document.querySelector('input[name="chk_nutrition_text"]');
+        if (nutritionCheckbox) {
+          nutritionCheckbox.checked = true;
+          console.log('영양성분 체크박스 체크됨');
+        }
+        
+        // 계산기 버튼 텍스트 변경
+        const nutritionButton = document.querySelector('button[onclick="handleNutritionTablePopup()"]');
+        if (nutritionButton) {
+          nutritionButton.innerHTML = '<i class="fas fa-edit me-1"></i>영양성분 수정';
+          nutritionButton.title = '영양성분 수정';
+        }
+      }
+    }
+    
+    console.log('영양성분 데이터가 성공적으로 저장되었습니다.');
+  }
+  
+  // 영양성분 데이터 초기화 처리
+  function handleNutritionDataReset() {
+    console.log('영양성분 데이터 초기화');
+    
+    // 영양성분 텍스트 필드 초기화 및 읽기 전용 해제
+    const nutritionTextField = document.querySelector('textarea[name="nutrition_text"]');
+    if (nutritionTextField) {
+      nutritionTextField.value = '';
+      nutritionTextField.readOnly = false;
+      nutritionTextField.style.backgroundColor = '';
+      nutritionTextField.style.cursor = '';
+    }
+    
+    // hidden 필드들 초기화
+    const fieldNames = [
+      'serving_size', 'serving_size_unit', 'units_per_package',
+      'nutrition_style', 'nutrition_display_type', 'nutrition_base_amount', 'nutrition_base_amount_unit',
+      'calories', 'calories_unit', 'natriums', 'natriums_unit',
+      'carbohydrates', 'carbohydrates_unit', 'sugars', 'sugars_unit',
+      'fats', 'fats_unit', 'trans_fats', 'trans_fats_unit',
+      'saturated_fats', 'saturated_fats_unit', 'cholesterols', 'cholesterols_unit',
+      'proteins', 'proteins_unit'
+    ];
+    
+    fieldNames.forEach(fieldName => {
+      const field = document.querySelector(`input[name="${fieldName}"]`);
+      if (field) field.value = '';
+    });
+    
+    // 계산기 버튼 텍스트 원래대로 변경
+    const nutritionButton = document.querySelector('button[onclick="handleNutritionTablePopup()"]');
+    if (nutritionButton) {
+      nutritionButton.innerHTML = '<i class="fas fa-table me-1"></i>영양성분표';
+      nutritionButton.title = '영양성분표';
+    }
+    
+    // 영양성분 체크박스 해제
+    const nutritionCheckbox = document.querySelector('input[name="chk_nutrition_text"]');
+    if (nutritionCheckbox) {
+      nutritionCheckbox.checked = false;
+    }
+  }
+  
+  // HTML에서 영양성분 텍스트 추출
+  function extractNutritionText(htmlElement) {
+    const tables = htmlElement.querySelectorAll('table');
+    let result = '';
+    
+    tables.forEach(table => {
+      const rows = table.querySelectorAll('tr');
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length > 0) {
+          const rowText = Array.from(cells).map(cell => cell.textContent.trim()).join(' ');
+          if (rowText) {
+            result += rowText + '\n';
+          }
+        }
+      });
+    });
+    
+    return result.trim();
+  }
+
   window.openPhrasePopup = function () {
     openPopup('/label/phrases/', 'phrasePopup', 1100, 900);
   };
@@ -230,6 +510,23 @@ document.addEventListener('DOMContentLoaded', function () {
   };
 
   window.addEventListener('message', function (e) {
+    console.log('메시지 수신됨:', e.data);
+    
+    // 영양성분 데이터 처리
+    if (e.data.type === 'nutrition-data-updated') {
+      console.log('영양성분 데이터 업데이트 처리');
+      handleNutritionDataUpdate(e.data);
+      return;
+    }
+    
+    // 영양성분 초기화 처리
+    if (e.data.type === 'nutrition-data-reset') {
+      console.log('영양성분 데이터 초기화 처리');
+      handleNutritionDataReset();
+      return;
+    }
+    
+    // 기존 문구 적용 처리
     if (e.data.type !== 'applyPhrases') return;
     const phrases = e.data.phrases;
     const categoryMapping = {
@@ -314,6 +611,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ------------------ 식품유형 요약 업데이트 (적용 버튼에서만 동작) ------------------
   function updateSummary() {
+    // 기존 요약 로직 실행
     const summaries = [];
     const foodSmall = $('#food_type option:selected').text();
     if (foodSmall && foodSmall !== '소분류') {
@@ -322,6 +620,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const longShelfId = $('.grp-long-shelf:checked').attr('id');
     let isFrozenHeated = false;
+    
+    // 새로운 복합 요약 시스템도 함께 실행
+    updateFoodTypeSummary();
     if (longShelfId === 'chk_frozen_heated') {
       summaries.push('가열하여 섭취하는 냉동식품');
       isFrozenHeated = true;
@@ -360,8 +661,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const summaryText = '식품유형 자동 입력 : ' + (summaries.length ? summaries.join(' | ') : '');
-    // 적용 버튼 시에만 summary-step1에 표시
-    $('#summary-step1').text(summaryText).attr('title', summaryText);
+    // 아래쪽 요약 표시 비활성화 - 헤더의 배지로만 표시
+    // $('#summary-step1').text(summaryText).attr('title', summaryText);
   }
 
   // ------------------ 토글 버튼 초기화 ------------------
@@ -1120,14 +1421,32 @@ document.addEventListener('DOMContentLoaded', function () {
     // 적용 버튼 클릭 시에만 요약 표시
     updateSummary();
     document.getElementById('step1-body').style.display = 'none';
-    document.getElementById('applyStep1Btn').style.display = 'none';
-    document.getElementById('expandStep1Btn').style.display = '';
+    // 버튼 토글 - 동시에 보이지 않도록 확실히 처리
+    const applyBtn = document.getElementById('applyStep1Btn');
+    const expandBtn = document.getElementById('expandStep1Btn');
+    if (applyBtn) {
+      applyBtn.style.display = 'none';
+      applyBtn.style.visibility = 'hidden';
+    }
+    if (expandBtn) {
+      expandBtn.style.display = 'inline-flex';
+      expandBtn.style.visibility = 'visible';
+    }
   }
 
   function step1Expand() {
     document.getElementById('step1-body').style.display = '';
-    document.getElementById('applyStep1Btn').style.display = '';
-    document.getElementById('expandStep1Btn').style.display = 'none';
+    // 버튼 토글 - 동시에 보이지 않도록 확실히 처리
+    const applyBtn = document.getElementById('applyStep1Btn');
+    const expandBtn = document.getElementById('expandStep1Btn');
+    if (applyBtn) {
+      applyBtn.style.display = 'inline-flex';
+      applyBtn.style.visibility = 'visible';
+    }
+    if (expandBtn) {
+      expandBtn.style.display = 'none';
+      expandBtn.style.visibility = 'hidden';
+    }
     // 펼치기 시 요약 숨김 코드 제거 (summary-step1 텍스트를 지우지 않음)
   }
 
@@ -1145,8 +1464,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // 최초 로드시 step1-body는 펼쳐짐, 요약은 빈 값
   document.getElementById('step1-body').style.display = '';
-  document.getElementById('applyStep1Btn').style.display = '';
-  document.getElementById('expandStep1Btn').style.display = 'none';
+  // 초기 상태에서 버튼 토글 확실히 설정
+  const initialApplyBtn = document.getElementById('applyStep1Btn');
+  const initialExpandBtn = document.getElementById('expandStep1Btn');
+  if (initialApplyBtn) {
+    initialApplyBtn.style.display = 'inline-flex';
+    initialApplyBtn.style.visibility = 'visible';
+  }
+  if (initialExpandBtn) {
+    initialExpandBtn.style.display = 'none';
+    initialExpandBtn.style.visibility = 'hidden';
+  }
   const summaryEl = document.getElementById('summary-step1');
   if (summaryEl) {
     summaryEl.innerText = '';
@@ -1180,21 +1508,26 @@ document.addEventListener('DOMContentLoaded', function () {
   window.verifyReportNo = function(labelId) {
     const btn = document.getElementById('verifyReportNoBtn');
     if (!btn) return;
+    
     // 상태 복구: 검증완료/검증실패 상태에서 클릭 시 초기화
-    if (btn.textContent === '검증완료' || btn.textContent === '검증실패') {
-      btn.textContent = '번호검증';
-      btn.classList.remove('btn-success', 'btn-danger');
-      btn.classList.add('btn-outline-primary');
+    if (btn.innerHTML.includes('검증완료') || btn.innerHTML.includes('검증실패')) {
+      btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
+      btn.className = 'btn btn-outline-info action-btn-modern';
       return;
     }
+    
     btn.disabled = true;
-    btn.textContent = '저장 중...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장 중...';
+    btn.className = 'btn btn-secondary action-btn-modern';
+    
     const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
     let reportNo = reportNoInput?.value?.trim();
+    
     if (!reportNo) {
       alert('품목보고번호를 입력하세요.');
       btn.disabled = false;
-      btn.textContent = '번호검증';
+      btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
+      btn.className = 'btn btn-outline-info action-btn-modern';
       return;
     }
 
@@ -1214,7 +1547,7 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(data => {
       if (!data.success) throw new Error(data.error || '저장 실패');
       // 2. 저장 성공 시 검증 진행 (하이픈 제거된 값으로 검증)
-      btn.textContent = '검증 중...';
+      btn.innerHTML = '<i class="fas fa-shield-alt fa-pulse me-1"></i>중복 검증 중...';
       return fetch('/label/verify-report-no/', {
         method: 'POST',
         headers: {
@@ -1227,23 +1560,1134 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(res => res.json())
     .then(data => {
       if (data.verified) {
-        btn.textContent = '검증완료';
-        btn.classList.remove('btn-outline-primary', 'btn-danger');
-        btn.classList.add('btn-success');
+        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>검증완료';
+        btn.className = 'btn btn-success action-btn-modern';
+        btn.title = 'API 중복 검사 및 번호 규칙 검증 완료';
       } else {
-        btn.textContent = '검증실패';
-        btn.classList.remove('btn-outline-primary', 'btn-success');
-        btn.classList.add('btn-danger');
+        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>검증실패';
+        btn.className = 'btn btn-danger action-btn-modern';
+        btn.title = 'API 중복 또는 번호 규칙 오류 발견';
+        
+        // 실패 원인에 따른 상세 메시지
+        let message = '검증에 실패했습니다.';
+        if (data.error_type === 'duplicate') {
+          message = '이미 사용 중인 품목보고번호입니다.';
+        } else if (data.error_type === 'format') {
+          message = '품목보고번호 형식이 올바르지 않습니다.';
+        } else if (data.message) {
+          message = data.message;
+        }
+        
+        // 비침입적인 방식으로 오류 표시
+        setTimeout(() => {
+          if (confirm(message + '\n\n다시 검증하시겠습니까?')) {
+            // 사용자가 재검증을 원하면 버튼 상태 초기화
+            btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
+            btn.className = 'btn btn-outline-info action-btn-modern';
+          }
+        }, 100);
       }
     })
     .catch(err => {
-      alert('저장 또는 검증 중 오류가 발생했습니다. ' + (err.message || ''));
-      btn.textContent = '번호검증';
+      btn.innerHTML = '<i class="fas fa-times-circle me-1"></i>오류발생';
+      btn.className = 'btn btn-warning action-btn-modern';
+      btn.title = '네트워크 오류 또는 서버 오류';
+      
+      setTimeout(() => {
+        alert('검증 중 오류가 발생했습니다. ' + (err.message || ''));
+        btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
+        btn.className = 'btn btn-outline-info action-btn-modern';
+        btn.title = 'API 중복 검사 및 번호 규칙 검증';
+      }, 100);
     })
     .finally(() => {
       btn.disabled = false;
     });
   };
+  
+  // 식품유형 요약 표시 기능 추가 (복합 요약 방식)
+  function updateFoodTypeSummary() {
+    const summaries = [];
+    
+    // 1. 식품유형 (소분류)
+    const foodSmall = $('#food_type option:selected').text();
+    if (foodSmall && foodSmall !== '소분류 선택' && foodSmall !== '') {
+      summaries.push(foodSmall);
+    }
+
+    // 2. 장기보존식품
+    const longShelfId = $('.grp-long-shelf:checked, input[name="preservation_type"]:checked').attr('id');
+    let isFrozenHeated = false;
+    if (longShelfId === 'chk_frozen_heated') {
+      summaries.push('가열하여 섭취하는 냉동식품');
+      isFrozenHeated = true;
+    } else if (longShelfId === 'chk_frozen_nonheated') {
+      summaries.push('가열하지 않고 섭취하는 냉동식품');
+    } else if (longShelfId === 'chk_canned') {
+      summaries.push('통.병조림');
+    } else if (longShelfId === 'chk_retort') {
+      summaries.push('레토르트식품');
+    }
+
+    // 3. 제조방법
+    const methodLabels = {
+      chk_sanitized: '살균제품',
+      chk_aseptic: '멸균제품',
+      chk_yutang: '유탕.유처리제품'
+    };
+    let methodChecked = false;
+    $('.grp-sterilization:checked, input[name="processing_method"]:checked').each(function () {
+      const methodId = $(this).attr('id');
+      if (methodLabels[methodId]) {
+        summaries.push(methodLabels[methodId]);
+        methodChecked = true;
+      }
+    });
+
+    // 4. 기타 조건
+    if ($('#chk_sterilization_other').is(':checked')) {
+      const conditionValue = $('input[name="processing_condition"]').val()?.trim();
+      if (conditionValue) {
+        summaries.push(conditionValue);
+        methodChecked = true;
+      }
+    }
+
+    // 5. 냉동(가열)이지만 제조방법이 없으면 비살균제품 추가
+    if (isFrozenHeated && !methodChecked) {
+      summaries.push('비살균제품');
+    }
+
+    // UI 업데이트
+    const summaryDisplay = document.getElementById('food-type-summary-display');
+    const summaryText = document.getElementById('selected-food-type');
+    
+    if (summaryDisplay && summaryText) {
+      if (summaries.length > 0) {
+        const summaryContent = summaries.join(' | ');
+        summaryText.innerHTML = `<i class="fas fa-tag me-1"></i>${summaryContent}`;
+        summaryText.setAttribute('data-food-type-text', summaryContent);
+        summaryDisplay.style.display = 'block';
+      } else {
+        summaryDisplay.style.display = 'none';
+      }
+    }
+  }
+  
+  // 식품유형 요약 클릭 시 아래 필드에 입력
+  function setupFoodTypeSummaryClick() {
+    const summaryText = document.getElementById('selected-food-type');
+    if (summaryText) {
+      summaryText.addEventListener('click', function() {
+        const foodTypeText = this.getAttribute('data-food-type-text');
+        if (foodTypeText) {
+          // 상세 입력 섹션의 식품유형 필드에 입력
+          const foodTypeField = document.querySelector('input[name="prdlst_dcnm"]');
+          if (foodTypeField) {
+            foodTypeField.value = foodTypeText;
+            foodTypeField.focus();
+            
+            // 시각적 피드백
+            this.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+              this.style.transform = 'scale(1)';
+            }, 150);
+            
+            // 입력 완료 알림
+            const tempTooltip = document.createElement('div');
+            tempTooltip.textContent = '식품유형 필드에 입력되었습니다';
+            tempTooltip.style.cssText = `
+              position: absolute;
+              background: #198754;
+              color: white;
+              padding: 0.25rem 0.5rem;
+              border-radius: 4px;
+              font-size: 0.75rem;
+              top: -30px;
+              left: 50%;
+              transform: translateX(-50%);
+              z-index: 1000;
+              pointer-events: none;
+            `;
+            this.style.position = 'relative';
+            this.appendChild(tempTooltip);
+            
+            setTimeout(() => {
+              if (tempTooltip.parentNode) {
+                tempTooltip.parentNode.removeChild(tempTooltip);
+              }
+            }, 2000);
+          }
+        }
+      });
+    }
+  }
+  
+  // 식품유형 변경 이벤트 리스너 추가 (복합 요약용)
+  const foodGroupSelect = document.getElementById('food_group');
+  const foodTypeSelect = document.getElementById('food_type');
+  
+  if (foodGroupSelect) {
+    foodGroupSelect.addEventListener('change', updateFoodTypeSummary);
+  }
+  if (foodTypeSelect) {
+    foodTypeSelect.addEventListener('change', updateFoodTypeSummary);
+  }
+  
+  // 체크박스 변경 시에도 요약 업데이트
+  document.querySelectorAll('input[name="preservation_type"], input[name="processing_method"], #chk_sterilization_other').forEach(checkbox => {
+    checkbox.addEventListener('change', updateFoodTypeSummary);
+  });
+  
+  // 조건 상세 입력 시에도 요약 업데이트
+  const conditionInput = document.querySelector('input[name="processing_condition"]');
+  if (conditionInput) {
+    conditionInput.addEventListener('input', updateFoodTypeSummary);
+  }
+  
+  // 초기 로드 시 요약 표시
+  updateFoodTypeSummary();
+  
+  // 식품유형 요약 클릭 이벤트 설정
+  setupFoodTypeSummaryClick();
+  
+  // 체크박스 단일 선택 처리 (라디오 버튼처럼 동작)
+  function initSingleCheckboxGroups() {
+    // 장기보존식품 체크박스 그룹
+    const preservationCheckboxes = document.querySelectorAll('input[name="preservation_type"]');
+    preservationCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        if (this.checked) {
+          preservationCheckboxes.forEach(other => {
+            if (other !== this) {
+              other.checked = false;
+            }
+          });
+        }
+        updateFoodTypeSummary(); // 요약 업데이트
+      });
+    });
+    
+    // 제조방법 체크박스 그룹
+    const processingCheckboxes = document.querySelectorAll('input[name="processing_method"]');
+    processingCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', function() {
+        if (this.checked) {
+          processingCheckboxes.forEach(other => {
+            if (other !== this) {
+              other.checked = false;
+            }
+          });
+        }
+        updateFoodTypeSummary(); // 요약 업데이트
+      });
+    });
+  }
+  
+  // 3개 플로팅 모달 시스템 초기화
+  function initRightPanel() {
+    // 이미 초기화되었는지 확인
+    if (window.floatingModalsInitialized) {
+        console.log('플로팅 모달 시스템이 이미 초기화되었습니다.');
+        return;
+    }
+    
+    console.log('🚀 3개 플로팅 모달 시스템 초기화 중...');
+    
+    // 모든 토글 버튼과 모달 찾기
+    const toggleButtons = document.querySelectorAll('.floating-toggle-btn');
+    const modals = document.querySelectorAll('.floating-modal');
+    const closeButtons = document.querySelectorAll('.floating-modal-close');
+    
+    if (toggleButtons.length === 0 || modals.length === 0) {
+        return;
+    }
+    
+    // 각 토글 버튼과 모달 정보 출력
+    toggleButtons.forEach((btn, i) => {
+        console.log(`   토글 버튼 ${i+1}: data-modal="${btn.getAttribute('data-modal')}"`);
+    });
+    
+    modals.forEach((modal, i) => {
+        console.log(`   모달 ${i+1}: id="${modal.id}"`);
+    });
+    
+    // 모달 열기 함수
+    function openModal(modalId) {
+        console.log(`🚀 openModal 함수 실행: ${modalId}`);
+        
+        // 지정된 모달 찾기
+        const targetModal = document.getElementById(modalId + '-modal');
+        console.log(`🎯 대상 모달 찾기: ${modalId}-modal`, targetModal);
+        
+        if (targetModal) {
+            // 모달이 이미 열려있는지 확인
+            if (targetModal.classList.contains('show')) {
+                console.log(`⚠️ ${modalId} 모달이 이미 열려있음`);
+                return;
+            }
+            
+            // 모달 표시
+            targetModal.style.display = 'block';
+            
+            // 강제 리플로우 후 애니메이션 시작
+            targetModal.offsetHeight;
+            
+            setTimeout(() => {
+                targetModal.classList.add('show');
+                console.log(`✅ ${modalId} 모달 열림 완료`);
+                
+                // 드래그 기능 초기화
+                initModalDrag(targetModal);
+            }, 50);
+        } else {
+            console.error(`❌ 모달을 찾을 수 없음: ${modalId}-modal`);
+        }
+    }
+    
+    // 모달 닫기 함수
+    function closeModal(modalId) {
+        const targetModal = document.getElementById(modalId + '-modal');
+        if (targetModal) {
+            targetModal.classList.remove('show');
+            setTimeout(() => {
+                targetModal.style.display = 'none';
+            }, 300);
+            console.log(`${modalId} 모달 닫힘`);
+        }
+    }
+    
+    // 모든 모달 닫기 함수
+    function closeAllModals() {
+        modals.forEach(modal => {
+            modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300);
+        });
+    }
+    
+    // 토글 버튼 이벤트 리스너
+    toggleButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const modalType = this.getAttribute('data-modal');
+            console.log(`${modalType} 버튼 클릭`);
+            
+            const targetModal = document.getElementById(modalType + '-modal');
+            if (targetModal && targetModal.classList.contains('show')) {
+                closeModal(modalType);
+            } else {
+                openModal(modalType);
+            }
+        });
+    });
+    
+    // 모달 드래그 기능 초기화
+    function initModalDrag(modal) {
+        const header = modal.querySelector('.floating-modal-header');
+        if (!header) return;
+        
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        // 현재 모달의 초기 위치 저장
+        const rect = modal.getBoundingClientRect();
+        const computedStyle = window.getComputedStyle(modal);
+        
+        header.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+        
+        function dragStart(e) {
+            if (e.target === header || header.contains(e.target)) {
+                // 닫기 버튼 클릭은 드래그하지 않음
+                if (e.target.closest('.floating-modal-close')) {
+                    return;
+                }
+                
+                isDragging = true;
+                
+                // 현재 모달의 위치를 기준으로 드래그 시작점 계산
+                const rect = modal.getBoundingClientRect();
+                initialX = e.clientX - rect.left;
+                initialY = e.clientY - rect.top;
+                
+                modal.style.transition = 'none';
+                header.style.cursor = 'grabbing';
+                console.log('🖱️ 드래그 시작');
+                e.preventDefault();
+            }
+        }
+        
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                
+                // 마우스 현재 위치에서 초기 클릭 오프셋을 빼서 모달의 새 위치 계산
+                currentX = e.clientX - offsetX;
+                currentY = e.clientY - offsetY;
+                
+                // 화면 경계 제한
+                const maxX = window.innerWidth - modal.offsetWidth;
+                const maxY = window.innerHeight - modal.offsetHeight;
+                
+                currentX = Math.max(0, Math.min(maxX, currentX));
+                currentY = Math.max(0, Math.min(maxY, currentY));
+                
+                // position을 fixed로 설정하고 left, top으로 위치 설정
+                modal.style.position = 'fixed';
+                modal.style.left = currentX + 'px';
+                modal.style.top = currentY + 'px';
+                modal.style.right = 'auto';
+                modal.style.transform = 'none';
+            }
+        }
+        
+        function dragEnd(e) {
+            if (isDragging) {
+                isDragging = false;
+                modal.style.transition = 'transform 0.3s ease';
+                header.style.cursor = 'move';
+                console.log('🖱️ 드래그 종료');
+            }
+        }
+    }
+    
+    // 닫기 버튼 이벤트 리스너
+    closeButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const modalType = this.getAttribute('data-close');
+            closeModal(modalType);
+        });
+    });
+    
+    // 모달 배경 클릭 시 닫기 제거 (사이드 패널은 클릭해도 닫히지 않음)
+    // 대신 ESC 키로만 닫기 가능
+    
+    // ESC 키로 모든 모달 닫기
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeAllModals();
+        }
+    });
+    
+    // 초기화 완료 표시
+    window.floatingModalsInitialized = true;
+    console.log('✅ 3개 플로팅 모달 시스템 초기화 완료');
+    
+    // 모달 데이터 초기화
+    initModalData();
+    
+    // 테스트 함수 전역으로 등록
+    window.testModal = function(modalId) {
+        console.log(`🧪 테스트: ${modalId} 모달 열기`);
+        openModal(modalId);
+    };
+  }
+  
+  // 모달 데이터 초기화 함수
+  function initModalData() {
+    console.log('📊 모달 데이터 초기화 시작');
+    
+    // 관련규정 데이터 로드
+    initRegulationModal();
+    
+    // 내 문구 데이터 로드
+    initMyPhrasesModal();
+    
+    console.log('📊 모달 데이터 초기화 완료');
+  }
+  
+  // 관련규정 모달 초기화
+  function initRegulationModal() {
+    try {
+        const regulationsScript = document.getElementById('regulations-data');
+        if (regulationsScript) {
+            const regulationsData = JSON.parse(regulationsScript.textContent);
+            const textarea = document.querySelector('#regulation-modal textarea[name="related_regulations"]');
+            
+            if (textarea && regulationsData) {
+                // 규정 데이터를 보기 좋게 포맷팅
+                let regulationText = '=== 식품유형별 관련 규정 ===\n\n';
+                
+                if (typeof regulationsData === 'object') {
+                    Object.entries(regulationsData).forEach(([key, value]) => {
+                        // 키를 한글 제목으로 변환
+                        const keyMapping = {
+                            'prdlst_dcnm': '제품명상세',
+                            'prdlst_nm': '제품명',
+                            'ingredients_info': '성분명 및 함량',
+                            'content_weight': '내용량',
+                            'report_no': '품목보고번호',
+                            'storage': '보관방법',
+                            'package': '포장재질',
+                            'manufacturer': '제조원 소재지'
+                        };
+                        
+                        const title = keyMapping[key] || key;
+                        regulationText += `📋 ${title}\n`;
+                        regulationText += `${'='.repeat(30)}\n`;
+                        
+                        // 값을 줄바꿈으로 정리
+                        if (typeof value === 'string') {
+                            const cleanValue = value.trim()
+                                .replace(/\n\s*\n/g, '\n')  // 중복 줄바꿈 제거
+                                .replace(/^\s+/gm, '')     // 앞쪽 공백 제거
+                                .replace(/\s+$/gm, '');    // 뒤쪽 공백 제거
+                            regulationText += `${cleanValue}\n\n`;
+                        } else {
+                            regulationText += `${value}\n\n`;
+                        }
+                    });
+                } else if (typeof regulationsData === 'string') {
+                    regulationText += regulationsData;
+                }
+                
+                textarea.value = regulationText;
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.min(textarea.scrollHeight, 500) + 'px';
+                console.log('✅ 관련규정 데이터 로드 완료');
+            }
+        }
+    } catch (error) {
+        console.error('❌ 관련규정 데이터 로드 실패:', error);
+        const textarea = document.querySelector('#regulation-modal textarea[name="related_regulations"]');
+        if (textarea) {
+            textarea.value = '관련 규정 데이터를 불러오는 중 오류가 발생했습니다.\n\n다시 시도해주세요.';
+        }
+    }
+  }
+  
+  // 내 문구 모달 초기화
+  function initMyPhrasesModal() {
+    try {
+        const phrasesScript = document.getElementById('phrases-data');
+        const modalBody = document.querySelector('#phrases-modal .modal-body');
+        
+        if (!modalBody) {
+            console.error('❌ 내 문구 모달 컨테이너를 찾을 수 없습니다');
+            return;
+        }
+
+        // 기본 컨테이너 생성
+        modalBody.innerHTML = `
+            <div class="phrases-container">
+                <div class="phrases-header mb-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">저장된 문구 목록</h5>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="addNewPhrase()">
+                        ➕ 새 문구 추가
+                    </button>
+                </div>
+                <div class="phrases-list" id="phrases-list">
+                    <!-- 문구 목록이 여기에 동적으로 추가됩니다 -->
+                </div>
+                <div class="new-phrase-form" id="new-phrase-form" style="display: none;">
+                    <div class="mt-3 p-3 border rounded bg-light">
+                        <h6>새 문구 추가</h6>
+                        <div class="mb-2">
+                            <label class="form-label">문구 이름:</label>
+                            <input type="text" class="form-control" id="new-phrase-name" placeholder="예: 보관방법 기본">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">문구 내용:</label>
+                            <textarea class="form-control" id="new-phrase-content" rows="3" placeholder="문구 내용을 입력하세요"></textarea>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">카테고리:</label>
+                            <select class="form-control" id="new-phrase-category">
+                                <option value="보관방법">보관방법</option>
+                                <option value="주의사항">주의사항</option>
+                                <option value="성분정보">성분정보</option>
+                                <option value="기타">기타</option>
+                            </select>
+                        </div>
+                        <div class="text-end">
+                            <button type="button" class="btn btn-secondary btn-sm me-2" onclick="cancelNewPhrase()">취소</button>
+                            <button type="button" class="btn btn-success btn-sm" onclick="saveNewPhrase()">저장</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 문구 데이터 로드
+        let phrasesData = [];
+        if (phrasesScript) {
+            try {
+                const rawData = JSON.parse(phrasesScript.textContent);
+                
+                // 데이터 구조 정규화
+                if (Array.isArray(rawData)) {
+                    phrasesData = rawData.map((item, index) => {
+                        if (typeof item === 'string') {
+                            return { name: `문구 ${index + 1}`, content: item, category: '기타' };
+                        }
+                        return item;
+                    });
+                } else if (typeof rawData === 'object') {
+                    // 카테고리별 데이터 처리
+                    Object.entries(rawData).forEach(([category, phrases]) => {
+                        if (Array.isArray(phrases)) {
+                            phrases.forEach((phrase, index) => {
+                                if (typeof phrase === 'string') {
+                                    phrasesData.push({ 
+                                        name: `${category} ${index + 1}`, 
+                                        content: phrase, 
+                                        category: category 
+                                    });
+                                } else {
+                                    phrasesData.push({ ...phrase, category: category });
+                                }
+                            });
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('기존 문구 데이터 파싱 실패, 기본 데이터로 초기화');
+                phrasesData = getDefaultPhrases();
+            }
+        } else {
+            phrasesData = getDefaultPhrases();
+        }
+
+        // localStorage에서 추가 문구 로드
+        const savedPhrases = localStorage.getItem('userPhrases');
+        if (savedPhrases) {
+            try {
+                const userPhrases = JSON.parse(savedPhrases);
+                phrasesData = [...phrasesData, ...userPhrases];
+            } catch (error) {
+                console.warn('사용자 저장 문구 로드 실패');
+            }
+        }
+
+        displayPhrases(phrasesData);
+        console.log('✅ 내 문구 모달 초기화 완료');
+        
+    } catch (error) {
+        console.error('❌ 내 문구 모달 초기화 실패:', error);
+        const modalBody = document.querySelector('#phrases-modal .modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = `
+                <div class="alert alert-danger">
+                    내 문구 데이터를 불러오는 중 오류가 발생했습니다.<br>
+                    페이지를 새로고침 후 다시 시도해주세요.
+                </div>
+            `;
+        }
+    }
+  }
+  
+  // 문구 적용 함수
+  window.applyPhrase = function(phrase) {
+    // 현재 포커스된 필드에 문구 적용
+    const activeElement = document.activeElement;
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        activeElement.value = phrase;
+        activeElement.dispatchEvent(new Event('change', { bubbles: true }));
+        console.log(`✅ 문구 적용: "${phrase}"`);
+        
+        // 모달 닫기
+        closeModal('phrases');
+    } else {
+        alert('먼저 적용할 입력 필드를 클릭해주세요.');
+    }
+  };
+
+  // 기본 문구 데이터
+  function getDefaultPhrases() {
+    return [
+        { name: "냉장보관 기본", content: "냉장보관(0~10℃)", category: "보관방법" },
+        { name: "실온보관 기본", content: "직사광선을 피하고 서늘한 곳에 보관하세요", category: "보관방법" },
+        { name: "냉동보관", content: "냉동보관(-18℃ 이하)", category: "보관방법" },
+        { name: "어린이 주의사항", content: "어린이의 손이 닿지 않는 곳에 보관하세요", category: "주의사항" },
+        { name: "개봉 후 주의", content: "개봉 후에는 냉장보관하시고 빠른 시일 내에 드세요", category: "주의사항" },
+        { name: "알레르기 정보", content: "본 제품은 우유, 대두를 함유하고 있습니다", category: "성분정보" },
+        { name: "제조원 표시", content: "제조원: (주)식품회사 / 소재지: 서울특별시", category: "기타" }
+    ];
+  }
+
+  // 문구 목록 표시
+  function displayPhrases(phrases) {
+    const phrasesList = document.getElementById('phrases-list');
+    if (!phrasesList) return;
+
+    if (!phrases || phrases.length === 0) {
+        phrasesList.innerHTML = '<div class="text-muted text-center py-3">저장된 문구가 없습니다.</div>';
+        return;
+    }
+
+    // 카테고리별로 그룹화
+    const groupedPhrases = {};
+    phrases.forEach((phrase, globalIndex) => {
+        const category = phrase.category || '기타';
+        if (!groupedPhrases[category]) {
+            groupedPhrases[category] = [];
+        }
+        groupedPhrases[category].push({ ...phrase, globalIndex });
+    });
+
+    let html = '';
+    Object.entries(groupedPhrases).forEach(([category, categoryPhrases]) => {
+        html += `
+            <div class="category-group mb-4">
+                <h6 class="category-title text-primary border-bottom pb-1">${category}</h6>
+                <div class="phrases-in-category">
+        `;
+        
+        categoryPhrases.forEach((phrase) => {
+            html += `
+                <div class="phrase-item border rounded p-3 mb-2 hover-shadow">
+                    <div class="phrase-header d-flex justify-content-between align-items-start mb-2">
+                        <strong class="phrase-name text-dark">${phrase.name}</strong>
+                        <div class="phrase-actions">
+                            <button type="button" class="btn btn-sm btn-primary me-1" 
+                                    onclick="applyPhrase('${phrase.content.replace(/'/g, "\\'")}')">
+                                ✓ 적용
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-1" 
+                                    onclick="editPhrase(${phrase.globalIndex})">
+                                ✏️ 수정
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                    onclick="deletePhrase(${phrase.globalIndex})">
+                                🗑️ 삭제
+                            </button>
+                        </div>
+                    </div>
+                    <div class="phrase-content text-muted small bg-light p-2 rounded">${phrase.content}</div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    });
+
+    phrasesList.innerHTML = html;
+  }
+
+  // 새 문구 추가 폼 표시
+  window.addNewPhrase = function() {
+    document.getElementById('new-phrase-form').style.display = 'block';
+    document.getElementById('new-phrase-name').focus();
+  };
+
+  // 새 문구 추가 취소
+  window.cancelNewPhrase = function() {
+    document.getElementById('new-phrase-form').style.display = 'none';
+    document.getElementById('new-phrase-name').value = '';
+    document.getElementById('new-phrase-content').value = '';
+    document.getElementById('new-phrase-category').value = '보관방법';
+  };
+
+  // 새 문구 저장
+  window.saveNewPhrase = function() {
+    const name = document.getElementById('new-phrase-name').value.trim();
+    const content = document.getElementById('new-phrase-content').value.trim();
+    const category = document.getElementById('new-phrase-category').value;
+
+    if (!name || !content) {
+        alert('문구 이름과 내용을 모두 입력해주세요.');
+        return;
+    }
+
+    // 사용자 저장 문구 가져오기
+    let userPhrases = [];
+    try {
+        const saved = localStorage.getItem('userPhrases');
+        if (saved) {
+            userPhrases = JSON.parse(saved);
+        }
+    } catch (error) {
+        console.warn('기존 사용자 문구 로드 실패');
+    }
+
+    // 새 문구 추가
+    const newPhrase = { name, content, category };
+    userPhrases.push(newPhrase);
+
+    // localStorage에 저장
+    try {
+        localStorage.setItem('userPhrases', JSON.stringify(userPhrases));
+        console.log('✅ 새 문구 저장 완료:', newPhrase);
+        
+        // 화면 새로고침
+        initMyPhrasesModal();
+        cancelNewPhrase();
+        
+    } catch (error) {
+        console.error('❌ 문구 저장 실패:', error);
+        alert('문구 저장에 실패했습니다.');
+    }
+  };
+
+  // 문구 수정
+  window.editPhrase = function(globalIndex) {
+    // TODO: 문구 수정 기능 구현
+    alert('문구 수정 기능은 개발 중입니다.');
+  };
+
+  // 문구 삭제
+  window.deletePhrase = function(globalIndex) {
+    if (!confirm('이 문구를 삭제하시겠습니까?')) {
+        return;
+    }
+
+    try {
+        // 사용자 저장 문구만 삭제 가능
+        let userPhrases = [];
+        const saved = localStorage.getItem('userPhrases');
+        if (saved) {
+            userPhrases = JSON.parse(saved);
+        }
+
+        // 기본 문구 개수 계산
+        const defaultCount = getDefaultPhrases().length;
+        
+        if (globalIndex >= defaultCount) {
+            // 사용자 문구 삭제
+            const userIndex = globalIndex - defaultCount;
+            userPhrases.splice(userIndex, 1);
+            localStorage.setItem('userPhrases', JSON.stringify(userPhrases));
+            
+            console.log('✅ 문구 삭제 완료');
+            initMyPhrasesModal(); // 화면 새로고침
+        } else {
+            alert('기본 제공 문구는 삭제할 수 없습니다.');
+        }
+        
+    } catch (error) {
+        console.error('❌ 문구 삭제 실패:', error);
+        alert('문구 삭제에 실패했습니다.');
+    }
+  };
+
+  // 스마트 추천 모달 초기화는 통합 시스템에서 처리됨 (comprehensive_recommendation.js)
+  
+  // 기존 추천 시스템 열기
+  window.openExistingRecommendation = function() {
+    // 다양한 방법으로 기존 추천 모달 찾기 및 열기
+    try {
+        // 방법 1: 기존 함수 호출
+        if (typeof openRecommendationModal === 'function') {
+            openRecommendationModal();
+            return;
+        }
+        
+        // 방법 2: Bootstrap 모달 찾기
+        const modalIds = ['recommendationModal', 'smartRecommendationModal', 'autoFillModal'];
+        for (const modalId of modalIds) {
+            const modalElement = document.getElementById(modalId);
+            if (modalElement) {
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                    return;
+                } else if (typeof $ !== 'undefined') {
+                    $(modalElement).modal('show');
+                    return;
+                }
+            }
+        }
+        
+        // 방법 3: 기존 스마트 추천 시스템 직접 호출
+        if (window.smartRecommendationModal) {
+            if (typeof window.smartRecommendationModal.openModal === 'function') {
+                window.smartRecommendationModal.openModal();
+                return;
+            }
+            if (typeof window.smartRecommendationModal.showRecommendations === 'function') {
+                window.smartRecommendationModal.showRecommendations();
+                return;
+            }
+        }
+        
+        // 방법 4: comprehensive recommendation 시스템 호출
+        if (window.comprehensiveRecommendation) {
+            if (typeof window.comprehensiveRecommendation.showModal === 'function') {
+                window.comprehensiveRecommendation.showModal();
+                return;
+            }
+        }
+        
+        // 모든 방법이 실패하면 현재 모달에서 추천 생성
+        generateRecommendation();
+        
+    } catch (error) {
+        console.error('기존 추천 시스템 열기 실패:', error);
+        alert('기존 추천 시스템을 찾을 수 없습니다. 새로운 추천을 생성합니다.');
+        generateRecommendation();
+    }
+  };
+
+  // 전체 추천 불러오기
+  window.loadComprehensiveRecommendation = function() {
+    try {
+        // 기존 comprehensive recommendation 시스템 호출
+        if (window.comprehensiveRecommendation && typeof window.comprehensiveRecommendation.loadAllRecommendations === 'function') {
+            window.comprehensiveRecommendation.loadAllRecommendations();
+            return;
+        }
+        
+        // 기존 시스템이 없으면 전체 추천 생성
+        document.getElementById('recommendation-type').value = 'all';
+        generateRecommendation();
+        
+    } catch (error) {
+        console.error('전체 추천 불러오기 실패:', error);
+        console.warn('전체 추천 시스템을 찾을 수 없습니다. 새로운 전체 추천을 생성합니다.');
+        document.getElementById('recommendation-type').value = 'all';
+        generateRecommendation();
+    }
+  };
+
+  // AI 추천 생성 함수 (기존 시스템과 연동)
+  window.generateRecommendation = function() {
+    const loadingDiv = document.getElementById('recommendation-loading');
+    const resultsDiv = document.getElementById('recommendation-results');
+    const recommendationType = document.getElementById('recommendation-type').value;
+    
+    // 로딩 표시
+    loadingDiv.style.display = 'block';
+    resultsDiv.style.display = 'none';
+    
+    // 폼 데이터 수집
+    const formData = collectFormData();
+    
+    // 기존 스마트 추천 시스템 호출
+    if (window.smartRecommendationModal && typeof window.smartRecommendationModal.generateRecommendations === 'function') {
+        // 기존 시스템과 연동
+        window.smartRecommendationModal.generateRecommendations(recommendationType, formData)
+            .then(recommendations => {
+                displayRecommendations(recommendations);
+                loadingDiv.style.display = 'none';
+                resultsDiv.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('AI 추천 생성 실패:', error);
+                // 실패 시 모의 데이터로 대체
+                const mockRecommendations = generateMockRecommendations(recommendationType, formData);
+                displayRecommendations(mockRecommendations);
+                loadingDiv.style.display = 'none';
+                resultsDiv.style.display = 'block';
+            });
+    } else {
+        // 기존 시스템이 없으면 모의 추천 생성
+        setTimeout(() => {
+            const recommendations = generateMockRecommendations(recommendationType, formData);
+            displayRecommendations(recommendations);
+            
+            loadingDiv.style.display = 'none';
+            resultsDiv.style.display = 'block';
+        }, 2000);
+    }
+  };
+
+  // 폼 데이터 수집
+  function collectFormData() {
+    const data = {};
+    
+    // 기본 제품 정보
+    data.productName = document.querySelector('input[name="prdlst_dcnm"]')?.value || '';
+    data.foodType = document.querySelector('input[name="bar_cd"]:checked')?.closest('.form-check')?.querySelector('label')?.textContent || '';
+    data.ingredients = document.querySelector('textarea[name="rawmtrl_nm"]')?.value || '';
+    data.packaging = document.querySelector('input[name="pkg_fom_nm"]')?.value || '';
+    data.manufacturer = document.querySelector('input[name="manufacture"]')?.value || '';
+    
+    // 추가 정보
+    data.weight = document.querySelector('input[name="cntnts_cn"]')?.value || '';
+    data.storage = document.querySelector('textarea[name="srvng_method"]')?.value || '';
+    data.shelfLife = document.querySelector('input[name="expiry_date"]')?.value || '';
+    
+    return data;
+  }
+
+  // 모의 AI 추천 생성
+  function generateMockRecommendations(type, formData) {
+    const recommendations = {
+        storage: [
+            {
+                title: "보관방법 추천",
+                content: "직사광선을 피하고 서늘하고 건조한 곳에 보관하세요.",
+                confidence: 95,
+                reason: "일반적인 가공식품의 표준 보관방법입니다."
+            },
+            {
+                title: "개봉 후 보관",
+                content: "개봉 후에는 냉장보관하시고 가능한 빨리 드세요.",
+                confidence: 88,
+                reason: "제품의 신선도 유지를 위한 권장사항입니다."
+            }
+        ],
+        ingredients: [
+            {
+                title: "주요 성분 표시",
+                content: "밀가루, 설탕, 식용유지, 소금 (함량 순)",
+                confidence: 92,
+                reason: "입력된 원재료명을 기준으로 생성되었습니다."
+            },
+            {
+                title: "알레르기 정보",
+                content: "본 제품은 밀, 대두를 함유하고 있습니다.",
+                confidence: 85,
+                reason: "주요 알레르기 유발 성분을 식별했습니다."
+            }
+        ],
+        warnings: [
+            {
+                title: "일반 주의사항",
+                content: "어린이의 손이 닿지 않는 곳에 보관하세요.",
+                confidence: 90,
+                reason: "식품 안전을 위한 기본 주의사항입니다."
+            },
+            {
+                title: "섭취 시 주의",
+                content: "과다 섭취 시 복통이나 설사를 일으킬 수 있습니다.",
+                confidence: 75,
+                reason: "일반적인 가공식품 섭취 주의사항입니다."
+            }
+        ]
+    };
+
+    return type === 'all' ? 
+        [...recommendations.storage, ...recommendations.ingredients, ...recommendations.warnings] :
+        recommendations[type] || [];
+  }
+
+  // 추천 결과 표시
+  function displayRecommendations(recommendations) {
+    const resultsDiv = document.getElementById('recommendation-results');
+    
+    if (!recommendations || recommendations.length === 0) {
+        resultsDiv.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-exclamation-circle fa-2x mb-2 opacity-50"></i>
+                <p>추천할 수 있는 내용이 없습니다.<br>제품 정보를 더 입력해주세요.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div class="recommendations-list">';
+    
+    recommendations.forEach((rec, index) => {
+        const confidenceColor = rec.confidence >= 90 ? 'success' : rec.confidence >= 80 ? 'warning' : 'secondary';
+        
+        html += `
+            <div class="recommendation-item border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="recommendation-title mb-1">${rec.title}</h6>
+                    <span class="badge bg-${confidenceColor}">${rec.confidence}%</span>
+                </div>
+                <div class="recommendation-content bg-light p-2 rounded mb-2">
+                    ${rec.content}
+                </div>
+                <div class="recommendation-reason small text-muted mb-2">
+                    💡 ${rec.reason}
+                </div>
+                <div class="recommendation-actions">
+                    <button type="button" class="btn btn-sm btn-primary me-2" 
+                            onclick="applyRecommendation('${rec.content.replace(/'/g, "\\'")}')">
+                        ✓ 적용
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" 
+                            onclick="customizeRecommendation(${index})">
+                        ✏️ 수정 후 적용
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    resultsDiv.innerHTML = html;
+  }
+
+  // 추천 내용 적용
+  window.applyRecommendation = function(content) {
+    const activeElement = document.activeElement;
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        activeElement.value = content;
+        activeElement.dispatchEvent(new Event('change', { bubbles: true }));
+        console.log(`✅ AI 추천 적용: "${content}"`);
+        
+        // 모달 닫기
+        closeModal('smart-recommendation');
+    } else {
+        alert('추천 내용을 적용할 입력 필드를 먼저 클릭해주세요.');
+    }
+  };
+
+  // 추천 내용 커스터마이징
+  window.customizeRecommendation = function(index) {
+    alert('추천 내용 커스터마이징 기능은 개발 중입니다.');
+  };
+
+  // 스마트 추천 모달 초기화
+  initSingleCheckboxGroups();
+  
+  // DOM 로드 완료 후 모달 시스템 초기화
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔄 DOM 로드 완료 - 모달 시스템 초기화 시작');
+    
+    // 데이터 스크립트 확인
+    const phrasesScript = document.getElementById('phrases-data');
+    const regulationsScript = document.getElementById('regulations-data');
+    const smartScript = document.getElementById('smart-recommendation-data');
+    
+    console.log('📄 데이터 스크립트 상태 확인:');
+    console.log('  - phrases-data:', phrasesScript ? '✅ 존재' : '❌ 없음');
+    console.log('  - regulations-data:', regulationsScript ? '✅ 존재' : '❌ 없음');
+    console.log('  - smart-recommendation-data:', smartScript ? '✅ 존재' : '❌ 없음');
+    
+    if (phrasesScript) {
+        try {
+            const data = JSON.parse(phrasesScript.textContent);
+            console.log('  - phrases 데이터 타입:', typeof data, '길이:', Array.isArray(data) ? data.length : Object.keys(data).length);
+        } catch (e) {
+            console.error('  - phrases 데이터 파싱 오류:', e);
+        }
+    }
+    
+    if (regulationsScript) {
+        try {
+            const data = JSON.parse(regulationsScript.textContent);
+            console.log('  - regulations 데이터 타입:', typeof data, '키 개수:', Object.keys(data).length);
+        } catch (e) {
+            console.error('  - regulations 데이터 파싱 오류:', e);
+        }
+    }
+    
+    // 모든 모달 초기화 (스마트 추천은 통합 시스템에서 처리)
+    setTimeout(() => {
+        initRegulationModal(); 
+        initMyPhrasesModal();
+        initRightPanel();
+    }, 100);
+  });
+  
+  // 페이지 완전 로드 후에도 한 번 더 시도
+  window.addEventListener('load', function() {
+    console.log('🔄 페이지 완전 로드 완료 - 모달 시스템 재확인');
+    if (!window.floatingModalsInitialized) {
+      initRightPanel();
+    }
+  });
+  
   // '항목별 문구 및 규정' 탭 클릭 시 강제 새로고침
   document.addEventListener('DOMContentLoaded', function () {
     var myPhrasesTab = document.getElementById('myphrases-tab');
@@ -1348,4 +2792,42 @@ document.addEventListener('DOMContentLoaded', function () {
     initializeLabelNameSync();
     initializeContentWeightFields();
   });
+  
+  // 플로팅 모달 드래그 기능 강화
+  function ensureModalDrag() {
+    const modals = ['smart-recommendation-modal', 'regulation-modal', 'phrases-modal'];
+    modals.forEach(modalId => {
+      const modal = document.getElementById(modalId);
+      if (modal && !modal.dataset.dragInitialized) {
+        initModalDrag(modal);
+        modal.dataset.dragInitialized = 'true';
+        console.log(`✅ ${modalId} 드래그 초기화 완료`);
+      }
+    });
+  }
+  
+  // 모달 열기 시 드래그 재초기화
+  window.addEventListener('load', function() {
+    setTimeout(ensureModalDrag, 500);
+  });
+  
+  // MutationObserver로 동적 모달 감지
+  if (typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach(function(node) {
+            if (node.nodeType === 1 && node.classList && node.classList.contains('floating-modal')) {
+              setTimeout(() => ensureModalDrag(), 100);
+            }
+          });
+        }
+      });
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
 });

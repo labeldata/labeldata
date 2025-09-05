@@ -448,14 +448,15 @@ function updateRowNumbers() {
             orderCell.classList.add('drag-handle');
         }
         // 강조 초기화
-        row.classList.remove('ingredient-row', 'selected');
+        row.classList.remove('ingredient-row', 'selected', 'origin-missing');
         row.style.backgroundColor = '';
         row.style.borderLeft = '';
         row.style.color = '';
         row.style.fontWeight = '';
-        row.style.boxShadow = '';
+        row.style.boxShadow = 'none';
         row.style.transition = '';
         row.style.border = '';
+        row.style.borderRadius = '';
     });
 }
 
@@ -469,14 +470,15 @@ function markOriginTargets() {
             originCell.textContent = '';
             originCell.innerHTML = '';
         }
-        row.classList.remove('ingredient-row', 'selected');
+        row.classList.remove('ingredient-row', 'selected', 'origin-missing');
         row.style.backgroundColor = '';
         row.style.borderLeft = '';
         row.style.color = '';
         row.style.fontWeight = '';
-        row.style.boxShadow = '';
+        row.style.boxShadow = 'none';
         row.style.transition = '';
         row.style.border = '';
+        row.style.borderRadius = '';
     });
 
     // 예외 항목 배열 (식품유형 포함)
@@ -543,10 +545,10 @@ function markRowAsOriginTarget(row, rank) {
     const displayNameText = displayNameInput.value.trim();
     const foundCountries = findCountriesInText(displayNameText);
 
-    // 강조 스타일: 붉은색 테두리 + 붉은색 글씨
+    // 강조 스타일: 모던 스타일 적용
     if (foundCountries.length > 0) {
         originCell.innerHTML = `${rank}순위 - ${foundCountries.join(', ')}`;
-        row.classList.remove('ingredient-row', 'selected');
+        row.classList.remove('ingredient-row', 'selected', 'origin-missing');
         row.style.backgroundColor = '';
         row.style.borderLeft = '';
         row.style.color = '';
@@ -554,16 +556,19 @@ function markRowAsOriginTarget(row, rank) {
         row.style.boxShadow = '';
         row.style.transition = '';
         row.style.border = '';
+        row.style.borderRadius = '';
     } else {
-        originCell.innerHTML = `${rank}순위 - <span style="color:#d32f2f;font-weight:700;">미표시</span>`;
+        originCell.innerHTML = `${rank}순위 - <span style="color:#dc3545;font-weight:600;">미표시</span>`;
         row.classList.remove('ingredient-row', 'selected');
-        row.style.backgroundColor = '';
-        row.style.color = '';
-        row.style.fontWeight = '';
-        row.style.boxShadow = '';
-        row.style.transition = '';
-        row.style.borderLeft = '';
-        row.style.border = '2px solid #d32f2f';
+        row.classList.add('origin-missing');
+        row.style.setProperty('background-color', 'rgba(220, 53, 69, 0.2)', 'important');
+        row.style.setProperty('color', '#721c24', 'important');
+        row.style.setProperty('font-weight', '500', 'important');
+        row.style.setProperty('box-shadow', 'none', 'important');
+        row.style.setProperty('transition', 'all 0.2s ease', 'important');
+        row.style.setProperty('border-left', '6px solid #dc3545', 'important');
+        row.style.setProperty('border', '2px solid #dc3545', 'important');
+        row.style.setProperty('border-radius', '6px', 'important');
     }
 }
 
