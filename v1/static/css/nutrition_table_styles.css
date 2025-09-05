@@ -1,0 +1,349 @@
+/* ====================================================
+   영양성분 표시 CSS - 한눈에 보는 영양표시 가이드라인 기준
+   ==================================================== */
+
+/* 공통 컨테이너 */
+.nutrition-style-basic,
+.nutrition-style-vertical,
+.nutrition-style-parallel {
+  font-family: 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif !important;
+  margin: 0 auto !important;
+  padding: 10px;
+}
+
+/* 공통 테이블 스타일 */
+.nutrition-table {
+  width: 100%;
+  border-collapse: collapse !important;
+  background: #fff !important;
+  color: #000 !important;
+  font-size: 12pt !important; /* 최소 10pt 이상으로 증가 */
+  line-height: 1.4 !important;
+  border: 2px solid #000 !important; /* 가장 굵은 외곽선 */
+  font-family: 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif !important;
+}
+
+/* 테이블 헤더(thead), 바디(tbody), 푸터(tfoot) */
+.nutrition-table thead,
+.nutrition-table tbody,
+.nutrition-table tfoot {
+  border: none;
+}
+
+.nutrition-table th,
+.nutrition-table td {
+  padding: 4px 8px !important;
+  text-align: left !important;
+  vertical-align: middle !important;
+  border: none;
+}
+
+/* 제목 (영양정보) - 검은색 배경 */
+.nutrition-title {
+  background: #000 !important;
+  color: white !important;
+  font-weight: bold !important;
+  font-size: 14pt !important;
+  text-align: center !important;
+  padding: 8px !important;
+  border-bottom: 1px solid #000 !important;
+}
+
+/* 부제목 (총 내용량, 열량) - 검은색 배경 */
+.nutrition-subheader {
+  background: #000 !important;
+  color: white !important;
+  font-weight: normal !important;
+  font-size: 10pt !important;
+  text-align: left !important;
+  padding: 6px 8px !important;
+  border-bottom: 8px solid #000 !important; /* 두꺼운 구분선 */
+}
+.calories-value {
+  font-weight: bold !important;
+}
+
+/* 영양성분 행 - 흰색 배경 */
+.nutrition-row td {
+  background: white !important;
+  color: #000 !important;
+  border-bottom: 1px solid #000 !important;
+}
+
+/* 영양성분명 */
+.nutrition-name {
+  font-weight: bold !important; /* 영양성분명 볼드 처리 */
+  text-align: left !important;
+}
+.nutrition-indent {
+  padding-left: 25px !important;
+  font-weight: bold !important; /* 들여쓰기 항목도 볼드 */
+}
+
+/* 함량 값 */
+.nutrition-value {
+  text-align: right !important;
+  font-weight: bold !important; /* 영양성분 값 볼드 처리 */
+}
+
+/* %영양성분 기준치 값 */
+.nutrition-percent {
+  text-align: right !important;
+  font-weight: bold !important; /* % 값 볼드 처리 */
+}
+.nutrition-percent b {
+  font-weight: bold !important;
+}
+
+/* 마지막 행 하단 테두리 제거 */
+.nutrition-table tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+/* 하단 안내 문구 - 흰색 배경 */
+.nutrition-footer {
+  background: white !important;
+  color: #000 !important;
+  font-size: 8pt !important;
+  line-height: 1.3 !important;
+  text-align: left !important;
+  padding: 8px !important;
+  border-top: 5px solid #000 !important; /* 두꺼운 구분선 */
+}
+
+/* ===== 스타일별 너비 조정 ===== */
+.nutrition-style-basic { width: 320px; }
+.nutrition-style-vertical { width: 240px; }
+.nutrition-style-parallel { width: 500px; }
+
+/* ===== 세로형 스타일 추가 ===== */
+.nutrition-style-vertical .nutrition-subheader {
+  text-align: center !important;
+}
+
+/* ===== 병행표시(복합형) 스타일 추가 ===== */
+.nutrition-style-parallel .nutrition-subheader.subheader-right {
+  border-left: 1px solid #000;
+}
+.nutrition-style-parallel .column-headers th {
+  background: #000 !important;
+  color: white !important;
+  font-size: 9pt;
+  font-weight: bold;
+  text-align: center !important;
+  border-bottom: 2px solid #000 !important; /* 중간 굵기 선 */
+}
+.nutrition-style-parallel .column-headers th.nutrition-name-header {
+  text-align: left !important;
+}
+.nutrition-style-parallel .column-headers th.percent-header {
+  border-right: 2px solid #000; /* 굵은 세로 구분선 */
+}
+.nutrition-style-parallel .nutrition-row td:nth-child(3) {
+  border-right: 2px solid #000; /* 굵은 세로 구분선 */
+}
+.nutrition-style-parallel .nutrition-value,
+.nutrition-style-parallel .nutrition-percent {
+  text-align: center !important;
+}
+.nutrition-style-parallel .nutrition-name {
+  text-align: left !important;
+}
+
+/* Bootstrap 테이블 스타일 무력화 */
+.nutrition-table.table,
+.nutrition-table.table * {
+  box-sizing: border-box !important;
+}
+
+.nutrition-table.table th,
+.nutrition-table.table td {
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .nutrition-style-basic { width: 280px; }
+  .nutrition-style-vertical { width: 220px; }
+  .nutrition-style-parallel { width: 450px; font-size: 9pt !important; }
+  
+  .emphasis-group {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  
+  .emphasis-group-title {
+    margin-bottom: 4px !important;
+  }
+  
+  .emphasis-badge {
+    font-size: 10pt !important;
+    padding: 3px 6px !important;
+  }
+}
+
+/* 계산기 팝업 전용 스타일 */
+.calculator-popup .nutrition-table {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+
+/* 강조표시 라벨 스타일 */
+.emphasis-label {
+  font-size: 10pt !important;
+  font-weight: bold !important;
+  padding: 1px 4px !important;
+  border-radius: 3px !important;
+  margin-left: 5px !important;
+  white-space: nowrap !important;
+}
+
+/* 무 함유 강조 (파란색) */
+.emphasis-free {
+  background-color: #e3f2fd !important;
+  color: #1565c0 !important;
+  border: 1px solid #1976d2 !important;
+}
+
+/* 저 함유 강조 (초록색) */
+.emphasis-low {
+  background-color: #e8f5e8 !important;
+  color: #2e7d32 !important;
+  border: 1px solid #4caf50 !important;
+}
+
+/* 고 함유 강조 (주황색) */
+.emphasis-high {
+  background-color: #fff3e0 !important;
+  color: #ef6c00 !important;
+  border: 1px solid #ff9800 !important;
+}
+
+/* 강조표시 라벨 호버 효과 */
+.emphasis-label:hover {
+  opacity: 0.8 !important;
+  transform: scale(1.05) !important;
+  transition: all 0.2s ease !important;
+}
+
+/* 강조표시 검토결과 영역 스타일 */
+.emphasis-review-section {
+  margin-top: 20px !important;
+  padding: 15px !important;
+  background-color: #f8f9fa !important;
+  border: 1px solid #dee2e6 !important;
+  border-radius: 5px !important;
+  font-family: 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif !important;
+}
+
+.emphasis-title {
+  font-size: 14pt !important;
+  font-weight: bold !important;
+  color: #333 !important;
+  margin: 0 0 15px 0 !important;
+  padding-bottom: 8px !important;
+  border-bottom: 2px solid #007bff !important;
+}
+
+.emphasis-recommendations {
+  margin-bottom: 10px !important;
+}
+
+.emphasis-group {
+  margin-bottom: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+}
+
+.emphasis-group-title {
+  font-size: 11pt !important;
+  font-weight: bold !important;
+  margin: 0 8px 0 0 !important;
+  color: #495057 !important;
+  display: inline-block !important;
+  white-space: nowrap !important;
+}
+
+.emphasis-list {
+  list-style: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  flex: 1 !important;
+}
+
+.emphasis-item {
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  margin: 0 !important;
+}
+
+.emphasis-badge {
+  display: inline-block !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  font-size: 11pt !important;
+  font-weight: bold !important;
+  margin: 0 !important;
+  min-width: auto !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+
+.emphasis-note {
+  font-size: 10pt !important;
+  color: #6c757d !important;
+  margin: 0 !important;
+  font-style: italic !important;
+}
+
+.no-emphasis {
+  color: #6c757d !important;
+  font-style: italic !important;
+  margin: 0 !important;
+  text-align: center !important;
+  padding: 10px !important;
+}
+
+/* PDF/인쇄용 스타일 */
+@media print {
+  .emphasis-review-section {
+    page-break-inside: avoid !important;
+    background-color: #f8f9fa !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  .emphasis-badge {
+    background-color: inherit !important;
+    border: 1px solid #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  .emphasis-free {
+    background-color: #e3f2fd !important;
+    border-color: #1976d2 !important;
+  }
+  
+  .emphasis-low {
+    background-color: #e8f5e8 !important;
+    border-color: #4caf50 !important;
+  }
+  
+  .emphasis-high {
+    background-color: #fff3e0 !important;
+    border-color: #ff9800 !important;
+  }
+}
+
+/* HTML to Canvas 캡처 시 스타일 보존 */
+.emphasis-review-section * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
