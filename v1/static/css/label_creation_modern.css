@@ -6,7 +6,33 @@
    - 원재료 표로 입력
    - 영양성분 계산기
    가시성, 디자인 통일성, 사용자 편의성 개선
+   Updated: 2025-09-05 - 스마트추천 버튼 겹침 해결
    ==================================================== */
+
+/* 전역 textarea 동적 크기 조절 기본 스타일 */
+textarea {
+  min-height: 48px !important;
+  resize: none !important;
+  overflow-y: hidden !important;
+  box-sizing: border-box !important;
+  line-height: 1.4 !important;
+  word-wrap: break-word !important;
+  height: auto !important; /* JavaScript에서 동적으로 설정된 값을 우선시 */
+  max-height: none !important; /* 최대 높이 제한 제거 */
+}
+
+/* 일반 input 필드는 고정 높이 유지 (1줄) - 더 타이트하게 조정 */
+input[type="text"], 
+input[type="number"], 
+input[type="email"], 
+input[type="password"],
+select {
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  line-height: 1.2 !important;
+  padding: 0.375rem 0.5rem !important; /* 기본 패딩도 줄임 */
+}
 
 /* CSS 변수 정의 */
 :root {
@@ -43,12 +69,12 @@
 
 .fixed-header-container {
   position: fixed;
-  top: 56px; /* Bootstrap navbar 기본 높이 */
+  top: 66px; /* Bootstrap navbar 기본 높이 + 10px 간격 추가 */
   left: 0;
   right: 0;
   z-index: 1040; /* navbar z-index(1030)보다 높게 설정 */
   background: linear-gradient(135deg, #ffffff 0%, var(--modern-gray-50) 100%);
-  border-bottom: 1px solid var(--modern-gray-200);
+  border-top: 1px solid var(--modern-gray-200); /* 테두리를 상단으로 이동 */
   box-shadow: var(--modern-shadow-md);
   height: var(--header-height);
   width: 100%;
@@ -155,7 +181,7 @@
 }
 
 .header-spacer {
-  height: calc(56px + var(--header-height) + 0.25rem); /* navbar height + header height + 더 작은 간격 (0.5rem → 0.25rem) */
+  height: calc(66px + var(--header-height) * 0.1 + 0.0625rem); /* navbar height + 간격 + header height 반으로 축소 + 추가 간격 더 축소 */
   width: 100%;
 }
 
@@ -237,13 +263,13 @@
 
 @media (max-width: 768px) {
   .fixed-header-container {
-    top: 56px;
+    top: 66px; /* 모바일에서도 동일한 간격 적용 */
     z-index: 1050;
     height: auto;
   }
   
   .header-spacer {
-    height: calc(56px + 80px + 0.25rem); /* 높이 고정값으로 조정 */
+    height: calc(66px + 40px + 0.0625rem); /* navbar + 간격 + 높이를 절반으로 축소, 추가 간격 더 축소 */
   }
   
   .compact-header {
@@ -302,6 +328,104 @@
   .action-buttons-compact .btn i {
     margin: 0;
   }
+
+/* 상세 입력 영역의 스마트 추천 버튼 스타일 (체크박스 크기) */
+.smart-recommendation-icon {
+  width: 20px !important;
+  height: 20px !important;
+  border: none !important;
+  border-radius: 3px !important;
+  background: none !important;
+  color: #9ca3af !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 2px 4px !important;
+  font-size: 0.7rem !important;
+  box-shadow: none !important;
+  opacity: 0.7 !important;
+}
+
+.smart-recommendation-icon:hover {
+  background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.smart-recommendation-icon:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.smart-recommendation-icon.has-recommendations {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: white !important;
+  opacity: 1 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+.smart-recommendation-icon.has-recommendations:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3) !important;
+}
+
+.smart-recommendation-icon.has-recommendations:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.2) !important;
+}
+
+.smart-recommendation-icon.checking {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%) !important;
+  color: white !important;
+  opacity: 0.8 !important;
+  animation: pulse 1s infinite !important;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.smart-recommendation-icon.disabled {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%) !important;
+  color: #9ca3af !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  pointer-events: none !important;
+  opacity: 0.3 !important;
+}
+
+.smart-recommendation-icon.disabled:hover {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%) !important;
+  transform: none !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  color: #9ca3af !important;
+}
+
+.smart-recommendation-icon.disabled:active {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%) !important;
+  transform: none !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.smart-recommendation-icon[disabled] {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%) !important;
+  color: #9ca3af !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  pointer-events: none !important;
+  opacity: 0.3 !important;
+}
+
+.smart-recommendation-icon i {
+  font-size: 8px !important;
+  margin: 0 !important;
+}
 
 /* Select2 드롭다운 위치 수정 */
 .select2-container {
@@ -451,6 +575,54 @@
 }
 
 /* ====================================================
+   Step 컨테이너 여백 제거
+   ==================================================== */
+
+#step1-row,
+#step2-card {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  /* textarea 확장을 위한 높이 제한 해제 */
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+#step1-row .modern-card,
+#step2-card .modern-card {
+  margin-top: 0 !important;
+}
+
+/* ====================================================
+   버튼 크기 통일 (헤더 버튼 기준)
+   ==================================================== */
+
+.btn:not(.action-buttons-compact .btn):not(.btn-lg):not(.btn-xs) {
+  padding: 0.375rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  border-radius: var(--modern-border-radius-sm) !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+/* 동적으로 생성되는 버튼들도 포함 */
+.add-ingredient-btn,
+.remove-ingredient-btn,
+.add-additive-btn,
+.remove-additive-btn,
+.btn[class*="add-"],
+.btn[class*="remove-"] {
+  padding: 0.375rem 0.75rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  border-radius: var(--modern-border-radius-sm) !important;
+}
+
+/* ====================================================
    카드 스타일
    ==================================================== */
 
@@ -476,14 +648,38 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--modern-spacing-sm);
+  min-height: 60px;
 }
 
 .card-title-section {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 제목과 버튼이 포함된 영역 */
+.card-title-section h5 {
+  margin: 0;
+}
+
+/* 제목과 버튼을 같은 줄에 배치 */
+.title-and-buttons {
+  display: flex !important;
+  align-items: center !important;
+  gap: 15px !important;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 버튼 컨테이너 스타일 최적화 */
+.card-title-section .ms-3 {
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .card-title {
@@ -512,6 +708,7 @@
   display: flex;
   gap: var(--modern-spacing-xs);
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .modern-card-body {
@@ -603,20 +800,37 @@
 }
 
 /* ====================================================
-   상세 입력 필드 스타일
+   상세 입력 필드 스타일 - 4영역 분리 구조
+   1. 왼쪽 라벨 영역 (고정 너비)
+   2. 중간 입력 영역 (가변 너비)
+   3. 오른쪽 스마트추천 아이콘 영역 (고정 너비, Step2만)
+   4. 여백 영역 (필요시)
    ==================================================== */
 
 .field-row-modern {
   display: flex;
-  align-items: center;
-  gap: var(--modern-spacing-sm);
+  align-items: center; /* 기본값 center로 복원 - 일반 필드들은 중앙 정렬 */
+  gap: 1rem; /* var(--modern-spacing-sm) → 1rem으로 간격 확대 */
   margin-bottom: var(--modern-spacing);
   padding: var(--modern-spacing-sm);
   background-color: var(--modern-gray-50);
   border-radius: var(--modern-border-radius-sm);
   border: 1px solid var(--modern-gray-200);
   transition: all 0.2s ease;
-  min-height: 48px;
+  min-height: 40px; /* 48px → 40px로 줄임 */
+  width: 100%; /* 전체 너비 사용 */
+  position: relative; /* 스마트 추천 아이콘의 absolute positioning을 위해 */
+  /* textarea 확장을 위한 높이 자동 조절 */
+  height: auto !important; /* !important 추가로 높이 제약 확실히 제거 */
+}
+
+/* 특정 textarea 필드들만 상단 정렬 적용 */
+.field-row-modern:has(textarea[name="rawmtrl_nm_display"]),
+.field-row-modern:has(textarea[name="rawmtrl_nm"]),
+.field-row-modern:has(textarea[name="caution_text"]),
+.field-row-modern:has(textarea[name="etc_dsply_text"]),
+.field-row-modern:has(textarea[name="nutrition_text"]) {
+  align-items: flex-start; /* 다중 라인 textarea만 상단 정렬 */
 }
 
 .field-row-modern:hover {
@@ -624,12 +838,324 @@
   border-color: var(--modern-gray-300);
 }
 
-.field-checkbox-section {
+/* 분리배출마크 텍스트 라인 고정: 각 복합재질 항목은 별도의 줄로 렌더링 */
+#recyclingMarkTextContainer {
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+  margin-top: 6px;
+}
+
+.recycling-line {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 7pt; /* slightly larger for 가독성 */
+  line-height: 1.2;
+}
+
+.recycling-text-line {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+/* 토글: 긴 텍스트를 말줄임 대신 줄바꿈으로 허용하려면 부모에 .recycling-wrap-normal을 추가 */
+.recycling-wrap-normal .recycling-line {
+  white-space: normal;
+  text-overflow: clip;
+}
+
+/* 리스트형 분리배출마크 UI 스타일 */
+#recyclingMarkList {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+
+.recycling-item {
   display: flex;
   align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid var(--modern-gray-200);
+  margin-bottom: 6px;
+}
+
+.recycling-mark-item img {
+  width: 24px;
+  height: 24px;
+}
+
+.recycling-text-item {
+  background: var(--modern-gray-50);
+}
+
+/* 영역 1: 왼쪽 라벨 영역 - 고정 너비 */
+.field-checkbox-section {
+  display: flex;
+  align-items: flex-start;
   gap: 0.5rem;
-  min-width: 140px;
+  width: 180px; /* 160px → 180px (제조원 소재지 텍스트를 위해 확장) */
+  min-width: 180px;
+  max-width: 180px;
+  flex-shrink: 0; /* 축소 방지 */
+}
+
+/* 세로 중간정렬을 위한 클래스 */
+.field-checkbox-section-vertical-center {
+  align-items: center !important; /* flex-start를 center로 변경 */
+}
+
+/* 세로 중간정렬 시 label-button-container도 중간정렬 */
+.field-checkbox-section-vertical-center .label-button-container {
+  justify-content: center !important; /* 컨테이너 내부 요소들을 세로 중간정렬 */
+  align-items: flex-start !important; /* 좌측 정렬은 유지 */
+}
+
+/* ------------------ Preview-specific micro-tweaks ------------------ */
+/* Reduce icon visual footprint inside preview/action buttons */
+.preview-actions .fas,
+.settings-actions-row .fas,
+.preview-panel .fas {
+  font-size: 0.85rem !important; /* 기본보다 작게 */
+  vertical-align: middle;
+  color: var(--modern-gray-600) !important;
+}
+
+/* Shrink icon left margin for compact buttons */
+.preview-actions .me-1,
+.settings-actions-row .me-1 {
+  margin-right: 0.35rem !important;
+}
+
+/* Input padding increase to avoid icon overlap and improve legibility */
+.settings-panel .form-control,
+.settings-panel .form-select {
+  padding: 0.45rem 0.6rem !important;
+}
+
+/* Force settings rows to keep label and input on a single line where possible */
+.settings-panel .settings-row .settings-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+  white-space: nowrap !important;
+}
+
+/* When width is constrained, allow input to shrink but keep label on one line */
+.settings-panel .settings-row .settings-item label.form-label {
+  flex: 0 0 90px !important;
+  min-width: 90px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.settings-panel .settings-row .settings-item input,
+.settings-panel .settings-row .settings-item select {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+/* Enforce left panel max width as requested */
+.settings-panel { max-width: 480px !important; }
+
+/* Ensure preview header action buttons visually match calculator buttons */
+.preview-actions .btn {
+  background: var(--modern-primary) !important;
+  color: white !important;
+  border-color: transparent !important;
+  box-shadow: var(--modern-shadow) !important;
+}
+.preview-actions .btn.btn-secondary {
+  background: #6b7280 !important;
+}
+.preview-actions .btn i { color: rgba(255,255,255,0.95) !important; font-size:0.9rem !important; }
+
+/* Left panel action buttons - keep outline / primary semantics consistent */
+.settings-actions-row .btn-modern-outline {
+  background: transparent !important;
+  color: var(--modern-gray-700) !important;
+  border: 1px solid var(--modern-gray-300) !important;
+}
+.settings-actions-row .btn-modern-success {
+  background: var(--modern-success) !important;
+  color: white !important;
+  border: none !important;
+}
+
+/* Small helper: reduce excessive margins in preview buttons */
+.preview-actions .btn { padding: 6px 8px !important; font-size:0.9rem !important; }
+
+/* Mobile: relax single-line enforcement */
+@media (max-width: 992px) {
+  .settings-panel .settings-row .settings-item { white-space: normal !important; flex-direction: column !important; align-items: flex-start !important; }
+  .settings-panel { max-width: none !important; }
+  .preview-actions .btn { font-size: 0.85rem !important; }
+}
+
+/* Header buttons: match nutrition calculator popup primary style */
+.btn-calc-primary,
+.preview-actions .btn-calc-primary {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 6px 14px rgba(37,99,235,0.16) !important;
+}
+.btn-calc-primary i { color: rgba(255,255,255,0.95) !important; }
+.btn-calc-primary:hover, .preview-actions .btn-calc-primary:hover {
+  background: linear-gradient(180deg, #2563eb 0%, #1e40af 100%) !important;
+  transform: translateY(-1px);
+}
+.btn-calc-primary:focus {
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.12) !important;
+  outline: none;
+}
+
+/* Center-align the two action buttons in left panel vertically */
+.settings-actions-row {
+  display: flex !important;
+  gap: 10px !important;
+  align-items: center !important; /* vertical center */
+  justify-content: flex-start !important;
+  padding: 6px 0 !important;
+}
+
+/* Role-based button utilities (use these across popups/pages) */
+.btn-role-primary {
+  background: linear-gradient(180deg, var(--modern-primary) 0%, var(--modern-primary-hover) 100%) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 4px 10px rgba(59,130,246,0.12) !important;
+}
+.btn-role-secondary {
+  background: linear-gradient(180deg, #6b7280 0%, #4b5563 100%) !important;
+  color: #fff !important;
+  border: none !important;
+}
+.btn-role-outline {
+  background: transparent !important;
+  color: var(--modern-gray-700) !important;
+  border: 1px solid var(--modern-gray-300) !important;
+}
+
+/* Recycling mark: ensure each material/complex-material renders on its own line */
+#recyclingMarkUiBox .recycling-line,
+#recyclingMarkUiBox .recycling-composite {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 6px 8px !important;
+  border-radius: var(--modern-border-radius-sm) !important;
+  background: var(--modern-gray-50) !important;
+  margin-bottom: 6px !important;
+  width: 100%;
+}
+
+#recyclingMarkUiBox .recycling-composite .sub-item {
+  display: block !important; /* ensure sub items stack vertically inside composite */
+  margin-left: 12px !important;
+}
+
+/* -------------------------------------------------------------------- */
+
+/* 영역 2: 중간 입력 영역 - 가변 너비 */
+.field-input-section {
+  flex: 1; /* 가변 너비 - 남은 공간 사용 */
+  display: flex;
+  align-items: center; /* 기본값 center로 복원 - 일반 필드들은 중앙 정렬 */
+  gap: var(--modern-spacing-xs);
+  min-width: 0; /* 축소 허용 */
+  /* 스마트 추천 영역을 위한 오른쪽 마진 제거 - absolute positioning 사용 */
+  margin-right: 0;
+  height: auto !important; /* 높이 자동 조절 허용 */
+  min-height: 0 !important; /* 최소 높이 제한 제거 */
+}
+
+/* Step2 섹션의 모든 항목명(라벨)을 중앙정렬로 통일 */
+#step2-card .field-row-modern .field-checkbox-section,
+#step2-card .field-row-modern .field-label-section {
+  display: flex;
+  align-items: center; /* 모든 라벨을 세로 중앙정렬 */
+}
+
+/* Step2 섹션의 특정 textarea 필드들만 라벨을 상단 정렬 유지 */
+#step2-card .field-row-modern:has(textarea[name="rawmtrl_nm_display"]) .field-checkbox-section,
+#step2-card .field-row-modern:has(textarea[name="rawmtrl_nm"]) .field-checkbox-section,
+#step2-card .field-row-modern:has(textarea[name="cautions"]) .field-checkbox-section,
+#step2-card .field-row-modern:has(textarea[name="additional_info"]) .field-checkbox-section,
+#step2-card .field-row-modern:has(textarea[name="nutrition_text"]) .field-checkbox-section {
+  align-items: flex-start; /* 다중 라인 textarea의 라벨만 상단 정렬 */
+}
+
+/* 특정 textarea 필드들의 입력 섹션만 상단 정렬 */
+.field-row-modern:has(textarea[name="rawmtrl_nm_display"]) .field-input-section,
+.field-row-modern:has(textarea[name="rawmtrl_nm"]) .field-input-section,
+.field-row-modern:has(textarea[name="caution_text"]) .field-input-section,
+.field-row-modern:has(textarea[name="etc_dsply_text"]) .field-input-section,
+.field-row-modern:has(textarea[name="nutrition_text"]) .field-input-section {
+  align-items: flex-start; /* 다중 라인 textarea만 상단 정렬 */
+}
+
+/* 영역 3: 오른쪽 스마트추천 아이콘 영역 - Step2에서만 표시 */
+.smart-recommendation-area {
+  position: absolute;
+  right: 6px; /* 8px → 6px로 더 오른쪽 가장자리로 */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px; /* 24px → 20px로 더 작게 */
+  height: 20px; /* 24px → 20px로 더 작게 */
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 기본적으로 숨김 */
+  visibility: hidden;
+  z-index: 10;
+}
+
+/* Step2 영역에서만 스마트추천 영역 표시 */
+#step2-card .smart-recommendation-area {
+  visibility: visible;
+}
+
+/* 선택박스(select) 필드에서는 스마트추천 버튼 숨김 (드롭다운 화살표와 겹침 방지) */
+#step2-card .field-row-modern:has(select) .smart-recommendation-area,
+#step2-card .field-row-modern:has(.select2-container) .smart-recommendation-area {
+  visibility: hidden !important;
+  display: none !important;
+}
+
+/* 원산지 선택박스 전용 숨김 */
+input[name="country_of_origin"] ~ .smart-recommendation-area,
+.select2-container ~ .smart-recommendation-area {
+  visibility: hidden !important;
+  display: none !important;
+}
+
+/* 선택박스는 스마트추천 버튼이 없으므로 패딩 제거 */
+#step2-card .input-container-modern select,
+#step2-card .field-input-section select,
+#step2-card .input-container-modern .select2-selection,
+#step2-card .field-input-section .select2-selection {
+  padding-right: 12px !important; /* 기본 패딩으로 복원 */
+}
+
+/* d-flex 컨테이너 내부의 입력 필드는 스마트추천 버튼 영향 없음 */
+#step2-card .input-container-modern.d-flex .form-control,
+#step2-card .field-input-section .input-container-modern.d-flex .form-control {
+  padding-right: 12px !important; /* 기본 패딩 사용 */
+}
+
+/* 원산지 필드의 스마트추천 영역 완전 제거 */
+.field-row-modern:has(select[name="country_of_origin"]) .smart-recommendation-area,
+.field-row-modern:has(.select2-country) .smart-recommendation-area {
+  display: none !important;
+  visibility: hidden !important;
 }
 
 /* 라벨 영역 버튼 스타일 */
@@ -647,6 +1173,12 @@
 
 .field-checkbox-section .btn i {
   font-size: 0.7rem !important;
+}
+
+/* 제조원 소재지 토글 버튼 */
+#toggleManufacturerBtn {
+  min-width: 30px !important;
+  width: 30px !important;
 }
 
 /* 2줄 라벨-버튼 컨테이너 스타일 */
@@ -745,16 +1277,10 @@ input[name="prdlst_report_no"] {
 input[name="prdlst_report_no"] {
   min-width: 180px !important;
   max-width: 180px !important;
-  font-family: 'Courier New', monospace !important;
   letter-spacing: 0.5px !important;
   text-align: center !important;
   font-size: 0.9rem !important;
   flex-shrink: 0 !important;
-}
-
-/* 식품유형 대분류 select 박스 스타일 */
-#food_group {
-  min-width: 200px !important;
 }
 
 /* 검증 상태별 버튼 색상 강화 */
@@ -785,6 +1311,7 @@ input[name="prdlst_report_no"] {
   transition: all 0.2s ease;
   flex-shrink: 0;
   margin: 0;
+  margin-top: 2px;
 }
 
 .field-checkbox-modern:checked {
@@ -799,7 +1326,8 @@ input[name="prdlst_report_no"] {
   margin: 0;
   cursor: pointer;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: center;
   line-height: 1.2;
 }
 
@@ -811,61 +1339,317 @@ input[name="prdlst_report_no"] {
 }
 
 .input-container-modern {
-  flex: 1;
+  width: 100%; /* 부모 영역(field-input-section) 전체 사용 */
   position: relative;
   display: flex;
   gap: var(--modern-spacing-xs);
-  align-items: center;
+  align-items: flex-start; /* center에서 flex-start로 변경하여 높이 확장 허용 */
+  height: auto !important; /* 높이 자동 조절 허용 */
+  min-height: unset !important; /* 최소 높이 제한 제거 */
 }
 
-.input-container-modern .form-control,
-.input-container-modern .form-select,
-.input-container-modern textarea {
+.input-container-modern .form-control:not(textarea),
+.input-container-modern .form-select {
+  width: 100% !important; /* 컨테이너 전체 너비 사용 */
+  flex: 1 !important; /* 가변 너비 */
   border: 2px solid var(--modern-gray-200);
   border-radius: var(--modern-border-radius-sm);
   transition: all 0.2s ease;
   font-size: 0.875rem;
-  flex: 1;
-  min-width: 0; /* 텍스트가 잘릴 수 있도록 */
-  height: 38px; /* 표준 높이 통일 */
+  height: 38px; /* 표준 높이 통일 - textarea는 제외 */
+  margin: 0 !important; /* 마진 제거 */
+  padding-right: 12px !important; /* 기본 패딩 */
 }
+
+.input-container-modern textarea {
+  width: 100% !important;
+  flex: 1 !important;
+  border: 2px solid var(--modern-gray-200);
+  border-radius: var(--modern-border-radius-sm);
+  font-size: 0.875rem;
+  height: auto !important; /* 자동 높이 조절 허용 */
+  max-height: none !important; /* 최대 높이 제한 제거 */
+  min-height: 48px !important;
+  margin: 0 !important;
+  padding: 6px 10px !important; /* 8px → 6px, 12px → 10px로 줄임 */
+  resize: none !important;
+  overflow-y: hidden !important;
+  line-height: 1.3 !important; /* 1.4 → 1.3으로 줄임 */
+  box-sizing: border-box !important;
+  vertical-align: top !important;
+  /* height는 JavaScript가 설정 */
+}
+
+/* 영양성분과 원재료명(참고) 필드 - 클릭 전용 스타일 */
+div.input-container-modern textarea#nutrition_text,
+div.input-container-modern textarea#rawmtrl_nm {
+  background-color: #f8f9fa !important;
+  cursor: pointer !important;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+  border: 2px solid var(--modern-gray-200) !important;
+}
+
+div.input-container-modern textarea#nutrition_text:hover,
+div.input-container-modern textarea#rawmtrl_nm:hover {
+  background-color: #e9ecef !important;
+  border-color: #86b7fe !important;
+  transform: none !important; /* 다른 hover 효과 제거 */
+}
+
+div.input-container-modern textarea#nutrition_text:focus,
+div.input-container-modern textarea#rawmtrl_nm:focus {
+  background-color: #e9ecef !important;
+  border-color: #86b7fe !important;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
+  outline: none !important;
+}
+
+/* 원재료명(참고) 오버레이 스타일 */
+#rawmtrl_nm_overlay {
+  cursor: pointer !important;
+  z-index: 10 !important;
+}
+
+/* 오버레이 hover 시 textarea 스타일 변경 */
+#rawmtrl_nm_overlay:hover + textarea#rawmtrl_nm,
+.input-container-modern:has(#rawmtrl_nm_overlay:hover) textarea#rawmtrl_nm {
+  background-color: #e9ecef !important;
+  border-color: #86b7fe !important;
+}
+
+/* 텍스트 크기와 스타일 완전 통일 */
+div.input-container-modern textarea#nutrition_text,
+div.input-container-modern textarea#rawmtrl_nm {
+  font-size: 0.875rem !important;
+  line-height: 1.4 !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: normal !important;
+  color: #495057 !important;
+  padding: 8px 12px !important;
+}
+
+/* 원재료명(표시) 필드 - 일반 입력 필드 스타일 (기본 스타일 사용) */
+.input-container-modern textarea[name="rawmtrl_nm_display"] {
+  background-color: #ffffff !important;
+  cursor: text !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+  min-height: 48px !important; /* 기본 2줄 표시 높이 */
+  height: auto !important; /* 자동 높이 조절 허용 */
+  max-height: none !important; /* 최대 높이 제한 제거 */
+  overflow-y: hidden !important; /* 스크롤바 없애기 */
+}
+
+.input-container-modern textarea[name="rawmtrl_nm_display"]:hover {
+  border-color: #86b7fe !important;
+}
+
+.input-container-modern textarea[name="rawmtrl_nm_display"]:focus {
+  background-color: #ffffff !important;
+  border-color: #86b7fe !important;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
+}
+
+/* Step2 영역(상세 입력) - 4영역 구조 적용 */
+/* 입력 필드와 스마트추천 아이콘이 완전히 분리됨 */
+#step2-card .input-container-modern .form-control,
+#step2-card .input-container-modern .form-select,
+#step2-card .input-container-modern textarea,
+#step2-card .field-input-section .form-control,
+#step2-card .field-input-section .form-select,
+#step2-card .field-input-section textarea {
+  width: 100% !important;
+  flex: 1 !important;
+  /* 스마트추천 아이콘 크기 축소로 패딩도 대폭 축소 */
+  padding-right: 24px !important; /* 28px → 24px로 더 축소 */
+}
+
+/* 범용적으로 Step2 영역의 모든 입력 요소에 적용 - 3영역 구조로 대체됨 */
+/* 기존 padding-right 방식 제거하고 margin-right 방식 사용 */
 
 /* input과 select 요소만 높이 적용 */
 .input-container-modern .form-control:not(textarea),
 .input-container-modern .form-select {
   height: 38px !important;
-  line-height: 1.5 !important;
-  display: flex !important;
-  align-items: center !important;
+  width: 100% !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  padding-right: 28px !important;
+
+.position-static {
+  position: static !important;
+}
+.card-header-modern {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.card-header-modern h5 {
+  margin-bottom: 0 !important;
+  white-space: nowrap !important;
+}
+.card-body .form-group,
+.card-body .row {
+  margin-bottom: 1.25rem !important;
+}
+/* textarea 높이 설정 - JavaScript가 동적으로 관리 */
+.input-container-modern textarea {
+  min-height: 48px !important;
+  width: 100% !important;
+  flex: 1 !important;
+  resize: none !important;
 }
 
-/* textarea 높이 설정 */
-.input-container-modern textarea {
-  min-height: 80px !important;
-  height: auto !important; /* textarea는 자동 높이 */
-  resize: vertical !important;
+/* Step2 영역의 textarea - 높이 제한 완전 해제 */
+#step2-card .input-container-modern textarea,
+#step2-card .field-input-section textarea {
+  min-height: 48px !important;
+  max-height: none !important;
+  height: auto !important;
+  width: 100% !important;
+  flex: 1 !important;
+  resize: none !important;
+  padding-right: 24px !important;
+  overflow: visible !important;
 }
 
 .input-container-modern textarea.auto-expand {
-  min-height: 80px !important;
-  max-height: 200px !important;
-  overflow-y: auto !important;
+  min-height: 48px !important;
+  overflow-y: hidden !important;
 }
 
-/* textarea가 있는 필드의 정렬 처리 */
+/* textarea가 있는 필드의 정렬 처리 - 강화된 선택자 */
 .input-container-modern:has(textarea) {
   align-items: flex-start !important;
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
 }
 
+#step2-card .field-row-modern:has(textarea),
 .field-row-modern:has(textarea) {
   align-items: flex-start !important;
   min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+/* field-input-section도 높이 제한 해제 */
+.field-input-section:has(textarea) {
+  align-items: flex-start !important;
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
 }
 
 /* 2줄 라벨 컨테이너가 있는 필드의 정렬 처리 */
 .field-row-modern:has(.label-button-container) {
   align-items: flex-start !important;
   min-height: auto !important;
+}
+
+/* textarea 필드에 대한 추가 강화 - 높이 자동 확장 보장 */
+.field-row-modern:has(textarea[name="rawmtrl_nm_display"]),
+.field-row-modern:has(textarea[name="cautions"]),
+.field-row-modern:has(textarea[name="additional_info"]),
+.field-row-modern:has(textarea[name="nutrition_text"]),
+.field-row-modern:has(textarea[name="rawmtrl_nm"]) {
+  align-items: flex-start !important;
+  min-height: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  /* textarea 필드는 패딩을 줄여서 더 컴팩트하게 */
+  padding: 8px 12px !important;
+}
+
+/* Bootstrap row와 col 클래스의 textarea 관련 높이 제한 해제 */
+.row:has(textarea),
+.col-12:has(textarea),
+.g-3:has(textarea),
+.mb-2:has(textarea) {
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+/* textarea를 포함한 모든 부모 컨테이너의 높이 제한 완전 해제 */
+*:has(textarea[name="rawmtrl_nm_display"]) {
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+*:has(textarea[name="cautions"]) {
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+*:has(textarea[name="additional_info"]) {
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+*:has(textarea[name="nutrition_text"]) {
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+*:has(textarea[name="rawmtrl_nm"]) {
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+/* 모든 textarea 포함 요소의 높이 제한 완전 해제 - 최종 보장 */
+.container:has(textarea),
+.container-fluid:has(textarea),
+.card:has(textarea),
+.card-body:has(textarea),
+.row:has(textarea),
+[class*="col"]:has(textarea),
+div:has(textarea) {
+  min-height: auto !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+/* textarea 자체의 모든 제약 완전 제거 - 최고 우선순위 */
+textarea.form-control,
+textarea.auto-expand,
+textarea[name*="rawmtrl"],
+textarea[name*="cautions"],
+textarea[name*="additional"],
+textarea[name*="nutrition"],
+textarea[name="rawmtrl_nm_display"],
+textarea[name="rawmtrl_nm"],
+textarea[name="cautions"],
+textarea[name="additional_info"],
+textarea[name="nutrition_text"] {
+  min-height: 48px !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow-y: hidden !important;
+  resize: none !important;
+  box-sizing: border-box !important;
+}
+
+/* 모든 textarea 관련 240px 제한 완전 제거 */
+#step2-card textarea,
+.input-container-modern textarea,
+.field-input-section textarea,
+.form-control.auto-expand,
+.textarea {
+  max-height: none !important;
 }
 
 /* ====================================================
@@ -1318,6 +2102,102 @@ input[name="prdlst_report_no"] {
   box-shadow: var(--modern-shadow) !important;
 }
 
+/* -----------------------
+   Modern centralized button system
+   - Use these classes across the app for consistent look
+   - Prefer adding semantic classes: btn-primary-modern, btn-secondary-modern, btn-outline-modern
+   - Also override common placement used in templates (action-buttons, preview-actions)
+   ----------------------- */
+
+:root {
+  --btn-padding-y: 0.45rem;
+  --btn-padding-x: 0.9rem;
+  --btn-font-size: 0.95rem;
+  --btn-icon-gap: 0.5rem;
+}
+
+/* Icon spacing inside buttons */
+.btn i, .btn .fas, .btn .fa {
+  margin-right: var(--btn-icon-gap);
+  font-size: 1rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+.btn.btn-icon-only i, .btn-icon-only .fas, .btn-icon-only .fa { margin-right: 0; }
+
+/* Base modern sizing */
+.btn {
+  padding: var(--btn-padding-y) var(--btn-padding-x) !important;
+  font-size: var(--btn-font-size) !important;
+  min-height: 36px !important;
+}
+.btn-sm { padding: 0.35rem 0.65rem !important; font-size: 0.85rem !important; min-height: 30px !important; }
+
+/* Primary / Secondary / Success variants (modern colors using defined variables) */
+.btn-primary, .btn-primary-modern, .action-buttons .btn-primary, .action-buttons-right .btn-primary {
+  background: var(--modern-primary) !important;
+  color: #fff !important;
+  border: none !important;
+}
+.btn-primary:hover, .btn-primary-modern:hover { background: var(--modern-primary-hover) !important; }
+
+.btn-secondary, .btn-secondary-modern {
+  background: var(--modern-gray-600) !important;
+  color: #fff !important;
+  border: none !important;
+}
+.btn-secondary:hover, .btn-secondary-modern:hover { background: var(--modern-gray-700) !important; }
+
+.btn-success, .btn-success-modern {
+  background: var(--modern-success) !important;
+  color: #fff !important;
+  border: none !important;
+}
+.btn-success:hover, .btn-success-modern:hover { background: var(--modern-success-hover) !important; }
+
+/* Outline variant */
+.btn-outline-modern, .btn-outline-primary, .btn-outline-secondary {
+  background: transparent !important;
+  border: 1px solid var(--modern-gray-300) !important;
+  color: var(--modern-gray-700) !important;
+}
+.btn-outline-primary { border-color: var(--modern-primary) !important; color: var(--modern-primary) !important; }
+.btn-outline-primary:hover { background: var(--modern-primary) !important; color: #fff !important; }
+
+/* Focus & accessibility */
+.btn:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important; /* visual focus consistent */
+}
+
+/* Small helpers used in preview & header for denser layout */
+.preview-actions .btn, .settings-actions-row .btn, .action-buttons-compact .btn { padding: 6px 8px !important; font-size:0.9rem !important; }
+.preview-actions .btn i { color: rgba(255,255,255,0.95) !important; font-size:0.95rem !important; }
+
+/* Ensure icon-only buttons keep circular-ish shape */
+.btn-icon-only { padding: 6px !important; width: 36px !important; height: 36px !important; justify-content: center !important; }
+
+/* Popup-specific small overrides to align with modern system */
+.phrase-popup .delete-btn,
+.popup .delete-btn,
+.phrase-popup .delete-btn.btn {
+  background: var(--danger-color, #dc3545) !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 6px 8px !important;
+  font-size: 0.85rem !important;
+  border-radius: 6px !important;
+}
+.phrase-popup .delete-btn:hover { background: #c82333 !important; }
+
+/* Right-panel toggle button alignment */
+.toggle-right-panel-btn {
+  font-size: 0.95rem !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+}
+
+
 /* ====================================================
    반응형 디자인
    ==================================================== */
@@ -1400,35 +2280,6 @@ input[name="prdlst_report_no"] {
 
 .btn-action:hover::before {
   left: 100%;
-}
-
-/* ====================================================
-   추천 시스템 통합 스타일
-   ==================================================== */
-
-.recommendation-icon {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--modern-info);
-  cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.2s ease;
-  z-index: 10;
-}
-
-.recommendation-icon:hover {
-  color: var(--modern-info-hover);
-  transform: translateY(-50%) scale(1.1);
-}
-
-.field-input-section .input-container-modern {
-  position: relative;
-}
-
-.field-input-section .input-container-modern .form-control[data-recommendation-enabled="true"] {
-  padding-right: 2.5rem;
 }
 
 /* ====================================================
@@ -1608,24 +2459,42 @@ textarea:focus {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
 }
 
+/* 중복 제거됨 - 필드 레이아웃 스타일은 위에서 이미 정의됨 */
+
 /* 필드 라벨 섹션 */
-.field-label-section {
-  min-width: 120px;
-  flex-shrink: 0;
+.field-label-section,
+.field-checkbox-section {
+  min-width: 140px !important;
+  flex-shrink: 0 !important;
+  margin-right: 1rem !important;
+  padding-right: 0.5rem !important;
 }
 
+/* 필드 라벨 스타일 통일 */
 .field-label-modern {
-  font-size: 0.9rem !important;
+  font-size: 0.85rem !important;
   font-weight: 600 !important;
   color: var(--modern-gray-700) !important;
   margin-bottom: 0 !important;
   display: flex !important;
   align-items: center !important;
+  line-height: 1.3 !important;
+}
+
+/* 필드 입력 섹션 */
+.field-input-section {
+  flex: 1 !important;
+  min-width: 0 !important;
 }
 
 .field-label-modern i {
   color: var(--modern-primary) !important;
-  font-size: 0.85rem !important;
+  font-size: 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 /* 체크박스 그룹 스타일 */
@@ -1643,10 +2512,15 @@ textarea:focus {
   gap: 0.5rem !important;
 }
 
+/* ====================================================
+   체크박스 스타일 통합 (전체 적용)
+   ==================================================== */
+
+/* 체크박스 입력 기본 스타일 */
 .form-check-input-modern {
   width: 1.1rem !important;
   height: 1.1rem !important;
-  margin: 0 !important;
+  margin: 0 0.4rem 0 0 !important;
   border: 2px solid var(--modern-gray-300) !important;
   border-radius: 4px !important;
   transition: all 0.2s ease !important;
@@ -1664,13 +2538,40 @@ textarea:focus {
   outline: none !important;
 }
 
+/* 체크박스 라벨 기본 스타일 */
 .form-check-label-modern {
-  font-size: 0.875rem !important;
+  font-size: 0.8rem !important;
   font-weight: 500 !important;
+  line-height: 1.2 !important;
   color: var(--modern-gray-700) !important;
   margin: 0 !important;
   cursor: pointer !important;
   user-select: none !important;
+}
+
+/* 컴팩트 체크박스 스타일 (장기보존식품, 제조방법에 사용) */
+.form-check-compact {
+  display: flex !important;
+  align-items: center !important;
+  margin: 0 !important;
+  gap: 0.3rem !important;
+  padding: 0.2rem 0 !important;
+}
+
+.form-check-compact .form-check-input-modern {
+  width: 1rem !important;
+  height: 1rem !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+.form-check-compact .form-check-label-modern {
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.1 !important;
 }
 
 /* 셀렉트 박스 스타일 통일 - 높이를 일반 input과 동일하게 */
@@ -1711,14 +2612,6 @@ textarea:focus {
 /* 기본정보 설정 영역 공백 줄이기 */
 .card-body {
   padding: 0.5rem !important; /* 기본 1.5rem에서 0.5rem으로 줄임 */
-}
-
-#food-type-section {
-  margin-bottom: 0.5rem !important; /* 기본 1rem에서 0.5rem으로 줄임 */
-}
-
-.field-row-modern {
-  margin-bottom: 1rem !important; /* 기본 1.5rem에서 1rem으로 줄임 */
 }
 
 .row.g-4 {
@@ -1775,6 +2668,9 @@ textarea:focus {
     border-bottom: 1px solid #dee2e6;
     padding-bottom: 10px;
     margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .category-group {
@@ -1782,10 +2678,12 @@ textarea:focus {
 }
 
 .category-title {
-    font-weight: 600;
+    font-weight: 500;
     color: #495057;
-    margin-bottom: 10px;
-    padding: 5px 0;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    min-width: 90px;
+    flex-shrink: 0;
 }
 
 .phrase-item {
@@ -1860,10 +2758,40 @@ textarea:focus {
     margin-top: 0.5rem !important;
   }
   
-  .card-title-section .d-flex {
-    flex-direction: column !important;
-    align-items: flex-start !important;
+  /* 카드 헤더는 반응형에서도 nowrap 유지 */
+  .card-header-content {
+    flex-wrap: nowrap !important;
     gap: 0.5rem !important;
+  }
+  
+  .card-title-section {
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+  
+  .card-actions {
+    flex-shrink: 0 !important;
+  }
+  
+  /* 제목과 버튼을 반응형에서도 같은 줄에 유지 */
+  .title-and-buttons {
+    gap: 10px !important;
+  }
+  
+  /* 반응형에서 제목 크기 축소 */
+  .title-and-buttons h5 {
+    font-size: 1.1rem !important;
+  }
+  
+  /* 버튼 크기 축소로 공간 확보 */
+  .title-and-buttons .btn-sm {
+    font-size: 0.75rem !important;
+    padding: 0.2rem 0.4rem !important;
+  }
+  
+  .card-actions .btn-sm {
+    font-size: 0.75rem !important;
+    padding: 0.2rem 0.4rem !important;
   }
   
   .floating-buttons-container {
@@ -1875,6 +2803,26 @@ textarea:focus {
     min-width: 120px;
     padding: 10px 15px;
     font-size: 0.9rem;
+  }
+  
+  /* 모바일에서는 플로팅 버튼이 top 위치에 있으므로 오른쪽 패딩 조정 */
+  #step2-card .input-container-modern .form-control,
+  #step2-card .input-container-modern .form-select,
+  #step2-card .input-container-modern textarea,
+  #step2-card .field-input-section .form-control,
+  #step2-card .field-input-section .form-select,
+  #step2-card .field-input-section textarea {
+    padding-right: 140px !important; /* 모바일에서 더 큰 패딩 적용 */
+  }
+  
+  /* 모바일에서 범용적으로 Step2 영역의 모든 입력 요소에 적용 */
+  #step2-card input[type="text"],
+  #step2-card input[type="email"],
+  #step2-card input[type="password"],
+  #step2-card input[type="number"],
+  #step2-card select,
+  #step2-card textarea {
+    padding-right: 140px !important;
   }
   
   .floating-modal {
@@ -2154,41 +3102,98 @@ textarea:focus {
 }
 
 /* 필드 섹션 간격 축소 */
+/* ====================================================
+   식품 유형 섹션 통합 스타일
+   ==================================================== */
+
 #food-type-section {
-  margin-bottom: 0.75rem !important;     /* mb-3의 50% */
+  background-color: var(--modern-gray-50) !important;
+  border: 1px solid var(--modern-gray-200) !important;
+  border-radius: var(--modern-border-radius) !important;
+  padding: 1rem !important;
+  margin-bottom: 0.75rem !important;
 }
 
-/* 특정 필드 너비 조정 */
-/* 품목보고번호 필드 너비 확장 */
+/* 특정 필드 특별 스타일 조정 */
+/* 품목보고번호 필드 */
 input[name="prdlst_report_no"] {
-  min-width: 250px !important;           /* 최소 너비 설정 */
+  width: 100% !important; /* 컨테이너 전체 사용 */
+  font-family: 'Courier New', monospace !important;
+  letter-spacing: 0.5px !important;
+  text-align: center !important;
+  font-size: 0.9rem !important;
 }
 
-/* 원산지 버튼 겹침 방지 */
-input[name="country_of_origin"] ~ .btn-group {
-  margin-left: 0.5rem !important;        /* 버튼들 사이 간격 */
+/* 원산지 입력 필드 */
+input[name="country_of_origin"] {
+  width: 100% !important; /* 컨테이너 전체 사용 */
 }
 
-.btn-group .btn {
-  margin-right: 0.25rem !important;      /* 버튼 간격 */
-}
-
-/* 식품유형 대분류/소분류 드롭다운 너비 확장 */
+/* 식품유형 대분류/소분류 드롭다운 - 너비 제한 */
 select[name="food_type"], 
 select[name="food_subtype"],
 .select2-container[data-select2-id*="food"] {
-  min-width: 600px !important;           /* 기본 너비의 네 배 (300px → 600px) */
+  width: 180px !important; /* 100% → 180px로 축소 */
+  max-width: 180px !important;
 }
 
-/* 반응형에서 필드 너비 조정 */
+/* ====================================================
+   Step1 (기본정보 설정) 영역 전용 스타일
+   ==================================================== */
+
+/* Step1 필드 행의 간격 확대 */
+#step1-row .field-row-modern {
+  gap: 1.5rem !important; /* 기본 1rem보다 더 넓은 간격 적용 */
+}
+
+/* Step1 필드 라벨 섹션 최소 너비 확대 */
+#step1-row .field-label-section {
+  min-width: 120px !important; /* 100px → 120px로 확대하여 더 일관성 있는 정렬 */
+}
+
+/* Step1 영역의 입력 필드들 - 3영역 구조 적용 */
+#step1-row .field-input-section {
+  /* Step1에서는 스마트 추천 영역이 없으므로 margin-right 없음 */
+  margin-right: 0 !important;
+}
+
+/* 반응형에서 4영역 구조 조정 */
 @media (max-width: 768px) {
-  input[name="prdlst_report_no"] {
-    min-width: 200px !important;
+  /* 모바일에서 4영역 구조 유지 */
+  .field-checkbox-section {
+    width: 100px; /* 모바일에서 라벨 영역 축소 */
+    min-width: 100px;
+    max-width: 100px;
   }
   
-  select[name="food_type"], 
-  select[name="food_subtype"] {
-    min-width: 400px !important;  /* 모바일에서도 충분한 크기 (250px → 400px) */
+  .field-input-section {
+    flex: 1; /* 가변 너비 */
+  }
+  
+  .smart-recommendation-area {
+    width: 35px; /* 모바일에서 스마트추천 영역 축소 */
+    min-width: 35px;
+    max-width: 35px;
+  }
+  
+  /* 모바일에서 스마트추천 아이콘 크기 조정 - 작은 크기 유지 */
+  .smart-recommendation-icon {
+    width: 20px !important; /* 28px → 20px로 더 작게 */
+    height: 20px !important;
+    font-size: 9px !important; /* 12px → 9px */
+  }
+  
+  /* 모바일에서 필드 행 세로 배치 옵션 (필요시) */
+  .field-row-modern.mobile-vertical {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--modern-spacing-xs);
+  }
+  
+  .field-row-modern.mobile-vertical .field-checkbox-section,
+  .field-row-modern.mobile-vertical .smart-recommendation-area {
+    width: 100%;
+    max-width: none;
   }
 }
 
@@ -2275,6 +3280,60 @@ select[name="food_subtype"],
   background: var(--modern-success-hover);
   transform: translateY(-1px);
   box-shadow: var(--modern-shadow-md);
+}
+
+/* Ensure preview header buttons visually match the nutrition calculator primary buttons */
+.preview-actions .btn,
+.preview-actions .btn-primary,
+.preview-actions .btn-modern {
+  background: var(--modern-primary);
+  color: #fff;
+  border-color: var(--modern-primary);
+  padding: 6px 10px;
+  border-radius: var(--modern-border-radius-sm);
+  box-shadow: var(--modern-shadow);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.preview-actions .btn:hover,
+.preview-actions .btn-primary:hover,
+.preview-actions .btn-modern:hover {
+  background: var(--modern-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--modern-shadow-md);
+}
+
+/* Settings panel: make reset/save buttons match calculator (outline/primary/success semantics) */
+.settings-actions-row .btn-modern-outline,
+.settings-panel .btn-outline-secondary {
+  background: transparent !important;
+  color: var(--modern-gray-800) !important;
+  border: 1px solid var(--modern-gray-300) !important;
+}
+.settings-actions-row .btn-modern-outline:hover,
+.settings-panel .btn-outline-secondary:hover {
+  background: var(--modern-gray-100) !important;
+  box-shadow: var(--modern-shadow-md) !important;
+  transform: translateY(-1px) !important;
+}
+
+.settings-actions-row .btn-modern-success,
+.settings-actions-row .btn-save,
+.settings-panel .btn-primary,
+.settings-panel .btn-modern-success {
+  background: var(--modern-primary);
+  color: #fff;
+  border-color: var(--modern-primary);
+  box-shadow: var(--modern-shadow);
+}
+.settings-actions-row .btn-modern-success:hover,
+.settings-actions-row .btn-save:hover,
+.settings-panel .btn-primary:hover,
+.settings-panel .btn-modern-success:hover {
+  background: var(--modern-primary-hover);
+  box-shadow: var(--modern-shadow-md);
+  transform: translateY(-1px);
 }
 
 .action-buttons .btn-outline-secondary,
@@ -2400,6 +3459,8 @@ select[name="food_subtype"],
   margin: 0;
   color: var(--modern-gray-700);
   font-size: 0.875rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .nutrient-row .form-control,
@@ -2591,11 +3652,13 @@ select[name="food_subtype"],
    ==================================================== */
 
 /* 설정 패널 기본 스타일 */
+/* 기존 스타일 복원 */
 .settings-panel {
-  min-width: 350px;
-  max-width: 400px;
-  width: 100%;
-  padding: var(--modern-spacing);
+  flex: 0 0 300px;
+  padding: 20px;
+  border-right: 1px solid #dee2e6;
+  overflow-y: auto;
+  background-color: #f8f9fa;
 }
 
 /* 설정 항목 한 줄 레이아웃 */
@@ -2638,23 +3701,211 @@ select[name="food_subtype"],
   border-radius: var(--modern-border-radius);
   padding: var(--modern-spacing);
   margin-bottom: var(--modern-spacing);
-  box-shadow: var(--modern-shadow);
-  border: 1px solid var(--modern-gray-200);
 }
 
-/* 면적 표시 스타일 */
-.settings-panel .area-info {
-  background: linear-gradient(135deg, var(--modern-success) 0%, var(--modern-success-hover) 100%);
-  color: white !important;
-  padding: 0.75rem;
+/* Settings action row (reset + save) */
+.settings-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap; /* narrow 화면에서 2줄로 감쌈 */
+}
+
+/* Modern button primitives used across preview */
+.btn-modern {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border-radius: var(--modern-border-radius-sm);
-  text-align: center;
-  font-weight: 600;
-  font-size: 0.9rem;
+  padding: 6px 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+}
+.btn-modern:active { transform: translateY(0); }
+.btn-modern-sm { padding: 6px 8px; font-size: 0.85rem; }
+.btn-modern-xs { padding: 4px 8px; font-size: 0.8rem; }
+.btn-modern-outline { color: var(--modern-gray-800); border-color: var(--modern-gray-300); background: var(--modern-gray-50); }
+.btn-modern-success { color: #fff; background: var(--modern-success); border-color: var(--modern-success); }
+.btn-modern-success:hover { background: var(--modern-success-hover); }
+.btn-reset { flex: 1 1 48%; min-width: 120px; }
+.btn-save { flex: 1 1 48%; min-width: 120px; }
+
+/* Area display button styling */
+.btn-area { background: var(--modern-gray-100); color: var(--modern-gray-700); border-color: var(--modern-gray-200); padding: 6px 10px; }
+.btn-area:hover { background: var(--modern-gray-200); }
+
+@media (max-width: 600px) {
+  .btn-reset, .btn-save { flex-basis: 100%; }
+}
+
+
+/* 면적 표시 스타일 */
+/* Ensure area container is neutral so .btn-area displays correctly */
+.settings-panel .area-info {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+  text-align: left;
   margin-bottom: var(--modern-spacing) !important;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
+  border: none;
+}
+
+/* Stronger rules for buttons inside settings-panel to avoid being overridden */
+.settings-panel .btn-modern-outline {
+  background: var(--modern-gray-50) !important;
+  color: var(--modern-gray-800) !important;
+  border-color: var(--modern-gray-300) !important;
+}
+.settings-panel .btn-modern-success {
+  background: var(--modern-success) !important;
+  color: #fff !important;
+  border-color: var(--modern-success) !important;
+}
+.settings-actions-row .btn-modern { min-height: 36px; }
+
+/* ====================================================
+   최우선 Step2 입력 필드 스마트추천 버튼 겹침 방지 
+   파일 끝에 배치하여 다른 모든 스타일보다 우선 적용
+   ==================================================== */
+
+/* 최우선 규칙 - 모든 브라우저와 상황에서 적용 */
+#step2-card input,
+#step2-card textarea,
+#step2-card select,
+#step2-card .form-control,
+#step2-card .form-select {
+  padding-right: 100px !important;
+  margin-right: 0 !important;
+}
+
+/* 모바일에서 더 큰 여백 */
+@media (max-width: 768px) {
+  #step2-card input,
+  #step2-card textarea,
+  #step2-card select,
+  #step2-card .form-control,
+  #step2-card .form-select {
+    padding-right: 140px !important;
+  }
+}
+
+/* 특정 입력 타입 모두 포함 */
+#step2-card input[type="text"],
+#step2-card input[type="email"],
+#step2-card input[type="password"],
+#step2-card input[type="number"],
+#step2-card input[type="tel"],
+#step2-card input[type="url"] {
+  padding-right: 100px !important;
+}
+
+/* 모바일에서 특정 입력 타입들 */
+@media (max-width: 768px) {
+  #step2-card input[type="text"],
+  #step2-card input[type="email"],
+  #step2-card input[type="password"],
+  #step2-card input[type="number"],
+  #step2-card input[type="tel"],
+  #step2-card input[type="url"] {
+    padding-right: 140px !important;
+  }
+}
+
+/* 브라우저별 호환성 */
+#step2-card .field-input-section input:not([type="checkbox"]):not([type="radio"]),
+#step2-card .field-input-section textarea,
+#step2-card .field-input-section select,
+#step2-card .input-container-modern input:not([type="checkbox"]):not([type="radio"]),
+#step2-card .input-container-modern textarea,
+#step2-card .input-container-modern select {
+  padding-right: 100px !important;
+}
+
+/* 최종 안전장치 - 매우 구체적인 선택자 */
+div#step2-card div.field-row-modern div.field-input-section div.input-container-modern input.form-control,
+div#step2-card div.field-row-modern div.field-input-section div.input-container-modern textarea.form-control,
+div#step2-card div.field-row-modern div.field-input-section div.input-container-modern select.form-select {
+  padding-right: 100px !important;
+  box-sizing: border-box !important;
+}
+
+/* ====================================================
+   최우선 4영역 분리 구조 - 파일 끝에 배치하여 우선 적용
+   ==================================================== */
+
+/* 4영역 구조 최종 적용 */
+.field-row-modern {
+  display: flex !important;
+  width: 100% !important;
+  gap: var(--modern-spacing-sm) !important;
+}
+
+/* 영역 1: 왼쪽 라벨 (고정 너비) */
+.field-checkbox-section {
+  width: 140px !important;
+  min-width: 140px !important;
+  max-width: 140px !important;
+  flex-shrink: 0 !important;
+}
+
+/* 영역 2: 중간 입력 (가변 너비) */
+.field-input-section {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+/* 영역 3: 오른쪽 스마트추천 아이콘 (고정 너비) */
+.smart-recommendation-area {
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
+  flex-shrink: 0 !important;
+  visibility: hidden !important; /* 기본 숨김 */
+}
+
+/* Step2에서만 스마트추천 영역 표시 */
+#step2-card .smart-recommendation-area {
+  visibility: visible !important;
+}
+
+/* 입력 필드 전체 너비 사용 */
+.input-container-modern {
+  width: 100% !important;
+}
+
+.input-container-modern .form-control,
+.input-container-modern .form-select,
+.input-container-modern textarea {
+  width: 100% !important;
+  flex: 1 !important;
+  margin: 0 !important;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .field-checkbox-section {
+    width: 100px !important;
+    min-width: 100px !important;
+    max-width: 100px !important;
+  }
+  
+  .smart-recommendation-area {
+    width: 35px !important;
+    min-width: 35px !important;
+    max-width: 35px !important;
+  }
+  
+  .smart-recommendation-icon {
+    width: 20px !important; /* 28px → 20px로 더 작게 */
+    height: 20px !important;
+    font-size: 9px !important; /* 12px → 9px */
+  }
 }
 
 /* 필수 필드 표시 */
@@ -2662,4 +3913,792 @@ select[name="food_subtype"],
   content: " *";
   color: #dc3545;
   font-weight: bold;
+}
+}
+
+/* Preview page header (title left, actions right) - modeled after nutrition calculator */
+.preview-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 2px solid var(--modern-gray-200); /* match vertical separator */
+  background: linear-gradient(180deg, #ffffff 0%, var(--modern-gray-50) 100%);
+}
+.preview-page-header .panel-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+}
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.preview-actions .btn-modern { 
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  background: #fff;
+  border: 1px solid var(--modern-gray-200);
+  color: var(--modern-gray-800);
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.preview-actions .btn-modern i { color: var(--modern-gray-600); }
+
+/* 접근성: 포커스 링 및 키보드 포커스만 보이도록 처리 */
+.btn-modern { outline: none; }
+.btn-modern:focus-visible {
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.15), 0 1px 2px rgba(0,0,0,0.04);
+  border-color: var(--modern-primary);
+}
+
+.btn-modern[disabled], .btn-modern.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ====================================================
+   High-priority button overrides (unify legacy rules)
+   These rules use higher specificity and !important so
+   scattered legacy .btn definitions are unified.
+  ==================================================== */
+
+/* Apply modern sizing and spacing to legacy .btn variants */
+html body .btn,
+html body .btn-primary,
+html body .btn-secondary,
+html body .btn-success,
+html body .btn-danger,
+html body .btn-warning,
+html body .btn-default,
+html body .btn-outline-primary,
+html body .btn-outline-secondary,
+html body .btn-outline-danger,
+html body .btn-outline-cancel {
+  padding: var(--btn-padding-y, 6px) var(--btn-padding-x, 10px) !important;
+  font-size: var(--btn-font-size, 0.95rem) !important;
+  min-height: 36px !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: var(--btn-icon-gap, 8px) !important;
+  box-shadow: none !important;
+}
+
+/* icon spacing and icon-only behaviour */
+html body .btn i,
+html body .btn .fas,
+html body .btn .fa { margin-right: var(--btn-icon-gap, 8px) !important; }
+html body .btn.btn-icon-only i,
+html body .btn-icon-only .fas,
+html body .btn-icon-only .fa { margin-right: 0 !important; }
+
+/* Semantic color mapping to modern tokens */
+html body .btn-primary { background: var(--modern-primary) !important; border-color: var(--modern-primary) !important; color: #fff !important; }
+html body .btn-primary:hover { background: var(--modern-primary-hover) !important; }
+
+html body .btn-secondary { background: var(--modern-gray-700) !important; border-color: var(--modern-gray-700) !important; color: #fff !important; }
+html body .btn-secondary:hover { background: var(--modern-gray-600) !important; }
+
+html body .btn-success { background: var(--modern-success) !important; border-color: var(--modern-success) !important; color: #fff !important; }
+html body .btn-success:hover { background: var(--modern-success-hover) !important; }
+
+html body .btn-danger { background: var(--modern-danger, #dc3545) !important; border-color: var(--modern-danger, #dc3545) !important; color: #fff !important; }
+html body .btn-danger:hover { background: #c82333 !important; }
+
+/* Outline styles unify */
+html body .btn-outline-primary { color: var(--modern-primary) !important; border-color: var(--modern-primary) !important; background: transparent !important; }
+html body .btn-outline-primary:hover { background: var(--modern-primary) !important; color: #fff !important; }
+
+/* Small buttons */
+html body .btn-sm { padding: 0.35rem 0.65rem !important; font-size: 0.85rem !important; min-height: 30px !important; }
+
+/* popup-specific delete button: ensure modern danger appearance */
+.phrase-popup .delete-btn,
+.popup .delete-btn { background: var(--modern-danger, #dc3545) !important; color: #fff !important; border: none !important; padding: 6px 8px !important; border-radius: 6px !important; }
+.phrase-popup .delete-btn:hover, .popup .delete-btn:hover { background: #c82333 !important; }
+
+/* preview action buttons smaller footprint */
+.preview-actions .btn, .settings-actions-row .btn, .action-buttons-compact .btn { padding: 6px 8px !important; font-size:0.9rem !important; }
+
+/* Classes for JS-generated recycling list items and preview lines (replaces inline styles) */
+.recycling-item { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; background:#fff; border:1px solid #e6e6e6; margin-bottom:6px; }
+.recycling-item.recycling-text-item { padding:4px 8px; border-radius:4px; background:var(--modern-gray-50); margin-bottom:4px; }
+.recycling-item img { width:24px; height:24px; object-fit:contain; }
+.recycling-item .recycling-label { flex:1; font-size:0.9rem; }
+.recycling-item .recycling-action-btn { white-space:nowrap; }
+
+/* Preview line */
+.preview-line { font-size:0.9rem; line-height:1.2; margin-bottom:4px; }
+.preview-line.more-count { font-size:0.8rem; color: var(--modern-gray-600); }
+
+/* Preview table / cell classes used by JS when building preview */
+.preview-table { width: 100%; border-collapse: collapse; }
+.preview-cell { background: #f8f9fa; text-align: center; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100px; min-width: 100px; max-width: 100px; }
+
+/* Text block sizing controlled via CSS variable (fallback to 10pt) */
+.preview-text { font-size: var(--preview-text-size, 10pt); }
+
+/* Preview content modern layout driven by CSS variables set from JS */
+.preview-content-modern {
+  width: var(--preview-width, 10cm);
+  min-width: var(--preview-width, 10cm);
+  position: relative;
+  padding: var(--preview-padding, 20px);
+  background: var(--preview-background, #fff);
+  border: 1px solid var(--preview-border, #dee2e6);
+  overflow: visible;
+  box-sizing: border-box;
+  word-break: break-all;
+  white-space: normal;
+  font-family: var(--preview-font-family, 'Noto Sans KR');
+}
+
+.preview-content-modern .preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0;
+  word-break: break-all;
+  white-space: normal;
+}
+
+.preview-content-modern th,
+.preview-content-modern td {
+  padding: 4px 8px;
+  border: 1px solid #dee2e6;
+  vertical-align: middle;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  text-align: left;
+  white-space: normal;
+  font-size: var(--preview-font-size, 10pt);
+  letter-spacing: var(--preview-letter-spacing, 0em);
+  line-height: var(--preview-line-height, 1.2);
+  font-family: var(--preview-font-family, 'Noto Sans KR');
+}
+
+.preview-content-modern .preview-header {
+  background-color: #f8f9fa;
+  text-align: center;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  width: var(--preview-cell-width, 100px);
+  min-width: var(--preview-cell-width, 100px);
+  max-width: var(--preview-cell-width, 100px);
+}
+
+/* recycling mark container and image */
+#recyclingMarkContainer { position: absolute; width: 60px; cursor: move; text-align: center; }
+#recyclingMarkContainer .recycling-mark-image { width: 100%; height: auto; display: block; }
+#recyclingMarkContainer .recycling-mark-text { margin-top:6px; width:100%; box-sizing:border-box; }
+
+/* recycling text line used inside mark */
+.recycling-text-line { font-weight: 500; color: #000; line-height: 1.1; word-break: keep-all; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; font-size: var(--preview-text-size, 10pt); }
+
+/* ====================================================
+   텍스트 영역 자동 확장 스타일
+   ==================================================== */
+
+/* 자동 확장 텍스트 영역 기본 스타일 */
+textarea.auto-expand {
+  resize: vertical; /* 수직 크기 조정만 허용 */
+  min-height: 6rem; /* 최소 높이 (약 4줄) */
+  max-height: 15rem; /* 최대 높이 (약 10줄) */
+  line-height: 1.5;
+  overflow-y: hidden; /* 기본적으로 스크롤바 숨김 */
+  transition: height 0.2s ease; /* 부드러운 높이 변화 */
+}
+
+/* 내용이 많을 때 스크롤바 표시 */
+textarea.auto-expand.show-scroll {
+  overflow-y: auto;
+}
+
+/* 포커스 시 효과 */
+textarea.auto-expand:focus {
+  border-color: var(--modern-primary);
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+  outline: none;
+}
+
+/* 식품유형 드롭다운 확장 스타일 */
+.food-type-expanded {
+  min-width: 100%;
+}
+
+.food-type-select {
+  min-width: 200px;
+  font-size: 0.9rem;
+}
+
+/* ====================================================
+   Textarea 자동 확장 시스템 (통합)
+   ==================================================== */
+
+/* 모든 textarea 기본 스타일 */
+textarea.auto-expand,
+.input-container-modern textarea,
+.field-input-section textarea {
+  resize: vertical !important;
+  min-height: 2.8rem !important;
+  height: auto !important;
+  line-height: 1.4 !important;
+  overflow-y: hidden !important;
+  transition: height 0.2s ease !important;
+  font-size: 0.9rem !important;
+  padding: 0.5rem 0.75rem !important;
+  border: 1px solid var(--modern-gray-300) !important;
+  border-radius: var(--modern-border-radius) !important;
+}
+
+/* textarea 포커스 스타일 */
+textarea.auto-expand:focus,
+.input-container-modern textarea:focus,
+.field-input-section textarea:focus {
+  border-color: var(--modern-primary) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+  outline: none !important;
+}
+
+/* 식품유형 드롭다운 개선된 스타일 */
+.food-type-container {
+  width: 100%;
+}
+
+.food-type-selects-wrapper {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+}
+
+.food-type-select-item {
+  flex: 0 0 auto; /* flex-grow 제거, 고정 너비로 변경 */
+  min-width: 50px; /* 200px → 180px로 축소 */
+  max-width: 100px; /* 최대 너비도 제한 */
+}
+
+.food-type-select-improved {
+  width: 100% !important;
+  min-width: 50px !important; /* 200px → 180px로 축소 */
+  max-width: 100px !important; /* 최대 너비 제한 추가 */
+  font-size: 0.95rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--modern-gray-300);
+  border-radius: var(--modern-border-radius);
+  transition: all 0.2s ease;
+}
+
+.food-type-select-improved:focus {
+  border-color: var(--modern-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+.food-type-select-improved option {
+  padding: 0.5rem;
+  font-size: 0.95rem;
+}
+
+/* 장기보존식품 체크박스 그룹 - 가로 간격 확대 */
+.checkbox-group-preservation {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem; /* 0.5rem → 1rem으로 확대 */
+  align-items: start;
+}
+
+/* 장기보존식품 체크박스 행 간격 확대 */
+.row.g-2 {
+  --bs-gutter-x: 1.5rem !important; /* 기본 간격을 1.5rem으로 확대 */
+}
+
+/* 컴팩트한 체크박스 스타일 (25% 배치용) - 가로 간격 확대 */
+.form-check-compact {
+  padding: 0.25rem 0.1rem; /* 0.05rem → 0.1rem으로 확대 */
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  min-height: 2rem;
+  margin-right: 0.5rem; /* 오른쪽 마진 추가 */
+}
+
+.form-check-compact .form-check-input-modern {
+  margin-right: 0.4rem; /* 0.3rem → 0.4rem으로 확대 */
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.form-check-compact .form-check-label-modern {
+  font-size: 0.95rem;
+  line-height: 1.3; /* 1.2 → 1.3으로 확대 */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: nowrap; /* normal → nowrap으로 변경하여 한 줄 표시 */
+  margin-bottom: 0;
+  padding-right: 0.3rem; /* 오른쪽 패딩 추가 */
+}
+
+/* 제조방법 체크박스 그룹 */
+.checkbox-group-processing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.checkbox-group-processing .form-check-modern {
+  margin-bottom: 0.25rem;
+}
+
+.checkbox-group-processing .form-check-label-modern {
+  font-size: 0.9rem !important;
+  font-weight: 500 !important;
+  line-height: 1.2;
+  margin-bottom: 0;
+}
+
+.checkbox-group-processing .form-check-input-modern {
+  margin-right: 0.3rem;
+  margin-top: 0;
+}
+
+/* ====================================================
+   입력 컨테이너 및 폼 컨트롤 통합
+   ==================================================== */
+
+/* 입력 컨테이너 기본 스타일 */
+.input-container-modern {
+  width: 100% !important;
+  position: relative !important;
+}
+
+/* 모든 폼 컨트롤 기본 스타일 */
+.input-container-modern .form-control,
+.input-container-modern .form-select,
+.field-input-section .form-control,
+.field-input-section .form-select {
+  width: 100% !important;
+  font-size: 0.9rem !important;
+  padding: 0.5rem 0.75rem !important;
+  border: 1px solid var(--modern-gray-300) !important;
+  border-radius: var(--modern-border-radius) !important;
+  transition: all 0.2s ease !important;
+}
+
+/* 폼 컨트롤 포커스 스타일 */
+.input-container-modern .form-control:focus,
+.input-container-modern .form-select:focus,
+.field-input-section .form-control:focus,
+.field-input-section .form-select:focus {
+  border-color: var(--modern-primary) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+  outline: none !important;
+}
+
+/* 체크박스 스타일은 위에서 이미 정의됨 - 중복 제거 */
+
+/* ====================================================
+   통합된 반응형 디자인
+   ==================================================== */
+
+/* 태블릿 이하 화면 크기 */
+@media (max-width: 1200px) {
+  .field-label-section {
+    min-width: 80px !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .food-type-select-item {
+    min-width: 160px; /* 180px → 160px로 축소 */
+    max-width: 160px;
+  }
+  
+  .food-type-select-improved {
+    min-width: 160px !important;
+    max-width: 160px !important;
+  }
+}
+
+/* 모바일 화면 크기 */
+@media (max-width: 768px) {
+  /* 필드 레이아웃 모바일 최적화 */
+  .field-row-modern {
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+  
+  .field-label-section {
+    width: 100% !important;
+    min-width: auto !important;
+    margin-bottom: 0.25rem !important;
+  }
+  
+  /* 식품 유형 선택 모바일 레이아웃 */
+  .food-type-selects-wrapper {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .food-type-select-item {
+    min-width: 100%;
+  }
+  
+  #food-type-section .row > .col-6 {
+    width: 100% !important;
+    margin-bottom: 1rem;
+  }
+  
+  /* 체크박스 그룹 모바일 최적화 */
+  .checkbox-group-preservation {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.75rem !important; /* 모바일에서는 간격 약간 줄임 */
+  }
+  
+  .row.g-2 {
+    --bs-gutter-x: 1rem !important; /* 모바일에서 간격 조정 */
+  }
+  
+  .form-check-compact {
+    padding: 0.2rem 0.05rem !important; /* 모바일에서 패딩 축소 */
+    margin-right: 0.25rem !important;
+  }
+  
+  .checkbox-group-processing {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  /* 모바일에서 4영역 구조 유지 */
+  .field-checkbox-section {
+    width: 100px;
+    min-width: 100px;
+  }
+}
+
+/* 드롭다운 리스트 스타일 개선 */
+.food-type-select-improved {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px 12px;
+}
+
+/* ====================================================
+   CSS 통합 완료 - 모든 스타일이 위에서 정리됨
+   ==================================================== */
+
+/* ===== 🚨 CRITICAL: 모든 TEXTAREA 제한 OVERRIDE ===== */
+/* 이 규칙들은 반드시 파일 맨 마지막에 위치해야 함 */
+
+/* 1️⃣ TEXTAREA 직접 선택 - 모든 높이 제한 완전 제거 - NUCLEAR VERSION */
+textarea[name="rawmtrl_nm_display"],
+textarea[name="rawmtrl_nm"], 
+textarea[name="cautions"],
+textarea[name="additional_info"],
+textarea[name="nutrition_text"],
+#step2-card textarea,
+.form-control.auto-expand {
+  max-height: none !important;
+  height: auto !important;
+  min-height: 48px !important;
+  overflow-y: hidden !important;
+  resize: none !important;
+  box-sizing: border-box !important;
+}
+
+/* 🚨🚨🚨 NUCLEAR OPTION: 모든 가능한 CSS 규칙 무력화 */
+textarea[name="rawmtrl_nm_display"][style*="height"] {
+  height: inherit !important;
+}
+
+/* 인라인 스타일까지 강제로 덮어쓰기 */
+textarea[name="rawmtrl_nm_display"] {
+  height: unset !important;
+  max-height: unset !important;
+  min-height: 48px !important;
+}
+
+/* 🚨🚨🚨 LAST RESORT: 모든 CSS 무력화 */
+* textarea[name="rawmtrl_nm_display"],
+*:not(html) textarea[name="rawmtrl_nm_display"],
+body textarea[name="rawmtrl_nm_display"],
+div textarea[name="rawmtrl_nm_display"],
+.container textarea[name="rawmtrl_nm_display"],
+.form-control textarea[name="rawmtrl_nm_display"] {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 48px !important;
+  overflow: visible !important;
+  line-height: normal !important;
+}
+
+/* Bootstrap form-control 특별 처리 */
+
+textarea[name="rawmtrl_nm_display"].form-control {
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* 2️⃣ CONTAINER 정렬 강제 수정 - ALIGN-ITEMS CENTER 제거 (레이아웃 보존) */
+.field-row-modern:has(textarea),
+.field-input-section:has(textarea), 
+.input-container-modern:has(textarea) {
+  align-items: flex-start !important;
+}
+
+/* textarea가 없는 필드는 기존 레이아웃 유지 */
+.row,
+.col-12 {
+  align-items: flex-start !important;
+}
+
+/* 3️⃣ 모든 TEXTAREA 컨테이너 높이 제한 해제 - 강화 버전 */  
+.field-row-modern:has(textarea),
+.field-input-section:has(textarea),
+.input-container-modern:has(textarea) {
+  height: auto !important;
+  max-height: none !important;  
+  min-height: auto !important;
+  align-items: flex-start !important;
+  overflow: visible !important;
+}
+
+/* 🚨 CRITICAL: 컨테이너 고정 높이 강제 해제 */
+.input-container-modern {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.field-input-section {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.field-row-modern {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* 4️⃣ BOOTSTRAP 클래스 OVERRIDE */
+.row:has(textarea),
+.col-12:has(textarea),
+[class*="col"]:has(textarea) {
+  height: auto !important;
+  max-height: none !important;
+  align-items: flex-start !important;
+}
+
+/* 5️⃣ 🚨 EMERGENCY FIX: 모든 가능한 컨테이너 높이 해제 */
+div:has(textarea[name="rawmtrl_nm_display"]),
+div:has(textarea[name="rawmtrl_nm"]),
+div:has(textarea[name="cautions"]),
+div:has(textarea[name="additional_info"]),
+div:has(textarea[name="nutrition_text"]) {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* 6️⃣ 특정 클래스들의 고정 높이 강제 해제 */
+.modern-field-row,
+.field-container,
+.input-wrapper,
+.form-group,
+.mb-2,
+.mb-3 {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+}
+
+/* 7️⃣ 🚨🚨🚨 ABSOLUTE OVERRIDE - 최고 특이도 */
+#step2-card .field-row-modern.field-row-modern.field-row-modern,
+#step2-card .field-input-section.field-input-section.field-input-section,
+#step2-card .input-container-modern.input-container-modern.input-container-modern {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  align-items: flex-start !important;
+}
+
+/* 8️⃣ 인라인 스타일보다 높은 우선순위로 강제 적용 */
+textarea[name="rawmtrl_nm_display"][style],
+textarea[name="rawmtrl_nm"][style],
+textarea[name="cautions"][style],
+textarea[name="additional_info"][style],
+textarea[name="nutrition_text"][style] {
+  height: auto !important;
+  max-height: none !important;
+  overflow-y: hidden !important;
+}
+
+/* 9️⃣ 모든 부모 div에 강제 적용 - 매우 높은 특이도 */
+div.row.g-3.mb-2:has(textarea),
+div.col-12:has(textarea),
+div.field-row-modern:has(textarea),
+div.field-input-section:has(textarea),
+div.input-container-modern:has(textarea) {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  align-items: flex-start !important;
+}
+
+/* 🔟 🚨 NUCLEAR OPTION - 컨테이너 고정 높이 완전 제거 */
+.input-container-modern[style*="height"],
+.field-input-section[style*="height"],
+.field-row-modern[style*="height"] {
+  height: auto !important;
+}
+
+/* 1️⃣1️⃣ 특정 textarea 컨테이너 직접 타겟팅 */
+textarea[name="rawmtrl_nm_display"] + *,
+textarea[name="rawmtrl_nm_display"] ~ *,
+*:has(> textarea[name="rawmtrl_nm_display"]) {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+}
+
+/* 1️⃣2️⃣ TEXTAREA 높이 문제 특별 해결책 - FINAL BOSS */
+textarea.form-control[name="rawmtrl_nm_display"],
+textarea.form-control[name="rawmtrl_nm"],
+textarea.form-control[name="cautions"],
+textarea.form-control[name="additional_info"],
+textarea.form-control[name="nutrition_text"] {
+  height: auto !important;
+  min-height: 48px !important;
+  max-height: none !important;
+  box-sizing: content-box !important;
+  overflow-y: hidden !important;
+  overflow: hidden !important;
+  line-height: 1.5 !important;
+  transition: none !important;
+  resize: none !important;
+}
+
+/* 1️⃣3️⃣ Bootstrap .form-control 덮어쓰기 */
+.form-control.auto-expand {
+  height: auto !important;
+  min-height: 48px !important; 
+  max-height: none !important;
+}
+
+/* 1️⃣4️⃣ 부모 컨테이너들 높이 제한 해제 */
+.input-container-modern:has(.form-control[name="rawmtrl_nm_display"]),
+.field-input-section:has(.form-control[name="rawmtrl_nm_display"]),
+.field-row-modern:has(.form-control[name="rawmtrl_nm_display"]),
+.input-container-modern:has(textarea[name="rawmtrl_nm"]),
+.field-input-section:has(textarea[name="rawmtrl_nm"]),
+.field-row-modern:has(textarea[name="rawmtrl_nm"]),
+.input-container-modern:has(textarea[name="caution"]),
+.field-input-section:has(textarea[name="caution"]),
+.field-row-modern:has(textarea[name="caution"]),
+.input-container-modern:has(textarea[name="etc_info"]),
+.field-input-section:has(textarea[name="etc_info"]),
+.field-row-modern:has(textarea[name="etc_info"]),
+.input-container-modern:has(textarea[name="nutrition_text"]),
+.field-input-section:has(textarea[name="nutrition_text"]),
+.field-row-modern:has(textarea[name="nutrition_text"]) {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  overflow: visible !important;
+}
+
+/* 1️⃣5️⃣ 최대 우선순위를 가진 텍스트 영역 스타일 - !important 중첩 사용 */
+html body form div textarea[name="rawmtrl_nm_display"],
+html body form div textarea[name="rawmtrl_nm"],
+html body form div textarea[name="caution"],
+html body form div textarea[name="etc_info"],
+html body form div textarea[name="nutrition_text"] {
+  height: auto !important; 
+  min-height: 48px !important; /* 기본 2줄 높이 */
+  max-height: none !important;
+  overflow-y: hidden !important;
+  box-sizing: border-box !important;
+  position: relative !important;
+  z-index: 10 !important; /* 높은 z-index로 다른 요소보다 앞에 표시 */
+}
+
+/* 1️⃣6️⃣ Bootstrap Form Control 클래스 오버라이드 - 높이 제약 완전 제거 */
+html body textarea.form-control,
+html body .form-control[type="textarea"],
+html body div.form-control[contenteditable="true"],
+html body form textarea.form-control,
+html body .field-row-modern textarea.form-control,
+html body .field-input-section textarea.form-control, 
+html body .input-container-modern textarea.form-control {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 48px !important;
+  box-sizing: content-box !important;
+}
+
+/* 1️⃣7️⃣ 특정 필드에 대한 강제 높이 설정 - 정확한 계층 구조 */
+html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="rawmtrl_nm_display"],
+html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="rawmtrl_nm"],
+html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="caution"],
+html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="etc_info"],
+html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="nutrition_text"] {
+  display: block !important;
+  box-sizing: content-box !important;
+  min-height: 48px !important;
+  height: auto !important;
+  overflow: hidden !important;
+  resize: none !important;
+}
+
+/* 1️⃣8️⃣ 일반 항목은 세로 중앙 정렬 유지, 다중 라인 textarea만 flex-start */
+/* 기본 정렬 스타일 - 모든 필드는 중앙 정렬 */
+.field-row-modern {
+  align-items: center !important;
+}
+
+.field-input-section {
+  align-items: center !important;
+}
+
+.input-container-modern {
+  align-items: center !important;
+}
+
+/* 특정 다중 라인 텍스트 영역만 시작점(top) 정렬 */
+.field-row-modern:has(textarea[name="rawmtrl_nm_display"]),
+.field-row-modern:has(textarea[name="rawmtrl_nm"]),
+.field-row-modern:has(textarea[name="caution"]),
+.field-row-modern:has(textarea[name="etc_info"]),
+.field-row-modern:has(textarea[name="nutrition_text"]) {
+  align-items: flex-start !important;
+}
+
+.field-input-section:has(textarea[name="rawmtrl_nm_display"]),
+.field-input-section:has(textarea[name="rawmtrl_nm"]),
+.field-input-section:has(textarea[name="caution"]),
+.field-input-section:has(textarea[name="etc_info"]),
+.field-input-section:has(textarea[name="nutrition_text"]) {
+  align-items: flex-start !important;
+}
+
+.input-container-modern:has(textarea[name="rawmtrl_nm_display"]),
+.input-container-modern:has(textarea[name="rawmtrl_nm"]),
+.input-container-modern:has(textarea[name="caution"]),
+.input-container-modern:has(textarea[name="etc_info"]),
+.input-container-modern:has(textarea[name="nutrition_text"]) {
+  align-items: flex-start !important;
 }

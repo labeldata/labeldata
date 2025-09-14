@@ -1,3 +1,82 @@
+
+# --- [수정] Django Imports ---
+from django.conf import settings  # Django settings import 추가
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
+from django.core.paginator import Paginator
+from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
+from django.core.cache import cache
+from django.db.models import F, Q
+from django.db.models import Count
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse # [추가] URL 생성을 위해 import
+from django.utils import timezone  # 추가
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST, require_GET
+
+# --- [수정] Local Application Imports ---
+from .constants import CATEGORY_CHOICES, DEFAULT_PHRASES, FIELD_REGULATIONS
+from .forms import LabelCreationForm, MyIngredientsForm
+from .models import (AgriculturalProduct, CountryList, ExpiryRecommendation,
+                     FoodAdditive, FoodItem, FoodType, ImportedFood,
+                     LabelIngredientRelation, MyIngredient, MyLabel, MyPhrase)
+from venv import logger  # 지우지 않음
+
+# --- [추가] food_type_settings 함수 정의 ---
+@login_required
+@csrf_exempt
+def food_type_settings(request):
+    """
+    식품유형(소분류)에 따른 표시 규정, 옵션, 기타 설정을 반환하는 API
+    프론트엔드에서 /label/food-type-settings/?food_type=xxx 로 호출
+    """
+    food_type = request.GET.get('food_type', '').strip()
+    settings = {}
+    # 식품유형 객체 조회
+    ft = None
+    if food_type:
+        try:
+            ft = FoodType.objects.filter(food_type=food_type).first()
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'식품유형 조회 오류: {str(e)}'})
+    # 관련 규정
+    if ft and hasattr(ft, 'relevant_regulations'):
+        settings['relevant_regulations'] = ft.relevant_regulations or ''
+    else:
+        settings['relevant_regulations'] = ''
+    # 소비기한 옵션 (예시: pog_daycnt_options 필드가 있다면)
+    if ft and hasattr(ft, 'pog_daycnt_options') and ft.pog_daycnt_options:
+        options = [opt.strip() for opt in ft.pog_daycnt_options.split(',') if opt.strip()]
+        settings['pog_daycnt_options'] = options
+        settings['pog_daycnt'] = 'Y' if options else 'N'
+    else:
+        settings['pog_daycnt_options'] = []
+        settings['pog_daycnt'] = 'N'
+    # 기타 표시 설정 (예시: 기타 필드가 있다면 추가)
+    # settings['weight_calorie'] = getattr(ft, 'weight_calorie', 'N')
+    # 필요한 추가 필드가 있으면 여기에 확장
+    return JsonResponse({'success': True, 'settings': settings})
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+
+@login_required
+@csrf_exempt
+def get_food_group(request):
+    """food_type 값을 받아 해당하는 food_group을 반환하는 API"""
+    food_type = request.GET.get('food_type', '').strip()
+    if not food_type:
+        return JsonResponse({'success': False, 'error': 'food_type 파라미터가 필요합니다.'})
+    try:
+        ft = FoodType.objects.filter(food_type=food_type).first()
+        if ft:
+            return JsonResponse({'success': True, 'food_group': ft.food_group})
+        else:
+            return JsonResponse({'success': False, 'error': '해당 food_type에 대한 food_group을 찾을 수 없습니다.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 import json
 import re  # 정규식 처리를 위해 추가
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
@@ -1445,67 +1524,49 @@ def nutrition_calculator_popup(request):
         'display_unit': 'unit',
         'nutrients': {}
     }
-    
+    # 모든 영양성분 필드 정의 (추가 항목 포함)
+    nutrition_fields = [
+        ('calories', 'calories_unit'), ('natriums', 'natriums_unit'), ('carbohydrates', 'carbohydrates_unit'),
+        ('sugars', 'sugars_unit'), ('fats', 'fats_unit'), ('trans_fats', 'trans_fats_unit'), ('saturated_fats', 'saturated_fats_unit'),
+        ('cholesterols', 'cholesterols_unit'), ('proteins', 'proteins_unit'), ('dietary_fiber', 'dietary_fiber_unit'),
+        ('calcium', 'calcium_unit'), ('iron', 'iron_unit'), ('magnesium', 'magnesium_unit'), ('phosphorus', 'phosphorus_unit'),
+        ('potassium', 'potassium_unit'), ('zinc', 'zinc_unit'), ('vitamin_a', 'vitamin_a_unit'), ('vitamin_d', 'vitamin_d_unit'),
+        ('vitamin_c', 'vitamin_c_unit'), ('thiamine', 'thiamine_unit'), ('riboflavin', 'riboflavin_unit'), ('niacin', 'niacin_unit'),
+        ('vitamin_b6', 'vitamin_b6_unit'), ('folic_acid', 'folic_acid_unit'), ('vitamin_b12', 'vitamin_b12_unit'), ('selenium', 'selenium_unit'),
+        ('iodine', 'iodine_unit'), ('copper', 'copper_unit'), ('manganese', 'manganese_unit'), ('chromium', 'chromium_unit'),
+        ('molybdenum', 'molybdenum_unit'), ('vitamin_e', 'vitamin_e_unit'), ('vitamin_k', 'vitamin_k_unit'), ('biotin', 'biotin_unit'),
+        ('pantothenic_acid', 'pantothenic_acid_unit')
+    ]
     if label_id:
         try:
             label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-            
-            nutrition_data = {
-                'serving_size': label.serving_size,
-                'serving_size_unit': label.serving_size_unit or 'g',
-                'units_per_package': label.units_per_package or '1',
-                'display_unit': label.nutrition_display_unit or 'unit',
-                'nutrients': {
-                    'calorie': {
-                        'value': label.calories,
-                        'unit': label.calories_unit or 'kcal'
-                    },
-                    'natrium': {
-                        'value': label.natriums,
-                        'unit': label.natriums_unit or 'mg'
-                    },
-                    'carbohydrate': {
-                        'value': label.carbohydrates,
-                        'unit': label.carbohydrates_unit or 'g'
-                    },
-                    'sugar': {
-                        'value': label.sugars,
-                        'unit': label.sugars_unit or 'g'
-                    },
-                    'afat': {
-                        'value': label.fats,
-                        'unit': label.fats_unit or 'g'
-                    },
-                    'transfat': {
-                        'value': label.trans_fats,
-                        'unit': label.trans_fats_unit or 'g'
-                    },
-                    'satufat': {
-                        'value': label.saturated_fats,
-                        'unit': label.saturated_fats_unit or 'g'
-                    },
-                    'cholesterol': {
-                        'value': label.cholesterols,
-                        'unit': label.cholesterols_unit or 'mg'
-                    },
-                    'protein': {
-                        'value': label.proteins,
-                        'unit': label.proteins_unit or 'g'
-                    }
+            nutrition_data['serving_size'] = label.serving_size
+            nutrition_data['serving_size_unit'] = label.serving_size_unit or 'g'
+            nutrition_data['units_per_package'] = label.units_per_package or '1'
+            nutrition_data['display_unit'] = label.nutrition_display_unit or 'unit'
+            nutrition_data['nutrients'] = {}
+            for field, unit_field in nutrition_fields:
+                value = getattr(label, field, '')
+                unit = getattr(label, unit_field, '')
+                # 값이 None, 0, '0'이면 빈값('') 처리
+                if value is None or value == 0 or value == '0':
+                    value = ''
+                if unit is None:
+                    unit = ''
+                nutrition_data['nutrients'][field] = {
+                    'value': value,
+                    'unit': unit
                 }
-            }
         except Exception as e:
             print(f"영양성분 데이터 로딩 중 오류: {str(e)}")
-    
+    # None 값 처리
     for key, value in nutrition_data.items():
         if value is None:
             nutrition_data[key] = ''
-    
     for nutrient_name, nutrient_data in nutrition_data.get('nutrients', {}).items():
         for key, value in nutrient_data.items():
             if value is None:
                 nutrient_data[key] = ''
-    
     context = {
         'nutrition_data': json.dumps(nutrition_data)
     }
@@ -1582,28 +1643,37 @@ def save_nutrition(request):
         label.serving_size_unit = data.get('serving_size_unit', '')
         label.units_per_package = data.get('units_per_package', '')
         label.nutrition_display_unit = data.get('nutrition_display_unit', '')
-        
+
         label.nutrition_text = data.get('nutritions', '')
-        
-        label.calories = data.get('calories', '')
-        label.calories_unit = data.get('calories_unit', '')
-        label.natriums = data.get('natriums', '')
-        label.natriums_unit = data.get('natriums_unit', '')
-        label.carbohydrates = data.get('carbohydrates', '')
-        label.carbohydrates_unit = data.get('carbohydrates_unit', '')
-        label.sugars = data.get('sugars', '')
-        label.sugars_unit = data.get('sugars_unit', '')
-        label.fats = data.get('fats', '')
-        label.fats_unit = data.get('fats_unit', '')
-        label.trans_fats = data.get('trans_fats', '')
-        label.trans_fats_unit = data.get('trans_fats_unit', '')
-        label.saturated_fats = data.get('saturated_fats', '')
-        label.saturated_fats_unit = data.get('saturated_fats_unit', '')
-        label.cholesterols = data.get('cholesterols', '')
-        label.cholesterols_unit = data.get('cholesterols_unit', '')
-        label.proteins = data.get('proteins', '')
-        label.proteins_unit = data.get('proteins_unit', '')
-        
+
+        # 모든 영양성분 필드 저장
+        nutrition_fields = [
+            'calories', 'calories_unit', 'natriums', 'natriums_unit', 'carbohydrates', 'carbohydrates_unit',
+            'sugars', 'sugars_unit', 'fats', 'fats_unit', 'trans_fats', 'trans_fats_unit', 'saturated_fats', 'saturated_fats_unit',
+            'cholesterols', 'cholesterols_unit', 'proteins', 'proteins_unit',
+            'dietary_fiber', 'dietary_fiber_unit', 'calcium', 'calcium_unit', 'iron', 'iron_unit', 'magnesium', 'magnesium_unit',
+            'phosphorus', 'phosphorus_unit', 'potassium', 'potassium_unit', 'zinc', 'zinc_unit', 'vitamin_a', 'vitamin_a_unit',
+            'vitamin_d', 'vitamin_d_unit', 'vitamin_c', 'vitamin_c_unit', 'thiamine', 'thiamine_unit', 'riboflavin', 'riboflavin_unit',
+            'niacin', 'niacin_unit', 'vitamin_b6', 'vitamin_b6_unit', 'folic_acid', 'folic_acid_unit', 'vitamin_b12', 'vitamin_b12_unit',
+            'selenium', 'selenium_unit', 'iodine', 'iodine_unit', 'copper', 'copper_unit', 'manganese', 'manganese_unit',
+            'chromium', 'chromium_unit', 'molybdenum', 'molybdenum_unit', 'vitamin_e', 'vitamin_e_unit', 'vitamin_k', 'vitamin_k_unit',
+            'biotin', 'biotin_unit', 'pantothenic_acid', 'pantothenic_acid_unit'
+        ]
+        nutrition_inputs = data.get('nutritionInputs', {})
+        for field in nutrition_fields:
+            value = ''
+            # nutritionInputs에 값이 있으면 그 값을 사용
+            if field in nutrition_inputs:
+                field_data = nutrition_inputs.get(field)
+                # nutritionInputs[field]가 dict일 경우 value 키 사용
+                if isinstance(field_data, dict):
+                    value = field_data.get('value', '')
+                else:
+                    value = field_data
+            else:
+                value = data.get(field, '')
+            setattr(label, field, value)
+
         label.save()
         
         return JsonResponse({'success': True})
@@ -1612,105 +1682,38 @@ def save_nutrition(request):
 
 @login_required
 def food_types_by_group(request):
-    group = request.GET.get('group', '')
-    
-    if group:
-        # 대분류가 있으면 해당 대분류의 소분류만 반환
-        food_types = FoodType.objects.filter(food_group=group).values('food_type', 'food_group').order_by('food_type')
-    else:
-        # 대분류가 없으면 모든 소분류 반환
-        food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
-    
-    return JsonResponse({
-        'success': True,
-        'food_types': list(food_types)
-    })
-
-@login_required
-def get_food_group(request):
-    food_type = request.GET.get('food_type', '')
-    
-    if food_type:
-        try:
-            food_group = FoodType.objects.filter(food_type=food_type).values_list('food_group', flat=True).first()
-            return JsonResponse({
-                'success': True,
-                'food_group': food_group or ''
-           
-            })
-        except FoodType.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': '해당하는 식품유형을 찾을 수 없습니다.'
-            })
-    else:
-        return JsonResponse({
-            'success': False,
-            'error': '식품유형이 제공되지 않았습니다.'
-        })
-
-@login_required
-def food_type_settings(request):
-    food_type = request.GET.get('food_type', '')
-    
-    if not food_type:
-        return JsonResponse({
-            'success': False,
-            'error': '식품유형이 제공되지 않았습니다.'
-        })
-
-    
+    """식품 대분류별 소분류 목록을 반환하는 API"""
     try:
-        ft = FoodType.objects.filter(food_type=food_type).first()
+        group = request.GET.get('group', '')
         
-        if not ft:
-            return JsonResponse({
-                'success': False,
-                'error': '해당 식품유형을 찾을 수 없습니다.'
-            })
+        # 모델 임포트 확인
+        from .models import FoodType
         
-        settings = {}
-        
-        checkbox_fields = [
-            'prdlst_dcnm', 'rawmtrl_nm', 'nutritions', 'cautions', 'frmlc_mtrqlt',
-            'pog_daycnt', 'storage_method', 'weight_calorie', 'country_of_origin',
-            'additional_info', 'prdlst_report_no'
-        ]
-        
-        for field in checkbox_fields:
-            if hasattr(ft, field):
-                value = getattr(ft, field, 'N') or 'N'
-                settings[field] = value
-        
-        pog_daycnt_value = ft.pog_daycnt
-        
-        if pog_daycnt_value:
-            if ',' in pog_daycnt_value:
-                options = [option.strip() for option in pog_daycnt_value.split(',') if option.strip()]
-                if options:
-                    settings['pog_daycnt_options'] = options
-                    settings['pog_daycnt'] = 'Y'  # 옵션이 있으면 활성화
-                else:
-                    settings['pog_daycnt'] = 'N'  # 옵션이 없으면 비활성화
-            else:
-                settings['pog_daycnt'] = pog_daycnt_value  # 직접 값 사용
-                settings['pog_daycnt_options'] = [pog_daycnt_value] if pog_daycnt_value != 'D' else []
+        # 대분류가 지정된 경우 해당 대분류의 소분류만, 아니면 모든 소분류 반환
+        if group:
+            food_types = FoodType.objects.filter(food_group=group).order_by('food_type')
         else:
-            settings['pog_daycnt'] = 'N'  # 값이 없으면 비활성화
+            # 모든 소분류 반환 (대분류 선택과 무관하게)
+            food_types = FoodType.objects.all().order_by('food_group', 'food_type')
         
-        # 관련 규정 정보 추가
-        if hasattr(ft, 'relevant_regulations'):
-            settings['relevant_regulations'] = ft.relevant_regulations or ""
+        # JSON 응답용 데이터 구성
+        food_types_data = []
+        for ft in food_types:
+            food_types_data.append({
+                'food_type': ft.food_type,
+                'food_group': ft.food_group
+            })
         
         return JsonResponse({
             'success': True,
-            'settings': settings
+            'food_types': food_types_data
         })
+        
     except Exception as e:
         return JsonResponse({
             'success': False,
             'error': str(e)
-        })
+        }, status=500)
 
 
 @login_required
@@ -1804,8 +1807,6 @@ def reorder_phrases(request):
     try:
         data = json.loads(request.body)
         updates = data.get('updates', [])
-        logger.info(f"Reordering phrases: {updates}")
-        
         for update in updates:
             phrase = MyPhrase.objects.get(
                 my_phrase_id=update['id'],
@@ -1813,7 +1814,6 @@ def reorder_phrases(request):
             )
             phrase.display_order = update['order']
             phrase.save()
-            
         return JsonResponse({'success': True})
     except Exception as e:
         logger.error(f"reorder_phrases error: {str(e)}")
@@ -2056,6 +2056,27 @@ def preview_popup(request):
             print(f"만료일 추천 데이터 로드 오류: {e}")
             expiry_recommendations = {}
         
+        # 저장된 미리보기 설정을 JSON으로 구성
+        preview_settings = {}
+        if label.prv_width or label.prv_font_size or label.prv_letter_spacing or label.prv_line_spacing or label.prv_font:
+            preview_settings = {
+                'layout': label.prv_layout,
+                'width': float(label.prv_width) if label.prv_width else None,
+                'length': float(label.prv_length) if label.prv_length else None,
+                'font': label.prv_font,
+                'font_size': float(label.prv_font_size) if label.prv_font_size else None,
+                'letter_spacing': int(label.prv_letter_spacing) if label.prv_letter_spacing else None,
+                'line_spacing': float(label.prv_line_spacing) if label.prv_line_spacing else None,
+                'recycling_mark': {
+                    'enabled': label.prv_recycling_mark_enabled == 'Y',
+                    'type': label.prv_recycling_mark_type,
+                    'position_x': label.prv_recycling_mark_position_x,
+                    'position_y': label.prv_recycling_mark_position_y,
+                    'text': label.prv_recycling_mark_text
+                } if label.prv_recycling_mark_enabled == 'Y' else None
+            }
+            print(f"미리보기 설정 구성 완료: {preview_settings}")
+        
         context = {
             'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
@@ -2065,7 +2086,8 @@ def preview_popup(request):
             'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
             'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
             'country_mapping': json.dumps(country_mapping, ensure_ascii=False),  # 국가 코드 매핑 추가
-            'expiry_recommendation_json': json.dumps(expiry_recommendations, ensure_ascii=False)  # 소비기한 권장 데이터 추가
+            'expiry_recommendation_json': json.dumps(expiry_recommendations, ensure_ascii=False),  # 소비기한 권장 데이터 추가
+            'preview_settings': json.dumps(preview_settings, ensure_ascii=False) if preview_settings else '{}'  # 미리보기 설정 추가
 
         }
         

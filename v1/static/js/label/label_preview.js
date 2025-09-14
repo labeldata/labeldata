@@ -177,8 +177,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 { value: '일반팩', label: '일반팩', img: '/static/img/recycle_pack_general.png' },
                 { value: '멸균팩', label: '멸균팩', img: '/static/img/recycle_pack_sterile.png' },
                 { value: '유리', label: '유리', img: '/static/img/recycle_glass.png' },
-                // [삭제] 복합재질 항목을 데이터에서 제거합니다.
-                // { value: '복합재질', label: '복합재질', img: '/static/img/recycle_composite.png', isComposite: true },
+                { value: '복합재질', label: '복합재질', img: '/static/img/recycle_composite.png', isComposite: true },
                 { value: '도포첩합', label: '도포첩합', img: '/static/img/recycle_coated.png' }
             ]
         }
@@ -192,8 +191,145 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // 포장재질 텍스트로 추천 분리배출마크 구하기
-    function recommendRecyclingMarkByMaterial(materialText) {
+    // 텍스트 라인 ID 카운터 (각 라인에 data-text-id 부여)
+    let recyclingTextIdCounter = 0;
+
+    // ===== 분리배출마크 UI 헬퍼 =====
+    function clearRecyclingListUI() {
+        const list = document.getElementById('recyclingMarkList');
+        if (list) list.innerHTML = '';
+    }
+
+    function removeRecyclingMarkUI() {
+        const container = document.getElementById('recyclingMarkContainer');
+        if (container) container.remove();
+        clearRecyclingListUI();
+        const addBtn = document.getElementById('addRecyclingMarkBtn');
+        if (addBtn) {
+            addBtn.textContent = '적용';
+            addBtn.classList.remove('btn-danger');
+            addBtn.classList.add('btn-outline-primary');
+        }
+        const additionalInputBox = document.getElementById('additionalTextInputBox');
+        if (additionalInputBox) additionalInputBox.style.display = 'none';
+    }
+
+    function renderRecyclingListFromContainer() {
+        const list = document.getElementById('recyclingMarkList');
+        if (!list) return;
+        list.innerHTML = '';
+        const container = document.getElementById('recyclingMarkContainer');
+        if (!container) return;
+
+        // 마크 항목 (이미지 + 라벨 + 제거 버튼)
+        const img = container.querySelector('#recyclingMarkImage');
+        const markType = img && img.src ? img.src.split('/').pop().replace('.png','') : null;
+    const li = document.createElement('div');
+    li.className = 'recycling-item recycling-mark-item';
+
+        if (img && img.src) {
+            const thumb = document.createElement('img');
+            thumb.src = img.src;
+            // sizing handled by .recycling-item img
+            li.appendChild(thumb);
+        }
+
+    const label = document.createElement('div');
+    label.textContent = markType || '';
+    label.className = 'recycling-label';
+    li.appendChild(label);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn btn-sm btn-role-outline recycling-action-btn';
+        removeBtn.textContent = '제거';
+        removeBtn.addEventListener('click', function() {
+            removeRecyclingMarkUI();
+        });
+        li.appendChild(removeBtn);
+
+        list.appendChild(li);
+
+        // 텍스트 라인들이 있으면 각각을 리스트에 추가
+        const textLines = Array.from(container.querySelectorAll('.recycling-line'));
+
+        // preview에 최대 3줄만 표시, 초과 시 +N으로 표시
+        const preview = document.getElementById('recyclingMarkPreviewArea');
+        if (preview) preview.innerHTML = '';
+
+        textLines.forEach((line, idx) => {
+            const textEl = line.querySelector('.recycling-text-line');
+            const tid = line.dataset.textId || null;
+            if (textEl) {
+                const tli = document.createElement('div');
+                tli.className = 'recycling-item recycling-text-item';
+                const txt = document.createElement('div');
+                txt.textContent = textEl.textContent;
+                txt.className = 'recycling-label';
+                tli.appendChild(txt);
+
+                const del = document.createElement('button');
+                del.className = 'btn btn-sm btn-role-outline';
+                del.textContent = '삭제';
+                del.addEventListener('click', function() {
+                    if (tid) removeRecyclingTextById(tid);
+                });
+                tli.appendChild(del);
+                list.appendChild(tli);
+
+                // preview에 라인 추가(최대 3개만 보여줌)
+                if (preview && idx < 3) {
+                    const p = document.createElement('div');
+                    p.className = 'preview-line';
+                    p.textContent = textEl.textContent;
+                    preview.appendChild(p);
+                }
+            }
+        });
+
+        // preview 초과 카운트
+        if (preview && textLines.length > 3) {
+            const more = document.createElement('div');
+            more.textContent = `+${textLines.length - 3} 더보기`;
+            more.className = 'preview-line more-count';
+            preview.appendChild(more);
+        }
+    }
+
+    function addRecyclingListTextItem(text, id) {
+        const list = document.getElementById('recyclingMarkList');
+        if (!list) return;
+        const tli = document.createElement('div');
+        tli.className = 'recycling-item recycling-text-item';
+        tli.dataset.textId = id;
+        tli.style.cssText = 'display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:4px; background:var(--modern-gray-50); margin-bottom:4px;';
+        const txt = document.createElement('div');
+        txt.textContent = text;
+        txt.style.flex = '1';
+        txt.style.fontSize = '0.85rem';
+        tli.appendChild(txt);
+        const del = document.createElement('button');
+        del.className = 'btn btn-sm btn-role-outline';
+        del.textContent = '삭제';
+        del.addEventListener('click', function() {
+            removeRecyclingTextById(id);
+        });
+        tli.appendChild(del);
+        list.appendChild(tli);
+    }
+
+    function removeRecyclingTextById(id) {
+        const el = document.querySelector(`#recyclingMarkContainer .recycling-line[data-text-id="${id}"]`);
+        if (el) el.remove();
+        const ui = document.querySelector(`#recyclingMarkList .recycling-item[data-text-id="${id}"]`) || document.querySelector(`#recyclingMarkList .recycling-item[data-text-id]`);
+        // remove matching list item
+        const listItem = document.querySelector(`#recyclingMarkList .recycling-item[data-text-id="${id}"]`);
+        if (listItem) listItem.remove();
+    // preview 동기화
+    renderRecyclingListFromContainer();
+    }
+
+    // 포장재질 텍스트로 추천 분리배출마크 구하기 (전역 함수)
+    window.recommendRecyclingMarkByMaterial = function recommendRecyclingMarkByMaterial(materialText) {
         if (!materialText) return null;
         const text = materialText.toLowerCase().trim();
 
@@ -242,21 +378,39 @@ document.addEventListener('DOMContentLoaded', function () {
         return null; // 일치하는 항목이 없을 경우
     }
     
-    // 분리배출마크 UI 생성 및 삽입
+    // 분리배출마크 UI 생성 및 삽입 (더 견고한 삽입 로직)
     function renderRecyclingMarkUI() {
-        const contentTab = document.querySelector('#content-tab .settings-group');
-        if (!contentTab) return;
-        if (document.getElementById('recyclingMarkUiBox')) return;
+        // 1) 우선 플레이스홀더가 있으면 사용
+        const existingPlaceholder = document.getElementById('recyclingMarkUiBox');
 
-        const uiBox = document.createElement('div');
+        // 2) 플레이스홀더가 없으면 기존의 settings-panel 또는 legacy 탭 컨테이너를 찾음
+        const fallbackTargets = [
+            document.querySelector('.settings-panel .settings-group'),
+            document.querySelector('.settings-panel'),
+            document.querySelector('#content-tab .settings-group'),
+            document.querySelector('.settings-group')
+        ];
+        const target = existingPlaceholder || fallbackTargets.find(t => t !== null && t !== undefined);
+        if (!target) return; // 삽입 가능한 위치가 없으면 종료
+
+        // 중복 생성 방지: 이미 컨트롤이 채워져 있으면 아무것도 하지 않음
+        if (document.getElementById('recyclingMarkControls')) return;
+
+        // uiBox로 플레이스홀더를 재사용하거나 새로 생성
+        const uiBox = existingPlaceholder || document.createElement('div');
         uiBox.id = 'recyclingMarkUiBox';
-        uiBox.className = 'settings-row';
-        // [수정] 복합재질 텍스트 입력 필드 추가
+        uiBox.className = uiBox.className ? (uiBox.className + ' settings-row') : 'settings-row';
+        // 리스트 기반 UI: 현재 적용된 마크 및 텍스트 목록을 위에 표시
         uiBox.innerHTML = `
-            <div class="settings-item">
+            <div class="settings-item" style="flex-direction:column;">
                 <label class="form-label" for="recyclingMarkSelect">분리배출마크</label>
-                <div id="recyclingMarkControls">
-                    <select id="recyclingMarkSelect" class="form-select form-select-sm">
+                <div id="recyclingMarkList" style="margin-bottom:8px;"></div>
+
+                <!-- 별도 미리보기 영역: 최대 3줄 표시 -->
+                <div id="recyclingMarkPreviewArea" class="recycling-mark-preview" aria-label="분리배출마크 미리보기"></div>
+
+                <div id="recyclingMarkControls" style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                    <select id="recyclingMarkSelect" class="form-select form-select-sm" style="flex:1; min-width:0;">
                         ${recyclingMarkGroups.map(group => `
                             <optgroup label="${group.group}">
                                 ${group.options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
@@ -265,27 +419,51 @@ document.addEventListener('DOMContentLoaded', function () {
                     </select>
                     <button id="addRecyclingMarkBtn" type="button" class="btn btn-outline-primary btn-sm">적용</button>
                 </div>
-                <!-- [수정] 추가 텍스트 입력 상자 (기본 숨김) -->
-                <div id="additionalTextInputBox" style="display: none; margin-top: 8px;">
-                    <label for="additionalRecyclingText" class="form-label" style="font-size: 0.8rem;">복합재질</label>
-                    <div style="display: flex;">
-                        <input type="text" id="additionalRecyclingText" class="form-control form-control-sm" placeholder="예: 본체(종이)/뚜껑(PP)">
-                        <button id="addRecyclingTextBtn" type="button" class="btn btn-secondary btn-sm" style="margin-left: 4px; white-space: nowrap;">추가</button>
-                    </div>
+
+                <!-- 추가 텍스트 입력 상자 -->
+                <div id="additionalTextInputBox" style="margin-top: 8px; display:flex; gap:8px;">
+                    <input type="text" id="additionalRecyclingText" class="form-control form-control-sm" placeholder="예: 본체(종이)/뚜껑(PP)" style="flex:1; min-width:0;" />
+                    <button id="addRecyclingTextBtn" type="button" class="btn btn-sm btn-role-primary" style="white-space:nowrap;">추가</button>
                 </div>
             </div>
         `;
-        contentTab.appendChild(uiBox);
+
+        // 플레이스홀더가 없었으면 찾아낸 target에 append
+        if (!existingPlaceholder) {
+            target.appendChild(uiBox);
+        }
 
         // [수정] 셀렉트박스 변경 시 복합재질 입력창 표시/숨김 처리
         const select = document.getElementById('recyclingMarkSelect');
         if (select) {
             select.addEventListener('change', function() {
                 const btn = document.getElementById('addRecyclingMarkBtn');
+                const additionalInputBox = document.getElementById('additionalTextInputBox');
+                
                 if (btn) {
                     btn.textContent = '적용';
                     btn.classList.remove('btn-danger');
                     btn.classList.add('btn-outline-primary');
+                }
+                
+                // 복합재질 선택 시에만 추가 입력창 표시
+                if (additionalInputBox) {
+                    const selectedValue = this.value;
+                    const markObj = recyclingMarkMap[selectedValue];
+                    
+                    console.log('🔄 분리배출마크 선택 변경:', {
+                        선택값: selectedValue,
+                        마크객체: markObj,
+                        복합재질여부: markObj?.isComposite
+                    });
+                    
+                    if (markObj?.isComposite || selectedValue === '복합재질') {
+                        additionalInputBox.style.display = 'flex';
+                        console.log('✅ 복합재질 입력창 표시');
+                    } else {
+                        additionalInputBox.style.display = 'none';
+                        console.log('❌ 복합재질 입력창 숨김');
+                    }
                 }
             });
         }
@@ -302,14 +480,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     addBtn.classList.remove('btn-outline-primary');
                     addBtn.classList.add('btn-danger');
                     if (additionalInputBox) additionalInputBox.style.display = 'block';
+                    renderRecyclingListFromContainer();
                 } else {
-                    // [수정] 컨테이너 전체를 제거하도록 변경
-                    const container = document.getElementById('recyclingMarkContainer');
-                    if (container) container.remove();
-                    addBtn.textContent = '적용';
-                    addBtn.classList.remove('btn-danger');
-                    addBtn.classList.add('btn-outline-primary');
-                    if (additionalInputBox) additionalInputBox.style.display = 'none';
+                    // 해제: 전체 UI 정리
+                    removeRecyclingMarkUI();
                 }
             });
         }
@@ -335,8 +509,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 추천 마크 갱신
-    function updateRecyclingMarkUI(packageText) {
+    // 추천 마크 갱신 (전역 함수로 만들어 HTML에서 접근 가능)
+    window.updateRecyclingMarkUI = function(packageText) {
         const recommended = recommendRecyclingMarkByMaterial(packageText);
         const recommendSpan = document.getElementById('recyclingMarkRecommend');
         const select = document.getElementById('recyclingMarkSelect');
@@ -346,27 +520,51 @@ document.addEventListener('DOMContentLoaded', function () {
         if (select && recommended) {
             select.value = recommended;
         }
-    }
+    };
 
     // [추가] 분리배출 마크에 텍스트 라인 추가
     function addTextToRecyclingMark(text) {
         const container = document.getElementById('recyclingMarkContainer');
         const image = document.getElementById('recyclingMarkImage');
-        if (!container || !image) return;
+        const textContainer = document.getElementById('recyclingMarkTextContainer');
+        if (!container || !image || !textContainer) return;
+
+        // 각 라인을 별도의 블록으로 감싸서 CSS로 한 줄 고정을 쉽게 적용
+        const lineWrap = document.createElement('div');
+        lineWrap.className = 'recycling-line';
+        lineWrap.style.cssText = `
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+        `;
 
         const textDiv = document.createElement('div');
         textDiv.textContent = text;
+        // 내부 텍스트 요소는 .recycling-text-line 으로 분리하여 스타일/스크립트 접근 가능
+        textDiv.className = 'recycling-text-line';
         textDiv.style.cssText = `
             font-weight: 500;
             color: #000;
             line-height: 1.1;
             word-break: keep-all;
-            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: inline-block;
         `;
-        container.appendChild(textDiv);
 
-        // 폰트 크기 자동 조절
-        const imageWidth = image.offsetWidth;
+    // 고유 ID 부여
+    const textId = `rtext-${++recyclingTextIdCounter}`;
+    lineWrap.dataset.textId = textId;
+    lineWrap.appendChild(textDiv);
+    textContainer.appendChild(lineWrap);
+
+    // 리스트 UI 동기화
+    addRecyclingListTextItem(text, textId);
+
+        // 폰트 크기 자동 조절 (텍스트가 이미지 너비를 넘지 않도록)
+        const imageWidth = image.offsetWidth || 60; // fallback
         let fontSize = 6; // pt 단위
         textDiv.style.fontSize = `${fontSize}pt`;
 
@@ -389,14 +587,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         container = document.createElement('div');
         container.id = 'recyclingMarkContainer';
-        container.style.position = 'absolute';
-        container.style.width = '60px'; // 컨테이너 너비 고정
-        container.style.cursor = 'move';
-        container.style.textAlign = 'center';
+        container.className = 'recycling-mark-container';
+        // width, cursor, and text alignment handled by CSS
         
         // 컨테이너 내부에 이미지와 텍스트 영역 추가
         container.innerHTML = `
-            <img id="recyclingMarkImage" style="width: 100%; height: auto; display: block;">
+            <img id="recyclingMarkImage" class="recycling-mark-image">
+            <div id="recyclingMarkTextContainer" class="recycling-mark-text"></div>
         `;
         previewContent.appendChild(container);
 
@@ -427,16 +624,16 @@ document.addEventListener('DOMContentLoaded', function () {
             // 제품명 행의 상단에 맞춤
             const topPosition = rowRect.top - previewRect.top;
             
-            container.style.top = `${topPosition}px`;
-            container.style.right = '25px'; // 우측 여백
-            container.style.left = '';
-            container.style.bottom = '';
+            container.style.setProperty('--recycling-top', `${topPosition}px`);
+            container.style.setProperty('--recycling-right', '25px');
+            container.style.setProperty('--recycling-left', '');
+            container.style.setProperty('--recycling-bottom', '');
         } else {
             // 제품명 행을 찾지 못할 경우의 기본 위치 (예: 우측 하단)
-            container.style.right = '20px';
-            container.style.bottom = '20px';
-            container.style.left = '';
-            container.style.top = '';
+            container.style.setProperty('--recycling-right', '20px');
+            container.style.setProperty('--recycling-bottom', '20px');
+            container.style.setProperty('--recycling-left', '');
+            container.style.setProperty('--recycling-top', '');
         }
 
         // 드래그 로직 (컨테이너에 적용)
@@ -449,8 +646,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 const rect = previewContent.getBoundingClientRect();
                 container.style.left = (pageX - rect.left - shiftX) + 'px';
                 container.style.top = (pageY - rect.top - shiftY) + 'px';
-                container.style.right = '';
-                container.style.bottom = '';
+                container.style.setProperty('--recycling-right', '');
+                container.style.setProperty('--recycling-bottom', '');
             }
 
             function onMouseMove(e) {
@@ -463,7 +660,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.removeEventListener('mouseup', mouseUpHandler);
             });
         };
-        container.ondragstart = () => false;
+    container.ondragstart = () => false;
+    // update CSS custom properties to reflect initial inline positions
+    // (these properties are optional; CSS has sensible defaults)
     }
 
     // 미리보기 스타일 업데이트
@@ -480,76 +679,26 @@ document.addEventListener('DOMContentLoaded', function () {
             fontFamily: document.getElementById('fontFamilySelect').value || "'Noto Sans KR'"
         };
 
-        previewContent.style.cssText = `
-            width: ${settings.width}cm;
-            min-width: ${settings.width}cm;
-            position: relative;
-            padding: 20px;
-            background: #fff;
-            border: 1px solid #dee2e6;
-            overflow: visible;
-            box-sizing: border-box;
-            word-break: break-all;
-            white-space: normal;
-        `;
+    // Apply modern preview content class and set CSS variables for dynamic values
+    previewContent.classList.add('preview-content-modern');
+    previewContent.style.setProperty('--preview-width', `${settings.width}cm`);
+    previewContent.style.setProperty('--preview-font-size', `${settings.fontSize}pt`);
+    previewContent.style.setProperty('--preview-letter-spacing', `${settings.letterSpacing / 100}em`);
+    previewContent.style.setProperty('--preview-line-height', `${settings.lineHeight}`);
+    previewContent.style.setProperty('--preview-font-family', `${settings.fontFamily}`);
 
         const table = previewContent.querySelector('.preview-table');
-        if (table) {
-            table.style.cssText = `
-                width: 100%;
-                border-collapse: collapse;
-                table-layout: fixed;
-                margin: 0;
-                word-break: break-all;
-                white-space: normal;
-            `;
-        }
+    if (table) table.classList.add('preview-table');
 
-        const baseTextStyle = `
-            font-size: ${settings.fontSize}pt;
-            font-family: ${settings.fontFamily};
-            letter-spacing: ${settings.letterSpacing / 100}em;
-            line-height: ${settings.lineHeight};
-            word-break: break-all;
-            white-space: normal;
-        `;
-
+        // Cells will pick up sizing and font from CSS variables applied to previewContent-modern
         const cells = previewContent.querySelectorAll('th, td');
         cells.forEach(cell => {
-            cell.style.cssText = `
-                ${baseTextStyle}
-                padding: 4px 8px;
-                border: 1px solid #dee2e6;
-                vertical-align: middle;
-                word-break: break-all;
-                overflow-wrap: break-word;
-                text-align: left;
-                white-space: normal;
-            `;
-            if (cell.tagName === 'TH') {
-                cell.style.backgroundColor = '#f8f9fa';
-                cell.style.textAlign = 'center';
-                cell.style.fontWeight = '500';
-                cell.style.whiteSpace = 'nowrap';
-                cell.style.textOverflow = 'ellipsis';
-                cell.style.overflow = 'hidden';
-                cell.style.width = '100px';
-                cell.style.minWidth = '100px';
-                cell.style.maxWidth = '100px';
-            }
+            cell.classList.add('preview-cell');
+            if (cell.tagName === 'TH') cell.classList.add('preview-header');
         });
 
-        const headerText = previewContent.querySelector('.header-text');
-        if (headerText) {
-            headerText.style.cssText = `
-                ${baseTextStyle}
-                margin: 0;
-                line-height: 1.2;
-                font-weight: bold;
-                color: #fff;
-                text-align: left;
-            `;
-        }
+    const headerText = previewContent.querySelector('.header-text');
+    if (headerText) headerText.classList.add('preview-text');
 
         requestAnimationFrame(() => {
             const contentHeight = previewContent.scrollHeight;
@@ -620,6 +769,28 @@ document.addEventListener('DOMContentLoaded', function () {
                 element.addEventListener('change', updateArea);
             }
         });
+
+        // areaDisplayInput 바인딩: 사용자가 면적을 직접 입력하면 가로(width)를 재계산
+        const areaInput = document.getElementById('areaDisplayInput');
+        if (areaInput) {
+            const onAreaChange = function() {
+                const areaVal = parseFloat(areaInput.value) || 0;
+                const heightEl = document.getElementById('heightInput');
+                const widthEl = document.getElementById('widthInput');
+                const heightVal = parseFloat(heightEl?.value) || 0;
+                if (heightVal > 0 && widthEl) {
+                    const newWidth = Math.max(1, Math.round((areaVal / heightVal) * 100) / 100);
+                    widthEl.value = newWidth;
+                    updatePreviewStyles();
+                    updateArea();
+                } else {
+                    // 높이가 유효하지 않으면 단순히 디스플레이만 갱신
+                    updateArea();
+                }
+            };
+            areaInput.addEventListener('input', debounce(onAreaChange, 150));
+            areaInput.addEventListener('change', onAreaChange);
+        }
     }
 
     // 입력값 최소/최대 제한
@@ -861,6 +1032,28 @@ document.addEventListener('DOMContentLoaded', function () {
         nutrition_text: '영양성분'
     };
 
+    // 표시사항 작성 페이지 순서에 맞는 필드 순서
+    const FIELD_ORDER = [
+        'prdlst_dcnm',        // 식품유형
+        'prdlst_nm',          // 제품명
+        'rawmtrl_nm_display', // 원재료명
+        'ingredient_info',    // 특정성분 함량
+        'content_weight',     // 내용량
+        'weight_calorie',     // 내용량(열량)
+        'prdlst_report_no',   // 품목보고번호
+        'country_of_origin',  // 원산지
+        'storage_method',     // 보관 방법
+        'frmlc_mtrqlt',       // 용기·포장재질
+        'bssh_nm',            // 제조원 소재지
+        'distributor_address', // 유통전문판매원
+        'repacker_address',   // 소분원
+        'importer_address',   // 수입원
+        'pog_daycnt',         // 소비기한
+        'cautions',           // 주의사항
+        'additional_info',    // 기타표시사항
+        'nutrition_text'      // 영양성분
+    ];
+
     // 필드 데이터 저장소
     let checkedFields = {};
     const tbody = document.getElementById('previewTableBody');
@@ -937,7 +1130,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!tbody) return;
 
             tbody.innerHTML = ''; // 로딩 또는 에러 메시지 제거
-            Object.entries(checkedFields).forEach(([field, value]) => {
+            
+            // 표시사항 작성 페이지 순서에 맞게 필드를 정렬하여 렌더링
+            FIELD_ORDER.forEach(field => {
+                const value = checkedFields[field];
                 if (FIELD_LABELS[field] && value) {
                     const tr = document.createElement('tr');
                     const th = document.createElement('th');
@@ -1053,10 +1249,88 @@ document.addEventListener('DOMContentLoaded', function () {
             // 테이블 내용 생성 후 스타일 즉시 적용 (레이아웃 깨짐 방지)
             updatePreviewStyles();
 
-            // 포장재질 기반 추천
-            const frmlc = checkedFields.frmlc_mtrqlt || '';
+            // 분리배출마크 UI 렌더링 및 자동 설정
             renderRecyclingMarkUI();
-            updateRecyclingMarkUI(frmlc);
+            
+            // 포장재질 기반 자동 분리배출마크 설정
+            const frmlc = checkedFields.frmlc_mtrqlt || '';
+            console.log('🔍 포장재질 확인:', {
+                원본값: checkedFields.frmlc_mtrqlt,
+                정제된값: frmlc,
+                전체필드: Object.keys(checkedFields)
+            });
+            
+            if (frmlc) {
+                console.log('📦 포장재질 감지:', frmlc);
+                
+                // 포장재질을 기반으로 추천 마크 찾기
+                const recommendedMark = recommendRecyclingMarkByMaterial(frmlc);
+                console.log('🎯 추천 결과:', { 입력: frmlc, 추천마크: recommendedMark });
+                
+                if (recommendedMark) {
+                    console.log('✅ 추천 분리배출마크:', recommendedMark);
+                    
+                    // UI가 렌더링된 후 자동 설정
+                    setTimeout(() => {
+                        console.log('🚀 자동 설정 시작...');
+                        
+                        const selectElement = document.getElementById('recyclingMarkSelect');
+                        console.log('선택박스 확인:', selectElement ? '존재' : '없음');
+                        
+                        if (selectElement) {
+                            // 옵션 확인
+                            const options = Array.from(selectElement.options).map(opt => opt.value);
+                            console.log('사용 가능한 옵션:', options);
+                            console.log('추천 마크가 옵션에 있는지:', options.includes(recommendedMark));
+                            
+                            selectElement.value = recommendedMark;
+                            console.log('선택박스 값 설정:', selectElement.value);
+                            
+                            // 자동 적용
+                            setRecyclingMark(recommendedMark, true);
+                            
+                            // 버튼 상태 변경
+                            const addBtn = document.getElementById('addRecyclingMarkBtn');
+                            if (addBtn) {
+                                addBtn.textContent = '해제';
+                                addBtn.classList.remove('btn-outline-primary');
+                                addBtn.classList.add('btn-danger');
+                            }
+                            
+                            // 복합재질 입력창 표시
+                            const additionalInputBox = document.getElementById('additionalTextInputBox');
+                            if (additionalInputBox) {
+                                additionalInputBox.style.display = 'block';
+                            }
+                            
+                            console.log('🎯 분리배출마크 자동 설정 완료');
+                        }
+                    }, 100);
+                } else {
+                    console.log('⚠️ 추천할 분리배출마크를 찾지 못했습니다');
+                    // updateRecyclingMarkUI(frmlc); // 인라인으로 대체
+                    const recommendSpan = document.getElementById('recyclingMarkRecommend');
+                    const select = document.getElementById('recyclingMarkSelect');
+                    const recommended = recommendRecyclingMarkByMaterial(frmlc);
+                    if (recommendSpan) {
+                        recommendSpan.textContent = recommended;
+                    }
+                    if (select && recommended) {
+                        select.value = recommended;
+                    }
+                }
+            } else {
+                console.log('ℹ️ 포장재질 정보가 없습니다');
+                // updateRecyclingMarkUI(''); // 인라인으로 대체
+                const recommendSpan = document.getElementById('recyclingMarkRecommend');
+                const select = document.getElementById('recyclingMarkSelect');
+                if (recommendSpan) {
+                    recommendSpan.textContent = '';
+                }
+                if (select) {
+                    select.value = '';
+                }
+            }
         }
     });
 
@@ -1195,7 +1469,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 // 추가 텍스트 설정
                 if (markData.text) {
-                    addTextToRecyclingMark(markData.text);
+                    // 기존 텍스트 라인 초기화
+                    const textContainer = document.getElementById('recyclingMarkTextContainer');
+                    if (textContainer) textContainer.innerHTML = '';
+
+                    // 저장된 텍스트는 '/'로 구분된 여러 라인일 수 있으므로 분리하여 복원
+                    const lines = String(markData.text).split('/');
+                    lines.forEach(line => {
+                        const trimmed = line.trim();
+                        if (trimmed) addTextToRecyclingMark(trimmed);
+                    });
+                    // 리스트 UI 동기화
+                    renderRecyclingListFromContainer();
                 }
             }, 100);
         } else {
@@ -1218,7 +1503,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const style = markElement.style;
         const imgElement = markElement.querySelector('#recyclingMarkImage');
-        const textElement = markElement.querySelector('.recycling-text');
+        // 우선 `.recycling-text-line` 요소들(개별 라인)을 찾아 합쳐서 반환
+        const textLines = Array.from(markElement.querySelectorAll('.recycling-text-line'));
+        let aggregatedText = null;
+        if (textLines.length > 0) {
+            aggregatedText = textLines.map(el => el.textContent.trim()).filter(Boolean).join('/');
+        }
+        const textElement = aggregatedText ? { textContent: aggregatedText } : markElement.querySelector('.recycling-text');
         
         // 이미지 src에서 파일명 추출
         let markType = null;
@@ -1301,33 +1592,99 @@ document.addEventListener('DOMContentLoaded', function () {
         const suggestions = [];
         const rawmtrl = checkedFields.rawmtrl_nm_display || '';
         const cautions = checkedFields.cautions || '';
+        
+        console.log('🔍 알레르기 성분 검증 시작');
+        console.log('원재료명:', rawmtrl);
+        console.log('주의사항:', cautions);
+        
         const allergenMatch = rawmtrl.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/i);
         if (allergenMatch) {
+            console.log('알레르기 성분 매칭 결과:', allergenMatch[1]);
+            
             const allergens = allergenMatch[1].split(',').map(a => a.trim().toLowerCase());
             const cautionsLower = cautions.toLowerCase();
             const finalDuplicatedMessages = [];
 
-            // 일반 알레르기 성분 및 '알류' 포함하여 한번에 검사
+            console.log('추출된 알레르기 성분:', allergens);
+            console.log('주의사항 (소문자):', cautionsLower);
+
+            // 알레르기 성분별 동의어 매핑
+            const allergenSynonyms = {
+                '대두': ['대두', '콩', '된장', '간장', '두부', '콩나물'],
+                '우유': ['우유', '유제품', '치즈', '버터', '요거트', '요구르트', '크림', '밀크'],
+                '알류': ['알류', '난류', '계란', '메추리알', '오리알', '달걀', '난백', '난황'],
+                '밀': ['밀', '밀가루', '글루텐', '면류'],
+                '견과류': ['견과류', '땅콩', '호두', '아몬드', '잣', '피스타치오', '마카다미아', '헤이즐넛'],
+                '새우': ['새우', '갑각류', '크릴'],
+                '게': ['게', '갑각류'],
+                '조개류': ['조개류', '굴', '홍합', '가리비', '바지락'],
+                '생선': ['생선', '어류', '멸치', '참치', '고등어', '연어'],
+                '복숭아': ['복숭아'],
+                '토마토': ['토마토'],
+                '아황산류': ['아황산류', '이산화황'],
+                '호두': ['호두', '견과류'],
+                '땅콩': ['땅콩', '견과류'],
+                '굴': ['굴', '조개류'],
+                '전복': ['전복', '조개류'],
+                '홍합': ['홍합', '조개류']
+            };
+
+            // 각 알레르기 성분에 대해 검사
             allergens.forEach(allergen => {
-                if (allergen === '알류') {
-                    const eggRelatedTerms = ['알류', '난류', '계란', '메츄리알', '오리알', '달걀'];
-                    const foundEggTerms = eggRelatedTerms.filter(term => cautionsLower.includes(term));
-                    
-                    if (foundEggTerms.length > 0) {
-                        finalDuplicatedMessages.push(`알류(${foundEggTerms.join(', ')})`);
+                console.log(`검사 중인 알레르기 성분: ${allergen}`);
+                
+                const synonyms = allergenSynonyms[allergen] || [allergen];
+                const foundTerms = synonyms.filter(term => {
+                    const found = cautionsLower.includes(term);
+                    if (found) {
+                        console.log(`- 발견된 동의어: ${term}`);
                     }
-                } else {
-                    if (cautionsLower.includes(allergen)) {
-                        finalDuplicatedMessages.push(allergen);
-                    }
+                    return found;
+                });
+                
+                if (foundTerms.length > 0) {
+                    finalDuplicatedMessages.push(`${allergen}(${foundTerms.join(', ')})`);
                 }
             });
 
+            console.log('최종 중복 메시지:', finalDuplicatedMessages);
+
             if (finalDuplicatedMessages.length > 0) {
                 errors.push(`주의사항에 원재료명의 알레르기 성분이 중복 표시되었습니다: ${finalDuplicatedMessages.join(', ')}`);
+                suggestions.push('원재료명에 이미 [알레르기 성분]으로 표시된 성분은 주의사항에서 제거하거나, 주의사항에서만 표시하세요.');
+            } else {
+                console.log('알레르기 성분 중복 없음');
+            }
+        } else {
+            console.log('원재료명에 알레르기 성분 표시 없음');
+        }
+        
+        console.log('🔍 알레르기 성분 검증 완료', { errors, suggestions });
+        return { errors, suggestions };
+    }
+
+    // 헬퍼 함수: 냉장보관 온도 확인
+    function hasRefrigerateTemp() {
+        const storageMethod = (checkedFields.storage_method || '').trim();
+        const cautions = (checkedFields.cautions || '').trim();
+        const additional = (checkedFields.additional_info || '').trim();
+        const combinedText = storageMethod + cautions + additional;
+        
+        // 냉장 키워드 확인
+        if (combinedText.includes('냉장')) return true;
+        
+        // 0~10℃ 범위의 온도 확인
+        const rangeRegex = /(\d+(\.\d+)?)\s*~\s*(\d+(\.\d+)?)\s*(℃|도)/g;
+        let match;
+        while ((match = rangeRegex.exec(combinedText)) !== null) {
+            const startTemp = parseFloat(match[1]);
+            const endTemp = parseFloat(match[3]);
+            if (!isNaN(startTemp) && !isNaN(endTemp) && startTemp >= 0 && endTemp <= 10) {
+                return true;
             }
         }
-        return { errors, suggestions };
+        
+        return false;
     }
 
     // 3. 냉동식품 문구 및 온도, 보관조건, 필수 문구 통합

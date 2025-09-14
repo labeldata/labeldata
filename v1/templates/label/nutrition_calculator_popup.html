@@ -9,7 +9,6 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <link href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
   <link href="{% static 'css/nutrition_table_styles.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
-  <link href="{% static 'css/label_creation_modern.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
   <style>
@@ -314,6 +313,96 @@
       font-style: italic;
     }
     
+    /* 강조표시 검증 결과 스타일 */
+    .emphasis-validation-container {
+      margin-bottom: 15px;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    
+    .emphasis-validation-header {
+      background: #f8f9fa;
+      padding: 10px 15px;
+      border-bottom: 1px solid #dee2e6;
+    }
+    
+    .emphasis-validation-header h6 {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #495057;
+    }
+    
+    .emphasis-validation-content {
+      padding: 15px;
+      background: white;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .emphasis-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+    
+    .emphasis-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .emphasis-eligible {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    
+    .emphasis-not-eligible {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    
+    .emphasis-nutrient-name {
+      font-weight: 600;
+    }
+    
+    .emphasis-labels {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    
+    .emphasis-badge {
+      background: #007bff;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    
+    .emphasis-badge.free {
+      background: #28a745;
+    }
+    
+    .emphasis-badge.low {
+      background: #17a2b8;
+    }
+    
+    .emphasis-badge.high {
+      background: #fd7e14;
+    }
+    
+    .emphasis-threshold {
+      color: #6c757d;
+      font-size: 0.75rem;
+      margin-left: 5px;
+    }
+    
     /* 하위 옵션 표시/숨김 */
     .sub-options {
       display: none;
@@ -325,10 +414,21 @@
     
     /* 영양성분표 스타일 */
     .nutrition-result-table {
-      font-family: 'Noto Sans KR', sans-serif;
+      font-family: 'Noto Sans KR', 'Malgun Gothic', '맑은 고딕', sans-serif !important;
       background: white;
       overflow: hidden;
       width: 100%;
+    }
+    
+    /* PDF 호환성을 위한 폰트 설정 */
+    .nutrition-table,
+    .nutrition-table *,
+    .nutrition-style-basic,
+    .nutrition-style-vertical,
+    .nutrition-style-parallel {
+      font-family: 'Noto Sans KR', 'Malgun Gothic', '맑은 고딕', Arial, sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     
     /* 기본형 스타일 */
@@ -472,6 +572,16 @@
       font-size: 14px;
     }
     
+    .nutrition-style-parallel .nutrition-title {
+      background: #000;
+      color: white;
+      text-align: center;
+      padding: 8px;
+      font-weight: bold;
+      font-size: 14px;
+      width: 33%;
+    }
+    
     .nutrition-style-parallel .nutrition-subheader {
       background: #000;
       color: white;
@@ -497,6 +607,114 @@
       width: 25%;
     }
     
+    .nutrition-style-parallel .nutrition-content-info {
+      background: #000;
+      color: white;
+      text-align: right;
+      padding: 8px;
+      font-weight: bold;
+      font-size: 12px;
+      width: 67%;
+      position: relative;
+    }
+    
+    .nutrition-style-parallel .nutrition-unit-header {
+      background: white;
+      color: #000;
+      text-align: left;
+      padding: 4px 8px;
+      font-size: 10px;
+      border: 1px solid #000;
+      font-weight: bold;
+      width: 33%;
+    }
+    
+    .nutrition-style-parallel .nutrition-percent-header {
+      background: white;
+      color: #000;
+      text-align: right;
+      padding: 4px 8px;
+      font-size: 10px;
+      border: 1px solid #000;
+      font-weight: bold;
+      width: 34%;
+    }
+    
+    .nutrition-style-parallel .nutrition-total-header {
+      background: #e0e0e0;
+      color: #000;
+      text-align: right;
+      padding: 4px 8px;
+      font-size: 10px;
+      border: 1px solid #000;
+      font-weight: bold;
+      width: 33%;
+    }
+    
+    .nutrition-style-parallel .nutrition-name-unit-cell {
+      width: 33%;
+      position: relative;
+      text-align: left;
+      padding: 2px 4px;
+      vertical-align: top;
+    }
+    
+    .nutrition-style-parallel .nutrition-name-unit-cell.nutrition-indent {
+      padding-left: 16px;
+    }
+    
+    .nutrition-style-parallel .nutrition-name-bold {
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+    
+    .nutrition-style-parallel .nutrition-unit-value {
+      font-size: 9px;
+      color: #666;
+    }
+    
+    .nutrition-style-parallel .nutrition-percent-cell {
+      width: 34%;
+      text-align: right;
+      padding: 2px 4px;
+      font-weight: bold;
+      vertical-align: middle;
+    }
+    
+    .nutrition-style-parallel .nutrition-total-cell {
+      width: 33%;
+      text-align: left;
+      font-weight: bold;
+      background: #f0f0f0;
+      padding: 2px 4px;
+      position: relative;
+    }
+    
+    .nutrition-style-parallel .total-value-left {
+      float: left;
+    }
+    
+    .nutrition-style-parallel .total-percent-right {
+      float: right;
+    }
+    
+    .nutrition-style-parallel .nutrition-unit-cell {
+      width: 50%;
+      position: relative;
+      text-align: left;
+      padding: 2px 4px;
+    }
+    
+    .nutrition-style-parallel .nutrition-unit-cell .unit-value {
+      float: left;
+      font-weight: bold;
+    }
+    
+    .nutrition-style-parallel .nutrition-unit-cell .percent-value {
+      float: right;
+      font-weight: bold;
+    }
+    
     .nutrition-style-parallel .nutrition-value {
       width: 18.75%;
     }
@@ -517,13 +735,12 @@
   <div class="input-panel">
     <div class="panel-header">
       <div class="panel-title">📊 영양성분 입력</div>
-      <!-- 계산/초기화 버튼을 우측 상단으로 이동 -->
       <div class="button-row">
-        <button type="button" class="btn btn-primary btn-sm" id="calculateBtn" onclick="calculateNutrition()">
+        <button type="button" class="btn btn-sm btn-info" id="calculateBtn" onclick="calculateNutrition()">
           <i class="fas fa-calculator me-1"></i>계산
         </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetFormAndParent()">
-          <i class="fas fa-redo me-1"></i>초기화
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetFormAndParent()">
+          <i class="fas fa-undo me-1"></i>초기화
         </button>
       </div>
     </div>
@@ -559,7 +776,7 @@
         <!-- 기본형/세로형 세부 옵션 -->
         <div id="basic-vertical-options" class="sub-options show">
           <label>표시 기준</label>
-          <select id="basic_display_type">
+          <select id="basic_display_type" onchange="recalculateOnChange()">
             <option value="total">총 내용량당</option>
             <option value="unit">단위내용량당</option>
             <option value="100g">100g(ml)당</option>
@@ -568,7 +785,7 @@
         <!-- 병행표시 세부 옵션 -->
         <div id="parallel-options" class="sub-options">
           <label>병행표시 유형</label>
-          <select id="parallel_display_type">
+          <select id="parallel_display_type" onchange="recalculateOnChange()">
             <option value="unit_total">단위내용량당 + 총내용량당</option>
             <option value="unit_100g">단위내용량당 + 100g당</option>
             <option value="serving_total">1회 섭취참고량당 + 총내용량당</option>
@@ -608,15 +825,25 @@
     <div class="result-header">
       <div class="panel-title">📋 영양성분표</div>
       <div class="result-buttons">
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="exportToPDF()">
-          <i class="fas fa-file-pdf me-1"></i>PDF 저장
-        </button>
         <button type="button" class="btn btn-success btn-sm" onclick="sendNutritionDataToParent()">
           <i class="fas fa-save me-1"></i>데이터 저장
         </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">
+        <button type="button" class="btn btn-primary btn-sm" onclick="exportToPDF()">
+          <i class="fas fa-file-pdf me-1"></i>PDF 저장
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">
           <i class="fas fa-times me-1"></i>닫기
         </button>
+      </div>
+    </div>
+    
+    <!-- 강조표시 검증 결과 영역 -->
+    <div id="emphasisValidationResults" class="emphasis-validation-container" style="display: none;">
+      <div class="emphasis-validation-header">
+        <h6><i class="fas fa-star text-warning me-2"></i>강조표시 검증 결과</h6>
+      </div>
+      <div id="emphasisValidationContent" class="emphasis-validation-content">
+        <!-- 검증 결과가 여기에 표시됩니다 -->
       </div>
     </div>
     
@@ -647,7 +874,18 @@
     
     // 스타일 변경 시 자동 계산
     if (document.getElementById('base_amount').value && document.getElementById('servings_per_package').value) {
-      calculateNutrition();
+      if (typeof window.calculateNutrition === 'function') {
+        window.calculateNutrition();
+      }
+    }
+  };
+
+  // 표시 기준 변경 시 재계산 함수
+  window.recalculateOnChange = function() {
+    if (document.getElementById('base_amount').value && document.getElementById('servings_per_package').value) {
+      if (typeof window.calculateNutrition === 'function') {
+        window.calculateNutrition();
+      }
     }
   };
 

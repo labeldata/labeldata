@@ -762,8 +762,9 @@ function saveIngredients() {
                 const rawmtrlNmField = window.opener.document.querySelector('textarea[name="rawmtrl_nm"]');
                 if (rawmtrlNmField) {
                     rawmtrlNmField.value = summaryText;
-                    if (typeof window.opener.updateTextareaHeight === 'function') {
-                        window.opener.updateTextareaHeight(rawmtrlNmField);
+                    // 팝업 전용 필드 높이 조절 함수 호출
+                    if (typeof window.opener.adjustPopupFieldHeight === 'function') {
+                        window.opener.adjustPopupFieldHeight('rawmtrl_nm');
                     }
                 }
 

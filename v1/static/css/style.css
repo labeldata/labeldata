@@ -205,138 +205,56 @@ body {
     border-color: var(--pagination-color);
 }
 /* ====================================================
-   7. Buttons
+   7. Buttons (refactored to use modern tokens)
    ==================================================== */
+/* These rules delegate to modern design tokens defined in
+   label_creation_modern.css. Fallbacks preserve previous colors.
+*/
 .btn {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--btn-icon-gap, 8px);
     font-weight: 400;
     text-align: center;
     vertical-align: middle;
     cursor: pointer;
     background-color: transparent;
     border: 1px solid transparent;
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8rem;
+    padding: var(--btn-padding-y, 0.375rem) var(--btn-padding-x, 0.75rem);
+    font-size: var(--btn-font-size, 0.9rem);
     line-height: 1.5;
-    border-radius: 0.25rem;
-    transition: color 0.15s ease-in-out,
-                background-color 0.15s ease-in-out,
-                border-color 0.15s ease-in-out,
-                box-shadow 0.15s ease-in-out;
-    color: #212529;
+    border-radius: var(--modern-border-radius-sm, 0.25rem);
+    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    color: var(--btn-text-color, #212529);
 }
 .btn-default {
-    background-color: #e9ecef;
+    background-color: var(--modern-gray-50, #e9ecef);
     color: var(--text-color);
-    border: 1px solid #ced4da;
+    border: 1px solid var(--modern-gray-200, #ced4da);
 }
-.btn-default:hover {
-    background-color: #d0d5d8;
-    color: #212529;
-    border-color: #b0b7bd;
-}
-.btn-primary {
-    color: #fff;
-    background-color: var(--btn-color);
-    border-color: var(--btn-color);
-}
-.btn-secondary {
-    color: #fff;
-    background-color: var(--btn-secondary-color);
-    border-color: var(--btn-secondary-color);
-}
-.btn-cancel {
-    color: #fff;
-    background-color: var(--btn-cancel-color);
-    border-color: var(--btn-cancel-color);
-}
-.btn-danger {
-    color: #fff;
-    background-color: var(--danger-color);
-    border-color: var(--danger-color);
-}
-.btn-warning {
-    color: #212529;
-    background-color: #ffbc42;
-    border-color: #ffbc42;
-}
-.btn-sm {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.75rem;
-}
-.btn-primary:hover {
-    background-color: #1f55cc;
-    border-color: #1f55cc;
-    color: #fff;
-}
-.btn-secondary:hover {
-    background-color: #1678d0;
-    border-color: #1678d0;
-    color: #fff;
-}
-.btn-cancel:hover {
-    background-color: #565e64;
-    border-color: #565e64;
-    color: #fff;
-}
-.btn-danger:hover {
-    background-color: #c82333;
-    border-color: #c82333;
-}
-.btn-warning:hover {
-    background-color: #e0a935;
-    border-color: #e0a935;
-    color: #212529;
-}
-/* Outline 버튼 스타일 추가 */
-.btn-outline-primary {
-    color: var(--btn-color);
-    border-color: var(--btn-color);
-    background-color: transparent;
-}
-.btn-outline-primary:hover {
-    background-color: var(--btn-color);
-    color: #fff;
-}
-.btn-outline-secondary {
-    color: var(--btn-secondary-color);
-    border-color: var(--btn-secondary-color);
-    background-color: transparent;
-}
-.btn-outline-secondary:hover {
-    background-color: var(--btn-secondary-color);
-    color: #fff;
-}
-.btn-outline-danger {
-    color: var(--danger-color);
-    border-color: var(--danger-color);
-    background-color: transparent;
-}
-.btn-outline-danger:hover {
-    background-color: var(--danger-color);
-    color: #fff;
-}
-.btn-outline-cancel {
-    color: var(--btn-cancel-color);
-    border-color: var(--btn-cancel-color);
-    background-color: transparent;
-}
-.btn-outline-cancel:hover,
-.btn-outline-cancel:focus {
-    background-color: var(--btn-cancel-color);
-    color: #fff;
-}
-.btn-icon {
-    border: none;
-    background: none;
-    color: #6c757d;
-    padding: 2px 4px;
-    line-height: 1;
-}
-.btn-icon:hover {
-    color: #495057;
-    background-color: rgba(108, 117, 125, 0.1);
-}
+.btn-default:hover { background-color: var(--modern-gray-100, #d0d5d8); }
+.btn-primary { color: #fff; background-color: var(--modern-primary, var(--btn-color)); border-color: var(--modern-primary, var(--btn-color)); }
+.btn-secondary { color: #fff; background-color: var(--modern-gray-700, var(--btn-secondary-color)); border-color: var(--modern-gray-700, var(--btn-secondary-color)); }
+.btn-cancel { color: #fff; background-color: var(--btn-cancel-color); border-color: var(--btn-cancel-color); }
+.btn-danger { color: #fff; background-color: var(--modern-danger, var(--danger-color)); border-color: var(--modern-danger, var(--danger-color)); }
+.btn-warning { color: var(--btn-warning-text, #212529); background-color: var(--btn-warning-bg, #ffbc42); border-color: var(--btn-warning-bg, #ffbc42); }
+.btn-sm { padding: var(--btn-sm-padding, 0.25rem 0.5rem); font-size: var(--btn-sm-font-size, 0.85rem); }
+.btn-primary:hover { background-color: var(--modern-primary-hover, #1f55cc); }
+.btn-secondary:hover { background-color: var(--modern-gray-600, #1678d0); }
+.btn-cancel:hover { background-color: #565e64; }
+.btn-danger:hover { background-color: var(--modern-danger-hover, #c82333); }
+.btn-warning:hover { background-color: var(--btn-warning-hover, #e0a935); }
+.btn-outline-primary { color: var(--modern-primary, var(--btn-color)); border-color: var(--modern-primary, var(--btn-color)); background-color: transparent; }
+.btn-outline-primary:hover { background: var(--modern-primary, var(--btn-color)); color: #fff; }
+.btn-outline-secondary { color: var(--modern-gray-700, var(--btn-secondary-color)); border-color: var(--modern-gray-700, var(--btn-secondary-color)); background-color: transparent; }
+.btn-outline-secondary:hover { background: var(--modern-gray-700, var(--btn-secondary-color)); color: #fff; }
+.btn-outline-danger { color: var(--modern-danger, var(--danger-color)); border-color: var(--modern-danger, var(--danger-color)); background-color: transparent; }
+.btn-outline-danger:hover { background: var(--modern-danger, var(--danger-color)); color: #fff; }
+.btn-outline-cancel { color: var(--btn-cancel-color); border-color: var(--btn-cancel-color); background-color: transparent; }
+.btn-outline-cancel:hover, .btn-outline-cancel:focus { background-color: var(--btn-cancel-color); color: #fff; }
+.btn-icon { border: none; background: none; color: var(--modern-gray-600, #6c757d); padding: 2px 4px; line-height: 1; }
+.btn-icon:hover { color: var(--modern-gray-800, #495057); background-color: rgba(108,117,125,0.06); }
 /* ====================================================
    9. Home & Search Sections
    ==================================================== */

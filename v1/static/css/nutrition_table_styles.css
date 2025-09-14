@@ -1,4 +1,318 @@
 /* ====================================================
+   영양성분표 최종 CSS - 외부 스타일 간섭 완전 차단 (개선 버전)
+   ==================================================== */
+
+/* 1. 전체 컨테이너 (캡슐화) */
+#nutrition-facts-label {
+  width: 100%;
+  border: 2px solid #000 !important; /* 가이드라인: 가장 굵은 외부선 */
+  font-family: 'Malgun Gothic', '맑은 고딕', sans-serif !important;
+  line-height: 1.3 !important;
+  margin: 0 auto !important;
+  -webkit-font-smoothing: antialiased;
+  color: #000 !important; /* 기본 글자색 검정 */
+}
+
+#nutrition-facts-label * { /* 내부 모든 요소 박스 사이징 통일 */
+  box-sizing: border-box !important;
+}
+
+/* 2. 검은색 헤더 영역 */
+#nutrition-facts-label .nutrition-header {
+  background-color: #000 !important;
+  color: #fff !important;
+  padding: 8px 12px !important;
+  text-align: center !important;
+  border-bottom: 1px solid #000 !important;
+}
+#nutrition-facts-label .nutrition-header * { /* 헤더 안 모든 글씨 흰색 강제 */
+  color: #fff !important;
+}
+#nutrition-facts-label .nutrition-title {
+  font-size: 16pt !important;
+  font-weight: bold !important;
+  margin: 0 !important;
+}
+#nutrition-facts-label .nutrition-subheader {
+  font-size: 10pt !important;
+  font-weight: normal !important;
+  margin-top: 4px !important;
+  text-align: left !important;
+}
+#nutrition-facts-label .nutrition-total-info {
+  font-size: 10pt !important;
+  font-weight: normal !important;
+  margin-top: 4px !important;
+  text-align: center !important;
+}
+#nutrition-facts-label .calories-value {
+  font-weight: bold !important; /* 가이드라인: 열량 값은 굵게 */
+}
+
+/* 3. 흰색 테이블 본문 영역 */
+#nutrition-facts-label .nutrition-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  background-color: #fff !important;
+  color: #000 !important;
+  table-layout: fixed !important;
+}
+#nutrition-facts-label .nutrition-table th,
+#nutrition-facts-label .nutrition-table td {
+  padding: 5px 8px !important;
+  vertical-align: middle !important;
+  border-bottom: 1px solid #000 !important; /* 가이드라인: 얇은 선 */
+  text-align: left !important;
+  font-size: 10pt !important;
+}
+#nutrition-facts-label .nutrition-table tr:last-child td {
+  border-bottom: none !important;
+}
+
+/* 4. 컬럼 헤더 ('영양성분', '함량' 등) */
+#nutrition-facts-label thead th {
+  font-weight: bold !important;
+  border-bottom: 2px solid #000 !important; /* 가이드라인: 중간 굵기 선 */
+  text-align: center !important; /* 가이드라인: 헤더는 중앙 정렬 */
+  padding: 6px 8px !important;
+  line-height: 1.2 !important;
+}
+
+/* 5. 셀 스타일 및 정렬 */
+#nutrition-facts-label .nutrition-name {
+  width: 45% !important;
+  text-align: left !important;
+}
+#nutrition-facts-label .nutrition-indent {
+  padding-left: 25px !important;
+}
+#nutrition-facts-label .nutrition-content {
+  width: 35% !important;
+  text-align: right !important;
+  padding: 5px 8px !important;
+}
+#nutrition-facts-label .nutrition-daily {
+  width: 20% !important;
+  text-align: right !important;
+  font-weight: bold !important; /* 가이드라인: % 값은 굵게 */
+  padding: 5px 8px !important;
+}
+
+/* 6. 하단 안내문구 */
+#nutrition-facts-label .nutrition-footer td {
+  border-top: 5px solid #000 !important; /* 가이드라인: 가장 굵은 선 */
+  border-bottom: none !important;
+  font-size: 8pt !important;
+  padding-top: 8px !important;
+}
+
+/* 7. 병행표시 전용 스타일 */
+#nutrition-facts-label.nutrition-style-parallel .nutrition-table th {
+  font-size: 9pt;
+  font-weight: normal;
+  vertical-align: middle;
+  text-align: center;
+}
+#nutrition-facts-label.nutrition-style-parallel .parallel-header-top th {
+  font-weight: bold;
+}
+#nutrition-facts-label.nutrition-style-parallel .parallel-header-bottom th {
+  font-weight: normal;
+  border-top: 1px solid #000;
+}
+#nutrition-facts-label.nutrition-style-parallel .parallel-divider { /* 세로 굵은 선 */
+  border-left: 3px solid #000 !important;
+}
+#nutrition-facts-label.nutrition-style-parallel .nutrition-name {
+  width: 34% !important;
+}
+#nutrition-facts-label.nutrition-style-parallel .nutrition-content {
+  width: 33% !important;
+  padding: 5px 6px !important;
+}
+
+/* 8. 스타일별 너비 설정 및 개선 */
+.nutrition-style-basic { max-width: 400px; } /* 기본형 너비 증가로 공백 문제 해결 */
+.nutrition-style-vertical { max-width: 320px; } /* 세로형 너비 증가 */
+.nutrition-style-parallel { max-width: 600px; } /* 병행형 너비 증가로 2줄 문제 해결 */
+
+/* 8-1. 기본형 테이블 컬럼 너비 최적화 */
+#nutrition-facts-label.nutrition-style-basic .nutrition-name {
+  width: 45% !important;
+}
+#nutrition-facts-label.nutrition-style-basic .nutrition-content {
+  width: 35% !important;
+}
+#nutrition-facts-label.nutrition-style-basic .nutrition-daily {
+  width: 20% !important;
+}
+
+/* 9. 세로형 영양표 전용 스타일 */
+#nutrition-facts-label .nutrition-vertical {
+  width: 100% !important;
+  border: 2px solid #000 !important;
+  background-color: #fff !important;
+}
+
+#nutrition-facts-label .nutrition-vertical-header {
+  background-color: #000 !important;
+  color: #fff !important;
+  padding: 8px 12px !important;
+  text-align: center !important;
+}
+
+#nutrition-facts-label .nutrition-title-vertical {
+  font-size: 16pt !important;
+  font-weight: bold !important;
+  margin: 0 0 4px 0 !important;
+}
+
+#nutrition-facts-label .nutrition-amount-vertical {
+  font-size: 10pt !important;
+  font-weight: normal !important;
+  margin: 2px 0 !important;
+}
+
+#nutrition-facts-label .nutrition-calories-vertical {
+  font-size: 12pt !important;
+  font-weight: bold !important;
+  margin: 4px 0 0 0 !important;
+}
+
+#nutrition-facts-label .nutrition-vertical-content {
+  padding: 0 !important;
+}
+
+#nutrition-facts-label .nutrition-vertical-item {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 6px 12px !important;
+  border-bottom: 1px solid #000 !important;
+  font-size: 10pt !important;
+  line-height: 1.3 !important;
+}
+
+#nutrition-facts-label .nutrition-vertical-indent {
+  padding-left: 24px !important;
+}
+
+#nutrition-facts-label .nutrition-vertical-name {
+  flex: 1 !important;
+  text-align: left !important;
+  font-weight: normal !important;
+}
+
+#nutrition-facts-label .nutrition-vertical-value {
+  margin-left: 8px !important;
+  font-weight: normal !important;
+  white-space: nowrap !important;
+}
+
+#nutrition-facts-label .nutrition-vertical-percent {
+  margin-left: 4px !important;
+  font-weight: bold !important;
+  white-space: nowrap !important;
+}
+
+#nutrition-facts-label .nutrition-vertical-footer {
+  padding: 8px 12px !important;
+  font-size: 8pt !important;
+  border-top: 2px solid #000 !important;
+  background-color: #f8f8f8 !important;
+}
+
+/* 10. 기본형 오른쪽 공백 문제 해결 */
+#nutrition-facts-label.nutrition-style-basic .nutrition-table {
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+#nutrition-facts-label.nutrition-style-basic .nutrition-table td,
+#nutrition-facts-label.nutrition-style-basic .nutrition-table th {
+  padding: 5px 8px !important;
+}
+
+#nutrition-facts-label.nutrition-style-basic .nutrition-table .nutrition-name {
+  width: 55% !important;
+}
+
+#nutrition-facts-label.nutrition-style-basic .nutrition-table .nutrition-content {
+  width: 25% !important;
+  text-align: right !important;
+}
+
+#nutrition-facts-label.nutrition-style-basic .nutrition-table .nutrition-daily {
+  width: 20% !important;
+  text-align: right !important;
+}
+
+/* 11. 병행형 2줄 문제 해결 */
+#nutrition-facts-label.nutrition-style-parallel .nutrition-table {
+  font-size: 8.5pt !important; /* 글씨 크기 축소 */
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+#nutrition-facts-label.nutrition-style-parallel .nutrition-table th,
+#nutrition-facts-label.nutrition-style-parallel .nutrition-table td {
+  font-size: 8.5pt !important;
+  padding: 3px 4px !important;
+  white-space: nowrap !important; /* 한 줄 강제 */
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.2 !important;
+}
+
+#nutrition-facts-label.nutrition-style-parallel .nutrition-name {
+  width: 30% !important;
+  font-size: 8pt !important;
+}
+
+#nutrition-facts-label.nutrition-style-parallel .nutrition-content {
+  width: 17.5% !important;
+  text-align: center !important;
+  font-size: 8pt !important;
+}
+
+#nutrition-facts-label.nutrition-style-parallel .parallel-divider {
+  border-left: 3px solid #000 !important;
+}
+
+/* 병행형 헤더 추가 최적화 */
+#nutrition-facts-label.nutrition-style-parallel .parallel-header-top th {
+  font-size: 9pt !important;
+  padding: 4px 2px !important;
+}
+
+#nutrition-facts-label.nutrition-style-parallel .parallel-header-bottom th {
+  font-size: 8pt !important;
+  padding: 3px 2px !important;
+}
+
+/* 12. 추가 반응형 개선사항 */
+#nutrition-facts-label .nutrition-indent {
+  padding-left: 20px !important;
+}
+
+/* 13. 텍스트 렌더링 최적화 */
+#nutrition-facts-label {
+  -webkit-text-size-adjust: 100% !important;
+  text-rendering: optimizeLegibility !important;
+}
+
+/* 14. 인쇄 최적화 */
+@media print {
+  #nutrition-facts-label {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  #nutrition-facts-label.nutrition-style-parallel .nutrition-table th,
+  #nutrition-facts-label.nutrition-style-parallel .nutrition-table td {
+    font-size: 7pt !important;
+  }
+}/* ====================================================
    영양성분 표시 CSS - 한눈에 보는 영양표시 가이드라인 기준
    ==================================================== */
 

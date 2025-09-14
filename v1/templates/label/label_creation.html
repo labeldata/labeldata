@@ -12,6 +12,36 @@
 <!-- 외부 CSS 및 JS 파일 로드 -->
 <link href="{% static 'css/style.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
 <link href="{% static 'css/label_creation_modern.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
+
+<!-- 클릭 전용 필드 스타일은 CSS 파일에서 관리 -->
+<style>
+.readonly-field-info {
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+
+.readonly-field-info i {
+    color: #0d6efd;
+}
+
+/* HTML 인라인 스타일이 CSS 파일 스타일을 대체함 */
+
+/* 영양성분 표로 입력 버튼 스타일 */
+.btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    border-radius: 0.25rem;
+}
+
+.label-button-container {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+</style>
+
 <!-- 자주 사용하는 문구 데이터 삽입 -->
 <script id="phrases-data" type="application/json">
   {{ phrases_json|safe }}
@@ -27,13 +57,1037 @@
 <!-- 통합 스마트 추천 시스템 (단일 파일) -->
 <script src="{% static 'js/unified_recommendation.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
-<!-- OCR 자동 실행 스크립트 -->
+<!-- 🔧 직접 전역 함수 정의 (단순하고 확실한 방법) -->
 <script>
-// 개발 중 메시지 표시 함수 (전역 함수로 정의)
+// 개발 중 메시지 표시 함수
 function showDevelopmentMessage() {
-    alert('🚀 커밍 순~! 사진으로 자동 입력 기능을 열심히 개발 중입니다! 😊');
-    return false; // 모달 열기 방지
+    alert('🚀 Coming Soon~! 사진으로 자동 입력 기능을 열심히 개발 중입니다! 😊');
+    return false;
 }
+
+// � 팝업 차단 테스트 함수 (가장 먼저 정의)
+
+
+// 🔗 원재료명 필드 강제 연결 함수
+function forceRawMaterialFieldConnection() {
+    console.log('🔗 원재료명 필드 강제 연결 시작');
+    const rawMaterialField = document.getElementById('rawmtrl_nm');
+    
+    if (!rawMaterialField) {
+        console.error('❌ 원재료명 필드를 찾을 수 없음');
+        return false;
+    }
+    
+    console.log('✅ 원재료명 필드 발견:', rawMaterialField);
+    
+    // 강력한 클릭 이벤트 연결
+    rawMaterialField.addEventListener('click', function(e) {
+        console.log('🖱️ 원재료명 필드 클릭됨!');
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 라벨 ID 확인
+        const labelId = document.getElementById('label_id')?.value || '';
+        console.log('🏷️ 사용할 라벨 ID:', labelId);
+        
+        // 간단한 확인 후 바로 팝업 열기
+        if (confirm('원재료 표로 입력 팝업을 열시겠습니까?')) {
+            openIngredientPopupDirect(labelId);
+        }
+    }, true); // useCapture = true로 확실하게
+    
+    // 포커스 이벤트도 연결
+    rawMaterialField.addEventListener('focus', function(e) {
+        console.log('🎯 원재료명 필드 포커스');
+        e.preventDefault();
+        rawMaterialField.blur();
+        setTimeout(() => {
+            rawMaterialField.click();
+        }, 10);
+    }, true);
+    
+    console.log('✅ 원재료명 필드 이벤트 연결 완료');
+    return true;
+}
+
+//  전체 상황 진단 함수 (강화된 버전)
+function diagnoseAll() {
+    console.log('🩺 전체 상황 진단 시작');
+    console.log('📋 전역 함수들 상태:', {
+        testPopupBlocking: typeof testPopupBlocking,
+        testIngredientPopup: typeof testIngredientPopup,
+        testRawMaterialClick: typeof testRawMaterialClick,
+        forceRawMaterialFieldConnection: typeof forceRawMaterialFieldConnection,
+        forceConnectRawMaterialField: typeof forceConnectRawMaterialField
+    });
+    
+    console.log('🔍 중요 요소들 확인:');
+    const rawmtrlField = document.getElementById('rawmtrl_nm');
+    const nutritionField = document.getElementById('nutrition_text');
+    const labelIdField = document.getElementById('label_id');
+    
+    console.log('  - rawmtrl_nm 필드:', rawmtrlField);
+    console.log('  - nutrition_text 필드:', nutritionField);
+    console.log('  - label_id 필드:', labelIdField);
+    console.log('  - label_id 값:', labelIdField?.value);
+    
+    // 필드 이벤트 리스너 확인
+    if (rawmtrlField) {
+        console.log('  - rawmtrl_nm 이벤트:', {
+            hasClickSetup: rawmtrlField.hasAttribute('data-click-setup'),
+            onclick: !!rawmtrlField.onclick,
+            eventListeners: 'addEventListener로 등록된 이벤트는 확인 불가'
+        });
+    }
+    
+    console.log('🔧 팝업 관련 함수들:', {
+        openIngredientTablePopup: typeof window.openIngredientTablePopup,
+        openPopup: typeof window.openPopup,
+        handleIngredientPopup: typeof window.handleIngredientPopup,
+        openIngredientPopupDirect: typeof openIngredientPopupDirect
+    });
+    
+    return {
+        functions: typeof testPopupBlocking !== 'undefined',
+        rawmtrlField: !!rawmtrlField,
+        nutritionField: !!nutritionField,
+        labelId: labelIdField?.value
+    };
+}
+
+
+
+
+
+// 🔥 최종 해결책: 오버레이 기반 클릭 핸들러
+function createFieldOverlays() {
+    
+    const fields = [
+        { id: 'rawmtrl_nm', handler: 'rawmaterial', label: '원재료명(참고)' },
+        { id: 'nutrition_text', handler: 'nutrition', label: '영양성분' }
+    ];
+    
+    fields.forEach(fieldInfo => {
+        const field = document.getElementById(fieldInfo.id);
+        if (!field) {
+            console.warn(`⚠️ ${fieldInfo.label} 필드를 찾을 수 없음`);
+            return;
+        }
+        
+        // 기존 오버레이 제거
+        const existingOverlay = document.getElementById(`${fieldInfo.id}_overlay`);
+        if (existingOverlay) {
+            existingOverlay.remove();
+        }
+        
+        // 필드의 위치와 크기 정보 가져오기
+        const fieldRect = field.getBoundingClientRect();
+        const fieldStyle = getComputedStyle(field);
+        
+        // 오버레이 DIV 생성
+        const overlay = document.createElement('div');
+        overlay.id = `${fieldInfo.id}_overlay`;
+        overlay.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            cursor: pointer;
+            z-index: 10;
+            border-radius: ${fieldStyle.borderRadius};
+        `;
+        
+        // 필드의 부모 컨테이너에 relative 포지션 설정
+        const container = field.closest('.input-container-modern') || field.parentElement;
+        if (container && getComputedStyle(container).position === 'static') {
+            container.style.position = 'relative';
+        }
+        
+        // 오버레이를 필드 다음에 삽입
+        field.parentNode.insertBefore(overlay, field.nextSibling);
+        
+        // 클릭 이벤트 핸들러 등록
+        overlay.addEventListener('click', function(e) {
+            console.log(`🖱️ ${fieldInfo.label} 오버레이 클릭!`);
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (fieldInfo.handler === 'rawmaterial') {
+                handleRawMaterialPopup();
+            } else if (fieldInfo.handler === 'nutrition') {
+                handleNutritionPopup();
+            }
+        });
+        
+        // 호버 효과
+        overlay.addEventListener('mouseenter', function() {
+            field.style.backgroundColor = '#e9ecef';
+            field.style.borderColor = '#86b7fe';
+            overlay.style.backgroundColor = 'rgba(0, 123, 255, 0.05)';
+        });
+        
+        overlay.addEventListener('mouseleave', function() {
+            field.style.backgroundColor = '#f8f9fa';
+            field.style.borderColor = '#e3e6f0';
+            overlay.style.backgroundColor = 'transparent';
+        });
+        
+        console.log(`✅ ${fieldInfo.label} 오버레이 생성 완료`);
+    });
+}
+
+// 원재료명 팝업 핸들러
+function handleRawMaterialPopup() {
+
+    
+    // 3가지 선택지 모달 창 표시
+    showRawMaterialOptionsModal();
+}
+
+// 원재료명 3가지 선택지 모달 함수
+function showRawMaterialOptionsModal() {
+
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('rawMaterialOptionsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modalHtml = `
+        <div id="rawMaterialOptionsModal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        ">
+            <div onclick="event.stopPropagation()" style="
+                background: white;
+                border-radius: 15px;
+                padding: 35px;
+                box-shadow: 0 6px 30px rgba(0, 0, 0, 0.3);
+                text-align: center;
+                max-width: 450px;
+                width: 90%;
+            ">
+                <h4 style="margin-bottom: 25px; color: #333; font-size: 1.3rem;">🥘 원재료명(참고) 옵션</h4>
+                <p style="margin-bottom: 30px; color: #666; line-height: 1.6; font-size: 0.95rem;">
+                    원재료명 처리 방법을 선택해주세요
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <button type="button" onclick="selectRawMaterialOption('table')" style="
+                        background: linear-gradient(135deg, #28a745, #20c997);
+                        color: white;
+                        border: none;
+                        padding: 15px 25px;
+                        border-radius: 10px;
+                        font-size: 15px;
+                        font-weight: 500;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 3px 10px rgba(40, 167, 69, 0.3);
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(40, 167, 69, 0.4)'" 
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 3px 10px rgba(40, 167, 69, 0.3)'">
+                        📊 표로 입력 (팝업)
+                    </button>
+                    <button type="button" onclick="selectRawMaterialOption('copy')" style="
+                        background: linear-gradient(135deg, #007bff, #0056b3);
+                        color: white;
+                        border: none;
+                        padding: 15px 25px;
+                        border-radius: 10px;
+                        font-size: 15px;
+                        font-weight: 500;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 3px 10px rgba(0, 123, 255, 0.3);
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(0, 123, 255, 0.4)'" 
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 3px 10px rgba(0, 123, 255, 0.3)'">
+                        📋 원재료명(표시)에 복사
+                    </button>
+                    <button type="button" onclick="selectRawMaterialOption('cancel')" style="
+                        background: linear-gradient(135deg, #6c757d, #5a6268);
+                        color: white;
+                        border: none;
+                        padding: 15px 25px;
+                        border-radius: 10px;
+                        font-size: 15px;
+                        font-weight: 500;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        box-shadow: 0 3px 10px rgba(108, 117, 125, 0.3);
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(108, 117, 125, 0.4)'" 
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 3px 10px rgba(108, 117, 125, 0.3)'">
+                        ❌ 취소
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 배경 클릭 시 닫기
+    const modal = document.getElementById('rawMaterialOptionsModal');
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+    
+    // ESC 키로 닫기
+    const escHandler = function(e) {
+        if (e.key === 'Escape') {
+            modal.remove();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+// 원재료명 선택지 처리 함수
+window.selectRawMaterialOption = function(option) {
+
+    const modal = document.getElementById('rawMaterialOptionsModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    if (option === 'table') {
+        // 표로 입력 팝업 열기
+        console.log('📊 표로 입력 선택됨');
+        const labelId = document.getElementById('label_id')?.value || '';
+        
+        try {
+            if (typeof window.openIngredientTablePopup === 'function') {
+                console.log('📦 openIngredientTablePopup 호출');
+                window.openIngredientTablePopup();
+            } else if (typeof window.openPopup === 'function') {
+                console.log('🔧 openPopup 직접 호출');
+                const url = `/label/ingredient-popup/?label_id=${labelId}`;
+                window.openPopup(url, 'IngredientPopup', 1000, 800);
+            } else {
+                console.log('🚀 직접 팝업 열기');
+                openIngredientPopupDirect(labelId);
+            }
+        } catch (error) {
+            console.error('❌ 팝업 열기 오류:', error);
+            alert('팝업을 열 수 없습니다: ' + error.message);
+        }
+    } else if (option === 'copy') {
+        // 원재료명(표시)에 복사
+
+        copyRawMaterialToDisplay();
+    } else {
+        console.log('❌ 취소 선택됨');
+    }
+};
+
+// 원재료명(표시) 필드로 복사하는 함수
+function copyRawMaterialToDisplay() {
+    const sourceField = document.getElementById('rawmtrl_nm');
+    const targetField = document.querySelector('textarea[name="rawmtrl_nm_display"]');
+    const targetCheckbox = document.getElementById('chk_rawmtrl_nm_display');
+    
+    if (sourceField && targetField) {
+        const sourceValue = sourceField.value.trim();
+        
+        if (sourceValue) {
+            // 복사 내용이 길면 축약해서 표시
+            const previewText = sourceValue.length > 150 ? 
+                sourceValue.substring(0, 150) + '...' : sourceValue;
+            
+            targetField.value = sourceValue;
+            
+            // 원재료명(표시) 체크박스 자동 체크
+            if (targetCheckbox) {
+                targetCheckbox.checked = true;
+            }
+            
+            // textarea 높이 자동 조절
+            if (window.updateTextareaHeight) {
+                window.updateTextareaHeight(targetField);
+            } else {
+                targetField.style.height = '1px';
+                targetField.style.height = Math.max(48, targetField.scrollHeight) + 'px';
+            }
+            
+            // 성공 알림 모달
+            showSuccessModal('원재료명(표시) 필드에 복사가 완료되었습니다!<br>체크박스도 자동으로 선택되었습니다.');
+        } else {
+            alert('원재료명(참고) 필드에 복사할 내용이 없습니다.\n\n먼저 원재료 정보를 입력해주세요.');
+        }
+    } else {
+        console.error('❌ 필드를 찾을 수 없습니다');
+        alert('필드를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+    }
+}
+
+// 성공 알림 모달
+function showSuccessModal(message) {
+    const modalHtml = `
+        <div id="successModal" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10001;
+        ">
+            <div onclick="event.stopPropagation()" style="
+                background: white;
+                border-radius: 15px;
+                padding: 30px;
+                box-shadow: 0 6px 30px rgba(0, 0, 0, 0.3);
+                text-align: center;
+                max-width: 400px;
+                width: 90%;
+            ">
+                <div style="font-size: 3rem; margin-bottom: 20px;">✅</div>
+                <h4 style="margin-bottom: 20px; color: #28a745; font-size: 1.2rem;">완료!</h4>
+                <p style="margin-bottom: 25px; color: #666; line-height: 1.5;">${message}</p>
+                <button type="button" onclick="document.getElementById('successModal').remove()" style="
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    padding: 12px 25px;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                " onmouseover="this.style.background='#1e7e34'" onmouseout="this.style.background='#28a745'">
+                    확인
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // 3초 후 자동 닫기
+    setTimeout(() => {
+        const modal = document.getElementById('successModal');
+        if (modal) {
+            modal.remove();
+        }
+    }, 3000);
+}
+
+// 영양성분 팝업 핸들러
+function handleNutritionPopup() {
+
+    
+    // 영양성분 계산기 모달 표시
+    if (typeof window.closeNutritionCalculatorModal === 'function') {
+        // 기존 모달 닫기
+        window.closeNutritionCalculatorModal();
+    }
+    
+    // 개선된 모달 표시
+    setTimeout(() => {
+        const modalHtml = `
+            <div id="nutritionCalculatorModal" style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 10000;
+            ">
+                <div onclick="event.stopPropagation()" style="
+                    background: white;
+                    border-radius: 15px;
+                    padding: 35px;
+                    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.3);
+                    text-align: center;
+                    max-width: 450px;
+                    width: 90%;
+                ">
+                    <div style="font-size: 3rem; margin-bottom: 20px;">🧮</div>
+                    <h4 style="margin-bottom: 25px; color: #333; font-size: 1.3rem;">영양성분 계산기</h4>
+                    <p style="margin-bottom: 30px; color: #666; line-height: 1.6; font-size: 0.95rem;">
+                        영양성분 계산기를 열어서<br>영양정보를 자동으로 계산하시겠습니까?
+                    </p>
+                    <div style="display: flex; gap: 15px; justify-content: center;">
+                        <button type="button" onclick="openNutritionCalculatorFromModal()" style="
+                            background: linear-gradient(135deg, #28a745, #20c997);
+                            color: white;
+                            border: none;
+                            padding: 15px 25px;
+                            border-radius: 10px;
+                            font-size: 15px;
+                            font-weight: 500;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            box-shadow: 0 3px 10px rgba(40, 167, 69, 0.3);
+                        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(40, 167, 69, 0.4)'" 
+                           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 3px 10px rgba(40, 167, 69, 0.3)'">
+                            ✅ 계산기 열기
+                        </button>
+                        <button type="button" onclick="closeNutritionCalculatorModal()" style="
+                            background: linear-gradient(135deg, #6c757d, #5a6268);
+                            color: white;
+                            border: none;
+                            padding: 15px 25px;
+                            border-radius: 10px;
+                            font-size: 15px;
+                            font-weight: 500;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            box-shadow: 0 3px 10px rgba(108, 117, 125, 0.3);
+                        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(108, 117, 125, 0.4)'" 
+                           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 3px 10px rgba(108, 117, 125, 0.3)'">
+                            ❌ 취소
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // 배경 클릭 시 닫기
+        const modal = document.getElementById('nutritionCalculatorModal');
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+        
+        // ESC 키로 닫기
+        const escHandler = function(e) {
+            if (e.key === 'Escape') {
+                modal.remove();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    }, 100);
+}
+
+// 전역 함수로 등록
+window.createFieldOverlays = createFieldOverlays;
+window.handleRawMaterialPopup = handleRawMaterialPopup;
+window.handleNutritionPopup = handleNutritionPopup;
+window.showRawMaterialOptionsModal = showRawMaterialOptionsModal;
+window.copyRawMaterialToDisplay = copyRawMaterialToDisplay;
+window.showSuccessModal = showSuccessModal;
+
+
+
+// 🧮 영양성분 계산기 함수 미리 정의 (호출 전에 정의해야 함)
+window.openNutritionCalculatorFromModal = function() {
+    console.log('🧮 영양성분 계산기 열기 시도');
+    const modal = document.getElementById('nutritionCalculatorModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    try {
+        const labelId = document.getElementById('label_id')?.value || '';
+        console.log('🧮 라벨 ID:', labelId);
+        
+        if (labelId) {
+            // 실제 프로젝트 URL 패턴에 맞게 수정 (하이픈 사용)
+            const possibleUrls = [
+                `/label/nutrition-calculator-popup/?label_id=${labelId}`,
+                `/label/nutrition-popup/?label_id=${labelId}`
+            ];
+            
+            console.log('🧮 시도할 URL들:', possibleUrls);
+            
+            // URL 시도 함수
+            function tryOpenCalculator(urlIndex = 0) {
+                if (urlIndex >= possibleUrls.length) {
+                    console.error('❌ 모든 URL 시도 실패');
+                    alert('영양성분 계산기를 찾을 수 없습니다.\n\n개발자에게 문의해주세요.');
+                    return;
+                }
+                
+                const currentUrl = possibleUrls[urlIndex];
+                console.log(`🧮 URL 시도 중 (${urlIndex + 1}/${possibleUrls.length}):`, currentUrl);
+                
+                try {
+                    const popup = window.open(currentUrl, 'NutritionCalculator', 'width=1200,height=800,scrollbars=yes,resizable=yes,menubar=no,toolbar=no,location=no,status=no');
+                    
+                    if (popup) {
+                        console.log('✅ 영양성분 계산기 팝업 열기 성공');
+                        
+                        // 팝업 로드 확인
+                        let hasLoaded = false;
+                        
+                        // 팝업이 닫힐 때 처리
+                        const checkClosed = setInterval(() => {
+                            if (popup.closed) {
+                                clearInterval(checkClosed);
+                                
+                                if (!hasLoaded && urlIndex + 1 < possibleUrls.length) {
+                                    console.warn(`⚠️ 팝업이 빨리 닫혔습니다. 다음 URL 시도: ${currentUrl}`);
+                                    setTimeout(() => tryOpenCalculator(urlIndex + 1), 500);
+                                    return;
+                                }
+                                
+                                console.log('📄 영양성분 계산기 팝업이 닫혔습니다.');
+                                
+                                // 영양성분 필드 업데이트 확인
+                                setTimeout(() => {
+                                    const nutritionField = document.getElementById('nutrition_text');
+                                    if (nutritionField) {
+                                        console.log('🔄 영양성분 데이터 확인 중...');
+                                    }
+                                }, 500);
+                            }
+                        }, 1000);
+                        
+                        // 3초 후 로드 성공으로 간주
+                        setTimeout(() => {
+                            hasLoaded = true;
+                            console.log('✅ 영양성분 계산기 로드 성공으로 간주');
+                        }, 3000);
+                        
+                    } else {
+                        console.error('❌ 팝업이 차단되었습니다');
+                        alert('팝업이 차단되었습니다.\n\n브라우저에서 팝업을 허용해주세요.');
+                    }
+                } catch (error) {
+                    console.error(`❌ URL 오류 (${currentUrl}):`, error);
+                    if (urlIndex + 1 < possibleUrls.length) {
+                        console.log('다음 URL 시도...');
+                        tryOpenCalculator(urlIndex + 1);
+                    } else {
+                        alert('영양성분 계산기를 열 수 없습니다.\n\n오류: ' + error.message);
+                    }
+                }
+            }
+            
+            // 계산기 열기 시도
+            tryOpenCalculator();
+        } else {
+            console.error('❌ 라벨 ID를 찾을 수 없음');
+            alert('라벨 ID를 찾을 수 없습니다.\n\n페이지를 새로고침해주세요.');
+        }
+    } catch (error) {
+        console.error('❌ 영양성분 계산기 열기 오류:', error);
+        alert('영양성분 계산기를 열 수 없습니다.\n\n오류: ' + error.message);
+    }
+};
+
+window.closeNutritionCalculatorModal = function() {
+    const modal = document.getElementById('nutritionCalculatorModal');
+    if (modal) {
+        modal.remove();
+    }
+};
+
+
+
+// 🧮 영양성분 계산기 설정 함수 (클릭 시에만 작동)
+function setupNutritionCalculator() {
+    console.log('🧮 영양성분 계산기 설정 시작');
+    
+    // 영양성분 계산기 확인 모달 함수
+    function showNutritionCalculatorConfirm() {
+        console.log('🧮 영양성분 계산기 모달 표시');
+        
+        const modalHtml = `
+            <div id="nutritionCalculatorModal" style="
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 10000;
+            ">
+                <div onclick="event.stopPropagation()" style="
+                    background: white;
+                    border-radius: 10px;
+                    padding: 30px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                    text-align: center;
+                    max-width: 400px;
+                    width: 90%;
+                ">
+                    <h4 style="margin-bottom: 20px; color: #333;">🧮 영양성분 계산기</h4>
+                    <p style="margin-bottom: 25px; color: #666; line-height: 1.5;">
+                        영양성분 계산기를 열어서<br>영양정보를 자동으로 계산하시겠습니까?
+                    </p>
+                    <div style="display: flex; gap: 12px; justify-content: center;">
+                        <button type="button" onclick="openNutritionCalculatorFromModal()" style="
+                            background: #28a745;
+                            color: white;
+                            border: none;
+                            padding: 12px 20px;
+                            border-radius: 6px;
+                            font-size: 14px;
+                            cursor: pointer;
+                            transition: background 0.2s;
+                        " onmouseover="this.style.background='#1e7e34'" onmouseout="this.style.background='#28a745'">
+                            ✅ 계산기 열기
+                        </button>
+                        <button type="button" onclick="closeNutritionCalculatorModal()" style="
+                            background: #6c757d;
+                            color: white;
+                            border: none;
+                            padding: 12px 20px;
+                            border-radius: 6px;
+                            font-size: 14px;
+                            cursor: pointer;
+                            transition: background 0.2s;
+                        " onmouseover="this.style.background='#545b62'" onmouseout="this.style.background='#6c757d'">
+                            ❌ 취소
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 기존 모달 제거
+        const existingModal = document.getElementById('nutritionCalculatorModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // 새 모달 추가
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // 배경 클릭 시 닫기
+        const modal = document.getElementById('nutritionCalculatorModal');
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+        
+        // ESC 키로 닫기
+        const escHandler = function(e) {
+            if (e.key === 'Escape') {
+                modal.remove();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    }
+    
+    // 영양성분 textarea 클릭 이벤트 설정 (더 강력한 방식)
+    function connectNutritionField() {
+        const nutritionTextarea = document.getElementById('nutrition_text');
+        if (nutritionTextarea) {
+            console.log('🧮 영양성분 필드 발견, 이벤트 연결 시작');
+            let isProcessing = false; // 중복 실행 방지
+            
+            // 기존 이벤트 리스너 제거를 위해 복제
+            const newTextarea = nutritionTextarea.cloneNode(true);
+            nutritionTextarea.parentNode.replaceChild(newTextarea, nutritionTextarea);
+            
+            // 강력한 클릭 이벤트 연결
+            newTextarea.addEventListener('click', function(event) {
+                console.log('🧮 영양성분 필드 클릭됨!');
+                event.preventDefault();
+                event.stopPropagation();
+                
+                if (isProcessing) {
+                    console.log('🧮 영양성분 계산기 처리 중, 중복 실행 방지');
+                    return;
+                }
+                
+                isProcessing = true;
+                showNutritionCalculatorConfirm();
+                
+                setTimeout(() => {
+                    isProcessing = false;
+                }, 1000);
+            }, true); // useCapture = true
+            
+            // 포커스 이벤트도 추가
+            newTextarea.addEventListener('focus', function(event) {
+                console.log('🧮 영양성분 필드 포커스!');
+                event.preventDefault();
+                newTextarea.blur(); // 즉시 포커스 해제
+                setTimeout(() => {
+                    newTextarea.click();
+                }, 10);
+            }, true);
+            
+            console.log('✅ 영양성분 계산기 강력 연결 완료');
+            return true;
+        } else {
+            console.warn('⚠️ nutrition_text 필드를 찾을 수 없음');
+            return false;
+        }
+    }
+    
+    // 즉시 시도 및 재시도 로직
+    if (!connectNutritionField()) {
+        setTimeout(connectNutritionField, 1000);
+        setTimeout(connectNutritionField, 3000);
+        setTimeout(connectNutritionField, 5000);
+    }
+}
+
+// 더 강력한 원재료명 필드 연결 함수
+function forceConnectRawMaterialField() {
+    const rawMaterialField = document.getElementById('rawmtrl_nm');
+    
+    if (!rawMaterialField) {
+        console.error('❌ 원재료명 필드를 찾을 수 없음');
+        return false;
+    }
+    
+    console.log('✅ 원재료명 필드 발견, 강력한 이벤트 연결 시작');
+    
+    // 기존 이벤트 리스너 제거를 위해 복제
+    const newField = rawMaterialField.cloneNode(true);
+    rawMaterialField.parentNode.replaceChild(newField, rawMaterialField);
+    
+    // 강력한 클릭 이벤트 연결
+    newField.addEventListener('click', function(e) {
+        console.log('🖱️ 원재료명 필드 클릭됨!');
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // 라벨 ID 확인
+        const labelId = document.getElementById('label_id')?.value || '';
+        console.log('🏷️ 사용할 라벨 ID:', labelId);
+        
+        // 간단한 확인 후 바로 팝업 열기
+        if (confirm('원재료 표로 입력 팝업을 열시겠습니까?')) {
+            openIngredientPopupDirect(labelId);
+        }
+    }, true); // useCapture = true로 확실하게
+    
+    // 포커스 이벤트도 연결
+    newField.addEventListener('focus', function(e) {
+        console.log('🎯 원재료명 필드 포커스');
+        e.preventDefault();
+        newField.blur();
+        setTimeout(() => {
+            newField.click();
+        }, 10);
+    }, true);
+    
+    console.log('✅ 원재료명 필드 강력 연결 완료');
+    return true;
+}
+
+// 즉시 진단 실행 및 강력한 필드 연결
+console.log('🚀 전역 함수 정의 완료');
+setTimeout(() => {
+    console.log('🔍 1초 후 자동 진단 및 연결...');
+    diagnoseAll();
+    
+    // 🔥 오버레이 기반 클릭 핸들러 생성
+    createFieldOverlays();
+    
+    // 강력한 원재료명 필드 연결 시도 (백업용)
+    if (forceConnectRawMaterialField()) {
+        console.log('✅ 원재료명 필드 강력 연결 성공');
+    } else {
+        console.log('❌ 원재료명 필드 강력 연결 실패 - 재시도 예정');
+        // 재시도
+        setTimeout(forceConnectRawMaterialField, 2000);
+        setTimeout(forceConnectRawMaterialField, 5000);
+    }
+}, 1000);
+</script>
+
+<!-- 🧪 추가 테스트용 스크립트 -->
+<script>
+// DOM 로드 완료 후 실행되는 추가 테스트
+document.addEventListener('DOMContentLoaded', function() {
+
+    
+    // 3초 후 자동 테스트 실행
+    setTimeout(() => {
+        console.log('� 3초 후 자동 테스트 실행...');
+        
+        if (typeof diagnoseAll === 'function') {
+            const diagnosis = diagnoseAll();
+            console.log('📊 진단 결과:', diagnosis);
+            
+            if (diagnosis.functions && diagnosis.field) {
+                console.log('✅ 모든 조건 충족 - 테스트 준비 완료');
+                console.log('🧪 콘솔에서 다음 명령어들을 사용할 수 있습니다:');
+                console.log('  - testPopupBlocking() : 팝업 차단 테스트');
+                console.log('  - testIngredientPopup() : 표로입력 팝업 테스트');
+                console.log('  - testRawMaterialClick() : 원재료명 필드 클릭 테스트');
+                console.log('  - forceRawMaterialFieldConnection() : 강제 필드 연결');
+                console.log('  - diagnoseAll() : 전체 상황 진단');
+            } else {
+                console.warn('⚠️ 일부 조건이 충족되지 않음:', diagnosis);
+            }
+        }
+    }, 3000);
+});
+</script>
+
+<script>
+// 전역 handleIngredientPopup 함수 정의 (항상 사용 가능)
+window.handleIngredientPopup = function() {
+    console.log('🖱️ 원재료 표로 입력 버튼 클릭');
+
+    console.log('  - openIngredientTablePopup:', typeof openIngredientTablePopup);
+    console.log('  - window.openIngredientTablePopup:', typeof window.openIngredientTablePopup);
+    console.log('  - openPopup:', typeof openPopup);
+    console.log('  - window.openPopup:', typeof window.openPopup);
+    
+    try {
+        if (typeof window.openIngredientTablePopup === 'function') {
+            console.log('✅ window.openIngredientTablePopup이 존재합니다');
+            window.openIngredientTablePopup();
+        } else if (typeof openIngredientTablePopup === 'function') {
+            console.log('✅ openIngredientTablePopup이 존재합니다');
+            openIngredientTablePopup();
+        } else {
+            console.warn('⚠️ openIngredientTablePopup 함수를 찾을 수 없습니다');
+            console.log('📋 현재 window 객체의 관련 함수들:');
+            Object.keys(window).filter(key => key.toLowerCase().includes('ingredient')).forEach(key => {
+                console.log(`  - ${key}:`, typeof window[key]);
+            });
+            
+            // 강제로 함수 정의 시도
+            if (typeof window.openPopup === 'function') {
+                console.log('🔧 openPopup 함수가 존재하므로 직접 호출 시도');
+                const labelId = document.getElementById('label_id')?.value || '';
+                const url = `/label/ingredient-popup/?label_id=${labelId}`;
+                window.openPopup(url, 'IngredientPopup', 1000, 800);
+            } else {
+                alert('원재료 표로 입력 기능을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+            }
+        }
+    } catch (error) {
+        console.error('💥 원재료 표로 입력 열기 오류:', error);
+        alert('원재료 표로 입력을 열 수 없습니다. 페이지를 새로고침해주세요.');
+    }
+};
+
+// 전역 함수로 setupSmartRecommendationButtons 정의
+window.setupSmartRecommendationButtons = function() {
+    console.log('🔧 스마트 추천 버튼 이벤트 리스너 설정 시작 (v6.0 - 추천 기반 색상 변경)');
+    
+    // 기존 JavaScript로 생성된 아이콘들 제거
+    const existingIcons = document.querySelectorAll('.smart-rec-icon');
+    if (existingIcons.length > 0) {
+        console.log(`🗑️ 기존 추천 아이콘 ${existingIcons.length}개 제거`);
+        existingIcons.forEach(icon => icon.remove());
+    }
+    
+    // 기존 JavaScript로 추가된 패딩 제거
+    const inputFields = document.querySelectorAll('#step2-card input, #step2-card textarea, #step2-card select');
+    inputFields.forEach(field => {
+        if (field.style.paddingRight === '40px') {
+            field.style.paddingRight = '';
+            console.log('🔧 필드 패딩 제거:', field.name || field.id || field.placeholder);
+        }
+    });
+    
+    const smartButtons = document.querySelectorAll('.smart-recommendation-icon');
+    console.log(`📊 발견된 스마트 추천 버튼 수: ${smartButtons.length}`);
+    
+    if (smartButtons.length === 0) {
+        console.warn('❌ 스마트 추천 버튼을 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 기존 이벤트 리스너 제거 및 새로 추가
+    smartButtons.forEach((button, index) => {
+        const fieldName = button.getAttribute('data-field');
+        if (!fieldName) {
+            console.warn(`❌ data-field 속성이 없는 버튼 발견 (인덱스: ${index}):`, button);
+            return;
+        }
+        
+        console.log(`✅ 버튼 설정 중: ${fieldName}`);
+        
+        // 기존 이벤트 리스너 제거 (복제로 제거)
+        const newButton = button.cloneNode(true);
+        button.parentNode.replaceChild(newButton, button);
+        
+        // 새로운 이벤트 리스너 추가
+        newButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log(`🔔 스마트 추천 버튼 클릭: ${fieldName}`);
+            
+            // 통합 스마트 추천 시스템 존재 확인
+            if (!window.unifiedSmartRecommendation) {
+                console.error('❌ window.unifiedSmartRecommendation이 존재하지 않습니다.');
+                alert('스마트추천 시스템을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+                return;
+            }
+            
+            // 추천 문구가 없는 경우 알림
+            if (!newButton.classList.contains('has-recommendations')) {
+                console.warn('⚠️ 해당 필드에 추천 문구가 없습니다.');
+                alert('해당 필드에는 현재 추천 문구가 없습니다.');
+                return;
+            }
+            
+            // 해당 필드 찾기
+            const fieldElement = document.querySelector(`[name="${fieldName}"]`);
+            if (!fieldElement) {
+                console.error(`❌ 필드를 찾을 수 없음: ${fieldName}`);
+                alert(`필드를 찾을 수 없습니다: ${fieldName}`);
+                return;
+            }
+            
+            const value = fieldElement.value ? fieldElement.value.trim() : '';
+            console.log(`📝 필드 값: "${value}"`);
+            
+            // 통합 스마트 추천 시스템 호출
+            if (window.unifiedSmartRecommendation.loadAndShowRecommendations) {
+                try {
+                    window.unifiedSmartRecommendation.currentField = fieldName;
+                    window.unifiedSmartRecommendation.currentFieldValue = value;
+                    window.unifiedSmartRecommendation.loadAndShowRecommendations(fieldName, value);
+                    console.log(`🚀 스마트 추천 팝업 호출 성공: ${fieldName}`);
+                } catch (error) {
+                    console.error('❌ 스마트 추천 팝업 호출 실패:', error);
+                    alert('스마트추천 기능에 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.');
+                }
+            } else {
+                console.error('❌ loadAndShowRecommendations 함수를 찾을 수 없습니다.');
+                alert('스마트추천 시스템이 초기화되지 않았습니다. 새로고침 후 다시 시도해주세요.');
+            }
+        });
+        
+        // 필드 값 변경 시 추천 상태 재확인
+        const fieldElement = document.querySelector(`[name="${fieldName}"]`);
+        if (fieldElement) {
+            fieldElement.addEventListener('input', function() {
+                if (window.unifiedSmartRecommendation && window.unifiedSmartRecommendation.checkFieldForRecommendations) {
+                    // 300ms 디바운스
+                    clearTimeout(fieldElement.checkTimeout);
+                    fieldElement.checkTimeout = setTimeout(() => {
+                        window.unifiedSmartRecommendation.checkFieldForRecommendations(fieldName);
+                    }, 300);
+                }
+            });
+        }
+    });
+    
+    console.log('✅ 스마트 추천 버튼 이벤트 리스너 설정 완료 (v6.0)');
+};
 
 document.addEventListener('DOMContentLoaded', function() {
     // URL 파라미터에서 ocr=auto가 있으면 OCR 모달 자동 열기
@@ -116,10 +1170,25 @@ document.addEventListener('DOMContentLoaded', function() {
             if (window.unifiedSmartRecommendation) {
                 try {
                     window.unifiedSmartRecommendation.initializeSystem();
+                    console.log('✅ 통합 스마트 추천 시스템 초기화 성공');
                 } catch (error) {
                     console.error('❌ 통합 스마트 추천 시스템 초기화 실패:', error);
                 }
+            } else {
+                console.warn('⚠️ window.unifiedSmartRecommendation이 없습니다.');
             }
+            
+            // 새로운 스마트 추천 버튼들에 이벤트 리스너 추가 - 즉시 실행
+            if (window.setupSmartRecommendationButtons) {
+                window.setupSmartRecommendationButtons();
+            }
+            
+            // 추가로 DOM이 완전히 로드된 후에도 한번 더 실행
+            setTimeout(() => {
+                if (window.setupSmartRecommendationButtons) {
+                    window.setupSmartRecommendationButtons();
+                }
+            }, 1000);
             
             return true; // 초기화 성공
         } else {
@@ -142,9 +1211,670 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 초기화 시작
-    setTimeout(tryInitRecommendationSystem, 1000);
+    // 초기화 시작 - 즉시 실행
+    setTimeout(() => {
+        console.log('🎯 추천 시스템 초기화 시작...');
+        tryInitRecommendationSystem();
+    }, 500);
+    
+    // 안전장치 - 추가 재시도
+    setTimeout(() => {
+        if (!window.unifiedSmartRecommendation) {
+            console.warn('⚠️ 스마트 추천 시스템이 여전히 로드되지 않았습니다. 강제 재시도...');
+            tryInitRecommendationSystem();
+        }
+        if (window.setupSmartRecommendationButtons) {
+            window.setupSmartRecommendationButtons();
+        }
+    }, 2000);
+    
+    // 🧮 영양성분 계산기 관련 함수들 (클릭 시에만 실행)
+    setupNutritionCalculator();
+    
+    // 📋 중복 제거됨 - 이미 전역에서 정의됨
+
+    // 원재료명(참고) textarea 클릭 시 확인 후 원재료 표로 입력 팝업 열기
+    function setupRawMaterialClickEvent() {
+        const rawMaterialTextarea = document.getElementById('rawmtrl_nm');
+        console.log('🔍 rawmtrl_nm 요소 검색 결과:', rawMaterialTextarea);
+        
+        if (rawMaterialTextarea) {
+            console.log('✅ rawmtrl_nm 요소 발견, 다중 이벤트 리스너 추가');
+            let isRawMaterialProcessing = false; // 중복 실행 방지
+            
+            // 클릭 이벤트 핸들러 함수 - 3개 선택지 메뉴 (전역 함수로 정의)
+            window.handleRawMaterialClick = async function(event) {
+                console.log('🖱️ rawmtrl_nm 필드 클릭됨 - 이벤트 타입:', event.type);
+                
+                if (isRawMaterialProcessing) {
+                    console.log('⏳ 원재료 표로 입력 처리 중, 중복 실행 방지');
+                    return;
+                }
+                
+                // 3개 선택지 메뉴 표시 (Promise 기반)
+                const choice = await showRawMaterialMenu();
+                
+                if (choice === 'table') {
+                    console.log('✅ 사용자가 표로 입력 선택');
+                    isRawMaterialProcessing = true;
+                    
+                    try {
+                        // 함수 존재 확인 및 호출
+                        console.log('🔍 팝업 함수 존재 확인:', {
+                            openIngredientTablePopup: typeof window.openIngredientTablePopup,
+                            openPopup: typeof window.openPopup
+                        });
+                        
+                        if (typeof window.openIngredientTablePopup === 'function') {
+                            console.log('📦 openIngredientTablePopup 호출');
+                            window.openIngredientTablePopup();
+                        } else if (typeof window.openPopup === 'function') {
+                            console.log('🔧 openPopup 직접 호출');
+                            const labelId = document.getElementById('label_id')?.value || '';
+                            const url = `/label/ingredient-popup/?label_id=${labelId}`;
+                            window.openPopup(url, 'IngredientPopup', 1000, 800);
+                        } else {
+                            console.error('❌ 팝업 함수들을 찾을 수 없음');
+                            alert('팝업 기능을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+                        }
+                    } catch (error) {
+                        console.error('💥 원재료 표로 입력 열기 오류:', error);
+                        alert('팝업을 여는 중 오류가 발생했습니다: ' + error.message);
+                    } finally {
+                        setTimeout(() => {
+                            isRawMaterialProcessing = false;
+                        }, 1000);
+                    }
+                } else if (choice === 'copy') {
+                    console.log('📋 사용자가 원재료명(표시)에 복사 선택');
+                    copyToDisplayField();
+                } else {
+                    console.log('❌ 사용자가 취소 선택');
+                }
+            }
+            
+            // 3개 선택지 메뉴 표시 함수 - 간단한 confirm 방식
+            function showRawMaterialMenu() {
+                return new Promise((resolve) => {
+                    // 간단한 confirm 대화상자 사용
+                    const choice = confirm('원재료 표로 입력 팝업을 열시겠습니까?\n\n확인: 표로 입력\n취소: 취소');
+                    
+                    if (choice) {
+                        resolve('table');
+                    } else {
+                        resolve('cancel');
+                    }
+                });
+            }
+            
+            // 원재료명(표시) 필드로 복사하는 함수
+            function copyToDisplayField() {
+                const sourceField = document.getElementById('rawmtrl_nm');
+                const targetField = document.querySelector('textarea[name="rawmtrl_nm_display"]');
+                const targetCheckbox = document.getElementById('chk_rawmtrl_nm_display');
+                
+                if (sourceField && targetField) {
+                    const sourceValue = sourceField.value.trim();
+                    
+                    if (sourceValue) {
+                        // 복사 내용이 길면 축약해서 표시
+                        const previewText = sourceValue.length > 150 ? 
+                            sourceValue.substring(0, 150) + '...' : sourceValue;
+                        
+                        targetField.value = sourceValue;
+                        
+                        // 원재료명(표시) 체크박스 자동 체크
+                        if (targetCheckbox) {
+                            targetCheckbox.checked = true;
+                        }
+                        
+                        // textarea 높이 자동 조절
+                        if (window.updateTextareaHeight) {
+                            updateTextareaHeight(targetField);
+                        }
+                        
+                        console.log('✅ 원재료명(표시)에 복사 완료');
+                        alert('원재료명(표시) 필드에 복사가 완료되었습니다.\n\n' + 
+                              '체크박스도 자동으로 선택되었습니다.');
+                    } else {
+                        alert('원재료명(참고) 필드에 복사할 내용이 없습니다.\n\n' +
+                              '먼저 "표로 입력"을 통해 데이터를 입력해주세요.');
+                    }
+                } else {
+                    console.error('❌ 필드를 찾을 수 없습니다');
+                    alert('필드를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+                }
+            }
+            
+            // 중복 이벤트 제거 - 오버레이에서만 처리
+            
+            window.checkRawMaterialElements = function() {
+                console.log('🔍 원재료명 요소들 확인:');
+                console.log('  - rawmtrl_nm textarea:', document.getElementById('rawmtrl_nm'));
+                console.log('  - rawmtrl_nm_overlay:', document.getElementById('rawmtrl_nm_overlay'));
+                console.log('  - rawmtrl_nm_section:', document.getElementById('rawmtrl_nm_section'));
+            };
+            
+            // textarea 직접 클릭 이벤트도 추가
+            if (!rawMaterialTextarea.hasAttribute('data-click-setup')) {
+                rawMaterialTextarea.addEventListener('click', function(event) {
+                    console.log('🖱️ rawmtrl_nm textarea 직접 클릭!');
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.handleRawMaterialClick(event);
+                });
+                
+                // 포커스 이벤트도 추가
+                rawMaterialTextarea.addEventListener('focus', function(event) {
+                    console.log('🔍 rawmtrl_nm textarea 포커스!');
+                    event.preventDefault();
+                    rawMaterialTextarea.blur(); // 즉시 포커스 해제
+                    window.handleRawMaterialClick(event);
+                });
+                
+                rawMaterialTextarea.setAttribute('data-click-setup', 'true');
+            }
+            
+            // 오버레이 요소에도 클릭 이벤트 추가
+            const overlay = document.getElementById('rawmtrl_nm_overlay');
+            if (overlay) {
+                console.log('🔄 rawmtrl_nm 오버레이 발견, 클릭 및 hover 이벤트 추가');
+                
+                // 클릭 이벤트 - 중복 방지를 위해 단일 이벤트만 등록
+                overlay.addEventListener('click', function(event) {
+                    console.log('🖱️ 오버레이 클릭 이벤트 시작!');
+                    console.log('📍 클릭 좌표:', event.clientX, event.clientY);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.handleRawMaterialClick(event);
+                }, { once: false });
+                
+                // 추가 안전장치: 더블클릭도 처리
+                overlay.addEventListener('dblclick', function(event) {
+                    console.log('🖱️ 오버레이 더블클릭 이벤트!');
+                    event.preventDefault();
+                    event.stopPropagation();
+                    window.handleRawMaterialClick(event);
+                });
+                
+                // hover 이벤트로 textarea 스타일 변경
+                overlay.addEventListener('mouseenter', function() {
+                    console.log('🖱️ rawmtrl_nm 오버레이 hover 시작');
+                    rawMaterialTextarea.style.backgroundColor = '#e9ecef';
+                    rawMaterialTextarea.style.borderColor = '#86b7fe';
+                });
+                
+                overlay.addEventListener('mouseleave', function() {
+                    console.log('🖱️ rawmtrl_nm 오버레이 hover 종료');
+                    rawMaterialTextarea.style.backgroundColor = '#f8f9fa';
+                    rawMaterialTextarea.style.borderColor = '#e3e6f0'; // modern-gray-200 색상값
+                });
+            }
+            
+            console.log('✅ rawmtrl_nm 이벤트 리스너 설정 완료');
+            console.log('🧪 테스트 명령어:');
+            console.log('  - testRawMaterialClick() : 모달 테스트');
+            console.log('  - testIngredientPopup() : 표로입력 팝업 테스트');
+            console.log('  - handleIngredientPopup() : 직접 팝업 열기');
+            
+        } else {
+            console.warn('⚠️ rawmtrl_nm 요소를 찾을 수 없습니다 - DOM이 아직 완전히 로드되지 않았을 수 있습니다');
+        }
+    }
+    
+    // � 중복 제거됨 - 이미 전역에서 정의됨
+    
+    // 즉시 실행
+    setupRawMaterialClickEvent();
+    
+    // 함수 가용성 디버깅 (5초 후 확인)
+    setTimeout(() => {
+        console.log('🔍 5초 후 함수 가용성 확인:');
+        console.log('  - openIngredientTablePopup:', typeof window.openIngredientTablePopup);
+        console.log('  - openPopup:', typeof window.openPopup);
+        console.log('  - handleIngredientPopup:', typeof window.handleIngredientPopup);
+        
+        if (typeof window.openIngredientTablePopup !== 'function') {
+            console.warn('⚠️ openIngredientTablePopup이 5초 후에도 로드되지 않았습니다');
+        }
+    }, 5000);
+    
+    // DOM 변경 감지하여 재시도
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                const rawMaterialTextarea = document.getElementById('rawmtrl_nm');
+                if (rawMaterialTextarea && !rawMaterialTextarea.hasAttribute('data-click-setup')) {
+                    console.log('� DOM 변경 감지로 rawmtrl_nm 재설정');
+                    rawMaterialTextarea.setAttribute('data-click-setup', 'true');
+                    setupRawMaterialClickEvent();
+                }
+            }
+        });
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+    
+    // 최적화된 textarea 높이 조절 함수 (전역 중복 실행 방지)
+    if (!window.globalTextareaInitialized) {
+        window.globalTextareaInitialized = true;
+    
+    function simpleTextareaResize() {
+        if (textareaInitialized) {
+            return;
+        }
+        console.log('🔧 textarea 자동 크기 조절 초기화');
+        const textareas = document.querySelectorAll('textarea');
+        
+        let setupCount = 0;
+        
+        textareas.forEach(textarea => {
+            if (!textarea.hasAttribute('data-auto-resize')) {
+                textarea.setAttribute('data-auto-resize', 'true');
+                
+                function resizeTextarea() {
+                    textarea.style.height = '1px';
+                    const newHeight = Math.max(48, textarea.scrollHeight);
+                    textarea.style.height = newHeight + 'px';
+                    console.log(`� ${textarea.name || 'textarea'}: ${newHeight}px`);
+                }
+                
+                // 초기 크기 설정
+                resizeTextarea();
+                
+                // 이벤트 리스너
+                textarea.addEventListener('input', resizeTextarea);
+                textarea.addEventListener('paste', () => setTimeout(resizeTextarea, 0));
+                setupCount++;
+            }
+        });
+        
+        if (setupCount > 0) {
+            console.log(`✅ ${setupCount}개 textarea 설정 완료`);
+        }
+        textareaInitialized = true;
+    }
+    
+    // 🚫 중복 함수 실행 제거 (성능 최적화)
+    // setTimeout(simpleTextareaResize, 100);
+    
+    // 전역 테스트 함수
+    window.testTextareas = () => {
+        console.log('🧪 textarea 테스트 실행');
+        document.querySelectorAll('textarea').forEach(textarea => {
+            const oldHeight = textarea.style.height;
+            textarea.style.height = '1px';
+            const newHeight = Math.max(48, textarea.scrollHeight) + 'px';
+            textarea.style.height = newHeight;
+            console.log(`📏 ${textarea.name || 'textarea'}: ${oldHeight} → ${newHeight}`);
+        });
+    };
+    
+    // � 중복 함수 제거됨 (별도 스크립트 블록으로 이동)
+    
+    // 컨테이너 정보 확인 함수
+    window.checkTextareaContainers = () => {
+        console.log('🔍 textarea 컨테이너 분석');
+        document.querySelectorAll('textarea').forEach(textarea => {
+            const container = textarea.closest('.input-container-modern');
+            const fieldSection = textarea.closest('.field-input-section');
+            const fieldRow = textarea.closest('.field-row-modern');
+            
+            console.log(`📦 ${textarea.name}:`);
+            console.log('  - textarea styles:', {
+                height: textarea.style.height,
+                scrollHeight: textarea.scrollHeight,
+                overflow: getComputedStyle(textarea).overflow,
+                maxHeight: getComputedStyle(textarea).maxHeight,
+                padding: getComputedStyle(textarea).padding,
+                lineHeight: getComputedStyle(textarea).lineHeight
+            });
+            if (container) {
+                console.log('  - container styles:', {
+                    height: getComputedStyle(container).height,
+                    maxHeight: getComputedStyle(container).maxHeight,
+                    alignItems: getComputedStyle(container).alignItems,
+                    padding: getComputedStyle(container).padding
+                });
+            }
+            if (fieldRow) {
+                console.log('  - field-row styles:', {
+                    height: getComputedStyle(fieldRow).height,
+                    maxHeight: getComputedStyle(fieldRow).maxHeight,
+                    alignItems: getComputedStyle(fieldRow).alignItems,
+                    padding: getComputedStyle(fieldRow).padding
+                });
+            }
+        });
+    };
+    
+    // ✅ 성능 최적화된 textarea 시스템 실행
+    setTimeout(window.initOptimizedTextareaSystem, 200);
+
+    
+    // � 텍스트영역을 contenteditable div로 대체하는 핵심 함수
+    window.replaceTextareaWithDiv = () => {
+        console.log('💥 textarea를 contenteditable div로 대체 시작');
+        
+        // 특별 관심 대상 textarea들
+        const targetSelectors = [
+            'textarea[name="rawmtrl_nm_display"]',
+            'textarea[name="rawmtrl_nm"]',
+            'textarea[name="caution"]',
+            'textarea[name="etc_info"]',
+            'textarea[name="nutrition_text"]'
+        ];
+        
+        // 각 textarea 처리
+        targetSelectors.forEach(selector => {
+            const textarea = document.querySelector(selector);
+            if (!textarea) {
+                console.log(`⚠️ ${selector} 찾을 수 없음`);
+                return;
+            }
+            
+            // 이미 처리된 경우 스킵
+            if (textarea.dataset.replaced === 'true') {
+                console.log(`⚠️ ${selector}는 이미 대체됨`);
+                return;
+            }
+            
+            // textarea의 위치와 속성 정보 저장
+            const parent = textarea.parentNode;
+            const name = textarea.getAttribute('name');
+            const id = textarea.getAttribute('id');
+            const classes = textarea.getAttribute('class');
+            const value = textarea.value;
+            
+            // contenteditable div 생성
+            const div = document.createElement('div');
+            div.setAttribute('contenteditable', 'true');
+            div.setAttribute('data-name', name);
+            div.innerHTML = value.replace(/\n/g, '<br>');
+            
+            if (id) div.id = id + '_editor';
+            if (classes) div.className = classes + ' contenteditable-textarea';
+            
+            // 스타일 설정
+            div.style.cssText = `
+                min-height: 48px;
+                padding: 0.5rem 0.75rem;
+                width: 100%;
+                border: 2px solid var(--modern-gray-200);
+                border-radius: 6px;
+                font-family: inherit;
+                font-size: 0.875rem;
+                line-height: 1.4;
+                white-space: pre-wrap;
+                overflow-wrap: break-word;
+                background-color: #ffffff;
+                outline: none;
+                box-sizing: border-box;
+                overflow: hidden;
+            `;
+            
+            // 숨겨진 textarea 준비 (폼 제출용)
+            textarea.style.display = 'none';
+            textarea.dataset.replaced = 'true';
+            
+            // div 삽입
+            parent.insertBefore(div, textarea);
+            
+            // div 입력 시 원래 textarea 업데이트
+            div.addEventListener('input', () => {
+                textarea.value = div.innerText;
+            });
+            
+            // blur 시 textarea 값 설정
+            div.addEventListener('blur', () => {
+                textarea.value = div.innerText;
+            });
+            
+            console.log(`✅ ${selector} → contenteditable div 변환 완료`);
+        });
+        
+        console.log('💥 모든 대상 textarea 대체 완료');
+    };
+    
+    // �📌 MutationObserver 접근법
+    window.setupMutationObserver = () => {
+        console.log('📌 MutationObserver 설정 시작');
+        
+        const textarea = document.querySelector('textarea[name="rawmtrl_nm_display"]');
+        if (!textarea) {
+            console.log('❌ textarea를 찾을 수 없습니다');
+            return;
+        }
+        
+        // 이전 observer 제거
+        if (window.textareaObserver) {
+            window.textareaObserver.disconnect();
+            console.log('기존 observer 해제');
+        }
+        
+        // 실시간으로 높이 변화 감지 및 강제 설정
+        window.textareaObserver = new MutationObserver((mutations) => {
+            // textarea 실제 필요 높이 계산
+            textarea.style.height = '1px';
+            const newHeight = Math.max(48, textarea.scrollHeight);
+            
+            // 강제 설정 (가장 강력한 방법)
+            textarea.setAttribute('style', `height: ${newHeight}px !important; min-height: ${newHeight}px !important; max-height: none !important; overflow-y: hidden !important;`);
+            
+            console.log(`📌 Observer: 높이 ${newHeight}px로 설정`);
+            
+            // 부모 컨테이너도 조정
+            const container = textarea.closest('.input-container-modern');
+            if (container) {
+                container.setAttribute('style', `height: auto !important; min-height: ${newHeight}px !important; align-items: flex-start !important; overflow: visible !important;`);
+            }
+        });
+        
+        // 속성 변화 및 자식 노드 변화 감지
+        
+        window.textareaObserver.observe(textarea, {
+            attributes: true,
+            attributeFilter: ['style', 'class'],
+            characterData: true,
+            childList: true,
+            subtree: true
+        });
+        
+        console.log('📌 MutationObserver 설정 완료 - 이제 텍스트를 변경하면 자동으로 높이가 조정됩니다');
+    };
+    
+    // 최적화된 통합 textarea 높이 조절 시스템 (성능 개선)
+    window.initOptimizedTextareaSystem = function() {
+        // 전역 초기화 중복 방지
+        if (window.textareaSystemInitialized) {
+            console.log('⚠️ Textarea 시스템 이미 초기화됨 - 중복 실행 방지');
+            return;
+        }
+        window.textareaSystemInitialized = true;
+        console.log('� 간단한 textarea 자동 확장 초기화');
+        
+        console.log('🎯 최적화된 textarea 높이 조절 시스템 초기화');
+        
+        const textareas = document.querySelectorAll('textarea');
+        let processedCount = 0;
+        
+        textareas.forEach(textarea => {
+            if (!textarea.hasAttribute('data-optimized-resize')) {
+                textarea.setAttribute('data-optimized-resize', 'true');
+                processedCount++;
+                
+                // 성능 최적화된 리사이즈 함수 (디바운스 적용)
+                let resizeTimer;
+                function performResize() {
+                    clearTimeout(resizeTimer);
+                    resizeTimer = setTimeout(() => {
+                        textarea.style.height = 'auto';
+                        const newHeight = Math.max(48, textarea.scrollHeight);
+                        textarea.style.height = newHeight + 'px';
+                    }, 50); // 디바운스 시간으로 성능 개선
+                }
+                
+                // 초기 높이 설정
+                performResize();
+                
+                // 최적화된 이벤트 리스너 (passive 옵션으로 성능 향상)
+                textarea.addEventListener('input', performResize, { passive: true });
+                textarea.addEventListener('paste', () => setTimeout(performResize, 100));
+            }
+        });
+        
+        console.log(`✅ ${processedCount}개 textarea 최적화 완료 (서버 부하 감소)`);
+    }
 });
+</script>
+
+<!-- 🔧 모달 연결 디버깅 및 수정 스크립트 -->
+<script>
+// 🔧 원재료명 모달 연결 진단 함수
+window.diagnoseRawMaterialModal = function() {
+    console.log('🩺 원재료명 모달 연결 진단 시작');
+    
+    // 1. 원재료명 필드 확인
+    const rawmtrlField = document.querySelector('textarea[name="rawmtrl_nm"]');
+    console.log('📋 원재료명 필드:', rawmtrlField ? '찾음' : '없음', rawmtrlField);
+    
+    if (rawmtrlField) {
+        console.log('  - 필드 속성:', {
+            id: rawmtrlField.id,
+            name: rawmtrlField.name,
+            value: rawmtrlField.value.substring(0, 50) + (rawmtrlField.value.length > 50 ? '...' : ''),
+            readOnly: rawmtrlField.readOnly,
+            disabled: rawmtrlField.disabled,
+            classList: Array.from(rawmtrlField.classList)
+        });
+    }
+    
+    // 2. 팝업 관련 요소들 확인
+    const labelId = document.getElementById('label_id')?.value || '';
+    console.log('🏢 라벨 ID:', labelId ? '찾음' : '없음', labelId);
+    
+    // 3. 팝업 함수들 확인
+    console.log('🔧 팝업 함수들:', {
+        openIngredientTablePopup: typeof window.openIngredientTablePopup,
+        handleIngredientPopup: typeof window.handleIngredientPopup,
+        openPopup: typeof window.openPopup
+    });
+    
+    // 4. 추가 함수들 확인
+    console.log('🔧 함수 확인:', {
+        setupRawMaterialClickEvent: typeof window.setupRawMaterialClickEvent,
+        handleIngredientPopup: typeof window.handleIngredientPopup,
+        openIngredientTablePopup: typeof window.openIngredientTablePopup
+    });
+    
+    console.log('🩺 진단 완료');
+    return {rawmtrlField, labelId};
+};
+
+// 🚀 원재료명 팝업 강제 연결 함수 (팝업 윈도우 방식)
+window.forceConnectRawMaterialModal = function() {
+    console.log('🔗 원재료명 팝업 강제 연결 시작');
+    
+    const rawmtrlField = document.querySelector('textarea[name="rawmtrl_nm"]');
+    
+    if (!rawmtrlField) {
+        console.error('❌ 원재료명 필드를 찾을 수 없음');
+        return false;
+    }
+    
+    try {
+        // 기존 이벤트 리스너 제거를 위해 복제
+        const newField = rawmtrlField.cloneNode(true);
+        rawmtrlField.parentNode.replaceChild(newField, rawmtrlField);
+        
+        // 강력한 클릭 이벤트 연결
+        newField.addEventListener('click', function(e) {
+            console.log('🖱️ 강제 연결된 원재료명 필드 클릭!');
+            e.preventDefault();
+            e.stopPropagation();
+            
+            try {
+                // 기존 팝업 함수들을 시도
+                if (typeof window.openIngredientTablePopup === 'function') {
+                    console.log('📦 openIngredientTablePopup 함수로 팝업 열기');
+                    window.openIngredientTablePopup();
+                } else if (typeof window.handleIngredientPopup === 'function') {
+                    console.log('📦 handleIngredientPopup 함수로 팝업 열기');
+                    window.handleIngredientPopup();
+                } else if (typeof window.openPopup === 'function') {
+                    console.log('🔧 직접 팝업 열기 시도');
+                    const labelId = document.getElementById('label_id')?.value || '';
+                    const url = `/label/ingredient-popup/?label_id=${labelId}`;
+                    window.openPopup(url, 'IngredientPopup', 1000, 800);
+                } else {
+                    console.error('❌ 사용 가능한 팝업 함수가 없음');
+                    alert('원재료 표로 입력 기능을 불러오는 중입니다.');
+                }
+                console.log('✅ 팝업 열기 성공!');
+            } catch (error) {
+                console.error('❌ 팝업 열기 실패:', error);
+                alert('원재료 표로 입력을 열 수 없습니다. 새로고침 후 다시 시도해주세요.');
+            }
+        }, true);
+        
+        // 포커스 이벤트도 연결
+        newField.addEventListener('focus', function(e) {
+            console.log('🎯 포커스로 팝업 열기');
+            newField.click();
+        });
+        
+        console.log('✅ 원재료명 팝업 강제 연결 완료');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ 강제 연결 실패:', error);
+        return false;
+    }
+};
+
+// 🧪 원재료명 팝업 테스트 함수
+window.testRawMaterialPopup = function() {
+    console.log('🧪 원재료명 팝업 테스트 시작');
+    
+    try {
+        if (typeof window.openIngredientTablePopup === 'function') {
+            console.log('📦 openIngredientTablePopup 함수 호출');
+            window.openIngredientTablePopup();
+            return true;
+        } else if (typeof window.handleIngredientPopup === 'function') {
+            console.log('📦 handleIngredientPopup 함수 호출');
+            window.handleIngredientPopup();
+            return true;
+        } else if (typeof window.openPopup === 'function') {
+            console.log('🔧 직접 팝업 열기');
+            const labelId = document.getElementById('label_id')?.value || '';
+            const url = `/label/ingredient-popup/?label_id=${labelId}`;
+            window.openPopup(url, 'IngredientPopup', 1000, 800);
+            return true;
+        } else {
+            console.error('❌ 사용 가능한 팝업 함수가 없음');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ 팝업 테스트 실패:', error);
+        return false;
+    }
+};
+
+// 페이지 로드 후 자동 연결 시도 (조건부)
+setTimeout(() => {
+    const rawmtrlField = document.querySelector('textarea[name="rawmtrl_nm"]');
+    if (rawmtrlField) {
+        console.log('🔗 원재료명 필드 발견 - 자동 연결 시도');
+        window.forceConnectRawMaterialModal();
+    } else {
+        console.log('⚠️ 원재료명 필드가 아직 로드되지 않음');
+    }
+}, 1000);
+
 </script>
 
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
@@ -156,31 +1886,33 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="compact-header">
       <div class="header-left">
         <h4 class="page-title-compact">
-          <i class="fas fa-edit me-2"></i>표시사항 작성
+          <i class="fas fa-file-alt me-2"></i>표시사항 작성
         </h4>
-        <div class="label-name-compact">
+        <div class="label-name-compact" style="margin-left: 50px; display: flex; align-items: center; gap: 10px;">
           <label for="my_label_name_top" class="label-name-label-compact">라벨명</label>
           <input type="text" id="my_label_name_top" name="my_label_name_top"
                  class="form-control label-name-input-compact"
                  placeholder="라벨명을 입력하세요"
-                 value="{{ label.my_label_name|default:'' }}">
+                 value="{{ label.my_label_name|default:'' }}"
+                 style="min-width: 200px; flex: 1;">
+          <button type="button" class="btn btn-outline-secondary btn-sm" 
+                  onclick="window.location.href='{% url 'label:my_label_list' %}'"
+                  title="표시사항 작성 리스트로 돌아가기">
+            <i class="fas fa-list me-1"></i>표시사항 리스트 보기
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" 
+                  onclick="window.openNutritionCalculator()"
+                  title="영양성분 계산기">
+            <i class="fas fa-calculator me-1"></i>영양성분 계산기
+          </button>
         </div>
       </div>
       
       <div class="header-right">
         <span class="last-update-compact">
-          <i class="fas fa-clock me-1"></i>{{ label.update_datetime|date:"m/d H:i" }}
+          <i class="fas fa-pencil-alt me-1"></i>{{ label.update_datetime|date:"m/d H:i" }}
         </span>
         <div class="action-buttons-compact">
-          <button type="button" class="btn btn-success btn-sm" 
-                  id="smartRecommendationToggleBtn"
-                  title="스마트 추천 활성화됨 (클릭하여 끄기)">
-            <i class="fas fa-lightbulb me-1"></i>
-            <span id="smartToggleText">스마트 추천</span>
-            <span id="smartToggleIcon" class="ms-1">
-              <i class="fas fa-toggle-on text-light"></i>
-            </span>
-          </button>
           <button type="button" class="btn btn-outline-info btn-sm" 
                   title="사진으로 자동 입력"
                   onclick="showDevelopmentMessage(); return false;">
@@ -189,13 +1921,8 @@ document.addEventListener('DOMContentLoaded', function() {
           <button type="button" class="btn btn-outline-primary btn-sm" onclick="openPreviewPopup()">
             <i class="fas fa-eye me-1"></i>미리보기
           </button>
-          <button type="submit" form="labelForm" class="btn btn-success btn-sm">
+          <button type="submit" form="labelForm" class="btn btn-primary btn-sm">
             <i class="fas fa-save me-1"></i>저장
-          </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" 
-                  onclick="window.location.href='{% url 'label:my_label_list' %}'"
-                  title="표시사항 작성 리스트로 돌아가기">
-            <i class="fas fa-times me-1"></i>닫기
           </button>
         </div>
       </div>
@@ -207,7 +1934,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="header-spacer"></div>
 
 <!-- Step1. 기본 설정 -->
-<div class="container mt-1" id="step1-row">
+<div class="container" id="step1-row">
   <div class="card modern-card">
     <div class="card-header modern-card-header" id="step1-summary-bar">
       <div class="card-header-content">
@@ -229,21 +1956,21 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
         </div>
         <div class="card-actions">
-          <button type="button" class="btn btn-primary btn-sm" id="applyStep1Btn">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="applyStep1Btn">
             <i class="fas fa-check me-1"></i>필수항목 적용 후 접기
           </button>
-          <button type="button" class="btn btn-outline-primary btn-sm" id="expandStep1Btn" style="display:none;">
+          <button type="button" class="btn btn-outline-primary btn-sm" id="expandStep1Btn">
             <i class="fas fa-expand me-1"></i>펼치기
           </button>
         </div>
       </div>
     </div>
     <div class="card-body" id="step1-body">
-      <div id="food-type-section" class="mb-1">
-        <div class="row g-2">
-          <div class="col-md-6">
-            <!-- 식품유형 선택 -->
-            <div class="field-row-modern mb-2">
+      <div id="food-type-section" class="mb-3">
+        <!-- 식품유형 선택과 장기보존식품을 같은 줄에 50:50 배치 -->
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <div class="field-row-modern mb-3">
               <div class="field-label-section">
                 <label class="field-label-modern">
                   <i class="fas fa-utensils me-2"></i>식품유형
@@ -252,7 +1979,7 @@ document.addEventListener('DOMContentLoaded', function() {
               <div class="field-input-section">
                 <div class="input-container-modern">
                   <div class="row g-2">
-                    <div class="col-7">
+                    <div class="col-6">
                       <select id="food_group" name="food_group" class="form-select">
                         <option value="">대분류 선택</option>
                         {% for group in food_groups %}
@@ -260,7 +1987,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         {% endfor %}
                       </select>
                     </div>
-                    <div class="col-5">
+                    <div class="col-6">
                       <select id="food_type" name="food_type" class="form-select">
                         <option value="">소분류 선택</option>
                         {% for type in food_types %}
@@ -276,9 +2003,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
               </div>
             </div>
-            
+          </div>
+          
+          <div class="col-6">
             <!-- 장기보존식품 -->
-            <div class="field-row-modern mb-2">
+            <div class="field-row-modern mb-3">
               <div class="field-label-section">
                 <label class="field-label-modern">
                   <i class="fas fa-snowflake me-2"></i>장기보존식품
@@ -286,32 +2015,43 @@ document.addEventListener('DOMContentLoaded', function() {
               </div>
               <div class="field-input-section">
                 <div class="input-container-modern">
-                  <div class="checkbox-group-modern">
-                    <div class="form-check-modern">
-                      <input type="checkbox" id="chk_frozen_heated" name="preservation_type" value="frozen_heated" class="form-check-input-modern" {% if form.preservation_type.value == "frozen_heated" %}checked{% endif %}>
-                      <label for="chk_frozen_heated" class="form-check-label-modern">냉동(가열)</label>
+                  <div class="row g-2">
+                    <div class="col-3">
+                      <div class="form-check-modern form-check-compact">
+                        <input type="checkbox" id="chk_frozen_heated" name="preservation_type" value="frozen_heated" class="form-check-input-modern" {% if form.preservation_type.value == "frozen_heated" %}checked{% endif %}>
+                        <label for="chk_frozen_heated" class="form-check-label-modern">냉동(가열)</label>
+                      </div>
                     </div>
-                    <div class="form-check-modern">
-                      <input type="checkbox" id="chk_frozen_nonheated" name="preservation_type" value="frozen_nonheated" class="form-check-input-modern" {% if form.preservation_type.value == "frozen_nonheated" %}checked{% endif %}>
-                      <label for="chk_frozen_nonheated" class="form-check-label-modern">냉동(비가열)</label>
+                    <div class="col-3">
+                      <div class="form-check-modern form-check-compact">
+                        <input type="checkbox" id="chk_frozen_nonheated" name="preservation_type" value="frozen_nonheated" class="form-check-input-modern" {% if form.preservation_type.value == "frozen_nonheated" %}checked{% endif %}>
+                        <label for="chk_frozen_nonheated" class="form-check-label-modern">냉동(비가열)</label>
+                      </div>
                     </div>
-                    <div class="form-check-modern">
-                      <input type="checkbox" id="chk_canned" name="preservation_type" value="canned" class="form-check-input-modern" {% if form.preservation_type.value == "canned" %}checked{% endif %}>
-                      <label for="chk_canned" class="form-check-label-modern">통.병조림</label>
+                    <div class="col-3">
+                      <div class="form-check-modern form-check-compact">
+                        <input type="checkbox" id="chk_canned" name="preservation_type" value="canned" class="form-check-input-modern" {% if form.preservation_type.value == "canned" %}checked{% endif %}>
+                        <label for="chk_canned" class="form-check-label-modern">통.병조림</label>
+                      </div>
                     </div>
-                    <div class="form-check-modern">
-                      <input type="checkbox" id="chk_retort" name="preservation_type" value="retort" class="form-check-input-modern" {% if form.preservation_type.value == "retort" %}checked{% endif %}>
-                      <label for="chk_retort" class="form-check-label-modern">레토르트</label>
+                    <div class="col-3">
+                      <div class="form-check-modern form-check-compact">
+                        <input type="checkbox" id="chk_retort" name="preservation_type" value="retort" class="form-check-input-modern" {% if form.preservation_type.value == "retort" %}checked{% endif %}>
+                        <label for="chk_retort" class="form-check-label-modern">레토르트</label>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-          
-          <div class="col-md-6">
+        </div>
+        
+        <!-- 제조방법과 조건상세를 50:50으로 1줄에 배치 -->
+        <div class="row g-3 mb-3">
+          <div class="col-6">
             <!-- 제조방법 -->
-            <div class="field-row-modern mb-2">
+            <div class="field-row-modern">
               <div class="field-label-section">
                 <label class="field-label-modern">
                   <i class="fas fa-industry me-2"></i>제조방법
@@ -319,30 +2059,40 @@ document.addEventListener('DOMContentLoaded', function() {
               </div>
               <div class="field-input-section">
                 <div class="input-container-modern">
-                  <div class="checkbox-group-modern">
-                    <div class="form-check-modern">
-                      <input type="checkbox" id="chk_sanitized" name="processing_method" value="sanitized" class="form-check-input-modern" {% if form.processing_method.value == "sanitized" %}checked{% endif %}>
-                      <label for="chk_sanitized" class="form-check-label-modern">살균</label>
+                  <div class="row g-2">
+                    <div class="col-3">
+                      <div class="form-check-modern form-check-compact">
+                        <input type="checkbox" id="chk_sanitized" name="processing_method" value="sanitized" class="form-check-input-modern" {% if form.processing_method.value == "sanitized" %}checked{% endif %}>
+                        <label for="chk_sanitized" class="form-check-label-modern">살균</label>
+                      </div>
                     </div>
-                    <div class="form-check-modern">
-                      <input type="checkbox" id="chk_aseptic" name="processing_method" value="aseptic" class="form-check-input-modern" {% if form.processing_method.value == "aseptic" %}checked{% endif %}>
-                      <label for="chk_aseptic" class="form-check-label-modern">멸균</label>
+                    <div class="col-3">
+                      <div class="form-check-modern form-check-compact">
+                        <input type="checkbox" id="chk_aseptic" name="processing_method" value="aseptic" class="form-check-input-modern" {% if form.processing_method.value == "aseptic" %}checked{% endif %}>
+                        <label for="chk_aseptic" class="form-check-label-modern">멸균</label>
+                      </div>
                     </div>
-                    <div class="form-check-modern">
-                      <input type="checkbox" id="chk_yutang" name="processing_method" value="yutang" class="form-check-input-modern" {% if form.processing_method.value == "yutang" %}checked{% endif %}>
-                      <label for="chk_yutang" class="form-check-label-modern">유탕/유처리</label>
+                    <div class="col-3">
+                      <div class="form-check-modern form-check-compact">
+                        <input type="checkbox" id="chk_yutang" name="processing_method" value="yutang" class="form-check-input-modern" {% if form.processing_method.value == "yutang" %}checked{% endif %}>
+                        <label for="chk_yutang" class="form-check-label-modern">유탕/유처리</label>
+                      </div>
                     </div>
-                    <div class="form-check-modern">
-                      <input type="checkbox" id="chk_sterilization_other" name="chk_sterilization_other" class="form-check-input-modern" {% if form.processing_condition.value %}checked{% endif %}>
-                      <label for="chk_sterilization_other" class="form-check-label-modern">기타 조건</label>
+                    <div class="col-3">
+                      <div class="form-check-modern form-check-compact">
+                        <input type="checkbox" id="chk_sterilization_other" name="chk_sterilization_other" class="form-check-input-modern" {% if form.processing_condition.value %}checked{% endif %}>
+                        <label for="chk_sterilization_other" class="form-check-label-modern">기타 조건</label>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            
+          </div>
+          
+          <div class="col-6">
             <!-- 조건 상세 -->
-            <div class="field-row-modern mb-2">
+            <div class="field-row-modern">
               <div class="field-label-section">
                 <label class="field-label-modern">
                   <i class="fas fa-edit me-2"></i>조건 상세
@@ -364,19 +2114,28 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <!-- Step2. 상세 입력 영역 -->
-<div class="container mt-1" id="step2-card">
+<div class="container" id="step2-card">
   <div class="card modern-card">
     <div class="card-header modern-card-header">
       <div class="card-header-content">
         <div class="card-title-section">
-          <h5 class="card-title">
-            <i class="fas fa-edit me-2"></i>2. 상세 입력
-          </h5>
+          <div class="title-and-buttons" style="display: flex; align-items: center; gap: 15px;">
+            <h5 class="card-title">
+              <i class="fas fa-edit me-2"></i>2. 상세 입력
+            </h5>
+            <div style="display: inline-flex; gap: 5px; flex-wrap: nowrap;">
+              <button type="button" class="btn btn-outline-primary btn-sm" style="white-space: nowrap; font-size: 0.85rem; padding: 0.25rem 0.5rem;"
+                        onclick="handleIngredientPopup()"
+                        title="원재료 표로 입력">
+                <i class="fas fa-table me-1"></i>원재료 표로 입력
+              </button>
+              <button type="button" class="btn btn-outline-primary btn-sm" style="white-space: nowrap; font-size: 0.85rem; padding: 0.25rem 0.5rem;" id="linkedLabelsBtn">
+                <i class="fas fa-link me-1"></i>연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
+              </button>
+            </div>
+          </div>
         </div>
         <div class="card-actions">
-          <button type="button" class="btn btn-outline-info btn-sm" id="linkedLabelsBtn">
-            <i class="fas fa-link me-1"></i>연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
-          </button>
           <button type="button" class="btn btn-outline-primary btn-sm" onclick="openPhrasePopup()" title="내 문구 관리">
             <i class="fas fa-bookmark me-1"></i>내 문구 관리
           </button>
@@ -423,7 +2182,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_prdlst_nm" name="chk_prdlst_nm" class="field-checkbox-modern" 
                            {% if label.chckd_prdlst_nm == "Y" %}checked{% endif %}>
                     <label for="chk_prdlst_nm" class="field-label-modern">
-                      <i class="fas fa-box me-1"></i>제품명
+                      제품명
                     </label>
                   </div>
                   <div class="field-input-section">
@@ -431,6 +2190,12 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="text" name="prdlst_nm" class="form-control auto-expand" 
                              placeholder="제품명을 입력하세요" value="{{ form.prdlst_nm.value|default:'' }}">
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="prdlst_nm">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -440,7 +2205,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_ingredient_info" name="chk_ingredient_info" class="field-checkbox-modern" 
                            {% if label.chckd_ingredient_info == "Y" %}checked{% endif %}>
                     <label for="chk_ingredient_info" class="field-label-modern">
-                      <i class="fas fa-percentage me-1"></i>특정성분 함량
+                      특정성분 함량
                     </label>
                   </div>
                   <div class="field-input-section">
@@ -448,6 +2213,14 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="text" name="ingredient_info" class="form-control auto-expand" 
                              placeholder="예) 레몬즙 5%" value="{{ form.ingredient_info.value|default:'' }}">
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="ingredient_info">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
+                  </div>
+                </div>
                   </div>
                 </div>
               </div>
@@ -460,7 +2233,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_prdlst_dcnm" name="chk_prdlst_dcnm" class="field-checkbox-modern" 
                            {% if label.chckd_prdlst_dcnm == "Y" %}checked{% endif %}>
                     <label for="chk_prdlst_dcnm" class="field-label-modern">
-                      <i class="fas fa-tags me-1"></i>식품유형
+                      식품유형
                     </label>
                   </div>
                   <div class="field-input-section">
@@ -468,6 +2241,12 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="text" name="prdlst_dcnm" class="form-control auto-expand" 
                              placeholder="상단의 식품유형을 참고하여 입력하세요" value="{{ form.prdlst_dcnm.value|default:'' }}">
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="prdlst_dcnm">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -477,7 +2256,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_prdlst_report_no" name="chk_prdlst_report_no" class="field-checkbox-modern" 
                            {% if label.chckd_prdlst_report_no == "Y" %}checked{% endif %}>
                     <label for="chk_prdlst_report_no" class="field-label-modern">
-                      <i class="fas fa-barcode me-1"></i>품목보고번호
+                      품목보고번호
                     </label>
                   </div>
                   <div class="field-input-section">
@@ -485,14 +2264,22 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" 
                              placeholder="0000000000000 (13자리)"
                              maxlength="15"
-                             value="{{ form.prdlst_report_no.value|default:'' }}">
-                      <button type="button" class="btn btn-outline-info btn-sm flex-shrink-0" 
+                             value="{{ form.prdlst_report_no.value|default:'' }}"
+                             style="flex: 1; min-width: 200px;">
+                      <button type="button" class="btn btn-outline-primary btn-sm flex-shrink-0" 
                                 id="verifyReportNoBtn" 
                                 onclick="verifyReportNo(document.getElementById('label_id')?.value)"
-                                title="API 중복 검사 및 번호 규칙 검증">
-                          <i class="fas fa-search"></i><span>중복검증</span>
+                                title="API 중복 검사 및 번호 규칙 검증"
+                                style="margin-left: auto;">
+                          <i class="fas fa-search me-1"></i>중복검증
                         </button>
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="prdlst_report_no">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -504,7 +2291,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="field-checkbox-modern" 
                            {% if label.chckd_content_weight == "Y" or label.chckd_weight_calorie == "Y" %}checked{% endif %}>
                     <label class="field-label-modern">
-                      <i class="fas fa-weight me-1"></i><span id="content_type_display">내용량</span>
+                      <span id="content_type_display">내용량</span>
                     </label>
                     <input type="hidden" id="content_type_value" name="content_type" value="content_weight">
                   </div>
@@ -514,6 +2301,12 @@ document.addEventListener('DOMContentLoaded', function() {
                              placeholder="내용량을 입력하세요" value="{{ form.content_weight.value|default:'' }}">
                     </div>
                   </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="content_weight">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="col-md-6">
@@ -522,7 +2315,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_country_of_origin" name="chk_country_of_origin" class="field-checkbox-modern" 
                            {% if label.chckd_country_of_origin == "Y" %}checked{% endif %}>
                     <label for="chk_country_of_origin" class="field-label-modern">
-                      <i class="fas fa-globe me-1"></i>원산지
+                      원산지
                     </label>
                   </div>
                   <div class="field-input-section">
@@ -534,6 +2327,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         {% endfor %}
                       </select>
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="country_of_origin">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -547,7 +2346,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_storage_method" name="chk_storage_method" class="field-checkbox-modern" 
                            {% if label.chckd_storage_method == "Y" %}checked{% endif %}>
                     <label for="chk_storage_method" class="field-label-modern">
-                      <i class="fas fa-thermometer-half me-1"></i>보관방법
+                      보관방법
                     </label>
                   </div>
                   <div class="field-input-section">
@@ -555,6 +2354,12 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="text" name="storage_method" class="form-control auto-expand" 
                              placeholder="보관방법을 입력하거나 내문구를 선택하세요" value="{{ form.storage_method.value|default:'' }}">
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="storage_method">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -564,7 +2369,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_frmlc_mtrqlt" name="chk_frmlc_mtrqlt" class="field-checkbox-modern" 
                            {% if label.chckd_frmlc_mtrqlt == "Y" %}checked{% endif %}>
                     <label for="chk_frmlc_mtrqlt" class="field-label-modern">
-                      <i class="fas fa-cube me-1"></i>용기.포장재질
+                      용기.포장재질
                     </label>
                   </div>
                   <div class="field-input-section">
@@ -572,6 +2377,12 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" 
                              placeholder="용기.포장재질을 입력하거나 내문구를 선택하세요" value="{{ form.frmlc_mtrqlt.value|default:'' }}">
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="frmlc_mtrqlt">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -581,17 +2392,18 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="row g-3 mb-2">
               <div class="col-12">
                 <div class="field-row-modern">
-                  <div class="field-checkbox-section">
+                  <div class="field-checkbox-section field-checkbox-section-vertical-center">
                     <input type="checkbox" id="chk_bssh_nm" name="chk_bssh_nm" class="field-checkbox-modern" 
                            {% if label.chckd_bssh_nm == "Y" %}checked{% endif %}>
                     <label for="chk_bssh_nm" class="field-label-modern">
-                      <i class="fas fa-building me-1"></i>제조원 소재지
+                      제조원 소재지
                     </label>
                     <button type="button" class="btn btn-outline-primary btn-sm ms-2" 
                               id="toggleManufacturerBtn"
                               data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
                               aria-controls="other-manufacturers"
-                              title="추가 제조원 정보">
+                              title="추가 제조원 정보"
+                              style="min-width: 40px; padding: 0.375rem 0.75rem;">
                         <i class="fas fa-chevron-down"></i>
                       </button>
                   </div>
@@ -600,6 +2412,12 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="text" name="bssh_nm" class="form-control auto-expand" 
                              placeholder="제조원을 입력하거나 내문구를 선택하세요" value="{{ form.bssh_nm.value|default:'' }}">
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="bssh_nm">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -613,7 +2431,7 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address" class="field-checkbox-modern" 
                              {% if label.chckd_distributor_address == "Y" %}checked{% endif %}>
                       <label for="chk_distributor_address" class="field-label-modern">
-                        <i class="fas fa-truck me-1"></i>유통전문판매원
+                        유통전문판매원
                       </label>
                     </div>
                     <div class="field-input-section">
@@ -622,6 +2440,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                placeholder="유통전문판매원을 입력하거나 내문구를 선택하세요"
                                value="{{ form.distributor_address.value|default:'' }}">
                       </div>
+                    </div>
+                    <div class="smart-recommendation-area">
+                      <button type="button" class="smart-recommendation-icon" 
+                              title="스마트 추천" data-field="distributor_address">
+                        <i class="fas fa-lightbulb"></i>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -633,7 +2457,7 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="checkbox" id="chk_repacker_address" name="chk_repacker_address" class="field-checkbox-modern" 
                              {% if label.chckd_repacker_address == "Y" %}checked{% endif %}>
                       <label for="chk_repacker_address" class="field-label-modern">
-                        <i class="fas fa-box-open me-1"></i>소분원
+                        소분원
                       </label>
                     </div>
                     <div class="field-input-section">
@@ -642,6 +2466,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                placeholder="소분원을 입력하거나 내문구를 선택하세요"
                                value="{{ form.repacker_address.value|default:'' }}">
                       </div>
+                    </div>
+                    <div class="smart-recommendation-area">
+                      <button type="button" class="smart-recommendation-icon" 
+                              title="스마트 추천" data-field="repacker_address">
+                        <i class="fas fa-lightbulb"></i>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -653,7 +2483,7 @@ document.addEventListener('DOMContentLoaded', function() {
                       <input type="checkbox" id="chk_importer_address" name="chk_importer_address" class="field-checkbox-modern" 
                              {% if label.chckd_importer_address == "Y" %}checked{% endif %}>
                       <label for="chk_importer_address" class="field-label-modern">
-                        <i class="fas fa-ship me-1"></i>수입원
+                        수입원
                       </label>
                     </div>
                     <div class="field-input-section">
@@ -662,6 +2492,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                placeholder="수입원을 입력하거나 내문구를 선택하세요"
                                value="{{ form.importer_address.value|default:'' }}">
                       </div>
+                    </div>
+                    <div class="smart-recommendation-area">
+                      <button type="button" class="smart-recommendation-icon" 
+                              title="스마트 추천" data-field="importer_address">
+                        <i class="fas fa-lightbulb"></i>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -676,7 +2512,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="checkbox" id="chk_pog_daycnt" name="chk_pog_daycnt" class="field-checkbox-modern" 
                            {% if label.chckd_pog_daycnt == "Y" %}checked{% endif %}>
                     <label class="field-label-modern">
-                      <i class="fas fa-calendar me-1"></i>
                       <select name="date_option" class="form-select form-select-sm ms-1" style="width: auto; display: inline-block;">
                         <option value="소비기한" {% if form.date_option.value == "소비기한" or not form.date_option.value %}selected{% endif %}>소비기한</option>
                         <option value="품질유지기한" {% if form.date_option.value == "품질유지기한" %}selected{% endif %}>품질유지기한</option>
@@ -691,6 +2526,12 @@ document.addEventListener('DOMContentLoaded', function() {
                              placeholder="소비기한 등을 입력하거나 내문구를 선택하세요" value="{{ form.pog_daycnt.value|default:'' }}">
                     </div>
                   </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="pog_daycnt">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -699,68 +2540,77 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="row g-3 mb-2">
               <div class="col-12">
                 <div class="field-row-modern">
-                  <div class="field-checkbox-section">
+                  <div class="field-checkbox-section field-checkbox-section-vertical-center">
                     <input type="checkbox" id="chk_rawmtrl_nm_display" name="chk_rawmtrl_nm_display" class="field-checkbox-modern" 
                            {% if label.chckd_rawmtrl_nm_display == "Y" %}checked{% endif %}>
                     <div class="label-button-container">
                       <label for="chk_rawmtrl_nm_display" class="field-label-modern">
-                        <i class="fas fa-list me-1"></i>원재료명(표시)
+                        원재료명(표시)
                       </label>
-                      <button type="button" class="btn btn-outline-primary btn-sm" 
-                                onclick="handleIngredientPopup()"
-                                title="표로 입력">
-                          <i class="fas fa-table me-1"></i>표로 입력
-                        </button>
                     </div>
                   </div>
                   <div class="field-input-section">
                     <div class="input-container-modern">
-                      <textarea name="rawmtrl_nm_display" class="form-control auto-expand textarea" rows="4" 
+                      <textarea name="rawmtrl_nm_display" class="form-control auto-expand textarea" rows="2" 
                                 placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="rawmtrl_nm_display">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
-            <!-- 원재료명 (참고) -->
-            {% if has_ingredient_relations %}
+            <!-- 원재료명 (참고) - 항상 표시 -->
             <div class="row g-3 mb-2" id="rawmtrl_nm_section">
               <div class="col-12">
                 <div class="field-row-modern">
                   <div class="field-checkbox-section">
                     <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="field-checkbox-modern" 
-                           {% if label.chckd_rawmtrl_nm == "Y" %}checked{% endif %} disabled>
+                           {% if label.chckd_rawmtrl_nm == "Y" %}checked{% endif %}>
                     <label for="chk_rawmtrl_nm" class="field-label-modern">
                       <i class="fas fa-info-circle me-1"></i>원재료명(참고)
                     </label>
                   </div>
                   <div class="field-input-section">
-                    <div class="input-container-modern">
-                      <textarea name="rawmtrl_nm" class="form-control auto-expand textarea disabled-textarea" rows="4" 
-                                placeholder="원재료명을 입력하세요" disabled readonly>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+                    <div class="input-container-modern" style="position: relative;">
+                      <textarea name="rawmtrl_nm" id="rawmtrl_nm" class="form-control auto-expand textarea" rows="2" 
+                                placeholder="원재료 표로 입력을 사용하여 입력하세요" readonly>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+                      <!-- 클릭 감지를 위한 투명 오버레이 -->
+                      <div id="rawmtrl_nm_overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+                           background: transparent; cursor: pointer; z-index: 10;" 
+                           title="클릭하여 원재료 표로 입력"></div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            {% endif %}
 
             <!-- 주의사항 -->
             <div class="row g-3 mb-2">
               <div class="col-12">
                 <div class="field-row-modern">
-                  <div class="field-checkbox-section">
+                  <div class="field-checkbox-section field-checkbox-section-vertical-center">
                     <input type="checkbox" id="chk_cautions" name="chk_cautions" class="field-checkbox-modern" 
                            {% if label.chckd_cautions == "Y" %}checked{% endif %}>
                     <label for="chk_cautions" class="field-label-modern">
-                      <i class="fas fa-exclamation-triangle me-1"></i>주의사항
+                      주의사항
                     </label>
                   </div>
                   <div class="field-input-section">
                     <div class="input-container-modern">
-                      <textarea name="cautions" class="form-control auto-expand textarea" rows="4" 
+                      <textarea name="cautions" class="form-control auto-expand textarea" rows="2" 
                                 placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.cautions.value|default:'' }}</textarea>
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="cautions">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -770,18 +2620,24 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="row g-3 mb-2">
               <div class="col-12">
                 <div class="field-row-modern">
-                  <div class="field-checkbox-section">
+                  <div class="field-checkbox-section field-checkbox-section-vertical-center">
                     <input type="checkbox" id="chk_additional_info" name="chk_additional_info" class="field-checkbox-modern" 
                            {% if label.chckd_additional_info == "Y" %}checked{% endif %}>
                     <label for="chk_additional_info" class="field-label-modern">
-                      <i class="fas fa-plus-circle me-1"></i>기타표시사항
+                      기타표시사항
                     </label>
                   </div>
                   <div class="field-input-section">
                     <div class="input-container-modern">
-                      <textarea name="additional_info" class="form-control auto-expand textarea" rows="4" 
+                      <textarea name="additional_info" class="form-control auto-expand textarea" rows="2" 
                                 placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.additional_info.value|default:'' }}</textarea>
                     </div>
+                  </div>
+                  <div class="smart-recommendation-area">
+                    <button type="button" class="smart-recommendation-icon" 
+                            title="스마트 추천" data-field="additional_info">
+                      <i class="fas fa-lightbulb"></i>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -791,26 +2647,22 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="row g-3 mb-2">
               <div class="col-12">
                 <div class="field-row-modern">
-                  <div class="field-checkbox-section">
+                  <div class="field-checkbox-section field-checkbox-section-vertical-center">
                     <input type="checkbox" id="chk_nutrition_text" name="chk_nutrition_text" class="field-checkbox-modern" 
                            {% if label.chckd_nutrition_text == "Y" %}checked{% endif %} style="display: none;">
                     <div class="label-button-container">
                       <label for="chk_nutrition_text" class="field-label-modern">
                         <i class="fas fa-calculator me-1"></i>영양성분
                       </label>
-                      <button type="button" class="btn btn-outline-success btn-sm" 
-                                onclick="handleNutritionTablePopup()"
-                                title="영양성분표">
-                          <i class="fas fa-table me-1"></i>영양성분표
-                        </button>
                     </div>
                   </div>
                   <div class="field-input-section">
                     <div class="input-container-modern">
-                      <textarea name="nutrition_text" class="form-control auto-expand textarea" rows="5" 
-                                placeholder="영양성분 정보를 입력하세요">{{ form.nutrition_text.value|default:'' }}</textarea>
+                      <textarea name="nutrition_text" id="nutrition_text" class="form-control auto-expand textarea" rows="2" 
+                                placeholder="영양성분 계산기를 사용하여 입력하세요" readonly>{{ form.nutrition_text.value|default:'' }}</textarea>
                     </div>
                   </div>
+                </div>
                 </div>
               </div>
             </div>
@@ -827,8 +2679,10 @@ document.addEventListener('DOMContentLoaded', function() {
               <input type="hidden" name="nutrition_base_amount" value="{{ form.nutrition_base_amount.value|default:'' }}">
               <input type="hidden" name="nutrition_base_amount_unit" value="{{ form.nutrition_base_amount_unit.value|default:'' }}">
               <!-- 영양성분 값 필드 -->
+              <!-- DEBUG: calories = "{{ form.calories.value|default:'없음' }}" -->
               <input type="hidden" name="calories" value="{{ form.calories.value|default:'' }}">
               <input type="hidden" name="calories_unit" value="{{ form.calories_unit.value|default:'' }}">
+              <!-- DEBUG: natriums = "{{ form.natriums.value|default:'없음' }}" -->
               <input type="hidden" name="natriums" value="{{ form.natriums.value|default:'' }}">
               <input type="hidden" name="natriums_unit" value="{{ form.natriums_unit.value|default:'' }}">
               <input type="hidden" name="carbohydrates" value="{{ form.carbohydrates.value|default:'' }}">
@@ -845,6 +2699,49 @@ document.addEventListener('DOMContentLoaded', function() {
               <input type="hidden" name="cholesterols_unit" value="{{ form.cholesterols_unit.value|default:'' }}">
               <input type="hidden" name="proteins" value="{{ form.proteins.value|default:'' }}">
               <input type="hidden" name="proteins_unit" value="{{ form.proteins_unit.value|default:'' }}">
+              <!-- 추가 영양성분 필드들 -->
+              <input type="hidden" name="dietary_fiber" value="{{ form.dietary_fiber.value|default:'' }}">
+              <input type="hidden" name="dietary_fiber_unit" value="{{ form.dietary_fiber_unit.value|default:'' }}">
+              <input type="hidden" name="calcium" value="{{ form.calcium.value|default:'' }}">
+              <input type="hidden" name="calcium_unit" value="{{ form.calcium_unit.value|default:'' }}">
+              <input type="hidden" name="iron" value="{{ form.iron.value|default:'' }}">
+              <input type="hidden" name="iron_unit" value="{{ form.iron_unit.value|default:'' }}">
+              <input type="hidden" name="potassium" value="{{ form.potassium.value|default:'' }}">
+              <input type="hidden" name="potassium_unit" value="{{ form.potassium_unit.value|default:'' }}">
+              <input type="hidden" name="magnesium" value="{{ form.magnesium.value|default:'' }}">
+              <input type="hidden" name="magnesium_unit" value="{{ form.magnesium_unit.value|default:'' }}">
+              <input type="hidden" name="zinc" value="{{ form.zinc.value|default:'' }}">
+              <input type="hidden" name="zinc_unit" value="{{ form.zinc_unit.value|default:'' }}">
+              <input type="hidden" name="phosphorus" value="{{ form.phosphorus.value|default:'' }}">
+              <input type="hidden" name="phosphorus_unit" value="{{ form.phosphorus_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_a" value="{{ form.vitamin_a.value|default:'' }}">
+              <input type="hidden" name="vitamin_a_unit" value="{{ form.vitamin_a_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_d" value="{{ form.vitamin_d.value|default:'' }}">
+              <input type="hidden" name="vitamin_d_unit" value="{{ form.vitamin_d_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_e" value="{{ form.vitamin_e.value|default:'' }}">
+              <input type="hidden" name="vitamin_e_unit" value="{{ form.vitamin_e_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_c" value="{{ form.vitamin_c.value|default:'' }}">
+              <input type="hidden" name="vitamin_c_unit" value="{{ form.vitamin_c_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_b1" value="{{ form.vitamin_b1.value|default:'' }}">
+              <input type="hidden" name="vitamin_b1_unit" value="{{ form.vitamin_b1_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_b2" value="{{ form.vitamin_b2.value|default:'' }}">
+              <input type="hidden" name="vitamin_b2_unit" value="{{ form.vitamin_b2_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_b6" value="{{ form.vitamin_b6.value|default:'' }}">
+              <input type="hidden" name="vitamin_b6_unit" value="{{ form.vitamin_b6_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_b12" value="{{ form.vitamin_b12.value|default:'' }}">
+              <input type="hidden" name="vitamin_b12_unit" value="{{ form.vitamin_b12_unit.value|default:'' }}">
+              <input type="hidden" name="folic_acid" value="{{ form.folic_acid.value|default:'' }}">
+              <input type="hidden" name="folic_acid_unit" value="{{ form.folic_acid_unit.value|default:'' }}">
+              <input type="hidden" name="niacin" value="{{ form.niacin.value|default:'' }}">
+              <input type="hidden" name="niacin_unit" value="{{ form.niacin_unit.value|default:'' }}">
+              <input type="hidden" name="pantothenic_acid" value="{{ form.pantothenic_acid.value|default:'' }}">
+              <input type="hidden" name="pantothenic_acid_unit" value="{{ form.pantothenic_acid_unit.value|default:'' }}">
+              <input type="hidden" name="biotin" value="{{ form.biotin.value|default:'' }}">
+              <input type="hidden" name="biotin_unit" value="{{ form.biotin_unit.value|default:'' }}">
+              <input type="hidden" name="selenium" value="{{ form.selenium.value|default:'' }}">
+              <input type="hidden" name="selenium_unit" value="{{ form.selenium_unit.value|default:'' }}">
+              <input type="hidden" name="iodine" value="{{ form.iodine.value|default:'' }}">
+              <input type="hidden" name="iodine_unit" value="{{ form.iodine_unit.value|default:'' }}">
             </div>
           </form>
         </div>
@@ -909,7 +2806,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   드래그 앤 드롭으로 업로드하세요<br>
                   JPG, PNG, GIF, BMP 파일 지원 (최대 10MB)
                 </p>
-                <button type="button" class="btn btn-outline-primary mt-3" onclick="document.getElementById('fileInput').click()">
+                <button type="button" class="btn btn-outline-primary btn-sm mt-3" onclick="document.getElementById('fileInput').click()">
                   <i class="fas fa-folder-open me-2"></i>파일 선택
                 </button>
               </div>
@@ -924,10 +2821,10 @@ document.addEventListener('DOMContentLoaded', function() {
             <img id="previewImg" class="img-fluid border rounded" style="max-height: 300px;">
           </div>
           <div class="d-flex justify-content-between">
-            <button type="button" class="btn btn-outline-secondary" onclick="resetUpload()">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetUpload()">
               <i class="fas fa-redo me-1"></i>다시 선택
             </button>
-            <button type="button" class="btn btn-primary" onclick="processOCR()" id="processBtn">
+            <button type="button" class="btn btn-primary btn-sm" onclick="processOCR()" id="processBtn">
               <span id="processText">
                 <i class="fas fa-magic me-1"></i>텍스트 추출하기
               </span>
@@ -954,12 +2851,12 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
           
           <div class="d-flex justify-content-between">
-            <button type="button" class="btn btn-outline-secondary" onclick="resetUpload()">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetUpload()">
               <i class="fas fa-arrow-left me-1"></i>처음으로
             </button>
             <div>
-              <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">취소</button>
-              <button type="button" class="btn btn-success" onclick="applyOCRResults()">
+              <button type="button" class="btn btn-secondary btn-sm me-2" data-bs-dismiss="modal">취소</button>
+              <button type="button" class="btn btn-success btn-sm" onclick="applyOCRResults()">
                 <i class="fas fa-check me-1"></i>적용하기
               </button>
             </div>
