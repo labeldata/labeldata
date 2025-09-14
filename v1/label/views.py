@@ -589,9 +589,24 @@ def label_creation(request, label_id=None):
             else:
                 form = LabelCreationForm(post_data)
 
+        # 체크박스 필드들을 별도로 처리하기 위해 폼 검증 전에 미리 추출
+        preservation_types = request.POST.getlist('preservation_type')
+        processing_methods = request.POST.getlist('processing_method')
+        processing_condition = request.POST.get('processing_condition', '')
+        
         if form.is_valid():
-            label = form.save(commit=False)
-            label.user_id = request.user
+            # 폼을 통해 기본 필드들은 처리하되, 문제가 되는 필드들은 별도 처리
+            if label_id:
+                # 기존 라벨을 업데이트하는 경우
+                label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+                # 폼의 cleaned_data에서 안전한 값들만 가져와서 설정
+                for field_name in form.fields:
+                    if field_name in form.cleaned_data and field_name not in ['preservation_type', 'processing_method']:
+                        setattr(label, field_name, form.cleaned_data[field_name])
+            else:
+                # 새 라벨을 생성하는 경우
+                label = form.save(commit=False)
+                label.user_id = request.user
             
             # 라벨명 다시 한번 확인하여 설정
             if my_label_name:
@@ -600,6 +615,20 @@ def label_creation(request, label_id=None):
             # hidden 필드에서 식품유형 정보 가져오기
             label.food_group = request.POST.get('food_group')
             label.food_type = request.POST.get('food_type')
+            
+            # 장기보존식품과 제조방법 정보 저장 (다중 선택 지원)
+            label.preservation_type = ', '.join(preservation_types) if preservation_types else ''
+            label.processing_method = ', '.join(processing_methods) if processing_methods else ''
+            label.processing_condition = processing_condition
+            
+            # 저장 전 값 확인
+            print(f"=== 저장 직전 값 확인 ===")
+            print(f"food_group: '{label.food_group}'")
+            print(f"food_type: '{label.food_type}'")
+            print(f"preservation_type: '{label.preservation_type}'")
+            print(f"processing_method: '{label.processing_method}'")
+            print(f"processing_condition: '{label.processing_condition}'")
+            print("============================")
             
             # 체크박스 상태 처리
             checkbox_fields = [field for field in request.POST.keys() if field.startswith('chk_')]
@@ -634,6 +663,17 @@ def label_creation(request, label_id=None):
                 label.report_no_verify_YN = 'N'
 
             label.save()
+            
+            # 저장 후 DB에서 다시 읽어와서 값 확인
+            saved_label = MyLabel.objects.get(my_label_id=label.my_label_id)
+            print(f"=== 저장 후 DB 값 확인 ===")
+            print(f"food_group: '{saved_label.food_group}'")
+            print(f"food_type: '{saved_label.food_type}'")
+            print(f"preservation_type: '{saved_label.preservation_type}'")
+            print(f"processing_method: '{saved_label.processing_method}'")
+            print(f"processing_condition: '{saved_label.processing_condition}'")
+            print("============================")
+            
             # 모든 메시지 제거
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
@@ -2198,22 +2238,76 @@ def linked_ingredient_count(request, label_id):
 @login_required
 def verify_report_no(request):
     import json
+    import re
     data = json.loads(request.body)
     label_id = data.get('label_id')
     prdlst_report_no = data.get('prdlst_report_no', '').strip()
+    
     if not label_id or not prdlst_report_no:
-        return JsonResponse({'verified': False, 'error': '필수값 누락'})
+        return JsonResponse({
+            'verified': False, 
+            'status': 'error',
+            'error_type': 'missing_data',
+            'message': '필수값이 누락되었습니다.'
+        })
+    
     try:
         label = MyLabel.objects.get(pk=label_id, user_id=request.user)
     except MyLabel.DoesNotExist:
-        return JsonResponse({'verified': False, 'error': '라벨을 찾을 수 없습니다.'})
+        return JsonResponse({
+            'verified': False, 
+            'status': 'error',
+            'error_type': 'label_not_found',
+            'message': '라벨을 찾을 수 없습니다.'
+        })
+    
+    # 1. 품목보고번호 형식 검증 (13자리 또는 14자리 숫자)
+    if not re.match(r'^\d{13,14}$', prdlst_report_no):
+        return JsonResponse({
+            'verified': False,
+            'status': 'format_error',
+            'error_type': 'format',
+            'message': '품목보고번호는 13자리 또는 14자리 숫자여야 합니다.'
+        })
+    
+    # 2. 기본 규칙 검증 (첫 4자리가 연도 형식인지 확인)
+    year_part = prdlst_report_no[:4]
+    try:
+        year = int(year_part)
+        current_year = 2025
+        if year < 1960 or year > current_year + 1:
+            return JsonResponse({
+                'verified': False,
+                'status': 'rule_error',
+                'error_type': 'invalid_year',
+                'message': f'품목보고번호의 연도({year})가 유효하지 않습니다. (1960-{current_year + 1})'
+            })
+    except ValueError:
+        return JsonResponse({
+            'verified': False,
+            'status': 'format_error',
+            'error_type': 'format',
+            'message': '품목보고번호 형식이 올바르지 않습니다.'
+        })
+    
+    # 3. 중복 검증
     exists = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).exists()
     if exists:
+        # 중복된 번호 (이미 신고되어 있음)
+        return JsonResponse({
+            'verified': True,
+            'status': 'completed',
+            'message': '동일한 번호가 있으면 다시 확인하세요'
+        })
+    else:
+        # 등록되지 않은 번호 (신고 가능)
         label.report_no_verify_YN = 'Y'
         label.save(update_fields=['report_no_verify_YN'])
-        return JsonResponse({'verified': True})
-    else:
-        return JsonResponse({'verified': False})
+        return JsonResponse({
+            'verified': True,
+            'status': 'available',
+            'message': '품목보고신고 가능한 번호입니다.'
+        })
 
 @csrf_exempt
 @require_POST
@@ -4222,21 +4316,40 @@ def test_recommendation_system(request):
         }, status=500)
 
 
+@csrf_exempt
 def get_phrases_api(request):
     """
     저장된 문구 API - 고성능 추천 시스템용
     """
     try:
-        field_name = request.GET.get('field')
-        phrase_type = request.GET.get('type', 'all')
+        # GET 또는 POST 방식으로 파라미터 받기
+        if request.method == 'POST':
+            import json
+            try:
+                data = json.loads(request.body)
+                field_name = data.get('field_name') or data.get('field')
+                phrase_type = data.get('type', 'all')
+                category = data.get('category', '')
+            except json.JSONDecodeError:
+                field_name = request.POST.get('field_name') or request.POST.get('field')
+                phrase_type = request.POST.get('type', 'all')
+                category = request.POST.get('category', '')
+        else:
+            field_name = request.GET.get('field_name') or request.GET.get('field')
+            phrase_type = request.GET.get('type', 'all')
+            category = request.GET.get('category', '')
+        
         user_only = request.GET.get('user_only', 'false').lower() == 'true'
         limit = int(request.GET.get('limit', 20))
         
-        if not field_name:
+        # field_name이 없어도 category가 있으면 처리 가능
+        if not field_name and not category:
             return JsonResponse({
-                'success': False,
-                'error': 'field 파라미터가 필요합니다.'
-            }, status=400)
+                'success': True,
+                'phrases': [],
+                'total_count': 0,
+                'message': 'field_name 또는 category 파라미터가 필요합니다.'
+            })
         
         # 필드명을 카테고리명으로 매핑
         field_to_category_mapping = {

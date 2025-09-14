@@ -809,16 +809,16 @@ select {
 
 .field-row-modern {
   display: flex;
-  align-items: center; /* 기본값 center로 복원 - 일반 필드들은 중앙 정렬 */
-  gap: 1rem; /* var(--modern-spacing-sm) → 1rem으로 간격 확대 */
+  align-items: center !important; /* 모든 필드를 세로 중앙정렬로 통일 */
+  gap: 1rem !important; /* 모든 필드 간격 통일 */
   margin-bottom: var(--modern-spacing);
   padding: var(--modern-spacing-sm);
   background-color: var(--modern-gray-50);
   border-radius: var(--modern-border-radius-sm);
   border: 1px solid var(--modern-gray-200);
   transition: all 0.2s ease;
-  min-height: 40px; /* 48px → 40px로 줄임 */
-  width: 100%; /* 전체 너비 사용 */
+  min-height: 48px !important; /* 모든 필드의 최소 높이 통일 */
+  width: 100% !important; /* 가로 너비 완전 통일 */
   position: relative; /* 스마트 추천 아이콘의 absolute positioning을 위해 */
   /* textarea 확장을 위한 높이 자동 조절 */
   height: auto !important; /* !important 추가로 높이 제약 확실히 제거 */
@@ -899,11 +899,11 @@ select {
 /* 영역 1: 왼쪽 라벨 영역 - 고정 너비 */
 .field-checkbox-section {
   display: flex;
-  align-items: flex-start;
+  align-items: center !important; /* 모든 항목명을 세로 중앙정렬로 통일 */
   gap: 0.5rem;
-  width: 180px; /* 160px → 180px (제조원 소재지 텍스트를 위해 확장) */
-  min-width: 180px;
-  max-width: 180px;
+  width: 180px !important; /* 모든 라벨 영역 너비 통일 */
+  min-width: 180px !important;
+  max-width: 180px !important;
   flex-shrink: 0; /* 축소 방지 */
 }
 
@@ -1326,26 +1326,27 @@ input[name="prdlst_report_no"] {
   margin: 0;
   cursor: pointer;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  align-items: center !important; /* 모든 항목명 라벨을 세로 중앙정렬로 통일 */
+  justify-content: flex-start !important; /* 좌측 정렬 통일 */
   line-height: 1.2;
 }
 
 .field-input-section {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: center !important; /* 입력 필드 영역도 세로 중앙정렬로 통일 */
   gap: var(--modern-spacing-xs);
+  width: 100% !important; /* 입력 영역 너비 통일 */
 }
 
 .input-container-modern {
-  width: 100%; /* 부모 영역(field-input-section) 전체 사용 */
+  width: 100% !important; /* 모든 입력 컨테이너 너비 통일 */
   position: relative;
   display: flex;
   gap: var(--modern-spacing-xs);
-  align-items: flex-start; /* center에서 flex-start로 변경하여 높이 확장 허용 */
+  align-items: center !important; /* 모든 입력 요소를 세로 중앙정렬로 통일 */
   height: auto !important; /* 높이 자동 조절 허용 */
-  min-height: unset !important; /* 최소 높이 제한 제거 */
+  min-height: 38px !important; /* 최소 높이 통일 */
 }
 
 .input-container-modern .form-control:not(textarea),
@@ -1578,24 +1579,9 @@ div.input-container-modern textarea#rawmtrl_nm {
 }
 
 /* textarea를 포함한 모든 부모 컨테이너의 높이 제한 완전 해제 */
-*:has(textarea[name="rawmtrl_nm_display"]) {
-  min-height: auto !important;
-  max-height: none !important;
-  height: auto !important;
-  overflow: visible !important;
-}
-*:has(textarea[name="cautions"]) {
-  min-height: auto !important;
-  max-height: none !important;
-  height: auto !important;
-  overflow: visible !important;
-}
-*:has(textarea[name="additional_info"]) {
-  min-height: auto !important;
-  max-height: none !important;
-  height: auto !important;
-  overflow: visible !important;
-}
+*:has(textarea[name="rawmtrl_nm_display"]),
+*:has(textarea[name="cautions"]),
+*:has(textarea[name="additional_info"]),
 *:has(textarea[name="nutrition_text"]) {
   min-height: auto !important;
   max-height: none !important;
@@ -2347,19 +2333,7 @@ textarea:focus {
   border-color: #0d6efd !important;
 }
 
-.btn-success {
-  color: #fff !important;
-  background-color: #198754 !important;
-  border-color: #198754 !important;
-}
-
-.btn-success:hover,
-.btn-success:focus,
-.btn-success:active {
-  color: #fff !important;
-  background-color: #157347 !important;
-  border-color: #146c43 !important;
-}
+/* btn-success는 위쪽 통합된 정의 사용 */
 
 .btn-outline-secondary {
   color: #6c757d !important;
@@ -3252,20 +3226,7 @@ select[name="food_subtype"],
   box-shadow: var(--modern-shadow);
 }
 
-.action-buttons .btn-primary,
-.action-buttons-right .btn-primary,
-.btn-group .btn-primary {
-  background: var(--modern-primary);
-  color: white;
-}
-
-.action-buttons .btn-primary:hover,
-.action-buttons-right .btn-primary:hover,
-.btn-group .btn-primary:hover {
-  background: var(--modern-primary-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--modern-shadow-md);
-}
+/* btn-primary는 위쪽 통합된 정의와 html body 정의 사용 */
 
 .action-buttons .btn-success,
 .action-buttons-right .btn-success,
@@ -4597,108 +4558,94 @@ textarea.form-control[name="nutrition_text"] {
   max-height: none !important;
 }
 
-/* 1️⃣4️⃣ 부모 컨테이너들 높이 제한 해제 */
-.input-container-modern:has(.form-control[name="rawmtrl_nm_display"]),
-.field-input-section:has(.form-control[name="rawmtrl_nm_display"]),
-.field-row-modern:has(.form-control[name="rawmtrl_nm_display"]),
-.input-container-modern:has(textarea[name="rawmtrl_nm"]),
-.field-input-section:has(textarea[name="rawmtrl_nm"]),
+/* 🎯 통합된 TEXTAREA 스타일 - 중복 제거 및 통합 */
+/* 다중 라인 textarea가 있는 필드들의 컨테이너 설정 */
+.field-row-modern:has(textarea[name="rawmtrl_nm_display"]),
 .field-row-modern:has(textarea[name="rawmtrl_nm"]),
-.input-container-modern:has(textarea[name="caution"]),
-.field-input-section:has(textarea[name="caution"]),
-.field-row-modern:has(textarea[name="caution"]),
-.input-container-modern:has(textarea[name="etc_info"]),
-.field-input-section:has(textarea[name="etc_info"]),
-.field-row-modern:has(textarea[name="etc_info"]),
-.input-container-modern:has(textarea[name="nutrition_text"]),
+.field-row-modern:has(textarea[name="cautions"]),
+.field-row-modern:has(textarea[name="additional_info"]),
+.field-row-modern:has(textarea[name="nutrition_text"]),
+.field-input-section:has(textarea[name="rawmtrl_nm_display"]),
+.field-input-section:has(textarea[name="rawmtrl_nm"]),
+.field-input-section:has(textarea[name="cautions"]),
+.field-input-section:has(textarea[name="additional_info"]),
 .field-input-section:has(textarea[name="nutrition_text"]),
-.field-row-modern:has(textarea[name="nutrition_text"]) {
+.input-container-modern:has(textarea[name="rawmtrl_nm_display"]),
+.input-container-modern:has(textarea[name="rawmtrl_nm"]),
+.input-container-modern:has(textarea[name="cautions"]),
+.input-container-modern:has(textarea[name="additional_info"]),
+.input-container-modern:has(textarea[name="nutrition_text"]) {
   height: auto !important;
   min-height: auto !important;
   max-height: none !important;
-  display: flex !important;
   align-items: flex-start !important;
   overflow: visible !important;
 }
 
-/* 1️⃣5️⃣ 최대 우선순위를 가진 텍스트 영역 스타일 - !important 중첩 사용 */
-html body form div textarea[name="rawmtrl_nm_display"],
-html body form div textarea[name="rawmtrl_nm"],
-html body form div textarea[name="caution"],
-html body form div textarea[name="etc_info"],
-html body form div textarea[name="nutrition_text"] {
-  height: auto !important; 
-  min-height: 48px !important; /* 기본 2줄 높이 */
+/* 모든 textarea 공통 스타일 */
+textarea[name="rawmtrl_nm_display"],
+textarea[name="rawmtrl_nm"],
+textarea[name="cautions"],
+textarea[name="additional_info"],
+textarea[name="nutrition_text"] {
+  height: auto !important;
+  min-height: 48px !important;
   max-height: none !important;
   overflow-y: hidden !important;
   box-sizing: border-box !important;
-  position: relative !important;
-  z-index: 10 !important; /* 높은 z-index로 다른 요소보다 앞에 표시 */
-}
-
-/* 1️⃣6️⃣ Bootstrap Form Control 클래스 오버라이드 - 높이 제약 완전 제거 */
-html body textarea.form-control,
-html body .form-control[type="textarea"],
-html body div.form-control[contenteditable="true"],
-html body form textarea.form-control,
-html body .field-row-modern textarea.form-control,
-html body .field-input-section textarea.form-control, 
-html body .input-container-modern textarea.form-control {
-  height: auto !important;
-  max-height: none !important;
-  min-height: 48px !important;
-  box-sizing: content-box !important;
-}
-
-/* 1️⃣7️⃣ 특정 필드에 대한 강제 높이 설정 - 정확한 계층 구조 */
-html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="rawmtrl_nm_display"],
-html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="rawmtrl_nm"],
-html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="caution"],
-html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="etc_info"],
-html body form div.field-row-modern div.field-input-section div.input-container-modern textarea[name="nutrition_text"] {
-  display: block !important;
-  box-sizing: content-box !important;
-  min-height: 48px !important;
-  height: auto !important;
-  overflow: hidden !important;
   resize: none !important;
 }
 
-/* 1️⃣8️⃣ 일반 항목은 세로 중앙 정렬 유지, 다중 라인 textarea만 flex-start */
-/* 기본 정렬 스타일 - 모든 필드는 중앙 정렬 */
-.field-row-modern {
+/* 🎯 통합된 레이아웃 정렬 규칙 - 중복 제거 */
+/* 모든 필드 기본 중앙 정렬 */
+.field-row-modern,
+.field-input-section,
+.input-container-modern,
+.field-checkbox-section,
+.field-label-modern {
   align-items: center !important;
+}
+
+/* 크기 통일 */
+.field-row-modern {
+  min-height: 48px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  padding-left: var(--modern-spacing-sm) !important;
+  padding-right: var(--modern-spacing-sm) !important;
 }
 
 .field-input-section {
-  align-items: center !important;
+  width: 100% !important;
+  flex: 1 !important;
+  min-width: 0 !important;
 }
 
 .input-container-modern {
-  align-items: center !important;
+  width: 100% !important;
+  min-height: 38px !important;
 }
 
-/* 특정 다중 라인 텍스트 영역만 시작점(top) 정렬 */
-.field-row-modern:has(textarea[name="rawmtrl_nm_display"]),
-.field-row-modern:has(textarea[name="rawmtrl_nm"]),
-.field-row-modern:has(textarea[name="caution"]),
-.field-row-modern:has(textarea[name="etc_info"]),
-.field-row-modern:has(textarea[name="nutrition_text"]) {
-  align-items: flex-start !important;
+.field-checkbox-section {
+  width: 180px !important;
+  min-width: 180px !important;
+  max-width: 180px !important;
 }
 
-.field-input-section:has(textarea[name="rawmtrl_nm_display"]),
-.field-input-section:has(textarea[name="rawmtrl_nm"]),
-.field-input-section:has(textarea[name="caution"]),
-.field-input-section:has(textarea[name="etc_info"]),
-.field-input-section:has(textarea[name="nutrition_text"]) {
-  align-items: flex-start !important;
+.field-label-modern {
+  justify-content: flex-start !important;
 }
 
-.input-container-modern:has(textarea[name="rawmtrl_nm_display"]),
-.input-container-modern:has(textarea[name="rawmtrl_nm"]),
-.input-container-modern:has(textarea[name="caution"]),
-.input-container-modern:has(textarea[name="etc_info"]),
-.input-container-modern:has(textarea[name="nutrition_text"]) {
-  align-items: flex-start !important;
+/* 입력 요소 통일 스타일 */
+.input-container-modern .form-control,
+.input-container-modern .form-select {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  min-height: 38px !important;
+}
+
+/* 체크박스 정렬 */
+.field-checkbox-section input[type="checkbox"] {
+  margin-top: 0 !important;
+  vertical-align: middle !important;
 }

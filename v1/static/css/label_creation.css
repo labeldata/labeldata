@@ -42,6 +42,31 @@
     border-color: var(--disabled-border) !important;
   }
   
+  /* 체크박스 스타일 개선 */
+  .form-check-modern .form-check-input-modern[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+  }
+  
+  .form-check-modern .form-check-input-modern[type="checkbox"]:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+  }
+  
+  .form-check-modern .form-check-label-modern {
+    font-size: 0.75rem;
+    color: var(--text-color);
+    cursor: pointer;
+    margin-left: 2px;
+  }
+  
+  .form-check-modern.form-check-compact {
+    margin-bottom: 4px;
+  }
+
   /* 문구 항목 스타일 */
   .phrase-item {
     padding: 6px 8px;

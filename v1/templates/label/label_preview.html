@@ -238,7 +238,7 @@
           </tbody>
         </table>
         <div class="footer-text">
-          labeldata.com 에서 관련법규에 따라 작성되었습니다.
+          ezlabel.com 에서 관련법규에 따라 작성되었습니다.
           <span class="creator-info"></span>
         </div>
       </div>
@@ -324,26 +324,30 @@
                     { value: '플라스틱(LDPE)', label: '플라스틱(LDPE)', img: "{% static 'img/recycle_ldpe.png' %}" },
                     { value: '플라스틱(PP)', label: '플라스틱(PP)', img: "{% static 'img/recycle_pp.png' %}" },
                     { value: '플라스틱(PS)', label: '플라스틱(PS)', img: "{% static 'img/recycle_ps.png' %}" },
-                    { value: '플라스틱(PVC)', label: '플라스틱(PVC)', img: "{% static 'img/recycle_pvc.png' %}" },
-                    { value: '기타플라스틱', label: '기타플라스틱', img: "{% static 'img/recycle_plastic_other.png' %}" }
+                    { value: '기타플라스틱', label: '기타플라스틱', img: "{% static 'img/recycle_other_plastic.png' %}" }
                 ]
             },
             { 
                 group: '종이/금속/유리', 
                 options: [ 
                     { value: '종이', label: '종이', img: "{% static 'img/recycle_paper.png' %}" }, 
-                    { value: '종이팩', label: '종이팩', img: "{% static 'img/recycle_paperpack.png' %}" },
-                    { value: '금속캔', label: '금속캔', img: "{% static 'img/recycle_can.png' %}" },
-                    { value: '알루미늄', label: '알루미늄', img: "{% static 'img/recycle_aluminum.png' %}" },
-                    { value: '철', label: '철', img: "{% static 'img/recycle_iron.png' %}" },
+                    { value: '일반팩', label: '일반팩', img: "{% static 'img/recycle_pack_general.png' %}" },
+                    { value: '멸균팩', label: '멸균팩', img: "{% static 'img/recycle_pack_sterile.png' %}" },
+                    { value: '캔류(알미늄)', label: '캔류(알미늄)', img: "{% static 'img/recycle_can_aluminum.png' %}" },
+                    { value: '캔류(철)', label: '캔류(철)', img: "{% static 'img/recycle_can_iron.png' %}" },
                     { value: '유리', label: '유리', img: "{% static 'img/recycle_glass.png' %}" }
                 ]
             },
             { 
                 group: '기타/혼합', 
                 options: [ 
-                    { value: '복합재질', label: '복합재질', img: "{% static 'img/recycle_composite.png' %}", isComposite: true },
-                    { value: '비닐', label: '비닐', img: "{% static 'img/recycle_vinyl.png' %}" }
+                    { value: '복합재질', label: '복합재질', img: "{% static 'img/recycle_coated.png' %}", isComposite: true },
+                    { value: '비닐(PET)', label: '비닐(PET)', img: "{% static 'img/recycle_vinyl_pet.png' %}" },
+                    { value: '비닐(HDPE)', label: '비닐(HDPE)', img: "{% static 'img/recycle_vinyl_hdpe.png' %}" },
+                    { value: '비닐(LDPE)', label: '비닐(LDPE)', img: "{% static 'img/recycle_vinyl_ldpe.png' %}" },
+                    { value: '비닐(PP)', label: '비닐(PP)', img: "{% static 'img/recycle_vinyl_pp.png' %}" },
+                    { value: '비닐(PS)', label: '비닐(PS)', img: "{% static 'img/recycle_vinyl_ps.png' %}" },
+                    { value: '비닐(기타)', label: '비닐(기타)', img: "{% static 'img/recycle_vinyl_other.png' %}" }
                 ]
             }
         ];
@@ -1031,14 +1035,20 @@
             else if (material.includes('ldpe')) return '플라스틱(LDPE)';
             else if (material.includes('pp') || material.includes('폴리프로필렌')) return '플라스틱(PP)';
             else if (material.includes('ps') || material.includes('폴리스티렌')) return '플라스틱(PS)';
-            else if (material.includes('pvc')) return '플라스틱(PVC)';
+            else if (material.includes('기타') && material.includes('플라스틱')) return '기타플라스틱';
             else if (material.includes('종이') && !material.includes('팩')) return '종이';
-            else if (material.includes('종이팩') || material.includes('팩')) return '종이팩';
-            else if (material.includes('철') || material.includes('캔')) return '금속캔';
-            else if (material.includes('알미늄') || material.includes('알루미늄')) return '알루미늄';
+            else if (material.includes('일반팩') || (material.includes('팩') && !material.includes('멸균'))) return '일반팩';
+            else if (material.includes('멸균팩') || (material.includes('멸균') && material.includes('팩'))) return '멸균팩';
+            else if (material.includes('철') || (material.includes('캔') && material.includes('철'))) return '캔류(철)';
+            else if (material.includes('알미늄') || material.includes('알루미늄') || (material.includes('캔') && material.includes('알미늄'))) return '캔류(알미늄)';
             else if (material.includes('유리')) return '유리';
-            else if (material.includes('복합재질')) return '복합재질';
-            else if (material.includes('비닐')) return '비닐';
+            else if (material.includes('복합재질') || material.includes('도포') || material.includes('첩합')) return '복합재질';
+            else if (material.includes('비닐') && material.includes('pet')) return '비닐(PET)';
+            else if (material.includes('비닐') && material.includes('hdpe')) return '비닐(HDPE)';
+            else if (material.includes('비닐') && material.includes('ldpe')) return '비닐(LDPE)';
+            else if (material.includes('비닐') && material.includes('pp')) return '비닐(PP)';
+            else if (material.includes('비닐') && material.includes('ps')) return '비닐(PS)';
+            else if (material.includes('비닐')) return '비닐(기타)';
             else return '';
         }
 
@@ -1070,39 +1080,67 @@
             let compatible = false;
             switch (selectedMark) {
                 case '무색페트':
+                    compatible = isCompatible(selectedMark, ['pet', '페트', '무색']);
+                    break;
+                case '유색페트':
+                    compatible = isCompatible(selectedMark, ['pet', '페트', '유색']);
+                    break;
                 case '플라스틱(PET)':
                     compatible = isCompatible(selectedMark, ['pet', '페트']);
-
                     break;
                 case '플라스틱(LDPE)':
+                    compatible = isCompatible(selectedMark, ['ldpe', '저밀도', '폴리에틸렌', 'pe']);
+                    break;
                 case '플라스틱(HDPE)':
-                    compatible = isCompatible(selectedMark, ['ldpe', 'hdpe', '폴리에틸렌', 'pe']);
-
+                    compatible = isCompatible(selectedMark, ['hdpe', '고밀도', '폴리에틸렌', 'pe']);
                     break;
                 case '플라스틱(PP)':
                     compatible = isCompatible(selectedMark, ['pp', '피피', '폴리프로필렌']);
-
                     break;
                 case '플라스틱(PS)':
                     compatible = isCompatible(selectedMark, ['ps', '피에스', '폴리스티렌']);
                     break;
+                case '기타플라스틱':
+                    compatible = isCompatible(selectedMark, ['기타', '플라스틱', 'other']);
+                    break;
                 case '캔류(철)':
-                    compatible = isCompatible(selectedMark, ['철', 'steel']);
+                    compatible = isCompatible(selectedMark, ['철', 'steel', '캔']);
                     break;
                 case '캔류(알미늄)':
-                    compatible = isCompatible(selectedMark, ['알미늄', '알루미늄', 'aluminum', 'al']);
+                    compatible = isCompatible(selectedMark, ['알미늄', '알루미늄', 'aluminum', 'al', '캔']);
                     break;
                 case '종이':
-                    compatible = isCompatible(selectedMark, ['종이', 'paper']);
-                    break;
-                case '유리':
-                    compatible = isCompatible(selectedMark, ['유리', 'glass']);
+                    compatible = isCompatible(selectedMark, ['종이', 'paper']) && !packageMaterial.includes('팩');
                     break;
                 case '일반팩':
                     compatible = packageMaterial.includes('팩') && !packageMaterial.includes('멸균');
                     break;
                 case '멸균팩':
-                    compatible = packageMaterial.includes('멸균');
+                    compatible = packageMaterial.includes('멸균') && packageMaterial.includes('팩');
+                    break;
+                case '유리':
+                    compatible = isCompatible(selectedMark, ['유리', 'glass']);
+                    break;
+                case '복합재질':
+                    compatible = isCompatible(selectedMark, ['복합재질', '도포', '첩합', '코팅']);
+                    break;
+                case '비닐(PET)':
+                    compatible = isCompatible(selectedMark, ['비닐', 'pet', '페트']);
+                    break;
+                case '비닐(HDPE)':
+                    compatible = isCompatible(selectedMark, ['비닐', 'hdpe', '고밀도']);
+                    break;
+                case '비닐(LDPE)':
+                    compatible = isCompatible(selectedMark, ['비닐', 'ldpe', '저밀도']);
+                    break;
+                case '비닐(PP)':
+                    compatible = isCompatible(selectedMark, ['비닐', 'pp', '폴리프로필렌']);
+                    break;
+                case '비닐(PS)':
+                    compatible = isCompatible(selectedMark, ['비닐', 'ps', '폴리스티렌']);
+                    break;
+                case '비닐(기타)':
+                    compatible = isCompatible(selectedMark, ['비닐', '기타']);
                     break;
                 default:
                     const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);

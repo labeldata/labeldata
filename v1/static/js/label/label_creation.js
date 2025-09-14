@@ -2051,10 +2051,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const btn = document.getElementById('verifyReportNoBtn');
     if (!btn) return;
     
-    // 상태 복구: 검증완료/검증실패 상태에서 클릭 시 초기화
-    if (btn.innerHTML.includes('검증완료') || btn.innerHTML.includes('검증실패')) {
+    // 상태 복구: 완료된 상태에서 클릭 시 초기화
+    const completedStates = ['사용가능', '형식오류', '규칙오류', '미등록', '검증실패', '오류발생'];
+    const isCompleted = completedStates.some(state => btn.innerHTML.includes(state));
+    
+    if (isCompleted) {
       btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
       btn.className = 'btn btn-outline-info action-btn-modern';
+      btn.title = 'API 중복 검사 및 번호 규칙 검증';
       return;
     }
     
@@ -2066,10 +2070,17 @@ document.addEventListener('DOMContentLoaded', function () {
     let reportNo = reportNoInput?.value?.trim();
     
     if (!reportNo) {
-      alert('품목보고번호를 입력하세요.');
+      btn.innerHTML = '<i class="fas fa-edit me-1"></i>입력필요';
+      btn.className = 'btn btn-outline-secondary action-btn-modern';
+      btn.title = '품목보고번호를 입력해주세요';
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-      btn.className = 'btn btn-outline-info action-btn-modern';
+      
+      setTimeout(() => {
+        alert('품목보고번호를 입력하세요.');
+        btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
+        btn.className = 'btn btn-outline-info action-btn-modern';
+        btn.title = 'API 중복 검사 및 번호 규칙 검증';
+      }, 1500);
       return;
     }
 
@@ -2101,45 +2112,71 @@ document.addEventListener('DOMContentLoaded', function () {
     })
     .then(res => res.json())
     .then(data => {
-      if (data.verified) {
-        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>검증완료';
+      // 성공 상태 처리
+      if (data.verified && data.status === 'available') {
+        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>사용가능';
         btn.className = 'btn btn-success action-btn-modern';
-        btn.title = 'API 중복 검사 및 번호 규칙 검증 완료';
-      } else {
-        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>검증실패';
-        btn.className = 'btn btn-danger action-btn-modern';
-        btn.title = 'API 중복 또는 번호 규칙 오류 발견';
-        
-        // 실패 원인에 따른 상세 메시지
-        let message = '검증에 실패했습니다.';
-        if (data.error_type === 'duplicate') {
-          message = '이미 사용 중인 품목보고번호입니다.';
-        } else if (data.error_type === 'format') {
-          message = '품목보고번호 형식이 올바르지 않습니다.';
-        } else if (data.message) {
-          message = data.message;
-        }
-        
-        // 비침입적인 방식으로 오류 표시
-        setTimeout(() => {
-          if (confirm(message + '\n\n다시 검증하시겠습니까?')) {
-            // 사용자가 재검증을 원하면 버튼 상태 초기화
-            btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-            btn.className = 'btn btn-outline-info action-btn-modern';
-          }
-        }, 100);
+        btn.title = '등록된 품목보고번호로 사용 가능합니다';
+        return;
       }
+      
+      // 실패 상태별 처리
+      const status = data.status || 'unknown';
+      let message = data.message || '검증에 실패했습니다.';
+      
+      switch(status) {
+        case 'format_error':
+          btn.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>형식오류';
+          btn.className = 'btn btn-warning action-btn-modern';
+          btn.title = '품목보고번호 형식이 올바르지 않습니다';
+          break;
+          
+        case 'rule_error':
+          btn.innerHTML = '<i class="fas fa-ban me-1"></i>규칙오류';
+          btn.className = 'btn btn-warning action-btn-modern';
+          btn.title = '품목보고번호 규칙에 맞지 않습니다';
+          break;
+          
+        case 'not_found':
+          btn.innerHTML = '<i class="fas fa-question-circle me-1"></i>미등록';
+          btn.className = 'btn btn-danger action-btn-modern';
+          btn.title = '등록되지 않은 품목보고번호입니다';
+          break;
+          
+        case 'error':
+        default:
+          btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>검증실패';
+          btn.className = 'btn btn-danger action-btn-modern';
+          btn.title = '검증 중 오류가 발생했습니다';
+          break;
+      }
+      
+      // 비침입적인 방식으로 오류 표시
+      setTimeout(() => {
+        const shouldRetry = confirm(message + '\n\n다시 검증하시겠습니까?');
+        if (shouldRetry) {
+          // 사용자가 재검증을 원하면 버튼 상태 초기화
+          btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
+          btn.className = 'btn btn-outline-info action-btn-modern';
+          btn.title = 'API 중복 검사 및 번호 규칙 검증';
+        }
+      }, 100);
     })
     .catch(err => {
-      btn.innerHTML = '<i class="fas fa-times-circle me-1"></i>오류발생';
-      btn.className = 'btn btn-warning action-btn-modern';
-      btn.title = '네트워크 오류 또는 서버 오류';
+      btn.innerHTML = '<i class="fas fa-wifi me-1"></i>통신오류';
+      btn.className = 'btn btn-secondary action-btn-modern';
+      btn.title = '네트워크 연결 또는 서버 오류';
       
       setTimeout(() => {
-        alert('검증 중 오류가 발생했습니다. ' + (err.message || ''));
-        btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-        btn.className = 'btn btn-outline-info action-btn-modern';
-        btn.title = 'API 중복 검사 및 번호 규칙 검증';
+        const errorMsg = '검증 중 통신 오류가 발생했습니다.\n' + 
+                        '인터넷 연결을 확인하고 다시 시도해주세요.\n\n' +
+                        '오류 내용: ' + (err.message || '알 수 없는 오류');
+        
+        if (confirm(errorMsg + '\n\n다시 시도하시겠습니까?')) {
+          btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
+          btn.className = 'btn btn-outline-info action-btn-modern';
+          btn.title = 'API 중복 검사 및 번호 규칙 검증';
+        }
       }, 100);
     })
     .finally(() => {
@@ -2918,265 +2955,37 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  // 스마트 추천 모달 초기화는 통합 시스템에서 처리됨 (comprehensive_recommendation.js)
-  
-  // 기존 추천 시스템 열기
-  window.openExistingRecommendation = function() {
-    // 다양한 방법으로 기존 추천 모달 찾기 및 열기
-    try {
-        // 방법 1: 기존 함수 호출
-        if (typeof openRecommendationModal === 'function') {
-            openRecommendationModal();
-            return;
-        }
-        
-        // 방법 2: Bootstrap 모달 찾기
-        const modalIds = ['recommendationModal', 'smartRecommendationModal', 'autoFillModal'];
-        for (const modalId of modalIds) {
-            const modalElement = document.getElementById(modalId);
-            if (modalElement) {
-                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-                    const modal = new bootstrap.Modal(modalElement);
-                    modal.show();
-                    return;
-                } else if (typeof $ !== 'undefined') {
-                    $(modalElement).modal('show');
-                    return;
-                }
-            }
-        }
-        
-        // 방법 3: 기존 스마트 추천 시스템 직접 호출
-        if (window.smartRecommendationModal) {
-            if (typeof window.smartRecommendationModal.openModal === 'function') {
-                window.smartRecommendationModal.openModal();
-                return;
-            }
-            if (typeof window.smartRecommendationModal.showRecommendations === 'function') {
-                window.smartRecommendationModal.showRecommendations();
-                return;
-            }
-        }
-        
-        // 방법 4: comprehensive recommendation 시스템 호출
-        if (window.comprehensiveRecommendation) {
-            if (typeof window.comprehensiveRecommendation.showModal === 'function') {
-                window.comprehensiveRecommendation.showModal();
-                return;
-            }
-        }
-        
-        // 모든 방법이 실패하면 현재 모달에서 추천 생성
-        generateRecommendation();
-        
-    } catch (error) {
-        console.error('기존 추천 시스템 열기 실패:', error);
-        alert('기존 추천 시스템을 찾을 수 없습니다. 새로운 추천을 생성합니다.');
-        generateRecommendation();
+  // 스마트 추천 시스템 - 통합 시스템으로 단순화
+  window.openSmartRecommendation = function(fieldName, fieldValue) {
+    if (window.unifiedSmartRecommendation) {
+      window.unifiedSmartRecommendation.loadAndShowRecommendations(fieldName || 'prdlst_nm', fieldValue || '');
+    } else {
+      console.error('통합 스마트 추천 시스템을 찾을 수 없습니다.');
+      alert('스마트추천 시스템을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
     }
   };
 
-  // 전체 추천 불러오기
+  // 레거시 호환성 함수 - 통합 시스템으로 리디렉션
   window.loadComprehensiveRecommendation = function() {
-    try {
-        // 기존 comprehensive recommendation 시스템 호출
-        if (window.comprehensiveRecommendation && typeof window.comprehensiveRecommendation.loadAllRecommendations === 'function') {
-            window.comprehensiveRecommendation.loadAllRecommendations();
-            return;
-        }
-        
-        // 기존 시스템이 없으면 전체 추천 생성
-        document.getElementById('recommendation-type').value = 'all';
-        generateRecommendation();
-        
-    } catch (error) {
-        console.error('전체 추천 불러오기 실패:', error);
-        console.warn('전체 추천 시스템을 찾을 수 없습니다. 새로운 전체 추천을 생성합니다.');
-        document.getElementById('recommendation-type').value = 'all';
-        generateRecommendation();
-    }
+    window.openSmartRecommendation('prdlst_nm', '');
   };
+  
+  // 레거시 호환성 별칭
+  window.openExistingRecommendation = window.openSmartRecommendation;
 
-  // AI 추천 생성 함수 (기존 시스템과 연동)
+  // 레거시 추천 생성 함수 - 통합 시스템으로 리디렉션
   window.generateRecommendation = function() {
-    const loadingDiv = document.getElementById('recommendation-loading');
-    const resultsDiv = document.getElementById('recommendation-results');
-    const recommendationType = document.getElementById('recommendation-type').value;
-    
-    // 로딩 표시
-    loadingDiv.style.display = 'block';
-    resultsDiv.style.display = 'none';
-    
-    // 폼 데이터 수집
-    const formData = collectFormData();
-    
-    // 기존 스마트 추천 시스템 호출
-    if (window.smartRecommendationModal && typeof window.smartRecommendationModal.generateRecommendations === 'function') {
-        // 기존 시스템과 연동
-        window.smartRecommendationModal.generateRecommendations(recommendationType, formData)
-            .then(recommendations => {
-                displayRecommendations(recommendations);
-                loadingDiv.style.display = 'none';
-                resultsDiv.style.display = 'block';
-            })
-            .catch(error => {
-                console.error('AI 추천 생성 실패:', error);
-                // 실패 시 모의 데이터로 대체
-                const mockRecommendations = generateMockRecommendations(recommendationType, formData);
-                displayRecommendations(mockRecommendations);
-                loadingDiv.style.display = 'none';
-                resultsDiv.style.display = 'block';
-            });
-    } else {
-        // 기존 시스템이 없으면 모의 추천 생성
-        setTimeout(() => {
-            const recommendations = generateMockRecommendations(recommendationType, formData);
-            displayRecommendations(recommendations);
-            
-            loadingDiv.style.display = 'none';
-            resultsDiv.style.display = 'block';
-        }, 2000);
-    }
+    console.warn('레거시 generateRecommendation 호출됨. 통합 스마트 추천 시스템으로 리디렉션합니다.');
+    window.openSmartRecommendation('prdlst_nm', '');
   };
 
-  // 폼 데이터 수집
-  function collectFormData() {
-    const data = {};
-    
-    // 기본 제품 정보
-    data.productName = document.querySelector('input[name="prdlst_dcnm"]')?.value || '';
-    data.foodType = document.querySelector('input[name="bar_cd"]:checked')?.closest('.form-check')?.querySelector('label')?.textContent || '';
-    data.ingredients = document.querySelector('textarea[name="rawmtrl_nm"]')?.value || '';
-    data.packaging = document.querySelector('input[name="pkg_fom_nm"]')?.value || '';
-    data.manufacturer = document.querySelector('input[name="manufacture"]')?.value || '';
-    
-    // 추가 정보
-    data.weight = document.querySelector('input[name="cntnts_cn"]')?.value || '';
-    data.storage = document.querySelector('textarea[name="srvng_method"]')?.value || '';
-    data.shelfLife = document.querySelector('input[name="expiry_date"]')?.value || '';
-    
-    return data;
-  }
-
-  // 모의 AI 추천 생성
-  function generateMockRecommendations(type, formData) {
-    const recommendations = {
-        storage: [
-            {
-                title: "보관방법 추천",
-                content: "직사광선을 피하고 서늘하고 건조한 곳에 보관하세요.",
-                confidence: 95,
-                reason: "일반적인 가공식품의 표준 보관방법입니다."
-            },
-            {
-                title: "개봉 후 보관",
-                content: "개봉 후에는 냉장보관하시고 가능한 빨리 드세요.",
-                confidence: 88,
-                reason: "제품의 신선도 유지를 위한 권장사항입니다."
-            }
-        ],
-        ingredients: [
-            {
-                title: "주요 성분 표시",
-                content: "밀가루, 설탕, 식용유지, 소금 (함량 순)",
-                confidence: 92,
-                reason: "입력된 원재료명을 기준으로 생성되었습니다."
-            },
-            {
-                title: "알레르기 정보",
-                content: "본 제품은 밀, 대두를 함유하고 있습니다.",
-                confidence: 85,
-                reason: "주요 알레르기 유발 성분을 식별했습니다."
-            }
-        ],
-        warnings: [
-            {
-                title: "일반 주의사항",
-                content: "어린이의 손이 닿지 않는 곳에 보관하세요.",
-                confidence: 90,
-                reason: "식품 안전을 위한 기본 주의사항입니다."
-            },
-            {
-                title: "섭취 시 주의",
-                content: "과다 섭취 시 복통이나 설사를 일으킬 수 있습니다.",
-                confidence: 75,
-                reason: "일반적인 가공식품 섭취 주의사항입니다."
-            }
-        ]
-    };
-
-    return type === 'all' ? 
-        [...recommendations.storage, ...recommendations.ingredients, ...recommendations.warnings] :
-        recommendations[type] || [];
-  }
-
-  // 추천 결과 표시
-  function displayRecommendations(recommendations) {
-    const resultsDiv = document.getElementById('recommendation-results');
-    
-    if (!recommendations || recommendations.length === 0) {
-        resultsDiv.innerHTML = `
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-exclamation-circle fa-2x mb-2 opacity-50"></i>
-                <p>추천할 수 있는 내용이 없습니다.<br>제품 정보를 더 입력해주세요.</p>
-            </div>
-        `;
-        return;
-    }
-
-    let html = '<div class="recommendations-list">';
-    
-    recommendations.forEach((rec, index) => {
-        const confidenceColor = rec.confidence >= 90 ? 'success' : rec.confidence >= 80 ? 'warning' : 'secondary';
-        
-        html += `
-            <div class="recommendation-item border rounded p-3 mb-3">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h6 class="recommendation-title mb-1">${rec.title}</h6>
-                    <span class="badge bg-${confidenceColor}">${rec.confidence}%</span>
-                </div>
-                <div class="recommendation-content bg-light p-2 rounded mb-2">
-                    ${rec.content}
-                </div>
-                <div class="recommendation-reason small text-muted mb-2">
-                    💡 ${rec.reason}
-                </div>
-                <div class="recommendation-actions">
-                    <button type="button" class="btn btn-sm btn-primary me-2" 
-                            onclick="applyRecommendation('${rec.content.replace(/'/g, "\\'")}')">
-                        ✓ 적용
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" 
-                            onclick="customizeRecommendation(${index})">
-                        ✏️ 수정 후 적용
-                    </button>
-                </div>
-            </div>
-        `;
-    });
-    
-    html += '</div>';
-    resultsDiv.innerHTML = html;
-  }
-
-  // 추천 내용 적용
+  // 레거시 추천 함수들 - 통합 시스템으로 리디렉션
   window.applyRecommendation = function(content) {
-    const activeElement = document.activeElement;
-    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
-        activeElement.value = content;
-        activeElement.dispatchEvent(new Event('change', { bubbles: true }));
-        console.log(`✅ AI 추천 적용: "${content}"`);
-        
-        // 모달 닫기
-        closeModal('smart-recommendation');
-    } else {
-        alert('추천 내용을 적용할 입력 필드를 먼저 클릭해주세요.');
-    }
+    console.warn('레거시 applyRecommendation 호출됨. 내용:', content);
   };
-
-  // 추천 내용 커스터마이징
+  
   window.customizeRecommendation = function(index) {
-    alert('추천 내용 커스터마이징 기능은 개발 중입니다.');
+    console.warn('레거시 customizeRecommendation 호출됨. 인덱스:', index);
   };
 
   // 스마트 추천 모달 초기화

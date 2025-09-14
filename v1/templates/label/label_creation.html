@@ -49,13 +49,15 @@
 <script id="regulations-data" type="application/json">
     {{ regulations_json|safe }}
 </script>
-<script id="smart-recommendation-data" type="application/json">
-    {{ smart_recommendations_json|safe }}
-</script>
+
+<!-- 기본 JavaScript 파일들 -->
 <script src="{% static 'js/label/label_creation.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script src="{% static 'js/label/ocr_processor.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
-<!-- 통합 스마트 추천 시스템 (단일 파일) -->
-<script src="{% static 'js/unified_recommendation.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+<!-- 기본 추천 시스템 -->
+<script src="{% static 'js/label/recommendation_system.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+<!-- 테스트 도구 제거됨 -->
 
 <!-- 🔧 직접 전역 함수 정의 (단순하고 확실한 방법) -->
 <script>
@@ -65,8 +67,9 @@ function showDevelopmentMessage() {
     return false;
 }
 
-// � 팝업 차단 테스트 함수 (가장 먼저 정의)
+// 내 문구 관리 함수 제거됨 (기본 추천 시스템으로 대체)
 
+// 🔗 팝업 차단 테스트 함수 (가장 먼저 정의)
 
 // 🔗 원재료명 필드 강제 연결 함수
 function forceRawMaterialFieldConnection() {
@@ -155,10 +158,6 @@ function diagnoseAll() {
     };
 }
 
-
-
-
-
 // 🔥 최종 해결책: 오버레이 기반 클릭 핸들러
 function createFieldOverlays() {
     
@@ -241,7 +240,6 @@ function createFieldOverlays() {
 // 원재료명 팝업 핸들러
 function handleRawMaterialPopup() {
 
-    
     // 3가지 선택지 모달 창 표시
     showRawMaterialOptionsModal();
 }
@@ -249,7 +247,6 @@ function handleRawMaterialPopup() {
 // 원재료명 3가지 선택지 모달 함수
 function showRawMaterialOptionsModal() {
 
-    
     // 기존 모달 제거
     const existingModal = document.getElementById('rawMaterialOptionsModal');
     if (existingModal) {
@@ -488,7 +485,6 @@ function showSuccessModal(message) {
 // 영양성분 팝업 핸들러
 function handleNutritionPopup() {
 
-    
     // 영양성분 계산기 모달 표시
     if (typeof window.closeNutritionCalculatorModal === 'function') {
         // 기존 모달 닫기
@@ -588,8 +584,6 @@ window.handleNutritionPopup = handleNutritionPopup;
 window.showRawMaterialOptionsModal = showRawMaterialOptionsModal;
 window.copyRawMaterialToDisplay = copyRawMaterialToDisplay;
 window.showSuccessModal = showSuccessModal;
-
-
 
 // 🧮 영양성분 계산기 함수 미리 정의 (호출 전에 정의해야 함)
 window.openNutritionCalculatorFromModal = function() {
@@ -694,8 +688,6 @@ window.closeNutritionCalculatorModal = function() {
         modal.remove();
     }
 };
-
-
 
 // 🧮 영양성분 계산기 설정 함수 (클릭 시에만 작동)
 function setupNutritionCalculator() {
@@ -915,7 +907,6 @@ setTimeout(() => {
 // DOM 로드 완료 후 실행되는 추가 테스트
 document.addEventListener('DOMContentLoaded', function() {
 
-    
     // 3초 후 자동 테스트 실행
     setTimeout(() => {
         console.log('� 3초 후 자동 테스트 실행...');
@@ -980,114 +971,7 @@ window.handleIngredientPopup = function() {
     }
 };
 
-// 전역 함수로 setupSmartRecommendationButtons 정의
-window.setupSmartRecommendationButtons = function() {
-    console.log('🔧 스마트 추천 버튼 이벤트 리스너 설정 시작 (v6.0 - 추천 기반 색상 변경)');
-    
-    // 기존 JavaScript로 생성된 아이콘들 제거
-    const existingIcons = document.querySelectorAll('.smart-rec-icon');
-    if (existingIcons.length > 0) {
-        console.log(`🗑️ 기존 추천 아이콘 ${existingIcons.length}개 제거`);
-        existingIcons.forEach(icon => icon.remove());
-    }
-    
-    // 기존 JavaScript로 추가된 패딩 제거
-    const inputFields = document.querySelectorAll('#step2-card input, #step2-card textarea, #step2-card select');
-    inputFields.forEach(field => {
-        if (field.style.paddingRight === '40px') {
-            field.style.paddingRight = '';
-            console.log('🔧 필드 패딩 제거:', field.name || field.id || field.placeholder);
-        }
-    });
-    
-    const smartButtons = document.querySelectorAll('.smart-recommendation-icon');
-    console.log(`📊 발견된 스마트 추천 버튼 수: ${smartButtons.length}`);
-    
-    if (smartButtons.length === 0) {
-        console.warn('❌ 스마트 추천 버튼을 찾을 수 없습니다.');
-        return;
-    }
-    
-    // 기존 이벤트 리스너 제거 및 새로 추가
-    smartButtons.forEach((button, index) => {
-        const fieldName = button.getAttribute('data-field');
-        if (!fieldName) {
-            console.warn(`❌ data-field 속성이 없는 버튼 발견 (인덱스: ${index}):`, button);
-            return;
-        }
-        
-        console.log(`✅ 버튼 설정 중: ${fieldName}`);
-        
-        // 기존 이벤트 리스너 제거 (복제로 제거)
-        const newButton = button.cloneNode(true);
-        button.parentNode.replaceChild(newButton, button);
-        
-        // 새로운 이벤트 리스너 추가
-        newButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            console.log(`🔔 스마트 추천 버튼 클릭: ${fieldName}`);
-            
-            // 통합 스마트 추천 시스템 존재 확인
-            if (!window.unifiedSmartRecommendation) {
-                console.error('❌ window.unifiedSmartRecommendation이 존재하지 않습니다.');
-                alert('스마트추천 시스템을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
-                return;
-            }
-            
-            // 추천 문구가 없는 경우 알림
-            if (!newButton.classList.contains('has-recommendations')) {
-                console.warn('⚠️ 해당 필드에 추천 문구가 없습니다.');
-                alert('해당 필드에는 현재 추천 문구가 없습니다.');
-                return;
-            }
-            
-            // 해당 필드 찾기
-            const fieldElement = document.querySelector(`[name="${fieldName}"]`);
-            if (!fieldElement) {
-                console.error(`❌ 필드를 찾을 수 없음: ${fieldName}`);
-                alert(`필드를 찾을 수 없습니다: ${fieldName}`);
-                return;
-            }
-            
-            const value = fieldElement.value ? fieldElement.value.trim() : '';
-            console.log(`📝 필드 값: "${value}"`);
-            
-            // 통합 스마트 추천 시스템 호출
-            if (window.unifiedSmartRecommendation.loadAndShowRecommendations) {
-                try {
-                    window.unifiedSmartRecommendation.currentField = fieldName;
-                    window.unifiedSmartRecommendation.currentFieldValue = value;
-                    window.unifiedSmartRecommendation.loadAndShowRecommendations(fieldName, value);
-                    console.log(`🚀 스마트 추천 팝업 호출 성공: ${fieldName}`);
-                } catch (error) {
-                    console.error('❌ 스마트 추천 팝업 호출 실패:', error);
-                    alert('스마트추천 기능에 오류가 발생했습니다. 새로고침 후 다시 시도해주세요.');
-                }
-            } else {
-                console.error('❌ loadAndShowRecommendations 함수를 찾을 수 없습니다.');
-                alert('스마트추천 시스템이 초기화되지 않았습니다. 새로고침 후 다시 시도해주세요.');
-            }
-        });
-        
-        // 필드 값 변경 시 추천 상태 재확인
-        const fieldElement = document.querySelector(`[name="${fieldName}"]`);
-        if (fieldElement) {
-            fieldElement.addEventListener('input', function() {
-                if (window.unifiedSmartRecommendation && window.unifiedSmartRecommendation.checkFieldForRecommendations) {
-                    // 300ms 디바운스
-                    clearTimeout(fieldElement.checkTimeout);
-                    fieldElement.checkTimeout = setTimeout(() => {
-                        window.unifiedSmartRecommendation.checkFieldForRecommendations(fieldName);
-                    }, 300);
-                }
-            });
-        }
-    });
-    
-    console.log('✅ 스마트 추천 버튼 이벤트 리스너 설정 완료 (v6.0)');
-};
+
 
 document.addEventListener('DOMContentLoaded', function() {
     // URL 파라미터에서 ocr=auto가 있으면 OCR 모달 자동 열기
@@ -1150,45 +1034,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 100);
             });
             
-            // 테스트용 수동 추천 활성화 함수
-            window.testRecommendations = function() {
-                const testFields = ['storage_method', 'cautions', 'content_weight', 'bssh_nm'];
-                testFields.forEach(fieldName => {
-                    const element = document.querySelector(`[name="${fieldName}"]`);
-                    if (element) {
-                        // 기존 추천 기능 제거 후 재설정
-                        element.removeAttribute('data-recommendation-enabled');
-                        window.recommendationSystem.setupFieldRecommendations(element, fieldName);
-                    }
-                });
-            };
+            // 테스트 함수 제거됨
             
-            // 자동 테스트 실행
-            window.testRecommendations();
+
             
-            // 통합 스마트 추천 시스템 초기화
-            if (window.unifiedSmartRecommendation) {
-                try {
-                    window.unifiedSmartRecommendation.initializeSystem();
-                    console.log('✅ 통합 스마트 추천 시스템 초기화 성공');
-                } catch (error) {
-                    console.error('❌ 통합 스마트 추천 시스템 초기화 실패:', error);
-                }
-            } else {
-                console.warn('⚠️ window.unifiedSmartRecommendation이 없습니다.');
-            }
-            
-            // 새로운 스마트 추천 버튼들에 이벤트 리스너 추가 - 즉시 실행
-            if (window.setupSmartRecommendationButtons) {
-                window.setupSmartRecommendationButtons();
-            }
-            
-            // 추가로 DOM이 완전히 로드된 후에도 한번 더 실행
-            setTimeout(() => {
-                if (window.setupSmartRecommendationButtons) {
-                    window.setupSmartRecommendationButtons();
-                }
-            }, 1000);
+
             
             return true; // 초기화 성공
         } else {
@@ -1217,16 +1067,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tryInitRecommendationSystem();
     }, 500);
     
-    // 안전장치 - 추가 재시도
-    setTimeout(() => {
-        if (!window.unifiedSmartRecommendation) {
-            console.warn('⚠️ 스마트 추천 시스템이 여전히 로드되지 않았습니다. 강제 재시도...');
-            tryInitRecommendationSystem();
-        }
-        if (window.setupSmartRecommendationButtons) {
-            window.setupSmartRecommendationButtons();
-        }
-    }, 2000);
+
     
     // 🧮 영양성분 계산기 관련 함수들 (클릭 시에만 실행)
     setupNutritionCalculator();
@@ -1554,7 +1395,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // ✅ 성능 최적화된 textarea 시스템 실행
     setTimeout(window.initOptimizedTextareaSystem, 200);
 
-    
     // � 텍스트영역을 contenteditable div로 대체하는 핵심 함수
     window.replaceTextareaWithDiv = () => {
         console.log('💥 textarea를 contenteditable div로 대체 시작');
@@ -1564,7 +1404,7 @@ document.addEventListener('DOMContentLoaded', function() {
             'textarea[name="rawmtrl_nm_display"]',
             'textarea[name="rawmtrl_nm"]',
             'textarea[name="caution"]',
-            'textarea[name="etc_info"]',
+            'textarea[name="additional_info"]',
             'textarea[name="nutrition_text"]'
         ];
         
@@ -1900,11 +1740,7 @@ setTimeout(() => {
                   title="표시사항 작성 리스트로 돌아가기">
             <i class="fas fa-list me-1"></i>표시사항 리스트 보기
           </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" 
-                  onclick="window.openNutritionCalculator()"
-                  title="영양성분 계산기">
-            <i class="fas fa-calculator me-1"></i>영양성분 계산기
-          </button>
+          <!-- 영양성분 계산기 버튼이 오른쪽으로 이동됨 -->
         </div>
       </div>
       
@@ -1915,10 +1751,10 @@ setTimeout(() => {
         <div class="action-buttons-compact">
           <button type="button" class="btn btn-outline-info btn-sm" 
                   title="사진으로 자동 입력"
-                  onclick="showDevelopmentMessage(); return false;">
+                  onclick="try { showDevelopmentMessage(); return false; } catch(e) { console.error('onclick error:', e); }">
             <i class="fas fa-camera"></i>
           </button>
-          <button type="button" class="btn btn-outline-primary btn-sm" onclick="openPreviewPopup()">
+          <button type="button" class="btn btn-outline-primary btn-sm" onclick="try { openPreviewPopup(); } catch(e) { console.error('onclick error:', e); }">
             <i class="fas fa-eye me-1"></i>미리보기
           </button>
           <button type="submit" form="labelForm" class="btn btn-primary btn-sm">
@@ -1980,7 +1816,7 @@ setTimeout(() => {
                 <div class="input-container-modern">
                   <div class="row g-2">
                     <div class="col-6">
-                      <select id="food_group" name="food_group" class="form-select">
+                      <select id="food_group" name="food_group" class="form-select form-select-sm">
                         <option value="">대분류 선택</option>
                         {% for group in food_groups %}
                         <option value="{{ group }}" {% if label.food_group == group %}selected{% endif %}>{{ group }}</option>
@@ -1988,7 +1824,7 @@ setTimeout(() => {
                       </select>
                     </div>
                     <div class="col-6">
-                      <select id="food_type" name="food_type" class="form-select">
+                      <select id="food_type" name="food_type" class="form-select form-select-sm">
                         <option value="">소분류 선택</option>
                         {% for type in food_types %}
                         <option value="{{ type.food_type }}" 
@@ -2018,29 +1854,30 @@ setTimeout(() => {
                   <div class="row g-2">
                     <div class="col-3">
                       <div class="form-check-modern form-check-compact">
-                        <input type="checkbox" id="chk_frozen_heated" name="preservation_type" value="frozen_heated" class="form-check-input-modern" {% if form.preservation_type.value == "frozen_heated" %}checked{% endif %}>
+                        <input type="checkbox" id="chk_frozen_heated" name="preservation_type" value="냉동(가열)" class="form-check-input-modern" {% if "냉동(가열)" in label.preservation_type|default:'' %}checked{% endif %}>
                         <label for="chk_frozen_heated" class="form-check-label-modern">냉동(가열)</label>
                       </div>
                     </div>
                     <div class="col-3">
                       <div class="form-check-modern form-check-compact">
-                        <input type="checkbox" id="chk_frozen_nonheated" name="preservation_type" value="frozen_nonheated" class="form-check-input-modern" {% if form.preservation_type.value == "frozen_nonheated" %}checked{% endif %}>
+                        <input type="checkbox" id="chk_frozen_nonheated" name="preservation_type" value="냉동(비가열)" class="form-check-input-modern" {% if "냉동(비가열)" in label.preservation_type|default:'' %}checked{% endif %}>
                         <label for="chk_frozen_nonheated" class="form-check-label-modern">냉동(비가열)</label>
                       </div>
                     </div>
                     <div class="col-3">
                       <div class="form-check-modern form-check-compact">
-                        <input type="checkbox" id="chk_canned" name="preservation_type" value="canned" class="form-check-input-modern" {% if form.preservation_type.value == "canned" %}checked{% endif %}>
+                        <input type="checkbox" id="chk_canned" name="preservation_type" value="통.병조림" class="form-check-input-modern" {% if "통.병조림" in label.preservation_type|default:'' %}checked{% endif %}>
                         <label for="chk_canned" class="form-check-label-modern">통.병조림</label>
                       </div>
                     </div>
                     <div class="col-3">
                       <div class="form-check-modern form-check-compact">
-                        <input type="checkbox" id="chk_retort" name="preservation_type" value="retort" class="form-check-input-modern" {% if form.preservation_type.value == "retort" %}checked{% endif %}>
+                        <input type="checkbox" id="chk_retort" name="preservation_type" value="레토르트" class="form-check-input-modern" {% if "레토르트" in label.preservation_type|default:'' %}checked{% endif %}>
                         <label for="chk_retort" class="form-check-label-modern">레토르트</label>
                       </div>
                     </div>
                   </div>
+
                 </div>
               </div>
             </div>
@@ -2062,28 +1899,23 @@ setTimeout(() => {
                   <div class="row g-2">
                     <div class="col-3">
                       <div class="form-check-modern form-check-compact">
-                        <input type="checkbox" id="chk_sanitized" name="processing_method" value="sanitized" class="form-check-input-modern" {% if form.processing_method.value == "sanitized" %}checked{% endif %}>
+                        <input type="checkbox" id="chk_sanitized" name="processing_method" value="살균" class="form-check-input-modern" {% if "살균" in label.processing_method|default:'' %}checked{% endif %}>
                         <label for="chk_sanitized" class="form-check-label-modern">살균</label>
                       </div>
                     </div>
                     <div class="col-3">
                       <div class="form-check-modern form-check-compact">
-                        <input type="checkbox" id="chk_aseptic" name="processing_method" value="aseptic" class="form-check-input-modern" {% if form.processing_method.value == "aseptic" %}checked{% endif %}>
+                        <input type="checkbox" id="chk_aseptic" name="processing_method" value="멸균" class="form-check-input-modern" {% if "멸균" in label.processing_method|default:'' %}checked{% endif %}>
                         <label for="chk_aseptic" class="form-check-label-modern">멸균</label>
                       </div>
                     </div>
                     <div class="col-3">
                       <div class="form-check-modern form-check-compact">
-                        <input type="checkbox" id="chk_yutang" name="processing_method" value="yutang" class="form-check-input-modern" {% if form.processing_method.value == "yutang" %}checked{% endif %}>
+                        <input type="checkbox" id="chk_yutang" name="processing_method" value="유탕/유처리" class="form-check-input-modern" {% if "유탕/유처리" in label.processing_method|default:'' %}checked{% endif %}>
                         <label for="chk_yutang" class="form-check-label-modern">유탕/유처리</label>
                       </div>
                     </div>
-                    <div class="col-3">
-                      <div class="form-check-modern form-check-compact">
-                        <input type="checkbox" id="chk_sterilization_other" name="chk_sterilization_other" class="form-check-input-modern" {% if form.processing_condition.value %}checked{% endif %}>
-                        <label for="chk_sterilization_other" class="form-check-label-modern">기타 조건</label>
-                      </div>
-                    </div>
+
                   </div>
                 </div>
               </div>
@@ -2123,22 +1955,25 @@ setTimeout(() => {
             <h5 class="card-title">
               <i class="fas fa-edit me-2"></i>2. 상세 입력
             </h5>
-            <div style="display: inline-flex; gap: 5px; flex-wrap: nowrap;">
-              <button type="button" class="btn btn-outline-primary btn-sm" style="white-space: nowrap; font-size: 0.85rem; padding: 0.25rem 0.5rem;"
-                        onclick="handleIngredientPopup()"
-                        title="원재료 표로 입력">
-                <i class="fas fa-table me-1"></i>원재료 표로 입력
-              </button>
-              <button type="button" class="btn btn-outline-primary btn-sm" style="white-space: nowrap; font-size: 0.85rem; padding: 0.25rem 0.5rem;" id="linkedLabelsBtn">
-                <i class="fas fa-link me-1"></i>연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
-              </button>
-            </div>
+            <!-- 원재료 관련 버튼들이 오른쪽으로 이동됨 -->
           </div>
         </div>
         <div class="card-actions">
-          <button type="button" class="btn btn-outline-primary btn-sm" onclick="openPhrasePopup()" title="내 문구 관리">
-            <i class="fas fa-bookmark me-1"></i>내 문구 관리
-          </button>
+          <div style="display: inline-flex; gap: 5px; flex-wrap: nowrap;">
+            <button type="button" class="btn btn-outline-primary btn-sm" style="white-space: nowrap; font-size: 0.85rem; padding: 0.25rem 0.5rem;"
+                      onclick="handleIngredientPopup()"
+                      title="원재료 표로 입력">
+              <i class="fas fa-table me-1"></i>원재료 표로 입력
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" style="white-space: nowrap; font-size: 0.85rem; padding: 0.25rem 0.5rem;" id="linkedLabelsBtn">
+              <i class="fas fa-link me-1"></i>연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" style="white-space: nowrap; font-size: 0.85rem; padding: 0.25rem 0.5rem;"
+                      onclick="try { window.openNutritionCalculator(); } catch(e) { console.error('onclick error:', e); }"
+                      title="영양성분 계산기">
+              <i class="fas fa-calculator me-1"></i>영양성분 계산기
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2191,12 +2026,7 @@ setTimeout(() => {
                              placeholder="제품명을 입력하세요" value="{{ form.prdlst_nm.value|default:'' }}">
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="prdlst_nm">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
               <div class="col-md-6">
@@ -2214,12 +2044,7 @@ setTimeout(() => {
                              placeholder="예) 레몬즙 5%" value="{{ form.ingredient_info.value|default:'' }}">
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="ingredient_info">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
                   </div>
                 </div>
@@ -2242,12 +2067,7 @@ setTimeout(() => {
                              placeholder="상단의 식품유형을 참고하여 입력하세요" value="{{ form.prdlst_dcnm.value|default:'' }}">
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="prdlst_dcnm">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
               <div class="col-md-6">
@@ -2262,7 +2082,7 @@ setTimeout(() => {
                   <div class="field-input-section">
                     <div class="input-container-modern d-flex align-items-center gap-2">
                       <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" 
-                             placeholder="0000000000000 (13자리)"
+                             placeholder="0000000000000 (13-14자리)"
                              maxlength="15"
                              value="{{ form.prdlst_report_no.value|default:'' }}"
                              style="flex: 1; min-width: 200px;">
@@ -2275,12 +2095,7 @@ setTimeout(() => {
                         </button>
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="prdlst_report_no">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
             </div>            <!-- 내용량 | 원산지 -->
@@ -2301,12 +2116,7 @@ setTimeout(() => {
                              placeholder="내용량을 입력하세요" value="{{ form.content_weight.value|default:'' }}">
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="content_weight">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
               <div class="col-md-6">
@@ -2328,12 +2138,7 @@ setTimeout(() => {
                       </select>
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="country_of_origin">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
             </div>
@@ -2355,12 +2160,7 @@ setTimeout(() => {
                              placeholder="보관방법을 입력하거나 내문구를 선택하세요" value="{{ form.storage_method.value|default:'' }}">
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="storage_method">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
               <div class="col-md-6">
@@ -2378,12 +2178,7 @@ setTimeout(() => {
                              placeholder="용기.포장재질을 입력하거나 내문구를 선택하세요" value="{{ form.frmlc_mtrqlt.value|default:'' }}">
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="frmlc_mtrqlt">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
             </div>
@@ -2413,12 +2208,7 @@ setTimeout(() => {
                              placeholder="제조원을 입력하거나 내문구를 선택하세요" value="{{ form.bssh_nm.value|default:'' }}">
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="bssh_nm">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
             </div>
@@ -2441,12 +2231,7 @@ setTimeout(() => {
                                value="{{ form.distributor_address.value|default:'' }}">
                       </div>
                     </div>
-                    <div class="smart-recommendation-area">
-                      <button type="button" class="smart-recommendation-icon" 
-                              title="스마트 추천" data-field="distributor_address">
-                        <i class="fas fa-lightbulb"></i>
-                      </button>
-                    </div>
+                    
                   </div>
                 </div>
               </div>
@@ -2467,12 +2252,7 @@ setTimeout(() => {
                                value="{{ form.repacker_address.value|default:'' }}">
                       </div>
                     </div>
-                    <div class="smart-recommendation-area">
-                      <button type="button" class="smart-recommendation-icon" 
-                              title="스마트 추천" data-field="repacker_address">
-                        <i class="fas fa-lightbulb"></i>
-                      </button>
-                    </div>
+                    
                   </div>
                 </div>
               </div>
@@ -2493,12 +2273,7 @@ setTimeout(() => {
                                value="{{ form.importer_address.value|default:'' }}">
                       </div>
                     </div>
-                    <div class="smart-recommendation-area">
-                      <button type="button" class="smart-recommendation-icon" 
-                              title="스마트 추천" data-field="importer_address">
-                        <i class="fas fa-lightbulb"></i>
-                      </button>
-                    </div>
+                    
                   </div>
                 </div>
               </div>
@@ -2526,12 +2301,7 @@ setTimeout(() => {
                              placeholder="소비기한 등을 입력하거나 내문구를 선택하세요" value="{{ form.pog_daycnt.value|default:'' }}">
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="pog_daycnt">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
             </div>
@@ -2555,12 +2325,7 @@ setTimeout(() => {
                                 placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="rawmtrl_nm_display">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
             </div>
@@ -2606,12 +2371,7 @@ setTimeout(() => {
                                 placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.cautions.value|default:'' }}</textarea>
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="cautions">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
             </div>
@@ -2633,12 +2393,7 @@ setTimeout(() => {
                                 placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.additional_info.value|default:'' }}</textarea>
                     </div>
                   </div>
-                  <div class="smart-recommendation-area">
-                    <button type="button" class="smart-recommendation-icon" 
-                            title="스마트 추천" data-field="additional_info">
-                      <i class="fas fa-lightbulb"></i>
-                    </button>
-                  </div>
+                  
                 </div>
               </div>
             </div>
@@ -3018,4 +2773,40 @@ setTimeout(() => {
   background-color: #fafafa;
 }
 </style>
+
+<!-- 체크박스 상태 제출을 위한 JavaScript -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 폼 제출 시 체크박스 상태를 확실히 전송
+    const form = document.getElementById('labelForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            console.log('=== 폼 제출 시 체크박스 상태 확인 ===');
+            
+            // 장기보존식품 체크박스들
+            const preservationTypes = [];
+            document.querySelectorAll('input[name="preservation_type"]:checked').forEach(cb => {
+                preservationTypes.push(cb.value);
+                console.log('선택된 장기보존식품:', cb.value);
+            });
+            
+            // 제조방법 체크박스들
+            const processingMethods = [];
+            document.querySelectorAll('input[name="processing_method"]:checked').forEach(cb => {
+                processingMethods.push(cb.value);
+                console.log('선택된 제조방법:', cb.value);
+            });
+            
+            // 조건 상세
+            const processingCondition = document.querySelector('input[name="processing_condition"]');
+            console.log('조건 상세:', processingCondition ? processingCondition.value : 'NULL');
+            
+            console.log('장기보존식품 배열:', preservationTypes);
+            console.log('제조방법 배열:', processingMethods);
+            console.log('========================================');
+        });
+    }
+});
+</script>
+
 {% endblock %}
