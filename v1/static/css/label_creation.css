@@ -1,313 +1,351 @@
-/* ====================================================
-   공통 디자인 변수 및 스타일 통합
-   ==================================================== */
-   :root {
-    --text-color: #495057;
-    --font-size-small: 0.8rem;
-    --highlight-color: #d0ebff;
-    --border-color: #ccc;
-    --bg-default: #fff;
-    --disabled-bg: #f8f9fa;
-    --disabled-border: #ced4da;
-  }
-  
-  .form-control,
-  textarea.form-control,
-  select.form-control,
-  input.form-control {
-    font-size: var(--font-size-small) !important;
-    color: var(--text-color) !important;
-  }
-  
-  textarea[readonly],
-  textarea.disabled-textarea,
-  input[disabled],
-  textarea[disabled] {
-    background-color: var(--disabled-bg) !important;
-    color: #000 !important;
-    cursor: text !important;
-    opacity: 0.7 !important;
-    border-color: var(--disabled-border) !important;
-    user-select: text !important;
-    -webkit-user-select: text !important;
-    -moz-user-select: text !important;
-    -ms-user-select: text !important;
-  }
-  
-  textarea.disabled-textarea:focus,
-  input[disabled]:focus,
-  textarea[disabled]:focus {
-    box-shadow: none !important;
-    outline: none !important;
-    border-color: var(--disabled-border) !important;
-  }
-  
-  /* 체크박스 스타일 개선 */
-  .form-check-modern .form-check-input-modern[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    margin-right: 6px;
-    border: 1px solid #ced4da;
-    border-radius: 3px;
-  }
-  
-  .form-check-modern .form-check-input-modern[type="checkbox"]:checked {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-  }
-  
-  .form-check-modern .form-check-label-modern {
-    font-size: 0.75rem;
-    color: var(--text-color);
-    cursor: pointer;
-    margin-left: 2px;
-  }
-  
-  .form-check-modern.form-check-compact {
-    margin-bottom: 4px;
-  }
+/* 레이블 생성 페이지 모던 스타일 */
 
-  /* 문구 항목 스타일 */
-  .phrase-item {
-    padding: 6px 8px;
+/* CSS Variables - Unified Color Palette */
+:root {
+  --primary-color: #023047;
+  --secondary-color: #3b82f6;
+  --success-color: #10b981;
+  --danger-color: #dc3545;
+  --warning-color: #f59e0b;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-muted: #e5e7eb;
+  --border-color: #d1d5db;
+  --border-light: #e5e7eb;
+}
+
+/* 카드 스타일 개선 */
+.card {
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    border: none;
+    margin-bottom: 20px;
+    transition: all 0.2s ease;
+}
+
+/* 모던 카드 스타일 */
+.modern-card {
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    border: none;
+    background-color: var(--bg-primary);
+    margin-bottom: 24px;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.card-header {
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-light);
+    padding: 15px 20px;
+    border-radius: 8px 8px 0 0 !important;
+    font-weight: 600;
+}
+
+.card-body {
+    padding: 20px;
+}
+
+/* 입력 필드 스타일링 */
+.form-control, .form-select, select.form-control, textarea.form-control {
+    border-radius: 6px;
     border: 1px solid var(--border-color);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: var(--font-size-small);
-    color: var(--text-color);
-    background-color: var(--bg-default);
-    transition: background-color 0.2s;
-    margin-bottom: 4px;
-  }
-  
-  .phrase-item.applied-phrase,
-  .phrase-item.selected {
-    background-color: var(--highlight-color) !important;
-  }
-  
-  /* 관련규정 / 내문구 관련 규정 텍스트박스 */
-  #regulation-content textarea,
-  #myphrases-content .related-regulation-textarea {
-    height: auto;
-    max-height: none;
-    overflow-y: auto;
-    font-size: var(--font-size-small);
-    color: var(--text-color);
-    background-color: var(--disabled-bg);
-    resize: none;
-    border: 1px solid var(--border-color);
-  }
-  
-  .related-regulation-block {
-    margin-bottom: 1rem;
-  }
-  
-  .related-regulation-block .title {
-    font-weight: bold;
-    font-size: var(--font-size-small);
-    margin-bottom: 0.3rem;
-    color: var(--text-color);
-  }
-  
-  .related-regulation-block textarea.related-regulation-textarea {
-    width: 100%;
-    padding: 6px;
-    border-radius: 4px;
-    resize: none;
-    line-height: 1.4;
-  }
-  
-  /* 자동 높이 확장 */
-  textarea.auto-expand {
-    overflow: hidden;
-    resize: none;
-  }
-  
-  textarea.auto-expand:focus {
-    outline: none;
+    padding: 8px 12px;
+    transition: all 0.3s;
     box-shadow: none;
-    border-color: var(--border-color);
-  }
-  
-  /* Select2 기본 스타일 */
-  .select2-container--default .select2-selection--single {
-    height: auto !important;
-    font-size: var(--font-size-small) !important;
-    color: var(--text-color) !important;
-    border: 1px solid var(--disabled-border) !important;
-    border-radius: 0.25rem !important;
-    padding: 0.3rem 0.6rem !important;
-  }
-  
-  .select2-selection__rendered {
-    line-height: 1.5 !important;
-  }
-  
-  /* 표 셀 패딩 최소화 */
-  .table-bordered td,
-  .table-bordered th {
-    padding: 0.2rem;
-  }
-  
-  /* 체크박스 비활성화 스타일 */
-  input[type="checkbox"][disabled] + label {
-    opacity: 0.7 !important;
-    cursor: not-allowed !important;
-    color: #6c757d !important;
-  }
-  
-  label {
-    font-size: 0.8rem !important;
-  }
+}
 
-  .recent-update {
-    font-size: 0.8rem !important;  /* 버튼과 동일한 크기로 통일 */
-    color: #495057 !important;
-  }
-  
-  .detail-btn {
-    font-size: 0.75rem;
-    padding: 4px 6px;
-  }
-  
-  /* 상단 고정 영역 */
-  .sticky-top-bar {
-    position: sticky;
-    top: 0;
-    background-color: white;
-    z-index: 1020;
-    padding-top: 10px;
-    border-bottom: 1px solid #dee2e6;
-  }
-  
-  /* 우측 슬라이딩 패널 */
-  .collapsible-panel {
+.form-control:focus, .form-select:focus, select.form-control:focus, textarea.form-control:focus {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+textarea.form-control {
+    min-height: 60px;
+}
+
+/* 버튼 스타일 개선 */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 6px 12px;
+    transition: all 0.3s;
+    box-shadow: none;
+}
+
+.btn-primary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-outline-primary {
+    color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--secondary-color);
+    color: var(--bg-primary);
+}
+
+/* 체크박스 스타일 */
+.form-check-input {
+    width: 18px;
+    height: 18px;
+    margin-top: 0.2rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.form-check-input:checked {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+/* 텍스트 영역에 포커스 효과 추가 */
+.input-container {
+    position: relative;
+    display: flex;
+    align-items: center;
     width: 100%;
-    max-width: 30%;
-    transition: max-width 0.3s ease;
-    overflow: hidden;
+}
+
+.input-container textarea,
+.input-container input {
+    width: 100%;
+    transition: all 0.3s;
+}
+
+.input-container button {
+    margin-left: 10px;
+}
+
+/* 레이블 헤더 스타일링 */
+.label-header-row {
+    padding: 12px 20px;
+    background-color: var(--bg-primary);
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    margin-bottom: 10px;
+    transition: all 0.3s ease;
+}
+
+.label-header-row:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.label-header-group, .label-header-actions {
+    display: flex;
+    align-items: center;
+}
+
+/* 레이아웃 컨테이너 */
+.layout-container {
     display: flex;
     flex-direction: column;
-  }
-  
-  .collapsible-panel.collapsed {
-    max-width: 0;
-    padding: 0;
-  }
-  
-  /* 토글 버튼 위치 조정 */
-  .toggle-right-panel-btn {
-    position: absolute;
-    top: -5px;
-    right: -15px;
-    z-index: 1050;
-    font-size: 1rem;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background-color: var(--disabled-bg);
-    border: 1px solid var(--disabled-border);
-  }
-  
-  #toggleRegulationBtn {
-    margin-left: auto;
-    margin-right: 0;
-    font-weight: bold;
-  }
-  
-  /* 규정 정보 블럭 */
-  .regulation-info-container {
-    background-color: var(--disabled-bg);
-    border: 1px solid #e9ecef;
-    border-left: 3px solid #0d6efd;
-    border-radius: 4px;
-    padding: 15px;
-    margin-bottom: 15px;
+}
+
+.left-panel {
+    flex: 1;
+    padding-right: 0;
+}
+
+/* 반응형 조정 */
+@media (min-width: 992px) {
+    .layout-container {
+        flex-direction: row;
+    }
+    
+    .left-panel {
+        padding-right: 20px;
+    }
+}
+
+/* 입력 필드 라벨 스타일링 */
+label {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* 2열 레이아웃 스타일 */
+.flex-wrap-2col {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.flex-equal {
+    flex: 1 1 45%;
+    min-width: 300px;
+}
+
+/* readonly 필드 스타일링 */
+.form-control[readonly], 
+.form-control:disabled, 
+.disabled-textarea {
+    background-color: var(--bg-muted);
+    border-color: var(--border-light);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+/* 영양성분 필드 특별 스타일 */
+#nutrition_text {
+    background-color: rgba(59, 130, 246, 0.05);
+    border-color: var(--secondary-color);
+}
+
+/* 모던 텍스트 영역 스타일 */
+.modern-textarea {
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+}
+
+.modern-textarea:focus {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* 모던 버튼 스타일 */
+.modern-button {
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 6px 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.modern-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* 모던 입력 컨테이너 스타일 */
+.input-container-modern {
+    position: relative;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 접힘 영역 전환 애니메이션 */
+.collapse {
     transition: all 0.3s ease;
-  }
-  
-  .regulation-info-container:hover {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  }
-  
-  /* 관련규정 텍스트박스 스타일 수정 */
-  .regulation-info {
-    background-color: #f8f9fa;
-    padding: 15px;
-    margin-bottom: 15px;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    color: #495057;
-    white-space: pre-line;
-    min-height: 100px;  /* 최소 높이 추가 */
-    max-height: 200px;  /* 최대 높이 제한 */
-    overflow-y: auto;   /* 스크롤바 추가 */
-    border-radius: 4px; /* 모서리 둥글게 */
-  }
-  
-  /* 스크롤바 스타일링 */
-  .regulation-info::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  .regulation-info::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-  }
-  
-  .regulation-info::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-  }
-  
-  .regulation-info::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-  }
-
-  .tab-content {
-    position: relative;
-    height: 100%;
-    min-height: 400px; /* 최소 높이 보장 */
-  }
-  
-  #regulation-content {
-    position: relative;
-    width: 100%;
-    overflow-y: hidden;
-    transition: height 0.2s ease;
-  }
-  
-  #regulation-content textarea.form-control {
-    width: 100%;
-    height: 100%;
-    resize: none;
-    font-size: 0.8rem;
-    padding: 8px;
-    box-sizing: border-box;
-  }
-
-.select2-container--default .select2-results__option {
-    font-size: 0.8rem;  /* 드롭다운 옵션도 동일한 크기 */
 }
 
-.select2-container--default .select2-selection--single .select2-selection__placeholder {
-    color: #a0a6ab;  /* 더 옅은 색상의 플레이스홀더 */
+/* 선택 필드 아이콘 스타일링 */
+select.form-control {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23606266' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 30px;
 }
 
-/* 입력 필드 플레이스홀더 스타일 */
-input::placeholder,
-textarea::placeholder {
-    color: #a0a6ab !important;  /* 더 옅은 색상 */
-    opacity: 1;
+/* 모던 셀렉트 박스 스타일 */
+.modern-select {
+    border-radius: 8px;
+    border: 1px solid #d0d7de;
+    padding: 8px 12px;
+    background-color: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
 }
 
-/* 탭 스타일 초기화 */
-.nav-tabs .nav-link {
-    color: #6c757d;  /* 기본 탭 색상 */
-    font-size: 0.8rem;
+.modern-select:focus {
+    border-color: #4a86e8;
+    box-shadow: 0 0 0 3px rgba(74, 134, 232, 0.2);
+    outline: none;
 }
 
-/* textarea 기본 높이 설정 */
-textarea.form-control {
-    height: auto;
+/* 모던 입력 필드 스타일 */
+.modern-input {
+    border-radius: 8px;
+    border: 1px solid #d0d7de;
+    padding: 8px 12px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
 }
 
+.modern-input:focus {
+    border-color: #4a86e8;
+    box-shadow: 0 0 0 3px rgba(74, 134, 232, 0.2);
+    outline: none;
+}
+
+/* 모던 체크박스 그룹 스타일 */
+.modern-checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.modern-form-check {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.modern-form-check:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* 모던 체크박스 스타일 */
+.modern-checkbox {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    margin-right: 6px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: 1px solid #c0c7d0;
+}
+
+.modern-checkbox:checked {
+    background-color: #4a86e8;
+    border-color: #4a86e8;
+}
+
+/* 모던 라벨 스타일 */
+.modern-label {
+    font-size: 0.9rem;
+    color: #424242;
+    margin-left: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 400;
+}
+
+/* 필드 라벨 그룹 스타일 */
+.field-label-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 섹션 구분선 */
+.section-divider {
+    height: 1px;
+    background-color: #ebeef5;
+    margin: 20px 0;
+}

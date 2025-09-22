@@ -13,10 +13,7 @@ urlpatterns = [
     path('user-management/', include('v1.user_management.urls', namespace='user_management')),  # user_management 앱
     path('board/', include('v1.board.urls', namespace='board')),  # Register 'board' namespace
     
-    # 에러 페이지 테스트용 URL (개발 환경에서 커스텀 에러 페이지 확인용)
-    path('test/404/', common_views.test_404, name='test_404'),
-    path('test/403/', common_views.test_403, name='test_403'),
-    path('test/500/', common_views.test_500, name='test_500'),
+
 ]
 
 # 정적 파일 서빙 (개발 환경과 에러 페이지 테스트를 위해 항상 활성화)

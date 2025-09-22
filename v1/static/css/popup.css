@@ -3,64 +3,75 @@
 ==================================================== */
 :root {
   --primary-color: #023047;
-  --secondary-color: #6c757d;
-  --text-color: #495057;
-  --btn-color: #2667ff;
-  --btn-secondary-color: #1e96fc;
-  --btn-cancel-color: #6c757d;
-  --navbar-bg-color: #023047;
-  --highlight-color: #caf0f8;
-  --table-header-bg-color: #e9ecef;
-  --table-hover-bg-color: #e9ecef;
-  --pagination-color: #023047;
-  --footer-bg-color: #d9dcd6;
-  --delete-btn-color: #dc3545;
-  --border-color: #dee2e6;
+  --secondary-color: #3b82f6;
+  --success-color: #198754;
+  --info-color: #0dcaf0;
+  --danger-color: #dc3545;
+  --warning-color: #f59e0b;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-white: #ffffff;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-muted: #e5e7eb;
+  --bg-light: #f1f5f9;
+  --border-color: #d1d5db;
+  --border-light: #e5e7eb;
+  --delete-btn-color: var(--danger-color);
   --font-size-base: 0.8rem;
+  --font-size-small: 0.75rem;
   --font-size-title: 1.2rem;
+  --modern-border-radius-sm: 6px;
 }
 
 /* ====================================================
    2. Global Reset & Base Layout for Popup
 ==================================================== */
 body {
-  padding: 30px 20px 70px 20px;
+  padding: 20px;
   font-size: var(--font-size-base);
-  color: var(--text-color);
+  color: var(--text-primary);
   font-family: 'Noto Sans KR', sans-serif;
+  background-color: var(--bg-secondary);
+}
+
+/* 원재료 팝업 전체 컨테이너 */
+.popup-container {
+  background-color: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
 }
 label,
 .form-control,
 .form-select {
   font-size: var(--font-size-base);
-  color: var(--text-color);
+  color: var(--text-primary);
 }
 
-.nav-tabs .nav-link {
-  font-size: var(--font-size-base);
-  padding: 8px 16px;
-  color: #6c757d;
-}
-.nav-tabs .nav-link.active {
-  color: #0d6efd;
-  background-color: #fff;
-  border-bottom: 2px solid #0d6efd;
-}
+/* Removed unused tab navigation styles */
 
 /* ====================================================
    3. Common Components
 ==================================================== */
-.header {
+.popup-header, .header {
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-light);
+    padding: 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 5px 0;
+    flex-shrink: 0;
 }
 
 .popup-title {
-    font-size: var(--font-size-title);
-    font-weight: 500;
-    color: var(--text-color);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
     margin: 0;
     padding: 0;
 }
@@ -72,265 +83,398 @@ label,
     margin-left: auto;
 }
 
-/* ====================================================
-   4. 입력 폼 테이블 스타일 (NEW)
-==================================================== */
-.ingredient-form-table th, .ingredient-form-table td {
-  padding: 4px 8px;
-  height: 48px;
-  vertical-align: middle;
-}
-.ingredient-form-table th {
-  width: 20%;
-  background-color: var(--table-header-bg-color);
-  font-weight: 500;
-}
-.ingredient-form-table td { width: 80%; }
-.ingredient-form-table .form-control, .ingredient-form-table .form-control-sm {
-  height: 32px;
-  padding: 4px 8px;
-}
-.ingredient-form-table textarea.form-control {
-  height: auto;
-  min-height: 32px;
+/* 모던 버튼 스타일 (팝업용 크기 확대) */
+.btn {
+    border-radius: var(--modern-border-radius-sm);
+    font-weight: 500;
+    padding: 8px 16px;
+    transition: all 0.2s ease;
+    box-shadow: none;
+    font-size: 0.9rem;
+    min-height: 38px;
 }
 
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    min-height: 32px;
+}
+
+.btn-primary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+    border-color: #2563eb;
+    color: white;
+}
+
+.btn-secondary {
+    background-color: var(--text-secondary);
+    border-color: var(--text-secondary);
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: var(--text-primary);
+    border-color: var(--text-primary);
+    color: white;
+}
+
+.btn-info {
+    background-color: var(--info-color) !important;
+    border-color: var(--info-color) !important;
+    color: white !important;
+}
+
+.btn-info:hover {
+    background-color: #0aa2c0 !important;
+    border-color: #0aa2c0 !important;
+    color: white !important;
+}
+
+.btn-success {
+    background-color: var(--success-color) !important;
+    border-color: var(--success-color) !important;
+    color: white !important;
+}
+
+.btn-success:hover {
+    background-color: #157347 !important;
+    border-color: #146c43 !important;
+    color: white !important;
+}
+
+.btn-outline-secondary {
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+    background-color: transparent;
+}
+
+.btn-outline-secondary:hover {
+    background-color: var(--bg-muted);
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+/* Removed unused .ingredient-form-table styles */
+
 /* ====================================================
-   5. 알레르기/GMO 선택 영역 (NEW)
+   5. 알레르기/GMO 선택 영역 (개선된 스타일)
 ==================================================== */
 #allergySelection, #gmoSelection {
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: 5px;
-  margin-top: 5px;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
   max-height: 200px;
   overflow-y: auto;
+  transition: all 0.2s ease;
+}
+
+#allergySelection:focus-within, #gmoSelection:focus-within {
+  border-color: var(--secondary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* 체크박스 그룹 스타일링 */
+.checkbox-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  padding: 4px;
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.form-check:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.form-check-input {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  border: 2px solid var(--border-color);
+  border-radius: 3px;
+}
+
+.form-check-input:checked {
+  background-color: var(--secondary-color);
+  border-color: var(--secondary-color);
+}
+
+.form-check-label {
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  margin-bottom: 0;
+  cursor: pointer;
 }
 
 /* ====================================================
    6. 삭제 버튼 스타일
 ==================================================== */
 .phrase-popup .delete-btn {
-  background: var(--modern-danger, var(--delete-btn-color)) !important;
-  border: none !important;
-  color: #fff !important;
+  background-color: var(--delete-btn-color);
+  border: none;
+  color: white;
   font-size: var(--font-size-base);
-  padding: 6px 8px !important;
-  border-radius: var(--modern-border-radius-sm, 6px) !important;
+  padding: 4px 8px;
+  border-radius: 4px;
   cursor: pointer;
 }
-.phrase-popup .delete-btn:hover { background: var(--modern-danger-hover, #c82333) !important; }
-
-/* ====================================================
-   8. 상세정보 & 미리보기 팝업 공통 스타일
-==================================================== */
-.setting-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  margin-bottom: 10px;
-}
-
-.setting-row label {
-  min-width: 50px;
-  font-weight: 500;
-  margin: 0;
-}
-
-.setting-row .form-control {
-  font-size: 0.8rem;
-  max-width: 50px;
-}
-
-.setting-row .form-select {
-  font-size: 0.8rem;
-  max-width: 100px;
-}
-
-.highlight-allergen {
-  background-color: #fff4e6;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-
-.highlight-origin {
-  font-weight: bold;
+.phrase-popup .delete-btn:hover {
+  background-color: #b91c2c;
 }
 
 /* ====================================================
-   9. 영양성분 계산기 팝업 스타일
+   7. 원재료 팝업 전용 스타일
 ==================================================== */
-.calculator-popup .row::after { left: 50%; }
-.calculator-popup .col-md-6 { width: 50% !important; }
 
-.calculator-popup {
-  width: 1100px !important;
-  margin: 0 auto;
-}
-
-.calculator-popup .container-fluid {
+/* 원재료 목록 테이블 스타일 */
+.styled-table {
   width: 100%;
-  max-width: none !important;
-  padding: 0;
-}
-
-.calculator-popup .row {
-  margin: 0;
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  position: relative;
-}
-
-.calculator-popup .row::after {
-  content: '';
-  position: absolute;
-  left: 49.5%;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background-color: var(--border-color);
-}
-
-.calculator-popup .col-md-6 {
-  width: 49.5% !important;
-  padding: 20px;
-}
-
-.calculator-popup .nutrient-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.calculator-popup .nutrient-row label {
-  width: 30%;
-  min-width: 120px;
-}
-
-.calculator-popup .nutrient-row .form-control {
-  width: 50%;
-  flex: 2;
-}
-
-.calculator-popup .nutrient-row .form-select.input-unit {
-  width: 20%;
-  flex: 1;
-  min-width: 80px;
-}
-
-/* ================================
-   영양정보 미리보기 스타일 (식약처 표준형)
-================================ */
-.nutrition-preview-box {
-  background: #111;
-  color: #fff;
-  border-radius: 6px;
-  border: 2px solid #111;
-  padding: 16px 16px 10px 16px;
-  width: 320px;
-  margin: 0 auto 0 auto;
-  font-family: 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.nutrition-preview-title {
-  font-size: 2rem;
-  font-weight: 900;
-  letter-spacing: -1px;
-  margin-bottom: 0;
-  text-align: left;
-  color: #fff;
-}
-
-.nutrition-preview-total-small {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #fff;
-}
-
-.nutrition-preview-kcal {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #fff;
-  text-align: right;
-  line-height: 1;
-}
-
-.nutrition-preview-small {
-  font-size: 0.95rem !important;
-  font-weight: 500 !important;
-}
-
-.nutrition-preview-table {
-  background: #fff !important;
-  color: #222 !important;
-  border-radius: 0 0 6px 6px;
-  width: 320px;
-  margin: 0 auto 16px auto;
   border-collapse: collapse;
+  font-size: var(--font-size-base);
+  background-color: var(--bg-primary);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
-.nutrition-preview-table th,
-.nutrition-preview-table td {
-  border: none;
-  border-bottom: 1.5px solid #222;
-  padding: 6px 0 6px 0;
-  font-size: 1rem;
-  background: #fff;
-  color: #222;
-  text-align: left;
+
+.styled-table th,
+.styled-table td {
+  border: 1px solid var(--border-light);
+  padding: 8px 12px;
   vertical-align: middle;
-}
-.nutrition-preview-table th {
-  font-weight: 700;
-  font-size: 1.05rem;
-  background: #fff;
-  padding-bottom: 2px;
-  border-bottom: 2.5px solid #222;
-}
-.nutrition-preview-table .nutrient-label {
-  font-weight: 400;
   text-align: left;
-}
-.nutrition-preview-table .nutrient-value {
-  font-weight: 700;
-  text-align: left;
-}
-.nutrition-preview-table .nutrient-percent {
-  font-weight: 700;
-  text-align: right;
-}
-/* 들여쓰기 항목 */
-.nutrition-preview-table .nutrient-label-indent {
-  padding-left: 24px !important;
 }
 
-.nutrition-preview-footer,
-.nutrition-preview-footer-inside {
-  font-size: 0.5rem;
-  color: #222;
-  margin-top: 8px;
-  text-align: left;
-  opacity: 1;
-  line-height: 1.3;
-  font-weight: bold;
-  background: #fff;
-  padding: 8px 0 0 0;
-  border-bottom-left-radius: 6px;
-  border-bottom-right-radius: 6px;
+.styled-table th {
+  background-color: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
-.nutrition-preview-footer-inside {
-  border-bottom: none;
-  padding: 8px 0 0 0;
-  font-size: 0.425rem;
-  font-weight: bold;
-  background: #fff;
-  color: #222;
+.styled-table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.styled-table tbody tr:hover {
+  background-color: rgba(59, 130, 246, 0.02);
+}
+
+.styled-table tbody tr:nth-child(even) {
+  background-color: rgba(248, 249, 250, 0.5);
+}
+
+/* 드래그 앤 드롭 스타일 */
+.sortable-ghost {
+  opacity: 0.4;
+  background-color: var(--warning-color) !important;
+}
+
+.drag-handle {
+  cursor: move;
+  color: var(--text-muted);
+  font-size: 1.1em;
+  padding: 4px;
+  transition: color 0.2s ease;
+}
+
+.drag-handle:hover {
+  color: var(--secondary-color);
+}
+
+/* 요약 섹션 스타일 */
+.summary-section {
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  border-left: 4px solid var(--secondary-color);
+}
+
+.summary-section h6 {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.summary-section p {
+  margin: 8px 0;
+  word-break: break-word;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+/* Removed unused .modal-search-fixed styles */
+
+.modal-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.modal-search-bar .modal-title {
+  margin-bottom: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-right: 12px;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.modal-search-bar .form-control,
+.modal-search-bar .form-select {
+  min-width: 90px;
+  width: 120px;
+  max-width: 130px;
+  height: 38px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* 식품유형 선택박스 - 더 짧게 설정 */
+.modal-search-bar #modalSearchInputFoodCategory,
+.modal-search-bar #modalSearchInput3 {
+  min-width: 80px;
+  width: 100px;
+  max-width: 110px;
+}
+
+.modal-search-bar .form-control:focus,
+.modal-search-bar .form-select:focus {
+  border-color: var(--secondary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-btn {
+  height: 38px;
+  min-width: 55px;
+  width: 65px;
+  padding: 6px 8px;
+  border-radius: var(--modern-border-radius-sm);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  font-size: 0.7rem !important;
+  flex-shrink: 0;
+}
+
+.modal-close-btn {
+  height: 38px;
+  min-width: 55px;
+  width: 65px;
+  padding: 6px 8px;
+  border: 1px solid var(--text-secondary);
+  border-radius: var(--modern-border-radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  font-size: 0.7rem !important;
+  flex-shrink: 0;
+}
+
+.modal-close-btn:hover, .modal-close-btn:focus {
+  background-color: var(--text-secondary);
+  color: var(--bg-primary);
+}
+
+/* Removed duplicate button styles and unused tab-content */
+
+/* 입력 필드 포커스 효과 통일 */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--secondary-color);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+/* ====================================================
+   8. Ingredient 팝업 전용 스타일
+==================================================== */
+
+/* Ingredient 테이블 헤더 개선 */
+.ingredient-popup .table th {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 600;
+  border: 1px solid var(--border-light);
+  font-size: var(--font-size-small);
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.ingredient-popup .table td {
+  font-size: var(--font-size-small);
+  padding: 8px;
+  vertical-align: middle;
+  border-color: var(--border-light);
+}
+
+.ingredient-popup .table tbody tr:hover {
+  background-color: var(--bg-light);
+  transition: background-color 0.2s ease;
+}
+
+/* Ingredient 버튼 스타일 개선 - 크기 확대 */
+.ingredient-popup .btn {
+  padding: 10px 20px;
+  font-size: 1rem;
+  border-radius: var(--modern-border-radius-sm);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-height: 42px;
+}
+
+.ingredient-popup .btn-sm {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  min-height: 36px;
+}
+
+/* Select 버튼 스타일 - 미리보기와 동일한 크기 */
+.modal-select-btn {
+  font-size: var(--font-size-base);
+  padding: 6px 12px;
+  min-width: 60px;
+  border-radius: var(--modern-border-radius-sm);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.modal-select-btn.selected,
+.modal-select-btn:disabled {
+  background: var(--success-color) !important;
+  border-color: var(--success-color) !important;
+  color: white !important;
+  cursor: default;
+}
+
+/* Ingredient 팝업 컨테이너 개선 */
+.ingredient-popup .popup-container {
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.ingredient-popup .popup-header {
+  border-radius: 12px 12px 0 0;
 }

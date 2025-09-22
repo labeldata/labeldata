@@ -325,7 +325,6 @@ def call_api_endpoint(request, pk):
 
             items = data.get(endpoint.service_name, {}).get("row", [])
             logger.info(f"Number of items fetched: {len(items)} (change_date: {change_date})")
-            print(f"Page 저장 완료: {start_position} ~ {start_position + batch_size - 1}, change_date: {change_date}")
             for item in items:
                 close_old_connections()  # DB 연결 유지
                 try:
@@ -357,7 +356,6 @@ def call_api_endpoint(request, pk):
         endpoint.save()
 
         logger.info(f"Total saved items: {total_saved}, change_date: {change_date}")
-        print(f"[{endpoint.name}] API 호출 종료 - 저장된 항목 수: {total_saved}, change_date: {change_date}")
         return JsonResponse({"success": True, "total_saved": total_saved})
 
     except requests.exceptions.RequestException as e:
@@ -504,13 +502,11 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                         total_saved += 1
 
                 logger.info(f"Page {page_no} 저장 완료 (category={category})")
-                print(f"Page {page_no} 저장 완료 (category={category})")
 
         endpoint.last_called_at = now()
         endpoint.last_status = "success"
         endpoint.save()
         logger.info(f"Total ImportedFood saved: {total_saved}")
-        print(f"[{endpoint.name}] API 호출 종료 - 저장된 항목 수: {total_saved}")
         return JsonResponse({
             "success": True,
             "total_saved": total_saved,
@@ -600,12 +596,10 @@ def call_agricultural_product_api_endpoint(request, pk):
                     ModelClass.objects.create(**lookup, **defaults)
                     total_saved += 1
             logger.info(f"Page {page_no} 저장 완료")
-            print(f"Page {page_no} 저장 완료")
         endpoint.last_called_at = now()
         endpoint.last_status = "success"
         endpoint.save()
         logger.info(f"Total AgriculturalProduct saved: {total_saved}")
-        print(f"[{endpoint.name}] API 호출 종료 - 저장된 항목 수: {total_saved}")
         return JsonResponse({
             "success": True,
             "total_saved": total_saved,
@@ -635,20 +629,7 @@ def permission_denied_view(request):
     """명시적으로 403을 보여주고 싶은 경우 사용"""
     return render(request, '403.html', status=403)
 
-def test_404(request):
-    """404 에러 페이지 테스트 (개발용)"""
-    # 개발 환경에서도 커스텀 404 페이지를 강제로 표시
-    return render(request, '404.html', status=404)
 
-def test_403(request):
-    """403 에러 페이지 테스트 (개발용)"""
-    # 개발 환경에서도 커스텀 403 페이지를 강제로 표시
-    return render(request, '403.html', status=403)
-
-def test_500(request):
-    """500 에러 페이지 테스트 (개발용)"""
-    # 개발 환경에서도 커스텀 500 페이지를 강제로 표시
-    return render(request, '500.html', status=500)
 
 @login_required
 def show_404_page(request):

@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            console.log('Sort button clicked:', sortField, sortOrder);
+            // Sort button clicked: sortField, sortOrder
             
             // 현재 URL의 모든 파라미터 유지하면서 정렬 파라미터만 변경
             const currentParams = new URLSearchParams(window.location.search);
@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
             currentParams.set('page', '1'); // 정렬 시 첫 페이지로
             
             const newUrl = `${window.location.pathname}?${currentParams.toString()}`;
-            console.log('Navigating to:', newUrl);
+
             
             // 페이지 이동
             window.location.href = newUrl;

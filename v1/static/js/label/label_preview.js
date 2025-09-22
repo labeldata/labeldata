@@ -1,61 +1,581 @@
-document.addEventListener('DOMContentLoaded', function () {
-    console.log('🚀 미리보기 페이지 로드 시작');
+// 즉시 실행 함수로 전역 함수들 정의
+// 디버그 모드 비활성화
+
+// ===== 전역 validateSettings 함수 =====
+window.validateSettings = async function() {
     
-    // 영양성분 데이터 확인
     try {
-        const nutritionItems = document.getElementById('nutrition-data')?.textContent;
-        if (nutritionItems) {
-            console.log('✅ 영양성분 데이터 원시값:', nutritionItems.substring(0, 200) + '...');
-            const parsed = JSON.parse(nutritionItems);
-            console.log('✅ 영양성분 데이터 파싱 성공:', parsed);
-        } else {
-            console.warn('⚠️ 영양성분 데이터 요소가 없습니다');
-        }
-    } catch (error) {
-        console.error("❌ 영양성분 데이터 파싱 오류:", error);
-    }
-
-    // 국가 매핑 데이터 로드
-    let countryMapping = {};
-    try {
-        const countryMappingElement = document.getElementById('country-mapping-data');
-        if (countryMappingElement) {
-            countryMapping = JSON.parse(countryMappingElement.textContent);
-            console.log("✅ 국가 매핑 데이터 로드 성공:", Object.keys(countryMapping).length, "개");
-        } else {
-            console.warn("⚠️ 국가 매핑 데이터 요소가 없습니다");
-        }
-    } catch (error) {
-        console.error("❌ 국가 매핑 데이터 로드 오류:", error);
-    }
-
-    // 만료일 추천 데이터 확인
-    try {
-        const expiryElement = document.getElementById('expiry-recommendation-data');
-        if (expiryElement) {
-            const expiryData = JSON.parse(expiryElement.textContent);
-            console.log("✅ 만료일 추천 데이터 로드 성공:", expiryData);
-        } else {
-            console.warn("⚠️ 만료일 추천 데이터 요소가 없습니다");
-        }
-    } catch (error) {
-        console.error("❌ 만료일 추천 데이터 로드 오류:", error);
-    }
-
-    // 국가 코드를 한글명으로 변환하는 함수
-    function convertCountryCodeToKorean(text) {
-        if (!text || !countryMapping) return text;
+        // DOM 요소들 가져오기
+        const width = parseFloat(document.getElementById('widthInput')?.value) || 0;
+        const height = parseFloat(document.getElementById('heightInput')?.value.replace(/[^0-9.-]/g, '')) || 0;
+        const area = width * height;
+        const fontSize = parseFloat(document.getElementById('fontSizeInput')?.value) || 10;
         
-        // 국가 코드 패턴 찾기 (대문자 2글자)
-        return text.replace(/\b[A-Z]{2}\b/g, function(match) {
-            const koreanName = countryMapping[match];
-            if (koreanName) {
-                console.log(`국가 코드 변환: ${match} -> ${koreanName}`);
-                return koreanName;
+        // 검증 항목들 정의
+        const validationItems = [
+            {
+                label: '표시면 면적',
+                check: () => ({
+                    ok: area >= 40,
+                    errors: area < 40 ? [`표시면 면적은 최소 40cm² 이상이어야 합니다 («식품 등의 표시기준» 제4조).`] : [],
+                    suggestions: area < 40 ? ['면적을 40cm² 이상으로 조정하세요.'] : []
+                }),
+                always: true
+            },
+            {
+                label: '글꼴 크기',
+                check: () => ({
+                    ok: fontSize >= 10,
+                    errors: fontSize < 10 ? [`글꼴 크기는 최소 10pt 이상이어야 합니다 («식품 등의 표시기준» 제6조).`] : [],
+                    suggestions: fontSize < 10 ? ['글꼴 크기를 10pt 이상으로 조정하세요.'] : []
+                }),
+                always: true
+            },
+            {
+                label: '성분 표시 규정',
+                check: () => {
+                    try {
+                        return validateIngredientCompliance();
+                    } catch (e) {
+                        console.warn('성분 표시 규정 검증 오류:', e);
+                        return { ok: true, errors: [], suggestions: [] };
+                    }
+                }
+            },
+            {
+                label: '문구 표시 규정',
+                check: () => {
+                    try {
+                        return validateTextCompliance();
+                    } catch (e) {
+                        console.warn('문구 표시 규정 검증 오류:', e);
+                        return { ok: true, errors: [], suggestions: [] };
+                    }
+                }
+            },
+            {
+                label: '알레르기 성분',
+                check: () => {
+                    try {
+                        return validateAllergenCompliance();
+                    } catch (e) {
+                        console.warn('알레르기 성분 검증 오류:', e);
+                        return { ok: true, errors: [], suggestions: [] };
+                    }
+                }
+            },
+            {
+                label: '포장재질 및 분리배출',
+                check: () => {
+                    try {
+                        return validatePackagingCompliance();
+                    } catch (e) {
+                        console.warn('포장재질 검증 오류:', e);
+                        return { ok: true, errors: [], suggestions: [] };
+                    }
+                },
+                always: true
             }
-            return match; // 변환할 수 없으면 원본 반환
+        ];
+        
+        // 모든 검증 실행
+        const validationResults = validationItems.map(item => {
+            try {
+                const result = item.check();
+                return { ...result, label: item.label };
+            } catch (error) {
+                console.error(`❌ ${item.label} 검증 오류:`, error);
+                return {
+                    ok: false,
+                    errors: [`${item.label} 검증 중 오류가 발생했습니다: ${error.message}`],
+                    suggestions: [],
+                    label: item.label
+                };
+            }
         });
+        
+        // 결과 모달 표시
+        showValidationModal(validationResults);
+        
+    } catch (error) {
+        console.error('🔥 validateSettings 오류:', error);
+        alert('검증 중 오류가 발생했습니다: ' + error.message);
     }
+};
+
+// 알레르기 성분 검증 함수
+function checkAllergenDuplication() {
+    // 알레르기 성분 중복 검증
+    
+    // constants.js에서 로드된 알레르기 키워드 사용
+    const allergenKeywords = window.allergenKeywords;
+    
+    // 원재료명과 알레르기 표시사항 가져오기
+    let ingredients = '';
+    let allergenInfo = '';
+    
+    // 부모창 데이터 확인
+    
+    // DOMContentLoaded에서 정의된 checkedFields가 있는지 확인 (부모창 원본 데이터)
+    if (typeof window.checkedFields !== 'undefined' && window.checkedFields && Object.keys(window.checkedFields).length > 0) {
+        // 부모창의 원본 원재료명 사용 (rawmtrl_nm_display)
+        ingredients = window.checkedFields.rawmtrl_nm_display || '';
+        
+        // 부모창 원본에서 알레르기 성분 추출
+        const allergenMatch = ingredients.match(/\[알레르기\s*성분\s*:\s*([^\]]+)\]/i);
+        if (allergenMatch) {
+            allergenInfo = allergenMatch[0]; // 전체 [알레르기 성분 : ...] 부분
+        }
+        
+    } else {
+        
+        // 방법 1: 부모 창의 URL 파라미터나 세션 스토리지 확인
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const labelId = urlParams.get('label_id');
+            console.log('🔍 라벨 ID:', labelId);
+            
+            // 세션 스토리지에서 원본 데이터 찾기
+            const sessionKey = `labelPreviewSettings_${labelId}`;
+            const sessionData = sessionStorage.getItem(sessionKey);
+            if (sessionData) {
+                const parsed = JSON.parse(sessionData);
+                if (parsed.rawmtrl_nm_display) {
+                    ingredients = parsed.rawmtrl_nm_display;
+                }
+            }
+        } catch (e) {
+            // 세션 스토리지 접근 실패 무시
+        }
+        
+        // 방법 2: 입력 필드에서 원본 데이터 직접 찾기
+        if (!ingredients) {
+            
+            // 페이지의 모든 input, textarea 확인
+            const inputs = document.querySelectorAll('input, textarea, select');
+            for (const input of inputs) {
+                const value = input.value || '';
+                const name = input.name || input.id || '';
+                
+                if ((name.includes('rawmtrl') || name.includes('원재료')) && value.includes('[알레르기')) {
+                    console.log('� 원본 원재료명 입력 필드 발견:', name, value);
+                    ingredients = value.trim();
+                    break;
+                }
+                
+                // 감자플레이크를 포함하는 필드도 체크
+                if (value.includes('감자플레이크') && value.includes('[알레르기')) {
+                    console.log('� 원재료명 패턴 매치:', name, value);
+                    ingredients = value.trim();
+                    break;
+                }
+            }
+        }
+        
+        // 방법 3: DOM에서 원본 형태 찾기 (마지막 수단)
+        if (!ingredients) {
+            const allElements = document.querySelectorAll('*');
+            for (const element of allElements) {
+                const text = element.textContent || '';
+                if (text.includes('감자플레이크') && text.includes('[알레르기') && text.length < 500) {
+                    console.log('� DOM에서 원본 형태 발견:', text.substring(0, 200));
+                    ingredients = text.trim();
+                    break;
+                }
+            }
+        }
+    }
+    
+    console.log('📊 최종 원재료명:', ingredients);
+    console.log('📊 최종 알레르기 정보:', allergenInfo);
+    
+    // 원재료명이 없으면 검증 불가
+    if (!ingredients || !ingredients.trim()) {
+        console.log('⚠️ 원재료명이 없어 알레르기 검증을 수행할 수 없습니다.');
+        return [];
+    }
+    
+    // 부모창 원본 데이터 기준으로 처리
+    // 1. 원재료명에서 알레르기 성분 정보 분리
+    let cleanIngredients = ingredients;
+    let declaredAllergenText = '';
+    
+    // [알레르기 성분 : ...] 부분 제거하여 순수 원재료명 추출
+    const allergenPattern = /\[알레르기[^:]*:\s*([^\]]+)\]/i;
+    const allergenMatch = ingredients.match(allergenPattern);
+    
+    if (allergenMatch) {
+        // 순수 원재료명 (알레르기 성분 표시 제거)
+        cleanIngredients = ingredients.replace(allergenPattern, '').trim();
+        // 선언된 알레르기 성분
+        declaredAllergenText = allergenMatch[1]; // "밀, 달걀, 우유, 대두 함유"
+        
+        console.log('🎯 부모창 데이터 분석 완료');
+        console.log('  - 순수 원재료명:', cleanIngredients);
+        console.log('  - 선언된 알레르기:', declaredAllergenText);
+    } else {
+        console.log('⚠️ 알레르기 성분 표시를 찾을 수 없음');
+    }
+    
+    console.log('📊 최종 검증 대상 - 원재료명:', cleanIngredients);
+    console.log('📊 최종 검증 대상 - 알레르기 표시:', declaredAllergenText);
+    
+    if (!cleanIngredients.trim()) {
+        console.log('⚠️ 원재료명이 비어있음');
+        return [];
+    }
+    
+    // 3. 원재료명에서 발견된 알레르기 성분들
+    const foundAllergens = [];
+    
+    for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
+        for (const keyword of keywords) {
+            // 단일 문자(잣)의 경우 특별 처리: 앞뒤로 공백, 쉼표, 괄호 등이 있는지 확인
+            if (keyword.length === 1) {
+                const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
+                if (regex.test(cleanIngredients)) {
+                    console.log(`🎯 단일 문자 알레르기 성분 발견: ${allergen} (키워드: ${keyword})`);
+                    if (!foundAllergens.includes(allergen)) {
+                        foundAllergens.push(allergen);
+                    }
+                    break;
+                }
+            } else {
+                if (cleanIngredients.toLowerCase().includes(keyword.toLowerCase())) {
+                    console.log(`🎯 알레르기 성분 발견: ${allergen} (키워드: ${keyword})`);
+                    if (!foundAllergens.includes(allergen)) {
+                        foundAllergens.push(allergen);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    
+    console.log('🔍 원재료에서 발견된 알레르기 성분:', foundAllergens);
+    
+    // 4. 부모창에서 선언된 알레르기 성분들 파싱
+    const declaredAllergens = [];
+    
+    if (declaredAllergenText) {
+        console.log('🔍 부모창 알레르기 성분 파싱 시작:', declaredAllergenText);
+        
+        // "밀, 달걀, 우유, 대두 함유" 형태에서 "함유" 제거하고 쉼표로 분리
+        let cleanText = declaredAllergenText.replace(/\s*함유\s*/g, '').trim();
+        
+        const items = cleanText.split(/[,、，]/).map(item => item.trim()).filter(item => item && item.length > 0);
+        declaredAllergens.push(...items);
+        console.log('🎯 부모창에서 선언된 알레르기 성분들:', items);
+    }
+    
+    console.log('🔍 선언된 알레르기 성분:', declaredAllergens);
+    
+    // 5. 주의사항에서 중복 표시 검사
+    let cautionsText = '';
+    if (window.checkedFields && window.checkedFields.cautions) {
+        cautionsText = window.checkedFields.cautions;
+        console.log('🔍 주의사항 텍스트:', cautionsText);
+    }
+    
+    const duplicatedAllergens = [];
+    
+    if (declaredAllergens.length > 0 && cautionsText) {
+        const cautionsLower = cautionsText.toLowerCase();
+        
+        for (const declaredAllergen of declaredAllergens) {
+            // 선언된 알레르기 성분별 키워드 확인
+            const matchedKeywords = allergenKeywords[declaredAllergen] || [declaredAllergen];
+            
+            const foundInCautions = matchedKeywords.filter(keyword => {
+                // 키워드가 주의사항에 포함되어 있는지 확인
+                if (keyword.length === 1) {
+                    // 단일 문자는 정확한 매치 확인
+                    const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
+                    return regex.test(cautionsText);
+                } else {
+                    return cautionsLower.includes(keyword.toLowerCase());
+                }
+            });
+            
+            if (foundInCautions.length > 0) {
+                duplicatedAllergens.push({
+                    allergen: declaredAllergen,
+                    foundKeywords: foundInCautions
+                });
+                console.log(`⚠️ 중복 발견: ${declaredAllergen} (키워드: ${foundInCautions.join(', ')})`);
+            }
+        }
+    }
+    
+    // 누락된 알레르기 성분 찾기
+    const missingAllergens = foundAllergens.filter(allergen => 
+        !declaredAllergens.some(declared => 
+            declared.toLowerCase().includes(allergen.toLowerCase()) ||
+            allergen.toLowerCase().includes(declared.toLowerCase())
+        )
+    );
+    
+    console.log('🔍 누락된 알레르기 성분:', missingAllergens);
+    console.log('🔍 중복된 알레르기 성분:', duplicatedAllergens);
+    
+    // 오류 메시지 생성
+    const errors = [];
+    
+    // 누락 오류
+    if (missingAllergens.length > 0) {
+        errors.push(...missingAllergens.map(allergen => 
+            `원재료명에 '${allergen}'이(가) 포함되어 있으나 [알레르기 성분] 표시에 누락되었습니다.`
+        ));
+    }
+    
+    // 중복 오류 (원재료명 음영표시 + 주의사항 중복)
+    if (duplicatedAllergens.length > 0) {
+        errors.push(...duplicatedAllergens.map(item => 
+            `원재료명에 [알레르기 성분: ${item.allergen}]으로 표시된 성분이 주의사항에 중복으로 표시되었습니다. (발견된 키워드: ${item.foundKeywords.join(', ')})`
+        ));
+    }
+    
+    return errors;
+}
+
+// 검증 결과 모달 표시 함수
+function showValidationModal(results) {
+    console.log('📋 검증 결과 모달 표시');
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('validationModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 새 모달 생성
+    const modal = document.createElement('div');
+    modal.id = 'validationModal';
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">규정 검증 결과</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%">검증 항목</th>
+                                <th style="width: 15%; white-space: nowrap;">상태</th>
+                                <th style="width: 60%">결과 및 제안</th>
+                            </tr>
+                        </thead>
+                        <tbody id="validationResultBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 테이블 내용 채우기
+    const tbody = document.getElementById('validationResultBody');
+    let rowsHtml = '';
+    
+    for (const result of results) {
+        rowsHtml += '<tr>';
+        rowsHtml += `<td>${result.label}</td>`;
+        
+        if (result.ok) {
+            rowsHtml += '<td><span class="text-success">적합</span></td>';
+        } else {
+            rowsHtml += '<td><span class="text-danger">재검토</span></td>';
+        }
+        
+        let msg = '';
+        if (result.errors && result.errors.length > 0) {
+            // 에러 메시지에 볼드 적용
+            const boldErrors = result.errors.map(error => 
+                error.includes('<strong>') ? error : `<strong>${error}</strong>`
+            );
+            msg += boldErrors.join('<br>');
+        }
+        if (result.suggestions && result.suggestions.length > 0) {
+            if (msg) msg += '<br><br>';
+            // 제안사항에 볼드 적용
+            const boldSuggestions = result.suggestions.map(suggestion => 
+                suggestion.includes('<strong>') ? suggestion : `<strong>${suggestion}</strong>`
+            );
+            msg += '<strong style="color: #0066cc;">💡 제안:</strong><br>' + boldSuggestions.join('<br>');
+        }
+        rowsHtml += `<td>${msg}</td>`;
+        rowsHtml += '</tr>';
+    }
+    
+    tbody.innerHTML = rowsHtml;
+    
+    // 모달 표시
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+// ===== 전역 함수 정의 끝 =====
+
+(function() {
+    'use strict';
+    
+    console.log('🔧 분리배출마크 전역 함수 초기화 시작');
+    
+    // 전역 변수
+    window.recyclingMarkFunctionsReady = false;
+    
+    // 함수 준비 상태 확인 헬퍼 (즉시 사용 가능)
+    window.checkRecyclingMarkReady = function() {
+        return {
+            ready: !!window.recyclingMarkFunctionsReady,
+            functions: {
+                applyRecommendedRecyclingMark: typeof window.applyRecommendedRecyclingMark,
+                getCurrentRecyclingMarkStatus: typeof window.getCurrentRecyclingMarkStatus,
+                debugRecyclingMark: typeof window.debugRecyclingMark,
+                updateRecyclingMarkUI: typeof window.updateRecyclingMarkUI
+            }
+        };
+    };
+    
+    // 기본 함수들 (DOM 로드 전)
+    window.applyRecommendedRecyclingMark = function() {
+        if (!window.recyclingMarkFunctionsReady) {
+            console.warn('⚠️ DOM이 아직 준비되지 않았습니다. 페이지 로드 후 다시 시도하세요.');
+            return false;
+        }
+        return window._applyRecommendedRecyclingMark();
+    };
+
+    window.getCurrentRecyclingMarkStatus = function() {
+        if (!window.recyclingMarkFunctionsReady) {
+            console.warn('⚠️ DOM이 아직 준비되지 않았습니다. 페이지 로드 후 다시 시도하세요.');
+            return { ready: false };
+        }
+        return window._getCurrentRecyclingMarkStatus();
+    };
+
+    window.debugRecyclingMark = function() {
+        if (!window.recyclingMarkFunctionsReady) {
+            console.warn('⚠️ DOM이 아직 준비되지 않았습니다. 페이지 로드 후 다시 시도하세요.');
+            return;
+        }
+        return window._debugRecyclingMark();
+    };
+    
+    console.log('✅ 분리배출마크 기본 함수들이 정의되었습니다.');
+})();
+
+// 유틸리티 함수: 안전한 JSON 데이터 로드
+function safeLoadJsonData(elementId, defaultValue = null, description = '') {
+    try {
+        const element = document.getElementById(elementId);
+        if (element && element.textContent) {
+            return JSON.parse(element.textContent);
+        } else {
+            console.warn(`⚠️ ${description || elementId} 요소가 없습니다`);
+            return defaultValue;
+        }
+    } catch (error) {
+        console.error(`❌ ${description || elementId} 파싱 오류:`, error);
+        return defaultValue;
+    }
+}
+
+// 유틸리티 함수: HTML 엔티티 디코딩
+function decodeHtmlEntities(text) {
+    if (!text) return text;
+    return text
+        .replace(/&quot;/g, '"')
+        .replace(/&#x27;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>');
+}
+
+// 유틸리티 함수: 안전한 JSON 파싱 (디코딩 포함)
+function safeParseJson(textContent, description = '') {
+    if (!textContent || typeof textContent !== 'string') {
+        console.log(`ℹ️ ${description} 데이터가 비어있습니다. 기본 설정을 사용합니다.`);
+        return {};
+    }
+    
+    // HTML 엔티티 디코딩
+    const decodedText = decodeHtmlEntities(textContent.trim());
+    console.log(`🔧 ${description} 디코딩된 데이터:`, decodedText.substring(0, 200) + '...');
+    
+    let result = {};
+    
+    if (decodedText.length > 0) {
+        // 기본적인 JSON 구조 확인
+        if (decodedText.startsWith('{') && decodedText.endsWith('}')) {
+            try {
+                result = JSON.parse(decodedText);
+                console.log(`✅ ${description} JSON 파싱 성공:`, result);
+            } catch (parseError) {
+                console.warn(`⚠️ ${description} JSON 파싱 실패, 기본값 사용:`, parseError.message);
+                console.log('🔍 파싱 실패한 내용 (첫 500자):', decodedText.substring(0, 500));
+                result = {};
+            }
+        } else if (decodedText.startsWith('[') && decodedText.endsWith(']')) {
+            try {
+                const arrayData = JSON.parse(decodedText);
+                result = arrayData[0] || {};
+                console.log(`✅ ${description} 배열 JSON 파싱 성공:`, result);
+            } catch (parseError) {
+                console.warn(`⚠️ ${description} 배열 JSON 파싱 실패, 기본값 사용:`, parseError.message);
+                result = {};
+            }
+        } else {
+            console.warn(`⚠️ ${description} JSON 형식이 아닙니다. 기본값을 사용합니다.`);
+            console.log('🔍 유효하지 않은 데이터:', decodedText.substring(0, 100));
+            result = {};
+        }
+    }
+    
+    return result;
+}
+
+// 유틸리티 함수: 안전한 DOM 요소 값 설정
+function safeSetElementValue(elementId, value, warnOnMissing = false) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.value = value;
+        return true;
+    } else if (warnOnMissing) {
+        console.warn(`⚠️ ${elementId} 요소를 찾을 수 없습니다`);
+    }
+    return false;
+}
+
+// 유틸리티 함수: 안전한 이벤트 리스너 추가
+function safeAddEventListener(elementId, eventType, handler, options = {}) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.addEventListener(eventType, handler, options);
+        return true;
+    }
+    return false;
+}
+
+// 유틸리티 함수: 여러 요소에 같은 이벤트 리스너 추가
+function addEventListenersToElements(elementIds, eventType, handler, options = {}) {
+    const results = elementIds.map(id => safeAddEventListener(id, eventType, handler, options));
+    return results.filter(result => result).length; // 성공한 개수 반환
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('📄 DOMContentLoaded 이벤트 발생 - 미리보기 페이지 초기화 시작');
+    // 미리보기 페이지 로드 시작
+    
+    // 데이터 로드 (중복 제거된 코드)
+    const nutritionData = safeLoadJsonData('nutrition-data', null, '영양성분 데이터');
+    const countryMapping = safeLoadJsonData('country-mapping-data', {}, '국가 매핑 데이터');
+    const expiryData = safeLoadJsonData('expiry-recommendation-data', null, '만료일 추천 데이터');
+
+    // [제거] 국가 코드를 한글명으로 변환하는 함수 (constants.py로 이동)
 
     // 작성일시 정보 설정
     const updateDateTime = document.getElementById('update_datetime')?.value;
@@ -63,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (footerText && updateDateTime) {
         footerText.innerHTML = `
             <span style="font-size: 7pt;">
-                간편한 표시사항 연구소에서 관련 법규에 따라 작성되었습니다.
+                EZLABELING.COM에서 관련 법규에 따라 작성되었습니다.
                 <span class="creator-info">[${updateDateTime}]</span>
             </span>
         `;
@@ -82,101 +602,26 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
-    // 기본 설정
-    const DEFAULT_SETTINGS = {
-        width: 10,
-        height: 11, // 11cm 고정
-        fontSize: 10,
-        letterSpacing: -5,
-        lineHeight: 1.2,
-        fontFamily: "'Noto Sans KR'"
-    };
-
-    // 규정 상수
-    const REGULATIONS = {
-        area_thresholds: {
-            small: 100,
-            medium: 3000,
-            large: 3000
-        },
-        font_size: {
-            product_name: { min: 16, small_area_min: 10 },
-            origin: { min: 14, small_area_min: 10 },
-            content_weight: { min: 12, small_area_min: 10 },
-            general: { min: 10, small_area_min: 10 }
-        },
-        storage_conditions: {
-            frozen: { temp: "-18℃ 이하", phrases: ["냉동 보관 (-18℃ 이하)", "해동 후 재냉동 금지"] },
-            refrigerated: { temp: "0~10℃", phrases: ["냉장 보관 (0~10℃)", "개봉 후 냉장 보관"] },
-            room_temp: { temp: "직사광선을 피하고 서늘한 곳", phrases: ["직사광선을 피하고 서늘한 곳에 보관"] }
-        },
-        food_type_phrases: {
-            "과ㆍ채가공품(살균제품/산성통조림)": ["캔주의"],
-            "유함유가공품": ["알레르기 주의"],
-            "고카페인": ["어린이, 임산부, 카페인 민감자는 섭취에 주의"],
-            "젤리/곤약": ["질식주의"],
-            "방사선 조사": ["감마선/전자선으로 조사처리"],
-            "냉동식품": ["해동 후 재냉동 금지"]
-        },
-        expiry_limits: {
-            frozen: 48, // 냉동식품: 최대 48개월
-            default: 36 // 기타: 최대 36개월
-        },
-        // 아래 expiry_recommendation 객체가 백엔드로부터 전달되어야 합니다.
-        expiry_recommendation: {} // 초기에는 비워둠
-    };
-
+    // constants.js에서 로드된 상수들 사용
+    const DEFAULT_SETTINGS = window.DEFAULT_SETTINGS;
+    const REGULATIONS = { ...window.REGULATIONS };
+    const recyclingMarkGroups = window.recyclingMarkGroupsDetailed;
+    
     // 백엔드에서 전달된 소비기한 권장 데이터를 REGULATIONS 객체에 주입
-    try {
-        const expiryDataElement = document.getElementById('expiry-recommendation-data');
-        if (expiryDataElement) {
-            const expiryData = JSON.parse(expiryDataElement.textContent);
-            REGULATIONS.expiry_recommendation = expiryData;
-        }
-    } catch (e) {
-        console.error('소비기한 권장 데이터 파싱 오류:', e);
+    if (expiryData) {
+        REGULATIONS.expiry_recommendation = expiryData;
     }
-
-
-    // 분리배출마크 구분값 및 이미지 매핑
-    const recyclingMarkGroups = [
-        {
-            group: '플라스틱',
-            options: [
-                { value: '무색페트', label: '무색페트', img: '/static/img/recycle_clearpet.png' },
-                { value: '유색페트', label: '유색페트', img: '/static/img/recycle_pet.png' },
-                { value: '플라스틱(PET)', label: '플라스틱(PET)', img: '/static/img/recycle_pet.png' },
-                { value: '플라스틱(HDPE)', label: '플라스틱(HDPE)', img: '/static/img/recycle_hdpe.png' },
-                { value: '플라스틱(LDPE)', label: '플라스틱(LDPE)', img: '/static/img/recycle_ldpe.png' },
-                { value: '플라스틱(PP)', label: '플라스틱(PP)', img: '/static/img/recycle_pp.png' },
-                { value: '플라스틱(PS)', label: '플라스틱(PS)', img: '/static/img/recycle_ps.png' },
-                { value: '기타플라스틱', label: '기타플라스틱', img: '/static/img/recycle_other_plastic.png' }
-            ]
-        },
-        {
-            group: '종이/금속/유리',
-            options: [
-                { value: '종이', label: '종이', img: '/static/img/recycle_paper.png' },
-                { value: '일반팩', label: '일반팩', img: '/static/img/recycle_pack_general.png' },
-                { value: '멸균팩', label: '멸균팩', img: '/static/img/recycle_pack_sterile.png' },
-                { value: '캔류(알미늄)', label: '캔류(알미늄)', img: '/static/img/recycle_can_aluminum.png' },
-                { value: '캔류(철)', label: '캔류(철)', img: '/static/img/recycle_can_iron.png' },
-                { value: '유리', label: '유리', img: '/static/img/recycle_glass.png' }
-            ]
-        },
-        {
-            group: '기타/혼합',
-            options: [
-                { value: '복합재질', label: '복합재질', img: '/static/img/recycle_coated.png', isComposite: true },
-                { value: '비닐(PET)', label: '비닐(PET)', img: '/static/img/recycle_vinyl_pet.png' },
-                { value: '비닐(HDPE)', label: '비닐(HDPE)', img: '/static/img/recycle_vinyl_hdpe.png' },
-                { value: '비닐(LDPE)', label: '비닐(LDPE)', img: '/static/img/recycle_vinyl_ldpe.png' },
-                { value: '비닐(PP)', label: '비닐(PP)', img: '/static/img/recycle_vinyl_pp.png' },
-                { value: '비닐(PS)', label: '비닐(PS)', img: '/static/img/recycle_vinyl_ps.png' },
-                { value: '비닐(기타)', label: '비닐(기타)', img: '/static/img/recycle_vinyl_other.png' }
-            ]
-        }
-    ];
+    
+    // 추가 규정 설정 (constants.js에 없는 부분만)
+    REGULATIONS.storage_conditions = {
+        frozen: { temp: "-18℃ 이하", phrases: ["냉동 보관 (-18℃ 이하)", "해동 후 재냉동 금지"] },
+        refrigerated: { temp: "0~10℃", phrases: ["냉장 보관 (0~10℃)", "개봉 후 냉장 보관"] },
+        room_temp: { temp: "직사광선을 피하고 서늘한 곳", phrases: ["직사광선을 피하고 서늘한 곳에 보관"] }
+    };
+    REGULATIONS.expiry_limits = {
+        frozen: 48, // 냉동식품: 최대 48개월
+        default: 36 // 기타: 최대 36개월
+    };
 
     // value → 이미지 매핑
     const recyclingMarkMap = {};
@@ -188,6 +633,170 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 텍스트 라인 ID 카운터 (각 라인에 data-text-id 부여)
     let recyclingTextIdCounter = 0;
+
+    // DOM 준비 상태 확인 함수
+    function waitForElement(selector, callback, maxWait = 3000) {
+        const element = document.getElementById(selector);
+        if (element) {
+            callback();
+        } else if (maxWait > 0) {
+            setTimeout(() => waitForElement(selector, callback, maxWait - 100), 100);
+        } else {
+            console.warn(`요소를 찾을 수 없습니다: ${selector}`);
+        }
+    }
+
+    // 복합재질 감지 함수 (복합재질이 목록에서 제거되어 더 이상 사용되지 않음)
+    // 하위 호환성을 위해 함수는 유지하되 항상 false 반환
+    function isCompositeMaterial(markValue) {
+        return false;
+    }
+
+    // 설정 UI 요소들 존재 확인 및 생성
+    function ensureSettingsElements() {
+        console.log('🔧 설정 UI 요소들 확인 중...');
+        
+        const requiredElements = [
+            { id: 'widthInput', type: 'number', value: '10', min: '5', max: '20', step: '0.1' },
+            { id: 'heightInput', type: 'number', value: '11', min: '5', max: '30', step: '0.1' },
+            { id: 'fontSizeInput', type: 'number', value: '10', min: '6', max: '20', step: '0.5' },
+            { id: 'letterSpacingInput', type: 'number', value: '-5', min: '-10', max: '5', step: '1' },
+            { id: 'lineHeightInput', type: 'number', value: '1.2', min: '1.0', max: '2.0', step: '0.1' },
+            { id: 'fontFamilySelect', type: 'select', value: "'Noto Sans KR'" }
+        ];
+        
+        let missingElements = [];
+        
+        requiredElements.forEach(config => {
+            const element = document.getElementById(config.id);
+            if (!element) {
+                missingElements.push(config.id);
+                console.warn(`⚠️ ${config.id} 요소가 없습니다. 임시 요소를 생성합니다.`);
+                
+                // 임시 요소 생성
+                const tempElement = config.type === 'select' ? document.createElement('select') : document.createElement('input');
+                tempElement.id = config.id;
+                tempElement.style.display = 'none'; // 숨김 처리
+                
+                if (config.type !== 'select') {
+                    tempElement.type = config.type;
+                    tempElement.min = config.min;
+                    tempElement.max = config.max;
+                    tempElement.step = config.step;
+                }
+                
+                tempElement.value = config.value;
+                document.body.appendChild(tempElement);
+            }
+        });
+        
+        if (missingElements.length > 0) {
+            console.warn(`⚠️ 누락된 설정 요소들: ${missingElements.join(', ')}`);
+            console.log('임시 요소들을 생성했습니다. 실제 UI가 로드되면 교체될 예정입니다.');
+        } else {
+            console.log('✅ 모든 설정 요소들이 존재합니다.');
+        }
+    }
+
+    // 전역 함수 설정 (DOM 준비 후 실제 기능 활성화)
+    function setupGlobalRecyclingFunctions() {
+        // 실제 구현 함수들
+        window._applyRecommendedRecyclingMark = function() {
+            const packageMaterialSelectors = [
+                'input[name="frmlc_mtrqlt"]',
+                '#frmlc_mtrqlt',
+                'input[placeholder*="포장재질"]',
+                'textarea[name="frmlc_mtrqlt"]'
+            ];
+            
+            let packageField = null;
+            let packageValue = '';
+            
+            // 포장재질 필드 찾기
+            for (const selector of packageMaterialSelectors) {
+                packageField = document.querySelector(selector);
+                if (packageField && packageField.value.trim()) {
+                    packageValue = packageField.value.trim();
+                    break;
+                }
+            }
+            
+            if (packageValue) {
+                console.log('포장재질 발견:', packageValue);
+                window.updateRecyclingMarkUI(packageValue, true);
+                return true;
+            } else {
+                console.warn('포장재질 정보를 찾을 수 없습니다.');
+                // 디버깅을 위해 현재 페이지의 모든 input 요소들을 출력
+                const allInputs = document.querySelectorAll('input, textarea');
+                console.log('페이지의 모든 input/textarea 요소들:', Array.from(allInputs).map(el => ({
+                    name: el.name,
+                    id: el.id,
+                    placeholder: el.placeholder,
+                    value: el.value
+                })));
+                return false;
+            }
+        };
+
+        // 실제 구현: 현재 설정된 분리배출마크 정보 가져오기
+        window._getCurrentRecyclingMarkStatus = function() {
+            const container = document.getElementById('recyclingMarkContainer');
+            const select = document.getElementById('recyclingMarkSelect');
+            const addBtn = document.getElementById('addRecyclingMarkBtn');
+            
+            const status = {
+                hasContainer: !!container,
+                selectedValue: select ? select.value : null,
+                isApplied: addBtn ? addBtn.textContent === '해제' : false,
+                containerVisible: container ? container.style.display !== 'none' : false
+            };
+            
+            console.log('분리배출마크 상태:', status);
+            return status;
+        };
+
+        // 실제 구현: 분리배출마크 관련 디버깅 정보
+        window._debugRecyclingMark = function() {
+            console.group('🔍 분리배출마크 디버깅 정보');
+            
+            // DOM 요소 존재 확인
+            const elements = {
+                container: document.getElementById('recyclingMarkContainer'),
+                select: document.getElementById('recyclingMarkSelect'),
+                addBtn: document.getElementById('addRecyclingMarkBtn'),
+                uiBox: document.getElementById('recyclingMarkUiBox'),
+                list: document.getElementById('recyclingMarkList')
+            };
+            
+            console.log('DOM 요소들:', elements);
+            
+            // 추천 함수 테스트
+            const testMaterials = ['PET', 'PP', '종이', '알미늄'];
+            console.log('추천 테스트:');
+            testMaterials.forEach(material => {
+                const recommended = recommendRecyclingMarkByMaterial(material);
+                console.log(`${material} → ${recommended}`);
+            });
+            
+            // 현재 상태
+            console.log('현재 상태:', window.getCurrentRecyclingMarkStatus());
+            
+            console.groupEnd();
+        };
+
+        // 함수 등록 완료 알림 및 상태 설정
+        window.recyclingMarkFunctionsReady = true;
+        console.log('✅ 분리배출마크 전역 함수들이 등록되었습니다:', {
+            applyRecommendedRecyclingMark: typeof window.applyRecommendedRecyclingMark,
+            getCurrentRecyclingMarkStatus: typeof window.getCurrentRecyclingMarkStatus,
+            debugRecyclingMark: typeof window.debugRecyclingMark,
+            updateRecyclingMarkUI: typeof window.updateRecyclingMarkUI
+        });
+        
+        // 즉시 사용 가능함을 알리는 이벤트 발생
+        window.dispatchEvent(new CustomEvent('recyclingMarkReady'));
+    }
 
     // ===== 분리배출마크 UI 헬퍼 =====
     function clearRecyclingListUI() {
@@ -323,61 +932,7 @@ document.addEventListener('DOMContentLoaded', function () {
     renderRecyclingListFromContainer();
     }
 
-    // 포장재질 텍스트로 추천 분리배출마크 구하기 (전역 함수)
-    window.recommendRecyclingMarkByMaterial = function recommendRecyclingMarkByMaterial(materialText) {
-        if (!materialText) return null;
-        const text = materialText.toLowerCase().trim();
-
-        // [수정] 우선순위 키워드 기반 추천 로직
-        // 1. PET 계열 (무색페트 우선)
-        if (text.includes('pet') || text.includes('페트')) {
-            if (text.includes('무색')) {
-                return '무색페트';
-            } else if (text.includes('유색')) {
-                return '유색페트';
-            }
-            return '플라스틱(PET)';
-        }
-
-        // 2. 폴리에틸렌(PE) 계열 (HDPE 우선)
-        if (text.includes('hdpe') || text.includes('고밀도')) {
-            return '플라스틱(HDPE)';
-        }
-        if (text.includes('ldpe') || text.includes('저밀도')) {
-            return '플라스틱(LDPE)';
-        }
-        if (text.includes('폴리에틸렌') || text.includes('pe')) {
-            // 특정 밀도 언급이 없으면 HDPE를 기본으로 추천
-            return '플라스틱(HDPE)';
-        }
-
-        // 3. 기타 재질
-        if (text.includes('pp') || text.includes('폴리프로필렌')) return '플라스틱(PP)';
-        if (text.includes('ps') || text.includes('폴리스티렌')) return '플라스틱(PS)';
-        if (text.includes('철')) return '캔류(철)';
-        if (text.includes('알미늄') || text.includes('알루미늄')) return '캔류(알미늄)';
-        if (text.includes('종이') && !text.includes('팩')) return '종이';
-        if (text.includes('유리')) return '유리';
-        if (text.includes('팩') && text.includes('멸균')) return '멸균팩';
-        if (text.includes('팩')) return '일반팩';
-        if (text.includes('복합재질') || text.includes('도포') || text.includes('첩합') || text.includes('코팅')) return '복합재질';
-        
-        // 4. 비닐류 (위에서 플라스틱으로 잡히지 않은 경우)
-        if (text.includes('비닐')) {
-            if (text.includes('pet')) return '비닐(PET)';
-            if (text.includes('hdpe')) return '비닐(HDPE)';
-            if (text.includes('ldpe')) return '비닐(LDPE)';
-            if (text.includes('pp')) return '비닐(PP)';
-            if (text.includes('ps')) return '비닐(PS)';
-            return '비닐(기타)'; // 비닐류의 가장 일반적인 기본값
-        }
-
-        // 5. 일반적인 '플라스틱' 또는 기타
-        if (text.includes('기타') && text.includes('플라스틱')) return '기타플라스틱';
-        if (text.includes('플라스틱')) return '플라스틱(OTHER)';
-
-        return null; // 일치하는 항목이 없을 경우
-    }
+    // [제거] 포장재질 텍스트로 추천 분리배출마크 구하기 (constants.py로 이동)
     
     // 분리배출마크 UI 생성 및 삽입 (더 견고한 삽입 로직)
     function renderRecyclingMarkUI() {
@@ -421,9 +976,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     <button id="addRecyclingMarkBtn" type="button" class="btn btn-outline-primary btn-sm">적용</button>
                 </div>
 
-                <!-- 추가 텍스트 입력 상자 -->
+                <!-- 복합재질 정보 입력 상자: 항상 표시 -->
                 <div id="additionalTextInputBox" style="margin-top: 8px; display:flex; gap:8px;">
-                    <input type="text" id="additionalRecyclingText" class="form-control form-control-sm" placeholder="예: 본체(종이)/뚜껑(PP)" style="flex:1; min-width:0;" />
+                    <input type="text" id="additionalRecyclingText" class="form-control form-control-sm" placeholder="복합재질 정보 입력 (예: 본체(종이)/뚜껑(PP))" style="flex:1; min-width:0;" />
                     <button id="addRecyclingTextBtn" type="button" class="btn btn-sm btn-role-primary" style="white-space:nowrap;">추가</button>
                 </div>
             </div>
@@ -434,37 +989,16 @@ document.addEventListener('DOMContentLoaded', function () {
             target.appendChild(uiBox);
         }
 
-        // [수정] 셀렉트박스 변경 시 복합재질 입력창 표시/숨김 처리
+        // 셀렉트박스 변경 시 버튼 상태 리셋
         const select = document.getElementById('recyclingMarkSelect');
         if (select) {
             select.addEventListener('change', function() {
                 const btn = document.getElementById('addRecyclingMarkBtn');
-                const additionalInputBox = document.getElementById('additionalTextInputBox');
                 
                 if (btn) {
                     btn.textContent = '적용';
                     btn.classList.remove('btn-danger');
                     btn.classList.add('btn-outline-primary');
-                }
-                
-                // 복합재질 선택 시에만 추가 입력창 표시
-                if (additionalInputBox) {
-                    const selectedValue = this.value;
-                    const markObj = recyclingMarkMap[selectedValue];
-                    
-                    console.log('🔄 분리배출마크 선택 변경:', {
-                        선택값: selectedValue,
-                        마크객체: markObj,
-                        복합재질여부: markObj?.isComposite
-                    });
-                    
-                    if (markObj?.isComposite || selectedValue === '복합재질') {
-                        additionalInputBox.style.display = 'flex';
-                        console.log('✅ 복합재질 입력창 표시');
-                    } else {
-                        additionalInputBox.style.display = 'none';
-                        console.log('❌ 복합재질 입력창 숨김');
-                    }
                 }
             });
         }
@@ -474,13 +1008,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (addBtn) {
             addBtn.addEventListener('click', function() {
                 const markValue = document.getElementById('recyclingMarkSelect').value;
-                const additionalInputBox = document.getElementById('additionalTextInputBox');
                 if (addBtn.textContent === '적용') {
                     setRecyclingMark(markValue);
                     addBtn.textContent = '해제';
                     addBtn.classList.remove('btn-outline-primary');
                     addBtn.classList.add('btn-danger');
-                    if (additionalInputBox) additionalInputBox.style.display = 'block';
                     renderRecyclingListFromContainer();
                 } else {
                     // 해제: 전체 UI 정리
@@ -510,17 +1042,43 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 추천 마크 갱신 (전역 함수로 만들어 HTML에서 접근 가능)
-    window.updateRecyclingMarkUI = function(packageText) {
+    // 추천 마크 갱신 및 자동 적용 (전역 함수로 만들어 HTML에서 접근 가능)
+    window.updateRecyclingMarkUI = function(packageText, autoApply = false) {
         const recommended = recommendRecyclingMarkByMaterial(packageText);
-        const recommendSpan = document.getElementById('recyclingMarkRecommend');
-        const select = document.getElementById('recyclingMarkSelect');
-        if (recommendSpan) {
-            recommendSpan.textContent = recommended;
-        }
-        if (select && recommended) {
-            select.value = recommended;
-        }
+        
+        // DOM 요소가 준비될 때까지 대기
+        waitForElement('recyclingMarkSelect', () => {
+            const recommendSpan = document.getElementById('recyclingMarkRecommend');
+            const select = document.getElementById('recyclingMarkSelect');
+            
+            // 추천 텍스트 업데이트
+            if (recommendSpan) {
+                recommendSpan.textContent = recommended || '추천 없음';
+            }
+            
+            // 셀렉트 박스 업데이트
+            if (select && recommended) {
+                select.value = recommended;
+                
+                // 자동 적용이 요청된 경우 마크 생성
+                if (autoApply) {
+                    setRecyclingMark(recommended, true);
+                    
+                    // UI 상태 업데이트
+                    const addBtn = document.getElementById('addRecyclingMarkBtn');
+                    if (addBtn) {
+                        addBtn.textContent = '해제';
+                        addBtn.classList.remove('btn-outline-primary');
+                        addBtn.classList.add('btn-danger');
+                    }
+                    
+                    // 리스트 UI 업데이트
+                    renderRecyclingListFromContainer();
+                }
+            } else if (select) {
+                select.value = '';
+            }
+        });
     };
 
     // [추가] 분리배출 마크에 텍스트 라인 추가
@@ -530,50 +1088,77 @@ document.addEventListener('DOMContentLoaded', function () {
         const textContainer = document.getElementById('recyclingMarkTextContainer');
         if (!container || !image || !textContainer) return;
 
+        // DocumentFragment를 사용해서 레이아웃 리플로우 최소화
+        const fragment = document.createDocumentFragment();
+
         // 각 라인을 별도의 블록으로 감싸서 CSS로 한 줄 고정을 쉽게 적용
         const lineWrap = document.createElement('div');
         lineWrap.className = 'recycling-line';
+        
+        // CSS containment로 레이아웃 격리 (실험적)
         lineWrap.style.cssText = `
-            display: block;
-            width: 100%;
-            box-sizing: border-box;
-            text-align: center;
+            display: block !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            text-align: center !important;
+            contain: layout style !important;
+            isolation: isolate !important;
         `;
 
         const textDiv = document.createElement('div');
         textDiv.textContent = text;
-        // 내부 텍스트 요소는 .recycling-text-line 으로 분리하여 스타일/스크립트 접근 가능
         textDiv.className = 'recycling-text-line';
+        
+        // 완전히 격리된 스타일 (모든 속성 명시적 설정)
         textDiv.style.cssText = `
-            font-weight: 500;
-            color: #000;
-            line-height: 1.1;
-            word-break: keep-all;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: inline-block;
+            font-weight: 500 !important;
+            color: rgb(0, 0, 0) !important;
+            line-height: 1.1 !important;
+            word-break: keep-all !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            display: inline-block !important;
+            font-family: Arial, sans-serif !important;
+            font-size: 6pt !important;
+            letter-spacing: normal !important;
+            word-spacing: normal !important;
+            text-transform: none !important;
+            text-decoration: none !important;
+            text-shadow: none !important;
+            font-style: normal !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            position: static !important;
+            float: none !important;
+            clear: none !important;
+            vertical-align: baseline !important;
+            contain: layout style !important;
+            isolation: isolate !important;
         `;
+        
+        // CSS 변수 완전 차단 (all을 사용해서 모든 변수 리셋)
+        textDiv.style.setProperty('all', 'unset', 'important');
+        textDiv.style.setProperty('display', 'inline-block', 'important');
+        textDiv.style.setProperty('font-size', '6pt', 'important');
+        textDiv.style.setProperty('font-family', 'Arial, sans-serif', 'important');
+        textDiv.style.setProperty('color', 'black', 'important');
 
-    // 고유 ID 부여
-    const textId = `rtext-${++recyclingTextIdCounter}`;
-    lineWrap.dataset.textId = textId;
-    lineWrap.appendChild(textDiv);
-    textContainer.appendChild(lineWrap);
+        // 고유 ID 부여
+        const textId = `rtext-${++recyclingTextIdCounter}`;
+        lineWrap.dataset.textId = textId;
+        
+        // Fragment에 먼저 추가
+        lineWrap.appendChild(textDiv);
+        fragment.appendChild(lineWrap);
+        
+        // 한 번에 DOM에 추가 (리플로우 최소화)
+        textContainer.appendChild(fragment);
 
-    // 리스트 UI 동기화
-    addRecyclingListTextItem(text, textId);
-
-        // 폰트 크기 자동 조절 (텍스트가 이미지 너비를 넘지 않도록)
-        const imageWidth = image.offsetWidth || 60; // fallback
-        let fontSize = 6; // pt 단위
-        textDiv.style.fontSize = `${fontSize}pt`;
-
-        // 텍스트 너비가 이미지 너비보다 크면 폰트 크기를 줄임
-        while (textDiv.scrollWidth > imageWidth && fontSize > 4) {
-            fontSize -= 0.5;
-            textDiv.style.fontSize = `${fontSize}pt`;
-        }
+        // 리스트 UI 동기화
+        addRecyclingListTextItem(text, textId);
     }
 
     // [수정] 미리보기 영역에 마크(이미지+텍스트) 추가 및 드래그
@@ -589,27 +1174,104 @@ document.addEventListener('DOMContentLoaded', function () {
         container = document.createElement('div');
         container.id = 'recyclingMarkContainer';
         container.className = 'recycling-mark-container';
-        // width, cursor, and text alignment handled by CSS
+        
+        // 전역 스타일과 CSS 변수로부터 완전히 격리된 컨테이너 스타일
+        container.style.cssText = `
+            position: absolute !important;
+            z-index: 1000 !important;
+            width: 60px !important;
+            min-width: 60px !important;
+            max-width: 60px !important;
+            height: auto !important;
+            text-align: center !important;
+            cursor: move !important;
+            background: transparent !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            font-family: Arial, sans-serif !important;
+            font-size: 6pt !important;
+            line-height: 1.0 !important;
+            letter-spacing: 0 !important;
+            word-spacing: 0 !important;
+            text-transform: none !important;
+            text-decoration: none !important;
+            text-shadow: none !important;
+            font-weight: normal !important;
+            font-style: normal !important;
+            color: black !important;
+            contain: layout style size !important;
+            isolation: isolate !important;
+            transform: translateZ(0) !important;
+        `;
+        
+        // 모든 CSS 상속 차단
+        container.style.setProperty('all', 'unset', 'important');
+        container.style.setProperty('position', 'absolute', 'important');
+        container.style.setProperty('z-index', '1000', 'important');
+        container.style.setProperty('width', '60px', 'important');
+        container.style.setProperty('cursor', 'move', 'important');
+        container.style.setProperty('contain', 'layout style size', 'important');
         
         // 컨테이너 내부에 이미지와 텍스트 영역 추가
         container.innerHTML = `
-            <img id="recyclingMarkImage" class="recycling-mark-image">
-            <div id="recyclingMarkTextContainer" class="recycling-mark-text"></div>
+            <img id="recyclingMarkImage" class="recycling-mark-image" style="
+                display: block !important;
+                width: 60px !important;
+                height: auto !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                border: none !important;
+                background: transparent !important;
+            ">
+            <div id="recyclingMarkTextContainer" class="recycling-mark-text" style="
+                width: 100% !important;
+                text-align: center !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: transparent !important;
+                border: none !important;
+                font-family: Arial, sans-serif !important;
+            "></div>
         `;
-        previewContent.appendChild(container);
+        
+        // previewContent가 아닌 독립적인 위치에 배치 (CSS 변수 상속 방지)
+        const previewWrapper = previewContent.parentElement || document.body;
+        previewWrapper.appendChild(container);
+        
+        // previewContent 기준으로 절대 위치 계산
+        const previewRect = previewContent.getBoundingClientRect();
+        const wrapperRect = previewWrapper.getBoundingClientRect();
+        const relativeTop = previewRect.top - wrapperRect.top;
+        const relativeLeft = previewRect.left - wrapperRect.left;
 
         const img = container.querySelector('#recyclingMarkImage');
 
-        // 이미지 설정
+        // 이미지 설정 및 에러 처리
         if (markObj.img) {
             img.src = markObj.img;
             img.alt = markObj.label;
             img.style.display = 'block';
+            
+            // 이미지 로딩 실패 처리
+            img.onerror = function() {
+                this.style.display = 'none';
+                console.warn('분리배출 마크 이미지 로딩 실패:', this.src);
+                // 대체 텍스트 표시
+                const textContainer = container.querySelector('#recyclingMarkTextContainer');
+                if (textContainer && !textContainer.querySelector('.fallback-text')) {
+                    const fallbackText = document.createElement('div');
+                    fallbackText.className = 'fallback-text recycling-text-line';
+                    fallbackText.textContent = markObj.label;
+                    fallbackText.style.cssText = 'font-weight: bold; color: #333; padding: 4px;';
+                    textContainer.appendChild(fallbackText);
+                }
+            };
         } else {
             img.style.display = 'none';
         }
 
-        // [수정] 자동 위치 설정: 제품명 행의 우측 상단에 배치
+        // [수정] 자동 위치 설정: 제품명 행의 우측 상단에 배치 (독립 컨테이너 기준)
         const thElements = previewContent.querySelectorAll('th');
         let productNameRow = null;
         thElements.forEach(th => {
@@ -619,36 +1281,36 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (productNameRow) {
-            const previewRect = previewContent.getBoundingClientRect();
             const rowRect = productNameRow.getBoundingClientRect();
             
-            // 제품명 행의 상단에 맞춤
-            const topPosition = rowRect.top - previewRect.top;
+            // 제품명 행의 상단에 맞춤 (wrapper 기준으로 계산)
+            const topPosition = rowRect.top - wrapperRect.top;
+            const rightPosition = (wrapperRect.right - previewRect.right) + 25;
             
-            container.style.setProperty('--recycling-top', `${topPosition}px`);
-            container.style.setProperty('--recycling-right', '25px');
-            container.style.setProperty('--recycling-left', '');
-            container.style.setProperty('--recycling-bottom', '');
+            container.style.top = `${topPosition}px`;
+            container.style.right = `${rightPosition}px`;
+            container.style.left = '';
+            container.style.bottom = '';
         } else {
             // 제품명 행을 찾지 못할 경우의 기본 위치 (예: 우측 하단)
-            container.style.setProperty('--recycling-right', '20px');
-            container.style.setProperty('--recycling-bottom', '20px');
-            container.style.setProperty('--recycling-left', '');
-            container.style.setProperty('--recycling-top', '');
+            container.style.top = '';
+            container.style.right = '20px';
+            container.style.left = '';
+            container.style.bottom = '20px';
         }
 
-        // 드래그 로직 (컨테이너에 적용)
+        // 드래그 로직 (독립 컨테이너 기준으로 수정)
         container.onmousedown = function(e) {
             e.preventDefault();
             let shiftX = e.clientX - container.getBoundingClientRect().left;
             let shiftY = e.clientY - container.getBoundingClientRect().top;
             
             function moveAt(pageX, pageY) {
-                const rect = previewContent.getBoundingClientRect();
+                const rect = previewWrapper.getBoundingClientRect();
                 container.style.left = (pageX - rect.left - shiftX) + 'px';
                 container.style.top = (pageY - rect.top - shiftY) + 'px';
-                container.style.setProperty('--recycling-right', '');
-                container.style.setProperty('--recycling-bottom', '');
+                container.style.right = '';
+                container.style.bottom = '';
             }
 
             function onMouseMove(e) {
@@ -666,8 +1328,12 @@ document.addEventListener('DOMContentLoaded', function () {
     // (these properties are optional; CSS has sensible defaults)
     }
 
-    // 미리보기 스타일 업데이트
+    // 미리보기 스타일 업데이트 (임시 비활성화로 테스트)
     function updatePreviewStyles() {
+        // 임시로 완전히 비활성화하여 분리배출마크 영향 테스트
+        console.log('updatePreviewStyles 호출됨 (비활성화됨)');
+        return;
+        
         const previewContent = document.getElementById('previewContent');
         if (!previewContent) return;
 
@@ -691,11 +1357,18 @@ document.addEventListener('DOMContentLoaded', function () {
         const table = previewContent.querySelector('.preview-table');
     if (table) table.classList.add('preview-table');
 
-        // Cells will pick up sizing and font from CSS variables applied to previewContent-modern
+        // 분리배출마크 요소들은 제외하고 셀에만 스타일 적용
         const cells = previewContent.querySelectorAll('th, td');
         cells.forEach(cell => {
-            cell.classList.add('preview-cell');
-            if (cell.tagName === 'TH') cell.classList.add('preview-header');
+            // 분리배출마크 관련 요소인지 확인
+            const isRecyclingElement = cell.closest('#recyclingMarkContainer') || 
+                                     cell.classList.contains('recycling-text-line') ||
+                                     cell.classList.contains('recycling-line');
+            
+            if (!isRecyclingElement) {
+                cell.classList.add('preview-cell');
+                if (cell.tagName === 'TH') cell.classList.add('preview-header');
+            }
         });
 
     const headerText = previewContent.querySelector('.header-text');
@@ -704,24 +1377,28 @@ document.addEventListener('DOMContentLoaded', function () {
         requestAnimationFrame(() => {
             const contentHeight = previewContent.scrollHeight;
             const cmHeight = Math.ceil(contentHeight / 37.8);
-            document.getElementById('heightInput').value = cmHeight;
-            updateArea();
+            const heightInput = document.getElementById('heightInput');
+            
+            // 이벤트 발생 없이 값만 변경 (연쇄 반응 방지)
+            if (heightInput && heightInput.value !== cmHeight.toString()) {
+                // 임시로 이벤트 리스너 제거
+                const tempValue = heightInput.value;
+                heightInput.value = cmHeight;
+                
+                // updateArea만 직접 호출 (다른 이벤트 체인 방지)
+                updateArea();
+            }
         });
     }
 
-    // 이벤트 리스너 설정
+    // 이벤트 리스너 설정 (중복 제거된 코드)
     function setupEventListeners() {
-        const inputs = [
-            'widthInput', 'fontSizeInput', 'letterSpacingInput',
-            'lineHeightInput', 'fontFamilySelect'
-        ];
-        inputs.forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.addEventListener('input', debounce(updatePreviewStyles, 100));
-                element.addEventListener('change', updatePreviewStyles);
-            }
-        });
+        const inputIds = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput', 'fontFamilySelect'];
+        
+        // input 이벤트에 디바운스 적용
+        addEventListenersToElements(inputIds, 'input', debounce(updatePreviewStyles, 100));
+        // change 이벤트에 즉시 적용
+        addEventListenersToElements(inputIds, 'change', updatePreviewStyles);
 
         const resetButton = document.querySelector('button[onclick="resetSettings()"]');
         if (resetButton) {
@@ -729,10 +1406,7 @@ document.addEventListener('DOMContentLoaded', function () {
             resetButton.addEventListener('click', resetSettings);
         }
 
-        const validateButton = document.getElementById('validateButton');
-        if (validateButton) {
-            validateButton.addEventListener('click', validateSettings);
-        }
+        // validateButton 이벤트는 DOMContentLoaded에서 처리
     }
 
     // 설정 초기화
@@ -762,14 +1436,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setupAreaCalculation() {
-        const inputs = ['widthInput', 'heightInput'];
-        inputs.forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.addEventListener('input', updateArea);
-                element.addEventListener('change', updateArea);
-            }
-        });
+        const inputIds = ['widthInput', 'heightInput'];
+        // 중복 제거된 이벤트 리스너 설정
+        addEventListenersToElements(inputIds, 'input', updateArea);
+        addEventListenersToElements(inputIds, 'change', updateArea);
 
         // areaDisplayInput 바인딩: 사용자가 면적을 직접 입력하면 가로(width)를 재계산
         const areaInput = document.getElementById('areaDisplayInput');
@@ -820,25 +1490,17 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 영양성분 데이터 처리 - 개선된 오류 처리
+    // 영양성분 데이터 처리 - 중복 제거된 코드
     try {
-        console.log('🔍 영양성분 데이터 처리 시작');
-        const nutritionDataRaw = document.getElementById('nutrition-data')?.textContent;
-        
-        if (!nutritionDataRaw) {
+        // 통합된 데이터 로드 함수 사용
+        if (!nutritionData) {
             console.warn('⚠️ 영양성분 데이터가 없습니다');
             return;
         }
         
-        console.log('📄 영양성분 원시 데이터 길이:', nutritionDataRaw.length);
-        console.log('📄 영양성분 원시 데이터 샘플:', nutritionDataRaw.substring(0, 100));
-        
-        const nutritionData = JSON.parse(nutritionDataRaw);
-        console.log('✅ 영양성분 데이터 파싱 성공:', nutritionData);
-        
         // 기본값 보장
         if (!nutritionData.nutrients || Object.keys(nutritionData.nutrients).length === 0) {
-            console.log('🔧 기본 영양성분 데이터 설정');
+            // 기본 영양성분 데이터 설정
             nutritionData.nutrients = {
                 calorie: { value: 0, unit: 'kcal' },
                 natrium: { value: 0, unit: 'mg' },
@@ -852,30 +1514,17 @@ document.addEventListener('DOMContentLoaded', function () {
             };
         }
         
-        // 서빙 사이즈 표시 업데이트
+        // 영양성분 UI 업데이트 (중복 제거된 코드)
         if (nutritionData.serving_size && nutritionData.serving_size_unit) {
-            const servingSizeElement = document.getElementById('servingSizeDisplay');
-            if (servingSizeElement) {
-                servingSizeElement.value = `${nutritionData.serving_size}${nutritionData.serving_size_unit}`;
-                console.log('✅ 서빙 사이즈 설정:', servingSizeElement.value);
-            } else {
-                console.warn('⚠️ servingSizeDisplay 요소를 찾을 수 없습니다');
-            }
+            safeSetElementValue('servingSizeDisplay', `${nutritionData.serving_size}${nutritionData.serving_size_unit}`, true);
         }
         
-        // 추가 영양성분 정보 설정
         if (nutritionData.units_per_package) {
-            const servingsElement = document.getElementById('servingsPerPackageDisplay');
-            if (servingsElement) {
-                servingsElement.value = nutritionData.units_per_package;
-            }
+            safeSetElementValue('servingsPerPackageDisplay', nutritionData.units_per_package);
         }
         
         if (nutritionData.display_unit) {
-            const displayUnitElement = document.getElementById('nutritionDisplayUnit');
-            if (displayUnitElement) {
-                displayUnitElement.value = nutritionData.display_unit;
-            }
+            safeSetElementValue('nutritionDisplayUnit', nutritionData.display_unit);
         }
         
         // 영양성분 데이터 구조화
@@ -923,46 +1572,42 @@ document.addEventListener('DOMContentLoaded', function () {
         window.nutritionData = data;
         updateNutritionDisplay(data);
         
-        // 영양성분은 영양성분 탭이 활성화될 때만 표시
-        console.log('✅ 영양성분 데이터 로드 완료 (탭 전환 시 표시됨)');
+    // 영양성분은 영양성분 탭이 활성화될 때만 표시
     } catch (e) {
         console.error('❌ 영양성분 데이터 처리 중 오류:', e);
-        console.log('🔄 백업 데이터 로드 시도...');
+    // 백업 데이터 로드 시도
         
-        // 오류 발생 시 백업 로직: DOM에서 직접 데이터 추출
+        // 오류 발생 시 백업 로직: DOM에서 직접 데이터 추출 (중복 제거된 코드)
         try {
+            // 유틸리티 함수로 간소화된 백업 데이터 생성
+            const getElementValue = (id, defaultValue = '0') => document.getElementById(id)?.value || defaultValue;
+            
             const backupData = {
-                serving_size: document.getElementById('serving_size')?.value || '100',
-                serving_size_unit: document.getElementById('serving_size_unit')?.value || 'g',
-                units_per_package: document.getElementById('units_per_package')?.value || '1',
-                display_unit: document.getElementById('nutrition_display_unit')?.value || 'unit',
+                serving_size: getElementValue('serving_size', '100'),
+                serving_size_unit: getElementValue('serving_size_unit', 'g'),
+                units_per_package: getElementValue('units_per_package', '1'),
+                display_unit: getElementValue('nutrition_display_unit', 'unit'),
                 nutrients: {
-                    calorie: { value: document.getElementById('calories')?.value || '0', unit: 'kcal' },
-                    natrium: { value: document.getElementById('natriums')?.value || '0', unit: 'mg' },
-                    carbohydrate: { value: document.getElementById('carbohydrates')?.value || '0', unit: 'g' },
-                    sugar: { value: document.getElementById('sugars')?.value || '0', unit: 'g' },
-                    afat: { value: document.getElementById('fats')?.value || '0', unit: 'g' },
-                    transfat: { value: document.getElementById('trans_fats')?.value || '0', unit: 'g' },
-                    satufat: { value: document.getElementById('saturated_fats')?.value || '0', unit: 'g' },
-                    cholesterol: { value: document.getElementById('cholesterols')?.value || '0', unit: 'mg' },
-                    protein: { value: document.getElementById('proteins')?.value || '0', unit: 'g' }
+                    calorie: { value: getElementValue('calories'), unit: 'kcal' },
+                    natrium: { value: getElementValue('natriums'), unit: 'mg' },
+                    carbohydrate: { value: getElementValue('carbohydrates'), unit: 'g' },
+                    sugar: { value: getElementValue('sugars'), unit: 'g' },
+                    afat: { value: getElementValue('fats'), unit: 'g' },
+                    transfat: { value: getElementValue('trans_fats'), unit: 'g' },
+                    satufat: { value: getElementValue('saturated_fats'), unit: 'g' },
+                    cholesterol: { value: getElementValue('cholesterols'), unit: 'mg' },
+                    protein: { value: getElementValue('proteins'), unit: 'g' }
                 }
             };
             
-            console.log('✅ 백업 데이터 로드 성공:', backupData);
-            
-            // 백업 데이터로 UI 업데이트 시도
-            const servingSizeElement = document.getElementById('servingSizeDisplay');
-            if (servingSizeElement) {
-                servingSizeElement.value = `${backupData.serving_size}${backupData.serving_size_unit}`;
-            }
+            // 백업 데이터로 UI 업데이트
+            safeSetElementValue('servingSizeDisplay', `${backupData.serving_size}${backupData.serving_size_unit}`);
             
         } catch (backupError) {
             console.error('❌ 백업 데이터 로드도 실패:', backupError);
         }
         
-        // 백업 데이터 로드 완료
-        console.log('✅ 백업 영양성분 데이터 로드 완료 (탭 전환 시 표시됨)');
+    // 백업 데이터 로드 완료
     }
 
     // 탭 전환 처리
@@ -1004,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (headerBox) headerBox.style.display = 'block';
         if (markImage) markImage.style.display = 'block';
         
-        console.log('✅ 초기 탭 상태 설정 완료 - 표시사항 탭 표시');
+    // 초기 탭 상태 설정 완료 - 표시사항 탭 표시
     }
     
     // 초기화 실행
@@ -1057,6 +1702,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 필드 데이터 저장소
     let checkedFields = {};
+    // checkedFields를 전역에서 접근 가능하도록 설정
+    window.checkedFields = checkedFields;
     const tbody = document.getElementById('previewTableBody');
     let dataLoaded = false; // 데이터 로딩 상태 플래그
 
@@ -1086,41 +1733,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
 
-    // 국가명 볼드 처리 함수
-    function boldCountryNames(text, countryList) {
-        if (!text || !countryList) return text;
-        
-        let processedText = text;
-        
-        // 국가명 목록을 길이 순으로 정렬 (긴 이름부터 처리하여 중복 매칭 방지)
-        const sortedCountries = countryList.sort((a, b) => b.length - a.length);
-        
-        sortedCountries.forEach(country => {
-            if (!country) return;
-            
-            // 국가명과 선택적으로 뒤따르는 " 산" 또는 "산"을 매칭하는 정규식
-            // 예: "호주" -> "호주산", "호주 산" / "미국" -> "미국산", "미국 산"
-            const escapedCountry = country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`(${escapedCountry}(\\s*산)?)`, 'gi');
-            // $1은 전체 매칭된 부분(예: "호주산")을 참조
-            processedText = processedText.replace(regex, '<strong>$1</strong>');
-        });
-        
-        return processedText;
-    }
+    // [제거] 국가명 볼드 처리 함수 (constants.py로 이동)
 
-    // 국가명 목록 초기화 (페이지 로드 시) - 먼저 선언
-    let countryList = [];
-    const countryListScript = document.getElementById('country-list-data');
-    if (countryListScript) {
-        try {
-            const countryListText = countryListScript.textContent;
-            countryList = JSON.parse(countryListText);
-        } catch (e) {
-            console.error('국가명 목록 파싱 오류:', e);
-            countryList = [];
-        }
-    }
+    // 국가명 목록 초기화 (중복 제거된 코드)
+    const countryList = safeLoadJsonData('country-list-data', [], '국가명 목록');
 
     // 입력 데이터 반영 (테스트용)
     window.addEventListener('message', function(e) {
@@ -1247,50 +1863,28 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
 
-            // 테이블 내용 생성 후 스타일 즉시 적용 (레이아웃 깨짐 방지)
-            updatePreviewStyles();
-
             // 분리배출마크 UI 렌더링 및 자동 설정
             renderRecyclingMarkUI();
+
+            // 테이블 내용 생성 후 스타일 적용 (분리배출마크 생성 전에 실행하여 간섭 방지)
+            updatePreviewStyles();
             
             // 포장재질 기반 자동 분리배출마크 설정
             const frmlc = checkedFields.frmlc_mtrqlt || '';
-            console.log('🔍 포장재질 확인:', {
-                원본값: checkedFields.frmlc_mtrqlt,
-                정제된값: frmlc,
-                전체필드: Object.keys(checkedFields)
-            });
             
             if (frmlc) {
-                console.log('📦 포장재질 감지:', frmlc);
-                
-                // 포장재질을 기반으로 추천 마크 찾기
+                // 포장재질 감지: frmlc
                 const recommendedMark = recommendRecyclingMarkByMaterial(frmlc);
-                console.log('🎯 추천 결과:', { 입력: frmlc, 추천마크: recommendedMark });
-                
                 if (recommendedMark) {
-                    console.log('✅ 추천 분리배출마크:', recommendedMark);
-                    
                     // UI가 렌더링된 후 자동 설정
-                    setTimeout(() => {
-                        console.log('🚀 자동 설정 시작...');
-                        
+                    waitForElement('recyclingMarkSelect', () => {
                         const selectElement = document.getElementById('recyclingMarkSelect');
-                        console.log('선택박스 확인:', selectElement ? '존재' : '없음');
-                        
                         if (selectElement) {
-                            // 옵션 확인
-                            const options = Array.from(selectElement.options).map(opt => opt.value);
-                            console.log('사용 가능한 옵션:', options);
-                            console.log('추천 마크가 옵션에 있는지:', options.includes(recommendedMark));
-                            
+                            // 옵션 확인 및 자동 적용
                             selectElement.value = recommendedMark;
-                            console.log('선택박스 값 설정:', selectElement.value);
-                            
-                            // 자동 적용
                             setRecyclingMark(recommendedMark, true);
                             
-                            // 버튼 상태 변경
+                            // UI 상태 업데이트
                             const addBtn = document.getElementById('addRecyclingMarkBtn');
                             if (addBtn) {
                                 addBtn.textContent = '해제';
@@ -1298,65 +1892,79 @@ document.addEventListener('DOMContentLoaded', function () {
                                 addBtn.classList.add('btn-danger');
                             }
                             
-                            // 복합재질 입력창 표시
                             const additionalInputBox = document.getElementById('additionalTextInputBox');
                             if (additionalInputBox) {
-                                additionalInputBox.style.display = 'block';
+                                additionalInputBox.style.display = isCompositeMaterial(recommendedMark) ? 'flex' : 'none';
                             }
                             
-                            console.log('🎯 분리배출마크 자동 설정 완료');
+                            // 리스트 UI 업데이트
+                            renderRecyclingListFromContainer();
                         }
-                    }, 100);
+                    });
                 } else {
-                    console.log('⚠️ 추천할 분리배출마크를 찾지 못했습니다');
-                    // updateRecyclingMarkUI(frmlc); // 인라인으로 대체
-                    const recommendSpan = document.getElementById('recyclingMarkRecommend');
-                    const select = document.getElementById('recyclingMarkSelect');
-                    const recommended = recommendRecyclingMarkByMaterial(frmlc);
-                    if (recommendSpan) {
-                        recommendSpan.textContent = recommended;
-                    }
-                    if (select && recommended) {
-                        select.value = recommended;
-                    }
+                    // 추천 마크 없음: 선택박스만 업데이트
+                    waitForElement('recyclingMarkSelect', () => {
+                        const select = document.getElementById('recyclingMarkSelect');
+                        if (select) {
+                            select.value = '';
+                        }
+                    });
                 }
             } else {
-                console.log('ℹ️ 포장재질 정보가 없습니다');
-                // updateRecyclingMarkUI(''); // 인라인으로 대체
+                // 포장재질 정보 없음: 초기화
                 const recommendSpan = document.getElementById('recyclingMarkRecommend');
                 const select = document.getElementById('recyclingMarkSelect');
-                if (recommendSpan) {
-                    recommendSpan.textContent = '';
-                }
-                if (select) {
-                    select.value = '';
-                }
+                if (recommendSpan) recommendSpan.textContent = '';
+                if (select) select.value = '';
             }
         }
     });
 
-    // 설정 저장
+    // 설정 저장 (로깅 강화)
     function savePreviewSettings() {
+        console.log('💾 설정 저장 시작');
+        
         const labelId = document.querySelector('input[name="label_id"]')?.value;
         if (!labelId) {
-            console.warn('label_id를 찾을 수 없습니다.');
+            console.warn('⚠️ label_id를 찾을 수 없습니다.');
             return;
         }
+        
+        console.log('🏷️ Label ID:', labelId);
 
         // 분리배출마크 정보 수집
         const recyclingMarkInfo = getCurrentRecyclingMarkInfo();
+        console.log('♻️ 분리배출마크 정보:', recyclingMarkInfo);
+
+        // 입력 요소들 확인
+        const elements = {
+            layoutSelect: document.getElementById('layoutSelect'),
+            widthInput: document.getElementById('widthInput'),
+            heightInput: document.getElementById('heightInput'),
+            fontFamilySelect: document.getElementById('fontFamilySelect'),
+            fontSizeInput: document.getElementById('fontSizeInput'),
+            letterSpacingInput: document.getElementById('letterSpacingInput'),
+            lineHeightInput: document.getElementById('lineHeightInput')
+        };
+
+        console.log('🔍 설정 요소들 존재 여부:', Object.keys(elements).reduce((acc, key) => {
+            acc[key] = !!elements[key];
+            return acc;
+        }, {}));
 
         const data = {
             label_id: labelId,
-            layout: document.getElementById('layoutSelect').value || 'vertical',
-            width: parseFloat(document.getElementById('widthInput').value) || 10,
-            length: parseFloat(document.getElementById('heightInput').value) || 10,
-            font: document.getElementById('fontFamilySelect').value || "'Noto Sans KR'",
-            font_size: parseFloat(document.getElementById('fontSizeInput').value) || 10,
-            letter_spacing: parseInt(document.getElementById('letterSpacingInput').value) || -5,
-            line_spacing: parseFloat(document.getElementById('lineHeightInput').value) || 1.2,
+            layout: elements.layoutSelect?.value || 'vertical',
+            width: parseFloat(elements.widthInput?.value) || 10,
+            length: parseFloat(elements.heightInput?.value) || 10,
+            font: elements.fontFamilySelect?.value || "'Noto Sans KR'",
+            font_size: parseFloat(elements.fontSizeInput?.value) || 10,
+            letter_spacing: parseInt(elements.letterSpacingInput?.value) || -5,
+            line_spacing: parseFloat(elements.lineHeightInput?.value) || 1.2,
             recycling_mark: recyclingMarkInfo
         };
+        
+        console.log('📋 저장할 데이터:', data);
 
         fetch('/label/save_preview_settings/', {
             method: 'POST',
@@ -1391,24 +1999,45 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // 저장된 미리보기 설정 로드
+    // 저장된 미리보기 설정 로드 (중복 제거된 코드)
     function loadSavedPreviewSettings() {
+        console.log('🔄 설정 로드 시작');
+        
         try {
             const settingsScript = document.getElementById('preview-settings-data');
-            if (!settingsScript) return;
+            if (!settingsScript) {
+                console.log('ℹ️ preview-settings-data 요소가 없습니다. 기본 설정을 사용합니다.');
+                return;
+            }
             
-            const settings = JSON.parse(settingsScript.textContent);
-            const recyclingMark = settings.recycling_mark;
+            const textContent = settingsScript.textContent?.trim();
+            console.log('📄 원본 설정 데이터:', textContent ? textContent.substring(0, 200) + '...' : 'null');
+            
+            // 통합된 JSON 파싱 함수 사용
+            const settings = safeParseJson(textContent, '미리보기 설정');
             
             // 분리배출마크 설정 복원
+            const recyclingMark = settings.recycling_mark;
             if (recyclingMark && recyclingMark.enabled && recyclingMark.type) {
-                // 분리배출마크 UI가 완전히 로드된 후 실행되도록 더 긴 딜레이 적용
-                setTimeout(() => {
+                console.log('♻️ 분리배출마크 복원 시작:', recyclingMark);
+                waitForElement('recyclingMarkSelect', () => {
                     restoreRecyclingMark(recyclingMark);
-                }, 1500); // 1.5초 딜레이로 증가
+                });
+            } else {
+                console.log('ℹ️ 복원할 분리배출마크 설정이 없습니다.');
             }
+            
         } catch (error) {
-            console.error('저장된 설정 로드 중 오류:', error);
+            console.error('❌ 설정 로드 중 치명적 오류:', error);
+            console.log('🔍 오류 세부사항:', {
+                message: error.message,
+                stack: error.stack,
+                elementExists: !!document.getElementById('preview-settings-data'),
+                elementContent: document.getElementById('preview-settings-data')?.textContent?.substring(0, 100)
+            });
+            
+            // 치명적 오류가 발생해도 계속 진행하도록 보장
+            console.log('🔄 오류 무시하고 계속 진행합니다.');
         }
     }
 
@@ -1529,140 +2158,12 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
-    // 농수산물 목록
-    const farmSeafoodItems = [
-    "쌀", "찹쌀", "현미", "벼", "밭벼", "찰벼", "보리", "보리쌀", "밀", "밀쌀", "호밀", "귀리", "옥수수", "조", "수수", "메밀", "기장", "율무",
-    "콩", "팥", "녹두", "완두", "강낭콩", "동부", "기타콩",
-    "감자", "고구마", "야콘",
-    "참깨", "들깨", "땅콩", "해바라기", "유채", "고추씨",
-    "수박", "참외", "메론", "딸기", "토마토", "방울토마토", "호박", "오이",
-    "배추", "양배추", "고구마줄기", "토란줄기", "쑥", "건 무청", "시래기", "무말랭이", "무", "알타리무", "순무", "당근", "우엉", "연근", "양파", "대파", "쪽파", "실파",
-    "건고추", "마늘", "생강", "풋고추", "꽈리고추", "홍고추", "피망", "단고추", "브로코리", "녹색꽃양배추", "파프리카",
-    "갈근", "감초", "강활", "건강", "결명자", "구기자", "금은화", "길경", "당귀", "독활", "두충", "만삼", "맥문동", "모과", "목단", "반하", "방풍", "복령", "복분자", "백수오", "백지", "백출", "비자", "사삼", "양유", "더덕", "산수유", "산약", "산조인", "산초", "소자", "시호", "오가피", "오미자", "오배자", "우슬", "황정", "층층갈고리둥굴레", "옥죽", "외유", "둥굴레", "음양곽", "익모초", "작약", "진피", "지모", "지황", "차전자", "창출", "천궁", "천마", "치자", "택사", "패모", "하수오", "황기", "황백", "황금", "행인", "향부자", "현삼", "후박", "홍화씨", "고본", "소엽", "형개", "치커리", "헛개",
-    "녹용", "녹각",
-    "사과", "애플", "배", "포도", "복숭아", "단감", "떫은감", "곶감", "자두", "살구", "참다래", "파인애플", "감귤", "만감", "한라봉", "레몬", "탄제린", "오렌지", "청견", "자몽", "금감", "유자", "버찌", "매실", "앵두", "무화과", "바나나", "블루베리", "석류", "오디",
-    "밤", "대추", "잣", "호두", "은행", "도토리",
-    "영지버섯", "팽이버섯", "목이버섯", "석이버섯", "운지버섯", "송이버섯", "표고버섯", "양송이버섯", "느타리버섯", "상황버섯", "아가리쿠스", "동충하초", "새송이버섯", "싸리버섯", "능이버섯",
-    "수삼", "산양삼", "장뇌삼", "산삼배양근", "묘삼",
-    "고사리", "취나물", "고비", "두릅", "죽순", "도라지", "더덕", "마",
-    "쇠고기", "한우", "육우", "젖소", "양고기", "염소", "돼지고기", "멧돼지", "닭고기", "오리고기", "사슴고기", "토끼고기", "칠면조고기", "메추리고기", "말고기", "육류의 부산물",
-    "국화", "카네이션", "장미", "백합", "글라디올러스", "튜울립", "거베라", "아이리스", "프리지아", "칼라", "안개꽃",
-    "벌꿀", "건조누에", "프로폴리스",
-    "계란", "오리알", "메추리알",
-    "뽕잎", "누에번데기", "초콜릿", "치즈",
-    "고등어", "명태", "갈치", "조기", "참치", "연어", "대구", "방어", "참돔", "새우", "오징어", "낙지", "홍합", "바지락", "전복", "게",
-    "다시마", "미역", "김", "톳", "매생이", "어묵", "가리비 관자"
-    ];
+    // [제거] 농수산물 목록 및 사용금지 문구 (템플릿에서 전달됨)
 
-    // 사용금지 문구
-    const forbiddenPhrases = ['천연', '자연', '슈퍼', '생명'];
+    // [제거] 제품명 성분 표시 검증 로직 (checkFarmSeafoodCompliance) (constants.py로 이동)
 
-    // [수정] 제품명 성분 표시 검증 로직 (checkFarmSeafoodCompliance)
-    function checkFarmSeafoodCompliance() {
-        const errors = [];
-        const productName = checkedFields.prdlst_nm || '';
-        const ingredientInfo = checkedFields.ingredient_info || '';
+    // 2. 알레르기 성분 검증: 중복 표시 및 누락 검사
 
-        // 제품명에 포함된 농수산물명 추출 (긴 이름부터 처리하여 '돼지고기'가 '고기'보다 먼저 잡히도록 함)
-        const foundItems = farmSeafoodItems
-            .filter(item => productName.includes(item))
-            .sort((a, b) => b.length - a.length);
-
-        if (foundItems.length === 0) {
-            return { errors: [], suggestions: [] }; // 검증 대상이 없으면 종료
-        }
-
-        foundItems.forEach(item => {
-            // '특정성분 함량' 필드에 해당 성분명과 함량(%)이 모두 포함되어 있는지 확인
-            // 정규식: 성분명 + (0개 이상의 문자, 단 쉼표 제외) + 숫자 + %
-            // 예: "사과 100%", "사과(국산) 100%" 모두 통과
-            const complianceRegex = new RegExp(`${item}[^,]*\\d+(\\.\\d+)?\\s*%`);
-            
-            // 검증 실패 시 오류 추가
-            if (!complianceRegex.test(ingredientInfo)) {
-                errors.push(`제품명에 사용된 '${item}'의 함량을 '특정성분 함량' 항목에 표시하세요 (예: ${item} 100%).`);
-            }
-        });
-
-        return { errors, suggestions: [] };
-    }
-
-    // 2. 알레르기 성분 중복: 중복된 성분을 모두 한 줄에 표시
-    function checkAllergenDuplication() {
-        const errors = [];
-        const suggestions = [];
-        const rawmtrl = checkedFields.rawmtrl_nm_display || '';
-        const cautions = checkedFields.cautions || '';
-        
-        console.log('🔍 알레르기 성분 검증 시작');
-        console.log('원재료명:', rawmtrl);
-        console.log('주의사항:', cautions);
-        
-        const allergenMatch = rawmtrl.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/i);
-        if (allergenMatch) {
-            console.log('알레르기 성분 매칭 결과:', allergenMatch[1]);
-            
-            const allergens = allergenMatch[1].split(',').map(a => a.trim().toLowerCase());
-            const cautionsLower = cautions.toLowerCase();
-            const finalDuplicatedMessages = [];
-
-            console.log('추출된 알레르기 성분:', allergens);
-            console.log('주의사항 (소문자):', cautionsLower);
-
-            // 알레르기 성분별 동의어 매핑
-            const allergenSynonyms = {
-                '대두': ['대두', '콩', '된장', '간장', '두부', '콩나물'],
-                '우유': ['우유', '유제품', '치즈', '버터', '요거트', '요구르트', '크림', '밀크'],
-                '알류': ['알류', '난류', '계란', '메추리알', '오리알', '달걀', '난백', '난황'],
-                '밀': ['밀', '밀가루', '글루텐', '면류'],
-                '견과류': ['견과류', '땅콩', '호두', '아몬드', '잣', '피스타치오', '마카다미아', '헤이즐넛'],
-                '새우': ['새우', '갑각류', '크릴'],
-                '게': ['게', '갑각류'],
-                '조개류': ['조개류', '굴', '홍합', '가리비', '바지락'],
-                '생선': ['생선', '어류', '멸치', '참치', '고등어', '연어'],
-                '복숭아': ['복숭아'],
-                '토마토': ['토마토'],
-                '아황산류': ['아황산류', '이산화황'],
-                '호두': ['호두', '견과류'],
-                '땅콩': ['땅콩', '견과류'],
-                '굴': ['굴', '조개류'],
-                '전복': ['전복', '조개류'],
-                '홍합': ['홍합', '조개류']
-            };
-
-            // 각 알레르기 성분에 대해 검사
-            allergens.forEach(allergen => {
-                console.log(`검사 중인 알레르기 성분: ${allergen}`);
-                
-                const synonyms = allergenSynonyms[allergen] || [allergen];
-                const foundTerms = synonyms.filter(term => {
-                    const found = cautionsLower.includes(term);
-                    if (found) {
-                        console.log(`- 발견된 동의어: ${term}`);
-                    }
-                    return found;
-                });
-                
-                if (foundTerms.length > 0) {
-                    finalDuplicatedMessages.push(`${allergen}(${foundTerms.join(', ')})`);
-                }
-            });
-
-            console.log('최종 중복 메시지:', finalDuplicatedMessages);
-
-            if (finalDuplicatedMessages.length > 0) {
-                errors.push(`주의사항에 원재료명의 알레르기 성분이 중복 표시되었습니다: ${finalDuplicatedMessages.join(', ')}`);
-                suggestions.push('원재료명에 이미 [알레르기 성분]으로 표시된 성분은 주의사항에서 제거하거나, 주의사항에서만 표시하세요.');
-            } else {
-                console.log('알레르기 성분 중복 없음');
-            }
-        } else {
-            console.log('원재료명에 알레르기 성분 표시 없음');
-        }
-        
-        console.log('🔍 알레르기 성분 검증 완료', { errors, suggestions });
-        return { errors, suggestions };
-    }
 
     // 헬퍼 함수: 냉장보관 온도 확인
     function hasRefrigerateTemp() {
@@ -1828,6 +2329,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         // value에서 "천연" 및 유사 영문 제거
                         value = value.replace(/천연/gi, '').replace(/natural/gi, '').replace(/naturel/gi, '');
                         checkedFields[field] = value.trim();
+                        // 전역 노출 강화
+                        window.checkedFields = checkedFields;
+                        console.log('🔄 checkedFields 업데이트됨:', field, value.trim());
                         return;
                     }
                     // ...기존 자연 등 다른 문구 처리...
@@ -2074,203 +2578,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return modal;
     }
 
-    async function validateSettings() {
-        const width = parseFloat(document.getElementById('widthInput').value) || 0;
-        const height = parseFloat(document.getElementById('heightInput').value) || 0;
-        const area = width * height;
-        const fontSize = parseFloat(document.getElementById('fontSizeInput').value) || 10;
-        const packageMaterial = (checkedFields.frmlc_mtrqlt || '');
-        const select = document.getElementById('recyclingMarkSelect');
-        const selectedMark = select ? select.value : '';
-        const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);
 
-        // 캐시된 결과가 있으면 재사용(표시면 면적, 글꼴 크기, 분리배출마크 제외)
-        let cached = cachedValidation;
-        let now = Date.now();
-        let useCache = false;
-        if (
-            cached &&
-            cached._cacheTime &&
-            // 표시면 면적, 글꼴 크기, 분리배출마크 관련 값이 변하지 않았으면 캐시 사용
-            cached._width === width &&
-            cached._height === height &&
-            cached._fontSize === fontSize &&
-            cached._selectedMark === selectedMark &&
-            cached._recommendedMark === recommendedMark
-        ) {
-            useCache = true;
-        }
-
-        // 검증 항목 순서 및 매핑
-        const validationItems = [
-            {
-                label: '표시면 면적',
-                check: () => ({
-                    ok: area >= 40,
-                    errors: area < 40 ? [
-                        `<strong style="color:#222;">표시면 면적은 최소 40cm² 이상이어야 합니다 («식품 등의 표시기준» 제4조).</strong>`
-                    ] : [],
-                    suggestions: area < 40 ? [
-                        `<strong style="color:#222;">면적을 40cm² 이상으로 조정하세요.</strong>`
-                    ] : []
-                }),
-                always: true
-            },
-            {
-                label: '글꼴 크기',
-                check: () => ({
-                    ok: fontSize >= REGULATIONS.font_size.general.min,
-                    errors: fontSize < REGULATIONS.font_size.general.min ? [
-                        `<strong style="color:#222;">글꼴 크기는 최소 ${REGULATIONS.font_size.general.min}pt 이상이어야 합니다 («식품 등의 표시기준» 제6조).</strong>`
-                    ] : [],
-                    suggestions: fontSize < REGULATIONS.font_size.general.min ? [
-                        `<strong style="color:#222;">글꼴 크기를 ${REGULATIONS.font_size.general.min}pt 이상으로 조정하세요.</strong>`
-                    ] : []
-                }),
-                always: true
-            },
-            {
-                label: '제품명 성분 표시',
-                check: () => {
-                    const result = checkFarmSeafoodCompliance();
-                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    return result;
-                }
-            },
-            {
-                label: '필수 문구',
-                check: () => {
-                    const result = checkFoodTypePhrasesUnified();
-                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    return result;
-                }
-            },
-            {
-                label: '사용금지 문구',
-                check: () => checkForbiddenPhrases()
-            },
-            {
-                label: '알레르기 중복 표시',
-                check: () => {
-                    const result = checkAllergenDuplication();
-                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    return result;
-                }
-            },
-            {
-                label: '분리배출마크',
-                check: () => {
-                    const result = checkRecyclingMarkCompliance();
-                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    return result;
-                },
-                always: true
-            },
-            {
-                label: '소비기한',
-                check: () => {
-                    const result = checkExpiryCompliance();
-                    result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                    return result;
-                }
-            }
-        ];
-
-        // 캐시가 있으면 표시면 면적/글꼴 크기/분리배출마크만 새로 계산, 나머지는 캐시 사용
-        let results = [];
-        if (useCache) {
-            for (let i = 0; i < validationItems.length; i++) {
-                const item = validationItems[i];
-                if (item.always) {
-                    results.push(item.check());
-                } else {
-                    results.push(cached.results[i]);
-                }
-            }
-        } else {
-            results = validationItems.map(item => item.check());
-            // 캐시 저장(항상 새로 계산되는 항목 값도 저장)
-            cachedValidation = {
-                _cacheTime: Date.now(),
-                _width: width,
-                _height: height,
-                _fontSize: fontSize,
-                _selectedMark: selectedMark,
-                _recommendedMark: recommendedMark,
-                results
-            };
-        }
-
-        const modal = showValidationModal();
-        const tbody = modal.querySelector('#validationResultBody');
-        tbody.innerHTML = '';
-
-        // 입력 필드 상태 초기화
-        [
-            'widthInput','heightInput','fontSizeInput','letterSpacingInput','lineHeightInput',
-            'recyclingMarkSelect','ingredient_info','country_of_origin','prdlst_nm',
-            'rawmtrl_nm_display','cautions','additional_info','storage_method','pog_daycnt'
-        ].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.classList.remove('is-valid','is-invalid');
-            }
-        });
-
-        let hasErrors = false;
-
-        // tbody에 모든 검증 항목을 한 번에 추가 (tr을 누적해서 innerHTML로 할당)
-        let rowsHtml = '';
-        for (let i = 0; i < validationItems.length; i++) {
-            const item = validationItems[i];
-            const result = results[i];
-
-            rowsHtml += `<tr>`;
-
-            // 항목명
-            rowsHtml += `<td>${item.label}</td>`;
-
-            // 결과
-            if (!result.errors || result.errors.length === 0) {
-                rowsHtml += `<td><span class="text-success">적합</span></td>`;
-            } else {
-                rowsHtml += `<td><span class="text-danger">재검토</span></td>`;
-                hasErrors = true;
-            }
-
-            // 에러/수정제안
-            let msg = '';
-            if (result.errors && result.errors.length > 0) msg += result.errors.join('<br>');
-            if (result.suggestions && result.suggestions.length > 0) {
-                if (msg) msg += ' | ';
-                msg += result.suggestions.join('<br>');
-            }
-            rowsHtml += `<td>${msg}</td>`;
-
-            rowsHtml += `</tr>`;
-        }
-        tbody.innerHTML = rowsHtml;
-
-        // 입력 필드에 유효/비유효 클래스 추가 (간단화)
-        [
-            'widthInput','heightInput','fontSizeInput','letterSpacingInput','lineHeightInput',
-            'recyclingMarkSelect','ingredient_info','country_of_origin','prdlst_nm',
-            'rawmtrl_nm_display','cautions','additional_info','storage_method','pog_daycnt'
-        ].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                if (hasErrors) element.classList.remove('is-valid');
-                else element.classList.add('is-valid');
-            }
-        });
-
-        return !hasErrors;
-    }
 
     // PDF 저장
     async function exportToPDF() {
@@ -2513,10 +2821,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const activeTab = document.querySelector('.nav-link.active[data-bs-toggle="tab"]');
         if (activeTab && activeTab.getAttribute('data-bs-target') === '#nutrition-tab') {
             nutritionPreview.style.display = 'block';
-            console.log('✅ 영양성분 탭이 활성화되어 있어 영양성분 표시');
         } else {
             nutritionPreview.style.display = 'none';
-            console.log('ℹ️ 영양성분 탭이 비활성화되어 있어 영양성분 숨김');
         }
     }
 
@@ -2561,77 +2867,587 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 초기화
     setupEventListeners();
-    // 최초 로드시에도 고정 사이즈 및 th 사이즈 적용
+    // 최초 로드시에만 한 번 실행 (분리배출마크 간섭 방지)
     updatePreviewStyles();
-    setTimeout(updatePreviewStyles, 100);
-    setTimeout(updatePreviewStyles, 500); // 추가로 한번 더 실행
     setupAreaCalculation();
     setTimeout(updateArea, 100);
     enforceInputMinMax();
     
-    // 저장된 설정 로드
+    // 설정 UI 요소들이 존재하는지 확인하고 없으면 생성
+    ensureSettingsElements();
+    
+    // 전역 함수들을 먼저 설정 (에러 발생 전에)
+    setupGlobalRecyclingFunctions();
+    
+    // 저장된 설정 로드 (에러가 발생해도 다른 기능에 영향 없도록)
     loadSavedPreviewSettings();
-    const exportPdfBtn = document.getElementById('exportPdfBtn');
-    if (exportPdfBtn) {
-        exportPdfBtn.addEventListener('click', exportToPDF);
-    }
     
-    // 설정 저장 버튼 이벤트 추가
-    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
-    if (saveSettingsBtn) {
-        saveSettingsBtn.addEventListener('click', savePreviewSettings);
-    }
+    // 버튼 이벤트 리스너 설정 (중복 제거된 코드)
+    safeAddEventListener('exportPdfBtn', 'click', exportToPDF);
+    safeAddEventListener('saveSettingsBtn', 'click', savePreviewSettings);
     
-    const widthInput = document.getElementById('widthInput');
-    if (widthInput) widthInput.addEventListener('change', calculateHeight);
-    const fontSizeInput = document.getElementById('fontSizeInput');
-    if (fontSizeInput) fontSizeInput.addEventListener('change', calculateHeight);
-    const letterSpacingInput = document.getElementById('letterSpacingInput');
-    if (letterSpacingInput) letterSpacingInput.addEventListener('change', calculateHeight);
-    const lineHeightInput = document.getElementById('lineHeightInput');
-    if (lineHeightInput) lineHeightInput.addEventListener('change', calculateHeight);
+    // 높이 계산 이벤트 리스너 설정 (중복 제거된 코드)
+    const heightCalculationInputs = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput'];
+    addEventListenersToElements(heightCalculationInputs, 'change', calculateHeight);
     window.addEventListener('load', calculateHeight);
     
-    // DOM 요소들의 존재 여부 확인 및 초기화
-    console.log('🔍 DOM 요소 존재 여부 확인');
+    // DOM 요소들의 존재 여부 확인 (중복 제거된 코드)
     const criticalElements = [
-        'nutrition-data',
-        'country-mapping-data', 
-        'expiry-recommendation-data',
-        'nutritionPreview',
-        'servingSizeDisplay',
-        'servingsPerPackageDisplay',
-        'nutritionDisplayUnit'
+        'nutrition-data', 'country-mapping-data', 'expiry-recommendation-data',
+        'nutritionPreview', 'servingSizeDisplay', 'servingsPerPackageDisplay', 'nutritionDisplayUnit'
     ];
     
-    criticalElements.forEach(elementId => {
-        const element = document.getElementById(elementId);
-        if (element) {
-            console.log(`✅ ${elementId}: 존재함`);
-        } else {
-            console.warn(`⚠️ ${elementId}: 찾을 수 없음`);
-        }
-    });
+    const missingElements = criticalElements.filter(id => !document.getElementById(id));
+    if (missingElements.length > 0) {
+        console.warn(`⚠️ 누락된 DOM 요소들: ${missingElements.join(', ')}`);
+    }
     
-    // 초기화 완료 표시
-    console.log('🎉 미리보기 페이지 초기화 완료');
+    // 초기화 완료 표시 (debug removed)
+    
+    // 포장재질 필드 변경 감지 및 자동 분리배출마크 추천
+    function setupPackageMaterialWatcher() {
+        // 포장재질 입력 필드 찾기 (다양한 selector 시도)
+        const packageMaterialSelectors = [
+            'input[name="frmlc_mtrqlt"]',
+            '#frmlc_mtrqlt',
+            'input[placeholder*="포장재질"]',
+            'input[placeholder*="용기"]'
+        ];
+        
+        let packageField = null;
+        for (const selector of packageMaterialSelectors) {
+            packageField = document.querySelector(selector);
+            if (packageField) break;
+        }
+        
+        if (packageField) {
+            // 디바운스된 업데이트 함수
+            const debouncedUpdate = debounce((value) => {
+                if (value && value.trim()) {
+                    // 자동 추천 및 적용
+                    window.updateRecyclingMarkUI(value.trim(), true);
+                }
+            }, 500);
+            
+            // 이벤트 리스너 추가 (중복 제거된 코드)
+            const handler = (e) => debouncedUpdate(e.target.value);
+            packageField.addEventListener('input', handler);
+            packageField.addEventListener('change', handler);
+        }
+    }
+    
+    // 포장재질 감지기 설정
+    setTimeout(setupPackageMaterialWatcher, 500);
     
     // 페이지 로드 후 탭 상태 확인
     setTimeout(() => {
-        console.log('🔄 지연 후 탭 상태 재검사');
+        // 지연 후 탭 상태 재검사 (debug removed)
         const activeTab = document.querySelector('.nav-link.active');
-        if (activeTab) {
-            console.log('✅ 활성 탭:', activeTab.textContent.trim());
-            console.log('✅ 탭 타겟:', activeTab.getAttribute('data-bs-target'));
-        } else {
+        if (!activeTab) {
             console.warn('⚠️ 활성 탭을 찾을 수 없음');
         }
-        
         // 현재 영양성분 표시 상태 확인
         const nutritionPreview = document.getElementById('nutritionPreview');
         if (nutritionPreview) {
-            console.log('ℹ️ 영양성분 표시 상태:', nutritionPreview.style.display);
+            // (debug removed)
         }
     }, 1000);
 
+});
+
+// validateButton 이벤트 리스너 - 단순하고 안정적인 방식
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('� validateButton 이벤트 리스너 연결 시작');
+    
+    const validateButton = document.getElementById('validateButton');
+    console.log('🔍 validateButton 찾기:', validateButton);
+    
+    if (validateButton) {
+        validateButton.addEventListener('click', function() {
+            console.log('🎯 validateButton 클릭됨!');
+            if (typeof window.validateSettings === 'function') {
+                window.validateSettings();
+            } else {
+                console.error('❌ validateSettings 함수를 찾을 수 없음');
+                alert('검증 함수를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+            }
+        });
+        console.log('✅ validateButton 이벤트 리스너 연결 완료');
+    } else {
+        console.log('❌ validateButton을 찾을 수 없음');
+    }
+});
+
+// 부모창으로부터 데이터 수신 리스너
+window.addEventListener('message', function(e) {
+    if (e.data.type === 'previewCheckedFields') {
+        // 전역 변수로 설정하여 validateSettings에서 사용할 수 있도록
+        window.checkedFields = e.data.checked;
+        console.log('✅ 부모창 원본 데이터 연동 완료');
+        
+        // 원재료명 정보 로깅
+        if (window.checkedFields.ingredient_info) {
+            console.log('🎯 부모창 원재료명:', window.checkedFields.ingredient_info);
+        }
+    }
+});
+
+// 제품명 금지문구 검증 (기존 로직 활용)
+function checkForbiddenPhrasesInProduct() {
+    // HTML의 기존 checkForbiddenPhrases 로직을 호출
+    if (typeof window.checkForbiddenPhrases === 'function') {
+        return window.checkForbiddenPhrases();
+    }
+    
+    // 폴백 로직
+    const errors = [];
+    const suggestions = [];
+    const productName = (checkedFields.prdlst_nm || '').trim();
+    
+    if (!productName) {
+        return { ok: true, errors, suggestions };
+    }
+    
+    const forbiddenPhrases = window.LABEL_CONSTANTS?.forbiddenPhrases || ['천연', '자연', '슈퍼', '생명'];
+    const foundForbiddenPhrases = forbiddenPhrases.filter(phrase => 
+        productName.toLowerCase().includes(phrase.toLowerCase())
+    );
+    
+    if (foundForbiddenPhrases.length > 0) {
+        errors.push(`제품명에 사용금지 문구가 포함되어 있습니다: ${foundForbiddenPhrases.join(', ')}`);
+        suggestions.push('사용금지 문구를 제품명에서 제거하세요. (식품 등의 표시기준 제8조)');
+    }
+    
+    return {
+        ok: errors.length === 0,
+        errors,
+        suggestions
+    };
+}
+
+// 농수산물 성분 함량 표시 검증 (기존 로직 활용)
+function checkFarmSeafoodContentDisplay() {
+    console.log('🚀 checkFarmSeafoodContentDisplay 함수 호출됨');
+    
+    // checkedFields 데이터 확인
+    if (!checkedFields) {
+        console.warn('⚠️ checkedFields 데이터 없음');
+        return { ok: true, errors: [], suggestions: [] };
+    }
+    
+    // HTML의 기존 checkFarmSeafoodCompliance 로직을 호출
+    if (typeof window.checkFarmSeafoodCompliance === 'function') {
+        console.log('✅ HTML의 checkFarmSeafoodCompliance 함수 호출');
+        return window.checkFarmSeafoodCompliance();
+    }
+    
+    console.log('📋 폴백 로직 사용');
+    // 폴백 로직 (기존 HTML 로직과 동일)
+    const errors = [];
+    const suggestions = [];
+    const productName = checkedFields.prdlst_nm || '';
+    const ingredientInfo = checkedFields.ingredient_info || '';
+    
+    console.log('- 제품명:', productName);
+    console.log('- 특정성분 함량:', ingredientInfo);
+    
+    // 농수산물 목록 (constants.js에서 가져오기)
+    const farmSeafoodItems = window.LABEL_CONSTANTS?.farmSeafoodItems || window.farmSeafoodItems || [];
+
+    // 제품명에 포함된 농수산물명 추출 (긴 이름부터 처리)
+    const foundItems = farmSeafoodItems
+        .filter(item => productName.includes(item))
+        .sort((a, b) => b.length - a.length);
+
+    console.log('- 발견된 농수산물:', foundItems);
+
+    if (foundItems.length === 0) {
+        console.log('✅ 농수산물 성분 없음 - 검증 통과');
+        return { ok: true, errors: [], suggestions: [] };
+    }
+
+    foundItems.forEach(item => {
+        // '특정성분 함량' 필드에 해당 성분명과 함량(%)이 모두 포함되어 있는지 확인
+        const complianceRegex = new RegExp(`${item}[^,]*\\d+(\\.\\d+)?\\s*%`);
+        const isCompliant = complianceRegex.test(ingredientInfo);
+        
+        console.log(`- ${item} 검증:`, isCompliant ? '통과' : '실패');
+
+        if (!isCompliant) {
+            errors.push(`제품명에 사용된 '${item}'의 함량을 '특정성분 함량' 항목에 표시하세요 (예: ${item} 100%).`);
+        }
+    });
+
+    console.log('✅ 농수산물 성분 함량 검증 완료:', errors.length === 0 ? '통과' : '오류 있음');
+    return {
+        ok: errors.length === 0,
+        errors,
+        suggestions
+    };
+}
+
+// 필수 문구 및 식품유형별 검증 (HTML에서 이동)
+window.checkFoodTypePhrasesUnified = function checkFoodTypePhrasesUnified() {
+    const errors = [];
+    const suggestions = [];
+    const storageMethod = (checkedFields.storage_method || '').trim();
+    const foodType = (checkedFields.prdlst_dcnm || '').trim();
+    const cautions = (checkedFields.cautions || '').trim();
+    const additional = (checkedFields.additional_info || '').trim();
+
+    console.log('🔍 필수 문구 검증 시작');
+    console.log('- 보관방법:', storageMethod);
+    console.log('- 식품유형:', foodType);
+    console.log('- 주의사항:', cautions);
+    console.log('- 기타표시사항:', additional);
+
+    // 1. 냉동 조건 검증
+    const isFrozenStorage = (() => {
+        if (storageMethod.includes('냉동')) return true;
+        const tempRegex = /(-?\d+(\.\d+)?)\s*(℃|도)/g;
+        let match;
+        while ((match = tempRegex.exec(storageMethod)) !== null) {
+            const tempValue = parseFloat(match[1]);
+            if (!isNaN(tempValue) && tempValue <= -18) {
+                return true;
+            }
+        }
+        return false;
+    })();
+
+    if (isFrozenStorage) {
+        const hasRequiredFrozenKeywords = cautions.includes('해동') || cautions.includes('재냉동') || additional.includes('해동') || additional.includes('재냉동');
+        if (!hasRequiredFrozenKeywords) {
+            errors.push('냉동 보관 제품은 주의사항 또는 기타표시사항에 "해동" 또는 "재냉동" 관련 문구를 포함해야 합니다.');
+        }
+    }
+
+    // 2. 냉장 조건 검증
+    const isRefrigeratedStorage = (() => {
+        if (storageMethod.includes('냉장')) return true;
+        const rangeRegex = /(\d+(\.\d+)?)\s*~\s*(\d+(\.\d+)?)\s*(℃|도)/g;
+        let match;
+        while ((match = rangeRegex.exec(storageMethod)) !== null) {
+            const minTemp = parseFloat(match[1]);
+            const maxTemp = parseFloat(match[3]);
+            if (!isNaN(minTemp) && !isNaN(maxTemp) && minTemp >= -1 && maxTemp <= 15) {
+                return true;
+            }
+        }
+        return false;
+    })();
+
+    // 3. 즉석조리식품 검증
+    if (foodType.includes('즉석조리식품')) {
+        const hasCookingMethod = /조리방법/.test(additional);
+        if (!hasCookingMethod) {
+            errors.push('즉석조리식품은 기타표시사항에 "조리방법"을 표시해야 합니다.');
+        }
+    }
+
+    // 4. 유제품 검증
+    const dairyKeywords = ["우유", "치즈", "발효유", "요구르트", "유제품"];
+    const isDairy = dairyKeywords.some(keyword => foodType.includes(keyword));
+    if (isDairy) {
+        const hasFatRegex = /지방.*\(\s*%\s*\)/;
+        const hasFat = hasFatRegex.test(cautions) || hasFatRegex.test(additional);
+        if (!hasFat) {
+            errors.push('조건: 유제품 | 항목: 주의사항/기타표시사항 | 문구: "지방함량(%)"');
+        }
+        const hasSteril = /멸균/.test(cautions) || /멸균/.test(additional);
+        if (!hasSteril) {
+            errors.push('조건: 유제품 | 항목: 주의사항/기타표시사항 | 문구: "멸균방식"');
+        }
+        if (!isRefrigeratedStorage) {
+            errors.push('조건: 유제품 | 항목: 보관방법/주의사항/기타표시사항 | 문구: "냉장보관(0~10℃)"');
+        }
+    }
+
+    // 5. 필수 문구 검증
+    const REGULATIONS = window.REGULATIONS || {};
+    let requiredPhrases = [];
+    Object.keys(REGULATIONS.food_type_phrases || {}).forEach(key => {
+        if (foodType.includes(key)) {
+            requiredPhrases = requiredPhrases.concat(REGULATIONS.food_type_phrases[key]);
+        }
+    });
+    
+    requiredPhrases = requiredPhrases.filter(phrase => phrase !== "해동 후 재냉동 금지");
+    requiredPhrases.forEach(phrase => {
+        if (!cautions.includes(phrase) && !additional.includes(phrase)) {
+            errors.push(`조건: 식품유형("${foodType}") | 항목: 주의사항/기타표시사항 | 문구: "${phrase}"`);
+        }
+    });
+
+    // 6. 1399 문구 검증
+    const hasReport = cautions.includes("1399") || additional.includes("1399");
+    if (!hasReport) {
+        errors.push('모든 식품에는 "부정불량식품신고는 국번없이 1399"를 표시해야 합니다.');
+    }
+
+    console.log('✅ 필수 문구 검증 완료:', errors.length === 0 ? '통과' : '오류 있음');
+    return { ok: errors.length === 0, errors, suggestions };
+};
+
+// ===== 통합 규정 검증 시스템 =====
+window.validateRegulations = function validateRegulations() {
+    const results = {
+        ok: true,
+        errors: [],
+        suggestions: [],
+        details: {}
+    };
+    
+    // checkedFields 검증
+    if (typeof checkedFields === 'undefined') {
+        console.warn('checkedFields가 정의되지 않음 - 규정 검증 불가');
+        return { ok: true, errors: [], suggestions: [] };
+    }
+
+    // 1. 성분 관련 검증 (농수산물 + 특정성분)
+    const ingredientValidation = validateIngredientCompliance();
+    results.details.ingredient = ingredientValidation;
+    if (!ingredientValidation.ok) {
+        results.ok = false;
+        results.errors.push(...ingredientValidation.errors);
+        results.suggestions.push(...ingredientValidation.suggestions);
+    }
+
+    // 2. 문구 관련 검증 (필수문구 + 금지문구)
+    const textValidation = validateTextCompliance();
+    results.details.text = textValidation;
+    if (!textValidation.ok) {
+        results.ok = false;
+        results.errors.push(...textValidation.errors);
+        results.suggestions.push(...textValidation.suggestions);
+    }
+
+    // 3. 알레르기 성분 검증
+    const allergenValidation = validateAllergenCompliance();
+    results.details.allergen = allergenValidation;
+    if (!allergenValidation.ok) {
+        results.ok = false;
+        results.errors.push(...allergenValidation.errors);
+        results.suggestions.push(...allergenValidation.suggestions);
+    }
+
+    // 4. 포장재질 및 분리배출마크 검증
+    const packagingValidation = validatePackagingCompliance();
+    results.details.packaging = packagingValidation;
+    if (!packagingValidation.ok) {
+        results.ok = false;
+        results.errors.push(...packagingValidation.errors);
+        results.suggestions.push(...packagingValidation.suggestions);
+    }
+
+    return results;
+};
+
+// ===== 개별 검증 모듈들 =====
+
+// 1. 성분 관련 검증 (농수산물 성분 + 특정성분 함량)
+function validateIngredientCompliance() {
+    const errors = [];
+    const suggestions = [];
+    
+    // 농수산물 성분 함량 검증
+    const farmSeafoodResult = checkFarmSeafoodContent();
+    if (!farmSeafoodResult.ok) {
+        errors.push(...farmSeafoodResult.errors);
+        suggestions.push(...farmSeafoodResult.suggestions);
+    }
+    
+    return { ok: errors.length === 0, errors, suggestions };
+}
+
+// 2. 문구 관련 검증 (필수문구 + 금지문구)
+function validateTextCompliance() {
+    const errors = [];
+    const suggestions = [];
+    
+    // 필수 문구 검증
+    const requiredTextResult = checkRequiredPhrases();
+    if (!requiredTextResult.ok) {
+        errors.push(...requiredTextResult.errors);
+        suggestions.push(...requiredTextResult.suggestions);
+    }
+    
+    // 사용 금지 문구 검증
+    const forbiddenTextResult = checkForbiddenText();
+    if (!forbiddenTextResult.ok) {
+        errors.push(...forbiddenTextResult.errors);
+        suggestions.push(...forbiddenTextResult.suggestions);
+    }
+    
+    return { ok: errors.length === 0, errors, suggestions };
+}
+
+// 3. 알레르기 성분 검증
+function validateAllergenCompliance() {
+    const allergenErrors = checkAllergenDuplication();
+    return {
+        ok: allergenErrors.length === 0,
+        errors: allergenErrors,
+        suggestions: allergenErrors.length > 0 ? ['누락된 알레르기 성분을 표시사항에 추가하세요.'] : []
+    };
+}
+
+// 4. 포장재질 및 분리배출마크 검증
+function validatePackagingCompliance() {
+    const errors = [];
+    const suggestions = [];
+    
+    // 분리배출마크 검증
+    try {
+        if (typeof window.checkRecyclingMarkCompliance === 'function') {
+            const recyclingResult = window.checkRecyclingMarkCompliance();
+            if (!recyclingResult.ok) {
+                errors.push(...recyclingResult.errors);
+                suggestions.push(...recyclingResult.suggestions);
+            }
+        }
+    } catch (e) {
+        console.warn('분리배출마크 검증 오류:', e);
+    }
+    
+    return { ok: errors.length === 0, errors, suggestions };
+}
+
+// ===== 세부 검증 함수들 (기존 함수들을 리팩토링) =====
+
+// 농수산물 성분 함량 검증 (기존 checkFarmSeafoodCompliance 리팩토링)
+function checkFarmSeafoodContent() {
+    const errors = [];
+    const suggestions = [];
+    const productName = checkedFields.prdlst_nm || '';
+    const ingredientInfo = checkedFields.ingredient_info || '';
+    
+    // constants.js에서 로드된 배열 사용
+    const farmSeafoodItems = window.farmSeafoodItems;
+    if (!farmSeafoodItems) {
+        return { ok: true, errors: [], suggestions: [] };
+    }
+
+    // 제품명에 포함된 농수산물명 추출
+    const foundItems = farmSeafoodItems
+        .filter(item => productName.includes(item))
+        .sort((a, b) => b.length - a.length);
+
+    if (foundItems.length === 0) {
+        return { ok: true, errors: [], suggestions: [] };
+    }
+
+    foundItems.forEach(item => {
+        const complianceRegex = new RegExp(`${item}[^,]*\\d+(\\.\\d+)?\\s*%`);
+        const isCompliant = complianceRegex.test(ingredientInfo);
+
+        if (!isCompliant) {
+            errors.push(`제품명에 사용된 '${item}'의 함량을 '특정성분 함량' 항목에 표시하세요 (예: ${item} 100%).`);
+        }
+    });
+
+    return { ok: errors.length === 0, errors, suggestions };
+}
+
+// 필수 문구 검증 (기존 checkFoodTypePhrasesUnified 리팩토링)
+function checkRequiredPhrases() {
+    const errors = [];
+    const suggestions = [];
+    
+    try {
+        if (typeof window.checkFoodTypePhrasesUnified === 'function') {
+            const result = window.checkFoodTypePhrasesUnified();
+            return result;
+        }
+    } catch (e) {
+        console.warn('필수 문구 검증 오류:', e);
+    }
+    
+    return { ok: true, errors, suggestions };
+}
+
+// 사용 금지 문구 검증 (기존 checkForbiddenPhrases 리팩토링)
+function checkForbiddenText() {
+    const errors = [];
+    const suggestions = [];
+    
+    const forbiddenPhrases = window.forbiddenPhrases;
+    if (!forbiddenPhrases) {
+        return { ok: true, errors: [], suggestions: [] };
+    }
+    
+    const FIELD_LABELS = {
+        'prdlst_nm': '제품명',
+        'ingredient_info': '특정성분 함량',
+        'rawmtrl_nm_display': '원재료명',
+        'cautions': '주의사항',
+        'additional_info': '기타표시사항'
+    };
+    
+    const fieldsToCheck = [
+        'prdlst_nm', 'ingredient_info', 'rawmtrl_nm_display', 'cautions', 'additional_info'
+    ];
+    
+    fieldsToCheck.forEach(field => {
+        let value = (checkedFields[field] || '').toString();
+        forbiddenPhrases.forEach(phrase => {
+            if (value && value.match(new RegExp(phrase, 'i'))) {
+                if (field === 'rawmtrl_nm_display' && phrase === '천연') {
+                    let msg = `<strong>"${FIELD_LABELS[field]}" 항목에 사용 금지 문구 "${phrase}"가 표시되어 있습니다.</strong>`;
+                    let suggestion = `<strong style="color:#222;">"${FIELD_LABELS[field]}" 항목에 "${phrase}" 문구를 표시하려면 반드시 사용 조건에 맞게 표시하세요.</strong><br>` +
+                        '<span style="color:#888;">사용 조건:<br>' +
+                        '① 원료 중에 합성향료·합성착색료·방부제 등 어떠한 인공 화학 성분도 전혀 포함되어 있지 않아야 함<br>' +
+                        '② 최소한의 물리적 가공(세척·절단·동결·건조 등)만 거친 상태여야 함<br>' +
+                        '③ "천연"과 유사한 의미로 오인될 수 있는 "자연산(naturel)" 등의 외국어 사용도 동일 기준 적용<br>' +
+                        '④ 식품유형별로 별도 금지 사항(「식품등의 표시기준」의 개별 고시 규정)이 있는 경우, 그 규정에 따라 추가 제한이 있음<br>' +
+                        '⑤ 예: 설탕에는 "천연설탕"이라는 표현이 불가<br>' +
+                        '⑥ 영업소 명칭 또는 등록상표에 포함된 경우는 허용<br>' +
+                        '⑦ "천연향료" 등 고시된 허용 목록 내 용어만 예외적으로 허용</span>';
+                    errors.push(`${msg}<br>${suggestion}`);
+                    value = value.replace(/천연/gi, '').replace(/natural/gi, '').replace(/naturel/gi, '');
+                    checkedFields[field] = value.trim();
+                    return;
+                }
+                
+                let msg = `<strong>"${FIELD_LABELS[field]}" 항목에 사용 금지 문구 "${phrase}"가 표시되어 있습니다.</strong>`;
+                let suggestion = `<strong style="color:#222;">"${FIELD_LABELS[field]}"에서 "${phrase}" 문구를 삭제하세요.</strong>`;
+                
+                if (field === 'rawmtrl_nm_display' && phrase === '자연') {
+                    suggestion = `<strong style="color:#222;">"${FIELD_LABELS[field]}" 항목에 "${phrase}" 문구를 표시하려면 반드시 사용 조건에 맞게 표시하세요.</strong><br>` +
+                        '<span style="color:#888;">사용 조건:<br>' +
+                        '① "자연"이라는 용어는 가공되지 않은 농산물·임산물·수산물·축산물에 대해서만 허용<br>' +
+                        '② 수확하여 세척·포장만 거친 원물(raw agricultural/seafood/livestock products)에만 허용<br>' +
+                        '③ 이미 "가공식품"으로 분류된 상태라면 "자연" 표기가 불가능<br>' +
+                        '④ 유전자변형식품, 나노식품 등은 "자연" 표기가 금지됨<br>' +
+                        '⑤ 영업소 명칭 또는 등록상표에 포함된 경우는 허용<br>' +
+                        '⑥ 단, 제품명(product name) 자체에 "천연"·"자연"을 붙일 수는 없음</span>';
+                }
+                errors.push(`${msg}<br>${suggestion}`);
+            }
+        });
+    });
+    
+    return { ok: errors.length === 0, errors, suggestions };
+}
+
+// ===== 기존 개별 함수들 (호환성을 위해 유지) =====
+window.checkFarmSeafoodCompliance = function checkFarmSeafoodCompliance() {
+    return checkFarmSeafoodContent();
+};
+
+// ===== 사용 금지 문구 검증 (호환성을 위해 유지) =====
+window.checkForbiddenPhrases = function checkForbiddenPhrases() {
+    return checkForbiddenText();
+};
+
+// 페이지 로드 완료 시 부모창에 데이터 요청
+window.addEventListener('load', function() {
+    if (window.opener) {
+        window.opener.postMessage({
+            type: 'requestPreviewData'
+        }, '*');
+        console.log('📤 부모창에 데이터 요청 완료');
+    } else {
+        console.log('⚠️ 부모창이 없음 - 팝업이 아닌 직접 접근');
+    }
 });

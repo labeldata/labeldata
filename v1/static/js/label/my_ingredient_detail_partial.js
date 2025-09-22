@@ -199,7 +199,7 @@ function doSaveMyIngredient(url, formData, queryString, doneCallback) {
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+    console.error('Error:', error);
         alert('저장 중 오류가 발생했습니다.');
     })
     .finally(() => {
@@ -384,8 +384,7 @@ function initFoodTypeSelect() {
     const foodCategorySelect = ingredientForm ? ingredientForm.querySelector('#foodCategorySelect') : null;
     const currentFoodCategory = foodCategorySelect ? foodCategorySelect.value : 'processed';
     
-    console.log('initFoodTypeSelect - foodCategorySelect:', foodCategorySelect);
-    console.log('initFoodTypeSelect - currentFoodCategory:', currentFoodCategory);
+    // debug logs removed
     
     const actualFoodCategory = currentFoodCategory || 'processed';
     
@@ -482,16 +481,16 @@ function setupFoodCategoryChangeEvent() {
     const ingredientForm = document.getElementById('ingredientForm');
     const foodCategorySelect = ingredientForm ? ingredientForm.querySelector('#foodCategorySelect') : null;
     
-    if (foodCategorySelect) {
+        if (foodCategorySelect) {
         // 기존 onchange 속성 제거 (다른 스크립트에서 추가했을 수 있음)
         if (foodCategorySelect.hasAttribute('onchange')) {
             foodCategorySelect.removeAttribute('onchange');
         }
         
         // 기존 이벤트 리스너 제거 (중복 방지)
-        foodCategorySelect.removeEventListener('change', handleFoodCategoryChange);        
+        foodCategorySelect.removeEventListener('change', handleFoodCategoryChange);
         foodCategorySelect.addEventListener('change', function(event) {
-            console.log('식품 구분 변경됨:', event.target.value);
+            // 식품 구분 변경됨 처리
             handleFoodCategoryChange();
         });
     }
@@ -499,14 +498,10 @@ function setupFoodCategoryChangeEvent() {
 
 // 식품 구분 변경 핸들러
 function handleFoodCategoryChange() {
-    console.log('handleFoodCategoryChange 호출됨');
     if (window.IngredientDetailPartial.isSyncing) {
-        console.log('동기화 중이므로 처리하지 않음');
         return;
     }
-    console.log('식품유형 드롭다운 초기화 시작');
     initFoodTypeSelect();
-    console.log('표시규정 업데이트 시작');
     updateDisplayRegulation(); // 표시규정 업데이트
 }
 
@@ -576,7 +571,7 @@ onReady(function() {
 
 // 표시규정 정보 업데이트 함수
 function updateDisplayRegulation() {
-    console.log('updateDisplayRegulation 함수 호출됨');
+    // updateDisplayRegulation called
     
     // ingredient form 내부에서 요소를 찾음 (initFoodTypeSelect와 동일한 방식)
     const ingredientForm = document.getElementById('ingredientForm');
@@ -585,42 +580,27 @@ function updateDisplayRegulation() {
     const displayRegulationRow = document.getElementById('display-regulation-row');
     const displayRegulationDisplay = document.getElementById('display_regulation_display');
     
-    console.log('Elements found:', {
-        ingredientForm: !!ingredientForm,
-        foodCategorySelect: !!foodCategorySelect,
-        foodTypeSelect: !!foodTypeSelect,
-        displayRegulationRow: !!displayRegulationRow,
-        displayRegulationDisplay: !!displayRegulationDisplay
-    });
+    // elements presence checked
     
     if (!foodCategorySelect || !foodTypeSelect || !displayRegulationRow || !displayRegulationDisplay) {
-        console.log('필수 요소를 찾을 수 없습니다.');
+    // 필수 요소가 누락되었습니다.
         return;
     }
     
     const foodCategory = foodCategorySelect.value;
     const foodType = foodTypeSelect.value;
     
-    console.log('현재 값:', { foodCategory, foodType });
-    console.log('foodCategorySelect element:', foodCategorySelect);
-    console.log('foodCategorySelect.selectedIndex:', foodCategorySelect.selectedIndex);
-    console.log('foodCategorySelect.options:', Array.from(foodCategorySelect.options).map(opt => ({ value: opt.value, text: opt.text, selected: opt.selected })));
+    // current values inspected
     
     // 식품첨가물이 아니거나 식품유형이 없으면 숨김
     if (foodCategory !== 'additive' || !foodType) {
-        console.log('식품첨가물이 아니거나 식품유형이 없음 - 표시규정 숨김');
-        console.log('조건 체크:', { 
-            'foodCategory !== additive': foodCategory !== 'additive', 
-            'foodCategory': foodCategory,
-            '!foodType': !foodType,
-            'foodType': foodType
-        });
+    // 식품첨가물이 아니거나 식품유형이 없음 - 숨김
         displayRegulationRow.style.display = 'none';
         displayRegulationDisplay.value = '';
         return;
     }
     
-    console.log('API 호출 시작');
+    // calling API for regulation info
     
     // API 호출하여 표시규정 정보 가져오기
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
@@ -637,13 +617,10 @@ function updateDisplayRegulation() {
     })
     .then(response => response.json())
     .then(data => {
-        console.log('API 응답:', data);
         if (data.success && data.regulation) {
-            console.log('표시규정 표시:', data.regulation);
             displayRegulationDisplay.value = data.regulation;
             displayRegulationRow.style.display = '';
         } else {
-            console.log('표시규정 없음 - 숨김');
             displayRegulationRow.style.display = 'none';
             displayRegulationDisplay.value = '';
         }

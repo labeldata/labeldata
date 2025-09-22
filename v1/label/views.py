@@ -1,82 +1,3 @@
-
-# --- [수정] Django Imports ---
-from django.conf import settings  # Django settings import 추가
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.core.cache import cache
-from django.core.paginator import Paginator
-from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
-from django.core.cache import cache
-from django.db.models import F, Q
-from django.db.models import Count
-from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse # [추가] URL 생성을 위해 import
-from django.utils import timezone  # 추가
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST, require_GET
-
-# --- [수정] Local Application Imports ---
-from .constants import CATEGORY_CHOICES, DEFAULT_PHRASES, FIELD_REGULATIONS
-from .forms import LabelCreationForm, MyIngredientsForm
-from .models import (AgriculturalProduct, CountryList, ExpiryRecommendation,
-                     FoodAdditive, FoodItem, FoodType, ImportedFood,
-                     LabelIngredientRelation, MyIngredient, MyLabel, MyPhrase)
-from venv import logger  # 지우지 않음
-
-# --- [추가] food_type_settings 함수 정의 ---
-@login_required
-@csrf_exempt
-def food_type_settings(request):
-    """
-    식품유형(소분류)에 따른 표시 규정, 옵션, 기타 설정을 반환하는 API
-    프론트엔드에서 /label/food-type-settings/?food_type=xxx 로 호출
-    """
-    food_type = request.GET.get('food_type', '').strip()
-    settings = {}
-    # 식품유형 객체 조회
-    ft = None
-    if food_type:
-        try:
-            ft = FoodType.objects.filter(food_type=food_type).first()
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': f'식품유형 조회 오류: {str(e)}'})
-    # 관련 규정
-    if ft and hasattr(ft, 'relevant_regulations'):
-        settings['relevant_regulations'] = ft.relevant_regulations or ''
-    else:
-        settings['relevant_regulations'] = ''
-    # 소비기한 옵션 (예시: pog_daycnt_options 필드가 있다면)
-    if ft and hasattr(ft, 'pog_daycnt_options') and ft.pog_daycnt_options:
-        options = [opt.strip() for opt in ft.pog_daycnt_options.split(',') if opt.strip()]
-        settings['pog_daycnt_options'] = options
-        settings['pog_daycnt'] = 'Y' if options else 'N'
-    else:
-        settings['pog_daycnt_options'] = []
-        settings['pog_daycnt'] = 'N'
-    # 기타 표시 설정 (예시: 기타 필드가 있다면 추가)
-    # settings['weight_calorie'] = getattr(ft, 'weight_calorie', 'N')
-    # 필요한 추가 필드가 있으면 여기에 확장
-    return JsonResponse({'success': True, 'settings': settings})
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
-
-@login_required
-@csrf_exempt
-def get_food_group(request):
-    """food_type 값을 받아 해당하는 food_group을 반환하는 API"""
-    food_type = request.GET.get('food_type', '').strip()
-    if not food_type:
-        return JsonResponse({'success': False, 'error': 'food_type 파라미터가 필요합니다.'})
-    try:
-        ft = FoodType.objects.filter(food_type=food_type).first()
-        if ft:
-            return JsonResponse({'success': True, 'food_group': ft.food_group})
-        else:
-            return JsonResponse({'success': False, 'error': '해당 food_type에 대한 food_group을 찾을 수 없습니다.'})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
 import json
 import re  # 정규식 처리를 위해 추가
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
@@ -96,11 +17,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
-from django.core.cache import cache
 from django.db.models import F, Q
-from django.db.models import Count
-import json
-import hashlib
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse # [추가] URL 생성을 위해 import
@@ -109,82 +26,15 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 
 # --- [수정] Local Application Imports ---
-from .constants import CATEGORY_CHOICES, DEFAULT_PHRASES, FIELD_REGULATIONS
+from .constants import CATEGORY_CHOICES
 from .forms import LabelCreationForm, MyIngredientsForm
-from .models import (AgriculturalProduct, CountryList, ExpiryRecommendation,
-                     FoodAdditive, FoodItem, FoodType, ImportedFood,
-                     LabelIngredientRelation, MyIngredient, MyLabel, MyPhrase)
+from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem, 
+                     FoodType, ImportedFood, LabelIngredientRelation, MyIngredient, 
+                     MyLabel, MyPhrase)
 from venv import logger  # 지우지 않음
 
-# --- [추가] 엑셀 처리를 위한 상수 정의 ---
-ALLERGEN_LIST = [
-    "메밀", "밀", "대두", "호두", "땅콩", "복숭아", "토마토", "돼지고기",
-    "난류(가금류)", "우유", "닭고기", "쇠고기", "새우", "고등어", "홍합",
-    "전복", "굴", "조개류", "게", "오징어", "아황산류", "잣"
-]
-GMO_LIST = ["대두", "옥수수", "면화", "카놀라", "사탕무", "알팔파"]
-
-def get_expiry_recommendations():
-    """
-    ExpiryRecommendation 데이터를 캐시와 함께 가져오는 헬퍼 함수
-    캐시 타임아웃: 1시간
-    """
-    cache_key = 'expiry_recommendations_dict'
-    cached_data = cache.get(cache_key)
-    
-    if cached_data is not None:
-        return cached_data
-    
-    # DB에서 데이터를 가져와서 딕셔너리 형태로 변환
-    recommendations = {}
-    for item in ExpiryRecommendation.objects.all():
-        recommendations[item.food_type] = {
-            'shelf_life': item.shelf_life,
-            'unit': item.unit
-        }
-    
-    # 1시간 동안 캐시
-    cache.set(cache_key, recommendations, 3600)
-    return recommendations
-def get_search_conditions(request, search_fields):
-    """
-    Request에서 검색 조건을 추출하고 Q 객체를 생성합니다.
-    """
-    search_conditions = Q()
-    search_values = {}
-    for field, query_param in search_fields.items():
-        value = request.GET.get(query_param, "").strip()
-        if value:
-            # 원료 표시명, 알레르기, GMO 검색에서 쉼표/플러스 구분 검색 지원
-            if field in ["ingredient_display_name", "allergens", "gmo"]:
-                # 플러스(+)로 구분하여 AND 검색
-                if '+' in value:
-                    # 플러스로 구분된 경우 AND 검색 (모든 조건이 만족되어야 함)
-                    search_terms = [term.strip() for term in value.split('+') if term.strip()]
-                    if search_terms:
-                        # 각 검색어에 대해 AND 조건으로 LIKE 검색
-                        field_conditions = Q()
-                        for term in search_terms:
-                            field_conditions &= Q(**{f"{field}__icontains": term})
-                        search_conditions &= field_conditions
-                # 쉼표로 구분하여 OR 검색
-                elif ',' in value:
-                    # 여러 검색어가 있는 경우 OR 검색
-                    search_terms = [term.strip() for term in value.split(',') if term.strip()]
-                    if search_terms:
-                        # 각 검색어에 대해 OR 조건으로 LIKE 검색
-                        field_conditions = Q()
-                        for term in search_terms:
-                            field_conditions |= Q(**{f"{field}__icontains": term})
-                        search_conditions &= field_conditions
-                else:
-                    # 단일 검색어인 경우 기존 LIKE 검색
-                    search_conditions &= Q(**{f"{field}__icontains": value})
-            else:
-                # 다른 필드는 기존 방식 유지 (원재료명 포함)
-                search_conditions &= Q(**{f"{field}__icontains": value})
-            search_values[query_param] = value
-    return search_conditions, search_values
+# --- [Import] utils에서 유틸리티 함수 및 상수 import ---
+from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 
 def paginate_queryset(queryset, page_number, items_per_page):
     """
@@ -621,15 +471,6 @@ def label_creation(request, label_id=None):
             label.processing_method = ', '.join(processing_methods) if processing_methods else ''
             label.processing_condition = processing_condition
             
-            # 저장 전 값 확인
-            print(f"=== 저장 직전 값 확인 ===")
-            print(f"food_group: '{label.food_group}'")
-            print(f"food_type: '{label.food_type}'")
-            print(f"preservation_type: '{label.preservation_type}'")
-            print(f"processing_method: '{label.processing_method}'")
-            print(f"processing_condition: '{label.processing_condition}'")
-            print("============================")
-            
             # 체크박스 상태 처리
             checkbox_fields = [field for field in request.POST.keys() if field.startswith('chk_')]
             for field_name in checkbox_fields:
@@ -663,18 +504,6 @@ def label_creation(request, label_id=None):
                 label.report_no_verify_YN = 'N'
 
             label.save()
-            
-            # 저장 후 DB에서 다시 읽어와서 값 확인
-            saved_label = MyLabel.objects.get(my_label_id=label.my_label_id)
-            print(f"=== 저장 후 DB 값 확인 ===")
-            print(f"food_group: '{saved_label.food_group}'")
-            print(f"food_type: '{saved_label.food_type}'")
-            print(f"preservation_type: '{saved_label.preservation_type}'")
-            print(f"processing_method: '{saved_label.processing_method}'")
-            print(f"processing_condition: '{saved_label.processing_condition}'")
-            print("============================")
-            
-            # 모든 메시지 제거
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
             messages.error(request, '입력 정보에 오류가 있습니다.')
@@ -860,23 +689,7 @@ def label_creation(request, label_id=None):
             # 대분류가 선택되지 않은 경우 모든 소분류 가져옴
             food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
             
-        # 자주 사용하는 문구 불러오기
-        user_phrases = MyPhrase.objects.filter(user_id=request.user, delete_YN='N').order_by('category_name', 'display_order')
-
-        phrases_data = {}
-        for phrase in user_phrases:
-            category = phrase.category_name
-            if category not in phrases_data:
-                phrases_data[category] = []
-            phrases_data[category].append({
-                'id': phrase.my_phrase_id,
-                'name': phrase.my_phrase_name,
-                'content': phrase.comment_content,
-                'note': phrase.note or '',
-                'order': phrase.display_order
-            })
-
-        phrases_json = json.dumps(phrases_data, ensure_ascii=False)
+        # 자주 사용하는 문구 관련 코드 삭제
 
         context = {
             'form': form,
@@ -885,9 +698,8 @@ def label_creation(request, label_id=None):
             'food_groups': food_groups,
             'country_list': CountryList.objects.all(),
             'has_ingredient_relations': has_ingredient_relations,
-            'phrases_json': phrases_json,  
             'count_ingredient_relations': count_ingredient_relations,
-            'regulations_json': json.dumps(FIELD_REGULATIONS, ensure_ascii=False)  # 추가
+            # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
         return render(request, 'label/label_creation.html', context)
 
@@ -1598,7 +1410,7 @@ def nutrition_calculator_popup(request):
                     'unit': unit
                 }
         except Exception as e:
-            print(f"영양성분 데이터 로딩 중 오류: {str(e)}")
+            pass  # 영양성분 데이터 로딩 오류 무시
     # None 값 처리
     for key, value in nutrition_data.items():
         if value is None:
@@ -1757,184 +1569,6 @@ def food_types_by_group(request):
 
 
 @login_required
-@csrf_exempt
-def manage_phrases(request):
-    """문구 추가/수정/삭제 처리"""
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Invalid method'})
-
-    try:
-        data = json.loads(request.body)
-        action = data.get('action')
-        category_name = data.get('category_name', '').strip()
-        
-        # 유효한 카테고리인지 확인
-        valid_categories = [choice[0] for choice in CATEGORY_CHOICES]
-        if not category_name or category_name not in valid_categories:
-            return JsonResponse({
-                'success': False, 
-                'error': f'카테고리 값이 올바르지 않습니다. 받은 값: "{category_name}", 유효한 값: {valid_categories}'
-            })
-
-        if action == 'create':
-            # 신규 문구 생성
-            new_phrase = MyPhrase.objects.create(
-                user_id=request.user,
-                my_phrase_name=data.get('my_phrase_name'),
-                category_name=category_name,
-                comment_content=data.get('comment_content'),
-                note=data.get('note', ''),
-                display_order=data.get('order', 0),  # display_order 추가
-                delete_YN='N'
-            )
-            return JsonResponse({
-                'success': True,
-                'message': '문구가 저장되었습니다.',
-                'id': new_phrase.my_phrase_id
-            })
-
-        elif action == 'update':
-            # 기존 문구 수정 로직
-            changes = data if isinstance(data, list) else [data]
-            for change in changes:
-                category_name_change = change.get('category_name', '').strip()
-                if not category_name_change or category_name_change not in valid_categories:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': f'카테고리 값이 올바르지 않습니다. 받은 값: "{category_name_change}", 유효한 값: {valid_categories}'
-                    })
-                
-                phrase = MyPhrase.objects.get(
-                    my_phrase_id=change['id'],
-                    user_id=request.user
-                )
-                phrase.my_phrase_name = change.get('my_phrase_name', phrase.my_phrase_name)
-                phrase.comment_content = change.get('comment_content', phrase.comment_content)
-                phrase.note = change.get('note', phrase.note)
-                phrase.category_name = category_name_change
-                phrase.display_order = change.get('order', phrase.display_order)  # display_order 업데이트
-                phrase.save()
-            return JsonResponse({'success': True})
-
-        elif action == 'delete':
-            # 문구 삭제 로직
-            phrase = MyPhrase.objects.get(
-                my_phrase_id=data['id'],
-                user_id=request.user
-            )
-            phrase.delete_YN = 'Y'
-            phrase.delete_datetime = timezone.now().strftime('%Y%m%d')
-            phrase.save()
-            return JsonResponse({'success': True})
-
-        else:
-            return JsonResponse({'success': False, 'error': 'Invalid action'})
-
-    except MyPhrase.DoesNotExist:
-        return JsonResponse({'success': False, 'error': '문구를 찾을 수 없습니다.'})
-    except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': '잘못된 데이터 형식입니다.'})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': f'오류 발생: {str(e)}'})
-
-@login_required
-@csrf_exempt
-def reorder_phrases(request):
-    """문구 순서 변경 처리"""
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Invalid method'})
-    
-    try:
-        data = json.loads(request.body)
-        updates = data.get('updates', [])
-        for update in updates:
-            phrase = MyPhrase.objects.get(
-                my_phrase_id=update['id'],
-                user_id=request.user
-            )
-            phrase.display_order = update['order']
-            phrase.save()
-        return JsonResponse({'success': True})
-    except Exception as e:
-        logger.error(f"reorder_phrases error: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)})
-
-@login_required
-
-def phrase_popup(request):
-    """자주 사용하는 문구 팝업"""
-    phrases_data = {}
-    categories = CATEGORY_CHOICES
-    
-    # CATEGORY_CHOICES에서 정의된 모든 카테고리에 대한 빈 리스트 초기화
-    for category_code, _ in categories:
-        phrases_data[category_code] = []
-    
-    # 사용자 문구만 가져오기 (display_order 순으로 정렬)
-    user_phrases = MyPhrase.objects.filter(
-        user_id=request.user, 
-        delete_YN='N'
-    ).order_by('category_name', 'display_order', 'my_phrase_name')
-
-    # 유효한 카테고리 코드 목록 생성
-    valid_categories = {choice[0] for choice in CATEGORY_CHOICES}
-
-    for phrase in user_phrases:
-        category = phrase.category_name
-        
-        # 유효한 카테고리가 아닌 경우 처리
-        if category not in valid_categories:
-            # 로그는 개발 환경에서만 출력하도록 제한
-            if hasattr(settings, 'DEBUG') and settings.DEBUG:
-                try:
-                    print(f"Warning: Unknown category in MyPhrase: {category} (ID: {phrase.my_phrase_id})")
-                except Exception:
-                    pass
-            
-            # 알 수 없는 카테고리는 'additional'로 분류하거나 건너뛰기
-            # 옵션 1: 건너뛰기 (현재 방식)
-            continue
-            
-            # 옵션 2: 'additional' 카테고리로 분류
-            # if 'additional' in phrases_data:
-            #     category = 'additional'
-            # else:
-            #     continue
-        
-        # phrases_data에 해당 카테고리가 없으면 초기화 (동적 카테고리 지원)
-        if category not in phrases_data:
-            phrases_data[category] = []
-            
-        phrases_data[category].append({
-            'id': phrase.my_phrase_id,
-            'name': phrase.my_phrase_name,
-            'content': phrase.comment_content,
-            'note': phrase.note or '',
-            'order': phrase.display_order or 0,
-            'is_custom': True
-        })
-    
-    context = {
-        'phrases_json': json.dumps(phrases_data),
-        'categories': categories
-    }
-    return render(request, 'label/phrase_popup.html', context)
-
-@login_required
-def phrase_suggestions(request):
-    """추천 문구 제공"""
-    try:
-        category = request.GET.get('category')
-        if not category:
-            return JsonResponse({'success': False, 'error': '카테고리가 제공되지 않았습니다.'})
-       
-        suggestions = DEFAULT_PHRASES.get(category, [])
-        return JsonResponse({'success': True, 'suggestions': suggestions})
-    except Exception as e:
-        logger.error(f"phrase_suggestions error: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)})
-
-@login_required
 def preview_popup(request):
     """표시사항 미리보기 팝업"""
     label_id = request.GET.get('label_id')
@@ -1944,9 +1578,6 @@ def preview_popup(request):
     
     try:
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-        
-        # 로그 추가
-        print(f"미리보기 요청 - 라벨 ID: {label_id}, 사용자: {request.user.username}")
         
         # 미리보기 항목 구성
         preview_items = []
@@ -1974,7 +1605,7 @@ def preview_popup(request):
         ]
 
         for field, label_text in field_mappings:
-            value = getattr(label, field, None)
+            value = getattr(label, field)
             if value:
                 preview_items.append({
                     'id': len(preview_items) + 1,
@@ -2018,104 +1649,63 @@ def preview_popup(request):
                 allergens.extend(relation.ingredient.allergens.split(','))
             # 원산지 표시대상 로직 추가 (필요한 경우)
 
-        # 영양성분 데이터 nutrition_data (계산기와 동일 구조) - 개선된 오류 처리
+        # 영양성분 데이터 nutrition_data (계산기와 동일 구조)
         nutrition_data = {
-            'serving_size': getattr(label, 'serving_size', None) or '100',
-            'serving_size_unit': getattr(label, 'serving_size_unit', None) or 'g',
-            'units_per_package': getattr(label, 'units_per_package', None) or '1',
-            'display_unit': getattr(label, 'nutrition_display_unit', None) or 'unit',
+            'serving_size': label.serving_size or '',
+            'serving_size_unit': label.serving_size_unit or 'g',
+            'units_per_package': label.units_per_package or '1',
+            'display_unit': label.nutrition_display_unit or 'unit',
             'nutrients': {
                 'calorie': {
-                    'value': getattr(label, 'calories', None) or 0,
-                    'unit': getattr(label, 'calories_unit', None) or 'kcal'
+                    'value': label.calories,
+                    'unit': label.calories_unit or 'kcal'
                 },
                 'natrium': {
-                    'value': getattr(label, 'natriums', None) or 0,
-                    'unit': getattr(label, 'natriums_unit', None) or 'mg'
+                    'value': label.natriums,
+                    'unit': label.natriums_unit or 'mg'
                 },
                 'carbohydrate': {
-                    'value': getattr(label, 'carbohydrates', None) or 0,
-                    'unit': getattr(label, 'carbohydrates_unit', None) or 'g'
+                    'value': label.carbohydrates,
+                    'unit': label.carbohydrates_unit or 'g'
                 },
                 'sugar': {
-                    'value': getattr(label, 'sugars', None) or 0,
-                    'unit': getattr(label, 'sugars_unit', None) or 'g'
+                    'value': label.sugars,
+                    'unit': label.sugars_unit or 'g'
                 },
                 'afat': {
-                    'value': getattr(label, 'fats', None) or 0,
-                    'unit': getattr(label, 'fats_unit', None) or 'g'
+                    'value': label.fats,
+                    'unit': label.fats_unit or 'g'
                 },
                 'transfat': {
-                    'value': getattr(label, 'trans_fats', None) or 0,
-                    'unit': getattr(label, 'trans_fats_unit', None) or 'g'
+                    'value': label.trans_fats,
+                    'unit': label.trans_fats_unit or 'g'
                 },
                 'satufat': {
-                    'value': getattr(label, 'saturated_fats', None) or 0,
-                    'unit': getattr(label, 'saturated_fats_unit', None) or 'g'
+                    'value': label.saturated_fats,
+                    'unit': label.saturated_fats_unit or 'g'
                 },
                 'cholesterol': {
-                    'value': getattr(label, 'cholesterols', None) or 0,
-                    'unit': getattr(label, 'cholesterols_unit', None) or 'mg'
+                    'value': label.cholesterols,
+                    'unit': label.cholesterols_unit or 'mg'
                 },
                 'protein': {
-                    'value': getattr(label, 'proteins', None) or 0,
-                    'unit': getattr(label, 'proteins_unit', None) or 'g'
+                    'value': label.proteins,
+                    'unit': label.proteins_unit or 'g'
                 }
             }
         }
-        
-        print(f"영양성분 데이터 생성 완료: {nutrition_data}")
 
         # 국가명 목록 추가 - 안전한 JSON 변환
-        try:
-            country_list = list(CountryList.objects.all().values_list('country_name_ko', flat=True))
-            # None 값 제거 및 빈 문자열 제거
-            country_list = [country for country in country_list if country and country.strip()]
-            print(f"국가 목록 로드 완료: {len(country_list)}개")
-        except Exception as e:
-            print(f"국가 목록 로드 오류: {e}")
-            country_list = []
+        country_list = list(CountryList.objects.all().values_list('country_name_ko', flat=True))
+        # None 값 제거 및 빈 문자열 제거
+        country_list = [country for country in country_list if country and country.strip()]
         
         # 국가 코드 매핑 데이터 추가 (country_code2 -> 한글명)
-        try:
-            country_mapping = {}
-            country_data = CountryList.objects.all().values('country_code2', 'country_name_ko')
-            for country in country_data:
-                if country['country_code2'] and country['country_name_ko']:
-                    country_mapping[country['country_code2']] = country['country_name_ko']
-            print(f"국가 코드 매핑 완료: {len(country_mapping)}개")
-        except Exception as e:
-            print(f"국가 코드 매핑 오류: {e}")
-            country_mapping = {}
-        
-        # 만료일 추천 데이터 로드
-        try:
-            expiry_recommendations = get_expiry_recommendations()
-            print(f"만료일 추천 데이터 로드 완료")
-        except Exception as e:
-            print(f"만료일 추천 데이터 로드 오류: {e}")
-            expiry_recommendations = {}
-        
-        # 저장된 미리보기 설정을 JSON으로 구성
-        preview_settings = {}
-        if label.prv_width or label.prv_font_size or label.prv_letter_spacing or label.prv_line_spacing or label.prv_font:
-            preview_settings = {
-                'layout': label.prv_layout,
-                'width': float(label.prv_width) if label.prv_width else None,
-                'length': float(label.prv_length) if label.prv_length else None,
-                'font': label.prv_font,
-                'font_size': float(label.prv_font_size) if label.prv_font_size else None,
-                'letter_spacing': int(label.prv_letter_spacing) if label.prv_letter_spacing else None,
-                'line_spacing': float(label.prv_line_spacing) if label.prv_line_spacing else None,
-                'recycling_mark': {
-                    'enabled': label.prv_recycling_mark_enabled == 'Y',
-                    'type': label.prv_recycling_mark_type,
-                    'position_x': label.prv_recycling_mark_position_x,
-                    'position_y': label.prv_recycling_mark_position_y,
-                    'text': label.prv_recycling_mark_text
-                } if label.prv_recycling_mark_enabled == 'Y' else None
-            }
-            print(f"미리보기 설정 구성 완료: {preview_settings}")
+        country_mapping = {}
+        country_data = CountryList.objects.all().values('country_code2', 'country_name_ko')
+        for country in country_data:
+            if country['country_code2'] and country['country_name_ko']:
+                country_mapping[country['country_code2']] = country['country_name_ko']
         
         context = {
             'label': label,  # label 객체를 context에 추가
@@ -2126,23 +1716,16 @@ def preview_popup(request):
             'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
             'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
             'country_mapping': json.dumps(country_mapping, ensure_ascii=False),  # 국가 코드 매핑 추가
-            'expiry_recommendation_json': json.dumps(expiry_recommendations, ensure_ascii=False),  # 소비기한 권장 데이터 추가
-            'preview_settings': json.dumps(preview_settings, ensure_ascii=False) if preview_settings else '{}'  # 미리보기 설정 추가
-
+            'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False),  # 소비기한 권장 데이터 추가
+            # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
-        
-        print(f"미리보기 컨텍스트 구성 완료 - 항목 수: {len(preview_items)}, 영양성분: {len(nutrition_items)}")
         
         return render(request, 'label/label_preview.html', context)
         
     except MyLabel.DoesNotExist:
-        print(f"라벨을 찾을 수 없음 - ID: {label_id}, 사용자: {request.user.username}")
         return JsonResponse({'success': False, 'error': '라벨을 찾을 수 없습니다.'})
     except Exception as e:
-        print(f"미리보기 처리 중 오류 - ID: {label_id}, 오류: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'success': False, 'error': f'미리보기 처리 중 오류가 발생했습니다: {str(e)}'})
+        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 def my_ingredient_table_partial(request):
@@ -2237,12 +1820,9 @@ def linked_ingredient_count(request, label_id):
 @require_POST
 @login_required
 def verify_report_no(request):
-    import json
-    import re
     data = json.loads(request.body)
     label_id = data.get('label_id')
     prdlst_report_no = data.get('prdlst_report_no', '').strip()
-    
     if not label_id or not prdlst_report_no:
         return JsonResponse({
             'verified': False, 
@@ -2858,1584 +2438,6 @@ def upload_my_ingredients_excel(request):
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'파일 처리 중 심각한 오류가 발생했습니다: {str(e)}'})
 
-
-# ==================== OCR 관련 뷰 ====================
-
-@login_required
-@csrf_exempt
-def ocr_process(request):
-    """
-    업로드된 이미지를 OCR 처리하여 텍스트 추출 및 필드 매핑
-    """
-    import logging
-    
-    logger = logging.getLogger(__name__)
-    
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': '잘못된 요청 방식입니다.'})
-    
-    try:
-        # 파일 검증
-        if 'image' not in request.FILES:
-            return JsonResponse({'success': False, 'error': '이미지 파일이 없습니다.'})
-        
-        image_file = request.FILES['image']
-        label_id = request.POST.get('label_id')
-        
-        # 기본 파일 검증
-        if not image_file.content_type.startswith('image/'):
-            return JsonResponse({'success': False, 'error': '이미지 파일만 업로드 가능합니다.'})
-        
-        if image_file.size > 5 * 1024 * 1024:  # 5MB
-            return JsonResponse({'success': False, 'error': '파일 크기는 5MB 이하여야 합니다.'})
-        
-        # MyLabel 객체 확인
-        label_obj = None
-        if label_id:
-            try:
-                label_obj = MyLabel.objects.get(my_label_id=label_id, user_id=request.user)
-            except MyLabel.DoesNotExist:
-                pass
-        
-        # OCR 결과 객체 생성
-        try:
-            from .models import OCRResult, OCRFieldMapping
-            
-            ocr_result = OCRResult.objects.create(
-                user_id=request.user,
-                label_id=label_obj,
-                original_image=image_file,
-                status='processing'
-            )
-        except Exception as e:
-            logger.error(f"OCR 결과 객체 생성 실패: {str(e)}")
-            return JsonResponse({'success': False, 'error': f'데이터베이스 오류: {str(e)}'})
-        
-        logger.info(f"OCR 처리 시작 - 사용자: {request.user.username}, OCR ID: {ocr_result.id}")
-        
-        try:
-            # OCR 서비스 모듈 동적 import로 변경
-            try:
-                import sys
-                import os
-                
-                # 현재 모듈 경로를 sys.path에 추가
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                services_dir = os.path.join(current_dir, 'services')
-                if services_dir not in sys.path:
-                    sys.path.append(services_dir)
-                
-                from .services.ocr_service import OCRService
-                from .services.text_parser import LabelTextParser
-                
-                logger.info("OCR 서비스 모듈 import 성공")
-                
-            except ImportError as e:
-                logger.error(f"OCR 서비스 모듈 import 실패: {str(e)}")
-                
-                # 테스트용 더미 클래스 사용
-                class DummyOCRService:
-                    def extract_text(self, image_path):
-                        return {
-                            'success': True,
-                            'text': '''제품명: 건강한 과자
-원재료명: 밀가루, 설탕, 식물성유지, 소금
-알레르기 유발요소: 밀, 대두 함유
-유통기한: 2024년 12월 31일
-보관방법: 직사광선을 피하고 서늘한 곳에 보관
-제조업체: 테스트 제조회사
-영양성분: 열량 100kcal, 탄수화물 15g, 단백질 3g, 지방 4g
-중량: 50g''',
-                            'confidence': 0.85,
-                            'processing_time': 1.2,
-                            'metadata': {
-                                'engine': 'dummy_test',
-                                'note': 'OCR 엔진이 설정되지 않아 테스트 데이터를 반환합니다.'
-                            }
-                        }
-                
-                class DummyTextParser:
-                    def parse_label_text(self, text):
-                        return {
-                            'product_name': {'text': '건강한 과자', 'confidence': 0.9, 'matched_pattern': 'product'},
-                            'ingredients': {'text': '밀가루, 설탕, 식물성유지, 소금', 'confidence': 0.85, 'matched_pattern': 'ingredients'},
-                            'allergens': {'text': '밀, 대두 함유', 'confidence': 0.8, 'matched_pattern': 'allergen'},
-                            'expiry_date': {'text': '2024년 12월 31일', 'confidence': 0.9, 'matched_pattern': 'expiry'},
-                            'storage_method': {'text': '직사광선을 피하고 서늘한 곳에 보관', 'confidence': 0.75, 'matched_pattern': 'storage'},
-                            'manufacturer': {'text': '테스트 제조회사\n서울특별시 강남구 테헤란로 123\n전화: 02-1234-5678', 'confidence': 0.8, 'matched_pattern': 'manufacturer'},
-                            'nutrition_facts': {'text': '100g당 열량 500kcal, 탄수화물 60g, 단백질 8g, 지방 20g, 나트륨 300mg', 'confidence': 0.7, 'matched_pattern': 'nutrition'},
-                            'weight': {'text': '50g', 'confidence': 0.9, 'matched_pattern': 'weight'},
-                            'prdlst_dcnm': {'text': '과자류', 'confidence': 0.85, 'matched_pattern': 'food_type'},
-                            'cautions': {'text': '어린이의 손이 닿지 않는 곳에 보관하세요.', 'confidence': 0.75, 'matched_pattern': 'caution'},
-                            'pog_daycnt': {'text': '제조일로부터 12개월', 'confidence': 0.8, 'matched_pattern': 'shelf_life'}
-                        }
-                
-                OCRService = DummyOCRService
-                LabelTextParser = DummyTextParser
-                logger.warning("OCR 서비스를 테스트 모드로 실행합니다.")
-            
-            # OCR 서비스 실행
-            ocr_service = OCRService()
-            text_data = ocr_service.extract_text(ocr_result.original_image.path)
-            
-            if not text_data.get('success', False):
-                raise Exception(text_data.get('error', 'OCR 처리 실패'))
-            
-            # 텍스트 파싱 및 필드 매핑
-            parser = LabelTextParser()
-            field_mappings = parser.parse_label_text(text_data.get('text', ''))
-            
-            # 결과 저장
-            ocr_result.raw_text = text_data.get('text', '')
-            ocr_result.structured_data = {
-                'field_mappings': field_mappings,
-                'ocr_metadata': text_data.get('metadata', {})
-            }
-            ocr_result.confidence_score = text_data.get('confidence', 0.0)
-            ocr_result.processing_time = text_data.get('processing_time', 0.0)
-            ocr_result.ocr_engine = text_data.get('metadata', {}).get('engine', 'unknown')
-            ocr_result.status = 'completed'
-            ocr_result.save()
-            
-            # 필드별 매핑 결과 저장
-            for field_name, mapping in field_mappings.items():
-                if mapping.get('text'):
-                    OCRFieldMapping.objects.create(
-                        ocr_result=ocr_result,
-                        field_name=field_name,
-                        extracted_text=mapping['text'],
-                        confidence=mapping.get('confidence', 0.0),
-                        matched_pattern=mapping.get('matched_pattern', '')
-                    )
-            
-            logger.info(f"OCR 처리 완료 - OCR ID: {ocr_result.id}, 추출된 필드 수: {len(field_mappings)}")
-            
-            return JsonResponse({
-                'success': True,
-                'data': {
-                    'ocr_id': ocr_result.id,
-                    'raw_text': text_data.get('text', ''),
-                    'field_mappings': field_mappings,
-                    'confidence': text_data.get('confidence', 0.0),
-                    'processing_time': text_data.get('processing_time', 0.0),
-                    'engine': text_data.get('metadata', {}).get('engine', 'unknown')
-                }
-            })
-            
-        except Exception as e:
-            # OCR 처리 실패
-            ocr_result.status = 'failed'
-            ocr_result.error_message = str(e)
-            ocr_result.save()
-            
-            logger.error(f"OCR 처리 실패 - OCR ID: {ocr_result.id}, 오류: {str(e)}")
-            raise e
-            
-    except Exception as e:
-        logger.error(f"OCR 요청 처리 오류: {str(e)}")
-        return JsonResponse({
-            'success': False, 
-            'error': f'OCR 처리 중 오류가 발생했습니다: {str(e)}'
-        })
-
-
-@login_required
-def ocr_history(request):
-    """
-    사용자의 OCR 처리 이력 조회
-    """
-    from .models import OCRResult
-    
-    try:
-        # 페이지네이션
-        page = request.GET.get('page', 1)
-        per_page = 20
-        
-        # 사용자의 OCR 결과 조회 (최신순)
-        ocr_results = OCRResult.objects.filter(
-            user_id=request.user
-        ).select_related('label_id').order_by('-created_at')
-        
-        paginator = Paginator(ocr_results, per_page)
-        page_obj = paginator.get_page(page)
-        
-        # 결과 데이터 구성
-        results_data = []
-        for ocr_result in page_obj:
-            field_count = len(ocr_result.structured_data.get('field_mappings', {}))
-            
-            results_data.append({
-                'id': ocr_result.id,
-                'label_name': ocr_result.label_id.my_label_name if ocr_result.label_id else '미연결',
-                'status': ocr_result.get_status_display(),
-                'confidence': f"{ocr_result.confidence_score * 100:.1f}%" if ocr_result.confidence_score else 'N/A',
-                'field_count': field_count,
-                'processing_time': f"{ocr_result.processing_time:.2f}초" if ocr_result.processing_time else 'N/A',
-                'engine': ocr_result.ocr_engine or 'N/A',
-                'created_at': ocr_result.created_at,
-                'error_message': ocr_result.error_message
-            })
-        
-        return JsonResponse({
-            'success': True,
-            'data': {
-                'results': results_data,
-                'pagination': {
-                    'current_page': page_obj.number,
-                    'total_pages': paginator.num_pages,
-                    'total_count': paginator.count,
-                    'has_next': page_obj.has_next(),
-                    'has_previous': page_obj.has_previous()
-                }
-            }
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'OCR 이력 조회 중 오류가 발생했습니다: {str(e)}'
-        })
-
-
-# ==================== 추천 시스템 관련 뷰 ====================
-
-from django.views.decorators.http import require_GET
-import json
-
-# 추천 서비스 import (안전한 import)
-try:
-    from .services.recommendation_service import RecommendationService
-except ImportError:
-    # 서비스 파일이 없을 경우 더미 클래스
-    class RecommendationService:
-        def get_smart_recommendations(self, context_data, field_name, limit=5):
-            return [('테스트 추천값', 10)]
-        
-        def get_sample_data_for_testing(self):
-            return {
-                'storage_method': [('직사광선을 피하고 서늘한 곳에 보관', 50)],
-                'cautions': [('개봉 후 냉장보관', 30)],
-                'country_of_origin': [('대한민국', 100)],
-                'content_weight': [('100g', 80)],
-                'bssh_nm': [('서울특별시', 60)]
-            }
-
-def extract_from_korlabel(korlabel, field_type):
-    """korlabel에서 특정 정보 추출"""
-    if not korlabel:
-        return None
-        
-    import re
-    
-    patterns = {
-        'storage_method': [
-            r'보관방법[:\s]*([^,\n]+)',
-            r'저장방법[:\s]*([^,\n]+)',
-            r'보관[:\s]*([^,\n]+)'
-        ],
-        'cautions': [
-            r'주의사항[:\s]*([^,\n]+)',
-            r'주의[:\s]*([^,\n]+)',
-            r'경고[:\s]*([^,\n]+)'
-        ],
-        'content_weight': [
-            r'내용량[:\s]*([^,\n]+)',
-            r'중량[:\s]*([^,\n]+)',
-            r'(\d+(?:\.\d+)?(?:g|kg|ml|l|개))'
-        ],
-        'frmlc_mtrqlt': [
-            r'포장재질[:\s]*([^,\n]+)',
-            r'용기[:\s]*([^,\n]+)',
-            r'재질[:\s]*([^,\n]+)'
-        ]
-    }
-    
-    if field_type in patterns:
-        for pattern in patterns[field_type]:
-            match = re.search(pattern, korlabel, re.IGNORECASE)
-            if match:
-                return match.group(1).strip()
-    
-    return None
-
-@require_GET
-def get_smart_recommendations(request):
-    """
-    스마트 추천 API
-    
-    Parameters:
-        - field_name: 추천받을 필드명 (예: storage_method, cautions)
-        - product_type: 제품 유형 (선택사항)
-        - manufacturer: 제조업체 (선택사항)
-        - limit: 추천 개수 (기본값: 5)
-    """
-    try:
-        field_name = request.GET.get('field_name')
-        if not field_name:
-            return JsonResponse({'error': '필드명이 필요합니다.'}, status=400)
-        
-        # 컨텍스트 데이터 수집
-        context_data = {
-            'product_type': request.GET.get('product_type'),
-            'manufacturer': request.GET.get('manufacturer'),
-        }
-        
-        limit = int(request.GET.get('limit', 5))
-        
-        # 추천 서비스 실행
-        service = RecommendationService()
-        recommendations = service.get_smart_recommendations(context_data, field_name, limit)
-        
-        # 응답 데이터 구성
-        response_data = {
-            'success': True,
-            'field_name': field_name,
-            'recommendations': [
-                {
-                    'value': value,
-                    'frequency': freq,
-                    'display': f"{value} ({freq}회 사용)"
-                }
-                for value, freq in recommendations
-            ],
-            'total_count': len(recommendations),
-            'context': context_data
-        }
-        
-        return JsonResponse(response_data)
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'추천 처리 중 오류: {str(e)}'
-        }, status=500)
-
-@require_GET  
-def get_popular_values(request):
-    """
-    전체 인기 값 조회 API
-    """
-    try:
-        field_name = request.GET.get('field_name')
-        limit = int(request.GET.get('limit', 10))
-        
-        service = RecommendationService()
-        
-        # 샘플 데이터에서 인기값 가져오기
-        sample_data = service.get_sample_data_for_testing()
-        popular_values = sample_data.get(field_name, [])[:limit]
-        
-        response_data = {
-            'success': True,
-            'field_name': field_name,
-            'popular_values': [
-                {
-                    'value': value,
-                    'frequency': freq,
-                    'display': f"{value} ({freq}회)"
-                }
-                for value, freq in popular_values
-            ]
-        }
-        
-        return JsonResponse(response_data)
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'인기값 조회 중 오류: {str(e)}'
-        }, status=500)
-
-@require_GET
-def get_auto_fill_suggestions(request):
-    """
-    고성능 포괄적 추천 API - 캐싱 및 사전 정리된 데이터 활용
-    """
-    try:
-        input_field = request.GET.get('input_field', '').strip()
-        input_value = request.GET.get('input_value', '').strip()
-        target_fields_str = request.GET.get('target_fields', '').strip()
-        priority = request.GET.get('priority', 'medium')
-        
-        if not input_field or not input_value:
-            return JsonResponse({'success': False, 'error': '필수 파라미터가 누락되었습니다.'})
-        
-        # target_fields가 제공되지 않으면 모든 관련 필드를 대상으로
-        if target_fields_str:
-            try:
-                import json
-                target_fields = json.loads(target_fields_str)
-                if isinstance(target_fields, list):
-                    target_fields = [field.strip().strip('"') for field in target_fields if field.strip()]
-                else:
-                    target_fields = [field.strip() for field in target_fields_str.split(',') if field.strip()]
-            except:
-                target_fields = [field.strip() for field in target_fields_str.split(',') if field.strip()]
-        else:
-            target_fields = get_related_fields(input_field)
-        
-        print(f"� 고성능 추천 요청: {input_field}='{input_value}' -> {target_fields}")
-        
-        # 캐시 키 생성
-        cache_key = generate_cache_key(input_field, input_value, target_fields)
-        
-        # 개발 중 캐시 무시 - 캐시에서 확인
-        cached_result = None  # cache.get(cache_key)
-        if cached_result:
-            print(f"⚡ 캐시 히트: {cache_key}")
-            return JsonResponse(cached_result, json_dumps_params={'ensure_ascii': False})
-        
-        # 고성능 추천 생성
-        suggestions = get_fast_comprehensive_recommendations(input_field, input_value, target_fields)
-        print(f"🎯 생성된 추천 데이터: {suggestions}")
-        
-        # 빈 추천 필터링 - 새로운 배열 구조에 맞게 수정
-        filtered_suggestions = {}
-        for k, v in suggestions.items():
-            if v:  # v가 존재하고
-                if isinstance(v, list):  # 배열인 경우
-                    if v:  # 빈 배열이 아닌 경우
-                        filtered_suggestions[k] = v
-                elif isinstance(v, dict) and v.get('value'):  # 단일 객체인 경우 (하위 호환성)
-                    filtered_suggestions[k] = [v]  # 배열로 변환
-        print(f"🔍 필터링된 추천 데이터: {filtered_suggestions}")
-        
-        result = {
-            'success': True,
-            'suggestions': filtered_suggestions,
-            'total_matches': len(filtered_suggestions),
-            'input_field': input_field,
-            'input_value': input_value,
-            'priority': priority,
-            'has_recommendations': len(filtered_suggestions) > 0,
-            'cached': False
-        }
-        
-        print(f"📤 최종 응답 데이터: {result}")
-        
-        # 결과 캐싱 (10분)
-        cache.set(cache_key, result, 600)
-        
-        return JsonResponse(result, json_dumps_params={'ensure_ascii': False})
-        
-    except Exception as e:
-        print(f"❌ 고성능 추천 API 오류: {e}")
-        import traceback
-        traceback.print_exc()
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-
-def generate_cache_key(input_field, input_value, target_fields):
-    """캐시 키 생성"""
-    data = f"{input_field}:{input_value}:{','.join(sorted(target_fields))}"
-    return f"recommendation_{hashlib.md5(data.encode()).hexdigest()}"
-
-
-def get_fast_comprehensive_recommendations(input_field, input_value, target_fields):
-    """고성능 포괄적 추천 시스템 - 각 필드별로 여러 추천 반환"""
-    suggestions = {}
-    print(f"🚀 고성능 추천 시작: {input_field}='{input_value}', 대상={target_fields}")
-    
-    try:
-        for target_field in target_fields:
-            print(f"  🎯 처리중: {target_field}")
-            # 1. 규칙 기반 추천 (가장 빠름)
-            rule_recs = get_fast_rule_based_recommendations(input_field, input_value, target_field)
-            print(f"    📜 규칙 기반: {len(rule_recs)}개")
-            
-            # 2. 사전 정리된 수입식품 데이터 조회
-            imported_recs = get_fast_imported_food_recommendations(input_field, input_value, target_field)
-            print(f"    🌍 수입식품: {len(imported_recs)}개")
-            
-            # 3. 내 라벨 데이터 (제한적 조회)
-            my_recs = get_fast_my_label_recommendations(input_field, input_value, target_field)
-            print(f"    📝 내 라벨: {len(my_recs)}개")
-            
-            # 모든 추천을 결합하되 중복 제거
-            all_recs = rule_recs + imported_recs + my_recs
-            print(f"    🔗 전체 결과: {len(all_recs)}개")
-            
-            if all_recs:
-                # 중복 제거 (같은 값이지만 다른 출처는 유지)
-                unique_recs = []
-                seen_values = set()
-                for rec in all_recs:
-                    value_key = rec['value'].strip().lower()
-                    if value_key not in seen_values:
-                        unique_recs.append(rec)
-                        seen_values.add(value_key)
-                
-                # 최대 5개까지만 반환 (너무 많으면 UI가 복잡해짐)
-                suggestions[target_field] = unique_recs[:5]
-                print(f"    ⭐ 최종 선택: {len(suggestions[target_field])}개")
-        
-        print(f"✅ 고성능 추천 완료: {suggestions}")
-        
-    except Exception as e:
-        print(f"❌ 고성능 추천 생성 오류: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    return suggestions
-
-
-def get_fast_rule_based_recommendations(input_field, input_value, target_field):
-    """고속 규칙 기반 추천"""
-    recommendations = []
-    
-    # 사전 정의된 고속 룰 테이블
-    fast_rules = {
-        'storage_method': {
-            '냉장': '냉장보관(1~10℃)',
-            '냉동': '냉동보관(-18℃이하)',
-            '실온': '실온보관, 직사광선을 피하여 서늘한 곳에 보관',
-            '빵': '실온보관, 직사광선을 피하여 서늘한 곳에 보관',
-            '과자': '실온보관, 습기를 피하여 보관',
-            '음료': '냉장보관, 개봉 후 냉장보관',
-            '육류': '냉장보관, 냉동보관 가능',
-            '유제품': '냉장보관(1~10℃)',
-            '초콜릿': '실온보관, 직사광선 및 고온다습한 곳을 피하여 보관'
-        },
-        'cautions': {
-            '어린이': '어린이 기호식품 품질인증',
-            '알레르기': '알레르기 유발요소 확인 후 섭취',
-            '임산부': '임산부, 수유부는 섭취에 주의',
-            '개봉': '개봉 후 밀폐보관하여 빠른 시일 내 섭취',
-            '냉장': '개봉 후 냉장보관',
-            '냉동': '해동 후 재냉동 금지',
-            '가열': '충분히 가열하여 섭취',
-            '빵': '개봉 후 밀폐보관하여 빠른 시일 내 섭취',
-            '과자': '개봉 후 밀폐보관',
-            '음료': '개봉 후 냉장보관하여 빠른 시일 내 섭취'
-        }
-    }
-    
-    if target_field in fast_rules:
-        rules = fast_rules[target_field]
-        for keyword, recommendation in rules.items():
-            if keyword in input_value:
-                recommendations.append({
-                    'value': recommendation,
-                    'confidence': 95,
-                    'source': 'rule_based',
-                    'source_detail': f'고속 규칙 ({keyword})'
-                })
-                break  # 첫 번째 매치만 사용
-    
-    return recommendations
-
-
-def get_fast_imported_food_recommendations(input_field, input_value, target_field):
-    """고속 수입식품 추천 (인덱스 최적화)"""
-    recommendations = []
-    
-    try:
-        # 키워드 기반 빠른 검색
-        if len(input_value) < 2:
-            return recommendations
-            
-        # 인덱스를 활용한 제한적 쿼리
-        if input_field == 'prdlst_nm':
-            products = ImportedFood.objects.filter(
-                prduct_korean_nm__icontains=input_value[:10]  # 처음 10글자만
-            ).exclude(korlabel__isnull=True).exclude(korlabel='')[:5]
-        elif input_field == 'bssh_nm':
-            products = ImportedFood.objects.filter(
-                bsn_ofc_name__icontains=input_value[:10]
-            ).exclude(korlabel__isnull=True).exclude(korlabel='')[:5]
-        else:
-            products = ImportedFood.objects.filter(
-                korlabel__icontains=input_value[:5]
-            )[:3]
-        
-        for product in products:
-            if target_field == 'storage_method':
-                extracted = extract_storage_from_korlabel_fast(product.korlabel)
-            elif target_field == 'cautions':
-                extracted = extract_cautions_from_korlabel_fast(product.korlabel)
-            else:
-                continue
-                
-            if extracted:
-                recommendations.append({
-                    'value': extracted,
-                    'confidence': 85,
-                    'source': 'imported_food',
-                    'source_detail': f'수입식품 ({product.prduct_korean_nm[:20]}...)'
-                })
-                
-    except Exception as e:
-        print(f"❌ 고속 수입식품 추천 오류: {e}")
-    
-    return recommendations
-
-
-def extract_storage_from_korlabel_fast(korlabel):
-    """korlabel에서 보관방법 고속 추출"""
-    if not korlabel:
-        return None
-        
-    storage_patterns = [
-        '냉장보관', '냉동보관', '실온보관', '서늘한 곳', '직사광선'
-    ]
-    
-    for pattern in storage_patterns:
-        if pattern in korlabel:
-            # 간단한 추출
-            start = korlabel.find(pattern)
-            end = min(start + 50, len(korlabel))
-            extracted = korlabel[start:end].split('\n')[0].split(',')[0]
-            return extracted.strip()
-    
-    return None
-
-
-def extract_cautions_from_korlabel_fast(korlabel):
-    """korlabel에서 주의사항 고속 추출"""
-    if not korlabel:
-        return None
-        
-    caution_patterns = [
-        '주의사항', '알레르기', '어린이', '임산부', '개봉'
-    ]
-    
-    for pattern in caution_patterns:
-        if pattern in korlabel:
-            start = korlabel.find(pattern)
-            end = min(start + 80, len(korlabel))
-            extracted = korlabel[start:end].split('\n')[0]
-            return extracted.strip()
-    
-    return None
-
-
-def get_fast_my_label_recommendations(input_field, input_value, target_field):
-    """고속 내 라벨 추천 (제한적 조회)"""
-    recommendations = []
-    
-    try:
-        # 매우 제한적인 쿼리 (최대 3개)
-        filter_dict = {f'{input_field}__icontains': input_value[:10]}
-        exclude_dict = {f'{target_field}__isnull': True}
-        
-        labels = MyLabel.objects.filter(**filter_dict).exclude(**exclude_dict)[:3]
-        
-        for label in labels:
-            value = getattr(label, target_field, None)
-            if value and value.strip():
-                recommendations.append({
-                    'value': value.strip(),
-                    'confidence': 90,
-                    'source': 'my_label',
-                    'source_detail': '내 이전 작성'
-                })
-                
-    except Exception as e:
-        print(f"❌ 고속 내 라벨 추천 오류: {e}")
-    
-    return recommendations
-
-
-def select_fast_recommendation(recommendations):
-    """고속 최적 추천 선택"""
-    if not recommendations:
-        return None
-    
-    # 간단한 우선순위: 규칙 기반 > 내 라벨 > 수입식품
-    rule_based = [r for r in recommendations if r['source'] == 'rule_based']
-    if rule_based:
-        return rule_based[0]
-    
-    my_label = [r for r in recommendations if r['source'] == 'my_label']
-    if my_label:
-        return my_label[0]
-    
-    return recommendations[0] if recommendations else None
-
-
-def get_related_fields(input_field):
-    """입력 필드에 따른 관련 필드들 반환"""
-    field_relationships = {
-        'prdlst_nm': ['prdlst_dcnm', 'storage_method', 'cautions', 'additional_info', 'bssh_nm', 'country_of_origin'],
-        'prdlst_dcnm': ['storage_method', 'cautions', 'additional_info', 'frmlc_mtrqlt'],
-        'storage_method': ['cautions', 'additional_info'],
-        'bssh_nm': ['country_of_origin', 'storage_method'],
-        'country_of_origin': ['bssh_nm', 'storage_method'],
-        'frmlc_mtrqlt': ['cautions', 'storage_method']
-    }
-    
-    return field_relationships.get(input_field, ['storage_method', 'cautions', 'additional_info'])
-
-
-def get_comprehensive_recommendations(input_field, input_value, target_fields, request=None):
-    """포괄적 추천 시스템 - 다양한 데이터 소스 통합"""
-    suggestions = {}
-    
-    for target_field in target_fields:
-        field_recommendations = []
-        
-        # 1. 수입식품 데이터 기반 추천
-        imported_food_recs = get_imported_food_recommendations(input_field, input_value, target_field)
-        field_recommendations.extend(imported_food_recs)
-        
-        # 2. 내 표시사항 정보 기반 추천
-        my_label_recs = get_my_label_recommendations(input_field, input_value, target_field)
-        field_recommendations.extend(my_label_recs)
-        
-        # 3. 다른 사용자 표시사항 기반 추천
-        current_user = getattr(request, 'user', None) if request else None
-        other_label_recs = get_other_label_recommendations(input_field, input_value, target_field, current_user)
-        field_recommendations.extend(other_label_recs)
-        
-        # 4. 규칙 기반 추천
-        rule_based_recs = get_rule_based_recommendations(input_field, input_value, target_field)
-        field_recommendations.extend(rule_based_recs)
-        
-        # 최적 추천 선택
-        if field_recommendations:
-            best_recommendation = select_best_comprehensive_recommendation(field_recommendations)
-            if best_recommendation:
-                suggestions[target_field] = best_recommendation
-    
-    return suggestions
-
-
-def get_imported_food_recommendations(input_field, input_value, target_field):
-    """수입식품 데이터 기반 추천"""
-    recommendations = []
-    
-    try:
-        # 필드별 검색 전략
-        search_queries = []
-        
-        if input_field == 'prdlst_nm':
-            search_queries = [
-                Q(prduct_korean_nm__icontains=input_value),
-                Q(korlabel__icontains=input_value)
-            ]
-        elif input_field == 'bssh_nm':
-            search_queries = [
-                Q(bsn_ofc_name__icontains=input_value),
-                Q(korlabel__icontains=input_value)
-            ]
-        elif input_field == 'country_of_origin':
-            search_queries = [
-                Q(xport_ntncd_nm__icontains=input_value),
-                Q(korlabel__icontains=input_value)
-            ]
-        else:
-            search_queries = [Q(korlabel__icontains=input_value)]
-        
-        # 검색 실행
-        products = ImportedFood.objects.none()
-        for query in search_queries:
-            products = products.union(
-                ImportedFood.objects.filter(query)
-                .exclude(korlabel__isnull=True)
-                .exclude(korlabel='')[:15]
-            )
-        
-        # 타겟 필드별 데이터 추출
-        for product in products[:20]:  # 최대 20개 제품
-            extracted_value = None
-            
-            if target_field in ['storage_method', 'cautions', 'additional_info', 'frmlc_mtrqlt']:
-                extracted_value = extract_from_korlabel(product.korlabel, target_field)
-            elif target_field == 'country_of_origin':
-                extracted_value = product.xport_ntncd_nm
-            elif target_field == 'bssh_nm':
-                extracted_value = product.bsn_ofc_name
-            elif target_field == 'prdlst_dcnm':
-                # korlabel에서 식품유형 추출 시도
-                extracted_value = extract_food_type_from_korlabel(product.korlabel)
-            
-            if extracted_value and extracted_value.strip():
-                # 유사도 계산
-                similarity = calculate_similarity(input_value, extracted_value)
-                
-                recommendations.append({
-                    'value': extracted_value.strip(),
-                    'confidence': min(95, 50 + similarity * 45),
-                    'frequency': 1,
-                    'source': 'imported_food',
-                    'source_detail': f'수입식품 DB ({product.prduct_korean_nm or "이름없음"})'
-                })
-        
-    except Exception as e:
-        print(f"❌ 수입식품 추천 오류: {e}")
-    
-    return recommendations
-
-
-def get_my_label_recommendations(input_field, input_value, target_field):
-    """내 표시사항 정보 기반 추천"""
-    recommendations = []
-    
-    try:
-        # 현재 사용자의 이전 표시사항들 검색
-        user_labels = MyLabel.objects.filter(
-            **{f'{input_field}__icontains': input_value}
-        ).exclude(
-            **{f'{target_field}__isnull': True}
-        ).exclude(
-            **{f'{target_field}__exact': ''}
-        )[:15]
-        
-        for label in user_labels:
-            target_value = getattr(label, target_field, None)
-            if target_value and target_value.strip():
-                recommendations.append({
-                    'value': target_value.strip(),
-                    'confidence': 85,  # 내 데이터이므로 높은 신뢰도
-                    'frequency': 1,
-                    'source': 'my_label',
-                    'source_detail': f'내 표시사항 ({label.prdlst_nm or "이전 작성"})'
-                })
-        
-    except Exception as e:
-        print(f"❌ 내 표시사항 추천 오류: {e}")
-    
-    return recommendations
-
-
-def get_other_label_recommendations(input_field, input_value, target_field, current_user=None):
-    """다른 사용자 표시사항 기반 추천"""
-    recommendations = []
-    
-    try:
-        # 다른 사용자들의 공개된 표시사항 검색 (개인정보 보호 고려)
-        query_filter = {f'{input_field}__icontains': input_value}
-        other_labels = MyLabel.objects.filter(**query_filter).exclude(
-            **{f'{target_field}__isnull': True}
-        ).exclude(
-            **{f'{target_field}__exact': ''}
-        )
-        
-        # 현재 사용자 제외 (로그인된 경우)
-        if current_user and current_user.is_authenticated:
-            other_labels = other_labels.exclude(user=current_user)
-        
-        other_labels = other_labels[:10]
-        
-        for label in other_labels:
-            target_value = getattr(label, target_field, None)
-            if target_value and target_value.strip():
-                recommendations.append({
-                    'value': target_value.strip(),
-                    'confidence': 70,  # 다른 사용자 데이터이므로 중간 신뢰도
-                    'frequency': 1,
-                    'source': 'other_label',
-                    'source_detail': '다른 사용자 표시사항'
-                })
-        
-    except Exception as e:
-        print(f"❌ 다른 사용자 표시사항 추천 오류: {e}")
-    
-    return recommendations
-
-
-def get_rule_based_recommendations(input_field, input_value, target_field):
-    """규칙 기반 추천"""
-    recommendations = []
-    
-    try:
-        # 식품유형별 특화 규칙
-        food_type_rules = {
-            '과자': {
-                'storage_method': ['실온보관', '직사광선을 피하여 서늘한 곳에 보관', '건조한 곳에 보관'],
-                'cautions': ['어린이 기호식품', '알레르기 유발 가능 성분 확인', '개봉 후 밀폐보관'],
-                'additional_info': ['개봉 후 빠른 시일 내 섭취', '유통기한 확인 후 섭취']
-            },
-            '음료': {
-                'storage_method': ['냉장보관', '직사광선을 피하여 보관', '서늘한 곳에 보관'],
-                'cautions': ['개봉 후 냉장보관', '카페인 함유 여부 확인', '당분 함량 주의'],
-                'additional_info': ['흔들어서 드세요', '침전물은 품질에 이상이 없습니다', '개봉 후 빠른 시일 내 섭취']
-            },
-            '건강기능식품': {
-                'storage_method': ['실온보관', '습기를 피하여 서늘한 곳에 보관', '밀폐용기에 보관'],
-                'cautions': ['임산부, 수유부 섭취 주의', '의약품 복용 시 전문가 상담', '1일 섭취량 준수'],
-                'additional_info': ['질병 치료를 위한 의약품이 아닙니다', '균형 잡힌 식사와 함께 섭취']
-            },
-            '차류': {
-                'storage_method': ['실온보관', '밀폐용기에 보관', '습기를 피하여 보관'],
-                'cautions': ['카페인 함유', '임산부 섭취 주의', '과량 섭취 주의'],
-                'additional_info': ['끓는 물에 우려서 드세요', '기호에 따라 당류 첨가 가능']
-            },
-            '육류': {
-                'storage_method': ['냉장보관', '냉동보관'],
-                'cautions': ['충분히 가열하여 섭취', '해동 후 재냉동 금지', '유통기한 내 섭취'],
-                'additional_info': ['조리 전 흐르는 물에 세척', '완전히 익혀서 섭취']
-            }
-        }
-        
-        # 보관방법별 특화 규칙
-        storage_rules = {
-            '냉장': {
-                'cautions': ['개봉 후 냉장보관', '유통기한 내 섭취', '온도변화 주의'],
-                'additional_info': ['냉장고에서 꺼낸 후 바로 섭취', '재냉동 금지']
-            },
-            '냉동': {
-                'cautions': ['해동 후 재냉동 금지', '충분히 가열하여 섭취'],
-                'additional_info': ['해동은 냉장고에서 천천히', '완전히 가열하여 드세요']
-            },
-            '실온': {
-                'cautions': ['직사광선 피하기', '습기 주의', '밀폐보관'],
-                'additional_info': ['서늘하고 건조한 곳 보관', '개봉 후 빠른 시일 내 섭취']
-            }
-        }
-        
-        # 입력값에 따른 규칙 적용
-        applicable_rules = {}
-        
-        # 식품유형 키워드 매칭
-        for food_type, rules in food_type_rules.items():
-            if food_type in input_value:
-                applicable_rules.update(rules)
-        
-        # 보관방법 키워드 매칭
-        for storage_type, rules in storage_rules.items():
-            if storage_type in input_value:
-                applicable_rules.update(rules)
-        
-        # 타겟 필드에 대한 규칙 추천 생성
-        if target_field in applicable_rules:
-            for rule_value in applicable_rules[target_field]:
-                recommendations.append({
-                    'value': rule_value,
-                    'confidence': 90,  # 규칙 기반이므로 높은 신뢰도
-                    'frequency': 5,
-                    'source': 'rule_based',
-                    'source_detail': f'전문가 규칙 ({food_type if food_type in input_value else "일반"})'
-                })
-        
-    except Exception as e:
-        print(f"❌ 규칙 기반 추천 오류: {e}")
-    
-    return recommendations
-
-
-def extract_food_type_from_korlabel(korlabel):
-    """korlabel에서 식품유형 추출"""
-    if not korlabel:
-        return None
-    
-    # 일반적인 식품유형 패턴
-    food_type_patterns = [
-        r'식품유형[:\s]*([^,\n]+)',
-        r'유형[:\s]*([^,\n]+)',
-        r'분류[:\s]*([^,\n]+)'
-    ]
-    
-    for pattern in food_type_patterns:
-        match = re.search(pattern, korlabel)
-        if match:
-            return match.group(1).strip()
-    
-    return None
-
-
-def select_best_comprehensive_recommendation(recommendations):
-    """포괄적 추천에서 최적 추천 선택"""
-    if not recommendations:
-        return None
-    
-    # 소스별 가중치
-    source_weights = {
-        'my_label': 1.5,      # 내 데이터 가중치 높음
-        'rule_based': 1.3,    # 규칙 기반 가중치 높음
-        'imported_food': 1.0, # 기본 가중치
-        'other_label': 0.8    # 다른 사용자 데이터 가중치 낮음
-    }
-    
-    # 값별로 그룹핑하고 점수 계산
-    value_groups = {}
-    for rec in recommendations:
-        value = rec['value']
-        if value not in value_groups:
-            value_groups[value] = {
-                'value': value,
-                'total_confidence': 0,
-                'total_frequency': 0,
-                'source_count': 0,
-                'sources': set(),
-                'source_details': []
-            }
-        
-        # 소스별 가중치 적용
-        weight = source_weights.get(rec['source'], 1.0)
-        weighted_confidence = rec['confidence'] * weight
-        
-        value_groups[value]['total_confidence'] += weighted_confidence
-        value_groups[value]['total_frequency'] += rec['frequency']
-        value_groups[value]['source_count'] += 1
-        value_groups[value]['sources'].add(rec['source'])
-        value_groups[value]['source_details'].append(rec['source_detail'])
-    
-    # 최적 추천 선택
-    best_value = None
-    best_score = 0
-    
-    for value_data in value_groups.values():
-        # 평균 신뢰도 계산
-        avg_confidence = value_data['total_confidence'] / value_data['source_count']
-        
-        # 다양한 소스 보너스
-        source_bonus = len(value_data['sources']) * 10
-        
-        # 빈도수 보너스
-        frequency_bonus = min(value_data['total_frequency'] * 5, 25)
-        
-        # 최종 점수
-        final_score = avg_confidence + source_bonus + frequency_bonus
-        
-        if final_score > best_score:
-            best_score = final_score
-            best_value = value_data
-    
-    if best_value:
-        return {
-            'value': best_value['value'],
-            'confidence': min(95, best_value['total_confidence'] / best_value['source_count']),
-            'frequency': best_value['total_frequency'],
-            'sources': list(best_value['sources']),
-            'source_details': best_value['source_details'][:3]  # 최대 3개 소스 정보
-        }
-    
-    return None
-
-
-def get_product_name_based_recommendations(product_name, target_fields):
-    """제품명 기반 고도화된 추천"""
-    suggestions = {}
-    total_matches = 0
-    
-    try:
-        # 제품명으로 유사한 제품들 검색 (더 정교한 검색)
-        similar_products = ImportedFood.objects.filter(
-            Q(prduct_korean_nm__icontains=product_name) |
-            Q(korlabel__icontains=product_name)
-        ).exclude(korlabel__isnull=True).exclude(korlabel='')[:20]
-        
-        total_matches = similar_products.count()
-        
-        if total_matches == 0:
-            return suggestions, 0
-        
-        # 각 대상 필드별 추천 생성
-        for target_field in target_fields:
-            field_suggestions = []
-            
-            for product in similar_products:
-                extracted_data = extract_from_korlabel(product.korlabel, target_field)
-                if extracted_data:
-                    # 유사도 점수 계산 (제품명 유사도 기반)
-                    similarity_score = calculate_similarity(product_name, product.prduct_korean_nm or '')
-                    
-                    field_suggestions.append({
-                        'value': extracted_data,
-                        'confidence': min(95, 60 + similarity_score * 35),  # 60-95% 범위
-                        'frequency': 1,
-                        'source': 'product_name_similarity'
-                    })
-            
-            # 가장 빈번하고 신뢰도 높은 추천 선택
-            if field_suggestions:
-                best_suggestion = select_best_suggestion(field_suggestions)
-                if best_suggestion:
-                    suggestions[target_field] = best_suggestion
-        
-        return suggestions, total_matches
-        
-    except Exception as e:
-        print(f"❌ 제품명 기반 추천 오류: {e}")
-        return {}, 0
-
-
-def get_food_type_based_recommendations(food_type, target_fields):
-    """식품유형 기반 고도화된 추천"""
-    suggestions = {}
-    total_matches = 0
-    
-    try:
-        # 식품유형으로 제품들 검색
-        products = ImportedFood.objects.filter(
-            korlabel__icontains=food_type
-        ).exclude(korlabel__isnull=True).exclude(korlabel='')[:30]
-        
-        total_matches = products.count()
-        
-        if total_matches == 0:
-            return suggestions, 0
-        
-        # 식품유형별 특화된 추천 규칙
-        food_type_rules = {
-            '과자': {
-                'storage_method': ['실온보관', '직사광선을 피하여 서늘한 곳에 보관'],
-                'cautions': ['어린이 기호식품', '알레르기 유발 가능 성분 확인'],
-                'additional_info': ['개봉 후 밀폐보관', '유통기한 확인 후 섭취']
-            },
-            '음료': {
-                'storage_method': ['냉장보관', '직사광선을 피하여 보관'],
-                'cautions': ['개봉 후 냉장보관', '카페인 함유'],
-                'additional_info': ['흔들어서 드세요', '침전물은 품질에 이상이 없습니다']
-            },
-            '건강기능식품': {
-                'storage_method': ['실온보관', '습기를 피하여 서늘한 곳에 보관'],
-                'cautions': ['임산부, 수유부 섭취 주의', '의약품 복용 시 전문가 상담'],
-                'additional_info': ['1일 섭취량을 준수하세요', '질병 치료를 위한 의약품이 아닙니다']
-            },
-            '차류': {
-                'storage_method': ['실온보관', '밀폐용기에 보관'],
-                'cautions': ['카페인 함유', '임산부 섭취 주의'],
-                'additional_info': ['끓는 물에 우려서 드세요', '기호에 따라 당류 첨가 가능']
-            }
-        }
-        
-        # 각 대상 필드별 추천 생성
-        for target_field in target_fields:
-            field_suggestions = []
-            
-            # 규칙 기반 추천 (높은 신뢰도)
-            for food_keyword, rules in food_type_rules.items():
-                if food_keyword in food_type and target_field in rules:
-                    for rule_value in rules[target_field]:
-                        field_suggestions.append({
-                            'value': rule_value,
-                            'confidence': 90,  # 규칙 기반이므로 높은 신뢰도
-                            'frequency': 10,
-                            'source': 'food_type_rule'
-                        })
-            
-            # 데이터 기반 추천
-            for product in products:
-                extracted_data = extract_from_korlabel(product.korlabel, target_field)
-                if extracted_data:
-                    field_suggestions.append({
-                        'value': extracted_data,
-                        'confidence': 75,
-                        'frequency': 1,
-                        'source': 'data_extraction'
-                    })
-            
-            # 최적 추천 선택
-            if field_suggestions:
-                best_suggestion = select_best_suggestion(field_suggestions)
-                if best_suggestion:
-                    suggestions[target_field] = best_suggestion
-        
-        return suggestions, total_matches
-        
-    except Exception as e:
-        print(f"❌ 식품유형 기반 추천 오류: {e}")
-        return {}, 0
-
-
-def get_storage_method_based_recommendations(storage_method, target_fields):
-    """보관방법 기반 고도화된 추천"""
-    suggestions = {}
-    total_matches = 0
-    
-    try:
-        # 보관방법으로 제품들 검색
-        products = ImportedFood.objects.filter(
-            korlabel__icontains=storage_method
-        ).exclude(korlabel__isnull=True).exclude(korlabel='')[:25]
-        
-        total_matches = products.count()
-        
-        # 보관방법별 특화된 추천 규칙
-        storage_rules = {
-            '냉장': {
-                'cautions': ['개봉 후 냉장보관', '유통기한 내 섭취', '온도변화 주의'],
-                'additional_info': ['냉장고에서 꺼낸 후 바로 섭취', '재냉동 금지']
-            },
-            '냉동': {
-                'cautions': ['해동 후 재냉동 금지', '조리 후 섭취'],
-                'additional_info': ['해동은 냉장고에서 천천히', '완전히 가열하여 드세요']
-            },
-            '실온': {
-                'cautions': ['직사광선 피하기', '습기 주의', '밀폐보관'],
-                'additional_info': ['서늘하고 건조한 곳 보관', '개봉 후 빠른 시일 내 섭취']
-            }
-        }
-        
-        # 각 대상 필드별 추천 생성
-        for target_field in target_fields:
-            field_suggestions = []
-            
-            # 규칙 기반 추천
-            for storage_keyword, rules in storage_rules.items():
-                if storage_keyword in storage_method and target_field in rules:
-                    for rule_value in rules[target_field]:
-                        field_suggestions.append({
-                            'value': rule_value,
-                            'confidence': 85,
-                            'frequency': 5,
-                            'source': 'storage_rule'
-                        })
-            
-            # 데이터 기반 추천
-            for product in products:
-                extracted_data = extract_from_korlabel(product.korlabel, target_field)
-                if extracted_data:
-                    field_suggestions.append({
-                        'value': extracted_data,
-                        'confidence': 70,
-                        'frequency': 1,
-                        'source': 'data_extraction'
-                    })
-            
-            # 최적 추천 선택
-            if field_suggestions:
-                best_suggestion = select_best_suggestion(field_suggestions)
-                if best_suggestion:
-                    suggestions[target_field] = best_suggestion
-        
-        return suggestions, total_matches
-        
-    except Exception as e:
-        print(f"❌ 보관방법 기반 추천 오류: {e}")
-        return {}, 0
-
-
-def get_general_recommendations(input_field, input_value, target_fields):
-    """일반적인 추천 로직"""
-    suggestions = {}
-    total_matches = 0
-    
-    try:
-        # 입력값으로 제품들 검색
-        products = ImportedFood.objects.filter(
-            korlabel__icontains=input_value
-        ).exclude(korlabel__isnull=True).exclude(korlabel='')[:20]
-        
-        total_matches = products.count()
-        
-        for target_field in target_fields:
-            field_suggestions = []
-            
-            for product in products:
-                extracted_data = extract_from_korlabel(product.korlabel, target_field)
-                if extracted_data:
-                    field_suggestions.append({
-                        'value': extracted_data,
-                        'confidence': 65,
-                        'frequency': 1,
-                        'source': 'general_extraction'
-                    })
-            
-            if field_suggestions:
-                best_suggestion = select_best_suggestion(field_suggestions)
-                if best_suggestion:
-                    suggestions[target_field] = best_suggestion
-        
-        return suggestions, total_matches
-        
-    except Exception as e:
-        print(f"❌ 일반 추천 오류: {e}")
-        return {}, 0
-
-
-def select_best_suggestion(field_suggestions):
-    """최적 추천 선택 알고리즘"""
-    if not field_suggestions:
-        return None
-    
-    # 값별로 그룹핑
-    value_groups = {}
-    for suggestion in field_suggestions:
-        value = suggestion['value']
-        if value not in value_groups:
-            value_groups[value] = {
-                'value': value,
-                'confidence': 0,
-                'frequency': 0,
-                'total_confidence': 0,
-                'sources': set()
-            }
-        
-        value_groups[value]['frequency'] += suggestion['frequency']
-        value_groups[value]['total_confidence'] += suggestion['confidence'] * suggestion['frequency']
-        value_groups[value]['sources'].add(suggestion['source'])
-    
-    # 평균 신뢰도 계산 및 점수 계산
-    scored_suggestions = []
-    for value_data in value_groups.values():
-        avg_confidence = value_data['total_confidence'] / value_data['frequency']
-        
-        # 다양한 소스에서 나온 추천에 보너스 점수
-        source_bonus = len(value_data['sources']) * 5
-        
-        # 최종 점수 = 빈도수 * 10 + 평균 신뢰도 + 소스 보너스
-        final_score = value_data['frequency'] * 10 + avg_confidence + source_bonus
-        
-        scored_suggestions.append({
-            'value': value_data['value'],
-            'confidence': min(95, avg_confidence + source_bonus),  # 최대 95%
-            'frequency': value_data['frequency'],
-            'score': final_score
-        })
-    
-    # 점수 기준으로 정렬하여 최고 추천 반환
-    if scored_suggestions:
-        best = max(scored_suggestions, key=lambda x: x['score'])
-        return {
-            'value': best['value'],
-            'confidence': best['confidence'],
-            'frequency': best['frequency']
-        }
-    
-    return None
-
-
-def calculate_similarity(str1, str2):
-    """문자열 유사도 계산 (0-1 범위)"""
-    if not str1 or not str2:
-        return 0
-    
-    # 간단한 자카드 유사도 계산
-    set1 = set(str1.replace(' ', ''))
-    set2 = set(str2.replace(' ', ''))
-    
-    intersection = len(set1.intersection(set2))
-    union = len(set1.union(set2))
-    
-    return intersection / union if union > 0 else 0
-
-
-@require_GET  
-def get_smart_auto_fill(request):
-    """
-    스마트 자동 입력 - 여러 필드 조합으로 정확도 높은 추천
-    """
-    try:
-        # 현재 폼의 입력값들 수집
-        form_data = {}
-        for key, value in request.GET.items():
-            if value and value.strip():
-                form_data[key] = value.strip()
-        
-        if not form_data:
-            return JsonResponse({'error': '입력된 데이터가 없습니다.'}, status=400)
-        
-        from .models import ImportedFood
-        from django.db.models import Q
-        
-        # 복합 검색 조건 생성
-        search_conditions = Q()
-        for field, value in form_data.items():
-            if hasattr(ImportedFood, field):
-                search_conditions |= Q(**{f'{field}__icontains': value})
-        
-        # 유사한 제품들 찾기
-        similar_products = ImportedFood.objects.filter(search_conditions).distinct()[:20]
-        
-        # 추천할 필드들 (주요 표시사항 필드들)
-        recommendation_fields = [
-            'storage_method', 'cautions', 'country_of_origin', 
-            'content_weight', 'bssh_nm', 'frmlc_mtrqlt'
-        ]
-        
-        suggestions = {}
-        for field in recommendation_fields:
-            if field in form_data:  # 이미 입력된 필드는 제외
-                continue
-                
-            field_values = []
-            for product in similar_products:
-                value = getattr(product, field, None)
-                if value and str(value).strip():
-                    field_values.append(str(value).strip())
-            
-            if field_values:
-                from collections import Counter
-                counter = Counter(field_values)
-                top_suggestion = counter.most_common(1)[0]
-                
-                confidence = (top_suggestion[1] / len(similar_products)) * 100
-                
-                # 신뢰도가 30% 이상인 경우만 추천
-                if confidence >= 30:
-                    suggestions[field] = {
-                        'value': top_suggestion[0],
-                        'frequency': top_suggestion[1],
-                        'confidence': round(confidence, 1),
-                        'total_matches': len(similar_products)
-                    }
-        
-        response_data = {
-            'success': True,
-            'input_data': form_data,
-            'total_matches': len(similar_products),
-            'suggestions': suggestions,
-            'message': f'{len(suggestions)}개 필드에 대한 자동 입력 추천을 생성했습니다.'
-        }
-        
-        return JsonResponse(response_data, json_dumps_params={'ensure_ascii': False})
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'스마트 자동 입력 처리 중 오류: {str(e)}'
-        }, status=500)
-
-
-@require_GET
-def test_recommendation_system(request):
-    """
-    추천 시스템 테스트 페이지
-    """
-    try:
-        from .services.recommendation_service import RecommendationService
-        service = RecommendationService()
-        
-        # 모든 필드의 샘플 데이터 가져오기
-        sample_data = service.get_sample_data_for_testing()
-        
-        test_results = {}
-        for field_name, values in sample_data.items():
-            test_results[field_name] = {
-                'field_name': field_name,
-                'recommendations': values[:3],  # 상위 3개만
-                'total_count': len(values)
-            }
-        
-        response_data = {
-            'success': True,
-            'message': '추천 시스템 테스트 완료',
-            'test_results': test_results,
-            'available_fields': list(sample_data.keys())
-        }
-        
-        return JsonResponse(response_data, json_dumps_params={'ensure_ascii': False, 'indent': 2})
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'테스트 중 오류: {str(e)}'
-        }, status=500)
-
-
-@csrf_exempt
-def get_phrases_api(request):
-    """
-    저장된 문구 API - 고성능 추천 시스템용
-    """
-    try:
-        # GET 또는 POST 방식으로 파라미터 받기
-        if request.method == 'POST':
-            import json
-            try:
-                data = json.loads(request.body)
-                field_name = data.get('field_name') or data.get('field')
-                phrase_type = data.get('type', 'all')
-                category = data.get('category', '')
-            except json.JSONDecodeError:
-                field_name = request.POST.get('field_name') or request.POST.get('field')
-                phrase_type = request.POST.get('type', 'all')
-                category = request.POST.get('category', '')
-        else:
-            field_name = request.GET.get('field_name') or request.GET.get('field')
-            phrase_type = request.GET.get('type', 'all')
-            category = request.GET.get('category', '')
-        
-        user_only = request.GET.get('user_only', 'false').lower() == 'true'
-        limit = int(request.GET.get('limit', 20))
-        
-        # field_name이 없어도 category가 있으면 처리 가능
-        if not field_name and not category:
-            return JsonResponse({
-                'success': True,
-                'phrases': [],
-                'total_count': 0,
-                'message': 'field_name 또는 category 파라미터가 필요합니다.'
-            })
-        
-        # 필드명을 카테고리명으로 매핑
-        field_to_category_mapping = {
-            'prdlst_nm': 'product_name',
-            'ingredient_info': 'ingredient_info', 
-            'prdlst_dcnm': 'food_type',
-            'prdlst_report_no': 'report_no',
-            'content_weight': 'content_weight',
-            'storage_method': 'storage',
-            'frmlc_mtrqlt': 'package',
-            'bssh_nm': 'manufacturer',
-            'distributor_address': 'distributor',
-            'repacker_address': 'repacker',
-            'importer_address': 'importer',
-            'pog_daycnt': 'expiry',
-            'rawmtrl_nm_display': 'rawmtrl_nm',
-            'cautions': 'cautions',
-            'additional_info': 'additional',
-            'nutrition_text': 'nutrition_text'
-        }
-        
-        category_name = field_to_category_mapping.get(field_name, field_name)
-        
-        # 문구 조회 조건 설정
-        query_filters = {
-            'category_name': category_name,
-            'delete_YN': 'N'
-        }
-        
-        if user_only and request.user.is_authenticated:
-            query_filters['user_id'] = request.user
-        
-        # 타입별 필터링
-        if phrase_type == 'popular':
-            # 사용 빈도가 높은 문구 (모든 사용자)
-            if user_only:
-                phrases = MyPhrase.objects.filter(**query_filters).order_by('-display_order', '-update_datetime')[:limit]
-            else:
-                # 전체 사용자의 인기 문구 (구현 필요시)
-                phrases = []
-        elif phrase_type == 'saved':
-            # 현재 사용자의 저장된 문구
-            if request.user.is_authenticated:
-                query_filters['user_id'] = request.user
-                phrases = MyPhrase.objects.filter(**query_filters).order_by('-display_order', '-update_datetime')[:limit]
-            else:
-                phrases = []
-        else:
-            # 모든 문구
-            phrases = MyPhrase.objects.filter(**query_filters).order_by('-display_order', '-update_datetime')[:limit]
-        
-        # 문구 데이터 구성
-        phrases_data = []
-        for phrase in phrases:
-            phrases_data.append({
-                'id': phrase.my_phrase_id,
-                'content': phrase.comment_content,
-                'field': field_name,
-                'name': phrase.my_phrase_name,
-                'note': phrase.note or '',
-                'created_at': phrase.create_datetime.strftime('%Y-%m-%d') if phrase.create_datetime else '',
-                'updated_at': phrase.update_datetime.strftime('%Y-%m-%d') if phrase.update_datetime else ''
-            })
-        
-        response_data = {
-            'success': True,
-            'field_name': field_name,
-            'phrases': phrases_data,
-            'total_count': len(phrases_data),
-            'message': f'{field_name}에 대한 {len(phrases_data)}개 문구를 찾았습니다.'
-        }
-        
-        return JsonResponse(response_data, json_dumps_params={'ensure_ascii': False})
-        
-    except ValueError as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'잘못된 파라미터: {str(e)}'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'저장된 문구 조회 중 오류: {str(e)}'
-        }, status=500)
-
-
 @login_required
 def get_recent_usage_api(request):
     """
@@ -4491,4 +2493,181 @@ def get_recent_usage_api(request):
         return JsonResponse({
             'success': False,
             'error': f'최근 사용 항목 조회 중 오류: {str(e)}'
+        }, status=500)
+
+@login_required
+@require_GET
+def auto_fill_api(request):
+    """
+    기본 추천 시스템용 자동 채우기 API
+    스마트 추천 기능을 시뮬레이션하여 기본적인 추천 제공
+    """
+    try:
+        input_field = request.GET.get('input_field', '')
+        input_value = request.GET.get('input_value', '')
+        category = request.GET.get('category', 'general')
+        priority = request.GET.get('priority', 'medium')
+        
+        # 필드별 기본 추천 데이터 (recommendation_system.js와 동일)
+        basic_recommendations = {
+            'prdlst_nm': [
+                "진한 사골곰탕", "100% 착즙 사과주스", "즉석 발아현미밥",
+                "바삭한 통밀 쿠키", "담백한 살코기참치", "글루텐프리 쌀 파스타"
+            ],
+            'ingredient_info': [  # 상세 입력 영역
+                "딸기농축액 1.5 % (고형분 65 %, 딸기 100 %)", "국산 돼지고기 92.5 %",
+                "유기농 토마토 85 %", "고등어 50 %, 정제수, 토마토소스",
+                "칼슘 110 mg, 비타민D 5 μg", "페닐알라닌 함유",
+                "과량 섭취 시 설사를 일으킬 수 있습니다."
+            ],
+            'prdlst_dcnm': [  # 상세 입력 영역
+                "과·채주스 (살균제품)", "식육함유가공품 (비살균제품 / 가열하여 섭취하는 냉동식품)",
+                "건강기능식품 (홍삼제품)", "특수용도식품 (체중조절용 조제식품)",
+                "초콜릿가공품 (과자)", "어육소시지 (멸균제품)"
+            ],
+            'prdlst_report_no': [
+                "20240001234", "20240005678", "20240009012", "20240003456",
+                "20240007890", "20240002468", "20240008024", "20240004680",
+                "20240006802", "20240001357"
+            ],
+            'frmlc_mtrqlt': [
+                "폴리에틸렌(PE)", "용기: 폴리프로필렌(PP), 리드필름(뚜껑): OTHER(복합재질)",
+                "용기: 페트(PET), 뚜껑: 폴리에틸렌(PE)", "알루미늄",
+                "종이, 폴리에틸렌(내면)"
+            ],
+            'cautions': [
+                "부정·불량식품신고는 국번없이 1399",
+                "이 제품은 알류(가금류), 우유, 메밀, 땅콩, 대두, 밀, 게, 새우, 돼지고기, 복숭아, 토마토, 아황산류, 호두, 닭고기, 쇠고기, 오징어, 조개류(굴, 전복, 홍합 포함), 잣을 사용한 제품과 같은 제조시설에서 제조하고 있습니다.",
+                "개봉 후 냉장보관하시고 가급적 빠른 시일 내에 섭취하시기 바랍니다.",
+                "어린이, 임산부, 카페인 민감자는 섭취에 주의해 주세요.",
+                "직사광선을 피하여 보관하시기 바랍니다.",
+                "흔들어 드세요"
+            ],
+            'additional_info': [
+                "반품 및 교환장소: 구입처 또는 제조원",
+                "본 제품은 소비자분쟁해결기준에 의거 교환 또는 보상을 받을 수 있습니다.",
+                "무료소비자 상담실: 080-***-**** (평일 오전9시~오후6시)",
+                "개봉 전·후 주의사항을 반드시 확인하세요"
+            ],
+            'storage_method': [
+                "냉장 보관 (0~10℃)", "냉동 보관 (-18℃ 이하)",
+                "실온 보관 (1~35℃)", "상온 보관 (15~25℃)",
+                "직사광선을 피하고 서늘한 곳에 보관하십시오.",
+                "개봉 후에는 냉장 보관하시고, 가급적 빨리 드시기 바랍니다."
+            ],
+            'content_weight': [
+                "100g", "200g", "250g", "300g", "500g", 
+            ],
+            'bssh_nm': [
+                "(주)한국식품", "대한제과", "맛있는식품(주)", "우리농장",
+            ],
+            'pog_daycnt': [
+                "제조일로부터 12개월", "제조일로부터 18개월", 
+                "제조일로부터 24개월", "제조일로부터 6개월",
+            ],
+            'processing_condition': [
+                "85℃에서 15분간 살균",
+                "121℃에서 4분간 멸균", 
+                "냉동 -18℃ 이하 보관",
+                "상온 유통 가능",
+                "65℃에서 30분간 저온살균",
+                "100℃에서 10분간 끓임 살균",
+                "자외선 살균 처리",
+                "고압 살균 처리"
+            ]
+        }
+        
+        # 해당 필드의 추천 데이터 가져오기
+        suggestions = basic_recommendations.get(input_field, [])
+        
+        # 입력값이 있으면 관련성 높은 순서로 정렬
+        if input_value and suggestions:
+            # 간단한 키워드 매칭으로 관련성 계산
+            input_lower = input_value.lower()
+            scored_suggestions = []
+            
+            for suggestion in suggestions:
+                score = 0
+                suggestion_lower = suggestion.lower()
+                
+                # 완전 일치 시 높은 점수
+                if input_lower in suggestion_lower:
+                    score += 10
+                
+                # 첫 글자 일치 시 점수 추가
+                if suggestion_lower.startswith(input_lower[:1]):
+                    score += 5
+                    
+                scored_suggestions.append((score, suggestion))
+            
+            # 점수순으로 정렬하고 상위 3개만 선택
+            scored_suggestions.sort(key=lambda x: x[0], reverse=True)
+            suggestions = [item[1] for item in scored_suggestions[:3]]
+        else:
+            # 입력값이 없으면 상위 3개만
+            suggestions = suggestions[:3]
+        
+        return JsonResponse({
+            'success': True,
+            'suggestions': suggestions,
+            'field': input_field,
+            'category': category,
+            'priority': priority,
+            'message': f'{input_field}에 대한 {len(suggestions)}개 추천을 제공합니다.'
+        }, json_dumps_params={'ensure_ascii': False})
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'자동 채우기 API 오류: {str(e)}'
+        }, status=500)
+
+@login_required  
+@require_GET
+def phrases_api(request):
+    """
+    사용자 정의 문구 API
+    MyPhrase 모델에서 사용자의 저장된 문구들을 반환
+    """
+    try:
+        category = request.GET.get('category', 'general')
+        field_name = request.GET.get('field', '')
+        
+        # 카테고리별 문구 조회
+        user_phrases = MyPhrase.objects.filter(
+            user_id=request.user,
+            delete_YN='N'
+        )
+        
+        if category != 'all':
+            user_phrases = user_phrases.filter(category_name=category)
+            
+        user_phrases = user_phrases.order_by('display_order', 'my_phrase_id')
+        
+        phrases = []
+        for phrase in user_phrases:
+            phrases.append({
+                'id': phrase.my_phrase_id,
+                'name': phrase.my_phrase_name,
+                'text': phrase.comment_content,  # recommendation_system.js에서 text 속성 사용
+                'content': phrase.comment_content,
+                'note': phrase.note or '',
+                'category': phrase.category_name,
+                'order': phrase.display_order
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'phrases': phrases,
+            'data': phrases,  # recommendation_system.js에서 data 속성도 확인
+            'category': category,
+            'field': field_name,
+            'total_count': len(phrases),
+            'message': f'{category} 카테고리의 {len(phrases)}개 문구를 제공합니다.'
+        }, json_dumps_params={'ensure_ascii': False})
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'문구 API 오류: {str(e)}'
         }, status=500)

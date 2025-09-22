@@ -1,0 +1,389 @@
+/**
+ * 라벨 미리보기 스타일시트
+ * Label Preview CSS Styles
+ * 
+ * 주요 구성:
+ * 1. CSS 변수 정의
+ * 2. 기본 레이아웃 스타일
+ * 3. 헤더 및 액션 버튼
+ * 4. 설정 패널
+ * 5. 미리보기 패널
+ * 6. 분리배출마크 관련 스타일
+ * 7. 반응형 디자인
+ */
+
+:root {
+  --primary-color: #023047;
+  --secondary-color: #3b82f6;
+  --success-color: #198754;
+  --info-color: #0dcaf0;
+  --danger-color: #dc3545;
+  --warning-color: #f59e0b;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f9fa;
+  --bg-muted: #e5e7eb;
+  --border-color: #d1d5db;
+  --border-light: #e5e7eb;
+  --modern-border-radius-sm: 6px;
+}
+
+/* 버튼 색상 통일 */
+.btn-info {
+  background-color: var(--info-color) !important;
+  border-color: var(--info-color) !important;
+  color: white !important;
+}
+
+.btn-info:hover {
+  background-color: #0aa2c0 !important;
+  border-color: #0aa2c0 !important;
+  color: white !important;
+}
+
+.btn-success {
+  background-color: var(--success-color) !important;
+  border-color: var(--success-color) !important;
+  color: white !important;
+}
+
+.btn-success:hover {
+  background-color: #157347 !important;
+  border-color: #146c43 !important;
+  color: white !important;
+}
+
+.btn-primary {
+  background-color: var(--secondary-color) !important;
+  border-color: var(--secondary-color) !important;
+  color: white !important;
+}
+
+.btn-primary:hover {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+  color: white !important;
+}
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background-color: var(--bg-secondary);
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.preview-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-primary);
+  height: 70px;
+  flex-shrink: 0;
+}
+
+.preview-page-header .panel-title { 
+    font-size: 1.25rem; 
+    font-weight: 600; 
+    color: var(--text-primary); 
+    margin: 0;
+}
+
+.preview-actions { 
+    display: flex; 
+    gap: 8px; 
+    align-items: center; 
+}
+
+.preview-container {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.settings-panel {
+  width: 420px; /* 너비 소폭 증가 */
+  padding: 20px;
+  border-right: 1px solid var(--border-light);
+  overflow-y: auto;
+  background-color: var(--bg-primary);
+  flex-shrink: 0;
+}
+
+.preview-panel {
+  flex: 1;
+  padding: 20px;
+  overflow: auto;
+  background-color: var(--bg-primary);
+  min-width: 0; /* flexbox에서 최소 너비 제한 해제 */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+#previewContent {
+  margin: 0 auto;
+  box-sizing: border-box;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 20px;
+  transform-origin: top center;
+  transition: transform 0.2s ease-in-out;
+  position: relative;
+  /* 정확한 가로 길이 적용을 위한 설정 */
+  width: fit-content;
+  min-width: auto;
+  /* 분리배출마크 텍스트 잘림 방지 */
+  overflow: visible;
+}
+
+/* 미리보기 콘텐츠 기본 스타일 */
+.preview-content {
+  min-height: 400px;
+  font-family: 'Noto Sans KR', sans-serif;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.preview-header-box { 
+    background-color: var(--primary-color); 
+    color: var(--bg-primary); 
+    padding: 8px 12px; 
+    margin: -20px -20px 10px -20px;
+}
+
+.preview-header-box .header-text { 
+    margin: 0; 
+    line-height: 1.2; 
+    font-weight: bold; 
+    font-size: 10pt; 
+    text-align: center; 
+}
+
+.preview-table { 
+  width: 100%; 
+  border-collapse: collapse; 
+  table-layout: fixed; 
+  word-break: break-word;
+  margin-top: 10px;
+}
+
+.preview-table td {
+  width: 75%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.preview-table th, .preview-table td { 
+  border: 1px solid var(--border-light); 
+  padding: 6px 10px; 
+  vertical-align: top; 
+  font-size: 10pt; 
+  line-height: 1.4;
+}
+
+.preview-table th { 
+    background-color: var(--bg-secondary); 
+    text-align: center; 
+    font-weight: 500; 
+    white-space: nowrap; 
+    width: 25%;
+    min-width: 120px;
+    max-width: 120px;
+}
+
+.footer-text { 
+    text-align: right; 
+    font-size: 7.5pt; 
+    color: var(--text-muted); 
+    margin-top: 12px; 
+    padding-top: 8px; 
+    border-top: 1px solid var(--border-light); 
+}
+
+/* 설정 그룹 스타일 */
+.settings-group { 
+    margin-bottom: 25px; 
+}
+
+.settings-actions-row { 
+    display: flex; 
+    gap: 10px; 
+    margin-bottom: 20px; 
+}
+
+.settings-group h6 {
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 15px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+/* 2개씩 묶기 위한 스타일 */
+.settings-row-pair {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.settings-row-pair .settings-row {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.settings-row { 
+    margin-bottom: 15px; 
+}
+
+.form-label { 
+  font-weight: 500; 
+  margin-bottom: 5px; 
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.form-label.required::after { 
+    content: " *"; 
+    color: var(--danger-color); 
+}
+
+#heightInput { 
+    background-color: var(--bg-secondary) !important; 
+    cursor: not-allowed !important; 
+}
+
+/* 영역 정보 스타일 */
+.area-info {
+  background-color: var(--bg-secondary);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 3px solid var(--secondary-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.zoom-controls { 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+}
+
+.zoom-controls button { 
+    width: 32px; 
+    height: 32px; 
+    font-size: 1rem; 
+}
+
+#zoomDisplay { 
+    font-weight: 500; 
+    min-width: 50px; 
+    text-align: center; 
+}
+
+#recyclingMarkUiBox {
+    border-top: 1px solid var(--border-light);
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+}
+
+
+
+#recyclingMarkContainer { 
+    position: absolute; 
+    width: 60px; 
+    cursor: move; 
+    text-align: center; 
+    top: 20px; 
+    right: 20px; 
+    z-index: 10; 
+}
+
+#recyclingMarkContainer .recycling-mark-image { 
+    width: 100%; 
+    height: auto; 
+    display: block; 
+}
+
+#recyclingMarkContainer .recycling-mark-text { 
+    margin-top: 4px; 
+}
+
+.recycling-text-line { 
+    font-weight: 500; 
+    color: var(--text-primary); 
+    line-height: 1.1; 
+    word-break: keep-all; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    display: inline-block; 
+}
+
+/* JavaScript에서 동적으로 생성되는 요소들 */
+.creator-info {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.preview-line {
+    margin-bottom: 2px;
+}
+
+.more-count {
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+/* 가로 스크롤 스타일 개선 */
+.preview-panel::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.preview-panel::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.preview-panel::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.preview-panel::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 반응형 처리 */
+@media (max-width: 1200px) {
+  .settings-panel {
+    width: 350px;
+  }
+}
+
+@media (max-width: 992px) {
+  .preview-container {
+    flex-direction: column;
+  }
+  
+  .settings-panel {
+    width: 100%;
+    max-height: 300px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-light);
+  }
+  
+  .preview-panel {
+    flex: 1;
+  }
+}

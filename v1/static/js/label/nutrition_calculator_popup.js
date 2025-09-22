@@ -2,80 +2,8 @@
 (function() {
 'use strict';
 
-// 영양성분 정의 - 한눈에 보는 영양표시 가이드라인 순서 (MFDS 2024 기준)
-const NUTRITION_DATA = {
-  // 필수 영양성분 (9가지) - 가이드라인 순서
-  'calories': { label: '열량', unit: 'kcal', order: 1, required: true, daily_value: null },
-  'sodium': { label: '나트륨', unit: 'mg', order: 2, required: true, daily_value: 2000 },
-  'carbohydrate': { label: '탄수화물', unit: 'g', order: 3, required: true, daily_value: 324 },
-  'sugars': { label: '당류', unit: 'g', order: 4, parent: 'carbohydrate', indent: true, required: true, daily_value: 100 },
-  'fat': { label: '지방', unit: 'g', order: 5, required: true, daily_value: 54 },
-  'trans_fat': { label: '트랜스지방', unit: 'g', order: 6, parent: 'fat', indent: true, required: true, daily_value: null },
-  'saturated_fat': { label: '포화지방', unit: 'g', order: 7, parent: 'fat', indent: true, required: true, daily_value: 15 },
-  'cholesterol': { label: '콜레스테롤', unit: 'mg', order: 8, required: true, daily_value: 300 },
-  'protein': { label: '단백질', unit: 'g', order: 9, required: true, daily_value: 55 },
-  
-  // 추가 영양성분 - 식약처 기준 업데이트
-  'dietary_fiber': { label: '식이섬유', unit: 'g', order: 10, daily_value: 25 },
-  'calcium': { label: '칼슘', unit: 'mg', order: 11, daily_value: 700 },
-  'iron': { label: '철', unit: 'mg', order: 12, daily_value: 12 },
-  'magnesium': { label: '마그네슘', unit: 'mg', order: 13, daily_value: 315 },
-  'phosphorus': { label: '인', unit: 'mg', order: 14, daily_value: 700 },
-  'potassium': { label: '칼륨', unit: 'mg', order: 15, daily_value: 3500 },
-  'zinc': { label: '아연', unit: 'mg', order: 16, daily_value: 8.5 },
-  'vitamin_a': { label: '비타민A', unit: 'μg RAE', order: 17, daily_value: 700 },
-  'vitamin_d': { label: '비타민D', unit: 'μg', order: 18, daily_value: 10 },
-  'vitamin_e': { label: '비타민E', unit: 'mg α-TE', order: 19, daily_value: 12 },
-  'vitamin_c': { label: '비타민C', unit: 'mg', order: 20, daily_value: 100 },
-  'thiamine': { label: '티아민', unit: 'mg', order: 21, daily_value: 1.2 },
-  'riboflavin': { label: '리보플라빈', unit: 'mg', order: 22, daily_value: 1.4 },
-  'niacin': { label: '니아신', unit: 'mg NE', order: 23, daily_value: 15 },
-  'vitamin_b6': { label: '비타민B6', unit: 'mg', order: 24, daily_value: 1.5 },
-  'folic_acid': { label: '엽산', unit: 'μg DFE', order: 25, daily_value: 400 },
-  'vitamin_b12': { label: '비타민B12', unit: 'μg', order: 26, daily_value: 2.4 },
-  'selenium': { label: '셀레늄', unit: 'μg', order: 27, daily_value: 55 },
-  
-  // 추가 영양성분들 (식약처 기준)
-  'pantothenic_acid': { label: '판토텐산', unit: 'mg', order: 28, daily_value: 5 },
-  'biotin': { label: '비오틴', unit: 'μg', order: 29, daily_value: 30 },
-  'iodine': { label: '요오드', unit: 'μg', order: 30, daily_value: 150 },
-  'vitamin_k': { label: '비타민K', unit: 'μg', order: 31, daily_value: 70 },
-  'copper': { label: '구리', unit: 'mg', order: 32, daily_value: 0.8 },
-  'manganese': { label: '망간', unit: 'mg', order: 33, daily_value: 3.0 },
-  'chromium': { label: '크롬', unit: 'μg', order: 34, daily_value: 30 },
-  'molybdenum': { label: '몰리브덴', unit: 'μg', order: 35, daily_value: 25 }
-};
-
-// 강조표시 기준 (식약처 기준)
-const EMPHASIS_CRITERIA = {
-  // 저 함유 기준 (100g 또는 100ml 기준)
-  low: {
-    'calories': { threshold: 40, label: '저열량' }, // 40kcal 이하
-    'fat': { threshold: 3, label: '저지방' }, // 3g 이하
-    'saturated_fat': { threshold: 1.5, label: '저포화지방' }, // 1.5g 이하
-    'sugars': { threshold: 5, label: '저당' }, // 5g 이하
-    'sodium': { threshold: 120, label: '저나트륨' }, // 120mg 이하
-    'cholesterol': { threshold: 20, label: '저콜레스테롤' } // 20mg 이하
-  },
-  // 무 함유 기준
-  free: {
-    'calories': { threshold: 4, label: '무열량' }, // 4kcal 미만
-    'fat': { threshold: 0.5, label: '무지방' }, // 0.5g 미만
-    'saturated_fat': { threshold: 0.1, label: '무포화지방' }, // 0.1g 미만
-    'sugars': { threshold: 0.5, label: '무당' }, // 0.5g 미만
-    'sodium': { threshold: 5, label: '무나트륨' }, // 5mg 미만
-    'cholesterol': { threshold: 2, label: '무콜레스테롤' } // 2mg 미만
-  },
-  // 고 함유 기준 (100g 또는 100ml 기준, 1일 기준치의 30% 이상)
-  high: {
-    'protein': { threshold: 16.5, label: '고단백' }, // 1일기준치 30% 이상
-    'dietary_fiber': { threshold: 7.5, label: '고식이섬유' }, // 1일기준치 30% 이상
-    'calcium': { threshold: 210, label: '고칼슘' }, // 1일기준치 30% 이상
-    'iron': { threshold: 3.6, label: '고철분' }, // 1일기준치 30% 이상
-    'vitamin_e': { threshold: 3.6, label: '고비타민E' }, // 1일기준치 30% 이상
-    'vitamin_c': { threshold: 30, label: '고비타민C' } // 1일기준치 30% 이상
-  }
-};
+// 영양성분 상수는 constants.js에서 로드됨
+// window.NUTRITION_DATA, window.EMPHASIS_CRITERIA 사용
 
 // 전역 변수
 let currentNutritionData = {};
@@ -140,17 +68,17 @@ function processNutritionValue(key, value) {
     case 'calories':
       if (roundedValue < 5) return '5kcal 미만';
       return formatNumberWithCommas(Math.round(roundedValue / 5) * 5); // 5kcal 단위
+    case 'natriums':
     case 'sodium':
       if (roundedValue < 5) return '5mg 미만';
       if (roundedValue >= 1000) {
-        // 1000mg 이상은 1000mg 단위로 반올림
         const sodiumLargeResult = Math.round(roundedValue / 1000) * 1000;
         return formatNumberWithCommas(sodiumLargeResult);
       } else {
-        // 1000mg 미만은 5mg 단위로 반올림
         const sodiumResult = Math.round(roundedValue / 5) * 5;
         return formatNumberWithCommas(sodiumResult);
       }
+    case 'cholesterols':
     case 'cholesterol':
       if (roundedValue < 2) return '0';
       if (roundedValue < 5) return '5mg 미만';
@@ -164,7 +92,9 @@ function processNutritionValue(key, value) {
     case 'zinc':
     case 'selenium':
       return formatNumberWithCommas(Math.round(roundedValue));
+    case 'carbohydrates':
     case 'carbohydrate':
+    case 'proteins':
     case 'protein':
     case 'dietary_fiber':
       if (roundedValue < 1) return '1g 미만';
@@ -172,7 +102,9 @@ function processNutritionValue(key, value) {
     case 'sugars': // 당류는 '미만' 표시 없음
       if (roundedValue < 0.5) return '0';
       return formatNumberWithCommas(Math.round(roundedValue));
+    case 'fats':
     case 'fat':
+    case 'saturated_fats':
     case 'saturated_fat':
       if (roundedValue < 0.5) return '0';
       if (roundedValue <= 5) {
@@ -180,8 +112,9 @@ function processNutritionValue(key, value) {
         return formatNumberWithCommas(fatResult);
       }
       return formatNumberWithCommas(Math.round(roundedValue));
+    case 'trans_fats':
     case 'trans_fat':
-      if (roundedValue < 0.2) return '0'; // 식약처 기준: 0.2g 미만은 0g
+      if (roundedValue < 0.2) return '0';
       if (roundedValue < 0.5) return '0.5g 미만';
       const transResult = Math.round(roundedValue * 10) / 10;
       return formatNumberWithCommas(transResult);
@@ -195,7 +128,7 @@ function processNutritionValue(key, value) {
 // % 영양성분 기준치 계산 함수 (가이드라인 준수)
 function calculateDailyValuePercent(key, processedValue, originalValue) {
   const nutritionInfo = NUTRITION_DATA[key];
-  if (key === 'calories' || key === 'trans_fat' || !nutritionInfo.daily_value) return null;
+  if (key === 'calories' || key === 'trans_fats' || !nutritionInfo.daily_value) return null;
 
   let valueForCalc = originalValue;
   if (typeof processedValue === 'string' && processedValue.includes('미만')) {
@@ -240,432 +173,6 @@ function getNutritionInputsFromDOM() {
   return nutritionInputs;
 }
 
-// ===== 영양성분표 생성 함수들 =====
-
-// 기본형/세로형 영양성분표 생성 (가이드라인 준수)
-function generateBasicDisplay(nutritionInputs, baseAmount, servingsPerPackage, style) {
-  // 세로형인 경우 별도 함수 호출
-  if (style === 'vertical') {
-    return generateVerticalDisplay(nutritionInputs, baseAmount, servingsPerPackage);
-  }
-  
-  // 표시 기준 확인
-  const displayType = document.getElementById('basic_display_type').value;
-  let displayAmount, multiplier, headerText;
-  
-  switch (displayType) {
-    case 'unit':
-      displayAmount = baseAmount;
-      multiplier = baseAmount / 100;
-      headerText = `단위내용량 ${baseAmount.toLocaleString()}g당`;
-      break;
-    case '100g':
-      displayAmount = 100;
-      multiplier = 1;
-      headerText = `100g당`;
-      break;
-    case 'total':
-    default:
-      displayAmount = (baseAmount * servingsPerPackage);
-      multiplier = displayAmount / 100;
-      headerText = `총 내용량 ${displayAmount.toLocaleString()}g당`;
-      break;
-  }
-  
-  const calories = processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier);
-
-  // 헤더 HTML - 표시 기준에 따른 동적 헤더
-  let html = `
-  <div class="nutrition-header">
-    <div class="nutrition-title">영양정보</div>
-    <div class="nutrition-subheader">${headerText} / <span class="calories-value">${calories.toLocaleString()}</span>kcal</div>
-  </div>
-  <table class="nutrition-table">
-    <thead>
-      <tr>
-        <th class="nutrition-name">영양성분</th>
-        <th class="nutrition-content">함량</th>
-        <th class="nutrition-daily">기준치(%)</th>
-      </tr>
-    </thead>
-    <tbody>`;
-
-  // 본문(영양성분) HTML - 가이드라인 순서 준수
-  // 9대 기본 성분은 0이어도 항상 표시
-  const sortedNutrients = Object.entries(NUTRITION_DATA)
-      .filter(([key]) => {
-        if (key === 'calories') return false; // 열량은 헤더에 이미 표시
-        // 9대 기본 성분(required: true)은 항상 표시, 추가 성분은 값이 있을 때만 표시
-        return NUTRITION_DATA[key].required || nutritionInputs[key] !== undefined;
-      })
-      .sort((a, b) => a[1].order - b[1].order);
-
-  sortedNutrients.forEach(([key, data]) => {
-      const originalValue = (nutritionInputs[key] || 0) * multiplier;
-      const processedValue = processNutritionValue(key, originalValue);
-      const percent = calculateDailyValuePercent(key, processedValue, originalValue);
-      
-      let displayValue;
-      if (processedValue.includes('미만')) {
-        displayValue = processedValue;
-      } else {
-        const numericValue = Number(processedValue.replace(/,/g, ''));
-        displayValue = `${numericValue.toLocaleString()}${data.unit}`;
-      }
-
-      html += `
-      <tr class="nutrition-row">
-        <td class="nutrition-name ${data.indent ? 'nutrition-indent' : ''}">${data.label}</td>
-        <td class="nutrition-content">${displayValue}</td>
-        <td class="nutrition-daily">${percent !== null ? `${percent}%` : '-'}</td>
-      </tr>`;
-  });
-
-  html += `</tbody>`;
-  
-  // 푸터 HTML
-  html += `
-    <tfoot>
-      <tr class="nutrition-footer">
-        <td colspan="3">* 1일 영양성분 기준치에 대한 비율(%)은 2,000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.</td>
-      </tr>
-    </tfoot>
-  </table>`;
-  return html;
-}
-
-// 세로형 영양성분표 생성 (공간 협소 시 사용 - 식약처 표준 도안)
-function generateVerticalDisplay(nutritionInputs, baseAmount, servingsPerPackage) {
-  // 표시 기준 확인
-  const displayType = document.getElementById('basic_display_type').value;
-  let displayAmount, multiplier, headerText;
-  
-  switch (displayType) {
-    case 'unit':
-      displayAmount = baseAmount;
-      multiplier = baseAmount / 100;
-      headerText = `단위내용량 ${baseAmount.toLocaleString()}g당`;
-      break;
-    case '100g':
-      displayAmount = 100;
-      multiplier = 1;
-      headerText = `100g당`;
-      break;
-    case 'total':
-    default:
-      displayAmount = (baseAmount * servingsPerPackage);
-      multiplier = displayAmount / 100;
-      headerText = `총 내용량 ${displayAmount.toLocaleString()}g당`;
-      break;
-  }
-  
-  const calories = processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier);
-
-  // 세로형 헤더 HTML (식약처 표준 도안) - 표시 기준에 따른 동적 헤더
-  let html = `
-  <div class="nutrition-vertical">
-    <div class="nutrition-vertical-header">
-      <div class="nutrition-title-vertical">영양정보</div>
-      <div class="nutrition-amount-vertical">${headerText}</div>
-      <div class="nutrition-calories-vertical">열량 ${calories.toLocaleString()}kcal</div>
-    </div>
-    <div class="nutrition-vertical-content">`;
-
-  // 영양성분 세로 나열 (식약처 표준 순서)
-  // 9대 기본 성분은 0이어도 항상 표시
-  const sortedNutrients = Object.entries(NUTRITION_DATA)
-      .filter(([key]) => {
-        if (key === 'calories') return false; // 열량은 헤더에 이미 표시
-        // 9대 기본 성분(required: true)은 항상 표시, 추가 성분은 값이 있을 때만 표시
-        return NUTRITION_DATA[key].required || nutritionInputs[key] !== undefined;
-      })
-      .sort((a, b) => a[1].order - b[1].order);
-
-  sortedNutrients.forEach(([key, data]) => {
-      const originalValue = (nutritionInputs[key] || 0) * multiplier;
-      const processedValue = processNutritionValue(key, originalValue);
-      const percent = calculateDailyValuePercent(key, processedValue, originalValue);
-      
-      let displayValue;
-      if (processedValue.includes('미만')) {
-        displayValue = processedValue;
-      } else {
-        const numericValue = Number(processedValue.replace(/,/g, ''));
-        displayValue = `${numericValue.toLocaleString()}${data.unit}`;
-      }
-
-      html += `
-      <div class="nutrition-vertical-item ${data.indent ? 'nutrition-vertical-indent' : ''}">
-        <span class="nutrition-vertical-name">${data.label}</span>
-        <span class="nutrition-vertical-value">${displayValue}</span>
-        ${percent !== null ? `<span class="nutrition-vertical-percent">(${percent}%)</span>` : ''}
-      </div>`;
-  });
-
-  html += `
-    </div>
-    <div class="nutrition-vertical-footer">
-      * 1일 영양성분 기준치에 대한 비율(%)은 2,000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.
-    </div>
-  </div>`;
-  
-  return html;
-}
-
-// 병행표시 영양성분표 생성 (가이드라인 준수 - 4가지 케이스 지원)
-function generateParallelDisplay(nutritionInputs, baseAmount, servingsPerPackage) {
-  // 병행표시 유형 확인
-  const parallelType = document.getElementById('parallel_display_type').value;
-  const totalAmount = (baseAmount * servingsPerPackage);
-  
-  // 단위 확인 (g 또는 ml)
-  const baseUnit = document.getElementById('base_amount_unit')?.value || 'g';
-  
-  let multiplier1, multiplier2, headerText1, headerText2, calories1, calories2;
-  
-  switch (parallelType) {
-    case 'unit_total':
-      // Case 1: 단위내용량당 + 총내용량당
-      multiplier1 = baseAmount / 100;
-      multiplier2 = totalAmount / 100;
-      headerText1 = `단위내용량당(${baseAmount.toLocaleString()}${baseUnit})`;
-      headerText2 = `총 내용량당(${totalAmount.toLocaleString()}${baseUnit})`;
-      break;
-      
-    case 'unit_100g':
-      // Case 2: 단위내용량당 + 100g당
-      multiplier1 = baseAmount / 100;
-      multiplier2 = 1;
-      headerText1 = `단위내용량당(${baseAmount.toLocaleString()}${baseUnit})`;
-      headerText2 = `100${baseUnit}당`;
-      break;
-      
-    case 'serving_total':
-      // Case 3: 1회 섭취참고량당 + 총내용량당
-      multiplier1 = baseAmount / 100;
-      multiplier2 = totalAmount / 100;
-      headerText1 = `1회 섭취참고량당(${baseAmount.toLocaleString()}${baseUnit})`;
-      headerText2 = `총 내용량당(${totalAmount.toLocaleString()}${baseUnit})`;
-      break;
-      
-    case 'serving_100ml':
-      // Case 4: 1회 섭취참고량당 + 100ml당 (주로 음료용)
-      multiplier1 = baseAmount / 100;
-      multiplier2 = 1;
-      headerText1 = `1회 섭취참고량당(${baseAmount.toLocaleString()}${baseUnit})`;
-      headerText2 = `100${baseUnit === 'ml' ? 'ml' : 'g'}당`;
-      break;
-      
-    default:
-      // 기본값: 단위내용량당 + 총내용량당
-      multiplier1 = baseAmount / 100;
-      multiplier2 = totalAmount / 100;
-      headerText1 = `단위내용량당(${baseAmount.toLocaleString()}${baseUnit})`;
-      headerText2 = `총 내용량당(${totalAmount.toLocaleString()}${baseUnit})`;
-      break;
-  }
-  
-  console.log('병행표시 설정:', {
-    parallelType,
-    baseAmount,
-    servingsPerPackage,
-    totalAmount,
-    baseUnit,
-    headerText1,
-    headerText2,
-    multiplier1,
-    multiplier2
-  });
-  
-  calories1 = processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier1);
-  calories2 = processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier2);
-
-  // 헤더 HTML - 병행형 (표시 유형에 따른 동적 헤더)
-  let html = `
-  <div class="nutrition-header">
-    <div class="nutrition-title">영양정보</div>
-    <div class="nutrition-total-info">총 내용량 ${totalAmount.toLocaleString()}g (${baseAmount.toLocaleString()}g X ${servingsPerPackage.toLocaleString()}개)</div>
-  </div>
-  <table class="nutrition-table">
-    <thead>
-      <tr class="parallel-header-top">
-        <th rowspan="2">영양성분</th>
-        <th colspan="2">${headerText1}</th>
-        <th colspan="2" class="parallel-divider">${headerText2}</th>
-      </tr>
-      <tr class="parallel-header-bottom">
-        <th>함량</th>
-        <th>기준치(%)</th>
-        <th class="parallel-divider">함량</th>
-        <th>기준치(%)</th>
-      </tr>
-    </thead>
-    <tbody>`;
-
-  // 열량 표시 (9대 기본 성분이므로 항상 표시)
-  html += `
-    <tr class="nutrition-row">
-      <td class="nutrition-name" style="font-weight: bold;">열량</td>
-      <td style="text-align:center; font-weight:bold;">${calories1}kcal</td>
-      <td style="text-align:center;"></td>
-      <td style="text-align:center; font-weight:bold;" class="parallel-divider">${calories2}kcal</td>
-      <td style="text-align:center;"></td>
-    </tr>`;
-
-  // 본문(영양성분) HTML - 가이드라인 순서 준수
-  // 9대 기본 성분은 0이어도 항상 표시
-  const sortedNutrients = Object.entries(NUTRITION_DATA)
-      .filter(([key]) => {
-        if (key === 'calories') return false; // 열량은 별도 처리
-        // 9대 기본 성분(required: true)은 항상 표시, 추가 성분은 값이 있을 때만 표시
-        return NUTRITION_DATA[key].required || nutritionInputs[key] !== undefined;
-      })
-      .sort((a, b) => a[1].order - b[1].order);
-  
-  sortedNutrients.forEach(([key, data]) => {
-      const originalValue1 = (nutritionInputs[key] || 0) * multiplier1;
-      const processedValue1 = processNutritionValue(key, originalValue1);
-      const percent1 = calculateDailyValuePercent(key, processedValue1, originalValue1);
-      
-      let displayValue1;
-      if (processedValue1.includes('미만')) {
-        displayValue1 = processedValue1;
-      } else {
-        const numericValue1 = Number(processedValue1.replace(/,/g, ''));
-        displayValue1 = `${numericValue1.toLocaleString()}${data.unit}`;
-      }
-
-      const originalValue2 = (nutritionInputs[key] || 0) * multiplier2;
-      const processedValue2 = processNutritionValue(key, originalValue2);
-      const percent2 = calculateDailyValuePercent(key, processedValue2, originalValue2);
-      
-      let displayValue2;
-      if (processedValue2.includes('미만')) {
-        displayValue2 = processedValue2;
-      } else {
-        const numericValue2 = Number(processedValue2.replace(/,/g, ''));
-        displayValue2 = `${numericValue2.toLocaleString()}${data.unit}`;
-      }
-
-      html += `
-      <tr class="nutrition-row">
-        <td class="nutrition-name ${data.indent ? 'nutrition-indent' : ''}">${data.label}</td>
-        <td style="text-align:center;">${displayValue1}</td>
-        <td style="text-align:center; font-weight:bold;">${percent1 !== null ? (percent1.includes('미만') ? percent1 : percent1 + '%') : ''}</td>
-        <td style="text-align:center;" class="parallel-divider">${displayValue2}</td>
-        <td style="text-align:center; font-weight:bold;">${percent2 !== null ? (percent2.includes('미만') ? percent2 : percent2 + '%') : ''}</td>
-      </tr>`;
-  });
-
-  html += `</tbody>`;
-  
-  // 푸터 HTML
-  html += `
-    <tfoot>
-      <tr class="nutrition-footer">
-        <td colspan="5">* 1일 영양성분 기준치에 대한 비율(%)은 2,000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.</td>
-      </tr>
-    </tfoot>
-  </table>`;
-  return html;
-}
-
-// 단위내용량당 + 총내용량당 병행표시 생성
-function generateUnitTotalParallelDisplay(nutritionInputs, baseAmount, servingsPerPackage) {
-  const totalAmount = parseFloat((baseAmount * servingsPerPackage).toFixed(1));
-  const unitMultiplier = baseAmount / 100;
-  const totalMultiplier = totalAmount / 100;
-  
-  const unitCalories = nutritionInputs['calories'] ? nutritionInputs['calories'] * unitMultiplier : 0;
-  const totalCalories = nutritionInputs['calories'] ? nutritionInputs['calories'] * totalMultiplier : 0;
-  const processedUnitCalories = processNutritionValue('calories', unitCalories);
-  const processedTotalCalories = processNutritionValue('calories', totalCalories);
-
-  let html = '<div id="nutrition-facts-label" class="nutrition-style-parallel">';
-  
-  // 검은색 헤더 영역 분리
-  html += '<div class="nutrition-header">';
-  html += '<div class="nutrition-title">영양정보</div>';
-  html += '<div class="nutrition-subtitle-parallel">';
-  html += `<span class="left-header">1조각당 (${baseAmount}g) ${processedUnitCalories}kcal</span>`;
-  html += `<span class="right-header">총 내용량당 (${totalAmount}g) ${processedTotalCalories}kcal</span>`;
-  html += '</div>';
-  html += '<div class="nutrition-total-info">총 내용량 ${totalAmount}g (${baseAmount}g X ${servingsPerPackage}조각)</div>';
-  html += '</div>';
-  
-  // 흰색 표 영역
-  html += '<table class="nutrition-table">';
-  html += '<thead>';
-  html += '<tr class="nutrition-column-header-top">';
-  html += '<th rowspan="2" class="nutrition-name-header">영양성분</th>';
-  html += '<th colspan="2" class="nutrition-section-header">1조각당 (${baseAmount}g)</th>';
-  html += '<th colspan="2" class="nutrition-section-header parallel-divider">총 내용량당 (${totalAmount}g)</th>';
-  html += '</tr>';
-  html += '<tr class="nutrition-column-header-bottom">';
-  html += '<th class="nutrition-value-header">함량</th>';
-  html += '<th class="nutrition-percent-header">영양성분 기준치(%)</th>';
-  html += '<th class="nutrition-value-header parallel-divider">함량</th>';
-  html += '<th class="nutrition-percent-header">영양성분 기준치(%)</th>';
-  html += '</tr>';
-  html += '</thead>';
-  html += '<tbody>';
-  
-  const requiredNutrients = Object.entries(NUTRITION_DATA)
-    .filter(([key]) => key !== 'calories' && nutritionInputs[key] !== undefined && NUTRITION_DATA[key].required)
-    .sort((a, b) => a[1].order - b[1].order);
-
-  requiredNutrients.forEach(([key, data], idx) => {
-    const unitValue = nutritionInputs[key] * unitMultiplier;
-    const totalValue = nutritionInputs[key] * totalMultiplier;
-    const processedUnitValue = processNutritionValue(key, unitValue);
-    const processedTotalValue = processNutritionValue(key, totalValue);
-    const percentValue = calculateDailyValuePercent(key, processedUnitValue, unitValue);
-
-    const unitDisplay = processedUnitValue.includes('미만') ? processedUnitValue : `${processedUnitValue}${data.unit}`;
-    const totalDisplay = processedTotalValue.includes('미만') ? processedTotalValue : `${processedTotalValue}${data.unit}`;
-
-    html += `<tr class="nutrition-row nutrition-thin-line">`;
-    html += `<td class="nutrition-name" style="text-align:left;">${data.label}</td>`;
-    html += `<td class="nutrition-value" style="text-align:right;">${unitDisplay}</td>`;
-    html += `<td class="nutrition-percent nutrition-bold" style="text-align:right;">${percentValue !== null ? percentValue+'%' : ''}</td>`;
-    html += `<td class="nutrition-value" style="text-align:right; border-left:4px solid #fff;">${totalDisplay}</td>`;
-    html += `<td class="nutrition-percent nutrition-bold" style="text-align:right;">${percentValue !== null ? percentValue+'%' : ''}</td>`;
-    html += '</tr>';
-  });
-  
-  const additionalNutrients = Object.entries(NUTRITION_DATA)
-    .filter(([key]) => key !== 'calories' && nutritionInputs[key] !== undefined && !NUTRITION_DATA[key].required)
-    .sort((a, b) => a[1].order - b[1].order);
-
-  additionalNutrients.forEach(([key, data], idx) => {
-    const unitValue = nutritionInputs[key] * unitMultiplier;
-    const totalValue = nutritionInputs[key] * totalMultiplier;
-    const processedUnitValue = processNutritionValue(key, unitValue);
-    const processedTotalValue = processNutritionValue(key, totalValue);
-    const percentValue = calculateDailyValuePercent(key, processedUnitValue, unitValue);
-
-    const unitDisplay = processedUnitValue.includes('미만') ? processedUnitValue : `${processedUnitValue}${data.unit}`;
-    const totalDisplay = processedTotalValue.includes('미만') ? processedTotalValue : `${processedTotalValue}${data.unit}`;
-
-    html += `<tr class="nutrition-row nutrition-thin-line">`;
-    html += `<td class="nutrition-name" style="text-align:left;">${data.label}</td>`;
-    html += `<td class="nutrition-value" style="text-align:right;">${unitDisplay}</td>`;
-    html += `<td class="nutrition-percent nutrition-bold" style="text-align:right;">${percentValue !== null ? percentValue+'%' : ''}</td>`;
-    html += `<td class="nutrition-value" style="text-align:right; border-left:4px solid #fff;">${totalDisplay}</td>`;
-    html += `<td class="nutrition-percent nutrition-bold" style="text-align:right;">${percentValue !== null ? percentValue+'%' : ''}</td>`;
-    html += '</tr>';
-  });
-
-  html += '</tbody>';
-  html += '<tfoot>';
-  html += `<tr class="nutrition-thick-line"><td colspan="5" class="nutrition-footer">* 1일 영양성분 기준치에 대한 비율(%)은 2,000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.<br>총 내용량 ${totalAmount}g (${baseAmount}g X ${servingsPerPackage}조각)</td></tr>`;
-  html += '</tfoot>';
-  html += '</table>';
-  html += '</div>';
-  
-  return html;
-}
-
 // ===== 메인 기능 함수들 =====
 
 // 영양성분 입력 폼 빌드
@@ -684,7 +191,7 @@ function buildInputForm() {
     .sort((a, b) => a[1].order - b[1].order)
     .forEach(([key, data]) => {
       const div = document.createElement('div');
-      div.className = 'nutrient-item';
+      div.className = 'nutrient-input-group';
       div.innerHTML = `
         <label for="${key}" class="${data.indent ? 'indent' : ''}">${data.label}</label>
         <input type="text" id="${key}" name="${key}" placeholder="0" data-nutrition-key="${key}">
@@ -699,7 +206,7 @@ function buildInputForm() {
     .sort((a, b) => a[1].order - b[1].order)
     .forEach(([key, data]) => {
       const div = document.createElement('div');
-      div.className = 'nutrient-item';
+      div.className = 'nutrient-input-group';
       div.innerHTML = `
         <label for="${key}">${data.label}</label>
         <input type="text" id="${key}" name="${key}" placeholder="0" data-nutrition-key="${key}">
@@ -742,7 +249,6 @@ function attachCommaFormattingToInputs() {
     input.addEventListener('focus', function(e) {
       const value = e.target.value;
       if (value) {
-        console.log(`Focus 이벤트 - ${e.target.id}: "${value}" -> "${value.replace(/,/g, '')}"`);
         e.target.value = value.replace(/,/g, '');
       }
     });
@@ -753,7 +259,6 @@ function attachCommaFormattingToInputs() {
       if (value && !isNaN(value.replace(/,/g, ''))) {
         const numericValue = parseFloat(value.replace(/,/g, ''));
         const formattedValue = numericValue.toLocaleString('ko-KR');
-        console.log(`Blur 이벤트 - ${e.target.id}: "${value}" -> "${formattedValue}"`);
         e.target.value = formattedValue;
       }
     });
@@ -816,7 +321,7 @@ function displayEmphasisValidation(nutritionInputs) {
 function calculateNutrition() {
   const baseAmount = parseFloat(document.getElementById('base_amount').value) || 100;
   const servingsPerPackage = parseFloat(document.getElementById('servings_per_package').value) || 1;
-  const style = document.getElementById('nutrition_style').value;
+  const style = document.getElementById('nutrition_display_unit').value;
   
   // [개선] DOM에서 최신 영양성분 입력값 수집
   const nutritionInputs = getNutritionInputsFromDOM();
@@ -833,12 +338,12 @@ function calculateNutrition() {
   let displayHTML = '';
   
   if (style === 'parallel') {
-    displayHTML = generateParallelDisplay(nutritionInputs, baseAmount, servingsPerPackage);
+    displayHTML = generateParallelDisplayV3(nutritionInputs, baseAmount, servingsPerPackage);
   } else {
-    displayHTML = generateBasicDisplay(nutritionInputs, baseAmount, servingsPerPackage, style);
+    displayHTML = generateBasicDisplayV3(nutritionInputs, baseAmount, servingsPerPackage);
   }
   
-  document.getElementById('resultDisplay').innerHTML = `<div id="nutrition-facts-label" class="nutrition-style-${style}">${displayHTML}</div>`;
+  document.getElementById('resultDisplay').innerHTML = displayHTML;
   
   // 마지막 계산 결과 저장
   currentNutritionData = nutritionInputs;
@@ -858,7 +363,7 @@ function resetFormAndParent() {
     // 기본값 설정
     document.getElementById('base_amount').value = '100';
     document.getElementById('servings_per_package').value = '1';
-    document.getElementById('nutrition_style').value = 'basic';
+    document.getElementById('nutrition_display_unit').value = 'basic';
     document.getElementById('basic_display_type').value = 'total';
     document.getElementById('parallel_display_type').value = 'unit_total';
     
@@ -885,42 +390,51 @@ function sendNutritionDataToParent() {
 
   const baseAmount = parseFloat(document.getElementById('base_amount').value) || 100;
   const servingsPerPackage = parseFloat(document.getElementById('servings_per_package').value) || 1;
-  const style = document.getElementById('nutrition_style').value;
+  const style = document.getElementById('nutrition_display_unit').value;
+  const basicDisplayType = document.getElementById('basic_display_type')?.value || 'per_100g';
+  const parallelDisplayType = document.getElementById('parallel_display_type')?.value || 'per_serving';
 
-  // 모든 영양성분을 그대로 전달
+  // 입력된 영양성분만 전달 (빈 값 제외)
   const formattedData = {};
-  Object.keys(NUTRITION_DATA).forEach(key => {
+  Object.keys(nutritionDataToSave).forEach(key => {
     const nutritionInfo = NUTRITION_DATA[key];
-    formattedData[key] = {
-      label: nutritionInfo.label,
-      value: nutritionDataToSave[key] || '',
-      unit: nutritionInfo.unit
-    };
+    if (nutritionInfo && nutritionDataToSave[key] !== '' && nutritionDataToSave[key] != null) {
+      formattedData[key] = {
+        label: nutritionInfo.label,
+        value: nutritionDataToSave[key],
+        unit: nutritionInfo.unit
+      };
+    }
   });
 
   const dataToSend = {
     type: 'nutritionData',
     data: {
       nutritionInputs: formattedData,
-      baseAmount: baseAmount,
-      servingsPerPackage: servingsPerPackage,
-      style: style,
+      settings: {
+        base_amount: baseAmount,
+        servings_per_package: servingsPerPackage,
+        nutrition_display_unit: style,
+        basic_display_type: basicDisplayType,
+        parallel_display_type: parallelDisplayType
+      },
       html: document.getElementById('resultDisplay').innerHTML
     }
   };
+
+  // 계산기에서 전송할 데이터 정보 (디버그 로그 제거)
 
   if (window.opener && typeof window.opener.postMessage === 'function') {
     window.opener.postMessage(dataToSend, '*');
     alert('영양성분 데이터가 저장되었습니다.');
   } else {
-    console.error('부모 창을 찾을 수 없습니다.', dataToSend);
     alert('데이터 저장에 실패했습니다. 부모 창을 찾을 수 없습니다.');
   }
 }
 
 // PDF 내보내기
 function exportToPDF() {
-  const nutritionContainer = document.querySelector('#resultDisplay .nutrition-result-table, #resultDisplay .nutrition-style-basic, #resultDisplay .nutrition-style-vertical, #resultDisplay .nutrition-style-parallel');
+  const nutritionContainer = document.querySelector('#resultDisplay .nutrition-result-table, #resultDisplay .nutrition-style-basic, #resultDisplay .nutrition-style-parallel');
   
   if (!nutritionContainer) {
     alert('먼저 영양성분을 계산해주세요.');
@@ -961,8 +475,7 @@ function exportToPDF() {
         
         const now = new Date();
         const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-        const styleText = document.getElementById('nutrition_style').value === 'basic' ? '기본형' :
-                         document.getElementById('nutrition_style').value === 'vertical' ? '세로형' : '병행표시';
+        const styleText = document.getElementById('nutrition_display_unit').value === 'basic' ? '기본형' : '병행표시';
         // 제품명 가져오기 (우선순위: label_name -> prdlst_nm)
         let productName = '';
         // 1. label_name (부모창에서 전달된 경우)
@@ -990,14 +503,14 @@ function exportToPDF() {
         alert('PDF가 성공적으로 저장되었습니다.');
         
       } catch (error) {
-        console.error('PDF 생성 오류:', error);
+
         alert('PDF 생성 중 오류가 발생했습니다: ' + error.message);
       } finally {
         pdfButton.disabled = false;
         pdfButton.innerHTML = originalText;
       }
     }).catch(error => {
-      console.error('이미지 변환 오류:', error);
+
       alert('이미지 변환 중 오류가 발생했습니다: ' + error.message);
       pdfButton.disabled = false;
       pdfButton.innerHTML = originalText;
@@ -1011,35 +524,26 @@ let isLoadingData = false;
 
 function loadExistingData(data) {
   try {
+  // 데이터 로딩 시작 (디버그 로그 제거)
     if (!data || typeof data !== 'object') return;
     
     // 중복 실행 방지 - 단, 부모창 데이터는 우선 처리
-    const hasParentData = data.calories !== undefined || data.sodium !== undefined || data.carbohydrate !== undefined || data.fat !== undefined;
+    const hasParentData = data.calories !== undefined || data.natriums !== undefined || data.carbohydrates !== undefined || data.fats !== undefined;
     
     if (isLoadingData && !hasParentData) {
-      console.log('loadExistingData 이미 실행 중입니다 (부모창 데이터 아님).');
       return;
     }
     
     if (hasParentData) {
-      console.log('🚀 부모창 데이터 감지 - 우선 처리 시작');
-      console.log('🔍 부모창 데이터 상세:', {
-        calories: data.calories,
-        sodium: data.sodium,
-        carbohydrate: data.carbohydrate,
-        sugars: data.sugars
-      });
       isLoadingData = false; // 부모창 데이터는 항상 처리하도록 플래그 리셋 
       
       // 중첩 구조 데이터가 있어도 부모창 데이터로 덮어쓰기
       if (data.nutrients) {
-        console.log('⚠️ 중첩 구조 데이터도 존재하지만 부모창 데이터를 우선 사용');
         delete data.nutrients; // 중첩 구조 데이터 제거하여 부모창 데이터만 사용
       }
     }
     
     isLoadingData = true;
-    console.log('loadExistingData 호출됨:', JSON.stringify(data, null, 2));
     
     // DOM이 준비될 때까지 대기 후 실행
     const waitForDOM = () => {
@@ -1047,16 +551,8 @@ function loadExistingData(data) {
       const additionalContainer = document.getElementById('additional-nutrient-inputs');
       const allNutritionInputs = document.querySelectorAll('input[data-nutrition-key]');
       
-      console.log('입력 폼 준비 상태 확인:', {
-        basicContainer: !!basicContainer,
-        additionalContainer: !!additionalContainer,
-        nutritionInputsCount: allNutritionInputs.length,
-        inputIds: Array.from(allNutritionInputs).map(el => el.id)
-      });
-      
       // DOM이 준비되지 않았으면 다시 시도
       if (!basicContainer || !additionalContainer || allNutritionInputs.length === 0) {
-        console.log('DOM이 아직 준비되지 않음, 100ms 후 재시도...');
         setTimeout(waitForDOM, 100);
         return;
       }
@@ -1078,40 +574,59 @@ function loadExistingData(data) {
       document.getElementById('servings_per_package').value = servingValue;
     }
     
-    if (data.style || data.nutrition_style) {
-      const styleValue = data.style || data.nutrition_style;
-      document.getElementById('nutrition_style').value = styleValue;
+    if (data.style || data.nutrition_display_unit) {
+      const styleValue = data.style || data.nutrition_display_unit;
+      document.getElementById('nutrition_display_unit').value = styleValue;
+      // 스타일 변경 후 옵션 표시 업데이트
+      if (typeof window.toggleStyleOptions === 'function') {
+        window.toggleStyleOptions();
+      }
+    }
+    
+    // 표시기준 로드
+    if (data.basic_display_type) {
+      const basicDisplayElement = document.getElementById('basic_display_type');
+      if (basicDisplayElement) {
+        basicDisplayElement.value = data.basic_display_type;
+      }
+    }
+    
+    if (data.parallel_display_type) {
+      const parallelDisplayElement = document.getElementById('parallel_display_type');
+      if (parallelDisplayElement) {
+        parallelDisplayElement.value = data.parallel_display_type;
+      }
     }
     
     // 영양성분 데이터 로드 - 부모창에서 전달받는 형식에 맞게 수정
     let hasAdditionalValue = false;
     
-    // 부모창 필드명과 팝업 필드명 매핑 (다양한 변형 포함)
+    // 부모창 필드명과 팝업 필드명 매핑 (복수형으로 통일)
     const fieldMapping = {
       'calories': 'calories',
       'calorie': 'calories',
       'kcal': 'calories',
-      'natriums': 'sodium',
-      'sodium': 'sodium',
-      'na': 'sodium',
-      'carbohydrates': 'carbohydrate',
-      'carbohydrate': 'carbohydrate',
-      'carbs': 'carbohydrate',
+      'natriums': 'natriums',
+      'sodium': 'natriums',
+      'na': 'natriums',
+      'carbohydrates': 'carbohydrates',
+      'carbohydrate': 'carbohydrates',
+      'carbs': 'carbohydrates',
       'sugars': 'sugars',
       'sugar': 'sugars',
-      'fats': 'fat',
-      'fat': 'fat',
-      'total_fat': 'fat',
-      'trans_fats': 'trans_fat',
-      'trans_fat': 'trans_fat',
-      'transfat': 'trans_fat',
-      'saturated_fats': 'saturated_fat',
-      'saturated_fat': 'saturated_fat',
-      'sat_fat': 'saturated_fat',
-      'cholesterols': 'cholesterol',
-      'cholesterol': 'cholesterol',
-      'proteins': 'protein',
-      'protein': 'protein',
+      'fats': 'fats',
+      'fat': 'fats',
+      'total_fat': 'fats',
+      'trans_fats': 'trans_fats',
+      'trans_fat': 'trans_fats',
+      'transfat': 'trans_fats',
+      'saturated_fats': 'saturated_fats',
+      'saturated_fat': 'saturated_fats',
+      'sat_fat': 'saturated_fats',
+      'cholesterols': 'cholesterols',
+      'cholesterol': 'cholesterols',
+      'proteins': 'proteins',
+      'protein': 'proteins',
       // 추가 영양성분 매핑
       'dietary_fiber': 'dietary_fiber',
       'fiber': 'dietary_fiber',
@@ -1179,26 +694,48 @@ function loadExistingData(data) {
       'mo': 'molybdenum'
     };
     
-    // 두 가지 데이터 형식 모두 지원
-    // 1. 부모창에서 전달받는 형식 최우선 처리 (collectExistingNutritionData에서 수집)
-    if (data.calories !== undefined || data.sodium !== undefined || data.carbohydrate !== undefined || data.fat !== undefined) {
-      console.log('📥 부모창 평면 구조 데이터 처리 시작');
+    // 세 가지 데이터 형식 지원 - 우선순위에 따라 처리
+    // 1. 중첩 구조 형식이 있으면 우선 처리 (nutrients.calories.value)
+    if (data.nutrients) {
+      Object.keys(data.nutrients).forEach(key => {
+        // 필드명은 이제 복수형으로 통일되어 직접 사용
+        const popupFieldName = key;
+        const input = document.getElementById(popupFieldName);
+        const nutrientData = data.nutrients[key];
+        
+        if (input && nutrientData && nutrientData.value && nutrientData.value !== '' && nutrientData.value !== '0') {
+          const value = nutrientData.value;
+          const numValue = parseFloat(value);
+          
+          if (!isNaN(numValue)) {
+            const formattedValue = numValue.toLocaleString('ko-KR');
+            input.value = formattedValue;
+            
+            // 이벤트 발생시켜 리액트/뷰 등의 프레임워크 대응
+            const inputEvent = new Event('input', { bubbles: true });
+            input.dispatchEvent(inputEvent);
+            
+            const changeEvent = new Event('change', { bubbles: true });
+            input.dispatchEvent(changeEvent);
+            
+            if (NUTRITION_DATA[popupFieldName] && !NUTRITION_DATA[popupFieldName].required) {
+              hasAdditionalValue = true;
+            }
+          }
+        } else if (input) {
+          input.value = '';
+        }
+      });
+    } 
+    // 2. 부모창에서 전달받는 평면 구조 형식 (collectExistingNutritionData에서 수집)
+    else if (data.calories !== undefined || data.sodium !== undefined || data.carbohydrate !== undefined || data.fat !== undefined) {
       
       Object.keys(fieldMapping).forEach(parentFieldName => {
         const popupFieldName = fieldMapping[parentFieldName];
         const input = document.getElementById(popupFieldName);
         
-        // 모든 필드에 대해 입력 필드 존재 여부 확인
-        console.log(`필드 검색: ${parentFieldName} -> ${popupFieldName}`, {
-          inputExists: !!input,
-          hasValue: data[parentFieldName] !== undefined && data[parentFieldName] !== null && data[parentFieldName] !== '',
-          actualValue: data[parentFieldName],
-          dataType: typeof data[parentFieldName]
-        });
-        
         if (input && data[parentFieldName] !== undefined && data[parentFieldName] !== null && data[parentFieldName] !== '' && data[parentFieldName] !== '0') {
           const value = data[parentFieldName];
-          console.log(`영양성분 로드 시도: ${parentFieldName} -> ${popupFieldName} = ${value}`);
           
           // 문자열에서 숫자만 추출 (쉼표 제거)
           const cleanValue = String(value).replace(/,/g, '');
@@ -1206,7 +743,6 @@ function loadExistingData(data) {
           
           if (!isNaN(numValue)) {
             const formattedValue = numValue.toLocaleString('ko-KR');
-            console.log(`✅ 값 설정: ${popupFieldName} = ${formattedValue}`);
             
             try {
               // 직접 값 설정
@@ -1220,7 +756,6 @@ function loadExistingData(data) {
               input.dispatchEvent(changeEvent);
               
             } catch (setError) {
-              console.error(`값 설정 오류 - ${popupFieldName}:`, setError);
             }
             
             // 추가 영양성분에 값이 있으면 펼침
@@ -1228,12 +763,20 @@ function loadExistingData(data) {
               hasAdditionalValue = true;
             }
           }
+        } else {
+          // 부모창 데이터가 비어있는 경우, 기존 값이 있다면 유지 (덮어쓰지 않음)
+          if (input && input.value && input.value.trim() !== '') {
+            // 기존에 값이 있는 추가 영양성분이면 섹션 펼침
+            if (NUTRITION_DATA[popupFieldName] && !NUTRITION_DATA[popupFieldName].required) {
+              hasAdditionalValue = true;
+            }
+          }
         }
       });
       
-    } else if (data.nutritionInputs) {
-      // 2. 기존 형식 (팝업 내부에서 생성된 데이터)
-      console.log('📥 팝업 내부 데이터 구조 처리');
+    } 
+    // 3. 팝업 내부에서 생성된 데이터 구조 (nutritionInputs)
+    else if (data.nutritionInputs) {
       Object.keys(NUTRITION_DATA).forEach(key => {
         const input = document.getElementById(key);
         const item = data.nutritionInputs[key];
@@ -1251,44 +794,14 @@ function loadExistingData(data) {
           input.value = '';
         }
       });
-    } else if (data.nutrients) {
-      // 3. 중첩 구조 형식 (nutrients.calories.value)
-      console.log('📥 중첩 구조 데이터 처리');
-      Object.keys(data.nutrients).forEach(key => {
-        const input = document.getElementById(key);
-        const nutrientData = data.nutrients[key];
-        
-        if (input && nutrientData && nutrientData.value && nutrientData.value !== '' && nutrientData.value !== '0') {
-          const value = nutrientData.value;
-          const numValue = parseFloat(value);
-          
-          if (!isNaN(numValue)) {
-            const formattedValue = numValue.toLocaleString('ko-KR');
-            input.value = formattedValue;
-            
-            if (NUTRITION_DATA[key] && !NUTRITION_DATA[key].required) {
-              hasAdditionalValue = true;
-            }
-          }
-        }
-      });
     } else {
       // 부모창에서 전달받는 형식 (collectExistingNutritionData에서 수집)
       Object.keys(fieldMapping).forEach(parentFieldName => {
         const popupFieldName = fieldMapping[parentFieldName];
         const input = document.getElementById(popupFieldName);
         
-        // 모든 필드에 대해 입력 필드 존재 여부 확인
-        console.log(`필드 검색: ${parentFieldName} -> ${popupFieldName}`, {
-          inputExists: !!input,
-          hasValue: data[parentFieldName] !== undefined && data[parentFieldName] !== null && data[parentFieldName] !== '',
-          actualValue: data[parentFieldName],
-          dataType: typeof data[parentFieldName]
-        });
-        
         if (input && data[parentFieldName] !== undefined && data[parentFieldName] !== null && data[parentFieldName] !== '' && data[parentFieldName] !== '0') {
           const value = data[parentFieldName];
-          console.log(`영양성분 로드 시도: ${parentFieldName} -> ${popupFieldName} = ${value}`);
           
           // 문자열에서 숫자만 추출 (쉼표 제거)
           const cleanValue = String(value).replace(/,/g, '');
@@ -1296,16 +809,6 @@ function loadExistingData(data) {
           
           if (!isNaN(numValue)) {
             const formattedValue = numValue.toLocaleString('ko-KR');
-            console.log(`DOM 필드 확인 - ${popupFieldName}:`, {
-              element: !!input,
-              tagName: input?.tagName,
-              id: input?.id,
-              currentValue: input?.value,
-              newValue: formattedValue,
-              isReadOnly: input?.readOnly,
-              isDisabled: input?.disabled
-            });
-            
             // 다양한 방법으로 값 설정 시도
             try {
               // 방법 1: 직접 설정
@@ -1321,15 +824,12 @@ function loadExistingData(data) {
               const changeEvent = new Event('change', { bubbles: true });
               input.dispatchEvent(changeEvent);
               
-              console.log(`값 설정 완료 - ${popupFieldName}: ${formattedValue}`);
             } catch (setError) {
-              console.error(`값 설정 오류 - ${popupFieldName}:`, setError);
             }
             
             // 값이 실제로 설정되었는지 확인
             setTimeout(() => {
               const actualValue = document.getElementById(popupFieldName)?.value;
-              console.log(`값 설정 확인 - ${popupFieldName}: 설정값="${formattedValue}", 실제값="${actualValue}"`);
               
               // 만약 여전히 값이 설정되지 않았다면 추가 시도
               if (!actualValue || actualValue === '') {
@@ -1337,7 +837,6 @@ function loadExistingData(data) {
                 if (retryInput) {
                   retryInput.value = formattedValue;
                   retryInput.setAttribute('value', formattedValue);
-                  console.log(`재설정 시도 - ${popupFieldName}: ${formattedValue}`);
                 }
               }
             }, 100);
@@ -1351,14 +850,8 @@ function loadExistingData(data) {
           }
         } else {
           if (!input) {
-            console.warn(`입력 필드를 찾을 수 없음: ${popupFieldName}`);
-            // 전체 DOM에서 해당 ID를 가진 요소가 있는지 확인
-            const allElements = document.querySelectorAll(`#${popupFieldName}, [name="${popupFieldName}"], [data-nutrition-key="${popupFieldName}"]`);
-            console.log(`DOM 검색 결과 - ${popupFieldName}:`, allElements.length, allElements);
-            
-            // 모든 input 요소 출력 (디버깅용)
-            const allInputs = document.querySelectorAll('input[data-nutrition-key]');
-            console.log('현재 존재하는 영양성분 입력 필드들:', Array.from(allInputs).map(el => el.id));
+
+
           }
           if (input) {
             input.value = '';
@@ -1370,8 +863,11 @@ function loadExistingData(data) {
     const additionalSection = document.getElementById('additional-nutrients');
     const toggleIcon = document.getElementById('nutrition-toggle');
     const toggleText = document.getElementById('nutrition-toggle-text');
-    if (hasAdditionalValue && additionalSection && additionalSection.style.display === 'none') {
+    
+    if (hasAdditionalValue && additionalSection) {
+      // 강제로 펼치기 (display 상태에 관계없이)
       additionalSection.style.display = 'block';
+      
       if (toggleIcon) {
         toggleIcon.textContent = '▲';
         toggleIcon.classList.add('rotated');
@@ -1380,9 +876,12 @@ function loadExistingData(data) {
         toggleText.textContent = '성분 접기';
       }
     }
-    // 자동 계산
+    // 자동 계산 제거 - 계산 버튼을 눌렀을 때만 계산
+    // 스타일 옵션만 설정
     setTimeout(() => {
-      calculateNutrition();
+      if (typeof window.toggleStyleOptions === 'function') {
+        window.toggleStyleOptions();
+      }
     }, 100);
     };
     
@@ -1390,12 +889,11 @@ function loadExistingData(data) {
     waitForDOM();
     
   } catch (error) {
-    console.error('데이터 로드 오류:', error);
+
   } finally {
     // 3초 후 플래그 해제 (DOM 로드 및 처리 완료 대기)
     setTimeout(() => {
       isLoadingData = false;
-      console.log('loadExistingData 플래그 해제됨');
     }, 3000);
   }
 }
@@ -1404,7 +902,7 @@ function loadExistingData(data) {
 
 // 스타일 옵션 토글
 window.toggleStyleOptions = function() {
-  const style = document.getElementById('nutrition_style').value;
+  const style = document.getElementById('nutrition_display_unit').value;
   const basicVerticalOptions = document.getElementById('basic-vertical-options');
   const parallelOptions = document.getElementById('parallel-options');
   
@@ -1420,15 +918,8 @@ window.toggleStyleOptions = function() {
   const baseAmount = document.getElementById('base_amount').value;
   const servingsPerPackage = document.getElementById('servings_per_package').value;
   
-  // 영양성분 입력값이 하나라도 있는지 확인
-  const hasNutritionData = Object.keys(NUTRITION_DATA).some(key => {
-    const input = document.getElementById(key);
-    return input && input.value && input.value.trim() !== '';
-  });
-  
-  if (baseAmount && servingsPerPackage && hasNutritionData) {
-    calculateNutrition();
-  }
+  // 자동 계산 제거 - 계산 버튼을 눌렀을 때만 계산
+  // 영양성분 입력값 확인은 하지만 자동 계산은 하지 않음
 };
 
 // 영양성분 섹션 토글
@@ -1452,12 +943,10 @@ window.toggleNutritionSection = function() {
 
 // 페이지 로드 완료 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('DOM 로드 완료, 입력 폼 생성 시작');
   buildInputForm();
   
   // buildInputForm이 완료될 때까지 충분히 기다린 후 데이터 로드
   setTimeout(() => {
-    console.log('입력 폼 생성 완료 대기 중...');
     
     // DOM 요소가 실제로 생성되었는지 여러 번 확인
     const waitForFormReady = () => {
@@ -1468,18 +957,10 @@ document.addEventListener('DOMContentLoaded', function() {
       ];
       
       const allFieldsReady = testFields.every(field => field !== null);
-      console.log('폼 준비 상태 체크:', {
-        allFieldsReady,
-        calories: !!testFields[0],
-        sodium: !!testFields[1], 
-        carbohydrate: !!testFields[2]
-      });
       
       if (allFieldsReady) {
-        console.log('모든 입력 필드 준비 완료, 데이터 로드 시작');
         loadDataAfterFormReady();
       } else {
-        console.log('입력 필드 아직 준비 안됨, 100ms 후 재시도');
         setTimeout(waitForFormReady, 100);
       }
     };
@@ -1512,32 +993,29 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // 입력 폼 준비 완료 후 데이터 로드 함수
+let loadDataAfterFormReadyExecuted = false;
 function loadDataAfterFormReady() {
-  console.log('loadDataAfterFormReady 시작');
+  // 중복 실행 방지
+  if (loadDataAfterFormReadyExecuted) {
+    return;
+  }
+  loadDataAfterFormReadyExecuted = true;
   
   if (window.opener && !window.opener.closed) {
-    console.log('부모창 접근 가능');
     
     try {
       const parentData = window.opener.getNutritionDataForPopup();
-      console.log('부모창에서 받은 데이터:', JSON.stringify(parentData, null, 2));
-      console.log('부모창 데이터 키들:', Object.keys(parentData));
-      console.log('부모창 calories 값:', parentData.calories);
-      console.log('부모창 sodium 값:', parentData.sodium);
       
       if (parentData && Object.keys(parentData).length > 0) {
-        console.log('부모창 데이터 존재, 데이터 로드 시작');
         loadExistingData(parentData);
       } else {
-        console.log('부모창 데이터 없음, URL 파라미터 사용');
         loadDataFromUrlParams();
       }
     } catch (e) {
-      console.error('부모창 데이터 전달 오류:', e);
+
       loadDataFromUrlParams();
     }
   } else {
-    console.log('부모창 접근 불가, URL 파라미터 사용');
     loadDataFromUrlParams();
   }
 }
@@ -1559,8 +1037,8 @@ function loadDataFromUrlParams() {
       data.servingsPerPackage = parseFloat(urlParams.get('units_per_package'));
     }
     
-    if (urlParams.get('nutrition_style')) {
-      data.style = urlParams.get('nutrition_style');
+    if (urlParams.get('nutrition_display_unit')) {
+      data.style = urlParams.get('nutrition_display_unit');
     }
     
     // 영양성분 데이터 로드
@@ -1623,13 +1101,312 @@ function loadDataFromUrlParams() {
     
     // 데이터가 있으면 로드
     if (Object.keys(data).length > 0) {
-      console.log('URL 파라미터에서 데이터 로드:', data);
       loadExistingData(data);
     }
     
   } catch (error) {
-    console.error('URL 파라미터 로드 오류:', error);
+
   }
+}
+
+// ===== V3 영양성분표 생성 함수들 =====
+
+// V3 기본형 영양정보표 생성
+function generateBasicDisplayV3(nutritionInputs, baseAmount, servingsPerPackage) {
+  
+  console.log('generateBasicDisplayV3 호출됨:', nutritionInputs, baseAmount, servingsPerPackage);
+  
+  // 표시 기준 확인
+  const displayType = document.getElementById('basic_display_type')?.value || 'total';
+  let displayAmount, multiplier;
+  
+  // 단위 확인 (g 또는 ml)
+  const baseUnit = document.getElementById('base_amount_unit')?.value || 'g';
+  
+  switch (displayType) {
+    case 'unit':
+      displayAmount = baseAmount;
+      multiplier = baseAmount / 100;
+      break;
+    case '100g':
+      displayAmount = 100;
+      multiplier = 1;
+      break;
+    case 'total':
+    default:
+      displayAmount = (baseAmount * servingsPerPackage);
+      multiplier = displayAmount / 100;
+      break;
+  }
+  
+  const calories = window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier);
+
+  // V3 요구사항에 맞춘 기본형 HTML 구조
+  let html = '<div class="nutrition-facts-container">';
+  html += '<div class="nutrition-style-basic">';
+  
+  // 1.2. 표 머리글 (Header) - 검은색 배경
+  html += '<div class="nutrition-header">';
+  html += '<div class="nutrition-title">영양정보</div>';
+  html += '<div class="nutrition-subtitle">';
+  html += '<div class="nutrition-total-amount">총 내용량 ' + displayAmount.toLocaleString() + baseUnit + '</div>';
+  html += '<div class="nutrition-calories">' + calories + 'kcal</div>';
+  html += '</div>';
+  html += '</div>';
+  
+  html += '<table class="nutrition-table">';
+  html += '<thead>';
+  html += '<tr>';
+  
+  // 표시기준 텍스트 생성
+  let displayTypeText = '';
+  switch (displayType) {
+    case 'unit':
+      displayTypeText = '단위내용량당';
+      break;
+    case '100g':
+      displayTypeText = '100' + baseUnit + '당';
+      break;
+    case 'total':
+    default:
+      displayTypeText = '총내용량당';
+      break;
+  }
+  
+  html += '<th>' + displayTypeText + '</th>';
+  html += '<th>1일 영양성분<br>기준치에 대한 비율</th>';
+  html += '</tr>';
+  html += '</thead>';
+  html += '<tbody>';
+
+  // 본문(영양성분) HTML - 가이드라인 순서 준수
+  const sortedNutrients = Object.entries(window.NUTRITION_DATA)
+      .filter(function(item) {
+        const key = item[0];
+        if (key === 'calories') return false; // 열량은 헤더에 이미 표시
+        return window.NUTRITION_DATA[key].required || nutritionInputs[key] !== undefined;
+      })
+      .sort(function(a, b) {
+        return a[1].order - b[1].order;
+      });
+
+  sortedNutrients.forEach(function(item, index) {
+      const key = item[0];
+      const data = item[1];
+      
+      const originalValue = (nutritionInputs[key] || 0) * multiplier;
+      const processedValue = window.processNutritionValue(key, originalValue);
+      const percent = window.calculateDailyValuePercent(key, processedValue, originalValue);
+      
+      let displayValue;
+      if (processedValue.includes('미만')) {
+        displayValue = processedValue;
+      } else {
+        const numericValue = Number(processedValue.replace(/,/g, ''));
+        displayValue = numericValue.toLocaleString() + data.unit;
+      }
+
+      const percentDisplay = percent !== null ? (percent.includes('미만') ? percent : '<strong>' + percent + '</strong>%') : '';
+      
+      // 주요 영양성분 그룹 구분 (단백질 다음에 구분선)
+      const isGroupEnd = key === 'proteins';
+      const rowClass = isGroupEnd ? 'nutrition-row major-group-end' : 'nutrition-row';
+      
+      html += '<tr class="' + rowClass + '">';
+      html += '<td class="nutrition-name-content ' + (data.indent ? 'nutrition-indent' : '') + '"><strong>' + data.label + '</strong> ' + displayValue + '</td>';
+      html += '<td class="nutrition-daily">' + percentDisplay + '</td>';
+      html += '</tr>';
+  });
+
+  // 1.4. 표 바닥글 (Footer)
+  html += '</tbody>';
+  html += '<tfoot>';
+  html += '<tr class="nutrition-footer">';
+  html += '<td colspan="2">* <strong>1일 영양성분 기준치에 대한 비율(%)</strong>은 2,000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.</td>';
+  html += '</tr>';
+  html += '</tfoot>';
+  html += '</table>';
+  html += '</div>';
+  html += '</div>';
+  
+  return html;
+}
+
+// V3 병행표시 영양정보표 생성
+function generateParallelDisplayV3(nutritionInputs, baseAmount, servingsPerPackage) {
+  
+  // 병행표시 유형 확인
+  const parallelType = document.getElementById('parallel_display_type').value;
+  const totalAmount = (baseAmount * servingsPerPackage);
+  
+  // 단위 확인 (g 또는 ml)
+  const baseUnit = document.getElementById('base_amount_unit')?.value || 'g';
+  
+  let multiplier1, multiplier2, headerText1, headerText2, subHeaderText1, subHeaderText2, unitText1, unitText2;
+  
+  switch (parallelType) {
+    case 'unit_total':
+      multiplier1 = baseAmount / 100;
+      multiplier2 = totalAmount / 100;
+      headerText1 = '총 내용량 ' + totalAmount.toLocaleString() + baseUnit + '(' + baseAmount.toLocaleString() + baseUnit + ' X ' + servingsPerPackage.toLocaleString() + ')';
+      headerText2 = '1조각(' + baseAmount.toLocaleString() + baseUnit + ')당 ' + window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier1) + 'kcal';
+      subHeaderText1 = '1조각당';
+      subHeaderText2 = '총내용량당';
+      unitText1 = '조각';
+      unitText2 = '총량';
+      break;
+      
+    case 'unit_100g':
+      multiplier1 = baseAmount / 100;
+      multiplier2 = 1;
+      headerText1 = '총 내용량 ' + totalAmount.toLocaleString() + baseUnit + '(' + baseAmount.toLocaleString() + baseUnit + ' X ' + servingsPerPackage.toLocaleString() + ')';
+      headerText2 = '1조각(' + baseAmount.toLocaleString() + baseUnit + ')당 ' + window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier1) + 'kcal';
+      subHeaderText1 = '1조각당';
+      subHeaderText2 = '100' + baseUnit + '당';
+      unitText1 = '조각';
+      unitText2 = '100' + baseUnit;
+      break;
+      
+    case 'serving_total':
+      multiplier1 = baseAmount / 100;
+      multiplier2 = totalAmount / 100;
+      headerText1 = '총 내용량 ' + totalAmount.toLocaleString() + baseUnit;
+      headerText2 = '1회량(' + baseAmount.toLocaleString() + baseUnit + ')당 ' + window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier1) + 'kcal';
+      subHeaderText1 = '1회량당';
+      subHeaderText2 = '총내용량당';
+      unitText1 = '회';
+      unitText2 = '총량';
+      break;
+      
+    case 'serving_100ml':
+      multiplier1 = baseAmount / 100;
+      multiplier2 = 1;
+      headerText1 = '총 내용량 ' + totalAmount.toLocaleString() + baseUnit;
+      headerText2 = '1회량(' + baseAmount.toLocaleString() + baseUnit + ')당 ' + window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier1) + 'kcal';
+      subHeaderText1 = '1회량당';
+      subHeaderText2 = '100ml당';
+      unitText1 = '회';
+      unitText2 = '100ml';
+      break;
+      
+    default:
+      multiplier1 = baseAmount / 100;
+      multiplier2 = totalAmount / 100;
+      headerText1 = '총 내용량 ' + totalAmount.toLocaleString() + baseUnit + '(' + baseAmount.toLocaleString() + baseUnit + ' X ' + servingsPerPackage.toLocaleString() + ')';
+      headerText2 = '1조각(' + baseAmount.toLocaleString() + baseUnit + ')당 ' + window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier1) + 'kcal';
+      subHeaderText1 = '1조각당';
+      subHeaderText2 = '총내용량당';
+      unitText1 = '조각';
+      unitText2 = '총량';
+      break;
+  }
+  
+  const calories1 = window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier1);
+  const calories2 = window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier2);
+
+  // V3 요구사항에 맞춘 병행표시 HTML 구조
+  let html = '<div class="nutrition-facts-container">';
+  html += '<div class="nutrition-style-parallel">';
+  
+  // 2.2. 표 머리글 (Header) - 검은색 배경
+  html += '<div class="nutrition-header">';
+  html += '<div class="nutrition-header-left">';
+  html += '<div class="nutrition-title">영양정보</div>';
+  html += '</div>';
+  html += '<div class="nutrition-header-right">';
+  html += '<div class="nutrition-subtitle">' + headerText1 + '</div>';
+  html += '<div class="nutrition-calories"><strong>' + headerText2 + '</strong></div>';
+  html += '</div>';
+  html += '</div>';
+  
+  // 컬럼 헤더 구조
+  html += '<table class="nutrition-table">';
+  html += '<thead>';
+  
+  html += '<tr>';
+  html += '<th class="left-section" colspan="2">';
+  html += '<div class="header-flex">';
+  html += '<span class="header-left">' + subHeaderText1 + '</span>';
+  html += '<span class="header-right">1일 영양성분 기준치에 대한 비율</span>';
+  html += '</div>';
+  html += '</th>';
+  html += '<th class="right-section parallel-section" colspan="2">';
+  html += '<div class="header-flex">';
+  html += '<span class="header-empty"></span>';
+  html += '<span class="header-right">' + subHeaderText2 + '</span>';
+  html += '</div>';
+  html += '</th>';
+  html += '</tr>';
+  
+  html += '</thead>';
+  html += '<tbody>';
+
+  // 본문(영양성분) HTML
+  const sortedNutrients = Object.entries(window.NUTRITION_DATA)
+      .filter(function(item) {
+        const key = item[0];
+        if (key === 'calories') return false; // 열량은 이미 처리함
+        return window.NUTRITION_DATA[key].required || nutritionInputs[key] !== undefined;
+      })
+      .sort(function(a, b) {
+        return a[1].order - b[1].order;
+      });
+  
+  sortedNutrients.forEach(function(item, index) {
+      const key = item[0];
+      const data = item[1];
+      
+      const originalValue1 = (nutritionInputs[key] || 0) * multiplier1;
+      const processedValue1 = window.processNutritionValue(key, originalValue1);
+      const percent1 = window.calculateDailyValuePercent(key, processedValue1, originalValue1);
+      
+      let displayValue1;
+      if (processedValue1.includes('미만')) {
+        displayValue1 = processedValue1;
+      } else {
+        const numericValue1 = Number(processedValue1.replace(/,/g, ''));
+        displayValue1 = numericValue1.toLocaleString() + data.unit;
+      }
+
+      const originalValue2 = (nutritionInputs[key] || 0) * multiplier2;
+      const processedValue2 = window.processNutritionValue(key, originalValue2);
+      const percent2 = window.calculateDailyValuePercent(key, processedValue2, originalValue2);
+      
+      let displayValue2;
+      if (processedValue2.includes('미만')) {
+        displayValue2 = processedValue2;
+      } else {
+        const numericValue2 = Number(processedValue2.replace(/,/g, ''));
+        displayValue2 = numericValue2.toLocaleString() + data.unit;
+      }
+
+      const percentDisplay1 = percent1 !== null ? (percent1.includes('미만') ? percent1 : '<strong>' + percent1 + '</strong>%') : '';
+      const percentDisplay2 = percent2 !== null ? (percent2.includes('미만') ? percent2 : '<strong>' + percent2 + '</strong>%') : '';
+      
+      // 주요 영양성분 그룹 구분 (단백질 다음에 구분선)
+      const isGroupEnd = key === 'proteins';
+      const rowClass = isGroupEnd ? 'nutrition-row major-group-end' : 'nutrition-row';
+      
+      html += '<tr class="' + rowClass + '">';
+      html += '<td class="nutrition-name ' + (data.indent ? 'nutrition-indent' : '') + '"><strong>' + data.label + '</strong> ' + displayValue1 + '</td>';
+      html += '<td class="nutrition-daily">' + percentDisplay1 + '</td>';
+      html += '<td class="nutrition-content parallel-section">' + displayValue2 + '</td>';
+      html += '<td class="nutrition-daily parallel-section">' + percentDisplay2 + '</td>';
+      html += '</tr>';
+  });
+
+  // 2.4. 표 바닥글 (Footer)
+  html += '</tbody>';
+  html += '<tfoot>';
+  html += '<tr class="nutrition-footer">';
+  html += '<td colspan="4">* <strong>1일 영양성분 기준치에 대한 비율(%)</strong>은 2,000kcal 기준이므로 개인의 필요 열량에 따라 다를 수 있습니다.</td>';
+  html += '</tr>';
+  html += '</tfoot>';
+  html += '</table>';
+  html += '</div>';
+  html += '</div>';
+  
+  return html;
 }
 
 // ===== 전역 함수로 노출 =====
@@ -1642,5 +1419,10 @@ window.loadExistingData = loadExistingData;
 window.buildInputForm = buildInputForm;
 window.NUTRITION_DATA = NUTRITION_DATA;
 window.loadDataAfterFormReady = loadDataAfterFormReady;
+window.processNutritionValue = processNutritionValue;
+window.calculateDailyValuePercent = calculateDailyValuePercent;
+// V3 함수들도 전역으로 노출
+window.generateBasicDisplayV3 = generateBasicDisplayV3;
+window.generateParallelDisplayV3 = generateParallelDisplayV3;
 
 })(); // IIFE 종료
