@@ -168,10 +168,11 @@ LOGGING = {
 
 # 이메일 발송 설정 (실제 서비스에서는 환경변수로 관리 권장)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.naver.com')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='labeldatagpt@naver.com')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='vmfhwprxm123!')
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='administrator@ezlabeling.com')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='xeenovaeuejedgji')
 EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+# 보내는 사람 주소 (별칭 사용)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply-verify@ezlabeling.com')
 
