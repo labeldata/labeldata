@@ -17,6 +17,12 @@ def signup(request):
             email = request.POST.get('username', '').strip().lower()
             password1 = request.POST.get('password1')
             password2 = request.POST.get('password2')
+            privacy_agree = request.POST.get('privacy_agree')
+            
+            # 개인정보 처리방침 동의 확인
+            if not privacy_agree:
+                messages.error(request, "개인정보 처리방침에 동의해주세요.")
+                return render(request, 'user_management/signup.html')
             
             # 이메일 형식 체크
             if not email or '@' not in email:
@@ -203,3 +209,7 @@ def change_password(request):
         form = PasswordChangeForm(request.user)
     
     return render(request, 'user_management/change_password.html', {'form': form})
+
+def privacy_policy(request):
+    """개인정보 처리방침 페이지"""
+    return render(request, 'user_management/privacy_policy.html')
