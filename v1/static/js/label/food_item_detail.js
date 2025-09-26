@@ -1,4 +1,5 @@
 function saveToMyLabel(prdlst_report_no, imported_mode) {
+  console.log("saveToMyLabel 호출됨", prdlst_report_no, imported_mode);
   if (!prdlst_report_no) {
     alert("품목보고번호가 누락되었습니다.");
     return;
@@ -47,6 +48,7 @@ function saveToMyLabel(prdlst_report_no, imported_mode) {
 }
 
 function saveToMyIngredients(prdlst_report_no, imported_mode) {
+    console.log("saveToMyIngredients 호출됨", prdlst_report_no, imported_mode);
     if (!prdlst_report_no) {
         alert("품목보고번호가 누락되었습니다.");
         return;

@@ -20,12 +20,19 @@ urlpatterns = [
     path("label/create/", views.label_creation, name="label_creation"),
     path('label-creation/<int:label_id>/', views.label_creation, name='label_creation'),
     path('ingredient-popup/', views.ingredient_popup, name='ingredient_popup'),
+    path('nutrition-popup/', views.nutrition_calculator_popup, name='nutrition_popup'),
     path('nutrition-calculator-popup/', views.nutrition_calculator_popup, name='nutrition_calculator_popup'),
     path('save-nutrition/', views.save_nutrition, name='save_nutrition'),
     path('duplicate/<int:label_id>/', views.duplicate_label, name='duplicate_label'),
     path('delete/<int:label_id>/', views.delete_label, name='delete_label'),
+    path('phrases/manage/', views.manage_phrases, name='manage_phrase'),
+    path('phrases/reorder/', views.reorder_phrases, name='reorder_phrases'),
+    path('phrases/', views.phrase_popup, name='phrase_popup'),
+    path('phrases/suggestions/', views.phrase_suggestions, name='phrase_suggestions'),  # 추가
     path('preview/', views.preview_popup, name='preview_popup'),  
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
+    path('get-food-group/', views.get_food_group, name='get_food_group'),
+    path('food-type-settings/', views.food_type_settings, name='food_type_settings'),
     path('save_preview_settings/', views.save_preview_settings, name='save_preview_settings'),
 
     # 내원료 관리
@@ -50,6 +57,16 @@ urlpatterns = [
     # 수입식품 개수 조회
     path('imported_food_count/', views.imported_food_count, name='imported_food_count'),
 
+    # linked_labels_count API
+    path('linked-labels-count/<int:ingredient_id>/', views.linked_labels_count, name='linked_labels_count'),
+    path('linked-ingredient-count/<int:label_id>/', views.linked_ingredient_count, name='linked_ingredient_count'),
+
+    # verify-report-no API
+    path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
+
+    # update-report-no API
+    path('update-report-no/', views.update_report_no, name='update_report_no'),
+
     # 추가된 URL 패턴
     path('phrases-data/', views.phrases_data_api, name='phrases_data'),
     path('my-ingredient-calculate-page/', views.my_ingredient_calculate_page, name='my_ingredient_calculate_page'),
@@ -58,16 +75,4 @@ urlpatterns = [
     # --- [신규] 엑셀 다운로드/업로드 URL 추가 ---
     path('my-ingredients/download/', views.download_my_ingredients_excel, name='download_my_ingredients_excel'),
     path('my-ingredients/upload/', views.upload_my_ingredients_excel, name='upload_my_ingredients_excel'),
-    
-    # 저장된 문구 API 패턴
-    path('api/recent-usage/', views.get_recent_usage_api, name='recent_usage_api'),
-    path('api/auto-fill/', views.auto_fill_api, name='auto_fill_api'),
-    path('api/phrases/', views.phrases_api, name='phrases_api'),
-    
-    # 연결된 원료 조회
-    path('linked-ingredient-count/<int:label_id>/', views.linked_ingredient_count, name='linked_ingredient_count'),
-    
-    # 품목보고번호 검증 관련
-    path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
-    path('update-report-no/', views.update_report_no, name='update_report_no'),
 ]

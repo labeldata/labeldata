@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const savedIngredients = JSON.parse(document.getElementById('saved-ingredients-data').textContent || '[]');
-        // Loaded saved ingredients (hidden debug)
+    console.log('Loaded saved ingredients:', savedIngredients);
     const hasRelations = document.querySelector('.popup-container').dataset.hasRelations === 'true';
     
     const tbody = document.getElementById('ingredient-body');
@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });    if (hasRelations && savedIngredients.length > 0) {
         savedIngredients.forEach(ingredient => {
-            // Adding saved ingredient: ingredient.ingredient_name
+            console.log(`Adding saved ingredient: ${ingredient.ingredient_name}, food_category: ${ingredient.food_category}`);
             addIngredientRowWithData(ingredient);
         });
         // 초기 로드 시: 비율이 있으면 비율로 정렬, 없으면 relation_sequence 순서 유지
@@ -425,11 +425,11 @@ function sortRowsInitialLoad() {
     
     if (hasRatios) {
         // 비율이 있으면 비율 기준으로 정렬
-        // (debug log removed)
+        console.log('비율이 있어서 비율 기준으로 정렬합니다.');
         sortRowsByRatio();
     } else {
-    // 비율이 없으면 relation_sequence 순서 유지 (이미 DB에서 정렬된 상태)
-    // (debug log removed)
+        // 비율이 없으면 relation_sequence 순서 유지 (이미 DB에서 정렬된 상태)
+        console.log('비율이 없어서 relation_sequence 순서를 유지합니다.');
         updateRowNumbers();
         markOriginTargets();
         updateSummarySection();
@@ -830,8 +830,7 @@ function escapeHtml(str) {
 function addIngredientRowWithData(ingredient, fromModal = true) {
     const foodCategory = ingredient.food_category || 'processed';
     const foodCategoryDisplay = foodCategoryDisplayMap[foodCategory] || '가공식품';
-    // 원료 행 추가
-    // Adding ingredient row: ${ingredient.ingredient_name}, category: ${foodCategory}
+    console.log(`Adding ingredient row: ${ingredient.ingredient_name}, food_category: ${foodCategory}, displayed as: ${foodCategoryDisplay}`);
 
     const row = document.createElement('tr');
     // 알레르기/GMO 정보를 data 속성으로 저장
@@ -1297,6 +1296,13 @@ function updateAndValidateRatios() {
     return isValid;
 }
 
+// HTML 특수문자 이스케이프 함수
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // 속성값을 위한 이스케이프 함수
 function escapeForAttribute(text) {
     return text.replace(/'/g, "\\'").replace(/"/g, '\\"');
@@ -1304,19 +1310,17 @@ function escapeForAttribute(text) {
 
 // 알레르기 유발성분/GMO 상세 모달 표시
 function showAllergenGmoDetail(type, component) {
-    // 알레르기/GMO 상세 모달 열기
-    // Opening modal for ${type} - ${component}
+    console.log(`Opening modal for ${type} - ${component}`);
     
     // 현재 테이블의 모든 행의 데이터 확인
     const tbody = document.getElementById('ingredient-body');
     const rows = tbody.getElementsByTagName('tr');
-    // Current table data inspection removed
-    // Current table data (hidden debug)
+    console.log('Current table data:');
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const nameInput = row.querySelector('.ingredient-name-input');
         const name = nameInput ? nameInput.value : 'Unknown';
-        // Row ${i}: ${name}, allergen: ${row.dataset.allergen}, gmo: ${row.dataset.gmo}
+        console.log(`Row ${i}: ${name}, allergen: ${row.dataset.allergen}, gmo: ${row.dataset.gmo}`);
     }
     
     const modal = new bootstrap.Modal(document.getElementById('allergenGmoDetailModal'));
@@ -1464,7 +1468,6 @@ function filterIngredientsByComponent(type, component) {
         }
     }
     
-    // Filtered ingredients debug output removed
-    // Filtered ingredients for ${type} - ${component}
+    console.log(`Filtered ingredients for ${type} - ${component}:`, filteredIngredients);
     return filteredIngredients;
 }

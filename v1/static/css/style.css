@@ -1,37 +1,25 @@
-/* 웹폰트 - @import는 파일 최상단에 위치해야 함 */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
-
 /* 1. Global Variables & Base Styles */
 :root {
-  /* Unified Color Palette */
-  --primary-color: #023047;
-  --secondary-color: #3b82f6;
-  --success-color: #10b981;
-  --danger-color: #dc3545;
-  --warning-color: #f59e0b;
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
-  --bg-muted: #e5e7eb;
-  --border-color: #d1d5db;
-  --border-light: #e5e7eb;
-  
-  /* Legacy variables for compatibility */
-    --text-color: var(--text-primary);
-    --btn-color: var(--secondary-color);
-    --btn-secondary-color: var(--primary-color);
-    --btn-cancel-color: var(--text-secondary);
-    --navbar-bg-color: var(--primary-color);
+    --primary-color: #023047;
+    --secondary-color: #6c757d;
+    --text-color: #343a40;
+    --btn-color: #2667ff;
+    --btn-secondary-color: #1e96fc;
+    --btn-cancel-color: #6c757d;
+    --navbar-bg-color: #023047;
     --highlight-color: #caf0f8;
-    --table-header-bg-color: var(--bg-muted);
-    --table-hover-bg-color: var(--bg-muted);
-    --pagination-color: var(--primary-color);
+    --table-header-bg-color: #e9ecef;
+    --table-hover-bg-color: #e9ecef;
+    --pagination-color: #023047;
     --footer-bg-color: #d9dcd6;
-    --bg-color: var(--bg-secondary);
+    --danger-color: #dc3545;
+    --success-color: #28a745;
+    --border-color: #dee2e6;
+    --bg-color: #f8f9fa;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
+/* 웹폰트 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
 /* 2. Global Reset & Layout */
 html, body {
     min-height: 100vh;
@@ -42,8 +30,8 @@ body {
     display: flex;
     flex-direction: column;
     font-family: 'Noto Sans KR', sans-serif;
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
+    background-color: #f9f9f9;
+    color: var(--text-color);
 }
 /* 메인 콘텐츠 영역 */
 .main-content {
@@ -1283,59 +1271,5 @@ select.form-control.select2-date-option {
     .table th .sort-buttons {
         right: 2px;
         gap: 0.1rem;
-    }
-}
-
-/* 고정 헤더 스타일 개선 */
-@media (max-width: 1200px) {
-    .label-header-row .label-header-group {
-        flex-wrap: wrap !important;
-        gap: 8px !important;
-    }
-    .label-header-row .label-header-group > div {
-        margin-left: 10px !important;
-    }
-    .label-header-row .label-header-actions {
-        gap: 4px !important;
-    }
-    .label-header-row .label-header-actions .btn {
-        font-size: 0.8rem !important;
-        padding: 2px 6px !important;
-    }
-}
-
-@media (max-width: 768px) {
-    .label-header-row .label-header-group h2 {
-        font-size: 1.1rem !important;
-    }
-    .label-header-row .label-header-group > div input {
-        max-width: 180px !important;
-        min-width: 120px !important;
-    }
-    .label-header-row .label-header-actions .btn-sm {
-        padding: 1px 4px !important;
-        font-size: 0.75rem !important;
-    }
-    .label-header-row .label-header-date {
-        font-size: 0.75rem !important;
-    }
-    
-    /* 상세 입력 카드 헤더 버튼들 반응형 */
-    .card-actions .btn-sm {
-        font-size: 0.7rem !important;
-        padding: 2px 4px !important;
-    }
-    
-    .card-actions .btn-sm .me-1 {
-        display: none !important; /* 아이콘 숨김 */
-    }
-}
-
-@media (max-width: 480px) {
-    /* 매우 작은 화면에서는 버튼 텍스트를 더 축약 */
-    .card-actions .btn-sm {
-        font-size: 0.65rem !important;
-        padding: 1px 3px !important;
-        min-width: auto !important;
     }
 }

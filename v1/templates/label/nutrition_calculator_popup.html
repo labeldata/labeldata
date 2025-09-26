@@ -6,213 +6,127 @@
   <title>영양성분 계산기</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">  
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <link href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
-  <link href="{% static 'css/label_calculator.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
+  <link href="{% static 'css/nutrition_preview_fix.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
+  <style>
+    body {
+      font-size: 0.8rem;
+      font-family: 'Noto Sans KR', sans-serif;
+    }
+    .nutrient-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .nutrient-row label {
+      min-width: 100px;
+      font-weight: 500;
+      margin: 0;
+    }
+    .nutrient-row .form-control,
+    .nutrient-row .form-select {
+      flex: 1;
+      font-size: 0.8rem;
+    }
+    .nutrient-row .input-unit {
+      white-space: nowrap;
+      margin-left: 4px;
+    }
+    .popup-title {
+      font-size: 1.2rem;
+      font-weight: 500;
+      color: #495057;
+    }
+    .nutrition-tab-content {
+      display: none;
+    }
+    .nutrition-tab-content.active {
+      display: block;
+    }
+    .result-card,
+    .result-card .table,
+    .result-card .summary-header,
+    .result-card .summary-footer {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 0.8rem;
+      color: #495057;
+      font-weight: 500;
+    }
+  </style>
 </head>
-<body>
-<div class="nutrition-calculator-container">
-</head>
-<body>
-<div class="nutrition-calculator-container">
-  <!-- 왼쪽 입력 패널 -->
-  <div class="input-panel">
-    <div class="panel-header">
-      <div class="panel-title">📊 영양성분 입력</div>
-      <div class="button-row">
-        <button type="button" class="btn btn-sm btn-info" id="calculateBtn" onclick="calculateNutrition()">
-          <i class="fas fa-calculator me-1"></i>계산
-        </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetFormAndParent()">
-          <i class="fas fa-undo me-1"></i>초기화
-        </button>
+<body class="calculator-popup">
+<div class="container-fluid" style="max-width: 1400px;">
+  <div class="row">
+    <div class="col-md-6" style="padding-right: 15px; border-right: 1px solid #ccc;">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="popup-title">영양성분 입력</div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-primary btn-sm" onclick="calculateNutrition()">계산</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetFormAndParent()">초기화</button>
+        </div>
       </div>
-    </div>
-    
-    <!-- 기본 정보 -->
-    <div class="basic-info-row">
-      <div class="info-group">
-        <label>단위량</label>
-        <input type="number" id="base_amount" placeholder="100">
-        <select id="base_amount_unit">
+      <hr>
+      <div class="nutrient-row">
+        <label>단위내용량</label>
+        <input type="number" id="base_amount" class="form-control" placeholder="예: 100">
+        <select class="form-select input-unit" id="base_amount_unit">
           <option value="g" selected>g</option>
           <option value="ml">ml</option>
         </select>
       </div>
-      <div class="info-group">
-        <label>포장개수</label>
-        <input type="number" id="servings_per_package" placeholder="1">
-        <span class="unit-label">개</span>
+      <div class="nutrient-row">
+        <label>포장 당 갯수</label>
+        <input type="number" id="servings_per_package" class="form-control" placeholder="예: 1">
+        <span class="input-unit">개</span>
       </div>
+      <hr>
+      <div id="nutrient-inputs"></div>
     </div>
-    
-    <!-- 표시 방식 -->
-    <div class="display-style-row">
-      <div class="info-group">
-        <label>스타일</label>
-        <select id="nutrition_display_unit" onchange="toggleStyleOptionsOnly()">
-          <option value="basic">기본형</option>
-          <option value="parallel">병행표시</option>
-        </select>
-      </div>
-      <div class="info-group">
-        <!-- 기본형 세부 옵션 -->
-        <div id="basic-options" class="sub-options">
-          <label>표시기준</label>
-          <select id="basic_display_type">
-            <option value="total">총량당</option>
-            <option value="unit">단위량당</option>
-            <option value="100g">100g당</option>
+    <div class="col-md-6" style="padding-left: 15px;">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h5 class="mb-0">계산 결과</h5>
+        <div class="d-flex gap-2">
+          <select id="tabSelector" class="form-select form-select-sm" style="width: auto;">
+            <option value="total">총 내용량당</option>
+            <option value="unit">단위내용량당</option>
+            <option value="100g">100g(ml)당</option>
           </select>
-        </div>
-        <!-- 병행표시 세부 옵션 -->
-        <div id="parallel-options" class="sub-options">
-          <label>유형</label>
-          <select id="parallel_display_type">
-            <option value="unit_total">단위량+총량</option>
-            <option value="unit_100g">단위량+100g</option>
-            <option value="serving_total">1회+총량</option>
-            <option value="serving_100ml">1회+100ml</option>
-          </select>
+          <button type="button" class="btn btn-primary btn-sm" onclick="sendNutritionDataToParent()">저장</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
         </div>
       </div>
-    </div>
-    
-    <!-- 영양성분 입력 -->
-    <div class="nutrition-section">
-      <div class="nutrition-header" onclick="toggleNutritionSection()">
-        <span class="panel-title">🥄 영양성분 (100g 기준)</span>
-        <span class="toggle-text">
-          <span id="nutrition-toggle-text">성분 추가</span>
-          <span class="toggle-icon" id="nutrition-toggle">▼</span>
-        </span>
-      </div>
-      
-      <!-- 기본 영양성분 (항상 표시) -->
-      <div class="basic-nutrients">
-        <div class="nutrients-grid" id="basic-nutrient-inputs"></div>
-      </div>
-      
-      <!-- 추가 영양성분 (접었다 펼칠 수 있음) -->
-      <div class="additional-nutrients" id="additional-nutrients" style="display: none;">
-        <div class="additional-header">
-          <span>📋 추가 영양성분</span>
+      <hr>
+      <ul class="nav nav-tabs mb-3" id="resultTab" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="total-tab" data-bs-toggle="tab" data-bs-target="#result-total" data-tab="total" type="button" role="tab" aria-controls="result-total" aria-selected="true">총 내용량당</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="unit-tab" data-bs-toggle="tab" data-bs-target="#result-unit" data-tab="unit" type="button" role="tab" aria-controls="result-unit" aria-selected="false">단위내용량당</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="100g-tab" data-bs-toggle="tab" data-bs-target="#result-100g" data-tab="100g" type="button" role="tab" aria-controls="result-100g" aria-selected="false">100g(ml)당</button>
+        </li>
+      </ul>
+      <div class="tab-content">
+        <div id="result-total" class="tab-pane fade show active" role="tabpanel" aria-labelledby="total-tab">
+          <div class="result-card" id="resultBoxTotal"></div>
         </div>
-        <div class="nutrients-grid" id="additional-nutrient-inputs"></div>
+        <div id="result-unit" class="tab-pane fade" role="tabpanel" aria-labelledby="unit-tab">
+          <div class="result-card" id="resultBoxUnit"></div>
+        </div>
+        <div id="result-100g" class="tab-pane fade" role="tabpanel" aria-labelledby="100g-tab">
+          <div class="result-card" id="resultBox100g"></div>
+        </div>
       </div>
-    </div>
-  </div>
-  
-  <!-- 오른쪽 표시 패널 -->
-  <div class="display-panel">
-    <div class="result-header">
-      <div class="panel-title">📋 영양성분표</div>
-      <div class="result-buttons">
-        <button type="button" class="btn btn-success btn-sm" onclick="sendNutritionDataToParent()">
-          <i class="fas fa-save me-1"></i>데이터 저장
-        </button>
-        <button type="button" class="btn btn-primary btn-sm" onclick="exportToPDF()">
-          <i class="fas fa-file-pdf me-1"></i>PDF 저장
-        </button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="window.close()">
-          <i class="fas fa-times me-1"></i>닫기
-        </button>
-      </div>
-    </div>
-    
-    <!-- 강조표시 검증 결과 영역 -->
-    <div id="emphasisValidationResults" class="emphasis-validation-container" style="display: none;">
-      <div class="emphasis-validation-header">
-        <h6><i class="fas fa-star text-warning me-2"></i>강조표시 검증 결과</h6>
-      </div>
-      <div id="emphasisValidationContent" class="emphasis-validation-content">
-        <!-- 검증 결과가 여기에 표시됩니다 -->
-      </div>
-    </div>
-    
-    <div class="result-display" id="resultDisplay">
-      <div class="empty-result">영양성분을 입력하고 계산 버튼을 눌러주세요.</div>
     </div>
   </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
-  <script src="{% static 'js/label/nutrition_calculator_popup.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
-</body>
-</html>
+<script src="{% static 'js/label/nutrition_calculator_popup.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script>
-  // 전역 함수로 toggleStyleOptions와 toggleNutritionSection 노출
-  // 자동 계산을 하지 않는 스타일 옵션 토글 함수
-  window.toggleStyleOptionsOnly = function() {
-    const style = document.getElementById('nutrition_display_unit').value;
-    const basicOptions = document.getElementById('basic-options');
-    const parallelOptions = document.getElementById('parallel-options');
-    
-    // 모든 옵션을 먼저 숨김 (강제로)
-    basicOptions.classList.remove('show');
-    basicOptions.style.display = 'none';
-    parallelOptions.classList.remove('show');
-    parallelOptions.style.display = 'none';
-    
-    // 선택된 스타일에 따라 해당 옵션만 표시 (강제로)
-    if (style === 'parallel') {
-      parallelOptions.classList.add('show');
-      parallelOptions.style.display = 'block';
-    } else {
-      basicOptions.classList.add('show');
-      basicOptions.style.display = 'block';
-    }
-    // 자동 계산 제거 - 계산 버튼을 눌렀을 때만 계산
-  };
-
-  // 기존 호환성을 위한 함수 (자동 계산 제거)
-  window.toggleStyleOptions = function() {
-    window.toggleStyleOptionsOnly();
-  };
-
-  // 표시 기준 변경 시 재계산 함수 (자동 계산 제거)
-  window.recalculateOnChange = function() {
-    // 자동 계산 제거 - 계산 버튼을 눌렀을 때만 계산
-  };
-
-
-
-  window.toggleNutritionSection = function() {
-    const additionalSection = document.getElementById('additional-nutrients');
-    const toggleIcon = document.getElementById('nutrition-toggle');
-    const toggleText = document.getElementById('nutrition-toggle-text');
-    
-    if (additionalSection.style.display === 'none') {
-      additionalSection.style.display = 'block';
-      toggleIcon.textContent = '▲';
-      toggleIcon.classList.add('rotated');
-      toggleText.textContent = '성분 접기';
-    } else {
-      additionalSection.style.display = 'none';
-      toggleIcon.textContent = '▼';
-      toggleIcon.classList.remove('rotated');
-      toggleText.textContent = '성분 추가';
-    }
-  };
-
-  // 페이지 로드 시 초기 상태 설정
-  document.addEventListener('DOMContentLoaded', function() {
-    // 초기 스타일 옵션 설정 (지연 실행)
-    setTimeout(function() {
-      toggleStyleOptions();
-    }, 100);
-    
-    // 추가적으로 더 늦게 한번 더 실행 (데이터 로드 후)
-    setTimeout(function() {
-      toggleStyleOptions();
-    }, 500);
-  });
-
   document.addEventListener('nutrition-calculator-ready', function() {
     const dataStr = "{{ nutrition_data|escapejs }}";
     if (dataStr && dataStr !== "{}") {
@@ -220,20 +134,11 @@
         const data = JSON.parse(dataStr);
         if (data && Object.keys(data).length > 0) {
           loadExistingData(data);
-          // 데이터 로드 후 스타일 옵션 다시 설정
-          setTimeout(function() {
-            toggleStyleOptions();
-          }, 100);
         }
       } catch (e) {
-
+        console.error("영양성분 데이터 오류:", e);
       }
     }
-    
-    // 데이터가 없어도 스타일 옵션 설정
-    setTimeout(function() {
-      toggleStyleOptions();
-    }, 50);
   });
 </script>
 </body>

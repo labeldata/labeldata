@@ -1,4 +1,23 @@
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
 // 전역 데이터 초기화
+let phrasesData = {};
+let regulations = {};
+let lastFocusedFieldName = null;
+let phraseInsertMode = 'append';
 
 // ------------------ 체크박스 필드 매핑 (전역) ------------------
 const fieldMappings = {
@@ -18,7 +37,7 @@ const fieldMappings = {
   distributor_address: 'chk_distributor_address',
   repacker_address: 'chk_repacker_address',
   importer_address: 'chk_importer_address',
-  pog_daycnt: 'chk_pog_daycnt',
+  date_info: 'chk_date_info',
   cautions: 'chk_cautions',
   additional_info: 'chk_additional_info',
   // initCheckboxFieldToggle에서 사용하는 필드 매핑 (배열 형태)
@@ -35,7 +54,7 @@ const fieldMappings = {
   distributor_address_arr: ['input[name="distributor_address"]'],
   repacker_address_arr: ['input[name="repacker_address"]'],
   importer_address_arr: ['input[name="importer_address"]'],
-  pog_daycnt_arr: ['input[name="pog_daycnt"]', 'select[name="date_option_display"]'],
+  date_info_arr: ['input[name="pog_daycnt"]', 'select[name="date_option"]'],
   rawmtrl_nm_display_arr: ['textarea[name="rawmtrl_nm_display"]'],
   rawmtrl_nm_arr: ['textarea[name="rawmtrl_nm"]'],
   cautions_arr: ['textarea[name="cautions"]'],
@@ -45,7 +64,13 @@ const fieldMappings = {
 
 // DOMContentLoaded 이벤트로 초기화 보장
 document.addEventListener('DOMContentLoaded', function () {
-  // 초기화
+  // 데이터 초기화
+  try {
+    phrasesData = JSON.parse(document.getElementById('phrases-data')?.textContent || '{}');
+    regulations = JSON.parse(document.getElementById('regulations-data')?.textContent || '{}');
+  } catch (e) {
+    console.error('데이터 파싱 오류:', e);
+  }
 
   // ------------------ 공통 유틸리티 함수 ------------------
   // CSRF 토큰 쿠키값을 얻는 함수 (Django 공식)
@@ -114,46 +139,6 @@ document.addEventListener('DOMContentLoaded', function () {
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // ------------------ 필드 클릭 이벤트 초기화 ------------------
-  let nutritionPopupOpen = false;
-  let ingredientPopupOpen = false;
-
-  function initFieldClickEvents() {
-    // 영양성분 필드 클릭 시 계산기 팝업 열기
-    const nutritionTextarea = document.getElementById('nutrition_text');
-    if (nutritionTextarea) {
-      nutritionTextarea.addEventListener('click', function(e) {
-        e.preventDefault();
-        if (!nutritionPopupOpen) {
-          nutritionPopupOpen = true;
-          handleNutritionTablePopup();
-          setTimeout(() => {
-            nutritionPopupOpen = false;
-          }, 1000);
-        }
-      });
-    }
-
-    // 원재료명(표로입력) 필드 클릭 시 원재료명 팝업 열기
-    const rawmtrlTextarea = document.getElementById('rawmtrl_nm');
-    if (rawmtrlTextarea) {
-      // 원재료명 필드는 항상 클릭 가능하도록 disabled 속성 강제 제거
-      rawmtrlTextarea.disabled = false;
-      rawmtrlTextarea.classList.remove('disabled-textarea');
-      
-      rawmtrlTextarea.addEventListener('click', function(e) {
-        e.preventDefault();
-        if (!ingredientPopupOpen) {
-          ingredientPopupOpen = true;
-          handleIngredientPopup();
-          setTimeout(() => {
-            ingredientPopupOpen = false;
-          }, 1000);
-        }
-      });
-    }
-  }
-
   // ------------------ 라벨 관리 기능 ------------------
   window.copyLabel = function (labelId) {
     if (!labelId) return alert('복사할 라벨이 없습니다.');
@@ -189,219 +174,85 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   };
 
-  // ===== 영양성분 계산기 팝업 관련 함수들 =====
-
-  // 팝업 열기
   window.openNutritionCalculator = function () {
     const labelId = document.getElementById('label_id')?.value || '';
-    openPopup(`/label/nutrition-calculator-popup/?label_id=${labelId}`, 'NutritionCalculator', 1300, 1000);
+    openPopup(`/label/nutrition-calculator-popup/?label_id=${labelId}`, 'NutritionCalculator', 1100, 900);
   };
 
-  // 팝업 열기 (기존 데이터 포함)
-  window.handleNutritionTablePopup = function () {
-      const labelId = document.getElementById('label_id')?.value || '';
-      const existingData = collectExistingNutritionData();
-      const productNameField = document.querySelector('input[name="prdlst_nm"]');
-      if (productNameField && productNameField.value.trim()) {
-          existingData.product_name = productNameField.value.trim();
-      }
-
-      let url = `/label/nutrition-calculator-popup/?label_id=${labelId}`;
-      if (existingData && Object.keys(existingData).length > 0) {
-          const params = new URLSearchParams();
-          Object.keys(existingData).forEach(key => {
-              // 모든 필드를 전달 (빈 값도 포함)
-              params.append(key, existingData[key] || '');
-          });
-          url += '&' + params.toString();
-      }
-      openPopup(url, 'NutritionCalculator', 1300, 1000);
+  window.openPhrasePopup = function () {
+    openPopup('/label/phrases/', 'phrasePopup', 1100, 900);
   };
-
-  // 부모창의 기존 영양성분 데이터 수집 (필드명 통일로 간소화)
-  function collectExistingNutritionData() {
-  // 기존 영양성분 데이터 수집 시작
-    const data = {};
-    
-    // 기본 설정값들 (HTML 템플릿의 hidden 필드와 일치)
-    const basicFields = [
-      'serving_size', 'serving_size_unit', 'units_per_package', 'nutrition_display_unit',
-      'basic_display_type', 'parallel_display_type'
-    ];
-    
-    // 영양성분 필드들 (HTML과 일치하는 필드명 사용)
-    const nutritionFields = [
-      'calories', 'natriums', 'carbohydrates', 'sugars', 
-      'fats', 'trans_fats', 'saturated_fats', 
-      'cholesterols', 'proteins', 'dietary_fiber', 
-      'calcium', 'iron', 'potassium', 'magnesium', 'zinc', 'phosphorus', 
-      'vitamin_a', 'vitamin_d', 'vitamin_e', 'vitamin_c', 
-      'vitamin_b1', 'vitamin_b2', 'niacin', 
-      'vitamin_b6', 'folic_acid', 'vitamin_b12', 'selenium', 
-      'pantothenic_acid', 'biotin', 'iodine', 'vitamin_k', 
-      'copper', 'manganese', 'chromium', 'molybdenum'
-    ];
-    
-    // 모든 필드 검사 (다양한 셀렉터로 필드 찾기) - 영양성분 unit 필드도 포함
-    [...basicFields, ...nutritionFields].forEach(fieldName => {
-      let field = document.querySelector(`input[name="${fieldName}"]`);
-      if (!field) field = document.getElementById(fieldName);
-      if (!field) field = document.querySelector(`input[type="hidden"][name="${fieldName}"]`);
-      if (!field) field = document.querySelector(`[name="${fieldName}"]`);
-      
-      // 영양성분 단위 필드도 수집
-      let unitField = null;
-      if (nutritionFields.includes(fieldName)) {
-        unitField = document.querySelector(`input[name="${fieldName}_unit"]`);
-      }
-      
-      // 모든 필드를 수집하되, 기본 필드는 빈 값도 포함
-      if (field) {
-        const popupFieldName = fieldName;
-        const value = field.value ? field.value.trim() : '';
-        
-        // 기본 필드는 빈 값이어도 전달
-        if (basicFields.includes(fieldName)) {
-          data[popupFieldName] = value;
-        } else {
-          // 영양성분 필드는 값이 있을 때만 전달
-          if (value !== '' && value !== '0') {
-            data[popupFieldName] = value;
-          }
-        }
-        
-        // 영양성분 단위 필드 처리
-        if (unitField) {
-          const unitValue = unitField.value ? unitField.value.trim() : '';
-          if (unitValue !== '') {
-            data[`${fieldName}_unit`] = unitValue;
-          }
-        }
-      } else {
-        // 필드를 찾지 못한 경우 기본값으로 빈 문자열 설정 (기본 필드만)
-        if (basicFields.includes(fieldName)) {
-          data[fieldName] = '';
-        }
-      }
-      
-      // 표시 기준 설정 필드가 없으면 기본값 사용
-      if (['basic_display_type', 'parallel_display_type'].includes(fieldName) && !field) {
-        const defaultValues = {
-          'basic_display_type': 'per_100g',
-          'parallel_display_type': 'per_serving'
-        };
-        data[fieldName] = defaultValues[fieldName];
-      }
-    });
-    
-  // 수집된 데이터 (디버그 로그 제거)
-    
-    return data;
-  }
 
   window.openPreviewPopup = function() {
     const form = document.getElementById("labelForm");
     if (!form) {
-        console.error("오류: #labelForm 요소를 찾을 수 없습니다.");
         return;
     }
-    
-    let labelId = document.getElementById('label_id')?.value;
-    if (!labelId) {
-        const urlParams = new URLSearchParams(window.location.search);
+    let labelId = null;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('label_id')) {
         labelId = urlParams.get('label_id');
+    } else {
+        labelId = document.getElementById('label_id')?.value;
     }
-    
     if (!labelId) {
         alert('라벨을 먼저 저장해주세요.');
         return;
     }
-    
     const url = `/label/preview/?label_id=${labelId}`;
-    const popup = window.open(url, "label_preview", "width=1200,height=900,scrollbars=yes,resizable=yes");
-    
+    const width = 1100;
+    const height = 900;
+    const left = (window.innerWidth - width) / 2;
+    const top = (window.innerHeight - height) / 2;
+    const popup = window.open(
+        url, 
+        "previewPopup",
+        `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
+    );
     if (!popup) {
-        alert("팝업이 차단되었습니다. 브라우저의 팝업 차단 설정을 확인해 주세요.");
+        alert("팝업이 차단되었습니다. 팝업 차단을 해제해주세요.");
         return;
     }
-
-    // 팝업이 데이터를 요청하면('requestPreviewData') 이 리스너가 응답합니다.
-    window.addEventListener('message', function handlePreviewRequest(e) {
-        // 이 메시지가 우리가 연 팝업(e.source)에서 온 것인지 확인
-        if (e.source !== popup || e.data.type !== 'requestPreviewData') {
-            return;
-        }
-
-  // Preview popup requested data; sending collected data
-
-        const checkedData = {};
-        
-        // 체크박스 ID와 실제 데이터 필드의 name 속성을 1:1로 매핑
-        const fieldIdToNameMap = {
-            'chk_prdlst_nm': 'prdlst_nm',
-            'chk_ingredient_info': 'ingredient_info',
-            'chk_prdlst_dcnm': 'prdlst_dcnm',
-            'chk_prdlst_report_no': 'prdlst_report_no',
-            'chk_content_weight': 'content_weight',
-            'chk_country_of_origin': 'country_of_origin',
-            'chk_storage_method': 'storage_method',
-            'chk_frmlc_mtrqlt': 'frmlc_mtrqlt',
-            'chk_bssh_nm': 'bssh_nm',
-            'chk_distributor_address': 'distributor_address',
-            'chk_repacker_address': 'repacker_address',
-            'chk_importer_address': 'importer_address',
-            'chk_pog_daycnt': 'pog_daycnt',
-            'chk_rawmtrl_nm_display': 'rawmtrl_nm_display',
-            'chk_cautions': 'cautions',
-            'chk_additional_info': 'additional_info',
-            'chk_nutrition_text': 'nutrition_text'
-        };
-
+    // 체크된 필드만 값과 함께 postMessage로 전달
+    setTimeout(() => {
+        const checked = {};
         document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(cb => {
             if (cb.checked) {
-                const fieldName = fieldIdToNameMap[cb.id];
-                if (fieldName) {
-                    const inputElement = document.querySelector(`[name="${fieldName}"]`);
-                    if (inputElement) {
-                        // 미리보기 페이지가 기대하는 표준 필드명을 키(key)로 사용
-                        checkedData[fieldName] = inputElement.value || '';
-                        
-                        // pog_daycnt 필드의 경우 날짜 옵션도 함께 전달
-                        if (fieldName === 'pog_daycnt') {
-                            const dateOptionElement = document.querySelector('select[name="date_option_display"]');
-                            if (dateOptionElement) {
-                                checkedData['date_option'] = dateOptionElement.value || '소비기한';
-                            }
-                        }
-                    }
-                }
+                // 필드명 추출 (예: chk_prdlst_nm → prdlst_nm)
+                const field = cb.id.replace('chk_', '');
+                // 값은 입력/textarea/select에서 가져옴
+                const input = document.querySelector(`[name="${field}"]`);
+                if (input) checked[field] = input.value;
             }
         });
-
-        // 미리보기 설정값들 수집
-        const previewSettings = {
-            width: document.querySelector('input[name="width"]')?.value || '10',
-            height: document.querySelector('input[name="height"]')?.value || '10',
-            font_family: document.querySelector('select[name="font_family"]')?.value || "'Noto Sans KR'",
-            font_size: document.querySelector('input[name="font_size"]')?.value || '10',
-            letter_spacing: document.querySelector('input[name="letter_spacing"]')?.value || '-5',
-            line_height: document.querySelector('input[name="line_height"]')?.value || '1.2'
-        };
-        
-
-
-        // 팝업으로 최종 데이터 전송
-        popup.postMessage({
-            type: 'previewCheckedFields',
-            checked: checkedData,
-            settings: previewSettings,
-            update_datetime: new Date().toISOString().slice(0, 16).replace('T', ' ')
-        }, '*');
-
-        // 이벤트 리스너를 한 번만 실행하고 제거하여 중복 호출 방지
-        window.removeEventListener('message', handlePreviewRequest);
-    });
+        popup.postMessage({ type: 'previewCheckedFields', checked }, '*');
+    }, 500);
   };
+
+  window.addEventListener('message', function (e) {
+    if (e.data.type !== 'applyPhrases') return;
+    const phrases = e.data.phrases;
+    const categoryMapping = {
+      storage: 'storage_method',
+      package: 'frmlc_mtrqlt',
+      manufacturer: 'bssh_nm',
+      distributor: 'distributor_address',
+      repacker: 'repacker_address',
+      importer: 'importer_address',
+      expiry: 'pog_daycnt',
+      cautions: 'cautions',
+      additional: 'additional_info'
+    };
+
+    Object.keys(phrases).forEach(category => {
+      const mappedCategory = categoryMapping[category] || category;
+      const textarea = document.querySelector(`textarea[name="${mappedCategory}"]`);
+      if (textarea && phrases[category]?.length) {
+        textarea.value = phrases[category].map(p => p.content).join('\n');
+        updateTextareaHeight(textarea);
+      }
+    });
+  });
 
   // ------------------ 체크박스 그룹 초기화 ------------------
   function initCheckBoxGroups() {
@@ -592,12 +443,12 @@ document.addEventListener('DOMContentLoaded', function () {
   function updateCheckboxesByFoodType(foodType) {
     if (!foodType) return;
     
-
+    console.log('updateCheckboxesByFoodType called with:', foodType);
     
     return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
       .then(response => response.json())
       .then(data => {
-
+        console.log('API response:', data);
         
         if (!data.success || !data.settings) {
           console.error('API error:', data.error || 'No settings returned');
@@ -613,7 +464,7 @@ document.addEventListener('DOMContentLoaded', function () {
                           document.querySelector('#regulationPanel textarea');
           
           if (textarea) {
-
+            console.log('Found regulations textarea, updating with:', settings.relevant_regulations);
             textarea.value = settings.relevant_regulations || '해당 식품유형에 관련된 규정이 없습니다.';
             if (typeof updateTextareaHeight === 'function') {
               updateTextareaHeight(textarea);
@@ -625,7 +476,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         // 날짜 옵션 업데이트
         if (settings.pog_daycnt_options !== undefined) {
-
+          console.log('Updating date options:', settings.pog_daycnt_options);
           updateDateDropdownOptions(settings.pog_daycnt_options);
         }
         
@@ -638,7 +489,7 @@ document.addEventListener('DOMContentLoaded', function () {
           const checkbox = document.getElementById(checkboxId);
           
           if (checkbox) {
-
+            console.log(`Updating checkbox ${checkboxId}: ${value}`);
             checkbox.checked = value === 'Y';
             checkbox.disabled = value === 'D';
             checkbox.dataset.forcedDisabled = value === 'D' ? 'true' : 'false';
@@ -799,13 +650,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ------------------ 날짜 드롭다운 업데이트 ------------------
   function updateDateDropdown(value) {
-    const dateOptions = document.querySelector('select[name="date_option_display"]');
+    const dateOptions = document.querySelector('select[name="date_option"]');
     if (!dateOptions) {
       console.warn('Date options select not found in updateDateDropdown');
       return;
     }
     
-
+    console.log('updateDateDropdown called with value:', value);
     
     dateOptions.disabled = value === 'D';
     Array.from(dateOptions.options).forEach(option => (option.disabled = value === 'D'));
@@ -813,17 +664,17 @@ document.addEventListener('DOMContentLoaded', function () {
       dateOptions.value = '';
     }
     
-
+    console.log('Date dropdown state updated - disabled:', dateOptions.disabled);
   }
 
   function updateDateDropdownOptions(options) {
-    const dateOptions = document.querySelector('select[name="date_option_display"]');
+    const dateOptions = document.querySelector('select[name="date_option"]');
     if (!dateOptions) {
       console.warn('Date options select not found');
       return;
     }
     
-
+    console.log('Updating date dropdown with options:', options);
     
     const currentValue = dateOptions.value;
     if (!dateOptions.dataset.originalOptions) {
@@ -846,7 +697,7 @@ document.addEventListener('DOMContentLoaded', function () {
       dateOptions.innerHTML = dateOptions.dataset.originalOptions || '';
     }
     dateOptions.disabled = false;
-
+    console.log('Date dropdown updated successfully');
   }
   // ------------------ 체크박스 필드 토글 ------------------
   function initCheckboxFieldToggle() {
@@ -894,12 +745,6 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       function updateFields() {
         relatedFields.forEach(field => {
-          // 원재료명(표로입력) 필드는 항상 클릭 가능하도록 disabled 하지 않음
-          if (field.name === 'rawmtrl_nm') {
-            field.disabled = false;
-            field.classList.remove('disabled-textarea');
-            return;
-          }
           field.disabled = !checkbox.checked || checkbox.dataset.forcedDisabled === 'true';
           field.classList.toggle('disabled-textarea', field.disabled);
         });
@@ -965,10 +810,133 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#food_group').select2({ placeholder: '대분류 선택', allowClear: true, width: '100%' });
     $('#food_type').select2({ placeholder: '소분류 선택', allowClear: true, width: '100%' });
     $('select[name="country_of_origin"]').select2({ placeholder: '대외무역법에 따른 가공국을 선택하세요.', allowClear: true, width: '100%' });
-    // 소비기한/품질유지기한 드롭다운(select[name="date_option_display"])에는 select2를 적용하지 않음 (검색 기능 제거)
+    // 소비기한/품질유지기한 드롭다운(select[name="date_option"])에는 select2를 적용하지 않음 (검색 기능 제거)
   }
 
+  // ------------------ 내문구 탭 기능 ------------------
+  function getCategoryFromFieldName(fieldName) {
+    const mapping = {
+      my_label_name: 'label_name',          // 라벨명
+      prdlst_dcnm: 'food_type',            // 식품유형
+      prdlst_nm: 'product_name',           // 제품명
+      ingredient_info: 'ingredient_info',   // 특정성분 함량
+      content_weight: 'content_weight',     // 내용량
+      weight_calorie: 'weight_calorie',     // 내용량(열량)
+      prdlst_report_no: 'report_no',       // 품목보고번호
+      storage_method: 'storage',            // 보관방법
+      frmlc_mtrqlt: 'package',             // 용기.포장재질
+      bssh_nm: 'manufacturer',             // 제조원 소재지
+      distributor_address: 'distributor',   // 유통전문판매원
+      repacker_address: 'repacker',        // 소분원
+      importer_address: 'importer',         // 수입원
+      pog_daycnt: 'expiry',                // 소비기한
+      cautions: 'cautions',                // 주의사항
+      additional_info: 'additional'         // 기타표시사항
+    };
+    return mapping[fieldName] || null;
+  }
+  
+  function renderMyPhrasesForFocusedField() {
+    const fieldName = lastFocusedFieldName || 'prdlst_nm';
+    const category = getCategoryFromFieldName(fieldName);
+    const listContainer = document.getElementById('myPhraseList');
+    if (!listContainer || !category || !phrasesData) {
+      console.warn('Missing required elements:', { listContainer, category, phrasesData }); // Debugging
+      if (listContainer) listContainer.innerHTML = '<div class="text-muted" style="font-size: 0.8rem;">문구 데이터를 로드할 수 없습니다.</div>';
+      return;
+    }
+  
+    listContainer.innerHTML = '';
+    const isMultiSelect = ['cautions', 'additional'].includes(category);
+    const textarea = document.querySelector(`textarea[name="${fieldName}"], input[name="${fieldName}"]`);
+    const currentValues = textarea ? textarea.value.split('\n').map(v => v.trim()).filter(Boolean) : [];
+  
+    const phraseList = phrasesData[category] || [];
+    if (!phraseList.length) {
+      listContainer.innerHTML = '<div class="text-muted" style="font-size: 0.8rem;">저장된 문구가 없습니다. 문구 관리에서 추가하세요.</div>';
+      return;
+    }
+  
+    const sortedPhrases = [...phraseList].sort((a, b) => (b.note?.includes('★') ? 1 : 0) - (a.note?.includes('★') ? 1 : 0));
+  
+    sortedPhrases.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'phrase-item';
+      div.textContent = p.content;
+      Object.assign(div.style, {
+        padding: '6px 8px',
+        border: '1px solid #ccc',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '0.8rem',
+        transition: 'background-color 0.2s',
+        marginBottom: '4px'
+      });
+  
+      div.addEventListener('click', () => {
+        if (!textarea) return;
+        if (isMultiSelect) {
+          const values = textarea.value.split(' | ').map(v => v.trim()).filter(Boolean);
+          const index = values.indexOf(p.content);
+          if (index === -1) {
+            values.push(p.content);
+            div.style.backgroundColor = '#d0ebff';
+          } else {
+            values.splice(index, 1);
+            div.style.backgroundColor = '#fff';
+          }
+          textarea.value = values.join(' | ');
+        } else {
+          const isSelected = textarea.value === p.content;
+          textarea.value = isSelected ? '' : p.content;
+          listContainer.querySelectorAll('.phrase-item').forEach(item => {
+            item.style.backgroundColor = item.textContent === textarea.value ? '#d0ebff' : '#fff';
+          });
+        }
+        updateTextareaHeight(textarea);
+      });
+  
+      div.style.backgroundColor = currentValues.includes(p.content) ? '#d0ebff' : '#fff';
+      if (p.note) div.title = p.note;
+      listContainer.appendChild(div);
+    });
+  }
 
+  function showRegulationInfo(fieldName) {
+    const container = document.getElementById('myPhraseContainer');
+    if (!container) return;
+  
+    container.querySelectorAll('.text-muted, .regulation-info').forEach(el => el.remove());
+  
+    const fieldMapping = {
+      my_label_name: 'label_nm',
+      prdlst_dcnm: 'prdlst_dcnm',
+      prdlst_nm: 'prdlst_nm',
+      ingredient_info: 'ingredients_info',
+      content_weight: 'content_weight',
+      prdlst_report_no: 'report_no',  
+      storage_method: 'storage',
+      frmlc_mtrqlt: 'package',
+      bssh_nm: 'manufacturer',
+      distributor_address: 'distributor',
+      pog_daycnt: 'expiry',
+      weight_calorie: 'weight_calorie',
+      rawmtrl_nm_display: 'rawmtrl_nm',
+      cautions: 'cautions',
+      additional_info: 'additional'
+    };
+  
+    const regulationInfo = regulations[fieldMapping[fieldName] || fieldName];
+    if (regulationInfo) {
+      const infoContainer = document.createElement('div');
+      infoContainer.className = 'regulation-info';
+      infoContainer.innerHTML = regulationInfo
+        .split('\n')
+        .map(line => (line.trim() ? `<p class="mb-1">${line}</p>` : '<br>'))
+        .join('');
+      container.appendChild(infoContainer);
+    }
+  }
   function applyDbCheckboxStates() {
     document.querySelectorAll('input[type="hidden"][name^="chckd_"]').forEach(hiddenField => {
       const fieldName = hiddenField.name.replace('chckd_', '');
@@ -981,7 +949,61 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  function handlePhraseTabActivation() {
+    if (lastFocusedFieldName) {
+      renderMyPhrasesForFocusedField();
+      showRegulationInfo(lastFocusedFieldName);
+    }
+  }
 
+  function setPhraseTabNavStyles() {
+    document.querySelectorAll('#phraseTab .nav-link').forEach(btn => {
+      btn.style.fontSize = '0.8rem';
+      btn.style.color = btn.classList.contains('active') ? '#0d6efd' : '';
+      btn.addEventListener('shown.bs.tab', () => {
+        document.querySelectorAll('#phraseTab .nav-link').forEach(b => (b.style.color = ''));
+        btn.style.color = '#0d6efd';
+      });
+    });
+  }
+
+  function bindSaveCheckboxOnTabShow() {
+    document.querySelectorAll('.nav-link').forEach(tab => {
+      tab.addEventListener('show.bs.tab', function() {
+        saveCheckboxStates();
+      });
+    });
+  }
+
+  // 내문구 탭 강제 새로고침 함수
+  function reloadPhraseTab() {
+    // 문구 데이터 새로고침 (AJAX)
+    fetch('/label/phrases-data/', {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json'
+      },
+      credentials: 'same-origin'
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.phrases) {
+          phrasesData = data.phrases;
+          renderMyPhrasesForFocusedField();
+        } else {
+          const listContainer = document.getElementById('myPhraseList');
+          if (listContainer) {
+            listContainer.innerHTML = '<div class="text-danger" style="font-size:0.8rem;">문구 데이터를 불러오지 못했습니다.</div>';
+          }
+        }
+      })
+      .catch(() => {
+        const listContainer = document.getElementById('myPhraseList');
+        if (listContainer) {
+          listContainer.innerHTML = '<div class="text-danger" style="font-size:0.8rem;">문구 데이터를 불러오지 못했습니다.</div>';
+        }
+      });
+  }
 
   // ------------------ 초기화 및 이벤트 바인딩 ------------------
   $(document).ready(function () {
@@ -991,7 +1013,6 @@ document.addEventListener('DOMContentLoaded', function () {
     initCheckboxFieldToggle();
     initFoodTypeFiltering();
     initAutoExpand();
-    initFieldClickEvents();
 
     //applyDbCheckboxStates();
 
@@ -1016,9 +1037,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
     $('.select2-food-type, input[type="checkbox"], input[name="processing_condition"]').on('change input', updateSummary);
 
+    document.querySelectorAll('textarea, input[type="text"]').forEach(el => {
+      el.addEventListener('focus', function () {
+        clearTimeout(window.focusTimeout);
+        window.focusTimeout = setTimeout(() => {
+          lastFocusedFieldName = this.getAttribute('name');
+          if (document.querySelector('#myphrases-tab.active')) {
+            handlePhraseTabActivation();
+          }
+        }, 100);
+      });
+    });
 
+    const myPhrasesTab = document.getElementById('myphrases-tab');
+    if (myPhrasesTab) {
+      myPhrasesTab.addEventListener('shown.bs.tab', reloadPhraseTab);
+      myPhrasesTab.addEventListener('click', reloadPhraseTab);
+    }
 
-
+    setPhraseTabNavStyles();
+    bindSaveCheckboxOnTabShow();
 
     $('.preview-btn').on('click', function() {
       window.openPreviewPopup();
@@ -1142,37 +1180,21 @@ document.addEventListener('DOMContentLoaded', function () {
   window.verifyReportNo = function(labelId) {
     const btn = document.getElementById('verifyReportNoBtn');
     if (!btn) return;
-    
-    // 상태 복구: 완료된 상태에서 클릭 시 초기화
-    const completedStates = ['사용가능', '형식오류', '규칙오류', '미등록', '검증실패', '오류발생'];
-    const isCompleted = completedStates.some(state => btn.innerHTML.includes(state));
-    
-    if (isCompleted) {
-      btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-      btn.className = 'btn btn-outline-info action-btn-modern';
-      btn.title = 'API 중복 검사 및 번호 규칙 검증';
+    // 상태 복구: 검증완료/검증실패 상태에서 클릭 시 초기화
+    if (btn.textContent === '검증완료' || btn.textContent === '검증실패') {
+      btn.textContent = '번호검증';
+      btn.classList.remove('btn-success', 'btn-danger');
+      btn.classList.add('btn-outline-primary');
       return;
     }
-    
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장 중...';
-    btn.className = 'btn btn-secondary action-btn-modern';
-    
+    btn.textContent = '저장 중...';
     const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
     let reportNo = reportNoInput?.value?.trim();
-    
     if (!reportNo) {
-      btn.innerHTML = '<i class="fas fa-edit me-1"></i>입력필요';
-      btn.className = 'btn btn-outline-secondary action-btn-modern';
-      btn.title = '품목보고번호를 입력해주세요';
+      alert('품목보고번호를 입력하세요.');
       btn.disabled = false;
-      
-      setTimeout(() => {
-        alert('품목보고번호를 입력하세요.');
-        btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-        btn.className = 'btn btn-outline-info action-btn-modern';
-        btn.title = 'API 중복 검사 및 번호 규칙 검증';
-      }, 1500);
+      btn.textContent = '번호검증';
       return;
     }
 
@@ -1192,7 +1214,7 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(data => {
       if (!data.success) throw new Error(data.error || '저장 실패');
       // 2. 저장 성공 시 검증 진행 (하이픈 제거된 값으로 검증)
-      btn.innerHTML = '<i class="fas fa-shield-alt fa-pulse me-1"></i>중복 검증 중...';
+      btn.textContent = '검증 중...';
       return fetch('/label/verify-report-no/', {
         method: 'POST',
         headers: {
@@ -1204,77 +1226,33 @@ document.addEventListener('DOMContentLoaded', function () {
     })
     .then(res => res.json())
     .then(data => {
-      // 성공 상태 처리
-      if (data.verified && data.status === 'available') {
-        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>사용가능';
-        btn.className = 'btn btn-success action-btn-modern';
-        btn.title = '등록된 품목보고번호로 사용 가능합니다';
-        return;
+      if (data.verified) {
+        btn.textContent = '검증완료';
+        btn.classList.remove('btn-outline-primary', 'btn-danger');
+        btn.classList.add('btn-success');
+      } else {
+        btn.textContent = '검증실패';
+        btn.classList.remove('btn-outline-primary', 'btn-success');
+        btn.classList.add('btn-danger');
       }
-      
-      // 실패 상태별 처리
-      const status = data.status || 'unknown';
-      let message = data.message || '검증에 실패했습니다.';
-      
-      switch(status) {
-        case 'format_error':
-          btn.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>형식오류';
-          btn.className = 'btn btn-warning action-btn-modern';
-          btn.title = '품목보고번호 형식이 올바르지 않습니다';
-          break;
-          
-        case 'rule_error':
-          btn.innerHTML = '<i class="fas fa-ban me-1"></i>규칙오류';
-          btn.className = 'btn btn-warning action-btn-modern';
-          btn.title = '품목보고번호 규칙에 맞지 않습니다';
-          break;
-          
-        case 'not_found':
-          btn.innerHTML = '<i class="fas fa-question-circle me-1"></i>미등록';
-          btn.className = 'btn btn-danger action-btn-modern';
-          btn.title = '등록되지 않은 품목보고번호입니다';
-          break;
-          
-        case 'error':
-        default:
-          btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>검증실패';
-          btn.className = 'btn btn-danger action-btn-modern';
-          btn.title = '검증 중 오류가 발생했습니다';
-          break;
-      }
-      
-      // 비침입적인 방식으로 오류 표시
-      setTimeout(() => {
-        const shouldRetry = confirm(message + '\n\n다시 검증하시겠습니까?');
-        if (shouldRetry) {
-          // 사용자가 재검증을 원하면 버튼 상태 초기화
-          btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-          btn.className = 'btn btn-outline-info action-btn-modern';
-          btn.title = 'API 중복 검사 및 번호 규칙 검증';
-        }
-      }, 100);
     })
     .catch(err => {
-      btn.innerHTML = '<i class="fas fa-wifi me-1"></i>통신오류';
-      btn.className = 'btn btn-secondary action-btn-modern';
-      btn.title = '네트워크 연결 또는 서버 오류';
-      
-      setTimeout(() => {
-        const errorMsg = '검증 중 통신 오류가 발생했습니다.\n' + 
-                        '인터넷 연결을 확인하고 다시 시도해주세요.\n\n' +
-                        '오류 내용: ' + (err.message || '알 수 없는 오류');
-        
-        if (confirm(errorMsg + '\n\n다시 시도하시겠습니까?')) {
-          btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-          btn.className = 'btn btn-outline-info action-btn-modern';
-          btn.title = 'API 중복 검사 및 번호 규칙 검증';
-        }
-      }, 100);
+      alert('저장 또는 검증 중 오류가 발생했습니다. ' + (err.message || ''));
+      btn.textContent = '번호검증';
     })
     .finally(() => {
       btn.disabled = false;
     });
   };
+  // '항목별 문구 및 규정' 탭 클릭 시 강제 새로고침
+  document.addEventListener('DOMContentLoaded', function () {
+    var myPhrasesTab = document.getElementById('myphrases-tab');
+    if (myPhrasesTab) {
+      myPhrasesTab.addEventListener('click', function () {
+        reloadPhraseTab();
+      });
+    }
+  });
 
   // 라벨명 동기화 함수
   function initializeLabelNameSync() {
@@ -1365,283 +1343,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // 팝업에서 보낸 데이터 수신 리스너
-  window.addEventListener('message', function(event) {
-    // 보안을 위해 event.origin을 확인하는 것이 좋습니다.
-    // if (event.origin !== 'https://your-domain.com') return;
-
-    if (event.data && event.data.type === 'nutritionData') {
-      const popupData = event.data.data;
-      const convertedData = convertPopupDataToParentFormat(popupData);
-      handleNutritionDataUpdate(convertedData);
-    } else if (event.data && event.data.type === 'nutritionReset') {
-      handleNutritionDataReset();
-    }
-  });
-
-  // 팝업 데이터를 부모창 형식으로 변환 (필드명 통일로 간소화)
-  function convertPopupDataToParentFormat(popupData) {
-  // 변환 함수 입력 데이터
-    const convertedData = { settings: {}, formattedData: {}, resultHTML: '' };
-    
-    // 기본 설정 데이터 - settings 객체에서 가져오기
-    if (popupData.settings) {
-      convertedData.settings = {
-        base_amount: popupData.settings.base_amount,
-        servings_per_package: popupData.settings.servings_per_package,
-        nutrition_display_unit: popupData.settings.nutrition_display_unit,
-        basic_display_type: popupData.settings.basic_display_type,
-        parallel_display_type: popupData.settings.parallel_display_type
-      };
-    } else {
-      // 하위 호환성을 위한 fallback
-      convertedData.settings = {
-        base_amount: popupData.baseAmount,
-        servings_per_package: popupData.servingsPerPackage,
-        nutrition_display_unit: popupData.style,
-        basic_display_type: popupData.basic_display_type,
-        parallel_display_type: popupData.parallel_display_type
-      };
-    }
-    
-    // 영양성분 데이터 - 필드명 통일로 변환 불필요
-    if (popupData.nutritionInputs) {
-      convertedData.formattedData = popupData.nutritionInputs;
-    }
-    
-    // HTML 결과 추가
-    if (popupData.html) {
-      convertedData.resultHTML = popupData.html;
-    }
-    
-  // 변환 함수 출력 데이터
-    return convertedData;
-  }
-
-  // 팝업에서 받은 데이터로 폼 업데이트
-  function handleNutritionDataUpdate(data) {
-    // 영양성분 데이터 업데이트 처리 (디버그 로그 제거)
-
-    // 1. 기본 설정 데이터 저장 - 실제 존재하는 필드들만 처리
-    if (data.settings) {
-      // 다양한 가능한 필드명들로 시도
-      const possibleBaseAmountFields = [
-        'input[name="serving_size"]',
-        'input[name="nutrition_base_amount"]',
-        'input[name="base_amount"]'
-      ];
-      
-      const possibleUnitsFields = [
-        'input[name="units_per_package"]',
-        'input[name="servings_per_package"]'
-      ];
-      
-      const possibleStyleFields = [
-        'input[name="nutrition_display_unit"]',
-        'input[name="nutrition_style"]',
-        'input[name="style"]'
-      ];
-
-      // 기본 양 필드 찾기
-      let baseAmountField = null;
-      for (const selector of possibleBaseAmountFields) {
-        baseAmountField = document.querySelector(selector);
-        if (baseAmountField) break;
-      }
-
-      // 포장당 단위 필드 찾기
-      let unitsPerPackageField = null;
-      for (const selector of possibleUnitsFields) {
-        unitsPerPackageField = document.querySelector(selector);
-        if (unitsPerPackageField) break;
-      }
-
-      // 스타일 필드 찾기 - nutrition_display_unit 필드를 우선 검색
-      let nutritionStyleField = document.querySelector('input[name="nutrition_display_unit"]');
-      if (!nutritionStyleField) {
-        for (const selector of possibleStyleFields) {
-          nutritionStyleField = document.querySelector(selector);
-          if (nutritionStyleField) break;
-        }
-      }
-      
-  // 기본 설정 필드 존재 여부 확인
-      
-      // 기본 설정값들 업데이트 (다양한 필드명 대응)
-      const settingsMap = {
-        'serving_size': data.settings.serving_size || data.settings.base_amount || '',
-        'serving_size_unit': data.settings.serving_size_unit || 'g',
-        'units_per_package': data.settings.units_per_package || data.settings.servings_per_package || '1',
-        'nutrition_display_unit': data.settings.nutrition_display_unit || data.settings.style || '',
-        'basic_display_type': data.settings.basic_display_type || 'per_100g',
-        'parallel_display_type': data.settings.parallel_display_type || 'per_serving'
-      };
-      
-      Object.entries(settingsMap).forEach(([fieldName, value]) => {
-        const field = document.querySelector(`input[name="${fieldName}"]`);
-        if (field) {
-          field.value = value;
-        }
-      });
-
-      // 표시 기준 설정 필드들 처리
-      const basicDisplayTypeField = document.querySelector('input[name="basic_display_type"]');
-      if (basicDisplayTypeField && data.settings.basic_display_type) {
-        basicDisplayTypeField.value = data.settings.basic_display_type;
-      }
-
-      const parallelDisplayTypeField = document.querySelector('input[name="parallel_display_type"]');
-      if (parallelDisplayTypeField && data.settings.parallel_display_type) {
-        parallelDisplayTypeField.value = data.settings.parallel_display_type;
-      }
-    }
-
-    // 2. 포맷된 영양성분 데이터를 필드에 저장 - 필드명 통일로 직접 매핑
-      const nutritionData = data.formattedData || data.nutritionInputs;
-      if (nutritionData) {
-  // 포맷된 데이터 처리 시작
-      
-      let updatedFields = 0;
-      let foundFields = [];
-      let processedData = {};
-      
-      // 필드명이 통일되어 직접 매핑 가능
-      Object.keys(nutritionData).forEach(fieldName => {
-        const valueField = document.querySelector(`input[name="${fieldName}"]`);
-        const unitField = document.querySelector(`input[name="${fieldName}_unit"]`);
-        
-        if (valueField || unitField) {
-          foundFields.push(fieldName);
-        }
-        
-        if (nutritionData[fieldName] && (valueField || unitField)) {
-          // 처리 가능한 영양소: fieldName
-          
-          if (valueField) {
-            valueField.value = nutritionData[fieldName].value || '';
-            // 값 필드 업데이트
-            updatedFields++;
-          }
-          
-          if (unitField) {
-            unitField.value = nutritionData[fieldName].unit || '';
-            // 단위 필드 업데이트
-          }
-          
-          // 처리된 데이터 저장
-          processedData[fieldName] = {
-            value: nutritionData[fieldName].value || '',
-            unit: nutritionData[fieldName].unit || '',
-            label: nutritionData[fieldName].label || ''
-          };
-        }
-      });
-      
-  // 업데이트 완료
-    }
-
-    // 3. 영양성분 텍스트 필드에 결과 요약 저장
-    const nutritionTextField = document.querySelector('textarea[name="nutrition_text"]');
-  // 영양성분 텍스트 필드 존재 여부
-    
-    if (nutritionTextField && data.formattedData) {
-      const nutritionItems = Object.values(data.formattedData)
-        .filter(item => item.value !== '' && item.value !== null && item.value !== undefined)
-        .map(item => `${item.label} ${item.value}${item.unit}`);
-      
-      nutritionTextField.value = nutritionItems.join(', ');
-      // 영양성분 체크박스 자동 체크
-      const nutritionCheckbox = document.getElementById('chk_nutrition_text');
-      if (nutritionCheckbox && nutritionItems.length > 0) {
-        nutritionCheckbox.checked = true;
-        // 체크박스 상태 변경 이벤트 트리거
-        nutritionCheckbox.dispatchEvent(new Event('change'));
-      }
-    }
-  }
-
-  // 팝업에서 초기화 버튼 클릭 시 부모창 데이터도 초기화
-  function handleNutritionDataReset() {
-    // 영양성분 데이터 초기화
-    const nutritionTextField = document.querySelector('textarea[name="nutrition_text"]');
-    if (nutritionTextField) {
-      nutritionTextField.value = '';
-    }
-    
-    // 영양성분 체크박스 해제
-    const nutritionCheckbox = document.getElementById('chk_nutrition_text');
-    if (nutritionCheckbox) {
-      nutritionCheckbox.checked = false;
-      // 체크박스 상태 변경 이벤트 트리거
-      nutritionCheckbox.dispatchEvent(new Event('change'));
-    }
-    
-    const fieldNames = [
-      'serving_size', 'units_per_package', 'nutrition_style', 'calories', 'natriums', 'carbohydrates', 'sugars',
-      'fats', 'trans_fats', 'saturated_fats', 'cholesterols', 'proteins', 'dietary_fiber', 'calcium', 'iron',
-      'potassium', 'magnesium', 'zinc', 'phosphorus', 'vitamin_a', 'vitamin_d', 'vitamin_e', 'vitamin_c',
-      'vitamin_b1', 'vitamin_b2', 'niacin', 'vitamin_b6', 'folic_acid', 'vitamin_b12', 'selenium',
-      'pantothenic_acid', 'biotin', 'iodine', 'vitamin_k', 'copper', 'manganese', 'chromium', 'molybdenum'
-    ];
-
-    fieldNames.forEach(fieldName => {
-      const valueField = document.querySelector(`input[name="${fieldName}"]`);
-      const unitField = document.querySelector(`input[name="${fieldName}_unit"]`);
-      if (valueField) valueField.value = '';
-      if (unitField) unitField.value = '';
-    });
-  }
-
-  // 팝업창에서 호출할 함수 (기존 데이터 전달용)
-  window.getNutritionDataForPopup = function() {
-    const data = collectExistingNutritionData();
-    
-    // 직접 매핑 - 필드명이 통일되어 변환 로직 제거
-    const convertedData = {
-      baseAmount: data.nutrition_base_amount || data.serving_size,
-      servingsPerPackage: data.units_per_package,
-      style: data.nutrition_display_unit || data.nutrition_style,
-      basic_display_type: data.basic_display_type || 'per_100g',  // 기본값 설정
-      parallel_display_type: data.parallel_display_type || 'per_serving'  // 기본값 설정
-    };
-    
-
-    
-    // 필수 영양성분 (항상 전달)
-    const requiredNutrients = ['calories', 'natriums', 'carbohydrates', 'sugars', 'fats', 'trans_fats', 'saturated_fats', 'cholesterols', 'proteins'];
-    requiredNutrients.forEach(field => {
-      convertedData[field] = data[field] || '';
-    });
-    
-    // 추가 영양성분 (값이 있을 때만 전달) - DB 필드명 사용
-    const additionalNutrients = [
-      'dietary_fiber', 'calcium', 'iron', 'potassium', 'magnesium', 'zinc', 'phosphorus', 
-      'vitamin_a', 'vitamin_d', 'vitamin_e', 'vitamin_c', 'thiamine', 'riboflavin', 
-      'niacin', 'vitamin_b6', 'folic_acid', 'vitamin_b12', 'selenium', 'pantothenic_acid', 
-      'biotin', 'iodine', 'vitamin_k', 'copper', 'manganese', 'chromium', 'molybdenum'
-    ];
-    
-    const transmittedAdditionalNutrients = [];
-    additionalNutrients.forEach(field => {
-      const value = data[field];
-      
-
-      
-      // 셀렉트박스 방식: 실제 값이 있는 경우에만 전달 (빈 값은 전달하지 않음)
-      if (value !== undefined && value !== null && value !== '' && (typeof value !== 'string' || value.trim() !== '')) {
-        convertedData[field] = value;
-        transmittedAdditionalNutrients.push(field);
-      }
-    });
-    
-
-    return convertedData;
-  };
-
   // DOM 로드 완료 시 초기화 함수들 실행
   document.addEventListener('DOMContentLoaded', function() {
     initializeLabelNameSync();
     initializeContentWeightFields();
   });
 });
-

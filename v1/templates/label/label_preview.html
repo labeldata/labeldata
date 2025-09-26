@@ -1,104 +1,416 @@
-{% load static %}
 <!DOCTYPE html>
+{% load static %}
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>라벨 미리보기</title>
-  <!-- External Libraries -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
+  <link href="{% static 'css/nutrition_preview_fix.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
+
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
-  <!-- Label Preview CSS -->
-  <link href="{% static 'css/label_preview.css' %}" rel="stylesheet">
-  <!-- 라벨 상수 로드 -->
-  <script src="{% static 'js/label/constants.js' %}"></script>
+
+  <!-- React & DnD -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-beautiful-dnd@13/dist/react-beautiful-dnd.min.js"></script>
+
+  <!-- PDF Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{% static 'js/label/label_preview.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+  <script id="expiry-recommendation-data" type="application/json">
+      {{ expiry_recommendation_json|safe }}
+  </script>
+
+  <style>
+    /* 전체 레이아웃을 세로 분할로 변경 */
+    .modal-dialog {
+      max-width: 1600px !important; /* 최대 너비를 더 크게 조정 */
+      width: 98% !important;
+      height: 90vh !important;
+      max-height: 90vh !important;
+    }
+
+    .modal-content {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-body {
+      flex: 1;
+      overflow: hidden;
+      padding: 0;
+    }
+
+    .preview-container {
+      display: flex;
+      height: 100%;
+      gap: 0;
+    }
+
+    /* 왼쪽 설정 패널 */
+    .settings-panel {
+      flex: 0 0 300px; /* 패널 너비를 더 크게 조정 */
+      padding: 20px;
+      border-right: 1px solid #dee2e6;
+      overflow-y: auto;
+      background-color: #f8f9fa;
+    }
+
+    /* 오른쪽 미리보기 패널 */
+    .preview-panel {
+      flex: 1;
+      padding: 20px;
+      overflow: auto;
+      background-color: #ffffff;
+      min-width: 0; /* flexbox에서 최소 너비 제한 해제 */
+    }
+
+    #previewContent {
+      margin: 0 auto;
+      box-sizing: border-box;
+      max-width: none; /* 최대 너비 제한 완전 해제 */
+      background: white;
+      border: 1px solid #dee2e6;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 20px;
+      /* 가로 스크롤을 위한 설정 */
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    /* 미리보기 콘텐츠 기본 스타일 */
+    .preview-content {
+      min-height: 400px;
+      font-family: 'Noto Sans KR', sans-serif;
+      line-height: 1.6;
+      /* 긴 가로 길이 지원 */
+      min-width: fit-content;
+      width: auto;
+    }
+
+    /* 가로 스크롤 스타일 개선 */
+    .preview-panel::-webkit-scrollbar {
+      height: 8px;
+      width: 8px;
+    }
+
+    .preview-panel::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+
+    .preview-panel::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 4px;
+    }
+
+    .preview-panel::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+
+    /* 반응형 처리 */
+    @media (max-width: 1400px) {
+      .modal-dialog {
+        width: 99% !important;
+      }
+      
+      .settings-panel {
+        flex: 0 0 280px;
+      }
+    }
+
+    @media (max-width: 1200px) {
+      .settings-panel {
+        flex: 0 0 250px;
+      }
+    }
+
+    @media (max-width: 992px) {
+      .preview-container {
+        flex-direction: column;
+      }
+      
+      .settings-panel {
+        flex: none;
+        border-right: none;
+        border-bottom: 1px solid #dee2e6;
+        max-height: 200px;
+      }
+      
+      .preview-panel {
+        flex: 1;
+      }
+    }
+
+    /* 설정 패널 스타일 */
+    .settings-group {
+      margin-bottom: 25px;
+    }
+
+    .settings-group h6 {
+      color: #495057;
+      font-weight: 600;
+      margin-bottom: 15px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #dee2e6;
+    }
+
+    .settings-item {
+      margin-bottom: 15px;
+    }
+
+    .form-label {
+      font-weight: 500;
+      color: #495057;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+    }
+
+    .form-control-sm {
+      font-size: 0.875rem;
+    }
+
+    /* 세로 길이 입력 필드 스타일 */
+    #heightInput {
+      background-color: #f8f9fa !important;
+      cursor: not-allowed !important;
+    }
+
+    /* 모달 헤더 스타일 */
+    .modal-header {
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      padding: 15px 20px;
+    }
+
+    .modal-title {
+      font-weight: 600;
+      color: #495057;
+    }
+
+    /* 버튼 스타일 */
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.875rem;
+    }
+
+    .preview-header-box {
+      background-color: var(--primary-color) !important;
+      color: #ffffff !important;
+      padding: 8px 12px;
+      margin-bottom: 0;
+      width: 100%;
+      display: block;
+    }
+    .preview-header-box .header-text {
+      margin: 0;
+      line-height: 1.2;
+      font-weight: bold;
+    }
+
+    .footer-text {
+      text-align: right;
+      font-size: 7.5pt;
+      color: #6c757d;
+      margin: 12px 0 8px 0;
+      padding: 0;
+    }
+
+    .preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0;
+      table-layout: auto;
+    }
+    .preview-table th,
+    .preview-table td {
+      border: 1px solid #dee2e6;
+      padding: 4px 8px;
+      vertical-align: middle;
+      word-break: break-all;
+    }
+    .preview-table th {
+      background-color: #f8f9fa;
+      text-align: center;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .nav-tabs {
+      margin-bottom: 1.5rem !important;
+    }
+
+    /* 분리배출마크 UI 스타일 */
+    #recyclingMarkUiBox .settings-item {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #recyclingMarkControls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    #recyclingMarkSelect {
+      flex: 1;
+      max-width: 100%;
+    }
+    #addRecyclingMarkBtn {
+      white-space: nowrap;
+    }
+    #recyclingMarkRecommendText {
+      font-size: 0.9rem;
+      color: #6c757d;
+      margin-top: 5px;
+      width: 100%;
+      text-align: left;
+    }
+
+    /* 미리보기 헤더 버튼 오른쪽 정렬 */
+    .preview-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+  </style>
 </head>
 <body>
-  <header class="preview-page-header">
-    <h1 class="panel-title">라벨 미리보기</h1>
-    <div class="preview-actions" role="toolbar" aria-label="미리보기 도구">
-      <div class="zoom-controls">
-        <button class="btn btn-outline-secondary btn-sm" id="zoomOutBtn" aria-label="축소"><i class="fas fa-search-minus"></i></button>
-        <span id="zoomDisplay">100%</span>
-        <button class="btn btn-outline-secondary btn-sm" id="zoomInBtn" aria-label="확대"><i class="fas fa-search-plus"></i></button>
-      </div>
-      <button class="btn btn-info btn-sm" id="validateButton" aria-label="규정 검증">
-        <i class="fas fa-check-circle me-1" aria-hidden="true"></i>규정 검증
-      </button>
-      <button class="btn btn-primary btn-sm" id="exportPdfBtn" aria-label="PDF 저장">
-        <i class="fas fa-file-arrow-down me-1" aria-hidden="true"></i>PDF 저장
-      </button>
-      <button class="btn btn-secondary btn-sm" onclick="window.close()" aria-label="창 닫기">
-        <i class="fas fa-times me-1" aria-hidden="true"></i>닫기
-      </button>
+  <div class="preview-header">
+    <div class="preview-actions">
+      <button class="btn btn-outline-success btn-sm" id="saveSettingsBtn">설정 저장</button>
+      <button class="btn btn-outline-primary btn-sm" id="validateButton">규정 검증</button>
+      <button class="btn btn-outline-primary btn-sm" id="exportPdfBtn">PDF 저장</button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
     </div>
-  </header>
+  </div>
 
-  <main class="preview-container">
-    <aside class="settings-panel">
-      <div class="settings-actions-row">
-        <button class="btn btn-sm btn-outline-secondary" id="resetSettingsBtn">
-          <i class="fas fa-undo me-1"></i> 설정 초기화
-        </button>
-        <button id="saveSettingsBtn" class="btn btn-sm btn-success">
-          <i class="fas fa-file-arrow-down me-1"></i> 설정 저장
-        </button>
-      </div>
+  <div class="preview-container">
+    <!-- 왼쪽 설정 패널 -->
+    <div class="settings-panel">
+      <button class="btn btn-outline-primary btn-sm w-100 mb-3" onclick="resetSettings()">
+        <i class="bi bi-arrow-counterclockwise"></i> 설정 초기화
+      </button>
       
-      <div class="settings-header mb-3">
-        <h6 class="text-secondary mb-0">표시사항 설정</h6>
-      </div>
+      <ul class="nav nav-tabs nav-fill mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#content-tab">표시사항</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#nutrition-tab">영양성분</button>
+        </li>
+      </ul>
       
-      <section class="settings-group">
-        <div class="area-info text-primary mb-3">
-          정보표시면 면적: <span id="areaDisplay">100</span> cm²
+      <div class="tab-content">
+        <!-- 표시사항 탭 -->
+        <div class="tab-pane fade show active" id="content-tab">
+          <div class="settings-group">
+            <div class="settings-row mb-3 layout-select">
+              <div class="settings-item">
+                <label class="form-label">레이아웃</label>
+                <select class="form-select form-select-sm" id="layoutSelect" disabled>
+                  <option value="vertical" {% if label.prv_layout == "vertical" %}selected{% endif %}>세로형</option>
+                  <option value="horizontal" {% if label.prv_layout == "horizontal" %}selected{% endif %}>가로형</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="area-info text-primary mb-2">
+              정보표시면 면적: <span id="areaDisplay">100</span> cm²
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label required">가로(cm)</label>
+                <input type="number" class="form-control form-control-sm" id="widthInput" 
+                       value="{{ label.prv_width|default:'10' }}" min="4" max="30" step="1">
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label required">세로</label>
+                <input type="number" class="form-control form-control-sm" id="heightInput" 
+                       value="{{ label.prv_length|default:'10' }}" disabled>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">글꼴</label>
+                <select class="form-select form-select-sm" id="fontFamilySelect">
+                  <option value="'Noto Sans KR'" {% if label.prv_font == "'Noto Sans KR'" %}selected{% endif %}>노토 산스</option>
+                  <option value="'Nanum Gothic'" {% if label.prv_font == "'Nanum Gothic'" %}selected{% endif %}>나눔고딕</option>
+                  <option value="'Nanum Myeongjo'" {% if label.prv_font == "'Nanum Myeongjo'" %}selected{% endif %}>나눔명조</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">크기(pt)</label>
+                <input type="number" class="form-control form-control-sm" id="fontSizeInput" 
+                       value="{{ label.prv_font_size|default:'10' }}" min="10" max="72" step="1">
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">자간(%)</label>
+                <input type="number" class="form-control form-control-sm" id="letterSpacingInput" 
+                       value="{{ label.prv_letter_spacing|default:'-5' }}" min="-5" max="10" step="1">
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">줄간격</label>
+                <input type="number" class="form-control form-control-sm" id="lineHeightInput" 
+                       value="{{ label.prv_line_spacing|default:'1.2' }}" min="1" max="3.0" step="0.1">
+              </div>
+            </div>
+          </div>
         </div>
         
-        <div class="settings-row-pair">
-          <div class="settings-row">
-              <label class="form-label required" for="widthInput">가로 (cm)</label>
-              <input type="number" class="form-control form-control-sm" id="widthInput" value="10" min="4" max="50" step="1">
-          </div>
-          <div class="settings-row">
-              <label class="form-label">세로 (cm) - 자동 계산</label>
-              <input type="text" class="form-control form-control-sm" id="heightInput" readonly>
-          </div>
-        </div>
-        <div class="settings-row-pair">
-          <div class="settings-row">
-              <label class="form-label" for="fontFamilySelect">글꼴</label>
-              <select class="form-select form-select-sm" id="fontFamilySelect">
-                <option value="'Noto Sans KR', sans-serif" selected>노토 산스</option>
-                <option value="'Nanum Gothic', sans-serif">나눔고딕</option>
-                <option value="'Nanum Myeongjo', serif">나눔명조</option>
-              </select>
-          </div>
-          <div class="settings-row">
-              <label class="form-label" for="fontSizeInput">기본 글자 크기 (pt)</label>
-              <input type="number" class="form-control form-control-sm" id="fontSizeInput" value="10" min="7" max="72" step="0.5">
-          </div>
-        </div>
-        <div class="settings-row-pair">
+        <!-- 영양성분 탭 -->
+        <div class="tab-pane fade" id="nutrition-tab">
+          <div class="settings-group">
             <div class="settings-row">
-                <label class="form-label" for="letterSpacingInput">자간 (%)</label>
-                <input type="number" class="form-control form-control-sm" id="letterSpacingInput" value="-5" min="-20" max="20" step="1">
+              <div class="settings-item">
+                <label class="form-label">단위내용량</label>
+                <input type="text" id="servingSizeDisplay" class="form-control form-control-sm" readonly disabled>
+              </div>
             </div>
             <div class="settings-row">
-                <label class="form-label" for="lineHeightInput">줄간격</label>
-                <input type="number" class="form-control form-control-sm" id="lineHeightInput" value="1.5" min="1" max="3.0" step="0.1">
+              <div class="settings-item">
+                <label class="form-label">포장당 갯수</label>
+                <input type="text" id="servingsPerPackageDisplay" class="form-control form-control-sm" readonly disabled>
+              </div>
             </div>
+            <div class="settings-row">
+              <div class="settings-item">
+                <label class="form-label">표시 단위</label>
+                <select id="nutritionDisplayUnit" class="form-select form-select-sm">
+                  <option value="unit">단위내용량</option>
+                  <option value="total">총내용량</option>
+                  <option value="100g">100g당</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
-      </section>
-      <div id="recyclingMarkUiBox" class="mt-4 pt-3 border-top"></div>
-    </aside>
+      </div>
+    </div>
 
-    <section class="preview-panel">
+    <!-- 오른쪽 미리보기 패널 -->
+    <div class="preview-panel">
       <div id="previewContent" class="preview-content">
         <div class="preview-header-box">
-          <div class="header-text">식품 등의 표시·광고에 관한 법률에 의한 한글표시사항</div>
+          <div class="header-text">식품 등의 표시.광고에 관한 법률에 의한 한글표시사항</div>
         </div>
         
         <form style="display:none;">
@@ -109,28 +421,36 @@
         <input type="hidden" id="update_datetime" name="update_datetime" value="{{ label.update_datetime|date:'Y-m-d H:i' }}">
 
         <table class="preview-table">
-          <tbody id="previewTableBody">
-             <!-- Data will be rendered here by JavaScript -->
-          </tbody>
+          <tbody id="previewTableBody"></tbody>
         </table>
-        
+        <div id="nutritionPreview" class="mt-4" style="display: none;">
+          <hr>
+          <h6 class="mb-3">■ 영양성분</h6>
+          <div class="nutrition-header mb-2"></div>
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th style="width: 35%">항목</th>
+                <th class="nutrition-value-header" style="width: 65%">단위내용량당</th>
+              </tr>
+            </thead>
+            <tbody id="nutritionTableBody"></tbody>
+          </table>
+          <div class="nutrition-footer text-muted small">※ 1일 영양성분 기준치에 대한 비율(%)</div>
+        </div>
         <div class="footer-text">
-          ezlabeling.com 에서 관련법규에 따라 작성되었습니다.
+          labeldata.com 에서 관련법규에 따라 작성되었습니다.
           <span class="creator-info">[{{ label.update_datetime|date:"Y-m-d H:i" }}]</span>
         </div>
       </div>
-    </section>
-  </main>
+    </div>
+  </div>
 
-  <!-- Hidden data passed from backend -->
+  <script id="nutrition-data" type="application/json">{{ nutrition_data|safe }}</script>
+  <script id="country-list-data" type="application/json">{{ country_list|safe }}</script>
+  <script id="country-mapping-data" type="application/json">{{ country_mapping|safe }}</script>
   <script id="preview-settings-data" type="application/json">
     {
-      "width": "{{ label.prv_width|default:'10' }}",
-      "length": "{{ label.prv_length|default:'11' }}",
-      "font": "{{ label.prv_font|default:'Noto Sans KR' }}",
-      "font_size": "{{ label.prv_font_size|default:'10' }}",
-      "letter_spacing": "{{ label.prv_letter_spacing|default:'-5' }}",
-      "line_spacing": "{{ label.prv_line_spacing|default:'1.2' }}",
       "recycling_mark": {
         "enabled": {% if label.prv_recycling_mark_enabled == 'Y' %}true{% else %}false{% endif %},
         "type": "{{ label.prv_recycling_mark_type|default:'' }}",
@@ -139,1592 +459,6 @@
         "text": "{{ label.prv_recycling_mark_text|default:'' }}"
       }
     }
-  </script>
-  <script id="country-mapping-data" type="application/json">{{ country_mapping|safe }}</script>
-  <script id="country-list-data" type="application/json">{{ country_list|safe }}</script>
-  <script id="expiry-recommendation-data" type="application/json">{{ expiry_recommendation|safe }}</script>
-
-  <!-- External JS Libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  
-  <!-- Label Preview JS -->
-  <script src="{% static 'js/label/label_preview.js' %}"></script>
-  
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // --- DATA LOADING & STATE ---
-        let countryMapping = {};
-        let countryList = [];
-        let checkedFields = {};
-        let dataLoaded = false;
-        let currentZoom = 1;
-        let recyclingTextIdCounter = 0;
-
-        function safeJsonParse(elementId) {
-            try {
-                const element = document.getElementById(elementId);
-                if (element && element.textContent.trim()) {
-                    // Django template sometimes adds quotes around the JSON string.
-                    const text = element.textContent.trim();
-                    return JSON.parse(text);
-                }
-            } catch (e) {
-                console.error(`"${elementId}" 데이터 파싱 오류:`, e, "콘텐츠:", document.getElementById(elementId)?.textContent);
-            }
-            return {};
-        }
-
-        countryMapping = safeJsonParse('country-mapping-data');
-        countryList = safeJsonParse('country-list-data') || [];
-
-        // --- DOM ELEMENTS ---
-        const previewContent = document.getElementById('previewContent');
-        const widthInput = document.getElementById('widthInput');
-        const heightInput = document.getElementById('heightInput');
-        const fontSizeInput = document.getElementById('fontSizeInput');
-        const letterSpacingInput = document.getElementById('letterSpacingInput');
-        const lineHeightInput = document.getElementById('lineHeightInput');
-        const fontFamilySelect = document.getElementById('fontFamilySelect');
-        const tbody = document.getElementById('previewTableBody');
-        
-        // constants.js에서 로드된 상수들 사용
-        const DEFAULT_SETTINGS = window.DEFAULT_SETTINGS;
-        const REGULATIONS = { ...window.REGULATIONS };
-        // 백엔드 데이터 주입
-        if (safeJsonParse('expiry-recommendation-data')) {
-            REGULATIONS.expiry_recommendation = safeJsonParse('expiry-recommendation-data');
-        }
-        
-        const recyclingMarkGroups = window.recyclingMarkGroupsDetailed;
-        const recyclingMarkMap = {};
-        recyclingMarkGroups.forEach(g => g.options.forEach(o => recyclingMarkMap[o.value] = o));
-        const CM_TO_PX = 37.795;
-
-        // --- UTILS ---
-        function debounce(func, wait) {
-            let timeout;
-            return function(...args) {
-                clearTimeout(timeout);
-                timeout = setTimeout(() => func.apply(this, args), wait);
-            };
-        }
-
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
-
-        function makeDraggable(element) {
-            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-            element.onmousedown = e => {
-                e.preventDefault();
-                pos3 = e.clientX;
-                pos4 = e.clientY;
-                document.onmouseup = () => { document.onmouseup = null; document.onmousemove = null; };
-                document.onmousemove = e => {
-                    e.preventDefault();
-                    pos1 = pos3 - e.clientX;
-                    pos2 = pos4 - e.clientY;
-                    pos3 = e.clientX;
-                    pos4 = e.clientY;
-                    
-                    // 새로운 위치 계산
-                    let newTop = element.offsetTop - pos2;
-                    let newLeft = element.offsetLeft - pos1;
-                    
-                    // 표 영역 제한 (previewContent 기준)
-                    const container = document.getElementById('previewContent');
-                    if (container) {
-                        // 안전 여백 설정
-                        const safeMargin = 2;
-                        
-                        // 최소/최대 위치 계산 (표 안에만 위치)
-                        const minTop = safeMargin;
-                        const maxTop = Math.max(safeMargin, container.offsetHeight - element.offsetHeight - safeMargin);
-                        const minLeft = safeMargin;
-                        const maxLeft = Math.max(safeMargin, container.offsetWidth - element.offsetWidth - safeMargin);
-                        
-                        // 위치 제한 적용
-                        newTop = Math.max(minTop, Math.min(maxTop, newTop));
-                        newLeft = Math.max(minLeft, Math.min(maxLeft, newLeft));
-                    }
-                    
-                    element.style.top = `${newTop}px`;
-                    element.style.left = `${newLeft}px`;
-                };
-            };
-        }
-
-        // --- CORE FUNCTIONS ---
-        function updatePreviewStyles() {
-            if (!previewContent) return;
-            const widthCm = parseFloat(widthInput.value) || 10;
-            let fontSizePt = parseFloat(fontSizeInput.value) || 10;
-            const letterSpacingPercent = parseInt(letterSpacingInput.value) || 0;
-            const lineHeight = parseFloat(lineHeightInput.value) || 1.5;
-            const fontFamily = fontFamilySelect.value;
-            
-            // 정확한 가로 길이 설정
-            const widthPx = widthCm * CM_TO_PX;
-            previewContent.style.width = `${widthPx}px`;
-            previewContent.style.maxWidth = `${widthPx}px`;
-            previewContent.style.minWidth = `${widthPx}px`;
-            
-            // 테이블 레이아웃 고정으로 열 너비 강제 적용
-            const tables = previewContent.querySelectorAll('table');
-            tables.forEach(table => {
-                table.style.tableLayout = 'fixed';
-                table.style.width = '100%';
-                table.style.borderCollapse = 'collapse';
-                
-                // 인라인 스타일 추가로 첫 번째 열 너비 강제 고정
-                if (!document.getElementById('label-preview-column-style')) {
-                    const style = document.createElement('style');
-                    style.id = 'label-preview-column-style';
-                    style.textContent = `
-                        #previewContent table th:first-child,
-                        #previewContent table td:first-child,
-                        #previewContent .label-preview-first-column {
-                            width: 90px !important;
-                            min-width: 90px !important;
-                            max-width: 90px !important;
-                            overflow: visible !important;
-                            text-overflow: clip !important;
-                            white-space: nowrap !important;
-                            word-break: keep-all !important;
-                            padding: 2px 4px !important;
-                            box-sizing: border-box !important;
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
-            });
-            
-            const elementsToStyle = previewContent.querySelectorAll('th, td, .header-text, .footer-text');
-            elementsToStyle.forEach(el => {
-                el.style.fontSize = `${fontSizePt}pt`;
-                el.style.fontFamily = fontFamily;
-                el.style.letterSpacing = `${letterSpacingPercent / 100}em`;
-                el.style.lineHeight = lineHeight;
-            });
-            
-            // 항목명 열(첫 번째 열) 너비를 절대값으로 고정 - CSS 덮어쓰기 방지
-            const firstColumnCells = previewContent.querySelectorAll('th:first-child, td:first-child');
-            const fixedWidth = '90px'; // 가로사이즈 12cm일 때 7글자가 잘 보이는 고정 너비
-            firstColumnCells.forEach(cell => {
-                // 특별한 클래스 추가로 CSS 우선순위 확보
-                cell.classList.add('label-preview-first-column');
-                
-                // CSS 변수로 설정하여 다른 스타일 영향 차단
-                cell.style.cssText += `
-                    --column-width: ${fixedWidth};
-                    width: var(--column-width) !important;
-                    min-width: var(--column-width) !important;
-                    max-width: var(--column-width) !important;
-                    overflow: visible !important;
-                    text-overflow: clip !important;
-                    white-space: nowrap !important;
-                    word-break: keep-all !important;
-                    padding: 2px 4px !important;
-                    box-sizing: border-box !important;
-                    flex-shrink: 0 !important;
-                `;
-            });
-            
-            // 복합재질 텍스트 기본 스타일 적용
-            const recyclingTextElements = previewContent.querySelectorAll('.recycling-text-line');
-            recyclingTextElements.forEach(el => {
-                el.style.fontFamily = fontFamily;
-                el.style.letterSpacing = `${letterSpacingPercent / 100}em`;
-                el.style.lineHeight = lineHeight; // 기본 줄간격 사용
-            });
-
-            requestAnimationFrame(() => {
-                if(previewContent.scrollHeight > 0){
-                    const contentHeightPx = previewContent.scrollHeight;
-                    const heightCm = (contentHeightPx / CM_TO_PX).toFixed(1);
-                    heightInput.value = `${heightCm} cm`;
-                    
-                    // 면적 계산 및 업데이트
-                    const area = (widthCm * parseFloat(heightCm)).toFixed(1);
-                    const areaDisplay = document.getElementById('areaDisplay');
-                    if (areaDisplay) {
-                        areaDisplay.textContent = area;
-                    }
-                }
-            });
-        }
-        
-        function convertCountryCodeToKorean(text) {
-            if (!text || !countryMapping) return text;
-            return text.replace(/\b[A-Z]{2}\b/g, match => countryMapping[match] || match);
-        }
-
-        function boldCountryNames(text, countries) {
-            if (!text || !countries || countries.length === 0) return text;
-            let processedText = text;
-            const sortedCountries = countries.sort((a, b) => b.length - a.length);
-            sortedCountries.forEach(country => {
-                if(country){
-                    const regex = new RegExp(`(${country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s*산)?)`, 'gi');
-                    processedText = processedText.replace(regex, '<strong>$1</strong>');
-                }
-            });
-            return processedText;
-        }
-
-        function renderTable(data) {
-            if (!tbody) return;
-            tbody.innerHTML = '';
-            
-            // 항목 순서를 표시사항 작성 페이지와 일치시키기 위한 정렬된 필드 목록
-            const ORDERED_FIELDS = [
-                'prdlst_nm', 'ingredient_info', 'prdlst_dcnm', 
-                'prdlst_report_no', 'content_weight', 'country_of_origin',
-                'storage_method', 'frmlc_mtrqlt', 'bssh_nm',
-                'distributor_address', 'repacker_address', 'importer_address',
-                'pog_daycnt', 'rawmtrl_nm_display', 'cautions', 'additional_info'
-                // 'weight_calorie', 'nutrition_text'
-            ];
-            
-            const FIELD_LABELS = { 
-                prdlst_dcnm: '식품유형', 
-                prdlst_nm: '제품명', 
-                ingredient_info: '특정성분 함량',
-                content_weight: '내용량', 
-                weight_calorie: '내용량(열량)',
-                prdlst_report_no: '품목보고번호',
-                country_of_origin: '원산지', 
-                storage_method: '보관 방법', 
-                frmlc_mtrqlt: '용기·포장재질',
-                bssh_nm:'제조원 소재지',
-                distributor_address: '유통전문판매원', 
-                repacker_address: '소분원', 
-                importer_address: '수입원',
-                pog_daycnt: '소비기한', 
-                rawmtrl_nm_display: '원재료명', 
-                cautions: '주의사항',
-                additional_info: '기타표시사항',
-                nutrition_text: '영양성분'
-            };
-
-            // 정렬된 순서대로 필드 표시
-            ORDERED_FIELDS.forEach(key => {
-                if (data[key]) {
-                    const tr = document.createElement('tr');
-                    const th = document.createElement('th');
-                    const td = document.createElement('td');
-                    th.textContent = FIELD_LABELS[key] || key;
-                    
-                    let value = data[key];
-
-                    if (key === 'rawmtrl_nm_display') {
-                        const allergenMatch = value.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/);
-                        const gmoMatch = value.match(/\[GMO\s*성분\s*:\s*([^\]]+)\]/);
-                        const container = document.createElement('div');
-                        let mainText = value.replace(/\[알레르기 성분\s*:[^\]]+\]/, '').replace(/\[GMO\s*성분\s*:[^\]]+\]/, '').trim() || '';
-                        
-                        let processedText = boldCountryNames(mainText, countryList);
-                        container.innerHTML = `<div>${processedText}</div>`;
-
-                        if (allergenMatch) {
-                            container.innerHTML += `<div style="background-color: #000; color: #fff; padding: 2px 5px; font-weight: bold; display: inline-block; margin-top: 5px;">${allergenMatch[1].trim()} 함유</div>`;
-                        }
-                         if (gmoMatch) {
-                            container.innerHTML += `<div style="background-color: #000; color: #fff; padding: 2px 5px; font-weight: bold; display: inline-block; margin-top: 5px;">${gmoMatch[1].trim()}(GMO)</div>`;
-                        }
-                        td.appendChild(container);
-
-                    } else if (key === 'country_of_origin'){
-                         td.innerHTML = boldCountryNames(convertCountryCodeToKorean(value), countryList);
-                    } else if (key === 'pog_daycnt') {
-                        // 소비기한 필드: 선택된 항목명과 입력값을 간단하게 표시
-                        const dateOption = data.date_option || '소비기한';
-                        const dateValue = value || '';
-                        
-                        // 테이블 헤더는 선택된 옵션으로, 내용은 입력값만 표시
-                        th.textContent = dateOption;  // 항목명을 테이블 헤더로
-                        td.innerHTML = dateValue ? boldCountryNames(dateValue, countryList) : '';
-                        tr.appendChild(th);
-                        tr.appendChild(td);
-                        tbody.appendChild(tr);
-                        return; // 기본 처리 로직을 건너뛰기 위해 return
-                    } else {
-                        td.innerHTML = boldCountryNames(value, countryList);
-                    }
-                    tr.appendChild(th);
-                    tr.appendChild(td);
-                    tbody.appendChild(tr);
-                }
-            });
-            updatePreviewStyles();
-        }
-
-        // 분리배출 마크에 텍스트 라인 추가
-        function addTextToRecyclingMark(text) {
-            const container = document.getElementById('recyclingMarkContainer');
-            const image = document.getElementById('recyclingMarkImage') || container.querySelector('.recycling-mark-image');
-            const textContainer = container.querySelector('.recycling-mark-text');
-            if (!container || !image || !textContainer) {
-                return;
-            }
-
-            const textDiv = document.createElement('div');
-            textDiv.className = 'recycling-text-line';
-            textDiv.dataset.textId = `rtext-${++recyclingTextIdCounter || 1}`;
-            textDiv.textContent = text;
-            
-
-            textDiv.style.cssText = `
-                font-weight: 500;
-                color: #000;
-                line-height: 0.95;
-                word-break: keep-all;
-                text-align: center;
-                margin-top: 0px;
-                margin-bottom: 1px;
-                padding-bottom: 1px;
-                overflow: visible;
-            `;
-            textContainer.appendChild(textDiv);
-
-            // 단순화된 폰트 크기 계산 공식
-            const imageWidth = image.offsetWidth;
-            const textLength = text.length;
-            
-            // 유동적 폰트 크기 계산: 기본 8pt에서 텍스트 길이에 따라 감소
-            let fontSize = Math.max(8 - (textLength * 0.12), 5.5);
-            
-            textDiv.style.fontSize = `${fontSize}pt`;
-
-            // 이미지 너비 기반 추가 조정
-            let adjustmentAttempts = 0;
-            while (textDiv.scrollWidth > imageWidth && fontSize > 5 && adjustmentAttempts < 5) {
-                fontSize *= 0.9; // 10%씩 감소
-                textDiv.style.fontSize = `${fontSize}pt`;
-                adjustmentAttempts++;
-            }
-
-        }
-        
-        // 미리보기 영역에 마크(이미지+텍스트) 추가 및 드래그
-        function setRecyclingMark(markValue, auto = false) {
-            const markObj = recyclingMarkMap[markValue];
-            const previewContent = document.getElementById('previewContent');
-            if (!previewContent || !markObj) return;
-
-            // 컨테이너를 찾거나 새로 생성
-            let container = document.getElementById('recyclingMarkContainer');
-            if (container) container.remove(); // 기존 컨테이너가 있으면 제거하고 새로 생성
-
-            container = document.createElement('div');
-            container.id = 'recyclingMarkContainer';
-            container.style.position = 'absolute';
-            container.style.width = '60px'; // 컨테이너 너비 고정
-            container.style.minHeight = '100px'; // 최소 높이 설정으로 텍스트 영역 확보
-            container.style.cursor = 'move';
-            container.style.textAlign = 'center';
-            container.style.overflow = 'visible'; // 텍스트 넘침 허용
-            
-            // 표 영역 안에 초기 위치 설정 (DOM 렌더링 후)
-            container.style.left = '10px'; // 임시 위치
-            container.style.top = '10px';
-            
-            // 컨테이너 내부에 이미지와 텍스트 영역 추가
-            container.innerHTML = `
-                <img id="recyclingMarkImage" class="recycling-mark-image" src="${markObj.img}" alt="${markObj.label}" style="width: 100%; height: auto; display: block; margin-bottom: -4px;">
-                <div class="recycling-mark-text" style="margin-top: 0px; padding: 2px 0; line-height: 0.9; min-height: 30px; overflow: visible;"></div>
-            `;
-            
-            previewContent.appendChild(container);
-
-            // 안전한 위치 조정 - 표 영역 안에서만 위치
-            setTimeout(() => {
-                // 표 크기 정보 가져오기
-                const containerWidth = previewContent.offsetWidth;
-                const containerHeight = previewContent.offsetHeight;
-                const markWidth = container.offsetWidth || 60;
-                const markHeight = container.offsetHeight || 100; // 최소 높이 증가에 맞춰 기본값 조정
-                
-                // 표 영역을 벗어나지 않도록 안전한 위치 계산
-                const safeMargin = 5; // 여백
-                const maxLeft = Math.max(0, containerWidth - markWidth - safeMargin);
-                const maxTop = Math.max(0, containerHeight - markHeight - safeMargin);
-                
-                // 제품명 행 찾기
-                const thElements = previewContent.querySelectorAll('th');
-                let targetTop = safeMargin; // 기본값
-                
-                for (const th of thElements) {
-                    if (th.textContent.trim() === '제품명') {
-                        const row = th.parentElement;
-                        if (row && row.offsetTop >= 0) {
-                            targetTop = Math.min(row.offsetTop, maxTop);
-                        }
-                        break;
-                    }
-                }
-                
-                // 최종 위치 설정 (표 안에만)
-                container.style.left = `${maxLeft}px`;
-                container.style.top = `${targetTop}px`;
-                container.style.right = '';
-            }, 200);
-
-            // 드래그 가능하게 설정
-            makeDraggable(container);
-            container.ondragstart = () => false;
-        }
-        
-        function renderRecyclingMarkUI() {
-            const target = document.getElementById('recyclingMarkUiBox');
-            if (!target || document.getElementById('recyclingMarkControls')) return;
-
-            target.innerHTML = `
-                <section class="settings-group">
-                    <h6 class="mb-3">분리배출마크</h6>
-                    <div id="recyclingMarkControls">
-                        <div class="settings-row-pair">
-                            <div class="settings-row">
-                                <label class="form-label" for="recyclingMarkSelect">분리배출마크 선택</label>
-                                <select class="form-select form-select-sm" id="recyclingMarkSelect">
-                                    <option value="">마크를 선택하세요</option>
-                                    ${recyclingMarkGroups.map(group => 
-                                        `<optgroup label="${group.group}">
-                                            ${group.options.map(option => 
-                                                `<option value="${option.value}" ${option.isComposite ? 'data-is-composite="true"' : ''}>${option.label}</option>`
-                                            ).join('')}
-                                        </optgroup>`
-                                    ).join('')}
-                                </select>
-                            </div>
-                            <div class="settings-row d-flex align-items-end">
-                                <button class="btn btn-outline-primary btn-sm w-100" id="addRecyclingMarkBtn">
-                                    <i class="fas fa-plus me-1"></i>추가
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- 복합재질 정보 섹션 - 항상 표시 -->
-                        <div class="mt-4 pt-3 border-top">
-                            <div class="settings-row-pair">
-                                <div class="settings-row">
-                                    <label class="form-label" for="additionalRecyclingText">복합재질 정보</label>
-                                    <input type="text" class="form-control form-control-sm" 
-                                           id="additionalRecyclingText" 
-                                           placeholder="예: 몸체(종이)/뚜껑(PP)">
-                                </div>
-                                <div class="settings-row d-flex align-items-end">
-                                    <button class="btn btn-outline-secondary btn-sm w-100" id="addRecyclingTextBtn">
-                                        <i class="fas fa-sync me-1"></i>새로고침
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="form-text mt-1">
-                                <i class="fas fa-info-circle me-1"></i>
-                                입력 즉시 미리보기에 반영됩니다. 여러 재질은 '/'로 구분하세요. 예: 몸체(종이)/뚜껑(PP)
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            `;
-            
-            const select = document.getElementById('recyclingMarkSelect');
-            const addBtn = document.getElementById('addRecyclingMarkBtn');
-            const additionalInputBox = document.getElementById('additionalTextInputBox');
-
-
-            
-            addBtn.addEventListener('click', () => {
-                const selectedOption = select.options[select.selectedIndex];
-                const markValue = selectedOption.value;
-                if (!markValue) { alert('마크를 선택해주세요.'); return; }
-                
-                if (addBtn.textContent === '추가') {
-                    setRecyclingMark(markValue);
-                    addBtn.textContent = '제거';
-                    addBtn.classList.replace('btn-outline-primary', 'btn-danger');
-
-                } else {
-                    const mark = document.getElementById('recyclingMarkContainer');
-                    if (mark) mark.remove();
-                    addBtn.textContent = '추가';
-                    addBtn.classList.replace('btn-danger', 'btn-outline-primary');
-                    select.value = "";
-
-                }
-            });
-
-            // 실시간 미리보기 함수 정의
-            function updateCompositeTextPreview() {
-                const textInput = document.getElementById('additionalRecyclingText');
-                const text = textInput.value.trim();
-                
-                // 기존 텍스트 라인 모두 제거
-                const textContainer = document.querySelector('#recyclingMarkContainer .recycling-mark-text');
-                if (textContainer) {
-                    window.recyclingTextIdCounter = 0;
-                    textContainer.innerHTML = '';
-                }
-                
-                // 텍스트가 있으면 분할해서 추가
-                if (text) {
-                    const lines = text.split('/');
-                    lines.forEach((line, index) => {
-                        const trimmedLine = line.trim();
-                        if (trimmedLine) {
-                            addTextToRecyclingMark(trimmedLine);
-                        }
-                    });
-                }
-            }
-            
-            // 실시간 미리보기 이벤트 리스너
-            const textInput = document.getElementById('additionalRecyclingText');
-            let updateTimeout;
-            
-            textInput.addEventListener('input', () => {
-                // 디바운싱: 300ms 후에 업데이트 (타이핑 성능 최적화)
-                clearTimeout(updateTimeout);
-                updateTimeout = setTimeout(updateCompositeTextPreview, 300);
-            });
-            
-            // 즉시 반영 이벤트들
-            textInput.addEventListener('paste', () => {
-                setTimeout(updateCompositeTextPreview, 50);
-            });
-            
-            textInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Backspace' || e.key === 'Delete') {
-                    setTimeout(updateCompositeTextPreview, 50);
-                }
-            });
-            
-            // 기존 추가 버튼 (선택적 사용)
-            const addTextBtn = document.getElementById('addRecyclingTextBtn');
-            addTextBtn.addEventListener('click', updateCompositeTextPreview);
-        }
-        
-        function updateZoom() {
-            previewContent.style.transform = `scale(${currentZoom})`;
-            document.getElementById('zoomDisplay').textContent = `${Math.round(currentZoom * 100)}%`;
-        }
-    
-        function resetSettings() {
-            widthInput.value = DEFAULT_SETTINGS.width;
-            fontSizeInput.value = DEFAULT_SETTINGS.fontSize;
-            letterSpacingInput.value = DEFAULT_SETTINGS.letterSpacing;
-            lineHeightInput.value = DEFAULT_SETTINGS.lineHeight;
-            fontFamilySelect.value = DEFAULT_SETTINGS.fontFamily;
-            updatePreviewStyles();
-        }
-
-        // --- All validation functions from the JS file ---
-        // (검증 함수들은 label_preview.js로 이동됨)
-
-        // 분리배출마크 추천 함수
-        function recommendRecyclingMarkByMaterial(packageMaterial) {
-            const material = packageMaterial.toLowerCase();
-            if (material.includes('무색페트') || material.includes('무색 페트')) return '무색페트';
-            else if (material.includes('유색페트') || material.includes('유색 페트')) return '유색페트';
-            else if (material.includes('pet') || material.includes('페트')) return '플라스틱(PET)';
-            else if (material.includes('hdpe')) return '플라스틱(HDPE)';
-            else if (material.includes('ldpe')) return '플라스틱(LDPE)';
-            else if (material.includes('pp') || material.includes('폴리프로필렌')) return '플라스틱(PP)';
-            else if (material.includes('ps') || material.includes('폴리스티렌')) return '플라스틱(PS)';
-            else if (material.includes('기타') && material.includes('플라스틱')) return '기타플라스틱';
-            else if (material.includes('종이') && !material.includes('팩')) return '종이';
-            else if (material.includes('일반팩') || (material.includes('팩') && !material.includes('멸균'))) return '일반팩';
-            else if (material.includes('멸균팩') || (material.includes('멸균') && material.includes('팩'))) return '멸균팩';
-            else if (material.includes('철') || (material.includes('캔') && material.includes('철'))) return '캔류(철)';
-            else if (material.includes('알미늄') || material.includes('알루미늄') || (material.includes('캔') && material.includes('알미늄'))) return '캔류(알미늄)';
-            else if (material.includes('유리')) return '유리';
-            else if (material.includes('복합재질') || material.includes('도포') || material.includes('첩합')) return '복합재질';
-            else if (material.includes('비닐') && material.includes('pet')) return '비닐(PET)';
-            else if (material.includes('비닐') && material.includes('hdpe')) return '비닐(HDPE)';
-            else if (material.includes('비닐') && material.includes('ldpe')) return '비닐(LDPE)';
-            else if (material.includes('비닐') && material.includes('pp')) return '비닐(PP)';
-            else if (material.includes('비닐') && material.includes('ps')) return '비닐(PS)';
-            else if (material.includes('비닐')) return '비닐(기타)';
-            else return '';
-        }
-
-        // 5. 분리배출마크 (전역 함수로 노출)
-        window.checkRecyclingMarkCompliance = function checkRecyclingMarkCompliance() {
-            const errors = [];
-            const suggestions = [];
-            const packageMaterial = (checkedFields.frmlc_mtrqlt || '').toLowerCase();
-            const select = document.getElementById('recyclingMarkSelect');
-            const selectedMark = select ? select.value : '';
-
-
-
-            if (!packageMaterial) {
-                errors.push('포장재질을 표시하세요.');
-                return { errors, suggestions };
-            }
-
-            // 사용자가 마크를 선택하지 않았으면 검증하지 않음
-            if (!selectedMark || selectedMark === '미표시') {
-                return { errors, suggestions };
-            }
-
-            // 마크와 재질 키워드 간의 호환성 검증 헬퍼 함수
-            const isCompatible = (mark, materialKeywords) => {
-                return materialKeywords.some(keyword => packageMaterial.includes(keyword));
-            };
-
-            let compatible = false;
-            switch (selectedMark) {
-                case '무색페트':
-                    compatible = isCompatible(selectedMark, ['pet', '페트', '무색']);
-                    break;
-                case '유색페트':
-                    compatible = isCompatible(selectedMark, ['pet', '페트', '유색']);
-                    break;
-                case '플라스틱(PET)':
-                    compatible = isCompatible(selectedMark, ['pet', '페트']);
-                    break;
-                case '플라스틱(LDPE)':
-                    compatible = isCompatible(selectedMark, ['ldpe', '저밀도', '폴리에틸렌', 'pe']);
-                    break;
-                case '플라스틱(HDPE)':
-                    compatible = isCompatible(selectedMark, ['hdpe', '고밀도', '폴리에틸렌', 'pe']);
-                    break;
-                case '플라스틱(PP)':
-                    compatible = isCompatible(selectedMark, ['pp', '피피', '폴리프로필렌']);
-                    break;
-                case '플라스틱(PS)':
-                    compatible = isCompatible(selectedMark, ['ps', '피에스', '폴리스티렌']);
-                    break;
-                case '기타플라스틱':
-                    compatible = isCompatible(selectedMark, ['기타', '플라스틱', 'other']);
-                    break;
-                case '캔류(철)':
-                    compatible = isCompatible(selectedMark, ['철', 'steel', '캔']);
-                    break;
-                case '캔류(알미늄)':
-                    compatible = isCompatible(selectedMark, ['알미늄', '알루미늄', 'aluminum', 'al', '캔']);
-                    break;
-                case '종이':
-                    compatible = isCompatible(selectedMark, ['종이', 'paper']) && !packageMaterial.includes('팩');
-                    break;
-                case '일반팩':
-                    compatible = packageMaterial.includes('팩') && !packageMaterial.includes('멸균');
-                    break;
-                case '멸균팩':
-                    compatible = packageMaterial.includes('멸균') && packageMaterial.includes('팩');
-                    break;
-                case '유리':
-                    compatible = isCompatible(selectedMark, ['유리', 'glass']);
-                    break;
-                case '복합재질':
-                    compatible = isCompatible(selectedMark, ['복합재질', '도포', '첩합', '코팅']);
-                    break;
-                case '비닐(PET)':
-                    compatible = isCompatible(selectedMark, ['비닐', 'pet', '페트']);
-                    break;
-                case '비닐(HDPE)':
-                    compatible = isCompatible(selectedMark, ['비닐', 'hdpe', '고밀도']);
-                    break;
-                case '비닐(LDPE)':
-                    compatible = isCompatible(selectedMark, ['비닐', 'ldpe', '저밀도']);
-                    break;
-                case '비닐(PP)':
-                    compatible = isCompatible(selectedMark, ['비닐', 'pp', '폴리프로필렌']);
-                    break;
-                case '비닐(PS)':
-                    compatible = isCompatible(selectedMark, ['비닐', 'ps', '폴리스티렌']);
-                    break;
-                case '비닐(기타)':
-                    compatible = isCompatible(selectedMark, ['비닐', '기타']);
-                    break;
-                default:
-                    const recommendedMark = recommendRecyclingMarkByMaterial(packageMaterial);
-                    compatible = (selectedMark === recommendedMark);
-                    break;
-            }
-
-
-            
-            if (!compatible) {
-                errors.push(
-                    `포장재질("${checkedFields.frmlc_mtrqlt}")과 분리배출마크("${selectedMark}")가 일치하지 않습니다. 사용된 포장재질과 분리배출마크를 재확인하세요.`
-                );
-            }
-
-            return { errors, suggestions };
-        }
-
-        // 6. 소비기한
-        function checkExpiryCompliance() {
-            const errors = [];
-            const suggestions = [];
-            const foodType = (checkedFields.prdlst_dcnm || '').trim();
-            const expiry = (checkedFields.pog_daycnt || '').trim();
-            const storageMethod = (checkedFields.storage_method || '').trim();
-
-            if (!expiry || !foodType) {
-                return { errors, suggestions };
-            }
-
-            // 냉동식품 또는 장기보존식품(통조림, 레토르트)은 검증에서 제외
-            const isFrozen = storageMethod.toLowerCase().includes('냉동') || foodType.toLowerCase().includes('냉동');
-            const isLongTermStorage = foodType.includes('통조림') || foodType.includes('병조림') || foodType.includes('레토르트');
-
-            if (isFrozen || isLongTermStorage) {
-                return { errors, suggestions }; // 검증 대상이 아니므로 종료
-            }
-
-            // 1. 식품유형에 맞는 권장 소비기한 찾기
-            const recommendationKeys = Object.keys(REGULATIONS.expiry_recommendation || {}).sort((a, b) => b.length - a.length);
-            let recommendation = null;
-            for (const key of recommendationKeys) {
-                if (foodType.includes(key)) {
-                    recommendation = REGULATIONS.expiry_recommendation[key];
-                    break;
-                }
-            }
-
-            if (!recommendation || typeof recommendation.shelf_life !== 'number') {
-                return { errors, suggestions }; // 검증 대상이 아니면 종료
-            }
-
-            // 2. 입력된 소비기한을 '일' 단위로 변환
-            let totalDays = 0;
-            const yearMatch = expiry.match(/(\d+)\s*년/);
-            const monthMatch = expiry.match(/(\d+)\s*개월/);
-            const dayMatch = expiry.match(/(\d+)\s*일/);
-
-            if (yearMatch) {
-                totalDays = parseInt(yearMatch[1], 10) * 365;
-            } else if (monthMatch) {
-                totalDays = parseInt(monthMatch[1], 10) * 30;
-            } else if (dayMatch) {
-                totalDays = parseInt(dayMatch[1], 10);
-            }
-
-            if (totalDays === 0) {
-                return { errors, suggestions }; // 유효한 기간이 아니면 종료
-            }
-
-            // 3. 권장 소비기한을 '일' 단위로 변환
-            let recommendedDays = 0;
-            if (recommendation.unit === 'months') {
-                recommendedDays = recommendation.shelf_life * 30;
-            } else if (recommendation.unit === 'days') {
-                recommendedDays = recommendation.shelf_life;
-            }
-
-            // 4. 비교 및 오류 메시지 생성
-            if (recommendedDays > 0 && totalDays > recommendedDays) {
-                const unitText = recommendation.unit === 'months' ? '개월' : '일';
-                const suggestionMsg = `권장 소비기한(${recommendation.shelf_life}${unitText})을 초과하였습니다. 설정 근거를 반드시 확인하시기 바랍니다.`;
-                suggestions.push(suggestionMsg);
-            }
-
-            return { errors, suggestions };
-        }
-        
-        function checkRecyclingMarkCompliance() { 
-            const errors = [];
-            const suggestions = [];
-            
-            // 분리배출마크 검사
-            const frmlcMtrqlt = checkedFields.frmlc_mtrqlt || '';
-            const container = document.getElementById('recyclingMarkContainer');
-            
-            if (frmlcMtrqlt) {
-                if (!container) {
-                    errors.push(`포장재질(${frmlcMtrqlt})에 대한 분리배출마크가 필요합니다.`);
-                    
-                    // 포장재질에 따른 추천 마크
-                    if (frmlcMtrqlt.includes('종이')) {
-                        suggestions.push("종이 분리배출마크 추가 필요");
-                    } else if (frmlcMtrqlt.includes('페트') || frmlcMtrqlt.includes('PET')) {
-                        suggestions.push("플라스틱(PET) 분리배출마크 추가 필요");
-                    } else if (frmlcMtrqlt.includes('PP') || frmlcMtrqlt.includes('폴리프로필렌')) {
-                        suggestions.push("플라스틱(PP) 분리배출마크 추가 필요");
-                    } else if (frmlcMtrqlt.includes('유리')) {
-                        suggestions.push("유리 분리배출마크 추가 필요");
-                    } else if (frmlcMtrqlt.includes('복합재질')) {
-                        suggestions.push("복합재질 분리배출마크 추가 필요");
-                    }
-                }
-                
-                // 복합재질 마크에 추가 설명이 있는지 확인
-                if (container && frmlcMtrqlt.includes('복합재질')) {
-                    const textContainer = container.querySelector('.recycling-mark-text');
-                    if (!textContainer || !textContainer.textContent.trim()) {
-                        errors.push("복합재질 분리배출마크에 재질 정보(예: 몸체(종이)/뚜껑(PP))를 추가해야 합니다.");
-                    }
-                }
-            }
-            
-            return { errors, suggestions };
-        }
-        
-        function checkExpiryCompliance() { 
-            const errors = [];
-            const suggestions = [];
-            
-            // 소비기한 검사
-            const pogDaycnt = checkedFields.pog_daycnt || '';
-            const foodType = checkedFields.prdlst_dcnm || '';
-            
-            if (pogDaycnt && foodType) {
-                // REGULATIONS.expiry_recommendation에서 식품유형별 권장 소비기한 확인
-                const recommendation = REGULATIONS.expiry_recommendation[foodType];
-                
-                if (recommendation) {
-                    const { shelf_life, unit } = recommendation;
-                    const recommendedMonths = parseInt(shelf_life);
-                    
-                    if (!isNaN(recommendedMonths)) {
-                        // 권장 소비기한과 입력된 소비기한 비교
-                        const currentMonthMatch = pogDaycnt.match(/(\d+)\s*개월/);
-                        
-                        if (currentMonthMatch) {
-                            const currentMonths = parseInt(currentMonthMatch[1]);
-                            
-                            if (!isNaN(currentMonths) && currentMonths > recommendedMonths) {
-                                suggestions.push(`현재 소비기한(${currentMonths}개월)이 ${foodType}의 권장 소비기한(${recommendedMonths}개월)보다 깁니다. 검토가 필요합니다.`);
-                            }
-                        }
-                    }
-                }
-            }
-            
-            return { errors, suggestions };
-        }
-    
-        function showValidationModal() {
-            // 기존 모달과 오버레이 제거
-            let modal = document.getElementById('validationModal');
-            if (modal) modal.remove();
-            
-            // 혹시 남아있는 modal-backdrop 요소 제거
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            backdrops.forEach(backdrop => backdrop.remove());
-            
-            // 모달 생성
-            modal = document.createElement('div');
-            modal.id = 'validationModal';
-            modal.className = 'modal fade';
-            modal.innerHTML = `<div class="modal-dialog modal-lg"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">규정 검증 결과</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><table class="table table-bordered"><thead><tr><th>검증 항목</th><th>상태</th><th>결과 및 제안</th></tr></thead><tbody id="validationResultBody"></tbody></table></div></div></div>`;
-            document.body.appendChild(modal);
-            
-            // 모달이 닫힐 때 오버레이 제거 이벤트 추가
-            modal.addEventListener('hidden.bs.modal', function() {
-                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-                document.body.classList.remove('modal-open');
-                document.body.style.overflow = '';
-                document.body.style.paddingRight = '';
-            });
-            
-            new bootstrap.Modal(modal).show();
-            return modal;
-        }
-    
-        async function validateSettings_HTML_DEPRECATED() {
-            // 기존 backdrop 제거
-            document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-            
-            // 검증 항목 순서 및 매핑
-            const validationItems = [
-                {
-                    label: '표시면 면적',
-                    check: () => {
-                        const width = parseFloat(widthInput?.value) || 0;
-                        const height = parseFloat(document.getElementById('heightInput').value) || 0;
-                        const area = width * height;
-                        return {
-                            ok: area >= 40,
-                            errors: area < 40 ? [
-                                `<strong style="color:#222;">표시면 면적은 최소 40cm² 이상이어야 합니다 («식품 등의 표시기준» 제4조).</strong>`
-                            ] : [],
-                            suggestions: area < 40 ? [
-                                `<strong style="color:#222;">면적을 40cm² 이상으로 조정하세요.</strong>`
-                            ] : []
-                        };
-                    },
-                    always: true
-                },
-                {
-                    label: '글꼴 크기',
-                    check: () => {
-                        const fontSize = parseFloat(fontSizeInput?.value) || 10;
-                        return {
-                            ok: fontSize >= REGULATIONS.font_size.general.min,
-                            errors: fontSize < REGULATIONS.font_size.general.min ? [
-                                `<strong style="color:#222;">글꼴 크기는 최소 ${REGULATIONS.font_size.general.min}pt 이상이어야 합니다 («식품 등의 표시기준» 제6조).</strong>`
-                            ] : [],
-                            suggestions: fontSize < REGULATIONS.font_size.general.min ? [
-                                `<strong style="color:#222;">글꼴 크기를 ${REGULATIONS.font_size.general.min}pt 이상으로 조정하세요.</strong>`
-                            ] : []
-                        };
-                    },
-                    always: true
-                },
-                {
-                    label: '제품명 성분 표시',
-                    check: () => {
-                        const result = checkFarmSeafoodCompliance();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    }
-                },
-                {
-                    label: '필수 문구',
-                    check: () => {
-                        const result = checkFoodTypePhrasesUnified();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    }
-                },
-                {
-                    label: '사용금지 문구',
-                    check: () => checkForbiddenPhrases()
-                },
-                {
-                    label: '알레르기 중복 표시',
-                    check: () => {
-                        const result = checkAllergenDuplication();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    }
-                },
-                {
-                    label: '분리배출마크',
-                    check: () => {
-                        const result = checkRecyclingMarkCompliance();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    },
-                    always: true
-                },
-                {
-                    label: '소비기한',
-                    check: () => {
-                        const result = checkExpiryCompliance();
-                        result.errors = (result.errors || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        result.suggestions = (result.suggestions || []).map(e => `<strong style="color:#222;">${e}</strong>`);
-                        return result;
-                    }
-                }
-            ];
-
-            const results = validationItems.map(item => item.check());
-            
-            const modal = showValidationModal();
-            const tbody = modal.querySelector('#validationResultBody');
-            tbody.innerHTML = '';
-
-            let hasErrors = false;
-
-            // tbody에 모든 검증 항목을 한 번에 추가 (tr을 누적해서 innerHTML로 할당)
-            let rowsHtml = '';
-            for (let i = 0; i < validationItems.length; i++) {
-                const item = validationItems[i];
-                const result = results[i];
-
-                rowsHtml += `<tr>`;
-
-                // 항목명
-                rowsHtml += `<td>${item.label}</td>`;
-
-                // 결과
-                if (!result.errors || result.errors.length === 0) {
-                    rowsHtml += `<td><span class="text-success">적합</span></td>`;
-                } else {
-                    rowsHtml += `<td><span class="text-danger">재검토</span></td>`;
-                    hasErrors = true;
-                }
-
-                // 에러/수정제안
-                let msg = '';
-                if (result.errors && result.errors.length > 0) msg += result.errors.join('<br>');
-                if (result.suggestions && result.suggestions.length > 0) {
-                    if (msg) msg += ' | ';
-                    msg += result.suggestions.join('<br>');
-                }
-                rowsHtml += `<td>${msg}</td>`;
-
-                rowsHtml += `</tr>`;
-            }
-            tbody.innerHTML = rowsHtml;
-        }
-    
-        async function exportToPDF() {
-            try {
-                previewContent.style.transform = 'scale(1)';
-                const { jsPDF } = window.jspdf;
-                const canvas = await html2canvas(previewContent, { scale: 3, useCORS: true });
-                const imgData = canvas.toDataURL('image/png');
-                const widthCm = parseFloat(widthInput.value);
-                const heightCm = parseFloat(heightInput.value.replace(' cm', ''));
-                const orientation = widthCm > heightCm ? 'l' : 'p';
-                const pdf = new jsPDF(orientation, 'cm', [widthCm, heightCm]);
-                pdf.addImage(imgData, 'PNG', 0, 0, widthCm, heightCm);
-                const productName = checkedFields.prdlst_nm || 'label';
-                const date = new Date().toISOString().slice(0,10).replace(/-/g,"");
-                pdf.save(`한글표시사항_${productName}_${date}.pdf`);
-            } catch (error) {
-                console.error('PDF generation error:', error);
-            } finally {
-                updateZoom();
-            }
-        }
-
-        // 현재 분리배출마크 정보 수집 (개선된 버전)
-        function getCurrentRecyclingMarkInfo() {
-            const markElement = document.getElementById('recyclingMarkContainer');
-            if (!markElement) {
-                return {
-                    enabled: false,
-                    type: null,
-                    position_x: null,
-                    position_y: null,
-                    text: null
-                };
-            }
-
-            const style = markElement.style;
-            const imgElement = markElement.querySelector('#recyclingMarkImage');
-            const textElements = markElement.querySelectorAll('.recycling-text-line'); // 정확한 텍스트 라인들만 선택
-            
-            // 이미지 src에서 파일명 추출
-            let markType = null;
-            if (imgElement && imgElement.src) {
-                const srcParts = imgElement.src.split('/');
-                const fileName = srcParts[srcParts.length - 1];
-                markType = fileName.replace('.png', '');
-            }
-            
-            // 복합재질 텍스트 수집 - 입력 필드 값을 우선으로 사용
-            let combinedText = null;
-            
-            // 먼저 입력 필드에서 텍스트 확인 (이것이 정확한 사용자 입력)
-            const textInput = document.getElementById('additionalRecyclingText');
-            if (textInput && textInput.value.trim()) {
-                combinedText = textInput.value.trim();
-
-            }
-            
-            // 입력 필드에 값이 없을 때만 DOM에서 수집
-            if (!combinedText) {
-
-                
-                if (textElements.length > 0) {
-                    const textArray = Array.from(textElements).map(el => el.textContent.trim()).filter(text => text);
-
-                    if (textArray.length > 0) {
-                        combinedText = textArray.join('/');
-                    }
-                }
-            }
-            
-
-            
-            return {
-                enabled: true,
-                type: markType,
-                position_x: style.left ? style.left.replace('px', '') : (style.right ? 'right:' + style.right.replace('px', '') : '0'),
-                position_y: style.top ? style.top.replace('px', '') : '0',
-                text: combinedText
-            };
-        }
-        
-        // 추천 마크 갱신
-        function updateRecyclingMarkUI(packageText) {
-            if (!packageText) return;
-            
-            const material = packageText.toLowerCase();
-            let recommendedMark = '';
-            
-            // 다양한 재질에 따른 마크 추천
-            if (material.includes('무색페트') || material.includes('무색 페트')) recommendedMark = '무색페트';
-            else if (material.includes('유색페트') || material.includes('유색 페트')) recommendedMark = '유색페트';
-            else if (material.includes('페트') || material.includes('pet')) recommendedMark = '플라스틱(PET)';
-            else if (material.includes('hdpe') || material.includes('고밀도폴리에틸렌')) recommendedMark = '플라스틱(HDPE)';
-            else if (material.includes('ldpe') || material.includes('저밀도폴리에틸렌')) recommendedMark = '플라스틱(LDPE)';
-            else if (material.includes('pp') || material.includes('폴리프로필렌')) recommendedMark = '플라스틱(PP)';
-            else if (material.includes('ps') || material.includes('폴리스티렌')) recommendedMark = '플라스틱(PS)';
-            else if (material.includes('pvc') || material.includes('폴리염화비닐')) recommendedMark = '플라스틱(PVC)';
-            else if (material.includes('플라스틱') && !material.includes('(')) recommendedMark = '기타플라스틱';
-            else if (material.includes('종이팩') || material.includes('종이 팩')) recommendedMark = '종이팩';
-            else if (material.includes('종이')) recommendedMark = '종이';
-            else if (material.includes('알루미늄') || material.includes('알미늄')) recommendedMark = '알루미늄';
-            else if (material.includes('철') && !material.includes('캔')) recommendedMark = '철';
-            else if ((material.includes('캔') && material.includes('금속')) || material.includes('금속캔')) recommendedMark = '금속캔';
-            else if (material.includes('유리')) recommendedMark = '유리';
-            else if (material.includes('비닐')) recommendedMark = '비닐';
-            else if (material.includes('/') || (material.match(/[가-힣]+\([가-힣]+\)/) && material.match(/[가-힣]+\([가-힣]+\)/g).length > 1)) recommendedMark = '복합재질';
-            
-            if (recommendedMark) {
-                const select = document.getElementById('recyclingMarkSelect');
-                const addBtn = document.getElementById('addRecyclingMarkBtn');
-                if (select && addBtn && addBtn.textContent === '추가') {
-                    select.value = recommendedMark;
-                    setRecyclingMark(recommendedMark);
-                    addBtn.textContent = '제거';
-                    addBtn.classList.replace('btn-outline-primary', 'btn-danger');
-                    
-                    const selectedOption = select.options[select.selectedIndex];
-                    const additionalInputBox = document.getElementById('additionalTextInputBox');
-                    if (additionalInputBox && selectedOption.dataset.isComposite === 'true') {
-                        additionalInputBox.style.display = 'block';
-                        // 복합재질이면 자동 포커스
-                        setTimeout(() => document.getElementById('additionalRecyclingText').focus(), 100);
-                    }
-                }
-            }
-        }
-
-        // 설정 저장
-        function savePreviewSettings() {
-
-            
-            // labelId 찾기 시도 1: input 필드에서
-            const labelInput = document.querySelector('input[name="label_id"]');
-
-            const labelId = labelInput?.value;
-
-            
-            // labelId 찾기 시도 2: URL에서
-            let finalLabelId = labelId;
-            if (!finalLabelId) {
-                const urlParams = new URLSearchParams(window.location.search);
-                finalLabelId = urlParams.get('label_id');
-
-            }
-            
-            if (!finalLabelId) {
-                console.error('label_id를 찾을 수 없습니다. input:', labelInput, 'URL params:', new URLSearchParams(window.location.search).toString());
-                alert('라벨 ID를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
-                return;
-            }
-            
-
-
-            // 분리배출마크 정보 수집
-
-            const recyclingMarkInfo = getCurrentRecyclingMarkInfo();
-
-
-
-            // 세로 길이는 "22.6 cm" 형식이므로 숫자 부분만 추출
-            const heightValue = document.getElementById('heightInput')?.value || '10';
-            const heightNumber = parseFloat(heightValue.replace(/[^0-9.-]/g, '')) || 10;
-            
-            const data = {
-                label_id: finalLabelId,
-                layout: 'vertical', // 레이아웃은 항상 세로형으로 고정
-                width: parseFloat(widthInput?.value) || 10,
-                length: heightNumber,
-                font: document.getElementById('fontFamilySelect')?.value || "'Noto Sans KR'",
-                font_size: parseFloat(fontSizeInput?.value) || 10,
-                letter_spacing: parseInt(letterSpacingInput?.value) || -5,
-                line_spacing: parseFloat(document.getElementById('lineHeightInput')?.value) || 1.2,
-                recycling_mark: recyclingMarkInfo
-            };
-            
-
-
-            const csrfToken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-
-
-            fetch('/label/save_preview_settings/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify(data)
-            })
-            .then(res => {
-
-                return res.json();
-            })
-            .then(res => {
-
-                if (res.success) {
-                    // 성공 메시지 표시
-                    const saveBtn = document.getElementById('saveSettingsBtn');
-                    if (saveBtn) {
-                        const originalText = saveBtn.textContent;
-                        saveBtn.textContent = '저장완료';
-                        saveBtn.classList.remove('btn-outline-success');
-                        saveBtn.classList.add('btn-success');
-                        saveBtn.disabled = false; // 버튼 활성화
-                        
-                        setTimeout(() => {
-                            saveBtn.textContent = originalText;
-                            saveBtn.classList.remove('btn-success');
-                            saveBtn.classList.add('btn-outline-success');
-                        }, 2000);
-                    }
-                } else {
-                    alert('미리보기 설정 저장 실패: ' + (res.error || ''));
-                    // 실패 시에도 버튼 복원
-                    const saveBtn = document.getElementById('saveSettingsBtn');
-                    if (saveBtn) {
-                        saveBtn.disabled = false;
-                        saveBtn.textContent = '설정 저장';
-                    }
-                }
-            })
-            .catch(err => {
-                console.error('저장 에러:', err);
-                alert('미리보기 설정 저장 에러: ' + err);
-                // 에러 시에도 버튼 복원
-                const saveBtn = document.getElementById('saveSettingsBtn');
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = '설정 저장';
-                }
-            });
-        }
-    
-        // 분리배출마크 복원 (개선된 버전)
-        function restoreRecyclingMark(markData) {
-            if (!markData.type) return;
-            
-            // 분리배출마크 설정 (기존 setRecyclingMark 함수 활용)
-            // markData.type에서 실제 값 찾기
-            let markValue = markData.type;
-            
-            // recyclingMarkMap에서 해당 타입 찾기
-            const foundEntry = Object.entries(recyclingMarkMap).find(([key, value]) => {
-                const imageName = value.img.split('/').pop().replace('.png', '');
-                return imageName === markData.type || key === markData.type;
-            });
-            
-            if (foundEntry) {
-                markValue = foundEntry[0];
-                
-                // 셀렉트 박스에서 해당 값 선택
-                const selectElement = document.getElementById('recyclingMarkSelect');
-                if (selectElement) {
-                    selectElement.value = markValue;
-                }
-                
-                // 분리배출마크 설정
-                setRecyclingMark(markValue, false);
-                
-                // 버튼 텍스트를 "해제"로 변경
-                setTimeout(() => {
-                    const addBtn = document.getElementById('addRecyclingMarkBtn');
-                    if (addBtn) {
-                        addBtn.textContent = '해제';
-                        addBtn.classList.remove('btn-outline-primary');
-                        addBtn.classList.add('btn-danger');
-                    }
-                    
-                    // 추가 텍스트 입력 박스도 표시
-                    const additionalInputBox = document.getElementById('additionalTextInputBox');
-                    if (additionalInputBox) {
-                        additionalInputBox.style.display = 'block';
-                    }
-                }, 50);
-                
-                // 위치 설정 (약간의 딜레이 후)
-                setTimeout(() => {
-                    const markElement = document.getElementById('recyclingMarkContainer');
-                    if (markElement) {
-                        if (markData.position_x && markData.position_x.startsWith('right:')) {
-                            markElement.style.right = markData.position_x.replace('right:', '') + 'px';
-                            markElement.style.left = 'auto';
-                        } else {
-                            markElement.style.left = markData.position_x + 'px';
-                            markElement.style.right = 'auto';
-                        }
-                        markElement.style.top = markData.position_y + 'px';
-                    }
-                    
-                    // 복합재질 텍스트 설정
-                    if (markData.text) {
-
-                        
-                        // 복합재질 입력 필드에 텍스트 설정 먼저
-                        const textInput = document.getElementById('additionalRecyclingText');
-                        if (textInput) {
-                            textInput.value = markData.text;
-                        }
-                        
-                        // 잘못된 형태의 데이터를 감지하고 정리
-                        let cleanText = markData.text;
-                        
-                        // "몸체(종이)뚜껑(PE)/몸체(종이)/뚜껑(PE)" 같은 패턴을 감지
-                        const parts = markData.text.split('/');
-                        if (parts.length > 2) {
-                            // 첫 번째 부분이 나머지 부분들의 조합인지 확인
-                            const firstPart = parts[0];
-                            const remainingParts = parts.slice(1);
-                            const combinedRemaining = remainingParts.join('');
-                            
-                            if (firstPart === combinedRemaining) {
-                                // 잘못된 데이터이므로 나머지 부분들만 사용
-                                cleanText = remainingParts.join('/');
-
-                                
-                                // 입력 필드도 정리된 텍스트로 업데이트
-                                if (textInput) {
-                                    textInput.value = cleanText;
-                                }
-                            }
-                        }
-                        
-                        // 정리된 텍스트로 분리하여 추가
-                        const lines = cleanText.split('/');
-
-                        
-                        lines.forEach((line, index) => {
-                            const trimmedLine = line.trim();
-
-                            if (trimmedLine) {
-                                addTextToRecyclingMark(trimmedLine);
-                            }
-                        });
-                    }
-                }, 100);
-            } else {
-                console.warn('분리배출마크 타입을 찾을 수 없음:', markData.type);
-            }
-        }
-
-        // 저장된 미리보기 설정 로드
-        function loadSavedPreviewSettings() {
-
-            
-            try {
-                // 1. 백엔드에서 전달된 설정 확인
-                const settingsScript = document.getElementById('preview-settings-data');
-                let settings = {};
-                
-                if (settingsScript && settingsScript.textContent && settingsScript.textContent.trim() !== '{}') {
-                    settings = JSON.parse(settingsScript.textContent);
-
-                }
-                
-                // 2. localStorage에서 최근 설정 확인 (우선순위 높음)
-                const labelInput = document.querySelector('input[name="label_id"]');
-                const labelId = labelInput?.value;
-                
-                if (labelId) {
-                    const savedSettings = sessionStorage.getItem('labelPreviewSettings_' + labelId);
-                    if (savedSettings) {
-                        const localSettings = JSON.parse(savedSettings);
-
-                        // 로컬 설정이 있으면 백엔드 설정보다 우선
-                        settings = { ...settings, ...localSettings };
-                    }
-                }
-
-                
-                // 기본 설정 복원
-                if (settings.width) {
-                    if (widthInput) {
-                        widthInput.value = settings.width;
-
-                    }
-                }
-                
-                if (settings.font_size) {
-                    if (fontSizeInput) {
-                        fontSizeInput.value = settings.font_size;
-
-                    }
-                }
-                
-                if (settings.letter_spacing !== undefined) {
-                    if (letterSpacingInput) {
-                        letterSpacingInput.value = settings.letter_spacing;
-
-                    }
-                }
-                
-                if (settings.line_spacing) {
-                    const lineHeightInput = document.getElementById('lineHeightInput');
-                    if (lineHeightInput) {
-                        lineHeightInput.value = settings.line_spacing;
-
-                    }
-                }
-                
-                // 폰트 설정 (빈값이면 기본값 사용)
-                const fontFamilySelect = document.getElementById('fontFamilySelect');
-                if (fontFamilySelect) {
-                    let fontValue = settings.font || 'Noto Sans KR';
-                    
-                    // 폰트 이름을 실제 option value와 매칭
-                    if (fontValue.includes('Noto Sans KR')) {
-                        fontValue = "'Noto Sans KR', sans-serif";
-                    } else if (fontValue.includes('Nanum Gothic')) {
-                        fontValue = "'Nanum Gothic', sans-serif";
-                    } else if (fontValue.includes('Nanum Myeongjo')) {
-                        fontValue = "'Nanum Myeongjo', serif";
-                    } else {
-                        // 기본값
-                        fontValue = "'Noto Sans KR', sans-serif";
-                    }
-                    
-                    fontFamilySelect.value = fontValue;
-
-                }
-                
-                // 분리배출마크 설정 복원
-                const recyclingMark = settings.recycling_mark;
-                if (recyclingMark && recyclingMark.enabled && recyclingMark.type) {
-
-                    setTimeout(() => {
-                        restoreRecyclingMark(recyclingMark);
-                    }, 1500);
-                }
-                
-                // 설정 복원 후 스타일 업데이트
-                setTimeout(() => {
-                    if (typeof updatePreviewStyles === 'function') {
-                        updatePreviewStyles();
-
-                    }
-                }, 100);
-                
-            } catch (error) {
-                console.error('저장된 설정 로드 중 오류:', error);
-            }
-        }
-    
-        // --- EVENT LISTENERS & INITIALIZATION ---
-        function setupEventListeners() {
-            const inputs = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput', 'fontFamilySelect'];
-            inputs.forEach(id => {
-                document.getElementById(id)?.addEventListener('input', debounce(updatePreviewStyles, 250));
-            });
-            document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
-            // validateButton 이벤트 리스너는 label_preview.js에서 처리
-            const saveBtn = document.getElementById('saveSettingsBtn');
-            if (saveBtn) {
-
-                saveBtn.addEventListener('click', function(e) {
-
-                    e.preventDefault();
-                    savePreviewSettings();
-                });
-            } else {
-                console.error('설정 저장 버튼을 찾을 수 없음!');
-            }
-            document.getElementById('exportPdfBtn')?.addEventListener('click', exportToPDF);
-            document.getElementById('zoomInBtn')?.addEventListener('click', () => { currentZoom = Math.min(2, currentZoom + 0.1); updateZoom(); });
-            document.getElementById('zoomOutBtn')?.addEventListener('click', () => { currentZoom = Math.max(0.5, currentZoom - 0.1); updateZoom(); });
-        }
-    
-        window.addEventListener('message', function(e) {
-            if (e.data?.type === 'previewCheckedFields' && e.data.checked) {
-
-                dataLoaded = true;
-                checkedFields = e.data.checked;
-                renderTable(checkedFields);
-                const frmlc = checkedFields.frmlc_mtrqlt || '';
-                updateRecyclingMarkUI(frmlc);
-                
-                // Update footer with received date
-                const updateDateTime = e.data.update_datetime || new Date().toISOString().slice(0, 16).replace('T', ' ');
-                const footerInfo = document.querySelector('.footer-text .creator-info');
-                if (footerInfo) footerInfo.textContent = `[${updateDateTime}]`;
-            }
-        });
-    
-        // Initial calls
-        if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; padding: 20px; color: #6c757d;">표시사항 데이터를 기다리는 중...</td></tr>`;
-        }
-
-        if (window.opener) {
-
-            window.opener.postMessage({ type: 'requestPreviewData' }, '*');
-        }
-
-        setTimeout(() => {
-            if (!dataLoaded) {
-
-                const sampleData = { prdlst_nm: '샘플 제품', prdlst_dcnm: '과자', content_weight: '100g', frmlc_mtrqlt: '종이', pog_daycnt: '제조일로부터 12개월', rawmtrl_nm_display: '밀가루(밀:미국산), 설탕, 식물성유지', cautions: '이 제품은 우유, 대두를 사용한 제품과 같은 제조시설에서 제조하고 있습니다.', additional_info: '부정불량식품 신고는 국번없이 1399' };
-                renderTable(sampleData);
-                
-                // 초기 로드 후 면적 계산을 위해 추가 업데이트 실행
-                setTimeout(() => {
-                    updatePreviewStyles();
-                }, 100);
-                updateRecyclingMarkUI(sampleData.frmlc_mtrqlt);
-            }
-        }, 2000);
-
-        // 페이지 언로드 시 현재 설정을 자동 저장 (세션 스토리지에만)
-        window.addEventListener('beforeunload', function() {
-            try {
-                // 여러 방법으로 labelId 찾기
-                let labelId = document.querySelector('input[name="label_id"]')?.value;
-                if (!labelId) {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    labelId = urlParams.get('label_id');
-                }
-                if (!labelId) return;
-                
-                const recyclingMarkInfo = getCurrentRecyclingMarkInfo();
-                const currentSettings = {
-                    label_id: labelId,
-                    width: parseFloat(widthInput?.value) || 10,
-                    font: fontFamilySelect?.value || "'Noto Sans KR'",
-                    font_size: parseFloat(fontSizeInput?.value) || 10,
-                    letter_spacing: parseInt(letterSpacingInput?.value) || -5,
-                    line_spacing: parseFloat(lineHeightInput?.value) || 1.5,
-                    recycling_mark: recyclingMarkInfo,
-                    auto_saved: true,
-                    timestamp: new Date().toISOString()
-                };
-                
-                sessionStorage.setItem('labelPreviewSettings_' + labelId, JSON.stringify(currentSettings));
-
-            } catch (e) {
-                console.warn('설정 자동 저장 실패:', e);
-            }
-        });
-        
-        setupEventListeners();
-        renderRecyclingMarkUI();
-        
-        // 초기 스타일 적용 및 면적 계산
-        updatePreviewStyles();
-        
-        // 저장된 설정 로드
-        loadSavedPreviewSettings();
-        
-        // 페이지 로드 완료 후 최종 면적 계산
-        setTimeout(() => {
-            updatePreviewStyles();
-        }, 500);
-    });
-
-    // 프론트엔드 상수들은 constants.js에서 로드됨
   </script>
 </body>
 </html>

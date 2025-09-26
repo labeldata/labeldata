@@ -23,18 +23,85 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse # [추가] URL 생성을 위해 import
 from django.utils import timezone  # 추가
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST
 
 # --- [수정] Local Application Imports ---
-from .constants import CATEGORY_CHOICES
+from .constants import CATEGORY_CHOICES, DEFAULT_PHRASES, FIELD_REGULATIONS
 from .forms import LabelCreationForm, MyIngredientsForm
-from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem, 
-                     FoodType, ImportedFood, LabelIngredientRelation, MyIngredient, 
-                     MyLabel, MyPhrase)
+from .models import (AgriculturalProduct, CountryList, ExpiryRecommendation,
+                     FoodAdditive, FoodItem, FoodType, ImportedFood,
+                     LabelIngredientRelation, MyIngredient, MyLabel, MyPhrase)
 from venv import logger  # 지우지 않음
 
-# --- [Import] utils에서 유틸리티 함수 및 상수 import ---
-from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
+# --- [추가] 엑셀 처리를 위한 상수 정의 ---
+ALLERGEN_LIST = [
+    "메밀", "밀", "대두", "호두", "땅콩", "복숭아", "토마토", "돼지고기",
+    "난류(가금류)", "우유", "닭고기", "쇠고기", "새우", "고등어", "홍합",
+    "전복", "굴", "조개류", "게", "오징어", "아황산류", "잣"
+]
+GMO_LIST = ["대두", "옥수수", "면화", "카놀라", "사탕무", "알팔파"]
+
+def get_expiry_recommendations():
+    """
+    ExpiryRecommendation 데이터를 캐시와 함께 가져오는 헬퍼 함수
+    캐시 타임아웃: 1시간
+    """
+    cache_key = 'expiry_recommendations_dict'
+    cached_data = cache.get(cache_key)
+    
+    if cached_data is not None:
+        return cached_data
+    
+    # DB에서 데이터를 가져와서 딕셔너리 형태로 변환
+    recommendations = {}
+    for item in ExpiryRecommendation.objects.all():
+        recommendations[item.food_type] = {
+            'shelf_life': item.shelf_life,
+            'unit': item.unit
+        }
+    
+    # 1시간 동안 캐시
+    cache.set(cache_key, recommendations, 3600)
+    return recommendations
+def get_search_conditions(request, search_fields):
+    """
+    Request에서 검색 조건을 추출하고 Q 객체를 생성합니다.
+    """
+    search_conditions = Q()
+    search_values = {}
+    for field, query_param in search_fields.items():
+        value = request.GET.get(query_param, "").strip()
+        if value:
+            # 원료 표시명, 알레르기, GMO 검색에서 쉼표/플러스 구분 검색 지원
+            if field in ["ingredient_display_name", "allergens", "gmo"]:
+                # 플러스(+)로 구분하여 AND 검색
+                if '+' in value:
+                    # 플러스로 구분된 경우 AND 검색 (모든 조건이 만족되어야 함)
+                    search_terms = [term.strip() for term in value.split('+') if term.strip()]
+                    if search_terms:
+                        # 각 검색어에 대해 AND 조건으로 LIKE 검색
+                        field_conditions = Q()
+                        for term in search_terms:
+                            field_conditions &= Q(**{f"{field}__icontains": term})
+                        search_conditions &= field_conditions
+                # 쉼표로 구분하여 OR 검색
+                elif ',' in value:
+                    # 여러 검색어가 있는 경우 OR 검색
+                    search_terms = [term.strip() for term in value.split(',') if term.strip()]
+                    if search_terms:
+                        # 각 검색어에 대해 OR 조건으로 LIKE 검색
+                        field_conditions = Q()
+                        for term in search_terms:
+                            field_conditions |= Q(**{f"{field}__icontains": term})
+                        search_conditions &= field_conditions
+                else:
+                    # 단일 검색어인 경우 기존 LIKE 검색
+                    search_conditions &= Q(**{f"{field}__icontains": value})
+            else:
+                # 다른 필드는 기존 방식 유지 (원재료명 포함)
+                search_conditions &= Q(**{f"{field}__icontains": value})
+            search_values[query_param] = value
+    return search_conditions, search_values
 
 def paginate_queryset(queryset, page_number, items_per_page):
     """
@@ -439,24 +506,9 @@ def label_creation(request, label_id=None):
             else:
                 form = LabelCreationForm(post_data)
 
-        # 체크박스 필드들을 별도로 처리하기 위해 폼 검증 전에 미리 추출
-        preservation_types = request.POST.getlist('preservation_type')
-        processing_methods = request.POST.getlist('processing_method')
-        processing_condition = request.POST.get('processing_condition', '')
-        
         if form.is_valid():
-            # 폼을 통해 기본 필드들은 처리하되, 문제가 되는 필드들은 별도 처리
-            if label_id:
-                # 기존 라벨을 업데이트하는 경우
-                label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-                # 폼의 cleaned_data에서 안전한 값들만 가져와서 설정
-                for field_name in form.fields:
-                    if field_name in form.cleaned_data and field_name not in ['preservation_type', 'processing_method']:
-                        setattr(label, field_name, form.cleaned_data[field_name])
-            else:
-                # 새 라벨을 생성하는 경우
-                label = form.save(commit=False)
-                label.user_id = request.user
+            label = form.save(commit=False)
+            label.user_id = request.user
             
             # 라벨명 다시 한번 확인하여 설정
             if my_label_name:
@@ -465,11 +517,6 @@ def label_creation(request, label_id=None):
             # hidden 필드에서 식품유형 정보 가져오기
             label.food_group = request.POST.get('food_group')
             label.food_type = request.POST.get('food_type')
-            
-            # 장기보존식품과 제조방법 정보 저장 (다중 선택 지원)
-            label.preservation_type = ', '.join(preservation_types) if preservation_types else ''
-            label.processing_method = ', '.join(processing_methods) if processing_methods else ''
-            label.processing_condition = processing_condition
             
             # 체크박스 상태 처리
             checkbox_fields = [field for field in request.POST.keys() if field.startswith('chk_')]
@@ -504,6 +551,7 @@ def label_creation(request, label_id=None):
                 label.report_no_verify_YN = 'N'
 
             label.save()
+            # 모든 메시지 제거
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
             messages.error(request, '입력 정보에 오류가 있습니다.')
@@ -689,7 +737,23 @@ def label_creation(request, label_id=None):
             # 대분류가 선택되지 않은 경우 모든 소분류 가져옴
             food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
             
-        # 자주 사용하는 문구 관련 코드 삭제
+        # 자주 사용하는 문구 불러오기
+        user_phrases = MyPhrase.objects.filter(user_id=request.user, delete_YN='N').order_by('category_name', 'display_order')
+
+        phrases_data = {}
+        for phrase in user_phrases:
+            category = phrase.category_name
+            if category not in phrases_data:
+                phrases_data[category] = []
+            phrases_data[category].append({
+                'id': phrase.my_phrase_id,
+                'name': phrase.my_phrase_name,
+                'content': phrase.comment_content,
+                'note': phrase.note or '',
+                'order': phrase.display_order
+            })
+
+        phrases_json = json.dumps(phrases_data, ensure_ascii=False)
 
         context = {
             'form': form,
@@ -698,8 +762,9 @@ def label_creation(request, label_id=None):
             'food_groups': food_groups,
             'country_list': CountryList.objects.all(),
             'has_ingredient_relations': has_ingredient_relations,
+            'phrases_json': phrases_json,  
             'count_ingredient_relations': count_ingredient_relations,
-            # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
+            'regulations_json': json.dumps(FIELD_REGULATIONS, ensure_ascii=False)  # 추가
         }
         return render(request, 'label/label_creation.html', context)
 
@@ -1376,49 +1441,67 @@ def nutrition_calculator_popup(request):
         'display_unit': 'unit',
         'nutrients': {}
     }
-    # 모든 영양성분 필드 정의 (추가 항목 포함)
-    nutrition_fields = [
-        ('calories', 'calories_unit'), ('natriums', 'natriums_unit'), ('carbohydrates', 'carbohydrates_unit'),
-        ('sugars', 'sugars_unit'), ('fats', 'fats_unit'), ('trans_fats', 'trans_fats_unit'), ('saturated_fats', 'saturated_fats_unit'),
-        ('cholesterols', 'cholesterols_unit'), ('proteins', 'proteins_unit'), ('dietary_fiber', 'dietary_fiber_unit'),
-        ('calcium', 'calcium_unit'), ('iron', 'iron_unit'), ('magnesium', 'magnesium_unit'), ('phosphorus', 'phosphorus_unit'),
-        ('potassium', 'potassium_unit'), ('zinc', 'zinc_unit'), ('vitamin_a', 'vitamin_a_unit'), ('vitamin_d', 'vitamin_d_unit'),
-        ('vitamin_c', 'vitamin_c_unit'), ('thiamine', 'thiamine_unit'), ('riboflavin', 'riboflavin_unit'), ('niacin', 'niacin_unit'),
-        ('vitamin_b6', 'vitamin_b6_unit'), ('folic_acid', 'folic_acid_unit'), ('vitamin_b12', 'vitamin_b12_unit'), ('selenium', 'selenium_unit'),
-        ('iodine', 'iodine_unit'), ('copper', 'copper_unit'), ('manganese', 'manganese_unit'), ('chromium', 'chromium_unit'),
-        ('molybdenum', 'molybdenum_unit'), ('vitamin_e', 'vitamin_e_unit'), ('vitamin_k', 'vitamin_k_unit'), ('biotin', 'biotin_unit'),
-        ('pantothenic_acid', 'pantothenic_acid_unit')
-    ]
+    
     if label_id:
         try:
             label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
-            nutrition_data['serving_size'] = label.serving_size
-            nutrition_data['serving_size_unit'] = label.serving_size_unit or 'g'
-            nutrition_data['units_per_package'] = label.units_per_package or '1'
-            nutrition_data['display_unit'] = label.nutrition_display_unit or 'unit'
-            nutrition_data['nutrients'] = {}
-            for field, unit_field in nutrition_fields:
-                value = getattr(label, field, '')
-                unit = getattr(label, unit_field, '')
-                # 값이 None, 0, '0'이면 빈값('') 처리
-                if value is None or value == 0 or value == '0':
-                    value = ''
-                if unit is None:
-                    unit = ''
-                nutrition_data['nutrients'][field] = {
-                    'value': value,
-                    'unit': unit
+            
+            nutrition_data = {
+                'serving_size': label.serving_size,
+                'serving_size_unit': label.serving_size_unit or 'g',
+                'units_per_package': label.units_per_package or '1',
+                'display_unit': label.nutrition_display_unit or 'unit',
+                'nutrients': {
+                    'calorie': {
+                        'value': label.calories,
+                        'unit': label.calories_unit or 'kcal'
+                    },
+                    'natrium': {
+                        'value': label.natriums,
+                        'unit': label.natriums_unit or 'mg'
+                    },
+                    'carbohydrate': {
+                        'value': label.carbohydrates,
+                        'unit': label.carbohydrates_unit or 'g'
+                    },
+                    'sugar': {
+                        'value': label.sugars,
+                        'unit': label.sugars_unit or 'g'
+                    },
+                    'afat': {
+                        'value': label.fats,
+                        'unit': label.fats_unit or 'g'
+                    },
+                    'transfat': {
+                        'value': label.trans_fats,
+                        'unit': label.trans_fats_unit or 'g'
+                    },
+                    'satufat': {
+                        'value': label.saturated_fats,
+                        'unit': label.saturated_fats_unit or 'g'
+                    },
+                    'cholesterol': {
+                        'value': label.cholesterols,
+                        'unit': label.cholesterols_unit or 'mg'
+                    },
+                    'protein': {
+                        'value': label.proteins,
+                        'unit': label.proteins_unit or 'g'
+                    }
                 }
+            }
         except Exception as e:
-            pass  # 영양성분 데이터 로딩 오류 무시
-    # None 값 처리
+            print(f"영양성분 데이터 로딩 중 오류: {str(e)}")
+    
     for key, value in nutrition_data.items():
         if value is None:
             nutrition_data[key] = ''
+    
     for nutrient_name, nutrient_data in nutrition_data.get('nutrients', {}).items():
         for key, value in nutrient_data.items():
             if value is None:
                 nutrient_data[key] = ''
+    
     context = {
         'nutrition_data': json.dumps(nutrition_data)
     }
@@ -1495,37 +1578,28 @@ def save_nutrition(request):
         label.serving_size_unit = data.get('serving_size_unit', '')
         label.units_per_package = data.get('units_per_package', '')
         label.nutrition_display_unit = data.get('nutrition_display_unit', '')
-
+        
         label.nutrition_text = data.get('nutritions', '')
-
-        # 모든 영양성분 필드 저장
-        nutrition_fields = [
-            'calories', 'calories_unit', 'natriums', 'natriums_unit', 'carbohydrates', 'carbohydrates_unit',
-            'sugars', 'sugars_unit', 'fats', 'fats_unit', 'trans_fats', 'trans_fats_unit', 'saturated_fats', 'saturated_fats_unit',
-            'cholesterols', 'cholesterols_unit', 'proteins', 'proteins_unit',
-            'dietary_fiber', 'dietary_fiber_unit', 'calcium', 'calcium_unit', 'iron', 'iron_unit', 'magnesium', 'magnesium_unit',
-            'phosphorus', 'phosphorus_unit', 'potassium', 'potassium_unit', 'zinc', 'zinc_unit', 'vitamin_a', 'vitamin_a_unit',
-            'vitamin_d', 'vitamin_d_unit', 'vitamin_c', 'vitamin_c_unit', 'thiamine', 'thiamine_unit', 'riboflavin', 'riboflavin_unit',
-            'niacin', 'niacin_unit', 'vitamin_b6', 'vitamin_b6_unit', 'folic_acid', 'folic_acid_unit', 'vitamin_b12', 'vitamin_b12_unit',
-            'selenium', 'selenium_unit', 'iodine', 'iodine_unit', 'copper', 'copper_unit', 'manganese', 'manganese_unit',
-            'chromium', 'chromium_unit', 'molybdenum', 'molybdenum_unit', 'vitamin_e', 'vitamin_e_unit', 'vitamin_k', 'vitamin_k_unit',
-            'biotin', 'biotin_unit', 'pantothenic_acid', 'pantothenic_acid_unit'
-        ]
-        nutrition_inputs = data.get('nutritionInputs', {})
-        for field in nutrition_fields:
-            value = ''
-            # nutritionInputs에 값이 있으면 그 값을 사용
-            if field in nutrition_inputs:
-                field_data = nutrition_inputs.get(field)
-                # nutritionInputs[field]가 dict일 경우 value 키 사용
-                if isinstance(field_data, dict):
-                    value = field_data.get('value', '')
-                else:
-                    value = field_data
-            else:
-                value = data.get(field, '')
-            setattr(label, field, value)
-
+        
+        label.calories = data.get('calories', '')
+        label.calories_unit = data.get('calories_unit', '')
+        label.natriums = data.get('natriums', '')
+        label.natriums_unit = data.get('natriums_unit', '')
+        label.carbohydrates = data.get('carbohydrates', '')
+        label.carbohydrates_unit = data.get('carbohydrates_unit', '')
+        label.sugars = data.get('sugars', '')
+        label.sugars_unit = data.get('sugars_unit', '')
+        label.fats = data.get('fats', '')
+        label.fats_unit = data.get('fats_unit', '')
+        label.trans_fats = data.get('trans_fats', '')
+        label.trans_fats_unit = data.get('trans_fats_unit', '')
+        label.saturated_fats = data.get('saturated_fats', '')
+        label.saturated_fats_unit = data.get('saturated_fats_unit', '')
+        label.cholesterols = data.get('cholesterols', '')
+        label.cholesterols_unit = data.get('cholesterols_unit', '')
+        label.proteins = data.get('proteins', '')
+        label.proteins_unit = data.get('proteins_unit', '')
+        
         label.save()
         
         return JsonResponse({'success': True})
@@ -1534,39 +1608,287 @@ def save_nutrition(request):
 
 @login_required
 def food_types_by_group(request):
-    """식품 대분류별 소분류 목록을 반환하는 API"""
-    try:
-        group = request.GET.get('group', '')
-        
-        # 모델 임포트 확인
-        from .models import FoodType
-        
-        # 대분류가 지정된 경우 해당 대분류의 소분류만, 아니면 모든 소분류 반환
-        if group:
-            food_types = FoodType.objects.filter(food_group=group).order_by('food_type')
-        else:
-            # 모든 소분류 반환 (대분류 선택과 무관하게)
-            food_types = FoodType.objects.all().order_by('food_group', 'food_type')
-        
-        # JSON 응답용 데이터 구성
-        food_types_data = []
-        for ft in food_types:
-            food_types_data.append({
-                'food_type': ft.food_type,
-                'food_group': ft.food_group
+    group = request.GET.get('group', '')
+    
+    if group:
+        # 대분류가 있으면 해당 대분류의 소분류만 반환
+        food_types = FoodType.objects.filter(food_group=group).values('food_type', 'food_group').order_by('food_type')
+    else:
+        # 대분류가 없으면 모든 소분류 반환
+        food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
+    
+    return JsonResponse({
+        'success': True,
+        'food_types': list(food_types)
+    })
+
+@login_required
+def get_food_group(request):
+    food_type = request.GET.get('food_type', '')
+    
+    if food_type:
+        try:
+            food_group = FoodType.objects.filter(food_type=food_type).values_list('food_group', flat=True).first()
+            return JsonResponse({
+                'success': True,
+                'food_group': food_group or ''
+           
             })
+        except FoodType.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': '해당하는 식품유형을 찾을 수 없습니다.'
+            })
+    else:
+        return JsonResponse({
+            'success': False,
+            'error': '식품유형이 제공되지 않았습니다.'
+        })
+
+@login_required
+def food_type_settings(request):
+    food_type = request.GET.get('food_type', '')
+    
+    if not food_type:
+        return JsonResponse({
+            'success': False,
+            'error': '식품유형이 제공되지 않았습니다.'
+        })
+
+    
+    try:
+        ft = FoodType.objects.filter(food_type=food_type).first()
+        
+        if not ft:
+            return JsonResponse({
+                'success': False,
+                'error': '해당 식품유형을 찾을 수 없습니다.'
+            })
+        
+        settings = {}
+        
+        checkbox_fields = [
+            'prdlst_dcnm', 'rawmtrl_nm', 'nutritions', 'cautions', 'frmlc_mtrqlt',
+            'pog_daycnt', 'storage_method', 'weight_calorie', 'country_of_origin',
+            'additional_info', 'prdlst_report_no'
+        ]
+        
+        for field in checkbox_fields:
+            if hasattr(ft, field):
+                value = getattr(ft, field, 'N') or 'N'
+                settings[field] = value
+        
+        pog_daycnt_value = ft.pog_daycnt
+        
+        if pog_daycnt_value:
+            if ',' in pog_daycnt_value:
+                options = [option.strip() for option in pog_daycnt_value.split(',') if option.strip()]
+                if options:
+                    settings['pog_daycnt_options'] = options
+                    settings['pog_daycnt'] = 'Y'  # 옵션이 있으면 활성화
+                else:
+                    settings['pog_daycnt'] = 'N'  # 옵션이 없으면 비활성화
+            else:
+                settings['pog_daycnt'] = pog_daycnt_value  # 직접 값 사용
+                settings['pog_daycnt_options'] = [pog_daycnt_value] if pog_daycnt_value != 'D' else []
+        else:
+            settings['pog_daycnt'] = 'N'  # 값이 없으면 비활성화
+        
+        # 관련 규정 정보 추가
+        if hasattr(ft, 'relevant_regulations'):
+            settings['relevant_regulations'] = ft.relevant_regulations or ""
         
         return JsonResponse({
             'success': True,
-            'food_types': food_types_data
+            'settings': settings
         })
-        
     except Exception as e:
         return JsonResponse({
             'success': False,
             'error': str(e)
-        }, status=500)
+        })
 
+
+@login_required
+@csrf_exempt
+def manage_phrases(request):
+    """문구 추가/수정/삭제 처리"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+    try:
+        data = json.loads(request.body)
+        action = data.get('action')
+        category_name = data.get('category_name', '').strip()
+        
+        # 유효한 카테고리인지 확인
+        valid_categories = [choice[0] for choice in CATEGORY_CHOICES]
+        if not category_name or category_name not in valid_categories:
+            return JsonResponse({
+                'success': False, 
+                'error': f'카테고리 값이 올바르지 않습니다. 받은 값: "{category_name}", 유효한 값: {valid_categories}'
+            })
+
+        if action == 'create':
+            # 신규 문구 생성
+            new_phrase = MyPhrase.objects.create(
+                user_id=request.user,
+                my_phrase_name=data.get('my_phrase_name'),
+                category_name=category_name,
+                comment_content=data.get('comment_content'),
+                note=data.get('note', ''),
+                display_order=data.get('order', 0),  # display_order 추가
+                delete_YN='N'
+            )
+            return JsonResponse({
+                'success': True,
+                'message': '문구가 저장되었습니다.',
+                'id': new_phrase.my_phrase_id
+            })
+
+        elif action == 'update':
+            # 기존 문구 수정 로직
+            changes = data if isinstance(data, list) else [data]
+            for change in changes:
+                category_name_change = change.get('category_name', '').strip()
+                if not category_name_change or category_name_change not in valid_categories:
+                    return JsonResponse({
+                        'success': False, 
+                        'error': f'카테고리 값이 올바르지 않습니다. 받은 값: "{category_name_change}", 유효한 값: {valid_categories}'
+                    })
+                
+                phrase = MyPhrase.objects.get(
+                    my_phrase_id=change['id'],
+                    user_id=request.user
+                )
+                phrase.my_phrase_name = change.get('my_phrase_name', phrase.my_phrase_name)
+                phrase.comment_content = change.get('comment_content', phrase.comment_content)
+                phrase.note = change.get('note', phrase.note)
+                phrase.category_name = category_name_change
+                phrase.display_order = change.get('order', phrase.display_order)  # display_order 업데이트
+                phrase.save()
+            return JsonResponse({'success': True})
+
+        elif action == 'delete':
+            # 문구 삭제 로직
+            phrase = MyPhrase.objects.get(
+                my_phrase_id=data['id'],
+                user_id=request.user
+            )
+            phrase.delete_YN = 'Y'
+            phrase.delete_datetime = timezone.now().strftime('%Y%m%d')
+            phrase.save()
+            return JsonResponse({'success': True})
+
+        else:
+            return JsonResponse({'success': False, 'error': 'Invalid action'})
+
+    except MyPhrase.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '문구를 찾을 수 없습니다.'})
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '잘못된 데이터 형식입니다.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'오류 발생: {str(e)}'})
+
+@login_required
+@csrf_exempt
+def reorder_phrases(request):
+    """문구 순서 변경 처리"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
+    
+    try:
+        data = json.loads(request.body)
+        updates = data.get('updates', [])
+        logger.info(f"Reordering phrases: {updates}")
+        
+        for update in updates:
+            phrase = MyPhrase.objects.get(
+                my_phrase_id=update['id'],
+                user_id=request.user
+            )
+            phrase.display_order = update['order']
+            phrase.save()
+            
+        return JsonResponse({'success': True})
+    except Exception as e:
+        logger.error(f"reorder_phrases error: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+
+def phrase_popup(request):
+    """자주 사용하는 문구 팝업"""
+    phrases_data = {}
+    categories = CATEGORY_CHOICES
+    
+    # CATEGORY_CHOICES에서 정의된 모든 카테고리에 대한 빈 리스트 초기화
+    for category_code, _ in categories:
+        phrases_data[category_code] = []
+    
+    # 사용자 문구만 가져오기 (display_order 순으로 정렬)
+    user_phrases = MyPhrase.objects.filter(
+        user_id=request.user, 
+        delete_YN='N'
+    ).order_by('category_name', 'display_order', 'my_phrase_name')
+
+    # 유효한 카테고리 코드 목록 생성
+    valid_categories = {choice[0] for choice in CATEGORY_CHOICES}
+
+    for phrase in user_phrases:
+        category = phrase.category_name
+        
+        # 유효한 카테고리가 아닌 경우 처리
+        if category not in valid_categories:
+            # 로그는 개발 환경에서만 출력하도록 제한
+            if hasattr(settings, 'DEBUG') and settings.DEBUG:
+                try:
+                    print(f"Warning: Unknown category in MyPhrase: {category} (ID: {phrase.my_phrase_id})")
+                except Exception:
+                    pass
+            
+            # 알 수 없는 카테고리는 'additional'로 분류하거나 건너뛰기
+            # 옵션 1: 건너뛰기 (현재 방식)
+            continue
+            
+            # 옵션 2: 'additional' 카테고리로 분류
+            # if 'additional' in phrases_data:
+            #     category = 'additional'
+            # else:
+            #     continue
+        
+        # phrases_data에 해당 카테고리가 없으면 초기화 (동적 카테고리 지원)
+        if category not in phrases_data:
+            phrases_data[category] = []
+            
+        phrases_data[category].append({
+            'id': phrase.my_phrase_id,
+            'name': phrase.my_phrase_name,
+            'content': phrase.comment_content,
+            'note': phrase.note or '',
+            'order': phrase.display_order or 0,
+            'is_custom': True
+        })
+    
+    context = {
+        'phrases_json': json.dumps(phrases_data),
+        'categories': categories
+    }
+    return render(request, 'label/phrase_popup.html', context)
+
+@login_required
+def phrase_suggestions(request):
+    """추천 문구 제공"""
+    try:
+        category = request.GET.get('category')
+        if not category:
+            return JsonResponse({'success': False, 'error': '카테고리가 제공되지 않았습니다.'})
+       
+        suggestions = DEFAULT_PHRASES.get(category, [])
+        return JsonResponse({'success': True, 'suggestions': suggestions})
+    except Exception as e:
+        logger.error(f"phrase_suggestions error: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 def preview_popup(request):
@@ -1716,8 +2038,8 @@ def preview_popup(request):
             'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
             'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
             'country_mapping': json.dumps(country_mapping, ensure_ascii=False),  # 국가 코드 매핑 추가
-            'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False),  # 소비기한 권장 데이터 추가
-            # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
+            'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False)  # 소비기한 권장 데이터 추가
+
         }
         
         return render(request, 'label/label_preview.html', context)
@@ -1820,74 +2142,23 @@ def linked_ingredient_count(request, label_id):
 @require_POST
 @login_required
 def verify_report_no(request):
+    import json
     data = json.loads(request.body)
     label_id = data.get('label_id')
     prdlst_report_no = data.get('prdlst_report_no', '').strip()
     if not label_id or not prdlst_report_no:
-        return JsonResponse({
-            'verified': False, 
-            'status': 'error',
-            'error_type': 'missing_data',
-            'message': '필수값이 누락되었습니다.'
-        })
-    
+        return JsonResponse({'verified': False, 'error': '필수값 누락'})
     try:
         label = MyLabel.objects.get(pk=label_id, user_id=request.user)
     except MyLabel.DoesNotExist:
-        return JsonResponse({
-            'verified': False, 
-            'status': 'error',
-            'error_type': 'label_not_found',
-            'message': '라벨을 찾을 수 없습니다.'
-        })
-    
-    # 1. 품목보고번호 형식 검증 (13자리 또는 14자리 숫자)
-    if not re.match(r'^\d{13,14}$', prdlst_report_no):
-        return JsonResponse({
-            'verified': False,
-            'status': 'format_error',
-            'error_type': 'format',
-            'message': '품목보고번호는 13자리 또는 14자리 숫자여야 합니다.'
-        })
-    
-    # 2. 기본 규칙 검증 (첫 4자리가 연도 형식인지 확인)
-    year_part = prdlst_report_no[:4]
-    try:
-        year = int(year_part)
-        current_year = 2025
-        if year < 1960 or year > current_year + 1:
-            return JsonResponse({
-                'verified': False,
-                'status': 'rule_error',
-                'error_type': 'invalid_year',
-                'message': f'품목보고번호의 연도({year})가 유효하지 않습니다. (1960-{current_year + 1})'
-            })
-    except ValueError:
-        return JsonResponse({
-            'verified': False,
-            'status': 'format_error',
-            'error_type': 'format',
-            'message': '품목보고번호 형식이 올바르지 않습니다.'
-        })
-    
-    # 3. 중복 검증
+        return JsonResponse({'verified': False, 'error': '라벨을 찾을 수 없습니다.'})
     exists = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).exists()
     if exists:
-        # 중복된 번호 (이미 신고되어 있음)
-        return JsonResponse({
-            'verified': True,
-            'status': 'completed',
-            'message': '동일한 번호가 있으면 다시 확인하세요'
-        })
-    else:
-        # 등록되지 않은 번호 (신고 가능)
         label.report_no_verify_YN = 'Y'
         label.save(update_fields=['report_no_verify_YN'])
-        return JsonResponse({
-            'verified': True,
-            'status': 'available',
-            'message': '품목보고신고 가능한 번호입니다.'
-        })
+        return JsonResponse({'verified': True})
+    else:
+        return JsonResponse({'verified': False})
 
 @csrf_exempt
 @require_POST
@@ -2437,237 +2708,3 @@ def upload_my_ingredients_excel(request):
 
     except Exception as e:
         return JsonResponse({'success': False, 'message': f'파일 처리 중 심각한 오류가 발생했습니다: {str(e)}'})
-
-@login_required
-def get_recent_usage_api(request):
-    """
-    최근 사용한 항목 API - 사용자의 최근 라벨에서 해당 필드값 추출
-    """
-    try:
-        field_name = request.GET.get('field')
-        limit = int(request.GET.get('limit', 5))
-        
-        if not field_name:
-            return JsonResponse({
-                'success': False,
-                'error': 'field 파라미터가 필요합니다.'
-            }, status=400)
-        
-        # 현재 사용자의 최근 라벨에서 해당 필드값 추출
-        recent_labels = MyLabel.objects.filter(
-            user_id=request.user
-        ).order_by('-update_datetime')[:50]  # 최근 50개 라벨
-        
-        recent_items = []
-        seen_contents = set()  # 중복 제거용
-        
-        for label in recent_labels:
-            field_value = getattr(label, field_name, None)
-            if field_value and field_value.strip() and field_value not in seen_contents:
-                recent_items.append({
-                    'content': field_value.strip(),
-                    'field': field_name,
-                    'last_used': label.update_datetime.isoformat() if label.update_datetime else None,
-                    'label_name': label.my_label_name or '무제'
-                })
-                seen_contents.add(field_value)
-                
-                # limit 도달하면 중단
-                if len(recent_items) >= limit:
-                    break
-        
-        return JsonResponse({
-            'success': True,
-            'field_name': field_name,
-            'recent_items': recent_items,
-            'total_count': len(recent_items),
-            'message': f'{field_name}에 대한 {len(recent_items)}개 최근 사용 항목을 찾았습니다.'
-        }, json_dumps_params={'ensure_ascii': False})
-        
-    except ValueError as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'잘못된 파라미터: {str(e)}'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'최근 사용 항목 조회 중 오류: {str(e)}'
-        }, status=500)
-
-@login_required
-@require_GET
-def auto_fill_api(request):
-    """
-    기본 추천 시스템용 자동 채우기 API
-    스마트 추천 기능을 시뮬레이션하여 기본적인 추천 제공
-    """
-    try:
-        input_field = request.GET.get('input_field', '')
-        input_value = request.GET.get('input_value', '')
-        category = request.GET.get('category', 'general')
-        priority = request.GET.get('priority', 'medium')
-        
-        # 필드별 기본 추천 데이터 (recommendation_system.js와 동일)
-        basic_recommendations = {
-            'prdlst_nm': [
-                "진한 사골곰탕", "100% 착즙 사과주스", "즉석 발아현미밥",
-                "바삭한 통밀 쿠키", "담백한 살코기참치", "글루텐프리 쌀 파스타"
-            ],
-            'ingredient_info': [  # 상세 입력 영역
-                "딸기농축액 1.5 % (고형분 65 %, 딸기 100 %)", "국산 돼지고기 92.5 %",
-                "유기농 토마토 85 %", "고등어 50 %, 정제수, 토마토소스",
-                "칼슘 110 mg, 비타민D 5 μg", "페닐알라닌 함유",
-                "과량 섭취 시 설사를 일으킬 수 있습니다."
-            ],
-            'prdlst_dcnm': [  # 상세 입력 영역
-                "과·채주스 (살균제품)", "식육함유가공품 (비살균제품 / 가열하여 섭취하는 냉동식품)",
-                "건강기능식품 (홍삼제품)", "특수용도식품 (체중조절용 조제식품)",
-                "초콜릿가공품 (과자)", "어육소시지 (멸균제품)"
-            ],
-            'prdlst_report_no': [
-                "20240001234", "20240005678", "20240009012", "20240003456",
-                "20240007890", "20240002468", "20240008024", "20240004680",
-                "20240006802", "20240001357"
-            ],
-            'frmlc_mtrqlt': [
-                "폴리에틸렌(PE)", "용기: 폴리프로필렌(PP), 리드필름(뚜껑): OTHER(복합재질)",
-                "용기: 페트(PET), 뚜껑: 폴리에틸렌(PE)", "알루미늄",
-                "종이, 폴리에틸렌(내면)"
-            ],
-            'cautions': [
-                "부정·불량식품신고는 국번없이 1399",
-                "이 제품은 알류(가금류), 우유, 메밀, 땅콩, 대두, 밀, 게, 새우, 돼지고기, 복숭아, 토마토, 아황산류, 호두, 닭고기, 쇠고기, 오징어, 조개류(굴, 전복, 홍합 포함), 잣을 사용한 제품과 같은 제조시설에서 제조하고 있습니다.",
-                "개봉 후 냉장보관하시고 가급적 빠른 시일 내에 섭취하시기 바랍니다.",
-                "어린이, 임산부, 카페인 민감자는 섭취에 주의해 주세요.",
-                "직사광선을 피하여 보관하시기 바랍니다.",
-                "흔들어 드세요"
-            ],
-            'additional_info': [
-                "반품 및 교환장소: 구입처 또는 제조원",
-                "본 제품은 소비자분쟁해결기준에 의거 교환 또는 보상을 받을 수 있습니다.",
-                "무료소비자 상담실: 080-***-**** (평일 오전9시~오후6시)",
-                "개봉 전·후 주의사항을 반드시 확인하세요"
-            ],
-            'storage_method': [
-                "냉장 보관 (0~10℃)", "냉동 보관 (-18℃ 이하)",
-                "실온 보관 (1~35℃)", "상온 보관 (15~25℃)",
-                "직사광선을 피하고 서늘한 곳에 보관하십시오.",
-                "개봉 후에는 냉장 보관하시고, 가급적 빨리 드시기 바랍니다."
-            ],
-            'content_weight': [
-                "100g", "200g", "250g", "300g", "500g", 
-            ],
-            'bssh_nm': [
-                "(주)한국식품", "대한제과", "맛있는식품(주)", "우리농장",
-            ],
-            'pog_daycnt': [
-                "제조일로부터 12개월", "제조일로부터 18개월", 
-                "제조일로부터 24개월", "제조일로부터 6개월",
-            ],
-            'processing_condition': [
-                "85℃에서 15분간 살균",
-                "121℃에서 4분간 멸균", 
-                "냉동 -18℃ 이하 보관",
-                "상온 유통 가능",
-                "65℃에서 30분간 저온살균",
-                "100℃에서 10분간 끓임 살균",
-                "자외선 살균 처리",
-                "고압 살균 처리"
-            ]
-        }
-        
-        # 해당 필드의 추천 데이터 가져오기
-        suggestions = basic_recommendations.get(input_field, [])
-        
-        # 입력값이 있으면 관련성 높은 순서로 정렬
-        if input_value and suggestions:
-            # 간단한 키워드 매칭으로 관련성 계산
-            input_lower = input_value.lower()
-            scored_suggestions = []
-            
-            for suggestion in suggestions:
-                score = 0
-                suggestion_lower = suggestion.lower()
-                
-                # 완전 일치 시 높은 점수
-                if input_lower in suggestion_lower:
-                    score += 10
-                
-                # 첫 글자 일치 시 점수 추가
-                if suggestion_lower.startswith(input_lower[:1]):
-                    score += 5
-                    
-                scored_suggestions.append((score, suggestion))
-            
-            # 점수순으로 정렬하고 상위 3개만 선택
-            scored_suggestions.sort(key=lambda x: x[0], reverse=True)
-            suggestions = [item[1] for item in scored_suggestions[:3]]
-        else:
-            # 입력값이 없으면 상위 3개만
-            suggestions = suggestions[:3]
-        
-        return JsonResponse({
-            'success': True,
-            'suggestions': suggestions,
-            'field': input_field,
-            'category': category,
-            'priority': priority,
-            'message': f'{input_field}에 대한 {len(suggestions)}개 추천을 제공합니다.'
-        }, json_dumps_params={'ensure_ascii': False})
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'자동 채우기 API 오류: {str(e)}'
-        }, status=500)
-
-@login_required  
-@require_GET
-def phrases_api(request):
-    """
-    사용자 정의 문구 API
-    MyPhrase 모델에서 사용자의 저장된 문구들을 반환
-    """
-    try:
-        category = request.GET.get('category', 'general')
-        field_name = request.GET.get('field', '')
-        
-        # 카테고리별 문구 조회
-        user_phrases = MyPhrase.objects.filter(
-            user_id=request.user,
-            delete_YN='N'
-        )
-        
-        if category != 'all':
-            user_phrases = user_phrases.filter(category_name=category)
-            
-        user_phrases = user_phrases.order_by('display_order', 'my_phrase_id')
-        
-        phrases = []
-        for phrase in user_phrases:
-            phrases.append({
-                'id': phrase.my_phrase_id,
-                'name': phrase.my_phrase_name,
-                'text': phrase.comment_content,  # recommendation_system.js에서 text 속성 사용
-                'content': phrase.comment_content,
-                'note': phrase.note or '',
-                'category': phrase.category_name,
-                'order': phrase.display_order
-            })
-        
-        return JsonResponse({
-            'success': True,
-            'phrases': phrases,
-            'data': phrases,  # recommendation_system.js에서 data 속성도 확인
-            'category': category,
-            'field': field_name,
-            'total_count': len(phrases),
-            'message': f'{category} 카테고리의 {len(phrases)}개 문구를 제공합니다.'
-        }, json_dumps_params={'ensure_ascii': False})
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': f'문구 API 오류: {str(e)}'
-        }, status=500)

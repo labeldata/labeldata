@@ -11,73 +11,56 @@
 
 <!-- 외부 CSS 및 JS 파일 로드 -->
 <link href="{% static 'css/style.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
-<link href="{% static 'css/label_creation.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
+<!-- 자주 사용하는 문구 데이터 삽입 -->
+<script id="phrases-data" type="application/json">
+  {{ phrases_json|safe }}
+</script>
+<script id="regulations-data" type="application/json">
+    {{ regulations_json|safe }}
+</script>
 <script src="{% static 'js/label/label_creation.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
-
-<!-- 기본 추천 시스템 -->
-<script src="{% static 'js/label/phrase_autocomplete.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
 <input type="hidden" id="label_id" value="{{ label.my_label_id }}">
 
-<!-- 상단 헤더 (모던 스타일 적용) -->
-<div class="container mt-4" style="position: fixed; top: 56px; left: 0; right: 0; z-index: 1020; background-color: #ffffff; padding: 10px 0; border-bottom: 1px solid #e0e7ff; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+<!-- 상단 헤더 -->
+<div class="container mt-4" style="padding-bottom: 10px;">
   <div class="d-flex align-items-center label-header-row" style="gap: 10px;">
     <div class="d-flex align-items-center label-header-group" style="gap: 10px;">
-      <h2 class="mb-0" style="flex-shrink:0; font-size: 1.3rem;">
-        <i class="fas fa-file-alt me-2"></i>표시사항 작성
-      </h2>
-      <div style="display:flex; align-items:center; flex-shrink:0; margin-left: 20px;">
+      <h2 class="mb-0" style="flex-shrink:0;">표시사항 작성</h2>
+      <div style="display:flex; align-items:center; flex-shrink:0;">
         <label for="my_label_name_top" class="mb-0"
-          style="font-size:0.9rem; font-weight:500; color:#495057; margin-right:8px; min-width:50px; white-space:nowrap;">
+          style="font-size:1rem; font-weight:500; color:#495057; margin-left:25px; margin-right:4px; min-width:90px; max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block;">
           라벨명
         </label>
         <input type="text" id="my_label_name_top" name="my_label_name_top"
                class="form-control auto-expand"
-               placeholder="라벨명을 입력하세요"
+               placeholder="라벨명을 입력하세요."
                value="{{ label.my_label_name|default:'' }}"
-               style="font-size:0.9rem; font-weight:500; color:#495057; min-width:200px; max-width:300px; height:2rem; padding:4px 8px;"
-               oninput="document.getElementById('my_label_name_hidden').value = this.value;">
+               style="font-size:1rem; font-weight:500; color:#495057; min-width:300px; max-width:45ch; height:2.2rem; padding:2px 12px;">
       </div>
-      <button type="button" class="btn btn-outline-cancel btn-sm"
-              onclick="window.location.href='{% url 'label:my_label_list' %}'"
-              title="표시사항 작성 리스트로 돌아가기"
-              style="white-space: nowrap;">
-        <i class="fas fa-list me-1"></i>표시사항 리스트 보기
-      </button>
     </div>
-    <div class="d-flex align-items-center ms-auto label-header-actions" style="gap: 8px;">
-      <span class="recent-update label-header-date" style="margin-right:8px; font-size: 0.85rem;">
-        <i class="fas fa-pencil-alt me-1"></i>{{ label.update_datetime|date:"m/d H:i" }}
-      </span>
-      <button type="button" class="btn btn-outline-primary btn-sm" onclick="try { openPreviewPopup(); } catch(e) { console.error('onclick error:', e); }">
-        <i class="fas fa-eye me-1"></i>미리보기
-      </button>
-      <button type="submit" form="labelForm" class="btn btn-primary btn-sm">
-        <i class="fas fa-save me-1"></i>저장
-      </button>
+    <div class="d-flex align-items-center ms-auto label-header-actions" style="gap: 10px;">
+      <span class="recent-update label-header-date" style="margin-right:8px;">최근 수정일: {{ label.update_datetime|date:"Y-m-d H:i" }}</span>
+      <button type="submit" form="labelForm" class="btn btn-primary">저장</button>
+      <button type="button" class="btn btn-outline-primary" onclick="openPreviewPopup()">미리보기</button>
     </div>
   </div>
 </div>
 
-<!-- 헤더 높이만큼 여백 추가 -->
-<div style="height: 80px;"></div>
-
-<!-- Step1. 기본 설정 (모던 스타일 적용) -->
+<!-- Step1. 기본 설정 -->
 <div class="container mt-4" id="step1-row">
-  <div class="card modern-card">
-    <div class="card-header d-flex justify-content-between align-items-center" id="step1-summary-bar">
-      <h5 class="card-title mb-0">
-        <i class="fas fa-cog me-2"></i>1. 기본정보 설정
-        <button id="summary-step1"
+  <div class="card">
+    <div class="card-header d-flex align-items-center" id="step1-summary-bar" style="gap: 1rem; flex-wrap:nowrap;">
+      <strong>1. 기본정보 설정</strong>
+      <button id="summary-step1"
               type="button"
               class="btn btn-outline-cancel btn-sm ms-2"
               style="font-weight:bold; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; margin-left:10px; display:inline-block; padding: 2px 10px; text-align:left;">
-        </button>
-      </h5>
-      <div class="card-actions d-flex align-items-center" style="gap: 0.5rem;">
-        <button type="button" class="btn btn-primary btn-sm modern-button" id="applyStep1Btn">필수항목 적용 후 접기</button>
-        <button type="button" class="btn btn-outline-primary btn-sm modern-button" id="expandStep1Btn" style="display:none;">펼치기</button>
+      </button>
+      <div class="ms-auto d-flex align-items-center" style="gap: 0.5rem;">
+        <button type="button" class="btn btn-primary btn-sm" id="applyStep1Btn">필수항목 적용 후 접기</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="expandStep1Btn" style="display:none;">펼치기</button>
       </div>
     </div>
     <div class="card-body" id="step1-body">
@@ -85,15 +68,15 @@
         <div class="row" style="gap:0;">
           <div class="col-md-6" style="padding-right:16px;">
             <div class="d-flex align-items-center mb-2 flex-nowrap">
-              <div class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">식품유형</div>
-              <div class="d-flex flex-nowrap input-container-modern" style="gap:10px; width:100%; min-width:0;">
-                <select id="food_group" name="food_group" class="form-control modern-select" style="width:45%; min-width:150px;">
+              <label class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">식품유형</label>
+              <div class="d-flex flex-nowrap" style="gap:5px; width:100%; min-width:0;">
+                <select id="food_group" name="food_group" class="form-control" style="width:20%; min-width:0;">
                   <option value="">대분류</option>
                   {% for group in food_groups %}
                   <option value="{{ group }}" {% if label.food_group == group %}selected{% endif %}>{{ group }}</option>
                   {% endfor %}
                 </select>
-                <select id="food_type" name="food_type" class="form-control modern-select" style="width:45%; min-width:150px;">
+                <select id="food_type" name="food_type" class="form-control" style="width:20%; min-width:0;">
                   <option value="">소분류</option>
                   {% for type in food_types %}
                   <option value="{{ type.food_type }}" 
@@ -106,11 +89,11 @@
               </div>
             </div>
             <div class="d-flex align-items-center mb-2 flex-nowrap">
-              <div class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">장기보존식품</div>
-              <div class="d-flex flex-wrap align-items-center modern-checkbox-group" style="gap:10px;">
-                <div class="form-check modern-form-check" style="margin:0;">
-                  <input type="checkbox" id="chk_frozen_heated" name="preservation_type" value="frozen_heated" class="form-check-input modern-checkbox grp-long-shelf" {% if form.preservation_type.value == "frozen_heated" %}checked{% endif %}>
-                  <label for="chk_frozen_heated" class="form-check-label modern-label" style="font-size:0.8rem;">냉동(가열)</label>
+              <label class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">장기보존식품</label>
+              <div class="d-flex flex-wrap align-items-center" style="gap:10px;">
+                <div class="form-check" style="margin:0;">
+                  <input type="checkbox" id="chk_frozen_heated" name="preservation_type" value="frozen_heated" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "frozen_heated" %}checked{% endif %}>
+                  <label for="chk_frozen_heated" class="form-check-label" style="font-size:0.8rem;">냉동(가열)</label>
                 </div>
                 <div class="form-check" style="margin:0;">
                   <input type="checkbox" id="chk_frozen_nonheated" name="preservation_type" value="frozen_nonheated" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "frozen_nonheated" %}checked{% endif %}>
@@ -129,7 +112,7 @@
           </div>
           <div class="col-md-6" style="padding-left:16px;">
             <div class="d-flex align-items-center mb-2 flex-nowrap">
-              <div class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">제조방법</div>
+              <label class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px;">제조방법</label>
               <div class="d-flex flex-nowrap align-items-center" style="gap:10px; width:100%; min-width:0;">
                 <div class="form-check" style="margin:0;">
                   <input type="checkbox" id="chk_sanitized" name="processing_method" value="sanitized" class="form-check-input grp-sterilization" {% if form.processing_method.value == "sanitized" %}checked{% endif %}>
@@ -149,14 +132,12 @@
                 </div>
               </div>
             </div>
-            <div class="d-flex align-items-center mb-2 flex-nowrap input-container-modern">
-              <div class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px; visibility:hidden;">조건상세</div>
-              <input type="text" name="processing_condition" class="form-control modern-input"
+            <div class="d-flex align-items-center mb-2 flex-nowrap">
+              <label class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; min-width:90px; visibility:hidden;">조건상세</label>
+              <input type="text" name="processing_condition" class="form-control"
                 placeholder="조건 상세"
                 style="width:320px; min-width:180px; max-width:100%; flex-shrink:1; white-space:nowrap; overflow:hidden;"
-                value="{{ form.processing_condition.value|default:'' }}"
-                onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('processing_condition', this); }"
-                onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('processing_condition', this); }">
+                value="{{ form.processing_condition.value|default:'' }}">
             </div>
           </div>
         </div>
@@ -165,28 +146,23 @@
   </div>
 </div>
 
-<!-- Step2. 상세 입력 영역 (모던 스타일 적용) -->
+<!-- Step2. 상세 입력 영역 -->
 <div class="container mt-4" id="step2-card">
-  <div class="card modern-card">
+  <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="card-title mb-0">
-        <i class="fas fa-edit me-2"></i>2. 상세 입력
-      </h5>
-      <div class="card-actions d-flex align-items-center" style="gap: 5px;">
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="handleIngredientPopup()" title="원재료 표로 입력">
-          <i class="fas fa-table me-1"></i>원재료 표로 입력
+      <strong>2. 상세 입력</strong>
+      <div class="d-flex align-items-center" style="gap: 8px;">
+        <button type="button" class="btn btn-outline-cancel btn-sm ms-2" id="linkedLabelsBtn">
+                연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
         </button>
-        <button type="button" class="btn btn-outline-cancel btn-sm" id="linkedLabelsBtn">
-          <i class="fas fa-link me-1"></i>연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
-        </button>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="handleNutritionTablePopup()" title="영양성분 계산기">
-          <i class="fas fa-calculator me-1"></i>영양성분 계산기
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="openPhrasePopup()" title="내 문구 관리">
+          내 문구 관리
         </button>
       </div>
     </div>
     <div class="card-body">
-      <div class="layout-container">
-        <div class="left-panel">
+      <div class="layout-container" style="display: flex; gap: 20px; align-items: flex-start;">
+        <div class="left-panel flex-grow-1 position-relative" style="flex-basis: 70%;">
           <form method="post" id="labelForm">
             {% csrf_token %}
             <!-- 라벨명 필드를 실제 폼 필드로 포함 - name 속성 확인 -->
@@ -225,11 +201,7 @@
                   <label for="chk_prdlst_nm" class="m-0">제품명</label>
                 </div>
                 <div style="width:85%;">
-                  <input type="text" name="prdlst_nm" class="form-control auto-expand" 
-                         placeholder="제품명을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
-                         value="{{ form.prdlst_nm.value|default:'' }}"
-                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_nm', this); }"
-                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_nm', this); }">
+                  <input type="text" name="prdlst_nm" class="form-control auto-expand" placeholder="제품명을 입력하세요." value="{{ form.prdlst_nm.value|default:'' }}">
                 </div>
               </div>
               <div class="d-flex align-items-center flex-equal">
@@ -238,11 +210,7 @@
                   <label for="chk_ingredient_info" class="m-0">특정성분 함량</label>
                 </div>
                 <div style="width:85%;">
-                  <input type="text" name="ingredient_info" class="form-control auto-expand" 
-                         placeholder="제품명에 표시한 경우 : 예) 레몬즙 5% (클릭하면 추천 문구가 표시됩니다)" 
-                         value="{{ form.ingredient_info.value|default:'' }}"
-                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('ingredient_info', this); }"
-                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('ingredient_info', this); }">
+                  <input type="text" name="ingredient_info" class="form-control auto-expand" placeholder="제품명에 표시한 경우 : 예) 레몬즙 5%" value="{{ form.ingredient_info.value|default:'' }}">
                 </div>
               </div>
             </div>
@@ -254,11 +222,7 @@
                   <label for="chk_prdlst_dcnm" class="m-0">식품유형</label>
                 </div>
                 <div style="width:85%;">
-                  <input type="text" name="prdlst_dcnm" class="form-control auto-expand" 
-                         placeholder="상단의 식품유형을 참고하여 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
-                         value="{{ form.prdlst_dcnm.value|default:'' }}"
-                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_dcnm', this); }"
-                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_dcnm', this); }">
+                  <input type="text" name="prdlst_dcnm" class="form-control auto-expand" placeholder="상단의 식품유형을 참고하여 입력하세요." value="{{ form.prdlst_dcnm.value|default:'' }}">
                 </div>
               </div>
               <div class="d-flex align-items-center flex-equal">
@@ -268,9 +232,7 @@
                 </div>
                 <div style="width:85%;">
                   <div class="input-container">
-                    <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}"
-                           onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_report_no', this); }"
-                           onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_report_no', this); }">
+                    <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}">
                     <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo(document.getElementById('label_id')?.value)">번호검증</button>
                   </div>
                 </div>
@@ -284,11 +246,7 @@
                 </div>
                 <div style="width:85%;">
                   <div class="input-container">
-                    <input type="text" id="content_weight_input" name="content_weight" class="form-control auto-expand" 
-                           placeholder="내용량을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
-                           value="{{ form.content_weight.value|default:'' }}"
-                           onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('content_weight', this); }"
-                           onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('content_weight', this); }">
+                    <input type="text" id="content_weight_input" name="content_weight" class="form-control auto-expand" placeholder="내용량을 입력하세요." value="{{ form.content_weight.value|default:'' }}">
                     <input type="text" id="weight_calorie_input" name="weight_calorie" class="form-control auto-expand" placeholder="내용량(열량)을 입력하세요." value="{{ form.weight_calorie.value|default:'' }}" style="display: none;">
                   </div>
                 </div>
@@ -300,7 +258,7 @@
                 </div>
                  <div style="width:85%;">
                   <div class="input-container">
-                    <select name="country_of_origin" class="form-control select2-country" style="width:100%; min-width:200px; height:40px; font-size:14px;">
+                    <select name="country_of_origin" class="form-control select2-country">
                       <option value="">선택하세요</option>
                       {% for c in country_list %}
                       <option value="{{ c.country_code2 }}" {% if form.country_of_origin.value == c.country_code2 %}selected{% endif %}>{{ c.country_name_ko }}</option>
@@ -318,11 +276,7 @@
                   <label for="chk_storage_method" class="m-0">보관방법</label>
                 </div>
                 <div style="width:85%;">
-                  <input type="text" name="storage_method" class="form-control auto-expand" 
-                         placeholder="보관방법을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
-                         value="{{ form.storage_method.value|default:'' }}"
-                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('storage_method', this); }"
-                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('storage_method', this); }">
+                  <input type="text" name="storage_method" class="form-control auto-expand" placeholder="보관방법을 입력하거나 내문구를 선택하세요." value="{{ form.storage_method.value|default:'' }}">
                 </div>
               </div>
               <div class="d-flex align-items-center flex-equal">
@@ -331,27 +285,19 @@
                   <label for="chk_frmlc_mtrqlt" class="m-0">용기.포장재질</label>
                 </div>
                 <div style="width:85%;">
-                  <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" 
-                         placeholder="용기.포장재질을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
-                         value="{{ form.frmlc_mtrqlt.value|default:'' }}"
-                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('frmlc_mtrqlt', this); }"
-                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('frmlc_mtrqlt', this); }">
+                  <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" placeholder="용기.포장재질을 입력하거나 내문구를 선택하세요." value="{{ form.frmlc_mtrqlt.value|default:'' }}">
                 </div>
               </div>
             </div>
             <!-- 제조원 소재지 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:15%; min-width:130px;">
                 <input type="checkbox" id="chk_bssh_nm" name="chk_bssh_nm" class="form-check-input" 
                        {% if label.chckd_bssh_nm == "Y" %}checked{% endif %}>
                 <label for="chk_bssh_nm" class="m-0">제조원 소재지</label>
               </div>
-              <div style="width:90%; display:flex; align-items:center;">
-                <input type="text" name="bssh_nm" class="form-control auto-expand" 
-                       placeholder="제조원을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
-                       value="{{ form.bssh_nm.value|default:'' }}"
-                       onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('bssh_nm', this); }"
-                       onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('bssh_nm', this); }">
+              <div style="width:85%; display:flex; align-items:center;">
+                <input type="text" name="bssh_nm" class="form-control auto-expand" placeholder="제조원을 입력하거나 내문구를 선택하세요." value="{{ form.bssh_nm.value|default:'' }}">
                 <button type="button" class="btn btn-outline-primary btn-sm" id="toggleManufacturerBtn"
                   data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
                   aria-controls="other-manufacturers" style="font-size:0.9rem; padding:2px 8px; min-width:0; white-space:nowrap; margin-left:6px;">
@@ -362,137 +308,132 @@
             <!-- 접힘 영역 -->
             <div class="collapse mb-2" id="other-manufacturers">
               <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:15%; min-width:130px;">
                   <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address" class="form-check-input" 
                          {% if label.chckd_distributor_address == "Y" %}checked{% endif %}>
                   <label for="chk_distributor_address" class="m-0">유통전문판매원</label>
                 </div>
-                <div style="width:90%;">
-                  <input type="text" name="distributor_address" class="form-control auto-expand" placeholder="유통전문판매원을 입력하세요."
-                        value="{{ form.distributor_address.value|default:'' }}"
-                        onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('distributor_address', this); }"
-                        onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('distributor_address', this); }">
+                <div style="width:85%;">
+                  <input type="text" name="distributor_address" class="form-control auto-expand" placeholder="유통전문판매원을 입력하거나 내문구를 선택하세요."
+                        value="{{ form.distributor_address.value|default:'' }}">
                 </div>
               </div>
               <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:15%; min-width:130px;">
                   <input type="checkbox" id="chk_repacker_address" name="chk_repacker_address" class="form-check-input" 
                          {% if label.chckd_repacker_address == "Y" %}checked{% endif %}>
                   <label for="chk_repacker_address" class="m-0">소분원</label>
                 </div>
-                <div style="width:90%;">
-                  <input type="text" name="repacker_address" class="form-control auto-expand" placeholder="소분원을 입력하세요."
-                        value="{{ form.repacker_address.value|default:'' }}"
-                        onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('repacker_address', this); }"
-                        onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('repacker_address', this); }">
+                <div style="width:85%;">
+                  <input type="text" name="repacker_address" class="form-control auto-expand" placeholder="소분원을 입력하거나 내문구를 선택하세요."
+                        value="{{ form.repacker_address.value|default:'' }}">
                 </div>
               </div>
               <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:15%; min-width:130px;">
                   <input type="checkbox" id="chk_importer_address" name="chk_importer_address" class="form-check-input" 
                          {% if label.chckd_importer_address == "Y" %}checked{% endif %}>
                   <label for="chk_importer_address" class="m-0">수입원</label>
                 </div>
-                <div style="width:90%;">
+                <div style="width:85%;">
                   <input type="text" name="importer_address" class="form-control auto-expand" placeholder="수입원을 입력하거나 내문구를 선택하세요."
-                        value="{{ form.importer_address.value|default:'' }}"
-                        onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('importer_address', this); }"
-                        onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('importer_address', this); }">
+                        value="{{ form.importer_address.value|default:'' }}">
                 </div>
               </div>
             </div>
             <!-- 소비기한/품질유지기한/제조연월일/생산연도 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-              <div style="width:10%; min-width:130px; display:flex; align-items:center;">
+              <div style="width:15%; min-width:130px; display:flex; align-items:center;">
                 <input type="checkbox" id="chk_pog_daycnt" name="chk_pog_daycnt" class="form-check-input" {% if label.chckd_pog_daycnt == "Y" %}checked{% endif %}>
                 <!-- 체크박스와 셀렉트박스 사이 간격 추가 (margin-left:8px) -->
-                <select name="date_option_display" class="form-control select2-date-option" style="width:88%; min-width:90px; max-width:190px;">
-                  <option value="소비기한" selected>소비기한</option>
-                  <option value="품질유지기한">품질유지기한</option>
-                  <option value="제조연월일">제조연월일</option>
-                  <option value="생산연도">생산연도</option>
+                <select name="date_option" class="form-control select2-date-option" style="width:80%; min-width:90px; max-width:180px;">
+                  <option value="소비기한" {% if form.date_option.value == "소비기한" or not form.date_option.value %}selected{% endif %}>소비기한</option>
+                  <option value="품질유지기한" {% if form.date_option.value == "품질유지기한" %}selected{% endif %}>품질유지기한</option>
+                  <option value="제조연월일" {% if form.date_option.value == "제조연월일" %}selected{% endif %}>제조연월일</option>
+                  <option value="생산연도" {% if form.date_option.value == "생산연도" %}selected{% endif %}>생산연도</option>
                 </select>
               </div>
-              <div style="width:90%;">
-                <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value|default:'' }}"
-                       onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('pog_daycnt', this); }"
-                       onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('pog_daycnt', this); }">
+              <div style="width:85%;">
+                <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value|default:'' }}">
               </div>
             </div>
             <!-- 원재료명(표시) -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:15%; min-width:130px;">
                 <input type="checkbox" id="chk_rawmtrl_nm_display" name="chk_rawmtrl_nm_display" class="form-check-input" {% if label.chckd_rawmtrl_nm_display == "Y" %}checked{% endif %}>
-                <label for="chk_rawmtrl_nm_display" class="m-0">원재료명 <br> (최종표시)</label>
+                <label for="chk_rawmtrl_nm_display" class="m-0">원재료명(표시)</label>
               </div>
-              <div style="width:90%;">
-                <textarea name="rawmtrl_nm_display" class="form-control auto-expand textarea" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
+              <div style="width:85%;">
+                <div class="input-container">
+                  <textarea name="rawmtrl_nm_display" class="form-control auto-expand textarea" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
+                  <button type="button" class="btn btn-outline-primary btn-sm" onclick="handleIngredientPopup()">표로 입력</button>
+                </div>
               </div>
             </div>
             <!-- 원재료명 (참고) -->
-            <!-- 원재료명 (표로입력) - 항상 표시 -->
-            <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
-                <!-- [수정] 체크박스를 숨기고, 라벨만 표시하도록 변경 -->
-                <div class="form-check">
-                  <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" {% if label.chckd_rawmtrl_nm == "Y" %}checked{% endif %} style="display: none;">
-                  <label for="chk_rawmtrl_nm" class="form-check-label m-0">원재료명 <br> (표로입력)</label>
+            {% if has_ingredient_relations %}
+            <div class="mb-2" id="rawmtrl_nm_section">
+              <div class="d-flex align-items-center" style="gap:5px;">
+                <div style="width:15%; min-width:130px;">
+                  <div class="form-check">
+                    <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" 
+                           {% if label.chckd_rawmtrl_nm == "Y" %}checked{% endif %} disabled>
+                    <label for="chk_rawmtrl_nm" class="m-0">원재료명(참고)</label>
+                  </div>
                 </div>
-              </div>
-              <div style="width:90%;">
-                <div class="input-container input-container-modern">
-                  <textarea id="rawmtrl_nm" name="rawmtrl_nm" class="form-control auto-expand textarea modern-textarea" rows="2" 
-                            placeholder="원재료명 팝업을 통해 입력하세요. 클릭하면 팝업이 열립니다." readonly style="cursor: pointer;" title="클릭하면 원재료명 팝업이 열립니다.">{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+                <div style="width:85%;">
+                  <div class="input-container">
+                    <textarea name="rawmtrl_nm" class="form-control auto-expand textarea disabled-textarea" rows="2" 
+                              placeholder="원재료명을 입력하세요" disabled readonly>{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+                  </div>
                 </div>
-              </div>
+              </div>  
             </div>
+            {% endif %}
             <!-- 주의사항 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:15%; min-width:130px;">
                 <div class="form-check">
                   <input type="checkbox" id="chk_cautions" name="chk_cautions" class="form-check-input" {% if label.chckd_cautions == "Y" %}checked{% endif %}>
                   <label for="chk_cautions" class="m-0">주의사항</label>
                 </div>
               </div>
-              <div style="width:90%;">
-                <div class="input-container input-container-modern">
+              <div style="width:85%;">
+                <div class="input-container">
                   <textarea name="cautions" class="form-control auto-expand textarea" rows="2" 
-                            placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
-                            onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('cautions', this); }"
-                            onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('cautions', this); }">{{ form.cautions.value|default:'' }}</textarea>
+                            placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.cautions.value|default:'' }}</textarea>
                 </div>
               </div>
             </div>
             <!-- 기타 표시사항 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:15%; min-width:130px;">
                 <div class="form-check">
                   <input type="checkbox" id="chk_additional_info" name="chk_additional_info" class="form-check-input" {% if label.chckd_additional_info == "Y" %}checked{% endif %}>
                   <label for="chk_additional_info" class="m-0">기타표시사항</label>
                 </div>
               </div>
-              <div style="width:90%;">
-                <div class="input-container input-container-modern">
-                  <textarea name="additional_info" class="form-control auto-expand textarea modern-textarea" rows="2" 
-                            placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
-                            onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('additional_info', this); }"
-                            onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('additional_info', this); }">{{ form.additional_info.value|default:'' }}</textarea>
+              <div style="width:85%;">
+                <div class="input-container">
+                  <textarea name="additional_info" class="form-control auto-expand textarea" rows="2" 
+                            placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다.">{{ form.additional_info.value|default:'' }}</textarea>
                 </div>
               </div>
             </div>    
             <!-- 영양성분 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:12%; min-width:130px;">
                 <!-- [수정] 체크박스를 숨기고, 라벨만 표시하도록 변경 -->
                 <div class="form-check">
                   <input type="checkbox" id="chk_nutrition_text" name="chk_nutrition_text" class="form-check-input" {% if label.chckd_nutrition_text == "Y" %}checked{% endif %} style="display: none;">
                   <label for="chk_nutrition_text" class="form-check-label m-0">영양성분</label>
                 </div>
               </div>
-              <div style="width:90%;">
-                <div class="input-container input-container-modern">
-                  <textarea id="nutrition_text" name="nutrition_text" class="form-control auto-expand textarea modern-textarea" rows="2" 
-                            placeholder="영양성분 계산기를 통해 입력하세요. 클릭하면 계산기가 열립니다." readonly style="cursor: pointer;" title="클릭하면 영양성분 계산기가 열립니다.">{{ form.nutrition_text.value|default:'' }}</textarea>
+              <div style="width:88%;">
+                <div class="input-container">
+                  <textarea id="nutrition_text" name="nutrition_text" class="form-control auto-expand textarea" rows="2" 
+                            placeholder="영양성분 계산기를 통해 입력하세요." readonly>{{ form.nutrition_text.value|default:'' }}</textarea>
+                  <button type="button" class="btn btn-outline-primary btn-sm" onclick="openNutritionCalculator()">계산기</button>
                 </div>
               </div>
             </div>
@@ -502,8 +443,6 @@
               <input type="hidden" name="serving_size_unit" value="{{ form.serving_size_unit.value|default:'' }}">
               <input type="hidden" name="units_per_package" value="{{ form.units_per_package.value|default:'' }}">
               <input type="hidden" name="nutrition_display_unit" value="{{ form.nutrition_display_unit.value|default:'' }}">
-              <input type="hidden" name="basic_display_type" value="{{ form.basic_display_type.value|default:'' }}">
-              <input type="hidden" name="parallel_display_type" value="{{ form.parallel_display_type.value|default:'' }}">
               <input type="hidden" name="calories" value="{{ form.calories.value|default:'' }}">
               <input type="hidden" name="calories_unit" value="{{ form.calories_unit.value|default:'' }}">
               <input type="hidden" name="natriums" value="{{ form.natriums.value|default:'' }}">
@@ -522,70 +461,32 @@
               <input type="hidden" name="cholesterols_unit" value="{{ form.cholesterols_unit.value|default:'' }}">
               <input type="hidden" name="proteins" value="{{ form.proteins.value|default:'' }}">
               <input type="hidden" name="proteins_unit" value="{{ form.proteins_unit.value|default:'' }}">
-              
-              <!-- 추가 영양성분 hidden 필드들 -->
-              <input type="hidden" name="dietary_fiber" value="{{ form.dietary_fiber.value|default:'' }}">
-              <input type="hidden" name="dietary_fiber_unit" value="{{ form.dietary_fiber_unit.value|default:'' }}">
-              <input type="hidden" name="calcium" value="{{ form.calcium.value|default:'' }}">
-              <input type="hidden" name="calcium_unit" value="{{ form.calcium_unit.value|default:'' }}">
-              <input type="hidden" name="iron" value="{{ form.iron.value|default:'' }}">
-              <input type="hidden" name="iron_unit" value="{{ form.iron_unit.value|default:'' }}">
-              <input type="hidden" name="potassium" value="{{ form.potassium.value|default:'' }}">
-              <input type="hidden" name="potassium_unit" value="{{ form.potassium_unit.value|default:'' }}">
-              <input type="hidden" name="magnesium" value="{{ form.magnesium.value|default:'' }}">
-              <input type="hidden" name="magnesium_unit" value="{{ form.magnesium_unit.value|default:'' }}">
-              <input type="hidden" name="zinc" value="{{ form.zinc.value|default:'' }}">
-              <input type="hidden" name="zinc_unit" value="{{ form.zinc_unit.value|default:'' }}">
-              <input type="hidden" name="phosphorus" value="{{ form.phosphorus.value|default:'' }}">
-              <input type="hidden" name="phosphorus_unit" value="{{ form.phosphorus_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_a" value="{{ form.vitamin_a.value|default:'' }}">
-              <input type="hidden" name="vitamin_a_unit" value="{{ form.vitamin_a_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_d" value="{{ form.vitamin_d.value|default:'' }}">
-              <input type="hidden" name="vitamin_d_unit" value="{{ form.vitamin_d_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_e" value="{{ form.vitamin_e.value|default:'' }}">
-              <input type="hidden" name="vitamin_e_unit" value="{{ form.vitamin_e_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_c" value="{{ form.vitamin_c.value|default:'' }}">
-              <input type="hidden" name="vitamin_c_unit" value="{{ form.vitamin_c_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_b1" value="{{ form.vitamin_b1.value|default:'' }}">
-              <input type="hidden" name="vitamin_b1_unit" value="{{ form.vitamin_b1_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_b2" value="{{ form.vitamin_b2.value|default:'' }}">
-              <input type="hidden" name="vitamin_b2_unit" value="{{ form.vitamin_b2_unit.value|default:'' }}">
-              <input type="hidden" name="niacin" value="{{ form.niacin.value|default:'' }}">
-              <input type="hidden" name="niacin_unit" value="{{ form.niacin_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_b6" value="{{ form.vitamin_b6.value|default:'' }}">
-              <input type="hidden" name="vitamin_b6_unit" value="{{ form.vitamin_b6_unit.value|default:'' }}">
-              <input type="hidden" name="folic_acid" value="{{ form.folic_acid.value|default:'' }}">
-              <input type="hidden" name="folic_acid_unit" value="{{ form.folic_acid_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_b12" value="{{ form.vitamin_b12.value|default:'' }}">
-              <input type="hidden" name="vitamin_b12_unit" value="{{ form.vitamin_b12_unit.value|default:'' }}">
-              <input type="hidden" name="selenium" value="{{ form.selenium.value|default:'' }}">
-              <input type="hidden" name="selenium_unit" value="{{ form.selenium_unit.value|default:'' }}">
-              <input type="hidden" name="pantothenic_acid" value="{{ form.pantothenic_acid.value|default:'' }}">
-              <input type="hidden" name="pantothenic_acid_unit" value="{{ form.pantothenic_acid_unit.value|default:'' }}">
-              <input type="hidden" name="biotin" value="{{ form.biotin.value|default:'' }}">
-              <input type="hidden" name="biotin_unit" value="{{ form.biotin_unit.value|default:'' }}">
-              <input type="hidden" name="iodine" value="{{ form.iodine.value|default:'' }}">
-              <input type="hidden" name="iodine_unit" value="{{ form.iodine_unit.value|default:'' }}">
-              <input type="hidden" name="vitamin_k" value="{{ form.vitamin_k.value|default:'' }}">
-              <input type="hidden" name="vitamin_k_unit" value="{{ form.vitamin_k_unit.value|default:'' }}">
-              <input type="hidden" name="copper" value="{{ form.copper.value|default:'' }}">
-              <input type="hidden" name="copper_unit" value="{{ form.copper_unit.value|default:'' }}">
-              <input type="hidden" name="manganese" value="{{ form.manganese.value|default:'' }}">
-              <input type="hidden" name="manganese_unit" value="{{ form.manganese_unit.value|default:'' }}">
-              <input type="hidden" name="chromium" value="{{ form.chromium.value|default:'' }}">
-              <input type="hidden" name="chromium_unit" value="{{ form.chromium_unit.value|default:'' }}">
-              <input type="hidden" name="molybdenum" value="{{ form.molybdenum.value|default:'' }}">
-              <input type="hidden" name="molybdenum_unit" value="{{ form.molybdenum_unit.value|default:'' }}">
             </div>
           </form>
         </div>
+        <!-- 우측 패널 탭 구조 -->
+        <div id="regulationPanel" class="right-panel collapsible-panel show">
+          <ul class="nav nav-tabs" id="phraseTab" role="tablist">
+            <li class="nav-item" role="presentation">
+              <a class="nav-link active" id="regulation-tab" data-bs-toggle="tab" href="#regulation-content">식품유형별 규정</a>
+            </li>
+            <li class="nav-item" role="presentation">
+              <a class="nav-link" id="myphrases-tab" data-bs-toggle="tab" href="#myphrases-content">항목별 문구 및 규정</a>
+            </li>
+          </ul>
+          <div class="tab-content p-2" style="height:100%;">
+            <div class="tab-pane fade show active" id="regulation-content" role="tabpanel">
+              <textarea name="related_regulations" readonly class="form-control">...</textarea>
+            </div>
+            <div class="tab-pane fade" id="myphrases-content" role="tabpanel">
+              <div id="myPhraseContainer" style="max-height:400px; overflow-y:auto;">
+                <div id="myPhraseList" class="d-flex flex-column gap-2"></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>    
     </div>
-
-
   </div>
 </div>
-
-<!-- 라벨 상수 로드 -->
-<script src="{% static 'js/label/constants.js' %}"></script>
 {% endblock %}
