@@ -233,13 +233,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const nutritionFields = [
       'calories', 'natriums', 'carbohydrates', 'sugars', 
       'fats', 'trans_fats', 'saturated_fats', 
-      'cholesterols', 'proteins', 'dietary_fiber', 
-      'calcium', 'iron', 'potassium', 'magnesium', 'zinc', 'phosphorus', 
-      'vitamin_a', 'vitamin_d', 'vitamin_e', 'vitamin_c', 
-      'vitamin_b1', 'vitamin_b2', 'niacin', 
-      'vitamin_b6', 'folic_acid', 'vitamin_b12', 'selenium', 
-      'pantothenic_acid', 'biotin', 'iodine', 'vitamin_k', 
-      'copper', 'manganese', 'chromium', 'molybdenum'
+      'cholesterols', 'proteins',
+      
+      // 추가 영양성분 (선택) - 모델의 26개 필드와 정확히 일치
+      'dietary_fiber', 'calcium', 'iron', 'magnesium', 'phosphorus', 
+      'potassium', 'zinc', 'vitamin_a', 'vitamin_d', 'vitamin_c', 
+      'thiamine', 'riboflavin', 'niacin', 'vitamin_b6', 'folic_acid', 
+      'vitamin_b12', 'selenium', 'iodine', 'copper', 'manganese', 
+      'chromium', 'molybdenum', 'vitamin_e', 'vitamin_k', 'biotin', 'pantothenic_acid'
     ];
     
     // 모든 필드 검사 (다양한 셀렉터로 필드 찾기) - 영양성분 unit 필드도 포함
@@ -1374,6 +1375,9 @@ document.addEventListener('DOMContentLoaded', function () {
       const popupData = event.data.data;
       const convertedData = convertPopupDataToParentFormat(popupData);
       handleNutritionDataUpdate(convertedData);
+      
+      // 영양성분 데이터 업데이트 완료
+      
     } else if (event.data && event.data.type === 'nutritionReset') {
       handleNutritionDataReset();
     }
@@ -1384,14 +1388,14 @@ document.addEventListener('DOMContentLoaded', function () {
   // 변환 함수 입력 데이터
     const convertedData = { settings: {}, formattedData: {}, resultHTML: '' };
     
-    // 기본 설정 데이터 - settings 객체에서 가져오기
+    // 기본 설정 데이터 - 모델 필드명으로 매핑
     if (popupData.settings) {
       convertedData.settings = {
-        base_amount: popupData.settings.base_amount,
-        servings_per_package: popupData.settings.servings_per_package,
+        // 계산기에서 전송한 필드명을 부모창 필드명으로 매핑
+        serving_size: popupData.settings.serving_size,
+        units_per_package: popupData.settings.units_per_package,
         nutrition_display_unit: popupData.settings.nutrition_display_unit,
-        basic_display_type: popupData.settings.basic_display_type,
-        parallel_display_type: popupData.settings.parallel_display_type
+        serving_size_unit: popupData.settings.serving_size_unit || 'g'
       };
     } else {
       // 하위 호환성을 위한 fallback
@@ -1480,6 +1484,7 @@ document.addEventListener('DOMContentLoaded', function () {
       Object.entries(settingsMap).forEach(([fieldName, value]) => {
         const field = document.querySelector(`input[name="${fieldName}"]`);
         if (field) {
+          const oldValue = field.value;
           field.value = value;
         }
       });
@@ -1554,8 +1559,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const nutritionCheckbox = document.getElementById('chk_nutrition_text');
       if (nutritionCheckbox && nutritionItems.length > 0) {
         nutritionCheckbox.checked = true;
-        // 체크박스 상태 변경 이벤트 트리거
-        nutritionCheckbox.dispatchEvent(new Event('change'));
+        // change 이벤트를 발생시키지 않아 자동 폼 제출 방지
       }
     }
   }
@@ -1572,8 +1576,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const nutritionCheckbox = document.getElementById('chk_nutrition_text');
     if (nutritionCheckbox) {
       nutritionCheckbox.checked = false;
-      // 체크박스 상태 변경 이벤트 트리거
-      nutritionCheckbox.dispatchEvent(new Event('change'));
+      // change 이벤트를 발생시키지 않아 자동 폼 제출 방지
     }
     
     const fieldNames = [
@@ -1598,11 +1601,11 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // 직접 매핑 - 필드명이 통일되어 변환 로직 제거
     const convertedData = {
-      baseAmount: data.nutrition_base_amount || data.serving_size,
-      servingsPerPackage: data.units_per_package,
-      style: data.nutrition_display_unit || data.nutrition_style,
-      basic_display_type: data.basic_display_type || 'per_100g',  // 기본값 설정
-      parallel_display_type: data.parallel_display_type || 'per_serving'  // 기본값 설정
+      // 모델 필드명 기반으로 설정값 전달
+      serving_size: data.serving_size || '100',  // 단위량
+      units_per_package: data.units_per_package || '1',  // 포장갯수  
+      nutrition_display_unit: data.nutrition_display_unit || 'basic',  // 표시 스타일
+      serving_size_unit: data.serving_size_unit || 'g'  // 단위량 단위
     };
     
 

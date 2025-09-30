@@ -319,8 +319,8 @@ function displayEmphasisValidation(nutritionInputs) {
 
 // 영양성분 계산 메인 함수
 function calculateNutrition() {
-  const baseAmount = parseFloat(document.getElementById('base_amount').value) || 100;
-  const servingsPerPackage = parseFloat(document.getElementById('servings_per_package').value) || 1;
+  const baseAmount = parseFloat(document.getElementById('serving_size').value) || 100;
+  const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value) || 1;
   const style = document.getElementById('nutrition_display_unit').value;
   
   // [개선] DOM에서 최신 영양성분 입력값 수집
@@ -361,8 +361,8 @@ function resetFormAndParent() {
     });
     
     // 기본값 설정
-    document.getElementById('base_amount').value = '100';
-    document.getElementById('servings_per_package').value = '1';
+    document.getElementById('serving_size').value = '100';
+    document.getElementById('units_per_package').value = '1';
     document.getElementById('nutrition_display_unit').value = 'basic';
     document.getElementById('basic_display_type').value = 'total';
     document.getElementById('parallel_display_type').value = 'unit_total';
@@ -388,8 +388,8 @@ function sendNutritionDataToParent() {
     return;
   }
 
-  const baseAmount = parseFloat(document.getElementById('base_amount').value) || 100;
-  const servingsPerPackage = parseFloat(document.getElementById('servings_per_package').value) || 1;
+  const baseAmount = parseFloat(document.getElementById('serving_size').value) || 100;
+  const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value) || 1;
   const style = document.getElementById('nutrition_display_unit').value;
   const basicDisplayType = document.getElementById('basic_display_type')?.value || 'per_100g';
   const parallelDisplayType = document.getElementById('parallel_display_type')?.value || 'per_serving';
@@ -412,8 +412,8 @@ function sendNutritionDataToParent() {
     data: {
       nutritionInputs: formattedData,
       settings: {
-        base_amount: baseAmount,
-        servings_per_package: servingsPerPackage,
+        serving_size: baseAmount,
+        units_per_package: servingsPerPackage,
         nutrition_display_unit: style,
         basic_display_type: basicDisplayType,
         parallel_display_type: parallelDisplayType
@@ -566,12 +566,12 @@ function loadExistingData(data) {
     // 기본 설정값 로드
     if (data.baseAmount || data.nutrition_base_amount || data.serving_size) {
       const baseValue = data.baseAmount || data.nutrition_base_amount || data.serving_size;
-      document.getElementById('base_amount').value = baseValue;
+      document.getElementById('serving_size').value = baseValue;
     }
     
     if (data.servingsPerPackage || data.units_per_package) {
       const servingValue = data.servingsPerPackage || data.units_per_package;
-      document.getElementById('servings_per_package').value = servingValue;
+      document.getElementById('units_per_package').value = servingValue;
     }
     
     if (data.style || data.nutrition_display_unit) {
@@ -915,8 +915,8 @@ window.toggleStyleOptions = function() {
   }
   
   // 스타일 변경 시 자동 계산 (영양성분 데이터가 있는 경우에만)
-  const baseAmount = document.getElementById('base_amount').value;
-  const servingsPerPackage = document.getElementById('servings_per_package').value;
+  const baseAmount = document.getElementById('serving_size').value;
+  const servingsPerPackage = document.getElementById('units_per_package').value;
   
   // 자동 계산 제거 - 계산 버튼을 눌렀을 때만 계산
   // 영양성분 입력값 확인은 하지만 자동 계산은 하지 않음
@@ -1121,7 +1121,7 @@ function generateBasicDisplayV3(nutritionInputs, baseAmount, servingsPerPackage)
   let displayAmount, multiplier;
   
   // 단위 확인 (g 또는 ml)
-  const baseUnit = document.getElementById('base_amount_unit')?.value || 'g';
+  const baseUnit = document.getElementById('serving_size_unit')?.value || 'g';
   
   switch (displayType) {
     case 'unit':
@@ -1240,7 +1240,7 @@ function generateParallelDisplayV3(nutritionInputs, baseAmount, servingsPerPacka
   const totalAmount = (baseAmount * servingsPerPackage);
   
   // 단위 확인 (g 또는 ml)
-  const baseUnit = document.getElementById('base_amount_unit')?.value || 'g';
+  const baseUnit = document.getElementById('serving_size_unit')?.value || 'g';
   
   let multiplier1, multiplier2, headerText1, headerText2, subHeaderText1, subHeaderText2, unitText1, unitText2;
   
