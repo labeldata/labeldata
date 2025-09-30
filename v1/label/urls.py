@@ -65,6 +65,7 @@ urlpatterns = [
     path('api/phrases/', views.phrases_api, name='phrases_api'),
     
     # 연결된 원료 조회
+    path('linked-labels-count/<int:ingredient_id>/', views.linked_labels_count, name='linked_labels_count'), #삭제했던 url 다시 추가 (원료 관리에서 연결된 표시사항 갯수 확인 용도)
     path('linked-ingredient-count/<int:label_id>/', views.linked_ingredient_count, name='linked_ingredient_count'),
     
     # 품목보고번호 검증 관련
