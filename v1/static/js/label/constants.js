@@ -220,18 +220,21 @@ const EMPHASIS_CRITERIA = {
 
 // === 알레르기 유발요소 데이터 ===
 
-// 알레르기 키워드 매핑 (19개 공식 알레르기 유발요소)
+// 알레르기 키워드 매핑 (19개 공식 알레르기 유발요소) + 검증 오류 방지를 위한 키워드 변경
 const ALLERGEN_KEYWORDS = {
-    '난류': ['달걀', '계란', '오리알', '메추리알', '전란', '난백', '난황', '알부민', '레시틴(난황)', 'egg'],
-    '우유': ['우유', '원유', '산양유', '유청', '카제인', '유당', '치즈', '버터', '크림', '연유', '분유', '요구르트', 'milk', 'dairy'],
+    // 수정: '난류' → '알류', '난류' 키워드 추가
+    '알류': ['달걀', '계란', '오리알', '메추리알', '전란', '전란액', '전란유', '전란분', '난백', '난백액', '난백분', '난황', '난황액', '난황분', '난황유', '거위알', '알부민', '레시틴(난황)', '라이소자임', '난류', 'egg', 'lysozyme'],
+    '우유': ['우유', '원유', '산양유', '유청', '유청단백', '카제인', '카제인나트륨', '유당', '치즈', '버터', '크림', '생크림', '사워크림', '유크림', '연유', '분유', '전지분유', '탈지분유', '요구르트', 'milk', 'dairy', 'whey protein', 'sodium caseinate'],
     '메밀': ['메밀', '메밀가루', '메밀묵', 'buckwheat'],
-    '밀': ['밀', '밀가루', '통밀', '글루텐', '세몰리나', '듀럼밀', '소맥', 'wheat', 'gluten'],
-    '대두': ['대두', '콩', '두부', '두유', '된장', '간장', '고추장', '콩가루', '콩기름', '대두단백', 'soy', 'soybean'],
+    '밀': ['밀', '밀가루', '통밀', '글루텐', '세몰리나', '듀럼밀', '소맥', '부침가루', '튀김가루', '밀기울', '스펠트밀', 'wheat', 'gluten', 'wheat bran', 'spelt'],
+    // 수정: '콩' 키워드 제거 (완두콩과의 오탐 방지)
+    '대두': ['대두', '대두콩', '노란콩', '콩나물', '두부', '두유', '된장', '간장', '고추장', '콩가루', '콩기름', '대두유', '대두단백', '레시틴', '대두레시틴', 'soy', 'soybean', 'soy lecithin'],
     '땅콩': ['땅콩', '땅콩버터', '땅콩기름', '낙화생', 'peanut', 'peanuts'],
     '호두': ['호두', '호두유', 'walnut', 'walnuts'],
     '잣': ['잣', 'pine nuts', 'pine nut'],
-    '쇠고기': ['쇠고기', '소고기', '우육', '소 내장', '곱창', '대창', '사골', '우족', '육수', '쇠고기추출물', 'beef'],
-    '돼지고기': ['돼지고기', '돈육', '돼지 내장', '돈골', '돈족', '베이컨', '햄', '소시지', 'pork'],
+    // 수정: '육수' 키워드 제거 (멸치육수 등과의 오탐 방지), '육류 육수' 키워드 추가
+    '쇠고기': ['쇠고기', '소고기', '우육', '소 내장', '곱창', '대창', '사골', '우족', '쇠고기추출물', '소고기육수', '사골육수', '소육수', '우지', '젤라틴', 'beef', 'tallow'],
+    '돼지고기': ['돼지고기', '돈육', '돼지 내장', '돈골', '돈족', '베이컨', '햄', '소시지', '돈지', '젤라틴', 'pork', 'lard'],
     '닭고기': ['닭고기', '계육', '닭 내장', '닭발', '닭 육수', 'chicken'],
     '고등어': ['고등어', 'mackerel'],
     '게': ['게', '꽃게', 'crab'],
@@ -242,6 +245,24 @@ const ALLERGEN_KEYWORDS = {
     '토마토': ['토마토', '토마토 페이스트', '토마토 케첩', '토마토 퓌레', 'tomato', 'tomatoes'],
     '아황산류': ['아황산나트륨', '메타중아황산칼륨', '무수아황산', '산성아황산나트륨', '이산화황', 'sulfite', 'sulfur dioxide']
 };
+
+/**
+ * 알레르기 성분 동의어 검색 함수 (키워드 검색 -> 알레르기 그룹 동의어 반환)
+ */
+function findAllergenSynonyms(keyword) {
+    const lowerKeyword = keyword.toLowerCase();
+    
+    for (const [allergen, keywords] of Object.entries(ALLERGEN_KEYWORDS)) {
+        const foundKeyword = keywords.find(k => k.toLowerCase() === lowerKeyword);
+        if (foundKeyword) {
+            return {
+                allergen: allergen,
+                synonyms: keywords
+            };
+        }
+    }
+    return null;
+}
 
 // === 전역 객체로 내보내기 ===
 
@@ -260,7 +281,7 @@ window.LABEL_CONSTANTS = {
     recyclingMarkGroups: RECYCLING_MARK_GROUPS,
     recyclingMarkMap: RECYCLING_MARK_MAP,
     recyclingMarkGroupsDetailed: RECYCLING_MARK_GROUPS_DETAILED,
-    
+
     // 설정값 (프론트엔드 전용)
     defaultSettings: DEFAULT_SETTINGS,
     regulations: REGULATIONS  // 추후 서버에서 동적 로드 예정
@@ -276,6 +297,7 @@ window.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
 window.REGULATIONS = REGULATIONS;
 window.recyclingMarkGroupsDetailed = RECYCLING_MARK_GROUPS_DETAILED;
 window.allergenKeywords = ALLERGEN_KEYWORDS;
+window.findAllergenSynonyms = findAllergenSynonyms;
 // 영양성분 관련 상수 추가
 window.NUTRITION_DATA = NUTRITION_DATA;
 window.EMPHASIS_CRITERIA = EMPHASIS_CRITERIA;

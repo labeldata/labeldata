@@ -230,24 +230,39 @@ function checkAllergenDuplication() {
     
     for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
         for (const keyword of keywords) {
-            // 단일 문자(잣)의 경우 특별 처리: 앞뒤로 공백, 쉼표, 괄호 등이 있는지 확인
+            let found = false;
+            
             if (keyword.length === 1) {
                 const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
                 if (regex.test(cleanIngredients)) {
-                    console.log(`🎯 단일 문자 알레르기 성분 발견: ${allergen} (키워드: ${keyword})`);
-                    if (!foundAllergens.includes(allergen)) {
-                        foundAllergens.push(allergen);
-                    }
-                    break;
+                    found = true;
                 }
             } else {
                 if (cleanIngredients.toLowerCase().includes(keyword.toLowerCase())) {
-                    console.log(`🎯 알레르기 성분 발견: ${allergen} (키워드: ${keyword})`);
-                    if (!foundAllergens.includes(allergen)) {
-                        foundAllergens.push(allergen);
-                    }
-                    break;
+                    found = true;
                 }
+            }
+            
+            if (!found && window.findAllergenSynonyms) {
+                const synonymData = window.findAllergenSynonyms(keyword);
+                if (synonymData) {
+                    found = synonymData.synonyms.some(synonym => {
+                        if (synonym.length === 1) {
+                            const regex = new RegExp(`[\\s,():]${synonym}[\\s,():]|^${synonym}[\\s,():]|[\\s,():]${synonym}$|^${synonym}$`, 'gi');
+                            return regex.test(cleanIngredients);
+                        } else {
+                            return cleanIngredients.toLowerCase().includes(synonym.toLowerCase());
+                        }
+                    });
+                }
+            }
+            
+            if (found) {
+                console.log(` 알레르기 성분 발견: ${allergen} (키워드: ${keyword})`);
+                if (!foundAllergens.includes(allergen)) {
+                    foundAllergens.push(allergen);
+                }
+                break;
             }
         }
     }
@@ -308,12 +323,45 @@ function checkAllergenDuplication() {
     }
     
     // 누락된 알레르기 성분 찾기
-    const missingAllergens = foundAllergens.filter(allergen => 
-        !declaredAllergens.some(declared => 
-            declared.toLowerCase().includes(allergen.toLowerCase()) ||
-            allergen.toLowerCase().includes(declared.toLowerCase())
-        )
-    );
+    const missingAllergens = foundAllergens.filter(foundAllergen => {
+        const hasMatch = declaredAllergens.some(declared => {
+            // 1. 정확한 일치 검사
+            if (foundAllergen.toLowerCase() === declared.toLowerCase()) {
+                return true;
+            }
+            
+            // 2. 부분 포함 검사 (기존 로직 유지)
+            if (declared.toLowerCase().includes(foundAllergen.toLowerCase()) ||
+                foundAllergen.toLowerCase().includes(declared.toLowerCase())) {
+                return true;
+            }
+            
+            // 3. 동의어 검사 '난류' 표기와 '알류' 표기를 동일한 알레르기로 인식
+            const foundSynonyms = window.findAllergenSynonyms ? window.findAllergenSynonyms(foundAllergen) : null;
+            const declaredSynonyms = window.findAllergenSynonyms ? window.findAllergenSynonyms(declared) : null;
+            
+            // 동의어 그룹이 같으면 동일한 알레르기로 간주 (예): '달걀' 원재료 + '난류' 표시 = 정상 인식
+            if (foundSynonyms && declaredSynonyms && 
+                foundSynonyms.allergen === declaredSynonyms.allergen) {
+                return true;
+            }
+            
+            // 동의어 목록에서 부분 일치 검사
+            if (foundSynonyms && foundSynonyms.synonyms.some(synonym => 
+                declared.toLowerCase().includes(synonym.toLowerCase()))) {
+                return true;
+            }
+            
+            if (declaredSynonyms && declaredSynonyms.synonyms.some(synonym => 
+                foundAllergen.toLowerCase().includes(synonym.toLowerCase()))) {
+                return true;
+            }
+            
+            return false;
+        });
+        
+        return !hasMatch; // 일치하지 않는 것만 누락으로 처리
+    });
     
     console.log('🔍 누락된 알레르기 성분:', missingAllergens);
     console.log('🔍 중복된 알레르기 성분:', duplicatedAllergens);
@@ -336,7 +384,7 @@ function checkAllergenDuplication() {
     }
     
     return errors;
-}
+} // checkAllergenDuplication 함수 끝
 
 // 검증 결과 모달 표시 함수
 function showValidationModal(results) {
