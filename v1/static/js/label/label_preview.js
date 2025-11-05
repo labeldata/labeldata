@@ -84,7 +84,7 @@ window.validateSettings = async function() {
                 const result = item.check();
                 return { ...result, label: item.label };
             } catch (error) {
-                console.error(`❌ ${item.label} 검증 오류:`, error);
+                console.error(`${item.label} 검증 오류:`, error);
                 return {
                     ok: false,
                     errors: [`${item.label} 검증 중 오류가 발생했습니다: ${error.message}`],
@@ -98,7 +98,7 @@ window.validateSettings = async function() {
         showValidationModal(validationResults);
         
     } catch (error) {
-        console.error('🔥 validateSettings 오류:', error);
+        console.error('validateSettings 오류:', error);
         alert('검증 중 오류가 발생했습니다: ' + error.message);
     }
 };
@@ -133,7 +133,6 @@ function checkAllergenDuplication() {
         try {
             const urlParams = new URLSearchParams(window.location.search);
             const labelId = urlParams.get('label_id');
-            console.log('🔍 라벨 ID:', labelId);
             
             // 세션 스토리지에서 원본 데이터 찾기
             const sessionKey = `labelPreviewSettings_${labelId}`;
@@ -158,14 +157,12 @@ function checkAllergenDuplication() {
                 const name = input.name || input.id || '';
                 
                 if ((name.includes('rawmtrl') || name.includes('원재료')) && value.includes('[알레르기')) {
-                    console.log('� 원본 원재료명 입력 필드 발견:', name, value);
                     ingredients = value.trim();
                     break;
                 }
                 
                 // 감자플레이크를 포함하는 필드도 체크
                 if (value.includes('감자플레이크') && value.includes('[알레르기')) {
-                    console.log('� 원재료명 패턴 매치:', name, value);
                     ingredients = value.trim();
                     break;
                 }
@@ -178,7 +175,6 @@ function checkAllergenDuplication() {
             for (const element of allElements) {
                 const text = element.textContent || '';
                 if (text.includes('감자플레이크') && text.includes('[알레르기') && text.length < 500) {
-                    console.log('� DOM에서 원본 형태 발견:', text.substring(0, 200));
                     ingredients = text.trim();
                     break;
                 }
@@ -186,12 +182,8 @@ function checkAllergenDuplication() {
         }
     }
     
-    console.log('📊 최종 원재료명:', ingredients);
-    console.log('📊 최종 알레르기 정보:', allergenInfo);
-    
     // 원재료명이 없으면 검증 불가
     if (!ingredients || !ingredients.trim()) {
-        console.log('⚠️ 원재료명이 없어 알레르기 검증을 수행할 수 없습니다.');
         return [];
     }
     
@@ -209,19 +201,9 @@ function checkAllergenDuplication() {
         cleanIngredients = ingredients.replace(allergenPattern, '').trim();
         // 선언된 알레르기 성분
         declaredAllergenText = allergenMatch[1]; // "밀, 달걀, 우유, 대두 함유"
-        
-        console.log('🎯 부모창 데이터 분석 완료');
-        console.log('  - 순수 원재료명:', cleanIngredients);
-        console.log('  - 선언된 알레르기:', declaredAllergenText);
-    } else {
-        console.log('⚠️ 알레르기 성분 표시를 찾을 수 없음');
     }
     
-    console.log('📊 최종 검증 대상 - 원재료명:', cleanIngredients);
-    console.log('📊 최종 검증 대상 - 알레르기 표시:', declaredAllergenText);
-    
     if (!cleanIngredients.trim()) {
-        console.log('⚠️ 원재료명이 비어있음');
         return [];
     }
     
@@ -258,7 +240,6 @@ function checkAllergenDuplication() {
             }
             
             if (found) {
-                console.log(` 알레르기 성분 발견: ${allergen} (키워드: ${keyword})`);
                 if (!foundAllergens.includes(allergen)) {
                     foundAllergens.push(allergen);
                 }
@@ -267,29 +248,21 @@ function checkAllergenDuplication() {
         }
     }
     
-    console.log('🔍 원재료에서 발견된 알레르기 성분:', foundAllergens);
-    
     // 4. 부모창에서 선언된 알레르기 성분들 파싱
     const declaredAllergens = [];
     
     if (declaredAllergenText) {
-        console.log('🔍 부모창 알레르기 성분 파싱 시작:', declaredAllergenText);
-        
         // "밀, 달걀, 우유, 대두 함유" 형태에서 "함유" 제거하고 쉼표로 분리
         let cleanText = declaredAllergenText.replace(/\s*함유\s*/g, '').trim();
         
         const items = cleanText.split(/[,、，]/).map(item => item.trim()).filter(item => item && item.length > 0);
         declaredAllergens.push(...items);
-        console.log('🎯 부모창에서 선언된 알레르기 성분들:', items);
     }
-    
-    console.log('🔍 선언된 알레르기 성분:', declaredAllergens);
     
     // 5. 주의사항에서 중복 표시 검사
     let cautionsText = '';
     if (window.checkedFields && window.checkedFields.cautions) {
         cautionsText = window.checkedFields.cautions;
-        console.log('🔍 주의사항 텍스트:', cautionsText);
     }
     
     const duplicatedAllergens = [];
@@ -317,7 +290,6 @@ function checkAllergenDuplication() {
                     allergen: declaredAllergen,
                     foundKeywords: foundInCautions
                 });
-                console.log(`⚠️ 중복 발견: ${declaredAllergen} (키워드: ${foundInCautions.join(', ')})`);
             }
         }
     }
@@ -363,9 +335,6 @@ function checkAllergenDuplication() {
         return !hasMatch; // 일치하지 않는 것만 누락으로 처리
     });
     
-    console.log('🔍 누락된 알레르기 성분:', missingAllergens);
-    console.log('🔍 중복된 알레르기 성분:', duplicatedAllergens);
-    
     // 오류 메시지 생성
     const errors = [];
     
@@ -388,7 +357,6 @@ function checkAllergenDuplication() {
 
 // 검증 결과 모달 표시 함수
 function showValidationModal(results) {
-    console.log('📋 검증 결과 모달 표시');
     
     // 기존 모달 제거
     const existingModal = document.getElementById('validationModal');
@@ -470,8 +438,6 @@ function showValidationModal(results) {
 (function() {
     'use strict';
     
-    console.log('🔧 분리배출마크 전역 함수 초기화 시작');
-    
     // 전역 변수
     window.recyclingMarkFunctionsReady = false;
     
@@ -513,7 +479,6 @@ function showValidationModal(results) {
         return window._debugRecyclingMark();
     };
     
-    console.log('✅ 분리배출마크 기본 함수들이 정의되었습니다.');
 })();
 
 // 유틸리티 함수: 안전한 JSON 데이터 로드
@@ -523,11 +488,11 @@ function safeLoadJsonData(elementId, defaultValue = null, description = '') {
         if (element && element.textContent) {
             return JSON.parse(element.textContent);
         } else {
-            console.warn(`⚠️ ${description || elementId} 요소가 없습니다`);
+            console.warn(`${description || elementId} 요소가 없습니다`);
             return defaultValue;
         }
     } catch (error) {
-        console.error(`❌ ${description || elementId} 파싱 오류:`, error);
+        console.error(`${description || elementId} 파싱 오류:`, error);
         return defaultValue;
     }
 }
@@ -546,13 +511,11 @@ function decodeHtmlEntities(text) {
 // 유틸리티 함수: 안전한 JSON 파싱 (디코딩 포함)
 function safeParseJson(textContent, description = '') {
     if (!textContent || typeof textContent !== 'string') {
-        console.log(`ℹ️ ${description} 데이터가 비어있습니다. 기본 설정을 사용합니다.`);
         return {};
     }
     
     // HTML 엔티티 디코딩
     const decodedText = decodeHtmlEntities(textContent.trim());
-    console.log(`🔧 ${description} 디코딩된 데이터:`, decodedText.substring(0, 200) + '...');
     
     let result = {};
     
@@ -561,24 +524,20 @@ function safeParseJson(textContent, description = '') {
         if (decodedText.startsWith('{') && decodedText.endsWith('}')) {
             try {
                 result = JSON.parse(decodedText);
-                console.log(`✅ ${description} JSON 파싱 성공:`, result);
             } catch (parseError) {
-                console.warn(`⚠️ ${description} JSON 파싱 실패, 기본값 사용:`, parseError.message);
-                console.log('🔍 파싱 실패한 내용 (첫 500자):', decodedText.substring(0, 500));
+                console.warn(`${description} JSON 파싱 실패, 기본값 사용:`, parseError.message);
                 result = {};
             }
         } else if (decodedText.startsWith('[') && decodedText.endsWith(']')) {
             try {
                 const arrayData = JSON.parse(decodedText);
                 result = arrayData[0] || {};
-                console.log(`✅ ${description} 배열 JSON 파싱 성공:`, result);
             } catch (parseError) {
-                console.warn(`⚠️ ${description} 배열 JSON 파싱 실패, 기본값 사용:`, parseError.message);
+                console.warn(`${description} 배열 JSON 파싱 실패, 기본값 사용:`, parseError.message);
                 result = {};
             }
         } else {
-            console.warn(`⚠️ ${description} JSON 형식이 아닙니다. 기본값을 사용합니다.`);
-            console.log('🔍 유효하지 않은 데이터:', decodedText.substring(0, 100));
+            console.warn(`${description} JSON 형식이 아닙니다. 기본값을 사용합니다.`);
             result = {};
         }
     }
@@ -593,7 +552,7 @@ function safeSetElementValue(elementId, value, warnOnMissing = false) {
         element.value = value;
         return true;
     } else if (warnOnMissing) {
-        console.warn(`⚠️ ${elementId} 요소를 찾을 수 없습니다`);
+        console.warn(`${elementId} 요소를 찾을 수 없습니다`);
     }
     return false;
 }
@@ -615,7 +574,6 @@ function addEventListenersToElements(elementIds, eventType, handler, options = {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    console.log('📄 DOMContentLoaded 이벤트 발생 - 미리보기 페이지 초기화 시작');
     // 미리보기 페이지 로드 시작
     
     // 데이터 로드 (중복 제거된 코드)
@@ -702,7 +660,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 설정 UI 요소들 존재 확인 및 생성
     function ensureSettingsElements() {
-        console.log('🔧 설정 UI 요소들 확인 중...');
         
         const requiredElements = [
             { id: 'widthInput', type: 'number', value: '10', min: '5', max: '20', step: '0.1' },
@@ -719,7 +676,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const element = document.getElementById(config.id);
             if (!element) {
                 missingElements.push(config.id);
-                console.warn(`⚠️ ${config.id} 요소가 없습니다. 임시 요소를 생성합니다.`);
+                console.warn(`${config.id} 요소가 없습니다. 임시 요소를 생성합니다.`);
                 
                 // 임시 요소 생성
                 const tempElement = config.type === 'select' ? document.createElement('select') : document.createElement('input');
@@ -739,10 +696,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         
         if (missingElements.length > 0) {
-            console.warn(`⚠️ 누락된 설정 요소들: ${missingElements.join(', ')}`);
-            console.log('임시 요소들을 생성했습니다. 실제 UI가 로드되면 교체될 예정입니다.');
-        } else {
-            console.log('✅ 모든 설정 요소들이 존재합니다.');
+            console.warn(`누락된 설정 요소들: ${missingElements.join(', ')}`);
         }
     }
 
@@ -770,19 +724,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             
             if (packageValue) {
-                console.log('포장재질 발견:', packageValue);
                 window.updateRecyclingMarkUI(packageValue, true);
                 return true;
             } else {
                 console.warn('포장재질 정보를 찾을 수 없습니다.');
-                // 디버깅을 위해 현재 페이지의 모든 input 요소들을 출력
-                const allInputs = document.querySelectorAll('input, textarea');
-                console.log('페이지의 모든 input/textarea 요소들:', Array.from(allInputs).map(el => ({
-                    name: el.name,
-                    id: el.id,
-                    placeholder: el.placeholder,
-                    value: el.value
-                })));
                 return false;
             }
         };
@@ -800,13 +745,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 containerVisible: container ? container.style.display !== 'none' : false
             };
             
-            console.log('분리배출마크 상태:', status);
             return status;
         };
 
         // 실제 구현: 분리배출마크 관련 디버깅 정보
         window._debugRecyclingMark = function() {
-            console.group('🔍 분리배출마크 디버깅 정보');
+            console.group('분리배출마크 디버깅 정보');
             
             // DOM 요소 존재 확인
             const elements = {
@@ -835,12 +779,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // 함수 등록 완료 알림 및 상태 설정
         window.recyclingMarkFunctionsReady = true;
-        console.log('✅ 분리배출마크 전역 함수들이 등록되었습니다:', {
-            applyRecommendedRecyclingMark: typeof window.applyRecommendedRecyclingMark,
-            getCurrentRecyclingMarkStatus: typeof window.getCurrentRecyclingMarkStatus,
-            debugRecyclingMark: typeof window.debugRecyclingMark,
-            updateRecyclingMarkUI: typeof window.updateRecyclingMarkUI
-        });
         
         // 즉시 사용 가능함을 알리는 이벤트 발생
         window.dispatchEvent(new CustomEvent('recyclingMarkReady'));
@@ -1379,7 +1317,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // 미리보기 스타일 업데이트 (임시 비활성화로 테스트)
     function updatePreviewStyles() {
         // 임시로 완전히 비활성화하여 분리배출마크 영향 테스트
-        console.log('updatePreviewStyles 호출됨 (비활성화됨)');
         return;
         
         const previewContent = document.getElementById('previewContent');
@@ -1622,7 +1559,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
     // 영양성분은 영양성분 탭이 활성화될 때만 표시
     } catch (e) {
-        console.error('❌ 영양성분 데이터 처리 중 오류:', e);
+        console.error('영양성분 데이터 처리 중 오류:', e);
     // 백업 데이터 로드 시도
         
         // 오류 발생 시 백업 로직: DOM에서 직접 데이터 추출 (중복 제거된 코드)
@@ -2049,17 +1986,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 저장된 미리보기 설정 로드 (중복 제거된 코드)
     function loadSavedPreviewSettings() {
-        console.log('🔄 설정 로드 시작');
         
         try {
             const settingsScript = document.getElementById('preview-settings-data');
             if (!settingsScript) {
-                console.log('ℹ️ preview-settings-data 요소가 없습니다. 기본 설정을 사용합니다.');
                 return;
             }
             
             const textContent = settingsScript.textContent?.trim();
-            console.log('📄 원본 설정 데이터:', textContent ? textContent.substring(0, 200) + '...' : 'null');
             
             // 통합된 JSON 파싱 함수 사용
             const settings = safeParseJson(textContent, '미리보기 설정');
@@ -2067,25 +2001,13 @@ document.addEventListener('DOMContentLoaded', function () {
             // 분리배출마크 설정 복원
             const recyclingMark = settings.recycling_mark;
             if (recyclingMark && recyclingMark.enabled && recyclingMark.type) {
-                console.log('♻️ 분리배출마크 복원 시작:', recyclingMark);
                 waitForElement('recyclingMarkSelect', () => {
                     restoreRecyclingMark(recyclingMark);
                 });
-            } else {
-                console.log('ℹ️ 복원할 분리배출마크 설정이 없습니다.');
             }
             
         } catch (error) {
-            console.error('❌ 설정 로드 중 치명적 오류:', error);
-            console.log('🔍 오류 세부사항:', {
-                message: error.message,
-                stack: error.stack,
-                elementExists: !!document.getElementById('preview-settings-data'),
-                elementContent: document.getElementById('preview-settings-data')?.textContent?.substring(0, 100)
-            });
-            
-            // 치명적 오류가 발생해도 계속 진행하도록 보장
-            console.log('🔄 오류 무시하고 계속 진행합니다.');
+            console.error('설정 로드 중 오류:', error);
         }
     }
 
@@ -3005,24 +2927,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // validateButton 이벤트 리스너 - 단순하고 안정적인 방식
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('� validateButton 이벤트 리스너 연결 시작');
     
     const validateButton = document.getElementById('validateButton');
-    console.log('🔍 validateButton 찾기:', validateButton);
     
     if (validateButton) {
         validateButton.addEventListener('click', function() {
-            console.log('🎯 validateButton 클릭됨!');
             if (typeof window.validateSettings === 'function') {
                 window.validateSettings();
             } else {
-                console.error('❌ validateSettings 함수를 찾을 수 없음');
+                console.error('validateSettings 함수를 찾을 수 없음');
                 alert('검증 함수를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
             }
         });
-        console.log('✅ validateButton 이벤트 리스너 연결 완료');
-    } else {
-        console.log('❌ validateButton을 찾을 수 없음');
     }
 });
 
@@ -3031,11 +2947,9 @@ window.addEventListener('message', function(e) {
     if (e.data.type === 'previewCheckedFields') {
         // 전역 변수로 설정하여 validateSettings에서 사용할 수 있도록
         window.checkedFields = e.data.checked;
-        console.log('✅ 부모창 원본 데이터 연동 완료');
         
         // 원재료명 정보 로깅
         if (window.checkedFields.ingredient_info) {
-            console.log('🎯 부모창 원재료명:', window.checkedFields.ingredient_info);
         }
     }
 });
@@ -3075,29 +2989,23 @@ function checkForbiddenPhrasesInProduct() {
 
 // 농수산물 성분 함량 표시 검증 (기존 로직 활용)
 function checkFarmSeafoodContentDisplay() {
-    console.log('🚀 checkFarmSeafoodContentDisplay 함수 호출됨');
     
     // checkedFields 데이터 확인
     if (!checkedFields) {
-        console.warn('⚠️ checkedFields 데이터 없음');
+        console.warn('checkedFields 데이터 없음');
         return { ok: true, errors: [], suggestions: [] };
     }
     
     // HTML의 기존 checkFarmSeafoodCompliance 로직을 호출
     if (typeof window.checkFarmSeafoodCompliance === 'function') {
-        console.log('✅ HTML의 checkFarmSeafoodCompliance 함수 호출');
         return window.checkFarmSeafoodCompliance();
     }
     
-    console.log('📋 폴백 로직 사용');
     // 폴백 로직 (기존 HTML 로직과 동일)
     const errors = [];
     const suggestions = [];
     const productName = checkedFields.prdlst_nm || '';
     const ingredientInfo = checkedFields.ingredient_info || '';
-    
-    console.log('- 제품명:', productName);
-    console.log('- 특정성분 함량:', ingredientInfo);
     
     // 농수산물 목록 (constants.js에서 가져오기)
     const farmSeafoodItems = window.LABEL_CONSTANTS?.farmSeafoodItems || window.farmSeafoodItems || [];
@@ -3107,10 +3015,7 @@ function checkFarmSeafoodContentDisplay() {
         .filter(item => productName.includes(item))
         .sort((a, b) => b.length - a.length);
 
-    console.log('- 발견된 농수산물:', foundItems);
-
     if (foundItems.length === 0) {
-        console.log('✅ 농수산물 성분 없음 - 검증 통과');
         return { ok: true, errors: [], suggestions: [] };
     }
 
@@ -3118,15 +3023,12 @@ function checkFarmSeafoodContentDisplay() {
         // '특정성분 함량' 필드에 해당 성분명과 함량(%)이 모두 포함되어 있는지 확인
         const complianceRegex = new RegExp(`${item}[^,]*\\d+(\\.\\d+)?\\s*%`);
         const isCompliant = complianceRegex.test(ingredientInfo);
-        
-        console.log(`- ${item} 검증:`, isCompliant ? '통과' : '실패');
 
         if (!isCompliant) {
             errors.push(`제품명에 사용된 '${item}'의 함량을 '특정성분 함량' 항목에 표시하세요 (예: ${item} 100%).`);
         }
     });
 
-    console.log('✅ 농수산물 성분 함량 검증 완료:', errors.length === 0 ? '통과' : '오류 있음');
     return {
         ok: errors.length === 0,
         errors,
@@ -3142,12 +3044,6 @@ window.checkFoodTypePhrasesUnified = function checkFoodTypePhrasesUnified() {
     const foodType = (checkedFields.prdlst_dcnm || '').trim();
     const cautions = (checkedFields.cautions || '').trim();
     const additional = (checkedFields.additional_info || '').trim();
-
-    console.log('🔍 필수 문구 검증 시작');
-    console.log('- 보관방법:', storageMethod);
-    console.log('- 식품유형:', foodType);
-    console.log('- 주의사항:', cautions);
-    console.log('- 기타표시사항:', additional);
 
     // 1. 냉동 조건 검증
     const isFrozenStorage = (() => {
@@ -3233,7 +3129,6 @@ window.checkFoodTypePhrasesUnified = function checkFoodTypePhrasesUnified() {
         errors.push('모든 식품에는 "부정불량식품신고는 국번없이 1399"를 표시해야 합니다.');
     }
 
-    console.log('✅ 필수 문구 검증 완료:', errors.length === 0 ? '통과' : '오류 있음');
     return { ok: errors.length === 0, errors, suggestions };
 };
 
@@ -3494,8 +3389,5 @@ window.addEventListener('load', function() {
         window.opener.postMessage({
             type: 'requestPreviewData'
         }, '*');
-        console.log('📤 부모창에 데이터 요청 완료');
-    } else {
-        console.log('⚠️ 부모창이 없음 - 팝업이 아닌 직접 접근');
     }
 });
