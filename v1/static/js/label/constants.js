@@ -112,14 +112,14 @@ const RECYCLING_MARK_GROUPS_DETAILED = [
         group: '종이', 
         options: [
             { value: '종이', label: '종이', img: '/static/img/recycle_paper.png' },
-            { value: '일반팩', label: '일반팩', img: '/static/img/recycle_pack.png' },
-            { value: '멸균팩', label: '멸균팩', img: '/static/img/recycle_sterilized_pack.png' }
+            { value: '일반팩', label: '일반팩', img: '/static/img/recycle_pack_general.png' },
+            { value: '멸균팩', label: '멸균팩', img: '/static/img/recycle_pack_sterile.png' }
         ]
     },
     { 
         group: '금속', 
         options: [
-            { value: '캔류(철)', label: '캔류(철)', img: '/static/img/recycle_can_steel.png' },
+            { value: '캔류(철)', label: '캔류(철)', img: '/static/img/recycle_can_iron.png' },
             { value: '캔류(알미늄)', label: '캔류(알미늄)', img: '/static/img/recycle_can_aluminum.png' }
         ]
     },
@@ -137,8 +137,7 @@ const RECYCLING_MARK_GROUPS_DETAILED = [
             { value: '비닐(LDPE)', label: '비닐(LDPE)', img: '/static/img/recycle_vinyl_ldpe.png' },
             { value: '비닐(PP)', label: '비닐(PP)', img: '/static/img/recycle_vinyl_pp.png' },
             { value: '비닐(PS)', label: '비닐(PS)', img: '/static/img/recycle_vinyl_ps.png' },
-            { value: '비닐(기타)', label: '비닐(기타)', img: '/static/img/recycle_vinyl_other.png' },
-            { value: '복합재질', label: '복합재질', img: '/static/img/recycle_composite.png' }
+            { value: '비닐(기타)', label: '비닐(기타)', img: '/static/img/recycle_vinyl_other.png' }
         ]
     }
 ];

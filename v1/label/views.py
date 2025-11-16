@@ -1818,36 +1818,40 @@ def linked_ingredient_count(request, label_id):
 
 @csrf_exempt
 @require_POST
-@login_required
 def verify_report_no(request):
     data = json.loads(request.body)
     label_id = data.get('label_id')
     prdlst_report_no = data.get('prdlst_report_no', '').strip()
-    if not label_id or not prdlst_report_no:
+    
+    # 품목보고번호가 없으면 오류
+    if not prdlst_report_no:
         return JsonResponse({
             'verified': False, 
             'status': 'error',
             'error_type': 'missing_data',
-            'message': '필수값이 누락되었습니다.'
+            'message': '품목보고번호를 입력해주세요.'
         })
     
-    try:
-        label = MyLabel.objects.get(pk=label_id, user_id=request.user)
-    except MyLabel.DoesNotExist:
-        return JsonResponse({
-            'verified': False, 
-            'status': 'error',
-            'error_type': 'label_not_found',
-            'message': '라벨을 찾을 수 없습니다.'
-        })
+    # label_id가 있고 로그인된 경우에만 라벨 조회
+    label = None
+    if label_id and request.user.is_authenticated:
+        try:
+            label = MyLabel.objects.get(pk=label_id, user_id=request.user)
+        except MyLabel.DoesNotExist:
+            return JsonResponse({
+                'verified': False, 
+                'status': 'error',
+                'error_type': 'label_not_found',
+                'message': '라벨을 찾을 수 없습니다.'
+            })
     
-    # 1. 품목보고번호 형식 검증 (13자리 또는 14자리 숫자)
-    if not re.match(r'^\d{13,14}$', prdlst_report_no):
+    # 1. 품목보고번호 형식 검증 (13~15자리 숫자)
+    if not re.match(r'^\d{13,15}$', prdlst_report_no):
         return JsonResponse({
             'verified': False,
             'status': 'format_error',
             'error_type': 'format',
-            'message': '품목보고번호는 13자리 또는 14자리 숫자여야 합니다.'
+            'message': '품목보고번호는 13~15자리 숫자여야 합니다.'
         })
     
     # 2. 기본 규칙 검증 (첫 4자리가 연도 형식인지 확인)
@@ -1871,18 +1875,28 @@ def verify_report_no(request):
         })
     
     # 3. 중복 검증
-    exists = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).exists()
-    if exists:
-        # 중복된 번호 (이미 신고되어 있음)
+    food_item = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).first()
+    if food_item:
+        # 중복된 번호 (이미 신고되어 있음) - 해당 제품 정보 반환
         return JsonResponse({
             'verified': True,
             'status': 'completed',
-            'message': '동일한 번호가 있으면 다시 확인하세요'
+            'message': '식품안전나라에 등록된 제품정보를 가져왔습니다.',
+            'product_data': {
+                'prdlst_nm': food_item.prdlst_nm or '',
+                'prdlst_dcnm': food_item.prdlst_dcnm or '',
+                'packaging_material': food_item.frmlc_mtrqlt or '',
+                'manufacturer': food_item.bssh_nm or '',
+                'rawmtrl_nm': food_item.rawmtrl_nm or ''
+            }
         })
     else:
         # 등록되지 않은 번호 (신고 가능)
-        label.report_no_verify_YN = 'Y'
-        label.save(update_fields=['report_no_verify_YN'])
+        # label이 있는 경우에만 저장
+        if label:
+            label.report_no_verify_YN = 'Y'
+            label.save(update_fields=['report_no_verify_YN'])
+        
         return JsonResponse({
             'verified': True,
             'status': 'available',

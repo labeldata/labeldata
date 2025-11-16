@@ -19,21 +19,6 @@
   <!-- 메인 CSS -->
   <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20250413">
   {% block extra_head %}{% endblock %}
-  <style>
-    /* main-content 영역: flex-grow를 이용하여 남은 공간 모두 차지 */
-    .main-content {
-      flex: 1;
-      margin-top: 60px; /* 네비게이션 높이 */
-      padding-bottom: 20px;
-      display: flex;
-      flex-direction: column;
-      overflow: auto;
-    }
-    /* body에 최소 높이 보장 */
-    html, body {
-      min-height: 100vh;
-    }
-  </style>
 </head>
 <body>
   <!-- Navbar -->
@@ -48,5 +33,6 @@
   {% include 'includes/footer.html' %}
 
   {% bootstrap_javascript %}
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

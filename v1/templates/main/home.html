@@ -1,410 +1,912 @@
 {% extends 'base.html' %}
 {% load static %}
+
 {% block title %}간편한 표시사항 연구소{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/label_creation.css' %}">
+<link rel="stylesheet" href="{% static 'css/label_preview.css' %}">
+<style>
+/* --- 데모 페이지 전용 스타일 --- */
+.demo-hero {
+    background: linear-gradient(135deg, #38b2ac 0%, #319795 100%);
+    color: white;
+    padding: 0.8rem 0;
+    margin-bottom: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.demo-title { 
+    font-size: 1.3rem; 
+    font-weight: 700; 
+    margin-bottom: 0.2rem; 
+}
+.demo-subtitle { 
+    font-size: 0.85rem; 
+    opacity: 0.95; 
+    margin-bottom: 0; 
+}
+
+/* 패널 컨테이너 - 독립 스크롤 */
+.row.demo-panels {
+    height: calc(100vh - 140px);
+    min-height: 600px;
+}
+
+/* 왼쪽 패널 - 독립 스크롤 */
+.col-12.col-lg-6.demo-left-panel {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 15px;
+}
+
+/* 오른쪽 패널 - 독립 스크롤 */
+.col-12.col-lg-6.demo-right-panel {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-left: 15px;
+}
+
+/* 카드 높이 조정 - h-100 제거 효과 */
+.demo-left-panel .card,
+.demo-right-panel .card {
+    height: auto;
+    margin-bottom: 1rem;
+}
+
+/* 1열 레이아웃 - 컴팩트 버전 */
+.input-form-area .form-group-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    gap: 8px;
+}
+.input-form-area .form-group-row.align-start {
+    align-items: flex-start;
+}
+.input-form-area .form-label-cell {
+    width: 22%;
+    min-width: 110px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+}
+.input-form-area .form-input-cell {
+    width: 78%;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.input-form-area .form-input-cell .form-control {
+    flex: 1;
+    font-size: 0.9rem;
+    padding: 0.4rem 0.6rem;
+}
+.input-form-area textarea.form-control {
+    min-height: 38px;
+    overflow-y: hidden;
+    resize: none;
+}
+.input-form-area textarea.form-control.auto-resize {
+    transition: height 0.1s ease;
+    flex: none !important;
+    flex-shrink: 0 !important;
+}
+.input-form-area .btn-sm {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+/* 미리보기 설정 패널 - 컴팩트 버전 */
+#settingsPanelDemo {
+    background: #f8f9fa;
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+}
+
+#settingsPanelDemo label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    color: #495057;
+}
+
+#settingsPanelDemo input[type="number"],
+#settingsPanelDemo select {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.4rem;
+    height: 30px;
+}
+
+/* 스크롤바 스타일 */
+.demo-left-panel::-webkit-scrollbar,
+.demo-right-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.demo-left-panel::-webkit-scrollbar-track,
+.demo-right-panel::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.demo-left-panel::-webkit-scrollbar-thumb,
+.demo-right-panel::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.demo-left-panel::-webkit-scrollbar-thumb:hover,
+.demo-right-panel::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* 미리보기 테이블 항목명 고정 너비 (home 데모 전용 - 150px) */
+#previewContent .preview-table th {
+    width: 150px !important;
+    min-width: 150px !important;
+    max-width: 150px !important;
+    white-space: nowrap;
+    background-color: #f8f9fa;
+    text-align: center;
+    font-weight: 500;
+    padding: 6px 10px;
+    border: 1px solid #dee2e6;
+    vertical-align: top;
+}
+
+#previewContent .preview-table td {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    padding: 6px 10px;
+    border: 1px solid #dee2e6;
+    vertical-align: top;
+}
+
+#previewContent .preview-table {
+    table-layout: fixed !important;
+    width: 100%;
+}
+
+/* label_creation.css의 일부 스타일 오버라이드 (데모용) */
+.modern-card { box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: none; }
+.card-body { overflow-y: visible !important; }
+.input-form-area { max-height: none !important; overflow-y: visible !important; }
+
+/* 미리보기 설정 패널 */
+#settingsPanelDemo .row {
+    margin-bottom: 0.5rem;
+}
+
+/* 탭 네비게이션 스타일 */
+.form-tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #e9ecef;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.form-tab {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #6c757d;
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.form-tab:hover {
+    color: #0d6efd;
+    background: #f8f9fa;
+}
+
+.form-tab.active {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+    font-weight: 600;
+}
+
+.form-tab i {
+    margin-right: 0.5rem;
+}
+
+.tab-content-panel {
+    display: none;
+}
+
+.tab-content-panel.active {
+    display: block;
+}
+
+/* 플로팅 네비게이션 버튼 */
+.floating-nav {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.floating-nav .btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s;
+}
+
+.floating-nav .btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 991px) {
+    .floating-nav {
+        bottom: 10px;
+        left: 10px;
+    }
+    .floating-nav .btn {
+        width: 40px;
+        height: 40px;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<main class="home-container">
-    <!-- 메인 소개 섹션 -->
-    <section class="intro-section">
-        <header class="intro-header">
-            <h1 class="intro-title">"간편한 표시사항 연구소"에 오신 것을 환영합니다.</h1>
-            <p class="intro-description">복잡한 표시사항 작성, 이제 쉽고 빠르게 해결하세요.</p>
-        </header>
-        
-        <div class="home-actions">
-            <button id="start-tutorial-btn" class="action-btn tutorial-btn">
-                <span class="btn-icon">🚀</span>
-                <span class="btn-text">주요 기능 둘러보기</span>
-            </button>
-
-            {% if user.is_authenticated %}
-                {# 로그인 사용자: 클릭 시 JS로 새 라벨 생성 #}
-                <button id="create-new-label-btn" class="action-btn create-btn">
-                    <span class="btn-icon">✨</span>
-                    <span class="btn-text">표시사항 신규 작성</span>
+<body data-is-authenticated="{% if user.is_authenticated %}true{% else %}false{% endif %}">
+<div class="demo-hero">
+    <div class="container-fluid px-4">
+        <div class="row align-items-center">
+            <div class="col-lg-9 col-md-8">
+                <h1 class="demo-title mb-1">
+                    <i class="fas fa-flask me-2"></i>표시사항 작성하기
+                </h1>
+                <p class="demo-subtitle mb-0">
+                    샘플 데이터를 선택하거나 직접 입력하여 실시간 미리보기를 확인하고 저장할 수 있습니다.
+                </p>
+            </div>
+            <div class="col-lg-3 col-md-4 text-end">
+                <button class="btn btn-warning" id="saveLabelBtn" onclick="handleSaveLabel()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;">
+                    <i class="fas fa-save me-1"></i>저장하기
                 </button>
-            {% else %}
-                {# 비로그인 사용자: 클릭 시 로그인 페이지로 이동 #}
-                <a href="/user-management/login/" class="action-btn create-btn" style="text-decoration: none;">
-                    <span class="btn-icon">✨</span>
-                    <span class="btn-text">표시사항 신규 작성</span>
-                </a>
-            {% endif %}
+            </div>
         </div>
-    </section>
-
-    <!-- 하단 기능 제안 섹션 -->
-    <section class="highlight-feature">
-        <span>새로운 기능이 필요하신가요?</span>
-        <a href="{% url 'board:list' %}" class="cta-button">게시판에 아이디어를 공유해주세요 😊</a>
-    </section>
-</main>
-
-<!-- 튜토리얼 오버레이 UI -->
-<div id="tutorial-overlay" style="display: none;">
-    <div class="tutorial-dialog">
-        <header class="tutorial-header">
-            <h3 id="tutorial-title"></h3>
-            <button id="tutorial-close-btn" class="tutorial-btn-close" aria-label="튜토리얼 닫기">&times;</button>
-        </header>
-        <div class="tutorial-body">
-            <img id="tutorial-image" src="" alt="튜토리얼 단계별 예시 화면">
-            <p id="tutorial-description"></p>
-        </div>
-        <footer class="tutorial-footer">
-            <button id="tutorial-prev-btn" class="tutorial-nav-btn">&lt; 이전</button>
-            <div id="tutorial-progress-bar"></div>
-            <button id="tutorial-next-btn" class="tutorial-nav-btn">다음 &gt;</button>
-        </footer>
     </div>
 </div>
 
-<style>
-/* --- 기본 레이아웃 및 색상 변수, 네비바 배경색 오적용 개선을 위해서 스타일 적용 범위를 홈컨테이너로 한정 --- */
-.home-container {
-    --primary-color: #38b2ac;
-    --primary-dark: #319795;
-    --primary-light: #e6fffa;
-    --text-dark: #2d3748;
-    --text-light: #4a5568;
-    --bg-light: #f7fafc;
-    --border-color: #e2e8f0;
-}
+<div class="container-fluid px-4">
+    <div class="row g-3 mt-2 demo-panels">
+        <!-- 왼쪽 패널: 입력 영역 -->
+        <div class="col-12 col-lg-6 demo-left-panel">
+            <div class="card modern-card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+                        <h5 class="mb-0"><i class="fas fa-edit me-2"></i>1. 표시사항 입력</h5>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('beverage')" title="음료 샘플"><i class="fas fa-mug-hot me-1"></i>[샘플] 음료</button>
+                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('snack')" title="과자 샘플"><i class="fas fa-cookie-bite me-1"></i>[샘플] 과자</button>
+                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('noodle')" title="면류 샘플"><i class="fas fa-bowl-food me-1"></i>[샘플] 면류</button>
+                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('sauce')" title="소스 샘플"><i class="fas fa-pepper-hot me-1"></i>[샘플] 소스</button>
+                            <button class="btn btn-sm btn-header-danger py-1 px-2" onclick="resetAllData()" title="모든 입력 데이터 초기화"><i class="fas fa-sync-alt"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- 탭 네비게이션 -->
+                    <div class="form-tabs">
+                        <button class="form-tab active" onclick="switchTab('basic')" data-tab="basic">
+                            <i class="fas fa-info-circle"></i>기본정보
+                        </button>
+                        <button class="form-tab" onclick="switchTab('ingredients')" data-tab="ingredients">
+                            <i class="fas fa-leaf"></i>원재료 & 알레르기
+                        </button>
+                        <button class="form-tab" onclick="switchTab('notices')" data-tab="notices">
+                            <i class="fas fa-exclamation-triangle"></i>주의문구
+                        </button>
+                        <button class="form-tab" onclick="switchTab('additional')" data-tab="additional">
+                            <i class="fas fa-plus-circle"></i>기타항목
+                        </button>
+                    </div>
 
-.home-container {
-    max-width: 1100px;
-    margin: 4rem auto;
-    padding: 0 1rem;
-}
+                    <!-- 표시사항 입력 폼 -->
+                    <div class="input-form-area">
+                        <form id="demoForm">
+                            
+                            <!-- 탭 1: 기본정보 -->
+                            <div class="tab-content-panel active" id="tab-basic">
+                            
+                            <!-- 기본 설정: 식품유형 선택 - 컴팩트 버전 -->
+                            <div class="mb-2 pb-2 border-bottom" id="step1-row">
+                                <div class="d-flex align-items-center" style="gap: 8px;">
+                                    <label class="mb-0 text-nowrap" style="font-size:0.85rem; font-weight:600;">
+                                        <i class="fas fa-cog me-1"></i>식품유형
+                                    </label>
+                                    <select id="food_group" name="food_group" class="form-control form-control-sm" style="flex: 1;">
+                                        <option value="">대분류</option>
+                                        {% for group in food_groups %}
+                                        <option value="{{ group }}">{{ group }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <select id="food_type" name="food_type" class="form-control form-control-sm" style="flex: 1;">
+                                        <option value="">소분류</option>
+                                        {% for type in food_types %}
+                                        <option value="{{ type.food_type }}" data-group="{{ type.food_group }}" style="display:none;">
+                                            {{ type.food_type }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- 제품명 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_prdlst_nm" class="form-check-input me-2" checked>
+                                    <label for="chk_prdlst_nm">제품명</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="prdlst_nm" class="form-control" placeholder="제품명을 입력하세요">
+                                </div>
+                            </div>
+                            
+                            <!-- 특정성분 함량 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_ingredient_info" class="form-check-input me-2">
+                                    <label for="chk_ingredient_info">특정성분 함량</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="ingredient_info" class="form-control" placeholder="예) 레몬즙 5%">
+                                </div>
+                            </div>
+                            
+                            <!-- 식품유형 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_prdlst_dcnm" class="form-check-input me-2">
+                                    <label for="chk_prdlst_dcnm">식품유형</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="prdlst_dcnm" class="form-control" placeholder="식품유형을 입력하세요">
+                                </div>
+                            </div>
 
-/* --- 소개 섹션 --- */
-.intro-section {
-    background-color: var(--bg-light);
-    padding: 3rem 2rem;
-    border-radius: 16px;
-    text-align: center;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
-}
-.intro-title {
-    font-size: clamp(1.8rem, 4vw, 2.5rem);
-    font-weight: 800;
-    color: var(--text-dark);
-    margin-bottom: 0.75rem;
-}
-.intro-description {
-    font-size: clamp(1.1rem, 2.5vw, 1.25rem);
-    color: var(--text-light);
-    margin-bottom: 3rem;
-}
+                            <!-- 품목보고번호 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_prdlst_report_no" class="form-check-input me-2">
+                                    <label for="chk_prdlst_report_no">품목보고번호</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="prdlst_report_no" class="form-control" placeholder="품목보고번호를 입력하세요 (예: 2024-12-34567890)">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo()" style="white-space: nowrap;">번호검증</button>
+                                </div>
+                            </div>
 
-/* --- 액션 버튼 --- */
-.home-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2rem;
-    justify-content: center;
-}
-.action-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 300px;
-    height: 220px;
-    padding: 2rem;
-    border-radius: 16px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-}
-.action-btn:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 12px 25px rgba(0,0,0,0.12);
-}
-.action-btn .btn-icon {
-    font-size: 3.5rem;
-    margin-bottom: 1rem;
-    transition: transform 0.3s ease;
-}
-.action-btn:hover .btn-icon {
-    transform: scale(1.1);
-}
-.action-btn .btn-text {
-    font-size: 1.5rem;
-    font-weight: 700;
-}
+                            <!-- 내용량 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_content_weight" class="form-check-input me-2" checked>
+                                    <label for="chk_content_weight">내용량</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="content_weight" class="form-control" placeholder="예) 500ml, 250g">
+                                </div>
+                            </div>
 
-.tutorial-btn {
-    background: linear-gradient(145deg, #ffffff, #f0fdfa);
-    color: var(--primary-dark);
-    border: 2px solid var(--primary-color);
-}
-.create-btn {
-    background: linear-gradient(145deg, var(--primary-color), var(--primary-dark));
-    color: white;
-}
+                            <!-- 원산지 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_country_of_origin" name="chk_country_of_origin" class="form-check-input me-2">
+                                    <label for="chk_country_of_origin">원산지</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <select id="countrySelect" class="form-control" style="flex: 0 0 auto; width: 120px;">
+                                        <option value="">-- 국가 선택 --</option>
+                                        <option value="직접입력">직접입력</option>
+                                        {% for country in countries %}
+                                        <option value="{% if country.country_name_ko|slice:'-1:' == '산' %}{{ country.country_name_ko }}{% else %}{{ country.country_name_ko }}산{% endif %}">{% if country.country_name_ko|slice:'-1:' == '산' %}{{ country.country_name_ko }}{% else %}{{ country.country_name_ko }}산{% endif %}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <input type="text" name="country_of_origin" class="form-control" placeholder="원산지를 입력하세요" id="countryInput" disabled>
+                                </div>
+                            </div>
+                            
+                            <!-- 보관방법 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_storage_method" class="form-check-input me-2">
+                                    <label for="chk_storage_method">보관방법</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="storage_method" class="form-control" placeholder="보관방법을 입력하세요">
+                                </div>
+                            </div>
 
-/* --- 하단 기능 제안 섹션 --- */
-.highlight-feature {
-    margin-top: 3rem;
-    padding: 1.25rem 2rem;
-    background-color: var(--primary-light);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-.highlight-feature span {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--primary-dark);
-}
-.cta-button {
-    background-color: var(--primary-color);
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 600;
-    transition: background-color 0.3s ease;
-}
-.cta-button:hover { background-color: var(--primary-dark); }
+                            <!-- 소비기한 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_expiry_date" class="form-check-input me-2">
+                                    <label for="chk_expiry_date">소비기한</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="expiry_date" class="form-control" placeholder="예) 제조일로부터 24개월">
+                                </div>
+                            </div>
+                            
+                            </div><!-- end tab-basic -->
+                            
+                            <!-- 탭 2: 원재료 & 알레르기 -->
+                            <div class="tab-content-panel" id="tab-ingredients">
+                            
+                            <!-- 원재료명 -->
+                            <div class="form-group-row align-start">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_rawmtrl_nm_display" class="form-check-input me-2">
+                                    <label for="chk_rawmtrl_nm_display">원재료명</label>
+                                </div>
+                                <div class="form-input-cell" style="align-items: flex-start;">
+                                    <textarea name="rawmtrl_nm_display" class="form-control auto-resize" rows="1" placeholder="원재료명(표시)을 입력하세요" id="rawmtrl_nm_textarea"></textarea>
+                                </div>
+                            </div>
 
-/* --- 튜토리얼 오버레이 --- */
-#tutorial-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: rgba(0, 0, 0, 0.8);
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-}
-.tutorial-dialog {
-    background-color: white;
-    border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    width: 100%;
-    max-width: 800px;
-    max-height: 95vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-.tutorial-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-}
-#tutorial-title {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--text-dark);
-}
-.tutorial-btn-close {
-    font-size: 2rem;
-    font-weight: 300;
-    background: none;
-    border: none;
-    color: var(--text-light);
-    cursor: pointer;
-    line-height: 1;
-    padding: 0.5rem;
-}
-.tutorial-body {
-    padding: 1.5rem;
-    overflow-y: auto;
-    text-align: center;
-}
-#tutorial-image {
-    max-width: 100%;
-    height: auto;
-    max-height: 50vh;
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
-    object-fit: contain;
-}
-#tutorial-description {
-    font-size: 1.1rem;
-    line-height: 1.6;
-    color: var(--text-dark);
-}
-.highlight-text {
-    color: var(--primary-dark);
-    font-weight: 700;
-}
-.tutorial-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.5rem;
-    border-top: 1px solid var(--border-color);
-    background-color: var(--bg-light);
-}
-.tutorial-nav-btn {
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    padding: 0.6rem 1.2rem;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-.tutorial-nav-btn:hover { background-color: var(--primary-dark); }
-.tutorial-nav-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+                            <!-- 알레르기 관리 모듈 -->
+                            <div class="form-group-row align-start" style="background: #fff8e1; padding: 0.8rem; border-radius: 6px; border: 1px solid #ffd54f;">
+                                <div class="form-label-cell" style="align-self: flex-start; cursor: pointer;" onclick="toggleAllergenModule()">
+                                    <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                                    <label style="font-weight: 700; color: #f57c00; cursor: pointer;">알레르기 관리</label>
+                                    <i class="fas fa-chevron-down ms-2" id="allergenModuleToggleIcon" style="font-size: 0.8rem; color: #f57c00;"></i>
+                                </div>
+                                <div class="form-input-cell" style="flex-direction: column; align-items: stretch; gap: 10px;" id="allergenModuleContent">
+                                    
+                                    <!-- 원재료 사용 알레르기 물질 (자동 감지 + 수동 편집) -->
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label mb-0 label-danger">
+                                                <i class="fas fa-utensils me-1"></i>원재료 사용 알레르기 물질
+                                            </label>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="manualDetectAllergens()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" title="알레르기 물질 다시 감지">
+                                                    <i class="fas fa-sync-alt me-1"></i>새로고침
+                                                </button>
+                                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleAllergenDropdown()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" title="전체 목록 보기">
+                                                    <i class="fas fa-list me-1"></i>전체 목록 <i class="fas fa-chevron-down ms-1" id="allergenDropdownIcon"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 자동 감지된 알레르기 태그 표시 -->
+                                        <div id="detectedAllergens" class="p-2 bg-white border rounded position-relative text-sm" style="min-height: 50px;">
+                                            <span class="text-muted"><i class="fas fa-info-circle me-1"></i>원재료명을 입력하면 자동으로 감지됩니다</span>
+                                            <!-- 감지 상태 표시 -->
+                                            <div id="allergenDetectingIndicator" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                                <div class="spinner-border spinner-border-sm text-primary" role="status" style="width: 1.5rem; height: 1.5rem;">
+                                                    <span class="visually-hidden">감지 중...</span>
+                                                </div>
+                                                <span class="text-primary ms-2" style="font-size: 0.8rem;">감지 중...</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 자주 사용하는 알레르기 빠른 추가 버튼 -->
+                                        <div class="mt-2" style="display: flex; flex-wrap: wrap; gap: 5px; align-items: center;">
+                                            <span class="text-xs" style="margin-right: 4px;">빠른 추가:</span>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="알류" style="font-size: 0.7rem;">알류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="우유" style="font-size: 0.7rem;">우유</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="밀" style="font-size: 0.7rem;">밀</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="대두" style="font-size: 0.7rem;">대두</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="새우" style="font-size: 0.7rem;">새우</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="게" style="font-size: 0.7rem;">게</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn py-0 px-2" data-allergen="땅콩" style="font-size: 0.7rem;">땅콩</button>
+                                        </div>
+                                        
+                                        <!-- 전체 알레르기 목록 (드롭다운) -->
+                                        <div id="allergenFullList" class="mt-2 p-2 bg-light border rounded" style="display: none;">
+                                            <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="메밀" style="font-size: 0.7rem;">메밀</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="고등어" style="font-size: 0.7rem;">고등어</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="돼지고기" style="font-size: 0.7rem;">돼지고기</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="복숭아" style="font-size: 0.7rem;">복숭아</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="토마토" style="font-size: 0.7rem;">토마토</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="아황산류" style="font-size: 0.7rem;">아황산류</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="호두" style="font-size: 0.7rem;">호두</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="잣" style="font-size: 0.7rem;">잣</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="닭고기" style="font-size: 0.7rem;">닭고기</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="쇠고기" style="font-size: 0.7rem;">쇠고기</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="오징어" style="font-size: 0.7rem;">오징어</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary full-allergen-btn py-0 px-2" data-allergen="조개류" style="font-size: 0.7rem;">조개류</button>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 숨겨진 입력 필드 (선택된 알레르기 저장) -->
+                                        <input type="hidden" id="selected_ingredient_allergens" name="ingredient_allergens">
+                                    </div>
+                                    
+                                    <!-- 제조시설 혼입 우려 알레르기 물질 (수동 선택) -->
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label class="form-label mb-0 label-warning">
+                                                <i class="fas fa-industry me-1"></i>제조시설 혼입 우려 물질 (선택)
+                                            </label>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button type="button" id="toggleAllAllergensBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAllergens()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                                    <i class="fas fa-check-double me-1"></i>전체 선택
+                                                </button>
+                                                <button type="button" id="toggleAllergenWarningBtn" class="btn btn-outline-primary btn-sm" onclick="toggleAllergenWarning()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                                    <i class="fas fa-arrow-right me-1"></i>주의사항에 추가
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="allergen-selection" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px;">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="알류" style="font-size: 0.7rem;">알류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="우유" style="font-size: 0.7rem;">우유</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="메밀" style="font-size: 0.7rem;">메밀</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="땅콩" style="font-size: 0.7rem;">땅콩</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="대두" style="font-size: 0.7rem;">대두</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="밀" style="font-size: 0.7rem;">밀</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="고등어" style="font-size: 0.7rem;">고등어</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="게" style="font-size: 0.7rem;">게</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="새우" style="font-size: 0.7rem;">새우</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="돼지고기" style="font-size: 0.7rem;">돼지고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="복숭아" style="font-size: 0.7rem;">복숭아</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="토마토" style="font-size: 0.7rem;">토마토</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="아황산류" style="font-size: 0.7rem;">아황산류</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="호두" style="font-size: 0.7rem;">호두</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="잣" style="font-size: 0.7rem;">잣</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="닭고기" style="font-size: 0.7rem;">닭고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="쇠고기" style="font-size: 0.7rem;">쇠고기</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="오징어" style="font-size: 0.7rem;">오징어</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle py-0 px-2" data-allergen="조개류" style="font-size: 0.7rem;">조개류</button>
+                                        </div>
+                                        <input type="hidden" id="selected_cross_contamination_allergens" name="cross_contamination_allergens">
+                                    </div>
+                                    
+                                    <!-- 혼입 경고 문구 미리보기 -->
+                                    <div id="crossContaminationPreview" class="p-2 bg-light border rounded text-sm" style="display: none;">
+                                        <strong class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>생성된 혼입 경고 문구:</strong>
+                                        <div id="crossContaminationText" class="mt-1 text-dark"></div>
+                                    </div>
+                                </div>
+                            </div>
 
-#tutorial-progress-bar { display: flex; gap: 8px; }
-.progress-dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background-color: #ccc;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-.progress-dot.active { background-color: var(--primary-color); }
-</style>
+                            </div><!-- end tab-ingredients -->
+                            
+                            <!-- 탭 3: 표시사항 -->
+                            <div class="tab-content-panel" id="tab-notices">
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
+                            <!-- 주의사항 -->
+                            <div class="form-group-row align-start">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_caution" class="form-check-input me-2">
+                                    <label for="chk_caution">주의사항</label>
+                                </div>
+                                <div class="form-input-cell" style="align-items: flex-start; flex-direction: column; gap: 5px; height: auto;">
+                                    <!-- 전체 추가/해제 버튼 -->
+                                    <div class="d-flex justify-content-between align-items-center mb-1" style="width: 100%;">
+                                        <span style="font-size: 0.75rem; color: #666;">
+                                            <i class="fas fa-info-circle me-1"></i>빠른 입력 버튼
+                                        </span>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllQuickTexts('caution')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                                <i class="fas fa-plus-circle me-1"></i>전체 추가
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllQuickTexts('caution')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                                <i class="fas fa-eraser me-1"></i>일괄 해제
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="quick-text-buttons" style="display: flex; flex-wrap: wrap; gap: 3px; width: 100%; margin-bottom: 3px;">
+                                        <!-- 법정 필수 경고 -->
+                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="부정·불량식품 신고는 국번없이 1399" title="부정불량식품 신고 (법정 의무)" style="font-size: 0.7rem;"><i class="fas fa-phone-alt me-1"></i>1399</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="이 제품에는 페닐알라닌이 함유되어 있습니다. (페닐케톤뇨증 환자 주의)" title="아스파탐 법정 필수 표시" style="font-size: 0.7rem;"><i class="fas fa-exclamation-circle me-1"></i>페닐알라닌</button>
+                                        
+                                        <!-- 일반 관리 경고 -->
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="개봉 후에는 변질될 우려가 있으니 반드시 밀봉하여 냉장 보관하시고, 가급적 빨리 섭취하시기 바랍니다." title="개봉 후 보관 및 취급" style="font-size: 0.7rem;"><i class="fas fa-box-open me-1"></i>개봉후보관</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="직사광선을 피하고 서늘한 곳에 보관하시기 바랍니다." title="보관 조건" style="font-size: 0.7rem;"><i class="fas fa-sun me-1"></i>직사광선</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="냉동 제품은 해동 후 재냉동하지 마시기 바랍니다." title="재냉동 금지" style="font-size: 0.7rem;"><i class="fas fa-snowflake me-1"></i>재냉동금지</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="용기가 파손되거나 부풀어 있는 경우 섭취하지 마시기 바랍니다." title="용기 파손 주의" style="font-size: 0.7rem;"><i class="fas fa-box-tissue me-1"></i>용기파손</button>
+                                        
+                                        <!-- 안전 주의사항 -->
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="어린이가 먹을 경우 보호자의 지도가 필요합니다." title="어린이 주의" style="font-size: 0.7rem;"><i class="fas fa-child me-1"></i>어린이</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="질식의 위험이 있으니 주의하시기 바랍니다." title="질식 주의" style="font-size: 0.7rem;"><i class="fas fa-lungs me-1"></i>질식</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="뜨거우니 화상에 주의하시기 바랍니다." title="화상 주의" style="font-size: 0.7rem;"><i class="fas fa-fire me-1"></i>화상</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="제품 개봉 시 내용물이 튈 수 있으니 주의하시기 바랍니다." title="개봉 주의" style="font-size: 0.7rem;"><i class="fas fa-spray-can me-1"></i>튐주의</button>
+                                        
+                                        <!-- 건강기능식품 관련 -->
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="특정 질환이 있거나 의약품 복용 중이신 분은 섭취 전 의사 및 전문가와 상담하시기 바랍니다. 본 제품은 질병의 예방 및 치료를 위한 의약품이 아닙니다." title="건강기능식품 일반 주의" style="font-size: 0.7rem;"><i class="fas fa-user-md me-1"></i>의약품복용자</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="임산부 및 수유부, 어린이(또는 특정 연령층)는 섭취에 주의해야 합니다." title="특정 대상 주의" style="font-size: 0.7rem;"><i class="fas fa-baby me-1"></i>임산부/어린이</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="caution" data-text="본 제품 섭취 시 이상 사례 발생 또는 불편함을 느끼는 경우, 섭취를 중단하고 소비자 상담실 또는 1577-2488(이상사례 신고 핫라인)로 신고하여 주십시오." title="이상사례 신고" style="font-size: 0.7rem;"><i class="fas fa-phone-volume me-1"></i>이상사례</button>
+                                    </div>
+                                    <textarea name="caution" class="form-control auto-resize" rows="1" placeholder="주의사항을 입력하세요" id="caution_textarea" style="width: 100%;"></textarea>
+                                </div>
+                            </div>
 
-    // --- 유틸리티 함수 ---
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
+                            <!-- 기타표시사항 -->
+                            <div class="form-group-row align-start">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_other_info" class="form-check-input me-2">
+                                    <label for="chk_other_info">기타표시사항</label>
+                                </div>
+                                <div class="form-input-cell" style="align-items: flex-start; flex-direction: column; gap: 5px; height: auto;">
+                                    <!-- 전체 추가/해제 버튼 -->
+                                    <div class="d-flex justify-content-between align-items-center mb-1" style="width: 100%;">
+                                        <span style="font-size: 0.75rem; color: #666;">
+                                            <i class="fas fa-info-circle me-1"></i>빠른 입력 버튼
+                                        </span>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllQuickTexts('other_info')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                                <i class="fas fa-plus-circle me-1"></i>전체 추가
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllQuickTexts('other_info')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                                <i class="fas fa-eraser me-1"></i>일괄 해제
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="quick-text-buttons" style="display: flex; flex-wrap: wrap; gap: 3px; width: 100%; margin-bottom: 3px;">
+                                        <!-- 소비자 행정/품질 관련 (법정 필수) -->
+                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="제품에 대한 문의 사항 및 상담은 종합상담센터 1577-1255 (유료)로 연락 주시기 바랍니다." title="소비자 상담실 (법정 필수)" style="font-size: 0.7rem;"><i class="fas fa-headset me-1"></i>상담센터</button>
+                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="본 제품은 공정거래위원회 고시 소비자분쟁해결기준에 의거, 교환 또는 보상받을 수 있습니다." title="품질보증 (분쟁해결기준)" style="font-size: 0.7rem;"><i class="fas fa-certificate me-1"></i>품질보증</button>
+                                        
+                                        <!-- 인증 마크 (조건부 필수) -->
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="HACCP 인증 제품" title="HACCP 인증" style="font-size: 0.7rem;"><i class="fas fa-check-circle me-1"></i>HACCP</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="ISO 22000 인증" title="ISO 22000" style="font-size: 0.7rem;"><i class="fas fa-award me-1"></i>ISO22000</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="유기농 인증 제품" title="유기농 인증" style="font-size: 0.7rem;"><i class="fas fa-leaf me-1"></i>유기농</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="KS 인증 제품" title="KS 인증" style="font-size: 0.7rem;"><i class="fas fa-stamp me-1"></i>KS</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="전통식품 품질인증" title="전통식품" style="font-size: 0.7rem;"><i class="fas fa-landmark me-1"></i>전통식품</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="우수식품인증(GMP)" title="GMP" style="font-size: 0.7rem;"><i class="fas fa-star me-1"></i>GMP</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="저탄소 인증 제품" title="저탄소 인증 (온실가스 배출량 감축)" style="font-size: 0.7rem;"><i class="fas fa-seedling me-1"></i>저탄소</button>
+                                        
+                                        <!-- 규제된 자발적 클레임 (기준 충족 필수) -->
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="무 글루텐 (Gluten Free)" title="총 글루텐 함량 1kg당 20mg 이하" style="font-size: 0.7rem;"><i class="fas fa-wheat-awn me-1"></i>무글루텐</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="비건 인증 (Vegan)" title="동물 유래 성분 불포함" style="font-size: 0.7rem;"><i class="fas fa-leaf me-1"></i>비건</button>
+                                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="할랄(Halal) 인증 제품" title="할랄 인증" style="font-size: 0.7rem;"><i class="fas fa-moon me-1"></i>할랄</button>
+                                        
+                                        <!-- 일반 자발적 표시 -->
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="무(無) MSG, 무(無) 합성보존료, 무(無) 합성착색료" title="무첨가" style="font-size: 0.7rem;"><i class="fas fa-ban me-1"></i>무첨가</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="Non-GMO 제품" title="Non-GMO" style="font-size: 0.7rem;"><i class="fas fa-dna me-1"></i>Non-GMO</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle" data-field="other_info" data-text="저나트륨 제품" title="저나트륨" style="font-size: 0.7rem;"><i class="fas fa-heart me-1"></i>저나트륨</button>
+                                    </div>
+                                    <textarea name="other_info" class="form-control auto-resize" rows="1" placeholder="기타 표시사항을 입력하세요" style="width: 100%;"></textarea>
+                                </div>
+                            </div>
 
-    // --- 신규 표시사항 작성 기능 ---
-    const createNewLabelBtn = document.getElementById('create-new-label-btn');
-    if (createNewLabelBtn) {
-        createNewLabelBtn.addEventListener('click', () => {
-            if (confirm("새로운 표시사항을 작성하시겠습니까?")) {
-                fetch("{% url 'label:create_new_label' %}", {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({})
-                })
-                .then(response => {
-                    if (!response.ok) return response.json().then(err => { throw new Error(err.error || '서버 응답 오류'); });
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success && data.redirect_url) {
-                        window.location.href = data.redirect_url;
-                    } else {
-                        alert('신규 표시사항 생성에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert(`신규 표시사항 생성 중 오류가 발생했습니다: ${error.message}`);
-                });
-            }
-        });
-    }
+                            </div><!-- end tab-notices -->
+                            
+                            <!-- 탭 4: 기타항목 -->
+                            <div class="tab-content-panel" id="tab-additional">
 
-    // --- 튜토리얼 기능 ---
-    const tutorialModule = {
-        // DOM 요소
-        elements: {
-            overlay: document.getElementById('tutorial-overlay'),
-            startBtn: document.getElementById('start-tutorial-btn'),
-            closeBtn: document.getElementById('tutorial-close-btn'),
-            nextBtn: document.getElementById('tutorial-next-btn'),
-            prevBtn: document.getElementById('tutorial-prev-btn'),
-            title: document.getElementById('tutorial-title'),
-            image: document.getElementById('tutorial-image'),
-            description: document.getElementById('tutorial-description'),
-            progressBar: document.getElementById('tutorial-progress-bar'),
-        },
-        // 튜토리얼 데이터
-        steps: [
-            { title: '제품 조회(1) : 국내/수입제품 검색', image: "{% static 'img/tutorial/step-1-1.png' %}", description: '국내외 150만 건의 표시사항을 <span class="highlight-text">①조건 검색, ②품목 선택</span> 후 상세 정보를 확인할 수 있습니다.' },
-            { title: '제품 조회(2) : 원료, 제품 저장', image: "{% static 'img/tutorial/step-1-2.png' %}", description: '제품 정보는 <span class="highlight-text">①내원료 저장, ②표시사항 생성</span> 버튼으로 쉽게 복사하여 사용할 수 있습니다.' },
-            { title: '원료 관리(1) : 상세정보 관리', image: "{% static 'img/tutorial/step-2-1.png' %}", description: '원료 리스트에서 <span class="highlight-text">①선택 후 ②상세정보 입력, ③저장</span>하면 표시사항 작성할 때 불러올 수 있습니다.<br>※식품첨가물은 관련 규정에 따라 표시문구를 추천해줍니다.' },
-            { title: '원료 관리(2) : 신규등록, 엑셀 다운/업로드', image: "{% static 'img/tutorial/step-2-2.png' %}", description: '원료 정보는 <span class="highlight-text">①엑셀 다운로드 및 일괄 업로드, ②신규 추가</span>도 가능하며, <span class="highlight-text">③연결된 표시사항을 직접 조회</span>할 수도 있습니다.<br>※엑셀 업로드 시에는 다운받은 양식에 데이터를 입력하여 업로드하여야 합니다.' },
-            { title: '표시사항 관리(1) : 다운로드,복사,삭제, 품보신고 검증', image: "{% static 'img/tutorial/step-3-1.png' %}", description: '표시사항 리스트를 선택하여 <span class="highlight-text">①엑셀 다운로드, 복사, 삭제</span>를 할 수 있고, <br>표시사항에 입력한 품목보고번호의 <span class="highlight-text">②실제 신고 여부도 실시간으로 확인</span> 가능합니다.' },
-            { title: '표시사항 관리(2) : 식품유형별 필수항목 자동 추천', image: "{% static 'img/tutorial/step-3-2.png' %}", description: '표시사항 작성 화면에서 <span class="highlight-text">①식품유형 선택, ②제조방법 및 장기보존 선택, ③필수항목 적용 후 접기</span> 버튼을 클릭하면,<br> "상세 입력" 화면의 필수 항목이 자동 체크되고, 오른쪽 패널에서는 식품유형별 관련 규정도 표시됩니다.' },
-            { title: '표시사항 관리(3) : 상세정보 입력', image: "{% static 'img/tutorial/step-3-3.png' %}", description: '각 항목의 입력필드를 선택하면 오른쪽 패널에 <span class="highlight-text">①관련 규정 표시</span>되고 및 <span class="highlight-text">①자주 사용하는 문구 등록 및 선택하여 쉽게 입력</span>할 수 있습니다. <br>품목보고번호를 입력하고 번호검증 기능을 통해<span class="highlight-text">②사용 여부를 실시간 확인</span>할 수 있습니다.<br>원료 관리에서 등록한 원료를 "표로 입력" 버튼을 클릭하여 <span class="highlight-text">③원재료명 자동 추천 기능</span>을 사용할 수 있습니다.' },        
-            { title: '표시사항 관리(4) : 원재료 표시명 추천', image: "{% static 'img/tutorial/step-3-4.png' %}", description: '등록된 원료를 검색하여 <span class="highlight-text">①추가, ② 비율 입력이나 순서 변경, ③ 표시규칙 선택</span>하면 <br> 원재료 표시명 및 알레르기/GMO 성분이 자동으로 생성되고, 식품유형 및 함량에 따른 원산지 표시대상과 국가명 포함 여부를 나타내줍니다.' },
-            { title: '표시사항 관리(5) : 표시사항 미리보기', image: "{% static 'img/tutorial/step-3-5.png' %}", description: '표시사항 작성 화면의 우측 상단 "미리보기" 버튼을 클릭하면 한글표시사항의<span class="highlight-text">①크기 설정 변경</span>하고, <span class="highlight-text">②분리배출 마크 추가</span> 등을 할 수 있습니다.' },
-            { title: '표시사항 관리(6) : 규정 검증 및 PDF 저장', image: "{% static 'img/tutorial/step-3-6.png' %}", description: '완성된 표시사항이 <span class="highlight-text">①규정에 맞는지 검증</span>하고, 결과를 <span class="highlight-text">②PDF 파일로 저장</span>하여 공유할 수 있습니다.' }
-        ],
-        currentStep: 0,
+                            <!-- 용기·포장재질 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_packaging_material" class="form-check-input me-2">
+                                    <label for="chk_packaging_material">용기·포장재질</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="packaging_material" class="form-control" placeholder="예) PET, 플라스틱, 유리">
+                                </div>
+                            </div>
 
-        init() {
-            if (!this.elements.startBtn) return;
-            this.elements.startBtn.addEventListener('click', () => this.start());
-            this.elements.closeBtn.addEventListener('click', () => this.end());
-            this.elements.nextBtn.addEventListener('click', () => this.showStep(this.currentStep + 1));
-            this.elements.prevBtn.addEventListener('click', () => this.showStep(this.currentStep - 1));
-            document.addEventListener('keydown', (e) => this.handleKeyPress(e));
-        },
-        start() {
-            this.createProgressBar();
-            this.elements.overlay.style.display = 'flex';
-            this.showStep(0);
-        },
-        end() {
-            this.elements.overlay.style.display = 'none';
-        },
-        showStep(index) {
-            if (index < 0 || index >= this.steps.length) return;
-            this.currentStep = index;
-            const step = this.steps[index];
-            
-            this.elements.title.textContent = step.title;
-            this.elements.image.src = step.image;
-            this.elements.description.innerHTML = step.description;
+                            <!-- 제조원 소재지 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_manufacturer" class="form-check-input me-2">
+                                    <label for="chk_manufacturer">제조원 소재지</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="manufacturer" class="form-control" placeholder="제조원 소재지를 입력하세요">
+                                </div>
+                            </div>
 
-            this.elements.prevBtn.disabled = index === 0;
-            this.elements.nextBtn.disabled = index === this.steps.length - 1;
+                            <!-- 유통전문판매원 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_distributor" class="form-check-input me-2">
+                                    <label for="chk_distributor">유통전문판매원</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="distributor" class="form-control" placeholder="유통전문판매원을 입력하세요">
+                                </div>
+                            </div>
 
-            this.updateProgressBar();
-        },
-        handleKeyPress(e) {
-            if (this.elements.overlay.style.display !== 'flex') return;
-            if (e.key === 'ArrowRight') this.showStep(this.currentStep + 1);
-            else if (e.key === 'ArrowLeft') this.showStep(this.currentStep - 1);
-            else if (e.key === 'Escape') this.end();
-        },
-        createProgressBar() {
-            this.elements.progressBar.innerHTML = '';
-            this.steps.forEach((_, index) => {
-                const dot = document.createElement('div');
-                dot.classList.add('progress-dot');
-                dot.dataset.index = index;
-                dot.addEventListener('click', () => this.showStep(index));
-                this.elements.progressBar.appendChild(dot);
-            });
-        },
-        updateProgressBar() {
-            this.elements.progressBar.querySelectorAll('.progress-dot').forEach((dot, index) => {
-                dot.classList.toggle('active', index === this.currentStep);
-            });
-        }
-    };
+                            <!-- 소분원 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_subdivider" class="form-check-input me-2">
+                                    <label for="chk_subdivider">소분원</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="subdivider" class="form-control" placeholder="소분원을 입력하세요">
+                                </div>
+                            </div>
 
-    tutorialModule.init();
-});
-</script>
+                            <!-- 수입원 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_importer" class="form-check-input me-2">
+                                    <label for="chk_importer">수입원</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="importer" class="form-control" placeholder="수입원을 입력하세요">
+                                </div>
+                            </div>
 
+                            <!-- 분리배출마크 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_recycling_mark" class="form-check-input me-2">
+                                    <label for="chk_recycling_mark">분리배출마크</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <select class="form-select form-select-sm" id="recyclingMarkSelect" style="flex: 1; max-width: 200px;">
+                                            <option value="">마크를 선택하세요</option>
+                                            <optgroup label="플라스틱">
+                                                <option value="무색페트">무색페트</option>
+                                                <option value="유색페트">유색페트</option>
+                                                <option value="플라스틱(PET)">플라스틱(PET)</option>
+                                                <option value="플라스틱(HDPE)">플라스틱(HDPE)</option>
+                                                <option value="플라스틱(LDPE)">플라스틱(LDPE)</option>
+                                                <option value="플라스틱(PP)">플라스틱(PP)</option>
+                                                <option value="플라스틱(PS)">플라스틱(PS)</option>
+                                                <option value="기타플라스틱">기타플라스틱</option>
+                                            </optgroup>
+                                            <optgroup label="종이">
+                                                <option value="종이">종이</option>
+                                                <option value="일반팩">일반팩</option>
+                                                <option value="멸균팩">멸균팩</option>
+                                            </optgroup>
+                                            <optgroup label="금속">
+                                                <option value="캔류(철)">캔류(철)</option>
+                                                <option value="캔류(알미늄)">캔류(알미늄)</option>
+                                            </optgroup>
+                                            <optgroup label="유리">
+                                                <option value="유리">유리</option>
+                                            </optgroup>
+                                            <optgroup label="비닐">
+                                                <option value="비닐(PET)">비닐(PET)</option>
+                                                <option value="비닐(HDPE)">비닐(HDPE)</option>
+                                                <option value="비닐(LDPE)">비닐(LDPE)</option>
+                                                <option value="비닐(PP)">비닐(PP)</option>
+                                                <option value="비닐(PS)">비닐(PS)</option>
+                                                <option value="비닐(기타)">비닐(기타)</option>
+                                            </optgroup>
+                                        </select>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" id="addRecyclingMarkBtn" style="white-space: nowrap;">추가</button>
+                                        <input type="text" class="form-control form-control-sm" id="additionalRecyclingText" placeholder="복합재질 예: 몸체(종이)/뚜껑(PP)" style="flex: 1;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            </div><!-- end tab-additional -->
+                            
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 오른쪽 패널: 미리보기 영역 -->
+        <div class="col-12 col-lg-6 demo-right-panel">
+            <div class="card modern-card">
+                <div class="card-header bg-success text-white">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
+                        <h5 class="mb-0"><i class="fas fa-eye me-2"></i>2. 실시간 미리보기</h5>
+                        <div class="preview-actions d-flex gap-1">
+                            <button class="btn btn-sm btn-header-success py-1 px-2" id="validateButton" title="규정 검증"><i class="fas fa-check-circle me-1"></i>규정 검증</button>
+                            <button class="btn btn-sm btn-header-success py-1 px-2" id="exportPdfBtn" title="PDF 저장"><i class="fas fa-file-pdf me-1"></i>PDF 저장</button>
+                            <button class="btn btn-sm btn-header-success py-1 px-2" id="toggleSettingsBtn" title="서식 설정 열기/닫기"><i class="fas fa-cog me-1"></i>설정 열기</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- 미리보기 크기 및 글꼴 설정 패널 (통합) - 1줄 배치 -->
+                    <div class="mb-2 pb-2 border-bottom" id="settingsPanelDemo" style="display: none;">
+                        <div class="row g-2 align-items-end">
+                            <div class="col">
+                                <label class="form-label mb-1 text-xs" for="widthInput">가로(cm)</label>
+                                <input type="number" class="form-control form-control-sm" id="widthInput" value="10" min="4" max="50" step="1" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                            </div>
+                            <div class="col">
+                                <label class="form-label mb-1 text-xs">세로(cm)</label>
+                                <input type="text" class="form-control form-control-sm" id="heightInput" readonly style="font-size: 0.8rem; padding: 0.25rem 0.3rem; background: #f8f9fa;">
+                            </div>
+                            <div class="col">
+                                <label class="form-label mb-1 text-xs">면적(cm²)</label>
+                                <input type="text" class="form-control form-control-sm" id="areaDisplay" readonly style="font-size: 0.8rem; padding: 0.25rem 0.3rem; background: #f8f9fa;">
+                            </div>
+                            <div class="col">
+                                <label class="form-label mb-1 text-xs" for="fontFamilySelect">글꼴</label>
+                                <select class="form-select form-select-sm" id="fontFamilySelect" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                                    <option value="'Noto Sans KR', sans-serif" selected>노토 산스</option>
+                                    <option value="'Nanum Gothic', sans-serif">나눔고딕</option>
+                                    <option value="'Nanum Myeongjo', serif">나눔명조</option>
+                                </select>
+                            </div>
+                            <div class="col">
+                                <label class="form-label mb-1 text-xs" for="fontSizeInput">크기(pt)</label>
+                                <input type="number" class="form-control form-control-sm" id="fontSizeInput" value="10" min="7" max="20" step="0.5" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                            </div>
+                            <div class="col">
+                                <label class="form-label mb-1 text-xs" for="letterSpacingInput">자간(%)</label>
+                                <input type="number" class="form-control form-control-sm" id="letterSpacingInput" value="-5" min="-20" max="20" step="1" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                            </div>
+                            <div class="col">
+                                <label class="form-label mb-1 text-xs" for="lineHeightInput">줄간격</label>
+                                <input type="number" class="form-control form-control-sm" id="lineHeightInput" value="1.5" min="1" max="3.0" step="0.1" style="font-size: 0.8rem; padding: 0.25rem 0.3rem;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 검증 결과 패널 -->
+                    <div id="validationResults" class="alert" style="display: none;"></div>
+
+                    <!-- 미리보기 컨텐츠 -->
+                    <div class="preview-content-area">
+                        <div id="previewContent" style="min-height: 300px; background: white; padding: 1rem; border: 1px solid #dee2e6; border-radius: 8px;">
+                            <p class="text-center text-muted" style="padding: 2rem;">
+                                <i class="fas fa-info-circle me-2"></i>
+                                샘플을 선택하거나 왼쪽에 항목을 입력하면 실시간 미리보기가 표시됩니다.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 로그인 모달 -->
+<div class="modal fade" id="loginModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-lock me-2"></i>로그인이 필요합니다
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <div class="mb-3">
+                    <i class="fas fa-save fa-4x text-primary mb-3"></i>
+                </div>
+                <h5 class="mb-3">작성하신 표시사항을 저장하시겠어요?</h5>
+                <p class="text-muted mb-2">
+                    로그인하시면 지금 작성한 내용이 자동으로 저장됩니다.
+                </p>
+                <p class="text-muted small mb-0">
+                    💡 아직 회원이 아니신가요? 지금 바로 무료 가입하고 편리하게 이용하세요!
+                </p>
+            </div>
+            <div class="modal-footer justify-content-center border-0 pt-0">
+                <a href="{% url 'user_management:login' %}?next=/" class="btn btn-primary btn-lg px-5">
+                    <i class="fas fa-sign-in-alt me-2"></i>로그인하고 저장하기
+                </a>
+                <a href="{% url 'user_management:signup' %}" class="btn btn-outline-secondary btn-lg px-5">
+                    <i class="fas fa-user-plus me-2"></i>회원가입
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<script src="{% static 'js/label/constants.js' %}"></script>
+<script src="{% static 'js/home_demo.js' %}"></script>
 {% endblock %}

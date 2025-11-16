@@ -42,11 +42,14 @@ function showAllergyOptions() {
     if (!optionsContainer) return;
     optionsContainer.innerHTML = '';
     const currentAllergies = document.getElementById('allergy_info').value.split(',').map(s => s.trim());
+    
+    // constants.js의 ALLERGEN_KEYWORDS와 일치하는 19개 알레르기 항목
     const allergyOptions = [
-        '알류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우',
-        '돼지고기', '복숭아', '토마토', '아황산류', '호두', '닭고기', '쇠고기',
-         '오징어', '조개류', '조개류(굴)', '조개류(전복)', '조개류(홍합)', '잣'
-        ];
+        '알류', '우유', '메밀', '밀', '대두', '땅콩', '호두', '잣',
+        '쇠고기', '돼지고기', '닭고기', '고등어', '게', '새우', '오징어',
+        '조개류', '복숭아', '토마토', '아황산류'
+    ];
+    
     allergyOptions.forEach(option => {
         const div = document.createElement('div');
         div.className = 'form-check form-check-inline mb-1';
