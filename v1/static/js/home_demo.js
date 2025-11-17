@@ -987,7 +987,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (pdfBtn) {
         pdfBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            showLoginModal();
+            // 로그인 모달을 띄우는 대신 PDF 다운로드 함수를 직접 호출합니다.
+            downloadAsPDF();
         });
     }
 
@@ -1179,6 +1180,75 @@ document.addEventListener('DOMContentLoaded', function() {
     // ==================== 알레르기 관리 모듈 ====================
     initializeAllergenModule();
 });
+
+// ==================== PDF 다운로드 기능 ====================
+function downloadAsPDF() {
+    const previewContent = document.getElementById('previewContent');
+    const prdlstNmInput = document.querySelector('input[name="prdlst_nm"]');
+    const fileName = prdlstNmInput && prdlstNmInput.value.trim() ? prdlstNmInput.value.trim() + '.pdf' : 'label_preview.pdf';
+
+    if (!previewContent) {
+        alert('미리보기 영역을 찾을 수 없습니다.');
+        return;
+    }
+
+    showToast('PDF 생성을 시작합니다. 잠시만 기다려주세요...');
+
+    html2canvas(previewContent, {
+        scale: 2, // 해상도 2배로 높여 품질 개선
+        useCORS: true, // CORS 이미지 사용 허용
+        logging: false // 콘솔 로그 비활성화
+    }).then(canvas => {
+        try {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: 'p',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const imgWidth = 210; // A4 가로
+            const pageHeight = 297; // A4 세로
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                doc.addPage();
+                doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            // Blob을 생성하여 '다른 이름으로 저장' 대화상자를 엽니다.
+            const pdfBlob = doc.output('blob');
+            const blobUrl = URL.createObjectURL(pdfBlob);
+
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // 메모리 해제
+            URL.revokeObjectURL(blobUrl);
+
+            showToast('PDF 파일 저장이 시작되었습니다.');
+
+        } catch (error) {
+            console.error('PDF 생성 중 오류 발생:', error);
+            alert('PDF를 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+        }
+    }).catch(err => {
+        console.error('html2canvas 오류:', err);
+        alert('미리보기를 이미지로 변환하는 중 오류가 발생했습니다.');
+    });
+}
 
 // ==================== 저장 버튼 로직 ====================
 function handleSaveLabel() {
@@ -2149,6 +2219,7 @@ function addAllQuickTexts(fieldName) {
             button.classList.remove('btn-outline-secondary');
             button.classList.remove('btn-outline-danger');
             button.classList.remove('btn-outline-info');
+            button.classList.remove('btn-outline-primary');
             
             textsToAdd.push(text);
         }
