@@ -902,6 +902,11 @@ function getCookie(name) {
 
 // ==================== DOMContentLoaded ====================
 document.addEventListener('DOMContentLoaded', function() {
+    // 페이지 로드 시 스크롤을 최상단으로 리셋
+    window.scrollTo(0, 0);
+    document.querySelector('.demo-left-panel')?.scrollTo(0, 0);
+    document.querySelector('.demo-right-panel')?.scrollTo(0, 0);
+    
     // 전역 변수 초기화 (알레르기 관리용)
     if (!window.selectedIngredientAllergens) {
         window.selectedIngredientAllergens = new Set();

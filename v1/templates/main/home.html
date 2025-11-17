@@ -7,12 +7,20 @@
 <link rel="stylesheet" href="{% static 'css/label_creation.css' %}">
 <link rel="stylesheet" href="{% static 'css/label_preview.css' %}">
 <style>
+/* --- 전체 페이지 스크롤 방지 --- */
+html, body {
+    overflow: hidden;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
 /* --- 데모 페이지 전용 스타일 --- */
 .demo-hero {
     background: linear-gradient(135deg, #38b2ac 0%, #319795 100%);
     color: white;
     padding: 0.8rem 0;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 .demo-title { 
@@ -26,10 +34,18 @@
     margin-bottom: 0; 
 }
 
-/* 패널 컨테이너 - 독립 스크롤 */
+/* 메인 컨테이너 높이 조정 */
+.demo-main-container {
+    height: calc(100vh - 80px);
+    overflow: hidden;
+}
+
+/* 패널 컨테이너 - 뷰포트 높이 고정 (전체 페이지 스크롤 방지) */
 .row.demo-panels {
-    height: calc(100vh - 140px);
-    min-height: 600px;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    margin-top: 0 !important;
 }
 
 /* 왼쪽 패널 - 독립 스크롤 */
@@ -40,12 +56,42 @@
     padding-right: 15px;
 }
 
-/* 오른쪽 패널 - 독립 스크롤 */
+/* 오른쪽 패널 - 독립 스크롤 (가로 스크롤 제거) */
 .col-12.col-lg-6.demo-right-panel {
     height: 100%;
     overflow-y: auto;
-    overflow-x: auto;
+    overflow-x: hidden;
     padding-left: 15px;
+}
+
+/* 오른쪽 패널 카드 body - 가로 스크롤 방지 */
+.demo-right-panel .card-body {
+    overflow-x: hidden;
+}
+
+/* 미리보기 컨텐츠 영역 - 가로 스크롤만 이 영역에서 */
+.preview-content-area {
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+}
+
+.preview-content-area::-webkit-scrollbar {
+    height: 8px;
+}
+
+.preview-content-area::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.preview-content-area::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.preview-content-area::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
 /* 카드 높이 조정 - h-100 제거 효과 */
@@ -287,8 +333,8 @@
     </div>
 </div>
 
-<div class="container-fluid px-4">
-    <div class="row g-3 mt-2 demo-panels">
+<div class="container-fluid px-4 demo-main-container">
+    <div class="row g-3 demo-panels">
         <!-- 왼쪽 패널: 입력 영역 -->
         <div class="col-12 col-lg-6 demo-left-panel">
             <div class="card modern-card">
