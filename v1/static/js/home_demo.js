@@ -1185,8 +1185,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function downloadAsPDF() {
     const previewContent = document.getElementById('previewContent');
     const prdlstNmInput = document.querySelector('input[name="prdlst_nm"]');
-    const fileName = prdlstNmInput && prdlstNmInput.value.trim() ? prdlstNmInput.value.trim() + '.pdf' : 'label_preview.pdf';
-
+    
     if (!previewContent) {
         alert('미리보기 영역을 찾을 수 없습니다.');
         return;
@@ -1194,35 +1193,60 @@ function downloadAsPDF() {
 
     showToast('PDF 생성을 시작합니다. 잠시만 기다려주세요...');
 
+    // 현재 설정된 가로/세로 길이 가져오기 (미리보기 팝업과 동일)
+    const widthInput = document.getElementById('widthInput');
+    const heightInput = document.getElementById('heightInput');
+    const width = parseFloat(widthInput?.value) || 10;
+    const height = parseFloat(heightInput?.value) || 11;
+    
+    // cm를 pt로 변환 (1cm = 28.35pt) - label_preview.js와 동일
+    const widthPt = width * 28.35;
+    const heightPt = height * 28.35;
+
     html2canvas(previewContent, {
-        scale: 2, // 해상도 2배로 높여 품질 개선
-        useCORS: true, // CORS 이미지 사용 허용
-        logging: false // 콘솔 로그 비활성화
+        scale: 3, // 고해상도를 위해 스케일 증가 (label_preview.js와 동일)
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        width: previewContent.scrollWidth,
+        height: previewContent.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+        logging: false
     }).then(canvas => {
         try {
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({
-                orientation: 'p',
-                unit: 'mm',
-                format: 'a4'
-            });
+            
+            // PDF 생성 (가로, 세로 방향 및 단위, 크기 설정)
+            const orientation = widthPt > heightPt ? 'l' : 'p'; // 가로가 길면 landscape
+            const doc = new jsPDF(orientation, 'pt', [widthPt, heightPt]);
 
             const imgData = canvas.toDataURL('image/png');
-            const imgWidth = 210; // A4 가로
-            const pageHeight = 297; // A4 세로
-            const imgHeight = canvas.height * imgWidth / canvas.width;
-            let heightLeft = imgHeight;
-            let position = 0;
+            
+            // PDF에 이미지 추가 (이미지를 PDF 크기에 맞춤)
+            doc.addImage(imgData, 'PNG', 0, 0, widthPt, heightPt);
 
-            doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-
-            while (heightLeft >= 0) {
-                position = heightLeft - imgHeight;
-                doc.addPage();
-                doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
+            // 파일명 생성 (연월일 포함)
+            const today = new Date();
+            const year = today.getFullYear().toString();
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const day = today.getDate().toString().padStart(2, '0');
+            const dateStr = `${year}${month}${day}`;
+            
+            // 제품명 가져오기
+            const productName = (prdlstNmInput?.value || '').trim();
+            
+            // 파일명 구성: 한글표시사항_제품명_연월일
+            let fileName = '한글표시사항';
+            
+            if (productName) {
+                fileName += `_${productName}`;
             }
+            
+            fileName += `_${dateStr}.pdf`;
+            
+            // 파일명에서 특수문자 제거 (파일시스템에서 허용되지 않는 문자들)
+            fileName = fileName.replace(/[<>:"/\\|?*]/g, '_');
 
             // Blob을 생성하여 '다른 이름으로 저장' 대화상자를 엽니다.
             const pdfBlob = doc.output('blob');
