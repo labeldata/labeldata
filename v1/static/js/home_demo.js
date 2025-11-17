@@ -1273,7 +1273,7 @@ function saveLabelData() {
         return;
     }
     
-    fetch('/save/', {
+    fetch('/save-label/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -1284,12 +1284,15 @@ function saveLabelData() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast('표시사항 작성 페이지로 이동합니다!');
+            showToast(data.message || '표시사항이 저장되었습니다!');
             
-            // 표시사항 작성 페이지로 이동
+            // localStorage 데이터 초기화
+            localStorage.removeItem('demo_label_data');
+            
+            // 표시사항 리스트 페이지로 리다이렉트
             setTimeout(() => {
-                window.location.href = data.redirect_url || '/label/create-new/';
-            }, 1000);
+                window.location.href = data.redirect_url || '/label/my-labels/';
+            }, 500);
         } else if (data.requires_login) {
             // 로그인 필요 응답 처리
             const userConfirmed = confirm(data.message);

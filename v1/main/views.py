@@ -86,25 +86,105 @@ def save_label(request):
         })
     
     try:
+        from v1.label.models import MyLabel
+        from django.utils import timezone
+        
         data = json.loads(request.body)
         
         # 필수 필드 체크
         if not data.get('prdlst_nm'):
             return JsonResponse({'success': False, 'error': '제품명은 필수입니다.'}, status=400)
         
-        # 세션에 데이터 저장
-        request.session['demo_label_data'] = data
+        # MyLabel 인스턴스 생성
+        label = MyLabel(user_id=request.user)
         
-        # label_creation 페이지로 리다이렉트하도록 URL 반환
+        # 라벨명 생성 (제품명 + 날짜)
+        label.my_label_name = data.get('prdlst_nm', '표시사항') + '_' + timezone.now().strftime('%Y%m%d')
+        
+        # 기본 정보
+        label.prdlst_nm = data.get('prdlst_nm', '')
+        label.ingredient_info = data.get('ingredient_info', '')
+        label.prdlst_dcnm = data.get('prdlst_dcnm', '')
+        label.prdlst_report_no = data.get('prdlst_report_no', '')
+        label.content_weight = data.get('content_weight', '')
+        label.weight_calorie = data.get('weight_calorie', '')
+        
+        # 원산지 및 보관/포장
+        label.country_of_origin = data.get('country_of_origin', '')
+        label.storage_method = data.get('storage_method', '')
+        label.frmlc_mtrqlt = data.get('packaging_material', '')
+        label.pog_daycnt = data.get('expiry_date', '')
+        
+        # 원재료명
+        label.rawmtrl_nm = data.get('rawmtrl_nm', '')
+        label.rawmtrl_nm_display = data.get('rawmtrl_nm_display', '')
+        
+        # 제조원 등 주소 정보
+        label.bssh_nm = data.get('manufacturer', '')
+        label.distributor_address = data.get('distributor', '')
+        label.repacker_address = data.get('subdivider', '')
+        label.importer_address = data.get('importer', '')
+        
+        # 주의사항 및 기타
+        label.cautions = data.get('caution', '')
+        label.additional_info = data.get('other_info', '')
+        
+        # 영양성분 정보
+        label.nutrition_text = data.get('nutrition_text', '')
+        label.serving_size = data.get('serving_size', '')
+        label.serving_size_unit = data.get('serving_size_unit', '')
+        label.units_per_package = data.get('units_per_package', '')
+        label.nutrition_display_unit = data.get('nutrition_display_unit', '')
+        
+        # 영양성분 상세
+        label.calories = data.get('calories', '')
+        label.calories_unit = data.get('calories_unit', 'kcal')
+        label.natriums = data.get('natriums', '')
+        label.natriums_unit = data.get('natriums_unit', 'mg')
+        label.carbohydrates = data.get('carbohydrates', '')
+        label.carbohydrates_unit = data.get('carbohydrates_unit', 'g')
+        label.sugars = data.get('sugars', '')
+        label.sugars_unit = data.get('sugars_unit', 'g')
+        label.fats = data.get('fats', '')
+        label.fats_unit = data.get('fats_unit', 'g')
+        label.trans_fats = data.get('trans_fats', '')
+        label.trans_fats_unit = data.get('trans_fats_unit', 'g')
+        label.saturated_fats = data.get('saturated_fats', '')
+        label.saturated_fats_unit = data.get('saturated_fats_unit', 'g')
+        label.cholesterols = data.get('cholesterols', '')
+        label.cholesterols_unit = data.get('cholesterols_unit', 'mg')
+        label.proteins = data.get('proteins', '')
+        label.proteins_unit = data.get('proteins_unit', 'g')
+        
+        # 추가 영양성분
+        label.dietary_fiber = data.get('dietary_fiber', '')
+        label.dietary_fiber_unit = data.get('dietary_fiber_unit', 'g')
+        label.calcium = data.get('calcium', '')
+        label.calcium_unit = data.get('calcium_unit', 'mg')
+        label.iron = data.get('iron', '')
+        label.iron_unit = data.get('iron_unit', 'mg')
+        
+        # 식품 분류 정보
+        label.food_group = data.get('food_group', '')
+        label.food_type = data.get('food_type', '')
+        
+        # 저장
+        label.save()
+        
+        # 표시사항 리스트로 리다이렉트 (방금 저장한 데이터만 보이도록 label_id 전달)
         return JsonResponse({
             'success': True,
-            'redirect_url': '/label/create-new/',
-            'message': '표시사항 작성 페이지로 이동합니다.'
+            'redirect_url': f'/label/my-labels/?label_id={label.my_label_id}',
+            'message': '표시사항이 저장되었습니다.',
+            'label_id': label.my_label_id
         })
         
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': '잘못된 데이터 형식입니다.'}, status=400)
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        import traceback
+        print(f"Error saving label: {str(e)}")
+        print(traceback.format_exc())
+        return JsonResponse({'success': False, 'error': f'저장 중 오류가 발생했습니다: {str(e)}'}, status=500)
 
 

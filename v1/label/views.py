@@ -194,6 +194,9 @@ def my_label_list(request):
 
     ingredient_id = request.GET.get("ingredient_id")
     ingredient_name = None
+    
+    # 특정 label_id로 필터링 (메인 페이지에서 저장 후 리다이렉트 시)
+    label_id = request.GET.get("label_id")
 
     # 품보 신고 상태 필터 추가
     prdlst_report_status = request.GET.get("prdlst_report_status", "").strip()
@@ -210,6 +213,9 @@ def my_label_list(request):
             ingredient_name = ingredient_obj.prdlst_nm or ingredient_obj.ingredient_display_name or ingredient_id
         except MyIngredient.DoesNotExist:
             ingredient_name = ingredient_id
+    elif label_id:
+        # 특정 label_id만 조회
+        labels = MyLabel.objects.filter(user_id=request.user, my_label_id=label_id).filter(search_conditions).order_by(sort_field)
     else:
         labels = MyLabel.objects.filter(user_id=request.user).filter(search_conditions).order_by(sort_field)
 
