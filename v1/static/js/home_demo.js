@@ -468,6 +468,47 @@ function toggleSettingsPanel() {
     }
 }
 
+// 미리보기 설정 초기화 함수
+function resetPreviewSettings() {
+    // 기본값으로 되돌리기
+    const defaults = {
+        widthInput: 10,
+        heightInput: 11,
+        fontFamilySelect: "'Noto Sans KR', sans-serif",
+        fontSizeInput: 10,
+        letterSpacingInput: -5,
+        lineHeightInput: 1.5
+    };
+    
+    // 각 입력 필드 초기화
+    Object.keys(defaults).forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            if (element.tagName === 'SELECT') {
+                element.value = defaults[id];
+            } else {
+                element.value = defaults[id];
+            }
+        }
+    });
+    
+    // 설정 적용
+    applyPreviewSettings();
+    
+    // 사용자에게 피드백
+    const btn = document.getElementById('resetPreviewSettingsBtn');
+    if (btn) {
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check me-1"></i>초기화 완료';
+        btn.disabled = true;
+        
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+        }, 1500);
+    }
+}
+
 function applyPreviewSettings() {
     const previewContent = document.getElementById('previewContent');
     if (!previewContent) return;
@@ -1019,6 +1060,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
     if (toggleSettingsBtn) {
         toggleSettingsBtn.addEventListener('click', toggleSettingsPanel);
+    }
+    
+    // 설정 초기화 버튼
+    const resetPreviewSettingsBtn = document.getElementById('resetPreviewSettingsBtn');
+    if (resetPreviewSettingsBtn) {
+        resetPreviewSettingsBtn.addEventListener('click', resetPreviewSettings);
     }
 
     // 설정 변경 시 미리보기 업데이트
