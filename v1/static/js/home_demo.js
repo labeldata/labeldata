@@ -2410,3 +2410,135 @@ function toggleQuickText(button) {
     // 입력 이벤트 트리거하여 미리보기 업데이트
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
 }
+
+// ==================== 드래그 스크롤 기능 ====================
+/**
+ * 미리보기 영역에 드래그 스크롤 기능 추가
+ * 마우스로 클릭하여 상하좌우로 드래그하면 스크롤 이동
+ */
+function initializeDragScroll() {
+    const previewArea = document.querySelector('.preview-content-area');
+    if (!previewArea) return;
+
+    let isDown = false;
+    let startX;
+    let startY;
+    let scrollLeft;
+    let scrollTop;
+
+    previewArea.addEventListener('mousedown', (e) => {
+        // 텍스트 선택이 필요한 경우를 제외하고 드래그 시작
+        // 링크나 버튼 클릭 시에는 드래그 방지
+        if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON') {
+            return;
+        }
+
+        isDown = true;
+        previewArea.classList.add('dragging');
+        
+        startX = e.pageX - previewArea.offsetLeft;
+        startY = e.pageY - previewArea.offsetTop;
+        scrollLeft = previewArea.scrollLeft;
+        scrollTop = previewArea.scrollTop;
+    });
+
+    previewArea.addEventListener('mouseleave', () => {
+        isDown = false;
+        previewArea.classList.remove('dragging');
+    });
+
+    previewArea.addEventListener('mouseup', () => {
+        isDown = false;
+        previewArea.classList.remove('dragging');
+    });
+
+    previewArea.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        
+        e.preventDefault();
+        
+        const x = e.pageX - previewArea.offsetLeft;
+        const y = e.pageY - previewArea.offsetTop;
+        
+        // 이동 거리 계산 (속도 조절: 1.5배)
+        const walkX = (x - startX) * 1.5;
+        const walkY = (y - startY) * 1.5;
+        
+        // 스크롤 위치 업데이트
+        previewArea.scrollLeft = scrollLeft - walkX;
+        previewArea.scrollTop = scrollTop - walkY;
+    });
+}
+
+// ==================== 패널 리사이저 기능 ====================
+/**
+ * 왼쪽/오른쪽 패널 사이의 리사이저 드래그 기능
+ * 최소 30%씩 확보하면서 크기 조절 가능
+ */
+function initializePanelResizer() {
+    const resizer = document.querySelector('.panel-resizer');
+    const leftPanel = document.querySelector('.demo-left-panel');
+    const rightPanel = document.querySelector('.demo-right-panel');
+    const container = document.querySelector('.demo-panels');
+    
+    if (!resizer || !leftPanel || !rightPanel || !container) return;
+
+    let isResizing = false;
+    let startX;
+    let startLeftWidth;
+    let startRightWidth;
+    let containerWidth;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        resizer.classList.add('resizing');
+        
+        startX = e.clientX;
+        containerWidth = container.offsetWidth;
+        startLeftWidth = leftPanel.offsetWidth;
+        startRightWidth = rightPanel.offsetWidth;
+        
+        // 드래그 중 텍스트 선택 방지
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+        
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        
+        const deltaX = e.clientX - startX;
+        const newLeftWidth = startLeftWidth + deltaX;
+        const newRightWidth = startRightWidth - deltaX;
+        
+        // 최소 30% 확보 체크
+        const minWidth = containerWidth * 0.3;
+        
+        if (newLeftWidth >= minWidth && newRightWidth >= minWidth) {
+            const leftPercent = (newLeftWidth / containerWidth) * 100;
+            const rightPercent = (newRightWidth / containerWidth) * 100;
+            
+            leftPanel.style.flex = `0 0 ${leftPercent}%`;
+            leftPanel.style.maxWidth = `${leftPercent}%`;
+            
+            rightPanel.style.flex = `0 0 ${rightPercent}%`;
+            rightPanel.style.maxWidth = `${rightPercent}%`;
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            resizer.classList.remove('resizing');
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+        }
+    });
+}
+
+// 페이지 로드 시 드래그 스크롤 초기화
+document.addEventListener('DOMContentLoaded', () => {
+    initializeDragScroll();
+    initializePanelResizer();
+});

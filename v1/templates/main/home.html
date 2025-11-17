@@ -46,6 +46,9 @@ html, body {
     max-height: 100%;
     overflow: hidden;
     margin-top: 0 !important;
+    display: flex;
+    flex-wrap: nowrap;
+    position: relative;
 }
 
 /* 왼쪽 패널 - 독립 스크롤 */
@@ -54,6 +57,9 @@ html, body {
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: 15px;
+    flex: 0 0 50%;
+    max-width: 50%;
+    min-width: 30%;
 }
 
 /* 오른쪽 패널 - 독립 스크롤 (가로 스크롤 제거) */
@@ -62,6 +68,39 @@ html, body {
     overflow-y: auto;
     overflow-x: hidden;
     padding-left: 15px;
+    flex: 0 0 50%;
+    max-width: 50%;
+    min-width: 30%;
+}
+
+/* 패널 리사이저 */
+.panel-resizer {
+    width: 8px;
+    background: #e0e0e0;
+    cursor: col-resize;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    z-index: 10;
+}
+
+.panel-resizer:hover {
+    background: #38b2ac;
+}
+
+.panel-resizer::before {
+    content: '⋮';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #666;
+    font-size: 1rem;
+    pointer-events: none;
+}
+
+.panel-resizer.resizing {
+    background: #319795;
 }
 
 /* 오른쪽 패널 카드 body - 가로 스크롤 방지 */
@@ -72,8 +111,16 @@ html, body {
 /* 미리보기 컨텐츠 영역 - 가로 스크롤만 이 영역에서 */
 .preview-content-area {
     overflow-x: auto;
-    overflow-y: visible;
+    overflow-y: auto;
     width: 100%;
+    max-height: 600px; /* 최대 높이 제한으로 세로 스크롤 활성화 */
+    cursor: grab;
+    user-select: none;
+}
+
+.preview-content-area.dragging {
+    cursor: grabbing;
+    user-select: none;
 }
 
 .preview-content-area::-webkit-scrollbar {
@@ -229,23 +276,25 @@ html, body {
 /* 탭 네비게이션 스타일 */
 .form-tabs {
     display: flex;
-    gap: 0.25rem;
+    gap: 0.15rem; /* 0.25rem에서 0.15rem으로 축소 */
     margin-bottom: 1rem;
     border-bottom: 2px solid #e9ecef;
     overflow-x: auto;
     white-space: nowrap;
+    flex-wrap: nowrap;
 }
 
 .form-tab {
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 0.6rem; /* 0.5rem 1rem에서 축소 */
     background: transparent;
     border: none;
     border-bottom: 3px solid transparent;
     color: #6c757d;
     font-weight: 500;
-    font-size: 0.9rem;
+    font-size: 0.8rem; /* 0.9rem에서 0.8rem으로 축소 */
     cursor: pointer;
     transition: all 0.2s;
+    flex-shrink: 0;
 }
 
 .form-tab:hover {
@@ -260,7 +309,8 @@ html, body {
 }
 
 .form-tab i {
-    margin-right: 0.5rem;
+    margin-right: 0.3rem; /* 0.5rem에서 0.3rem으로 축소 */
+    font-size: 0.75rem; /* 아이콘 크기 축소 */
 }
 
 .tab-content-panel {
@@ -843,6 +893,9 @@ html, body {
                 </div>
             </div>
         </div>
+
+        <!-- 패널 리사이저 -->
+        <div class="panel-resizer"></div>
 
         <!-- 오른쪽 패널: 미리보기 영역 -->
         <div class="col-12 col-lg-6 demo-right-panel">
