@@ -269,6 +269,8 @@ class MyLabel(models.Model):
     pantothenic_acid = models.CharField(max_length=10, verbose_name="판토텐산", null=True, blank=True)
     pantothenic_acid_unit = models.CharField(max_length=10, verbose_name="판토텐산 단위", null=True, blank=True)
 
+    allergens = models.CharField(max_length=1000, verbose_name="알레르기 물질", null=True, blank=True)
+
     create_datetime = models.DateTimeField(auto_now_add=True)
     update_datetime = models.DateTimeField(auto_now=True)
     label_create_YN = models.CharField(max_length=1, verbose_name="표시사항 작성여부", default="N" )
