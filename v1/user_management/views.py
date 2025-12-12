@@ -68,7 +68,7 @@ def signup(request):
     return render(request, 'user_management/signup.html', {'form': form})
 
 def verify_email(request):
-    """이메일 인증 처리"""
+    """이메일 인증 처리 (1시간 유효)"""
     uid = request.GET.get('uid')
     token = request.GET.get('token')
     
@@ -78,19 +78,35 @@ def verify_email(request):
         user = User.objects.get(id=uid)
         profile, created = UserProfile.objects.get_or_create(user=user)
         
-        # Case 1: 성공적인 첫 인증
-        if profile.email_verification_token == token and token:
-            user.is_active = True
-            user.save()
-            profile.is_email_verified = True
-            profile.email_verification_token = ''
-            profile.save()
-            context['result_type'] = 'success'
-            context['message_text'] = '이메일 인증이 완료되었습니다. 로그인하세요.'
-        # Case 2: 이미 인증된 경우 (예: 링크 재클릭)
-        elif profile.is_email_verified:
+        # Case 1: 이미 인증된 경우
+        if profile.is_email_verified:
             context['result_type'] = 'info'
             context['message_text'] = '이미 인증된 계정입니다.'
+        # Case 2: 토큰이 일치하는 경우
+        elif profile.email_verification_token == token and token:
+            # 시간 검증: 발송 시간으로부터 1시간 이내인지 확인
+            if profile.email_verification_sent_at:
+                time_diff = timezone.now() - profile.email_verification_sent_at
+                # 1시간 = 3600초
+                if time_diff.total_seconds() > 3600:
+                    # 인증 링크 만료
+                    context['result_type'] = 'error'
+                    context['message_text'] = '인증 링크가 만료되었습니다. (유효시간: 1시간)'
+                    context['show_resend'] = True
+                    context['user_email'] = user.email
+                else:
+                    # 인증 성공
+                    user.is_active = True
+                    user.save()
+                    profile.is_email_verified = True
+                    profile.email_verification_token = ''
+                    profile.save()
+                    context['result_type'] = 'success'
+                    context['message_text'] = '이메일 인증이 완료되었습니다. 로그인하세요.'
+            else:
+                # 발송 시간 정보가 없는 경우 (예외 상황)
+                context['result_type'] = 'error'
+                context['message_text'] = '인증 정보를 확인할 수 없습니다.'
         # Case 3: 잘못된 링크
         else:
             context['result_type'] = 'error'
