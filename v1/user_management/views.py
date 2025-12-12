@@ -115,17 +115,67 @@ def login_view(request):
         else:
             email = request.POST.get('username', '').strip()
             password = request.POST.get('password')
+        
+        # 먼저 사용자 존재 여부 및 비밀번호 확인
         user = authenticate(request, username=email, password=password)
+        
         if user is not None:
+            # 인증 상태 확인
             if hasattr(user, 'profile') and not user.profile.is_email_verified:
-                messages.error(request, "이메일 인증이 완료되어야 로그인할 수 있습니다.")
+                # 인증되지 않은 계정
+                request.session['unverified_email'] = email
+                messages.warning(request, "이메일 인증이 완료되지 않았습니다. 인증메일을 확인하거나 재발송 버튼을 클릭하세요.")
             else:
                 login(request, user)
                 return redirect('main:home')
         else:
-            messages.error(request, "아이디 또는 비밀번호가 올바르지 않습니다.")
+            # 사용자가 없거나 비밀번호가 틀린 경우
+            # 비활성 사용자도 체크 (is_active=False인 경우)
+            try:
+                inactive_user = User.objects.get(username=email, is_active=False)
+                if inactive_user.check_password(password):
+                    # 비밀번호는 맞지만 인증이 안된 경우
+                    request.session['unverified_email'] = email
+                    messages.warning(request, "이메일 인증이 완료되지 않았습니다. 인증메일을 확인하거나 재발송 버튼을 클릭하세요.")
+                else:
+                    messages.error(request, "아이디 또는 비밀번호가 올바르지 않습니다.")
+            except User.DoesNotExist:
+                messages.error(request, "아이디 또는 비밀번호가 올바르지 않습니다.")
+    
+    # 세션에 저장된 이메일 가져오기
+    unverified_email = request.session.get('unverified_email', '')
     form = AuthenticationForm()
-    return render(request, 'user_management/login.html', {'form': form})
+    return render(request, 'user_management/login.html', {'form': form, 'unverified_email': unverified_email})
+
+def resend_verification_email(request):
+    """인증 메일 재발송"""
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip()
+        try:
+            user = User.objects.get(username=email, is_active=False)
+            profile = user.profile
+            
+            # 새로운 토큰 생성
+            token = get_random_string(32)
+            profile.email_verification_token = token
+            profile.email_verification_sent_at = timezone.now()
+            profile.save()
+            
+            # 인증 메일 발송
+            verify_url = request.build_absolute_uri(f"/user-management/verify-email/?uid={user.id}&token={token}")
+            send_mail(
+                '이메일 인증 요청 (재발송)',
+                f'아래 링크를 클릭하여 이메일 인증을 완료하세요:\n{verify_url}',
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+            )
+            messages.success(request, "인증 메일이 재발송되었습니다. 이메일을 확인하세요.")
+        except User.DoesNotExist:
+            messages.error(request, "해당 이메일로 가입된 계정을 찾을 수 없습니다.")
+        except Exception as e:
+            messages.error(request, "메일 발송 중 오류가 발생했습니다.")
+    
+    return redirect('user_management:login')
 
 def logout_view(request):
     """로그아웃"""

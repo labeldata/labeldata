@@ -10,8 +10,18 @@
         
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} mb-3" role="alert">
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% else %}{{ message.tags }}{% endif %} mb-3" role="alert">
                     {{ message }}
+                    {% if message.tags == 'warning' and unverified_email %}
+                        <hr>
+                        <form method="post" action="{% url 'user_management:resend_verification' %}" class="mt-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="email" value="{{ unverified_email }}">
+                            <button type="submit" class="btn btn-sm btn-warning">
+                                <i class="fas fa-envelope me-1"></i>인증메일 재발송
+                            </button>
+                        </form>
+                    {% endif %}
                 </div>
             {% endfor %}
         {% endif %}
