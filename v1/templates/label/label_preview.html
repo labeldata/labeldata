@@ -456,13 +456,13 @@
                         
                         // 테이블 헤더는 선택된 옵션으로, 내용은 입력값만 표시
                         th.textContent = dateOption;  // 항목명을 테이블 헤더로
-                        td.innerHTML = dateValue ? boldCountryNames(dateValue, countryList) : '';
+                        td.innerHTML = dateValue || '';
                         tr.appendChild(th);
                         tr.appendChild(td);
                         tbody.appendChild(tr);
                         return; // 기본 처리 로직을 건너뛰기 위해 return
                     } else {
-                        td.innerHTML = boldCountryNames(value, countryList);
+                        td.innerHTML = value;
                     }
                     tr.appendChild(th);
                     tr.appendChild(td);
