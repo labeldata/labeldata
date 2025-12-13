@@ -7,7 +7,7 @@ from django.views.decorators.http import require_http_methods
 import json
 from v1.disposition.models import AdministrativeDisposition, CrawlingSetting  # import 경로 수정
 from v1.disposition.forms import DispositionForm  # import 경로 수정
-from v1.label.models import FoodType, FoodItem, CountryList  # 데모 페이지용 추가
+from v1.label.models import FoodType, FoodItem, CountryList, MyLabel  # 데모 페이지용 추가
 
 def home(request):
     """
@@ -168,6 +168,23 @@ def save_label(request):
         label.food_group = data.get('food_group', '')
         label.food_type = data.get('food_type', '')
         
+        # 알레르기 정보 저장 (원재료 사용 알레르기만 DB 저장)
+        ingredient_allergens = data.get('ingredient_allergens', '')
+        if ingredient_allergens:
+            label.allergens = ingredient_allergens
+        
+        # 교차오염 알레르기는 caution에 추가
+        cross_contamination = data.get('cross_contamination_allergens', '')
+        if cross_contamination:
+            cross_allergens_list = [a.strip() for a in cross_contamination.split(',') if a.strip()]
+            if cross_allergens_list:
+                cross_text = f"이 제품은 {', '.join(cross_allergens_list)}를 사용한 제품과 같은 제조시설에서 제조하고 있습니다."
+                # 기존 caution이 있으면 줄바꿈 추가
+                if label.cautions and label.cautions.strip():
+                    label.cautions = label.cautions.strip() + '\n' + cross_text
+                else:
+                    label.cautions = cross_text
+        
         # 저장
         label.save()
         
@@ -186,5 +203,3 @@ def save_label(request):
         print(f"Error saving label: {str(e)}")
         print(traceback.format_exc())
         return JsonResponse({'success': False, 'error': f'저장 중 오류가 발생했습니다: {str(e)}'}, status=500)
-
-

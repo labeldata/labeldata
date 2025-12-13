@@ -1618,6 +1618,9 @@ function updateAllergenDisplay() {
     // 버튼 상태 업데이트
     updateAllergenButtonStates();
     
+    // localStorage에 저장
+    saveAllergensToStorage();
+    
     // 미리보기 업데이트
     updatePreview();
 }
@@ -1625,7 +1628,7 @@ function updateAllergenDisplay() {
 // 알레르기 버튼 상태 업데이트
 function updateAllergenButtonStates() {
     // 빠른 추가 버튼 업데이트
-    document.querySelectorAll('.quick-allergen-btn, .full-allergen-btn').forEach(button => {
+    document.querySelectorAll('.quick-allergen-btn').forEach(button => {
         const allergen = button.dataset.allergen;
         if (window.selectedIngredientAllergens.has(allergen)) {
             button.classList.remove('btn-outline-secondary');
@@ -2584,8 +2587,48 @@ function initializePanelResizer() {
     });
 }
 
+// ==================== 알레르기 저장/로딩 ====================
+// localStorage에 알레르기 정보 저장
+function saveAllergensToStorage() {
+    const timestamp = new Date().toISOString();
+    
+    // localStorage 저장 (비로그인/로그인 모두)
+    localStorage.setItem('labeldata_allergens', JSON.stringify([...window.selectedIngredientAllergens]));
+    localStorage.setItem('labeldata_crossContaminationAllergens', JSON.stringify([...window.selectedCrossContaminationAllergens]));
+    localStorage.setItem('labeldata_timestamp', timestamp);
+}
+
+// localStorage에서 알레르기 정보 로드
+function loadAllergensFromStorage() {
+    const timestamp = localStorage.getItem('labeldata_timestamp');
+    
+    if (timestamp) {
+        const savedTime = new Date(timestamp);
+        const now = new Date();
+        const hoursDiff = (now - savedTime) / (1000 * 60 * 60);
+        
+        if (hoursDiff < 24) {
+            // 24시간 이내 데이터 로드
+            const allergens = JSON.parse(localStorage.getItem('labeldata_allergens') || '[]');
+            const crossAllergens = JSON.parse(localStorage.getItem('labeldata_crossContaminationAllergens') || '[]');
+            
+            allergens.forEach(a => window.selectedIngredientAllergens.add(a));
+            crossAllergens.forEach(a => window.selectedCrossContaminationAllergens.add(a));
+            
+            updateAllergenTags();
+            console.log('알레르기 정보를 localStorage에서 불러왔습니다.');
+        } else {
+            // 만료된 데이터 삭제
+            localStorage.removeItem('labeldata_allergens');
+            localStorage.removeItem('labeldata_crossContaminationAllergens');
+            localStorage.removeItem('labeldata_timestamp');
+        }
+    }
+}
+
 // 페이지 로드 시 드래그 스크롤 초기화
 document.addEventListener('DOMContentLoaded', () => {
     initializeDragScroll();
     initializePanelResizer();
+    loadAllergensFromStorage();
 });

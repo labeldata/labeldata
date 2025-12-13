@@ -426,9 +426,124 @@
                 <label for="chk_rawmtrl_nm_display" class="m-0">원재료명 <br> (최종표시)</label>
               </div>
               <div style="width:90%;">
-                <textarea name="rawmtrl_nm_display" class="form-control auto-expand textarea" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
+                <textarea name="rawmtrl_nm_display" id="rawmtrl_nm_display_textarea" class="form-control auto-expand textarea" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
               </div>
             </div>
+            
+            <!-- 알레르기 관리 모듈 -->
+            <div class="mb-3" style="background: #fff8e1; padding: 0.8rem; border-radius: 6px; border: 1px solid #ffd54f;">
+                <div class="d-flex align-items-center justify-content-between mb-2" style="gap: 10px;">
+                    <div class="d-flex align-items-center" style="cursor: pointer; flex-shrink: 0;" onclick="toggleAllergenModuleLabel()">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        <label style="font-weight: 700; color: #f57c00; cursor: pointer; margin-bottom: 0;">알레르기 관리</label>
+                        <i class="fas fa-chevron-down ms-2" id="allergenModuleToggleIconLabel" style="font-size: 0.8rem; color: #f57c00;"></i>
+                    </div>
+                    
+                    <!-- 감지된 알레르기 표시 (접었을 때도 표시) -->
+                    <div id="allergenSummaryLabel" class="d-flex align-items-center flex-grow-1" style="min-height: 30px; overflow-x: auto; gap: 5px; flex-wrap: wrap;">
+                        <span class="text-muted" style="font-size: 0.75rem;">원재료명을 입력하면 자동 감지됩니다</span>
+                    </div>
+                    
+                    <!-- 새로고침 버튼 -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="manualDetectAllergensLabel()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; flex-shrink: 0;" title="알레르기 물질 다시 감지">
+                        <i class="fas fa-sync-alt me-1"></i>새로고침
+                    </button>
+                </div>
+                
+                <div id="allergenModuleContentLabel" style="display: flex; flex-direction: column; gap: 12px; margin-top: 12px;">
+                    <!-- 원재료 사용 알레르기 물질 -->
+                    <div style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e0e0e0;">
+                        <label class="mb-2" style="font-weight: 600; color: #d32f2f; font-size: 0.9rem;">
+                            <i class="fas fa-utensils me-1"></i>원재료 사용 알레르기 물질
+                        </label>
+                        
+                        <!-- 자동 감지된 알레르기 태그 표시 -->
+                        <div id="detectedAllergensLabel" class="p-2 bg-light border rounded mb-2 position-relative" style="min-height: 40px; font-size: 0.85rem;">
+                            <span class="text-muted"><i class="fas fa-info-circle me-1"></i>원재료명(최종표시)을 입력하면 자동으로 감지됩니다</span>
+                            <!-- 감지 상태 표시 -->
+                            <div id="allergenDetectingIndicatorLabel" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status" style="width: 1.5rem; height: 1.5rem;">
+                                    <span class="visually-hidden">감지 중...</span>
+                                </div>
+                                <span class="text-primary ms-2" style="font-size: 0.8rem;">감지 중...</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 직접 추가 버튼 (모든 항목) -->
+                        <div class="mt-2" style="display: flex; flex-wrap: wrap; gap: 5px; align-items: center;">
+                            <span style="font-size: 0.75rem; color: #666; font-weight: 500;">직접 추가:</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="알류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">알류</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="우유" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">우유</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="메밀" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">메밀</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="땅콩" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">땅콩</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="대두" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">대두</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="밀" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">밀</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="고등어" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">고등어</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="게" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">게</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="새우" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">새우</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="돼지고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">돼지고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="복숭아" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">복숭아</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="토마토" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">토마토</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="아황산류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">아황산류</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="호두" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">호두</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="잣" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">잣</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="닭고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">닭고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="쇠고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">쇠고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="오징어" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">오징어</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="조개류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">조개류</button>
+                        </div>
+                        
+                        <!-- 숨겨진 입력 필드 -->
+                        <input type="hidden" id="selected_ingredient_allergens_label" name="allergens" value="{{ label.allergens|default:'' }}">
+                    </div>
+                    
+                    <!-- 제조시설 혼입 우려 물질 -->
+                    <div style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e0e0e0;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="mb-0" style="font-weight: 600; color: #f57c00; font-size: 0.9rem;">
+                                <i class="fas fa-industry me-1"></i>제조시설 혼입 우려 물질
+                            </label>
+                            <div class="d-flex justify-content-end" style="gap: 5px;">
+                                <button type="button" id="toggleAllAllergensLabelBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAllergensLabel()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                    <i class="fas fa-check-double me-1"></i>전체 선택
+                                </button>
+                                <button type="button" id="toggleAllergenWarningLabelBtn" class="btn btn-outline-primary btn-sm" onclick="toggleAllergenWarningLabel()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                    <i class="fas fa-arrow-down me-1"></i>주의사항에 추가
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="알류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">알류</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="우유" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">우유</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="메밀" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">메밀</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="땅콩" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">땅콩</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="대두" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">대두</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="밀" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">밀</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="고등어" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">고등어</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="게" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">게</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="새우" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">새우</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="돼지고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">돼지고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="복숭아" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">복숭아</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="토마토" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">토마토</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="아황산류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">아황산류</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="호두" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">호두</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="잣" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">잣</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="닭고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">닭고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="쇠고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">쇠고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="오징어" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">오징어</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="조개류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">조개류</button>
+                        </div>
+                        
+                        <!-- 혼입 경고 문구 미리보기 -->
+                        <div id="crossContaminationPreviewLabel" class="mt-2 p-2 bg-light border rounded" style="display: none; font-size: 0.85rem;">
+                            <strong class="text-dark">생성된 혼입 경고 문구:</strong>
+                            <div id="crossContaminationTextLabel" class="mt-1 text-dark"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- 원재료명 (참고) -->
             <!-- 원재료명 (표로입력) - 항상 표시 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
@@ -588,4 +703,50 @@
 
 <!-- 라벨 상수 로드 -->
 <script src="{% static 'js/label/constants.js' %}"></script>
+
+<!-- 기존 알레르기 데이터 로드 -->
+<script>
+// 페이지 로드 시 기존 알레르기 데이터 적용
+document.addEventListener('DOMContentLoaded', function() {
+    {% if label and label.allergens %}
+    // 저장된 알레르기 데이터 로드
+    const savedAllergens = "{{ label.allergens|escapejs }}";
+    if (savedAllergens && window.selectedIngredientAllergensLabel) {
+        const allergenArray = savedAllergens.split(',').map(a => a.trim()).filter(a => a);
+        allergenArray.forEach(allergen => {
+            window.selectedIngredientAllergensLabel.add(allergen);
+        });
+        
+        // UI 업데이트
+        if (typeof updateAllergenTagsLabel === 'function') {
+            setTimeout(() => {
+                updateAllergenTagsLabel();
+                console.log('✅ 저장된 알레르기 정보 로드:', allergenArray);
+            }, 100);
+        }
+    }
+    {% endif %}
+    
+    {% if label and label.cautions %}
+    // 교차오염 알레르기 파싱
+    const cautionText = "{{ label.cautions|escapejs }}";
+    const crossMatch = cautionText.match(/이 제품은 (.+?)를 사용한 제품과 같은 제조시설에서 제조하고 있습니다\./);
+    if (crossMatch && window.selectedCrossContaminationAllergensLabel) {
+        const crossAllergens = crossMatch[1].split(',').map(a => a.trim());
+        crossAllergens.forEach(allergen => {
+            window.selectedCrossContaminationAllergensLabel.add(allergen);
+        });
+        
+        // UI 업데이트
+        if (typeof updateAllergenTagsLabel === 'function') {
+            setTimeout(() => {
+                updateAllergenTagsLabel();
+                console.log('✅ 저장된 교차오염 정보 로드:', crossAllergens);
+            }, 100);
+        }
+    }
+    {% endif %}
+});
+</script>
+
 {% endblock %}

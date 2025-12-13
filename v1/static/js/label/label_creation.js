@@ -1778,3 +1778,363 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
+// ==================== 알레르기 관리 기능 (Label Creation) ====================
+
+// 알레르기 데이터 저장소
+let selectedIngredientAllergensLabel = new Set();
+let selectedCrossContaminationAllergensLabel = new Set();
+
+// 알레르기 모듈 토글
+function toggleAllergenModuleLabel() {
+    const content = document.getElementById('allergenModuleContentLabel');
+    const icon = document.getElementById('allergenModuleToggleIconLabel');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'flex';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    } else {
+        content.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    }
+}
+
+// 알레르기 자동 감지 (rawmtrl_nm_display 기반)
+function detectAllergensLabel() {
+    const rawmtrlTextarea = document.getElementById('rawmtrl_nm_display_textarea');
+    if (!rawmtrlTextarea) return;
+    
+    const rawmtrlText = rawmtrlTextarea.value;
+    const detectingIndicator = document.getElementById('allergenDetectingIndicatorLabel');
+    
+    // 로딩 인디케이터 표시
+    if (detectingIndicator) {
+        detectingIndicator.style.display = 'flex';
+    }
+    
+    // 약간의 지연 후 실행하여 로딩 효과 표시
+    setTimeout(() => {
+        if (!rawmtrlText || rawmtrlText.trim() === '') {
+            if (detectingIndicator) {
+                detectingIndicator.style.display = 'none';
+            }
+            return;
+        }
+    
+    // constants.js의 ALLERGEN_KEYWORDS 사용 (home_demo.js와 동일한 키워드)
+    const allergenKeywords = window.allergenKeywords || window.ALLERGEN_KEYWORDS || {};
+    
+    // 감지된 알레르기
+    const detectedAllergens = new Set();
+    
+    // 각 알레르기 그룹의 키워드로 검색 (home_demo.js와 동일한 로직)
+    for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
+        for (const keyword of keywords) {
+            let found = false;
+            
+            // 1글자 키워드는 단어 경계 체크 (오탐 방지)
+            if (keyword.length === 1) {
+                const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
+                if (regex.test(rawmtrlText)) {
+                    found = true;
+                }
+            } else {
+                // 2글자 이상은 포함 여부만 체크
+                if (rawmtrlText.toLowerCase().includes(keyword.toLowerCase())) {
+                    found = true;
+                }
+            }
+            
+            if (found) {
+                detectedAllergens.add(allergen);
+                break;
+            }
+        }
+    }
+    
+    // 기존 선택된 알레르기와 병합
+    detectedAllergens.forEach(a => selectedIngredientAllergensLabel.add(a));
+    
+    // UI 업데이트
+    updateAllergenTagsLabel();
+    
+    // 로딩 인디케이터 숨기기
+    if (detectingIndicator) {
+        detectingIndicator.style.display = 'none';
+    }
+    }, 300); // 300ms 지연
+}
+
+// 수동 감지 트리거
+function manualDetectAllergensLabel() {
+    selectedIngredientAllergensLabel.clear();
+    detectAllergensLabel();
+    updateAllergenButtonStatesLabel();
+}
+
+// 알레르기 태그 추가
+function addAllergenTagLabel(allergen) {
+    selectedIngredientAllergensLabel.add(allergen);
+    updateAllergenTagsLabel();
+}
+
+// 알레르기 태그 제거
+function removeAllergenTagLabel(allergen) {
+    selectedIngredientAllergensLabel.delete(allergen);
+    updateAllergenTagsLabel();
+}
+
+// 알레르기 태그 UI 업데이트
+function updateAllergenTagsLabel() {
+    const container = document.getElementById('detectedAllergensLabel');
+    const summary = document.getElementById('allergenSummaryLabel');
+    
+    if (!container) return;
+    
+    if (selectedIngredientAllergensLabel.size === 0) {
+        container.innerHTML = '<span class="text-muted"><i class="fas fa-info-circle me-1"></i>원재료명(최종표시)을 입력하면 자동으로 감지됩니다</span>';
+        if (summary) {
+            summary.innerHTML = '<span class="text-muted" style="font-size: 0.75rem;">원재료명을 입력하면 자동 감지됩니다</span>';
+        }
+    } else {
+        container.innerHTML = '';
+        selectedIngredientAllergensLabel.forEach(allergen => {
+            const tag = document.createElement('span');
+            tag.className = 'badge bg-danger me-1 mb-1';
+            tag.style.fontSize = '0.8rem';
+            tag.style.padding = '0.3em 0.5em';
+            tag.innerHTML = `${allergen} <i class="fas fa-times ms-1" style="cursor: pointer;" onclick="removeAllergenTagLabel('${allergen}')"></i>`;
+            container.appendChild(tag);
+        });
+        
+        // 헤더 요약에도 모든 배지 표시 (접었을 때 보이는 부분)
+        if (summary) {
+            summary.innerHTML = '';
+            selectedIngredientAllergensLabel.forEach(allergen => {
+                const tag = document.createElement('span');
+                tag.className = 'badge bg-danger me-1 mb-1';
+                tag.style.fontSize = '0.85rem';
+                tag.style.padding = '0.35em 0.6em';
+                tag.textContent = allergen;
+                summary.appendChild(tag);
+            });
+        }
+    }
+    
+    // hidden input 업데이트
+    document.getElementById('selected_ingredient_allergens_label').value = Array.from(selectedIngredientAllergensLabel).join(',');
+    
+    // 제조시설 혼입 버튼 상태 업데이트 (중복 방지)
+    updateAllergenButtonStatesLabel();
+}
+
+// 알레르기 버튼 상태 업데이트 (제조시설 혼입 버튼 비활성화)
+function updateAllergenButtonStatesLabel() {
+    // 직접 추가 버튼 상태 업데이트
+    document.querySelectorAll('.quick-allergen-btn-label').forEach(button => {
+        const allergen = button.dataset.allergen;
+        if (selectedIngredientAllergensLabel.has(allergen)) {
+            button.classList.remove('btn-outline-secondary');
+            button.classList.add('btn-info');
+        } else {
+            button.classList.remove('btn-info');
+            button.classList.add('btn-outline-secondary');
+        }
+    });
+    
+    // 제조시설 혼입 우려물질 버튼 비활성화 (선택된 알레르기 항목)
+    document.querySelectorAll('.allergen-toggle-label').forEach(button => {
+        const allergen = button.dataset.allergen;
+        if (selectedIngredientAllergensLabel.has(allergen)) {
+            // 원재료에 이미 사용된 경우 비활성화 및 선택 해제
+            button.disabled = true;
+            button.classList.remove('btn-warning');
+            button.classList.add('btn-outline-secondary', 'opacity-50');
+            button.title = '원재료로 사용되어 제조시설 혼입 경고에 추가할 수 없습니다';
+            // 선택된 상태에서 제거
+            selectedCrossContaminationAllergensLabel.delete(allergen);
+        } else {
+            // 활성화
+            button.disabled = false;
+            button.classList.remove('opacity-50');
+            button.title = '';
+        }
+    });
+}
+
+// 제조시설 혼입 알레르기 토글
+function toggleAllergenLabel(allergen) {
+    // 원재료에 이미 사용된 알레르기는 토글 불가
+    if (selectedIngredientAllergensLabel.has(allergen)) {
+        return;
+    }
+    
+    if (selectedCrossContaminationAllergensLabel.has(allergen)) {
+        selectedCrossContaminationAllergensLabel.delete(allergen);
+    } else {
+        selectedCrossContaminationAllergensLabel.add(allergen);
+    }
+    updateCrossContaminationUILabel();
+}
+
+// 모든 제조시설 알레르기 선택/해제
+function toggleAllAllergensLabel() {
+    const btn = document.getElementById('toggleAllAllergensLabelBtn');
+    const allAllergens = ['알류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우', '돼지고기', '복숭아', '토마토', '아황산류', '호두', '잣', '닭고기', '쇠고기', '오징어', '조개류'];
+    
+    if (selectedCrossContaminationAllergensLabel.size === allAllergens.length) {
+        selectedCrossContaminationAllergensLabel.clear();
+    } else {
+        allAllergens.forEach(a => selectedCrossContaminationAllergensLabel.add(a));
+    }
+    
+    updateCrossContaminationUILabel();
+}
+
+// 제조시설 혼입 UI 업데이트
+function updateCrossContaminationUILabel() {
+    const buttons = document.querySelectorAll('.allergen-toggle-label');
+    buttons.forEach(btn => {
+        const allergen = btn.dataset.allergen;
+        if (selectedCrossContaminationAllergensLabel.has(allergen)) {
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-warning');
+        } else {
+            btn.classList.remove('btn-warning');
+            btn.classList.add('btn-outline-secondary');
+        }
+    });
+    
+    // 전체 선택 버튼 텍스트 업데이트
+    const btn = document.getElementById('toggleAllAllergensLabelBtn');
+    const allAllergens = ['알류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우', '돼지고기', '복숭아', '토마토', '아황산류', '호두', '잣', '닭고기', '쇠고기', '오징어', '조개류'];
+    if (selectedCrossContaminationAllergensLabel.size === allAllergens.length) {
+        btn.innerHTML = '<i class="fas fa-times me-1"></i>전체 해제';
+    } else {
+        btn.innerHTML = '<i class="fas fa-check-double me-1"></i>전체 선택';
+    }
+    
+    // 미리보기 업데이트
+    updateCrossContaminationPreviewLabel();
+}
+
+// 혼입 경고 문구 미리보기 업데이트
+function updateCrossContaminationPreviewLabel() {
+    const preview = document.getElementById('crossContaminationPreviewLabel');
+    const text = document.getElementById('crossContaminationTextLabel');
+    
+    if (selectedCrossContaminationAllergensLabel.size === 0) {
+        preview.style.display = 'none';
+    } else {
+        const allergenList = Array.from(selectedCrossContaminationAllergensLabel).join(', ');
+        text.textContent = `이 제품은 ${allergenList}를 사용한 제품과 같은 제조시설에서 제조하고 있습니다.`;
+        preview.style.display = 'block';
+    }
+}
+
+// 주의사항에 혼입 경고 추가
+function toggleAllergenWarningLabel() {
+    if (selectedCrossContaminationAllergensLabel.size === 0) {
+        alert('먼저 제조시설 혼입 우려 물질을 선택해주세요.');
+        return;
+    }
+    
+    const cautionsTextarea = document.querySelector('textarea[name="cautions"]');
+    if (!cautionsTextarea) return;
+    
+    const allergenList = Array.from(selectedCrossContaminationAllergensLabel).join(', ');
+    const warningText = `이 제품은 ${allergenList}를 사용한 제품과 같은 제조시설에서 제조하고 있습니다.`;
+    
+    let currentCautions = cautionsTextarea.value.trim();
+    
+    // 이미 있는지 확인
+    if (currentCautions.includes(warningText)) {
+        alert('이미 주의사항에 추가되어 있습니다.');
+        return;
+    }
+    
+    // 추가
+    if (currentCautions === '') {
+        cautionsTextarea.value = warningText;
+    } else {
+        cautionsTextarea.value = currentCautions + '\n' + warningText;
+    }
+    
+    alert('주의사항에 추가되었습니다.');
+}
+
+// 알레르기 관리 초기화
+function initializeAllergenManagementLabel() {
+    // 직접 추가 버튼 이벤트
+    document.querySelectorAll('.quick-allergen-btn-label').forEach(btn => {
+        btn.addEventListener('click', function() {
+            addAllergenTagLabel(this.dataset.allergen);
+        });
+    });
+    
+    // 제조시설 혼입 버튼 이벤트
+    document.querySelectorAll('.allergen-toggle-label').forEach(btn => {
+        btn.addEventListener('click', function() {
+            toggleAllergenLabel(this.dataset.allergen);
+        });
+    });
+    
+    // rawmtrl_nm_display 변경 시 자동 감지
+    const rawmtrlTextarea = document.getElementById('rawmtrl_nm_display_textarea');
+    if (rawmtrlTextarea) {
+        rawmtrlTextarea.addEventListener('input', debounce(function() {
+            detectAllergensLabel();
+        }, 800));
+    }
+    
+    // 저장된 알레르기 데이터 로드
+    loadSavedAllergensLabel();
+}
+
+// 저장된 알레르기 데이터 로드
+function loadSavedAllergensLabel() {
+    // 원재료 사용 알레르기 로드 (allergens 필드)
+    const ingredientInput = document.getElementById('selected_ingredient_allergens_label');
+    if (ingredientInput && ingredientInput.value) {
+        const allergens = ingredientInput.value.split(',').filter(a => a.trim() !== '');
+        allergens.forEach(a => selectedIngredientAllergensLabel.add(a.trim()));
+        updateAllergenTagsLabel();
+    }
+    
+    // 제조시설 혼입 알레르기 로드 (주의사항 텍스트에서 파싱)
+    const cautionsTextarea = document.querySelector('textarea[name="cautions"]');
+    if (cautionsTextarea && cautionsTextarea.value) {
+        const cautionsText = cautionsTextarea.value;
+        // "이 제품은 ...를 사용한 제품과 같은 제조시설에서 제조하고 있습니다." 패턴 찾기 (※ 기호 제거)
+        const pattern = /이\s*제품은\s+([^를]+)를\s*사용한\s*제품과\s*같은\s*제조시설에서\s*제조하고\s*있습니다\.?/;
+        const match = cautionsText.match(pattern);
+        
+        if (match && match[1]) {
+            // 쉼표 또는 "와/과"로 분리된 알레르기 목록 추출
+            const allergenText = match[1].trim();
+            const allergens = allergenText.split(/[,،、]/).map(a => a.trim()).filter(a => a !== '');
+            
+            allergens.forEach(a => selectedCrossContaminationAllergensLabel.add(a));
+            updateCrossContaminationUILabel();
+        }
+    }
+}
+
+// 디바운스 유틸리티
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initializeAllergenManagementLabel();
+});

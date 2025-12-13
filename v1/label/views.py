@@ -508,6 +508,9 @@ def label_creation(request, label_id=None):
             else:
                 # 신규 생성 시에도 무조건 N
                 label.report_no_verify_YN = 'N'
+            
+            # 알레르기 정보 저장 (원재료 사용 알레르기만 DB 저장)
+            label.allergens = request.POST.get('allergens', '')
 
             label.save()
             return redirect('label:label_creation', label_id=label.my_label_id)
