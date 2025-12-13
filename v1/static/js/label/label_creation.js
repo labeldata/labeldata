@@ -2137,4 +2137,213 @@ function debounce(func, wait) {
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
     initializeAllergenManagementLabel();
+    initializeQuickTextButtonsLabel();
 });
+
+// ==================== 주의사항/기타표시사항 빠른 입력 기능 ====================
+
+// 버튼 초기화 함수
+function initializeQuickTextButtonsLabel() {
+    const buttons = document.querySelectorAll('.quick-text-toggle-label');
+    
+    buttons.forEach(button => {
+        const fieldName = button.getAttribute('data-field');
+        const text = button.getAttribute('data-text');
+        const textarea = document.querySelector(`textarea[name="${fieldName}"]`);
+        
+        // 원래 색상 클래스 저장 (outline 클래스들)
+        const classList = Array.from(button.classList);
+        const originalColor = classList.find(cls => cls.startsWith('btn-outline-'));
+        if (originalColor) {
+            button.dataset.originalColor = originalColor;
+        }
+        
+        // 기존 textarea 값에 해당 문구가 있는지 확인
+        if (textarea && textarea.value.trim()) {
+            const lines = textarea.value.split('\n');
+            const hasText = lines.some(line => line.trim() === text.trim());
+            
+            if (hasText) {
+                button.classList.add('active');
+                button.classList.add('btn-primary');
+                button.classList.remove('btn-outline-secondary', 'btn-outline-danger', 'btn-outline-info', 'btn-outline-success', 'btn-outline-primary');
+            }
+        }
+        
+        // 클릭 이벤트 바인딩
+        button.addEventListener('click', function() {
+            toggleQuickTextLabel(this);
+        });
+    });
+}
+
+// 빠른 문구 토글 기능 (온/오프 방식)
+function toggleQuickTextLabel(button) {
+    const fieldName = button.getAttribute('data-field');
+    const text = button.getAttribute('data-text');
+    const textarea = document.querySelector(`textarea[name="${fieldName}"]`);
+    
+    if (!textarea) return;
+    
+    // 버튼이 활성화 상태인지 확인
+    const isActive = button.classList.contains('active');
+    
+    if (isActive) {
+        // 비활성화: 해당 문구를 textarea에서 제거
+        button.classList.remove('active');
+        button.classList.remove('btn-primary');
+        
+        // 원래 색상 클래스 복원
+        const originalColor = button.dataset.originalColor || 'btn-outline-secondary';
+        if (!button.classList.contains(originalColor)) {
+            button.classList.add(originalColor);
+        }
+        
+        const lines = textarea.value.split('\n');
+        const newLines = lines.filter(line => line.trim() !== text.trim());
+        textarea.value = newLines.join('\n').trim();
+    } else {
+        // 활성화: 해당 문구를 textarea에 추가
+        button.classList.add('active');
+        button.classList.add('btn-primary');
+        
+        // 원래 outline 색상 클래스 제거 (btn-primary와 충돌 방지)
+        button.classList.remove('btn-outline-secondary', 'btn-outline-danger', 'btn-outline-info', 'btn-outline-success', 'btn-outline-primary');
+        
+        const currentValue = textarea.value.trim();
+        if (currentValue) {
+            textarea.value = currentValue + '\n' + text;
+        } else {
+            textarea.value = text;
+        }
+    }
+    
+    // textarea 높이 자동 조절
+    if (typeof updateTextareaHeight === 'function') {
+        updateTextareaHeight(textarea);
+        setTimeout(() => updateTextareaHeight(textarea), 10);
+    }
+    
+    // 입력 이벤트 트리거
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// 전체 추가 기능
+function addAllQuickTextsLabel(fieldName) {
+    const textarea = document.querySelector(`textarea[name="${fieldName}"]`);
+    if (!textarea) return;
+    
+    const buttons = document.querySelectorAll(`.quick-text-toggle-label[data-field="${fieldName}"]`);
+    const textsToAdd = [];
+    
+    buttons.forEach(button => {
+        const text = button.getAttribute('data-text');
+        const isActive = button.classList.contains('active');
+        
+        if (!isActive) {
+            // 버튼 활성화
+            button.classList.add('active');
+            button.classList.add('btn-primary');
+            button.classList.remove('btn-outline-secondary');
+            button.classList.remove('btn-outline-danger');
+            button.classList.remove('btn-outline-info');
+            button.classList.remove('btn-outline-primary');
+            button.classList.remove('btn-outline-success');
+            
+            textsToAdd.push(text);
+        }
+    });
+    
+    if (textsToAdd.length > 0) {
+        const currentValue = textarea.value.trim();
+        if (currentValue) {
+            textarea.value = currentValue + '\n' + textsToAdd.join('\n');
+        } else {
+            textarea.value = textsToAdd.join('\n');
+        }
+        
+        // textarea 높이 자동 조절
+        if (typeof updateTextareaHeight === 'function') {
+            updateTextareaHeight(textarea);
+            setTimeout(() => updateTextareaHeight(textarea), 10);
+        }
+        
+        // 해당 필드의 체크박스 자동 체크
+        const checkboxId = fieldName === 'cautions' ? 'chk_cautions' : 'chk_additional_info';
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox) {
+            checkbox.checked = true;
+        }
+        
+        // 성공 메시지
+        showToastMessage(`${textsToAdd.length}개의 문구가 추가되었습니다.`, 'success');
+    } else {
+        alert('이미 모든 문구가 추가되어 있습니다.');
+    }
+}
+
+// 일괄 해제 기능
+function clearAllQuickTextsLabel(fieldName) {
+    const textarea = document.querySelector(`textarea[name="${fieldName}"]`);
+    if (!textarea) return;
+    
+    const buttons = document.querySelectorAll(`.quick-text-toggle-label[data-field="${fieldName}"]`);
+    let removedCount = 0;
+    
+    buttons.forEach(button => {
+        const isActive = button.classList.contains('active');
+        
+        if (isActive) {
+            // 버튼 비활성화 (원래 색상으로 복원)
+            button.classList.remove('active');
+            button.classList.remove('btn-primary');
+            
+            // data 속성에 저장된 원래 색상 클래스 복원
+            const originalColor = button.dataset.originalColor || 'btn-outline-secondary';
+            if (!button.classList.contains(originalColor)) {
+                button.classList.add(originalColor);
+            }
+            
+            removedCount++;
+        }
+    });
+    
+    if (removedCount > 0) {
+        // textarea 내용 완전히 초기화
+        textarea.value = '';
+        
+        // textarea 높이 자동 조절
+        if (typeof updateTextareaHeight === 'function') {
+            updateTextareaHeight(textarea);
+            setTimeout(() => updateTextareaHeight(textarea), 10);
+        }
+        
+        // 성공 메시지
+        showToastMessage(`${removedCount}개의 문구가 해제되었습니다.`, 'warning');
+    } else {
+        alert('해제할 문구가 없습니다.');
+    }
+}
+
+// 토스트 메시지 표시 함수
+function showToastMessage(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed top-0 end-0 p-3';
+    toast.style.zIndex = '9999';
+    
+    const iconClass = type === 'success' ? 'fa-check-circle' : 'fa-eraser';
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-warning';
+    
+    toast.innerHTML = `
+        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            <i class="fas ${iconClass} me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+

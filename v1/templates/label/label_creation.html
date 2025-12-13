@@ -562,36 +562,106 @@
               </div>
             </div>
             <!-- 주의사항 -->
-            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+            <div class="d-flex align-items-start mb-2" style="gap:5px;">
                 <div style="width:10%; min-width:130px;">
                 <div class="form-check">
                   <input type="checkbox" id="chk_cautions" name="chk_cautions" class="form-check-input" {% if label.chckd_cautions == "Y" %}checked{% endif %}>
                   <label for="chk_cautions" class="m-0">주의사항</label>
                 </div>
               </div>
-              <div style="width:90%;">
+              <div style="width:90%; display: flex; flex-direction: column; gap: 5px;">
                 <div class="input-container input-container-modern">
-                  <textarea name="cautions" class="form-control auto-expand textarea" rows="2" 
+                  <textarea name="cautions" class="form-control textarea" rows="3" 
                             placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
+                            style="max-height: 300px; overflow-y: auto; resize: vertical;"
                             onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('cautions', this); }"
                             onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('cautions', this); }">{{ form.cautions.value|default:'' }}</textarea>
+                </div>
+                <!-- 빠른 입력 버튼 영역 -->
+                <div class="d-flex justify-content-between align-items-center" style="gap: 5px;">
+                  <div class="quick-text-buttons" style="display: flex; flex-wrap: wrap; gap: 3px; flex: 1;">
+                    <!-- 법정 필수 경고 -->
+                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="부정·불량식품 신고는 국번없이 1399" title="부정불량식품 신고 (법정 의무)" style="font-size: 0.7rem;"><i class="fas fa-phone-alt me-1"></i>1399</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="이 제품에는 페닐알라닌이 함유되어 있습니다. (페닐케톤뇨증 환자 주의)" title="아스파탐 법정 필수 표시" style="font-size: 0.7rem;"><i class="fas fa-exclamation-circle me-1"></i>페닐알라닌</button>
+                    
+                    <!-- 일반 관리 경고 -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="개봉 후에는 변질될 우려가 있으니 반드시 밀봉하여 냉장 보관하시고, 가급적 빨리 섭취하시기 바랍니다." title="개봉 후 보관 및 취급" style="font-size: 0.7rem;"><i class="fas fa-box-open me-1"></i>개봉후보관</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="직사광선을 피하고 서늘한 곳에 보관하시기 바랍니다." title="보관 조건" style="font-size: 0.7rem;"><i class="fas fa-sun me-1"></i>직사광선</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="냉동 제품은 해동 후 재냉동하지 마시기 바랍니다." title="재냉동 금지" style="font-size: 0.7rem;"><i class="fas fa-snowflake me-1"></i>재냉동금지</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="용기가 파손되거나 부풀어 있는 경우 섭취하지 마시기 바랍니다." title="용기 파손 주의" style="font-size: 0.7rem;"><i class="fas fa-box-tissue me-1"></i>용기파손</button>
+                    
+                    <!-- 안전 주의사항 -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="어린이가 먹을 경우 보호자의 지도가 필요합니다." title="어린이 주의" style="font-size: 0.7rem;"><i class="fas fa-child me-1"></i>어린이</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="질식의 위험이 있으니 주의하시기 바랍니다." title="질식 주의" style="font-size: 0.7rem;"><i class="fas fa-lungs me-1"></i>질식</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="뜨거우니 화상에 주의하시기 바랍니다." title="화상 주의" style="font-size: 0.7rem;"><i class="fas fa-fire me-1"></i>화상</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="제품 개봉 시 내용물이 튈 수 있으니 주의하시기 바랍니다." title="개봉 주의" style="font-size: 0.7rem;"><i class="fas fa-spray-can me-1"></i>튐주의</button>
+                    
+                    <!-- 건강기능식품 관련 -->
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="특정 질환이 있거나 의약품 복용 중이신 분은 섭취 전 의사 및 전문가와 상담하시기 바랍니다. 본 제품은 질병의 예방 및 치료를 위한 의약품이 아닙니다." title="건강기능식품 일반 주의" style="font-size: 0.7rem;"><i class="fas fa-user-md me-1"></i>의약품복용자</button>
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="임산부 및 수유부, 어린이(또는 특정 연령층)는 섭취에 주의해야 합니다." title="특정 대상 주의" style="font-size: 0.7rem;"><i class="fas fa-baby me-1"></i>임산부/어린이</button>
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="본 제품 섭취 시 이상 사례 발생 또는 불편함을 느끼는 경우, 섭취를 중단하고 소비자 상담실 또는 1577-2488(이상사례 신고 핫라인)로 신고하여 주십시오." title="이상사례 신고" style="font-size: 0.7rem;"><i class="fas fa-phone-volume me-1"></i>이상사례</button>
+                  </div>
+                  <div class="btn-group btn-group-sm" role="group" style="flex-shrink: 0;">
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllQuickTextsLabel('cautions')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                      <i class="fas fa-plus-circle me-1"></i>전체 추가
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllQuickTextsLabel('cautions')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                      <i class="fas fa-eraser me-1"></i>일괄 해제
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
             <!-- 기타 표시사항 -->
-            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+            <div class="d-flex align-items-start mb-2" style="gap:5px;">
                 <div style="width:10%; min-width:130px;">
                 <div class="form-check">
                   <input type="checkbox" id="chk_additional_info" name="chk_additional_info" class="form-check-input" {% if label.chckd_additional_info == "Y" %}checked{% endif %}>
-                  <label for="chk_additional_info" class="m-0">기타표시사항</label>
+                  <label for="chk_additional_info" class="m-0">기타표시</label>
                 </div>
               </div>
-              <div style="width:90%;">
+              <div style="width:90%; display: flex; flex-direction: column; gap: 5px;">
                 <div class="input-container input-container-modern">
-                  <textarea name="additional_info" class="form-control auto-expand textarea modern-textarea" rows="2" 
+                  <textarea name="additional_info" class="form-control textarea modern-textarea" rows="3" 
                             placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
+                            style="max-height: 300px; overflow-y: auto; resize: vertical;"
                             onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('additional_info', this); }"
                             onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('additional_info', this); }">{{ form.additional_info.value|default:'' }}</textarea>
+                </div>
+                <!-- 빠른 입력 버튼 영역 -->
+                <div class="d-flex justify-content-between align-items-center" style="gap: 5px;">
+                  <div class="quick-text-buttons" style="display: flex; flex-wrap: wrap; gap: 3px; flex: 1;">
+                    <!-- 소비자 행정/품질 관련 (법정 필수) -->
+                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="제품에 대한 문의 사항 및 상담은 종합상담센터 1577-1255 (유료)로 연락 주시기 바랍니다." title="소비자 상담실 (법정 필수)" style="font-size: 0.7rem;"><i class="fas fa-headset me-1"></i>상담센터</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="본 제품은 공정거래위원회 고시 소비자분쟁해결기준에 의거, 교환 또는 보상받을 수 있습니다." title="품질보증 (분쟁해결기준)" style="font-size: 0.7rem;"><i class="fas fa-certificate me-1"></i>품질보증</button>
+                    
+                    <!-- 인증 마크 (조건부 필수) -->
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="HACCP 인증 제품" title="HACCP 인증" style="font-size: 0.7rem;"><i class="fas fa-check-circle me-1"></i>HACCP</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="ISO 22000 인증" title="ISO 22000" style="font-size: 0.7rem;"><i class="fas fa-award me-1"></i>ISO22000</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="유기농 인증 제품" title="유기농 인증" style="font-size: 0.7rem;"><i class="fas fa-leaf me-1"></i>유기농</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="KS 인증 제품" title="KS 인증" style="font-size: 0.7rem;"><i class="fas fa-stamp me-1"></i>KS</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="전통식품 품질인증" title="전통식품" style="font-size: 0.7rem;"><i class="fas fa-landmark me-1"></i>전통식품</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="우수식품인증(GMP)" title="GMP" style="font-size: 0.7rem;"><i class="fas fa-star me-1"></i>GMP</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="저탄소 인증 제품" title="저탄소 인증 (온실가스 배출량 감축)" style="font-size: 0.7rem;"><i class="fas fa-seedling me-1"></i>저탄소</button>
+                    
+                    <!-- 규제된 자발적 클레임 (기준 충족 필수) -->
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="무 글루텐 (Gluten Free)" title="총 글루텐 함량 1kg당 20mg 이하" style="font-size: 0.7rem;"><i class="fas fa-wheat-awn me-1"></i>무글루텐</button>
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="비건 인증 (Vegan)" title="동물 유래 성분 불포함" style="font-size: 0.7rem;"><i class="fas fa-leaf me-1"></i>비건</button>
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="할랄(Halal) 인증 제품" title="할랄 인증" style="font-size: 0.7rem;"><i class="fas fa-moon me-1"></i>할랄</button>
+                    
+                    <!-- 일반 자발적 표시 -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="무(無) MSG, 무(無) 합성보존료, 무(無) 합성착색료" title="무첨가" style="font-size: 0.7rem;"><i class="fas fa-ban me-1"></i>무첨가</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="Non-GMO 제품" title="Non-GMO" style="font-size: 0.7rem;"><i class="fas fa-dna me-1"></i>Non-GMO</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="저나트륨 제품" title="저나트륨" style="font-size: 0.7rem;"><i class="fas fa-heart me-1"></i>저나트륨</button>
+                  </div>
+                  <div class="btn-group btn-group-sm" role="group" style="flex-shrink: 0;">
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllQuickTextsLabel('additional_info')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                      <i class="fas fa-plus-circle me-1"></i>전체 추가
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllQuickTextsLabel('additional_info')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                      <i class="fas fa-eraser me-1"></i>일괄 해제
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>    
