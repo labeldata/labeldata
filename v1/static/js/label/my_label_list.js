@@ -13,12 +13,23 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     });
 
-    document.querySelectorAll("tr[data-url]").forEach(row => {
-    row.addEventListener("click", function (e) {
-        if (!e.target.classList.contains("check-item") && !e.target.closest(".checkbox-cell")) {
-        window.location.href = this.dataset.url;
-        }
-    });
+    // 모드 선택 토글 초기화
+    initViewModeToggle();
+
+    // 행 클릭 이벤트 (선택된 모드에 따라 이동)
+    document.querySelectorAll("tr.clickable-row").forEach(row => {
+        row.addEventListener("click", function (e) {
+            if (!e.target.classList.contains("check-item") && !e.target.closest(".checkbox-cell")) {
+                const labelId = this.dataset.labelId;
+                const viewMode = getViewMode();
+                
+                if (viewMode === 'simple') {
+                    window.location.href = `/?label_id=${labelId}`;
+                } else {
+                    window.location.href = `/label/label-creation/${labelId}/`;
+                }
+            }
+        });
     });
 
     // 검색 입력 필드 효과 처리
@@ -283,4 +294,68 @@ function downloadSelectedLabelsExcel() {
         alert('엑셀 다운로드 중 오류가 발생했습니다.');
         console.error(error);
     });
+}
+
+// 모드 선택 토글 초기화 및 관리
+function initViewModeToggle() {
+    // localStorage에서 저장된 모드 불러오기 (기본값: detail)
+    const savedMode = localStorage.getItem('labelViewMode') || 'detail';
+    
+    // 라디오 버튼 설정
+    const simpleRadio = document.getElementById('viewModeSimple');
+    const detailRadio = document.getElementById('viewModeDetail');
+    
+    if (savedMode === 'simple') {
+        simpleRadio.checked = true;
+    } else {
+        detailRadio.checked = true;
+    }
+    
+    // 라디오 버튼 변경 이벤트
+    simpleRadio.addEventListener('change', function() {
+        if (this.checked) {
+            localStorage.setItem('labelViewMode', 'simple');
+            showModeChangeToast('📋 간편 모드로 전환되었습니다');
+        }
+    });
+    
+    detailRadio.addEventListener('change', function() {
+        if (this.checked) {
+            localStorage.setItem('labelViewMode', 'detail');
+            showModeChangeToast('✏️ 상세 모드로 전환되었습니다');
+        }
+    });
+}
+
+// 현재 선택된 모드 가져오기
+function getViewMode() {
+    return localStorage.getItem('labelViewMode') || 'detail';
+}
+
+// 모드 변경 토스트 메시지
+function showModeChangeToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed top-0 end-0 p-3';
+    toast.style.zIndex = '9999';
+    toast.innerHTML = `
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 2000);
+}
+
+// 홈 화면에서 열기 (레거시 함수 - 호환성 유지)
+function openInHome(labelId) {
+    window.location.href = `/?label_id=${labelId}`;
+}
+
+// 작성 페이지에서 열기 (레거시 함수 - 호환성 유지)
+function openInEditor(labelId) {
+    window.location.href = `/label/label-creation/${labelId}/`;
 }

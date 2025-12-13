@@ -1778,6 +1778,16 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
+// 홈 화면으로 전환
+function switchToHome() {
+    const labelId = document.getElementById('label_id')?.value;
+    if (labelId) {
+        window.location.href = `/?label_id=${labelId}`;
+    } else {
+        window.location.href = '/';
+    }
+}
+
 // ==================== 알레르기 관리 기능 (Label Creation) ====================
 
 // 알레르기 데이터 저장소

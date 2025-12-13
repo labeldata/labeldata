@@ -368,16 +368,23 @@ html, body {
         <div class="row align-items-center">
             <div class="col-lg-9 col-md-8">
                 <h1 class="demo-title mb-1">
-                    <i class="fas fa-flask me-2"></i>표시사항 작성하기
+                    📋 간편 모드
                 </h1>
                 <p class="demo-subtitle mb-0">
-                    샘플 데이터를 선택하거나 직접 입력하여 실시간 미리보기를 확인하고 저장할 수 있습니다.
+                    한눈에 보고 빠르게 작성 - 샘플 데이터를 선택하거나 직접 입력하여 실시간 미리보기를 확인하세요
                 </p>
             </div>
             <div class="col-lg-3 col-md-4 text-end">
-                <button class="btn btn-warning" id="saveLabelBtn" onclick="handleSaveLabel()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;">
-                    <i class="fas fa-save me-1"></i>저장하기
-                </button>
+                <div class="d-flex justify-content-end gap-2">
+                    {% if user.is_authenticated and current_label_id %}
+                    <button class="btn btn-outline-light" onclick="switchToEditor()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;">
+                        ✏️ 상세 모드로 전환
+                    </button>
+                    {% endif %}
+                    <button class="btn btn-warning" id="saveLabelBtn" onclick="handleSaveLabel()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;">
+                        <i class="fas fa-save me-1"></i>저장하기
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -998,4 +1005,56 @@ html, body {
 
 <script src="{% static 'js/label/constants.js' %}"></script>
 <script src="{% static 'js/home_demo.js' %}"></script>
+
+{% if current_label %}
+<script>
+// 라벨 데이터 자동 로드
+document.addEventListener('DOMContentLoaded', function() {
+    const labelData = {{ current_label_json|safe }};
+    
+    // 폼 필드에 데이터 채우기
+    const form = document.getElementById('demoForm');
+    if (form && labelData) {
+        // 기본 정보
+        if (labelData.prdlst_nm) form.querySelector('[name="prdlst_nm"]').value = labelData.prdlst_nm;
+        if (labelData.ingredient_info) form.querySelector('[name="ingredient_info"]').value = labelData.ingredient_info;
+        if (labelData.prdlst_dcnm) form.querySelector('[name="prdlst_dcnm"]').value = labelData.prdlst_dcnm;
+        if (labelData.prdlst_report_no) form.querySelector('[name="prdlst_report_no"]').value = labelData.prdlst_report_no;
+        if (labelData.content_weight) form.querySelector('[name="content_weight"]').value = labelData.content_weight;
+        if (labelData.weight_calorie) form.querySelector('[name="weight_calorie"]').value = labelData.weight_calorie;
+        
+        // 원산지 및 보관
+        if (labelData.country_of_origin) form.querySelector('[name="country_of_origin"]').value = labelData.country_of_origin;
+        if (labelData.storage_method) form.querySelector('[name="storage_method"]').value = labelData.storage_method;
+        if (labelData.frmlc_mtrqlt) form.querySelector('[name="packaging_material"]').value = labelData.frmlc_mtrqlt;
+        if (labelData.pog_daycnt) form.querySelector('[name="expiry_date"]').value = labelData.pog_daycnt;
+        
+        // 원재료명
+        if (labelData.rawmtrl_nm_display) form.querySelector('[name="rawmtrl_nm_display"]').value = labelData.rawmtrl_nm_display;
+        
+        // 제조원 등
+        if (labelData.bssh_nm) form.querySelector('[name="manufacturer"]').value = labelData.bssh_nm;
+        if (labelData.distributor_address) form.querySelector('[name="distributor"]').value = labelData.distributor_address;
+        if (labelData.repacker_address) form.querySelector('[name="subdivider"]').value = labelData.repacker_address;
+        if (labelData.importer_address) form.querySelector('[name="importer"]').value = labelData.importer_address;
+        
+        // 주의사항 및 기타
+        if (labelData.cautions) form.querySelector('[name="caution"]').value = labelData.cautions;
+        if (labelData.additional_info) form.querySelector('[name="other_info"]').value = labelData.additional_info;
+        
+        // textarea 높이 조절
+        document.querySelectorAll('textarea.auto-resize').forEach(textarea => {
+            if (textarea.value) {
+                autoResizeHeight(textarea);
+            }
+        });
+        
+        // 미리보기 업데이트
+        setTimeout(() => {
+            updatePreview();
+        }, 100);
+    }
+});
+</script>
+{% endif %}
 {% endblock %}

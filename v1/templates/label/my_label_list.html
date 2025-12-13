@@ -6,8 +6,22 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4" style="padding-bottom: 10px;">
       <h2 class="mb-0">표시사항 조회 및 수정</h2>
-      <div class="d-flex" style="gap: 10px;">
-        <!-- 신규 작성 버튼 추가 -->
+      <div class="d-flex align-items-center" style="gap: 10px;">
+        <!-- 모드 선택 토글 -->
+        <div class="d-flex align-items-center" style="gap: 6px; padding: 4px 8px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6;">
+          <span style="font-size: 0.8rem; font-weight: 600; color: #495057;">기본 화면:</span>
+          <div class="btn-group btn-group-sm" role="group" aria-label="View mode toggle" style="font-size: 0.75rem;">
+            <input type="radio" class="btn-check" name="viewMode" id="viewModeSimple" value="simple" autocomplete="off">
+            <label class="btn btn-outline-primary" for="viewModeSimple" title="간편 모드: 한눈에 보고 빠르게 작성" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+              📋 간편
+            </label>
+            <input type="radio" class="btn-check" name="viewMode" id="viewModeDetail" value="detail" autocomplete="off" checked>
+            <label class="btn btn-outline-primary" for="viewModeDetail" title="상세 모드: 세밀한 편집과 전문 기능" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+              ✏️ 상세
+            </label>
+          </div>
+        </div>
+        <!-- 기존 버튼들 -->
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="createNewLabel()">신규 작성</button>
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="bulkCopy()">선택 복사</button>
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="downloadSelectedLabelsExcel()">선택 다운로드</button>
@@ -129,7 +143,7 @@
             </thead>
             <tbody>
                 {% for label in page_obj %}
-                <tr data-url="{% url 'label:label_creation' label.my_label_id %}" onclick="location.href=this.dataset.url">
+                <tr class="clickable-row" data-label-id="{{ label.my_label_id }}" style="cursor: pointer;">
                     <td class="checkbox-cell" onclick="event.stopPropagation(); toggleCheckbox(this);">
                         <input type="checkbox" class="check-item" value="{{ label.my_label_id }}">
                     </td>
@@ -166,6 +180,16 @@
 </div>
 
 <style>
+/* 행 호버 효과 */
+.clickable-row:hover {
+    background-color: #f0f8ff !important;
+    transition: background-color 0.2s ease;
+}
+
+.clickable-row {
+    transition: background-color 0.2s ease;
+}
+
 /* 한 줄만 보이고 넘치면 ... 처리, 마우스오버시 title로 전체 표시 */
 .ellipsis-cell {
     max-width: 180px;

@@ -8,11 +8,13 @@ import json
 from v1.disposition.models import AdministrativeDisposition, CrawlingSetting  # import 경로 수정
 from v1.disposition.forms import DispositionForm  # import 경로 수정
 from v1.label.models import FoodType, FoodItem, CountryList, MyLabel  # 데모 페이지용 추가
+from django.core.serializers import serialize
 
 def home(request):
     """
     홈 페이지 (표시사항 작성 기능 포함)
     로그인 없이 누구나 접근 가능
+    label_id 파라미터가 있으면 해당 라벨 데이터 로드
     """
     # 식품유형 데이터를 가져옵니다.
     food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
@@ -20,11 +22,47 @@ def home(request):
     
     # 국가 목록을 가져옵니다.
     countries = CountryList.objects.all().order_by('country_name_ko')
+    
+    # label_id 파라미터로 전달된 라벨 데이터 로드
+    current_label = None
+    current_label_id = None
+    current_label_json = None
+    label_id = request.GET.get('label_id')
+    
+    if label_id and request.user.is_authenticated:
+        try:
+            current_label = MyLabel.objects.get(my_label_id=label_id, user_id=request.user)
+            current_label_id = label_id
+            # JSON 직렬화
+            current_label_json = json.dumps({
+                'prdlst_nm': current_label.prdlst_nm or '',
+                'ingredient_info': current_label.ingredient_info or '',
+                'prdlst_dcnm': current_label.prdlst_dcnm or '',
+                'prdlst_report_no': current_label.prdlst_report_no or '',
+                'content_weight': current_label.content_weight or '',
+                'weight_calorie': current_label.weight_calorie or '',
+                'country_of_origin': current_label.country_of_origin or '',
+                'storage_method': current_label.storage_method or '',
+                'frmlc_mtrqlt': current_label.frmlc_mtrqlt or '',
+                'pog_daycnt': current_label.pog_daycnt or '',
+                'rawmtrl_nm_display': current_label.rawmtrl_nm_display or '',
+                'bssh_nm': current_label.bssh_nm or '',
+                'distributor_address': current_label.distributor_address or '',
+                'repacker_address': current_label.repacker_address or '',
+                'importer_address': current_label.importer_address or '',
+                'cautions': current_label.cautions or '',
+                'additional_info': current_label.additional_info or '',
+            })
+        except MyLabel.DoesNotExist:
+            pass
 
     context = {
         'food_groups': food_groups,
         'food_types': food_types,
         'countries': countries,
+        'current_label': current_label,
+        'current_label_id': current_label_id,
+        'current_label_json': current_label_json,
     }
     return render(request, 'main/home.html', context)
 

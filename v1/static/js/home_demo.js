@@ -1390,6 +1390,16 @@ function getCsrfToken() {
     return getCookie('csrftoken');
 }
 
+// 작성 페이지로 전환
+function switchToEditor() {
+    const labelId = new URLSearchParams(window.location.search).get('label_id');
+    if (labelId) {
+        window.location.href = `/label/label-creation/${labelId}/`;
+    } else {
+        alert('전환할 표시사항이 없습니다.');
+    }
+}
+
 // 탭 전환 함수
 function switchTab(tabName) {
     // 모든 탭 콘텐츠 숨기기
