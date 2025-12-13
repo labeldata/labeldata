@@ -70,5 +70,4 @@ urlpatterns = [
     
     # 품목보고번호 검증 관련
     path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
-    path('update-report-no/', views.update_report_no, name='update_report_no'),
 ]

@@ -1898,38 +1898,17 @@ def verify_report_no(request):
         })
     else:
         # 등록되지 않은 번호 (신고 가능)
-        # label이 있는 경우에만 저장
+        # label이 있는 경우 품목보고번호와 검증여부 저장
         if label:
+            label.prdlst_report_no = prdlst_report_no
             label.report_no_verify_YN = 'Y'
-            label.save(update_fields=['report_no_verify_YN'])
+            label.save(update_fields=['prdlst_report_no', 'report_no_verify_YN'])
         
         return JsonResponse({
             'verified': True,
             'status': 'available',
             'message': '품목보고신고 가능한 번호입니다.'
         })
-
-@csrf_exempt
-@require_POST
-@login_required
-def update_report_no(request):
-    try:
-        data = json.loads(request.body)
-        label_id = data.get('label_id')
-        prdlst_report_no = data.get('prdlst_report_no', '').strip()
-        if not label_id or not prdlst_report_no:
-            return JsonResponse({'success': False, 'error': '필수값 누락'}, status=400)
-        label = MyLabel.objects.get(my_label_id=label_id)
-        # 품목보고번호가 변경된 경우에만 업데이트
-        if label.prdlst_report_no != prdlst_report_no:
-            label.prdlst_report_no = prdlst_report_no
-            label.report_no_verify_YN = 'N'
-            label.save(update_fields=['prdlst_report_no', 'report_no_verify_YN'])
-        return JsonResponse({'success': True})
-    except MyLabel.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Label not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
 def phrases_data_api(request):

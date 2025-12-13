@@ -1140,76 +1140,153 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ------------------ 품목보고번호 검증 기능 ------------------
+  // 제품 정보 자동 입력 함수
+  function applyProductDataToLabel(btn, productData) {
+    btn.innerHTML = '<i class="fas fa-download me-1"></i>정보가져옴';
+    btn.className = 'btn btn-info btn-sm';
+    btn.title = '식품안전나라 등록 정보를 가져왔습니다';
+    
+    // 제품명
+    if (productData.prdlst_nm) {
+      const prdlstNmInput = document.querySelector('input[name="prdlst_nm"]');
+      if (prdlstNmInput) {
+        prdlstNmInput.value = productData.prdlst_nm;
+        prdlstNmInput.style.backgroundColor = '#e3f2fd';
+        prdlstNmInput.style.border = '2px solid #2196f3';
+        const checkbox = document.getElementById('chk_prdlst_nm');
+        if (checkbox) checkbox.checked = true;
+      }
+    }
+    
+    // 식품유형
+    if (productData.prdlst_dcnm) {
+      const prdlstDcnmInput = document.querySelector('input[name="prdlst_dcnm"]');
+      if (prdlstDcnmInput) {
+        prdlstDcnmInput.value = productData.prdlst_dcnm;
+        prdlstDcnmInput.style.backgroundColor = '#e3f2fd';
+        prdlstDcnmInput.style.border = '2px solid #2196f3';
+        const checkbox = document.getElementById('chk_prdlst_dcnm');
+        if (checkbox) checkbox.checked = true;
+      }
+    }
+    
+    // 용기·포장재질
+    if (productData.packaging_material) {
+      const packagingInput = document.querySelector('input[name="frmlc_mtrqlt"]');
+      if (packagingInput) {
+        packagingInput.value = productData.packaging_material;
+        packagingInput.style.backgroundColor = '#e3f2fd';
+        packagingInput.style.border = '2px solid #2196f3';
+        const checkbox = document.getElementById('chk_frmlc_mtrqlt');
+        if (checkbox) checkbox.checked = true;
+      }
+    }
+    
+    // 제조원
+    if (productData.manufacturer) {
+      const manufacturerInput = document.querySelector('input[name="bssh_nm"]');
+      if (manufacturerInput) {
+        manufacturerInput.value = productData.manufacturer;
+        manufacturerInput.style.backgroundColor = '#e3f2fd';
+        manufacturerInput.style.border = '2px solid #2196f3';
+        const checkbox = document.getElementById('chk_bssh_nm');
+        if (checkbox) checkbox.checked = true;
+      }
+    }
+    
+    // 원재료명
+    if (productData.rawmtrl_nm) {
+      const rawmtrlTextarea = document.querySelector('textarea[name="rawmtrl_nm_display"]');
+      if (rawmtrlTextarea) {
+        rawmtrlTextarea.value = productData.rawmtrl_nm;
+        rawmtrlTextarea.style.backgroundColor = '#e3f2fd';
+        rawmtrlTextarea.style.border = '2px solid #2196f3';
+        const checkbox = document.getElementById('chk_rawmtrl_nm_display');
+        if (checkbox) checkbox.checked = true;
+      }
+    }
+    
+    // 성공 알림 표시
+    alert('제품 정보를 성공적으로 불러왔습니다.\n\n기본정보(제품명, 식품유형), 원재료명, 기타항목(용기·포장재질, 제조원)이 자동으로 입력되었습니다.');
+  }
+
   window.verifyReportNo = function(labelId) {
     const btn = document.getElementById('verifyReportNoBtn');
     if (!btn) return;
     
     // 상태 복구: 완료된 상태에서 클릭 시 초기화
-    const completedStates = ['사용가능', '형식오류', '규칙오류', '미등록', '검증실패', '오류발생'];
+    const completedStates = ['사용가능', '형식오류', '규칙오류', '미등록', '검증실패', '오류발생', '정보가져옴'];
     const isCompleted = completedStates.some(state => btn.innerHTML.includes(state));
     
     if (isCompleted) {
-      btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-      btn.className = 'btn btn-outline-info action-btn-modern';
+      btn.innerHTML = '번호검증';
+      btn.className = 'btn btn-outline-primary btn-sm';
       btn.title = 'API 중복 검사 및 번호 규칙 검증';
       return;
     }
     
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장 중...';
-    btn.className = 'btn btn-secondary action-btn-modern';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>검증 중...';
+    btn.className = 'btn btn-secondary btn-sm';
     
     const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
     let reportNo = reportNoInput?.value?.trim();
     
     if (!reportNo) {
       btn.innerHTML = '<i class="fas fa-edit me-1"></i>입력필요';
-      btn.className = 'btn btn-outline-secondary action-btn-modern';
+      btn.className = 'btn btn-outline-secondary btn-sm';
       btn.title = '품목보고번호를 입력해주세요';
       btn.disabled = false;
       
       setTimeout(() => {
         alert('품목보고번호를 입력하세요.');
-        btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-        btn.className = 'btn btn-outline-info action-btn-modern';
+        btn.innerHTML = '번호검증';
+        btn.className = 'btn btn-outline-primary btn-sm';
         btn.title = 'API 중복 검사 및 번호 규칙 검증';
-      }, 1500);
+      }, 1000);
       return;
     }
 
     // 검증용 번호: 하이픈(-)을 제거한 값
     const verifyReportNo = reportNo.replace(/-/g, '');
 
-    // 1. 먼저 품목보고번호 저장 및 검증여부 N으로 초기화 (원본 값으로 저장)
-    fetch('/label/update-report-no/', {
+    // 단일 API 호출로 검증 진행 (홈 화면과 동일한 방식)
+    fetch('/label/verify-report-no/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRFToken': getCookie('csrftoken')
       },
-      body: JSON.stringify({ label_id: labelId, prdlst_report_no: reportNo })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (!data.success) throw new Error(data.error || '저장 실패');
-      // 2. 저장 성공 시 검증 진행 (하이픈 제거된 값으로 검증)
-      btn.innerHTML = '<i class="fas fa-shield-alt fa-pulse me-1"></i>중복 검증 중...';
-      return fetch('/label/verify-report-no/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken')
-        },
-        body: JSON.stringify({ label_id: labelId, prdlst_report_no: verifyReportNo })
-      });
+      body: JSON.stringify({ 
+        label_id: labelId,  // 라벨 크리에이션에서는 labelId 전달
+        prdlst_report_no: verifyReportNo 
+      })
     })
     .then(res => res.json())
     .then(data => {
       // 성공 상태 처리
       if (data.verified && data.status === 'available') {
         btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>사용가능';
-        btn.className = 'btn btn-success action-btn-modern';
+        btn.className = 'btn btn-success btn-sm';
         btn.title = '등록된 품목보고번호로 사용 가능합니다';
+        return;
+      }
+      
+      // 등록된 제품 정보가 있는 경우 - 사용자가 선택
+      if (data.status === 'completed' && data.product_data) {
+        // 사용자 확인 대화상자
+        const userConfirmed = confirm('이미 신고된 제품이 있습니다.\n식품안전나라에 신고된 제품의 정보를 불러오시겠습니까?');
+        
+        if (!userConfirmed) {
+          // 취소 선택 시 - 검증 버튼 초기화
+          btn.innerHTML = '번호검증';
+          btn.className = 'btn btn-outline-primary btn-sm';
+          btn.title = 'API 중복 검사 및 번호 규칙 검증';
+          return;
+        }
+        
+        // 확인 선택 시 - 정보 자동 입력
+        applyProductDataToLabel(btn, data.product_data);
         return;
       }
       
@@ -1248,34 +1325,87 @@ document.addEventListener('DOMContentLoaded', function () {
       setTimeout(() => {
         const shouldRetry = confirm(message + '\n\n다시 검증하시겠습니까?');
         if (shouldRetry) {
-          // 사용자가 재검증을 원하면 버튼 상태 초기화
-          btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-          btn.className = 'btn btn-outline-info action-btn-modern';
+          btn.innerHTML = '번호검증';
+          btn.className = 'btn btn-outline-primary btn-sm';
           btn.title = 'API 중복 검사 및 번호 규칙 검증';
         }
       }, 100);
     })
     .catch(err => {
-      btn.innerHTML = '<i class="fas fa-wifi me-1"></i>통신오류';
-      btn.className = 'btn btn-secondary action-btn-modern';
-      btn.title = '네트워크 연결 또는 서버 오류';
-      
-      setTimeout(() => {
-        const errorMsg = '검증 중 통신 오류가 발생했습니다.\n' + 
-                        '인터넷 연결을 확인하고 다시 시도해주세요.\n\n' +
-                        '오류 내용: ' + (err.message || '알 수 없는 오류');
-        
-        if (confirm(errorMsg + '\n\n다시 시도하시겠습니까?')) {
-          btn.innerHTML = '<i class="fas fa-search me-1"></i>중복검증';
-          btn.className = 'btn btn-outline-info action-btn-modern';
-          btn.title = 'API 중복 검사 및 번호 규칙 검증';
-        }
-      }, 100);
+      handleVerificationNetworkError(btn, err);
     })
     .finally(() => {
       btn.disabled = false;
     });
   };
+
+  // 검증 오류 처리 함수 (홈 화면과 동일)
+  function handleVerificationError(btn, data) {
+    const status = data.status || 'unknown';
+    let message = data.message || '검증에 실패했습니다.';
+    
+    switch(status) {
+      case 'format_error':
+        btn.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>형식오류';
+        btn.className = 'btn btn-warning btn-sm';
+        btn.title = '품목보고번호 형식이 올바르지 않습니다';
+        break;
+        
+      case 'rule_error':
+        btn.innerHTML = '<i class="fas fa-ban me-1"></i>규칙오류';
+        btn.className = 'btn btn-warning btn-sm';
+        btn.title = '품목보고번호 규칙에 맞지 않습니다';
+        break;
+        
+      case 'not_found':
+        btn.innerHTML = '<i class="fas fa-question-circle me-1"></i>미등록';
+        btn.className = 'btn btn-danger btn-sm';
+        btn.title = '등록되지 않은 품목보고번호입니다';
+        break;
+        
+      case 'completed':
+        btn.innerHTML = '<i class="fas fa-info-circle me-1"></i>중복확인';
+        btn.className = 'btn btn-info btn-sm';
+        btn.title = '이미 등록된 번호입니다';
+        break;
+        
+      case 'error':
+      default:
+        btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>검증실패';
+        btn.className = 'btn btn-danger btn-sm';
+        btn.title = '검증 중 오류가 발생했습니다';
+        break;
+    }
+    
+    // 비침입적인 방식으로 오류 표시
+    setTimeout(() => {
+      const shouldRetry = confirm(message + '\n\n다시 검증하시겠습니까?');
+      if (shouldRetry) {
+        btn.innerHTML = '번호검증';
+        btn.className = 'btn btn-outline-primary btn-sm';
+        btn.title = 'API 중복 검사 및 번호 규칙 검증';
+      }
+    }, 100);
+  }
+
+  // 네트워크 오류 처리 함수 (홈 화면과 동일)
+  function handleVerificationNetworkError(btn, err) {
+    btn.innerHTML = '<i class="fas fa-wifi me-1"></i>통신오류';
+    btn.className = 'btn btn-secondary btn-sm';
+    btn.title = '네트워크 연결 또는 서버 오류';
+    
+    setTimeout(() => {
+      const errorMsg = '검증 중 통신 오류가 발생했습니다.\n' + 
+                      '인터넷 연결을 확인하고 다시 시도해주세요.\n\n' +
+                      '오류 내용: ' + (err.message || '알 수 없는 오류');
+      
+      if (confirm(errorMsg + '\n\n다시 시도하시겠습니까?')) {
+        btn.innerHTML = '번호검증';
+        btn.className = 'btn btn-outline-primary btn-sm';
+        btn.title = 'API 중복 검사 및 번호 규칙 검증';
+      }
+    }, 100);
+  }
 
   // 라벨명 동기화 함수
   function initializeLabelNameSync() {
