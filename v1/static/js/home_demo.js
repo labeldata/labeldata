@@ -2610,6 +2610,11 @@ function saveAllergensToStorage() {
 
 // localStorage에서 알레르기 정보 로드
 function loadAllergensFromStorage() {
+    // 서버에서 로드된 라벨 데이터가 있으면 localStorage 로드하지 않음
+    if (window.hasServerLabelData) {
+        return;
+    }
+    
     const timestamp = localStorage.getItem('labeldata_timestamp');
     
     if (timestamp) {
@@ -2625,7 +2630,7 @@ function loadAllergensFromStorage() {
             allergens.forEach(a => window.selectedIngredientAllergens.add(a));
             crossAllergens.forEach(a => window.selectedCrossContaminationAllergens.add(a));
             
-            updateAllergenTags();
+            updateAllergenDisplay();
             console.log('알레르기 정보를 localStorage에서 불러왔습니다.');
         } else {
             // 만료된 데이터 삭제

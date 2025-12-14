@@ -1008,13 +1008,18 @@ html, body {
 
 {% if current_label %}
 <script>
+// 서버에서 로드된 라벨 데이터가 있음을 표시 (localStorage 로드 방지)
+window.hasServerLabelData = true;
+
 // 라벨 데이터 자동 로드
 document.addEventListener('DOMContentLoaded', function() {
-    const labelData = {{ current_label_json|safe }};
-    
-    // 폼 필드에 데이터 채우기
-    const form = document.getElementById('demoForm');
-    if (form && labelData) {
+    // 다른 초기화가 완료될 때까지 약간 지연
+    setTimeout(function() {
+        const labelData = {{ current_label_json|safe }};
+        
+        // 폼 필드에 데이터 채우기
+        const form = document.getElementById('demoForm');
+        if (form && labelData) {
         // 기본 정보
         if (labelData.prdlst_nm) form.querySelector('[name="prdlst_nm"]').value = labelData.prdlst_nm;
         if (labelData.ingredient_info) form.querySelector('[name="ingredient_info"]').value = labelData.ingredient_info;
@@ -1042,6 +1047,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (labelData.cautions) form.querySelector('[name="caution"]').value = labelData.cautions;
         if (labelData.additional_info) form.querySelector('[name="other_info"]').value = labelData.additional_info;
         
+        // 알레르기 정보 복원
+        if (labelData.allergens && typeof window.selectedIngredientAllergens !== 'undefined') {
+            window.selectedIngredientAllergens.clear();
+            const allergenList = labelData.allergens.split(',').map(a => a.trim()).filter(Boolean);
+            allergenList.forEach(allergen => {
+                window.selectedIngredientAllergens.add(allergen);
+            });
+            if (typeof updateAllergenDisplay === 'function') {
+                updateAllergenDisplay();
+            }
+        }
+        
         // textarea 높이 조절
         document.querySelectorAll('textarea.auto-resize').forEach(textarea => {
             if (textarea.value) {
@@ -1054,6 +1071,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updatePreview();
         }, 100);
     }
+    }, 100); // 다른 초기화 후 실행
 });
 </script>
 {% endif %}

@@ -52,6 +52,7 @@ def home(request):
                 'importer_address': current_label.importer_address or '',
                 'cautions': current_label.cautions or '',
                 'additional_info': current_label.additional_info or '',
+                'allergens': current_label.allergens or '',
             })
         except MyLabel.DoesNotExist:
             pass
