@@ -2157,6 +2157,73 @@ function updateAllergenButtonStatesLabel() {
     });
 }
 
+// 빠른 입력 버튼 섹션 접기/펼치기 함수
+function toggleContentSection(fieldName) {
+    const content = document.getElementById(fieldName + 'Content');
+    const icon = document.getElementById(fieldName + 'ToggleIcon');
+    const summary = document.getElementById(fieldName + 'Summary');
+    
+    if (!content || !icon) return;
+    
+    if (content.style.display === 'none') {
+        // 펼치기
+        content.style.display = 'flex';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+        if (summary) summary.style.display = 'none';
+    } else {
+        // 접기
+        content.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+        if (summary) {
+            updateContentSummary(fieldName);
+            summary.style.display = 'block';
+        }
+    }
+}
+
+// 주의사항/기타표시 요약 업데이트 함수
+function updateContentSummary(fieldName) {
+    const textarea = document.querySelector(`textarea[name="${fieldName}"]`);
+    const summary = document.getElementById(fieldName + 'Summary');
+    
+    if (!textarea || !summary) return;
+    
+    const content = textarea.value.trim();
+    
+    if (!content) {
+        summary.innerHTML = '<span class="text-muted">내용이 없습니다</span>';
+        return;
+    }
+    
+    // 줄바꿈으로 분리하여 각 항목을 표시
+    const lines = content.split('\n').filter(line => line.trim());
+    
+    if (lines.length === 0) {
+        summary.innerHTML = '<span class="text-muted">내용이 없습니다</span>';
+        return;
+    }
+    
+    // 최대 3개 항목만 표시
+    const displayLines = lines.slice(0, 3);
+    const remainingCount = lines.length - displayLines.length;
+    
+    let html = '<div style="display: flex; flex-wrap: wrap; gap: 5px;">';
+    
+    displayLines.forEach(line => {
+        const truncated = line.length > 50 ? line.substring(0, 50) + '...' : line;
+        html += `<span class="badge bg-secondary" style="font-size: 0.75rem; font-weight: normal; padding: 0.35em 0.6em;" title="${line.replace(/"/g, '&quot;')}">${truncated}</span>`;
+    });
+    
+    if (remainingCount > 0) {
+        html += `<span class="badge bg-info" style="font-size: 0.75rem; padding: 0.35em 0.6em;">+${remainingCount}개 더보기</span>`;
+    }
+    
+    html += '</div>';
+    summary.innerHTML = html;
+}
+
 // 제조시설 혼입 알레르기 토글
 function toggleAllergenLabel(allergen) {
     // 원재료에 이미 사용된 알레르기는 토글 불가
