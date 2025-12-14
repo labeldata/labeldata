@@ -711,26 +711,42 @@ function showToast(message) {
 }
 
 // ==================== 품목보고번호 검증 기능 ====================
+// 검증된 제품 정보를 저장할 전역 변수
+let verifiedProductData = null;
+
+// 검증 이력 캐시 (중복 검증 방지)
+const verificationCache = new Map();
+
+// 오류 상태별 도움말
+const errorHelp = {
+    'format_error': '형식: YYYY-MM-XXXXXXXX (예: 2024-12-01234567)',
+    'rule_error': '품목보고번호 형식이 올바르지 않습니다. 하이픈(-) 포함 17자리를 입력하세요.',
+    'not_found': '식품안전나라에서 해당 번호를 찾을 수 없습니다. 번호를 다시 확인해주세요.',
+    'error': '검증 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+};
+
 function verifyReportNo() {
     const btn = document.getElementById('verifyReportNoBtn');
+    const copyBtn = document.getElementById('copyProductDataBtn');
+    const resultMsg = document.getElementById('verifyResultMessage');
+    const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
     if (!btn) return;
     
     // 상태 복구: 완료된 상태에서 클릭 시 초기화
-    const completedStates = ['사용가능', '형식오류', '규칙오류', '미등록', '검증실패', '오류발생', '정보가져옴'];
+    const completedStates = ['사용가능', '형식오류', '복사완료', '등록제품', '검증 중'];
     const isCompleted = completedStates.some(state => btn.innerHTML.includes(state));
     
     if (isCompleted) {
         btn.innerHTML = '번호검증';
         btn.className = 'btn btn-outline-primary btn-sm';
         btn.title = 'API 중복 검사 및 번호 규칙 검증';
+        if (copyBtn) copyBtn.style.display = 'none';
+        if (resultMsg) resultMsg.style.display = 'none';
+        if (reportNoInput) reportNoInput.disabled = false;
+        verifiedProductData = null;
         return;
     }
     
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>검증 중...';
-    btn.className = 'btn btn-secondary btn-sm';
-    
-    const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
     let reportNo = reportNoInput?.value?.trim();
     
     if (!reportNo) {
@@ -747,6 +763,19 @@ function verifyReportNo() {
         }, 1000);
         return;
     }
+
+    // 캐시 확인 (최근 검증한 번호)
+    if (verificationCache.has(reportNo)) {
+        const cached = verificationCache.get(reportNo);
+        showCachedResult(btn, copyBtn, resultMsg, cached);
+        return;
+    }
+
+    // 로딩 중 입력 비활성화
+    btn.disabled = true;
+    if (reportNoInput) reportNoInput.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>검증 중...';
+    btn.className = 'btn btn-secondary btn-sm';
 
     // 검증용 번호: 하이픈(-)을 제거한 값
     const verifyReportNo = reportNo.replace(/-/g, '');
@@ -765,6 +794,9 @@ function verifyReportNo() {
     })
     .then(res => res.json())
     .then(data => {
+        // 결과 캐싱
+        verificationCache.set(reportNo, data);
+        
         // 성공 상태 처리
         if (data.verified && data.status === 'available') {
             btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>사용가능';
@@ -773,21 +805,35 @@ function verifyReportNo() {
             return;
         }
         
-        // 등록된 제품 정보가 있는 경우 - 사용자에게 선택권 제공
+        // 등록된 제품 정보가 있는 경우 - 복사 버튼 표시
         if (data.status === 'completed' && data.product_data) {
-            // 사용자 확인 대화상자
-            const userConfirmed = confirm('이미 신고된 제품이 있습니다.\n식품안전나라에 신고된 제품의 정보를 불러오시겠습니까?');
+            verifiedProductData = data.product_data;
             
-            if (!userConfirmed) {
-                // 취소 선택 시 - 검증 버튼 초기화
-                btn.innerHTML = '번호검증';
-                btn.className = 'btn btn-outline-primary btn-sm';
-                btn.title = 'API 중복 검사 및 번호 규칙 검증';
-                return;
+            btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>등록제품';
+            btn.className = 'btn btn-info btn-sm';
+            btn.title = '식품안전나라에 등록된 제품입니다';
+            
+            // 복사 버튼 표시 (애니메이션 효과)
+            const copyBtn = document.getElementById('copyProductDataBtn');
+            if (copyBtn) {
+                copyBtn.style.display = 'inline-block';
+                copyBtn.innerHTML = '복사하기';
+                copyBtn.className = 'btn btn-success btn-sm';
+                copyBtn.style.opacity = '0';
+                copyBtn.style.transition = 'opacity 0.3s ease-in';
+                setTimeout(() => { copyBtn.style.opacity = '1'; }, 10);
             }
             
-            // 확인 선택 시 - 정보 자동 입력
-            applyProductData(btn, data.product_data);
+            // 결과 메시지 표시 (애니메이션 효과)
+            const resultMsg = document.getElementById('verifyResultMessage');
+            if (resultMsg) {
+                resultMsg.style.display = 'block';
+                resultMsg.className = 'alert alert-info mb-0';
+                resultMsg.innerHTML = '<i class="fas fa-info-circle me-2"></i>식품안전나라에 등록된 제품입니다. 복사 버튼을 눌러 정보를 가져올 수 있습니다.';
+                resultMsg.style.opacity = '0';
+                resultMsg.style.transition = 'opacity 0.3s ease-in';
+                setTimeout(() => { resultMsg.style.opacity = '1'; }, 10);
+            }
             return;
         }
         
@@ -795,18 +841,48 @@ function verifyReportNo() {
         handleVerificationError(btn, data);
     })
     .catch(err => {
-        handleVerificationNetworkError(btn, err);
+        // 네트워크 오류는 일반 오류로 처리
+        handleVerificationError(btn, { status: 'error', message: '검증 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' });
     })
     .finally(() => {
         btn.disabled = false;
+        if (reportNoInput) reportNoInput.disabled = false;
     });
+}
+
+// 캐시된 결과 표시 함수
+function showCachedResult(btn, copyBtn, resultMsg, data) {
+    if (data.verified && data.status === 'available') {
+        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>사용가능';
+        btn.className = 'btn btn-success btn-sm';
+        btn.title = '등록된 품목보고번호로 사용 가능합니다 (캐시됨)';
+    } else if (data.status === 'completed' && data.product_data) {
+        verifiedProductData = data.product_data;
+        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>등록제품';
+        btn.className = 'btn btn-info btn-sm';
+        btn.title = '식품안전나라에 등록된 제품입니다 (캐시됨)';
+        
+        if (copyBtn) {
+            copyBtn.style.display = 'inline-block';
+            copyBtn.innerHTML = '복사하기';
+            copyBtn.className = 'btn btn-success btn-sm';
+        }
+        
+        if (resultMsg) {
+            resultMsg.style.display = 'block';
+            resultMsg.className = 'alert alert-info mb-0';
+            resultMsg.innerHTML = '<i class="fas fa-info-circle me-2"></i>식품안전나라에 등록된 제품입니다. 복사 버튼을 눌러 정보를 가져올 수 있습니다.';
+        }
+    } else {
+        handleVerificationError(btn, data);
+    }
 }
 
 // 제품 정보 자동 입력 함수
 function applyProductData(btn, productData) {
-    btn.innerHTML = '<i class="fas fa-download me-1"></i>정보가져옴';
-    btn.className = 'btn btn-info btn-sm';
-    btn.title = '식품안전나라 등록 정보를 가져왔습니다';
+    btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>복사완료';
+    btn.className = 'btn btn-success btn-sm';
+    btn.title = '제품 정보를 성공적으로 불러왔습니다';
     
     // 제품명
     if (productData.prdlst_nm) {
@@ -882,9 +958,30 @@ function applyProductData(btn, productData) {
     if (typeof saveToLocalStorage === 'function') {
         saveToLocalStorage();
     }
+}
+
+// 검증된 제품 정보 복사 함수
+function copyVerifiedProductData() {
+    if (!verifiedProductData) {
+        return;
+    }
     
-    // 성공 알림 표시
-    alert('제품 정보를 성공적으로 불러왔습니다.\n\n기본정보(제품명, 식품유형), 원재료&알레르기(원재료명), 기타항목(용기·포장재질, 제조원) 이 자동으로 입력되었습니다.');
+    const copyBtn = document.getElementById('copyProductDataBtn');
+    const verifyBtn = document.getElementById('verifyReportNoBtn');
+    const resultMsg = document.getElementById('verifyResultMessage');
+    
+    // 제품 정보 적용
+    applyProductData(verifyBtn, verifiedProductData);
+    
+    // 복사 버튼 숨기기
+    if (copyBtn) {
+        copyBtn.style.display = 'none';
+    }
+    
+    // 결과 메시지 숨김
+    if (resultMsg) {
+        resultMsg.style.display = 'none';
+    }
 }
 
 // 검증 오류 처리 함수
@@ -894,21 +991,18 @@ function handleVerificationError(btn, data) {
     
     switch(status) {
         case 'format_error':
+        case 'rule_error':
             btn.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>형식오류';
             btn.className = 'btn btn-warning btn-sm';
             btn.title = '품목보고번호 형식이 올바르지 않습니다';
             break;
             
-        case 'rule_error':
-            btn.innerHTML = '<i class="fas fa-ban me-1"></i>규칙오류';
-            btn.className = 'btn btn-warning btn-sm';
-            btn.title = '품목보고번호 규칙에 맞지 않습니다';
-            break;
-            
         case 'not_found':
-            btn.innerHTML = '<i class="fas fa-question-circle me-1"></i>미등록';
-            btn.className = 'btn btn-danger btn-sm';
-            btn.title = '등록되지 않은 품목보고번호입니다';
+        case 'error':
+        default:
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>검증 중...';
+            btn.className = 'btn btn-secondary btn-sm';
+            btn.title = '품목보고번호 검증 중';
             break;
             
         case 'completed':
@@ -916,44 +1010,28 @@ function handleVerificationError(btn, data) {
             btn.className = 'btn btn-info btn-sm';
             btn.title = '이미 등록된 번호입니다';
             break;
-            
-        case 'error':
-        default:
-            btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>검증실패';
-            btn.className = 'btn btn-danger btn-sm';
-            btn.title = '검증 중 오류가 발생했습니다';
-            break;
     }
     
-    // 비침입적인 방식으로 오류 표시
-    setTimeout(() => {
-        const shouldRetry = confirm(message + '\n\n다시 검증하시겠습니까?');
-        if (shouldRetry) {
-            btn.innerHTML = '번호검증';
-            btn.className = 'btn btn-outline-primary btn-sm';
-            btn.title = 'API 중복 검사 및 번호 규칙 검증';
+    // 결과 메시지 표시 (도움말 포함)
+    const resultMsg = document.getElementById('verifyResultMessage');
+    if (resultMsg) {
+        resultMsg.style.display = 'block';
+        let alertClass = 'alert-warning';
+        
+        if (status === 'not_found' || status === 'error') {
+            alertClass = 'alert-danger';
         }
-    }, 100);
+        
+        const helpText = errorHelp[status] || '';
+        resultMsg.className = 'alert ' + alertClass + ' mb-0';
+        resultMsg.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>${message}
+            ${helpText ? '<br><small class="text-muted">' + helpText + '</small>' : ''}
+        `;
+    }
 }
 
-// 네트워크 오류 처리 함수
-function handleVerificationNetworkError(btn, err) {
-    btn.innerHTML = '<i class="fas fa-wifi me-1"></i>통신오류';
-    btn.className = 'btn btn-secondary btn-sm';
-    btn.title = '네트워크 연결 또는 서버 오류';
-    
-    setTimeout(() => {
-        const errorMsg = '검증 중 통신 오류가 발생했습니다.\n' + 
-                        '인터넷 연결을 확인하고 다시 시도해주세요.\n\n' +
-                        '오류 내용: ' + (err.message || '알 수 없는 오류');
-        
-        if (confirm(errorMsg + '\n\n다시 시도하시겠습니까?')) {
-            btn.innerHTML = '번호검증';
-            btn.className = 'btn btn-outline-primary btn-sm';
-            btn.title = 'API 중복 검사 및 번호 규칙 검증';
-        }
-    }, 100);
-}
+// 네트워크 오류 처리 함수 삭제됨 (catch 블록에서 일반 오류로 처리)
 
 // getCookie 함수 (CSRF 토큰용)
 function getCookie(name) {
@@ -984,6 +1062,36 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (!window.autoDetectedAllergens) {
         window.autoDetectedAllergens = new Set();
+    }
+    
+    // 품목보고번호 실시간 형식 검증
+    const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
+    if (reportNoInput) {
+        reportNoInput.addEventListener('input', function(e) {
+            const value = e.target.value;
+            // 품목보고번호 패턴: YYYY-MM-XXXXXXXX (예: 2024-12-01234567)
+            const pattern = /^\d{4}-\d{2}-\d{8}$/;
+            
+            if (value && value.length > 0) {
+                if (pattern.test(value)) {
+                    // 올바른 형식
+                    e.target.style.borderColor = '#28a745';
+                    e.target.style.boxShadow = '0 0 0 0.2rem rgba(40, 167, 69, 0.25)';
+                } else if (value.length >= 17) {
+                    // 길이는 충분하지만 형식 오류
+                    e.target.style.borderColor = '#ffc107';
+                    e.target.style.boxShadow = '0 0 0 0.2rem rgba(255, 193, 7, 0.25)';
+                } else {
+                    // 입력 중
+                    e.target.style.borderColor = '';
+                    e.target.style.boxShadow = '';
+                }
+            } else {
+                // 입력 없음
+                e.target.style.borderColor = '';
+                e.target.style.boxShadow = '';
+            }
+        });
     }
     
     // 모든 quick-text-toggle 버튼의 원래 색상 저장

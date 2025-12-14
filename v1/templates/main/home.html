@@ -500,10 +500,13 @@ html, body {
                                     <label for="chk_prdlst_report_no">품목보고번호</label>
                                 </div>
                                 <div class="form-input-cell">
-                                    <input type="text" name="prdlst_report_no" class="form-control" placeholder="품목보고번호를 입력하세요 (예: 2024-12-34567890)">
+                                    <input type="text" name="prdlst_report_no" class="form-control" placeholder="품목보고번호를 입력하세요 (예: 2024-12-34567890)" style="flex: 1; min-width: 0;">
                                     <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo()" style="white-space: nowrap;">번호검증</button>
+                                    <button type="button" class="btn btn-success btn-sm" id="copyProductDataBtn" onclick="copyVerifiedProductData()" style="white-space: nowrap; display: none;">복사하기</button>
                                 </div>
                             </div>
+                            <!-- 검증 결과 메시지 -->
+                            <div id="verifyResultMessage" style="display: none; margin-top: 10px;"></div>
 
                             <!-- 내용량 -->
                             <div class="form-group-row">

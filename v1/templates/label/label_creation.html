@@ -288,12 +288,14 @@
                   <label for="chk_prdlst_report_no" class="m-0">품목보고번호</label>
                 </div>
                 <div style="width:85%;">
-                  <div class="input-container">
-                    <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}"
+                  <div class="input-container" style="position: relative;">
+                    <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}" style="flex: 1; min-width: 0;"
                            onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_report_no', this); }"
                            onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_report_no', this); }">
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo(document.getElementById('label_id')?.value)">번호검증</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo(document.getElementById('label_id')?.value)" style="white-space: nowrap;">번호검증</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="copyProductDataBtn" onclick="copyVerifiedProductData()" style="display: none; white-space: nowrap;">복사하기</button>
                   </div>
+                  <div id="verifyResultMessage" style="display: none; margin-top: 0.5rem; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem;"></div>
                 </div>
               </div>            </div>            <!-- 내용량 | 원산지 -->
             <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
