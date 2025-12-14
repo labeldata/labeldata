@@ -349,3 +349,28 @@ select.form-control {
     background-color: #ebeef5;
     margin: 20px 0;
 }
+
+/* Section Summary Styles */
+.section-summary {
+    cursor: pointer;
+    margin-bottom: 0.5rem;
+}
+
+.section-summary-card {
+    background-color: #e7f3ff;
+    border: 1px solid #b3d7ff;
+    border-left: 4px solid #007bff;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+}
+
+.section-summary-icon {
+    color: #007bff;
+    margin-right: 0.5rem;
+}
+
+.section-summary-text {
+    color: #004085;
+    font-weight: 500;
+    font-size: 0.875rem;
+}

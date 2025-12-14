@@ -2345,26 +2345,13 @@ function updateContentSummary(fieldName) {
     
     const content = textarea.value.trim();
     
-    // 색상 테마 설정 (fieldName에 따라)
-    let bgColor, borderColor, iconColor, textColor, icon;
+    // 아이콘 설정
+    let icon;
     if (fieldName === 'cautions') {
-        bgColor = '#fff3cd';
-        borderColor = '#ffc107';
-        iconColor = 'text-warning';
-        textColor = '#856404';
         icon = 'fa-exclamation-triangle';
     } else if (fieldName === 'additional_info') {
-        bgColor = '#d1ecf1';
-        borderColor = '#17a2b8';
-        iconColor = 'text-info';
-        textColor = '#0c5460';
         icon = 'fa-info-circle';
     } else {
-        // 기본값
-        bgColor = '#f8f9fa';
-        borderColor = '#6c757d';
-        iconColor = 'text-secondary';
-        textColor = '#495057';
         icon = 'fa-file-alt';
     }
     
@@ -2378,10 +2365,10 @@ function updateContentSummary(fieldName) {
             guideText = '내용을 입력하세요';
         }
         summary.innerHTML = `
-            <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+            <div class="border rounded p-2 section-summary-card">
                 <div class="d-flex align-items-center">
-                    <i class="fas ${icon} ${iconColor} me-2"></i>
-                    <small style="color: ${textColor}; font-weight: 500;">${guideText}</small>
+                    <i class="fas ${icon} section-summary-icon"></i>
+                    <small class="section-summary-text">${guideText}</small>
                 </div>
             </div>
         `;
@@ -2401,10 +2388,10 @@ function updateContentSummary(fieldName) {
             guideText = '내용을 입력하세요';
         }
         summary.innerHTML = `
-            <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+            <div class="border rounded p-2 section-summary-card">
                 <div class="d-flex align-items-center">
-                    <i class="fas ${icon} ${iconColor} me-2"></i>
-                    <small style="color: ${textColor}; font-weight: 500;">${guideText}</small>
+                    <i class="fas ${icon} section-summary-icon"></i>
+                    <small class="section-summary-text">${guideText}</small>
                 </div>
             </div>
         `;
@@ -2425,10 +2412,10 @@ function updateContentSummary(fieldName) {
     }
     
     summary.innerHTML = `
-        <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+        <div class="border rounded p-2 section-summary-card">
             <div class="d-flex align-items-center">
-                <i class="fas fa-check-circle ${iconColor} me-2"></i>
-                <small style="color: ${textColor}; font-weight: 500;">${summaryText}</small>
+                <i class="fas fa-check-circle section-summary-icon"></i>
+                <small class="section-summary-text">${summaryText}</small>
             </div>
         </div>
     `;
@@ -3181,18 +3168,13 @@ function updateCustomFieldsSummary() {
     const rows = container.querySelectorAll('.custom-field-row');
     const count = rows.length;
     
-    const bgColor = '#d4edda';
-    const borderColor = '#28a745';
-    const iconColor = 'text-success';
-    const textColor = '#155724';
-    
     if (count === 0) {
         // 내용이 없으면 안내 문구 (카드 스타일)
         summary.innerHTML = `
-            <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+            <div class="border rounded p-2 section-summary-card">
                 <div class="d-flex align-items-center">
-                    <i class="fas fa-tags ${iconColor} me-2"></i>
-                    <small style="color: ${textColor}; font-weight: 500;">아래 <strong>추가</strong> 버튼을 클릭하여 항목을 추가하세요 (조리법, 반품 교환, 알레르기 혼입 등)</small>
+                    <i class="fas fa-tags section-summary-icon"></i>
+                    <small class="section-summary-text">아래 <strong>추가</strong> 버튼을 클릭하여 항목을 추가하세요 (조리법, 반품 교환, 알레르기 혼입 등)</small>
                 </div>
             </div>
         `;
@@ -3216,19 +3198,19 @@ function updateCustomFieldsSummary() {
                 summaryText += ` <span>외 ${count - 3}개</span>`;
             }
             summary.innerHTML = `
-                <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+                <div class="border rounded p-2 section-summary-card">
                     <div class="d-flex align-items-center">
-                        <i class="fas fa-check-circle ${iconColor} me-2"></i>
-                        <small style="color: ${textColor}; font-weight: 500;">${summaryText}</small>
+                        <i class="fas fa-check-circle section-summary-icon"></i>
+                        <small class="section-summary-text">${summaryText}</small>
                     </div>
                 </div>
             `;
         } else {
             summary.innerHTML = `
-                <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+                <div class="border rounded p-2 section-summary-card">
                     <div class="d-flex align-items-center">
-                        <i class="fas fa-tags ${iconColor} me-2"></i>
-                        <small style="color: ${textColor}; font-weight: 500;">항목명과 내용을 입력하거나 템플릿을 선택하세요</small>
+                        <i class="fas fa-tags section-summary-icon"></i>
+                        <small class="section-summary-text">항목명과 내용을 입력하거나 템플릿을 선택하세요</small>
                     </div>
                 </div>
             `;
