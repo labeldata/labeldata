@@ -144,6 +144,7 @@
   <script id="country-list-data" type="application/json">{{ country_list|safe }}</script>
   <script id="expiry-recommendation-data" type="application/json">{{ expiry_recommendation|safe }}</script>
   <script id="allergens-data" type="application/json">{{ allergens|safe }}</script>
+  <script id="custom-fields-data" type="application/json">{{ custom_fields|safe }}</script>
 
   <!-- External JS Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -180,6 +181,7 @@
         countryMapping = safeJsonParse('country-mapping-data');
         countryList = safeJsonParse('country-list-data') || [];
         const allergensData = safeJsonParse('allergens-data') || [];
+        const customFieldsData = safeJsonParse('custom-fields-data') || [];
 
         // --- DOM ELEMENTS ---
         const previewContent = document.getElementById('previewContent');
@@ -472,6 +474,23 @@
                     tbody.appendChild(tr);
                 }
             });
+            
+            // 맞춤항목 표시 (표준 항목 이후)
+            if (customFieldsData && customFieldsData.length > 0) {
+                customFieldsData.forEach(field => {
+                    if (field.label && field.value) {
+                        const tr = document.createElement('tr');
+                        const th = document.createElement('th');
+                        const td = document.createElement('td');
+                        th.textContent = field.label;
+                        td.textContent = field.value;
+                        tr.appendChild(th);
+                        tr.appendChild(td);
+                        tbody.appendChild(tr);
+                    }
+                });
+            }
+            
             updatePreviewStyles();
         }
 
@@ -1646,6 +1665,14 @@
 
                 dataLoaded = true;
                 checkedFields = e.data.checked;
+                
+                // 맞춤항목이 있으면 customFieldsData에 병합
+                if (e.data.customFields && e.data.customFields.length > 0) {
+                    // 기존 customFieldsData를 상세모드에서 전달받은 데이터로 대체
+                    customFieldsData.length = 0;
+                    customFieldsData.push(...e.data.customFields);
+                }
+                
                 renderTable(checkedFields);
                 const frmlc = checkedFields.frmlc_mtrqlt || '';
                 updateRecyclingMarkUI(frmlc);

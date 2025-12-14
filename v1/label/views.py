@@ -538,6 +538,26 @@ def label_creation(request, label_id=None):
             # 알레르기 정보 저장 (원재료 사용 알레르기만 DB 저장)
             label.allergens = request.POST.get('allergens', '')
 
+            # 맞춤항목 저장
+            custom_fields_json = request.POST.get('custom_fields_json', '')
+            print(f'[DEBUG] custom_fields_json 받음: {custom_fields_json}')  # 디버깅
+            if custom_fields_json:
+                try:
+                    import json
+                    custom_fields = json.loads(custom_fields_json)
+                    print(f'[DEBUG] 파싱된 custom_fields: {custom_fields}')  # 디버깅
+                    # 최대 10개로 제한
+                    if len(custom_fields) > 10:
+                        custom_fields = custom_fields[:10]
+                    label.custom_fields = custom_fields
+                    print(f'[DEBUG] label.custom_fields 설정 완료: {label.custom_fields}')  # 디버깅
+                except json.JSONDecodeError as e:
+                    print(f'[DEBUG] JSON 파싱 오류: {e}')  # 디버깅
+                    label.custom_fields = []
+            else:
+                print('[DEBUG] custom_fields_json이 비어있음')  # 디버깅
+                label.custom_fields = []
+
             label.save()
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
@@ -725,6 +745,12 @@ def label_creation(request, label_id=None):
             food_types = FoodType.objects.values('food_type', 'food_group').order_by('food_type')
             
         # 자주 사용하는 문구 관련 코드 삭제
+        
+        # 맞춤항목 JSON 직렬화
+        custom_fields_json = ''
+        if label and label.custom_fields:
+            import json
+            custom_fields_json = json.dumps(label.custom_fields, ensure_ascii=False)
 
         context = {
             'form': form,
@@ -734,6 +760,7 @@ def label_creation(request, label_id=None):
             'country_list': CountryList.objects.all(),
             'has_ingredient_relations': has_ingredient_relations,
             'count_ingredient_relations': count_ingredient_relations,
+            'custom_fields_json': custom_fields_json,
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
         return render(request, 'label/label_creation.html', context)
@@ -1799,6 +1826,9 @@ def preview_popup(request):
             if country['country_code2'] and country['country_name_ko']:
                 country_mapping[country['country_code2']] = country['country_name_ko']
         
+        # 맞춤항목 데이터 추가
+        custom_fields = label.custom_fields if label.custom_fields else []
+        
         context = {
             'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
@@ -1809,6 +1839,7 @@ def preview_popup(request):
             'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화
             'country_mapping': json.dumps(country_mapping, ensure_ascii=False),  # 국가 코드 매핑 추가
             'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False),  # 소비기한 권장 데이터 추가
+            'custom_fields': json.dumps(custom_fields, ensure_ascii=False),  # 맞춤항목 추가
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
         

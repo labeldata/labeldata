@@ -65,10 +65,10 @@
               <span class="recent-update label-header-date" style="font-size: 0.85rem;">
                 <i class="fas fa-pencil-alt me-1"></i>{{ label.update_datetime|date:"m/d H:i" }}
               </span>
-              <button type="button" class="btn btn-outline-primary btn-sm" onclick="try { openPreviewPopup(); } catch(e) { console.error('onclick error:', e); }">
+              <button type="button" class="btn btn-outline-primary btn-sm" id="previewBtn" onclick="try { openPreviewPopup(); } catch(e) { console.error('onclick error:', e); }">
                 <i class="fas fa-eye me-1"></i>미리보기
               </button>
-              <button type="submit" form="labelForm" class="btn btn-primary btn-sm">
+              <button type="submit" form="labelForm" class="btn btn-primary btn-sm" id="saveBtn">
                 <i class="fas fa-save me-1"></i>저장
               </button>
             </div>
@@ -202,9 +202,6 @@
         </button>
         <button type="button" class="btn btn-outline-cancel btn-sm" id="linkedLabelsBtn">
           <i class="fas fa-link me-1"></i>연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
-        </button>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="handleNutritionTablePopup()" title="영양성분 계산기">
-          <i class="fas fa-calculator me-1"></i>영양성분 계산기
         </button>
       </div>
     </div>
@@ -587,6 +584,29 @@
                 </div>
               </div>
             </div>
+            
+            <!-- 구분선 및 통합 컨트롤 버튼 -->
+            <div class="mb-3 mt-4" style="border-top: 2px solid #dee2e6; padding-top: 15px;">
+              <div class="d-flex justify-content-between align-items-center mb-2" style="flex-wrap: nowrap;">
+                <div class="d-flex align-items-center" style="gap: 10px; flex: 1; min-width: 0; white-space: nowrap;">
+                  <span style="font-weight: 600; color: #495057; font-size: 0.95rem; flex-shrink: 0;">
+                    <i class="fas fa-clipboard-list me-2"></i>추가 정보 입력
+                  </span>
+                  <span style="color: #6c757d; font-size: 0.85rem; flex-shrink: 0;">
+                    주의사항, 기타 표시사항을 버튼으로 빠르게 등록,수정할 수 있고, 맞춤 항목을 추가,수정할 수 있습니다.
+                  </span>
+                </div>
+                <div class="d-flex align-items-center justify-content-end" style="gap: 5px; flex-shrink: 0;">
+                  <button type="button" id="toggleAllBtn" class="btn btn-outline-primary btn-sm" onclick="toggleAllSectionsButton()" title="모든 섹션 펼치기">
+                    <i class="fas fa-chevron-down me-1"></i>전체 열기
+                  </button>
+                  <button type="button" class="btn btn-outline-primary btn-sm" onclick="handleNutritionTablePopup()" title="영양성분 계산기">
+                    <i class="fas fa-calculator me-1"></i>영양성분 계산기
+                  </button>
+                </div>
+              </div>
+            </div>
+            
             <!-- 주의사항 -->
             <div class="d-flex align-items-start mb-2" style="gap:5px;">
                 <div style="width:10%; min-width:130px;">
@@ -600,10 +620,15 @@
               </div>
               <div style="width:90%;">
                 <!-- 요약 표시 영역 (접었을 때 보임) -->
-                <div id="cautionsSummary" class="mb-2" onclick="toggleContentSection('cautions')" style="display: none; font-size: 0.85rem; color: #666; line-height: 1.4; cursor: pointer;" title="클릭하여 펼치기">
-                  <span class="text-muted">내용이 없습니다</span>
+                <div id="cautionsSummary" class="mb-2" onclick="toggleContentSection('cautions')" style="display: none; cursor: pointer;" title="클릭하여 펼치기">
+                  <div class="border rounded p-2" style="background-color: #fff3cd; border-color: #ffc107 !important; border-left: 4px solid #ffc107 !important;">
+                    <div class="d-flex align-items-center">
+                      <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                      <small style="color: #856404; font-weight: 500;">내용이 없습니다</small>
+                    </div>
+                  </div>
                 </div>
-                <div id="cautionsContent" style="display: flex; flex-direction: column; gap: 5px;">
+                <div id="cautionsContent" class="border rounded p-2" style="display: flex; flex-direction: column; gap: 5px; background-color: #f8f9fa;">
                   <div class="input-container input-container-modern">
                     <textarea name="cautions" class="form-control auto-expand textarea" rows="2" 
                               placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
@@ -660,10 +685,15 @@
               </div>
               <div style="width:90%;">
                 <!-- 요약 표시 영역 (접었을 때 보임) -->
-                <div id="additional_infoSummary" class="mb-2" onclick="toggleContentSection('additional_info')" style="display: none; font-size: 0.85rem; color: #666; line-height: 1.4; cursor: pointer;" title="클릭하여 펼치기">
-                  <span class="text-muted">내용이 없습니다</span>
+                <div id="additional_infoSummary" class="mb-2" onclick="toggleContentSection('additional_info')" style="display: none; cursor: pointer;" title="클릭하여 펼치기">
+                  <div class="border rounded p-2" style="background-color: #d1ecf1; border-color: #17a2b8 !important; border-left: 4px solid #17a2b8 !important;">
+                    <div class="d-flex align-items-center">
+                      <i class="fas fa-info-circle text-info me-2"></i>
+                      <span style="font-size: 0.875rem; color: #0c5460; font-weight: 500;">내용이 없습니다</span>
+                    </div>
+                  </div>
                 </div>
-                <div id="additional_infoContent" style="display: flex; flex-direction: column; gap: 5px;">
+                <div id="additional_infoContent" class="border rounded p-2" style="display: flex; flex-direction: column; gap: 5px; background-color: #f8f9fa;">
                   <div class="input-container input-container-modern">
                     <textarea name="additional_info" class="form-control auto-expand textarea" rows="2" 
                               placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
@@ -708,7 +738,57 @@
                   </div>
                 </div>
               </div>
-            </div>    
+            </div>
+            
+            <!-- 맞춤항목 -->
+            <div class="d-flex align-items-start mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                <div class="form-check">
+                  <label class="m-0" style="font-size: 0.9rem; font-weight: normal;">맞춤항목</label>
+                  <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="toggleContentSection('custom_fields')" style="font-size: 0.8rem; text-decoration: none; color: #6c757d;" title="접기/펼치기">
+                    <i class="fas fa-chevron-up" id="custom_fieldsToggleIcon"></i>
+                  </button>
+                </div>
+              </div>
+              <div style="width:90%;">
+                <!-- 요약 메시지 (접었을 때 표시) -->
+                <div id="custom_fieldsSummary" class="mb-2" onclick="toggleContentSection('custom_fields')" style="display: none; cursor: pointer;" title="클릭하여 펼치기">
+                  <div class="border rounded p-2" style="background-color: #d4edda; border-color: #28a745 !important; border-left: 4px solid #28a745 !important;">
+                    <div class="d-flex align-items-center">
+                      <i class="fas fa-tags text-success me-2"></i>
+                      <small style="color: #155724; font-weight: 500;">내용이 없습니다</small>
+                    </div>
+                  </div>
+                </div>
+                
+                <div id="custom_fieldsContent" class="border rounded p-2" style="display: flex; flex-direction: column; gap: 5px; background-color: #f8f9fa;">
+                  
+                  <!-- 항목명/내용 레이블 (항상 표시) -->
+                  <div id="customFieldsHeader" class="row g-2 mb-1 align-items-center">
+                    <div class="col-auto" style="width: 80px;">
+                      <button type="button" class="btn btn-success btn-sm" onclick="addNewCustomFieldRow()" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+                        <i class="fas fa-plus me-1"></i>추가
+                      </button>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label mb-0" style="font-size: 0.85rem; font-weight: 600;">항목명</label>
+                    </div>
+                    <div class="col">
+                      <label class="form-label mb-0" style="font-size: 0.85rem; font-weight: 600;">내용</label>
+                    </div>
+                  </div>
+                  
+                  <!-- 맞춤항목 컨테이너 -->
+                  <div id="customFieldsContainer" style="display: flex; flex-direction: column; gap: 5px;">
+                    <!-- JavaScript로 동적 생성 -->
+                  </div>
+                  
+                  <!-- Hidden input for JSON data -->
+                  <input type="hidden" id="custom_fields_json" name="custom_fields_json" value='{% if custom_fields_json %}{{ custom_fields_json|safe }}{% else %}[]{% endif %}'>
+                </div>
+              </div>
+            </div>
+            
             <!-- 영양성분 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
                 <div style="width:10%; min-width:130px;">

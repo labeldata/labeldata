@@ -567,13 +567,29 @@ document.addEventListener('DOMContentLoaded', function () {
             line_height: document.querySelector('input[name="line_height"]')?.value || '1.2'
         };
         
-
+        // 맞춤항목 수집 (체크박스 체크 시에만 포함)
+        let customFields = [];
+        const customFieldsCheckbox = document.getElementById('chk_custom_fields');
+        if (customFieldsCheckbox && customFieldsCheckbox.checked) {
+            const container = document.getElementById('customFieldsContainer');
+            if (container) {
+                const rows = container.querySelectorAll('.custom-field-row');
+                rows.forEach(row => {
+                    const label = row.querySelector('.custom-field-label')?.value.trim();
+                    const value = row.querySelector('.custom-field-value')?.value.trim();
+                    if (label && value) {
+                        customFields.push({ label, value });
+                    }
+                });
+            }
+        }
 
         // 팝업으로 최종 데이터 전송
         popup.postMessage({
             type: 'previewCheckedFields',
             checked: checkedData,
             settings: previewSettings,
+            customFields: customFields,
             update_datetime: new Date().toISOString().slice(0, 16).replace('T', ' ')
         }, '*');
 
@@ -1258,18 +1274,25 @@ document.addEventListener('DOMContentLoaded', function () {
   const savingSpinner = document.getElementById('savingSpinner');
   const form = document.getElementById('labelForm') || document.querySelector('form');
 
-  if (form && saveBtn && previewBtn && savingSpinner) {
-    form.addEventListener('submit', function() {
-      saveBtn.disabled = true;
-      previewBtn.disabled = true;
-      savingSpinner.style.display = '';
+  // form submit 이벤트 리스너 등록 (반드시 form에 등록)
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      // 맞춤항목 데이터 직렬화
+      serializeCustomFields();
+      
+      // 버튼 비활성화
+      if (saveBtn) {
+        saveBtn.disabled = true;
+      }
+      if (previewBtn) {
+        previewBtn.disabled = true;
+      }
+      if (savingSpinner) {
+        savingSpinner.style.display = '';
+      }
     });
-
-    // 저장 완료 후(redirect 없이 ajax라면) 아래 코드로 복구 필요
-    // 예시: 저장 ajax 콜백에서
-    // saveBtn.disabled = false;
-    // previewBtn.disabled = false;
-    // savingSpinner.style.display = 'none';
+  } else {
+    console.error('Form을 찾을 수 없습니다!');
   }
 
   function step1Apply() {
@@ -2217,6 +2240,70 @@ function toggleContentSection(fieldName) {
     }
 }
 
+// 전체 섹션 열기/닫기 함수
+function toggleAllSections(action) {
+    const sections = ['cautions', 'additional_info', 'custom_fields'];
+    
+    sections.forEach(fieldName => {
+        const content = document.getElementById(fieldName + 'Content');
+        const icon = document.getElementById(fieldName + 'ToggleIcon');
+        const summary = document.getElementById(fieldName + 'Summary');
+        
+        if (!content || !icon) return;
+        
+        if (action === 'expand') {
+            // 펼치기
+            content.style.display = 'flex';
+            icon.classList.remove('fa-chevron-down');
+            icon.classList.add('fa-chevron-up');
+            if (summary) summary.style.display = 'none';
+        } else if (action === 'collapse') {
+            // 접기
+            content.style.display = 'none';
+            icon.classList.remove('fa-chevron-up');
+            icon.classList.add('fa-chevron-down');
+            if (summary) {
+                // 요약 업데이트
+                if (fieldName === 'cautions' || fieldName === 'additional_info') {
+                    updateContentSummary(fieldName);
+                } else if (fieldName === 'custom_fields') {
+                    updateCustomFieldsSummary();
+                }
+                summary.style.display = 'block';
+            }
+        }
+    });
+}
+
+// 전체 섹션 열기/닫기 토글 버튼 함수
+function toggleAllSectionsButton() {
+    const btn = document.getElementById('toggleAllBtn');
+    const icon = btn.querySelector('i');
+    const sections = ['cautions', 'additional_info', 'custom_fields'];
+    
+    // 현재 상태 확인: 모두 펼쳐져 있는지 체크
+    const allExpanded = sections.every(fieldName => {
+        const content = document.getElementById(fieldName + 'Content');
+        return content && content.style.display !== 'none';
+    });
+    
+    if (allExpanded) {
+        // 모두 접기
+        toggleAllSections('collapse');
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+        btn.innerHTML = '<i class="fas fa-chevron-down me-1"></i>전체 열기';
+        btn.title = '모든 섹션 펼치기';
+    } else {
+        // 모두 펼치기
+        toggleAllSections('expand');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+        btn.innerHTML = '<i class="fas fa-chevron-up me-1"></i>전체 닫기';
+        btn.title = '모든 섹션 접기';
+    }
+}
+
 // 주의사항/기타표시 요약 업데이트 함수
 function updateContentSummary(fieldName) {
     const textarea = document.querySelector(`textarea[name="${fieldName}"]`);
@@ -2226,8 +2313,46 @@ function updateContentSummary(fieldName) {
     
     const content = textarea.value.trim();
     
+    // 색상 테마 설정 (fieldName에 따라)
+    let bgColor, borderColor, iconColor, textColor, icon;
+    if (fieldName === 'cautions') {
+        bgColor = '#fff3cd';
+        borderColor = '#ffc107';
+        iconColor = 'text-warning';
+        textColor = '#856404';
+        icon = 'fa-exclamation-triangle';
+    } else if (fieldName === 'additional_info') {
+        bgColor = '#d1ecf1';
+        borderColor = '#17a2b8';
+        iconColor = 'text-info';
+        textColor = '#0c5460';
+        icon = 'fa-info-circle';
+    } else {
+        // 기본값
+        bgColor = '#f8f9fa';
+        borderColor = '#6c757d';
+        iconColor = 'text-secondary';
+        textColor = '#495057';
+        icon = 'fa-file-alt';
+    }
+    
     if (!content) {
-        summary.innerHTML = '<span class="text-muted">내용이 없습니다</span>';
+        let guideText = '';
+        if (fieldName === 'cautions') {
+            guideText = '직접 입력하거나 클릭하여 추천 문구를 선택하세요';
+        } else if (fieldName === 'additional_info') {
+            guideText = '직접 입력하거나 아래 버튼을 클릭하여 항목을 추가하세요';
+        } else {
+            guideText = '내용을 입력하세요';
+        }
+        summary.innerHTML = `
+            <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+                <div class="d-flex align-items-center">
+                    <i class="fas ${icon} ${iconColor} me-2"></i>
+                    <small style="color: ${textColor}; font-weight: 500;">${guideText}</small>
+                </div>
+            </div>
+        `;
         return;
     }
     
@@ -2235,7 +2360,22 @@ function updateContentSummary(fieldName) {
     const lines = content.split('\n').filter(line => line.trim());
     
     if (lines.length === 0) {
-        summary.innerHTML = '<span class="text-muted">내용이 없습니다</span>';
+        let guideText = '';
+        if (fieldName === 'cautions') {
+            guideText = '직접 입력하거나 클릭하여 추천 문구를 선택하세요';
+        } else if (fieldName === 'additional_info') {
+            guideText = '직접 입력하거나 아래 버튼을 클릭하여 항목을 추가하세요';
+        } else {
+            guideText = '내용을 입력하세요';
+        }
+        summary.innerHTML = `
+            <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+                <div class="d-flex align-items-center">
+                    <i class="fas ${icon} ${iconColor} me-2"></i>
+                    <small style="color: ${textColor}; font-weight: 500;">${guideText}</small>
+                </div>
+            </div>
+        `;
         return;
     }
     
@@ -2243,19 +2383,23 @@ function updateContentSummary(fieldName) {
     const displayLines = lines.slice(0, 3);
     const remainingCount = lines.length - displayLines.length;
     
-    let html = '<div style="display: flex; flex-wrap: wrap; gap: 5px;">';
-    
-    displayLines.forEach(line => {
-        const truncated = line.length > 50 ? line.substring(0, 50) + '...' : line;
-        html += `<span class="badge bg-secondary" style="font-size: 0.75rem; font-weight: normal; padding: 0.35em 0.6em;" title="${line.replace(/"/g, '&quot;')}">${truncated}</span>`;
-    });
+    let summaryText = displayLines.map(line => {
+        const truncated = line.length > 40 ? line.substring(0, 40) + '...' : line;
+        return `<strong>•</strong> ${truncated}`;
+    }).join(' | ');
     
     if (remainingCount > 0) {
-        html += `<span class="badge bg-info" style="font-size: 0.75rem; padding: 0.35em 0.6em;">+${remainingCount}개 더보기</span>`;
+        summaryText += ` <span>외 ${remainingCount}개</span>`;
     }
     
-    html += '</div>';
-    summary.innerHTML = html;
+    summary.innerHTML = `
+        <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-check-circle ${iconColor} me-2"></i>
+                <small style="color: ${textColor}; font-weight: 500;">${summaryText}</small>
+            </div>
+        </div>
+    `;
 }
 
 // 제조시설 혼입 알레르기 토글
@@ -2643,3 +2787,507 @@ function showToastMessage(message, type = 'success') {
     }, 3000);
 }
 
+// 맞춤항목 관리 (조리법, 반품 교환, 알레르기 혼입 등)
+
+// 빠른추가 템플릿
+const CUSTOM_FIELD_TEMPLATES = {
+    "조리법": [
+        "전자레인지(700W): 3분 가열 후 드시면 됩니다",
+        "끓는 물에 5~7분간 데워 드시면 됩니다",
+        "해동 후 팬에 약불로 5분간 조리하세요",
+        "오븐(180℃)에서 10~15분 구워 드시면 됩니다"
+    ],
+    "반품 및 교환": [
+        "제조원 및 판매원",
+        "제품 구입처",
+        "고객센터 1588-0000"
+    ],
+    "소비기한 표시": [
+        "별도표시일까지",
+        "포장재 앞면 상단 참조",
+        "제품 패키지 하단 표시",
+        "별도표시일까지"
+    ],
+    "알레르기 혼입 가능성": [
+        "본 제품은 우유, 대두를 사용한 제품과 같은 제조시설에서 제조하고 있습니다",
+        "동일 설비에서 우유, 대두 사용 제품을 생산하여 미량 혼입 가능성이 있습니다",
+        "우유, 대두와 교차 오염 가능성이 있습니다 (동일 제조라인 사용)",
+    ],
+    "고객센터": [
+        "1588-0000 (평일 09:00~18:00)",
+        "1577-0000 (연중무휴)",
+        "02-0000-0000"
+    ],
+    "영업시간": [
+        "평일 09:00~18:00 (주말/공휴일 휴무)",
+        "연중무휴 (09:00~22:00)",
+        "월~금 09:00~18:00, 토 09:00~13:00"
+    ],
+    "제품 보증기간": [
+        "구매일로부터 1년",
+        "제조일로부터 2년",
+        "품질보증기간: 제조일로부터 24개월"
+    ],
+    "환불 정책": [
+        "제품 하자 시 100% 교환 또는 환불",
+        "개봉 후 7일 이내 반품 가능",
+        "소비자 분쟁해결기준에 따라 처리"
+    ],
+    "인증 번호": [
+        "식품제조·가공업 등록번호: 제0000-0000호",
+        "건강기능식품 제조번호: 제0000-0000호",
+        "HACCP 인증번호: 제0000-0000호"
+    ]
+};
+
+// 맞춤항목 초기화
+function initCustomFields() {
+    const customFieldsInput = document.querySelector('#custom_fields_json');
+    if (!customFieldsInput) return;
+    
+    const customFieldsData = customFieldsInput.value;
+    
+    if (customFieldsData && customFieldsData.trim() !== '' && customFieldsData.trim() !== '[]') {
+        try {
+            const trimmedData = customFieldsData.trim();
+            const fields = JSON.parse(trimmedData);
+            
+            if (Array.isArray(fields) && fields.length > 0) {
+                fields.forEach((field) => {
+                    if (field && field.label && field.value) {
+                        addCustomFieldRow(field.label, field.value, false);
+                    }
+                });
+            }
+        } catch (e) {
+            // JSON 파싱 오류 무시
+        }
+    }
+    
+    updateCustomFieldsSummary();
+}
+
+// 맞춤항목 행 추가
+function addCustomFieldRow(label = '', value = '', isNew = false) {
+    console.log(`✓ addCustomFieldRow 호출: label="${label}", value="${value}", isNew=${isNew}`);
+    
+    const container = document.getElementById('customFieldsContainer');
+    if (!container) {
+        console.error('✗ customFieldsContainer를 찾을 수 없습니다!');
+        return;
+    }
+    
+    const currentCount = container.children.length;
+    console.log(`✓ 현재 항목 개수: ${currentCount}`);
+    
+    if (currentCount >= 10) {
+        alert('최대 10개까지만 추가할 수 있습니다.');
+        return;
+    }
+    
+    const index = Date.now(); // 고유 ID로 타임스탬프 사용
+    const isFirst = container.children.length === 0;
+    const isEditable = isNew || (label === '' && value === ''); // 신규 또는 빈 항목은 편집 가능
+    
+    console.log(`✓ index=${index}, isFirst=${isFirst}, isEditable=${isEditable}`);
+    
+    const fieldRow = document.createElement('div');
+    fieldRow.className = 'custom-field-row border rounded p-2';
+    fieldRow.style.backgroundColor = '#f8f9fa';
+    fieldRow.setAttribute('data-index', index);
+    fieldRow.setAttribute('data-editable', isEditable ? 'true' : 'false');
+    
+    fieldRow.innerHTML = `
+        <div class="row g-2 align-items-center">
+            <!-- 수정/저장/- 버튼 -->
+            <div class="col-auto" style="width: 80px;">
+                <button type="button" 
+                        class="btn btn-sm" 
+                        onclick="toggleEditMode(${index})" 
+                        data-action-btn="${index}"
+                        style="font-size: 0.75rem; padding: 0.2rem 0.4rem; ${isEditable ? 'background-color: #28a745; color: white; border-color: #28a745;' : 'background-color: #0d6efd; color: white; border-color: #0d6efd;'}" 
+                        title="${isEditable ? '저장' : '수정'}">
+                    <i class="fas fa-${isEditable ? 'save' : 'edit'}"></i>
+                </button>
+                <button type="button" 
+                        class="btn btn-outline-danger btn-sm ms-1" 
+                        onclick="removeCustomFieldRow(${index})"
+                        style="font-size: 0.75rem; padding: 0.2rem 0.4rem;${isFirst ? ' display: none;' : ''}" 
+                        data-remove-btn="${index}"
+                        title="항목 삭제">
+                    <i class="fas fa-minus"></i>
+                </button>
+            </div>
+            <div class="col-md-3">
+                <div class="input-group input-group-sm">
+                    <input type="text" 
+                           class="form-control custom-field-label" 
+                           placeholder="선택 또는 직접 입력"
+                           value="${label}"
+                           list="customFieldTemplates${index}"
+                           ${isEditable ? '' : 'disabled'}
+                           style="font-size: 0.875rem;">
+                    <datalist id="customFieldTemplates${index}">
+                        ${Object.keys(CUSTOM_FIELD_TEMPLATES).map(key => `<option value="${key}">`).join('')}
+                    </datalist>
+                </div>
+            </div>
+            <div class="col">
+                <input type="text" 
+                       class="form-control form-control-sm custom-field-value" 
+                       placeholder="항목명을 선택하거나 직접 입력하세요" 
+                       value="${value}"
+                       ${isEditable ? '' : 'disabled'}
+                       style="font-size: 0.875rem;">
+                <div class="mt-1" id="quickValueButtons${index}" style="display: ${isEditable && label ? 'flex' : 'none'}; flex-wrap: wrap; gap: 3px;">
+                    <!-- 빠른 입력 버튼이 여기에 동적으로 추가됨 -->
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(fieldRow);
+    console.log(`✓ 항목 추가 완료, 현재 총 ${container.children.length}개`);
+    
+    updateCustomFieldsSummary();
+    updateCustomFieldCount();
+    
+    // 2개 이상일 때 모든 - 버튼 표시
+    const allRows = container.querySelectorAll('.custom-field-row');
+    if (allRows.length > 1) {
+        allRows.forEach(r => {
+            const removeBtn = r.querySelector('[data-remove-btn]');
+            if (removeBtn) {
+                removeBtn.style.display = '';
+            }
+        });
+    }
+    
+    // 편집 가능한 항목에만 이벤트 리스너 등록
+    if (isEditable) {
+        // 항목명 변경 시 빠른 입력 버튼 업데이트 및 첫 번째 값 자동 입력
+        const labelInput = fieldRow.querySelector('.custom-field-label');
+        const valueInput = fieldRow.querySelector('.custom-field-value');
+        
+        labelInput.addEventListener('input', function() {
+            const selectedKey = this.value;
+            updateQuickValueButtons(index, selectedKey);
+            
+            // 템플릿에 있는 항목명이고 내용이 비어있을 때만 첫 번째 옵션을 기본값으로 설정
+            if (selectedKey && !valueInput.value && CUSTOM_FIELD_TEMPLATES[selectedKey]) {
+                valueInput.value = CUSTOM_FIELD_TEMPLATES[selectedKey][0];
+            }
+            
+            // 요약 업데이트
+            updateCustomFieldsSummary();
+        });
+        
+        // 내용 변경 시 요약 업데이트
+        valueInput.addEventListener('input', function() {
+            updateCustomFieldsSummary();
+        });
+        
+        // 초기 로드 시 빠른 입력 버튼 업데이트
+        if (label && CUSTOM_FIELD_TEMPLATES[label]) {
+            updateQuickValueButtons(index, label);
+        }
+    }
+}
+
+// 새로운 항목 추가 (헤더 버튼에서 호출)
+function addNewCustomFieldRow() {
+    addCustomFieldRow('', '', true);
+}
+
+// 항목 편집 모드 토글 (수정 ↔ 저장)
+function toggleEditMode(index) {
+    const row = document.querySelector(`[data-index="${index}"]`);
+    if (!row) return;
+    
+    const isEditable = row.getAttribute('data-editable') === 'true';
+    const labelInput = row.querySelector('.custom-field-label');
+    const valueInput = row.querySelector('.custom-field-value');
+    const actionBtn = row.querySelector('[data-action-btn]');
+    
+    if (isEditable) {
+        // 현재 편집 모드 → 저장하고 읽기 모드로
+        row.setAttribute('data-editable', 'false');
+        labelInput.disabled = true;
+        valueInput.disabled = true;
+        
+        // 버튼 변경: 저장 → 수정
+        if (actionBtn) {
+            actionBtn.style.backgroundColor = '#0d6efd';
+            actionBtn.style.borderColor = '#0d6efd';
+            actionBtn.title = '수정';
+            actionBtn.innerHTML = '<i class="fas fa-edit"></i>';
+        }
+        
+        // 빠른 입력 버튼 숨김
+        const buttonsContainer = row.querySelector(`[id^="quickValueButtons"]`);
+        if (buttonsContainer) {
+            buttonsContainer.style.display = 'none';
+        }
+        
+        updateCustomFieldsSummary();
+    } else {
+        // 현재 읽기 모드 → 편집 모드로
+        row.setAttribute('data-editable', 'true');
+        labelInput.disabled = false;
+        valueInput.disabled = false;
+        
+        // 버튼 변경: 수정 → 저장
+        if (actionBtn) {
+            actionBtn.style.backgroundColor = '#28a745';
+            actionBtn.style.borderColor = '#28a745';
+            actionBtn.title = '저장';
+            actionBtn.innerHTML = '<i class="fas fa-save"></i>';
+        }
+        
+        // 빠른 입력 버튼 표시
+        const currentLabel = labelInput.value;
+        if (currentLabel && CUSTOM_FIELD_TEMPLATES[currentLabel]) {
+            const buttonsContainer = row.querySelector(`[id^="quickValueButtons"]`);
+            if (buttonsContainer) {
+                buttonsContainer.style.display = 'flex';
+                const buttonId = buttonsContainer.id.replace('quickValueButtons', '');
+                updateQuickValueButtons(parseInt(buttonId), currentLabel);
+            }
+        }
+        
+        // 이벤트 리스너 등록 (한 번만)
+        if (!labelInput.hasAttribute('data-listener-added')) {
+            labelInput.addEventListener('input', function() {
+                const selectedKey = this.value;
+                const buttonId = row.querySelector(`[id^="quickValueButtons"]`).id.replace('quickValueButtons', '');
+                updateQuickValueButtons(parseInt(buttonId), selectedKey);
+                
+                if (selectedKey && !valueInput.value && CUSTOM_FIELD_TEMPLATES[selectedKey]) {
+                    valueInput.value = CUSTOM_FIELD_TEMPLATES[selectedKey][0];
+                }
+                
+                updateCustomFieldsSummary();
+            });
+            labelInput.setAttribute('data-listener-added', 'true');
+        }
+        
+        if (!valueInput.hasAttribute('data-listener-added')) {
+            valueInput.addEventListener('input', function() {
+                updateCustomFieldsSummary();
+            });
+            valueInput.setAttribute('data-listener-added', 'true');
+        }
+    }
+}
+
+// 템플릿 선택 함수는 이제 select의 change 이벤트로 대체되어 삭제됨
+
+// 빠른 입력 버튼 업데이트
+function updateQuickValueButtons(index, templateKey) {
+    const buttonsContainer = document.getElementById(`quickValueButtons${index}`);
+    if (!buttonsContainer) return;
+    
+    if (CUSTOM_FIELD_TEMPLATES[templateKey]) {
+        buttonsContainer.style.display = 'flex';
+        buttonsContainer.innerHTML = CUSTOM_FIELD_TEMPLATES[templateKey].map((text, idx) => `
+            <button type="button" 
+                    class="btn btn-outline-secondary btn-sm" 
+                    onclick="insertCustomFieldValue(${index}, '${text.replace(/'/g, "\\'")}')"
+                    style="font-size: 0.7rem; padding: 0.3rem 0.6rem; white-space: normal; text-align: left; line-height: 1.3;">
+                <i class="fas fa-plus-circle me-1"></i>${text}
+            </button>
+        `).join('');
+    } else {
+        buttonsContainer.style.display = 'none';
+        buttonsContainer.innerHTML = '';
+    }
+}
+
+// 내용 입력 (빠른 입력 버튼 클릭 시)
+function insertCustomFieldValue(index, value) {
+    const row = document.querySelector(`[data-index="${index}"]`);
+    if (!row) return;
+    
+    const valueTextarea = row.querySelector('.custom-field-value');
+    valueTextarea.value = value;
+}
+
+// 맞춤항목 행 제거
+function removeCustomFieldRow(index) {
+    const container = document.getElementById('customFieldsContainer');
+    
+    const row = document.querySelector(`[data-index="${index}"]`);
+    if (row) {
+        row.remove();
+        updateCustomFieldsSummary();
+        updateCustomFieldCount();
+        
+        // 남은 행의 - 버튼 표시/숨김 처리
+        const remainingRows = container.querySelectorAll('.custom-field-row');
+        if (remainingRows.length === 0) {
+            // 모든 항목이 삭제되면 요약 업데이트
+            updateCustomFieldsSummary();
+        } else if (remainingRows.length === 1) {
+            // 1개만 남았을 때도 - 버튼 표시 (모두 삭제 가능)
+            const firstRemoveBtn = remainingRows[0].querySelector('[data-remove-btn]');
+            if (firstRemoveBtn) {
+                firstRemoveBtn.style.display = '';
+            }
+        } else {
+            // 2개 이상일 때 모든 - 버튼 표시
+            remainingRows.forEach(r => {
+                const removeBtn = r.querySelector('[data-remove-btn]');
+                if (removeBtn) {
+                    removeBtn.style.display = '';
+                }
+            });
+        }
+    }
+}
+
+// 맞춤항목 개수 업데이트 (10개 제한 체크용)
+function updateCustomFieldCount() {
+    const container = document.getElementById('customFieldsContainer');
+    const count = container.children.length;
+    
+    // + 버튼들을 모두 찾아서 10개 제한 적용
+    const addButtons = document.querySelectorAll('[data-action-btn]');
+    addButtons.forEach(btn => {
+        // + 버튼인지 확인 (onclick에 addNewCustomFieldRow 포함)
+        const onclick = btn.getAttribute('onclick');
+        if (onclick && onclick.includes('addNewCustomFieldRow')) {
+            if (count >= 10) {
+                btn.disabled = true;
+                btn.title = '최대 10개까지 추가 가능합니다';
+            } else {
+                btn.disabled = false;
+                btn.title = '항목 추가';
+            }
+        }
+    });
+}
+
+// 맞춤항목 요약 업데이트
+function updateCustomFieldsSummary() {
+    const container = document.getElementById('customFieldsContainer');
+    const summary = document.getElementById('custom_fieldsSummary');
+    
+    if (!container || !summary) return;
+    
+    const rows = container.querySelectorAll('.custom-field-row');
+    const count = rows.length;
+    
+    const bgColor = '#d4edda';
+    const borderColor = '#28a745';
+    const iconColor = 'text-success';
+    const textColor = '#155724';
+    
+    if (count === 0) {
+        // 내용이 없으면 안내 문구 (카드 스타일)
+        summary.innerHTML = `
+            <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-tags ${iconColor} me-2"></i>
+                    <small style="color: ${textColor}; font-weight: 500;">아래 <strong>추가</strong> 버튼을 클릭하여 항목을 추가하세요 (조리법, 반품 교환, 알레르기 혼입 등)</small>
+                </div>
+            </div>
+        `;
+    } else {
+        // 내용이 있으면 요약 (카드 스타일)
+        const summaryItems = [];
+        rows.forEach((row, index) => {
+            if (index < 3) { // 최대 3개까지만 표시
+                const label = row.querySelector('.custom-field-label').value.trim();
+                const value = row.querySelector('.custom-field-value').value.trim();
+                if (label && value) {
+                    const shortValue = value.length > 20 ? value.substring(0, 20) + '...' : value;
+                    summaryItems.push(`<strong>${label}</strong>: ${shortValue}`);
+                }
+            }
+        });
+        
+        if (summaryItems.length > 0) {
+            let summaryText = summaryItems.join(' | ');
+            if (count > 3) {
+                summaryText += ` <span>외 ${count - 3}개</span>`;
+            }
+            summary.innerHTML = `
+                <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-check-circle ${iconColor} me-2"></i>
+                        <small style="color: ${textColor}; font-weight: 500;">${summaryText}</small>
+                    </div>
+                </div>
+            `;
+        } else {
+            summary.innerHTML = `
+                <div class="border rounded p-2" style="background-color: ${bgColor}; border-color: ${borderColor} !important; border-left: 4px solid ${borderColor} !important;">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-tags ${iconColor} me-2"></i>
+                        <small style="color: ${textColor}; font-weight: 500;">항목명과 내용을 입력하거나 템플릿을 선택하세요</small>
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+
+// 폼 제출 전 맞춤항목 데이터를 JSON으로 변환
+function serializeCustomFields() {
+    const container = document.getElementById('customFieldsContainer');
+    if (!container) return;
+    
+    const rows = container.querySelectorAll('.custom-field-row');
+    const customFields = [];
+    
+    rows.forEach((row) => {
+        const label = row.querySelector('.custom-field-label').value.trim();
+        const value = row.querySelector('.custom-field-value').value.trim();
+        
+        if (label && value) {
+            customFields.push({ label, value });
+        }
+    });
+    
+    const jsonString = JSON.stringify(customFields);
+    const hiddenInput = document.getElementById('custom_fields_json');
+    if (hiddenInput) {
+        hiddenInput.value = jsonString;
+    }
+}
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initCustomFields();
+    
+    // 주의사항과 기타표시 요약 초기화
+    updateContentSummary('cautions');
+    updateContentSummary('additional_info');
+    
+    // 전체 열기/닫기 버튼 상태 초기화
+    initToggleAllButton();
+});
+
+// 전체 열기/닫기 버튼 초기 상태 설정
+function initToggleAllButton() {
+    const btn = document.getElementById('toggleAllBtn');
+    if (!btn) return;
+    
+    const sections = ['cautions', 'additional_info', 'custom_fields'];
+    
+    // 현재 상태 확인: 모두 펼쳐져 있는지 체크
+    const allExpanded = sections.every(fieldName => {
+        const content = document.getElementById(fieldName + 'Content');
+        return content && content.style.display !== 'none';
+    });
+    
+    if (allExpanded) {
+        // 펼쳐진 상태면 닫기 버튼 표시
+        btn.innerHTML = '<i class="fas fa-chevron-up me-1"></i>전체 닫기';
+        btn.title = '모든 섹션 접기';
+    } else {
+        // 접힌 상태면 열기 버튼 표시
+        btn.innerHTML = '<i class="fas fa-chevron-down me-1"></i>전체 열기';
+        btn.title = '모든 섹션 펼치기';
+    }
+}
