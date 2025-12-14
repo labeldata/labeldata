@@ -204,6 +204,13 @@ function updateSummarySection() {
         allergenGmoText.push(`<span class="allergen-gmo-link" onclick="showAllergenGmoDetail('gmo', 'all')">전체</span> : ${gmoTexts.join(', ')}`);
     }
     document.getElementById('summary-allergens-gmo').innerHTML = allergenGmoText.length > 0 ? allergenGmoText.join(' / ') : '없음';
+    
+    // 저장 시 사용할 요약 정보 반환
+    return {
+        summaryDisplayNames: summaryDisplayNames.filter(Boolean),
+        allergens: Array.from(allergenCount.keys()),
+        gmos: Array.from(gmoCount.keys())
+    };
 }
 
 // 문서 로드시 초기화 코드
@@ -595,13 +602,10 @@ function saveIngredients() {
         return;
     }
 
+    // updateSummarySection을 호출하여 요약 정보 가져오기 (중복 코드 제거)
+    const summaryInfo = updateSummarySection();
+    
     const ingredients = [];
-    const displayNames = [];
-    const allergensSet = new Set();
-    const gmosSet = new Set();
-
-    const summaryParts = [];
-    const summaryDisplayNames = [];    
     document.querySelectorAll('#ingredient-body tr').forEach((row, index) => {
         const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
         const foodCategoryInput = row.querySelector('.food-category-input');
@@ -610,7 +614,6 @@ function saveIngredients() {
         const foodType = row.querySelector('.food-type-select')?.value.trim() ||
                          row.querySelector('.form-control[readonly].modal-readonly-field:not(.ingredient-name-input):not(.display-name-input)')?.value.trim() || '';
         const ratioStr = row.querySelector('.ratio-input')?.value.trim();
-        const ratio = parseFloat(ratioStr);
         const allergenInput = row.querySelector('.allergen-input')?.value.trim() || '';
         const gmoInput = row.querySelector('.gmo-input')?.value.trim() || '';
         
@@ -620,89 +623,9 @@ function saveIngredients() {
             summaryType = row.querySelector('.summary-type-radio:checked')?.value || 'foodType';
         }
         
-        const summaryTypeFlag = summaryType === 'foodType' ? 'Y' : 'N'; // DB 저장용 플래그 변환
+        const summaryTypeFlag = summaryType === 'foodType' ? 'Y' : 'N';
         
         let displayName = displayNameRaw;
-
-        allergenInput.split(',').map(item => item.trim()).filter(Boolean).forEach(item => allergensSet.add(item));
-        gmoInput.split(',').map(item => item.trim()).filter(Boolean).forEach(item => gmosSet.add(item));
-        if (displayName) displayNames.push(displayName);        // updateSummarySection과 동일한 로직 적용
-        if (foodCategory === 'additive') {
-            summaryDisplayNames.push(displayName);
-        } else if (foodCategory === 'agricultural') {
-            if (ratioStr && !isNaN(ratio) && ratio >= 5) {
-                let items = [];
-                let count = 0;
-                let str = displayName;
-                let i = 0;
-                let len = str.length;
-                let buffer = '';
-                let inParen = 0;
-                while (i < len && count < 5) {
-                    let ch = str[i];
-                    if (ch === '(' || ch === '[' || ch === '{') {
-                        inParen++;
-                        buffer += ch;
-                    } else if (ch === ')' || ch === ']' || ch === '}') {
-                        inParen = Math.max(0, inParen - 1);
-                        buffer += ch;
-                    } else if (ch === ',' && inParen === 0) {
-                        if (buffer.trim()) {
-                            items.push(buffer.trim());
-                            count += 1;
-                        }
-                        buffer = '';
-                    } else {
-                        buffer += ch;
-                    }
-                    i++;
-                }
-                if (count < 5 && buffer.trim()) {
-                    items.push(buffer.trim());
-                }
-                summaryDisplayNames.push(`${foodType}[${items.join(', ')}]`);
-            } else {
-                summaryDisplayNames.push(foodType || displayName);
-            }
-        } else if (foodCategory === '정제수') {
-            summaryDisplayNames.push(foodType || displayName);
-        } else {
-            // 가공식품 처리
-            if (ratioStr && !isNaN(ratio) && ratio >= 5) {
-                let items = [];
-                let count = 0;
-                let str = displayName;
-                let i = 0;
-                let len = str.length;
-                let buffer = '';
-                let inParen = 0;
-                while (i < len && count < 5) {
-                    let ch = str[i];
-                    if (ch === '(' || ch === '[' || ch === '{') {
-                        inParen++;
-                        buffer += ch;
-                    } else if (ch === ')' || ch === ']' || ch === '}') {
-                        inParen = Math.max(0, inParen - 1);
-                        buffer += ch;
-                    } else if (ch === ',' && inParen === 0) {
-                        if (buffer.trim()) {
-                            items.push(buffer.trim());
-                            count += 1;
-                        }
-                        buffer = '';
-                    } else {
-                        buffer += ch;
-                    }
-                    i++;
-                }
-                if (count < 5 && buffer.trim()) {
-                    items.push(buffer.trim());
-                }
-                summaryDisplayNames.push(`${foodType}[${items.join(', ')}]`);
-            } else {
-                summaryDisplayNames.push(foodType || displayName);
-            }
-        }
 
         const ingredient = {
             ingredient_name: ingredientName || "",
@@ -714,17 +637,20 @@ function saveIngredients() {
             gmo: gmoInput,
             origin: row.querySelector('.origin-cell')?.textContent.trim() || "",
             my_ingredient_id: ingredientName !== '정제수' ? row.querySelector('.my-ingredient-id')?.value.trim() || "" : "",
-            summary_type: summaryType, // 저장할 객체에 추가
-            summary_type_flag: summaryTypeFlag, // DB 저장용 Y/N 플래그 추가
+            summary_type: summaryType,
+            summary_type_flag: summaryTypeFlag,
             order: index + 1
         };
         ingredients.push(ingredient);
     });
 
-    const allergens = Array.from(allergensSet).join(', ');
-    const gmos = Array.from(gmosSet).join(', ');
+    // 요약 정보에서 원재료명만 추출 (대괄호 부분 제거)
+    const ingredientsOnly = summaryInfo.summaryDisplayNames.join(', ') || '없음';
+    const allergens = summaryInfo.allergens.join(', ');
+    const gmos = summaryInfo.gmos.join(', ');
+    
     const summaryText = [
-        `[원재료명] ${summaryDisplayNames.join(', ') || '없음'}`,
+        ingredientsOnly,
         allergens ? `[알레르기 성분: ${allergens}]` : '',
         gmos ? `[GMO 성분: ${gmos}]` : ''
     ].filter(Boolean).join('\n');
@@ -754,6 +680,7 @@ function saveIngredients() {
     .then(data => {
         if (data.success) {
             if (window.opener) {
+                // 원재료명(표로입력)만 업데이트
                 const rawmtrlNmField = window.opener.document.querySelector('textarea[name="rawmtrl_nm"]');
                 if (rawmtrlNmField) {
                     rawmtrlNmField.value = summaryText;
@@ -762,14 +689,7 @@ function saveIngredients() {
                     }
                 }
 
-                const rawmtrlNmDisplayField = window.opener.document.querySelector('textarea[name="rawmtrl_nm_display"]');
-                if (rawmtrlNmDisplayField) {
-                    rawmtrlNmDisplayField.value = summaryText;
-                    if (typeof window.opener.updateTextareaHeight === 'function') {
-                        window.opener.updateTextareaHeight(rawmtrlNmDisplayField);
-                    }
-                }
-
+                // 표로입력 체크박스만 체크
                 const checkbox = window.opener.document.getElementById('chk_rawmtrl_nm');
                 if (checkbox) {
                     checkbox.checked = true;
@@ -778,17 +698,8 @@ function saveIngredients() {
                         hiddenField.value = 'Y';
                     }
                 }
-
-                const displayCheckbox = window.opener.document.getElementById('chk_rawmtrl_nm_display');
-                if (displayCheckbox) {
-                    displayCheckbox.checked = true;
-                    const displayHiddenField = window.opener.document.querySelector('input[name="chckd_rawmtrl_nm_display"]');
-                    if (displayHiddenField) {
-                        displayHiddenField.value = 'Y';
-                    }
-                }
-
-                window.opener.location.reload();
+                
+                // 원재료명(최종표시)는 사용자가 모달에서 수동으로만 업데이트
             }
             alert('원재료 정보가 성공적으로 저장되었습니다.');
             window.close();

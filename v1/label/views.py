@@ -1251,6 +1251,8 @@ def search_ingredient_add_row(request):
             'ingredient_display_name',
             'my_ingredient_id',
             'food_category',  # 식품 구분 필드 추가
+            'allergens',  # 알레르기 정보 추가
+            'gmo',  # GMO 정보 추가
         ))
 
         if ingredients:

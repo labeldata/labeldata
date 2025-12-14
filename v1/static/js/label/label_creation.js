@@ -134,25 +134,178 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    // 원재료명(표로입력) 필드 클릭 시 원재료명 팝업 열기
+    // 원재료명(표로입력) 필드 클릭 시 선택 모달 표시
     const rawmtrlTextarea = document.getElementById('rawmtrl_nm');
     if (rawmtrlTextarea) {
       // 원재료명 필드는 항상 클릭 가능하도록 disabled 속성 강제 제거
       rawmtrlTextarea.disabled = false;
       rawmtrlTextarea.classList.remove('disabled-textarea');
       
-      rawmtrlTextarea.addEventListener('click', function(e) {
+      rawmtrlTextarea.addEventListener('click', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         if (!ingredientPopupOpen) {
-          ingredientPopupOpen = true;
-          handleIngredientPopup();
-          setTimeout(() => {
-            ingredientPopupOpen = false;
-          }, 1000);
+          showRawmtrlActionModal();
         }
       });
     }
   }
+
+  // 원재료명 필드 액션 선택 모달
+  function showRawmtrlActionModal() {
+    const rawmtrlValue = document.getElementById('rawmtrl_nm').value.trim();
+    
+    if (!rawmtrlValue) {
+      // 내용이 없으면 바로 팝업 열기
+      openIngredientPopupFromModal();
+      return;
+    }
+    
+    // 선택 모달 표시
+    const modal = document.createElement('div');
+    modal.className = 'modal fade show';
+    modal.style.display = 'block';
+    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">원재료명 작업 선택</h5>
+            <button type="button" class="btn-close" data-action="close"></button>
+          </div>
+          <div class="modal-body">
+            <p>원재료명 필드에 대해 어떤 작업을 하시겠습니까?</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-action="close">
+              <i class="fas fa-times me-1"></i>취소
+            </button>
+            <button type="button" class="btn btn-primary" data-action="copy">
+              <i class="fas fa-copy me-1"></i>원재료명(최종표시)로 복사
+            </button>
+            <button type="button" class="btn btn-success" data-action="popup">
+              <i class="fas fa-table me-1"></i>원재료 팝업 열기
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // 이벤트 위임으로 버튼 클릭 처리
+    modal.addEventListener('click', (e) => {
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (!action) {
+        // 백드롭 클릭 시 모달 닫기
+        if (e.target === modal) {
+          closeModal();
+        }
+        return;
+      }
+      
+      switch(action) {
+        case 'copy':
+          copyRawmtrlToDisplay();
+          break;
+        case 'popup':
+          openIngredientPopupFromModal();
+          break;
+      }
+      
+      closeModal();
+    });
+    
+    // ESC 키로 모달 닫기
+    const closeOnEsc = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+      }
+    };
+    
+    const closeModal = () => {
+      modal.remove();
+      document.removeEventListener('keydown', closeOnEsc);
+    };
+    
+    document.addEventListener('keydown', closeOnEsc);
+    document.body.appendChild(modal);
+  }
+
+  // 원재료 팝업 열기 (모달에서 호출)
+  function openIngredientPopupFromModal() {
+    // 플래그를 설정하여 중복 클릭 방지
+    if (ingredientPopupOpen) return;
+    
+    ingredientPopupOpen = true;
+    handleIngredientPopup();
+    
+    // 팝업이 열린 후 플래그 해제
+    setTimeout(() => {
+      ingredientPopupOpen = false;
+    }, 1000);
+  }
+  
+  // 팝업에서 접근 가능하도록 window 객체에도 할당
+  window.openIngredientPopupFromModal = openIngredientPopupFromModal;
+
+  // 원재료명 복사 및 알레르기 분리
+  function copyRawmtrlToDisplay() {
+    const rawmtrlTextarea = document.getElementById('rawmtrl_nm');
+    const displayTextarea = document.getElementById('rawmtrl_nm_display_textarea');
+    
+    if (!rawmtrlTextarea || !displayTextarea) return;
+    
+    let rawmtrlText = rawmtrlTextarea.value.trim();
+    
+    if (!rawmtrlText) {
+      alert('복사할 내용이 없습니다.');
+      return;
+    }
+    
+    // 알레르기 성분 추출 패턴: [알레르기 성분 : XX, YY] 또는 [알레르기성분:XX,YY]
+    const allergenPattern = /\[알레르기\s*성분\s*[：:]\s*([^\]]+)\]/gi;
+    const allergenMatches = [...rawmtrlText.matchAll(allergenPattern)];
+    
+    // 알레르기 성분이 있으면 추출하고 제거
+    if (allergenMatches.length > 0) {
+      const extractedAllergens = new Set();
+      
+      allergenMatches.forEach(match => {
+        const allergenText = match[1];
+        // 쉼표나 슬래시로 분리
+        const allergens = allergenText.split(/[,/、]/).map(a => a.trim()).filter(a => a);
+        allergens.forEach(allergen => extractedAllergens.add(allergen));
+        
+        // 원재료명에서 알레르기 성분 부분 제거
+        rawmtrlText = rawmtrlText.replace(match[0], '').trim();
+      });
+      
+      // 알레르기 관리에 추가 (기존 성분 삭제 후 새로 추가)
+      if (extractedAllergens.size > 0) {
+        selectedIngredientAllergensLabel.clear();
+        extractedAllergens.forEach(allergen => {
+          selectedIngredientAllergensLabel.set(allergen, 'table');
+        });
+        
+        updateAllergenTagsLabel();
+        
+        const allergenList = Array.from(extractedAllergens).join(', ');
+        showToastMessage(`알레르기 성분이 추가되었습니다: ${allergenList}`, 'success');
+      }
+    }
+    
+    // 정리된 원재료명을 최종표시에 복사
+    displayTextarea.value = rawmtrlText;
+    updateTextareaHeight(displayTextarea);
+    
+    // 체크박스 자동 체크
+    const checkbox = document.getElementById('chk_rawmtrl_nm_display');
+    if (checkbox) checkbox.checked = true;
+    
+    showToastMessage('원재료명(최종표시)로 복사되었습니다.', 'success');
+  }
+  
+  // 팝업에서 접근 가능하도록 window 객체에도 할당
+  window.copyRawmtrlToDisplay = copyRawmtrlToDisplay;
 
   // ------------------ 라벨 관리 기능 ------------------
   window.copyLabel = function (labelId) {
@@ -182,7 +335,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.handleIngredientPopup = function () {
     const labelId = document.getElementById('label_id')?.value || '';
-    openPopup(`/label/ingredient-popup/?label_id=${labelId}`, 'IngredientPopup', 1400, 900);
+    const url = `/label/ingredient-popup/?label_id=${labelId}`;
+    
+    openPopup(url, 'IngredientPopup', 1400, 900);
+    
     const rawmtrlSection = document.getElementById('rawmtrl_nm_section');
     if (rawmtrlSection?.classList.contains('collapse')) {
       rawmtrlSection.classList.add('show');
@@ -856,15 +1012,11 @@ document.addEventListener('DOMContentLoaded', function () {
       checkbox.dataset.initialized = 'true';
       const fieldName = checkbox.id.replace('chk_', '');
       
-      // [수정] 원재료명(참고) 필드는 항상 비활성화하고 체크박스는 숨김
+      // [수정] 원재료명(참고) 필드는 체크박스만 숨김, textarea는 클릭 가능하도록 유지
       if (fieldName === 'rawmtrl_nm') {
         checkbox.style.display = 'none'; // 체크박스를 화면에 보이지 않게 처리
         checkbox.disabled = true; // 기능적으로도 비활성화 상태 유지
-        const textarea = document.querySelector('textarea[name="rawmtrl_nm"]');
-        if (textarea) {
-          textarea.disabled = true;
-          textarea.classList.add('disabled-textarea');
-        }
+        // textarea는 클릭 이벤트를 위해 활성화 상태 유지
         return;
       }        // 내용량 필드는 특별 처리 (텍스트 표시와 입력 필드)
       if (fieldName === 'content_weight') {
@@ -993,6 +1145,13 @@ document.addEventListener('DOMContentLoaded', function () {
     initFoodTypeFiltering();
     initAutoExpand();
     initFieldClickEvents();
+    
+    // initCheckboxFieldToggle 이후 rawmtrl_nm 필드 강제 활성화
+    const rawmtrlTextarea = document.getElementById('rawmtrl_nm');
+    if (rawmtrlTextarea) {
+      rawmtrlTextarea.disabled = false;
+      rawmtrlTextarea.classList.remove('disabled-textarea');
+    }
 
     //applyDbCheckboxStates();
 
@@ -1790,8 +1949,9 @@ function switchToHome() {
 
 // ==================== 알레르기 관리 기능 (Label Creation) ====================
 
-// 알레르기 데이터 저장소
-let selectedIngredientAllergensLabel = new Set();
+// 알레르기 데이터 저장소 (Map: allergen -> source)
+// source: 'auto' (자동감지), 'manual' (사용자선택), 'table' (표입력)
+let selectedIngredientAllergensLabel = new Map();
 let selectedCrossContaminationAllergensLabel = new Set();
 
 // 알레르기 모듈 토글
@@ -1864,7 +2024,7 @@ function detectAllergensLabel() {
     }
     
     // 기존 선택된 알레르기와 병합
-    detectedAllergens.forEach(a => selectedIngredientAllergensLabel.add(a));
+    detectedAllergens.forEach(a => selectedIngredientAllergensLabel.set(a, 'auto'));
     
     // UI 업데이트
     updateAllergenTagsLabel();
@@ -1883,9 +2043,9 @@ function manualDetectAllergensLabel() {
     updateAllergenButtonStatesLabel();
 }
 
-// 알레르기 태그 추가
+// 알레르기 태그 추가 (출처: 'manual' - 사용자 선택)
 function addAllergenTagLabel(allergen) {
-    selectedIngredientAllergensLabel.add(allergen);
+    selectedIngredientAllergensLabel.set(allergen, 'manual');
     updateAllergenTagsLabel();
 }
 
@@ -1902,6 +2062,28 @@ function updateAllergenTagsLabel() {
     
     if (!container) return;
     
+    // 알레르기 태그 스타일 생성 헬퍼 함수
+    const getAllergenStyle = (source) => {
+        const styles = {
+            auto: {
+                bgColor: 'background-color: #fff3cd; color: #856404; border: 1px solid #ffc107;',
+                icon: '<i class="fas fa-robot me-1"></i>',
+                title: '자동 감지됨'
+            },
+            manual: {
+                bgColor: 'background-color: #cfe2ff; color: #084298; border: 1px solid #0d6efd;',
+                icon: '<i class="fas fa-hand-pointer me-1"></i>',
+                title: '수동 추가됨'
+            },
+            table: {
+                bgColor: 'background-color: #d1e7dd; color: #0f5132; border: 1px solid #198754;',
+                icon: '<i class="fas fa-table me-1"></i>',
+                title: '표에서 요약됨'
+            }
+        };
+        return styles[source] || styles.manual;
+    };
+    
     if (selectedIngredientAllergensLabel.size === 0) {
         container.innerHTML = '<span class="text-muted"><i class="fas fa-info-circle me-1"></i>원재료명(최종표시)을 입력하면 자동으로 감지됩니다</span>';
         if (summary) {
@@ -1909,31 +2091,33 @@ function updateAllergenTagsLabel() {
         }
     } else {
         container.innerHTML = '';
-        selectedIngredientAllergensLabel.forEach(allergen => {
+        selectedIngredientAllergensLabel.forEach((source, allergen) => {
+            const style = getAllergenStyle(source);
             const tag = document.createElement('span');
-            tag.className = 'badge bg-danger me-1 mb-1';
-            tag.style.fontSize = '0.8rem';
-            tag.style.padding = '0.3em 0.5em';
-            tag.innerHTML = `${allergen} <i class="fas fa-times ms-1" style="cursor: pointer;" onclick="removeAllergenTagLabel('${allergen}')"></i>`;
+            tag.className = 'badge me-1 mb-1';
+            tag.style.cssText = `cursor: pointer; font-size: 0.8rem; padding: 0.3em 0.5em; ${style.bgColor}`;
+            tag.title = `${style.title} - 클릭하여 제거`;
+            tag.innerHTML = `${style.icon}${allergen} <i class="fas fa-times ms-1" style="cursor: pointer;" onclick="removeAllergenTagLabel('${allergen}')"></i>`;
             container.appendChild(tag);
         });
         
         // 헤더 요약에도 모든 배지 표시 (접었을 때 보이는 부분)
         if (summary) {
             summary.innerHTML = '';
-            selectedIngredientAllergensLabel.forEach(allergen => {
+            selectedIngredientAllergensLabel.forEach((source, allergen) => {
+                const style = getAllergenStyle(source);
                 const tag = document.createElement('span');
-                tag.className = 'badge bg-danger me-1 mb-1';
-                tag.style.fontSize = '0.85rem';
-                tag.style.padding = '0.35em 0.6em';
-                tag.textContent = allergen;
+                tag.className = 'badge me-1 mb-1';
+                tag.style.cssText = `font-size: 0.85rem; padding: 0.35em 0.6em; ${style.bgColor}`;
+                tag.innerHTML = `${style.icon}${allergen}`;
                 summary.appendChild(tag);
             });
         }
     }
     
-    // hidden input 업데이트
-    document.getElementById('selected_ingredient_allergens_label').value = Array.from(selectedIngredientAllergensLabel).join(',');
+    // hidden input 업데이트 (allergen 이름만 추출)
+    const allergenNames = Array.from(selectedIngredientAllergensLabel.keys());
+    document.getElementById('selected_ingredient_allergens_label').value = allergenNames.join(',');
     
     // 제조시설 혼입 버튼 상태 업데이트 (중복 방지)
     updateAllergenButtonStatesLabel();
@@ -2108,7 +2292,8 @@ function loadSavedAllergensLabel() {
     const ingredientInput = document.getElementById('selected_ingredient_allergens_label');
     if (ingredientInput && ingredientInput.value) {
         const allergens = ingredientInput.value.split(',').filter(a => a.trim() !== '');
-        allergens.forEach(a => selectedIngredientAllergensLabel.add(a.trim()));
+        // 저장된 데이터는 출처가 불명확하므로 'manual'로 처리
+        allergens.forEach(a => selectedIngredientAllergensLabel.set(a.trim(), 'manual'));
         updateAllergenTagsLabel();
     }
     
