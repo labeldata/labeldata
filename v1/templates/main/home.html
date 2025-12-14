@@ -1054,6 +1054,16 @@ html, body {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <script src="{% static 'js/label/constants.js' %}"></script>
+
+<script>
+// 국가 목록을 JavaScript에서 사용할 수 있도록 전역 변수로 설정
+window.countryListForBold = [
+    {% for country in countries %}
+    "{{ country.country_name_ko|escapejs }}"{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+</script>
+
 <script src="{% static 'js/home_demo.js' %}"></script>
 
 {% if current_label %}

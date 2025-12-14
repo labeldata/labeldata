@@ -396,6 +396,22 @@ function generatePreviewHTML(data) {
     return html;
 }
 
+// 국가명을 굵게 표시하는 함수 (상세모드와 동일)
+function boldCountryNames(text, countries) {
+    if (!text || !countries || countries.length === 0) return text;
+    let processedText = text;
+    // 긴 국가명부터 처리 (예: "대한민국" 먼저, "한국" 나중에)
+    const sortedCountries = countries.sort((a, b) => b.length - a.length);
+    sortedCountries.forEach(country => {
+        if (country) {
+            // 국가명 + "산" 패턴 매칭 (ex: "대한민국", "대한민국산")
+            const regex = new RegExp(`(${country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s*산)?)`, 'gi');
+            processedText = processedText.replace(regex, '<strong>$1</strong>');
+        }
+    });
+    return processedText;
+}
+
 function generateTableRow(label, value, multiline = false, separator = false) {
     if (!value || !value.trim()) return '';
 
@@ -406,8 +422,15 @@ function generateTableRow(label, value, multiline = false, separator = false) {
         const items = value.split('\n').filter(item => item.trim());
         valueHtml = items.join(' | ');
     } else if (multiline && label === '원재료명') {
-        // 원재료명: 알레르기 물질 정보 추가
-        valueHtml = value.replace(/\n/g, '<br>');
+        // 원재료명: 국가명 굵게 처리 + 알레르기 물질 정보 추가
+        let processedValue = value.replace(/\n/g, '<br>');
+        
+        // 국가명 굵게 표시
+        if (window.countryListForBold && window.countryListForBold.length > 0) {
+            processedValue = boldCountryNames(processedValue, window.countryListForBold);
+        }
+        
+        valueHtml = processedValue;
         
         // 감지된 알레르기 물질 가져오기 (constants.js의 키워드 활용)
         const detectedAllergens = getDetectedAllergens();
@@ -416,6 +439,13 @@ function generateTableRow(label, value, multiline = false, separator = false) {
             const allergenText = detectedAllergens.join(', ');
             // 미리보기 팝업과 동일한 형식: "xx, xx 함유" (검은색 배경에 하얀색 글씨)
             valueHtml += `<br><span style="background-color: #000; color: #fff; font-weight: 600; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">${allergenText} 함유</span>`;
+        }
+    } else if (label === '원산지') {
+        // 원산지: 국가명 굵게 표시
+        if (window.countryListForBold && window.countryListForBold.length > 0) {
+            valueHtml = boldCountryNames(value, window.countryListForBold);
+        } else {
+            valueHtml = value;
         }
     } else if (multiline) {
         // 기타 멀티라인: 줄바꿈 유지
