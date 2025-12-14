@@ -39,6 +39,7 @@ urlpatterns = [
     path('delete-my-ingredient/<int:ingredient_id>/', views.delete_my_ingredient, name='delete_my_ingredient'),
     path('save-ingredients-to-label/<int:label_id>/', views.save_ingredients_to_label, name='save_ingredients_to_label'),
     path('search-ingredient-add-row/', views.search_ingredient_add_row, name='search_ingredient_add_row'),
+    path('quick-register-ingredient/', views.quick_register_ingredient, name='quick_register_ingredient'),
     path('verify-ingredients/', views.verify_ingredients, name='verify_ingredients'),
     path('my-ingredient-table-partial/', views.my_ingredient_table_partial, name='my_ingredient_table_partial'),
     path('get-additive-regulation/', views.get_additive_regulation, name='get_additive_regulation'),

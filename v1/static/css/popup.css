@@ -252,6 +252,27 @@ label,
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
+/* 테이블 헤더 스타일 (부모창과 동일) */
+.styled-table th {
+  background-color: #e5e7eb;
+  color: #1f2937;
+  font-weight: 600;
+  padding: 10px 8px;
+  text-align: center;
+  border: 1px solid #d1d5db;
+  font-size: var(--font-size-base);
+  vertical-align: middle;
+}
+
+.styled-table th small {
+  font-size: 0.7rem;
+  opacity: 0.85;
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  color: #6b7280;
+}
+
 .styled-table th,
 .styled-table td {
   border: 1px solid var(--border-light);
@@ -317,85 +338,91 @@ label,
   word-break: break-word;
   line-height: 1.5;
   color: var(--text-primary);
+  font-size: 0.9rem;
 }
 
-/* Removed unused .modal-search-fixed styles */
-
-.modal-search-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-}
-
-.modal-search-bar .modal-title {
-  margin-bottom: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  white-space: nowrap;
-  margin-right: 12px;
-  color: var(--text-primary);
-  flex-shrink: 0;
-}
-
-.modal-search-bar .form-control,
-.modal-search-bar .form-select {
-  min-width: 90px;
-  width: 120px;
-  max-width: 130px;
-  height: 38px;
+/* 원료 검색 모달 스타일 */
+.modal-header .form-control,
+.modal-header .form-select {
   border-radius: 6px;
   border: 1px solid var(--border-color);
   transition: all 0.2s ease;
-  flex-shrink: 0;
+  font-size: 0.875rem;
 }
 
-/* 식품유형 선택박스 - 더 짧게 설정 */
-.modal-search-bar #modalSearchInputFoodCategory,
-.modal-search-bar #modalSearchInput3 {
-  min-width: 80px;
-  width: 100px;
-  max-width: 110px;
-}
-
-.modal-search-bar .form-control:focus,
-.modal-search-bar .form-select:focus {
+.modal-header .form-control:focus,
+.modal-header .form-select:focus {
   border-color: var(--secondary-color);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* Select2 테두리 통일 */
+.modal-header .select2-container .select2-selection--single {
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  height: 38px !important;
+}
+
+/* 식품유형 Select2 컨테이너 크기 제한 */
+.modal-header .select2-container {
+  width: 100px !important;
+  max-width: 100px !important;
+}
+
+.modal-header .select2-container--default .select2-selection--single .select2-selection__rendered {
+  line-height: 36px !important;
+  color: #1f2937 !important;
+}
+
+.modal-header .select2-container--default .select2-selection--single .select2-selection__placeholder {
+  color: #9ca3af !important;
+}
+
+.modal-header .select2-container--default.select2-container--focus .select2-selection--single {
+  border-color: var(--secondary-color) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
 .search-btn {
   height: 38px;
-  min-width: 55px;
-  width: 65px;
-  padding: 6px 8px;
+  min-width: 60px;
+  width: 70px;
+  padding: 6px 10px;
   border-radius: var(--modern-border-radius-sm);
   font-weight: 500;
   transition: all 0.2s ease;
-  font-size: 0.7rem !important;
+  font-size: 0.875rem !important;
   flex-shrink: 0;
 }
 
 .modal-close-btn {
   height: 38px;
-  min-width: 55px;
-  width: 65px;
-  padding: 6px 8px;
+  min-width: 60px;
+  width: 70px;
+  padding: 6px 10px;
   border: 1px solid var(--text-secondary);
   border-radius: var(--modern-border-radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-weight: 500;
   transition: all 0.2s ease;
-  font-size: 0.7rem !important;
+  font-size: 0.875rem !important;
   flex-shrink: 0;
 }
 
 .modal-close-btn:hover, .modal-close-btn:focus {
   background-color: var(--text-secondary);
   color: var(--bg-primary);
+}
+
+/* 검색 결과 헤더 스타일 */
+.search-result-header {
+  background-color: #e5e7eb;
+  color: #1f2937;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 15px;
+  margin-bottom: 10px;
 }
 
 /* Removed duplicate button styles and unused tab-content */
@@ -477,4 +504,38 @@ label,
 
 .ingredient-popup .popup-header {
   border-radius: 12px 12px 0 0;
+}
+
+/* 검색 결과 리스트 아이템 카드 스타일 */
+.list-group-item {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  padding: 16px;
+  background-color: white;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.list-group-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* 원재료 표시명 textarea 셀 내부 스타일 */
+.display-name-input {
+  min-height: 60px;
+  resize: vertical;
+  font-size: var(--font-size-small);
+  line-height: 1.4;
+}
+
+/* 라디오 버튼 컨테이너 개선 */
+.summary-type-radio {
+  cursor: pointer;
+}
+
+.summary-type-radio + label {
+  cursor: pointer;
+  user-select: none;
 }

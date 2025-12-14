@@ -1229,6 +1229,8 @@ def search_ingredient_add_row(request):
         food_type = data.get('food_type', '').strip()
         manufacturer = data.get('manufacturer', '').strip()
         food_category = data.get('food_category', '').strip()
+        allergen = data.get('allergen', '').strip()
+        gmo = data.get('gmo', '').strip()
         
         # 기존: qs = MyIngredient.objects.filter(user_id=request.user, delete_YN='N')
         qs = MyIngredient.objects.filter(delete_YN='N').filter(Q(user_id=request.user) | Q(user_id__isnull=True))
@@ -1242,6 +1244,10 @@ def search_ingredient_add_row(request):
             qs = qs.filter(bssh_nm__icontains=manufacturer)
         if food_category:
             qs = qs.filter(food_category=food_category)
+        if allergen:
+            qs = qs.filter(allergens__icontains=allergen)
+        if gmo:
+            qs = qs.filter(gmo__icontains=gmo)
         
         ingredients = list(qs.values(
             'prdlst_nm',
@@ -1259,6 +1265,54 @@ def search_ingredient_add_row(request):
             return JsonResponse({'success': True, 'ingredients': ingredients})
         else:
             return JsonResponse({'success': False, 'error': '검색 결과가 없습니다.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@login_required
+@csrf_exempt
+def quick_register_ingredient(request):
+    """빠른 원료 등록 API"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        ingredient_name = data.get('ingredient_name', '').strip()
+        display_name = data.get('display_name', '').strip()
+        food_category = data.get('food_category', '').strip()
+        food_type = data.get('food_type', '').strip()
+        manufacturer = data.get('manufacturer', '').strip()
+        report_no = data.get('report_no', '').strip()
+        allergens = data.get('allergens', '').strip()
+        gmo = data.get('gmo', '').strip()
+        
+        if not ingredient_name or not food_category or not food_type:
+            return JsonResponse({'success': False, 'error': '필수 항목(원재료명, 식품구분, 식품유형)을 입력해주세요.'}, status=400)
+        
+        # display_name이 비어있으면 ingredient_name 사용
+        if not display_name:
+            display_name = ingredient_name
+        
+        # 새 원료 생성
+        new_ingredient = MyIngredient.objects.create(
+            user_id=request.user,
+            prdlst_nm=ingredient_name,
+            food_category=food_category,
+            prdlst_dcnm=food_type,
+            bssh_nm=manufacturer,
+            prdlst_report_no=report_no,
+            ingredient_display_name=display_name,
+            summary_type_flag='Y',  # 기본값: 식품유형 요약
+            allergens=allergens,
+            gmo=gmo,
+            delete_YN='N'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'my_ingredient_id': new_ingredient.my_ingredient_id,
+            'message': '원료가 성공적으로 등록되었습니다.'
+        })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
