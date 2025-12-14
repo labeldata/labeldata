@@ -164,118 +164,39 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    // 원재료명(표로입력) 필드 클릭 시 선택 모달 표시
+    // 원재료명(표로입력) 복사하기 버튼 표시/숨김 처리
     const rawmtrlTextarea = document.getElementById('rawmtrl_nm');
+    const copyRawmtrlBtn = document.getElementById('copyRawmtrlBtn');
+    
+    // 초기 상태 설정
+    function updateCopyButtonVisibility() {
+      if (rawmtrlTextarea && copyRawmtrlBtn) {
+        const hasContent = rawmtrlTextarea.value.trim().length > 0;
+        copyRawmtrlBtn.style.display = hasContent ? 'inline-block' : 'none';
+      }
+    }
+    
+    // 페이지 로드 시 초기 상태 설정
+    updateCopyButtonVisibility();
+    
+    // 원재료명 변경 감지 (input, change, 팝업 닫힌 후)
     if (rawmtrlTextarea) {
-      // 원재료명 필드는 항상 클릭 가능하도록 disabled 속성 강제 제거
-      rawmtrlTextarea.disabled = false;
-      rawmtrlTextarea.classList.remove('disabled-textarea');
+      rawmtrlTextarea.addEventListener('input', updateCopyButtonVisibility);
+      rawmtrlTextarea.addEventListener('change', updateCopyButtonVisibility);
       
-      rawmtrlTextarea.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!ingredientPopupOpen) {
-          showRawmtrlActionModal();
-        }
+      // MutationObserver로 값 변경 감지 (팝업에서 값이 설정될 때)
+      const observer = new MutationObserver(updateCopyButtonVisibility);
+      observer.observe(rawmtrlTextarea, { 
+        attributes: true, 
+        childList: true, 
+        characterData: true,
+        subtree: true 
       });
     }
+    
+    // 전역 함수로 등록하여 팝업 닫힐 때 호출 가능하게
+    window.updateCopyButtonVisibility = updateCopyButtonVisibility;
   }
-
-  // 원재료명 필드 액션 선택 모달
-  function showRawmtrlActionModal() {
-    const rawmtrlValue = document.getElementById('rawmtrl_nm').value.trim();
-    
-    if (!rawmtrlValue) {
-      // 내용이 없으면 바로 팝업 열기
-      openIngredientPopupFromModal();
-      return;
-    }
-    
-    // 선택 모달 표시
-    const modal = document.createElement('div');
-    modal.className = 'modal fade show';
-    modal.style.display = 'block';
-    modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
-    modal.innerHTML = `
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">원재료명 작업 선택</h5>
-            <button type="button" class="btn-close" data-action="close"></button>
-          </div>
-          <div class="modal-body">
-            <p>원재료명 필드에 대해 어떤 작업을 하시겠습니까?</p>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-action="close">
-              <i class="fas fa-times me-1"></i>취소
-            </button>
-            <button type="button" class="btn btn-primary" data-action="copy">
-              <i class="fas fa-copy me-1"></i>원재료명(최종표시)로 복사
-            </button>
-            <button type="button" class="btn btn-success" data-action="popup">
-              <i class="fas fa-table me-1"></i>원재료 팝업 열기
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-    
-    // 이벤트 위임으로 버튼 클릭 처리
-    modal.addEventListener('click', (e) => {
-      const action = e.target.closest('[data-action]')?.dataset.action;
-      if (!action) {
-        // 백드롭 클릭 시 모달 닫기
-        if (e.target === modal) {
-          closeModal();
-        }
-        return;
-      }
-      
-      switch(action) {
-        case 'copy':
-          copyRawmtrlToDisplay();
-          break;
-        case 'popup':
-          openIngredientPopupFromModal();
-          break;
-      }
-      
-      closeModal();
-    });
-    
-    // ESC 키로 모달 닫기
-    const closeOnEsc = (e) => {
-      if (e.key === 'Escape') {
-        closeModal();
-      }
-    };
-    
-    const closeModal = () => {
-      modal.remove();
-      document.removeEventListener('keydown', closeOnEsc);
-    };
-    
-    document.addEventListener('keydown', closeOnEsc);
-    document.body.appendChild(modal);
-  }
-
-  // 원재료 팝업 열기 (모달에서 호출)
-  function openIngredientPopupFromModal() {
-    // 플래그를 설정하여 중복 클릭 방지
-    if (ingredientPopupOpen) return;
-    
-    ingredientPopupOpen = true;
-    handleIngredientPopup();
-    
-    // 팝업이 열린 후 플래그 해제
-    setTimeout(() => {
-      ingredientPopupOpen = false;
-    }, 1000);
-  }
-  
-  // 팝업에서 접근 가능하도록 window 객체에도 할당
-  window.openIngredientPopupFromModal = openIngredientPopupFromModal;
 
   // 원재료명 복사 및 알레르기 분리
   function copyRawmtrlToDisplay() {

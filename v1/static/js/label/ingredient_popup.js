@@ -715,6 +715,11 @@ function saveIngredients() {
                     }
                 }
                 
+                // 복사하기 버튼 표시 업데이트
+                if (typeof window.opener.updateCopyButtonVisibility === 'function') {
+                    window.opener.updateCopyButtonVisibility();
+                }
+                
                 // 원재료명(최종표시)는 사용자가 모달에서 수동으로만 업데이트
             }
             alert('원재료 정보가 성공적으로 저장되었습니다.');

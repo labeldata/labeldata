@@ -65,10 +65,10 @@
               <span class="recent-update label-header-date" style="font-size: 0.85rem;">
                 <i class="fas fa-pencil-alt me-1"></i>{{ label.update_datetime|date:"m/d H:i" }}
               </span>
-              <button type="button" class="btn btn-outline-primary btn-sm" id="previewBtn" onclick="try { openPreviewPopup(); } catch(e) { console.error('onclick error:', e); }">
+              <button type="button" class="btn btn-outline-primary" id="previewBtn" onclick="try { openPreviewPopup(); } catch(e) { console.error('onclick error:', e); }" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">
                 <i class="fas fa-eye me-1"></i>미리보기
               </button>
-              <button type="submit" form="labelForm" class="btn btn-primary btn-sm" id="saveBtn">
+              <button type="submit" form="labelForm" class="btn btn-primary" id="saveBtn" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">
                 <i class="fas fa-save me-1"></i>저장
               </button>
             </div>
@@ -197,10 +197,10 @@
         <i class="fas fa-edit me-2"></i>2. 상세 입력
       </h5>
       <div class="card-actions d-flex align-items-center" style="gap: 5px;">
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="handleIngredientPopup()" title="원재료 표로 입력">
+        <button type="button" class="btn btn-outline-primary" onclick="handleIngredientPopup()" title="원재료 표로 입력" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
           <i class="fas fa-table me-1"></i>원재료 표로 입력
         </button>
-        <button type="button" class="btn btn-outline-cancel btn-sm" id="linkedLabelsBtn">
+        <button type="button" class="btn btn-outline-cancel" id="linkedLabelsBtn" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
           <i class="fas fa-link me-1"></i>연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
         </button>
       </div>
@@ -292,8 +292,8 @@
                     <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}" style="flex: 1; min-width: 0;"
                            onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_report_no', this); }"
                            onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_report_no', this); }">
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo(document.getElementById('label_id')?.value)" style="white-space: nowrap;">번호검증</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="copyProductDataBtn" onclick="copyVerifiedProductData()" style="display: none; white-space: nowrap;">복사하기</button>
+                    <button type="button" class="btn btn-outline-primary" id="verifyReportNoBtn" onclick="verifyReportNo(document.getElementById('label_id')?.value)" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">번호검증</button>
+                    <button type="button" class="btn btn-outline-secondary" id="copyProductDataBtn" onclick="copyVerifiedProductData()" style="display: none; font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">복사하기</button>
                   </div>
                   <div id="verifyResultMessage" style="display: none; margin-top: 0.5rem; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem;"></div>
                 </div>
@@ -470,7 +470,7 @@
                     </div>
                     
                     <!-- 새로고침 버튼 -->
-                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="manualDetectAllergensLabel()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem; flex-shrink: 0;" title="알레르기 물질 다시 감지">
+                    <button type="button" class="btn btn-outline-secondary" onclick="manualDetectAllergensLabel()" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; flex-shrink: 0; white-space: nowrap;" title="알레르기 물질 다시 감지">
                         <i class="fas fa-sync-alt me-1"></i>새로고침
                     </button>
                 </div>
@@ -572,17 +572,25 @@
             <!-- 원재료명 (참고) -->
             <!-- 원재료명 (표로입력) - 항상 표시 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-                <div style="width:10%; min-width:130px;">
+                <div style="width:10%; min-width:130px; display: flex; align-items: center; gap: 3px;">
                 <!-- [수정] 체크박스를 숨기고, 라벨만 표시하도록 변경 -->
-                <div class="form-check">
+                <div class="form-check" style="flex: 1; min-width: 0;">
                   <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" {% if label.chckd_rawmtrl_nm == "Y" %}checked{% endif %} style="display: none;">
-                  <label for="chk_rawmtrl_nm" class="form-check-label m-0">원재료명 <br> (표로입력)</label>
+                  <label for="chk_rawmtrl_nm" class="form-check-label m-0" style="line-height: 1.2; display: inline-block; min-width: 80px;">
+                    <span style="white-space: nowrap;">원재료명</span> <br> <span style="white-space: nowrap;">(표로입력)</span>
+                  </label>
                 </div>
+                <button type="button" class="btn btn-outline-primary" onclick="handleIngredientPopup()" title="표로 입력" style="padding: 0.1rem 0.2rem; flex-shrink: 0; font-size: 0.875rem; line-height: 1;">
+                  <i class="fas fa-table" style="font-size: 0.95rem;"></i>
+                </button>
               </div>
               <div style="width:90%;">
-                <div class="input-container input-container-modern">
-                  <textarea id="rawmtrl_nm" name="rawmtrl_nm" class="form-control auto-expand textarea modern-textarea" rows="2" 
-                            placeholder="클릭하여 원재료 팝업 열기 또는 복사" readonly style="cursor: pointer;" title="클릭하여 작업 선택">{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+                <div class="input-container">
+                  <textarea id="rawmtrl_nm" name="rawmtrl_nm" class="form-control auto-expand textarea" rows="2" 
+                            placeholder="원재료 팝업에서 작성" readonly style="cursor: pointer; background-color: #f8f9fa; flex: 1; min-width: 0;">{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+                  <button type="button" id="copyRawmtrlBtn" class="btn btn-outline-primary" onclick="copyRawmtrlToDisplay()" title="원재료명(최종표시)로 복사" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap; display: none;">
+                    <i class="fas fa-copy me-1"></i>복사하기
+                  </button>
                 </div>
               </div>
             </div>
@@ -599,10 +607,10 @@
                   </span>
                 </div>
                 <div class="d-flex align-items-center justify-content-end" style="gap: 5px; flex-shrink: 0;">
-                  <button type="button" id="toggleAllBtn" class="btn btn-outline-primary btn-sm" onclick="toggleAllSectionsButton()" title="모든 섹션 펼치기">
+                  <button type="button" id="toggleAllBtn" class="btn btn-outline-primary" onclick="toggleAllSectionsButton()" title="모든 섹션 펼치기" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
                     <i class="fas fa-chevron-down me-1"></i>전체 열기
                   </button>
-                  <button type="button" class="btn btn-outline-primary btn-sm" onclick="handleNutritionTablePopup()" title="영양성분 계산기">
+                  <button type="button" class="btn btn-outline-primary" onclick="handleNutritionTablePopup()" title="영양성분 계산기" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
                     <i class="fas fa-calculator me-1"></i>영양성분 계산기
                   </button>
                 </div>
