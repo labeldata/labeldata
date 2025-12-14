@@ -300,10 +300,10 @@
                 </div>
               </div>            </div>            <!-- 내용량 | 원산지 -->
             <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
-              <div class="d-flex align-items-center flex-equal">                <div style="width:15%; min-width:130px; display:flex; align-items:center;">
+              <div class="d-flex align-items-center flex-equal">                <div style="width:15%; min-width:130px;">
                   <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" 
                          {% if label.chckd_content_weight == "Y" or label.chckd_weight_calorie == "Y" %}checked{% endif %}>
-                  <span id="content_type_display" class="content-type-label" style="margin-left: 8px; font-size: 0.9rem; color: #495057; min-width: 90px;">내용량</span>
+                  <label for="chk_content_weight" id="content_type_display" class="content-type-label m-0">내용량</label>
                   <input type="hidden" id="content_type_value" name="content_type" value="content_weight">
                 </div>
                 <div style="width:85%;">
@@ -368,19 +368,19 @@
                 <div style="width:10%; min-width:130px;">
                 <input type="checkbox" id="chk_bssh_nm" name="chk_bssh_nm" class="form-check-input" 
                        {% if label.chckd_bssh_nm == "Y" %}checked{% endif %}>
-                <label for="chk_bssh_nm" class="m-0">제조원 소재지</label>
+                <label for="chk_bssh_nm" class="m-0">제조원</label>
+                <button type="button" class="btn btn-sm btn-link p-0 ms-1" id="toggleManufacturerBtn"
+                  data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
+                  aria-controls="other-manufacturers" style="font-size: 0.8rem; text-decoration: none; color: #6c757d;" title="추가 항목 열기/닫기">
+                  <i class="fas fa-chevron-down" id="manufacturerToggleIcon"></i>
+                </button>
               </div>
-              <div style="width:90%; display:flex; align-items:center;">
+              <div style="width:90%;">
                 <input type="text" name="bssh_nm" class="form-control auto-expand" 
                        placeholder="제조원을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
                        value="{{ form.bssh_nm.value|default:'' }}"
                        onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('bssh_nm', this); }"
                        onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('bssh_nm', this); }">
-                <button type="button" class="btn btn-outline-primary btn-sm" id="toggleManufacturerBtn"
-                  data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
-                  aria-controls="other-manufacturers" style="font-size:0.9rem; padding:2px 8px; min-width:0; white-space:nowrap; margin-left:6px;">
-                  ∨
-                </button>
               </div>
             </div>
             <!-- 접힘 영역 -->
@@ -427,15 +427,17 @@
             </div>
             <!-- 소비기한/품질유지기한/제조연월일/생산연도 -->
             <div class="d-flex align-items-center mb-2" style="gap:5px;">
-              <div style="width:10%; min-width:130px; display:flex; align-items:center;">
-                <input type="checkbox" id="chk_pog_daycnt" name="chk_pog_daycnt" class="form-check-input" {% if label.chckd_pog_daycnt == "Y" %}checked{% endif %}>
-                <!-- 체크박스와 셀렉트박스 사이 간격 추가 (margin-left:8px) -->
-                <select name="date_option_display" class="form-control select2-date-option" style="width:88%; min-width:90px; max-width:190px;">
-                  <option value="소비기한" selected>소비기한</option>
-                  <option value="품질유지기한">품질유지기한</option>
-                  <option value="제조연월일">제조연월일</option>
-                  <option value="생산연도">생산연도</option>
-                </select>
+              <div style="width:10%; min-width:130px;">
+                <div class="d-flex align-items-center">
+                  <input type="checkbox" id="chk_pog_daycnt" name="chk_pog_daycnt" class="form-check-input" {% if label.chckd_pog_daycnt == "Y" %}checked{% endif %}>
+                  <!-- 체크박스와 셀렉트박스 사이 간격 추가 (margin-left:8px) -->
+                  <select name="date_option_display" class="form-control select2-date-option" style="width:88%; min-width:90px; max-width:190px; margin-left:8px;">
+                    <option value="소비기한" selected>소비기한</option>
+                    <option value="품질유지기한">품질유지기한</option>
+                    <option value="제조연월일">제조연월일</option>
+                    <option value="생산연도">생산연도</option>
+                  </select>
+                </div>
               </div>
               <div style="width:90%;">
                 <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value|default:'' }}"
@@ -590,7 +592,7 @@
                 <div style="width:10%; min-width:130px;">
                 <div class="form-check">
                   <input type="checkbox" id="chk_cautions" name="chk_cautions" class="form-check-input" {% if label.chckd_cautions == "Y" %}checked{% endif %}>
-                  <label for="chk_cautions" class="m-0" style="font-size: 0.9rem;">주의사항</label>
+                  <label for="chk_cautions" class="m-0" style="font-size: 0.9rem; font-weight: normal;">주의사항</label>
                   <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="toggleContentSection('cautions')" style="font-size: 0.8rem; text-decoration: none; color: #6c757d;" title="접기/펼치기">
                     <i class="fas fa-chevron-up" id="cautionsToggleIcon"></i>
                   </button>
@@ -598,14 +600,14 @@
               </div>
               <div style="width:90%;">
                 <!-- 요약 표시 영역 (접었을 때 보임) -->
-                <div id="cautionsSummary" class="mb-2" style="display: none; font-size: 0.85rem; color: #666; line-height: 1.4;">
+                <div id="cautionsSummary" class="mb-2" onclick="toggleContentSection('cautions')" style="display: none; font-size: 0.85rem; color: #666; line-height: 1.4; cursor: pointer;" title="클릭하여 펼치기">
                   <span class="text-muted">내용이 없습니다</span>
                 </div>
                 <div id="cautionsContent" style="display: flex; flex-direction: column; gap: 5px;">
                   <div class="input-container input-container-modern">
-                    <textarea name="cautions" class="form-control textarea" rows="3" 
+                    <textarea name="cautions" class="form-control auto-expand textarea" rows="2" 
                               placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
-                              style="max-height: 300px; overflow-y: auto; resize: vertical;"
+                              style="font-size: 0.875rem; min-height: 60px; max-height: 200px; overflow-y: auto;"
                               onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('cautions', this); }"
                               onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('cautions', this); }">{{ form.cautions.value|default:'' }}</textarea>
                   </div>
@@ -650,7 +652,7 @@
                 <div style="width:10%; min-width:130px;">
                 <div class="form-check">
                   <input type="checkbox" id="chk_additional_info" name="chk_additional_info" class="form-check-input" {% if label.chckd_additional_info == "Y" %}checked{% endif %}>
-                  <label for="chk_additional_info" class="m-0" style="font-size: 0.9rem;">기타표시</label>
+                  <label for="chk_additional_info" class="m-0" style="font-size: 0.9rem; font-weight: normal;">기타표시</label>
                   <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="toggleContentSection('additional_info')" style="font-size: 0.8rem; text-decoration: none; color: #6c757d;" title="접기/펼치기">
                     <i class="fas fa-chevron-up" id="additional_infoToggleIcon"></i>
                   </button>
@@ -658,14 +660,14 @@
               </div>
               <div style="width:90%;">
                 <!-- 요약 표시 영역 (접었을 때 보임) -->
-                <div id="additional_infoSummary" class="mb-2" style="display: none; font-size: 0.85rem; color: #666; line-height: 1.4;">
+                <div id="additional_infoSummary" class="mb-2" onclick="toggleContentSection('additional_info')" style="display: none; font-size: 0.85rem; color: #666; line-height: 1.4; cursor: pointer;" title="클릭하여 펼치기">
                   <span class="text-muted">내용이 없습니다</span>
                 </div>
                 <div id="additional_infoContent" style="display: flex; flex-direction: column; gap: 5px;">
                   <div class="input-container input-container-modern">
-                    <textarea name="additional_info" class="form-control textarea modern-textarea" rows="3" 
+                    <textarea name="additional_info" class="form-control auto-expand textarea" rows="2" 
                               placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
-                              style="max-height: 300px; overflow-y: auto; resize: vertical;"
+                              style="font-size: 0.875rem; min-height: 60px; max-height: 200px; overflow-y: auto;"
                               onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('additional_info', this); }"
                               onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('additional_info', this); }">{{ form.additional_info.value|default:'' }}</textarea>
                   </div>

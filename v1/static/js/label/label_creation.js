@@ -733,12 +733,24 @@ document.addEventListener('DOMContentLoaded', function () {
           btnEl.setAttribute('title', isHidden ? showTitle : hideTitle);
         });
       } else {
+        // Bootstrap collapse 이벤트로 아이콘 토글 (chevron 아이콘 사용)
+        const iconEl = btnEl.querySelector('i');
         sectionEl.addEventListener('shown.bs.collapse', () => {
-          btnEl.innerText = showText;
+          if (iconEl) {
+            iconEl.classList.remove('fa-chevron-down');
+            iconEl.classList.add('fa-chevron-up');
+          } else {
+            btnEl.innerText = showText;
+          }
           btnEl.setAttribute('title', showTitle);
         });
         sectionEl.addEventListener('hidden.bs.collapse', () => {
-          btnEl.innerText = hideText;
+          if (iconEl) {
+            iconEl.classList.remove('fa-chevron-up');
+            iconEl.classList.add('fa-chevron-down');
+          } else {
+            btnEl.innerText = hideText;
+          }
           btnEl.setAttribute('title', hideTitle);
         });
       }
