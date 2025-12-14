@@ -28,13 +28,13 @@
         <div class="d-flex flex-column" style="gap: 4px;">
           <!-- 1줄: 3개 영역 분할 -->
           <div class="d-flex align-items-center justify-content-between" style="gap: 10px;">
-            <!-- 왼쪽: 타이틀 + 간편모드 전환 -->
+            <!-- 왼쪽: 타이틀 + 간편모드 보기 -->
             <div class="d-flex align-items-center" style="gap: 10px;">
               <h2 class="mb-0" style="flex-shrink:0; font-size: 1.3rem;">
                 ✏️ 상세 모드
               </h2>
               <button type="button" class="btn btn-outline-secondary btn-sm" onclick="switchToHome()" title="간편 모드로 전환">
-                📋 간편 모드로 전환
+                📋 간편 모드로 보기
               </button>
             </div>
             
@@ -477,7 +477,7 @@
                     <!-- 원재료 사용 알레르기 물질 -->
                     <div style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e0e0e0;">
                         <label class="mb-2" style="font-weight: 600; color: #d32f2f; font-size: 0.9rem;">
-                            <i class="fas fa-utensils me-1"></i>원재료 사용 알레르기 물질
+                            원재료 사용 알레르기 물질
                         </label>
                         
                         <!-- 자동 감지된 알레르기 태그 표시 -->
@@ -524,7 +524,7 @@
                     <div style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e0e0e0;">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <label class="mb-0" style="font-weight: 600; color: #f57c00; font-size: 0.9rem;">
-                                <i class="fas fa-industry me-1"></i>제조시설 혼입 우려 물질
+                                제조시설 혼입 우려 물질
                             </label>
                             <div class="d-flex justify-content-end" style="gap: 5px;">
                                 <button type="button" id="toggleAllAllergensLabelBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAllergensLabel()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">

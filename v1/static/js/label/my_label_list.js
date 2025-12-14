@@ -315,14 +315,12 @@ function initViewModeToggle() {
     simpleRadio.addEventListener('change', function() {
         if (this.checked) {
             localStorage.setItem('labelViewMode', 'simple');
-            showModeChangeToast('📋 간편 모드로 전환되었습니다');
         }
     });
     
     detailRadio.addEventListener('change', function() {
         if (this.checked) {
             localStorage.setItem('labelViewMode', 'detail');
-            showModeChangeToast('✏️ 상세 모드로 전환되었습니다');
         }
     });
 }

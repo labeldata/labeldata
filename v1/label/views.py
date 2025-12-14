@@ -540,22 +540,17 @@ def label_creation(request, label_id=None):
 
             # 맞춤항목 저장
             custom_fields_json = request.POST.get('custom_fields_json', '')
-            print(f'[DEBUG] custom_fields_json 받음: {custom_fields_json}')  # 디버깅
             if custom_fields_json:
                 try:
                     import json
                     custom_fields = json.loads(custom_fields_json)
-                    print(f'[DEBUG] 파싱된 custom_fields: {custom_fields}')  # 디버깅
                     # 최대 10개로 제한
                     if len(custom_fields) > 10:
                         custom_fields = custom_fields[:10]
                     label.custom_fields = custom_fields
-                    print(f'[DEBUG] label.custom_fields 설정 완료: {label.custom_fields}')  # 디버깅
                 except json.JSONDecodeError as e:
-                    print(f'[DEBUG] JSON 파싱 오류: {e}')  # 디버깅
                     label.custom_fields = []
             else:
-                print('[DEBUG] custom_fields_json이 비어있음')  # 디버깅
                 label.custom_fields = []
 
             label.save()
@@ -902,10 +897,15 @@ def ingredient_popup(request):
     # 국가 목록 데이터 추가
     country_list = list(CountryList.objects.values('country_name_ko').order_by('country_name_ko'))
     country_names = [country['country_name_ko'] for country in country_list]
+    
+    # utils.py에서 알레르기 목록 가져오기
+    from .utils import ALLERGEN_LIST
+    
     context = {
         'saved_ingredients': ingredients_data,
         'has_relations': has_relations,
         'country_names': country_names,  # 국가 목록 추가
+        'allergen_list': ALLERGEN_LIST,  # 알레르기 목록 추가
         'food_types': list(FoodType.objects.all().values('food_type')),
         'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
         'food_additives': list(FoodAdditive.objects.all().values('name_kr'))

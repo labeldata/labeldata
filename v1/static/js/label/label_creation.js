@@ -287,9 +287,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         
         updateAllergenTagsLabel();
-        
-        const allergenList = Array.from(extractedAllergens).join(', ');
-        showToastMessage(`알레르기 성분이 추가되었습니다: ${allergenList}`, 'success');
       }
     }
     
@@ -300,8 +297,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // 체크박스 자동 체크
     const checkbox = document.getElementById('chk_rawmtrl_nm_display');
     if (checkbox) checkbox.checked = true;
-    
-    showToastMessage('원재료명(최종표시)로 복사되었습니다.', 'success');
   }
   
   // 팝업에서 접근 가능하도록 window 객체에도 할당
@@ -2714,9 +2709,6 @@ function addAllQuickTextsLabel(fieldName) {
         if (checkbox) {
             checkbox.checked = true;
         }
-        
-        // 성공 메시지
-        showToastMessage(`${textsToAdd.length}개의 문구가 추가되었습니다.`, 'success');
     } else {
         alert('이미 모든 문구가 추가되어 있습니다.');
     }
@@ -2757,34 +2749,9 @@ function clearAllQuickTextsLabel(fieldName) {
             updateTextareaHeight(textarea);
             setTimeout(() => updateTextareaHeight(textarea), 10);
         }
-        
-        // 성공 메시지
-        showToastMessage(`${removedCount}개의 문구가 해제되었습니다.`, 'warning');
     } else {
         alert('해제할 문구가 없습니다.');
     }
-}
-
-// 토스트 메시지 표시 함수
-function showToastMessage(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.className = 'position-fixed top-0 end-0 p-3';
-    toast.style.zIndex = '9999';
-    
-    const iconClass = type === 'success' ? 'fa-check-circle' : 'fa-eraser';
-    const alertClass = type === 'success' ? 'alert-success' : 'alert-warning';
-    
-    toast.innerHTML = `
-        <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
-            <i class="fas ${iconClass} me-2"></i>${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.remove();
-    }, 3000);
 }
 
 // 맞춤항목 관리 (조리법, 반품 교환, 알레르기 혼입 등)

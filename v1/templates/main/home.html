@@ -367,21 +367,23 @@ html, body {
     <div class="container-fluid px-4">
         <div class="row align-items-center">
             <div class="col-lg-9 col-md-8">
-                <h1 class="demo-title mb-1">
-                    📋 간편 모드
-                </h1>
+                <div class="d-flex align-items-center gap-3 mb-1">
+                    <h1 class="demo-title mb-0">
+                        📋 간편 모드
+                    </h1>
+                    <button class="btn btn-outline-light btn-sm" onclick="handleDetailModeSwitch()" style="border: 2px solid rgba(255, 255, 255, 0.8);" title="{% if user.is_authenticated %}상세 모드로 보기{% else %}회원 전용 기능{% endif %}">
+                        ✏️ 상세 모드로 보기
+                        {% if not user.is_authenticated %}<i class="fas fa-lock ms-1" style="font-size: 0.75em; opacity: 0.8;"></i>{% endif %}
+                    </button>
+                </div>
                 <p class="demo-subtitle mb-0">
                     한눈에 보고 빠르게 작성 - 샘플 데이터를 선택하거나 직접 입력하여 실시간 미리보기를 확인하세요
                 </p>
             </div>
             <div class="col-lg-3 col-md-4 text-end">
                 <div class="d-flex justify-content-end gap-2">
-                    <button class="btn btn-outline-light" onclick="handleListNavigation()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;" title="{% if user.is_authenticated %}표시사항 작성 리스트로 돌아가기{% else %}회원 전용 기능{% endif %}">
+                    <button class="btn btn-outline-light" onclick="handleListNavigation()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap; border: 2px solid rgba(255, 255, 255, 0.8);" title="{% if user.is_authenticated %}표시사항 작성 리스트로 돌아가기{% else %}회원 전용 기능{% endif %}">
                         <i class="fas fa-list me-1"></i>표시사항 리스트 보기
-                        {% if not user.is_authenticated %}<i class="fas fa-lock ms-1" style="font-size: 0.75em; opacity: 0.8;"></i>{% endif %}
-                    </button>
-                    <button class="btn btn-outline-light" onclick="handleDetailModeSwitch()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;" title="{% if user.is_authenticated %}상세 모드로 전환{% else %}회원 전용 기능{% endif %}">
-                        ✏️ 상세 모드로 전환
                         {% if not user.is_authenticated %}<i class="fas fa-lock ms-1" style="font-size: 0.75em; opacity: 0.8;"></i>{% endif %}
                     </button>
                     <button class="btn btn-warning" id="saveLabelBtn" onclick="handleSaveLabel()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;">
@@ -402,10 +404,10 @@ html, body {
                     <div class="d-flex justify-content-between align-items-center flex-wrap" style="gap: 8px;">
                         <h5 class="mb-0"><i class="fas fa-edit me-2"></i>1. 표시사항 입력</h5>
                         <div class="d-flex flex-wrap gap-1">
-                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('beverage')" title="음료 샘플"><i class="fas fa-mug-hot me-1"></i>[샘플] 음료</button>
-                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('snack')" title="과자 샘플"><i class="fas fa-cookie-bite me-1"></i>[샘플] 과자</button>
-                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('noodle')" title="면류 샘플"><i class="fas fa-bowl-food me-1"></i>[샘플] 면류</button>
-                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('sauce')" title="소스 샘플"><i class="fas fa-pepper-hot me-1"></i>[샘플] 소스</button>
+                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('beverage')" title="음료 샘플">[샘플] 음료</button>
+                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('snack')" title="과자 샘플">[샘플] 과자</button>
+                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('noodle')" title="면류 샘플">[샘플] 면류</button>
+                            <button class="btn btn-sm btn-header-primary py-1 px-2" onclick="loadSampleData('sauce')" title="소스 샘플">[샘플] 소스</button>
                             <button class="btn btn-sm btn-header-danger py-1 px-2" onclick="resetAllData()" title="모든 입력 데이터 초기화"><i class="fas fa-sync-alt"></i></button>
                         </div>
                     </div>
@@ -415,16 +417,16 @@ html, body {
                     <!-- 탭 네비게이션 -->
                     <div class="form-tabs">
                         <button class="form-tab active" onclick="switchTab('basic')" data-tab="basic">
-                            <i class="fas fa-info-circle"></i>기본정보
+                            기본정보
                         </button>
                         <button class="form-tab" onclick="switchTab('ingredients')" data-tab="ingredients">
-                            <i class="fas fa-leaf"></i>원재료 & 알레르기
+                            원재료 & 알레르기
                         </button>
                         <button class="form-tab" onclick="switchTab('notices')" data-tab="notices">
-                            <i class="fas fa-exclamation-triangle"></i>주의문구
+                            주의문구
                         </button>
                         <button class="form-tab" onclick="switchTab('additional')" data-tab="additional">
-                            <i class="fas fa-plus-circle"></i>기타항목
+                            기타항목
                         </button>
                     </div>
 
@@ -583,7 +585,7 @@ html, body {
                                     <div>
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <label class="form-label mb-0 label-danger">
-                                                <i class="fas fa-utensils me-1"></i>원재료 사용 알레르기 물질
+                                                원재료 사용 알레르기 물질
                                             </label>
                                             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="manualDetectAllergens()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" title="알레르기 물질 다시 감지">
                                                 <i class="fas fa-sync-alt me-1"></i>새로고침
@@ -634,7 +636,7 @@ html, body {
                                     <div>
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <label class="form-label mb-0 label-warning">
-                                                <i class="fas fa-industry me-1"></i>제조시설 혼입 우려 물질 (선택)
+                                                제조시설 혼입 우려 물질 (선택)
                                             </label>
                                             <div class="btn-group btn-group-sm" role="group">
                                                 <button type="button" id="toggleAllAllergensBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAllergens()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
@@ -992,16 +994,13 @@ html, body {
                         <li class="mb-0"><i class="fas fa-check-circle text-success me-2"></i>PDF 다운로드 및 인쇄 기능 제공</li>
                     </ul>
                 </div>
-                <p class="text-muted small mb-0">
-                    <i class="fas fa-gift me-1"></i>아직 회원이 아니신가요? <strong>지금 바로 무료 가입</strong>하고 편리하게 이용하세요!
-                </p>
             </div>
             <div class="modal-footer justify-content-center border-0 pt-0 pb-4">
-                <a href="{% url 'user_management:login' %}?next=/" class="btn btn-lg px-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-weight: 600;">
-                    <i class="fas fa-sign-in-alt me-2"></i>로그인하고 저장하기
+                <a href="{% url 'user_management:signup' %}" class="btn btn-primary btn-lg px-5">
+                    <i class="fas fa-user-plus me-2"></i>가입하기
                 </a>
-                <a href="{% url 'user_management:signup' %}" class="btn btn-outline-secondary btn-lg px-5">
-                    <i class="fas fa-user-plus me-2"></i>회원가입
+                <a href="{% url 'user_management:login' %}?next=/" class="btn btn-outline-primary btn-lg px-5">
+                    <i class="fas fa-sign-in-alt me-2"></i>로그인
                 </a>
             </div>
         </div>
@@ -1028,19 +1027,16 @@ html, body {
                     <ul class="list-unstyled mb-0">
                         <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>작성한 표시사항을 저장하고 관리</li>
                         <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>언제든지 수정 및 재사용 가능</li>
-                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>간편 모드 ↔ 상세 모드 자유롭게 전환</li>
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>간편 모드 ↔ 상세 모드 자유롭게 보기</li>
                         <li class="mb-0"><i class="fas fa-check-circle text-success me-2"></i>다양한 템플릿 및 원재료 데이터베이스 활용</li>
                     </ul>
                 </div>
-                <p class="text-muted small mb-0">
-                    <i class="fas fa-gift me-1"></i>지금 가입하면 <strong>모든 기능을 무료</strong>로 이용하실 수 있습니다!
-                </p>
             </div>
             <div class="modal-footer justify-content-center border-0 pt-0 pb-4">
-                <a href="{% url 'user_management:signup' %}" class="btn btn-lg px-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-weight: 600;">
-                    <i class="fas fa-user-plus me-2"></i>무료로 시작하기
+                <a href="{% url 'user_management:signup' %}" class="btn btn-primary btn-lg px-5">
+                    <i class="fas fa-user-plus me-2"></i>가입하기
                 </a>
-                <a href="{% url 'user_management:login' %}?next=/" class="btn btn-outline-secondary btn-lg px-5">
+                <a href="{% url 'user_management:login' %}?next=/" class="btn btn-outline-primary btn-lg px-5">
                     <i class="fas fa-sign-in-alt me-2"></i>로그인
                 </a>
             </div>
