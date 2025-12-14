@@ -1343,6 +1343,12 @@ function handleSaveLabel() {
 function saveLabelData() {
     const formData = collectFormData();
     
+    // label_id가 있으면 포함 (기존 라벨 업데이트)
+    const labelId = new URLSearchParams(window.location.search).get('label_id');
+    if (labelId) {
+        formData.label_id = labelId;
+    }
+    
     // 필수 항목 체크
     if (!formData.prdlst_nm || !formData.prdlst_nm.trim()) {
         alert('제품명을 입력해주세요.');
@@ -1365,10 +1371,19 @@ function saveLabelData() {
             // localStorage 데이터 초기화
             localStorage.removeItem('demo_label_data');
             
-            // 표시사항 리스트 페이지로 리다이렉트
-            setTimeout(() => {
-                window.location.href = data.redirect_url || '/label/my-labels/';
-            }, 500);
+            // 로그인 상태이면 항상 현재 페이지 유지
+            if (data.stay_on_page || data.label_id) {
+                // URL을 label_id가 포함된 것으로 부드럽게 변경
+                const newUrl = data.redirect_url || `/?label_id=${data.label_id}`;
+                window.history.replaceState({}, '', newUrl);
+                // 페이지 새로고침하여 저장된 데이터 반영
+                window.location.reload();
+            } else {
+                // 표시사항 리스트 페이지로 리다이렉트
+                setTimeout(() => {
+                    window.location.href = data.redirect_url || '/label/my-labels/';
+                }, 500);
+            }
         } else if (data.requires_login) {
             // 로그인 필요 응답 처리
             const userConfirmed = confirm(data.message);
@@ -1390,7 +1405,52 @@ function getCsrfToken() {
     return getCookie('csrftoken');
 }
 
-// 작성 페이지로 전환
+// 표시사항 리스트 네비게이션 처리
+function handleListNavigation() {
+    const isAuthenticated = document.body.dataset.isAuthenticated === 'true';
+    
+    if (isAuthenticated) {
+        window.location.href = '/label/my-labels/';
+    } else {
+        showFeatureModal('list');
+    }
+}
+
+// 상세 모드 전환 처리
+function handleDetailModeSwitch() {
+    const isAuthenticated = document.body.dataset.isAuthenticated === 'true';
+    
+    if (isAuthenticated) {
+        switchToEditor();
+    } else {
+        showFeatureModal('detail');
+    }
+}
+
+// 기능 유도 모달 표시
+function showFeatureModal(featureType) {
+    const modal = document.getElementById('featureModal');
+    const title = modal.querySelector('#featureModalTitle');
+    const subtitle = modal.querySelector('#featureModalSubtitle');
+    const icon = modal.querySelector('#featureModalIcon');
+    
+    if (featureType === 'list') {
+        title.textContent = '표시사항 리스트 보기';
+        subtitle.textContent = '작성한 표시사항을 한눈에 관리하세요!';
+        icon.className = 'fas fa-list fa-4x mb-3';
+    } else if (featureType === 'detail') {
+        title.textContent = '상세 모드';
+        subtitle.textContent = '더 많은 기능으로 정밀하게 작성하세요!';
+        icon.className = 'fas fa-edit fa-4x mb-3';
+    }
+    
+    icon.style.color = '#667eea';
+    
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+// 작성 페이지로 전환 (기존 함수 유지)
 function switchToEditor() {
     const labelId = new URLSearchParams(window.location.search).get('label_id');
     if (labelId) {

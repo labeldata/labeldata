@@ -130,15 +130,26 @@ def save_label(request):
         
         data = json.loads(request.body)
         
+        # label_id가 있으면 기존 라벨 업데이트, 없으면 신규 생성
+        label_id = data.get('label_id')
+        if label_id:
+            try:
+                label = MyLabel.objects.get(my_label_id=label_id, user_id=request.user)
+                is_update = True
+            except MyLabel.DoesNotExist:
+                label = MyLabel(user_id=request.user)
+                is_update = False
+        else:
+            label = MyLabel(user_id=request.user)
+            is_update = False
+        
         # 필수 필드 체크
         if not data.get('prdlst_nm'):
             return JsonResponse({'success': False, 'error': '제품명은 필수입니다.'}, status=400)
         
-        # MyLabel 인스턴스 생성
-        label = MyLabel(user_id=request.user)
-        
-        # 라벨명 생성 (제품명 + 날짜)
-        label.my_label_name = data.get('prdlst_nm', '표시사항') + '_' + timezone.now().strftime('%Y%m%d')
+        # 라벨명 설정 (신규 생성 시만)
+        if not is_update:
+            label.my_label_name = data.get('prdlst_nm', '표시사항') + '_' + timezone.now().strftime('%Y%m%d')
         
         # 기본 정보
         label.prdlst_nm = data.get('prdlst_nm', '')
@@ -227,12 +238,13 @@ def save_label(request):
         # 저장
         label.save()
         
-        # 표시사항 리스트로 리다이렉트 (방금 저장한 데이터만 보이도록 label_id 전달)
+        # 저장 후 현재 페이지 유지 (신규/업데이트 모두)
         return JsonResponse({
             'success': True,
-            'redirect_url': f'/label/my-labels/?label_id={label.my_label_id}',
+            'redirect_url': f'/?label_id={label.my_label_id}',
             'message': '표시사항이 저장되었습니다.',
-            'label_id': label.my_label_id
+            'label_id': label.my_label_id,
+            'stay_on_page': True
         })
         
     except json.JSONDecodeError:

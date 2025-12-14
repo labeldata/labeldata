@@ -376,11 +376,14 @@ html, body {
             </div>
             <div class="col-lg-3 col-md-4 text-end">
                 <div class="d-flex justify-content-end gap-2">
-                    {% if user.is_authenticated and current_label_id %}
-                    <button class="btn btn-outline-light" onclick="switchToEditor()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;">
-                        ✏️ 상세 모드로 전환
+                    <button class="btn btn-outline-light" onclick="handleListNavigation()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;" title="{% if user.is_authenticated %}표시사항 작성 리스트로 돌아가기{% else %}회원 전용 기능{% endif %}">
+                        <i class="fas fa-list me-1"></i>표시사항 리스트 보기
+                        {% if not user.is_authenticated %}<i class="fas fa-lock ms-1" style="font-size: 0.75em; opacity: 0.8;"></i>{% endif %}
                     </button>
-                    {% endif %}
+                    <button class="btn btn-outline-light" onclick="handleDetailModeSwitch()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;" title="{% if user.is_authenticated %}상세 모드로 전환{% else %}회원 전용 기능{% endif %}">
+                        ✏️ 상세 모드로 전환
+                        {% if not user.is_authenticated %}<i class="fas fa-lock ms-1" style="font-size: 0.75em; opacity: 0.8;"></i>{% endif %}
+                    </button>
                     <button class="btn btn-warning" id="saveLabelBtn" onclick="handleSaveLabel()" style="border-radius: 8px; font-weight: 600; padding: 0.6rem 1.2rem; white-space: nowrap;">
                         <i class="fas fa-save me-1"></i>저장하기
                     </button>
@@ -965,33 +968,80 @@ html, body {
 </div>
 
 <!-- 로그인 모달 -->
+<!-- 저장 기능 로그인 모달 -->
 <div class="modal fade" id="loginModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
+            <div class="modal-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                 <h5 class="modal-title">
-                    <i class="fas fa-lock me-2"></i>로그인이 필요합니다
+                    <i class="fas fa-save me-2"></i>표시사항을 저장하시겠어요?
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body text-center py-4">
                 <div class="mb-3">
-                    <i class="fas fa-save fa-4x text-primary mb-3"></i>
+                    <i class="fas fa-cloud-upload-alt fa-4x mb-3" style="color: #667eea;"></i>
                 </div>
-                <h5 class="mb-3">작성하신 표시사항을 저장하시겠어요?</h5>
-                <p class="text-muted mb-2">
-                    로그인하시면 지금 작성한 내용이 자동으로 저장됩니다.
-                </p>
+                <h5 class="mb-3">지금 작성한 내용을 안전하게 보관하세요!</h5>
+                <div class="text-start mb-3" style="background: #f8f9fa; padding: 1.5rem; border-radius: 10px;">
+                    <p class="mb-2"><strong>로그인하시면:</strong></p>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>작성한 내용이 자동으로 저장됩니다</li>
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>언제든지 다시 불러와서 수정 가능</li>
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>표시사항 리스트에서 한눈에 관리</li>
+                        <li class="mb-0"><i class="fas fa-check-circle text-success me-2"></i>PDF 다운로드 및 인쇄 기능 제공</li>
+                    </ul>
+                </div>
                 <p class="text-muted small mb-0">
-                    💡 아직 회원이 아니신가요? 지금 바로 무료 가입하고 편리하게 이용하세요!
+                    <i class="fas fa-gift me-1"></i>아직 회원이 아니신가요? <strong>지금 바로 무료 가입</strong>하고 편리하게 이용하세요!
                 </p>
             </div>
-            <div class="modal-footer justify-content-center border-0 pt-0">
-                <a href="{% url 'user_management:login' %}?next=/" class="btn btn-primary btn-lg px-5">
+            <div class="modal-footer justify-content-center border-0 pt-0 pb-4">
+                <a href="{% url 'user_management:login' %}?next=/" class="btn btn-lg px-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-weight: 600;">
                     <i class="fas fa-sign-in-alt me-2"></i>로그인하고 저장하기
                 </a>
                 <a href="{% url 'user_management:signup' %}" class="btn btn-outline-secondary btn-lg px-5">
                     <i class="fas fa-user-plus me-2"></i>회원가입
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 기능 유도 모달 -->
+<div class="modal fade" id="featureModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-gradient" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h5 class="modal-title">
+                    <i class="fas fa-star me-2"></i><span id="featureModalTitle">회원 전용 기능</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <div class="mb-3">
+                    <i id="featureModalIcon" class="fas fa-list fa-4x mb-3" style="color: #667eea;"></i>
+                </div>
+                <h5 class="mb-3" id="featureModalSubtitle">회원님을 위한 특별한 기능!</h5>
+                <div class="text-start mb-3" style="background: #f8f9fa; padding: 1.5rem; border-radius: 10px;">
+                    <p class="mb-2"><strong>가입하시면 이런 기능을 사용할 수 있어요:</strong></p>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>작성한 표시사항을 저장하고 관리</li>
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>언제든지 수정 및 재사용 가능</li>
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>간편 모드 ↔ 상세 모드 자유롭게 전환</li>
+                        <li class="mb-0"><i class="fas fa-check-circle text-success me-2"></i>다양한 템플릿 및 원재료 데이터베이스 활용</li>
+                    </ul>
+                </div>
+                <p class="text-muted small mb-0">
+                    <i class="fas fa-gift me-1"></i>지금 가입하면 <strong>모든 기능을 무료</strong>로 이용하실 수 있습니다!
+                </p>
+            </div>
+            <div class="modal-footer justify-content-center border-0 pt-0 pb-4">
+                <a href="{% url 'user_management:signup' %}" class="btn btn-lg px-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-weight: 600;">
+                    <i class="fas fa-user-plus me-2"></i>무료로 시작하기
+                </a>
+                <a href="{% url 'user_management:login' %}?next=/" class="btn btn-outline-secondary btn-lg px-5">
+                    <i class="fas fa-sign-in-alt me-2"></i>로그인
                 </a>
             </div>
         </div>
