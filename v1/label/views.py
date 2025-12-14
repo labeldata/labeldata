@@ -36,6 +36,32 @@ from venv import logger  # 지우지 않음
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 
+
+def format_cautions_text(text):
+    """
+    주의사항/기타표시 텍스트를 미리보기 형식으로 변환
+    줄바꿈과 마침표를 " | "로 구분
+    
+    Args:
+        text (str): 원본 텍스트
+        
+    Returns:
+        str: 변환된 텍스트
+    """
+    if not text:
+        return ''
+    
+    # 1. 줄바꿈을 먼저 |로 변경
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    result = ' | '.join(lines)
+    
+    # 2. 마침표 뒤에 |가 없으면 추가
+    result = re.sub(r'\.\s+(?!\|)', '. | ', result)
+    result = re.sub(r'\.(?=[^\s|])', '. | ', result)
+    
+    return result
+
+
 def paginate_queryset(queryset, page_number, items_per_page):
     """
     페이징 처리를 수행합니다.
@@ -1672,6 +1698,10 @@ def preview_popup(request):
         for field, label_text in field_mappings:
             value = getattr(label, field)
             if value:
+                # 주의사항과 기타표시는 공통 함수로 변환
+                if field in ['cautions', 'additional_info']:
+                    value = format_cautions_text(value)
+                
                 preview_items.append({
                     'id': len(preview_items) + 1,
                     'label': label_text,
@@ -1707,12 +1737,9 @@ def preview_popup(request):
         allergens = []  # 알레르기 유발물질 목록
         origins = []    # 원산지 표시대상 목록
         
-        # 연결된 원재료에서 알레르기 유발물질과 원산지 표시대상 추출
-        ingredient_relations = label.ingredient_relations.select_related('ingredient')
-        for relation in ingredient_relations:
-            if relation.ingredient.allergens:
-                allergens.extend(relation.ingredient.allergens.split(','))
-            # 원산지 표시대상 로직 추가 (필요한 경우)
+        # 알레르기 관리에서 설정된 알레르기 성분 가져오기
+        if label.allergens:
+            allergens = [a.strip() for a in label.allergens.split(',') if a.strip()]
 
         # 영양성분 데이터 nutrition_data (계산기와 동일 구조)
         nutrition_data = {
@@ -1776,7 +1803,7 @@ def preview_popup(request):
             'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
             'nutrition_items': nutrition_items,
-            'allergens': list(set(allergens)),  # 중복 제거
+            'allergens': json.dumps(list(set(allergens)), ensure_ascii=False),  # JSON 직렬화 추가
             'origins': list(set(origins)),       # 중복 제거
             'nutrition_data': json.dumps(nutrition_data, ensure_ascii=False),
             'country_list': json.dumps(country_list, ensure_ascii=False),  # JSON 직렬화

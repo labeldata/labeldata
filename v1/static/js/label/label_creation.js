@@ -482,6 +482,21 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    // 주의사항/기타표시 텍스트 변환 함수 (서버 로직과 동일)
+    const formatCautionsText = (text) => {
+        if (!text) return '';
+        
+        // 1. 줄바꿈을 |로 변경
+        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+        let result = lines.join(' | ');
+        
+        // 2. 마침표 뒤에 | 추가
+        result = result.replace(/\.\s+(?!\|)/g, '. | ');
+        result = result.replace(/\.(?=[^\s|])/g, '. | ');
+        
+        return result;
+    };
+
     // 팝업이 데이터를 요청하면('requestPreviewData') 이 리스너가 응답합니다.
     window.addEventListener('message', function handlePreviewRequest(e) {
         // 이 메시지가 우리가 연 팝업(e.source)에서 온 것인지 확인
@@ -520,8 +535,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (fieldName) {
                     const inputElement = document.querySelector(`[name="${fieldName}"]`);
                     if (inputElement) {
+                        let value = inputElement.value || '';
+                        
+                        // 주의사항과 기타표시는 formatCautionsText 함수로 변환
+                        if (fieldName === 'cautions' || fieldName === 'additional_info') {
+                            value = formatCautionsText(value);
+                        }
+                        
                         // 미리보기 페이지가 기대하는 표준 필드명을 키(key)로 사용
-                        checkedData[fieldName] = inputElement.value || '';
+                        checkedData[fieldName] = value;
                         
                         // pog_daycnt 필드의 경우 날짜 옵션도 함께 전달
                         if (fieldName === 'pog_daycnt') {

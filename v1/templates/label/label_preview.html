@@ -143,6 +143,7 @@
   <script id="country-mapping-data" type="application/json">{{ country_mapping|safe }}</script>
   <script id="country-list-data" type="application/json">{{ country_list|safe }}</script>
   <script id="expiry-recommendation-data" type="application/json">{{ expiry_recommendation|safe }}</script>
+  <script id="allergens-data" type="application/json">{{ allergens|safe }}</script>
 
   <!-- External JS Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -178,6 +179,7 @@
 
         countryMapping = safeJsonParse('country-mapping-data');
         countryList = safeJsonParse('country-list-data') || [];
+        const allergensData = safeJsonParse('allergens-data') || [];
 
         // --- DOM ELEMENTS ---
         const previewContent = document.getElementById('previewContent');
@@ -431,21 +433,22 @@
                     let value = data[key];
 
                     if (key === 'rawmtrl_nm_display') {
-                        const allergenMatch = value.match(/\[알레르기 성분\s*:\s*([^\]]+)\]/);
-                        const gmoMatch = value.match(/\[GMO\s*성분\s*:\s*([^\]]+)\]/);
                         const container = document.createElement('div');
+                        // 기존 패턴 매칭 제거
                         let mainText = value.replace(/\[알레르기 성분\s*:[^\]]+\]/, '').replace(/\[GMO\s*성분\s*:[^\]]+\]/, '').trim() || '';
                         
                         let processedText = boldCountryNames(mainText, countryList);
                         container.innerHTML = `<div>${processedText}</div>`;
 
-                        if (allergenMatch) {
-                            container.innerHTML += `<div style="background-color: #000; color: #fff; padding: 2px 5px; font-weight: bold; display: inline-block; margin-top: 5px;">${allergenMatch[1].trim()} 함유</div>`;
-                        }
-                         if (gmoMatch) {
-                            container.innerHTML += `<div style="background-color: #000; color: #fff; padding: 2px 5px; font-weight: bold; display: inline-block; margin-top: 5px;">${gmoMatch[1].trim()}(GMO)</div>`;
+                        // allergens 데이터에서 알레르기 표시
+                        if (allergensData && allergensData.length > 0) {
+                            container.innerHTML += `<div style="background-color: #000; color: #fff; padding: 2px 5px; font-weight: bold; display: inline-block; margin-top: 5px;">${allergensData.join(', ')} 함유</div>`;
                         }
                         td.appendChild(container);
+
+                    } else if (key === 'cautions' || key === 'additional_info') {
+                        // 주의사항/기타표시: 줄바꿈을 " | "로 구분
+                        td.innerHTML = value;
 
                     } else if (key === 'country_of_origin'){
                          td.innerHTML = boldCountryNames(convertCountryCodeToKorean(value), countryList);
