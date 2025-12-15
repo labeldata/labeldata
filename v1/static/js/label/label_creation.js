@@ -1113,7 +1113,44 @@ document.addEventListener('DOMContentLoaded', function () {
   function initSelect2Components() {
     $('#food_group').select2({ placeholder: '대분류 선택', allowClear: true, width: '100%' });
     $('#food_type').select2({ placeholder: '소분류 선택', allowClear: true, width: '100%' });
-    $('select[name="country_of_origin"]').select2({ placeholder: '대외무역법에 따른 가공국을 선택하세요.', allowClear: true, width: '100%' });
+    
+    // 원산지는 일반 select로 변경 (간편모드와 동일한 방식)
+    // Select2 제거하고 일반 이벤트 리스너 사용
+    const countrySelect = document.getElementById('countrySelectDetail');
+    const countryInput = document.getElementById('countryInputDetail');
+    
+    if (countrySelect && countryInput) {
+      countrySelect.addEventListener('change', function() {
+        if (this.value === '직접입력') {
+          // 직접입력 선택 시 입력 필드 활성화
+          countryInput.disabled = false;
+          countryInput.value = '';
+          countryInput.focus();
+        } else if (this.value === '') {
+          // "-- 국가 선택 --" 선택 시 입력 필드 비활성화 및 초기화
+          countryInput.disabled = true;
+          countryInput.value = '';
+        } else {
+          // 특정 국가 선택 시 자동 입력 및 필드 비활성화
+          countryInput.value = this.value;
+          countryInput.disabled = true;
+        }
+      });
+      
+      // 페이지 로드 시 기존 값이 있으면 직접입력 모드로 설정
+      if (countryInput.value && countryInput.value.trim() !== '') {
+        const matchingOption = Array.from(countrySelect.options).find(opt => opt.value === countryInput.value);
+        if (matchingOption) {
+          countrySelect.value = countryInput.value;
+          countryInput.disabled = true;
+        } else {
+          // 목록에 없는 값이면 직접입력 모드
+          countrySelect.value = '직접입력';
+          countryInput.disabled = false;
+        }
+      }
+    }
+    
     // 소비기한/품질유지기한 드롭다운(select[name="date_option_display"])에는 select2를 적용하지 않음 (검색 기능 제거)
   }
 
@@ -2860,16 +2897,12 @@ function initCustomFields() {
 
 // 맞춤항목 행 추가
 function addCustomFieldRow(label = '', value = '', isNew = false) {
-    console.log(`✓ addCustomFieldRow 호출: label="${label}", value="${value}", isNew=${isNew}`);
-    
     const container = document.getElementById('customFieldsContainer');
     if (!container) {
-        console.error('✗ customFieldsContainer를 찾을 수 없습니다!');
         return;
     }
     
     const currentCount = container.children.length;
-    console.log(`✓ 현재 항목 개수: ${currentCount}`);
     
     if (currentCount >= 10) {
         alert('최대 10개까지만 추가할 수 있습니다.');
@@ -2879,8 +2912,6 @@ function addCustomFieldRow(label = '', value = '', isNew = false) {
     const index = Date.now(); // 고유 ID로 타임스탬프 사용
     const isFirst = container.children.length === 0;
     const isEditable = isNew || (label === '' && value === ''); // 신규 또는 빈 항목은 편집 가능
-    
-    console.log(`✓ index=${index}, isFirst=${isFirst}, isEditable=${isEditable}`);
     
     const fieldRow = document.createElement('div');
     fieldRow.className = 'custom-field-row border rounded p-2';
@@ -2938,7 +2969,6 @@ function addCustomFieldRow(label = '', value = '', isNew = false) {
     `;
     
     container.appendChild(fieldRow);
-    console.log(`✓ 항목 추가 완료, 현재 총 ${container.children.length}개`);
     
     updateCustomFieldsSummary();
     updateCustomFieldCount();

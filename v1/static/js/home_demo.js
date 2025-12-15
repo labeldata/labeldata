@@ -248,6 +248,7 @@ function loadFromLocalStorage() {
                 window.selectedIngredientAllergens = new Set(allergens);
                 // 자동 감지 여부는 알 수 없으므로 모두 수동 추가로 간주
                 window.autoDetectedAllergens = new Set();
+                window.selectedCrossContaminationAllergens = new Set(); 
                 updateAllergenDisplay();
             }
             
@@ -400,12 +401,21 @@ function generatePreviewHTML(data) {
 function boldCountryNames(text, countries) {
     if (!text || !countries || countries.length === 0) return text;
     let processedText = text;
+    
     // 긴 국가명부터 처리 (예: "대한민국" 먼저, "한국" 나중에)
+    // 이렇게 하면 "영국산"에서 "영국"을 먼저 찾고, "국"은 나중에 찾게 됨
     const sortedCountries = countries.sort((a, b) => b.length - a.length);
+    
     sortedCountries.forEach(country => {
         if (country) {
-            // 국가명 + "산" 패턴 매칭 (ex: "대한민국", "대한민국산")
-            const regex = new RegExp(`(${country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s*산)?)`, 'gi');
+            const escapedCountry = country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            
+            // 개선된 정규표현식:
+            // 1. (?<![가-힣]): 앞에 한글이 오면 안 됨 (미국산에서 국산 방지)
+            // 2. (국가명): 국가명 매칭
+            // 3. (\s*산)?: 선택적으로 "산" 매칭 (공백 포함 가능)
+            // 4. (?![가-힣]): 뒤에 한글이 오면 안 됨
+            const regex = new RegExp(`(?<![가-힣])(${escapedCountry}(\\s*산)?)(?![가-힣])`, 'gi');
             processedText = processedText.replace(regex, '<strong>$1</strong>');
         }
     });
@@ -1062,6 +1072,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (!window.autoDetectedAllergens) {
         window.autoDetectedAllergens = new Set();
+    }
+    if (!window.selectedCrossContaminationAllergens) {
+        window.selectedCrossContaminationAllergens = new Set();
     }
     
     // 품목보고번호 실시간 형식 검증
@@ -1768,6 +1781,7 @@ function toggleAllergenDropdown() {
 // 선택된 알레르기 물질 관리 (전역 변수)
 window.selectedIngredientAllergens = new Set();
 window.autoDetectedAllergens = new Set();
+window.selectedCrossContaminationAllergens = new Set(); // 교차오염 알레르기 추가
 
 // 알레르기 태그 추가
 function addAllergenTag(allergen, isAuto = false) {
@@ -2798,44 +2812,70 @@ function initializePanelResizer() {
 // ==================== 알레르기 저장/로딩 ====================
 // localStorage에 알레르기 정보 저장
 function saveAllergensToStorage() {
-    const timestamp = new Date().toISOString();
-    
-    // localStorage 저장 (비로그인/로그인 모두)
-    localStorage.setItem('labeldata_allergens', JSON.stringify([...window.selectedIngredientAllergens]));
-    localStorage.setItem('labeldata_crossContaminationAllergens', JSON.stringify([...window.selectedCrossContaminationAllergens]));
-    localStorage.setItem('labeldata_timestamp', timestamp);
+    try {
+        const timestamp = new Date().toISOString();
+        
+        // Set이 제대로 초기화되어 있는지 확인
+        if (!window.selectedIngredientAllergens || !(window.selectedIngredientAllergens instanceof Set)) {
+            window.selectedIngredientAllergens = new Set();
+        }
+        if (!window.selectedCrossContaminationAllergens || !(window.selectedCrossContaminationAllergens instanceof Set)) {
+            window.selectedCrossContaminationAllergens = new Set();
+        }
+        
+        // localStorage 저장 (비로그인/로그인 모두)
+        localStorage.setItem('labeldata_allergens', JSON.stringify([...window.selectedIngredientAllergens]));
+        localStorage.setItem('labeldata_crossContaminationAllergens', JSON.stringify([...window.selectedCrossContaminationAllergens]));
+        localStorage.setItem('labeldata_timestamp', timestamp);
+    } catch (e) {
+        console.error('알레르기 정보 저장 실패:', e);
+    }
 }
 
 // localStorage에서 알레르기 정보 로드
 function loadAllergensFromStorage() {
-    // 서버에서 로드된 라벨 데이터가 있으면 localStorage 로드하지 않음
-    if (window.hasServerLabelData) {
-        return;
-    }
-    
-    const timestamp = localStorage.getItem('labeldata_timestamp');
-    
-    if (timestamp) {
-        const savedTime = new Date(timestamp);
-        const now = new Date();
-        const hoursDiff = (now - savedTime) / (1000 * 60 * 60);
-        
-        if (hoursDiff < 24) {
-            // 24시간 이내 데이터 로드
-            const allergens = JSON.parse(localStorage.getItem('labeldata_allergens') || '[]');
-            const crossAllergens = JSON.parse(localStorage.getItem('labeldata_crossContaminationAllergens') || '[]');
-            
-            allergens.forEach(a => window.selectedIngredientAllergens.add(a));
-            crossAllergens.forEach(a => window.selectedCrossContaminationAllergens.add(a));
-            
-            updateAllergenDisplay();
-            console.log('알레르기 정보를 localStorage에서 불러왔습니다.');
-        } else {
-            // 만료된 데이터 삭제
-            localStorage.removeItem('labeldata_allergens');
-            localStorage.removeItem('labeldata_crossContaminationAllergens');
-            localStorage.removeItem('labeldata_timestamp');
+    try {
+        // 서버에서 로드된 라벨 데이터가 있으면 localStorage 로드하지 않음
+        if (window.hasServerLabelData) {
+            return;
         }
+        
+        // Set 초기화 확인
+        if (!window.selectedIngredientAllergens || !(window.selectedIngredientAllergens instanceof Set)) {
+            window.selectedIngredientAllergens = new Set();
+        }
+        if (!window.selectedCrossContaminationAllergens || !(window.selectedCrossContaminationAllergens instanceof Set)) {
+            window.selectedCrossContaminationAllergens = new Set();
+        }
+        
+        const timestamp = localStorage.getItem('labeldata_timestamp');
+        
+        if (timestamp) {
+            const savedTime = new Date(timestamp);
+            const now = new Date();
+            const hoursDiff = (now - savedTime) / (1000 * 60 * 60);
+            
+            if (hoursDiff < 24) {
+                // 24시간 이내 데이터 로드
+                const allergens = JSON.parse(localStorage.getItem('labeldata_allergens') || '[]');
+                const crossAllergens = JSON.parse(localStorage.getItem('labeldata_crossContaminationAllergens') || '[]');
+                
+                allergens.forEach(a => window.selectedIngredientAllergens.add(a));
+                crossAllergens.forEach(a => window.selectedCrossContaminationAllergens.add(a));
+                
+                updateAllergenDisplay();
+            } else {
+                // 만료된 데이터 삭제
+                localStorage.removeItem('labeldata_allergens');
+                localStorage.removeItem('labeldata_crossContaminationAllergens');
+                localStorage.removeItem('labeldata_timestamp');
+            }
+        }
+    } catch (e) {
+        console.error('localStorage 알레르기 정보 로드 실패:', e);
+        // 에러 발생 시 Set 초기화
+        window.selectedIngredientAllergens = new Set();
+        window.selectedCrossContaminationAllergens = new Set();
     }
 }
 

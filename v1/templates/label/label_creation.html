@@ -322,13 +322,15 @@
                   <label for="chk_country_of_origin" class="m-0">원산지</label>
                 </div>
                  <div style="width:85%;">
-                  <div class="input-container">
-                    <select name="country_of_origin" class="form-control select2-country" style="width:100%; min-width:200px; height:40px; font-size:14px;">
-                      <option value="">선택하세요</option>
+                  <div class="input-container d-flex" style="gap: 8px;">
+                    <select id="countrySelectDetail" class="form-control" style="flex: 0 0 auto; width: 140px; height:40px;">
+                      <option value="">-- 국가 선택 --</option>
+                      <option value="직접입력">직접입력</option>
                       {% for c in country_list %}
-                      <option value="{{ c.country_code2 }}" {% if form.country_of_origin.value == c.country_code2 %}selected{% endif %}>{{ c.country_name_ko }}</option>
+                      <option value="{% if c.country_name_ko|slice:'-1:' == '산' %}{{ c.country_name_ko }}{% else %}{{ c.country_name_ko }}산{% endif %}">{% if c.country_name_ko|slice:'-1:' == '산' %}{{ c.country_name_ko }}{% else %}{{ c.country_name_ko }}산{% endif %}</option>
                       {% endfor %}
                     </select>
+                    <input type="text" name="country_of_origin" class="form-control" placeholder="원산지를 입력하세요" id="countryInputDetail" style="flex: 1; height:40px;" disabled>
                   </div>
                 </div>
               </div>
@@ -951,6 +953,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     {% endif %}
 });
+</script>
+
+<script>
+// 국가 목록을 JavaScript에서 사용할 수 있도록 전역 변수로 설정 (볼드 처리용)
+window.countryListForBold = [
+    {% for c in country_list %}
+    "{{ c.country_name_ko|escapejs }}"{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
 </script>
 
 {% endblock %}

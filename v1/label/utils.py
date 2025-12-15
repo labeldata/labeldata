@@ -84,19 +84,28 @@ def convert_country_code_to_korean(text, country_mapping):
 def bold_country_names(text, country_list):
     """
     국가명 볼드 처리 (HTML 태그 추가)
+    
+    긴 국가명부터 처리하여 부분 매칭 방지
+    예: "영국산"을 먼저 매칭하여 "국산"이 별도로 매칭되지 않도록 함
     """
     if not text or not country_list:
         return text
 
     processed_text = text
-    # 국가명 목록을 길이 순으로 정렬
+    # 국가명 목록을 길이 순으로 정렬 (긴 이름부터 처리)
     sorted_countries = sorted(country_list, key=len, reverse=True)
 
     for country in sorted_countries:
         if not country:
             continue
         escaped_country = re.escape(country)
-        regex = re.compile(f'({escaped_country}(\\s*산)?)', re.IGNORECASE)
+        
+        # 개선된 정규표현식:
+        # 1. (?<![가-힣]): 앞에 한글이 오면 안 됨 (미국산에서 국산 방지)
+        # 2. (국가명): 국가명 매칭
+        # 3. (\s*산)?: 선택적으로 "산" 매칭 (공백 포함 가능)
+        # 4. (?![가-힣]): 뒤에 한글이 오면 안 됨
+        regex = re.compile(f'(?<![가-힣])({escaped_country}(\\s*산)?)(?![가-힣])', re.IGNORECASE)
         processed_text = regex.sub(r'<strong>\1</strong>', processed_text)
 
     return processed_text

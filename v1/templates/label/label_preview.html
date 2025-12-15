@@ -379,10 +379,18 @@
         function boldCountryNames(text, countries) {
             if (!text || !countries || countries.length === 0) return text;
             let processedText = text;
+            
+            // 긴 국가명부터 처리 (예: "영국" 먼저, "국" 나중에)
             const sortedCountries = countries.sort((a, b) => b.length - a.length);
+            
             sortedCountries.forEach(country => {
                 if(country){
-                    const regex = new RegExp(`(${country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s*산)?)`, 'gi');
+                    const escapedCountry = country.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    
+                    // 개선된 정규표현식:
+                    // (?<![가-힣]): 앞에 한글이 오면 안 됨
+                    // (?![가-힣]): 뒤에 한글이 오면 안 됨
+                    const regex = new RegExp(`(?<![가-힣])(${escapedCountry}(\\s*산)?)(?![가-힣])`, 'gi');
                     processedText = processedText.replace(regex, '<strong>$1</strong>');
                 }
             });
