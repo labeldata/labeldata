@@ -530,7 +530,6 @@ function safeLoadJsonData(elementId, defaultValue = null, description = '') {
         if (element && element.textContent) {
             return JSON.parse(element.textContent);
         } else {
-            console.warn(`${description || elementId} 요소가 없습니다`);
             return defaultValue;
         }
     } catch (error) {
@@ -1521,7 +1520,6 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
         // 통합된 데이터 로드 함수 사용
         if (!nutritionData) {
-            console.warn('⚠️ 영양성분 데이터가 없습니다');
             return;
         }
         

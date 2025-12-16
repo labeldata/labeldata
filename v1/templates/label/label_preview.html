@@ -18,7 +18,12 @@
 </head>
 <body>
   <header class="preview-page-header">
-    <h1 class="panel-title">라벨 미리보기</h1>
+    <div style="flex-grow: 1;">
+      <h1 class="panel-title">라벨 미리보기</h1>
+      <p class="mb-0" style="font-size: 0.75rem; color: #6c757d; margin-top: 4px;">
+        표 설정, 텍스트 변환, 분리배출마크를 설정하여 라벨 디자인을 미리 확인하고 PDF로 다운로드하세요
+      </p>
+    </div>
     <div class="preview-actions" role="toolbar" aria-label="미리보기 도구">
       <div class="zoom-controls">
         <button class="btn btn-outline-secondary btn-sm" id="zoomOutBtn" aria-label="축소"><i class="fas fa-search-minus"></i></button>
@@ -48,51 +53,97 @@
         </button>
       </div>
       
-      <div class="settings-header mb-3">
-        <h6 class="text-secondary mb-0">표시사항 설정</h6>
+      <!-- 탭 네비게이션 -->
+      <div class="preview-tabs" style="display: flex; gap: 0.15rem; margin-bottom: 1rem; border-bottom: 2px solid #e9ecef; overflow-x: auto; white-space: nowrap; flex-wrap: nowrap;">
+        <button class="preview-tab active" data-tab="table-settings" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
+          표 설정
+        </button>
+        <button class="preview-tab" data-tab="text-format" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
+          텍스트 변환
+        </button>
+        <button class="preview-tab" data-tab="recycling-mark" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
+          분리배출마크
+        </button>
       </div>
       
-      <section class="settings-group">
-        <div class="area-info text-primary mb-3">
+      <!-- 표 설정 탭 -->
+      <section class="preview-tab-content active" id="table-settings-content">
+        <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
+          <i class="fas fa-info-circle"></i> 라벨의 가로 크기, 글꼴, 글자 크기, 자간, 줄간격을 설정합니다. 세로 크기는 자동으로 계산됩니다.
+        </div>
+        
+        <div class="area-info text-primary mb-3" style="font-size: 0.85rem; font-weight: 600;">
           정보표시면 면적: <span id="areaDisplay">100</span> cm²
         </div>
         
         <div class="settings-row-pair">
           <div class="settings-row">
-              <label class="form-label required" for="widthInput">가로 (cm)</label>
-              <input type="number" class="form-control form-control-sm" id="widthInput" value="10" min="4" max="50" step="1">
+            <label class="form-label required" for="widthInput" style="font-size: 0.85rem; font-weight: 600;">가로 (cm)</label>
+            <input type="number" class="form-control form-control-sm" id="widthInput" value="10" min="4" max="50" step="1">
           </div>
           <div class="settings-row">
-              <label class="form-label">세로 (cm) - 자동 계산</label>
-              <input type="text" class="form-control form-control-sm" id="heightInput" readonly>
+            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">세로 (cm) - 자동 계산</label>
+            <input type="text" class="form-control form-control-sm" id="heightInput" readonly>
           </div>
         </div>
         <div class="settings-row-pair">
           <div class="settings-row">
-              <label class="form-label" for="fontFamilySelect">글꼴</label>
-              <select class="form-select form-select-sm" id="fontFamilySelect">
-                <option value="'Noto Sans KR', sans-serif" selected>노토 산스</option>
-                <option value="'Nanum Gothic', sans-serif">나눔고딕</option>
-                <option value="'Nanum Myeongjo', serif">나눔명조</option>
-              </select>
+            <label class="form-label" for="fontFamilySelect" style="font-size: 0.85rem; font-weight: 600;">글꼴</label>
+            <select class="form-select form-select-sm" id="fontFamilySelect">
+              <option value="'Noto Sans KR', sans-serif" selected>노토 산스</option>
+              <option value="'Nanum Gothic', sans-serif">나눔고딕</option>
+              <option value="'Nanum Myeongjo', serif">나눔명조</option>
+            </select>
           </div>
           <div class="settings-row">
-              <label class="form-label" for="fontSizeInput">기본 글자 크기 (pt)</label>
-              <input type="number" class="form-control form-control-sm" id="fontSizeInput" value="10" min="7" max="72" step="0.5">
+            <label class="form-label" for="fontSizeInput" style="font-size: 0.85rem; font-weight: 600;">기본 글자 크기 (pt)</label>
+            <input type="number" class="form-control form-control-sm" id="fontSizeInput" value="10" min="7" max="72" step="0.5">
           </div>
         </div>
         <div class="settings-row-pair">
-            <div class="settings-row">
-                <label class="form-label" for="letterSpacingInput">자간 (%)</label>
-                <input type="number" class="form-control form-control-sm" id="letterSpacingInput" value="-5" min="-20" max="20" step="1">
-            </div>
-            <div class="settings-row">
-                <label class="form-label" for="lineHeightInput">줄간격</label>
-                <input type="number" class="form-control form-control-sm" id="lineHeightInput" value="1.5" min="1" max="3.0" step="0.1">
-            </div>
+          <div class="settings-row">
+            <label class="form-label" for="letterSpacingInput" style="font-size: 0.85rem; font-weight: 600;">자간 (%)</label>
+            <input type="number" class="form-control form-control-sm" id="letterSpacingInput" value="-5" min="-20" max="20" step="1">
+          </div>
+          <div class="settings-row">
+            <label class="form-label" for="lineHeightInput" style="font-size: 0.85rem; font-weight: 600;">줄간격</label>
+            <input type="number" class="form-control form-control-sm" id="lineHeightInput" value="1.5" min="1" max="3.0" step="0.1">
+          </div>
         </div>
       </section>
-      <div id="recyclingMarkUiBox" class="mt-4 pt-3 border-top"></div>
+      
+      <!-- 텍스트 변환 설정 탭 -->
+      <section class="preview-tab-content" id="text-format-content">
+        <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
+          <i class="fas fa-info-circle"></i> 주의사항과 기타표시사항의 표시 방식을 선택합니다. 줄바꿈을 그대로 보거나, 한 줄로 연결하거나, 구분 기호로 연결할 수 있습니다.
+        </div>
+        
+        <div class="settings-row mb-3">
+          <label class="form-label" for="textFormatMode" style="font-size: 0.85rem; font-weight: 600;">표시 방식</label>
+          <select class="form-select form-select-sm" id="textFormatMode">
+            <option value="KEEP">입력 데이터 그대로 보기</option>
+            <option value="REMOVE">줄바꿈 없애기 (한 줄로)</option>
+            <option value="REPLACE" selected>문장 구분 기호 추가</option>
+          </select>
+        </div>
+        
+        <div class="settings-row" id="delimiterRow">
+          <label class="form-label" for="textDelimiter" style="font-size: 0.85rem; font-weight: 600;">구분 기호</label>
+          <select class="form-select form-select-sm mb-2" id="textDelimiter">
+            <option value="|" selected>| (수직선)</option>
+            <option value=",">, (쉼표)</option>
+            <option value="/">/ (슬래시)</option>
+            <option value="·">· (가운뎃점)</option>
+            <option value="custom">직접 입력</option>
+          </select>
+          <input type="text" class="form-control form-control-sm" id="customDelimiter" placeholder="구분 기호 입력 (최대 3자)" maxlength="3" style="display: none;">
+        </div>
+      </section>
+      
+      <!-- 분리배출마크 관리 탭 -->
+      <section class="preview-tab-content" id="recycling-mark-content">
+        <div id="recyclingMarkUiBox"></div>
+      </section>
     </aside>
 
     <section class="preview-panel">
@@ -163,6 +214,36 @@
         let dataLoaded = false;
         let currentZoom = 1;
         let recyclingTextIdCounter = 0;
+        
+        // 텍스트 변환 설정 (전역)
+        window.textFormatConfig = {
+            mode: 'REPLACE',      // 'KEEP', 'REMOVE', 'REPLACE'
+            delimiter: '|'        // 구분 기호
+        };
+        
+        // 텍스트 변환 함수
+        window.formatTextByOptions = function(text, config) {
+            if (!text) return '';
+            
+            const mode = config.mode || 'REPLACE';
+            const delimiter = config.delimiter || '|';
+            
+            if (mode === 'KEEP') {
+                // 입력 데이터 그대로 보기
+                return text;
+            } else if (mode === 'REMOVE') {
+                // 줄바꿈 없애기
+                return text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+            } else if (mode === 'REPLACE') {
+                // 문장 구분 기호 추가
+                return text.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .join(delimiter);
+            }
+            
+            return text;
+        };
 
         function safeJsonParse(elementId) {
             try {
@@ -233,6 +314,68 @@
                 }
             }
             return cookieValue;
+        }
+        
+        // 탭 전환 함수
+        function switchPreviewTab(tabName) {
+            // 모든 탭 버튼의 active 클래스 제거
+            document.querySelectorAll('.preview-tab').forEach(tab => {
+                tab.classList.remove('active');
+                tab.style.color = '#6c757d';
+                tab.style.borderBottomColor = 'transparent';
+                tab.style.fontWeight = '500';
+            });
+            
+            // 모든 탭 콘텐츠 숨기기
+            document.querySelectorAll('.preview-tab-content').forEach(content => {
+                content.classList.remove('active');
+                content.style.display = 'none';
+            });
+            
+            // 선택된 탭 활성화
+            const selectedTab = document.querySelector(`.preview-tab[data-tab="${tabName}"]`);
+            const selectedContent = document.getElementById(`${tabName}-content`);
+            
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+                selectedTab.style.color = '#0d6efd';
+                selectedTab.style.borderBottomColor = '#0d6efd';
+                selectedTab.style.fontWeight = '600';
+            }
+            
+            if (selectedContent) {
+                selectedContent.classList.add('active');
+                selectedContent.style.display = 'block';
+            }
+            
+            // localStorage에 현재 탭 저장
+            try {
+                localStorage.setItem('preview-active-tab', tabName);
+            } catch (e) {
+                console.error('탭 상태 저장 실패:', e);
+            }
+        }
+        
+        // 탭 클릭 이벤트 리스너
+        document.querySelectorAll('.preview-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                switchPreviewTab(this.dataset.tab);
+            });
+        });
+        
+        // 페이지 로드 시 저장된 탭 복원
+        function restoreActiveTab() {
+            try {
+                const savedTab = localStorage.getItem('preview-active-tab');
+                if (savedTab) {
+                    switchPreviewTab(savedTab);
+                } else {
+                    switchPreviewTab('table-settings'); // 기본 탭
+                }
+            } catch (e) {
+                console.error('탭 상태 복원 실패:', e);
+                switchPreviewTab('table-settings');
+            }
         }
 
         function makeDraggable(element) {
@@ -466,8 +609,20 @@
                         td.appendChild(container);
 
                     } else if (key === 'cautions' || key === 'additional_info') {
-                        // 주의사항/기타표시: 줄바꿈을 " | "로 구분
-                        td.innerHTML = value;
+                        // 주의사항/기타표시: 텍스트 변환 설정 적용
+                        let displayText = value;
+                        
+                        // textFormatConfig가 있으면 변환 적용
+                        if (window.textFormatConfig && window.formatTextByOptions) {
+                            displayText = window.formatTextByOptions(value, window.textFormatConfig);
+                        }
+                        
+                        // KEEP 모드일 때는 줄바꿈을 <br>로 변환하여 화면에 표시
+                        if (window.textFormatConfig && window.textFormatConfig.mode === 'KEEP') {
+                            displayText = displayText.replace(/\n/g, '<br>');
+                        }
+                        
+                        td.innerHTML = displayText;
 
                     } else if (key === 'country_of_origin'){
                          td.innerHTML = boldCountryNames(convertCountryCodeToKorean(value), countryList);
@@ -748,54 +903,55 @@
             if (!target || document.getElementById('recyclingMarkControls')) return;
 
             target.innerHTML = `
-                <section class="settings-group">
-                    <h6 class="mb-3">분리배출마크 (최대 ${MAX_RECYCLING_MARKS}개)</h6>
-                    <div id="recyclingMarkControls">
-                        <!-- 1. 마크 선택 + 복합재질 정보 입력 -->
-                        <div class="settings-row-pair mb-3">
-                            <div class="settings-row">
-                                <label class="form-label" for="recyclingMarkSelect">마크 선택</label>
-                                <select class="form-select form-select-sm" id="recyclingMarkSelect">
-                                    <option value="">마크를 선택하세요</option>
-                                    ${recyclingMarkGroups.map(group => 
-                                        `<optgroup label="${group.group}">
-                                            ${group.options.map(option => 
-                                                `<option value="${option.value}">${option.label}</option>`
-                                            ).join('')}
-                                        </optgroup>`
-                                    ).join('')}
-                                </select>
-                            </div>
-                            <div class="settings-row">
-                                <label class="form-label" for="additionalRecyclingText">복합재질 정보 (선택)</label>
-                                <input type="text" class="form-control form-control-sm" 
-                                       id="additionalRecyclingText" 
-                                       placeholder="예: 몸체(종이)/뚜껑(PP)">
-                            </div>
+                <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
+                    <i class="fas fa-info-circle"></i> 분리배출마크를 선택하고 추가하세요. 복합재질인 경우 재질 정보를 입력할 수 있으며, 최대 ${MAX_RECYCLING_MARKS}개까지 추가 가능합니다.
+                </div>
+                
+                <div id="recyclingMarkControls">
+                    <!-- 1. 마크 선택 + 복합재질 정보 입력 -->
+                    <div class="settings-row-pair mb-3">
+                        <div class="settings-row">
+                            <label class="form-label" for="recyclingMarkSelect" style="font-size: 0.85rem; font-weight: 600;">마크 선택</label>
+                            <select class="form-select form-select-sm" id="recyclingMarkSelect">
+                                <option value="">마크를 선택하세요</option>
+                                ${recyclingMarkGroups.map(group => 
+                                    `<optgroup label="${group.group}">
+                                        ${group.options.map(option => 
+                                            `<option value="${option.value}">${option.label}</option>`
+                                        ).join('')}
+                                    </optgroup>`
+                                ).join('')}
+                            </select>
                         </div>
-                        
-                        <!-- 도움말 -->
-                        <div class="form-text mt-1 mb-3">
-                            <i class="fas fa-info-circle me-1"></i>
-                            복합재질인 경우 입력하세요. 여러 재질은 '/'로 구분하세요.
-                        </div>
-                        
-                        <!-- 2. 추가 버튼 -->
-                        <div class="mb-3">
-                            <button class="btn btn-primary btn-sm w-100" id="addRecyclingMarkBtn">
-                                <i class="fas fa-plus me-1"></i>마크 추가
-                            </button>
-                        </div>
-                        
-                        <!-- 3. 추가된 마크 목록 -->
-                        <div class="mt-3 pt-3 border-top">
-                            <label class="form-label">추가된 마크</label>
-                            <div id="recyclingMarkList" class="border rounded p-2" style="min-height: 60px; background-color: #f8f9fa;">
-                                <div class="text-muted small">추가된 마크가 없습니다.</div>
-                            </div>
+                        <div class="settings-row">
+                            <label class="form-label" for="additionalRecyclingText" style="font-size: 0.85rem; font-weight: 600;">복합재질 정보 (선택)</label>
+                            <input type="text" class="form-control form-control-sm" 
+                                   id="additionalRecyclingText" 
+                                   placeholder="예: 몸체(종이)/뚜껑(PP)">
                         </div>
                     </div>
-                </section>
+                    
+                    <!-- 도움말 -->
+                    <div class="form-text mt-1 mb-3" style="font-size: 0.75rem;">
+                        <i class="fas fa-info-circle me-1"></i>
+                        복합재질인 경우 입력하세요. 여러 재질은 '/'로 구분하세요.
+                    </div>
+                    
+                    <!-- 2. 추가 버튼 -->
+                    <div class="mb-3">
+                        <button class="btn btn-primary btn-sm w-100" id="addRecyclingMarkBtn">
+                            <i class="fas fa-plus me-1"></i>마크 추가
+                        </button>
+                    </div>
+                    
+                    <!-- 3. 추가된 마크 목록 -->
+                    <div class="mt-3">
+                        <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">추가된 마크</label>
+                        <div id="recyclingMarkList" class="border rounded p-2" style="min-height: 60px; background-color: #f8f9fa;">
+                            <div class="text-muted small">추가된 마크가 없습니다.</div>
+                        </div>
+                    </div>
+                </div>
             `;
             
             const select = document.getElementById('recyclingMarkSelect');
@@ -1658,6 +1814,125 @@
             document.getElementById('exportPdfBtn')?.addEventListener('click', exportToPDF);
             document.getElementById('zoomInBtn')?.addEventListener('click', () => { currentZoom = Math.min(2, currentZoom + 0.1); updateZoom(); });
             document.getElementById('zoomOutBtn')?.addEventListener('click', () => { currentZoom = Math.max(0.5, currentZoom - 0.1); updateZoom(); });
+            
+            // 텍스트 변환 설정 이벤트 리스너
+            const textFormatMode = document.getElementById('textFormatMode');
+            const textDelimiter = document.getElementById('textDelimiter');
+            const customDelimiter = document.getElementById('customDelimiter');
+            const delimiterRow = document.getElementById('delimiterRow');
+            
+            if (textFormatMode) {
+                textFormatMode.addEventListener('change', function() {
+                    // 구분 기호 추가 모드일 때만 구분 기호 입력 표시
+                    if (delimiterRow) {
+                        delimiterRow.style.display = this.value === 'REPLACE' ? 'block' : 'none';
+                    }
+                    
+                    // 설정 업데이트
+                    window.textFormatConfig.mode = this.value;
+                    
+                    try {
+                        localStorage.setItem('textFormatConfig', JSON.stringify(window.textFormatConfig));
+                    } catch (e) {
+                        console.error('설정 저장 실패:', e);
+                    }
+                    
+                    // 테이블 즉시 업데이트
+                    if (checkedFields && Object.keys(checkedFields).length > 0) {
+                        renderTable(checkedFields);
+                    }
+                });
+                
+                // 초기 상태 설정
+                if (delimiterRow) {
+                    delimiterRow.style.display = textFormatMode.value === 'REPLACE' ? 'block' : 'none';
+                }
+            }
+            
+            if (textDelimiter && customDelimiter) {
+                textDelimiter.addEventListener('change', function() {
+                    if (this.value === 'custom') {
+                        customDelimiter.style.display = 'block';
+                        customDelimiter.focus();
+                    } else {
+                        customDelimiter.style.display = 'none';
+                        
+                        // 설정 업데이트
+                        window.textFormatConfig.delimiter = this.value;
+                        
+                        try {
+                            localStorage.setItem('textFormatConfig', JSON.stringify(window.textFormatConfig));
+                        } catch (e) {
+                            console.error('설정 저장 실패:', e);
+                        }
+                        
+                        // 테이블 즉시 업데이트
+                        if (checkedFields && Object.keys(checkedFields).length > 0) {
+                            renderTable(checkedFields);
+                        }
+                    }
+                });
+                
+                customDelimiter.addEventListener('input', function() {
+                    // 설정 저장
+                    if (window.textFormatConfig) {
+                        window.textFormatConfig.delimiter = this.value || '|';
+                        try {
+                            localStorage.setItem('textFormatConfig', JSON.stringify(window.textFormatConfig));
+                        } catch (e) {
+                            console.error('설정 저장 실패:', e);
+                        }
+                    }
+                });
+                
+                customDelimiter.addEventListener('blur', function() {
+                    // 입력이 끝나면 테이블 업데이트
+                    if (checkedFields && Object.keys(checkedFields).length > 0) {
+                        renderTable(checkedFields);
+                    }
+                });
+            }
+            
+            // 페이지 로드 시 설정 불러오기
+            try {
+                const saved = localStorage.getItem('textFormatConfig');
+                if (saved) {
+                    const config = JSON.parse(saved);
+                    
+                    // window.textFormatConfig 업데이트
+                    if (config.mode) {
+                        window.textFormatConfig.mode = config.mode;
+                    }
+                    if (config.delimiter) {
+                        window.textFormatConfig.delimiter = config.delimiter;
+                    }
+                    
+                    // UI에 반영
+                    if (textFormatMode && config.mode) {
+                        textFormatMode.value = config.mode;
+                        if (delimiterRow) {
+                            delimiterRow.style.display = config.mode === 'REPLACE' ? 'block' : 'none';
+                        }
+                    }
+                    if (config.delimiter) {
+                        if (textDelimiter) {
+                            // 미리 정의된 구분 기호인지 확인
+                            const predefined = ['|', ',', '/', '·'];
+                            if (predefined.includes(config.delimiter)) {
+                                textDelimiter.value = config.delimiter;
+                            } else {
+                                textDelimiter.value = 'custom';
+                                if (customDelimiter) {
+                                    customDelimiter.value = config.delimiter;
+                                    customDelimiter.style.display = 'block';
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('설정 불러오기 실패:', e);
+            }
         }
     
         window.addEventListener('message', function(e) {
@@ -1746,6 +2021,7 @@
         
         setupEventListeners();
         renderRecyclingMarkUI();
+        restoreActiveTab(); // 탭 상태 복원
         
         // 초기 스타일 적용 및 면적 계산
         updatePreviewStyles();

@@ -402,6 +402,70 @@ document.addEventListener('DOMContentLoaded', function () {
     return data;
   }
 
+  // ===== 텍스트 변환 설정 시스템 =====
+  
+  // 텍스트 변환 옵션 (간단한 설정)
+  const textFormatConfig = {
+    mode: 'REPLACE',        // KEEP, REMOVE, REPLACE
+    delimiter: '|'          // 구분 기호
+  };
+
+  /**
+   * 간단한 텍스트 변환 함수
+   * @param {string} text - 변환할 원본 텍스트
+   * @param {object} config - 변환 옵션 설정
+   * @returns {string} 변환된 텍스트
+   */
+  const formatTextByOptions = (text, config = textFormatConfig) => {
+    if (!text) return '';
+    
+    let result = text;
+    
+    // 모드에 따른 처리
+    switch (config.mode) {
+      case 'KEEP':
+        // 입력 데이터 그대로
+        result = text;
+        break;
+        
+      case 'REMOVE':
+        // 줄바꿈 없애기 (한 줄로)
+        result = text.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+        break;
+        
+      case 'REPLACE':
+        // 문장 구분 기호 추가
+        const delimiter = config.delimiter || '|';
+        result = text.replace(/\r?\n/g, ` ${delimiter} `).replace(/\s+/g, ' ').trim();
+        break;
+        
+      default:
+        result = text;
+    }
+    
+    return result;
+  };
+
+  // 하위 호환성을 위한 기존 함수명 유지 (내부적으로 새 함수 사용)
+  const formatCautionsText = (text) => {
+    return formatTextByOptions(text, textFormatConfig);
+  };
+
+  // 전역 함수로 노출 (다른 모듈에서도 사용 가능)
+  window.formatTextByOptions = formatTextByOptions;
+  window.textFormatConfig = textFormatConfig;
+
+  // 페이지 로드 시 설정 불러오기
+  try {
+    const saved = localStorage.getItem('textFormatConfig');
+    if (saved) {
+      const loaded = JSON.parse(saved);
+      Object.assign(textFormatConfig, loaded);
+    }
+  } catch (e) {
+    console.error('설정 불러오기 실패:', e);
+  }
+
   window.openPreviewPopup = function() {
     const form = document.getElementById("labelForm");
     if (!form) {
@@ -427,21 +491,6 @@ document.addEventListener('DOMContentLoaded', function () {
         alert("팝업이 차단되었습니다. 브라우저의 팝업 차단 설정을 확인해 주세요.");
         return;
     }
-
-    // 주의사항/기타표시 텍스트 변환 함수 (서버 로직과 동일)
-    const formatCautionsText = (text) => {
-        if (!text) return '';
-        
-        // 1. 줄바꿈을 |로 변경
-        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
-        let result = lines.join(' | ');
-        
-        // 2. 마침표 뒤에 | 추가
-        result = result.replace(/\.\s+(?!\|)/g, '. | ');
-        result = result.replace(/\.(?=[^\s|])/g, '. | ');
-        
-        return result;
-    };
 
     // 팝업이 데이터를 요청하면('requestPreviewData') 이 리스너가 응답합니다.
     window.addEventListener('message', function handlePreviewRequest(e) {
@@ -483,11 +532,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (inputElement) {
                         let value = inputElement.value || '';
                         
-                        // 주의사항과 기타표시는 formatCautionsText 함수로 변환
-                        if (fieldName === 'cautions' || fieldName === 'additional_info') {
-                            value = formatCautionsText(value);
-                        }
-                        
+                        // 원본 데이터를 그대로 전달 (미리보기 팝업에서 변환 처리)
                         // 미리보기 페이지가 기대하는 표준 필드명을 키(key)로 사용
                         checkedData[fieldName] = value;
                         
