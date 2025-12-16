@@ -113,6 +113,16 @@ function checkAllergenDuplication() {
     // 원재료명과 알레르기 표시사항 가져오기
     let ingredients = '';
     let allergenInfo = '';
+    let declaredAllergens = []; // 선언된 알레르기 성분
+    
+    // 1순위: 부모창에서 전달된 알레르기 데이터 (알레르기 관리 모듈)
+    if (typeof window.parentAllergens !== 'undefined' && window.parentAllergens && window.parentAllergens.length > 0) {
+        declaredAllergens = window.parentAllergens.slice(); // 배열 복사
+    }
+    // 2순위: 백엔드에서 전달된 allergensData (DB 저장된 데이터)
+    else if (typeof allergensData !== 'undefined' && allergensData && allergensData.length > 0) {
+        declaredAllergens = allergensData.slice(); // 배열 복사
+    }
     
     // 부모창 데이터 확인
     
@@ -121,10 +131,16 @@ function checkAllergenDuplication() {
         // 부모창의 원본 원재료명 사용 (rawmtrl_nm_display)
         ingredients = window.checkedFields.rawmtrl_nm_display || '';
         
-        // 부모창 원본에서 알레르기 성분 추출
-        const allergenMatch = ingredients.match(/\[알레르기\s*성분\s*:\s*([^\]]+)\]/i);
-        if (allergenMatch) {
-            allergenInfo = allergenMatch[0]; // 전체 [알레르기 성분 : ...] 부분
+        // 3순위: 부모창 원본에서 알레르기 성분 추출 (구식 방식, 폴백)
+        if (declaredAllergens.length === 0) {
+            const allergenMatch = ingredients.match(/\[알레르기\s*성분\s*:\s*([^\]]+)\]/i);
+            if (allergenMatch) {
+                allergenInfo = allergenMatch[0]; // 전체 [알레르기 성분 : ...] 부분
+                // 알레르기 성분 파싱
+                const allergenText = allergenMatch[1].replace(/\s*함유\s*/g, '').trim();
+                const items = allergenText.split(/[,、，]/).map(item => item.trim()).filter(item => item && item.length > 0);
+                declaredAllergens.push(...items);
+            }
         }
         
     } else {
@@ -213,29 +229,42 @@ function checkAllergenDuplication() {
     for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
         for (const keyword of keywords) {
             let found = false;
+            let matchedBy = '';
             
             if (keyword.length === 1) {
                 const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
                 if (regex.test(cleanIngredients)) {
                     found = true;
+                    matchedBy = `직접매칭(단일문자): ${keyword}`;
                 }
             } else {
-                if (cleanIngredients.toLowerCase().includes(keyword.toLowerCase())) {
+                // 2글자 이상: 단어 경계를 고려한 매칭 (예: '우유'가 '두유'에 매칭되지 않도록)
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                if (regex.test(cleanIngredients)) {
                     found = true;
+                    matchedBy = `직접매칭: ${keyword}`;
                 }
             }
             
             if (!found && window.findAllergenSynonyms) {
                 const synonymData = window.findAllergenSynonyms(keyword);
                 if (synonymData) {
-                    found = synonymData.synonyms.some(synonym => {
+                    const matchedSynonym = synonymData.synonyms.find(synonym => {
                         if (synonym.length === 1) {
                             const regex = new RegExp(`[\\s,():]${synonym}[\\s,():]|^${synonym}[\\s,():]|[\\s,():]${synonym}$|^${synonym}$`, 'gi');
                             return regex.test(cleanIngredients);
                         } else {
-                            return cleanIngredients.toLowerCase().includes(synonym.toLowerCase());
+                            // 동의어도 단어 경계를 고려한 매칭으로 변경
+                            const escapedSynonym = synonym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedSynonym}(?=$|[\\s,():\\[\\]])`, 'gi');
+                            return regex.test(cleanIngredients);
                         }
                     });
+                    if (matchedSynonym) {
+                        found = true;
+                        matchedBy = `동의어매칭: ${matchedSynonym} (원키워드: ${keyword})`;
+                    }
                 }
             }
             
@@ -248,10 +277,10 @@ function checkAllergenDuplication() {
         }
     }
     
-    // 4. 부모창에서 선언된 알레르기 성분들 파싱
-    const declaredAllergens = [];
+    // 4. 구식 방식으로 추가 파싱 (폴백용 - 이미 앞에서 처리됨)
+    // declaredAllergens는 이미 위에서 초기화됨
     
-    if (declaredAllergenText) {
+    if (declaredAllergens.length === 0 && declaredAllergenText) {
         // "밀, 달걀, 우유, 대두 함유" 형태에서 "함유" 제거하고 쉼표로 분리
         let cleanText = declaredAllergenText.replace(/\s*함유\s*/g, '').trim();
         
@@ -268,20 +297,22 @@ function checkAllergenDuplication() {
     const duplicatedAllergens = [];
     
     if (declaredAllergens.length > 0 && cautionsText) {
-        const cautionsLower = cautionsText.toLowerCase();
         
         for (const declaredAllergen of declaredAllergens) {
             // 선언된 알레르기 성분별 키워드 확인
             const matchedKeywords = allergenKeywords[declaredAllergen] || [declaredAllergen];
             
             const foundInCautions = matchedKeywords.filter(keyword => {
-                // 키워드가 주의사항에 포함되어 있는지 확인
+                // 키워드가 주의사항에 포함되어 있는지 확인 (단어 경계 고려)
                 if (keyword.length === 1) {
                     // 단일 문자는 정확한 매치 확인
                     const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
                     return regex.test(cautionsText);
                 } else {
-                    return cautionsLower.includes(keyword.toLowerCase());
+                    // 2글자 이상: 단어 경계를 고려한 매칭
+                    const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                    return regex.test(cautionsText);
                 }
             });
             
@@ -348,7 +379,7 @@ function checkAllergenDuplication() {
     // 중복 오류 (원재료명 음영표시 + 주의사항 중복)
     if (duplicatedAllergens.length > 0) {
         errors.push(...duplicatedAllergens.map(item => 
-            `원재료명에 [알레르기 성분: ${item.allergen}]으로 표시된 성분이 주의사항에 중복으로 표시되었습니다. (발견된 키워드: ${item.foundKeywords.join(', ')})`
+            `알레르기 성분 '${item.allergen}'이(가) 주의사항에 중복으로 표시되어 있습니다. 원재료명에 음영표시되어 있으므로 주의사항에서 삭제하거나 표현을 수정하세요. (발견된 키워드: ${item.foundKeywords.join(', ')})`
         ));
     }
     
@@ -3231,7 +3262,7 @@ function validateAllergenCompliance() {
     return {
         ok: allergenErrors.length === 0,
         errors: allergenErrors,
-        suggestions: allergenErrors.length > 0 ? ['누락된 알레르기 성분을 표시사항에 추가하세요.'] : []
+        suggestions: allergenErrors.length > 0 ? ['알레르기 성분과 주의문구를 확인해서 수정하세요.'] : []
     };
 }
 

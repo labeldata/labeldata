@@ -450,9 +450,13 @@
                         let processedText = boldCountryNames(mainText, countryList);
                         container.innerHTML = `<div>${processedText}</div>`;
 
-                        // allergens 데이터에서 알레르기 표시
-                        if (allergensData && allergensData.length > 0) {
-                            container.innerHTML += `<div style="background-color: #000; color: #fff; padding: 2px 5px; font-weight: bold; display: inline-block; margin-top: 5px;">${allergensData.join(', ')} 함유</div>`;
+                        // 알레르기 데이터 표시 (우선순위: parentAllergens > allergensData)
+                        const displayAllergens = (typeof window.parentAllergens !== 'undefined' && window.parentAllergens && window.parentAllergens.length > 0) 
+                            ? window.parentAllergens 
+                            : (allergensData && allergensData.length > 0 ? allergensData : []);
+                        
+                        if (displayAllergens.length > 0) {
+                            container.innerHTML += `<div style="background-color: #000; color: #fff; padding: 2px 5px; font-weight: bold; display: inline-block; margin-top: 5px;">${displayAllergens.join(', ')} 함유</div>`;
                         }
                         td.appendChild(container);
 
@@ -1673,6 +1677,11 @@
 
                 dataLoaded = true;
                 checkedFields = e.data.checked;
+                
+                // 부모창에서 전달된 알레르기 데이터 저장
+                if (e.data.allergens && Array.isArray(e.data.allergens) && e.data.allergens.length > 0) {
+                    window.parentAllergens = e.data.allergens;
+                }
                 
                 // 맞춤항목이 있으면 customFieldsData에 병합
                 if (e.data.customFields && e.data.customFields.length > 0) {

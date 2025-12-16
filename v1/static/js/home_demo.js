@@ -641,6 +641,16 @@ function validateRegulations() {
             issues.push(`<strong>알레르기 물질 중복 오류:</strong> ${allergenValidation.duplicates.join(', ')}은(는) 원재료에 이미 사용되었으므로 제조시설 혼입 경고에 포함할 수 없습니다. 원재료 사용 알레르기는 "원재료명"에만 표시되어야 합니다.`);
         }
     }
+    
+    // 알레르기 누락/중복 검증 (checkAllergenDuplication 함수 사용)
+    if (typeof checkAllergenDuplication === 'function') {
+        const allergenErrors = checkAllergenDuplication();
+        if (allergenErrors && allergenErrors.length > 0) {
+            allergenErrors.forEach(error => {
+                issues.push(error);
+            });
+        }
+    }
 
     // 결과 표시
     if (issues.length === 0 && warnings.length === 0) {
@@ -1933,8 +1943,10 @@ function detectAllergens(isAutoDetect = true) {
                             found = true;
                         }
                     } else {
-                        // 2글자 이상은 포함 여부만 체크
-                        if (rawmtrlText.toLowerCase().includes(keyword.toLowerCase())) {
+                        // 2글자 이상: 단어 경계를 고려한 매칭 (예: '우유'가 '두유'에 매칭되지 않도록)
+                        const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                        if (regex.test(rawmtrlText)) {
                             found = true;
                         }
                     }
@@ -2082,18 +2094,39 @@ function toggleAllergenWarning() {
         return;
     }
     
-    // 현재 상태 확인: 혼입 경고 문구가 있는지
-    const hasWarning = cautionTextarea.value.includes('같은 제조시설');
+    // 현재 버튼 상태 확인 (추가 모드 vs 해제 모드)
+    const isRemoveMode = toggleBtn.classList.contains('btn-danger');
     
-    if (hasWarning) {
-        // 주의사항에서 해제
-        const originalValue = cautionTextarea.value;
+    if (isRemoveMode) {
+        // 해제 모드: 기존 혼입 경고 문구만 제거
+        let currentValue = cautionTextarea.value;
         
-        // 혼입 경고 문구 패턴 제거
-        const newValue = originalValue.replace(/본 제품은 .+?를 사용한 제품과 같은 제조시설\(또는 동일 라인\)에서 제조되었습니다\./g, '').trim();
+        const lines = currentValue.split('\n');
+        const filteredLines = lines.filter((line) => {
+            const trimmedLine = line.trim();
+            
+            const hasFactory = trimmedLine.includes('같은 제조시설') || 
+                               trimmedLine.includes('같은 시설') || 
+                               trimmedLine.includes('동일 라인') ||
+                               trimmedLine.includes('동일한 제조시설');
+            const hasManufacture = trimmedLine.includes('제조하고 있습니다') || 
+                                   trimmedLine.includes('제조합니다') || 
+                                   trimmedLine.includes('제조되었습니다') ||
+                                   trimmedLine.includes('제조됩니다') ||
+                                   trimmedLine.includes('제조하였습니다') ||
+                                   trimmedLine.includes('생산');
+            const hasProduct = trimmedLine.includes('제품') || trimmedLine.includes('원료');
+            
+            if (hasFactory && hasManufacture && hasProduct) {
+                return false;
+            }
+            return true;
+        });
         
-        // 연속된 줄바꿈 정리
-        cautionTextarea.value = newValue.replace(/\n{3,}/g, '\n\n');
+        currentValue = filteredLines.join('\n').trim();
+        currentValue = currentValue.replace(/\n{3,}/g, '\n\n').trim();
+        
+        cautionTextarea.value = currentValue;
         
         // textarea 높이 자동 조절
         if (cautionTextarea.classList.contains('auto-resize')) {
@@ -2103,42 +2136,17 @@ function toggleAllergenWarning() {
         
         updatePreview();
         
-        // 버튼 상태 변경
+        // 버튼 상태 변경: 추가 모드로
         toggleBtn.classList.remove('btn-danger');
         toggleBtn.classList.add('btn-outline-primary');
         toggleBtn.innerHTML = '<i class="fas fa-arrow-right me-1"></i>주의사항에 추가';
         
-        // 혼입 경고 문구 미리보기 다시 표시 (해제되었으므로, 선택된 항목이 있으면)
-        const selectedAllergensForPreview = [];
-        document.querySelectorAll('.allergen-toggle.active').forEach(button => {
-            selectedAllergensForPreview.push(button.dataset.allergen);
-        });
+        // 혼입 경고 문구 미리보기 다시 표시
+        updateCrossContaminationPreview();
         
-        if (selectedAllergensForPreview.length > 0) {
-            updateCrossContaminationPreview();
-        }
-        
-        // 성공 메시지
-        if (originalValue !== cautionTextarea.value) {
-            const toast = document.createElement('div');
-            toast.className = 'position-fixed top-0 end-0 p-3';
-            toast.style.zIndex = '9999';
-            toast.innerHTML = `
-                <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                    <i class="fas fa-check-circle me-2"></i>주의사항에서 혼입 경고 문구가 제거되었습니다.
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            `;
-            document.body.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.remove();
-            }, 3000);
-        }
     } else {
-        // 주의사항에 추가
+        // 추가 모드: 선택된 알레르기 확인
         const selectedAllergens = [];
-        
         document.querySelectorAll('.allergen-toggle.active').forEach(button => {
             selectedAllergens.push(button.dataset.allergen);
         });
@@ -2162,15 +2170,43 @@ function toggleAllergenWarning() {
             }
         }
         
+        // 기존 주의사항에서 유사한 혼입 경고 문구 먼저 제거
+        let currentValue = cautionTextarea.value;
+        
+        const lines = currentValue.split('\n');
+        const filteredLines = lines.filter((line) => {
+            const trimmedLine = line.trim();
+            
+            const hasFactory = trimmedLine.includes('같은 제조시설') || 
+                               trimmedLine.includes('같은 시설') || 
+                               trimmedLine.includes('동일 라인') ||
+                               trimmedLine.includes('동일한 제조시설');
+            const hasManufacture = trimmedLine.includes('제조하고 있습니다') || 
+                                   trimmedLine.includes('제조합니다') || 
+                                   trimmedLine.includes('제조되었습니다') ||
+                                   trimmedLine.includes('제조됩니다') ||
+                                   trimmedLine.includes('제조하였습니다') ||
+                                   trimmedLine.includes('생산');
+            const hasProduct = trimmedLine.includes('제품') || trimmedLine.includes('원료');
+            
+            if (hasFactory && hasManufacture && hasProduct) {
+                return false;
+            }
+            return true;
+        });
+        
+        currentValue = filteredLines.join('\n').trim();
+        currentValue = currentValue.replace(/\n{3,}/g, '\n\n').trim();
+        
         const warningText = `본 제품은 ${selectedAllergens.join(', ')}를 사용한 제품과 같은 제조시설(또는 동일 라인)에서 제조되었습니다.`;
         
-        if (cautionTextarea.value.trim()) {
-            cautionTextarea.value += '\n' + warningText;
+        if (currentValue) {
+            cautionTextarea.value = currentValue + '\n' + warningText;
         } else {
             cautionTextarea.value = warningText;
         }
         
-        // textarea 높이 자동 조절 (auto-resize 트리거)
+        // textarea 높이 자동 조절
         if (cautionTextarea.classList.contains('auto-resize')) {
             autoResizeHeight(cautionTextarea);
             setTimeout(() => autoResizeHeight(cautionTextarea), 10);
@@ -2184,32 +2220,16 @@ function toggleAllergenWarning() {
         
         updatePreview();
         
-        // 버튼 상태 변경
+        // 버튼 상태 변경: 해제 모드로
         toggleBtn.classList.remove('btn-outline-primary');
         toggleBtn.classList.add('btn-danger');
         toggleBtn.innerHTML = '<i class="fas fa-arrow-left me-1"></i>주의사항에서 해제';
         
-        // 혼입 경고 문구 미리보기 숨기기 (추가되었으므로)
+        // 혼입 경고 문구 미리보기 숨기기
         const previewDiv = document.getElementById('crossContaminationPreview');
         if (previewDiv) {
             previewDiv.style.display = 'none';
         }
-        
-        // 성공 메시지
-        const toast = document.createElement('div');
-        toast.className = 'position-fixed top-0 end-0 p-3';
-        toast.style.zIndex = '9999';
-        toast.innerHTML = `
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fas fa-check-circle me-2"></i>주의사항에 혼입 경고 문구가 추가되었습니다.
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-        document.body.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.remove();
-        }, 3000);
     }
 }
 
@@ -2509,14 +2529,31 @@ function addAllQuickTexts(fieldName) {
     const textarea = document.querySelector(`textarea[name="${fieldName}"]`);
     if (!textarea) return;
     
+    // 주의사항에 대해 일괄 추가할 때는 원재료 사용 알레르기 확인
+    let detectedAllergens = [];
+    if (fieldName === 'caution') {
+        detectedAllergens = getDetectedAllergens();
+    }
+    
     const buttons = document.querySelectorAll(`.quick-text-toggle[data-field="${fieldName}"]`);
     const textsToAdd = [];
+    let skippedCount = 0;
     
     buttons.forEach(button => {
         const text = button.getAttribute('data-text');
         const isActive = button.classList.contains('active');
         
         if (!isActive) {
+            // 제조시설 혼입 알레르기 버튼인 경우 중복 확인
+            if (button.classList.contains('allergen-toggle')) {
+                const allergen = button.getAttribute('data-allergen');
+                if (detectedAllergens.includes(allergen)) {
+                    // 원재료에서 이미 사용된 알레르기는 건너뜀
+                    skippedCount++;
+                    return;
+                }
+            }
+            
             // 버튼 활성화
             button.classList.add('active');
             button.classList.add('btn-primary');
@@ -2551,22 +2588,6 @@ function addAllQuickTexts(fieldName) {
         }
         
         updatePreview();
-        
-        // 성공 메시지
-        const toast = document.createElement('div');
-        toast.className = 'position-fixed top-0 end-0 p-3';
-        toast.style.zIndex = '9999';
-        toast.innerHTML = `
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <i class="fas fa-check-circle me-2"></i>${textsToAdd.length}개의 문구가 추가되었습니다.
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-        document.body.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.remove();
-        }, 3000);
     } else {
         alert('이미 모든 문구가 추가되어 있습니다.');
     }
@@ -2609,22 +2630,6 @@ function clearAllQuickTexts(fieldName) {
         }
         
         updatePreview();
-        
-        // 성공 메시지
-        const toast = document.createElement('div');
-        toast.className = 'position-fixed top-0 end-0 p-3';
-        toast.style.zIndex = '9999';
-        toast.innerHTML = `
-            <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                <i class="fas fa-eraser me-2"></i>${removedCount}개의 문구가 해제되었습니다.
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        `;
-        document.body.appendChild(toast);
-        
-        setTimeout(() => {
-            toast.remove();
-        }, 3000);
     } else {
         alert('해제할 문구가 없습니다.');
     }
@@ -2877,6 +2882,131 @@ function loadAllergensFromStorage() {
         window.selectedIngredientAllergens = new Set();
         window.selectedCrossContaminationAllergens = new Set();
     }
+}
+
+// 알레르기 성분 검증 함수 (간편모드용 - label_preview.js와 동일한 로직)
+function checkAllergenDuplication() {
+    // constants.js에서 로드된 알레르기 키워드 사용
+    const allergenKeywords = window.allergenKeywords || {};
+    
+    // 원재료명과 알레르기 표시사항 가져오기
+    let ingredients = '';
+    let declaredAllergens = [];
+    
+    // 원재료명 가져오기
+    const rawmtrlTextarea = document.getElementById('rawmtrl_nm_textarea');
+    if (rawmtrlTextarea) {
+        ingredients = rawmtrlTextarea.value || '';
+    }
+    
+    // 선언된 알레르기 성분 (간편모드는 window.selectedIngredientAllergens 사용)
+    if (window.selectedIngredientAllergens && window.selectedIngredientAllergens.size > 0) {
+        declaredAllergens = Array.from(window.selectedIngredientAllergens);
+    }
+    
+    if (!ingredients || !ingredients.trim()) {
+        return [];
+    }
+    
+    // 원재료명에서 발견된 알레르기 성분들
+    const foundAllergens = [];
+    const cleanIngredients = ingredients;
+    
+    for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
+        for (const keyword of keywords) {
+            let found = false;
+            let matchedBy = '';
+            
+            if (keyword.length === 1) {
+                const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
+                if (regex.test(cleanIngredients)) {
+                    found = true;
+                    matchedBy = `직접매칭(단일문자): ${keyword}`;
+                }
+            } else {
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                if (regex.test(cleanIngredients)) {
+                    found = true;
+                    matchedBy = `직접매칭: ${keyword}`;
+                }
+            }
+            
+            if (found) {
+                if (!foundAllergens.includes(allergen)) {
+                    foundAllergens.push(allergen);
+                }
+                break;
+            }
+        }
+    }
+    
+    // 주의사항 가져오기
+    let cautionsText = '';
+    const cautionTextarea = document.getElementById('caution_textarea');
+    if (cautionTextarea) {
+        cautionsText = cautionTextarea.value || '';
+    }
+    
+    const duplicatedAllergens = [];
+    
+    if (declaredAllergens.length > 0 && cautionsText) {
+        
+        for (const declaredAllergen of declaredAllergens) {
+            const matchedKeywords = allergenKeywords[declaredAllergen] || [declaredAllergen];
+            
+            const foundInCautions = matchedKeywords.filter(keyword => {
+                if (keyword.length === 1) {
+                    const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
+                    return regex.test(cautionsText);
+                } else {
+                    const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                    return regex.test(cautionsText);
+                }
+            });
+            
+            if (foundInCautions.length > 0) {
+                duplicatedAllergens.push({
+                    allergen: declaredAllergen,
+                    foundKeywords: foundInCautions
+                });
+            }
+        }
+    }
+    
+    // 누락된 알레르기 성분 찾기
+    const missingAllergens = foundAllergens.filter(foundAllergen => {
+        const hasMatch = declaredAllergens.some(declared => {
+            if (foundAllergen.toLowerCase() === declared.toLowerCase()) {
+                return true;
+            }
+            if (declared.toLowerCase().includes(foundAllergen.toLowerCase()) ||
+                foundAllergen.toLowerCase().includes(declared.toLowerCase())) {
+                return true;
+            }
+            return false;
+        });
+        
+        return !hasMatch;
+    });
+    
+    // 오류 메시지 생성
+    const errors = [];
+    
+    if (missingAllergens.length > 0) {
+        errors.push(...missingAllergens.map(allergen => 
+            `원재료명에 '${allergen}'이(가) 포함되어 있으나 [알레르기 성분] 표시에 누락되었습니다.`
+        ));
+    }
+    
+    if (duplicatedAllergens.length > 0) {
+        errors.push(...duplicatedAllergens.map(item => 
+            `알레르기 성분 '${item.allergen}'이(가) 주의사항에 중복으로 표시되어 있습니다. 원재료명에 음영표시되어 있으므로 주의사항에서 삭제하거나 표현을 수정하세요. (발견된 키워드: ${item.foundKeywords.join(', ')})`
+        ));
+    }
+    
+    return errors;
 }
 
 // 페이지 로드 시 드래그 스크롤 초기화

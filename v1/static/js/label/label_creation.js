@@ -530,12 +530,19 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
+        // 알레르기 성분 수집 (알레르기 관리 모듈에서)
+        let allergens = [];
+        if (typeof selectedIngredientAllergensLabel !== 'undefined' && selectedIngredientAllergensLabel) {
+            allergens = Array.from(selectedIngredientAllergensLabel.keys());
+        }
+
         // 팝업으로 최종 데이터 전송
         popup.postMessage({
             type: 'previewCheckedFields',
             checked: checkedData,
             settings: previewSettings,
             customFields: customFields,
+            allergens: allergens,
             update_datetime: new Date().toISOString().slice(0, 16).replace('T', ' ')
         }, '*');
 
@@ -2126,6 +2133,7 @@ function detectAllergensLabel() {
     
     // 각 알레르기 그룹의 키워드로 검색 (home_demo.js와 동일한 로직)
     for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
+        let allergenFound = false;
         for (const keyword of keywords) {
             let found = false;
             
@@ -2136,14 +2144,18 @@ function detectAllergensLabel() {
                     found = true;
                 }
             } else {
-                // 2글자 이상은 포함 여부만 체크
-                if (rawmtrlText.toLowerCase().includes(keyword.toLowerCase())) {
+                // 2글자 이상: 단어 경계를 고려한 매칭 (예: '우유'가 '두유'에 매칭되지 않도록)
+                // 단어 앞뒤가 공백, 쉼표, 괄호, 콜론, 대괄호, 문자열 시작/끝인 경우만 매칭
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                if (regex.test(rawmtrlText)) {
                     found = true;
                 }
             }
             
             if (found) {
                 detectedAllergens.add(allergen);
+                allergenFound = true;
                 break;
             }
         }
@@ -2154,6 +2166,9 @@ function detectAllergensLabel() {
     
     // UI 업데이트
     updateAllergenTagsLabel();
+    
+    // 제조시설 혼입 UI 업데이트 (원재료 사용 알레르기 버튼 비활성화)
+    updateCrossContaminationUILabel();
     
     // 로딩 인디케이터 숨기기
     if (detectingIndicator) {
@@ -2173,12 +2188,14 @@ function manualDetectAllergensLabel() {
 function addAllergenTagLabel(allergen) {
     selectedIngredientAllergensLabel.set(allergen, 'manual');
     updateAllergenTagsLabel();
+    updateCrossContaminationUILabel();
 }
 
 // 알레르기 태그 제거
 function removeAllergenTagLabel(allergen) {
     selectedIngredientAllergensLabel.delete(allergen);
     updateAllergenTagsLabel();
+    updateCrossContaminationUILabel();
 }
 
 // 알레르기 태그 UI 업데이트
@@ -2478,10 +2495,19 @@ function toggleAllAllergensLabel() {
     const btn = document.getElementById('toggleAllAllergensLabelBtn');
     const allAllergens = ['알류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우', '돼지고기', '복숭아', '토마토', '아황산류', '호두', '잣', '닭고기', '쇠고기', '오징어', '조개류'];
     
-    if (selectedCrossContaminationAllergensLabel.size === allAllergens.length) {
+    // 원재료에서 이미 사용된 알레르기 목록
+    const detectedAllergens = Array.from(selectedIngredientAllergensLabel.keys());
+    
+    if (selectedCrossContaminationAllergensLabel.size === allAllergens.filter(a => !detectedAllergens.includes(a)).length) {
+        // 전체 해제
         selectedCrossContaminationAllergensLabel.clear();
     } else {
-        allAllergens.forEach(a => selectedCrossContaminationAllergensLabel.add(a));
+        // 전체 선택 (원재료 사용 알레르기 제외)
+        allAllergens.forEach(a => {
+            if (!detectedAllergens.includes(a)) {
+                selectedCrossContaminationAllergensLabel.add(a);
+            }
+        });
     }
     
     updateCrossContaminationUILabel();
@@ -2490,21 +2516,41 @@ function toggleAllAllergensLabel() {
 // 제조시설 혼입 UI 업데이트
 function updateCrossContaminationUILabel() {
     const buttons = document.querySelectorAll('.allergen-toggle-label');
+    const detectedAllergens = Array.from(selectedIngredientAllergensLabel.keys());
+    
     buttons.forEach(btn => {
         const allergen = btn.dataset.allergen;
-        if (selectedCrossContaminationAllergensLabel.has(allergen)) {
-            btn.classList.remove('btn-outline-secondary');
-            btn.classList.add('btn-warning');
+        
+        // 원재료에 사용된 알레르기는 비활성화
+        if (detectedAllergens.includes(allergen)) {
+            btn.disabled = true;
+            btn.classList.remove('btn-warning', 'btn-outline-secondary');
+            btn.classList.add('btn-outline-secondary', 'opacity-50');
+            btn.title = '원재료로 사용되어 제조시설 혼입 경고에 추가할 수 없습니다';
+            // Set에서도 제거
+            selectedCrossContaminationAllergensLabel.delete(allergen);
         } else {
-            btn.classList.remove('btn-warning');
-            btn.classList.add('btn-outline-secondary');
+            btn.disabled = false;
+            btn.classList.remove('opacity-50');
+            btn.title = '';
+            
+            // 선택 상태 업데이트
+            if (selectedCrossContaminationAllergensLabel.has(allergen)) {
+                btn.classList.remove('btn-outline-secondary');
+                btn.classList.add('btn-warning');
+            } else {
+                btn.classList.remove('btn-warning');
+                btn.classList.add('btn-outline-secondary');
+            }
         }
     });
     
     // 전체 선택 버튼 텍스트 업데이트
     const btn = document.getElementById('toggleAllAllergensLabelBtn');
     const allAllergens = ['알류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우', '돼지고기', '복숭아', '토마토', '아황산류', '호두', '잣', '닭고기', '쇠고기', '오징어', '조개류'];
-    if (selectedCrossContaminationAllergensLabel.size === allAllergens.length) {
+    const availableAllergens = allAllergens.filter(a => !detectedAllergens.includes(a));
+    
+    if (selectedCrossContaminationAllergensLabel.size === availableAllergens.length && availableAllergens.length > 0) {
         btn.innerHTML = '<i class="fas fa-times me-1"></i>전체 해제';
     } else {
         btn.innerHTML = '<i class="fas fa-check-double me-1"></i>전체 선택';
@@ -2538,22 +2584,70 @@ function toggleAllergenWarningLabel() {
     const cautionsTextarea = document.querySelector('textarea[name="cautions"]');
     if (!cautionsTextarea) return;
     
+    // 원재료에서 감지/선택된 알레르기 성분 가져오기
+    const detectedAllergens = Array.from(selectedIngredientAllergensLabel.keys());
+    
+    // 혼입 알레르기 중 원재료 사용 알레르기와 중복되는 것 확인
+    const duplicates = Array.from(selectedCrossContaminationAllergensLabel).filter(allergen => 
+        detectedAllergens.includes(allergen)
+    );
+    
+    if (duplicates.length > 0) {
+        const confirmMsg = `⚠️ 경고: ${duplicates.join(', ')}은(는) 원재료에 이미 사용된 알레르기 물질입니다.\n\n원재료 사용 알레르기는 "원재료명"에만 표시되어야 하며, 제조시설 혼입 경고에는 포함할 수 없습니다.\n\n계속 진행하시겠습니까?`;
+        
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+    }
+    
+    // 기존 주의사항에서 유사한 혼입 경고 문구 먼저 제거
+    let currentValue = cautionsTextarea.value;
+    
+    const lines = currentValue.split('\n');
+    const filteredLines = lines.filter((line) => {
+        const trimmedLine = line.trim();
+        
+        const hasFactory = trimmedLine.includes('같은 제조시설') || 
+                           trimmedLine.includes('같은 시설') || 
+                           trimmedLine.includes('동일 라인') ||
+                           trimmedLine.includes('동일한 제조시설');
+        const hasManufacture = trimmedLine.includes('제조하고 있습니다') || 
+                               trimmedLine.includes('제조합니다') || 
+                               trimmedLine.includes('제조되었습니다') ||
+                               trimmedLine.includes('제조됩니다') ||
+                               trimmedLine.includes('제조하였습니다') ||
+                               trimmedLine.includes('생산');
+        const hasProduct = trimmedLine.includes('제품') || trimmedLine.includes('원료');
+        
+        if (hasFactory && hasManufacture && hasProduct) {
+            return false;
+        }
+        return true;
+    });
+    
+    currentValue = filteredLines.join('\n').trim();
+    currentValue = currentValue.replace(/\n{3,}/g, '\n\n').trim();
+    
     const allergenList = Array.from(selectedCrossContaminationAllergensLabel).join(', ');
     const warningText = `이 제품은 ${allergenList}를 사용한 제품과 같은 제조시설에서 제조하고 있습니다.`;
     
-    let currentCautions = cautionsTextarea.value.trim();
-    
-    // 이미 있는지 확인
-    if (currentCautions.includes(warningText)) {
-        alert('이미 주의사항에 추가되어 있습니다.');
-        return;
-    }
-    
     // 추가
-    if (currentCautions === '') {
+    if (currentValue === '') {
         cautionsTextarea.value = warningText;
     } else {
-        cautionsTextarea.value = currentCautions + '\n' + warningText;
+        cautionsTextarea.value = currentValue + '\n' + warningText;
+    }
+    
+    // textarea 높이 자동 조절
+    if (typeof updateTextareaHeight === 'function') {
+        updateTextareaHeight(cautionsTextarea);
+        setTimeout(() => updateTextareaHeight(cautionsTextarea), 10);
+    }
+    
+    // 주의사항 체크박스 자동 체크
+    const checkbox = document.getElementById('chk_cautions');
+    if (checkbox) {
+        checkbox.checked = true;
     }
     
     alert('주의사항에 추가되었습니다.');
@@ -2729,14 +2823,31 @@ function addAllQuickTextsLabel(fieldName) {
     const textarea = document.querySelector(`textarea[name="${fieldName}"]`);
     if (!textarea) return;
     
+    // 주의사항에 대해 일괄 추가할 때는 원재료 사용 알레르기 확인
+    let detectedAllergens = [];
+    if (fieldName === 'cautions') {
+        detectedAllergens = Array.from(selectedIngredientAllergensLabel.keys());
+    }
+    
     const buttons = document.querySelectorAll(`.quick-text-toggle-label[data-field="${fieldName}"]`);
     const textsToAdd = [];
+    let skippedCount = 0;
     
     buttons.forEach(button => {
         const text = button.getAttribute('data-text');
         const isActive = button.classList.contains('active');
         
         if (!isActive) {
+            // 제조시설 혼입 알레르기 버튼인 경우 중복 확인
+            if (button.classList.contains('allergen-toggle-label')) {
+                const allergen = button.getAttribute('data-allergen');
+                if (detectedAllergens.includes(allergen)) {
+                    // 원재료에서 이미 사용된 알레르기는 건너뜀
+                    skippedCount++;
+                    return;
+                }
+            }
+            
             // 버튼 활성화
             button.classList.add('active');
             button.classList.add('btn-primary');
@@ -2770,8 +2881,17 @@ function addAllQuickTextsLabel(fieldName) {
         if (checkbox) {
             checkbox.checked = true;
         }
+        
+        // 건너뛴 항목이 있으면 알림
+        if (skippedCount > 0) {
+            alert(`${textsToAdd.length}개 항목이 추가되었습니다.\n${skippedCount}개 항목은 원재료에 이미 사용된 알레르기 물질이므로 제외되었습니다.`);
+        }
     } else {
-        alert('이미 모든 문구가 추가되어 있습니다.');
+        if (skippedCount > 0) {
+            alert('원재료에 이미 사용된 알레르기 물질은 제조시설 혼입 경고에 추가할 수 없습니다.');
+        } else {
+            alert('이미 모든 문구가 추가되어 있습니다.');
+        }
     }
 }
 
