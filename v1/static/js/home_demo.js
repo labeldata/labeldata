@@ -604,6 +604,16 @@ function validateRegulations() {
         }
     });
 
+    // 내용량 단위 체크 (mg, g, kg, l, ml만 허용, 열량 표시도 허용)
+    if (data.chk_content_weight && data.content_weight && data.content_weight.trim()) {
+        const contentWeight = data.content_weight.trim();
+        const validUnits = /\b(mg|g|kg|ml|l)\b/i;
+        
+        if (!validUnits.test(contentWeight)) {
+            issues.push('<strong>내용량에 올바른 단위가 표시되지 않았습니다.</strong> mg, g, kg, ml, l 중 하나를 사용하세요. (예: 500g, 1L, 250ml, 500l(500kcal))');
+        }
+    }
+
     // 글자 크기 체크
     const fontSize = parseFloat(document.getElementById('fontSizeInput')?.value || 10);
     if (fontSize < 7) {

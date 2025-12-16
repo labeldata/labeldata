@@ -32,6 +32,17 @@ window.validateSettings = async function() {
                 always: true
             },
             {
+                label: '기본 필드 검증',
+                check: () => {
+                    try {
+                        return validateBasicFields();
+                    } catch (e) {
+                        console.warn('기본 필드 검증 오류:', e);
+                        return { ok: true, errors: [], suggestions: [] };
+                    }
+                }
+            },
+            {
                 label: '성분 표시 규정',
                 check: () => {
                     try {
@@ -3178,6 +3189,15 @@ window.validateRegulations = function validateRegulations() {
         return { ok: true, errors: [], suggestions: [] };
     }
 
+    // 0. 기본 필드 검증 (내용량 단위 체크)
+    const basicValidation = validateBasicFields();
+    results.details.basic = basicValidation;
+    if (!basicValidation.ok) {
+        results.ok = false;
+        results.errors.push(...basicValidation.errors);
+        results.suggestions.push(...basicValidation.suggestions);
+    }
+
     // 1. 성분 관련 검증 (농수산물 + 특정성분)
     const ingredientValidation = validateIngredientCompliance();
     results.details.ingredient = ingredientValidation;
@@ -3218,6 +3238,25 @@ window.validateRegulations = function validateRegulations() {
 };
 
 // ===== 개별 검증 모듈들 =====
+
+// 0. 기본 필드 검증
+function validateBasicFields() {
+    const errors = [];
+    const suggestions = [];
+    
+    // 내용량 단위 검증 (mg, g, kg, l, ml만 허용, 열량 표시도 허용)
+    const contentWeight = checkedFields['content_weight'] || '';
+    if (contentWeight && contentWeight.trim()) {
+        const validUnits = /\b(mg|g|kg|ml|l)\b/i;
+        
+        if (!validUnits.test(contentWeight)) {
+            errors.push('내용량에 올바른 단위가 누락되었습니다.');
+            suggestions.push('내용량 필드에 mg, g, kg, ml, l 중 하나의 단위를 포함해주세요. (예: 500g, 1L, 250ml, 500l(500kcal))');
+        }
+    }
+    
+    return { ok: errors.length === 0, errors, suggestions };
+}
 
 // 1. 성분 관련 검증 (농수산물 성분 + 특정성분 함량)
 function validateIngredientCompliance() {
