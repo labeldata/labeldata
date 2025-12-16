@@ -205,6 +205,11 @@
         const recyclingMarkMap = {};
         recyclingMarkGroups.forEach(g => g.options.forEach(o => recyclingMarkMap[o.value] = o));
         const CM_TO_PX = 37.795;
+        
+        // 다중 분리배출마크 관리
+        const MAX_RECYCLING_MARKS = 5;
+        let recyclingMarks = []; // {id, markValue, position, compositeText}
+        let markIdCounter = 0;
 
         // --- UTILS ---
         function debounce(func, wait) {
@@ -554,72 +559,188 @@
         }
         
         // 미리보기 영역에 마크(이미지+텍스트) 추가 및 드래그
-        function setRecyclingMark(markValue, auto = false) {
+        function setRecyclingMark(markValue, savedPosition = null, savedText = null) {
             const markObj = recyclingMarkMap[markValue];
             const previewContent = document.getElementById('previewContent');
-            if (!previewContent || !markObj) return;
+            if (!previewContent || !markObj) return null;
+            
+            // 최대 개수 확인
+            if (recyclingMarks.length >= MAX_RECYCLING_MARKS) {
+                alert(`분리배출마크는 최대 ${MAX_RECYCLING_MARKS}개까지 추가할 수 있습니다.`);
+                return null;
+            }
 
-            // 컨테이너를 찾거나 새로 생성
-            let container = document.getElementById('recyclingMarkContainer');
-            if (container) container.remove(); // 기존 컨테이너가 있으면 제거하고 새로 생성
-
-            container = document.createElement('div');
-            container.id = 'recyclingMarkContainer';
+            const markId = `recyclingMark_${++markIdCounter}`;
+            
+            const container = document.createElement('div');
+            container.id = markId;
+            container.className = 'recycling-mark-container';
+            container.dataset.markValue = markValue;
             container.style.position = 'absolute';
-            container.style.width = '60px'; // 컨테이너 너비 고정
-            container.style.minHeight = '100px'; // 최소 높이 설정으로 텍스트 영역 확보
+            container.style.width = '60px';
+            container.style.minHeight = '100px';
             container.style.cursor = 'move';
             container.style.textAlign = 'center';
-            container.style.overflow = 'visible'; // 텍스트 넘침 허용
+            container.style.overflow = 'visible';
+            container.style.zIndex = '1000';
             
-            // 표 영역 안에 초기 위치 설정 (DOM 렌더링 후)
-            container.style.left = '10px'; // 임시 위치
-            container.style.top = '10px';
+            // 삭제 버튼 추가
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn btn-danger btn-sm';
+            deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
+            deleteBtn.style.cssText = 'position: absolute; top: -10px; right: -10px; width: 24px; height: 24px; padding: 0; border-radius: 50%; font-size: 12px; z-index: 1001; display: none;';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                removeRecyclingMark(markId);
+            };
             
-            // 컨테이너 내부에 이미지와 텍스트 영역 추가
+            // 호버 시 삭제 버튼 표시
+            container.addEventListener('mouseenter', () => {
+                deleteBtn.style.display = 'block';
+            });
+            container.addEventListener('mouseleave', () => {
+                deleteBtn.style.display = 'none';
+            });
+            
+            // 초기 위치 설정
+            if (savedPosition) {
+                container.style.left = savedPosition.left;
+                container.style.top = savedPosition.top;
+            } else {
+                // 기존 마크들과 겹치지 않도록 위치 계산
+                const offset = recyclingMarks.length * 70;
+                container.style.left = `${10 + offset}px`;
+                container.style.top = '10px';
+            }
+            
+            // 컨테이너 내부 구조
             container.innerHTML = `
-                <img id="recyclingMarkImage" class="recycling-mark-image" src="${markObj.img}" alt="${markObj.label}" style="width: 100%; height: auto; display: block; margin-bottom: -4px;">
+                <img class="recycling-mark-image" src="${markObj.img}" alt="${markObj.label}" style="width: 100%; height: auto; display: block; margin-bottom: -4px;">
                 <div class="recycling-mark-text" style="margin-top: 0px; padding: 2px 0; line-height: 0.9; min-height: 30px; overflow: visible;"></div>
             `;
             
+            container.insertBefore(deleteBtn, container.firstChild);
             previewContent.appendChild(container);
-
-            // 안전한 위치 조정 - 표 영역 안에서만 위치
-            setTimeout(() => {
-                // 표 크기 정보 가져오기
-                const containerWidth = previewContent.offsetWidth;
-                const containerHeight = previewContent.offsetHeight;
-                const markWidth = container.offsetWidth || 60;
-                const markHeight = container.offsetHeight || 100; // 최소 높이 증가에 맞춰 기본값 조정
-                
-                // 표 영역을 벗어나지 않도록 안전한 위치 계산
-                const safeMargin = 5; // 여백
-                const maxLeft = Math.max(0, containerWidth - markWidth - safeMargin);
-                const maxTop = Math.max(0, containerHeight - markHeight - safeMargin);
-                
-                // 제품명 행 찾기
-                const thElements = previewContent.querySelectorAll('th');
-                let targetTop = safeMargin; // 기본값
-                
-                for (const th of thElements) {
-                    if (th.textContent.trim() === '제품명') {
-                        const row = th.parentElement;
-                        if (row && row.offsetTop >= 0) {
-                            targetTop = Math.min(row.offsetTop, maxTop);
-                        }
-                        break;
-                    }
-                }
-                
-                // 최종 위치 설정 (표 안에만)
-                container.style.left = `${maxLeft}px`;
-                container.style.top = `${targetTop}px`;
-                container.style.right = '';
-            }, 200);
-
+            
             // 드래그 가능하게 설정
             makeDraggable(container);
             container.ondragstart = () => false;
+            
+            // 마크 정보 저장
+            const markInfo = {
+                id: markId,
+                markValue: markValue,
+                compositeText: savedText || ''
+            };
+            recyclingMarks.push(markInfo);
+            
+            // 저장된 텍스트가 있으면 추가
+            if (savedText) {
+                const lines = savedText.split('/');
+                const textContainer = container.querySelector('.recycling-mark-text');
+                lines.forEach(line => {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine) {
+                        addTextToRecyclingMarkById(markId, trimmedLine);
+                    }
+                });
+            }
+            
+            updateRecyclingMarkList();
+            return markId;
+        }
+        
+        // 마크 제거
+        function removeRecyclingMark(markId) {
+            const container = document.getElementById(markId);
+            if (container) {
+                container.remove();
+            }
+            recyclingMarks = recyclingMarks.filter(mark => mark.id !== markId);
+            updateRecyclingMarkList();
+        }
+        
+        // 특정 마크에 텍스트 추가
+        function addTextToRecyclingMarkById(markId, text) {
+            const container = document.getElementById(markId);
+            if (!container) return;
+            
+            const image = container.querySelector('.recycling-mark-image');
+            const textContainer = container.querySelector('.recycling-mark-text');
+            if (!image || !textContainer) return;
+
+            const textDiv = document.createElement('div');
+            textDiv.className = 'recycling-text-line';
+            textDiv.textContent = text;
+            
+            textDiv.style.cssText = `
+                font-weight: 500;
+                color: #000;
+                line-height: 0.95;
+                word-break: keep-all;
+                text-align: center;
+                margin-top: 0px;
+                margin-bottom: 1px;
+                padding-bottom: 1px;
+                overflow: visible;
+            `;
+            textContainer.appendChild(textDiv);
+
+            // 폰트 크기 자동 조정
+            const imageWidth = image.offsetWidth;
+            const textLength = text.length;
+            let fontSize = Math.max(8 - (textLength * 0.12), 5.5);
+            textDiv.style.fontSize = `${fontSize}pt`;
+
+            let adjustmentAttempts = 0;
+            while (textDiv.scrollWidth > imageWidth && fontSize > 5 && adjustmentAttempts < 5) {
+                fontSize *= 0.9;
+                textDiv.style.fontSize = `${fontSize}pt`;
+                adjustmentAttempts++;
+            }
+        }
+        
+        // 마크 목록 UI 업데이트
+        function updateRecyclingMarkList() {
+            const listContainer = document.getElementById('recyclingMarkList');
+            if (!listContainer) return;
+            
+            if (recyclingMarks.length === 0) {
+                listContainer.innerHTML = '<div class="text-muted small">추가된 마크가 없습니다.</div>';
+                return;
+            }
+            
+            listContainer.innerHTML = recyclingMarks.map((mark, index) => {
+                const markObj = recyclingMarkMap[mark.markValue];
+                return `
+                    <div class="d-flex align-items-center justify-content-between mb-2 p-2 border rounded" data-mark-id="${mark.id}">
+                        <div class="d-flex align-items-center">
+                            <img src="${markObj.img}" alt="${markObj.label}" style="width: 30px; height: 30px; margin-right: 8px;">
+                            <small>${markObj.label}</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger mark-delete-btn" data-mark-id="${mark.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+            
+            // 삭제 버튼에 이벤트 리스너 추가
+            listContainer.querySelectorAll('.mark-delete-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const markId = this.getAttribute('data-mark-id');
+                    removeRecyclingMark(markId);
+                });
+            });
+        }
+        
+        // 기존 addTextToRecyclingMark 함수 (하위 호환성 유지)
+        function addTextToRecyclingMark(text) {
+            // 가장 최근에 추가된 마크에 텍스트 추가
+            if (recyclingMarks.length > 0) {
+                const lastMark = recyclingMarks[recyclingMarks.length - 1];
+                addTextToRecyclingMarkById(lastMark.id, text);
+            }
         }
         
         function renderRecyclingMarkUI() {
@@ -628,47 +749,49 @@
 
             target.innerHTML = `
                 <section class="settings-group">
-                    <h6 class="mb-3">분리배출마크</h6>
+                    <h6 class="mb-3">분리배출마크 (최대 ${MAX_RECYCLING_MARKS}개)</h6>
                     <div id="recyclingMarkControls">
-                        <div class="settings-row-pair">
+                        <!-- 1. 마크 선택 + 복합재질 정보 입력 -->
+                        <div class="settings-row-pair mb-3">
                             <div class="settings-row">
-                                <label class="form-label" for="recyclingMarkSelect">분리배출마크 선택</label>
+                                <label class="form-label" for="recyclingMarkSelect">마크 선택</label>
                                 <select class="form-select form-select-sm" id="recyclingMarkSelect">
                                     <option value="">마크를 선택하세요</option>
                                     ${recyclingMarkGroups.map(group => 
                                         `<optgroup label="${group.group}">
                                             ${group.options.map(option => 
-                                                `<option value="${option.value}" ${option.isComposite ? 'data-is-composite="true"' : ''}>${option.label}</option>`
+                                                `<option value="${option.value}">${option.label}</option>`
                                             ).join('')}
                                         </optgroup>`
                                     ).join('')}
                                 </select>
                             </div>
-                            <div class="settings-row d-flex align-items-end">
-                                <button class="btn btn-outline-primary btn-sm w-100" id="addRecyclingMarkBtn">
-                                    <i class="fas fa-plus me-1"></i>추가
-                                </button>
+                            <div class="settings-row">
+                                <label class="form-label" for="additionalRecyclingText">복합재질 정보 (선택)</label>
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="additionalRecyclingText" 
+                                       placeholder="예: 몸체(종이)/뚜껑(PP)">
                             </div>
                         </div>
                         
-                        <!-- 복합재질 정보 섹션 - 항상 표시 -->
-                        <div class="mt-4 pt-3 border-top">
-                            <div class="settings-row-pair">
-                                <div class="settings-row">
-                                    <label class="form-label" for="additionalRecyclingText">복합재질 정보</label>
-                                    <input type="text" class="form-control form-control-sm" 
-                                           id="additionalRecyclingText" 
-                                           placeholder="예: 몸체(종이)/뚜껑(PP)">
-                                </div>
-                                <div class="settings-row d-flex align-items-end">
-                                    <button class="btn btn-outline-secondary btn-sm w-100" id="addRecyclingTextBtn">
-                                        <i class="fas fa-sync me-1"></i>새로고침
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="form-text mt-1">
-                                <i class="fas fa-info-circle me-1"></i>
-                                입력 즉시 미리보기에 반영됩니다. 여러 재질은 '/'로 구분하세요. 예: 몸체(종이)/뚜껑(PP)
+                        <!-- 도움말 -->
+                        <div class="form-text mt-1 mb-3">
+                            <i class="fas fa-info-circle me-1"></i>
+                            복합재질인 경우 입력하세요. 여러 재질은 '/'로 구분하세요.
+                        </div>
+                        
+                        <!-- 2. 추가 버튼 -->
+                        <div class="mb-3">
+                            <button class="btn btn-primary btn-sm w-100" id="addRecyclingMarkBtn">
+                                <i class="fas fa-plus me-1"></i>마크 추가
+                            </button>
+                        </div>
+                        
+                        <!-- 3. 추가된 마크 목록 -->
+                        <div class="mt-3 pt-3 border-top">
+                            <label class="form-label">추가된 마크</label>
+                            <div id="recyclingMarkList" class="border rounded p-2" style="min-height: 60px; background-color: #f8f9fa;">
+                                <div class="text-muted small">추가된 마크가 없습니다.</div>
                             </div>
                         </div>
                     </div>
@@ -677,78 +800,48 @@
             
             const select = document.getElementById('recyclingMarkSelect');
             const addBtn = document.getElementById('addRecyclingMarkBtn');
-            const additionalInputBox = document.getElementById('additionalTextInputBox');
-
-
+            const textInput = document.getElementById('additionalRecyclingText');
             
+            // 마크 추가 버튼 (복합재질 정보도 함께 적용)
             addBtn.addEventListener('click', () => {
-                const selectedOption = select.options[select.selectedIndex];
-                const markValue = selectedOption.value;
-                if (!markValue) { alert('마크를 선택해주세요.'); return; }
-                
-                if (addBtn.textContent === '추가') {
-                    setRecyclingMark(markValue);
-                    addBtn.textContent = '제거';
-                    addBtn.classList.replace('btn-outline-primary', 'btn-danger');
-
-                } else {
-                    const mark = document.getElementById('recyclingMarkContainer');
-                    if (mark) mark.remove();
-                    addBtn.textContent = '추가';
-                    addBtn.classList.replace('btn-danger', 'btn-outline-primary');
-                    select.value = "";
-
-                }
-            });
-
-            // 실시간 미리보기 함수 정의
-            function updateCompositeTextPreview() {
-                const textInput = document.getElementById('additionalRecyclingText');
-                const text = textInput.value.trim();
-                
-                // 기존 텍스트 라인 모두 제거
-                const textContainer = document.querySelector('#recyclingMarkContainer .recycling-mark-text');
-                if (textContainer) {
-                    window.recyclingTextIdCounter = 0;
-                    textContainer.innerHTML = '';
+                const markValue = select.value;
+                if (!markValue) { 
+                    alert('마크를 선택해주세요.'); 
+                    return; 
                 }
                 
-                // 텍스트가 있으면 분할해서 추가
-                if (text) {
-                    const lines = text.split('/');
-                    lines.forEach((line, index) => {
+                if (recyclingMarks.length >= MAX_RECYCLING_MARKS) {
+                    alert(`분리배출마크는 최대 ${MAX_RECYCLING_MARKS}개까지 추가할 수 있습니다.`);
+                    return;
+                }
+                
+                // 복합재질 텍스트 가져오기
+                const compositeText = textInput.value.trim();
+                
+                // 마크 추가
+                const markId = setRecyclingMark(markValue);
+                
+                // 복합재질 정보가 있으면 추가
+                if (markId && compositeText) {
+                    const lines = compositeText.split('/');
+                    lines.forEach(line => {
                         const trimmedLine = line.trim();
                         if (trimmedLine) {
-                            addTextToRecyclingMark(trimmedLine);
+                            addTextToRecyclingMarkById(markId, trimmedLine);
                         }
                     });
+                    
+                    // 마크 정보 업데이트
+                    const mark = recyclingMarks.find(m => m.id === markId);
+                    if (mark) {
+                        mark.compositeText = compositeText;
+                    }
                 }
-            }
-            
-            // 실시간 미리보기 이벤트 리스너
-            const textInput = document.getElementById('additionalRecyclingText');
-            let updateTimeout;
-            
-            textInput.addEventListener('input', () => {
-                // 디바운싱: 300ms 후에 업데이트 (타이핑 성능 최적화)
-                clearTimeout(updateTimeout);
-                updateTimeout = setTimeout(updateCompositeTextPreview, 300);
+                
+                // 입력 필드 초기화
+                select.value = "";
+                textInput.value = "";
             });
-            
-            // 즉시 반영 이벤트들
-            textInput.addEventListener('paste', () => {
-                setTimeout(updateCompositeTextPreview, 50);
-            });
-            
-            textInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Backspace' || e.key === 'Delete') {
-                    setTimeout(updateCompositeTextPreview, 50);
-                }
-            });
-            
-            // 기존 추가 버튼 (선택적 사용)
-            const addTextBtn = document.getElementById('addRecyclingTextBtn');
-            addTextBtn.addEventListener('click', updateCompositeTextPreview);
         }
         
         function updateZoom() {
@@ -1230,61 +1323,34 @@
         }
 
         // 현재 분리배출마크 정보 수집 (개선된 버전)
+        // 현재 분리배출마크 정보 수집 (다중 마크 지원)
         function getCurrentRecyclingMarkInfo() {
-            const markElement = document.getElementById('recyclingMarkContainer');
-            if (!markElement) {
+            if (recyclingMarks.length === 0) {
                 return {
                     enabled: false,
-                    type: null,
-                    position_x: null,
-                    position_y: null,
-                    text: null
+                    marks: []
                 };
             }
-
-            const style = markElement.style;
-            const imgElement = markElement.querySelector('#recyclingMarkImage');
-            const textElements = markElement.querySelectorAll('.recycling-text-line'); // 정확한 텍스트 라인들만 선택
             
-            // 이미지 src에서 파일명 추출
-            let markType = null;
-            if (imgElement && imgElement.src) {
-                const srcParts = imgElement.src.split('/');
-                const fileName = srcParts[srcParts.length - 1];
-                markType = fileName.replace('.png', '');
-            }
-            
-            // 복합재질 텍스트 수집 - 입력 필드 값을 우선으로 사용
-            let combinedText = null;
-            
-            // 먼저 입력 필드에서 텍스트 확인 (이것이 정확한 사용자 입력)
-            const textInput = document.getElementById('additionalRecyclingText');
-            if (textInput && textInput.value.trim()) {
-                combinedText = textInput.value.trim();
-
-            }
-            
-            // 입력 필드에 값이 없을 때만 DOM에서 수집
-            if (!combinedText) {
-
+            const marksData = recyclingMarks.map(mark => {
+                const container = document.getElementById(mark.id);
+                if (!container) return null;
                 
-                if (textElements.length > 0) {
-                    const textArray = Array.from(textElements).map(el => el.textContent.trim()).filter(text => text);
-
-                    if (textArray.length > 0) {
-                        combinedText = textArray.join('/');
-                    }
-                }
-            }
-            
-
+                // px 단위 제거하여 숫자만 저장
+                const posX = parseFloat(container.style.left) || 0;
+                const posY = parseFloat(container.style.top) || 0;
+                
+                return {
+                    type: mark.markValue,
+                    position_x: posX,
+                    position_y: posY,
+                    text: mark.compositeText || ''
+                };
+            }).filter(m => m !== null);
             
             return {
-                enabled: true,
-                type: markType,
-                position_x: style.left ? style.left.replace('px', '') : (style.right ? 'right:' + style.right.replace('px', '') : '0'),
-                position_y: style.top ? style.top.replace('px', '') : '0',
-                text: combinedText
+                enabled: marksData.length > 0,
+                marks: marksData
             };
         }
         
@@ -1382,6 +1448,8 @@
                 recycling_mark: recyclingMarkInfo
             };
             
+            console.log('저장할 분리배출마크 데이터:', recyclingMarkInfo);
+            console.log('전체 저장 데이터:', data);
 
 
             const csrfToken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
@@ -1439,116 +1507,30 @@
             });
         }
     
-        // 분리배출마크 복원 (개선된 버전)
+        // 분리배출마크 복원 (첫 번째 마크만)
         function restoreRecyclingMark(markData) {
-            if (!markData.type) return;
+            console.log('분리배출마크 복원 시작:', markData);
             
-            // 분리배출마크 설정 (기존 setRecyclingMark 함수 활용)
-            // markData.type에서 실제 값 찾기
-            let markValue = markData.type;
+            if (!markData || !markData.enabled) {
+                console.log('분리배출마크가 비활성화되어 있거나 데이터가 없음');
+                return;
+            }
             
-            // recyclingMarkMap에서 해당 타입 찾기
-            const foundEntry = Object.entries(recyclingMarkMap).find(([key, value]) => {
-                const imageName = value.img.split('/').pop().replace('.png', '');
-                return imageName === markData.type || key === markData.type;
-            });
-            
-            if (foundEntry) {
-                markValue = foundEntry[0];
-                
-                // 셀렉트 박스에서 해당 값 선택
-                const selectElement = document.getElementById('recyclingMarkSelect');
-                if (selectElement) {
-                    selectElement.value = markValue;
-                }
-                
-                // 분리배출마크 설정
-                setRecyclingMark(markValue, false);
-                
-                // 버튼 텍스트를 "해제"로 변경
-                setTimeout(() => {
-                    const addBtn = document.getElementById('addRecyclingMarkBtn');
-                    if (addBtn) {
-                        addBtn.textContent = '해제';
-                        addBtn.classList.remove('btn-outline-primary');
-                        addBtn.classList.add('btn-danger');
-                    }
-                    
-                    // 추가 텍스트 입력 박스도 표시
-                    const additionalInputBox = document.getElementById('additionalTextInputBox');
-                    if (additionalInputBox) {
-                        additionalInputBox.style.display = 'block';
-                    }
-                }, 50);
-                
-                // 위치 설정 (약간의 딜레이 후)
-                setTimeout(() => {
-                    const markElement = document.getElementById('recyclingMarkContainer');
-                    if (markElement) {
-                        if (markData.position_x && markData.position_x.startsWith('right:')) {
-                            markElement.style.right = markData.position_x.replace('right:', '') + 'px';
-                            markElement.style.left = 'auto';
-                        } else {
-                            markElement.style.left = markData.position_x + 'px';
-                            markElement.style.right = 'auto';
-                        }
-                        markElement.style.top = markData.position_y + 'px';
-                    }
-                    
-                    // 복합재질 텍스트 설정
-                    if (markData.text) {
-
-                        
-                        // 복합재질 입력 필드에 텍스트 설정 먼저
-                        const textInput = document.getElementById('additionalRecyclingText');
-                        if (textInput) {
-                            textInput.value = markData.text;
-                        }
-                        
-                        // 잘못된 형태의 데이터를 감지하고 정리
-                        let cleanText = markData.text;
-                        
-                        // "몸체(종이)뚜껑(PE)/몸체(종이)/뚜껑(PE)" 같은 패턴을 감지
-                        const parts = markData.text.split('/');
-                        if (parts.length > 2) {
-                            // 첫 번째 부분이 나머지 부분들의 조합인지 확인
-                            const firstPart = parts[0];
-                            const remainingParts = parts.slice(1);
-                            const combinedRemaining = remainingParts.join('');
-                            
-                            if (firstPart === combinedRemaining) {
-                                // 잘못된 데이터이므로 나머지 부분들만 사용
-                                cleanText = remainingParts.join('/');
-
-                                
-                                // 입력 필드도 정리된 텍스트로 업데이트
-                                if (textInput) {
-                                    textInput.value = cleanText;
-                                }
-                            }
-                        }
-                        
-                        // 정리된 텍스트로 분리하여 추가
-                        const lines = cleanText.split('/');
-
-                        
-                        lines.forEach((line, index) => {
-                            const trimmedLine = line.trim();
-
-                            if (trimmedLine) {
-                                addTextToRecyclingMark(trimmedLine);
-                            }
-                        });
-                    }
-                }, 100);
-            } else {
-                console.warn('분리배출마크 타입을 찾을 수 없음:', markData.type);
+            // 단일 마크 복원
+            if (markData.type) {
+                console.log('마크 복원:', markData.type, '위치:', markData.position_x, markData.position_y);
+                const position = {
+                    left: `${parseFloat(markData.position_x) || 10}px`,
+                    top: `${parseFloat(markData.position_y) || 10}px`
+                };
+                setRecyclingMark(markData.type, position, markData.text);
+                console.log('마크 복원 완료, 설정된 위치:', position);
             }
         }
 
         // 저장된 미리보기 설정 로드
         function loadSavedPreviewSettings() {
-
+            console.log('설정 로드 시작');
             
             try {
                 // 1. 백엔드에서 전달된 설정 확인
@@ -1557,7 +1539,9 @@
                 
                 if (settingsScript && settingsScript.textContent && settingsScript.textContent.trim() !== '{}') {
                     settings = JSON.parse(settingsScript.textContent);
-
+                    console.log('백엔드에서 로드된 설정:', settings);
+                } else {
+                    console.log('백엔드 설정 없음 또는 빈 객체');
                 }
                 
                 // 2. localStorage에서 최근 설정 확인 (우선순위 높음)
@@ -1568,12 +1552,17 @@
                     const savedSettings = sessionStorage.getItem('labelPreviewSettings_' + labelId);
                     if (savedSettings) {
                         const localSettings = JSON.parse(savedSettings);
-
+                        console.log('세션스토리지에서 로드된 설정:', localSettings);
                         // 로컬 설정이 있으면 백엔드 설정보다 우선
                         settings = { ...settings, ...localSettings };
+                    } else {
+                        console.log('세션스토리지에 저장된 설정 없음');
                     }
+                } else {
+                    console.log('label_id를 찾을 수 없음');
                 }
-
+                
+                console.log('최종 로드된 설정:', settings);
                 
                 // 기본 설정 복원
                 if (settings.width) {
@@ -1628,8 +1617,7 @@
                 
                 // 분리배출마크 설정 복원
                 const recyclingMark = settings.recycling_mark;
-                if (recyclingMark && recyclingMark.enabled && recyclingMark.type) {
-
+                if (recyclingMark) {
                     setTimeout(() => {
                         restoreRecyclingMark(recyclingMark);
                     }, 1500);

@@ -1891,14 +1891,26 @@ def save_preview_settings(request):
         label.prv_letter_spacing = data.get('letter_spacing')
         label.prv_line_spacing = data.get('line_spacing')
         
-        # 분리배출마크 설정 저장
+        # 분리배출마크 정보 저장 (첫 번째 마크만)
         recycling_mark = data.get('recycling_mark', {})
-        
-        label.prv_recycling_mark_enabled = 'Y' if recycling_mark.get('enabled') else 'N'
-        label.prv_recycling_mark_type = recycling_mark.get('type')
-        label.prv_recycling_mark_position_x = recycling_mark.get('position_x')
-        label.prv_recycling_mark_position_y = recycling_mark.get('position_y')
-        label.prv_recycling_mark_text = recycling_mark.get('text')
+        if recycling_mark:
+            label.prv_recycling_mark_enabled = 'Y' if recycling_mark.get('enabled') else 'N'
+            
+            # marks 배열이 있으면 첫 번째 마크만 저장
+            if recycling_mark.get('marks') and isinstance(recycling_mark['marks'], list) and len(recycling_mark['marks']) > 0:
+                first_mark = recycling_mark['marks'][0]
+                label.prv_recycling_mark_type = first_mark.get('type', '')
+                label.prv_recycling_mark_position_x = str(first_mark.get('position_x', ''))
+                label.prv_recycling_mark_position_y = str(first_mark.get('position_y', ''))
+                label.prv_recycling_mark_text = first_mark.get('text', '')
+            else:
+                # 구버전 형식 지원
+                label.prv_recycling_mark_type = recycling_mark.get('type', '')
+                label.prv_recycling_mark_position_x = str(recycling_mark.get('position_x', ''))
+                label.prv_recycling_mark_position_y = str(recycling_mark.get('position_y', ''))
+                label.prv_recycling_mark_text = recycling_mark.get('text', '')
+        else:
+            label.prv_recycling_mark_enabled = 'N'
         
         label.save()
         return JsonResponse({'success': True})
