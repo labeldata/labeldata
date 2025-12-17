@@ -18,6 +18,12 @@
     background-color: #e9ecef !important;
     color: #6c757d !important;
   }
+  
+  /* th 너비 통일 */
+  .nutrition-table th {
+    width: 120px;
+    min-width: 120px;
+  }
 </style>
 <div class="popup-container" id="ingredient-detail-container-partial">
     <div class="panel-header">
@@ -37,7 +43,6 @@
             {% if mode == 'edit' and user.username != 'guest@labeasylabel.com' %}<button type="button" class="btn btn-outline-danger btn-sm" id="deleteBtn">삭제</button>{% endif %}
         </div>
     </div>
-    <hr />
 
     <div>
         <form method="post" id="ingredientForm">
@@ -47,79 +52,115 @@
             
             <table class="nutrition-table">
                 <tbody>
+                    <!-- 1행: 식품 구분 (라디오 버튼) -->
                     <tr>
-                        <th>원재료명</th>
-                        <td><input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm" value="{{ ingredient.prdlst_nm|default:'' }}"></td>
-                        <th>품목보고번호</th>
-                        <td><input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no" value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15"></td>
-                    </tr>
-                    <tr>
-                        <th>식품 구분</th>
-                        <td>
-                            <select class="form-control form-control-sm" name="food_category" id="foodCategorySelect">
-                                <option value="processed" {% if ingredient.food_category == "processed" or not ingredient.food_category %}selected{% endif %}>가공식품</option>
-                                <option value="agricultural" {% if ingredient.food_category == "agricultural" %}selected{% endif %}>농수산물</option>
-                                <option value="additive" {% if ingredient.food_category == "additive" %}selected{% endif %}>식품첨가물</option>
-                            </select>
+                        <th>식품 구분 <span class="text-danger">*</span></th>
+                        <td colspan="3">
+                            <div class="d-flex flex-wrap align-items-center gap-3">
+                                <div class="d-flex gap-3">
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input" type="radio" name="food_category" id="foodCategoryProcessed" value="processed" {% if ingredient.food_category == "processed" or not ingredient.food_category %}checked{% endif %}>
+                                        <label class="form-check-label" for="foodCategoryProcessed">가공식품</label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input" type="radio" name="food_category" id="foodCategoryAdditive" value="additive" {% if ingredient.food_category == "additive" %}checked{% endif %}>
+                                        <label class="form-check-label" for="foodCategoryAdditive">식품첨가물</label>
+                                    </div>
+                                    <div class="form-check form-check-inline mb-0">
+                                        <input class="form-check-input" type="radio" name="food_category" id="foodCategoryAgricultural" value="agricultural" {% if ingredient.food_category == "agricultural" %}checked{% endif %}>
+                                        <label class="form-check-label" for="foodCategoryAgricultural">농수산물</label>
+                                    </div>
+                                </div>
+                            </div>
                         </td>
-                        <th>식품유형</th>
-                        <td><select id="foodTypeSelect" name="prdlst_dcnm" class="form-control form-control-sm" data-selected="{{ ingredient.prdlst_dcnm|default:'' }}"></select></td>
                     </tr>
+                    <!-- 2행: 품목보고번호 (가공식품/식품첨가물만) -->
+                    <tr id="reportNoRow">
+                        <th>품목보고번호</th>
+                        <td colspan="3">
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no" value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15" placeholder="예: 19950000000000" style="flex: 1;">
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="fetchFoodItemByReportNo()" title="품목보고번호로 불러오기" style="white-space: nowrap;">
+                                    <i class="bi bi-download"></i> 불러오기
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mt-1">품목보고번호를 입력하고 불러오기 버튼을 클릭하면 정보가 자동으로 입력됩니다.</small>
+                        </td>
+                    </tr>
+                    <!-- 3행: 원재료명 / 식품유형 -->
+                    <tr>
+                        <th style="width: 120px;">원재료명 <span class="text-danger">*</span></th>
+                        <td style="width: 60%;">
+                            <input type="text" class="form-control" name="prdlst_nm" id="prdlst_nm" value="{{ ingredient.prdlst_nm|default:'' }}" placeholder="예: 밀가루">
+                        </td>
+                        <th style="width: 120px;">식품유형</th>
+                        <td style="width: auto;">
+                            <select id="foodTypeSelect" name="prdlst_dcnm" class="form-control form-control-sm" data-selected="{{ ingredient.prdlst_dcnm|default:'' }}"></select>
+                        </td>
+                    </tr>
+                    <!-- 4행: 제조사명 -->
                     <tr>
                         <th>제조사명</th>
-                        <td colspan="3"><input type="text" class="form-control" name="bssh_nm" id="bssh_nm" value="{{ ingredient.bssh_nm|default:'' }}"></td>
+                        <td colspan="3">
+                            <input type="text" class="form-control" name="bssh_nm" id="bssh_nm" value="{{ ingredient.bssh_nm|default:'' }}">
+                        </td>
                     </tr>
+                    <!-- 5행: 원재료 표시명 -->
                     <tr>
                         <th>원재료 표시명</th>
                         <td colspan="3">
-                            <textarea class="auto-expand form-control" name="ingredient_display_name" id="ingredient_display_name" placeholder="원재료 표시명을 입력하세요">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
+                            <textarea class="auto-expand form-control" name="ingredient_display_name" id="ingredient_display_name" placeholder="원재료 표시명을 입력하세요" rows="1" style="overflow:hidden; resize:vertical;">{{ ingredient.ingredient_display_name|default:'' }}</textarea>
+                            <small class="text-muted d-block mt-1" id="ingredient_display_name_help">제품 라벨에 표시될 원재료명을 입력하세요. (예: 밀가루(미국산), 정제수)</small>
+                            <!-- 식품첨가물 표시규정 (식품첨가물인 경우) -->
+                            <div id="display-regulation-info" style="display: none; margin-top: 8px;">
+                                <div class="alert alert-info mb-0" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;">
+                                    <strong><i class="bi bi-info-circle"></i> 식품첨가물 표시규정</strong>
+                                    <div id="display_regulation_display" style="margin-top: 8px; white-space: pre-wrap;"></div>
+                                    <div id="display_regulation_buttons" style="margin-top: 8px; display: none;" class="d-flex flex-wrap gap-2"></div>
+                                </div>
+                            </div>
                         </td>
                     </tr>
-                    <tr id="display-regulation-row">
-                        <th>식품첨가물 <br> 표시규정</th>
-                        <td colspan="3">
-                                        <textarea class="auto-expand form-control readonly-bg" id="display_regulation_display" placeholder="식품첨가물 표시규정 정보" readonly rows="3"></textarea>
-                        </td>
-                    </tr>
-                    <tr class="allergy-row">
+                    <!-- 6행: 식품첨가물 표시규정 제거 (위로 이동) -->
+                    <!-- 7행: 알레르기 -->
+                    <tr>
                         <th>알레르기</th>
                         <td colspan="3">
-                            <div class="d-flex">
-                                <input type="text" class="form-control readonly-bg" name="allergens" id="allergy_info"
-                                       placeholder="알레르기 선택"
-                                       value="{{ ingredient.allergens|default:'' }}"
-                                       readonly>
-                                <button type="button" class="btn btn-outline-cancel" id="allergyToggleButton" onclick="toggleAllergySelection()">
-                                    선택
-                                </button>
-                            </div>
-                            <div id="allergySelection" style="display: none; margin-top: 10px;">
-                                <div class="mb-2 d-flex justify-content-between">
+                            <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; background-color: #f8f9fa;">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <div id="allergySelectedDisplay" style="font-size: 0.75rem; color: #6b7280; flex: 1;">
+                                        선택된 항목 없음
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="allergyToggleBtn" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;">전체선택</button>
                                 </div>
-                                <div id="allergyOptions" class="allergy-options d-flex flex-wrap gap-2">
-                                    <!-- 알레르기 항목 체크박스가 여기에 동적으로 생성됨 -->
+                                <div id="allergyBtnList" class="d-flex flex-wrap gap-1 mb-1">
+                                    {% for allergen in allergen_list %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary allergy-btn" data-allergen="{{ allergen }}" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">{{ allergen }}</button>
+                                    {% endfor %}
                                 </div>
+                                <input type="hidden" name="allergens" id="allergy_info" value="{{ ingredient.allergens|default:'' }}">
+                                <small class="text-muted">알레르기 유발 성분을 선택하세요. 버튼 클릭으로 선택/해제할 수 있습니다.</small>
                             </div>
                         </td>
                     </tr>
-                    <tr class="gmo-row">
+                    <!-- 8행: GMO -->
+                    <tr>
                         <th>GMO</th>
                         <td colspan="3">
-                            <div class="d-flex">
-                                <input type="text" class="form-control readonly-bg" name="gmo" id="gmo_info"
-                                       placeholder="GMO 선택"
-                                       value="{{ ingredient.gmo|default:'' }}"
-                                       readonly>
-                                <button type="button" class="btn btn-outline-cancel" id="gmoToggleButton" onclick="toggleGmoSelection()">
-                                    선택
-                                </button>
-                            </div>
-                            <div id="gmoSelection" style="display: none; margin-top: 10px;">
-                                <div class="mb-2">
+                            <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; background-color: #f8f9fa;">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <div id="gmoSelectedDisplay" style="font-size: 0.75rem; color: #6b7280; flex: 1;">
+                                        선택된 항목 없음
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="gmoToggleBtn" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;">전체선택</button>
                                 </div>
-                                <div id="gmoOptions" class="gmo-options d-flex flex-wrap gap-2">
-                                    <!-- JavaScript로 동적 생성 -->
+                                <div id="gmoBtnList" class="d-flex flex-wrap gap-1 mb-1">
+                                    {% for gmo in gmo_list %}
+                                    <button type="button" class="btn btn-sm btn-outline-primary gmo-btn" data-gmo="{{ gmo }}" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">{{ gmo }}</button>
+                                    {% endfor %}
                                 </div>
+                                <input type="hidden" name="gmo" id="gmo_info" value="{{ ingredient.gmo|default:'' }}">
+                                <small class="text-muted">GMO 성분을 선택하세요. 버튼 클릭으로 선택/해제할 수 있습니다.</small>
                             </div>
                         </td>
                     </tr>

@@ -1,5 +1,283 @@
-// my_ingredient_detail_partial.html에서 분리된 스크립트
-// my_ingredient_detail_partial.html에서 분리된 스크립트 (수정됨)
+(function() {
+'use strict';
+
+// --- 알레르기/GMO 버튼 선택 로직 ---
+let selectedAllergens = [];
+let selectedGmos = [];
+
+function updateAllergyDisplay() {
+    const display = document.getElementById('allergySelectedDisplay');
+    const input = document.getElementById('allergy_info');
+    if (!display || !input) return;
+    
+    if (selectedAllergens.length === 0) {
+        display.textContent = '선택된 항목 없음';
+        display.style.color = '#6b7280';
+        input.value = '';
+    } else {
+        display.textContent = selectedAllergens.join(', ');
+        display.style.color = '#1f2937';
+        display.style.fontWeight = '600';
+        input.value = selectedAllergens.join(', ');
+    }
+}
+
+function updateGmoDisplay() {
+    const display = document.getElementById('gmoSelectedDisplay');
+    const input = document.getElementById('gmo_info');
+    if (!display || !input) return;
+    
+    if (selectedGmos.length === 0) {
+        display.textContent = '선택된 항목 없음';
+        display.style.color = '#6b7280';
+        input.value = '';
+    } else {
+        display.textContent = selectedGmos.join(', ');
+        display.style.color = '#1f2937';
+        display.style.fontWeight = '600';
+        input.value = selectedGmos.join(', ');
+    }
+}
+
+function initAllergyGmoButtonEvents() {
+    // 초기값 세팅
+    const allergyInput = document.getElementById('allergy_info');
+    const gmoInput = document.getElementById('gmo_info');
+    if (!allergyInput || !gmoInput) return;
+    
+    selectedAllergens = allergyInput.value ? allergyInput.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+    selectedGmos = gmoInput.value ? gmoInput.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+    // 버튼 상태 초기화
+    document.querySelectorAll('.allergy-btn').forEach(btn => {
+        const allergen = btn.dataset.allergen;
+        if (selectedAllergens.includes(allergen)) {
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-primary');
+        } else {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-primary');
+        }
+    });
+    document.querySelectorAll('.gmo-btn').forEach(btn => {
+        const gmo = btn.dataset.gmo;
+        if (selectedGmos.includes(gmo)) {
+            btn.classList.remove('btn-outline-primary');
+            btn.classList.add('btn-primary');
+        } else {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-primary');
+        }
+    });
+    updateAllergyDisplay();
+    updateGmoDisplay();
+    
+    // === 전체선택/해제 버튼 이벤트 바인딩 ===
+    const allergyToggleBtn = document.getElementById('allergyToggleBtn');
+    const allergyBtnList = document.getElementById('allergyBtnList');
+    
+    if (allergyToggleBtn && allergyBtnList) {
+        allergyToggleBtn.onclick = function() {
+            const allAllergens = Array.from(allergyBtnList.querySelectorAll('.allergy-btn')).map(btn => btn.dataset.allergen);
+            const allSelected = allAllergens.every(allergen => selectedAllergens.includes(allergen));
+            
+            if (allSelected) {
+                // 전체해제
+                selectedAllergens = [];
+                allergyBtnList.querySelectorAll('.allergy-btn').forEach(btn => {
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-outline-primary');
+                });
+                this.textContent = '전체선택';
+            } else {
+                // 전체선택
+                selectedAllergens = [...allAllergens];
+                allergyBtnList.querySelectorAll('.allergy-btn').forEach(btn => {
+                    btn.classList.remove('btn-outline-primary');
+                    btn.classList.add('btn-primary');
+                });
+                this.textContent = '전체해제';
+            }
+            updateAllergyDisplay();
+        };
+    }
+    
+    // GMO 전체선택/해제 토글
+    const gmoToggleBtn = document.getElementById('gmoToggleBtn');
+    const gmoBtnList = document.getElementById('gmoBtnList');
+    
+    if (gmoToggleBtn && gmoBtnList) {
+        gmoToggleBtn.onclick = function() {
+            const allGmos = Array.from(gmoBtnList.querySelectorAll('.gmo-btn')).map(btn => btn.dataset.gmo);
+            const allSelected = allGmos.every(gmo => selectedGmos.includes(gmo));
+            
+            if (allSelected) {
+                // 전체해제
+                selectedGmos = [];
+                gmoBtnList.querySelectorAll('.gmo-btn').forEach(btn => {
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-outline-primary');
+                });
+                this.textContent = '전체선택';
+            } else {
+                // 전체선택
+                selectedGmos = [...allGmos];
+                gmoBtnList.querySelectorAll('.gmo-btn').forEach(btn => {
+                    btn.classList.remove('btn-outline-primary');
+                    btn.classList.add('btn-primary');
+                });
+                this.textContent = '전체해제';
+            }
+            updateGmoDisplay();
+        };
+    }
+    
+    // === 개별 버튼 클릭 이벤트 위임 ===
+    // 알레르기 버튼 개별 클릭
+    if (allergyBtnList) {
+        allergyBtnList.querySelectorAll('.allergy-btn').forEach(btn => {
+            btn.onclick = function() {
+                const allergen = this.dataset.allergen;
+                const idx = selectedAllergens.indexOf(allergen);
+                if (idx > -1) {
+                    selectedAllergens.splice(idx, 1);
+                    this.classList.remove('btn-primary');
+                    this.classList.add('btn-outline-primary');
+                } else {
+                    selectedAllergens.push(allergen);
+                    this.classList.remove('btn-outline-primary');
+                    this.classList.add('btn-primary');
+                }
+                updateAllergyDisplay();
+                // 토글 버튼 텍스트 업데이트
+                const allergyToggleBtn = document.getElementById('allergyToggleBtn');
+                if (allergyToggleBtn) {
+                    const allAllergens = Array.from(allergyBtnList.querySelectorAll('.allergy-btn')).map(b => b.dataset.allergen);
+                    const allSelected = allAllergens.every(a => selectedAllergens.includes(a));
+                    allergyToggleBtn.textContent = allSelected ? '전체해제' : '전체선택';
+                }
+            };
+        });
+    }
+    
+    // GMO 버튼 개별 클릭
+    if (gmoBtnList) {
+        gmoBtnList.querySelectorAll('.gmo-btn').forEach(btn => {
+            btn.onclick = function() {
+                const gmo = this.dataset.gmo;
+                const idx = selectedGmos.indexOf(gmo);
+                if (idx > -1) {
+                    selectedGmos.splice(idx, 1);
+                    this.classList.remove('btn-primary');
+                    this.classList.add('btn-outline-primary');
+                } else {
+                    selectedGmos.push(gmo);
+                    this.classList.remove('btn-outline-primary');
+                    this.classList.add('btn-primary');
+                }
+                updateGmoDisplay();
+                // 토글 버튼 텍스트 업데이트
+                const gmoToggleBtn = document.getElementById('gmoToggleBtn');
+                if (gmoToggleBtn) {
+                    const allGmos = Array.from(gmoBtnList.querySelectorAll('.gmo-btn')).map(b => b.dataset.gmo);
+                    const allSelected = allGmos.every(g => selectedGmos.includes(g));
+                    gmoToggleBtn.textContent = allSelected ? '전체해제' : '전체선택';
+                }
+            };
+        });
+    }
+}
+
+// --- 품목보고번호 불러오기 기능 ---
+function fetchFoodItemByReportNo() {
+    const reportNoInput = document.getElementById('prdlst_report_no');
+    const reportNo = reportNoInput ? reportNoInput.value.trim() : '';
+    
+    if (!reportNo) {
+        alert('품목보고번호를 입력해주세요.');
+        return;
+    }
+    
+    fetch(`/label/fetch-food-item/${reportNo}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 원재료명 자동 입력
+                if (data.prdlst_nm) {
+                    const prdlstNmInput = document.getElementById('prdlst_nm');
+                    if (prdlstNmInput) {
+                        prdlstNmInput.value = data.prdlst_nm;
+                    }
+                }
+                
+                // 식품유형 자동 입력
+                if (data.prdlst_dcnm) {
+                    const foodType = data.prdlst_dcnm;
+                    let detectedCategory = 'processed'; // 기본값
+                    
+                    // 식품유형 데이터 가져오기
+                    const foodTypesData = document.getElementById('food-types-data');
+                    const agriProductsData = document.getElementById('agricultural-products-data');
+                    const foodAdditivesData = document.getElementById('food-additives-data');
+                    
+                    if (foodTypesData && agriProductsData && foodAdditivesData) {
+                        const foodTypes = JSON.parse(foodTypesData.textContent || '[]');
+                        const agriProducts = JSON.parse(agriProductsData.textContent || '[]');
+                        const foodAdditives = JSON.parse(foodAdditivesData.textContent || '[]');
+                        
+                        // 식품유형으로 식품구분 추측
+                        if (foodTypes.some(opt => opt.food_type === foodType)) {
+                            detectedCategory = 'processed';
+                        } else if (agriProducts.some(opt => opt.name_kr === foodType)) {
+                            detectedCategory = 'agricultural';
+                        } else if (foodAdditives.some(opt => opt.name_kr === foodType)) {
+                            detectedCategory = 'additive';
+                        }
+                    }
+                    
+                    // 라디오 버튼 선택
+                    const targetRadio = document.querySelector(`input[name="food_category"][value="${detectedCategory}"]`);
+                    if (targetRadio) {
+                        targetRadio.checked = true;
+                        // 품목보고번호 행 표시/숨김 처리
+                        if (typeof toggleReportNoRow === 'function') {
+                            toggleReportNoRow();
+                        }
+                    }
+                    
+                    // 식품유형 옵션 업데이트 및 선택
+                    if (typeof initFoodTypeSelect === 'function') {
+                        initFoodTypeSelect();
+                    }
+                    
+                    // select2로 식품유형 선택
+                    const foodTypeSelect = document.getElementById('foodTypeSelect');
+                    if (foodTypeSelect && typeof $ !== 'undefined' && $.fn.select2) {
+                        setTimeout(() => {
+                            $(foodTypeSelect).val(foodType).trigger('change.select2');
+                        }, 100);
+                    }
+                }
+                
+                // 제조사 자동 입력
+                if (data.bssh_nm) {
+                    const bsshNmInput = document.getElementById('bssh_nm');
+                    if (bsshNmInput) {
+                        bsshNmInput.value = data.bssh_nm;
+                    }
+                }
+                
+                alert('정보를 불러왔습니다. 내용을 확인하고 필요하면 수정해주세요.');
+            } else {
+                alert('해당 품목보고번호를 찾을 수 없습니다.');
+            }
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            alert('불러오기 중 오류가 발생했습니다.');
+        });
+}
+
 // 삭제 확인 및 삭제 함수
 function confirmDelete() {
     if (confirm('정말 삭제하시겠습니까?')) {
@@ -379,13 +657,10 @@ function initFoodTypeSelect() {
         return;
     }
     
-    // 현재 식품 구분 값을 가져옴 - ingredient form 내부에서만 찾기
+    // 현재 식품 구분 값을 가져옴 - 라디오 버튼에서
     const ingredientForm = document.getElementById('ingredientForm');
-    const foodCategorySelect = ingredientForm ? ingredientForm.querySelector('#foodCategorySelect') : null;
-    const currentFoodCategory = foodCategorySelect ? foodCategorySelect.value : 'processed';
-    
-    // debug logs removed
-    
+    const selectedCategoryRadio = ingredientForm ? ingredientForm.querySelector('input[name="food_category"]:checked') : null;
+    const currentFoodCategory = selectedCategoryRadio ? selectedCategoryRadio.value : 'processed';
     const actualFoodCategory = currentFoodCategory || 'processed';
     
     // 식품 구분에 따라 옵션 필터링
@@ -418,7 +693,7 @@ function initFoodTypeSelect() {
     // 옵션을 select에 직접 추가
     select.innerHTML = '<option></option>';
     options.forEach(opt => {
-        if (!opt.id || !opt.text) return; // id/text가 없으면 추가하지 않음
+        if (!opt.id || !opt.text) return;
         const option = document.createElement('option');
         option.value = opt.id;
         option.text = opt.text;
@@ -435,21 +710,33 @@ function initFoodTypeSelect() {
         width: '100%',
         placeholder: '식품유형 선택',
         allowClear: true
-    });    // 기존 값이 있으면 선택
+    });
+    
+    // 기존 값이 있으면 선택
     const currentValue = select.getAttribute('data-selected') || select.value;
     if (currentValue) {
         $(select).val(currentValue).trigger('change.select2');
     } else {
         $(select).val(null).trigger('change.select2');
-    }    // select2 change 이벤트: 식품유형 선택 시 식품 구분 자동 선택
+    }
+    
+    // select2 change 이벤트: 식품유형 선택 시 식품 구분 자동 선택
     $(select).on('change.foodtype', function (e) {
         if (window.IngredientDetailPartial.isSyncing) return;
         const selectedOption = select.options[select.selectedIndex];
         if (!selectedOption) return;
         const selectedCategory = selectedOption.getAttribute('data-category');
-        if (!selectedCategory) return;        if (foodCategorySelect && foodCategorySelect.value !== selectedCategory) {
+        if (!selectedCategory) return;
+        
+        // 라디오 버튼 값 변경
+        const currentCategoryRadio = document.querySelector('input[name="food_category"]:checked');
+        if (currentCategoryRadio && currentCategoryRadio.value !== selectedCategory) {
             window.IngredientDetailPartial.isSyncing = true;
-            foodCategorySelect.value = selectedCategory;
+            const targetRadio = document.querySelector(`input[name="food_category"][value="${selectedCategory}"]`);
+            if (targetRadio) {
+                targetRadio.checked = true;
+                toggleReportNoRow();
+            }
             initFoodTypeSelect();
             $(select).val(selectedOption.value).trigger('change.select2');
             window.IngredientDetailPartial.isSyncing = false;
@@ -460,39 +747,32 @@ function initFoodTypeSelect() {
     });
 }
 
-// 알레르기와 GMO 옵션 초기화 함수
-function initAllergyAndGmoOptions() {
-    // showAllergyOptions와 showGmoOptions를 window에서 가져와 실행
-    if (typeof window.showAllergyOptions === 'function') {
-        window.showAllergyOptions();
-    }
-    if (typeof window.showGmoOptions === 'function') {
-        window.showGmoOptions();
-    }
-    // 초기 상태를 접혀있게 설정
-    if (typeof window.initializeSelections === 'function') {
-        window.initializeSelections();
-    }
-}
-
 // 식품 구분 선택 변경시 식품유형 드롭다운 갱신
 function setupFoodCategoryChangeEvent() {
-    // 더 구체적으로 ingredient form 내부의 foodCategorySelect를 찾음
-    const ingredientForm = document.getElementById('ingredientForm');
-    const foodCategorySelect = ingredientForm ? ingredientForm.querySelector('#foodCategorySelect') : null;
-    
-        if (foodCategorySelect) {
-        // 기존 onchange 속성 제거 (다른 스크립트에서 추가했을 수 있음)
-        if (foodCategorySelect.hasAttribute('onchange')) {
-            foodCategorySelect.removeAttribute('onchange');
-        }
-        
-        // 기존 이벤트 리스너 제거 (중복 방지)
-        foodCategorySelect.removeEventListener('change', handleFoodCategoryChange);
-        foodCategorySelect.addEventListener('change', function(event) {
-            // 식품 구분 변경됨 처리
+    // 라디오 버튼 이벤트 바인딩
+    const foodCategoryRadios = document.querySelectorAll('input[name="food_category"]');
+    foodCategoryRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
             handleFoodCategoryChange();
+            toggleReportNoRow();
         });
+    });
+}
+
+// 품목보고번호 행 표시/숨김 처리
+function toggleReportNoRow() {
+    const reportNoRow = document.getElementById('reportNoRow');
+    if (!reportNoRow) return;
+    
+    const selectedCategory = document.querySelector('input[name="food_category"]:checked');
+    if (!selectedCategory) return;
+    
+    const category = selectedCategory.value;
+    // 가공식품 또는 식품첨가물인 경우에만 표시
+    if (category === 'processed' || category === 'additive') {
+        reportNoRow.style.display = '';
+    } else {
+        reportNoRow.style.display = 'none';
     }
 }
 
@@ -527,15 +807,14 @@ onReady(function() {
     
     initFoodTypeSelect();
     setupFoodCategoryChangeEvent();
-    initAllergyAndGmoOptions(); // 알레르기와 GMO 옵션 초기화
+    toggleReportNoRow(); // 초기 품목보고번호 행 표시/숨김
+    initAllergyGmoButtonEvents(); // 알레르기/GMO 버튼 초기화
     
     // 폼 submit 이벤트 바인딩 (partial에서도 반드시 필요)
     var form = document.getElementById('ingredientForm');
     if (form) {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
-            if (typeof updateAllergyInfo === 'function') updateAllergyInfo();
-            if (typeof updateGmoInfo === 'function') updateGmoInfo();
             saveMyIngredient();
         });
     }
@@ -553,7 +832,7 @@ onReady(function() {
             if(confirm('입력 내용을 초기화하시겠습니까?')) {
                 form.reset();
                 initFoodTypeSelect(); // 식품유형도 초기화
-                initAllergyAndGmoOptions();
+                initAllergyGmoButtonEvents(); // 알레르기/GMO 초기화
                 // 초기화 후 변경 감지 플래그 해제
                 if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
             }
@@ -571,36 +850,30 @@ onReady(function() {
 
 // 표시규정 정보 업데이트 함수
 function updateDisplayRegulation() {
-    // updateDisplayRegulation called
-    
-    // ingredient form 내부에서 요소를 찾음 (initFoodTypeSelect와 동일한 방식)
     const ingredientForm = document.getElementById('ingredientForm');
-    const foodCategorySelect = ingredientForm ? ingredientForm.querySelector('#foodCategorySelect') : null;
+    const selectedCategoryRadio = ingredientForm ? ingredientForm.querySelector('input[name="food_category"]:checked') : null;
     const foodTypeSelect = document.getElementById('foodTypeSelect');
-    const displayRegulationRow = document.getElementById('display-regulation-row');
+    const displayRegulationInfo = document.getElementById('display-regulation-info');
     const displayRegulationDisplay = document.getElementById('display_regulation_display');
+    const displayRegulationButtons = document.getElementById('display_regulation_buttons');
+    const ingredientDisplayNameHelp = document.getElementById('ingredient_display_name_help');
     
-    // elements presence checked
-    
-    if (!foodCategorySelect || !foodTypeSelect || !displayRegulationRow || !displayRegulationDisplay) {
-    // 필수 요소가 누락되었습니다.
+    if (!selectedCategoryRadio || !foodTypeSelect || !displayRegulationInfo || !displayRegulationDisplay) {
         return;
     }
     
-    const foodCategory = foodCategorySelect.value;
+    const foodCategory = selectedCategoryRadio.value;
     const foodType = foodTypeSelect.value;
-    
-    // current values inspected
+    const prdlstNm = document.getElementById('prdlst_nm') ? document.getElementById('prdlst_nm').value : '';
     
     // 식품첨가물이 아니거나 식품유형이 없으면 숨김
     if (foodCategory !== 'additive' || !foodType) {
-    // 식품첨가물이 아니거나 식품유형이 없음 - 숨김
-        displayRegulationRow.style.display = 'none';
-        displayRegulationDisplay.value = '';
+        displayRegulationInfo.style.display = 'none';
+        if (ingredientDisplayNameHelp) ingredientDisplayNameHelp.style.display = '';
+        displayRegulationDisplay.textContent = '';
+        if (displayRegulationButtons) displayRegulationButtons.style.display = 'none';
         return;
     }
-    
-    // calling API for regulation info
     
     // API 호출하여 표시규정 정보 가져오기
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
@@ -612,22 +885,73 @@ function updateDisplayRegulation() {
             'X-CSRFToken': csrfToken
         },
         body: JSON.stringify({
-            food_type: foodType
+            food_type: foodType,
+            prdlst_nm: prdlstNm
         })
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success && data.regulation) {
-            displayRegulationDisplay.value = data.regulation;
-            displayRegulationRow.style.display = '';
+        if (data.success && data.has_regulation) {
+            // 구조화된 데이터 직접 사용
+            const header = data.header || '';
+            const buttons = data.buttons || [];
+            
+            // 헤더 텍스트 표시
+            if (header) {
+                displayRegulationDisplay.textContent = header;
+            } else {
+                displayRegulationDisplay.textContent = '';
+            }
+            
+            // 버튼 생성
+            if (displayRegulationButtons && buttons.length > 0) {
+                displayRegulationButtons.innerHTML = '';
+                displayRegulationButtons.style.display = 'flex';
+                
+                buttons.forEach(item => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-sm btn-outline-primary';
+                    btn.textContent = item.value;
+                    btn.style.fontSize = '0.75rem';
+                    btn.style.padding = '0.25rem 0.5rem';
+                    btn.title = `클릭하면 "원재료 표시명"에 자동 입력됩니다.`;
+                    
+                    btn.onclick = function() {
+                        const displayNameInput = document.getElementById('ingredient_display_name');
+                        if (displayNameInput) {
+                            displayNameInput.value = item.value;
+                            // textarea 자동 확장
+                            if (displayNameInput.classList.contains('auto-expand')) {
+                                displayNameInput.style.height = 'auto';
+                                displayNameInput.style.height = displayNameInput.scrollHeight + 'px';
+                            }
+                        }
+                    };
+                    
+                    displayRegulationButtons.appendChild(btn);
+                });
+            } else if (displayRegulationButtons) {
+                displayRegulationButtons.style.display = 'none';
+            }
+            
+            // 기본 설명 숨기고 표시규정 표시
+            if (ingredientDisplayNameHelp) ingredientDisplayNameHelp.style.display = 'none';
+            displayRegulationInfo.style.display = '';
         } else {
-            displayRegulationRow.style.display = 'none';
-            displayRegulationDisplay.value = '';
+            displayRegulationInfo.style.display = 'none';
+            if (ingredientDisplayNameHelp) ingredientDisplayNameHelp.style.display = '';
+            displayRegulationDisplay.textContent = '';
+            if (displayRegulationButtons) displayRegulationButtons.style.display = 'none';
         }
     })
     .catch(error => {
         console.error('Error fetching regulation info:', error);
-        displayRegulationRow.style.display = 'none';
-        displayRegulationDisplay.value = '';
+        displayRegulationInfo.style.display = 'none';
+        if (ingredientDisplayNameHelp) ingredientDisplayNameHelp.style.display = '';
+        displayRegulationDisplay.textContent = '';
+        if (displayRegulationButtons) displayRegulationButtons.style.display = 'none';
     });
 }
+
+})(); // IIFE 끝

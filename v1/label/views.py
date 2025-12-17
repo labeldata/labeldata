@@ -31,7 +31,6 @@ from .forms import LabelCreationForm, MyIngredientsForm
 from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem, 
                      FoodType, ImportedFood, LabelIngredientRelation, MyIngredient, 
                      MyLabel, MyPhrase)
-from venv import logger  # 지우지 않음
 
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
@@ -1123,10 +1122,11 @@ def my_ingredient_detail(request, ingredient_id=None):
         'ingredient': ingredient,
         'form': form,
         'mode': mode,
-        'food_types': list(FoodType.objects.all().values('food_type')),
+        'food_types': list(FoodType.objects.all().values('food_type', 'food_group').order_by('food_type')),
         'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
         'food_additives': list(FoodAdditive.objects.all().values('name_kr')),
-
+        'allergen_list': ALLERGEN_LIST,
+        'gmo_list': GMO_LIST,
     }
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -2173,95 +2173,170 @@ def my_ingredient_pagination_info(request):
 @login_required
 @csrf_exempt
 def get_additive_regulation(request):
-    """식품첨가물의 표시규정 정보 조회"""
+    """식품첨가물의 표시규정 정보 조회 - 구조화된 데이터 반환"""
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
     try:
         data = json.loads(request.body)
         food_type = data.get('food_type', '').strip()
-        prdlst_nm = data.get('prdlst_nm', '').strip() # prdlst_nm 추가
+        prdlst_nm = data.get('prdlst_nm', '').strip()
 
         if not food_type:
-            return JsonResponse({'success': True, 'regulation': ''})
+            return JsonResponse({'success': True, 'has_regulation': False})
 
-       # 1. 향료, 천연향료, 합성향료 추천 로직
+        # 1. 향료, 천연향료, 합성향료 추천 로직
         if food_type in ["향료", "천연향료", "합성향료"] and "향료제제" not in food_type:
-            m = re.search(r'([가-힣\s]+)\s*향', prdlst_nm) # 정규식 수정 (공백 포함)
+            m = re.search(r'([가-힣\s]+)\s*향', prdlst_nm)
             flavor_name = m.group(1).strip() if m else ""
             
-            # 식품유형이 '향료'인 경우
+            buttons = []
+            header = ""
+            
             if food_type == "향료":
                 if flavor_name:
-                    recommendation = f"향료 or 향료({flavor_name}향)"
+                    buttons = [
+                        {"value": "향료"},
+                        {"value": f"향료({flavor_name}향)"}
+                    ]
                 else:
-                    recommendation = "향료 or 향료(OO향)" # 문구 추출 실패 시 예시 제공
-                regulation = f"※ 식품첨가물의 유형이 \"향료\"인 경우에는 다음과 같이 표시할 수 있다.\n     추천문구 : {recommendation}"
-            # 식품유형이 '천연향료' 또는 '합성향료'인 경우
+                    buttons = [
+                        {"value": "향료"},
+                        {"value": "향료(OO향)"}
+                    ]
+                header = "※ 식품첨가물의 유형이 \"향료\"인 경우에는 선택하여 입력하세요."
             else:
                 if flavor_name:
-                    regulation = f"{food_type} or {food_type}({flavor_name}향)"
+                    buttons = [
+                        {"value": food_type},
+                        {"value": f"{food_type}({flavor_name}향)"}
+                    ]
                 else:
-                    regulation = food_type
+                    buttons = [{"value": food_type}]
+                header = f"※ 식품첨가물의 유형이 \"{food_type}\"인 경우에는 선택하여 입력하세요."
             
-            return JsonResponse({'success': True, 'regulation': regulation})
+            return JsonResponse({
+                'success': True,
+                'has_regulation': True,
+                'header': header,
+                'buttons': buttons
+            })
 
         # 2. 기타 식품첨가물 (표 정보 포함)
         try:
             additive = FoodAdditive.objects.get(name_kr=food_type)
             
-            table_lines = []
+            buttons = []
             applicable_tables = []
+            table_info = {}
             
-            # 표 4, 5, 6 해당 여부 확인 및 문구 생성
+            # 표 4: 명칭+용도 (명칭(용도1), 명칭(용도2) 형태만 생성)
+            # 표 4: 명칭+용도 (명칭(용도1), 명칭(용도2) 형태만 생성)
             if str(additive.alias_4).strip().upper() == 'Y':
                 applicable_tables.append("4")
-                if additive.name_kr and additive.main_purpose:
-                    rec = f"{additive.name_kr}({additive.main_purpose})"
-                    table_lines.append(f"    표4(명칭+용도) : {rec}")
+                table_info['4'] = '명칭+용도'
+                if additive.name_kr:
+                    # 각 용도 필드를 체크하여 'Y'로 설정된 용도 추출
+                    purpose_fields = [
+                        ('color_agent', '착색료'),
+                        ('sweetener', '감미료'),
+                        ('nutrient_enhancer', '영양강화제'),
+                        ('preservative', '보존료'),
+                        ('antioxidant', '산화방지제'),
+                        ('bleaching_agent', '표백제'),
+                        ('color_fixative', '발색제'),
+                        ('stabilizer', '안정제'),
+                        ('emulsifier', '유화제'),
+                        ('thickener', '증점제'),
+                        ('coagulant', '응고제'),
+                        ('leavening_agent', '팽창제'),
+                        ('sterilizer', '살균제'),
+                        ('coating_agent', '피막제'),
+                    ]
+                    
+                    purposes = []
+                    for field_name, purpose_label in purpose_fields:
+                        field_value = getattr(additive, field_name, None)
+                        if field_value and str(field_value).strip().upper() == 'Y':
+                            purposes.append(purpose_label)
+                    
+                    # "명칭(용도)" 형태의 버튼 생성
+                    for purpose in purposes:
+                        buttons.append({"value": f"{additive.name_kr}({purpose})"})
 
+            # 표 5: 명칭or간략명 (명칭, 간략명1, 간략명2... 각각 별도 버튼)
             if str(additive.alias_5).strip().upper() == 'Y':
                 applicable_tables.append("5")
-                parts = []
+                table_info['5'] = '명칭or간략명'
+                # 1. 명칭 버튼 추가
                 if additive.name_kr:
-                    parts.append(additive.name_kr)
-                if additive.main_purpose:
-                    for p in str(additive.main_purpose).split(','):
-                        p = p.strip()
-                        if p and p not in {"Y", "N", "-"}:
-                            parts.append(p)
-                if parts:
-                    rec = " or ".join(parts)
-                    table_lines.append(f"    표5(명칭or용도) : {rec}")
+                    buttons.append({"value": additive.name_kr})
+                # 2. 간략명 처리 (쉼표로만 분리)
+                if additive.short_name:
+                    short_name_str = str(additive.short_name).strip()
+                    short_names = [s.strip() for s in short_name_str.split(',') if s.strip() and s.strip() not in {"Y", "N", "-"}]
+                    for short_name in short_names:
+                        buttons.append({"value": short_name})
 
+            # 표 6: 명칭or간략명or용도 (명칭, 간략명1, 간략명2, 용도1, 용도2... 각각 별도 버튼)
             if str(additive.alias_6).strip().upper() == 'Y':
                 applicable_tables.append("6")
-                parts = []
+                table_info['6'] = '명칭or간략명or용도'
+                
+                # 1. 명칭 버튼 추가
                 if additive.name_kr:
-                    parts.append(additive.name_kr)
+                    buttons.append({"value": additive.name_kr})
+                
+                # 2. 간략명 처리 (쉼표로만 분리)
                 if additive.short_name:
-                    for s in str(additive.short_name).split(','):
-                        s = s.strip()
-                        if s and s not in {"Y", "N", "-"}:
-                            parts.append(s)
-                if parts:
-                    rec = " or ".join(parts)
-                    table_lines.append(f"    표6(명칭or간략명) : {rec}")
+                    short_name_str = str(additive.short_name).strip()
+                    short_names = [s.strip() for s in short_name_str.split(',') if s.strip() and s.strip() not in {"Y", "N", "-"}]
+                    for short_name in short_names:
+                        buttons.append({"value": short_name})
+                
+                # 3. 용도 처리 (각 용도 필드를 체크)
+                purpose_fields = [
+                    ('color_agent', '착색료'),
+                    ('sweetener', '감미료'),
+                    ('nutrient_enhancer', '영양강화제'),
+                    ('preservative', '보존료'),
+                    ('antioxidant', '산화방지제'),
+                    ('bleaching_agent', '표백제'),
+                    ('color_fixative', '발색제'),
+                    ('stabilizer', '안정제'),
+                    ('emulsifier', '유화제'),
+                    ('thickener', '증점제'),
+                    ('coagulant', '응고제'),
+                    ('leavening_agent', '팽창제'),
+                    ('sterilizer', '살균제'),
+                    ('coating_agent', '피막제'),
+                ]
+                
+                for field_name, purpose_label in purpose_fields:
+                    field_value = getattr(additive, field_name, None)
+                    if field_value and str(field_value).strip().upper() == 'Y':
+                        buttons.append({"value": purpose_label})
 
-            # 표 정보가 있으면 새로운 형식으로 반환
-            if table_lines:
+            # 표 정보가 있으면 반환
+            if buttons:
                 table_numbers = ", ".join(applicable_tables)
-                header = f"※ 식품첨가물공전 표 {table_numbers}에 해당되어 다음과 같이 표시할 수 있다."
-                regulation = header + "\n" + "\n".join(table_lines)
+                # 가장 큰 표 번호의 타입을 헤더에 표시
+                last_table = applicable_tables[-1] if applicable_tables else None
+                table_type = f"({table_info[last_table]})" if last_table and last_table in table_info else ""
+                header = f"※ 식품첨가물공전 표 {table_numbers}{table_type}에 해당되어 선택하여 입력하세요."
+                
+                return JsonResponse({
+                    'success': True,
+                    'has_regulation': True,
+                    'header': header,
+                    'buttons': buttons
+                })
             
-            # 표 정보가 없으면 빈 문자열 반환
-            else:
-                regulation = ""
-
-            return JsonResponse({'success': True, 'regulation': regulation})
+            # 표 정보가 없으면 빈 반환
+            return JsonResponse({'success': True, 'has_regulation': False})
 
         except FoodAdditive.DoesNotExist:
-            return JsonResponse({'success': True, 'regulation': ''})
+            return JsonResponse({'success': True, 'has_regulation': False})
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
