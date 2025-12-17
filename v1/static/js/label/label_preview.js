@@ -3245,8 +3245,8 @@ function validateBasicFields() {
     // 내용량 단위 검증 (mg, g, kg, l, ml만 허용, 열량 표시도 허용)
     const contentWeight = checkedFields['content_weight'] || '';
     if (contentWeight && contentWeight.trim()) {
-        const validUnits = /\b(mg|g|kg|ml|l)\b/i;
-        
+        // 숫자와 단위가 붙어 있는 경우도 인식
+        const validUnits = /(\d+(?:\.\d+)?)(mg|g|kg|ml|l)(?![a-zA-Z])/i;
         if (!validUnits.test(contentWeight)) {
             errors.push('내용량에 올바른 단위가 누락되었습니다.');
             suggestions.push('내용량 필드에 mg, g, kg, ml, l 중 하나의 단위를 포함해주세요. (예: 500g, 1L, 250ml, 500l(500kcal))');
