@@ -343,8 +343,41 @@ def call_api_endpoint(request, pk):
                         
                         if rawmtrl_nm and rawmtrl_ordno:
                             try:
-                                # 원재료명: ", "로 분리, 원재료명 순서: ","로 분리하고 빈 문자열 제거
-                                ingredients = [x for x in rawmtrl_nm.split(', ') if x.strip()]
+                                # 괄호를 고려한 원재료명 분리 함수
+                                def split_with_parentheses(text, separator):
+                                    """괄호 밖의 separator만 구분자로 사용"""
+                                    result = []
+                                    current = []
+                                    depth = 0
+                                    i = 0
+                                    
+                                    while i < len(text):
+                                        char = text[i]
+                                        
+                                        if char == '(':
+                                            depth += 1
+                                            current.append(char)
+                                        elif char == ')':
+                                            depth -= 1
+                                            current.append(char)
+                                        elif depth == 0 and text[i:i+len(separator)] == separator:
+                                            # 괄호 밖에서 separator를 만났을 때
+                                            result.append(''.join(current).strip())
+                                            current = []
+                                            i += len(separator) - 1  # separator 길이만큼 건너뛰기
+                                        else:
+                                            current.append(char)
+                                        
+                                        i += 1
+                                    
+                                    # 마지막 항목 추가
+                                    if current:
+                                        result.append(''.join(current).strip())
+                                    
+                                    return [x for x in result if x]  # 빈 문자열 제거
+                                
+                                # 원재료명: ", "로 분리 (괄호 고려), 원재료명 순서: ","로 분리
+                                ingredients = split_with_parentheses(rawmtrl_nm, ', ')
                                 orders = [x.strip() for x in rawmtrl_ordno.split(',') if x.strip()]
                                 
                                 # 순서가 숫자인지 확인하고 정렬
