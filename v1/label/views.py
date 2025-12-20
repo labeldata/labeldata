@@ -2024,6 +2024,9 @@ def verify_report_no(request):
     food_item = FoodItem.objects.filter(prdlst_report_no=prdlst_report_no).first()
     if food_item:
         # 중복된 번호 (이미 신고되어 있음) - 해당 제품 정보 반환
+        # rawmtrl_nm_sorted가 있으면 우선 사용, 없으면 rawmtrl_nm 사용
+        rawmtrl_nm = food_item.rawmtrl_nm_sorted or food_item.rawmtrl_nm or ''
+        
         return JsonResponse({
             'verified': True,
             'status': 'completed',
@@ -2033,7 +2036,7 @@ def verify_report_no(request):
                 'prdlst_dcnm': food_item.prdlst_dcnm or '',
                 'packaging_material': food_item.frmlc_mtrqlt or '',
                 'manufacturer': food_item.bssh_nm or '',
-                'rawmtrl_nm': food_item.rawmtrl_nm or ''
+                'rawmtrl_nm': rawmtrl_nm
             }
         })
     else:
