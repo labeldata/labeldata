@@ -162,11 +162,11 @@ function getNutritionInputsFromDOM() {
   Object.keys(NUTRITION_DATA).forEach(key => {
     const input = document.getElementById(key);
     if (input && input.value && input.value.trim() !== '') {
-      // 쉼표 제거 후 숫자로 변환
-      const cleanValue = input.value.replace(/,/g, '');
-      const numericValue = parseFloat(cleanValue);
-      if (!isNaN(numericValue)) {
-        nutritionInputs[key] = numericValue;
+      // 소수점 포함 숫자로 변환
+      const numericValue = parseFloat(input.value);
+      if (!isNaN(numericValue) && numericValue >= 0) {
+        // 소수점 2자리까지 반올림
+        nutritionInputs[key] = Math.round(numericValue * 100) / 100;
       }
     }
   });
@@ -194,7 +194,7 @@ function buildInputForm() {
       div.className = 'nutrient-input-group';
       div.innerHTML = `
         <label for="${key}" class="${data.indent ? 'indent' : ''}">${data.label}</label>
-        <input type="text" id="${key}" name="${key}" placeholder="0" data-nutrition-key="${key}">
+        <input type="number" id="${key}" name="${key}" placeholder="0" step="0.01" min="0" data-nutrition-key="${key}">
         <span class="unit-label">${data.unit}</span>
       `;
       basicContainer.appendChild(div);
@@ -209,7 +209,7 @@ function buildInputForm() {
       div.className = 'nutrient-input-group';
       div.innerHTML = `
         <label for="${key}">${data.label}</label>
-        <input type="text" id="${key}" name="${key}" placeholder="0" data-nutrition-key="${key}">
+        <input type="number" id="${key}" name="${key}" placeholder="0" step="0.01" min="0" data-nutrition-key="${key}">
         <span class="unit-label">${data.unit}</span>
       `;
       additionalContainer.appendChild(div);
@@ -225,41 +225,38 @@ function attachCommaFormattingToInputs() {
   const nutritionInputs = document.querySelectorAll('input[data-nutrition-key]');
   
   nutritionInputs.forEach(input => {
-    // input 이벤트로 실시간 포맷팅
+    // input 이벤트로 실시간 검증 (소수점 2자리까지 허용)
     input.addEventListener('input', function(e) {
       let value = e.target.value;
       
-      // 숫자가 아닌 문자 제거 (쉼표와 소수점 제외)
-      value = value.replace(/[^\d.,]/g, '');
+      // 숫자와 소수점만 허용
+      value = value.replace(/[^\d.]/g, '');
       
-      // 쉼표 제거 후 숫자로 변환
-      const numericValue = value.replace(/,/g, '');
-      
-      // 유효한 숫자인지 확인
-      if (numericValue && !isNaN(numericValue)) {
-        // 3자리마다 쉼표 추가
-        const formattedValue = parseFloat(numericValue).toLocaleString('ko-KR');
-        e.target.value = formattedValue;
-      } else if (numericValue === '') {
-        e.target.value = '';
+      // 소수점이 여러 개 입력된 경우 처리
+      const parts = value.split('.');
+      if (parts.length > 2) {
+        value = parts[0] + '.' + parts.slice(1).join('');
       }
+      
+      // 소수점 두 번째 자리까지만 허용
+      if (parts.length === 2 && parts[1].length > 2) {
+        value = parts[0] + '.' + parts[1].substring(0, 2);
+      }
+      
+      e.target.value = value;
     });
     
-    // focus 이벤트에서 쉼표 제거 (편집 모드)
-    input.addEventListener('focus', function(e) {
-      const value = e.target.value;
-      if (value) {
-        e.target.value = value.replace(/,/g, '');
-      }
-    });
-    
-    // blur 이벤트에서 쉼표 복원 (표시 모드)
+    // blur 이벤트에서 소수점 검증 및 포매팅
     input.addEventListener('blur', function(e) {
-      const value = e.target.value;
-      if (value && !isNaN(value.replace(/,/g, ''))) {
-        const numericValue = parseFloat(value.replace(/,/g, ''));
-        const formattedValue = numericValue.toLocaleString('ko-KR');
-        e.target.value = formattedValue;
+      let value = e.target.value;
+      if (value && value !== '') {
+        const numericValue = parseFloat(value);
+        if (!isNaN(numericValue) && numericValue >= 0) {
+          // 소수점 2자리까지 반올림
+          e.target.value = Math.round(numericValue * 100) / 100;
+        } else {
+          e.target.value = '';
+        }
       }
     });
   });
