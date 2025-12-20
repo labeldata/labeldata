@@ -343,6 +343,9 @@ def call_api_endpoint(request, pk):
                         
                         if rawmtrl_nm and rawmtrl_ordno:
                             try:
+                                # 줄바꿈 문자를 공백으로 치환 (원재료명에 \n이 포함된 경우 처리)
+                                rawmtrl_nm = rawmtrl_nm.replace('\n', '').replace('\r', '')
+                                
                                 # 괄호를 고려한 원재료명 분리 함수
                                 def split_with_parentheses(text, separator):
                                     """괄호 밖의 separator만 구분자로 사용"""
