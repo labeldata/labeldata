@@ -343,36 +343,9 @@ def call_api_endpoint(request, pk):
                         
                         if rawmtrl_nm and rawmtrl_ordno:
                             try:
-                                # 괄호 밖의 쉼표만 구분자로 사용 (괄호 안의 쉼표는 무시)
-                                def split_ignore_parentheses(text):
-                                    """괄호 밖의 쉼표로만 분리"""
-                                    result = []
-                                    current = []
-                                    depth = 0
-                                    
-                                    for char in text:
-                                        if char == '(':
-                                            depth += 1
-                                            current.append(char)
-                                        elif char == ')':
-                                            depth -= 1
-                                            current.append(char)
-                                        elif char == ',' and depth == 0:
-                                            # 괄호 밖의 쉼표만 구분자로 사용
-                                            result.append(''.join(current).strip())
-                                            current = []
-                                        else:
-                                            current.append(char)
-                                    
-                                    # 마지막 항목 추가
-                                    if current:
-                                        result.append(''.join(current).strip())
-                                    
-                                    return result
-                                
-                                # 원재료명과 순서를 분리 (괄호 안 쉼표 무시)
-                                ingredients = split_ignore_parentheses(rawmtrl_nm)
-                                orders = [x.strip() for x in rawmtrl_ordno.split(',')]
+                                # ", "로 분리하고 빈 문자열 제거
+                                ingredients = [x for x in rawmtrl_nm.split(', ') if x.strip()]
+                                orders = [x for x in rawmtrl_ordno.split(', ') if x.strip()]
                                 
                                 # 순서가 숫자인지 확인하고 정렬
                                 if len(ingredients) == len(orders):
@@ -382,7 +355,7 @@ def call_api_endpoint(request, pk):
                                     paired_sorted = sorted(paired, key=lambda x: int(x[0]) if x[0].isdigit() else 999)
                                     # 정렬된 원재료명만 추출
                                     sorted_ingredients = [pair[1] for pair in paired_sorted]
-                                    # 콤마로 합쳐서 저장
+                                    # ", "로 합쳐서 저장
                                     defaults['rawmtrl_nm_sorted'] = ', '.join(sorted_ingredients)
                                     logger.info(f"원재료명 정렬 완료: {unique_value}")
                                 else:
