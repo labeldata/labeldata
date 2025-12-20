@@ -343,9 +343,9 @@ def call_api_endpoint(request, pk):
                         
                         if rawmtrl_nm and rawmtrl_ordno:
                             try:
-                                # ", "로 분리하고 빈 문자열 제거
+                                # 원재료명: ", "로 분리, 원재료명 순서: ","로 분리하고 빈 문자열 제거
                                 ingredients = [x for x in rawmtrl_nm.split(', ') if x.strip()]
-                                orders = [x for x in rawmtrl_ordno.split(', ') if x.strip()]
+                                orders = [x.strip() for x in rawmtrl_ordno.split(',') if x.strip()]
                                 
                                 # 순서가 숫자인지 확인하고 정렬
                                 if len(ingredients) == len(orders):
