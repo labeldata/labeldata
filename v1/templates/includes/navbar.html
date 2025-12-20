@@ -8,7 +8,7 @@
             <!-- 제품 조회 -->
             <li class="nav-item dropdown me-4" data-menu="product">
                 <a class="nav-link {% if 'food_item' in request.resolver_match.url_name or 'food_additive' in request.resolver_match.url_name %}active{% endif %}" 
-                   href="#" role="button">
+                   href="{% url 'label:food_item_list_domestic' %}" role="button">
                     제품 조회
                 </a>
             </li>
@@ -16,7 +16,7 @@
             <!-- 표시사항 작성 -->
             <li class="nav-item dropdown me-4" data-menu="label">
                 <a class="nav-link {% if 'label_creation' in request.resolver_match.url_name or 'my_label' in request.resolver_match.url_name %}active{% endif %}" 
-                   href="#" role="button">
+                   href="{% url 'label:my_label_list' %}" role="button">
                     표시사항
                 </a>
             </li>
