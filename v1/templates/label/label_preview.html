@@ -12,7 +12,7 @@
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
   <!-- Label Preview CSS -->
-  <link href="{% static 'css/label_preview.css' %}" rel="stylesheet">
+  <link href="{% static 'css/label_preview.css' %}?v=20.0" rel="stylesheet">
   <!-- 라벨 상수 로드 -->
   <script src="{% static 'js/label/constants.js' %}"></script>
 </head>
@@ -33,6 +33,9 @@
       <button class="btn btn-info btn-sm" id="validateButton" aria-label="규정 검증">
         <i class="fas fa-check-circle me-1" aria-hidden="true"></i>규정 검증
       </button>
+      <button id="saveSettingsBtn" class="btn btn-success btn-sm" aria-label="설정 저장">
+        <i class="fas fa-save me-1" aria-hidden="true"></i>설정 저장
+      </button>
       <button class="btn btn-primary btn-sm" id="exportPdfBtn" aria-label="PDF 저장">
         <i class="fas fa-file-arrow-down me-1" aria-hidden="true"></i>PDF 저장
       </button>
@@ -44,25 +47,23 @@
 
   <main class="preview-container">
     <aside class="settings-panel">
-      <div class="settings-actions-row">
-        <button class="btn btn-sm btn-outline-secondary" id="resetSettingsBtn">
-          <i class="fas fa-undo me-1"></i> 설정 초기화
-        </button>
-        <button id="saveSettingsBtn" class="btn btn-sm btn-success">
-          <i class="fas fa-file-arrow-down me-1"></i> 설정 저장
-        </button>
-      </div>
-      
       <!-- 탭 네비게이션 -->
-      <div class="preview-tabs" style="display: flex; gap: 0.15rem; margin-bottom: 1rem; border-bottom: 2px solid #e9ecef; overflow-x: auto; white-space: nowrap; flex-wrap: nowrap;">
+      <div class="preview-tabs" style="display: flex; gap: 0.15rem; margin-bottom: 1rem; border-bottom: 2px solid #e9ecef; overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; align-items: center;">
         <button class="preview-tab active" data-tab="table-settings" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
           표 설정
+        </button>
+        <button class="preview-tab" data-tab="field-order" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
+          항목 순서
         </button>
         <button class="preview-tab" data-tab="text-format" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
           텍스트 변환
         </button>
         <button class="preview-tab" data-tab="recycling-mark" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
           분리배출마크
+        </button>
+        <div style="flex: 1;"></div>
+        <button class="btn btn-sm btn-outline-secondary" id="resetSettingsBtn" style="border: none; padding: 0.4rem 0.6rem; font-size: 0.9rem;" title="설정 초기화">
+          <i class="fas fa-undo"></i>
         </button>
       </div>
       
@@ -112,6 +113,55 @@
         </div>
       </section>
       
+      <!-- 항목 순서 탭 -->
+      <section class="preview-tab-content" id="field-order-content">
+        <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
+          <i class="fas fa-info-circle"></i> 드래그하여 항목 순서를 변경하고, 눈 아이콘으로 표시/숨김을 전환할 수 있습니다.
+        </div>
+        
+        <!-- 레이아웃 배치 방식 선택 -->
+        <div class="mb-3">
+          <label class="form-label mb-2" style="font-size: 0.85rem; font-weight: 600;">레이아웃 배치</label>
+          <div id="layoutButtonGrid" class="layout-button-grid">
+            <button class="layout-btn active" data-layout="vertical">
+              <i class="fas fa-bars"></i>
+              <span>세로</span>
+            </button>
+            <button class="layout-btn" data-layout="horizontal">
+              <i class="fas fa-columns"></i>
+              <span>2단배치</span>
+            </button>
+            <button class="layout-btn" data-layout="grid">
+              <i class="fas fa-th"></i>
+              <span>가로형</span>
+            </button>
+          </div>
+        </div>
+        
+        <p style="font-size: 0.75rem; color: #666; margin-bottom: 0.5rem;">
+          드래그 또는 버튼으로 순서 변경, 눈 아이콘으로 표시/숨김
+        </p>
+        
+        <div class="mb-2" style="display: flex; gap: 4px;">
+          <button class="btn btn-sm btn-outline-secondary" onclick="resetFieldOrder()" style="flex: 1; font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+            <i class="fas fa-undo"></i> 초기화
+          </button>
+          <button class="btn btn-sm btn-outline-primary" onclick="toggleAllFieldsVisibility()" style="flex: 1; font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+            <i class="fas fa-eye"></i> 표시/숨김
+          </button>
+          <button class="btn btn-sm btn-outline-info" onclick="setAllFieldsWidth('50%')" style="flex: 1; font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+            <i class="fas fa-columns"></i> 50%
+          </button>
+          <button class="btn btn-sm btn-outline-warning" onclick="setAllFieldsWidth('100%')" style="flex: 1; font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+            <i class="fas fa-expand-arrows-alt"></i> 100%
+          </button>
+        </div>
+        
+        <div id="fieldOrderList" class="field-order-list">
+          <!-- JavaScript로 동적 생성 -->
+        </div>
+      </section>
+      
       <!-- 텍스트 변환 설정 탭 -->
       <section class="preview-tab-content" id="text-format-content">
         <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
@@ -133,10 +183,17 @@
             <option value="|" selected>| (수직선)</option>
             <option value=",">, (쉼표)</option>
             <option value="/">/ (슬래시)</option>
-            <option value="·">· (가운뎃점)</option>
+            <option value="•">• (원)</option>
             <option value="custom">직접 입력</option>
           </select>
-          <input type="text" class="form-control form-control-sm" id="customDelimiter" placeholder="구분 기호 입력 (최대 3자)" maxlength="3" style="display: none;">
+          <div style="display: none;" id="customDelimiterGroup">
+            <div class="input-group input-group-sm">
+              <input type="text" class="form-control form-control-sm" id="customDelimiter" placeholder="구분 기호 입력 (최대 3자)" maxlength="3">
+              <button class="btn btn-primary btn-sm" id="applyCustomDelimiter" type="button" title="적용">
+                <i class="fas fa-check"></i> 적용
+              </button>
+            </div>
+          </div>
         </div>
       </section>
       
@@ -160,7 +217,7 @@
         <input type="hidden" id="update_datetime" name="update_datetime" value="{{ label.update_datetime|date:'Y-m-d H:i' }}">
 
         <table class="preview-table">
-          <tbody id="previewTableBody">
+          <tbody id="previewTableBody" class="layout-vertical">
              <!-- Data will be rendered here by JavaScript -->
           </tbody>
         </table>
@@ -193,17 +250,32 @@
   </script>
   <script id="country-mapping-data" type="application/json">{{ country_mapping|safe }}</script>
   <script id="country-list-data" type="application/json">{{ country_list|safe }}</script>
-  <script id="expiry-recommendation-data" type="application/json">{{ expiry_recommendation|safe }}</script>
+  <script id="expiry-recommendation-data" type="application/json">{{ expiry_recommendation_json|safe }}</script>
   <script id="allergens-data" type="application/json">{{ allergens|safe }}</script>
   <script id="custom-fields-data" type="application/json">{{ custom_fields|safe }}</script>
+  <script>
+    // 백엔드 알레르기 데이터를 전역 변수로 설정
+    try {
+        const allergensScript = document.getElementById('allergens-data');
+        if (allergensScript && allergensScript.textContent) {
+            const allergensData = JSON.parse(allergensScript.textContent);
+            if (Array.isArray(allergensData) && allergensData.length > 0) {
+                window.allergensData = allergensData;
+            }
+        }
+    } catch(e) {
+        console.error('알레르기 데이터 로드 실패:', e);
+    }
+  </script>
 
   <!-- External JS Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   
   <!-- Label Preview JS -->
-  <script src="{% static 'js/label/label_preview.js' %}"></script>
+  <script src="{% static 'js/label/label_preview.js' %}?v=85.2"></script>
   
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -233,13 +305,26 @@
                 return text;
             } else if (mode === 'REMOVE') {
                 // 줄바꿈 없애기
-                return text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+                let result = text.replace(/\n/g, ' ');
+                // 쉼표 앞 공백 제거, 뒤에만 공백
+                result = result.replace(/\s*,\s*/g, ', ');
+                result = result.replace(/\s+/g, ' ').trim();
+                return result;
             } else if (mode === 'REPLACE') {
                 // 문장 구분 기호 추가
-                return text.split('\n')
+                let lines = text.split('\n')
                     .map(line => line.trim())
-                    .filter(line => line.length > 0)
-                    .join(delimiter);
+                    .filter(line => line.length > 0);
+                
+                // 쉼표 정규화: 앞 공백 제거, 뒤에만 공백
+                lines = lines.map(line => line.replace(/\s*,\s*/g, ', '));
+                
+                // 구분 기호로 연결 (쉼표는 뒤에만 공백, 나머지는 앞뒤 공백)
+                if (delimiter === ',') {
+                    return lines.join(', ');
+                } else {
+                    return lines.join(` ${delimiter} `);
+                }
             }
             
             return text;
@@ -263,6 +348,10 @@
         countryList = safeJsonParse('country-list-data') || [];
         const allergensData = safeJsonParse('allergens-data') || [];
         const customFieldsData = safeJsonParse('custom-fields-data') || [];
+        
+        // 전역 변수로 설정 (필드 순서 조정 및 렌더링 함수에서 사용)
+        window.customFieldsData = customFieldsData;
+        window.countryList = countryList;
 
         // --- DOM ELEMENTS ---
         const previewContent = document.getElementById('previewContent');
@@ -544,9 +633,33 @@
             });
             return processedText;
         }
+        
+        // boldCountryNames를 전역 함수로 등록
+        window.boldCountryNames = boldCountryNames;
 
         function renderTable(data) {
             if (!tbody) return;
+            
+            // window.currentLabelData 설정
+            window.currentLabelData = data;
+            
+            // 데이터 로드 후 필드 리스트 업데이트 (무조건 실행)
+            if (typeof window.updateFieldOrderFromData === 'function') {
+                window.updateFieldOrderFromData();
+            }
+            
+            // 필드 순서 UI도 업데이트
+            if (typeof window.renderFieldOrderList === 'function') {
+                window.renderFieldOrderList();
+            }
+            
+            // renderTableWithLayout 함수가 있으면 사용, 없으면 기본 렌더링
+            if (typeof window.renderTableWithLayout === 'function') {
+                window.renderTableWithLayout(data, fieldOrderData?.layoutMode || 'vertical');
+                return;
+            }
+            
+            // 기본 렌더링 (fallback)
             tbody.innerHTML = '';
             
             // 항목 순서를 표시사항 작성 페이지와 일치시키기 위한 정렬된 필드 목록
@@ -1665,29 +1778,22 @@
     
         // 분리배출마크 복원 (첫 번째 마크만)
         function restoreRecyclingMark(markData) {
-            console.log('분리배출마크 복원 시작:', markData);
-            
             if (!markData || !markData.enabled) {
-                console.log('분리배출마크가 비활성화되어 있거나 데이터가 없음');
                 return;
             }
             
             // 단일 마크 복원
             if (markData.type) {
-                console.log('마크 복원:', markData.type, '위치:', markData.position_x, markData.position_y);
                 const position = {
                     left: `${parseFloat(markData.position_x) || 10}px`,
                     top: `${parseFloat(markData.position_y) || 10}px`
                 };
                 setRecyclingMark(markData.type, position, markData.text);
-                console.log('마크 복원 완료, 설정된 위치:', position);
             }
         }
 
         // 저장된 미리보기 설정 로드
         function loadSavedPreviewSettings() {
-            console.log('설정 로드 시작');
-            
             try {
                 // 1. 백엔드에서 전달된 설정 확인
                 const settingsScript = document.getElementById('preview-settings-data');
@@ -1695,9 +1801,6 @@
                 
                 if (settingsScript && settingsScript.textContent && settingsScript.textContent.trim() !== '{}') {
                     settings = JSON.parse(settingsScript.textContent);
-                    console.log('백엔드에서 로드된 설정:', settings);
-                } else {
-                    console.log('백엔드 설정 없음 또는 빈 객체');
                 }
                 
                 // 2. localStorage에서 최근 설정 확인 (우선순위 높음)
@@ -1708,17 +1811,10 @@
                     const savedSettings = sessionStorage.getItem('labelPreviewSettings_' + labelId);
                     if (savedSettings) {
                         const localSettings = JSON.parse(savedSettings);
-                        console.log('세션스토리지에서 로드된 설정:', localSettings);
                         // 로컬 설정이 있으면 백엔드 설정보다 우선
                         settings = { ...settings, ...localSettings };
-                    } else {
-                        console.log('세션스토리지에 저장된 설정 없음');
                     }
-                } else {
-                    console.log('label_id를 찾을 수 없음');
                 }
-                
-                console.log('최종 로드된 설정:', settings);
                 
                 // 기본 설정 복원
                 if (settings.width) {
@@ -1838,8 +1934,8 @@
                     }
                     
                     // 테이블 즉시 업데이트
-                    if (checkedFields && Object.keys(checkedFields).length > 0) {
-                        renderTable(checkedFields);
+                    if (window.currentLabelData && Object.keys(window.currentLabelData).length > 0) {
+                        renderTable(window.currentLabelData);
                     }
                 });
                 
@@ -1850,12 +1946,19 @@
             }
             
             if (textDelimiter && customDelimiter) {
+                const customDelimiterGroup = document.getElementById('customDelimiterGroup');
+                const applyCustomDelimiter = document.getElementById('applyCustomDelimiter');
+                
                 textDelimiter.addEventListener('change', function() {
                     if (this.value === 'custom') {
-                        customDelimiter.style.display = 'block';
+                        if (customDelimiterGroup) {
+                            customDelimiterGroup.style.display = 'block';
+                        }
                         customDelimiter.focus();
                     } else {
-                        customDelimiter.style.display = 'none';
+                        if (customDelimiterGroup) {
+                            customDelimiterGroup.style.display = 'none';
+                        }
                         
                         // 설정 업데이트
                         window.textFormatConfig.delimiter = this.value;
@@ -1867,28 +1970,42 @@
                         }
                         
                         // 테이블 즉시 업데이트
-                        if (checkedFields && Object.keys(checkedFields).length > 0) {
-                            renderTable(checkedFields);
+                        if (window.currentLabelData && Object.keys(window.currentLabelData).length > 0) {
+                            renderTable(window.currentLabelData);
                         }
                     }
                 });
                 
-                customDelimiter.addEventListener('input', function() {
-                    // 설정 저장
-                    if (window.textFormatConfig) {
-                        window.textFormatConfig.delimiter = this.value || '|';
+                // 적용 버튼 클릭 이벤트
+                if (applyCustomDelimiter) {
+                    applyCustomDelimiter.addEventListener('click', function() {
+                        const customValue = customDelimiter.value.trim();
+                        if (!customValue) {
+                            alert('구분 기호를 입력해주세요.');
+                            customDelimiter.focus();
+                            return;
+                        }
+                        
+                        // 설정 업데이트
+                        window.textFormatConfig.delimiter = customValue;
+                        
                         try {
                             localStorage.setItem('textFormatConfig', JSON.stringify(window.textFormatConfig));
                         } catch (e) {
                             console.error('설정 저장 실패:', e);
                         }
-                    }
-                });
+                        
+                        // 테이블 즉시 업데이트
+                        if (window.currentLabelData && Object.keys(window.currentLabelData).length > 0) {
+                            renderTable(window.currentLabelData);
+                        }
+                    });
+                }
                 
-                customDelimiter.addEventListener('blur', function() {
-                    // 입력이 끝나면 테이블 업데이트
-                    if (checkedFields && Object.keys(checkedFields).length > 0) {
-                        renderTable(checkedFields);
+                // Enter 키로도 적용 가능
+                customDelimiter.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter' && applyCustomDelimiter) {
+                        applyCustomDelimiter.click();
                     }
                 });
             }
@@ -1941,9 +2058,10 @@
                 dataLoaded = true;
                 checkedFields = e.data.checked;
                 
-                // 부모창에서 전달된 알레르기 데이터 저장
+                // 부모창에서 전달된 알레르기 데이터 저장 (전역)
                 if (e.data.allergens && Array.isArray(e.data.allergens) && e.data.allergens.length > 0) {
                     window.parentAllergens = e.data.allergens;
+                    window.allergensData = e.data.allergens;
                 }
                 
                 // 맞춤항목이 있으면 customFieldsData에 병합
@@ -1951,6 +2069,8 @@
                     // 기존 customFieldsData를 상세모드에서 전달받은 데이터로 대체
                     customFieldsData.length = 0;
                     customFieldsData.push(...e.data.customFields);
+                    // 전역으로 다시 설정
+                    window.customFieldsData = customFieldsData;
                 }
                 
                 renderTable(checkedFields);
@@ -2022,6 +2142,13 @@
         setupEventListeners();
         renderRecyclingMarkUI();
         restoreActiveTab(); // 탭 상태 복원
+        
+        // 필드 순서 조정 기능 초기화
+        if (typeof window.initializeFieldOrder === 'function') {
+            window.initializeFieldOrder();
+        } else {
+            console.error('initializeFieldOrder 함수를 찾을 수 없습니다!');
+        }
         
         // 초기 스타일 적용 및 면적 계산
         updatePreviewStyles();

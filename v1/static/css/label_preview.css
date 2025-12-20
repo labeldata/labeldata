@@ -28,105 +28,110 @@
   --border-color: #d1d5db;
   --border-light: #e5e7eb;
   --modern-border-radius-sm: 6px;
+  
+  /* 폰트 크기 변수 추가 */
+  --font-xs: 0.7rem;
+  --font-sm: 0.75rem;
+  --font-md: 0.85rem;
+  --font-base: 0.9rem;
 }
 
 /* 버튼 색상 통일 */
+.btn-info,
+.btn-success,
+.btn-primary {
+  color: white !important;
+}
+
 .btn-info {
   background-color: var(--info-color) !important;
   border-color: var(--info-color) !important;
-  color: white !important;
 }
 
 .btn-info:hover {
   background-color: #0aa2c0 !important;
   border-color: #0aa2c0 !important;
-  color: white !important;
 }
 
 .btn-success {
   background-color: var(--success-color) !important;
   border-color: var(--success-color) !important;
-  color: white !important;
 }
 
 .btn-success:hover {
   background-color: #157347 !important;
   border-color: #146c43 !important;
-  color: white !important;
 }
 
 .btn-primary {
   background-color: var(--secondary-color) !important;
   border-color: var(--secondary-color) !important;
-  color: white !important;
 }
 
 .btn-primary:hover {
   background-color: #2563eb !important;
   border-color: #2563eb !important;
-  color: white !important;
 }
 
-/* 헤더 버튼 스타일 - 샘플 버튼, 미리보기 버튼 공통 */
-.btn-header-primary {
-  font-size: 0.75rem;
+/* 헤더 버튼 스타일 - 공통 속성 */
+.btn-header-primary,
+.btn-header-success,
+.btn-header-danger {
+  font-size: var(--font-sm);
   background-color: white;
-  color: #0d6efd;
   border: 1px solid white;
   padding: 0.25rem 0.5rem;
 }
 
+.btn-header-primary {
+  color: #0d6efd;
+}
+
 .btn-header-primary:hover {
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
   color: #0a58ca;
 }
 
 .btn-header-success {
-  font-size: 0.75rem;
-  background-color: white;
-  color: #198754;
-  border: 1px solid white;
-  padding: 0.25rem 0.5rem;
+  color: var(--success-color);
 }
 
 .btn-header-success:hover {
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
   color: #146c43;
 }
 
 .btn-header-danger {
-  font-size: 0.75rem;
-  background-color: white;
-  color: #dc3545;
-  border: 1px solid white;
-  padding: 0.25rem 0.5rem;
+  color: var(--danger-color);
 }
 
 .btn-header-danger:hover {
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
   color: #b02a37;
 }
 
 /* 작은 텍스트 스타일 */
 .text-xs {
-  font-size: 0.75rem;
+  font-size: var(--font-sm);
   color: #666;
 }
 
 .text-sm {
-  font-size: 0.85rem;
+  font-size: var(--font-md);
 }
 
 /* 레이블 색상 유틸리티 */
-.label-danger {
-  font-size: 0.85rem;
+.label-danger,
+.label-warning {
+  font-size: var(--font-md);
   font-weight: 600;
+}
+
+.label-danger {
   color: #d32f2f;
 }
 
 .label-warning {
-  font-size: 0.85rem;
-  font-weight: 600;
   color: #f57c00;
 }
 
@@ -249,7 +254,7 @@ body {
 .preview-table th, .preview-table td { 
   border: 1px solid var(--border-light); 
   padding: 6px 10px; 
-  vertical-align: top; 
+  vertical-align: middle; 
   font-size: 10pt; 
   line-height: 1.4;
 }
@@ -483,4 +488,369 @@ body {
     background: #f8f9fa;
     border-radius: 4px;
     text-align: center;
+}
+
+/* ==================== 레이아웃 버튼 그리드 ==================== */
+.layout-button-grid {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.layout-btn {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #dee2e6;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.7rem;
+    gap: 0.3rem;
+    flex: 1;
+}
+
+.layout-btn i {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.layout-btn span {
+    font-weight: 500;
+    color: #495057;
+}
+
+.layout-btn:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.layout-btn:hover i,
+.layout-btn:hover span {
+    color: #667eea;
+}
+
+.layout-btn.active {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.layout-btn.active i,
+.layout-btn.active span {
+    color: #667eea;
+}
+
+/* ==================== 필드 순서 편집 스타일 ==================== */
+.field-order-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 0.25rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.4rem;
+    grid-auto-flow: row;
+}
+
+.field-order-item {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: move;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+    user-select: none;
+}
+
+.field-order-item:hover {
+    border-color: #667eea;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.15);
+}
+
+.field-order-item.hidden-field {
+    opacity: 0.5;
+    background: #f8f9fa;
+}
+
+.field-order-item.disabled-field {
+    display: none !important;
+}
+
+.field-order-item .drag-handle {
+    color: #adb5bd;
+    cursor: grab;
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-right: 4px;
+}
+
+.field-order-item:active {
+    cursor: grabbing;
+}
+
+.field-order-item:hover .drag-handle {
+    color: #667eea;
+}
+
+.field-order-item .field-label {
+    flex: 1;
+    font-weight: 600;
+    color: #333;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 100% 너비 항목 */
+.field-order-item.full-width-item {
+    grid-column: 1 / -1;
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    font-weight: 500;
+}
+
+.field-order-item.full-width-item .field-label {
+    font-weight: 600;
+}
+
+.field-order-item.full-width-item .field-label::after {
+    content: ' (100%)';
+    font-size: 0.85em;
+    color: #856404;
+    font-weight: normal;
+}
+
+/* 50% 너비 항목 */
+.field-order-item.half-width-item .field-label::after {
+    content: ' (50%)';
+    font-size: 0.85em;
+    color: #6c757d;
+    font-weight: normal;
+}
+
+.field-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.width-toggle {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid #dee2e6;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.7rem;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
+.width-toggle:hover {
+    background: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.width-toggle.width-100 {
+    background: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.order-btn {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #dee2e6;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.order-btn:hover:not(:disabled) {
+    border-color: #667eea;
+    background: #f8f9fa;
+    color: #667eea;
+}
+
+.order-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: #f8f9fa;
+}
+
+.field-order-item .visibility-toggle {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #dee2e6;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.field-order-item .visibility-toggle:hover:not(:disabled) {
+    border-color: #667eea;
+    background: #f8f9fa;
+}
+
+.field-order-item .visibility-toggle:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.field-order-item .visibility-toggle.visible {
+    color: #667eea;
+}
+
+.field-order-item .visibility-toggle.hidden {
+    color: #adb5bd;
+}
+
+.field-order-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.field-order-list::-webkit-scrollbar-track {
+    background: #e9ecef;
+    border-radius: 3px;
+}
+
+.field-order-list::-webkit-scrollbar-thumb {
+    background: #adb5bd;
+    border-radius: 3px;
+}
+
+.field-order-list::-webkit-scrollbar-thumb:hover {
+    background: #6c757d;
+}
+
+/* Sortable 애니메이션 */
+.sortable-ghost {
+    opacity: 0.4;
+    background: #e3e7ff;
+}
+
+.sortable-drag {
+    opacity: 1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* ==================== 레이아웃 배치 스타일 ==================== */
+
+/* 가로 배치 (동적 2열) */
+tbody.layout-horizontal {
+    display: block;
+}
+
+/* 모든 행 */
+tbody.layout-horizontal tr {
+    display: flex;
+    width: 100%;
+    align-items: stretch; /* 같은 행의 항목 높이 통일 */
+}
+
+/* 100% 너비 행 (단독) */
+tbody.layout-horizontal tr.full-width-row {
+    display: flex;
+}
+
+tbody.layout-horizontal tr.full-width-row th {
+    width: var(--label-width, 120px);
+    flex-shrink: 0;
+}
+
+tbody.layout-horizontal tr.full-width-row td {
+    flex: 1;
+}
+
+/* 50% 너비 행 (2개 항목 컨테이너) */
+tbody.layout-horizontal tr:not(.full-width-row) {
+    display: flex;
+}
+
+tbody.layout-horizontal tr:not(.full-width-row) > div {
+    display: flex;
+    width: 50%;
+    flex-shrink: 0;
+}
+
+/* 중요: div 내부의 th에도 CSS 변수 적용 */
+tbody.layout-horizontal tr:not(.full-width-row) > div > th {
+    width: var(--label-width, 120px) !important;
+    flex-shrink: 0;
+}
+
+tbody.layout-horizontal tr:not(.full-width-row) > div > td {
+    flex: 1;
+    min-width: 0; /* flex item 오버플로우 방지 */
+}
+
+/* 공통 스타일 */
+tbody.layout-horizontal tr th,
+tbody.layout-horizontal tr td,
+tbody.layout-horizontal tr > div > th,
+tbody.layout-horizontal tr > div > td {
+    display: block;
+    vertical-align: middle !important;
+    padding: 6px 10px;
+    border: 1px solid #dee2e6;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    word-wrap: break-word;
+    word-break: break-word;
+    white-space: normal;
+    box-sizing: border-box;
+}
+
+tbody.layout-horizontal tr th,
+tbody.layout-horizontal tr > div > th {
+    font-weight: 500 !important;
+    background-color: #f8f9fa;
+    text-align: center;
+}
+
+/* 세로 배치 (기본) */
+tbody.layout-vertical tr {
+    display: table-row;
+}
+
+tbody.layout-vertical tr th {
+    width: 20%;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    font-weight: 500 !important;
+    vertical-align: middle !important;
+}
+
+tbody.layout-vertical tr td {
+    width: 80%;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    vertical-align: middle !important;
 }

@@ -5,11 +5,12 @@
 window.validateSettings = async function() {
     
     try {
-        // DOM 요소들 가져오기
-        const width = parseFloat(document.getElementById('widthInput')?.value) || 0;
-        const height = parseFloat(document.getElementById('heightInput')?.value.replace(/[^0-9.-]/g, '')) || 0;
+        // 캐싱된 요소 사용
+        const elements = window.cachedElements || {};
+        const width = parseFloat(elements.widthInput?.value || document.getElementById('widthInput')?.value) || 0;
+        const height = parseFloat((elements.heightInput?.value || document.getElementById('heightInput')?.value || '').replace(/[^0-9.-]/g, '')) || 0;
         const area = width * height;
-        const fontSize = parseFloat(document.getElementById('fontSizeInput')?.value) || 10;
+        const fontSize = parseFloat(elements.fontSizeInput?.value || document.getElementById('fontSizeInput')?.value) || 10;
         
         // 검증 항목들 정의
         const validationItems = [
@@ -617,6 +618,20 @@ function addEventListenersToElements(elementIds, eventType, handler, options = {
 document.addEventListener('DOMContentLoaded', function () {
     // 미리보기 페이지 로드 시작
     
+    // 자주 사용하는 DOM 요소 캐싱
+    const cachedElements = {
+        widthInput: document.getElementById('widthInput'),
+        heightInput: document.getElementById('heightInput'),
+        fontSizeInput: document.getElementById('fontSizeInput'),
+        letterSpacingInput: document.getElementById('letterSpacingInput'),
+        lineHeightInput: document.getElementById('lineHeightInput'),
+        areaDisplay: document.getElementById('areaDisplay'),
+        layoutSelect: document.getElementById('layoutSelect'),
+        previewContent: document.getElementById('previewContent'),
+        fontFamilySelect: document.getElementById('fontFamilySelect')
+    };
+    window.cachedElements = cachedElements;
+    
     // 데이터 로드 (중복 제거된 코드)
     const nutritionData = safeLoadJsonData('nutrition-data', null, '영양성분 데이터');
     const countryMapping = safeLoadJsonData('country-mapping-data', {}, '국가 매핑 데이터');
@@ -691,12 +706,6 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             console.warn(`요소를 찾을 수 없습니다: ${selector}`);
         }
-    }
-
-    // 복합재질 감지 함수 (복합재질이 목록에서 제거되어 더 이상 사용되지 않음)
-    // 하위 호환성을 위해 함수는 유지하되 항상 false 반환
-    function isCompositeMaterial(markValue) {
-        return false;
     }
 
     // 설정 UI 요소들 존재 확인 및 생성
@@ -801,21 +810,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 uiBox: document.getElementById('recyclingMarkUiBox'),
                 list: document.getElementById('recyclingMarkList')
             };
-            
-            console.log('DOM 요소들:', elements);
-            
-            // 추천 함수 테스트
-            const testMaterials = ['PET', 'PP', '종이', '알미늄'];
-            console.log('추천 테스트:');
-            testMaterials.forEach(material => {
-                const recommended = recommendRecyclingMarkByMaterial(material);
-                console.log(`${material} → ${recommended}`);
-            });
-            
-            // 현재 상태
-            console.log('현재 상태:', window.getCurrentRecyclingMarkStatus());
-            
-            console.groupEnd();
         };
 
         // 함수 등록 완료 알림 및 상태 설정
@@ -1449,12 +1443,13 @@ document.addEventListener('DOMContentLoaded', function () {
         updateArea();
     }
 
-    // 면적 계산
+    // 면적 계산 (캐싱된 요소 사용)
     function updateArea() {
-        const width = parseFloat(document.getElementById('widthInput').value) || 0;
-        const height = parseFloat(document.getElementById('heightInput').value) || 0;
+        const elements = window.cachedElements || {};
+        const width = parseFloat(elements.widthInput?.value || document.getElementById('widthInput')?.value) || 0;
+        const height = parseFloat(elements.heightInput?.value || document.getElementById('heightInput')?.value) || 0;
         const area = width * height;
-        const areaDisplay = document.getElementById('areaDisplay');
+        const areaDisplay = elements.areaDisplay || document.getElementById('areaDisplay');
         if (areaDisplay) {
             areaDisplay.textContent = Math.round(area * 100) / 100;
         }
@@ -1945,21 +1940,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // 설정 저장 (로깅 강화)
+    // 설정 저장
     function savePreviewSettings() {
-        console.log('💾 설정 저장 시작');
-        
         const labelId = document.querySelector('input[name="label_id"]')?.value;
         if (!labelId) {
-            console.warn('⚠️ label_id를 찾을 수 없습니다.');
             return;
         }
-        
-        console.log('🏷️ Label ID:', labelId);
 
         // 분리배출마크 정보 수집
         const recyclingMarkInfo = getCurrentRecyclingMarkInfo();
-        console.log('♻️ 분리배출마크 정보:', recyclingMarkInfo);
 
         // 입력 요소들 확인
         const elements = {
@@ -1972,11 +1961,6 @@ document.addEventListener('DOMContentLoaded', function () {
             lineHeightInput: document.getElementById('lineHeightInput')
         };
 
-        console.log('🔍 설정 요소들 존재 여부:', Object.keys(elements).reduce((acc, key) => {
-            acc[key] = !!elements[key];
-            return acc;
-        }, {}));
-
         const data = {
             label_id: labelId,
             layout: elements.layoutSelect?.value || 'vertical',
@@ -1988,8 +1972,6 @@ document.addEventListener('DOMContentLoaded', function () {
             line_spacing: parseFloat(elements.lineHeightInput?.value) || 1.2,
             recycling_mark: recyclingMarkInfo
         };
-        
-        console.log('📋 저장할 데이터:', data);
 
         fetch('/label/save_preview_settings/', {
             method: 'POST',
@@ -2341,7 +2323,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         checkedFields[field] = value.trim();
                         // 전역 노출 강화
                         window.checkedFields = checkedFields;
-                        console.log('🔄 checkedFields 업데이트됨:', field, value.trim());
                         return;
                     }
                     // ...기존 자연 등 다른 문구 처리...
@@ -3459,3 +3440,916 @@ window.addEventListener('load', function() {
         }, '*');
     }
 });
+
+// ==================== 필드 순서 조정 기능 ====================
+
+// 필드 순서 저장 (localStorage)
+let fieldOrderData = {
+    order: [],
+    visibility: {},
+    width: {}, // '50%' or '100%'
+    layoutMode: 'vertical' // 'vertical', 'horizontal', 'grid', 'compact'
+};
+
+// 기본 필드 정의 (실제 라벨 데이터에서 추출)
+const DEFAULT_FIELDS = {
+    'prdlst_nm': '제품명',
+    'prdlst_dcnm': '식품유형',
+    'ingredient_info': '특정성분 함량',
+    'pog_daycnt': '소비기한',
+    'content_weight': '내용량',
+    'weight_calorie': '내용량(열량)',
+    'rawmtrl_nm': '원재료명',
+    'rawmtrl_nm_display': '원재료명',
+    'allergies': '알레르기 성분',
+    'bssh_nm': '제조원 소재지',
+    'distributor_address': '유통전문판매원',
+    'repacker_address': '소분원',
+    'importer_address': '수입원',
+    'country_of_origin': '원산지',
+    'prdlst_report_no': '품목보고번호',
+    'frmlc_mtrqlt': '용기·포장재질',
+    'storage_method': '보관 방법',
+    'cautions': '주의사항',
+    'additional_info': '기타표시사항',
+    'etc_description': '기타표시사항',
+    'nutrition_text': '영양성분'
+};
+
+// 필드 정의 가져오기 (현재 라벨 데이터 기반)
+function getFieldDefinitions() {
+    const fields = [];
+    const addedKeys = new Set(); // 중복 방지
+    
+    // 현재 라벨 데이터가 있으면 그것을 사용
+    if (window.currentLabelData && typeof window.currentLabelData === 'object') {
+        Object.keys(window.currentLabelData).forEach(key => {
+            // custom_field_로 시작하는 키는 customFieldsData에서 처리하므로 여기서는 건너뛰기
+            if (key.startsWith('custom_field_')) return;
+            // date_option은 pog_daycnt와 중복되므로 제외 (소비기한 표시는 pog_daycnt에서 처리)
+            if (key === 'date_option') return;
+            
+            const value = window.currentLabelData[key];
+            const label = DEFAULT_FIELDS[key] || key;
+            if (!addedKeys.has(key)) {
+                fields.push({
+                    key: key,
+                    label: label,
+                    visible: true,
+                    width: '50%'
+                });
+                addedKeys.add(key);
+            }
+        });
+        
+        // 맞춤항목 추가 (customFieldsData가 있으면)
+        if (window.customFieldsData && Array.isArray(window.customFieldsData) && window.customFieldsData.length > 0) {
+            window.customFieldsData.forEach((field, index) => {
+                const customKey = `custom_field_${index}`;
+                if (field.label && !addedKeys.has(customKey)) {
+                    fields.push({
+                        key: customKey,
+                        label: field.label,
+                        value: field.value || '',
+                        isCustomField: true,
+                        visible: true,
+                        width: '50%'
+                    });
+                    addedKeys.add(customKey);
+                }
+            });
+        }
+        
+        // currentLabelData가 있지만 필드가 없으면 기본 필드 사용
+        if (fields.length === 0) {
+            Object.keys(DEFAULT_FIELDS).forEach(key => {
+                if (!addedKeys.has(key)) {
+                    fields.push({
+                        key: key,
+                        label: DEFAULT_FIELDS[key],
+                        visible: true,
+                        width: '50%'
+                    });
+                    addedKeys.add(key);
+                }
+            });
+        }
+    } else {
+        // 라벨 데이터가 없으면 기본 필드 사용
+        Object.keys(DEFAULT_FIELDS).forEach(key => {
+            if (!addedKeys.has(key)) {
+                fields.push({
+                    key: key,
+                    label: DEFAULT_FIELDS[key],
+                    visible: true,
+                    width: '50%'
+                });
+                addedKeys.add(key);
+            }
+        });
+    }
+    
+    return fields;
+}
+
+// 필드 순서 초기화
+window.initializeFieldOrder = function() {
+    const savedOrder = localStorage.getItem('labelFieldOrder');
+    if (savedOrder) {
+        try {
+            const parsed = JSON.parse(savedOrder);
+            
+            // order에서 중복 제거
+            let cleanOrder = [];
+            if (parsed.order && Array.isArray(parsed.order)) {
+                const seenKeys = new Set();
+                parsed.order.forEach(key => {
+                    if (!seenKeys.has(key)) {
+                        cleanOrder.push(key);
+                        seenKeys.add(key);
+                    }
+                });
+            }
+            
+            // 필수 속성 확인 및 초기화
+            fieldOrderData = {
+                order: cleanOrder,
+                visibility: parsed.visibility || {},
+                width: parsed.width || {},
+                layoutMode: parsed.layoutMode || 'vertical'
+            };
+        } catch(e) {
+            fieldOrderData = {
+                order: [],
+                visibility: {},
+                width: {},
+                layoutMode: 'vertical'
+            };
+        }
+    }
+    
+    // 필드 순서가 없으면 기본 순서로 초기화
+    if (!fieldOrderData.order || fieldOrderData.order.length === 0) {
+        const fields = getFieldDefinitions();
+        fieldOrderData.order = fields.map(f => f.key);
+        if (!fieldOrderData.visibility) fieldOrderData.visibility = {};
+        if (!fieldOrderData.width) fieldOrderData.width = {};
+        
+        // currentLabelData가 있는 경우에만 데이터 기반으로 visibility 설정
+        if (window.currentLabelData && typeof window.currentLabelData === 'object') {
+            fields.forEach(f => {
+                if (f.isCustomField) {
+                    fieldOrderData.visibility[f.key] = !!f.value;
+                } else if (window.currentLabelData[f.key]) {
+                    fieldOrderData.visibility[f.key] = true;
+                } else {
+                    fieldOrderData.visibility[f.key] = false;
+                }
+                fieldOrderData.width[f.key] = '50%';
+            });
+        } else {
+            // currentLabelData가 없으면 모든 항목 표시 (나중에 데이터 로드 시 업데이트됨)
+            fields.forEach(f => {
+                fieldOrderData.visibility[f.key] = true;
+                fieldOrderData.width[f.key] = '50%';
+            });
+        }
+        saveFieldOrder();
+    }
+    
+    renderFieldOrderList();
+    initializeLayoutButtons();
+};
+
+// 데이터 로드 후 새 필드 추가 (order에 없는 필드)
+window.updateFieldOrderFromData = function() {
+    if (!window.currentLabelData) {
+        return;
+    }
+    
+    const currentFields = getFieldDefinitions();
+    
+    // order가 비어있거나 필드 수와 크게 차이나면 완전히 재초기화
+    if (!fieldOrderData.order || fieldOrderData.order.length === 0 || 
+        Math.abs(currentFields.length - fieldOrderData.order.length) > 5) {
+        fieldOrderData.order = currentFields.map(f => f.key);
+        fieldOrderData.visibility = {};
+        fieldOrderData.width = {};
+        
+        currentFields.forEach(field => {
+            if (field.isCustomField) {
+                fieldOrderData.visibility[field.key] = !!field.value;
+            } else {
+                fieldOrderData.visibility[field.key] = !!window.currentLabelData[field.key];
+            }
+            fieldOrderData.width[field.key] = '50%';
+        });
+        
+        saveFieldOrder();
+        renderFieldOrderList();
+        return;
+    }
+    
+    // 기존 order에 없는 필드만 추가
+    const existingKeys = new Set(fieldOrderData.order);
+    let hasNewFields = false;
+    
+    currentFields.forEach(field => {
+        if (!existingKeys.has(field.key)) {
+            fieldOrderData.order.push(field.key);
+            if (field.isCustomField) {
+                fieldOrderData.visibility[field.key] = !!field.value;
+            } else {
+                fieldOrderData.visibility[field.key] = !!window.currentLabelData[field.key];
+            }
+            fieldOrderData.width[field.key] = '50%';
+            hasNewFields = true;
+        }
+    });
+    
+    if (hasNewFields) {
+        saveFieldOrder();
+        renderFieldOrderList();
+    }
+};
+
+// 필드 순서 목록 렌더링
+window.renderFieldOrderList = function() {
+    const container = document.getElementById('fieldOrderList');
+    if (!container) {
+        console.warn('fieldOrderList 컨테이너를 찾을 수 없습니다.');
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    const fields = getFieldDefinitions();
+    
+    if (fields.length === 0) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: #6c757d;">표시할 항목이 없습니다.</div>';
+        return;
+    }
+    
+    const fieldMap = {};
+    fields.forEach(f => fieldMap[f.key] = f);
+    
+    // 필수 속성 초기화
+    if (!fieldOrderData.visibility) fieldOrderData.visibility = {};
+    if (!fieldOrderData.width) fieldOrderData.width = {};
+    
+    // order가 비어있으면 현재 필드로 초기화
+    if (!fieldOrderData.order || fieldOrderData.order.length === 0) {
+        fieldOrderData.order = fields.map(f => f.key);
+        fields.forEach(f => {
+            fieldOrderData.visibility[f.key] = true;
+            fieldOrderData.width[f.key] = '50%';
+        });
+        saveFieldOrder();
+    } else {
+        // order에서 중복 제거
+        const uniqueOrder = [];
+        const seenKeys = new Set();
+        fieldOrderData.order.forEach(key => {
+            if (!seenKeys.has(key)) {
+                uniqueOrder.push(key);
+                seenKeys.add(key);
+            }
+        });
+        if (uniqueOrder.length !== fieldOrderData.order.length) {
+            fieldOrderData.order = uniqueOrder;
+            saveFieldOrder();
+        }
+    }
+    
+    // 모든 항목 렌더링 (숨겨진 항목도 포함)
+    fieldOrderData.order.forEach((fieldKey, index) => {
+        const field = fieldMap[fieldKey];
+        if (!field) return;
+        
+        const isVisible = fieldOrderData.visibility[fieldKey] !== false;
+        const width = fieldOrderData.width[fieldKey] || '50%';
+        const isFullWidth = width === '100%';
+        
+        const item = document.createElement('div');
+        item.className = 'field-order-item';
+        item.dataset.fieldKey = fieldKey;
+        
+        // 숨겨진 항목은 비활성화 표시
+        if (!isVisible) {
+            item.classList.add('hidden-field');
+        }
+        
+        if (isFullWidth) {
+            item.classList.add('full-width-item');
+        } else {
+            item.classList.add('half-width-item');
+        }
+        
+        item.innerHTML = `
+            <i class="fas fa-grip-vertical drag-handle"></i>
+            <span class="field-label">${field.label}</span>
+            <div class="field-controls">
+                <button class="width-toggle ${isFullWidth ? 'width-100' : 'width-50'}" 
+                        onclick="toggleFieldWidth('${fieldKey}')" 
+                        title="${isFullWidth ? '50%로 변경' : '100%로 변경'}">
+                    ${isFullWidth ? '100' : '50'}
+                </button>
+                <button class="order-btn" onclick="moveFieldUp('${fieldKey}')" 
+                        ${index === 0 ? 'disabled' : ''} title="위로">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
+                <button class="order-btn" onclick="moveFieldDown('${fieldKey}')" 
+                        ${index === fieldOrderData.order.length - 1 ? 'disabled' : ''} title="아래로">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <button class="visibility-toggle ${isVisible ? 'visible' : 'hidden'}" 
+                        onclick="toggleFieldVisibility('${fieldKey}')" 
+                        title="${isVisible ? '숨기기' : '표시하기'}">
+                    <i class="fas ${isVisible ? 'fa-eye' : 'fa-eye-slash'}"></i>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(item);
+    });
+    
+    // Sortable.js 초기화 (전체 항목 드래그 가능)
+    if (typeof Sortable !== 'undefined') {
+        new Sortable(container, {
+            animation: 150,
+            // handle 제거하여 전체 항목 드래그 가능
+            ghostClass: 'sortable-ghost',
+            dragClass: 'sortable-drag',
+            onEnd: function(evt) {
+                const newOrder = Array.from(container.children).map(item => item.dataset.fieldKey);
+                fieldOrderData.order = newOrder;
+                saveFieldOrder();
+                renderTableWithCurrentData();
+            }
+        });
+    } else {
+        console.warn('Sortable.js가 로드되지 않았습니다.');
+    }
+};
+
+// 필드 너비 토글
+window.toggleFieldWidth = function(fieldKey) {
+    const currentWidth = fieldOrderData.width[fieldKey] || '50%';
+    fieldOrderData.width[fieldKey] = currentWidth === '50%' ? '100%' : '50%';
+    saveFieldOrder();
+    renderFieldOrderList();
+    renderTableWithCurrentData();
+};
+
+// 필드 위로 이동
+window.moveFieldUp = function(fieldKey) {
+    const index = fieldOrderData.order.indexOf(fieldKey);
+    if (index > 0) {
+        [fieldOrderData.order[index - 1], fieldOrderData.order[index]] = 
+        [fieldOrderData.order[index], fieldOrderData.order[index - 1]];
+        saveFieldOrder();
+        renderFieldOrderList();
+        renderTableWithCurrentData();
+    }
+};
+
+// 필드 아래로 이동
+window.moveFieldDown = function(fieldKey) {
+    const index = fieldOrderData.order.indexOf(fieldKey);
+    if (index < fieldOrderData.order.length - 1) {
+        [fieldOrderData.order[index], fieldOrderData.order[index + 1]] = 
+        [fieldOrderData.order[index + 1], fieldOrderData.order[index]];
+        saveFieldOrder();
+        renderFieldOrderList();
+        renderTableWithCurrentData();
+    }
+};
+
+// 필드 표시/숨김 토글
+window.toggleFieldVisibility = function(fieldKey) {
+    fieldOrderData.visibility[fieldKey] = !(fieldOrderData.visibility[fieldKey] !== false);
+    saveFieldOrder();
+    renderFieldOrderList();
+    renderTableWithCurrentData();
+};
+
+// 전체 필드 표시/숨김 토글
+window.toggleAllFieldsVisibility = function() {
+    const allVisible = fieldOrderData.order.every(key => fieldOrderData.visibility[key] !== false);
+    fieldOrderData.order.forEach(key => {
+        fieldOrderData.visibility[key] = !allVisible;
+    });
+    saveFieldOrder();
+    renderFieldOrderList();
+    renderTableWithCurrentData();
+};
+
+// 전체 필드 너비 설정
+window.setAllFieldsWidth = function(width) {
+    if (!fieldOrderData.width) {
+        fieldOrderData.width = {};
+    }
+    
+    fieldOrderData.order.forEach(key => {
+        fieldOrderData.width[key] = width;
+    });
+    saveFieldOrder();
+    renderFieldOrderList();
+    renderTableWithCurrentData();
+};
+
+// 필드 내용 분석 함수
+function analyzeFieldContents(data) {
+    const analysis = [];
+    
+    Object.keys(data).forEach(key => {
+        const value = data[key];
+        if (!value) return;
+        
+        const textContent = typeof value === 'string' ? value : String(value);
+        const length = textContent.length;
+        const lines = textContent.split('\n').length;
+        const wordCount = textContent.split(/\s+/).length;
+        
+        analysis.push({
+            key: key,
+            length: length,
+            lines: lines,
+            wordCount: wordCount,
+            score: length + (lines * 20) // 줄바꿈에 가중치 부여
+        });
+    });
+    
+    return analysis;
+}
+
+// 스마트 자동 최적화 함수
+window.autoOptimizeLayout = function(options = {}) {
+    const { silent = false, layoutMode = null } = options;
+    
+    if (!window.currentLabelData) {
+        if (!silent) alert('먼저 라벨 데이터를 불러와주세요.');
+        return;
+    }
+    
+    if (!fieldOrderData.order || fieldOrderData.order.length === 0) {
+        if (!silent) alert('표시할 항목이 없습니다.');
+        return;
+    }
+    
+    // 기본값으로 모든 필드를 50%로 설정
+    if (!fieldOrderData.width) fieldOrderData.width = {};
+    
+    let optimizedCount = 0;
+    let visibleCount = 0;
+    const currentLayoutMode = layoutMode || fieldOrderData.layoutMode;
+    
+    // order에 있는 항목만 분석 및 최적화
+    fieldOrderData.order.forEach(key => {
+        // 숨겨진 항목은 건너뛰기
+        if (fieldOrderData.visibility && fieldOrderData.visibility[key] === false) {
+            return;
+        }
+        
+        visibleCount++;
+        
+        // 데이터에서 해당 키의 값 가져오기
+        let value = window.currentLabelData[key];
+        
+        // 맞춤항목 처리
+        if (key.startsWith('custom_field_')) {
+            const index = parseInt(key.replace('custom_field_', ''));
+            if (window.customFieldsData && window.customFieldsData[index]) {
+                value = window.customFieldsData[index].value;
+            }
+        }
+        
+        // 특정 필드는 항상 100% (중요 정보)
+        const alwaysFullWidth = ['rawmtrl_nm_display', 'cautions', 'additional_info', 'nutrition_text'];
+        if (alwaysFullWidth.includes(key)) {
+            fieldOrderData.width[key] = '100%';
+            optimizedCount++;
+            return;
+        }
+        
+        if (!value) {
+            // 값이 없으면 기본 50%
+            fieldOrderData.width[key] = '50%';
+            return;
+        }
+        
+        // 내용 길이에 따라 최적 너비 결정
+        const strValue = String(value);
+        const length = strValue.length;
+        const lines = (strValue.match(/\n/g) || []).length + 1;
+        
+        // 매우 긴 텍스트 항목 (200자 이상 또는 5줄 이상)
+        if (length > 200 || lines > 5) {
+            fieldOrderData.width[key] = '100%';
+            optimizedCount++;
+        }
+        // 긴 텍스트 항목 (100자 이상 또는 3줄 이상)
+        else if (length > 100 || lines > 3) {
+            fieldOrderData.width[key] = '100%';
+            optimizedCount++;
+        }
+        // 중간 길이 텍스트
+        else {
+            fieldOrderData.width[key] = '50%';
+        }
+    });
+    
+    // 가로 모드일 경우 마지막 항목이 홀수면 100%로 변경
+    if (currentLayoutMode === 'horizontal') {
+        const visibleKeys = fieldOrderData.order.filter(key => 
+            fieldOrderData.visibility[key] !== false
+        );
+        
+        const halfWidthKeys = visibleKeys.filter(key => 
+            fieldOrderData.width[key] === '50%'
+        );
+        
+        // 50% 항목이 홀수개이면 마지막 항목을 100%로
+        if (halfWidthKeys.length % 2 === 1) {
+            const lastHalfWidthKey = halfWidthKeys[halfWidthKeys.length - 1];
+            fieldOrderData.width[lastHalfWidthKey] = '100%';
+            optimizedCount++;
+        }
+    }
+    
+    saveFieldOrder();
+    renderFieldOrderList();
+    renderTableWithCurrentData();
+    
+    // DOM 업데이트를 위한 강제 리플로우
+    if (currentLayoutMode === 'horizontal') {
+        setTimeout(() => {
+            const tbody = document.getElementById('previewTableBody');
+            if (tbody) {
+                tbody.style.display = 'none';
+                tbody.offsetHeight; // 강제 리플로우
+                tbody.style.display = 'block';
+            }
+        }, 50);
+    }
+    
+    // 사용자 피드백 (silent 모드가 아닐 때만)
+    if (!silent) {
+        alert(`✨ 자동 최적화 완료!\n\n표시 중인 ${visibleCount}개 항목 중 ${optimizedCount}개를 100% 너비로 설정했습니다.`);
+    }
+    
+    console.log('📊 자동 최적화 결과:', {
+        표시중인항목: visibleCount,
+        전체너비항목: optimizedCount,
+        절반너비항목: visibleCount - optimizedCount,
+        레이아웃모드: currentLayoutMode,
+        order: fieldOrderData.order,
+        width: fieldOrderData.width
+    });
+};
+
+// 필드 순서 초기화
+window.resetFieldOrder = function() {
+    if (confirm('필드 순서를 초기값으로 되돌리시겠습니까?')) {
+        const fields = getFieldDefinitions();
+        fieldOrderData = {
+            order: fields.map(f => f.key),
+            visibility: {},
+            width: {},
+            layoutMode: 'vertical'
+        };
+        
+        fields.forEach(f => {
+            fieldOrderData.visibility[f.key] = true;
+            fieldOrderData.width[f.key] = '50%';
+        });
+        
+        saveFieldOrder();
+        renderFieldOrderList();
+        initializeLayoutButtons();
+        renderTableWithCurrentData();
+    }
+};
+
+// 레이아웃 모드 초기화
+window.resetLayoutMode = function() {
+    fieldOrderData.layoutMode = 'vertical';
+    saveFieldOrder();
+    initializeLayoutButtons();
+    renderTableWithCurrentData();
+};
+
+// 필드 순서 저장
+function saveFieldOrder() {
+    // 저장하기 전에 order에서 중복 제거
+    if (fieldOrderData.order && Array.isArray(fieldOrderData.order)) {
+        const uniqueOrder = [];
+        const seenKeys = new Set();
+        fieldOrderData.order.forEach(key => {
+            if (!seenKeys.has(key)) {
+                uniqueOrder.push(key);
+                seenKeys.add(key);
+            }
+        });
+        if (uniqueOrder.length !== fieldOrderData.order.length) {
+            fieldOrderData.order = uniqueOrder;
+        }
+    }
+    localStorage.setItem('labelFieldOrder', JSON.stringify(fieldOrderData));
+}
+
+// 현재 데이터로 테이블 재렌더링
+function renderTableWithCurrentData() {
+    if (typeof window.renderTableWithLayout === 'function' && window.currentLabelData) {
+        window.renderTableWithLayout(window.currentLabelData, fieldOrderData.layoutMode);
+    }
+}
+
+// 레이아웃 버튼 초기화
+function initializeLayoutButtons() {
+    const buttons = document.querySelectorAll('.layout-btn');
+    
+    buttons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.layout === fieldOrderData.layoutMode) {
+            btn.classList.add('active');
+        }
+        
+        // 가로형 버튼은 개발 중 메시지만 표시
+        if (btn.dataset.layout === 'grid') {
+            btn.onclick = function() {
+                alert('가로형 레이아웃은 개발 중입니다.');
+                return false;
+            };
+            return;
+        }
+        
+        btn.onclick = function() {
+            fieldOrderData.layoutMode = this.dataset.layout;
+            saveFieldOrder();
+            buttons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            
+            if (this.dataset.layout === 'horizontal') {
+                autoOptimizeLayout({ silent: true, layoutMode: 'horizontal' });
+                setTimeout(() => renderTableWithCurrentData(), 100);
+            } else {
+                renderTableWithCurrentData();
+            }
+        };
+    });
+}
+
+// 레이아웃 적용하여 테이블 렌더링
+window.renderTableWithLayout = function(data, layoutMode) {
+    const tbody = document.getElementById('previewTableBody');
+    if (!tbody || !data) return;
+    
+    window.currentLabelData = data;
+    layoutMode = layoutMode || fieldOrderData.layoutMode || 'vertical';
+    
+    // grid 모드는 지원 중단, vertical로 변경
+    if (layoutMode === 'grid') {
+        layoutMode = 'vertical';
+        fieldOrderData.layoutMode = 'vertical';
+    }
+    
+    // tbody 초기화
+    tbody.innerHTML = '';
+    tbody.className = `layout-${layoutMode}`;
+    
+    // 필드 순서대로 렌더링
+    const fields = getFieldDefinitions();
+    const fieldMap = {};
+    fields.forEach(f => fieldMap[f.key] = f);
+    
+    if (layoutMode === 'vertical') {
+        renderVerticalLayout(tbody, data, fieldMap);
+    } else if (layoutMode === 'horizontal') {
+        renderHorizontalLayout(tbody, data, fieldMap);
+    }
+    
+    // 스타일 재적용
+    if (typeof window.updatePreviewStyles === 'function') {
+        window.updatePreviewStyles();
+    }
+};
+
+// 세로 레이아웃
+function renderVerticalLayout(tbody, data, fieldMap) {
+    // order에 있는 필드 + 맞춤항목 모두 렌더링
+    const allKeys = [...fieldOrderData.order];
+    
+    // 맞춤항목 추가 (order에 없으면)
+    Object.keys(fieldMap).forEach(key => {
+        if (key.startsWith('custom_field_') && !allKeys.includes(key)) {
+            allKeys.push(key);
+        }
+    });
+    
+    allKeys.forEach(fieldKey => {
+        const isVisible = fieldOrderData.visibility[fieldKey] !== false;
+        if (!isVisible) return;
+        
+        const field = fieldMap[fieldKey];
+        if (!field) return;
+        
+        // 맞춤항목 처리
+        if (field.isCustomField) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <th>${field.label}</th>
+                <td>${field.value || ''}</td>
+            `;
+            tbody.appendChild(tr);
+            return;
+        }
+        
+        let value = data[fieldKey] || ''; // 빈 값도 허용
+        
+        // 주의사항/기타표시사항: 텍스트 변환 적용
+        if ((fieldKey === 'cautions' || fieldKey === 'additional_info') && window.formatTextByOptions && window.textFormatConfig) {
+            value = window.formatTextByOptions(value, window.textFormatConfig);
+            if (window.textFormatConfig.mode === 'KEEP') {
+                value = value.replace(/\n/g, '<br>');
+            }
+        }
+        
+        // 원재료명: 국가명 굵게 표시 + 알레르기 성분 오른쪽 정렬
+        if (fieldKey === 'rawmtrl_nm_display') {
+            if (typeof window.boldCountryNames === 'function') {
+                value = window.boldCountryNames(value, window.countryList || []);
+            }
+            const displayAllergens = window.allergensData || window.parentAllergens || [];
+            if (displayAllergens.length > 0) {
+                value = `${value} <span style="float: right; background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; white-space: nowrap;">${displayAllergens.join(', ')} 함유</span>`;
+            }
+        }
+        
+        // 원산지: 굵게 표시 적용
+        if (fieldKey === 'country_of_origin' && typeof window.boldCountryNames === 'function') {
+            value = window.boldCountryNames(value, window.countryList || []);
+        }
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <th>${field.label}</th>
+            <td>${value}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// 가로 레이아웃 (동적 2열) - 2개씩 묶어서 행으로 렌더링
+function renderHorizontalLayout(tbody, data, fieldMap) {
+    // order에 있는 필드 + 맞춤항목 모두 렌더링
+    const allKeys = [...fieldOrderData.order];
+    
+    // 맞춤항목 추가 (order에 없으면)
+    Object.keys(fieldMap).forEach(key => {
+        if (key.startsWith('custom_field_') && !allKeys.includes(key)) {
+            allKeys.push(key);
+        }
+    });
+    
+    // 표시할 항목들만 수집
+    const visibleItems = [];
+    allKeys.forEach(fieldKey => {
+        const isVisible = fieldOrderData.visibility[fieldKey] !== false;
+        if (!isVisible) return;
+        
+        const field = fieldMap[fieldKey];
+        if (!field) return;
+        
+        const width = fieldOrderData.width[fieldKey] || '50%';
+        
+        // 맞춤항목 처리
+        let value;
+        if (field.isCustomField) {
+            value = field.value || '';
+        } else {
+            value = data[fieldKey] || ''; // 빈 값도 허용
+            
+            // 주의사항/기타표시사항: 텍스트 변환 적용
+            if ((fieldKey === 'cautions' || fieldKey === 'additional_info') && window.formatTextByOptions && window.textFormatConfig) {
+                value = window.formatTextByOptions(value, window.textFormatConfig);
+                if (window.textFormatConfig.mode === 'KEEP') {
+                    value = value.replace(/\n/g, '<br>');
+                }
+            }
+            
+            // 원재료명: 국가명 굵게 표시 + 알레르기 성분 오른쪽 정렬
+            if (fieldKey === 'rawmtrl_nm_display') {
+                if (typeof window.boldCountryNames === 'function') {
+                    value = window.boldCountryNames(value, window.countryList || []);
+                }
+                const displayAllergens = window.allergensData || window.parentAllergens || [];
+                if (displayAllergens.length > 0) {
+                    value = `${value} <span style="float: right; background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; white-space: nowrap;">${displayAllergens.join(', ')} 함유</span>`;
+                }
+            }
+            
+            // 원산지: 굵게 표시 적용
+            if (fieldKey === 'country_of_origin' && typeof window.boldCountryNames === 'function') {
+                value = window.boldCountryNames(value, window.countryList || []);
+            }
+        }
+        
+        visibleItems.push({
+            key: fieldKey,
+            label: field.label,
+            value: value,
+            width: width
+        });
+    });
+    
+    // 100% 항목과 50% 항목 분리
+    const fullWidthItems = visibleItems.filter(item => item.width === '100%');
+    const halfWidthItems = visibleItems.filter(item => item.width === '50%');
+    
+    // 50% 항목을 2개씩 묶어서 행으로 렌더링
+    const rows = [];
+    
+    // 100% 항목 먼저 추가 (순서 유지를 위해 원래 순서대로)
+    visibleItems.forEach(item => {
+        if (item.width === '100%') {
+            rows.push([item]);
+        }
+    });
+    
+    // 50% 항목을 2개씩 묶음
+    for (let i = 0; i < halfWidthItems.length; i += 2) {
+        if (i + 1 < halfWidthItems.length) {
+            // 2개씩 묶어서 행 생성
+            rows.push([halfWidthItems[i], halfWidthItems[i + 1]]);
+        } else {
+            // 마지막 홀수 항목은 100%로
+            rows.push([halfWidthItems[i]]);
+        }
+    }
+    
+    // 실제 순서대로 재정렬 (원래 visibleItems 순서 유지)
+    const orderedRows = [];
+    let halfWidthIndex = 0;
+    let currentRow = [];
+    
+    visibleItems.forEach(item => {
+        if (item.width === '100%') {
+            // 현재 행에 항목이 있으면 먼저 추가
+            if (currentRow.length > 0) {
+                orderedRows.push([...currentRow]);
+                currentRow = [];
+            }
+            // 100% 항목은 단독 행
+            orderedRows.push([item]);
+        } else {
+            // 50% 항목은 2개씩 묶음
+            currentRow.push(item);
+            if (currentRow.length === 2) {
+                orderedRows.push([...currentRow]);
+                currentRow = [];
+            }
+        }
+    });
+    
+    // 마지막 남은 행 추가
+    if (currentRow.length > 0) {
+        orderedRows.push(currentRow);
+    }
+    
+    // 행별로 렌더링
+    orderedRows.forEach(rowItems => {
+        if (rowItems.length === 1) {
+            // 100% 너비 항목
+            const item = rowItems[0];
+            const tr = document.createElement('tr');
+            tr.classList.add('full-width-row');
+            tr.innerHTML = `
+                <th>${item.label}</th>
+                <td>${item.value}</td>
+            `;
+            tbody.appendChild(tr);
+        } else if (rowItems.length === 2) {
+            // 50% 너비 항목 2개를 하나의 tr로 렌더링
+            const containerTr = document.createElement('tr');
+            
+            // 각 항목을 50% 컸테이너로 감싸기
+            rowItems.forEach(item => {
+                const itemContainer = document.createElement('div');
+                itemContainer.style.cssText = 'display: flex; width: 50%; flex-shrink: 0;';
+                
+                const th = document.createElement('th');
+                th.textContent = item.label;
+                
+                const td = document.createElement('td');
+                td.innerHTML = item.value;
+                
+                itemContainer.appendChild(th);
+                itemContainer.appendChild(td);
+                containerTr.appendChild(itemContainer);
+            });
+            
+            tbody.appendChild(containerTr);
+        }
+    });
+}
