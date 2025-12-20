@@ -1106,6 +1106,24 @@ document.addEventListener('DOMContentLoaded', function() {
         if (labelData.cautions) form.querySelector('[name="caution"]').value = labelData.cautions;
         if (labelData.additional_info) form.querySelector('[name="other_info"]').value = labelData.additional_info;
         
+        // 체크박스 상태 복원
+        if (typeof labelData.chk_prdlst_nm !== 'undefined') {
+            const checkboxes = [
+                'chk_prdlst_nm', 'chk_ingredient_info', 'chk_prdlst_dcnm', 
+                'chk_prdlst_report_no', 'chk_content_weight', 'chk_country_of_origin',
+                'chk_storage_method', 'chk_expiry_date', 'chk_rawmtrl_nm_display',
+                'chk_caution', 'chk_other_info', 'chk_packaging_material',
+                'chk_manufacturer', 'chk_distributor', 'chk_subdivider',
+                'chk_importer', 'chk_recycling_mark'
+            ];
+            checkboxes.forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox && typeof labelData[id] !== 'undefined') {
+                    checkbox.checked = labelData[id];
+                }
+            });
+        }
+        
         // 알레르기 정보 복원
         if (labelData.allergens && typeof window.selectedIngredientAllergens !== 'undefined') {
             window.selectedIngredientAllergens.clear();

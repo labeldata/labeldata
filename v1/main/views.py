@@ -53,6 +53,24 @@ def home(request):
                 'cautions': current_label.cautions or '',
                 'additional_info': current_label.additional_info or '',
                 'allergens': current_label.allergens or '',
+                # 체크박스 상태 추가
+                'chk_prdlst_nm': bool(current_label.prdlst_nm),
+                'chk_ingredient_info': bool(current_label.ingredient_info),
+                'chk_prdlst_dcnm': bool(current_label.prdlst_dcnm),
+                'chk_prdlst_report_no': bool(current_label.prdlst_report_no),
+                'chk_content_weight': bool(current_label.content_weight),
+                'chk_country_of_origin': bool(current_label.country_of_origin),
+                'chk_storage_method': bool(current_label.storage_method),
+                'chk_expiry_date': bool(current_label.pog_daycnt),
+                'chk_rawmtrl_nm_display': bool(current_label.rawmtrl_nm_display),
+                'chk_caution': bool(current_label.cautions),
+                'chk_other_info': bool(current_label.additional_info),
+                'chk_packaging_material': bool(current_label.frmlc_mtrqlt),
+                'chk_manufacturer': bool(current_label.bssh_nm),
+                'chk_distributor': bool(current_label.distributor_address),
+                'chk_subdivider': bool(current_label.repacker_address),
+                'chk_importer': bool(current_label.importer_address),
+                'chk_recycling_mark': False,  # 기본값
             })
         except MyLabel.DoesNotExist:
             pass
