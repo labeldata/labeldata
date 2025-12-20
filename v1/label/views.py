@@ -278,11 +278,11 @@ def my_label_list(request):
     return render(request, "label/my_label_list.html", context)
 
 @login_required
-@require_POST # POST 요청만 허용
 def create_new_label(request):
     """
     [신규] '신규 작성' 요청을 받아 새 표시사항을 생성하고 편집 페이지로 리디렉션합니다.
     라벨명은 "임시 - 제품명 - N" 형식으로 자동 생성됩니다.
+    GET 요청 시 HTML 응답, POST 요청 시 JSON 응답을 반환합니다.
     """
     try:
         base_name = "임시 - 제품명"
@@ -313,13 +313,24 @@ def create_new_label(request):
         )
 
         # 생성된 라벨의 편집 페이지 URL 생성
+        mode = request.GET.get('mode', '') or request.POST.get('mode', '')
         redirect_url = reverse('label:label_creation', kwargs={'label_id': new_label.my_label_id})
-
-        return JsonResponse({'success': True, 'redirect_url': redirect_url})
+        if mode:
+            redirect_url += f'?mode={mode}'
+        
+        if request.method == 'POST':
+            return JsonResponse({'success': True, 'redirect_url': redirect_url})
+        else:
+            # GET 요청 시 바로 리디렉션
+            return redirect(redirect_url)
 
     except Exception as e:
         # 예외 발생 시 에러 메시지 반환
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        if request.method == 'POST':
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        else:
+            messages.error(request, f'표시사항 생성 실패: {str(e)}')
+            return redirect('label:my_label_list')
 
 @login_required
 def food_item_detail(request, prdlst_report_no):
@@ -2874,3 +2885,83 @@ def phrases_api(request):
             'success': False,
             'error': f'문구 API 오류: {str(e)}'
         }, status=500)
+
+
+# 제품 조회 - 국내 제품
+@login_required
+def food_item_list_domestic(request):
+    """국내 제품 조회"""
+    # 기존 food_item_list에 food_category=domestic 파라미터 추가
+    from django.http import QueryDict
+    query_dict = request.GET.copy()
+    query_dict['food_category'] = 'domestic'
+    request.GET = query_dict
+    return food_item_list(request)
+
+
+# 제품 조회 - 수입 제품
+@login_required
+def food_item_list_imported(request):
+    """수입 제품 조회"""
+    # 기존 food_item_list에 food_category=imported 파라미터 추가
+    from django.http import QueryDict
+    query_dict = request.GET.copy()
+    query_dict['food_category'] = 'imported'
+    request.GET = query_dict
+    return food_item_list(request)
+
+
+# 식품첨가물 검색
+@login_required
+def food_additive_search(request):
+    """식품첨가물 번호 검색"""
+    search_query = request.GET.get('search', '').strip()
+    search_type = request.GET.get('search_type', 'all')  # all, name_kr, name_en, ins_no, e_no, cas_no
+    
+    items_per_page = int(request.GET.get("items_per_page", 20))
+    page_number = request.GET.get("page", 1)
+    
+    additives_qs = FoodAdditive.objects.all()
+    
+    if search_query:
+        if search_type == 'name_kr':
+            additives_qs = additives_qs.filter(name_kr__icontains=search_query)
+        elif search_type == 'name_en':
+            additives_qs = additives_qs.filter(name_en__icontains=search_query)
+        elif search_type == 'alias_name':
+            additives_qs = additives_qs.filter(alias_name__icontains=search_query)
+        elif search_type == 'ins_no':
+            additives_qs = additives_qs.filter(ins_no__icontains=search_query)
+        elif search_type == 'e_no':
+            additives_qs = additives_qs.filter(e_no__icontains=search_query)
+        elif search_type == 'cas_no':
+            additives_qs = additives_qs.filter(cas_no__icontains=search_query)
+        else:  # all
+            additives_qs = additives_qs.filter(
+                Q(name_kr__icontains=search_query) |
+                Q(name_en__icontains=search_query) |
+                Q(alias_name__icontains=search_query) |
+                Q(ins_no__icontains=search_query) |
+                Q(e_no__icontains=search_query) |
+                Q(cas_no__icontains=search_query)
+            )
+    
+    additives_qs = additives_qs.order_by('name_kr')
+    total_count = additives_qs.count()
+    
+    paginator, page_obj, page_range = paginate_queryset(additives_qs, page_number, items_per_page)
+    querystring_without_page = get_querystring_without(request, ["page"])
+    
+    context = {
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "page_range": page_range,
+        "search_query": search_query,
+        "search_type": search_type,
+        "items_per_page": items_per_page,
+        "total_count": total_count,
+        "querystring_without_page": querystring_without_page,
+    }
+    
+    return render(request, "label/food_additive_search.html", context)
+

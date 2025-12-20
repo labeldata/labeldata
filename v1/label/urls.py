@@ -6,8 +6,13 @@ app_name = 'label'
 urlpatterns = [
     # 제품 목록 및 상세
     path('food-items/', views.food_item_list, name='food_item_list'),
+    path('food-items/domestic/', views.food_item_list_domestic, name='food_item_list_domestic'),
+    path('food-items/imported/', views.food_item_list_imported, name='food_item_list_imported'),
     path('food-item-detail/<str:prdlst_report_no>/', views.food_item_detail, name='food_item_detail'),
     path('fetch-food-item/<str:prdlst_report_no>/', views.fetch_food_item, name='fetch_food_item'),
+    
+    # 식품첨가물 검색
+    path('food-additives/', views.food_additive_search, name='food_additive_search'),
 
     # 내 표시사항 관리
     path('my-labels/', views.my_label_list, name='my_label_list'),

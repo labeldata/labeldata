@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}원료 관리{% endblock %}
+{% block title %}내 원료 관리{% endblock %}
 
 {% block content %}
 <style>
@@ -159,8 +159,9 @@
     </div>
     {% endif %}
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-         <h2 class="mb-0">원료 조회 및 수정</h2>
+    <div class="mb-1">
+         <h2 class="mb-1">내 원료 조회</h2>
+         <p class="text-muted" style="font-size: 0.875rem; margin-bottom: 1.5rem;">내 원료 목록을 수정,삭제,복사,불러오기와 식품첨가물 표시규정을 확인하고 적용할 수 있습니다</p>
     </div>
 
     {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list_combined' page_type='ingredient' search_values=search_values food_category=request.GET.food_category|default_if_none:'' items_per_page=items_per_page extra_fields="allergens,gmo" %}

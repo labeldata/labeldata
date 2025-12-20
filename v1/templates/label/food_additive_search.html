@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}식품첨가물 번호 검색{% endblock %}
+
+{% block content %}
+<div class="container mt-5 pt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2 class="mb-4">
+                <i class="fas fa-flask me-2"></i>식품첨가물 번호 검색
+            </h2>
+
+            <!-- 검색 폼 -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <form method="get" action="{% url 'label:food_additive_search' %}" class="row g-3">
+                        <div class="col-md-3">
+                            <label for="search_type" class="form-label">검색 구분</label>
+                            <select name="search_type" id="search_type" class="form-select">
+                                <option value="all" {% if search_type == 'all' %}selected{% endif %}>전체</option>
+                                <option value="name_kr" {% if search_type == 'name_kr' %}selected{% endif %}>한글명</option>
+                                <option value="name_en" {% if search_type == 'name_en' %}selected{% endif %}>영문명</option>
+                                <option value="alias_name" {% if search_type == 'alias_name' %}selected{% endif %}>이명</option>
+                                <option value="ins_no" {% if search_type == 'ins_no' %}selected{% endif %}>INS No.</option>
+                                <option value="e_no" {% if search_type == 'e_no' %}selected{% endif %}>E No.</option>
+                                <option value="cas_no" {% if search_type == 'cas_no' %}selected{% endif %}>CAS No.</option>
+                            </select>
+                        </div>
+                        <div class="col-md-7">
+                            <label for="search" class="form-label">검색어</label>
+                            <input type="text" name="search" id="search" class="form-control" 
+                                   value="{{ search_query }}" placeholder="검색어를 입력하세요">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search me-1"></i>검색
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 검색 결과 -->
+            {% if search_query %}
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <span>
+                        <i class="fas fa-list me-2"></i>검색 결과 
+                        <span class="badge bg-light text-dark ms-2">{{ total_count }}개</span>
+                    </span>
+                    <div>
+                        <label for="items_per_page" class="me-2 mb-0">페이지당 항목:</label>
+                        <select name="items_per_page" id="items_per_page" class="form-select form-select-sm d-inline-block w-auto"
+                                onchange="updateItemsPerPage(this.value)">
+                            <option value="10" {% if items_per_page == 10 %}selected{% endif %}>10개</option>
+                            <option value="20" {% if items_per_page == 20 %}selected{% endif %}>20개</option>
+                            <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50개</option>
+                            <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100개</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    {% if page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 5%;">번호</th>
+                                    <th style="width: 15%;">한글명</th>
+                                    <th style="width: 20%;">영문명</th>
+                                    <th style="width: 20%;">이명</th>
+                                    <th style="width: 10%;">INS No.</th>
+                                    <th style="width: 10%;">E No.</th>
+                                    <th style="width: 15%;">CAS No.</th>
+                                    <th style="width: 5%;">용도</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for additive in page_obj %}
+                                <tr>
+                                    <td>{{ forloop.counter|add:page_obj.start_index|add:"-1" }}</td>
+                                    <td><strong>{{ additive.name_kr }}</strong></td>
+                                    <td>{{ additive.name_en|default:"-" }}</td>
+                                    <td>
+                                        {% if additive.alias_name %}
+                                            {{ additive.alias_name|truncatechars:40 }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ additive.ins_no|default:"-" }}</td>
+                                    <td>{{ additive.e_no|default:"-" }}</td>
+                                    <td>{{ additive.cas_no|default:"-" }}</td>
+                                    <td>
+                                        {% if additive.main_purpose %}
+                                            <small class="text-muted">{{ additive.main_purpose }}</small>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">검색 결과가 없습니다.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- 페이지네이션 -->
+                {% if page_obj.has_other_pages %}
+                <div class="card-footer">
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center mb-0">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ querystring_without_page }}&page=1" aria-label="First">
+                                    <span aria-hidden="true">&laquo;&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ querystring_without_page }}&page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;&laquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&laquo;</span>
+                            </li>
+                            {% endif %}
+
+                            {% for num in page_range %}
+                            <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+                                <a class="page-link" href="?{{ querystring_without_page }}&page={{ num }}">{{ num }}</a>
+                            </li>
+                            {% endfor %}
+
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ querystring_without_page }}&page={{ page_obj.next_page_number }}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?{{ querystring_without_page }}&page={{ paginator.num_pages }}" aria-label="Last">
+                                    <span aria-hidden="true">&raquo;&raquo;</span>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;</span>
+                            </li>
+                            <li class="page-item disabled">
+                                <span class="page-link">&raquo;&raquo;</span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="card shadow-sm">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-info-circle fa-3x text-info mb-3"></i>
+                    <h5>검색어를 입력해주세요</h5>
+                    <p class="text-muted">식품첨가물의 한글명, 영문명, 이명 또는 각종 번호(INS, E, CAS)로 검색할 수 있습니다.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function updateItemsPerPage(value) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('items_per_page', value);
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+}
+</script>
+
+<style>
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+.pagination .page-link {
+    color: #0d6efd;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.card-header {
+    font-weight: 600;
+}
+</style>
+{% endblock %}

@@ -3,14 +3,8 @@
   <div class="search-filter-row d-flex align-items-center mb-3" style="font-size: 0.8rem; width:100%; max-width:100%;">
     <div class="search-filter-inner d-flex align-items-center flex-nowrap gap-2 w-100 justify-content-between" style="font-size: 0.8rem; width:100%; max-width:100%; overflow-x:auto;">
       {% if page_type == "product" %}
-        <div style="min-width:110px;max-width:120px;flex:0 0 120px;">
-          <select name="food_category" id="foodCategorySelect" class="form-select" style="font-size: 0.8rem;"
-            onchange="this.form.submit()">
-            <option value="domestic" {% if food_category == "domestic" %}selected{% endif %}>국내제품</option>
-            <option value="imported" {% if food_category == "imported" %}selected{% endif %}>수입제품</option>
-          </select>
-        </div>
         {% if food_category == "imported" %}
+          <input type="hidden" name="food_category" value="imported">
           <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
           <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">
           <input type="text" name="xport_ntncd_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="수출국" value="{{ search_values.xport_ntncd_nm|default_if_none:'' }}">
@@ -19,6 +13,7 @@
           <input type="text" name="pog_daycnt" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="소비기한" value="{{ search_values.pog_daycnt|default_if_none:'' }}">
           <input type="text" name="rawmtrl_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명" value="{{ search_values.rawmtrl_nm|default_if_none:'' }}">
         {% else %}
+          <input type="hidden" name="food_category" value="domestic">
           <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="품목보고번호" value="{{ search_values.prdlst_report_no|default_if_none:'' }}">
           <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
           <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">

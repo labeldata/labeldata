@@ -5,19 +5,129 @@
         
         <!-- 네비게이션 메뉴 -->
         <ul class="navbar-nav flex-row me-auto">
-            <li class="nav-item me-3">
-                <a href="{% url 'label:my_label_list' %}" class="nav-link {% if request.resolver_match.url_name == 'my_label_list' %}active{% endif %}">표시사항 작성</a>
+            <!-- 제품 조회 -->
+            <li class="nav-item dropdown me-4">
+                <a class="nav-link {% if 'food_item' in request.resolver_match.url_name or 'food_additive' in request.resolver_match.url_name %}active{% endif %}" 
+                   href="#" role="button">
+                    제품 조회
+                </a>
             </li>
-            <li class="nav-item me-3">
-                <a href="{% url 'label:my_ingredient_list_combined' %}" class="nav-link {% if request.resolver_match.url_name == 'my_ingredient_list_combined' %}active{% endif %}">내 원료 관리</a>
+            
+            <!-- 표시사항 작성 -->
+            <li class="nav-item dropdown me-4">
+                <a class="nav-link {% if 'label_creation' in request.resolver_match.url_name or 'my_label' in request.resolver_match.url_name %}active{% endif %}" 
+                   href="#" role="button">
+                    표시사항 작성
+                </a>
             </li>
-            <li class="nav-item me-3">
-                <a href="{% url 'label:food_item_list' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list' %}active{% endif %}">제품 검색</a>
+            
+            <!-- 원료 관리 -->
+            <li class="nav-item dropdown me-4">
+                <a class="nav-link {% if 'ingredient' in request.resolver_match.url_name %}active{% endif %}" 
+                   href="#" role="button">
+                    원료 관리
+                </a>
             </li>
-            <li class="nav-item me-3">
-                <a href="{% url 'board:list' %}" class="nav-link {% if request.resolver_match.url_name == 'list' %}active{% endif %}">게시판</a>
+            
+            <!-- 게시판 -->
+            <li class="nav-item dropdown me-4">
+                <a class="nav-link {% if 'board' in request.resolver_match.url_name or 'user_management' in request.resolver_match.url_name %}active{% endif %}" 
+                   href="#" role="button">
+                    게시판
+                </a>
             </li>
         </ul>
+        
+        <!-- 통합 메가메뉴 -->
+        <div class="mega-menu">
+            <div class="container">
+                <div class="row">
+                    <!-- 제품 조회 메뉴 -->
+                    <div class="col-3 menu-column" data-menu="product">
+                        <h6 class="menu-title">제품 조회</h6>
+                        <ul class="menu-list">
+                            <li>
+                                <a href="{% url 'label:food_item_list_domestic' %}">
+                                    <div class="menu-item-name">국내 제품 조회</div>
+                                    <div class="menu-item-desc">국내에서 제조된 식품 제품을 검색합니다</div>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{% url 'label:food_item_list_imported' %}">
+                                    <div class="menu-item-name">수입 제품 조회</div>
+                                    <div class="menu-item-desc">해외에서 수입된 식품 제품을 검색합니다</div>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{% url 'label:food_additive_search' %}">
+                                    <div class="menu-item-name">식품첨가물 No.</div>
+                                    <div class="menu-item-desc">식품첨가물의 INS, EU, CAS No.를 검색합니다</div>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <!-- 표시사항 작성 메뉴 -->
+                    <div class="col-3 menu-column" data-menu="label">
+                        <h6 class="menu-title">표시사항 관리</h6>
+                        <ul class="menu-list">
+                            <li>
+                                <a href="{% url 'label:my_label_list' %}">
+                                    <div class="menu-item-name">표시사항 관리</div>
+                                    <div class="menu-item-desc">작성한 표시사항 목록을 확인하고 관리합니다</div>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{% url 'main:home' %}#create-label">
+                                    <div class="menu-item-name">신규 작성(간편)</div>
+                                    <div class="menu-item-desc">홈 화면에서 간편하게 새 표시사항을 작성합니다</div>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" id="create-detailed-label">
+                                    <div class="menu-item-name">신규 작성(상세)</div>
+                                    <div class="menu-item-desc">상세한 옵션으로 새 표시사항을 작성합니다</div>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <!-- 원료 관리 메뉴 -->
+                    <div class="col-3 menu-column" data-menu="ingredient">
+                        <h6 class="menu-title">원료 관리</h6>
+                        <ul class="menu-list">
+                            <li>
+                                <a href="{% url 'label:my_ingredient_list_combined' %}">
+                                    <div class="menu-item-name">내 원료 관리</div>
+                                    <div class="menu-item-desc">등록한 원료 목록을 확인하고 관리합니다</div>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <!-- 게시판 메뉴 -->
+                    <div class="col-3 menu-column" data-menu="etc">
+                        <h6 class="menu-title">게시판</h6>
+                        <ul class="menu-list">
+                            <li>
+                                <a href="{% url 'board:list' %}">
+                                    <div class="menu-item-name">질문 및 요청</div>
+                                    <div class="menu-item-desc">문의사항을 남기고 다른 사용자와 소통합니다</div>
+                                </a>
+                            </li>
+                            {% if user.is_authenticated and user.email != 'guest@labeasylabel.com' %}
+                            <li>
+                                <a href="{% url 'user_management:change_password' %}">
+                                    <div class="menu-item-name">내정보 관리</div>
+                                    <div class="menu-item-desc">비밀번호를 변경하고 계정을 관리합니다</div>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <!-- 사용자 메뉴 -->
         <div class="d-flex align-items-center">
@@ -61,14 +171,90 @@
 }
 
 .navbar-nav .nav-link:hover {
-    color: #20c997 !important; /* 더 밝은 청록색 */
+    color: #20c997 !important;
     border-bottom-color: #20c997;
-    transform: none; /* 크기 변화 방지 */
+    transform: none;
 }
 
 .navbar-nav .nav-link.active {
-    color: #20c997 !important; /* 더 밝은 청록색 */
+    color: #20c997 !important;
     border-bottom-color: #20c997;
+}
+
+/* 메가메뉴 스타일 */
+.mega-menu {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 100%;
+    background-color: #2c3e50;
+    border-top: 1px solid #34495e;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    display: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 1000;
+    padding: 1.5rem 0;
+}
+
+.mega-menu.show {
+    display: block;
+    opacity: 1;
+}
+
+.mega-menu .menu-column {
+    border-right: 1px solid #34495e;
+}
+
+.mega-menu .menu-column:last-child {
+    border-right: none;
+}
+
+.mega-menu .menu-title {
+    color: #20c997;
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #34495e;
+    text-align: center;
+}
+
+.mega-menu .menu-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.mega-menu .menu-list li {
+    margin-bottom: 0.75rem;
+}
+
+.mega-menu .menu-list a {
+    color: #ecf0f1;
+    text-decoration: none;
+    display: block;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    transition: all 0.3s ease;
+}
+
+.mega-menu .menu-list a:hover {
+    background-color: #34495e;
+    color: #20c997;
+    padding-left: 1.5rem;
+}
+
+.mega-menu .menu-item-name {
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.mega-menu .menu-item-desc {
+    font-size: 0.75rem;
+    color: #95a5a6;
+    line-height: 1.3;
 }
 
 /* 크기 변화 방지를 위한 추가 스타일 */
@@ -141,6 +327,76 @@ document.addEventListener('DOMContentLoaded', function() {
                 usernameDisplay.classList.add('guest-user');
             }
         }
+    }
+    
+    // 메가메뉴 동작 (모바일 제외)
+    if (window.innerWidth > 992) {
+        const navItems = document.querySelectorAll('.navbar-nav .nav-item.dropdown');
+        const megaMenu = document.querySelector('.mega-menu');
+        let hideTimeout;
+        
+        navItems.forEach(navItem => {
+            navItem.addEventListener('mouseenter', function() {
+                clearTimeout(hideTimeout);
+                megaMenu.classList.add('show');
+            });
+        });
+        
+        // navbar 전체 영역과 메가메뉴에서 mouseleave 시 닫기
+        const navbar = document.querySelector('.navbar');
+        
+        navbar.addEventListener('mouseleave', function(e) {
+            // 메가메뉴로 이동하지 않은 경우
+            if (!megaMenu.contains(e.relatedTarget)) {
+                hideTimeout = setTimeout(() => {
+                    megaMenu.classList.remove('show');
+                }, 200);
+            }
+        });
+        
+        megaMenu.addEventListener('mouseenter', function() {
+            clearTimeout(hideTimeout);
+            megaMenu.classList.add('show');
+        });
+        
+        megaMenu.addEventListener('mouseleave', function() {
+            hideTimeout = setTimeout(() => {
+                megaMenu.classList.remove('show');
+            }, 200);
+        });
+    }
+    
+    // 신규 작성(상세) 버튼 클릭 이벤트
+    const createDetailedBtn = document.getElementById('create-detailed-label');
+    
+    if (createDetailedBtn) {
+        createDetailedBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            createNewLabel('detailed');
+        });
+    }
+    
+    function createNewLabel(mode) {
+        fetch('{% url "label:create_new_label" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ mode: mode })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = data.redirect_url;
+            } else {
+                alert('표시사항 생성 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('표시사항 생성 중 오류가 발생했습니다.');
+        });
     }
 });
 </script>
