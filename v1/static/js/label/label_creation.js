@@ -797,8 +797,54 @@ document.addEventListener('DOMContentLoaded', function () {
   function updateCheckboxesByFoodType(foodType) {
     if (!foodType) return;
     
-
+    // 현재 선택된 대분류 확인
+    const foodGroup = $('#food_group').val();
     
+    // 식품첨가물/혼합제제/농수축산물인 경우
+    if (foodGroup === '식품첨가물' || foodGroup === '혼합제제' || foodGroup === '농수축산물') {
+      return fetch(`/label/get-additive-field-settings/?food_group=${encodeURIComponent(foodGroup)}&food_type=${encodeURIComponent(foodType)}`)
+        .then(response => response.json())
+        .then(data => {
+          if (!data.success || !data.settings) {
+            console.error('API error:', data.error || 'No settings returned');
+            return;
+          }
+          
+          const settings = data.settings;
+          
+          // 체크박스 업데이트
+          Object.keys(settings).forEach(field => {
+            const value = settings[field];
+            const checkboxId = fieldMappings[field] || `chk_${field}`;
+            const checkbox = document.getElementById(checkboxId);
+            
+            if (checkbox) {
+              checkbox.checked = value === 'Y';
+              checkbox.disabled = value === 'D';
+              checkbox.dataset.forcedDisabled = value === 'D' ? 'true' : 'false';
+              checkbox.dispatchEvent(new Event('change'));
+            }
+            
+            if (field === 'pog_daycnt') {
+              updateDateDropdown(settings.pog_daycnt);
+            }
+            
+            if (field === 'weight_calorie') {
+              updateContentTypeByFoodType(value);
+            }
+          });
+          
+          // 농수축산물인 경우 맞춤항목 자동 추가
+          if (foodGroup === '농수축산물' && data.custom_fields) {
+            addCustomFieldsForAgricultural(data.custom_fields);
+          }
+        })
+        .catch(error => {
+          console.error('Error updating checkboxes:', error);
+        });
+    }
+    
+    // 일반 식품유형인 경우 기존 로직 실행
     return fetch(`/label/food-type-settings/?food_type=${encodeURIComponent(foodType)}`)
       .then(response => response.json())
       .then(data => {
@@ -863,7 +909,37 @@ document.addEventListener('DOMContentLoaded', function () {
       .catch(error => {
         console.error('Error updating checkboxes:', error);
       });
-  }  // 식품유형에 따른 내용량 타입 자동 설정
+  }
+  
+  // 농수축산물 맞춤항목 자동 추가 함수
+  function addCustomFieldsForAgricultural(customFields) {
+    if (!customFields || customFields.length === 0) {
+      return;
+    }
+    
+    // 기존 맞춤항목 초기화 (중복 방지)
+    const container = document.getElementById('customFieldsContainer');
+    if (!container) {
+      return;
+    }
+    
+    // 기존 항목 제거
+    container.innerHTML = '';
+    
+    // 새 항목 추가
+    customFields.forEach(field => {
+      if (typeof addCustomFieldRow === 'function') {
+        addCustomFieldRow(field.label, field.value, false);
+      }
+    });
+    
+    // 맞춤항목 요약 업데이트
+    if (typeof updateCustomFieldsSummary === 'function') {
+      updateCustomFieldsSummary();
+    }
+  }
+  
+  // 식품유형에 따른 내용량 타입 자동 설정
   function updateContentTypeByFoodType(weightCalorieValue) {
     const contentTypeDisplay = document.getElementById('content_type_display');
     const contentTypeValue = document.getElementById('content_type_value');
@@ -934,7 +1010,38 @@ document.addEventListener('DOMContentLoaded', function () {
     foodGroup.on('change', function () {
       const group = this.value;
       updateHiddenFields();
-      updateFoodTypes(group, foodType.val());
+      
+      // 소분류 초기화
+      foodType.empty().append('<option value="">소분류</option>');
+      
+      if (!group) {
+        foodType.val(null).trigger('change.select2');
+        updateSummary();
+        return;
+      }
+      
+      // 식품첨가물/혼합제제/농수축산물인 경우 API로 데이터 가져오기
+      if (group === '식품첨가물' || group === '혼합제제' || group === '농수축산물') {
+        const url = `/label/food-types-by-group/?group=${encodeURIComponent(group)}`;
+        
+        fetch(url)
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              data.food_types.forEach(item => {
+                const option = new Option(item.food_type, item.food_type);
+                option.dataset.group = item.food_group;
+                foodType.append(option);
+              });
+              foodType.trigger('change.select2');
+            }
+          })
+          .catch(error => console.error('Error loading food types:', error));
+      } else {
+        // 일반 식품유형인 경우 기존 로직
+        updateFoodTypes(group, foodType.val());
+      }
+      
       updateSummary();
     });
 
@@ -944,7 +1051,13 @@ document.addEventListener('DOMContentLoaded', function () {
       const foodTypeValue = selectedOption?.value;
       updateHiddenFields();
       if (foodTypeValue) {
-        const group = selectedOption.dataset.group;
+        const group = selectedOption.dataset.group || foodGroup.val();
+        
+        // 식품첨가물/혼합제제/농수축산물인 경우 즉시 체크박스 업데이트
+        if (group === '식품첨가물' || group === '혼합제제' || group === '농수축산물') {
+          updateCheckboxesByFoodType(foodTypeValue);
+        }
+        
         if (group && foodGroup.val() !== group) {
           foodGroup.val(group).trigger('change.select2');
           hiddenFoodGroup.val(group);

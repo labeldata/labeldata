@@ -1668,8 +1668,37 @@ def food_types_by_group(request):
         group = request.GET.get('group', '')
         
         # 모델 임포트 확인
-        from .models import FoodType
+        from .models import FoodType, FoodAdditive
         
+        # 식품첨가물 또는 혼합제제인 경우 FoodAdditive 테이블에서 데이터 가져오기
+        if group == '식품첨가물':
+            additives = FoodAdditive.objects.filter(category='식품첨가물').order_by('name_kr')
+            food_types_data = [{'food_type': add.name_kr, 'food_group': '식품첨가물'} for add in additives]
+            return JsonResponse({
+                'success': True,
+                'food_types': food_types_data
+            })
+        elif group == '혼합제제':
+            # 혼합제제는 FoodAdditive에서 category가 '혼합제제류'인 것들
+            additives = FoodAdditive.objects.filter(category='혼합제제류').order_by('name_kr')
+            food_types_data = [{'food_type': add.name_kr, 'food_group': '혼합제제'} for add in additives]
+            return JsonResponse({
+                'success': True,
+                'food_types': food_types_data
+            })
+        elif group == '농수축산물':
+            # 농수축산물 소분류 하드코딩
+            food_types_data = [
+                {'food_type': '농산물', 'food_group': '농수축산물'},
+                {'food_type': '수산물', 'food_group': '농수축산물'},
+                {'food_type': '축산물', 'food_group': '농수축산물'}
+            ]
+            return JsonResponse({
+                'success': True,
+                'food_types': food_types_data
+            })
+        
+        # 일반 식품유형인 경우
         # 대분류가 지정된 경우 해당 대분류의 소분류만, 아니면 모든 소분류 반환
         if group:
             food_types = FoodType.objects.filter(food_group=group).order_by('food_type')
@@ -3138,3 +3167,119 @@ def request_additive_correction(request):
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+def get_additive_field_settings(request):
+    """식품첨가물/혼합제제/농수축산물 선택 시 필드 표시 규칙을 반환하는 API"""
+    try:
+        food_group = request.GET.get('food_group', '')
+        food_type = request.GET.get('food_type', '')  # 농수축산물 소분류 판별용
+        
+        # 식품첨가물 또는 혼합제제인 경우
+        if food_group in ['식품첨가물', '혼합제제']:
+            settings = {
+                'prdlst_nm': 'Y',  # 제품명: 필수
+                'ingredient_info': 'N',  # 특정성분 함량: 선택
+                'prdlst_dcnm': 'Y',  # 식품유형명: 필수
+                'content_weight': 'Y',  # 내용량: 필수
+                'weight_calorie': 'Y',  # 내용량(열량): 필수
+                'prdlst_report_no': 'Y',  # 품목보고번호: 필수
+                'country_of_origin': 'N',  # 원산지: 선택
+                'frmlc_mtrqlt': 'Y',  # 포장재질: 필수
+                'pog_daycnt': 'Y',  # 소비기한: 필수
+                'rawmtrl_nm': 'Y',  # 원재료명: 필수
+                'storage_method': 'Y',  # 보관방법: 필수
+                'bssh_nm': 'Y',  # 제조원: 필수
+                'nutritions': 'D',  # 영양성분: 조회불가
+                'cautions': 'Y',  # 주의사항: 필수
+            }
+            
+            return JsonResponse({
+                'success': True,
+                'settings': settings
+            })
+        
+        # 농수축산물인 경우
+        elif food_group == '농수축산물':
+            # 기본 설정 (공통 비활성화 항목)
+            settings = {
+                'prdlst_nm': 'Y',  # 제품명: 필수
+                'ingredient_info': 'D',  # 특정성분 함량: 비활성화
+                'prdlst_dcnm': 'D',  # 식품유형명: 비활성화
+                'content_weight': 'Y',  # 내용량: 필수
+                'weight_calorie': 'D',  # 내용량(열량): 비활성화
+                'prdlst_report_no': 'D',  # 품목보고번호: 비활성화
+                'country_of_origin': 'Y',  # 원산지: 필수
+                'frmlc_mtrqlt': 'D',  # 포장재질: 비활성화
+                'pog_daycnt': 'N',  # 소비기한: 기본 선택
+                'rawmtrl_nm': 'N',  # 원재료명: 기본 선택
+                'storage_method': 'N',  # 보관방법: 기본 선택
+                'bssh_nm': 'Y',  # 제조원/생산자: 필수
+                'nutritions': 'D',  # 영양성분: 비활성화
+                'cautions': 'D',  # 주의사항: 비활성화
+            }
+            
+            custom_fields = []
+            
+            # 농산물 (사과, 채소 등)
+            if food_type == '농산물':
+                settings.update({
+                    'pog_daycnt': 'N',  # 소비기한: 선택
+                    'rawmtrl_nm': 'D',  # 원재료명: 비활성화
+                    'storage_method': 'N',  # 보관방법: 선택
+                })
+                custom_fields = [
+                    {'label': '생산연도 (또는 생산연월일)', 'value': ''},
+                    {'label': '포장일', 'value': ''},
+                    {'label': '품종', 'value': ''},
+                    {'label': '등급 (표준규격품인 경우)', 'value': ''},
+                ]
+            
+            # 수산물 (생선, 조개 등)
+            elif food_type == '수산물':
+                settings.update({
+                    'pog_daycnt': 'N',  # 소비기한: 선택
+                    'rawmtrl_nm': 'D',  # 원재료명: 비활성화
+                    'storage_method': 'N',  # 보관방법: 선택
+                })
+                custom_fields = [
+                    {'label': '생산연월일', 'value': ''},
+                    {'label': '포장일', 'value': ''},
+                    {'label': '등급', 'value': ''},
+                    {'label': '마릿수', 'value': ''},
+                ]
+            
+            # 축산물 (생고기 등)
+            elif food_type == '축산물':
+                settings.update({
+                    'pog_daycnt': 'Y',  # 소비기한: 필수
+                    'rawmtrl_nm': 'Y',  # 원재료명: 필수
+                    'storage_method': 'N',  # 보관방법: 선택 (냉장/냉동)
+                })
+                custom_fields = [
+                    {'label': '이력관리번호', 'value': ''},
+                    {'label': '등급', 'value': ''},
+                    {'label': '부위', 'value': ''},
+                    {'label': '도축일', 'value': ''},
+                    {'label': '포장일', 'value': ''},
+                    {'label': '도축장명', 'value': ''},
+                    {'label': '보관방법 (냉장/냉동)', 'value': ''},
+                ]
+            
+            return JsonResponse({
+                'success': True,
+                'settings': settings,
+                'custom_fields': custom_fields  # 맞춤항목 추가
+            })
+        
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': '식품첨가물, 혼합제제 또는 농수축산물이 아닙니다.'
+            })
+            
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

@@ -1166,37 +1166,147 @@ document.addEventListener('DOMContentLoaded', function() {
     // localStorage에서 이전 데이터 복원
     loadFromLocalStorage();
 
-    // ==================== 식품유형 선택기 ====================
-    const foodGroupSelect = document.getElementById('food_group');
-    const foodTypeSelect = document.getElementById('food_type');
+    // ==================== 식품유형 선택기 (Select2 적용) ====================
+    const foodGroupSelect = $('#food_group');
+    const foodTypeSelect = $('#food_type');
     
-    if (foodGroupSelect && foodTypeSelect) {
-        const allFoodTypes = Array.from(foodTypeSelect.options);
-
-        foodGroupSelect.addEventListener('change', function() {
-            const selectedGroup = this.value;
-            foodTypeSelect.innerHTML = '<option value="">소분류</option>';
-            
-            allFoodTypes.forEach(option => {
-                if (option.dataset.group === selectedGroup || selectedGroup === "") {
-                    if (option.value) {
-                        const newOption = option.cloneNode(true);
-                        newOption.style.display = 'block';
-                        foodTypeSelect.appendChild(newOption);
-                    }
-                }
-            });
+    // Select2 초기화
+    if (foodGroupSelect.length && foodTypeSelect.length) {
+        // 대분류 Select2 초기화
+        foodGroupSelect.select2({
+            placeholder: '대분류',
+            allowClear: true,
+            width: '100%'
         });
-
-        // 식품유형 선택 시 입력 필드 자동 채우기
-        foodTypeSelect.addEventListener('change', function() {
-            const selectedFoodType = this.value;
-            const prdlstDcnmInput = document.querySelector('input[name="prdlst_dcnm"]');
-            if (prdlstDcnmInput && selectedFoodType) {
-                prdlstDcnmInput.value = selectedFoodType;
-                updatePreview();
+        
+        // 소분류 Select2 초기화
+        foodTypeSelect.select2({
+            placeholder: '소분류',
+            allowClear: true,
+            width: '100%'
+        });
+        
+        // 대분류 변경 이벤트
+        foodGroupSelect.on('change', function() {
+            const selectedGroup = $(this).val();
+            
+            // 소분류 초기화
+            foodTypeSelect.empty().append('<option value=""></option>');
+            
+            if (!selectedGroup) {
+                foodTypeSelect.val(null).trigger('change');
+                return;
+            }
+            
+            // 농수축산물인 경우 알림 표시
+            if (selectedGroup === '농수축산물') {
+                alert('농수축산물은 상세모드에서만 작성 가능합니다.\n상단의 "상세 모드 보기" 버튼을 클릭하세요.');
+                foodGroupSelect.val('').trigger('change');
+                return;
+            }
+            
+            // 식품첨가물 또는 혼합제제인 경우 API로 데이터 가져오기
+            if (selectedGroup === '식품첨가물' || selectedGroup === '혼합제제') {
+                fetch(`/label/food-types-by-group/?group=${encodeURIComponent(selectedGroup)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.food_types) {
+                            data.food_types.forEach(item => {
+                                const option = new Option(item.food_type, item.food_type, false, false);
+                                option.dataset.group = item.food_group;
+                                foodTypeSelect.append(option);
+                            });
+                            foodTypeSelect.trigger('change');
+                        }
+                    })
+                    .catch(error => console.error('Error loading food types:', error));
+            } else {
+                // 일반 식품유형인 경우 기존 로직
+                const allOptions = foodTypeSelect.data('allOptions') || [];
+                allOptions.forEach(option => {
+                    if (option.group === selectedGroup) {
+                        const newOption = new Option(option.text, option.value, false, false);
+                        newOption.dataset.group = option.group;
+                        foodTypeSelect.append(newOption);
+                    }
+                });
+                foodTypeSelect.trigger('change');
             }
         });
+        
+        // 초기 로드 시 모든 옵션 저장
+        const initialOptions = [];
+        foodTypeSelect.find('option').each(function() {
+            if ($(this).val()) {
+                initialOptions.push({
+                    value: $(this).val(),
+                    text: $(this).text(),
+                    group: $(this).data('group')
+                });
+            }
+        });
+        foodTypeSelect.data('allOptions', initialOptions);
+        
+        // 소분류 선택 시 식품유형 필드 자동 채우기 및 필드 규칙 적용
+        foodTypeSelect.on('change', function() {
+            const selectedFoodType = $(this).val();
+            const selectedGroup = foodGroupSelect.val();
+            const prdlstDcnmInput = document.querySelector('input[name="prdlst_dcnm"]');
+            
+            if (prdlstDcnmInput && selectedFoodType) {
+                prdlstDcnmInput.value = selectedFoodType;
+            }
+            
+            // 식품첨가물/혼합제제인 경우 필드 규칙 적용
+            if (selectedGroup === '식품첨가물' || selectedGroup === '혼합제제') {
+                applyAdditiveFieldRules(selectedGroup);
+            }
+            
+            updatePreview();
+        });
+    }
+    
+    // 식품첨가물/혼합제제 필드 규칙 적용 함수
+    function applyAdditiveFieldRules(foodGroup) {
+        fetch(`/label/get-additive-field-settings/?food_group=${encodeURIComponent(foodGroup)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.settings) {
+                    const settings = data.settings;
+                    
+                    // 체크박스 ID 매핑
+                    const fieldMapping = {
+                        'prdlst_nm': 'chk_prdlst_nm',
+                        'ingredient_info': 'chk_ingredient_info',
+                        'prdlst_dcnm': 'chk_prdlst_dcnm',
+                        'content_weight': 'chk_content_weight',
+                        'weight_calorie': 'chk_weight_calorie',
+                        'prdlst_report_no': 'chk_prdlst_report_no',
+                        'country_of_origin': 'chk_country_of_origin',
+                        'frmlc_mtrqlt': 'chk_frmlc_mtrqlt',
+                        'pog_daycnt': 'chk_pog_daycnt',
+                        'rawmtrl_nm': 'chk_rawmtrl_nm',
+                        'storage_method': 'chk_storage_method',
+                        'bssh_nm': 'chk_bssh_nm',
+                        'nutritions': 'chk_calories',
+                        'cautions': 'chk_cautions'
+                    };
+                    
+                    // 각 필드에 규칙 적용
+                    Object.keys(settings).forEach(field => {
+                        const checkboxId = fieldMapping[field];
+                        if (checkboxId) {
+                            const checkbox = document.getElementById(checkboxId);
+                            if (checkbox) {
+                                const value = settings[field];
+                                checkbox.checked = value === 'Y';
+                                checkbox.disabled = value === 'D';
+                            }
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error('Error applying field rules:', error));
     }
 
     // ==================== PDF 저장 버튼 -> 로그인 유도 ====================
