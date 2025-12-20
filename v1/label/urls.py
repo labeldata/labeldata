@@ -13,6 +13,8 @@ urlpatterns = [
     
     # 식품첨가물 검색
     path('food-additives/', views.food_additive_search, name='food_additive_search'),
+    path('copy-additives-to-ingredients/', views.copy_additives_to_ingredients, name='copy_additives_to_ingredients'),
+    path('request-additive-correction/', views.request_additive_correction, name='request_additive_correction'),
 
     # 내 표시사항 관리
     path('my-labels/', views.my_label_list, name='my_label_list'),

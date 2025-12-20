@@ -67,6 +67,13 @@
                style="font-size: 0.8rem; min-width:110px; max-width:180px;"
                placeholder="포장재질" value="{{ search_values.frmlc_mtrqlt|default_if_none:'' }}">
         <!-- 소비기한(pog_daycnt) 검색 조건은 제외 -->
+      {% elif page_type == "additive" %}
+        <input type="text" name="name_kr" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품첨가물명" value="{{ search_values.name_kr|default_if_none:'' }}">
+        <input type="text" name="name_en" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="영문명" value="{{ search_values.name_en|default_if_none:'' }}">
+        <input type="text" name="alias_name" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="이명" value="{{ search_values.alias_name|default_if_none:'' }}">
+        <input type="text" name="ins_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="INS No." value="{{ search_values.ins_no|default_if_none:'' }}">
+        <input type="text" name="e_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="E No." value="{{ search_values.e_no|default_if_none:'' }}">
+        <input type="text" name="cas_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="CAS No." value="{{ search_values.cas_no|default_if_none:'' }}">
       {% endif %}
       <select name="items_per_page" class="form-select" style="font-size: 0.8rem; width:110px; min-width:100px;">
         <option value="10"  {% if items_per_page == 10  %}selected{% endif %}>10개</option>

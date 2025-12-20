@@ -474,6 +474,11 @@ class FoodAdditive(models.Model):
     
     category = models.CharField(max_length=100, verbose_name="식품첨가물 대분류")
     name_kr = models.CharField(max_length=200, verbose_name="식품첨가물 명칭(한글)", primary_key=True)
+    name_en = models.CharField(max_length=200, blank=True, null=True, verbose_name="영문명")
+    alias_name = models.CharField(max_length=300, blank=True, null=True, verbose_name="이명")
+    ins_no = models.CharField(max_length=150, blank=True, null=True, verbose_name="INS No.")
+    e_no = models.CharField(max_length=150, blank=True, null=True, verbose_name="E No.")
+    cas_no = models.CharField(max_length=100, blank=True, null=True, verbose_name="CAS No.")
     alias_4 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표4 명칭+용도")
     alias_5 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표5 명칭 또는 간략명")
     alias_6 = models.CharField(max_length=200, blank=True, null=True, verbose_name="표6 명칭 또는 간략명 또는 용도")

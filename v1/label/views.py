@@ -2915,53 +2915,223 @@ def food_item_list_imported(request):
 @login_required
 def food_additive_search(request):
     """식품첨가물 번호 검색"""
-    search_query = request.GET.get('search', '').strip()
-    search_type = request.GET.get('search_type', 'all')  # all, name_kr, name_en, ins_no, e_no, cas_no
+    name_kr = request.GET.get('name_kr', '').strip()
+    name_en = request.GET.get('name_en', '').strip()
+    alias_name = request.GET.get('alias_name', '').strip()
+    ins_no = request.GET.get('ins_no', '').strip()
+    e_no = request.GET.get('e_no', '').strip()
+    cas_no = request.GET.get('cas_no', '').strip()
+    sort_by = request.GET.get('sort', 'name_kr')
+    order = request.GET.get('order', 'asc')
     
-    items_per_page = int(request.GET.get("items_per_page", 20))
+    items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
     
-    additives_qs = FoodAdditive.objects.all()
+    # 혼합제제류는 제외 (내원료 관리 등에서만 사용)
+    additives_qs = FoodAdditive.objects.exclude(category='혼합제제류')
     
-    if search_query:
-        if search_type == 'name_kr':
-            additives_qs = additives_qs.filter(name_kr__icontains=search_query)
-        elif search_type == 'name_en':
-            additives_qs = additives_qs.filter(name_en__icontains=search_query)
-        elif search_type == 'alias_name':
-            additives_qs = additives_qs.filter(alias_name__icontains=search_query)
-        elif search_type == 'ins_no':
-            additives_qs = additives_qs.filter(ins_no__icontains=search_query)
-        elif search_type == 'e_no':
-            additives_qs = additives_qs.filter(e_no__icontains=search_query)
-        elif search_type == 'cas_no':
-            additives_qs = additives_qs.filter(cas_no__icontains=search_query)
-        else:  # all
-            additives_qs = additives_qs.filter(
-                Q(name_kr__icontains=search_query) |
-                Q(name_en__icontains=search_query) |
-                Q(alias_name__icontains=search_query) |
-                Q(ins_no__icontains=search_query) |
-                Q(e_no__icontains=search_query) |
-                Q(cas_no__icontains=search_query)
-            )
+    # 각 필드별 검색 조건 적용 (LIKE 검색 - 부분 일치)
+    if name_kr:
+        # 쉼표로 구분된 경우 OR 검색
+        if ',' in name_kr:
+            from django.db.models import Q
+            q = Q()
+            for term in name_kr.split(','):
+                term = term.strip()
+                if term:
+                    q |= Q(name_kr__icontains=term)
+            additives_qs = additives_qs.filter(q)
+        else:
+            additives_qs = additives_qs.filter(name_kr__icontains=name_kr)
     
-    additives_qs = additives_qs.order_by('name_kr')
+    if name_en:
+        if ',' in name_en:
+            from django.db.models import Q
+            q = Q()
+            for term in name_en.split(','):
+                term = term.strip()
+                if term:
+                    q |= Q(name_en__icontains=term)
+            additives_qs = additives_qs.filter(q)
+        else:
+            additives_qs = additives_qs.filter(name_en__icontains=name_en)
+    
+    if alias_name:
+        if ',' in alias_name:
+            from django.db.models import Q
+            q = Q()
+            for term in alias_name.split(','):
+                term = term.strip()
+                if term:
+                    q |= Q(alias_name__icontains=term)
+            additives_qs = additives_qs.filter(q)
+        else:
+            additives_qs = additives_qs.filter(alias_name__icontains=alias_name)
+    
+    if ins_no:
+        additives_qs = additives_qs.filter(ins_no__icontains=ins_no)
+    if e_no:
+        additives_qs = additives_qs.filter(e_no__icontains=e_no)
+    if cas_no:
+        additives_qs = additives_qs.filter(cas_no__icontains=cas_no)
+    
+    # 정렬
+    if order == 'desc':
+        sort_by = f'-{sort_by}'
+    additives_qs = additives_qs.order_by(sort_by)
+    
     total_count = additives_qs.count()
     
     paginator, page_obj, page_range = paginate_queryset(additives_qs, page_number, items_per_page)
     querystring_without_page = get_querystring_without(request, ["page"])
+    querystring_without_sort = get_querystring_without(request, ["sort", "order"])
+    
+    # search_values 딕셔너리 생성
+    search_values = {
+        'name_kr': name_kr,
+        'name_en': name_en,
+        'alias_name': alias_name,
+        'ins_no': ins_no,
+        'e_no': e_no,
+        'cas_no': cas_no,
+    }
+    
+    # 검색 조건이 있으면 검색 결과 수 전달
+    has_search = any([name_kr, name_en, alias_name, ins_no, e_no, cas_no])
+    search_result_count = total_count if has_search else None
     
     context = {
         "page_obj": page_obj,
         "paginator": paginator,
         "page_range": page_range,
-        "search_query": search_query,
-        "search_type": search_type,
+        "search_values": search_values,
         "items_per_page": items_per_page,
         "total_count": total_count,
+        "search_result_count": search_result_count,
         "querystring_without_page": querystring_without_page,
+        "querystring_without_sort": querystring_without_sort,
     }
     
     return render(request, "label/food_additive_search.html", context)
 
+
+@login_required
+@require_POST
+def copy_additives_to_ingredients(request):
+    """선택한 식품첨가물을 내 원료로 복사"""
+    try:
+        data = json.loads(request.body)
+        additives = data.get('additives', [])
+        
+        if not additives:
+            return JsonResponse({'success': False, 'error': '선택한 항목이 없습니다.'})
+        
+        created_count = 0
+        skipped_count = 0
+        
+        for additive_data in additives:
+            name_kr = additive_data.get('name_kr')
+            
+            # 이미 존재하는지 확인
+            existing = MyIngredient.objects.filter(
+                user_id=request.user,
+                prdlst_nm=name_kr
+            ).first()
+            
+            if existing:
+                skipped_count += 1
+                continue
+            
+            # 새 원료 생성 (식품첨가물명을 모든 필드에 입력)
+            MyIngredient.objects.create(
+                user_id=request.user,
+                prdlst_nm=name_kr,  # 원료명
+                food_category='additive',  # 식품구분 (영문 코드)
+                prdlst_dcnm=name_kr,  # 식품유형
+                rawmtrl_nm=name_kr,  # 원재료명
+                ingredient_display_name=name_kr,  # 원재료 표시명
+                delete_YN='N'  # 삭제되지 않은 상태
+            )
+            created_count += 1
+        
+        message = f'{created_count}개의 식품첨가물이 내 원료로 복사되었습니다.'
+        if skipped_count > 0:
+            message += f' ({skipped_count}개는 이미 존재하여 건너뛰었습니다.)'
+        
+        return JsonResponse({'success': True, 'message': message})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def request_additive_correction(request):
+    """식품첨가물 데이터 수정 요청"""
+    try:
+        data = json.loads(request.body)
+        corrections = data.get('corrections', [])
+        reason = data.get('reason', '')
+        
+        if not corrections or not reason:
+            return JsonResponse({'success': False, 'error': '수정 내용과 사유를 모두 입력해주세요.'})
+        
+        # 게시판에 수정 요청 글 작성
+        from v1.board.models import Board
+        
+        # 작성자 이름 마스킹 (앞 2글자만 표시)
+        user_email = request.user.email
+        if len(user_email) >= 2:
+            masked_email = user_email[:2] + '*' * (len(user_email.split('@')[0]) - 2) + '@' + user_email.split('@')[1]
+        else:
+            masked_email = '*' * len(user_email)
+        
+        # 수정 요청 내용 포맷팅
+        content_lines = ['[식품첨가물 데이터 수정 요청]\n']
+        content_lines.append(f'요청자: {masked_email}\n')
+        content_lines.append(f'요청일시: {timezone.now().strftime("%Y-%m-%d %H:%M")}\n\n')
+        content_lines.append('=== 수정 내용 ===\n')
+        
+        for idx, correction in enumerate(corrections, 1):
+            name_kr = correction.get('name_kr')
+            fields = correction.get('fields', {})
+            
+            try:
+                additive = FoodAdditive.objects.get(name_kr=name_kr)
+                content_lines.append(f'\n{idx}. {additive.name_kr}\n')
+                content_lines.append(f'   [현재 데이터]\n')
+                content_lines.append(f'   - 영문명: {additive.name_en or "(없음)"}\n')
+                content_lines.append(f'   - 이명: {additive.alias_name or "(없음)"}\n')
+                content_lines.append(f'   - INS No.: {additive.ins_no or "(없음)"}\n')
+                content_lines.append(f'   - E No.: {additive.e_no or "(없음)"}\n')
+                content_lines.append(f'   - CAS No.: {additive.cas_no or "(없음)"}\n')
+                content_lines.append(f'   [수정 요청 데이터]\n')
+                content_lines.append(f'   - 영문명: {fields.get("name_en", "")}\n')
+                content_lines.append(f'   - 이명: {fields.get("alias_name", "")}\n')
+                content_lines.append(f'   - INS No.: {fields.get("ins_no", "")}\n')
+                content_lines.append(f'   - E No.: {fields.get("e_no", "")}\n')
+                content_lines.append(f'   - CAS No.: {fields.get("cas_no", "")}\n')
+            except FoodAdditive.DoesNotExist:
+                content_lines.append(f'\n{idx}. [식품첨가물명: {name_kr}] - 항목을 찾을 수 없음\n')
+        
+        content_lines.append('\n=== 수정 사유 및 근거 ===\n')
+        content_lines.append(reason)
+        
+        content = ''.join(content_lines)
+        
+        # 게시판에 비밀글로 작성
+        Board.objects.create(
+            author=request.user,
+            title=f'[데이터 수정 요청] 식품첨가물 {len(corrections)}건',
+            content=content,
+            is_notice=False,
+            is_hidden=True  # 비밀글로 설정
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'message': '수정 요청이 게시판에 등록되었습니다. 관리자가 확인 후 반영하겠습니다.'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
