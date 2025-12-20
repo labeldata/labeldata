@@ -116,6 +116,9 @@
                   {% for group in food_groups %}
                   <option value="{{ group }}" {% if label.food_group == group %}selected{% endif %}>{{ group }}</option>
                   {% endfor %}
+                  <option value="식품첨가물" {% if label.food_group == "식품첨가물" %}selected{% endif %}>식품첨가물</option>
+                  <option value="혼합제제" {% if label.food_group == "혼합제제" %}selected{% endif %}>혼합제제</option>
+                  <option value="농수축산물" {% if label.food_group == "농수축산물" %}selected{% endif %}>농수축산물</option>
                 </select>
                 <select id="food_type" name="food_type" class="form-control modern-select" style="width:45%; min-width:150px;">
                   <option value="">소분류</option>
