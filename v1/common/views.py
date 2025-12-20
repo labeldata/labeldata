@@ -2,6 +2,7 @@ import logging
 import requests
 import xml.etree.ElementTree as ET
 import time
+import re
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout
@@ -343,8 +344,9 @@ def call_api_endpoint(request, pk):
                         
                         if rawmtrl_nm and rawmtrl_ordno:
                             try:
-                                # 줄바꿈 문자를 공백으로 치환 (원재료명에 \n이 포함된 경우 처리)
-                                rawmtrl_nm = rawmtrl_nm.replace('\n', '').replace('\r', '')
+                                # 줄바꿈 문자를 공백으로 치환하고 연속된 공백 정리
+                                rawmtrl_nm = rawmtrl_nm.replace('\n', ' ').replace('\r', ' ')
+                                rawmtrl_nm = re.sub(r'\s+', ' ', rawmtrl_nm).strip()
                                 
                                 # 괄호를 고려한 원재료명 분리 함수
                                 def split_with_parentheses(text, separator):
