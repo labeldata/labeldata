@@ -24,6 +24,8 @@ class FoodItem(models.Model):
     dispos = models.CharField(max_length=200, verbose_name="제품형태", null=True, blank=True)
     frmlc_mtrqlt = models.TextField(max_length=300, verbose_name="포장재질", null=True, blank=True)
     rawmtrl_nm = models.TextField(max_length=1000, verbose_name="원재료명", null=True, blank=True)
+    rawmtrl_ordno = models.TextField(max_length=1000, verbose_name="원재료순서", null=True, blank=True)  #
+    rawmtrl_nm_sorted = models.TextField(max_length=1000, verbose_name="원재료명 정렬", null=True, blank=True)  #
     update_datetime = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -88,6 +88,7 @@ SERVICE_MAPPING = {
             'prms_dt': ('prms_dt', 'PRMS_DT'),
             'prdlst_nm': ('prdlst_nm', 'PRDLST_NM'),
             'rawmtrl_nm': ('rawmtrl_nm', 'RAWMTRL_NM'),
+            'rawmtrl_ordno': ('rawmtrl_ordno', 'RAWMTRL_ORDNO'),  # 추가된 필드
             # 예시로 C002에서는 추가로 custom_field를 업데이트한다고 가정
             # 필요에 따라 다른 컬럼도 추가 가능
         },
@@ -123,6 +124,7 @@ SERVICE_MAPPING = {
             'prms_dt': ('prms_dt', 'PRMS_DT'),
             'prdlst_nm': ('prdlst_nm', 'PRDLST_NM'),
             'rawmtrl_nm': ('rawmtrl_nm', 'RAWMTRL_NM'),
+            'rawmtrl_ordno': ('rawmtrl_ordno', 'RAWMTRL_ORDNO'),  # 추가된 필드
             # 예시로 C002에서는 추가로 custom_field를 업데이트한다고 가정
             # 필요에 따라 다른 컬럼도 추가 가능
         },
@@ -333,6 +335,67 @@ def call_api_endpoint(request, pk):
                     unique_value = item.get(unique_api_key)
 
                     defaults = build_defaults(field_mapping, item)
+                    
+                    # 원재료명 정렬 로직 (C002, C006에서 rawmtrl_ordno가 있을 때)
+                    if 'rawmtrl_ordno' in defaults and defaults.get('rawmtrl_ordno'):
+                        rawmtrl_nm = defaults.get('rawmtrl_nm', '')
+                        rawmtrl_ordno = defaults.get('rawmtrl_ordno', '')
+                        
+                        if rawmtrl_nm and rawmtrl_ordno:
+                            try:
+                                # 괄호 밖의 쉼표만 구분자로 사용 (괄호 안의 쉼표는 무시)
+                                def split_ignore_parentheses(text):
+                                    """괄호 밖의 쉼표로만 분리"""
+                                    result = []
+                                    current = []
+                                    depth = 0
+                                    
+                                    for char in text:
+                                        if char == '(':
+                                            depth += 1
+                                            current.append(char)
+                                        elif char == ')':
+                                            depth -= 1
+                                            current.append(char)
+                                        elif char == ',' and depth == 0:
+                                            # 괄호 밖의 쉼표만 구분자로 사용
+                                            result.append(''.join(current).strip())
+                                            current = []
+                                        else:
+                                            current.append(char)
+                                    
+                                    # 마지막 항목 추가
+                                    if current:
+                                        result.append(''.join(current).strip())
+                                    
+                                    return result
+                                
+                                # 원재료명과 순서를 분리 (괄호 안 쉼표 무시)
+                                ingredients = split_ignore_parentheses(rawmtrl_nm)
+                                orders = [x.strip() for x in rawmtrl_ordno.split(',')]
+                                
+                                # 순서가 숫자인지 확인하고 정렬
+                                if len(ingredients) == len(orders):
+                                    # (순서, 원재료명) 튜플 리스트 생성
+                                    paired = list(zip(orders, ingredients))
+                                    # 순서를 숫자로 변환하여 정렬
+                                    paired_sorted = sorted(paired, key=lambda x: int(x[0]) if x[0].isdigit() else 999)
+                                    # 정렬된 원재료명만 추출
+                                    sorted_ingredients = [pair[1] for pair in paired_sorted]
+                                    # 콤마로 합쳐서 저장
+                                    defaults['rawmtrl_nm_sorted'] = ', '.join(sorted_ingredients)
+                                    logger.info(f"원재료명 정렬 완료: {unique_value}")
+                                else:
+                                    # 개수가 다르면 원본 그대로 저장
+                                    defaults['rawmtrl_nm_sorted'] = rawmtrl_nm
+                                    logger.warning(f"원재료명과 순서 개수 불일치: {unique_value} | 원재료({len(ingredients)}개): {rawmtrl_nm[:200]} | 순서({len(orders)}개): {rawmtrl_ordno}")
+                            except Exception as e:
+                                # 정렬 실패 시 원본 그대로 저장
+                                defaults['rawmtrl_nm_sorted'] = rawmtrl_nm
+                                logger.error(f"원재료명 정렬 실패 {unique_value}: {e}")
+                        else:
+                            defaults['rawmtrl_nm_sorted'] = rawmtrl_nm
+                    
                     instance, created = ModelClass.objects.update_or_create(
                         **{unique_field_name: unique_value},
                         defaults=defaults
