@@ -1,10 +1,12 @@
 {% url action_url as target_url %}
 <form id="searchFilterForm" method="get" action="{{ target_url }}" style="width:100%;max-width:100%;">
+  {% if page_type == "product" %}
+    <input type="hidden" name="food_category" value="{{ food_category }}" id="hiddenFoodCategory">
+  {% endif %}
   <div class="search-filter-row d-flex align-items-center mb-3" style="font-size: 0.8rem; width:100%; max-width:100%;">
     <div class="search-filter-inner d-flex align-items-center flex-nowrap gap-2 w-100 justify-content-between" style="font-size: 0.8rem; width:100%; max-width:100%; overflow-x:auto;">
       {% if page_type == "product" %}
         {% if food_category == "imported" %}
-          <input type="hidden" name="food_category" value="imported">
           <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
           <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">
           <input type="text" name="xport_ntncd_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="수출국" value="{{ search_values.xport_ntncd_nm|default_if_none:'' }}">
@@ -13,7 +15,6 @@
           <input type="text" name="pog_daycnt" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="소비기한" value="{{ search_values.pog_daycnt|default_if_none:'' }}">
           <input type="text" name="rawmtrl_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="원재료명" value="{{ search_values.rawmtrl_nm|default_if_none:'' }}">
         {% else %}
-          <input type="hidden" name="food_category" value="domestic">
           <input type="text" name="prdlst_report_no" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="품목보고번호" value="{{ search_values.prdlst_report_no|default_if_none:'' }}">
           <input type="text" name="prdlst_nm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="제품명" value="{{ search_values.prdlst_nm|default_if_none:'' }}">
           <input type="text" name="prdlst_dcnm" class="form-control flex-grow-1" style="font-size: 0.8rem; min-width:110px; max-width:180px;" placeholder="식품유형" value="{{ search_values.prdlst_dcnm|default_if_none:'' }}">
@@ -86,7 +87,7 @@
         <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
         <span class="loading-text d-none">검색중...</span>
       </button>
-      <button type="button" class="btn btn-cancel search-filter-btn ms-1" id="searchResetBtn" onclick="location.href='{{ target_url }}'" style="font-size: 0.8rem; min-width:30px; max-width:40px;">
+      <button type="button" class="btn btn-cancel search-filter-btn ms-1" id="searchResetBtn" onclick="resetSearch('{{ page_type }}', '{{ food_category }}')" style="font-size: 0.8rem; min-width:30px; max-width:40px;">
         &#x21BA;
       </button>
     </div>
@@ -152,6 +153,8 @@
       if (saved) {
         const params = JSON.parse(saved);
         for (const [k, v] of Object.entries(params)) {
+          // food_category는 URL 파라미터로만 관리하므로 localStorage 복원에서 제외
+          if (k === 'food_category') continue;
           const el = form.elements[k];
           if (el) el.value = v;
         }
@@ -161,7 +164,10 @@
     form.addEventListener('submit', function() {
       const params = {};
       Array.from(form.elements).forEach(el => {
-        if (el.name && el.value !== undefined) params[el.name] = el.value;
+        // food_category는 URL 파라미터로만 관리하므로 localStorage 저장에서 제외
+        if (el.name && el.value !== undefined && el.name !== 'food_category') {
+          params[el.name] = el.value;
+        }
       });
       localStorage.setItem('search_' + window.location.pathname, JSON.stringify(params));
     });
@@ -180,6 +186,18 @@
       foodCategorySelect.value = "{{ food_category|escapejs }}";
     }
   });
+  
+  // 초기화 함수 추가
+  function resetSearch(pageType, foodCategory) {
+    // 제품 조회의 경우 food_category 파라미터 유지
+    if (pageType === 'product' && foodCategory) {
+      window.location.href = window.location.pathname + '?food_category=' + foodCategory;
+    } else {
+      window.location.href = window.location.pathname;
+    }
+  }
+  
+
 </script>
 
 <script>
