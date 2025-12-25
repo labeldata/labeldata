@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import reverse  # reverse는 이미 import되어 있음
 from django.utils.html import format_html  # format_html import 추가
-from .models import ApiKey, ApiEndpoint
+from .models import ApiKey, ApiEndpoint, UserActivityLog    
 
 
 class BaseAdmin(admin.ModelAdmin):
@@ -132,7 +132,109 @@ class CustomUserAdmin(UserAdmin):
     get_last_login.admin_order_field = 'last_login'  # 정렬 기능 유지
 
 
-# 기존의 User 관리자 등록을 해제
+# 기존의 User 관리자 등록을 해제하고 CustomUserAdmin으로 재등록
 admin.site.unregister(User)
-# 새로 정의한 CustomUserAdmin으로 User 모델을 다시 등록
 admin.site.register(User, CustomUserAdmin)
+
+# ============================================
+# 사용자 활동 로그 관리
+# ============================================
+
+@admin.register(UserActivityLog)
+class UserActivityLogAdmin(BaseAdmin):
+    """사용자 활동 로그 관리 (대시보드 데이터 소스)"""
+    list_display = ('user', 'category', 'action', 'target_id', 'created_at')
+    list_filter = ('category', 'action', 'created_at')
+    search_fields = ('user__username', 'ip_address')
+    readonly_fields = ('created_at',)
+    date_hierarchy = 'created_at'
+
+# ============================================
+# Label 앱 모델 관리
+# ============================================
+
+from v1.board.models import Board, Comment
+
+@admin.register(MyLabel)
+class MyLabelAdmin(BaseAdmin):
+    """내 표시사항 관리 (소프트 삭제 지원)"""
+    list_display = ('my_label_id', 'my_label_name', 'user_id', 'food_type', 'delete_YN', 'update_datetime')
+    search_fields = ('my_label_name', 'food_type', 'user_id__username')
+    list_filter = ('delete_YN', 'food_type')
+    readonly_fields = ('create_datetime', 'update_datetime')
+    actions = ['soft_delete_selected', 'restore_selected']
+    
+    def soft_delete_selected(self, request, queryset):
+        """선택된 항목을 소프트 삭제"""
+        from datetime import datetime
+        updated = queryset.update(
+            delete_YN='Y',
+            delete_datetime=datetime.now().strftime('%Y%m%d')
+        )
+        self.message_user(request, f'{updated}개의 표시사항이 삭제되었습니다.')
+    soft_delete_selected.short_description = '선택된 표시사항 삭제'
+    
+    def restore_selected(self, request, queryset):
+        """선택된 항목을 복원"""
+        updated = queryset.update(
+            delete_YN='N',
+            delete_datetime=''
+        )
+        self.message_user(request, f'{updated}개의 표시사항이 복원되었습니다.')
+    restore_selected.short_description = '선택된 표시사항 복원'
+
+@admin.register(MyIngredient)
+class MyIngredientAdmin(BaseAdmin):
+    """내 원료 관리 (소프트 삭제 지원)"""
+    list_display = ('my_ingredient_id', 'prdlst_nm', 'user_id', 'bssh_nm', 'delete_YN', 'update_datetime')
+    search_fields = ('prdlst_nm', 'bssh_nm', 'user_id__username')
+    list_filter = ('delete_YN',)
+    readonly_fields = ('update_datetime',)
+    actions = ['soft_delete_selected', 'restore_selected']
+    
+    def soft_delete_selected(self, request, queryset):
+        """선택된 항목을 소프트 삭제"""
+        from datetime import datetime
+        updated = queryset.update(
+            delete_YN='Y',
+            delete_datetime=datetime.now().strftime('%Y%m%d')
+        )
+        self.message_user(request, f'{updated}개의 원료가 삭제되었습니다.')
+    soft_delete_selected.short_description = '선택된 원료 삭제'
+    
+    def restore_selected(self, request, queryset):
+        """선택된 항목을 복원"""
+        updated = queryset.update(
+            delete_YN='N',
+            delete_datetime=''
+        )
+        self.message_user(request, f'{updated}개의 원료가 복원되었습니다.')
+    restore_selected.short_description = '선택된 원료 복원'
+
+# ============================================
+# Board 앱 모델 관리
+# ============================================
+
+class CommentInline(admin.TabularInline):
+    """게시글 댓글 인라인 편집"""
+    model = Comment
+    extra = 0
+    readonly_fields = ('created_at', 'updated_at')
+    fields = ('author', 'content', 'created_at')
+
+@admin.register(Board)
+class BoardAdmin(BaseAdmin):
+    """게시판 관리 (댓글 인라인 포함)"""
+    list_display = ('title', 'author', 'is_notice', 'views', 'created_at')
+    search_fields = ('title', 'content', 'author__username')
+    list_filter = ('is_notice', 'is_hidden', 'created_at')
+    readonly_fields = ('created_at', 'updated_at', 'views')
+    inlines = [CommentInline]
+
+# ============================================
+# Django Admin 사이트 설정
+# ============================================
+
+admin.site.site_header = "EZLABELING 관리자"
+admin.site.site_title = "EZLABELING Admin"
+admin.site.index_title = "관리자 페이지"

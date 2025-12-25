@@ -5,6 +5,24 @@
 window.validateSettings = async function() {
     
     try {
+        // 로깅 API 호출
+        const urlParams = new URLSearchParams(window.location.search);
+        const labelId = urlParams.get('label_id');
+        if (labelId) {
+            try {
+                await fetch('/label/log-validation/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ label_id: labelId })
+                });
+            } catch (logError) {
+                console.warn('로깅 실패:', logError);
+            }
+        }
+        
         // 캐싱된 요소 사용
         const elements = window.cachedElements || {};
         const width = parseFloat(elements.widthInput?.value || document.getElementById('widthInput')?.value) || 0;
@@ -3785,6 +3803,11 @@ window.renderFieldOrderList = function() {
                 fieldOrderData.order = newOrder;
                 saveFieldOrder();
                 renderTableWithCurrentData();
+                
+                // 항목 순서 변경 로깅
+                if (typeof window.logPreviewAction === 'function') {
+                    window.logPreviewAction('preview_order');
+                }
             }
         });
     } else {
@@ -3810,6 +3833,11 @@ window.moveFieldUp = function(fieldKey) {
         saveFieldOrder();
         renderFieldOrderList();
         renderTableWithCurrentData();
+        
+        // 항목 순서 변경 로깅
+        if (typeof window.logPreviewAction === 'function') {
+            window.logPreviewAction('preview_order');
+        }
     }
 };
 
@@ -3822,6 +3850,11 @@ window.moveFieldDown = function(fieldKey) {
         saveFieldOrder();
         renderFieldOrderList();
         renderTableWithCurrentData();
+        
+        // 항목 순서 변경 로깅
+        if (typeof window.logPreviewAction === 'function') {
+            window.logPreviewAction('preview_order');
+        }
     }
 };
 
@@ -4352,4 +4385,19 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
             tbody.appendChild(containerTr);
         }
     });
+}
+// CSRF 토큰 가져오기 함수
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }

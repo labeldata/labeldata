@@ -430,12 +430,33 @@ function sendNutritionDataToParent() {
 }
 
 // PDF 내보내기
-function exportToPDF() {
+async function exportToPDF() {
   const nutritionContainer = document.querySelector('#resultDisplay .nutrition-result-table, #resultDisplay .nutrition-style-basic, #resultDisplay .nutrition-style-parallel');
   
   if (!nutritionContainer) {
     alert('먼저 영양성분을 계산해주세요.');
     return;
+  }
+  
+  // PDF 저장 로깅
+  const urlParams = new URLSearchParams(window.location.search);
+  const labelId = urlParams.get('label_id');
+  if (labelId) {
+    try {
+      await fetch('/label/log-pdf-save/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ 
+          label_id: labelId,
+          source: 'calculator'
+        })
+      });
+    } catch (logError) {
+      console.warn('로깅 실패:', logError);
+    }
   }
   
   const pdfButton = document.querySelector('button[onclick="exportToPDF()"]');

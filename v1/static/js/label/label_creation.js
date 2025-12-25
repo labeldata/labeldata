@@ -1,5 +1,31 @@
 // 전역 데이터 초기화
 
+// ------------------ 공통 유틸리티 함수 (전역) ------------------
+// CSRF 토큰 쿠키값을 얻는 함수 (Django 공식)
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+// 페이지에서 label_id 가져오기
+function getLabelIdFromPage() {
+  const hiddenInput = document.getElementById('label_id');
+  if (hiddenInput && hiddenInput.value) {
+    return hiddenInput.value;
+  }
+  return null;
+}
+
 // ------------------ 체크박스 필드 매핑 (전역) ------------------
 const fieldMappings = {
   // updateCheckboxesByFoodType에서 사용하는 id 매핑
@@ -77,23 +103,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // ------------------ 공통 유틸리티 함수 ------------------
-  // CSRF 토큰 쿠키값을 얻는 함수 (Django 공식)
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-
+  // ------------------ adjustHeight 함수 ------------------
   function adjustHeight(element, maxHeight = Infinity) {
     if (!element) return;
     element.style.height = 'auto';  // 기본 높이 제거
@@ -2964,6 +2974,22 @@ function toggleQuickTextLabel(button) {
         } else {
             textarea.value = text;
         }
+        
+        // 주의문구/기타문구 빠른 등록 로깅
+        const labelId = getLabelIdFromPage();
+        if (labelId && (fieldName === 'cautions' || fieldName === 'additional_info')) {
+            fetch('/label/log-quick-text/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ 
+                    label_id: labelId,
+                    field_type: fieldName
+                })
+            }).catch(err => console.warn('빠른 문구 로깅 실패:', err));
+        }
     }
     
     // textarea 높이 자동 조절
@@ -3038,6 +3064,22 @@ function addAllQuickTextsLabel(fieldName) {
         const checkbox = document.getElementById(checkboxId);
         if (checkbox) {
             checkbox.checked = true;
+        }
+        
+        // 전체추가 로깅
+        const labelId = getLabelIdFromPage();
+        if (labelId && (fieldName === 'cautions' || fieldName === 'additional_info')) {
+            fetch('/label/log-quick-text/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ 
+                    label_id: labelId,
+                    field_type: fieldName
+                })
+            }).catch(err => console.warn('전체추가 로깅 실패:', err));
         }
         
         // 건너뛴 항목이 있으면 알림
@@ -3168,6 +3210,21 @@ function initCustomFields() {
         } catch (e) {
             // JSON 파싱 오류 무시
         }
+    }
+    
+    // 페이지 로드 시 초기값 설정 (중복 로깅 방지용)
+    const container = document.getElementById('customFieldsContainer');
+    if (container) {
+        const rows = container.querySelectorAll('.custom-field-row');
+        const customFields = [];
+        rows.forEach((row) => {
+            const label = row.querySelector('.custom-field-label')?.value.trim();
+            const value = row.querySelector('.custom-field-value')?.value.trim();
+            if (label && value) {
+                customFields.push({ label, value });
+            }
+        });
+        previousCustomFieldsValue = JSON.stringify(customFields);
     }
     
     updateCustomFieldsSummary();
@@ -3310,25 +3367,46 @@ function toggleEditMode(index) {
     
     if (isEditable) {
         // 현재 편집 모드 → 저장하고 읽기 모드로
-        row.setAttribute('data-editable', 'false');
-        labelInput.disabled = true;
-        valueInput.disabled = true;
+        const label = labelInput.value.trim();
+        const value = valueInput.value.trim();
         
-        // 버튼 변경: 저장 → 수정
-        if (actionBtn) {
-            actionBtn.style.backgroundColor = '#0d6efd';
-            actionBtn.style.borderColor = '#0d6efd';
-            actionBtn.title = '수정';
-            actionBtn.innerHTML = '<i class="fas fa-edit"></i>';
+        // 항목명과 내용이 있을 때만 저장 및 로깅
+        if (label && value) {
+            row.setAttribute('data-editable', 'false');
+            labelInput.disabled = true;
+            valueInput.disabled = true;
+            
+            // 버튼 변경: 저장 → 수정
+            if (actionBtn) {
+                actionBtn.style.backgroundColor = '#0d6efd';
+                actionBtn.style.borderColor = '#0d6efd';
+                actionBtn.title = '수정';
+                actionBtn.innerHTML = '<i class="fas fa-edit"></i>';
+            }
+            
+            // 빠른 입력 버튼 숨김
+            const buttonsContainer = row.querySelector(`[id^="quickValueButtons"]`);
+            if (buttonsContainer) {
+                buttonsContainer.style.display = 'none';
+            }
+            
+            // 맞춤항목 개별 저장 로깅
+            const labelId = getLabelIdFromPage();
+            if (labelId) {
+                fetch('/label/log-custom-field/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ label_id: labelId })
+                }).catch(err => console.warn('맞춤항목 개별 저장 로깅 실패:', err));
+            }
+            
+            updateCustomFieldsSummary();
+        } else {
+            alert('항목명과 내용을 모두 입력해주세요.');
         }
-        
-        // 빠른 입력 버튼 숨김
-        const buttonsContainer = row.querySelector(`[id^="quickValueButtons"]`);
-        if (buttonsContainer) {
-            buttonsContainer.style.display = 'none';
-        }
-        
-        updateCustomFieldsSummary();
     } else {
         // 현재 읽기 모드 → 편집 모드로
         row.setAttribute('data-editable', 'true');
@@ -3526,6 +3604,9 @@ function updateCustomFieldsSummary() {
     }
 }
 
+// 맞춤항목 이전 값 저장용 (중복 로깅 방지)
+let previousCustomFieldsValue = null;
+
 // 폼 제출 전 맞춤항목 데이터를 JSON으로 변환
 function serializeCustomFields() {
     const container = document.getElementById('customFieldsContainer');
@@ -3548,6 +3629,9 @@ function serializeCustomFields() {
     if (hiddenInput) {
         hiddenInput.value = jsonString;
     }
+    
+    // 이전 값 업데이트만 하고 로깅은 개별 저장 버튼에서만 수행
+    previousCustomFieldsValue = jsonString;
 }
 
 // 페이지 로드 시 초기화

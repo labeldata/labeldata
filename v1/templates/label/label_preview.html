@@ -405,6 +405,26 @@
             return cookieValue;
         }
         
+        // 미리보기 팝업 로깅 함수 (전역)
+        window.logPreviewAction = function(action) {
+            const labelIdInput = document.querySelector('input[name="label_id"]');
+            const labelId = labelIdInput ? labelIdInput.value : null;
+            
+            if (!labelId) return;
+            
+            fetch('/label/log-preview-action/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ 
+                    label_id: labelId,
+                    action: action
+                })
+            }).catch(err => console.warn('미리보기 로깅 실패:', err));
+        };
+        
         // 탭 전환 함수
         function switchPreviewTab(tabName) {
             // 모든 탭 버튼의 active 클래스 제거
@@ -448,7 +468,8 @@
         // 탭 클릭 이벤트 리스너
         document.querySelectorAll('.preview-tab').forEach(tab => {
             tab.addEventListener('click', function() {
-                switchPreviewTab(this.dataset.tab);
+                const tabName = this.dataset.tab;
+                switchPreviewTab(tabName);
             });
         });
         
@@ -1090,6 +1111,11 @@
                 // 마크 추가
                 const markId = setRecyclingMark(markValue);
                 
+                // 분리배출마크 추가 로깅
+                if (markId && typeof window.logPreviewAction === 'function') {
+                    window.logPreviewAction('preview_recycling_mark');
+                }
+                
                 // 복합재질 정보가 있으면 추가
                 if (markId && compositeText) {
                     const lines = compositeText.split('/');
@@ -1572,6 +1598,27 @@
     
         async function exportToPDF() {
             try {
+                // PDF 저장 로깅
+                const urlParams = new URLSearchParams(window.location.search);
+                const labelId = urlParams.get('label_id');
+                if (labelId) {
+                    try {
+                        await fetch('/label/log-pdf-save/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCookie('csrftoken')
+                            },
+                            body: JSON.stringify({ 
+                                label_id: labelId,
+                                source: 'preview'
+                            })
+                        });
+                    } catch (logError) {
+                        console.warn('로깅 실패:', logError);
+                    }
+                }
+                
                 previewContent.style.transform = 'scale(1)';
                 const { jsPDF } = window.jspdf;
                 const canvas = await html2canvas(previewContent, { scale: 3, useCORS: true });
@@ -1739,6 +1786,11 @@
             .then(res => {
 
                 if (res.success) {
+                    // 설정 저장 로깅
+                    if (typeof window.logPreviewAction === 'function') {
+                        window.logPreviewAction('preview_settings_save');
+                    }
+                    
                     // 성공 메시지 표시
                     const saveBtn = document.getElementById('saveSettingsBtn');
                     if (saveBtn) {
@@ -1892,7 +1944,16 @@
         function setupEventListeners() {
             const inputs = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput', 'fontFamilySelect'];
             inputs.forEach(id => {
-                document.getElementById(id)?.addEventListener('input', debounce(updatePreviewStyles, 250));
+                const element = document.getElementById(id);
+                if (element) {
+                    element.addEventListener('input', debounce(updatePreviewStyles, 250));
+                    // 표 설정 변경 시 로깅 (디바운스로 한 번만)
+                    element.addEventListener('change', debounce(function() {
+                        if (typeof window.logPreviewAction === 'function') {
+                            window.logPreviewAction('preview_table_settings');
+                        }
+                    }, 500));
+                }
             });
             document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
             // validateButton 이벤트 리스너는 label_preview.js에서 처리
@@ -1933,6 +1994,11 @@
                         console.error('설정 저장 실패:', e);
                     }
                     
+                    // 텍스트 변환 설정 변경 로깅
+                    if (typeof window.logPreviewAction === 'function') {
+                        window.logPreviewAction('preview_text_transform');
+                    }
+                    
                     // 테이블 즉시 업데이트
                     if (window.currentLabelData && Object.keys(window.currentLabelData).length > 0) {
                         renderTable(window.currentLabelData);
@@ -1969,6 +2035,11 @@
                             console.error('설정 저장 실패:', e);
                         }
                         
+                        // 텍스트 변환 설정 변경 로깅
+                        if (typeof window.logPreviewAction === 'function') {
+                            window.logPreviewAction('preview_text_transform');
+                        }
+                        
                         // 테이블 즉시 업데이트
                         if (window.currentLabelData && Object.keys(window.currentLabelData).length > 0) {
                             renderTable(window.currentLabelData);
@@ -1993,6 +2064,11 @@
                             localStorage.setItem('textFormatConfig', JSON.stringify(window.textFormatConfig));
                         } catch (e) {
                             console.error('설정 저장 실패:', e);
+                        }
+                        
+                        // 텍스트 변환 설정 변경 로깅
+                        if (typeof window.logPreviewAction === 'function') {
+                            window.logPreviewAction('preview_text_transform');
                         }
                         
                         // 테이블 즉시 업데이트

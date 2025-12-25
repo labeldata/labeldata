@@ -18,9 +18,137 @@ from django.conf import settings
 from django.http import Http404
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.decorators import login_required  # 추가
+from django.contrib.admin.views.decorators import staff_member_required
 
 # 로거 설정
 logger = logging.getLogger(__name__)
+
+# ============================================
+# 대시보드 관련 뷰
+# ============================================
+
+@staff_member_required
+def dashboard_view(request):
+    """
+    관리자 대시보드 페이지
+    - URL: /dashboard/
+    - 권한: staff 또는 superuser
+    - 기능: 사용자 통계, 콘텐츠 현황, 활동 분석 표시
+    """
+    from .admin_site import CustomAdminSite
+    from django.utils import timezone
+    
+    custom_site = CustomAdminSite()
+    period = request.GET.get('period', 'week')
+    
+    # 연도 선택 파라미터 처리
+    selected_year_param = request.GET.get('year')
+    selected_year = int(selected_year_param) if selected_year_param else None
+    
+    period_start, period_end, previous_period_start, previous_period_end, period_display = custom_site.get_period_dates(period, selected_year)
+    
+    # 현재 날짜 정보
+    now = timezone.now()
+    current_year = now.year
+    target_year = selected_year if selected_year else current_year
+    current_quarter = (now.month - 1) // 3 + 1
+    current_half = 1 if now.month <= 6 else 2
+    
+    # 연도 선택 목록 (현재 연도와 다음 연도)
+    available_years = [current_year, current_year + 1]
+    
+    # 분기 버튼 처리
+    if period.startswith('quarter'):
+        current_q = int(period.replace('quarter', '')) if period != 'quarter' else current_quarter
+        next_q = (current_q % 4) + 1
+        quarter_next = f'quarter{next_q}'
+        quarter_display = f'{current_q}분기'
+    else:
+        quarter_next = f'quarter{current_quarter}'
+        quarter_display = '분기'
+    
+    # 반기 버튼 처리
+    if period.startswith('half_year'):
+        current_h = int(period.replace('half_year', '')) if period != 'half_year' else current_half
+        next_h = 1 if current_h == 2 else 2
+        half_year_next = f'half_year{next_h}'
+        half_year_display = '상반기' if current_h == 1 else '하반기'
+    else:
+        half_year_next = f'half_year{current_half}'
+        half_year_display = '반기'
+    
+    # 연도 버튼 처리
+    if period.startswith('year'):
+        current_y = int(period.replace('year', '')) if period != 'year' else current_year
+        # 현재 년도와 다음 년도만 토글
+        if current_y == current_year:
+            next_y = current_year + 1
+        else:
+            next_y = current_year
+        year_next = f'year{next_y}'
+        year_display = f'{current_y % 100}년'
+    else:
+        year_next = f'year{current_year}'
+        year_display = '연간'
+    
+    # 활성 사용자 라벨 및 설명 텍스트 동적 생성
+    active_user_labels = {
+        'week': ('WAU', '최근 7일 활동'),
+        'month': ('MAU', '최근 30일 활동'),
+    }
+    
+    if period.startswith('quarter'):
+        q_num = int(period.replace('quarter', '')) if period != 'quarter' else current_quarter
+        active_user_label = f'{q_num}분기 활성 사용자'
+        active_user_period = f'{q_num}분기 활동'
+    elif period.startswith('half_year'):
+        h_num = int(period.replace('half_year', '')) if period != 'half_year' else current_half
+        h_text = '상반기' if h_num == 1 else '하반기'
+        active_user_label = f'{h_text} 활성 사용자'
+        active_user_period = f'{h_text} 활동'
+    elif period.startswith('year'):
+        y_num = int(period.replace('year', '')) if period != 'year' else current_year
+        active_user_label = f'{y_num}년 활성 사용자'
+        active_user_period = f'{y_num}년 활동'
+    else:
+        active_user_label, active_user_period = active_user_labels.get(period, ('WAU', '최근 7일 활동'))
+    
+    # 전체 통계에 증감 추가
+    total_stats = custom_site.get_total_stats()
+    period_stats = custom_site.get_period_stats(period_start, period_end, previous_period_start, previous_period_end)
+    
+    # 전체 표시사항과 원료에 기간별 증감 추가
+    total_stats['total_labels_change'] = period_stats.get('new_labels_change', 0.0)
+    total_stats['total_ingredients_change'] = period_stats.get('new_ingredients_change', 0.0)
+    
+    context = {
+        'period': period,
+        'period_display': period_display,
+        'total_stats': total_stats,
+        'period_stats': period_stats,
+        'category_stats': custom_site.get_category_stats(period_start, period_end, previous_period_start, previous_period_end),
+        'recent_data': custom_site.get_recent_data(),
+        'site_header': 'EZLABELING 관리자',
+        # 버튼 순환 정보
+        'quarter_next': quarter_next,
+        'quarter_display': quarter_display,
+        'half_year_next': half_year_next,
+        'half_year_display': half_year_display,
+        'year_next': year_next,
+        'year_display': year_display,
+        # 활성 사용자 라벨
+        'active_user_label': active_user_label,
+        'active_user_period': active_user_period,
+        # 연도 선택
+        'available_years': available_years,
+        'selected_year': target_year,
+    }
+    
+    return render(request, 'admin/dashboard.html', context)
+
+# ============================================
+# 사용자 인증 관련 뷰
+# ============================================
 
 # 회원가입
 def signup(request):

@@ -34,6 +34,14 @@ urlpatterns = [
     path('preview/', views.preview_popup, name='preview_popup'),  
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
     path('save_preview_settings/', views.save_preview_settings, name='save_preview_settings'),
+    path('log-validation/', views.log_validation, name='log_validation'),
+    path('log-pdf-save/', views.log_pdf_save, name='log_pdf_save'),
+    path('log-mode-switch/', views.log_mode_switch, name='log_mode_switch'),
+    path('log-quick-text/', views.log_quick_text, name='log_quick_text'),
+    path('log-custom-field/', views.log_custom_field, name='log_custom_field'),
+    path('log-preview-action/', views.log_preview_action, name='log_preview_action'),
+    path('log-quick-text/', views.log_quick_text, name='log_quick_text'),
+    path('log-custom-field/', views.log_custom_field, name='log_custom_field'),
 
     # 내원료 관리
     path('save-to-my-ingredients/<str:prdlst_report_no>/', views.save_to_my_ingredients, name='save_to_my_ingredients'),

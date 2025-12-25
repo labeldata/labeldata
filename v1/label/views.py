@@ -36,6 +36,33 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 
 
+# ============================================
+# 사용자 활동 로깅 헬퍼 함수
+# ============================================
+
+def log_user_activity(request, category, action, target_id=None):
+    """
+    사용자 활동을 기록하는 헬퍼 함수
+    - request: HttpRequest 객체
+    - category: 카테고리 (label, ingredient, preview, validation, search, calculator, board)
+    - action: 액션 (label_create, ingredient_view 등)
+    - target_id: 대상 ID (선택사항)
+    """
+    try:
+        from v1.common.models import UserActivityLog
+        if request.user.is_authenticated:
+            UserActivityLog.objects.create(
+                user=request.user,
+                category=category,
+                action=action,
+                target_id=str(target_id) if target_id else None,
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')[:255]
+            )
+    except Exception:
+        pass  # 로깅 실패해도 기능에는 영향 없도록
+
+
 def format_cautions_text(text):
     """
     주의사항/기타표시 텍스트를 미리보기 형식으로 변환
@@ -107,6 +134,13 @@ def to_bool(val):
 def food_item_list(request):
     # 국내제품/수입제품 구분
     food_category = request.GET.get("food_category", "domestic")
+    
+    # 조회 활동 로깅
+    if food_category == "domestic":
+        log_user_activity(request, 'search', 'search_domestic')
+    else:
+        log_user_activity(request, 'search', 'search_import')
+    
     # 검색 필드
     search_fields = {
         "prdlst_nm": "prdlst_nm",
@@ -198,6 +232,9 @@ def food_item_list(request):
 
 @login_required
 def my_label_list(request):
+    # 표시사항 목록 조회 로깅
+    log_user_activity(request, 'label', 'label_view')
+    
     search_fields = {
         "my_label_name": "my_label_name",
         "prdlst_report_no": "prdlst_report_no",
@@ -284,6 +321,8 @@ def create_new_label(request):
     라벨명은 "임시 - 제품명 - N" 형식으로 자동 생성됩니다.
     GET 요청 시 HTML 응답, POST 요청 시 JSON 응답을 반환합니다.
     """
+    # 표시사항 생성 로깅
+    log_user_activity(request, 'label', 'label_create')
     try:
         base_name = "임시 - 제품명"
         
@@ -334,6 +373,8 @@ def create_new_label(request):
 
 @login_required
 def food_item_detail(request, prdlst_report_no):
+    # 국내/수입 제품 상세 조회 로깅
+    log_user_activity(request, 'search', 'search_domestic', prdlst_report_no)
     """
     제품 상세 팝업: 가공식품/식품첨가물/수입식품 모두 지원.
     - 수입식품: ImportedFood에서 제품명(한글) 또는 pk로 조회
@@ -385,6 +426,9 @@ FOODITEM_MYLABEL_MAPPING = {
 def save_to_my_label(request, prdlst_report_no):
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
+
+    # 검색에서 표시사항 복사 로깅
+    log_user_activity(request, 'search', 'search_label_copy')
 
     try:
         imported_item = None
@@ -462,6 +506,9 @@ def save_to_my_label(request, prdlst_report_no):
 @login_required
 def label_creation(request, label_id=None):
     if request.method == 'POST':
+        # 표시사항 작성 로깅
+        log_user_activity(request, 'label', 'label_write', label_id)
+        
         if label_id:
             label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
             form = LabelCreationForm(request.POST, instance=label)
@@ -546,7 +593,20 @@ def label_creation(request, label_id=None):
                 label.report_no_verify_YN = 'N'
             
             # 알레르기 정보 저장 (원재료 사용 알레르기만 DB 저장)
-            label.allergens = request.POST.get('allergens', '')
+            allergens_input = request.POST.get('allergens', '')
+            label.allergens = allergens_input
+            
+            # 알레르기 자동 감지 활동 로깅
+            if allergens_input:
+                from v1.common.models import UserActivityLog
+                UserActivityLog.objects.create(
+                    user=request.user,
+                    category='validation',
+                    action='allergen_auto_detect',
+                    target_id=str(label.my_label_id) if label.my_label_id else None,
+                    ip_address=request.META.get('REMOTE_ADDR', ''),
+                    user_agent=request.META.get('HTTP_USER_AGENT', '')[:255]
+                )
 
             # 맞춤항목 저장
             custom_fields_json = request.POST.get('custom_fields_json', '')
@@ -564,6 +624,10 @@ def label_creation(request, label_id=None):
                 label.custom_fields = []
 
             label.save()
+            
+            # 표시사항 수정 로깅
+            log_user_activity(request, 'label', 'label_update', label.my_label_id)
+            
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
             messages.error(request, '입력 정보에 오류가 있습니다.')
@@ -777,6 +841,9 @@ def save_to_my_ingredients(request, prdlst_report_no=None):
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Invalid request method"}, status=400)
 
+    # 검색에서 내원료 복사 로깅
+    log_user_activity(request, 'search', 'search_ingredient_copy')
+
     try:
         data = json.loads(request.body) if request.body else {}
         imported_mode = to_bool(data.get("imported_mode", False))
@@ -954,6 +1021,9 @@ def check_my_ingredient(request):
     
 @login_required
 def my_ingredient_list(request):
+    # 원료 목록 조회 로깅
+    log_user_activity(request, 'ingredient', 'ingredient_view')
+    
     search_fields = {
         'prdlst_nm': 'prdlst_nm',
         'prdlst_report_no': 'prdlst_report_no',
@@ -1150,6 +1220,10 @@ def my_ingredient_detail(request, ingredient_id=None):
 def save_ingredients_to_label(request, label_id):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    
+    # 원재료 표로 입력 로깅
+    log_user_activity(request, 'label', 'ingredient_table_input', label_id)
+    
     try:
         data = json.loads(request.body)
         ingredients_data = data.get('ingredients', [])
@@ -1253,6 +1327,7 @@ def save_ingredients_to_label(request, label_id):
             label.country_of_origin = ', '.join(origin_targets)
             
         label.save()
+        
         # 메시지 제거 - JSON 응답만 반환
         return JsonResponse({'success': True, 'message': '저장되었습니다.'})
     except Exception as e:
@@ -1266,6 +1341,9 @@ def delete_my_ingredient(request, ingredient_id):
         return JsonResponse({'success': False, 'error': '게스트 계정은 삭제 기능을 사용할 수 없습니다.'})
         
     if request.method == 'POST':
+        # 원료 삭제 로깅
+        log_user_activity(request, 'ingredient', 'ingredient_delete', ingredient_id)
+        
         try:
             ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
             # 공용 원료(user_id=None)는 삭제 불가
@@ -1338,6 +1416,9 @@ def quick_register_ingredient(request):
     """빠른 원료 등록 API"""
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method'}, status=400)
+    
+    # 원재료 빠른 등록 로깅
+    log_user_activity(request, 'label', 'ingredient_quick_register')
     
     try:
         data = json.loads(request.body)
@@ -1558,6 +1639,10 @@ def duplicate_label(request, label_id):
     original.pk = None  
     original.my_label_name += " (복사본)"
     original.save()
+    
+    # 표시사항 복사 로깅
+    log_user_activity(request, 'label', 'label_copy', original.my_label_id)
+    
     return redirect('label:label_creation', label_id=original.my_label_id)
 
 def delete_label(request, label_id):
@@ -1567,6 +1652,10 @@ def delete_label(request, label_id):
         return redirect('label:my_label_list')
         
     label = get_object_or_404(MyLabel, my_label_id=label_id)
+    
+    # 표시사항 삭제 로깅
+    log_user_activity(request, 'label', 'label_delete', label_id)
+    
     label.delete()
     return redirect('label:my_label_list')
 
@@ -1583,6 +1672,10 @@ def bulk_copy_labels(request):
                 new_label.pk = None  
                 new_label.my_label_name += " (복사본)"
                 new_label.save()
+                
+                # 선택 복사 로깅
+                log_user_activity(request, 'label', 'selection_copy', new_label.my_label_id)
+            
             return JsonResponse({"success": True})
         except Exception as e:
             return JsonResponse({"success": False, "error": str(e)})
@@ -1617,6 +1710,9 @@ def save_nutrition(request):
     try:
         data = json.loads(request.body)
         label_id = data.get('label_id')
+        
+        # 영양성분 저장 로깅
+        log_user_activity(request, 'calculator', 'calculator_save', label_id)
         
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
         
@@ -1730,6 +1826,9 @@ def food_types_by_group(request):
 def preview_popup(request):
     """표시사항 미리보기 팝업"""
     label_id = request.GET.get('label_id')
+    
+    # 미리보기 조회 로깅
+    log_user_activity(request, 'preview', 'preview_view', label_id)
     
     if not label_id:
         return JsonResponse({'success': False, 'error': '라벨 ID가 제공되지 않았습니다.'})
@@ -1922,6 +2021,12 @@ def save_preview_settings(request):
         label_id = data.get('label_id')
         label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
         
+        # 미리보기 설정 변경 로깅
+        if data.get('font_size'):
+            log_user_activity(request, 'preview', 'preview_size', label_id)
+        if data.get('font'):
+            log_user_activity(request, 'preview', 'preview_font', label_id)
+        
         # 기본 미리보기 설정 저장
         label.prv_layout = data.get('layout')
         label.prv_width = data.get('width')
@@ -1956,7 +2061,129 @@ def save_preview_settings(request):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def log_validation(request):
+    """규정 검증 로깅 API"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            label_id = data.get('label_id')
+            
+            # 규정 검증 로깅
+            log_user_activity(request, 'validation', 'validation_nutrition', label_id)
+            
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
     
+    return JsonResponse({'success': False, 'error': 'POST required'})
+
+
+@login_required
+def log_mode_switch(request):
+    """간편/상세 모드 전환 로깅 API"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            label_id = data.get('label_id')
+            
+            # 모드 전환 로깅
+            log_user_activity(request, 'label', 'mode_switch', label_id)
+            
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'POST required'})
+
+
+@login_required
+def log_quick_text(request):
+    """주의문구/기타문구 빠른 등록 로깅 API"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            label_id = data.get('label_id')
+            field_type = data.get('field_type')  # 'cautions' or 'additional_info'
+            
+            if label_id and field_type:
+                action = 'caution_quick_add' if field_type == 'cautions' else 'other_text_quick_add'
+                log_user_activity(request, 'label', action, label_id)
+            
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'POST required'})
+
+
+@login_required
+def log_custom_field(request):
+    """맞춤항목 등록 로깅 API"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            label_id = data.get('label_id')
+            
+            if label_id:
+                log_user_activity(request, 'label', 'custom_field_use', label_id)
+            
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'POST required'})
+
+
+@login_required
+def log_pdf_save(request):
+    """PDF 저장 로깅 API"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            label_id = data.get('label_id')
+            source = data.get('source', 'preview')  # 'preview' 또는 'calculator'
+            
+            if source == 'calculator':
+                # 영양성분 계산기 PDF 저장 로깅
+                log_user_activity(request, 'calculator', 'calculator_calc', label_id)
+            else:
+                # 미리보기 PDF 저장 로깅
+                log_user_activity(request, 'preview', 'preview_pdf_save', label_id)
+            
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'POST required'})
+
+
+@login_required
+def log_preview_action(request):
+    """미리보기 팝업 각 기능별 로깅 API"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            label_id = data.get('label_id')
+            action = data.get('action')  # 'preview_view', 'preview_table_settings', 'preview_order', 'preview_text_transform', 'preview_recycling_mark', 'preview_settings_save'
+            
+            if label_id and action:
+                # action이 유효한지 확인
+                valid_actions = [
+                    'preview_view', 'preview_table_settings', 'preview_order', 
+                    'preview_text_transform', 'preview_recycling_mark', 'preview_settings_save'
+                ]
+                if action in valid_actions:
+                    log_user_activity(request, 'preview', action, label_id)
+            
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'POST required'})
+
 @login_required
 def imported_food_count(request):
     total = ImportedFood.objects.count()
@@ -1997,6 +2224,9 @@ def verify_report_no(request):
     data = json.loads(request.body)
     label_id = data.get('label_id')
     prdlst_report_no = data.get('prdlst_report_no', '').strip()
+    
+    # 품목보고번호 검증 로깅
+    log_user_activity(request, 'validation', 'validation_report', label_id)
     
     # 품목보고번호가 없으면 오류
     if not prdlst_report_no:
@@ -2947,6 +3177,9 @@ def food_item_list_imported(request):
 @login_required
 def food_additive_search(request):
     """식품첨가물 번호 검색"""
+    # 식품첨가물 조회 로깅
+    log_user_activity(request, 'search', 'search_additive')
+    
     name_kr = request.GET.get('name_kr', '').strip()
     name_en = request.GET.get('name_en', '').strip()
     alias_name = request.GET.get('alias_name', '').strip()

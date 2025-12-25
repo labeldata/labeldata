@@ -125,7 +125,7 @@ class MyIngredient(models.Model):
         ]
 
     def __str__(self):
-        return self.my_ingredient_id
+        return str(self.my_ingredient_id) if self.my_ingredient_id else "새 원료"
     
     def save(self, *args, **kwargs):
         """search_name이 비어 있을 경우, 기본값으로 id 사용"""

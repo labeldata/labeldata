@@ -33,7 +33,7 @@
               <h2 class="mb-0" style="flex-shrink:0; font-size: 1.3rem;">
                 ✏️ 상세 모드
               </h2>
-              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="switchToHome()" title="간편 모드로 전환">
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="logModeSwitch(); switchToHome();" title="간편 모드로 전환">
                 📋 간편 모드로 보기
               </button>
             </div>
@@ -965,6 +965,37 @@ window.countryListForBold = [
     "{{ c.country_name_ko|escapejs }}"{% if not forloop.last %},{% endif %}
     {% endfor %}
 ];
+
+// 간편/상세 모드 전환 로깅
+function logModeSwitch() {
+    const labelId = '{{ label.my_label_id|default:"" }}';
+    if (!labelId) return;
+    
+    fetch('/label/log-mode-switch/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ label_id: labelId })
+    }).catch(err => console.warn('모드 전환 로깅 실패:', err));
+}
+
+// CSRF 토큰 가져오기
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
 </script>
 
 {% endblock %}

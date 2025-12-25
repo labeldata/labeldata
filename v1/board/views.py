@@ -14,6 +14,28 @@ from urllib.parse import quote
 import mimetypes
 import os
 
+
+# ============================================
+# 사용자 활동 로깅 헬퍼 함수
+# ============================================
+
+def log_board_activity(request, action, target_id=None):
+    """게시판 활동 로깅"""
+    try:
+        from v1.common.models import UserActivityLog
+        if request.user.is_authenticated:
+            UserActivityLog.objects.create(
+                user=request.user,
+                category='board',
+                action=action,
+                target_id=str(target_id) if target_id else None,
+                ip_address=request.META.get('REMOTE_ADDR', ''),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')[:255]
+            )
+    except Exception:
+        pass
+
+
 class BoardForm(forms.ModelForm):
     is_hidden = forms.BooleanField(
         label='비밀글',
@@ -144,6 +166,9 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
             messages.error(self.request, '공지사항은 관리자만 작성할 수 있습니다.')
             return self.form_invalid(form)
         
+        # 게시글 작성 로깅
+        log_board_activity(self.request, 'board_post')
+        
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -233,7 +258,9 @@ def add_comment(request, pk):
     content = request.POST.get('content', '').strip()
     if not content:
         messages.error(request, '답변 내용을 입력하세요.')
-        return redirect('board:detail', pk=pk)
+        return redirect('board:detail', pk=pk)    
+    # 댓글 작성 로깅
+    log_board_activity(request, 'board_comment', pk)
     Comment.objects.create(board=board, author=request.user, content=content)
     messages.success(request, '답변이 등록되었습니다.')
     return redirect('board:detail', pk=pk)

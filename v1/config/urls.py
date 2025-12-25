@@ -6,6 +6,7 @@ from v1.common import views as common_views  # common views import 추가
 
 urlpatterns = [
     path('', include('v1.main.urls')),  # 메인 앱 URL
+    path('dashboard/', common_views.dashboard_view, name='dashboard'),  # 관리자 통계 대시보드
     path('common/', include('v1.common.urls', namespace='common')),  # common 앱 URL
     path('admin/', admin.site.urls),  # 관리자 페이지
     path('label/', include('v1.label.urls', namespace='label')),  # label 앱 URL
