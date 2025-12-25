@@ -156,7 +156,7 @@ class MyLabel(models.Model):
     prdlst_nm = models.CharField(max_length=200, verbose_name="제품명", null=True, blank=True)
     ingredient_info = models.TextField(max_length=1000, verbose_name="특정성분 함량", null=True, blank=True)
 
-    content_weight = models.CharField(max_length=50, verbose_name="내용량", null=True, blank=True)
+    content_weight = models.CharField(max_length=200, verbose_name="내용량", null=True, blank=True)
     weight_calorie = models.CharField(max_length=50, verbose_name="내용량(열량)", null=True, blank=True)
 
     prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", null=True, blank=True)
