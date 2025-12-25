@@ -76,7 +76,7 @@
           
           <!-- 2줄: 설명 (왼쪽 정렬) -->
           <p class="mb-0" style="font-size: 0.8rem; color: #6c757d;">
-            세밀한 편집과 전문 기능 - 등록된 원료를 연결하여 원재료명 자동 생성 및 영양성분 계산 가능
+            세밀한 편집과 전문 기능 - 등록된 원료를 연결하여 원재료명 자동 생성 및 영양성분 계산 가능합니다. 식약처에 신고된 제품 정보는 제품 조회에서 확인하세요.(국내, 수입)
           </p>
         </div>
       </div>
@@ -245,7 +245,7 @@
               <div class="d-flex align-items-center flex-equal">
                 <div style="width:15%; min-width:130px;">
                   <input type="checkbox" id="chk_prdlst_nm" name="chk_prdlst_nm" class="form-check-input" 
-                         {% if label.chckd_prdlst_nm == "Y" %}checked{% endif %}>
+                         {% if not label or label.chckd_prdlst_nm == "Y" %}checked{% endif %}>
                   <label for="chk_prdlst_nm" class="m-0">제품명</label>
                 </div>
                 <div style="width:85%;">
@@ -258,7 +258,7 @@
               </div>
               <div class="d-flex align-items-center flex-equal">
                 <div style="width:15%; min-width:130px;">
-                  <input type="checkbox" id="chk_ingredient_info" name="chk_ingredient_info" class="form-check-input" {% if label.chckd_ingredient_info == "Y" %}checked{% endif %}>
+                  <input type="checkbox" id="chk_ingredient_info" name="chk_ingredient_info" class="form-check-input" {% if not label or label.chckd_ingredient_info == "Y" %}checked{% endif %}>
                   <label for="chk_ingredient_info" class="m-0">특정성분 함량</label>
                 </div>
                 <div style="width:85%;">
@@ -274,7 +274,7 @@
             <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
               <div class="d-flex align-items-center flex-equal">
                 <div style="width:15%; min-width:130px;">
-                  <input type="checkbox" id="chk_prdlst_dcnm" name="chk_prdlst_dcnm" class="form-check-input" {% if label.chckd_prdlst_dcnm == "Y" %}checked{% endif %}>
+                  <input type="checkbox" id="chk_prdlst_dcnm" name="chk_prdlst_dcnm" class="form-check-input" {% if not label or label.chckd_prdlst_dcnm == "Y" %}checked{% endif %}>
                   <label for="chk_prdlst_dcnm" class="m-0">식품유형</label>
                 </div>
                 <div style="width:85%;">
@@ -287,7 +287,7 @@
               </div>
               <div class="d-flex align-items-center flex-equal">
                 <div style="width:15%; min-width:130px;">
-                  <input type="checkbox" id="chk_prdlst_report_no" name="chk_prdlst_report_no" class="form-check-input" {% if label.chckd_prdlst_report_no == "Y" %}checked{% endif %}>
+                  <input type="checkbox" id="chk_prdlst_report_no" name="chk_prdlst_report_no" class="form-check-input" {% if not label or label.chckd_prdlst_report_no == "Y" %}checked{% endif %}>
                   <label for="chk_prdlst_report_no" class="m-0">품목보고번호</label>
                 </div>
                 <div style="width:85%;">
@@ -304,7 +304,7 @@
             <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
               <div class="d-flex align-items-center flex-equal">                <div style="width:15%; min-width:130px;">
                   <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" 
-                         {% if label.chckd_content_weight == "Y" or label.chckd_weight_calorie == "Y" %}checked{% endif %}>
+                         {% if not label or label.chckd_content_weight == "Y" or label.chckd_weight_calorie == "Y" %}checked{% endif %}>
                   <label for="chk_content_weight" id="content_type_display" class="content-type-label m-0">내용량</label>
                   <input type="hidden" id="content_type_value" name="content_type" value="content_weight">
                 </div>
@@ -321,7 +321,7 @@
               </div>
               <div class="d-flex align-items-center flex-equal">
                 <div style="width:15%; min-width:130px;">
-                  <input type="checkbox" id="chk_country_of_origin" name="chk_country_of_origin" class="form-check-input" {% if label.chckd_country_of_origin == "Y" %}checked{% endif %}>
+                  <input type="checkbox" id="chk_country_of_origin" name="chk_country_of_origin" class="form-check-input" {% if not label or label.chckd_country_of_origin == "Y" %}checked{% endif %}>
                   <label for="chk_country_of_origin" class="m-0">원산지</label>
                 </div>
                  <div style="width:85%;">
@@ -342,7 +342,7 @@
             <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
               <div class="d-flex align-items-center flex-equal">
                 <div style="width:15%; min-width:130px;">
-                  <input type="checkbox" id="chk_storage_method" name="chk_storage_method" class="form-check-input" {% if label.chckd_storage_method == "Y" %}checked{% endif %}>
+                  <input type="checkbox" id="chk_storage_method" name="chk_storage_method" class="form-check-input" {% if not label or label.chckd_storage_method == "Y" %}checked{% endif %}>
                   <label for="chk_storage_method" class="m-0">보관방법</label>
                 </div>
                 <div style="width:85%;">

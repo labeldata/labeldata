@@ -381,7 +381,7 @@ html, body {
                     </button>
                 </div>
                 <p class="demo-subtitle mb-0">
-                    한눈에 보고 빠르게 작성 - 샘플 데이터를 선택하거나 직접 입력하여 실시간 미리보기를 확인하세요
+                    한눈에 보고 빠르게 작성 - 샘플 데이터를 선택하거나 직접 입력하여 실시간 미리보기를 확인하세요. 식약처에 신고된 제품 정보는 제품 조회에서 확인하세요.(국내, 수입)<br>
                 </p>
             </div>
             <div class="col-lg-3 col-md-4 text-end">
@@ -467,6 +467,17 @@ html, body {
                                 </div>
                             </div>
                             
+                            <!-- 라벨명 -->
+                            <div class="form-group-row">
+                                <div class="form-label-cell">
+                                    <input type="checkbox" id="chk_label_name" name="chk_label_name" class="form-check-input me-2">
+                                    <label for="chk_label_name">라벨명</label>
+                                </div>
+                                <div class="form-input-cell">
+                                    <input type="text" name="label_name" class="form-control" placeholder="라벨명을 입력하세요 (예: 내용물라벨, 외포장라벨 등)">
+                                </div>
+                            </div>
+
                             <!-- 제품명 -->
                             <div class="form-group-row">
                                 <div class="form-label-cell">
@@ -1038,6 +1049,7 @@ html, body {
                         <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>작성한 표시사항을 저장하고 관리</li>
                         <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>언제든지 수정 및 재사용 가능</li>
                         <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>간편 모드 ↔ 상세 모드 자유롭게 보기</li>
+                        <li class="mb-2"><i class="fas fa-check-circle text-success me-2"></i>제품 조회 화면에서 식약처 신고 제품 조회 기능</li>
                         <li class="mb-0"><i class="fas fa-check-circle text-success me-2"></i>다양한 템플릿 및 원재료 데이터베이스 활용</li>
                     </ul>
                 </div>

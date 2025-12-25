@@ -1727,9 +1727,11 @@ function showFeatureModal(featureType) {
 function switchToEditor() {
     const labelId = new URLSearchParams(window.location.search).get('label_id');
     if (labelId) {
+        // 기존 표시사항이 있으면 해당 ID로 이동
         window.location.href = `/label/label-creation/${labelId}/`;
     } else {
-        alert('전환할 표시사항이 없습니다.');
+        // 빈 화면에서도 상세모드로 이동 가능
+        window.location.href = '/label/label/create/';
     }
 }
 

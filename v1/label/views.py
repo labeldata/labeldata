@@ -778,6 +778,10 @@ def label_creation(request, label_id=None):
                 form = LabelCreationForm(instance=label)
         else:
             # 새 라벨 생성
+            label = None  # label 변수 초기화
+            has_ingredient_relations = False
+            count_ingredient_relations = 0
+            
             if request.method == 'POST':
                 # POST 요청 처리
                 form = LabelCreationForm(request.POST)
