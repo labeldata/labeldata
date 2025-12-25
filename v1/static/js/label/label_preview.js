@@ -256,6 +256,8 @@ function checkAllergenDuplication() {
     // 3. 원재료명에서 발견된 알레르기 성분들
     const foundAllergens = [];
     
+    console.log('[알레르기 감지] 검사 시작 - 원재료명:', cleanIngredients);
+    
     for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
         for (const keyword of keywords) {
             let found = false;
@@ -268,12 +270,13 @@ function checkAllergenDuplication() {
                     matchedBy = `직접매칭(단일문자): ${keyword}`;
                 }
             } else {
-                // 2글자 이상: 단어 경계를 고려한 매칭 (예: '우유'가 '두유'에 매칭되지 않도록)
+                // 2글자 이상: 단순 포함 여부로 체크 (탈지대두에서 대두 찾기)
                 const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                const regex = new RegExp(escapedKeyword, 'gi');
                 if (regex.test(cleanIngredients)) {
                     found = true;
                     matchedBy = `직접매칭: ${keyword}`;
+                    console.log(`[알레르기 감지] ${allergen} 발견! 키워드: ${keyword}, 매칭된 텍스트:`, cleanIngredients.match(regex));
                 }
             }
             
@@ -285,9 +288,9 @@ function checkAllergenDuplication() {
                             const regex = new RegExp(`[\\s,():]${synonym}[\\s,():]|^${synonym}[\\s,():]|[\\s,():]${synonym}$|^${synonym}$`, 'gi');
                             return regex.test(cleanIngredients);
                         } else {
-                            // 동의어도 단어 경계를 고려한 매칭으로 변경
+                            // 동의어도 단순 포함 여부로 체크
                             const escapedSynonym = synonym.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                            const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedSynonym}(?=$|[\\s,():\\[\\]])`, 'gi');
+                            const regex = new RegExp(escapedSynonym, 'gi');
                             return regex.test(cleanIngredients);
                         }
                     });
@@ -333,15 +336,15 @@ function checkAllergenDuplication() {
             const matchedKeywords = allergenKeywords[declaredAllergen] || [declaredAllergen];
             
             const foundInCautions = matchedKeywords.filter(keyword => {
-                // 키워드가 주의사항에 포함되어 있는지 확인 (단어 경계 고려)
+                // 키워드가 주의사항에 포함되어 있는지 확인 (단순 포함)
                 if (keyword.length === 1) {
                     // 단일 문자는 정확한 매치 확인
                     const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
                     return regex.test(cautionsText);
                 } else {
-                    // 2글자 이상: 단어 경계를 고려한 매칭
+                    // 2글자 이상: 단순 포함 여부로 체크
                     const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                    const regex = new RegExp(escapedKeyword, 'gi');
                     return regex.test(cautionsText);
                 }
             });

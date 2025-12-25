@@ -2063,9 +2063,9 @@ function detectAllergens(isAutoDetect = true) {
                             found = true;
                         }
                     } else {
-                        // 2글자 이상: 단어 경계를 고려한 매칭 (예: '우유'가 '두유'에 매칭되지 않도록)
+                        // 2글자 이상: 단순 포함 여부로 체크 (탈지대두에서 대두 찾기)
                         const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                        const regex = new RegExp(escapedKeyword, 'gi');
                         if (regex.test(rawmtrlText)) {
                             found = true;
                         }
@@ -3044,8 +3044,9 @@ function checkAllergenDuplication() {
                     matchedBy = `직접매칭(단일문자): ${keyword}`;
                 }
             } else {
+                // 2글자 이상: 단순 포함 여부로 체크 (탈지대두에서 대두 찾기)
                 const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                const regex = new RegExp(escapedKeyword, 'gi');
                 if (regex.test(cleanIngredients)) {
                     found = true;
                     matchedBy = `직접매칭: ${keyword}`;
@@ -3080,8 +3081,9 @@ function checkAllergenDuplication() {
                     const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
                     return regex.test(cautionsText);
                 } else {
+                    // 2글자 이상: 단순 포함 여부로 체크
                     const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    const regex = new RegExp(`(?:^|[\\s,():\\[\\]])${escapedKeyword}(?=$|[\\s,():\\[\\]])`, 'gi');
+                    const regex = new RegExp(escapedKeyword, 'gi');
                     return regex.test(cautionsText);
                 }
             });
