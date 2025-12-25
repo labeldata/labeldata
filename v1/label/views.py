@@ -55,9 +55,7 @@ def log_user_activity(request, category, action, target_id=None):
                 user=request.user,
                 category=category,
                 action=action,
-                target_id=str(target_id) if target_id else None,
-                ip_address=request.META.get('REMOTE_ADDR', ''),
-                user_agent=request.META.get('HTTP_USER_AGENT', '')[:255]
+                target_id=str(target_id) if target_id else None
             )
     except Exception:
         pass  # 로깅 실패해도 기능에는 영향 없도록
@@ -603,9 +601,7 @@ def label_creation(request, label_id=None):
                     user=request.user,
                     category='validation',
                     action='allergen_auto_detect',
-                    target_id=str(label.my_label_id) if label.my_label_id else None,
-                    ip_address=request.META.get('REMOTE_ADDR', ''),
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')[:255]
+                    target_id=str(label.my_label_id) if label.my_label_id else None
                 )
 
             # 맞춤항목 저장
