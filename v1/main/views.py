@@ -39,6 +39,7 @@ def home(request):
                 'ingredient_info': current_label.ingredient_info or '',
                 'prdlst_dcnm': current_label.prdlst_dcnm or '',
                 'prdlst_report_no': current_label.prdlst_report_no or '',
+                'report_no_verify_YN': current_label.report_no_verify_YN or 'N',  # 검증 상태 추가
                 'content_weight': current_label.content_weight or '',
                 'weight_calorie': current_label.weight_calorie or '',
                 'country_of_origin': current_label.country_of_origin or '',
@@ -173,7 +174,49 @@ def save_label(request):
         label.prdlst_nm = data.get('prdlst_nm', '')
         label.ingredient_info = data.get('ingredient_info', '')
         label.prdlst_dcnm = data.get('prdlst_dcnm', '')
-        label.prdlst_report_no = data.get('prdlst_report_no', '')
+        
+        # 품목보고번호 변경 감지 및 검증 상태 관리
+        new_prdlst_report_no = data.get('prdlst_report_no', '')
+        new_verify_status = data.get('report_no_verify_YN', 'N')  # 클라이언트에서 보낸 검증 상태
+        
+        print(f"🔍 [DEBUG] 품목보고번호 처리:")
+        print(f"  - 새 번호: {new_prdlst_report_no}")
+        print(f"  - 새 검증상태: {new_verify_status}")
+        print(f"  - is_update: {is_update}")
+        
+        if is_update:
+            # 기존 라벨 업데이트 시
+            orig_label = MyLabel.objects.get(my_label_id=label_id)
+            print(f"  - 기존 번호: {orig_label.prdlst_report_no}")
+            print(f"  - 기존 검증상태: {orig_label.report_no_verify_YN}")
+            
+            label.prdlst_report_no = new_prdlst_report_no
+            
+            if orig_label.prdlst_report_no != new_prdlst_report_no:
+                # 품목보고번호가 변경된 경우
+                print(f"  ✅ 번호 변경됨 - 새 검증상태 사용: {new_verify_status}")
+                # 클라이언트에서 새 번호에 대한 검증 상태를 보냈으면 사용, 없으면 'N'
+                label.report_no_verify_YN = new_verify_status if new_verify_status else 'N'
+            else:
+                # 품목보고번호가 변경되지 않은 경우
+                print(f"  ⚠️ 번호 유지")
+                # 클라이언트에서 검증 상태를 보냈으면 그것을 사용, 없으면 기존 상태 유지
+                if new_verify_status and new_verify_status != 'N':
+                    print(f"  ✅ 새 검증상태 사용: {new_verify_status}")
+                    label.report_no_verify_YN = new_verify_status
+                else:
+                    print(f"  ✅ 기존 검증상태 유지: {orig_label.report_no_verify_YN}")
+                    label.report_no_verify_YN = orig_label.report_no_verify_YN
+        else:
+            # 신규 생성 시
+            print(f"  ✅ 신규 생성 - 검증상태: {new_verify_status}")
+            label.prdlst_report_no = new_prdlst_report_no
+            # 클라이언트에서 검증 상태를 보냈으면 사용, 없으면 'N'
+            label.report_no_verify_YN = new_verify_status if new_verify_status else 'N'
+        
+        print(f"  💾 최종 저장 값: report_no={label.prdlst_report_no}, verify_YN={label.report_no_verify_YN}")
+        print(f"")  # 빈 줄
+        
         label.content_weight = data.get('content_weight', '')
         label.weight_calorie = data.get('weight_calorie', '')
         

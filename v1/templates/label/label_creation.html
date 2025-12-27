@@ -215,6 +215,8 @@
             {% csrf_token %}
             <!-- 라벨명 필드를 실제 폼 필드로 포함 - name 속성 확인 -->
             <input type="hidden" name="my_label_name" id="my_label_name_hidden" value="{{ label.my_label_name|default:'' }}">
+            <!-- 품목보고번호 검증 상태 hidden input -->
+            <input type="hidden" name="report_no_verify_YN" id="report_no_verify_YN" value="{{ label.report_no_verify_YN|default:'N' }}">
             <input type="hidden" id="hidden_food_group" name="food_group" value="{{ label.food_group }}">
             <input type="hidden" id="hidden_food_type" name="food_type" value="{{ label.food_type }}">
             <input type="hidden" id="hidden_preservation_type" name="preservation_type" value="{{ label.preservation_type }}">

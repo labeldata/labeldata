@@ -581,14 +581,28 @@ def label_creation(request, label_id=None):
                     if corresponding_checkbox not in checkbox_fields:
                         setattr(label, field_name, 'N')
 
-            # 품목보고번호 변경 시 검증여부 N으로 초기화
+            # 품목보고번호 변경 감지 및 검증 상태 관리
+            # POST 데이터에서 전달된 검증 상태 확인 (프론트엔드에서 검증 후 전달)
+            post_verify_status = request.POST.get('report_no_verify_YN', '').strip()
+            
             if label_id:
                 orig_label = MyLabel.objects.get(my_label_id=label_id)
-                if orig_label.prdlst_report_no != label.prdlst_report_no:
+                
+                # 1. POST로 검증 상태가 명시적으로 전달된 경우 우선 사용
+                if post_verify_status and post_verify_status in ['Y', 'N', 'F', 'R']:
+                    label.report_no_verify_YN = post_verify_status
+                # 2. 품목보고번호가 변경된 경우 'N'으로 초기화
+                elif orig_label.prdlst_report_no != label.prdlst_report_no:
                     label.report_no_verify_YN = 'N'
+                # 3. 번호 변경도 없고 POST 데이터도 없으면 기존 상태 유지
+                else:
+                    label.report_no_verify_YN = orig_label.report_no_verify_YN
             else:
-                # 신규 생성 시에도 무조건 N
-                label.report_no_verify_YN = 'N'
+                # 신규 생성 시: POST 데이터가 있으면 사용, 없으면 'N'
+                if post_verify_status and post_verify_status in ['Y', 'N', 'F', 'R']:
+                    label.report_no_verify_YN = post_verify_status
+                else:
+                    label.report_no_verify_YN = 'N'
             
             # 알레르기 정보 저장 (원재료 사용 알레르기만 DB 저장)
             allergens_input = request.POST.get('allergens', '')
@@ -2252,6 +2266,11 @@ def verify_report_no(request):
     
     # 1. 품목보고번호 형식 검증 (13~15자리 숫자)
     if not re.match(r'^\d{13,15}$', prdlst_report_no):
+        # 형식 오류 상태 저장
+        if label:
+            label.report_no_verify_YN = 'F'
+            label.save(update_fields=['report_no_verify_YN'])
+        
         return JsonResponse({
             'verified': False,
             'status': 'format_error',
@@ -2265,6 +2284,11 @@ def verify_report_no(request):
         year = int(year_part)
         current_year = 2025
         if year < 1960 or year > current_year + 1:
+            # 규칙 오류 상태 저장
+            if label:
+                label.report_no_verify_YN = 'R'
+                label.save(update_fields=['report_no_verify_YN'])
+            
             return JsonResponse({
                 'verified': False,
                 'status': 'rule_error',
@@ -2272,6 +2296,11 @@ def verify_report_no(request):
                 'message': f'품목보고번호의 연도({year})가 유효하지 않습니다. (1960-{current_year + 1})'
             })
     except ValueError:
+        # ValueError도 형식 오류로 처리
+        if label:
+            label.report_no_verify_YN = 'F'
+            label.save(update_fields=['report_no_verify_YN'])
+        
         return JsonResponse({
             'verified': False,
             'status': 'format_error',
@@ -2285,6 +2314,18 @@ def verify_report_no(request):
         # 중복된 번호 (이미 신고되어 있음) - 해당 제품 정보 반환
         # rawmtrl_nm_sorted가 있으면 우선 사용, 없으면 rawmtrl_nm 사용
         rawmtrl_nm = food_item.rawmtrl_nm_sorted or food_item.rawmtrl_nm or ''
+        
+        # label이 있는 경우 검증 상태 업데이트
+        if label:
+            # 기존 품목보고번호와 검색한 번호가 다른 경우 상태를 'N'으로 설정
+            if label.prdlst_report_no != prdlst_report_no:
+                label.prdlst_report_no = prdlst_report_no
+                label.report_no_verify_YN = 'N'
+                label.save(update_fields=['prdlst_report_no', 'report_no_verify_YN'])
+            else:
+                # 번호가 동일한 경우에만 'Y'로 설정
+                label.report_no_verify_YN = 'Y'
+                label.save(update_fields=['report_no_verify_YN'])
         
         return JsonResponse({
             'verified': True,
@@ -2300,10 +2341,10 @@ def verify_report_no(request):
         })
     else:
         # 등록되지 않은 번호 (신고 가능)
-        # label이 있는 경우 품목보고번호와 검증여부 저장
+        # FoodItem DB에 없으므로 '미확인' 상태로 설정
         if label:
             label.prdlst_report_no = prdlst_report_no
-            label.report_no_verify_YN = 'Y'
+            label.report_no_verify_YN = 'N'
             label.save(update_fields=['prdlst_report_no', 'report_no_verify_YN'])
         
         return JsonResponse({

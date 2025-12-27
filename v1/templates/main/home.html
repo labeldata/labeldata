@@ -519,6 +519,7 @@ html, body {
                                 </div>
                                 <div class="form-input-cell">
                                     <input type="text" name="prdlst_report_no" class="form-control" placeholder="품목보고번호를 입력하세요 (예: 2024-12-34567890)" style="flex: 1; min-width: 0;">
+                                    <input type="hidden" id="report_no_verify_yn_value" value="">
                                     <button type="button" class="btn btn-outline-primary btn-sm" id="verifyReportNoBtn" onclick="verifyReportNo()" style="white-space: nowrap;">번호검증</button>
                                     <button type="button" class="btn btn-success btn-sm" id="copyProductDataBtn" onclick="copyVerifiedProductData()" style="white-space: nowrap; display: none;">복사하기</button>
                                 </div>
@@ -1103,6 +1104,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (labelData.ingredient_info) form.querySelector('[name="ingredient_info"]').value = labelData.ingredient_info;
         if (labelData.prdlst_dcnm) form.querySelector('[name="prdlst_dcnm"]').value = labelData.prdlst_dcnm;
         if (labelData.prdlst_report_no) form.querySelector('[name="prdlst_report_no"]').value = labelData.prdlst_report_no;
+        
+        // 품목보고번호 검증 상태 복원 (리스트 표시용)
+        if (labelData.report_no_verify_YN) {
+            const hiddenInput = document.getElementById('report_no_verify_yn_value');
+            if (hiddenInput) {
+                hiddenInput.value = labelData.report_no_verify_YN;
+            }
+        }
+        
         if (labelData.content_weight) form.querySelector('[name="content_weight"]').value = labelData.content_weight;
         if (labelData.weight_calorie) form.querySelector('[name="weight_calorie"]').value = labelData.weight_calorie;
         

@@ -137,7 +137,6 @@ function loadSampleData(type) {
     // 저장 및 미리보기 업데이트
     saveToLocalStorage();
     updatePreview();
-    showToast(`${getSampleName(type)} 샘플 데이터가 로딩되었습니다.`);
 }
 
 function getSampleName(type) {
@@ -203,7 +202,6 @@ function resetAllData() {
         if (button1399) {
             toggleQuickText(button1399);
         }
-        showToast('모든 데이터가 초기화되었습니다.');
     }, 100);
 }
 
@@ -296,6 +294,89 @@ function collectFormData() {
             data[field.name] = field.value;
         }
     });
+    
+    // 품목보고번호 검증 상태 추가
+    const reportNo = data.prdlst_report_no?.trim();
+    
+    if (reportNo) {
+        try {
+            // 1단계: 메모리 캐시 확인
+            if (verificationCache.has(reportNo)) {
+                const cachedData = verificationCache.get(reportNo);
+                
+                let verifyStatus = 'N';
+                if (cachedData.status === 'completed') {
+                    verifyStatus = 'Y';
+                } else if (cachedData.status === 'available') {
+                    verifyStatus = 'N';
+                } else if (cachedData.status === 'format_error') {
+                    verifyStatus = 'F';
+                } else if (cachedData.status === 'rule_error') {
+                    verifyStatus = 'R';
+                }
+                data.report_no_verify_YN = verifyStatus;
+                
+                const hiddenInput = document.getElementById('report_no_verify_YN');
+                if (hiddenInput) {
+                    hiddenInput.value = verifyStatus;
+                }
+                return data;
+            }
+            
+            // 2단계: localStorage 확인
+            const storageKey = 'verification_demo_v2';
+            const stored = localStorage.getItem(storageKey);
+            
+            if (stored) {
+                const verificationData = JSON.parse(stored);
+                const now = Date.now();
+                
+                if (verificationData.reportNo === reportNo && now <= verificationData.expiresAt) {
+                    let verifyStatus = 'N';
+                    if (verificationData.status === 'completed') {
+                        verifyStatus = 'Y';
+                    } else if (verificationData.status === 'available') {
+                        verifyStatus = 'N';
+                    } else if (verificationData.status === 'format_error') {
+                        verifyStatus = 'F';
+                    } else if (verificationData.status === 'rule_error') {
+                        verifyStatus = 'R';
+                    }
+                    data.report_no_verify_YN = verifyStatus;
+                    
+                    const hiddenInput = document.getElementById('report_no_verify_YN');
+                    if (hiddenInput) {
+                        hiddenInput.value = verifyStatus;
+                    }
+                } else {
+                    data.report_no_verify_YN = 'N';
+                    const hiddenInput = document.getElementById('report_no_verify_YN');
+                    if (hiddenInput) {
+                        hiddenInput.value = 'N';
+                    }
+                }
+            } else {
+                data.report_no_verify_YN = 'N';
+                const hiddenInput = document.getElementById('report_no_verify_YN');
+                if (hiddenInput) {
+                    hiddenInput.value = 'N';
+                }
+            }
+        } catch (e) {
+            // 검증 상태 추출 실패
+            data.report_no_verify_YN = 'N';
+            const hiddenInput = document.getElementById('report_no_verify_YN');
+            if (hiddenInput) {
+                hiddenInput.value = 'N';
+            }
+        }
+    } else {
+        data.report_no_verify_YN = 'N';
+        const hiddenInput = document.getElementById('report_no_verify_YN');
+        if (hiddenInput) {
+            hiddenInput.value = 'N';
+        }
+    }
     
     // 분리배출마크 데이터 추가
     if (window.recyclingMarkData) {
@@ -706,38 +787,15 @@ function showLoginModal() {
     modal.show();
 }
 
-// ==================== 토스트 알림 ====================
-function showToast(message) {
-    const toastHtml = `
-        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
-            <div class="toast show" role="alert">
-                <div class="toast-header">
-                    <i class="fas fa-info-circle me-2 text-primary"></i>
-                    <strong class="me-auto">알림</strong>
-                    <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-                </div>
-                <div class="toast-body">
-                    ${message}
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const toastElement = document.createElement('div');
-    toastElement.innerHTML = toastHtml;
-    document.body.appendChild(toastElement);
-    
-    setTimeout(() => {
-        toastElement.remove();
-    }, 3000);
-}
-
 // ==================== 품목보고번호 검증 기능 ====================
 // 검증된 제품 정보를 저장할 전역 변수
 let verifiedProductData = null;
 
 // 검증 이력 캐시 (중복 검증 방지)
 const verificationCache = new Map();
+
+// 캐시 유효 시간 설정 (30분)
+const CACHE_DURATION = 30 * 60 * 1000; // 30분 = 1800000ms
 
 // 오류 상태별 도움말
 const errorHelp = {
@@ -755,7 +813,7 @@ function verifyReportNo() {
     if (!btn) return;
     
     // 상태 복구: 완료된 상태에서 클릭 시 초기화
-    const completedStates = ['사용가능', '형식오류', '복사완료', '등록제품', '검증 중'];
+    const completedStates = ['사용가능', '형식오류', '복사완료', '등록제품', '검증 중', '검증실패'];
     const isCompleted = completedStates.some(state => btn.innerHTML.includes(state));
     
     if (isCompleted) {
@@ -793,6 +851,23 @@ function verifyReportNo() {
         return;
     }
 
+    // localStorage에서 캐시 확인 (페이지 새로고침 대응)
+    const cachedState = restoreVerificationState();
+    
+    if (cachedState && cachedState.status) {
+        // completed인데 productData가 없으면 캐시 무시하고 API 호출
+        if (cachedState.status === 'completed' && !cachedState.productData) {
+            clearVerificationState();
+        } else {
+            showCachedResult(btn, copyBtn, resultMsg, {
+                status: cachedState.status,
+                product_data: cachedState.productData,
+                verified: cachedState.status === 'available' || cachedState.status === 'completed'
+            });
+            return;
+        }
+    }
+
     // 로딩 중 입력 비활성화
     btn.disabled = true;
     if (reportNoInput) reportNoInput.disabled = true;
@@ -814,7 +889,12 @@ function verifyReportNo() {
             prdlst_report_no: verifyReportNo 
         })
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        return res.json();
+    })
     .then(data => {
         // 결과 캐싱
         verificationCache.set(reportNo, data);
@@ -824,6 +904,13 @@ function verifyReportNo() {
             btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>사용가능';
             btn.className = 'btn btn-success btn-sm';
             btn.title = '등록된 품목보고번호로 사용 가능합니다';
+            
+            saveVerificationState('available', reportNo);
+            if (reportNoInput) {
+                reportNoInput.style.borderColor = '#28a745';
+                reportNoInput.style.boxShadow = '0 0 0 0.2rem rgba(40, 167, 69, 0.25)';
+                reportNoInput.style.backgroundColor = '#d4edda';
+            }
             return;
         }
         
@@ -834,6 +921,13 @@ function verifyReportNo() {
             btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>등록제품';
             btn.className = 'btn btn-info btn-sm';
             btn.title = '식품안전나라에 등록된 제품입니다';
+            
+            saveVerificationState('completed', reportNo, data.product_data);
+            if (reportNoInput) {
+                reportNoInput.style.borderColor = '#17a2b8';
+                reportNoInput.style.boxShadow = '0 0 0 0.2rem rgba(23, 162, 184, 0.25)';
+                reportNoInput.style.backgroundColor = '#d1ecf1';
+            }
             
             // 복사 버튼 표시 (애니메이션 효과)
             const copyBtn = document.getElementById('copyProductDataBtn');
@@ -860,7 +954,58 @@ function verifyReportNo() {
         }
         
         // 실패 상태별 처리
-        handleVerificationError(btn, data);
+        const status = data.status || 'unknown';
+        let message = data.message || '검증에 실패했습니다.';
+        const resultMsg = document.getElementById('verifyResultMessage');
+        
+        switch(status) {
+            case 'format_error':
+                btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>형식오류';
+                btn.className = 'btn btn-warning btn-sm';
+                btn.title = '품목보고번호 형식이 올바르지 않습니다';
+                saveVerificationState('format_error', reportNo);
+                if (reportNoInput) {
+                    reportNoInput.style.borderColor = '#ffc107';
+                    reportNoInput.style.boxShadow = '0 0 0 0.2rem rgba(255, 193, 7, 0.25)';
+                    reportNoInput.style.backgroundColor = '#fff3cd';
+                }
+                if (resultMsg) {
+                    resultMsg.style.display = 'block';
+                    resultMsg.className = 'alert alert-warning mb-0';
+                    resultMsg.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>' + message;
+                }
+                break;
+                
+            case 'rule_error':
+                btn.innerHTML = '<i class="fas fa-times-circle me-1"></i>규칙오류';
+                btn.className = 'btn btn-danger btn-sm';
+                btn.title = '품목보고번호 규칙이 올바르지 않습니다';
+                saveVerificationState('rule_error', reportNo);
+                if (reportNoInput) {
+                    reportNoInput.style.borderColor = '#dc3545';
+                    reportNoInput.style.boxShadow = '0 0 0 0.2rem rgba(220, 53, 69, 0.25)';
+                    reportNoInput.style.backgroundColor = '#f8d7da';
+                }
+                if (resultMsg) {
+                    resultMsg.style.display = 'block';
+                    resultMsg.className = 'alert alert-danger mb-0';
+                    resultMsg.innerHTML = '<i class="fas fa-times-circle me-2"></i>' + message;
+                }
+                break;
+                
+            case 'not_found':
+            case 'error':
+            default:
+                btn.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>오류';
+                btn.className = 'btn btn-secondary btn-sm';
+                btn.title = '품목보고번호 검증 오류';
+                if (resultMsg) {
+                    resultMsg.style.display = 'block';
+                    resultMsg.className = 'alert alert-danger mb-0';
+                    resultMsg.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>' + message;
+                }
+                break;
+        }
     })
     .catch(err => {
         // 네트워크 오류는 일반 오류로 처리
@@ -870,34 +1015,6 @@ function verifyReportNo() {
         btn.disabled = false;
         if (reportNoInput) reportNoInput.disabled = false;
     });
-}
-
-// 캐시된 결과 표시 함수
-function showCachedResult(btn, copyBtn, resultMsg, data) {
-    if (data.verified && data.status === 'available') {
-        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>사용가능';
-        btn.className = 'btn btn-success btn-sm';
-        btn.title = '등록된 품목보고번호로 사용 가능합니다 (캐시됨)';
-    } else if (data.status === 'completed' && data.product_data) {
-        verifiedProductData = data.product_data;
-        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>등록제품';
-        btn.className = 'btn btn-info btn-sm';
-        btn.title = '식품안전나라에 등록된 제품입니다 (캐시됨)';
-        
-        if (copyBtn) {
-            copyBtn.style.display = 'inline-block';
-            copyBtn.innerHTML = '복사하기';
-            copyBtn.className = 'btn btn-success btn-sm';
-        }
-        
-        if (resultMsg) {
-            resultMsg.style.display = 'block';
-            resultMsg.className = 'alert alert-info mb-0';
-            resultMsg.innerHTML = '<i class="fas fa-info-circle me-2"></i>식품안전나라에 등록된 제품입니다. 복사 버튼을 눌러 정보를 가져올 수 있습니다.';
-        }
-    } else {
-        handleVerificationError(btn, data);
-    }
 }
 
 // 제품 정보 자동 입력 함수
@@ -985,24 +1102,72 @@ function applyProductData(btn, productData) {
 // 검증된 제품 정보 복사 함수
 function copyVerifiedProductData() {
     if (!verifiedProductData) {
+        alert('복사할 제품 정보가 없습니다.');
         return;
     }
     
+    const btn = document.getElementById('verifyReportNoBtn');
     const copyBtn = document.getElementById('copyProductDataBtn');
-    const verifyBtn = document.getElementById('verifyReportNoBtn');
-    const resultMsg = document.getElementById('verifyResultMessage');
     
-    // 제품 정보 적용
-    applyProductData(verifyBtn, verifiedProductData);
+    // 정보 적용
+    applyProductData(btn, verifiedProductData);
     
     // 복사 버튼 숨기기
     if (copyBtn) {
         copyBtn.style.display = 'none';
     }
     
-    // 결과 메시지 숨김
+    // 검증 버튼 상태 업데이트
+    btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>복사완료';
+    btn.className = 'btn btn-success btn-sm';
+    btn.title = '제품 정보를 성공적으로 불러왔습니다';
+    
+    // 결과 메시지 숨기기
+    const resultMsg = document.getElementById('verifyResultMessage');
     if (resultMsg) {
         resultMsg.style.display = 'none';
+    }
+    
+    // 전역 변수 초기화
+    verifiedProductData = null;
+}
+
+// 캐시된 결과 표시 함수
+function showCachedResult(btn, copyBtn, resultMsg, data) {
+    const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
+    
+    if (data.verified && data.status === 'available') {
+        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>사용가능';
+        btn.className = 'btn btn-success btn-sm';
+        btn.title = '등록된 품목보고번호로 사용 가능합니다 (캐시됨)';
+        if (reportNoInput) {
+            reportNoInput.style.borderColor = '#28a745';
+            reportNoInput.style.boxShadow = '0 0 0 0.2rem rgba(40, 167, 69, 0.25)';
+            reportNoInput.style.backgroundColor = '#d4edda';
+        }
+    } else if (data.status === 'completed' && data.product_data) {
+        verifiedProductData = data.product_data;
+        btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>등록제품';
+        btn.className = 'btn btn-info btn-sm';
+        btn.title = '식품안전나라에 등록된 제품입니다 (캐시됨)';
+        
+        if (reportNoInput) {
+            reportNoInput.style.borderColor = '#17a2b8';
+            reportNoInput.style.boxShadow = '0 0 0 0.2rem rgba(23, 162, 184, 0.25)';
+            reportNoInput.style.backgroundColor = '#d1ecf1';
+        }
+        
+        if (copyBtn) {
+            copyBtn.style.display = 'inline-block';
+        }
+        
+        if (resultMsg) {
+            resultMsg.style.display = 'block';
+            resultMsg.className = 'alert alert-info mb-0';
+            resultMsg.innerHTML = '<i class="fas fa-info-circle me-2"></i>식품안전나라에 등록된 제품입니다. 복사 버튼을 눌러 정보를 가져올 수 있습니다.';
+        }
+    } else {
+        handleVerificationError(btn, data);
     }
 }
 
@@ -1010,50 +1175,172 @@ function copyVerifiedProductData() {
 function handleVerificationError(btn, data) {
     const status = data.status || 'unknown';
     let message = data.message || '검증에 실패했습니다.';
+    const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
+    const resultMsg = document.getElementById('verifyResultMessage');
     
     switch(status) {
         case 'format_error':
-        case 'rule_error':
-            btn.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>형식오류';
+            btn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>형식오류';
             btn.className = 'btn btn-warning btn-sm';
             btn.title = '품목보고번호 형식이 올바르지 않습니다';
+            if (reportNoInput) {
+                reportNoInput.style.borderColor = '#ffc107';
+                reportNoInput.style.boxShadow = '0 0 0 0.2rem rgba(255, 193, 7, 0.25)';
+                reportNoInput.style.backgroundColor = '#fff3cd';
+            }
             break;
-            
-        case 'not_found':
-        case 'error':
+        case 'rule_error':
+            btn.innerHTML = '<i class="fas fa-times-circle me-1"></i>규칙오류';
+            btn.className = 'btn btn-danger btn-sm';
+            btn.title = '품목보고번호 규칙이 올바르지 않습니다';
+            if (reportNoInput) {
+                reportNoInput.style.borderColor = '#dc3545';
+                reportNoInput.style.boxShadow = '0 0 0 0.2rem rgba(220, 53, 69, 0.25)';
+                reportNoInput.style.backgroundColor = '#f8d7da';
+            }
+            break;
         default:
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>검증 중...';
-            btn.className = 'btn btn-secondary btn-sm';
-            btn.title = '품목보고번호 검증 중';
-            break;
-            
-        case 'completed':
-            btn.innerHTML = '<i class="fas fa-info-circle me-1"></i>중복확인';
-            btn.className = 'btn btn-info btn-sm';
-            btn.title = '이미 등록된 번호입니다';
+            btn.innerHTML = '<i class="fas fa-times-circle me-1"></i>검증실패';
+            btn.className = 'btn btn-danger btn-sm';
+            btn.title = message;
             break;
     }
     
-    // 결과 메시지 표시 (도움말 포함)
-    const resultMsg = document.getElementById('verifyResultMessage');
     if (resultMsg) {
         resultMsg.style.display = 'block';
-        let alertClass = 'alert-warning';
-        
-        if (status === 'not_found' || status === 'error') {
-            alertClass = 'alert-danger';
-        }
-        
-        const helpText = errorHelp[status] || '';
-        resultMsg.className = 'alert ' + alertClass + ' mb-0';
-        resultMsg.innerHTML = `
-            <i class="fas fa-exclamation-triangle me-2"></i>${message}
-            ${helpText ? '<br><small class="text-muted">' + helpText + '</small>' : ''}
-        `;
+        resultMsg.className = 'alert alert-danger mb-0';
+        resultMsg.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>' + message;
+        resultMsg.style.opacity = '0';
+        resultMsg.style.transition = 'opacity 0.3s ease-in';
+        setTimeout(() => { resultMsg.style.opacity = '1'; }, 10);
     }
 }
 
-// 네트워크 오류 처리 함수 삭제됨 (catch 블록에서 일반 오류로 처리)
+// 검증 상태 저장 함수 (localStorage + 만료시간)
+function saveVerificationState(status, reportNo, productData = null) {
+    try {
+        const demoKey = 'verification_demo_v2';
+        
+        const verificationData = {
+            status: status,
+            reportNo: reportNo,
+            timestamp: new Date().toISOString(),
+            expiresAt: Date.now() + CACHE_DURATION,
+            productData: productData
+        };
+        
+        // 간편모드 키에 저장
+        localStorage.setItem(demoKey, JSON.stringify(verificationData));
+        
+        // 상세모드와의 호환성을 위해 label_id가 있으면 해당 키에도 저장
+        const labelId = document.getElementById('label_id')?.value;
+        if (labelId) {
+            const detailKey = `verification_${labelId}`;
+            localStorage.setItem(detailKey, JSON.stringify(verificationData));
+        }
+    } catch (e) {
+        // 검증 상태 저장 실패
+    }
+}
+
+// 검증 상태 복원 함수 (localStorage에서 읽기)
+function restoreVerificationState() {
+    try {
+        const demoKey = 'verification_demo_v2';
+        let stored = localStorage.getItem(demoKey);
+        
+        // 간편모드 키에 없으면 상세모드 키 확인
+        if (!stored) {
+            const labelId = document.getElementById('label_id')?.value;
+            if (labelId) {
+                const detailKey = `verification_${labelId}`;
+                stored = localStorage.getItem(detailKey);
+            }
+        }
+        
+        if (!stored) {
+            return null;
+        }
+        
+        const data = JSON.parse(stored);
+        const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
+        const reportNo = reportNoInput?.value?.trim();
+        
+        // 저장된 품목보고번호와 현재 입력된 번호가 다르면 삭제
+        if (data.reportNo !== reportNo) {
+            localStorage.removeItem(demoKey);
+            const labelId = document.getElementById('label_id')?.value;
+            if (labelId) {
+                localStorage.removeItem(`verification_${labelId}`);
+            }
+            return null;
+        }
+        
+        // 만료 시간 체크
+        const now = Date.now();
+        if (now > data.expiresAt) {
+            localStorage.removeItem(demoKey);
+            const labelId = document.getElementById('label_id')?.value;
+            if (labelId) {
+                localStorage.removeItem(`verification_${labelId}`);
+            }
+            return null;
+        }
+        
+        return data;
+    } catch (e) {
+        // 검증 상태 복원 실패
+        return null;
+    }
+}
+
+// 검증 상태 초기화 함수
+function clearVerificationState() {
+    const btn = document.getElementById('verifyReportNoBtn');
+    if (btn) {
+        btn.innerHTML = '번호검증';
+        btn.className = 'btn btn-outline-primary btn-sm';
+        btn.title = 'API 중복 검사 및 번호 규칙 검증';
+    }
+    
+    const copyBtn = document.getElementById('copyProductDataBtn');
+    if (copyBtn) {
+        copyBtn.style.display = 'none';
+    }
+    
+    const resultMsg = document.getElementById('verifyResultMessage');
+    if (resultMsg) {
+        resultMsg.style.display = 'none';
+    }
+    
+    const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
+    if (reportNoInput) {
+        reportNoInput.style.borderColor = '';
+        reportNoInput.style.boxShadow = '';
+        reportNoInput.style.backgroundColor = '';
+    }
+    
+    // hidden input도 초기화
+    const hiddenInput = document.getElementById('report_no_verify_YN');
+    if (hiddenInput) {
+        hiddenInput.value = 'N';
+    }
+    
+    verifiedProductData = null;
+    
+    // localStorage에서도 제거
+    try {
+        localStorage.removeItem('verification_demo_v2');
+        
+        // 상세모드 키도 제거
+        const labelId = document.getElementById('label_id')?.value;
+        if (labelId) {
+            localStorage.removeItem(`verification_${labelId}`);
+        }
+    } catch (e) {
+        // 검증 상태 삭제 실패
+    }
+}
 
 // getCookie 함수 (CSRF 토큰용)
 function getCookie(name) {
@@ -1089,9 +1376,27 @@ document.addEventListener('DOMContentLoaded', function() {
         window.selectedCrossContaminationAllergens = new Set();
     }
     
-    // 품목보고번호 실시간 형식 검증
+    // 모드 전환으로 저장된 품목보고번호 복원
     const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
     if (reportNoInput) {
+        try {
+            const savedReportNo = localStorage.getItem('mode_switch_report_no');
+            if (savedReportNo && savedReportNo.trim()) {
+                // 현재 입력값이 없거나 DB 값인 경우에만 복원
+                if (!reportNoInput.value || reportNoInput.value.trim() === '') {
+                    reportNoInput.value = savedReportNo;
+                }
+                // 사용 후 삭제
+                localStorage.removeItem('mode_switch_report_no');
+            }
+        } catch (e) {
+            // 품목보고번호 복원 실패
+        }
+    }
+    
+    // 품목보고번호 실시간 형식 검증
+    if (reportNoInput) {
+        // 입력 이벤트 - 실시간 형식 검증
         reportNoInput.addEventListener('input', function(e) {
             const value = e.target.value;
             // 품목보고번호 패턴: YYYY-MM-XXXXXXXX (예: 2024-12-01234567)
@@ -1116,6 +1421,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.target.style.borderColor = '';
                 e.target.style.boxShadow = '';
             }
+            
+            // 번호가 변경되면 검증 상태 초기화
+            clearVerificationState();
         });
     }
     
@@ -1157,6 +1465,27 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // localStorage에서 이전 데이터 복원
     loadFromLocalStorage();
+    
+    // localStorage 데이터 복원 후 검증 상태 복원 (지연 실행)
+    setTimeout(() => {
+        const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
+        const reportNo = reportNoInput?.value?.trim();
+        
+        if (reportNo) {
+            const cachedState = restoreVerificationState();
+            if (cachedState && cachedState.status) {
+                const btn = document.getElementById('verifyReportNoBtn');
+                const copyBtn = document.getElementById('copyProductDataBtn');
+                const resultMsg = document.getElementById('verifyResultMessage');
+                
+                showCachedResult(btn, copyBtn, resultMsg, {
+                    status: cachedState.status,
+                    product_data: cachedState.productData,
+                    verified: cachedState.status === 'available' || cachedState.status === 'completed'
+                });
+            }
+        }
+    }, 300);
 
     // ==================== 식품유형 선택기 (Select2 적용) ====================
     const foodGroupSelect = $('#food_group');
@@ -1326,7 +1655,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     } else {
-        console.error('❌ demoForm을 찾을 수 없습니다');
+        // demoForm을 찾을 수 없습니다
     }
 
     // ==================== 설정 패널 ====================
@@ -1516,8 +1845,6 @@ function downloadAsPDF() {
         return;
     }
 
-    showToast('PDF 생성을 시작합니다. 잠시만 기다려주세요...');
-
     // 현재 설정된 가로/세로 길이 가져오기 (미리보기 팝업과 동일)
     const widthInput = document.getElementById('widthInput');
     const heightInput = document.getElementById('heightInput');
@@ -1587,8 +1914,6 @@ function downloadAsPDF() {
             // 메모리 해제
             URL.revokeObjectURL(blobUrl);
 
-            showToast('PDF 파일 저장이 시작되었습니다.');
-
         } catch (error) {
             console.error('PDF 생성 중 오류 발생:', error);
             alert('PDF를 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
@@ -1639,8 +1964,6 @@ function saveLabelData() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast(data.message || '표시사항이 저장되었습니다!');
-            
             // localStorage 데이터 초기화
             localStorage.removeItem('demo_label_data');
             
@@ -1725,6 +2048,16 @@ function showFeatureModal(featureType) {
 
 // 작성 페이지로 전환 (기존 함수 유지)
 function switchToEditor() {
+    // 현재 입력된 품목보고번호를 localStorage에 저장 (모드 전환 시 전달용)
+    const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
+    if (reportNoInput && reportNoInput.value.trim()) {
+        try {
+            localStorage.setItem('mode_switch_report_no', reportNoInput.value.trim());
+        } catch (e) {
+            // 품목보고번호 저장 실패
+        }
+    }
+    
     const labelId = new URLSearchParams(window.location.search).get('label_id');
     if (labelId) {
         // 기존 표시사항이 있으면 해당 ID로 이동
@@ -2947,7 +3280,7 @@ function saveAllergensToStorage() {
         localStorage.setItem('labeldata_crossContaminationAllergens', JSON.stringify([...window.selectedCrossContaminationAllergens]));
         localStorage.setItem('labeldata_timestamp', timestamp);
     } catch (e) {
-        console.error('알레르기 정보 저장 실패:', e);
+        // 알레르기 정보 저장 실패
     }
 }
 
