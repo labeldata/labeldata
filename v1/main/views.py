@@ -35,6 +35,7 @@ def home(request):
             current_label_id = label_id
             # JSON 직렬화
             current_label_json = json.dumps({
+                'my_label_name': current_label.my_label_name or '',
                 'prdlst_nm': current_label.prdlst_nm or '',
                 'ingredient_info': current_label.ingredient_info or '',
                 'prdlst_dcnm': current_label.prdlst_dcnm or '',
@@ -166,9 +167,15 @@ def save_label(request):
         if not data.get('prdlst_nm'):
             return JsonResponse({'success': False, 'error': '제품명은 필수입니다.'}, status=400)
         
-        # 라벨명 설정 (신규 생성 시만)
-        if not is_update:
+        # 라벨명 설정
+        label_name = data.get('label_name', '').strip()
+        if label_name:
+            # 사용자가 입력한 라벨명 사용
+            label.my_label_name = label_name
+        elif not is_update:
+            # 신규 생성 시만 자동 생성
             label.my_label_name = data.get('prdlst_nm', '표시사항') + '_' + timezone.now().strftime('%Y%m%d')
+        # is_update이고 label_name이 비어있으면 기존 값 유지
         
         # 기본 정보
         label.prdlst_nm = data.get('prdlst_nm', '')

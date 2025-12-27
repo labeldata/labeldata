@@ -350,10 +350,19 @@ def create_new_label(request):
         )
 
         # 생성된 라벨의 편집 페이지 URL 생성
-        mode = request.GET.get('mode', '') or request.POST.get('mode', '')
-        redirect_url = reverse('label:label_creation', kwargs={'label_id': new_label.my_label_id})
-        if mode:
-            redirect_url += f'?mode={mode}'
+        mode = request.GET.get('mode', '')
+        if request.method == 'POST':
+            try:
+                body = json.loads(request.body)
+                mode = body.get('mode', mode)
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        
+        # 간편 모드면 홈 페이지로, 상세 모드면 상세 편집 페이지로 리다이렉트
+        if mode == 'simple':
+            redirect_url = f'/?label_id={new_label.my_label_id}'
+        else:
+            redirect_url = reverse('label:label_creation', kwargs={'label_id': new_label.my_label_id})
         
         if request.method == 'POST':
             return JsonResponse({'success': True, 'redirect_url': redirect_url})

@@ -1099,6 +1099,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // 폼 필드에 데이터 채우기
         const form = document.getElementById('demoForm');
         if (form && labelData) {
+        // 라벨명
+        if (labelData.my_label_name) {
+            const labelNameField = form.querySelector('[name="label_name"]');
+            if (labelNameField) {
+                labelNameField.value = labelData.my_label_name;
+                // 라벨명 체크박스도 체크
+                const chkLabelName = document.getElementById('chk_label_name');
+                if (chkLabelName) chkLabelName.checked = true;
+            }
+        }
+        
         // 기본 정보
         if (labelData.prdlst_nm) form.querySelector('[name="prdlst_nm"]').value = labelData.prdlst_nm;
         if (labelData.ingredient_info) form.querySelector('[name="ingredient_info"]').value = labelData.ingredient_info;
@@ -1138,7 +1149,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // 체크박스 상태 복원
         if (typeof labelData.chk_prdlst_nm !== 'undefined') {
             const checkboxes = [
-                'chk_prdlst_nm', 'chk_ingredient_info', 'chk_prdlst_dcnm', 
+                'chk_label_name', 'chk_prdlst_nm', 'chk_ingredient_info', 'chk_prdlst_dcnm', 
                 'chk_prdlst_report_no', 'chk_content_weight', 'chk_country_of_origin',
                 'chk_storage_method', 'chk_expiry_date', 'chk_rawmtrl_nm_display',
                 'chk_caution', 'chk_other_info', 'chk_packaging_material',

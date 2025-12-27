@@ -91,15 +91,28 @@ const sampleData = {
 
 // ==================== 샘플 데이터 로딩 ====================
 function loadSampleData(type) {
+    // 서버에서 라벨 데이터를 제공한 경우 샘플 데이터 로드 방지
+    if (window.hasServerLabelData) {
+        if (!confirm('현재 편집 중인 표시사항이 샘플 데이터로 덮어씌워집니다. 계속하시겠습니까?')) {
+            return;
+        }
+        // 사용자가 확인한 경우 플래그 제거
+        window.hasServerLabelData = false;
+    }
+    
     const data = sampleData[type];
     if (!data) return;
 
     const form = document.getElementById('demoForm');
     if (!form) return;
 
-    // 폼 초기화
-    form.reset();
+    // 샘플 데이터에 없는 항목 보존 (라벨명 등)
+    const preservedFields = {
+        label_name: form.querySelector('[name="label_name"]')?.value || '',
+        chk_label_name: document.getElementById('chk_label_name')?.checked || false
+    };
 
+    // 폼 초기화 대신 샘플 데이터에 있는 필드만 업데이트
     let loadedFields = 0;
 
     // 체크박스와 입력 필드 채우기
@@ -123,6 +136,15 @@ function loadSampleData(type) {
         }
     });
 
+    // 보존된 필드 복원
+    const labelNameField = form.querySelector('[name="label_name"]');
+    if (labelNameField && preservedFields.label_name) {
+        labelNameField.value = preservedFields.label_name;
+    }
+    const chkLabelName = document.getElementById('chk_label_name');
+    if (chkLabelName && preservedFields.chk_label_name) {
+        chkLabelName.checked = preservedFields.chk_label_name;
+    }
     
     // auto-resize textarea 높이 재조정 (샘플 데이터 로드 후)
     setTimeout(() => {
@@ -216,6 +238,11 @@ function saveToLocalStorage() {
 }
 
 function loadFromLocalStorage() {
+    // 서버에서 라벨 데이터를 제공한 경우 localStorage 로드 건너뛰기
+    if (window.hasServerLabelData) {
+        return;
+    }
+    
     try {
         const saved = localStorage.getItem('demo_label_data');
         if (saved) {

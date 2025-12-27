@@ -125,6 +125,9 @@ document.addEventListener("DOMContentLoaded", function () {
  */
 function createNewLabel() {
     if (confirm("새로운 표시사항을 작성하시겠습니까?")) {
+        // 선택된 모드 확인 (간편/상세)
+        const selectedMode = document.querySelector('input[name="viewMode"]:checked')?.value || 'detail';
+        
         // 서버의 생성 처리 URL로 POST 요청을 보냅니다.
         fetch('/label/create-new/', {
             method: 'POST',
@@ -132,7 +135,7 @@ function createNewLabel() {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
             },
-            body: JSON.stringify({}) // 필요 시 초기 데이터 전송
+            body: JSON.stringify({ mode: selectedMode }) // 선택된 모드 전송
         })
         .then(response => {
             if (!response.ok) {
