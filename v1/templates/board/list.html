@@ -7,8 +7,7 @@
     <div class="mb-1">
         <h2 class="mb-1">질문 및 요청</h2>
         <p class="text-muted" style="font-size: 0.875rem; margin-bottom: 1rem;">
-            문의사항을 남기고 다른 사용자와 소통합니다
-            {% if is_paginated %}
+            시스템 매뉴얼을 확인하고, 기능 요청 및 오류 제보 등을 게시하세요.            {% if is_paginated %}
                 <span class="ms-2">| 총 <strong>{{ page_obj.paginator.count }}</strong>개의 글</span>
             {% endif %}
         </p>
@@ -115,14 +114,12 @@
                         <td class="text-center" style="width: 10%;">
                             {% if board.is_notice %}
                                 <span class="text-primary fw-bold" style="font-size: 0.85rem;">공지사항</span>
-                            {% elif '[신기능 요청]' in board.title %}
-                                <span class="text-primary" style="font-size: 0.85rem;">신기능 요청</span>
+                            {% elif '[기능 요청]' in board.title %}
+                                <span class="text-primary" style="font-size: 0.85rem;">기능 요청</span>
                             {% elif '[오류 제보]' in board.title %}
                                 <span class="text-danger" style="font-size: 0.85rem;">오류 제보</span>
                             {% elif '[사업 제휴]' in board.title %}
                                 <span class="text-success" style="font-size: 0.85rem;">사업 제휴</span>
-                            {% elif '[가입인사]' in board.title %}
-                                <span class="text-info" style="font-size: 0.85rem;">가입인사</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
@@ -136,14 +133,12 @@
                                     <span class="badge bg-secondary text-white">내 글</span>
                                 {% endif %}
                                 <span class="board-title">
-                                    {% if '[신기능 요청]' in board.title %}
+                                    {% if '[기능 요청]' in board.title %}
                                         {{ board.title|slice:'8:' }}
                                     {% elif '[오류 제보]' in board.title %}
                                         {{ board.title|slice:'7:' }}
                                     {% elif '[사업 제휴]' in board.title %}
                                         {{ board.title|slice:'7:' }}
-                                    {% elif '[가입인사]' in board.title %}
-                                        {{ board.title|slice:'6:' }}
                                     {% else %}
                                         {{ board.title }}
                                     {% endif %}
@@ -163,14 +158,12 @@
                             <!-- 모바일: 추가 정보 표시 -->
                             <div class="d-sm-none mt-1">
                                 <small class="text-muted">
-                                    {% if '[신기능 요청]' in board.title %}
-                                        [신기능] | 
+                                    {% if '[기능 요청]' in board.title %}
+                                        [기능] | 
                                     {% elif '[오류 제보]' in board.title %}
                                         [오류] | 
                                     {% elif '[사업 제휴]' in board.title %}
                                         [제휴] | 
-                                    {% elif '[가입인사]' in board.title %}
-                                        [인사] | 
                                     {% endif %}
                                     {% if board.author.is_staff %}관리자{% else %}{{ board.author.email|slice:":2" }}****{% endif %} | 
                                     조회 {{ board.views }} | 

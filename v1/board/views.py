@@ -264,7 +264,7 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
             form.instance.is_notice = False
             # 기존 카테고리 제거 (수정 시)
             title_without_category = original_title
-            for cat in ['[신기능 요청]', '[오류 제보]', '[사업 제휴]', '[가입인사]']:
+            for cat in ['[기능 요청]', '[오류 제보]', '[사업 제휴]']:
                 if original_title.startswith(cat):
                     title_without_category = original_title[len(cat):].strip()
                     break
@@ -332,7 +332,7 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
             form.instance.is_notice = False
             # 기존 카테고리 제거 (수정 시)
             title_without_category = original_title
-            for cat in ['[신기능 요청]', '[오류 제보]', '[사업 제휴]', '[가입인사]']:
+            for cat in ['[기능 요청]', '[오류 제보]', '[사업 제휴]']:
                 if original_title.startswith(cat):
                     title_without_category = original_title[len(cat):].strip()
                     break
