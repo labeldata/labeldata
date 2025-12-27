@@ -1359,10 +1359,13 @@ def delete_my_ingredient(request, ingredient_id):
         log_user_activity(request, 'ingredient', 'ingredient_delete', ingredient_id)
         
         try:
-            ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id, user_id=request.user)
+            # 먼저 ID로 원료 조회
+            ingredient = get_object_or_404(MyIngredient, my_ingredient_id=ingredient_id)
+            
             # 공용 원료(user_id=None)는 삭제 불가
-            if getattr(ingredient, 'user_id', None) is None:
-                return JsonResponse({'success': False, 'error': '공용 원료는 삭제할 수 없습니다.'})
+            if ingredient.user_id is None:
+                return JsonResponse({'success': False, 'error': '정제수는 기본 원료로 삭제가 불가합니다.'})
+            
             LabelIngredientRelation.objects.filter(ingredient_id=ingredient.my_ingredient_id).delete()
             ingredient.delete_YN = 'Y'
             ingredient.save()
