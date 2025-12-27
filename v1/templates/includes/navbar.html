@@ -34,6 +34,17 @@
                 <a class="nav-link {% if 'board' in request.resolver_match.url_name or 'user_management' in request.resolver_match.url_name %}active{% endif %}" 
                    href="{% url 'board:list' %}">
                     게시판
+                    {% if board_notification_count > 0 %}
+                        <!-- 방법 1: 숫자 표시 (현재 방식) -->
+                        <span class="badge bg-danger rounded-pill ms-1">{{ board_notification_count }}</span>
+                        
+                        <!-- 방법 2: 점(dot) 표시 (아래 주석 해제하여 사용) -->
+                        <!-- <span class="position-relative">
+                            <span class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle" style="margin-left: 0.25rem;">
+                                <span class="visually-hidden">새 알림</span>
+                            </span>
+                        </span> -->
+                    {% endif %}
                 </a>
             </li>
         </ul>

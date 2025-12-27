@@ -118,6 +118,13 @@ class BoardListView(ListView):
         """페이지당 게시글 수 동적 설정"""
         return self.request.GET.get('per_page', 10)
 
+    def get(self, request, *args, **kwargs):
+        """게시판 방문 시 세션에 시간 기록"""
+        if request.user.is_authenticated:
+            from django.utils import timezone
+            request.session['board_last_visit'] = timezone.now().isoformat()
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self):
         queryset = Board.objects.select_related('author').prefetch_related('comments').annotate(
             is_notice_order=Case(

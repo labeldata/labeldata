@@ -66,6 +66,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'v1.common.context_processors.static_build_date',
+                'v1.common.context_processors.board_notifications',
             ],
         },
     },
@@ -139,6 +140,11 @@ LOGOUT_REDIRECT_URL = LOGIN_URL
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=False, cast=bool)
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=False, cast=bool)
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
+
+# 세션 설정
+SESSION_COOKIE_AGE = 43200  # 12시간 (12 * 60 * 60 초)
+SESSION_SAVE_EVERY_REQUEST = True  # 매 요청마다 세션 갱신 (사용자 활동 시 세션 연장)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # 브라우저 닫아도 세션 유지 (12시간까지)
 
 # Django 기본 데이터베이스 세션 사용 (권한 문제로 현재 작동하지 않음)
 # SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # 기본값
