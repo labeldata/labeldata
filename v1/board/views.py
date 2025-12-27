@@ -253,28 +253,28 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
             messages.error(self.request, '구분을 선택해주세요.')
             return self.form_invalid(form)
         
-        # 기존 카테고리 제거 (수정 시)
-        title_without_category = original_title
-        for cat in ['[신기능 요청]', '[오류 제보]', '[사업 제휴]', '[가입인사]']:
-            if original_title.startswith(cat):
-                title_without_category = original_title[len(cat):].strip()
-                break
-        
-        if category:
-            form.instance.title = f"[{category}] {title_without_category}"
+        # 공지사항 카테고리 처리
+        if category == '공지사항':
+            if not self.request.user.is_staff:
+                messages.error(self.request, '공지사항은 관리자만 작성할 수 있습니다.')
+                return self.form_invalid(form)
+            form.instance.is_notice = True
+            form.instance.title = original_title  # 공지사항은 제목에 프리픽스 없이
         else:
-            form.instance.title = title_without_category
-        
-        # 관리자가 아닌 경우 공지사항, 첨부파일, 이미지 업로드 방지
-        if not self.request.user.is_staff:
             form.instance.is_notice = False
+            # 기존 카테고리 제거 (수정 시)
+            title_without_category = original_title
+            for cat in ['[신기능 요청]', '[오류 제보]', '[사업 제휴]', '[가입인사]']:
+                if original_title.startswith(cat):
+                    title_without_category = original_title[len(cat):].strip()
+                    break
+            
+            form.instance.title = f"[{category}] {title_without_category}"
+        
+        # 관리자가 아닌 경우 첨부파일, 이미지 업로드 방지
+        if not self.request.user.is_staff:
             form.instance.attachment = None
             form.instance.image = None
-        
-        # 공지사항 권한 검증
-        if form.instance.is_notice and not self.request.user.is_staff:
-            messages.error(self.request, '공지사항은 관리자만 작성할 수 있습니다.')
-            return self.form_invalid(form)
         
         # 게시글 작성 로깅
         log_board_activity(self.request, 'board_post')
@@ -321,17 +321,23 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
             messages.error(self.request, '구분을 선택해주세요.')
             return self.form_invalid(form)
         
-        # 기존 카테고리 제거 (수정 시)
-        title_without_category = original_title
-        for cat in ['[신기능 요청]', '[오류 제보]', '[사업 제휴]', '[가입인사]']:
-            if original_title.startswith(cat):
-                title_without_category = original_title[len(cat):].strip()
-                break
-        
-        if category:
-            form.instance.title = f"[{category}] {title_without_category}"
+        # 공지사항 카테고리 처리
+        if category == '공지사항':
+            if not self.request.user.is_staff:
+                messages.error(self.request, '공지사항은 관리자만 작성할 수 있습니다.')
+                return self.form_invalid(form)
+            form.instance.is_notice = True
+            form.instance.title = original_title  # 공지사항은 제목에 프리픽스 없이
         else:
-            form.instance.title = title_without_category
+            form.instance.is_notice = False
+            # 기존 카테고리 제거 (수정 시)
+            title_without_category = original_title
+            for cat in ['[신기능 요청]', '[오류 제보]', '[사업 제휴]', '[가입인사]']:
+                if original_title.startswith(cat):
+                    title_without_category = original_title[len(cat):].strip()
+                    break
+            
+            form.instance.title = f"[{category}] {title_without_category}"
         
         # 일반 유저의 경우 첨부파일/이미지 수정 방지
         if not self.request.user.is_staff:

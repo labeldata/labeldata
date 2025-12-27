@@ -23,6 +23,9 @@
                             <label class="form-label mb-1" style="font-size: 0.875rem;">구분 <span class="text-danger">*</span></label>
                             <select name="category" class="form-select" style="font-size: 0.9rem;" required>
                                 <option value="">구분 선택</option>
+                                {% if user.is_staff %}
+                                <option value="공지사항" {% if form.instance.is_notice %}selected{% endif %}>공지사항</option>
+                                {% endif %}
                                 <option value="신기능 요청" {% if '[신기능 요청]' in form.instance.title %}selected{% endif %}>신기능 요청</option>
                                 <option value="오류 제보" {% if '[오류 제보]' in form.instance.title %}selected{% endif %}>오류 제보</option>
                                 <option value="사업 제휴" {% if '[사업 제휴]' in form.instance.title %}selected{% endif %}>사업 제휴</option>

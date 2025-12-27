@@ -172,7 +172,7 @@
                                     {% elif '[가입인사]' in board.title %}
                                         [인사] | 
                                     {% endif %}
-                                    {{ board.author.email|slice:":2" }}**** | 
+                                    {% if board.author.is_staff %}관리자{% else %}{{ board.author.email|slice:":2" }}****{% endif %} | 
                                     조회 {{ board.views }} | 
                                     {{ board.created_at|date:"m/d H:i" }}
                                 </small>
@@ -183,7 +183,9 @@
                         </td>
                         <td class="text-center d-none d-lg-table-cell" style="width: 12%;">
                             <span class="text-muted" style="font-size: 0.875rem; display: inline-block;">
-                                {% if board.author.email %}
+                                {% if board.author.is_staff %}
+                                    관리자
+                                {% elif board.author.email %}
                                     {{ board.author.email|slice:":2" }}****
                                 {% else %}
                                     {{ board.author.username|slice:":2" }}****

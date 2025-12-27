@@ -42,7 +42,7 @@
                 <div class="d-flex gap-4 text-muted" style="font-size: 0.9rem;">
                     <span>
                         <i class="fas fa-user me-1"></i>
-                        {{ object.author.username }}
+                        {% if object.author.is_staff %}관리자{% else %}{{ object.author.username }}{% endif %}
                     </span>
                     <span>
                         <i class="fas fa-calendar me-1"></i>

@@ -255,9 +255,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const usernameDisplay = document.getElementById('username-display');
     if (usernameDisplay) {
         const userEmail = '{{ user.email|escapejs }}';
+        const isStaff = {{ user.is_staff|yesno:"true,false" }};
+        
         if (userEmail) {
-            const username = userEmail.split('@')[0];
-            usernameDisplay.textContent = username + '님';
+            // 관리자인 경우 "관리자"로 표시
+            if (isStaff) {
+                usernameDisplay.textContent = '관리자님';
+            } else {
+                const username = userEmail.split('@')[0];
+                usernameDisplay.textContent = username + '님';
+            }
             
             // Guest 사용자인 경우 특별 처리
             if (userEmail === 'guest@labeasylabel.com') {
