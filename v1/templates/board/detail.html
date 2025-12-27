@@ -3,98 +3,157 @@
 {% block title %}게시글 상세보기 - {{ object.title }}{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container mt-4" style="max-width: 900px;">
     {% bootstrap_messages %}
-    <div class="card mb-4">
-        <div class="card-header">
-            <h2 class="mb-0">
-                {% if object.is_notice %}<span class="badge bg-warning text-dark">공지</span>{% endif %}
-                {% if object.is_hidden %}
-                    <span class="badge bg-secondary text-white">비밀글</span>
+    
+    <!-- 게시글 내용 -->
+    <div class="card mb-3">
+        <div class="card-body p-4">
+            <!-- 제목 영역 -->
+            <div class="border-bottom pb-3 mb-3">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <h2 class="mb-2 flex-grow-1" style="padding-right: 1rem;">
+                        {% if object.is_notice %}<span class="badge bg-info text-white me-1">공지</span>{% endif %}
+                        {% if object.is_hidden %}
+                            <i class="fas fa-lock text-muted me-1" title="비밀글"></i>
+                        {% endif %}
+                        {{ object.title }}
+                        {% if object.attachment %}
+                            <i class="fas fa-paperclip text-muted ms-2" style="font-size: 0.875rem;"></i>
+                        {% endif %}
+                    </h2>
+                    <div class="d-flex gap-2 ms-3 flex-shrink-0">
+                        <a href="{% url 'board:list' %}" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.4rem 0.8rem; white-space: nowrap;">
+                            <i class="fas fa-list me-1"></i>목록
+                        </a>
+                        {% if object.author == user or user.is_staff %}
+                        <a href="{% url 'board:update' object.pk %}" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.4rem 0.8rem; white-space: nowrap;">
+                            <i class="fas fa-edit me-1"></i>수정
+                        </a>
+                        <a href="{% url 'board:delete' object.pk %}" class="btn btn-danger" style="font-size: 0.85rem; padding: 0.4rem 0.8rem; white-space: nowrap;" onclick="return confirm('정말 삭제하시겠습니까?');">
+                            <i class="fas fa-trash me-1"></i>삭제
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                </h2>
+                
+                <!-- 메타 정보 -->
+                <div class="d-flex gap-4 text-muted" style="font-size: 0.9rem;">
+                    <span>
+                        <i class="fas fa-user me-1"></i>
+                        {{ object.author.username }}
+                    </span>
+                    <span>
+                        <i class="fas fa-calendar me-1"></i>
+                        {{ object.created_at|date:"Y.m.d H:i" }}
+                    </span>
+                    <span>
+                        <i class="fas fa-eye me-1"></i>
+                        조회 {{ object.views }}
+                    </span>
+                </div>
+            </div>
+            
+            <!-- 본문 -->
+            <div class="{% if object.content %}mb-4{% else %}mb-2{% endif %}" style="{% if object.content %}min-height: 100px;{% endif %} line-height: 1.8; font-size: 1rem;">
+                {% if object.content %}
+                    {{ object.content|linebreaks|urlize }}
+                {% else %}
+                    <p class="text-muted" style="font-size: 0.9rem;">내용이 없습니다.</p>
                 {% endif %}
-                {{ object.title }}
-                {% if object.attachment %}
-                    <img src="{% static 'img/attachment-icon.png' %}" alt="첨부파일" class="attachment-icon ms-1" style="width: 16px; height: 16px;">
-                {% endif %}
-            </h2>
-        </div>
-        <div class="card-body">
-            <div class="mb-3">
-                <span class="fw-bold">작성자:</span> {{ object.author.username }}
             </div>
-            <div class="mb-3">
-                <span class="fw-bold">작성일:</span> {{ object.created_at|date:"Y-m-d H:i" }}
-            </div>
-            <div class="mb-3">
-                <span class="fw-bold">조회수:</span> {{ object.views }}
-            </div>
-            <div class="mb-3">
-                <span class="fw-bold">내용:</span>
-                <p class="post-content">{{ object.content|linebreaks|urlize }}</p>
-            </div>
+            
+            <!-- 첨부파일 -->
             {% if object.attachment %}
-            <div class="mb-3">
-                <span class="fw-bold">첨부파일:</span>
-                <a href="{% url 'board:download_file' object.pk %}" class="text-primary">{{ object.attachment.name|truncatechars:50 }}</a>
+            <div class="alert alert-light border mb-3" role="alert">
+                <i class="fas fa-paperclip me-2 text-primary"></i>
+                <strong>첨부파일:</strong>
+                <a href="{% url 'board:download_file' object.pk %}" class="ms-2 text-decoration-none">
+                    {{ object.attachment.name|truncatechars:50 }}
+                    <i class="fas fa-download ms-1"></i>
+                </a>
             </div>
             {% endif %}
+            
+            <!-- 이미지 -->
             {% if object.image %}
-            <div class="mb-3">
-                <span class="fw-bold">첨부 이미지:</span><br>
-                <img src="{{ object.image.url }}" alt="첨부 이미지" style="max-width: 400px; max-height: 400px;">
+            <div class="mb-3 text-center">
+                <img src="{{ object.image.url }}" alt="첨부 이미지" class="img-fluid rounded" style="max-width: 100%; max-height: 500px;">
             </div>
             {% endif %}
-            <div class="d-flex justify-content-end gap-2">
-                <a href="{% url 'board:list' %}" class="btn btn-outline-secondary btn-sm">목록</a>
-                {% if object.author == user or user.is_staff %}
-                <a href="{% url 'board:update' object.pk %}" class="btn btn-outline-primary btn-sm">수정</a>
-                <a href="{% url 'board:delete' object.pk %}" class="btn btn-outline-danger btn-sm">삭제</a>
-                {% endif %}
-            </div>
         </div>
     </div>
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5>답변</h5>
+    
+    <!-- 답변 목록 -->
+    {% if object.comments.count > 0 or user.is_staff %}
+    <div class="card mb-3">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="fas fa-comments me-2"></i>답변
+                <span class="badge bg-primary ms-1">{{ object.comments.count }}</span>
+            </h5>
         </div>
-        <div class="card-body">
+        <div class="card-body {% if object.comments.count > 0 %}p-4{% else %}p-3{% endif %}">
             {% for comment in object.comments.all %}
-            <div class="comment-item mb-3 border-top pt-3">
-                <div class="comment-details d-flex flex-column">
-                    <div class="mb-1">
-                        <span class="fw-bold">{{ comment.author.username|default:"익명" }}</span>
-                        <span class="text-muted small">({{ comment.created_at|date:"Y-m-d H:i" }})</span>
+            <div class="comment-item p-3 mb-3 {% if not forloop.last %}border-bottom{% endif %} bg-light rounded">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <span class="fw-bold text-primary">
+                            <i class="fas fa-user-circle me-1"></i>
+                            {{ comment.author.username|default:"시스템 관리자" }}
+                        </span>
+                        <span class="text-muted small ms-2">
+                            <i class="fas fa-clock me-1"></i>
+                            {{ comment.created_at|date:"Y.m.d H:i" }}
+                        </span>
                     </div>
-                    <p class="comment-content mb-1">{{ comment.content|linebreaks|urlize }}</p>
                     {% if comment.author == user or user.is_staff %}
-                    <div class="d-flex justify-content-end gap-2">
-                        <a href="{% url 'board:edit_comment' comment.pk %}" class="btn btn-outline-primary btn-sm">수정</a>
-                        <form method="post" action="{% url 'board:delete_comment' comment.pk %}">
+                    <div class="d-flex gap-1">
+                        <a href="{% url 'board:edit_comment' comment.pk %}" class="btn btn-sm btn-outline-primary" style="font-size: 0.75rem;">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <form method="post" action="{% url 'board:delete_comment' comment.pk %}" style="display: inline;">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-danger btn-sm">삭제</button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger" style="font-size: 0.75rem;" onclick="return confirm('정말 삭제하시겠습니까?');">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </form>
                     </div>
                     {% endif %}
                 </div>
+                <div class="comment-content" style="line-height: 1.6; padding-left: 1.5rem;">
+                    {{ comment.content|linebreaks|urlize }}
+                </div>
             </div>
             {% empty %}
-            <p class="text-muted">확인 중입니다.</p>
+            <div class="text-center py-4 text-muted">
+                <i class="fas fa-inbox fa-2x mb-2"></i>
+                <p>확인 중입니다.</p>
+            </div>
             {% endfor %}
         </div>
     </div>
+    {% endif %}
+    
+    <!-- 답변 작성 -->
     {% if user.is_authenticated and user.is_staff %}
     <div class="card mb-4">
-        <div class="card-header">
-            <h5>답변 작성</h5>
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="fas fa-pen me-2"></i>답변 작성
+            </h5>
         </div>
-        <div class="card-body">
+        <div class="card-body p-4">
             <form method="post" action="{% url 'board:add_comment' object.pk %}">
                 {% csrf_token %}
                 <div class="mb-3">
-                    <textarea name="content" class="form-control" rows="3" placeholder="답변을 입력하세요..." required></textarea>
+                    <textarea name="content" class="form-control" rows="4" placeholder="답변을 입력하세요..." required style="font-size: 0.9rem;"></textarea>
                 </div>
                 <div class="d-flex justify-content-end">
-                    <button type="submit" class="btn btn-primary btn-sm">등록</button>
+                    <button type="submit" class="btn btn-primary" style="font-size: 0.8rem;">
+                        <i class="fas fa-paper-plane me-1"></i>등록
+                    </button>
                 </div>
             </form>
         </div>

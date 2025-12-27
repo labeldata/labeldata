@@ -91,6 +91,15 @@ class BoardForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         is_notice = cleaned_data.get('is_notice')
+        title = cleaned_data.get('title')
+        content = cleaned_data.get('content')
+        
+        # 제목과 내용 필수 검증
+        if not title or not title.strip():
+            raise forms.ValidationError('제목을 입력해주세요.')
+        if not content or not content.strip():
+            raise forms.ValidationError('내용을 입력해주세요.')
+        
         # 공지사항 등록/수정 시 관리자 검증
         if is_notice and (not self.user or not self.user.is_staff):
             raise forms.ValidationError('공지사항은 관리자만 작성할 수 있습니다.')
@@ -104,7 +113,10 @@ class BoardListView(ListView):
     model = Board
     template_name = 'board/list.html'
     context_object_name = 'boards'
-    paginate_by = 10
+    
+    def get_paginate_by(self, queryset):
+        """페이지당 게시글 수 동적 설정"""
+        return self.request.GET.get('per_page', 10)
 
     def get_queryset(self):
         queryset = Board.objects.select_related('author').prefetch_related('comments').annotate(
@@ -113,7 +125,28 @@ class BoardListView(ListView):
                 default=Value(0),
                 output_field=IntegerField(),
             )
-        ).order_by('-is_notice_order', '-created_at')
+        )
+        
+        # 검색 기능
+        search_query = self.request.GET.get('q', '').strip()
+        if search_query:
+            queryset = queryset.filter(
+                Q(title__icontains=search_query) | Q(content__icontains=search_query)
+            )
+        
+        # 필터링 기능
+        filter_type = self.request.GET.get('filter', 'all')
+        if filter_type == 'my':
+            if self.request.user.is_authenticated:
+                queryset = queryset.filter(author=self.request.user)
+        elif filter_type == 'waiting':
+            queryset = queryset.filter(is_notice=False, comments__isnull=True).distinct()
+        elif filter_type == 'answered':
+            queryset = queryset.filter(is_notice=False, comments__isnull=False).distinct()
+        elif filter_type == 'notice':
+            queryset = queryset.filter(is_notice=True)
+        
+        # 권한 필터링
         if self.request.user.is_authenticated:
             if not self.request.user.is_staff:
                 queryset = queryset.filter(
@@ -121,7 +154,56 @@ class BoardListView(ListView):
                 )
         else:
             queryset = queryset.filter(is_hidden=False)
+        
+        # 정렬 기능
+        sort_by = self.request.GET.get('sort', 'recent')
+        if sort_by == 'views':
+            queryset = queryset.order_by('-is_notice_order', '-views', '-created_at')
+        elif sort_by == 'comments':
+            from django.db.models import Count
+            queryset = queryset.annotate(comment_count=Count('comments')).order_by(
+                '-is_notice_order', '-comment_count', '-created_at'
+            )
+        else:  # recent
+            queryset = queryset.order_by('-is_notice_order', '-created_at')
+        
         return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        page_obj = context['page_obj']
+        paginator = page_obj.paginator
+        page_number = page_obj.number
+        
+        # 현재 페이지 기준 ±3 범위 계산
+        page_range = range(
+            max(1, page_number - 3),
+            min(paginator.num_pages + 1, page_number + 4)
+        )
+        context['page_range'] = page_range
+        
+        # 게시글 번호 계산 (역순)
+        boards_with_number = []
+        for idx, board in enumerate(context['boards']):
+            if not board.is_notice:
+                # 전체 게시글 수 - (시작 인덱스 + 현재 인덱스) + 1
+                board.display_number = paginator.count - (page_obj.start_index() - 1 + idx)
+            boards_with_number.append(board)
+        context['boards'] = boards_with_number
+        
+        # 검색, 필터, 정렬 파라미터 유지
+        context['search_query'] = self.request.GET.get('q', '')
+        context['current_filter'] = self.request.GET.get('filter', 'all')
+        context['current_sort'] = self.request.GET.get('sort', 'recent')
+        context['per_page'] = self.request.GET.get('per_page', '10')
+        
+        # 쿼리스트링 생성 (페이지 번호 제외)
+        query_params = self.request.GET.copy()
+        if 'page' in query_params:
+            query_params.pop('page')
+        context['querystring_without_page'] = query_params.urlencode()
+        
+        return context
 
 class BoardDetailView(DetailView):
     model = Board
@@ -154,6 +236,27 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
     def form_valid(self, form):
         # 현재 로그인한 사용자를 author로 설정
         form.instance.author = self.request.user
+        
+        # 카테고리를 제목 앞에 추가
+        category = self.request.POST.get('category', '')
+        original_title = self.request.POST.get('title', '')
+        
+        # 카테고리 필수 검증
+        if not category:
+            messages.error(self.request, '구분을 선택해주세요.')
+            return self.form_invalid(form)
+        
+        # 기존 카테고리 제거 (수정 시)
+        title_without_category = original_title
+        for cat in ['[신기능 요청]', '[오류 제보]', '[사업 제휴]', '[가입인사]']:
+            if original_title.startswith(cat):
+                title_without_category = original_title[len(cat):].strip()
+                break
+        
+        if category:
+            form.instance.title = f"[{category}] {title_without_category}"
+        else:
+            form.instance.title = title_without_category
         
         # 관리자가 아닌 경우 공지사항, 첨부파일, 이미지 업로드 방지
         if not self.request.user.is_staff:
@@ -201,6 +304,27 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
         if form.instance.is_notice and not self.request.user.is_staff:
             messages.error(self.request, '공지사항은 관리자만 수정할 수 있습니다.')
             return self.form_invalid(form)
+        
+        # 카테고리를 제목 앞에 추가
+        category = self.request.POST.get('category', '')
+        original_title = self.request.POST.get('title', '')
+        
+        # 카테고리 필수 검증
+        if not category:
+            messages.error(self.request, '구분을 선택해주세요.')
+            return self.form_invalid(form)
+        
+        # 기존 카테고리 제거 (수정 시)
+        title_without_category = original_title
+        for cat in ['[신기능 요청]', '[오류 제보]', '[사업 제휴]', '[가입인사]']:
+            if original_title.startswith(cat):
+                title_without_category = original_title[len(cat):].strip()
+                break
+        
+        if category:
+            form.instance.title = f"[{category}] {title_without_category}"
+        else:
+            form.instance.title = title_without_category
         
         # 일반 유저의 경우 첨부파일/이미지 수정 방지
         if not self.request.user.is_staff:

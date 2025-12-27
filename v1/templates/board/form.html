@@ -3,43 +3,71 @@
 {% block title %}{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}{% endblock %}
 
 {% block content %}
-<div class="container mt-3">
-    <h2>{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}</h2>
+<div class="container mt-4" style="max-width: 900px;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">
+            <i class="fas fa-edit me-2"></i>
+            {% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}
+        </h2>
+    </div>
+    
     {% bootstrap_messages %}
+    
     <div class="card mb-4">
-        <div class="card-body">
+        <div class="card-body p-4">
             <form method="post" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="mb-3 d-flex align-items-center justify-content-between">
-                    <div class="d-flex gap-3">
-                        <div class="form-check">
-                            {{ form.is_hidden }}
-                            <label class="form-check-label" for="{{ form.is_hidden.id_for_label }}">비밀글</label>
+                    <div class="d-flex gap-3 align-items-center flex-grow-1">
+                        <div style="min-width: 200px;">
+                            <label class="form-label mb-1" style="font-size: 0.875rem;">구분 <span class="text-danger">*</span></label>
+                            <select name="category" class="form-select" style="font-size: 0.9rem;" required>
+                                <option value="">구분 선택</option>
+                                <option value="신기능 요청" {% if '[신기능 요청]' in form.instance.title %}selected{% endif %}>신기능 요청</option>
+                                <option value="오류 제보" {% if '[오류 제보]' in form.instance.title %}selected{% endif %}>오류 제보</option>
+                                <option value="사업 제휴" {% if '[사업 제휴]' in form.instance.title %}selected{% endif %}>사업 제휴</option>
+                                <option value="가입인사" {% if '[가입인사]' in form.instance.title %}selected{% endif %}>가입인사</option>
+                            </select>
                         </div>
-                        {% if user.is_staff %}
-                        <div class="form-check ms-4">
-                            {{ form.is_notice }}
-                            <label class="form-check-label" for="{{ form.is_notice.id_for_label }}">공지사항</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                {{ form.is_hidden }}
+                                <label class="form-check-label" for="{{ form.is_hidden.id_for_label }}">비밀글</label>
+                            </div>
+                            {% if user.is_staff %}
+                            <div class="form-check">
+                                {{ form.is_notice }}
+                                <label class="form-check-label" for="{{ form.is_notice.id_for_label }}">공지사항</label>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
                     </div>
-                    <div class="flex-grow-1"></div>
-                    {% if form.is_hidden.errors %}
-                        <div class="invalid-feedback d-block">{{ form.is_hidden.errors }}</div>
-                    {% endif %}
-                    {% if form.is_notice.errors %}
-                        <div class="invalid-feedback d-block">{{ form.is_notice.errors }}</div>
-                    {% endif %}
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'board:list' %}" class="btn btn-secondary" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                            <i class="fas fa-times me-1"></i>취소
+                        </a>
+                        <button type="submit" class="btn btn-primary" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
+                            <i class="fas fa-save me-1"></i>저장
+                        </button>
+                    </div>
                 </div>
+                {% if form.is_hidden.errors %}
+                    <div class="invalid-feedback d-block mb-3">{{ form.is_hidden.errors }}</div>
+                {% endif %}
+                {% if form.is_notice.errors %}
+                    <div class="invalid-feedback d-block mb-3">{{ form.is_notice.errors }}</div>
+                {% endif %}
                 <div class="mb-3">
-                    <label for="{{ form.title.id_for_label }}" class="form-label">제목</label>
-                    {{ form.title }}
+                    <label for="{{ form.title.id_for_label }}" class="form-label">제목 <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control" id="id_title" 
+                           value="{% if form.instance.title %}{% if '[신기능 요청]' in form.instance.title %}{{ form.instance.title|slice:'8:' }}{% elif '[오류 제보]' in form.instance.title %}{{ form.instance.title|slice:'7:' }}{% elif '[사업 제휴]' in form.instance.title %}{{ form.instance.title|slice:'7:' }}{% elif '[가입인사]' in form.instance.title %}{{ form.instance.title|slice:'6:' }}{% else %}{{ form.instance.title }}{% endif %}{% endif %}" 
+                           required>
                     {% if form.title.errors %}
                         <div class="invalid-feedback d-block">{{ form.title.errors }}</div>
                     {% endif %}
                 </div>
                 <div class="mb-3">
-                    <label for="{{ form.content.id_for_label }}" class="form-label">내용</label>
+                    <label for="{{ form.content.id_for_label }}" class="form-label">내용 <span class="text-danger">*</span></label>
                     {{ form.content }}
                     {% if form.content.errors %}
                         <div class="invalid-feedback d-block">{{ form.content.errors }}</div>
@@ -81,10 +109,6 @@
                     {% endif %}
                 </div>
                 {% endif %}
-                <div class="d-flex justify-content-end gap-2">
-                    <a href="{% url 'board:list' %}" class="btn btn-outline-secondary btn-sm">취소</a>
-                    <button type="submit" class="btn btn-primary btn-sm">저장</button>
-                </div>
             </form>
         </div>
     </div>
