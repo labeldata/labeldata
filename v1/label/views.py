@@ -2443,6 +2443,15 @@ def my_ingredient_pagination_info(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
+def _parse_short_names(short_name_value):
+    """간략명 파싱 헬퍼 함수"""
+    if not short_name_value:
+        return []
+    short_name_str = str(short_name_value).strip()
+    return [s.strip() for s in short_name_str.split(',') 
+            if s.strip() and s.strip() not in {"Y", "N", "-"}]
+
+
 @login_required
 @csrf_exempt
 def get_additive_regulation(request):
@@ -2544,12 +2553,9 @@ def get_additive_regulation(request):
                 # 1. 명칭 버튼 추가
                 if additive.name_kr:
                     buttons.append({"value": additive.name_kr})
-                # 2. 간략명 처리 (쉼표로만 분리)
-                if additive.short_name:
-                    short_name_str = str(additive.short_name).strip()
-                    short_names = [s.strip() for s in short_name_str.split(',') if s.strip() and s.strip() not in {"Y", "N", "-"}]
-                    for short_name in short_names:
-                        buttons.append({"value": short_name})
+                # 2. 간략명 처리
+                for short_name in _parse_short_names(additive.short_name):
+                    buttons.append({"value": short_name})
 
             # 표 6: 명칭or간략명or용도 (명칭, 간략명1, 간략명2, 용도1, 용도2... 각각 별도 버튼)
             if str(additive.alias_6).strip().upper() == 'Y':
@@ -2560,12 +2566,9 @@ def get_additive_regulation(request):
                 if additive.name_kr:
                     buttons.append({"value": additive.name_kr})
                 
-                # 2. 간략명 처리 (쉼표로만 분리)
-                if additive.short_name:
-                    short_name_str = str(additive.short_name).strip()
-                    short_names = [s.strip() for s in short_name_str.split(',') if s.strip() and s.strip() not in {"Y", "N", "-"}]
-                    for short_name in short_names:
-                        buttons.append({"value": short_name})
+                # 2. 간략명 처리
+                for short_name in _parse_short_names(additive.short_name):
+                    buttons.append({"value": short_name})
                 
                 # 3. 용도 처리 (각 용도 필드를 체크)
                 purpose_fields = [
