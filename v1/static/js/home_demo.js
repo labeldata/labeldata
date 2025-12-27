@@ -548,7 +548,7 @@ function generateTableRow(label, value, multiline = false, separator = false) {
         if (detectedAllergens.length > 0) {
             const allergenText = detectedAllergens.join(', ');
             // 미리보기 팝업과 동일한 형식: "xx, xx 함유" (검은색 배경에 하얀색 글씨)
-            valueHtml += `<br><span style="background-color: #000; color: #fff; font-weight: 600; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 4px;">${allergenText} 함유</span>`;
+            valueHtml += `<br><span style="background-color: #000; color: #fff; font-weight: 600; padding: 2px 6px; border-radius: 3px; display: inline-block; margin-top: 4px; word-break: keep-all;">${allergenText} 함유</span>`;
         }
     } else if (label === '원산지') {
         // 원산지: 국가명 굵게 표시
@@ -2274,6 +2274,69 @@ function addAllergenTag(allergen, isAuto = false) {
     }
     window.selectedIngredientAllergens.add(allergen);
     updateAllergenDisplay();
+    
+    // 수동 추가인 경우 제조시설 경고 문구 전체 삭제
+    if (!isAuto) {
+        removeCrossContaminationWarning();
+    }
+}
+
+// 주의사항에서 제조시설 경고 문구 전체 제거 + 버튼 초기화
+function removeCrossContaminationWarning() {
+    const cautionTextarea = document.getElementById('caution_textarea');
+    if (!cautionTextarea) return;
+    
+    let currentValue = cautionTextarea.value;
+    const lines = currentValue.split('\n');
+    const filteredLines = lines.filter((line) => {
+        const trimmedLine = line.trim();
+        
+        // 제조시설 관련 문구인지 확인
+        const hasFactory = trimmedLine.includes('같은 제조시설') || 
+                           trimmedLine.includes('같은 시설') || 
+                           trimmedLine.includes('동일 라인') ||
+                           trimmedLine.includes('동일한 제조시설');
+        const hasManufacture = trimmedLine.includes('제조하고 있습니다') || 
+                               trimmedLine.includes('제조합니다') || 
+                               trimmedLine.includes('제조되었습니다') ||
+                               trimmedLine.includes('제조됩니다') ||
+                               trimmedLine.includes('제조하였습니다') ||
+                               trimmedLine.includes('생산');
+        const hasProduct = trimmedLine.includes('제품') || trimmedLine.includes('원료');
+        
+        // 제조시설 경고 문구면 제거
+        if (hasFactory && hasManufacture && hasProduct) {
+            return false;
+        }
+        return true;
+    });
+    
+    currentValue = filteredLines.join('\n').trim();
+    currentValue = currentValue.replace(/\n{3,}/g, '\n\n').trim();
+    cautionTextarea.value = currentValue;
+    
+    // textarea 높이 자동 조절
+    if (typeof autoResizeTextarea === 'function') {
+        autoResizeTextarea.call(cautionTextarea);
+    }
+    
+    // "주의사항에 추가" 버튼 상태 초기화
+    resetCrossContaminationButton();
+    
+    // 미리보기 업데이트
+    updatePreview();
+}
+
+// 제조시설 혼입 버튼 초기화
+function resetCrossContaminationButton() {
+    const toggleBtn = document.getElementById('toggleAllergenWarningBtn');
+    if (!toggleBtn) return;
+    
+    // 버튼 상태를 "주의사항에 추가"로 변경
+    toggleBtn.classList.remove('btn-danger');
+    toggleBtn.classList.add('btn-primary');
+    toggleBtn.innerHTML = '<i class="fas fa-arrow-right me-1"></i>주의사항에 추가';
+    toggleBtn.title = '선택한 제조시설 혼입 경고를 주의사항에 추가합니다.';
 }
 
 // 알레르기 태그 제거
@@ -2281,6 +2344,9 @@ function removeAllergenTag(allergen) {
     window.autoDetectedAllergens.delete(allergen);
     window.selectedIngredientAllergens.delete(allergen);
     updateAllergenDisplay();
+    
+    // 알레르기 성분 변경 시 제조시설 경고 문구 전체 삭제
+    removeCrossContaminationWarning();
 }
 
 // 알레르기 표시 업데이트

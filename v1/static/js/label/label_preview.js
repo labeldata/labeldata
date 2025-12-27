@@ -1805,7 +1805,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         container.style.cssText = `
                             position: relative;
                             width: 100%;
-                            overflow: hidden;
                         `;
 
                         let mainText = value
@@ -1844,12 +1843,12 @@ document.addEventListener('DOMContentLoaded', function () {
                                 padding: 4px 8px;
                                 font-size: 9pt;
                                 font-weight: bold;
-                                text-align: center;
-                                margin-top: 8px;
-                                display: inline-block;
-                                float: right;
-                                clear: both;
+                                text-align: right;
+                                margin-top: 4px;
+                                display: block;
                                 border-radius: 2px;
+                                word-wrap: break-word;
+                                overflow-wrap: break-word;
                             `;
                             container.appendChild(allergenDiv);
                         }
@@ -4218,7 +4217,7 @@ function renderVerticalLayout(tbody, data, fieldMap) {
             }
             const displayAllergens = window.allergensData || window.parentAllergens || [];
             if (displayAllergens.length > 0) {
-                value = `${value} <span style="float: right; background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; white-space: nowrap;">${displayAllergens.join(', ')} 함유</span>`;
+                value = `${value}<div style="background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; margin-top: 4px; text-align: right; word-break: keep-all; white-space: normal;">${displayAllergens.join(', ')} 함유</div>`;
             }
         }
         
@@ -4230,7 +4229,7 @@ function renderVerticalLayout(tbody, data, fieldMap) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <th>${field.label}</th>
-            <td>${value}</td>
+            <td style="word-wrap: break-word; overflow-wrap: break-word;">${value}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -4281,7 +4280,7 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
                 }
                 const displayAllergens = window.allergensData || window.parentAllergens || [];
                 if (displayAllergens.length > 0) {
-                    value = `${value} <span style="float: right; background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; white-space: nowrap;">${displayAllergens.join(', ')} 함유</span>`;
+                    value = `${value}<div style="background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; margin-top: 4px; text-align: right; word-break: keep-all; white-space: normal;">${displayAllergens.join(', ')} 함유</div>`;
                 }
             }
             

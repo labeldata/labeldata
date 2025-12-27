@@ -2691,6 +2691,64 @@ function addAllergenTagLabel(allergen) {
     selectedIngredientAllergensLabel.set(allergen, 'manual');
     updateAllergenTagsLabel();
     updateCrossContaminationUILabel();
+    
+    // 알레르기 성분 변경 시 제조시설 경고 문구 전체 삭제
+    removeCrossContaminationWarningLabel();
+}
+
+// 주의사항에서 제조시설 경고 문구 전체 제거 + 버튼 초기화
+function removeCrossContaminationWarningLabel() {
+    const cautionsTextarea = document.querySelector('textarea[name="cautions"]');
+    if (!cautionsTextarea) return;
+    
+    let currentValue = cautionsTextarea.value;
+    const lines = currentValue.split('\n');
+    const filteredLines = lines.filter((line) => {
+        const trimmedLine = line.trim();
+        
+        // 제조시설 관련 문구인지 확인
+        const hasFactory = trimmedLine.includes('같은 제조시설') || 
+                           trimmedLine.includes('같은 시설') || 
+                           trimmedLine.includes('동일 라인') ||
+                           trimmedLine.includes('동일한 제조시설');
+        const hasManufacture = trimmedLine.includes('제조하고 있습니다') || 
+                               trimmedLine.includes('제조합니다') || 
+                               trimmedLine.includes('제조되었습니다') ||
+                               trimmedLine.includes('제조됩니다') ||
+                               trimmedLine.includes('제조하였습니다') ||
+                               trimmedLine.includes('생산');
+        const hasProduct = trimmedLine.includes('제품') || trimmedLine.includes('원료');
+        
+        // 제조시설 경고 문구면 제거
+        if (hasFactory && hasManufacture && hasProduct) {
+            return false;
+        }
+        return true;
+    });
+    
+    currentValue = filteredLines.join('\n').trim();
+    currentValue = currentValue.replace(/\n{3,}/g, '\n\n').trim();
+    cautionsTextarea.value = currentValue;
+    
+    // textarea 높이 자동 조절
+    if (typeof updateTextareaHeight === 'function') {
+        updateTextareaHeight(cautionsTextarea);
+    }
+    
+    // "주의사항에 추가" 버튼 상태 초기화
+    resetCrossContaminationButtonLabel();
+}
+
+// 제조시설 혼입 버튼 초기화
+function resetCrossContaminationButtonLabel() {
+    const toggleBtn = document.getElementById('toggleAllergenWarningBtn');
+    if (!toggleBtn) return;
+    
+    // 버튼 상태를 "주의사항에 추가"로 변경
+    toggleBtn.classList.remove('btn-danger');
+    toggleBtn.classList.add('btn-primary');
+    toggleBtn.innerHTML = '<i class="fas fa-arrow-right me-1"></i>주의사항에 추가';
+    toggleBtn.title = '선택한 제조시설 혼입 경고를 주의사항에 추가합니다.';
 }
 
 // 알레르기 태그 제거
@@ -2698,6 +2756,9 @@ function removeAllergenTagLabel(allergen) {
     selectedIngredientAllergensLabel.delete(allergen);
     updateAllergenTagsLabel();
     updateCrossContaminationUILabel();
+    
+    // 알레르기 성분 변경 시 제조시설 경고 문구 전체 삭제
+    removeCrossContaminationWarningLabel();
 }
 
 // 알레르기 태그 UI 업데이트
