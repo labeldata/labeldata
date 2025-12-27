@@ -222,8 +222,13 @@ def get_search_conditions(request, search_fields):
                 else:
                     # 단일 검색어인 경우 기존 LIKE 검색
                     search_conditions &= Q(**{f"{field}__icontains": value})
+            elif field == "rawmtrl_nm":
+                # 원재료명 검색: rawmtrl_nm_sorted가 있으면 우선 검색, 없으면 rawmtrl_nm 검색
+                search_conditions &= (
+                    Q(rawmtrl_nm_sorted__icontains=value) | Q(rawmtrl_nm__icontains=value)
+                )
             else:
-                # 다른 필드는 기존 방식 유지 (원재료명 포함)
+                # 다른 필드는 기존 방식 유지
                 search_conditions &= Q(**{f"{field}__icontains": value})
             search_values[query_param] = value
             

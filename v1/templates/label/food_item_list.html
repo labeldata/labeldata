@@ -191,7 +191,7 @@
                     <td class="ellipsis-cell" title="{{ item.bssh_nm|default:'' }}">{{ item.bssh_nm|default:"" }}</td>
                     <td class="ellipsis-cell" title="{{ item.pog_daycnt|default:'' }}">{{ item.pog_daycnt|default:"" }}</td>
                     <td class="ellipsis-cell" title="{{ item.frmlc_mtrqlt|default:'' }}">{{ item.frmlc_mtrqlt|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.rawmtrl_nm|default:'' }}">{{ item.rawmtrl_nm|default:"" }}</td>
+                    <td class="ellipsis-cell" title="{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:'' }}">{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:"" }}</td>
                     <td class="ellipsis-cell" title="{{ item.prms_dt|default:'' }}">{{ item.prms_dt|default:"" }}</td>
                 </tr>
                 {% empty %}
