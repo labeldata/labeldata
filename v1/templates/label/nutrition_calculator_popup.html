@@ -35,7 +35,7 @@
     <div class="basic-info-row">
       <div class="info-group">
         <label>단위량</label>
-        <input type="number" id="serving_size" placeholder="100">
+        <input type="text" inputmode="decimal" id="serving_size" placeholder="100">
         <select id="serving_size_unit">
           <option value="g" selected>g</option>
           <option value="ml">ml</option>
@@ -43,7 +43,7 @@
       </div>
       <div class="info-group">
         <label>포장개수</label>
-        <input type="number" id="units_per_package" placeholder="1">
+        <input type="text" inputmode="decimal" id="units_per_package" placeholder="1">
         <span class="unit-label">개</span>
       </div>
     </div>
@@ -52,7 +52,7 @@
     <div class="display-style-row">
       <div class="info-group">
         <label>스타일</label>
-        <select id="nutrition_display_unit" onchange="toggleStyleOptionsOnly()">
+        <select id="nutrition_display_unit" onchange="toggleStyleOptions()">
           <option value="basic">기본형</option>
           <option value="parallel">병행표시</option>
         </select>
@@ -146,20 +146,19 @@
 </body>
 </html>
 <script>
-  // 전역 함수로 toggleStyleOptions와 toggleNutritionSection 노출
-  // 자동 계산을 하지 않는 스타일 옵션 토글 함수
-  window.toggleStyleOptionsOnly = function() {
+  // 스타일 옵션 토글 함수
+  window.toggleStyleOptions = function() {
     const style = document.getElementById('nutrition_display_unit').value;
     const basicOptions = document.getElementById('basic-options');
     const parallelOptions = document.getElementById('parallel-options');
     
-    // 모든 옵션을 먼저 숨김 (강제로)
+    // 모든 옵션을 먼저 숨김
     basicOptions.classList.remove('show');
     basicOptions.style.display = 'none';
     parallelOptions.classList.remove('show');
     parallelOptions.style.display = 'none';
     
-    // 선택된 스타일에 따라 해당 옵션만 표시 (강제로)
+    // 선택된 스타일에 따라 해당 옵션만 표시
     if (style === 'parallel') {
       parallelOptions.classList.add('show');
       parallelOptions.style.display = 'block';
@@ -167,20 +166,7 @@
       basicOptions.classList.add('show');
       basicOptions.style.display = 'block';
     }
-    // 자동 계산 제거 - 계산 버튼을 눌렀을 때만 계산
   };
-
-  // 기존 호환성을 위한 함수 (자동 계산 제거)
-  window.toggleStyleOptions = function() {
-    window.toggleStyleOptionsOnly();
-  };
-
-  // 표시 기준 변경 시 재계산 함수 (자동 계산 제거)
-  window.recalculateOnChange = function() {
-    // 자동 계산 제거 - 계산 버튼을 눌렀을 때만 계산
-  };
-
-
 
   window.toggleNutritionSection = function() {
     const additionalSection = document.getElementById('additional-nutrients');
@@ -202,15 +188,7 @@
 
   // 페이지 로드 시 초기 상태 설정
   document.addEventListener('DOMContentLoaded', function() {
-    // 초기 스타일 옵션 설정 (지연 실행)
-    setTimeout(function() {
-      toggleStyleOptions();
-    }, 100);
-    
-    // 추가적으로 더 늦게 한번 더 실행 (데이터 로드 후)
-    setTimeout(function() {
-      toggleStyleOptions();
-    }, 500);
+    toggleStyleOptions();
   });
 
   document.addEventListener('nutrition-calculator-ready', function() {
@@ -220,20 +198,12 @@
         const data = JSON.parse(dataStr);
         if (data && Object.keys(data).length > 0) {
           loadExistingData(data);
-          // 데이터 로드 후 스타일 옵션 다시 설정
-          setTimeout(function() {
-            toggleStyleOptions();
-          }, 100);
+          toggleStyleOptions();
         }
       } catch (e) {
-
+        console.error('영양성분 데이터 로드 오류:', e);
       }
     }
-    
-    // 데이터가 없어도 스타일 옵션 설정
-    setTimeout(function() {
-      toggleStyleOptions();
-    }, 50);
   });
 </script>
 </body>

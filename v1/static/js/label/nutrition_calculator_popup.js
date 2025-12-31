@@ -162,8 +162,8 @@ function getNutritionInputsFromDOM() {
   Object.keys(NUTRITION_DATA).forEach(key => {
     const input = document.getElementById(key);
     if (input && input.value && input.value.trim() !== '') {
-      // 소수점 포함 숫자로 변환
-      const numericValue = parseFloat(input.value);
+      // 쉼표 제거 후 숫자로 변환
+      const numericValue = parseFloat(input.value.replace(/,/g, ''));
       if (!isNaN(numericValue) && numericValue >= 0) {
         // 소수점 2자리까지 반올림
         nutritionInputs[key] = Math.round(numericValue * 100) / 100;
@@ -194,7 +194,7 @@ function buildInputForm() {
       div.className = 'nutrient-input-group';
       div.innerHTML = `
         <label for="${key}" class="${data.indent ? 'indent' : ''}">${data.label}</label>
-        <input type="number" id="${key}" name="${key}" placeholder="0" step="0.01" min="0" data-nutrition-key="${key}">
+        <input type="text" inputmode="decimal" id="${key}" name="${key}" placeholder="0" data-nutrition-key="${key}">
         <span class="unit-label">${data.unit}</span>
       `;
       basicContainer.appendChild(div);
@@ -209,7 +209,7 @@ function buildInputForm() {
       div.className = 'nutrient-input-group';
       div.innerHTML = `
         <label for="${key}">${data.label}</label>
-        <input type="number" id="${key}" name="${key}" placeholder="0" step="0.01" min="0" data-nutrition-key="${key}">
+        <input type="text" inputmode="decimal" id="${key}" name="${key}" placeholder="0" data-nutrition-key="${key}">
         <span class="unit-label">${data.unit}</span>
       `;
       additionalContainer.appendChild(div);
@@ -219,46 +219,49 @@ function buildInputForm() {
   attachCommaFormattingToInputs();
 }
 
+// 쉼표 포맷팅 공통 함수
+function applyCommaFormatting(e) {
+  let value = e.target.value;
+  
+  // 쉼표 제거
+  value = value.replace(/,/g, '');
+  
+  // 숫자와 소수점만 허용
+  value = value.replace(/[^\d.]/g, '');
+  
+  // 소수점이 여러 개 입력된 경우 첫 번째 것만 유지
+  const parts = value.split('.');
+  if (parts.length > 2) {
+    value = parts[0] + '.' + parts.slice(1).join('');
+  }
+  
+  // 소수점 이하 2자리 제한
+  if (parts.length === 2 && parts[1] && parts[1].length > 2) {
+    value = parts[0] + '.' + parts[1].substring(0, 2);
+  }
+  
+  // 정수부에 쉼표 추가
+  if (value !== '') {
+    const updatedParts = value.split('.');
+    if (updatedParts[0] !== '') {
+      updatedParts[0] = Number(updatedParts[0]).toLocaleString('ko-KR');
+    }
+    value = updatedParts.join('.');
+  }
+  
+  e.target.value = value;
+}
+
 // 3자리 쉼표 포맷팅 기능 추가
 function attachCommaFormattingToInputs() {
   // 모든 영양성분 입력 필드 선택
   const nutritionInputs = document.querySelectorAll('input[data-nutrition-key]');
   
   nutritionInputs.forEach(input => {
-    // input 이벤트로 실시간 검증 (소수점 2자리까지 허용)
-    input.addEventListener('input', function(e) {
-      let value = e.target.value;
-      
-      // 숫자와 소수점만 허용
-      value = value.replace(/[^\d.]/g, '');
-      
-      // 소수점이 여러 개 입력된 경우 처리
-      const parts = value.split('.');
-      if (parts.length > 2) {
-        value = parts[0] + '.' + parts.slice(1).join('');
-      }
-      
-      // 소수점 두 번째 자리까지만 허용
-      if (parts.length === 2 && parts[1].length > 2) {
-        value = parts[0] + '.' + parts[1].substring(0, 2);
-      }
-      
-      e.target.value = value;
-    });
-    
-    // blur 이벤트에서 소수점 검증 및 포매팅
-    input.addEventListener('blur', function(e) {
-      let value = e.target.value;
-      if (value && value !== '') {
-        const numericValue = parseFloat(value);
-        if (!isNaN(numericValue) && numericValue >= 0) {
-          // 소수점 2자리까지 반올림
-          e.target.value = Math.round(numericValue * 100) / 100;
-        } else {
-          e.target.value = '';
-        }
-      }
-    });
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    input.removeEventListener('input', applyCommaFormatting);
+    // 새로운 이벤트 리스너 추가
+    input.addEventListener('input', applyCommaFormatting);
   });
 }
 
@@ -297,13 +300,18 @@ function displayEmphasisValidation(nutritionInputs) {
   let html = '';
   
   validationResults.forEach(result => {
+    // 숫자 값을 쉼표 포맷팅
+    const formattedValue = parseFloat(result.value).toLocaleString('ko-KR');
+    
     html += `<div class="emphasis-item emphasis-eligible">`;
-    html += `<div class="emphasis-nutrient-name">${result.label} (${result.value}${result.unit})</div>`;
+    html += `<div class="emphasis-nutrient-name">${result.label} (${formattedValue} ${result.unit})</div>`;
     
     html += '<div class="emphasis-labels">';
     result.emphasisResult.forEach(emphasis => {
+      // 임계값도 쉼표 포맷팅
+      const formattedThreshold = parseFloat(emphasis.threshold).toLocaleString('ko-KR');
       html += `<span class="emphasis-badge ${emphasis.type}">${emphasis.label}</span>`;
-      html += `<span class="emphasis-threshold">${emphasis.threshold}${result.unit} ${emphasis.type === 'free' ? '미만' : emphasis.type === 'low' ? '이하' : '이상'}</span>`;
+      html += `<span class="emphasis-threshold">${formattedThreshold} ${result.unit} ${emphasis.type === 'free' ? '미만' : emphasis.type === 'low' ? '이하' : '이상'}</span>`;
     });
     html += '</div>';
     
@@ -316,8 +324,8 @@ function displayEmphasisValidation(nutritionInputs) {
 
 // 영양성분 계산 메인 함수
 function calculateNutrition() {
-  const baseAmount = parseFloat(document.getElementById('serving_size').value) || 100;
-  const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value) || 1;
+  const baseAmount = parseFloat(document.getElementById('serving_size').value.replace(/,/g, '')) || 100;
+  const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value.replace(/,/g, '')) || 1;
   const style = document.getElementById('nutrition_display_unit').value;
   
   // [개선] DOM에서 최신 영양성분 입력값 수집
@@ -385,8 +393,8 @@ function sendNutritionDataToParent() {
     return;
   }
 
-  const baseAmount = parseFloat(document.getElementById('serving_size').value) || 100;
-  const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value) || 1;
+  const baseAmount = parseFloat(document.getElementById('serving_size').value.replace(/,/g, '')) || 100;
+  const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value.replace(/,/g, '')) || 1;
   const style = document.getElementById('nutrition_display_unit').value;
   const basicDisplayType = document.getElementById('basic_display_type')?.value || 'per_100g';
   const parallelDisplayType = document.getElementById('parallel_display_type')?.value || 'per_serving';
@@ -396,9 +404,11 @@ function sendNutritionDataToParent() {
   Object.keys(nutritionDataToSave).forEach(key => {
     const nutritionInfo = NUTRITION_DATA[key];
     if (nutritionInfo && nutritionDataToSave[key] !== '' && nutritionDataToSave[key] != null) {
+      // 쉼표 제거된 숫자 값으로 저장
+      const numericValue = parseFloat(String(nutritionDataToSave[key]).replace(/,/g, ''));
       formattedData[key] = {
         label: nutritionInfo.label,
-        value: nutritionDataToSave[key],
+        value: isNaN(numericValue) ? nutritionDataToSave[key] : numericValue,
         unit: nutritionInfo.unit
       };
     }
@@ -946,50 +956,22 @@ function loadExistingData(data) {
 
 // ===== 이벤트 핸들러들 =====
 
-// 스타일 옵션 토글
-window.toggleStyleOptions = function() {
-  const style = document.getElementById('nutrition_display_unit').value;
-  const basicVerticalOptions = document.getElementById('basic-vertical-options');
-  const parallelOptions = document.getElementById('parallel-options');
-  
-  if (style === 'parallel') {
-    basicVerticalOptions.classList.remove('show');
-    parallelOptions.classList.add('show');
-  } else {
-    basicVerticalOptions.classList.add('show');
-    parallelOptions.classList.remove('show');
-  }
-  
-  // 스타일 변경 시 자동 계산 (영양성분 데이터가 있는 경우에만)
-  const baseAmount = document.getElementById('serving_size').value;
-  const servingsPerPackage = document.getElementById('units_per_package').value;
-  
-  // 자동 계산 제거 - 계산 버튼을 눌렀을 때만 계산
-  // 영양성분 입력값 확인은 하지만 자동 계산은 하지 않음
-};
-
-// 영양성분 섹션 토글
-window.toggleNutritionSection = function() {
-  const additionalSection = document.getElementById('additional-nutrients');
-  const toggleIcon = document.getElementById('nutrition-toggle');
-  const toggleText = document.getElementById('nutrition-toggle-text');
-  
-  if (additionalSection.style.display === 'none') {
-    additionalSection.style.display = 'block';
-    toggleIcon.textContent = '▲';
-    toggleIcon.classList.add('rotated');
-    toggleText.textContent = '성분 접기';
-  } else {
-    additionalSection.style.display = 'none';
-    toggleIcon.textContent = '▼';
-    toggleIcon.classList.remove('rotated');
-    toggleText.textContent = '성분 추가';
-  }
-};
-
 // 페이지 로드 완료 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
   buildInputForm();
+  
+  // 단위량, 포장개수 필드에 쉼표 포맷팅 추가
+  const servingSizeInput = document.getElementById('serving_size');
+  const unitsPerPackageInput = document.getElementById('units_per_package');
+  
+  [servingSizeInput, unitsPerPackageInput].forEach(input => {
+    if (input) {
+      // 기존 이벤트 리스너 제거 (중복 방지)
+      input.removeEventListener('input', applyCommaFormatting);
+      // 공통 함수 사용
+      input.addEventListener('input', applyCommaFormatting);
+    }
+  });
   
   // buildInputForm이 완료될 때까지 충분히 기다린 후 데이터 로드
   setTimeout(() => {
@@ -1013,25 +995,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     waitForFormReady();
   }, 200);
-
-  // 입력 패널 숫자 입력에 쉼표 자동 추가 기능
-  setTimeout(() => {
-    const inputPanel = document.querySelector('.input-panel');
-    if (inputPanel) {
-      inputPanel.addEventListener('input', function(e) {
-        if (e.target.type === 'number' || e.target.classList.contains('ratio-input')) {
-          const value = e.target.value.replace(/,/g, '');
-          if (!isNaN(value) && value.length > 0) {
-            const formattedValue = Number(value).toLocaleString('ko-KR');
-            // 커서 위치 유지를 위해 현재 값과 다를 때만 업데이트
-            if (e.target.value !== formattedValue) {
-                e.target.value = formattedValue;
-            }
-          }
-        }
-      });
-    }
-  }, 400);
 
   // 커스텀 이벤트 발생
   const event = new CustomEvent('nutrition-calculator-ready');
@@ -1160,8 +1123,6 @@ function loadDataFromUrlParams() {
 // V3 기본형 영양정보표 생성
 function generateBasicDisplayV3(nutritionInputs, baseAmount, servingsPerPackage) {
   
-  console.log('generateBasicDisplayV3 호출됨:', nutritionInputs, baseAmount, servingsPerPackage);
-  
   // 표시 기준 확인
   const displayType = document.getElementById('basic_display_type')?.value || 'total';
   let displayAmount, multiplier;
@@ -1249,7 +1210,7 @@ function generateBasicDisplayV3(nutritionInputs, baseAmount, servingsPerPackage)
         displayValue = processedValue;
       } else {
         const numericValue = Number(processedValue.replace(/,/g, ''));
-        displayValue = numericValue.toLocaleString() + data.unit;
+        displayValue = numericValue.toLocaleString() + ' ' + data.unit;
       }
 
       const percentDisplay = percent !== null ? (percent.includes('미만') ? percent : '<strong>' + percent + '</strong>%') : '';
@@ -1411,7 +1372,7 @@ function generateParallelDisplayV3(nutritionInputs, baseAmount, servingsPerPacka
         displayValue1 = processedValue1;
       } else {
         const numericValue1 = Number(processedValue1.replace(/,/g, ''));
-        displayValue1 = numericValue1.toLocaleString() + data.unit;
+        displayValue1 = numericValue1.toLocaleString() + ' ' + data.unit;
       }
 
       const originalValue2 = (nutritionInputs[key] || 0) * multiplier2;
@@ -1423,7 +1384,7 @@ function generateParallelDisplayV3(nutritionInputs, baseAmount, servingsPerPacka
         displayValue2 = processedValue2;
       } else {
         const numericValue2 = Number(processedValue2.replace(/,/g, ''));
-        displayValue2 = numericValue2.toLocaleString() + data.unit;
+        displayValue2 = numericValue2.toLocaleString() + ' ' + data.unit;
       }
 
       const percentDisplay1 = percent1 !== null ? (percent1.includes('미만') ? percent1 : '<strong>' + percent1 + '</strong>%') : '';

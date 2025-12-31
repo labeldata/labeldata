@@ -269,7 +269,7 @@ body {
 }
 
 .info-group input {
-  width: 80px;
+  width: 120px;
   font-size: 0.9rem;
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -434,7 +434,7 @@ body {
 }
 
 .nutrients-grid .nutrient-input-group input {
-  width: 70px;
+  width: 100px;
   font-size: 0.85rem;
   border: 1px solid var(--border-color);
   border-radius: 4px;

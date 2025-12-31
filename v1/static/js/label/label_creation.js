@@ -2812,7 +2812,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (nutritionTextField && data.formattedData) {
       const nutritionItems = Object.values(data.formattedData)
         .filter(item => item.value !== '' && item.value !== null && item.value !== undefined)
-        .map(item => `${item.label} ${item.value}${item.unit}`);
+        .map(item => {
+          // 숫자 값을 쉼표 포맷팅하여 표시
+          const numValue = parseFloat(item.value);
+          const formattedValue = !isNaN(numValue) ? numValue.toLocaleString('ko-KR') : item.value;
+          return `${item.label} ${formattedValue} ${item.unit}`;
+        });
       
       nutritionTextField.value = nutritionItems.join(', ');
       // 영양성분 체크박스 자동 체크
