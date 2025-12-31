@@ -423,9 +423,37 @@ function sendNutritionDataToParent() {
 
   if (window.opener && typeof window.opener.postMessage === 'function') {
     window.opener.postMessage(dataToSend, '*');
-    alert('영양성분 데이터가 저장되었습니다.');
+    
+    // 저장 버튼 피드백
+    const saveBtn = document.querySelector('button[onclick="sendNutritionDataToParent()"]');
+    if (saveBtn) {
+      const originalText = saveBtn.innerHTML;
+      const originalClass = saveBtn.className;
+      
+      saveBtn.className = 'btn btn-success';
+      saveBtn.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
+      
+      // 1.5초 후 원래 상태로 복구
+      setTimeout(() => {
+        saveBtn.className = originalClass;
+        saveBtn.innerHTML = originalText;
+      }, 1500);
+    }
   } else {
-    alert('데이터 저장에 실패했습니다. 부모 창을 찾을 수 없습니다.');
+    // 저장 실패 버튼 피드백
+    const saveBtn = document.querySelector('button[onclick="sendNutritionDataToParent()"]');
+    if (saveBtn) {
+      const originalText = saveBtn.innerHTML;
+      const originalClass = saveBtn.className;
+      
+      saveBtn.className = 'btn btn-danger';
+      saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>저장실패';
+      
+      setTimeout(() => {
+        saveBtn.className = originalClass;
+        saveBtn.innerHTML = originalText;
+      }, 3000);
+    }
   }
 }
 

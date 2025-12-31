@@ -1980,6 +1980,15 @@ function saveLabelData() {
         return;
     }
     
+    // 저장 버튼 비활성화 및 로딩 표시
+    const saveBtn = document.getElementById('saveLabelBtn');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.classList.remove('btn-warning', 'btn-success', 'btn-danger');
+        saveBtn.classList.add('btn-secondary');
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
+    }
+    
     fetch('/save-label/', {
         method: 'POST',
         headers: {
@@ -1994,18 +2003,26 @@ function saveLabelData() {
             // localStorage 데이터 초기화
             localStorage.removeItem('demo_label_data');
             
-            // 로그인 상태이면 항상 현재 페이지 유지
-            if (data.stay_on_page || data.label_id) {
-                // URL을 label_id가 포함된 것으로 부드럽게 변경
-                const newUrl = data.redirect_url || `/?label_id=${data.label_id}`;
-                window.history.replaceState({}, '', newUrl);
-                // 페이지 새로고침하여 저장된 데이터 반영
-                window.location.reload();
-            } else {
-                // 표시사항 리스트 페이지로 리다이렉트
+            // 저장 버튼 피드백 (성공)
+            const saveBtn = document.getElementById('saveLabelBtn');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('btn-secondary');
+                saveBtn.classList.add('btn-success');
+                saveBtn.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
+                
+                // 1.5초 후 원래 상태로 복구
                 setTimeout(() => {
-                    window.location.href = data.redirect_url || '/label/my-labels/';
-                }, 500);
+                    saveBtn.classList.remove('btn-success');
+                    saveBtn.classList.add('btn-warning');
+                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
+                }, 1500);
+            }
+            
+            // URL을 label_id가 포함된 것으로 변경 (새로고침 없이)
+            if (data.label_id) {
+                const newUrl = `/?label_id=${data.label_id}`;
+                window.history.replaceState({}, '', newUrl);
             }
         } else if (data.requires_login) {
             // 로그인 필요 응답 처리
@@ -2015,12 +2032,42 @@ function saveLabelData() {
             }
         } else {
             console.error('❌ 저장 실패:', data.error);
-            alert('저장에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
+            
+            // 저장 버튼 피드백 (실패)
+            const saveBtn = document.getElementById('saveLabelBtn');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('btn-secondary');
+                saveBtn.classList.add('btn-danger');
+                saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>저장실패';
+                
+                // 3초 후 원래 상태로 복구
+                setTimeout(() => {
+                    saveBtn.classList.remove('btn-danger');
+                    saveBtn.classList.add('btn-warning');
+                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
+                }, 3000);
+            }
         }
     })
     .catch(error => {
         console.error('❌ 서버 통신 오류:', error);
-        alert('서버와의 통신에 실패했습니다. 다시 시도해주세요.');
+        
+        // 저장 버튼 피드백 (오류)
+        const saveBtn = document.getElementById('saveLabelBtn');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('btn-secondary');
+            saveBtn.classList.add('btn-danger');
+            saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>통신오류';
+            
+            // 3초 후 원래 상태로 복구
+            setTimeout(() => {
+                saveBtn.classList.remove('btn-danger');
+                saveBtn.classList.add('btn-warning');
+                saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
+            }, 3000);
+        }
     });
 }
 

@@ -383,15 +383,27 @@ function saveMyIngredient() {
         if (qs) queryString = qs;
     }
 
-    // 저장 버튼 비활성화(중복 저장 방지)
+    // 저장 버튼 비활성화 및 로딩 표시
     const saveBtn = document.querySelector('button[type="submit"][form="ingredientForm"]');
-    if (saveBtn) saveBtn.disabled = true;
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.className = 'btn btn-secondary';
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
+    }
 
     // 원재료명 필수값 체크
     const prdlst_nm = formData.get('prdlst_nm')?.trim();
     if (!prdlst_nm) {
-        alert('원재료명은 필수 입력값입니다.');
-        if (saveBtn) saveBtn.disabled = false;
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.className = 'btn btn-danger';
+            saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>원재료명 필수';
+            
+            setTimeout(() => {
+                saveBtn.className = 'btn btn-primary';
+                saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
+            }, 3000);
+        }
         document.getElementById('prdlst_nm').focus();
         return;
     }
@@ -410,31 +422,39 @@ function saveMyIngredient() {
         .then(data => {
             if (data.exists) {
                 if (!confirm('동일한 이름의 원료가 이미 존재합니다. 그래도 저장하시겠습니까?')) {
-                    if (saveBtn) saveBtn.disabled = false;
+                    if (saveBtn) {
+                        saveBtn.disabled = false;
+                        saveBtn.className = 'btn btn-primary';
+                        saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
+                    }
                     return;
                 } else {
                     // 중복 무시 의도 전달
                     formData.append('ignore_duplicate', 'Y');
                 }
             }
-            doSaveMyIngredient(url, formData, queryString, function() {
-                if (saveBtn) saveBtn.disabled = false;
-            });
+            doSaveMyIngredient(url, formData, queryString, saveBtn);
         })
         .catch(() => {
-            if (saveBtn) saveBtn.disabled = false;
-            alert('중복 체크 중 오류가 발생했습니다.');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.className = 'btn btn-danger';
+                saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>중복체크 오류';
+                
+                setTimeout(() => {
+                    saveBtn.className = 'btn btn-primary';
+                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
+                }, 3000);
+            }
         });
         return;
     }
     // 기존 원료 수정 또는 원재료명 미입력 시 바로 저장
-    doSaveMyIngredient(url, formData, queryString, function() {
-        if (saveBtn) saveBtn.disabled = false;
-    });
+    doSaveMyIngredient(url, formData, queryString, saveBtn);
 }
 
 // doSaveMyIngredient 함수 수정
-function doSaveMyIngredient(url, formData, queryString, doneCallback) {
+function doSaveMyIngredient(url, formData, queryString, saveBtn) {
     fetch(url, {
         method: 'POST',
         body: formData,
@@ -454,34 +474,67 @@ function doSaveMyIngredient(url, formData, queryString, doneCallback) {
     })
     .then(data => {
         if (data.success) {
-            // 신규 등록된 원료의 페이지 계산 및 이동
-            if (data.ingredient_id && !document.getElementById('my_ingredient_id').value) {
-                // 신규 등록의 경우 해당 원료가 있는 페이지 계산
-                calculateIngredientPage(data.ingredient_id, queryString, function(targetPage) {
-                    const urlParams = new URLSearchParams(queryString.replace('?', ''));
-                    urlParams.set('page', targetPage);
-                    const finalQueryString = '?' + urlParams.toString();
-                    
-                    // 해당 페이지로 리스트 갱신
-                    updateIngredientListAndSelect(finalQueryString, data.ingredient_id);
-                });
-            } else {
-                // 수정의 경우 현재 페이지에서 리스트 갱신
-                updateIngredientListAndSelect(queryString, data.ingredient_id);
+            // 저장 성공 버튼 피드백
+            if (saveBtn) {
+                saveBtn.className = 'btn btn-success';
+                saveBtn.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
+                
+                setTimeout(() => {
+                    saveBtn.disabled = false;
+                    saveBtn.className = 'btn btn-primary';
+                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
+                }, 1500);
             }
             
-            // 저장 성공 후 변경 감지 플래그 해제
-            if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
+            // 버튼 피드백 표시 후 리스트 갱신 (300ms 지연)
+            setTimeout(() => {
+                // 신규 등록된 원료의 페이지 계산 및 이동
+                if (data.ingredient_id && !document.getElementById('my_ingredient_id').value) {
+                    // 신규 등록의 경우 해당 원료가 있는 페이지 계산
+                    calculateIngredientPage(data.ingredient_id, queryString, function(targetPage) {
+                        const urlParams = new URLSearchParams(queryString.replace('?', ''));
+                        urlParams.set('page', targetPage);
+                        const finalQueryString = '?' + urlParams.toString();
+                        
+                        // 해당 페이지로 리스트 갱신
+                        updateIngredientListAndSelect(finalQueryString, data.ingredient_id);
+                    });
+                } else {
+                    // 수정의 경우 현재 페이지에서 리스트 갱신
+                    updateIngredientListAndSelect(queryString, data.ingredient_id);
+                }
+                
+                // 저장 성공 후 변경 감지 플래그 해제
+                if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
+            }, 300);
         } else {
-            alert(data.error || '저장에 실패했습니다.');
+            // 저장 실패 버튼 피드백
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.className = 'btn btn-danger';
+                saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>저장실패: ' + (data.error || '알 수 없는 오류');
+                
+                setTimeout(() => {
+                    saveBtn.className = 'btn btn-primary';
+                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
+                }, 3000);
+            }
         }
     })
     .catch(error => {
-    console.error('Error:', error);
-        alert('저장 중 오류가 발생했습니다.');
-    })
-    .finally(() => {
-        if (typeof doneCallback === 'function') doneCallback();
+        console.error('Error:', error);
+        
+        // 통신 오류 버튼 피드백
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.className = 'btn btn-danger';
+            saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>통신오류';
+            
+            setTimeout(() => {
+                saveBtn.className = 'btn btn-primary';
+                saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
+            }, 3000);
+        }
     });
 }
 

@@ -618,6 +618,14 @@ function saveIngredients() {
         return;
     }
 
+    // 저장 버튼 비활성화 및 로딩 표시
+    const saveButton = document.querySelector('button[onclick="saveIngredients()"]');
+    if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.className = 'btn btn-secondary';
+        saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
+    }
+    
     // updateSummarySection을 호출하여 요약 정보 가져오기 (중복 코드 제거)
     const summaryInfo = updateSummarySection();
     
@@ -722,15 +730,54 @@ function saveIngredients() {
                 
                 // 원재료명(최종표시)는 사용자가 모달에서 수동으로만 업데이트
             }
-            alert('원재료 정보가 성공적으로 저장되었습니다.');
-            window.close();
+            
+            // 저장 버튼 피드백
+            const saveButton = document.querySelector('button[onclick="saveIngredients()"]');
+            if (saveButton) {
+                const originalText = saveButton.innerHTML;
+                const originalClass = saveButton.className;
+                
+                saveButton.disabled = false;
+                saveButton.className = 'btn btn-success';
+                saveButton.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
+                
+                // 1초 후 창 닫기
+                setTimeout(() => {
+                    window.close();
+                }, 1000);
+            } else {
+                window.close();
+            }
         } else {
-            alert('저장 중 오류가 발생했습니다: ' + (data.error || '알 수 없는 오류'));
+            // 저장 실패 버튼 피드백
+            const saveButton = document.querySelector('button[onclick="saveIngredients()"]');
+            if (saveButton) {
+                saveButton.disabled = false;
+                saveButton.className = 'btn btn-danger';
+                saveButton.innerHTML = '<i class="fas fa-times me-1"></i>저장실패: ' + (data.error || '알 수 없는 오류');
+                
+                setTimeout(() => {
+                    saveButton.className = 'btn btn-primary';
+                    saveButton.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
+                }, 3000);
+            }
         }
     })
     .catch(error => {
-        alert(`저장 중 오류가 발생했습니다: ${error.message}`);
         console.error('Save error:', error);
+        
+        // 통신 오류 버튼 피드백
+        const saveButton = document.querySelector('button[onclick="saveIngredients()"]');
+        if (saveButton) {
+            saveButton.disabled = false;
+            saveButton.className = 'btn btn-danger';
+            saveButton.innerHTML = '<i class="fas fa-times me-1"></i>통신오류';
+            
+            setTimeout(() => {
+                saveButton.className = 'btn btn-primary';
+                saveButton.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
+            }, 3000);
+        }
     });
 }
 

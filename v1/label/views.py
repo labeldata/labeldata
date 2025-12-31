@@ -647,6 +647,14 @@ def label_creation(request, label_id=None):
             # 표시사항 수정 로깅
             log_user_activity(request, 'label', 'label_update', label.my_label_id)
             
+            # AJAX 요청인 경우 JSON 응답 반환
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': '저장되었습니다.',
+                    'label_id': str(label.my_label_id)
+                })
+            
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
             messages.error(request, '입력 정보에 오류가 있습니다.')

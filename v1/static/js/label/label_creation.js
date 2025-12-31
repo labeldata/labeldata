@@ -1378,22 +1378,111 @@ document.addEventListener('DOMContentLoaded', function () {
     //applyDbCheckboxStates();
 
     $('#labelForm').on('submit', function (event) {
+      event.preventDefault(); // 기본 폼 제출 방지
+      
       const urlParams = new URLSearchParams(window.location.search);
       const autoSubmit = urlParams.get('autoSubmit');
       
-      if (autoSubmit !== 'true') {
-        // 최종 동기화
-        const topInput = document.getElementById('my_label_name_top');
-        const hiddenInput = document.getElementById('my_label_name_hidden');
-        if (topInput && hiddenInput) {
-          hiddenInput.value = topInput.value;
-        }
-        
-        $('#hidden_food_group').val($('#food_group').val());
-        $('#hidden_food_type').val($('#food_type').val());
-        prepareFormData();
+      if (autoSubmit === 'true') {
+        return false;
       }
-      return autoSubmit !== 'true';
+      
+      // 최종 동기화
+      const topInput = document.getElementById('my_label_name_top');
+      const hiddenInput = document.getElementById('my_label_name_hidden');
+      if (topInput && hiddenInput) {
+        hiddenInput.value = topInput.value;
+      }
+      
+      $('#hidden_food_group').val($('#food_group').val());
+      $('#hidden_food_type').val($('#food_type').val());
+      prepareFormData();
+      
+      // AJAX로 저장
+      const saveBtn = document.getElementById('saveBtn');
+      const form = document.getElementById('labelForm');
+      const formData = new FormData(form);
+      
+      // 저장 버튼 상태 변경 (로딩)
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.classList.remove('btn-primary', 'btn-success', 'btn-danger');
+        saveBtn.classList.add('btn-secondary');
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
+      }
+      
+      // 현재 URL에서 label_id 추출
+      const currentPath = window.location.pathname;
+      const actionUrl = currentPath; // 현재 URL을 action으로 사용
+      
+      fetch(actionUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // 성공 피드백
+          if (saveBtn) {
+            saveBtn.classList.remove('btn-secondary', 'btn-danger');
+            saveBtn.classList.add('btn-success');
+            saveBtn.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
+            
+            // 1.5초 후 원래 상태로 복구
+            setTimeout(() => {
+              saveBtn.classList.remove('btn-success');
+              saveBtn.classList.add('btn-primary');
+              saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
+              saveBtn.disabled = false;
+            }, 1500);
+          }
+          
+          // 새 레코드 생성 시 URL 업데이트
+          if (data.label_id && !currentPath.includes(data.label_id)) {
+            const newUrl = `/label/label-creation/${data.label_id}/`;
+            window.history.replaceState({}, '', newUrl);
+          }
+        } else {
+          // 실패 피드백
+          if (saveBtn) {
+            saveBtn.classList.remove('btn-secondary', 'btn-success');
+            saveBtn.classList.add('btn-danger');
+            saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>저장실패';
+            
+            // 3초 후 원래 상태로 복구
+            setTimeout(() => {
+              saveBtn.classList.remove('btn-danger');
+              saveBtn.classList.add('btn-primary');
+              saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
+              saveBtn.disabled = false;
+            }, 3000);
+          }
+        }
+      })
+      .catch(error => {
+        console.error('저장 오류:', error);
+        
+        // 오류 피드백
+        if (saveBtn) {
+          saveBtn.classList.remove('btn-secondary', 'btn-success');
+          saveBtn.classList.add('btn-danger');
+          saveBtn.innerHTML = '<i class="fas fa-times me-1"></i>통신오류';
+          
+          // 3초 후 원래 상태로 복구
+          setTimeout(() => {
+            saveBtn.classList.remove('btn-danger');
+            saveBtn.classList.add('btn-primary');
+            saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
+            saveBtn.disabled = false;
+          }, 3000);
+        }
+      });
+      
+      return false;
     });
 
     $('.select2-food-type, input[type="checkbox"], input[name="processing_condition"]').on('change input', updateSummary);
