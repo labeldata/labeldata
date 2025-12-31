@@ -1398,7 +1398,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
     $('.select2-food-type, input[type="checkbox"], input[name="processing_condition"]').on('change input', updateSummary);
 
-
+    // 페이지 로드 시 저장된 데이터가 있으면 식품유형 자동입력 요약 업데이트
+    // setTimeout을 사용하여 DOM이 완전히 로드된 후 실행
+    setTimeout(function() {
+      const hiddenFoodType = $('#hidden_food_type').val();
+      const hiddenPreservationType = $('#hidden_preservation_type').val();
+      const hiddenProcessingMethod = $('#hidden_processing_method').val();
+      const hiddenProcessingCondition = $('#hidden_processing_condition').val();
+      
+      // 체크박스 상태 확인
+      const hasCheckedLongShelf = $('.grp-long-shelf:checked').length > 0;
+      const hasCheckedSterilization = $('.grp-sterilization:checked').length > 0;
+      
+      if (hiddenFoodType || hiddenPreservationType || hiddenProcessingMethod || hiddenProcessingCondition || 
+          hasCheckedLongShelf || hasCheckedSterilization) {
+        // 저장된 데이터가 있으면 요약 업데이트
+        updateSummary();
+      }
+    }, 100);
 
 
 
