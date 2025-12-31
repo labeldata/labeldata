@@ -72,8 +72,238 @@ const fieldMappings = {
 // DOMContentLoaded 이벤트로 초기화 보장
 document.addEventListener('DOMContentLoaded', function () {
   // 초기화
+  
+  // localStorage에서 모드 전환 시 저장된 폼 데이터 복원
+  try {
+    const savedFormData = localStorage.getItem('mode_switch_form_data');
+    if (savedFormData) {
+      const data = JSON.parse(savedFormData);
+      
+      let foodCategoryValue = null;
+      let foodGroupValue = null;
+      
+      // 1단계: 일반 필드 복원
+      Object.keys(data).forEach(key => {
+        const value = data[key];
+        
+        // 체크박스는 별도 처리
+        if (key.startsWith('chk_')) return;
+        
+        // 식품유형은 나중에 처리 (필터링 후)
+        if (key === 'food_type') return;
+        
+        // 식품군은 필터링용으로 저장만
+        if (key === 'food_group') {
+          foodGroupValue = value;
+        }
+        
+        // 식품구분 라디오는 별도 처리
+        if (key === 'food_category_radio') {
+          const radio = document.querySelector(`input[name="food_category_radio"][value="${value}"]`);
+          if (radio) {
+            radio.checked = true;
+            foodCategoryValue = value;
+            console.log('  ✓ 식품구분 라디오:', value);
+          }
+          return;
+        }
+        
+        // 장기보존식품 체크박스 처리
+        if (key === 'preservation_type') {
+          const hiddenInput = document.getElementById('hidden_preservation_type');
+          if (value) {
+            const checkbox = document.querySelector(`input[name="preservation_type"][value="${value}"]`);
+            if (checkbox) {
+              checkbox.checked = true;
+            }
+            if (hiddenInput) {
+              hiddenInput.value = value;
+            }
+          } else {
+            // 체크 안됨 - 모든 체크박스 해제 및 hidden input 비우기
+            document.querySelectorAll('input[name="preservation_type"]').forEach(cb => cb.checked = false);
+            if (hiddenInput) {
+              hiddenInput.value = '';
+            }
+            console.log('  - 장기보존식품: 체크 해제');
+          }
+          return;
+        }
+        
+        // 제조방법 체크박스 처리
+        if (key === 'processing_method') {
+          const hiddenInput = document.getElementById('hidden_processing_method');
+          if (value) {
+            const checkbox = document.querySelector(`input[name="processing_method"][value="${value}"]`);
+            if (checkbox) {
+              checkbox.checked = true;
+            }
+            if (hiddenInput) {
+              hiddenInput.value = value;
+            }
+          } else {
+            // 체크 안됨 - 모든 체크박스 해제 및 hidden input 비우기
+            document.querySelectorAll('input[name="processing_method"]').forEach(cb => cb.checked = false);
+            if (hiddenInput) {
+              hiddenInput.value = '';
+            }
+            console.log('  - 제조방법: 체크 해제');
+          }
+          return;
+        }
+        
+        // 제조방법 조건 텍스트 처리
+        if (key === 'processing_condition') {
+          const field = document.querySelector(`input[name="processing_condition"]`);
+          const hiddenInput = document.getElementById('hidden_processing_condition');
+          const otherCheckbox = document.getElementById('chk_sterilization_other');
+          
+          if (value) {
+            if (field) {
+              field.value = value;
+              console.log('  ✓ 제조방법 조건:', value);
+            }
+            if (hiddenInput) {
+              hiddenInput.value = value;
+            }
+            if (otherCheckbox) {
+              otherCheckbox.checked = true;
+            }
+          } else {
+            // 값 없음 - 필드 및 hidden input 비우기
+            if (field) {
+              field.value = '';
+            }
+            if (hiddenInput) {
+              hiddenInput.value = '';
+            }
+            console.log('  - 제조방법 조건: 비움');
+          }
+          return;
+        }
+        
+        // 필드 복원
+        const field = document.querySelector(`[name="${key}"]`) || document.getElementById(key);
+        
+        if (field) {
+          if (field.type === 'checkbox') {
+            field.checked = value;
+          } else if (field.type === 'radio') {
+            if (field.value === value) {
+              field.checked = true;
+            }
+          } else if (field.tagName === 'SELECT') {
+            // Select2 필드 감지 및 트리거
+            field.value = value;
+            if ($(field).hasClass('select2-hidden-accessible')) {
+              $(field).trigger('change');
+            }
+          } else {
+            field.value = value;
+          }
+        }
+      });
+      
+      // 2단계: 식품유형 필터링 및 복원
+      // food_group이 있으면 food_group 기반, 없으면 food_category 기반
+      const filterValue = foodGroupValue || foodCategoryValue;
+      
+      if (filterValue) {
+        // food_group 먼저 설정
+        if (foodGroupValue) {
+          const $foodGroupSelect = $('#food_group');
+          if ($foodGroupSelect.length) {
+            $foodGroupSelect.val(foodGroupValue);
+            
+            // food_type 옵션 필터링 (직접 AJAX 호출)
+            const foodType = data['food_type'];
+            setTimeout(() => {
+              const $foodTypeSelect = $('#food_type');
+              $foodTypeSelect.empty().append('<option value="">소분류</option>');
+              
+              const url = `/label/food-types-by-group/?group=${encodeURIComponent(foodGroupValue)}`;
+              fetch(url)
+                .then(response => response.json())
+                .then(result => {
+                  if (result.success) {
+                    result.food_types.forEach(item => {
+                      const option = new Option(item.food_type, item.food_type);
+                      option.dataset.group = item.food_group;
+                      $foodTypeSelect.append(option);
+                    });
+                    
+                    // 소분류 선택
+                    if (foodType && result.food_types.some(t => t.food_type === foodType)) {
+                      $foodTypeSelect.val(foodType).trigger('change.select2');
+                      
+                      // hidden input도 업데이트
+                      const hiddenFoodType = document.getElementById('hidden_food_type');
+                      if (hiddenFoodType) {
+                        hiddenFoodType.value = foodType;
+                      }
+                    }
+                  }
+                })
+                .catch(err => console.error('식품유형 로드 실패:', err));
+            }, 100);
+          }
+        }
+        
+        // 식품구분 라디오 기반 필터링
+        if (!foodGroupValue && foodCategoryValue && typeof filterFoodTypeByCategory === 'function') {
+          setTimeout(() => {
+            filterFoodTypeByCategory(foodCategoryValue);
+            console.log('  ✓ 식품유형 필터링 (라디오):', foodCategoryValue);
+            
+            const foodType = data['food_type'];
+            if (foodType) {
+              setTimeout(() => {
+                const $foodTypeSelect = $('#food_type');
+                if ($foodTypeSelect.length) {
+                  $foodTypeSelect.val(foodType).trigger('change');
+                  console.log('  ✓ 식품유형 소분류:', foodType);
+                  
+                  // hidden input도 업데이트
+                  const hiddenFoodType = document.getElementById('hidden_food_type');
+                  if (hiddenFoodType) {
+                    hiddenFoodType.value = foodType;
+                  }
+                }
+              }, 200);
+            }
+          }, 100);
+        }
+      }
+      
+      // 3단계: 체크박스 상태 복원
+      Object.keys(data).forEach(key => {
+        if (key.startsWith('chk_')) {
+          const checkbox = document.getElementById(key);
+          if (checkbox && checkbox.type === 'checkbox') {
+            checkbox.checked = (data[key] === 'Y' || data[key] === true);
+            
+            // hidden input도 업데이트 (chk_prdlst_nm -> chckd_prdlst_nm)
+            const hiddenInputName = key.replace('chk_', 'chckd_');
+            const hiddenInput = document.querySelector(`input[type="hidden"][name="${hiddenInputName}"]`);
+            if (hiddenInput) {
+              hiddenInput.value = checkbox.checked ? 'Y' : 'N';
+            }
+          }
+        }
+      });
+      
+      // 복원된 데이터 보호 플래그 설정
+      window.formDataRestored = true;
+      window.restoredFormData = data;
+      
+      // 사용 후 삭제
+      localStorage.removeItem('mode_switch_form_data');
+    }
+  } catch (e) {
+    console.error('❌ 폼 데이터 복원 실패:', e);
+  }
 
-  // 품목보고번호 복원
+  // 품목보고번호 복원 (하위 호환성)
   const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
   if (reportNoInput) {
     try {
@@ -1128,7 +1358,10 @@ document.addEventListener('DOMContentLoaded', function () {
           });
       }
     } else {
-      updateFoodTypes('', initialFoodType);
+      // 모드 전환 복원 시에는 초기화 건너뛰기
+      if (!window.formDataRestored) {
+        updateFoodTypes('', initialFoodType);
+      }
     }
 
     // 전역 함수로 노출하여 적용 버튼에서 호출할 수 있도록 함
@@ -2671,6 +2904,11 @@ window.getNutritionDataForPopup = function() {
 
 // 홈 화면으로 전환
 window.switchToHome = function() {
+    const labelId = document.getElementById('label_id')?.value;
+    
+    // 모드 전환 시 항상 localStorage에 임시 저장 (DB 저장 아님)
+    saveFormDataToLocalStorage();
+    
     // 현재 입력된 품목보고번호를 localStorage에 저장 (모드 전환 시 전달용)
     const reportNoInput = document.querySelector('input[name="prdlst_report_no"]');
     if (reportNoInput && reportNoInput.value.trim()) {
@@ -2681,13 +2919,133 @@ window.switchToHome = function() {
         }
     }
     
-    const labelId = document.getElementById('label_id')?.value;
     if (labelId) {
         window.location.href = `/?label_id=${labelId}`;
     } else {
         window.location.href = '/';
     }
 };
+
+// 폼 데이터를 localStorage에 저장
+function saveFormDataToLocalStorage() {
+    const form = document.getElementById('labelForm');
+    if (!form) {
+        console.error('❌ labelForm을 찾을 수 없습니다');
+        return;
+    }
+    
+    const data = {};
+    
+    // 필수 전달 필드
+    const CORE_FIELDS = [
+        'my_label_name', 'prdlst_nm', 'prdlst_dcnm', 'content_weight', 'food_type', 'food_group',
+        'prdlst_report_no', 'country_of_origin', 'storage_method',
+        'rawmtrl_nm_display', 'bssh_nm', 'distributor_address', 'frmlc_mtrqlt',
+        'packaging_material', 'cautions', 'additional_info', 'ingredient_info',
+        'repacker_address', 'importer_address', 'pog_daycnt'
+    ];
+    
+    // 체크박스 필드 (실제 HTML의 chk_* 형식)
+    const CHECKBOX_FIELDS = [
+        'chk_ingredient_info', 'chk_prdlst_dcnm',
+        'chk_prdlst_report_no', 'chk_country_of_origin',
+        'chk_storage_method', 'chk_pog_daycnt', 'chk_rawmtrl_nm_display',
+        'chk_cautions', 'chk_additional_info', 'chk_frmlc_mtrqlt',
+        'chk_bssh_nm', 'chk_distributor_address', 'chk_repacker_address', 'chk_importer_address'
+    ];
+    
+    // 조건부 필드
+    const OPTIONAL_FIELDS = [
+        'food_category_radio', 'weight_calorie', 'pog_daycnt',
+        'importer_address', 'repacker_address', 'frmlc_mtrqlt',
+        'nutrition_text', 'ingredient_info',
+        'preservation_type', 'processing_method', 'processing_condition'
+    ];
+    
+    console.log('📦 상세모드 데이터 수집 시작...');
+    
+    // 필수 필드 수집
+    CORE_FIELDS.forEach(key => {
+        let field = null;
+        let value = '';
+        
+        // 식품유형 필드는 select와 hidden이 모두 있을 수 있음
+        if (key === 'food_group' || key === 'food_type') {
+            // select 필드 먼저 확인
+            const selectField = document.getElementById(key);
+            const hiddenField = document.getElementById('hidden_' + key);
+            
+            // select에 값이 있으면 select 사용, 없으면 hidden 사용
+            if (selectField && selectField.value) {
+                field = selectField;
+                value = selectField.value;
+            } else if (hiddenField && hiddenField.value) {
+                field = hiddenField;
+                value = hiddenField.value;
+            } else {
+                field = selectField || hiddenField;
+            }
+        } else {
+            field = document.querySelector(`[name="${key}"]`) || document.getElementById(key);
+        }
+        
+        if (field) {
+            if (!value) {
+                value = field.value || '';
+            }
+            data[key] = value;
+            // 식품유형은 빈 값이어도 로그 출력
+            if (value || key === 'food_type' || key === 'food_group') {
+                const displayValue = value ? value.substring(0, 50) + (value.length > 50 ? '...' : '') : '(빈 값)';
+                console.log(`  ✓ ${key}:`, displayValue);
+            }
+        } else {
+            console.warn(`  ⚠️ ${key}: 필드를 찾을 수 없음`);
+        }
+    });
+    
+    // 체크박스 상태 수집
+    CHECKBOX_FIELDS.forEach(key => {
+        const checkbox = document.getElementById(key);
+        if (checkbox && checkbox.type === 'checkbox') {
+            data[key] = checkbox.checked ? 'Y' : 'N';
+            console.log(`  ✓ 체크박스 ${key}:`, data[key]);
+        } else {
+            console.warn(`  ⚠️ 체크박스 ${key}: 찾을 수 없음`);
+        }
+    });
+    
+    // 조건부 필드 수집 (값이 있을 때만)
+    OPTIONAL_FIELDS.forEach(key => {
+        // 체크박스/라디오는 :checked된 것만 저장
+        if (key === 'preservation_type' || key === 'processing_method' || key === 'food_category_radio') {
+            const field = document.querySelector(`[name="${key}"]:checked`);
+            if (field && field.value) {
+                data[key] = field.value;
+                console.log(`  ✓ ${key}: ${field.value}`);
+            } else {
+                // 체크되지 않은 경우 빈 문자열로 명시적 저장 (복원 시 해제 처리)
+                data[key] = '';
+                console.log(`  - ${key}: 체크 안됨 (빈 값 저장)`);
+            }
+        } else {
+            // 일반 필드는 기존 로직 사용
+            const field = document.querySelector(`[name="${key}"]`) || document.getElementById(key);
+            if (field && field.value) {
+                data[key] = field.value;
+                console.log(`  ✓ ${key}: ${field.value}`);
+            }
+        }
+    });
+    
+    try {
+        localStorage.setItem('mode_switch_form_data', JSON.stringify(data));
+        console.log('✅ 상세모드 데이터 저장 완료:', Object.keys(data).length, '개 필드');
+        console.log('  저장된 필드:', Object.keys(data).join(', '));
+    } catch (e) {
+        console.error('❌ localStorage 저장 실패:', e);
+    }
+}
 
 // ==================== 알레르기 관리 기능 (Label Creation) ====================
 
