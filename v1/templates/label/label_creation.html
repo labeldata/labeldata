@@ -335,7 +335,7 @@
                       <option value="{% if c.country_name_ko|slice:'-1:' == '산' %}{{ c.country_name_ko }}{% else %}{{ c.country_name_ko }}산{% endif %}">{% if c.country_name_ko|slice:'-1:' == '산' %}{{ c.country_name_ko }}{% else %}{{ c.country_name_ko }}산{% endif %}</option>
                       {% endfor %}
                     </select>
-                    <input type="text" name="country_of_origin" class="form-control" placeholder="원산지를 입력하세요" id="countryInputDetail" style="flex: 1; height:40px;" disabled>
+                    <input type="text" name="country_of_origin" class="form-control" placeholder="원산지를 입력하세요" id="countryInputDetail" style="flex: 1; height:40px;" value="{{ form.country_of_origin.value|default:'' }}" disabled>
                   </div>
                 </div>
               </div>

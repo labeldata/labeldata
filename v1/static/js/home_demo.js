@@ -806,7 +806,7 @@ function showLoginModal() {
         sessionStorage.setItem('pending_label_data', JSON.stringify(formData));
         sessionStorage.setItem('return_to_demo', 'true');
     } catch (e) {
-        console.error('❌ 임시 저장 실패:', e);
+        console.error('임시 저장 실패:', e);
     }
     
     // Bootstrap Modal 표시
@@ -1478,7 +1478,7 @@ document.addEventListener('DOMContentLoaded', function() {
             localStorage.removeItem('mode_switch_form_data');
         }
     } catch (e) {
-        console.error('❌ 폼 데이터 복원 실패:', e);
+        console.error('폼 데이터 복원 실패:', e);
     }
     
     // 모드 전환으로 저장된 품목보고번호 복원 (하위 호환성)
@@ -1564,7 +1564,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 saveLabelData();
             }, 500);
         } catch (e) {
-            console.error('❌ 임시 데이터 복원 실패:', e);
+            console.error('임시 데이터 복원 실패:', e);
         }
     }
     
@@ -2087,12 +2087,12 @@ function saveLabelData() {
                 saveBtn.classList.add('btn-success');
                 saveBtn.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
                 
-                // 1.5초 후 원래 상태로 복구
+                // 2.5초 후 원래 상태로 복구
                 setTimeout(() => {
                     saveBtn.classList.remove('btn-success');
                     saveBtn.classList.add('btn-warning');
                     saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
-                }, 1500);
+                }, 2500);
             }
             
             // URL을 label_id가 포함된 것으로 변경 (새로고침 없이)
@@ -2107,7 +2107,7 @@ function saveLabelData() {
                 window.location.href = data.login_url || '/user-management/login/?next=/';
             }
         } else {
-            console.error('❌ 저장 실패:', data.error);
+            console.error('저장 실패:', data.error);
             
             // 저장 버튼 피드백 (실패)
             const saveBtn = document.getElementById('saveLabelBtn');
@@ -2122,12 +2122,12 @@ function saveLabelData() {
                     saveBtn.classList.remove('btn-danger');
                     saveBtn.classList.add('btn-warning');
                     saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장하기';
-                }, 3000);
+                }, 5000);
             }
         }
     })
     .catch(error => {
-        console.error('❌ 서버 통신 오류:', error);
+        console.error('서버 통신 오류:', error);
         
         // 저장 버튼 피드백 (오류)
         const saveBtn = document.getElementById('saveLabelBtn');
@@ -2252,7 +2252,7 @@ function hasUnsavedData() {
 function saveFormDataToLocalStorage() {
     const form = document.getElementById('demoForm');
     if (!form) {
-        console.error('❌ demoForm을 찾을 수 없습니다');
+        console.error('demoForm을 찾을 수 없습니다');
         return;
     }
     
@@ -2284,7 +2284,7 @@ function saveFormDataToLocalStorage() {
         'preservation_type', 'processing_method', 'processing_condition'
     ];
     
-    console.log('📦 간편모드 데이터 수집 시작...');
+    console.log('간편모드 데이터 수집 시작...');
     
     // 기존 localStorage 또는 복원된 데이터에서 상세모드 전용 필드 가져오기
     let existingData = {};
@@ -2302,7 +2302,7 @@ function saveFormDataToLocalStorage() {
             }
         }
     } catch (e) {
-        console.warn('  ⚠️ 기존 데이터 로드 실패:', e);
+        console.warn('기존 데이터 로드 실패:', e);
     }
     
     // 필수 필드 수집
@@ -2313,7 +2313,7 @@ function saveFormDataToLocalStorage() {
         // 식품유형 필드는 ID로 직접 찾기 (Select2 적용됨)
         if (key === 'food_group' || key === 'food_type') {
             field = document.getElementById(key);
-            console.log(`  🔍 ${key} 필드 찾기:`, field ? '발견' : '없음');
+            console.log(`${key} 필드 찾기:`, field ? '발견' : '없음');
             if (field) {
                 value = field.value || '';
                 console.log(`    현재 값:`, value ? value : '(빈 값)');
@@ -2335,7 +2335,7 @@ function saveFormDataToLocalStorage() {
                 console.log(`  ✓ ${key}:`, displayValue);
             }
         } else {
-            console.warn(`  ⚠️ ${key}: 필드를 찾을 수 없음`);
+            console.warn(`${key}: 필드를 찾을 수 없음`);
         }
     });
     
@@ -2346,7 +2346,7 @@ function saveFormDataToLocalStorage() {
             data[key] = checkbox.checked ? 'Y' : 'N';
             console.log(`  ✓ 체크박스 ${key}:`, data[key]);
         } else {
-            console.warn(`  ⚠️ 체크박스 ${key}: 찾을 수 없음`);
+            console.warn(`체크박스 ${key}: 찾을 수 없음`);
         }
     });
     
@@ -2369,16 +2369,16 @@ function saveFormDataToLocalStorage() {
     DETAIL_ONLY_FIELDS.forEach(key => {
         if (existingData.hasOwnProperty(key)) {
             data[key] = existingData[key];
-            console.log(`  🔄 상세모드 전용 필드 보존 ${key}:`, data[key] || '(빈 값)');
+            console.log(`상세모드 전용 필드 보존 ${key}:`, data[key] || '(빈 값)');
         }
     });
     
     try {
         localStorage.setItem('mode_switch_form_data', JSON.stringify(data));
-        console.log('✅ 간편모드 데이터 저장 완료:', Object.keys(data).length, '개 필드');
+        console.log('간편모드 데이터 저장 완료:', Object.keys(data).length, '개 필드');
         console.log('  저장된 필드:', Object.keys(data).join(', '));
     } catch (e) {
-        console.error('❌ localStorage 저장 실패:', e);
+        console.error('localStorage 저장 실패:', e);
     }
 }
 
@@ -2509,7 +2509,7 @@ function initializeAllergenModule() {
     // constants.js의 ALLERGEN_KEYWORDS를 window.allergenKeywords로 사용
     // 중복 정의 제거: constants.js의 상세한 키워드 매핑을 그대로 사용
     if (!window.allergenKeywords) {
-        console.error('❌ constants.js의 ALLERGEN_KEYWORDS가 로드되지 않았습니다.');
+        console.error('constants.js의 ALLERGEN_KEYWORDS가 로드되지 않았습니다.');
     }
     
     // 원재료명 입력 감지 (실시간 알레르기 물질 감지)
@@ -2911,7 +2911,7 @@ function updateCrossContaminationPreview() {
         
         // 중복이 있으면 경고 표시
         if (duplicates.length > 0) {
-            warningText += `\n⚠️ 경고: ${duplicates.join(', ')}은(는) 원재료에 이미 사용된 알레르기 물질입니다.`;
+            warningText += `\n경고: ${duplicates.join(', ')}은(는) 원재료에 이미 사용된 알레르기 물질입니다.`;
             textDiv.innerHTML = warningText.replace(/\n/g, '<br>');
             textDiv.style.color = '#d32f2f';
         } else {
@@ -3006,7 +3006,7 @@ function toggleAllergenWarning() {
         );
         
         if (duplicates.length > 0) {
-            const confirmMsg = `⚠️ 경고: ${duplicates.join(', ')}은(는) 원재료에 이미 사용된 알레르기 물질입니다.\n\n원재료 사용 알레르기는 "원재료명"에만 표시되어야 하며, 제조시설 혼입 경고에는 포함할 수 없습니다.\n\n계속 진행하시겠습니까?`;
+            const confirmMsg = `경고: ${duplicates.join(', ')}은(는) 원재료에 이미 사용된 알레르기 물질입니다.\n\n원재료 사용 알레르기는 "원재료명"에만 표시되어야 하며, 제조시설 혼입 경고에는 포함할 수 없습니다.\n\n계속 진행하시겠습니까?`;
             
             if (!confirm(confirmMsg)) {
                 return;

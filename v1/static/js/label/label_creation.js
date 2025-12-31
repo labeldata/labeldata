@@ -1507,6 +1507,14 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
+    // 원산지 필드가 disabled 상태면 임시로 활성화 (FormData에 포함되도록)
+    const countryInput = document.getElementById('countryInputDetail');
+    if (countryInput && countryInput.disabled && countryInput.value) {
+      countryInput.disabled = false;
+      // 저장 후 다시 비활성화하기 위해 플래그 설정
+      countryInput.dataset.wasDisabled = 'true';
+    }
+
     $('#hidden_preservation_type').val($('.grp-long-shelf:checked').val() || '');
     $('#hidden_processing_method').val($('.grp-sterilization:checked').not('#chk_sterilization_other').val() || '');
     $('#hidden_processing_condition').val($('input[name="processing_condition"]').val() || '');
@@ -1658,6 +1666,13 @@ document.addEventListener('DOMContentLoaded', function () {
       })
       .then(response => response.json())
       .then(data => {
+        // 원산지 필드 상태 복원
+        const countryInput = document.getElementById('countryInputDetail');
+        if (countryInput && countryInput.dataset.wasDisabled === 'true') {
+          countryInput.disabled = true;
+          delete countryInput.dataset.wasDisabled;
+        }
+        
         if (data.success) {
           // 성공 피드백
           if (saveBtn) {
@@ -1698,6 +1713,13 @@ document.addEventListener('DOMContentLoaded', function () {
       })
       .catch(error => {
         console.error('저장 오류:', error);
+        
+        // 원산지 필드 상태 복원
+        const countryInput = document.getElementById('countryInputDetail');
+        if (countryInput && countryInput.dataset.wasDisabled === 'true') {
+          countryInput.disabled = true;
+          delete countryInput.dataset.wasDisabled;
+        }
         
         // 오류 피드백
         if (saveBtn) {
