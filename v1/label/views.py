@@ -312,13 +312,31 @@ def my_label_list(request):
 
     return render(request, "label/my_label_list.html", context)
 
-@login_required
 def create_new_label(request):
     """
     [신규] '신규 작성' 요청을 받아 새 표시사항을 생성하고 편집 페이지로 리디렉션합니다.
     라벨명은 "임시 - 제품명 - N" 형식으로 자동 생성됩니다.
     GET 요청 시 HTML 응답, POST 요청 시 JSON 응답을 반환합니다.
     """
+    # 로그인 확인 (AJAX 요청에 대해 JSON 응답)
+    if not request.user.is_authenticated:
+        if request.method == 'POST' or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            login_url = reverse('user_management:login')
+            # mode를 포함한 현재 URL을 next로 전달
+            mode = request.GET.get('mode', 'detailed')
+            next_url = f"{reverse('label:create_new_label')}?mode={mode}"
+            return JsonResponse({
+                'success': False,
+                'error': 'login_required',
+                'login_url': login_url,
+                'next_url': next_url,
+                'message': '로그인이 필요합니다.'
+            }, status=401)
+        else:
+            # GET 요청 시 일반 로그인 리다이렉트
+            login_url = reverse('user_management:login')
+            return redirect(f'{login_url}?next={request.get_full_path()}')
+    
     # 표시사항 생성 로깅
     log_user_activity(request, 'label', 'label_create')
     try:

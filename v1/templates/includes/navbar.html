@@ -334,16 +334,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function createNewLabel(mode) {
-        fetch('{% url "label:create_new_label" %}', {
+        fetch('{% url "label:create_new_label" %}?mode=' + mode, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': '{{ csrf_token }}',
                 'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({ mode: mode })
         })
-        .then(response => response.json())
+        .then(response => {
+            // 401 Unauthorized - 로그인 필요
+            if (response.status === 401) {
+                return response.json().then(data => {
+                    // mode를 포함한 create_new_label URL로 리다이렉트
+                    const loginUrl = data.login_url || '{% url "user_management:login" %}';
+                    const createUrl = '{% url "label:create_new_label" %}?mode=' + mode;
+                    window.location.href = `${loginUrl}?next=${encodeURIComponent(createUrl)}`;
+                    return null;
+                });
+            }
+            
+            // 정상 응답
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            return response.json();
+        })
         .then(data => {
+            if (!data) return; // 로그인 리다이렉트된 경우
+            
             if (data.success) {
                 window.location.href = data.redirect_url;
             } else {
