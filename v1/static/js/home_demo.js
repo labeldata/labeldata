@@ -3374,7 +3374,7 @@ function addAllQuickTexts(fieldName) {
     
     // 주의사항에 대해 일괄 추가할 때는 원재료 사용 알레르기 확인
     let detectedAllergens = [];
-    if (fieldName === 'caution') {
+    if (fieldName === 'cautions') {
         detectedAllergens = getDetectedAllergens();
     }
     
@@ -3424,7 +3424,7 @@ function addAllQuickTexts(fieldName) {
         }
         
         // 해당 필드의 체크박스 자동 체크
-        const checkboxId = fieldName === 'caution' ? 'chk_caution' : 'chk_other_info';
+        const checkboxId = fieldName === 'cautions' ? 'chk_cautions' : 'chk_additional_info';
         const checkbox = document.getElementById(checkboxId);
         if (checkbox) {
             checkbox.checked = true;
