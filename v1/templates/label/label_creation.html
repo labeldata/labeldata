@@ -21,10 +21,10 @@
 <input type="hidden" id="label_id" value="{{ label.my_label_id }}">
 
 <!-- 상단 헤더 (모던 스타일 적용) -->
-<div style="position: fixed; top: 56px; left: 0; right: 0; z-index: 1020; background-color: #f8f9fa; padding: 10px 0; border-bottom: 1px solid #e0e7ff; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+<div id="labelCreationHeader" style="position: fixed; top: 56px; left: 0; right: 0; z-index: 1020; background-color: #f8f9fa; padding: 0.75rem 0; border-bottom: 1px solid #e0e7ff; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
   <div class="container">
     <div class="card modern-card" style="margin-bottom: 0;">
-      <div class="card-body" style="padding: 1rem;">
+      <div class="card-body" style="padding: 0.875rem 1rem;">
         <div class="d-flex flex-column" style="gap: 4px;">
           <!-- 1줄: 3개 영역 분할 -->
           <div class="d-flex align-items-center justify-content-between" style="gap: 10px;">
@@ -84,11 +84,11 @@
   </div>
 </div>
 
-<!-- 헤더 높이만큼 여백 추가 -->
-<div style="height: 100px;"></div>
+<!-- 헤더 높이만큼 여백 추가 (동적 계산) -->
+<div id="headerSpacer" style="height: 120px;"></div>
 
 <!-- Step1. 기본 설정 (모던 스타일 적용) -->
-<div class="container mt-4" id="step1-row">
+<div class="container" id="step1-row" style="margin-top: 1.5rem;">
   <div class="card modern-card">
     <div class="card-header d-flex justify-content-between align-items-center" id="step1-summary-bar">
       <h5 class="card-title mb-0">
@@ -193,7 +193,7 @@
 </div>
 
 <!-- Step2. 상세 입력 영역 (모던 스타일 적용) -->
-<div class="container mt-4" id="step2-card">
+<div class="container" id="step2-card" style="margin-top: 1.5rem; margin-bottom: 2rem;">
   <div class="card modern-card">
     <div class="card-header d-flex justify-content-between align-items-center">
       <h5 class="card-title mb-0">
@@ -998,6 +998,25 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// 헤더 높이에 맞춰 여백 동적 조정
+document.addEventListener('DOMContentLoaded', function() {
+    const header = document.getElementById('labelCreationHeader');
+    const spacer = document.getElementById('headerSpacer');
+    
+    if (header && spacer) {
+        // 헤더의 실제 높이 계산
+        const headerHeight = header.offsetHeight;
+        // 여백을 헤더 높이 + 여유 공간(20px)으로 설정
+        spacer.style.height = (headerHeight + 20) + 'px';
+        
+        // 윈도우 리사이즈 시에도 재계산
+        window.addEventListener('resize', function() {
+            const newHeaderHeight = header.offsetHeight;
+            spacer.style.height = (newHeaderHeight + 20) + 'px';
+        });
+    }
+});
 </script>
 
 {% endblock %}
