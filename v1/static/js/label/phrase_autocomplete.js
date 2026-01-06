@@ -216,6 +216,11 @@ class PhraseAutocomplete {
     }
     
     async showRecommendations(fieldName, targetElement) {
+        // 토글 상태 확인 - 비활성화되어 있으면 추천 창 표시하지 않음
+        if (typeof window.recommendationsEnabled !== 'undefined' && !window.recommendationsEnabled) {
+            return;
+        }
+        
         // 기존 추천 박스 제거
         this.hideRecommendations();
         
