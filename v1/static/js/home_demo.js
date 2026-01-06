@@ -682,6 +682,257 @@ function applyPreviewSettings() {
     });
 }
 
+// ==================== 규정 검증 헬퍼 함수 ====================
+
+// 냉동 제품 판별 (상세모드와 동일한 로직)
+function isFrozenProduct(storageMethod, foodType) {
+    const storageLower = storageMethod.toLowerCase();
+    const foodTypeLower = foodType.toLowerCase();
+    
+    // 1. 보관방법에 냉동 키워드
+    if (storageLower.includes('냉동')) return true;
+    
+    // 2. 보관방법에 -18℃ 이하 온도
+    const tempRegex = /(-?\d+(\.\d+)?)\s*(℃|도)/g;
+    let match;
+    while ((match = tempRegex.exec(storageMethod)) !== null) {
+        const temp = parseFloat(match[1]);
+        if (!isNaN(temp) && temp <= -18) return true;
+    }
+    
+    // 3. 식품유형에 "냉동" 포함
+    if (foodTypeLower.includes('냉동')) return true;
+    
+    return false;
+}
+
+// 냉장 제품 판별 (상세모드와 동일한 로직)
+function isRefrigeratedProduct(storageMethod, cautions, additional) {
+    const storageLower = storageMethod.toLowerCase();
+    const cautionsLower = (cautions || '').toLowerCase();
+    const additionalLower = (additional || '').toLowerCase();
+    
+    // 1. 보관방법에 냉장 키워드
+    if (storageLower.includes('냉장')) return true;
+    
+    // 2. 보관방법에 0~10℃ 범위 온도
+    const rangeRegex = /(\d+(\.\d+)?)\s*~\s*(\d+(\.\d+)?)\s*(℃|도)/g;
+    let match;
+    while ((match = rangeRegex.exec(storageMethod)) !== null) {
+        const start = parseFloat(match[1]);
+        const end = parseFloat(match[3]);
+        if (!isNaN(start) && !isNaN(end) && start >= 0 && end <= 10) return true;
+    }
+    
+    // 3. 주의사항이나 기타표시사항에 냉장 키워드
+    if (cautionsLower.includes('냉장') || additionalLower.includes('냉장')) return true;
+    
+    return false;
+}
+
+// 냉동/냉장 제품 필수 문구 검증 (상세모드와 동일한 로직)
+function checkStorageConditions(data) {
+    const errors = [];
+    const storageMethod = (data.storage_method || '').trim();
+    const foodType = (data.prdlst_dcnm || '').trim();
+    const cautions = (data.cautions || '').trim();
+    const additional = (data.additional_info || '').trim();
+    
+    // 1. 냉동 조건 검증
+    if (isFrozenProduct(storageMethod, foodType)) {
+        // 1-1. 보관방법에 "냉동" 키워드 확인
+        if (!storageMethod.toLowerCase().includes('냉동')) {
+            errors.push('<strong>냉동 보관 제품은 보관방법에 "냉동 보관" 문구를 포함해야 합니다.</strong>');
+        }
+        
+        // 1-2. 보관방법에 온도(-18℃ 이하) 표시 확인
+        const tempRegex = /(-?\d+(\.\d+)?)\s*(℃|도)/g;
+        let hasTemp = false;
+        let match;
+        while ((match = tempRegex.exec(storageMethod)) !== null) {
+            const tempValue = parseFloat(match[1]);
+            if (!isNaN(tempValue) && tempValue <= -18) {
+                hasTemp = true;
+                break;
+            }
+        }
+        if (!hasTemp) {
+            errors.push('<strong>냉동 보관 제품은 보관방법에 온도(-18℃ 이하)를 표시해야 합니다.</strong>');
+        }
+        
+        // 1-3. 주의사항/기타표시사항에 필수 문구 확인
+        const combinedText = (cautions + additional).toLowerCase();
+        const hasRequiredKeywords = combinedText.includes('해동') || combinedText.includes('재냉동');
+        if (!hasRequiredKeywords) {
+            errors.push('<strong>냉동 보관 제품은 주의사항 또는 기타표시사항에 "해동" 또는 "재냉동" 관련 문구를 포함해야 합니다.</strong>');
+        }
+    }
+    
+    // 2. 냉장 조건 검증
+    if (isRefrigeratedProduct(storageMethod, cautions, additional)) {
+        // 2-1. 보관방법에 "냉장" 키워드 확인
+        if (!storageMethod.toLowerCase().includes('냉장')) {
+            errors.push('<strong>냉장 보관 제품은 보관방법에 "냉장 보관" 문구를 포함해야 합니다.</strong>');
+        }
+        
+        // 2-2. 보관방법에 온도(0~10℃ 범위 내) 표시 확인
+        let hasTemp = false;
+        
+        // 온도 범위 체크
+        const rangeRegex = /(\d+(\.\d+)?)\s*~\s*(\d+(\.\d+)?)\s*(℃|도)/g;
+        let match;
+        while ((match = rangeRegex.exec(storageMethod)) !== null) {
+            const startTemp = parseFloat(match[1]);
+            const endTemp = parseFloat(match[3]);
+            if (!isNaN(startTemp) && !isNaN(endTemp) && startTemp >= 0 && endTemp <= 10) {
+                hasTemp = true;
+                break;
+            }
+        }
+        
+        // 단일 온도 체크
+        if (!hasTemp) {
+            const singleTempRegex = /(-?\d+(\.\d+)?)\s*(℃|도)/g;
+            while ((match = singleTempRegex.exec(storageMethod)) !== null) {
+                const temp = parseFloat(match[1]);
+                if (!isNaN(temp) && temp >= 0 && temp <= 10) {
+                    hasTemp = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!hasTemp) {
+            errors.push('<strong>냉장 보관 제품은 보관방법에 온도(0~10℃ 범위 내)를 표시해야 합니다.</strong>');
+        }
+    }
+    
+    return errors;
+}
+
+// 농수산물 함량 검증 (상세모드와 동일한 로직, constants.js 활용)
+function checkFarmSeafoodContent(data) {
+    const errors = [];
+    const productName = (data.prdlst_nm || '').trim();
+    const ingredientInfo = (data.ingredient_info || '').trim();
+    
+    // constants.js에서 로드된 배열 사용
+    const farmSeafoodItems = window.farmSeafoodItems;
+    if (!farmSeafoodItems || farmSeafoodItems.length === 0) {
+        // 대체 키워드 리스트 (constants.js 로드 실패 시)
+        return errors;
+    }
+    
+    // 제품명에 포함된 농수산물명 추출
+    const foundItems = farmSeafoodItems
+        .filter(item => productName.includes(item))
+        .sort((a, b) => b.length - a.length);
+    
+    if (foundItems.length === 0) {
+        return errors;
+    }
+    
+    foundItems.forEach(item => {
+        const complianceRegex = new RegExp(`${item}[^,]*\\d+(\\.\\d+)?\\s*%`);
+        const isCompliant = complianceRegex.test(ingredientInfo);
+        
+        if (!isCompliant) {
+            errors.push(`<strong>제품명에 사용된 '${item}'의 함량을 '특정성분 함량' 항목에 표시하세요.</strong> (예: ${item} 100%)`);
+        }
+    });
+    
+    return errors;
+}
+
+// 사용 금지 문구 검증 (상세모드와 동일한 로직)
+function checkForbiddenPhrases(data) {
+    const errors = [];
+    
+    const forbiddenPhrases = window.forbiddenPhrases;
+    if (!forbiddenPhrases || forbiddenPhrases.length === 0) {
+        return errors;
+    }
+    
+    const FIELD_LABELS = {
+        'prdlst_nm': '제품명',
+        'ingredient_info': '특정성분 함량',
+        'rawmtrl_nm_display': '원재료명',
+        'cautions': '주의사항',
+        'additional_info': '기타표시사항'
+    };
+    
+    const fieldsToCheck = ['prdlst_nm', 'ingredient_info', 'rawmtrl_nm_display', 'cautions', 'additional_info'];
+    
+    fieldsToCheck.forEach(field => {
+        const value = (data[field] || '').toString();
+        if (!value) return;
+        
+        forbiddenPhrases.forEach(phrase => {
+            if (value.match(new RegExp(phrase, 'i'))) {
+                if (field === 'rawmtrl_nm_display' && phrase === '천연') {
+                    errors.push(`<strong>"${FIELD_LABELS[field]}" 항목에 사용 금지 문구 "${phrase}"가 표시되어 있습니다.</strong><br>` +
+                        '<span style="color:#666;">천연 표기는 합성향료·합성착색료·방부제 등 인공 화학 성분이 전혀 포함되지 않고, 최소한의 물리적 가공(세척·절단·동결·건조 등)만 거친 경우에만 사용 가능합니다.</span>');
+                } else if (field === 'rawmtrl_nm_display' && phrase === '자연') {
+                    errors.push(`<strong>"${FIELD_LABELS[field]}" 항목에 사용 금지 문구 "${phrase}"가 표시되어 있습니다.</strong><br>` +
+                        '<span style="color:#666;">자연 표기는 가공되지 않은 농산물·임산물·수산물·축산물에 대해서만 허용됩니다.</span>');
+                } else {
+                    errors.push(`<strong>"${FIELD_LABELS[field]}" 항목에 사용 금지 문구 "${phrase}"가 표시되어 있습니다.</strong> 해당 문구를 삭제하세요.`);
+                }
+            }
+        });
+    });
+    
+    return errors;
+}
+
+// 분리배출마크 검증 (상세모드와 동일한 로직)
+function checkRecyclingMarkCompliance(data) {
+    const errors = [];
+    
+    // 분리배출마크 데이터가 없으면 검증 생략
+    if (!window.recyclingMarkData || !window.recyclingMarkData.markValue) {
+        return errors;
+    }
+    
+    const packagingMaterial = (data.frmlc_mtrqlt || '').trim().toLowerCase();
+    const markValue = window.recyclingMarkData.markValue;
+    
+    if (!packagingMaterial) {
+        return errors;
+    }
+    
+    // 재질별 허용 마크 매핑
+    const materialMarkMapping = {
+        'pet': ['OTHER 7', 'PET 1', 'PETG'],
+        'pe': ['LDPE 4', 'HDPE 2', 'OTHER 7'],
+        'pp': ['PP 5', 'OTHER 7'],
+        'ps': ['PS 6', 'OTHER 7'],
+        'pvc': ['PVC 3', 'OTHER 7'],
+        '종이': ['종이', 'PAPER'],
+        '유리': ['유리', 'GL'],
+        '금속': ['금속', 'STEEL', 'ALU'],
+        '알루미늄': ['ALU', '금속'],
+        '철': ['STEEL', '금속']
+    };
+    
+    // 재질에 맞는 마크인지 확인
+    let isValid = false;
+    for (const [material, allowedMarks] of Object.entries(materialMarkMapping)) {
+        if (packagingMaterial.includes(material)) {
+            if (allowedMarks.some(mark => markValue.toUpperCase().includes(mark))) {
+                isValid = true;
+                break;
+            }
+        }
+    }
+    
+    if (!isValid && packagingMaterial && markValue) {
+        errors.push(`<strong>용기·포장재질(${data.frmlc_mtrqlt})과 분리배출마크(${markValue})가 일치하지 않습니다.</strong> 재질에 맞는 분리배출마크를 선택하세요.`);
+    }
+    
+    return errors;
+}
+
 // ==================== 규정 검증 ====================
 function validateRegulations() {
     const data = collectFormData();
@@ -725,24 +976,21 @@ function validateRegulations() {
         warnings.push('제품명이 너무 깁니다 (100자 권장).');
     }
 
-    // 제품명에 특정 원재료가 포함된 경우 특정성분 함량 체크
-    if (data.prdlst_nm && data.chk_prdlst_nm) {
-        const productName = data.prdlst_nm.toLowerCase();
-        const ingredientInfo = (data.ingredient_info || '').trim();
-        const ingredientInfoChecked = data.chk_ingredient_info;
-        
-        // 주스, 과일, 우유, 치즈 등이 제품명에 포함된 경우
-        const ingredientKeywords = ['주스', '과즙', '사과', '오렌지', '포도', '딸기', '복숭아', '망고', 
-                                    '우유', '치즈', '초콜릿', '요구르트', '요거트', '과일'];
-        
-        const hasIngredientInName = ingredientKeywords.some(keyword => 
-            productName.includes(keyword)
-        );
-        
-        if (hasIngredientInName && (!ingredientInfoChecked || !ingredientInfo)) {
-            issues.push('<strong>제품명에 포함된 원재료의 특정성분 함량이 표시되지 않았습니다.</strong> (예: 사과주스 → 과즙 함량 표시 필수)');
-        }
-    }
+    // 농수산물 함량 검증 (상세모드와 동일, constants.js 활용)
+    const farmSeafoodErrors = checkFarmSeafoodContent(data);
+    issues.push(...farmSeafoodErrors);
+
+    // 냉동/냉장 제품 필수 문구 검증 (상세모드와 동일)
+    const storageErrors = checkStorageConditions(data);
+    issues.push(...storageErrors);
+
+    // 사용 금지 문구 검증 (상세모드와 동일)
+    const forbiddenErrors = checkForbiddenPhrases(data);
+    issues.push(...forbiddenErrors);
+
+    // 분리배출마크 검증 (상세모드와 동일)
+    const recyclingErrors = checkRecyclingMarkCompliance(data);
+    issues.push(...recyclingErrors);
 
     // 알레르기 중복 검증 (원재료 사용 vs 제조시설 혼입)
     if (typeof validateAllergenSeparation === 'function') {

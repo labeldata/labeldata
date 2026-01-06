@@ -694,17 +694,62 @@ document.addEventListener('DOMContentLoaded', function () {
     if (expiryData) {
         REGULATIONS.expiry_recommendation = expiryData;
     }
+
+    // ===== 냉동/냉장 판단 헬퍼 함수 =====
     
-    // 추가 규정 설정 (constants.js에 없는 부분만)
-    REGULATIONS.storage_conditions = {
-        frozen: { temp: "-18℃ 이하", phrases: ["냉동 보관 (-18℃ 이하)", "해동 후 재냉동 금지"] },
-        refrigerated: { temp: "0~10℃", phrases: ["냉장 보관 (0~10℃)", "개봉 후 냉장 보관"] },
-        room_temp: { temp: "직사광선을 피하고 서늘한 곳", phrases: ["직사광선을 피하고 서늘한 곳에 보관"] }
-    };
-    REGULATIONS.expiry_limits = {
-        frozen: 48, // 냉동식품: 최대 48개월
-        default: 36 // 기타: 최대 36개월
-    };
+    /**
+     * 냉동 보관 제품 여부 판단
+     * @param {string} storageMethod - 보관방법
+     * @param {string} foodType - 식품유형
+     * @returns {boolean}
+     */
+    function isFrozenProduct(storageMethod, foodType) {
+        const storage = (storageMethod || '').toLowerCase();
+        const type = (foodType || '').toLowerCase();
+        
+        // 1. 키워드 체크
+        if (storage.includes('냉동') || type.includes('냉동')) return true;
+        
+        // 2. -18℃ 이하 온도 체크
+        const tempRegex = /(-?\d+(\.\d+)?)\s*(℃|도)/g;
+        let match;
+        while ((match = tempRegex.exec(storage)) !== null) {
+            const tempValue = parseFloat(match[1]);
+            if (!isNaN(tempValue) && tempValue <= -18) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * 냉장 보관 제품 여부 판단
+     * @param {string} storageMethod - 보관방법
+     * @param {string} cautions - 주의사항
+     * @param {string} additional - 기타표시사항
+     * @returns {boolean}
+     */
+    function isRefrigeratedProduct(storageMethod, cautions, additional) {
+        const storage = (storageMethod || '').toLowerCase();
+        const combinedText = ((storageMethod || '') + (cautions || '') + (additional || '')).toLowerCase();
+        
+        // 1. 키워드 체크
+        if (storage.includes('냉장')) return true;
+        
+        // 2. 0~10℃ 범위 온도 체크
+        const rangeRegex = /(\d+(\.\d+)?)\s*~\s*(\d+(\.\d+)?)\s*(℃|도)/g;
+        let match;
+        while ((match = rangeRegex.exec(combinedText)) !== null) {
+            const startTemp = parseFloat(match[1]);
+            const endTemp = parseFloat(match[3]);
+            if (!isNaN(startTemp) && !isNaN(endTemp) && startTemp >= 0 && endTemp <= 10) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
 
     // value → 이미지 매핑
     const recyclingMarkMap = {};
@@ -2177,28 +2222,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // 2. 알레르기 성분 검증: 중복 표시 및 누락 검사
 
 
-    // 헬퍼 함수: 냉장보관 온도 확인
+    // 헬퍼 함수: 냉장보관 온도 확인 (하위 호환성 유지)
     function hasRefrigerateTemp() {
-        const storageMethod = (checkedFields.storage_method || '').trim();
-        const cautions = (checkedFields.cautions || '').trim();
-        const additional = (checkedFields.additional_info || '').trim();
-        const combinedText = storageMethod + cautions + additional;
-        
-        // 냉장 키워드 확인
-        if (combinedText.includes('냉장')) return true;
-        
-        // 0~10℃ 범위의 온도 확인
-        const rangeRegex = /(\d+(\.\d+)?)\s*~\s*(\d+(\.\d+)?)\s*(℃|도)/g;
-        let match;
-        while ((match = rangeRegex.exec(combinedText)) !== null) {
-            const startTemp = parseFloat(match[1]);
-            const endTemp = parseFloat(match[3]);
-            if (!isNaN(startTemp) && !isNaN(endTemp) && startTemp >= 0 && endTemp <= 10) {
-                return true;
-            }
-        }
-        
-        return false;
+        return isRefrigeratedProduct(
+            checkedFields.storage_method,
+            checkedFields.cautions,
+            checkedFields.additional_info
+        );
     }
 
     // 3. 냉동식품 문구 및 온도, 보관조건, 필수 문구 통합
@@ -2210,53 +2240,78 @@ document.addEventListener('DOMContentLoaded', function () {
         const cautions      = (checkedFields.cautions || '').trim();
         const additional    = (checkedFields.additional_info || '').trim();
 
-        // --- 신규 검증 로직 ---
+        // --- 통합된 검증 로직 ---
 
         // 1. 냉동 조건 검증
-        const isFrozenStorage = (() => {
-            if (storageMethod.includes('냉동')) return true;
+        if (isFrozenProduct(storageMethod, foodType)) {
+            // 1-1. 보관방법에 "냉동" 키워드 확인
+            const hasKeyword = storageMethod.toLowerCase().includes('냉동');
+            if (!hasKeyword) {
+                errors.push('냉동 보관 제품은 보관방법에 "냉동 보관" 문구를 포함해야 합니다.');
+            }
+            
+            // 1-2. 보관방법에 온도(-18℃ 이하) 표시 확인
             const tempRegex = /(-?\d+(\.\d+)?)\s*(℃|도)/g;
+            let hasTemp = false;
             let match;
             while ((match = tempRegex.exec(storageMethod)) !== null) {
                 const tempValue = parseFloat(match[1]);
                 if (!isNaN(tempValue) && tempValue <= -18) {
-                    return true; // -18도 이하 온도가 있으면 냉동으로 간주
+                    hasTemp = true;
+                    break;
                 }
             }
-            return false;
-        })();
-
-        if (isFrozenStorage) {
-            const hasRequiredFrozenKeywords = cautions.includes('해동') || cautions.includes('재냉동') || additional.includes('해동') || additional.includes('재냉동');
+            if (!hasTemp) {
+                errors.push('냉동 보관 제품은 보관방법에 온도(-18℃ 이하)를 표시해야 합니다.');
+            }
+            
+            // 1-3. 주의사항/기타표시사항에 필수 문구 확인
+            const combinedText = (cautions + additional).toLowerCase();
+            const hasRequiredFrozenKeywords = combinedText.includes('해동') || combinedText.includes('재냉동');
             if (!hasRequiredFrozenKeywords) {
                 errors.push('냉동 보관 제품은 주의사항 또는 기타표시사항에 "해동" 또는 "재냉동" 관련 문구를 포함해야 합니다.');
             }
         }
 
         // 2. 냉장 조건 검증
-        const isRefrigeratedStorage = (() => {
-            if (storageMethod.includes('냉장')) return true;
+        if (isRefrigeratedProduct(storageMethod, cautions, additional)) {
+            // 2-1. 보관방법에 "냉장" 키워드 확인
+            const hasKeyword = storageMethod.toLowerCase().includes('냉장');
+            if (!hasKeyword) {
+                errors.push('냉장 보관 제품은 보관방법에 "냉장 보관" 문구를 포함해야 합니다.');
+            }
+            
+            // 2-2. 보관방법에 온도(0~10℃ 범위 내) 표시 확인
+            let hasTemp = false;
+            
+            // 온도 범위 체크 (예: 0~10℃, 2~8℃, 0~5℃ 등)
             const rangeRegex = /(\d+(\.\d+)?)\s*~\s*(\d+(\.\d+)?)\s*(℃|도)/g;
             let match;
             while ((match = rangeRegex.exec(storageMethod)) !== null) {
                 const startTemp = parseFloat(match[1]);
                 const endTemp = parseFloat(match[3]);
-                // 0~10도 범위 내의 온도이면 냉장으로 간주
+                // 시작온도와 종료온도가 모두 0~10도 범위 내에 있으면 적합
                 if (!isNaN(startTemp) && !isNaN(endTemp) && startTemp >= 0 && endTemp <= 10) {
-                    return true;
+                    hasTemp = true;
+                    break;
                 }
             }
-            return false;
-        })();
-
-        if (isRefrigeratedStorage) {
-            const combinedText = cautions + additional;
-            // '개봉' 키워드와 ('냉장' 또는 '빨리' 또는 '빠른 시일') 키워드가 모두 있어야 통과
-            const hasOpeningKeyword = combinedText.includes('개봉') || combinedText.includes('구매') || combinedText.includes('구입');
-            const hasStorageKeyword = combinedText.includes('냉장') || combinedText.includes('섭취') || combinedText.includes('취식');
-
-            if (!(hasOpeningKeyword && hasStorageKeyword)) {
-                errors.push('냉장 보관 제품은 주의사항 또는 기타표시사항에 "개봉/구매 후 냉장 보관 및 빠른 섭취/취식" 관련 문구를 포함해야 합니다.');
+            
+            // 단일 온도 체크 (예: 5℃, 8℃ 등)
+            if (!hasTemp) {
+                const singleTempRegex = /(-?\d+(\.\d+)?)\s*(℃|도)/g;
+                while ((match = singleTempRegex.exec(storageMethod)) !== null) {
+                    const temp = parseFloat(match[1]);
+                    // 온도가 0~10도 범위 내에 있으면 적합
+                    if (!isNaN(temp) && temp >= 0 && temp <= 10) {
+                        hasTemp = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!hasTemp) {
+                errors.push('냉장 보관 제품은 보관방법에 온도(0~10℃ 범위 내)를 표시해야 합니다.');
             }
         }
 
@@ -2482,7 +2537,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // 냉동식품 또는 장기보존식품(통조림, 레토르트)은 검증에서 제외
-        const isFrozen = storageMethod.toLowerCase().includes('냉동') || foodType.toLowerCase().includes('냉동');
+        const isFrozen = isFrozenProduct(storageMethod, foodType);
         const isLongTermStorage = foodType.includes('통조림') || foodType.includes('병조림') || foodType.includes('레토르트');
 
         if (isFrozen || isLongTermStorage) {
