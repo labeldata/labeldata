@@ -258,9 +258,10 @@ class CustomAdminSite:
             {'title': '검색에서 표시사항 복사', 'actions': ['search_label_copy'], 'parent': '조회 복사'},
             {'title': '검색에서 내원료 복사', 'actions': ['search_ingredient_copy'], 'parent': '조회 복사'},
             
-            # 표시사항 작성 세부기능 (9개)
+            # 표시사항 작성 세부기능 (10개)
             {'title': '품목보고번호 검증', 'actions': ['validation_report'], 'parent': '표시사항 작성'},
-            {'title': '알레르기 감지', 'actions': ['allergen_auto_detect'], 'parent': '표시사항 작성'},
+            {'title': '알레르기 감지(표시)', 'actions': ['allergen_auto_detect'], 'parent': '표시사항 작성'},
+            {'title': '알레르기 감지(원료)', 'actions': ['allergy_auto_detect'], 'parent': '표시사항 작성'},
             {'title': '원재료 표로 입력', 'actions': ['ingredient_table_input'], 'parent': '표시사항 작성'},
             {'title': '원재료 빠른 등록', 'actions': ['ingredient_quick_register'], 'parent': '표시사항 작성'},
             {'title': '주의문구 빠른 등록', 'actions': ['caution_quick_add'], 'parent': '표시사항 작성'},

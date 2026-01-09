@@ -2213,6 +2213,21 @@ def log_pdf_save(request):
 
 
 @login_required
+def log_allergy_auto_detect(request):
+    """원료 관리 알레르기 자동감지 로깅 API"""
+    if request.method == 'POST':
+        try:
+            # 원료 관리 알레르기 자동감지 로깅
+            log_user_activity(request, 'ingredient', 'allergy_auto_detect')
+            
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'POST required'})
+
+
+@login_required
 def log_preview_action(request):
     """미리보기 팝업 각 기능별 로깅 API"""
     if request.method == 'POST':

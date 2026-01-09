@@ -188,6 +188,126 @@ function initAllergyGmoButtonEvents() {
     }
 }
 
+// --- 알레르기 자동감지 기능 (label_creation.js와 동일한 로직 사용) ---
+function autoDetectAllergensIngredient() {
+    // 원재료명과 원재료 표시명 텍스트 가져오기
+    const prdlstNmInput = document.getElementById('prdlst_nm');
+    const displayNameInput = document.getElementById('ingredient_display_name');
+    
+    if (!prdlstNmInput && !displayNameInput) {
+        alert('원재료명을 먼저 입력해주세요.');
+        return;
+    }
+    
+    // 두 필드의 텍스트를 합쳐서 검색
+    const prdlstNmText = prdlstNmInput ? prdlstNmInput.value : '';
+    const displayNameText = displayNameInput ? displayNameInput.value : '';
+    const combinedText = `${prdlstNmText} ${displayNameText}`.trim();
+    
+    if (!combinedText) {
+        alert('원재료명 또는 원재료 표시명을 먼저 입력해주세요.');
+        return;
+    }
+    
+    // constants.js의 ALLERGEN_KEYWORDS 사용
+    const allergenKeywords = window.allergenKeywords || window.ALLERGEN_KEYWORDS || {
+        '알류': ['달걀', '계란', '오리알', '메추리알', '전란', '전란액', '전란유', '전란분', '난백', '난백액', '난백분', '난황', '난황액', '난황분', '난황유', '거위알', '알부민', '레시틴(난황)', '라이소자임', '난류', 'egg', 'lysozyme'],
+        '우유': ['우유', '원유', '산양유', '유청', '유청단백', '카제인', '카제인나트륨', '유당', '치즈', '버터', '크림', '생크림', '사워크림', '유크림', '연유', '분유', '전지분유', '탈지분유', '요구르트', 'milk', 'dairy', 'whey protein', 'sodium caseinate'],
+        '메밀': ['메밀', '메밀가루', '메밀묵', 'buckwheat'],
+        '밀': ['밀', '밀가루', '통밀', '글루텐', '세몰리나', '듀럼밀', '소맥', '부침가루', '튀김가루', '밀기울', '스펠트밀', 'wheat', 'gluten', 'wheat bran', 'spelt'],
+        '대두': ['대두', '대두콩', '노란콩', '콩나물', '두부', '두유', '된장', '간장', '고추장', '콩가루', '콩기름', '대두유', '대두단백', '레시틴', '대두레시틴', 'soy', 'soybean', 'soy lecithin'],
+        '땅콩': ['땅콩', '땅콩버터', '땅콩기름', '낙화생', 'peanut', 'peanuts'],
+        '호두': ['호두', '호두유', 'walnut', 'walnuts'],
+        '잣': ['잣', 'pine nuts', 'pine nut'],
+        '쇠고기': ['쇠고기', '소고기', '우육', '소 내장', '곱창', '대창', '사골', '우족', '쇠고기추출물', '소고기육수', '사골육수', '소육수', '우지', '젤라틴', 'beef', 'tallow'],
+        '돼지고기': ['돼지고기', '돈육', '돼지 내장', '돈골', '돈족', '베이컨', '햄', '소시지', '돈지', '젤라틴', 'pork', 'lard'],
+        '닭고기': ['닭고기', '계육', '닭 내장', '닭발', '닭 육수', 'chicken'],
+        '고등어': ['고등어', 'mackerel'],
+        '게': ['게', '꽃게', 'crab'],
+        '새우': ['새우', 'shrimp', 'prawns'],
+        '오징어': ['오징어', 'squid'],
+        '조개류': ['굴', '전복', '홍합', '꼬막', '바지락', '가리비', '소라', '재첩', '백합', '키조개', 'shellfish', 'clam', 'oyster'],
+        '복숭아': ['복숭아', 'peach', 'peaches'],
+        '토마토': ['토마토', '토마토 페이스트', '토마토 케첩', '토마토 퓌레', 'tomato', 'tomatoes'],
+        '아황산류': ['아황산나트륨', '메타중아황산칼륨', '무수아황산', '산성아황산나트륨', '이산화황', 'sulfite', 'sulfur dioxide']
+    };
+    
+    // 감지된 알레르기
+    const detectedAllergens = new Set();
+    
+    // 각 알레르기 그룹의 키워드로 검색 (label_creation.js와 동일한 로직)
+    for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
+        let allergenFound = false;
+        for (const keyword of keywords) {
+            let found = false;
+            
+            // 1글자 키워드는 단어 경계 체크 (오탐 방지)
+            if (keyword.length === 1) {
+                const regex = new RegExp(`[\\s,():]${keyword}[\\s,():]|^${keyword}[\\s,():]|[\\s,():]${keyword}$|^${keyword}$`, 'gi');
+                if (regex.test(combinedText)) {
+                    found = true;
+                }
+            } else {
+                // 2글자 이상: 단순 포함 여부로 체크
+                const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(escapedKeyword, 'gi');
+                if (regex.test(combinedText)) {
+                    found = true;
+                }
+            }
+            
+            if (found) {
+                detectedAllergens.add(allergen);
+                allergenFound = true;
+                break;
+            }
+        }
+    }
+    
+    // 감지된 알레르기 성분을 선택된 목록에 추가
+    selectedAllergens = Array.from(detectedAllergens);
+    
+    // UI 업데이트
+    const allergyBtnList = document.getElementById('allergyBtnList');
+    if (allergyBtnList) {
+        allergyBtnList.querySelectorAll('.allergy-btn').forEach(btn => {
+            const allergen = btn.dataset.allergen;
+            if (selectedAllergens.includes(allergen)) {
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary');
+            } else {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline-primary');
+            }
+        });
+    }
+    
+    // 전체선택 버튼 텍스트 업데이트
+    const allergyToggleBtn = document.getElementById('allergyToggleBtn');
+    if (allergyToggleBtn && allergyBtnList) {
+        const allAllergens = Array.from(allergyBtnList.querySelectorAll('.allergy-btn')).map(b => b.dataset.allergen);
+        const allSelected = allAllergens.every(a => selectedAllergens.includes(a));
+        allergyToggleBtn.textContent = allSelected ? '전체해제' : '전체선택';
+    }
+    
+    updateAllergyDisplay();
+    
+    // 사용 로그 기록
+    logAllergyAutoDetect();
+}
+
+// 알레르기 자동감지 사용 로그 기록
+function logAllergyAutoDetect() {
+    fetch('/label/log-allergy-auto-detect/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({})
+    }).catch(err => console.error('로그 기록 실패:', err));
+}
+
 // --- 품목보고번호 불러오기 기능 ---
 function fetchFoodItemByReportNo() {
     const reportNoInput = document.getElementById('prdlst_report_no');
@@ -862,6 +982,12 @@ onReady(function() {
     setupFoodCategoryChangeEvent();
     toggleReportNoRow(); // 초기 품목보고번호 행 표시/숨김
     initAllergyGmoButtonEvents(); // 알레르기/GMO 버튼 초기화
+    
+    // 알레르기 자동감지 버튼 이벤트 바인딩
+    const allergyAutoDetectBtn = document.getElementById('allergyAutoDetectBtn');
+    if (allergyAutoDetectBtn) {
+        allergyAutoDetectBtn.addEventListener('click', autoDetectAllergensIngredient);
+    }
     
     // 폼 submit 이벤트 바인딩 (partial에서도 반드시 필요)
     var form = document.getElementById('ingredientForm');

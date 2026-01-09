@@ -40,6 +40,7 @@ urlpatterns = [
     path('log-quick-text/', views.log_quick_text, name='log_quick_text'),
     path('log-custom-field/', views.log_custom_field, name='log_custom_field'),
     path('log-preview-action/', views.log_preview_action, name='log_preview_action'),
+    path('log-allergy-auto-detect/', views.log_allergy_auto_detect, name='log_allergy_auto_detect'),
     path('log-quick-text/', views.log_quick_text, name='log_quick_text'),
     path('log-custom-field/', views.log_custom_field, name='log_custom_field'),
 
