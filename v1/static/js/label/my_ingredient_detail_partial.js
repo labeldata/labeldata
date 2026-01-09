@@ -989,6 +989,9 @@ onReady(function() {
         allergyAutoDetectBtn.addEventListener('click', autoDetectAllergensIngredient);
     }
     
+    // textarea 자동 확장 초기화
+    initAutoExpandTextareas();
+    
     // 폼 submit 이벤트 바인딩 (partial에서도 반드시 필요)
     var form = document.getElementById('ingredientForm');
     if (form) {
@@ -1130,6 +1133,26 @@ function updateDisplayRegulation() {
         if (ingredientDisplayNameHelp) ingredientDisplayNameHelp.style.display = '';
         displayRegulationDisplay.textContent = '';
         if (displayRegulationButtons) displayRegulationButtons.style.display = 'none';
+    });
+}
+
+// textarea 자동 확장 함수들
+function adjustTextareaHeight(element, maxHeight = 200) {
+    if (!element) return;
+    element.style.height = 'auto';
+    const scrollHeight = element.scrollHeight + 2;
+    element.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+}
+
+function initAutoExpandTextareas() {
+    // 모든 auto-expand textarea에 이벤트 리스너 추가
+    document.querySelectorAll('textarea.auto-expand').forEach(textarea => {
+        // 초기 높이 조정
+        adjustTextareaHeight(textarea);
+        
+        // input 이벤트 리스너
+        textarea.addEventListener('input', () => adjustTextareaHeight(textarea));
+        textarea.addEventListener('change', () => adjustTextareaHeight(textarea));
     });
 }
 
