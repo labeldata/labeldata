@@ -1,0 +1,1035 @@
+{% csrf_token %}
+
+<!-- ==================== Google Workspace Compact UI ==================== -->
+<div class="doc-workspace-wrapper d-flex flex-nowrap bg-white position-relative">
+    
+    <!-- 메인 컨텐츠 영역 -->
+    <div id="doc-main-content" class="flex-grow-1 d-flex flex-column">
+    
+    <!-- 상단: 컴플라이언스 상태 바 (Status Strip) - 높이 최소화 -->
+    <div class="compliance-strip d-flex align-items-center border-bottom px-4 py-3 bg-light">
+        <!-- 준수율 원형 차트 -->
+        <div class="d-flex align-items-center me-4 flex-shrink-0">
+            <div class="position-relative me-3" style="width: 52px; height: 52px;">
+                <svg viewBox="0 0 36 36" class="circular-chart">
+                    <path class="circle-bg" stroke="#e0e0e0" stroke-width="3" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path class="circle" 
+                          stroke="{% if compliance_rate >= 100 %}#34a853{% elif compliance_rate >= 70 %}#fbbc04{% else %}#ea4335{% endif %}" 
+                          stroke-width="3" 
+                          stroke-dasharray="{{ compliance_rate }}, 100" 
+                          stroke-linecap="round" 
+                          fill="none" 
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                </svg>
+                <span class="position-absolute top-50 start-50 translate-middle fw-bold text-primary" style="font-size: 13px;">{{ compliance_rate|floatformat:0 }}%</span>
+            </div>
+            <div>
+                <div class="fw-bold small">문서 준수율</div>
+                <div class="text-muted" style="font-size: 11px;">{{ filled_slots }}/{{ total_slots }} 완료</div>
+            </div>
+        </div>
+        
+        <div class="vr me-3 flex-shrink-0"></div>
+
+        <!-- 필수 문서 상태 칩들 (가로 스크롤) -->
+        <div class="d-flex gap-2 flex-nowrap">
+            {% for slot in document_slots %}
+            <div class="status-chip border rounded-pill ps-2 pe-3 py-1 d-flex align-items-center cursor-pointer shadow-sm flex-shrink-0
+                        {% if slot.status == 'VALID' %}bg-white{% elif slot.status == 'EXPIRING' %}bg-warning bg-opacity-10 border-warning{% elif slot.status == 'EXPIRED' %}bg-danger bg-opacity-10 border-danger{% else %}bg-white border-dashed{% endif %}"
+                 data-slot-id="{{ slot.slot_id }}"
+                 data-doc-type-id="{{ slot.document_type.type_id }}"
+                 data-doc-type-name="{{ slot.document_type.type_name }}"
+                 onclick="handleSlotClick({{ slot.slot_id }}, '{{ slot.document_type.type_name }}', {{ slot.document_type.type_id }}, {% if slot.current_document %}{{ slot.current_document.document_id }}{% else %}null{% endif %})"
+                 title="{{ slot.document_type.description }}">
+                <div class="icon-circle me-2 
+                            {% if slot.status == 'VALID' %}bg-success text-white{% elif slot.status == 'EXPIRING' %}bg-warning text-dark{% elif slot.status == 'EXPIRED' %}bg-danger text-white{% else %}bg-light text-muted{% endif %}">
+                    <i class="bi {% if slot.status == 'VALID' %}bi-check-lg{% elif slot.status == 'EMPTY' %}bi-plus-lg{% else %}bi-exclamation-lg{% endif %}"></i>
+                </div>
+                <div>
+                    <div class="fw-bold text-dark" style="font-size: 11px; white-space: nowrap;">{{ slot.document_type.type_name }}</div>
+                    <div style="font-size: 10px; white-space: nowrap;"
+                         class="{% if slot.status == 'VALID' %}text-success{% elif slot.status == 'EXPIRING' %}text-warning{% elif slot.status == 'EXPIRED' %}text-danger fw-bold{% else %}text-danger{% endif %}">
+                        {% if slot.status == 'VALID' %}유효함
+                        {% elif slot.status == 'EXPIRING' %}만료 임박
+                        {% elif slot.status == 'EXPIRED' %}만료됨
+                        {% else %}미등록 (필수){% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% if can_upload_documents and available_doc_types %}
+            <button class="btn btn-outline-primary btn-sm px-3 fw-semibold flex-shrink-0" onclick="openAddSlotModal()" style="border-radius: 4px; font-size: 12px;">
+                <i class="bi bi-plus-lg me-1"></i>필수 문서 추가
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 중간: 필터 & 검색 툴바 -->
+    <div class="d-flex justify-content-between align-items-center px-4 py-2 border-bottom bg-white" style="flex-shrink: 0;">
+        <div class="d-flex align-items-center gap-2">
+            <ul class="nav nav-pills nav-sm mb-0">
+                <li class="nav-item">
+                    <a class="nav-link active rounded-pill px-3 py-1 small fw-semibold" href="#" onclick="filterDocuments('ALL'); return false;">전체</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-muted rounded-pill px-3 py-1 small" href="#" onclick="filterDocuments('REQUIRED'); return false;">필수 문서</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link text-muted rounded-pill px-3 py-1 small" href="#" onclick="filterDocuments('EXPIRING'); return false;">만료 임박</a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="d-flex align-items-center gap-2">
+            <div class="input-group input-group-sm" style="width: 250px;">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="compact-doc-search" class="form-control border-start-0 ps-0" placeholder="파일명 검색...">
+            </div>
+            {% if can_upload_documents %}
+            <button class="btn btn-primary btn-sm px-4 fw-semibold" onclick="openUploadModal(null, null, null)" style="border-radius: 4px; font-size: 13px;">
+                <i class="bi bi-plus-lg me-1"></i> 업로드
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 선택 액션 바 (Action Bar) -->
+    <div id="compact-action-bar" class="compact-action-bar d-none">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary" id="compact-selected-count">0</span>
+            <span class="small text-muted">개 선택됨</span>
+            <button class="btn btn-sm btn-light ms-2" onclick="clearCompactSelection()">선택 해제</button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-secondary" onclick="bulkDownloadCompact()">
+                <i class="bi bi-download me-1"></i>다운로드
+            </button>
+            {% if can_upload_documents %}
+            <button class="btn btn-sm btn-outline-danger" onclick="bulkDeleteCompact()">
+                <i class="bi bi-trash me-1"></i>삭제
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 메인: 문서 데이터 그리드 (Google Drive 스타일) -->
+    <div class="flex-grow-1 overflow-auto position-relative">
+        {% if documents %}
+        <table class="table table-hover align-middle mb-0 compact-doc-table" style="table-layout: fixed;">
+            <thead class="bg-light sticky-top" style="z-index: 5;">
+                <tr class="text-muted small text-uppercase">
+                    <th style="width: 40px;" class="ps-4"><input type="checkbox" class="form-check-input" id="select-all-compact"></th>
+                    <th style="width: 45%;">문서명</th>
+                    <th style="width: 18%;">구분</th>
+                    <th style="width: 18%;">상태 / 만료일</th>
+                    <th style="width: 10%;">버전</th>
+                    <th style="width: 9%;">등록자</th>
+                </tr>
+            </thead>
+            <tbody id="compact-doc-body">
+                {% for doc in documents %}
+                <tr class="document-row cursor-pointer" 
+                    data-doc-id="{{ doc.document_id }}" 
+                    data-filename="{{ doc.original_filename }}" 
+                    data-expiry="{{ doc.expiry_date|date:'Y-m-d' }}"
+                    data-slot-id="{% if doc.slot %}{{ doc.slot.slot_id }}{% endif %}"
+                    data-type-id="{{ doc.document_type.type_id }}"
+                    onclick="openEditPanel({{ doc.document_id }})">
+                    <td class="ps-4"><input type="checkbox" class="form-check-input" onclick="event.stopPropagation()"></td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            {% if '.pdf' in doc.original_filename|lower %}
+                                <i class="bi bi-file-earmark-pdf text-danger me-3" style="font-size: 20px;"></i>
+                            {% elif '.jpg' in doc.original_filename|lower or '.jpeg' in doc.original_filename|lower or '.png' in doc.original_filename|lower %}
+                                <i class="bi bi-file-earmark-image text-info me-3" style="font-size: 20px;"></i>
+                            {% elif 'doc' in doc.original_filename|lower %}
+                                <i class="bi bi-file-earmark-word text-primary me-3" style="font-size: 20px;"></i>
+                            {% elif 'xls' in doc.original_filename|lower %}
+                                <i class="bi bi-file-earmark-excel text-success me-3" style="font-size: 20px;"></i>
+                            {% else %}
+                                <i class="bi bi-file-earmark text-secondary me-3" style="font-size: 20px;"></i>
+                            {% endif %}
+                            <div class="text-truncate">
+                                <div class="fw-bold text-dark text-truncate" title="{{ doc.original_filename }}">{{ doc.original_filename }}</div>
+                                <div class="text-muted" style="font-size: 11px;">{{ doc.file_size|filesizeformat }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="badge {% if doc.document_type.is_required %}bg-danger{% else %}bg-primary{% endif %} text-white fw-semibold">{{ doc.document_type.type_name|default:"미분류" }}</span></td>
+                    <td>
+                        {% if doc.expiry_date %}
+                        <div class="d-flex align-items-center">
+                            <span class="badge {% if doc.expiry_date < today %}bg-danger text-white{% elif doc.expiry_date < warning_date %}bg-warning text-dark fw-bold{% else %}bg-success text-white{% endif %} me-2">
+                                {% if doc.expiry_date < today %}만료{% elif doc.expiry_date < warning_date %}D-30{% else %}정상{% endif %}
+                            </span>
+                            <span class="small text-muted">{{ doc.expiry_date|date:"y.m.d" }}</span>
+                        </div>
+                        {% else %}
+                        <span class="badge bg-success text-white fw-semibold">무기한</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge bg-secondary text-white fw-semibold" style="min-width: 48px;">v{{ doc.version|default:1 }}.0</span></td>
+                    <td><div class="small">{{ doc.uploaded_by.username|default:"-" }}</div></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="d-flex align-items-center justify-content-center" style="height: 260px;">
+            <div class="text-center">
+                <i class="bi bi-inbox" style="font-size: 48px; opacity: 0.3;"></i>
+                <p class="mt-3 text-muted">등록된 문서가 없습니다</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    </div><!-- /메인 컨텐츠 영역 -->
+    
+    <!-- 우측 수정 패널 (목차 패널 스타일) -->
+    <div id="doc-edit-panel" class="border-start bg-white doc-edit-collapsed"
+         style="flex-shrink: 0; transition: width 0.25s ease, min-width 0.25s ease; overflow: hidden;">
+        <div class="overflow-y-auto custom-scrollbar p-3" 
+             style="max-height: calc(100vh - 250px); height: 100%;">
+            
+            <div class="d-flex justify-content-between align-items-center mb-3 sticky-top bg-white pt-2" style="top: -12px; z-index: 5;">
+                <h6 class="fw-bold text-muted small text-uppercase mb-0">문서 정보</h6>
+                <button type="button" class="btn btn-sm btn-light border rounded-circle" onclick="closeEditPanel()" aria-label="닫기" style="width: 28px; height: 28px; padding: 0;">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            
+            <div id="edit-panel-content">
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-pencil-square" style="font-size: 48px; opacity: 0.3;"></i>
+                    <p class="mt-3 small">문서를 선택하여 수정하세요</p>
+                </div>
+            </div>
+        </div>
+    </div><!-- /우측 수정 패널 -->
+    
+</div>
+
+
+<!-- 문서 수정 모달 (숨김처리 - 사이드 패널로 대체) -->
+<div class="modal fade" id="editDocumentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 bg-light">
+                <div>
+                    <h6 class="modal-title fw-bold mb-1"><i class="bi bi-pencil-square me-2"></i>문서 정보 수정</h6>
+                    <p class="mb-0 text-muted small" id="edit-doc-filename"></p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-3">
+                <input type="hidden" id="edit-doc-id">
+                
+                <div class="mb-3">
+                    <label for="edit-doc-type" class="form-label fw-semibold small text-muted">문서 구분</label>
+                    <select class="form-select" id="edit-doc-type">
+                        {% for dtype in document_types %}
+                        <option value="{{ dtype.type_id }}">{{ dtype.type_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label for="edit-issue-date" class="form-label fw-semibold small text-muted">발행일</label>
+                        <input type="date" class="form-control" id="edit-issue-date">
+                    </div>
+                    <div class="col-6">
+                        <label for="edit-expiry-date" class="form-label fw-semibold small text-muted">만료일</label>
+                        <input type="date" class="form-control" id="edit-expiry-date">
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="edit-description" class="form-label fw-semibold small text-muted">설명</label>
+                    <textarea class="form-control" id="edit-description" rows="3" placeholder="문서에 대한 설명을 입력하세요..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary rounded-pill px-3" onclick="submitDocumentUpdate()">
+                    <i class="bi bi-check-lg me-1"></i>저장
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 전체 화면 드래그 오버레이 -->
+<div id="upload-overlay" class="upload-overlay d-none">
+    <div class="overlay-content">
+        <i class="bi bi-cloud-arrow-up fs-1 mb-2"></i>
+        <div class="fw-bold">여기에 파일을 놓으세요</div>
+        <div class="small">드롭하면 업로드 모달이 열립니다</div>
+    </div>
+</div>
+
+<style>
+    /* 문서 탭 외부 컨테이너 */
+    .doc-workspace-wrapper {
+        height: 100%;
+        max-height: calc(100vh - 250px);
+        min-height: 400px;
+    }
+
+    /* 메인 컨텐츠 영역 */
+    #doc-main-content {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    /* 컨플라이언스 현황 바 */
+    .compliance-strip {
+        min-height: 85px;
+        max-height: 85px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-shrink: 0;
+    }
+
+    .status-chip { 
+        transition: all 0.2s; 
+        min-width: 160px; 
+        border-radius: 999px; 
+    }
+    .status-chip:hover { 
+        transform: translateY(-1px); 
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+    }
+    .status-chip.chip-active { 
+        background-color: rgba(26, 115, 232, 0.12) !important; 
+        border-color: #1a73e8 !important; 
+    }
+    .icon-circle { 
+        width: 28px; 
+        height: 28px; 
+        border-radius: 50%; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        font-size: 14px; 
+    }
+    .border-dashed { 
+        border-style: dashed; 
+    }
+    
+    /* 커스텀 스크롤바 */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: rgba(0,0,0,0.1);
+        border-radius: 3px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(0,0,0,0.2);
+    }
+    
+    /* 우측 수정 패널 */
+    /* 패널 닫힌 상태: 너비 0 → 표를 덮지 않음 */
+    .doc-edit-collapsed {
+        width: 0 !important;
+        min-width: 0 !important;
+        border-left: none !important;
+        padding: 0 !important;
+    }
+    /* 패널 열린 상태 */
+    #doc-edit-panel:not(.doc-edit-collapsed) {
+        width: 280px;
+        min-width: 280px;
+        overflow-y: auto;
+    }
+    #doc-edit-panel .form-label {
+        margin-bottom: 6px;
+    }
+    #doc-edit-panel .form-control,
+    #doc-edit-panel .form-select {
+        font-size: 13px;
+    }
+    
+    /* Google Drive 스타일 테이블 - 세로선 제거 */
+    .compact-doc-table { 
+        border-collapse: collapse; 
+    }
+    .compact-doc-table th, 
+    .compact-doc-table td { 
+        padding: 12px 16px; 
+        border-left: none !important; 
+        border-right: none !important; 
+        vertical-align: middle;
+    }
+    .compact-doc-table th { 
+        border-bottom: 1px solid #dadce0; 
+        border-top: none; 
+        font-weight: 500; 
+        color: #5f6368;
+        font-size: 12px; 
+        letter-spacing: 0.3px;
+        background: white;
+    }
+    .compact-doc-table td { 
+        border-bottom: 1px solid #f1f3f4; 
+        border-top: none; 
+    }
+    .compact-doc-table tbody tr {
+        transition: background-color 0.15s ease;
+    }
+    .compact-doc-table tbody tr:hover {
+        background-color: #f8f9fa !important;
+    }
+    .compact-doc-table tbody tr:hover td {
+        background-color: transparent;
+    }
+    .compact-doc-table tr.selected {
+        background-color: rgba(26, 115, 232, 0.08) !important;
+    }
+    .compact-doc-table tr.selected td {
+        background-color: transparent;
+    }
+    .compact-doc-table thead.sticky-top { 
+        box-shadow: 0 1px 2px rgba(60,64,67,0.1);
+        z-index: 5;
+    }
+    
+    .nav-pills .nav-link { 
+        border-radius: 999px;
+        font-size: 13px;
+        padding: 6px 16px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    .nav-pills .nav-link.active { 
+        background-color: rgba(26, 115, 232, 0.12); 
+        color: #1a73e8; 
+        font-weight: 600;
+    }
+    .nav-pills .nav-link:hover:not(.active) {
+        background-color: rgba(60, 64, 67, 0.08);
+    }
+    
+    .cursor-pointer { 
+        cursor: pointer; 
+    }
+    ::-webkit-scrollbar { 
+        height: 6px; 
+        width: 6px; 
+    }
+    ::-webkit-scrollbar-thumb { 
+        background: #dadce0; 
+        border-radius: 3px; 
+    }
+    ::-webkit-scrollbar-thumb:hover { 
+        background: #bdc1c6; 
+    }
+    .compact-action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: rgba(26, 115, 232, 0.08);
+        border-bottom: 1px solid #dadce0;
+        font-size: 13px;
+    }
+    .upload-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(26, 115, 232, 0.08);
+        border: 3px dashed #1a73e8;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(2px);
+    }
+    .upload-overlay .overlay-content {
+        text-align: center;
+        color: #1a73e8;
+        background: white;
+        padding: 32px 48px;
+        border-radius: 12px;
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15);
+    }
+    
+    /* 반응형 높이 조절 */
+    @media (max-height: 900px) {
+        #doc-edit-panel .overflow-y-auto {
+            max-height: calc(100vh - 300px) !important;
+        }
+    }
+    
+    @media (max-height: 700px) {
+        .compliance-strip {
+            min-height: 60px !important;
+            max-height: 60px !important;
+        }
+        #doc-edit-panel .overflow-y-auto {
+            max-height: calc(100vh - 250px) !important;
+        }
+    }
+
+    /* 반응형 너비 조절 */
+    @media (max-width: 991px) {
+        /* 모바일에서도 flex flow 안에서 width 애니메이션으로 처리 (표 덮지 않음) */
+        #doc-edit-panel:not(.doc-edit-collapsed) {
+            width: 260px;
+            min-width: 260px;
+        }
+
+        .compact-doc-table th:last-child,
+        .compact-doc-table td:last-child {
+            display: none; /* 좁은 화면에서 등록자 컬럼 숨김 */
+        }
+    }
+</style>
+
+<script>
+    // CSRF 토큰 가져오기
+    function getCsrfToken() {
+        const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (tokenInput) return tokenInput.value;
+        
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='));
+        if (cookieValue) return cookieValue.split('=')[1];
+        
+        console.error('CSRF 토큰을 찾을 수 없습니다');
+        return null;
+    }
+
+    // 문서 타입 목록 (서버에서 렌더링)
+    const documentTypes = [
+        {% for dtype in document_types %}
+        { id: {{ dtype.type_id }}, name: "{{ dtype.type_name|escapejs }}", isRequired: {{ dtype.is_required|yesno:"true,false" }} },
+        {% endfor %}
+    ];
+    
+    function filterDocuments(type) {
+        const rows = document.querySelectorAll('#compact-doc-body .document-row');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const warningDate = new Date(today);
+        warningDate.setDate(warningDate.getDate() + 30);
+        
+        // 필터 링크의 active 상태 업데이트
+        document.querySelectorAll('.filter-pills .nav-link').forEach(link => {
+            link.classList.remove('active');
+            link.classList.add('text-muted');
+        });
+        
+        // 현재 클릭된 필터 활성화
+        event.target.classList.add('active');
+        event.target.classList.remove('text-muted');
+        
+        rows.forEach(row => {
+            let shouldShow = false;
+            
+            if (type === 'ALL') {
+                shouldShow = true;
+            } else if (type === 'REQUIRED') {
+                // slot_id가 있는 문서 (필수 문서)
+                const slotId = row.dataset.slotId;
+                shouldShow = slotId !== '' && slotId !== undefined;
+            } else if (type === 'EXPIRING') {
+                // 만료일이 30일 이내이거나 이미 만료된 문서
+                const expiryDateStr = row.dataset.expiry;
+                if (expiryDateStr && expiryDateStr !== 'None') {
+                    const expiryDate = new Date(expiryDateStr);
+                    shouldShow = expiryDate <= warningDate;
+                }
+            }
+            
+            row.style.display = shouldShow ? '' : 'none';
+        });
+    }
+
+    const compactSearch = document.getElementById('compact-doc-search');
+    if (compactSearch) {
+        compactSearch.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            document.querySelectorAll('#compact-doc-body .document-row').forEach(row => {
+                const filename = row.getAttribute('data-filename').toLowerCase();
+                row.style.display = filename.includes(searchTerm) ? '' : 'none';
+            });
+        });
+    }
+
+    function updateCompactSelectionState() {
+        const selected = document.querySelectorAll('#compact-doc-body input[type="checkbox"]:checked');
+        const countBadge = document.getElementById('compact-selected-count');
+        const actionBar = document.getElementById('compact-action-bar');
+        if (countBadge) {
+            countBadge.textContent = selected.length.toString();
+        }
+        if (actionBar) {
+            actionBar.classList.toggle('d-none', selected.length === 0);
+        }
+    }
+
+    // 체크박스 선택 시 행 강조
+    document.querySelectorAll('#compact-doc-body input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', function() {
+            const row = this.closest('tr');
+            if (row) {
+                row.classList.toggle('selected', this.checked);
+            }
+            updateCompactSelectionState();
+        });
+    });
+
+    const selectAllCompact = document.getElementById('select-all-compact');
+    if (selectAllCompact) {
+        selectAllCompact.addEventListener('change', function() {
+            const rows = document.querySelectorAll('#compact-doc-body .document-row');
+            rows.forEach(row => {
+                const cb = row.querySelector('input[type="checkbox"]');
+                if (cb) {
+                    cb.checked = this.checked;
+                    row.classList.toggle('selected', this.checked);
+                }
+            });
+            updateCompactSelectionState();
+        });
+    }
+
+    // 상태 칩 선택 효과
+    document.querySelectorAll('.status-chip').forEach(chip => {
+        chip.addEventListener('click', function() {
+            document.querySelectorAll('.status-chip').forEach(c => c.classList.remove('chip-active'));
+            this.classList.add('chip-active');
+        });
+    });
+
+    // 상태 칩 드래그 타겟 추적
+    let dragTargetSlot = null;
+    document.querySelectorAll('.status-chip').forEach(chip => {
+        chip.addEventListener('dragenter', function(e) {
+            if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+            dragTargetSlot = {
+                slotId: this.getAttribute('data-slot-id'),
+                docTypeId: this.getAttribute('data-doc-type-id'),
+                docTypeName: this.getAttribute('data-doc-type-name')
+            };
+        });
+        chip.addEventListener('dragleave', function() {
+            dragTargetSlot = null;
+        });
+        chip.addEventListener('dragover', function(e) {
+            e.preventDefault();
+        });
+    });
+
+    // 전체 화면 드래그 오버레이
+    const overlay = document.getElementById('upload-overlay');
+    let dragCounter = 0;
+
+    window.addEventListener('dragenter', function(e) {
+        if (!e.dataTransfer || !e.dataTransfer.types.includes('Files')) return;
+        dragCounter += 1;
+        overlay.classList.remove('d-none');
+    });
+
+    window.addEventListener('dragleave', function() {
+        dragCounter = Math.max(0, dragCounter - 1);
+        if (dragCounter === 0) {
+            overlay.classList.add('d-none');
+        }
+    });
+
+    window.addEventListener('drop', function(e) {
+        if (overlay.classList.contains('d-none')) return;
+        e.preventDefault();
+        overlay.classList.add('d-none');
+        dragCounter = 0;
+
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+
+        if (typeof openUploadModal === 'function') {
+            const fallbackContext = window.lastUploadSlotContext || null;
+            if (dragTargetSlot && dragTargetSlot.slotId) {
+                openUploadModal(dragTargetSlot.slotId, dragTargetSlot.docTypeName, dragTargetSlot.docTypeId);
+            } else if (fallbackContext && fallbackContext.slotId) {
+                openUploadModal(fallbackContext.slotId, fallbackContext.docTypeName, fallbackContext.docTypeId);
+            } else {
+                openUploadModal(null, null, null);
+            }
+        }
+        if (typeof handleFileSelect === 'function') {
+            setTimeout(() => handleFileSelect(files[0]), 150);
+        }
+        dragTargetSlot = null;
+    });
+
+    window.addEventListener('dragover', function(e) {
+        if (overlay.classList.contains('d-none')) return;
+        e.preventDefault();
+    });
+
+    // 액션 바 핸들러
+    function getSelectedDocIds() {
+        return Array.from(document.querySelectorAll('#compact-doc-body input[type="checkbox"]:checked'))
+            .map(cb => cb.closest('tr').getAttribute('data-doc-id'))
+            .filter(Boolean);
+    }
+
+    window.clearCompactSelection = function() {
+        const rows = document.querySelectorAll('#compact-doc-body .document-row');
+        rows.forEach(row => {
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = false;
+            row.classList.remove('selected');
+        });
+        const selectAll = document.getElementById('select-all-compact');
+        if (selectAll) selectAll.checked = false;
+        updateCompactSelectionState();
+    };
+
+    window.bulkDownloadCompact = function() {
+        const ids = getSelectedDocIds();
+        if (ids.length === 0) {
+            alert('다운로드할 문서를 선택하세요.');
+            return;
+        }
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/products/documents/api/bulk-download/';
+
+        const tokenInput = document.createElement('input');
+        tokenInput.type = 'hidden';
+        tokenInput.name = 'csrfmiddlewaretoken';
+        tokenInput.value = getCsrfToken();
+        form.appendChild(tokenInput);
+
+        const idsInput = document.createElement('input');
+        idsInput.type = 'hidden';
+        idsInput.name = 'document_ids';
+        idsInput.value = ids.join(',');
+        form.appendChild(idsInput);
+
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+    };
+
+    window.bulkDeleteCompact = async function() {
+        const ids = getSelectedDocIds();
+        if (ids.length === 0) {
+            alert('삭제할 문서를 선택하세요.');
+            return;
+        }
+        if (!confirm(`${ids.length}개의 문서를 삭제하시겠습니까?`)) {
+            return;
+        }
+
+        const response = await fetch('/products/documents/api/bulk-delete/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ document_ids: ids })
+        });
+        const result = await response.json();
+        if (result.success) {
+            alert(result.message || '삭제되었습니다.');
+            location.reload();
+        } else {
+            alert(result.error || '삭제 중 오류가 발생했습니다.');
+        }
+    };
+
+    // 문서 수정 패널 열기
+    window.openEditPanel = function(docId) {
+        const doc = documentData[docId];
+        if (!doc) {
+            alert('문서 정보를 찾을 수 없습니다.');
+            return;
+        }
+
+        // 패널에 현재 데이터 채우기
+        const panelContent = `
+            <input type="hidden" id="edit-doc-id" value="${docId}">
+            <input type="hidden" id="edit-slot-id" value="${doc.slotId || ''}">
+            <input type="hidden" id="edit-doc-type-id" value="${doc.typeId}">
+            <input type="hidden" id="edit-doc-type-name" value="${doc.typeName || ''}">
+            
+            <div class="mb-3">
+                <div class="fw-bold text-dark mb-2 text-truncate" title="${doc.filename}">
+                    <i class="bi bi-file-earmark me-1"></i>${doc.filename}
+                </div>
+                <div class="small text-muted">${(doc.fileSize / 1024 / 1024).toFixed(2)} MB</div>
+            </div>
+            
+            <div class="row g-2 mb-3">
+                <div class="col-4">
+                    <button class="btn btn-outline-primary btn-sm w-100" onclick="previewDocument(${docId})">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>
+                <div class="col-4">
+                    <a class="btn btn-outline-secondary btn-sm w-100" href="${doc.downloadUrl}" download>
+                        <i class="bi bi-download"></i>
+                    </a>
+                </div>
+                <div class="col-4">
+                    <button class="btn btn-outline-success btn-sm w-100" onclick="openUploadForUpdate()" title="새 버전 업로드">
+                        <i class="bi bi-upload"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="mb-3">
+                <label class="form-label fw-semibold small text-muted mb-2">문서 구분</label>
+                <select class="form-select form-select-sm" id="edit-doc-type">
+                    ${documentTypes.map(dtype => 
+                        `<option value="${dtype.id}" ${doc.typeId == dtype.id ? 'selected' : ''}>${dtype.name}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label fw-semibold small text-muted mb-2">발행일</label>
+                <input type="date" class="form-control form-control-sm" id="edit-issue-date" value="${doc.issueDate || ''}">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label fw-semibold small text-muted mb-2">유효기간 설정</label>
+                <div class="d-flex flex-wrap gap-1 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2" onclick="setExpiryByMonths(1)" style="font-size: 11px;">+1개월</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2" onclick="setExpiryByMonths(3)" style="font-size: 11px;">+3개월</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2" onclick="setExpiryByMonths(6)" style="font-size: 11px;">+6개월</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2" onclick="setExpiryByYears(1)" style="font-size: 11px;">+1년</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2" onclick="setExpiryByYears(2)" style="font-size: 11px;">+2년</button>
+                    <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2" onclick="clearExpiry()" style="font-size: 11px;">무기한</button>
+                </div>
+                <input type="date" class="form-control form-control-sm" id="edit-expiry-date" value="${doc.expiryDate || ''}">
+            </div>
+            
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="edit-notification-enabled" ${doc.expiryNotificationEnabled ? 'checked' : ''}>
+                    <label class="form-check-label small" for="edit-notification-enabled">
+                        만료 ${doc.expiryNotificationDays || 30}일 전 알림
+                    </label>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label fw-semibold small text-muted mb-2">설명</label>
+                <textarea class="form-control form-control-sm" id="edit-description" rows="3" placeholder="문서에 대한 설명을 입력하세요...">${doc.description || ''}</textarea>
+            </div>
+            
+            <hr>
+            
+            <div class="row g-2">
+                <div class="col-6">
+                    <button class="btn btn-primary btn-sm w-100" onclick="submitDocumentUpdate()">
+                        <i class="bi bi-check-lg me-1"></i>저장
+                    </button>
+                </div>
+                <div class="col-6">
+                    <button class="btn btn-light btn-sm w-100" onclick="closeEditPanel()">
+                        취소
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mt-3 pt-3 border-top">
+                <div class="small text-muted">
+                    <div class="mb-1"><i class="bi bi-person me-1"></i>등록자: ${doc.uploadedBy}</div>
+                    <div><i class="bi bi-calendar me-1"></i>등록일: ${doc.uploadedDate}</div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('edit-panel-content').innerHTML = panelContent;
+        
+        const panel = document.getElementById('doc-edit-panel');
+        
+        // 패널 표시 (flex width 기반)
+        panel.classList.remove('doc-edit-collapsed');
+    };
+    
+    // 문서 수정 패널 닫기
+    window.closeEditPanel = function() {
+        const panel = document.getElementById('doc-edit-panel');
+        
+        // 패널 숨기기 (flex width 기반)
+        panel.classList.add('doc-edit-collapsed');
+        
+        document.getElementById('edit-panel-content').innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-pencil-square" style="font-size: 48px; opacity: 0.3;"></i>
+                <p class="mt-3 small">문서를 선택하여 수정하세요</p>
+            </div>
+        `;
+    };
+
+    // 문서 정보 업데이트 제출
+    window.submitDocumentUpdate = async function() {
+        const docId = document.getElementById('edit-doc-id').value;
+        const data = {
+            document_type_id: parseInt(document.getElementById('edit-doc-type').value),
+            issue_date: document.getElementById('edit-issue-date').value || null,
+            expiry_date: document.getElementById('edit-expiry-date').value || null,
+            description: document.getElementById('edit-description').value || '',
+            expiry_notification_enabled: document.getElementById('edit-notification-enabled').checked
+        };
+
+        try {
+            const response = await fetch(`/products/documents/api/${docId}/update/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('문서 정보가 업데이트되었습니다.');
+                closeEditPanel();
+                // 현재 탭 유지하면서 새로고침
+                window.location.hash = '#tab-docs';
+                window.location.reload();
+            } else {
+                alert(result.error || '업데이트 중 오류가 발생했습니다.');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('업데이트 중 오류가 발생했습니다.');
+        }
+    };
+    
+    // 유효기간 설정 헬퍼 함수
+    window.setExpiryByMonths = function(months) {
+        const today = new Date();
+        today.setMonth(today.getMonth() + months);
+        const expiryDate = today.toISOString().split('T')[0];
+        document.getElementById('edit-expiry-date').value = expiryDate;
+    };
+    
+    window.setExpiryByYears = function(years) {
+        const today = new Date();
+        today.setFullYear(today.getFullYear() + years);
+        today.setDate(today.getDate() - 1); // 1일 빼기 (예: 26.1.2 -> 27.1.1)
+        const expiryDate = today.toISOString().split('T')[0];
+        document.getElementById('edit-expiry-date').value = expiryDate;
+    };
+    
+    window.clearExpiry = function() {
+        document.getElementById('edit-expiry-date').value = '';
+    };
+
+    // 슬롯 카드 클릭 처리
+    window.handleSlotClick = function(slotId, docTypeName, docTypeId, documentId) {
+        if (documentId) {
+            // 문서가 있으면 오른쪽 패널 열기
+            openEditPanel(documentId);
+        } else {
+            // 문서가 없으면 업로드 모달 열기
+            if (typeof openUploadModal === 'function') {
+                openUploadModal(slotId, docTypeName, docTypeId);
+            } else {
+                alert('업로드 기능을 사용할 수 없습니다.');
+            }
+        }
+    };
+
+    // 오른쪽 패널에서 업로드 모달 열기 (슬롯 정보 유지)
+    window.openUploadForUpdate = function() {
+        const slotId = document.getElementById('edit-slot-id')?.value;
+        const docTypeName = document.getElementById('edit-doc-type-name')?.value;
+        const docTypeId = document.getElementById('edit-doc-type-id')?.value;
+        
+        closeEditPanel();
+        
+        if (slotId && docTypeName && docTypeId && typeof openUploadModal === 'function') {
+            openUploadModal(slotId, docTypeName, docTypeId);
+        } else {
+            alert('업로드 기능을 사용할 수 없습니다.');
+        }
+    };
+
+    window.openAddSlotModal = function() {
+        console.log('[openAddSlotModal] 함수 호출됨');
+        
+        const modalEl = document.getElementById('addSlotModal');
+        console.log('[openAddSlotModal] 모달 요소:', modalEl);
+        
+        if (!modalEl) {
+            console.error('addSlotModal element not found');
+            alert('모달을 찾을 수 없습니다.');
+            return;
+        }
+        
+        // select 초기화
+        const select = document.getElementById('add-slot-type-select');
+        if (select) {
+            select.value = '';
+        }
+        
+        // 모달 표시
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        
+        console.log('[openAddSlotModal] 모달 표시 완료');
+    };
+
+    window.submitAddSlot = async function() {
+        console.log('[submitAddSlot] 함수 호출됨');
+        
+        const select = document.getElementById('add-slot-type-select');
+        console.log('[submitAddSlot] 선택된 값:', select?.value);
+        
+        if (!select || !select.value) {
+            alert('추가할 문서를 선택하세요.');
+            return;
+        }
+
+        try {
+            const modalEl = document.getElementById('addSlotModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+
+            console.log('[submitAddSlot] API 호출 시작');
+            const response = await fetch(`/products/slots/add/{{ product.my_label_id }}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ document_type_id: select.value })
+            });
+
+            console.log('[submitAddSlot] 응답 상태:', response.status);
+            const result = await response.json();
+            console.log('[submitAddSlot] 응답 데이터:', result);
+            
+            if (result.success) {
+                if (modal) modal.hide();
+                alert(result.message || '문서가 추가되었습니다.');
+                location.reload();
+            } else {
+                alert(result.error || '문서 추가 중 오류가 발생했습니다.');
+            }
+        } catch (error) {
+            console.error('[submitAddSlot] Error:', error);
+            alert('문서 추가 중 오류가 발생했습니다: ' + error.message);
+        }
+    };
+</script>
+
+<!-- 숨겨진 파일 업로드 영역 -->
+<input type="file" id="document-upload-input" style="display: none;" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">

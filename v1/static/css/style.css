@@ -1205,13 +1205,13 @@ select.form-control.select2-date-option {
 .table th {
     position: relative;
     vertical-align: middle !important;
-    padding: 10px 42px 10px 8px; /* 오른쪽 패딩 충분히 확보 */
-    height: 45px; /* 적절한 높이 */
+    padding: 10px 8px; /* sort-button은 position:absolute라 우측 42px 불필요 */
+    height: 45px;
     line-height: 1.2;
-    white-space: nowrap; /* 한 줄 표시 */
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.8rem; /* 적절한 글자 크기 */
+    font-size: 0.8rem;
     font-weight: 600;
 }
 
@@ -1228,7 +1228,7 @@ select.form-control.select2-date-option {
 .table th[style*="width: 4%"],
 .table th[style*="width: 5%"] {
     font-size: 0.75rem;
-    padding: 8px 38px 8px 4px;
+    padding: 8px 4px;
 }
 
 .table th[style*="width: 7%"],
@@ -1236,7 +1236,7 @@ select.form-control.select2-date-option {
 .table th[style*="width: 9%"],
 .table th[style*="width: 10%"] {
     font-size: 0.78rem;
-    padding: 10px 40px 10px 6px;
+    padding: 10px 6px;
 }
 
 /* 넓은 컬럼 */
@@ -1245,14 +1245,14 @@ select.form-control.select2-date-option {
 .table th[style*="width: 18%"],
 .table th[style*="width: 20%"] {
     font-size: 0.8rem;
-    padding: 10px 42px 10px 8px;
+    padding: 10px 8px;
 }
 
 /* 반응형 대응 */
 @media (max-width: 1200px) {
     .table th {
         font-size: 0.75rem;
-        padding: 8px 38px 8px 6px;
+        padding: 8px 6px;
         height: 42px;
     }
     
@@ -1270,7 +1270,7 @@ select.form-control.select2-date-option {
 @media (max-width: 768px) {
     .table th {
         font-size: 0.7rem;
-        padding: 6px 34px 6px 4px;
+        padding: 6px 4px;
         height: 38px;
     }
     
@@ -1337,5 +1337,30 @@ select.form-control.select2-date-option {
         font-size: 0.65rem !important;
         padding: 1px 3px !important;
         min-width: auto !important;
+    }
+}
+
+/* ==================== V2 반응형 테이블 카드 ==================== */
+@media (max-width: 768px) {
+    .table-responsive-card thead {
+        display: none;
+    }
+    .table-responsive-card tr {
+        display: block;
+        margin-bottom: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+    }
+    .table-responsive-card td {
+        display: flex;
+        justify-content: space-between;
+        border: none;
+        padding: 5px 0;
+    }
+    .table-responsive-card td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        color: #666;
     }
 }

@@ -1,6 +1,3 @@
 from django.contrib import admin
-from .models import Allergen
 
-# @admin.register(Allergen)
-# class AllergenAdmin(admin.ModelAdmin):
-#     list_display = ['name']
+# main 앱은 현재 모델이 없으므로 admin 등록 없음

@@ -1,0 +1,223 @@
+<!-- 스마트 업로드 모달 (Smart Upload Modal) -->
+<div class="modal fade smart-upload-modal" id="smartUploadModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-label-id="{{ product.my_label_id }}">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg smart-upload-shell">
+            <form id="smart-upload-form">
+                {% csrf_token %}
+                <input type="hidden" id="target-slot-id" name="slot_id">
+                
+                <div class="modal-body p-0">
+                    <div class="row g-0 smart-upload-split">
+                        <!-- 좌측: 파일 영역 -->
+                        <div class="col-md-5 smart-upload-left border-end d-flex flex-column">
+                            <div id="upload-dropzone" class="smart-dropzone flex-grow-1 d-flex flex-column justify-content-center align-items-center text-center p-4">
+                                <div class="smart-icon-circle bg-white shadow-sm mb-3 text-primary">
+                                    <i class="bi bi-cloud-upload"></i>
+                                </div>
+                                <h6 class="fw-bold text-dark mb-1">파일을 드래그하거나 클릭</h6>
+                                <p class="small text-muted mb-0">PDF, 이미지, 문서 파일 (최대 50MB)</p>
+                                <button type="button" class="btn btn-primary btn-sm mt-3" id="select-file-btn">
+                                    <i class="bi bi-folder2-open me-1"></i>파일 선택
+                                </button>
+                                <input type="file" id="document-upload-input" class="d-none">
+                            </div>
+                            
+                            <div id="selected-file-info" class="smart-preview p-4" style="display: none;">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-file-earmark text-primary me-3" id="file-icon"></i>
+                                        <div>
+                                            <div class="fw-bold text-truncate" id="file-name">-</div>
+                                            <small class="text-muted" id="file-size">-</small>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-light border rounded-circle" id="remove-file-btn" title="파일 제거">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                                <div class="smart-preview-hint text-muted small">업로드할 파일을 확인해 주세요.</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 우측: 메타데이터 영역 -->
+                        <div class="col-md-7 bg-white p-4 d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="fw-bold m-0" id="upload-modal-title">문서 등록</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            
+                            <div class="d-flex flex-column gap-3 flex-grow-1">
+                                <div class="form-floating">
+                                    <select class="form-select border-light-subtle bg-light" id="document-type-select" name="document_type" required>
+                                        <option value="">-- 문서 종류를 선택하세요 --</option>
+                                        {% for dtype in document_types %}
+                                        <option value="{{ dtype.type_id }}" data-validity="{{ dtype.default_validity_days|default:'' }}">
+                                            {{ dtype.type_name }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <label for="document-type-select">문서 종류</label>
+                                </div>
+                                
+                                <div class="smart-expiry-box">
+                                    <label class="small fw-bold text-muted mb-2 d-block">유효기간 설정</label>
+                                    <div class="d-flex gap-2 overflow-auto pb-1 smart-expiry-chips" role="group">
+                                        <input type="radio" class="btn-check" name="expiry-option" id="expiry-6m" value="180">
+                                        <label class="btn btn-sm btn-outline-secondary rounded-pill px-3" for="expiry-6m">+6개월</label>
+                                        
+                                        <input type="radio" class="btn-check" name="expiry-option" id="expiry-1y" value="365">
+                                        <label class="btn btn-sm btn-outline-secondary rounded-pill px-3" for="expiry-1y">+1년</label>
+                                        
+                                        <input type="radio" class="btn-check" name="expiry-option" id="expiry-2y" value="730">
+                                        <label class="btn btn-sm btn-outline-secondary rounded-pill px-3" for="expiry-2y">+2년</label>
+                                        
+                                        <input type="radio" class="btn-check" name="expiry-option" id="expiry-unlimited" value="0" checked>
+                                        <label class="btn btn-sm btn-outline-success rounded-pill px-3" for="expiry-unlimited">무기한</label>
+                                        
+                                        <input type="radio" class="btn-check" name="expiry-option" id="expiry-custom" value="custom">
+                                        <label class="btn btn-sm btn-outline-secondary rounded-pill px-3" for="expiry-custom">직접입력</label>
+                                    </div>
+                                    
+                                    <div id="custom-expiry-input" class="mt-3" style="display: none;">
+                                        <div class="form-floating">
+                                            <input type="date" class="form-control" id="custom-expiry-date" name="expiry_date">
+                                            <label for="custom-expiry-date">만료일 (직접 입력)</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="calculated-expiry" class="alert alert-info mt-3 py-2" style="display: none;">
+                                        <i class="bi bi-calendar-event me-2"></i>
+                                        만료 예정일: <strong id="calculated-expiry-text">-</strong>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="enable-notification" name="enable_notification" checked>
+                                        <label class="form-check-label" for="enable-notification">만료 1개월 전 알림</label>
+                                    </div>
+                                    <small class="text-muted">담당자에게 자동 알림</small>
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                                <button type="button" class="btn btn-light rounded-pill px-4 fw-bold text-secondary" data-bs-dismiss="modal">취소</button>
+                                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" id="upload-submit-btn">
+                                    <i class="bi bi-cloud-arrow-up me-1"></i>등록하기
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Smart Upload Modal */
+#smartUploadModal .smart-upload-shell {
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+#smartUploadModal .smart-upload-left {
+    background: #f1f3f4;
+    min-height: 480px;
+}
+
+#smartUploadModal .smart-dropzone {
+    border: 2px dashed #d2d6dc;
+    border-radius: 12px;
+    transition: background-color 0.2s, border-color 0.2s;
+    cursor: pointer;
+}
+
+#smartUploadModal .smart-dropzone.dragover {
+    background-color: #e8f0fe;
+    border-color: #1a73e8;
+}
+
+#smartUploadModal .smart-icon-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    font-size: 24px;
+}
+
+#smartUploadModal .smart-preview {
+    background: #e8f0fe;
+    border-top: 1px solid #d2e3fc;
+}
+
+#smartUploadModal #file-icon {
+    font-size: 36px;
+}
+
+#smartUploadModal .form-floating > .form-control,
+#smartUploadModal .form-floating > .form-select {
+    height: 50px;
+    min-height: 50px;
+}
+
+#smartUploadModal .form-floating > label {
+    padding: 0.75rem 0.75rem;
+}
+
+#smartUploadModal .smart-expiry-box {
+    background: #f8f9fa;
+    border: 1px solid #eceff1;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+#smartUploadModal .smart-expiry-chips::-webkit-scrollbar {
+    height: 0;
+    background: transparent;
+}
+
+/* 슬롯 카드 테두리 색상 */
+.border-empty {
+    border-color: #dee2e6 !important;
+}
+
+.border-valid {
+    border-color: #28a745 !important;
+}
+
+.border-expiring {
+    border-color: #ffc107 !important;
+}
+
+.border-expired {
+    border-color: #dc3545 !important;
+}
+
+/* 컴플라이언스 요약 */
+.compliance-summary .progress {
+    border-radius: 12px;
+}
+
+.compliance-summary .progress-bar {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+/* 슬롯 카드 호버 효과 */
+.slot-card-inner {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.slot-card-inner:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* 슬롯 비어있을 때 */
+.slot-empty {
+    cursor: pointer;
+}
+</style>

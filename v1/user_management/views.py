@@ -4,7 +4,7 @@ from django.contrib.auth import login, logout, authenticate, update_session_auth
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from .models import UserProfile
+from .models import UserProfile, CompanyDocument
 from django.utils.crypto import get_random_string
 from django.core.mail import send_mail
 from django.conf import settings
@@ -275,6 +275,93 @@ def change_password(request):
         form = PasswordChangeForm(request.user)
     
     return render(request, 'user_management/change_password.html', {'form': form})
+
+@login_required
+def user_profile(request):
+    """내 정보 수정 — 회사 정보 + 고정 서류 관리"""
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    documents = CompanyDocument.objects.filter(user=request.user)
+    is_guest = request.user.email == 'guest@labeasylabel.com'
+
+    if request.method == 'POST':
+        if is_guest:
+            messages.error(request, 'Guest 계정은 정보를 수정할 수 없습니다.')
+            return redirect('user_management:user_profile')
+
+        action = request.POST.get('action', 'save_info')
+
+        if action == 'save_info':
+            # 회사 기본 정보 저장
+            profile.company_name = request.POST.get('company_name', '').strip()
+            profile.license_number = request.POST.get('license_number', '').strip()
+            profile.manufacturer_name = request.POST.get('manufacturer_name', '').strip()
+            profile.manufacturer_address = request.POST.get('manufacturer_address', '').strip()
+            profile.save()
+            messages.success(request, '기업 정보가 저장되었습니다.')
+
+        elif action == 'upload_document':
+            doc_type = request.POST.get('doc_type', '')
+            doc_name = request.POST.get('doc_name', '').strip()
+            note = request.POST.get('note', '').strip()
+            doc_file = request.FILES.get('doc_file')
+            if doc_file and doc_type:
+                CompanyDocument.objects.create(
+                    user=request.user,
+                    doc_type=doc_type,
+                    doc_name=doc_name,
+                    note=note,
+                    doc_file=doc_file,
+                )
+                messages.success(request, '서류가 등록되었습니다.')
+            else:
+                messages.error(request, '서류 종류와 파일을 모두 선택해주세요.')
+
+        elif action == 'change_password':
+            if is_guest:
+                messages.error(request, 'Guest 계정은 비밀번호를 변경할 수 없습니다.')
+            else:
+                form = PasswordChangeForm(request.user, request.POST)
+                if form.is_valid():
+                    user = form.save()
+                    update_session_auth_hash(request, user)
+                    messages.success(request, '비밀번호가 변경되었습니다.')
+                else:
+                    for field, errors in form.errors.items():
+                        for error in errors:
+                            messages.error(request, error)
+
+        return redirect('user_management:user_profile')
+
+    pw_form = PasswordChangeForm(request.user)
+    doc_type_choices = CompanyDocument.DOC_TYPE_CHOICES
+    # 서류 종류별로 그룹화
+    docs_by_type = {}
+    for doc in documents:
+        docs_by_type.setdefault(doc.doc_type, []).append(doc)
+
+    return render(request, 'user_management/user_profile.html', {
+        'profile': profile,
+        'documents': documents,
+        'docs_by_type': docs_by_type,
+        'doc_type_choices': doc_type_choices,
+        'pw_form': pw_form,
+        'is_guest': is_guest,
+    })
+
+
+@login_required
+def delete_company_document(request, pk):
+    """고정 서류 삭제"""
+    if request.method == 'POST':
+        try:
+            doc = CompanyDocument.objects.get(pk=pk, user=request.user)
+            doc.doc_file.delete(save=False)
+            doc.delete()
+            messages.success(request, '서류가 삭제되었습니다.')
+        except CompanyDocument.DoesNotExist:
+            messages.error(request, '서류를 찾을 수 없습니다.')
+    return redirect('user_management:user_profile')
+
 
 def privacy_policy(request):
     """개인정보 처리방침 페이지"""

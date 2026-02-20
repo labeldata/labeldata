@@ -1,22 +1,32 @@
-{% extends 'base.html' %}
+{% extends 'base_v2.html' %}
 {% load static django_bootstrap5 %}
 {% block title %}게시글 삭제{% endblock %}
 
+{% block topbar %}
+<a href="{% url 'board:detail' object.pk %}" class="board-back-btn">
+    <i class="bi bi-arrow-left"></i>보러가기
+</a>
+<span class="ms-3 board-topbar-title">게시글 삭제</span>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/board.css' %}">
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <h2>게시글 삭제</h2>
-    {% bootstrap_messages %}
-    <div class="card mb-4">
-        <div class="card-body">
-            <p>정말로 "<strong>{{ object.title }}</strong>" 게시글을 삭제하시겠습니까?</p>
-            <form method="post">
-                {% csrf_token %}
-                <div class="d-flex justify-content-end gap-2">
-                    <a href="{% url 'board:detail' object.pk %}" class="btn btn-outline-secondary btn-sm">취소</a>
-                    <button type="submit" class="btn btn-danger btn-sm">삭제</button>
-                </div>
-            </form>
-        </div>
+<div class="confirm-wrap">
+    <div class="confirm-card">
+        <div class="confirm-icon"><i class="bi bi-trash3-fill"></i></div>
+        <div class="confirm-title">게시글을 삭제하시겠습니까?</div>
+        <div class="confirm-desc">"<strong>{{ object.title }}</strong>"<br>삭제 후에는 복구할 수 없습니다.</div>
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex justify-content-center gap-2">
+                <a href="{% url 'board:detail' object.pk %}" class="cancel-btn"><i class="bi bi-x"></i>취소</a>
+                <button type="submit" class="del-btn"><i class="bi bi-trash3"></i>삭제</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}

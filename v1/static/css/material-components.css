@@ -1,0 +1,472 @@
+/* ==================== Google Material Style UX Components ====================
+ * FAB (Floating Action Button)
+ * Toast / Snackbar 알림
+ * Material Design 기반 컴포넌트
+ * ==================== */
+
+/* ==================== CSS Variables (Material Design Colors) ==================== */
+:root {
+    --md-primary: #1a73e8;
+    --md-primary-dark: #1557b0;
+    --md-primary-light: #4285f4;
+    --md-secondary: #5f6368;
+    --md-surface: #ffffff;
+    --md-background: #f8f9fa;
+    --md-error: #ea4335;
+    --md-success: #34a853;
+    --md-warning: #f9ab00;
+    --md-info: #1a73e8;
+    
+    --md-shadow-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+    --md-shadow-2: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+    --md-shadow-3: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+    --md-shadow-4: 0 14px 28px rgba(0,0,0,0.25), 0 10px 10px rgba(0,0,0,0.22);
+    --md-shadow-5: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
+    
+    --md-transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    --md-transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    --md-transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* ==================== FAB (Floating Action Button) ==================== */
+
+.fab-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 16px;
+}
+
+/* 메인 FAB */
+.fab {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: var(--md-primary);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--md-shadow-3);
+    transition: all var(--md-transition-normal);
+    font-size: 24px;
+}
+
+.fab:hover {
+    background: var(--md-primary-dark);
+    box-shadow: var(--md-shadow-4);
+    transform: scale(1.05);
+}
+
+.fab:active {
+    transform: scale(0.95);
+}
+
+/* Extended FAB (텍스트 포함) */
+.fab.fab-extended {
+    width: auto;
+    padding: 0 20px;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.fab.fab-extended .fab-text {
+    white-space: nowrap;
+}
+
+/* Mini FAB */
+.fab.fab-mini {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    font-size: 18px;
+    box-shadow: var(--md-shadow-2);
+}
+
+/* FAB 색상 변형 */
+.fab.fab-secondary {
+    background: var(--md-surface);
+    color: var(--md-primary);
+}
+
+.fab.fab-secondary:hover {
+    background: var(--md-background);
+}
+
+.fab.fab-success {
+    background: var(--md-success);
+}
+
+.fab.fab-warning {
+    background: var(--md-warning);
+    color: #333;
+}
+
+.fab.fab-error {
+    background: var(--md-error);
+}
+
+/* FAB 메뉴 (Speed Dial) */
+.fab-menu {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 12px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(20px);
+    transition: all var(--md-transition-normal);
+}
+
+.fab-container.open .fab-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.fab-container.open .fab-main .fab-icon {
+    transform: rotate(45deg);
+}
+
+.fab-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    white-space: nowrap;
+}
+
+.fab-menu-item .fab-mini {
+    box-shadow: var(--md-shadow-2);
+}
+
+.fab-menu-label {
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+
+/* ==================== Toast / Snackbar ==================== */
+
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.toast {
+    background: #323232;
+    color: white;
+    padding: 14px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 400;
+    box-shadow: var(--md-shadow-3);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 288px;
+    max-width: 568px;
+    pointer-events: auto;
+    
+    /* 애니메이션 */
+    opacity: 0;
+    transform: translateY(100%) scale(0.8);
+    transition: all var(--md-transition-normal);
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.toast.hiding {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.9);
+}
+
+/* Toast 아이콘 */
+.toast-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+/* Toast 메시지 */
+.toast-message {
+    flex: 1;
+    line-height: 1.4;
+}
+
+/* Toast 액션 버튼 */
+.toast-action {
+    background: transparent;
+    border: none;
+    color: var(--md-primary-light);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 8px 12px;
+    margin: -8px -12px -8px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: background var(--md-transition-fast);
+}
+
+.toast-action:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Toast 닫기 버튼 */
+.toast-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 18px;
+    padding: 4px;
+    margin: -4px -8px -4px 4px;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all var(--md-transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toast-close:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Toast 색상 변형 */
+.toast.toast-success {
+    background: var(--md-success);
+}
+
+.toast.toast-error {
+    background: var(--md-error);
+}
+
+.toast.toast-warning {
+    background: var(--md-warning);
+    color: #333;
+}
+
+.toast.toast-warning .toast-action {
+    color: #333;
+}
+
+.toast.toast-info {
+    background: var(--md-info);
+}
+
+
+/* ==================== Progress Indicator ==================== */
+
+.progress-linear {
+    height: 4px;
+    background: rgba(26, 115, 232, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-linear-bar {
+    height: 100%;
+    background: var(--md-primary);
+    border-radius: 2px;
+    transition: width var(--md-transition-normal);
+}
+
+/* Indeterminate animation */
+.progress-linear.indeterminate .progress-linear-bar {
+    width: 30%;
+    animation: progress-indeterminate 1.5s infinite ease-in-out;
+}
+
+@keyframes progress-indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(400%);
+    }
+}
+
+
+/* ==================== Loading Overlay ==================== */
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--md-transition-normal);
+}
+
+.loading-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(26, 115, 232, 0.2);
+    border-top-color: var(--md-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.loading-text {
+    margin-top: 16px;
+    color: var(--md-secondary);
+    font-size: 14px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* ==================== Chip / Tag ==================== */
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--md-background);
+    border: 1px solid #dadce0;
+    border-radius: 16px;
+    font-size: 13px;
+    color: var(--md-secondary);
+    transition: all var(--md-transition-fast);
+}
+
+.chip:hover {
+    background: #e8eaed;
+}
+
+.chip.chip-primary {
+    background: #e8f0fe;
+    border-color: #e8f0fe;
+    color: var(--md-primary);
+}
+
+.chip.chip-success {
+    background: #e6f4ea;
+    border-color: #e6f4ea;
+    color: var(--md-success);
+}
+
+.chip.chip-warning {
+    background: #fef7e0;
+    border-color: #fef7e0;
+    color: #b06000;
+}
+
+.chip.chip-error {
+    background: #fce8e6;
+    border-color: #fce8e6;
+    color: var(--md-error);
+}
+
+.chip-close {
+    background: transparent;
+    border: none;
+    color: inherit;
+    opacity: 0.7;
+    cursor: pointer;
+    padding: 2px;
+    margin: -2px -6px -2px 2px;
+    font-size: 16px;
+    border-radius: 50%;
+    transition: all var(--md-transition-fast);
+}
+
+.chip-close:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+
+/* ==================== Empty State ==================== */
+
+.empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--md-secondary);
+}
+
+.empty-state-icon {
+    font-size: 64px;
+    color: #dadce0;
+    margin-bottom: 16px;
+}
+
+.empty-state-title {
+    font-size: 20px;
+    font-weight: 500;
+    color: #202124;
+    margin-bottom: 8px;
+}
+
+.empty-state-description {
+    font-size: 14px;
+    max-width: 400px;
+    margin: 0 auto 24px;
+}
+
+
+/* ==================== Responsive ==================== */
+
+@media (max-width: 600px) {
+    .fab-container {
+        bottom: 16px;
+        right: 16px;
+    }
+    
+    .toast-container {
+        bottom: 16px;
+        left: 16px;
+        right: 16px;
+        transform: none;
+    }
+    
+    .toast {
+        min-width: auto;
+        width: 100%;
+    }
+    
+    .fab-menu-label {
+        display: none;
+    }
+}

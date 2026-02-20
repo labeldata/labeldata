@@ -1,18 +1,10 @@
-<header class="navbar navbar-expand-lg navbar-dark shadow-sm fixed-top">
+﻿<header class="navbar navbar-expand-lg navbar-dark shadow-sm fixed-top">
     <div class="container">
         <!-- 네비게이션 로고 및 브랜드 -->
         <a class="navbar-brand text-warning" href="{% url 'main:home' %}">간편한 표시사항 연구소</a>
         
         <!-- 네비게이션 메뉴 -->
         <ul class="navbar-nav flex-row me-auto">
-            <!-- 제품 조회 -->
-            <li class="nav-item dropdown me-4" data-menu="product">
-                <a class="nav-link {% if 'food_item' in request.resolver_match.url_name or 'food_additive' in request.resolver_match.url_name %}active{% endif %}" 
-                   href="{% url 'label:food_item_list_domestic' %}" role="button">
-                    제품 조회
-                </a>
-            </li>
-            
             <!-- 표시사항 작성 -->
             <li class="nav-item dropdown me-4" data-menu="label">
                 <a class="nav-link {% if 'label_creation' in request.resolver_match.url_name or 'my_label' in request.resolver_match.url_name %}active{% endif %}" 
@@ -21,57 +13,16 @@
                 </a>
             </li>
             
-            <!-- 원료 관리 -->
+            <!-- 데이터 포털 (V2) -->
             <li class="nav-item me-4">
-                <a class="nav-link {% if 'ingredient' in request.resolver_match.url_name %}active{% endif %}" 
-                   href="{% url 'label:my_ingredient_list_combined' %}">
-                    원료 관리
-                </a>
-            </li>
-            
-            <!-- 게시판 -->
-            <li class="nav-item me-4">
-                <a class="nav-link {% if 'board' in request.resolver_match.url_name or 'user_management' in request.resolver_match.url_name %}active{% endif %}" 
-                   href="{% url 'board:list' %}">
-                    게시판
-                    {% if board_notification_count > 0 %}
-                        <!-- 방법 1: 숫자 표시 (현재 방식) -->
-                        <span class="badge bg-danger rounded-pill ms-1">{{ board_notification_count }}</span>
-                        
-                        <!-- 방법 2: 점(dot) 표시 (아래 주석 해제하여 사용) -->
-                        <!-- <span class="position-relative">
-                            <span class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle" style="margin-left: 0.25rem;">
-                                <span class="visually-hidden">새 알림</span>
-                            </span>
-                        </span> -->
-                    {% endif %}
+                <a class="nav-link {% if request.resolver_match.namespace == 'products' %}active{% endif %}" 
+                   href="{% url 'products:product_explorer' %}">
+                    데이터 포털
                 </a>
             </li>
         </ul>
         
-        <!-- 통합 메가메뉴 -->
-        <!-- 제품 조회 메뉴 -->
-        <div class="menu-column" data-menu="product">
-            <ul class="menu-list">
-                <li>
-                    <a href="{% url 'label:food_item_list_domestic' %}">
-                        국내 제품 조회
-                    </a>
-                </li>
-                <li>
-                    <a href="{% url 'label:food_item_list_imported' %}">
-                        수입 제품 조회
-                    </a>
-                </li>
-                <li>
-                    <a href="{% url 'label:food_additive_search' %}">
-                        식품첨가물 데이터베이스
-                    </a>
-                </li>
-            </ul>
-        </div>
-        
-        <!-- 표시사항 메뉴 -->
+        <!-- 메가메뉴: 표시사항 -->
         <div class="menu-column" data-menu="label">
             <ul class="menu-list">
                 <li>

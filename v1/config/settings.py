@@ -35,11 +35,14 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_bootstrap5',  # django-bootstrap5 사용
+    'v1.main',           # Main 앱 (홈 페이지) ⚠️ 반드시 포함 필요!
     'v1.label',          # Label 앱
     'v1.disposition',    # Action 앱
     'v1.common',         # Common 앱
     'v1.user_management',
     'v1.board',          # Board 앱
+    'v1.products',       # 제품 관리 (documents, collaboration, sharing 통합됨)
+    'v1.bom',            # BOM 구조 관리
 ]
 
 MIDDLEWARE = [
@@ -120,13 +123,13 @@ STATICFILES_DIRS = [
 ]
 
 if DEBUG:
-    STATIC_ROOT = config('STATIC_ROOT', default='d:/projects/labeldata/staticfiles')
+    STATIC_ROOT = config('STATIC_ROOT', default=str(BASE_DIR.parent / 'staticfiles'))
 else:
     STATIC_ROOT = config('STATIC_ROOT', default='/home/labeldata/mysite/staticfiles')
 
 # Media files
 MEDIA_URL = '/media/'
-MEDIA_ROOT = config('MEDIA_ROOT', default='d:/projects/labeldata/media')
+MEDIA_ROOT = config('MEDIA_ROOT', default=str(BASE_DIR.parent / 'media'))
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -182,3 +185,7 @@ EMAIL_USE_TLS = True
 # 보내는 사람 주소 (별칭 사용)
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply-verify@ezlabeling.com')
 
+# iframe 설정: SAMEORIGIN으로 설정하여 같은 도메인 내 iframe 로드 허용
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+
+CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.dev'] # 외부 접속용 앱 허용

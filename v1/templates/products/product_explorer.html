@@ -1,0 +1,1106 @@
+﻿{% extends "base_v2.html" %}
+{% load static %}
+
+{% block title %}제품 관리 - Food Data Portal{% endblock %}
+
+{% block topbar %}
+<div class="v2-topbar-title-wrapper">
+    <i class="bi bi-hdd-stack me-2 v2-topbar-icon"></i>
+    <span class="v2-topbar-title">제품 관리</span>
+    <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">제품을 등록하고 문서와 원료를 관리하세요</span>
+</div>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<style>
+    /* Material Design 3 기반 타이포그래피 */
+    body {
+        font-family: 'Roboto', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #1f1f1f;
+    }
+
+    /* v2-content: padding 제거 + 명시적 높이 고정
+       flex:1 만으로는 자식 height:100%가 auto로 해석됨 → height를 명시해야 해결 */
+    .v2-content {
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        height: calc(100vh - 64px) !important; /* 100vh - v2-topbar */
+    }
+
+    /* 메인 컨테이너: 이제 parent height가 확정되어 100% 작동 */
+    .product-explorer-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: #f8f9fa;
+    }
+
+    /* 상단 통계 영역 - M3 스타일 */
+    .stats-strip {
+        min-height: 100px;
+        max-height: 100px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-shrink: 0;
+        border-bottom: 1px solid #e0e2e0;
+        background: #f8f9fa;
+        padding: 16px 0;
+    }
+
+    .stat-card {
+        border-radius: 12px;
+        min-width: 180px;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 2px solid transparent;
+        background: #ffffff;
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 1px 2px rgba(60,64,67,.15);
+    }
+
+    .stat-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 6px rgba(60,64,67,.2);
+    }
+
+    .stat-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    .stat-icon-default { background: #f1f3f4; color: #5f6368; }
+    .stat-icon-primary { background: #e8f0fe; color: #1967d2; }
+    .stat-icon-warning { background: #fef7e0; color: #c77700; }
+    .stat-icon-danger  { background: #fce8e6; color: #c5221f; }
+
+    .stat-card-count { font-size: 22px; font-weight: 700; color: #1f1f1f; line-height: 1; }
+    .stat-card-label { font-size: 12px; color: #5f6368; font-weight: 500; }
+
+    /* 필터 툴바 - M3 스타일 */
+    .filter-toolbar {
+        flex-shrink: 0;
+        border-bottom: 1px solid #e0e2e0;
+        background: #ffffff;
+        min-height: 64px;
+    }
+
+    .nav-pills .nav-link {
+        font-size: 13px;
+        font-weight: 500;
+        padding: 8px 20px;
+        border-radius: 20px;
+        color: #444746;
+        background: transparent;
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .nav-pills .nav-link.active {
+        background-color: #c2e7ff;
+        color: #001d35;
+    }
+
+    .nav-pills .nav-link:hover:not(.active) {
+        background-color: #e8f0fe;
+        color: #1a67d4;
+    }
+
+    /* 제품 테이블 - M3 스타일 */
+    .product-table {
+        table-layout: fixed;
+        background: #ffffff;
+    }
+
+    .product-table thead {
+        position: sticky;
+        top: 0;
+        background: #ffffff;
+        z-index: 10;
+    }
+
+    .product-table thead th {
+        border-bottom: 2px solid #e8eaed;
+        border-left: none !important;
+        border-right: none !important;
+        font-weight: 500;
+        font-size: 14px;
+        letter-spacing: 0.3px;
+        color: #444746;
+        padding: 16px 12px;
+        text-align: center !important;
+        white-space: nowrap;
+        background: #ffffff;
+    }
+
+    /* 헤더 좌정렬 예외 제거 - 전체 중앙정렬 적용 */
+
+    .product-table tbody tr {
+        cursor: pointer;
+        transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        border-bottom: none;
+        height: 56px;
+    }
+
+    .product-table tbody tr:hover {
+        background-color: #f1f3f4;
+    }
+
+    .product-table tbody td {
+        padding: 8px 12px;
+        font-size: 14px;
+        color: #1f1f1f;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+        border-bottom-color: #f0f0f0;
+    }
+
+    .product-row.selected {
+        background-color: #e8f0fe !important;
+    }
+
+    /* 선택 항목 액션 바 - M3 스타일 */
+    #selection-actions {
+        animation: slideIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        background: #ffffff;
+        border: 1px solid #e0e2e0;
+        border-radius: 28px;
+        padding: 6px 16px;
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+    }
+
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    #selection-actions .badge {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 6px 14px;
+        border-radius: 12px;
+        background-color: #1967d2;
+        color: #ffffff;
+    }
+
+    #selection-actions .btn {
+        font-size: 13px;
+        font-weight: 500;
+        padding: 6px 16px;
+        border-radius: 16px;
+        border: 1px solid #dadce0;
+        background: #ffffff;
+        color: #444746;
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #selection-actions .btn:hover {
+        background-color: #f1f3f4;
+        border-color: #c0c4c7;
+    }
+
+    #selection-actions .btn-outline-danger {
+        border-color: #f28b82;
+        color: #c5221f;
+    }
+
+    #selection-actions .btn-outline-danger:hover {
+        background-color: #fce8e6;
+        border-color: #f28b82;
+    }
+
+    /* 체크박스 - M3 스타일 */
+    .form-check-input {
+        border: 2px solid #5f6368;
+        border-radius: 2px;
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .form-check-input:checked {
+        background-color: #1a73e8;
+        border-color: #1a73e8;
+    }
+
+    .form-check-input:hover {
+        border-color: #1a73e8;
+    }
+
+    /* 스크롤바 커스텀 - M3 스타일 */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #dadce0;
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #bdc1c6;
+        background-clip: padding-box;
+    }
+
+    /* 파일 아이콘 - M3 스타일 */
+    .file-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: #e8f0fe;
+        font-size: 20px;
+        color: #1967d2;
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .product-row:hover .file-icon {
+        background: #d2e3fc;
+    }
+
+    /* 뱃지 - M3 스타일 */
+    .status-badge {
+        font-size: 11px;
+        font-weight: 500;
+        padding: 4px 12px;
+        border-radius: 12px;
+        letter-spacing: 0.3px;
+    }
+
+    .badge.bg-primary {
+        background-color: #1967d2 !important;
+    }
+
+    /* 검색창 - M3 스타일 */
+    .input-group .form-control,
+    .input-group .input-group-text {
+        border: 1px solid #dadce0;
+        background: #ffffff;
+        color: #1f1f1f;
+        font-size: 14px;
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .input-group .form-control:focus {
+        border-color: #1a73e8;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+    }
+
+    .input-group .input-group-text {
+        background-color: #f8f9fa;
+    }
+
+    /* 신규 등록 버튼 - M3 FAB 스타일 */
+    .btn-primary {
+        background: #1a73e8;
+        border: none;
+        border-radius: 28px;
+        font-weight: 500;
+        font-size: 14px;
+        padding: 10px 24px;
+        box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3);
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-primary:hover {
+        background: #1765cc;
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15);
+        transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+        background: #1557b0;
+    }
+
+    /* 텍스트 색상 - M3 팔레트 */
+    .text-dark {
+        color: #1f1f1f !important;
+    }
+
+    .text-muted {
+        color: #5f6368 !important;
+    }
+
+    /* 통계 숫자 강조 */
+    .stat-card .h5 {
+        color: #1f1f1f;
+        font-weight: 500;
+    }
+
+    .stat-card .small {
+        color: #5f6368;
+        font-size: 13px;
+    }
+
+    /* 빈 상태 메시지 */
+    .bi-inbox {
+        color: #dadce0;
+    }
+
+    /* 테이블 내 아이콘 색상 */
+    .bi-check-circle-fill.text-success {
+        color: #1e8e3e !important;
+    }
+
+    .bi-dash-circle.text-muted {
+        color: #dadce0 !important;
+    }
+
+    .bi-star-fill.text-warning {
+        color: #f9ab00 !important;
+    }
+
+    .bi-star.text-muted {
+        color: #dadce0 !important;
+    }
+
+    /* 문서함/BOM 통계 텍스트 */
+    .small .fw-semibold {
+        color: #1f1f1f;
+        font-weight: 500;
+    }
+
+    /* 진행률 색상 개선 */
+    .text-success {
+        color: #1e8e3e !important;
+    }
+
+    .text-warning {
+        color: #ea8600 !important;
+    }
+
+    .text-danger {
+        color: #c5221f !important;
+    }
+
+    /* 제품 코드 강조 */
+    .text-primary.fw-semibold {
+        color: #1967d2 !important;
+        font-weight: 500;
+    }
+
+    /* 반응형: 좁은 화면에서 통계 스트립 스크롤 */
+    @media (max-width: 1400px) {
+        .stats-strip {
+            overflow-x: scroll;
+        }
+    }
+
+    /* 호버 시 밝기 효과 */
+    .stat-card:active {
+        transform: scale(0.98);
+    }
+
+    /* 통계 카드 활성(필터 적용) 상태 */
+    .stat-card.stat-card-active {
+        outline: 2px solid #1a73e8;
+        background: #e8f0fe;
+    }
+    .stat-card.stat-card-active .stat-icon { background: #1a73e8; color: #fff; }
+
+    /* 클릭 가능한 테이블 셀 호버 스타일 */
+    .product-table tbody td[onclick] {
+        transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .product-table tbody td[onclick]:hover {
+        background-color: #e8f0fe;
+    }
+
+    /* 부드러운 전환 효과 */
+    * {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* 페이지네이션 스타일 */
+    .pagination {
+        --bs-pagination-padding-x: 0.75rem;
+        --bs-pagination-padding-y: 0.375rem;
+        --bs-pagination-font-size: 0.875rem;
+        --bs-pagination-color: #5f6368;
+        --bs-pagination-bg: #ffffff;
+        --bs-pagination-border-width: 1px;
+        --bs-pagination-border-color: #dadce0;
+        --bs-pagination-border-radius: 8px;
+        --bs-pagination-hover-color: #1f1f1f;
+        --bs-pagination-hover-bg: #f8f9fa;
+        --bs-pagination-hover-border-color: #dadce0;
+        --bs-pagination-focus-color: #1967d2;
+        --bs-pagination-focus-bg: #e8f0fe;
+        --bs-pagination-focus-box-shadow: 0 0 0 0.25rem rgba(25, 103, 210, 0.15);
+        --bs-pagination-active-color: #ffffff;
+        --bs-pagination-active-bg: #1967d2;
+        --bs-pagination-active-border-color: #1967d2;
+        --bs-pagination-disabled-color: #dadce0;
+        --bs-pagination-disabled-bg: #ffffff;
+        --bs-pagination-disabled-border-color: #dadce0;
+        gap: 4px;
+    }
+    
+    .pagination .page-link {
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        font-weight: 500;
+        min-width: 36px;
+        text-align: center;
+    }
+    
+    .pagination .page-item:first-child .page-link,
+    .pagination .page-item:last-child .page-link {
+        border-radius: 8px;
+    }
+    
+    .pagination .page-link:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .pagination .page-item.active .page-link {
+        box-shadow: 0 1px 3px rgba(25, 103, 210, 0.3);
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="product-explorer-container">
+    
+    <!-- 상단: 통계 및 빠른 액세스 -->
+    <div class="stats-strip d-flex align-items-center px-4 py-3">
+        <!-- 전체 제품 통계 -->
+        <div class="stat-card flex-shrink-0 me-3" id="stat-all" onclick="window.location.href='{% url 'products:product_explorer' %}'">
+            <div class="stat-icon stat-icon-default">
+                <i class="bi bi-box-seam"></i>
+            </div>
+            <div>
+                <div class="stat-card-count">{{ total_products_count|default_if_none:0 }}</div>
+                <div class="stat-card-label">전체 제품</div>
+            </div>
+        </div>
+
+        <!-- 즐겨찾기 -->
+        <div class="stat-card flex-shrink-0 me-3" id="stat-starred" onclick="filterByStarred()">
+            <div class="stat-icon stat-icon-warning">
+                <i class="bi bi-star-fill"></i>
+            </div>
+            <div>
+                <div class="stat-card-count">{{ starred_count }}</div>
+                <div class="stat-card-label">즐겨찾기</div>
+            </div>
+        </div>
+
+        <!-- 만료 임박 문서 -->
+        {% if expiring_documents %}
+        <div class="stat-card flex-shrink-0 me-3" id="stat-expiring" onclick="filterExpiring()">
+            <div class="stat-icon stat-icon-danger">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <div>
+                <div class="stat-card-count" style="color:#c5221f;">{{ expiring_documents|length }}</div>
+                <div class="stat-card-label">만료 임박</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 승인 대기 -->
+        {% if approval_pending_count > 0 %}
+        <div class="stat-card flex-shrink-0 me-3" onclick="filterByStatus('REQUESTING')">
+            <div class="stat-icon stat-icon-warning">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div>
+                <div class="stat-card-count">{{ approval_pending_count }}</div>
+                <div class="stat-card-label">승인 대기</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 검토 필요 -->
+        {% if review_needed_count > 0 %}
+        <div class="stat-card flex-shrink-0 me-3" onclick="filterByStatus('REVIEW')">
+            <div class="stat-icon stat-icon-primary">
+                <i class="bi bi-eye-fill"></i>
+            </div>
+            <div>
+                <div class="stat-card-count">{{ review_needed_count }}</div>
+                <div class="stat-card-label">검토 필요</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 중간: 필터 & 검색 툴바 -->
+    <div class="filter-toolbar d-flex justify-content-between align-items-center px-4 py-2 bg-white">
+        <div class="d-flex align-items-center gap-2">
+            <ul class="nav nav-pills nav-sm mb-0">
+                <li class="nav-item">
+                    <a class="nav-link {% if filter_type == 'ALL' or not filter_type %}active{% endif %}"
+                       href="?filter=ALL{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}"
+                       data-filter="ALL">전체</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if filter_type == 'MINE' %}active{% endif %}"
+                       href="?filter=MINE{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}"
+                       data-filter="MINE">내 제품</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if filter_type == 'COLLAB' %}active{% endif %}"
+                       href="?filter=COLLAB{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}"
+                       data-filter="COLLAB">
+                        참여 중
+                        {% if collab_count > 0 %}
+                        <span class="badge rounded-pill ms-1"
+                              style="background:#c2e7ff;color:#001d35;font-size:10px;">{{ collab_count }}</span>
+                        {% endif %}
+                    </a>
+                </li>
+            </ul>
+            
+            <!-- 상태 필터 -->
+            <select id="status-filter" class="form-select form-select-sm" style="width: 140px;" onchange="applyAdvancedFilters()">
+                <option value="">모든 상태</option>
+                <option value="DRAFT">작성 중</option>
+                <option value="REQUESTING">자료 요청</option>
+                <option value="SUBMITTED">제출 완료</option>
+                <option value="REVIEW">검토 중</option>
+                <option value="PENDING">승인 대기</option>
+                <option value="CONFIRMED">승인 완료</option>
+            </select>
+            
+            <!-- 날짜 필터 -->
+            <select id="date-filter" class="form-select form-select-sm" style="width: 140px;" onchange="applyAdvancedFilters()">
+                <option value="">전체 기간</option>
+                <option value="today">오늘</option>
+                <option value="week">최근 7일</option>
+                <option value="month">최근 30일</option>
+                <option value="3months">최근 3개월</option>
+            </select>
+        </div>
+        
+        <div class="d-flex align-items-center gap-2">
+            <!-- 선택 항목 액션 바 -->
+            <div id="selection-actions" class="d-none align-items-center gap-2 me-3">
+                <span class="badge bg-primary"><span id="selected-count">0</span>개 선택됨</span>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteSelected()">
+                    <i class="bi bi-trash me-1"></i>삭제
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="copySelected()">
+                    <i class="bi bi-files me-1"></i>복사
+                </button>
+            </div>
+            
+            <div class="input-group input-group-sm" style="width: 280px;">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="product-search" class="form-control border-start-0 ps-0" placeholder="제품명, 코드 검색..." value="{{ search_query }}">
+            </div>
+            <a href="{% url 'products:product_create' %}" class="v2-action-btn">
+                <i class="bi bi-plus-lg"></i> 신규 등록
+            </a>
+        </div>
+    </div>
+
+    <!-- 하단: 제품 데이터 그리드 -->
+    <div class="flex-grow-1 overflow-auto custom-scrollbar px-4">
+        {% if products_data %}
+        <table class="table table-hover align-middle mb-0 product-table">
+            <thead>
+                <tr class="text-muted">
+                    <th style="width: 40px;" class="ps-4"><input type="checkbox" class="form-check-input" id="select-all-products"></th>
+                    <th style="width: 25%;">제품명</th>
+                    <th style="width: 8%;">식품유형</th>
+                    <th style="width: 7%;">최종 수정</th>
+                    <th style="width: 8%;">진행상태</th>
+                    <th style="width: 10%;">문서함</th>
+                    <th style="width: 8%;">BOM</th>
+                    <th style="width: 7%;">표시사항</th>
+                    <th style="width: 7%;">영양성분</th>
+                    <th style="width: 7%;">권한</th>
+                    <th style="width: 8%;">내 권한</th>
+                    <th style="width: 5%;">즐겨찾기</th>
+                </tr>
+            </thead>
+            <tbody id="product-tbody">
+                {% for item in products_data %}
+                <tr class="product-row" 
+                    data-product-id="{{ item.label.my_label_id }}"
+                    data-is-owned="{{ item.is_owned|yesno:'true,false' }}"
+                    data-is-starred="{{ item.is_starred|yesno:'true,false' }}"
+                    data-has-expiring="{% for doc in expiring_documents %}{% if doc.label.my_label_id == item.label.my_label_id %}true{% endif %}{% endfor %}"
+                    data-status="{{ item.metadata.status|default:'DRAFT' }}"
+                    data-update-date="{{ item.label.update_datetime|date:'Y-m-d' }}">
+                    <td class="ps-4" onclick="event.stopPropagation()">
+                        <input type="checkbox" class="form-check-input product-checkbox" data-product-id="{{ item.label.my_label_id }}">
+                    </td>
+                    <td onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}'">
+                        <div class="d-flex align-items-center">
+                            <div class="file-icon me-3">
+                                <i class="bi bi-file-earmark-text"></i>
+                            </div>
+                            <div style="min-width: 0;">
+                                <div class="fw-bold text-dark text-truncate">{{ item.label.my_label_name|default:item.label.prdlst_nm }}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}'; event.stopPropagation();">
+                        <span class="text-muted">{{ item.label.food_type|default:"미분류" }}</span>
+                    </td>
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}'; event.stopPropagation();">
+                        <span class="text-muted">{{ item.label.update_datetime|date:"y.m.d" }}</span>
+                    </td>
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}'; event.stopPropagation();">
+                        {% with s=item.metadata.status|default:'DRAFT' %}
+                        {% if s == 'DRAFT' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#e8f0fe;color:#1967d2;font-weight:600;">작성 중</span>
+                        {% elif s == 'REQUESTING' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#fef7e0;color:#c77700;font-weight:600;">자료 요청</span>
+                        {% elif s == 'SUBMITTED' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#e6f4ea;color:#0f9d58;font-weight:600;">제출 완료</span>
+                        {% elif s == 'REVIEW' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#f3e8fd;color:#9334e9;font-weight:600;">검토 중</span>
+                        {% elif s == 'PENDING' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#fff0e0;color:#e37400;font-weight:600;">승인 대기</span>
+                        {% elif s == 'CONFIRMED' %}<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:#e6f4ea;color:#1e8e3e;font-weight:600;">승인 완료</span>
+                        {% endif %}
+                        {% endwith %}
+                    </td>
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#documents'; event.stopPropagation();" style="cursor: pointer;">
+                        <div>
+                            <div class="text-muted">{{ item.document_stats.total }}건</div>
+                            <div class="text-muted" style="font-size: 12px;">
+                                {% if item.document_stats.rate >= 100 %}
+                                <span class="text-success">✓ {{ item.document_stats.rate|floatformat:0 }}%</span>
+                                {% elif item.document_stats.rate >= 70 %}
+                                <span class="text-warning">{{ item.document_stats.rate|floatformat:0 }}%</span>
+                                {% else %}
+                                <span class="text-danger">{{ item.document_stats.rate|floatformat:0 }}%</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#bom'; event.stopPropagation();" style="cursor: pointer;">
+                        <div>
+                            <div class="text-muted">{{ item.bom_stats.count }}개</div>
+                            <div class="text-muted" style="font-size: 12px;">
+                                {% if item.bom_stats.ratio > 100 %}
+                                <span class="text-danger">{{ item.bom_stats.ratio|floatformat:1 }}%</span>
+                                {% elif item.bom_stats.complete %}
+                                <span class="text-success">✓ {{ item.bom_stats.ratio|floatformat:1 }}%</span>
+                                {% else %}
+                                <span class="text-warning">{{ item.bom_stats.ratio|floatformat:1 }}%</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#labeling'; event.stopPropagation();" style="cursor: pointer;">
+                        {% if item.label.allergens %}
+                        <i class="bi bi-check-circle-fill text-success" title="규정 검증 완료"></i>
+                        {% else %}
+                        <i class="bi bi-dash-circle text-muted" title="미검증"></i>
+                        {% endif %}
+                    </td>
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#nutrition'; event.stopPropagation();" style="cursor: pointer;">
+                        {% if item.has_nutrition %}
+                        <i class="bi bi-check-circle-fill text-success" title="입력 완료"></i>
+                        {% else %}
+                        <i class="bi bi-dash-circle text-muted" title="미입력"></i>
+                        {% endif %}
+                    </td>
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#permissions'; event.stopPropagation();" style="cursor: pointer;">
+                        {% if item.is_owned %}
+                            {% if item.permission_count > 0 %}
+                            <span class="text-muted">{{ item.permission_count }}명</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted" style="font-size:11px;">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center" onclick="event.stopPropagation();">
+                        {% if item.is_owned %}
+                        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:#e8f0fe;color:#1a73e8;font-weight:600;">소유자</span>
+                        {% elif item.my_role %}
+                        <span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;
+                            {% if item.my_role == 'EDITOR' %}background:#e6f4ea;color:#1e8e3e;
+                            {% elif item.my_role == 'REVIEWER' %}background:#fef7e0;color:#c77700;
+                            {% elif item.my_role == 'APPROVER' %}background:#f3e8fd;color:#9334e9;
+                            {% elif item.my_role == 'UPLOADER' %}background:#e8f0fe;color:#1967d2;
+                            {% else %}background:#f1f3f4;color:#5f6368;{% endif %}">{{ item.my_role }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center" onclick="event.stopPropagation();">
+                        {% if item.is_starred %}
+                        <i class="bi bi-star-fill text-warning"></i>
+                        {% else %}
+                        <i class="bi bi-star text-muted"></i>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- 제품 수 정보 및 페이지네이션 -->
+        <div class="d-flex justify-content-between align-items-center px-4 py-3 bg-white border-top">
+            <div class="d-flex align-items-center gap-3">
+                <div class="text-muted small">
+                    전체 <span class="fw-semibold text-dark">{{ total_products_count }}</span>개 제품
+                    {% if page_obj %}
+                    ({{ page_obj.start_index }}-{{ page_obj.end_index }})
+                    {% endif %}
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="text-muted small mb-0">페이지당:</label>
+                    <select id="per-page-select" class="form-select form-select-sm" style="width: 80px;" onchange="changePerPage(this.value)">
+                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                        <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+                    </select>
+                </div>
+            </div>
+            
+            {% if page_obj.paginator.num_pages > 1 %}
+            {% with fq=filter_type|default:"ALL" %}
+            <nav aria-label="제품 목록 페이지네이션">
+                <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">
+                            <i class="bi bi-chevron-double-left"></i></a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">
+                            <i class="bi bi-chevron-left"></i></a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
+                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">
+                            <i class="bi bi-chevron-right"></i></a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}&per_page={{ per_page }}{% if fq != 'ALL' %}&filter={{ fq }}{% endif %}">
+                            <i class="bi bi-chevron-double-right"></i></a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
+                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endwith %}
+            {% else %}
+            <div></div>
+            {% endif %}
+        </div>
+        
+        {% else %}
+        <div class="d-flex align-items-center justify-content-center" style="height: 400px;">
+            <div class="text-center">
+                <i class="bi bi-inbox" style="font-size: 64px; opacity: 0.3;"></i>
+                {% if filter_type == 'COLLAB' %}
+                <p class="mt-3 text-muted">권한을 부여받은 제품이 없습니다</p>
+                {% else %}
+                <p class="mt-3 text-muted">등록된 제품이 없습니다</p>
+                <a href="{% url 'products:product_create' %}" class="btn btn-primary btn-sm mt-2">
+                    <i class="bi bi-plus-lg me-1"></i> 첫 제품 등록하기
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+</div>
+
+<script>
+// 페이지당 항목 수 변경
+function changePerPage(perPage) {
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('per_page', perPage);
+    urlParams.set('page', '1'); // 첫 페이지로 이동
+    // filter 파라미터 유지
+    const filterType = '{{ filter_type|default:"ALL" }}';
+    if (filterType && filterType !== 'ALL') urlParams.set('filter', filterType);
+    else urlParams.delete('filter');
+    window.location.search = urlParams.toString();
+}
+
+// 검색 기능
+document.getElementById('product-search').addEventListener('keyup', function(e) {
+    if (e.key === 'Enter') {
+        const query = this.value.trim();
+        const baseUrl = `{% url 'products:product_explorer' %}`;
+        const filterType = '{{ filter_type|default:"ALL" }}';
+        const filterParam = (filterType && filterType !== 'ALL') ? `&filter=${filterType}` : '';
+        if (query) {
+            window.location.href = `${baseUrl}?q=${encodeURIComponent(query)}${filterParam}`;
+        } else {
+            window.location.href = `${baseUrl}${filterParam ? '?' + filterParam.slice(1) : ''}`;
+        }
+    }
+});
+
+// 필터 기능 (상태/날짜 클라이언트 필터)
+let activeSpecialFilter = null; // 'starred' | 'expiring' | null
+
+// 즐겨찾기 통계카드 클릭 → 유명 행만 표시
+function filterByStarred() {
+    if (activeSpecialFilter === 'starred') {
+        activeSpecialFilter = null;
+        _clearStatCardActive();
+    } else {
+        activeSpecialFilter = 'starred';
+        _clearStatCardActive();
+        const card = document.getElementById('stat-starred');
+        if (card) card.classList.add('stat-card-active');
+    }
+    applyAdvancedFilters();
+}
+
+// 만료임박 통계카드 클릭 → 해당 제품만 표시
+function filterExpiring() {
+    if (activeSpecialFilter === 'expiring') {
+        activeSpecialFilter = null;
+        _clearStatCardActive();
+    } else {
+        activeSpecialFilter = 'expiring';
+        _clearStatCardActive();
+        const card = document.getElementById('stat-expiring');
+        if (card) card.classList.add('stat-card-active');
+    }
+    applyAdvancedFilters();
+}
+
+function _clearStatCardActive() {
+    document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('stat-card-active'));
+}
+
+// 상태별 필터링
+function filterByStatus(status) {
+    activeSpecialFilter = null;
+    _clearStatCardActive();
+    const statusFilter = document.getElementById('status-filter');
+    if (statusFilter) {
+        statusFilter.value = status;
+        applyAdvancedFilters();
+    }
+}
+
+// 고급 필터 적용
+function applyAdvancedFilters() {
+    const statusFilter = document.getElementById('status-filter').value;
+    const dateFilter = document.getElementById('date-filter').value;
+    
+    const rows = document.querySelectorAll('.product-row');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    rows.forEach(row => {
+        let show = true;
+        
+        // 특수 필터 (즐겨찾기 / 만료임박)
+        if (activeSpecialFilter === 'starred') {
+            if (row.dataset.isStarred !== 'true') show = false;
+        } else if (activeSpecialFilter === 'expiring') {
+            if (row.dataset.hasExpiring !== 'true') show = false;
+        }
+        
+        // 상태 필터
+        if (show && statusFilter && row.dataset.status !== statusFilter) {
+            show = false;
+        }
+        
+        // 날짜 필터
+        if (show && dateFilter) {
+            const updateDate = new Date(row.dataset.updateDate);
+            const diffDays = Math.floor((today - updateDate) / (1000 * 60 * 60 * 24));
+            
+            if (dateFilter === 'today' && diffDays !== 0) show = false;
+            else if (dateFilter === 'week' && diffDays > 7) show = false;
+            else if (dateFilter === 'month' && diffDays > 30) show = false;
+            else if (dateFilter === '3months' && diffDays > 90) show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// 전체 선택
+document.getElementById('select-all-products')?.addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.product-checkbox:not([style*="display: none"])');
+    const visibleCheckboxes = Array.from(checkboxes).filter(cb => {
+        const row = cb.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+    
+    visibleCheckboxes.forEach(cb => {
+        cb.checked = this.checked;
+    });
+    
+    updateSelectionActions();
+});
+
+// 개별 체크박스
+document.querySelectorAll('.product-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        const row = this.closest('tr');
+        if (this.checked) {
+            row.classList.add('selected');
+        } else {
+            row.classList.remove('selected');
+        }
+        
+        updateSelectionActions();
+    });
+});
+
+// 선택 항목 액션 업데이트
+function updateSelectionActions() {
+    const selectedCheckboxes = document.querySelectorAll('.product-checkbox:checked');
+    const visibleSelected = Array.from(selectedCheckboxes).filter(cb => {
+        const row = cb.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+    
+    const count = visibleSelected.length;
+    const actionsBar = document.getElementById('selection-actions');
+    const countSpan = document.getElementById('selected-count');
+    
+    if (count > 0) {
+        actionsBar.classList.remove('d-none');
+        actionsBar.classList.add('d-flex');
+        countSpan.textContent = count;
+    } else {
+        actionsBar.classList.remove('d-flex');
+        actionsBar.classList.add('d-none');
+    }
+}
+
+// 선택 항목 삭제
+async function deleteSelected() {
+    const selectedCheckboxes = document.querySelectorAll('.product-checkbox:checked');
+    const visibleSelected = Array.from(selectedCheckboxes).filter(cb => {
+        const row = cb.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+    
+    if (visibleSelected.length === 0) {
+        alert('삭제할 제품을 선택해주세요.');
+        return;
+    }
+    
+    if (!confirm(`선택한 ${visibleSelected.length}개 제품을 삭제하시겠습니까?`)) {
+        return;
+    }
+    
+    const productIds = visibleSelected.map(cb => cb.dataset.productId);
+    
+    try {
+        const response = await fetch('/products/api/bulk-delete/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ product_ids: productIds })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('선택한 제품이 삭제되었습니다.');
+            window.location.reload();
+        } else {
+            alert('삭제 중 오류가 발생했습니다: ' + (result.message || '알 수 없는 오류'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('삭제 중 오류가 발생했습니다.');
+    }
+}
+
+// 선택 항목 복사
+async function copySelected() {
+    const selectedCheckboxes = document.querySelectorAll('.product-checkbox:checked');
+    const visibleSelected = Array.from(selectedCheckboxes).filter(cb => {
+        const row = cb.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+    
+    if (visibleSelected.length === 0) {
+        alert('복사할 제품을 선택해주세요.');
+        return;
+    }
+    
+    if (!confirm(`선택한 ${visibleSelected.length}개 제품을 복사하시겠습니까?`)) {
+        return;
+    }
+    
+    const productIds = visibleSelected.map(cb => cb.dataset.productId);
+    
+    try {
+        const response = await fetch('/v2/products/api/bulk-copy/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ product_ids: productIds })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('선택한 제품이 복사되었습니다.');
+            window.location.reload();
+        } else {
+            alert('복사 중 오류가 발생했습니다: ' + (result.message || '알 수 없는 오류'));
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('복사 중 오류가 발생했습니다.');
+    }
+}
+</script>
+{% endblock %}

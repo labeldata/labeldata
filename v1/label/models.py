@@ -159,13 +159,13 @@ class MyLabel(models.Model):
     content_weight = models.CharField(max_length=200, verbose_name="내용량", null=True, blank=True)
     weight_calorie = models.CharField(max_length=50, verbose_name="내용량(열량)", null=True, blank=True)
 
-    prdlst_report_no = models.CharField(max_length=16, verbose_name="품목보고번호", null=True, blank=True)
+    prdlst_report_no = models.TextField(verbose_name="품목보고번호", null=True, blank=True)
     country_of_origin = models.CharField(max_length=255, verbose_name="원산지", null=True, blank=True)
 
     storage_method = models.CharField(max_length=300, verbose_name="보관방법", null=True, blank=True)
     frmlc_mtrqlt = models.TextField(max_length=300, verbose_name="포장재질", null=True, blank=True)
 
-    bssh_nm = models.CharField(max_length=500, verbose_name="제조원 소재지", null=True, blank=True)
+    bssh_nm = models.TextField(verbose_name="제조원 소재지", null=True, blank=True)
     #manufacturer_etc = models.CharField(max_length=500, verbose_name="제조원 외", null=True, blank=True)
     distributor_address = models.CharField(max_length=500, verbose_name="유통전문판매원 소재지", null=True, blank=True)
     repacker_address = models.CharField(max_length=500, verbose_name="소분원 소재지", null=True, blank=True)
@@ -187,6 +187,8 @@ class MyLabel(models.Model):
 
     units_per_package = models.CharField(max_length=10, verbose_name="포장 당 갯수", null=True, blank=True)
     nutrition_display_unit = models.CharField(max_length=10, verbose_name="영양성분 표시 단위", null=True, blank=True)
+    basic_display_type = models.CharField(max_length=20, verbose_name="기본형 표시 기준", null=True, blank=True)
+    parallel_display_type = models.CharField(max_length=20, verbose_name="병렬형 표시 기준", null=True, blank=True)
 
     calories = models.CharField(max_length=10, verbose_name="칼로리", null=True, blank=True)
     calories_unit = models.CharField(max_length=10, verbose_name="칼로리 단위", null=True, blank=True)

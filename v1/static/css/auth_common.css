@@ -1,0 +1,398 @@
+/* ============================================================
+   EazyLabel 인증 페이지 공통 스타일 (auth_common.css)
+   login / signup / password_reset / signup_done / verify_result /
+   privacy_policy 에서 공유합니다.
+   ============================================================ */
+
+/* ── 리셋 & 기본 ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: #f1f3f4;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    color: #202124;
+}
+
+/* ─────────────────────────────────────────────
+   1. 로고 블록 (login / signup / reset 공용)
+   ───────────────────────────────────────────── */
+.login-logo             { margin-bottom: 16px; text-align: center; }
+.login-logo-icon {
+    width: 48px; height: 48px;
+    background: #1a73e8;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-bottom: 8px;
+}
+.login-logo-icon i      { color: #fff; font-size: 22px; }
+.login-logo-text        { font-size: 22px; font-weight: 700; color: #202124; letter-spacing: -.3px; }
+.login-logo-sub         { font-size: 13px; color: #5f6368; margin-top: 4px; }
+
+/* 색상 오버라이드 — 비밀번호 재설정 확인 페이지(초록) */
+.login-logo-icon.icon-green { background: #1e8e3e; }
+
+/* ─────────────────────────────────────────────
+   2. 카드 (login / signup / reset 공용)
+   ───────────────────────────────────────────── */
+.login-card {
+    background: #fff;
+    border: 1px solid #dadce0;
+    border-radius: 12px;
+    padding: 40px 40px 32px;
+    width: 100%; max-width: 420px;
+    box-shadow: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+}
+.login-card.card-wide   { max-width: 440px; }   /* 회원가입 */
+.login-card-title       { font-size: 20px; font-weight: 600; color: #202124; margin-bottom: 6px; }
+.login-card-desc        { font-size: 14px; color: #5f6368; margin-bottom: 28px; line-height: 1.6; }
+
+/* ─────────────────────────────────────────────
+   3. 메시지 / 알림 박스
+   ───────────────────────────────────────────── */
+.g-alert {
+    padding: 10px 14px; border-radius: 6px;
+    font-size: 13px; margin-bottom: 16px;
+    display: flex; align-items: flex-start; gap: 8px;
+}
+.g-alert-error   { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6c3; }
+.g-alert-warning { background: #fef7e0; color: #994a00; border: 1px solid #fde68a; }
+.g-alert-info    { background: #e8f0fe; color: #1765cc; border: 1px solid #c5d8fc; }
+.g-alert-success { background: #e6f4ea; color: #1e8e3e; border: 1px solid #ceead6; }
+
+/* ─────────────────────────────────────────────
+   4. 폼 필드
+   ───────────────────────────────────────────── */
+.g-field        { margin-bottom: 18px; }
+.g-label {
+    display: block;
+    font-size: 12px; font-weight: 600;
+    color: #5f6368; text-transform: uppercase;
+    letter-spacing: .4px; margin-bottom: 6px;
+}
+.g-hint         { font-size: 11px; color: #80868b; margin-top: 4px; line-height: 1.4; }
+.g-input {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid #dadce0; border-radius: 6px;
+    font-size: 14px; color: #202124; background: #fff;
+    outline: none; transition: border-color .2s, box-shadow .2s;
+    font-family: inherit;
+}
+.g-input:focus  { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,.12); }
+
+/* 비밀번호 확인 페이지 — 초록 포커스 오버라이드 */
+.focus-green .g-input:focus { border-color: #1e8e3e; box-shadow: 0 0 0 3px rgba(30,142,62,.12); }
+
+/* ─────────────────────────────────────────────
+   5. 버튼
+   ───────────────────────────────────────────── */
+.g-btn-primary {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 11px 22px; border-radius: 6px;
+    background: #1a73e8; color: #fff;
+    font-size: 14px; font-weight: 600; border: none; cursor: pointer;
+    transition: background .18s, box-shadow .18s, opacity .18s;
+    font-family: inherit; letter-spacing: -.1px;
+    margin-bottom: 10px;
+}
+.g-btn-primary:hover:not(:disabled) {
+    background: #1765cc; box-shadow: 0 1px 3px rgba(26,115,232,.35);
+}
+.g-btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 초록 버튼 오버라이드 */
+.g-btn-primary.btn-green              { background: #1e8e3e; }
+.g-btn-primary.btn-green:hover:not(:disabled) {
+    background: #187734; box-shadow: 0 1px 3px rgba(30,142,62,.35);
+}
+
+.g-btn-secondary {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 10px 22px; border-radius: 6px;
+    background: #fff; color: #5f6368;
+    font-size: 14px; font-weight: 500;
+    border: 1.5px solid #dadce0; cursor: pointer;
+    transition: background .18s, border-color .18s;
+    font-family: inherit; margin-bottom: 10px;
+}
+.g-btn-secondary:hover { background: #f8f9fa; border-color: #bdc1c6; }
+
+/* ─────────────────────────────────────────────
+   6. 인라인 링크형 버튼 (signup_done / verify_result 등)
+   ───────────────────────────────────────────── */
+.g-btn-inline {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 28px; border-radius: 6px;
+    background: #1a73e8; color: #fff;
+    font-size: 14px; font-weight: 600; border: none; cursor: pointer;
+    text-decoration: none;
+    transition: background .18s, box-shadow .18s;
+    font-family: inherit;
+}
+.g-btn-inline:hover { background: #1765cc; box-shadow: 0 1px 3px rgba(26,115,232,.35); color: #fff; }
+
+/* ─────────────────────────────────────────────
+   7. 구분선 (로그인 페이지)
+   ───────────────────────────────────────────── */
+.g-divider {
+    display: flex; align-items: center; gap: 12px;
+    margin: 4px 0 14px;
+    color: #bdc1c6; font-size: 12px;
+}
+.g-divider::before, .g-divider::after {
+    content: ''; flex: 1; height: 1px; background: #e8eaed;
+}
+
+/* ─────────────────────────────────────────────
+   8. 체크박스 행 (회원가입)
+   ───────────────────────────────────────────── */
+.g-check-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 14px 16px;
+    background: #f8f9fa; border: 1px solid #dadce0;
+    border-radius: 8px; margin-bottom: 20px;
+}
+.g-check-row input[type="checkbox"] {
+    width: 17px; height: 17px; flex-shrink: 0;
+    margin-top: 2px; cursor: pointer; accent-color: #1a73e8;
+}
+.g-check-row label { font-size: 13px; color: #5f6368; cursor: pointer; line-height: 1.6; }
+.g-check-row label a { color: #1a73e8; font-weight: 500; text-decoration: none; }
+.g-check-row label a:hover { text-decoration: underline; }
+.g-check-row .required-tag {
+    display: block;
+    color: #c5221f; font-weight: 600; font-size: 12px; margin-top: 2px;
+}
+
+/* ─────────────────────────────────────────────
+   9. 인증메일 재발송 버튼 (로그인 경고 메시지 안)
+   ───────────────────────────────────────────── */
+.resend-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 12px; border-radius: 4px;
+    background: #994a00; color: #fff;
+    font-size: 12px; font-weight: 600;
+    border: none; cursor: pointer;
+    font-family: inherit; transition: background .18s;
+}
+.resend-btn:hover { background: #7a3900; }
+
+/* ─────────────────────────────────────────────
+   10. 하단 링크 푸터
+   ───────────────────────────────────────────── */
+.login-footer {
+    margin-top: 20px; text-align: center;
+    font-size: 13px; color: #5f6368; line-height: 2.2;
+}
+.login-footer a          { color: #1a73e8; text-decoration: none; font-weight: 500; }
+.login-footer a:hover    { text-decoration: underline; }
+.login-footer-sep        { margin: 0 8px; color: #dadce0; }
+
+/* ─────────────────────────────────────────────
+   11. 결과 카드 (signup_done / verify_result)
+   ───────────────────────────────────────────── */
+.result-card {
+    background: #fff;
+    border: 1px solid #dadce0;
+    border-radius: 16px;
+    padding: 48px 40px 40px;
+    width: 100%; max-width: 460px;
+    box-shadow: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+    text-align: center;
+}
+.result-icon {
+    width: 72px; height: 72px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px; font-size: 30px;
+}
+.icon-blue   { background: #e8f0fe; color: #1a73e8; }
+.icon-green  { background: #e6f4ea; color: #1e8e3e; }
+.icon-red    { background: #fce8e6; color: #c5221f; }
+
+.result-title       { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+.title-green        { color: #1e8e3e; }
+.title-blue         { color: #1a73e8; }
+.title-red          { color: #c5221f; }
+.result-desc        { font-size: 14px; color: #5f6368; line-height: 1.7; margin-bottom: 28px; }
+
+/* ─────────────────────────────────────────────
+   12. 단계 박스 (signup_done)
+   ───────────────────────────────────────────── */
+.step-box {
+    background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 10px;
+    padding: 18px 20px; margin-bottom: 14px; text-align: left;
+}
+.step-box-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .5px; color: #1a73e8; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+}
+.step-list          { list-style: none; padding: 0; }
+.step-list li {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; color: #3c4043; padding: 4px 0; line-height: 1.5;
+}
+.step-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #1a73e8; color: #fff;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+}
+
+/* ─────────────────────────────────────────────
+   13. 경고 박스 (signup_done / verify_result)
+   ───────────────────────────────────────────── */
+.warn-box {
+    background: #fef7e0; border: 1px solid #fde68a; border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 20px; text-align: left;
+}
+/* signup_done 스타일 */
+.warn-box-title {
+    font-size: 12px; font-weight: 700; color: #994a00;
+    display: flex; align-items: center; gap: 6px; margin-bottom: 8px;
+}
+.warn-box ul        { padding-left: 18px; font-size: 12px; color: #5f4b00; }
+.warn-box li        { margin-bottom: 4px; line-height: 1.5; }
+/* verify_result 스타일 (flex row) */
+.warn-box.flex-row  {
+    display: flex; gap: 10px; align-items: flex-start;
+    border-radius: 8px; margin-bottom: 20px;
+    font-size: 13px; color: #5f4b00;
+}
+.warn-box.flex-row i  { flex-shrink: 0; font-size: 15px; margin-top: 1px; }
+
+/* ─────────────────────────────────────────────
+   14. 버튼 그룹 (verify_result)
+   ───────────────────────────────────────────── */
+.btn-group          { display: flex; flex-direction: column; gap: 10px; }
+.g-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 24px; border-radius: 6px;
+    font-size: 14px; font-weight: 600; border: none; cursor: pointer;
+    text-decoration: none; font-family: inherit;
+    transition: background .18s, box-shadow .18s;
+}
+.g-btn-green        { background: #1e8e3e; color: #fff; }
+.g-btn-green:hover  { background: #187734; box-shadow: 0 1px 3px rgba(30,142,62,.35); color: #fff; }
+.g-btn-blue         { background: #1a73e8; color: #fff; }
+.g-btn-blue:hover   { background: #1765cc; box-shadow: 0 1px 3px rgba(26,115,232,.35); color: #fff; }
+.g-btn-orange       { background: #f9ab00; color: #fff; }
+.g-btn-orange:hover { background: #e09000; color: #fff; }
+/* .g-btn-outline 과 .g-btn 안에서 사용하는 .g-btn-secondary 공용 */
+.g-btn-outline,
+.g-btn.g-btn-secondary {
+    background: #fff; color: #5f6368;
+    border: 1.5px solid #dadce0;
+}
+.g-btn-outline:hover,
+.g-btn.g-btn-secondary:hover { background: #f8f9fa; color: #202124; }
+
+/* ─────────────────────────────────────────────
+   15. 개인정보 처리방침 전용
+   ───────────────────────────────────────────── */
+/* body override — 이 페이지만 center flex 해제 */
+body.pp-page {
+    display: block;
+    padding: 0;
+    justify-content: unset;
+    align-items: unset;
+}
+
+.pp-header {
+    background: #fff; border-bottom: 1px solid #dadce0;
+    padding: 16px 24px;
+    display: flex; align-items: center; gap: 14px;
+    position: sticky; top: 0; z-index: 10;
+    box-shadow: 0 1px 3px rgba(60,64,67,.15);
+}
+.pp-header-logo {
+    width: 36px; height: 36px; background: #1a73e8; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.pp-header-logo i   { color: #fff; font-size: 16px; }
+.pp-header-title    { font-size: 17px; font-weight: 600; color: #202124; }
+.pp-header-sub      { font-size: 12px; color: #5f6368; }
+
+.pp-layout          { max-width: 780px; margin: 0 auto; padding: 32px 24px 60px; }
+
+.pp-intro {
+    background: #fff; border: 1px solid #dadce0; border-radius: 12px;
+    padding: 28px 32px; margin-bottom: 24px;
+    box-shadow: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+}
+.pp-intro-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #e8f0fe; color: #1a73e8;
+    font-size: 12px; font-weight: 600;
+    padding: 4px 12px; border-radius: 20px;
+    margin-bottom: 14px; border: 1px solid #c5d8fc;
+}
+.pp-intro h1        { font-size: 22px; font-weight: 700; color: #202124; margin-bottom: 10px; }
+.pp-intro p         { font-size: 14px; color: #5f6368; line-height: 1.7; }
+
+.pp-card {
+    background: #fff; border: 1px solid #dadce0; border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+}
+.pp-section-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #1a73e8; color: #fff;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.pp-section-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 16px; padding-bottom: 12px;
+    border-bottom: 1px solid #f1f3f4;
+}
+.pp-section-header h2 { font-size: 15px; font-weight: 600; color: #202124; }
+.pp-body            { font-size: 13px; color: #3c4043; line-height: 1.8; }
+.pp-body ul         { padding-left: 18px; }
+.pp-body li         { margin-bottom: 6px; }
+.pp-body strong     { font-weight: 600; color: #202124; }
+
+.pp-table           { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pp-table th {
+    background: #f8f9fa; font-weight: 600; color: #5f6368;
+    padding: 8px 12px; border: 1px solid #e8eaed;
+    text-align: left; font-size: 12px;
+}
+.pp-table td        { padding: 10px 12px; border: 1px solid #e8eaed; color: #3c4043; vertical-align: top; }
+
+.pp-date-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #e6f4ea; color: #1e8e3e; border: 1px solid #ceead6;
+    border-radius: 8px; padding: 10px 16px;
+    font-size: 13px; font-weight: 500;
+}
+.pp-footer          { text-align: center; margin-top: 32px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.pp-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 10px 22px; border-radius: 6px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    font-family: inherit; text-decoration: none; border: none;
+    transition: background .18s;
+}
+.pp-btn-primary     { background: #1a73e8; color: #fff; }
+.pp-btn-primary:hover { background: #1765cc; color: #fff; }
+.pp-btn-secondary   { background: #fff; color: #5f6368; border: 1.5px solid #dadce0; }
+.pp-btn-secondary:hover { background: #f8f9fa; }
+
+/* ─────────────────────────────────────────────
+   16. 반응형
+   ───────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .login-card { padding: 28px 20px 24px; border-radius: 0; border: none; box-shadow: none; }
+    .result-card { padding: 32px 20px 28px; border-radius: 12px; }
+}
+@media (max-width: 600px) {
+    .pp-layout  { padding: 16px 12px 40px; }
+    .pp-intro, .pp-card { padding: 18px 16px; }
+    .pp-header  { padding: 12px 16px; }
+}

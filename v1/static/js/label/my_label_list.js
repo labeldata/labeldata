@@ -174,25 +174,44 @@ function bulkDelete() {
         return;
     }
     if (confirm("선택한 라벨을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.")) {
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        const csrfToken = getCsrfToken();
+        if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+
         fetch('/label/bulk-delete-labels/', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-            },
-            body: JSON.stringify({label_ids: selected})
+            headers,
+            body: JSON.stringify({ label_ids: selected })
         })
-        .then(response => response.json())
+        .then(response => response.text().then(text => {
+            let data = null;
+            if (text) {
+                try {
+                    data = JSON.parse(text);
+                } catch (parseError) {
+                    data = null;
+                }
+            }
+            if (!response.ok) {
+                const message = (data && data.error) ? data.error : `HTTP ${response.status}`;
+                throw new Error(message);
+            }
+            return data || { success: false, error: '응답 데이터가 없습니다.' };
+        }))
         .then(data => {
             if (data.success) {
                 window.location.reload();
             } else {
-                alert('삭제 중 오류가 발생했습니다.');
+                alert(`삭제 중 오류가 발생했습니다. ${data.error || ''}`.trim());
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('삭제 중 오류가 발생했습니다.');
+            alert(`삭제 중 오류가 발생했습니다. ${error.message || ''}`.trim());
         });
     }
 }
@@ -204,27 +223,55 @@ function bulkCopy() {
         return;
     }
     if (confirm("선택한 라벨을 복사하시겠습니까?")) {
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        const csrfToken = getCsrfToken();
+        if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+
         fetch('/label/bulk-copy-labels/', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-            },
-            body: JSON.stringify({label_ids: selected})
+            headers,
+            body: JSON.stringify({ label_ids: selected })
         })
-        .then(response => response.json())
+        .then(response => response.text().then(text => {
+            let data = null;
+            if (text) {
+                try {
+                    data = JSON.parse(text);
+                } catch (parseError) {
+                    data = null;
+                }
+            }
+            if (!response.ok) {
+                const message = (data && data.error) ? data.error : `HTTP ${response.status}`;
+                throw new Error(message);
+            }
+            return data || { success: false, error: '응답 데이터가 없습니다.' };
+        }))
         .then(data => {
             if (data.success) {
                 window.location.reload();
             } else {
-                alert('복사 중 오류가 발생했습니다.');
+                alert(`복사 중 오류가 발생했습니다. ${data.error || ''}`.trim());
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('복사 중 오류가 발생했습니다.');
+            alert(`복사 중 오류가 발생했습니다. ${error.message || ''}`.trim());
         });
     }
+}
+
+function getCsrfToken() {
+    const inputToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (inputToken && inputToken.value) {
+        return inputToken.value;
+    }
+    const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
 }
 
 function getSelectedIds() {

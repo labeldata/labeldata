@@ -1,244 +1,452 @@
-{% extends "base.html" %}
+{% extends "base_v2.html" %}
 {% load static %}
-{% block title %}{% if food_category == 'domestic' %}국내 제품 조회{% elif food_category == 'imported' %}수입 제품 조회{% else %}제품 조회{% endif %}{% endblock %}
+
+{% block title %}{% if food_category == 'domestic' %}국내 제품 조회{% elif food_category == 'imported' %}수입 제품 조회{% else %}제품 조회{% endif %} - V2{% endblock %}
+
+{% block topbar %}
+<div class="v2-topbar-title-wrapper">
+    {% if food_category == 'domestic' %}
+        <i class="bi bi-search me-2 v2-topbar-icon"></i>
+        <span class="v2-topbar-title">제품 조회 (국내)</span>
+        <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">국내에서 품목보고된 식품을 검색하고, 내 원료와 표시사항으로 복사할 수 있습니다</span>
+    {% elif food_category == 'imported' %}
+        <i class="bi bi-globe me-2 v2-topbar-icon"></i>
+        <span class="v2-topbar-title">제품 조회 (수입)</span>
+        <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">해외에서 수입된 식품을 검색하고, 내 원료와 표시사항으로 복사할 수 있습니다</span>
+    {% else %}
+        <i class="bi bi-search me-2 v2-topbar-icon"></i>
+        <span class="v2-topbar-title">제품 조회</span>
+    {% endif %}
+</div>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<style>
+    /* Material Design 3 기반 타이포그래피 */
+    body {
+        font-family: 'Roboto', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #1f1f1f;
+    }
+
+    /* Google Drive 스타일 메인 컨테이너 */
+    .product-explorer-container {
+        height: calc(100vh - 140px);
+        display: flex;
+        flex-direction: column;
+        background: #f8f9fa;
+    }
+
+    /* 필터 툴바 - M3 스타일 */
+    .filter-toolbar {
+        flex-shrink: 0;
+        border-bottom: 1px solid #e0e2e0;
+        background: #ffffff;
+        min-height: 64px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 24px;
+        gap: 16px;
+    }
+
+    /* 제품 테이블 - M3 스타일 */
+    .product-table {
+        table-layout: fixed;
+        background: #ffffff;
+    }
+
+    .product-table thead {
+        position: sticky;
+        top: 0;
+        background: #ffffff;
+        z-index: 10;
+    }
+
+    .product-table thead th {
+        border-bottom: 2px solid #e8eaed;
+        border-left: none !important;
+        border-right: none !important;
+        font-weight: 500;
+        font-size: 13px;
+        letter-spacing: 0.3px;
+        color: #444746;
+        padding: 12px 8px;
+        text-align: center !important;
+        white-space: nowrap;
+        background: #ffffff;
+    }
+
+    .product-table thead th:first-child {
+        text-align: center !important;
+        width: 4%;
+    }
+
+    .product-table tbody tr {
+        cursor: pointer;
+        transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        border-bottom: none;
+        height: 48px;
+    }
+
+    .product-table tbody tr:hover {
+        background-color: #f1f3f4;
+    }
+
+    .product-table tbody td {
+        padding: 8px;
+        font-size: 13px;
+        color: #1f1f1f;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+        border-bottom-color: #f0f0f0;
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    .product-table tbody td:first-child {
+        text-align: center;
+    }
+
+    .product-table tbody td:nth-child(2) {
+        text-align: left;
+    }
+
+    /* 스크롤바 커스텀 - M3 스타일 */
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #dadce0;
+        border-radius: 10px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #bdc1c6;
+        background-clip: padding-box;
+    }
+
+    /* 검색창 - M3 스타일 */
+    .input-group .form-control,
+    .input-group .input-group-text {
+        border: 1px solid #dadce0;
+        background: #ffffff;
+        color: #1f1f1f;
+        font-size: 14px;
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .input-group .form-control:focus {
+        border-color: #1a73e8;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+    }
+
+    .input-group .input-group-text {
+        background-color: #f8f9fa;
+    }
+
+    /* 신규 등록 버튼 - M3 FAB 스타일 */
+    .btn-primary {
+        background: #1a73e8;
+        border: none;
+        border-radius: 28px;
+        font-weight: 500;
+        font-size: 14px;
+        padding: 10px 24px;
+        box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3);
+        transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-primary:hover {
+        background: #1765cc;
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 2px 6px 2px rgba(60,64,67,0.15);
+        transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+        background: #1557b0;
+    }
+
+    /* 텍스트 색상 - M3 팔레트 */
+    .text-dark {
+        color: #1f1f1f !important;
+    }
+
+    .text-muted {
+        color: #5f6368 !important;
+    }
+
+    /* 엘립시스 셀 */
+    .ellipsis-cell {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    /* 정렬 버튼 */
+    .sort-buttons {
+        display: inline-flex;
+        gap: 2px;
+        margin-left: 4px;
+        opacity: 0.5;
+        transition: opacity 0.2s;
+    }
+
+    .product-table thead th:hover .sort-buttons {
+        opacity: 1;
+    }
+
+    .sort-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        text-decoration: none;
+        color: #444746;
+        font-size: 12px;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+
+    .sort-btn:hover {
+        background: #e8e8e8;
+        color: #1967d2;
+    }
+
+    /* 페이지네이션 스타일 */
+    .pagination {
+        --bs-pagination-padding-x: 0.75rem;
+        --bs-pagination-padding-y: 0.375rem;
+        --bs-pagination-font-size: 0.875rem;
+        --bs-pagination-color: #5f6368;
+        --bs-pagination-bg: #ffffff;
+        --bs-pagination-border-width: 1px;
+        --bs-pagination-border-color: #dadce0;
+        --bs-pagination-border-radius: 8px;
+        --bs-pagination-hover-color: #1f1f1f;
+        --bs-pagination-hover-bg: #f8f9fa;
+        --bs-pagination-hover-border-color: #dadce0;
+        --bs-pagination-focus-color: #1967d2;
+        --bs-pagination-focus-bg: #e8f0fe;
+        --bs-pagination-focus-box-shadow: 0 0 0 0.25rem rgba(25, 103, 210, 0.15);
+        --bs-pagination-active-color: #ffffff;
+        --bs-pagination-active-bg: #1967d2;
+        --bs-pagination-active-border-color: #1967d2;
+    }
+
+    /* 부드러운 전환 효과 */
+    * {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* 헤더 제목 */
+    .page-header {
+        padding: 24px 24px 0;
+        background: #f8f9fa;
+    }
+
+    .page-header h2 {
+        font-size: 28px;
+        font-weight: 400;
+        color: #1f1f1f;
+        margin: 0;
+    }
+
+    .page-header .text-muted {
+        margin-top: 8px;
+        font-size: 14px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <h2 class="mb-1">{% if food_category == 'domestic' %}국내 제품 조회{% elif food_category == 'imported' %}수입 제품 조회{% else %}제품 조회 및 복사{% endif %}</h2>
-    <p class="text-muted" style="font-size: 0.875rem; margin-bottom: 1.5rem;">
-        {% if food_category == 'domestic' %}국내에서 품목보고된 식품을 검색하고, 내 원료와 표시사항으로 복사할 수 있습니다{% elif food_category == 'imported' %}해외에서 수입된 식품을 검색하고, 내 원료와 표시사항으로 복사할 수 있습니다{% else %}국내 및 수입 식품 제품을 검색합니다{% endif %}
-    </p>
+<div class="product-explorer-container">
+    <!-- 필터 및 검색 바 -->
+    <div class="filter-toolbar">
+        <form method="get" action="" class="d-flex align-items-center" style="gap: 12px; flex: 1;" id="searchForm">
+            <input type="hidden" name="food_category" value="{{ food_category }}">
+            <!-- 통합 검색: 모드에 따라 다른 placeholder -->
+            <div class="input-group" style="max-width: 100%;">
+                <span class="input-group-text bg-white border-end-0" style="font-size: 12px;"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="product-search" name="q" class="form-control border-start-0 ps-0" 
+                       placeholder="{% if imported_mode %}제품명, 식품유형, 수출국, 수입업체명, 제조사명 중 검색어를 1개 이상 입력하세요{% else %}제품명, 품목보고번호, 식품유형, 제조사명 중 검색어를 1개 이상 입력하세요{% endif %}" 
+                       value="{{ search_query|default:'' }}" style="font-size: 13px;">
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
+                <i class="bi bi-search me-1"></i>검색
+            </button>
+            {% if search_query %}
+            <a href="?food_category={{ food_category }}" class="btn btn-outline-secondary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
+                초기화
+            </a>
+            {% endif %}
+        </form>
+        <div class="ms-auto d-flex align-items-center gap-2" style="padding-right: 16px;">
+            <span class="text-muted small">페이지당:</span>
+            <select id="per-page-select" name="per_page" class="form-select form-select-sm" style="width: 70px;">
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+        </div>
+    </div>
 
-    {% include 'includes/search_filter.html' with action_url='label:food_item_list' page_type='product' search_values=search_values food_category=food_category items_per_page=items_per_page show_food_category=False %}
-
-    <div class="table-responsive">
-        {% if imported_mode %}
-        <table class="table table-bordered table-hover common-table">
+    <!-- 제품 데이터 그리드 -->
+    <div class="flex-grow-1 overflow-auto custom-scrollbar">
+        {% if imported_items or page_obj %}
+        <table class="table table-hover align-middle mb-0 product-table">
             <thead>
                 <tr>
-                    <th class="text-center align-middle" style="width: 3%;">번호</th>
-                    <th style="width: 15%;">제품명
-                        <span class="sort-buttons">
-                            <a href="?sort=prduct_korean_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=prduct_korean_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 7%;">식품유형
-                        <span class="sort-buttons">
-                            <a href="?sort=itm_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=itm_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 7%;">수출국
-                        <span class="sort-buttons">
-                            <a href="?sort=xport_ntncd_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=xport_ntncd_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 10%;">수입업체명
-                        <span class="sort-buttons">
-                            <a href="?sort=bsn_ofc_name&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=bsn_ofc_name&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 15%;">제조사명
-                        <span class="sort-buttons">
-                            <a href="?sort=ovsmnfst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=ovsmnfst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 15%;">원재료명
-                    </th>
-                    <th style="width: 10%;">소비기한
-                        <span class="sort-buttons">
-                            <a href="?sort=expirde_dtm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=expirde_dtm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 7%;">수입일
-                        <span class="sort-buttons">
-                            <a href="?sort=procs_dtm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=procs_dtm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
+                    <th class="text-center">번호</th>
+                    {% if imported_mode %}
+                        <th style="width: 15%; text-align: left;">제품명</th>
+                        <th style="width: 10%; text-align: center;">식품유형</th>
+                        <th style="width: 10%; text-align: center;">수출국</th>
+                        <th style="width: 12%; text-align: center;">수입업체명</th>
+                        <th style="width: 15%; text-align: center;">제조사명</th>
+                        <th style="width: 15%; text-align: center;">원재료명</th>
+                        <th style="width: 10%; text-align: center;">소비기한</th>
+                        <th style="width: 8%; text-align: center;">수입일</th>
+                    {% else %}
+                        <th style="width: 15%; text-align: left;">품목보고번호</th>
+                        <th style="width: 18%; text-align: left;">제품명</th>
+                        <th style="width: 10%; text-align: center;">식품유형</th>
+                        <th style="width: 12%; text-align: center;">제조사명</th>
+                        <th style="width: 10%; text-align: center;">소비기한</th>
+                        <th style="width: 10%; text-align: center;">포장재질</th>
+                        <th style="width: 12%; text-align: center;">원재료명</th>
+                        <th style="width: 10%; text-align: center;">허가일자</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
-                {% for item in imported_items %}
-                <tr onclick="openImportedDetailPopup('{{ item.id }}')" style="cursor: pointer;">                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prduct_korean_nm|default:'' }}">{{ item.prduct_korean_nm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.itm_nm|default:'' }}">{{ item.itm_nm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.xport_ntncd_nm|default:'' }}">{{ item.xport_ntncd_nm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.bsn_ofc_name|default:'' }}">{{ item.bsn_ofc_name|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.ovsmnfst_nm|default:'' }}">{{ item.ovsmnfst_nm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.irdnt_nm|default:'' }}">{{ item.irdnt_nm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.expirde_dtm|default:'' }}">{{ item.expirde_dtm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.procs_dtm|default:'' }}">{{ item.procs_dtm|default:"" }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="9" class="text-center text-muted">수입식품이 없습니다.</td>
-                </tr>
-                {% endfor %}
+                {% if imported_mode %}
+                    {% for item in imported_items %}
+                    <tr onclick="openImportedDetailPopup('{{ item.id }}')" style="cursor: pointer;">
+                        <td class="text-center" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                        <td class="ellipsis-cell" title="{{ item.prduct_korean_nm|default:'' }}">{{ item.prduct_korean_nm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.itm_nm|default:'' }}">{{ item.itm_nm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.xport_ntncd_nm|default:'' }}">{{ item.xport_ntncd_nm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.bsn_ofc_name|default:'' }}">{{ item.bsn_ofc_name|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.ovsmnfst_nm|default:'' }}">{{ item.ovsmnfst_nm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.irdnt_nm|default:'' }}">{{ item.irdnt_nm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.expirde_dtm|default:'' }}">{{ item.expirde_dtm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.procs_dtm|default:'' }}">{{ item.procs_dtm|default:"" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">수입식품이 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    {% for item in page_obj %}
+                    <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">
+                        <td class="text-center" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                        <td class="ellipsis-cell" title="{{ item.prdlst_report_no|default:'' }}">{{ item.prdlst_report_no|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.prdlst_nm|default:'' }}">{{ item.prdlst_nm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.prdlst_dcnm|default:'' }}">{{ item.prdlst_dcnm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.bssh_nm|default:'' }}">{{ item.bssh_nm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.pog_daycnt|default:'' }}">{{ item.pog_daycnt|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.frmlc_mtrqlt|default:'' }}">{{ item.frmlc_mtrqlt|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:'' }}">{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:"" }}</td>
+                        <td class="ellipsis-cell" title="{{ item.prms_dt|default:'' }}">{{ item.prms_dt|default:"" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">제품이 없습니다.</td>
+                    </tr>
+                    {% endfor %}
+                {% endif %}
             </tbody>
         </table>
         {% else %}
-        <table class="table table-bordered table-hover common-table">
-            <thead>
-                <tr>
-                    <th class="text-center align-middle" style="width: 4%;">번호</th>
-                    <th style="width: 15%;">품목보고번호
-                        <span class="sort-buttons">
-                            <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 20%;">제품명
-                        <span class="sort-buttons">
-                            <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 10%;">식품유형
-                        <span class="sort-buttons">
-                            <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 15%;">제조사명
-                        <span class="sort-buttons">
-                            <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=bssh_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 10%;">소비기한
-                        <span class="sort-buttons">
-                            <a href="?sort=pog_daycnt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=pog_daycnt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 10%;">포장재질
-                        <!-- 정렬 버튼 제거 -->
-                    </th>
-                    <th style="width: 15%;">원재료명
-                        <!-- 정렬 버튼 제거 -->
-                    </th>
-                    <th style="width: 10%;">허가일자
-                        <span class="sort-buttons">
-                            <a href="?sort=prms_dt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=prms_dt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in page_obj %}
-                <tr onclick="openDetailPopup('{{ item.prdlst_report_no }}')" style="cursor: pointer;">                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prdlst_report_no|default:'' }}">{{ item.prdlst_report_no|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prdlst_nm|default:'' }}">{{ item.prdlst_nm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prdlst_dcnm|default:'' }}">{{ item.prdlst_dcnm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.bssh_nm|default:'' }}">{{ item.bssh_nm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.pog_daycnt|default:'' }}">{{ item.pog_daycnt|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.frmlc_mtrqlt|default:'' }}">{{ item.frmlc_mtrqlt|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:'' }}">{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:"" }}</td>
-                    <td class="ellipsis-cell" title="{{ item.prms_dt|default:'' }}">{{ item.prms_dt|default:"" }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="9" class="text-center text-muted">제품이 없습니다.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="d-flex flex-column align-items-center justify-content-center" style="height: 300px;">
+            <i class="bi bi-inbox" style="font-size: 48px; color: #dadce0; margin-bottom: 16px;"></i>
+            <p class="text-muted">데이터가 없습니다.</p>
+        </div>
         {% endif %}
     </div>
 
-    {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
+    <!-- 페이지네이션 및 정보 -->
+    <div class="d-flex justify-content-between align-items-center px-4 py-3 bg-white border-top">
+        <div class="d-flex align-items-center gap-3">
+            <div class="text-muted small">
+                {% if page_obj %}
+                    전체 <span class="fw-semibold text-dark">{{ page_obj.paginator.count }}</span>개 제품
+                    ({{ page_obj.start_index }}-{{ page_obj.end_index }})
+                {% elif imported_items %}
+                    전체 <span class="fw-semibold text-dark">{{ imported_items|length }}</span>개 제품
+                {% endif %}
+            </div>
+        </div>
+        {% if page_obj and page_obj.has_other_pages %}
+        <nav>
+            <ul class="pagination mb-0">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1">«</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹</a>
+                    </li>
+                {% endif %}
+                
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > page_obj.number|add:'-5' and num < page_obj.number|add:'5' %}
+                        <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">›</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">»</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
 </div>
 
-<style>
-.ellipsis-cell {
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    vertical-align: middle;
-    cursor: pointer;
-}
-.table th, .table td {
-    vertical-align: middle !important;
-}
-
-/* 검색 필드 포커스 및 입력 효과 */
-.form-control:focus {
-    background-color: #f8f9fa !important;
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-}
-
-/* 입력값이 있는 경우 테두리 효과 */
-.form-control.has-value {
-    border-color: #28a745 !important;
-    border-width: 2px !important;
-}
-
-.form-control.has-value:focus {
-    background-color: #f8f9fa !important;
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-}
-</style>
+<script>
+// 페이지 로드 시 검색 폼 처리
+document.addEventListener('DOMContentLoaded', function() {
+    const perPageSelect = document.getElementById('per-page-select');
+    const searchForm = perPageSelect?.closest('form');
+    
+    // 페이지당 항목 수 변경 시 폼 제출
+    if (perPageSelect) {
+        perPageSelect.addEventListener('change', function() {
+            if (searchForm) {
+                searchForm.submit();
+            }
+        });
+    }
+});
+</script>
 
 <script src="{% static 'js/label/food_item_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

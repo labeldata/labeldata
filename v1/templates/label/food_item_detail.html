@@ -6,229 +6,682 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>제품 상세 정보</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-  <link rel="stylesheet" href="{% static 'css/popup.css' %}?v={{ STATIC_BUILD_DATE }}">
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
   <style>
-    .detail-flex-container {
-      display: flex;
-      gap: 24px;
-      min-height: 320px;
+    /* Material Design 3 CSS Variables */
+    :root {
+      --google-blue: #1a73e8;
+      --google-blue-hover: #1557b0;
+      --google-bg-light: #f8f9fa;
+      --google-border: #dadce0;
+      --text-primary: #202124;
+      --text-secondary: #5f6368;
+      --text-hint: #9aa0a6;
+      
+      --shadow-card: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+      --shadow-hover: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15);
     }
-    .detail-left-panel {
-      flex: 1 1 0;
-      min-width: 320px;
-      max-width: 480px;
-      border-right: 1px solid #e0e0e0;
-      padding-right: 24px;
+
+    * {
+      box-sizing: border-box;
     }
-    .detail-right-panel {
-      flex: 1 1 0;
-      min-width: 320px;
-      padding-left: 24px;
+
+    body {
+      font-family: 'Roboto', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--google-bg-light);
+      color: var(--text-primary);
+    }
+
+    /* 팝업 컨테이너 */
+    .phrase-popup {
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      justify-content: flex-start;
+      height: calc(100vh - 40px);
+      max-height: 100%;
     }
-    /* 1:3 비율로 조정 */
-    .nutrition-table,
-    .detail-table {
+
+    /* 헤더 영역 - Material Card */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--google-border);
+      background: #ffffff;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .popup-title {
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .action-buttons .btn {
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: 1px solid var(--google-border);
+      background: #ffffff;
+      color: var(--text-secondary);
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      word-break: keep-all;
+      white-space: nowrap;
+    }
+
+    .action-buttons .btn:hover {
+      background-color: var(--google-bg-light);
+      border-color: #c0c4c7;
+      color: var(--text-primary);
+    }
+
+    .action-buttons .btn-primary {
+      background: var(--google-blue);
+      border-color: var(--google-blue);
+      color: #ffffff;
+    }
+
+    .action-buttons .btn-primary:hover {
+      background: var(--google-blue-hover);
+      border-color: var(--google-blue-hover);
+    }
+
+    /* 탭 네비게이션 */
+    .nav-tabs {
+      border-bottom: 1px solid var(--google-border);
+      background: #f8f9fa;
+      margin: 0;
+      padding: 0 24px;
+    }
+
+    .nav-tabs .nav-link {
+      color: var(--text-secondary);
+      border: none;
+      border-bottom: 3px solid transparent;
+      padding: 12px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-tabs .nav-link:hover {
+      color: var(--google-blue);
+      background: transparent;
+    }
+
+    .nav-tabs .nav-link.active {
+      color: var(--google-blue);
+      border-bottom-color: var(--google-blue);
+      background: transparent;
+    }
+
+    /* 콘텐츠 영역 */
+    .preview-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    /* 커스텀 스크롤바 */
+    .preview-container::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .preview-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .preview-container::-webkit-scrollbar-thumb {
+      background: var(--google-border);
+      border-radius: 10px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    .preview-container::-webkit-scrollbar-thumb:hover {
+      background: #bdc1c6;
+      background-clip: padding-box;
+    }
+
+    /* 정보 카드 */
+    .info-card {
+      background: #ffffff;
+      border: 1px solid var(--google-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-card);
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .info-card:hover {
+      box-shadow: var(--shadow-hover);
+    }
+
+    /* 정보 카드 헤더 */
+    .info-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--google-border);
+    }
+
+    .info-card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: #e8f0fe;
+      color: var(--google-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .info-card-title {
+      flex: 1;
+    }
+
+    .info-card-title h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .info-card-subtitle {
+      font-size: 12px;
+      color: var(--text-hint);
+      margin-top: 4px;
+    }
+
+    /* 정보 항목 그룹 */
+    .info-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .info-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .info-value {
+      font-size: 14px;
+      color: var(--text-primary);
+      word-break: break-word;
+      line-height: 1.5;
+    }
+
+    /* 테이블 스타일 - Material Design */
+    .info-table {
       width: 100%;
       border-collapse: collapse;
-      table-layout: fixed;
+      margin: 16px 0;
     }
-    .nutrition-table th,
-    .nutrition-table td,
-    .detail-table th,
-    .detail-table td {
-      font-family: 'Noto Sans KR', sans-serif;
-      font-size: 0.8rem;
-      line-height: 1.5;
-      border: 1px solid #ccc;
-      padding: 8px;
-      vertical-align: middle;
-    }
-    .nutrition-table th,
-    .detail-table th {
-      background-color: #e9ecef;
-      color: #343a40;
+
+    .info-table th {
+      background: var(--google-bg-light);
+      border: 1px solid var(--google-border);
+      padding: 12px;
+      text-align: left;
+      font-size: 12px;
       font-weight: 600;
-      text-align: center;
-      width: 20%;
-      min-width: 80px;
-      max-width: 120px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
-    .nutrition-table td,
-    .detail-table td {
-      background: #fff;
-      word-break: break-all;
-      width: 60%;
-      min-width: 180px;
-      max-width: 360px;
+
+    .info-table td {
+      border: 1px solid var(--google-border);
+      padding: 12px;
+      font-size: 13px;
+      color: var(--text-primary);
+      word-break: break-word;
     }
-    .nutrition-table td[colspan="3"],
-    .detail-table td[colspan="3"] {
-      width: 80%;
-    }
-    .korlabel-panel-title {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 10px;
-      color: #333;
-    }
-    .korlabel-panel-content {
+
+    .info-table tbody tr:hover {
       background: #f8f9fa;
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      padding: 18px 16px;
-      font-size: 0.8rem;
-      min-height: 180px;
-      white-space: pre-line;
-      color: #444;
+      transition: background 0.15s ease;
     }
-    @media (max-width: 900px) {
-      .detail-flex-container {
+
+    /* 텍스트 영역 */
+    .text-area-card {
+      background: var(--google-bg-light);
+      border: 1px solid var(--google-border);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-primary);
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 150px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .text-area-card::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .text-area-card::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .text-area-card::-webkit-scrollbar-thumb {
+      background: #c5cace;
+      border-radius: 4px;
+    }
+
+    .text-area-card::-webkit-scrollbar-thumb:hover {
+      background: #9aa0a6;
+    }
+
+    /* 패널 제목 */
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 16px 0 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* 리스트 아이템 */
+    .list-group-item {
+      border: 1px solid var(--google-border);
+      background: #ffffff;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--text-primary);
+      transition: all 0.15s ease;
+    }
+
+    .list-group-item:hover {
+      background: var(--google-bg-light);
+    }
+
+    .list-group-item.text-muted {
+      color: var(--text-secondary);
+    }
+
+    /* 모달 스타일 */
+    .modal-header {
+      border-bottom: 1px solid var(--google-border);
+      background: #ffffff;
+      padding: 20px 24px;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: 20px 24px;
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.6;
+      background: #ffffff;
+    }
+
+    .modal-footer {
+      border-top: 1px solid var(--google-border);
+      background: #ffffff;
+      padding: 16px 24px;
+      gap: 8px;
+    }
+
+    .modal-content {
+      border-radius: 8px;
+      border: none;
+      box-shadow: var(--shadow-hover);
+      animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* 모달 버튼 */
+    .modal-footer .btn {
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 4px;
+      transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      border: none;
+    }
+
+    .modal-footer .btn-secondary {
+      background: #f8f9fa;
+      border: 1px solid var(--google-border);
+      color: var(--text-secondary);
+    }
+
+    .modal-footer .btn-secondary:hover {
+      background-color: #e8e8e8;
+      border-color: #c0c4c7;
+      color: var(--text-primary);
+    }
+
+    .modal-footer .btn-primary {
+      background: var(--google-blue);
+      border: 1px solid var(--google-blue);
+      color: #ffffff;
+    }
+
+    .modal-footer .btn-primary:hover {
+      background: var(--google-blue-hover);
+      border-color: var(--google-blue-hover);
+      box-shadow: 0 1px 3px 0 rgba(26, 115, 232, 0.3);
+    }
+
+    /* 모달 배경 */
+    .modal-backdrop.fade {
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 0.5;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .header {
         flex-direction: column;
-        gap: 0;
+        align-items: flex-start;
       }
-      .detail-left-panel,
-      .detail-right-panel {
-        max-width: 100%;
-        min-width: 0;
-        padding: 0;
-        border: none;
+
+      .action-buttons {
+        width: 100%;
       }
-      .detail-right-panel {
-        margin-top: 24px;
+
+      .action-buttons .btn {
+        flex: 1;
+        flex-basis: calc(50% - 4px);
+      }
+
+      .info-group {
+        grid-template-columns: 1fr;
+      }
+
+      .nav-tabs {
+        padding: 0 16px;
+      }
+
+      .preview-container {
+        padding: 16px;
       }
     }
   </style>
 </head>
 <body>
-<div class="container mt-4 phrase-popup">
+<div class="phrase-popup">
+  <!-- 헤더 -->
   <div class="header">
-    <div class="popup-title">제품 상세 정보</div>
+    <div class="popup-title">
+      <i class="bi bi-box-seam" style="margin-right: 12px; color: var(--google-blue);"></i>
+      제품 상세 정보
+    </div>
     <div class="action-buttons">
       {% if imported_mode %}
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyIngredients('{{ item.id }}', true)">내원료 저장</button>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyLabel('{{ item.id }}', true)">표시사항 생성</button>
+        <button type="button" class="btn btn-outline-primary" onclick="saveToMyIngredients('{{ item.id }}', true)">
+          <i class="bi bi-download me-1"></i>내원료 저장
+        </button>
+        <button type="button" class="btn btn-outline-primary" onclick="saveToMyLabel('{{ item.id }}', true)">
+          <i class="bi bi-tags me-1"></i>표시사항 생성
+        </button>
       {% else %}
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}', false)">내원료 저장</button>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveToMyLabel('{{ item.prdlst_report_no }}', false)">표시사항 생성</button>
+        <button type="button" class="btn btn-outline-primary" onclick="saveToMyIngredients('{{ item.prdlst_report_no }}', false)">
+          <i class="bi bi-download me-1"></i>내원료 저장
+        </button>
+        <button type="button" class="btn btn-outline-primary" onclick="saveToMyLabel('{{ item.prdlst_report_no }}', false)">
+          <i class="bi bi-tags me-1"></i>표시사항 생성
+        </button>
       {% endif %}
-      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.close()">닫기</button>
+      <button type="button" class="btn btn-outline-secondary" onclick="window.close()">
+        <i class="bi bi-x-lg me-1"></i>닫기
+      </button>
     </div>
   </div>
-  <hr />
 
-  <div class="preview-container">
+  <!-- 탭 네비게이션 -->
+  <ul class="nav nav-tabs" role="tablist" style="margin-bottom: 0;">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="info-tab" data-toggle="tab" href="#info-content" role="tab" aria-controls="info-content" aria-selected="true">
+        <i class="bi bi-file-text"></i> 기본정보
+      </button>
+    </li>
     {% if imported_mode %}
-    <div class="detail-flex-container">
-      <!-- 왼쪽: 제품 상세 정보 (1:3 비율) -->
-      <div class="detail-left-panel">
-        <table class="nutrition-table">          <tbody>
-            <tr>
-              <th>제품명</th>
-              <td>{{ item.prduct_korean_nm|default:"" }}</td>
-            </tr>
-            <tr>
-              <th>제품명(영문)</th>
-              <td>{{ item.prduct_nm|default:"" }}</td>
-            </tr>
-            <tr>
-              <th>식품유형</th>
-              <td>{{ item.itm_nm|default:"" }}</td>
-            </tr>
-            <tr>
-              <th>수출국</th>
-              <td>{{ item.xport_ntncd_nm|default:"" }}</td>
-            </tr>
-            <tr>
-              <th>수입업체</th>
-              <td>{{ item.bsn_ofc_name|default:"" }}</td>
-            </tr>
-            <tr>
-              <th>제조사명</th>
-              <td>{{ item.ovsmnfst_nm|default:"" }}</td>
-            </tr>
-            <tr>
-              <th>원재료명</th>
-              <td>{{ item.irdnt_nm|default:"" }}</td>
-            </tr>
-            <tr>
-              <th>소비기한</th>
-              <td>{{ item.expirde_dtm|default:"" }}</td>
-            </tr>
-            <tr>
-              <th>수입일</th>
-              <td>{{ item.procs_dtm|default:"" }}</td>
-            </tr>
-          </tbody>
-        </table>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="label-tab" data-toggle="tab" href="#label-content" role="tab" aria-controls="label-content" aria-selected="false">
+        <i class="bi bi-bookmark"></i> 표시사항
+      </button>
+    </li>
+    {% endif %}
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="action-tab" data-toggle="tab" href="#action-content" role="tab" aria-controls="action-content" aria-selected="false">
+        <i class="bi bi-exclamation-triangle"></i> 행정처분
+      </button>
+    </li>
+  </ul>
+
+  <!-- 콘텐츠 영역 -->
+  <div class="preview-container">
+    <div class="tab-content">
+      <!-- 기본정보 탭 -->
+      <div class="tab-pane fade show active" id="info-content" role="tabpanel" aria-labelledby="info-tab">
+        {% if imported_mode %}
+          <!-- 수입식품 정보 카드 -->
+          <div class="info-card">
+            <div class="info-card-header">
+              <div class="info-card-icon">
+                <i class="bi bi-globe"></i>
+              </div>
+              <div class="info-card-title">
+                <h3>{{ item.prduct_korean_nm|default:"제품명 미정의" }}</h3>
+                <div class="info-card-subtitle">{{ item.prduct_nm|default:"Product name unavailable" }}</div>
+              </div>
+            </div>
+            <div class="info-group">
+              <div class="info-item">
+                <span class="info-label">식품유형</span>
+                <span class="info-value">{{ item.itm_nm|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">수출국</span>
+                <span class="info-value">{{ item.xport_ntncd_nm|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">수입업체명</span>
+                <span class="info-value">{{ item.bsn_ofc_name|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">제조사명</span>
+                <span class="info-value">{{ item.ovsmnfst_nm|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">소비기한</span>
+                <span class="info-value">{{ item.expirde_dtm|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">수입일</span>
+                <span class="info-value">{{ item.procs_dtm|default:"-" }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 원재료명 카드 -->
+          <div class="info-card">
+            <div class="panel-title">
+              <i class="bi bi-list" style="color: var(--google-blue);"></i>
+              원재료명
+            </div>
+            <div class="text-area-card">{{ item.irdnt_nm|default:"-" }}</div>
+          </div>
+        {% else %}
+          <!-- 국내식품 정보 카드 -->
+          <div class="info-card">
+            <div class="info-card-header">
+              <div class="info-card-icon">
+                <i class="bi bi-box-seam"></i>
+              </div>
+              <div class="info-card-title">
+                <h3>{{ item.prdlst_nm|default:"제품명 미정의" }}</h3>
+                <div class="info-card-subtitle">
+                  품목보고번호: {{ item.prdlst_report_no|default:"-" }}
+                </div>
+              </div>
+            </div>
+            <div class="info-group">
+              <div class="info-item">
+                <span class="info-label">식품유형</span>
+                <span class="info-value">{{ item.prdlst_dcnm|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">제조사</span>
+                <span class="info-value">{{ item.bssh_nm|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">업종분류</span>
+                <span class="info-value">{{ item.induty_cd_nm|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">소비기한</span>
+                <span class="info-value">{{ item.pog_daycnt|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">포장재질</span>
+                <span class="info-value">{{ item.frmlc_mtrqlt|default:"-" }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">허가일자</span>
+                <span class="info-value">{{ item.prms_dt|default:"-" }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 원재료명 카드 -->
+          <div class="info-card">
+            <div class="panel-title">
+              <i class="bi bi-list" style="color: var(--google-blue);"></i>
+              원재료명
+            </div>
+            <div class="text-area-card">{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:"-" }}</div>
+          </div>
+
+          <!-- 제품 상세정보 카드 -->
+          {% if item.dispos or item.usages %}
+          <div class="info-card">
+            <div class="panel-title">
+              <i class="bi bi-info-circle" style="color: var(--google-blue);"></i>
+              제품 상세정보
+            </div>
+            {% if item.dispos %}
+            <div class="info-item" style="margin-bottom: 16px;">
+              <span class="info-label">제품형태</span>
+              <span class="info-value">{{ item.dispos }}</span>
+            </div>
+            {% endif %}
+            {% if item.usages %}
+            <div class="info-item">
+              <span class="info-label">용법</span>
+              <span class="info-value">{{ item.usages }}</span>
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+        {% endif %}
       </div>
-      <!-- 오른쪽: 한글표시사항 -->
-      <div class="detail-right-panel">
-        <div class="korlabel-panel-title">수입식품 한글표시사항 전체보기</div>
-        <div class="korlabel-panel-content">
-          {{ item.korlabel|default:"-" }}
+
+      <!-- 표시사항 탭 -->
+      {% if imported_mode %}
+      <div class="tab-pane fade" id="label-content" role="tabpanel" aria-labelledby="label-tab">
+        <div class="info-card">
+          <div class="panel-title">
+            <i class="bi bi-file-earmark-text" style="color: var(--google-blue);"></i>
+            수입식품 한글표시사항
+          </div>
+          <div class="text-area-card">{{ item.korlabel|default:"-" }}</div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- 행정처분 탭 -->
+      <div class="tab-pane fade" id="action-content" role="tabpanel" aria-labelledby="action-tab">
+        <div class="info-card">
+          <div class="panel-title">
+            <i class="bi bi-exclamation-circle" style="color: #d32f2f;"></i>
+            관련 행정처분
+          </div>
+          {% if actions %}
+            <div style="padding: 0;">
+              {% for action in actions %}
+                <div class="list-group-item" style="border-left: 4px solid #d32f2f;">
+                  <div style="font-weight: 500; color: var(--text-primary);">{{ action.action_name }}</div>
+                  <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                    {{ action.action_date|date:'Y-m-d' }}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted" style="font-size: 13px; margin: 0;">관련된 행정처분이 없습니다.</p>
+          {% endif %}
         </div>
       </div>
     </div>
-    {% else %}
-    <!-- ...existing code for 일반식품 상세 테이블... -->
-    <table class="nutrition-table">      <tbody>
-        <tr>
-          <th style="width:20%;">품목보고번호</th>
-          <td style="width:60%;">{{ item.prdlst_report_no|default:"" }}</td>
-          <th style="width:20%;">허가일자</th>
-          <td style="width:60%;">{{ item.prms_dt|default:"" }}</td>
-        </tr>
-        <tr>
-          <th style="width:20%;">제품명</th>
-          <td style="width:60%;">{{ item.prdlst_nm|default:"" }}</td>
-          <th style="width:20%;">식품유형</th>
-          <td style="width:60%;">{{ item.prdlst_dcnm|default:"" }}</td>
-        </tr>
-        <tr>
-          <th style="width:20%;">제조사</th>
-          <td style="width:60%;">{{ item.bssh_nm|default:"" }}</td>
-          <th style="width:20%;">업종명</th>
-          <td style="width:60%;">{{ item.induty_cd_nm|default:"" }}</td>
-        </tr>
-        <tr>
-          <th style="width:20%;">소비기한</th>
-          <td style="width:60%;">{{ item.pog_daycnt|default:"" }}</td>
-          <th style="width:20%;">포장재질</th>
-          <td style="width:60%;">{{ item.frmlc_mtrqlt|default:"" }}</td>
-        </tr>
-        <tr>
-          <th style="width:20%;">원재료명</th>
-          <td colspan="3" style="width:80%;">{{ item.rawmtrl_nm_sorted|default:item.rawmtrl_nm|default:"" }}</td>
-        </tr>
-        <tr>
-          <th style="width:20%;">제품형태</th>
-          <td colspan="3" style="width:80%;">{{ item.dispos|default:"" }}</td>
-        </tr>
-        <tr>
-          <th style="width:20%;">용법</th>
-          <td colspan="3" style="width:80%;">{{ item.usages|default:"" }}</td>
-        </tr>
-      </tbody>
-    </table>
-    <div class="mt-4">
-      <h6 class="preview-title mb-2">관련 행정처분</h6>
-      <ul class="list-group">
-        {% if actions %}
-          {% for action in actions %}
-            <li class="list-group-item">{{ action.action_name }} ({{ action.action_date|date:'Y-m-d' }})</li>
-          {% endfor %}
-        {% else %}
-          <li class="list-group-item text-muted">관련된 행정처분이 없습니다.</li>
-        {% endif %}
-      </ul>
-    </div>
-    {% endif %}
   </div>
 </div>
 
@@ -237,14 +690,28 @@
   <div class="modal-dialog modal-dialog-centered" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="successModalLabel">저장 완료</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+        <h5 class="modal-title" id="successModalLabel">
+          <i class="bi bi-check-circle" style="color: #0f9d58; margin-right: 8px;"></i>
+          저장 완료
+        </h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="opacity: 0.7;">
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
+      <div class="modal-body">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <i class="bi bi-check-circle-fill" style="color: #0f9d58; font-size: 24px;"></i>
+          <div>
+            <div style="font-weight: 500; margin-bottom: 4px;">원료가 저장되었습니다</div>
+            <div style="font-size: 12px; color: var(--text-secondary);">내 원료함에서 확인할 수 있습니다</div>
+          </div>
+        </div>
+      </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">확인</button>
-        <button type="button" class="btn btn-primary btn-sm" id="goToIngredientBtn">저장된 원료로 이동하기</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">확인</button>
+        <button type="button" class="btn btn-primary" id="goToIngredientBtn">
+          <i class="bi bi-arrow-right me-1"></i>저장된 원료로 이동
+        </button>
       </div>
     </div>
   </div>
@@ -255,14 +722,28 @@
   <div class="modal-dialog modal-dialog-centered" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="labelSuccessModalLabel">저장 완료</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+        <h5 class="modal-title" id="labelSuccessModalLabel">
+          <i class="bi bi-check-circle" style="color: #0f9d58; margin-right: 8px;"></i>
+          생성 완료
+        </h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="opacity: 0.7;">
           <span aria-hidden="true">&times;</span>
         </button>
       </div>
+      <div class="modal-body">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <i class="bi bi-check-circle-fill" style="color: #0f9d58; font-size: 24px;"></i>
+          <div>
+            <div style="font-weight: 500; margin-bottom: 4px;">표시사항이 생성되었습니다</div>
+            <div style="font-size: 12px; color: var(--text-secondary);">내 제품에서 확인할 수 있습니다</div>
+          </div>
+        </div>
+      </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">확인</button>
-        <button type="button" class="btn btn-primary btn-sm" id="goToLabelBtn">저장된 표시사항으로 이동하기</button>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">확인</button>
+        <button type="button" class="btn btn-primary" id="goToLabelBtn">
+          <i class="bi bi-arrow-right me-1"></i>저장된 표시사항으로 이동
+        </button>
       </div>
     </div>
   </div>

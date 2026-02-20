@@ -16,12 +16,16 @@
   <!-- 라벨 상수 로드 -->
   <script src="{% static 'js/label/constants.js' %}"></script>
 </head>
-<body>
+<body{% if request.GET.readonly %} class="readonly-mode"{% endif %}>
   <header class="preview-page-header">
     <div style="flex-grow: 1;">
       <h1 class="panel-title">라벨 미리보기</h1>
       <p class="mb-0" style="font-size: 0.75rem; color: #6c757d; margin-top: 4px;">
+        {% if request.GET.readonly %}
+        저장된 설정으로 라벨을 미리보고 있습니다. 설정을 변경하려면 표시사항 작성 화면에서 수정하세요.
+        {% else %}
         표 설정, 텍스트 변환, 분리배출마크를 설정하여 라벨 디자인을 미리 확인하고 PDF로 다운로드하세요
+        {% endif %}
       </p>
     </div>
     <div class="preview-actions" role="toolbar" aria-label="미리보기 도구">
@@ -30,23 +34,27 @@
         <span id="zoomDisplay">100%</span>
         <button class="btn btn-outline-secondary btn-sm" id="zoomInBtn" aria-label="확대"><i class="fas fa-search-plus"></i></button>
       </div>
+      {% if not request.GET.readonly %}
       <button class="btn btn-info btn-sm" id="validateButton" aria-label="규정 검증">
         <i class="fas fa-check-circle me-1" aria-hidden="true"></i>규정 검증
       </button>
       <button id="saveSettingsBtn" class="btn btn-success btn-sm" aria-label="설정 저장">
         <i class="fas fa-save me-1" aria-hidden="true"></i>설정 저장
       </button>
+      {% endif %}
       <button class="btn btn-primary btn-sm" id="exportPdfBtn" aria-label="PDF 저장">
         <i class="fas fa-file-arrow-down me-1" aria-hidden="true"></i>PDF 저장
       </button>
+      {% if not request.GET.readonly %}
       <button class="btn btn-secondary btn-sm" onclick="window.close()" aria-label="창 닫기">
         <i class="fas fa-times me-1" aria-hidden="true"></i>닫기
       </button>
+      {% endif %}
     </div>
   </header>
 
   <main class="preview-container">
-    <aside class="settings-panel">
+    <aside class="settings-panel"{% if request.GET.readonly %} style="display: none;"{% endif %}>
       <!-- 탭 네비게이션 -->
       <div class="preview-tabs" style="display: flex; gap: 0.15rem; margin-bottom: 1rem; border-bottom: 2px solid #e9ecef; overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; align-items: center;">
         <button class="preview-tab active" data-tab="table-settings" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
@@ -253,6 +261,7 @@
   <script id="expiry-recommendation-data" type="application/json">{{ expiry_recommendation_json|safe }}</script>
   <script id="allergens-data" type="application/json">{{ allergens|safe }}</script>
   <script id="custom-fields-data" type="application/json">{{ custom_fields|safe }}</script>
+    <script id="label-data" type="application/json">{{ label_data|safe }}</script>
   <script>
     // 백엔드 알레르기 데이터를 전역 변수로 설정
     try {
@@ -265,6 +274,19 @@
         }
     } catch(e) {
         console.error('알레르기 데이터 로드 실패:', e);
+    }
+    // URL 파라미터 allergens 도 지원 (저장 전 선택값 포함)
+    try {
+        var _urlAllergens = new URLSearchParams(window.location.search).get('allergens');
+        if (_urlAllergens && _urlAllergens.trim()) {
+            var _parsed = _urlAllergens.split(',').map(function(a){ return a.trim(); }).filter(Boolean);
+            if (_parsed.length > 0) {
+                window.allergensData = _parsed;
+                window.parentAllergens = _parsed;
+            }
+        }
+    } catch(e) {
+        console.error('URL allergens 파라미터 인식 실패:', e);
     }
   </script>
 
@@ -635,7 +657,16 @@
         }
 
         function boldCountryNames(text, countries) {
-            if (!text || !countries || countries.length === 0) return text;
+            if (!text || !countries) return text;
+            
+            // countries가 배열이 아닌 경우 처리
+            if (!Array.isArray(countries)) {
+                console.warn('countries is not an array:', countries);
+                return text;
+            }
+            
+            if (countries.length === 0) return text;
+            
             let processedText = text;
             
             // 긴 국가명부터 처리 (예: "영국" 먼저, "국" 나중에)
@@ -1942,35 +1973,40 @@
     
         // --- EVENT LISTENERS & INITIALIZATION ---
         function setupEventListeners() {
-            const inputs = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput', 'fontFamilySelect'];
-            inputs.forEach(id => {
-                const element = document.getElementById(id);
-                if (element) {
-                    element.addEventListener('input', debounce(updatePreviewStyles, 250));
-                    // 표 설정 변경 시 로깅 (디바운스로 한 번만)
-                    element.addEventListener('change', debounce(function() {
-                        if (typeof window.logPreviewAction === 'function') {
-                            window.logPreviewAction('preview_table_settings');
-                        }
-                    }, 500));
-                }
-            });
-            document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
-            // validateButton 이벤트 리스너는 label_preview.js에서 처리
-            const saveBtn = document.getElementById('saveSettingsBtn');
-            if (saveBtn) {
-
-                saveBtn.addEventListener('click', function(e) {
-
-                    e.preventDefault();
-                    savePreviewSettings();
+            // readonly 모드에서는 설정 관련 이벤트 리스너 건너뛰기
+            const isReadonly = new URLSearchParams(window.location.search).get('readonly') === 'true';
+            
+            if (!isReadonly) {
+                const inputs = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput', 'fontFamilySelect'];
+                inputs.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.addEventListener('input', debounce(updatePreviewStyles, 250));
+                        // 표 설정 변경 시 로깅 (디바운스로 한 번만)
+                        element.addEventListener('change', debounce(function() {
+                            if (typeof window.logPreviewAction === 'function') {
+                                window.logPreviewAction('preview_table_settings');
+                            }
+                        }, 500));
+                    }
                 });
-            } else {
-                console.error('설정 저장 버튼을 찾을 수 없음!');
+                document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
+                // validateButton 이벤트 리스너는 label_preview.js에서 처리
+                const saveBtn = document.getElementById('saveSettingsBtn');
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        savePreviewSettings();
+                    });
+                }
             }
+            
+            // 줌 및 PDF 내보내기는 readonly 모드에서도 동작
             document.getElementById('exportPdfBtn')?.addEventListener('click', exportToPDF);
             document.getElementById('zoomInBtn')?.addEventListener('click', () => { currentZoom = Math.min(2, currentZoom + 0.1); updateZoom(); });
             document.getElementById('zoomOutBtn')?.addEventListener('click', () => { currentZoom = Math.max(0.5, currentZoom - 0.1); updateZoom(); });
+            
+            if (isReadonly) return; // readonly 모드에서는 나머지 이벤트 리스너 건너뛰기
             
             // 텍스트 변환 설정 이벤트 리스너
             const textFormatMode = document.getElementById('textFormatMode');
@@ -2165,8 +2201,28 @@
             tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; padding: 20px; color: #6c757d;">표시사항 데이터를 기다리는 중...</td></tr>`;
         }
 
-        if (window.opener) {
+        let initialLabelData = null;
+        try {
+            const labelDataScript = document.getElementById('label-data');
+            if (labelDataScript && labelDataScript.textContent) {
+                initialLabelData = JSON.parse(labelDataScript.textContent);
+            }
+        } catch (e) {
+            initialLabelData = null;
+        }
 
+        if (initialLabelData && Object.keys(initialLabelData).length > 0) {
+            dataLoaded = true;
+            checkedFields = initialLabelData;
+            renderTable(checkedFields);
+            const frmlc = checkedFields.frmlc_mtrqlt || '';
+            updateRecyclingMarkUI(frmlc);
+            /* initialLabelData로 1차 렌더 후, opener가 있으면 최신 데이터도 요청
+               → v2에서도 allergens / 원산지 굵기 처리 정상화 */
+            if (window.opener) {
+                window.opener.postMessage({ type: 'requestPreviewData' }, '*');
+            }
+        } else if (window.opener) {
             window.opener.postMessage({ type: 'requestPreviewData' }, '*');
         }
 

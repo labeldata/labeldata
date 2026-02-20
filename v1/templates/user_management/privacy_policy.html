@@ -1,112 +1,178 @@
-<!-- privacy_policy.html -->
-{% extends 'base.html' %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>개인정보 처리방침 - EazyLabeling</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{% static 'css/auth_common.css' %}">
+</head>
+<body class="pp-page">
 
-{% block title %}개인정보 처리방침{% endblock %}
+    <div class="pp-header">
+        <div class="pp-header-logo"><i class="bi bi-tag-fill"></i></div>
+        <div>
+            <div class="pp-header-title">EazyLabeling</div>
+            <div class="pp-header-sub">개인정보 처리방침</div>
+        </div>
+    </div>
 
-{% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <h3 class="mb-0">개인정보 처리방침</h3>
-                </div>
-                <div class="card-body p-4">
-                    <div class="privacy-content">
-                        <p class="lead">
-                            간편한 표시사항 연구소(www.ezlabeling.com, 이하 "사이트")는 「개인정보 보호법」 등 관련 법령을 준수하며, 
-                            이용자의 개인정보를 보호하기 위해 최선을 다하고 있습니다. 본 개인정보 처리방침은 사이트가 운영되는 동안 적용됩니다.
-                        </p>
+    <div class="pp-layout">
 
-                        <h4 class="mt-4 mb-3">1. 수집하는 개인정보 항목</h4>
-                        <ul>
-                            <li><strong>필수 항목:</strong> 이메일 주소(ID), 비밀번호(암호화 저장)</li>
-                            <li><strong>자동 수집 항목:</strong> 접속 IP, 쿠키, 서비스 이용 기록(보안 및 이용 통계 목적)</li>
-                        </ul>
+        <div class="pp-intro">
+            <div class="pp-intro-badge"><i class="bi bi-shield-check-fill"></i>개인정보 보호</div>
+            <h1>개인정보 처리방침</h1>
+            <p>
+                간편한 표시사항 연구소(www.ezlabeling.com, 이하 "사이트")는 「개인정보 보호법」 등 관련 법령을 준수하며,
+                이용자의 개인정보를 보호하기 위해 최선을 다하고 있습니다.
+                본 개인정보 처리방침은 사이트가 운영되는 동안 적용됩니다.
+            </p>
+        </div>
 
-                        <h4 class="mt-4 mb-3">2. 개인정보의 처리 목적</h4>
-                        <ul>
-                            <li>회원 가입 및 관리</li>
-                            <li>본인 확인 및 인증</li>
-                            <li>비밀번호 찾기 및 계정 관련 안내</li>
-                            <li>서비스 공지사항 전달</li>
-                        </ul>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">1</div>
+                <h2>수집하는 개인정보 항목</h2>
+            </div>
+            <div class="pp-body">
+                <ul>
+                    <li><strong>필수 항목:</strong> 이메일 주소(ID), 비밀번호(암호화 저장)</li>
+                    <li><strong>자동 수집 항목:</strong> 접속 IP, 쿠키, 서비스 이용 기록(보안 및 이용 통계 목적)</li>
+                </ul>
+            </div>
+        </div>
 
-                        <h4 class="mt-4 mb-3">3. 개인정보의 보유 및 이용 기간</h4>
-                        <ul>
-                            <li>회원 탈퇴 시 즉시 파기</li>
-                            <li>관련 법령에 따라 일정 기간 보관이 필요한 경우 해당 기간 동안 보관 후 파기</li>
-                        </ul>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">2</div>
+                <h2>개인정보의 처리 목적</h2>
+            </div>
+            <div class="pp-body">
+                <ul>
+                    <li>회원 가입 및 관리</li>
+                    <li>본인 확인 및 인증</li>
+                    <li>비밀번호 찾기 및 계정 관련 안내</li>
+                    <li>서비스 공지사항 전달</li>
+                </ul>
+            </div>
+        </div>
 
-                        <h4 class="mt-4 mb-3">4. 개인정보의 제3자 제공</h4>
-                        <ul>
-                            <li>사이트는 원칙적으로 이용자의 개인정보를 제3자에게 제공하지 않습니다.</li>
-                            <li>다만, 법령에 의거하거나 수사기관의 요청이 있는 경우 예외적으로 제공될 수 있습니다.</li>
-                        </ul>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">3</div>
+                <h2>개인정보의 보유 및 이용 기간</h2>
+            </div>
+            <div class="pp-body">
+                <ul>
+                    <li>회원 탈퇴 시 즉시 파기</li>
+                    <li>관련 법령에 따라 일정 기간 보관이 필요한 경우 해당 기간 동안 보관 후 파기</li>
+                </ul>
+            </div>
+        </div>
 
-                        <h4 class="mt-4 mb-3">5. 개인정보 처리 위탁</h4>
-                        <p>사이트는 원활한 서비스 제공을 위하여 개인정보 처리를 외부 업체에 위탁하고 있습니다.</p>
-                        <ul>
-                            <li><strong>수탁업체:</strong> Google LLC</li>
-                            <li><strong>위탁업무 내용:</strong> 회원가입 인증 메일, 비밀번호 재설정 메일, 공지 메일 등 발송 대행</li>
-                            <li><strong>보유 및 이용 기간:</strong> 위탁 계약 종료 시까지</li>
-                        </ul>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">4</div>
+                <h2>개인정보의 제3자 제공</h2>
+            </div>
+            <div class="pp-body">
+                <ul>
+                    <li>사이트는 원칙적으로 이용자의 개인정보를 제3자에게 제공하지 않습니다.</li>
+                    <li>다만, 법령에 의거하거나 수사기관의 요청이 있는 경우 예외적으로 제공될 수 있습니다.</li>
+                </ul>
+            </div>
+        </div>
 
-                        <h4 class="mt-4 mb-3">6. 이용자의 권리와 행사 방법</h4>
-                        <p>이용자는 언제든지 자신의 개인정보를 조회, 수정, 삭제할 수 있으며, 회원 탈퇴를 요청할 수 있습니다.<br>
-                        문의는 아래 연락처로 가능합니다.</p>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">5</div>
+                <h2>개인정보 처리 위탁</h2>
+            </div>
+            <div class="pp-body">
+                <p style="margin-bottom:12px;">사이트는 원활한 서비스 제공을 위하여 개인정보 처리를 외부 업체에 위탁하고 있습니다.</p>
+                <table class="pp-table">
+                    <thead>
+                        <tr>
+                            <th>수탁업체</th>
+                            <th>위탁업무 내용</th>
+                            <th>보유 및 이용 기간</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Google LLC</td>
+                            <td>회원가입 인증 메일, 비밀번호 재설정 메일, 공지 메일 등 발송 대행</td>
+                            <td>위탁 계약 종료 시까지</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-                        <h4 class="mt-4 mb-3">7. 개인정보 보호책임자</h4>
-                        <ul>
-                            <li><strong>성명:</strong> 윤순성</li>
-                            <li><strong>이메일:</strong> administrator@ezlabeling.com</li>
-                        </ul>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">6</div>
+                <h2>이용자의 권리와 행사 방법</h2>
+            </div>
+            <div class="pp-body">
+                <p>이용자는 언제든지 자신의 개인정보를 조회, 수정, 삭제할 수 있으며, 회원 탈퇴를 요청할 수 있습니다.<br>
+                문의는 아래 개인정보 보호책임자 연락처로 가능합니다.</p>
+            </div>
+        </div>
 
-                        <h4 class="mt-4 mb-3">8. 개인정보의 안전성 확보 조치</h4>
-                        <ul>
-                            <li>비밀번호는 해시 알고리즘을 이용해 암호화하여 저장합니다.</li>
-                            <li>개인정보 접근은 최소 인원에게만 제한합니다.</li>
-                            <li>보안 업데이트 및 점검을 정기적으로 시행합니다.</li>
-                        </ul>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">7</div>
+                <h2>개인정보 보호책임자</h2>
+            </div>
+            <div class="pp-body">
+                <ul>
+                    <li><strong>성명:</strong> 윤순성</li>
+                    <li><strong>이메일:</strong> administrator@ezlabeling.com</li>
+                </ul>
+            </div>
+        </div>
 
-                        <h4 class="mt-4 mb-3">9. 적용 일자</h4>
-                        <div class="alert alert-info">
-                            <strong>시행일:</strong> 이 개인정보 처리방침은 2025년 9월 25일부터 적용됩니다.
-                        </div>
-                    </div>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">8</div>
+                <h2>개인정보의 안전성 확보 조치</h2>
+            </div>
+            <div class="pp-body">
+                <ul>
+                    <li>비밀번호는 해시 알고리즘을 이용해 암호화하여 저장합니다.</li>
+                    <li>개인정보 접근은 최소 인원에게만 제한합니다.</li>
+                    <li>보안 업데이트 및 점검을 정기적으로 시행합니다.</li>
+                </ul>
+            </div>
+        </div>
 
-                    <div class="text-center mt-4">
-                        <button type="button" class="btn btn-secondary" onclick="window.close();">창 닫기</button>
-                        <a href="{% url 'user_management:signup' %}" class="btn btn-primary ms-2">회원가입으로 돌아가기</a>
-                    </div>
+        <div class="pp-card">
+            <div class="pp-section-header">
+                <div class="pp-section-num">9</div>
+                <h2>적용 일자</h2>
+            </div>
+            <div class="pp-body">
+                <div class="pp-date-badge">
+                    <i class="bi bi-calendar3-fill"></i>
+                    이 개인정보 처리방침은 <strong>2025년 9월 25일</strong>부터 적용됩니다.
                 </div>
             </div>
         </div>
+
+        <div class="pp-footer">
+            <button type="button" class="pp-btn pp-btn-secondary" onclick="window.close();">
+                <i class="bi bi-x-lg"></i>창 닫기
+            </button>
+            <a href="{% url 'user_management:signup' %}" class="pp-btn pp-btn-primary">
+                <i class="bi bi-person-plus-fill"></i>회원가입으로 돌아가기
+            </a>
+        </div>
+
     </div>
-</div>
-
-<style>
-.privacy-content h4 {
-    color: #0d6efd;
-    border-bottom: 2px solid #e9ecef;
-    padding-bottom: 0.5rem;
-}
-
-.privacy-content ul {
-    padding-left: 1.5rem;
-}
-
-.privacy-content li {
-    margin-bottom: 0.5rem;
-}
-
-.card {
-    border: none;
-    border-radius: 10px;
-}
-
-.card-header {
-    border-radius: 10px 10px 0 0 !important;
-}
-</style>
-{% endblock %}
+</body>
+</html>

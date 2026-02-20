@@ -1,0 +1,848 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>영양성분 입력</title>
+    
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Handsontable -->
+    <link href="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.css" rel="stylesheet">
+    
+    <!-- V1 영양성분 계산기 스타일 -->
+    <link href="{% static 'css/label_calculator.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --bg-gray: #f8f9fa;
+            --border-color: #e5e7eb;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: #ffffff;
+            overflow: hidden;
+        }
+        
+        #nutrition-container {
+            display: flex;
+            height: 100vh;
+            width: 100%;
+        }
+        
+        /* 왼쪽 입력 패널 */
+        #input-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            border-right: 1px solid var(--border-color);
+            min-width: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        
+        .panel-header {
+            margin-bottom: 16px;
+        }
+        
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 12px;
+        }
+        
+        .config-section {
+            background: var(--bg-gray);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px 8px;
+            margin-bottom: 6px;
+        }
+        
+        .config-row {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .config-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 0 0 auto;
+        }
+        
+        .config-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            white-space: nowrap;
+            min-width: auto;
+        }
+        
+        .unit-label {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .config-section .form-control,
+        .config-section .form-select {
+            height: 28px;
+            min-height: 28px;
+            padding: 0 6px;
+            font-size: 14px;
+        }
+        
+        #grid-container {
+            flex: 1 1 auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow-x: hidden;
+            overflow-y: hidden;
+            width: 100%;
+            height: auto;
+            min-height: 300px;
+            max-width: none;
+            min-height: 300px;
+            margin: 0;
+            padding: 0;
+            align-self: stretch;
+        }
+        
+        #nutrition-grid {
+            height: auto;
+            width: 100%;
+        }
+        
+        /* 오른쪽 미리보기 패널 */
+        #preview-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-gray);
+            overflow-y: auto;
+        }
+        
+            #nutrition-grid .handsontable .ht_master,
+            #nutrition-grid .handsontable .wtHider,
+            #nutrition-grid .handsontable .wtHolder {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: hidden !important;
+            }
+        
+        .preview-header {
+            padding: 20px;
+            background: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .preview-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 12px;
+        }
+        
+        .style-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .style-btn {
+            padding: 6px 8px;
+            font-size: 12px;
+            border: 1px solid #d1d5db;
+            background: #ffffff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .style-btn:hover {
+            background: #f3f4f6;
+        }
+        
+        .style-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        
+        .preview-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        
+        .preview-content {
+            flex: 1;
+            padding: 20px;
+        }
+        
+        .result-display {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 400px;
+        }
+        
+        .empty-result {
+            text-align: center;
+            color: #6b7280;
+            padding: 60px 20px;
+        }
+        
+        .preview-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: nowrap;
+        }
+
+        .control-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+            min-width: 52px;
+        }
+
+        .control-group .style-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script>
+// JavaScript 실행 시작
+</script>
+
+<div id="nutrition-container">
+    {% if not can_edit %}
+    <div class="alert alert-secondary alert-dismissible m-2 py-2 d-flex align-items-center" role="alert" style="border-radius:6px;">
+        <i class="bi bi-lock-fill me-2"></i>
+        <span><strong>읽기 전용</strong> — 현재 역할(뷰어/검토자)로는 영양성분을 수정할 수 없습니다. 미리보기는 가능합니다.</span>
+    </div>
+    {% endif %}
+    <!-- 왼쪽: 입력 패널 -->
+    <div id="input-panel">
+        <!-- 기본 설정 -->
+        <div class="config-section">
+            <div class="config-row">
+                <div class="config-item">
+                    <label class="config-label">단위량</label>
+                    <input type="text" class="form-control form-control-sm" id="serving_size" placeholder="100" style="width: 70px;">
+                    <select class="form-select form-select-sm" id="serving_size_unit" style="width: 60px;">
+                        <option value="g">g</option>
+                        <option value="ml">ml</option>
+                    </select>
+                </div>
+                
+                <div class="config-item">
+                    <label class="config-label">포장개수</label>
+                    <input type="text" class="form-control form-control-sm" id="units_per_package" placeholder="1" style="width: 70px;">
+                    <span class="unit-label">개</span>
+                </div>
+                
+            </div>
+        </div>
+        
+        <!-- Handsontable 그리드 -->
+        <div id="grid-container">
+            <div id="nutrition-grid"></div>
+        </div>
+    </div>
+    
+    <!-- 오른쪽: 미리보기 패널 -->
+    <div id="preview-panel">
+        <div class="preview-header">
+            <div class="preview-controls">
+                <div class="control-group">
+                    <div class="control-title">스타일</div>
+                    <div class="style-selector" id="styleButtons">
+                        <button class="style-btn active" type="button" data-style="basic">기본형</button>
+                        <button class="style-btn" type="button" data-style="parallel">병행표시</button>
+                    </div>
+                </div>
+
+                <div class="control-group" id="basicDisplayTypeGroup">
+                    <div class="control-title">표시기준</div>
+                    <div class="style-selector">
+                        <button class="style-btn active" type="button" data-basic="total">총내용량당</button>
+                        <button class="style-btn" type="button" data-basic="unit">단위내용량당</button>
+                        <button class="style-btn" type="button" data-basic="100g">100g당</button>
+                    </div>
+                </div>
+
+                <div class="control-group" id="parallelDisplayTypeGroup" style="display: none;">
+                    <div class="control-title">표시기준</div>
+                    <div class="style-selector">
+                        <button class="style-btn active" type="button" data-parallel="unit_total">1조각/총내용량</button>
+                        <button class="style-btn" type="button" data-parallel="unit_100g">1조각/100g</button>
+                        <button class="style-btn" type="button" data-parallel="serving_total">1회량/총내용량</button>
+                        <button class="style-btn" type="button" data-parallel="serving_100ml">1회량/100ml</button>
+                    </div>
+                </div>
+            </div>
+
+            <select id="basic_display_type" class="visually-hidden" aria-hidden="true">
+                <option value="total" selected>총내용량당</option>
+                <option value="unit">단위내용량당</option>
+                <option value="100g">100g당</option>
+            </select>
+            <select id="parallel_display_type" class="visually-hidden" aria-hidden="true">
+                <option value="unit_total" selected>1조각/총내용량</option>
+                <option value="unit_100g">1조각/100g</option>
+                <option value="serving_total">1회량/총내용량</option>
+                <option value="serving_100ml">1회량/100ml</option>
+            </select>
+            <input type="hidden" id="nutrition_display_unit" value="basic">
+            
+        </div>
+
+        
+        <div class="preview-content">
+            <div class="result-display" id="resultDisplay">
+                <div class="empty-result">
+                    <div style="padding: 40px; text-align: center; color: #999;">
+                        <p style="font-size: 12px; margin-bottom: 16px;">📄 페이지 상태: 로드 중...</p>
+                        <p style="font-size: 11px; color: #ccc; margin: 0;">
+                            LABEL_ID: <code id="labelIdDisplay" style="background: #f0f0f0; padding: 2px 4px;">확인 중</code>
+                        </p>
+                        <div style="margin-top: 20px; font-size: 10px;">
+                            <p id="loadStatus" style="color: #999; margin: 4px 0;">⏳ 데이터 로드 중...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
+
+<!-- V1 영양성분 계산기 로직 -->
+<script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/label/nutrition_calculator_popup.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+<script>
+// Django 템플릿 렌더링
+const LABEL_ID_TEMPLATE = '{{ LABEL_ID }}';
+const CAN_EDIT = {{ can_edit|yesno:'true,false' }};
+const API_NUTRITION_LOAD_URL = '{% url "products:nutrition_data_api" LABEL_ID %}';
+const API_NUTRITION_SAVE_URL = '{% url "products:nutrition_save_api" LABEL_ID %}';
+
+// LABEL_ID 파싱
+let LABEL_ID = null;
+try {
+    if (LABEL_ID_TEMPLATE && LABEL_ID_TEMPLATE !== '' && LABEL_ID_TEMPLATE !== '{{ LABEL_ID }}') {
+        LABEL_ID = parseInt(LABEL_ID_TEMPLATE, 10);
+    } else {
+        throw new Error('LABEL_ID 템플릿 렌더링 실패');
+    }
+} catch (error) {
+    if (!isNaN(parseInt(LABEL_ID_TEMPLATE, 10))) {
+        LABEL_ID = parseInt(LABEL_ID_TEMPLATE, 10);
+    }
+}
+
+let hot = null;
+let currentPreviewStyle = 'basic';
+
+// 상태 표시 영역 업데이트
+function updateStatus(message) {
+    const statusEl = document.getElementById('loadStatus');
+    if (statusEl) {
+        statusEl.textContent = message;
+    }
+}
+
+// LABEL_ID 표시 업데이트
+function updateLabelIdDisplay() {
+    const display = document.getElementById('labelIdDisplay');
+    if (display && LABEL_ID) {
+        display.textContent = LABEL_ID;
+    }
+}
+const ALL_NUTRIENTS = [
+    // 필수 영양성분 9가지 (식약처 표준 순서)
+    { field: 'calories', label: '열량', unit: 'kcal', unitOptions: ['kcal'], required: true },
+    { field: 'carbohydrates', label: '탄수화물', unit: 'g', unitOptions: ['g'], required: true },
+    { field: 'sugars', label: '당류', unit: 'g', unitOptions: ['g'], required: true },
+    { field: 'fats', label: '지방', unit: 'g', unitOptions: ['g'], required: true },
+    { field: 'trans_fats', label: '트랜스지방', unit: 'g', unitOptions: ['g', 'mg'], required: true },
+    { field: 'saturated_fats', label: '포화지방', unit: 'g', unitOptions: ['g', 'mg'], required: true },
+    { field: 'cholesterols', label: '콜레스테롤', unit: 'mg', unitOptions: ['mg', 'g'], required: true },
+    { field: 'proteins', label: '단백질', unit: 'g', unitOptions: ['g'], required: true },
+    { field: 'natriums', label: '나트륨', unit: 'mg', unitOptions: ['mg', 'g'], required: true },
+    // 추가 영양성분
+    { field: 'dietary_fiber', label: '식이섬유', unit: 'g', unitOptions: ['g'] },
+    { field: 'calcium', label: '칼슘', unit: 'mg', unitOptions: ['mg', 'μg'] },
+    { field: 'iron', label: '철', unit: 'mg', unitOptions: ['mg', 'μg'] },
+    { field: 'magnesium', label: '마그네슘', unit: 'mg', unitOptions: ['mg'] },
+    { field: 'phosphorus', label: '인', unit: 'mg', unitOptions: ['mg'] },
+    { field: 'potassium', label: '칼륨', unit: 'mg', unitOptions: ['mg', 'g'] },
+    { field: 'zinc', label: '아연', unit: 'mg', unitOptions: ['mg', 'μg'] },
+    { field: 'vitamin_a', label: '비타민A', unit: 'μg RAE', unitOptions: ['μg RAE', 'μg', 'IU'] },
+    { field: 'vitamin_d', label: '비타민D', unit: 'μg', unitOptions: ['μg', 'IU'] },
+    { field: 'vitamin_c', label: '비타민C', unit: 'mg', unitOptions: ['mg'] },
+    { field: 'thiamine', label: '티아민', unit: 'mg', unitOptions: ['mg'] },
+    { field: 'riboflavin', label: '리보플라빈', unit: 'mg', unitOptions: ['mg'] },
+    { field: 'niacin', label: '니아신', unit: 'mg NE', unitOptions: ['mg NE', 'mg'] },
+    { field: 'vitamin_b6', label: '비타민B6', unit: 'mg', unitOptions: ['mg'] },
+    { field: 'folic_acid', label: '엽산', unit: 'μg DFE', unitOptions: ['μg DFE', 'μg'] },
+    { field: 'vitamin_b12', label: '비타민B12', unit: 'μg', unitOptions: ['μg'] }
+];
+
+// Handsontable 초기화 - 세로 형식 (25개 행)
+function initGrid() {
+    const container = document.getElementById('nutrition-grid');
+    
+    // 각 영양성분을 하나의 행으로 구성
+    const data = ALL_NUTRIENTS.map(nutrient => [
+        nutrient.label + (nutrient.required ? ' *' : ''),
+        '',
+        nutrient.unit,
+        ''
+    ]);
+    
+    hot = new Handsontable(container, {
+        data: data,
+        colHeaders: ['영양성분', '함량 (100g당)', '단위', '강조표시 판정'],
+        readOnly: !CAN_EDIT,
+        columns: [
+            {
+                type: 'text',
+                readOnly: true,
+                width: 180
+            },
+            {
+                type: 'numeric',
+                numericFormat: { pattern: '0.00' },
+                width: 160,
+                readOnly: !CAN_EDIT
+            },
+            {
+                type: 'dropdown',
+                source: function(query, process) {
+                    const row = this.row;
+                    const nutrient = ALL_NUTRIENTS[row];
+                    process(nutrient.unitOptions);
+                },
+                width: 120,
+                readOnly: !CAN_EDIT
+            },
+            {
+                type: 'text',
+                readOnly: true,
+                width: 140
+            }
+        ],
+        rowHeaders: false,
+        rowHeights: 22,
+        height: 'auto',
+        width: '100%',
+        stretchH: 'all',
+        licenseKey: 'non-commercial-and-evaluation',
+        contextMenu: false,
+        manualRowResize: false,
+        manualColumnResize: false,
+        autoWrapRow: false,
+        autoWrapCol: false,
+        colWidths: [180, 160, 120, 140],
+        afterChange: function(changes, source) {
+            if (source === 'loadData' || source === 'internal') {
+                return;
+            }
+            calculateAndPreview();
+        }
+    });
+}
+
+// 그리드 데이터를 영양성분 객체로 변환
+function getGridNutritionData() {
+    const data = hot.getData();
+    const nutritionData = {};
+    
+    ALL_NUTRIENTS.forEach((nutrient, index) => {
+        if (index < data.length) {
+            // 숫자로 변환해서 저장
+            const numericValue = getNumericValue(data[index][1]);
+            if (numericValue !== null) {
+                nutritionData[nutrient.field] = Math.round(numericValue * 100) / 100;
+            } else {
+                nutritionData[nutrient.field] = ''; // 빈 값이면 빈 문자열
+            }
+        }
+    });
+    
+    return nutritionData;
+}
+
+function getNumericValue(value) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+    const parsed = parseFloat(String(value).replace(/,/g, ''));
+    return Number.isNaN(parsed) ? null : parsed;
+}
+
+function getGridNutritionInputs() {
+    const data = hot.getData();
+    const nutritionInputs = {};
+    
+    ALL_NUTRIENTS.forEach((nutrient, index) => {
+        if (index < data.length) {
+            const numericValue = getNumericValue(data[index][1]);
+            if (numericValue !== null) {
+                nutritionInputs[nutrient.field] = Math.round(numericValue * 100) / 100;
+            }
+        }
+    });
+    
+    return nutritionInputs;
+}
+
+// 영양성분 객체를 그리드에 로드
+function setGridNutritionData(nutritionData) {
+    // 각 영양성분을 위한 새로운 데이터 배열 생성 (4개 열 포함)
+    const data = ALL_NUTRIENTS.map(nutrient => [
+        nutrient.label + (nutrient.required ? ' *' : ''),
+        nutritionData[nutrient.field] || '',  // value 컬럼 (있으면 로드, 없으면 빈 문자열)
+        nutrient.unit,
+        ''  // 강조표시 판정 (초기에는 비움, calculateAndPreview에서 업데이트)
+    ]);
+    
+    hot.loadData(data);
+}
+
+// 미리보기 스타일 설정
+function setPreviewStyle(style) {
+    currentPreviewStyle = style;
+    document.getElementById('nutrition_display_unit').value = style;
+    document.querySelectorAll('#styleButtons .style-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.style === style);
+    });
+    document.getElementById('basicDisplayTypeGroup').style.display = style === 'basic' ? 'flex' : 'none';
+    document.getElementById('parallelDisplayTypeGroup').style.display = style === 'parallel' ? 'flex' : 'none';
+    calculateAndPreview();
+}
+
+function setBasicDisplayType(value) {
+    document.getElementById('basic_display_type').value = value;
+    document.querySelectorAll('[data-basic]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.basic === value);
+    });
+    calculateAndPreview();
+}
+
+function setParallelDisplayType(value) {
+    document.getElementById('parallel_display_type').value = value;
+    document.querySelectorAll('[data-parallel]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.parallel === value);
+    });
+    calculateAndPreview();
+}
+
+function bindPreviewControls() {
+    document.querySelectorAll('[data-style]').forEach(btn => {
+        btn.addEventListener('click', () => setPreviewStyle(btn.dataset.style));
+    });
+    document.querySelectorAll('[data-basic]').forEach(btn => {
+        btn.addEventListener('click', () => setBasicDisplayType(btn.dataset.basic));
+    });
+    document.querySelectorAll('[data-parallel]').forEach(btn => {
+        btn.addEventListener('click', () => setParallelDisplayType(btn.dataset.parallel));
+    });
+    document.getElementById('nutrition_display_unit').addEventListener('change', (event) => {
+        setPreviewStyle(event.target.value);
+    });
+}
+
+// 강조표시 판정 결과를 Handsontable 4번째 열에 업데이트
+function updateEmphasisColumn() {
+    const nutritionInputs = getGridNutritionInputs();
+    
+    ALL_NUTRIENTS.forEach((nutrient, index) => {
+        const value = nutritionInputs[nutrient.field] || 0;
+        let emphasisLabels = [];
+        
+        // 강조표시 판정 로직
+        if (value > 0 && window.EMPHASIS_CRITERIA) {
+            // 무 함유 기준 확인
+            if (window.EMPHASIS_CRITERIA.free && window.EMPHASIS_CRITERIA.free[nutrient.field]) {
+                if (value < window.EMPHASIS_CRITERIA.free[nutrient.field].threshold) {
+                    emphasisLabels.push(window.EMPHASIS_CRITERIA.free[nutrient.field].label);
+                }
+            }
+            
+            // 저 함유 기준 확인
+            if (window.EMPHASIS_CRITERIA.low && window.EMPHASIS_CRITERIA.low[nutrient.field]) {
+                if (value <= window.EMPHASIS_CRITERIA.low[nutrient.field].threshold) {
+                    emphasisLabels.push(window.EMPHASIS_CRITERIA.low[nutrient.field].label);
+                }
+            }
+            
+            // 고 함유 기준 확인
+            if (window.EMPHASIS_CRITERIA.high && window.EMPHASIS_CRITERIA.high[nutrient.field]) {
+                if (value >= window.EMPHASIS_CRITERIA.high[nutrient.field].threshold) {
+                    emphasisLabels.push(window.EMPHASIS_CRITERIA.high[nutrient.field].label);
+                }
+            }
+        }
+        
+        const emphasisLabel = emphasisLabels.join(', ');
+        
+        // 4번째 열(index 3)에 각 셀을 개별적으로 업데이트
+        hot.setDataAtCell(index, 3, emphasisLabel, 'internal');
+    });
+}
+
+// 미리보기 계산 및 갱신
+function calculateAndPreview() {
+    const baseAmount = parseFloat(document.getElementById('serving_size').value.replace(/,/g, '')) || 100;
+    const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value.replace(/,/g, '')) || 1;
+    const style = document.getElementById('nutrition_display_unit').value || 'basic';
+    const nutritionInputs = getGridNutritionInputs();
+    
+    // 강조표시 판정 항상 업데이트
+    updateEmphasisColumn();
+    
+    if (Object.keys(nutritionInputs).length === 0) {
+        document.getElementById('resultDisplay').innerHTML = '<div class="empty-result">영양성분을 입력해주세요.</div>';
+        return;
+    }
+    
+    let displayHTML = '';
+    if (style === 'parallel') {
+        displayHTML = window.generateParallelDisplayV3(nutritionInputs, baseAmount, servingsPerPackage);
+    } else {
+        displayHTML = window.generateBasicDisplayV3(nutritionInputs, baseAmount, servingsPerPackage);
+    }
+    
+    document.getElementById('resultDisplay').innerHTML = displayHTML;
+}
+
+// 간단한 미리보기 생성 (V1 스크립트 로드 실패 시)
+function createSimplePreview(nutritionData) {
+    calculateAndPreview();
+}
+
+// 데이터 로드
+async function loadData() {
+    updateStatus('⏳ 데이터 로드 중...');
+    updateLabelIdDisplay();
+    
+    try {
+        // LABEL_ID 확인
+        if (!LABEL_ID || isNaN(LABEL_ID)) {
+            const errMsg = '라벨 ID가 유효하지 않습니다. LABEL_ID: ' + LABEL_ID;
+            updateStatus('❌ ' + errMsg);
+            throw new Error(errMsg);
+        }
+        
+        const apiUrl = API_NUTRITION_LOAD_URL;
+        updateStatus(`📡 API 호출 중: ${apiUrl}`);
+        
+        const response = await fetch(apiUrl);
+        updateStatus(`📡 응답 받음: ${response.status}`);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            updateStatus(`❌ API 오류 (${response.status}): ${errorText.substring(0, 50)}`);
+            throw new Error(`API 응답 오류 (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        updateStatus('✅ 데이터 수신 완료');
+        
+        // 기본 설정
+        document.getElementById('serving_size').value = data.serving_size || '100';
+        document.getElementById('serving_size_unit').value = data.serving_size_unit || 'g';
+        document.getElementById('units_per_package').value = data.units_per_package || '1';
+        document.getElementById('nutrition_display_unit').value = data.nutrition_display_unit || 'basic';
+
+        // 표시기준 복원 (저장된 값이 있으면 복원)
+        if (data.basic_display_type) {
+            document.getElementById('basic_display_type').value = data.basic_display_type;
+            document.querySelectorAll('[data-basic]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.basic === data.basic_display_type);
+            });
+        }
+        if (data.parallel_display_type) {
+            document.getElementById('parallel_display_type').value = data.parallel_display_type;
+            document.querySelectorAll('[data-parallel]').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.parallel === data.parallel_display_type);
+            });
+        }
+
+        updateStatus('✅ 기본 설정 완료');
+        
+        // 그리드에 영양성분 데이터 로드
+        setGridNutritionData(data);
+        updateStatus('✅ 그리드 데이터 로드 완료');
+        
+        // 스타일 설정 및 미리보기 계산 (데이터 로드 후 한 번만)
+        setPreviewStyle(document.getElementById('nutrition_display_unit').value || 'basic');
+        updateStatus('✅ 초기화 완료');
+        
+    } catch (error) {
+        updateStatus(`❌ 오류: ${error.message}`);
+        alert('영양성분 데이터를 불러오는데 실패했습니다.\n\n오류: ' + error.message + '\n\nLABEL_ID: ' + LABEL_ID);
+    }
+}
+
+// 데이터 저장
+async function saveData() {
+    if (!CAN_EDIT) {
+        alert('영양성분 편집 권한이 없습니다.\n현재 역할로는 영양성분을 수정할 수 없습니다.');
+        return;
+    }
+    try {
+        const nutritionData = getGridNutritionData();
+
+        // 쉼표 제거 후 숫자변환, 빈 값이면 기본값 사용
+        const rawServingSize = parseFloat(String(document.getElementById('serving_size').value).replace(/,/g, ''));
+        const rawUnits = parseFloat(String(document.getElementById('units_per_package').value).replace(/,/g, ''));
+
+        const payload = {
+            label_id: LABEL_ID,
+            serving_size: isNaN(rawServingSize) ? '100' : String(rawServingSize),
+            serving_size_unit: document.getElementById('serving_size_unit').value || 'g',
+            units_per_package: isNaN(rawUnits) ? '1' : String(rawUnits),
+            nutrition_display_unit: document.getElementById('nutrition_display_unit').value || 'basic',
+            basic_display_type: document.getElementById('basic_display_type').value || 'total',
+            parallel_display_type: document.getElementById('parallel_display_type').value || 'unit_total',
+            ...nutritionData
+        };
+        
+        const csrfToken = getCookie('csrftoken');
+        
+        const response = await fetch(API_NUTRITION_SAVE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+            const errBody = await response.text().catch(() => '');
+            console.error('[NutritionEditor] saveData API 오류:', response.status, errBody);
+            throw new Error(`저장 실패 (${response.status})`);
+        }
+        
+        const result = await response.json();
+        alert('영양성분이 성공적으로 저장되었습니다.');
+        
+        // 부모 창에 저장 완료 알림
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                type: 'nutritionSaved',
+                labelId: LABEL_ID
+            }, '*');
+        }
+        
+    } catch (error) {
+        console.error('[NutritionEditor] saveData 오류:', error);
+        alert('영양성분 저장에 실패했습니다.\n\n오류: ' + error.message);
+    }
+}
+
+// CSRF 토큰 가져오기
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// 부모 창에서 저장 요청 받기
+window.addEventListener('message', function(event) {
+    if (event.data && event.data.action === 'save') {
+        saveData();
+    }
+});
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    // 초기 상태 표시
+    updateLabelIdDisplay();
+    updateStatus('⏳ 초기화 중...');
+    
+    // 기본값으로 입력 필드 초기화 (placeholder가 아닌 실제 값)
+    document.getElementById('serving_size').value = '100';
+    document.getElementById('units_per_package').value = '1';
+
+    try {
+        initGrid();
+        updateStatus('✅ 그리드 초기화 완료');
+    } catch (error) {
+        updateStatus('❌ 그리드 초기화 오류: ' + error.message);
+    }
+    
+    try {
+        bindPreviewControls();
+    } catch (error) {
+        // 무시
+    }
+    
+    // 단위량·포장개수 변경 시 즉시 미리보기 반영
+    ['serving_size', 'units_per_package'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => calculateAndPreview());
+            el.addEventListener('change', () => calculateAndPreview());
+        }
+    });
+    
+    try {
+        loadData();
+    } catch (error) {
+        updateStatus('❌ 데이터 로드 오류: ' + error.message);
+    }
+});
+</script>
+
+</body>
+</html>

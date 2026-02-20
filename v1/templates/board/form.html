@@ -1,114 +1,107 @@
-{% extends 'base.html' %}
+{% extends 'base_v2.html' %}
 {% load static django_bootstrap5 %}
-{% block title %}{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}{% endblock %}
+{% block title %}{% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %} - 직문 및 요청{% endblock %}
+
+{% block topbar %}
+<div class="page-title">
+    <i class="bi bi-pencil-square v2-topbar-icon"></i>
+    {% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}
+</div>
+<div class="d-flex gap-2">
+    <a href="{% url 'board:list' %}" class="form-action-btn cancel"><i class="bi bi-x"></i>취소</a>
+    <button type="submit" form="board-form" class="form-action-btn save"><i class="bi bi-check2"></i>저장</button>
+</div>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/board.css' %}">
+{% endblock %}
 
 {% block content %}
-<div class="container mt-4" style="max-width: 900px;">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="mb-0">
-            <i class="fas fa-edit me-2"></i>
-            {% if form.instance.pk %}게시글 수정{% else %}게시글 작성{% endif %}
-        </h2>
-    </div>
-    
-    {% bootstrap_messages %}
-    
-    <div class="card mb-4">
-        <div class="card-body p-4">
-            <form method="post" enctype="multipart/form-data">
+
+<div class="form-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <form id="board-form" method="post" enctype="multipart/form-data">
                 {% csrf_token %}
-                <div class="mb-3 d-flex align-items-center justify-content-between">
-                    <div class="d-flex gap-3 align-items-center flex-grow-1">
-                        <div style="min-width: 200px;">
-                            <label class="form-label mb-1" style="font-size: 0.875rem;">구분 <span class="text-danger">*</span></label>
-                            <select name="category" class="form-select" style="font-size: 0.9rem;" required>
-                                <option value="">구분 선택</option>
-                                {% if user.is_staff %}
-                                <option value="공지사항" {% if form.instance.is_notice %}selected{% endif %}>공지사항</option>
-                                {% endif %}
-                                <option value="기능 요청" {% if '[기능 요청]' in form.instance.title %}selected{% endif %}>기능 요청</option>
-                                <option value="오류 제보" {% if '[오류 제보]' in form.instance.title %}selected{% endif %}>오류 제보</option>
-                                <option value="사업 제휴" {% if '[사업 제휴]' in form.instance.title %}selected{% endif %}>사업 제휴</option>
-                            </select>
-                        </div>
-                        <div class="d-flex gap-3">
-                            <div class="form-check">
-                                {{ form.is_hidden }}
-                                <label class="form-check-label" for="{{ form.is_hidden.id_for_label }}">비밀글</label>
-                            </div>
+
+                <!-- 구분 + 옵션 -->
+                <div class="form-row">
+                    <div class="form-group board-select-group">
+                        <label class="m3-label">구분 <span class="req">*</span></label>
+                        <select name="category" class="m3-select" required>
+                            <option value="">구분 선택</option>
                             {% if user.is_staff %}
-                            <div class="form-check">
-                                {{ form.is_notice }}
-                                <label class="form-check-label" for="{{ form.is_notice.id_for_label }}">공지사항</label>
-                            </div>
+                            <option value="공지사항" {% if form.instance.is_notice %}selected{% endif %}>공지사항</option>
                             {% endif %}
-                        </div>
+                            <option value="기능 요청" {% if '[기능 요청]' in form.instance.title %}selected{% endif %}>기능 요청</option>
+                            <option value="오류 제보" {% if '[오류 제보]' in form.instance.title %}selected{% endif %}>오류 제보</option>
+                            <option value="사업 제휴" {% if '[사업 제휴]' in form.instance.title %}selected{% endif %}>사업 제휴</option>
+                        </select>
                     </div>
-                    <div class="d-flex gap-2">
-                        <a href="{% url 'board:list' %}" class="btn btn-secondary" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
-                            <i class="fas fa-times me-1"></i>취소
-                        </a>
-                        <button type="submit" class="btn btn-primary" style="font-size: 0.9rem; padding: 0.5rem 1rem;">
-                            <i class="fas fa-save me-1"></i>저장
-                        </button>
+                    <div class="d-flex gap-3 align-items-center pb-1">
+                        <label class="m3-check">
+                            {{ form.is_hidden }}
+                            비밀글
+                        </label>
+                        {% if user.is_staff %}
+                        <label class="m3-check">
+                            {{ form.is_notice }}
+                            공지사항
+                        </label>
+                        {% endif %}
                     </div>
                 </div>
-                {% if form.is_hidden.errors %}
-                    <div class="invalid-feedback d-block mb-3">{{ form.is_hidden.errors }}</div>
-                {% endif %}
-                {% if form.is_notice.errors %}
-                    <div class="invalid-feedback d-block mb-3">{{ form.is_notice.errors }}</div>
-                {% endif %}
-                <div class="mb-3">
-                    <label for="{{ form.title.id_for_label }}" class="form-label">제목 <span class="text-danger">*</span></label>
-                    <input type="text" name="title" class="form-control" id="id_title" 
-                           value="{% if form.instance.title %}{% if '[기능 요청]' in form.instance.title %}{{ form.instance.title|slice:'8:' }}{% elif '[오류 제보]' in form.instance.title %}{{ form.instance.title|slice:'7:' }}{% elif '[사업 제휴]' in form.instance.title %}{{ form.instance.title|slice:'7:' }}{% else %}{{ form.instance.title }}{% endif %}{% endif %}" 
-                           required>
-                    {% if form.title.errors %}
-                        <div class="invalid-feedback d-block">{{ form.title.errors }}</div>
-                    {% endif %}
+                {% if form.is_hidden.errors %}<div class="error-msg mb-2">{{ form.is_hidden.errors }}</div>{% endif %}
+                {% if form.is_notice.errors %}<div class="error-msg mb-2">{{ form.is_notice.errors }}</div>{% endif %}
+
+                <!-- 제목 -->
+                <div class="form-group">
+                    <label class="m3-label">제목 <span class="req">*</span></label>
+                    <input type="text" name="title" class="m3-input" id="id_title" required
+                           value="{% if form.instance.title %}{% if '[기능 요청]' in form.instance.title %}{{ form.instance.title|slice:'8:' }}{% elif '[오류 제보]' in form.instance.title %}{{ form.instance.title|slice:'7:' }}{% elif '[사업 제휴]' in form.instance.title %}{{ form.instance.title|slice:'7:' }}{% else %}{{ form.instance.title }}{% endif %}{% endif %}">
+                    {% if form.title.errors %}<div class="error-msg">{{ form.title.errors }}</div>{% endif %}
                 </div>
-                <div class="mb-3">
-                    <label for="{{ form.content.id_for_label }}" class="form-label">내용 <span class="text-danger">*</span></label>
+
+                <!-- 내용 -->
+                <div class="form-group">
+                    <label class="m3-label">내용 <span class="req">*</span></label>
                     {{ form.content }}
-                    {% if form.content.errors %}
-                        <div class="invalid-feedback d-block">{{ form.content.errors }}</div>
-                    {% endif %}
+                    {% if form.content.errors %}<div class="error-msg">{{ form.content.errors }}</div>{% endif %}
                 </div>
+
+                <!-- 관리자 전용: 첨부파일 + 이미지 -->
                 {% if user.is_staff %}
-                <div class="mb-3">
-                    <label for="{{ form.attachment.id_for_label }}" class="form-label">첨부파일</label>
-                    {{ form.attachment }}
-                    {% if form.attachment.errors %}
-                        <div class="invalid-feedback d-block">{{ form.attachment.errors }}</div>
-                    {% endif %}
-                    {% if form.instance.attachment %}
-                        <p class="mt-2">
-                            현재 첨부파일: <a href="{{ form.instance.attachment.url }}">{{ form.instance.attachment.name }}</a>
+                <hr class="form-divider">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="m3-label">첨부파일</label>
+                        {{ form.attachment }}
+                        {% if form.attachment.errors %}<div class="error-msg">{{ form.attachment.errors }}</div>{% endif %}
+                        {% if form.instance.attachment %}
+                        <div class="current-attachment">
+                            <i class="bi bi-paperclip"></i>
+                            <a href="{{ form.instance.attachment.url }}">{{ form.instance.attachment.name }}</a>
                             {% if form.delete_attachment %}
-                                <label class="form-check-label ms-2">
-                                    {{ form.delete_attachment }} 첨부파일 삭제
-                                </label>
-                            {% endif %}
-                        </p>
-                    {% endif %}
-                </div>
-                <div class="mb-3">
-                    <label for="{{ form.image.id_for_label }}" class="form-label">이미지 첨부</label>
-                    {{ form.image }}
-                    {% if form.image.errors %}
-                        <div class="invalid-feedback d-block">{{ form.image.errors }}</div>
-                    {% endif %}
-                    {% if form.instance.image %}
-                        <div class="mt-2">
-                            <img src="{{ form.instance.image.url }}" alt="첨부 이미지" style="max-width: 200px; max-height: 200px;">
-                            {% if form.delete_image %}
-                                <label class="form-check-label ms-2">
-                                    {{ form.delete_image }} 이미지 삭제
-                                </label>
+                            <label class="m3-check ms-2">{{ form.delete_attachment }} 삭제</label>
                             {% endif %}
                         </div>
-                    {% endif %}
+                        {% endif %}
+                    </div>
+                    <div class="form-group">
+                        <label class="m3-label">이미지 첨부</label>
+                        {{ form.image }}
+                        {% if form.image.errors %}<div class="error-msg">{{ form.image.errors }}</div>{% endif %}
+                        {% if form.instance.image %}
+                        <div class="current-attachment mt-2">
+                            <img src="{{ form.instance.image.url }}" alt="현재 이미지" class="board-preview-img">
+                            {% if form.delete_image %}
+                            <label class="m3-check ms-2">{{ form.delete_image }} 삭제</label>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endif %}
             </form>

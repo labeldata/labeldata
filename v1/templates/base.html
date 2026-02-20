@@ -2,7 +2,9 @@
 {% load django_bootstrap5 %}
 <!DOCTYPE html>
 <html lang="ko">
-<head>  <meta charset="UTF-8">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}식품 데이터 포털{% endblock %}</title>
   <!-- Favicon -->
@@ -18,7 +20,10 @@
   {% bootstrap_css %}
   <!-- 메인 CSS -->
   <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20250413">
+  <!-- Material Design Components CSS -->
+  <link rel="stylesheet" href="{% static 'css/material-components.css' %}?v=20250613">
   {% block extra_head %}{% endblock %}
+  {% block extra_css %}{% endblock %}
 </head>
 <body>
   <!-- Navbar -->
@@ -33,6 +38,8 @@
   {% include 'includes/footer.html' %}
 
   {% bootstrap_javascript %}
+  <!-- Material Design Components JS -->
+  <script src="{% static 'js/material-components.js' %}?v=20250613"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

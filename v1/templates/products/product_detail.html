@@ -1,0 +1,3021 @@
+{% extends "base_v2.html" %}
+{% load static v2_tags %}
+
+{% block title %}{{ product.my_label_name|default:product.prdlst_nm }} - 워크스페이스{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/products_detail.css' %}">
+{% comment %} 구 인라인 스타일 제거됨 → products_detail.css 로 이동 {% endcomment %}
+{% endblock %}
+
+{% block content %}
+<div class="workspace-shell">
+    <div class="d-flex justify-content-between align-items-center px-3 border-bottom bg-white workspace-global-header">
+        <div class="d-flex align-items-center flex-grow-1 gap-3">
+            <a href="{% if from_source == 'collab' %}{% url 'products:inbox' %}{% else %}{% url 'products:product_explorer' %}{% endif %}" class="btn btn-icon btn-link text-dark" title="목록으로">
+                <i class="bi bi-arrow-left fs-5"></i>
+            </a>
+
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <input
+                        id="workspace-product-name"
+                        type="text"
+                        class="form-control form-control-plaintext fw-bold fs-6 p-0"
+                        value="{{ product.my_label_name|default:product.prdlst_nm }}"
+                        {% if not can_edit %}readonly{% endif %}
+                        placeholder="라벨명을 입력하세요"
+                    >
+                    <i id="favorite-star" 
+                       class="bi {% if metadata.is_starred %}bi-star-fill text-warning{% else %}bi-star text-muted{% endif %} cursor-pointer"
+                       onclick="toggleFavorite()"
+                       title="{% if metadata.is_starred %}즐겨찾기 해제{% else %}즐겨찾기 추가{% endif %}"></i>
+
+                    <button class="btn btn-sm btn-link p-0 text-decoration-none text-muted d-flex align-items-center ms-2" type="button" onclick="saveProductInfo()">
+                        <i class="bi bi-cloud-arrow-up me-1"></i> 저장
+                    </button>
+                    <span id="save-status" class="text-success">
+                        <i class="bi bi-check2"></i> 저장됨
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-icon btn-light rounded-circle" title="댓글 및 활동" type="button" onclick="toggleWorkspaceSidebar()">
+                <i class="bi bi-layout-sidebar-inset-reverse"></i>
+            </button>
+
+            <div class="vr mx-2"></div>
+
+            <button class="btn btn-primary d-flex align-items-center px-4 py-2 shadow-sm fw-bold" type="button" onclick="switchToShareTab()">
+                <i class="bi bi-person-plus-fill me-2"></i>
+                <span>공유</span>
+            </button>
+
+            
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center px-3 border-bottom bg-light workspace-toolbar">
+        <ul class="nav nav-underline h-100 gap-2" id="workspaceTab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-info" type="button">
+                    <i class="bi bi-info-circle me-2 text-secondary"></i> 기본 정보
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-bom" type="button">
+                    <i class="bi bi-table me-2 text-secondary"></i> BOM
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-nutrition" type="button">
+                    <i class="bi bi-egg me-2 text-secondary"></i> 영양성분
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-label" type="button">
+                    <i class="bi bi-tag me-2 text-secondary"></i> 표시사항
+                </button>
+            </li>
+            <li class="nav-item ms-auto">
+                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button">
+                    <i class="bi bi-file-earmark-text me-2 text-secondary"></i> 문서함
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-share" type="button">
+                    <i class="bi bi-gear me-2 text-secondary"></i> 권한 설정
+                </button>
+            </li>
+        </ul>
+
+        <div class="d-flex align-items-center py-1 border-start ps-3 ms-3">
+            <!-- 현재 상태 배지 -->
+            <span class="badge bg-white text-dark border me-2 py-2 px-3 d-flex align-items-center gap-2 toolbar-status-badge">
+                <i class="bi bi-circle-fill me-1 status-dot" style="{% if product_status == 'DRAFT' %}color:#5f6368;{% elif product_status == 'REQUESTING' %}color:#1a73e8;{% elif product_status == 'SUBMITTED' %}color:#f9ab00;{% elif product_status == 'REVIEW' %}color:#f9ab00;{% elif product_status == 'PENDING' %}color:#e8710a;{% elif product_status == 'CONFIRMED' %}color:#1e8e3e;{% endif %}"></i>
+                {% if product_status == 'DRAFT' %}작성 중
+                {% elif product_status == 'REQUESTING' %}자료 요청
+                {% elif product_status == 'SUBMITTED' %}제출 완료
+                {% elif product_status == 'REVIEW' %}검토 중
+                {% elif product_status == 'PENDING' %}승인 대기
+                {% elif product_status == 'CONFIRMED' %}승인 완료
+                {% else %}상태 확인{% endif %}
+            </span>
+            <!-- 역할 배지 -->
+            <span class="badge bg-light text-dark border me-3 py-2 px-3 d-flex align-items-center gap-2 toolbar-status-badge">
+                <i class="bi bi-person-badge sidebar-person-icon"></i>
+                {{ user_role_label }}
+            </span>
+
+            <!-- 상태 전이 버튼 (역할·현재 상태에 따라 표시) -->
+            {% if product_status == 'DRAFT' %}
+                {% if 'requesting' in available_actions %}
+                <button class="btn btn-sm btn-outline-primary me-1" type="button" onclick="changeStatus('REQUESTING')">
+                    자료 요청 <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                {% endif %}
+            {% elif product_status == 'REQUESTING' %}
+                {% if 'submitted' in available_actions %}
+                <button class="btn btn-sm btn-primary me-1" type="button" onclick="changeStatus('SUBMITTED')">
+                    제출 완료 <i class="bi bi-check2 ms-1"></i>
+                </button>
+                {% endif %}
+                {% if 'draft' in available_actions %}
+                <button class="btn btn-sm btn-outline-danger" type="button" onclick="changeStatus('DRAFT')">요청 취소</button>
+                {% endif %}
+            {% elif product_status == 'SUBMITTED' %}
+                {% if 'review' in available_actions %}
+                <button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="changeStatus('REVIEW')">
+                    검토 시작 <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                {% endif %}
+                {% if 'requesting' in available_actions %}
+                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="changeStatus('REQUESTING')">보완 요청</button>
+                {% endif %}
+            {% elif product_status == 'REVIEW' %}
+                {% if 'pending' in available_actions %}
+                <button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="changeStatus('PENDING')">
+                    승인 요청 <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                {% endif %}
+                {% if 'submitted' in available_actions %}
+                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="changeStatus('SUBMITTED')">재검토</button>
+                {% endif %}
+            {% elif product_status == 'PENDING' %}
+                {% if 'confirmed' in available_actions %}
+                <button class="btn btn-sm btn-success me-1" type="button" onclick="changeStatus('CONFIRMED')">
+                    최종 승인 <i class="bi bi-patch-check ms-1"></i>
+                </button>
+                {% endif %}
+                {% if 'review' in available_actions %}
+                <button class="btn btn-sm btn-outline-danger" type="button" onclick="changeStatus('REVIEW')">반려</button>
+                {% endif %}
+            {% elif product_status == 'CONFIRMED' %}
+                {% if 'draft' in available_actions %}
+                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="changeStatus('DRAFT')">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>신규 버전 작성
+                </button>
+                {% else %}
+                <button class="btn btn-sm btn-light border" type="button" disabled>승인 완료</button>
+                {% endif %}
+            {% endif %}
+
+            {% if not can_edit %}
+                <span class="readonly-badge ms-2"><i class="bi bi-lock-fill"></i> 편집 제한</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="workspace-body">
+        <main class="workspace-content">
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="tab-info">
+                    <!-- Flexbox flex-nowrap 구조 (목차가 절대 아래로 안 떨어지게) -->
+                    <div class="d-flex flex-nowrap h-100">
+                        <!-- 메인 폼 영역 (왼쪽) -->
+                        <div class="flex-grow-1 bg-white info-tab-main">
+                            <div class="container-fluid p-4">
+                        <form id="basic-info-form">
+                            <fieldset {% if not can_edit %}disabled{% endif %}>
+                            {% include "products/_tab_basic_info.html" %}
+                            </fieldset>
+                        </form>
+                        
+                        <!-- 플로팅 저장 바 -->
+                        <div class="floating-save-bar" id="floating-save-bar" style="display: none;">
+                            <div class="floating-save-bar-content">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-exclamation-circle me-2"></i>
+                                    <span>저장하지 않은 변경사항이 있습니다</span>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-light" onclick="discardChanges()">
+                                        <i class="bi bi-x-circle me-1"></i>취소
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="saveBasicInfo()">
+                                        <i class="bi bi-check-circle me-1"></i>변경사항 저장
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 하단 여백 -->
+                        <div class="bottom-spacer"></div>
+                            </div><!-- /container-fluid -->
+                        </div><!-- /flex-grow-1 -->
+                    
+                        <!-- 우측 목차 컬럼 (고정 너비 240px) -->
+                        <div class="d-none d-lg-block border-start bg-white toc-sidebar">
+                            <div class="sticky-top overflow-y-auto custom-scrollbar p-3 toc-sticky-inner">
+                                <h6 class="fw-bold text-muted small text-uppercase mb-3 mt-2 ps-2">On this page</h6>
+                                <nav id="navbar-toc" class="nav flex-column small">
+                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent active" 
+                                       href="#section-food-info" data-section="section-food-info">기본정보</a>
+                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent" 
+                                       href="#section-product-info" data-section="section-product-info">제품 정보</a>
+                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent" 
+                                       href="#section-manufacturing" data-section="section-manufacturing">제조 정보</a>
+                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent" 
+                                       href="#section-details" data-section="section-details">상세 정보</a>
+                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent" 
+                                       href="#section-custom-fields" data-section="section-custom-fields">맞춤항목</a>
+                                </nav>
+                            </div>
+                        </div><!-- /우측 목차 -->
+                    </div><!-- /d-flex flex-nowrap -->
+                </div><!-- /tab-info -->
+
+                <div class="tab-pane" id="tab-bom">
+                    <div class="bom-iframe-container">
+                        <!-- Skeleton Loading UI -->
+                        <div id="bomLoadingMessage" class="skeleton-container" style="display: none; padding: 24px;">
+                            <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
+                                <div class="card-body p-4">
+                                    <div class="skeleton skeleton-title mb-4"></div>
+                                    <div class="skeleton skeleton-text mb-2"></div>
+                                    <div class="skeleton skeleton-text mb-2" style="width: 80%;"></div>
+                                    <div class="skeleton skeleton-text mb-4" style="width: 60%;"></div>
+                                    
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-center text-muted mt-3 sidebar-info-text">
+                                <i class="bi bi-hourglass-split me-1"></i>
+                                BOM 에디터를 불러오는 중...
+                            </div>
+                        </div>
+                        <div id="bomErrorMessage" style="display: none; padding: 40px; text-align: center;">
+                            <i class="bi bi-exclamation-triangle-fill text-warning icon-xl"></i>
+                            <h5 class="mt-3">BOM 에디터를 불러올 수 없습니다</h5>
+                            <p class="text-muted mb-3">URL: <code id="bomErrorUrl"></code></p>
+                            <button class="btn btn-primary" onclick="retryLoadBom()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>다시 시도
+                            </button>
+                        </div>
+                        <iframe id="bomEditorFrame" src="" title="BOM 에디터" data-bom-url="{% url 'bom:bom_editor' label_id=product.my_label_id %}" style="display: none;"></iframe>
+                    </div>
+                </div>
+
+                <div class="tab-pane" id="tab-nutrition">
+                    <div class="nutrition-iframe-container">
+                        <!-- Skeleton Loading UI -->
+                        <div id="nutritionLoadingMessage" class="skeleton-container" style="display: none; padding: 24px;">
+                            <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
+                                <div class="card-body p-4">
+                                    <div class="skeleton skeleton-title mb-4"></div>
+                                    <div class="row g-3 mb-4">
+                                        <div class="col-md-3">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="skeleton skeleton-input"></div>
+                                        </div>
+                                    </div>
+                                    <div class="skeleton skeleton-text mb-2"></div>
+                                    <div class="skeleton skeleton-text mb-2" style="width: 90%;"></div>
+                                    <div class="skeleton skeleton-text mb-2" style="width: 70%;"></div>
+                                </div>
+                            </div>
+                            <div class="text-center text-muted mt-3 sidebar-info-text">
+                                <i class="bi bi-hourglass-split me-1"></i>
+                                영양성분 에디터를 불러오는 중...
+                            </div>
+                        </div>
+                        <div id="nutritionErrorMessage" style="display: none; padding: 40px; text-align: center;">
+                            <i class="bi bi-exclamation-triangle-fill text-warning icon-xl"></i>
+                            <h5 class="mt-3">영양성분 에디터를 불러올 수 없습니다</h5>
+                            <p class="text-muted mb-3">URL: <code id="nutritionErrorUrl"></code></p>
+                            <button class="btn btn-primary" onclick="retryLoadNutrition()">
+                                <i class="bi bi-arrow-clockwise me-1"></i>다시 시도
+                            </button>
+                        </div>
+                        <iframe id="nutritionEditorFrame" src="" title="영양성분 에디터" data-nutrition-url="{% url 'products:nutrition_editor' label_id=product.my_label_id %}" style="display: none;"></iframe>
+                    </div>
+                </div>
+
+                <div class="tab-pane" id="tab-docs">
+                    {% include 'products/_tab_documents.html' %}
+                </div>
+
+                <div class="tab-pane" id="tab-share">
+                    {% include 'products/_tab_permissions.html' %}
+                </div>
+
+                <div class="tab-pane" id="tab-label">
+                    {% include 'products/_tab_label.html' %}
+                </div>
+            </div>
+        </main>
+
+        <aside class="workspace-sidebar collapsed" id="workspace-sidebar">
+            <div class="p-3 border-bottom">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <strong id="comment-sidebar-title">댓글 및 활동</strong>
+                    <button class="btn btn-sm btn-link text-muted" type="button" onclick="toggleWorkspaceSidebar()">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <!-- 탭 버튼 -->
+                <ul class="nav nav-pills mb-3" role="tablist">
+                    <li class="nav-item" role="presentation" style="flex: 1;">
+                        <button class="nav-link active w-100 sidebar-pill-btn" id="comments-tab" data-bs-toggle="pill" data-bs-target="#comments-panel" type="button" role="tab" aria-controls="comments-panel" aria-selected="true">
+                            <i class="bi bi-chat-dots me-1"></i>댓글
+                        </button>
+                    </li>
+                    <li class="nav-item sidebar-nav-item" role="presentation">
+                        <button class="nav-link w-100 sidebar-pill-btn" id="activity-tab" data-bs-toggle="pill" data-bs-target="#activity-panel" type="button" role="tab" aria-controls="activity-panel" aria-selected="false">
+                            <i class="bi bi-clock-history me-1"></i>활동 로그
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- 탭 컨텐츠 -->
+            <div class="tab-content sidebar-tab-content">
+                <!-- 댓글 탭 -->
+                <div class="tab-pane fade show active h-100 d-flex flex-column sidebar-tab-pane-abs" id="comments-panel" role="tabpanel">
+                    <div class="p-3 pb-0">
+                        <select class="form-select form-select-sm" id="comment-tab-filter">
+                            <option value="">모든 댓글</option>
+                            <option value="tab:info">기본 정보</option>
+                            <option value="tab:docs">문서함</option>
+                            <option value="tab:bom">BOM</option>
+                            <option value="tab:label">표시사항</option>
+                            <option value="tab:nutrition">영양성분</option>
+                            <option value="tab:share">권한 설정</option>
+                            <option value="general">일반 댓글</option>
+                        </select>
+                    </div>
+                    <div class="flex-grow-1 overflow-auto p-3" id="comment-list">
+                {% for comment in comments %}
+                <div class="d-flex gap-2 mb-3 comment-item" id="comment-{{ comment.comment_id }}" data-field="{{ comment.field_name|default:'general' }}">
+                    <div class="bg-secondary rounded-circle text-white d-flex align-items-center justify-content-center flex-shrink-0 comment-avatar">
+                        {% if comment.author.get_full_name %}
+                            {{ comment.author.get_full_name|slice:":1"|upper }}
+                        {% else %}
+                            {{ comment.author.email|slice:":1"|upper }}
+                        {% endif %}
+                    </div>
+                    <div class="bg-light p-2 rounded-3 comment-bubble">
+                        <div class="d-flex justify-content-between align-items-center flex-nowrap gap-2">
+                            <span class="fw-semibold text-truncate comment-name">
+                                {% if author_roles and comment.author_id in author_roles %}
+                                    <span class="text-primary">({{ author_roles|get_item:comment.author_id }})</span>
+                                {% endif %}
+                                {% if comment.author.get_full_name %}
+                                    {{ comment.author.get_full_name }}
+                                {% else %}
+                                    {{ comment.author.email }}
+                                {% endif %}
+                            </span>
+                            <span class="text-muted flex-shrink-0 comment-time">{{ comment.created_at|date:"m.d H:i" }}</span>
+                        </div>
+                        <div class="mt-1 comment-body">
+                            {% if comment.field_name and comment.field_name|slice:':4' == 'tab:' %}
+                                <strong class="text-muted">{{ comment.field_name|slice:'4:' }})</strong> 
+                            {% elif comment.field_name %}
+                                <strong class="text-muted">{{ comment.field_name }})</strong> 
+                            {% endif %}{{ comment.content }}
+                        </div>
+                        <div class="d-flex gap-2 mt-2">
+                            <button class="btn btn-sm btn-link p-0 text-decoration-none comment-action-btn" type="button" onclick="toggleReplyInput({{ comment.comment_id }})">답글</button>
+                            {% if comment.author == request.user or user_role == 'OWNER' %}
+                            <button class="btn btn-sm btn-link p-0 text-decoration-none text-danger comment-action-btn" type="button" onclick="deleteComment({{ comment.comment_id }})">삭제</button>
+                            {% endif %}
+                        </div>
+                        <div id="reply-box-{{ comment.comment_id }}" class="mt-2 d-none">
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" id="reply-input-{{ comment.comment_id }}" placeholder="답글 입력..." {% if not can_comment %}disabled{% endif %}>
+                                <button class="btn btn-primary" type="button" onclick="submitComment({{ comment.comment_id }})" {% if not can_comment %}disabled{% endif %}>
+                                    <i class="bi bi-send"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="comment-replies-{{ comment.comment_id }}" class="mt-2">
+                            {% for reply in comment.replies.all %}
+                            <div class="d-flex gap-2 mb-2" id="reply-{{ reply.comment_id }}">
+                                <div class="bg-secondary rounded-circle text-white d-flex align-items-center justify-content-center flex-shrink-0 reply-avatar">
+                                    {% if reply.author.get_full_name %}
+                                        {{ reply.author.get_full_name|slice:":1"|upper }}
+                                    {% else %}
+                                        {{ reply.author.email|slice:":1"|upper }}
+                                    {% endif %}
+                                </div>
+                                <div class="bg-white p-2 rounded-3 border reply-bubble">
+                                    <div class="d-flex justify-content-between align-items-center flex-nowrap gap-2">
+                                        <span class="fw-semibold text-truncate reply-name">
+                                            {% if author_roles and reply.author_id in author_roles %}
+                                                <span class="text-primary">({{ author_roles|get_item:reply.author_id }})</span>
+                                            {% endif %}
+                                            {% if reply.author.get_full_name %}
+                                                {{ reply.author.get_full_name }}
+                                            {% else %}
+                                                {{ reply.author.email }}
+                                            {% endif %}
+                                        </span>
+                                        <span class="text-muted flex-shrink-0 reply-time">{{ reply.created_at|date:"m.d H:i" }}</span>
+                                    </div>
+                                    <div class="mt-1 reply-body">{{ reply.content }}</div>
+                                    {% if reply.author == request.user or user_role == 'OWNER' %}
+                                    <div classd-flex justify-content-end mt-1">
+                                        <button class="btn btn-sm btn-link p-0 text-decoration-none text-danger reply-action-btn" type="button" onclick="deleteComment({{ reply.comment_id }})">삭제</button>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                    {% empty %}
+                    <div class="empty-state">아직 댓글이 없습니다.</div>
+                    {% endfor %}
+                    </div>
+                    <div class="p-3 border-top bg-light">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="comment-input" placeholder="댓글 입력..." {% if not can_comment %}disabled{% endif %}>
+                            <button class="btn btn-primary" type="button" onclick="submitComment()" {% if not can_comment %}disabled{% endif %}>
+                                <i class="bi bi-send"></i>
+                            </button>
+                        </div>
+                        {% if not can_comment %}
+                        <div class="text-muted mt-2 no-comment-permission">댓글 작성 권한이 없습니다.</div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- 활동 로그 탭 -->
+                <div class="tab-pane fade h-100 sidebar-tab-pane-abs" id="activity-panel" role="tabpanel" aria-labelledby="activity-tab">
+                    <div class="p-3 pb-0">
+                        <select class="form-select form-select-sm" id="activity-log-filter">
+                            <option value="">모든 활동</option>
+                            <option value="STATUS_CHANGED">상태 변경</option>
+                            <option value="INFO_UPDATED">정보 수정</option>
+                            <option value="DOCUMENT_UPLOADED">문서 업로드</option>
+                            <option value="DOCUMENT_DELETED">문서 삭제</option>
+                            <option value="COMMENT_ADDED">댓글 작성</option>
+                            <option value="SHARE_CREATED">공유 생성</option>
+                            <option value="SHARE_UPDATED">공유 수정</option>
+                            <option value="SHARE_DELETED">공유 삭제</option>
+                            <option value="CREATED">제품 생성</option>
+                        </select>
+                    </div>
+                    <div class="overflow-auto p-3 h-100" id="activity-log-list">
+                        {% if activity_logs %}
+                            <div class="activity-log-list">
+                                {% for log in activity_logs %}
+                                <div class="d-flex gap-2 mb-3 activity-log-item" 
+                                     id="activity-log-{{ log.log_id }}" 
+                                     data-action="{{ log.action }}">
+                                    <!-- 아이콘 아바타 -->
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 30px; height: 30px; font-size: 14px;
+                                        {% if log.action == 'CREATED' %}background-color: #d4edda;
+                                        {% elif log.action == 'STATUS_CHANGED' %}background-color: #cfe2ff;
+                                        {% elif log.action == 'COMMENT_ADDED' %}background-color: #d1ecf1;
+                                        {% elif log.action == 'INFO_UPDATED' %}background-color: #fff3cd;
+                                        {% elif log.action == 'DOCUMENT_UPLOADED' %}background-color: #d4edda;
+                                        {% elif log.action == 'DOCUMENT_DELETED' %}background-color: #f8d7da;
+                                        {% elif log.action == 'SHARE_CREATED' %}background-color: #cfe2ff;
+                                        {% else %}background-color: #e9ecef;{% endif %}">
+                                        {% if log.action == 'CREATED' %}
+                                            <i class="bi bi-plus-circle text-success"></i>
+                                        {% elif log.action == 'STATUS_CHANGED' %}
+                                            <i class="bi bi-arrow-left-right text-primary"></i>
+                                        {% elif log.action == 'COMMENT_ADDED' %}
+                                            <i class="bi bi-chat-dots text-info"></i>
+                                        {% elif log.action == 'INFO_UPDATED' %}
+                                            <i class="bi bi-pencil text-warning"></i>
+                                        {% elif log.action == 'DOCUMENT_UPLOADED' %}
+                                            <i class="bi bi-file-earmark-plus text-success"></i>
+                                        {% elif log.action == 'DOCUMENT_DELETED' %}
+                                            <i class="bi bi-file-earmark-minus text-danger"></i>
+                                        {% elif log.action == 'SHARE_CREATED' %}
+                                            <i class="bi bi-share text-primary"></i>
+                                        {% elif log.action == 'SHARE_UPDATED' %}
+                                            <i class="bi bi-person-gear text-info"></i>
+                                        {% elif log.action == 'SHARE_DELETED' %}
+                                            <i class="bi bi-person-dash text-danger"></i>
+                                        {% else %}
+                                            <i class="bi bi-circle-fill text-muted"></i>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- 활동 내용 박스 -->
+                                    <div class="bg-light p-2 rounded-3 comment-bubble">
+                                        <div class="d-flex justify-content-between align-items-center flex-nowrap gap-2">
+                                            <span class="fw-semibold text-truncate comment-name">
+                                                {% if log.user %}
+                                                    {% if activity_author_roles and log.user.id in activity_author_roles %}
+                                                        <span class="text-primary">({{ activity_author_roles|get_item:log.user.id }})</span>
+                                                    {% endif %}
+                                                    {{ log.user.username }}
+                                                {% else %}
+                                                    <span class="text-muted">(시스템)</span>
+                                                {% endif %}
+                                            </span>
+                                            <span class="text-muted flex-shrink-0 comment-time">{{ log.created_at|date:"m.d H:i" }}</span>
+                                        </div>
+                                        <div class="mt-1 comment-body">
+                                            {% if log.action == 'STATUS_CHANGED' and log.details %}
+                                                <strong class="text-muted">상태 변경)</strong>
+                                                <span class="badge bg-light text-dark border ms-1 sidebar-badge-xs">{{ log.details.old_status_label }}</span>
+                                                <i class="bi bi-arrow-right mx-1 sidebar-badge-xs"></i>
+                                                <span class="badge bg-primary text-white sidebar-badge-xs">{{ log.details.new_status_label }}</span>
+                                            
+                                            {% elif log.action == 'COMMENT_ADDED' and log.details %}
+                                                <strong class="text-muted">댓글 작성)</strong>
+                                                {% if log.details.field_name %}
+                                                    <span class="badge bg-light text-dark border ms-1 sidebar-badge-xs">{{ log.details.field_name }}</span>
+                                                {% endif %}
+                                            
+                                            {% elif log.action == 'DOCUMENT_UPLOADED' and log.details %}
+                                                <strong class="text-muted">문서 업로드)</strong>
+                                                <span class="ms-1">{{ log.details.file_name }}</span>
+                                                {% if log.details.document_type %}
+                                                    <span class="badge bg-light text-dark border ms-1 sidebar-badge-xs">{{ log.details.document_type }}</span>
+                                                {% endif %}
+                                            
+                                            {% elif log.action == 'DOCUMENT_DELETED' and log.details %}
+                                                <strong class="text-muted text-danger">문서 삭제)</strong>
+                                                <span class="ms-1 text-danger">{{ log.details.file_name }}</span>
+                                                {% if log.details.document_type %}
+                                                    <span class="badge bg-light text-dark border ms-1 sidebar-badge-xs">{{ log.details.document_type }}</span>
+                                                {% endif %}
+                                            
+                                            {% elif log.action == 'INFO_UPDATED' and log.details %}
+                                                <strong class="text-muted">정보 수정)</strong>
+                                                {% if log.details.changed_fields %}
+                                                    {% for field in log.details.changed_fields %}
+                                                        <span class="badge bg-light text-dark border me-1 ms-1 sidebar-badge-xs">{{ field }}</span>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            
+                                            {% elif log.action == 'SHARE_CREATED' and log.details %}
+                                                <strong class="text-muted">공유 생성)</strong>
+                                                {% if log.details.recipient_email %}
+                                                    <span class="ms-1">{{ log.details.recipient_email }}</span>
+                                                {% endif %}
+                                                {% if log.details.role_label %}
+                                                    <span class="badge bg-light text-dark border ms-1 sidebar-badge-xs">{{ log.details.role_label }}</span>
+                                                {% endif %}
+                                            
+                                            {% elif log.action == 'SHARE_UPDATED' and log.details %}
+                                                <strong class="text-muted">공유 수정)</strong>
+                                                {% if log.details.recipient_email %}
+                                                    <span class="ms-1">{{ log.details.recipient_email }}</span>
+                                                {% endif %}
+                                                {% if log.details.role_label %}
+                                                    <span class="badge bg-info text-white ms-1 sidebar-badge-xs">{{ log.details.role_label }}</span>
+                                                {% endif %}
+                                            
+                                            {% elif log.action == 'SHARE_DELETED' and log.details %}
+                                                <strong class="text-muted text-danger">공유 삭제)</strong>
+                                                {% if log.details.recipient_email %}
+                                                    <span class="ms-1 text-danger">{{ log.details.recipient_email }}</span>
+                                                {% endif %}
+                                            
+                                            {% elif log.action == 'CREATED' %}
+                                                <strong class="text-muted">제품 생성)</strong>
+                                            
+                                            {% else %}
+                                                <strong class="text-muted">{{ log.get_action_display }})</strong>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-inbox sidebar-empty-icon"></i>
+                                <p class="mt-2 sidebar-empty-text">아직 활동 이력이 없습니다</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- 사이드바 토글 버튼 (모바일) -->
+<button class="btn btn-primary sidebar-toggle-btn" id="sidebar-toggle-btn" type="button" onclick="toggleMobileSidebar()">
+    <i class="bi bi-chat-dots fs-5"></i>
+</button>
+
+<!-- 사이드바 오버레이 (모바일) -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+
+<!-- Quick Invite Modal -->
+<div class="modal fade" id="quickInviteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-person-plus-fill me-2 text-primary"></i>멤버 초대
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickInviteForm" onsubmit="event.preventDefault(); sendQuickInvite();">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">초대할 사람의 이메일</label>
+                        <input type="email" 
+                               class="form-control" 
+                               id="inviteEmail" 
+                               required
+                               placeholder="example@company.com"
+                               autocomplete="off">
+                        <div class="form-text">이메일 주소로 초대장이 발송됩니다.</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">이름</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="inviteName" 
+                                   placeholder="홍길동"
+                                   autocomplete="off">
+                            <div class="form-text">선택사항</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">회사명</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="inviteCompany" 
+                                   placeholder="삼성식품"
+                                   autocomplete="off">
+                            <div class="form-text">선택사항</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">역할 선택</label>
+                        <select class="form-select" id="inviteRole" required>
+                            <option value="">역할을 선택하세요</option>
+                            <option value="VIEWER">뷰어 - 읽기 전용 (비회원도 가능)</option>
+                            <option value="UPLOADER">업로더 - 문서 업로드 (회원 필수)</option>
+                            <option value="EDITOR">편집자 - 자료 입력 및 수정 (회원 필수)</option>
+                            <option value="REVIEWER">검토자 - 검토 및 피드백 (회원 필수)</option>
+                            <option value="APPROVER">승인자 - 최종 승인 (회원 필수)</option>
+                        </select>
+                    </div>
+                    <div class="alert alert-warning d-flex align-items-start">
+                        <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+                        <div class="sidebar-info-text">
+                            <strong>초대 방식:</strong> 이메일로 초대 링크가 전송됩니다.<br>
+                            <strong>비회원:</strong> 링크 접속 시 뷰어(읽기 전용)로 자동 접근<br>
+                            <strong>실제 권한:</strong> 회원가입/로그인 후 부여된 역할로 사용 가능
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="submit" form="quickInviteForm" class="btn btn-primary">
+                    <i class="bi bi-send-fill me-1"></i>초대장 보내기
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Role Assignment Modal -->
+<div class="modal fade" id="roleAssignModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold">담당자 변경</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">
+                    현재 공유된 멤버 중에서<br>
+                    <strong id="targetRoleName">검토자</strong> 역할을 수행할 사람을 선택하세요.
+                </p>
+                <div class="list-group" id="roleAssignList">
+                    {% for share in shares %}
+                    <button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            type="button"
+                            onclick="assignRole('{{ share.share_id }}', '{{ share.recipient_email }}')">
+                        <div>
+                            <div class="fw-semibold sidebar-permission-name">
+                                {{ share.display_name }}
+                            </div>
+                            <div class="text-muted sidebar-permission-email">{{ share.recipient_email }}</div>
+                        </div>
+                        <span class="badge bg-secondary">
+                            {{ share.permission_record.role_code|default:'VIEWER' }}
+                        </span>
+                    </button>
+                    {% empty %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-inbox"></i>
+                        <p class="mb-0 mt-2 sidebar-info-text">공유된 멤버가 없습니다.</p>
+                        <button class="btn btn-sm btn-primary mt-2" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#quickInviteModal"
+                                onclick="closeRoleAssignModal()">
+                            <i class="bi bi-plus"></i> 먼저 멤버 초대하기
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Assign Modal -->
+<div class="modal fade" id="bulkAssignModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">팀 구성 및 역할 일괄 배정</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-4">
+                <form id="bulk-assign-form" onsubmit="return submitBulkAssign(event)">
+                    <p class="text-muted small mb-4">각 역할에 필요한 담당자의 이메일을 입력하세요. 입력하지 않은 역할은 건너뜁니다. (쉼표로 구분하여 여러 명 입력 가능)</p>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-primary">STEP 2. 자료 제출 (협력업체)</label>
+                            <input type="text" name="emails_uploader" class="form-control bg-light border-0" placeholder="partner@email.com (쉼표로 구분)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-success">STEP 3. 공동 작성 (팀원)</label>
+                            <input type="text" name="emails_editor" class="form-control bg-light border-0" placeholder="team@company.com">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-warning">STEP 4. 검토/QA (팀장)</label>
+                            <input type="text" name="emails_reviewer" class="form-control bg-light border-0" placeholder="manager@company.com">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-danger">STEP 5. 최종 승인 (임원)</label>
+                            <input type="text" name="emails_approver" class="form-control bg-light border-0" placeholder="director@company.com">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small text-info">읽기 전용 뷰어 (비회원 가능)</label>
+                            <input type="text" name="emails_viewer" class="form-control bg-light border-0" placeholder="viewer@email.com (프로세스 단계와 무관)">
+                            <div class="form-text small">뷰어는 문서 조회만 가능합니다. 비회원도 초대 링크로 접근 가능</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 text-end">
+                        <button type="button" class="btn btn-light me-2" data-bs-dismiss="modal">취소</button>
+                        <button type="submit" class="btn btn-primary px-4 fw-bold">일괄 초대 발송</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notification Settings Modal -->
+<div class="modal fade" id="notificationSettingsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-bell me-2"></i>권한별 알림 설정
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-4">팀 멤버들에게 언제 알림을 보낼지 설정하세요.</p>
+                
+                <div class="notification-options">
+                    <div class="form-check form-switch mb-3 p-3 border rounded">
+                        <input class="form-check-input" type="checkbox" id="notif-invite" checked>
+                        <label class="form-check-label w-100" for="notif-invite">
+                            <div class="fw-bold">최초 권한 부여 알림</div>
+                            <div class="text-muted small">초대장 발송 시 이메일로 알림을 전송합니다.</div>
+                        </label>
+                    </div>
+                    
+                    <div class="form-check form-switch mb-3 p-3 border rounded">
+                        <input class="form-check-input" type="checkbox" id="notif-step-start" checked>
+                        <label class="form-check-label w-100" for="notif-step-start">
+                            <div class="fw-bold">해당 단계 시작 시 알림</div>
+                            <div class="text-muted small">내 차례가 오면 이메일 및 시스템 알림을 받습니다.</div>
+                        </label>
+                    </div>
+                    
+                    <div class="form-check form-switch mb-3 p-3 border rounded">
+                        <input class="form-check-input" type="checkbox" id="notif-complete">
+                        <label class="form-check-label w-100" for="notif-complete">
+                            <div class="fw-bold">최종 완료 시 알림</div>
+                            <div class="text-muted small">프로젝트 종료 시 모든 참여자에게 알림을 전송합니다.</div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" onclick="saveNotificationSettings()">
+                    <i class="bi bi-check-lg me-1"></i>설정 저장
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const CSRF_TOKEN = '{{ csrf_token }}';
+const PRODUCT_ID = '{{ product.my_label_id }}';
+const UPDATE_URL = "{% url 'products:product_update_fields' product_id=product.my_label_id %}";
+const STATUS_UPDATE_URL = "{% url 'products:product_update_status' product_id=product.my_label_id %}";
+const SHARE_CREATE_URL = "{% url 'products:share_create' label_id=product.my_label_id %}";
+const COMMENT_CREATE_URL = "{% url 'products:comment_create' label_id=product.my_label_id %}";
+const COMMENT_DELETE_URL = "{% url 'products:comment_delete' comment_id=0 %}";
+const CAN_EDIT = {{ can_edit|yesno:"true,false" }};
+const CAN_COMMENT = {{ can_comment|yesno:"true,false" }};
+
+// 댓글 탭 필터링 기능
+document.addEventListener('DOMContentLoaded', function() {
+    const tabFilter = document.getElementById('comment-tab-filter');
+    const commentList = document.getElementById('comment-list');
+    if (tabFilter && commentList) {
+        tabFilter.addEventListener('change', function() {
+            const selected = this.value;
+            const items = commentList.querySelectorAll('.comment-item');
+            items.forEach(function(item) {
+                if (!selected || item.dataset.field === selected) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    }
+    
+    // 활동 로그 필터링 기능
+    const activityFilter = document.getElementById('activity-log-filter');
+    const activityLogList = document.getElementById('activity-log-list');
+    
+    if (activityFilter && activityLogList) {
+        activityFilter.addEventListener('change', function() {
+            const selected = this.value;
+            const items = activityLogList.querySelectorAll('.activity-log-item');
+            
+            let visibleCount = 0;
+            items.forEach(function(item) {
+                const action = item.getAttribute('data-action');
+                
+                if (!selected || action === selected) {
+                    item.classList.remove('d-none');
+                    visibleCount++;
+                } else {
+                    item.classList.add('d-none');
+                }
+            });
+            
+            // 필터링 결과가 없을 때 메시지 표시
+            const emptyMessage = activityLogList.querySelector('.filter-empty-message');
+            if (visibleCount === 0) {
+                if (!emptyMessage) {
+                    const msg = document.createElement('div');
+                    msg.className = 'filter-empty-message text-center text-muted py-4';
+                    msg.innerHTML = '<i class="bi bi-inbox sidebar-empty-icon"></i><p class="mt-2 sidebar-empty-text">해당 활동이 없습니다</p>';
+                    activityLogList.appendChild(msg);
+                }
+            } else {
+                if (emptyMessage) {
+                    emptyMessage.remove();
+                }
+            }
+        });
+    }
+});
+
+// 원산지 드롭다운 변경 시 텍스트 입력 필드 업데이트
+document.addEventListener('DOMContentLoaded', function() {
+    const countrySelect = document.getElementById('field-country-select');
+    const countryInput = document.getElementById('field-country-of-origin');
+    const sidebar = document.getElementById('workspace-sidebar');
+    
+    if (countrySelect && countryInput) {
+        countrySelect.addEventListener('change', function() {
+            if (this.value) {
+                countryInput.value = this.value;
+            }
+        });
+    }
+
+    // 사이드바 초기 상태 (기본적으로 펼쳐져 있음)
+    // 사용자 설정이 있으면 그것을 따름
+    if (sidebar) {
+        const showActivityLog = localStorage.getItem('show-activity-log');
+        
+        if (showActivityLog === 'true') {
+            // 상태 변경 후 활동 로그를 표시
+            sidebar.classList.remove('collapsed');
+            
+            setTimeout(() => {
+                const activityTab = document.querySelector('#activity-tab');
+                const activityPanel = document.querySelector('#activity-panel');
+                const commentsTab = document.querySelector('#comments-tab');
+                const commentsPanel = document.querySelector('#comments-panel');
+                
+                if (activityTab && activityPanel) {
+                    // 댓글 탭 비활성화
+                    commentsTab?.classList.remove('active');
+                    commentsPanel?.classList.remove('show', 'active');
+                    
+                    // 활동 로그 탭 활성화
+                    activityTab.classList.add('active');
+                    activityPanel.classList.add('show', 'active');
+                }
+            }, 300);
+            
+            // 플래그 제거
+            localStorage.removeItem('show-activity-log');
+        } else {
+            // 일반적인 경우 이전 상태 복원
+            const sidebarState = localStorage.getItem('workspace-sidebar-state');
+            if (sidebarState === 'collapsed') {
+                sidebar.classList.add('collapsed');
+            } else {
+                sidebar.classList.remove('collapsed');
+            }
+        }
+    }
+    
+    // sessionStorage에서 탭 복원
+    const returnToTab = sessionStorage.getItem('returnToTab');
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    const hash = window.location.hash;
+    
+    if (returnToTab) {
+        sessionStorage.removeItem('returnToTab');
+        const tabTrigger = document.querySelector(`[data-bs-target="#tab-${returnToTab}"]`);
+        if (tabTrigger) {
+            const tab = new bootstrap.Tab(tabTrigger);
+            tab.show();
+        }
+    } else {
+        // URL 파라미터 또는 해시에 따라 탭 활성화
+        let targetTab = null;
+        if (tabParam) {
+            // URL 파라미터로 탭 지정 (예: ?tab=share)
+            targetTab = `#tab-${tabParam}`;
+        } else if (hash) {
+            // 해시 매핑: 대시보드에서 사용하는 앵커를 탭 ID로 변환
+            const hashMapping = {
+                '#documents': '#tab-docs',
+                '#bom': '#tab-bom',
+                '#labeling': '#tab-label',
+                '#nutrition': '#tab-nutrition',
+                '#permissions': '#tab-share'
+            };
+            
+            // 매핑된 탭 ID 또는 원본 해시 사용
+            targetTab = hashMapping[hash] || hash;
+        }
+        
+        if (targetTab) {
+            const tabTrigger = document.querySelector(`[data-bs-target="${targetTab}"]`);
+            if (tabTrigger) {
+                const tab = new bootstrap.Tab(tabTrigger);
+                tab.show();
+            }
+        }
+    }
+    
+    // iframe 로딩 (BOM, 영양성분)
+    const tabContainer = document.getElementById('workspaceTab');
+    if (tabContainer) {
+        tabContainer.addEventListener('shown.bs.tab', function(event) {
+            const targetId = event.target?.getAttribute('data-bs-target') || '';
+            if (targetId === '#tab-bom') {
+                loadBomIframe();
+            } else if (targetId === '#tab-nutrition') {
+                loadNutritionIframe();
+            }
+        });
+    }
+
+    // 초기 해시 기반 iframe 로딩
+    if (hash === '#tab-bom' || hash === '#bom') {
+        loadBomIframe();
+    }
+    if (hash === '#tab-nutrition' || hash === '#nutrition') {
+        loadNutritionIframe();
+    }
+});
+
+/* BOM iframe → 부모 페이지 postMessage 처리 */
+window.addEventListener('message', function(e) {
+    if (!e.data || e.data.type !== 'copyRawmtrlToBasicInfo') return;
+
+    const rawmtrl   = e.data.rawmtrl   || '';
+    const allergens = Array.isArray(e.data.allergens) ? e.data.allergens : [];
+
+    /* 기본정보 탭의 원재료 표시명 textarea 업데이트 */
+    const rawmtrlEl = document.getElementById('field-rawmtrl-nm');
+    if (rawmtrlEl) {
+        rawmtrlEl.value = rawmtrl;
+        rawmtrlEl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    /* 알레르기 hidden input 업데이트 */
+    if (allergens.length > 0) {
+        const allergensEl = document.getElementById('field-allergens');
+        if (allergensEl) {
+            allergensEl.value = allergens.join(', ');
+        }
+    }
+
+    /* 기본정보 탭으로 전환 */
+    const basicInfoTab = document.querySelector('[data-bs-target="#tab-info"]');
+    if (basicInfoTab) {
+        bootstrap.Tab.getOrCreateInstance(basicInfoTab).show();
+    }
+
+    /* 완료 토스트 */
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 p-3';
+    toast.style.zIndex = '9999';
+    toast.innerHTML = `
+        <div class="toast align-items-center text-white bg-success border-0 show" role="alert">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-check-circle me-2"></i>원재료 표시명이 기본정보 탭에 복사되었습니다.
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.closest('.position-fixed').remove()"></button>
+            </div>
+        </div>`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+});
+
+function loadBomIframe() {
+    const iframe = document.getElementById('bomEditorFrame');
+    const loadingMessage = document.getElementById('bomLoadingMessage');
+    const errorMessage = document.getElementById('bomErrorMessage');
+    const bomUrl = iframe.getAttribute('data-bom-url');
+    
+    if (!bomUrl) {
+        showBomError('URL이 설정되지 않았습니다');
+        return;
+    }
+    
+    // 로딩 메시지 표시
+    loadingMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    iframe.style.display = 'none';
+    
+    // iframe 로드 이벤트 핸들러
+    iframe.onload = function() {
+        loadingMessage.style.display = 'none';
+        errorMessage.style.display = 'none';
+        iframe.style.display = 'block';
+    };
+    
+    iframe.onerror = function() {
+        showBomError(bomUrl);
+    };
+    
+    // URL이 변경되지 않았다면 설정
+    if (!iframe.src || iframe.src !== bomUrl) {
+        iframe.src = bomUrl;
+        
+        // 타임아웃 설정 (10초 후에도 로드되지 않으면 에러)
+        setTimeout(function() {
+            if (loadingMessage.style.display === 'block') {
+                showBomError(bomUrl);
+            }
+        }, 10000);
+    }
+}
+
+function showBomError(url) {
+    const loadingMessage = document.getElementById('bomLoadingMessage');
+    const errorMessage = document.getElementById('bomErrorMessage');
+    const iframe = document.getElementById('bomEditorFrame');
+    const errorUrlElement = document.getElementById('bomErrorUrl');
+    
+    loadingMessage.style.display = 'none';
+    iframe.style.display = 'none';
+    errorMessage.style.display = 'block';
+    
+    if (errorUrlElement && url) {
+        errorUrlElement.textContent = url;
+    }
+}
+
+function retryLoadBom() {
+    loadBomIframe();
+}
+
+function loadNutritionIframe() {
+    const iframe = document.getElementById('nutritionEditorFrame');
+    const loadingMessage = document.getElementById('nutritionLoadingMessage');
+    const errorMessage = document.getElementById('nutritionErrorMessage');
+    const nutritionUrl = iframe?.getAttribute('data-nutrition-url');
+    
+    if (!iframe || !nutritionUrl) {
+        showNutritionError('URL이 설정되지 않았습니다');
+        return;
+    }
+    
+    // 이미 로드되어 있으면 바로 표시
+    if (iframe.src && iframe.src === nutritionUrl) {
+        loadingMessage.style.display = 'none';
+        errorMessage.style.display = 'none';
+        iframe.style.display = 'block';
+        return;
+    }
+    
+    loadingMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    iframe.style.display = 'none';
+    
+    iframe.onload = function() {
+        loadingMessage.style.display = 'none';
+        errorMessage.style.display = 'none';
+        iframe.style.display = 'block';
+    };
+    
+    iframe.onerror = function() {
+        showNutritionError(nutritionUrl);
+    };
+    
+    iframe.src = nutritionUrl;
+    
+    setTimeout(function() {
+        if (loadingMessage.style.display === 'block') {
+            showNutritionError(nutritionUrl);
+        }
+    }, 10000);
+}
+
+function showNutritionError(url) {
+    const loadingMessage = document.getElementById('nutritionLoadingMessage');
+    const errorMessage = document.getElementById('nutritionErrorMessage');
+    const iframe = document.getElementById('nutritionEditorFrame');
+    const errorUrlElement = document.getElementById('nutritionErrorUrl');
+    
+    loadingMessage.style.display = 'none';
+    iframe.style.display = 'none';
+    errorMessage.style.display = 'block';
+    
+    if (errorUrlElement && url) {
+        errorUrlElement.textContent = url;
+    }
+}
+
+function retryLoadNutrition() {
+    loadNutritionIframe();
+}
+
+// 표시사항 탭 함수들은 _label_tab.html에서 처리됨
+
+function toggleWorkspaceSidebar() {
+    const sidebar = document.getElementById('workspace-sidebar');
+    if (sidebar) {
+        sidebar.classList.toggle('collapsed');
+        // 상태 저장
+        const isCollapsed = sidebar.classList.contains('collapsed');
+        localStorage.setItem('workspace-sidebar-state', isCollapsed ? 'collapsed' : 'expanded');
+    }
+}
+
+function switchToShareTab() {
+    const triggerEl = document.querySelector('button[data-bs-target="#tab-share"]');
+    if (triggerEl) {
+        const tab = bootstrap.Tab.getOrCreateInstance(triggerEl);
+        tab.show();
+        const tabContent = document.querySelector('.tab-content');
+        if (tabContent) {
+            tabContent.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+}
+
+async function saveProductInfo() {
+    if (!CAN_EDIT) {
+        alert('현재 상태에서는 수정할 수 없습니다.');
+        return;
+    }
+    // BOM 탭이 활성화되어 있는지 확인
+    const bomTab = document.querySelector('[data-bs-target="#tab-bom"]');
+    const isBomTabActive = bomTab && bomTab.classList.contains('active');
+    
+    // BOM 탭이 활성화되어 있으면 BOM 저장 호출
+    if (isBomTabActive) {
+        const iframe = document.getElementById('bomEditorFrame');
+        if (iframe && iframe.contentWindow) {
+            try {
+                iframe.contentWindow.saveData();
+                return;
+            } catch (error) {
+                // BOM 저장 실패 시 무시
+            }
+        }
+    }
+    
+    // 영양성분 탭이 활성화되어 있는지 확인
+    const nutritionTab = document.querySelector('[data-bs-target="#tab-nutrition"]');
+    const isNutritionTabActive = nutritionTab && nutritionTab.classList.contains('active');
+    
+    // 영양성분 탭이 활성화되어 있으면 영양성분 저장 호출
+    if (isNutritionTabActive) {
+        const iframe = document.getElementById('nutritionEditorFrame');
+        if (iframe && iframe.contentWindow) {
+            try {
+                iframe.contentWindow.saveData();
+                return;
+            } catch (error) {
+                // 영양성분 저장 실패 시 무시
+            }
+        }
+    }
+    
+    const data = {
+        my_label_name: (document.getElementById('field-my-label-name') || document.getElementById('workspace-product-name'))?.value || '',
+        prdlst_nm: document.getElementById('field-prdlst-nm').value,
+        ingredient_info: document.getElementById('field-ingredient-info').value,
+        prdlst_dcnm: document.getElementById('field-prdlst-dcnm').value,
+        prdlst_report_no: document.getElementById('field-prdlst-report-no').value,
+        content_weight: document.getElementById('field-content-weight').value,
+        country_of_origin: document.getElementById('field-country-of-origin').value,
+        storage_method: document.getElementById('field-storage-method').value,
+        frmlc_mtrqlt: document.getElementById('field-frmlc-mtrqlt').value,
+        bssh_nm: document.getElementById('field-bssh-nm').value,
+        pog_daycnt: document.getElementById('field-pog-daycnt').value,
+        rawmtrl_nm: document.getElementById('field-rawmtrl-nm').value,
+        cautions: document.getElementById('field-cautions').value,
+        additional_info: document.getElementById('field-additional-info').value
+    };
+    
+    try {
+        const response = await fetch(UPDATE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('저장되었습니다.');
+            // 제품명이 변경된 경우 헤더의 제품명도 업데이트
+            const titleInput = document.getElementById('workspace-product-name');
+            if (titleInput) {
+                titleInput.value = data.my_label_name;
+            }
+        } else {
+            alert('저장 실패: ' + (result.error || '알 수 없는 오류'));
+        }
+    } catch (error) {
+        alert('저장 중 오류가 발생했습니다.');
+    }
+}
+
+async function changeStatus(newStatus) {
+    const formData = new FormData();
+    formData.append('status', newStatus);
+
+    try {
+        const response = await fetch(STATUS_UPDATE_URL, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            // 사이드바를 열고 활동 로그 탭으로 전환한 후 새로고침
+            localStorage.setItem('show-activity-log', 'true');
+            window.location.reload();
+        } else {
+            alert(result.error || '상태 변경에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('Status change error:', error);
+        alert('상태 변경 중 오류가 발생했습니다.');
+    }
+}
+
+function getActiveTabLabel() {
+    const activeTab = document.querySelector('#workspaceTab .nav-link.active');
+    if (!activeTab) return '알 수 없음';
+    return activeTab.textContent.replace(/\s+/g, ' ').trim();
+}
+
+function toggleReplyInput(commentId) {
+    const box = document.getElementById(`reply-box-${commentId}`);
+    if (!box) return;
+    box.classList.toggle('d-none');
+    const input = document.getElementById(`reply-input-${commentId}`);
+    if (input && !box.classList.contains('d-none')) {
+        input.focus();
+    }
+}
+
+async function submitComment(parentId = null) {
+    if (!CAN_COMMENT) {
+        alert('댓글 작성 권한이 없습니다.');
+        return;
+    }
+
+    const input = parentId ? document.getElementById(`reply-input-${parentId}`) : document.getElementById('comment-input');
+    if (!input) return;
+
+    const content = input.value.trim();
+    if (!content) return;
+
+    const formData = new FormData();
+    formData.append('content', content);
+    formData.append('field_name', `tab:${getActiveTabLabel()}`);
+    if (parentId) {
+        formData.append('parent_id', parentId);
+    }
+
+    try {
+        const response = await fetch(COMMENT_CREATE_URL, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.success && result.comment) {
+            if (parentId) {
+                const replies = document.getElementById(`comment-replies-${parentId}`);
+                if (replies) {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'd-flex gap-2 mb-2';
+                    wrapper.id = `reply-${result.comment.comment_id}`;
+                    wrapper.innerHTML = `
+                        <div class="bg-secondary rounded-circle text-white d-flex align-items-center justify-content-center flex-shrink-0 reply-avatar">
+                            ${result.comment.display_name ? result.comment.display_name.charAt(0).toUpperCase() : (result.comment.email ? result.comment.email.charAt(0).toUpperCase() : '?')}
+                        </div>
+                        <div class="bg-white p-2 rounded-3 border reply-bubble">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold reply-name">${result.comment.display_name || result.comment.email || ''}</span>
+                                <span class="text-muted reply-time">방금</span>
+                            </div>
+                            <div class="mt-1 reply-body"></div>
+                            <div class="d-flex justify-content-end mt-1">
+                                <button class="btn btn-sm btn-link p-0 text-decoration-none text-danger reply-action-btn" type="button" onclick="deleteComment(${result.comment.comment_id})">삭제</button>
+                            </div>
+                        </div>
+                    `;
+                    const contentNode = wrapper.querySelector('div.reply-body');
+                    if (contentNode) contentNode.textContent = result.comment.content || '';
+                    replies.prepend(wrapper);
+                }
+            } else {
+                const list = document.getElementById('comment-list');
+                if (list) {
+                    const emptyState = list.querySelector('.empty-state');
+                    if (emptyState) emptyState.remove();
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'd-flex gap-2 mb-3';
+                    wrapper.id = `comment-${result.comment.comment_id}`;
+                    wrapper.innerHTML = `
+                        <div class="bg-secondary rounded-circle text-white d-flex align-items-center justify-content-center flex-shrink-0 comment-avatar">
+                            ${result.comment.display_name ? result.comment.display_name.charAt(0).toUpperCase() : (result.comment.email ? result.comment.email.charAt(0).toUpperCase() : '?')}
+                        </div>
+                        <div class="bg-light p-2 rounded-3 comment-bubble">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold comment-name">${result.comment.display_name || result.comment.email || ''}</span>
+                                <span class="text-muted comment-time">방금</span>
+                            </div>
+                            <div class="mt-1">
+                                <span class="badge bg-white text-muted border sidebar-badge-xs">탭) ${getActiveTabLabel()}</span>
+                            </div>
+                            <div class="mt-1 comment-body"></div>
+                            <div class="d-flex gap-2 mt-2">
+                                <button class="btn btn-sm btn-link p-0 text-decoration-none comment-action-btn" type="button" onclick="toggleReplyInput(${result.comment.comment_id})">답글</button>
+                                <button class="btn btn-sm btn-link p-0 text-decoration-none text-danger comment-action-btn" type="button" onclick="deleteComment(${result.comment.comment_id})">삭제</button>
+                            </div>
+                            <div id="reply-box-${result.comment.comment_id}" class="mt-2 d-none">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" id="reply-input-${result.comment.comment_id}" placeholder="답글 입력...">
+                                    <button class="btn btn-primary" type="button" onclick="submitComment(${result.comment.comment_id})">
+                                        <i class="bi bi-send"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="comment-replies-${result.comment.comment_id}" class="mt-2"></div>
+                        </div>
+                    `;
+                    const contentNode = wrapper.querySelector('div.comment-body');
+                    if (contentNode) contentNode.textContent = result.comment.content || '';
+                    list.prepend(wrapper);
+                }
+            }
+
+            input.value = '';
+            if (parentId) {
+                toggleReplyInput(parentId);
+            }
+        } else {
+            alert(result.error || '댓글 작성에 실패했습니다.');
+        }
+    } catch (error) {
+        alert('댓글 작성 중 오류가 발생했습니다.');
+    }
+}
+
+async function deleteComment(commentId) {
+    if (!confirm('댓글을 삭제하시겠습니까?')) return;
+
+    try {
+        const response = await fetch(COMMENT_DELETE_URL.replace('/0/delete/', `/${commentId}/delete/`), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            const commentEl = document.getElementById(`comment-${commentId}`);
+            if (commentEl) commentEl.remove();
+            const replyEl = document.getElementById(`reply-${commentId}`);
+            if (replyEl) replyEl.remove();
+        } else {
+            alert(result.error || '댓글 삭제에 실패했습니다.');
+        }
+    } catch (error) {
+        alert('댓글 삭제 중 오류가 발생했습니다.');
+    }
+}
+
+async function inviteShareMember(event) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+
+    try {
+        const response = await fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert(result.message || '공유 초대가 완료되었습니다.');
+            window.location.hash = '#tab-share';
+            window.location.reload();
+        } else {
+            alert(result.error || '공유 초대에 실패했습니다.');
+        }
+    } catch (error) {
+        alert('공유 초대 중 오류가 발생했습니다.');
+    }
+    return false;
+}
+
+// Quick Invite 기능
+async function sendQuickInvite() {
+    const email = document.getElementById('inviteEmail').value.trim();
+    const role = document.getElementById('inviteRole').value;
+    const name = document.getElementById('inviteName').value.trim();
+    const company = document.getElementById('inviteCompany').value.trim();
+    
+    if (!email || !role) {
+        alert('이메일과 역할을 모두 입력해주세요.');
+        return;
+    }
+    
+    // 이메일 형식 간단 검증
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        alert('올바른 이메일 주소를 입력해주세요.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('email', email);
+    formData.append('role', role);
+    if (name) formData.append('name', name);
+    if (company) formData.append('company', company);
+
+    try {
+        const response = await fetch(SHARE_CREATE_URL, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert(`${email} 님에게 초대장을 보냈습니다.`);
+            bootstrap.Modal.getInstance(document.getElementById('quickInviteModal')).hide();
+            window.location.hash = '#tab-share';
+            window.location.reload();
+        } else {
+            alert(result.error || '초대 실패');
+        }
+    } catch (error) {
+        alert('초대 중 오류가 발생했습니다.');
+    }
+}
+
+// 역할 지정 모달
+let currentTargetRole = '';
+
+function openRoleAssignModal(role) {
+    currentTargetRole = role;
+    const roleNames = {
+        'REVIEWER': '검토자 (팀장/QA)',
+        'APPROVER': '최종 승인자 (임원)'
+    };
+    const roleName = roleNames[role] || role;
+    document.getElementById('targetRoleName').innerText = roleName;
+    
+    const modal = new bootstrap.Modal(document.getElementById('roleAssignModal'));
+    modal.show();
+}
+
+function closeRoleAssignModal() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('roleAssignModal'));
+    if (modal) {
+        modal.hide();
+    }
+}
+
+async function assignRole(shareId, email) {
+    if (!currentTargetRole) {
+        alert('역할이 선택되지 않았습니다.');
+        return;
+    }
+
+    const updateUrl = `/v2/products/share/${shareId}/update-permission/`;
+    const formData = new FormData();
+    formData.append('role', currentTargetRole);
+
+    try {
+        const response = await fetch(updateUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert(`${email} 님을 ${currentTargetRole} 역할로 지정했습니다.`);
+            closeRoleAssignModal();
+            window.location.reload();
+        } else {
+            alert(result.error || '역할 지정에 실패했습니다.');
+        }
+    } catch (error) {
+        alert('역할 지정 중 오류가 발생했습니다.');
+    }
+}
+
+async function updateShareRole(selectElement) {
+    const updateUrl = selectElement.dataset.updateUrl;
+    if (!updateUrl) {
+        alert('권한 변경 URL이 없습니다.');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('role', selectElement.value);
+
+    try {
+        const response = await fetch(updateUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+            alert(result.error || '권한 변경에 실패했습니다.');
+        }
+    } catch (error) {
+        alert('권한 변경 중 오류가 발생했습니다.');
+    }
+}
+
+async function revokeShare(button) {
+    const revokeUrl = button.dataset.revokeUrl;
+    const email = button.dataset.shareEmail || '해당 사용자';
+    if (!revokeUrl) {
+        alert('공유 해제 URL이 없습니다.');
+        return;
+    }
+
+    if (!confirm(`${email} 님의 공유를 해제하시겠습니까?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(revokeUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            window.location.hash = '#tab-share';
+            window.location.reload();
+        } else {
+            alert(result.error || '공유 해제에 실패했습니다.');
+        }
+    } catch (error) {
+        alert('공유 해제 중 오류가 발생했습니다.');
+    }
+}
+
+// BOM 에디터 iframe에서 저장 완료 메시지 수신
+window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'bomSaved') {
+        // BOM 탭이 활성화된 상태라면 iframe 리로드
+        const bomTab = document.querySelector('[data-bs-target="#tab-bom"]');
+        if (bomTab && bomTab.classList.contains('active')) {
+            const iframe = document.getElementById('bomEditorFrame');
+            if (iframe) {
+                iframe.src = iframe.src; // iframe 리로드
+            }
+        }
+    }
+});
+
+// 워크플로우 관리 스크립트
+const workflowShares = [
+    {% for share in shares %}
+    {
+        email: "{{ share.recipient_email|escapejs }}",
+        username: "{{ share.display_name|escapejs }}",
+        role: "{{ share.permission_record.role_code|default:'VIEWER' }}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+// 페이지 로드 시 워크플로우 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initializeWorkflow();
+});
+
+function initializeWorkflow() {
+    // 역할별로 그룹핑
+    const roleGroups = {
+        'UPLOADER': [],
+        'EDITOR': [],
+        'REVIEWER': [],
+        'APPROVER': [],
+        'VIEWER': []
+    };
+    
+    workflowShares.forEach(share => {
+        if (roleGroups.hasOwnProperty(share.role)) {
+            roleGroups[share.role].push(share);
+        }
+    });
+    
+    // 각 역할별 리스트 채우기
+    populateRoleList('uploader', roleGroups['UPLOADER'], 'UPLOADER');
+    populateRoleList('editor', roleGroups['EDITOR'], 'EDITOR');
+    populateRoleList('reviewer', roleGroups['REVIEWER'], 'REVIEWER');
+    populateRoleList('approver', roleGroups['APPROVER'], 'APPROVER');
+    populateRoleList('viewer', roleGroups['VIEWER'], 'VIEWER');
+}
+
+function populateRoleList(containerId, users, role) {
+    const container = document.getElementById(`${containerId}-list`);
+    if (!container) return;
+    
+    container.innerHTML = '';
+    users.forEach(user => {
+        const userItem = createUserItemElement(user, role);
+        container.appendChild(userItem);
+    });
+}
+
+function createUserItemElement(user, role) {
+    const div = document.createElement('div');
+    div.className = 'd-flex align-items-center mb-1';
+    
+    const initial = user.username && user.username !== '(미가입)' 
+        ? user.username.charAt(0).toUpperCase() 
+        : user.email.charAt(0).toUpperCase();
+    const displayName = user.username !== '(미가입)' ? user.username : user.email;
+    
+    // 역할별 아이콘/스타일
+    let iconHtml = '';
+    if (role === 'UPLOADER') {
+        iconHtml = `<span class="badge bg-primary text-white me-1 flex-shrink-0 badge-micro">업체</span>`;
+    } else if (role === 'EDITOR') {
+        iconHtml = `<div class="avatar bg-success text-white rounded-circle small me-1 flex-shrink-0 badge-micro" style="width:18px;height:18px;">${initial}</div>`;
+    } else if (role === 'REVIEWER') {
+        iconHtml = `<i class="bi bi-check-circle-fill text-warning me-1 small flex-shrink-0"></i>`;
+    } else if (role === 'APPROVER') {
+        iconHtml = `<i class="bi bi-shield-lock-fill text-danger me-1 small flex-shrink-0"></i>`;
+    } else if (role === 'VIEWER') {
+        iconHtml = `<i class="bi bi-eye-fill text-info me-1 small flex-shrink-0"></i>`;
+    }
+    
+    div.innerHTML = `
+        ${iconHtml}
+        <span class="small text-truncate-id text-muted" title="${displayName}">${displayName}</span>
+    `;
+    return div;
+}
+
+// 일괄 배정 전송
+async function submitBulkAssign(e) {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    
+    btn.disabled = true;
+    btn.innerText = "전송 중...";
+
+    // 각 역할별 이메일 수집
+    const emailsUploader = form.elements['emails_uploader'].value.trim();
+    const emailsEditor = form.elements['emails_editor'].value.trim();
+    const emailsReviewer = form.elements['emails_reviewer'].value.trim();
+    const emailsApprover = form.elements['emails_approver'].value.trim();
+    const emailsViewer = form.elements['emails_viewer'] ? form.elements['emails_viewer'].value.trim() : '';
+
+    try {
+        // 각 역할별로 개별 초대 요청
+        const invitePromises = [];
+        
+        if (emailsUploader) {
+            const emails = emailsUploader.split(',').map(e => e.trim()).filter(e => e);
+            emails.forEach(email => {
+                invitePromises.push(sendInvite(email, 'UPLOADER'));
+            });
+        }
+        
+        if (emailsEditor) {
+            const emails = emailsEditor.split(',').map(e => e.trim()).filter(e => e);
+            emails.forEach(email => {
+                invitePromises.push(sendInvite(email, 'EDITOR'));
+            });
+        }
+        
+        if (emailsReviewer) {
+            const emails = emailsReviewer.split(',').map(e => e.trim()).filter(e => e);
+            emails.forEach(email => {
+                invitePromises.push(sendInvite(email, 'REVIEWER'));
+            });
+        }
+        
+        if (emailsApprover) {
+            const emails = emailsApprover.split(',').map(e => e.trim()).filter(e => e);
+            emails.forEach(email => {
+                invitePromises.push(sendInvite(email, 'APPROVER'));
+            });
+        }
+        
+        if (emailsViewer) {
+            const emails = emailsViewer.split(',').map(e => e.trim()).filter(e => e);
+            emails.forEach(email => {
+                invitePromises.push(sendInvite(email, 'VIEWER'));
+            });
+        }
+
+        if (invitePromises.length === 0) {
+            alert('최소 1명 이상의 이메일을 입력해주세요.');
+            btn.disabled = false;
+            btn.innerText = "일괄 초대 발송";
+            return false;
+        }
+
+        await Promise.all(invitePromises);
+        
+        alert(`팀 구성이 완료되었습니다! (${invitePromises.length}명 초대)`);
+        bootstrap.Modal.getInstance(document.getElementById('bulkAssignModal')).hide();
+        window.location.reload();
+        
+    } catch (error) {
+        alert('일괄 초대 중 오류가 발생했습니다.');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "일괄 초대 발송";
+    }
+    
+    return false;
+}
+
+async function sendInvite(email, role) {
+    const formData = new FormData();
+    formData.append('email', email);  // 'recipient_email' → 'email'
+    formData.append('role', role);    // 'role_code' → 'role'
+
+    const response = await fetch(SHARE_CREATE_URL, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': CSRF_TOKEN
+        },
+        body: formData
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+        throw new Error(result.error || '초대 실패');
+    }
+    return result;
+}
+
+function openInviteModalWithRole(roleType) {
+    const modal = new bootstrap.Modal(document.getElementById('quickInviteModal'));
+    const roleSelect = document.getElementById('inviteRole');
+    
+    if (roleSelect) {
+        roleSelect.value = roleType;
+    }
+    
+    modal.show();
+}
+
+function openQuickInvite() {
+    openInviteModalWithRole('');
+}
+
+// 권한 설정 탭 함수들은 _permission_tab.html에서 처리됨
+
+// 인물 삭제 - 최종 확인 후 리로드
+async function deletePerson() {
+    if (!window.selectedShareId) {
+        alert('이 사용자는 현재 제품에 공유되지 않았습니다.');
+        return;
+    }
+    
+    if (window.selectedIsOwner) {
+        alert('이 사용자는 현재 제품에 공유되지 않았습니다.');
+        return;
+    }
+    
+    if (selectedIsOwner) {
+        alert('Owner는 삭제할 수 없습니다.');
+        return;
+    }
+    
+    if (!confirm('정말로 이 사용자의 공유를 완전히 삭제하시겠습니까?\n\n이 작업은 취소할 수 없으며, 팔레트에서도 제거됩니다.\n다시 추가하려면 새로 초대해야 합니다.')) {
+        return;
+    }
+    
+    try {
+        const revokeUrl = `/v2/products/share/${selectedShareId}/revoke/`;
+        
+        const response = await fetch(revokeUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRF_TOKEN
+            }
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            alert('공유가 완전히 삭제되었습니다.');
+            sessionStorage.setItem('returnToTab', 'share');
+            location.reload();
+        } else {
+            alert(result.error || '삭제에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('삭제 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
+
+// 모바일 사이드바 토글
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('workspace-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    if (!sidebar || !overlay) {
+        console.error('Sidebar or overlay not found');  
+        return;
+    }
+    
+    sidebar.classList.toggle('show');
+    overlay.classList.toggle('show');
+}
+
+// 문서 업로드 - 드래그 앤 드롭 및 클릭 업로드
+document.addEventListener('DOMContentLoaded', function() {
+    // 스마트 업로드 모달이 있으면 레거시 업로드 핸들러는 비활성화
+    if (document.getElementById('smartUploadModal') || document.getElementById('smart-upload-form')) {
+        return;
+    }
+    
+    const fileInput = document.getElementById('document-upload-input');
+    
+    if (!fileInput) {
+        console.warn('파일 입력이 없습니다');
+        return;
+    }
+    
+    // 파일 선택 시 업로드
+    fileInput.addEventListener('change', function(e) {
+        if (this.files.length > 0) {
+            handleFileUpload(this.files);
+        }
+    });
+});
+
+// CSRF 토큰 가져오기 함수 (전역 CSRF_TOKEN 사용)
+function getCsrfToken() {
+    // 전역 변수 CSRF_TOKEN이 정의되어 있으면 사용
+    if (typeof CSRF_TOKEN !== 'undefined' && CSRF_TOKEN) {
+        return CSRF_TOKEN;
+    }
+    
+    // 1. hidden input에서 찾기
+    let tokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (tokenElement) return tokenElement.value;
+    
+    // 2. 쿠키에서 찾기
+    const cookieValue = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='));
+    if (cookieValue) return cookieValue.split('=')[1];
+    
+    console.error('CSRF 토큰을 찾을 수 없습니다');
+    return null;
+}
+
+// 파일 업로드 처리
+async function handleFileUpload(files) {
+    if (files.length === 0) {
+        console.warn('파일이 없습니다');
+        return;
+    }
+    
+    const csrfToken = getCsrfToken();
+    
+    if (!csrfToken) {
+        alert('보안 토큰을 찾을 수 없습니다. 페이지를 새로고침 해주세요.');
+        return;
+    }
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // 각 파일을 순차적으로 업로드
+    for (let i = 0; i < files.length; i++) {
+        const formData = new FormData();
+        formData.append('file', files[i]);
+        
+        try {
+            const url = "{% url 'products:document_upload_api' label_id=product.my_label_id %}";
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                successCount++;
+            } else {
+                failCount++;
+                console.error(`✗ ${files[i].name} 업로드 실패:`, result.error);
+            }
+        } catch (error) {
+            failCount++;
+            console.error(`✗ ${files[i].name} 업로드 오류:`, error);
+        }
+    }
+    
+    // 결과 메시지 표시
+    if (successCount > 0) {
+        if (failCount > 0) {
+            alert(`${successCount}개 파일 업로드 성공, ${failCount}개 실패했습니다.`);
+        } else {
+            alert(`${successCount}개 파일이 업로드되었습니다.`);
+        }
+        location.reload();
+    } else {
+        alert('파일 업로드에 실패했습니다. 콘솔을 확인하세요.');
+    }
+}
+
+
+// 문서 선택 및 상세 정보 표시
+const documentData = {
+    {% for doc in documents %}
+        {{ doc.document_id }}: {
+            id: {{ doc.document_id }},
+            filename: "{{ doc.original_filename|escapejs }}",
+            type: "{{ doc.document_type.type_name|default:'미분류'|escapejs }}",
+            typeId: {{ doc.document_type.type_id }},
+            typeName: "{{ doc.document_type.type_name|default:'미분류'|escapejs }}",
+            slotId: {% if doc.slot %}{{ doc.slot.slot_id }}{% else %}null{% endif %},
+            fileSize: {{ doc.file_size }},
+            uploadedBy: "{{ doc.uploaded_by.username|default:'시스템'|escapejs }}",
+            uploadedDate: "{{ doc.uploaded_datetime|date:'Y.m.d H:i'|escapejs }}",
+            expiryDate: {% if doc.expiry_date %}"{{ doc.expiry_date|date:'Y-m-d'|escapejs }}"{% else %}null{% endif %},
+            issueDate: {% if doc.issue_date %}"{{ doc.issue_date|date:'Y-m-d'|escapejs }}"{% else %}null{% endif %},
+            description: "{{ doc.description|default:''|escapejs }}",
+            expiryNotificationEnabled: {{ doc.expiry_notification_enabled|yesno:"true,false" }},
+            expiryNotificationDays: {{ doc.expiry_notification_days|default:30 }},
+            fileUrl: "{% url 'products:document_detail' document_id=doc.document_id %}",
+            downloadUrl: "{% url 'products:document_download' document_id=doc.document_id %}",
+            extension: "{{ doc.file_extension|default:''|escapejs }}"
+        }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+};
+
+// 개별 문서 삭제
+async function deleteDocument(docId) {
+    if (!confirm('이 문서를 삭제하시겠습니까?')) {
+        return;
+    }
+    
+    try {
+        const csrftoken = getCsrfToken();
+        const response = await fetch(`/v2/products/documents/${docId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            }
+        });
+        
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('삭제에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('삭제 중 오류가 발생했습니다.');
+    }
+}
+
+// 문서 미리보기
+function previewDocument(docId) {
+    const doc = documentData[docId];
+    if (!doc) return;
+
+    const extension = (doc.extension || '').toLowerCase();
+    const previewUrl = doc.downloadUrl || doc.fileUrl;
+
+    // 모달 생성
+    const modalHtml = `
+        <div class="modal fade" id="documentPreviewModal" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-light">
+                        <div>
+                            <h5 class="modal-title mb-1"><i class="bi bi-eye me-2"></i>${doc.filename}</h5>
+                            <p class="mb-0 text-muted small">${doc.type} · ${(doc.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-0" style="min-height: 70vh; max-height: 80vh; overflow: auto;">
+                        ${extension === 'pdf' ?
+                            `<div id="pdf-viewer-container" style="height: 100%; min-height: 70vh;">
+                                <div class="d-flex justify-content-center align-items-center" style="height: 70vh;">
+                                    <div class="text-center">
+                                        <div class="spinner-border text-primary mb-3" role="status">
+                                            <span class="visually-hidden">로딩 중...</span>
+                                        </div>
+                                        <p class="text-muted">PDF를 불러오는 중...</p>
+                                    </div>
+                                </div>
+                            </div>` :
+                            ['jpg', 'jpeg', 'png', 'gif'].includes(extension) ?
+                            `<img src="${previewUrl}" style="max-width: 100%; height: auto;" class="d-block mx-auto">` :
+                            `<div class="text-center py-5">
+                                <i class="bi bi-file-earmark text-muted icon-2xl"></i>
+                                <p class="mt-3">미리보기를 지원하지 않는 파일 형식입니다.</p>
+                                <a href="${previewUrl}" class="btn btn-primary" download>다운로드</a>
+                            </div>`
+                        }
+                    </div>
+                    ${extension === 'pdf' ? `
+                    <div class="modal-footer bg-light border-top">
+                        <div class="d-flex align-items-center gap-2 flex-grow-1">
+                            <button class="btn btn-sm btn-light" id="pdf-prev-page"><i class="bi bi-chevron-left"></i></button>
+                            <span id="pdf-page-info" class="text-muted small">페이지 <span id="pdf-page-num">-</span> / <span id="pdf-page-count">-</span></span>
+                            <button class="btn btn-sm btn-light" id="pdf-next-page"><i class="bi bi-chevron-right"></i></button>
+                        </div>
+                        <a href="${previewUrl}" class="btn btn-primary btn-sm" download>
+                            <i class="bi bi-download me-1"></i>다운로드
+                        </a>
+                    </div>` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('documentPreviewModal');
+    if (existingModal) existingModal.remove();
+    
+    // 새 모달 추가 및 표시
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById('documentPreviewModal'));
+    modal.show();
+    
+    // PDF인 경우 pdf.js로 렌더링
+    if (extension === 'pdf') {
+        loadPdfViewer(previewUrl);
+    }
+    
+    // 모달 닫힐 때 DOM에서 제거
+    document.getElementById('documentPreviewModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+// PDF 뷰어 로드 (pdf.js 사용)
+async function loadPdfViewer(pdfUrl) {
+    try {
+        // pdf.js 라이브러리 동적 로드
+        if (typeof pdfjsLib === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            document.head.appendChild(script);
+            
+            await new Promise((resolve, reject) => {
+                script.onload = resolve;
+                script.onerror = reject;
+            });
+            
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        
+        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        const pdf = await loadingTask.promise;
+        
+        let currentPage = 1;
+        const totalPages = pdf.numPages;
+        
+        document.getElementById('pdf-page-count').textContent = totalPages;
+        
+        const container = document.getElementById('pdf-viewer-container');
+        container.innerHTML = '<canvas id="pdf-canvas" style="display: block; margin: 0 auto;"></canvas>';
+        
+        const canvas = document.getElementById('pdf-canvas');
+        const context = canvas.getContext('2d');
+        
+        async function renderPage(pageNumber) {
+            const page = await pdf.getPage(pageNumber);
+            const viewport = page.getViewport({ scale: 1.5 });
+            
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            const renderContext = {
+                canvasContext: context,
+                viewport: viewport
+            };
+            
+            await page.render(renderContext).promise;
+            document.getElementById('pdf-page-num').textContent = pageNumber;
+        }
+        
+        await renderPage(currentPage);
+        
+        document.getElementById('pdf-prev-page').addEventListener('click', async () => {
+            if (currentPage > 1) {
+                currentPage--;
+                await renderPage(currentPage);
+            }
+        });
+        
+        document.getElementById('pdf-next-page').addEventListener('click', async () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                await renderPage(currentPage);
+            }
+        });
+        
+    } catch (error) {
+        console.error('PDF 로드 실패:', error);
+        document.getElementById('pdf-viewer-container').innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-exclamation-triangle text-warning icon-xl"></i>
+                <p class="mt-3 text-muted">PDF를 불러올 수 없습니다.</p>
+                <a href="${pdfUrl}" class="btn btn-primary" target="_blank">새 탭에서 열기</a>
+            </div>
+        `;
+    }
+}
+
+
+// 만료일 알림 토글
+async function toggleExpiryNotification(docId) {
+    try {
+        const csrftoken = getCsrfToken();
+        const response = await fetch(`/v2/products/documents/${docId}/toggle-notification/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const btn = document.getElementById(`notify-btn-${docId}`);
+            const icon = btn.querySelector('i');
+            
+            if (data.enabled) {
+                btn.classList.add('text-warning');
+                icon.className = 'bi bi-bell';
+            } else {
+                btn.classList.remove('text-warning');
+                icon.className = 'bi bi-bell-slash';
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('알림 설정 변경 중 오류가 발생했습니다.');
+    }
+}
+
+// 버전 이력 보기
+function showVersionHistory(docId) {
+    const doc = documentData[docId];
+    const filename = doc ? doc.filename : '문서';
+    
+    // 버전 이력 모달 표시
+    const modalHtml = `
+        <div class="modal fade" id="versionHistoryModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-light">
+                        <div>
+                            <h5 class="modal-title mb-1"><i class="bi bi-clock-history me-2"></i>버전 이력 (History)</h5>
+                            <p class="mb-0 text-muted small">${filename}</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <div id="version-history-content">
+                            <div class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">로딩 중...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 기존 모달 제거
+    const existingModal = document.getElementById('versionHistoryModal');
+    if (existingModal) existingModal.remove();
+    
+    // 새 모달 추가 및 표시
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = new bootstrap.Modal(document.getElementById('versionHistoryModal'));
+    modal.show();
+    
+    // 버전 이력 로드
+    loadVersionHistory(docId);
+    
+    // 모달 닫힐 때 DOM에서 제거
+    document.getElementById('versionHistoryModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+async function loadVersionHistory(docId) {
+    try {
+        const response = await fetch(`/v2/products/documents/${docId}/versions/`);
+        if (response.ok) {
+            const data = await response.json();
+            displayVersionHistory(data.versions);
+        } else {
+            document.getElementById('version-history-content').innerHTML = 
+                '<div class="alert alert-warning">버전 이력을 불러올 수 없습니다.</div>';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('version-history-content').innerHTML = 
+            '<div class="alert alert-danger">오류가 발생했습니다.</div>';
+    }
+}
+
+function displayVersionHistory(versions) {
+    if (versions.length === 0) {
+        document.getElementById('version-history-content').innerHTML = 
+            '<div class="text-center text-muted py-5">버전 이력이 없습니다.</div>';
+        return;
+    }
+    
+    const html = `
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 15%;">버전</th>
+                        <th style="width: 20%;">날짜</th>
+                        <th style="width: 20%;">등록자</th>
+                        <th style="width: 30%;">설명</th>
+                        <th style="width: 15%; text-align: center;">작업</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${versions.map((v, idx) => `
+                        <tr class="${idx === 0 ? 'table-primary' : ''}">
+                            <td>
+                                <span class="badge ${idx === 0 ? 'bg-primary' : 'bg-secondary'}">v${v.version}.0</span>
+                                ${idx === 0 ? '<small class="text-primary ms-2 fw-semibold">현재 (Current)</small>' : ''}
+                            </td>
+                            <td><small class="text-muted">${v.uploaded_date}</small></td>
+                            <td><small class="text-muted">${v.uploaded_by}</small></td>
+                            <td>
+                                <small class="text-muted">
+                                    ${idx === 0 ? '최근 업데이트' : idx === versions.length - 1 ? '최초 등록' : '변경 사항'}
+                                </small>
+                            </td>
+                            <td class="text-center">
+                                <a href="${v.file_url}" class="btn btn-sm btn-light border" download title="다운로드">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    document.getElementById('version-history-content').innerHTML = html;
+}
+
+// 삭제 권한 확인
+const canDelete = {{ can_upload_documents|yesno:"true,false" }};
+
+// 패널 접기/펼치기 함수
+function toggleLeftPanel() {
+    const palette = document.querySelector('.people-palette');
+    const layout = document.querySelector('.permission-layout');
+    const btn = palette.querySelector('.panel-toggle-btn i');
+    
+    palette.classList.toggle('panel-collapsed');
+    
+    if (palette.classList.contains('panel-collapsed')) {
+        btn.className = 'bi bi-chevron-right';
+        if (document.querySelector('.person-detail-panel').classList.contains('panel-collapsed')) {
+            layout.classList.remove('right-collapsed');
+            layout.classList.add('both-collapsed');
+        } else {
+            layout.classList.remove('both-collapsed', 'right-collapsed');
+            layout.classList.add('left-collapsed');
+        }
+    } else {
+        btn.className = 'bi bi-chevron-left';
+        if (document.querySelector('.person-detail-panel').classList.contains('panel-collapsed')) {
+            layout.classList.remove('both-collapsed', 'left-collapsed');
+            layout.classList.add('right-collapsed');
+        } else {
+            layout.classList.remove('left-collapsed', 'right-collapsed', 'both-collapsed');
+        }
+    }
+}
+
+function toggleRightPanel() {
+    const panel = document.querySelector('.person-detail-panel');
+    const layout = document.querySelector('.permission-layout');
+    const btn = panel.querySelector('.panel-toggle-btn i');
+    
+    panel.classList.toggle('panel-collapsed');
+    
+    if (panel.classList.contains('panel-collapsed')) {
+        btn.className = 'bi bi-chevron-left';
+        if (document.querySelector('.people-palette').classList.contains('panel-collapsed')) {
+            layout.classList.remove('left-collapsed');
+            layout.classList.add('both-collapsed');
+        } else {
+            layout.classList.remove('both-collapsed', 'left-collapsed');
+            layout.classList.add('right-collapsed');
+        }
+    } else {
+        btn.className = 'bi bi-chevron-right';
+        if (document.querySelector('.people-palette').classList.contains('panel-collapsed')) {
+            layout.classList.remove('both-collapsed', 'right-collapsed');
+            layout.classList.add('left-collapsed');
+        } else {
+            layout.classList.remove('left-collapsed', 'right-collapsed', 'both-collapsed');
+        }
+    }
+}
+
+// ============================================
+// 빠른 목차 (Quick Navigation) 기능
+// ============================================
+
+// 빠른 목차 스크롤 스파이
+document.addEventListener('DOMContentLoaded', function() {
+    const quickNavItems = document.querySelectorAll('#navbar-toc .nav-link');
+    const sections = document.querySelectorAll('[id^="section-"]');
+    
+    if (quickNavItems.length === 0 || sections.length === 0) return;
+    
+    // 목차 클릭 시 부드러운 스크롤
+    quickNavItems.forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const targetId = this.getAttribute('data-section');
+            const targetSection = document.getElementById(targetId);
+            
+            if (targetSection) {
+                const scrollContainer = document.querySelector('.info-tab-main');
+                
+                if (scrollContainer) {
+                    // 첫 번째 섹션(제품 개요)은 맨 상단으로 스크롤 (헤더까지 보이도록)
+                    if (targetId === 'section-overview') {
+                        scrollContainer.scrollTo({
+                            top: 0,
+                            behavior: 'smooth'
+                        });
+                    } else {
+                        // 다른 섹션들은 스크롤 컨테이너 기준으로 위치 계산
+                        const containerRect = scrollContainer.getBoundingClientRect();
+                        const targetRect = targetSection.getBoundingClientRect();
+                        const scrollTop = scrollContainer.scrollTop;
+                        const targetPosition = targetRect.top - containerRect.top + scrollTop;
+                        
+                        scrollContainer.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+                
+                // 히스토리에 추가 (뒤로가기 지원)
+                history.pushState(null, '', `#${targetId}`);
+            }
+        });
+    });
+    
+    // 스크롤 시 현재 섹션 감지 (Intersection Observer 사용)
+    let visibleSections = new Map(); // 현재 보이는 섹션들과 비율 저장
+    
+    const observerOptions = {
+        root: document.querySelector('.info-tab-main'),
+        rootMargin: '-80px 0px -50% 0px', // 헤더 아래부터, 화면 상단 50%만 감지
+        threshold: [0, 0.25, 0.5, 0.75, 1.0]
+    };
+    
+    const sectionObserver = new IntersectionObserver((entries) => {
+        // 보이는 섹션 상태 업데이트
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                visibleSections.set(entry.target.id, entry.intersectionRatio);
+            } else {
+                visibleSections.delete(entry.target.id);
+            }
+        });
+        
+        // 가장 많이 보이는 섹션 찾기
+        let maxRatio = 0;
+        let activeSection = null;
+        
+        visibleSections.forEach((ratio, sectionId) => {
+            if (ratio > maxRatio) {
+                maxRatio = ratio;
+                activeSection = sectionId;
+            }
+        });
+        
+        // active 섹션이 있으면 목차 업데이트
+        if (activeSection) {
+            quickNavItems.forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('data-section') === activeSection) {
+                    item.classList.add('active');
+                }
+            });
+        }
+    }, observerOptions);
+    
+    // 모든 섹션 관찰
+    sections.forEach(section => {
+        sectionObserver.observe(section);
+    });
+    
+    // 초기 로드 시 첫 번째 항목 active
+    if (quickNavItems.length > 0) {
+        quickNavItems[0].classList.add('active');
+    }
+    
+    // 페이지 로드 시 URL 해시 확인
+    if (window.location.hash) {
+        const targetId = window.location.hash.substring(1);
+        const targetSection = document.getElementById(targetId);
+        
+        if (targetSection && targetId.startsWith('section-')) {
+            setTimeout(() => {
+                const scrollContainer = document.querySelector('.info-tab-main');
+                
+                if (scrollContainer) {
+                    if (targetId === 'section-overview') {
+                        scrollContainer.scrollTo({
+                            top: 0,
+                            behavior: 'smooth'
+                        });
+                    } else {
+                        const containerRect = scrollContainer.getBoundingClientRect();
+                        const targetRect = targetSection.getBoundingClientRect();
+                        const scrollTop = scrollContainer.scrollTop;
+                        const targetPosition = targetRect.top - containerRect.top + scrollTop;
+                        
+                        scrollContainer.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            }, 300);
+        }
+    }
+});
+
+// ============================================
+// 플로팅 저장 바 & 폼 변경 감지
+// ============================================
+
+let hasUnsavedChanges = false;
+let originalFormData = {};
+
+// 폼 초기값 저장
+document.addEventListener('DOMContentLoaded', function() {
+    const basicInfoForm = document.getElementById('basic-info-form');
+    if (!basicInfoForm) return;
+    
+    // 모든 입력 필드의 초기값 저장
+    const formElements = basicInfoForm.querySelectorAll('input, textarea, select');
+    formElements.forEach(element => {
+        if (element.id) {
+            if (element.type === 'checkbox') {
+                originalFormData[element.id] = element.checked;
+            } else {
+                originalFormData[element.id] = element.value;
+            }
+        }
+    });
+    
+    // 폼 변경 감지
+    formElements.forEach(element => {
+        element.addEventListener('input', checkFormChanges);
+        element.addEventListener('change', checkFormChanges);
+        
+        // 실시간 검증 추가
+        if (element.hasAttribute('required')) {
+            element.addEventListener('blur', function() {
+                validateField(element);
+            });
+            element.addEventListener('input', function() {
+                if (element.classList.contains('is-invalid')) {
+                    validateField(element);
+                }
+            });
+        }
+    });
+    
+    // 초기 로드 시 필수 필드 검증 (값이 있는지 확인)
+    formElements.forEach(element => {
+        if (element.hasAttribute('required') && element.value) {
+            element.classList.add('is-valid');
+        }
+    });
+});
+
+// 필드 검증 함수
+function validateField(field) {
+    if (field.hasAttribute('required')) {
+        if (field.value.trim() === '') {
+            field.classList.remove('is-valid');
+            field.classList.add('is-invalid');
+            return false;
+        } else {
+            field.classList.remove('is-invalid');
+            field.classList.add('is-valid');
+            return true;
+        }
+    }
+    return true;
+}
+
+// 전체 폼 검증
+function validateForm() {
+    const basicInfoForm = document.getElementById('basic-info-form');
+    if (!basicInfoForm) return true;
+    
+    const requiredFields = basicInfoForm.querySelectorAll('[required]');
+    let isValid = true;
+    let firstInvalidField = null;
+    
+    requiredFields.forEach(field => {
+        if (!validateField(field)) {
+            isValid = false;
+            if (!firstInvalidField) {
+                firstInvalidField = field;
+            }
+        }
+    });
+    
+    if (!isValid && firstInvalidField) {
+        // 첫 번째 오류 필드로 스크롤
+        firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstInvalidField.focus();
+        showToast('필수 항목을 모두 입력해주세요', 'error');
+    }
+    
+    return isValid;
+}
+
+// 폼 변경사항 확인
+function checkFormChanges() {
+    const basicInfoForm = document.getElementById('basic-info-form');
+    if (!basicInfoForm) return;
+    
+    const formElements = basicInfoForm.querySelectorAll('input, textarea, select');
+    let hasChanges = false;
+    
+    formElements.forEach(element => {
+        if (element.id && originalFormData.hasOwnProperty(element.id)) {
+            const currentValue = element.type === 'checkbox' ? element.checked : element.value;
+            const originalValue = originalFormData[element.id];
+            
+            if (currentValue !== originalValue) {
+                hasChanges = true;
+            }
+        }
+    });
+    
+    hasUnsavedChanges = hasChanges;
+    
+    // 플로팅 저장 바 표시/숨김
+    const floatingBar = document.getElementById('floating-save-bar');
+    if (floatingBar) {
+        if (hasChanges) {
+            floatingBar.style.display = 'block';
+            // 애니메이션 트리거
+            setTimeout(() => {
+                floatingBar.classList.add('show');
+            }, 10);
+        } else {
+            floatingBar.classList.remove('show');
+            setTimeout(() => {
+                floatingBar.style.display = 'none';
+            }, 300);
+        }
+    }
+}
+
+// 변경사항 취소
+function discardChanges() {
+    const basicInfoForm = document.getElementById('basic-info-form');
+    if (!basicInfoForm) return;
+    
+    // 모든 필드를 원래 값으로 복원
+    const formElements = basicInfoForm.querySelectorAll('input, textarea, select');
+    formElements.forEach(element => {
+        if (element.id && originalFormData.hasOwnProperty(element.id)) {
+            if (element.type === 'checkbox') {
+                element.checked = originalFormData[element.id];
+            } else {
+                element.value = originalFormData[element.id];
+            }
+        }
+    });
+    
+    hasUnsavedChanges = false;
+    
+    // 플로팅 바 숨김
+    const floatingBar = document.getElementById('floating-save-bar');
+    if (floatingBar) {
+        floatingBar.classList.remove('show');
+        setTimeout(() => {
+            floatingBar.style.display = 'none';
+        }, 300);
+    }
+    
+    showToast('변경사항이 취소되었습니다', 'info');
+}
+
+// 페이지 이탈 경고
+window.addEventListener('beforeunload', function(e) {
+    if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '저장하지 않은 변경사항이 있습니다. 페이지를 나가시겠습니까?';
+        return e.returnValue;
+    }
+});
+
+// ============================================
+// Toast 알림 시스템
+// ============================================
+
+function showToast(message, type = 'success') {
+    // 기존 toast 제거
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    // 새 toast 생성
+    const toast = document.createElement('div');
+    toast.className = `toast-notification ${type}`;
+    
+    const icon = type === 'success' ? 'check-circle-fill' : 
+                 type === 'error' ? 'exclamation-circle-fill' : 
+                 type === 'warning' ? 'exclamation-triangle-fill' : 
+                 'info-circle-fill';
+    
+    toast.innerHTML = `
+        <i class="bi bi-${icon} me-2"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // 애니메이션 트리거
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+    
+    // 자동 제거
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }, 3000);
+}
+
+// ============================================
+// 기본 정보 저장 함수 (기존 함수 수정)
+// ============================================
+
+// 기존 saveBasicInfo 함수를 수정하여 Toast 알림 및 플로팅 바 처리
+const originalSaveBasicInfo = typeof saveBasicInfo !== 'undefined' ? saveBasicInfo : null;
+
+function saveBasicInfo() {
+    const basicInfoForm = document.getElementById('basic-info-form');
+    if (!basicInfoForm) {
+        showToast('폼을 찾을 수 없습니다', 'error');
+        return;
+    }
+
+    // 맞춤항목 JSON 동기화 (있을 경우)
+    if (typeof syncCustomFieldsJson === 'function') {
+        syncCustomFieldsJson();
+    }
+
+    // 텍스트/textarea/select 필드 수집 (id="field-*" 패턴)
+    // my_label_name: 신규 작성 폼에는 field가 있고, detail 뷰에서는 상단 workspace-product-name에서 가져옴
+    const myLabelNameEl = document.getElementById('field-my-label-name')
+                       || document.getElementById('workspace-product-name');
+    if (myLabelNameEl) payload['my_label_name'] = myLabelNameEl.value || '';
+
+    const textFieldMap = {
+        'field-prdlst-nm':          'prdlst_nm',
+        'field-ingredient-info':    'ingredient_info',
+        'field-prdlst-dcnm':        'prdlst_dcnm',
+        'field-prdlst-report-no':   'prdlst_report_no',
+        'field-content-weight':     'content_weight',
+        'field-country-of-origin':  'country_of_origin',
+        'field-storage-method':     'storage_method',
+        'field-frmlc-mtrqlt':       'frmlc_mtrqlt',
+        'field-bssh-nm':            'bssh_nm',
+        'field-distributor-address':'distributor_address',
+        'field-repacker-address':   'repacker_address',
+        'field-importer-address':   'importer_address',
+        'field-pog-daycnt':         'pog_daycnt',
+        'field-rawmtrl-nm':         'rawmtrl_nm',
+        'field-cautions':           'cautions',
+        'field-additional-info':    'additional_info',
+        'field-food-group':         'food_group',
+        'field-food-type':          'food_type',
+        'field-processing-condition': 'processing_condition',
+        'field-allergens':          'allergens',
+    };
+
+    const payload = {};
+
+    Object.entries(textFieldMap).forEach(([elemId, fieldName]) => {
+        const el = document.getElementById(elemId);
+        if (el) payload[fieldName] = el.value || '';
+    });
+
+    // 배타적 체크박스 그룹: preservation_type
+    const checkedPreservation = document.querySelector('.grp-preservation:checked');
+    payload['preservation_type'] = checkedPreservation ? checkedPreservation.value : '';
+
+    // 배타적 체크박스 그룹: processing_method
+    const checkedProcessing = document.querySelector('.grp-processing:checked');
+    payload['processing_method'] = checkedProcessing ? checkedProcessing.value : '';
+
+    // 맞춤항목 JSON
+    const cfJsonEl = document.getElementById('field-custom-fields-json');
+    if (cfJsonEl) {
+        try {
+            payload['custom_fields_json'] = cfJsonEl.value || '[]';
+        } catch(e) {
+            payload['custom_fields_json'] = '[]';
+        }
+    }
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                   || getCookie('csrftoken');
+
+    fetch(UPDATE_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(payload),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 원본 데이터 갱신
+            const formElements = basicInfoForm.querySelectorAll('input, textarea, select');
+            formElements.forEach(element => {
+                if (element.id) {
+                    if (element.type === 'checkbox') {
+                        originalFormData[element.id] = element.checked;
+                    } else {
+                        originalFormData[element.id] = element.value;
+                    }
+                }
+            });
+
+            hasUnsavedChanges = false;
+
+            // 플로팅 바 숨김
+            const floatingBar = document.getElementById('floating-save-bar');
+            if (floatingBar) {
+                floatingBar.classList.remove('show');
+                setTimeout(() => { floatingBar.style.display = 'none'; }, 300);
+            }
+
+            showToast('기본 정보가 저장되었습니다', 'success');
+        } else {
+            showToast(data.message || '저장 중 오류가 발생했습니다', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('저장 중 오류가 발생했습니다', 'error');
+    });
+}
+
+// ============================================
+// 즐겨찾기 토글 기능
+// ============================================
+
+function toggleFavorite() {
+    const productId = {{ product.my_label_id }};
+    const starIcon = document.getElementById('favorite-star');
+    
+    // CSRF 토큰 가져오기
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                      document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                      getCookie('csrftoken');
+    
+    fetch(`/v2/products/api/products/${productId}/favorite/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 아이콘 업데이트
+            if (data.is_starred) {
+                starIcon.classList.remove('bi-star', 'text-muted');
+                starIcon.classList.add('bi-star-fill', 'text-warning');
+                starIcon.title = '즐겨찾기 해제';
+                showToast('즐겨찾기에 추가되었습니다', 'success');
+            } else {
+                starIcon.classList.remove('bi-star-fill', 'text-warning');
+                starIcon.classList.add('bi-star', 'text-muted');
+                starIcon.title = '즐겨찾기 추가';
+                showToast('즐겨찾기에서 제거되었습니다', 'info');
+            }
+        } else {
+            showToast(data.error || '즐겨찾기 설정에 실패했습니다', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('즐겨찾기 설정 중 오류가 발생했습니다', 'error');
+    });
+}
+
+// getCookie 헬퍼 함수 (CSRF 토큰용)
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+</script>
+
+<!-- 스마트 업로드 모달 -->
+{% include 'products/_modal_upload.html' %}
+
+<!-- 스마트 업로드 JavaScript -->
+<script src="{% static 'js/smart_upload.js' %}?v=20260218"></script>
+
+<!-- 필수 문서 추가 모달 -->
+<div class="modal fade" id="addSlotModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 bg-light">
+                <h6 class="modal-title fw-bold">필수 문서 추가</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <div class="mb-3">
+                    <p class="text-muted small mb-0">문서함에 추가할 필수 문서를 선택하세요.</p>
+                </div>
+                <div class="form-floating">
+                    <select class="form-select" id="add-slot-type-select">
+                        <option value="">-- 추가할 문서를 선택하세요 --</option>
+                        {% for dtype in available_doc_types %}
+                        <option value="{{ dtype.type_id }}">{{ dtype.type_name }}{% if dtype.description %} - {{ dtype.description }}{% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    <label for="add-slot-type-select">문서 종류</label>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4" onclick="submitAddSlot()">
+                    <i class="bi bi-plus-lg me-1"></i>추가
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

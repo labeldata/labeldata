@@ -1,363 +1,211 @@
-{% extends 'base.html' %}
+{% extends 'base_v2.html' %}
 {% load static django_bootstrap5 %}
 {% block title %}질문 및 요청{% endblock %}
 
+{% block topbar %}
+<div class="v2-topbar-title-wrapper">
+    <i class="bi bi-chat-dots me-2 v2-topbar-icon"></i>
+    <span class="v2-topbar-title">질문 및 요청</span>
+    <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">기능 요청, 오류 제보 및 사업 문의</span>
+</div>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/board.css' %}">
+{% endblock %}
+
 {% block content %}
-<div class="container mt-4">
-    <div class="mb-1">
-        <h2 class="mb-1">질문 및 요청</h2>
-        <div class="d-flex justify-content-between align-items-center" style="margin-bottom: 1rem;">
-            <p class="text-muted mb-0" style="font-size: 0.875rem;">
-                시스템 매뉴얼을 확인하고, 기능 요청 및 오류 제보 등을 게시하세요.
-                {% if is_paginated %}
-                    <span class="ms-2">| 총 <strong>{{ page_obj.paginator.count }}</strong>개의 글</span>
-                {% endif %}
-            </p>
-            <a href="{% url 'board:create' %}" class="btn btn-primary" style="font-size: 0.9rem; white-space: nowrap;">
-                <i class="fas fa-pen me-1"></i>새 글 작성
-            </a>
+<!-- 툴바 -->
+<div class="board-toolbar">
+    <div class="board-toolbar-inner">
+        <!-- 검색 -->
+        <form method="get" action="{% url 'board:list' %}" class="board-search-box">
+            {% if current_filter != 'all' %}<input type="hidden" name="filter" value="{{ current_filter }}">{% endif %}
+            {% if current_sort != 'recent' %}<input type="hidden" name="sort" value="{{ current_sort }}">{% endif %}
+            {% if per_page != '10' %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+            <input type="text" name="q" placeholder="제목 또는 내용 검색" value="{{ search_query }}">
+            <button type="submit"><i class="bi bi-search"></i></button>
+        </form>
+
+        <!-- 필터 탭 -->
+        <div class="filter-tabs">
+            <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=all{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" class="filter-tab default {% if current_filter == 'all' %}active{% endif %}">전체</a>
+            {% if user.is_authenticated %}
+            <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=my{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" class="filter-tab my {% if current_filter == 'my' %}active{% endif %}">내 글</a>
+            {% endif %}
+            <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=waiting{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" class="filter-tab waiting {% if current_filter == 'waiting' %}active{% endif %}">답변대기</a>
+            <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=answered{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" class="filter-tab answered {% if current_filter == 'answered' %}active{% endif %}">답변완료</a>
+            <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=notice{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" class="filter-tab notice {% if current_filter == 'notice' %}active{% endif %}">공지사항</a>
+        </div>
+
+        <!-- 정렬/페이지수 -->
+        <div class="d-flex gap-2 ms-auto align-items-center">
+            <a href="{% url 'board:create' %}" class="v2-action-btn"><i class="bi bi-pencil"></i>새 글 작성</a>
+            <select class="board-select" onchange="location.href=this.value;">
+                <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}sort=recent{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" {% if current_sort == 'recent' %}selected{% endif %}>최신순</option>
+                <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}sort=views{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" {% if current_sort == 'views' %}selected{% endif %}>조회순</option>
+                <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}sort=comments{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" {% if current_sort == 'comments' %}selected{% endif %}>댓글순</option>
+            </select>
+            <button class="toolbar-btn icon-only" onclick="location.href='{% url 'board:list' %}'" title="새로고침"><i class="bi bi-arrow-clockwise"></i></button>
         </div>
     </div>
-    
-    {% bootstrap_messages %}
-    
-    <!-- 검색 및 필터 영역 -->
-    <div class="mb-2">
-        <div class="py-2">
-            <!-- 첫 번째 줄: 검색 + 새로고침 버튼 -->
-            <div class="row g-2 mb-2">
-                <div class="col-12">
-                    <div class="d-flex gap-2">
-                        <div class="flex-grow-1">
-                            <form method="get" action="{% url 'board:list' %}">
-                                <div class="input-group">
-                                    <input type="text" class="form-control" name="q" placeholder="제목 또는 내용 검색" value="{{ search_query }}" style="font-size: 0.9rem;">
-                                    {% if current_filter != 'all' %}<input type="hidden" name="filter" value="{{ current_filter }}">{% endif %}
-                                    {% if current_sort != 'recent' %}<input type="hidden" name="sort" value="{{ current_sort }}">{% endif %}
-                                    {% if per_page != '10' %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
-                                    <button class="btn btn-primary" type="submit" style="font-size: 0.9rem;">검색</button>
-                                </div>
-                            </form>
-                        </div>
-                        <button type="button" class="btn btn-outline-secondary" onclick="location.href='{% url 'board:list' %}'" style="font-size: 0.75rem; width:40px; padding: 0.375rem 0; text-align: center;" title="새로고침">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 두 번째 줄: 필터 + 정렬 -->
-            <div class="row g-2 align-items-center">
-                <!-- 필터 탭 -->
-                <div class="col-md-8">
-                    <div class="d-flex gap-2 flex-wrap">
-                        <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=all{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" 
-                           class="btn btn-sm {% if current_filter == 'all' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" style="font-size: 0.85rem; border-width: 2px;">전체</a>
-                        {% if user.is_authenticated %}
-                        <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=my{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" 
-                           class="btn btn-sm {% if current_filter == 'my' %}btn-info{% else %}btn-outline-info{% endif %}" style="font-size: 0.85rem; border-width: 2px;">내 글</a>
-                        {% endif %}
-                        <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=waiting{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" 
-                           class="btn btn-sm {% if current_filter == 'waiting' %}btn-warning{% else %}btn-outline-warning{% endif %}" style="font-size: 0.85rem; border-width: 2px;">답변대기</a>
-                        <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=answered{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" 
-                           class="btn btn-sm {% if current_filter == 'answered' %}btn-success{% else %}btn-outline-success{% endif %}" style="font-size: 0.85rem; border-width: 2px;">답변완료</a>
-                        <a href="?{% if search_query %}q={{ search_query }}&{% endif %}filter=notice{% if current_sort != 'recent' %}&sort={{ current_sort }}{% endif %}{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" 
-                           class="btn btn-sm {% if current_filter == 'notice' %}btn-primary{% else %}btn-outline-primary{% endif %}" style="font-size: 0.85rem; border-width: 2px;">공지사항</a>
-                    </div>
-                </div>
-                
-                <!-- 정렬 및 페이지당 게시글 수 -->
-                <div class="col-md-4 text-end">
-                    <div class="d-flex gap-1 justify-content-end">
-                        <select class="form-select form-select-sm" style="width: auto; font-size: 0.85rem;" onchange="location.href=this.value;">
-                            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}sort=recent{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" {% if current_sort == 'recent' %}selected{% endif %}>최신순</option>
-                            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}sort=views{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" {% if current_sort == 'views' %}selected{% endif %}>조회순</option>
-                            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}sort=comments{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" {% if current_sort == 'comments' %}selected{% endif %}>댓글순</option>
-                        </select>
-                        <select class="form-select form-select-sm" style="width: auto; font-size: 0.85rem;" onchange="location.href=this.value;">
-                            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=10" {% if per_page == '10' %}selected{% endif %}>10개</option>
-                            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=20" {% if per_page == '20' %}selected{% endif %}>20개</option>
-                            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=50" {% if per_page == '50' %}selected{% endif %}>50개</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
+</div>
+
+<div class="board-content">
     <!-- 게시판 테이블 -->
-    <div class="card mb-4">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th scope="col" class="text-center" style="width: 8%">번호</th>
-                        <th scope="col" class="text-center" style="width: 10%">구분</th>
-                        <th scope="col" class="text-center" style="width: 37%;">제목</th>
-                        <th scope="col" class="text-center d-none d-sm-table-cell" style="width: 10%;">작성일</th>
-                        <th scope="col" class="text-center d-none d-lg-table-cell" style="width: 12%;">작성자</th>
-                        <th scope="col" class="text-center d-none d-md-table-cell" style="width: 8%;">조회수</th>
-                        <th scope="col" class="text-center" style="width: 10%;">답변</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for board in boards %}
-                    {% now "U" as current_timestamp %}
-                    {% load tz %}
-                    <tr class="{% if board.is_notice %}table-warning{% endif %} board-row" data-url="{% url 'board:detail' board.pk %}" style="cursor: pointer;">
-                        <td class="text-center" style="width: 8%;">
-                            {% if board.is_notice %}
-                                <i class="fas fa-bullhorn text-secondary"></i>
-                            {% else %}
-                                {{ board.display_number }}
+    <div class="board-table-wrapper">
+        <table class="board-table">
+            <thead>
+                <tr>
+                    <th class="col-num">번호</th>
+                    <th class="col-cat">구분</th>
+                    <th class="col-title">제목</th>
+                    <th class="d-none d-sm-table-cell col-date">작성일</th>
+                    <th class="d-none d-lg-table-cell col-author">작성자</th>
+                    <th class="d-none d-md-table-cell col-views">조회</th>
+                    <th class="col-reply">답변</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for board in boards %}
+                {% now "U" as current_timestamp %}
+                {% load tz %}
+                <tr class="board-row {% if board.is_notice %}row-notice{% endif %}" data-url="{% url 'board:detail' board.pk %}">
+                    <td class="row-num">
+                        {% if board.is_notice %}
+                            <i class="bi bi-megaphone-fill text-muted"></i>
+                        {% else %}
+                            {{ board.display_number }}
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if board.is_notice %}
+                            <span class="badge-category notice">공지</span>
+                        {% elif '[기능 요청]' in board.title %}
+                            <span class="badge-category feature">기능 요청</span>
+                        {% elif '[오류 제보]' in board.title %}
+                            <span class="badge-category error">오류 제보</span>
+                        {% elif '[사업 제휴]' in board.title %}
+                            <span class="badge-category partner">사업 제휴</span>
+                        {% else %}
+                            <span class="badge-category none">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="td-title">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            {% if board.is_hidden %}
+                                <i class="bi bi-lock-fill board-icon-lock-xs" title="비밀글"></i>
                             {% endif %}
-                        </td>
-                        <td class="text-center" style="width: 10%;">
-                            {% if board.is_notice %}
-                                <span class="text-primary fw-bold" style="font-size: 0.85rem;">공지사항</span>
-                            {% elif '[기능 요청]' in board.title %}
-                                <span class="text-primary" style="font-size: 0.85rem;">기능 요청</span>
-                            {% elif '[오류 제보]' in board.title %}
-                                <span class="text-danger" style="font-size: 0.85rem;">오류 제보</span>
-                            {% elif '[사업 제휴]' in board.title %}
-                                <span class="text-success" style="font-size: 0.85rem;">사업 제휴</span>
-                            {% else %}
-                                <span class="text-muted">-</span>
+                            {% if user.is_authenticated and board.author == user %}
+                                <span class="badge-mine">내 글</span>
                             {% endif %}
-                        </td>
-                        <td style="width: 37%; padding-left: 1.5rem;">
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                {% if board.is_hidden %}
-                                    <i class="fas fa-lock text-muted" title="비밀글"></i>
-                                {% endif %}
-                                {% if user.is_authenticated and board.author == user %}
-                                    <span class="badge bg-secondary text-white">내 글</span>
-                                {% endif %}
-                                <span class="board-title">
-                                    {% if '[기능 요청]' in board.title %}
-                                        {{ board.title|slice:'8:' }}
-                                    {% elif '[오류 제보]' in board.title %}
-                                        {{ board.title|slice:'7:' }}
-                                    {% elif '[사업 제휴]' in board.title %}
-                                        {{ board.title|slice:'7:' }}
-                                    {% else %}
-                                        {{ board.title }}
-                                    {% endif %}
-                                </span>
-                                {% if board.attachment %}
-                                    <a href="{% url 'board:download_file' board.pk %}" onclick="event.stopPropagation();" title="첨부파일 다운로드">
-                                        <i class="fas fa-paperclip text-muted" style="font-size: 0.875rem;"></i>
-                                    </a>
-                                {% endif %}
-                                {% if board.comments.count > 0 %}
-                                    <span class="badge bg-primary" style="font-size: 0.7rem;">{{ board.comments.count }}</span>
-                                {% endif %}
-                                {% if board.created_at.timestamp|add:"86400" > current_timestamp|add:"0" %}
-                                    <span class="badge bg-warning text-dark">NEW</span>
-                                {% endif %}
-                            </div>
-                            <!-- 모바일: 추가 정보 표시 -->
-                            <div class="d-sm-none mt-1">
-                                <small class="text-muted">
-                                    {% if '[기능 요청]' in board.title %}
-                                        [기능] | 
-                                    {% elif '[오류 제보]' in board.title %}
-                                        [오류] | 
-                                    {% elif '[사업 제휴]' in board.title %}
-                                        [제휴] | 
-                                    {% endif %}
-                                    {% if board.author.is_staff %}관리자{% else %}{{ board.author.email|slice:":2" }}****{% endif %} | 
-                                    조회 {{ board.views }} | 
-                                    {{ board.created_at|date:"m/d H:i" }}
-                                </small>
-                            </div>
-                        </td>
-                        <td class="text-center d-none d-sm-table-cell" style="width: 10%;">
-                            <span style="font-size: 0.875rem; display: inline-block;">{{ board.created_at|date:"m/d H:i" }}</span>
-                        </td>
-                        <td class="text-center d-none d-lg-table-cell" style="width: 12%;">
-                            <span class="text-muted" style="font-size: 0.875rem; display: inline-block;">
-                                {% if board.author.is_staff %}
-                                    관리자
-                                {% elif board.author.email %}
-                                    {{ board.author.email|slice:":2" }}****
+                            <span class="row-title">
+                                {% if '[기능 요청]' in board.title %}
+                                    {{ board.title|slice:'8:' }}
+                                {% elif '[오류 제보]' in board.title %}
+                                    {{ board.title|slice:'7:' }}
+                                {% elif '[사업 제휴]' in board.title %}
+                                    {{ board.title|slice:'7:' }}
                                 {% else %}
-                                    {{ board.author.username|slice:":2" }}****
+                                    {{ board.title }}
                                 {% endif %}
                             </span>
-                        </td>
-                        <td class="text-center d-none d-md-table-cell" style="width: 8%;">
-                            <span class="text-muted" style="font-size: 0.875rem; display: inline-block;">{{ board.views }}</span>
-                        </td>
-                        <td class="text-center" style="width: 10%;">
-                            {% if not board.is_notice %}
-                                {% if board.comments.count > 0 %}
-                                    <span class="badge bg-success">완료</span>
-                                {% else %}
-                                    <span class="badge bg-warning text-dark">대기</span>
-                                {% endif %}
+                            {% if board.attachment %}
+                                <a href="{% url 'board:download_file' board.pk %}" onclick="event.stopPropagation();" title="첨부파일 다운로드" class="board-list-link-muted">
+                                    <i class="bi bi-paperclip"></i>
+                                </a>
                             {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="7" class="text-center py-5">
-                            {% if search_query %}
-                                '<strong>{{ search_query }}</strong>' 검색 결과가 없습니다.
+                            {% if board.comments.count > 0 %}
+                                <span class="badge-count">{{ board.comments.count }}</span>
+                            {% endif %}
+                            {% if board.created_at.timestamp|add:"86400" > current_timestamp|add:"0" %}
+                                <span class="badge-new">NEW</span>
+                            {% endif %}
+                        </div>
+                        <div class="d-sm-none mt-1">
+                            <small class="text-muted">
+                                {% if board.author.is_staff %}관리자{% else %}{{ board.author.email|slice:":2" }}****{% endif %} &middot;
+                                조회 {{ board.views }} &middot;
+                                {{ board.created_at|date:"m/d H:i" }}
+                            </small>
+                        </div>
+                    </td>
+                    <td class="text-center d-none d-sm-table-cell text-muted small">
+                        {{ board.created_at|date:"m/d H:i" }}
+                    </td>
+                    <td class="text-center d-none d-lg-table-cell text-muted small">
+                        {% if board.author.is_staff %}관리자
+                        {% elif board.author.email %}{{ board.author.email|slice:":2" }}****
+                        {% else %}{{ board.author.username|slice:":2" }}****
+                        {% endif %}
+                    </td>
+                    <td class="text-center d-none d-md-table-cell text-muted small">{{ board.views }}</td>
+                    <td class="text-center">
+                        {% if not board.is_notice %}
+                            {% if board.comments.count > 0 %}
+                                <span class="badge-status done">완료</span>
                             {% else %}
-                                게시글이 없습니다.
+                                <span class="badge-status wait">대기</span>
                             {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        {% if search_query %}
+                            '<strong>{{ search_query }}</strong>' 검색 결과가 없습니다.
+                        {% else %}
+                            게시글이 없습니다.
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-    
+
     <!-- 페이지네이션 -->
-    {% if is_paginated %}
-    <div class="pagination-wrapper mt-3">
+    <div class="list-pagination">
+        <span class="pagination-info">
+            전체 <strong>{{ page_obj.paginator.count }}</strong>개 게시글
+            {% if is_paginated %}
+                &nbsp;({{ page_obj.start_index }}–{{ page_obj.end_index }})
+            {% endif %}
+        </span>
+        {% if is_paginated %}
         <nav aria-label="Page navigation">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page=1{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">처음</a>
+            <ul class="pagination pagination-nav mb-0">
+                <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
                 </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">이전</a>
-                </li>
-                {% endif %}
-                
                 {% for num in page_range %}
                 <li class="page-item {% if page_obj.number == num %}active{% endif %}">
                     <a class="page-link" href="?page={{ num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ num }}</a>
                 </li>
                 {% endfor %}
-                
-                {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">다음</a>
+                <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
                 </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">마지막</a>
-                </li>
-                {% endif %}
             </ul>
         </nav>
+        <select class="board-select" onchange="location.href=this.value;">
+            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=10" {% if per_page == '10' %}selected{% endif %}>10개</option>
+            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=20" {% if per_page == '20' %}selected{% endif %}>20개</option>
+            <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}{% if current_sort != 'recent' %}sort={{ current_sort }}&{% endif %}per_page=50" {% if per_page == '50' %}selected{% endif %}>50개</option>
+        </select>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
-
-<style>
-/* 게시판 스타일 개선 */
-.board-row {
-    transition: background-color 0.2s ease;
-}
-
-.board-row:hover {
-    background-color: rgba(0, 123, 255, 0.05) !important;
-}
-
-.board-row:hover .board-title {
-    color: #0d6efd;
-    text-decoration: underline;
-}
-
-.table > :not(caption) > * > * {
-    vertical-align: middle;
-}
-
-/* 첨부파일 아이콘 호버 효과 */
-.board-row a:hover i {
-    color: #0d6efd !important;
-}
-
-/* 공지사항 행 스타일 */
-.table-warning {
-    background-color: #fff3cd !important;
-}
-
-.table-warning:hover {
-    background-color: #ffe69c !important;
-}
-
-/* 페이지네이션 스타일 */
-.pagination-wrapper {
-    position: sticky;
-    bottom: 20px;
-    z-index: 10;
-    background-color: rgba(255, 255, 255, 0.95);
-    padding: 10px 0;
-    border-radius: 8px;
-}
-
-.pagination {
-    margin-bottom: 0;
-}
-
-.page-link {
-    color: #0d6efd;
-    border: 1px solid #dee2e6;
-}
-
-.page-item.active .page-link {
-    background-color: #0d6efd;
-    border-color: #0d6efd;
-    color: white;
-}
-
-.page-link:hover {
-    background-color: #e9ecef;
-    border-color: #dee2e6;
-}
-
-/* 반응형 스타일 */
-@media (max-width: 767px) {
-    .card-body {
-        padding: 0.75rem !important;
-    }
-    
-    .btn-group {
-        width: 100%;
-    }
-    
-    .btn-group .btn {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-    }
-    
-    .table th, .table td {
-        padding: 0.5rem 0.25rem;
-        font-size: 0.875rem;
-    }
-}
-
-@media (max-width: 575px) {
-    .input-group-sm .form-control,
-    .form-select-sm {
-        font-size: 0.8rem;
-    }
-    
-    h2 {
-        font-size: 1.5rem;
-    }
-}
-
-/* 필터 버튼 활성화 스타일 */
-.btn-outline-secondary.active,
-.btn-outline-primary.active,
-.btn-outline-info.active,
-.btn-outline-warning.active,
-.btn-outline-success.active {
-    font-weight: 600;
-}
-</style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const rows = document.querySelectorAll('.board-row');
-    rows.forEach(function(row) {
+    document.querySelectorAll('.board-row').forEach(function(row) {
         row.addEventListener('click', function() {
             window.location.href = row.getAttribute('data-url');
         });

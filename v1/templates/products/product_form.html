@@ -1,0 +1,79 @@
+{% extends "base_v2.html" %}
+{% load static %}
+{% load django_bootstrap5 %}
+
+{% block title %}{{ title }} - V2{% endblock %}
+
+
+{% block content %}
+<div class="form-container">
+    <div class="form-header">
+        <a href="{% url 'products:product_list' %}" class="form-header-back">
+            <i class="bi bi-arrow-left"></i> 제품 목록으로 돌아가기
+        </a>
+        <h1 class="form-header-title">{{ title }}</h1>
+        <p class="form-header-desc">제품 기본 정보를 입력하세요. 저장 후 BOM, 영양성분 등을 작성할 수 있습니다.</p>
+    </div>
+
+    <form method="post" id="productForm">
+        {% csrf_token %}
+
+        {% include "products/_tab_basic_info.html" %}
+
+        <div class="addon-card">
+            <div class="addon-card-header">
+                <div class="addon-card-icon addon-card-icon--green">
+                    <i class="bi bi-gear"></i>
+                </div>
+                추가 옵션
+            </div>
+            <div class="addon-card-body">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           name="is_raw_material" id="is_raw_material"
+                           {% if product.is_raw_material %}checked{% endif %}>
+                    <label class="form-check-label" for="is_raw_material">원료로 사용 가능</label>
+                </div>
+                <div class="form-text">체크하면 다른 제품의 원재료로 이 제품을 추가할 수 있습니다</div>
+            </div>
+        </div>
+
+        <div class="addon-card">
+            <div class="addon-card-header">
+                <div class="addon-card-icon addon-card-icon--yellow">
+                    <i class="bi bi-bookmark"></i>
+                </div>
+                태그
+            </div>
+            <div class="addon-card-body">
+                <input type="text"
+                       name="tags_input"
+                       class="form-control bg-light border-0"
+                       value="{{ product.tags_input|default:'' }}"
+                       placeholder="예시: #식품 #과자 #스낵"
+                       style="border-radius:8px; padding:10px 14px;">
+                <div class="form-text">태그를 #으로 구분하여 입력하세요.</div>
+            </div>
+        </div>
+
+        <div class="form-footer">
+            <a href="{% url 'products:product_list' %}" class="btn-gd-text">취소</a>
+            <button type="submit" class="btn-gd-primary" id="submitBtn">
+                {% if product %}
+                <i class="bi bi-check-lg me-1"></i> 변경사항 저장
+                {% else %}
+                <i class="bi bi-plus-lg me-1"></i> 제품 생성
+                {% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById('productForm').addEventListener('submit', function() {
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>저장 중...';
+});
+</script>
+{% endblock %}

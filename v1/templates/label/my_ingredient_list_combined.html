@@ -1,260 +1,909 @@
-{% extends "base.html" %}
+{% extends "base_v2.html" %}
 {% load static %}
-{% block title %}내 원료 관리{% endblock %}
+
+{% block title %}원료 관리 - V2{% endblock %}
+
+{% block topbar %}
+<div class="v2-topbar-title-wrapper">
+    <i class="bi bi-box-seam me-2 v2-topbar-icon"></i>
+    <span class="v2-topbar-title">원료 관리</span>
+    <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">내 원료 DB를 등록하고 제품 구성 원료를 관리하세요</span>
+</div>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<style>
+    :root {
+        --google-blue: #1a73e8;
+        --google-blue-hover: #1765cc;
+        --google-gray-50: #f8f9fa;
+        --google-gray-100: #f1f3f4;
+        --google-gray-200: #e8eaed;
+        --google-gray-300: #dadce0;
+        --text-primary: #202124;
+        --text-secondary: #5f6368;
+        --border-color: #dadce0;
+        --shadow-1: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    html, body {
+        height: 100%;
+        font-family: 'Roboto', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    #main-content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: var(--google-gray-50);
+    }
+
+    /* ===== 상단 툴바 ===== */
+    .ingredient-toolbar {
+        flex-shrink: 0;
+        background: white;
+        border-bottom: 1px solid var(--border-color);
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .search-box {
+        flex: 1;
+        max-width: 500px;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 13px;
+        outline: none;
+        transition: all 0.2s;
+    }
+
+    .search-box input:focus {
+        border-color: var(--google-blue);
+        box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    }
+
+    .toolbar-buttons {
+        display: flex;
+        gap: 8px;
+        margin-left: auto;
+    }
+
+    /* ===== 메인 콘텐츠 영역 ===== */
+    .ingredient-content {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        gap: 0;
+    }
+
+    /* ===== 좌측 패널 (리스트) ===== */
+    .ingredient-list-panel {
+        flex: 0 0 45%;
+        display: flex;
+        flex-direction: column;
+        background: white;
+        border-right: 1px solid var(--border-color);
+        overflow: hidden;
+    }
+
+    .list-header {
+        flex-shrink: 0;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border-color);
+        font-weight: 500;
+        font-size: 14px;
+        color: var(--text-primary);
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 44px;
+    }
+
+    /* ===== 체크박스 스타일 ===== */
+    .ingredient-check-all,
+    .ingredient-checkbox {
+        width: 15px;
+        height: 15px;
+        cursor: pointer;
+        accent-color: #1a73e8;
+        border: 1.5px solid #5f6368;
+        border-radius: 3px;
+        flex-shrink: 0;
+    }
+
+    /* 행 체크 시 하이라이트 */
+    .ingredient-row.row-checked {
+        background: #e8f0fe !important;
+    }
+    .ingredient-row.row-checked td {
+        color: var(--text-primary) !important;
+        font-weight: 400 !important;
+    }
+
+    /* ===== 선택 액션 바 ===== */
+    #ingredient-selection-actions {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        animation: ingFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        background: #ffffff;
+        border: 1px solid #e0e2e0;
+        border-radius: 28px;
+        padding: 4px 14px 4px 10px;
+        box-shadow: 0 1px 2px rgba(60,64,67,0.25), 0 1px 3px rgba(60,64,67,0.1);
+    }
+
+    #ingredient-selection-actions.show {
+        display: flex;
+    }
+
+    @keyframes ingFadeIn {
+        from { opacity: 0; transform: translateY(-4px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .selection-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 11px;
+        border-radius: 12px;
+        background-color: #1967d2;
+        color: #ffffff;
+        white-space: nowrap;
+    }
+
+    #ingredient-selection-actions .act-btn {
+        font-size: 11px;
+        font-weight: 500;
+        padding: 4px 12px;
+        border-radius: 14px;
+        border: 1px solid #dadce0;
+        background: #ffffff;
+        color: #444746;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+
+    #ingredient-selection-actions .act-btn:hover {
+        background: #f1f3f4;
+        border-color: #bdc1c6;
+    }
+
+    #ingredient-selection-actions .act-btn.danger {
+        border-color: #f28b82;
+        color: #c5221f;
+    }
+
+    #ingredient-selection-actions .act-btn.danger:hover {
+        background: #fce8e6;
+    }
+
+    .list-table-wrapper {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .list-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .list-table thead {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 10;
+    }
+
+    .list-table th {
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-align: center;
+        white-space: nowrap;
+        background: white;
+    }
+
+    .list-table tbody tr {
+        border-top: 1px solid #f0f0f0;
+        height: 44px;
+        cursor: pointer;
+        transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .list-table tbody tr:hover {
+        background: var(--google-gray-100);
+    }
+
+    .list-table tbody tr.selected {
+        background: rgba(26, 115, 232, 0.12) !important;
+    }
+
+    .list-table tbody tr.selected td {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .list-table td {
+        padding: 8px;
+        font-size: 12px;
+        color: var(--text-primary);
+        text-align: center;
+        vertical-align: middle;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* 체크박스 열 */
+    .list-table td:first-child,
+    .list-table th:first-child {
+        width: 38px;
+        padding: 8px 0;
+        text-align: center;
+    }
+
+    .list-table td:nth-child(2),
+    .list-table td:nth-child(5) {
+        text-align: left;
+    }
+
+    .list-empty {
+        text-align: center;
+        padding: 48px 24px;
+        color: var(--text-secondary);
+    }
+
+    /* ===== 페이지네이션 ===== */
+    .list-pagination {
+        flex-shrink: 0;
+        padding: 8px 16px;
+        border-top: 1px solid var(--border-color);
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 48px;
+    }
+
+    .pagination-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--text-secondary);
+        font-size: 12px;
+        flex-shrink: 0;
+    }
+
+    .pagination-info strong {
+        color: var(--text-primary);
+        font-weight: 600;
+    }
+
+    .pagination-per-page {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .pagination-per-page select {
+        padding: 2px 6px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 12px;
+        color: var(--text-primary);
+        background: white;
+        cursor: pointer;
+        outline: none;
+        transition: border-color 0.15s;
+    }
+
+    .pagination-per-page select:focus {
+        border-color: var(--google-blue);
+    }
+
+    /* Bootstrap pagination 오버라이드 */
+    .list-pagination .pagination {
+        margin: 0;
+        gap: 2px;
+    }
+
+    .list-pagination .page-link {
+        padding: 4px 9px;
+        font-size: 12px;
+        border-radius: 6px !important;
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        background: white;
+        line-height: 1.4;
+        transition: all 0.15s;
+    }
+
+    .list-pagination .page-item.active .page-link {
+        background: var(--google-blue);
+        border-color: var(--google-blue);
+        color: white;
+        font-weight: 600;
+    }
+
+    .list-pagination .page-item.disabled .page-link {
+        color: #c0c4c7;
+        border-color: #ebebeb;
+        background: white;
+    }
+
+    .list-pagination .page-link:hover:not(.active) {
+        background: var(--google-gray-100);
+        border-color: var(--google-blue);
+        color: var(--google-blue);
+    }
+
+    /* ===== 우측 패널 (상세정보) ===== */
+    .ingredient-detail-panel {
+        flex: 0 0 55%;
+        display: flex;
+        flex-direction: column;
+        background: #f8f9fb;
+        overflow: hidden;
+        border-left: 1px solid var(--border-color);
+    }
+
+    .detail-header {
+        flex-shrink: 0;
+        padding: 12px 16px;
+        border-bottom: 1px solid #eef1f6;
+        font-weight: 700;
+        font-size: 14px;
+        color: #111827;
+        background: #ffffff;
+    }
+
+    .detail-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        background: #f8f9fb;
+    }
+
+    .detail-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #9aa3b2;
+        gap: 8px;
+    }
+
+    .detail-placeholder i {
+        font-size: 48px;
+        color: #c8cdd8;
+        margin-bottom: 8px;
+        opacity: 0.5;
+    }
+
+    /* ===== 스크롤바 ===== */
+    .list-table-wrapper::-webkit-scrollbar,
+    .detail-content::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    .list-table-wrapper::-webkit-scrollbar-track,
+    .detail-content::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .list-table-wrapper::-webkit-scrollbar-thumb,
+    .detail-content::-webkit-scrollbar-thumb {
+        background: var(--google-gray-300);
+        border-radius: 5px;
+    }
+
+    .list-table-wrapper::-webkit-scrollbar-thumb:hover,
+    .detail-content::-webkit-scrollbar-thumb:hover {
+        background: var(--text-secondary);
+    }
+
+    /* ===== 폼 스타일 ===== */
+    .detail-content form {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 13px;
+        font-family: inherit;
+        outline: none;
+        transition: all 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+        border-color: var(--google-blue);
+        box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .form-btn {
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        border: 1px solid var(--border-color);
+        background: white;
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .form-btn.primary {
+        background: var(--google-blue);
+        border-color: var(--google-blue);
+        color: white;
+    }
+
+    .form-btn.primary:hover {
+        background: var(--google-blue-hover);
+    }
+
+    .form-btn:hover {
+        background: var(--google-gray-100);
+    }
+
+    /* ===== 숨겨진 파일 입력 ===== */
+    #excelFileInput {
+        display: none;
+    }
+
+    /* ===== 반응형 ===== */
+    @media (max-width: 1200px) {
+        .ingredient-list-panel {
+            flex: 0 0 40%;
+        }
+        .ingredient-detail-panel {
+            flex: 0 0 60%;
+        }
+    }
+
+    @media (max-width: 992px) {
+        .ingredient-content {
+            flex-direction: column;
+        }
+        .ingredient-list-panel,
+        .ingredient-detail-panel {
+            flex: 0 0 50% !important;
+            min-height: 300px;
+            border-right: none;
+            border-bottom: 1px solid var(--border-color);
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<style>
-  /* 예시: 최대폭을 기존 사이트와 맞추기 */
-  .custom-max-width {
-    max-width: 1320px; /* 원하는 사이즈 */
-    margin: 0 auto;
-  }
-  .row.full-height {
-    height: 100%; 
-  }
-  .combined-left-panel,
-  .combined-right-panel {
-    height: 100%;
-    overflow-y: auto;
-  }
-  .placeholder-content {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    min-height: 300px;
-    color: #6c757d;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    padding: 2rem;
-    text-align: center;
-  }
-  .placeholder-content i {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-  }
-  /* 선택된 행의 스타일 강화 */
-  .ingredient-row.selected {
-    background-color: #2d6cdf !important;
-    color: #fff !important;
-    font-weight: 700 !important;
-    border-left: 6px solid #ffb300 !important;
-    box-shadow: 0 2px 8px rgba(45,108,223,0.08);
-    transition: background 0.2s, box-shadow 0.2s;
-  }
-  .table-hover .ingredient-row.selected:hover {
-    background-color: #1b4e99 !important;
-    color: #fff !important;
-  }
-  /* 좌측 상단 툴바 스타일 */
-  .left-panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0;
-    padding: 0.5rem 0 0.5rem 0;
-    border-bottom: none; /* 구분선 제거 */
-  }
-  .left-panel-title {
-    font-size: 1.1rem;
-    font-weight: 500;
-    color: #343a40;
-    margin: 0;
-  }
-  .left-panel-actions {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-  }
-  .btn-save-style {
-    color: #fff;
-    background-color: #2667ff;
-    border-color: #2667ff;
-    font-weight: 500;
-    border-radius: 0.25rem;
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    transition: color 0.15s, background-color 0.15s, border-color 0.15s;
-  }
-  .btn-save-style:hover {
-    background-color: #1f55cc;
-    border-color: #1f55cc;
-    color: #fff;
-  }
-  .ellipsis-cell {
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    vertical-align: middle;
-    cursor: pointer;
-  }
-  .table th, .table td {
-    vertical-align: middle !important;
-  }
-
-  /* 검색 필드 포커스 및 입력 효과 */
-  .form-control:focus {
-    background-color: #f8f9fa !important;
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-  }
-
-  /* 입력값이 있는 경우 테두리 효과 */
-  .form-control.has-value {
-    border-color: #28a745 !important;
-    border-width: 2px !important;
-  }
-
-  .form-control.has-value:focus {
-    background-color: #f8f9fa !important;
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-  }
-
-  /* 원료 표시명, 알레르기, GMO 검색 필드에 대한 특별 스타일 */
-  input[name="ingredient_display_name"]:focus,
-  input[name="allergens"]:focus,
-  input[name="gmo"]:focus {
-    background-color: #f8f9fa !important;
-    border-color: #007bff !important;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
-  }
-
-  /* 툴팁 스타일 향상 */
-  input[name="ingredient_display_name"][title]:hover::after,
-  input[name="allergens"][title]:hover::after,
-  input[name="gmo"][title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    top: 100%;
-    left: 0;
-    background: #333;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: pre-line;
-    z-index: 1000;
-    margin-top: 5px;
-    max-width: 250px;
-    word-wrap: break-word;
-  }
-</style>
-
-<div class="container-fluid custom-max-width mt-4">
-    <!-- 상단 헤더/검색 필터 영역 -->
-    {% if label_id and label_name %}
-    <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
-      <div>
-        <b>
-          <a href="/label/label-creation/{{ label_id }}/" style="text-decoration:underline; color:inherit;">
-            라벨명: {{ label_name }}
-          </a>
-        </b>과(와) 연결된 표시사항만 표시 중입니다.
-      </div>
-      <a href="/label/my-ingredient-list-combined/" class="btn btn-outline-secondary btn-sm">전체 원료 목록 보기</a>
-    </div>
-    {% endif %}
-
-    <div class="mb-1">
-         <h2 class="mb-1">내 원료 조회</h2>
-         <p class="text-muted" style="font-size: 0.875rem; margin-bottom: 1.5rem;">내 원료 목록을 수정,삭제,복사,불러오기와 식품첨가물 표시규정을 확인하고 적용할 수 있습니다</p>
+<div id="main-content">
+    <!-- 상단 툴바 -->
+    <div class="ingredient-toolbar">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="원료명, 품목보고번호 검색...">
+        </div>
+        <div class="toolbar-buttons">
+            {% if user.is_authenticated %}
+            <button class="v2-action-btn" id="newBtn"><i class="bi bi-plus-lg"></i>신규 원료</button>
+            {% endif %}
+            <button class="v2-action-btn-outline" id="downloadBtn"><i class="bi bi-download"></i>다운로드</button>
+            <button class="v2-action-btn-outline" id="uploadBtn"><i class="bi bi-upload"></i>업로드</button>
+            <input type="file" id="excelFileInput" accept=".xlsx,.xls">
+        </div>
     </div>
 
-    {% include 'includes/search_filter.html' with action_url='label:my_ingredient_list_combined' page_type='ingredient' search_values=search_values food_category=request.GET.food_category|default_if_none:'' items_per_page=items_per_page extra_fields="allergens,gmo" %}
-
-    <div class="row full-height">
-        <!-- 좌측: 내원료 리스트 -->
-        <div class="col-md-6 combined-left-panel" style="border-right: 1px solid #ccc;">
-            <div class="left-panel-header">
-                <div class="left-panel-title">원료 조회</div>
-                <div class="left-panel-actions">
-                    <button id="newIngredientBtn" class="btn btn-outline-primary btn-sm" type="button">신규 원료</button>
-                    <button id="downloadExcelBtn" class="btn btn-outline-secondary btn-sm">엑셀 다운로드</button>
-                    <button id="uploadExcelBtn" class="btn btn-outline-secondary btn-sm">엑셀 업로드</button>
-                    <input type="file" id="excelUploadInput" style="display: none;" accept=".xlsx, .xls">
+    <!-- 메인 콘텐츠 -->
+    <div class="ingredient-content">
+        <!-- 좌측: 원료 리스트 -->
+        <div class="ingredient-list-panel">
+            <div class="list-header">
+                <span>원료 목록</span>
+                <div id="ingredient-selection-actions">
+                    <span class="selection-badge"><span id="ing-selected-count">0</span>개 선택</span>
+                    <button class="act-btn" id="bulkCopyBtn" title="선택한 원료를 복사합니다">
+                        <i class="bi bi-files"></i> 복사
+                    </button>
+                    <button class="act-btn danger" id="bulkDeleteBtn" title="선택한 원료를 삭제합니다">
+                        <i class="bi bi-trash"></i> 삭제
+                    </button>
                 </div>
             </div>
-            <hr style="margin: 16px 0 0 0; border-top: 1px solid #dee2e6;">
-            <table class="table table-hover" id="ingredientTable">
-                <thead>
-                    <tr>
-                        <th class="text-center align-middle" style="width: 5%;">번호</th>
-                        <th style="width: 12%;">식품구분</th>
-                        <th style="width: 18%;">품목보고번호
-                            <span class="sort-buttons">
-                                <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                    <i class="fas fa-caret-up"></i>
-                                </a>
-                                <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                    <i class="fas fa-caret-down"></i>
-                                </a>
-                            </span>
-                        </th>
-                        <th style="width: 30%;">원재료명
-                            <span class="sort-buttons">
-                                <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                    <i class="fas fa-caret-up"></i>
-                                </a>
-                                <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                    <i class="fas fa-caret-down"></i>
-                                </a>
-                            </span>
-                        </th>
-                        <th style="width: 15%;">식품유형
-                            <span class="sort-buttons">
-                                <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                    <i class="fas fa-caret-up"></i>
-                                </a>
-                                <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                    <i class="fas fa-caret-down"></i>
-                                </a>
-                            </span>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ingredient in page_obj %}
-                    <tr class="ingredient-row" data-ingredient-id="{{ ingredient.my_ingredient_id }}" onclick="loadIngredientDetail('{{ ingredient.my_ingredient_id }}', this)">
-                        <td class="text-center align-middle ellipsis-cell" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
-                        <td class="ellipsis-cell" title="{% if ingredient.food_category == 'additive' %}식품첨가물{% elif ingredient.food_category == 'agricultural' %}농수산물{% elif ingredient.food_category == 'processed' %}가공식품{% else %}미분류{% endif %}">
-                            {% if ingredient.food_category == 'additive' %}
-                                식품첨가물
-                            {% elif ingredient.food_category == 'agricultural' %}
-                                농수산물
-                            {% elif ingredient.food_category == 'processed' %}
-                                가공식품
-                            {% else %}
-                                미분류
+            <div class="list-table-wrapper">
+                <table class="list-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 38px;"><input type="checkbox" class="ingredient-check-all" id="checkAllIngredients"></th>
+                            <th style="width: 12%;">분류</th>
+                            <th style="width: 20%;">품목보고번호</th>
+                            <th style="width: 35%;">원재료명</th>
+                            <th style="width: 28%;">식품유형</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ingredient in page_obj %}
+                        <tr class="ingredient-row" data-id="{{ ingredient.my_ingredient_id }}">
+                            <td onclick="event.stopPropagation()" style="cursor: default;">
+                                <input type="checkbox" class="ingredient-checkbox" data-id="{{ ingredient.my_ingredient_id }}">
+                            </td>
+                            <td title="{% if ingredient.food_category == 'additive' %}식품첨가물{% elif ingredient.food_category == 'agricultural' %}농산물{% elif ingredient.food_category == 'processed' %}가공식품{% else %}미분류{% endif %}">
+                                {% if ingredient.food_category == 'additive' %}첨가물{% elif ingredient.food_category == 'agricultural' %}농산물{% elif ingredient.food_category == 'processed' %}가공식품{% else %}미분류{% endif %}
+                            </td>
+                            <td title="{{ ingredient.prdlst_report_no|default:'' }}">{{ ingredient.prdlst_report_no|default:'' }}</td>
+                            <td title="{{ ingredient.prdlst_nm|default:'' }}">{{ ingredient.prdlst_nm|default:'' }}</td>
+                            <td title="{{ ingredient.prdlst_dcnm|default:'' }}">{{ ingredient.prdlst_dcnm|default:'' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="list-empty">
+                                <i class="bi bi-inbox"></i>
+                                <p style="margin-top: 8px;">등록된 원료가 없습니다.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="list-pagination">
+                <!-- 왼쪽: 전체 정보 + 페이지당 선택 -->
+                <div class="pagination-info">
+                    <span>전체 <strong>{{ total_count }}</strong>개 원료
+                        {% if page_obj.paginator.count > 0 %}
+                        ({{ page_obj.start_index }}–{{ page_obj.end_index }})
+                        {% endif %}
+                    </span>
+                    <div class="pagination-per-page">
+                        <label for="perPageSelect">페이지당</label>
+                        <select id="perPageSelect" onchange="location.href='?page=1&items_per_page='+this.value">
+                            <option value="10" {% if items_per_page == 10 %}selected{% endif %}>10</option>
+                            <option value="25" {% if items_per_page == 25 %}selected{% endif %}>25</option>
+                            <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50</option>
+                            <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 오른쪽: 페이지 버튼 -->
+                {% if page_obj.paginator.num_pages > 1 %}
+                <nav aria-label="원료 목록 페이지">
+                    <ul class="pagination mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1&items_per_page={{ items_per_page }}"><i class="bi bi-chevron-double-left"></i></a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&items_per_page={{ items_per_page }}"><i class="bi bi-chevron-left"></i></a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
+                        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}&items_per_page={{ items_per_page }}">{{ num }}</a></li>
                             {% endif %}
-                        </td>
-                        <td class="ellipsis-cell" title="{{ ingredient.prdlst_report_no|default_if_none:'' }}">{{ ingredient.prdlst_report_no|default_if_none:'' }}</td>
-                        <td class="ellipsis-cell" title="{{ ingredient.prdlst_nm|default_if_none:'' }}">{{ ingredient.prdlst_nm|default_if_none:'' }}</td>
-                        <td class="ellipsis-cell" title="{{ ingredient.prdlst_dcnm|default_if_none:'' }}">{{ ingredient.prdlst_dcnm|default_if_none:'' }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="text-center">등록된 원료가 없습니다.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% include 'includes/pagination.html' with page_obj=page_obj page_range=page_range %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&items_per_page={{ items_per_page }}"><i class="bi bi-chevron-right"></i></a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&items_per_page={{ items_per_page }}"><i class="bi bi-chevron-double-right"></i></a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
+                        <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-right"></i></span></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% else %}
+                <div></div>
+                {% endif %}
+            </div>
         </div>
 
-        <!-- 우측: 내원료 상세 (AJAX 로드) -->
-        <div class="col-md-6 combined-detail combined-right-panel">
-            <div id="ingredient-detail-container">
-                <!-- 초기에는 빈 상태, 페이지 로드 시 AJAX로 빈 양식이 로드됨 -->
+        <!-- 우측: 상세 정보 -->
+        <div class="ingredient-detail-panel">
+            <div class="detail-header">상세 정보</div>
+            <div class="detail-content" id="detailContent">
+                <div class="detail-placeholder">
+                    <i class="bi bi-cursor fs-1 text-muted" style="opacity: 0.3;"></i>
+                    <p class="mt-2 text-muted small text-center">원료를 선택하면<br>상세 정보가 표시됩니다.</p>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ingredientRows = document.querySelectorAll('.ingredient-row');
+    const detailContent = document.getElementById('detailContent');
+    const searchInput = document.getElementById('searchInput');
+    const newBtn = document.getElementById('newBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const excelFileInput = document.getElementById('excelFileInput');
 
-<script src="{% static 'js/label/my_ingredient_options.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
-<script src="{% static 'js/label/my_ingredient_list_combined.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+    // 원료 설정 로드: HTML을 innerHTML로 설정하고,
+    // 인라인 JS스크립트(json_script 제외)를 실행한 후 reinit() 호출
+    function loadIngredientDetail(container, html) {
+        container.innerHTML = html;
+        // application/json 타입 제외한 인라인 스크립트만 실행
+        container.querySelectorAll('script:not([src]):not([type])').forEach(function(old) {
+            var neo = document.createElement('script');
+            neo.textContent = old.textContent;
+            document.head.appendChild(neo);
+        });
+        // 사전 로드된 JS가 종료된 후 reinit 호출
+        if (window.IngredientDetailPartial && window.IngredientDetailPartial.reinit) {
+            window.IngredientDetailPartial.reinit();
+        }
+    }
+
+    // ===== 체크박스 & 선택 액션바 =====
+    const actionsBar = document.getElementById('ingredient-selection-actions');
+    const selectedCountSpan = document.getElementById('ing-selected-count');
+    const checkAll = document.getElementById('checkAllIngredients');
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const bulkCopyBtn = document.getElementById('bulkCopyBtn');
+
+    function getCheckedBoxes() {
+        return Array.from(document.querySelectorAll('.ingredient-checkbox:checked'));
+    }
+
+    function updateSelectionActions() {
+        const checked = getCheckedBoxes();
+        const count = checked.length;
+        if (count > 0) {
+            actionsBar.classList.add('show');
+            selectedCountSpan.textContent = count;
+        } else {
+            actionsBar.classList.remove('show');
+        }
+        // 전체선택 체크박스 상태 동기화
+        const allBoxes = document.querySelectorAll('.ingredient-checkbox');
+        if (allBoxes.length > 0 && count === allBoxes.length) {
+            checkAll.indeterminate = false;
+            checkAll.checked = true;
+        } else if (count > 0) {
+            checkAll.indeterminate = true;
+            checkAll.checked = false;
+        } else {
+            checkAll.indeterminate = false;
+            checkAll.checked = false;
+        }
+    }
+
+    // 전체선택 체크박스
+    if (checkAll) {
+        checkAll.addEventListener('change', function() {
+            document.querySelectorAll('.ingredient-checkbox').forEach(cb => {
+                cb.checked = this.checked;
+                const row = cb.closest('.ingredient-row');
+                if (row) row.classList.toggle('row-checked', this.checked);
+            });
+            updateSelectionActions();
+        });
+    }
+
+    // 개별 체크박스 이벤트
+    document.querySelectorAll('.ingredient-checkbox').forEach(cb => {
+        cb.addEventListener('change', function() {
+            const row = this.closest('.ingredient-row');
+            if (row) row.classList.toggle('row-checked', this.checked);
+            updateSelectionActions();
+        });
+    });
+
+    // 일괄 삭제
+    if (bulkDeleteBtn) {
+        bulkDeleteBtn.addEventListener('click', function() {
+            const checked = getCheckedBoxes();
+            if (checked.length === 0) return;
+            if (!confirm(`선택한 ${checked.length}개 원료를 삭제하시겠습니까?`)) return;
+            const ids = checked.map(cb => parseInt(cb.dataset.id));
+            fetch('/label/bulk-delete-my-ingredients/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ ingredient_ids: ids })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`${data.deleted_count}개 원료가 삭제되었습니다.`);
+                    location.reload();
+                } else {
+                    alert('오류: ' + (data.error || '삭제 실패'));
+                }
+            })
+            .catch(() => alert('삭제 중 오류가 발생했습니다.'));
+        });
+    }
+
+    // 일괄 복사
+    if (bulkCopyBtn) {
+        bulkCopyBtn.addEventListener('click', function() {
+            const checked = getCheckedBoxes();
+            if (checked.length === 0) return;
+            if (!confirm(`선택한 ${checked.length}개 원료를 복사하시겠습니까?`)) return;
+            const ids = checked.map(cb => parseInt(cb.dataset.id));
+            fetch('/label/bulk-copy-my-ingredients/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ ingredient_ids: ids })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`${data.copied_count}개 원료가 복사되었습니다.`);
+                    location.reload();
+                } else {
+                    alert('오류: ' + (data.error || '복사 실패'));
+                }
+            })
+            .catch(() => alert('복사 중 오류가 발생했습니다.'));
+        });
+    }
+
+    // 원료 행 클릭 → 우측 패널 로드 (체크박스 열 클릭은 무시)
+    ingredientRows.forEach(row => {
+        row.addEventListener('click', function(e) {
+            // 체크박스 첫번째 td 클릭 시 무시
+            if (e.target.closest('td:first-child') || e.target.classList.contains('ingredient-checkbox')) return;
+
+            ingredientRows.forEach(r => r.classList.remove('selected'));
+            this.classList.add('selected');
+
+            const ingredientId = this.dataset.id;
+            fetch(`/label/my-ingredient-detail/${ingredientId}/`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => response.text())
+            .then(html => {
+                loadIngredientDetail(detailContent, html);
+            })
+            .catch(error => {
+                detailContent.innerHTML = '<div style="padding:16px;color:#d32f2f;">정보를 불러올 수 없습니다.</div>';
+            });
+        });
+    });
+
+    // 검색
+    searchInput.addEventListener('keyup', function() {
+        const query = this.value.toLowerCase();
+        ingredientRows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(query) ? '' : 'none';
+        });
+    });
+
+    // 신규 원료 - 우측 패널에 AJAX로 등록 폼 로드
+    if (newBtn) {
+        newBtn.addEventListener('click', () => {
+            ingredientRows.forEach(r => r.classList.remove('selected'));
+            fetch('/label/my-ingredient-detail/', {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(r => r.text())
+            .then(html => loadIngredientDetail(detailContent, html))
+            .catch(() => {
+                detailContent.innerHTML = '<div style="padding:16px;color:#d32f2f;">오류가 발생했습니다.</div>';
+            });
+        });
+    }
+
+    // 다운로드
+    downloadBtn.addEventListener('click', () => {
+        window.location.href = '/label/my-ingredients/download/';
+    });
+
+    // 업로드
+    uploadBtn.addEventListener('click', () => {
+        excelFileInput.click();
+    });
+
+    excelFileInput.addEventListener('change', function(e) {
+        if (this.files.length) {
+            const formData = new FormData();
+            formData.append('file', this.files[0]);
+            const token = getCookie('csrftoken');
+            fetch('/label/my-ingredients/upload/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': token },
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                alert(data.message || '완료되었습니다.');
+                location.reload();
+            })
+            .catch(() => alert('업로드 중 오류가 발생했습니다.'));
+        }
+    });
+
+    function getCookie(name) {
+        let value = null;
+        if (document.cookie) {
+            document.cookie.split(';').forEach(cookie => {
+                const [key, val] = cookie.trim().split('=');
+                if (key === name) value = decodeURIComponent(val);
+            });
+        }
+        return value;
+    }
+});
+</script>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/label/my_ingredient_detail_partial.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

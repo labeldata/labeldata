@@ -1,0 +1,40 @@
+{{ sender.username }}님이 {{ shares|length }}개 제품을 공유했습니다.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+공유된 제품 목록
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{% for share in shares %}
+{{ forloop.counter }}. {{ share.version.product.product_name }} (v{{ share.version.version_number }})
+{% endfor %}
+
+{% if message %}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+공유 메시지
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{{ message }}
+
+{% endif %}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+공유 권한
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{% with share=shares.0 %}
+{% if share.permission.can_view_ingredients %}✓ 원재료 정보 조회{% else %}✗ 원재료 정보 조회{% endif %}
+{% if share.permission.can_view_nutrition %}✓ 영양 정보 조회{% else %}✗ 영양 정보 조회{% endif %}
+{% if share.permission.can_view_documents %}✓ 첨부 문서 조회{% else %}✗ 첨부 문서 조회{% endif %}
+{% if share.permission.can_view_bom %}✓ BOM 구조 조회{% else %}✗ BOM 구조 조회{% endif %}
+{% if share.permission.can_download_documents %}✓ 문서 다운로드{% else %}✗ 문서 다운로드{% endif %}
+{% if share.permission.can_export_data %}✓ 데이터 내보내기{% else %}✗ 데이터 내보내기{% endif %}
+{% if share.permission.can_use_as_ingredient %}✓ 원료로 사용 가능{% else %}✗ 원료로 사용 가능{% endif %}
+{% endwith %}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+공유 기간: {{ shares.0.share_start_date|date:"Y년 m월 d일" }}{% if shares.0.share_end_date %} ~ {{ shares.0.share_end_date|date:"Y년 m월 d일" }}{% else %} ~ 무기한{% endif %}
+
+시스템에 로그인하여 공유된 제품을 확인하세요.
+로그인 URL: http://127.0.0.1:8001/v2/sharing/inbox/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LabeasyLabel 제품 관리 시스템
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,0 +1,33 @@
+{% extends "base_v2.html" %}
+{% load static %}
+
+{% block title %}{% if mode == 'create' %}원료 등록{% else %}원료 수정{% endif %} - Food RegTech{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .ingredient-page-wrapper {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 8px 0;
+    }
+
+    /* 페이지 전체용: popup-container 테두리 제거 */
+    .ingredient-page-wrapper .popup-container {
+        box-shadow: none;
+        border: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ingredient-page-wrapper">
+    {% include 'label/my_ingredient_detail_partial.html' %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/label/my_ingredient_detail_partial.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{% endblock %}

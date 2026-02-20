@@ -1,0 +1,431 @@
+/* ============================================================
+   EazyLabel V2 공통 컴포넌트 스타일 (v2_common.css)
+   base_v2.html 에서 로드되어 모든 V2 페이지에 한 번 적용됩니다.
+   페이지별 CSS에서 이 파일의 스타일을 중복 정의하지 마세요.
+   ============================================================ */
+
+/* -------------------------
+   1. CSS 변수 (V2 전용)
+   ------------------------- */
+:root {
+    --v2-blue:        #1a73e8;
+    --v2-blue-hover:  #1765cc;
+    --v2-blue-light:  #e8f0fe;
+    --v2-border:      #dadce0;
+    --v2-text:        #202124;
+    --v2-text-sub:    #5f6368;
+    --v2-gray-50:     #f8f9fa;
+    --v2-gray-100:    #f1f3f4;
+    --v2-avatar-size: 32px;
+}
+
+/* -------------------------
+   2. 공통 액션 버튼 — 프라이머리 (파란색 pill)
+   사용처: 신규 등록, 신규 원료, 새 글 작성
+   ------------------------- */
+.v2-action-btn {
+    display:         inline-flex;
+    align-items:     center;
+    gap:             6px;
+    padding:         7px 18px;
+    background:      var(--v2-blue);
+    color:           #fff !important;
+    border:          none;
+    border-radius:   20px;
+    font-size:       13px;
+    font-weight:     500;
+    line-height:     1.4;
+    white-space:     nowrap;
+    cursor:          pointer;
+    text-decoration: none !important;
+    transition:      background 0.15s, box-shadow 0.15s;
+    vertical-align:  middle;
+}
+.v2-action-btn:hover,
+.v2-action-btn:focus {
+    background:  var(--v2-blue-hover);
+    box-shadow:  0 1px 3px rgba(60,64,67,.3);
+    outline:     none;
+}
+.v2-action-btn:active {
+    background: #1557b0;
+}
+
+/* -------------------------
+   3. 공통 액션 버튼 — 아웃라인 (흰 바탕 + 파란 테두리)
+   사용처: 내 원료 복사, 수정 요청, 다운로드, 업로드
+   ------------------------- */
+.v2-action-btn-outline {
+    display:         inline-flex;
+    align-items:     center;
+    gap:             6px;
+    padding:         7px 18px;
+    background:      #fff;
+    color:           var(--v2-blue) !important;
+    border:          1.5px solid var(--v2-blue);
+    border-radius:   20px;
+    font-size:       13px;
+    font-weight:     500;
+    line-height:     1.4;
+    white-space:     nowrap;
+    cursor:          pointer;
+    text-decoration: none !important;
+    transition:      background 0.15s;
+    vertical-align:  middle;
+}
+.v2-action-btn-outline:hover,
+.v2-action-btn-outline:focus {
+    background: var(--v2-blue-light);
+    outline:    none;
+}
+
+/* -------------------------
+   4. 탑바 검색 필드 (내 제품 드라이브·즐겨찾기 공용)
+   .v2-topbar-search 를 <form> 에 추가
+   ------------------------- */
+.v2-topbar-search .form-control,
+.v2-topbar-search .input-group-text {
+    font-size: 13px;
+}
+.v2-topbar-search .form-control::placeholder {
+    font-size: 13px;
+    color:     #80868b;
+}
+
+/* -------------------------
+   5. 유저 아바타 원형 이니셜
+   모든 페이지 topbar 우측에 동일하게 적용
+   ------------------------- */
+.v2-user-avatar {
+    width:           var(--v2-avatar-size);
+    height:          var(--v2-avatar-size);
+    border-radius:   50%;
+    background:      #5f6368;
+    color:           #fff;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    font-size:       14px;
+    font-weight:     600;
+    flex-shrink:     0;
+    user-select:     none;
+}
+
+/* -------------------------
+   6. 탑바 우측 계정 영역 공통 레이아웃
+   ------------------------- */
+.v2-topbar-account {
+    display:     flex;
+    align-items: center;
+    gap:         12px;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* -------------------------
+   10. 탑바 제목 영역 공통 스타일
+   사용처: 원료관리, 제품관리, 공동작업, 제품조회 등 v2 전 페이지
+   ------------------------- */
+.v2-topbar-title-wrapper {
+    flex:        1;
+    min-width:   0;
+    display:     flex;
+    align-items: center;
+}
+.v2-topbar-icon {
+    color:       #1a73e8;
+    font-size:   18px;
+    flex-shrink: 0;
+}
+.v2-topbar-title {
+    font-size:   17px;
+    font-weight: 500;
+    color:       #202124;
+}
+.v2-topbar-subtitle {
+    font-size: 12px;
+    color:     #5f6368;
+}
+
+/* ======================================================
+   7. V2 기본 레이아웃 (base_v2.html 에서 이관)
+   ====================================================== */
+body {
+    font-family:      'Noto Sans KR', sans-serif;
+    background-color: #f7f9fc;
+    overflow:         hidden;
+}
+
+.v2-wrapper {
+    display: flex;
+    height:  100vh;
+}
+
+.v2-sidebar {
+    width:          250px;
+    background:     #ffffff;
+    border-right:   1px solid #e0e0e0;
+    display:        flex;
+    flex-direction: column;
+    padding:        16px;
+    gap:            16px;
+    font-family:    'Noto Sans KR', sans-serif; /* 페이지별 body font 오버라이드 차단 */
+}
+
+.v2-sidebar .nav-link {
+    color:         #444746;
+    border-radius: 24px;
+    padding:       10px 20px;
+    margin-bottom: 4px;
+}
+
+.v2-sidebar .nav-link:hover {
+    background-color: #f0f1f3;
+}
+
+.v2-sidebar .nav-link.active {
+    background-color: #c2e7ff;
+    color:            #001d35;
+    font-weight:      600;
+}
+
+.v2-main {
+    flex:           1;
+    display:        flex;
+    flex-direction: column;
+    overflow:       hidden;
+}
+
+.v2-topbar {
+    height:        64px;
+    display:       flex;
+    align-items:   center;
+    padding:       0 24px;
+    background:    #ffffff;
+    border-bottom: 1px solid #e0e0e0;
+    gap:           16px;
+    font-family:   'Noto Sans KR', sans-serif; /* 페이지별 body font 오버라이드 차단 */
+}
+
+.v2-content {
+    flex:       1;
+    overflow-y: auto;
+    padding:    24px;
+}
+
+@media (max-width: 1200px) {
+    .v2-sidebar { width: 200px; }
+}
+
+@media (max-width: 991px) {
+    .v2-sidebar { width: 180px; }
+}
+
+@media (max-width: 768px) {
+    .v2-sidebar {
+        position:   fixed;
+        left:       -250px;
+        top:        0;
+        width:      250px;
+        height:     100vh;
+        z-index:    1050;
+        transition: left 0.3s ease;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    }
+    .v2-sidebar.show { left: 0; }
+    .v2-main         { width: 100%; }
+}
+
+/* iframe 내 삽입 시 사이드바·탑바 숨김 */
+body.in-iframe {
+    background-color: #f7f9fc;
+}
+body.in-iframe .v2-wrapper   { height: 100vh; }
+body.in-iframe .v2-sidebar,
+body.in-iframe .v2-topbar    { display: none; }
+body.in-iframe .v2-main      { overflow: hidden; }
+body.in-iframe .v2-content   { padding: 0; overflow: hidden; }
+
+/* ======================================================
+   8. 문서 관리 공통 컴포넌트 (v2/documents 페이지)
+   ====================================================== */
+
+/* 문서 헤더 그라데이션 카드 — document_detail.html */
+.v2-doc-header-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color:      white;
+}
+
+/* ======================================================
+   9. 테이블 셀 텍스트 넘침 처리 + 퍄당 동일 적용
+   fixed-layout 테이블의 th/td 일괄 truncation + 툴팁
+   → 모든 V2 리스트 화면에 적용 (base_v2.html 에서 로드)
+   ====================================================== */
+
+/* ======================================================
+   11. 제품 카드 그리드 (product_recent.html / product_starred.html)
+   ====================================================== */
+
+.product-header {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    margin-bottom:   20px;
+}
+.product-title {
+    display:     flex;
+    align-items: center;
+    gap:         10px;
+    font-weight: 700;
+    color:       #0b1b2b;
+}
+.product-card-grid {
+    display:               grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap:                   16px;
+}
+.product-card {
+    border:         1px solid #e2e6ef;
+    border-radius:  16px;
+    background:     #ffffff;
+    box-shadow:     0 12px 30px rgba(15, 23, 42, 0.06);
+    padding:        16px;
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+    position:       relative;
+    min-height:     140px;
+}
+.product-card-meta    { font-size: 12px; color: #6b7280; }
+.product-card-badge   { font-weight: 600; }
+.product-card-actions { position: absolute; top: 12px; right: 12px; }
+
+/* ======================================================
+   12. 제품 등록/수정 폼 (product_form.html)
+   ====================================================== */
+
+.form-container {
+    max-width: 800px;
+    margin:    0 auto;
+    padding:   24px;
+}
+
+.form-header       { margin-bottom: 24px; }
+.form-header-back  {
+    display:         inline-flex;
+    align-items:     center;
+    gap:             8px;
+    color:           var(--v2-text-sub);
+    text-decoration: none;
+    font-size:       14px;
+    padding:         8px 0;
+}
+.form-header-back:hover { color: var(--v2-blue); }
+.form-header-title { font-size: 24px; font-weight: 400; color: var(--v2-text); margin: 16px 0 8px; }
+.form-header-desc  { color: var(--v2-text-sub); font-size: 14px; }
+
+.form-footer {
+    display:         flex;
+    justify-content: flex-end;
+    gap:             12px;
+    padding:         24px 0;
+}
+
+.btn-gd-text {
+    background:      transparent;
+    border:          none;
+    color:           var(--v2-blue);
+    padding:         12px 24px;
+    border-radius:   8px;
+    font-size:       14px;
+    font-weight:     500;
+    cursor:          pointer;
+    text-decoration: none;
+}
+.btn-gd-text:hover { background: var(--v2-blue-light); color: var(--v2-blue); }
+
+.btn-gd-primary {
+    background:    var(--v2-blue);
+    border:        none;
+    color:         white;
+    padding:       12px 32px;
+    border-radius: 8px;
+    font-size:     14px;
+    font-weight:   500;
+    cursor:        pointer;
+}
+.btn-gd-primary:hover { background: #1557b0; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+.addon-card {
+    background:    #ffffff;
+    border:        1px solid var(--v2-border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    overflow:      hidden;
+}
+.addon-card-header {
+    display:     flex;
+    align-items: center;
+    gap:         12px;
+    padding:     16px 20px;
+    font-size:   15px;
+    font-weight: 500;
+    color:       var(--v2-text);
+}
+.addon-card-icon {
+    width:           36px;
+    height:          36px;
+    border-radius:   50%;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    background:      var(--v2-blue-light);
+    color:           var(--v2-blue);
+}
+/* 색상 변형 */
+.addon-card-icon--green  { background: #e6f4ea; color: #137333; }
+.addon-card-icon--yellow { background: #fef7e0; color: #ea8600; }
+.addon-card-body { padding: 20px; }
+
+table thead th {
+    /* sort-button이 position:absolute라서 우측 42px 패딩 불필요 → td와 동일하게 */
+    padding-left:   8px !important;
+    padding-right:  8px !important;
+    /* 글자 펜치 제거 */
+    letter-spacing: 0   !important;
+    text-transform: none !important;
+    /* td와 동일한 truncation */
+    overflow:       hidden      !important;
+    text-overflow:  ellipsis    !important;
+    white-space:    nowrap      !important;
+}
+
+/* sort-button은 absolute라 패딩 없어도 동작 */
+table thead th .sort-buttons,
+table thead th > .sort-buttons {
+    position: absolute !important;
+    right: 4px         !important;
+}
+
+table[style*="table-layout: fixed"] td,
+table[style*="table-layout: fixed"] th,
+table.table-fixed td,
+table.table-fixed th,
+.product-table td,
+.product-table th,
+.common-table td,
+.common-table th {
+    overflow:      hidden;
+    text-overflow: ellipsis;
+    white-space:   nowrap;
+    max-width:     0;   /* fixed-layout에서 각 열의 width가 적용되도록 */
+}
+/* 긴 텍스트가 잘릴 때 커서로 힌트 */
+table td[title],
+table th[title] {
+    cursor: default;
+}
+/* Bootstrap .text-truncate 보완 */
+.text-truncate[title] {
+    cursor: default;
+}

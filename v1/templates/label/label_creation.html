@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}표시사항 작성{% endblock %}
@@ -19,6 +19,7 @@
 
 <!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
 <input type="hidden" id="label_id" value="{{ label.my_label_id }}">
+<input type="hidden" id="return_to_v2" value="{{ request.GET.return_to_v2|default:'false' }}">
 
 <!-- 상단 헤더 (모던 스타일 적용) -->
 <div id="labelCreationHeader" style="position: fixed; top: 56px; left: 0; right: 0; z-index: 1020; background-color: #f8f9fa; padding: 0.75rem 0; border-bottom: 1px solid #e0e7ff; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
@@ -32,9 +33,15 @@
             <h2 class="mb-0" style="flex-shrink:0; font-size: 1.3rem;">
               ✏️ 상세 모드
             </h2>
+            {% if request.GET.return_to_v2 == 'true' %}
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.location.href='{% url 'products:product_detail_new' product_id=label.my_label_id %}'" title="제품 상세로 돌아가기">
+              <i class="fas fa-arrow-left me-1"></i>제품 관리로 돌아가기
+            </button>
+            {% else %}
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="switchToHome();" title="간편 모드로 전환">
               📋 간편 모드로 보기
             </button>
+            {% endif %}
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.location.href='{% url 'label:my_label_list' %}'" title="표시사항 리스트로 돌아가기">
               <i class="fas fa-list me-1"></i>리스트
             </button>

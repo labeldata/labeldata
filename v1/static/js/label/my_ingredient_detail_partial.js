@@ -795,6 +795,44 @@ function updateLinkedLabelsButton(my_ingredient_id) {
 window.IngredientDetailPartial = window.IngredientDetailPartial || {};
 window.IngredientDetailPartial.isSyncing = false;
 
+// IIFE 외부(onclick 속성 등)에서 호출 가능하도록 전역 노출
+window.fetchFoodItemByReportNo = function() { fetchFoodItemByReportNo(); };
+
+// AJAX 재로드 시 재초기화 진입점
+window.IngredientDetailPartial.reinit = function() {
+    initFoodTypeSelect();
+    setupFoodCategoryChangeEvent();
+    toggleReportNoRow();
+    initAllergyGmoButtonEvents();
+    var autoDetectBtn = document.getElementById('allergyAutoDetectBtn');
+    if (autoDetectBtn) {
+        autoDetectBtn.onclick = autoDetectAllergensIngredient;
+    }
+    initAutoExpandTextareas();
+    var form = document.getElementById('ingredientForm');
+    if (form) {
+        form.onsubmit = function(e) { e.preventDefault(); saveMyIngredient(); };
+    }
+    var deleteBtn = document.getElementById('deleteBtn');
+    if (deleteBtn) { deleteBtn.onclick = confirmDelete; }
+    var closeBtn = document.getElementById('closeBtn');
+    if (closeBtn) {
+        closeBtn.onclick = function() {
+            if (confirm('입력 내용을 초기화하시겠습니까?')) {
+                var f = document.getElementById('ingredientForm');
+                if (f) f.reset();
+                initFoodTypeSelect();
+                initAllergyGmoButtonEvents();
+                if (typeof window.setDetailDirty === 'function') window.setDetailDirty(false);
+            }
+        };
+    }
+    var idElem = document.getElementById('my_ingredient_id');
+    var ingredientId = idElem ? parseInt(idElem.value, 10) : null;
+    updateLinkedLabelsButton(ingredientId);
+    updateDisplayRegulation();
+};
+
 // CSRF 토큰 가져오기 유틸
 function getCookie(name) {
     let cookieValue = null;
@@ -882,7 +920,8 @@ function initFoodTypeSelect() {
     $(select).select2({
         width: '100%',
         placeholder: '식품유형 선택',
-        allowClear: true
+        allowClear: true,
+        dropdownParent: $('body')
     });
     
     // 기존 값이 있으면 선택
@@ -1093,10 +1132,9 @@ function updateDisplayRegulation() {
                 buttons.forEach(item => {
                     const btn = document.createElement('button');
                     btn.type = 'button';
-                    btn.className = 'btn btn-sm btn-outline-primary';
+                    btn.className = 'btn btn-sm';
+                    btn.style.cssText = 'font-size: 0.72rem; padding: 3px 10px; border-radius: 12px; font-weight: 600; background: #e0e8ff; border: 1px solid #c4d3f8; color: #2c4fa0; transition: all 0.15s;';
                     btn.textContent = item.value;
-                    btn.style.fontSize = '0.75rem';
-                    btn.style.padding = '0.25rem 0.5rem';
                     btn.title = `클릭하면 "원재료 표시명"에 자동 입력됩니다.`;
                     
                     btn.onclick = function() {

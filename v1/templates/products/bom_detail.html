@@ -1,0 +1,1539 @@
+﻿{% extends 'base_v2.html' %}
+{% load static %}
+
+{% block title %}BOM 통합 워크스페이스 - {{ product.my_label_name|default:product.prdlst_nm }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.css">
+<link rel="stylesheet" href="{% static 'css/bom.css' %}?v=20260218">
+<style>
+body.in-iframe .bom-page-header { display: none !important; }
+</style>
+{% endblock %}
+
+{% block extra_head %}
+<script>
+(function() {
+    try {
+        if (window.self !== window.top) {
+            document.addEventListener('DOMContentLoaded', function() {
+                document.body.classList.add('in-iframe');
+            });
+        }
+    } catch(e) {
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.classList.add('in-iframe');
+        });
+    }
+})();
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="bom-page-header">
+        <div class="bom-header d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <a href="{% url 'products:product_detail_new' product_id=label.my_label_id %}" class="btn btn-sm btn-outline-secondary" title="제품 상세로 돌아가기">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h5 class="fw-bold mb-0">
+                    {{ product.my_label_name|default:product.prdlst_nm }}
+                    <span class="badge bg-secondary">BOM</span>
+                </h5>
+                <div class="vr"></div>
+                <button class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#loadLabelModal">
+                    <i class="bi bi-card-text"></i> 라벨 정보 불러오기
+                </button>
+            </div>
+            <div>
+                <span class="me-3 small text-muted">총 배합비</span>
+                <span id="total-ratio" class="fw-semibold">0.00%</span>
+                {% if can_edit %}
+                <button class="btn btn-primary btn-sm" id="save-btn" onclick="saveData()" style="border-radius: 4px; font-weight: 500;">
+                    <i class="bi bi-cloud-arrow-up me-1"></i> 저장하기
+                </button>
+                {% else %}
+                <span class="badge bg-secondary ms-2"><i class="bi bi-lock me-1"></i>읽기 전용</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="small text-muted mb-3">
+            셀을 더블 클릭해 수정할 수 있고, 우클릭 메뉴에서 행 추가/삭제 및 복사/되돌리기를 사용할 수 있습니다.
+        </div>
+    </div>
+
+    <div class="bom-workspace">
+        <div class="bom-main-column pe-lg-3">
+            <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <div class="small text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    셀 더블클릭으로 수정 &middot; 우클릭 메뉴에서 행 추가/삭제 &middot; 원료명 입력 시 자동완성 지원 &middot; 원료 보관함에서 끌어다 놓을 수 있습니다.
+                </div>
+                <div class="d-flex align-items-center gap-2 ms-3 text-nowrap">
+                    <span class="small text-muted">총 배합비:</span>
+                    <span id="total-ratio-display" class="fw-semibold text-primary">0.00%</span>
+                </div>
+            </div>
+            <div class="bom-grid-card shadow-sm">
+                <div id="bom-grid" class="hot-container"></div>
+            </div>
+
+            <!-- ── BOM 원재료 요약 패널 ── -->
+            <div class="card border-0 mt-3" id="bom-summary-panel"
+                 style="border-radius:10px; background:#f8f9ff; border:1px solid #c7d4f0 !important;">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h6 class="mb-0 fw-semibold" style="font-size:13px; color:#333;">
+                            <i class="bi bi-list-ul text-primary me-1"></i>원재료 표시명 요약
+                        </h6>
+                        <button type="button" class="btn btn-sm btn-primary"
+                                onclick="copyRawmtrlToBasicInfo()"
+                                style="font-size:11px; padding:3px 12px; border-radius:6px;">
+                            <i class="bi bi-arrow-left-circle me-1"></i>기본정보 탭 원재료 표시명으로 복사
+                        </button>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted" style="font-size:11px; font-weight:600;">원재료명 표시명</span>
+                        <div id="bom-summary-rawmtrl"
+                             class="mt-1 p-2 bg-white rounded border"
+                             style="font-size:12px; line-height:1.7; min-height:36px; color:#333; word-break:break-all;">
+                            <span class="text-muted">BOM에 원료를 입력하면 자동으로 생성됩니다.</span>
+                        </div>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted" style="font-size:11px; font-weight:600;"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>알레르기 성분</span>
+                            <div id="bom-summary-allergens" class="mt-1" style="font-size:12px; line-height:1.8;">
+                                <span class="text-muted">-</span>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <span class="text-muted" style="font-size:11px; font-weight:600;"><i class="bi bi-dna text-success me-1"></i>GMO 성분</span>
+                            <div id="bom-summary-gmo" class="mt-1" style="font-size:12px; line-height:1.8;">
+                                <span class="text-muted">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ── /BOM 원재료 요약 패널 ── -->
+
+        </div>
+        <div class="bom-right-panel border-start bg-white">
+            <div class="side-tabs">
+                <ul class="nav nav-tabs nav-fill small" id="sideTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active py-2" data-bs-toggle="tab" data-bs-target="#side-palette" type="button">원료 보관함</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link py-2" data-bs-toggle="tab" data-bs-target="#side-detail" type="button">원료 상세 정보</button>
+                    </li>
+                </ul>
+                <div class="tab-content side-tab-body custom-scrollbar" id="sideTabContent">
+                    <div class="tab-pane fade show active" id="side-palette">
+                        <div class="palette-panel border-0 shadow-none">
+                            <div class="palette-header">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                                    <input type="text" class="form-control bg-light border-start-0" id="palette-search" placeholder="원료명 검색...">
+                                </div>
+                            </div>
+                            <ul class="nav nav-tabs nav-fill small palette-tabs" id="paletteTab" role="tablist">
+                                <li class="nav-item">
+                                    <button class="nav-link active py-2" data-bs-toggle="tab" data-bs-target="#tab-recent" type="button">최근</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link py-2" data-bs-toggle="tab" data-bs-target="#tab-my" type="button">내 원료</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link py-2" data-bs-toggle="tab" data-bs-target="#tab-shared" type="button">공유됨</button>
+                                </li>
+                            </ul>
+                            <div class="tab-content flex-grow-1 overflow-auto bg-light" id="paletteTabContent">
+                                <div class="tab-pane fade show active" id="tab-recent">
+                                    <div class="palette-list" id="palette-recent"></div>
+                                </div>
+                                <div class="tab-pane fade" id="tab-my">
+                                    <div class="palette-list" id="palette-my"></div>
+                                </div>
+                                <div class="tab-pane fade" id="tab-shared">
+                                    <div class="palette-list" id="palette-shared"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="side-detail">
+                        <div class="bom-sidebar border-0 bg-transparent">
+                            <div class="card-body p-3" id="context-panel">
+                                <div id="context-empty" class="text-center bom-context-placeholder mt-5">
+                                    <i class="bi bi-cursor fs-1 text-muted" style="opacity: 0.3;"></i>
+                                    <p class="mt-3 text-muted small">원료를 선택하면<br>상세 정보가 표시됩니다.</p>
+                                </div>
+                                <div id="context-view" class="d-none">
+                                    <div class="mb-3">
+                                        <span id="context-view-type" class="badge bg-primary">직접 입력</span>
+                                    </div>
+                                    <div class="bom-detail-item border-bottom">
+                                        <span class="bom-detail-label">알레르기 정보</span>
+                                        <span id="view-allergens" class="bom-detail-value">-</span>
+                                    </div>
+                                    <div class="bom-detail-item border-bottom">
+                                        <span class="bom-detail-label">GMO 성분</span>
+                                        <span id="view-gmo" class="bom-detail-value">-</span>
+                                    </div>
+                                    <div class="bom-detail-item">
+                                        <span class="bom-detail-label">품목보고번호</span>
+                                        <span id="view-report-no" class="bom-detail-value">-</span>
+                                    </div>
+                                </div>
+                                <div id="context-form" class="d-none">
+                                    <div class="mb-3">
+                                        <label class="bom-field-label mb-2">알레르기 정보</label>
+                                        <div style="border: 1px solid #dadce0; border-radius: 8px; padding: 10px; background-color: #f8f9fa;">
+                                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                                <div id="allergenSelectedDisplay" style="font-size: 11px; color: #5f6368; flex: 1;">선택된 항목 없음</div>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" id="allergenToggleBtn" style="font-size: 10px; padding: 2px 8px;">전체선택</button>
+                                            </div>
+                                            <div id="allergen-quick-buttons" class="d-flex flex-wrap gap-1 mb-1">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="알류">알류</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="우유">우유</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="메밀">메밀</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="땅콩">땅콩</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="대두">대두</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="밀">밀</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="고등어">고등어</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="게">게</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="새우">새우</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="돼지고기">돼지고기</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="복숭아">복숭아</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="토마토">토마토</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="아황산류">아황산류</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="호두">호두</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="잣">잣</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="닭고기">닭고기</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="쇠고기">쇠고기</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="오징어">오징어</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="조개류">조개류</button>
+                                            </div>
+                                            <input type="hidden" id="field-allergens">
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="bom-field-label mb-2">GMO 성분</label>
+                                        <div style="border: 1px solid #dadce0; border-radius: 8px; padding: 10px; background-color: #f8f9fa;">
+                                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                                <div id="gmoSelectedDisplay" style="font-size: 11px; color: #5f6368; flex: 1;">선택된 항목 없음</div>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" id="gmoToggleBtn" style="font-size: 10px; padding: 2px 8px;">전체선택</button>
+                                            </div>
+                                            <div id="gmoBtnList" class="d-flex flex-wrap gap-1 mb-1">
+                                                {% for gmo in gmo_list %}
+                                                <button type="button" class="btn btn-sm btn-outline-secondary gmo-btn" data-gmo="{{ gmo }}">{{ gmo }}</button>
+                                                {% endfor %}
+                                            </div>
+                                            <input type="hidden" id="field-gmo" value="">
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="bom-field-label mb-2">원재료 표시명 기준</label>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-sm flex-fill summary-type-btn" data-value="식품유형" id="summaryTypeFoodType" style="font-size: 11px; border: 1px solid #dadce0;">
+                                                식품유형
+                                            </button>
+                                            <button type="button" class="btn btn-sm flex-fill summary-type-btn" data-value="원재료명" id="summaryTypeIngredientName" style="font-size: 11px; border: 1px solid #dadce0;">
+                                                원재료명
+                                            </button>
+                                        </div>
+                                        <div class="mt-1 text-muted" style="font-size: 10px;">원재료 요약 시 표시명으로 사용할 기준을 선택합니다.</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="bom-field-label mb-2">품목보고번호</label>
+                                        <input type="text" class="form-control form-control-sm" id="field-report-no" style="font-size: 12px;">
+                                    </div>
+                                    <input type="hidden" id="field-source-label-id">
+                                    <input type="hidden" id="field-summary-type" value="식품유형">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="loadLabelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">기존 표시사항에서 가져오기</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">V1에서 생성한 라벨의 원재료명을 가져옵니다. (기존 데이터 아래에 추가됩니다)</p>
+                <div class="list-group">
+                    {% for label in my_labels %}
+                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" onclick="loadLabelData({{ label.my_label_id }})">
+                        {{ label.my_label_name|default:label.prdlst_nm }}
+                        <small class="text-muted">{{ label.update_datetime|date:"Y-m-d" }}</small>
+                    </button>
+                    {% empty %}
+                    <div class="text-center py-3">등록된 라벨이 없습니다.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
+<script>
+    const container = document.getElementById('bom-grid');
+    const CSRF_TOKEN = '{{ csrf_token }}';
+    const LABEL_ID = '{{ label.my_label_id }}';
+    const CAN_EDIT = {{ can_edit|yesno:'true,false' }};
+    const DETAIL_URL = "{% url 'products:product_detail_new' product_id=label.my_label_id %}";
+    const DATA_URL = "{% url 'bom:bom_data_api' label_id=label.my_label_id %}";
+    const SAVE_URL = "{% url 'bom:bom_save_api' label_id=label.my_label_id %}";
+    const INGREDIENT_SEARCH_URL = "{% url 'bom:api_ingredient_search' %}";
+    const INGREDIENT_DETAIL_URL_TEMPLATE = "{% url 'bom:api_ingredient_detail' ingredient_id=0 %}";
+    const PALETTE_URL = "{% url 'bom:api_palette_list' %}";
+    const LOAD_LABEL_URL_TEMPLATE = "{% url 'bom:api_load_from_label' label_id=0 %}";
+    const DRAFT_KEY = `bomDraft:${LABEL_ID}`;
+    const paletteState = {
+        'palette-recent': { page: 1, perPage: 12, items: [] },
+        'palette-my': { page: 1, perPage: 12, items: [] },
+        'palette-shared': { page: 1, perPage: 12, items: [] }
+    };
+    let paletteQuery = '';
+
+    let hot;
+    let autocompleteIndex = {};
+    let currentRowIndex = null;
+    let draftSaveTimer = null;
+    let draftSaveDisabled = false;
+    
+    // 메타데이터 저장소 (rowIndex -> {allergens, gmo, report_no, ...})
+    const rowMetadata = new Map();
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.parent !== window) {
+            document.body.classList.add('in-iframe');
+        }
+        initGrid();
+        loadBOMData();
+        loadPaletteData();
+        setupDragAndDrop();
+        bindPaletteSearch();
+        bindQuickAllergenButtons();
+        bindGmoButtons();
+    });
+
+    function initGrid(data = []) {
+        if (!data.length) {
+            data = Array.from({ length: 15 }, () => ({}));
+        }
+
+        hot = new Handsontable(container, {
+            data: data,
+            licenseKey: 'non-commercial-and-evaluation',
+            rowHeaders: true,
+            colHeaders: ['원료명', '원재료 표시명', '식품유형', '배합비(%)', '제조사/수입사', '비고'],
+            manualRowMove: CAN_EDIT,
+            manualColumnResize: true,
+            contextMenu: CAN_EDIT ? {
+                items: {
+                    row_above: { name: '위에 행 추가' },
+                    row_below: { name: '아래에 행 추가' },
+                    separator_1: '---------',
+                    remove_row: { name: '행 삭제' },
+                    separator_2: '---------',
+                    undo: { name: '실행 취소' },
+                    redo: { name: '다시 실행' },
+                    separator_3: '---------',
+                    copy: { name: '복사' },
+                    cut: { name: '잘라내기' }
+                }
+            } : {
+                items: { copy: { name: '복사' } }
+            },
+            columns: [
+                {
+                    data: 'ingredient_name',
+                    type: 'autocomplete',
+                    strict: false,
+                    width: 150,
+                    source: function(query, process) {
+                        fetch(`${INGREDIENT_SEARCH_URL}?q=${encodeURIComponent(query)}`)
+                            .then(response => response.json())
+                            .then(response => {
+                                autocompleteIndex = {};
+                                const names = response.results.map(item => {
+                                    autocompleteIndex[item.name] = item;
+                                    return item.name;
+                                });
+                                process(names);
+                            })
+                            .catch(() => process([]));
+                    }
+                },
+                {
+                    data: 'raw_material_name',
+                    editor: 'text',
+                    width: 330,
+                    wordWrap: true,
+                    renderer: function(hotInstance, TD, row, col, prop, value) {
+                        TD.style.overflow = 'visible';
+                        TD.style.textOverflow = 'clip';
+                        TD.style.whiteSpace = 'pre-wrap';
+                        TD.style.wordBreak = 'break-word';
+                        TD.style.verticalAlign = 'top';
+                        TD.style.maxWidth = '330px';
+                        TD.textContent = value || '';
+                        return TD;
+                    }
+                },
+                { data: 'food_type', editor: 'text', width: 100 },
+                {
+                    data: 'mixing_ratio',
+                    type: 'numeric',
+                    numericFormat: { pattern: '0.00' },
+                    width: 80
+                },
+                { data: 'manufacturer', editor: 'text', width: 130 },
+                { data: 'notes', editor: 'text', width: 80 }
+            ],
+            stretchH: 'last',
+            height: 'auto',
+            autoRowSize: { syncLimit: 300 },
+            readOnly: !CAN_EDIT,
+            enterBeginsEditing: true,
+            afterSelectionEnd: function(row, col) {
+                // 이전 행의 context panel 데이터를 먼저 저장
+                if (currentRowIndex !== null && currentRowIndex !== row) {
+                    syncContextPanelToRow();
+                }
+                
+                const rowData = this.getSourceDataAtRow(row);
+                currentRowIndex = row;
+                updateContextPanel(rowData, row);
+            },
+            afterChange: function(changes, source) {
+                if (!changes || source === 'loadData' || source === 'palette' || source === 'syncPanel') {
+                    return;
+                }
+                changes.forEach(change => {
+                    const row = change[0];
+                    const prop = change[1];
+                    const value = change[3];
+                    if (prop === 'ingredient_name') {
+                        applyIngredientSelection(row, value);
+                    }
+                });
+                if (changes.some(change => change[1] === 'mixing_ratio')) {
+                    calculateTotal();  // calculateTotal 내부에서 generateBomSummary 호출
+                } else {
+                    generateBomSummary();  // mixing_ratio 외 변경시에도 요약 갱신
+                }
+                scheduleDraftSave();
+            },
+            afterRemoveRow: function() {
+                calculateTotal();
+                scheduleDraftSave();
+            }
+        });
+    }
+
+    function mapTypeLabel(sourceType) {
+        if (sourceType === 'shared') {
+            return '공유받음';
+        }
+        if (sourceType === 'internal' || sourceType === 'my' || sourceType === 'ingredient') {
+            return '내 원료';
+        }
+        return '직접입력';
+    }
+
+    function normalizeSourceType(sourceType) {
+        if (sourceType === 'my') {
+            return 'internal';
+        }
+        return sourceType || 'manual';
+    }
+
+    const gridProps = new Set([
+        'ingredient_name',
+        'raw_material_name',
+        'food_type',
+        'summary_type',
+        'mixing_ratio',
+        'manufacturer',
+        'notes',
+        'allergens',
+        'allergen',
+        'gmo',
+        'origin',
+        'origin_detail',
+        'sub_ingredients',
+        'is_additive',
+        'additive_role',
+        'is_gmo',
+        'report_no',
+        'source_label_id',
+        'source_type',
+        'source_id',
+        'shared_owner'
+    ]);
+
+    const gridColumnProps = new Set([
+        'ingredient_name',
+        'raw_material_name',
+        'food_type',
+        'mixing_ratio',
+        'manufacturer',
+        'notes'
+    ]);
+
+    function setRowProp(rowIndex, prop, value, source = null) {
+        const safeRowIndex = Number(rowIndex);
+        if (!Number.isInteger(safeRowIndex) || safeRowIndex < 0) {
+            return;
+        }
+        if (gridColumnProps.has(prop)) {
+            hot.setDataAtRowProp(safeRowIndex, prop, value, source || 'edit');
+            return;
+        }
+        // 메타데이터는 별도 Map에 저장
+        if (!rowMetadata.has(safeRowIndex)) {
+            rowMetadata.set(safeRowIndex, {});
+        }
+        rowMetadata.get(safeRowIndex)[prop] = value;
+    }
+
+    function setRowProps(rowIndex, values, source = null) {
+        Object.entries(values).forEach(([prop, value]) => {
+            setRowProp(rowIndex, prop, value, source);
+        });
+    }
+
+    function saveDraft() {
+        if (!hot) {
+            return;
+        }
+        syncContextPanelToRow();
+        const data = hot.getSourceData().filter(row => row && row.ingredient_name);
+        
+        // 메타데이터도 함께 저장
+        const metadataArray = Array.from(rowMetadata.entries());
+        
+        const payload = {
+            updatedAt: Date.now(),
+            data: data,
+            metadata: metadataArray
+        };
+        try {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+        } catch (error) {
+            console.warn('BOM 임시저장 실패:', error);
+        }
+    }
+
+    function scheduleDraftSave() {
+        if (draftSaveDisabled) {
+            return;
+        }
+        if (draftSaveTimer) {
+            clearTimeout(draftSaveTimer);
+        }
+        draftSaveTimer = setTimeout(saveDraft, 400);
+    }
+
+    function loadDraftIfExists() {
+        let draft = null;
+        try {
+            const raw = localStorage.getItem(DRAFT_KEY);
+            if (raw) {
+                draft = JSON.parse(raw);
+            }
+        } catch (error) {
+            draft = null;
+        }
+        if (!draft || !Array.isArray(draft.data) || !draft.data.length) {
+            return false;
+        }
+        // 임시 저장된 데이터가 있으면 자동으로 불러오기
+        hot.loadData(draft.data);
+        
+        // 메타데이터 복원
+        rowMetadata.clear();
+        if (draft.metadata && Array.isArray(draft.metadata)) {
+            draft.metadata.forEach(([key, value]) => {
+                rowMetadata.set(key, value);
+            });
+        }
+        
+        hot.render();
+        calculateTotal();
+        return true;
+    }
+
+    function clearDraft() {
+        try {
+            localStorage.removeItem(DRAFT_KEY);
+        } catch (error) {
+            console.warn('BOM 임시저장 삭제 실패:', error);
+        }
+    }
+
+    function applyIngredientSelection(row, value) {
+        const rowIndex = Number(row);
+        if (!Number.isInteger(rowIndex) || rowIndex < 0) {
+            return;
+        }
+        if (!value) {
+            setRowProps(rowIndex, {
+                type: '직접입력',
+                source_type: 'manual',
+                source_id: null,
+                shared_owner: '',
+                allergen: '',
+                allergens: '',
+                gmo: '',
+                is_gmo: false,
+                raw_material_name: ''
+            });
+            return;
+        }
+
+        const info = autocompleteIndex[value];
+        if (!info) {
+            setRowProps(rowIndex, {
+                type: '직접입력',
+                source_type: 'manual',
+                source_id: null,
+                shared_owner: ''
+            });
+            return;
+        }
+
+        const typeLabel = mapTypeLabel(info.type);
+        setRowProps(rowIndex, {
+            type: typeLabel,
+            source_type: info.type,
+            source_id: info.type === 'shared' ? info.receipt_id : info.id,
+            origin: info.origin || '',
+            shared_owner: info.owner || '',
+            allergen: info.allergens || info.allergen || '',
+            allergens: info.allergens || info.allergen || '',
+            raw_material_name: info.raw_material_name || value,
+            food_type: info.food_type || '',
+            gmo: info.gmo || '',
+            is_gmo: !!info.gmo || !!info.is_gmo,
+            report_no: info.report_no || '',
+            manufacturer: info.manufacturer || ''
+        });
+        if (info.type === 'ingredient') {
+            setRowProp(rowIndex, 'source_label_id', info.id);
+        }
+        const rawMaterialName = hot.getDataAtRowProp(rowIndex, 'raw_material_name');
+        if (!rawMaterialName) {
+            setRowProp(rowIndex, 'raw_material_name', value);
+        }
+        updateContextPanel(hot.getSourceDataAtRow(rowIndex), rowIndex);
+        // 자동완성 선택 후 요약 패널 갱신 (setRowProps는 source='syncPanel'로 afterChange 건너뜀)
+        setTimeout(generateBomSummary, 50);
+    }
+
+    async function loadPaletteData(query = '') {
+        try {
+            const nextQuery = query || '';
+            const resetPages = nextQuery !== paletteQuery;
+            paletteQuery = nextQuery;
+            if (resetPages) {
+                Object.keys(paletteState).forEach(key => {
+                    paletteState[key].page = 1;
+                });
+            }
+            const response = await fetch(`${PALETTE_URL}?q=${encodeURIComponent(query)}`);
+            const result = await response.json();
+            setPaletteItems('palette-recent', result.recent || []);
+            setPaletteItems('palette-my', result.my || []);
+            setPaletteItems('palette-shared', result.shared || []);
+            renderPaletteLabels(result.labels || []);
+            setupDragAndDrop();
+        } catch (error) {
+            console.error('팔레트 로드 실패:', error);
+        }
+    }
+
+    function setPaletteItems(containerId, items) {
+        if (!paletteState[containerId]) {
+            return;
+        }
+        paletteState[containerId].items = items;
+        renderPaletteList(containerId);
+    }
+
+    function renderPaletteList(containerId) {
+        const container = document.getElementById(containerId);
+        const state = paletteState[containerId];
+        if (!container) {
+            return;
+        }
+        if (!state) {
+            return;
+        }
+        const items = state.items || [];
+        if (!items.length) {
+            container.innerHTML = '<div class="text-center text-muted small py-3">데이터가 없습니다.</div>';
+            return;
+        }
+        const totalPages = Math.max(1, Math.ceil(items.length / state.perPage));
+        if (state.page > totalPages) {
+            state.page = totalPages;
+        }
+        const startIndex = (state.page - 1) * state.perPage;
+        const pageItems = items.slice(startIndex, startIndex + state.perPage);
+
+        container.innerHTML = '';
+        pageItems.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'palette-card p-2 mb-2';
+            card.draggable = true;
+            card.dataset.payload = JSON.stringify(item);
+
+            const ingredientName = item.prdlst_nm || item.name || '';
+            card.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2 flex-grow-1">
+                        <div class="fw-semibold">${ingredientName}</div>
+                        <span class="palette-meta">${item.food_type || ''}</span>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary">추가</button>
+                </div>
+            `;
+
+            const addButton = card.querySelector('button');
+            addButton.addEventListener('click', () => addItemToGrid(item));
+            card.addEventListener('dblclick', () => addItemToGrid(item));
+            container.appendChild(card);
+        });
+
+        const pagination = document.createElement('div');
+        pagination.className = 'palette-pagination';
+        pagination.innerHTML = `
+            <button type="button" class="btn btn-outline-secondary" ${state.page === 1 ? 'disabled' : ''}>이전</button>
+            <span>${state.page} / ${totalPages}</span>
+            <button type="button" class="btn btn-outline-secondary" ${state.page === totalPages ? 'disabled' : ''}>다음</button>
+        `;
+        const prevButton = pagination.querySelector('button:first-child');
+        const nextButton = pagination.querySelector('button:last-child');
+        prevButton.addEventListener('click', () => {
+            if (state.page > 1) {
+                state.page -= 1;
+                renderPaletteList(containerId);
+                setupDragAndDrop();
+            }
+        });
+        nextButton.addEventListener('click', () => {
+            if (state.page < totalPages) {
+                state.page += 1;
+                renderPaletteList(containerId);
+                setupDragAndDrop();
+            }
+        });
+        container.appendChild(pagination);
+    }
+
+    function renderPaletteLabels(labels) {
+        const container = document.getElementById('palette-labels');
+        if (!container) {
+            return;
+        }
+        if (!labels.length) {
+            container.textContent = '불러올 라벨이 없습니다.';
+            return;
+        }
+        container.innerHTML = labels.slice(0, 3).map(label => `${label.name}`).join(', ');
+    }
+
+    function bindPaletteSearch() {
+        const input = document.getElementById('palette-search');
+        if (!input) {
+            return;
+        }
+        let debounceId;
+        input.addEventListener('input', () => {
+            clearTimeout(debounceId);
+            debounceId = setTimeout(() => {
+                loadPaletteData(input.value.trim());
+            }, 250);
+        });
+    }
+
+    async function hydrateIngredientDetails(rowIndex, ingredientId) {
+        if (!ingredientId) {
+            return;
+        }
+        const url = INGREDIENT_DETAIL_URL_TEMPLATE.replace('/0/', `/${ingredientId}/`);
+        try {
+            const response = await fetch(url);
+            const result = await response.json();
+            if (!result.success) {
+                console.warn('원료 상세 API 응답 실패:', result);
+                return;
+            }
+            const updatedData = {
+                raw_material_name: result.raw_material_name || '',
+                food_type: result.food_type || '',
+                manufacturer: result.manufacturer || '',
+                report_no: result.report_no || '',
+                allergens: result.allergens || '',
+                allergen: result.allergens || '',
+                gmo: result.gmo || '',
+                is_gmo: Boolean(result.gmo)
+            };
+            setRowProps(rowIndex, updatedData, 'palette');
+            
+            // rowData에 updatedData를 병합하여 context panel 업데이트
+            const rowData = hot.getSourceDataAtRow(rowIndex);
+            const mergedData = Object.assign({}, rowData, updatedData);
+            
+            // context panel에 병합된 데이터 전달
+            updateContextPanel(mergedData, rowIndex);
+            scheduleDraftSave();
+        } catch (error) {
+            console.error('원료 상세 불러오기 실패:', error);
+        }
+    }
+
+    function addItemToGrid(item) {
+        const data = hot.getSourceData();
+        let targetRow = data.findIndex(row => !row.ingredient_name);
+        if (targetRow === -1) {
+            hot.alter('insert_row', data.length);
+            targetRow = hot.countRows() - 1;
+        }
+        if (!Number.isInteger(targetRow) || targetRow < 0) {
+            return;
+        }
+
+        setRowProps(targetRow, {
+            ingredient_name: item.name || '',
+            origin: item.origin || '',
+            type: mapTypeLabel(item.type),
+            source_type: item.type || 'internal',
+            source_id: item.type === 'shared' ? item.receipt_id : (item.ingredient_id || item.label_id),
+            allergen: item.allergens || item.allergen || '',
+            allergens: item.allergens || item.allergen || '',
+            raw_material_name: item.raw_material_name || item.name || '',
+            food_type: item.food_type || '',
+            summary_type: (rowMetadata.get(targetRow) || {}).summary_type || '식품유형',
+            gmo: item.gmo || '',
+            is_gmo: !!item.gmo || !!item.is_gmo,
+            report_no: item.report_no || '',
+            manufacturer: item.manufacturer || ''
+        }, 'palette');
+        if (item.type === 'ingredient') {
+            setRowProp(targetRow, 'source_label_id', item.ingredient_id || '');
+            hydrateIngredientDetails(targetRow, item.ingredient_id);
+        }
+
+        hot.selectCell(targetRow, 0);
+        updateContextPanel(hot.getSourceDataAtRow(targetRow), targetRow);
+        scheduleDraftSave();
+        // 팔레트 드롭 후 요약 갱신 (source='palette'로 afterChange 건너뜀)
+        setTimeout(generateBomSummary, 50);
+    }
+
+    function setupDragAndDrop() {
+        const draggables = document.querySelectorAll('.palette-card');
+        const dropZone = document.getElementById('bom-grid');
+        if (!dropZone) {
+            return;
+        }
+        draggables.forEach(card => {
+            card.addEventListener('dragstart', event => {
+                event.dataTransfer.setData('text/plain', card.dataset.payload);
+                event.dataTransfer.effectAllowed = 'copy';
+            });
+        });
+        dropZone.addEventListener('dragover', event => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+        });
+        dropZone.addEventListener('drop', event => {
+            event.preventDefault();
+            const raw = event.dataTransfer.getData('text/plain');
+            if (raw) {
+                try {
+                    addItemToGrid(JSON.parse(raw));
+                } catch (error) {
+                    console.error('드롭 파싱 실패:', error);
+                }
+            }
+        });
+    }
+
+    function updateAllergenButtons(allergenString) {
+        const buttons = document.querySelectorAll('#allergen-quick-buttons .quick-allergen-btn');
+        const toggleBtn = document.getElementById('allergenToggleBtn');
+        if (!buttons.length) {
+            return;
+        }
+        const selectedAllergens = (allergenString || '').split(',').map(item => item.trim()).filter(Boolean);
+        buttons.forEach(button => {
+            const allergen = button.dataset.allergen;
+            if (selectedAllergens.includes(allergen)) {
+                button.classList.add('active');
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-secondary');
+            } else {
+                button.classList.remove('active');
+                button.classList.remove('btn-secondary');
+                button.classList.add('btn-outline-secondary');
+            }
+        });
+        const display = document.getElementById('allergenSelectedDisplay');
+        if (display) {
+            display.textContent = selectedAllergens.length ? selectedAllergens.join(', ') : '선택된 항목 없음';
+        }
+        const viewAllergens = document.getElementById('view-allergens');
+        if (viewAllergens) {
+            viewAllergens.textContent = selectedAllergens.length ? selectedAllergens.join(', ') : '-';
+        }
+        if (toggleBtn) {
+            toggleBtn.textContent = selectedAllergens.length === buttons.length ? '전체해제' : '전체선택';
+        }
+    }
+
+    function updateGmoButtons(gmoString) {
+        const buttons = document.querySelectorAll('#gmoBtnList .gmo-btn');
+        const toggleBtn = document.getElementById('gmoToggleBtn');
+        const selected = (gmoString || '').split(',').map(item => item.trim()).filter(Boolean);
+        buttons.forEach(button => {
+            const value = button.dataset.gmo;
+            if (selected.includes(value)) {
+                button.classList.add('active');
+                button.classList.remove('btn-outline-secondary');
+                button.classList.add('btn-secondary');
+            } else {
+                button.classList.remove('active');
+                button.classList.remove('btn-secondary');
+                button.classList.add('btn-outline-secondary');
+            }
+        });
+        const display = document.getElementById('gmoSelectedDisplay');
+        if (display) {
+            display.textContent = selected.length ? selected.join(', ') : '선택된 항목 없음';
+        }
+        const viewGmo = document.getElementById('view-gmo');
+        if (viewGmo) {
+            viewGmo.textContent = selected.length ? selected.join(', ') : '-';
+        }
+        if (toggleBtn) {
+            toggleBtn.textContent = selected.length === buttons.length ? '전체해제' : '전체선택';
+        }
+    }
+
+    function ensureCurrentRowIndex() {
+        if (currentRowIndex !== null) {
+            return currentRowIndex;
+        }
+        if (hot && typeof hot.getSelectedLast === 'function') {
+            const selected = hot.getSelectedLast();
+            if (selected && Number.isInteger(selected[0])) {
+                currentRowIndex = selected[0];
+                return currentRowIndex;
+            }
+        }
+        return null;
+    }
+
+    function bindQuickAllergenButtons() {
+        const buttons = document.querySelectorAll('#allergen-quick-buttons .quick-allergen-btn');
+        const toggleBtn = document.getElementById('allergenToggleBtn');
+        const allergenField = document.getElementById('field-allergens');
+        
+        if (!buttons.length || !allergenField) {
+            return;
+        }
+        
+        const applyValue = (value) => {
+            const rowIndex = ensureCurrentRowIndex();
+            if (rowIndex === null) {
+                alert('원료를 먼저 선택해 주세요.');
+                return;
+            }
+            allergenField.value = value;
+            setRowProps(rowIndex, {
+                allergens: value,
+                allergen: value
+            });
+            updateAllergenButtons(value);
+        };
+        
+        buttons.forEach(button => {
+            button.addEventListener('click', () => {
+                const value = button.dataset.allergen;
+                if (!value) {
+                    return;
+                }
+                const current = (allergenField.value || '').split(',').map(item => item.trim()).filter(Boolean);
+                const index = current.indexOf(value);
+                if (index > -1) {
+                    current.splice(index, 1);
+                } else {
+                    current.push(value);
+                }
+                applyValue(current.join(', '));
+            });
+        });
+        
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const allValues = Array.from(buttons).map(btn => btn.dataset.allergen).filter(Boolean);
+                const current = (allergenField.value || '').split(',').map(item => item.trim()).filter(Boolean);
+                if (current.length === allValues.length) {
+                    applyValue('');
+                    toggleBtn.textContent = '전체선택';
+                } else {
+                    applyValue(allValues.join(', '));
+                    toggleBtn.textContent = '전체해제';
+                }
+            });
+        }
+    }
+
+    function bindGmoButtons() {
+        const buttons = document.querySelectorAll('#gmoBtnList .gmo-btn');
+        const toggleBtn = document.getElementById('gmoToggleBtn');
+        const gmoField = document.getElementById('field-gmo');
+
+        if (!buttons.length || !gmoField) {
+            return;
+        }
+
+        const applyValue = (value) => {
+            const rowIndex = ensureCurrentRowIndex();
+            if (rowIndex === null) {
+                alert('원료를 먼저 선택해 주세요.');
+                return;
+            }
+            gmoField.value = value;
+            setRowProps(rowIndex, {
+                gmo: value,
+                is_gmo: Boolean(value)
+            });
+            updateGmoButtons(value);
+        };
+
+        buttons.forEach(button => {
+            button.addEventListener('click', () => {
+                const value = button.dataset.gmo;
+                if (!value) {
+                    return;
+                }
+                const current = (gmoField.value || '').split(',').map(item => item.trim()).filter(Boolean);
+                const index = current.indexOf(value);
+                if (index > -1) {
+                    current.splice(index, 1);
+                } else {
+                    current.push(value);
+                }
+                applyValue(current.join(', '));
+            });
+        });
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const allValues = Array.from(buttons).map(btn => btn.dataset.gmo).filter(Boolean);
+                const current = (gmoField.value || '').split(',').map(item => item.trim()).filter(Boolean);
+                if (current.length === allValues.length) {
+                    applyValue('');
+                    toggleBtn.textContent = '전체선택';
+                } else {
+                    applyValue(allValues.join(', '));
+                    toggleBtn.textContent = '전체해제';
+                }
+            });
+        }
+    }
+
+    async function loadBOMData() {
+        try {
+            const response = await fetch(DATA_URL);
+            const result = await response.json();
+            if (!result.success) {
+                return;
+            }
+
+            const data = (result.data || []).map((item, idx) => {
+                const rowData = {
+                    ingredient_name: item.ingredient_name || '',
+                    raw_material_name: item.raw_material_name || item.ingredient_name || '',
+                    food_type: item.food_type || '',
+                    mixing_ratio: item.content_ratio || item.mixing_ratio || null,
+                    manufacturer: item.manufacturer || '',
+                    notes: item.notes || ''
+                };
+                
+                // 메타데이터를 rowMetadata Map에 저장
+                rowMetadata.set(idx, {
+                    bom_id: item.bom_id || null,
+                    source_type: normalizeSourceType(item.source_type),
+                    source_id: item.source_id || null,
+                    shared_owner: item.shared_owner || '',
+                    origin: item.origin || '',
+                    allergen: item.allergens || item.allergen || '',
+                    allergens: item.allergens || item.allergen || '',
+                    gmo: item.gmo || '',
+                    sub_ingredients: item.sub_ingredients || '',
+                    origin_detail: item.origin_detail || '',
+                    is_additive: !!item.is_additive,
+                    additive_role: item.additive_role || '',
+                    is_gmo: !!item.is_gmo,
+                    report_no: item.report_no || '',
+                    source_label_id: item.source_label_id || null,
+                    summary_type: item.summary_type || '식품유형'
+                });
+                
+                return rowData;
+            });
+
+            if (!data.length) {
+                // 서버 데이터가 없으면 임시저장 데이터 복원 시도
+                if (!loadDraftIfExists()) {
+                    hot.loadData(Array.from({ length: 15 }, () => ({})));
+                }
+            } else {
+                hot.loadData(data);
+            }
+            hot.render();
+            calculateTotal();  // 내부에서 generateBomSummary 호출
+        } catch (error) {
+            console.error('BOM 데이터 로드 실패:', error);
+        }
+    }
+
+    async function loadLabelData(labelId) {
+        if (!confirm('현재 BOM에 데이터를 추가하시겠습니까?')) {
+            return;
+        }
+
+        const url = LOAD_LABEL_URL_TEMPLATE.replace('/0/', `/${labelId}/`);
+        const res = await fetch(url);
+        const result = await res.json();
+
+        if (result.success) {
+            const currentData = hot.getSourceData().filter(row => row.ingredient_name);
+            const newData = result.data.map(item => ({
+                ingredient_name: item.ingredient_name,
+                type: '직접입력',
+                mixing_ratio: item.mixing_ratio || null,
+                origin: item.origin || '',
+                notes: item.notes || '',
+                source_type: 'manual',
+                raw_material_name: item.raw_material_name || item.ingredient_name || '',
+                sub_ingredients: item.sub_ingredients || '',
+                allergen: item.allergens || item.allergen || '',
+                allergens: item.allergens || item.allergen || '',
+                origin_detail: item.origin_detail || '',
+                food_type: item.food_type || '',
+                is_additive: !!item.is_additive,
+                additive_role: item.additive_role || '',
+                is_gmo: !!item.is_gmo,
+                report_no: item.report_no || '',
+                manufacturer: item.manufacturer || '',
+                source_label_id: item.source_label_id || null
+            }));
+            hot.loadData([...currentData, ...newData]);
+            hot.render();
+            calculateTotal();
+
+            bootstrap.Modal.getInstance(document.getElementById('loadLabelModal')).hide();
+            alert('라벨 정보를 불러왔습니다. 배합비를 입력해주세요.');
+        }
+    }
+
+    function calculateTotal() {
+        const totalEl = document.getElementById('total-ratio');
+        const totalDisplayEl = document.getElementById('total-ratio-display');
+        if (!hot) {
+            return;
+        }
+        const data = hot.getSourceData();
+        let total = 0;
+        data.forEach(row => {
+            const value = parseFloat(row.mixing_ratio);
+            if (!Number.isNaN(value)) {
+                total += value;
+            }
+        });
+        const totalText = `${total.toFixed(2)}%`;
+        
+        // 상단 총 배합비 업데이트 (있으면)
+        if (totalEl) {
+            totalEl.textContent = totalText;
+            if (Math.abs(total - 100) > 0.01) {
+                totalEl.classList.add('text-danger');
+                totalEl.classList.remove('text-success');
+            } else {
+                totalEl.classList.add('text-success');
+                totalEl.classList.remove('text-danger');
+            }
+        }
+        
+        // 하단 총 배합비 표시 업데이트 (새로 추가됨)
+        if (totalDisplayEl) {
+            totalDisplayEl.textContent = totalText;
+            if (Math.abs(total - 100) > 0.01) {
+                totalDisplayEl.classList.add('text-danger');
+                totalDisplayEl.classList.remove('text-success');
+                totalDisplayEl.classList.remove('text-primary');
+            } else {
+                totalDisplayEl.classList.add('text-success');
+                totalDisplayEl.classList.remove('text-danger');
+                totalDisplayEl.classList.remove('text-primary');
+            }
+        }
+
+        // 원재료 요약 패널 갱신
+        generateBomSummary();
+    }
+
+    /* ── BOM 원재료 요약 생성 ─────────────────────────────────────────── */
+    function generateBomSummary() {
+        if (!hot) return;
+
+        const rawmtrlEl   = document.getElementById('bom-summary-rawmtrl');
+        const allergensEl = document.getElementById('bom-summary-allergens');
+        const gmoEl       = document.getElementById('bom-summary-gmo');
+        if (!rawmtrlEl) return;
+
+        const data = hot.getSourceData();
+
+        /* 유효한 행만 추출 */
+        const validRows = [];
+        data.forEach((row, idx) => {
+            const rawName = (row.raw_material_name || row.ingredient_name || '').trim();
+            if (!rawName) return;
+            const ratio     = parseFloat(row.mixing_ratio) || 0;
+            const meta      = rowMetadata.get(idx) || {};
+            const summType  = (meta.summary_type || '식품유형').trim();
+            const foodType  = (row.food_type || '').trim();
+            /* \ud45c\uc2dc\uba85 \uacb0\uc815: '\uc2dd\ud488\uc720\ud615' \uc120\ud0dd \uc2dc foodType \uc6b0\uc120, \uc5c6\uc73c\uba74 rawName \ud3f4\ubc31 */
+            const displayName = (summType === '\uc6d0\uc7ac\ub8cc\uba85') ? rawName : (foodType || rawName);
+            validRows.push({
+                displayName,
+                ratio,
+                allergens: meta.allergens || meta.allergen || '',
+                gmo:       meta.gmo || ''
+            });
+        });
+
+        /* 배합비 내림차순 정렬 */
+        validRows.sort((a, b) => b.ratio - a.ratio);
+
+        /* 원재료명 표시명 */
+        const rawmtrlText = validRows.map(r => r.displayName).join(', ');
+        if (rawmtrlText) {
+            rawmtrlEl.textContent = rawmtrlText;
+            rawmtrlEl.style.color = '#333';
+        } else {
+            rawmtrlEl.innerHTML = '<span class="text-muted">BOM에 원료를 입력하면 자동으로 생성됩니다.</span>';
+        }
+
+        /* 알레르기 집계 (조개류 통합) */
+        const allergenSet     = new Set();
+        const shellfishItems  = new Set();
+        const shellfishPat    = /^조개류\(([^)]+)\)$/;
+        validRows.forEach(row => {
+            if (!row.allergens) return;
+            row.allergens.split(',').map(a => a.trim()).filter(Boolean).forEach(a => {
+                const m = a.match(shellfishPat);
+                if (m) {
+                    m[1].split(',').map(s => s.trim()).filter(Boolean).forEach(s => shellfishItems.add(s));
+                } else {
+                    allergenSet.add(a);
+                }
+            });
+        });
+        if (shellfishItems.size > 0) {
+            allergenSet.add(`\uC870\uAC1C\uB958(${Array.from(shellfishItems).join(', ')})`);
+        }
+
+        /* GMO 집계 */
+        const gmoSet = new Set();
+        validRows.forEach(row => {
+            if (!row.gmo) return;
+            row.gmo.split(',').map(g => g.trim()).filter(Boolean).forEach(g => gmoSet.add(g));
+        });
+
+        /* 알레르기 표시 */
+        if (allergensEl) {
+            if (allergenSet.size > 0) {
+                allergensEl.innerHTML = Array.from(allergenSet)
+                    .map(a => `<span class="badge bg-warning text-dark me-1 mb-1">${a} \uD568\uC720</span>`)
+                    .join('');
+            } else {
+                allergensEl.innerHTML = '<span class="text-muted">\uC5C6\uC74C</span>';
+            }
+        }
+
+        /* GMO 표시 */
+        if (gmoEl) {
+            if (gmoSet.size > 0) {
+                gmoEl.innerHTML = Array.from(gmoSet)
+                    .map(g => `<span class="badge bg-success text-white me-1 mb-1">${g}</span>`)
+                    .join('');
+            } else {
+                gmoEl.innerHTML = '<span class="text-muted">\uC5C6\uC74C</span>';
+            }
+        }
+
+        /* 복사용 전역 저장 */
+        window._bomSummaryRawmtrl  = rawmtrlText;
+        window._bomSummaryAllergens = Array.from(allergenSet);
+        window._bomSummaryGmo       = Array.from(gmoSet);
+    }
+
+    /* 기본정보 탭 원재료 표시명으로 복사 (postMessage) */
+    function copyRawmtrlToBasicInfo() {
+        if (!window._bomSummaryRawmtrl) {
+            alert('원재료 표시명 데이터가 없습니다. BOM에 원료를 입력해 주세요.');
+            return;
+        }
+        window.parent.postMessage({
+            type:      'copyRawmtrlToBasicInfo',
+            rawmtrl:   window._bomSummaryRawmtrl,
+            allergens: window._bomSummaryAllergens || [],
+            gmo:       window._bomSummaryGmo       || []
+        }, '*');
+    }
+
+    function updateContextPanel(data, rowIndex) {
+        const emptyEl = document.getElementById('context-empty');
+        const formEl = document.getElementById('context-form');
+        const viewEl = document.getElementById('context-view');
+        if (rowIndex === null || rowIndex === undefined) {
+            emptyEl.classList.remove('d-none');
+            formEl.classList.add('d-none');
+            viewEl.classList.add('d-none');
+            currentRowIndex = null;
+            return;
+        }
+
+        const detailTabTrigger = document.querySelector('[data-bs-target="#side-detail"]');
+        if (detailTabTrigger) {
+            const detailTab = bootstrap.Tab.getOrCreateInstance(detailTabTrigger);
+            detailTab.show();
+        }
+
+        emptyEl.classList.add('d-none');
+        formEl.classList.remove('d-none');
+        viewEl.classList.add('d-none');
+
+        const rowData = data || {};
+        const metadata = rowMetadata.get(rowIndex) || {};
+        const sourceType = metadata.source_type || 'manual';
+
+        const viewBadge = document.getElementById('context-view-type');
+        viewBadge.textContent = mapTypeLabel(sourceType);
+        viewBadge.className = 'badge';
+        if (sourceType === 'shared') {
+            viewBadge.classList.add('bg-info');
+        } else if (sourceType === 'internal' || sourceType === 'my' || sourceType === 'ingredient') {
+            viewBadge.classList.add('bg-success');
+        } else {
+            viewBadge.classList.add('bg-secondary');
+        }
+        
+        // 메타데이터에서 allergens, gmo 등을 읽어옴
+        document.getElementById('field-allergens').value = metadata.allergens || metadata.allergen || '';
+        document.getElementById('field-gmo').value = metadata.gmo || '';
+        document.getElementById('field-report-no').value = metadata.report_no || '';
+        document.getElementById('field-source-label-id').value = metadata.source_label_id || '';
+
+        document.getElementById('view-allergens').textContent = metadata.allergens || metadata.allergen || '-';
+        document.getElementById('view-gmo').textContent = metadata.gmo || '-';
+        document.getElementById('view-report-no').textContent = metadata.report_no || '-';
+
+        // 표시명 기준 버튼 상태 업데이트
+        const summaryType = metadata.summary_type || '식품유형';
+        document.getElementById('field-summary-type').value = summaryType;
+        document.querySelectorAll('.summary-type-btn').forEach(btn => {
+            const isActive = btn.dataset.value === summaryType;
+            btn.classList.toggle('btn-primary', isActive);
+            btn.classList.toggle('btn-outline-secondary', !isActive);
+        });
+        
+        // 알레르기 버튼 상태 업데이트
+        updateAllergenButtons(metadata.allergens || metadata.allergen || '');
+        updateGmoButtons(metadata.gmo || '');
+        
+        currentRowIndex = rowIndex;
+    }
+
+    function bindContextInputs() {
+        const mapping = [
+            ['field-allergens', 'allergens'],
+            ['field-gmo', 'gmo'],
+            ['field-report-no', 'report_no']
+        ];
+
+        mapping.forEach(([id, prop]) => {
+            const el = document.getElementById(id);
+            if (!el) {
+                return;
+            }
+            el.addEventListener('input', () => {
+                if (currentRowIndex === null) {
+                    return;
+                }
+                setRowProp(currentRowIndex, prop, el.value);
+                // 알레르기 필드 직접 입력 시 버튼 상태와 뷰 업데이트
+                if (prop === 'allergens') {
+                    updateAllergenButtons(el.value);
+                    document.getElementById('view-allergens').textContent = el.value || '-';
+                }
+            });
+        });
+
+        const gmoField = document.getElementById('field-gmo');
+        if (gmoField) {
+            gmoField.addEventListener('input', () => {
+                if (currentRowIndex === null) {
+                    return;
+                }
+                setRowProps(currentRowIndex, {
+                    gmo: gmoField.value,
+                    is_gmo: Boolean(gmoField.value)
+                });
+                updateGmoButtons(gmoField.value);
+            });
+        }
+
+        document.querySelectorAll('.summary-type-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (currentRowIndex === null) return;
+                const value = btn.dataset.value;
+                document.getElementById('field-summary-type').value = value;
+                document.querySelectorAll('.summary-type-btn').forEach(b => {
+                    b.classList.toggle('btn-primary', b.dataset.value === value);
+                    b.classList.toggle('btn-outline-secondary', b.dataset.value !== value);
+                });
+                setRowProp(currentRowIndex, 'summary_type', value, 'syncPanel');
+                setTimeout(generateBomSummary, 50);
+            });
+        });
+    }
+
+    function syncContextPanelToRow() {
+        if (currentRowIndex === null) {
+            return;
+        }
+        const allergens = document.getElementById('field-allergens');
+        const gmo = document.getElementById('field-gmo');
+        const reportNo = document.getElementById('field-report-no');
+        const sourceLabelId = document.getElementById('field-source-label-id');
+
+        const summaryTypeField = document.getElementById('field-summary-type');
+        // source='syncPanel'로 설정하여 afterChange 이벤트 방지
+        setRowProps(currentRowIndex, {
+            allergens: allergens ? allergens.value : '',
+            allergen: allergens ? allergens.value : '',
+            gmo: gmo ? gmo.value : '',
+            is_gmo: gmo ? Boolean(gmo.value) : false,
+            report_no: reportNo ? reportNo.value : '',
+            source_label_id: sourceLabelId ? sourceLabelId.value : '',
+            summary_type: summaryTypeField ? summaryTypeField.value : '식품유형'
+        }, 'syncPanel');
+
+        // 사이드패널 알레르기/GMO 변경 후 요약 갱신
+        setTimeout(generateBomSummary, 50);
+    }
+
+    async function saveData() {
+        try {
+            // 저장 시작 시점에 draft save 비활성화
+            draftSaveDisabled = true;
+            syncContextPanelToRow();
+            
+            const items = [];
+            const sourceData = hot.getSourceData();
+            const rowCount = hot.countRows();
+
+            // getSourceData()로 전체 배열을 가져와서 인덱스로 접근
+            for (let index = 0; index < rowCount; index++) {
+                const row = sourceData[index];
+                const metadata = rowMetadata.get(index) || {};
+                
+                if (row && row.ingredient_name && row.ingredient_name.toString().trim() !== '') {
+                    const itemData = {
+                        ingredient_name: row.ingredient_name,
+                        mixing_ratio: row.mixing_ratio || null,
+                        origin: metadata.origin || '',
+                        allergen: metadata.allergens || metadata.allergen || '',
+                        raw_material_name: row.raw_material_name || '',
+                        sub_ingredients: metadata.sub_ingredients || '',
+                        allergens: metadata.allergens || metadata.allergen || '',
+                        gmo: metadata.gmo || '',
+                        origin_detail: metadata.origin_detail || '',
+                        food_type: row.food_type || '',
+                        summary_type: metadata.summary_type || '식품유형',
+                        is_additive: !!metadata.is_additive,
+                        additive_role: metadata.additive_role || '',
+                        is_gmo: !!metadata.is_gmo,
+                        report_no: metadata.report_no || '',
+                        manufacturer: row.manufacturer || '',
+                        source_label_id: metadata.source_label_id || null,
+                        notes: row.notes || '',
+                        bom_id: metadata.bom_id || null,
+                        source_type: metadata.source_type || 'manual',
+                        source_id: metadata.source_id || null,
+                        sort_order: index
+                    };
+                    items.push(itemData);
+                }
+            }
+
+            if (!items.length) {
+                alert('저장할 데이터가 없습니다.');
+                return;
+            }
+
+            const response = await fetch(SAVE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                },
+                body: JSON.stringify({ items: items })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                // 저장 성공 후 draft save 완전히 비활성화
+                draftSaveDisabled = true;
+                clearDraft();
+                alert('저장되었습니다.');
+                // iframe인지 확인하고 부모 페이지로 이동
+                if (window.parent && window.parent !== window) {
+                    window.parent.location.href = DETAIL_URL;
+                } else {
+                    window.location.href = DETAIL_URL;
+                }
+            } else {
+                alert('저장 실패: ' + (result.error || '알 수 없는 오류'));
+            }
+        } catch (error) {
+            console.error('저장 실패:', error);
+            alert('저장 중 오류가 발생했습니다.');
+        }
+    }
+
+    bindContextInputs();
+</script>
+{% endblock %}
+

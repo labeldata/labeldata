@@ -175,6 +175,16 @@ body {
   overflow: hidden;
 }
 
+/* 읽기 전용 모드: 설정 패널 숨기고 미리보기 전체 너비 */
+.readonly-mode .preview-container {
+  justify-content: center;
+}
+
+.readonly-mode .preview-panel {
+  width: 100%;
+  max-width: 1200px;
+}
+
 .settings-panel {
   width: 420px; /* 너비 소폭 증가 */
   padding: 20px;
@@ -439,7 +449,7 @@ body {
   }
 }
 
-@media (max-width: 992px) {
+@media (max-width: 768px) {  /* 992px에서 768px로 변경하여 더 작은 화면에서만 적용 */
   .preview-container {
     flex-direction: column;
   }

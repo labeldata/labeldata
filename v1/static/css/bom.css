@@ -1,0 +1,407 @@
+/* ============================================================
+   EazyLabel V2 BOM 워크스페이스 전용 스타일 (v2_bom.css)
+   bom_workspace.html 의 <style> 블록에서 이관
+   ============================================================ */
+
+/* ── BOM 전용 CSS 변수 ────────────────────────────────────── */
+/* 공통 색상은 products_common.css(base_v2.html)의 --v2-* 변수를 재사용합니다.
+   아래는 BOM 페이지에만 쓰이는 전용 색상입니다.            */
+:root {
+    --bom-border:       #e6e9f2;  /* BOM 카드 · 패널 외곽선 (--v2-border 보다 약간 파랑) */
+    --bom-border-inner: #eef1f6;  /* BOM 내부 구분선 */
+    --bom-bg:           #f8f9fb;  /* BOM 사이드바 배경 */
+    --bom-placeholder:  #9aa3b2;  /* BOM placeholder 텍스트 */
+    --bom-label:        #6b7280;  /* BOM field label 텍스트 */
+    --bom-value:        #111827;  /* BOM 값 텍스트 (진한 검정) */
+}
+
+
+.bom-header {
+    background:    #ffffff;
+    border:        1px solid var(--bom-border);
+    border-radius: 12px;
+    padding:       10px 12px;
+}
+.bom-header h5 {
+    font-size: 16px;
+    margin:    0;
+}
+
+/* ── BOM 그리드 카드 ──────────────────────────────────────── */
+.bom-grid-card {
+    border:        1px solid var(--bom-border);
+    border-radius: 12px;
+    overflow:      visible;
+}
+
+/* ── BOM 사이드바 ─────────────────────────────────────────── */
+.bom-sidebar {
+    border:        1px solid var(--bom-border);
+    border-radius: 12px;
+    background:    var(--bom-bg);
+}
+.bom-sidebar.border-0 { border: 0; }
+.bom-sidebar .card-header {
+    background:    #ffffff;
+    border-bottom: 1px solid var(--bom-border-inner);
+    font-weight:   700;
+}
+.bom-context-placeholder { color: var(--bom-placeholder); }
+
+.bom-field-label {
+    font-size: 12px;
+    color:     var(--bom-label);
+}
+
+.bom-detail-item {
+    display:         flex;
+    justify-content: space-between;
+    gap:             12px;
+    font-size:       13px;
+    padding:         6px 0;
+    border-bottom:   1px solid var(--bom-border-inner);
+}
+.bom-detail-item:last-child { border-bottom: none; }
+.bom-detail-label { color: var(--bom-label); }
+.bom-detail-value {
+    text-align:  right;
+    color:       var(--bom-value);
+    max-width:   60%;
+    word-break:  break-word;
+}
+
+/* ── GMO 버튼 ─────────────────────────────────────────────── */
+.gmo-btn {
+    font-size:     11px;
+    padding:       4px 10px;
+    border-radius: 16px;
+    margin-right:  4px;
+    margin-bottom: 4px;
+    font-weight:   600;
+    transition:    all 0.15s ease;
+}
+.gmo-btn:hover:not(.active) {
+    background-color: rgba(60, 64, 67, 0.08);
+    border-color:     var(--v2-text-sub);
+}
+.gmo-btn.active {
+    background-color: var(--v2-blue);
+    color:            #ffffff;
+    border-color:     var(--v2-blue);
+}
+
+/* ── 빠른 알레르기 버튼 ───────────────────────────────────── */
+.quick-allergen-btn {
+    font-size:     11px;
+    padding:       4px 10px;
+    border-radius: 16px;
+    margin-right:  4px;
+    margin-bottom: 4px;
+    font-weight:   600;
+    transition:    all 0.15s ease;
+}
+.quick-allergen-btn:hover:not(.active) {
+    background-color: rgba(60, 64, 67, 0.08);
+    border-color:     var(--v2-text-sub);
+}
+.quick-allergen-btn.active {
+    background-color: var(--v2-blue);
+    color:            #ffffff;
+    border-color:     var(--v2-blue);
+}
+
+/* ── iframe 내 삽입 시 헤더 숨김 ────────────────────────── */
+body.in-iframe .bom-page-header          { display: none; }
+body.in-iframe .container-fluid.px-0    {
+    padding: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+body.in-iframe .bom-workspace {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+body.in-iframe .bom-main-column {
+    overflow-y: auto;
+}
+
+/* ── 팔레트 패널 ──────────────────────────────────────────── */
+.palette-panel {
+    width:          100%;
+    min-width:      0;
+    background:     #ffffff;
+    border:         1px solid var(--bom-border);
+    border-radius:  12px;
+    display:        flex;
+    flex-direction: column;
+    height:         100%;
+}
+.palette-panel.border-0 { border: 0; }
+
+.palette-header {
+    padding:       12px;
+    border-bottom: 1px solid var(--v2-border);
+    background:    #ffffff;
+}
+
+.palette-tabs .nav-link {
+    font-size:  12px;
+    padding:    6px 12px;
+    font-weight: 600;
+    color:      var(--v2-text-sub);
+    transition: all 0.2s ease;
+}
+.palette-tabs .nav-link:hover:not(.active) {
+    background-color: rgba(60, 64, 67, 0.08);
+}
+.palette-tabs .nav-link.active {
+    color:             var(--v2-blue);
+    border-bottom-color: var(--v2-blue);
+}
+
+.palette-list {
+    padding:       10px;
+    background:    #ffffff;
+    border-radius: 8px;
+}
+
+.palette-pagination {
+    position:        sticky;
+    bottom:          0;
+    background:      #ffffff;
+    border-top:      1px solid var(--v2-border);
+    padding:         10px 12px;
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    gap:             8px;
+    font-size:       12px;
+    color:           var(--v2-text-sub);
+    font-weight:     500;
+}
+.palette-pagination .btn {
+    font-size:     11px;
+    padding:       4px 12px;
+    border-radius: 4px;
+    font-weight:   600;
+    transition:    all 0.15s ease;
+}
+.palette-pagination .btn:hover:not(:disabled) {
+    background-color: rgba(26, 115, 232, 0.08);
+    border-color:     var(--v2-blue);
+    color:            var(--v2-blue);
+}
+
+.palette-card {
+    border:        1px solid var(--v2-border);
+    border-radius: 8px;
+    background:    #ffffff;
+    transition:    all 0.15s ease;
+    cursor:        grab;
+}
+.palette-card:hover {
+    transform:  translateY(-2px);
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,.3), 0 2px 6px 2px rgba(60,64,67,.15);
+    border-color: var(--v2-blue);
+}
+.palette-card:active { cursor: grabbing; }
+.palette-card .fw-semibold {
+    color:     var(--v2-text);
+    font-size: 13px;
+}
+
+.palette-meta  { font-size: 11px; color: var(--v2-text-sub); }
+.palette-badge {
+    font-size:        10px;
+    background-color: rgba(26, 115, 232, 0.1);
+    color:            var(--v2-blue);
+    padding:          2px 8px;
+    border-radius:    12px;
+    font-weight:      600;
+}
+
+/* ── 그리드 컨테이너 ──────────────────────────────────────── */
+/* ── Handsontable 셀 폰트 (영양성분 탭과 동일하게) ─────────────── */
+.hot-container .handsontable td,
+.hot-container .handsontable th,
+.hot-container .handsontable .htCore td,
+.hot-container .handsontable .htCore th,
+.hot-container .handsontable .htColumnHeaders th {
+    font-family: 'Noto Sans KR', 'Malgun Gothic', '맑은 고딕', sans-serif !important;
+    font-size: 13px !important;
+}
+
+#bom-grid {
+    width:    100%;
+    height:   auto !important;
+    overflow: hidden;
+}
+.hot-container {
+    width:        100%;
+    height:       auto;
+    min-height:   0;
+    overflow-x:   auto;
+}
+
+/* ── 워크스페이스 레이아웃 ────────────────────────────────── */
+.bom-workspace {
+    display:     flex;
+    flex-wrap:   nowrap;
+    gap:         0;
+    align-items: stretch;
+}
+.bom-main-column {
+    flex:      1 1 auto;
+    min-width: 0;
+}
+.bom-right-panel {
+    width:          280px;
+    min-width:      280px;
+    flex-shrink:    0;
+    background:     #ffffff;
+    color:          var(--v2-text);
+    font-size:      12px;
+    display:        flex;
+    flex-direction: column;
+    position:       sticky;
+    top:            0;
+    align-self:     flex-start;
+    max-height:     calc(100vh - 64px);
+    overflow:       hidden;
+}
+
+/* ── 사이드 탭 ─────────────────────────────────────────────── */
+.side-tabs {
+    border:         0;
+    border-radius:  0;
+    background:     #ffffff;
+    display:        flex;
+    flex-direction: column;
+    flex:           1 1 auto;
+    min-height:     0;
+    overflow:       hidden;
+}
+.side-tabs .nav-tabs {
+    border-bottom: 1px solid var(--v2-border);
+    background:    var(--v2-gray-50);
+}
+.side-tabs .nav-tabs .nav-link {
+    margin-bottom: 0;
+    font-size:     12px;
+    font-weight:   600;
+    color:         var(--v2-text-sub);
+    border:        0;
+    border-bottom: 2px solid transparent;
+    transition:    all 0.2s ease;
+}
+.side-tabs .nav-tabs .nav-link:hover:not(.active) {
+    background-color: rgba(60, 64, 67, 0.08);
+}
+.side-tabs .nav-tabs .nav-link.active {
+    color:               var(--v2-blue);
+    background:          #ffffff;
+    border-bottom-color: var(--v2-blue);
+}
+.side-tab-body {
+    flex:       1 1 auto;
+    min-height: 0;
+    overflow:   auto;
+    background: var(--v2-gray-50);
+    padding:    0;
+}
+.side-tabs .tab-pane { height: 100%; }
+
+/* ── 우측 패널 버튼 ───────────────────────────────────────── */
+.bom-right-panel .btn.btn-sm {
+    font-size:     11px;
+    padding:       4px 10px;
+    border-radius: 4px;
+    font-weight:   600;
+}
+.bom-right-panel .btn-primary {
+    background-color: var(--v2-blue);
+    border-color:     var(--v2-blue);
+}
+.bom-right-panel .btn-primary:hover {
+    background-color: var(--v2-blue-hover);
+    border-color:     var(--v2-blue-hover);
+}
+.bom-right-panel .btn-outline-primary {
+    color:        var(--v2-blue);
+    border-color: var(--v2-border);
+}
+.bom-right-panel .btn-outline-primary:hover {
+    background-color: rgba(26, 115, 232, 0.08);
+    border-color:     var(--v2-blue);
+    color:            var(--v2-blue);
+}
+.bom-right-panel .form-control,
+.bom-right-panel .form-select { font-size: 12px; }
+.bom-right-panel .form-control::placeholder { color: var(--bom-placeholder); }
+
+/* 우측 패널 내 필드 라벨/값 (덮어쓰기) */
+.bom-right-panel .bom-field-label {
+    font-size:      11px;
+    color:          var(--v2-text-sub);
+    font-weight:    600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.bom-right-panel .bom-detail-item {
+    font-size: 13px;
+    padding:   10px 0;
+}
+.bom-right-panel .bom-detail-label {
+    color:       var(--v2-text-sub);
+    font-weight: 500;
+}
+.bom-right-panel .bom-detail-value {
+    color:       var(--v2-text);
+    font-weight: 400;
+}
+
+/* ── 구글 스타일 스크롤바 ─────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar       { width: 8px; height: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background:    var(--v2-border);
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
+
+.palette-list::-webkit-scrollbar       { width: 6px; }
+.palette-list::-webkit-scrollbar-track { background: transparent; }
+.palette-list::-webkit-scrollbar-thumb {
+    background:    var(--v2-border);
+    border-radius: 10px;
+}
+.palette-list::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
+
+/* ── 반응형 ───────────────────────────────────────────────── */
+@media (max-width: 991px) {
+    .bom-workspace     { flex-direction: column; }
+    .bom-main-column   { padding-right: 0; }
+    .bom-right-panel   {
+        width:        100%;
+        min-width:    0;
+        border-left:  0;
+        border-top:   1px solid var(--bom-border-inner);
+    }
+}
+
+/* ── 저장 버튼 (Google-style) ─────────────────────────────── */
+#save-btn {
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+}
+#save-btn:hover {
+    box-shadow: 0 1px 3px 0 rgba(60,64,67,.3), 0 4px 8px 3px rgba(60,64,67,.15);
+    transform:  translateY(-1px);
+}
+#save-btn:active {
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,.3);
+    transform:  translateY(0);
+}

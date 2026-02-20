@@ -1,46 +1,262 @@
 {% load static %}
 <style>
-  /* 알레르기/GMO 필드 회색 배경 */
-  .readonly-bg {
-    background-color: #e9ecef !important;
-    border-color: #ced4da !important;
+  /* ===== BOM 스타일 기반 원료 상세 정보 ===== */
+
+  /* 컨테이너 카드 */
+  .popup-container {
+    border: 1px solid #e6e9f2;
+    border-radius: 12px;
+    overflow: visible;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   }
-  
-  .readonly-bg:focus {
-    background-color: #e9ecef !important;
-    border-color: #ced4da !important;
-    box-shadow: 0 0 0 0.2rem rgba(206, 212, 218, 0.25) !important;
+
+  /* 패널 헤더 */
+  .panel-header {
+    background: #ffffff;
+    border-bottom: 1px solid #eef1f6;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
   }
-  
-  /* 더 구체적인 선택자로 우선순위 높이기 */
-  #allergy_info.readonly-bg,
-  #gmo_info.readonly-bg {
-    background-color: #e9ecef !important;
-    color: #6c757d !important;
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
   }
-  
-  /* th 너비 통일 */
+
+  .panel-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;    align-items: center;  }
+
+  /* 폼 테이블 */
+  .nutrition-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
   .nutrition-table th {
-    width: 120px;
-    min-width: 120px;
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 600;
+    padding: 9px 12px;
+    background: #f8f9fb;
+    border-bottom: 1px solid #eef1f6;
+    vertical-align: top;
+    width: 110px;
+    min-width: 110px;
+    line-height: 1.4;
+  }
+
+  .nutrition-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #eef1f6;
+    vertical-align: middle;
+    color: #111827;
+  }
+
+  .nutrition-table tr:last-child th,
+  .nutrition-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* 입력 필드 */
+  .nutrition-table .form-control {
+    font-size: 12px;
+    border-color: #e6e9f2;
+    border-radius: 6px;
+    padding: 6px 10px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .nutrition-table .form-control:focus {
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
+    outline: none;
+  }
+
+  /* 알레르기/GMO 선택 패널 */
+  .allergy-gmo-panel {
+    border: 1px solid #e6e9f2 !important;
+    border-radius: 8px !important;
+    padding: 10px !important;
+    background-color: #f8f9fb !important;
+  }
+
+  /* 알레르기/GMO 버튼 - Bootstrap btn-outline-primary / btn-primary override */
+  .allergy-btn.btn-outline-primary,
+  .gmo-btn.btn-outline-primary {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 14px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    border: 1px solid #dadce0 !important;
+    background: white !important;
+    color: #374151 !important;
+  }
+
+  .allergy-btn.btn-outline-primary:hover,
+  .gmo-btn.btn-outline-primary:hover {
+    background-color: rgba(60,64,67,0.08) !important;
+    border-color: #5f6368 !important;
+    color: #111827 !important;
+  }
+
+  .allergy-btn.btn-primary,
+  .gmo-btn.btn-primary {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 14px;
+    font-weight: 600;
+    background-color: #1a73e8 !important;
+    border-color: #1a73e8 !important;
+    color: #ffffff !important;
+  }
+
+  .allergy-btn.btn-primary:hover,
+  .gmo-btn.btn-primary:hover {
+    background-color: #1765cc !important;
+    border-color: #1765cc !important;
+  }
+
+  /* 선택 표시 텍스트 */
+  .selected-display {
+    font-size: 11px;
+    color: #6b7280;
+    flex: 1;
+  }
+
+  /* readonly 필드 */
+  .readonly-bg {
+    background-color: #f1f3f4 !important;
+    border-color: #e6e9f2 !important;
+    color: #5f6368 !important;
+  }
+
+  /* 버튼 스타일 정렬 */
+  .btn-outline-cancel {
+    color: #5f6368;
+    border-color: #dadce0;
+    background: white;
+  }
+
+  .btn-outline-cancel:hover {
+    background: #f1f3f4;
+    border-color: #5f6368;
+    color: #202124;
+  }
+
+  /* ===== M3 패널 버튼 ===== */
+  .panel-btn {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid #dadce0;
+    background: #ffffff;
+    color: #444746;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.4,0,0.2,1);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+  .panel-btn:hover {
+    background: #f1f3f4;
+    border-color: #bdc1c6;
+  }
+  .panel-btn.primary {
+    background: #1a73e8;
+    border-color: #1a73e8;
+    color: #ffffff;
+    box-shadow: 0 1px 2px rgba(60,64,67,0.3);
+  }
+  .panel-btn.primary:hover {
+    background: #1765cc;
+    border-color: #1765cc;
+  }
+  .panel-btn.danger {
+    border-color: #f28b82;
+    color: #c5221f;
+  }
+  .panel-btn.danger:hover {
+    background: #fce8e6;
+  }
+  .panel-btn.linked {
+    border-color: #e0e8ff;
+    color: #1a73e8;
+    background: #f0f4ff;
+    font-size: 11px;
+  }
+  .panel-btn.linked:hover {
+    background: #e0e8ff;
+  }
+
+  /* ===== 식품첨가물 표시규정 카드 ===== */
+  .regulation-card {
+    background: #f0f4ff;
+    border: 1px solid #c4d3f8;
+    border-left: 3px solid #4a80f0;
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+
+  .regulation-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-weight: 700;
+    font-size: 0.76rem;
+    color: #2c4fa0;
+    letter-spacing: 0.2px;
+  }
+
+  .regulation-card-header i {
+    color: #4a80f0;
+    font-size: 0.82rem;
+  }
+
+  .regulation-card-text {
+    font-size: 0.78rem;
+    color: #374060;
+    white-space: pre-wrap;
+    line-height: 1.55;
+  }
+
+  .regulation-card-buttons {
+    margin-top: 8px;
   }
 </style>
 <div class="popup-container" id="ingredient-detail-container-partial">
     <div class="panel-header">
         <h5 class="panel-title">
             {% if mode == "create" %}
-              원료 등록
+              <span>원료 등록</span>
             {% else %}
-              원료 수정
+              <span>원료 수정</span>
             {% endif %}
-            <button type="button" class="btn btn-outline-cancel btn-sm ms-2" id="linkedLabelsBtn">
-                연결된 표시사항(0품목) 조회
+            <button type="button" class="panel-btn linked" id="linkedLabelsBtn">
+                <i class="bi bi-link-45deg"></i> 연결 표시사항(0품목)
             </button>
         </h5>
         <div class="panel-actions">
-            <button type="submit" form="ingredientForm" class="btn btn-outline-primary btn-sm">저장</button>
-            <button type="button" class="btn btn-outline-cancel btn-sm" id="closeBtn">초기화</button>
-            {% if mode == 'edit' and user.username != 'guest@labeasylabel.com' %}<button type="button" class="btn btn-outline-danger btn-sm" id="deleteBtn">삭제</button>{% endif %}
+            <button type="button" class="panel-btn" id="closeBtn">입력 초기화</button>
+            {% if mode == 'edit' and user.username != 'guest@labeasylabel.com' %}<button type="button" class="panel-btn danger" id="deleteBtn"><i class="bi bi-trash"></i> 삭제</button>{% endif %}
+            <button type="submit" form="ingredientForm" class="panel-btn primary"><i class="bi bi-check-lg"></i> 저장</button>
         </div>
     </div>
 
@@ -113,10 +329,13 @@
                             <small class="text-muted d-block mt-1" id="ingredient_display_name_help">제품 라벨에 표시될 원재료명을 입력하세요. (예: 밀가루(미국산), 정제수)</small>
                             <!-- 식품첨가물 표시규정 (식품첨가물인 경우) -->
                             <div id="display-regulation-info" style="display: none; margin-top: 8px;">
-                                <div class="alert alert-info mb-0" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;">
-                                    <strong><i class="bi bi-info-circle"></i> 식품첨가물 표시규정</strong>
-                                    <div id="display_regulation_display" style="margin-top: 8px; white-space: pre-wrap;"></div>
-                                    <div id="display_regulation_buttons" style="margin-top: 8px; display: none;" class="d-flex flex-wrap gap-2"></div>
+                                <div class="regulation-card">
+                                    <div class="regulation-card-header">
+                                        <i class="bi bi-info-circle-fill"></i>
+                                        <span>식품첨가물 표시규정</span>
+                                    </div>
+                                    <div id="display_regulation_display" class="regulation-card-text"></div>
+                                    <div id="display_regulation_buttons" style="display: none;" class="regulation-card-buttons d-flex flex-wrap gap-2"></div>
                                 </div>
                             </div>
                         </td>
@@ -126,25 +345,22 @@
                     <tr>
                         <th>알레르기</th>
                         <td colspan="3">
-                            <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; background-color: #f8f9fa;">
+                            <div class="allergy-gmo-panel">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <div id="allergySelectedDisplay" style="font-size: 0.75rem; color: #6b7280; flex: 1;">
-                                        선택된 항목 없음
-                                    </div>
+                                    <div id="allergySelectedDisplay" class="selected-display">선택된 항목 없음</div>
                                     <div class="d-flex gap-1">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="allergyAutoDetectBtn" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;" title="원재료명으로 알레르기 자동감지">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="allergyAutoDetectBtn" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 12px;" title="원재료명으로 알레르기 자동감지">
                                             <i class="fas fa-sync-alt"></i> 자동감지
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" id="allergyToggleBtn" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;">전체선택</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="allergyToggleBtn" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 12px;">전체선택</button>
                                     </div>
                                 </div>
                                 <div id="allergyBtnList" class="d-flex flex-wrap gap-1 mb-1">
                                     {% for allergen in allergen_list %}
-                                    <button type="button" class="btn btn-sm btn-outline-primary allergy-btn" data-allergen="{{ allergen }}" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">{{ allergen }}</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary allergy-btn" data-allergen="{{ allergen }}">{{ allergen }}</button>
                                     {% endfor %}
                                 </div>
                                 <input type="hidden" name="allergens" id="allergy_info" value="{{ ingredient.allergens|default:'' }}">
-                                <small class="text-muted">알레르기 유발 성분을 선택하세요. 버튼 클릭으로 선택/해제할 수 있습니다.</small>
                             </div>
                         </td>
                     </tr>
@@ -152,20 +368,17 @@
                     <tr>
                         <th>GMO</th>
                         <td colspan="3">
-                            <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; background-color: #f8f9fa;">
+                            <div class="allergy-gmo-panel">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <div id="gmoSelectedDisplay" style="font-size: 0.75rem; color: #6b7280; flex: 1;">
-                                        선택된 항목 없음
-                                    </div>
-                                    <button type="button" class="btn btn-sm btn-outline-primary" id="gmoToggleBtn" style="font-size: 0.75rem; padding: 0.15rem 0.5rem;">전체선택</button>
+                                    <div id="gmoSelectedDisplay" class="selected-display">선택된 항목 없음</div>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="gmoToggleBtn" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 12px;">전체선택</button>
                                 </div>
                                 <div id="gmoBtnList" class="d-flex flex-wrap gap-1 mb-1">
                                     {% for gmo in gmo_list %}
-                                    <button type="button" class="btn btn-sm btn-outline-primary gmo-btn" data-gmo="{{ gmo }}" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">{{ gmo }}</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary gmo-btn" data-gmo="{{ gmo }}">{{ gmo }}</button>
                                     {% endfor %}
                                 </div>
                                 <input type="hidden" name="gmo" id="gmo_info" value="{{ ingredient.gmo|default:'' }}">
-                                <small class="text-muted">GMO 성분을 선택하세요. 버튼 클릭으로 선택/해제할 수 있습니다.</small>
                             </div>
                         </td>
                     </tr>
@@ -175,15 +388,10 @@
     </div>
 </div>
 
-<!-- food_types, agricultural_products, food_additives 데이터 전달 -->
 {{ food_types|json_script:"food-types-data" }}
 {{ agricultural_products|json_script:"agricultural-products-data" }}
 {{ food_additives|json_script:"food-additives-data" }}
 
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
-<script src="{% static 'js/label/my_ingredient_detail_partial.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script>
 // 원료 상세 데이터 최초 로드시 window.originalIngredientData에 값 저장 (JSON 안전하게)
 window.originalIngredientData = {

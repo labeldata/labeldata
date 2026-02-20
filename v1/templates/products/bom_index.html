@@ -1,0 +1,31 @@
+﻿{% extends "base_v2.html" %}
+{% load static %}
+
+{% block title %}BOM 관리{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4"><i class="bi bi-diagram-3"></i> BOM (Bill of Materials) 관리</h2>
+
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> {{ message|default:"BOM을 관리하려면 제품 상세 페이지에서 버전을 선택하세요." }}
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h5>BOM이란?</h5>
+            <p>BOM(Bill of Materials)은 제품의 구성 원료를 관리하는 기능입니다.</p>
+            <ul>
+                <li>다단계 원료 구조 지원 (원료의 원료까지)</li>
+                <li>내가 등록한 제품을 원료로 사용</li>
+                <li>공유받은 제품을 원료로 사용</li>
+                <li>원료별 배합 비율 및 사용량 관리</li>
+            </ul>
+
+            <a href="{% url 'products:product_list' %}" class="btn btn-primary">
+                <i class="bi bi-box-seam"></i> 제품 목록으로 이동
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

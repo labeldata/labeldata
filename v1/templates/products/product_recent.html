@@ -1,0 +1,49 @@
+{% extends "base_v2.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="product-header">
+        <div class="product-title">
+            <i class="bi bi-clock-history text-primary"></i>
+            {{ title }}
+        </div>
+        <a href="{% url 'products:product_explorer' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-grid-3x3-gap me-1"></i> 탐색기로
+        </a>
+    </div>
+
+    {% if recent_logs %}
+    <div class="product-card-grid">
+        {% for log in recent_logs %}
+        <div class="product-card">
+            <div class="d-flex align-items-center gap-2">
+                {% if log.product.is_starred %}
+                <i class="bi bi-star-fill text-warning"></i>
+                {% else %}
+                <i class="bi bi-box-seam text-primary"></i>
+                {% endif %}
+                <a href="{% url 'products:product_detail_new' log.product.product_id %}" class="text-decoration-none text-dark fw-semibold">
+                    {{ log.product.product_name }}
+                </a>
+            </div>
+            <div class="product-card-meta">{{ log.product.product_code|default:"-" }}</div>
+            <div class="product-card-meta">최근 열람: {{ log.accessed_datetime|timesince }} 전</div>
+            <span class="badge bg-light text-dark border product-card-badge">조회 {{ log.access_count }}회</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-clock-history fs-1 text-muted mb-3"></i>
+        <p class="text-muted">최근 열어본 제품이 없습니다</p>
+        <a href="{% url 'products:product_explorer' %}" class="btn btn-primary">
+            <i class="bi bi-grid-3x3-gap me-1"></i> 제품 탐색기 열기
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-import json
+﻿import json
 import re  # 정규식 처리를 위해 추가
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
 from decimal import Decimal, InvalidOperation
@@ -24,6 +24,7 @@ from django.urls import reverse # [추가] URL 생성을 위해 import
 from django.utils import timezone  # 추가
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 # --- [수정] Local Application Imports ---
 from .constants import CATEGORY_CHOICES
@@ -149,6 +150,17 @@ def food_item_list(request):
         "frmlc_mtrqlt": "frmlc_mtrqlt",
         "rawmtrl_nm": "rawmtrl_nm",
     }
+    
+    # '통합 검색용' q 파라미터 처리 - 여러 필드에 OR 검색
+    search_q = request.GET.get('q', '').strip()
+    if search_q:
+        # q 파라미터가 있으면 여러 필드에서 OR 검색
+        search_or_conditions = Q(prdlst_nm__icontains=search_q) | \
+                               Q(prdlst_report_no__icontains=search_q) | \
+                               Q(prdlst_dcnm__icontains=search_q) | \
+                               Q(bssh_nm__icontains=search_q)
+    else:
+        search_or_conditions = None
     imported_search_fields = {
         "prduct_korean_nm": "prdlst_nm",
         "itm_nm": "prdlst_dcnm",
@@ -175,6 +187,17 @@ def food_item_list(request):
                 imported_search_values[query_param] = value
                 has_search_params = True # 검색 파라미터가 하나라도 있으면 True
         
+        # q 파라미터로 검색한 경우 OR 조건 추가
+        if search_or_conditions:
+            # 수입 제품 필드명으로 변환하여 OR 검색
+            # 수입 제품: 제품명, 식품유형, 수출국, 수입업체명 (제조사명 제외)
+            imported_conditions &= (Q(prduct_korean_nm__icontains=search_q) | \
+                                   Q(itm_nm__icontains=search_q) | \
+                                   Q(xport_ntncd_nm__icontains=search_q) | \
+                                   Q(bsn_ofc_name__icontains=search_q))
+            imported_search_values['q'] = search_q
+            has_search_params = True
+        
         if has_search_params:
             # 단일 컬럼 정렬 적용
             imported_items_qs = ImportedFood.objects.filter(imported_conditions).order_by(sort_field)
@@ -190,6 +213,13 @@ def food_item_list(request):
         items_per_page = int(request.GET.get("items_per_page", 10))
         page_number = request.GET.get("page", 1)
         search_conditions, search_values = get_search_conditions(request, search_fields)
+        
+        # q 파라미터로 검색한 경우 OR 조건 추가
+        if search_or_conditions:
+            search_conditions &= search_or_conditions
+            # 통합 검색이므로 search_values에 'q' 값만 저장
+            search_values['q'] = search_q
+        
         has_search_params = any(search_values.values()) # 검색 파라미터 유무 확인
 
         if has_search_params:
@@ -209,12 +239,16 @@ def food_item_list(request):
     # 검색 조건이 있는지 확인 (위에서 이미 계산된 has_search_params 사용)
     # search_result_count는 total_count를 사용하되, 검색 조건이 있었을 때만 의미가 있음
     search_result_count = total_count if has_search_params else None
+    
+    # Context에 search_query 추가 (템플릿에서 사용)
+    search_query = request.GET.get('q', '') or request.GET.get('prdlst_nm', '')
 
     context = {
         "page_obj": page_obj,
         "paginator": paginator,
         "page_range": page_range,
         "search_values": search_values,
+        "search_query": search_query,
         "food_category": food_category,
         "items_per_page": items_per_page,
         "sort_field": sort_field.lstrip('-') if isinstance(sort_field, str) else sort_field, # 정렬 필드에서 '-' 제거
@@ -366,6 +400,14 @@ def create_new_label(request):
             user_id=request.user,
             my_label_name=new_label_name
         )
+        
+        # ==================== V2 제품 자동 동기화 ====================
+        try:
+            from v1.products.utils import sync_from_v1_label
+            sync_from_v1_label(new_label)
+        except Exception:
+            pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
+        # =========================================================
 
         # 생성된 라벨의 편집 페이지 URL 생성
         mode = request.GET.get('mode', '')
@@ -494,6 +536,15 @@ def save_to_my_label(request, prdlst_report_no):
                 country_of_origin=imported_item.xport_ntncd_nm or imported_item.mnf_ntncn_nm or "",
                 # 기타 필드는 필요시 추가
             )
+            
+            # ==================== V2 제품 자동 동기화 ====================
+            try:
+                from v1.products.utils import sync_from_v1_label
+                sync_from_v1_label(new_label)
+            except Exception:
+                pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
+            # =========================================================
+            
             return JsonResponse({
                 "success": True, 
                 "message": "내 표시사항으로 저장되었습니다.",
@@ -511,6 +562,15 @@ def save_to_my_label(request, prdlst_report_no):
         
         if existing_label and confirm_flag:
             new_label = MyLabel.objects.create(user_id=request.user, my_label_name=label_name, **data_mapping)
+            
+            # ==================== V2 제품 자동 동기화 ====================
+            try:
+                from v1.products.utils import sync_from_v1_label
+                sync_from_v1_label(new_label)
+            except Exception:
+                pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
+            # =========================================================
+            
             return JsonResponse({
                 "success": True, 
                 "message": "내 표시사항으로 저장되었습니다.",
@@ -518,6 +578,15 @@ def save_to_my_label(request, prdlst_report_no):
             })
         
         new_label = MyLabel.objects.create(user_id=request.user, my_label_name=label_name, **data_mapping)
+        
+        # ==================== V2 제품 자동 동기화 ====================
+        try:
+            from v1.products.utils import sync_from_v1_label
+            sync_from_v1_label(new_label)
+        except Exception:
+            pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
+        # =========================================================
+        
         return JsonResponse({
             "success": True, 
             "message": "내 표시사항으로 저장되었습니다.",
@@ -662,6 +731,14 @@ def label_creation(request, label_id=None):
 
             label.save()
             
+            # ==================== V2 제품 자동 동기화 ====================
+            try:
+                from v1.products.utils import sync_from_v1_label
+                sync_from_v1_label(label)
+            except Exception:
+                pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
+            # =========================================================
+            
             # 표시사항 수정 로깅
             log_user_activity(request, 'label', 'label_update', label.my_label_id)
             
@@ -672,6 +749,12 @@ def label_creation(request, label_id=None):
                     'message': '저장되었습니다.',
                     'label_id': str(label.my_label_id)
                 })
+            
+            # V2에서 넘어온 경우 V2로 복귀
+            return_to_v2 = request.GET.get('return_to_v2', '') == 'true'
+            if return_to_v2:
+                messages.success(request, '표시사항이 저장되었습니다.')
+                return redirect('products:product_detail_new', product_id=label.my_label_id)
             
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
@@ -1070,52 +1153,8 @@ def check_my_ingredient(request):
     
 @login_required
 def my_ingredient_list(request):
-    # 원료 목록 조회 로깅
-    log_user_activity(request, 'ingredient', 'ingredient_view')
-    
-    search_fields = {
-        'prdlst_nm': 'prdlst_nm',
-        'prdlst_report_no': 'prdlst_report_no',
-        'prdlst_dcnm': 'prdlst_dcnm',
-        'bssh_nm': 'bssh_nm',
-        'ingredient_display_name': 'ingredient_display_name',
-    }
-    search_conditions, search_values = get_search_conditions(request, search_fields)
-    # 기존: search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
-    search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
-    sort_field, sort_order = process_sorting(request, 'prdlst_nm')
-    # ↓ 추가: report_no_verify_yn → report_no_verify_YN로 변환
-    if sort_field.lstrip('-') == 'report_no_verify_yn':
-        sort_field = sort_field.replace('report_no_verify_yn', 'report_no_verify_YN')
-    items_per_page = int(request.GET.get('items_per_page', 10))
-    page_number = request.GET.get('page', 1)
-    # 원료관리: 식품구분 오름차순(가나다순), 식품유형 오름차순(가나다순), 원재료명 오름차순
-    my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
-    paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
-    querystring_without_page = get_querystring_without(request, ['page'])
-    querydict_sort = request.GET.copy()
-    querydict_sort.pop('sort', None)
-    querydict_sort.pop('order', None)
-    querystring_without_sort = querydict_sort.urlencode()
-
-    context = {
-        'page_obj': page_obj,
-        'paginator': paginator,
-        'page_range': page_range,
-        'search_fields': [
-            {'name': 'prdlst_nm', 'placeholder': '원재료명', 'value': search_values.get('prdlst_nm', '')},
-            {'name': 'prdlst_report_no', 'placeholder': '품목제조번호', 'value': search_values.get('prdlst_report_no', '')},
-            {'name': 'prdlst_dcnm', 'placeholder': '식품유형', 'value': search_values.get('prdlst_dcnm', '')},
-            {'name': 'bssh_nm', 'placeholder': '제조사명', 'value': search_values.get('bssh_nm', '')},
-            {'name': 'ingredient_display_name', 'placeholder': '원료 표시명', 'value': search_values.get('ingredient_display_name', '')},
-        ],
-        'items_per_page': items_per_page,
-        'sort_field': sort_field.lstrip('-'),
-        'sort_order': sort_order,
-        'querystring_without_page': querystring_without_page,
-        'querystring_without_sort': querystring_without_sort,
-    }
-    return render(request, 'label/my_ingredient_list.html', context)
+    """my_ingredient_list_combined으로 통합됨 - 리다이렉트"""
+    return redirect('label:my_ingredient_list_combined')
 
 @login_required
 def my_ingredient_list_combined(request):
@@ -1188,6 +1227,7 @@ def my_ingredient_list_combined(request):
         'querystring_without_sort': querystring_without_sort,
         'label_id': label_id,
         'label_name': label_name,
+        'total_count': total_count,
         'search_result_count': search_result_count,  # 검색 결과 건수 추가
     }
     return render(request, 'label/my_ingredient_list_combined.html', context)
@@ -1409,6 +1449,67 @@ def delete_my_ingredient(request, ingredient_id):
             return JsonResponse({'success': False, 'error': str(e)})
     else:
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+@login_required
+def bulk_delete_my_ingredients(request):
+    """선택한 원료 일괄 삭제"""
+    if request.user.username == 'guest@labeasylabel.com':
+        return JsonResponse({'success': False, 'error': '게스트 계정은 삭제 기능을 사용할 수 없습니다.'})
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    try:
+        data = json.loads(request.body)
+        ingredient_ids = data.get('ingredient_ids', [])
+        if not ingredient_ids:
+            return JsonResponse({'success': False, 'error': '삭제할 원료를 선택해주세요.'})
+        deleted_count = 0
+        for ingredient_id in ingredient_ids:
+            try:
+                ingredient = MyIngredient.objects.get(
+                    my_ingredient_id=ingredient_id,
+                    user_id=request.user,
+                    delete_YN='N'
+                )
+                LabelIngredientRelation.objects.filter(ingredient_id=ingredient.my_ingredient_id).delete()
+                ingredient.delete_YN = 'Y'
+                ingredient.save()
+                deleted_count += 1
+            except MyIngredient.DoesNotExist:
+                continue
+        return JsonResponse({'success': True, 'deleted_count': deleted_count})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+def bulk_copy_my_ingredients(request):
+    """선택한 원료 일괄 복사"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    try:
+        data = json.loads(request.body)
+        ingredient_ids = data.get('ingredient_ids', [])
+        if not ingredient_ids:
+            return JsonResponse({'success': False, 'error': '복사할 원료를 선택해주세요.'})
+        copied_count = 0
+        for ingredient_id in ingredient_ids:
+            try:
+                ingredient = MyIngredient.objects.get(
+                    my_ingredient_id=ingredient_id,
+                    user_id=request.user,
+                    delete_YN='N'
+                )
+                # pk=None 설정으로 새 레코드 생성
+                ingredient.my_ingredient_id = None
+                ingredient.prdlst_nm = (ingredient.prdlst_nm or '') + '_복사'
+                ingredient.prdlst_report_no = None
+                ingredient.delete_YN = 'N'
+                ingredient.save()
+                copied_count += 1
+            except MyIngredient.DoesNotExist:
+                continue
+        return JsonResponse({'success': True, 'copied_count': copied_count})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 @csrf_exempt
@@ -1695,6 +1796,14 @@ def duplicate_label(request, label_id):
     # 표시사항 복사 로깅
     log_user_activity(request, 'label', 'label_copy', original.my_label_id)
     
+    # ==================== V2 제품 자동 동기화 ====================
+    try:
+        from v1.products.utils import sync_from_v1_label
+        sync_from_v1_label(original)
+    except Exception:
+        pass  # V2 동기화 실패해도 V1 복사는 성공으로 처리
+    # =========================================================
+    
     return redirect('label:label_creation', label_id=original.my_label_id)
 
 def delete_label(request, label_id):
@@ -1707,6 +1816,14 @@ def delete_label(request, label_id):
     
     # 표시사항 삭제 로깅
     log_user_activity(request, 'label', 'label_delete', label_id)
+    
+    # ==================== V2 제품 소프트 삭제 ====================
+    try:
+        from v1.products.utils import delete_v2_product_from_v1
+        delete_v2_product_from_v1(label_id, request.user)
+    except Exception:
+        pass  # V2 동기화 실패해도 V1 삭제는 진행
+    # =========================================================
     
     label.delete()
     return redirect('label:my_label_list')
@@ -1727,6 +1844,14 @@ def bulk_copy_labels(request):
                 
                 # 선택 복사 로깅
                 log_user_activity(request, 'label', 'selection_copy', new_label.my_label_id)
+                
+                # ==================== V2 제품 자동 동기화 ====================
+                try:
+                    from v1.products.utils import sync_from_v1_label
+                    sync_from_v1_label(new_label)
+                except Exception:
+                    pass  # V2 동기화 실패해도 V1 복사는 성공으로 처리
+                # =========================================================
             
             return JsonResponse({"success": True})
         except Exception as e:
@@ -1746,6 +1871,16 @@ def bulk_delete_labels(request):
         try:
             data = json.loads(request.body)
             ids = data.get("label_ids", [])
+            
+            # ==================== V2 제품 소프트 삭제 ====================
+            try:
+                from v1.products.utils import delete_v2_product_from_v1
+                for label_id in ids:
+                    delete_v2_product_from_v1(label_id, request.user)
+            except Exception:
+                pass  # V2 동기화 실패해도 V1 삭제는 진행
+            # =========================================================
+            
             MyLabel.objects.filter(my_label_id__in=ids, user_id=request.user).delete()
             return JsonResponse({"success": True})
         except Exception as e:
@@ -1875,6 +2010,7 @@ def food_types_by_group(request):
 
 
 @login_required
+@xframe_options_sameorigin
 def preview_popup(request):
     """표시사항 미리보기 팝업"""
     label_id = request.GET.get('label_id')
@@ -1886,7 +2022,24 @@ def preview_popup(request):
         return JsonResponse({'success': False, 'error': '라벨 ID가 제공되지 않았습니다.'})
     
     try:
-        label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+        # 오너 우선 조회, 실패 시 공유 사용자 허용
+        try:
+            label = MyLabel.objects.get(my_label_id=label_id, user_id=request.user)
+        except MyLabel.DoesNotExist:
+            from v1.products.models import ProductShare
+            from django.utils import timezone
+            from django.db.models import Q
+            shared_share = ProductShare.objects.filter(
+                label__my_label_id=label_id,
+                is_active=True,
+            ).filter(
+                Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
+            ).filter(
+                Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+            ).select_related('label').first()
+            if not shared_share:
+                return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'})
+            label = shared_share.label
         
         # 미리보기 항목 구성
         preview_items = []
@@ -1913,22 +2066,26 @@ def preview_popup(request):
             ('additional_info', '기타표시사항')
         ]
 
+        label_data = {}
+
         for field, label_text in field_mappings:
             value = getattr(label, field)
             if value:
                 # 주의사항과 기타표시는 공통 함수로 변환
                 if field in ['cautions', 'additional_info']:
                     value = format_cautions_text(value)
-                
+
                 preview_items.append({
                     'id': len(preview_items) + 1,
                     'label': label_text,
                     'value': value
                 })
+                label_data[field] = value
 
         # 영양성분 정보 구성
         nutrition_items = []
         if label.nutrition_text:
+            label_data['nutrition_text'] = label.nutrition_text
             nutrition_fields = [
                 ('calories', '열량', 'kcal'),
                 ('natriums', '나트륨', 'mg'),
@@ -1955,8 +2112,12 @@ def preview_popup(request):
         allergens = []  # 알레르기 유발물질 목록
         origins = []    # 원산지 표시대상 목록
         
-        # 알레르기 관리에서 설정된 알레르기 성분 가져오기
-        if label.allergens:
+        # URL 파라미터 allergens 우선 (현재 선택값, 저장 전 반영)
+        url_allergens_raw = request.GET.get('allergens', '').strip()
+        if url_allergens_raw:
+            allergens = [a.strip() for a in url_allergens_raw.split(',') if a.strip()]
+        elif label.allergens:
+            # URL 파라미터 없으면 DB 값 사용
             allergens = [a.strip() for a in label.allergens.split(',') if a.strip()]
 
         # 영양성분 데이터 nutrition_data (계산기와 동일 구조)
@@ -2031,6 +2192,7 @@ def preview_popup(request):
             'country_mapping': json.dumps(country_mapping, ensure_ascii=False),  # 국가 코드 매핑 추가
             'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False),  # 소비기한 권장 데이터 추가
             'custom_fields': json.dumps(custom_fields, ensure_ascii=False),  # 맞춤항목 추가
+            'label_data': json.dumps(label_data, ensure_ascii=False),
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
         
@@ -2040,6 +2202,115 @@ def preview_popup(request):
         return JsonResponse({'success': False, 'error': '라벨을 찾을 수 없습니다.'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def label_tab_json(request):
+    """표시사항 탭용 JSON 데이터 반환 (iframe 없이 탭 내 직접 렌더링)"""
+    label_id = request.GET.get('label_id')
+    if not label_id:
+        return JsonResponse({'success': False, 'error': '라벨 ID가 제공되지 않았습니다.'})
+
+    try:
+        from v1.products.models import ProductShare
+        from django.utils import timezone
+        from django.db.models import Q
+
+        # 오너 또는 공유받은 사용자 모두 허용
+        label = MyLabel.objects.filter(my_label_id=label_id).first()
+        if not label:
+            return JsonResponse({'success': False, 'error': '라벨을 찾을 수 없습니다.'})
+
+        is_owner = (label.user_id == request.user)
+        is_shared = False
+        if not is_owner:
+            is_shared = ProductShare.objects.filter(
+                label=label,
+                is_active=True,
+            ).filter(
+                Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
+            ).filter(
+                Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+            ).exists()
+
+        if not is_owner and not is_shared:
+            return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'}, status=403)
+
+        field_mappings = [
+            ('prdlst_dcnm',          '식품유형'),
+            ('prdlst_nm',            '제품명'),
+            ('ingredient_info',      '성분명 및 함량'),
+            ('content_weight',       '내용량'),
+            ('weight_calorie',       '내용량(열량)'),
+            ('prdlst_report_no',     '품목보고번호'),
+            ('country_of_origin',    '원산지'),
+            ('storage_method',       '보관방법'),
+            ('frmlc_mtrqlt',         '포장재질'),
+            ('bssh_nm',              '제조원'),
+            ('distributor_address',  '유통전문판매원'),
+            ('repacker_address',     '소분원'),
+            ('importer_address',     '수입원'),
+            ('pog_daycnt',           '소비기한'),
+            ('rawmtrl_nm_display',   '원재료명'),
+            ('rawmtrl_nm',           '원재료명(참고)'),
+            ('cautions',             '주의사항'),
+            ('additional_info',      '기타표시사항'),
+        ]
+
+        preview_items = []
+        for field, label_text in field_mappings:
+            value = getattr(label, field, None)
+            if value:
+                if field in ('cautions', 'additional_info'):
+                    value = format_cautions_text(value)
+                preview_items.append({'label': label_text, 'value': value})
+
+        # 영양성분
+        nutrition_items = []
+        nutrition_fields = [
+            ('calories',       '열량',     'kcal'),
+            ('natriums',       '나트륨',   'mg'),
+            ('carbohydrates',  '탄수화물', 'g'),
+            ('sugars',         '당류',     'g'),
+            ('fats',           '지방',     'g'),
+            ('trans_fats',     '트랜스지방', 'g'),
+            ('saturated_fats', '포화지방', 'g'),
+            ('cholesterols',   '콜레스테롤', 'mg'),
+            ('proteins',       '단백질',   'g'),
+        ]
+        for field, label_text, unit in nutrition_fields:
+            value = getattr(label, field, None)
+            if value:
+                unit_value = getattr(label, f'{field}_unit', unit) or unit
+                nutrition_items.append({'label': label_text, 'value': f'{value}{unit_value}'})
+
+        allergens = []
+        if label.allergens:
+            allergens = [a.strip() for a in label.allergens.split(',') if a.strip()]
+        # label.allergens가 없으면 rawmtrl_nm_display 내장 텍스트에서 추출 (폴백)
+        if not allergens and label.rawmtrl_nm_display:
+            import re as _re_ltj
+            _m_ltj = _re_ltj.search(r'\[알레르기\s*성분\s*:\s*([^\]]+)\]', label.rawmtrl_nm_display)
+            if _m_ltj:
+                _raw_ltj = _m_ltj.group(1).replace('함유', '').strip()
+                allergens = [a.strip() for a in _raw_ltj.split(',') if a.strip()]
+
+        custom_fields = label.custom_fields if label.custom_fields else []
+
+        return JsonResponse({
+            'success': True,
+            'label_name': label.my_label_name or label.prdlst_nm or '',
+            'preview_items': preview_items,
+            'nutrition_items': nutrition_items,
+            'nutrition_serving_size': label.serving_size or '',
+            'nutrition_serving_unit': label.serving_size_unit or 'g',
+            'allergens': allergens,
+            'custom_fields': custom_fields,
+        }, json_dumps_params={'ensure_ascii': False})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
 
 @login_required
 def my_ingredient_table_partial(request):

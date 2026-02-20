@@ -1,0 +1,552 @@
+{% extends "base_v2.html" %}
+{% load static %}
+
+{% block title %}내 정보 수정 - EazyLabeling{% endblock %}
+
+{% block topbar %}
+<div class="d-flex align-items-center" style="flex:1; min-width:0;">
+    <i class="bi bi-person-gear me-2" style="color:#1a73e8;font-size:18px;flex-shrink:0;"></i>
+    <span style="font-size:17px;font-weight:500;color:#202124;">내 정보 수정</span>
+</div>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 목차가 topbar 드롭다운보다 아래에 머물도록 z-index 낮춤 */
+.profile-toc-col .sticky-top { z-index: 10; }
+
+:root {
+    --google-blue: #1a73e8;
+    --google-blue-hover: #1765cc;
+    --google-gray-50: #f8f9fa;
+    --google-gray-100: #f1f3f4;
+    --google-gray-200: #e8eaed;
+    --google-gray-300: #dadce0;
+    --text-primary: #202124;
+    --text-secondary: #5f6368;
+    --border-color: #dadce0;
+    --shadow-card: 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+}
+
+/* ── 전체 레이아웃 ── */
+/* 제품 상세 기본정보 탭과 동일: v2-content는 overflow-hidden+padding-0, 내부 div이 자체 스크롤 */
+.v2-content.profile-mode {
+    overflow: hidden !important;
+    padding: 0 !important;
+}
+.profile-page { max-width: 820px; margin: 0 auto; padding-bottom: 40px; }
+
+/* ── 우측 목차 (TOC) ── */
+.profile-toc-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .6px; color: #80868b;
+    padding: 16px 0 8px 12px; margin-bottom: 2px;
+}
+#profile-toc .nav-link {
+    font-size: 13px; color: #5f6368;
+    padding: 7px 8px 7px 12px;
+    border-left: 2px solid transparent;
+    border-radius: 0 4px 4px 0;
+    transition: all .15s;
+    line-height: 1.4;
+}
+#profile-toc .nav-link:hover {
+    color: #202124;
+    background: #f1f3f4;
+    border-left-color: #dadce0;
+}
+#profile-toc .nav-link.active {
+    color: #1a73e8;
+    background: #e8f0fe;
+    border-left-color: #1a73e8;
+    font-weight: 600;
+}
+
+/* ── 상단 프로필 헤더 ── */
+.profile-hero {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 32px 36px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-card);
+}
+.profile-hero-avatar {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    background: var(--google-blue);
+    color: #fff;
+    font-size: 28px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    user-select: none;
+}
+.profile-hero-info { flex: 1; min-width: 0; }
+.profile-hero-name { font-size: 20px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px; }
+.profile-hero-email { font-size: 13px; color: var(--text-secondary); }
+.profile-hero-badge {
+    font-size: 11px; font-weight: 600; padding: 3px 10px;
+    border-radius: 20px; background: #e8f0fe; color: var(--google-blue);
+    border: 1px solid #c5d8fc;
+}
+
+/* ── 섹션 카드 ── */
+.profile-card {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+}
+.profile-card-header {
+    padding: 20px 28px 16px;
+    border-bottom: 1px solid var(--google-gray-100);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.profile-card-header-icon {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+}
+.icon-blue  { background: #e8f0fe; color: var(--google-blue); }
+.icon-green { background: #e6f4ea; color: #1e8e3e; }
+.icon-orange{ background: #fce8e6; color: #c5221f; }
+.profile-card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.profile-card-desc  { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+.profile-card-body  { padding: 24px 28px; }
+
+/* ── 폼 필드 ── */
+.g-label {
+    font-size: 12px; font-weight: 600; color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px;
+}
+.g-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: #fff;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+    font-family: inherit;
+}
+.g-input:focus {
+    border-color: var(--google-blue);
+    box-shadow: 0 0 0 3px rgba(26,115,232,.1);
+}
+.g-input:read-only { background: var(--google-gray-50); color: var(--text-secondary); cursor: not-allowed; }
+.g-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.g-row.full { grid-template-columns: 1fr; }
+.g-field { display: flex; flex-direction: column; }
+
+/* ── 저장 버튼 ── */
+.g-btn-primary {
+    padding: 9px 22px; border-radius: 4px;
+    background: var(--google-blue); color: #fff;
+    font-size: 14px; font-weight: 500; border: none; cursor: pointer;
+    transition: background .18s;
+}
+.g-btn-primary:hover { background: var(--google-blue-hover); }
+.g-btn-secondary {
+    padding: 9px 22px; border-radius: 4px;
+    background: #fff; color: var(--text-secondary);
+    font-size: 14px; font-weight: 500;
+    border: 1.5px solid var(--border-color); cursor: pointer;
+    transition: background .18s;
+}
+.g-btn-secondary:hover { background: var(--google-gray-50); }
+.g-btn-danger {
+    padding: 5px 14px; border-radius: 4px;
+    background: #fff; color: #c5221f;
+    font-size: 12px; font-weight: 500;
+    border: 1.5px solid #f5c6c3; cursor: pointer;
+    transition: background .18s;
+}
+.g-btn-danger:hover { background: #fce8e6; }
+.btn-area { display: flex; justify-content: flex-end; margin-top: 8px; gap: 10px; }
+
+/* ── 서류 카드 그리드 ── */
+.doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.doc-item {
+    border: 1px solid var(--border-color); border-radius: 8px;
+    padding: 14px 16px; background: var(--google-gray-50);
+    display: flex; flex-direction: column; gap: 6px; position: relative;
+}
+.doc-item-type { font-size: 11px; font-weight: 600; color: var(--google-blue); text-transform: uppercase; }
+.doc-item-name { font-size: 13px; font-weight: 500; color: var(--text-primary); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.doc-item-meta { font-size: 11px; color: var(--text-secondary); }
+.doc-item-actions { display: flex; gap: 8px; margin-top: 4px; }
+.doc-download-btn {
+    font-size: 12px; font-weight: 500; color: var(--google-blue); text-decoration: none;
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 4px; border: 1px solid #c5d8fc;
+    background: #e8f0fe; transition: background .18s;
+}
+.doc-download-btn:hover { background: #d2e3fc; color: var(--google-blue-hover); }
+
+/* ── 업로드 섹션 ── */
+.upload-section {
+    border: 2px dashed var(--border-color); border-radius: 8px;
+    padding: 20px; background: var(--google-gray-50);
+}
+.upload-section summary { font-size: 13px; font-weight: 600; color: var(--text-primary); cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+.upload-section summary::before { content: '\002B'; color: var(--google-blue); font-size: 16px; font-weight: 700; }
+details[open] .upload-section summary::before { content: '\2212'; }
+.upload-inner { padding-top: 18px; }
+.file-input-wrapper { position: relative; }
+.file-input-wrapper input[type="file"] { display: none; }
+.file-label {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border: 1.5px solid var(--border-color); border-radius: 6px;
+    font-size: 13px; color: var(--text-secondary); cursor: pointer;
+    background: #fff; transition: border-color .2s;
+}
+.file-label:hover { border-color: var(--google-blue); color: var(--google-blue); }
+.file-selected-name { font-size: 12px; color: var(--google-blue); margin-top: 4px; }
+
+/* ── 알림 ── */
+.g-alert {
+    padding: 10px 16px; border-radius: 6px;
+    font-size: 13px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+}
+.g-alert-success { background: #e6f4ea; color: #1e8e3e; border: 1px solid #ceead6; }
+.g-alert-error   { background: #fce8e6; color: #c5221f; border: 1px solid #f5c6c3; }
+
+@media (max-width: 1100px) {
+    .profile-toc-col { display: none !important; }
+}
+@media (max-width: 600px) {
+    .g-row { grid-template-columns: 1fr; }
+    .profile-hero { flex-direction: column; text-align: center; }
+    .doc-grid { grid-template-columns: 1fr; }
+    .profile-card-body, .profile-card-header { padding: 16px; }
+    #profile-scroll { padding: 16px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── 제품 상세 기본정보 탭과 동일한 flex-nowrap 내부스크롤 구조 ── #}
+<div class="d-flex flex-nowrap" style="height:100%;">
+
+    {# ── 메인 콘텐츠 (자체 스크롤) ── #}
+    <div id="profile-scroll" class="flex-grow-1 bg-white" style="min-width:0; overflow-y:auto; padding:24px;">
+
+        <div class="profile-page">
+
+    {# ── 프로필 헤더 ── #}
+    <div class="profile-hero" id="section-hero">
+        <div class="profile-hero-avatar">{{ request.user.username|slice:":1"|upper }}</div>
+        <div class="profile-hero-info">
+            <div class="profile-hero-name">
+                {% if profile.company_name %}{{ profile.company_name }}{% else %}{{ request.user.username }}{% endif %}
+            </div>
+            <div class="profile-hero-email">{{ request.user.email }}</div>
+        </div>
+        {% if is_guest %}<span class="profile-hero-badge">Guest</span>{% endif %}
+    </div>
+
+    {# ══ 1. 기업 기본 정보 ══ #}
+    <div class="profile-card" id="section-company">
+        <div class="profile-card-header">
+            <div class="profile-card-header-icon icon-blue"><i class="bi bi-building"></i></div>
+            <div>
+                <div class="profile-card-title">기업 기본 정보</div>
+                <div class="profile-card-desc">제품 등록 및 서류 자동 입력에 사용됩니다</div>
+            </div>
+        </div>
+        <div class="profile-card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_info">
+                <div class="g-row">
+                    <div class="g-field">
+                        <label class="g-label">회사명</label>
+                        <input type="text" name="company_name" class="g-input"
+                               value="{{ profile.company_name }}" placeholder="(주)예시식품"
+                               {% if is_guest %}readonly{% endif %}>
+                    </div>
+                    <div class="g-field">
+                        <label class="g-label">인허가번호</label>
+                        <input type="text" name="license_number" class="g-input"
+                               value="{{ profile.license_number }}" placeholder="2025-서울강남-01234"
+                               {% if is_guest %}readonly{% endif %}>
+                    </div>
+                </div>
+                <div class="g-row">
+                    <div class="g-field">
+                        <label class="g-label">제조원</label>
+                        <input type="text" name="manufacturer_name" class="g-input"
+                               value="{{ profile.manufacturer_name }}" placeholder="(주)예시제조"
+                               {% if is_guest %}readonly{% endif %}>
+                    </div>
+                    <div class="g-field">
+                        <label class="g-label">제조원 소재지</label>
+                        <input type="text" name="manufacturer_address" class="g-input"
+                               value="{{ profile.manufacturer_address }}" placeholder="경기도 수원시 영통구 …"
+                               {% if is_guest %}readonly{% endif %}>
+                    </div>
+                </div>
+                <div class="g-row full">
+                    <div class="g-field">
+                        <label class="g-label">계정 이메일</label>
+                        <input type="text" class="g-input" value="{{ request.user.email }}" readonly>
+                    </div>
+                </div>
+                {% if not is_guest %}
+                <div class="btn-area">
+                    <button type="submit" class="g-btn-primary"><i class="bi bi-check2 me-1"></i>저장</button>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    {# ══ 2. 고정 서류 관리 ══ #}
+    <div class="profile-card" id="section-documents">
+        <div class="profile-card-header">
+            <div class="profile-card-header-icon icon-green"><i class="bi bi-file-earmark-text"></i></div>
+            <div>
+                <div class="profile-card-title">고정 서류 관리</div>
+                <div class="profile-card-desc">영업신고증, HACCP 인증서 등을 등록해두면 제품 문서 등록 시 불러올 수 있습니다</div>
+            </div>
+        </div>
+        <div class="profile-card-body">
+
+            {# 등록된 서류 목록 #}
+            {% if documents %}
+            <div class="doc-grid">
+                {% for doc in documents %}
+                <div class="doc-item">
+                    <div class="doc-item-type">{{ doc.get_doc_type_display }}</div>
+                    <div class="doc-item-name" title="{{ doc.doc_name }}">{{ doc.doc_name }}</div>
+                    {% if doc.note %}<div class="doc-item-meta">{{ doc.note }}</div>{% endif %}
+                    <div class="doc-item-meta">{{ doc.uploaded_at|date:"Y.m.d" }} 등록</div>
+                    <div class="doc-item-actions">
+                        <a href="{{ doc.doc_file.url }}" download class="doc-download-btn">
+                            <i class="bi bi-download"></i>다운로드
+                        </a>
+                        {% if not is_guest %}
+                        <form method="post" action="{% url 'user_management:delete_company_document' doc.pk %}" class="m-0" onsubmit="return confirm('서류를 삭제하시겠습니까?')">
+                            {% csrf_token %}
+                            <button type="submit" class="g-btn-danger"><i class="bi bi-trash3"></i></button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="text-align:center;padding:24px 0;color:var(--text-secondary);font-size:13px;">
+                <i class="bi bi-file-earmark-plus" style="font-size:32px;display:block;margin-bottom:8px;opacity:.5;"></i>
+                등록된 서류가 없습니다. 아래에서 서류를 추가하세요.
+            </div>
+            {% endif %}
+
+            {# 서류 추가 섹션 #}
+            {% if not is_guest %}
+            <details>
+                <summary class="upload-section">서류 추가</summary>
+                <div class="upload-section" style="border-top:none;border-top-left-radius:0;border-top-right-radius:0;">
+                    <form method="post" enctype="multipart/form-data" class="upload-inner">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="upload_document">
+                        <div class="g-row" style="margin-bottom:12px;">
+                            <div class="g-field">
+                                <label class="g-label">서류 종류</label>
+                                <select name="doc_type" class="g-input" required>
+                                    <option value="">선택하세요</option>
+                                    {% for val, label in doc_type_choices %}
+                                    <option value="{{ val }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="g-field">
+                                <label class="g-label">서류명 <span style="font-size:10px;font-weight:400;text-transform:none;">(비우면 자동 입력)</span></label>
+                                <input type="text" name="doc_name" class="g-input" placeholder="예: 영업신고증 (2025년)">
+                            </div>
+                        </div>
+                        <div class="g-row full" style="margin-bottom:12px;">
+                            <div class="g-field">
+                                <label class="g-label">파일 선택</label>
+                                <div class="file-input-wrapper">
+                                    <label class="file-label" for="doc_file_input">
+                                        <i class="bi bi-paperclip"></i>파일 선택
+                                    </label>
+                                    <input type="file" id="doc_file_input" name="doc_file"
+                                           accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                                           onchange="document.getElementById('file-name-display').textContent = this.files[0]?.name || ''">
+                                    <div id="file-name-display" class="file-selected-name"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="g-row full" style="margin-bottom:16px;">
+                            <div class="g-field">
+                                <label class="g-label">메모 (선택)</label>
+                                <input type="text" name="note" class="g-input" placeholder="예: 2026년 갱신 예정">
+                            </div>
+                        </div>
+                        <div class="btn-area" style="justify-content:flex-start;">
+                            <button type="submit" class="g-btn-primary"><i class="bi bi-upload me-1"></i>등록</button>
+                        </div>
+                    </form>
+                </div>
+            </details>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ══ 3. 비밀번호 변경 ══ #}
+    {% if not is_guest %}
+    <div class="profile-card" id="section-password">
+        <div class="profile-card-header">
+            <div class="profile-card-header-icon icon-orange"><i class="bi bi-shield-lock"></i></div>
+            <div>
+                <div class="profile-card-title">비밀번호 변경</div>
+                <div class="profile-card-desc">정기적으로 비밀번호를 변경하면 계정을 안전하게 보호할 수 있습니다</div>
+            </div>
+        </div>
+        <div class="profile-card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="change_password">
+                <div class="g-row">
+                    <div class="g-field">
+                        <label class="g-label">현재 비밀번호</label>
+                        <input type="password" name="old_password" class="g-input" autocomplete="current-password" required>
+                    </div>
+                </div>
+                <div class="g-row">
+                    <div class="g-field">
+                        <label class="g-label">새 비밀번호</label>
+                        <input type="password" name="new_password1" class="g-input" autocomplete="new-password" required>
+                    </div>
+                    <div class="g-field">
+                        <label class="g-label">새 비밀번호 확인</label>
+                        <input type="password" name="new_password2" class="g-input" autocomplete="new-password" required>
+                    </div>
+                </div>
+                <div class="btn-area">
+                    <button type="submit" class="g-btn-primary"><i class="bi bi-shield-check me-1"></i>비밀번호 변경</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ══ 4. 로그아웃 ══ #}
+    <div class="profile-card" id="section-logout">
+        <div class="profile-card-header" style="border-bottom:none;">
+            <div class="profile-card-header-icon" style="background:#f1f3f4;color:#5f6368;"><i class="bi bi-box-arrow-right"></i></div>
+            <div style="flex:1;">
+                <div class="profile-card-title">로그아웃</div>
+                <div class="profile-card-desc">이 기기에서 EazyLabeling 계정에서 로그아웃합니다</div>
+            </div>
+            <form method="post" action="{% url 'user_management:logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="g-btn-secondary" style="color:#c5221f;border-color:#f5c6c3;">
+                    <i class="bi bi-box-arrow-right me-1"></i>로그아웃
+                </button>
+            </form>
+        </div>
+    </div>
+
+        </div>{# /profile-page #}
+
+    </div>{# /profile-scroll (flex-grow-1, 자체 스크롤) #}
+
+    {# ── 우측 TOC 컨럼 (제품 상세 기본정보 탭과 동일 구조) ── #}
+    <div class="profile-toc-col d-none d-lg-block border-start bg-white"
+         style="width:220px; min-width:220px; flex-shrink:0;">
+        <div class="sticky-top overflow-y-auto p-3"
+             style="top:0; max-height:100vh;">
+            <div class="profile-toc-label">On this page</div>
+            <nav id="profile-toc" class="nav flex-column">
+                <a class="nav-link active" href="#section-hero"   data-section="section-hero">내 정보</a>
+                <a class="nav-link"        href="#section-company" data-section="section-company">기업 기본 정보</a>
+                <a class="nav-link"        href="#section-documents" data-section="section-documents">고정 서류 관리</a>
+                {% if not is_guest %}
+                <a class="nav-link"        href="#section-password" data-section="section-password">비밀번호 변경</a>
+                {% endif %}
+                <a class="nav-link"        href="#section-logout"   data-section="section-logout">로그아웃</a>
+            </nav>
+        </div>
+    </div>
+
+</div>{# /d-flex flex-nowrap #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    // v2-content를 overflow-hidden+padding-0으로 설정해 내부 div가 자체 스크롤하도록
+    var el = document.querySelector('.v2-content');
+    if (el) el.classList.add('profile-mode');
+})();
+
+document.addEventListener('DOMContentLoaded', function () {
+    var tocItems = document.querySelectorAll('#profile-toc .nav-link');
+    var sections = document.querySelectorAll('[id^="section-"]');
+    var scrollEl = document.getElementById('profile-scroll'); // 내부 스크롤 컨테이너
+
+    if (!tocItems.length || !sections.length || !scrollEl) return;
+
+    // 클릭 시 부드러운 스크롤 (제품 상세와 동일 로직)
+    tocItems.forEach(function(item) {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            var targetId = this.getAttribute('data-section');
+            var target = document.getElementById(targetId);
+            if (!target) return;
+
+            if (targetId === 'section-hero') {
+                scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+            } else {
+                var containerRect = scrollEl.getBoundingClientRect();
+                var targetRect   = target.getBoundingClientRect();
+                var newTop = scrollEl.scrollTop + (targetRect.top - containerRect.top) - 16;
+                scrollEl.scrollTo({ top: newTop, behavior: 'smooth' });
+            }
+        });
+    });
+
+    // IntersectionObserver: root = #profile-scroll (실제 스크롤 컨테이너)
+    var visible = new Map();
+    var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                visible.set(entry.target.id, entry.intersectionRatio);
+            } else {
+                visible.delete(entry.target.id);
+            }
+        });
+        var maxRatio = 0, activeId = null;
+        visible.forEach(function(ratio, id) {
+            if (ratio > maxRatio) { maxRatio = ratio; activeId = id; }
+        });
+        if (activeId) {
+            tocItems.forEach(function(item) {
+                item.classList.toggle('active', item.getAttribute('data-section') === activeId);
+            });
+        }
+    }, {
+        root: scrollEl,                          // 내부 스크롤 컨테이너를 root로
+        rootMargin: '-40px 0px -40% 0px',
+        threshold: [0, 0.25, 0.5, 0.75, 1.0]
+    });
+
+    sections.forEach(function(s) { observer.observe(s); });
+});
+</script>
+{% endblock %}

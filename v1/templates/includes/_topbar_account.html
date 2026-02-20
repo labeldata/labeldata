@@ -1,0 +1,186 @@
+{# 탑바 우측 계정 영역 공통 컴포넌트 — 모든 V2 페이지 topbar 블록에서 include #}
+<div class="v2-topbar-account">
+    {# ── 알림 버튼 ── #}
+    <div class="dropdown" id="notificationDropdown">
+        <button class="btn btn-light rounded-circle position-relative" type="button"
+                title="알림" style="width:40px;height:40px;"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                id="notificationBell">
+            <i class="bi bi-bell" style="font-size:16px;"></i>
+            <span id="notificationBadge"
+                  class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                  style="display:none;font-size:10px;min-width:18px;padding:2px 5px;"></span>
+        </button>
+
+        <div class="dropdown-menu dropdown-menu-end border-0 p-0 mt-2"
+             style="width:340px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.15);overflow:hidden;"
+             id="notificationPanel">
+            {# 헤더 #}
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                        padding:14px 16px 10px;border-bottom:1px solid #e8eaed;">
+                <span style="font-size:14px;font-weight:600;color:#202124;">알림</span>
+                <button id="markAllReadBtn" onclick="notifMarkAllRead(event)"
+                        style="font-size:12px;color:#1a73e8;background:none;border:none;cursor:pointer;padding:0;">
+                    모두 읽음
+                </button>
+            </div>
+            {# 목록 영역 #}
+            <div id="notificationList"
+                 style="max-height:360px;overflow-y:auto;">
+                <div style="padding:32px 16px;text-align:center;color:#9aa0a6;font-size:13px;" id="notifEmpty">
+                    <i class="bi bi-bell-slash" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+                    새 알림이 없습니다.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dropdown">
+        <a href="#" class="d-flex align-items-center text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false">
+            <div class="v2-user-avatar">{{ request.user.username|slice:":1"|upper }}</div>
+        </a>
+
+        {# ── Google 스타일 계정 드롭다운 ── #}
+        <div class="dropdown-menu dropdown-menu-end border-0 p-0 mt-2"
+             style="width:300px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.15),0 1px 4px rgba(0,0,0,.1);overflow:hidden;">
+
+            {# 상단: 아바타 + 이름/이메일 #}
+            <div style="padding:20px 24px 16px;border-bottom:1px solid #e8eaed;text-align:center;">
+                <div style="width:56px;height:56px;border-radius:50%;background:#1a73e8;color:#fff;
+                            font-size:22px;font-weight:700;display:flex;align-items:center;
+                            justify-content:center;margin:0 auto 10px;">
+                    {{ request.user.username|slice:":1"|upper }}
+                </div>
+                <div style="font-size:14px;font-weight:600;color:#202124;margin-bottom:2px;">
+                    {% if request.user.profile.company_name %}
+                        {{ request.user.profile.company_name }}
+                    {% else %}
+                        {{ request.user.username }}
+                    {% endif %}
+                </div>
+                <div style="font-size:12px;color:#5f6368;">{{ request.user.email }}</div>
+            </div>
+
+            {# 내 정보 수정 링크 #}
+            <div style="padding:8px 12px;">
+                <a href="{% url 'user_management:user_profile' %}"
+                   style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;
+                          text-decoration:none;color:#202124;font-size:13px;transition:background .15s;"
+                   onmouseover="this.style.background='#f1f3f4'"
+                   onmouseout="this.style.background='transparent'">
+                    <div style="width:32px;height:32px;border-radius:50%;background:#e8f0fe;
+                                display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="bi bi-person-gear" style="color:#1a73e8;font-size:14px;"></i>
+                    </div>
+                    <span style="font-weight:500;">내 정보 수정</span>
+                </a>
+            </div>
+
+            {# 구분선 + 로그아웃 #}
+            <div style="border-top:1px solid #e8eaed;padding:8px 12px 12px;">
+                <form method="post" action="{% url 'user_management:logout' %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit"
+                            style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;
+                                   border-radius:8px;border:none;background:transparent;cursor:pointer;
+                                   color:#c5221f;font-size:13px;font-weight:500;text-align:left;transition:background .15s;"
+                            onmouseover="this.style.background='#fce8e6'"
+                            onmouseout="this.style.background='transparent'">
+                        <div style="width:32px;height:32px;border-radius:50%;background:#fce8e6;
+                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="bi bi-box-arrow-right" style="color:#c5221f;font-size:14px;"></i>
+                        </div>
+                        로그아웃
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ── 알림 시스템 ── */
+(function () {
+    const NOTIF_URL   = '{% url "products:notification_list" %}';
+    const MARK_URL    = '{% url "products:notification_mark_read" %}';
+    const LIST_EL     = document.getElementById('notificationList');
+    const BADGE_EL    = document.getElementById('notificationBadge');
+    const EMPTY_EL    = document.getElementById('notifEmpty');
+
+    function getCsrf() {
+        return document.cookie.split('; ')
+            .find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
+    }
+
+    function statusColor(code) {
+        const map = {
+            DRAFT: '#5f6368', REQUESTING: '#1a73e8', SUBMITTED: '#0f9d58',
+            REVIEW: '#f4b400', PENDING: '#e37400', CONFIRMED: '#1a73e8',
+        };
+        return map[code] || '#5f6368';
+    }
+
+    function renderNotifications(items) {
+        if (!LIST_EL) return;
+        if (!items || items.length === 0) {
+            LIST_EL.innerHTML = '';
+            if (EMPTY_EL) { EMPTY_EL.style.display = 'block'; }
+            return;
+        }
+        if (EMPTY_EL) EMPTY_EL.style.display = 'none';
+        LIST_EL.innerHTML = items.map(n => `
+            <div class="notif-item" data-id="${n.id}"
+                 style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #f1f3f4;
+                        background:${n.is_read ? '#fff' : '#f0f4ff'};cursor:pointer;transition:background .15s;"
+                 onclick="notifRead(${n.id}, '${n.url}')">
+                <div style="width:8px;height:8px;border-radius:50%;background:${statusColor(n.status_code)};
+                            margin-top:5px;flex-shrink:0;opacity:${n.is_read ? 0.3 : 1};"></div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:12px;color:#202124;line-height:1.4;word-break:keep-all;">${n.message}</div>
+                    <div style="font-size:11px;color:#9aa0a6;margin-top:3px;">${n.label_name ? n.label_name + ' · ' : ''}${n.created_at}</div>
+                </div>
+            </div>`).join('');
+    }
+
+    function fetchNotifications() {
+        fetch(NOTIF_URL, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(r => r.json())
+            .then(data => {
+                renderNotifications(data.notifications || []);
+                const cnt = data.unread || 0;
+                if (BADGE_EL) {
+                    BADGE_EL.textContent = cnt > 9 ? '9+' : cnt;
+                    BADGE_EL.style.display = cnt > 0 ? '' : 'none';
+                }
+            })
+            .catch(() => {});
+    }
+
+    window.notifRead = function (id, url) {
+        fetch(MARK_URL, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id})
+        }).then(() => {
+            fetchNotifications();
+            if (url) window.location.href = url;
+        });
+    };
+
+    window.notifMarkAllRead = function (e) {
+        e && e.stopPropagation();
+        fetch(MARK_URL, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        }).then(() => fetchNotifications());
+    };
+
+    /* 페이지 로드 + 드롭다운 열릴 때 갱신 */
+    fetchNotifications();
+    document.getElementById('notificationDropdown')
+        ?.addEventListener('show.bs.dropdown', fetchNotifications);
+    /* 30초마다 폴링 */
+    setInterval(fetchNotifications, 30000);
+})();
+</script>

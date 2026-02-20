@@ -1744,6 +1744,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 체크된 필드 렌더링
     const FIELD_LABELS = {
+        my_label_name: '라벨명',
         prdlst_dcnm: '식품유형',
         prdlst_nm: '제품명',
         ingredient_info: '특정성분 함량',
@@ -1766,6 +1767,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 표시사항 작성 페이지 순서에 맞는 필드 순서
     const FIELD_ORDER = [
+        'my_label_name',      // 라벨명
         'prdlst_dcnm',        // 식품유형
         'prdlst_nm',          // 제품명
         'rawmtrl_nm_display', // 원재료명
@@ -3528,6 +3530,7 @@ let fieldOrderData = {
 
 // 기본 필드 정의 (실제 라벨 데이터에서 추출)
 const DEFAULT_FIELDS = {
+    'my_label_name': '라벨명',
     'prdlst_nm': '제품명',
     'prdlst_dcnm': '식품유형',
     'ingredient_info': '특정성분 함량',
@@ -4267,10 +4270,22 @@ function renderVerticalLayout(tbody, data, fieldMap) {
         
         // 원재료명: 국가명 굵게 표시 + 알레르기 성분 오른쪽 정렬
         if (fieldKey === 'rawmtrl_nm_display') {
+            // 1) rawmtrl_nm_display에 내장된 [알레르기 성분 : ...] 텍스트 추출 후 제거
+            const embeddedAllergenMatchV = value.match(/\[알레르기\s*성분\s*:\s*([^\]]+)\]/);
+            if (embeddedAllergenMatchV) {
+                value = value.replace(/\[알레르기\s*성분\s*:[^\]]+\]/, '').trim();
+            }
             if (typeof window.boldCountryNames === 'function') {
                 value = window.boldCountryNames(value, window.countryList || []);
             }
-            const displayAllergens = window.allergensData || window.parentAllergens || [];
+            // 2) 우선순위: URL파라미터(parentAllergens) > DB(allergensData) > 내장텍스트
+            let displayAllergens = (window.parentAllergens && window.parentAllergens.length > 0)
+                ? window.parentAllergens
+                : (window.allergensData && window.allergensData.length > 0 ? window.allergensData : []);
+            if (!displayAllergens.length && embeddedAllergenMatchV) {
+                displayAllergens = embeddedAllergenMatchV[1].replace(/함유/g, '').split(',')
+                    .map(a => a.trim()).filter(Boolean);
+            }
             if (displayAllergens.length > 0) {
                 value = `${value}<div style="background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; margin-top: 4px; text-align: right; word-break: keep-all; white-space: normal;">${displayAllergens.join(', ')} 함유</div>`;
             }
@@ -4330,10 +4345,22 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
             
             // 원재료명: 국가명 굵게 표시 + 알레르기 성분 오른쪽 정렬
             if (fieldKey === 'rawmtrl_nm_display') {
+                // 1) rawmtrl_nm_display에 내장된 [알레르기 성분 : ...] 텍스트 추출 후 제거
+                const embeddedAllergenMatchH = value.match(/\[알레르기\s*성분\s*:\s*([^\]]+)\]/);
+                if (embeddedAllergenMatchH) {
+                    value = value.replace(/\[알레르기\s*성분\s*:[^\]]+\]/, '').trim();
+                }
                 if (typeof window.boldCountryNames === 'function') {
                     value = window.boldCountryNames(value, window.countryList || []);
                 }
-                const displayAllergens = window.allergensData || window.parentAllergens || [];
+                // 2) 우선순위: URL파라미터(parentAllergens) > DB(allergensData) > 내장텍스트
+                let displayAllergens = (window.parentAllergens && window.parentAllergens.length > 0)
+                    ? window.parentAllergens
+                    : (window.allergensData && window.allergensData.length > 0 ? window.allergensData : []);
+                if (!displayAllergens.length && embeddedAllergenMatchH) {
+                    displayAllergens = embeddedAllergenMatchH[1].replace(/함유/g, '').split(',')
+                        .map(a => a.trim()).filter(Boolean);
+                }
                 if (displayAllergens.length > 0) {
                     value = `${value}<div style="background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; margin-top: 4px; text-align: right; word-break: keep-all; white-space: normal;">${displayAllergens.join(', ')} 함유</div>`;
                 }

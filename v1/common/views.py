@@ -4,10 +4,7 @@ import xml.etree.ElementTree as ET
 import time
 import re
 from django.http import JsonResponse
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, logout
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from django.contrib import messages
+from django.shortcuts import render, get_object_or_404
 from django.utils.timezone import now
 from .models import ApiEndpoint
 from v1.label.models import FoodItem, ImportedFood, AgriculturalProduct
@@ -145,42 +142,6 @@ def dashboard_view(request):
     }
     
     return render(request, 'admin/dashboard.html', context)
-
-# ============================================
-# 사용자 인증 관련 뷰
-# ============================================
-
-# 회원가입
-def signup(request):
-    if request.method == 'POST':
-        form = UserCreationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            messages.success(request, "회원가입 완료!")
-            return redirect('label:post_list')
-    else:
-        form = UserCreationForm()
-    return render(request, 'common/signup.html', {'form': form})
-
-# 로그인
-def login_view(request):
-    if request.method == 'POST':
-        form = AuthenticationForm(request, data=request.POST)
-        if form.is_valid():
-            login(request, form.get_user())
-            messages.success(request, "로그인 성공!")
-            return redirect('label:post_list')
-    else:
-        form = AuthenticationForm()
-    return render(request, 'common/login.html', {'form': form})
-
-# 로그아웃
-def logout_view(request):
-    logout(request)
-    messages.info(request, "로그아웃되었습니다.")
-    return redirect('common:login')
-
 
 # 서비스별 매핑 정보를 하나의 딕셔너리로 관리
 # 각 항목은 서비스 이름을 키로 사용하며, 해당 값은 사용할 모델과 필드 매핑 정보를 포함합니다.
