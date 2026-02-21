@@ -11,11 +11,21 @@ from v1.label.models import FoodType, FoodItem, CountryList, MyLabel  # 데모 �
 from django.core.serializers import serialize
 
 def home(request):
+    """루트 URL: V1 모드인 경우 V1 홈으로, 그 외 인증 사용자는 v2 대시보드로, 비인증 사용자는 v1 홈으로"""
+    if request.user.is_authenticated:
+        if request.session.get('ui_mode') == 'v1':
+            return home_v1(request)
+        return redirect('main:home_dashboard')
+    return home_v1(request)
+
+def home_v1(request):
     """
     홈 페이지 (표시사항 작성 기능 포함)
     로그인 없이 누구나 접근 가능
     label_id 파라미터가 있으면 해당 라벨 데이터 로드
     """
+    # UI 모드를 V1으로 설정 (이후 페이지들이 V1 스타일을 사용하도록)
+    request.session['ui_mode'] = 'v1'
     # 식품유형 데이터를 가져옵니다.
     food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
     food_types = list(FoodType.objects.values('food_type', 'food_group').order_by('food_type'))
@@ -322,3 +332,107 @@ def save_label(request):
         print(f"Error saving label: {str(e)}")
         print(traceback.format_exc())
         return JsonResponse({'success': False, 'error': f'저장 중 오류가 발생했습니다: {str(e)}'}, status=500)
+
+
+# ============================================================
+# V2 대시보드 홈
+# ============================================================
+
+@login_required
+def home_dashboard(request):
+    """
+    V2 메인 대시보드 홈 페이지
+    - 사용자별 제품·협업·진행상태 통계 요약
+    - V2 주요 기능 안내 및 최근 활동 표시
+    """
+    # UI 모드를 V2로 설정 (이후 페이지들이 V2 스타일을 사용하도록)
+    request.session['ui_mode'] = 'v2'
+    from v1.products.models import ProductMetadata, ProductShare, ProductNotification
+    from django.db.models import Q, Count
+    from django.utils import timezone
+
+    user = request.user
+
+    # ── 내 제품 관련 통계 ──────────────────────────────────────
+    my_labels = MyLabel.objects.filter(user_id=user, delete_YN='N')
+    my_count = my_labels.count()
+
+    # 공유받은 제품 (협업 중)
+    now = timezone.now()
+    shared_ids = list(
+        ProductShare.objects.filter(
+            recipient_user=user,
+            is_active=True,
+        ).filter(
+            Q(share_end_date__isnull=True) | Q(share_end_date__gt=now)
+        ).values_list('label_id', flat=True)
+    )
+    collab_count = len(set(shared_ids))
+
+    # 즐겨찾기 수 (내 제품 + 공유받은 제품 포함 — product_explorer ALL 기준과 동일)
+    starred_count = ProductMetadata.objects.filter(
+        Q(label__user_id=user) | Q(label__my_label_id__in=shared_ids),
+        is_starred=True
+    ).count()
+
+    # 상태별 카운트 (내 제품 기준)
+    status_counts = {'DRAFT': 0, 'REQUESTING': 0, 'SUBMITTED': 0,
+                     'REVIEW': 0, 'PENDING': 0, 'CONFIRMED': 0}
+    for meta in ProductMetadata.objects.filter(label__user_id=user, label__delete_YN='N').values('status'):
+        s = meta['status'] or 'DRAFT'
+        if s in status_counts:
+            status_counts[s] += 1
+
+    # 총 완료(승인 완료) 비율
+    total_with_meta = sum(status_counts.values())
+    confirmed_count = status_counts.get('CONFIRMED', 0)
+    progress_pct = int(confirmed_count / total_with_meta * 100) if total_with_meta else 0
+
+    # ── 최근 수정 제품 5개 ──────────────────────────────────────
+    recent_labels = my_labels.order_by('-update_datetime')[:5]
+
+    # ── 읽지 않은 알림 수 ──────────────────────────────────────
+    try:
+        unread_notif_count = ProductNotification.objects.filter(
+            recipient=user, is_read=False
+        ).count()
+    except Exception:
+        unread_notif_count = 0
+
+    # ── 만료 임박 문서 (30일 이내) ──────────────────────────────
+    from v1.products.models import ProductDocument
+    expiring_count = 0
+    try:
+        expiry_threshold = now + timezone.timedelta(days=30)
+        expiring_count = ProductDocument.objects.filter(
+            label__user_id=user,
+            is_active=True,
+            expiry_date__isnull=False,
+            expiry_date__lte=expiry_threshold,
+            expiry_date__gte=now.date(),
+        ).count()
+    except Exception:
+        expiring_count = 0
+
+    context = {
+        'my_count': my_count,
+        'collab_count': collab_count,
+        'starred_count': starred_count,
+        'status_counts': status_counts,
+        'progress_pct': progress_pct,
+        'confirmed_count': confirmed_count,
+        'total_with_meta': total_with_meta,
+        'recent_labels': recent_labels,
+        'unread_notif_count': unread_notif_count,
+        'expiring_count': expiring_count,
+    }
+    return render(request, 'main/home_v2_dashboard.html', context)
+
+
+def home_switcher(request):
+    """
+    V1 ↔ V2 홈화면 전환 페이지
+    - 로그인/비로그인 모두 접근 가능
+    - 사용자가 원하는 홈화면으로 이동할 수 있는 브릿지 페이지
+    """
+    return render(request, 'main/home_switcher.html')

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load static django_bootstrap5 %}
+{% block title %}게시글 삭제{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>게시글 삭제</h2>
+    {% bootstrap_messages %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <p>정말로 "<strong>{{ object.title }}</strong>" 게시글을 삭제하시겠습니까?</p>
+            <form method="post">
+                {% csrf_token %}
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'board:detail' object.pk %}" class="btn btn-outline-secondary btn-sm">취소</a>
+                    <button type="submit" class="btn btn-danger btn-sm">삭제</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -63,7 +63,7 @@ def product_explorer(request, folder_id=None):
             Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
         ).values_list('label_id', flat=True)
     )
-    collab_count = len(shared_to_me_ids)
+    collab_count = len(set(shared_to_me_ids))
 
     # 현재 폴더의 제품 목록 (MyLabel 기반)
     if filter_type == 'MINE':

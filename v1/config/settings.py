@@ -70,6 +70,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'v1.common.context_processors.static_build_date',
                 'v1.common.context_processors.board_notifications',
+                'v1.common.context_processors.ui_mode',
             ],
         },
     },

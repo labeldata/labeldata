@@ -1,0 +1,519 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}식품첨가물 데이터베이스{% endblock %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-1">식품첨가물 데이터베이스</h2>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="text-muted mb-0" style="font-size: 0.875rem;">식품첨가물의 영문명, 이명, CAS No. INS No. E No. 을 제공합니다. 수정이 필요한 경우에 데이터 수정 요청하면 검토 후 반영됩니다.</p>
+        <div class="d-flex align-items-center" style="gap: 10px;">
+            {% if user.is_authenticated %}
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="copySelectedToIngredients()">
+                <i class="fas fa-copy me-1"></i>내 원료 복사
+            </button>
+            <button type="button" class="btn btn-outline-warning btn-sm" onclick="requestDataCorrection()">
+                <i class="fas fa-edit me-1"></i>데이터 수정 요청
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {% include 'includes/search_filter.html' with action_url='label:food_additive_search' page_type='additive' search_values=search_values items_per_page=items_per_page search_result_count=search_result_count %}
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover common-table">
+            <thead>
+                <tr>
+                    {% if user.is_authenticated %}
+                    <th class="text-center align-middle" style="width: 3%;">
+                        <input type="checkbox" id="check-all" onclick="toggleAllCheckboxes(this)">
+                    </th>
+                    {% endif %}
+                    <th class="text-center align-middle" style="width: 5%;">번호</th>
+                    <th style="width: 18%;">식품첨가물명
+                        <span class="sort-buttons">
+                            <a href="?sort=name_kr&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
+                                <i class="fas fa-caret-up"></i>
+                            </a>
+                            <a href="?sort=name_kr&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
+                                <i class="fas fa-caret-down"></i>
+                            </a>
+                        </span>
+                    </th>
+                    <th style="width: 22%;">영문명
+                        <span class="sort-buttons">
+                            <a href="?sort=name_en&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
+                                <i class="fas fa-caret-up"></i>
+                            </a>
+                            <a href="?sort=name_en&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
+                                <i class="fas fa-caret-down"></i>
+                            </a>
+                        </span>
+                    </th>
+                    <th style="width: 25%;">이명</th>
+                    <th style="width: 10%;">INS No.</th>
+                    <th style="width: 8%;">E No.</th>
+                    <th style="width: 12%;">CAS No.</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for additive in page_obj %}
+                <tr>
+                    {% if user.is_authenticated %}
+                    <td class="text-center align-middle">
+                        <input type="checkbox" class="additive-checkbox" value="{{ additive.name_kr }}"
+                               data-name-kr="{{ additive.name_kr }}"
+                               data-name-en="{{ additive.name_en|default:'' }}"
+                               data-alias-name="{{ additive.alias_name|default:'' }}"
+                               data-ins-no="{{ additive.ins_no|default:'' }}"
+                               data-e-no="{{ additive.e_no|default:'' }}"
+                               data-cas-no="{{ additive.cas_no|default:'' }}"
+                               data-main-purpose="{{ additive.main_purpose|default:'' }}">
+                    </td>
+                    {% endif %}
+                    <td class="ellipsis-cell text-center align-middle" title="{{ forloop.counter }}">{{ forloop.counter }}</td>
+                    <td class="ellipsis-cell" title="{{ additive.name_kr }}">
+                        <strong>{{ additive.name_kr }}</strong>
+                    </td>
+                    <td class="ellipsis-cell" title="{{ additive.name_en|default:'' }}">
+                        {{ additive.name_en|default:"-" }}
+                    </td>
+                    <td class="ellipsis-cell alias-name-cell">
+                        {% if additive.alias_name %}
+                            <span data-original="{{ additive.alias_name }}">{{ additive.alias_name|default:"-" }}</span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td class="ellipsis-cell" title="{{ additive.ins_no|default:'' }}">
+                        {{ additive.ins_no|default:"-" }}
+                    </td>
+                    <td class="ellipsis-cell" title="{{ additive.e_no|default:'' }}">
+                        {{ additive.e_no|default:"-" }}
+                    </td>
+                    <td class="ellipsis-cell cas-no-cell">
+                        {% if additive.cas_no %}
+                            <span data-original="{{ additive.cas_no }}">{{ additive.cas_no|default:"-" }}</span>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if user.is_authenticated %}8{% else %}7{% endif %}" class="text-center text-muted">검색 결과가 없습니다.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 페이지네이션 -->
+    {% if page_obj.has_other_pages %}
+    <nav aria-label="Page navigation">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">처음</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">이전</a>
+            </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">다음</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">마지막</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- 수정 요청 모달 -->
+<div class="modal fade" id="correctionModal" tabindex="-1" aria-labelledby="correctionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="correctionModalLabel">
+                    <i class="fas fa-edit me-2"></i>식품첨가물 데이터 수정 요청
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    선택한 식품첨가물의 정보를 수정하고 근거 자료를 입력해주세요. 관리자가 검토 후 반영합니다.
+                </div>
+                
+                <div id="correctionItemsList"></div>
+                
+                <div class="mb-3">
+                    <label for="correctionReason" class="form-label">
+                        <strong>수정 사유 및 근거 자료</strong>
+                        <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control" id="correctionReason" rows="4" 
+                              placeholder="수정이 필요한 이유와 근거 자료(출처, URL 등)을 상세히 입력해주세요."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" onclick="submitCorrectionRequest()">
+                    <i class="fas fa-paper-plane me-1"></i>수정 요청 제출
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 이명과 CAS No의 세미콜론과 쉼표를 줄바꿈으로 변환 + 툴팁용 데이터 저장
+document.addEventListener('DOMContentLoaded', function() {
+    // 이명 처리 (세미콜론으로 줄바꿈)
+    document.querySelectorAll('.alias-name-cell span[data-original]').forEach(function(span) {
+        const original = span.getAttribute('data-original');
+        if (original && original !== '-') {
+            const formatted = original.replace(/;\s*/g, ';\n');
+            span.innerHTML = original.replace(/;\s*/g, ';<br>');
+            // 부모 td에 툴팁용 전체 텍스트 저장
+            span.closest('td').setAttribute('data-full-text', formatted);
+        }
+    });
+    
+    // CAS No 처리 (쉼표와 세미콜론으로 줄바꿈)
+    document.querySelectorAll('.cas-no-cell span[data-original]').forEach(function(span) {
+        const original = span.getAttribute('data-original');
+        if (original && original !== '-') {
+            const formatted = original.replace(/[,;]\s*/g, function(match) {
+                return match.trim() + '\n';
+            });
+            span.innerHTML = original.replace(/[,;]\s*/g, function(match) {
+                return match.trim() + '<br>';
+            });
+            // 부모 td에 툴팁용 전체 텍스트 저장
+            span.closest('td').setAttribute('data-full-text', formatted);
+        }
+    });
+    
+    // 모든 ellipsis-cell에 툴팁 데이터 추가 (기본 title 속성 활용)
+    document.querySelectorAll('.ellipsis-cell').forEach(function(cell) {
+        if (!cell.getAttribute('data-full-text')) {
+            const text = cell.textContent.trim();
+            if (text && text !== '-') {
+                cell.setAttribute('data-full-text', text);
+            }
+        }
+    });
+});
+
+// 검색 폼 검증
+document.addEventListener('DOMContentLoaded', function() {
+    const searchForm = document.getElementById('searchFilterForm');
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            const nameKr = document.querySelector('input[name="name_kr"]');
+            const nameEn = document.querySelector('input[name="name_en"]');
+            const aliasName = document.querySelector('input[name="alias_name"]');
+            const insNo = document.querySelector('input[name="ins_no"]');
+            const eNo = document.querySelector('input[name="e_no"]');
+            const casNo = document.querySelector('input[name="cas_no"]');
+            
+            // 모든 검색 조건이 비어있는지 확인
+            const hasSearchValue = (nameKr && nameKr.value.trim()) ||
+                                   (nameEn && nameEn.value.trim()) ||
+                                   (aliasName && aliasName.value.trim()) ||
+                                   (insNo && insNo.value.trim()) ||
+                                   (eNo && eNo.value.trim()) ||
+                                   (casNo && casNo.value.trim());
+            
+            if (!hasSearchValue) {
+                e.preventDefault();
+                alert('최소 1개 이상의 검색 조건을 입력해주세요.');
+                return false;
+            }
+        });
+    }
+});
+
+function toggleAllCheckboxes(source) {
+    const checkboxes = document.querySelectorAll('.additive-checkbox');
+    checkboxes.forEach(checkbox => checkbox.checked = source.checked);
+}
+
+function getSelectedAdditives() {
+    const selected = [];
+    document.querySelectorAll('.additive-checkbox:checked').forEach(checkbox => {
+        selected.push({
+            name_kr: checkbox.value,
+            name_en: checkbox.dataset.nameEn,
+            alias_name: checkbox.dataset.aliasName,
+            ins_no: checkbox.dataset.insNo,
+            e_no: checkbox.dataset.eNo,
+            cas_no: checkbox.dataset.casNo,
+            main_purpose: checkbox.dataset.mainPurpose
+        });
+    });
+    return selected;
+}
+
+function copySelectedToIngredients() {
+    const selected = getSelectedAdditives();
+    
+    if (selected.length === 0) {
+        alert('복사할 식품첨가물을 선택해주세요.');
+        return;
+    }
+    
+    if (confirm(`선택한 ${selected.length}개의 식품첨가물을 내 원료로 복사하시겠습니까?`)) {
+        fetch('{% url "label:copy_additives_to_ingredients" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ additives: selected })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                document.querySelectorAll('.additive-checkbox').forEach(cb => cb.checked = false);
+                document.getElementById('check-all').checked = false;
+            } else {
+                alert('복사 실패: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('복사 중 오류가 발생했습니다.');
+        });
+    }
+}
+
+function requestDataCorrection() {
+    const selected = getSelectedAdditives();
+    
+    if (selected.length === 0) {
+        alert('수정 요청할 식품첨가물을 선택해주세요.');
+        return;
+    }
+    
+    let html = '<div class="selected-items-list">';
+    selected.forEach((item, index) => {
+        html += `
+            <div class="card mb-2" id="correction-item-${index}">
+                <div class="card-body p-3">
+                    <h6 class="mb-2">${index + 1}. ${item.name_kr}</h6>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small">영문명</label>
+                            <input type="text" class="form-control form-control-sm correction-field" 
+                                   data-name-kr="${item.name_kr}" data-field="name_en" value="${item.name_en || ''}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small">이명</label>
+                            <input type="text" class="form-control form-control-sm correction-field" 
+                                   data-name-kr="${item.name_kr}" data-field="alias_name" value="${item.alias_name || ''}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">INS No.</label>
+                            <input type="text" class="form-control form-control-sm correction-field" 
+                                   data-name-kr="${item.name_kr}" data-field="ins_no" value="${item.ins_no || ''}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">E No.</label>
+                            <input type="text" class="form-control form-control-sm correction-field" 
+                                   data-name-kr="${item.name_kr}" data-field="e_no" value="${item.e_no || ''}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small">CAS No.</label>
+                            <input type="text" class="form-control form-control-sm correction-field" 
+                                   data-name-kr="${item.name_kr}" data-field="cas_no" value="${item.cas_no || ''}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    document.getElementById('correctionItemsList').innerHTML = html;
+    document.getElementById('correctionReason').value = '';
+    
+    const modal = new bootstrap.Modal(document.getElementById('correctionModal'));
+    modal.show();
+}
+
+function submitCorrectionRequest() {
+    const reason = document.getElementById('correctionReason').value.trim();
+    
+    if (!reason) {
+        alert('수정 사유 및 근거 자료를 입력해주세요.');
+        return;
+    }
+    
+    const corrections = [];
+    document.querySelectorAll('.correction-field').forEach(field => {
+        const nameKr = field.dataset.nameKr;
+        const fieldName = field.dataset.field;
+        const value = field.value;
+        
+        let existing = corrections.find(c => c.name_kr === nameKr);
+        if (!existing) {
+            existing = { name_kr: nameKr, fields: {} };
+            corrections.push(existing);
+        }
+        existing.fields[fieldName] = value;
+    });
+    
+    fetch('{% url "label:request_additive_correction" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({
+            corrections: corrections,
+            reason: reason
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            bootstrap.Modal.getInstance(document.getElementById('correctionModal')).hide();
+            document.querySelectorAll('.additive-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('check-all').checked = false;
+        } else {
+            alert('요청 실패: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('요청 중 오류가 발생했습니다.');
+    });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+
+<style>
+/* 테이블 컨테이너 최소 높이 고정 - 페이지네이션 위치 안정화 */
+.table-responsive {
+    min-height: 600px;
+    position: relative;
+}
+
+/* 셀 내용 제한 */
+.ellipsis-cell {
+    max-width: 200px;
+    max-height: 4.8em; /* 약 3줄 높이 */
+    overflow: hidden;
+    line-height: 1.6em;
+    word-wrap: break-word;
+    word-break: break-word;
+    vertical-align: middle;
+    position: relative;
+}
+
+/* Hover 시 툴팁 스타일 */
+.ellipsis-cell:hover::after {
+    content: attr(data-full-text);
+    position: absolute;
+    left: 0;
+    top: 100%;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.9);
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-width: 400px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    margin-top: 6px;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    animation: fadeIn 0.2s ease-in;
+    pointer-events: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 툴팁 화살표 */
+.ellipsis-cell:hover::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 100%;
+    z-index: 1001;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 6px solid rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+}
+
+.sort-buttons {
+    display: inline-block;
+    margin-left: 5px;
+}
+
+.sort-btn {
+    color: #6c757d;
+    text-decoration: none;
+    padding: 0 2px;
+}
+
+.sort-btn:hover {
+    color: #007bff;
+}
+
+.selected-items-list .card {
+    border-left: 3px solid #007bff;
+}
+
+.correction-field:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+</style>
+
+<script>
+// Collapse 아이콘 회전 처리
+</script>
+{% endblock %}

@@ -125,6 +125,15 @@ def to_bool(val):
         return val.strip().lower() in ("true", "1", "on", "yes", "y")
     return False
 
+def _get_template(request, v2_template):
+    """UI 모드(세션 ui_mode)에 따라 적절한 템플릿 이름을 반환합니다.
+    - V1 모드: 'label/foo.html' → 'label/foo_v1.html'
+    - V2 모드: 원본 v2_template 그대로 반환
+    """
+    if request.session.get('ui_mode', 'v2') == 'v1':
+        return v2_template.replace('.html', '_v1.html')
+    return v2_template
+
 # ------------------------------------------
 # View 함수들
 # ------------------------------------------
@@ -260,7 +269,7 @@ def food_item_list(request):
         "search_result_count": search_result_count,
     }
 
-    return render(request, "label/food_item_list.html", context)
+    return render(request, _get_template(request, "label/food_item_list.html"), context)
 
 @login_required
 def my_label_list(request):
@@ -344,7 +353,7 @@ def my_label_list(request):
         "prdlst_report_status": prdlst_report_status,  # 품보 신고 상태 추가
     }
 
-    return render(request, "label/my_label_list.html", context)
+    return render(request, _get_template(request, "label/my_label_list.html"), context)
 
 def create_new_label(request):
     """
@@ -964,7 +973,7 @@ def label_creation(request, label_id=None):
             'custom_fields_json': custom_fields_json,
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
-        return render(request, 'label/label_creation.html', context)
+        return render(request, _get_template(request, 'label/label_creation.html'), context)
 
 
 @login_required
@@ -1230,7 +1239,7 @@ def my_ingredient_list_combined(request):
         'total_count': total_count,
         'search_result_count': search_result_count,  # 검색 결과 건수 추가
     }
-    return render(request, 'label/my_ingredient_list_combined.html', context)
+    return render(request, _get_template(request, 'label/my_ingredient_list_combined.html'), context)
 
 @login_required
 def my_ingredient_detail(request, ingredient_id=None):
@@ -1302,7 +1311,7 @@ def my_ingredient_detail(request, ingredient_id=None):
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return render(request, 'label/my_ingredient_detail_partial.html', context)
     else:
-        return render(request, 'label/my_ingredient_detail.html', context)
+        return render(request, _get_template(request, 'label/my_ingredient_detail.html'), context)
 
 @login_required
 @csrf_exempt
@@ -3645,7 +3654,7 @@ def food_additive_search(request):
         "querystring_without_sort": querystring_without_sort,
     }
     
-    return render(request, "label/food_additive_search.html", context)
+    return render(request, _get_template(request, "label/food_additive_search.html"), context)
 
 
 @login_required

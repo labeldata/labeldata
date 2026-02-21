@@ -1,0 +1,1088 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}표시사항 작성{% endblock %}
+
+{% block content %}
+<!-- jQuery & Select2 -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<!-- 외부 CSS 및 JS 파일 로드 -->
+<link href="{% static 'css/style.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
+<link href="{% static 'css/label_creation.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet" />
+<script src="{% static 'js/label/label_creation.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+<!-- 기본 추천 시스템 -->
+<script src="{% static 'js/label/phrase_autocomplete.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+<!-- 라벨 ID를 JavaScript에 전달하기 위한 숨겨진 입력 필드 -->
+<input type="hidden" id="label_id" value="{{ label.my_label_id }}">
+
+<!-- 상단 헤더 (모던 스타일 적용) -->
+<div id="labelCreationHeader" style="position: fixed; top: 56px; left: 0; right: 0; z-index: 1020; background-color: #f8f9fa; padding: 0.75rem 0; border-bottom: 1px solid #e0e7ff; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+  <div class="container">
+    <div class="card modern-card" style="margin-bottom: 0;">
+      <div class="card-body" style="padding: 0.875rem 1rem;">
+        <!-- 1줄: 타이틀 + 버튼들 -->
+        <div class="d-flex align-items-center justify-content-between" style="gap: 10px;">
+          <!-- 왼쪽: 타이틀 + 간편모드 보기 + 리스트 -->
+          <div class="d-flex align-items-center" style="gap: 10px;">
+            <h2 class="mb-0" style="flex-shrink:0; font-size: 1.3rem;">
+              ✏️ 상세 모드
+            </h2>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="switchToHome();" title="간편 모드로 전환">
+              📋 간편 모드로 보기
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.location.href='{% url 'label:my_label_list' %}'" title="표시사항 리스트로 돌아가기">
+              <i class="fas fa-list me-1"></i>리스트
+            </button>
+          </div>
+          
+          <!-- 중간: 추천문구 토글 -->
+          <div class="d-flex align-items-center" style="gap: 6px; padding: 4px 8px; background: #f8f9fa; border-radius: 6px; border: 1px solid #dee2e6;">
+            <span style="font-size: 0.8rem; font-weight: 600; color: #495057;">추천문구:</span>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Recommendation toggle">
+              <input type="radio" class="btn-check" name="recommendMode" id="recommendOn" autocomplete="off" checked>
+              <label class="btn btn-outline-primary" for="recommendOn" title="입력 시 추천문구 자동 표시" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+                💡 ON
+              </label>
+              <input type="radio" class="btn-check" name="recommendMode" id="recommendOff" autocomplete="off">
+              <label class="btn btn-outline-primary" for="recommendOff" title="추천문구 표시하지 않음" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+                ⚪ OFF
+              </label>
+            </div>
+          </div>
+          
+          <!-- 오른쪽: 시간 + 미리보기 + 저장 -->
+          <div class="d-flex align-items-center" style="gap: 8px;">
+            <span class="recent-update label-header-date" style="font-size: 0.85rem;">
+              <i class="fas fa-pencil-alt me-1"></i>{{ label.update_datetime|date:"m/d H:i" }}
+            </span>
+            <button type="button" class="btn btn-outline-primary" id="previewBtn" onclick="try { openPreviewPopup(); } catch(e) { console.error('onclick error:', e); }" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">
+              <i class="fas fa-eye me-1"></i>미리보기
+            </button>
+            <button type="submit" form="labelForm" class="btn btn-primary" id="saveBtn" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">
+              <i class="fas fa-save me-1"></i>저장
+            </button>
+          </div>
+        </div>
+        
+        <!-- 2줄: 설명 (왼쪽 정렬) -->
+        <p class="mb-0" style="font-size: 0.8rem; color: #6c757d; margin-top: 0.5rem;">
+          세밀한 편집과 전문 기능 - 등록된 원료를 연결하여 원재료명 자동 생성 및 영양성분 계산 가능합니다. 식약처에 신고된 제품 정보는 제품 조회에서 확인하세요.(국내, 수입)
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 헤더 높이만큼 여백 추가 (동적 계산) -->
+<div id="headerSpacer" style="height: 120px;"></div>
+
+<!-- Step1. 기본 설정 (모던 스타일 적용) -->
+<div class="container" id="step1-row" style="margin-top: 1.5rem;">
+  <div class="card modern-card">
+    <div class="card-header d-flex justify-content-between align-items-center" id="step1-summary-bar">
+      <h5 class="card-title mb-0">
+        <i class="fas fa-cog me-2"></i>1. 기본정보 설정
+        <button id="summary-step1"
+              type="button"
+              class="btn btn-outline-cancel btn-sm ms-2"
+              style="font-weight:bold; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; margin-left:10px; display:inline-block; padding: 2px 10px; text-align:left;">
+        </button>
+      </h5>
+      <div class="card-actions d-flex align-items-center" style="gap: 0.5rem;">
+        <button type="button" class="btn btn-primary btn-sm modern-button" id="applyStep1Btn">필수항목 적용 후 접기</button>
+        <button type="button" class="btn btn-outline-primary btn-sm modern-button" id="expandStep1Btn" style="display:none;">펼치기</button>
+      </div>
+    </div>
+    <div class="card-body" id="step1-body" style="padding: 0.875rem 1rem;">
+      <div id="food-type-section" class="mb-2">
+        <div class="row g-3">
+          <!-- 왼쪽 컬럼: 식품유형, 장기보존식품 -->
+          <div class="col-12 col-lg-6">
+            <!-- 식품유형 -->
+            <div class="d-flex align-items-center mb-3">
+              <div class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; width:110px; flex-shrink:0;">식품유형</div>
+              <div class="d-flex" style="gap:10px; flex:1; min-width:0;">
+                <select id="food_group" name="food_group" class="form-control modern-select" style="flex:1; min-width:140px;">
+                  <option value="">대분류</option>
+                  {% for group in food_groups %}
+                  <option value="{{ group }}" {% if label.food_group == group %}selected{% endif %}>{{ group }}</option>
+                  {% endfor %}
+                  <option value="식품첨가물" {% if label.food_group == "식품첨가물" %}selected{% endif %}>식품첨가물</option>
+                  <option value="혼합제제" {% if label.food_group == "혼합제제" %}selected{% endif %}>혼합제제</option>
+                  <option value="농수축산물" {% if label.food_group == "농수축산물" %}selected{% endif %}>농수축산물</option>
+                </select>
+                <select id="food_type" name="food_type" class="form-control modern-select" style="flex:1; min-width:140px;">
+                  <option value="">소분류</option>
+                  {% for type in food_types %}
+                  <option value="{{ type.food_type }}" 
+                          data-group="{{ type.food_group }}"
+                          {% if label.food_type == type.food_type %}selected{% endif %}>
+                    {{ type.food_type }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            
+            <!-- 장기보존식품 -->
+            <div class="d-flex align-items-start">
+              <div class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; width:110px; flex-shrink:0; padding-top:4px;">장기보존식품</div>
+              <div class="d-flex flex-wrap" style="gap:15px; flex:1; min-width:0;">
+                <div class="form-check modern-form-check" style="margin:0;">
+                  <input type="checkbox" id="chk_frozen_heated" name="preservation_type" value="frozen_heated" class="form-check-input modern-checkbox grp-long-shelf" {% if form.preservation_type.value == "frozen_heated" %}checked{% endif %}>
+                  <label for="chk_frozen_heated" class="form-check-label modern-label" style="font-size:0.8rem;">냉동(가열)</label>
+                </div>
+                <div class="form-check" style="margin:0;">
+                  <input type="checkbox" id="chk_frozen_nonheated" name="preservation_type" value="frozen_nonheated" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "frozen_nonheated" %}checked{% endif %}>
+                  <label for="chk_frozen_nonheated" class="form-check-label" style="font-size:0.8rem;">냉동(비가열)</label>
+                </div>
+                <div class="form-check" style="margin:0;">
+                  <input type="checkbox" id="chk_canned" name="preservation_type" value="canned" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "canned" %}checked{% endif %}>
+                  <label for="chk_canned" class="form-check-label" style="font-size:0.8rem;">통.병조림</label>
+                </div>
+                <div class="form-check" style="margin:0;">
+                  <input type="checkbox" id="chk_retort" name="preservation_type" value="retort" class="form-check-input grp-long-shelf" {% if form.preservation_type.value == "retort" %}checked{% endif %}>
+                  <label for="chk_retort" class="form-check-label" style="font-size:0.8rem;">레토르트</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 오른쪽 컬럼: 제조방법, 조건 -->
+          <div class="col-12 col-lg-6">
+            <!-- 제조방법 -->
+            <div class="d-flex align-items-start mb-2">
+              <div class="form-label mb-0" style="font-size:0.9rem; font-weight:bold; width:110px; flex-shrink:0; padding-top:4px;">제조방법</div>
+              <div class="d-flex flex-wrap align-items-center" style="gap:15px; flex:1; min-width:0;">
+                <div class="form-check" style="margin:0;">
+                  <input type="checkbox" id="chk_sanitized" name="processing_method" value="sanitized" class="form-check-input grp-sterilization" {% if form.processing_method.value == "sanitized" %}checked{% endif %}>
+                  <label for="chk_sanitized" class="form-check-label" style="font-size:0.8rem;">살균</label>
+                </div>
+                <div class="form-check" style="margin:0;">
+                  <input type="checkbox" id="chk_aseptic" name="processing_method" value="aseptic" class="form-check-input grp-sterilization" {% if form.processing_method.value == "aseptic" %}checked{% endif %}>
+                  <label for="chk_aseptic" class="form-check-label" style="font-size:0.8rem;">멸균</label>
+                </div>
+                <div class="form-check" style="margin:0;">
+                  <input type="checkbox" id="chk_yutang" name="processing_method" value="yutang" class="form-check-input grp-sterilization" {% if form.processing_method.value == "yutang" %}checked{% endif %}>
+                  <label for="chk_yutang" class="form-check-label" style="font-size:0.8rem;">유탕/유처리</label>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 조건 + 조건상세 -->
+            <div class="d-flex align-items-center">
+              <div style="width:110px; flex-shrink:0;"></div>
+              <div class="d-flex align-items-center" style="gap:8px; flex:1; min-width:0;">
+                <div class="form-check" style="margin:0; white-space:nowrap;">
+                  <input type="checkbox" id="chk_sterilization_other" name="chk_sterilization_other" class="form-check-input" {% if form.processing_condition.value %}checked{% endif %}>
+                  <label for="chk_sterilization_other" class="form-check-label" style="font-size:0.8rem;">조건</label>
+                </div>
+                <input type="text" name="processing_condition" id="processing_condition_input" class="form-control modern-input"
+                  placeholder="조건 상세"
+                  style="flex:1; min-width:0; font-size:0.85rem;"
+                  value="{{ form.processing_condition.value|default:'' }}"
+                  {% if not form.processing_condition.value %}disabled{% endif %}
+                  onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('processing_condition', this); }"
+                  onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('processing_condition', this); }">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Step2. 상세 입력 영역 (모던 스타일 적용) -->
+<div class="container" id="step2-card" style="margin-top: 1.5rem; margin-bottom: 2rem;">
+  <div class="card modern-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="d-flex align-items-center" style="gap: 1rem; flex: 1; min-width: 0;">
+        <h5 class="card-title mb-0" style="white-space: nowrap;">
+          <i class="fas fa-edit me-2"></i>2. 상세 입력
+        </h5>
+        <div class="d-flex align-items-center" style="gap: 8px; flex: 1; min-width: 0; margin-left: 90px;">
+          <label for="my_label_name" class="mb-0" style="font-size: 0.9rem; font-weight: 600; white-space: nowrap;">라벨명</label>
+          <input type="text" name="my_label_name" id="my_label_name" class="form-control" form="labelForm"
+                 placeholder="라벨명을 입력하세요"
+                 value="{{ label.my_label_name|default:'' }}"
+                 style="font-size: 0.9rem; max-width: 400px; flex: 1;">
+        </div>
+      </div>
+      <div class="card-actions d-flex align-items-center" style="gap: 0.5rem;">
+        <button type="button" class="btn btn-outline-primary" onclick="handleIngredientPopup()" title="원재료 표로 입력" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
+          <i class="fas fa-table me-1"></i>원재료 표로 입력
+        </button>
+        <button type="button" class="btn btn-outline-cancel" id="linkedLabelsBtn" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
+          <i class="fas fa-link me-1"></i>연결된 원료({{ count_ingredient_relations|default:0 }}품목) 조회
+        </button>
+      </div>
+    </div>
+    <div class="card-body" style="padding: 0.875rem 1rem;">
+      <div class="layout-container">
+        <div class="left-panel">
+          <form method="post" id="labelForm">
+            {% csrf_token %}
+            <!-- 품목보고번호 검증 상태 hidden input -->
+            <input type="hidden" name="report_no_verify_YN" id="report_no_verify_YN" value="{{ label.report_no_verify_YN|default:'N' }}">
+            <input type="hidden" id="hidden_food_group" name="food_group" value="{{ label.food_group }}">
+            <input type="hidden" id="hidden_food_type" name="food_type" value="{{ label.food_type }}">
+            <input type="hidden" id="hidden_preservation_type" name="preservation_type" value="{{ label.preservation_type }}">
+            <input type="hidden" id="hidden_processing_method" name="processing_method" value="{{ label.processing_method }}">
+            <input type="hidden" id="hidden_processing_condition" name="processing_condition" value="{{ label.processing_condition }}">
+            <input type="hidden" name="chckd_label_nm" value="{{ label.chckd_label_nm|default:'N' }}">
+            <input type="hidden" name="chckd_prdlst_dcnm" value="{{ label.chckd_prdlst_dcnm|default:'N' }}">
+            <input type="hidden" name="chckd_prdlst_nm" value="{{ label.chckd_prdlst_nm|default:'Y' }}">
+            <input type="hidden" name="chckd_ingredient_info" value="{{ label.chckd_ingredient_info|default:'N' }}">
+            <input type="hidden" name="chckd_content_weight" value="{{ label.chckd_content_weight|default:'Y' }}">
+            <input type="hidden" name="chckd_weight_calorie" value="{{ label.chckd_weight_calorie|default:'N' }}">
+            <input type="hidden" name="chckd_prdlst_report_no" value="{{ label.chckd_prdlst_report_no|default:'N' }}">
+            <input type="hidden" name="chckd_country_of_origin" value="{{ label.chckd_country_of_origin|default:'N' }}">
+            <input type="hidden" name="chckd_storage_method" value="{{ label.chckd_storage_method|default:'N' }}">
+            <input type="hidden" name="chckd_frmlc_mtrqlt" value="{{ label.chckd_frmlc_mtrqlt|default:'N' }}">
+            <input type="hidden" name="chckd_bssh_nm" value="{{ label.chckd_bssh_nm|default:'Y' }}">
+            <input type="hidden" name="chckd_distributor_address" value="{{ label.chckd_distributor_address|default:'N' }}">
+            <input type="hidden" name="chckd_repacker_address" value="{{ label.chckd_repacker_address|default:'N' }}">
+            <input type="hidden" name="chckd_importer_address" value="{{ label.chckd_importer_address|default:'N' }}">
+            <input type="hidden" name="chckd_pog_daycnt" value="{{ label.chckd_pog_daycnt|default:'Y' }}">
+            <input type="hidden" name="chckd_rawmtrl_nm_display" value="{{ label.chckd_rawmtrl_nm_display|default:'N' }}">
+            <input type="hidden" name="chckd_cautions" value="{{ label.chckd_cautions|default:'N' }}">
+            <input type="hidden" name="chckd_additional_info" value="{{ label.chckd_additional_info|default:'N' }}">
+            <input type="hidden" name="chckd_nutrition_text" value="{{ label.chckd_nutrition_text|default:'N' }}">
+
+            <!-- 제품명 | 성분명 및 함량 -->
+            <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_prdlst_nm" name="chk_prdlst_nm" class="form-check-input" 
+                         {% if not label or label.chckd_prdlst_nm == "Y" %}checked{% endif %}>
+                  <label for="chk_prdlst_nm" class="m-0">제품명</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="prdlst_nm" class="form-control auto-expand" 
+                         placeholder="제품명을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
+                         value="{{ form.prdlst_nm.value|default:'' }}"
+                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_nm', this); }"
+                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_nm', this); }">
+                </div>
+              </div>
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_ingredient_info" name="chk_ingredient_info" class="form-check-input" {% if not label or label.chckd_ingredient_info == "Y" %}checked{% endif %}>
+                  <label for="chk_ingredient_info" class="m-0">특정성분 함량</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="ingredient_info" class="form-control auto-expand" 
+                         placeholder="제품명에 표시한 경우 : 예) 레몬즙 5% (클릭하면 추천 문구가 표시됩니다)" 
+                         value="{{ form.ingredient_info.value|default:'' }}"
+                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('ingredient_info', this); }"
+                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('ingredient_info', this); }">
+                </div>
+              </div>
+            </div>
+            <!-- 식품유형 | 품목보고번호 -->
+            <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_prdlst_dcnm" name="chk_prdlst_dcnm" class="form-check-input" {% if not label or label.chckd_prdlst_dcnm == "Y" %}checked{% endif %}>
+                  <label for="chk_prdlst_dcnm" class="m-0">식품유형</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="prdlst_dcnm" class="form-control auto-expand" 
+                         placeholder="상단의 식품유형을 참고하여 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
+                         value="{{ form.prdlst_dcnm.value|default:'' }}"
+                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_dcnm', this); }"
+                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_dcnm', this); }">
+                </div>
+              </div>
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_prdlst_report_no" name="chk_prdlst_report_no" class="form-check-input" {% if not label or label.chckd_prdlst_report_no == "Y" %}checked{% endif %}>
+                  <label for="chk_prdlst_report_no" class="m-0">품목보고번호</label>
+                </div>
+                <div style="width:85%;">
+                  <div class="input-container" style="position: relative;">
+                    <input type="text" name="prdlst_report_no" class="form-control" value="{{ form.prdlst_report_no.value|default:'' }}" style="flex: 1; min-width: 0;"
+                           onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_report_no', this); }"
+                           onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('prdlst_report_no', this); }">
+                    <button type="button" class="btn btn-outline-primary" id="verifyReportNoBtn" onclick="verifyReportNo(document.getElementById('label_id')?.value)" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">번호검증</button>
+                    <button type="button" class="btn btn-outline-secondary" id="copyProductDataBtn" onclick="copyVerifiedProductData()" style="display: none; font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">복사하기</button>
+                  </div>
+                  <div id="verifyResultMessage" style="display: none; margin-top: 0.5rem; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem;"></div>
+                </div>
+              </div>            </div>            <!-- 내용량 | 원산지 -->
+            <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
+              <div class="d-flex align-items-center flex-equal">                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_content_weight" name="chk_content_weight" class="form-check-input" 
+                         {% if not label or label.chckd_content_weight == "Y" or label.chckd_weight_calorie == "Y" %}checked{% endif %}>
+                  <label for="chk_content_weight" id="content_type_display" class="content-type-label m-0">내용량</label>
+                  <input type="hidden" id="content_type_value" name="content_type" value="content_weight">
+                </div>
+                <div style="width:85%;">
+                  <div class="input-container">
+                    <input type="text" id="content_weight_input" name="content_weight" class="form-control auto-expand" 
+                           placeholder="내용량을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
+                           value="{{ form.content_weight.value|default:'' }}"
+                           onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('content_weight', this); }"
+                           onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('content_weight', this); }">
+                    <input type="text" id="weight_calorie_input" name="weight_calorie" class="form-control auto-expand" placeholder="내용량(열량)을 입력하세요." value="{{ form.weight_calorie.value|default:'' }}" style="display: none;">
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_country_of_origin" name="chk_country_of_origin" class="form-check-input" {% if not label or label.chckd_country_of_origin == "Y" %}checked{% endif %}>
+                  <label for="chk_country_of_origin" class="m-0">원산지</label>
+                </div>
+                 <div style="width:85%;">
+                  <div class="input-container d-flex" style="gap: 8px;">
+                    <select id="countrySelectDetail" class="form-control" style="flex: 0 0 auto; width: 140px; height:40px;">
+                      <option value="">-- 국가 선택 --</option>
+                      <option value="직접입력">직접입력</option>
+                      {% for c in country_list %}
+                      <option value="{% if c.country_name_ko|slice:'-1:' == '산' %}{{ c.country_name_ko }}{% else %}{{ c.country_name_ko }}산{% endif %}">{% if c.country_name_ko|slice:'-1:' == '산' %}{{ c.country_name_ko }}{% else %}{{ c.country_name_ko }}산{% endif %}</option>
+                      {% endfor %}
+                    </select>
+                    <input type="text" name="country_of_origin" class="form-control" placeholder="원산지를 입력하세요" id="countryInputDetail" style="flex: 1; height:40px;" value="{{ form.country_of_origin.value|default:'' }}" disabled>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 보관방법 | 용기.포장재질 -->
+            <div class="d-flex align-items-center mb-2 flex-wrap-2col" style="gap:5px;">
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_storage_method" name="chk_storage_method" class="form-check-input" {% if not label or label.chckd_storage_method == "Y" %}checked{% endif %}>
+                  <label for="chk_storage_method" class="m-0">보관방법</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="storage_method" class="form-control auto-expand" 
+                         placeholder="보관방법을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
+                         value="{{ form.storage_method.value|default:'' }}"
+                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('storage_method', this); }"
+                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('storage_method', this); }">
+                </div>
+              </div>
+              <div class="d-flex align-items-center flex-equal">
+                <div style="width:15%; min-width:130px;">
+                  <input type="checkbox" id="chk_frmlc_mtrqlt" name="chk_frmlc_mtrqlt" class="form-check-input" {% if label.chckd_frmlc_mtrqlt == "Y" %}checked{% endif %}>
+                  <label for="chk_frmlc_mtrqlt" class="m-0">용기.포장재질</label>
+                </div>
+                <div style="width:85%;">
+                  <input type="text" name="frmlc_mtrqlt" class="form-control auto-expand" 
+                         placeholder="용기.포장재질을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
+                         value="{{ form.frmlc_mtrqlt.value|default:'' }}"
+                         onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('frmlc_mtrqlt', this); }"
+                         onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('frmlc_mtrqlt', this); }">
+                </div>
+              </div>
+            </div>
+            <!-- 제조원 소재지 -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                <input type="checkbox" id="chk_bssh_nm" name="chk_bssh_nm" class="form-check-input" 
+                       {% if label.chckd_bssh_nm == "Y" %}checked{% endif %}>
+                <label for="chk_bssh_nm" class="m-0">제조원</label>
+                <button type="button" class="btn btn-sm btn-link p-0 ms-1" id="toggleManufacturerBtn"
+                  data-bs-toggle="collapse" data-bs-target="#other-manufacturers" aria-expanded="false"
+                  aria-controls="other-manufacturers" style="font-size: 0.8rem; text-decoration: none; color: #6c757d;" title="추가 항목 열기/닫기">
+                  <i class="fas fa-chevron-down" id="manufacturerToggleIcon"></i>
+                </button>
+              </div>
+              <div style="width:90%;">
+                <input type="text" name="bssh_nm" class="form-control auto-expand" 
+                       placeholder="제조원을 입력하세요 (클릭하면 추천 문구가 표시됩니다)" 
+                       value="{{ form.bssh_nm.value|default:'' }}"
+                       onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('bssh_nm', this); }"
+                       onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('bssh_nm', this); }">
+              </div>
+            </div>
+            <!-- 접힘 영역 -->
+            <div class="collapse mb-2" id="other-manufacturers">
+              <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                  <input type="checkbox" id="chk_distributor_address" name="chk_distributor_address" class="form-check-input" 
+                         {% if label.chckd_distributor_address == "Y" %}checked{% endif %}>
+                  <label for="chk_distributor_address" class="m-0">유통전문판매원</label>
+                </div>
+                <div style="width:90%;">
+                  <input type="text" name="distributor_address" class="form-control auto-expand" placeholder="유통전문판매원을 입력하세요."
+                        value="{{ form.distributor_address.value|default:'' }}"
+                        onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('distributor_address', this); }"
+                        onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('distributor_address', this); }">
+                </div>
+              </div>
+              <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                  <input type="checkbox" id="chk_repacker_address" name="chk_repacker_address" class="form-check-input" 
+                         {% if label.chckd_repacker_address == "Y" %}checked{% endif %}>
+                  <label for="chk_repacker_address" class="m-0">소분원</label>
+                </div>
+                <div style="width:90%;">
+                  <input type="text" name="repacker_address" class="form-control auto-expand" placeholder="소분원을 입력하세요."
+                        value="{{ form.repacker_address.value|default:'' }}"
+                        onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('repacker_address', this); }"
+                        onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('repacker_address', this); }">
+                </div>
+              </div>
+              <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                  <input type="checkbox" id="chk_importer_address" name="chk_importer_address" class="form-check-input" 
+                         {% if label.chckd_importer_address == "Y" %}checked{% endif %}>
+                  <label for="chk_importer_address" class="m-0">수입원</label>
+                </div>
+                <div style="width:90%;">
+                  <input type="text" name="importer_address" class="form-control auto-expand" placeholder="수입원을 입력하거나 내문구를 선택하세요."
+                        value="{{ form.importer_address.value|default:'' }}"
+                        onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('importer_address', this); }"
+                        onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('importer_address', this); }">
+                </div>
+              </div>
+            </div>
+            <!-- 소비기한/품질유지기한/제조연월일/생산연도 -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+              <div style="width:10%; min-width:130px;">
+                <div class="d-flex align-items-center">
+                  <input type="checkbox" id="chk_pog_daycnt" name="chk_pog_daycnt" class="form-check-input" {% if label.chckd_pog_daycnt == "Y" %}checked{% endif %}>
+                  <!-- 체크박스와 셀렉트박스 사이 간격 추가 (margin-left:8px) -->
+                  <select name="date_option_display" class="form-control select2-date-option" style="width:88%; min-width:90px; max-width:190px; margin-left:8px;">
+                    <option value="소비기한" selected>소비기한</option>
+                    <option value="품질유지기한">품질유지기한</option>
+                    <option value="제조연월일">제조연월일</option>
+                    <option value="생산연도">생산연도</option>
+                  </select>
+                </div>
+              </div>
+              <div style="width:90%;">
+                <input type="text" name="pog_daycnt" class="form-control auto-expand" placeholder="소비기한 등을 입력하거나 내문구를 선택하세요." value="{{ form.pog_daycnt.value|default:'' }}"
+                       onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('pog_daycnt', this); }"
+                       onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('pog_daycnt', this); }">
+              </div>
+            </div>
+            <!-- 원재료명(표시) -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                <input type="checkbox" id="chk_rawmtrl_nm_display" name="chk_rawmtrl_nm_display" class="form-check-input" {% if label.chckd_rawmtrl_nm_display == "Y" %}checked{% endif %}>
+                <label for="chk_rawmtrl_nm_display" class="m-0">원재료명 <br> (최종표시)</label>
+              </div>
+              <div style="width:90%;">
+                <textarea name="rawmtrl_nm_display" id="rawmtrl_nm_display_textarea" class="form-control auto-expand textarea" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
+              </div>
+            </div>
+            
+            <!-- 알레르기 관리 모듈 -->
+            <div class="mb-3" style="background: #fff8e1; padding: 0.8rem; border-radius: 6px; border: 1px solid #ffd54f;">
+                <div class="d-flex align-items-center justify-content-between mb-2" style="gap: 10px;">
+                    <div class="d-flex align-items-center" style="cursor: pointer; flex-shrink: 0;" onclick="toggleAllergenModuleLabel()">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        <label style="font-weight: 700; color: #f57c00; cursor: pointer; margin-bottom: 0;">알레르기 관리</label>
+                        <i class="fas fa-chevron-down ms-2" id="allergenModuleToggleIconLabel" style="font-size: 0.8rem; color: #f57c00;"></i>
+                    </div>
+                    
+                    <!-- 감지된 알레르기 표시 (접었을 때도 표시) -->
+                    <div id="allergenSummaryLabel" class="d-flex align-items-center flex-grow-1" style="min-height: 30px; overflow-x: auto; gap: 5px; flex-wrap: wrap;">
+                        <span class="text-muted" style="font-size: 0.75rem;">원재료명을 입력하면 자동 감지됩니다</span>
+                    </div>
+                    
+                    <!-- 새로고침 버튼 -->
+                    <button type="button" class="btn btn-outline-secondary" onclick="manualDetectAllergensLabel()" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; flex-shrink: 0; white-space: nowrap;" title="알레르기 물질 다시 감지">
+                        <i class="fas fa-sync-alt me-1"></i>새로고침
+                    </button>
+                </div>
+                
+                <div id="allergenModuleContentLabel" style="display: none; flex-direction: column; gap: 12px; margin-top: 12px;">
+                    <!-- 원재료 사용 알레르기 물질 -->
+                    <div style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e0e0e0;">
+                        <label class="mb-2" style="font-weight: 600; color: #d32f2f; font-size: 0.9rem;">
+                            원재료 사용 알레르기 물질
+                        </label>
+                        
+                        <!-- 자동 감지된 알레르기 태그 표시 -->
+                        <div id="detectedAllergensLabel" class="p-2 bg-light border rounded mb-2 position-relative" style="min-height: 40px; font-size: 0.85rem;">
+                            <span class="text-muted"><i class="fas fa-info-circle me-1"></i>원재료명(최종표시)을 입력하면 자동으로 감지됩니다</span>
+                            <!-- 감지 상태 표시 -->
+                            <div id="allergenDetectingIndicatorLabel" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status" style="width: 1.5rem; height: 1.5rem;">
+                                    <span class="visually-hidden">감지 중...</span>
+                                </div>
+                                <span class="text-primary ms-2" style="font-size: 0.8rem;">감지 중...</span>
+                            </div>
+                        </div>
+                        
+                        <!-- 직접 추가 버튼 (모든 항목) -->
+                        <div class="mt-2" style="display: flex; flex-wrap: wrap; gap: 5px; align-items: center;">
+                            <span style="font-size: 0.75rem; color: #666; font-weight: 500;">직접 추가:</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="알류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">알류</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="우유" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">우유</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="메밀" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">메밀</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="땅콩" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">땅콩</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="대두" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">대두</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="밀" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">밀</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="고등어" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">고등어</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="게" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">게</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="새우" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">새우</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="돼지고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">돼지고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="복숭아" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">복숭아</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="토마토" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">토마토</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="아황산류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">아황산류</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="호두" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">호두</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="잣" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">잣</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="닭고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">닭고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="쇠고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">쇠고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="오징어" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">오징어</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-label" data-allergen="조개류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">조개류</button>
+                        </div>
+                        
+                        <!-- 숨겨진 입력 필드 -->
+                        <input type="hidden" id="selected_ingredient_allergens_label" name="allergens" value="{{ label.allergens|default:'' }}">
+                    </div>
+                    
+                    <!-- 제조시설 혼입 우려 물질 -->
+                    <div style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e0e0e0;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="mb-0" style="font-weight: 600; color: #f57c00; font-size: 0.9rem;">
+                                제조시설 혼입 우려 물질
+                            </label>
+                            <div class="d-flex justify-content-end" style="gap: 5px;">
+                                <button type="button" id="toggleAllAllergensLabelBtn" class="btn btn-outline-secondary btn-sm" onclick="toggleAllAllergensLabel()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                    <i class="fas fa-check-double me-1"></i>전체 선택
+                                </button>
+                                <button type="button" id="toggleAllergenWarningLabelBtn" class="btn btn-outline-primary btn-sm" onclick="toggleAllergenWarningLabel()" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                                    <i class="fas fa-arrow-down me-1"></i>주의사항에 추가
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="알류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">알류</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="우유" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">우유</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="메밀" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">메밀</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="땅콩" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">땅콩</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="대두" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">대두</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="밀" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">밀</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="고등어" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">고등어</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="게" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">게</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="새우" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">새우</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="돼지고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">돼지고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="복숭아" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">복숭아</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="토마토" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">토마토</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="아황산류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">아황산류</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="호두" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">호두</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="잣" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">잣</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="닭고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">닭고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="쇠고기" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">쇠고기</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="오징어" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">오징어</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary allergen-toggle-label" data-allergen="조개류" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;">조개류</button>
+                        </div>
+                        
+                        <!-- 혼입 경고 문구 미리보기 -->
+                        <div id="crossContaminationPreviewLabel" class="mt-2 p-2 bg-light border rounded" style="display: none; font-size: 0.85rem;">
+                            <strong class="text-dark">생성된 혼입 경고 문구:</strong>
+                            <div id="crossContaminationTextLabel" class="mt-1 text-dark"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 원재료명 (참고) -->
+            <!-- 원재료명 (표로입력) - 항상 표시 -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px; display: flex; align-items: center; gap: 3px;">
+                <!-- [수정] 체크박스를 숨기고, 라벨만 표시하도록 변경 -->
+                <div class="form-check" style="flex: 1; min-width: 0;">
+                  <input type="checkbox" id="chk_rawmtrl_nm" name="chk_rawmtrl_nm" class="form-check-input" {% if label.chckd_rawmtrl_nm == "Y" %}checked{% endif %} style="display: none;">
+                  <label for="chk_rawmtrl_nm" class="form-check-label m-0" style="line-height: 1.2; display: inline-block; min-width: 80px;">
+                    <span style="white-space: nowrap;">원재료명</span> <br> <span style="white-space: nowrap;">(표로입력)</span>
+                  </label>
+                </div>
+                <button type="button" class="btn btn-outline-primary" onclick="handleIngredientPopup()" title="표로 입력" style="padding: 0.1rem 0.2rem; flex-shrink: 0; font-size: 0.875rem; line-height: 1;">
+                  <i class="fas fa-table" style="font-size: 0.95rem;"></i>
+                </button>
+              </div>
+              <div style="width:90%;">
+                <div class="input-container">
+                  <textarea id="rawmtrl_nm" name="rawmtrl_nm" class="form-control auto-expand textarea" rows="2" 
+                            placeholder="원재료 팝업에서 작성" readonly style="cursor: pointer; background-color: #f8f9fa; flex: 1; min-width: 0;">{{ form.rawmtrl_nm.value|default:'' }}</textarea>
+                  <button type="button" id="copyRawmtrlBtn" class="btn btn-outline-primary" onclick="copyRawmtrlToDisplay()" title="원재료명(최종표시)로 복사" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap; display: none;">
+                    <i class="fas fa-copy me-1"></i>복사하기
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 구분선 및 통합 컨트롤 버튼 -->
+            <div class="mb-3 mt-4" style="border-top: 2px solid #dee2e6; padding-top: 15px;">
+              <div class="d-flex justify-content-between align-items-center mb-2" style="flex-wrap: nowrap;">
+                <div class="d-flex align-items-center" style="gap: 10px; flex: 1; min-width: 0; white-space: nowrap;">
+                  <span style="font-weight: 600; color: #495057; font-size: 0.95rem; flex-shrink: 0;">
+                    <i class="fas fa-clipboard-list me-2"></i>추가 정보 입력
+                  </span>
+                  <span style="color: #6c757d; font-size: 0.85rem; flex-shrink: 0;">
+                    주의사항, 기타 표시사항을 버튼으로 빠르게 등록,수정할 수 있고, 맞춤 항목을 추가,수정할 수 있습니다.
+                  </span>
+                </div>
+                <div class="d-flex align-items-center justify-content-end" style="gap: 5px; flex-shrink: 0;">
+                  <button type="button" id="toggleAllBtn" class="btn btn-outline-primary" onclick="toggleAllSectionsButton()" title="모든 섹션 펼치기" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
+                    <i class="fas fa-chevron-down me-1"></i>전체 열기
+                  </button>
+                  <button type="button" class="btn btn-outline-primary" onclick="handleNutritionTablePopup()" title="영양성분 계산기" style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
+                    <i class="fas fa-calculator me-1"></i>영양성분 계산기
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 주의사항 -->
+            <div class="d-flex align-items-start mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                <div class="form-check">
+                  <input type="checkbox" id="chk_cautions" name="chk_cautions" class="form-check-input" {% if label.chckd_cautions == "Y" %}checked{% endif %}>
+                  <label for="chk_cautions" class="m-0" style="font-size: 0.9rem; font-weight: normal;">주의사항</label>
+                  <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="toggleContentSection('cautions')" style="font-size: 0.8rem; text-decoration: none; color: #6c757d;" title="접기/펼치기">
+                    <i class="fas fa-chevron-up" id="cautionsToggleIcon"></i>
+                  </button>
+                </div>
+              </div>
+              <div style="width:90%;">
+                <!-- 요약 표시 영역 (접었을 때 보임) -->
+                <div id="cautionsSummary" class="section-summary" onclick="toggleContentSection('cautions')" style="display: none;" title="클릭하여 펼치기">
+                  <div class="border rounded p-2 section-summary-card">
+                    <div class="d-flex align-items-center">
+                      <i class="fas fa-exclamation-triangle section-summary-icon"></i>
+                      <small class="section-summary-text">내용이 없습니다</small>
+                    </div>
+                  </div>
+                </div>
+                <div id="cautionsContent" class="border rounded p-2" style="display: flex; flex-direction: column; gap: 5px; background-color: #f8f9fa;">
+                  <div class="input-container input-container-modern">
+                    <textarea name="cautions" class="form-control auto-expand textarea" rows="2" 
+                              placeholder="주의사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
+                              style="font-size: 0.875rem; min-height: 60px; max-height: 200px; overflow-y: auto;"
+                              onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('cautions', this); }"
+                              onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('cautions', this); }">{{ form.cautions.value|default:'' }}</textarea>
+                  </div>
+                  <!-- 빠른 입력 버튼 영역 -->
+                  <div class="d-flex justify-content-between align-items-center" style="gap: 5px;">
+                    <div class="quick-text-buttons" style="display: flex; flex-wrap: wrap; gap: 3px; flex: 1;">
+                    <!-- 법정 필수 경고 -->
+                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="부정·불량식품 신고는 국번없이 1399" title="부정불량식품 신고 (법정 의무)" style="font-size: 0.7rem;"><i class="fas fa-phone-alt me-1"></i>1399</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="이 제품에는 페닐알라닌이 함유되어 있습니다. (페닐케톤뇨증 환자 주의)" title="아스파탐 법정 필수 표시" style="font-size: 0.7rem;"><i class="fas fa-exclamation-circle me-1"></i>페닐알라닌</button>
+                    
+                    <!-- 일반 관리 경고 -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="개봉 후에는 변질될 우려가 있으니 반드시 밀봉하여 냉장 보관하시고, 가급적 빨리 섭취하시기 바랍니다." title="개봉 후 보관 및 취급" style="font-size: 0.7rem;"><i class="fas fa-box-open me-1"></i>개봉후보관</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="직사광선을 피하고 서늘한 곳에 보관하시기 바랍니다." title="보관 조건" style="font-size: 0.7rem;"><i class="fas fa-sun me-1"></i>직사광선</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="냉동 제품은 해동 후 재냉동하지 마시기 바랍니다." title="재냉동 금지" style="font-size: 0.7rem;"><i class="fas fa-snowflake me-1"></i>재냉동금지</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="용기가 파손되거나 부풀어 있는 경우 섭취하지 마시기 바랍니다." title="용기 파손 주의" style="font-size: 0.7rem;"><i class="fas fa-box-tissue me-1"></i>용기파손</button>
+                    
+                    <!-- 안전 주의사항 -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="어린이가 먹을 경우 보호자의 지도가 필요합니다." title="어린이 주의" style="font-size: 0.7rem;"><i class="fas fa-child me-1"></i>어린이</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="질식의 위험이 있으니 주의하시기 바랍니다." title="질식 주의" style="font-size: 0.7rem;"><i class="fas fa-lungs me-1"></i>질식</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="뜨거우니 화상에 주의하시기 바랍니다." title="화상 주의" style="font-size: 0.7rem;"><i class="fas fa-fire me-1"></i>화상</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="제품 개봉 시 내용물이 튈 수 있으니 주의하시기 바랍니다." title="개봉 주의" style="font-size: 0.7rem;"><i class="fas fa-spray-can me-1"></i>튐주의</button>
+                    
+                    <!-- 건강기능식품 관련 -->
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="특정 질환이 있거나 의약품 복용 중이신 분은 섭취 전 의사 및 전문가와 상담하시기 바랍니다. 본 제품은 질병의 예방 및 치료를 위한 의약품이 아닙니다." title="건강기능식품 일반 주의" style="font-size: 0.7rem;"><i class="fas fa-user-md me-1"></i>의약품복용자</button>
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="임산부 및 수유부, 어린이(또는 특정 연령층)는 섭취에 주의해야 합니다." title="특정 대상 주의" style="font-size: 0.7rem;"><i class="fas fa-baby me-1"></i>임산부/어린이</button>
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="cautions" data-text="본 제품 섭취 시 이상 사례 발생 또는 불편함을 느끼는 경우, 섭취를 중단하고 소비자 상담실 또는 1577-2488(이상사례 신고 핫라인)로 신고하여 주십시오." title="이상사례 신고" style="font-size: 0.7rem;"><i class="fas fa-phone-volume me-1"></i>이상사례</button>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group" style="flex-shrink: 0;">
+                      <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllQuickTextsLabel('cautions')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                        <i class="fas fa-plus-circle me-1"></i>전체 추가
+                      </button>
+                      <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllQuickTextsLabel('cautions')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                        <i class="fas fa-eraser me-1"></i>일괄 해제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 기타 표시사항 -->
+            <div class="d-flex align-items-start mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                <div class="form-check">
+                  <input type="checkbox" id="chk_additional_info" name="chk_additional_info" class="form-check-input" {% if label.chckd_additional_info == "Y" %}checked{% endif %}>
+                  <label for="chk_additional_info" class="m-0" style="font-size: 0.9rem; font-weight: normal;">기타표시</label>
+                  <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="toggleContentSection('additional_info')" style="font-size: 0.8rem; text-decoration: none; color: #6c757d;" title="접기/펼치기">
+                    <i class="fas fa-chevron-up" id="additional_infoToggleIcon"></i>
+                  </button>
+                </div>
+              </div>
+              <div style="width:90%;">
+                <!-- 요약 표시 영역 (접었을 때 보임) -->
+                <div id="additional_infoSummary" class="section-summary" onclick="toggleContentSection('additional_info')" style="display: none;" title="클릭하여 펼치기">
+                  <div class="border rounded p-2 section-summary-card">
+                    <div class="d-flex align-items-center">
+                      <i class="fas fa-info-circle section-summary-icon"></i>
+                      <span class="section-summary-text">내용이 없습니다</span>
+                    </div>
+                  </div>
+                </div>
+                <div id="additional_infoContent" class="border rounded p-2" style="display: flex; flex-direction: column; gap: 5px; background-color: #f8f9fa;">
+                  <div class="input-container input-container-modern">
+                    <textarea name="additional_info" class="form-control auto-expand textarea" rows="2" 
+                              placeholder="기타 표시사항을 입력하거나 내문구를 선택하세요. 여러 항목을 추가할 수 있습니다 (클릭하면 추천 문구가 표시됩니다)"
+                              style="font-size: 0.875rem; min-height: 60px; max-height: 200px; overflow-y: auto;"
+                              onclick="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('additional_info', this); }"
+                              onfocus="if(window.basicRecommendationSystem) { window.basicRecommendationSystem.showRecommendations('additional_info', this); }">{{ form.additional_info.value|default:'' }}</textarea>
+                  </div>
+                  <!-- 빠른 입력 버튼 영역 -->
+                  <div class="d-flex justify-content-between align-items-center" style="gap: 5px;">
+                    <div class="quick-text-buttons" style="display: flex; flex-wrap: wrap; gap: 3px; flex: 1;">
+                    <!-- 소비자 행정/품질 관련 (법정 필수) -->
+                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="제품에 대한 문의 사항 및 상담은 종합상담센터 1577-1255 (유료)로 연락 주시기 바랍니다." title="소비자 상담실 (법정 필수)" style="font-size: 0.7rem;"><i class="fas fa-headset me-1"></i>상담센터</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="본 제품은 공정거래위원회 고시 소비자분쟁해결기준에 의거, 교환 또는 보상받을 수 있습니다." title="품질보증 (분쟁해결기준)" style="font-size: 0.7rem;"><i class="fas fa-certificate me-1"></i>품질보증</button>
+                    
+                    <!-- 인증 마크 (조건부 필수) -->
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="HACCP 인증 제품" title="HACCP 인증" style="font-size: 0.7rem;"><i class="fas fa-check-circle me-1"></i>HACCP</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="ISO 22000 인증" title="ISO 22000" style="font-size: 0.7rem;"><i class="fas fa-award me-1"></i>ISO22000</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="유기농 인증 제품" title="유기농 인증" style="font-size: 0.7rem;"><i class="fas fa-leaf me-1"></i>유기농</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="KS 인증 제품" title="KS 인증" style="font-size: 0.7rem;"><i class="fas fa-stamp me-1"></i>KS</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="전통식품 품질인증" title="전통식품" style="font-size: 0.7rem;"><i class="fas fa-landmark me-1"></i>전통식품</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="우수식품인증(GMP)" title="GMP" style="font-size: 0.7rem;"><i class="fas fa-star me-1"></i>GMP</button>
+                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="저탄소 인증 제품" title="저탄소 인증 (온실가스 배출량 감축)" style="font-size: 0.7rem;"><i class="fas fa-seedling me-1"></i>저탄소</button>
+                    
+                    <!-- 규제된 자발적 클레임 (기준 충족 필수) -->
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="무 글루텐 (Gluten Free)" title="총 글루텐 함량 1kg당 20mg 이하" style="font-size: 0.7rem;"><i class="fas fa-wheat-awn me-1"></i>무글루텐</button>
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="비건 인증 (Vegan)" title="동물 유래 성분 불포함" style="font-size: 0.7rem;"><i class="fas fa-leaf me-1"></i>비건</button>
+                    <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="할랄(Halal) 인증 제품" title="할랄 인증" style="font-size: 0.7rem;"><i class="fas fa-moon me-1"></i>할랄</button>
+                    
+                    <!-- 일반 자발적 표시 -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="무(無) MSG, 무(無) 합성보존료, 무(無) 합성착색료" title="무첨가" style="font-size: 0.7rem;"><i class="fas fa-ban me-1"></i>무첨가</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="Non-GMO 제품" title="Non-GMO" style="font-size: 0.7rem;"><i class="fas fa-dna me-1"></i>Non-GMO</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 quick-text-toggle-label" data-field="additional_info" data-text="저나트륨 제품" title="저나트륨" style="font-size: 0.7rem;"><i class="fas fa-heart me-1"></i>저나트륨</button>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group" style="flex-shrink: 0;">
+                      <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllQuickTextsLabel('additional_info')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                        <i class="fas fa-plus-circle me-1"></i>전체 추가
+                      </button>
+                      <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllQuickTextsLabel('additional_info')" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;">
+                        <i class="fas fa-eraser me-1"></i>일괄 해제
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 맞춤항목 -->
+            <div class="d-flex align-items-start mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                <div class="form-check">
+                  <label class="m-0" style="font-size: 0.9rem; font-weight: normal;">맞춤항목</label>
+                  <button type="button" class="btn btn-sm btn-link p-0 ms-1" onclick="toggleContentSection('custom_fields')" style="font-size: 0.8rem; text-decoration: none; color: #6c757d;" title="접기/펼치기">
+                    <i class="fas fa-chevron-up" id="custom_fieldsToggleIcon"></i>
+                  </button>
+                </div>
+              </div>
+              <div style="width:90%;">
+                <!-- 요약 메시지 (접었을 때 표시) -->
+                <div id="custom_fieldsSummary" class="section-summary" onclick="toggleContentSection('custom_fields')" style="display: none;" title="클릭하여 펼치기">
+                  <div class="border rounded p-2 section-summary-card">
+                    <div class="d-flex align-items-center">
+                      <i class="fas fa-tags section-summary-icon"></i>
+                      <small class="section-summary-text">내용이 없습니다</small>
+                    </div>
+                  </div>
+                </div>
+                
+                <div id="custom_fieldsContent" class="border rounded p-2" style="display: flex; flex-direction: column; gap: 5px; background-color: #f8f9fa;">
+                  
+                  <!-- 항목명/내용 레이블 (항상 표시) -->
+                  <div id="customFieldsHeader" class="row g-2 mb-1 align-items-center">
+                    <div class="col-auto" style="width: 80px;">
+                      <button type="button" class="btn btn-success btn-sm" onclick="addNewCustomFieldRow()" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">
+                        <i class="fas fa-plus me-1"></i>추가
+                      </button>
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label mb-0" style="font-size: 0.85rem; font-weight: 600;">항목명</label>
+                    </div>
+                    <div class="col">
+                      <label class="form-label mb-0" style="font-size: 0.85rem; font-weight: 600;">내용</label>
+                    </div>
+                  </div>
+                  
+                  <!-- 맞춤항목 컨테이너 -->
+                  <div id="customFieldsContainer" style="display: flex; flex-direction: column; gap: 5px;">
+                    <!-- JavaScript로 동적 생성 -->
+                  </div>
+                  
+                  <!-- Hidden input for JSON data -->
+                  <input type="hidden" id="custom_fields_json" name="custom_fields_json" value='{% if custom_fields_json %}{{ custom_fields_json|safe }}{% else %}[]{% endif %}'>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 영양성분 -->
+            <div class="d-flex align-items-center mb-2" style="gap:5px;">
+                <div style="width:10%; min-width:130px;">
+                <!-- [수정] 체크박스를 숨기고, 라벨만 표시하도록 변경 -->
+                <div class="form-check">
+                  <input type="checkbox" id="chk_nutrition_text" name="chk_nutrition_text" class="form-check-input" {% if label.chckd_nutrition_text == "Y" %}checked{% endif %} style="display: none;">
+                  <label for="chk_nutrition_text" class="form-check-label m-0">영양성분</label>
+                </div>
+              </div>
+              <div style="width:90%;">
+                <div class="input-container input-container-modern">
+                  <textarea id="nutrition_text" name="nutrition_text" class="form-control auto-expand textarea modern-textarea" rows="2" 
+                            placeholder="영양성분 계산기를 통해 입력하세요. 클릭하면 계산기가 열립니다." readonly style="cursor: pointer;" title="클릭하면 영양성분 계산기가 열립니다.">{{ form.nutrition_text.value|default:'' }}</textarea>
+                </div>
+              </div>
+            </div>
+            <!-- 영양성분 hidden 필드 -->
+            <div style="display: none;">
+              <input type="hidden" name="serving_size" value="{{ form.serving_size.value|default:'' }}">
+              <input type="hidden" name="serving_size_unit" value="{{ form.serving_size_unit.value|default:'' }}">
+              <input type="hidden" name="units_per_package" value="{{ form.units_per_package.value|default:'' }}">
+              <input type="hidden" name="nutrition_display_unit" value="{{ form.nutrition_display_unit.value|default:'' }}">
+              <input type="hidden" name="basic_display_type" value="{{ form.basic_display_type.value|default:'' }}">
+              <input type="hidden" name="parallel_display_type" value="{{ form.parallel_display_type.value|default:'' }}">
+              <input type="hidden" name="calories" value="{{ form.calories.value|default:'' }}">
+              <input type="hidden" name="calories_unit" value="{{ form.calories_unit.value|default:'' }}">
+              <input type="hidden" name="natriums" value="{{ form.natriums.value|default:'' }}">
+              <input type="hidden" name="natriums_unit" value="{{ form.natriums_unit.value|default:'' }}">
+              <input type="hidden" name="carbohydrates" value="{{ form.carbohydrates.value|default:'' }}">
+              <input type="hidden" name="carbohydrates_unit" value="{{ form.carbohydrates_unit.value|default:'' }}">
+              <input type="hidden" name="sugars" value="{{ form.sugars.value|default:'' }}">
+              <input type="hidden" name="sugars_unit" value="{{ form.sugars_unit.value|default:'' }}">
+              <input type="hidden" name="fats" value="{{ form.fats.value|default:'' }}">
+              <input type="hidden" name="fats_unit" value="{{ form.fats_unit.value|default:'' }}">
+              <input type="hidden" name="trans_fats" value="{{ form.trans_fats.value|default:'' }}">
+              <input type="hidden" name="trans_fats_unit" value="{{ form.trans_fats_unit.value|default:'' }}">
+              <input type="hidden" name="saturated_fats" value="{{ form.saturated_fats.value|default:'' }}">
+              <input type="hidden" name="saturated_fats_unit" value="{{ form.saturated_fats_unit.value|default:'' }}">
+              <input type="hidden" name="cholesterols" value="{{ form.cholesterols.value|default:'' }}">
+              <input type="hidden" name="cholesterols_unit" value="{{ form.cholesterols_unit.value|default:'' }}">
+              <input type="hidden" name="proteins" value="{{ form.proteins.value|default:'' }}">
+              <input type="hidden" name="proteins_unit" value="{{ form.proteins_unit.value|default:'' }}">
+              
+              <!-- 추가 영양성분 hidden 필드들 -->
+              <input type="hidden" name="dietary_fiber" value="{{ form.dietary_fiber.value|default:'' }}">
+              <input type="hidden" name="dietary_fiber_unit" value="{{ form.dietary_fiber_unit.value|default:'' }}">
+              <input type="hidden" name="calcium" value="{{ form.calcium.value|default:'' }}">
+              <input type="hidden" name="calcium_unit" value="{{ form.calcium_unit.value|default:'' }}">
+              <input type="hidden" name="iron" value="{{ form.iron.value|default:'' }}">
+              <input type="hidden" name="iron_unit" value="{{ form.iron_unit.value|default:'' }}">
+              <input type="hidden" name="potassium" value="{{ form.potassium.value|default:'' }}">
+              <input type="hidden" name="potassium_unit" value="{{ form.potassium_unit.value|default:'' }}">
+              <input type="hidden" name="magnesium" value="{{ form.magnesium.value|default:'' }}">
+              <input type="hidden" name="magnesium_unit" value="{{ form.magnesium_unit.value|default:'' }}">
+              <input type="hidden" name="zinc" value="{{ form.zinc.value|default:'' }}">
+              <input type="hidden" name="zinc_unit" value="{{ form.zinc_unit.value|default:'' }}">
+              <input type="hidden" name="phosphorus" value="{{ form.phosphorus.value|default:'' }}">
+              <input type="hidden" name="phosphorus_unit" value="{{ form.phosphorus_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_a" value="{{ form.vitamin_a.value|default:'' }}">
+              <input type="hidden" name="vitamin_a_unit" value="{{ form.vitamin_a_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_d" value="{{ form.vitamin_d.value|default:'' }}">
+              <input type="hidden" name="vitamin_d_unit" value="{{ form.vitamin_d_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_e" value="{{ form.vitamin_e.value|default:'' }}">
+              <input type="hidden" name="vitamin_e_unit" value="{{ form.vitamin_e_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_c" value="{{ form.vitamin_c.value|default:'' }}">
+              <input type="hidden" name="vitamin_c_unit" value="{{ form.vitamin_c_unit.value|default:'' }}">
+              <input type="hidden" name="thiamine" value="{{ form.thiamine.value|default:'' }}">
+              <input type="hidden" name="thiamine_unit" value="{{ form.thiamine_unit.value|default:'' }}">
+              <input type="hidden" name="riboflavin" value="{{ form.riboflavin.value|default:'' }}">
+              <input type="hidden" name="riboflavin_unit" value="{{ form.riboflavin_unit.value|default:'' }}">
+              <input type="hidden" name="niacin" value="{{ form.niacin.value|default:'' }}">
+              <input type="hidden" name="niacin_unit" value="{{ form.niacin_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_b6" value="{{ form.vitamin_b6.value|default:'' }}">
+              <input type="hidden" name="vitamin_b6_unit" value="{{ form.vitamin_b6_unit.value|default:'' }}">
+              <input type="hidden" name="folic_acid" value="{{ form.folic_acid.value|default:'' }}">
+              <input type="hidden" name="folic_acid_unit" value="{{ form.folic_acid_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_b12" value="{{ form.vitamin_b12.value|default:'' }}">
+              <input type="hidden" name="vitamin_b12_unit" value="{{ form.vitamin_b12_unit.value|default:'' }}">
+              <input type="hidden" name="selenium" value="{{ form.selenium.value|default:'' }}">
+              <input type="hidden" name="selenium_unit" value="{{ form.selenium_unit.value|default:'' }}">
+              <input type="hidden" name="pantothenic_acid" value="{{ form.pantothenic_acid.value|default:'' }}">
+              <input type="hidden" name="pantothenic_acid_unit" value="{{ form.pantothenic_acid_unit.value|default:'' }}">
+              <input type="hidden" name="biotin" value="{{ form.biotin.value|default:'' }}">
+              <input type="hidden" name="biotin_unit" value="{{ form.biotin_unit.value|default:'' }}">
+              <input type="hidden" name="iodine" value="{{ form.iodine.value|default:'' }}">
+              <input type="hidden" name="iodine_unit" value="{{ form.iodine_unit.value|default:'' }}">
+              <input type="hidden" name="vitamin_k" value="{{ form.vitamin_k.value|default:'' }}">
+              <input type="hidden" name="vitamin_k_unit" value="{{ form.vitamin_k_unit.value|default:'' }}">
+              <input type="hidden" name="copper" value="{{ form.copper.value|default:'' }}">
+              <input type="hidden" name="copper_unit" value="{{ form.copper_unit.value|default:'' }}">
+              <input type="hidden" name="manganese" value="{{ form.manganese.value|default:'' }}">
+              <input type="hidden" name="manganese_unit" value="{{ form.manganese_unit.value|default:'' }}">
+              <input type="hidden" name="chromium" value="{{ form.chromium.value|default:'' }}">
+              <input type="hidden" name="chromium_unit" value="{{ form.chromium_unit.value|default:'' }}">
+              <input type="hidden" name="molybdenum" value="{{ form.molybdenum.value|default:'' }}">
+              <input type="hidden" name="molybdenum_unit" value="{{ form.molybdenum_unit.value|default:'' }}">
+            </div>
+          </form>
+        </div>
+      </div>    
+    </div>
+
+
+  </div>
+</div>
+
+<!-- 라벨 상수 로드 -->
+<script src="{% static 'js/label/constants.js' %}"></script>
+
+<!-- 기존 알레르기 데이터 로드 -->
+<script>
+// 국가 목록을 JavaScript에서 사용할 수 있도록 전역 변수로 설정 (볼드 처리용)
+window.countryListForBold = [
+    {% for c in country_list %}
+    "{{ c.country_name_ko|escapejs }}"{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+// 간편/상세 모드 전환 로깅
+function logModeSwitch() {
+    const labelId = '{{ label.my_label_id|default:"" }}';
+    if (!labelId) return;
+    
+    fetch('/label/log-mode-switch/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ label_id: labelId })
+    }).catch(err => console.warn('모드 전환 로깅 실패:', err));
+}
+
+// CSRF 토큰 가져오기
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// 헤더 높이에 맞춰 여백 동적 조정 및 통합 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. 조건 체크박스 선택 시 조건상세 필드 활성화/비활성화
+    const conditionCheckbox = document.getElementById('chk_sterilization_other');
+    const conditionInput = document.getElementById('processing_condition_input');
+    
+    if (conditionCheckbox && conditionInput) {
+        conditionCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                conditionInput.disabled = false;
+                conditionInput.focus();
+            } else {
+                conditionInput.disabled = true;
+                conditionInput.value = '';
+            }
+        });
+    }
+    
+    // 2. 헤더 높이 동적 조정
+    const header = document.getElementById('labelCreationHeader');
+    const spacer = document.getElementById('headerSpacer');
+    
+    if (header && spacer) {
+        // 헤더의 실제 높이 계산
+        const headerHeight = header.offsetHeight;
+        // 여백을 헤더 높이 + 여유 공간(20px)으로 설정
+        spacer.style.height = (headerHeight + 20) + 'px';
+        
+        // 윈도우 리사이즈 시에도 재계산
+        window.addEventListener('resize', function() {
+            const newHeaderHeight = header.offsetHeight;
+            spacer.style.height = (newHeaderHeight + 20) + 'px';
+        });
+    }
+    
+    // 3. 추천문구 토글 상태 초기화
+    initRecommendationToggle();
+    
+    // 4. 기존 알레르기 데이터 로드
+    {% if label and label.allergens %}
+    // 저장된 알레르기 데이터 로드
+    const savedAllergens = "{{ label.allergens|escapejs }}";
+    if (savedAllergens && window.selectedIngredientAllergensLabel) {
+        const allergenArray = savedAllergens.split(',').map(a => a.trim()).filter(a => a);
+        allergenArray.forEach(allergen => {
+            window.selectedIngredientAllergensLabel.add(allergen);
+        });
+        
+        // UI 업데이트
+        if (typeof updateAllergenTagsLabel === 'function') {
+            setTimeout(() => {
+                updateAllergenTagsLabel();
+                console.log('✅ 저장된 알레르기 정보 로드:', allergenArray);
+            }, 100);
+        }
+    }
+    {% endif %}
+    
+    {% if label and label.cautions %}
+    // 교차오염 알레르기 파싱
+    const cautionText = "{{ label.cautions|escapejs }}";
+    const crossMatch = cautionText.match(/이 제품은 (.+?)를 사용한 제품과 같은 제조시설에서 제조하고 있습니다\./);
+    if (crossMatch && window.selectedCrossContaminationAllergensLabel) {
+        const crossAllergens = crossMatch[1].split(',').map(a => a.trim());
+        crossAllergens.forEach(allergen => {
+            window.selectedCrossContaminationAllergensLabel.add(allergen);
+        });
+        
+        // UI 업데이트
+        if (typeof updateAllergenTagsLabel === 'function') {
+            setTimeout(() => {
+                updateAllergenTagsLabel();
+                console.log('✅ 저장된 교차오염 정보 로드:', crossAllergens);
+            }, 100);
+        }
+    }
+    {% endif %}
+});
+
+// 추천문구 라디오 버튼 토글 기능
+window.recommendationsEnabled = true; // 전역 변수로 선언 (기본값: 활성화)
+
+function initRecommendationToggle() {
+    // localStorage에서 설정 불러오기
+    const saved = localStorage.getItem('labeldata_recommendations_enabled');
+    if (saved !== null) {
+        window.recommendationsEnabled = saved === 'true';
+    }
+    
+    // 라디오 버튼 상태 설정
+    if (window.recommendationsEnabled) {
+        document.getElementById('recommendOn').checked = true;
+    } else {
+        document.getElementById('recommendOff').checked = true;
+    }
+    
+    // 라디오 버튼 이벤트 리스너 추가
+    document.getElementById('recommendOn').addEventListener('change', function() {
+        if (this.checked) {
+            window.recommendationsEnabled = true;
+            localStorage.setItem('labeldata_recommendations_enabled', 'true');
+        }
+    });
+    
+    document.getElementById('recommendOff').addEventListener('change', function() {
+        if (this.checked) {
+            window.recommendationsEnabled = false;
+            localStorage.setItem('labeldata_recommendations_enabled', 'false');
+            // 현재 열린 추천 창이 있으면 닫기
+            if (window.basicRecommendationSystem) {
+                window.basicRecommendationSystem.hideRecommendations();
+            }
+        }
+    });
+}
+</script>
+
+{% endblock %}

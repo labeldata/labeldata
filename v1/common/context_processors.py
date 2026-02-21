@@ -5,6 +5,22 @@ from datetime import timedelta
 def static_build_date(request):
     return {'STATIC_BUILD_DATE': getattr(settings, 'STATIC_BUILD_DATE', '')}
 
+def ui_mode(request):
+    """UI 모드(V1/V2) 컨텍스트 프로세서.
+    세션의 'ui_mode' 값('v1' 또는 'v2')을 읽어 템플릿에 제공합니다.
+    - ui_mode : 현재 UI 모드 문자열
+    - ui_base : 해당 모드에 맞는 베이스 템플릿 이름
+    """
+    mode = request.session.get('ui_mode', 'v2')
+    if mode == 'v1':
+        base = 'base.html'
+    else:
+        base = 'base_v2.html'
+    return {
+        'ui_mode': mode,
+        'ui_base': base,
+    }
+
 def board_notifications(request):
     """게시판 알림 카운트 - 세션 기반 (모델 수정 없음)
     

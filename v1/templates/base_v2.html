@@ -20,7 +20,7 @@
     <div class="v2-wrapper">
         <nav class="v2-sidebar">
             <div class="px-2">
-                <a href="{% url 'products:product_explorer' %}" class="text-decoration-none text-dark fs-5 fw-bold">
+                <a href="{% url 'main:home_dashboard' %}" class="text-decoration-none text-dark fs-5 fw-bold">
                      Food Data Portal
                 </a>
             </div>
@@ -31,15 +31,12 @@
                 </a>
             </div>
 
-            <div class="nav flex-column">
+            <div class="nav flex-column v2-sidebar-nav">
                 <a href="{% url 'products:product_explorer' %}" class="nav-link {% if request.resolver_match.url_name == 'product_explorer' or request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_detail' or request.resolver_match.url_name == 'product_detail_new' %}{% if request.GET.from != 'collab' %}active{% endif %}{% endif %}">
                     <i class="bi bi-hdd-stack me-3"></i>제품 관리
                 </a>
                 <a href="{% url 'label:my_ingredient_list_combined' %}" class="nav-link {% if request.resolver_match.url_name == 'my_ingredient_list_combined' %}active{% endif %}">
                     <i class="bi bi-box-seam me-3"></i>원료 관리
-                </a>
-                <a href="{% url 'label:my_label_list' %}" class="nav-link {% if request.resolver_match.url_name == 'my_label_list' or request.resolver_match.url_name == 'label_creation' %}active{% endif %}">
-                    <i class="bi bi-file-earmark-text me-3"></i>표시사항 생성 <span class="badge bg-secondary ms-1" style="font-size:9px;">구버전</span>
                 </a>
                 <div class="border-top my-3"></div>
 
@@ -63,6 +60,15 @@
                 <a href="{% url 'board:list' %}" class="nav-link {% if request.resolver_match.namespace == 'board' %}active{% endif %}">
                     <i class="bi bi-chat-dots me-3"></i>게시판
                 </a>
+            </div>
+
+            <div class="v2-sidebar-footer">
+                <p class="v2-sf-copy">&copy; 2025 Lab.E.L.</p>
+                <p class="v2-sf-links">
+                    <a href="{% url 'board:list' %}">공지사항</a>
+                    <span class="v2-sf-dot">&middot;</span>
+                    <a href="{% url 'main:home_switcher' %}">기존 사이트 이동</a>
+                </p>
             </div>
         </nav>
 

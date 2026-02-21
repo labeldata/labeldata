@@ -1,0 +1,380 @@
+<header class="navbar navbar-expand-lg navbar-dark shadow-sm fixed-top">
+    <div class="container">
+        <!-- 네비게이션 로고 및 브랜드 -->
+        <a class="navbar-brand text-warning" href="{% url 'main:home' %}">간편한 표시사항 연구소</a>
+        
+        <!-- 네비게이션 메뉴 -->
+        <ul class="navbar-nav flex-row me-auto">
+            <!-- 제품 조회 -->
+            <li class="nav-item dropdown me-4" data-menu="product">
+                <a class="nav-link {% if 'food_item' in request.resolver_match.url_name or 'food_additive' in request.resolver_match.url_name %}active{% endif %}" 
+                   href="{% url 'label:food_item_list_domestic' %}" role="button">
+                    제품 조회
+                </a>
+            </li>
+            
+            <!-- 표시사항 작성 -->
+            <li class="nav-item dropdown me-4" data-menu="label">
+                <a class="nav-link {% if 'label_creation' in request.resolver_match.url_name or 'my_label' in request.resolver_match.url_name %}active{% endif %}" 
+                   href="{% url 'label:my_label_list' %}" role="button">
+                    표시사항
+                </a>
+            </li>
+            
+            <!-- 원료 관리 -->
+            <li class="nav-item me-4">
+                <a class="nav-link {% if 'ingredient' in request.resolver_match.url_name %}active{% endif %}" 
+                   href="{% url 'label:my_ingredient_list_combined' %}">
+                    원료 관리
+                </a>
+            </li>
+            
+            <!-- 게시판 -->
+            <li class="nav-item me-4">
+                <a class="nav-link {% if 'board' in request.resolver_match.url_name or 'user_management' in request.resolver_match.url_name %}active{% endif %}" 
+                   href="{% url 'board:list' %}">
+                    게시판
+                    {% if board_notification_count > 0 %}
+                        <!-- 방법 1: 숫자 표시 (현재 방식) -->
+                        <span class="badge bg-danger rounded-pill ms-1">{{ board_notification_count }}</span>
+                        
+                        <!-- 방법 2: 점(dot) 표시 (아래 주석 해제하여 사용) -->
+                        <!-- <span class="position-relative">
+                            <span class="position-absolute top-0 start-100 translate-middle p-1 bg-danger border border-light rounded-circle" style="margin-left: 0.25rem;">
+                                <span class="visually-hidden">새 알림</span>
+                            </span>
+                        </span> -->
+                    {% endif %}
+                </a>
+            </li>
+        </ul>
+        
+        <!-- 통합 메가메뉴 -->
+        <!-- 제품 조회 메뉴 -->
+        <div class="menu-column" data-menu="product">
+            <ul class="menu-list">
+                <li>
+                    <a href="{% url 'label:food_item_list_domestic' %}">
+                        국내 제품 조회
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'label:food_item_list_imported' %}">
+                        수입 제품 조회
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'label:food_additive_search' %}">
+                        식품첨가물 데이터베이스
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- 표시사항 메뉴 -->
+        <div class="menu-column" data-menu="label">
+            <ul class="menu-list">
+                <li>
+                    <a href="{% url 'label:my_label_list' %}">
+                        표시사항 조회
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'main:home' %}#create-label">
+                        신규 작성(간편)
+                    </a>
+                </li>
+                <li>
+                    <a href="#" id="create-detailed-label">
+                        신규 작성(상세)
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- 사용자 메뉴 -->
+        <div class="d-flex align-items-center">
+            {% if user.is_authenticated %}
+                {% if user.email == 'guest@labeasylabel.com' %}
+                    <span class="text-white me-3" id="username-display" title="Guest 계정은 비밀번호 변경이 불가능합니다"></span>
+                {% else %}
+                    <a href="{% url 'user_management:change_password' %}" class="text-white me-3 text-decoration-none" id="username-display" title="비밀번호 변경"></a>
+                {% endif %}
+                <form action="{% url 'common:logout' %}" method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="nav-link btn btn-link text-white" style="padding: 0;">로그아웃</button>
+                </form>
+            {% else %}
+                <a href="{% url 'user_management:login' %}" class="nav-link text-white d-inline">로그인</a>
+                <a href="{% url 'user_management:signup' %}" class="nav-link text-white d-inline ms-3">회원가입</a>
+            {% endif %}
+        </div>
+    </div>
+</header>
+
+<style>
+/* 브랜드 로고는 hover 효과 제외 */
+.navbar-brand {
+    text-decoration: none !important;
+    border-bottom: none !important;
+}
+
+.navbar-brand:hover {
+    text-decoration: none !important;
+    border-bottom: none !important;
+    color: #ffc107 !important;
+}
+
+/* 네비게이션 메뉴 hover 효과 고정 */
+.navbar-nav .nav-link {
+    position: relative;
+    transition: color 0.3s ease;
+    padding-bottom: 8px !important;
+    border-bottom: 2px solid transparent;
+}
+
+.navbar-nav .nav-link:hover {
+    color: #20c997 !important;
+    border-bottom-color: #20c997;
+    transform: none;
+}
+
+.navbar-nav .nav-link.active {
+    color: #20c997 !important;
+    border-bottom-color: #20c997;
+}
+
+/* 메뉴 컬럼 스타일 */
+.menu-column {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: #2c3e50;
+    border-top: 1px solid #34495e;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    display: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 1000;
+    min-width: 200px;
+}
+
+.menu-column.active {
+    display: block;
+    opacity: 1;
+}
+
+.menu-column .menu-list {
+    list-style: none;
+    padding: 1rem 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-column .menu-list li {
+    margin: 0;
+    width: 100%;
+}
+
+.menu-column .menu-list a {
+    color: #ecf0f1;
+    text-decoration: none;
+    display: block;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.menu-column .menu-list a:hover {
+    background-color: #34495e;
+    color: #20c997;
+}
+
+/* 크기 변화 방지를 위한 추가 스타일 */
+.navbar-nav .nav-item {
+    flex-shrink: 0;
+    position: relative;
+}
+
+.navbar-nav .nav-link::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: transparent;
+    transition: background-color 0.3s ease;
+}
+
+.navbar-nav .nav-link:hover::before,
+.navbar-nav .nav-link.active::before {
+    background-color: #20c997; /* 더 밝은 청록색 */
+}
+
+/* 로그아웃 버튼 스타일 조정 */
+.btn-link.nav-link {
+    border: none;
+    background: none;
+    text-decoration: none;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.btn-link.nav-link:hover {
+    color: #20c997 !important; /* 더 밝은 청록색 */
+    text-decoration: none;
+}
+
+/* 사용자명 링크 스타일 */
+#username-display {
+    transition: color 0.3s ease;
+}
+
+#username-display:hover {
+    color: #20c997 !important; /* 더 밝은 청록색 */
+    text-decoration: underline !important;
+}
+
+/* Guest 사용자는 hover 효과 제거 */
+#username-display.guest-user {
+    cursor: default;
+}
+
+#username-display.guest-user:hover {
+    color: #ffffff !important; /* 원래 색상 유지 */
+    text-decoration: none !important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const usernameDisplay = document.getElementById('username-display');
+    if (usernameDisplay) {
+        const userEmail = '{{ user.email|escapejs }}';
+        const isStaff = {{ user.is_staff|yesno:"true,false" }};
+        
+        if (userEmail) {
+            // 관리자인 경우 "관리자"로 표시
+            if (isStaff) {
+                usernameDisplay.textContent = '관리자님';
+            } else {
+                const username = userEmail.split('@')[0];
+                usernameDisplay.textContent = username + '님';
+            }
+            
+            // Guest 사용자인 경우 특별 처리
+            if (userEmail === 'guest@labeasylabel.com') {
+                usernameDisplay.classList.add('guest-user');
+            }
+        }
+    }
+    
+    // 메가메뉴 동작 (모바일 제외)
+    if (window.innerWidth > 992) {
+        const navItems = document.querySelectorAll('.navbar-nav .nav-item.dropdown');
+        const menuColumns = document.querySelectorAll('.menu-column');
+        let hideTimeout;
+        
+        // 각 대메뉴 아래에 해당 메뉴 컬럼 배치
+        menuColumns.forEach(column => {
+            const menuType = column.getAttribute('data-menu');
+            const correspondingNavItem = document.querySelector(`.navbar-nav .nav-item[data-menu="${menuType}"]`);
+            if (correspondingNavItem) {
+                correspondingNavItem.appendChild(column);
+            }
+        });
+        
+        navItems.forEach(navItem => {
+            const menuColumn = navItem.querySelector('.menu-column');
+            if (!menuColumn) return;
+            
+            navItem.addEventListener('mouseenter', function() {
+                clearTimeout(hideTimeout);
+                // 모든 메뉴 컬럼 숨기기
+                menuColumns.forEach(col => col.classList.remove('active'));
+                // 해당 메뉴만 표시
+                menuColumn.classList.add('active');
+            });
+            
+            navItem.addEventListener('mouseleave', function(e) {
+                // 메뉴 컬럼으로 이동하지 않은 경우
+                if (!menuColumn.contains(e.relatedTarget)) {
+                    hideTimeout = setTimeout(() => {
+                        menuColumn.classList.remove('active');
+                    }, 200);
+                }
+            });
+            
+            if (menuColumn) {
+                menuColumn.addEventListener('mouseenter', function() {
+                    clearTimeout(hideTimeout);
+                });
+                
+                menuColumn.addEventListener('mouseleave', function() {
+                    hideTimeout = setTimeout(() => {
+                        menuColumn.classList.remove('active');
+                    }, 200);
+                });
+            }
+        });
+    }
+    
+    // 신규 작성(상세) 버튼 클릭 이벤트
+    const createDetailedBtn = document.getElementById('create-detailed-label');
+    
+    if (createDetailedBtn) {
+        createDetailedBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            createNewLabel('detailed');
+        });
+    }
+    
+    function createNewLabel(mode) {
+        fetch('{% url "label:create_new_label" %}?mode=' + mode, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ mode: mode })
+        })
+        .then(response => {
+            // 401 Unauthorized - 로그인 필요
+            if (response.status === 401) {
+                return response.json().then(data => {
+                    // mode를 포함한 create_new_label URL로 리다이렉트
+                    const loginUrl = data.login_url || '{% url "user_management:login" %}';
+                    const createUrl = '{% url "label:create_new_label" %}?mode=' + mode;
+                    window.location.href = `${loginUrl}?next=${encodeURIComponent(createUrl)}`;
+                    return null;
+                });
+            }
+            
+            // 정상 응답
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            return response.json();
+        })
+        .then(data => {
+            if (!data) return; // 로그인 리다이렉트된 경우
+            
+            if (data.success) {
+                window.location.href = data.redirect_url;
+            } else {
+                alert('표시사항 생성 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('표시사항 생성 중 오류가 발생했습니다.');
+        });
+    }
+});
+</script>

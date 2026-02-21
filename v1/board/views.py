@@ -36,6 +36,23 @@ def log_board_activity(request, action, target_id=None):
         pass
 
 
+def _board_template(request, v2_template):
+    """UI 모드에 따라 board 템플릿 이름을 반환합니다."""
+    if request.session.get('ui_mode', 'v2') == 'v1':
+        return v2_template.replace('.html', '_v1.html')
+    return v2_template
+
+
+class UIModeMixin:
+    """세션의 ui_mode에 따라 V1/V2 템플릿을 동적으로 선택하는 Mixin."""
+
+    def get_template_names(self):
+        base_templates = super().get_template_names()
+        if self.request.session.get('ui_mode', 'v2') == 'v1':
+            return [t.replace('.html', '_v1.html') for t in base_templates]
+        return base_templates
+
+
 class BoardForm(forms.ModelForm):
     is_hidden = forms.BooleanField(
         label='비밀글',
@@ -109,7 +126,7 @@ class BoardForm(forms.ModelForm):
                 raise forms.ValidationError('이미지 첨부는 관리자만 사용할 수 있습니다.')
         return cleaned_data
 
-class BoardListView(ListView):
+class BoardListView(UIModeMixin, ListView):
     model = Board
     template_name = 'board/list.html'
     context_object_name = 'boards'
@@ -212,7 +229,7 @@ class BoardListView(ListView):
         
         return context
 
-class BoardDetailView(DetailView):
+class BoardDetailView(UIModeMixin, DetailView):
     model = Board
     template_name = 'board/detail.html'
 
@@ -230,7 +247,7 @@ class BoardDetailView(DetailView):
         context = self.get_context_data()
         return self.render_to_response(context)
 
-class BoardCreateView(LoginRequiredMixin, CreateView):
+class BoardCreateView(UIModeMixin, LoginRequiredMixin, CreateView):
     model = Board
     form_class = BoardForm
     template_name = 'board/form.html'
@@ -284,7 +301,7 @@ class BoardCreateView(LoginRequiredMixin, CreateView):
     def get_success_url(self):
         return reverse_lazy('board:detail', kwargs={'pk': self.object.pk})
 
-class BoardUpdateView(LoginRequiredMixin, UpdateView):
+class BoardUpdateView(UIModeMixin, LoginRequiredMixin, UpdateView):
     model = Board
     form_class = BoardForm
     template_name = 'board/form.html'
@@ -361,7 +378,7 @@ class BoardUpdateView(LoginRequiredMixin, UpdateView):
     def get_success_url(self):
         return reverse_lazy('board:detail', kwargs={'pk': self.object.pk})
 
-class BoardDeleteView(LoginRequiredMixin, DeleteView):
+class BoardDeleteView(UIModeMixin, LoginRequiredMixin, DeleteView):
     model = Board
     template_name = 'board/confirm_delete.html'
     success_url = reverse_lazy('board:list')
@@ -419,7 +436,7 @@ def edit_comment(request, pk):
         comment.save()
         messages.success(request, '답변이 수정되었습니다.')
         return redirect('board:detail', pk=comment.board.pk)
-    return render(request, 'board/edit_comment.html', {'comment': comment})
+    return render(request, _board_template(request, 'board/edit_comment.html'), {'comment': comment})
 
 @login_required
 @require_POST

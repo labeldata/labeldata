@@ -189,6 +189,48 @@ body {
     font-weight:      600;
 }
 
+.v2-sidebar-footer {
+    flex-shrink: 0;
+    padding: 12px 8px 4px;
+    border-top: 1px solid #e8eaed;
+}
+.v2-sf-copy {
+    margin: 0 0 4px;
+    font-size: 11px;
+    color: #80868b;
+    font-weight: 400;
+    letter-spacing: 0;
+}
+.v2-sf-links {
+    margin: 0;
+    font-size: 11px;
+    color: #80868b;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.v2-sf-links a {
+    color: #80868b;
+    text-decoration: none;
+}
+.v2-sf-links a:hover {
+    text-decoration: underline;
+    color: #1a73e8;
+}
+.v2-sf-dot {
+    color: #bdc1c6;
+    font-size: 10px;
+}
+
+.v2-sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #e0e0e0 transparent;
+}
+
 .v2-main {
     flex:           1;
     display:        flex;
