@@ -762,8 +762,12 @@ function addLinkedLabelsButton(my_ingredient_id) {
             btn.id = 'linkedLabelsViewBtn';
             btn.innerHTML = `연결된 표시사항(<span id="linkedLabelsCount">${data.count}</span>품목) 조회`;
             btn.onclick = function() {
-                // 리스트보기와 동일하게 이동
-                window.location.href = '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
+                // v2 컨텍스트이면 제품 관리(product_explorer)로, 아니면 v1 표시사항 목록으로 이동
+                const isV2 = !!document.querySelector('.v2-wrapper');
+                const url = isV2
+                    ? '/products/explorer/?ingredient_id=' + encodeURIComponent(my_ingredient_id)
+                    : '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
+                window.location.href = url;
             };
             // '원료 수정' 텍스트 옆에 삽입 (예시: id가 ingredientTitle인 요소 옆)
             const titleElem = document.getElementById('ingredientEditTitle') || document.querySelector('.ingredient-edit-title');
@@ -780,10 +784,15 @@ function updateLinkedLabelsButton(my_ingredient_id) {
     fetch(`/label/linked-labels-count/${my_ingredient_id}/`)
         .then(res => res.json())
         .then(data => {
-            btn.innerHTML = `연결된 표시사항(<span id="linkedLabelsCount">${data.count}</span>품목) 조회`;
+            btn.innerHTML = `<i class="bi bi-link-45deg"></i> 연결 표시사항(<span id="linkedLabelsCount">${data.count}</span>품목)`;
             btn.onclick = function() {
                 if (data.count && data.count > 0) {
-                    window.location.href = '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
+                    // v2 컨텍스트이면 제품 관리(product_explorer)로, 아니면 v1 표시사항 목록으로 이동
+                    const isV2 = !!document.querySelector('.v2-wrapper');
+                    const url = isV2
+                        ? '/products/explorer/?ingredient_id=' + encodeURIComponent(my_ingredient_id)
+                        : '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
+                    window.location.href = url;
                 } else {
                     alert('연결된 표시사항이 없습니다.');
                 }

@@ -63,6 +63,12 @@
             </button>
             {% endif %}
         </div>
+        {% if not can_upload_documents %}
+        <div class="ms-auto flex-shrink-0 d-flex align-items-center gap-2 ps-3">
+            <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>읽기 전용</span>
+            <span class="text-muted" style="font-size:11px;">문서를 업로드하거나 수정할 수 없습니다.</span>
+        </div>
+        {% endif %}
     </div>
 
     <!-- 중간: 필터 & 검색 툴바 -->
@@ -694,7 +700,7 @@
     window.bulkDownloadCompact = function() {
         const ids = getSelectedDocIds();
         if (ids.length === 0) {
-            alert('다운로드할 문서를 선택하세요.');
+            showSnackbar('다운로드할 문서를 선택하세요.', 'warning');
             return;
         }
 
@@ -722,7 +728,7 @@
     window.bulkDeleteCompact = async function() {
         const ids = getSelectedDocIds();
         if (ids.length === 0) {
-            alert('삭제할 문서를 선택하세요.');
+            showSnackbar('삭제할 문서를 선택하세요.', 'warning');
             return;
         }
         if (!confirm(`${ids.length}개의 문서를 삭제하시겠습니까?`)) {
@@ -739,10 +745,11 @@
         });
         const result = await response.json();
         if (result.success) {
-            alert(result.message || '삭제되었습니다.');
+            showSnackbar(result.message || '삭제되었습니다.', 'success');
+            sessionStorage.setItem('returnToTab', 'docs');
             location.reload();
         } else {
-            alert(result.error || '삭제 중 오류가 발생했습니다.');
+            showSnackbar(result.error || '삭제 중 오류가 발생했습니다.', 'error');
         }
     };
 
@@ -750,7 +757,7 @@
     window.openEditPanel = function(docId) {
         const doc = documentData[docId];
         if (!doc) {
-            alert('문서 정보를 찾을 수 없습니다.');
+            showSnackbar('문서 정보를 찾을 수 없습니다.', 'error');
             return;
         }
 
@@ -899,17 +906,16 @@
             const result = await response.json();
             
             if (result.success) {
-                alert('문서 정보가 업데이트되었습니다.');
+                showSnackbar('문서 정보가 업데이트되었습니다.', 'success');
                 closeEditPanel();
-                // 현재 탭 유지하면서 새로고침
-                window.location.hash = '#tab-docs';
+                sessionStorage.setItem('returnToTab', 'docs');
                 window.location.reload();
             } else {
-                alert(result.error || '업데이트 중 오류가 발생했습니다.');
+                showSnackbar(result.error || '업데이트 중 오류가 발생했습니다.', 'error');
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('업데이트 중 오류가 발생했습니다.');
+            showSnackbar('업데이트 중 오류가 발생했습니다.', 'error');
         }
     };
     
@@ -943,7 +949,7 @@
             if (typeof openUploadModal === 'function') {
                 openUploadModal(slotId, docTypeName, docTypeId);
             } else {
-                alert('업로드 기능을 사용할 수 없습니다.');
+                showSnackbar('업로드 기능을 사용할 수 없습니다.', 'error');
             }
         }
     };
@@ -959,19 +965,16 @@
         if (slotId && docTypeName && docTypeId && typeof openUploadModal === 'function') {
             openUploadModal(slotId, docTypeName, docTypeId);
         } else {
-            alert('업로드 기능을 사용할 수 없습니다.');
+            showSnackbar('업로드 기능을 사용할 수 없습니다.', 'error');
         }
     };
 
     window.openAddSlotModal = function() {
-        console.log('[openAddSlotModal] 함수 호출됨');
-        
         const modalEl = document.getElementById('addSlotModal');
-        console.log('[openAddSlotModal] 모달 요소:', modalEl);
         
         if (!modalEl) {
             console.error('addSlotModal element not found');
-            alert('모달을 찾을 수 없습니다.');
+            showSnackbar('모달을 찾을 수 없습니다.', 'error');
             return;
         }
         
@@ -984,18 +987,13 @@
         // 모달 표시
         const modal = new bootstrap.Modal(modalEl);
         modal.show();
-        
-        console.log('[openAddSlotModal] 모달 표시 완료');
     };
 
     window.submitAddSlot = async function() {
-        console.log('[submitAddSlot] 함수 호출됨');
-        
         const select = document.getElementById('add-slot-type-select');
-        console.log('[submitAddSlot] 선택된 값:', select?.value);
         
         if (!select || !select.value) {
-            alert('추가할 문서를 선택하세요.');
+            showSnackbar('추가할 문서를 선택하세요.', 'warning');
             return;
         }
 
@@ -1003,7 +1001,6 @@
             const modalEl = document.getElementById('addSlotModal');
             const modal = bootstrap.Modal.getInstance(modalEl);
 
-            console.log('[submitAddSlot] API 호출 시작');
             const response = await fetch(`/products/slots/add/{{ product.my_label_id }}/`, {
                 method: 'POST',
                 headers: {
@@ -1013,20 +1010,19 @@
                 body: JSON.stringify({ document_type_id: select.value })
             });
 
-            console.log('[submitAddSlot] 응답 상태:', response.status);
             const result = await response.json();
-            console.log('[submitAddSlot] 응답 데이터:', result);
             
             if (result.success) {
                 if (modal) modal.hide();
-                alert(result.message || '문서가 추가되었습니다.');
+                showSnackbar(result.message || '문서가 추가되었습니다.', 'success');
+                sessionStorage.setItem('returnToTab', 'docs');
                 location.reload();
             } else {
-                alert(result.error || '문서 추가 중 오류가 발생했습니다.');
+                showSnackbar(result.error || '문서 추가 중 오류가 발생했습니다.', 'error');
             }
         } catch (error) {
             console.error('[submitAddSlot] Error:', error);
-            alert('문서 추가 중 오류가 발생했습니다: ' + error.message);
+            showSnackbar('문서 추가 중 오류가 발생했습니다: ' + error.message, 'error');
         }
     };
 </script>

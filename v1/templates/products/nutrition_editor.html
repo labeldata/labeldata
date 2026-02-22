@@ -16,229 +16,8 @@
     
     <!-- V1 영양성분 계산기 스타일 -->
     <link href="{% static 'css/label_calculator.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
-    
-    <style>
-        :root {
-            --primary-color: #3b82f6;
-            --bg-gray: #f8f9fa;
-            --border-color: #e5e7eb;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Noto Sans KR', sans-serif;
-            background: #ffffff;
-            overflow: hidden;
-        }
-        
-        #nutrition-container {
-            display: flex;
-            height: 100vh;
-            width: 100%;
-        }
-        
-        /* 왼쪽 입력 패널 */
-        #input-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 12px;
-            border-right: 1px solid var(--border-color);
-            min-width: 0;
-            overflow-x: hidden;
-            overflow-y: auto;
-        }
-        
-        .panel-header {
-            margin-bottom: 16px;
-        }
-        
-        .panel-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 12px;
-        }
-        
-        .config-section {
-            background: var(--bg-gray);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 6px 8px;
-            margin-bottom: 6px;
-        }
-        
-        .config-row {
-            display: flex;
-            gap: 24px;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        
-        .config-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex: 0 0 auto;
-        }
-        
-        .config-label {
-            font-size: 14px;
-            font-weight: 500;
-            color: #374151;
-            white-space: nowrap;
-            min-width: auto;
-        }
-        
-        .unit-label {
-            font-size: 14px;
-            color: #6b7280;
-        }
-
-        .config-section .form-control,
-        .config-section .form-select {
-            height: 28px;
-            min-height: 28px;
-            padding: 0 6px;
-            font-size: 14px;
-        }
-        
-        #grid-container {
-            flex: 1 1 auto;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            overflow-x: hidden;
-            overflow-y: hidden;
-            width: 100%;
-            height: auto;
-            min-height: 300px;
-            max-width: none;
-            min-height: 300px;
-            margin: 0;
-            padding: 0;
-            align-self: stretch;
-        }
-        
-        #nutrition-grid {
-            height: auto;
-            width: 100%;
-        }
-        
-        /* 오른쪽 미리보기 패널 */
-        #preview-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: var(--bg-gray);
-            overflow-y: auto;
-        }
-        
-            #nutrition-grid .handsontable .ht_master,
-            #nutrition-grid .handsontable .wtHider,
-            #nutrition-grid .handsontable .wtHolder {
-                width: 100% !important;
-                max-width: 100% !important;
-                overflow-x: hidden !important;
-            }
-        
-        .preview-header {
-            padding: 20px;
-            background: #ffffff;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .preview-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #1f2937;
-            margin-bottom: 12px;
-        }
-        
-        .style-selector {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-        
-        .style-btn {
-            padding: 6px 8px;
-            font-size: 12px;
-            border: 1px solid #d1d5db;
-            background: #ffffff;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .style-btn:hover {
-            background: #f3f4f6;
-        }
-        
-        .style-btn.active {
-            background: #3b82f6;
-            color: white;
-            border-color: #3b82f6;
-        }
-        
-        .preview-buttons {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-        
-        .preview-content {
-            flex: 1;
-            padding: 20px;
-        }
-        
-        .result-display {
-            background: #ffffff;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            min-height: 400px;
-        }
-        
-        .empty-result {
-            text-align: center;
-            color: #6b7280;
-            padding: 60px 20px;
-        }
-        
-        .preview-controls {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: nowrap;
-        }
-
-        .control-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: #374151;
-            min-width: 52px;
-        }
-
-        .control-group .style-selector {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 0;
-        }
-    </style>
+    <!-- 영양성분 편집기 전용 스타일 -->
+    <link href="{% static 'css/nutrition_editor.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
 </head>
 <body>
 
@@ -247,14 +26,14 @@
 </script>
 
 <div id="nutrition-container">
-    {% if not can_edit %}
-    <div class="alert alert-secondary alert-dismissible m-2 py-2 d-flex align-items-center" role="alert" style="border-radius:6px;">
-        <i class="bi bi-lock-fill me-2"></i>
-        <span><strong>읽기 전용</strong> — 현재 역할(뷰어/검토자)로는 영양성분을 수정할 수 없습니다. 미리보기는 가능합니다.</span>
-    </div>
-    {% endif %}
     <!-- 왼쪽: 입력 패널 -->
     <div id="input-panel">
+        {% if not can_edit %}
+        <div class="d-flex align-items-center gap-2 mb-2 px-1 py-1">
+            <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>읽기 전용</span>
+            <span class="text-muted" style="font-size:12px;">현재 역할로는 영양성분을 수정할 수 없습니다.</span>
+        </div>
+        {% endif %}
         <!-- 기본 설정 -->
         <div class="config-section">
             <div class="config-row">
@@ -425,6 +204,15 @@ const ALL_NUTRIENTS = [
     { field: 'vitamin_b12', label: '비타민B12', unit: 'μg', unitOptions: ['μg'] }
 ];
 
+// 컨테이너 너비 기준 비율 콜너비 계산
+// 비율: 영양성분명(30%) : 함량(27%) : 단위(20%) : 판정(23%)
+function getNutritionColWidths() {
+    const container = document.getElementById('grid-container');
+    const w = (container && container.clientWidth > 10) ? container.clientWidth : 600;
+    const ratios = [0.30, 0.27, 0.20, 0.23];
+    return ratios.map(r => Math.max(60, Math.floor(w * r)));
+}
+
 // Handsontable 초기화 - 세로 형식 (25개 행)
 function initGrid() {
     const container = document.getElementById('nutrition-grid');
@@ -444,13 +232,11 @@ function initGrid() {
         columns: [
             {
                 type: 'text',
-                readOnly: true,
-                width: 180
+                readOnly: true
             },
             {
                 type: 'numeric',
                 numericFormat: { pattern: '0.00' },
-                width: 160,
                 readOnly: !CAN_EDIT
             },
             {
@@ -460,13 +246,11 @@ function initGrid() {
                     const nutrient = ALL_NUTRIENTS[row];
                     process(nutrient.unitOptions);
                 },
-                width: 120,
                 readOnly: !CAN_EDIT
             },
             {
                 type: 'text',
-                readOnly: true,
-                width: 140
+                readOnly: true
             }
         ],
         rowHeaders: false,
@@ -480,7 +264,7 @@ function initGrid() {
         manualColumnResize: false,
         autoWrapRow: false,
         autoWrapCol: false,
-        colWidths: [180, 160, 120, 140],
+        colWidths: getNutritionColWidths(),
         afterChange: function(changes, source) {
             if (source === 'loadData' || source === 'internal') {
                 return;
@@ -488,6 +272,22 @@ function initGrid() {
             calculateAndPreview();
         }
     });
+
+    // 컨테이너 크기 변경 시 컬럼 너비 자동 재계산 (반응형)
+    const gridContainer = document.getElementById('grid-container');
+    if (gridContainer && window.ResizeObserver) {
+        let resizeTimer;
+        const resizeObserver = new ResizeObserver(() => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (hot) {
+                    hot.updateSettings({ colWidths: getNutritionColWidths() });
+                    hot.render();
+                }
+            }, 50);
+        });
+        resizeObserver.observe(gridContainer);
+    }
 }
 
 // 그리드 데이터를 영양성분 객체로 변환
@@ -719,14 +519,14 @@ async function loadData() {
         
     } catch (error) {
         updateStatus(`❌ 오류: ${error.message}`);
-        alert('영양성분 데이터를 불러오는데 실패했습니다.\n\n오류: ' + error.message + '\n\nLABEL_ID: ' + LABEL_ID);
+        showSnackbar('영양성분 데이터 로드에 실패했습니다: ' + error.message, 'error');
     }
 }
 
 // 데이터 저장
 async function saveData() {
     if (!CAN_EDIT) {
-        alert('영양성분 편집 권한이 없습니다.\n현재 역할로는 영양성분을 수정할 수 없습니다.');
+        showSnackbar('영양성분 편집 권한이 없습니다. 현재 역할로는 영양성분을 수정할 수 없습니다.', 'warning');
         return;
     }
     try {
@@ -765,19 +565,21 @@ async function saveData() {
         }
         
         const result = await response.json();
-        alert('영양성분이 성공적으로 저장되었습니다.');
-        
-        // 부모 창에 저장 완료 알림
+
+        // 부모(product_detail) 안에 있으면 부모 Snackbar 사용, 단독 실행 시 자체 Snackbar
         if (window.parent && window.parent !== window) {
             window.parent.postMessage({
                 type: 'nutritionSaved',
+                message: '영양성분이 저장되었습니다.',
                 labelId: LABEL_ID
             }, '*');
+        } else {
+            showSnackbar('영양성분이 저장되었습니다.', 'success');
         }
         
     } catch (error) {
         console.error('[NutritionEditor] saveData 오류:', error);
-        alert('영양성분 저장에 실패했습니다.\n\n오류: ' + error.message);
+        showSnackbar('영양성분 저장에 실패했습니다: ' + error.message, 'error');
     }
 }
 
@@ -842,6 +644,35 @@ document.addEventListener('DOMContentLoaded', function() {
         updateStatus('❌ 데이터 로드 오류: ' + error.message);
     }
 });
+</script>
+
+<!-- 구글 Material Snackbar -->
+<div id="v2Snackbar" aria-live="polite">
+  <span id="v2SnackbarMsg"></span>
+  <button onclick="hideSnackbar()">닫기</button>
+</div>
+<script>
+(function(){
+  var _t = null;
+  window.showSnackbar = function(message, type) {
+    var el = document.getElementById('v2Snackbar');
+    var msg = document.getElementById('v2SnackbarMsg');
+    if (!el || !msg) return;
+    if (_t) { clearTimeout(_t); _t = null; }
+    el.classList.remove('snack-show','snack-error','snack-warning');
+    msg.textContent = message;
+    if (type === 'error') el.classList.add('snack-error');
+    else if (type === 'warning') el.classList.add('snack-warning');
+    void el.offsetWidth;
+    el.classList.add('snack-show');
+    _t = setTimeout(window.hideSnackbar, (type==='error'||type==='warning') ? 6000 : 4000);
+  };
+  window.hideSnackbar = function() {
+    var el = document.getElementById('v2Snackbar');
+    if (el) el.classList.remove('snack-show','snack-error','snack-warning');
+    if (_t) { clearTimeout(_t); _t = null; }
+  };
+})();
 </script>
 
 </body>

@@ -1,4 +1,10 @@
 <div class="permission-workspace">
+    {% if user_role != 'OWNER' %}
+    <div class="d-flex align-items-center gap-2 px-4 py-2 border-bottom bg-light flex-shrink-0">
+        <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>읽기 전용</span>
+        <span class="text-muted" style="font-size:12px;">현재 역할로는 권한을 관리할 수 없습니다. 권한 관리는 오너만 가능합니다.</span>
+    </div>
+    {% endif %}
     <!-- 3-column 레이아웃 -->
     <div class="permission-layout">
         <!-- 왼쪽: People Palette (인물 목록) -->
@@ -135,15 +141,19 @@
 
             <!-- ① 작성 중 (기초 작성) — 오너 + 공동 작성자 -->
             <div class="dropzone-card accent-top-draft {% if product_status == 'DRAFT' %}stage-active{% endif %}" data-role="OWNER">
+                <div class="step-indicator-col">
+                    <div class="step-number-badge">1</div>
+                    <div class="step-vline"></div>
+                </div>
                 <div class="dropzone-header">
-                    <span class="badge bg-secondary text-white">STAGE 1</span>
+                    <span class="badge bg-secondary text-white">STEP 1</span>
                     <div class="fw-bold">작성 중 <small class="text-muted">(기초 작성)</small></div>
                     <div class="text-muted small">오너 · 공동 작성자</div>
                     {% if product_status == 'DRAFT' %}<span class="badge bg-primary-subtle text-primary ms-auto" style="font-size:10px;">현재 단계</span>{% endif %}
                 </div>
-                <div class="dropzone-body" id="dropzone-owner" style="gap:4px;">
+                <div class="dropzone-body" id="dropzone-owner">
                     <!-- Owner (고정) -->
-                    <div class="person-card owner-card mb-1">
+                    <div class="person-card owner-card">
                         <div class="avatar bg-secondary text-white">{{ label_owner.username|slice:":1" }}</div>
                         <div class="person-info">
                             <div class="person-name">{{ label_owner.username }}</div>
@@ -152,7 +162,7 @@
                         <span class="badge bg-secondary" style="font-size:9px;">Owner</span>
                     </div>
                     <!-- EDITOR 드롭존 (공동 작성자) -->
-                    <div id="dropzone-editor" ondrop="dropPerson(event, 'EDITOR')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)" style="width:100%; min-height:48px;">
+                    <div id="dropzone-editor" ondrop="dropPerson(event, 'EDITOR')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)" style="flex:1; min-width:180px; min-height:40px; display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; align-content:flex-start;">
                         {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'EDITOR' %}
                         <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                             data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
@@ -176,8 +186,12 @@
 
             <!-- ② 자료 요청 (자료 제출) — 협력업체 -->
             <div class="dropzone-card accent-top-uploader {% if product_status == 'REQUESTING' %}stage-active{% endif %}" data-role="UPLOADER">
+                <div class="step-indicator-col">
+                    <div class="step-number-badge">2</div>
+                    <div class="step-vline"></div>
+                </div>
                 <div class="dropzone-header">
-                    <span class="badge bg-primary text-white">STAGE 2</span>
+                    <span class="badge bg-primary text-white">STEP 2</span>
                     <div class="fw-bold">자료 요청 <small class="text-muted">(자료 제출)</small></div>
                     <div class="text-muted small">협력업체</div>
                     {% if product_status == 'REQUESTING' %}<span class="badge bg-primary-subtle text-primary ms-auto" style="font-size:10px;">현재 단계</span>{% endif %}
@@ -205,8 +219,12 @@
 
             <!-- ③ 제출 완료 / 검토 중 — 검토자 -->
             <div class="dropzone-card accent-top-reviewer {% if product_status == 'SUBMITTED' or product_status == 'REVIEW' %}stage-active{% endif %}" data-role="REVIEWER">
+                <div class="step-indicator-col">
+                    <div class="step-number-badge">3</div>
+                    <div class="step-vline"></div>
+                </div>
                 <div class="dropzone-header">
-                    <span class="badge bg-warning text-dark">STAGE 3</span>
+                    <span class="badge bg-warning text-dark">STEP 3</span>
                     <div class="fw-bold">검토 중 <small class="text-muted">(검토 요청)</small></div>
                     <div class="text-muted small">검토자</div>
                     {% if product_status == 'SUBMITTED' or product_status == 'REVIEW' %}<span class="badge bg-warning-subtle text-warning-emphasis ms-auto" style="font-size:10px;">현재 단계</span>{% endif %}
@@ -234,8 +252,12 @@
 
             <!-- ④ 승인 대기 — 책임자 -->
             <div class="dropzone-card accent-top-approver {% if product_status == 'PENDING' %}stage-active{% endif %}" data-role="APPROVER">
+                <div class="step-indicator-col">
+                    <div class="step-number-badge">4</div>
+                    <div class="step-vline"></div>
+                </div>
                 <div class="dropzone-header">
-                    <span class="badge bg-danger text-white">STAGE 4</span>
+                    <span class="badge bg-danger text-white">STEP 4</span>
                     <div class="fw-bold">승인 대기 <small class="text-muted">(최종 승인)</small></div>
                     <div class="text-muted small">책임자</div>
                     {% if product_status == 'PENDING' %}<span class="badge bg-danger-subtle text-danger ms-auto" style="font-size:10px;">현재 단계</span>{% endif %}
@@ -262,7 +284,11 @@
             </div>
 
             <!-- 뷰어 (읽기 전용 — 단계 무관) -->
-            <div class="dropzone-card accent-top-viewer" data-role="VIEWER" style="border-style: dashed;">
+            <div class="dropzone-card accent-top-viewer" data-role="VIEWER">
+                <div class="step-indicator-col">
+                    <div class="step-number-badge" style="background:#c8e6c9; color:#2e7d32;"><i class="bi bi-eye" style="font-size:11px;"></i></div>
+                    <div class="step-vline"></div>
+                </div>
                 <div class="dropzone-header">
                     <span class="badge bg-info text-white">읽기 전용</span>
                     <div class="fw-bold">뷰어</div>
@@ -376,13 +402,30 @@
     height: auto !important;
 }
 
+/* 반응형: 좁은 화면에서 권한 그리드 열 축소 */
+@media (max-width: 1308px) {
+    .permission-layout {
+        grid-template-columns: 220px 1fr 260px !important;
+        gap: 12px !important;
+    }
+}
+@media (max-width: 1050px) {
+    .permission-layout {
+        grid-template-columns: 200px 1fr 220px !important;
+        gap: 10px !important;
+    }
+}
+
 /* 현재 단계 강조 */
 .dropzone-card.stage-active {
-    border: 2px solid #1a73e8 !important;
-    box-shadow: 0 0 0 3px rgba(26,115,232,0.15);
+    border-color: #1a73e8 !important;
+    box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
+}
+.dropzone-card.stage-active .step-indicator-col {
+    background: rgba(26,115,232,0.07);
 }
 .dropzone-card.stage-active .dropzone-header {
-    background: rgba(26,115,232,0.06);
+    background: rgba(26,115,232,0.04);
 }
 </style>
 
@@ -626,7 +669,7 @@ function dropPerson(event, role) {
     if (!shareId) {
         /* 현재 제품 공유 없음 → 초대하면서 역할 지정 (새로고침 필요) */
         var labelId = _labelId();
-        if (!labelId) { alert('라벨 ID를 찾을 수 없습니다.'); return; }
+        if (!labelId) { showSnackbar('라벨 ID를 찾을 수 없습니다.', 'error'); return; }
         _permPost('/products/share/create/' + labelId + '/', {
             email:   data.email,
             role:    role,
@@ -635,9 +678,9 @@ function dropPerson(event, role) {
         })
         .then(function(res) {
             if (res.success) _reloadToPermissions();
-            else alert(res.error || '초대에 실패했습니다.');
+            else showSnackbar(res.error || '초대에 실패했습니다.', 'error');
         })
-        .catch(function(err) { alert('초대 오류: ' + (err && err.message ? err.message : err)); });
+        .catch(function(err) { showSnackbar('초대 오류: ' + (err && err.message ? err.message : err), 'error'); });
         return;
     }
 
@@ -661,12 +704,12 @@ function dropPerson(event, role) {
     _permPost('/products/share/' + shareId + '/update-permission/', { role: role })
     .then(function(res) {
         if (!res.success) {
-            alert(res.error || '역할 변경에 실패했습니다. 새로고침합니다.');
+            showSnackbar(res.error || '역할 변경에 실패했습니다. 새로고침합니다.', 'error');
             _reloadToPermissions();
         }
     })
     .catch(function(err) {
-        alert('역할 변경 오류: ' + (err && err.message ? err.message : err) + '\n새로고침합니다.');
+        showSnackbar('역할 변경 오류: ' + (err && err.message ? err.message : err), 'error');
         _reloadToPermissions();
     });
 }
@@ -693,13 +736,13 @@ function dropPersonToPalette(event) {
     _permPost('/products/share/' + shareId + '/revoke/', {})
     .then(function(res) {
         if (!res.success) {
-            alert(res.error || '권한 제거에 실패했습니다. 새로고침합니다.');
+            showSnackbar(res.error || '권한 제거에 실패했습니다. 새로고침합니다.', 'error');
             _reloadToPermissions();
         }
         /* 성공: DOM은 이미 낙관적 업데이트됨, 추가 액션 불필요 */
     })
     .catch(function(err) {
-        alert('권한 제거 오류: ' + (err && err.message ? err.message : err) + '\n새로고침합니다.');
+        showSnackbar('권한 제거 오류: ' + (err && err.message ? err.message : err), 'error');
         _reloadToPermissions();
     });
 }
@@ -763,7 +806,7 @@ function savePersonDetails() {
     var content = document.getElementById('person-detail-content');
     if (!content) return;
     var shareId = content.dataset.shareId;
-    if (!shareId) { alert('저장할 공유 정보가 없습니다.'); return; }
+    if (!shareId) { showSnackbar('저장할 공유 정보가 없습니다.', 'warning'); return; }
 
     var name    = (document.getElementById('detail-name-input')    || {}).value || '';
     var company = (document.getElementById('detail-company-input') || {}).value || '';
@@ -772,24 +815,24 @@ function savePersonDetails() {
     _permPost('/products/share/' + shareId + '/update-info/', { name: name, company: company, role: role })
     .then(function(data) {
         if (data.success) _reloadToPermissions();
-        else alert(data.error || '저장에 실패했습니다.');
+        else showSnackbar(data.error || '저장에 실패했습니다.', 'error');
     })
-    .catch(function(err) { alert('저장 오류: ' + (err && err.message ? err.message : err)); });
+    .catch(function(err) { showSnackbar('저장 오류: ' + (err && err.message ? err.message : err), 'error'); });
 }
 
 function deletePerson() {
     var deleteBtn = document.getElementById('delete-person-btn');
     if (!deleteBtn) return;
     var shareId = deleteBtn.dataset.shareId;
-    if (!shareId) { alert('삭제할 공유 정보가 없습니다.'); return; }
+    if (!shareId) { showSnackbar('삭제할 공유 정보가 없습니다.', 'warning'); return; }
     if (!confirm('이 멤버의 공유를 완전히 삭제하시겠습니까?')) return;
 
     _permPost('/products/share/' + shareId + '/revoke/', {})
     .then(function(data) {
         if (data.success) _reloadToPermissions();
-        else alert(data.error || '삭제에 실패했습니다.');
+        else showSnackbar(data.error || '삭제에 실패했습니다.', 'error');
     })
-    .catch(function(err) { alert('삭제 오류: ' + (err && err.message ? err.message : err)); });
+    .catch(function(err) { showSnackbar('삭제 오류: ' + (err && err.message ? err.message : err), 'error'); });
 }
 
 /* ── 패널 토글 ── */
@@ -821,16 +864,16 @@ function filterPalette() {
 function openQuickInvite() {
     var email = prompt('초대할 이메일 주소를 입력하세요:');
     if (email === null) return;
-    if (!email || !email.includes('@')) { alert('유효한 이메일을 입력하세요.'); return; }
+    if (!email || !email.includes('@')) { showSnackbar('유효한 이메일을 입력하세요.', 'warning'); return; }
 
     var labelId = _labelId();
-    if (!labelId) { alert('라벨 ID를 찾을 수 없습니다. 새로고침 후 다시 시도하세요.'); return; }
+    if (!labelId) { showSnackbar('라벨 ID를 찾을 수 없습니다. 새로고침 후 다시 시도하세요.', 'error'); return; }
 
     _permPost('/products/share/create/' + labelId + '/', { email: email, role: 'VIEWER' })
     .then(function(data) {
-        if (data.success) { alert(email + ' 을(를) 초대했습니다.'); _reloadToPermissions(); }
-        else alert(data.error || '초대에 실패했습니다.');
+        if (data.success) { showSnackbar(email + ' 을(를) 초대했습니다.', 'success'); _reloadToPermissions(); }
+        else showSnackbar(data.error || '초대에 실패했습니다.', 'error');
     })
-    .catch(function(err) { alert('초대 오류: ' + (err && err.message ? err.message : err)); });
+    .catch(function(err) { showSnackbar('초대 오류: ' + (err && err.message ? err.message : err), 'error'); });
 }
 </script>

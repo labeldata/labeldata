@@ -243,7 +243,7 @@ body.in-iframe .bom-main-column {
     width:        100%;
     height:       auto;
     min-height:   0;
-    overflow-x:   auto;
+    overflow-x:   hidden;
 }
 
 /* ── 워크스페이스 레이아웃 ────────────────────────────────── */
@@ -363,15 +363,9 @@ body.in-iframe .bom-main-column {
     font-weight: 400;
 }
 
-/* ── 구글 스타일 스크롤바 ─────────────────────────────────── */
-.custom-scrollbar::-webkit-scrollbar       { width: 8px; height: 8px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background:    var(--v2-border);
-    border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
-
+/* ── 스크롤바 ────────────────────────────────────────────── */
+/* .custom-scrollbar 공통 스타일은 products_common.css(섹션 13)에 정의됨    */
+/* bom.css에서는 palette-list 전용 좁은 스크롤바만 추가로 정의합니다.        */
 .palette-list::-webkit-scrollbar       { width: 6px; }
 .palette-list::-webkit-scrollbar-track { background: transparent; }
 .palette-list::-webkit-scrollbar-thumb {

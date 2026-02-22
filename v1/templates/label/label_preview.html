@@ -38,14 +38,18 @@
       <button class="btn btn-info btn-sm" id="validateButton" aria-label="규정 검증">
         <i class="fas fa-check-circle me-1" aria-hidden="true"></i>규정 검증
       </button>
+      {% if is_owner %}
       <button id="saveSettingsBtn" class="btn btn-success btn-sm" aria-label="설정 저장">
         <i class="fas fa-save me-1" aria-hidden="true"></i>설정 저장
       </button>
       {% endif %}
+      {% endif %}
+      {% if can_upload_pdf %}
       <button class="btn btn-primary btn-sm" id="exportPdfBtn" aria-label="PDF 저장">
         <i class="fas fa-file-arrow-down me-1" aria-hidden="true"></i>PDF 저장
       </button>
-      {% if not request.GET.readonly %}
+      {% endif %}
+      {% if not request.GET.readonly and not request.GET.in_tab %}
       <button class="btn btn-secondary btn-sm" onclick="window.close()" aria-label="창 닫기">
         <i class="fas fa-times me-1" aria-hidden="true"></i>닫기
       </button>
@@ -295,9 +299,98 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-  
   <!-- Label Preview JS -->
   <script src="{% static 'js/label/label_preview.js' %}?v=85.2"></script>
+
+  <!-- 구글 스타일 Snackbar -->
+  <div id="previewSnackbar" style="
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(calc(100% + 2rem));
+    background: #323232;
+    color: #fff;
+    padding: 0.75rem 1.25rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: min(480px, calc(100vw - 2rem));
+    z-index: 9999;
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.25s;
+    opacity: 0;
+    pointer-events: none;
+  ">
+    <span id="previewSnackbarMsg" style="flex:1;"></span>
+    <button id="previewSnackbarClose" onclick="hideSnackbar()" style="
+      background: none; border: none; color: #90caf9;
+      font-size: 0.8rem; font-weight: 600; cursor: pointer;
+      padding: 0; flex-shrink: 0; letter-spacing: 0.05em;
+    ">닫기</button>
+  </div>
+  <style>
+    #previewSnackbar.snack-show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #previewSnackbar.snack-error  { background: #b71c1c; }
+    #previewSnackbar.snack-warning { background: #e65100; }
+    #previewSnackbar.snack-success { background: #323232; }
+  </style>
+
+  <script>
+    /* 파라미터
+       is_owner       : 현재 로그인 사용자가 라벨 소유자인지 여부
+       can_upload_pdf : PDF 문서함 업로드 권한 여부 */
+    const IS_OWNER       = {{ is_owner|yesno:'true,false' }};
+    const CAN_UPLOAD_PDF = {{ can_upload_pdf|yesno:'true,false' }};
+
+    /* Snackbar 헬퍼 (구글 Material 스타일)
+       - 아이프레임 내에 있을 때(고정 Snackbar가 클리핑될 수 있음) 포스트메시지로 부모에서 표시
+       - 단독 실행 시에만 로컈 Snackbar 사용
+       - type: 'success' | 'error' | 'warning' | 'info' */
+    let _snackTimer = null;
+    function showPreviewToast(message, type) {
+      // iframe 안에 있으면 부모 페이지로 postMessage 전달
+      if (window.self !== window.top) {
+        try {
+          window.parent.postMessage({ type: 'showSnackbar', message: message, snackType: type || 'success' }, '*');
+        } catch(e) {}
+        return;
+      }
+      // 단독 페이지: 로컈 Snackbar
+      const el  = document.getElementById('previewSnackbar');
+      const msg = document.getElementById('previewSnackbarMsg');
+      if (!el || !msg) return;
+
+      // 이전 타이머 취소
+      if (_snackTimer) { clearTimeout(_snackTimer); _snackTimer = null; }
+
+      // 타입별 색상 클래스 리셋
+      el.classList.remove('snack-show', 'snack-error', 'snack-warning', 'snack-success');
+
+      msg.textContent = message;
+      if (type === 'error')   el.classList.add('snack-error');
+      else if (type === 'warning') el.classList.add('snack-warning');
+      else                    el.classList.add('snack-success');
+
+      // 강제 reflow 후 슬라이드-업
+      void el.offsetWidth;
+      el.classList.add('snack-show');
+
+      const duration = (type === 'error' || type === 'warning') ? 6000 : 4000;
+      _snackTimer = setTimeout(hideSnackbar, duration);
+    }
+    function hideSnackbar() {
+      const el = document.getElementById('previewSnackbar');
+      if (el) el.classList.remove('snack-show', 'snack-error', 'snack-warning', 'snack-success');
+      if (_snackTimer) { clearTimeout(_snackTimer); _snackTimer = null; }
+    }
+  </script>
   
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -476,7 +569,7 @@
             
             if (selectedContent) {
                 selectedContent.classList.add('active');
-                selectedContent.style.display = 'block';
+                selectedContent.style.display = 'flex'; /* flex column: CSS .preview-tab-content.active 와 연동 */
             }
             
             // localStorage에 현재 탭 저장
@@ -716,11 +809,12 @@
             
             // 항목 순서를 표시사항 작성 페이지와 일치시키기 위한 정렬된 필드 목록
             const ORDERED_FIELDS = [
-                'prdlst_nm', 'ingredient_info', 'prdlst_dcnm', 
-                'prdlst_report_no', 'content_weight', 'country_of_origin',
-                'storage_method', 'frmlc_mtrqlt', 'bssh_nm',
-                'distributor_address', 'repacker_address', 'importer_address',
-                'pog_daycnt', 'rawmtrl_nm_display', 'cautions', 'additional_info'
+                'prdlst_dcnm', 'prdlst_nm', 'ingredient_info',
+                'content_weight', 'weight_calorie', 'prdlst_report_no',
+                'country_of_origin', 'storage_method', 'frmlc_mtrqlt',
+                'bssh_nm', 'distributor_address', 'repacker_address',
+                'importer_address', 'pog_daycnt', 'rawmtrl_nm_display',
+                'cautions', 'additional_info'
                 // 'weight_calorie', 'nutrition_text'
             ];
             
@@ -1628,6 +1722,8 @@
         }
     
         async function exportToPDF() {
+            const pdfBtn = document.getElementById('exportPdfBtn');
+            if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>PDF 생성 중...'; }
             try {
                 // PDF 저장 로깅
                 const urlParams = new URLSearchParams(window.location.search);
@@ -1649,23 +1745,64 @@
                         console.warn('로깅 실패:', logError);
                     }
                 }
-                
+
                 previewContent.style.transform = 'scale(1)';
                 const { jsPDF } = window.jspdf;
                 const canvas = await html2canvas(previewContent, { scale: 3, useCORS: true });
                 const imgData = canvas.toDataURL('image/png');
-                const widthCm = parseFloat(widthInput.value);
+                const widthCm  = parseFloat(widthInput.value);
                 const heightCm = parseFloat(heightInput.value.replace(' cm', ''));
                 const orientation = widthCm > heightCm ? 'l' : 'p';
                 const pdf = new jsPDF(orientation, 'cm', [widthCm, heightCm]);
                 pdf.addImage(imgData, 'PNG', 0, 0, widthCm, heightCm);
+
                 const productName = checkedFields.prdlst_nm || 'label';
-                const date = new Date().toISOString().slice(0,10).replace(/-/g,"");
-                pdf.save(`한글표시사항_${productName}_${date}.pdf`);
+                const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                const filename = `한글표시사항_${productName}_${date}.pdf`;
+
+                // 로컬 다운로드
+                pdf.save(filename);
+
+                // 서버 업로드 (문서함 등록) 라벨ID가 있는 경우만
+                if (labelId) {
+                    try {
+                        if (pdfBtn) { pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>문서함 등록 중...'; }
+
+                        const pdfBlob = pdf.output('blob');
+                        const formData = new FormData();
+                        formData.append('label_id', labelId);
+                        formData.append('pdf_file', pdfBlob, filename);
+
+                        const uploadRes = await fetch('/label/upload-label-pdf/', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                            body: formData,
+                        });
+                        const uploadJson = await uploadRes.json();
+
+                        if (uploadJson.success) {
+                            const msg = uploadJson.updated
+                                ? `문서함에 한글표시사항도안이 업데이트되었습니다. (버전 ${uploadJson.version})`
+                                : '문서함에 한글표시사항도안이 등록되었습니다.';
+                            showPreviewToast(msg, 'success');
+                        } else {
+                            console.warn('문서함 등록 실패:', uploadJson.error);
+                            showPreviewToast('문서함 등록 실패: ' + (uploadJson.error || ''), 'warning');
+                        }
+                    } catch (uploadErr) {
+                        console.warn('문서함 업로드 에러:', uploadErr);
+                        showPreviewToast('문서함 등록 중 오류가 발생했습니다.', 'warning');
+                    }
+                } else {
+                    // label_id 없는 경우(팝업 직접 열기 등)는 다운로드 성공만 알림
+                    showPreviewToast('PDF가 저장되었습니다.', 'success');
+                }
             } catch (error) {
                 console.error('PDF generation error:', error);
+                showPreviewToast('PDF 생성 중 오류가 발생했습니다.', 'error');
             } finally {
                 updateZoom();
+                if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.innerHTML = '<i class="fas fa-file-arrow-down me-1"></i>PDF 저장'; }
             }
         }
 
@@ -1795,10 +1932,6 @@
                 recycling_mark: recyclingMarkInfo
             };
             
-            console.log('저장할 분리배출마크 데이터:', recyclingMarkInfo);
-            console.log('전체 저장 데이터:', data);
-
-
             const csrfToken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
 
 
@@ -1821,40 +1954,43 @@
                     if (typeof window.logPreviewAction === 'function') {
                         window.logPreviewAction('preview_settings_save');
                     }
-                    
+
                     // 성공 메시지 표시
                     const saveBtn = document.getElementById('saveSettingsBtn');
                     if (saveBtn) {
-                        const originalText = saveBtn.textContent;
-                        saveBtn.textContent = '저장완료';
+                        const originalText = saveBtn.innerHTML;
+                        saveBtn.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
                         saveBtn.classList.remove('btn-outline-success');
                         saveBtn.classList.add('btn-success');
-                        saveBtn.disabled = false; // 버튼 활성화
-                        
+                        saveBtn.disabled = false;
                         setTimeout(() => {
-                            saveBtn.textContent = originalText;
+                            saveBtn.innerHTML = originalText;
                             saveBtn.classList.remove('btn-success');
                             saveBtn.classList.add('btn-outline-success');
                         }, 2000);
                     }
+                    showPreviewToast('미리보기 설정이 저장되었습니다.', 'success');
+                } else if (res.reason === 'not_owner') {
+                    // 공유 사용자는 설정 저장 불가 (정상 흐름)
+                    showPreviewToast('설정 저장은 라벨 소유자만 가능합니다.', 'warning');
+                    const saveBtn = document.getElementById('saveSettingsBtn');
+                    if (saveBtn) { saveBtn.disabled = false; }
                 } else {
-                    alert('미리보기 설정 저장 실패: ' + (res.error || ''));
-                    // 실패 시에도 버튼 복원
+                    showPreviewToast('설정 저장 실패: ' + (res.error || ''), 'error');
                     const saveBtn = document.getElementById('saveSettingsBtn');
                     if (saveBtn) {
                         saveBtn.disabled = false;
-                        saveBtn.textContent = '설정 저장';
+                        saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>설정 저장';
                     }
                 }
             })
             .catch(err => {
                 console.error('저장 에러:', err);
-                alert('미리보기 설정 저장 에러: ' + err);
-                // 에러 시에도 버튼 복원
+                showPreviewToast('설정 저장 에러: ' + err, 'error');
                 const saveBtn = document.getElementById('saveSettingsBtn');
                 if (saveBtn) {
                     saveBtn.disabled = false;
-                    saveBtn.textContent = '설정 저장';
+                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>설정 저장';
                 }
             });
         }
@@ -2217,13 +2353,17 @@
             renderTable(checkedFields);
             const frmlc = checkedFields.frmlc_mtrqlt || '';
             updateRecyclingMarkUI(frmlc);
-            /* initialLabelData로 1차 렌더 후, opener가 있으면 최신 데이터도 요청
-               → v2에서도 allergens / 원산지 굵기 처리 정상화 */
-            if (window.opener) {
-                window.opener.postMessage({ type: 'requestPreviewData' }, '*');
+            /* initialLabelData로 1차 렌더 후, opener(팝업) 또는 parent(탭 iframe)에도 최신 데이터 요청
+               → 알레르기 뱃지 / 원산지 굵기 처리 정상화 */
+            const _previewTarget = window.opener || (window.self !== window.top ? window.parent : null);
+            if (_previewTarget) {
+                _previewTarget.postMessage({ type: 'requestPreviewData' }, '*');
             }
-        } else if (window.opener) {
-            window.opener.postMessage({ type: 'requestPreviewData' }, '*');
+        } else {
+            const _previewTarget2 = window.opener || (window.self !== window.top ? window.parent : null);
+            if (_previewTarget2) {
+                _previewTarget2.postMessage({ type: 'requestPreviewData' }, '*');
+            }
         }
 
         setTimeout(() => {

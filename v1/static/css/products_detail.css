@@ -328,6 +328,58 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 .nav-underline .nav-link.active { color: var(--google-blue); font-weight: 600; background: rgba(26,115,232,0.12); }
 .nav-underline .nav-link.active i { color: var(--google-blue) !important; }
 
+/* === workspaceTab: 클래식 탭 스타일 + 수평 스크롤 === */
+/* ul: flex item으로 남은 공간 차지, 넘치면 가로 스크롤 */
+#workspaceTab {
+    flex:         1 !important;        /* 우측 배지 공간 제외, 나머지 전부 차지 */
+    min-width:    0 !important;        /* flex item 축소 허용 */
+    overflow-x:   auto;
+    overflow-y:   hidden;   /* visible + overflow-x:auto 조합 시 브라우저가 auto로 강제 변환 → hidden으로 명시 */
+    flex-wrap:    nowrap !important;
+    align-items:  flex-end !important;
+    padding-bottom: 0 !important;
+    /* 얇은 스크롤바: 스크롤 가능 상태 인지 */
+    scrollbar-width: thin;
+    scrollbar-color: #dee2e6 transparent;
+}
+#workspaceTab::-webkit-scrollbar       { height: 3px; }
+#workspaceTab::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 3px; }
+#workspaceTab::-webkit-scrollbar-track { background: transparent; }
+
+/* li: 탭 자체는 절대 줄어들거나 wrap되지 않도록 */
+#workspaceTab .nav-item { flex-shrink: 0; }
+
+/* 우측 상태 배지·버튼 영역: 항상 우측에 고정 */
+.workspace-toolbar > div { flex-shrink: 0; align-self: center; }
+#workspaceTab .nav-link {
+    border-radius: 6px 6px 0 0 !important;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    height: 40px !important;
+    margin-bottom: -1px;
+    color: var(--text-secondary) !important;
+    font-weight: 500;
+    font-size: 14px;
+    padding: 0 16px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    white-space: nowrap !important;          /* 아이콘+텍스트 줄바꿈 방지 */
+    overflow: visible !important;            /* 텍스트 클리핑 방지 */
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+#workspaceTab .nav-link:hover {
+    background: rgba(26,115,232,0.06) !important;
+    border-color: #ced4da #ced4da transparent !important;
+    color: var(--google-blue) !important;
+}
+#workspaceTab .nav-link.active {
+    background: #ffffff !important;
+    border-color: #dee2e6 #dee2e6 #ffffff !important;
+    color: var(--google-blue) !important;
+    font-weight: 600 !important;
+}
+#workspaceTab .nav-link.active i { color: var(--google-blue) !important; }
+
 /* hover/cursor 유틸리티 */
 .hover-warning:hover { color: #f4b400 !important; transform: scale(1.15); }
 .cursor-pointer      { cursor: pointer; }
@@ -385,7 +437,7 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 #tab-docs            { overflow: hidden; padding: 0; }
 #tab-docs.active     { flex: 1; min-height: 0; overflow-y: auto; }
 #tab-share           { overflow: hidden; padding: 0; }
-#tab-share.active    { flex: 1; min-height: 0; overflow-y: auto; }
+#tab-share.active    { flex: 1; min-height: 0; overflow-y: auto; overflow-x: auto; }
 
 /* ── 사이드바 ─────────────────────────────────────────────── */
 .workspace-sidebar {
@@ -443,27 +495,39 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
     height:                100%;
 }
 
-/* 워크플로우 드롭존 */
-.workflow-dropzones { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-.dropzone-card { background: white; border: 2px dashed var(--google-border); border-radius: var(--radius-card); padding: 16px; transition: all 0.2s ease; }
-.dropzone-card.drag-over { border-color: var(--google-blue); border-style: solid; background: rgba(26,115,232,0.04); box-shadow: var(--shadow-card); }
-.dropzone-header .badge   { font-size: 10px; margin-bottom: 6px; padding: 4px 8px; border-radius: 4px; font-weight: 500; letter-spacing: 0.3px; }
-.dropzone-header .fw-bold { font-size: 14px; font-weight: 500; margin: 4px 0; color: var(--text-primary); }
-.dropzone-header .text-muted { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
-.dropzone-body { min-height: 60px; border: 2px dashed var(--google-border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: all 0.2s ease; background: rgba(0,0,0,0.01); }
-.dropzone-body.drag-over { border-color: var(--google-blue); background: rgba(26,115,232,0.04); }
-.dropzone-placeholder { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--text-hint); font-size: 13px; padding: 12px; text-align: center; }
-.dropzone-placeholder i { font-size: 20px; }
-.dropzone-body .person-card { background: white; border: 1px solid var(--google-border); cursor: grab; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1); }
+/* 워크플로우 드롭존 — 세로 스텝 레이아웃 */
+.workflow-dropzones { display: flex; flex-direction: column; gap: 0; }
+.dropzone-card { display: flex; flex-direction: row; align-items: stretch; background: white; border: 1px solid var(--google-border); border-radius: 0; padding: 0; transition: all 0.2s ease; overflow: hidden; }
+.workflow-dropzones .dropzone-card:first-child { border-radius: var(--radius-card) var(--radius-card) 0 0; }
+.workflow-dropzones .dropzone-card:last-child  { border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.workflow-dropzones .dropzone-card + .dropzone-card { border-top: none; }
+.dropzone-card.drag-over { border-color: var(--google-blue); background: rgba(26,115,232,0.04); box-shadow: inset 0 0 0 2px rgba(26,115,232,0.18); }
+/* 스텝 번호 열 */
+.step-indicator-col { display: flex; flex-direction: column; align-items: center; padding: 14px 0; width: 48px; flex-shrink: 0; background: var(--google-gray-50,#f8f9fa); border-right: 1px solid var(--google-border); }
+.step-number-badge { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; background: #e0e0e0; color: var(--text-secondary); flex-shrink: 0; transition: background 0.2s; }
+.dropzone-card.stage-active .step-number-badge { background: var(--google-blue); color: white; }
+.step-vline { flex: 1; width: 2px; background: var(--google-border); margin-top: 6px; min-height: 12px; }
+.workflow-dropzones .dropzone-card:last-child .step-vline { background: transparent; }
+/* 단계 정보 열 */
+.dropzone-header { padding: 12px 16px; min-width: 176px; max-width: 210px; flex-shrink: 0; border-right: 1px solid var(--google-border); display: flex; flex-direction: column; justify-content: center; }
+.dropzone-header .badge   { font-size: 10px; margin-bottom: 5px; padding: 3px 7px; border-radius: 4px; font-weight: 500; letter-spacing: 0.3px; align-self: flex-start; }
+.dropzone-header .fw-bold { font-size: 13px; font-weight: 500; margin: 2px 0; color: var(--text-primary); }
+.dropzone-header .text-muted { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+/* 멤버 영역 */
+.dropzone-body { flex: 1; min-height: 56px; padding: 10px 16px; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: flex-start; align-content: flex-start; background: transparent; border: none; border-radius: 0; transition: background 0.2s ease; }
+.dropzone-body.drag-over { background: rgba(26,115,232,0.04); }
+.dropzone-placeholder { display: flex; align-items: center; gap: 6px; color: var(--text-hint); font-size: 12px; padding: 7px 12px; border: 1.5px dashed var(--google-border); border-radius: 6px; align-self: flex-start; white-space: nowrap; }
+.dropzone-placeholder i { font-size: 15px; }
+.dropzone-body .person-card { background: white; border: 1px solid var(--google-border); cursor: grab; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1); margin-bottom: 0; }
 .dropzone-body .person-card:hover  { background: #fafafa; border-color: var(--google-blue); box-shadow: var(--shadow-card); }
 .dropzone-body .person-card:active { cursor: grabbing; }
 
 /* People Palette */
-.people-palette { background: #fafafa; border: 1px solid var(--google-border); border-radius: var(--radius-card); padding: 16px; max-height: 700px; display: flex; flex-direction: column; position: sticky; top: 80px; transition: all 0.3s ease; }
+.people-palette { background: #fafafa; border: 1px solid var(--google-border); border-radius: var(--radius-card); padding: 16px; max-height: 700px; display: flex; flex-direction: column; position: sticky; top: 0; transition: all 0.3s ease; }
 .people-palette.drag-over { background: var(--status-success-bg); border-color: #34a853; box-shadow: var(--shadow-card); }
 
 /* Person Detail Panel */
-.person-detail-panel { background: #fafafa; border: 1px solid var(--google-border); border-radius: var(--radius-card); padding: 16px; position: sticky; top: 80px; min-height: 400px; }
+.person-detail-panel { background: #fafafa; border: 1px solid var(--google-border); border-radius: var(--radius-card); padding: 16px; position: sticky; top: 0; min-height: 400px; }
 .person-detail-panel .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: var(--text-hint); text-align: center; }
 .person-detail-panel .empty-state i { font-size: 48px; margin-bottom: 12px; opacity: 0.3; }
 .person-detail-panel .detail-avatar { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 32px; margin: 0 auto 16px; }
@@ -533,7 +597,6 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
     .workspace-content  { padding: 15px; }
     .workspace-sidebar  { width: 280px; }
     .permission-layout  { grid-template-columns: 240px 1fr 260px; gap: 12px; }
-    .workflow-dropzones { grid-template-columns: 1fr; }
 }
 @media (max-height: 800px) {
     .workspace-header { min-height: 52px; padding: 10px 20px; }
@@ -571,12 +634,12 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
     .permission-layout  { grid-template-columns: 1fr; gap: 16px; }
     .people-palette,
     .person-detail-panel { position: static; max-height: none; }
-    .workflow-dropzones { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
     .permission-workspace { padding: 12px; }
-    .dropzone-card        { padding: 10px; }
-    .dropzone-header .fw-bold { font-size: 13px; }
+    .dropzone-header      { min-width: auto; max-width: 150px; padding: 10px 12px; }
+    .dropzone-header .fw-bold { font-size: 12px; }
+    .step-indicator-col   { width: 38px; }
     .person-card          { padding: 8px !important; font-size: 11px; }
 }
 
@@ -661,6 +724,70 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 
 /* ── 워크스페이스 상단 헤더 / 툴바 세부 ────────────────────── */
 #workspace-product-name { width: auto; min-width: 300px; }
+
+/* ── 반응형: 1308px 미만 (제품 상세 워크스페이스) ─────────── */
+@media (max-width: 1308px) {
+    /* 헤더: 제품명 input 최소 너비 축소 */
+    #workspace-product-name { min-width: 140px !important; }
+
+    /* 헤더 전체: 요소가 넘칠 경우 두 줄 허용 */
+    .workspace-global-header {
+        height: auto !important;
+        min-height: 64px;
+        flex-wrap: wrap;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+    }
+
+    /* 탭바: 1308px 이하에서도 수평 스크롤로 모두 표시 (base 스타일과 동일, 확인용) */
+    .workspace-toolbar {
+        height: 48px;   /* 고정 높이 유지 */
+    }
+
+    /* 툴바 우측 상태 배지: flex-shrink:0 재확인 */
+    .workspace-toolbar > div { flex-shrink: 0; }
+}
+
+/* ── 반응형: 1318px 이하 → 탭 / 배지 2행 레이아웃 ──────────
+   1행: 탭 목록(가로 스크롤)  2행: 상태 배지·버튼
+   height 는 각 행이 독립적으로 가지며, 세로 스크롤 없음     */
+@media (max-width: 1318px) {
+    .workspace-toolbar {
+        flex-wrap:     wrap !important;
+        height:        auto !important;
+        padding-left:  0    !important;
+        padding-right: 0    !important;
+        align-items:   stretch !important;
+    }
+
+    /* 1행: 탭 ul ─ 전체 너비, 고정 높이 44px, 가로 스크롤 */
+    #workspaceTab {
+        flex:          0 0 100% !important;
+        width:         100%     !important;
+        height:        44px     !important;   /* h-100 무력화 */
+        border-bottom: 1px solid #dee2e6;     /* 탭 아래 구분선(활성탭 흰색으로 덮음) */
+        padding-left:  12px;
+        overflow-x:    auto;
+        overflow-y:    visible;
+    }
+
+    /* 2행: 상태 배지·버튼 영역 ─ 전체 너비, 좌측 구분선 제거, 가로 스크롤 */
+    #toolbar-badges {
+        flex:        0 0 100%  !important;
+        width:       100%      !important;
+        height:      40px      !important;
+        border-left: none      !important;
+        padding-left: 12px    !important;
+        margin-left:  0       !important;
+        overflow-x:   auto;
+        overflow-y:   hidden;
+        white-space:  nowrap;
+        flex-wrap:    nowrap   !important;
+    }
+    /* 배지 스크롤바 숨김 (존재는 하되 UI에서 안 보임) */
+    #toolbar-badges::-webkit-scrollbar { height: 3px; }
+    #toolbar-badges::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 3px; }
+}
 #save-status            { font-size: 0.8rem; }
 
 .info-tab-main               { min-width: 0; overflow-y: auto; }

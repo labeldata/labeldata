@@ -1,5 +1,14 @@
 {# 탑바 우측 계정 영역 공통 컴포넌트 — 모든 V2 페이지 topbar 블록에서 include #}
 <div class="v2-topbar-account">
+
+{% if user.is_authenticated %}
+    <!-- 홈 전환 버튼 (→ V1 기존홈) -->
+    <a href="{% url 'main:home_v1' %}"
+       class="btn btn-outline-secondary btn-sm me-2 d-flex align-items-center home-switch-btn"
+       style="font-size:0.8rem;border-radius:16px;padding:0.25rem 0.85rem;line-height:1.5;"
+       title="V1 기존홈으로 전환">
+        <i class="bi bi-arrow-left-right" style="font-size:0.85rem;"></i><span class="home-switch-text ms-1">홈 전환</span>
+    </a>
     {# ── 알림 버튼 ── #}
     <div class="dropdown" id="notificationDropdown">
         <button class="btn btn-light rounded-circle position-relative" type="button"
@@ -96,8 +105,21 @@
             </div>
         </div>
     </div>
+
+{% else %}
+{# ── 비인증(게스트): 로그인/회원가입 버튼 ── #}
+    <a href="{% url 'user_management:login' %}?next={{ request.get_full_path }}"
+       class="btn btn-outline-secondary btn-sm me-2" style="font-size:13px;border-radius:20px;padding:5px 16px;">
+        로그인
+    </a>
+    <a href="{% url 'user_management:signup' %}"
+       class="btn btn-primary btn-sm" style="font-size:13px;border-radius:20px;padding:5px 16px;">
+        회원가입
+    </a>
+{% endif %}
 </div>
 
+{% if user.is_authenticated %}
 <script>
 /* ── 알림 시스템 ── */
 (function () {
@@ -184,3 +206,4 @@
     setInterval(fetchNotifications, 30000);
 })();
 </script>
+{% endif %}

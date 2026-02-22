@@ -94,9 +94,29 @@ def product_explorer(request, folder_id=None):
         labels = labels.filter(
             Q(my_label_name__icontains=search_query) |
             Q(prdlst_nm__icontains=search_query) |
-            Q(prdlst_dcnm__icontains=search_query)
+            Q(prdlst_dcnm__icontains=search_query) |
+            Q(v2_metadata__search_tags__icontains=search_query)
         )
-    
+
+    # 원료 연결 필터: ingredient_id 파라미터가 있으면 해당 원료와 연결된 제품만 표시
+    ingredient_id_filter = request.GET.get('ingredient_id')
+    ingredient_name_filter = None
+    if ingredient_id_filter:
+        try:
+            from v1.label.models import LabelIngredientRelation, MyIngredient
+            linked_label_ids = LabelIngredientRelation.objects.filter(
+                ingredient_id=ingredient_id_filter
+            ).values_list('label_id', flat=True)
+            labels = labels.filter(my_label_id__in=linked_label_ids)
+            try:
+                ingredient_name_filter = MyIngredient.objects.get(
+                    my_ingredient_id=ingredient_id_filter
+                ).prdlst_nm or f'원료 #{ingredient_id_filter}'
+            except Exception:
+                ingredient_name_filter = f'원료 #{ingredient_id_filter}'
+        except Exception:
+            ingredient_id_filter = None
+
     # 페이지네이션 적용
     per_page = request.GET.get('per_page', '50')
     try:
@@ -126,61 +146,79 @@ def product_explorer(request, folder_id=None):
     for meta in metadatas:
         metadata_dict[meta.label.my_label_id] = meta
     
-    # 각 제품의 문서 개수 가져오기
-    document_counts = {}
-    doc_counts_qs = ProductDocument.objects.filter(
-        label__my_label_id__in=label_ids,
-        is_active=True
-    ).values('label__my_label_id').annotate(count=Count('document_id'))
-    
-    for item in doc_counts_qs:
-        document_counts[item['label__my_label_id']] = item['count']
-    
-    # 필수 문서 통계 (ProductDocument 직접 조회 - DocumentSlot 미생성 제품 포함)
-    required_doc_type_ids = list(
-        DocumentType.objects.filter(is_required=True, is_active=True).values_list('type_id', flat=True)
-    )
-    required_per_product = len(required_doc_type_ids)  # 모든 제품의 필수스 동일
-
-    # 제품별 실제 등록된 필수 문서 카운트 (is_active=True, document_type__in required)
-    filled_agg = (
+    # 각 제품의 문서 개수 가져오기 (구분별 1개로 카운팅 - 여러 버전이 있어도 1개)
+    doc_type_rows = (
         ProductDocument.objects.filter(
             label__my_label_id__in=label_ids,
             is_active=True,
-            document_type_id__in=required_doc_type_ids,
         )
         .values('label__my_label_id', 'document_type_id')
         .distinct()
     )
-    filled_by_label = {}
-    for row in filled_agg:
+    document_counts = {}  # {label_id: distinct doc_type 수}
+    for row in doc_type_rows:
         lid = row['label__my_label_id']
-        filled_by_label[lid] = filled_by_label.get(lid, 0) + 1
+        document_counts[lid] = document_counts.get(lid, 0) + 1
+
+    # 준수율 통계: DocumentSlot 기반 (문서함 탭과 동일한 로직)
+    # total_slots = 숨겨지지 않은 슬롯 수, filled = status != EMPTY
+    from .models import DocumentSlot
+    slot_rows = (
+        DocumentSlot.objects.filter(
+            label__my_label_id__in=label_ids,
+            is_hidden=False,
+        )
+        .values('label__my_label_id', 'status')
+    )
+    slot_totals = {}   # {label_id: 전체 슬롯 수}
+    slot_filled = {}   # {label_id: 채워진 슬롯 수}
+    for row in slot_rows:
+        lid = row['label__my_label_id']
+        slot_totals[lid] = slot_totals.get(lid, 0) + 1
+        if row['status'] != DocumentSlot.SlotStatus.EMPTY:
+            slot_filled[lid] = slot_filled.get(lid, 0) + 1
 
     document_stats = {}
     for label_id in label_ids:
-        total = document_counts.get(label_id, 0)
-        filled = filled_by_label.get(label_id, 0)
+        doc_count = document_counts.get(label_id, 0)
+        total = slot_totals.get(label_id, 0)
+        filled = slot_filled.get(label_id, 0)
         document_stats[label_id] = {
-            'total': total,
-            'required': required_per_product,
-            'filled': filled,
-            'rate': (filled / required_per_product * 100) if required_per_product > 0 else 100,
+            'total': doc_count,       # 등록 문서 수 (구분별 1개)
+            'required': total,        # 전체 슬롯 수 (분모)
+            'filled': filled,         # 채워진 슬롯 수 (분자)
+            'rate': (filled / total * 100) if total > 0 else 0,
         }
     
-    # BOM 통계 가져오기
+    # BOM 통계 가져오기 (level=1인 직접 원료 행만 카운팅)
     bom_stats = {}
     from v1.bom.models import ProductBOM
-    for label_id in label_ids:
-        bom_items = ProductBOM.objects.filter(parent_label__my_label_id=label_id)
-        ingredient_count = bom_items.count()
-        total_ratio = bom_items.aggregate(total=models.Sum('usage_ratio'))['total'] or 0
-        
-        bom_stats[label_id] = {
-            'count': ingredient_count,
-            'ratio': float(total_ratio),
-            'complete': total_ratio >= 99.9
+    from django.db.models import Sum as BomSum, Count as BomCount
+
+    bom_agg = (
+        ProductBOM.objects.filter(
+            parent_label__my_label_id__in=label_ids,
+            level=1,
+            is_active=True,
+        )
+        .values('parent_label__my_label_id')
+        .annotate(
+            row_count=BomCount('bom_id'),
+            total_ratio=BomSum('usage_ratio'),
+        )
+    )
+    for row in bom_agg:
+        lid = row['parent_label__my_label_id']
+        ratio = float(row['total_ratio'] or 0)
+        bom_stats[lid] = {
+            'count': row['row_count'],
+            'ratio': ratio,
+            'complete': ratio >= 99.9,
         }
+    # BOM 미등록 제품은 기본값
+    for label_id in label_ids:
+        if label_id not in bom_stats:
+            bom_stats[label_id] = {'count': 0, 'ratio': 0, 'complete': False}
     
     # 영양성분 데이터 입력 여부
     nutrition_stats = {}
@@ -309,6 +347,8 @@ def product_explorer(request, folder_id=None):
         'filter_type': filter_type,
         'collab_count': collab_count,
         'starred_count': starred_count,
+        'ingredient_id_filter': ingredient_id_filter,
+        'ingredient_name_filter': ingredient_name_filter,
     }
     return render(request, 'products/product_explorer.html', context)
 
@@ -851,22 +891,51 @@ def product_create(request):
                     'product_name': label.my_label_name,
                 }
             )
-        
+
+        # is_raw_material / search_tags 저장
+        is_raw = request.POST.get('is_raw_material') == 'on'
+        search_tags = request.POST.get('search_tags', '').strip()
+        metadata.is_raw_material = is_raw
+        metadata.search_tags = search_tags
+        metadata.save(update_fields=['is_raw_material', 'search_tags'])
+
+        # 원료로 사용 체크 시 MyIngredient 자동 등록
+        if is_raw:
+            from v1.label.models import MyIngredient as _MyIngredient
+            exists = _MyIngredient.objects.filter(
+                user_id=request.user,
+                prdlst_nm=label.prdlst_nm or label.my_label_name,
+                delete_YN='N'
+            ).exists()
+            if not exists:
+                _MyIngredient.objects.create(
+                    user_id=request.user,
+                    prdlst_nm=label.prdlst_nm or label.my_label_name,
+                    bssh_nm=label.bssh_nm or '',
+                    prdlst_dcnm=label.prdlst_dcnm or '',
+                    pog_daycnt=label.pog_daycnt or '',
+                    rawmtrl_nm=label.rawmtrl_nm or '',
+                    ingredient_display_name=label.rawmtrl_nm or label.prdlst_nm or label.my_label_name,
+                    food_category='processed',
+                    delete_YN='N',
+                )
+
         messages.success(request, '새로운 제품이 생성되었습니다.')
         # 생성 후 워크스페이스의 기본정보 탭으로 바로 이동
         return redirect('products:product_detail_new', product_id=label.my_label_id)
-    
+
     # GET: 폼 렌더링
     food_types = FoodType.objects.all().order_by('food_group', 'food_type')
     food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
     countries = CountryList.objects.all().order_by('country_name_ko')
-    
+
     context = {
         'product': None,  # 새 제품 생성이므로 None
         'title': '새 제품 만들기',
         'food_types': food_types,
         'food_groups': food_groups,
         'countries': countries,
+        'can_edit': True,
     }
     return render(request, 'products/product_form.html', context)
 
@@ -923,15 +992,46 @@ def product_update(request, product_id):
             except Exception:
                 label.custom_fields = []
         label.save()
-        
+
+        # is_raw_material / search_tags 저장
+        meta = ProductMetadata.objects.filter(label=label).first()
+        if meta:
+            is_raw = request.POST.get('is_raw_material') == 'on'
+            search_tags = request.POST.get('search_tags', '').strip()
+            meta.is_raw_material = is_raw
+            meta.search_tags = search_tags
+            meta.save(update_fields=['is_raw_material', 'search_tags'])
+
+            # 원료로 사용 체크 시 MyIngredient 자동 등록
+            if is_raw:
+                from v1.label.models import MyIngredient as _MyIngredient
+                exists = _MyIngredient.objects.filter(
+                    user_id=request.user,
+                    prdlst_nm=label.prdlst_nm or label.my_label_name,
+                    delete_YN='N'
+                ).exists()
+                if not exists:
+                    _MyIngredient.objects.create(
+                        user_id=request.user,
+                        prdlst_nm=label.prdlst_nm or label.my_label_name,
+                        bssh_nm=label.bssh_nm or '',
+                        prdlst_dcnm=label.prdlst_dcnm or '',
+                        pog_daycnt=label.pog_daycnt or '',
+                        rawmtrl_nm=label.rawmtrl_nm or '',
+                        ingredient_display_name=label.rawmtrl_nm or label.prdlst_nm or label.my_label_name,
+                        food_category='processed',
+                        delete_YN='N',
+                    )
+
         messages.success(request, '제품이 수정되었습니다.')
         return redirect('products:product_detail_new', product_id=label.my_label_id)
-    
+
     # 식품유형과 원산지 목록 추가
     food_types = FoodType.objects.all().order_by('food_group', 'food_type')
     food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
     countries = CountryList.objects.all().order_by('country_name_ko')
-    
+    meta = ProductMetadata.objects.filter(label=label).first()
+
     context = {
         'product': label,
         'label': label,
@@ -939,6 +1039,8 @@ def product_update(request, product_id):
         'food_types': food_types,
         'food_groups': food_groups,
         'countries': countries,
+        'metadata': meta,
+        'can_edit': True,
     }
     return render(request, 'products/product_form.html', context)
 
@@ -3301,3 +3403,451 @@ def notification_mark_read(request):
     ).count()
 
     return JsonResponse({'success': True, 'unread': unread_count})
+
+
+# ==================== 연락처 관리 (Contacts) ====================
+
+@login_required
+def contacts(request):
+    """연락처 관리 - 공유 이력 기반 연락처 목록 및 공유 현황"""
+    from v1.label.models import MyLabel
+
+    # 내가 공유한 이메일 목록 (고유값, 최신 이름/회사명 우선)
+    sent_shares = (
+        ProductShare.objects
+        .filter(label__user_id=request.user, share_mode='PRIVATE', is_active=True)
+        .exclude(recipient_email__isnull=True)
+        .select_related('permission')
+        .order_by('recipient_email', '-created_datetime')
+    )
+
+    contact_map = {}
+    for s in sent_shares:
+        email = s.recipient_email.lower()
+        if email not in contact_map:
+            contact_map[email] = {
+                'email': email,
+                'name': s.recipient_name or '',
+                'company': s.recipient_company or '',
+                'license_no': '',  # 추후 모델 확장 시 연결
+                'sent': 1,
+                'received': 0,
+            }
+        else:
+            contact_map[email]['sent'] += 1
+
+    # 나에게 공유한 사람들 (received)
+    received_shares = (
+        ProductShare.objects
+        .filter(share_mode='PRIVATE', is_active=True)
+        .filter(Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email))
+        .select_related('label', 'label__user_id')
+        .order_by('-created_datetime')
+    )
+    for s in received_shares:
+        sharer_email = s.label.user_id.email.lower() if s.label.user_id else ''
+        if sharer_email and sharer_email not in contact_map:
+            contact_map[sharer_email] = {
+                'email': sharer_email,
+                'name': s.label.user_id.get_full_name() or s.label.user_id.username,
+                'company': '',
+                'license_no': '',
+                'sent': 0,
+                'received': 1,
+            }
+        elif sharer_email:
+            contact_map[sharer_email]['received'] += 1
+
+    contacts_list = sorted(contact_map.values(), key=lambda x: x['email'])
+
+    # 문서 요청 집계 (내가 보낸 요청 기준)
+    from v1.products.models import DocumentRequest
+    from django.db.models import Count, Q as Qdr
+    dr_agg = (
+        DocumentRequest.objects
+        .filter(requester=request.user)
+        .values('recipient_email')
+        .annotate(
+            total=Count('request_id'),
+            pending=Count('request_id', filter=Qdr(status='PENDING')),
+        )
+    )
+    dr_map = {row['recipient_email'].lower(): row for row in dr_agg}
+
+    # 내가 받은 요청 집계 (요청수신 필터용)
+    dr_recv_agg = (
+        DocumentRequest.objects
+        .filter(recipient_email__iexact=request.user.email)
+        .values('requester__email')
+        .annotate(total=Count('request_id'))
+    )
+    dr_recv_map = {row['requester__email'].lower(): row['total'] for row in dr_recv_agg}
+
+    for c in contacts_list:
+        dr = dr_map.get(c['email'], {})
+        c['doc_sent']     = dr.get('total', 0)
+        c['doc_pending']  = dr.get('pending', 0)
+        c['doc_received'] = dr_recv_map.get(c['email'], 0)  # 이 연락처로부터 받은 요청
+
+    context = {
+        'contacts_list': contacts_list,
+    }
+    return render(request, 'products/contacts.html', context)
+
+
+@login_required
+def contacts_api_list(request):
+    """연락처 목록 JSON API"""
+    sent_shares = (
+        ProductShare.objects
+        .filter(label__user_id=request.user, share_mode='PRIVATE', is_active=True)
+        .exclude(recipient_email__isnull=True)
+        .values('recipient_email', 'recipient_name', 'recipient_company')
+        .distinct()
+    )
+
+    contact_map = {}
+    for s in sent_shares:
+        email = (s['recipient_email'] or '').lower()
+        if email and email not in contact_map:
+            contact_map[email] = {
+                'email': email,
+                'name': s['recipient_name'] or '',
+                'company': s['recipient_company'] or '',
+                'license_no': '',
+            }
+
+    received_shares = (
+        ProductShare.objects
+        .filter(share_mode='PRIVATE', is_active=True)
+        .filter(Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email))
+        .select_related('label__user_id')
+    )
+    for s in received_shares:
+        if s.label.user_id:
+            email = s.label.user_id.email.lower()
+            if email not in contact_map:
+                contact_map[email] = {
+                    'email': email,
+                    'name': s.label.user_id.get_full_name() or s.label.user_id.username,
+                    'company': '',
+                    'license_no': '',
+                }
+
+    data = sorted(contact_map.values(), key=lambda x: x['email'])
+    return JsonResponse({'contacts': data})
+
+
+@login_required
+def contacts_api_shares(request):
+    """특정 이메일의 공유 현황 JSON API"""
+    email = request.GET.get('email', '').strip().lower()
+    if not email:
+        return JsonResponse({'sent': [], 'received': []})
+
+    # 내가 그 이메일에 공유한 항목
+    sent = []
+    for s in (
+        ProductShare.objects
+        .filter(label__user_id=request.user, recipient_email__iexact=email,
+                share_mode='PRIVATE', is_active=True)
+        .select_related('label', 'permission')
+        .order_by('-created_datetime')
+    ):
+        try:
+            role_code    = s.permission.role_code
+            role_display = s.permission.get_role_code_display()
+        except Exception:
+            role_code, role_display = '', '미지정'
+        sent.append({
+            'share_id': s.share_id,
+            'label_id': s.label.my_label_id,
+            'label_name': s.label.my_label_name or s.label.prdlst_nm or '(이름 없음)',
+            'role': role_code,
+            'role_display': role_display,
+            'share_end_date': s.share_end_date.strftime('%Y-%m-%d') if s.share_end_date else '',
+            'created_at': s.created_datetime.strftime('%Y-%m-%d') if s.created_datetime else '',
+        })
+
+    # 그 이메일(사람)이 나에게 공유한 항목
+    received = []
+    from django.contrib.auth.models import User as DjangoUser
+    sharer_users = DjangoUser.objects.filter(email__iexact=email)
+    if sharer_users.exists():
+        sharer = sharer_users.first()
+        for s in (
+            ProductShare.objects
+            .filter(label__user_id=sharer, share_mode='PRIVATE', is_active=True)
+            .filter(Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email))
+            .select_related('label', 'permission')
+            .order_by('-created_datetime')
+        ):
+            try:
+                role_code    = s.permission.role_code
+                role_display = s.permission.get_role_code_display()
+            except Exception:
+                role_code, role_display = '', '미지정'
+            received.append({
+                'share_id': s.share_id,
+                'label_id': s.label.my_label_id,
+                'label_name': s.label.my_label_name or s.label.prdlst_nm or '(이름 없음)',
+                'role': role_code,
+                'role_display': role_display,
+                'share_end_date': s.share_end_date.strftime('%Y-%m-%d') if s.share_end_date else '',
+                'created_at': s.created_datetime.strftime('%Y-%m-%d') if s.created_datetime else '',
+            })
+
+    return JsonResponse({'sent': sent, 'received': received})
+
+
+@login_required
+def contacts_api_doc_requests(request):
+    """연락처별 자료 요청 이력 JSON API"""
+    from v1.products.models import DocumentRequest, DocumentSubmission
+    email = request.GET.get('email', '').strip().lower()
+    if not email:
+        return JsonResponse({'requests': []})
+
+    dr_list = (
+        DocumentRequest.objects
+        .filter(requester=request.user, recipient_email__iexact=email)
+        .prefetch_related('submissions')
+        .order_by('-created_datetime')
+    )
+    data = []
+    for dr in dr_list:
+        subs = [
+            {
+                'submission_id':   s.submission_id,
+                'document_type':   s.document_type,
+                'filename':        s.original_filename,
+                'file_url':        request.build_absolute_uri(s.file.url) if s.file else '',
+                'file_size':       s.file_size,
+                'submitted':       s.submitted_datetime.strftime('%Y-%m-%d %H:%M') if s.submitted_datetime else '',
+                'submitted_by':    s.submitted_by_name or s.submitted_by_email or '',
+            }
+            for s in dr.submissions.filter(is_active=True)
+        ]
+        data.append({
+            'request_id':          dr.request_id,
+            'status':              dr.status,
+            'status_display':      dr.get_status_display(),
+            'requested_documents': dr.requested_documents or [],
+            'message':             dr.message or '',
+            'due_date':            dr.due_date.strftime('%Y-%m-%d') if dr.due_date else '',
+            'created':             dr.created_datetime.strftime('%Y-%m-%d %H:%M') if dr.created_datetime else '',
+            'submissions':         subs,
+        })
+    return JsonResponse({'requests': data})
+
+
+@login_required
+@require_POST
+def doc_request_submit(request, req_id):
+    """수신자가 문서 파일을 제출하고 요청을 수낙"""
+    from v1.products.models import DocumentRequest, DocumentSubmission
+    try:
+        dr = DocumentRequest.objects.get(
+            request_id=req_id,
+            recipient_email__iexact=request.user.email,
+        )
+    except DocumentRequest.DoesNotExist:
+        return JsonResponse({'error': '요청을 찾을 수 없습니다.'}, status=404)
+    if dr.status == DocumentRequest.STATUS_CANCELLED:
+        return JsonResponse({'error': '취소된 요청입니다.'}, status=400)
+
+    files   = request.FILES  # key = doc_type_name (또는 type_id)
+    notes   = request.POST.get('notes', '')
+    saved   = []
+
+    for key, f in files.items():
+        sub = DocumentSubmission(
+            request            = dr,
+            document_type      = key,
+            file               = f,
+            original_filename  = f.name,
+            file_size          = f.size,
+            submitted_by_email = request.user.email,
+            submitted_by_name  = request.user.get_full_name() or request.user.username,
+            notes              = notes,
+            is_active          = True,
+        )
+        sub.save()
+        saved.append({'document_type': key, 'filename': f.name})
+
+    # 파일이 하나라도 제출되면 수낙 상태로 변경
+    if saved:
+        dr.status = DocumentRequest.STATUS_ACCEPTED
+        dr.save(update_fields=['status', 'updated_datetime'])
+
+    return JsonResponse({'success': True, 'submitted': saved})
+
+
+@login_required
+def contacts_api_received_doc_requests(request):
+    """내가 받은 자료 요청 목록 JSON API"""
+    from v1.products.models import DocumentRequest, DocumentSubmission
+    dr_list = (
+        DocumentRequest.objects
+        .filter(recipient_email__iexact=request.user.email)
+        .select_related('requester')
+        .prefetch_related('submissions')
+        .order_by('-created_datetime')
+    )
+    data = []
+    for dr in dr_list:
+        subs = [
+            {
+                'document_type': s.document_type,
+                'filename':      s.original_filename,
+                'file_url':      s.file.url if s.file else '',
+                'submitted':     s.submitted_datetime.strftime('%Y-%m-%d %H:%M') if s.submitted_datetime else '',
+            }
+            for s in dr.submissions.filter(is_active=True)
+        ]
+        data.append({
+            'request_id':          dr.request_id,
+            'status':              dr.status,
+            'status_display':      dr.get_status_display(),
+            'requester_name':      dr.requester.get_full_name() or dr.requester.username,
+            'requester_email':     dr.requester.email,
+            'requested_documents': dr.requested_documents or [],
+            'submissions':         subs,
+            'message':             dr.message or '',
+            'due_date':            dr.due_date.strftime('%Y-%m-%d') if dr.due_date else '',
+            'created':             dr.created_datetime.strftime('%Y-%m-%d %H:%M') if dr.created_datetime else '',
+            'attachment_url':      dr.attachment.url if dr.attachment else '',
+        })
+    return JsonResponse({'requests': data})
+
+
+@login_required
+def doc_requests_dashboard(request):
+    """연락처 관리로 통합 — 자료 요청 서브메뉴는 연락처 관리 페이지에서 확인합니다."""
+    from django.shortcuts import redirect
+    return redirect('products:contacts')
+
+
+@login_required
+@require_POST
+def doc_request_cancel(request, req_id):
+    """내가 보낸 문서 요청 취소"""
+    from v1.products.models import DocumentRequest
+    try:
+        dr = DocumentRequest.objects.get(request_id=req_id, requester=request.user)
+    except DocumentRequest.DoesNotExist:
+        return JsonResponse({'error': '요청을 찾을 수 없습니다.'}, status=404)
+    if dr.status != DocumentRequest.STATUS_PENDING:
+        return JsonResponse({'error': '이미 처리된 요청입니다.'}, status=400)
+    dr.status = DocumentRequest.STATUS_CANCELLED
+    dr.save(update_fields=['status', 'updated_datetime'])
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def doc_request_accept(request, req_id):
+    """내가 받은 문서 요청 수락"""
+    from v1.products.models import DocumentRequest
+    try:
+        dr = DocumentRequest.objects.get(
+            request_id=req_id,
+            recipient_email__iexact=request.user.email,
+        )
+    except DocumentRequest.DoesNotExist:
+        return JsonResponse({'error': '요청을 찾을 수 없습니다.'}, status=404)
+    if dr.status != DocumentRequest.STATUS_PENDING:
+        return JsonResponse({'error': '이미 처리된 요청입니다.'}, status=400)
+    dr.status = DocumentRequest.STATUS_ACCEPTED
+    dr.save(update_fields=['status', 'updated_datetime'])
+    return JsonResponse({'success': True})
+
+
+@login_required
+def api_doc_types(request):
+    """활성화된 문서 유형 목록 JSON"""
+    from v1.products.models import DocumentType
+    types = DocumentType.objects.filter(is_active=True).values(
+        'type_id', 'type_code', 'type_name', 'icon', 'color', 'is_required', 'description'
+    ).order_by('display_order', 'type_name')
+    return JsonResponse({'doc_types': list(types)})
+
+
+@login_required
+@require_POST
+def api_send_doc_request(request):
+    """문서 요청 생성 + 이메일 발송 (multipart/form-data)"""
+    import json
+    from v1.products.models import DocumentRequest, DocumentType
+    from django.core.mail import EmailMessage
+    from django.conf import settings
+
+    # FormData로 받음 (파일 첨부 지원)
+    try:
+        recipients   = json.loads(request.POST.get('recipients', '[]'))
+        type_ids     = json.loads(request.POST.get('type_ids', '[]'))
+    except (ValueError, TypeError):
+        return JsonResponse({'error': '잘못된 요청 형식입니다.'}, status=400)
+
+    message_text = request.POST.get('message', '').strip()
+    attachment   = request.FILES.get('attachment')
+
+    if not recipients:
+        return JsonResponse({'error': '수신자를 선택해주세요.'}, status=400)
+    if not type_ids:
+        return JsonResponse({'error': '요청할 문서 종류를 선택해주세요.'}, status=400)
+
+    doc_types = list(DocumentType.objects.filter(type_id__in=type_ids, is_active=True))
+    if not doc_types:
+        return JsonResponse({'error': '유효한 문서 종류가 없습니다.'}, status=400)
+    doc_names = ', '.join(dt.type_name for dt in doc_types)
+
+    requester_name = request.user.get_full_name() or request.user.username
+
+    created_count = 0
+    email_errors  = []
+    for r in recipients:
+        email = (r.get('email') or '').strip().lower()
+        if not email:
+            continue
+        doc_info = [{'type_id': dt.type_id, 'type_name': dt.type_name} for dt in doc_types]
+
+        dr = DocumentRequest.objects.create(
+            requester            = request.user,
+            recipient_email      = email,
+            recipient_name       = r.get('name', ''),
+            recipient_company    = r.get('company', ''),
+            requested_documents  = doc_info,
+            message              = message_text,
+            attachment           = attachment,
+        )
+        created_count += 1
+
+        # ── 이메일 발송 ──
+        subject = f'[EzLabeling] {requester_name}님이 문서 제출을 요청했습니다'
+        body_email = (
+            f'{requester_name}님이 아래 문서의 제출을 요청했습니다.\n\n'
+            f'요청 문서 ({len(doc_types)}종):\n'
+            + '\n'.join(f'  · {dt.type_name}' for dt in doc_types)
+            + (f'\n\n메시지: {message_text}' if message_text else '')
+            + f'\n\n요청 확인 및 수락: https://ezlabeling.com/products/doc-requests/'
+        )
+        try:
+            msg = EmailMessage(
+                subject,
+                body_email,
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+            )
+            # 첨부 파일이 있으면 이메일에도 첨부
+            if attachment and dr.attachment:
+                attachment.seek(0)
+                msg.attach(attachment.name, attachment.read(), attachment.content_type)
+            msg.send(fail_silently=True)
+        except Exception:
+            email_errors.append(email)
+
+    if created_count == 0:
+        return JsonResponse({'error': '요청 대상 이메일이 없습니다.'}, status=400)
+
+    return JsonResponse({'success': True, 'created': created_count, 'email_errors': email_errors})

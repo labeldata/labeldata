@@ -35,6 +35,7 @@ urlpatterns = [
     path('tab-json/', views.label_tab_json, name='label_tab_json'),  
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
     path('save_preview_settings/', views.save_preview_settings, name='save_preview_settings'),
+    path('upload-label-pdf/', views.upload_label_pdf, name='upload_label_pdf'),
     path('log-validation/', views.log_validation, name='log_validation'),
     path('log-pdf-save/', views.log_pdf_save, name='log_pdf_save'),
     path('log-mode-switch/', views.log_mode_switch, name='log_mode_switch'),

@@ -11,12 +11,8 @@ from v1.label.models import FoodType, FoodItem, CountryList, MyLabel  # 데모 �
 from django.core.serializers import serialize
 
 def home(request):
-    """루트 URL: V1 모드인 경우 V1 홈으로, 그 외 인증 사용자는 v2 대시보드로, 비인증 사용자는 v1 홈으로"""
-    if request.user.is_authenticated:
-        if request.session.get('ui_mode') == 'v1':
-            return home_v1(request)
-        return redirect('main:home_dashboard')
-    return home_v1(request)
+    """루트 URL: V2 신규홈(home_dashboard)으로 이동"""
+    return redirect('main:home_dashboard')
 
 def home_v1(request):
     """
@@ -338,15 +334,34 @@ def save_label(request):
 # V2 대시보드 홈
 # ============================================================
 
-@login_required
 def home_dashboard(request):
     """
-    V2 메인 대시보드 홈 페이지
-    - 사용자별 제품·협업·진행상태 통계 요약
-    - V2 주요 기능 안내 및 최근 활동 표시
+    V2 메인 대시보드 홈 페이지 (신규홈, 메인 주소)
+    - 비로그인 게스트: 서비스 소개 + 로그인/회원가입 유도 (대시보드만 접속 가능)
+    - 로그인 사용자: 제품·협업·진행상태 통계 요약 및 최근 활동 표시
     """
-    # UI 모드를 V2로 설정 (이후 페이지들이 V2 스타일을 사용하도록)
+    # UI 모드를 V2로 설정
     request.session['ui_mode'] = 'v2'
+
+    # ── 비로그인 게스트: 빈 context로 게스트용 화면 렌더링 ──────
+    if not request.user.is_authenticated:
+        context = {
+            'is_guest': True,
+            'my_count': 0,
+            'collab_count': 0,
+            'starred_count': 0,
+            'status_counts': {'DRAFT': 0, 'REQUESTING': 0, 'SUBMITTED': 0,
+                              'REVIEW': 0, 'PENDING': 0, 'CONFIRMED': 0},
+            'progress_pct': 0,
+            'confirmed_count': 0,
+            'total_with_meta': 0,
+            'recent_labels': [],
+            'unread_notif_count': 0,
+            'expiring_count': 0,
+        }
+        return render(request, 'main/home_v2_dashboard.html', context)
+
+    # ── 로그인 사용자: 개인화 통계 조회 ────────────────────────
     from v1.products.models import ProductMetadata, ProductShare, ProductNotification
     from django.db.models import Q, Count
     from django.utils import timezone
@@ -415,6 +430,7 @@ def home_dashboard(request):
         expiring_count = 0
 
     context = {
+        'is_guest': False,
         'my_count': my_count,
         'collab_count': collab_count,
         'starred_count': starred_count,
@@ -429,10 +445,3 @@ def home_dashboard(request):
     return render(request, 'main/home_v2_dashboard.html', context)
 
 
-def home_switcher(request):
-    """
-    V1 ↔ V2 홈화면 전환 페이지
-    - 로그인/비로그인 모두 접근 가능
-    - 사용자가 원하는 홈화면으로 이동할 수 있는 브릿지 페이지
-    """
-    return render(request, 'main/home_switcher.html')

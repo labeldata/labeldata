@@ -1,83 +1,64 @@
-﻿<!-- _tab_label.html: 표시사항 탭 -->
+﻿<!-- _tab_label.html: 표시사항 탭 – 미리보기 직접 임베드 -->
 <style>
 #ltRoot {
     flex: 1 1 auto;
-    overflow-y: auto;
-    min-height: 600px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     width: 100%;
     box-sizing: border-box;
 }
+
+#lt-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 300px;
+    color: #5f6368;
+}
+
+#lt-preview-frame {
+    width: 100%;
+    flex: 1 1 0;      /* basis 0 + grow: 컨테이너 잔여 높이를 정확히 채움 */
+    min-height: 0;    /* flex-shrink 허용 – 부모보다 커지지 않음 */
+    border: none;
+    display: block;
+}
 </style>
-<div id="ltRoot"></div>
 
-
+<div id="ltRoot">
+    {% if not can_edit %}
+    <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom bg-light flex-shrink-0">
+        <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>읽기 전용</span>
+        <span class="text-muted" style="font-size:12px;">현재 역할로는 표시사항 설정을 수정하거나 PDF를 저장할 수 없습니다.</span>
+    </div>
+    {% endif %}
+    <div id="lt-loading">
+        <div class="spinner-border text-primary" style="width:1.8rem;height:1.8rem;" role="status"></div>
+        <span>표시사항 미리보기를 불러오는 중...</span>
+    </div>
+    <iframe id="lt-preview-frame" src="" style="display:none;"></iframe>
+</div>
 <script>
 (function () {
     var LABEL_ID    = '{{ product.my_label_id }}';
     var API_URL     = '{% url "label:label_tab_json" %}?label_id=' + LABEL_ID;
-    var PREVIEW_URL = '{% url "label:preview_popup" %}?label_id=' + LABEL_ID;
+    var PREVIEW_URL = '{% url "label:preview_popup" %}?label_id=' + LABEL_ID + '&in_tab=1';
     var _loaded     = false;
-    var _ltData     = null;   // API 응답 원본 저장 (popup postMessage용)
-    var _popupWin   = null;   // 열린 팝업 창 참조
+    var _ltData     = null;
 
-    function root() { return document.getElementById('ltRoot'); }
+    function getFrame()   { return document.getElementById('lt-preview-frame'); }
+    function getLoading() { return document.getElementById('lt-loading'); }
 
-    function esc(s) {
-        return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
-
-    function showLoading() {
-        root().innerHTML =
-            '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;'
-            + 'min-height:300px;gap:12px;color:#5f6368;padding:40px;">'
-            + '<div class="spinner-border text-primary" style="width:1.8rem;height:1.8rem;" role="status"></div>'
-            + '<span>표시사항 정보를 불러오는 중...</span>'
-            + '</div>';
-    }
-
-    function showError(msg) {
-        root().innerHTML =
-            '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;'
-            + 'min-height:300px;gap:12px;color:#5f6368;text-align:center;padding:40px;">'
-            + '<i class="bi bi-exclamation-triangle-fill text-warning" style="font-size:40px;"></i>'
-            + '<p style="margin:0;">' + esc(msg) + '</p>'
-            + '<button onclick="ltLoad()" style="padding:6px 18px;border:1.5px solid #dadce0;border-radius:20px;background:#fff;cursor:pointer;font-size:13px;">다시 시도</button>'
-            + '</div>';
-    }
-
-    function buildFieldCell(it) {
-        return '<td style="width:50%;padding:9px 0;border-bottom:1px solid #f1f3f4;vertical-align:top;padding-right:20px;">'
-             + '<div style="font-size:10px;font-weight:700;color:#5f6368;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px;">' + esc(it.label) + '</div>'
-             + '<div style="font-size:13px;color:#1f1f1f;white-space:pre-wrap;word-break:break-word;line-height:1.6;">' + esc(it.value) + '</div>'
-             + '</td>';
-    }
-
-    function sectionTitle(text) {
-        return '<div style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;'
-             + 'color:#5f6368;margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid #e8eaed;">'
-             + text + '</div>';
-    }
-
-    /* 알레르기 배지 HTML 생성 */
-    function buildAllergenBadges(allergens) {
-        if (!allergens || allergens.length === 0) return '';
-        var html = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">';
-        allergens.forEach(function(a) {
-            html += '<span style="display:inline-block;background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;'
-                  + 'border-radius:12px;padding:3px 10px;font-size:12px;font-weight:500;">' + esc(a) + '</span>';
-        });
-        html += '</div>';
-        return html;
-    }
-
-    /* #field-allergens → 배열, rawmtrl_nm textarea도 폴백으로 확인 */
+    /* DOM에서 현재 선택된 알레르기 목록 읽기 */
     function getCurrentAllergens() {
         var el = document.getElementById('field-allergens');
         var val = el ? el.value.trim() : '';
         if (val) {
             return val.split(',').map(function(a){ return a.trim(); }).filter(Boolean);
         }
-        /* 폴백: rawmtrl_nm_display textarea 또는 rawmtrl_nm에서 inline 추출 */
         var rawEl = document.getElementById('field-rawmtrl-nm');
         if (rawEl && rawEl.value) {
             var m = rawEl.value.match(/\[알레르기\s*성분\s*:\s*([^\]]+)\]/);
@@ -88,267 +69,106 @@
         return [];
     }
 
-    function buildContent(data) {
-        var html = '<div style="padding:24px;width:100%;max-width:100%;box-sizing:border-box;">';
-
-        /* 툴바 */
-        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;flex-wrap:wrap;">'
-              + '<span style="font-size:17px;font-weight:700;color:#1f1f1f;flex:1;min-width:0;">'
-              +   esc(data.label_name || '표시사항')
-              + '</span>'
-              + '<button type="button" onclick="ltOpenPreviewPopup()"'
-              +  ' style="display:inline-flex;align-items:center;gap:6px;border-radius:20px;padding:6px 16px;'
-              +  'font-size:13px;font-weight:500;border:1.5px solid #dadce0;background:#fff;color:#3c4043;cursor:pointer;">'
-              +  '<i class="bi bi-box-arrow-up-right"></i>미리보기 팝업'
-              + '</button>'
-              + '</div>';
-
-        /* 표시항목 */
-        html += sectionTitle('표시항목');
-        var items = data.preview_items || [];
-        var longLabels = ['원재료명', '원재료명(참고)', '주의사항', '기타표시사항', '성분명 및 함량'];
-
-        /* 알레르기 - 우선순위: DOM(현재선택) > API(DB) > rawmtrl_nm_display 내장텍스트 */
-        var domAllergenVal = (document.getElementById('field-allergens') || {}).value || '';
-        domAllergenVal = domAllergenVal.trim();
-        var _apiAllergens = data.allergens || [];
-        /* rawmtrl_nm_display 내장텍스트 폴백 */
-        var _embeddedAllergens = [];
-        var _rawDisplayItem = items.filter(function(it){ return it.label === '원재료명'; })[0];
-        if (_rawDisplayItem && _rawDisplayItem.value) {
-            var _em = _rawDisplayItem.value.match(/\[알레르기\s*성분\s*:\s*([^\]]+)\]/);
-            if (_em) _embeddedAllergens = _em[1].replace(/함유/g,'').split(',').map(function(a){ return a.trim(); }).filter(Boolean);
-        }
-        /* 최종 알레르기 목록 (buildContent 시점) */
-        var _initAllergens = domAllergenVal
-            ? domAllergenVal.split(',').map(function(a){ return a.trim(); }).filter(Boolean)
-            : (_apiAllergens.length ? _apiAllergens : _embeddedAllergens);
-
-        if (items.length === 0) {
-            html += '<p style="color:#bdbdbd;font-style:italic;font-size:13px;margin:0;">표시항목 정보가 없습니다.</p>';
-        } else {
-            html += '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">';
-            var i = 0;
-            while (i < items.length) {
-                var it = items[i];
-                var isFull = (longLabels.indexOf(it.label) !== -1) || (it.value && it.value.length > 60);
-                if (isFull) {
-                    html += '<tr><td colspan="2" style="padding:9px 0;border-bottom:1px solid #f1f3f4;vertical-align:top;">'
-                          + '<div style="font-size:10px;font-weight:700;color:#5f6368;margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px;">' + esc(it.label) + '</div>'
-                          + '<div style="font-size:13px;color:#1f1f1f;white-space:pre-wrap;word-break:break-word;line-height:1.6;">' + esc(it.value) + '</div>'
-                          + '</td></tr>';
-                    /* ── 원재료명(참고) 바로 아래에 알레르기 유발물질 인라인 삽입 ── */
-                    if (it.label === '원재료명(참고)') {
-                        html += '<tr id="lt-allergen-row"><td colspan="2" style="padding:6px 0 12px;border-bottom:2px solid #ffe0b2;">'
-                              + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-                              + '<span style="font-size:10px;font-weight:700;color:#e65100;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;">'
-                              + '⚠ 알레르기 유발물질</span>'
-                              + '<div id="lt-allergen-badges" style="display:flex;flex-wrap:wrap;gap:4px;">'
-                              + buildAllergenInner(_initAllergens)
-                              + '</div>'
-                              + '</div>'
-                              + '</td></tr>';
-                    }
-                    i++;
-                } else {
-                    html += '<tr>' + buildFieldCell(items[i]);
-                    i++;
-                    if (i < items.length) {
-                        var next = items[i];
-                        var nextFull = (longLabels.indexOf(next.label) !== -1) || (next.value && next.value.length > 60);
-                        if (!nextFull) { html += buildFieldCell(items[i]); i++; }
-                        else { html += '<td style="border-bottom:1px solid #f1f3f4;"></td>'; }
-                    } else {
-                        html += '<td style="border-bottom:1px solid #f1f3f4;"></td>';
-                    }
-                    html += '</tr>';
-                }
-            }
-            html += '</table>';
-        }
-
-        /* 원재료명(참고) 항목이 없을 경우: 표시항목 표 아래에 알레르기 섹션 fallback 표시 */
-        var hasRawmtrlRef = items.some(function(it){ return it.label === '원재료명(참고)'; });
-        if (!hasRawmtrlRef) {
-            html += '<div id="lt-allergen-row" style="margin-top:12px;">'
-                  + '<div style="font-size:11px;font-weight:700;letter-spacing:.6px;color:#e65100;'
-                  +     'padding-bottom:6px;border-bottom:2px solid #ffe0b2;margin-bottom:6px;">⚠ 알레르기 유발물질</div>'
-                  + '<div id="lt-allergen-badges" style="display:flex;flex-wrap:wrap;gap:4px;">'
-                  + buildAllergenInner(_initAllergens)
-                  + '</div>'
-                  + '</div>';
-        }
-
-        /* 영양성분 */
-        var nutr = data.nutrition_items || [];
-        if (nutr.length > 0) {
-            html += sectionTitle('영양성분');
-            if (data.nutrition_serving_size) {
-                html += '<p style="font-size:12px;color:#6c757d;margin:0 0 8px;">1회 제공량: '
-                      + esc(data.nutrition_serving_size) + esc(data.nutrition_serving_unit || 'g') + '</p>';
-            }
-            html += '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'
-                  + '<thead><tr>'
-                  + '<th style="padding:5px 8px;border-bottom:1px solid #f1f3f4;background:#f8f9fa;font-size:11px;font-weight:700;color:#5f6368;text-align:left;">영양소</th>'
-                  + '<th style="padding:5px 8px;border-bottom:1px solid #f1f3f4;background:#f8f9fa;font-size:11px;font-weight:700;color:#5f6368;text-align:right;">함량</th>'
-                  + '</tr></thead><tbody>';
-            nutr.forEach(function (it) {
-                html += '<tr>'
-                      + '<td style="padding:5px 8px;border-bottom:1px solid #f1f3f4;">' + esc(it.label) + '</td>'
-                      + '<td style="padding:5px 8px;border-bottom:1px solid #f1f3f4;text-align:right;">' + esc(it.value) + '</td>'
-                      + '</tr>';
-            });
-            html += '</tbody></table>';
-        }
-
-        /* 맞춤항목 */
-        var custom = data.custom_fields || [];
-        if (custom.length > 0) {
-            html += sectionTitle('맞춤항목')
-                  + '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">';
-            var j = 0;
-            while (j < custom.length) {
-                html += '<tr>';
-                for (var col = 0; col < 2 && j < custom.length; col++) {
-                    var f = custom[j];
-                    html += '<td style="width:50%;padding:9px 0;border-bottom:1px solid #f1f3f4;vertical-align:top;padding-right:20px;">'
-                          + '<div style="font-size:10px;font-weight:700;color:#5f6368;margin-bottom:3px;">' + esc(f.name || '') + '</div>'
-                          + '<div style="font-size:13px;color:#1f1f1f;">' + esc(f.value || '') + '</div>'
-                          + '</td>';
-                    j++;
-                }
-                if (j % 2 === 1) html += '<td></td>';
-                html += '</tr>';
-            }
-            html += '</table>';
-        }
-
-        html += '</div>';
-        return html;
-    }
-
-    /* 알레르기 배지 내용만 반환 (없으면 회색 안내 문구) */
-    function buildAllergenInner(allergens) {
-        if (!allergens || allergens.length === 0) {
-            return '<span style="font-size:12px;color:#9e9e9e;font-style:italic;">감지된 알레르기 유발물질 없음</span>';
-        }
-        var html = '';
-        allergens.forEach(function(a) {
-            html += '<span style="display:inline-block;background:#fff3e0;color:#e65100;border:1px solid #ffe0b2;'
-                  + 'border-radius:12px;padding:3px 10px;font-size:12px;font-weight:500;">' + esc(a) + '</span>';
-        });
-        return html;
-    }
-
+    /* iframe 즉시 표시 후 API 데이터는 백그라운드로 로드
+       (requestPreviewData postMessage 응답에 사용) */
     function ltLoad() {
-        showLoading();
+        if (_loaded) return;
+        _loaded = true;
+        showFrame();  // 즉시 iframe 표시
+
+        // 백그라운드 fetch: postMessage 응답(previewCheckedFields)에 사용
         fetch(API_URL, { credentials: 'same-origin' })
-            .then(function (r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json();
-            })
-            .then(function (data) {
-                if (!data.success) { showError(data.error || '정보를 불러올 수 없습니다.'); return; }
-                _ltData = data;            // ← API 응답 보관 (popup postMessage용)
-                root().innerHTML = buildContent(data);
-                _loaded = true;
-                refreshAllergenBadges();  // fetch 완료 후 DOM 최신값으로 배지 갱신
-            })
-            .catch(function (err) {
-                console.error('[LabelTab] 오류:', err);
-                showError('네트워크 오류: ' + (err.message || err));
-            });
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) { if (data && data.success) _ltData = data; })
+            .catch(function() {});
     }
 
-    /* #lt-allergen-badges 내용을 DOM 최신값으로 갱신 */
-    function refreshAllergenBadges() {
-        var badgesEl = document.getElementById('lt-allergen-badges');
-        if (!badgesEl) return;
-        badgesEl.innerHTML = buildAllergenInner(getCurrentAllergens());
-    }
-
-    /* ── 미리보기 팝업 ──
-       표시사항 작성 페이지와 동일한 방식:
-       1. noopener 없이 열어 window.opener 유지
-       2. 팝업이 requestPreviewData 요청 시 previewCheckedFields 로 응답
-       3. allergens + country 정보 포함 → 검은 배경 바 + 원산지 굵게 정상 작동 */
-    function ltOpenPreviewPopup() {
-        var allergens = getCurrentAllergens();
-        var url = PREVIEW_URL;
-        /* URL 파라미터도 함께 전달 (폴백용) */
-        if (allergens.length > 0) {
-            url += '&allergens=' + encodeURIComponent(allergens.join(','));
+    function showFrame() {
+        var frame   = getFrame();
+        var loading = getLoading();
+        if (loading) loading.style.display = 'none';
+        if (frame) {
+            if (!frame.src || frame.src === window.location.href || frame.src === 'about:blank') {
+                frame.src = PREVIEW_URL;
+            }
+            frame.style.display = 'block';
         }
-        /* noopener 제거 → window.opener 유지 → postMessage 흐름 작동 */
-        _popupWin = window.open(url, 'ltPreviewPopup',
-            'width=1200,height=850,scrollbars=yes,resizable=yes');
     }
-    window.ltOpenPreviewPopup = ltOpenPreviewPopup;
 
-    /* 팝업 → 부모 방향 메시지 수신
-       popup이 requestPreviewData 를 보내면 previewCheckedFields 로 응답 */
+    /* iframe → 부모 방향 postMessage 수신:
+       label_preview.js 가 requestPreviewData 를 보내면 previewCheckedFields 로 응답 */
     window.addEventListener('message', function(e) {
         if (!e.data || e.data.type !== 'requestPreviewData') return;
-        if (!_popupWin || _popupWin.closed) return;
 
-        /* label_data: label_preview.js 의 renderVerticalLayout 이 사용하는 필드 집합 */
         var labelData = {};
         if (_ltData && _ltData.preview_items) {
-            /* preview_items 는 [{label, value}] 배열 → 필드키 역매핑 필요 */
             var labelMap = {
-                '식품유형': 'prdlst_dcnm', '제품명': 'prdlst_nm',
-                '성분명 및 함량': 'ingredient_info', '내용량': 'content_weight',
-                '내용량(열량)': 'weight_calorie', '품목보고번호': 'prdlst_report_no',
-                '원산지': 'country_of_origin', '보관방법': 'storage_method',
-                '포장재질': 'frmlc_mtrqlt', '제조원': 'bssh_nm',
+                '식품유형': 'prdlst_dcnm',              '제품명': 'prdlst_nm',
+                '성분명 및 함량': 'ingredient_info',    '내용량': 'content_weight',
+                '내용량(열량)': 'weight_calorie',        '품목보고번호': 'prdlst_report_no',
+                '원산지': 'country_of_origin',           '보관방법': 'storage_method',
+                '포장재질': 'frmlc_mtrqlt',              '제조원': 'bssh_nm',
+                '제조원 소재지': 'bssh_nm',
                 '유통전문판매원': 'distributor_address', '소분원': 'repacker_address',
-                '수입원': 'importer_address', '소비기한': 'pog_daycnt',
-                '원재료명': 'rawmtrl_nm_display', '원재료명(참고)': 'rawmtrl_nm',
-                '주의사항': 'cautions', '기타표시사항': 'additional_info'
+                '수입원': 'importer_address',            '소비기한': 'pog_daycnt',
+                '원재료명': 'rawmtrl_nm_display',
+                /* '원재료명(참고)': 'rawmtrl_nm' 은 의도적으로 제외.
+                   rawmtrl_nm 을 별도 키로 labelData 에 넣으면 iframe 의
+                   getFieldDefinitions() 가 '원재료명' 행을 중복 생성하고,
+                   rawmtrl_nm 키에는 원산지 굵게/알레르기 뱃지 처리가 없어
+                   표시 정보가 서로 다른 두 행이 나타나는 버그가 발생한다.
+                   rawmtrl_nm_display 가 비어있을 경우 아래에서 rawmtrl_nm 값으로 폴백한다. */
+                '주의사항': 'cautions',                  '기타표시사항': 'additional_info'
             };
             _ltData.preview_items.forEach(function(it) {
                 var key = labelMap[it.label];
                 if (key) labelData[key] = it.value;
             });
+
+            /* rawmtrl_nm_display 가 비어있으면 rawmtrl_nm(참고) 값을
+               rawmtrl_nm_display 키로 폴백 → 원산지 굵게/알레르기 처리 유지 */
+            if (!labelData.rawmtrl_nm_display) {
+                var fallbackItem = null;
+                _ltData.preview_items.forEach(function(it) {
+                    if (it.label === '원재료명(참고)') fallbackItem = it;
+                });
+                if (fallbackItem && fallbackItem.value) {
+                    labelData.rawmtrl_nm_display = fallbackItem.value;
+                }
+            }
         }
 
-        /* 알레르기 목록: DOM 현재값 우선 → API 응답값 폴백 */
         var allergens = getCurrentAllergens();
         if (!allergens.length && _ltData && _ltData.allergens) {
             allergens = _ltData.allergens;
         }
 
-        /* 맞춤항목 */
         var customFields = (_ltData && _ltData.custom_fields) ? _ltData.custom_fields : [];
 
-        _popupWin.postMessage({
-            type: 'previewCheckedFields',
-            checked: labelData,
-            allergens: allergens,
-            customFields: customFields,
-            update_datetime: new Date().toISOString().slice(0, 16).replace('T', ' ')
-        }, '*');
+        var target = e.source;
+        if (target) {
+            target.postMessage({
+                type: 'previewCheckedFields',
+                checked: labelData,
+                allergens: allergens,
+                customFields: customFields,
+                update_datetime: new Date().toISOString().slice(0, 16).replace('T', ' ')
+            }, '*');
+        }
     });
 
     function init() {
         var tabBtn = document.querySelector('button[data-bs-target="#tab-label"]');
         if (tabBtn) {
-            tabBtn.addEventListener('shown.bs.tab', function () {
-                if (!_loaded) {
-                    ltLoad();
-                } else {
-                    /* 재방문: 배지만 최신 DOM 값으로 갱신 */
-                    refreshAllergenBadges();
-                }
+            tabBtn.addEventListener('shown.bs.tab', function() {
+                ltLoad();
             });
         }
 
-        // Bootstrap은 DOMContentLoaded 시 탭을 초기화하며 #tab-info로 전환함
-        // 따라서 pre-load는 Bootstrap 완전 초기화 이후(requestAnimationFrame * 2)에만 실행
         requestAnimationFrame(function() {
             requestAnimationFrame(function() {
                 var pane = document.getElementById('tab-label');
-                if (pane && pane.classList.contains('active') && !_loaded) {
+                if (pane && pane.classList.contains('active')) {
                     ltLoad();
                 }
             });

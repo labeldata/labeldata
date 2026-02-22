@@ -6,8 +6,6 @@ let lastSlotContext = null;
 
 // 모달 열기
 function openUploadModal(slotId, docTypeName, docTypeId) {
-    console.log('[openUploadModal] slotId:', slotId, 'docTypeName:', docTypeName, 'docTypeId:', docTypeId);
-    
     const modal = new bootstrap.Modal(document.getElementById('smartUploadModal'));
     targetSlotId = slotId;
     
@@ -28,7 +26,6 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
         typeSelect.value = docTypeId;
         typeSelect.dispatchEvent(new Event('change'));
         typeSelect.disabled = true;
-        console.log('[openUploadModal] 문서 종류 자동 선택:', docTypeId, docTypeName);
     } else {
         lastSlotContext = null;
         window.lastUploadSlotContext = null;
@@ -36,7 +33,6 @@ function openUploadModal(slotId, docTypeName, docTypeId) {
         document.getElementById('upload-modal-title').textContent = '일반 문서 등록';
         typeSelect.disabled = false;
         typeSelect.value = '';
-        console.log('[openUploadModal] 일반 업로드 모드');
     }
     
     modal.show();
@@ -191,19 +187,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // 업로드 권한 체크 (서버와 클라이언트 이중 보호)
             if (typeof CAN_UPLOAD_DOCUMENTS !== 'undefined' && !CAN_UPLOAD_DOCUMENTS) {
-                alert('문서 업로드 권한이 없습니다.\n\n현재 역할(뷰어/검토자)로는 파일을 업로드할 수 없습니다.\n파일 업로드는 오너, 편집자, 자료 제출자만 가능합니다.');
+                showSnackbar('문서 업로드 권한이 없습니다. 파일 업로드는 오너, 편집자, 자료 제출자만 가능합니다.', 'warning');
                 return;
             }
 
             if (!selectedFile) {
-                alert('파일을 선택해주세요.');
+                showSnackbar('파일을 선택해주세요.', 'warning');
                 return;
             }
             
             const typeSelect = document.getElementById('document-type-select');
             const slotIdValue = document.getElementById('target-slot-id').value;
             if (!slotIdValue && !typeSelect.value) {
-                alert('문서 종류를 선택해주세요.');
+                showSnackbar('문서 종류를 선택해주세요.', 'warning');
                 return;
             }
             
@@ -260,19 +256,14 @@ async function handleSmartUpload() {
         selectedFile = fileInput.files[0];
     }
     
-    console.log('[handleSmartUpload] 시작');
-    console.log('[handleSmartUpload] selectedFile:', selectedFile);
-    console.log('[handleSmartUpload] document_type:', typeSelectValue);
-    console.log('[handleSmartUpload] slot_id:', slotIdValue);
-    
     // 유효성 검사
     if (!selectedFile) {
-        alert('파일을 선택해주세요.');
+        showSnackbar('파일을 선택해주세요.', 'warning');
         return;
     }
     
     if (!slotIdValue && !typeSelectValue) {
-        alert('문서 종류를 선택해주세요.');
+        showSnackbar('문서 종류를 선택해주세요.', 'warning');
         return;
     }
     
@@ -293,7 +284,6 @@ async function handleSmartUpload() {
                 const customDate = document.getElementById('custom-expiry-date').value;
                 if (customDate) {
                     formData.append('expiry_date', customDate);
-                    console.log('[handleSmartUpload] custom expiry_date:', customDate);
                 }
             } else {
                 const days = parseInt(expiryOption.value);
@@ -304,7 +294,6 @@ async function handleSmartUpload() {
                     expiryDate.setDate(expiryDate.getDate() + days);
                     const expiryDateStr = expiryDate.toISOString().split('T')[0];
                     formData.append('expiry_date', expiryDateStr);
-                    console.log('[handleSmartUpload] calculated expiry_date:', expiryDateStr, '(', days, 'days)');
                 }
             }
         } else {
@@ -313,20 +302,16 @@ async function handleSmartUpload() {
 
         if (expiryUnlimited) {
             formData.append('expiry_unlimited', 'true');
-            console.log('[handleSmartUpload] expiry_unlimited: true');
         }
         
         // 알림 설정
         const notificationEnabled = document.getElementById('enable-notification').checked;
         formData.append('notification_enabled', notificationEnabled);
-        console.log('[handleSmartUpload] notification_enabled:', notificationEnabled);
         
         const csrftoken = getCsrfToken();
         // data-label-id 속성에서 labelId 읽기
         const labelId = parseInt(document.getElementById('smartUploadModal').getAttribute('data-label-id'));
         const uploadUrl = `/products/documents/api/upload/${labelId}/`;
-        
-        console.log('[handleSmartUpload] uploading to:', uploadUrl);
         
         const response = await fetch(uploadUrl, {
             method: 'POST',
@@ -336,11 +321,8 @@ async function handleSmartUpload() {
             body: formData
         });
         
-        console.log('[handleSmartUpload] response status:', response.status, response.statusText);
-        
         if (response.ok) {
             const data = await response.json();
-            console.log('[handleSmartUpload] 성공:', data);
             
             // 모달 닫기
             const modalElement = document.getElementById('smartUploadModal');
@@ -349,20 +331,17 @@ async function handleSmartUpload() {
                 modal.hide();
             }
             
-            // 성공 메시지 표시
-            alert(data.message || '문서가 성공적으로 등록되었습니다.');
-            
-            // 페이지 새로고침
-            console.log('[handleSmartUpload] 페이지 새로고침 시작');
-            window.location.reload(true);
+            // 성공 메시지 + 문서함 탭 복원 후 새로고침
+            showSnackbar(data.message || '문서가 성공적으로 등록되었습니다.', 'success');
+            sessionStorage.setItem('returnToTab', 'docs');
+            window.location.reload();
         } else {
             const error = await response.json();
-            console.error('[handleSmartUpload] 업로드 실패:', error);
-            alert('업로드 실패: ' + (error.error || '알 수 없는 오류'));
+            showSnackbar('업로드 실패: ' + (error.error || '알 수 없는 오류'), 'error');
         }
     } catch (error) {
         console.error('[handleSmartUpload] Exception:', error);
-        alert('업로드 중 오류가 발생했습니다: ' + error.message);
+        showSnackbar('업로드 중 오류가 발생했습니다: ' + error.message, 'error');
     } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i class="bi bi-upload me-1"></i>등록';
@@ -430,7 +409,8 @@ function toggleSlotVisibility(slotId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                location.reload();  // 준수율 재계산을 위해 리로드
+                sessionStorage.setItem('returnToTab', 'docs');
+                location.reload();
             }
         });
     }
@@ -452,7 +432,7 @@ function handleSlotDrop(event, slotId, docTypeName) {
     
     // 파일 크기 체크 (50MB)
     if (file.size > 50 * 1024 * 1024) {
-        alert('파일 크기는 50MB를 초과할 수 없습니다.');
+        showSnackbar('파일 크기는 50MB를 초과할 수 없습니다.', 'warning');
         return;
     }
     

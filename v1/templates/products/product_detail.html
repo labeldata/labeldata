@@ -79,7 +79,7 @@
                     <i class="bi bi-tag me-2 text-secondary"></i> 표시사항
                 </button>
             </li>
-            <li class="nav-item ms-auto">
+            <li class="nav-item">
                 <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button">
                     <i class="bi bi-file-earmark-text me-2 text-secondary"></i> 문서함
                 </button>
@@ -91,7 +91,7 @@
             </li>
         </ul>
 
-        <div class="d-flex align-items-center py-1 border-start ps-3 ms-3">
+        <div id="toolbar-badges" class="d-flex align-items-center py-1 border-start ps-3 ms-3">
             <!-- 현재 상태 배지 -->
             <span class="badge bg-white text-dark border me-2 py-2 px-3 d-flex align-items-center gap-2 toolbar-status-badge">
                 <i class="bi bi-circle-fill me-1 status-dot" style="{% if product_status == 'DRAFT' %}color:#5f6368;{% elif product_status == 'REQUESTING' %}color:#1a73e8;{% elif product_status == 'SUBMITTED' %}color:#f9ab00;{% elif product_status == 'REVIEW' %}color:#f9ab00;{% elif product_status == 'PENDING' %}color:#e8710a;{% elif product_status == 'CONFIRMED' %}color:#1e8e3e;{% endif %}"></i>
@@ -855,6 +855,16 @@ const COMMENT_DELETE_URL = "{% url 'products:comment_delete' comment_id=0 %}";
 const CAN_EDIT = {{ can_edit|yesno:"true,false" }};
 const CAN_COMMENT = {{ can_comment|yesno:"true,false" }};
 
+/**
+ * 현재 활성 탭 ID를 sessionStorage에 저장.
+ * 페이지 리로드 직전에 호출하면 리로드 후 해당 탭으로 자동 복원됨.
+ */
+function saveCurrentTab() {
+    const activeBtn = document.querySelector('#workspaceTab .nav-link.active');
+    const tabId = activeBtn?.getAttribute('data-bs-target')?.replace('#tab-', '');
+    if (tabId) sessionStorage.setItem('returnToTab', tabId);
+}
+
 // 댓글 탭 필터링 기능
 document.addEventListener('DOMContentLoaded', function() {
     const tabFilter = document.getElementById('comment-tab-filter');
@@ -1007,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // iframe 로딩 (BOM, 영양성분)
+    // iframe 로딩 (BOM, 영양성분, 표시사항)
     const tabContainer = document.getElementById('workspaceTab');
     if (tabContainer) {
         tabContainer.addEventListener('shown.bs.tab', function(event) {
@@ -1016,6 +1026,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadBomIframe();
             } else if (targetId === '#tab-nutrition') {
                 loadNutritionIframe();
+            } else if (targetId === '#tab-label') {
+                if (typeof window.ltLoad === 'function') window.ltLoad();
+            }
+        });
+
+        // 탭 이탈 시 iframe 데이터 자동 저장 (편집 내용 보존)
+        tabContainer.addEventListener('hide.bs.tab', function(event) {
+            const leavingId = event.target?.getAttribute('data-bs-target') || '';
+            if (leavingId === '#tab-nutrition') {
+                const iframe = document.getElementById('nutritionEditorFrame');
+                if (iframe && iframe.contentWindow && iframe.contentWindow.saveData) {
+                    try { iframe.contentWindow.saveData(); } catch(e) {}
+                }
             }
         });
     }
@@ -1026,6 +1049,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (hash === '#tab-nutrition' || hash === '#nutrition') {
         loadNutritionIframe();
+    }
+    if (hash === '#tab-label' || hash === '#labeling') {
+        if (typeof window.ltLoad === 'function') window.ltLoad();
     }
 });
 
@@ -1057,21 +1083,8 @@ window.addEventListener('message', function(e) {
         bootstrap.Tab.getOrCreateInstance(basicInfoTab).show();
     }
 
-    /* 완료 토스트 */
-    const toast = document.createElement('div');
-    toast.className = 'position-fixed bottom-0 end-0 p-3';
-    toast.style.zIndex = '9999';
-    toast.innerHTML = `
-        <div class="toast align-items-center text-white bg-success border-0 show" role="alert">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="bi bi-check-circle me-2"></i>원재료 표시명이 기본정보 탭에 복사되었습니다.
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.closest('.position-fixed').remove()"></button>
-            </div>
-        </div>`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    /* 완료 Snackbar */
+    showSnackbar('원재료 표시명이 기본정보 탭에 복사되었습니다.', 'success');
 });
 
 function loadBomIframe() {
@@ -1082,6 +1095,14 @@ function loadBomIframe() {
     
     if (!bomUrl) {
         showBomError('URL이 설정되지 않았습니다');
+        return;
+    }
+    
+    // 이미 로드되어 있으면 바로 표시 (loadNutritionIframe과 동일한 패턴)
+    if (iframe.src && iframe.src === bomUrl) {
+        loadingMessage.style.display = 'none';
+        errorMessage.style.display = 'none';
+        iframe.style.display = 'block';
         return;
     }
     
@@ -1101,17 +1122,14 @@ function loadBomIframe() {
         showBomError(bomUrl);
     };
     
-    // URL이 변경되지 않았다면 설정
-    if (!iframe.src || iframe.src !== bomUrl) {
-        iframe.src = bomUrl;
-        
-        // 타임아웃 설정 (10초 후에도 로드되지 않으면 에러)
-        setTimeout(function() {
-            if (loadingMessage.style.display === 'block') {
-                showBomError(bomUrl);
-            }
-        }, 10000);
-    }
+    iframe.src = bomUrl;
+    
+    // 타임아웃 설정 (10초 후에도 로드되지 않으면 에러)
+    setTimeout(function() {
+        if (loadingMessage.style.display === 'block') {
+            showBomError(bomUrl);
+        }
+    }, 10000);
 }
 
 function showBomError(url) {
@@ -1220,85 +1238,43 @@ function switchToShareTab() {
 
 async function saveProductInfo() {
     if (!CAN_EDIT) {
-        alert('현재 상태에서는 수정할 수 없습니다.');
+        showSnackbar('현재 상태에서는 수정할 수 없습니다.', 'warning');
         return;
     }
-    // BOM 탭이 활성화되어 있는지 확인
-    const bomTab = document.querySelector('[data-bs-target="#tab-bom"]');
-    const isBomTabActive = bomTab && bomTab.classList.contains('active');
-    
-    // BOM 탭이 활성화되어 있으면 BOM 저장 호출
-    if (isBomTabActive) {
+
+    const activeTarget = document.querySelector('#workspaceTab .nav-link.active')
+                             ?.getAttribute('data-bs-target');
+
+    // BOM 탭
+    if (activeTarget === '#tab-bom') {
         const iframe = document.getElementById('bomEditorFrame');
-        if (iframe && iframe.contentWindow) {
-            try {
-                iframe.contentWindow.saveData();
-                return;
-            } catch (error) {
-                // BOM 저장 실패 시 무시
+        if (iframe && iframe.contentWindow && iframe.contentWindow.saveData) {
+            try { iframe.contentWindow.saveData(); } catch(e) {
+                showSnackbar('BOM 저장 중 오류가 발생했습니다.', 'error');
             }
         }
+        return;
     }
-    
-    // 영양성분 탭이 활성화되어 있는지 확인
-    const nutritionTab = document.querySelector('[data-bs-target="#tab-nutrition"]');
-    const isNutritionTabActive = nutritionTab && nutritionTab.classList.contains('active');
-    
-    // 영양성분 탭이 활성화되어 있으면 영양성분 저장 호출
-    if (isNutritionTabActive) {
+
+    // 영양성분 탭
+    if (activeTarget === '#tab-nutrition') {
         const iframe = document.getElementById('nutritionEditorFrame');
-        if (iframe && iframe.contentWindow) {
-            try {
-                iframe.contentWindow.saveData();
-                return;
-            } catch (error) {
-                // 영양성분 저장 실패 시 무시
+        if (iframe && iframe.contentWindow && iframe.contentWindow.saveData) {
+            try { iframe.contentWindow.saveData(); } catch(e) {
+                showSnackbar('영양성분 저장 중 오류가 발생했습니다.', 'error');
             }
         }
+        return;
     }
-    
-    const data = {
-        my_label_name: (document.getElementById('field-my-label-name') || document.getElementById('workspace-product-name'))?.value || '',
-        prdlst_nm: document.getElementById('field-prdlst-nm').value,
-        ingredient_info: document.getElementById('field-ingredient-info').value,
-        prdlst_dcnm: document.getElementById('field-prdlst-dcnm').value,
-        prdlst_report_no: document.getElementById('field-prdlst-report-no').value,
-        content_weight: document.getElementById('field-content-weight').value,
-        country_of_origin: document.getElementById('field-country-of-origin').value,
-        storage_method: document.getElementById('field-storage-method').value,
-        frmlc_mtrqlt: document.getElementById('field-frmlc-mtrqlt').value,
-        bssh_nm: document.getElementById('field-bssh-nm').value,
-        pog_daycnt: document.getElementById('field-pog-daycnt').value,
-        rawmtrl_nm: document.getElementById('field-rawmtrl-nm').value,
-        cautions: document.getElementById('field-cautions').value,
-        additional_info: document.getElementById('field-additional-info').value
-    };
-    
-    try {
-        const response = await fetch(UPDATE_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': CSRF_TOKEN
-            },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('저장되었습니다.');
-            // 제품명이 변경된 경우 헤더의 제품명도 업데이트
-            const titleInput = document.getElementById('workspace-product-name');
-            if (titleInput) {
-                titleInput.value = data.my_label_name;
-            }
-        } else {
-            alert('저장 실패: ' + (result.error || '알 수 없는 오류'));
-        }
-    } catch (error) {
-        alert('저장 중 오류가 발생했습니다.');
+
+    // 기본정보 탭 – 전용 saveBasicInfo() 위임 (hasUnsavedChanges 리셋 포함)
+    if (activeTarget === '#tab-info') {
+        saveBasicInfo();
+        return;
     }
+
+    // 표시사항 / 문서함 / 권한 탭 – 저장 대상 없음
+    showSnackbar('현재 탭에서는 저장할 내용이 없습니다.', 'info');
 }
 
 async function changeStatus(newStatus) {
@@ -1318,13 +1294,14 @@ async function changeStatus(newStatus) {
         if (result.success) {
             // 사이드바를 열고 활동 로그 탭으로 전환한 후 새로고침
             localStorage.setItem('show-activity-log', 'true');
+            saveCurrentTab();
             window.location.reload();
         } else {
-            alert(result.error || '상태 변경에 실패했습니다.');
+            showSnackbar(result.error || '상태 변경에 실패했습니다.', 'error');
         }
     } catch (error) {
         console.error('Status change error:', error);
-        alert('상태 변경 중 오류가 발생했습니다.');
+        showSnackbar('상태 변경 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -1346,7 +1323,7 @@ function toggleReplyInput(commentId) {
 
 async function submitComment(parentId = null) {
     if (!CAN_COMMENT) {
-        alert('댓글 작성 권한이 없습니다.');
+        showSnackbar('댓글 작성 권한이 없습니다.', 'warning');
         return;
     }
 
@@ -1447,10 +1424,10 @@ async function submitComment(parentId = null) {
                 toggleReplyInput(parentId);
             }
         } else {
-            alert(result.error || '댓글 작성에 실패했습니다.');
+            showSnackbar(result.error || '댓글 작성에 실패했습니다.', 'error');
         }
     } catch (error) {
-        alert('댓글 작성 중 오류가 발생했습니다.');
+        showSnackbar('댓글 작성 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -1472,10 +1449,10 @@ async function deleteComment(commentId) {
             const replyEl = document.getElementById(`reply-${commentId}`);
             if (replyEl) replyEl.remove();
         } else {
-            alert(result.error || '댓글 삭제에 실패했습니다.');
+            showSnackbar(result.error || '댓글 삭제에 실패했습니다.', 'error');
         }
     } catch (error) {
-        alert('댓글 삭제 중 오류가 발생했습니다.');
+        showSnackbar('댓글 삭제 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -1495,14 +1472,14 @@ async function inviteShareMember(event) {
 
         const result = await response.json();
         if (result.success) {
-            alert(result.message || '공유 초대가 완료되었습니다.');
-            window.location.hash = '#tab-share';
+            showSnackbar(result.message || '공유 초대가 완료되었습니다.', 'success');
+            sessionStorage.setItem('returnToTab', 'share');
             window.location.reload();
         } else {
-            alert(result.error || '공유 초대에 실패했습니다.');
+            showSnackbar(result.error || '공유 초대에 실패했습니다.', 'error');
         }
     } catch (error) {
-        alert('공유 초대 중 오류가 발생했습니다.');
+        showSnackbar('공유 초대 중 오류가 발생했습니다.', 'error');
     }
     return false;
 }
@@ -1515,13 +1492,13 @@ async function sendQuickInvite() {
     const company = document.getElementById('inviteCompany').value.trim();
     
     if (!email || !role) {
-        alert('이메일과 역할을 모두 입력해주세요.');
+        showSnackbar('이메일과 역할을 모두 입력해주세요.', 'warning');
         return;
     }
     
     // 이메일 형식 간단 검증
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        alert('올바른 이메일 주소를 입력해주세요.');
+        showSnackbar('올바른 이메일 주소를 입력해주세요.', 'warning');
         return;
     }
 
@@ -1542,15 +1519,15 @@ async function sendQuickInvite() {
 
         const result = await response.json();
         if (result.success) {
-            alert(`${email} 님에게 초대장을 보냈습니다.`);
+            showSnackbar(`${email} 님에게 초대장을 보냈습니다.`, 'success');
             bootstrap.Modal.getInstance(document.getElementById('quickInviteModal')).hide();
-            window.location.hash = '#tab-share';
+            sessionStorage.setItem('returnToTab', 'share');
             window.location.reload();
         } else {
-            alert(result.error || '초대 실패');
+            showSnackbar(result.error || '초대 실패', 'error');
         }
     } catch (error) {
-        alert('초대 중 오류가 발생했습니다.');
+        showSnackbar('초대 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -1579,7 +1556,7 @@ function closeRoleAssignModal() {
 
 async function assignRole(shareId, email) {
     if (!currentTargetRole) {
-        alert('역할이 선택되지 않았습니다.');
+        showSnackbar('역할이 선택되지 않았습니다.', 'warning');
         return;
     }
 
@@ -1598,21 +1575,22 @@ async function assignRole(shareId, email) {
 
         const result = await response.json();
         if (result.success) {
-            alert(`${email} 님을 ${currentTargetRole} 역할로 지정했습니다.`);
+            showSnackbar(`${email} 님을 ${currentTargetRole} 역할로 지정했습니다.`, 'success');
             closeRoleAssignModal();
+            sessionStorage.setItem('returnToTab', 'share');
             window.location.reload();
         } else {
-            alert(result.error || '역할 지정에 실패했습니다.');
+            showSnackbar(result.error || '역할 지정에 실패했습니다.', 'error');
         }
     } catch (error) {
-        alert('역할 지정 중 오류가 발생했습니다.');
+        showSnackbar('역할 지정 중 오류가 발생했습니다.', 'error');
     }
 }
 
 async function updateShareRole(selectElement) {
     const updateUrl = selectElement.dataset.updateUrl;
     if (!updateUrl) {
-        alert('권한 변경 URL이 없습니다.');
+        showSnackbar('권한 변경 URL이 없습니다.', 'error');
         return;
     }
 
@@ -1630,10 +1608,10 @@ async function updateShareRole(selectElement) {
 
         const result = await response.json();
         if (!result.success) {
-            alert(result.error || '권한 변경에 실패했습니다.');
+            showSnackbar(result.error || '권한 변경에 실패했습니다.', 'error');
         }
     } catch (error) {
-        alert('권한 변경 중 오류가 발생했습니다.');
+        showSnackbar('권한 변경 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -1641,7 +1619,7 @@ async function revokeShare(button) {
     const revokeUrl = button.dataset.revokeUrl;
     const email = button.dataset.shareEmail || '해당 사용자';
     if (!revokeUrl) {
-        alert('공유 해제 URL이 없습니다.');
+        showSnackbar('공유 해제 URL이 없습니다.', 'error');
         return;
     }
 
@@ -1659,27 +1637,35 @@ async function revokeShare(button) {
 
         const result = await response.json();
         if (result.success) {
-            window.location.hash = '#tab-share';
+            sessionStorage.setItem('returnToTab', 'share');
             window.location.reload();
         } else {
-            alert(result.error || '공유 해제에 실패했습니다.');
+            showSnackbar(result.error || '공유 해제에 실패했습니다.', 'error');
         }
     } catch (error) {
-        alert('공유 해제 중 오류가 발생했습니다.');
+        showSnackbar('공유 해제 중 오류가 발생했습니다.', 'error');
     }
 }
 
-// BOM 에디터 iframe에서 저장 완료 메시지 수신
+// BOM / 영양성분 / 표시사항 에디터 iframe에서 메시지 수신
 window.addEventListener('message', function(event) {
-    if (event.data && event.data.type === 'bomSaved') {
-        // BOM 탭이 활성화된 상태라면 iframe 리로드
-        const bomTab = document.querySelector('[data-bs-target="#tab-bom"]');
-        if (bomTab && bomTab.classList.contains('active')) {
-            const iframe = document.getElementById('bomEditorFrame');
-            if (iframe) {
-                iframe.src = iframe.src; // iframe 리로드
-            }
-        }
+    if (!event.data || !event.data.type) return;
+
+    // 범용 Snackbar 표시 요청 (iframe → 부모)
+    if (event.data.type === 'showSnackbar') {
+        showSnackbar(event.data.message || '', event.data.snackType || 'success');
+        return;
+    }
+
+    // BOM 저장 완료
+    if (event.data.type === 'bomSaved') {
+        showSnackbar(event.data.message || '저장되었습니다.', 'success');
+        return;
+    }
+
+    // 영양성분 저장 완료
+    if (event.data.type === 'nutritionSaved') {
+        showSnackbar(event.data.message || '영양성분이 저장되었습니다.', 'success');
     }
 });
 
@@ -1820,7 +1806,7 @@ async function submitBulkAssign(e) {
         }
 
         if (invitePromises.length === 0) {
-            alert('최소 1명 이상의 이메일을 입력해주세요.');
+            showSnackbar('최소 1명 이상의 이메일을 입력해주세요.', 'warning');
             btn.disabled = false;
             btn.innerText = "일괄 초대 발송";
             return false;
@@ -1828,12 +1814,13 @@ async function submitBulkAssign(e) {
 
         await Promise.all(invitePromises);
         
-        alert(`팀 구성이 완료되었습니다! (${invitePromises.length}명 초대)`);
+        showSnackbar(`팀 구성이 완료되었습니다! (${invitePromises.length}명 초대)`, 'success');
         bootstrap.Modal.getInstance(document.getElementById('bulkAssignModal')).hide();
+        sessionStorage.setItem('returnToTab', 'share');
         window.location.reload();
         
     } catch (error) {
-        alert('일괄 초대 중 오류가 발생했습니다.');
+        showSnackbar('일괄 초대 중 오류가 발생했습니다.', 'error');
     } finally {
         btn.disabled = false;
         btn.innerText = "일괄 초대 발송";
@@ -1882,17 +1869,17 @@ function openQuickInvite() {
 // 인물 삭제 - 최종 확인 후 리로드
 async function deletePerson() {
     if (!window.selectedShareId) {
-        alert('이 사용자는 현재 제품에 공유되지 않았습니다.');
+        showSnackbar('이 사용자는 현재 제품에 공유되지 않았습니다.', 'warning');
         return;
     }
     
     if (window.selectedIsOwner) {
-        alert('이 사용자는 현재 제품에 공유되지 않았습니다.');
+        showSnackbar('이 사용자는 현재 제품에 공유되지 않았습니다.', 'warning');
         return;
     }
     
     if (selectedIsOwner) {
-        alert('Owner는 삭제할 수 없습니다.');
+        showSnackbar('Owner는 삭제할 수 없습니다.', 'warning');
         return;
     }
     
@@ -1912,15 +1899,15 @@ async function deletePerson() {
         
         const result = await response.json();
         if (result.success) {
-            alert('공유가 완전히 삭제되었습니다.');
+            showSnackbar('공유가 완전히 삭제되었습니다.', 'success');
             sessionStorage.setItem('returnToTab', 'share');
             location.reload();
         } else {
-            alert(result.error || '삭제에 실패했습니다.');
+            showSnackbar(result.error || '삭제에 실패했습니다.', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('삭제 중 오류가 발생했습니다: ' + error.message);
+        showSnackbar('삭제 중 오류가 발생했습니다: ' + error.message, 'error');
     }
 }
 
@@ -1992,7 +1979,7 @@ async function handleFileUpload(files) {
     const csrfToken = getCsrfToken();
     
     if (!csrfToken) {
-        alert('보안 토큰을 찾을 수 없습니다. 페이지를 새로고침 해주세요.');
+        showSnackbar('보안 토큰을 찾을 수 없습니다. 페이지를 새로고침 해주세요.', 'error');
         return;
     }
     
@@ -2032,13 +2019,14 @@ async function handleFileUpload(files) {
     // 결과 메시지 표시
     if (successCount > 0) {
         if (failCount > 0) {
-            alert(`${successCount}개 파일 업로드 성공, ${failCount}개 실패했습니다.`);
+            showSnackbar(`${successCount}개 파일 업로드 성공, ${failCount}개 실패했습니다.`, 'warning');
         } else {
-            alert(`${successCount}개 파일이 업로드되었습니다.`);
+            showSnackbar(`${successCount}개 파일이 업로드되었습니다.`, 'success');
         }
+        sessionStorage.setItem('returnToTab', 'docs');
         location.reload();
     } else {
-        alert('파일 업로드에 실패했습니다. 콘솔을 확인하세요.');
+        showSnackbar('파일 업로드에 실패했습니다. 콘솔을 확인하세요.', 'error');
     }
 }
 
@@ -2085,13 +2073,14 @@ async function deleteDocument(docId) {
         });
         
         if (response.ok) {
+            sessionStorage.setItem('returnToTab', 'docs');
             location.reload();
         } else {
-            alert('삭제에 실패했습니다.');
+            showSnackbar('삭제에 실패했습니다.', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('삭제 중 오류가 발생했습니다.');
+        showSnackbar('삭제 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -2275,7 +2264,7 @@ async function toggleExpiryNotification(docId) {
         }
     } catch (error) {
         console.error('Error:', error);
-        alert('알림 설정 변경 중 오류가 발생했습니다.');
+        showSnackbar('알림 설정 변경 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -2756,45 +2745,9 @@ window.addEventListener('beforeunload', function(e) {
 });
 
 // ============================================
-// Toast 알림 시스템
+// Toast 알림 시스템 → 전역 Snackbar(base_v2.html) 위임
 // ============================================
-
-function showToast(message, type = 'success') {
-    // 기존 toast 제거
-    const existingToast = document.querySelector('.toast-notification');
-    if (existingToast) {
-        existingToast.remove();
-    }
-    
-    // 새 toast 생성
-    const toast = document.createElement('div');
-    toast.className = `toast-notification ${type}`;
-    
-    const icon = type === 'success' ? 'check-circle-fill' : 
-                 type === 'error' ? 'exclamation-circle-fill' : 
-                 type === 'warning' ? 'exclamation-triangle-fill' : 
-                 'info-circle-fill';
-    
-    toast.innerHTML = `
-        <i class="bi bi-${icon} me-2"></i>
-        <span>${message}</span>
-    `;
-    
-    document.body.appendChild(toast);
-    
-    // 애니메이션 트리거
-    setTimeout(() => {
-        toast.classList.add('show');
-    }, 10);
-    
-    // 자동 제거
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => {
-            toast.remove();
-        }, 300);
-    }, 3000);
-}
+function showToast(message, type) { showSnackbar(message, type || 'success'); }
 
 // ============================================
 // 기본 정보 저장 함수 (기존 함수 수정)
@@ -2817,6 +2770,8 @@ function saveBasicInfo() {
 
     // 텍스트/textarea/select 필드 수집 (id="field-*" 패턴)
     // my_label_name: 신규 작성 폼에는 field가 있고, detail 뷰에서는 상단 workspace-product-name에서 가져옴
+    const payload = {};
+
     const myLabelNameEl = document.getElementById('field-my-label-name')
                        || document.getElementById('workspace-product-name');
     if (myLabelNameEl) payload['my_label_name'] = myLabelNameEl.value || '';
@@ -2843,8 +2798,6 @@ function saveBasicInfo() {
         'field-processing-condition': 'processing_condition',
         'field-allergens':          'allergens',
     };
-
-    const payload = {};
 
     Object.entries(textFieldMap).forEach(([elemId, fieldName]) => {
         const el = document.getElementById(elemId);

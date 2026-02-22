@@ -2049,6 +2049,9 @@ def preview_popup(request):
             if not shared_share:
                 return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'})
             label = shared_share.label
+            # 공유 사용자의 문서 업로드 권한 확인
+            _perm = getattr(shared_share, 'permission', None)
+            _can_upload = bool(_perm and _perm.can_upload_documents)
         
         # 미리보기 항목 구성
         preview_items = []
@@ -2190,6 +2193,11 @@ def preview_popup(request):
         # 맞춤항목 데이터 추가
         custom_fields = label.custom_fields if label.custom_fields else []
         
+        # 오너 여부 판단 (공유 사용자인지 확인)
+        is_owner = (label.user_id == request.user)
+        # PDF 문서함 업로드 가능 여부: 오너는 항상 가능, 공유 사용자는 can_upload_documents 권한 필요
+        can_upload_pdf = is_owner or locals().get('_can_upload', False)
+
         context = {
             'label': label,  # label 객체를 context에 추가
             'preview_items': preview_items,
@@ -2202,6 +2210,8 @@ def preview_popup(request):
             'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False),  # 소비기한 권장 데이터 추가
             'custom_fields': json.dumps(custom_fields, ensure_ascii=False),  # 맞춤항목 추가
             'label_data': json.dumps(label_data, ensure_ascii=False),
+            'is_owner': is_owner,          # 설정 저장 버튼 표시 여부 결정
+            'can_upload_pdf': can_upload_pdf,  # PDF 문서함 업로드 버튼 표시 여부
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
         
@@ -2346,12 +2356,34 @@ def my_ingredient_table_partial(request):
 @require_POST
 @login_required
 def save_preview_settings(request):
-    """미리보기 설정(prv_*) 저장"""
+    """미리보기 설정(prv_*) 저장 – 오너 전용."""
     try:
         data = json.loads(request.body)
-        
         label_id = data.get('label_id')
-        label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+
+        # 오너 우선 조회; 공유 사용자는 설정을 DB에 저장하지 않음 (로컬스토리지 사용)
+        try:
+            label = MyLabel.objects.get(my_label_id=label_id, user_id=request.user)
+        except MyLabel.DoesNotExist:
+            # 공유 사용자인지 확인만 하여 적절한 메시지 반환
+            from v1.products.models import ProductShare
+            from django.utils import timezone
+            from django.db.models import Q
+            has_access = ProductShare.objects.filter(
+                label__my_label_id=label_id,
+                is_active=True,
+            ).filter(
+                Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
+            ).filter(
+                Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+            ).exists()
+            if has_access:
+                return JsonResponse({
+                    'success': False,
+                    'error': '설정 저장은 라벨 소유자만 가능합니다.',
+                    'reason': 'not_owner',
+                })
+            return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'}, status=403)
         
         # 미리보기 설정 변경 로깅
         if data.get('font_size'):
@@ -2392,6 +2424,143 @@ def save_preview_settings(request):
         label.save()
         return JsonResponse({'success': True})
     except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_POST
+@login_required
+def upload_label_pdf(request):
+    """미리보기 PDF를 문서함에 '한글표시사항도안'으로 등록/업데이트."""
+    import traceback
+    from django.db.models import Q, Max
+    from django.utils import timezone
+
+    try:
+        label_id = request.POST.get('label_id')
+        pdf_file = request.FILES.get('pdf_file')
+
+        if not label_id or not pdf_file:
+            return JsonResponse({'success': False, 'error': 'label_id와 pdf_file이 필요합니다.'})
+
+        # 파일 크기 제한 (20MB)
+        if pdf_file.size > 20 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': 'PDF 파일 크기는 20MB를 초과할 수 없습니다.'})
+
+        # 오너 우선 조회, 실패 시 공유 사용자 확인
+        label = None
+        try:
+            label = MyLabel.objects.get(my_label_id=label_id, user_id=request.user)
+        except MyLabel.DoesNotExist:
+            from v1.products.models import ProductShare
+            shared_share = ProductShare.objects.filter(
+                label__my_label_id=label_id,
+                is_active=True,
+            ).filter(
+                Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
+            ).filter(
+                Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
+            ).select_related('label', 'permission').first()
+
+            if not shared_share:
+                return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'}, status=403)
+
+            perm = getattr(shared_share, 'permission', None)
+            if perm and not perm.can_upload_documents:
+                return JsonResponse({
+                    'success': False,
+                    'error': '문서 업로드 권한이 없습니다. (문서 업로드는 오너·편집자·자료제출자만 가능합니다.)'
+                }, status=403)
+
+            label = shared_share.label
+
+        from v1.products.models import DocumentType, ProductDocument, ProductActivityLog, DocumentSlot
+
+        # '한글표시사항도안' DocumentType 조회 또는 생성
+        doc_type, _ = DocumentType.objects.get_or_create(
+            type_code='LABEL_DESIGN',
+            defaults={
+                'type_name': '한글표시사항도안',
+                'description': '미리보기에서 생성된 한글표시사항 도안 PDF',
+                'is_required': False,
+                'is_active': True,
+                'display_order': 0,
+                'icon': 'bi-file-pdf',
+                'color': '#e8710a',
+                'detection_keywords': '한글표시사항,표시사항도안',
+                'expiry_alert_days': 30,
+                'requires_expiry': False,
+            }
+        )
+
+        # 이 라벨의 최신 LABEL_DESIGN 문서 조회 (업데이트 여부 판단)
+        existing_doc = ProductDocument.objects.filter(
+            label=label,
+            document_type=doc_type,
+            is_active=True,
+        ).order_by('-version', '-uploaded_datetime').first()
+
+        product_name = label.prdlst_nm or label.my_label_name or 'label'
+        date_str = timezone.now().strftime('%Y%m%d')
+        filename = f'한글표시사항_{product_name}_{date_str}.pdf'
+
+        version_number = 1
+        parent_document = None
+        if existing_doc:
+            parent_document = existing_doc
+            latest_version = ProductDocument.objects.filter(
+                Q(document_id=existing_doc.document_id) | Q(parent_document=existing_doc)
+            ).aggregate(Max('version'))['version__max'] or 1
+            version_number = latest_version + 1
+
+        # 문서 생성
+        document = ProductDocument.objects.create(
+            label=label,
+            document_type=doc_type,
+            file=pdf_file,
+            original_filename=filename,
+            file_size=pdf_file.size,
+            uploaded_by=request.user,
+            parent_document=parent_document,
+            version=version_number,
+            metadata={'expiry_unlimited': True, 'source': 'preview_pdf_export'},
+        ) 
+
+        # DocumentSlot 생성 또는 current_document 업데이트 (준수율 카드 연결)
+        slot, slot_created = DocumentSlot.objects.get_or_create(
+            label=label,
+            document_type=doc_type,
+            defaults={'status': DocumentSlot.SlotStatus.VALID}
+        )
+        slot.current_document = document
+        slot.update_status()
+        slot.save()
+
+        # 활동 로그
+        ProductActivityLog.objects.create(
+            label=label,
+            user=request.user,
+            action='DOCUMENT_UPLOADED',
+            details={
+                'file_name': filename,
+                'document_type': doc_type.type_name,
+                'file_size': pdf_file.size,
+                'source': 'preview_pdf_export',
+                'version': version_number,
+            }
+        )
+
+        return JsonResponse({
+            'success': True,
+            'document_id': document.document_id,
+            'filename': filename,
+            'version': version_number,
+            'updated': version_number > 1,
+            'message': '한글표시사항도안이 문서함에 등록되었습니다.' if version_number == 1
+                       else f'한글표시사항도안이 문서함에 업데이트되었습니다. (버전 {version_number})',
+        })
+
+    except Exception as e:
+        traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)})
 
 

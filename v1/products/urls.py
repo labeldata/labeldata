@@ -101,4 +101,19 @@ urlpatterns = [
     # ==================== 알림 (Notifications) ====================
     path('notifications/', views.notification_list, name='notification_list'),
     path('notifications/mark-read/', views.notification_mark_read, name='notification_mark_read'),
+
+    # ==================== 연락처 관리 (Contacts) ====================
+    path('contacts/', views.contacts, name='contacts'),
+    path('contacts/api/list/', views.contacts_api_list, name='contacts_api_list'),
+    path('contacts/api/shares/', views.contacts_api_shares, name='contacts_api_shares'),
+    path('contacts/api/doc-requests/', views.contacts_api_doc_requests, name='contacts_api_doc_requests'),
+    path('contacts/api/received-doc-requests/', views.contacts_api_received_doc_requests, name='contacts_api_received_doc_requests'),
+    path('doc-requests/<int:req_id>/submit/', views.doc_request_submit, name='doc_request_submit'),
+
+    # ==================== 문서 요청 관리 (Document Requests) ====================
+    path('doc-requests/', views.doc_requests_dashboard, name='doc_requests_dashboard'),
+    path('doc-requests/<int:req_id>/cancel/', views.doc_request_cancel, name='doc_request_cancel'),
+    path('doc-requests/<int:req_id>/accept/', views.doc_request_accept, name='doc_request_accept'),
+    path('contacts/api/doc-types/', views.api_doc_types, name='api_doc_types'),
+    path('contacts/api/send-doc-request/', views.api_send_doc_request, name='api_send_doc_request'),
 ]

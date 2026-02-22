@@ -88,6 +88,21 @@ class ProductMetadata(models.Model):
         verbose_name='삭제일시'
     )
     
+    # 원료 등록 여부
+    is_raw_material = models.BooleanField(
+        default=False,
+        verbose_name='원료로 사용',
+        help_text='체크 시 원료 관리에 자동 등록됩니다'
+    )
+    # 검색 태그 (쉼표 또는 # 구분)
+    search_tags = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name='검색 태그',
+        help_text='#태그1 #태그2 또는 쉼표로 구분'
+    )
+
     # 타임스탬프
     created_datetime = models.DateTimeField(
         auto_now_add=True,
@@ -1503,3 +1518,96 @@ class ProductActivityLog(models.Model):
     def __str__(self):
         username = self.user.username if self.user else '시스템'
         return f"{username} - {self.get_action_display()} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+
+
+class DocumentRequest(models.Model):
+    """
+    문서 요청 - 연락처에게 특정 문서 종류 제출 요청
+    DB 테이블: v2_document_request  (기존 스키마 준수)
+    """
+    STATUS_PENDING   = 'PENDING'
+    STATUS_ACCEPTED  = 'ACCEPTED'
+    STATUS_REJECTED  = 'REJECTED'
+    STATUS_CANCELLED = 'CANCELLED'
+    STATUS_CHOICES = [
+        (STATUS_PENDING,   '요청 중'),
+        (STATUS_ACCEPTED,  '수락'),
+        (STATUS_REJECTED,  '거절'),
+        (STATUS_CANCELLED, '취소'),
+    ]
+
+    request_id          = models.AutoField(primary_key=True, verbose_name='요청 ID')
+    requester           = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='sent_doc_requests', verbose_name='요청자',
+    )
+    recipient_email     = models.EmailField(verbose_name='수신자 이메일')
+    recipient_name      = models.CharField(max_length=100, blank=True, verbose_name='수신자 이름')
+    recipient_company   = models.CharField(max_length=200, blank=True, null=True, verbose_name='수신자 회사')
+    # 기존 DB 컬럼 (NOT NULL → 기본값 지정)
+    target_product_name = models.CharField(max_length=200, blank=True, default='', verbose_name='대상 제품명')
+    requested_documents = models.JSONField(default=list, verbose_name='요청 문서 목록',
+                                           help_text='[{"type_id": 1, "type_name": "HACCP 인증서"}, ...]')
+    message             = models.TextField(blank=True, verbose_name='요청 메시지')
+    status              = models.CharField(max_length=20, choices=STATUS_CHOICES,
+                                           default=STATUS_PENDING, verbose_name='상태', db_index=True)
+    due_date            = models.DateField(null=True, blank=True, verbose_name='제출 기한')
+    upload_token        = models.CharField(max_length=32, unique=True, verbose_name='업로드 토큰')
+    email_sent          = models.BooleanField(default=False, verbose_name='이메일 발송 여부')
+    email_sent_datetime = models.DateTimeField(null=True, blank=True, verbose_name='이메일 발송 일시')
+    attachment          = models.FileField(upload_to='doc_requests/%Y/%m/',
+                                           null=True, blank=True, verbose_name='첨부 파일')
+    created_datetime    = models.DateTimeField(auto_now_add=True, verbose_name='요청일시')
+    updated_datetime    = models.DateTimeField(auto_now=True, verbose_name='최종수정일시')
+
+    class Meta:
+        db_table = 'v2_document_request'
+        ordering = ['-created_datetime']
+        indexes = [
+            models.Index(fields=['requester', 'status']),
+            models.Index(fields=['recipient_email']),
+        ]
+        verbose_name = '문서 요청'
+        verbose_name_plural = '문서 요청 목록'
+
+    def save(self, *args, **kwargs):
+        if not self.upload_token:
+            import uuid
+            self.upload_token = uuid.uuid4().hex  # 32자 hex
+        super().save(*args, **kwargs)
+
+    def get_status_display_ko(self):
+        return dict(self.STATUS_CHOICES).get(self.status, self.status)
+
+    def __str__(self):
+        return f"{self.requester.username} → {self.recipient_email} ({self.get_status_display()})"
+
+
+class DocumentSubmission(models.Model):
+    """
+    수신자가 제출한 문서 파일 (1요청 1파일 지원)
+    DB 테이블: v2_document_request_submission
+    """
+    submission_id       = models.AutoField(primary_key=True)
+    request             = models.ForeignKey(
+        DocumentRequest, on_delete=models.CASCADE,
+        related_name='submissions', db_column='request_id',
+    )
+    document_type       = models.CharField(max_length=100, verbose_name='문서 종류')
+    file                = models.FileField(upload_to='doc_submissions/%Y/%m/', verbose_name='파일')
+    original_filename   = models.CharField(max_length=255, verbose_name='원본 파일명')
+    file_size           = models.BigIntegerField(default=0, verbose_name='파일 크기')
+    submitted_by_email  = models.CharField(max_length=255, blank=True, null=True, verbose_name='제출자 이메일')
+    submitted_by_name   = models.CharField(max_length=100, blank=True, null=True, verbose_name='제출자 이름')
+    notes               = models.TextField(blank=True, null=True, verbose_name='메모')
+    is_active           = models.BooleanField(default=True)
+    submitted_datetime  = models.DateTimeField(auto_now_add=True, verbose_name='제출일시')
+
+    class Meta:
+        db_table = 'v2_document_request_submission'
+        ordering = ['-submitted_datetime']
+        verbose_name = '문서 제출'
+        verbose_name_plural = '문서 제출 목록'
+
+    def __str__(self):
+        return f"{self.document_type} ({self.original_filename})"

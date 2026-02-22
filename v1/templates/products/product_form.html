@@ -8,8 +8,8 @@
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <a href="{% url 'products:product_list' %}" class="form-header-back">
-            <i class="bi bi-arrow-left"></i> 제품 목록으로 돌아가기
+        <a href="{% url 'products:product_explorer' %}" class="form-header-back">
+            <i class="bi bi-arrow-left"></i> 제품 탐색기로 돌아가기
         </a>
         <h1 class="form-header-title">{{ title }}</h1>
         <p class="form-header-desc">제품 기본 정보를 입력하세요. 저장 후 BOM, 영양성분 등을 작성할 수 있습니다.</p>
@@ -20,44 +20,44 @@
 
         {% include "products/_tab_basic_info.html" %}
 
-        <div class="addon-card">
-            <div class="addon-card-header">
-                <div class="addon-card-icon addon-card-icon--green">
-                    <i class="bi bi-gear"></i>
-                </div>
-                추가 옵션
-            </div>
-            <div class="addon-card-body">
+        <!-- 원료로 사용 -->
+        <div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;">
+            <div class="card-body p-4">
+                <h6 class="fw-semibold mb-3" style="color: var(--text-primary, #202124); font-size: 15px;">
+                    <i class="bi bi-box-seam text-success me-2"></i>원료 관리 연계
+                </h6>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox"
                            name="is_raw_material" id="is_raw_material"
-                           {% if product.is_raw_material %}checked{% endif %}>
-                    <label class="form-check-label" for="is_raw_material">원료로 사용 가능</label>
+                           {% if metadata.is_raw_material %}checked{% endif %}>
+                    <label class="form-check-label fw-medium" for="is_raw_material">이 제품을 원료로 사용</label>
                 </div>
-                <div class="form-text">체크하면 다른 제품의 원재료로 이 제품을 추가할 수 있습니다</div>
+                <div class="form-text mt-1">
+                    체크하면 <strong>원료 관리</strong> 목록에 자동 등록되어, 다른 제품의 원재료로 선택할 수 있습니다.
+                </div>
             </div>
         </div>
 
-        <div class="addon-card">
-            <div class="addon-card-header">
-                <div class="addon-card-icon addon-card-icon--yellow">
-                    <i class="bi bi-bookmark"></i>
-                </div>
-                태그
-            </div>
-            <div class="addon-card-body">
+        <!-- 검색 태그 -->
+        <div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;">
+            <div class="card-body p-4">
+                <h6 class="fw-semibold mb-3" style="color: var(--text-primary, #202124); font-size: 15px;">
+                    <i class="bi bi-bookmark text-warning me-2"></i>검색 태그
+                </h6>
                 <input type="text"
-                       name="tags_input"
+                       name="search_tags"
                        class="form-control bg-light border-0"
-                       value="{{ product.tags_input|default:'' }}"
-                       placeholder="예시: #식품 #과자 #스낵"
-                       style="border-radius:8px; padding:10px 14px;">
-                <div class="form-text">태그를 #으로 구분하여 입력하세요.</div>
+                       value="{{ metadata.search_tags|default:'' }}"
+                       placeholder="예: #과자 #스낵 #수입"
+                       style="border-radius: 8px; padding: 10px 14px;">
+                <div class="form-text mt-1">
+                    #으로 구분하여 태그를 입력하면 <strong>제품 탐색기 검색</strong>에 반영됩니다.
+                </div>
             </div>
         </div>
 
         <div class="form-footer">
-            <a href="{% url 'products:product_list' %}" class="btn-gd-text">취소</a>
+            <a href="{% url 'products:product_explorer' %}" class="btn-gd-text">취소</a>
             <button type="submit" class="btn-gd-primary" id="submitBtn">
                 {% if product %}
                 <i class="bi bi-check-lg me-1"></i> 변경사항 저장

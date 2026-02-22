@@ -31,6 +31,13 @@
 }
 </style>
 
+{% if not can_edit %}
+<div class="d-flex align-items-center gap-2 mb-3 px-1 py-1">
+    <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>읽기 전용</span>
+    <span class="text-muted" style="font-size:12px;">현재 역할로는 기본 정보를 수정할 수 없습니다.</span>
+</div>
+{% endif %}
+
 <!--  기본정보 카드 (식품유형  장기보존식품  제조방법  제품 개요 통합) -->
 <div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;" id="section-food-info">
     <div class="card-body p-4">
@@ -397,54 +404,289 @@
                           placeholder="BOM 탭에서 원재료를 등록하면 자동으로 연결됩니다. 직접 입력도 가능합니다."
                           style="border-radius:8px; padding:10px 14px;">{{ product.rawmtrl_nm|default:"" }}</textarea>
 
-                <!-- ── 알레르기 감지 패널 ── -->
-                <div class="mt-2 p-3 rounded" style="background:#fff8e1; border:1px solid #ffd54f; border-radius:8px;">
-                    <div class="d-flex align-items-center gap-2">
-                        <span style="font-size:13px; font-weight:600; color:#f57c00; white-space:nowrap; flex-shrink:0;">
-                            <i class="bi bi-exclamation-triangle-fill me-1"></i>알레르기
+                <!-- ── 알레르기 감지 패널 (Google Material Style) ── -->
+                <div class="allergen-panel-root mt-2">
+
+                    <!-- 헤더 바: 항상 표시 -->
+                    <div class="allergen-panel-header d-flex align-items-center gap-2">
+                        <span class="allergen-panel-title">
+                            <i class="bi bi-shield-exclamation me-1"></i>알레르기 성분
                         </span>
-                        <!-- 감지된 태그 요약 (항상 표시) -->
-                        <div id="field-allergen-summary" class="d-flex flex-wrap gap-1 flex-grow-1" style="min-height:24px;">
-                            <span class="text-muted" style="font-size:12px;">원재료명 입력 시 자동 감지</span>
+                        <div id="field-allergen-summary" class="d-flex flex-wrap gap-1 flex-grow-1 align-items-center" style="min-height:22px;">
+                            <span class="text-muted" style="font-size:12px; color:var(--v2-text-sub);">원재료명 입력 시 자동 감지</span>
                         </div>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" style="white-space:nowrap; font-size:12px; border-radius:6px;" onclick="detectAllergensProduct()" title="자동 재감지">
-                            <i class="bi bi-arrow-clockwise me-1"></i>재감지
+                        <button type="button" class="allergen-icon-btn" onclick="detectAllergensProduct()" title="자동 재감지">
+                            <i class="bi bi-arrow-clockwise"></i>
                         </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size:12px; border-radius:6px; padding:4px 8px;" onclick="toggleAllergenPanelProduct()" title="펼치기/접기">
+                        <button type="button" class="allergen-icon-btn" onclick="toggleAllergenPanelProduct()" title="펼치기/접기">
                             <i class="bi bi-chevron-down" id="allergen-panel-chevron"></i>
                         </button>
                     </div>
-                    <!-- 펼치면 보이는 본문 -->
-                    <div id="allergen-panel-body" class="mt-2" style="display:none;">
-                        <!-- 감지된 태그 -->
-                        <div id="field-allergen-tags" class="p-2 bg-white rounded border mb-2" style="min-height:38px; font-size:13px;">
-                            <span class="text-muted"><i class="bi bi-info-circle me-1"></i>원재료명을 입력하면 자동으로 감지됩니다</span>
+
+                    <!-- 펼쳐지는 본문 -->
+                    <div id="allergen-panel-body" style="display:none;">
+
+                        <!-- ① 감지된 원재료 알레르기 -->
+                        <div class="allergen-section">
+                            <div class="allergen-section-label">
+                                <i class="bi bi-check-circle-fill me-1" style="color:var(--v2-blue);"></i>
+                                원재료 알레르기 <span class="allergen-section-hint">자동 감지 · 직접 추가 가능</span>
+                            </div>
+                            <div id="field-allergen-tags" class="allergen-tag-area">
+                                <span class="text-muted" style="font-size:12px;"><i class="bi bi-info-circle me-1"></i>원재료명을 입력하면 자동으로 감지됩니다</span>
+                            </div>
+                            <div class="allergen-chip-row mt-2">
+                                <span class="allergen-chip-label">직접 추가</span>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="알류">알류</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="우유">우유</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="메밀">메밀</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="땅콩">땅콩</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="대두">대두</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="밀">밀</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="고등어">고등어</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="게">게</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="새우">새우</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="돼지고기">돼지고기</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="복숭아">복숭아</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="토마토">토마토</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="아황산류">아황산류</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="호두">호두</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="잣">잣</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="닭고기">닭고기</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="쇠고기">쇠고기</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="오징어">오징어</button>
+                                <button type="button" class="allergen-chip quick-allergen-btn-product" data-allergen="조개류">조개류</button>
+                            </div>
                         </div>
-                        <!-- 직접 추가 버튼 -->
-                        <div class="d-flex flex-wrap gap-1 align-items-center">
-                            <span style="font-size:12px; color:#666; font-weight:500; flex-shrink:0;">직접 추가:</span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="알류" style="font-size:11px; padding:2px 8px; border-radius:12px;">알류</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="우유" style="font-size:11px; padding:2px 8px; border-radius:12px;">우유</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="메밀" style="font-size:11px; padding:2px 8px; border-radius:12px;">메밀</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="땅콩" style="font-size:11px; padding:2px 8px; border-radius:12px;">땅콩</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="대두" style="font-size:11px; padding:2px 8px; border-radius:12px;">대두</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="밀" style="font-size:11px; padding:2px 8px; border-radius:12px;">밀</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="고등어" style="font-size:11px; padding:2px 8px; border-radius:12px;">고등어</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="게" style="font-size:11px; padding:2px 8px; border-radius:12px;">게</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="새우" style="font-size:11px; padding:2px 8px; border-radius:12px;">새우</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="돼지고기" style="font-size:11px; padding:2px 8px; border-radius:12px;">돼지고기</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="복숭아" style="font-size:11px; padding:2px 8px; border-radius:12px;">복숭아</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="토마토" style="font-size:11px; padding:2px 8px; border-radius:12px;">토마토</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="아황산류" style="font-size:11px; padding:2px 8px; border-radius:12px;">아황산류</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="호두" style="font-size:11px; padding:2px 8px; border-radius:12px;">호두</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="잣" style="font-size:11px; padding:2px 8px; border-radius:12px;">잣</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="닭고기" style="font-size:11px; padding:2px 8px; border-radius:12px;">닭고기</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="쇠고기" style="font-size:11px; padding:2px 8px; border-radius:12px;">쇠고기</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="오징어" style="font-size:11px; padding:2px 8px; border-radius:12px;">오징어</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn-product" data-allergen="조개류" style="font-size:11px; padding:2px 8px; border-radius:12px;">조개류</button>
+
+                        <!-- ② 제조시설 혼입 우려 -->
+                        <div class="allergen-section allergen-section-cross">
+                            <div class="allergen-section-label d-flex align-items-center justify-content-between">
+                                <span>
+                                    <i class="bi bi-exclamation-triangle-fill me-1" style="color:#e65100;"></i>
+                                    제조시설 혼입 우려 <span class="allergen-section-hint">원재료에 없는 성분 중 같은 시설에서 제조되는 성분</span>
+                                </span>
+                                <button type="button" id="cross-allergen-selectall-btn"
+                                        class="allergen-selectall-btn"
+                                        onclick="toggleAllCrossAllergensProduct()">
+                                    전체선택
+                                </button>
+                            </div>
+                            <div class="allergen-chip-row" id="cross-allergen-btns-product">
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="알류">알류</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="우유">우유</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="메밀">메밀</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="땅콩">땅콩</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="대두">대두</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="밀">밀</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="고등어">고등어</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="게">게</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="새우">새우</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="돼지고기">돼지고기</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="복숭아">복숭아</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="토마토">토마토</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="아황산류">아황산류</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="호두">호두</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="잣">잣</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="닭고기">닭고기</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="쇠고기">쇠고기</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="오징어">오징어</button>
+                                <button type="button" class="allergen-chip cross-allergen-btn-product" data-allergen="조개류">조개류</button>
+                            </div>
+
+                            <!-- 선택된 혼입 성분 + 주의사항 추가 버튼 -->
+                            <div class="allergen-cross-footer" id="cross-allergen-footer" style="display:none;">
+                                <div id="cross-allergen-selected-product" class="allergen-cross-selected flex-grow-1"></div>
+                                <button type="button" id="cross-allergen-add-btn-product"
+                                        class="allergen-add-btn"
+                                        onclick="addCrossContaminationToCautionsProduct()">
+                                    <i class="bi bi-arrow-right-circle me-1"></i>주의사항에 추가
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                </div>
+
+                    </div><!-- /allergen-panel-body -->
+                </div><!-- /allergen-panel-root -->
+
+                <!-- 인라인 스타일 (알레르기 패널 전용) -->
+                <style>
+                .allergen-panel-root {
+                    border: 1px solid var(--v2-border, #dadce0);
+                    border-radius: 10px;
+                    overflow: hidden;
+                    background: #fff;
+                    box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+                }
+                .allergen-panel-header {
+                    padding: 10px 14px;
+                    background: var(--v2-gray-50, #f8f9fa);
+                    border-bottom: 1px solid transparent;
+                    cursor: default;
+                    transition: background 0.15s;
+                }
+                .allergen-panel-root[data-open="true"] .allergen-panel-header {
+                    border-bottom-color: var(--v2-border, #dadce0);
+                }
+                .allergen-panel-title {
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: var(--v2-text, #202124);
+                    white-space: nowrap;
+                    flex-shrink: 0;
+                }
+                .allergen-icon-btn {
+                    background: none;
+                    border: 1px solid var(--v2-border, #dadce0);
+                    border-radius: 6px;
+                    padding: 3px 7px;
+                    font-size: 13px;
+                    color: var(--v2-text-sub, #5f6368);
+                    cursor: pointer;
+                    transition: background 0.15s, color 0.15s;
+                    flex-shrink: 0;
+                }
+                .allergen-icon-btn:hover { background: var(--v2-gray-100, #f1f3f4); color: var(--v2-text, #202124); }
+                /* 섹션 */
+                .allergen-section {
+                    padding: 12px 14px;
+                    border-bottom: 1px solid var(--v2-border, #dadce0);
+                }
+                .allergen-section:last-child { border-bottom: none; }
+                .allergen-section-cross {
+                    background: #fff8f6;
+                }
+                .allergen-section-label {
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: var(--v2-text, #202124);
+                    margin-bottom: 8px;
+                }
+                .allergen-section-hint {
+                    font-size: 11px;
+                    font-weight: 400;
+                    color: var(--v2-text-sub, #5f6368);
+                    margin-left: 4px;
+                }
+                /* 태그 영역 */
+                .allergen-tag-area {
+                    min-height: 36px;
+                    padding: 6px 10px;
+                    background: var(--v2-gray-50, #f8f9fa);
+                    border: 1px solid var(--v2-border, #dadce0);
+                    border-radius: 8px;
+                    font-size: 13px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 4px;
+                    align-items: center;
+                }
+                /* 칩 행 */
+                .allergen-chip-row {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 5px;
+                    align-items: center;
+                }
+                .allergen-chip-label {
+                    font-size: 11px;
+                    color: var(--v2-text-sub, #5f6368);
+                    font-weight: 500;
+                    margin-right: 2px;
+                    flex-shrink: 0;
+                }
+                /* 개별 칩 버튼 */
+                .allergen-chip {
+                    background: #fff;
+                    border: 1px solid var(--v2-border, #dadce0);
+                    border-radius: 16px;
+                    padding: 3px 11px;
+                    font-size: 12px;
+                    color: var(--v2-text, #202124);
+                    cursor: pointer;
+                    transition: all 0.15s;
+                    line-height: 1.5;
+                }
+                .allergen-chip:hover:not(:disabled) {
+                    border-color: var(--v2-blue, #1a73e8);
+                    color: var(--v2-blue, #1a73e8);
+                    background: var(--v2-blue-light, #e8f0fe);
+                }
+                /* 원재료 알레르기 선택됨 */
+                .allergen-chip.selected-ingredient {
+                    background: var(--v2-blue-light, #e8f0fe);
+                    border-color: var(--v2-blue, #1a73e8);
+                    color: var(--v2-blue, #1a73e8);
+                    font-weight: 500;
+                }
+                /* 혼입 우려 선택됨 */
+                .allergen-chip.selected-cross {
+                    background: #fff3e0;
+                    border-color: #e65100;
+                    color: #e65100;
+                    font-weight: 500;
+                }
+                /* 비활성화 */
+                .allergen-chip:disabled {
+                    opacity: 0.38;
+                    cursor: not-allowed;
+                    background: var(--v2-gray-100, #f1f3f4);
+                    border-color: var(--v2-border, #dadce0);
+                    color: var(--v2-text-sub, #5f6368);
+                }
+                /* 전체선택 버튼 */
+                .allergen-selectall-btn {
+                    font-size: 11px;
+                    padding: 2px 10px;
+                    border-radius: 12px;
+                    border: 1px solid #e65100;
+                    background: #fff;
+                    color: #e65100;
+                    cursor: pointer;
+                    font-weight: 500;
+                    transition: all 0.15s;
+                    flex-shrink: 0;
+                }
+                .allergen-selectall-btn:hover { background: #fff3e0; }
+                .allergen-selectall-btn.all-selected { background: #e65100; color: #fff; }
+                /* 혼입 푸터 */
+                .allergen-cross-footer {
+                    margin-top: 10px;
+                    padding: 8px 12px;
+                    background: #fff3e0;
+                    border: 1px solid #ffcc80;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                }
+                .allergen-cross-selected {
+                    font-size: 12px;
+                    color: #e65100;
+                    font-weight: 500;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 4px;
+                    align-items: center;
+                }
+                .allergen-add-btn {
+                    flex-shrink: 0;
+                    font-size: 12px;
+                    padding: 5px 14px;
+                    border-radius: 6px;
+                    border: none;
+                    background: var(--v2-blue, #1a73e8);
+                    color: #fff;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: background 0.15s;
+                }
+                .allergen-add-btn:hover { background: var(--v2-blue-hover, #1765cc); }
+                .allergen-add-btn.btn-remove {
+                    background: #d93025;
+                }
+                .allergen-add-btn.btn-remove:hover { background: #b31412; }
+                </style>
+
                 <!-- 히든 입력: 저장 시 포함 -->
                 <input type="hidden" id="field-allergens" name="allergens" value="{{ product.allergens|default:'' }}">
             </div>
@@ -721,10 +963,12 @@ function filterFoodTypes(selectedGroup) {
     window.toggleAllergenPanelProduct = function() {
         var body = document.getElementById('allergen-panel-body');
         var chevron = document.getElementById('allergen-panel-chevron');
+        var root = document.querySelector('.allergen-panel-root');
         if (!body) return;
         var open = body.style.display !== 'none';
         body.style.display = open ? 'none' : 'block';
         chevron.className = open ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+        if (root) root.setAttribute('data-open', open ? 'false' : 'true');
         if (!open) renderAllergenTagsProduct(); // 펼 때 태그 렌더
     };
 
@@ -762,6 +1006,8 @@ function filterFoodTypes(selectedGroup) {
     window.removeAllergenTagProduct = function(allergen) {
         _productAllergens.delete(allergen);
         renderAllergenTagsProduct();
+        // 원재료 변경 시 기존 혼입 문구 초기화
+        removeCrossContaminationWarningProduct();
     };
 
     // ── UI 렌더 ──
@@ -774,28 +1020,28 @@ function filterFoodTypes(selectedGroup) {
 
         if (_productAllergens.size === 0) {
             container.innerHTML = '<span class="text-muted"><i class="bi bi-info-circle me-1"></i>원재료명을 입력하면 자동으로 감지됩니다</span>';
-            if (summary) summary.innerHTML = '<span class="text-muted" style="font-size:12px;">원재료명 입력 시 자동 감지</span>';
+            if (summary) summary.innerHTML = '<span class="text-muted" style="font-size:12px; color:var(--v2-text-sub);">원재료명 입력 시 자동 감지</span>';
         } else {
             container.innerHTML = '';
             if (summary) summary.innerHTML = '';
             _productAllergens.forEach(function(src, allergen) {
                 var isAuto = src === 'auto';
-                var style = isAuto
-                    ? 'background:#fff3cd; color:#856404; border:1px solid #ffc107;'
-                    : 'background:#cfe2ff; color:#084298; border:1px solid #0d6efd;';
+                var tagStyle = isAuto
+                    ? 'background:#e8f0fe; color:#1a73e8; border:1px solid #a8c7fa;'
+                    : 'background:#e6f4ea; color:#137333; border:1px solid #81c995;';
                 var title = isAuto ? '자동 감지' : '직접 추가';
                 // 본문 태그
                 var tag = document.createElement('span');
-                tag.className = 'badge me-1 mb-1';
-                tag.style.cssText = 'cursor:pointer; font-size:13px; padding:4px 8px; border-radius:12px; ' + style;
-                tag.title = title + ' — 클릭하여 제거';
-                tag.innerHTML = allergen + ' <i class="bi bi-x ms-1" onclick="removeAllergenTagProduct(\'' + allergen + '\')"></i>';
+                tag.style.cssText = 'display:inline-flex; align-items:center; gap:4px; cursor:default; font-size:12px; font-weight:500; padding:3px 9px; border-radius:14px; ' + tagStyle;
+                tag.title = title + ' — ✕ 클릭하여 제거';
+                tag.innerHTML = (isAuto ? '<i class="bi bi-magic" style="font-size:10px;"></i>' : '<i class="bi bi-pencil" style="font-size:10px;"></i>') +
+                    ' ' + allergen +
+                    ' <i class="bi bi-x" style="cursor:pointer; font-size:11px; opacity:0.7;" onclick="removeAllergenTagProduct(\'' + allergen + '\')"></i>';
                 container.appendChild(tag);
-                // 요약 태그
+                // 요약 태그 (헤더)
                 if (summary) {
                     var stag = document.createElement('span');
-                    stag.className = 'badge';
-                    stag.style.cssText = 'font-size:11px; padding:2px 6px; border-radius:10px; ' + style;
+                    stag.style.cssText = 'display:inline-block; font-size:11px; font-weight:500; padding:1px 7px; border-radius:10px; ' + tagStyle;
                     stag.textContent = allergen;
                     summary.appendChild(stag);
                 }
@@ -806,17 +1052,139 @@ function filterFoodTypes(selectedGroup) {
         document.querySelectorAll('.quick-allergen-btn-product').forEach(function(btn) {
             var a = btn.dataset.allergen;
             if (_productAllergens.has(a)) {
-                btn.classList.remove('btn-outline-secondary');
-                btn.classList.add('btn-info');
+                btn.classList.add('selected-ingredient');
             } else {
-                btn.classList.remove('btn-info');
-                btn.classList.add('btn-outline-secondary');
+                btn.classList.remove('selected-ingredient');
             }
         });
 
         // hidden input 업데이트
         if (hiddenInput) hiddenInput.value = Array.from(_productAllergens.keys()).join(',');
+
+        // 혼입 우려 버튼 상태 동기화 (원재료 사용 알레르기 비활성화)
+        updateCrossContaminationUIProduct();
     }
+
+    // ── 제조시설 혼입 우려 로직 ──
+    var _productCrossAllergens = new Set();
+    var ALL_ALLERGENS_PRODUCT = ['알류','우유','메밀','땅콩','대두','밀','고등어','게','새우',
+        '돼지고기','복숭아','토마토','아황산류','호두','잣','닭고기','쇠고기','오징어','조개류'];
+
+    window.toggleAllCrossAllergensProduct = function() {
+        var detectedList = Array.from(_productAllergens.keys());
+        var available = ALL_ALLERGENS_PRODUCT.filter(function(a) { return detectedList.indexOf(a) === -1; });
+        if (_productCrossAllergens.size === available.length && available.length > 0) {
+            _productCrossAllergens.clear(); // 전체 해제
+        } else {
+            available.forEach(function(a) { _productCrossAllergens.add(a); }); // 전체 선택
+        }
+        updateCrossContaminationUIProduct();
+    };
+
+    function updateCrossContaminationUIProduct() {
+        var detectedList = Array.from(_productAllergens.keys());
+        document.querySelectorAll('.cross-allergen-btn-product').forEach(function(btn) {
+            var a = btn.dataset.allergen;
+            if (detectedList.indexOf(a) !== -1) {
+                btn.disabled = true;
+                btn.classList.remove('selected-cross');
+                btn.title = '원재료에 이미 사용된 성분입니다';
+                _productCrossAllergens.delete(a);
+            } else {
+                btn.disabled = false;
+                btn.title = '';
+                if (_productCrossAllergens.has(a)) {
+                    btn.classList.add('selected-cross');
+                } else {
+                    btn.classList.remove('selected-cross');
+                }
+            }
+        });
+        // 전체선택 버튼 상태 동기화
+        var selectAllBtn = document.getElementById('cross-allergen-selectall-btn');
+        if (selectAllBtn) {
+            var available = ALL_ALLERGENS_PRODUCT.filter(function(a) { return detectedList.indexOf(a) === -1; });
+            var isAllSelected = available.length > 0 && _productCrossAllergens.size === available.length;
+            selectAllBtn.textContent = isAllSelected ? '전체해제' : '전체선택';
+            selectAllBtn.classList.toggle('all-selected', isAllSelected);
+        }
+        renderCrossSelectedProduct();
+    }
+
+    function renderCrossSelectedProduct() {
+        var display = document.getElementById('cross-allergen-selected-product');
+        var footer  = document.getElementById('cross-allergen-footer');
+        if (!display) return;
+        if (_productCrossAllergens.size === 0) {
+            if (footer) footer.style.display = 'none';
+        } else {
+            if (footer) footer.style.display = '';
+            var html = '<span style="font-size:12px; color:#e65100; font-weight:600; flex-shrink:0;">선택:</span>';
+            _productCrossAllergens.forEach(function(a) {
+                html += '<span style="background:#fff3e0; color:#e65100; border:1px solid #ffcc80; border-radius:12px; padding:2px 9px; font-size:12px; font-weight:500;">' + a + '</span>';
+            });
+            display.innerHTML = html;
+        }
+    }
+
+    window.toggleCrossAllergenProduct = function(allergen) {
+        if (_productCrossAllergens.has(allergen)) {
+            _productCrossAllergens.delete(allergen);
+        } else {
+            _productCrossAllergens.add(allergen);
+        }
+        updateCrossContaminationUIProduct();
+    };
+
+    function removeCrossContaminationWarningProduct() {
+        var ta = document.getElementById('field-cautions');
+        if (!ta) return;
+        var lines = ta.value.split('\n');
+        var filtered = lines.filter(function(line) {
+            var t = line.trim();
+            var hasFactory  = t.indexOf('같은 제조시설') !== -1 || t.indexOf('같은 시설') !== -1 ||
+                              t.indexOf('동일 라인') !== -1 || t.indexOf('동일한 제조시설') !== -1;
+            var hasManufact = t.indexOf('제조하고 있습니다') !== -1 || t.indexOf('제조합니다') !== -1 ||
+                              t.indexOf('제조되었습니다') !== -1 || t.indexOf('제조됩니다') !== -1 ||
+                              t.indexOf('제조하였습니다') !== -1 || t.indexOf('생산') !== -1;
+            var hasProduct  = t.indexOf('제품') !== -1 || t.indexOf('원료') !== -1;
+            return !(hasFactory && hasManufact && hasProduct);
+        });
+        ta.value = filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        // 추가 버튼 상태 초기화
+        var addBtn = document.getElementById('cross-allergen-add-btn-product');
+        if (addBtn) {
+            addBtn.classList.remove('btn-remove');
+            addBtn.innerHTML = '<i class="bi bi-arrow-right-circle me-1"></i>주의사항에 추가';
+            addBtn.onclick = window.addCrossContaminationToCautionsProduct;
+        }
+    }
+
+    window.addCrossContaminationToCautionsProduct = function() {
+        if (_productCrossAllergens.size === 0) {
+            alert('먼저 제조시설 혼입 우려 성분을 선택해주세요.');
+            return;
+        }
+        var detectedList = Array.from(_productAllergens.keys());
+        var dups = Array.from(_productCrossAllergens).filter(function(a) { return detectedList.indexOf(a) !== -1; });
+        if (dups.length > 0) {
+            if (!confirm('⚠️ ' + dups.join(', ') + '은(는) 원재료에 이미 사용된 알레르기 물질입니다.\n\n원재료 사용 알레르기는 \'원재료명\'에만 표시되어야 합니다.\n계속 진행하시겠습니까?')) return;
+        }
+        removeCrossContaminationWarningProduct();
+        var ta = document.getElementById('field-cautions');
+        if (!ta) return;
+        var allergenList = Array.from(_productCrossAllergens).join(', ');
+        var warningText = '이 제품은 ' + allergenList + '를 사용한 제품과 같은 제조시설에서 제조하고 있습니다.';
+        ta.value = ta.value ? ta.value.trim() + '\n' + warningText : warningText;
+        var addBtn = document.getElementById('cross-allergen-add-btn-product');
+        if (addBtn) {
+            addBtn.classList.add('btn-remove');
+            addBtn.innerHTML = '<i class="bi bi-trash me-1"></i>문구 삭제';
+            addBtn.onclick = function() {
+                removeCrossContaminationWarningProduct();
+            };
+        }
+    };
 
     // ── 빠름 추가 버튼 이벤트 ──
     document.querySelectorAll('.quick-allergen-btn-product').forEach(function(btn) {
@@ -828,6 +1196,15 @@ function filterFoodTypes(selectedGroup) {
                 _productAllergens.set(allergen, 'manual');
             }
             renderAllergenTagsProduct();
+            // 원재료 변경 시 기존 혼입 문구 초기화
+            removeCrossContaminationWarningProduct();
+        });
+    });
+
+    // ── 혼입 우려 버튼 이벤트 ──
+    document.querySelectorAll('.cross-allergen-btn-product').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            window.toggleCrossAllergenProduct(this.dataset.allergen);
         });
     });
 
@@ -900,7 +1277,7 @@ function verifyReportNoInline() {
     }
 
     if (!reportNo) {
-        alert('품목보고번호를 입력하세요.');
+        showSnackbar('품목보고번호를 입력하세요.', 'warning');
         return;
     }
 
@@ -982,7 +1359,7 @@ function _applyVerifyResult(btn, copyBtn, resultDiv, reportInput, data) {
 }
 
 function copyVerifiedDataInline() {
-    if (!_verifiedProductData) { alert('복사할 제품 정보가 없습니다.'); return; }
+    if (!_verifiedProductData) { showSnackbar('복사할 제품 정보가 없습니다.', 'warning'); return; }
     var d = _verifiedProductData;
     // API 응답 키: prdlst_nm, prdlst_dcnm, rawmtrl_nm, manufacturer(=bssh_nm), packaging_material(=frmlc_mtrqlt)
     var map = {
@@ -1137,7 +1514,7 @@ function addAllProductQuickTexts(fieldName) {
         ta.style.height = ta.scrollHeight + 'px';
         ta.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
-        alert('이미 모든 문구가 추가되어 있습니다.');
+        showSnackbar('이미 모든 문구가 추가되어 있습니다.', 'info');
     }
 }
 
@@ -1159,7 +1536,7 @@ function clearAllProductQuickTexts(fieldName) {
         ta.style.height = ta.scrollHeight + 'px';
         ta.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
-        alert('해제할 문구가 없습니다.');
+        showSnackbar('해제할 문구가 없습니다.', 'info');
     }
 }
 

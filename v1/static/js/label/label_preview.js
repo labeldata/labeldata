@@ -256,8 +256,6 @@ function checkAllergenDuplication() {
     // 3. 원재료명에서 발견된 알레르기 성분들
     const foundAllergens = [];
     
-    console.log('[알레르기 감지] 검사 시작 - 원재료명:', cleanIngredients);
-    
     for (const [allergen, keywords] of Object.entries(allergenKeywords)) {
         for (const keyword of keywords) {
             let found = false;
@@ -276,7 +274,6 @@ function checkAllergenDuplication() {
                 if (regex.test(cleanIngredients)) {
                     found = true;
                     matchedBy = `직접매칭: ${keyword}`;
-                    console.log(`[알레르기 감지] ${allergen} 발견! 키워드: ${keyword}, 매칭된 텍스트:`, cleanIngredients.match(regex));
                 }
             }
             
@@ -3509,12 +3506,14 @@ window.checkForbiddenPhrases = function checkForbiddenPhrases() {
     return checkForbiddenText();
 };
 
-// 페이지 로드 완료 시 부모창에 데이터 요청
+// 페이지 로드 완료 시 부모창 또는 부모 프레임에 데이터 요청
 window.addEventListener('load', function() {
     if (window.opener) {
-        window.opener.postMessage({
-            type: 'requestPreviewData'
-        }, '*');
+        // 팝업으로 열린 경우
+        window.opener.postMessage({ type: 'requestPreviewData' }, '*');
+    } else if (window.parent !== window) {
+        // iframe으로 임베드된 경우
+        window.parent.postMessage({ type: 'requestPreviewData' }, '*');
     }
 });
 
@@ -3530,28 +3529,30 @@ let fieldOrderData = {
 
 // 기본 필드 정의 (실제 라벨 데이터에서 추출)
 const DEFAULT_FIELDS = {
-    'my_label_name': '라벨명',
-    'prdlst_nm': '제품명',
+    /* 표시사항 작성 폼의 입력 순서와 일치 */
     'prdlst_dcnm': '식품유형',
+    'prdlst_nm': '제품명',
     'ingredient_info': '특정성분 함량',
-    'pog_daycnt': '소비기한',
     'content_weight': '내용량',
     'weight_calorie': '내용량(열량)',
-    'rawmtrl_nm': '원재료명',
-    'rawmtrl_nm_display': '원재료명',
-    'allergies': '알레르기 성분',
+    'prdlst_report_no': '품목보고번호',
+    'country_of_origin': '원산지',
+    'storage_method': '보관 방법',
+    'frmlc_mtrqlt': '용기·포장재질',
     'bssh_nm': '제조원 소재지',
     'distributor_address': '유통전문판매원',
     'repacker_address': '소분원',
     'importer_address': '수입원',
-    'country_of_origin': '원산지',
-    'prdlst_report_no': '품목보고번호',
-    'frmlc_mtrqlt': '용기·포장재질',
-    'storage_method': '보관 방법',
+    'pog_daycnt': '소비기한',
+    'rawmtrl_nm_display': '원재료명',
+    /* rawmtrl_nm 제외: _tab_label.html postMessage와 preview_popup label_data 모두
+       rawmtrl_nm_display 로 통일 처리. 별도 키가 있을 때 '원재료명' 행이 2개 생기는 버그 방지 */
     'cautions': '주의사항',
     'additional_info': '기타표시사항',
     'etc_description': '기타표시사항',
-    'nutrition_text': '영양성분'
+    'nutrition_text': '영양성분',
+    'my_label_name': '라벨명',
+    'allergies': '알레르기 성분',
 };
 
 // 필드 정의 가져오기 (현재 라벨 데이터 기반)

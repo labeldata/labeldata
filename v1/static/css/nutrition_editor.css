@@ -1,0 +1,282 @@
+/* ============================================================
+   EazyLabel V2 영양성분 편집기 전용 스타일
+   nutrition_editor.html 의 <style> 블록에서 이관
+   ============================================================ */
+
+/* ── CSS 변수 ────────────────────────────────────────────── */
+/* 이 파일은 독립 팝업(nutrition_editor.html)에서 로드됩니다.
+   products_common.css를 로드하지 않으므로 필요한 변수를 자체 정의합니다. */
+:root {
+    --primary-color: #3b82f6;   /* 영양성분 편집기 강조 색 */
+    --bg-gray:       #f8f9fa;
+    --border-color:  #e5e7eb;
+    /* V2 공통 토큰 (products_common.css 미로드 대비) */
+    --v2-blue:       #1a73e8;
+    --v2-border:     #dadce0;
+    --v2-text:       #202124;
+    --v2-text-sub:   #5f6368;
+    --v2-gray-50:    #f8f9fa;
+}
+
+/* ── 전역 초기화 (독립 팝업 전용) ────────────────────────── */
+/* base_v2.html을 상속하지 않으므로 box-sizing 리셋이 필요합니다 */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Noto Sans KR', sans-serif;
+    background: #ffffff;
+    overflow: hidden;
+}
+
+/* ── 전체 레이아웃 ────────────────────────────────────────── */
+#nutrition-container {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+}
+
+/* ── 왼쪽 입력 패널 ───────────────────────────────────────── */
+#input-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    border-right: 1px solid var(--border-color);
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.panel-header {
+    margin-bottom: 16px;
+}
+
+.panel-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 12px;
+}
+
+/* ── 설정 섹션 ────────────────────────────────────────────── */
+.config-section {
+    background: var(--bg-gray);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+}
+
+.config-row {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.config-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.config-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    white-space: nowrap;
+    min-width: auto;
+}
+
+.unit-label {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.config-section .form-control,
+.config-section .form-select {
+    height: 28px;
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 14px;
+}
+
+/* ── 그리드 컨테이너 ──────────────────────────────────────── */
+#grid-container {
+    flex: 1 1 auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    width: 100%;
+    height: auto;
+    min-height: 300px;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    align-self: stretch;
+}
+
+#nutrition-grid {
+    height: auto;
+    width: 100%;
+}
+
+/* Handsontable 너비 강제 */
+#nutrition-grid .handsontable .ht_master,
+#nutrition-grid .handsontable .wtHider,
+#nutrition-grid .handsontable .wtHolder {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
+
+/* ── 오른쪽 미리보기 패널 ────────────────────────────────── */
+#preview-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-gray);
+    overflow-y: auto;
+}
+
+.preview-header {
+    padding: 20px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.preview-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 12px;
+}
+
+/* ── 스타일 선택기 ────────────────────────────────────────── */
+.style-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.style-btn {
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.style-btn:hover {
+    background: #f3f4f6;
+}
+
+.style-btn.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+/* ── 미리보기 버튼/콘텐츠 ────────────────────────────────── */
+.preview-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.preview-content {
+    flex: 1;
+    padding: 20px;
+}
+
+.result-display {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    min-height: 400px;
+}
+
+.empty-result {
+    text-align: center;
+    color: #6b7280;
+    padding: 60px 20px;
+}
+
+/* ── 컨트롤 그룹 ──────────────────────────────────────────── */
+.preview-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
+.control-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    min-width: 52px;
+}
+
+.control-group .style-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 0;
+}
+
+/* ── Snackbar ─────────────────────────────────────────────── */
+#v2Snackbar {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(calc(100% + 2rem));
+    background: #323232;
+    color: #fff;
+    padding: .75rem 1.25rem;
+    border-radius: 4px;
+    font-size: .875rem;
+    line-height: 1.4;
+    box-shadow: 0 3px 8px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.2);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: min(480px, calc(100vw - 2rem));
+    z-index: 9999;
+    transition: transform .25s cubic-bezier(.4,0,.2,1), opacity .25s;
+    opacity: 0;
+    pointer-events: none;
+}
+
+#v2Snackbar.snack-show    { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+#v2Snackbar.snack-error   { background: #b71c1c; }
+#v2Snackbar.snack-warning { background: #e65100; }
+
+#v2SnackbarMsg { flex: 1; }
+
+#v2Snackbar button {
+    background: none;
+    border: none;
+    color: #90caf9;
+    font-size: .8rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+}

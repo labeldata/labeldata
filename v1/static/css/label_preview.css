@@ -186,12 +186,27 @@ body {
 }
 
 .settings-panel {
-  width: 420px; /* 너비 소폭 증가 */
+  width: 420px;
   padding: 20px;
   border-right: 1px solid var(--border-light);
-  overflow-y: auto;
+  overflow: hidden;          /* 패널 자체를 클리핑 컨테이너로 사용 */
   background-color: var(--bg-primary);
   flex-shrink: 0;
+  display: flex;             /* 세로 flex 컨테이너 */
+  flex-direction: column;
+}
+
+/* 탭 네비게이션: 항상 상단 고정 */
+.preview-tabs {
+  flex-shrink: 0;
+}
+
+/* 활성 탭 콘텐츠: 남은 공간을 채우고 세로 스크롤 */
+.preview-tab-content.active {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;    /* JS가 display:flex 설정 후 적용됨 */
+  overflow-y: auto;
 }
 
 .preview-panel {
@@ -554,8 +569,8 @@ body {
 
 /* ==================== 필드 순서 편집 스타일 ==================== */
 .field-order-list {
-    max-height: 400px;
-    overflow-y: auto;
+    /* max-height 제거: 부모 section 이 overflow-y:auto 로 스크롤 처리 */
+    overflow-y: visible;
     padding: 0.25rem;
     background: #f8f9fa;
     border-radius: 6px;

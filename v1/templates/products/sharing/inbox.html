@@ -1,13 +1,13 @@
-﻿{% extends 'base_v2.html' %}
+{% extends "base_v2.html" %}
 {% load static %}
 
-{% block title %}공동작업{% endblock %}
+{% block title %}공동 작업 - Food Data Portal{% endblock %}
 
 {% block topbar %}
 <div class="v2-topbar-title-wrapper">
     <i class="bi bi-people me-2 v2-topbar-icon"></i>
     <span class="v2-topbar-title">공동 작업</span>
-    <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">권한을 부여받은 제품을 확인하고 공동작업하세요</span>
+    <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">공유받은 제품을 확인하고 작업하세요</span>
 </div>
 {% include "includes/_topbar_account.html" %}
 {% endblock %}
@@ -16,369 +16,241 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-<style>
-    body { font-family:'Roboto','Noto Sans KR',-apple-system,sans-serif; color:#1f1f1f; }
-
-    /* v2-content: padding 제거 + 명시적 높이 고정
-       flex:1 만으로는 자식 height:100%가 auto로 해석됨 → height를 명시해야 해결 */
-    .v2-content {
-        padding: 0 !important;
-        margin: 0 !important;
-        overflow: hidden !important;
-        height: calc(100vh - 64px) !important; /* 100vh - v2-topbar */
-    }
-
-    /* 메인 컨테이너: 이제 parent height가 확정되어 100% 작동 */
-    .inbox-container {
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        background: #f8f9fa;
-    }
-
-    /* ── 진행상태 카드 스트립 ── */
-    .status-strip {
-        min-height: 100px; max-height: 100px;
-        overflow-x: auto; overflow-y: hidden;
-        flex-shrink: 0;
-        border-bottom: 1px solid #e0e2e0;
-        background: #f8f9fa;
-        padding: 14px 0;
-        scrollbar-width: none;
-    }
-    .status-strip::-webkit-scrollbar { display:none; }
-    .status-strip-inner {
-        display:flex; gap:12px;
-        padding:0 24px; min-width:max-content;
-    }
-    .status-card {
-        border-radius:12px; min-width:180px;
-        cursor:pointer; border:2px solid transparent;
-        background:#ffffff; padding:12px 16px;
-        display:flex; align-items:center; gap:12px;
-        text-decoration:none; color:inherit;
-        box-shadow:0 1px 2px rgba(60,64,67,.15);
-        transition:all .2s cubic-bezier(0.4,0,0.2,1);
-    }
-    .status-card:hover {
-        transform:translateY(-1px);
-        box-shadow:0 2px 6px rgba(60,64,67,.2);
-        color:inherit; text-decoration:none;
-    }
-    .status-card.active-all      { border-color:#5f6368; background:#f1f3f4; }
-    .status-card.active-DRAFT      { border-color:#1a73e8; background:#e8f0fe; }
-    .status-card.active-REQUESTING { border-color:#f9ab00; background:#fef7e0; }
-    .status-card.active-SUBMITTED  { border-color:#0f9d58; background:#e6f4ea; }
-    .status-card.active-REVIEW     { border-color:#9334e9; background:#f3e8fd; }
-    .status-card.active-PENDING    { border-color:#e37400; background:#fff0e0; }
-    .status-card.active-CONFIRMED  { border-color:#1e8e3e; background:#e6f4ea; }
-    .status-icon {  
-        width:44px; height:44px; border-radius:10px;
-        display:flex; align-items:center; justify-content:center;
-        font-size:20px; flex-shrink:0;
-    }
-    .si-all        { background:#f1f3f4; color:#5f6368; }
-    .si-draft      { background:#e8f0fe; color:#1967d2; }
-    .si-requesting { background:#fef7e0; color:#c77700; }
-    .si-submitted  { background:#e6f4ea; color:#0f9d58; }
-    .si-review     { background:#f3e8fd; color:#9334e9; }
-    .si-pending    { background:#fff0e0; color:#e37400; }
-    .si-confirmed  { background:#e6f4ea; color:#1e8e3e; }
-    .status-card-label { font-size:12px; color:#5f6368; font-weight:500; }
-    .status-card-count { font-size:22px; font-weight:700; color:#1f1f1f; line-height:1; }
-
-    /* ── 역할 필터 툴바 ── */
-    .filter-toolbar {
-        flex-shrink:0;
-        border-bottom:1px solid #e0e2e0;
-        background:#ffffff; min-height:56px;
-        display:flex; align-items:center;
-        padding:0 24px; gap:8px;
-    }
-    .filter-toolbar .label-text {
-        font-size:12px; font-weight:600; color:#5f6368;
-        text-transform:uppercase; letter-spacing:.4px; white-space:nowrap;
-    }
-    .role-pill {
-        display:inline-flex; align-items:center; gap:5px;
-        padding:5px 14px; border-radius:20px;
-        font-size:13px; font-weight:500;
-        border:1.5px solid #dadce0;
-        background:#fff; color:#5f6368;
-        text-decoration:none;
-        transition:all .15s; white-space:nowrap;
-    }
-    .role-pill:hover { background:#f1f3f4; color:#202124; text-decoration:none; }
-    .role-pill.active { background:#c2e7ff; border-color:#1a73e8; color:#001d35; font-weight:600; }
-
-    /* ── 목록 ── */
-    .inbox-list-area { flex:1; overflow-y:auto; background:#ffffff; padding: 0 24px; }
-
-    .inbox-table { table-layout:fixed; background:#ffffff; width:100%; }
-    .inbox-table thead {
-        position:sticky; top:0;
-        background:#ffffff; z-index:10;
-    }
-    .inbox-table thead th {
-        border-bottom:2px solid #e8eaed;
-        border-left:none; border-right:none;
-        font-weight:500; font-size:13px; color:#5f6368;
-        padding:14px 12px; white-space:nowrap; background:#ffffff;
-    }
-    .inbox-table tbody tr {
-        cursor:pointer;
-        transition:background-color .15s;
-        height:56px;
-    }
-    .inbox-table tbody tr:hover { background:#f1f3f4; }
-    .inbox-table tbody td {
-        padding:10px 12px; font-size:14px; color:#1f1f1f;
-        border-top:none; border-left:none; border-right:none;
-        border-bottom:1px solid #f0f0f0;
-        vertical-align:middle;
-    }
-
-    /* ── 제품명 셀 ── */
-    .product-name-cell { display:flex; align-items:center; gap:10px; }
-    .product-icon {
-        width:36px; height:36px; border-radius:8px; flex-shrink:0;
-        background:#e8f0fe; color:#1967d2;
-        display:flex; align-items:center; justify-content:center; font-size:16px;
-    }
-    .product-name  { font-weight:500; font-size:14px; color:#1f1f1f; }
-    .product-code  { font-size:11px; color:#80868b; }
-
-    /* ── 상태 뱃지 ── */
-    .status-badge {
-        display:inline-flex; align-items:center; gap:4px;
-        padding:3px 10px; border-radius:20px;
-        font-size:12px; font-weight:600; white-space:nowrap;
-    }
-    .status-DRAFT      { background:#e8f0fe; color:#1967d2; }
-    .status-REQUESTING { background:#fef7e0; color:#c77700; }
-    .status-SUBMITTED  { background:#e6f4ea; color:#0f9d58; }
-    .status-REVIEW     { background:#f3e8fd; color:#9334e9; }
-    .status-PENDING    { background:#fff0e0; color:#e37400; }
-    .status-CONFIRMED  { background:#e6f4ea; color:#1e8e3e; }
-
-    /* ── 역할 뱃지 ── */
-    .role-badge {
-        display:inline-block;
-        padding:2px 9px; border-radius:4px;
-        font-size:11px; font-weight:600; white-space:nowrap;
-    }
-    .role-VIEWER   { background:#f1f3f4; color:#5f6368; border:1px solid #dadce0; }
-    .role-UPLOADER { background:#e8f0fe; color:#1967d2; border:1px solid #c5d8fc; }
-    .role-EDITOR   { background:#e6f4ea; color:#1e8e3e; border:1px solid #ceead6; }
-    .role-REVIEWER { background:#fef7e0; color:#c77700; border:1px solid #fde68a; }
-    .role-APPROVER { background:#f3e8fd; color:#9334e9; border:1px solid #ddb6f8; }
-
-    /* ── 빈 상태 ── */
-    .empty-state {
-        display:flex; flex-direction:column;
-        align-items:center; justify-content:center;
-        padding:80px 20px; color:#5f6368;
-    }
-    .empty-state i { font-size:64px; opacity:.25; margin-bottom:16px; }
-    .empty-state p  { font-size:15px; margin:0; }
-</style>
+<link rel="stylesheet" href="{% static 'css/sharing_inbox.css' %}?v=20260222b">
 {% endblock %}
 
 {% block content %}
-<div class="inbox-container">
+<div class="inbox-page-container">
 
-    {# ────────── 진행상태별 필터 카드 ────────── #}
-    <div class="status-strip">
-        <div class="status-strip-inner">
+    {% comment %} 상단: 진행 단계 카드 스트립 {% endcomment %}
+    <div class="inbox-stats-strip">
+        <div class="inbox-stats-inner">
 
+            {% comment %} 전체 카드 {% endcomment %}
             <a href="?{% if role_filter %}role={{ role_filter }}{% endif %}"
-               class="status-card {% if not status_filter %}active-all{% endif %}">
-                <div class="status-icon si-all"><i class="bi bi-collection"></i></div>
+               class="inbox-stat-card {% if not status_filter %}isc-active-all{% endif %}">
+                <div class="stat-icon stat-icon-default"><i class="bi bi-people"></i></div>
                 <div>
-                    <div class="status-card-count">{{ total_count }}</div>
-                    <div class="status-card-label">전체</div>
+                    <div class="stat-card-count">{{ total_count }}</div>
+                    <div class="stat-card-label">전체</div>
                 </div>
             </a>
 
+            <div class="inbox-stage-sep"></div>
+
+            {% comment %} 작성중 {% endcomment %}
             <a href="?status=DRAFT{% if role_filter %}&role={{ role_filter }}{% endif %}"
-               class="status-card {% if status_filter == 'DRAFT' %}active-DRAFT{% endif %}">
-                <div class="status-icon si-draft"><i class="bi bi-pencil-square"></i></div>
+               class="inbox-stat-card isc-draft {% if status_filter == 'DRAFT' %}isc-active-DRAFT{% endif %}">
+                <div class="stat-icon isc-icon-draft"><i class="bi bi-pencil"></i></div>
                 <div>
-                    <div class="status-card-count">{{ status_counts.DRAFT|default:0 }}</div>
-                    <div class="status-card-label">작성 중</div>
+                    <div class="stat-card-count">{{ status_counts.DRAFT|default:0 }}</div>
+                    <div class="stat-card-label">작성 중</div>
                 </div>
             </a>
 
+            <div class="inbox-stage-arrow"><i class="bi bi-chevron-right"></i></div>
+
+            {% comment %} 자료요청 {% endcomment %}
             <a href="?status=REQUESTING{% if role_filter %}&role={{ role_filter }}{% endif %}"
-               class="status-card {% if status_filter == 'REQUESTING' %}active-REQUESTING{% endif %}">
-                <div class="status-icon si-requesting"><i class="bi bi-send"></i></div>
+               class="inbox-stat-card isc-requesting {% if status_filter == 'REQUESTING' %}isc-active-REQUESTING{% endif %}">
+                <div class="stat-icon isc-icon-requesting"><i class="bi bi-send"></i></div>
                 <div>
-                    <div class="status-card-count">{{ status_counts.REQUESTING|default:0 }}</div>
-                    <div class="status-card-label">자료 요청</div>
+                    <div class="stat-card-count">{{ status_counts.REQUESTING|default:0 }}</div>
+                    <div class="stat-card-label">자료 요청</div>
                 </div>
             </a>
 
+            <div class="inbox-stage-arrow"><i class="bi bi-chevron-right"></i></div>
+
+            {% comment %} 제출완료 {% endcomment %}
             <a href="?status=SUBMITTED{% if role_filter %}&role={{ role_filter }}{% endif %}"
-               class="status-card {% if status_filter == 'SUBMITTED' %}active-SUBMITTED{% endif %}">
-                <div class="status-icon si-submitted"><i class="bi bi-file-check"></i></div>
+               class="inbox-stat-card isc-submitted {% if status_filter == 'SUBMITTED' %}isc-active-SUBMITTED{% endif %}">
+                <div class="stat-icon isc-icon-submitted"><i class="bi bi-check2-all"></i></div>
                 <div>
-                    <div class="status-card-count">{{ status_counts.SUBMITTED|default:0 }}</div>
-                    <div class="status-card-label">제출 완료</div>
+                    <div class="stat-card-count">{{ status_counts.SUBMITTED|default:0 }}</div>
+                    <div class="stat-card-label">제출 완료</div>
                 </div>
             </a>
 
+            <div class="inbox-stage-arrow"><i class="bi bi-chevron-right"></i></div>
+
+            {% comment %} 검토중 {% endcomment %}
             <a href="?status=REVIEW{% if role_filter %}&role={{ role_filter }}{% endif %}"
-               class="status-card {% if status_filter == 'REVIEW' %}active-REVIEW{% endif %}">
-                <div class="status-icon si-review"><i class="bi bi-eye"></i></div>
+               class="inbox-stat-card isc-review {% if status_filter == 'REVIEW' %}isc-active-REVIEW{% endif %}">
+                <div class="stat-icon isc-icon-review"><i class="bi bi-eye"></i></div>
                 <div>
-                    <div class="status-card-count">{{ status_counts.REVIEW|default:0 }}</div>
-                    <div class="status-card-label">검토 중</div>
+                    <div class="stat-card-count">{{ status_counts.REVIEW|default:0 }}</div>
+                    <div class="stat-card-label">검토 중</div>
                 </div>
             </a>
 
+            <div class="inbox-stage-arrow"><i class="bi bi-chevron-right"></i></div>
+
+            {% comment %} 승인대기 {% endcomment %}
             <a href="?status=PENDING{% if role_filter %}&role={{ role_filter }}{% endif %}"
-               class="status-card {% if status_filter == 'PENDING' %}active-PENDING{% endif %}">
-                <div class="status-icon si-pending"><i class="bi bi-hourglass-split"></i></div>
+               class="inbox-stat-card isc-pending {% if status_filter == 'PENDING' %}isc-active-PENDING{% endif %}">
+                <div class="stat-icon isc-icon-pending"><i class="bi bi-hourglass-split"></i></div>
                 <div>
-                    <div class="status-card-count">{{ status_counts.PENDING|default:0 }}</div>
-                    <div class="status-card-label">승인 대기</div>
+                    <div class="stat-card-count">{{ status_counts.PENDING|default:0 }}</div>
+                    <div class="stat-card-label">승인 대기</div>
                 </div>
             </a>
 
+            <div class="inbox-stage-arrow"><i class="bi bi-chevron-right"></i></div>
+
+            {% comment %} 승인완료 {% endcomment %}
             <a href="?status=CONFIRMED{% if role_filter %}&role={{ role_filter }}{% endif %}"
-               class="status-card {% if status_filter == 'CONFIRMED' %}active-CONFIRMED{% endif %}">
-                <div class="status-icon si-confirmed"><i class="bi bi-check-circle"></i></div>
+               class="inbox-stat-card isc-confirmed {% if status_filter == 'CONFIRMED' %}isc-active-CONFIRMED{% endif %}">
+                <div class="stat-icon isc-icon-confirmed"><i class="bi bi-patch-check-fill"></i></div>
                 <div>
-                    <div class="status-card-count">{{ status_counts.CONFIRMED|default:0 }}</div>
-                    <div class="status-card-label">승인 완료</div>
+                    <div class="stat-card-count">{{ status_counts.CONFIRMED|default:0 }}</div>
+                    <div class="stat-card-label">승인 완료</div>
                 </div>
             </a>
 
         </div>
-    </div>{# /status-strip #}
-
-    {# ────────── 역할 필터 툴바 ────────── #}
-    <div class="filter-toolbar">
-        <span class="label-text me-1">역할</span>
-        <a href="?{% if status_filter %}status={{ status_filter }}{% endif %}"
-           class="role-pill {% if not role_filter %}active{% endif %}">전체</a>
-        {% for code, label in role_choices %}
-        <a href="?role={{ code }}{% if status_filter %}&status={{ status_filter }}{% endif %}"
-           class="role-pill {% if role_filter == code %}active{% endif %}">{{ label }}</a>
-        {% endfor %}
-        <span class="ms-auto text-muted" style="font-size:13px;">{{ filtered_count }}건</span>
     </div>
 
-    {# ────────── 목록 ────────── #}
-    <div class="inbox-list-area">
+    {% comment %} 역할 필터 툴바 {% endcomment %}
+    <div class="inbox-filter-bar">
+        <ul class="nav role-pills mb-0">
+            <li class="nav-item">
+                <a class="nav-link {% if not role_filter %}active{% endif %}"
+                   href="?{% if status_filter %}status={{ status_filter }}{% endif %}">
+                    <i class="bi bi-people me-1"></i>전체 역할
+                </a>
+            </li>
+            {% for code, label in role_choices %}
+            <li class="nav-item">
+                <a class="nav-link {% if role_filter == code %}active{% endif %}"
+                   href="?role={{ code }}{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                    {{ label }}
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <div class="ms-auto text-muted" style="font-size:13px;">
+            {% if status_filter or role_filter %}
+                <strong>{{ filtered_count }}</strong> / {{ total_count }}건
+            {% else %}
+                총 <strong>{{ total_count }}</strong>건
+            {% endif %}
+        </div>
+    </div>
+
+    {% comment %} 테이블 {% endcomment %}
+    <div class="flex-grow-1 overflow-auto custom-scrollbar px-0">
         {% if received_shares %}
-        <table class="inbox-table table mb-0">
+        <table class="table table-hover align-middle mb-0 inbox-table">
             <thead>
-                <tr>
-                    <th style="width:25%;">제품명</th>
-                    <th style="width:13%;">공유자</th>
-                    <th style="width:9%;">역할</th>
+                <tr class="text-muted">
+                    <th style="width:28%; text-align:left !important;">제품명</th>
+                    <th style="width:12%;">공유자</th>
+                    <th style="width:9%;">내 역할</th>
                     <th style="width:9%;">진행상태</th>
-                    <th style="width:18%;">메시지</th>
+                    <th style="width:20%; text-align:left !important;">메시지</th>
                     <th style="width:9%;">공유일</th>
-                    <th style="width:17%; text-align:center;">할 일</th>
+                    <th style="width:13%;">할 일</th>
                 </tr>
             </thead>
             <tbody>
-            {% for share in received_shares %}
-            {% with meta=share.metadata perm=share.permission %}
-            <tr onclick="window.location='{% url 'products:product_detail_new' share.label.my_label_id %}?from=collab'">
-
-                {# 제품명 #}
-                <td>
-                    <div class="product-name-cell">
-                        <div class="product-icon"><i class="bi bi-box-seam"></i></div>
-                        <div>
-                            <div class="product-name">{{ share.label.my_label_name|default:"(이름 없음)" }}</div>
-                            {% if meta and meta.product_code %}
-                            <div class="product-code">{{ meta.product_code }}</div>
-                            {% endif %}
+                {% for share in received_shares %}
+                <tr onclick="window.location.href='{% url 'products:product_detail_new' share.label.my_label_id %}'">
+                    <td style="text-align:left;">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="file-icon"><i class="bi bi-file-earmark-text"></i></div>
+                            <div>
+                                <div class="fw-semibold text-truncate" style="max-width:220px;">{{ share.label.my_label_name }}</div>
+                                {% if share.metadata.product_code %}
+                                <div class="text-muted" style="font-size:11px;">{{ share.metadata.product_code }}</div>
+                                {% endif %}
+                            </div>
                         </div>
-                    </div>
-                </td>
-
-                {# 공유자 #}
-                <td>
-                    <div style="font-size:13px; font-weight:500;">
-                        {{ share.created_by.get_full_name|default:share.created_by.username }}
-                    </div>
-                    <div style="font-size:11px; color:#80868b;">{{ share.created_by.email }}</div>
-                </td>
-
-                {# 역할 #}
-                <td>
-                    {% if perm %}
-                    <span class="role-badge role-{{ perm.role_code }}">{{ perm.get_role_code_display }}</span>
-                    {% else %}
-                    <span class="role-badge role-VIEWER">조회</span>
-                    {% endif %}
-                </td>
-
-                {# 진행상태 #}
-                <td>
-                    {% if meta %}
-                    <span class="status-badge status-{{ meta.status }}">
-                        {% if meta.status == 'DRAFT' %}<i class="bi bi-pencil-square"></i>
-                        {% elif meta.status == 'REQUESTING' %}<i class="bi bi-send"></i>
-                        {% elif meta.status == 'SUBMITTED' %}<i class="bi bi-file-check"></i>
-                        {% elif meta.status == 'REVIEW' %}<i class="bi bi-eye"></i>
-                        {% elif meta.status == 'PENDING' %}<i class="bi bi-hourglass-split"></i>
-                        {% elif meta.status == 'CONFIRMED' %}<i class="bi bi-check-circle"></i>
+                    </td>
+                    <td>
+                        <div style="font-size:12px;">{{ share.created_by.get_full_name|default:share.created_by.username }}</div>
+                        <div class="text-muted" style="font-size:11px;">{{ share.created_by.email }}</div>
+                    </td>
+                    <td>
+                        {% with r=share.permission.role_code %}
+                        <span class="status-badge-sm"
+                            style="{% if r == 'EDITOR' %}background:#e6f4ea;color:#1e8e3e;
+                            {% elif r == 'REVIEWER' %}background:#fef7e0;color:#c77700;
+                            {% elif r == 'APPROVER' %}background:#f3e8fd;color:#9334e9;
+                            {% elif r == 'UPLOADER' %}background:#e8f0fe;color:#1967d2;
+                            {% else %}background:#f1f3f4;color:#5f6368;{% endif %}">
+                            {{ share.permission.get_role_code_display }}
+                        </span>
+                        {% endwith %}
+                    </td>
+                    <td>
+                        {% with s=share.metadata.status %}
+                        {% if s == 'DRAFT' %}<span class="status-badge-sm" style="background:#e8f0fe;color:#1967d2;">작성 중</span>
+                        {% elif s == 'REQUESTING' %}<span class="status-badge-sm" style="background:#fef7e0;color:#c77700;">자료 요청</span>
+                        {% elif s == 'SUBMITTED' %}<span class="status-badge-sm" style="background:#e6f4ea;color:#0f9d58;">제출 완료</span>
+                        {% elif s == 'REVIEW' %}<span class="status-badge-sm" style="background:#f3e8fd;color:#9334e9;">검토 중</span>
+                        {% elif s == 'PENDING' %}<span class="status-badge-sm" style="background:#fff0e0;color:#e37400;">승인 대기</span>
+                        {% elif s == 'CONFIRMED' %}<span class="status-badge-sm" style="background:#e6f4ea;color:#1e8e3e;">승인 완료</span>
+                        {% else %}<span class="text-muted">-</span>
                         {% endif %}
-                        {{ meta.get_status_display }}
-                    </span>
-                    {% else %}
-                    <span class="status-badge status-DRAFT"><i class="bi bi-pencil-square"></i>작성 중</span>
-                    {% endif %}
-                </td>
-
-                {# 메시지 #}
-                <td style="font-size:12px; color:#5f6368;">
-                    {{ share.share_message|truncatechars:48|default:"—" }}
-                </td>
-
-                {# 공유일 #}
-                <td style="font-size:12px; color:#80868b; white-space:nowrap;">
-                    {{ share.share_start_date|date:"Y-m-d" }}
-                </td>
-
-                {# 할 일 #}
-                <td style="text-align:center;" onclick="event.stopPropagation();">
-                    {% if share.action_label %}
-                    <span class="{{ share.action_style }}" style="font-size:12px;font-weight:600;"
-                          title="{{ share.action_label }}">
-                        <i class="{{ share.action_icon }} me-1"></i>{{ share.action_label }}
-                    </span>
-                    {% else %}
-                    <span style="color:#9aa0a6;font-size:18px;" title="대기 없음">
-                        <i class="bi bi-dash"></i>
-                    </span>
-                    {% endif %}
-                </td>
-
-            </tr>
-            {% endwith %}
-            {% endfor %}
+                        {% endwith %}
+                    </td>
+                    <td style="text-align:left;" class="msg-cell" onclick="event.stopPropagation()">
+                        {% if share.share_message %}
+                        <div class="msg-text" title="{{ share.share_message }}">{{ share.share_message }}</div>
+                        {% else %}
+                        <span class="text-muted" style="font-size:12px;">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="text-muted" style="font-size:12px;">{{ share.share_start_date|date:"y.m.d" }}</span>
+                    </td>
+                    <td onclick="event.stopPropagation()">
+                        {% if share.action_label %}
+                        <a href="{% url 'products:product_detail_new' share.label.my_label_id %}"
+                           class="btn btn-sm {{ share.action_style }}" style="border-radius:16px;font-size:12px;white-space:nowrap;">
+                            {% if share.action_icon %}<i class="bi bi-{{ share.action_icon }} me-1"></i>{% endif %}
+                            {{ share.action_label }}
+                        </a>
+                        {% else %}
+                        <a href="{% url 'products:product_detail_new' share.label.my_label_id %}"
+                           class="btn btn-sm btn-outline-secondary" style="border-radius:16px;font-size:12px;">
+                            <i class="bi bi-eye me-1"></i>보기
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <div class="empty-state">
-            <i class="bi bi-people"></i>
-            <p>
+        <div class="d-flex align-items-center justify-content-center" style="height:360px;">
+            <div class="text-center">
+                <i class="bi bi-inbox" style="font-size:56px;color:#dadce0;"></i>
                 {% if status_filter or role_filter %}
-                    선택한 조건에 해당하는 공동작업 품목이 없습니다.
+                <p class="mt-3 text-muted">해당 조건에 맞는 공동 작업 항목이 없습니다</p>
+                <a href="?" class="btn btn-outline-secondary btn-sm mt-2" style="border-radius:16px;">전체 보기</a>
                 {% else %}
-                    아직 권한을 부여받은 제품이 없습니다.
+                <p class="mt-3 text-muted">공유받은 제품이 없습니다</p>
+                <p class="text-muted" style="font-size:13px;">다른 사용자가 제품을 공유하면 이곳에 표시됩니다</p>
                 {% endif %}
-            </p>
+            </div>
         </div>
         {% endif %}
-    </div>{# /inbox-list-area #}
+    </div>
 
-</div>{# /inbox-container #}
+    {% comment %} 하단 바 {% endcomment %}
+    <div class="bottom-bar">
+        <span class="text-muted" style="font-size:13px;">
+            {% if status_filter or role_filter %}
+                필터 결과 <strong>{{ filtered_count }}</strong>건 / 전체 {{ total_count }}건
+            {% else %}
+                전체 <strong>{{ total_count }}</strong>건
+            {% endif %}
+        </span>
+        <span></span>
+    </div>
+
+</div>
 {% endblock %}

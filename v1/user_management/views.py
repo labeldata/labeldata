@@ -194,11 +194,16 @@ def resend_verification_email(request):
     return redirect('user_management:login')
 
 def logout_view(request):
-    """로그아웃"""
+    """로그아웃 — 로그아웃 전 UI 모드에 따라 적절한 홈으로 이동"""
     if request.method == 'POST':
+        # logout() 전에 세션에서 UI 모드 저장 (logout 호출 시 세션 초기화됨)
+        ui_mode = request.session.get('ui_mode', 'v2')
         logout(request)
         messages.info(request, "로그아웃되었습니다.")
-    return redirect('user_management:login')
+        if ui_mode == 'v1':
+            return redirect('main:home_v1')
+        return redirect('main:home_dashboard')
+    return redirect('main:home_dashboard')
 
 def password_reset_request(request):
     """비밀번호 재설정 요청 (이메일로 링크 발송)"""

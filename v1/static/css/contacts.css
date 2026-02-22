@@ -1,0 +1,408 @@
+/* ============================================================
+   연락처 관리 (contacts.html) 전용 스타일
+   영양성분 편집기(nutrition_editor) 스타일 참고
+   ============================================================ */
+
+/* ── v2-content 패딩 무력화 (전체 화면 활용) ── */
+.v2-content {
+    padding: 0 !important;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── 전체 컨테이너 ── */
+.contacts-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────
+   왼쪽 패널 - 연락처 목록
+────────────────────────────────────────────── */
+.contacts-left {
+    width: 50%;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #e8eaed;
+    background: #fff;
+    overflow: hidden;
+}
+
+.contacts-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e8eaed;
+    background: #f8f9fa;
+    flex-shrink: 0;
+}
+
+.contacts-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-bottom: 1px solid #e8eaed;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.contacts-search-bar input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 13px;
+    color: #202124;
+    background: transparent;
+}
+
+/* ── Handsontable 그리드 래퍼 ── */
+.contacts-grid-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+#contactsGrid {
+    width: 100%;
+    height: 100%;
+}
+
+/* ── 연락처 테이블 래퍼 (구형 HTML 테이블용, 미사용) ── */
+.contacts-table-wrap {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+/* ── 연락처 테이블 ── */
+.contacts-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    table-layout: fixed;
+}
+
+.contacts-table thead th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    border-bottom: 2px solid #e8eaed;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #5f6368;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    z-index: 1;
+}
+
+.contacts-table tbody tr {
+    border-bottom: 1px solid #f1f3f4;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.contacts-table tbody tr:hover  { background: #f8f9fa; }
+.contacts-table tbody tr.selected { background: #e8f0fe !important; }
+.contacts-table tbody tr.new-row  { background: #fff8e1; }
+
+.contacts-table td {
+    padding: 8px 10px;
+    color: #202124;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 0;
+}
+
+/* 셀 인라인 편집 */
+.editable { cursor: text; }
+.editable:hover { background: rgba(26,115,232,0.05); }
+
+.cell-input {
+    width: 100%;
+    border: 1px solid #1a73e8;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 13px;
+    outline: none;
+    background: #fff;
+}
+
+/* ── 공유 뱃지 (내가 공유 / 받은 공유) ── */
+.share-badge { display: flex; gap: 4px; justify-content: center; align-items: center; }
+
+.badge-sent {
+    display: inline-block;
+    background: #e8f0fe; color: #1967d2;
+    border-radius: 10px; padding: 1px 7px;
+    font-size: 11px; font-weight: 600;
+}
+.badge-recv {
+    display: inline-block;
+    background: #e6f4ea; color: #1e8e3e;
+    border-radius: 10px; padding: 1px 7px;
+    font-size: 11px; font-weight: 600;
+}
+
+/* ── 하단 상태바 ── */
+.contacts-statusbar {
+    padding: 6px 14px;
+    background: #f8f9fa;
+    border-top: 1px solid #e8eaed;
+    font-size: 11px;
+    color: #5f6368;
+    flex-shrink: 0;
+}
+
+/* ── 아이콘 버튼 ── */
+.contacts-icon-btn {
+    background: none;
+    border: none;
+    padding: 5px 7px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    color: #3c4043;
+    line-height: 1;
+    transition: background 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.contacts-icon-btn:hover:not(:disabled) { background: #f1f3f4; }
+.contacts-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ─────────────────────────────────────────────
+   리사이즈 핸들
+────────────────────────────────────────────── */
+.contacts-resizer {
+    width: 5px;
+    background: #e8eaed;
+    cursor: col-resize;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+.contacts-resizer:hover { background: #1a73e8; }
+
+/* ─────────────────────────────────────────────
+   오른쪽 패널 - 공유 현황
+────────────────────────────────────────────── */
+.contacts-right {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    overflow: hidden;
+}
+
+/* ── 빈 상태 ── */
+.contacts-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #80868b;
+}
+
+/* ── 공유 현황 뷰 ── */
+.contacts-share-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ── 선택 연락처 헤더 ── */
+.share-contact-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 24px;
+    border-bottom: 1px solid #e8eaed;
+    background: #f8f9fa;
+    flex-shrink: 0;
+}
+
+.share-contact-avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: #1a73e8;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 700;
+    flex-shrink: 0;
+}
+
+.share-contact-name    { font-size: 16px; font-weight: 600; color: #202124; }
+.share-contact-email   { font-size: 13px; color: #5f6368; margin-top: 2px; }
+.share-contact-company { font-size: 12px; color: #80868b; margin-top: 1px; }
+
+/* ── 공유 테이블 ── */
+.share-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.share-table thead th {
+    background: #f8f9fa;
+    border-bottom: 2px solid #e8eaed;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #5f6368;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.share-table tbody tr {
+    border-bottom: 1px solid #f1f3f4;
+    transition: background 0.1s;
+}
+.share-table tbody tr:hover { background: #f8f9fa; }
+
+.share-table td { padding: 9px 12px; color: #202124; vertical-align: middle; }
+
+/* ── 역할 칩 ── */
+.role-chip {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.role-owner     { background: #f3e8fd; color: #9334e9; }
+.role-editor    { background: #e8f0fe; color: #1967d2; }
+.role-reviewer  { background: #e6f4ea; color: #1e8e3e; }
+.role-approver  { background: #fef7e0; color: #c77700; }
+.role-viewer    { background: #f1f3f4; color: #5f6368; }
+.role-requester { background: #fce8e6; color: #c5221f; }
+.role-none      { background: #f1f3f4; color: #9aa0a6; }
+
+/* ── 내비 탭 커스텀 ── */
+#shareTabs .nav-link {
+    font-size: 13px;
+    color: #5f6368;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 10px 16px;
+}
+#shareTabs .nav-link.active {
+    color: #1a73e8;
+    border-bottom-color: #1a73e8;
+    font-weight: 600;
+    background: transparent;
+}
+
+/* ── 연락처 필터 버튼 ── */
+.contacts-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 10px;
+    border: 1px solid #dadce0;
+    border-radius: 12px;
+    background: #fff;
+    font-size: 11px;
+    color: #5f6368;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+    white-space: nowrap;
+}
+.contacts-filter-btn:hover {
+    background: #f1f3f4;
+    border-color: #bdc1c6;
+}
+.contacts-filter-btn.active {
+    background: #e8f0fe;
+    border-color: #1a73e8;
+    color: #1a73e8;
+    font-weight: 600;
+}
+.contacts-filter-btn:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+}
+/* ── 선택 항목 액션 바 (제품 관리와 동일한 스타일) ── */
+#selection-actions {
+    animation: contactsSlideIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    background: #ffffff;
+    border: 1px solid #e0e2e0;
+    border-radius: 28px;
+    padding: 4px 14px;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+    gap: 8px;
+}
+
+@keyframes contactsSlideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+#selection-actions .badge {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 12px;
+    background-color: #1967d2 !important;
+    color: #ffffff;
+}
+
+#selection-actions .btn {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 16px;
+    border: 1px solid #e0e2e0;
+    background: #ffffff;
+    color: #444746;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#selection-actions .btn:hover {
+    background-color: #f1f3f4;
+    border-color: #c0c4c7;
+}
+
+#selection-actions .btn-outline-danger {
+    border-color: #f28b82;
+    color: #c5221f;
+    background: #ffffff;
+}
+
+#selection-actions .btn-outline-danger:hover {
+    background-color: #fce8e6;
+    border-color: #f28b82;
+    color: #c5221f;
+}
+
+#selection-actions .btn-primary {
+    background-color: #1967d2;
+    border-color: #1967d2;
+    color: #ffffff;
+}
+
+#selection-actions .btn-primary:hover {
+    background-color: #1558b0;
+    border-color: #1558b0;
+    color: #ffffff;
+}

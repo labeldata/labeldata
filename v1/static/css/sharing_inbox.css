@@ -1,0 +1,563 @@
+/* ============================================================
+   공동 작업(공유 인박스) 전용 스타일  sharing/inbox.html
+   base_v2.html → products_common.css 의 --v2-* 변수 사용 가능
+   ============================================================ */
+
+/* ── 페이지 레이아웃 ─────────────────────────────────────── */
+/* .v2-content 는 products_common.css 의 flex:1 기본값을 그대로 사용합니다.
+   padding 제거 + flex 컨테이너로 전환하여 자식이 flex:1로 높이를 채울 수 있게 합니다. */
+.v2-content {
+    padding: 0 !important;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.inbox-container {
+    flex:           1;
+    min-height:     0;
+    display:        flex;
+    flex-direction: column;
+    background:     var(--v2-gray-50);
+}
+
+/* ── 진행상태 카드 스트립 ──────────────────────────────────── */
+.status-strip {
+    min-height:    72px;
+    max-height:    72px;
+    overflow-x:    auto;
+    overflow-y:    hidden;
+    flex-shrink:   0;
+    border-bottom: 1px solid #e0e2e0;
+    background:    var(--v2-gray-50);
+    padding:       10px 0;
+    scrollbar-width: none;
+}
+.status-strip::-webkit-scrollbar { display: none; }
+
+.status-strip-inner {
+    display:    flex;
+    align-items: center;
+    gap:        8px;
+    padding:    0 20px;
+    min-width:  max-content;
+    height:     100%;
+}
+
+/* 카드 공통 */
+.status-card {
+    border-radius: 10px;
+    min-width:     130px;
+    cursor:        pointer;
+    border:        2px solid transparent;
+    background:    #ffffff;
+    padding:       7px 12px;
+    display:       flex;
+    align-items:   center;
+    gap:           8px;
+    text-decoration: none;
+    color:         inherit;
+    box-shadow:    0 1px 2px rgba(60,64,67,.12);
+    transition:    all .18s cubic-bezier(0.4,0,0.2,1);
+    white-space:   nowrap;
+}
+.status-card:hover {
+    transform:       translateY(-1px);
+    box-shadow:      0 2px 6px rgba(60,64,67,.18);
+    color:           inherit;
+    text-decoration: none;
+}
+
+/* 활성 상태별 테두리·배경 */
+.status-card.active-all        { border-color: #5f6368;  background: #f1f3f4; }
+.status-card.active-DRAFT      { border-color: #1a73e8;  background: #e8f0fe; }
+.status-card.active-REQUESTING { border-color: #f9ab00;  background: #fef7e0; }
+.status-card.active-SUBMITTED  { border-color: #0f9d58;  background: #e6f4ea; }
+.status-card.active-REVIEW     { border-color: #9334e9;  background: #f3e8fd; }
+.status-card.active-PENDING    { border-color: #e37400;  background: #fff0e0; }
+.status-card.active-CONFIRMED  { border-color: #1e8e3e;  background: #e6f4ea; }
+
+/* 카드 내부 아이콘 원 */
+.status-icon {
+    width:         32px;
+    height:        32px;
+    border-radius: 8px;
+    display:       flex;
+    align-items:   center;
+    justify-content: center;
+    font-size:     16px;
+    flex-shrink:   0;
+}
+.si-all        { background: #f1f3f4; color: #5f6368; }
+.si-draft      { background: #e8f0fe; color: #1967d2; }
+.si-requesting { background: #fef7e0; color: #c77700; }
+.si-submitted  { background: #e6f4ea; color: #0f9d58; }
+.si-review     { background: #f3e8fd; color: #9334e9; }
+.si-pending    { background: #fff0e0; color: #e37400; }
+.si-confirmed  { background: #e6f4ea; color: #1e8e3e; }
+
+.status-card-count { font-size: 18px; font-weight: 700; color: var(--v2-text);     line-height: 1; }
+.status-card-label { font-size: 11px; font-weight: 500; color: var(--v2-text-sub); margin-top: 1px; }
+
+/* ── 단계 간 연결 요소 ────────────────────────────────────── */
+/* 전체 카드와 단계 카드 사이 구분선 */
+.status-divider {
+    display:     flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding:     0 2px;
+    color:       var(--v2-border);
+    font-size:   18px;
+    user-select: none;
+}
+
+/* 단계 카드 간 화살표 */
+.status-arrow {
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    flex-shrink:     0;
+    width:           24px;
+    position:        relative;
+    color:           #bdc1c6;
+}
+.status-arrow::before,
+.status-arrow::after {
+    content:    '';
+    position:   absolute;
+    top:        50%;
+    height:     1px;
+    background: #e0e0e0;
+    transform:  translateY(-50%);
+}
+.status-arrow::before { left: 0;   right: 50%; }
+.status-arrow::after  { left: 50%; right: 0;   }
+.status-arrow i {
+    position:       relative;
+    z-index:        1;
+    background:     var(--v2-gray-50);
+    border:         1px solid #e0e0e0;
+    border-radius:  50%;
+    width:          20px;
+    height:         20px;
+    display:        flex;
+    align-items:    center;
+    justify-content: center;
+    font-size:      10px;
+}
+
+/* ── 역할 필터 툴바 ───────────────────────────────────────── */
+.filter-toolbar {
+    flex-shrink:   0;
+    border-bottom: 1px solid #e0e2e0;
+    background:    #ffffff;
+    min-height:    52px;
+    display:       flex;
+    align-items:   center;
+    padding:       0 20px;
+    gap:           8px;
+    overflow-x:    auto;
+    scrollbar-width: none;
+}
+.filter-toolbar::-webkit-scrollbar { display: none; }
+.filter-toolbar .label-text {
+    font-size:      12px;
+    font-weight:    600;
+    color:          var(--v2-text-sub);
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    white-space:    nowrap;
+}
+.role-pill {
+    display:         inline-flex;
+    align-items:     center;
+    gap:             5px;
+    padding:         4px 12px;
+    border-radius:   20px;
+    font-size:       13px;
+    font-weight:     500;
+    border:          1.5px solid var(--v2-border);
+    background:      #fff;
+    color:           var(--v2-text-sub);
+    text-decoration: none;
+    transition:      all .15s;
+    white-space:     nowrap;
+}
+.role-pill:hover  { background: var(--v2-gray-100); color: var(--v2-text); text-decoration: none; }
+.role-pill.active { background: #c2e7ff; border-color: var(--v2-blue); color: #001d35; font-weight: 600; }
+
+/* ── 목록 영역 ────────────────────────────────────────────── */
+.inbox-list-area { flex: 1; overflow-y: auto; background: #ffffff; padding: 0 20px; }
+
+.inbox-table         { table-layout: fixed; background: #ffffff; width: 100%; }
+.inbox-table thead   { position: sticky; top: 0; background: #ffffff; z-index: 10; }
+.inbox-table thead th {
+    border-bottom:  2px solid var(--v2-border);
+    border-left:    none;
+    border-right:   none;
+    font-weight:    500;
+    font-size:      13px;
+    color:          var(--v2-text-sub);
+    padding:        12px 12px;
+    white-space:    nowrap;
+    background:     #ffffff;
+}
+.inbox-table tbody tr {
+    cursor:     pointer;
+    transition: background-color .15s;
+    height:     52px;
+}
+.inbox-table tbody tr:hover { background: var(--v2-gray-100); }
+.inbox-table tbody td {
+    padding:        9px 12px;
+    font-size:      14px;
+    color:          var(--v2-text);
+    border-top:     none;
+    border-left:    none;
+    border-right:   none;
+    border-bottom:  1px solid #f0f0f0;
+    vertical-align: middle;
+}
+
+/* ── 제품명 셀 ────────────────────────────────────────────── */
+.product-name-cell { display: flex; align-items: center; gap: 10px; }
+.product-icon {
+    width:         34px;
+    height:        34px;
+    border-radius: 8px;
+    flex-shrink:   0;
+    background:    var(--v2-blue-light);
+    color:         #1967d2;
+    display:       flex;
+    align-items:   center;
+    justify-content: center;
+    font-size:     15px;
+}
+.product-name { font-weight: 500; font-size: 14px; color: var(--v2-text); }
+.product-code { font-size: 11px; color: #80868b; }
+
+/* ── 상태 뱃지 ────────────────────────────────────────────── */
+.status-badge {
+    display:    inline-flex;
+    align-items: center;
+    gap:        4px;
+    padding:    3px 10px;
+    border-radius: 20px;
+    font-size:  12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.status-DRAFT      { background: #e8f0fe; color: #1967d2; }
+.status-REQUESTING { background: #fef7e0; color: #c77700; }
+.status-SUBMITTED  { background: #e6f4ea; color: #0f9d58; }
+.status-REVIEW     { background: #f3e8fd; color: #9334e9; }
+.status-PENDING    { background: #fff0e0; color: #e37400; }
+.status-CONFIRMED  { background: #e6f4ea; color: #1e8e3e; }
+
+/* ── 역할 뱃지 ────────────────────────────────────────────── */
+.role-badge {
+    display:     inline-block;
+    padding:     2px 9px;
+    border-radius: 4px;
+    font-size:   11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.role-VIEWER   { background: var(--v2-gray-100); color: var(--v2-text-sub);  border: 1px solid var(--v2-border); }
+.role-UPLOADER { background: #e8f0fe; color: #1967d2; border: 1px solid #c5d8fc; }
+.role-EDITOR   { background: #e6f4ea; color: #1e8e3e; border: 1px solid #ceead6; }
+.role-REVIEWER { background: #fef7e0; color: #c77700; border: 1px solid #fde68a; }
+.role-APPROVER { background: #f3e8fd; color: #9334e9; border: 1px solid #ddb6f8; }
+
+/* ── 빈 상태 ──────────────────────────────────────────────── */
+.empty-state {
+    display:         flex;
+    flex-direction:  column;
+    align-items:     center;
+    justify-content: center;
+    padding:         80px 20px;
+    color:           var(--v2-text-sub);
+}
+.empty-state i { font-size: 64px; opacity: .25; margin-bottom: 16px; }
+.empty-state p { font-size: 15px; margin: 0; }
+
+/* ── inbox.html V2 리뉴얼 전용 ──────────────────────────── */
+.inbox-page-container {
+    flex:           1;
+    min-height:     0;
+    display:        flex;
+    flex-direction: column;
+    background:     #ffffff;
+}
+
+.filter-toolbar {
+    flex-shrink:   0;
+    border-bottom: 1px solid #e0e2e0;
+    background:    #ffffff;
+    min-height:    56px;
+    display:       flex;
+    align-items:   center;
+    padding:       0 20px;
+    gap:           12px;
+    flex-wrap:     nowrap;
+    overflow-x:    auto;
+}
+
+.status-flow { display: flex; align-items: center; flex-shrink: 0; }
+
+.status-flow-item {
+    display:         inline-flex;
+    align-items:     center;
+    gap:             4px;
+    padding:         4px 10px;
+    font-size:       11px;
+    font-weight:     600;
+    border:          1px solid #e0e2e0;
+    background:      #f8f9fa;
+    color:           #5f6368;
+    cursor:          pointer;
+    white-space:     nowrap;
+    text-decoration: none;
+    transition:      all 0.15s;
+    position:        relative;
+}
+.status-flow-item:first-child           { border-radius: 16px 0 0 16px; }
+.status-flow-item:last-child            { border-radius: 0 16px 16px 0; }
+.status-flow-item:not(:first-child)     { margin-left: -1px; }
+.status-flow-item:hover                 { z-index: 1; background: #e8eaed; color: #202124; }
+.status-flow-item.active                { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; z-index: 2; }
+.status-flow-item.active.st-requesting  { background: #fef7e0; border-color: #c77700; color: #c77700; }
+.status-flow-item.active.st-submitted   { background: #e6f4ea; border-color: #0f9d58; color: #0f9d58; }
+.status-flow-item.active.st-review      { background: #f3e8fd; border-color: #9334e9; color: #9334e9; }
+.status-flow-item.active.st-pending     { background: #fff0e0; border-color: #e37400; color: #e37400; }
+.status-flow-item.active.st-confirmed   { background: #e6f4ea; border-color: #1e8e3e; color: #1e8e3e; }
+
+.status-count-badge {
+    background:    #ffffff;
+    border-radius: 10px;
+    padding:       1px 6px;
+    font-size:     10px;
+    font-weight:   700;
+    border:        1px solid currentColor;
+    opacity:       0.85;
+}
+
+.role-pills .nav-link {
+    font-size:     12px;
+    padding:       4px 12px;
+    border-radius: 16px;
+    color:         #444746;
+    background:    transparent;
+    border:        1px solid #e0e2e0;
+    margin-right:  4px;
+}
+.role-pills .nav-link.active             { background-color: #c2e7ff; border-color: #c2e7ff; color: #001d35; }
+.role-pills .nav-link:hover:not(.active) { background-color: #f1f3f4; }
+
+.inbox-table { table-layout: fixed; background: #ffffff; }
+.inbox-table thead {
+    position:   sticky;
+    top:        0;
+    background: #ffffff;
+    z-index:    10;
+}
+.inbox-table thead th {
+    border-bottom: 2px solid #e8eaed;
+    border-left:   none !important;
+    border-right:  none !important;
+    font-weight:   500;
+    font-size:     13px;
+    color:         #444746;
+    padding:       12px 8px;
+    text-align:    center !important;
+    white-space:   nowrap;
+    background:    #ffffff;
+}
+.inbox-table tbody tr                { cursor: pointer; transition: background-color 0.15s; height: 52px; }
+.inbox-table tbody tr:hover          { background-color: #f1f3f4; }
+.inbox-table tbody td {
+    padding:        8px;
+    font-size:      13px;
+    color:          var(--v2-text, #1f1f1f);
+    border-top:     none;
+    border-left:    none;
+    border-right:   none;
+    border-bottom:  1px solid #f0f0f0;
+    text-align:     center;
+    vertical-align: middle;
+}
+
+.inbox-table .file-icon {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: var(--v2-blue-light, #e8f0fe);
+    font-size: 18px; color: #1967d2;
+    flex-shrink: 0;
+}
+
+.status-badge-sm {
+    font-size:     11px;
+    padding:       2px 8px;
+    border-radius: 12px;
+    font-weight:   600;
+}
+
+.custom-scrollbar::-webkit-scrollbar       { width: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background:      #dadce0;
+    border-radius:   8px;
+    border:          2px solid transparent;
+    background-clip: padding-box;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background:      #bdc1c6;
+    background-clip: padding-box;
+}
+
+.bottom-bar {
+    flex-shrink:     0;
+    background:      #ffffff;
+    border-top:      1px solid #e8eaed;
+    padding:         8px 20px;
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    gap:             12px;
+}
+
+.msg-cell { max-width: 180px; }
+.msg-text {
+    max-width:     100%;
+    overflow:      hidden;
+    text-overflow: ellipsis;
+    white-space:   nowrap;
+    font-size:     12px;
+    color:         var(--v2-text-sub, #5f6368);
+}
+
+/* ============================================================
+   공동 작업 상단 진행 단계 카드 스트립 (product_explorer 스타일)
+   ============================================================ */
+
+/* 카드 내부 공통 (product_explorer.css의 복사본 — 이 페이지에서만 로드) */
+.inbox-stats-strip .stat-icon {
+    width:           40px;
+    height:          40px;
+    border-radius:   10px;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    font-size:       18px;
+    flex-shrink:     0;
+}
+.inbox-stats-strip .stat-icon.stat-icon-default { background: var(--v2-gray-100, #f1f3f4); color: var(--v2-text-sub, #5f6368); }
+.inbox-stats-strip .stat-card-count  { font-size: 20px; font-weight: 700; color: var(--v2-text, #1f1f1f); line-height: 1; }
+.inbox-stats-strip .stat-card-label  { font-size: 11px; color: var(--v2-text-sub, #5f6368); font-weight: 500; margin-top: 2px; }
+
+/* 스트립 컨테이너 */
+.inbox-stats-strip {
+    flex-shrink:   0;
+    border-bottom: 1px solid #e0e2e0;
+    background:    #f8f9fa;
+    overflow-x:    auto;
+    overflow-y:    hidden;
+    scrollbar-width: none;
+    min-height:    88px;
+    max-height:    88px;
+}
+.inbox-stats-strip::-webkit-scrollbar { display: none; }
+
+.inbox-stats-inner {
+    display:     flex;
+    align-items: center;
+    gap:         4px;
+    padding:     12px 20px;
+    min-width:   max-content;
+    height:      100%;
+}
+
+/* 카드 공통 — product_explorer의 .stat-card 스타일 동일 */
+.inbox-stat-card {
+    display:         flex;
+    align-items:     center;
+    gap:             10px;
+    padding:         10px 14px;
+    border-radius:   12px;
+    border:          2px solid transparent;
+    background:      #ffffff;
+    box-shadow:      0 1px 2px rgba(60,64,67,.15);
+    cursor:          pointer;
+    text-decoration: none;
+    color:           inherit;
+    min-width:       120px;
+    flex-shrink:     0;
+    transition:      all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.inbox-stat-card:hover {
+    transform:       translateY(-1px);
+    box-shadow:      0 2px 6px rgba(60,64,67,.2);
+    color:           inherit;
+    text-decoration: none;
+}
+.inbox-stat-card:active { transform: scale(0.98); }
+
+/* 단계별 아이콘 색상 */
+.isc-icon-draft      { background: var(--v2-blue-light, #e8f0fe); color: #1967d2; }
+.isc-icon-requesting { background: #fef7e0; color: #c77700; }
+.isc-icon-submitted  { background: #e6f4ea; color: #0f9d58; }
+.isc-icon-review     { background: #f3e8fd; color: #9334e9; }
+.isc-icon-pending    { background: #fff0e0; color: #e37400; }
+.isc-icon-confirmed  { background: #e6f4ea; color: #1e8e3e; }
+
+/* 활성(선택) 상태별 카드 테두리·배경 */
+.isc-active-all                                 { border-color: #5f6368; background: var(--v2-gray-100, #f1f3f4); }
+.isc-active-all .stat-card-count               { color: #202124; }
+.isc-active-DRAFT                              { border-color: #1a73e8; background: var(--v2-blue-light, #e8f0fe); }
+.isc-active-DRAFT .isc-icon-draft             { background: #1a73e8; color: #fff; }
+.isc-active-REQUESTING                         { border-color: #c77700; background: #fef7e0; }
+.isc-active-REQUESTING .isc-icon-requesting   { background: #c77700; color: #fff; }
+.isc-active-SUBMITTED                          { border-color: #0f9d58; background: #e6f4ea; }
+.isc-active-SUBMITTED .isc-icon-submitted     { background: #0f9d58; color: #fff; }
+.isc-active-REVIEW                             { border-color: #9334e9; background: #f3e8fd; }
+.isc-active-REVIEW .isc-icon-review           { background: #9334e9; color: #fff; }
+.isc-active-PENDING                            { border-color: #e37400; background: #fff0e0; }
+.isc-active-PENDING .isc-icon-pending         { background: #e37400; color: #fff; }
+.isc-active-CONFIRMED                          { border-color: #1e8e3e; background: #e6f4ea; }
+.isc-active-CONFIRMED .isc-icon-confirmed     { background: #1e8e3e; color: #fff; }
+
+/* 단계 구분선 (전체 카드와 첫 단계 사이) */
+.inbox-stage-sep {
+    width:        1px;
+    height:       36px;
+    background:   #dadce0;
+    flex-shrink:  0;
+    margin:       0 6px;
+}
+
+/* 화살표 (단계 사이) */
+.inbox-stage-arrow {
+    display:     flex;
+    align-items: center;
+    color:       #c0c4c7;
+    font-size:   14px;
+    flex-shrink: 0;
+    padding:     0 2px;
+    transition:  color 0.15s;
+}
+
+/* 역할 필터 툴바 */
+.inbox-filter-bar {
+    display:       flex;
+    align-items:   center;
+    gap:           8px;
+    padding:       8px 20px;
+    background:    #ffffff;
+    border-bottom: 1px solid #e0e2e0;
+    flex-shrink:   0;
+    min-height:    48px;
+    overflow-x:    auto;
+    scrollbar-width: none;
+}
+.inbox-filter-bar::-webkit-scrollbar { display: none; }

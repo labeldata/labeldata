@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import time
 import re
 from django.http import JsonResponse
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.utils.timezone import now
 from .models import ApiEndpoint
 from v1.label.models import FoodItem, ImportedFood, AgriculturalProduct
@@ -16,9 +16,24 @@ from django.http import Http404
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.decorators import login_required  # 추가
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import logout
+from django.contrib import messages
 
 # 로거 설정
 logger = logging.getLogger(__name__)
+
+
+def logout_view(request):
+    """로그아웃 — 로그아웃 전 UI 모드에 따라 적절한 홈으로 이동"""
+    if request.method == 'POST':
+        # logout() 전에 세션에서 UI 모드 저장 (logout 호출 시 세션 초기화됨)
+        ui_mode = request.session.get('ui_mode', 'v2')
+        logout(request)
+        messages.info(request, "로그아웃되었습니다.")
+        if ui_mode == 'v1':
+            return redirect('main:home_v1')
+        return redirect('main:home_dashboard')
+    return redirect('main:home_dashboard')
 
 # ============================================
 # 대시보드 관련 뷰
