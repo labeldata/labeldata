@@ -6,9 +6,23 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from .models import UserProfile, CompanyDocument
 from django.utils.crypto import get_random_string
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 from django.conf import settings
 from django.utils import timezone
+
+
+def _send_account_email(subject, template_name, context, to_email):
+    """user_management 전용 HTML 이메일 발송 헬퍼."""
+    site_url = getattr(settings, 'SITE_URL', 'https://www.ezlabeling.com')
+    ctx = {'site_url': site_url, **context}
+    html_body = render_to_string(template_name, ctx)
+    text_body = strip_tags(html_body)
+    _from = getattr(settings, 'EMAIL_FROM_DISPLAY', settings.DEFAULT_FROM_EMAIL)
+    msg = EmailMultiAlternatives(subject, text_body, _from, [to_email])
+    msg.attach_alternative(html_body, 'text/html')
+    msg.send()
 
 def signup(request):
     """회원가입 (이메일 인증 방식)"""
@@ -51,11 +65,11 @@ def signup(request):
             
             # 인증 메일 발송
             verify_url = request.build_absolute_uri(f"/user-management/verify-email/?uid={user.id}&token={token}")
-            send_mail(
-                '이메일 인증 요청',
-                f'아래 링크를 클릭하여 이메일 인증을 완료하세요:\n{verify_url}',
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
+            _send_account_email(
+                subject='[EzLabeling] 이메일 인증 요청',
+                template_name='emails/verify_email.html',
+                context={'verify_url': verify_url, 'subject': '[EzLabeling] 이메일 인증 요청'},
+                to_email=email,
             )
             messages.info(request, "이메일 인증 링크가 발송되었습니다. 이메일을 확인하세요.")
             return render(request, 'user_management/signup_done.html')
@@ -179,11 +193,11 @@ def resend_verification_email(request):
             
             # 인증 메일 발송
             verify_url = request.build_absolute_uri(f"/user-management/verify-email/?uid={user.id}&token={token}")
-            send_mail(
-                '이메일 인증 요청 (재발송)',
-                f'아래 링크를 클릭하여 이메일 인증을 완료하세요:\n{verify_url}',
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
+            _send_account_email(
+                subject='[EzLabeling] 이메일 인증 요청 (재발송)',
+                template_name='emails/verify_email.html',
+                context={'verify_url': verify_url, 'subject': '[EzLabeling] 이메일 인증 요청 (재발송)'},
+                to_email=email,
             )
             messages.success(request, "인증 메일이 재발송되었습니다. 이메일을 확인하세요.")
         except User.DoesNotExist:
@@ -217,11 +231,11 @@ def password_reset_request(request):
             profile.password_reset_sent_at = timezone.now()
             profile.save()
             reset_url = request.build_absolute_uri(f"/user-management/password-reset-confirm/?uid={user.id}&token={token}")
-            send_mail(
-                '비밀번호 재설정',
-                f'아래 링크를 클릭하여 비밀번호를 재설정하세요:\n{reset_url}',
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
+            _send_account_email(
+                subject='[EzLabeling] 비밀번호 재설정',
+                template_name='emails/password_reset.html',
+                context={'reset_url': reset_url, 'subject': '[EzLabeling] 비밀번호 재설정'},
+                to_email=email,
             )
             messages.info(request, "비밀번호 재설정 링크가 이메일로 발송되었습니다.")
         except User.DoesNotExist:

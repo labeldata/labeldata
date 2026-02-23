@@ -183,8 +183,13 @@ EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='administrator@ezlabeling.com')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='xeenovaeuejedgji')
 EMAIL_USE_TLS = True
-# 보내는 사람 주소 (별칭 사용)
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply-verify@ezlabeling.com')
+# 보내는 사람 주소: Gmail은 인증 계정과 동일해야 스팸 처리 방지
+# Gmail Workspace 계정은 별칭 전송 가능하지만 일반 계정은 HOST_USER와 일치 필요
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='administrator@ezlabeling.com')
+# 표시용 발신자명 (이메일 클라이언트에서 "EzLabeling <administrator@...>" 형태로 표시)
+EMAIL_FROM_DISPLAY  = 'EzLabeling <administrator@ezlabeling.com>'
+# 시스템 공개 URL (이메일 내 링크에 사용)
+SITE_URL = config('SITE_URL', default='https://www.ezlabeling.com')
 
 # iframe 설정: SAMEORIGIN으로 설정하여 같은 도메인 내 iframe 로드 허용
 X_FRAME_OPTIONS = 'SAMEORIGIN'

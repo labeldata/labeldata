@@ -30,6 +30,107 @@ from v1.label.models import MyLabel
 from .forms import ProductForm
 
 
+# ==================== 공통 알림·이메일 헬퍼 ====================
+
+def _send_email_safe(subject, body, to_email, from_email=None, attachment=None, html_body=None):
+    """
+    이메일 안전 발송 헬퍼.
+    - html_body 제공 시 HTML + 텍스트 멀티파트로 발송
+    - 발송 성공 여부(bool) 반환, 실패 시 Django logger에 기록
+    """
+    import logging
+    from django.core.mail import EmailMultiAlternatives
+    from django.conf import settings
+    logger = logging.getLogger('django')
+
+    _from = from_email or getattr(settings, 'EMAIL_FROM_DISPLAY', None) or settings.DEFAULT_FROM_EMAIL
+    try:
+        msg = EmailMultiAlternatives(subject, body, _from, [to_email])
+        if html_body:
+            msg.attach_alternative(html_body, 'text/html')
+        if attachment:
+            if isinstance(attachment, tuple):
+                msg.attach(*attachment)
+            else:
+                try:
+                    attachment.seek(0)
+                    msg.attach(attachment.name, attachment.read(),
+                                getattr(attachment, 'content_type', 'application/octet-stream'))
+                except Exception:
+                    pass
+        msg.send(fail_silently=False)
+        return True
+    except Exception as e:
+        logger.error(f'[Email] Send failed to {to_email}: {type(e).__name__}: {e}')
+        return False
+
+
+def _create_notification(label, recipient_user, message, status_code=''):
+    """
+    recipient_user가 실제 User 객체일 때만 인앱 알림 생성 (None-safe).
+    """
+    if recipient_user is None:
+        return None
+    return ProductNotification.objects.create(
+        label=label,
+        recipient=recipient_user,
+        message=message,
+        status_code=status_code,
+    )
+
+
+def _get_sender_info(user):
+    """발신자 이름·회사명 반환. profile.company_name 없으면 빈 문자열."""
+    name = user.get_full_name() or user.username
+    try:
+        company = (user.profile.company_name or '').strip()
+    except Exception:
+        company = ''
+    return name, company
+
+
+def _render_email(template_name, context):
+    """
+    HTML 이메일 렌더링 + 텍스트 폴백(strip_tags) 반환.
+    returns (text_body, html_body)
+    """
+    from django.template.loader import render_to_string
+    from django.utils.html import strip_tags
+    from django.conf import settings as _cfg
+    ctx = {
+        'site_url': getattr(_cfg, 'SITE_URL', 'https://www.ezlabeling.com'),
+    }
+    ctx.update(context)
+    html_body = render_to_string(template_name, ctx)
+    text_body = strip_tags(html_body)
+    return text_body, html_body
+
+
+def _build_email_body(sender_name, sender_company, sender_email, sections, action_label, action_url):
+    """텍스트 이메일 본문 생성 (레거시 폴백용)."""
+    from django.conf import settings as _cfg
+    site_url = getattr(_cfg, 'SITE_URL', 'https://www.ezlabeling.com')
+    SEP  = '━' * 52
+    SEP2 = '─' * 52
+    lines = ['안녕하세요.', '']
+    for title, items in sections:
+        lines.append(title)
+        lines.append(SEP2)
+        for item in items:
+            lines.append(f'  {item}')
+        lines.append('')
+    lines += [f'▶ {action_label}', f'   {action_url}', '', SEP,
+              '■ 요청자 정보', f'  이름  : {sender_name}']
+    if sender_company:
+        lines.append(f'  회사  : {sender_company}')
+    lines += [f'  이메일: {sender_email}', '', SEP,
+              f'  시스템 접속 : {site_url}',
+              '  문의       : administrator@ezlabeling.com', SEP]
+    return '\n'.join(lines)
+
+
+
+
 # ==================== Google Drive 스타일 탐색기 ====================
 
 @login_required
@@ -1321,16 +1422,39 @@ def product_update_status(request, product_id):
     }
     new_status_label = metadata.get_status_display()
     product_name = label.my_label_name or label.prdlst_nm or '제품'
+    changer_name, changer_company = _get_sender_info(request.user)
+    _status_email_subject = f'[EzLabeling] {product_name} 상태가 변경되었습니다'
+    from django.conf import settings as _ds
+    _site_url = getattr(_ds, 'SITE_URL', 'https://labeldata.pythonanywhere.com')
+    # 역할별 해야 할 일 안내
+    _status_role_guide = {
+        'UPLOADER': '요청된 자료(원료 규격서, 성분 데이터 등)를 시스템에 업로드해 주세요.',
+        'REVIEWER': '제출된 자료를 검토하고 피드백을 남겨주세요.',
+        'EDITOR':   '제품 정보를 확인하고 필요 시 수정·보완해 주세요.',
+        'APPROVER': '검토 결과를 확인하고 최종 승인 또는 반려해 주세요.',
+        'OWNER':    '제품 상태 변경 내역을 확인해 주세요.',
+    }
+
     for nrole in notify_roles.get(new_status, []):
         if nrole in ('OWNER',):
             # 소유자 직접 알림
-            if label.user_id and label.user_id != request.user:
+            owner_user = label.user_id
+            if owner_user and owner_user != request.user:
                 ProductNotification.objects.create(
                     label=label,
-                    recipient=label.user_id,
+                    recipient=owner_user,
                     message=f'[{product_name}] 상태가 "{new_status_label}"으(로) 변경되었습니다.',
                     status_code=new_status,
                 )
+                # 소유자에게 이메일도 발송
+                _txt, _html = _render_email('emails/workflow_status.html', {
+                    'subject': _status_email_subject,
+                    'sender_name': changer_name, 'sender_company': changer_company, 'sender_email': request.user.email,
+                    'product_name': product_name, 'new_status_label': new_status_label, 'role_label': 'OWNER',
+                    'task_description': _status_role_guide.get('OWNER', '시스템에서 확인해 주세요.'),
+                    'inbox_url': f'{_site_url}/products/inbox/',
+                })
+                _send_email_safe(subject=_status_email_subject, body=_txt, to_email=owner_user.email, html_body=_html)
         else:
             perm_qs = SharePermission.objects.filter(
                 share__label=label,
@@ -1338,16 +1462,28 @@ def product_update_status(request, product_id):
                 role_code=nrole,
             ).filter(
                 Q(share__share_end_date__isnull=True) | Q(share__share_end_date__gt=timezone.now())
-            ).select_related('share__recipient_user')
+            ).select_related('share__recipient_user', 'share')
             for perm in perm_qs:
                 recipient = perm.share.recipient_user
+                notify_msg = f'[{product_name}] 상태가 "{new_status_label}"으(로) 변경되었습니다. 귀하의 작업이 필요합니다.'
+                _email_ctx = {
+                    'subject': _status_email_subject,
+                    'sender_name': changer_name, 'sender_company': changer_company, 'sender_email': request.user.email,
+                    'product_name': product_name, 'new_status_label': new_status_label, 'role_label': nrole,
+                    'task_description': _status_role_guide.get(nrole, '시스템에서 확인해 주세요.'),
+                    'inbox_url': f'{_site_url}/products/inbox/',
+                }
+                _txt, _html = _render_email('emails/workflow_status.html', _email_ctx)
                 if recipient and recipient != request.user:
+                    # 시스템 계정 있는 공유자: 인앱 알림 + 이메일
                     ProductNotification.objects.create(
-                        label=label,
-                        recipient=recipient,
-                        message=f'[{product_name}] 상태가 "{new_status_label}"으(로) 변경되었습니다. 귀하의 작업이 필요합니다.',
-                        status_code=new_status,
+                        label=label, recipient=recipient, message=notify_msg, status_code=new_status,
                     )
+                    if recipient.email:
+                        _send_email_safe(subject=_status_email_subject, body=_txt, to_email=recipient.email, html_body=_html)
+                elif not recipient and perm.share.recipient_email:
+                    # 이메일 전용 공유자(시스템 계정 없음): 이메일만 발송
+                    _send_email_safe(subject=_status_email_subject, body=_txt, to_email=perm.share.recipient_email, html_body=_html)
 
     return JsonResponse({
         'success': True,
@@ -2119,6 +2255,35 @@ def share_create(request, label_id):
         }
     )
 
+    # ── 초대 이메일 발송 ──
+    inviter_name, inviter_company = _get_sender_info(request.user)
+    product_name = label.my_label_name or label.prdlst_nm or '제품'
+    role_label   = permission.role_label
+    from django.conf import settings as _ds
+    inbox_url = f'{getattr(_ds, "SITE_URL", "https://labeldata.pythonanywhere.com")}/products/inbox/'
+    _role_actions = {
+        'UPLOADER': '공유받은 제품의 원료 규격서, 성분 데이터 등 요청 자료를 시스템에 업로드해 주세요.',
+        'REVIEWER': '공유받은 제품의 라벨 내용을 검토하고 의견을 남겨주세요.',
+        'EDITOR':   '공유받은 제품 정보를 확인하고 필요 시 수정·보완해 주세요.',
+        'APPROVER': '검토된 내용을 확인하고 최종 승인 또는 반려해 주세요.',
+    }
+    _invite_subject = f'[EzLabeling] {inviter_name}님이 제품을 공유했습니다 — {product_name}'
+    _txt, _html = _render_email('emails/product_invite.html', {
+        'subject': _invite_subject,
+        'sender_name': inviter_name, 'sender_company': inviter_company, 'sender_email': request.user.email,
+        'product_name': product_name, 'role_label': role_label,
+        'task_description': _role_actions.get(role_code, '시스템에 접속하여 내용을 확인해 주세요.'),
+        'inbox_url': inbox_url,
+    })
+    _send_email_safe(subject=_invite_subject, body=_txt, to_email=email, html_body=_html)
+
+    # ── 인앱 알림 (시스템 계정이 있는 경우) ──
+    _create_notification(
+        label=label,
+        recipient_user=recipient_user,
+        message=f'[{product_name}] {inviter_name}님이 {role_label} 역할로 초대했습니다.',
+    )
+
     return JsonResponse({'success': True, 'message': f'{email}님을 초대했습니다.'})
 
 
@@ -2192,6 +2357,28 @@ def share_update_permission(request, share_id):
             'role_label': permission.role_label,
             'change_type': 'permission'
         }
+    )
+
+    # ── 역할 변경 알림 (이메일 + 인앱) ──
+    changer_name, changer_company = _get_sender_info(request.user)
+    product_name = share.label.my_label_name or share.label.prdlst_nm or '제품'
+    role_label   = permission.role_label
+    notify_msg   = f'[{product_name}] 역할이 {role_label}(으)로 변경되었습니다.'
+    from django.conf import settings as _ds
+    _inbox_url = f'{getattr(_ds, "SITE_URL", "https://labeldata.pythonanywhere.com")}/products/inbox/'
+
+    _role_subj = f'[EzLabeling] {product_name} 제품 권한이 변경되었습니다'
+    _txt, _html = _render_email('emails/role_change.html', {
+        'subject': _role_subj,
+        'sender_name': changer_name, 'sender_company': changer_company, 'sender_email': request.user.email,
+        'product_name': product_name, 'role_label': role_label,
+        'inbox_url': _inbox_url,
+    })
+    _send_email_safe(subject=_role_subj, body=_txt, to_email=share.recipient_email, html_body=_html)
+    _create_notification(
+        label=share.label,
+        recipient_user=share.recipient_user,
+        message=notify_msg,
     )
 
     return JsonResponse({'success': True, 'role_label': permission.role_label})
@@ -3802,7 +3989,7 @@ def api_send_doc_request(request):
         return JsonResponse({'error': '유효한 문서 종류가 없습니다.'}, status=400)
     doc_names = ', '.join(dt.type_name for dt in doc_types)
 
-    requester_name = request.user.get_full_name() or request.user.username
+    requester_name, requester_company = _get_sender_info(request.user)
 
     created_count = 0
     email_errors  = []
@@ -3824,27 +4011,33 @@ def api_send_doc_request(request):
         created_count += 1
 
         # ── 이메일 발송 ──
+        from django.conf import settings as _ds
+        _site_url = getattr(_ds, 'SITE_URL', 'https://www.ezlabeling.com')
         subject = f'[EzLabeling] {requester_name}님이 문서 제출을 요청했습니다'
-        body_email = (
-            f'{requester_name}님이 아래 문서의 제출을 요청했습니다.\n\n'
-            f'요청 문서 ({len(doc_types)}종):\n'
-            + '\n'.join(f'  · {dt.type_name}' for dt in doc_types)
-            + (f'\n\n메시지: {message_text}' if message_text else '')
-            + f'\n\n요청 확인 및 수락: https://ezlabeling.com/products/doc-requests/'
-        )
-        try:
-            msg = EmailMessage(
-                subject,
-                body_email,
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
-            )
-            # 첨부 파일이 있으면 이메일에도 첨부
-            if attachment and dr.attachment:
+        _txt, _html = _render_email('emails/doc_request.html', {
+            'subject': subject,
+            'sender_name': requester_name, 'sender_company': requester_company, 'sender_email': request.user.email,
+            'recipient_name': r.get('name', ''), 'recipient_company': r.get('company', ''),
+            'doc_list': [dt.type_name for dt in doc_types],
+            'message_text': message_text,
+            'doc_request_url': f'{_site_url}/products/doc-requests/',
+        })
+
+        # 첨부파일 처리
+        attach_tuple = None
+        if attachment and dr.attachment:
+            try:
                 attachment.seek(0)
-                msg.attach(attachment.name, attachment.read(), attachment.content_type)
-            msg.send(fail_silently=True)
-        except Exception:
+                attach_tuple = (attachment.name, attachment.read(), attachment.content_type)
+            except Exception:
+                attach_tuple = None
+
+        sent_ok = _send_email_safe(subject=subject, body=_txt, to_email=email, html_body=_html, attachment=attach_tuple)
+        if sent_ok:
+            dr.email_sent = True
+            dr.email_sent_datetime = timezone.now()
+            dr.save(update_fields=['email_sent', 'email_sent_datetime'])
+        else:
             email_errors.append(email)
 
     if created_count == 0:
