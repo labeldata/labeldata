@@ -64,7 +64,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const removeFileBtn = document.getElementById('remove-file-btn');
     
     if (selectFileBtn) {
-        selectFileBtn.addEventListener('click', function() {
+        selectFileBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
             fileInput.click();
         });
     }
@@ -132,6 +133,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const days = parseInt(validityDays);
                 if (days === 0) {
                     document.getElementById('expiry-unlimited').checked = true;
+                } else if (days === 30) {
+                    document.getElementById('expiry-1m').checked = true;
+                } else if (days === 90) {
+                    document.getElementById('expiry-3m').checked = true;
                 } else if (days === 180) {
                     document.getElementById('expiry-6m').checked = true;
                 } else if (days === 365) {

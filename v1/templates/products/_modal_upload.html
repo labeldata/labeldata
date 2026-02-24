@@ -47,7 +47,8 @@
                             </div>
                             
                             <div class="d-flex flex-column gap-3 flex-grow-1">
-                                <div class="form-floating">
+                                <div>
+                                    <label for="document-type-select" class="form-label small fw-bold text-muted mb-1">문서 종류</label>
                                     <select class="form-select border-light-subtle bg-light" id="document-type-select" name="document_type" required>
                                         <option value="">-- 문서 종류를 선택하세요 --</option>
                                         {% for dtype in document_types %}
@@ -56,12 +57,17 @@
                                         </option>
                                         {% endfor %}
                                     </select>
-                                    <label for="document-type-select">문서 종류</label>
                                 </div>
                                 
                                 <div class="smart-expiry-box">
                                     <label class="small fw-bold text-muted mb-2 d-block">유효기간 설정</label>
-                                    <div class="d-flex gap-2 overflow-auto pb-1 smart-expiry-chips" role="group">
+                                    <div class="d-flex flex-wrap gap-2 pb-1 smart-expiry-chips" role="group">
+                                        <input type="radio" class="btn-check" name="expiry-option" id="expiry-1m" value="30">
+                                        <label class="btn btn-sm btn-outline-secondary rounded-pill px-3" for="expiry-1m">+1개월</label>
+
+                                        <input type="radio" class="btn-check" name="expiry-option" id="expiry-3m" value="90">
+                                        <label class="btn btn-sm btn-outline-secondary rounded-pill px-3" for="expiry-3m">+3개월</label>
+
                                         <input type="radio" class="btn-check" name="expiry-option" id="expiry-6m" value="180">
                                         <label class="btn btn-sm btn-outline-secondary rounded-pill px-3" for="expiry-6m">+6개월</label>
                                         
