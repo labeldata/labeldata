@@ -247,3 +247,96 @@ async function copySelected() {
         alert('복사 중 오류가 발생했습니다.');
     }
 }
+
+// 선택 전체 해제
+function clearAllSelection() {
+    document.querySelectorAll('.product-checkbox').forEach(cb => {
+        cb.checked = false;
+        const row = cb.closest('tr');
+        if (row) row.classList.remove('selected');
+    });
+    const all = document.getElementById('select-all-products');
+    if (all) all.checked = false;
+    updateSelectionActions();
+}
+
+// 엑셀 다운로드 모달 열기
+function openExcelDownloadModal() {
+    const modal = new bootstrap.Modal(document.getElementById('excelDownloadModal'));
+    // 버튼 초기화
+    const btn = document.getElementById('excel-download-btn');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-download me-1"></i>다운로드';
+    }
+    modal.show();
+}
+
+// 엑셀 다운로드 실행
+async function submitExcelDownload() {
+    const selectedCheckboxes = document.querySelectorAll('.product-checkbox:checked');
+    const visibleSelected = Array.from(selectedCheckboxes).filter(cb => {
+        const row = cb.closest('tr');
+        return row && row.style.display !== 'none';
+    });
+
+    if (visibleSelected.length === 0) {
+        alert('다운로드할 제품을 선택해주세요.');
+        return;
+    }
+
+    const tabs = Array.from(document.querySelectorAll('.excel-tab-cb:checked')).map(cb => cb.value);
+    if (tabs.length === 0) {
+        alert('다운로드할 탭을 1개 이상 선택해주세요.');
+        return;
+    }
+
+    const productIds = visibleSelected.map(cb => cb.dataset.productId);
+    const btn = document.getElementById('excel-download-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>생성 중...';
+    }
+
+    try {
+        const response = await fetch('/products/api/bulk-export-excel/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': PE_CSRF_TOKEN
+            },
+            body: JSON.stringify({ product_ids: productIds, tabs: tabs })
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || `서버 오류 (${response.status})`);
+        }
+
+        const blob = await response.blob();
+        const today = new Date();
+        const yymmdd = today.getFullYear().toString().slice(-2)
+            + String(today.getMonth() + 1).padStart(2, '0')
+            + String(today.getDate()).padStart(2, '0');
+        const filename = `LabelData_제품데이터_${yymmdd}.xlsx`;
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+        bootstrap.Modal.getInstance(document.getElementById('excelDownloadModal'))?.hide();
+    } catch (error) {
+        console.error('Excel download error:', error);
+        alert('엑셀 다운로드 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-download me-1"></i>다운로드';
+        }
+    }
+}

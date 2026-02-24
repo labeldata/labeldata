@@ -146,17 +146,6 @@
         </div>
         
         <div class="d-flex align-items-center gap-2">
-            <!-- 선택 항목 액션 바 -->
-            <div id="selection-actions" class="d-none align-items-center gap-2 me-3">
-                <span class="badge bg-primary"><span id="selected-count">0</span>개 선택됨</span>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteSelected()">
-                    <i class="bi bi-trash me-1"></i>삭제
-                </button>
-                <button class="btn btn-sm btn-outline-secondary" onclick="copySelected()">
-                    <i class="bi bi-files me-1"></i>복사
-                </button>
-            </div>
-            
             <div class="input-group input-group-sm" style="width: 280px;">
                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="product-search" class="form-control border-start-0 ps-0" placeholder="제품명, 코드 검색..." value="{{ search_query }}">
@@ -169,6 +158,22 @@
 
     <!-- 하단: 제품 데이터 그리드 -->
     <div class="flex-grow-1 overflow-auto custom-scrollbar px-4">
+        <!-- 선택시 액션 바 (테이블 위) -->
+        <div id="selection-actions" class="d-none align-items-center gap-1 py-2 border-bottom" style="min-height: 38px;">
+            <span class="badge bg-primary me-1" style="font-size:11px;"><span id="selected-count">0</span>개 선택됨</span>
+            <button class="btn btn-xs btn-outline-success" onclick="openExcelDownloadModal()" title="엑셀 다운로드" style="padding:2px 8px;font-size:11px;">
+                <i class="bi bi-file-earmark-excel"></i> 엑셀다운로드
+            </button>
+            <button class="btn btn-xs btn-outline-secondary" onclick="copySelected()" title="복사" style="padding:2px 8px;font-size:11px;">
+                <i class="bi bi-files"></i> 복사
+            </button>
+            <button class="btn btn-xs btn-outline-danger" onclick="deleteSelected()" title="삭제" style="padding:2px 8px;font-size:11px;">
+                <i class="bi bi-trash"></i> 삭제
+            </button>
+            <button class="btn btn-xs btn-link text-muted ms-1" onclick="clearAllSelection()" style="padding:2px 6px;font-size:11px;">
+                선택 해제
+            </button>
+        </div>
         {% if products_data %}
         <table class="table table-hover align-middle mb-0 product-table">
             <thead>
@@ -391,6 +396,66 @@
         {% endif %}
     </div>
     
+</div>
+
+<!-- 엑셀 다운로드 탭 선택 모달 -->
+<div class="modal fade" id="excelDownloadModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 bg-light py-3">
+                <div>
+                    <h6 class="modal-title fw-bold mb-0"><i class="bi bi-file-earmark-excel text-success me-2"></i>엑셀 다운로드</h6>
+                    <p class="text-muted small mb-0 mt-1">다운로드할 탭을 선택하세요. 탭별로 시트가 생성됩니다.</p>
+                </div>
+                <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3 px-4">
+                <div class="d-flex flex-column gap-2">
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                        <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="basic" checked>
+                        <div>
+                            <div class="fw-semibold small">기본정보</div>
+                            <div class="text-muted" style="font-size:11px;">제품코드, 제품명, 식품유형, 상태, 수정일, 폴더</div>
+                        </div>
+                    </label>
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                        <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="label">
+                        <div>
+                            <div class="fw-semibold small">표시사항</div>
+                            <div class="text-muted" style="font-size:11px;">품목보고번호, 원재료명, 내용량, 원산지, 보관방법 등 표시사항 전체</div>
+                        </div>
+                    </label>
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                        <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="nutrition">
+                        <div>
+                            <div class="fw-semibold small">영양성분</div>
+                            <div class="text-muted" style="font-size:11px;">열량, 탄수화물, 당류, 단백질, 지방, 포화지방, 트랜스지방, 콜레스테롤, 나트륨</div>
+                        </div>
+                    </label>
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                        <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="bom">
+                        <div>
+                            <div class="fw-semibold small">BOM (원재료 구성)</div>
+                            <div class="text-muted" style="font-size:11px;">원재료명, 함량, 원산지, 알레르기, 식품첨가물</div>
+                        </div>
+                    </label>
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                        <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="documents">
+                        <div>
+                            <div class="fw-semibold small">문서함</div>
+                            <div class="text-muted" style="font-size:11px;">문서 구분, 파일명, 발행일, 만료일, 상태, 등록자</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-success btn-sm rounded-pill px-4" id="excel-download-btn" onclick="submitExcelDownload()">
+                    <i class="bi bi-download me-1"></i>다운로드
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>

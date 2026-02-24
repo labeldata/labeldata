@@ -34,6 +34,7 @@ urlpatterns = [
     path('api/products/<int:product_id>/status/', views.product_update_status, name='product_update_status'),
     path('api/bulk-delete/', views.bulk_delete_products, name='bulk_delete_products'),
     path('api/bulk-copy/', views.bulk_copy_products, name='bulk_copy_products'),
+    path('api/bulk-export-excel/', views.bulk_export_products_excel, name='bulk_export_products_excel'),
     
     # ==================== 최근/즐겨찾기 ====================
     path('recent/', views.product_recent, name='product_recent'),

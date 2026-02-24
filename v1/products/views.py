@@ -1666,6 +1666,198 @@ def bulk_copy_products(request):
         return JsonResponse({'success': False, 'message': str(e)})
 
 
+@login_required
+@require_POST
+def bulk_export_products_excel(request):
+    """선택된 제품 데이터를 탭별 시트로 엑셀 다운로드"""
+    try:
+        import openpyxl
+        from openpyxl.styles import PatternFill, Font
+
+        data = json.loads(request.body)
+        product_ids = data.get('product_ids', [])
+        tabs = data.get('tabs', ['basic'])  # 선택된 탭 목록
+
+        if not product_ids:
+            return JsonResponse({'success': False, 'error': '선택된 제품이 없습니다.'}, status=400)
+        if not tabs:
+            return JsonResponse({'success': False, 'error': '다운로드할 탭을 선택하세요.'}, status=400)
+
+        labels = MyLabel.objects.filter(
+            my_label_id__in=product_ids,
+            delete_YN='N'
+        ).filter(
+            Q(user_id=request.user) |
+            Q(v2_shares__recipient_user=request.user, v2_shares__is_active=True)
+        ).distinct().order_by('my_label_id')
+
+        if not labels.exists():
+            return JsonResponse({'success': False, 'error': '다운로드할 데이터가 없습니다.'}, status=400)
+
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+
+        header_fill = PatternFill(start_color='D3E4F0', end_color='D3E4F0', fill_type='solid')
+        header_font = Font(bold=True, size=9)
+        body_font = Font(size=9)
+
+        def style_ws(ws):
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+            ws.freeze_panes = ws.cell(row=2, column=1)
+
+        today_str = timezone.now().strftime('%y%m%d')
+
+        # ========== 기본정보 ==========
+        if 'basic' in tabs:
+            ws = wb.create_sheet('기본정보')
+            ws.append(['번호', '제품코드', '제품명', '식품유형', '상태', '수정일', '즐겨찾기', '폴더'])
+            for idx, label in enumerate(labels, 1):
+                meta = getattr(label, 'v2_metadata', None)
+                ws.append([
+                    idx,
+                    meta.product_code if meta else '',
+                    label.my_label_name or '',
+                    label.prdlst_dcnm or '',
+                    meta.get_status_display() if meta else '',
+                    label.update_datetime.strftime('%y-%m-%d %H:%M') if label.update_datetime else '',
+                    '★' if (meta and meta.is_starred) else '',
+                    meta.folder.name if (meta and meta.folder) else '',
+                ])
+            style_ws(ws)
+            for col, w in [('B', 14), ('C', 25), ('D', 16), ('E', 10), ('F', 14)]:
+                ws.column_dimensions[col].width = w
+
+        # ========== 표시사항 ==========
+        if 'label' in tabs:
+            ws = wb.create_sheet('표시사항')
+            ws.append([
+                '번호', '제품명', '품목보고번호', '제조사명', '성분명 및 함량',
+                '내용량', '내용량(열량)', '원산지', '보관방법', '포장재질',
+                '유통전문판매원', '소분원', '수입원', '소비기한',
+                '원재료명(표시)', '원재료명(참고)', '주의사항', '기타표시사항', '영양성분'
+            ])
+            for idx, label in enumerate(labels, 1):
+                ws.append([
+                    idx, label.my_label_name or '', label.prdlst_report_no or '',
+                    label.bssh_nm or '', label.ingredient_info or '',
+                    label.content_weight or '', label.weight_calorie or '',
+                    label.country_of_origin or '', label.storage_method or '',
+                    label.frmlc_mtrqlt or '', label.distributor_address or '',
+                    label.repacker_address or '', label.importer_address or '',
+                    label.pog_daycnt or '', label.rawmtrl_nm_display or '',
+                    label.rawmtrl_nm or '', label.cautions or '',
+                    label.additional_info or '', label.nutrition_text or '',
+                ])
+            style_ws(ws)
+            for col, w in [('B', 22), ('C', 14), ('D', 18), ('E', 30), ('O', 28), ('P', 28)]:
+                ws.column_dimensions[col].width = w
+
+        # ========== 영양성분 ==========
+        if 'nutrition' in tabs:
+            ws = wb.create_sheet('영양성분')
+            ws.append(['번호', '제품명', '열량(kcal)', '탄수화물(g)', '당류(g)',
+                        '단백질(g)', '지방(g)', '포화지방(g)', '트랜스지방(g)', '콜레스테롤(mg)', '나트륨(mg)'])
+            for idx, label in enumerate(labels, 1):
+                ws.append([
+                    idx, label.my_label_name or '',
+                    label.calories or '', label.carbohydrates or '', label.sugars or '',
+                    label.proteins or '', label.fats or '',
+                    label.saturated_fats or '', label.trans_fats or '',
+                    label.cholesterols or '', label.natriums or '',
+                ])
+            style_ws(ws)
+            ws.column_dimensions['B'].width = 22
+
+        # ========== BOM ==========
+        if 'bom' in tabs:
+            from v1.bom.models import ProductBOM as BOM
+            ws = wb.create_sheet('BOM')
+            ws.append(['번호', '제품명', '원재료명', '함량(%)', '원산지', '알레르기', '식품첨가물', '용도', '비고'])
+            row_idx = 1
+            for label in labels:
+                bom_items = BOM.objects.filter(parent_label=label, level=1).order_by('sort_order')
+                if bom_items.exists():
+                    for bom in bom_items:
+                        ws.append([
+                            row_idx, label.my_label_name or '',
+                            bom.ingredient_name or '',
+                            float(bom.usage_ratio) if bom.usage_ratio is not None else '',
+                            bom.origin or '', bom.allergen or '',
+                            '○' if bom.is_additive else '',
+                            bom.additive_role or '', bom.notes or '',
+                        ])
+                        row_idx += 1
+                else:
+                    ws.append([row_idx, label.my_label_name or '', '(BOM 없음)', '', '', '', '', '', ''])
+                    row_idx += 1
+            style_ws(ws)
+            for col, w in [('B', 22), ('C', 26), ('E', 14), ('F', 20)]:
+                ws.column_dimensions[col].width = w
+
+        # ========== 문서함 ==========
+        if 'documents' in tabs:
+            ws = wb.create_sheet('문서함')
+            ws.append(['번호', '제품명', '문서 구분', '파일명', '발행일', '만료일', '상태', '등록자', '등록일'])
+            row_idx = 1
+            for label in labels:
+                slots = DocumentSlot.objects.filter(label=label, is_hidden=False).select_related('document_type')
+                if slots.exists():
+                    for slot in slots:
+                        doc = ProductDocument.objects.filter(
+                            label=label, document_type=slot.document_type, is_active=True
+                        ).order_by('-uploaded_datetime').first()
+                        today_date = timezone.now().date()
+                        if doc:
+                            if doc.expiry_date is None:
+                                status_str = '유효(무기한)'
+                            elif doc.expiry_date < today_date:
+                                status_str = '만료'
+                            elif (doc.expiry_date - today_date).days <= 30:
+                                status_str = '만료임박'
+                            else:
+                                status_str = '유효'
+                            ws.append([
+                                row_idx, label.my_label_name or '',
+                                slot.document_type.type_name or '',
+                                doc.original_filename or '',
+                                doc.issue_date.strftime('%Y-%m-%d') if doc.issue_date else '',
+                                doc.expiry_date.strftime('%Y-%m-%d') if doc.expiry_date else '무기한',
+                                status_str,
+                                doc.uploaded_by.get_full_name() or doc.uploaded_by.username if doc.uploaded_by else '',
+                                doc.uploaded_datetime.strftime('%Y-%m-%d') if doc.uploaded_datetime else '',
+                            ])
+                        else:
+                            ws.append([row_idx, label.my_label_name or '',
+                                       slot.document_type.type_name or '',
+                                       '미등록', '', '', '미등록', '', ''])
+                        row_idx += 1
+                else:
+                    ws.append([row_idx, label.my_label_name or '', '(문서 슬롯 없음)', '', '', '', '', '', ''])
+                    row_idx += 1
+            style_ws(ws)
+            for col, w in [('B', 22), ('C', 18), ('D', 32), ('F', 12), ('G', 10), ('H', 14), ('I', 12)]:
+                ws.column_dimensions[col].width = w
+
+        # 본문 폰트 적용
+        for sheet in wb.worksheets:
+            for row in sheet.iter_rows(min_row=2):
+                for cell in row:
+                    cell.font = body_font
+
+        filename = f'LabelData_제품데이터_{today_str}.xlsx'
+        resp = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        wb.save(resp)
+        return resp
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 # ==================== 폴더 관리 ====================
 
 @login_required
