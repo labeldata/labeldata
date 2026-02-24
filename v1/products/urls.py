@@ -84,6 +84,7 @@ urlpatterns = [
     
     # ==================== 문서 슬롯 (Document Slots) ====================
     path('slots/<int:slot_id>/toggle-visibility/', views.toggle_slot_visibility, name='toggle_slot_visibility'),
+    path('slots/<int:slot_id>/remove/', views.remove_document_slot, name='remove_document_slot'),
     path('slots/add/<int:label_id>/', views.add_document_slot, name='add_document_slot'),
     
     # ==================== 협업 기능 (Collaboration) ====================

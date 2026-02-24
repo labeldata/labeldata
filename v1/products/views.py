@@ -24,7 +24,7 @@ from .models import Product, ProductFolder, ProductAccessLog, ProductMetadata, F
 
 # 앱 통합 뷰를 위한 추가 import
 from v1.bom.models import ProductBOM
-from .models import ProductDocument, ProductComment, ProductShare, SharedProductReceipt, DocumentType, SharePermission, ProductNotification
+from .models import ProductDocument, ProductComment, ProductShare, SharedProductReceipt, DocumentType, DocumentSlot, SharePermission, ProductNotification
 from v1.label.models import MyLabel
 
 from .forms import ProductForm
@@ -773,20 +773,25 @@ def product_detail(request, product_id):
     
     # 문서 슬롯 정보 조회
     from .models import DocumentSlot
-    
-    existing_slot_types = set(
+
+    # 전체 슬롯 타입 (숨김 포함) — 중복 생성 방지용
+    all_slot_type_ids = set(
         DocumentSlot.objects.filter(label=label).values_list('document_type_id', flat=True)
+    )
+    # 보이는 슬롯 타입 (숨김 제외) — "필수 문서 추가" 드롭다운용
+    visible_slot_type_ids = set(
+        DocumentSlot.objects.filter(label=label, is_hidden=False).values_list('document_type_id', flat=True)
     )
 
     # 필수 문서 슬롯 자동 생성 (최초 접근 시)
     if is_owner:  # 오너만 슬롯 생성 가능
         
-        # 모든 필수 문서 타입에 대해 슬롯 생성
+        # 모든 필수 문서 타입에 대해 슬롯 생성 (전체 목록 기준 — 숨김 포함하여 중복 방지)
         required_types = DocumentType.objects.filter(is_required=True, is_active=True)
         slots_to_create = []
         
         for doc_type in required_types:
-            if doc_type.type_id not in existing_slot_types:
+            if doc_type.type_id not in all_slot_type_ids:
                 slots_to_create.append(
                     DocumentSlot(
                         label=label,
@@ -805,7 +810,7 @@ def product_detail(request, product_id):
     
     available_doc_types = DocumentType.objects.filter(
         is_active=True
-    ).exclude(type_id__in=existing_slot_types).order_by('display_order', 'type_name')
+    ).exclude(type_id__in=visible_slot_type_ids).order_by('display_order', 'type_name')
     
     # 슬롯 상태 업데이트 (만료일 기준)
     for slot in document_slots:
@@ -3533,6 +3538,44 @@ def add_document_slot(request, label_id):
         return JsonResponse({
             'success': False,
             'error': f'문서 추가 중 오류가 발생했습니다: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def remove_document_slot(request, slot_id):
+    """문서 슬롯 삭제 (숨김 처리 — 필수 문서 포함)"""
+    try:
+        slot = get_object_or_404(
+            DocumentSlot,
+            slot_id=slot_id,
+            label__user_id=request.user
+        )
+
+        slot.is_hidden = True
+        slot.save()
+
+        from .models import ProductActivityLog
+        ProductActivityLog.objects.create(
+            label=slot.label,
+            user=request.user,
+            action='SLOT_REMOVED',
+            details={
+                'slot_id': slot.slot_id,
+                'document_type': slot.document_type.type_name,
+                'was_required': slot.document_type.is_required,
+            }
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'"{slot.document_type.type_name}" 슬롯이 제거되었습니다.'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'슬롯 삭제 중 오류가 발생했습니다: {str(e)}'
         }, status=500)
 
 
