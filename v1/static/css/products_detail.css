@@ -788,7 +788,7 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
     #toolbar-badges::-webkit-scrollbar { height: 3px; }
     #toolbar-badges::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 3px; }
 }
-#save-status            { font-size: 0.8rem; }
+#save-status            { font-size: 0.8rem; transition: opacity 0.4s ease; }
 
 .info-tab-main               { min-width: 0; overflow-y: auto; }
 .info-tab-main > .container-fluid { max-width: 1000px; }

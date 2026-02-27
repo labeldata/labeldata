@@ -865,6 +865,7 @@ def product_detail(request, product_id):
         'expired_count': expired_count,
         'available_doc_types': available_doc_types,
         'from_source': request.GET.get('from', ''),
+        'custom_fields_json': json.dumps(label.custom_fields or [], ensure_ascii=False),
     }
     
     return render(request, 'products/product_detail.html', context)
@@ -1042,6 +1043,7 @@ def product_create(request):
         'food_groups': food_groups,
         'countries': countries,
         'can_edit': True,
+        'custom_fields_json': '[]',
     }
     return render(request, 'products/product_form.html', context)
 
@@ -1147,6 +1149,7 @@ def product_update(request, product_id):
         'countries': countries,
         'metadata': meta,
         'can_edit': True,
+        'custom_fields_json': json.dumps(label.custom_fields or [], ensure_ascii=False),
     }
     return render(request, 'products/product_form.html', context)
 

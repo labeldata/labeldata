@@ -34,8 +34,8 @@
                     <button class="btn btn-sm btn-link p-0 text-decoration-none text-muted d-flex align-items-center ms-2" type="button" onclick="saveProductInfo()">
                         <i class="bi bi-cloud-arrow-up me-1"></i> 저장
                     </button>
-                    <span id="save-status" class="text-success">
-                        <i class="bi bi-check2"></i> 저장됨
+                    <span id="save-status" class="text-success" style="opacity:0;transition:opacity 0.4s ease;">
+                        <i class="bi bi-check2"></i> 저장되었습니다
                     </span>
                 </div>
             </div>
@@ -1252,6 +1252,8 @@ async function saveProductInfo() {
             try { iframe.contentWindow.saveData(); } catch(e) {
                 showSnackbar('BOM 저장 중 오류가 발생했습니다.', 'error');
             }
+        } else {
+            showSnackbar('BOM 에디터가 로드 중입니다. 잠시 후 다시 시도해주세요.', 'warning');
         }
         return;
     }
@@ -1263,6 +1265,21 @@ async function saveProductInfo() {
             try { iframe.contentWindow.saveData(); } catch(e) {
                 showSnackbar('영양성분 저장 중 오류가 발생했습니다.', 'error');
             }
+        } else {
+            showSnackbar('영양성분 에디터가 로드 중입니다. 잠시 후 다시 시도해주세요.', 'warning');
+        }
+        return;
+    }
+
+    // 표시사항 탭 – iframe 안의 savePreviewSettings() 호출
+    if (activeTarget === '#tab-label') {
+        const iframe = document.getElementById('lt-preview-frame');
+        if (iframe && iframe.contentWindow && iframe.contentWindow.savePreviewSettings) {
+            try { iframe.contentWindow.savePreviewSettings(); } catch(e) {
+                showSnackbar('표시사항 설정 저장 중 오류가 발생했습니다.', 'error');
+            }
+        } else {
+            showSnackbar('표시사항 미리보기가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.', 'warning');
         }
         return;
     }
@@ -1273,7 +1290,7 @@ async function saveProductInfo() {
         return;
     }
 
-    // 표시사항 / 문서함 / 권한 탭 – 저장 대상 없음
+    // 문서함 / 권한 탭 – 저장 대상 없음
     showSnackbar('현재 탭에서는 저장할 내용이 없습니다.', 'info');
 }
 
@@ -1660,12 +1677,20 @@ window.addEventListener('message', function(event) {
     // BOM 저장 완료
     if (event.data.type === 'bomSaved') {
         showSnackbar(event.data.message || '저장되었습니다.', 'success');
+        showSaveStatusMsg();
         return;
     }
 
     // 영양성분 저장 완료
     if (event.data.type === 'nutritionSaved') {
         showSnackbar(event.data.message || '영양성분이 저장되었습니다.', 'success');
+        showSaveStatusMsg();
+        return;
+    }
+
+    // 표시사항(미리보기 설정) 저장 완료
+    if (event.data.type === 'previewSettingsSaved') {
+        showSaveStatusMsg();
     }
 });
 
@@ -2858,7 +2883,7 @@ function saveBasicInfo() {
                 setTimeout(() => { floatingBar.style.display = 'none'; }, 300);
             }
 
-            showToast('기본 정보가 저장되었습니다', 'success');
+            showSaveStatusMsg();
         } else {
             showToast(data.message || '저장 중 오류가 발생했습니다', 'error');
         }
@@ -2867,6 +2892,17 @@ function saveBasicInfo() {
         console.error('Error:', error);
         showToast('저장 중 오류가 발생했습니다', 'error');
     });
+}
+
+// 상단 저장 버튼 옆 '저장되었습니다' 메시지를 잠깐 표시 후 자동 소멸
+function showSaveStatusMsg() {
+    const el = document.getElementById('save-status');
+    if (!el) return;
+    el.style.opacity = '1';
+    clearTimeout(window._saveStatusTimer);
+    window._saveStatusTimer = setTimeout(() => {
+        el.style.opacity = '0';
+    }, 2500);
 }
 
 // ============================================

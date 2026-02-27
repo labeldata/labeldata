@@ -909,11 +909,12 @@
             // 맞춤항목 표시 (표준 항목 이후)
             if (customFieldsData && customFieldsData.length > 0) {
                 customFieldsData.forEach(field => {
-                    if (field.label && field.value) {
+                    const fieldLabel = field.name || field.label; // DB 저장 형식({name,value})과 이전 형식({label,value}) 모두 지원
+                    if (fieldLabel && field.value) {
                         const tr = document.createElement('tr');
                         const th = document.createElement('th');
                         const td = document.createElement('td');
-                        th.textContent = field.label;
+                        th.textContent = fieldLabel;
                         td.textContent = field.value;
                         tr.appendChild(th);
                         tr.appendChild(td);
@@ -1970,6 +1971,9 @@
                         }, 2000);
                     }
                     showPreviewToast('미리보기 설정이 저장되었습니다.', 'success');
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({ type: 'previewSettingsSaved' }, '*');
+                    }
                 } else if (res.reason === 'not_owner') {
                     // 공유 사용자는 설정 저장 불가 (정상 흐름)
                     showPreviewToast('설정 저장은 라벨 소유자만 가능합니다.', 'warning');
@@ -2001,7 +2005,21 @@
                 return;
             }
             
-            // 단일 마크 복원
+            // 신형식: marks 배열 형식
+            if (Array.isArray(markData.marks) && markData.marks.length > 0) {
+                markData.marks.forEach(function(mark) {
+                    if (mark && mark.type) {
+                        const position = {
+                            left: `${parseFloat(mark.position_x) || 10}px`,
+                            top: `${parseFloat(mark.position_y) || 10}px`
+                        };
+                        setRecyclingMark(mark.type, position, mark.text || '');
+                    }
+                });
+                return;
+            }
+            
+            // 구형식: 단일 마크 (type, position_x, position_y, text)
             if (markData.type) {
                 const position = {
                     left: `${parseFloat(markData.position_x) || 10}px`,
@@ -2030,7 +2048,9 @@
                     const savedSettings = sessionStorage.getItem('labelPreviewSettings_' + labelId);
                     if (savedSettings) {
                         const localSettings = JSON.parse(savedSettings);
-                        // 로컬 설정이 있으면 백엔드 설정보다 우선
+                        // 분리배출마크는 sessionStorage에서 복원하지 않음
+                        // (auto-save 시 마크가 아직 없는 상태를 저장하면 DB 설정을 덮어씌울 수 있음)
+                        delete localSettings.recycling_mark;
                         settings = { ...settings, ...localSettings };
                     }
                 }
@@ -2427,6 +2447,9 @@
         
         // 저장된 설정 로드
         loadSavedPreviewSettings();
+        
+        // 부모 프레임(탭 내장된 미리보기)에서 저장 버튼 클릭 시 호출 가능하도록 window에 노출
+        window.savePreviewSettings = savePreviewSettings;
         
         // 페이지 로드 완료 후 최종 면적 계산
         setTimeout(() => {

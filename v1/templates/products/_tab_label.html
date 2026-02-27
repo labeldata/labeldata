@@ -143,7 +143,21 @@
             allergens = _ltData.allergens;
         }
 
-        var customFields = (_ltData && _ltData.custom_fields) ? _ltData.custom_fields : [];
+        // DOM의 최신값을 우선 사용 (기본정보 탭에서 저장 후 바로 미리보기 탭을 열 때도 반영)
+        var customFields = [];
+        try {
+            var cfEl = document.getElementById('field-custom-fields-json');
+            if (cfEl && cfEl.value) {
+                var parsed = JSON.parse(cfEl.value);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    customFields = parsed;
+                }
+            }
+        } catch(e) {}
+        // DOM에 값이 없으면 API 캐시로 폴백
+        if (!customFields.length && _ltData && _ltData.custom_fields) {
+            customFields = _ltData.custom_fields;
+        }
 
         var target = e.source;
         if (target) {

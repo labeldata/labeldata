@@ -785,7 +785,7 @@
         </div>
         <div id="custom-fields-container" style="display:flex; flex-direction:column; gap:8px;"></div>
         <input type="hidden" id="field-custom-fields-json" name="custom_fields_json"
-               value="{{ product.custom_fields|default:'[]' }}">
+               value='{% if custom_fields_json %}{{ custom_fields_json|safe }}{% else %}[]{% endif %}'>
     </div>
 </div>
 

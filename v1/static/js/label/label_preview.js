@@ -3585,10 +3585,11 @@ function getFieldDefinitions() {
         if (window.customFieldsData && Array.isArray(window.customFieldsData) && window.customFieldsData.length > 0) {
             window.customFieldsData.forEach((field, index) => {
                 const customKey = `custom_field_${index}`;
-                if (field.label && !addedKeys.has(customKey)) {
+                const fieldLabel = field.name || field.label; // DB 저장 형식({name,value})과 이전 형식({label,value}) 모두 지원
+                if (fieldLabel && !addedKeys.has(customKey)) {
                     fields.push({
                         key: customKey,
-                        label: field.label,
+                        label: fieldLabel,
                         value: field.value || '',
                         isCustomField: true,
                         visible: true,
