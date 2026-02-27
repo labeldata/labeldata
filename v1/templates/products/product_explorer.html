@@ -260,10 +260,10 @@
                         </div>
                     </td>
                     <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#labeling'; event.stopPropagation();" style="cursor: pointer;">
-                        {% if item.label.allergens %}
-                        <i class="bi bi-check-circle-fill text-success" title="규정 검증 완료"></i>
+                        {% if item.label_checked %}
+                        <i class="bi bi-check-circle-fill text-success" title="PDF 저장 또는 규정 검증 완료"></i>
                         {% else %}
-                        <i class="bi bi-dash-circle text-muted" title="미검증"></i>
+                        <i class="bi bi-dash-circle text-muted" title="미완료"></i>
                         {% endif %}
                     </td>
                     <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#nutrition'; event.stopPropagation();" style="cursor: pointer;">

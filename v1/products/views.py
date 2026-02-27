@@ -330,6 +330,21 @@ def product_explorer(request, folder_id=None):
         if label_obj and label_obj.calories:
             has_nutrition = True
         nutrition_stats[label_id] = has_nutrition
+
+    # 표시사항 체크: PDF 저장(LABEL_DESIGN 문서 존재) 또는 규정 검증(label_create_YN='Y') 완료 여부
+    label_design_ids = set(
+        ProductDocument.objects.filter(
+            label__my_label_id__in=label_ids,
+            document_type__type_code='LABEL_DESIGN',
+            is_active=True,
+        ).values_list('label__my_label_id', flat=True)
+    )
+    label_checked_stats = {}
+    for label_id in label_ids:
+        label_obj = next((l for l in current_page_labels if l.my_label_id == label_id), None)
+        pdf_saved = label_id in label_design_ids
+        verified = label_obj.label_create_YN == 'Y' if label_obj else False
+        label_checked_stats[label_id] = pdf_saved or verified
     
     # 권한 부여 인원 통계
     permission_stats = {}
@@ -367,6 +382,7 @@ def product_explorer(request, folder_id=None):
             'permission_count': permission_stats.get(label.my_label_id, 0),
             'is_owned': is_owned,
             'my_role': my_role,
+            'label_checked': label_checked_stats.get(label.my_label_id, False),
         })
     
     # 브레드크럼 경로

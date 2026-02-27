@@ -95,81 +95,97 @@
         }
     }
 
-    /* iframe → 부모 방향 postMessage 수신:
-       label_preview.js 가 requestPreviewData 를 보내면 previewCheckedFields 로 응답 */
-    window.addEventListener('message', function(e) {
-        if (!e.data || e.data.type !== 'requestPreviewData') return;
-
+    /* ── _ltData 기반으로 previewCheckedFields 데이터를 빌드하는 헬퍼 ── */
+    function _buildLabelData() {
         var labelData = {};
-        if (_ltData && _ltData.preview_items) {
-            var labelMap = {
-                '식품유형': 'prdlst_dcnm',              '제품명': 'prdlst_nm',
-                '성분명 및 함량': 'ingredient_info',    '내용량': 'content_weight',
-                '내용량(열량)': 'weight_calorie',        '품목보고번호': 'prdlst_report_no',
-                '원산지': 'country_of_origin',           '보관방법': 'storage_method',
-                '포장재질': 'frmlc_mtrqlt',              '제조원': 'bssh_nm',
-                '제조원 소재지': 'bssh_nm',
-                '유통전문판매원': 'distributor_address', '소분원': 'repacker_address',
-                '수입원': 'importer_address',            '소비기한': 'pog_daycnt',
-                '원재료명': 'rawmtrl_nm_display',
-                /* '원재료명(참고)': 'rawmtrl_nm' 은 의도적으로 제외.
-                   rawmtrl_nm 을 별도 키로 labelData 에 넣으면 iframe 의
-                   getFieldDefinitions() 가 '원재료명' 행을 중복 생성하고,
-                   rawmtrl_nm 키에는 원산지 굵게/알레르기 뱃지 처리가 없어
-                   표시 정보가 서로 다른 두 행이 나타나는 버그가 발생한다.
-                   rawmtrl_nm_display 가 비어있을 경우 아래에서 rawmtrl_nm 값으로 폴백한다. */
-                '주의사항': 'cautions',                  '기타표시사항': 'additional_info'
-            };
+        if (!_ltData || !_ltData.preview_items) return labelData;
+        var labelMap = {
+            '식품유형': 'prdlst_dcnm',              '제품명': 'prdlst_nm',
+            '성분명 및 함량': 'ingredient_info',    '내용량': 'content_weight',
+            '내용량(열량)': 'weight_calorie',        '품목보고번호': 'prdlst_report_no',
+            '원산지': 'country_of_origin',           '보관방법': 'storage_method',
+            '포장재질': 'frmlc_mtrqlt',              '제조원': 'bssh_nm',
+            '제조원 소재지': 'bssh_nm',
+            '유통전문판매원': 'distributor_address', '소분원': 'repacker_address',
+            '수입원': 'importer_address',            '소비기한': 'pog_daycnt',
+            '원재료명': 'rawmtrl_nm_display',
+            /* '원재료명(참고)': 'rawmtrl_nm' 은 의도적으로 제외.
+               rawmtrl_nm 을 별도 키로 labelData 에 넣으면 iframe 의
+               getFieldDefinitions() 가 '원재료명' 행을 중복 생성하고,
+               rawmtrl_nm 키에는 원산지 굵게/알레르기 뱃지 처리가 없어
+               표시 정보가 서로 다른 두 행이 나타나는 버그가 발생한다.
+               rawmtrl_nm_display 가 비어있을 경우 아래에서 rawmtrl_nm 값으로 폴백한다. */
+            '주의사항': 'cautions',                  '기타표시사항': 'additional_info'
+        };
+        _ltData.preview_items.forEach(function(it) {
+            var key = labelMap[it.label];
+            if (key) labelData[key] = it.value;
+        });
+        /* rawmtrl_nm_display 가 비어있으면 rawmtrl_nm(참고) 값으로 폴백 */
+        if (!labelData.rawmtrl_nm_display) {
             _ltData.preview_items.forEach(function(it) {
-                var key = labelMap[it.label];
-                if (key) labelData[key] = it.value;
-            });
-
-            /* rawmtrl_nm_display 가 비어있으면 rawmtrl_nm(참고) 값을
-               rawmtrl_nm_display 키로 폴백 → 원산지 굵게/알레르기 처리 유지 */
-            if (!labelData.rawmtrl_nm_display) {
-                var fallbackItem = null;
-                _ltData.preview_items.forEach(function(it) {
-                    if (it.label === '원재료명(참고)') fallbackItem = it;
-                });
-                if (fallbackItem && fallbackItem.value) {
-                    labelData.rawmtrl_nm_display = fallbackItem.value;
+                if (it.label === '원재료명(참고)' && it.value) {
+                    labelData.rawmtrl_nm_display = it.value;
                 }
-            }
+            });
         }
+        return labelData;
+    }
 
-        var allergens = getCurrentAllergens();
-        if (!allergens.length && _ltData && _ltData.allergens) {
-            allergens = _ltData.allergens;
-        }
-
-        // DOM의 최신값을 우선 사용 (기본정보 탭에서 저장 후 바로 미리보기 탭을 열 때도 반영)
+    function _buildCustomFields() {
         var customFields = [];
         try {
             var cfEl = document.getElementById('field-custom-fields-json');
             if (cfEl && cfEl.value) {
                 var parsed = JSON.parse(cfEl.value);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    customFields = parsed;
-                }
+                if (Array.isArray(parsed) && parsed.length > 0) customFields = parsed;
             }
         } catch(e) {}
-        // DOM에 값이 없으면 API 캐시로 폴백
         if (!customFields.length && _ltData && _ltData.custom_fields) {
             customFields = _ltData.custom_fields;
         }
+        return customFields;
+    }
 
-        var target = e.source;
-        if (target) {
-            target.postMessage({
-                type: 'previewCheckedFields',
-                checked: labelData,
-                allergens: allergens,
-                customFields: customFields,
-                update_datetime: new Date().toISOString().slice(0, 16).replace('T', ' ')
-            }, '*');
-        }
+    /* target 윈도우에 previewCheckedFields 전송 */
+    function _sendPreviewData(target) {
+        if (!target) return;
+        var allergens = getCurrentAllergens();
+        if (!allergens.length && _ltData && _ltData.allergens) allergens = _ltData.allergens;
+        target.postMessage({
+            type: 'previewCheckedFields',
+            checked: _buildLabelData(),
+            allergens: allergens,
+            customFields: _buildCustomFields(),
+            update_datetime: new Date().toISOString().slice(0, 16).replace('T', ' ')
+        }, '*');
+    }
+
+    /* iframe → 부모 방향 postMessage 수신:
+       label_preview.js 가 requestPreviewData 를 보내면 previewCheckedFields 로 응답 */
+    window.addEventListener('message', function(e) {
+        if (!e.data || e.data.type !== 'requestPreviewData') return;
+        _sendPreviewData(e.source);
     });
+
+    /* 기본정보 저장 후 표시사항 탭 데이터를 즉시 갱신하는 함수
+       product_detail.html 의 saveBasicInfo() 성공 핸들러에서 호출됨 */
+    window.refreshLabelData = function() {
+        _ltData = null;  // 캐시 초기화 → 다음 탭 전환 시 재요청 보장
+        fetch(API_URL, { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) {
+                if (data && data.success) {
+                    _ltData = data;
+                    // iframe 이 이미 표시 중이면 즉시 새 데이터 전송
+                    var frame = getFrame();
+                    if (frame && frame.style.display !== 'none' && frame.contentWindow) {
+                        _sendPreviewData(frame.contentWindow);
+                    }
+                }
+            })
+            .catch(function() {});
+    };
 
     function init() {
         var tabBtn = document.querySelector('button[data-bs-target="#tab-label"]');

@@ -2574,6 +2574,13 @@ def log_validation(request):
             
             # 규정 검증 로깅
             log_user_activity(request, 'validation', 'validation_nutrition', label_id)
+
+            # 규정 검증 완료 플래그 업데이트 (label_create_YN = 'Y')
+            if label_id:
+                try:
+                    MyLabel.objects.filter(my_label_id=label_id).update(label_create_YN='Y')
+                except Exception:
+                    pass
             
             return JsonResponse({'success': True})
         except Exception as e:

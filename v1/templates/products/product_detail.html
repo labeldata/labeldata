@@ -2884,6 +2884,11 @@ function saveBasicInfo() {
             }
 
             showSaveStatusMsg();
+
+            // 표시사항 탭 캐시 갱신 (이미 로드됐으면 즉시, 아니면 다음 탭 전환 시 반영)
+            if (typeof window.refreshLabelData === 'function') {
+                window.refreshLabelData();
+            }
         } else {
             showToast(data.message || '저장 중 오류가 발생했습니다', 'error');
         }
