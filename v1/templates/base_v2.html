@@ -59,6 +59,17 @@
                 </a>
                 <div class="border-top my-3"></div>
 
+                {# 부적합·처분 알림 #}
+                <a href="{% url 'regulatory:list' %}" class="nav-link position-relative {% if request.resolver_match.namespace == 'regulatory' %}active{% endif %}">
+                    <i class="bi bi-shield-exclamation me-3"></i>부적합·처분 알림
+                    {% if regulatory_alert_count > 0 %}
+                    <span class="position-absolute badge rounded-pill bg-danger"
+                          style="top:6px;right:8px;font-size:10px;min-width:18px;padding:2px 5px;">
+                        {{ regulatory_alert_count|default:'' }}
+                    </span>
+                    {% endif %}
+                </a>
+
                 <a href="{% url 'board:list' %}" class="nav-link {% if request.resolver_match.namespace == 'board' %}active{% endif %}">
                     <i class="bi bi-chat-dots me-3"></i>게시판
                 </a>

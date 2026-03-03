@@ -1,0 +1,349 @@
+/* ================================================================
+   regulatory.css — 부적합·처분 알림 페이지 전용 스타일
+   news_list.html + _news_detail_panel.html 통합 CSS
+   ================================================================ */
+
+/* ── 1. 전체 레이아웃 (Split View) ─────────────────────────────── */
+.v2-content        { padding:0 !important; overflow:hidden !important;
+                     display:flex; flex-direction:column; }
+.reg-wrap          { display:flex; flex:1; min-height:0; overflow:hidden; background:#f8f9fa; }
+.reg-sidebar       { width:460px; flex-shrink:0; display:flex; flex-direction:column;
+                     background:#fff; border-right:1px solid #e0e0e0; overflow:hidden; }
+.reg-main          { flex:1; overflow:hidden; display:flex; flex-direction:column; background:#f8f9fa; }
+.rd-content-scroll { flex:1; overflow-y:auto; min-height:0; }
+
+/* ── 2. 검색바 ─────────────────────────────────────────────────── */
+.rs-search-bar        { padding:9px 12px 7px; border-bottom:1px solid #f1f3f4; }
+.rs-search-inner      { display:flex; align-items:center; border:1.5px solid #dadce0;
+                        border-radius:20px; overflow:hidden; background:#fff;
+                        transition:border-color .15s; padding:0 4px 0 10px; }
+.rs-search-inner:focus-within { border-color:#1a73e8; box-shadow:0 0 0 2px #e8f0fe; }
+.rs-search-icon       { color:#9aa0a6; font-size:13px; flex-shrink:0; margin-right:4px; cursor:pointer; }
+.rs-search-inner input { flex:1; border:none; outline:none; font-size:13px;
+                         background:transparent; padding:6px 0; color:#202124; min-width:0; }
+.rs-search-inner input::placeholder { color:#bdc1c6; }
+.rs-search-x          { background:none; border:none; padding:4px 6px; cursor:pointer;
+                        color:#9aa0a6; font-size:11px; flex-shrink:0; }
+.rs-search-x:hover    { color:#c5221f; }
+.rs-top-unread        { color:#c5221f; font-weight:700; }
+
+/* ── 3. 기간 바 ────────────────────────────────────────────────── */
+.rs-period-bar   { display:flex; align-items:center; gap:6px; padding:6px 12px;
+                   border-bottom:1px solid #f1f3f4; flex-wrap:nowrap; }
+.rs-days-group   { display:flex; gap:3px; flex-shrink:0; }
+.rs-day-btn      { padding:4px 8px; border-radius:12px; border:1.5px solid #dadce0;
+                   background:#fff; font-size:11px; font-weight:500; color:#5f6368;
+                   cursor:pointer; transition:all .15s; white-space:nowrap; line-height:1.2; }
+.rs-day-btn.active { border-color:#1a73e8; background:#e8f0fe; color:#1a73e8; font-weight:700; }
+.rs-day-btn:hover  { border-color:#aaa; color:#202124; }
+.rs-date-range   { display:flex; align-items:center; gap:3px; flex:1; min-width:0; }
+.rs-date-input   { border:1.5px solid #dadce0; border-radius:7px; padding:3px 4px;
+                   font-size:10px; color:#202124; background:#fff;
+                   cursor:pointer; flex:1; min-width:0; width:0; }
+.rs-date-input:focus { outline:none; border-color:#1a73e8; }
+.rs-date-sep     { font-size:10px; color:#9aa0a6; flex-shrink:0; }
+.rs-date-clear   { background:none; border:none; cursor:pointer; color:#9aa0a6;
+                   padding:0 2px; font-size:13px; flex-shrink:0; }
+.rs-date-clear:hover { color:#c5221f; }
+
+/* ── 4. 분야 토글 헤더 ─────────────────────────────────────────── */
+.rs-cat-bar       { display:flex; align-items:center; gap:6px; padding:7px 12px;
+                    border-bottom:1px solid #f1f3f4; cursor:pointer;
+                    user-select:none; transition:background .1s; }
+.rs-cat-bar:hover { background:#f8f9fa; }
+.rs-cat-bar-label { font-size:12px; font-weight:700; color:#5f6368; white-space:nowrap;
+                    display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.rs-cat-bar-label i { color:#9aa0a6; font-size:12px; }
+.rs-cat-bar-summary { font-size:11px; color:#80868b; flex:1; min-width:0;
+                      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rs-cat-bar-check { flex-shrink:0; font-size:11px; font-weight:600; color:#1a73e8; }
+.rs-cat-bar-check label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+.rs-cat-bar-check input[type=checkbox] { width:13px; height:13px; accent-color:#1a73e8; cursor:pointer; }
+
+/* ── 5. 분야 드로어 (접기/펼치기) ──────────────────────────────── */
+.rs-cat-drawer               { border-bottom:1px solid #f1f3f4; padding:0 12px;
+                               max-height:220px; }
+.rs-cat-drawer.collapsed     { border-bottom-color:transparent; }
+.rs-filter-collapse          { overflow:hidden; transition:max-height .22s ease, opacity .2s ease; }
+.rs-filter-collapse.collapsed { max-height:0 !important; opacity:0; pointer-events:none; padding-top:0; padding-bottom:0; }
+.rs-toggle-btn               { background:none; border:none; padding:0; cursor:pointer;
+                               color:#9aa0a6; font-size:13px; line-height:1;
+                               transition:transform .2s; display:flex; align-items:center; flex-shrink:0; }
+.rs-toggle-btn.collapsed     { transform:rotate(-90deg); }
+html.cat-filter-closed .rs-filter-collapse {
+  max-height:0 !important; opacity:0 !important;
+  pointer-events:none !important; transition:none !important; }
+html.cat-filter-closed #catToggleBtn { transform:rotate(-90deg) !important; }
+
+/* ── 6. 카테고리 그리드 ─────────────────────────────────────────── */
+.rs-cat-grid        { display:grid; grid-template-columns:32px repeat(3,1fr); gap:0; padding:6px 0; }
+.rs-col-hdr         { font-size:10px; font-weight:700; color:#80868b; text-align:center;
+                      padding:2px 2px 5px; border-bottom:2px solid #e8eaed; letter-spacing:-.2px; }
+.rs-row-lbl         { font-size:10px; font-weight:700; color:#5f6368; display:flex;
+                      flex-direction:column; align-items:center; justify-content:center;
+                      padding:4px 0; gap:1px; border-right:1px solid #f1f3f4; line-height:1.2; }
+.rs-row-lbl span    { font-size:13px; }
+.rs-row-divider     { grid-column:1/-1; height:1px; background:#f1f3f4; margin:0; }
+.rs-cat-cell        { display:flex; flex-direction:column; align-items:center;
+                      justify-content:center; padding:5px 2px; cursor:pointer;
+                      border-radius:5px; gap:2px; transition:background .1s; }
+.rs-cat-cell:hover  { background:#f1f3f4; }
+.rs-cat-cell input[type=checkbox] { width:14px; height:14px; accent-color:#1a73e8; cursor:pointer; }
+.rs-cat-cell-cnt    { font-size:10px; color:#9aa0a6; }
+
+/* ── 7. 등급 도움말 팡오버 ──────────────────────────── */
+.rs-risk-help-btn       { background:none; border:none; cursor:pointer; padding:0 2px;
+                          color:#9aa0a6; font-size:13px; line-height:1; flex-shrink:0; transition:color .15s; }
+.rs-risk-help-btn:hover { color:#1a73e8; }
+.rs-risk-popover        { display:none; position:absolute; z-index:200;
+                          background:#fff; border:1px solid #e0e0e0; border-radius:10px;
+                          box-shadow:0 4px 18px rgba(0,0,0,.15); padding:14px 16px;
+                          width:280px; font-size:11.5px; line-height:1.6; color:#202124;
+                          left:14px; right:14px; }
+.rs-risk-popover.open   { display:block; }
+.rs-rp-title            { font-size:12px; font-weight:700; color:#202124;
+                          margin-bottom:10px; display:flex; align-items:center; gap:5px; }
+.rs-rp-close            { margin-left:auto; background:none; border:none; cursor:pointer;
+                          color:#9aa0a6; font-size:14px; padding:0; line-height:1; }
+.rs-rp-close:hover      { color:#c5221f; }
+.rs-rp-section          { margin-bottom:10px; }
+.rs-rp-section:last-child { margin-bottom:0; }
+.rs-rp-cat     { font-size:10px; font-weight:700; color:#80868b; text-transform:uppercase;
+                 letter-spacing:.4px; margin-bottom:4px; }
+.rs-rp-row     { display:flex; align-items:baseline; gap:6px; margin-bottom:2px; }
+.rs-rp-badge   { border-radius:4px; font-size:9.5px; font-weight:700;
+                 padding:1px 6px; flex-shrink:0; white-space:nowrap; }
+.rs-rp-badge-H { background:#c5221f; color:#fff; }
+.rs-rp-badge-M { background:#e67700; color:#fff; }
+.rs-rp-badge-L { background:#1a73e8; color:#fff; }
+.rs-rp-desc    { font-size:11px; color:#5f6368; }
+
+/* ── 9. 등급 칩 필터 ────────────────────────────────────────────── */
+.rs-risk-chips        { display:flex; gap:4px; padding:6px 12px 7px;
+                        border-bottom:1px solid #f1f3f4; flex-wrap:wrap; align-items:center; }
+.rs-risk-chip         { border-radius:14px; border:1.5px solid #dadce0; background:#fff;
+                        padding:3px 9px; font-size:10px; font-weight:600; cursor:pointer;
+                        color:#5f6368; transition:all .15s; white-space:nowrap; }
+.rs-risk-chip:hover   { border-color:#bbb; color:#202124; }
+.rs-risk-chip.active-H { background:#fce8e6; border-color:#c5221f; color:#c5221f; }
+.rs-risk-chip.active-M { background:#fff3e0; border-color:#e67700; color:#e67700; }
+.rs-risk-chip.active-L { background:#e8f0fe; border-color:#1a73e8; color:#1a73e8; }
+.rs-risk-chip.active-no  { background:#fff8e1; border-color:#f9a825; color:#b06000; }
+.rs-risk-chip.active-mon { background:#e3f2fd; border-color:#1976d2; color:#1565c0; }
+.rs-risk-chip.active-res { background:#e8f5e9; border-color:#388e3c; color:#2e7d32; }
+.rs-chip-divider      { width:1px; height:16px; background:#dadce0; flex-shrink:0; margin:0 2px; }
+
+/* ── 10. 뉴스 목록 아이템 ──────────────────────────────────────── */
+.rs-list-body         { flex:1; overflow-y:auto; min-height:0; }
+.rs-item              { position:relative; padding:10px 14px; border-bottom:1px solid #f1f3f4;
+                        cursor:pointer; transition:background .1s; }
+.rs-item:hover        { background:#f8f9fa; }
+.rs-item.active       { background:#e8f0fe !important; }
+.rs-item.matched      { border-left:3px solid #c5221f; background:#fffaf9; padding-left:12px; }
+.rs-item.matched:hover { background:#fff5f4; }
+.rs-item.matched.active { background:#fce8e6 !important; }
+.rs-item.ing-matched  { border-left:3px solid #f9a825; background:#fffef0; padding-left:12px; }
+.rs-item.ing-matched:hover  { background:#fffde7; }
+.rs-item.ing-matched.active { background:#fef9e1 !important; }
+
+.rs-row1              { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+.rs-item-flag         { font-size:14px; flex-shrink:0; }
+.rs-item-name         { font-size:13px; font-weight:700; color:#202124;
+                        flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rs-item-date         { font-size:11px; color:#9aa0a6; flex-shrink:0; white-space:nowrap; }
+.rs-row2              { display:flex; align-items:center; gap:4px; min-width:0;
+                        flex-wrap:nowrap; overflow:hidden; }
+.rs-row2-right        { font-size:11px; color:#80868b; overflow:hidden;
+                        text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
+.rs-unread-dot        { width:7px; height:7px; border-radius:50%; background:#c5221f;
+                        display:inline-block; flex-shrink:0; }
+
+/* ── 11. 아이템 배지 ────────────────────────────────────────────── */
+.badge-dom    { background:#e6f4ea; color:#137333; font-size:11px; border-radius:3px;
+                padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-imp    { background:#fff3e0; color:#b06000; font-size:11px; border-radius:3px;
+                padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-admin  { background:#f1f3f4; color:#5f6368; font-size:11px; border-radius:3px;
+                padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-recall { background:#fde7e7; color:#b31412; font-size:11px; border-radius:3px;
+                padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-risk-H { background:#c5221f; color:#fff; font-size:10px; font-weight:700;
+                border-radius:3px; padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-risk-M { background:#e67700; color:#fff; font-size:10px; font-weight:700;
+                border-radius:3px; padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-risk-L { background:#1a73e8; color:#fff; font-size:10px; font-weight:700;
+                border-radius:3px; padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-ing    { font-size:11px !important; opacity:.85; }
+.badge-status-no  { background:#fff8e1; color:#b06000; font-size:10px; font-weight:700;
+                    border-radius:3px; padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-status-mon { background:#e3f2fd; color:#1565c0; font-size:10px; font-weight:700;
+                    border-radius:3px; padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.badge-status-res { background:#e8f5e9; color:#2e7d32; font-size:10px; font-weight:700;
+                    border-radius:3px; padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+
+/* ── 12. 목록 빈 상태 ──────────────────────────────────────────── */
+.rs-empty   { display:flex; flex-direction:column; align-items:center;
+              justify-content:center; padding:40px 20px; color:#9aa0a6; gap:10px; }
+.rs-empty i { font-size:36px; }
+
+/* ── 13. 페이지네이션 ──────────────────────────────────────────── */
+.rs-pagination   { display:flex; align-items:center; justify-content:center;
+                   gap:3px; padding:7px 10px; border-top:1px solid #f1f3f4;
+                   flex-shrink:0; background:#fff; }
+.rs-page-btn     { min-width:26px; height:26px; border-radius:13px; border:1px solid #dadce0;
+                   background:#fff; font-size:11px; font-weight:500; color:#5f6368; cursor:pointer;
+                   display:flex; align-items:center; justify-content:center;
+                   padding:0 6px; text-decoration:none; transition:all .12s; }
+.rs-page-btn:hover   { border-color:#1a73e8; color:#1a73e8; }
+.rs-page-btn.active  { background:#1a73e8; border-color:#1a73e8; color:#fff; font-weight:700; pointer-events:none; }
+.rs-page-btn.disabled { opacity:.35; pointer-events:none; }
+.rs-page-info    { font-size:10px; color:#9aa0a6; white-space:nowrap; }
+
+/* ── 14. 우측 패널 빈 상태 ─────────────────────────────────────── */
+.rd-empty           { display:flex; flex-direction:column; align-items:center;
+                      justify-content:center; height:100%; color:#9aa0a6; gap:14px; }
+.rd-empty i         { font-size:52px; }
+.rd-empty-title     { font-size:14px; color:#5f6368; }
+.rd-empty-sub       { font-size:12px; color:#c5221f; font-weight:600; }
+
+/* ================================================================
+   상세 패널 (_news_detail_panel.html)
+   ================================================================ */
+
+/* ── 15. 패널 래퍼 & 헤더 ─────────────────────────────────────── */
+.rd-wrap { display:flex; flex-direction:column; gap:0; font-size:13px; color:#3c4043;
+           max-width:900px; margin:0 auto; }
+.rd-hdr  { padding:14px 18px 10px; border-bottom:1px solid #e8eaed; background:#fff; }
+.rd-hdr-top { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+.rd-hdr-top .ms-auto { margin-left:auto; display:flex; align-items:center; gap:6px; }
+.rd-hdr-date { font-size:11px; color:#9aa0a6; white-space:nowrap; }
+
+/* ── 16. 헤더 배지 ─────────────────────────────────────────────── */
+.rh-badge   { font-size:10px; font-weight:600; border-radius:3px;
+              padding:2px 6px; white-space:nowrap; flex-shrink:0; }
+.rh-src-dom { background:#e8f0fe; color:#1a73e8; }
+.rh-src-imp { background:#fce8e6; color:#c5221f; }
+.rh-vtype   { background:#f1f3f4; color:#5f6368; }
+.rh-risk-H  { background:#c5221f; color:#fff; }
+.rh-risk-M  { background:#e67700; color:#fff; }
+.rh-risk-L  { background:#1a73e8; color:#fff; }
+.rh-risk-ing { opacity:.85; }
+/* 등급판정 기준 내 배지 */
+.rh-cH { background:#c5221f; color:#fff; border-radius:2px; padding:0 4px; font-size:10px; }
+.rh-cM { background:#e67700; color:#fff; border-radius:2px; padding:0 4px; font-size:10px; }
+.rh-cL { background:#1a73e8; color:#fff; border-radius:2px; padding:0 4px; font-size:10px; }
+
+/* ── 17. 제목·출처 링크 ─────────────────────────────────────────── */
+.rd-title      { font-size:16px; font-weight:700; color:#202124;
+                 margin:0 0 4px; line-height:1.3; word-break:keep-all; }
+.rd-subtitle   { font-size:12px; color:#5f6368; overflow:hidden; text-overflow:ellipsis; }
+.rd-subtitle b { color:#3c4043; font-weight:600; }
+.rd-src-links  { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.rd-src-link   { font-size:11px; color:#1a73e8; text-decoration:none;
+                 display:inline-flex; align-items:center; gap:3px;
+                 padding:2px 6px; border-radius:3px; border:1px solid #dadce0; background:#fff; }
+.rd-src-link:hover { background:#e8f0fe; }
+
+/* ── 18. AI 분석 섹션 ──────────────────────────────────────────── */
+.rd-ai-details          { border-bottom:1px solid #e8eaed; }
+.rd-ai-sum              { display:flex; align-items:center; gap:8px; padding:9px 18px;
+                          cursor:pointer; list-style:none; background:#fafafa;
+                          font-size:12px; font-weight:600; color:#3c4043; }
+.rd-ai-sum::-webkit-details-marker { display:none; }
+.rd-ai-sum::after       { content:"▸"; margin-left:auto; color:#9aa0a6; font-size:10px; }
+details[open] .rd-ai-sum::after { content:"▾"; }
+.rd-ai-chips            { display:flex; gap:4px; flex-wrap:wrap; margin-left:4px; }
+.rd-sub-chip            { background:#fff3e0; color:#b06000; font-size:10px; border-radius:3px; padding:1px 5px; }
+.rd-ing-chip            { background:#e8f5e9; color:#2e7d32; font-size:10px; border-radius:3px; padding:1px 5px; }
+.rd-ai-body             { padding:10px 18px 12px; background:#fff; }
+.rd-ai-sum-text         { font-size:12px; color:#5f6368; line-height:1.5; margin-bottom:8px; }
+.rd-ai-lbl              { font-size:10px; font-weight:700; color:#9aa0a6;
+                          text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.rd-ai-ing-list         { display:flex; flex-direction:column; gap:3px; }
+.rd-ai-ing-row          { display:flex; align-items:center; gap:5px; font-size:11px; flex-wrap:wrap; }
+.rd-ai-ing-name         { font-weight:600; color:#202124; }
+.rd-ai-ing-meta         { color:#9aa0a6; }
+.rd-kw-chip             { background:#f0ebff; color:#5a0fc8; font-size:10px; border-radius:10px; padding:1px 7px; }
+
+/* ── 19. 매칭 섹션 공통 ─────────────────────────────────────────── */
+.rd-sec       { padding:10px 18px; border-bottom:1px solid #e8eaed; }
+.rd-sec-hdr   { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700;
+                color:#5f6368; text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px; }
+.rd-sec-cnt   { background:#f1f3f4; color:#5f6368; font-size:10px;
+                border-radius:8px; padding:1px 6px; font-weight:400; }
+
+/* ── 20. 매칭 아이템 ────────────────────────────────────────────── */
+.rd-item             { border:1px solid #e8eaed; border-radius:6px;
+                       margin-bottom:6px; overflow:hidden; background:#fff; }
+.rd-item:last-child  { margin-bottom:0; }
+.rd-item-head        { display:flex; align-items:center; gap:6px; padding:7px 10px; flex-wrap:wrap; }
+.rd-item-name        { font-size:12px; font-weight:700; color:#202124; flex:1; min-width:0;
+                       overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rd-item-lv          { font-size:10px; font-weight:700; border-radius:3px;
+                       padding:1px 5px; white-space:nowrap; flex-shrink:0; }
+.lv-HIGH             { background:#c5221f; color:#fff; }
+.lv-MED              { background:#e67700; color:#fff; }
+.lv-LOW              { background:#1a73e8; color:#fff; }
+
+/* 매칭 근거 배지 */
+.rd-reasons          { display:flex; gap:4px; flex-wrap:wrap; padding:0 10px 5px; }
+.rd-rb               { font-size:10px; border-radius:3px; padding:1px 5px; }
+.rd-rb-origin        { background:#e8f0fe; color:#1a73e8; }
+.rd-rb-mfr           { background:#e6f4ea; color:#137333; }
+.rd-rb-ftype         { background:#fce8e6; color:#b31412; }
+.rd-rb-conflict      { background:#fce8e6; color:#c5221f; }
+.rd-rb-default       { background:#f1f3f4; color:#5f6368; }
+
+.rd-item-detail      { padding:0 10px 5px; font-size:11px; color:#9aa0a6; }
+.rd-item-detail b    { color:#5f6368; }
+
+/* ── 21. 조치 이력 ─────────────────────────────────────────────── */
+.rd-hist-line  { display:flex; align-items:center; gap:5px; padding:4px 10px;
+                 background:#fafafa; border-top:1px solid #f1f3f4; font-size:10px; color:#9aa0a6; }
+.rd-ah-badge   { border-radius:3px; padding:1px 5px; font-size:10px; font-weight:600; }
+.rd-ah-badge.monitoring { background:#e8f0fe; color:#1a73e8; }
+.rd-ah-badge.resolved   { background:#e6f4ea; color:#137333; }
+.rd-ah-badge.dismissed  { background:#fce8e6; color:#c5221f; }
+.rd-ah-badge.memo       { background:#f0ebff; color:#5a0fc8; }
+
+/* ── 22. 조치 버튼 행 ──────────────────────────────────────────── */
+.rd-act-row    { display:flex; align-items:center; gap:4px; flex-wrap:wrap; padding:0 10px 7px; }
+.rd-act-btn    { font-size:10px; border:1px solid #dadce0; background:#fff; border-radius:3px;
+                 padding:2px 6px; cursor:pointer; color:#3c4043; white-space:nowrap; }
+.rd-act-btn:hover                 { background:#f1f3f4; }
+.rd-act-btn.active-monitoring     { background:#e8f0fe; border-color:#1a73e8; color:#1a73e8; }
+.rd-act-btn.active-resolved       { background:#e6f4ea; border-color:#34a853; color:#34a853; }
+.rd-act-btn.active-dismissed      { background:#fce8e6; border-color:#c5221f; color:#c5221f; }
+.rd-act-spacer { flex:1; }
+.rd-item-link  { font-size:10px; color:#1a73e8; text-decoration:none; white-space:nowrap; flex-shrink:0; }
+.rd-item-link:hover { text-decoration:underline; }
+
+/* ── 23. 메모 영역 ─────────────────────────────────────────────── */
+.rd-memo-area               { padding:6px 10px; border-top:1px solid #f1f3f4; display:none; }
+.rd-memo-area.show          { display:block; }
+.rd-memo-area textarea      { width:100%; font-size:12px; border:1px solid #dadce0;
+                              border-radius:4px; padding:5px 8px; resize:vertical; min-height:56px; }
+.rd-memo-area textarea:focus { outline:none; border-color:#1a73e8; }
+.rd-memo-submit             { margin-top:4px; font-size:11px; padding:3px 10px;
+                              background:#1a73e8; color:#fff; border:none; border-radius:3px; cursor:pointer; }
+
+/* ── 24. BOM 목록 ──────────────────────────────────────────────── */
+.rd-bom-list   { padding:4px 10px 7px; border-top:1px solid #f1f3f4; }
+.rd-bom-label  { font-size:10px; color:#9aa0a6; margin-bottom:3px; }
+.rd-bom-item   { display:flex; align-items:center; gap:4px; font-size:11px; }
+.rd-no-bom     { font-size:11px; color:#9aa0a6; padding:4px 10px 7px; border-top:1px solid #f1f3f4; }
+
+/* ── 25. 등급판정 기준 (접기) ──────────────────────────────────── */
+.rd-crit-details { border-bottom:1px solid #f1f3f4; }
+.rd-crit-sum     { font-size:11px; color:#9aa0a6; cursor:pointer; padding:5px 18px;
+                   list-style:none; background:#fafafa; display:flex; align-items:center; gap:4px; }
+.rd-crit-sum::-webkit-details-marker { display:none; }
+.rd-crit-body    { padding:8px 18px 10px; font-size:11px; background:#fff; }
+.rd-crit-row     { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:center; margin-bottom:4px; }
+.rd-crit-src     { font-weight:700; color:#3c4043; }
+.rd-crit-note    { font-size:10px; color:#9aa0a6; margin-top:4px; }
+
+/* ── 26. 매칭 없음 / 하단 버튼 ─────────────────────────────────── */
+.rd-nomatch    { display:flex; align-items:center; gap:10px; padding:16px 18px;
+                 font-size:12px; color:#5f6368; }
+.rd-bottom-bar { padding:10px 18px; display:flex; gap:8px; }

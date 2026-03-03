@@ -3794,7 +3794,7 @@ def remove_document_slot(request, slot_id):
 
 @login_required
 def notification_list(request):
-    """읽지 않은 알림 목록 + 최근 알림 반환 (JSON)"""
+    """읽지 않은 알림 목록 + 최근 알림 반환 (JSON) - 부적합.처분 알림 통합"""
     qs = ProductNotification.objects.filter(
         recipient=request.user
     ).select_related('label').order_by('-created_at')[:30]
@@ -3816,37 +3816,96 @@ def notification_list(request):
             'url': f'/products/{n.label.my_label_id}/' if n.label else '',
         })
 
+    # ── 부적합.처분 알림 통합 ───────────────────────────────────────────
+    try:
+        from v1.regulatory.models import NewsProductMatch
+        reg_matches = (
+            NewsProductMatch.objects
+            .filter(product__user_id=request.user, is_false_positive=False)
+            .select_related('news', 'product')
+            .order_by('-created_at')[:10]
+        )
+        reg_unread = NewsProductMatch.objects.filter(
+            product__user_id=request.user, is_read=False, is_false_positive=False
+        ).count()
+        unread_count += reg_unread
+
+        for m in reg_matches:
+            items.append({
+                'id':          f'reg_{m.id}',
+                'message': (
+                    f"⚠️ 부적합.처분 알림: '{m.news.product_name[:20]}' 부적합 — "
+                    f"내 제품 '{m.product.my_label_name[:20]}' 연관 가능성"
+                ),
+                'is_read':     m.is_read,
+                'status_code': 'REGULATORY',
+                'created_at':  m.created_at.strftime('%Y-%m-%d %H:%M'),
+                'label_id':    m.product.my_label_id,
+                'label_name':  m.product.my_label_name or '',
+                'url':         f'/regulatory/?id={m.news_id}',
+            })
+    except Exception:
+        pass  # 앱 미설치 환경 안전 처리
+
+    # 미읽음 우선 정렬
+    items.sort(key=lambda x: (0 if not x['is_read'] else 1, x['created_at']), reverse=False)
+    items = items[:30]
+
     return JsonResponse({'notifications': items, 'unread': unread_count})
 
 
 @login_required
 @require_POST
 def notification_mark_read(request):
-    """알림 읽음 처리 – 특정 id 또는 전체"""
+    """알림 읽음 처리 - 특정 id 또는 전체 (부적합.처분 알림 포함)"""
     import json
+    from django.utils import timezone as tz
     try:
         body = json.loads(request.body)
         notification_id = body.get('id')
     except (ValueError, AttributeError):
         notification_id = None
 
-    if notification_id:
+    # reg_ 접두사 = 부적합.처분 알림
+    if notification_id and str(notification_id).startswith('reg_'):
+        try:
+            from v1.regulatory.models import NewsProductMatch
+            reg_id = int(str(notification_id).replace('reg_', ''))
+            NewsProductMatch.objects.filter(
+                id=reg_id, product__user_id=request.user
+            ).update(is_read=True, read_at=tz.now())
+        except Exception:
+            pass
+    elif notification_id:
         ProductNotification.objects.filter(
             id=notification_id, recipient=request.user
         ).update(is_read=True)
     else:
+        # 전체 읽음: 제품 알림 + 부적합.처분 알림 모두
         ProductNotification.objects.filter(
             recipient=request.user, is_read=False
         ).update(is_read=True)
+        try:
+            from v1.regulatory.models import NewsProductMatch
+            NewsProductMatch.objects.filter(
+                product__user_id=request.user, is_read=False
+            ).update(is_read=True, read_at=tz.now())
+        except Exception:
+            pass
 
     unread_count = ProductNotification.objects.filter(
         recipient=request.user, is_read=False
     ).count()
+    try:
+        from v1.regulatory.models import NewsProductMatch
+        unread_count += NewsProductMatch.objects.filter(
+            product__user_id=request.user, is_read=False,
+            is_false_positive=False,
+        ).count()
+    except Exception:
+        pass
 
     return JsonResponse({'success': True, 'unread': unread_count})
-
-
-# ==================== 연락처 관리 (Contacts) ====================
 
 @login_required
 def contacts(request):

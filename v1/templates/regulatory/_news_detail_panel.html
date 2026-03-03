@@ -1,0 +1,310 @@
+﻿{% load static %}
+{# 상세 패널 — 구글 스타일 컴팩트 재설계 #}
+{% with vtype=news.violation_type %}
+
+
+<div class="rd-wrap">
+
+  {# ══ 헤더 섹션 ══ #}
+  <div class="rd-hdr">
+    {# 배지 + 날짜 행 #}
+    <div class="rd-hdr-top">
+      {% if news.api_source == 'I2620' or news.api_source == 'I2640' %}<span class="rh-badge rh-src-dom">🇰🇷 검사부적합</span>
+      {% elif news.api_source == 'I0490' %}<span class="rh-badge rh-src-dom">🇰🇷 회수</span>
+      {% elif news.api_source == 'import' %}<span class="rh-badge rh-src-imp">🌏 수입회수</span>
+      {% elif news.api_source == 'imp_insp' %}<span class="rh-badge rh-src-imp">🌏 수입부적합</span>
+      {% elif news.api_source == 'I0470' or news.api_source == 'I0480' %}<span class="rh-badge rh-src-dom">🇰🇷 행정처분</span>
+      {% elif news.api_source == 'I0482' %}<span class="rh-badge rh-src-imp">🌏 행정처분</span>
+      {% else %}<span class="rh-badge rh-src-dom">🇰🇷 국내식품</span>
+      {% endif %}
+      {% if vtype == 'pesticide' %}<span class="rh-badge rh-vtype">🌿 잔류농약</span>
+      {% elif vtype == 'microbe' %}<span class="rh-badge rh-vtype">🦠 미생물</span>
+      {% elif vtype == 'heavy_metal' %}<span class="rh-badge rh-vtype">⚗️ 중금속</span>
+      {% elif vtype == 'additive' %}<span class="rh-badge rh-vtype">🧪 식품첨가물</span>
+      {% elif vtype == 'foreign_body' %}<span class="rh-badge rh-vtype">🔍 이물혼입</span>
+      {% elif vtype == 'deficiency' %}<span class="rh-badge rh-vtype">📉 성분미달</span>
+      {% elif vtype == 'labeling' %}<span class="rh-badge rh-vtype">🏷️ 표시위반</span>
+      {% elif vtype == 'admin' %}<span class="rh-badge rh-vtype">🏢 행정처분</span>
+      {% elif vtype == 'import_ban' %}<span class="rh-badge rh-vtype">🚫 수입금지</span>
+      {% elif vtype == 'recall' %}<span class="rh-badge rh-vtype">📦 회수·폐기</span>
+      {% elif vtype %}<span class="rh-badge rh-vtype">기타</span>
+      {% endif %}
+      {% if matches %}{% with top=matches|first %}
+        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H">🔴 중요</span>
+        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M">🟠 관심</span>
+        {% else %}<span class="rh-badge rh-risk-L">🔵 일반</span>{% endif %}
+      {% endwith %}{% elif ing_matches %}{% with top=ing_matches|first %}
+        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H rh-risk-ing">🔴 중요·원료</span>
+        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M rh-risk-ing">🟠 관심·원료</span>
+        {% else %}<span class="rh-badge rh-risk-L rh-risk-ing">🔵 일반·원료</span>{% endif %}
+      {% endwith %}{% endif %}
+      <div class="ms-auto">
+        <span class="rd-hdr-date">{% if news.event_date %}{{ news.event_date|date:"Y.m.d" }}<span style="font-size:10px;color:#bbb;"> (발생)</span>{% else %}{{ news.collected_date|date:"Y.m.d" }}{% endif %}</span>
+        {% if news.api_source == 'I2620' or news.api_source == 'I2640' or news.api_source == 'I0490' or news.api_source == 'I0470' or news.api_source == 'I0480' %}
+        <a href="https://www.foodsafetykorea.go.kr/portal/specialinfo/searchInfoResult.do?menu_no=54&menu_grp=MENU_NEW04" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식품안전나라</a>
+        {% elif news.api_source == 'imp_insp' %}
+        <a href="https://impfood.mfds.go.kr/CFCEE01F01" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 수입부적합 조회</a>
+        {% elif news.api_source == 'import' or news.api_source == 'I0482' %}
+        <a href="https://impfood.mfds.go.kr/CFCFF01F01" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 회수·판매중지 조회</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="rd-title">{{ news.product_name }}</div>
+    <div class="rd-subtitle">
+      <b><i class="bi bi-building"></i> {{ news.company_name|default:"업체명 미상" }}</b>
+      {% if news.violation_reason %}&nbsp;·&nbsp;{{ news.violation_reason|truncatechars:80 }}{% endif %}
+    </div>
+    {% if matches or ing_matches %}
+    <div class="rd-src-links">
+      <a href="{% url 'products:product_explorer' %}" class="rd-src-link"><i class="bi bi-hdd-stack"></i> 내 제품 관리</a>
+      <a href="{% url 'label:my_ingredient_list_combined' %}" class="rd-src-link"><i class="bi bi-box-seam"></i> 원료 보관함</a>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ══ AI 분석 — details 접기/펼치기 ══ #}
+  {% if news.ai_parsed %}
+  <details class="rd-ai-details">
+    <summary class="rd-ai-sum">
+      <i class="bi bi-stars text-primary"></i> AI 분석
+      <div class="rd-ai-chips">
+        {% if news.ai_substances %}{% for sub in news.ai_substances|slice:":4" %}<span class="rd-sub-chip">{{ sub }}</span>{% endfor %}
+        {% elif news.ai_issues %}{% for issue in news.ai_issues|slice:":3" %}<span class="rd-ing-chip">{{ issue.ingredient }}</span>{% endfor %}
+        {% endif %}
+      </div>
+    </summary>
+    <div class="rd-ai-body">
+      {% if news.ai_summary %}<div class="rd-ai-sum-text">{{ news.ai_summary }}</div>{% endif %}
+      {% if news.ai_substances %}
+      <div class="rd-ai-lbl">검출 물질</div>
+      <div class="rd-ai-chips" style="margin-bottom:8px;">
+        {% for sub in news.ai_substances %}<span class="rd-sub-chip">⚗ {{ sub }}</span>{% endfor %}
+      </div>
+      {% endif %}
+      {% if news.ai_issues %}
+      <div class="rd-ai-lbl">관련 원재료</div>
+      <div class="rd-ai-ing-list">
+        {% for issue in news.ai_issues %}
+        <div class="rd-ai-ing-row">
+          <span class="rd-ai-ing-name">🥬 {{ issue.ingredient }}</span>
+          {% if issue.origin %}<span class="rd-ai-ing-meta">📍 {{ issue.origin }}</span>{% endif %}
+          {% if issue.manufacturer %}<span class="rd-ai-ing-meta">🏭 {{ issue.manufacturer }}</span>{% endif %}
+          {% if issue.food_type %}<span class="rd-ai-ing-meta">{{ issue.food_type }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% elif news.ai_keywords %}
+      <div class="rd-ai-lbl">추출 키워드</div>
+      <div class="rd-ai-chips">{% for kw in news.ai_keywords %}<span class="rd-kw-chip">{{ kw }}</span>{% endfor %}</div>
+      {% endif %}
+    </div>
+  </details>
+  {% else %}
+  <div style="padding:9px 18px;font-size:12px;color:#9aa0a6;background:#fafafa;border-bottom:1px solid #e8eaed;">
+    <i class="bi bi-hourglass-split"></i> AI 분석 대기 중 — 다음 수집 스케줄에서 자동 분석됩니다.
+  </div>
+  {% endif %}
+
+  {# ══ 등급판정 기준 (접기) ══ #}
+  {% if matches or ing_matches %}
+  <details class="rd-crit-details">
+    <summary class="rd-crit-sum"><i class="bi bi-info-circle"></i> 등급판정 기준</summary>
+    <div class="rd-crit-body">
+      {% if news.api_source == 'I2640' %}
+      <div class="rd-crit-row"><span class="rd-crit-src">국내 농산물</span>
+        <span class="rh-cH">🔴중요</span><span>원료명+원산지 일치</span>
+        <span class="rh-cM">🟠관심</span><span>원료명+식품유형 일치</span>
+        <span class="rh-cL">🔵일반</span><span>원료명만 일치</span>
+      </div>
+      {% elif news.api_source == 'import' or news.api_source == 'imp_insp' %}
+      <div class="rd-crit-row"><span class="rd-crit-src">수입식품</span>
+        <span class="rh-cH">🔴중요</span><span>원산지/식품유형/제조사 2개+ 일치</span>
+        <span class="rh-cM">🟠관심</span><span>1개 일치</span>
+        <span class="rh-cL">🔵일반</span><span>원료명만 일치</span>
+      </div>
+      {% elif news.api_source == 'I0470' or news.api_source == 'I0480' or news.api_source == 'I0482' %}
+      <div class="rd-crit-row"><span class="rd-crit-src">행정처분</span>
+        <span class="rh-cM">🟠관심</span><span>처분업체명 = 내 원료 제조사</span>
+      </div>
+      {% else %}
+      <div class="rd-crit-row"><span class="rd-crit-src">국내가공</span>
+        <span class="rh-cH">🔴중요</span><span>제조사+제품명 동일</span>
+        <span class="rh-cM">🟠관심</span><span>식품유형+(제조사 or 원산지) 일치</span>
+        <span class="rh-cL">🔵일반</span><span>원료명만 일치</span>
+      </div>
+      {% endif %}
+      <div class="rd-crit-note">• SAFE: 원산지 확실 불일치 시 제외&nbsp;&nbsp;• 중요·관심은 원료명 일치가 기본 조건</div>
+    </div>
+  </details>
+  {% endif %}
+
+  {# ══ 내 제품 매칭 섹션 ══ #}
+  {% if matches %}
+  <div class="rd-sec">
+    <div class="rd-sec-hdr">
+      <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+      영향받는 내 제품 <span class="rd-sec-cnt">{{ matches|length }}건</span>
+    </div>
+    {% for m in matches %}
+    <div class="rd-item" id="match-{{ m.id }}">
+      <div class="rd-item-head">
+        {% if m.risk_level == 'HIGH' %}🔴{% elif m.risk_level == 'MED' %}🟠{% else %}🔵{% endif %}
+        <span class="rd-item-name" title="{{ m.product.my_label_name|default:m.product.prdlst_nm }}">
+          {{ m.product.my_label_name|default:m.product.prdlst_nm }}
+        </span>
+        <span class="rd-item-lv lv-{{ m.risk_level }}">{% if m.risk_level == 'HIGH' %}중요{% elif m.risk_level == 'MED' %}관심{% else %}일반{% endif %}</span>
+      </div>
+      {% if m.risk_reasons %}
+      <div class="rd-reasons">
+        {% for reason in m.risk_reasons %}
+          {% if '원산지' in reason and '불일치' in reason %}<span class="rd-rb rd-rb-conflict"><i class="bi bi-exclamation-triangle"></i> {{ reason }}</span>
+          {% elif '원산지' in reason %}<span class="rd-rb rd-rb-origin"><i class="bi bi-check2"></i> {{ reason }}</span>
+          {% elif '제조' in reason %}<span class="rd-rb rd-rb-mfr"><i class="bi bi-check2"></i> {{ reason }}</span>
+          {% elif '식품유형' in reason %}<span class="rd-rb rd-rb-ftype">{{ reason }}</span>
+          {% else %}<span class="rd-rb rd-rb-default">{{ reason }}</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div class="rd-item-detail">포함 원료: <b>{{ m.matched_ingredient }}</b> <span>(위해도 {{ m.risk_score }}pt · 유사도 {{ m.match_score|floatformat:0 }})</span></div>
+      {% with acts=m.actions.all %}{% if acts %}
+      <div class="rd-hist-line">
+        {% with la=acts|first %}<span class="rd-ah-badge {{ la.action_type }}">{{ la.get_action_type_display }}</span>
+        <span>{{ la.created_at|date:"m/d H:i" }}</span>
+        {% if la.memo %}<span style="color:#3c4043;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ la.memo|truncatechars:40 }}</span>{% endif %}{% endwith %}
+        {% if acts|length > 1 %}<span>외 {{ acts|length|add:"-1" }}건</span>{% endif %}
+      </div>
+      {% endif %}{% endwith %}
+      <div class="rd-act-row">
+        <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'monitoring',this)">📡 모니터링</button>
+        <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'resolved',this)">✅ 조치완료</button>
+        <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'dismissed',this)">❌ 해당없음</button>
+        <button class="rd-act-btn" onclick="toggleMemo('pm-{{ m.id }}')">📝 메모</button>
+        <span class="rd-act-spacer"></span>
+        <a href="/products/{{ m.product.my_label_id }}/" class="rd-item-link">제품 워크스페이스 <i class="bi bi-arrow-right-short"></i></a>
+        <button class="rd-act-btn" style="font-size:9px;color:#9aa0a6;" onclick="markFalsePositive({{ m.id }})">오탐지</button>
+      </div>
+      <div class="rd-memo-area" id="pm-{{ m.id }}">
+        <textarea placeholder="메모 내용 입력..."></textarea>
+        <button class="rd-memo-submit" onclick="saveActionMemo('product',{{ m.id }},'pm-{{ m.id }}')">저장</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ══ 원료 보관함 단독 매칭 ══ #}
+  {% if ing_matches %}
+  <div class="rd-sec">
+    <div class="rd-sec-hdr" style="color:#f9a825;">
+      <i class="bi bi-box-seam" style="color:#f9a825;"></i>
+      원료 보관함 연관 원료 <span class="rd-sec-cnt">{{ ing_matches|length }}건</span>
+      <span style="font-size:10px;font-weight:400;color:#9aa0a6;margin-left:2px;">BOM 미연결</span>
+    </div>
+    {% for im in ing_matches %}
+    <div class="rd-item" id="ing-match-{{ im.id }}" style="border-color:#ffd54f;">
+      <div class="rd-item-head">
+        {% if im.risk_level == 'HIGH' %}🔴{% elif im.risk_level == 'MED' %}🟠{% else %}🔵{% endif %}
+        <span class="rd-item-name">{{ im.ingredient.prdlst_nm|default:im.ingredient.ingredient_display_name }}</span>
+        <span class="rd-item-lv lv-{{ im.risk_level }}">{% if im.risk_level == 'HIGH' %}중요{% elif im.risk_level == 'MED' %}관심{% else %}일반{% endif %}</span>
+      </div>
+      <div class="rd-item-detail">매칭 키워드: <b>{{ im.matched_keyword }}</b> <span>(유사도 {{ im.match_score|floatformat:0 }}점)</span></div>
+      {% with bom_list=im.ingredient.bom_usages.all %}
+      {% if bom_list %}
+      <div class="rd-bom-list">
+        <div class="rd-bom-label">사용 제품:</div>
+        {% for bom in bom_list %}
+        <div class="rd-bom-item">
+          <i class="bi bi-tag" style="color:#9aa0a6;"></i>
+          <a href="/products/{{ bom.parent_label.my_label_id }}/" style="color:#1a73e8;text-decoration:none;font-size:11px;">{{ bom.parent_label.my_label_name|default:"(이름 없음)" }}</a>
+          <span style="color:#9aa0a6;font-size:10px;">({{ bom.ingredient_name }})</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}<div class="rd-no-bom">미사용 원료 — BOM 연결 시 제품 단위 판정됩니다</div>
+      {% endif %}{% endwith %}
+      {% with acts=im.actions.all %}{% if acts %}
+      <div class="rd-hist-line">
+        {% with la=acts|first %}<span class="rd-ah-badge {{ la.action_type }}">{{ la.get_action_type_display }}</span>
+        <span>{{ la.created_at|date:"m/d H:i" }}</span>
+        {% if la.memo %}<span style="color:#3c4043;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ la.memo|truncatechars:40 }}</span>{% endif %}{% endwith %}
+        {% if acts|length > 1 %}<span>외 {{ acts|length|add:"-1" }}건</span>{% endif %}
+      </div>
+      {% endif %}{% endwith %}
+      <div class="rd-act-row">
+        <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'monitoring',this)">📡 모니터링</button>
+        <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'resolved',this)">✅ 조치완료</button>
+        <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'dismissed',this)">❌ 해당없음</button>
+        <button class="rd-act-btn" onclick="toggleMemo('im-{{ im.id }}')">📝 메모</button>
+        <span class="rd-act-spacer"></span>
+        <a href="{% url 'label:my_ingredient_list_combined' %}" class="rd-item-link">원료 보관함 <i class="bi bi-arrow-right-short"></i></a>
+      </div>
+      <div class="rd-memo-area" id="im-{{ im.id }}">
+        <textarea placeholder="메모 내용 입력..."></textarea>
+        <button class="rd-memo-submit" onclick="saveActionMemo('ingredient',{{ im.id }},'im-{{ im.id }}')">저장</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ══ 매칭 없음 안내 ══ #}
+  {% if not matches and not ing_matches %}
+  <div class="rd-nomatch">
+    {% if news.ai_parsed %}
+    <i class="bi bi-check-circle-fill text-success" style="font-size:20px;flex-shrink:0;"></i>
+    <div><strong>내 원료/제품과 연관 없음</strong><br>현재 등록된 원료 및 BOM 기준으로 연관 원료가 발견되지 않았습니다.</div>
+    {% else %}
+    <i class="bi bi-hourglass-split" style="font-size:20px;color:#f9a825;flex-shrink:0;"></i>
+    <div><strong>AI 분석 대기 중</strong><br>분석 완료 후 매칭 결과가 표시됩니다.</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# 확인 완료 버튼 #}
+  {% if matches or ing_matches %}
+  <div class="rd-bottom-bar">
+    <button class="btn btn-outline-secondary btn-sm" style="font-size:12px;" onclick="markRead({{ news.id }})">
+      <i class="bi bi-check-lg me-1"></i>모두 확인 완료
+    </button>
+  </div>
+  {% endif %}
+
+</div>
+{% endwith %}
+
+<script>
+(function(){
+function getCsrf(){return document.cookie.split('; ').find(r=>r.startsWith('csrftoken='))?.split('=')[1]||'';}
+function markRead(id){
+  fetch("{% url 'regulatory:mark_read' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({news_id:id})})
+  .then(r=>r.json()).then(d=>{if(typeof showSnackbar==='function')showSnackbar('확인 완료 처리됐습니다.','success');_updateBadge(d.unread);setTimeout(()=>window.location.reload(),800);});
+}
+window.markRead=markRead;
+function markFalsePositive(matchId){
+  if(!confirm('이 매칭을 오탐지로 신고하시겠습니까?')) return;
+  fetch("{% url 'regulatory:mark_false_positive' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({match_id:matchId})})
+  .then(r=>r.json()).then(d=>{if(d.success){const c=document.getElementById('match-'+matchId);if(c){c.style.opacity='0.3';setTimeout(()=>c.remove(),500);}if(typeof showSnackbar==='function')showSnackbar('오탐지로 신고됐습니다.','info');_updateBadge(d.unread);}});
+}
+window.markFalsePositive=markFalsePositive;
+function toggleMemo(id){const el=document.getElementById(id);if(el)el.classList.toggle('show');}
+window.toggleMemo=toggleMemo;
+function doAction(matchType,matchId,actionType,btn){
+  fetch("{% url 'regulatory:save_action' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({match_type:matchType,match_id:matchId,action_type:actionType,memo:''})})
+  .then(r=>r.json()).then(d=>{
+    if(d.success){
+      if(actionType==='dismissed'){const c=matchType==='product'?document.getElementById('match-'+matchId):document.getElementById('ing-match-'+matchId);if(c){c.style.opacity='0.3';setTimeout(()=>c.remove(),500);}if(typeof showSnackbar==='function')showSnackbar('해당 없음으로 처리됐습니다.','info');}
+      else{if(btn)btn.classList.add('active-'+actionType);if(typeof showSnackbar==='function')showSnackbar('['+d.action_label+'] 기록됐습니다.','success');setTimeout(()=>window.location.reload(),700);}
+    }
+  });
+}
+window.doAction=doAction;
+function saveActionMemo(matchType,matchId,areaId){
+  const area=document.getElementById(areaId);const ta=area?area.querySelector('textarea'):null;const memo=ta?ta.value.trim():'';
+  fetch("{% url 'regulatory:save_action' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({match_type:matchType,match_id:matchId,action_type:'memo',memo:memo})})
+  .then(r=>r.json()).then(d=>{if(d.success){if(typeof showSnackbar==='function')showSnackbar('메모가 저장됐습니다.','success');setTimeout(()=>window.location.reload(),700);}});
+}
+window.saveActionMemo=saveActionMemo;
+function _updateBadge(unread){const b=document.getElementById('regBadge');if(b){b.textContent=unread>9?'9+':unread;b.style.display=unread>0?'':'none';}}
+}());
+</script>

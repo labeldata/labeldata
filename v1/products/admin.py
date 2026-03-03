@@ -3,7 +3,7 @@ from .models import (
     ProductMetadata, ProductFolder, ProductAccessLog,
     DocumentType, ProductDocument,
     ProductComment, CommentMention, SuggestionMode,
-    ProductShare, SharePermission, ShareAccessLog, SharedProductReceipt,
+    ProductShare, SharePermission, SharedProductReceipt,
     ProductActivityLog
 )
 
@@ -168,15 +168,6 @@ class SharedProductReceiptAdmin(admin.ModelAdmin):
     list_filter = ['is_accepted', 'is_used_as_ingredient', 'received_datetime']
     date_hierarchy = 'received_datetime'
     readonly_fields = ['received_datetime']
-
-
-@admin.register(ShareAccessLog)
-class ShareAccessLogAdmin(admin.ModelAdmin):
-    list_display = ['log_id', 'share', 'accessed_by', 'accessed_ip', 'action', 'accessed_datetime']
-    search_fields = ['accessed_ip', 'user_agent']
-    list_filter = ['action', 'accessed_datetime']
-    date_hierarchy = 'accessed_datetime'
-    readonly_fields = ['accessed_datetime']
 
 
 # ==================== 활동 로그 Admin ====================

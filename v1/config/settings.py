@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'v1.board',          # Board 앱
     'v1.products',       # 제품 관리 (documents, collaboration, sharing 통합됨)
     'v1.bom',            # BOM 구조 관리
+    'v1.regulatory',     # 부적합.처분 알림
 ]
 
 MIDDLEWARE = [
@@ -71,6 +72,7 @@ TEMPLATES = [
                 'v1.common.context_processors.static_build_date',
                 'v1.common.context_processors.board_notifications',
                 'v1.common.context_processors.ui_mode',
+                'v1.common.context_processors.regulatory_alerts',
             ],
         },
     },
@@ -190,6 +192,21 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='administrator@ezlabel
 EMAIL_FROM_DISPLAY  = 'EzLabeling <administrator@ezlabeling.com>'
 # 시스템 공개 URL (이메일 내 링크에 사용)
 SITE_URL = config('SITE_URL', default='https://www.ezlabeling.com')
+
+# ── 부적합.처분 알림 설정 ──────────────────────────────────────────────────────
+# OpenAI API Key (gpt-4o-mini 사용)
+OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
+
+# 식품안전나라 OpenAPI Key (https://openapi.foodsafetykorea.go.kr)
+FOODSAFETY_API_KEY = config('FOODSAFETY_API_KEY', default='')
+
+# 서비스 ID (foodsafetykorea.go.kr OpenAPI)
+# I2620: 수입식품 부적합, I0030: 국내식품 부적합 (확인 필요 시 변경)
+FOODSAFETY_IMPORT_SERVICE_ID  = config('FOODSAFETY_IMPORT_SERVICE_ID',  default='I2620')
+FOODSAFETY_DOMESTIC_SERVICE_ID = config('FOODSAFETY_DOMESTIC_SERVICE_ID', default='I0030')
+
+# RapidFuzz 매칭 임계값 (0~100, 기본 72)
+REGULATORY_MATCH_THRESHOLD = config('REGULATORY_MATCH_THRESHOLD', default=72, cast=int)
 
 # iframe 설정: SAMEORIGIN으로 설정하여 같은 도메인 내 iframe 로드 허용
 X_FRAME_OPTIONS = 'SAMEORIGIN'

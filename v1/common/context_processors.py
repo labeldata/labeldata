@@ -92,3 +92,33 @@ def board_notifications(request):
     
     return {'board_notification_count': notification_count}
 
+
+def regulatory_alerts(request):
+    """
+    규제 모니터링 미확인 알림 카운트
+    미읽은 제품 매칭 + 원료 매칭을 합산한 고유 뉴스 건수
+    (views.py unread_count 와 동일 기준)
+    """
+    if not request.user.is_authenticated:
+        return {'regulatory_alert_count': 0}
+    try:
+        from v1.regulatory.models import NewsIngredientMatch, NewsProductMatch
+        prod_news = set(
+            NewsProductMatch.objects.filter(
+                product__user_id=request.user,
+                is_read=False,
+                is_false_positive=False,
+            ).values_list('news_id', flat=True)
+        )
+        ing_news = set(
+            NewsIngredientMatch.objects.filter(
+                user=request.user,
+                is_read=False,
+                is_dismissed=False,
+            ).values_list('news_id', flat=True)
+        )
+        count = len(prod_news | ing_news)
+    except Exception:
+        count = 0
+    return {'regulatory_alert_count': count}
+

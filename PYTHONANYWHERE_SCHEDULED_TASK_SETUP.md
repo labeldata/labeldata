@@ -1,4 +1,67 @@
-# PythonAnywhere 서버 - 미인증 계정 자동 삭제 설정 가이드
+# PythonAnywhere 서버 - 정기 배치 작업 설정 가이드
+
+---
+
+## 📡 부적합·처분 알림 수집 (collect_regulatory_news)
+
+### 개요
+국내 식품안전나라 OpenAPI + 수입식품정보마루 AJAX를 통해 매일 최신 부적합 정보를 수집하고,
+내 제품·원료와 AI 매칭합니다.
+
+### 스케줄 설정
+
+| 항목 | 값 |
+|---|---|
+| 실행 시간 | **매일 오전 7시 (KST)** |
+| PythonAnywhere Hour | `22` (UTC, 전날 KST 오전 7시 = UTC 22시) |
+| Minute | `0` |
+
+**PythonAnywhere Tasks에 등록할 명령:**
+```bash
+cd /home/YOUR_USERNAME/labeldata && source venv/bin/activate && python manage.py collect_regulatory_news --source all >> logs/regulatory_$(date +\%Y\%m\%d).log 2>&1
+```
+
+**수집 대상 API:**
+- `I2620` — 국내 검사부적합 (식품)
+- `I2640` — 국내 검사부적합 (농산물)
+- `I0490` — 국내 회수·판매중지
+- `I0470` — 국내 행정처분
+- `I0480` — 국내 행정처분 (제조가공업)
+- `I0482` — 수입판매업 행정처분 (source=import)
+- `import` — 수입식품정보마루 회수·판매중지
+- `imp_insp` — 수입식품정보마루 검사부적합
+
+### 수동 실행
+
+```bash
+cd /home/YOUR_USERNAME/labeldata
+source venv/bin/activate
+
+# 전체 수집 + 파싱 + 매칭
+python manage.py collect_regulatory_news --source all
+
+# 국내만
+python manage.py collect_regulatory_news --source domestic
+
+# 수입만
+python manage.py collect_regulatory_news --source import
+
+# 수입부적합만
+python manage.py collect_regulatory_news --source imp_insp
+
+# AI 파싱만 (수집 생략)
+python manage.py collect_regulatory_news --parse-only
+
+# 매칭만 재실행
+python manage.py collect_regulatory_news --match-only
+
+# 테스트 (서비스당 100건 제한)
+python manage.py collect_regulatory_news --source all --limit 100
+```
+
+---
+
+## 🗑️ 미인증 계정 자동 삭제 설정 가이드
 
 ## 개요
 가입 후 48시간 이내에 이메일 인증을 하지 않은 계정을 자동으로 삭제하는 배치 작업입니다.

@@ -1368,57 +1368,6 @@ class SharedProductReceipt(models.Model):
         self.save()
 
 
-class ShareAccessLog(models.Model):
-    """공유 접근 로그"""
-    log_id = models.AutoField(primary_key=True, verbose_name="로그 ID")
-    share = models.ForeignKey(
-        ProductShare,
-        on_delete=models.CASCADE,
-        related_name="access_logs",
-        verbose_name="공유"
-    )
-    accessed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="v2_share_accesses",
-        verbose_name="접근자"
-    )
-    accessed_ip = models.GenericIPAddressField(
-        verbose_name="접근 IP",
-        null=True,
-        blank=True
-    )
-    accessed_datetime = models.DateTimeField(auto_now_add=True, verbose_name="접근일시")
-    
-    # 접근 정보
-    user_agent = models.CharField(
-        max_length=500,
-        verbose_name="User Agent",
-        null=True,
-        blank=True
-    )
-    action = models.CharField(
-        max_length=50,
-        verbose_name="행동",
-        help_text="view, download, comment 등"
-    )
-
-    class Meta:
-        db_table = "v2_share_access_log"
-        ordering = ['-accessed_datetime']
-        indexes = [
-            models.Index(fields=['share', 'accessed_datetime']),
-        ]
-        verbose_name = "공유 접근 로그"
-        verbose_name_plural = "공유 접근 로그 목록"
-
-    def __str__(self):
-        user_info = self.accessed_by.username if self.accessed_by else self.accessed_ip
-        return f"{user_info} - {self.share} ({self.action})"
-
-
 class ProductNotification(models.Model):
     """
     제품 상태 변경 알림

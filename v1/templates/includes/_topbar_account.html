@@ -41,6 +41,17 @@
                     새 알림이 없습니다.
                 </div>
             </div>
+            {% if regulatory_alert_count > 0 %}
+            {# 규제 알림 푸터 #}
+            <a href="{% url 'regulatory:list' %}"
+               style="display:flex;align-items:center;gap:8px;padding:10px 16px;
+                      border-top:1px solid #e8eaed;font-size:12px;color:#1a73e8;text-decoration:none;
+                      background:#f8f9ff;">
+                <i class="bi bi-shield-exclamation" style="font-size:14px;"></i>
+                <span>부적합 알림 <b>{{ regulatory_alert_count }}건</b></span>
+                <i class="bi bi-arrow-right ms-auto" style="font-size:12px;"></i>
+            </a>
+            {% endif %}
         </div>
     </div>
 
@@ -128,6 +139,7 @@
     const LIST_EL     = document.getElementById('notificationList');
     const BADGE_EL    = document.getElementById('notificationBadge');
     const EMPTY_EL    = document.getElementById('notifEmpty');
+    const REG_COUNT   = {{ regulatory_alert_count|default:0 }};  /* 규제 미확인 매칭 */
 
     function getCsrf() {
         return document.cookie.split('; ')
@@ -169,7 +181,7 @@
             .then(r => r.json())
             .then(data => {
                 renderNotifications(data.notifications || []);
-                const cnt = data.unread || 0;
+                const cnt = (data.unread || 0) + REG_COUNT;
                 if (BADGE_EL) {
                     BADGE_EL.textContent = cnt > 9 ? '9+' : cnt;
                     BADGE_EL.style.display = cnt > 0 ? '' : 'none';

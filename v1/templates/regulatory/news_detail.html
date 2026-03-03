@@ -1,0 +1,19 @@
+{% extends "base_v2.html" %}
+{% load static %}
+
+{% block title %}{{ news.product_name }} – 부적합·처분 알림{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/regulatory.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="v2-page-header d-flex align-items-center gap-3 mb-4">
+  <a href="{% url 'regulatory:list' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h1 class="v2-page-title mb-0" style="font-size:18px;">부적합·처분 알림 상세</h1>
+</div>
+
+{% include "regulatory/_news_detail_panel.html" with matches=my_matches ing_matches=ing_matches %}
+{% endblock %}
