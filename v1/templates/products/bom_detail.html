@@ -504,9 +504,9 @@ body.in-iframe .bom-page-header { display: none !important; }
         'origin',
         'origin_detail',
         'sub_ingredients',
-        'is_additive',
+        'additive_yn',
         'additive_role',
-        'is_gmo',
+        'gmo_yn',
         'report_no',
         'source_label_id',
         'source_type',
@@ -628,7 +628,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 allergen: '',
                 allergens: '',
                 gmo: '',
-                is_gmo: false,
+                gmo_yn: false,
                 raw_material_name: ''
             });
             return;
@@ -657,7 +657,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             raw_material_name: info.raw_material_name || value,
             food_type: info.food_type || '',
             gmo: info.gmo || '',
-            is_gmo: !!info.gmo || !!info.is_gmo,
+            gmo_yn: !!info.gmo || !!info.gmo_yn,
             report_no: info.report_no || '',
             manufacturer: info.manufacturer || ''
         });
@@ -820,7 +820,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 allergens: result.allergens || '',
                 allergen: result.allergens || '',
                 gmo: result.gmo || '',
-                is_gmo: Boolean(result.gmo)
+                gmo_yn: Boolean(result.gmo)
             };
             setRowProps(rowIndex, updatedData, 'palette');
             
@@ -859,7 +859,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             food_type: item.food_type || '',
             summary_type: (rowMetadata.get(targetRow) || {}).summary_type || '식품유형',
             gmo: item.gmo || '',
-            is_gmo: !!item.gmo || !!item.is_gmo,
+            gmo_yn: !!item.gmo || !!item.gmo_yn,
             report_no: item.report_no || '',
             manufacturer: item.manufacturer || ''
         }, 'palette');
@@ -1052,7 +1052,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             gmoField.value = value;
             setRowProps(rowIndex, {
                 gmo: value,
-                is_gmo: Boolean(value)
+                gmo_yn: Boolean(value)
             });
             updateGmoButtons(value);
         };
@@ -1119,9 +1119,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                     gmo: item.gmo || '',
                     sub_ingredients: item.sub_ingredients || '',
                     origin_detail: item.origin_detail || '',
-                    is_additive: !!item.is_additive,
+                    additive_yn: !!item.additive_yn,
                     additive_role: item.additive_role || '',
-                    is_gmo: !!item.is_gmo,
+                    gmo_yn: !!item.gmo_yn,
                     report_no: item.report_no || '',
                     source_label_id: item.source_label_id || null,
                     summary_type: item.summary_type || '식품유형'
@@ -1169,9 +1169,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                 allergens: item.allergens || item.allergen || '',
                 origin_detail: item.origin_detail || '',
                 food_type: item.food_type || '',
-                is_additive: !!item.is_additive,
+                additive_yn: !!item.additive_yn,
                 additive_role: item.additive_role || '',
-                is_gmo: !!item.is_gmo,
+                gmo_yn: !!item.gmo_yn,
                 report_no: item.report_no || '',
                 manufacturer: item.manufacturer || '',
                 source_label_id: item.source_label_id || null
@@ -1437,7 +1437,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 }
                 setRowProps(currentRowIndex, {
                     gmo: gmoField.value,
-                    is_gmo: Boolean(gmoField.value)
+                    gmo_yn: Boolean(gmoField.value)
                 });
                 updateGmoButtons(gmoField.value);
             });
@@ -1473,7 +1473,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             allergens: allergens ? allergens.value : '',
             allergen: allergens ? allergens.value : '',
             gmo: gmo ? gmo.value : '',
-            is_gmo: gmo ? Boolean(gmo.value) : false,
+            gmo_yn: gmo ? Boolean(gmo.value) : false,
             report_no: reportNo ? reportNo.value : '',
             source_label_id: sourceLabelId ? sourceLabelId.value : '',
             summary_type: summaryTypeField ? summaryTypeField.value : '식품유형'
@@ -1511,9 +1511,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                         origin_detail: metadata.origin_detail || '',
                         food_type: row.food_type || '',
                         summary_type: metadata.summary_type || '식품유형',
-                        is_additive: !!metadata.is_additive,
+                        additive_yn: !!metadata.additive_yn,
                         additive_role: metadata.additive_role || '',
-                        is_gmo: !!metadata.is_gmo,
+                        gmo_yn: !!metadata.gmo_yn,
                         report_no: metadata.report_no || '',
                         manufacturer: row.manufacturer || '',
                         source_label_id: metadata.source_label_id || null,

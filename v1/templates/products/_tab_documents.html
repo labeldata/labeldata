@@ -1,4 +1,4 @@
-{% csrf_token %}
+﻿{% csrf_token %}
 
 <!-- ==================== Google Workspace Compact UI ==================== -->
 <div class="doc-workspace-wrapper d-flex flex-nowrap bg-white position-relative">
@@ -165,7 +165,7 @@
                             </div>
                         </div>
                     </td>
-                    <td><span class="badge {% if doc.document_type.is_required %}bg-danger{% else %}bg-primary{% endif %} text-white fw-semibold">{{ doc.document_type.type_name|default:"미분류" }}</span></td>
+                    <td><span class="badge {% if doc.document_type.required_yn %}bg-danger{% else %}bg-primary{% endif %} text-white fw-semibold">{{ doc.document_type.type_name|default:"미분류" }}</span></td>
                     <td>
                         {% if doc.expiry_date %}
                         <div class="d-flex align-items-center">
@@ -546,7 +546,7 @@
     // 문서 타입 목록 (서버에서 렌더링)
     const documentTypes = [
         {% for dtype in document_types %}
-        { id: {{ dtype.type_id }}, name: "{{ dtype.type_name|escapejs }}", isRequired: {{ dtype.is_required|yesno:"true,false" }} },
+        { id: {{ dtype.type_id }}, name: "{{ dtype.type_name|escapejs }}", isRequired: {{ dtype.required_yn|yesno:"true,false" }} },
         {% endfor %}
     ];
     

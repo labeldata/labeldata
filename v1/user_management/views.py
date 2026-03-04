@@ -58,7 +58,7 @@ def signup(request):
             # 인증 토큰 생성 및 저장
             token = get_random_string(32)
             profile, created = UserProfile.objects.get_or_create(user=user)
-            profile.is_email_verified = False
+            profile.email_verified_yn = False
             profile.email_verification_token = token
             profile.email_verification_sent_at = timezone.now()
             profile.save()
@@ -93,7 +93,7 @@ def verify_email(request):
         profile, created = UserProfile.objects.get_or_create(user=user)
         
         # Case 1: 이미 인증된 경우
-        if profile.is_email_verified:
+        if profile.email_verified_yn:
             context['result_type'] = 'info'
             context['message_text'] = '이미 인증된 계정입니다.'
         # Case 2: 토큰이 일치하는 경우
@@ -112,7 +112,7 @@ def verify_email(request):
                     # 인증 성공
                     user.is_active = True
                     user.save()
-                    profile.is_email_verified = True
+                    profile.email_verified_yn = True
                     profile.email_verification_token = ''
                     profile.save()
                     context['result_type'] = 'success'
@@ -151,7 +151,7 @@ def login_view(request):
         
         if user is not None:
             # 인증 상태 확인
-            if hasattr(user, 'profile') and not user.profile.is_email_verified:
+            if hasattr(user, 'profile') and not user.profile.email_verified_yn:
                 # 인증되지 않은 계정
                 request.session['unverified_email'] = email
                 messages.warning(request, "이메일 인증이 완료되지 않았습니다. 인증메일을 확인하거나 재발송 버튼을 클릭하세요.")

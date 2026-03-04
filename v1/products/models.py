@@ -1,4 +1,4 @@
-"""
+﻿"""
 제품 관리 모델 (V2) - V1 MyLabel 테이블 공유
 - V1과 V2가 동일한 DB 테이블(my_label) 사용
 """
@@ -27,99 +27,26 @@ class ProductMetadata(models.Model):
         PENDING    = 'PENDING',    '승인 대기'
         CONFIRMED  = 'CONFIRMED',  '승인 완료'
     metadata_id = models.AutoField(primary_key=True, verbose_name="메타데이터 ID")
-    
-    # 핵심: V1 MyLabel 직접 참조
-    label = models.OneToOneField(
-        'label.MyLabel',
-        on_delete=models.CASCADE,
-        related_name='v2_metadata',
-        verbose_name='연결된 표시사항',
-        db_column='my_label_id'
-    )
-    
-    # V2 전용: 제품 코드 (자동 생성)
-    product_code = models.CharField(
-        max_length=50,
-        unique=True,
-        verbose_name="제품 코드",
-        db_index=True,
-        help_text="PRD-{user_id}-{순번}"
-    )
-
-    status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
-        default=Status.DRAFT,
-        verbose_name="제품 상태"
-    )
-    
-    # V2 전용: 폴더 관리
-    folder = models.ForeignKey(
-        'ProductFolder',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='metadata_items',
-        verbose_name='소속 폴더'
-    )
-    
-    # V2 전용: 즐겨찾기
-    is_starred = models.BooleanField(
-        default=False,
-        verbose_name='즐겨찾기',
-        db_index=True
-    )
-    starred_datetime = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name='즐겨찾기 등록일시'
-    )
-    
-    # V2 전용: 소프트 삭제
-    is_deleted = models.BooleanField(
-        default=False,
-        verbose_name='삭제 여부',
-        db_index=True,
-        help_text='V2에서만 사용. V1 MyLabel.delete_YN과 별도 관리'
-    )
-    deleted_datetime = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name='삭제일시'
-    )
-    
-    # 원료 등록 여부
-    is_raw_material = models.BooleanField(
-        default=False,
-        verbose_name='원료로 사용',
-        help_text='체크 시 원료 관리에 자동 등록됩니다'
-    )
-    # 검색 태그 (쉼표 또는 # 구분)
-    search_tags = models.CharField(
-        max_length=500,
-        blank=True,
-        default='',
-        verbose_name='검색 태그',
-        help_text='#태그1 #태그2 또는 쉼표로 구분'
-    )
-
-    # 타임스탬프
-    created_datetime = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='생성일시'
-    )
-    updated_datetime = models.DateTimeField(
-        auto_now=True,
-        verbose_name='수정일시'
-    )
+    label = models.OneToOneField('label.MyLabel', on_delete=models.CASCADE, related_name='v2_metadata', verbose_name='연결된 표시사항', db_column='my_label_id')
+    product_code = models.CharField(max_length=50, unique=True, verbose_name="제품 코드", db_index=True, help_text="PRD-{user_id}-{순번}")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT, verbose_name="제품 상태")
+    folder = models.ForeignKey('ProductFolder', on_delete=models.SET_NULL, null=True, blank=True, related_name='metadata_items', verbose_name='소속 폴더')
+    starred_yn = models.BooleanField(default=False, verbose_name='즐겨찾기', db_index=True)
+    starred_datetime = models.DateTimeField(null=True, blank=True, verbose_name='즐겨찾기 등록일시')
+    deleted_yn = models.BooleanField(default=False, verbose_name='삭제 여부', db_index=True, help_text='V2에서만 사용. V1 MyLabel.delete_YN과 별도 관리')
+    deleted_datetime = models.DateTimeField(null=True, blank=True, verbose_name='삭제일시')
+    raw_material_yn = models.BooleanField(default=False, verbose_name='원료로 사용', help_text='체크 시 원료 관리에 자동 등록됩니다')
+    search_tags = models.CharField(max_length=500, blank=True, default='', verbose_name='검색 태그', help_text='#태그1 #태그2 또는 쉼표로 구분')
+    created_datetime = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
+    updated_datetime = models.DateTimeField(auto_now=True, verbose_name='수정일시')
     
     class Meta:
         db_table = 'v2_product_metadata'
         ordering = ['-updated_datetime']
         indexes = [
-            models.Index(fields=['label', 'is_deleted']),
+            models.Index(fields=['label', 'deleted_yn']),
             models.Index(fields=['product_code']),
-            models.Index(fields=['is_starred']),
+            models.Index(fields=['starred_yn']),
             models.Index(fields=['folder']),
         ]
         verbose_name = 'V2 제품 메타데이터'
@@ -151,13 +78,13 @@ class ProductMetadata(models.Model):
     
     def soft_delete(self):
         """소프트 삭제 (V2에서만)"""
-        self.is_deleted = True
+        self.deleted_yn = True
         self.deleted_datetime = timezone.now()
         self.save()
     
     def restore(self):
         """복원"""
-        self.is_deleted = False
+        self.deleted_yn = False
         self.deleted_datetime = None
         self.save()
 
@@ -171,61 +98,14 @@ class ProductFolder(models.Model):
     - 사용자별 폴더 관리
     """
     folder_id = models.AutoField(primary_key=True, verbose_name="폴더 ID")
-    owner = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="product_folders",
-        verbose_name="소유자"
-    )
-    
-    # 폴더 정보
-    name = models.CharField(
-        max_length=100,
-        verbose_name="폴더명"
-    )
-    description = models.TextField(
-        max_length=500,
-        verbose_name="설명",
-        null=True,
-        blank=True
-    )
-    color = models.CharField(
-        max_length=7,
-        default="#6c757d",
-        verbose_name="폴더 색상",
-        help_text="HEX 색상 코드 (예: #0d6efd)"
-    )
-    icon = models.CharField(
-        max_length=50,
-        default="folder",
-        verbose_name="아이콘",
-        help_text="FontAwesome 아이콘명"
-    )
-    
-    # 재귀적 폴더 구조
-    parent = models.ForeignKey(
-        'self',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="children",
-        verbose_name="상위 폴더"
-    )
-    
-    # 정렬 순서
-    sort_order = models.IntegerField(
-        default=0,
-        verbose_name="정렬 순서"
-    )
-    
-    # 상태
-    is_system = models.BooleanField(
-        default=False,
-        verbose_name="시스템 폴더",
-        help_text="삭제/이름변경 불가 (휴지통 등)"
-    )
-    
-    # 타임스탬프
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="product_folders", verbose_name="소유자")
+    name = models.CharField(max_length=100, verbose_name="폴더명")
+    description = models.TextField(max_length=500, verbose_name="설명", null=True, blank=True)
+    color = models.CharField(max_length=7, default="#6c757d", verbose_name="폴더 색상", help_text="HEX 색상 코드 (예: #0d6efd)")
+    icon = models.CharField(max_length=50, default="folder", verbose_name="아이콘", help_text="FontAwesome 아이콘명")
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name="children", verbose_name="상위 폴더")
+    sort_order = models.IntegerField(default=0, verbose_name="정렬 순서")
+    system_yn = models.BooleanField(default=False, verbose_name="시스템 폴더", help_text="삭제/이름변경 불가 (휴지통 등)")
     created_datetime = models.DateTimeField(auto_now_add=True)
     updated_datetime = models.DateTimeField(auto_now=True)
     
@@ -266,7 +146,7 @@ class ProductFolder(models.Model):
     
     def get_all_products(self, include_subfolders=True):
         """폴더 내 모든 제품 반환"""
-        products = list(self.products.filter(is_deleted=False))
+        products = list(self.products.filter(deleted_yn=False))
         if include_subfolders:
             for child in self.children.all():
                 products.extend(child.get_all_products(True))
@@ -288,7 +168,7 @@ class ProductFolder(models.Model):
                 defaults={
                     'icon': folder_data['icon'],
                     'color': folder_data['color'],
-                    'is_system': True,
+                    'system_yn': True,
                     'sort_order': -1  # 시스템 폴더는 항상 맨 위
                 }
             )
@@ -303,17 +183,8 @@ class ProductAccessLog(models.Model):
     - Google Drive의 "최근" 기능 구현
     """
     log_id = models.AutoField(primary_key=True)
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="product_access_logs"
-    )
-    product = models.ForeignKey(
-        Product,
-        on_delete=models.CASCADE,
-        related_name="access_logs"
-    )
-    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="product_access_logs")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="access_logs")
     accessed_datetime = models.DateTimeField(auto_now=True)
     access_count = models.IntegerField(default=1)
     
@@ -341,7 +212,7 @@ class ProductAccessLog(models.Model):
         """최근 열어본 제품 목록"""
         return cls.objects.filter(
             user=user,
-            product__is_deleted=False
+            product__deleted_yn=False
         ).select_related('product')[:limit]
 
 
@@ -402,14 +273,14 @@ class DocumentType(models.Model):
     )
     
     # 필수 문서 여부
-    is_required = models.BooleanField(
+    required_yn = models.BooleanField(
         default=False,
         verbose_name="필수 문서",
         help_text="이 타입의 문서가 반드시 있어야 하는지"
     )
     
     # 상태
-    is_active = models.BooleanField(
+    active_yn = models.BooleanField(
         default=True,
         verbose_name="활성 상태"
     )
@@ -478,53 +349,13 @@ class DocumentSlot(models.Model):
         EXPIRED = 'EXPIRED', '만료됨'
     
     slot_id = models.AutoField(primary_key=True, verbose_name="슬롯 ID")
-    label = models.ForeignKey(
-        'label.MyLabel',
-        on_delete=models.CASCADE,
-        related_name="document_slots",
-        verbose_name="표시사항"
-    )
-    document_type = models.ForeignKey(
-        DocumentType,
-        on_delete=models.CASCADE,
-        related_name="slots",
-        verbose_name="문서 타입"
-    )
-    
-    # 현재 활성 문서 (최신 버전)
-    current_document = models.ForeignKey(
-        'ProductDocument',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="active_slot",
-        verbose_name="현재 문서"
-    )
-    
-    # 슬롯 상태
-    status = models.CharField(
-        max_length=20,
-        choices=SlotStatus.choices,
-        default=SlotStatus.EMPTY,
-        verbose_name="상태"
-    )
-    
-    # 슬롯 숨김 (사용자가 "해당 없음" 선택 시)
-    is_hidden = models.BooleanField(
-        default=False,
-        verbose_name="숨김",
-        help_text="이 슬롯이 숨겨졌는지 (준수율 계산에서 제외)"
-    )
-    
-    # 메타 정보
-    created_datetime = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="생성일시"
-    )
-    updated_datetime = models.DateTimeField(
-        auto_now=True,
-        verbose_name="수정일시"
-    )
+    label = models.ForeignKey('label.MyLabel', on_delete=models.CASCADE, related_name="document_slots", verbose_name="표시사항")
+    document_type = models.ForeignKey(DocumentType, on_delete=models.CASCADE, related_name="slots", verbose_name="문서 타입")
+    current_document = models.ForeignKey('ProductDocument', on_delete=models.SET_NULL, null=True, blank=True, related_name="active_slot", verbose_name="현재 문서")
+    status = models.CharField(max_length=20, choices=SlotStatus.choices, default=SlotStatus.EMPTY, verbose_name="상태")
+    hidden_yn = models.BooleanField(default=False, verbose_name="숨김", help_text="이 슬롯이 숨겨졌는지 (준수율 계산에서 제외)")
+    created_datetime = models.DateTimeField(auto_now_add=True, verbose_name="생성일시")
+    updated_datetime = models.DateTimeField(auto_now=True, verbose_name="수정일시")
     
     class Meta:
         db_table = "v2_document_slot"
@@ -571,130 +402,26 @@ class ProductDocument(models.Model):
     - 문서별 만료일 관리
     """
     document_id = models.AutoField(primary_key=True, verbose_name="문서 ID")
-    label = models.ForeignKey(
-        'label.MyLabel',
-        on_delete=models.CASCADE,
-        related_name="v2_documents",
-        verbose_name="표시사항"
-    )
-    document_type = models.ForeignKey(
-        DocumentType,
-        on_delete=models.PROTECT,
-        related_name="documents",
-        verbose_name="문서 타입"
-    )
-    
-    # 슬롯 연결 (필수 문서인 경우)
-    slot = models.ForeignKey(
-        DocumentSlot,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="documents",
-        verbose_name="문서 슬롯"
-    )
-    
-    # 파일 정보
-    file = models.FileField(
-        upload_to='v2/product_documents/%Y/%m/%d/',
-        verbose_name="파일"
-    )
-    original_filename = models.CharField(
-        max_length=255,
-        verbose_name="원본 파일명"
-    )
-    file_size = models.BigIntegerField(
-        verbose_name="파일 크기 (bytes)",
-        default=0
-    )
-    file_extension = models.CharField(
-        max_length=10,
-        verbose_name="파일 확장자",
-        blank=True
-    )
-    
-    # 문서 정보
-    document_title = models.CharField(
-        max_length=200,
-        verbose_name="문서 제목",
-        null=True,
-        blank=True
-    )
-    description = models.TextField(
-        max_length=1000,
-        verbose_name="설명",
-        null=True,
-        blank=True
-    )
-    
-    # 만료일 관리
-    issue_date = models.DateField(
-        null=True,
-        blank=True,
-        verbose_name="발행일"
-    )
-    expiry_date = models.DateField(
-        null=True,
-        blank=True,
-        verbose_name="만료일"
-    )
-    expiry_notification_enabled = models.BooleanField(
-        default=True,
-        verbose_name="만료일 알림"
-    )
-    expiry_notification_days = models.IntegerField(
-        default=30,
-        verbose_name="만료 알림 기간(일)"
-    )
-    
-    # 버전 관리
-    version = models.IntegerField(
-        default=1,
-        verbose_name="버전"
-    )
-    parent_document = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='versions',
-        verbose_name="원본 문서"
-    )
-    replaced_by = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='replaces',
-        verbose_name="대체된 문서"
-    )
-    
-    # 메타데이터
-    metadata = models.JSONField(
-        default=dict,
-        blank=True,
-        verbose_name="메타데이터",
-        help_text="추가 정보를 JSON으로 저장"
-    )
-    
-    # 업로드 정보
-    uploaded_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="v2_uploaded_documents",
-        verbose_name="업로드자"
-    )
-    uploaded_datetime = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="업로드일시"
-    )
-    
-    # 상태
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name="활성 상태"
-    )
+    label = models.ForeignKey('label.MyLabel', on_delete=models.CASCADE, related_name="v2_documents", verbose_name="표시사항")
+    document_type = models.ForeignKey(DocumentType, on_delete=models.PROTECT, related_name="documents", verbose_name="문서 타입")
+    slot = models.ForeignKey(DocumentSlot, on_delete=models.SET_NULL, null=True, blank=True, related_name="documents", verbose_name="문서 슬롯")
+    file = models.FileField(upload_to='v2/product_documents/%Y/%m/%d/', verbose_name="파일")
+    original_filename = models.CharField(max_length=255, verbose_name="원본 파일명")
+    file_size = models.BigIntegerField(verbose_name="파일 크기 (bytes)", default=0)
+    file_extension = models.CharField(max_length=10, verbose_name="파일 확장자", blank=True)
+    document_title = models.CharField(max_length=200, verbose_name="문서 제목", null=True, blank=True)
+    description = models.TextField(max_length=1000, verbose_name="설명", null=True, blank=True)
+    issue_date = models.DateField(null=True, blank=True, verbose_name="발행일")
+    expiry_date = models.DateField(null=True, blank=True, verbose_name="만료일")
+    expiry_notification_enabled = models.BooleanField(default=True, verbose_name="만료일 알림")
+    expiry_notification_days = models.IntegerField(default=30, verbose_name="만료 알림 기간(일)")
+    version = models.IntegerField(default=1, verbose_name="버전")
+    parent_document = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='versions', verbose_name="원본 문서")
+    replaced_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replaces', verbose_name="대체된 문서")
+    metadata = models.JSONField(default=dict, blank=True, verbose_name="메타데이터", help_text="추가 정보를 JSON으로 저장")
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="v2_uploaded_documents", verbose_name="업로드자")
+    uploaded_datetime = models.DateTimeField(auto_now_add=True, verbose_name="업로드일시")
+    active_yn = models.BooleanField(default=True, verbose_name="활성 상태")
     
     class Meta:
         db_table = "v2_product_document"
@@ -702,7 +429,7 @@ class ProductDocument(models.Model):
         indexes = [
             models.Index(fields=['label', 'document_type']),
             models.Index(fields=['expiry_date']),
-            models.Index(fields=['is_active']),
+            models.Index(fields=['active_yn']),
         ]
         verbose_name = "제품 문서"
         verbose_name_plural = "제품 문서 목록"
@@ -758,67 +485,14 @@ class ProductComment(models.Model):
     - V1 MyLabel을 직접 참조하여 데이터 중복 제거
     """
     comment_id = models.AutoField(primary_key=True)
-    label = models.ForeignKey(
-        'label.MyLabel',
-        on_delete=models.CASCADE, 
-        related_name="v2_comments",
-        verbose_name="표시사항"
-    )
-    
-    # 어떤 필드에 달린 댓글인지 (예: 'prdlst_nm', 'rawmtrl_nm')
-    # null이면 문서 전체에 대한 댓글
-    field_name = models.CharField(
-        max_length=100, 
-        null=True, 
-        blank=True,
-        verbose_name="대상 필드",
-        db_index=True
-    )
-    
-    # 댓글 작성자
-    author = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE,
-        related_name="product_comments",
-        verbose_name="작성자"
-    )
-    
-    # 댓글 내용
-    content = models.TextField(
-        verbose_name="내용",
-        max_length=2000
-    )
-    
-    # 해결 여부 (Google Docs의 'Resolve')
-    is_resolved = models.BooleanField(
-        default=False,
-        verbose_name="해결됨"
-    )
-    resolved_by = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name="resolved_comments",
-        verbose_name="해결자"
-    )
-    resolved_at = models.DateTimeField(
-        null=True, 
-        blank=True,
-        verbose_name="해결 일시"
-    )
-    
-    # 상위 댓글 (답글용)
-    parent = models.ForeignKey(
-        'self',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='replies',
-        verbose_name="상위 댓글"
-    )
-    
-    # 타임스탬프
+    label = models.ForeignKey('label.MyLabel', on_delete=models.CASCADE, related_name="v2_comments", verbose_name="표시사항")
+    field_name = models.CharField(max_length=100, null=True, blank=True, verbose_name="대상 필드", db_index=True)
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name="product_comments", verbose_name="작성자")
+    content = models.TextField(verbose_name="내용", max_length=2000)
+    resolved_yn = models.BooleanField(default=False, verbose_name="해결됨")
+    resolved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="resolved_comments", verbose_name="해결자")
+    resolved_at = models.DateTimeField(null=True, blank=True, verbose_name="해결 일시")
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies', verbose_name="상위 댓글")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -827,7 +501,7 @@ class ProductComment(models.Model):
         ordering = ['created_at']
         indexes = [
             models.Index(fields=['label', 'field_name']),
-            models.Index(fields=['is_resolved']),
+            models.Index(fields=['resolved_yn']),
         ]
         verbose_name = "제품 댓글"
         verbose_name_plural = "제품 댓글 목록"
@@ -838,11 +512,11 @@ class ProductComment(models.Model):
     
     def get_replies(self):
         """답글 목록 반환"""
-        return self.replies.filter(is_resolved=False).order_by('created_at')
+        return self.replies.filter(resolved_yn=False).order_by('created_at')
     
     def resolve(self, user):
         """댓글 해결 처리"""
-        self.is_resolved = True
+        self.resolved_yn = True
         self.resolved_by = user
         self.resolved_at = timezone.now()
         self.save()
@@ -854,41 +528,12 @@ class CommentMention(models.Model):
     - 멘션된 사용자에게 알림 발송
     """
     mention_id = models.AutoField(primary_key=True)
-    comment = models.ForeignKey(
-        ProductComment,
-        on_delete=models.CASCADE,
-        related_name="mentions",
-        verbose_name="댓글"
-    )
-    mentioned_user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="comment_mentions",
-        verbose_name="멘션된 사용자"
-    )
-    
-    # 알림 발송 여부
-    is_notified = models.BooleanField(
-        default=False,
-        verbose_name="알림 발송됨"
-    )
-    notified_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name="알림 발송 일시"
-    )
-    
-    # 읽음 여부
-    is_read = models.BooleanField(
-        default=False,
-        verbose_name="읽음"
-    )
-    read_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name="읽음 일시"
-    )
-    
+    comment = models.ForeignKey(ProductComment, on_delete=models.CASCADE, related_name="mentions", verbose_name="댓글")
+    mentioned_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comment_mentions", verbose_name="멘션된 사용자")
+    notified_yn = models.BooleanField(default=False, verbose_name="알림 발송됨")
+    notified_at = models.DateTimeField(null=True, blank=True, verbose_name="알림 발송 일시")
+    read_yn = models.BooleanField(default=False, verbose_name="읽음")
+    read_at = models.DateTimeField(null=True, blank=True, verbose_name="읽음 일시")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -908,73 +553,20 @@ class SuggestionMode(models.Model):
     - 승인/거절 워크플로우
     """
     suggestion_id = models.AutoField(primary_key=True)
-    label = models.ForeignKey(
-        'label.MyLabel',
-        on_delete=models.CASCADE,
-        related_name="v2_suggestions",
-        verbose_name="표시사항"
-    )
-    
-    # 제안자
-    suggested_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="field_suggestions",
-        verbose_name="제안자"
-    )
-    
-    # 대상 필드
-    field_name = models.CharField(
-        max_length=100,
-        verbose_name="대상 필드"
-    )
-    
-    # 변경 내용
-    original_value = models.TextField(
-        verbose_name="원본 값",
-        null=True,
-        blank=True
-    )
-    suggested_value = models.TextField(
-        verbose_name="제안 값"
-    )
-    
-    # 제안 사유
-    reason = models.TextField(
-        verbose_name="제안 사유",
-        max_length=1000,
-        null=True,
-        blank=True
-    )
-    
-    # 상태
+    label = models.ForeignKey('label.MyLabel', on_delete=models.CASCADE, related_name="v2_suggestions", verbose_name="표시사항")
+    suggested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="field_suggestions", verbose_name="제안자")
+    field_name = models.CharField(max_length=100, verbose_name="대상 필드")
+    original_value = models.TextField(verbose_name="원본 값", null=True, blank=True)
+    suggested_value = models.TextField(verbose_name="제안 값")
+    reason = models.TextField(verbose_name="제안 사유", max_length=1000, null=True, blank=True)
     STATUS_CHOICES = [
         ('pending', '대기중'),
         ('accepted', '승인'),
         ('rejected', '거절'),
     ]
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='pending',
-        verbose_name="상태"
-    )
-    
-    # 처리자/처리일시
-    processed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="processed_suggestions",
-        verbose_name="처리자"
-    )
-    processed_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name="처리 일시"
-    )
-    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="상태")
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="processed_suggestions", verbose_name="처리자")
+    processed_at = models.DateTimeField(null=True, blank=True, verbose_name="처리 일시")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1025,98 +617,18 @@ class ProductShare(models.Model):
     ]
     
     share_id = models.AutoField(primary_key=True, verbose_name="공유 ID")
-    label = models.ForeignKey(
-        'label.MyLabel',
-        on_delete=models.CASCADE,
-        related_name="v2_shares",
-        verbose_name="표시사항"
-    )
-    
-    # 공유 모드
-    share_mode = models.CharField(
-        max_length=20,
-        choices=SHARE_MODE_CHOICES,
-        default='PRIVATE',
-        verbose_name="공유 모드"
-    )
-    
-    # 공유 대상 (PRIVATE 모드)
-    recipient_email = models.EmailField(
-        max_length=255,
-        verbose_name="수신자 이메일",
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text="PRIVATE 모드에서만 사용"
-    )
-    recipient_user = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="v2_received_shares",
-        verbose_name="수신자 (회원)",
-        help_text="이메일이 회원인 경우 자동 연결"
-    )
-    recipient_name = models.CharField(
-        max_length=100,
-        verbose_name="수신자 이름",
-        null=True,
-        blank=True,
-        help_text="초대 시 입력한 이름 (선택)"
-    )
-    recipient_company = models.CharField(
-        max_length=200,
-        verbose_name="수신자 회사명",
-        null=True,
-        blank=True,
-        help_text="초대 시 입력한 회사명 (선택)"
-    )
-    
-    # 공개 링크 (PUBLIC 모드)
-    public_token = models.UUIDField(
-        default=uuid.uuid4,
-        editable=False,
-        unique=True,
-        verbose_name="공개 토큰",
-        help_text="PUBLIC 모드에서 사용하는 고유 URL 토큰"
-    )
-    
-    # 공유 정보
-    share_message = models.TextField(
-        max_length=1000,
-        verbose_name="공유 메시지",
-        null=True,
-        blank=True
-    )
-    
-    # 공유 기간
-    share_start_date = models.DateTimeField(
-        default=timezone.now,
-        verbose_name="공유 시작일"
-    )
-    share_end_date = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name="공유 종료일",
-        help_text="null이면 무기한"
-    )
-    
-    # 상태
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name="활성 상태"
-    )
-    
-    # 생성자
-    created_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="v2_created_shares",
-        verbose_name="공유자"
-    )
-    
-    # 타임스탬프
+    label = models.ForeignKey('label.MyLabel', on_delete=models.CASCADE, related_name="v2_shares", verbose_name="표시사항")
+    share_mode = models.CharField(max_length=20, choices=SHARE_MODE_CHOICES, default='PRIVATE', verbose_name="공유 모드")
+    recipient_email = models.EmailField(max_length=255, verbose_name="수신자 이메일", null=True, blank=True, db_index=True, help_text="PRIVATE 모드에서만 사용")
+    recipient_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="v2_received_shares", verbose_name="수신자 (회원)", help_text="이메일이 회원인 경우 자동 연결")
+    recipient_name = models.CharField(max_length=100, verbose_name="수신자 이름", null=True, blank=True, help_text="초대 시 입력한 이름 (선택)")
+    recipient_company = models.CharField(max_length=200, verbose_name="수신자 회사명", null=True, blank=True, help_text="초대 시 입력한 회사명 (선택)")
+    public_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name="공개 토큰", help_text="PUBLIC 모드에서 사용하는 고유 URL 토큰")
+    share_message = models.TextField(max_length=1000, verbose_name="공유 메시지", null=True, blank=True)
+    share_start_date = models.DateTimeField(default=timezone.now, verbose_name="공유 시작일")
+    share_end_date = models.DateTimeField(null=True, blank=True, verbose_name="공유 종료일", help_text="null이면 무기한")
+    active_yn = models.BooleanField(default=True, verbose_name="활성 상태")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="v2_created_shares", verbose_name="공유자")
     created_datetime = models.DateTimeField(auto_now_add=True, verbose_name="생성일시")
     updated_datetime = models.DateTimeField(auto_now=True, verbose_name="수정일시")
 
@@ -1126,7 +638,7 @@ class ProductShare(models.Model):
         indexes = [
             models.Index(fields=['recipient_email']),
             models.Index(fields=['public_token']),
-            models.Index(fields=['is_active']),
+            models.Index(fields=['active_yn']),
         ]
         verbose_name = "제품 공유"
         verbose_name_plural = "제품 공유 목록"
@@ -1210,74 +722,17 @@ class SharePermission(models.Model):
         },
     }
     permission_id = models.AutoField(primary_key=True, verbose_name="권한 ID")
-    share = models.OneToOneField(
-        ProductShare,
-        on_delete=models.CASCADE,
-        related_name="permission",
-        verbose_name="공유"
-    )
-
-    role_code = models.CharField(
-        max_length=20,
-        choices=ROLE_CHOICES,
-        default='VIEWER',
-        verbose_name="역할"
-    )
-    
-    # 보기 권한
-    can_view = models.BooleanField(
-        default=True,
-        verbose_name="보기"
-    )
-    
-    # 댓글 권한
-    can_comment = models.BooleanField(
-        default=True,
-        verbose_name="댓글 작성"
-    )
-    
-    # 제안 권한
-    can_suggest = models.BooleanField(
-        default=False,
-        verbose_name="수정 제안"
-    )
-
-    # 문서 업로드 권한
-    can_upload_documents = models.BooleanField(
-        default=False,
-        verbose_name="문서 업로드"
-    )
-
-    # 제품 정보 수정 권한
-    can_edit_label = models.BooleanField(
-        default=False,
-        verbose_name="정보 수정"
-    )
-
-    # 검토 권한
-    can_review = models.BooleanField(
-        default=False,
-        verbose_name="검토"
-    )
-
-    # 승인 권한
-    can_approve = models.BooleanField(
-        default=False,
-        verbose_name="승인"
-    )
-    
-    # 원료로 사용 권한
-    can_use_as_ingredient = models.BooleanField(
-        default=True,
-        verbose_name="원료로 사용",
-        help_text="BOM에서 이 제품을 원료로 추가할 수 있는지"
-    )
-    
-    # 다운로드 권한
-    can_download_documents = models.BooleanField(
-        default=True,
-        verbose_name="문서 다운로드"
-    )
+    share = models.OneToOneField(ProductShare, on_delete=models.CASCADE, related_name="permission", verbose_name="공유")
+    role_code = models.CharField(max_length=20, choices=ROLE_CHOICES, default='VIEWER', verbose_name="역할")
+    can_view = models.BooleanField(default=True, verbose_name="보기")
+    can_comment = models.BooleanField(default=True, verbose_name="댓글 작성")
+    can_suggest = models.BooleanField(default=False, verbose_name="수정 제안")
+    can_upload_documents = models.BooleanField(default=False, verbose_name="문서 업로드")
+    can_edit_label = models.BooleanField(default=False, verbose_name="정보 수정")
+    can_review = models.BooleanField(default=False, verbose_name="검토")
+    can_approve = models.BooleanField(default=False, verbose_name="승인")
+    can_use_as_ingredient = models.BooleanField(default=True, verbose_name="원료로 사용", help_text="BOM에서 이 제품을 원료로 추가할 수 있는지")
+    can_download_documents = models.BooleanField(default=True, verbose_name="문서 다운로드")
 
     class Meta:
         db_table = "v2_share_permission"
@@ -1328,7 +783,7 @@ class SharedProductReceipt(models.Model):
     )
     
     # 수락 여부
-    is_accepted = models.BooleanField(
+    accepted_yn = models.BooleanField(
         default=False,
         verbose_name="수락 여부"
     )
@@ -1338,8 +793,8 @@ class SharedProductReceipt(models.Model):
         verbose_name="수락 일시"
     )
     
-    # 원료로 사용 여부 (DB 컬럼명: is_used_as_ingredient)
-    is_used_as_ingredient = models.BooleanField(
+    # 원료로 사용 여부 (DB 컬럼명: used_as_ingredient_yn)
+    used_as_ingredient_yn = models.BooleanField(
         default=False,
         verbose_name="원료로 사용됨"
     )
@@ -1358,12 +813,12 @@ class SharedProductReceipt(models.Model):
         verbose_name_plural = "공유 수령 목록"
 
     def __str__(self):
-        status = "수락됨" if self.is_accepted else "대기중"
+        status = "수락됨" if self.accepted_yn else "대기중"
         return f"{self.receiver.username} ← {self.share.label} ({status})"
     
     def accept(self):
         """공유 수락"""
-        self.is_accepted = True
+        self.accepted_yn = True
         self.accepted_datetime = timezone.now()
         self.save()
 
@@ -1373,29 +828,19 @@ class ProductNotification(models.Model):
     제품 상태 변경 알림
     - 상태가 바뀌면 해당 단계 권한자에게 인앱 알림 생성
     """
-    label = models.ForeignKey(
-        'label.MyLabel',
-        on_delete=models.CASCADE,
-        related_name='notifications',
-        verbose_name='표시사항'
-    )
-    recipient = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='product_notifications',
-        verbose_name='수신자'
-    )
+    label = models.ForeignKey('label.MyLabel', on_delete=models.CASCADE, related_name='notifications', verbose_name='표시사항')
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='product_notifications', verbose_name='수신자')
     message = models.CharField(max_length=500, verbose_name='알림 메시지')
     status_code = models.CharField(max_length=20, verbose_name='관련 상태',
                                    blank=True, default='')
-    is_read = models.BooleanField(default=False, verbose_name='읽음 여부', db_index=True)
+    read_yn = models.BooleanField(default=False, verbose_name='읽음 여부', db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
 
     class Meta:
         db_table = 'v2_product_notification'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['recipient', 'is_read']),
+            models.Index(fields=['recipient', 'read_yn']),
             models.Index(fields=['label', 'created_at']),
         ]
         verbose_name = '제품 알림'
@@ -1423,35 +868,11 @@ class ProductActivityLog(models.Model):
     ]
     
     log_id = models.AutoField(primary_key=True, verbose_name="로그 ID")
-    label = models.ForeignKey(
-        'label.MyLabel',
-        on_delete=models.CASCADE,
-        related_name='activity_logs',
-        verbose_name='표시사항'
-    )
-    user = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='product_activities',
-        verbose_name='사용자'
-    )
-    action = models.CharField(
-        max_length=30,
-        choices=ACTION_CHOICES,
-        verbose_name='활동'
-    )
-    details = models.JSONField(
-        verbose_name='상세정보',
-        null=True,
-        blank=True,
-        help_text='상태 변경 전/후, 댓글 내용 등'
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='생성일시'
-    )
+    label = models.ForeignKey('label.MyLabel', on_delete=models.CASCADE, related_name='activity_logs', verbose_name='표시사항')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='product_activities', verbose_name='사용자')
+    action = models.CharField(max_length=30, choices=ACTION_CHOICES, verbose_name='활동')
+    details = models.JSONField(verbose_name='상세정보', null=True, blank=True, help_text='상태 변경 전/후, 댓글 내용 등')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
     
     class Meta:
         db_table = 'v2_product_activity_log'
@@ -1537,20 +958,17 @@ class DocumentSubmission(models.Model):
     수신자가 제출한 문서 파일 (1요청 1파일 지원)
     DB 테이블: v2_document_request_submission
     """
-    submission_id       = models.AutoField(primary_key=True)
-    request             = models.ForeignKey(
-        DocumentRequest, on_delete=models.CASCADE,
-        related_name='submissions', db_column='request_id',
-    )
-    document_type       = models.CharField(max_length=100, verbose_name='문서 종류')
-    file                = models.FileField(upload_to='doc_submissions/%Y/%m/', verbose_name='파일')
-    original_filename   = models.CharField(max_length=255, verbose_name='원본 파일명')
-    file_size           = models.BigIntegerField(default=0, verbose_name='파일 크기')
-    submitted_by_email  = models.CharField(max_length=255, blank=True, null=True, verbose_name='제출자 이메일')
-    submitted_by_name   = models.CharField(max_length=100, blank=True, null=True, verbose_name='제출자 이름')
-    notes               = models.TextField(blank=True, null=True, verbose_name='메모')
-    is_active           = models.BooleanField(default=True)
-    submitted_datetime  = models.DateTimeField(auto_now_add=True, verbose_name='제출일시')
+    submission_id = models.AutoField(primary_key=True)
+    request = models.ForeignKey(DocumentRequest, on_delete=models.CASCADE, related_name='submissions', db_column='request_id')
+    document_type = models.CharField(max_length=100, verbose_name='문서 종류')
+    file = models.FileField(upload_to='doc_submissions/%Y/%m/', verbose_name='파일')
+    original_filename = models.CharField(max_length=255, verbose_name='원본 파일명')
+    file_size = models.BigIntegerField(default=0, verbose_name='파일 크기')
+    submitted_by_email = models.CharField(max_length=255, blank=True, null=True, verbose_name='제출자 이메일')
+    submitted_by_name = models.CharField(max_length=100, blank=True, null=True, verbose_name='제출자 이름')
+    notes = models.TextField(blank=True, null=True, verbose_name='메모')
+    active_yn = models.BooleanField(default=True)
+    submitted_datetime = models.DateTimeField(auto_now_add=True, verbose_name='제출일시')
 
     class Meta:
         db_table = 'v2_document_request_submission'

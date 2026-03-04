@@ -11,12 +11,12 @@ class UserProfile(models.Model):
     birth_date = models.DateField(null=True, blank=True, help_text="사용자 생년월일")
     profile_image = models.ImageField(upload_to="profiles/", null=True, blank=True, help_text="사용자 프로필 이미지")
     # 이메일 인증 및 유료 서비스 관련 필드
-    is_email_verified = models.BooleanField(default=False)
+    email_verified_yn = models.BooleanField(default=False)
     email_verification_token = models.CharField(max_length=128, blank=True, null=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
     password_reset_token = models.CharField(max_length=128, blank=True, null=True)
     password_reset_sent_at = models.DateTimeField(blank=True, null=True)
-    is_paid = models.BooleanField(default=False)
+    paid_yn = models.BooleanField(default=False)
     subscription_type = models.CharField(max_length=20, blank=True, null=True)
     subscription_expiry = models.DateTimeField(blank=True, null=True)
 
@@ -69,7 +69,7 @@ def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.create(
             user=instance,
-            is_email_verified=False,
+            email_verified_yn=False,
             email_verification_token='',
             password_reset_token=''
         )

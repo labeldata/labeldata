@@ -50,7 +50,7 @@ class Command(BaseCommand):
         unverified_users = User.objects.filter(
             is_active=False,
             profile__email_verification_sent_at__lt=cutoff_time,
-            profile__is_email_verified=False
+            profile__email_verified_yn=False
         ).select_related('profile')
         
         count = unverified_users.count()

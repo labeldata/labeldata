@@ -2040,7 +2040,7 @@ def preview_popup(request):
             from django.db.models import Q
             shared_share = ProductShare.objects.filter(
                 label__my_label_id=label_id,
-                is_active=True,
+                active_yn=True,
             ).filter(
                 Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
             ).filter(
@@ -2245,7 +2245,7 @@ def label_tab_json(request):
         if not is_owner:
             is_shared = ProductShare.objects.filter(
                 label=label,
-                is_active=True,
+                active_yn=True,
             ).filter(
                 Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
             ).filter(
@@ -2371,7 +2371,7 @@ def save_preview_settings(request):
             from django.db.models import Q
             has_access = ProductShare.objects.filter(
                 label__my_label_id=label_id,
-                is_active=True,
+                active_yn=True,
             ).filter(
                 Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
             ).filter(
@@ -2454,7 +2454,7 @@ def upload_label_pdf(request):
             from v1.products.models import ProductShare
             shared_share = ProductShare.objects.filter(
                 label__my_label_id=label_id,
-                is_active=True,
+                active_yn=True,
             ).filter(
                 Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
             ).filter(
@@ -2481,8 +2481,8 @@ def upload_label_pdf(request):
             defaults={
                 'type_name': '한글표시사항도안',
                 'description': '미리보기에서 생성된 한글표시사항 도안 PDF',
-                'is_required': False,
-                'is_active': True,
+                'required_yn': False,
+                'active_yn': True,
                 'display_order': 0,
                 'icon': 'bi-file-pdf',
                 'color': '#e8710a',
@@ -2496,7 +2496,7 @@ def upload_label_pdf(request):
         existing_doc = ProductDocument.objects.filter(
             label=label,
             document_type=doc_type,
-            is_active=True,
+            active_yn=True,
         ).order_by('-version', '-uploaded_datetime').first()
 
         product_name = label.prdlst_nm or label.my_label_name or 'label'

@@ -1,4 +1,4 @@
-{% extends "base_v2.html" %}
+﻿{% extends "base_v2.html" %}
 {% load static %}
 
 {% block title %}연락처 관리 - Food Data Portal{% endblock %}
@@ -926,7 +926,7 @@ function renderDocTypes(types) {
             <input type="checkbox" class="doc-type-chk" value="${t.type_id}" style="width:15px;height:15px;">
             <i class="bi ${t.icon || 'bi-file-earmark'}" style="color:${t.color || '#6c757d'};font-size:15px;"></i>
             <span>${t.type_name}</span>
-            ${t.is_required ? '<span class="badge bg-danger ms-auto" style="font-size:10px;">필수</span>' : ''}
+            ${t.required_yn ? '<span class="badge bg-danger ms-auto" style="font-size:10px;">필수</span>' : ''}
         </label>`
     ).join('');
 }

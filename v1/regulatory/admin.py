@@ -1,4 +1,4 @@
-from django.contrib import admin
+﻿from django.contrib import admin
 from v1.regulatory.models import (
     RegulatoryNews, NewsProductMatch,
     NewsIngredientMatch, RegulatoryMatchAction,
@@ -18,8 +18,8 @@ class RegulatoryNewsAdmin(admin.ModelAdmin):
 @admin.register(NewsProductMatch)
 class NewsProductMatchAdmin(admin.ModelAdmin):
     list_display  = ('news', 'product', 'matched_keyword', 'match_score',
-                     'is_read', 'created_at')
-    list_filter   = ('is_read', 'created_at')
+                     'read_yn', 'created_at')
+    list_filter   = ('read_yn', 'created_at')
     search_fields = ('matched_keyword', 'matched_ingredient',
                      'news__product_name', 'product__my_label_name')
     ordering = ('-created_at',)
@@ -28,8 +28,8 @@ class NewsProductMatchAdmin(admin.ModelAdmin):
 @admin.register(NewsIngredientMatch)
 class NewsIngredientMatchAdmin(admin.ModelAdmin):
     list_display  = ('news', 'user', 'ingredient', 'matched_keyword',
-                     'risk_level', 'is_read', 'is_dismissed', 'created_at')
-    list_filter   = ('risk_level', 'is_read', 'is_dismissed', 'created_at')
+                     'risk_level', 'read_yn', 'dismissed_yn', 'created_at')
+    list_filter   = ('risk_level', 'read_yn', 'dismissed_yn', 'created_at')
     search_fields = ('matched_keyword', 'news__product_name',
                      'ingredient__prdlst_nm', 'user__username')
     raw_id_fields = ('news', 'user', 'ingredient')

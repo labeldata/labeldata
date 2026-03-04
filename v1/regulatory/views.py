@@ -100,12 +100,12 @@ def news_list(request):
     if risk:
         risk_from_product = (
             NewsProductMatch.objects
-            .filter(product__user_id=request.user, is_false_positive=False, risk_level=risk)
+            .filter(product__user_id=request.user, false_positive_yn=False, risk_level=risk)
             .values_list('news_id', flat=True)
         )
         risk_from_ingredient = (
             NewsIngredientMatch.objects
-            .filter(user=request.user, is_dismissed=False, risk_level=risk)
+            .filter(user=request.user, dismissed_yn=False, risk_level=risk)
             .values_list('news_id', flat=True)
         )
         qs = qs.filter(
@@ -119,7 +119,7 @@ def news_list(request):
             RegulatoryMatchAction.objects
             .filter(
                 product_match__product__user_id=request.user,
-                product_match__is_false_positive=False,
+                product_match__false_positive_yn=False,
                 action_type=status,
             ).values('product_match__news_id')
         )
@@ -127,7 +127,7 @@ def news_list(request):
             RegulatoryMatchAction.objects
             .filter(
                 ingredient_match__user=request.user,
-                ingredient_match__is_dismissed=False,
+                ingredient_match__dismissed_yn=False,
                 action_type=status,
             ).values('ingredient_match__news_id')
         )
@@ -153,10 +153,10 @@ def news_list(request):
         # 매칭된 뉴스 중 조치 이력이 없는 것만
         matched_ids = (
             list(NewsProductMatch.objects
-                 .filter(product__user_id=request.user, is_false_positive=False)
+                 .filter(product__user_id=request.user, false_positive_yn=False)
                  .values_list('news_id', flat=True)) +
             list(NewsIngredientMatch.objects
-                 .filter(user=request.user, is_dismissed=False)
+                 .filter(user=request.user, dismissed_yn=False)
                  .values_list('news_id', flat=True))
         )
         qs = qs.filter(id__in=matched_ids).exclude(
@@ -166,49 +166,49 @@ def news_list(request):
     # 내 매칭 집합 (제품 매칭 + 원료 보관함 단독 매칭 합산)
     my_matched_news_ids = set(
         NewsProductMatch.objects
-        .filter(product__user_id=request.user, is_false_positive=False)
+        .filter(product__user_id=request.user, false_positive_yn=False)
         .values_list('news_id', flat=True)
     ) | set(
         NewsIngredientMatch.objects
-        .filter(user=request.user, is_dismissed=False)
+        .filter(user=request.user, dismissed_yn=False)
         .values_list('news_id', flat=True)
     )
     my_unread_news_ids = set(
         NewsProductMatch.objects
-        .filter(product__user_id=request.user, is_read=False, is_false_positive=False)
+        .filter(product__user_id=request.user, read_yn=False, false_positive_yn=False)
         .values_list('news_id', flat=True)
     ) | set(
         NewsIngredientMatch.objects
-        .filter(user=request.user, is_read=False, is_dismissed=False)
+        .filter(user=request.user, read_yn=False, dismissed_yn=False)
         .values_list('news_id', flat=True)
     )
 
     # DB 레벨 어노테이션으로 정렬 (매칭→미읽음→최신)
     matched_subq = NewsProductMatch.objects.filter(
-        news=OuterRef('pk'), product__user_id=request.user, is_false_positive=False
+        news=OuterRef('pk'), product__user_id=request.user, false_positive_yn=False
     )
     unread_subq = NewsProductMatch.objects.filter(
         news=OuterRef('pk'), product__user_id=request.user,
-        is_read=False, is_false_positive=False
+        read_yn=False, false_positive_yn=False
     )
     ing_unread_subq = NewsIngredientMatch.objects.filter(
         news=OuterRef('pk'), user=request.user,
-        is_read=False, is_dismissed=False
+        read_yn=False, dismissed_yn=False
     )
     # 현재 사용자의 최고 등급 매칭 risk_level (제품 or 원료)
     my_risk_subq = (
         NewsProductMatch.objects
-        .filter(news=OuterRef('pk'), product__user_id=request.user, is_false_positive=False)
+        .filter(news=OuterRef('pk'), product__user_id=request.user, false_positive_yn=False)
         .order_by('-risk_score')
         .values('risk_level')[:1]
     )
     # 원료 보관함 단독 매칭 어노테이션
     ing_matched_subq = NewsIngredientMatch.objects.filter(
-        news=OuterRef('pk'), user=request.user, is_dismissed=False
+        news=OuterRef('pk'), user=request.user, dismissed_yn=False
     )
     ing_risk_subq = (
         NewsIngredientMatch.objects
-        .filter(news=OuterRef('pk'), user=request.user, is_dismissed=False)
+        .filter(news=OuterRef('pk'), user=request.user, dismissed_yn=False)
         .order_by('-risk_score')
         .values('risk_level')[:1]
     )
@@ -218,7 +218,7 @@ def news_list(request):
         .filter(
             product_match__news=OuterRef('pk'),
             product_match__product__user_id=request.user,
-            product_match__is_false_positive=False,
+            product_match__false_positive_yn=False,
             action_type__in=('monitoring', 'resolved'),
         )
         .order_by('-created_at')
@@ -229,7 +229,7 @@ def news_list(request):
         .filter(
             ingredient_match__news=OuterRef('pk'),
             ingredient_match__user=request.user,
-            ingredient_match__is_dismissed=False,
+            ingredient_match__dismissed_yn=False,
             action_type__in=('monitoring', 'resolved'),
         )
         .order_by('-created_at')
@@ -237,17 +237,17 @@ def news_list(request):
     )
 
     qs = qs.annotate(
-        is_my_matched=Exists(matched_subq),
-        is_my_unread=Exists(unread_subq),
-        is_ing_unread=Exists(ing_unread_subq),
+        my_matched_yn=Exists(matched_subq),
+        my_unread_yn=Exists(unread_subq),
+        ing_unread_yn=Exists(ing_unread_subq),
         my_risk_level=Subquery(my_risk_subq, output_field=CharField()),
-        is_ing_matched=Exists(ing_matched_subq),
+        ing_matched_yn=Exists(ing_matched_subq),
         ing_risk_level=Subquery(ing_risk_subq, output_field=CharField()),
         my_action_status=Subquery(latest_prod_action_subq, output_field=CharField()),
         my_ing_action_status=Subquery(latest_ing_action_subq, output_field=CharField()),
     ).order_by(
-        '-is_my_matched', '-is_ing_matched',
-        '-is_my_unread', '-is_ing_unread',
+        '-my_matched_yn', '-ing_matched_yn',
+        '-my_unread_yn', '-ing_unread_yn',
         F('event_date').desc(nulls_last=True),
         '-collected_date',
         '-created_at',
@@ -308,7 +308,7 @@ def news_list(request):
             selected_matches = (
                 NewsProductMatch.objects
                 .filter(news=selected_news, product__user_id=request.user,
-                        is_false_positive=False)
+                        false_positive_yn=False)
                 .select_related('product', 'matched_bom')
                 .order_by('-risk_score', '-match_score')
                 .prefetch_related('actions')
@@ -316,7 +316,7 @@ def news_list(request):
             # 원료 보관함 단독 매칭 (BOM 미연결)
             selected_ing_matches = (
                 NewsIngredientMatch.objects
-                .filter(news=selected_news, user=request.user, is_dismissed=False)
+                .filter(news=selected_news, user=request.user, dismissed_yn=False)
                 .select_related('ingredient')
                 .prefetch_related(
                     'ingredient__bom_usages__parent_label',
@@ -362,14 +362,14 @@ def news_detail(request, pk):
     news = get_object_or_404(RegulatoryNews, pk=pk)
     my_matches = (
         NewsProductMatch.objects
-        .filter(news=news, product__user_id=request.user, is_false_positive=False)
+        .filter(news=news, product__user_id=request.user, false_positive_yn=False)
         .select_related('product', 'matched_bom__parent_label')
         .prefetch_related('actions')
         .order_by('-risk_score', '-match_score')
     )
     ing_matches = (
         NewsIngredientMatch.objects
-        .filter(news=news, user=request.user, is_dismissed=False)
+        .filter(news=news, user=request.user, dismissed_yn=False)
         .select_related('ingredient')
         .prefetch_related('ingredient__bom_usages__parent_label', 'actions')
         .order_by('-risk_score', '-match_score')
@@ -393,15 +393,15 @@ def unread_count_api(request):
     prod_news = set(
         NewsProductMatch.objects.filter(
             product__user_id=request.user,
-            is_read=False,
-            is_false_positive=False,
+            read_yn=False,
+            false_positive_yn=False,
         ).values_list('news_id', flat=True)
     )
     ing_news = set(
         NewsIngredientMatch.objects.filter(
             user=request.user,
-            is_read=False,
-            is_dismissed=False,
+            read_yn=False,
+            dismissed_yn=False,
         ).values_list('news_id', flat=True)
     )
     count = len(prod_news | ing_news)
@@ -421,26 +421,26 @@ def mark_as_read(request):
     except (ValueError, AttributeError):
         news_id = None
 
-    qs = NewsProductMatch.objects.filter(product__user_id=request.user, is_read=False)
+    qs = NewsProductMatch.objects.filter(product__user_id=request.user, read_yn=False)
     if news_id:
         qs = qs.filter(news_id=news_id)
-    updated = qs.update(is_read=True, read_at=timezone.now())
+    updated = qs.update(read_yn=True, read_at=timezone.now())
 
     # 원료 보관함 매칭도 읽음 처리
-    ing_qs = NewsIngredientMatch.objects.filter(user=request.user, is_read=False, is_dismissed=False)
+    ing_qs = NewsIngredientMatch.objects.filter(user=request.user, read_yn=False, dismissed_yn=False)
     if news_id:
         ing_qs = ing_qs.filter(news_id=news_id)
-    ing_qs.update(is_read=True)
+    ing_qs.update(read_yn=True)
 
     # 읽음 처리 후 남은 미확인 뉴스 건수 (context_processors 와 동일 기준)
     prod_news = set(
         NewsProductMatch.objects.filter(
-            product__user_id=request.user, is_read=False, is_false_positive=False,
+            product__user_id=request.user, read_yn=False, false_positive_yn=False,
         ).values_list('news_id', flat=True)
     )
     ing_news = set(
         NewsIngredientMatch.objects.filter(
-            user=request.user, is_read=False, is_dismissed=False,
+            user=request.user, read_yn=False, dismissed_yn=False,
         ).values_list('news_id', flat=True)
     )
     unread = len(prod_news | ing_news)
@@ -487,8 +487,8 @@ def save_match_action(request):
         )
         # "해당 없음" 선택 시 dismissed 플래그 설정
         if action_type == RegulatoryMatchAction.ACTION_DISMISSED:
-            ing_match.is_dismissed = True
-            ing_match.save(update_fields=['is_dismissed'])
+            ing_match.dismissed_yn = True
+            ing_match.save(update_fields=['dismissed_yn'])
     else:
         try:
             prod_match = NewsProductMatch.objects.get(pk=match_id, product__user_id=request.user)
@@ -501,9 +501,9 @@ def save_match_action(request):
             memo=memo,
         )
         if action_type == RegulatoryMatchAction.ACTION_DISMISSED:
-            prod_match.is_false_positive = True
+            prod_match.false_positive_yn = True
             prod_match.false_positive_at = timezone.now()
-            prod_match.save(update_fields=['is_false_positive', 'false_positive_at'])
+            prod_match.save(update_fields=['false_positive_yn', 'false_positive_at'])
 
     return JsonResponse({
         'success': True,
@@ -530,11 +530,11 @@ def mark_false_positive(request):
         match = NewsProductMatch.objects.get(
             pk=match_id, product__user_id=request.user
         )
-        match.is_false_positive = True
+        match.false_positive_yn = True
         match.false_positive_at = timezone.now()
-        match.is_read = True
+        match.read_yn = True
         match.read_at = match.read_at or timezone.now()
-        match.save(update_fields=['is_false_positive', 'false_positive_at', 'is_read', 'read_at'])
+        match.save(update_fields=['false_positive_yn', 'false_positive_at', 'read_yn', 'read_at'])
         RegulatoryMatchAction.objects.create(
             user=request.user,
             product_match=match,
@@ -545,8 +545,8 @@ def mark_false_positive(request):
         return JsonResponse({'success': False, 'error': '매칭 정보를 찾을 수 없습니다.'}, status=404)
 
     unread = NewsProductMatch.objects.filter(
-        product__user_id=request.user, is_read=False
+        product__user_id=request.user, read_yn=False
     ).count() + NewsIngredientMatch.objects.filter(
-        user=request.user, is_read=False, is_dismissed=False
+        user=request.user, read_yn=False, dismissed_yn=False
     ).count()
     return JsonResponse({'success': True, 'unread': unread})

@@ -1,4 +1,4 @@
-﻿{% extends "base_v2.html" %}
+{% extends "base_v2.html" %}
 {% load static %}
 
 {% block title %}부적합·처분 알림{% endblock %}
@@ -180,13 +180,13 @@
     <div class="rs-list-body">
       {% for news in news_list %}
       <div class="rs-item
-                  {% if news.is_my_matched %}matched{% elif news.is_ing_matched %}ing-matched{% endif %}
+                  {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% endif %}
                   {% if selected_news and selected_news.id == news.id %}active{% endif %}"
            onclick="selectNews({{ news.id }})">
 
         {# 줄 1: 국기 + 제품명 + 날짜 #}
         <div class="rs-row1">
-          {% if news.is_my_unread or news.is_ing_unread %}<span class="rs-unread-dot"></span>{% endif %}
+          {% if news.my_unread_yn or news.ing_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
           <span class="rs-item-flag">
             {% if news.source == 'domestic' %}🇰🇷{% else %}🌏{% endif %}
           </span>
@@ -211,19 +211,19 @@
             <span class="badge-admin">행정(수입)</span>
           {% endif %}
           {# 등급 배지 #}
-          {% if news.is_my_matched %}
+          {% if news.my_matched_yn %}
             {% if news.my_risk_level == 'HIGH' %}<span class="badge-risk-H">🔴중요</span>
             {% elif news.my_risk_level == 'MED' %}<span class="badge-risk-M">🟠관심</span>
             {% elif news.my_risk_level == 'LOW' %}<span class="badge-risk-L">🔵일반</span>
             {% endif %}
-          {% elif news.is_ing_matched %}
+          {% elif news.ing_matched_yn %}
             {% if news.ing_risk_level == 'HIGH' %}<span class="badge-risk-H badge-ing">🔴중요&middot;원료</span>
             {% elif news.ing_risk_level == 'MED' %}<span class="badge-risk-M badge-ing">🟠관심&middot;원료</span>
             {% else %}<span class="badge-risk-L badge-ing">🔵일반&middot;원료</span>
             {% endif %}
           {% endif %}
           {# 진행상태 뱃지 (매칭 뉴스만) #}
-          {% if news.is_my_matched or news.is_ing_matched %}
+          {% if news.my_matched_yn or news.ing_matched_yn %}
             {% with st=news.my_action_status|default:news.my_ing_action_status %}
             {% if st == 'monitoring' %}<span class="badge-status-mon">&#x1F441; 모니터링</span>
             {% elif st == 'resolved' %}<span class="badge-status-res">&#x2705; 조치완료</span>

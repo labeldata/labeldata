@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404, redirect
+﻿from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
@@ -377,7 +377,7 @@ def home_dashboard(request):
     shared_ids = list(
         ProductShare.objects.filter(
             recipient_user=user,
-            is_active=True,
+            active_yn=True,
         ).filter(
             Q(share_end_date__isnull=True) | Q(share_end_date__gt=now)
         ).values_list('label_id', flat=True)
@@ -387,7 +387,7 @@ def home_dashboard(request):
     # 즐겨찾기 수 (내 제품 + 공유받은 제품 포함 — product_explorer ALL 기준과 동일)
     starred_count = ProductMetadata.objects.filter(
         Q(label__user_id=user) | Q(label__my_label_id__in=shared_ids),
-        is_starred=True
+        starred_yn=True
     ).count()
 
     # 상태별 카운트 (내 제품 기준)
@@ -409,7 +409,7 @@ def home_dashboard(request):
     # ── 읽지 않은 알림 수 ──────────────────────────────────────
     try:
         unread_notif_count = ProductNotification.objects.filter(
-            recipient=user, is_read=False
+            recipient=user, read_yn=False
         ).count()
     except Exception:
         unread_notif_count = 0
@@ -421,7 +421,7 @@ def home_dashboard(request):
         expiry_threshold = now + timezone.timedelta(days=30)
         expiring_count = ProductDocument.objects.filter(
             label__user_id=user,
-            is_active=True,
+            active_yn=True,
             expiry_date__isnull=False,
             expiry_date__lte=expiry_threshold,
             expiry_date__gte=now.date(),

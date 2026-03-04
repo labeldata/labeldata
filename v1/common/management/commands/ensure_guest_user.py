@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand
+﻿from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 from v1.user_management.models import UserProfile
 
@@ -15,7 +15,7 @@ class Command(BaseCommand):
             username=GUEST_EMAIL,
             defaults={
                 'email': GUEST_EMAIL,
-                'is_active': True,
+                'active_yn': True,
             }
         )
 
@@ -29,8 +29,8 @@ class Command(BaseCommand):
             if not user.check_password(GUEST_PASSWORD):
                 user.set_password(GUEST_PASSWORD)
                 changed = True
-            if not user.is_active:
-                user.is_active = True
+            if not user.active_yn:
+                user.active_yn = True
                 changed = True
             if changed:
                 user.save()
@@ -40,7 +40,7 @@ class Command(BaseCommand):
 
         # UserProfile 보정 (이메일 인증 필수)
         profile, _ = UserProfile.objects.get_or_create(user=user)
-        if not profile.is_email_verified:
-            profile.is_email_verified = True
+        if not profile.email_verified_yn:
+            profile.email_verified_yn = True
             profile.save()
             self.stdout.write(self.style.WARNING('    → 이메일 인증 상태 보정 완료'))

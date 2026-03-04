@@ -1,4 +1,4 @@
-{% extends "base_v2.html" %}
+﻿{% extends "base_v2.html" %}
 {% load static %}
 
 {% block title %}문서 타입 관리{% endblock %}
@@ -48,7 +48,7 @@
                             </td>
                             <td>{{ type.expiry_alert_days }}일 전</td>
                             <td>
-                                {% if type.is_active %}
+                                {% if type.active_yn %}
                                     <span class="badge bg-success">활성</span>
                                 {% else %}
                                     <span class="badge bg-danger">비활성</span>

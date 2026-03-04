@@ -75,8 +75,8 @@ class ProductExcelHandler:
             tags = ', '.join([f'#{tag}' for tag in product.tags]) if product.tags else ''
             ws.cell(row=row_num, column=5, value=tags)
             
-            ws.cell(row=row_num, column=6, value='가능' if product.is_raw_material else '불가')
-            ws.cell(row=row_num, column=7, value='활성' if product.is_active else '비활성')
+            ws.cell(row=row_num, column=6, value='가능' if product.raw_material_yn else '불가')
+            ws.cell(row=row_num, column=7, value='활성' if product.active_yn else '비활성')
             ws.cell(row=row_num, column=8, value=product.created_datetime.strftime('%Y-%m-%d %H:%M'))
             ws.cell(row=row_num, column=9, value=product.updated_datetime.strftime('%Y-%m-%d %H:%M'))
             
@@ -129,7 +129,7 @@ class ProductExcelHandler:
                     nutrition_str = json.dumps(version.nutrition_facts, ensure_ascii=False) if version.nutrition_facts else ''
                     ws_versions.cell(row=row_num, column=19, value=nutrition_str)
                     
-                    ws_versions.cell(row=row_num, column=20, value='활성' if version.is_active else '비활성')
+                    ws_versions.cell(row=row_num, column=20, value='활성' if version.active_yn else '비활성')
                     ws_versions.cell(row=row_num, column=21, value=version.created_at.strftime('%Y-%m-%d %H:%M'))
                     
                     # 테두리 적용
@@ -186,8 +186,8 @@ class ProductExcelHandler:
                     product_category = ws.cell(row=row_num, column=3).value
                     description = ws.cell(row=row_num, column=4).value
                     tags_str = ws.cell(row=row_num, column=5).value
-                    is_raw_material_str = ws.cell(row=row_num, column=6).value
-                    is_active_str = ws.cell(row=row_num, column=7).value
+                    raw_material_yn_str = ws.cell(row=row_num, column=6).value
+                    active_yn_str = ws.cell(row=row_num, column=7).value
                     
                     # 필수 필드 확인
                     if not product_name:
@@ -201,8 +201,8 @@ class ProductExcelHandler:
                         tags = [tag.strip().replace('#', '') for tag in str(tags_str).split(',') if tag.strip()]
                     
                     # Boolean 변환
-                    is_raw_material = str(is_raw_material_str).strip() == '가능'
-                    is_active = str(is_active_str).strip() != '비활성'
+                    raw_material_yn = str(raw_material_yn_str).strip() == '가능'
+                    active_yn = str(active_yn_str).strip() != '비활성'
                     
                     # Product import 로직 (실제 구현 시 모델 import 필요)
                     from v1.products.models import Product
@@ -214,8 +214,8 @@ class ProductExcelHandler:
                             'product_category': product_category,
                             'description': description,
                             'tags': tags,
-                            'is_raw_material': is_raw_material,
-                            'is_active': is_active,
+                            'raw_material_yn': raw_material_yn,
+                            'active_yn': active_yn,
                             'user': user,
                         }
                     )

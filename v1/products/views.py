@@ -159,7 +159,7 @@ def product_explorer(request, folder_id=None):
     shared_to_me_ids = list(
         ProductShare.objects.filter(
             recipient_user=user,
-            is_active=True,
+            active_yn=True,
         ).filter(
             Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
         ).values_list('label_id', flat=True)
@@ -251,7 +251,7 @@ def product_explorer(request, folder_id=None):
     doc_type_rows = (
         ProductDocument.objects.filter(
             label__my_label_id__in=label_ids,
-            is_active=True,
+            active_yn=True,
         )
         .values('label__my_label_id', 'document_type_id')
         .distinct()
@@ -267,7 +267,7 @@ def product_explorer(request, folder_id=None):
     slot_rows = (
         DocumentSlot.objects.filter(
             label__my_label_id__in=label_ids,
-            is_hidden=False,
+            hidden_yn=False,
         )
         .values('label__my_label_id', 'status')
     )
@@ -300,7 +300,7 @@ def product_explorer(request, folder_id=None):
         ProductBOM.objects.filter(
             parent_label__my_label_id__in=label_ids,
             level=1,
-            is_active=True,
+            active_yn=True,
         )
         .values('parent_label__my_label_id')
         .annotate(
@@ -336,7 +336,7 @@ def product_explorer(request, folder_id=None):
         ProductDocument.objects.filter(
             label__my_label_id__in=label_ids,
             document_type__type_code='LABEL_DESIGN',
-            is_active=True,
+            active_yn=True,
         ).values_list('label__my_label_id', flat=True)
     )
     label_checked_stats = {}
@@ -351,7 +351,7 @@ def product_explorer(request, folder_id=None):
     for label_id in label_ids:
         share_count = ProductShare.objects.filter(
             label__my_label_id=label_id,
-            is_active=True
+            active_yn=True
         ).values('recipient_user').distinct().count()
         permission_stats[label_id] = share_count
     
@@ -360,7 +360,7 @@ def product_explorer(request, folder_id=None):
     for share in ProductShare.objects.filter(
         recipient_user=user,
         label_id__in=label_ids,
-        is_active=True,
+        active_yn=True,
     ).select_related('permission'):
         try:
             my_role_map[share.label_id] = share.permission.role_code
@@ -374,7 +374,7 @@ def product_explorer(request, folder_id=None):
         products_data.append({
             'label': label,
             'metadata': metadata,
-            'is_starred': metadata.is_starred if metadata else False,
+            'starred_yn': metadata.starred_yn if metadata else False,
             'document_count': document_counts.get(label.my_label_id, 0),
             'document_stats': document_stats.get(label.my_label_id, {'total': 0, 'required': 0, 'filled': 0, 'rate': 0}),
             'bom_stats': bom_stats.get(label.my_label_id, {'count': 0, 'ratio': 0, 'complete': False}),
@@ -400,7 +400,7 @@ def product_explorer(request, folder_id=None):
     # 즐겨찾기 총 개수 (현재 filter_type + 검색어 기준, 페이지네이션 무관)
     starred_count = ProductMetadata.objects.filter(
         label__in=labels,
-        is_starred=True,
+        starred_yn=True,
     ).count()
 
     # 즐겨찾기 제품 (루트 폴더에서만, 사이드바용)
@@ -409,7 +409,7 @@ def product_explorer(request, folder_id=None):
         # ProductMetadata에서 즐겨찾기된 제품의 label 가져오기
         starred_metadata = ProductMetadata.objects.filter(
             label__in=labels,
-            is_starred=True
+            starred_yn=True
         ).select_related('label').order_by('-starred_datetime')[:10]
         starred_items = [meta.label for meta in starred_metadata]
 
@@ -423,7 +423,7 @@ def product_explorer(request, folder_id=None):
     alert_date = today + timedelta(days=30)
     expiring_documents = ProductDocument.objects.filter(
         label__user_id=user,
-        is_active=True,
+        active_yn=True,
         expiry_date__isnull=False,
         expiry_date__gte=today,
         expiry_date__lte=alert_date
@@ -486,7 +486,7 @@ def product_detail(request, product_id):
         # 공유 사용자 접근 허용
         shared_share = ProductShare.objects.filter(
             label__my_label_id=product_id,
-            is_active=True
+            active_yn=True
         ).filter(
             Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
         ).filter(
@@ -540,23 +540,23 @@ def product_detail(request, product_id):
         metadata = ProductMetadata.objects.create(
             label=label,
             product_code=product_code,
-            is_starred=False
+            starred_yn=False
         )
     
     # BOM 정보 조회
     bom_items = ProductBOM.objects.filter(
         parent_label=label,
-        is_active=True
+        active_yn=True
     ).select_related('child_label', 'shared_receipt').order_by('level', 'sort_order')
     
     # 문서 정보 조회
     documents = ProductDocument.objects.filter(
         label=label,
-        is_active=True
+        active_yn=True
     ).order_by('-uploaded_datetime')
     
     # 문서 타입별 그룹화
-    document_types = DocumentType.objects.filter(is_active=True).order_by('display_order', 'type_name')
+    document_types = DocumentType.objects.filter(active_yn=True).order_by('display_order', 'type_name')
     documents_by_type = {}
     for dtype in document_types:
         docs = documents.filter(document_type=dtype)
@@ -571,7 +571,7 @@ def product_detail(request, product_id):
     # 공유 정보 조회 (현재 제품)
     shares = ProductShare.objects.filter(
         label=label,
-        is_active=True
+        active_yn=True
     ).select_related('recipient_user').order_by('-created_datetime')
     share_permissions = SharePermission.objects.filter(share__in=shares)
     permission_map = {permission.share_id: permission for permission in share_permissions}
@@ -593,7 +593,7 @@ def product_detail(request, product_id):
         # 이 제품들에 대한 모든 공유 정보
         all_shares = ProductShare.objects.filter(
             label__in=my_labels,
-            is_active=True
+            active_yn=True
         ).select_related('recipient_user').order_by('-created_datetime')
         
         # 중복 제거를 위해 email 기준으로 unique한 사용자만
@@ -732,7 +732,7 @@ def product_detail(request, product_id):
         shared_users_permissions = SharePermission.objects.filter(
             share__label=label,
             share__recipient_user_id__in=author_ids,
-            share__is_active=True
+            share__active_yn=True
         ).select_related('share')
 
         share_roles = {
@@ -768,7 +768,7 @@ def product_detail(request, product_id):
         activity_shared_permissions = SharePermission.objects.filter(
             share__label=label,
             share__recipient_user_id__in=activity_author_ids,
-            share__is_active=True
+            share__active_yn=True
         ).select_related('share')
         
         activity_share_roles = {
@@ -796,14 +796,14 @@ def product_detail(request, product_id):
     )
     # 보이는 슬롯 타입 (숨김 제외) — "필수 문서 추가" 드롭다운용
     visible_slot_type_ids = set(
-        DocumentSlot.objects.filter(label=label, is_hidden=False).values_list('document_type_id', flat=True)
+        DocumentSlot.objects.filter(label=label, hidden_yn=False).values_list('document_type_id', flat=True)
     )
 
     # 필수 문서 슬롯 자동 생성 (최초 접근 시)
     if is_owner:  # 오너만 슬롯 생성 가능
         
         # 모든 필수 문서 타입에 대해 슬롯 생성 (전체 목록 기준 — 숨김 포함하여 중복 방지)
-        required_types = DocumentType.objects.filter(is_required=True, is_active=True)
+        required_types = DocumentType.objects.filter(required_yn=True, active_yn=True)
         slots_to_create = []
         
         for doc_type in required_types:
@@ -821,11 +821,11 @@ def product_detail(request, product_id):
     
     document_slots = DocumentSlot.objects.filter(
         label=label,
-        is_hidden=False  # 숨겨지지 않은 슬롯만
+        hidden_yn=False  # 숨겨지지 않은 슬롯만
     ).select_related('document_type', 'current_document').order_by('document_type__display_order')
     
     available_doc_types = DocumentType.objects.filter(
-        is_active=True
+        active_yn=True
     ).exclude(type_id__in=visible_slot_type_ids).order_by('display_order', 'type_name')
     
     # 슬롯 상태 업데이트 (만료일 기준)
@@ -912,7 +912,7 @@ def product_favorite(request):
     starred_metadata = ProductMetadata.objects.filter(
         label__user_id=request.user,
         label__delete_YN='N',
-        is_starred=True
+        starred_yn=True
     ).select_related('label').order_by('-starred_datetime')
 
     products = []
@@ -998,7 +998,7 @@ def product_create(request):
             label=label,
             defaults={
                 'product_code': product_code,
-                'is_starred': False,
+                'starred_yn': False,
             }
         )
         
@@ -1015,15 +1015,15 @@ def product_create(request):
                 }
             )
 
-        # is_raw_material / search_tags 저장
-        is_raw = request.POST.get('is_raw_material') == 'on'
+        # raw_material_yn / search_tags 저장
+        raw_yn = request.POST.get('raw_material_yn') == 'on'
         search_tags = request.POST.get('search_tags', '').strip()
-        metadata.is_raw_material = is_raw
+        metadata.raw_material_yn = raw_yn
         metadata.search_tags = search_tags
-        metadata.save(update_fields=['is_raw_material', 'search_tags'])
+        metadata.save(update_fields=['raw_material_yn', 'search_tags'])
 
         # 원료로 사용 체크 시 MyIngredient 자동 등록
-        if is_raw:
+        if raw_yn:
             from v1.label.models import MyIngredient as _MyIngredient
             exists = _MyIngredient.objects.filter(
                 user_id=request.user,
@@ -1117,17 +1117,17 @@ def product_update(request, product_id):
                 label.custom_fields = []
         label.save()
 
-        # is_raw_material / search_tags 저장
+        # raw_material_yn / search_tags 저장
         meta = ProductMetadata.objects.filter(label=label).first()
         if meta:
-            is_raw = request.POST.get('is_raw_material') == 'on'
+            raw_yn = request.POST.get('raw_material_yn') == 'on'
             search_tags = request.POST.get('search_tags', '').strip()
-            meta.is_raw_material = is_raw
+            meta.raw_material_yn = raw_yn
             meta.search_tags = search_tags
-            meta.save(update_fields=['is_raw_material', 'search_tags'])
+            meta.save(update_fields=['raw_material_yn', 'search_tags'])
 
             # 원료로 사용 체크 시 MyIngredient 자동 등록
-            if is_raw:
+            if raw_yn:
                 from v1.label.models import MyIngredient as _MyIngredient
                 exists = _MyIngredient.objects.filter(
                     user_id=request.user,
@@ -1182,7 +1182,7 @@ def product_update_fields(request, product_id):
     else:
         shared_share = ProductShare.objects.filter(
             label__my_label_id=product_id,
-            is_active=True
+            active_yn=True
         ).filter(
             Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
         ).filter(
@@ -1304,7 +1304,7 @@ def product_update_status(request, product_id):
     else:
         shared_share = ProductShare.objects.filter(
             label__my_label_id=product_id,
-            is_active=True
+            active_yn=True
         ).filter(
             Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
         ).filter(
@@ -1353,7 +1353,7 @@ def product_update_status(request, product_id):
     if required_roles:
         has_required = SharePermission.objects.filter(
             share__label=label,
-            share__is_active=True,
+            share__active_yn=True,
             role_code__in=required_roles
         ).filter(
             Q(share__share_end_date__isnull=True) | Q(share__share_end_date__gt=timezone.now())
@@ -1482,7 +1482,7 @@ def product_update_status(request, product_id):
         else:
             perm_qs = SharePermission.objects.filter(
                 share__label=label,
-                share__is_active=True,
+                share__active_yn=True,
                 role_code=nrole,
             ).filter(
                 Q(share__share_end_date__isnull=True) | Q(share__share_end_date__gt=timezone.now())
@@ -1645,7 +1645,7 @@ def bulk_copy_products(request):
                 ProductMetadata.objects.create(
                     label=new_label,
                     product_code=product_code,
-                    is_starred=False
+                    starred_yn=False
                 )
             except ProductMetadata.DoesNotExist:
                 pass
@@ -1668,9 +1668,9 @@ def bulk_copy_products(request):
                     report_no=bom_item.report_no,
                     origin=bom_item.origin,
                     origin_detail=bom_item.origin_detail,
-                    is_additive=bom_item.is_additive,
+                    additive_yn=bom_item.additive_yn,
                     additive_role=bom_item.additive_role,
-                    is_gmo=bom_item.is_gmo,
+                    gmo_yn=bom_item.gmo_yn,
                     notes=bom_item.notes
                 )
             
@@ -1707,7 +1707,7 @@ def bulk_export_products_excel(request):
             delete_YN='N'
         ).filter(
             Q(user_id=request.user) |
-            Q(v2_shares__recipient_user=request.user, v2_shares__is_active=True)
+            Q(v2_shares__recipient_user=request.user, v2_shares__active_yn=True)
         ).distinct().order_by('my_label_id')
 
         if not labels.exists():
@@ -1741,7 +1741,7 @@ def bulk_export_products_excel(request):
                     label.prdlst_dcnm or '',
                     meta.get_status_display() if meta else '',
                     label.update_datetime.strftime('%y-%m-%d %H:%M') if label.update_datetime else '',
-                    '★' if (meta and meta.is_starred) else '',
+                    '★' if (meta and meta.starred_yn) else '',
                     meta.folder.name if (meta and meta.folder) else '',
                 ])
             style_ws(ws)
@@ -1804,7 +1804,7 @@ def bulk_export_products_excel(request):
                             bom.ingredient_name or '',
                             float(bom.usage_ratio) if bom.usage_ratio is not None else '',
                             bom.origin or '', bom.allergen or '',
-                            '○' if bom.is_additive else '',
+                            '○' if bom.additive_yn else '',
                             bom.additive_role or '', bom.notes or '',
                         ])
                         row_idx += 1
@@ -1821,11 +1821,11 @@ def bulk_export_products_excel(request):
             ws.append(['번호', '제품명', '문서 구분', '파일명', '발행일', '만료일', '상태', '등록자', '등록일'])
             row_idx = 1
             for label in labels:
-                slots = DocumentSlot.objects.filter(label=label, is_hidden=False).select_related('document_type')
+                slots = DocumentSlot.objects.filter(label=label, hidden_yn=False).select_related('document_type')
                 if slots.exists():
                     for slot in slots:
                         doc = ProductDocument.objects.filter(
-                            label=label, document_type=slot.document_type, is_active=True
+                            label=label, document_type=slot.document_type, active_yn=True
                         ).order_by('-uploaded_datetime').first()
                         today_date = timezone.now().date()
                         if doc:
@@ -1989,12 +1989,12 @@ def product_favorite_toggle(request, product_id):
         metadata = ProductMetadata.objects.create(
             label=label,
             product_code=product_code,
-            is_starred=False
+            starred_yn=False
         )
     
     # 즐겨찾기 토글
-    metadata.is_starred = not metadata.is_starred
-    if metadata.is_starred:
+    metadata.starred_yn = not metadata.starred_yn
+    if metadata.starred_yn:
         metadata.starred_datetime = timezone.now()
     else:
         metadata.starred_datetime = None
@@ -2002,7 +2002,7 @@ def product_favorite_toggle(request, product_id):
     
     return JsonResponse({
         'success': True,
-        'is_starred': metadata.is_starred
+        'starred_yn': metadata.starred_yn
     })
 
 
@@ -2019,9 +2019,9 @@ def product_trash(request):
 @require_POST
 def product_restore(request, product_id):
     """제품 복원"""
-    product = get_object_or_404(Product, product_id=product_id, owner=request.user, is_deleted=True)
+    product = get_object_or_404(Product, product_id=product_id, owner=request.user, deleted_yn=True)
     
-    product.is_deleted = False
+    product.deleted_yn = False
     product.deleted_datetime = None
     product.save()
     
@@ -2033,7 +2033,7 @@ def product_restore(request, product_id):
 @require_POST
 def product_permanent_delete(request, product_id):
     """제품 영구 삭제"""
-    product = get_object_or_404(Product, product_id=product_id, owner=request.user, is_deleted=True)
+    product = get_object_or_404(Product, product_id=product_id, owner=request.user, deleted_yn=True)
     
     product.delete()
     
@@ -2063,7 +2063,7 @@ def sharing_inbox(request):
     # ProductShare 기반으로 직접 조회 (recipient_user 또는 이메일 매칭 모두 포함)
     my_shares = ProductShare.objects.filter(
         Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email),
-        is_active=True,
+        active_yn=True,
     ).filter(
         Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
     ).select_related(
@@ -2164,7 +2164,7 @@ def nutrition_workspace(request, label_id):
         # 공유 사용자 접근 허용
         shared_share = ProductShare.objects.filter(
             label__my_label_id=label_id,
-            is_active=True
+            active_yn=True
         ).filter(
             Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
         ).filter(
@@ -2197,7 +2197,7 @@ def nutrition_data_api(request, label_id):
     except MyLabel.DoesNotExist:
         shared_share = ProductShare.objects.filter(
             label__my_label_id=label_id,
-            is_active=True
+            active_yn=True
         ).filter(
             Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
         ).filter(
@@ -2262,7 +2262,7 @@ def nutrition_save_api(request, label_id):
     except MyLabel.DoesNotExist:
         shared_share = ProductShare.objects.filter(
             label__my_label_id=label_id,
-            is_active=True
+            active_yn=True
         ).filter(
             Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
         ).filter(
@@ -2347,7 +2347,7 @@ def received_share_detail(request, receipt_id):
 def received_share_accept(request, receipt_id):
     """공유 수락"""
     receipt = get_object_or_404(SharedProductReceipt, receipt_id=receipt_id, receiver=request.user)
-    receipt.is_accepted = True
+    receipt.accepted_yn = True
     receipt.accepted_datetime = timezone.now()
     receipt.save()
     messages.success(request, '공유를 수락했습니다.')
@@ -2359,7 +2359,7 @@ def received_share_accept(request, receipt_id):
 def use_as_ingredient(request, receipt_id):
     """원료로 사용"""
     receipt = get_object_or_404(SharedProductReceipt, receipt_id=receipt_id, receiver=request.user)
-    receipt.is_used_as_ingredient = True
+    receipt.used_as_ingredient_yn = True
     receipt.save()
     messages.success(request, '원료로 등록했습니다.')
     return redirect('products:inbox')
@@ -2369,7 +2369,7 @@ def _get_editor_share_for_label(request, label):
     """요청 사용자가 해당 label에 EDITOR 역할로 공유받은 share를 반환. 없으면 None."""
     return ProductShare.objects.filter(
         label=label,
-        is_active=True,
+        active_yn=True,
         sharepermission__role_code='EDITOR',
     ).filter(
         Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
@@ -2427,12 +2427,12 @@ def share_create(request, label_id):
 
     recipient_user = User.objects.filter(email__iexact=email).first()
 
-    if existing_share and existing_share.is_active:
+    if existing_share and existing_share.active_yn:
         return JsonResponse({'success': False, 'error': '이미 공유된 사용자입니다.'}, status=400)
 
-    if existing_share and not existing_share.is_active:
+    if existing_share and not existing_share.active_yn:
         share = existing_share
-        share.is_active = True
+        share.active_yn = True
         share.recipient_email = email
         share.recipient_user = recipient_user
         share.recipient_name = recipient_name
@@ -2535,8 +2535,8 @@ def share_revoke(request, share_id):
         }
     )
     
-    share.is_active = False
-    share.save(update_fields=['is_active', 'updated_datetime'])
+    share.active_yn = False
+    share.save(update_fields=['active_yn', 'updated_datetime'])
     return JsonResponse({'success': True})
 
 
@@ -2665,7 +2665,7 @@ def public_share_view(request, share_token):
 # 문서 타입 자동 감지
 def detect_document_type(filename):
     """파일명을 분석하여 적절한 문서 타입을 자동 감지"""
-    all_types = DocumentType.objects.filter(is_active=True).exclude(detection_keywords='')
+    all_types = DocumentType.objects.filter(active_yn=True).exclude(detection_keywords='')
     
     for dtype in all_types:
         if dtype.matches_filename(filename):
@@ -2678,10 +2678,10 @@ def detect_document_type(filename):
             'type_name': '기타',
             'icon': 'bi-file-earmark',
             'color': '#6c757d',
-            'is_required': False,
+            'required_yn': False,
             'default_validity_days': 365,
             'detection_keywords': '',
-            'is_active': True
+            'active_yn': True
         }
     )
     return other_type
@@ -2694,7 +2694,7 @@ def document_type_list(request):
         messages.warning(request, '문서 타입은 관리자만 조회할 수 있습니다. Django Admin을 이용해주세요.')
         return redirect('/admin/documents/documenttype/')
     
-    types = DocumentType.objects.filter(is_active=True).order_by('display_order', 'type_name')
+    types = DocumentType.objects.filter(active_yn=True).order_by('display_order', 'type_name')
     
     context = {
         'types': types,
@@ -2728,7 +2728,7 @@ def document_type_update(request, type_id):
 @login_required
 def document_types_api(request):
     """문서 타입 목록 API (드롭존 생성용)"""
-    types = DocumentType.objects.filter(is_active=True).order_by('display_order')
+    types = DocumentType.objects.filter(active_yn=True).order_by('display_order')
     
     data = [{
         'type_id': t.type_id,
@@ -2736,7 +2736,7 @@ def document_types_api(request):
         'type_name': t.type_name,
         'icon': t.icon,
         'color': t.color,
-        'is_required': t.is_required,
+        'required_yn': t.required_yn,
         'default_validity_days': t.default_validity_days,
         'detection_keywords': t.detection_keywords,
     } for t in types]
@@ -2764,7 +2764,7 @@ def document_upload_api(request, label_id):
         except MyLabel.DoesNotExist:
             shared_share = ProductShare.objects.filter(
                 label__my_label_id=label_id,
-                is_active=True,
+                active_yn=True,
             ).filter(
                 Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
             ).filter(
@@ -2828,7 +2828,7 @@ def document_upload_api(request, label_id):
             # 문서 타입 결정 (지정 vs 자동 분류)
             auto_detected = False
             if document_type_id:
-                document_type = get_object_or_404(DocumentType, type_id=document_type_id, is_active=True)
+                document_type = get_object_or_404(DocumentType, type_id=document_type_id, active_yn=True)
             else:
                 # 파일명 기반 자동 분류
                 document_type = detect_document_type(uploaded_file.name)
@@ -2951,7 +2951,7 @@ def document_delete_api(request, document_id):
             ProductDocument,
             document_id=document_id,
             label__user_id=request.user,
-            is_active=True
+            active_yn=True
         )
         
         # 삭제 전 정보 저장
@@ -2960,7 +2960,7 @@ def document_delete_api(request, document_id):
         label = document.label
         
         # Soft Delete
-        document.is_active = False
+        document.active_yn = False
         document.save()
         
         # 활동 로그 생성
@@ -3031,7 +3031,7 @@ def bulk_download(request):
     documents = ProductDocument.objects.filter(
         document_id__in=document_ids,
         label__user_id=request.user,
-        is_active=True
+        active_yn=True
     ).select_related('label', 'document_type')
     
     if not documents.exists():
@@ -3112,7 +3112,7 @@ def bulk_download_version(request, label_id):
     
     documents = ProductDocument.objects.filter(
         label=label,
-        is_active=True
+        active_yn=True
     ).select_related('document_type')
     
     if not documents.exists():
@@ -3182,7 +3182,7 @@ def document_download(request, document_id):
         ProductDocument,
         document_id=document_id,
         label__user_id=request.user,
-        is_active=True
+        active_yn=True
     )
     
     try:
@@ -3203,7 +3203,7 @@ def expiring_documents(request):
     
     documents = ProductDocument.objects.filter(
         label__user_id=request.user,
-        is_active=True,
+        active_yn=True,
         expiry_date__isnull=False,
         expiry_date__gte=today,
         expiry_date__lte=alert_date
@@ -3224,7 +3224,7 @@ def expired_documents(request):
     
     documents = ProductDocument.objects.filter(
         label__user_id=request.user,
-        is_active=True,
+        active_yn=True,
         expiry_date__isnull=False,
         expiry_date__lt=today
     ).select_related('label', 'document_type').order_by('-expiry_date')
@@ -3255,7 +3255,7 @@ def _get_label_access(request, label_id):
     except MyLabel.DoesNotExist:
         shared_share = ProductShare.objects.filter(
             label__my_label_id=label_id,
-            is_active=True
+            active_yn=True
         ).filter(
             Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
         ).filter(
@@ -3276,7 +3276,7 @@ def comment_list(request, label_id):
     if not label:
         return JsonResponse({'success': False, 'error': '접근 권한이 없습니다.'}, status=403)
 
-    comments = ProductComment.objects.filter(label=label, is_resolved=False).select_related('author').order_by('-created_at')
+    comments = ProductComment.objects.filter(label=label, resolved_yn=False).select_related('author').order_by('-created_at')
     payload = []
     for comment in comments:
         payload.append({
@@ -3420,7 +3420,7 @@ def bulk_delete_documents(request):
         documents = ProductDocument.objects.filter(
             document_id__in=document_ids,
             label__user_id=request.user,
-            is_active=True
+            active_yn=True
         )
         
         deleted_count = 0
@@ -3430,7 +3430,7 @@ def bulk_delete_documents(request):
             label = document.label
             
             # Soft Delete
-            document.is_active = False
+            document.active_yn = False
             document.save()
             
             # 활동 로그 생성
@@ -3469,7 +3469,7 @@ def toggle_document_notification(request, document_id):
             ProductDocument,
             document_id=document_id,
             label__user_id=request.user,
-            is_active=True
+            active_yn=True
         )
         
         # 알림 토글
@@ -3562,7 +3562,7 @@ def document_update(request, document_id):
                 document.document_type = new_document_type
                 
                 # 슬롯 재연결
-                if new_document_type.is_required:
+                if new_document_type.required_yn:
                     # 필수 문서: 해당 타입의 슬롯 찾기/생성
                     new_slot, created = DocumentSlot.objects.get_or_create(
                         label=document.label,
@@ -3583,7 +3583,7 @@ def document_update(request, document_id):
                         # 같은 슬롯의 다른 활성 문서 찾기
                         replacement = ProductDocument.objects.filter(
                             slot=old_slot,
-                            is_active=True
+                            active_yn=True
                         ).exclude(document_id=document.document_id).order_by('-uploaded_datetime').first()
                         old_slot.current_document = replacement
                     old_slot.update_status()
@@ -3594,7 +3594,7 @@ def document_update(request, document_id):
                     # 이 문서가 가장 최신인지 확인
                     latest_doc = ProductDocument.objects.filter(
                         slot=document.slot,
-                        is_active=True
+                        active_yn=True
                     ).order_by('-uploaded_datetime').first()
                     
                     if latest_doc == document:
@@ -3669,14 +3669,14 @@ def toggle_slot_visibility(request, slot_id):
         )
         
         # 필수 문서는 숨길 수 없음
-        if slot.document_type.is_required:
+        if slot.document_type.required_yn:
             return JsonResponse({
                 'success': False,
                 'error': '필수 문서 슬롯은 숨길 수 없습니다.'
             }, status=400)
         
         # 숨김 상태 토글
-        slot.is_hidden = not slot.is_hidden
+        slot.hidden_yn = not slot.hidden_yn
         slot.save()
         
         # 활동 로그
@@ -3688,13 +3688,13 @@ def toggle_slot_visibility(request, slot_id):
             details={
                 'slot_id': slot.slot_id,
                 'document_type': slot.document_type.type_name,
-                'is_hidden': slot.is_hidden
+                'hidden_yn': slot.hidden_yn
             }
         )
         
         return JsonResponse({
             'success': True,
-            'is_hidden': slot.is_hidden
+            'hidden_yn': slot.hidden_yn
         })
         
     except Exception as e:
@@ -3725,12 +3725,12 @@ def add_document_slot(request, label_id):
                 'error': '문서 종류를 선택해주세요.'
             }, status=400)
 
-        document_type = get_object_or_404(DocumentType, type_id=document_type_id, is_active=True)
+        document_type = get_object_or_404(DocumentType, type_id=document_type_id, active_yn=True)
 
         slot = DocumentSlot.objects.filter(label=label, document_type=document_type).first()
         if slot:
-            if slot.is_hidden:
-                slot.is_hidden = False
+            if slot.hidden_yn:
+                slot.hidden_yn = False
                 slot.save()
                 message = '숨겨진 문서가 다시 표시됩니다.'
             else:
@@ -3763,7 +3763,7 @@ def remove_document_slot(request, slot_id):
             label__user_id=request.user
         )
 
-        slot.is_hidden = True
+        slot.hidden_yn = True
         slot.save()
 
         from .models import ProductActivityLog
@@ -3774,7 +3774,7 @@ def remove_document_slot(request, slot_id):
             details={
                 'slot_id': slot.slot_id,
                 'document_type': slot.document_type.type_name,
-                'was_required': slot.document_type.is_required,
+                'was_required': slot.document_type.required_yn,
             }
         )
 
@@ -3800,7 +3800,7 @@ def notification_list(request):
     ).select_related('label').order_by('-created_at')[:30]
 
     unread_count = ProductNotification.objects.filter(
-        recipient=request.user, is_read=False
+        recipient=request.user, read_yn=False
     ).count()
 
     items = []
@@ -3808,7 +3808,7 @@ def notification_list(request):
         items.append({
             'id': n.id,
             'message': n.message,
-            'is_read': n.is_read,
+            'read_yn': n.read_yn,
             'status_code': n.status_code,
             'created_at': n.created_at.strftime('%Y-%m-%d %H:%M'),
             'label_id': n.label_id,
@@ -3821,12 +3821,12 @@ def notification_list(request):
         from v1.regulatory.models import NewsProductMatch
         reg_matches = (
             NewsProductMatch.objects
-            .filter(product__user_id=request.user, is_false_positive=False)
+            .filter(product__user_id=request.user, false_positive_yn=False)
             .select_related('news', 'product')
             .order_by('-created_at')[:10]
         )
         reg_unread = NewsProductMatch.objects.filter(
-            product__user_id=request.user, is_read=False, is_false_positive=False
+            product__user_id=request.user, read_yn=False, false_positive_yn=False
         ).count()
         unread_count += reg_unread
 
@@ -3837,7 +3837,7 @@ def notification_list(request):
                     f"⚠️ 부적합.처분 알림: '{m.news.product_name[:20]}' 부적합 — "
                     f"내 제품 '{m.product.my_label_name[:20]}' 연관 가능성"
                 ),
-                'is_read':     m.is_read,
+                'read_yn':     m.read_yn,
                 'status_code': 'REGULATORY',
                 'created_at':  m.created_at.strftime('%Y-%m-%d %H:%M'),
                 'label_id':    m.product.my_label_id,
@@ -3848,7 +3848,7 @@ def notification_list(request):
         pass  # 앱 미설치 환경 안전 처리
 
     # 미읽음 우선 정렬
-    items.sort(key=lambda x: (0 if not x['is_read'] else 1, x['created_at']), reverse=False)
+    items.sort(key=lambda x: (0 if not x['read_yn'] else 1, x['created_at']), reverse=False)
     items = items[:30]
 
     return JsonResponse({'notifications': items, 'unread': unread_count})
@@ -3873,34 +3873,34 @@ def notification_mark_read(request):
             reg_id = int(str(notification_id).replace('reg_', ''))
             NewsProductMatch.objects.filter(
                 id=reg_id, product__user_id=request.user
-            ).update(is_read=True, read_at=tz.now())
+            ).update(read_yn=True, read_at=tz.now())
         except Exception:
             pass
     elif notification_id:
         ProductNotification.objects.filter(
             id=notification_id, recipient=request.user
-        ).update(is_read=True)
+        ).update(read_yn=True)
     else:
         # 전체 읽음: 제품 알림 + 부적합.처분 알림 모두
         ProductNotification.objects.filter(
-            recipient=request.user, is_read=False
-        ).update(is_read=True)
+            recipient=request.user, read_yn=False
+        ).update(read_yn=True)
         try:
             from v1.regulatory.models import NewsProductMatch
             NewsProductMatch.objects.filter(
-                product__user_id=request.user, is_read=False
-            ).update(is_read=True, read_at=tz.now())
+                product__user_id=request.user, read_yn=False
+            ).update(read_yn=True, read_at=tz.now())
         except Exception:
             pass
 
     unread_count = ProductNotification.objects.filter(
-        recipient=request.user, is_read=False
+        recipient=request.user, read_yn=False
     ).count()
     try:
         from v1.regulatory.models import NewsProductMatch
         unread_count += NewsProductMatch.objects.filter(
-            product__user_id=request.user, is_read=False,
-            is_false_positive=False,
+            product__user_id=request.user, read_yn=False,
+            false_positive_yn=False,
         ).count()
     except Exception:
         pass
@@ -3915,7 +3915,7 @@ def contacts(request):
     # 내가 공유한 이메일 목록 (고유값, 최신 이름/회사명 우선)
     sent_shares = (
         ProductShare.objects
-        .filter(label__user_id=request.user, share_mode='PRIVATE', is_active=True)
+        .filter(label__user_id=request.user, share_mode='PRIVATE', active_yn=True)
         .exclude(recipient_email__isnull=True)
         .select_related('permission')
         .order_by('recipient_email', '-created_datetime')
@@ -3939,7 +3939,7 @@ def contacts(request):
     # 나에게 공유한 사람들 (received)
     received_shares = (
         ProductShare.objects
-        .filter(share_mode='PRIVATE', is_active=True)
+        .filter(share_mode='PRIVATE', active_yn=True)
         .filter(Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email))
         .select_related('label', 'label__user_id')
         .order_by('-created_datetime')
@@ -4000,7 +4000,7 @@ def contacts_api_list(request):
     """연락처 목록 JSON API"""
     sent_shares = (
         ProductShare.objects
-        .filter(label__user_id=request.user, share_mode='PRIVATE', is_active=True)
+        .filter(label__user_id=request.user, share_mode='PRIVATE', active_yn=True)
         .exclude(recipient_email__isnull=True)
         .values('recipient_email', 'recipient_name', 'recipient_company')
         .distinct()
@@ -4019,7 +4019,7 @@ def contacts_api_list(request):
 
     received_shares = (
         ProductShare.objects
-        .filter(share_mode='PRIVATE', is_active=True)
+        .filter(share_mode='PRIVATE', active_yn=True)
         .filter(Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email))
         .select_related('label__user_id')
     )
@@ -4050,7 +4050,7 @@ def contacts_api_shares(request):
     for s in (
         ProductShare.objects
         .filter(label__user_id=request.user, recipient_email__iexact=email,
-                share_mode='PRIVATE', is_active=True)
+                share_mode='PRIVATE', active_yn=True)
         .select_related('label', 'permission')
         .order_by('-created_datetime')
     ):
@@ -4077,7 +4077,7 @@ def contacts_api_shares(request):
         sharer = sharer_users.first()
         for s in (
             ProductShare.objects
-            .filter(label__user_id=sharer, share_mode='PRIVATE', is_active=True)
+            .filter(label__user_id=sharer, share_mode='PRIVATE', active_yn=True)
             .filter(Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email))
             .select_related('label', 'permission')
             .order_by('-created_datetime')
@@ -4126,7 +4126,7 @@ def contacts_api_doc_requests(request):
                 'submitted':       s.submitted_datetime.strftime('%Y-%m-%d %H:%M') if s.submitted_datetime else '',
                 'submitted_by':    s.submitted_by_name or s.submitted_by_email or '',
             }
-            for s in dr.submissions.filter(is_active=True)
+            for s in dr.submissions.filter(active_yn=True)
         ]
         data.append({
             'request_id':          dr.request_id,
@@ -4170,7 +4170,7 @@ def doc_request_submit(request, req_id):
             submitted_by_email = request.user.email,
             submitted_by_name  = request.user.get_full_name() or request.user.username,
             notes              = notes,
-            is_active          = True,
+            active_yn          = True,
         )
         sub.save()
         saved.append({'document_type': key, 'filename': f.name})
@@ -4203,7 +4203,7 @@ def contacts_api_received_doc_requests(request):
                 'file_url':      s.file.url if s.file else '',
                 'submitted':     s.submitted_datetime.strftime('%Y-%m-%d %H:%M') if s.submitted_datetime else '',
             }
-            for s in dr.submissions.filter(is_active=True)
+            for s in dr.submissions.filter(active_yn=True)
         ]
         data.append({
             'request_id':          dr.request_id,
@@ -4267,8 +4267,8 @@ def doc_request_accept(request, req_id):
 def api_doc_types(request):
     """활성화된 문서 유형 목록 JSON"""
     from v1.products.models import DocumentType
-    types = DocumentType.objects.filter(is_active=True).values(
-        'type_id', 'type_code', 'type_name', 'icon', 'color', 'is_required', 'description'
+    types = DocumentType.objects.filter(active_yn=True).values(
+        'type_id', 'type_code', 'type_name', 'icon', 'color', 'required_yn', 'description'
     ).order_by('display_order', 'type_name')
     return JsonResponse({'doc_types': list(types)})
 
@@ -4297,7 +4297,7 @@ def api_send_doc_request(request):
     if not type_ids:
         return JsonResponse({'error': '요청할 문서 종류를 선택해주세요.'}, status=400)
 
-    doc_types = list(DocumentType.objects.filter(type_id__in=type_ids, is_active=True))
+    doc_types = list(DocumentType.objects.filter(type_id__in=type_ids, active_yn=True))
     if not doc_types:
         return JsonResponse({'error': '유효한 문서 종류가 없습니다.'}, status=400)
     doc_names = ', '.join(dt.type_name for dt in doc_types)

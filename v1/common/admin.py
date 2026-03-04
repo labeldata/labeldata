@@ -1,4 +1,4 @@
-from django.contrib import admin
+﻿from django.contrib import admin
 from django.urls import reverse  # reverse는 이미 import되어 있음
 from django.utils.html import format_html  # format_html import 추가
 from .models import ApiKey, ApiEndpoint, UserActivityLog    
@@ -71,7 +71,7 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
         ('Personal info', {'fields': ('first_name', 'last_name', 'email')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Permissions', {'fields': ('active_yn', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
     

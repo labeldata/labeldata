@@ -1,4 +1,4 @@
-{% extends "base_v2.html" %}
+﻿{% extends "base_v2.html" %}
 {% load static %}
 
 {% block title %}제품 관리 - Food Data Portal{% endblock %}
@@ -197,7 +197,7 @@
                 <tr class="product-row" 
                     data-product-id="{{ item.label.my_label_id }}"
                     data-is-owned="{{ item.is_owned|yesno:'true,false' }}"
-                    data-is-starred="{{ item.is_starred|yesno:'true,false' }}"
+                    data-is-starred="{{ item.starred_yn|yesno:'true,false' }}"
                     data-has-expiring="{% for doc in expiring_documents %}{% if doc.label.my_label_id == item.label.my_label_id %}true{% endif %}{% endfor %}"
                     data-status="{{ item.metadata.status|default:'DRAFT' }}"
                     data-update-date="{{ item.label.update_datetime|date:'Y-m-d' }}">
@@ -299,7 +299,7 @@
                         {% endif %}
                     </td>
                     <td class="text-center" onclick="event.stopPropagation();">
-                        {% if item.is_starred %}
+                        {% if item.starred_yn %}
                         <i class="bi bi-star-fill text-warning"></i>
                         {% else %}
                         <i class="bi bi-star text-muted"></i>

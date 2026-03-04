@@ -1,4 +1,4 @@
-{% extends "base_v2.html" %}
+﻿{% extends "base_v2.html" %}
 {% load static %}
 {% load django_bootstrap5 %}
 
@@ -28,9 +28,9 @@
                 </h6>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox"
-                           name="is_raw_material" id="is_raw_material"
-                           {% if metadata.is_raw_material %}checked{% endif %}>
-                    <label class="form-check-label fw-medium" for="is_raw_material">이 제품을 원료로 사용</label>
+                           name="raw_material_yn" id="raw_material_yn"
+                           {% if metadata.raw_material_yn %}checked{% endif %}>
+                    <label class="form-check-label fw-medium" for="raw_material_yn">이 제품을 원료로 사용</label>
                 </div>
                 <div class="form-text mt-1">
                     체크하면 <strong>원료 관리</strong> 목록에 자동 등록되어, 다른 제품의 원재료로 선택할 수 있습니다.

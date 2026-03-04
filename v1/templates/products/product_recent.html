@@ -1,4 +1,4 @@
-{% extends "base_v2.html" %}
+﻿{% extends "base_v2.html" %}
 {% load static %}
 
 {% block title %}{{ title }}{% endblock %}
@@ -21,7 +21,7 @@
         {% for log in recent_logs %}
         <div class="product-card">
             <div class="d-flex align-items-center gap-2">
-                {% if log.product.is_starred %}
+                {% if log.product.starred_yn %}
                 <i class="bi bi-star-fill text-warning"></i>
                 {% else %}
                 <i class="bi bi-box-seam text-primary"></i>

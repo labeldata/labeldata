@@ -33,7 +33,7 @@ def _resolve_label_and_permission(request, label_id):
 
     shared_share = ProductShare.objects.filter(
         label__my_label_id=label_id,
-        is_active=True,
+        active_yn=True,
     ).filter(
         Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
     ).filter(
@@ -115,7 +115,7 @@ def api_ingredient_search(request):
             'allergens': ingredient.allergens or '',
             'food_type': ingredient.prdlst_dcnm or '',
             'gmo': ingredient.gmo or '',
-            'is_gmo': bool(ingredient.gmo),
+            'gmo_yn': bool(ingredient.gmo),
             'report_no': ingredient.prdlst_report_no or '',
             'manufacturer': ingredient.bssh_nm or '',
             'id': ingredient.my_ingredient_id
@@ -124,7 +124,7 @@ def api_ingredient_search(request):
     from v1.products.models import SharedProductReceipt
     shared_receipts = SharedProductReceipt.objects.filter(
         receiver=request.user,
-        is_accepted=True,
+        accepted_yn=True,
         share__permission__can_use_as_ingredient=True
     ).filter(
         Q(share__label__my_label_name__icontains=query) |
@@ -142,7 +142,7 @@ def api_ingredient_search(request):
             'raw_material_name': raw_material_name,
             'allergens': getattr(label, 'allergens', '') or '',
             'food_type': label.prdlst_dcnm or '',
-            'is_gmo': False,
+            'gmo_yn': False,
             'report_no': label.prdlst_report_no or '',
             'manufacturer': label.bssh_nm or '',
             'owner': receipt.share.created_by.username,
@@ -186,7 +186,7 @@ def api_palette_list(request):
             'allergens': ingredient.allergens or '',
             'food_type': ingredient.prdlst_dcnm or '',
             'gmo': ingredient.gmo or '',
-            'is_gmo': bool(ingredient.gmo),
+            'gmo_yn': bool(ingredient.gmo),
             'report_no': ingredient.prdlst_report_no or '',
             'manufacturer': ingredient.bssh_nm or '',
             'type': 'ingredient',
@@ -196,7 +196,7 @@ def api_palette_list(request):
     from v1.products.models import SharedProductReceipt
     shared_receipts = SharedProductReceipt.objects.filter(
         receiver=request.user,
-        is_accepted=True,
+        accepted_yn=True,
         share__permission__can_use_as_ingredient=True
     )
 
@@ -224,7 +224,7 @@ def api_palette_list(request):
             'allergens': getattr(label, 'allergens', '') or '',
             'food_type': label.prdlst_dcnm or '',
             'gmo': '',
-            'is_gmo': False,
+            'gmo_yn': False,
             'report_no': label.prdlst_report_no or '',
             'manufacturer': label.bssh_nm or '',
             'type': 'shared',
@@ -314,9 +314,9 @@ def api_load_from_label(request, label_id):
             'allergens': getattr(label, 'allergens', '') or '',
             'origin_detail': label.country_of_origin or '',
             'food_type': label.prdlst_dcnm or '',
-            'is_additive': False,
+            'additive_yn': False,
             'additive_role': '',
-            'is_gmo': False,
+            'gmo_yn': False,
             'report_no': label.prdlst_report_no or '',
             'manufacturer': label.bssh_nm or '',
             'source_label_id': label.my_label_id,
@@ -338,7 +338,7 @@ def bom_data_api(request, label_id):
     
     boms = ProductBOM.objects.filter(
         parent_label=label,
-        is_active=True
+        active_yn=True
     ).select_related(
         'child_label',
         'shared_receipt__share__label'
@@ -383,9 +383,9 @@ def bom_data_api(request, label_id):
             'gmo': bom.gmo or '',
             'origin_detail': bom.origin_detail or '',
             'food_type': bom.food_type or '',
-            'is_additive': bom.is_additive,
+            'additive_yn': bom.additive_yn,
             'additive_role': bom.additive_role or '',
-            'is_gmo': bom.is_gmo,
+            'gmo_yn': bom.gmo_yn,
             'report_no': bom.report_no or '',
             'manufacturer': bom.manufacturer or '',
             'source_label_id': bom.source_ingredient_id,
@@ -428,7 +428,7 @@ def bom_save_api(request, label_id):
         bom_items = data.get('items', [])
 
         # 기존 BOM 비활성화
-        ProductBOM.objects.filter(parent_label=label).update(is_active=False)
+        ProductBOM.objects.filter(parent_label=label).update(active_yn=False)
 
         for idx, item in enumerate(bom_items):
             if not item.get('ingredient_name'):
@@ -505,9 +505,9 @@ def bom_save_api(request, label_id):
                 gmo              = item.get('gmo') or '',
                 origin_detail    = item.get('origin_detail') or '',
                 food_type        = item.get('food_type') or '',
-                is_additive      = bool(item.get('is_additive')),
+                additive_yn      = bool(item.get('additive_yn')),
                 additive_role    = item.get('additive_role') or '',
-                is_gmo           = bool(item.get('is_gmo')),
+                gmo_yn           = bool(item.get('gmo_yn')),
                 report_no        = item.get('report_no') or '',
                 manufacturer     = item.get('manufacturer') or '',
                 source_ingredient= source_ingredient,
@@ -515,7 +515,7 @@ def bom_save_api(request, label_id):
                 summary_type     = item.get('summary_type', '식품유형'),
                 level            = item.get('level', 1),
                 sort_order       = idx,
-                is_active        = True,
+                active_yn        = True,
                 child_label      = child_label,
                 shared_receipt   = shared_receipt,
             )
@@ -536,7 +536,7 @@ def bom_save_api(request, label_id):
 
         # ── LabelIngredientRelation 동기화 (source_ingredient FK 기반) ──────
         saved_boms = ProductBOM.objects.filter(
-            parent_label=label, is_active=True
+            parent_label=label, active_yn=True
         ).select_related('source_ingredient')
 
         valid_ing_ids = {
@@ -637,9 +637,9 @@ def bom_load_from_label_api(request, label_id):
                 'allergens': allergens_text or allergen,
                 'origin_detail': origin or origin_text,
                 'food_type': label.prdlst_dcnm or '',
-                'is_additive': False,
+                'additive_yn': False,
                 'additive_role': '',
-                'is_gmo': False,
+                'gmo_yn': False,
                 'report_no': label.prdlst_report_no or '',
                 'manufacturer': label.bssh_nm or '',
                 'source_label_id': label.my_label_id,
@@ -673,7 +673,7 @@ def bom_calculate_nutrition(request, label_id):
         # DB에서 저장된 BOM 가져오기
         bom_items = list(ProductBOM.objects.filter(
             parent_label=label,
-            is_active=True
+            active_yn=True
         ).values('ingredient_name', 'usage_ratio', 'usage_amount'))
     
     # 영양성분 초기화 (향후 구현)
@@ -729,7 +729,7 @@ def bom_autocomplete(request):
     from v1.products.models import SharedProductReceipt
     shared = SharedProductReceipt.objects.filter(
         receiver=request.user,
-        is_accepted=True,
+        accepted_yn=True,
         share__permission__can_use_as_ingredient=True
     ).filter(
         Q(share__label__my_label_name__icontains=query) |

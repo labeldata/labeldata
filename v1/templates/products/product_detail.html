@@ -1,4 +1,4 @@
-{% extends "base_v2.html" %}
+﻿{% extends "base_v2.html" %}
 {% load static v2_tags %}
 
 {% block title %}{{ product.my_label_name|default:product.prdlst_nm }} - 워크스페이스{% endblock %}
@@ -27,9 +27,9 @@
                         placeholder="라벨명을 입력하세요"
                     >
                     <i id="favorite-star" 
-                       class="bi {% if metadata.is_starred %}bi-star-fill text-warning{% else %}bi-star text-muted{% endif %} cursor-pointer"
+                       class="bi {% if metadata.starred_yn %}bi-star-fill text-warning{% else %}bi-star text-muted{% endif %} cursor-pointer"
                        onclick="toggleFavorite()"
-                       title="{% if metadata.is_starred %}즐겨찾기 해제{% else %}즐겨찾기 추가{% endif %}"></i>
+                       title="{% if metadata.starred_yn %}즐겨찾기 해제{% else %}즐겨찾기 추가{% endif %}"></i>
 
                     <button class="btn btn-sm btn-link p-0 text-decoration-none text-muted d-flex align-items-center ms-2" type="button" onclick="saveProductInfo()">
                         <i class="bi bi-cloud-arrow-up me-1"></i> 저장
@@ -2935,7 +2935,7 @@ function toggleFavorite() {
     .then(data => {
         if (data.success) {
             // 아이콘 업데이트
-            if (data.is_starred) {
+            if (data.starred_yn) {
                 starIcon.classList.remove('bi-star', 'text-muted');
                 starIcon.classList.add('bi-star-fill', 'text-warning');
                 starIcon.title = '즐겨찾기 해제';
@@ -3008,7 +3008,7 @@ function getCookie(name) {
                             {% endif %}
                         </div>
                         <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                            {% if slot.document_type.is_required %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:10px;">필수</span>{% endif %}
+                            {% if slot.document_type.required_yn %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:10px;">필수</span>{% endif %}
                             <span class="badge {% if slot.status == 'VALID' %}bg-success-subtle text-success{% elif slot.status == 'EXPIRING' %}bg-warning-subtle text-warning{% elif slot.status == 'EXPIRED' %}bg-danger-subtle text-danger{% else %}bg-secondary-subtle text-secondary{% endif %}" style="font-size:10px;">
                                 {% if slot.status == 'VALID' %}유효{% elif slot.status == 'EXPIRING' %}임박{% elif slot.status == 'EXPIRED' %}만료{% else %}미등록{% endif %}
                             </span>
@@ -3029,7 +3029,7 @@ function getCookie(name) {
                             {% endif %}
                         </div>
                         <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                            {% if dtype.is_required %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:10px;">필수</span>{% endif %}
+                            {% if dtype.required_yn %}<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:10px;">필수</span>{% endif %}
                         </div>
                     </label>
                     {% endfor %}

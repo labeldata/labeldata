@@ -1,4 +1,4 @@
-"""
+﻿"""
 매칭 엔진 (matcher.py)
 AI 추출 키워드를 사용자 BOM/원료에서 RapidFuzz 퍼지 매칭 후
 카테고리별 등급판정으로 관련도를 산출합니다.
@@ -394,7 +394,7 @@ def save_ingredient_matches(news: RegulatoryNews, user: User,
                             matches: list[dict]) -> int:
     """
     find_matching_ingredients_unlinked() 결과를 NewsIngredientMatch 테이블에 저장.
-    기존 레코드는 위해도만 갱신 (is_dismissed 유지).
+    기존 레코드는 위해도만 갱신 (dismissed_yn 유지).
     Returns: 신규 저장 건수
     """
     saved = 0

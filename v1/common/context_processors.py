@@ -1,4 +1,4 @@
-from django.conf import settings
+﻿from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 
@@ -106,15 +106,15 @@ def regulatory_alerts(request):
         prod_news = set(
             NewsProductMatch.objects.filter(
                 product__user_id=request.user,
-                is_read=False,
-                is_false_positive=False,
+                read_yn=False,
+                false_positive_yn=False,
             ).values_list('news_id', flat=True)
         )
         ing_news = set(
             NewsIngredientMatch.objects.filter(
                 user=request.user,
-                is_read=False,
-                is_dismissed=False,
+                read_yn=False,
+                dismissed_yn=False,
             ).values_list('news_id', flat=True)
         )
         count = len(prod_news | ing_news)

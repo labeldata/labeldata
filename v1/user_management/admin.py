@@ -4,9 +4,9 @@ from .models import UserProfile, CompanyDocument
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ['user', 'company_name', 'license_number', 'is_email_verified', 'is_paid']
+    list_display = ['user', 'company_name', 'license_number', 'email_verified_yn', 'paid_yn']
     search_fields = ['user__email', 'company_name', 'license_number']
-    list_filter = ['is_email_verified', 'is_paid']
+    list_filter = ['email_verified_yn', 'paid_yn']
 
 
 @admin.register(CompanyDocument)

@@ -14,10 +14,10 @@ from .models import (
 
 @admin.register(DocumentType)
 class DocumentTypeAdmin(admin.ModelAdmin):
-    list_display = ['type_code', 'type_name', 'requires_expiry', 'default_validity_days', 'expiry_alert_days', 'is_required', 'is_active', 'display_order']
-    list_editable = ['is_active', 'display_order', 'is_required']
+    list_display = ['type_code', 'type_name', 'requires_expiry', 'default_validity_days', 'expiry_alert_days', 'required_yn', 'active_yn', 'display_order']
+    list_editable = ['active_yn', 'display_order', 'required_yn']
     search_fields = ['type_code', 'type_name', 'description', 'detection_keywords']
-    list_filter = ['requires_expiry', 'is_active', 'is_required']
+    list_filter = ['requires_expiry', 'active_yn', 'required_yn']
     ordering = ['display_order', 'type_name']
     
     fieldsets = (
@@ -36,16 +36,16 @@ class DocumentTypeAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('상태', {
-            'fields': ('is_active', 'is_required')
+            'fields': ('active_yn', 'required_yn')
         }),
     )
 
 
 @admin.register(ProductDocument)
 class ProductDocumentAdmin(admin.ModelAdmin):
-    list_display = ['document_id', 'label', 'document_type', 'original_filename', 'file_size', 'issue_date', 'expiry_date', 'uploaded_by', 'uploaded_datetime', 'is_active']
+    list_display = ['document_id', 'label', 'document_type', 'original_filename', 'file_size', 'issue_date', 'expiry_date', 'uploaded_by', 'uploaded_datetime', 'active_yn']
     search_fields = ['original_filename', 'document_title', 'description']
-    list_filter = ['document_type', 'is_active', 'uploaded_datetime', 'expiry_date']
+    list_filter = ['document_type', 'active_yn', 'uploaded_datetime', 'expiry_date']
     date_hierarchy = 'uploaded_datetime'
     readonly_fields = ['uploaded_datetime', 'file_size', 'file_extension']
     
@@ -64,7 +64,7 @@ class ProductDocumentAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('업로드 정보', {
-            'fields': ('uploaded_by', 'uploaded_datetime', 'is_active'),
+            'fields': ('uploaded_by', 'uploaded_datetime', 'active_yn'),
             'classes': ('collapse',)
         }),
     )
@@ -74,9 +74,9 @@ class ProductDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(ProductComment)
 class ProductCommentAdmin(admin.ModelAdmin):
-    list_display = ['comment_id', 'label', 'field_name', 'author', 'content_preview', 'is_resolved', 'created_at']
+    list_display = ['comment_id', 'label', 'field_name', 'author', 'content_preview', 'resolved_yn', 'created_at']
     search_fields = ['content', 'field_name']
-    list_filter = ['is_resolved', 'created_at', 'author']
+    list_filter = ['resolved_yn', 'created_at', 'author']
     date_hierarchy = 'created_at'
     readonly_fields = ['created_at', 'updated_at']
     
@@ -87,9 +87,9 @@ class ProductCommentAdmin(admin.ModelAdmin):
 
 @admin.register(CommentMention)
 class CommentMentionAdmin(admin.ModelAdmin):
-    list_display = ['mention_id', 'comment', 'mentioned_user', 'is_notified', 'is_read', 'created_at']
+    list_display = ['mention_id', 'comment', 'mentioned_user', 'notified_yn', 'read_yn', 'created_at']
     search_fields = ['mentioned_user__username']
-    list_filter = ['is_notified', 'is_read', 'created_at']
+    list_filter = ['notified_yn', 'read_yn', 'created_at']
     date_hierarchy = 'created_at'
     readonly_fields = ['created_at']
 
@@ -112,9 +112,9 @@ class SharePermissionInline(admin.StackedInline):
 
 @admin.register(ProductShare)
 class ProductShareAdmin(admin.ModelAdmin):
-    list_display = ['share_id', 'label', 'share_mode', 'recipient_email', 'recipient_user', 'is_active', 'share_end_date', 'created_by', 'created_datetime']
+    list_display = ['share_id', 'label', 'share_mode', 'recipient_email', 'recipient_user', 'active_yn', 'share_end_date', 'created_by', 'created_datetime']
     search_fields = ['recipient_email', 'share_message', 'public_token']
-    list_filter = ['share_mode', 'is_active', 'created_datetime']
+    list_filter = ['share_mode', 'active_yn', 'created_datetime']
     date_hierarchy = 'created_datetime'
     readonly_fields = ['public_token', 'created_datetime', 'updated_datetime']
     inlines = [SharePermissionInline]
@@ -133,7 +133,7 @@ class ProductShareAdmin(admin.ModelAdmin):
             'fields': ('share_start_date', 'share_end_date')
         }),
         ('상태', {
-            'fields': ('is_active',)
+            'fields': ('active_yn',)
         }),
         ('시스템 정보', {
             'fields': ('created_by', 'created_datetime', 'updated_datetime'),
@@ -163,9 +163,9 @@ class SharePermissionAdmin(admin.ModelAdmin):
 
 @admin.register(SharedProductReceipt)
 class SharedProductReceiptAdmin(admin.ModelAdmin):
-    list_display = ['receipt_id', 'share', 'receiver', 'is_accepted', 'is_used_as_ingredient', 'received_datetime']
+    list_display = ['receipt_id', 'share', 'receiver', 'accepted_yn', 'used_as_ingredient_yn', 'received_datetime']
     search_fields = ['receiver__username', 'receiver__email']
-    list_filter = ['is_accepted', 'is_used_as_ingredient', 'received_datetime']
+    list_filter = ['accepted_yn', 'used_as_ingredient_yn', 'received_datetime']
     date_hierarchy = 'received_datetime'
     readonly_fields = ['received_datetime']
 
