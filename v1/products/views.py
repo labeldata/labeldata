@@ -3818,17 +3818,45 @@ def notification_list(request):
 
     # ── 부적합.처분 알림 통합 ───────────────────────────────────────────
     try:
-        from v1.regulatory.models import NewsProductMatch
+        from v1.regulatory.models import (
+            NewsProductMatch, NewsIngredientMatch, RegulatoryMatchAction
+        )
+        _action_statuses = ('monitoring', 'resolved')
+
         reg_matches = (
             NewsProductMatch.objects
             .filter(product__user_id=request.user, false_positive_yn=False)
             .select_related('news', 'product')
             .order_by('-created_at')[:10]
         )
-        reg_unread = NewsProductMatch.objects.filter(
-            product__user_id=request.user, read_yn=False, false_positive_yn=False
-        ).count()
-        unread_count += reg_unread
+
+        # 미조치 건수 (matched - actioned) — 컨텍스트 프로세서와 동일 기준
+        prod_matched = set(
+            NewsProductMatch.objects.filter(
+                product__user_id=request.user, false_positive_yn=False,
+            ).values_list('news_id', flat=True)
+        )
+        ing_matched = set(
+            NewsIngredientMatch.objects.filter(
+                user=request.user, dismissed_yn=False,
+            ).values_list('news_id', flat=True)
+        )
+        prod_actioned = set(
+            RegulatoryMatchAction.objects.filter(
+                product_match__product__user_id=request.user,
+                product_match__false_positive_yn=False,
+                action_type__in=_action_statuses,
+            ).values_list('product_match__news_id', flat=True)
+        )
+        ing_actioned = set(
+            RegulatoryMatchAction.objects.filter(
+                ingredient_match__user=request.user,
+                ingredient_match__dismissed_yn=False,
+                action_type__in=_action_statuses,
+            ).values_list('ingredient_match__news_id', flat=True)
+        )
+        reg_no_action = len((prod_matched | ing_matched) - (prod_actioned | ing_actioned))
+        unread_count += reg_no_action
 
         for m in reg_matches:
             items.append({

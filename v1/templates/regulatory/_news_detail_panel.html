@@ -176,7 +176,7 @@
       </div>
       {% endif %}{% endwith %}
       <div class="rd-act-row">
-        <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'monitoring',this)">📡 모니터링</button>
+        <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'monitoring',this)">⏳ 진행 중</button>
         <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'resolved',this)">✅ 조치완료</button>
         <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'dismissed',this)">❌ 해당없음</button>
         <button class="rd-act-btn" onclick="toggleMemo('pm-{{ m.id }}')">📝 메모</button>
@@ -232,7 +232,7 @@
       </div>
       {% endif %}{% endwith %}
       <div class="rd-act-row">
-        <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'monitoring',this)">📡 모니터링</button>
+        <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'monitoring',this)">⏳ 진행 중</button>
         <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'resolved',this)">✅ 조치완료</button>
         <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'dismissed',this)">❌ 해당없음</button>
         <button class="rd-act-btn" onclick="toggleMemo('im-{{ im.id }}')">📝 메모</button>

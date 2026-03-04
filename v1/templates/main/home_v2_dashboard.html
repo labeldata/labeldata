@@ -122,16 +122,16 @@
                 <span class="fc-badge fc-badge-teal" style="margin-top:auto;">원재료</span>
             </div>
             <div class="feature-card">
-                <div class="fc-icon si-purple"><i class="bi bi-bell-fill"></i></div>
-                <div class="fc-title">알림 & 문서 인박스</div>
-                <div class="fc-desc">공유 요청, 상태 변경, 문서 만료를 실시간 알림으로 받아보세요.</div>
-                <span class="fc-badge fc-badge-purple" style="margin-top:auto;">알림</span>
-            </div>
-            <div class="feature-card">
                 <div class="fc-icon si-red"><i class="bi bi-search"></i></div>
                 <div class="fc-title">식품 DB 조회</div>
                 <div class="fc-desc">국내·수입 식품 공개 DB를 검색해 참고 정보를 활용하세요.</div>
                 <span class="fc-badge fc-badge-red" style="margin-top:auto;">DB</span>
+            </div>
+            <div class="feature-card" style="border-color:#fce8e6;">
+                <div class="fc-icon si-red"><i class="bi bi-shield-exclamation"></i></div>
+                <div class="fc-title">부적합·처분 알림</div>
+                <div class="fc-desc">식품안전나라 부적합·행정처분 정보를 AI로 분석해 내 제품·원료와 연관성을 자동으로 매칭합니다.</div>
+                <span class="fc-badge fc-badge-red" style="margin-top:auto;">규제 모니터링</span>
             </div>
         </div>
     </div><!-- /.features-section -->
@@ -275,8 +275,36 @@
             <a href="{% url 'products:inbox' %}" class="qa-btn">
                 <i class="bi bi-people"></i> 공동 작업
             </a>
+            <a href="{% url 'regulatory:list' %}" class="qa-btn{% if regulatory_alert_count > 0 %} qa-btn-alert{% endif %}">
+                <i class="bi bi-shield-exclamation"></i> 부적합·처분{% if regulatory_alert_count > 0 %} <span class="badge bg-danger ms-1" style="font-size:10px;vertical-align:middle;">{{ regulatory_alert_count }}</span>{% endif %}
+            </a>
         </div>
     </div>
+
+    <!-- 부적합·처분 알림 현황 배너 -->
+    {% if regulatory_alert_count > 0 %}
+    <div style="background:#fce8e6;border:1px solid #f28b82;border-radius:12px;padding:14px 20px;display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+        <i class="bi bi-shield-exclamation" style="font-size:24px;color:#c5221f;flex-shrink:0;"></i>
+        <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:600;color:#c5221f;margin-bottom:2px;">부적합·처분 알림 {{ regulatory_alert_count }}건 — 확인 필요</div>
+            <div style="font-size:12px;color:#5f6368;">내 제품·원료와 연관 가능성이 있는 새 부적합·처분 정보가 있습니다. 위험 수준을 확인하고 필요 시 조치하세요. 연관 없는 항목은 "오탐 제외"로 목록에서 제외할 수 있습니다.</div>
+        </div>
+        <a href="{% url 'regulatory:list' %}" class="btn btn-danger btn-sm" style="white-space:nowrap;border-radius:20px;">
+            <i class="bi bi-arrow-right me-1"></i>바로 확인
+        </a>
+    </div>
+    {% else %}
+    <div style="background:#f8f9fa;border:1px solid #e8eaed;border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <i class="bi bi-shield-check" style="font-size:20px;color:#1e8e3e;flex-shrink:0;"></i>
+        <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:#3c4043;margin-bottom:1px;">부적합·처분 알림 — 현재 연관 항목 없음 ✓</div>
+            <div style="font-size:12px;color:#5f6368;">식품안전나라 부적합·행정처분 정보를 AI로 분석해 내 제품·원료와의 연관성을 자동 모니터링합니다. 새 부적합 정보 등록 시 즉시 알림을 받습니다.</div>
+        </div>
+        <a href="{% url 'regulatory:list' %}" class="btn btn-outline-secondary btn-sm" style="white-space:nowrap;border-radius:20px;font-size:12px;">
+            <i class="bi bi-shield-exclamation me-1"></i>모니터링 현황
+        </a>
+    </div>
+    {% endif %}
 
     <!-- 통계 카드 4개 -->
     <div class="stats-grid">

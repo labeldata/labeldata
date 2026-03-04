@@ -95,29 +95,51 @@ def board_notifications(request):
 
 def regulatory_alerts(request):
     """
-    규제 모니터링 미확인 알림 카운트
-    미읽은 제품 매칭 + 원료 매칭을 합산한 고유 뉴스 건수
-    (views.py unread_count 와 동일 기준)
+    규제 모니터링 미조치 알림 카운트
+    매칭된 뉴스 중 monitoring·resolved 조치 이력이 없는 고유 뉴스 건수
+    (views.py no_action 필터와 동일 기준)
     """
     if not request.user.is_authenticated:
         return {'regulatory_alert_count': 0}
     try:
-        from v1.regulatory.models import NewsIngredientMatch, NewsProductMatch
-        prod_news = set(
+        from v1.regulatory.models import (
+            NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction
+        )
+        _action_statuses = ('monitoring', 'resolved')
+
+        # 매칭된 뉴스 ID (제품 + 원료)
+        prod_matched = set(
             NewsProductMatch.objects.filter(
                 product__user_id=request.user,
-                read_yn=False,
                 false_positive_yn=False,
             ).values_list('news_id', flat=True)
         )
-        ing_news = set(
+        ing_matched = set(
             NewsIngredientMatch.objects.filter(
                 user=request.user,
-                read_yn=False,
                 dismissed_yn=False,
             ).values_list('news_id', flat=True)
         )
-        count = len(prod_news | ing_news)
+        matched_ids = prod_matched | ing_matched
+
+        # 조치 완료된 뉴스 ID (monitoring 또는 resolved 이력 있는 것)
+        prod_actioned = set(
+            RegulatoryMatchAction.objects.filter(
+                product_match__product__user_id=request.user,
+                product_match__false_positive_yn=False,
+                action_type__in=_action_statuses,
+            ).values_list('product_match__news_id', flat=True)
+        )
+        ing_actioned = set(
+            RegulatoryMatchAction.objects.filter(
+                ingredient_match__user=request.user,
+                ingredient_match__dismissed_yn=False,
+                action_type__in=_action_statuses,
+            ).values_list('ingredient_match__news_id', flat=True)
+        )
+        actioned_ids = prod_actioned | ing_actioned
+
+        count = len(matched_ids - actioned_ids)
     except Exception:
         count = 0
     return {'regulatory_alert_count': count}

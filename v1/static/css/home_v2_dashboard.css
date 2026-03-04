@@ -754,6 +754,8 @@
 }
 .qa-btn.primary { background: var(--v2-blue); border-color: var(--v2-blue); color: #fff; }
 .qa-btn.primary:hover { background: var(--v2-blue-hover); color: #fff; }
+.qa-btn.qa-btn-alert { background: #fce8e6; border-color: #f28b82; color: #c5221f; }
+.qa-btn.qa-btn-alert:hover { background: #f28b82; border-color: #c5221f; color: #fff; }
 
 /* ── 퀵 액션 여백 축소 ────────────────────────────────────── */
 /* (dash-hero 내부에 통합됨 — .quick-actions 단독 섹션 불필요) */

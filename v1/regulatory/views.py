@@ -1,4 +1,4 @@
-"""
+﻿"""
 규제 모니터링 Views
 - 목록: 전체 부적합 뉴스 (내 제품 매칭 우선 정렬)
 - 상세: 뉴스 상세 + AI 분석 + 영향받는 내 제품 목록
@@ -10,7 +10,7 @@ from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import CharField, Count, Exists, F, OuterRef, Q, Subquery
+from django.db.models import CharField, Count, Exists, F, Max, OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -112,56 +112,57 @@ def news_list(request):
             Q(id__in=risk_from_product) | Q(id__in=risk_from_ingredient)
         )
 
-    # 진행상태 필터 — 매칭된 뉴스의 최근 조치 기준
+    # 진행상태 필터 — 뉴스별 최신 조치 기준
     _action_statuses = ('monitoring', 'resolved')
-    if status in _action_statuses:
-        prod_news_with_action = (
+    if status in _action_statuses or status == 'no_action':
+        # 뉴스별 최신 조치 타입 계산 (제품 매칭 + 원료 매칭 합산)
+        prod_act_qs = (
             RegulatoryMatchAction.objects
             .filter(
                 product_match__product__user_id=request.user,
                 product_match__false_positive_yn=False,
-                action_type=status,
-            ).values('product_match__news_id')
+                action_type__in=_action_statuses,
+            )
+            .values('product_match__news_id', 'action_type')
+            .annotate(max_dt=Max('created_at'))
         )
-        ing_news_with_action = (
+        ing_act_qs = (
             RegulatoryMatchAction.objects
             .filter(
                 ingredient_match__user=request.user,
                 ingredient_match__dismissed_yn=False,
-                action_type=status,
-            ).values('ingredient_match__news_id')
-        )
-        qs = qs.filter(
-            Q(id__in=prod_news_with_action) | Q(id__in=ing_news_with_action)
-        )
-    elif status == 'no_action':
-        # 매칭됐지만 monitoring·resolved 조치가 없는 뉴스
-        prod_actioned = (
-            RegulatoryMatchAction.objects
-            .filter(
-                product_match__product__user_id=request.user,
                 action_type__in=_action_statuses,
-            ).values('product_match__news_id')
+            )
+            .values('ingredient_match__news_id', 'action_type')
+            .annotate(max_dt=Max('created_at'))
         )
-        ing_actioned = (
-            RegulatoryMatchAction.objects
-            .filter(
-                ingredient_match__user=request.user,
-                action_type__in=_action_statuses,
-            ).values('ingredient_match__news_id')
-        )
-        # 매칭된 뉴스 중 조치 이력이 없는 것만
-        matched_ids = (
-            list(NewsProductMatch.objects
-                 .filter(product__user_id=request.user, false_positive_yn=False)
-                 .values_list('news_id', flat=True)) +
-            list(NewsIngredientMatch.objects
-                 .filter(user=request.user, dismissed_yn=False)
-                 .values_list('news_id', flat=True))
-        )
-        qs = qs.filter(id__in=matched_ids).exclude(
-            Q(id__in=prod_actioned) | Q(id__in=ing_actioned)
-        )
+        # 뉴스ID별 최신 조치 타입 dict 생성
+        news_latest_action = {}  # {news_id: (action_type, max_dt)}
+        for row in prod_act_qs:
+            nid, at, dt = row['product_match__news_id'], row['action_type'], row['max_dt']
+            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
+                news_latest_action[nid] = (at, dt)
+        for row in ing_act_qs:
+            nid, at, dt = row['ingredient_match__news_id'], row['action_type'], row['max_dt']
+            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
+                news_latest_action[nid] = (at, dt)
+
+        if status in _action_statuses:
+            # 최신 조치가 해당 status인 뉴스만
+            filtered_ids = [nid for nid, (at, _) in news_latest_action.items() if at == status]
+            qs = qs.filter(id__in=filtered_ids)
+        else:  # no_action
+            # 매칭됐지만 조치 이력이 전혀 없는 뉴스
+            matched_ids = set(
+                list(NewsProductMatch.objects
+                     .filter(product__user_id=request.user, false_positive_yn=False)
+                     .values_list('news_id', flat=True)) +
+                list(NewsIngredientMatch.objects
+                     .filter(user=request.user, dismissed_yn=False)
+                     .values_list('news_id', flat=True))
+            )
+            actioned_ids = set(news_latest_action.keys())
+            qs = qs.filter(id__in=(matched_ids - actioned_ids))
 
     # 내 매칭 집합 (제품 매칭 + 원료 보관함 단독 매칭 합산)
     my_matched_news_ids = set(
@@ -268,6 +269,24 @@ def news_list(request):
     matched_count = len(my_matched_news_ids)          # 이미 위에서 제품+원료 합산
     unread_count  = len(my_unread_news_ids)
 
+    # 미조치 건수 — 전 기간, 사이드바·헤더 배지와 동일 기준
+    _action_statuses = ('monitoring', 'resolved')
+    _prod_actioned = set(
+        RegulatoryMatchAction.objects.filter(
+            product_match__product__user_id=request.user,
+            product_match__false_positive_yn=False,
+            action_type__in=_action_statuses,
+        ).values_list('product_match__news_id', flat=True)
+    )
+    _ing_actioned = set(
+        RegulatoryMatchAction.objects.filter(
+            ingredient_match__user=request.user,
+            ingredient_match__dismissed_yn=False,
+            action_type__in=_action_statuses,
+        ).values_list('ingredient_match__news_id', flat=True)
+    )
+    no_action_count = len(my_matched_news_ids - (_prod_actioned | _ing_actioned))
+
     # 카테고리별 건수 (api_source 기반)
     api_counts_qs = RegulatoryNews.objects.values('api_source').annotate(cnt=Count('id'))
     api_counts = {row['api_source']: row['cnt'] for row in api_counts_qs}
@@ -342,6 +361,7 @@ def news_list(request):
         'imp_cats':           imp_cats,
         'matched_count':      matched_count,
         'unread_count':       unread_count,
+        'no_action_count':    no_action_count,
         'q':                  q,
         'cats':               cats,
         'days':               days,
@@ -387,24 +407,38 @@ def news_detail(request, pk):
 
 @login_required
 def unread_count_api(request):
-    """미확인 매칭 알림 수 반환 (JSON) - 상단 네비게이션 배지용
-    미읽은 제품+원료 매칭을 합산한 고유 뉴스 건수 (context_processors 와 동일 기준)
+    """미조치 매칭 알림 수 반환 (JSON) - 상단 네비게이션 배지용
+    매칭된 뉴스 중 monitoring·resolved 조치 이력이 없는 고유 뉴스 건수
+    (context_processors / 미조치 필터와 동일 기준)
     """
-    prod_news = set(
+    _action_statuses = ('monitoring', 'resolved')
+    prod_matched = set(
         NewsProductMatch.objects.filter(
             product__user_id=request.user,
-            read_yn=False,
             false_positive_yn=False,
         ).values_list('news_id', flat=True)
     )
-    ing_news = set(
+    ing_matched = set(
         NewsIngredientMatch.objects.filter(
             user=request.user,
-            read_yn=False,
             dismissed_yn=False,
         ).values_list('news_id', flat=True)
     )
-    count = len(prod_news | ing_news)
+    prod_actioned = set(
+        RegulatoryMatchAction.objects.filter(
+            product_match__product__user_id=request.user,
+            product_match__false_positive_yn=False,
+            action_type__in=_action_statuses,
+        ).values_list('product_match__news_id', flat=True)
+    )
+    ing_actioned = set(
+        RegulatoryMatchAction.objects.filter(
+            ingredient_match__user=request.user,
+            ingredient_match__dismissed_yn=False,
+            action_type__in=_action_statuses,
+        ).values_list('ingredient_match__news_id', flat=True)
+    )
+    count = len((prod_matched | ing_matched) - (prod_actioned | ing_actioned))
     return JsonResponse({'unread': count})
 
 

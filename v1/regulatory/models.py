@@ -166,7 +166,7 @@ class RegulatoryMatchAction(models.Model):
     ACTION_MEMO       = 'memo'
     ACTION_CHOICES = [
         (ACTION_DISMISSED,  '해당 없음'),
-        (ACTION_MONITORING, '모니터링 중'),
+        (ACTION_MONITORING, '진행 중'),
         (ACTION_RESOLVED,   '조치 완료'),
         (ACTION_MEMO,       '메모'),
     ]
