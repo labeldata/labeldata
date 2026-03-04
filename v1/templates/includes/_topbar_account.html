@@ -41,17 +41,21 @@
                     새 알림이 없습니다.
                 </div>
             </div>
-            {% if regulatory_alert_count > 0 %}
-            {# 규제 알림 푸터 #}
+            {# 규제 알림 푸터 (항상 표시) #}
             <a href="{% url 'regulatory:list' %}"
+               onclick="window.location.href=this.href;return false;"
                style="display:flex;align-items:center;gap:8px;padding:10px 16px;
-                      border-top:1px solid #e8eaed;font-size:12px;color:#1a73e8;text-decoration:none;
-                      background:#f8f9ff;">
+                      border-top:1px solid #e8eaed;font-size:12px;text-decoration:none;
+                      background:{% if regulatory_alert_count > 0 %}#f8f9ff{% else %}#fff{% endif %};
+                      color:{% if regulatory_alert_count > 0 %}#1a73e8{% else %}#5f6368{% endif %};">
                 <i class="bi bi-shield-exclamation" style="font-size:14px;"></i>
+                {% if regulatory_alert_count > 0 %}
                 <span>부적합 알림 <b>{{ regulatory_alert_count }}건</b></span>
+                {% else %}
+                <span>부적합·처분 알림</span>
+                {% endif %}
                 <i class="bi bi-arrow-right ms-auto" style="font-size:12px;"></i>
             </a>
-            {% endif %}
         </div>
     </div>
 
@@ -166,7 +170,7 @@
             <div class="notif-item" data-id="${n.id}"
                  style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #f1f3f4;
                         background:${n.read_yn ? '#fff' : '#f0f4ff'};cursor:pointer;transition:background .15s;"
-                 onclick="notifRead(${n.id}, '${n.url}')">
+                 onclick="notifRead('${n.id}', '${n.url}')">
                 <div style="width:8px;height:8px;border-radius:50%;background:${statusColor(n.status_code)};
                             margin-top:5px;flex-shrink:0;opacity:${n.read_yn ? 0.3 : 1};"></div>
                 <div style="flex:1;min-width:0;">
