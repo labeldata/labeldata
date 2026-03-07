@@ -83,9 +83,10 @@ def news_list(request):
             pass
 
     # 카테고리 필터
-    if cats:
+    # 전체 카테고리 선택 시 api_source 필터 생략 → 미정의 api_source 항목도 포함
+    if cats and set(cats) != set(_ALL_CAT_KEYS):
         qs = qs.filter(_cat_condition(cats))
-    else:
+    elif not cats:
         qs = qs.none()
 
     # 검색
@@ -247,8 +248,6 @@ def news_list(request):
         my_action_status=Subquery(latest_prod_action_subq, output_field=CharField()),
         my_ing_action_status=Subquery(latest_ing_action_subq, output_field=CharField()),
     ).order_by(
-        '-my_matched_yn', '-ing_matched_yn',
-        '-my_unread_yn', '-ing_unread_yn',
         F('event_date').desc(nulls_last=True),
         '-collected_date',
         '-created_at',
@@ -264,8 +263,8 @@ def news_list(request):
     qp.pop('page', None)
     page_query_string = qp.urlencode()
 
-    # 요약 통계 (전체 기준)
-    total_count   = RegulatoryNews.objects.count()
+    # 요약 통계 — 현재 기간·카테고리 필터 적용 기준
+    total_count   = paginator.count
     matched_count = len(my_matched_news_ids)          # 이미 위에서 제품+원료 합산
     unread_count  = len(my_unread_news_ids)
 
@@ -584,3 +583,133 @@ def mark_false_positive(request):
         user=request.user, read_yn=False, dismissed_yn=False
     ).count()
     return JsonResponse({'success': True, 'unread': unread})
+
+
+@login_required
+@require_POST
+def mark_all_resolved(request):
+    """
+    특정 뉴스의 모든 매칭(제품+원료)에 대해 일괄 조치 완료 처리 (JSON POST)
+    Body: {"news_id": 123}
+
+    - 각 매칭에 RegulatoryMatchAction(action_type='resolved') 레코드 생성
+    - read_yn=True 처리 병행
+    """
+    try:
+        body    = json.loads(request.body)
+        news_id = int(body.get('news_id', 0))
+    except (ValueError, AttributeError, TypeError):
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    if not news_id:
+        return JsonResponse({'success': False, 'error': 'news_id 필요'}, status=400)
+
+    created = 0
+
+    # ── 제품 매칭 일괄 처리 ──
+    prod_matches = NewsProductMatch.objects.filter(
+        news_id=news_id,
+        product__user_id=request.user,
+        false_positive_yn=False,
+    )
+    for pm in prod_matches:
+        RegulatoryMatchAction.objects.create(
+            user=request.user,
+            product_match=pm,
+            action_type='resolved',
+            memo='모두 확인 완료',
+        )
+        created += 1
+    prod_matches.update(read_yn=True, read_at=timezone.now())
+
+    # ── 원료 매칭 일괄 처리 ──
+    ing_matches = NewsIngredientMatch.objects.filter(
+        news_id=news_id,
+        user=request.user,
+        dismissed_yn=False,
+    )
+    for im in ing_matches:
+        RegulatoryMatchAction.objects.create(
+            user=request.user,
+            ingredient_match=im,
+            action_type='resolved',
+            memo='모두 확인 완료',
+        )
+        created += 1
+    ing_matches.update(read_yn=True)
+
+    # 남은 미확인 건수 (기존 mark_read 기준과 동일)
+    prod_news = set(
+        NewsProductMatch.objects.filter(
+            product__user_id=request.user, read_yn=False, false_positive_yn=False,
+        ).values_list('news_id', flat=True)
+    )
+    ing_news = set(
+        NewsIngredientMatch.objects.filter(
+            user=request.user, read_yn=False, dismissed_yn=False,
+        ).values_list('news_id', flat=True)
+    )
+    unread = len(prod_news | ing_news)
+
+    return JsonResponse({'success': True, 'created': created, 'unread': unread})
+
+
+@login_required
+@require_POST
+def mark_all_news_resolved(request):
+    """
+    현재 사용자의 모든 미조치 매칭(제품+원료, 전체 뉴스)에 대해 일괄 조치 완료 처리 (JSON POST)
+    Body: {}
+
+    - false_positive_yn=False 인 제품 매칭 전체에 resolved 조치 기록
+    - dismissed_yn=False 인 원료 매칭 전체에 resolved 조치 기록
+    - 이미 resolved/monitoring 조치가 있는 매칭은 중복 생성하지 않음
+    """
+    _actioned = ('monitoring', 'resolved')
+    created = 0
+
+    # 이미 조치된 제품 매칭 ID 제외
+    already_prod = set(
+        RegulatoryMatchAction.objects.filter(
+            product_match__product__user_id=request.user,
+            product_match__false_positive_yn=False,
+            action_type__in=_actioned,
+        ).values_list('product_match_id', flat=True)
+    )
+    prod_matches = NewsProductMatch.objects.filter(
+        product__user_id=request.user,
+        false_positive_yn=False,
+    ).exclude(id__in=already_prod)
+    for pm in prod_matches:
+        RegulatoryMatchAction.objects.create(
+            user=request.user,
+            product_match=pm,
+            action_type='resolved',
+            memo='모든 알림 일괄 확인 완료',
+        )
+        created += 1
+    prod_matches.update(read_yn=True, read_at=timezone.now())
+
+    # 이미 조치된 원료 매칭 ID 제외
+    already_ing = set(
+        RegulatoryMatchAction.objects.filter(
+            ingredient_match__user=request.user,
+            ingredient_match__dismissed_yn=False,
+            action_type__in=_actioned,
+        ).values_list('ingredient_match_id', flat=True)
+    )
+    ing_matches = NewsIngredientMatch.objects.filter(
+        user=request.user,
+        dismissed_yn=False,
+    ).exclude(id__in=already_ing)
+    for im in ing_matches:
+        RegulatoryMatchAction.objects.create(
+            user=request.user,
+            ingredient_match=im,
+            action_type='resolved',
+            memo='모든 알림 일괄 확인 완료',
+        )
+        created += 1
+    ing_matches.update(read_yn=True)
+
+    return JsonResponse({'success': True, 'created': created, 'unread': 0})

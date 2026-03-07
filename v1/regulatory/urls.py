@@ -13,4 +13,6 @@ urlpatterns = [
     path('api/mark-read/', views.mark_as_read, name='mark_read'),
     path('api/mark-false-positive/', views.mark_false_positive, name='mark_false_positive'),
     path('api/save-action/', views.save_match_action, name='save_action'),
+    path('api/mark-all-resolved/', views.mark_all_resolved, name='mark_all_resolved'),
+    path('api/mark-all-news-resolved/', views.mark_all_news_resolved, name='mark_all_news_resolved'),
 ]

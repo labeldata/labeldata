@@ -146,6 +146,21 @@ html.cat-filter-closed #catToggleBtn { transform:rotate(-90deg) !important; }
 .rs-item.ing-matched:hover  { background:#fffde7; }
 .rs-item.ing-matched.active { background:#fef9e1 !important; }
 
+/* 조치 완료 항목 — 채도 낮춤 */
+.rs-item--resolved        { opacity:.55; }
+.rs-item--resolved:hover  { opacity:.75; }
+.rs-item--resolved.active { opacity:1 !important; }
+
+/* 리스트 카드 Quick Action 버튼 */
+.rs-quick-resolve         { background:#e6f4ea; border:1px solid #34a853; border-radius:50%;
+                             width:20px; height:20px; padding:0; cursor:pointer; color:#137333;
+                             font-size:12px; line-height:1; flex-shrink:0;
+                             display:inline-flex; align-items:center; justify-content:center;
+                             opacity:0; transition:opacity .15s; }
+.rs-item:hover .rs-quick-resolve { opacity:1; }
+.rs-quick-resolve:hover   { background:#34a853; color:#fff; }
+.rs-quick-resolve:disabled { opacity:.4; cursor:default; }
+
 .rs-row1              { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
 .rs-item-flag         { font-size:14px; flex-shrink:0; }
 .rs-item-name         { font-size:13px; font-weight:700; color:#202124;
@@ -243,6 +258,19 @@ html.cat-filter-closed #catToggleBtn { transform:rotate(-90deg) !important; }
                  display:inline-flex; align-items:center; gap:3px;
                  padding:2px 6px; border-radius:3px; border:1px solid #dadce0; background:#fff; }
 .rd-src-link:hover { background:#e8f0fe; }
+
+/* ── 하단 고정 확인 완료 바 ────────────────────────────────────── */
+.rd-action-bottom     { position:sticky; bottom:0; z-index:10;
+                        display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+                        padding:10px 16px; background:#fff;
+                        border-top:2px solid #34a853;
+                        box-shadow:0 -3px 12px rgba(0,0,0,.08); }
+.rd-ab-col            { display:flex; flex-direction:column; gap:2px; flex:1; min-width:120px; }
+.rd-ab-title          { font-size:11px; font-weight:700; color:#202124; }
+.rd-ab-desc           { font-size:10px; color:#5f6368; line-height:1.4; }
+.rd-ab-desc strong    { color:#1e7e34; }
+.rd-ab-btn            { white-space:nowrap; font-size:12px; font-weight:600; flex-shrink:0; }
+.rd-ab-divider        { width:1px; background:#e8eaed; align-self:stretch; flex-shrink:0; margin:0 4px; }
 
 /* ── 18. AI 분석 섹션 ──────────────────────────────────────────── */
 .rd-ai-details          { border-bottom:1px solid #e8eaed; }

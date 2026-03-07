@@ -181,7 +181,8 @@
       {% for news in news_list %}
       <div class="rs-item
                   {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% endif %}
-                  {% if selected_news and selected_news.id == news.id %}active{% endif %}"
+                  {% if selected_news and selected_news.id == news.id %}active{% endif %}
+                  {% if news.my_action_status == 'resolved' or news.my_ing_action_status == 'resolved' %}rs-item--resolved{% endif %}"
            onclick="selectNews({{ news.id }})">
 
         {# 줄 1: 국기 + 제품명 + 날짜 #}
@@ -192,6 +193,7 @@
           </span>
           <span class="rs-item-name">{{ news.product_name }}</span>
           <span class="rs-item-date" title="수집: {{ news.collected_date|date:'Y-m-d' }}{% if news.event_date and news.event_date != news.collected_date %} (발생: {{ news.event_date|date:'Y-m-d' }}){% endif %}">{% if news.event_date %}{{ news.event_date|date:"m/d" }}{% else %}{{ news.collected_date|date:"m/d" }}{% endif %}</span>
+          {% if news.my_matched_yn or news.ing_matched_yn %}{% if news.my_action_status != 'resolved' and news.my_ing_action_status != 'resolved' %}<button class="rs-quick-resolve" onclick="quickResolve(event,{{ news.id }})" title="조치 완료로 표시"><i class="bi bi-check-lg"></i></button>{% endif %}{% endif %}
         </div>
 
         {# 줄 2: 위반유형 + 등급배지 + 업체명 / 위반요약 #}
@@ -312,4 +314,26 @@
 
 {% block extra_js %}
 <script src="{% static 'js/regulatory_list.js' %}"></script>
+<script>
+(function(){
+function getCsrf(){return document.cookie.split('; ').find(r=>r.startsWith('csrftoken='))?.split('=')[1]||'';}
+function quickResolve(e,newsId){
+  e.stopPropagation();
+  var btn=e.currentTarget; btn.disabled=true;
+  fetch("{% url 'regulatory:mark_all_resolved' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({news_id:newsId})})
+  .then(r=>r.json()).then(d=>{
+    if(d.success){
+      var item=btn.closest('.rs-item');
+      if(item){
+        item.classList.add('rs-item--resolved');
+        btn.remove();
+        var badge=item.querySelector('.badge-status-no');
+        if(badge){badge.className='badge-status-res';badge.innerHTML='&#x2705; 조치완료';}
+      }
+    } else {btn.disabled=false;}
+  }).catch(function(){btn.disabled=false;});
+}
+window.quickResolve=quickResolve;
+}());
+</script>
 {% endblock %}

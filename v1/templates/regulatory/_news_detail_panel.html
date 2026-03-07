@@ -261,11 +261,23 @@
   </div>
   {% endif %}
 
-  {# 확인 완료 버튼 #}
+  {# ══ 하단 고정 확인 완료 바 ══ #}
   {% if matches or ing_matches %}
-  <div class="rd-bottom-bar">
-    <button class="btn btn-outline-secondary btn-sm" style="font-size:12px;" onclick="markRead({{ news.id }})">
-      <i class="bi bi-check-lg me-1"></i>모두 확인 완료
+  <div class="rd-action-bottom">
+    <div class="rd-ab-col">
+      <div class="rd-ab-title">이 알림 확인 완료</div>
+      <div class="rd-ab-desc">이 항목에 매칭된 제품 <strong>{{ matches|length }}건</strong> · 원료 <strong>{{ ing_matches|length }}건</strong>을 조치 완료로 기록합니다.</div>
+    </div>
+    <button class="btn btn-outline-success btn-sm rd-ab-btn" onclick="markAllResolved({{ news.id }})">
+      <i class="bi bi-check-circle"></i> 이 알림
+    </button>
+    <div class="rd-ab-divider"></div>
+    <div class="rd-ab-col">
+      <div class="rd-ab-title">전체 알림 일괄 처리</div>
+      <div class="rd-ab-desc">미조치 상태인 <strong>전체 알림</strong>의 매칭을 모두 조치 완료로 기록합니다. <span style="color:#c5221f;">개별 취소 불가.</span></div>
+    </div>
+    <button class="btn btn-success btn-sm rd-ab-btn" onclick="markAllNewsResolved()">
+      <i class="bi bi-check-all"></i> 전체 알림
     </button>
   </div>
   {% endif %}
@@ -276,11 +288,29 @@
 <script>
 (function(){
 function getCsrf(){return document.cookie.split('; ').find(r=>r.startsWith('csrftoken='))?.split('=')[1]||'';}
-function markRead(id){
-  fetch("{% url 'regulatory:mark_read' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({news_id:id})})
-  .then(r=>r.json()).then(d=>{if(typeof showSnackbar==='function')showSnackbar('확인 완료 처리됐습니다.','success');_updateBadge(d.unread);setTimeout(()=>window.location.reload(),800);});
+function markAllResolved(id){
+  fetch("{% url 'regulatory:mark_all_resolved' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({news_id:id})})
+  .then(r=>r.json()).then(d=>{
+    if(d.success){
+      if(typeof showSnackbar==='function')showSnackbar('이 알림의 모든 매칭이 조치 완료로 처리됐습니다.','success');
+      _updateBadge(d.unread);
+      setTimeout(()=>window.location.reload(),800);
+    }
+  });
 }
-window.markRead=markRead;
+window.markAllResolved=markAllResolved;
+function markAllNewsResolved(){
+  if(!confirm('미조치 상태인 전체 알림을 모두 조치 완료로 처리합니다.\n이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?')) return;
+  fetch("{% url 'regulatory:mark_all_news_resolved' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({})})
+  .then(r=>r.json()).then(d=>{
+    if(d.success){
+      if(typeof showSnackbar==='function')showSnackbar('전체 '+d.created+'건의 매칭이 조치 완료로 처리됐습니다.','success');
+      _updateBadge(0);
+      setTimeout(()=>window.location.reload(),900);
+    }
+  });
+}
+window.markAllNewsResolved=markAllNewsResolved;
 function markFalsePositive(matchId){
   if(!confirm('이 매칭을 오탐지로 신고하시겠습니까?')) return;
   fetch("{% url 'regulatory:mark_false_positive' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({match_id:matchId})})
