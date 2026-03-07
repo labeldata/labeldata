@@ -583,6 +583,11 @@ def product_detail(request, product_id):
             or share.recipient_email
             or '미가입'
         )
+
+    # 각 역할 담당자 존재 여부 (추가 DB 쿼리 없이 이미 조회된 permission_map 활용)
+    has_uploader = any(p.role_code == 'UPLOADER' for p in permission_map.values())
+    has_reviewer = any(p.role_code == 'REVIEWER' for p in permission_map.values())
+    has_approver = any(p.role_code == 'APPROVER' for p in permission_map.values())
     
     # 내가 owner인 모든 제품의 공유자 목록 조회 (팔레트용)
     all_shared_users = []
@@ -683,15 +688,35 @@ def product_detail(request, product_id):
     }
     can_edit = user_role in edit_roles_by_status.get(status, set())
 
+    def _skip_aware_actions(cur_status):
+        """담당자 미지정 단계를 건너뛰는 available_actions를 반환합니다."""
+        if cur_status == ProductMetadata.Status.DRAFT:
+            if has_uploader:
+                return ['requesting']
+            elif has_reviewer:
+                return ['review']       # REQUESTING/SUBMITTED 건너뜀
+            elif has_approver:
+                return ['pending']      # REQUESTING~REVIEW 건너뜀
+            else:
+                return ['confirmed']    # 전 단계 건너뜀
+        elif cur_status == ProductMetadata.Status.SUBMITTED:
+            if has_reviewer:
+                return ['review', 'requesting']
+            elif has_approver:
+                return ['pending', 'requesting']    # REVIEW 건너뜀
+            else:
+                return ['confirmed', 'requesting']  # REVIEW+PENDING 건너뜀
+        return status_actions_map.get(cur_status, [])
+
     if user_role == 'OWNER':
         can_upload_documents = True
         can_comment = True
         can_delete_product = True
-        available_actions = status_actions_map.get(status, [])
+        available_actions = _skip_aware_actions(status)
     elif user_role == 'EDITOR':
         can_upload_documents = True
         can_comment = True
-        available_actions = status_actions_map.get(status, [])
+        available_actions = _skip_aware_actions(status)
     elif user_role == 'UPLOADER':
         can_upload_documents = True
         can_comment = True
@@ -699,7 +724,7 @@ def product_detail(request, product_id):
             available_actions = ['submitted']
     elif user_role == 'REVIEWER':
         can_comment = True
-        if status in [ProductMetadata.Status.SUBMITTED, ProductMetadata.Status.REVIEW]:
+        if status == ProductMetadata.Status.REVIEW:
             available_actions = ['pending']
     elif user_role == 'APPROVER':
         can_comment = True
@@ -864,6 +889,9 @@ def product_detail(request, product_id):
         'user_role': user_role,
         'user_role_label': role_labels.get(user_role, '뷰어'),
         'label_owner': label.user_id,  # 실제 라벨 소유자 (EDITOR 팔레트용)
+        'has_uploader': has_uploader,
+        'has_reviewer': has_reviewer,
+        'has_approver': has_approver,
         'comments': comments,
         'comment_fields': comment_fields,
         'author_roles': author_roles,
@@ -1336,6 +1364,36 @@ def product_update_status(request, product_id):
         ProductMetadata.Status.PENDING:    {ProductMetadata.Status.CONFIRMED, ProductMetadata.Status.REVIEW},
         ProductMetadata.Status.CONFIRMED:  {ProductMetadata.Status.DRAFT},
     }
+
+    # 담당자 미지정 단계 스킵 전환 (OWNER/EDITOR만) — 스킵 허용 action 코드 목록
+    skip_action_codes = []
+    if user_role in ('OWNER', 'EDITOR'):
+        _active_roles = set(SharePermission.objects.filter(
+            share__label=label,
+            share__active_yn=True,
+        ).values_list('role_code', flat=True))
+        _has_up = 'UPLOADER' in _active_roles
+        _has_rv = 'REVIEWER' in _active_roles
+        _has_ap = 'APPROVER' in _active_roles
+
+        if metadata.status == ProductMetadata.Status.DRAFT and not _has_up:
+            # REQUESTING/SUBMITTED 단계 건너뜀
+            if _has_rv:
+                transitions[ProductMetadata.Status.DRAFT].add(ProductMetadata.Status.REVIEW)
+                skip_action_codes.append('review')
+            if _has_ap:
+                transitions[ProductMetadata.Status.DRAFT].add(ProductMetadata.Status.PENDING)
+                skip_action_codes.append('pending')
+            transitions[ProductMetadata.Status.DRAFT].add(ProductMetadata.Status.CONFIRMED)
+            skip_action_codes.append('confirmed')
+        elif metadata.status == ProductMetadata.Status.SUBMITTED and not _has_rv:
+            # REVIEW 단계 건너뜀
+            if _has_ap:
+                transitions[ProductMetadata.Status.SUBMITTED].add(ProductMetadata.Status.PENDING)
+                skip_action_codes.append('pending')
+            transitions[ProductMetadata.Status.SUBMITTED].add(ProductMetadata.Status.CONFIRMED)
+            skip_action_codes.append('confirmed')
+
     allowed_targets = transitions.get(metadata.status, set())
     if new_status not in allowed_targets:
         return JsonResponse({'success': False, 'error': '현재 상태에서 변경할 수 없습니다.'}, status=400)
@@ -1390,14 +1448,13 @@ def product_update_status(request, product_id):
         ProductMetadata.Status.CONFIRMED:  ['draft'],
     }
     if user_role == 'OWNER':
-        available_actions = status_actions_map_view.get(metadata.status, [])
+        available_actions = status_actions_map_view.get(metadata.status, []) + skip_action_codes
     elif user_role == 'EDITOR':
-        available_actions = status_actions_map_view.get(metadata.status, [])
+        available_actions = status_actions_map_view.get(metadata.status, []) + skip_action_codes
     elif user_role == 'UPLOADER':
         available_actions = ['submitted'] if metadata.status == ProductMetadata.Status.REQUESTING else []
     elif user_role == 'REVIEWER':
-        available_actions = ['pending'] if metadata.status in [
-            ProductMetadata.Status.SUBMITTED, ProductMetadata.Status.REVIEW] else []
+        available_actions = ['pending'] if metadata.status == ProductMetadata.Status.REVIEW else []
     elif user_role == 'APPROVER':
         available_actions = ['confirmed'] if metadata.status == ProductMetadata.Status.PENDING else []
     else:
@@ -2370,12 +2427,12 @@ def _get_editor_share_for_label(request, label):
     return ProductShare.objects.filter(
         label=label,
         active_yn=True,
-        sharepermission__role_code='EDITOR',
+        permission__role_code='EDITOR',
     ).filter(
         Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email)
     ).filter(
         Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
-    ).select_related('sharepermission').first()
+    ).select_related('permission').first()
 
 
 @login_required

@@ -185,16 +185,16 @@
             </div>
 
             <!-- ② 자료 요청 (자료 제출) — 협력업체 -->
-            <div class="dropzone-card accent-top-uploader {% if product_status == 'REQUESTING' %}stage-active{% endif %}" data-role="UPLOADER">
+            <div class="dropzone-card accent-top-uploader {% if product_status == 'REQUESTING' %}stage-active{% elif not has_uploader %}step-skip-card{% endif %}" data-role="UPLOADER">
                 <div class="step-indicator-col">
-                    <div class="step-number-badge">2</div>
-                    <div class="step-vline"></div>
+                    <div class="step-number-badge{% if not has_uploader %} step-skip{% endif %}">2</div>
+                    <div class="step-vline{% if not has_uploader %} step-skip{% endif %}"></div>
                 </div>
                 <div class="dropzone-header">
                     <span class="badge bg-primary text-white">STEP 2</span>
                     <div class="fw-bold">자료 요청 <small class="text-muted">(자료 제출)</small></div>
                     <div class="text-muted small">협력업체</div>
-                    {% if product_status == 'REQUESTING' %}<span class="badge bg-primary-subtle text-primary ms-auto" style="font-size:10px;">현재 단계</span>{% endif %}
+                    {% if product_status == 'REQUESTING' %}<span class="badge bg-primary-subtle text-primary ms-auto" style="font-size:10px;">현재 단계</span>{% elif not has_uploader %}<span class="badge bg-secondary-subtle text-secondary border ms-auto skip-status-badge" style="font-size:10px;"><i class="bi bi-forward-fill me-1"></i>담당자 없음 · 건너뛰기 가능</span>{% endif %}
                 </div>
                 <div class="dropzone-body" id="dropzone-uploader" ondrop="dropPerson(event, 'UPLOADER')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
                     {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'UPLOADER' %}
@@ -218,16 +218,16 @@
             </div>
 
             <!-- ③ 제출 완료 / 검토 중 — 검토자 -->
-            <div class="dropzone-card accent-top-reviewer {% if product_status == 'SUBMITTED' or product_status == 'REVIEW' %}stage-active{% endif %}" data-role="REVIEWER">
+            <div class="dropzone-card accent-top-reviewer {% if product_status == 'SUBMITTED' or product_status == 'REVIEW' %}stage-active{% elif not has_reviewer %}step-skip-card{% endif %}" data-role="REVIEWER">
                 <div class="step-indicator-col">
-                    <div class="step-number-badge">3</div>
-                    <div class="step-vline"></div>
+                    <div class="step-number-badge{% if not has_reviewer %} step-skip{% endif %}">3</div>
+                    <div class="step-vline{% if not has_reviewer %} step-skip{% endif %}"></div>
                 </div>
                 <div class="dropzone-header">
                     <span class="badge bg-warning text-dark">STEP 3</span>
                     <div class="fw-bold">검토 중 <small class="text-muted">(검토 요청)</small></div>
                     <div class="text-muted small">검토자</div>
-                    {% if product_status == 'SUBMITTED' or product_status == 'REVIEW' %}<span class="badge bg-warning-subtle text-warning-emphasis ms-auto" style="font-size:10px;">현재 단계</span>{% endif %}
+                    {% if product_status == 'SUBMITTED' or product_status == 'REVIEW' %}<span class="badge bg-warning-subtle text-warning-emphasis ms-auto" style="font-size:10px;">현재 단계</span>{% elif not has_reviewer %}<span class="badge bg-secondary-subtle text-secondary border ms-auto skip-status-badge" style="font-size:10px;"><i class="bi bi-forward-fill me-1"></i>담당자 없음 · 건너뛰기 가능</span>{% endif %}
                 </div>
                 <div class="dropzone-body" id="dropzone-reviewer" ondrop="dropPerson(event, 'REVIEWER')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
                     {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'REVIEWER' %}
@@ -251,16 +251,16 @@
             </div>
 
             <!-- ④ 승인 대기 — 책임자 -->
-            <div class="dropzone-card accent-top-approver {% if product_status == 'PENDING' %}stage-active{% endif %}" data-role="APPROVER">
+            <div class="dropzone-card accent-top-approver {% if product_status == 'PENDING' %}stage-active{% elif not has_approver %}step-skip-card{% endif %}" data-role="APPROVER">
                 <div class="step-indicator-col">
-                    <div class="step-number-badge">4</div>
+                    <div class="step-number-badge{% if not has_approver %} step-skip{% endif %}">4</div>
                     <div class="step-vline"></div>
                 </div>
                 <div class="dropzone-header">
                     <span class="badge bg-danger text-white">STEP 4</span>
                     <div class="fw-bold">승인 대기 <small class="text-muted">(최종 승인)</small></div>
                     <div class="text-muted small">책임자</div>
-                    {% if product_status == 'PENDING' %}<span class="badge bg-danger-subtle text-danger ms-auto" style="font-size:10px;">현재 단계</span>{% endif %}
+                    {% if product_status == 'PENDING' %}<span class="badge bg-danger-subtle text-danger ms-auto" style="font-size:10px;">현재 단계</span>{% elif not has_approver %}<span class="badge bg-secondary-subtle text-secondary border ms-auto skip-status-badge" style="font-size:10px;"><i class="bi bi-forward-fill me-1"></i>담당자 없음 · 건너뛰기 가능</span>{% endif %}
                 </div>
                 <div class="dropzone-body" id="dropzone-approver" ondrop="dropPerson(event, 'APPROVER')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
                     {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'APPROVER' %}
@@ -427,6 +427,38 @@
 .dropzone-card.stage-active .dropzone-header {
     background: rgba(26,115,232,0.04);
 }
+
+/* 담당자 미지정(건너뛰기 가능) 단계 스타일 */
+.step-number-badge.step-skip {
+    background: #f1f3f4 !important;
+    color: #9aa0a6 !important;
+    border: 2px dashed #bdc1c6 !important;
+    box-sizing: border-box !important;
+    width: 26px !important;
+    height: 26px !important;
+}
+.step-vline.step-skip {
+    background: repeating-linear-gradient(
+        to bottom,
+        #bdc1c6 0, #bdc1c6 4px,
+        transparent 4px, transparent 10px
+    ) !important;
+}
+.dropzone-card.step-skip-card {
+    border-style: dashed !important;
+    border-color: #dadce0 !important;
+    opacity: 0.80;
+}
+.dropzone-card.step-skip-card .dropzone-header {
+    background: #fafafa;
+}
+
+/* 모든 스텝 인디케이터 열 너비·최소너비 일관성 보장 */
+.step-indicator-col {
+    width: 48px !important;
+    min-width: 48px !important;
+    flex-shrink: 0 !important;
+}
 </style>
 
 <script>
@@ -583,6 +615,35 @@ function _syncPlaceholder(zoneEl) {
     ph.classList.toggle('d-none', hasPerson);
 }
 
+/* 역할 담당자 유무에 따라 스킵 스타일(점선 테두리·배지·연결선) 즉시 동기화 */
+var _skipStyleRoles = ['UPLOADER', 'REVIEWER', 'APPROVER'];
+function _syncSkipStyles(role) {
+    if (!role || !_skipStyleRoles.includes(role)) return;
+    var card = document.querySelector('.dropzone-card[data-role="' + role + '"]');
+    if (!card) return;
+    // 현재 활성 단계(stage-active) 카드는 건드리지 않음
+    if (card.classList.contains('stage-active')) return;
+    var zone = document.getElementById('dropzone-' + role.toLowerCase());
+    if (!zone) return;
+    var hasAssignee = zone.querySelectorAll('.person-card').length > 0;
+    // 카드 테두리 점선/실선
+    card.classList.toggle('step-skip-card', !hasAssignee);
+    // 숫자 배지 회색化
+    var numBadge = card.querySelector('.step-number-badge');
+    if (numBadge) numBadge.classList.toggle('step-skip', !hasAssignee);
+    // 연결선 점선化
+    var vline = card.querySelector('.step-vline');
+    if (vline) vline.classList.toggle('step-skip', !hasAssignee);
+    // "담당자 없음" 텍스트 배지 표시/숨김
+    var skipBadge = card.querySelector('.skip-status-badge');
+    if (skipBadge) skipBadge.style.display = hasAssignee ? 'none' : '';
+    // 전역 HAS_* 변수 갱신 후 툴바 버튼 즉시 재렌더링
+    if (role === 'UPLOADER' && typeof HAS_UPLOADER !== 'undefined') HAS_UPLOADER = hasAssignee;
+    else if (role === 'REVIEWER' && typeof HAS_REVIEWER !== 'undefined') HAS_REVIEWER = hasAssignee;
+    else if (role === 'APPROVER' && typeof HAS_APPROVER !== 'undefined') HAS_APPROVER = hasAssignee;
+    if (typeof _updateStatusButtons === 'function') _updateStatusButtons();
+}
+
 /* 팔레트 카드의 역할 뱃지 갱신 */
 function _updatePaletteBadge(shareId, role) {
     var card = document.querySelector('.palette-list .person-card[data-share-id="' + shareId + '"]');
@@ -699,6 +760,9 @@ function dropPerson(event, role) {
         _syncPlaceholder(newZone);
     }
     _updatePaletteBadge(shareId, role);
+    // 출발지·도착지 카드의 스킵 스타일 즉시 반영
+    _syncSkipStyles(role);
+    _syncSkipStyles(data.role);
 
     /* API 호출 (실패 시 롤백) */
     _permPost('/products/share/' + shareId + '/update-permission/', { role: role })
@@ -731,6 +795,8 @@ function dropPersonToPalette(event) {
     _removeCardFromDropzones(shareId);
     document.querySelectorAll('.dropzone-body').forEach(_syncPlaceholder);
     _updatePaletteBadge(shareId, '');  /* 뱃지 완전 제거 */
+    // 제거된 역할 카드의 스킵 스타일 즉시 반영
+    _syncSkipStyles(data.role);
 
     /* API 호출: 공유 완전 취소 (revoke) → 새로고침 후 드롭존·팔레트 모두 미노출 */
     _permPost('/products/share/' + shareId + '/revoke/', {})

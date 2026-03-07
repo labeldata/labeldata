@@ -110,10 +110,23 @@
             </span>
 
             <!-- 상태 전이 버튼 (역할·현재 상태에 따라 표시) -->
+            <span id="status-action-btns" class="d-flex align-items-center gap-1">
             {% if product_status == 'DRAFT' %}
                 {% if 'requesting' in available_actions %}
-                <button class="btn btn-sm btn-outline-primary me-1" type="button" onclick="changeStatus('REQUESTING')">
+                <button class="btn btn-sm btn-outline-primary me-1" type="button" onclick="requestStatusChange('REQUESTING')">
                     자료 요청 <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                {% elif 'review' in available_actions %}
+                <button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('REVIEW', '협력업체 담당자가 지정되지 않아 검토 단계로 바로 이동합니다.')">
+                    검토 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i>
+                </button>
+                {% elif 'pending' in available_actions %}
+                <button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '협력업체·검토자가 미지정으로 승인 대기 단계로 바로 이동합니다.')">
+                    승인 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i>
+                </button>
+                {% elif 'confirmed' in available_actions %}
+                <button class="btn btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '담당자가 지정되지 않아 바로 승인 완료 처리합니다.')">
+                    바로 승인 완료 <i class="bi bi-skip-forward ms-1"></i>
                 </button>
                 {% endif %}
             {% elif product_status == 'REQUESTING' %}
@@ -127,8 +140,16 @@
                 {% endif %}
             {% elif product_status == 'SUBMITTED' %}
                 {% if 'review' in available_actions %}
-                <button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="changeStatus('REVIEW')">
+                <button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('REVIEW')">
                     검토 시작 <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+                {% elif 'pending' in available_actions %}
+                <button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '검토자가 지정되지 않아 승인 대기 단계로 바로 이동합니다.')">
+                    승인 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i>
+                </button>
+                {% elif 'confirmed' in available_actions %}
+                <button class="btn btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '검토자·승인자가 미지정으로 바로 승인 완료 처리합니다.')">
+                    바로 승인 완료 <i class="bi bi-skip-forward ms-1"></i>
                 </button>
                 {% endif %}
                 {% if 'requesting' in available_actions %}
@@ -136,7 +157,7 @@
                 {% endif %}
             {% elif product_status == 'REVIEW' %}
                 {% if 'pending' in available_actions %}
-                <button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="changeStatus('PENDING')">
+                <button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('PENDING')">
                     승인 요청 <i class="bi bi-arrow-right ms-1"></i>
                 </button>
                 {% endif %}
@@ -161,6 +182,7 @@
                 <button class="btn btn-sm btn-light border" type="button" disabled>승인 완료</button>
                 {% endif %}
             {% endif %}
+            </span>
 
             {% if not can_edit %}
                 <span class="readonly-badge ms-2"><i class="bi bi-lock-fill"></i> 편집 제한</span>
@@ -844,6 +866,29 @@
     </div>
 </div>
 
+<!-- 담당자 없음 경고 모달 -->
+<div class="modal fade" id="noAssigneeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>담당자가 지정되지 않았습니다
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="noAssigneeModal-body">
+                해당 단계의 담당자가 지정되지 않았습니다.
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="goToShareTab()">
+                    <i class="bi bi-person-plus me-1"></i>권한 설정으로 이동
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
 const PRODUCT_ID = '{{ product.my_label_id }}';
@@ -854,6 +899,11 @@ const COMMENT_CREATE_URL = "{% url 'products:comment_create' label_id=product.my
 const COMMENT_DELETE_URL = "{% url 'products:comment_delete' comment_id=0 %}";
 const CAN_EDIT = {{ can_edit|yesno:"true,false" }};
 const CAN_COMMENT = {{ can_comment|yesno:"true,false" }};
+let HAS_UPLOADER = {{ has_uploader|yesno:"true,false" }};
+let HAS_REVIEWER = {{ has_reviewer|yesno:"true,false" }};
+let HAS_APPROVER = {{ has_approver|yesno:"true,false" }};
+const PRODUCT_STATUS = '{{ product_status }}';
+const USER_ROLE_CODE = '{{ user_role }}';
 
 /**
  * 현재 활성 탭 ID를 sessionStorage에 저장.
@@ -1292,6 +1342,77 @@ async function saveProductInfo() {
 
     // 문서함 / 권한 탭 – 저장 대상 없음
     showSnackbar('현재 탭에서는 저장할 내용이 없습니다.', 'info');
+}
+
+/**
+ * 담당자 존재 여부 변경 시 툴바 단계 변경 버튼을 즉시 재생성합니다.
+ * OWNER/EDITOR의 DRAFT·SUBMITTED 상태에서만 버튼이 동적으로 바뀝니다.
+ */
+function _updateStatusButtons() {
+    const container = document.getElementById('status-action-btns');
+    if (!container) return;
+    if (USER_ROLE_CODE !== 'OWNER' && USER_ROLE_CODE !== 'EDITOR') return;
+
+    let html = '';
+    if (PRODUCT_STATUS === 'DRAFT') {
+        if (HAS_UPLOADER) {
+            html = `<button class="btn btn-sm btn-outline-primary me-1" type="button" onclick="requestStatusChange('REQUESTING')">자료 요청 <i class="bi bi-arrow-right ms-1"></i></button>`;
+        } else if (HAS_REVIEWER) {
+            html = `<button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('REVIEW', '협력업체 담당자가 지정되지 않아 검토 단계로 바로 이동합니다.')">검토 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i></button>`;
+        } else if (HAS_APPROVER) {
+            html = `<button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '협력업체·검토자가 미지정으로 승인 대기 단계로 바로 이동합니다.')">승인 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i></button>`;
+        } else {
+            html = `<button class="btn btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '담당자가 지정되지 않아 바로 승인 완료 처리합니다.')">바로 승인 완료 <i class="bi bi-skip-forward ms-1"></i></button>`;
+        }
+    } else if (PRODUCT_STATUS === 'SUBMITTED') {
+        if (HAS_REVIEWER) {
+            html = `<button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('REVIEW')">검토 시작 <i class="bi bi-arrow-right ms-1"></i></button>`;
+        } else if (HAS_APPROVER) {
+            html = `<button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '검토자가 지정되지 않아 승인 대기 단계로 바로 이동합니다.')">승인 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i></button>`;
+        } else {
+            html = `<button class="btn btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '검토자·승인자가 미지정으로 바로 승인 완료 처리합니다.')">바로 승인 완료 <i class="bi bi-skip-forward ms-1"></i></button>`;
+        }
+        html += `<button class="btn btn-sm btn-outline-secondary" type="button" onclick="changeStatus('REQUESTING')">보완 요청</button>`;
+    } else {
+        return; // 기타 상태는 동적 변경 불필요
+    }
+    container.innerHTML = html;
+}
+
+/**
+ * 상태 전이 전 담당자 존재 여부를 확인하고, 없으면 경고 모달을 표시합니다.
+ * 담당자가 있는 경우에만 changeStatus()를 호출합니다.
+ */
+function requestStatusChange(newStatus) {
+    const roleChecks = {
+        'REQUESTING': { flag: HAS_UPLOADER, role: '자료 제출(협력업체)' },
+        'REVIEW':     { flag: HAS_REVIEWER, role: '검토자' },
+        'PENDING':    { flag: HAS_APPROVER, role: '최종 승인자' },
+    };
+    const check = roleChecks[newStatus];
+    if (check && !check.flag) {
+        document.getElementById('noAssigneeModal-body').innerHTML =
+            `<strong>"${check.role}"</strong> 역할의 담당자가 지정되지 않았습니다.<br>` +
+            `권한 설정 탭에서 담당자를 추가한 후 다시 시도해 주세요.`;
+        new bootstrap.Modal(document.getElementById('noAssigneeModal')).show();
+        return;
+    }
+    changeStatus(newStatus);
+}
+
+function goToShareTab() {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('noAssigneeModal'));
+    if (modal) modal.hide();
+    const shareTabBtn = document.querySelector('button[data-bs-target="#tab-share"]');
+    if (shareTabBtn) new bootstrap.Tab(shareTabBtn).show();
+}
+
+/**
+ * 담당자가 없는 단계를 건너뛸 때 토스트 메시지를 먼저 보여주고 상태를 변경합니다.
+ */
+function skipWithToast(newStatus, message) {
+    showSnackbar(message, 'info');
+    setTimeout(function() { changeStatus(newStatus); }, 900);
 }
 
 async function changeStatus(newStatus) {
