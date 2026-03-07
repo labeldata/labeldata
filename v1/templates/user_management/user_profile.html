@@ -329,7 +329,7 @@ details[open] .upload-section summary::before { content: '\2212'; }
             <div class="doc-grid">
                 {% for doc in documents %}
                 <div class="doc-item">
-                    <div class="doc-item-type">{{ doc.get_doc_type_display }}</div>
+                    <div class="doc-item-type">{{ doc.linked_document_type.type_name|default:doc.get_doc_type_display }}</div>
                     <div class="doc-item-name" title="{{ doc.doc_name }}">{{ doc.doc_name }}</div>
                     {% if doc.note %}<div class="doc-item-meta">{{ doc.note }}</div>{% endif %}
                     <div class="doc-item-meta">{{ doc.uploaded_at|date:"Y.m.d" }} 등록</div>
@@ -364,11 +364,11 @@ details[open] .upload-section summary::before { content: '\2212'; }
                         <input type="hidden" name="action" value="upload_document">
                         <div class="g-row" style="margin-bottom:12px;">
                             <div class="g-field">
-                                <label class="g-label">서류 종류</label>
-                                <select name="doc_type" class="g-input" required>
+                                <label class="g-label">서류 구분 <span style="color:red;">*</span></label>
+                                <select name="linked_document_type_id" class="g-input" required>
                                     <option value="">선택하세요</option>
-                                    {% for val, label in doc_type_choices %}
-                                    <option value="{{ val }}">{{ label }}</option>
+                                    {% for dtype in product_doc_types %}
+                                    <option value="{{ dtype.type_id }}">{{ dtype.type_name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>

@@ -145,18 +145,20 @@
         <table class="table table-hover align-middle mb-0 inbox-table">
             <thead>
                 <tr class="text-muted">
-                    <th style="width:28%; text-align:left !important;">제품명</th>
-                    <th style="width:12%;">공유자</th>
-                    <th style="width:9%;">내 역할</th>
-                    <th style="width:9%;">진행상태</th>
-                    <th style="width:20%; text-align:left !important;">메시지</th>
-                    <th style="width:9%;">공유일</th>
-                    <th style="width:13%;">할 일</th>
+                    <th style="width:22%; text-align:left !important;">제품명</th>
+                    <th style="width:10%;">공유자</th>
+                    <th style="width:7%;">내 역할</th>
+                    <th style="width:8%;">진행상태</th>
+                    <th style="width:6%; text-align:center;">문서</th>
+                    <th style="width:12%; text-align:left !important;">메시지</th>
+                    <th style="width:7%;">공유일</th>
+                    <th style="width:14%;">할 일</th>
+                    <th style="width:14%;">내 원료</th>
                 </tr>
             </thead>
             <tbody>
                 {% for share in received_shares %}
-                <tr onclick="window.location.href='{% url 'products:product_detail_new' share.label.my_label_id %}'">
+                <tr onclick="window.location.href='{% url 'products:product_detail_new' share.label.my_label_id %}?from=collab'">
                     <td style="text-align:left;">
                         <div class="d-flex align-items-center gap-2">
                             <div class="file-icon"><i class="bi bi-file-earmark-text"></i></div>
@@ -196,7 +198,16 @@
                         {% endif %}
                         {% endwith %}
                     </td>
-                    <td style="text-align:left;" class="msg-cell" onclick="event.stopPropagation()">
+                    <td style="text-align:center;">
+                        {% if share.doc_count %}
+                        <span class="badge bg-light text-secondary border" style="font-size:11px;">
+                            <i class="bi bi-file-earmark me-1"></i>{{ share.doc_count }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted" style="font-size:11px;">-</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align:left;" class="msg-cell">
                         {% if share.share_message %}
                         <div class="msg-text" title="{{ share.share_message }}">{{ share.share_message }}</div>
                         {% else %}
@@ -207,17 +218,37 @@
                         <span class="text-muted" style="font-size:12px;">{{ share.share_start_date|date:"y.m.d" }}</span>
                     </td>
                     <td onclick="event.stopPropagation()">
+                        <div class="d-flex flex-row flex-wrap align-items-center gap-1">
                         {% if share.action_label %}
-                        <a href="{% url 'products:product_detail_new' share.label.my_label_id %}"
+                        <a href="{% url 'products:product_detail_new' share.label.my_label_id %}?from=collab"
                            class="btn btn-sm {{ share.action_style }}" style="border-radius:16px;font-size:12px;white-space:nowrap;">
                             {% if share.action_icon %}<i class="bi bi-{{ share.action_icon }} me-1"></i>{% endif %}
                             {{ share.action_label }}
                         </a>
                         {% else %}
-                        <a href="{% url 'products:product_detail_new' share.label.my_label_id %}"
-                           class="btn btn-sm btn-outline-secondary" style="border-radius:16px;font-size:12px;">
-                            <i class="bi bi-eye me-1"></i>보기
-                        </a>
+                        <span class="text-muted" style="font-size:12px;">-</span>
+                        {% endif %}
+                        </div>
+                    </td>
+                    <td onclick="event.stopPropagation()">
+                        {% if share.my_receipt %}
+                            {% if not share.my_receipt.used_as_ingredient_yn %}
+                            <form method="post" action="{% url 'products:use_as_ingredient' share.my_receipt.receipt_id %}">
+                                {% csrf_token %}
+                                <button type="submit"
+                                        class="btn btn-sm btn-outline-success"
+                                        style="border-radius:16px;font-size:11px;white-space:nowrap;"
+                                        title="이 제품을 내 원료 목록에 등록합니다">
+                                    <i class="bi bi-plus-circle me-1"></i>내 원료로 등록
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="badge bg-success-subtle text-success" style="border-radius:16px;font-size:11px;padding:4px 8px;">
+                                <i class="bi bi-check-circle me-1"></i>원료 등록됨
+                            </span>
+                            {% endif %}
+                        {% else %}
+                        <span class="text-muted" style="font-size:12px;">-</span>
                         {% endif %}
                     </td>
                 </tr>

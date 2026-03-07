@@ -96,6 +96,9 @@
                 <input type="text" id="compact-doc-search" class="form-control border-start-0 ps-0" placeholder="파일명 검색...">
             </div>
             {% if can_upload_documents %}
+            <button class="btn btn-outline-secondary btn-sm px-3 fw-semibold" onclick="openImportFromCompanyModal()" style="border-radius: 4px; font-size: 13px;" title="고정 서류 관리에서 불러오기">
+                <i class="bi bi-folder-symlink me-1"></i> 불러오기
+            </button>
             <button class="btn btn-primary btn-sm px-4 fw-semibold" onclick="openUploadModal(null, null, null)" style="border-radius: 4px; font-size: 13px;">
                 <i class="bi bi-plus-lg me-1"></i> 업로드
             </button>
@@ -125,15 +128,23 @@
     <!-- 메인: 문서 데이터 그리드 (Google Drive 스타일) -->
     <div class="flex-grow-1 overflow-auto position-relative">
         {% if documents %}
-        <table class="table table-hover align-middle mb-0 compact-doc-table" style="table-layout: fixed;">
+        <table class="table table-hover align-middle mb-0 compact-doc-table" style="width: 100%;">
+            <colgroup>
+                <col style="width: 4%;"><!-- 체크박스 -->
+                <col style="width: 10%;"><!-- 구분 -->
+                <col style="width: 47%;"><!-- 문서명 -->
+                <col style="width: 14%;"><!-- 상태/만료일 -->
+                <col style="width: 6%;"><!-- 버전 -->
+                <col style="width: 19%;"><!-- 등록자 -->
+            </colgroup>
             <thead class="bg-light sticky-top" style="z-index: 5;">
                 <tr class="text-muted small text-uppercase">
-                    <th style="width: 40px;" class="ps-4"><input type="checkbox" class="form-check-input" id="select-all-compact"></th>
-                    <th style="width: 45%;">문서명</th>
-                    <th style="width: 18%;">구분</th>
-                    <th style="width: 18%;">상태 / 만료일</th>
-                    <th style="width: 10%;">버전</th>
-                    <th style="width: 9%;">등록자</th>
+                    <th class="col-checkbox"><input type="checkbox" class="form-check-input" id="select-all-compact"></th>
+                    <th class="col-type">구분</th>
+                    <th class="col-name">문서명</th>
+                    <th class="col-status">상태 / 만료일</th>
+                    <th class="col-version">버전</th>
+                    <th class="col-uploader">등록자</th>
                 </tr>
             </thead>
             <tbody id="compact-doc-body">
@@ -145,41 +156,65 @@
                     data-slot-id="{% if doc.slot %}{{ doc.slot.slot_id }}{% endif %}"
                     data-type-id="{{ doc.document_type.type_id }}"
                     onclick="openEditPanel({{ doc.document_id }})">
-                    <td class="ps-4"><input type="checkbox" class="form-check-input" onclick="event.stopPropagation()"></td>
-                    <td>
+                    <td class="col-checkbox"><input type="checkbox" class="form-check-input" onclick="event.stopPropagation()"></td>
+                    <td class="col-type">
+                        <span class="badge {% if doc.document_type.required_yn %}bg-danger{% else %}bg-primary{% endif %} text-white fw-semibold text-truncate d-inline-block" style="max-width:100%;" title="{{ doc.document_type.type_name|default:'미분류' }}">{{ doc.document_type.type_name|default:"미분류" }}</span>
+                    </td>
+                    <td class="col-name">
                         <div class="d-flex align-items-center">
                             {% if '.pdf' in doc.original_filename|lower %}
-                                <i class="bi bi-file-earmark-pdf text-danger me-3" style="font-size: 20px;"></i>
+                                <i class="bi bi-file-earmark-pdf text-danger me-2 flex-shrink-0" style="font-size: 18px;"></i>
                             {% elif '.jpg' in doc.original_filename|lower or '.jpeg' in doc.original_filename|lower or '.png' in doc.original_filename|lower %}
-                                <i class="bi bi-file-earmark-image text-info me-3" style="font-size: 20px;"></i>
+                                <i class="bi bi-file-earmark-image text-info me-2 flex-shrink-0" style="font-size: 18px;"></i>
                             {% elif 'doc' in doc.original_filename|lower %}
-                                <i class="bi bi-file-earmark-word text-primary me-3" style="font-size: 20px;"></i>
+                                <i class="bi bi-file-earmark-word text-primary me-2 flex-shrink-0" style="font-size: 18px;"></i>
                             {% elif 'xls' in doc.original_filename|lower %}
-                                <i class="bi bi-file-earmark-excel text-success me-3" style="font-size: 20px;"></i>
+                                <i class="bi bi-file-earmark-excel text-success me-2 flex-shrink-0" style="font-size: 18px;"></i>
                             {% else %}
-                                <i class="bi bi-file-earmark text-secondary me-3" style="font-size: 20px;"></i>
+                                <i class="bi bi-file-earmark text-secondary me-2 flex-shrink-0" style="font-size: 18px;"></i>
                             {% endif %}
-                            <div class="text-truncate">
-                                <div class="fw-bold text-dark text-truncate" title="{{ doc.original_filename }}">{{ doc.original_filename }}</div>
+                            <div class="min-w-0" style="min-width:0;">
+                                <div class="fw-semibold text-dark text-truncate" title="{{ doc.original_filename }}">{{ doc.original_filename }}</div>
                                 <div class="text-muted" style="font-size: 11px;">{{ doc.file_size|filesizeformat }}</div>
                             </div>
                         </div>
                     </td>
-                    <td><span class="badge {% if doc.document_type.required_yn %}bg-danger{% else %}bg-primary{% endif %} text-white fw-semibold">{{ doc.document_type.type_name|default:"미분류" }}</span></td>
-                    <td>
+                    <td class="col-status">
                         {% if doc.expiry_date %}
-                        <div class="d-flex align-items-center">
-                            <span class="badge {% if doc.expiry_date < today %}bg-danger text-white{% elif doc.expiry_date < warning_date %}bg-warning text-dark fw-bold{% else %}bg-success text-white{% endif %} me-2">
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <span class="badge {% if doc.expiry_date < today %}bg-danger text-white{% elif doc.expiry_date < warning_date %}bg-warning text-dark fw-bold{% else %}bg-success text-white{% endif %}">
                                 {% if doc.expiry_date < today %}만료{% elif doc.expiry_date < warning_date %}D-30{% else %}정상{% endif %}
                             </span>
-                            <span class="small text-muted">{{ doc.expiry_date|date:"y.m.d" }}</span>
+                            <span class="small text-muted text-nowrap">{{ doc.expiry_date|date:"y.m.d" }}</span>
                         </div>
                         {% else %}
                         <span class="badge bg-success text-white fw-semibold">무기한</span>
                         {% endif %}
                     </td>
-                    <td><span class="badge bg-secondary text-white fw-semibold" style="min-width: 48px;">v{{ doc.version|default:1 }}.0</span></td>
-                    <td><div class="small">{{ doc.uploaded_by.username|default:"-" }}</div></td>
+                    <td class="col-version"><span class="badge bg-secondary text-white fw-semibold">v{{ doc.version|default:1 }}.0</span></td>
+                    <td class="col-uploader">
+                        {% if doc.uploaded_by %}
+                            {% if doc.uploaded_by == request.user %}
+                                <div class="small text-muted">나</div>
+                            {% else %}
+                                <div class="small text-truncate" title="{{ doc.uploaded_by.email }}">
+                                    {% with profile=doc.uploaded_by.profile %}
+                                        {% if profile.company_name %}
+                                            <div class="fw-semibold text-truncate" style="font-size:12px;">{{ doc.uploaded_by.get_full_name|default:doc.uploaded_by.username }}</div>
+                                            <div class="text-muted text-truncate" style="font-size:10px;">{{ profile.company_name }}</div>
+                                        {% elif doc.uploaded_by.get_full_name %}
+                                            <div class="fw-semibold text-truncate" style="font-size:12px;">{{ doc.uploaded_by.get_full_name }}</div>
+                                            <div class="text-muted text-truncate" style="font-size:10px;">{{ doc.uploaded_by.email }}</div>
+                                        {% else %}
+                                            <div class="text-truncate" style="font-size:12px;">{{ doc.uploaded_by.email }}</div>
+                                        {% endif %}
+                                    {% endwith %}
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="small text-muted">-</div>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -278,6 +313,148 @@
         <div class="small">드롭하면 업로드 모달이 열립니다</div>
     </div>
 </div>
+
+<!-- 고정 서류 불러오기 모달 -->
+<div class="modal fade" id="importCompanyDocModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden;">
+            <div class="modal-header border-0 px-4 pt-4 pb-2">
+                <div>
+                    <h5 class="fw-bold mb-1"><i class="bi bi-folder-symlink me-2 text-primary"></i>고정 서류에서 불러오기</h5>
+                    <p class="text-muted mb-0" style="font-size: 12px;">내 정보 수정 &gt; 고정 서류 관리에 등록된 서류를 이 제품 문서로 연결합니다.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 pb-2">
+                <!-- 고정 서류 목록 -->
+                <div class="mb-2">
+                    <label class="form-label fw-semibold small text-muted">불러올 고정 서류 선택 <span class="text-danger">*</span></label>
+                    <p class="text-muted mb-2" style="font-size:11px;"><i class="bi bi-info-circle me-1"></i>각 서류에 지정된 구분값이 자동 적용됩니다. 미지정 서류는 구분 없이 등록됩니다.</p>
+                    <div id="companyDocList" style="max-height: 340px; overflow-y: auto;">
+                        <div class="text-center py-4 text-muted">
+                            <div class="spinner-border spinner-border-sm me-2"></div>불러오는 중...
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 px-4 pb-4">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4" id="importCompanyDocBtn" onclick="submitImportCompanyDoc()">
+                    <i class="bi bi-folder-symlink me-1"></i>불러오기
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 고정 서류 불러오기 모달 열기
+const COMPANY_DOC_IMPORT_API = '{% url "products:company_document_import_api" product.my_label_id %}';
+const COMPANY_DOCS_LIST_API  = '{% url "products:api_my_company_documents" %}';
+
+async function openImportFromCompanyModal() {
+    const modal = new bootstrap.Modal(document.getElementById('importCompanyDocModal'));
+    modal.show();
+    await loadCompanyDocList();
+}
+
+let _companyDocs = null;
+async function loadCompanyDocList() {
+    const listEl = document.getElementById('companyDocList');
+    if (_companyDocs) { renderCompanyDocs(_companyDocs); return; }
+    listEl.innerHTML = '<div class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>불러오는 중...</div>';
+    try {
+        const res  = await fetch(COMPANY_DOCS_LIST_API);
+        const data = await res.json();
+        _companyDocs = data.documents || [];
+        renderCompanyDocs(_companyDocs);
+    } catch(e) {
+        listEl.innerHTML = '<p class="text-danger py-2" style="font-size:13px;">서류 목록을 불러올 수 없습니다.</p>';
+    }
+}
+
+function renderCompanyDocs(docs) {
+    const listEl = document.getElementById('companyDocList');
+    if (!docs.length) {
+        listEl.innerHTML = `<div class="text-center py-4 text-muted" style="font-size:13px;">
+            <i class="bi bi-inbox" style="font-size:28px;display:block;margin-bottom:8px;"></i>
+            등록된 고정 서류가 없습니다.<br>
+            <a href="{% url 'user_management:user_profile' %}" class="btn btn-sm btn-outline-primary mt-2">고정 서류 관리 &rarr;</a>
+        </div>`;
+        return;
+    }
+    // 서류 종류별 그룹화
+    const grouped = {};
+    docs.forEach(d => {
+        const g = d.doc_type_display;
+        if (!grouped[g]) grouped[g] = [];
+        grouped[g].push(d);
+    });
+    listEl.innerHTML = Object.entries(grouped).map(([group, items]) => `
+        <div class="mb-2">
+            <div class="fw-semibold text-muted mb-1" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;">${group}</div>
+            ${items.map(d => `
+                <label class="d-flex align-items-center gap-2 p-2 mb-1 rounded border cursor-pointer company-doc-item"
+                       style="font-size:13px;cursor:pointer;"
+                       onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''">
+                    <input type="checkbox" name="selectedCompanyDoc"
+                           value="${d.id}"
+                           data-doc-type-id="${d.linked_doc_type_id || ''}"
+                           style="width:15px;height:15px;flex-shrink:0;">
+                    <i class="bi bi-file-earmark-check text-success flex-shrink-0"></i>
+                    <div style="min-width:0;flex:1;">
+                        <div class="fw-semibold text-truncate">${d.doc_name}</div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:11px;color:#5f6368;">
+                            ${d.linked_doc_type_name
+                                ? `<span style="background:#e8f0fe;color:#1967d2;border-radius:8px;padding:0 6px;"><i class="bi bi-tag me-1"></i>${d.linked_doc_type_name}</span>`
+                                : `<span style="color:#bdc1c6;">구분 미지정</span>`}
+                            <span>${d.uploaded_at}${d.note ? ' · ' + d.note : ''}</span>
+                        </div>
+                    </div>
+                    <a href="${d.file_url}" target="_blank" class="ms-auto btn btn-xs btn-light border flex-shrink-0" style="font-size:11px;padding:2px 6px;" onclick="event.stopPropagation()">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                </label>`).join('')}
+        </div>`).join('');
+}
+
+async function submitImportCompanyDoc() {
+    const checkedBoxes = [...document.querySelectorAll('input[name="selectedCompanyDoc"]:checked')];
+    if (!checkedBoxes.length) { alert('불러올 서류를 하나 이상 선택하세요.'); return; }
+
+    const btn = document.getElementById('importCompanyDocBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    let anyFailed = false;
+    for (const box of checkedBoxes) {
+        const fd = new FormData();
+        fd.append('company_document_id', box.value);
+        // 각 서류에 저장된 linked_doc_type_id 사용
+        const docTypeId = box.dataset.docTypeId;
+        if (docTypeId) fd.append('document_type_id', docTypeId);
+        try {
+            const res  = await fetch(COMPANY_DOC_IMPORT_API, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrf },
+                body: fd,
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) anyFailed = true;
+        } catch(e) {
+            anyFailed = true;
+        }
+    }
+
+    if (anyFailed) {
+        alert('일부 서류 불러오기에 실패했습니다.');
+    }
+    bootstrap.Modal.getInstance(document.getElementById('importCompanyDocModal')).hide();
+    sessionStorage.setItem('returnToTab', 'docs');
+    location.reload();
+}
+</script>
 
 <style>
     /* 문서 탭 외부 컨테이너 */
@@ -395,14 +572,26 @@
     
     /* Google Drive 스타일 테이블 - 세로선 제거 */
     .compact-doc-table { 
-        border-collapse: collapse; 
+        border-collapse: collapse;
+        table-layout: fixed;
     }
     .compact-doc-table th, 
     .compact-doc-table td { 
-        padding: 12px 16px; 
+        padding: 10px 12px; 
         border-left: none !important; 
         border-right: none !important; 
         vertical-align: middle;
+        overflow: hidden;
+    }
+    /* 체크박스 컬럼 - padding/정렬만 제어 (col에서 너비 제어) */
+    .compact-doc-table th.col-checkbox,
+    .compact-doc-table td.col-checkbox {
+        min-width: 0 !important;
+        max-width: none !important;
+        padding: 8px 0 !important;
+        text-align: center !important;
+        overflow: visible !important;
+        white-space: normal !important;
     }
     .compact-doc-table th { 
         border-bottom: 1px solid #dadce0; 
@@ -521,9 +710,29 @@
             min-width: 260px;
         }
 
-        .compact-doc-table th:last-child,
-        .compact-doc-table td:last-child {
+        .compact-doc-table .col-uploader,
+        .compact-doc-table th.col-uploader {
             display: none; /* 좁은 화면에서 등록자 컬럼 숨김 */
+        }
+        .compact-doc-table .col-version,
+        .compact-doc-table th.col-version {
+            display: none; /* 좁은 화면에서 버전 컬럼 숨김 */
+        }
+    }
+
+    @media (max-width: 1199px) {
+        /* 중간 화면: 컬럼 폭 줄이기 */
+        .compact-doc-table .col-type,
+        .compact-doc-table th.col-type {
+            width: 10% !important;
+        }
+        .compact-doc-table .col-status,
+        .compact-doc-table th.col-status {
+            width: 13% !important;
+        }
+        .compact-doc-table .col-uploader,
+        .compact-doc-table th.col-uploader {
+            width: 10% !important;
         }
     }
 </style>

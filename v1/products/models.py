@@ -422,7 +422,16 @@ class ProductDocument(models.Model):
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="v2_uploaded_documents", verbose_name="업로드자")
     uploaded_datetime = models.DateTimeField(auto_now_add=True, verbose_name="업로드일시")
     active_yn = models.BooleanField(default=True, verbose_name="활성 상태")
-    
+    source_company_document = models.ForeignKey(
+        'user_management.CompanyDocument',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='linked_product_documents',
+        verbose_name="출처 고정 서류",
+        help_text="고정 서류 관리에서 불러온 경우 원본 서류를 참조합니다",
+    )
+
     class Meta:
         db_table = "v2_product_document"
         ordering = ['-uploaded_datetime']
@@ -521,86 +530,6 @@ class ProductComment(models.Model):
         self.resolved_at = timezone.now()
         self.save()
 
-
-class CommentMention(models.Model):
-    """
-    댓글 내 @멘션
-    - 멘션된 사용자에게 알림 발송
-    """
-    mention_id = models.AutoField(primary_key=True)
-    comment = models.ForeignKey(ProductComment, on_delete=models.CASCADE, related_name="mentions", verbose_name="댓글")
-    mentioned_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comment_mentions", verbose_name="멘션된 사용자")
-    notified_yn = models.BooleanField(default=False, verbose_name="알림 발송됨")
-    notified_at = models.DateTimeField(null=True, blank=True, verbose_name="알림 발송 일시")
-    read_yn = models.BooleanField(default=False, verbose_name="읽음")
-    read_at = models.DateTimeField(null=True, blank=True, verbose_name="읽음 일시")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "v2_comment_mention"
-        unique_together = [['comment', 'mentioned_user']]
-        verbose_name = "댓글 멘션"
-        verbose_name_plural = "댓글 멘션 목록"
-
-    def __str__(self):
-        return f"@{self.mentioned_user.username} in comment #{self.comment_id}"
-
-
-class SuggestionMode(models.Model):
-    """
-    Google Docs 스타일 제안 모드
-    - 필드 값 변경 제안
-    - 승인/거절 워크플로우
-    """
-    suggestion_id = models.AutoField(primary_key=True)
-    label = models.ForeignKey('label.MyLabel', on_delete=models.CASCADE, related_name="v2_suggestions", verbose_name="표시사항")
-    suggested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="field_suggestions", verbose_name="제안자")
-    field_name = models.CharField(max_length=100, verbose_name="대상 필드")
-    original_value = models.TextField(verbose_name="원본 값", null=True, blank=True)
-    suggested_value = models.TextField(verbose_name="제안 값")
-    reason = models.TextField(verbose_name="제안 사유", max_length=1000, null=True, blank=True)
-    STATUS_CHOICES = [
-        ('pending', '대기중'),
-        ('accepted', '승인'),
-        ('rejected', '거절'),
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="상태")
-    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="processed_suggestions", verbose_name="처리자")
-    processed_at = models.DateTimeField(null=True, blank=True, verbose_name="처리 일시")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "v2_suggestion_mode"
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['label', 'field_name']),
-            models.Index(fields=['status']),
-        ]
-        verbose_name = "필드 변경 제안"
-        verbose_name_plural = "필드 변경 제안 목록"
-
-    def __str__(self):
-        return f"{self.field_name}: {self.suggested_value[:30]} ({self.status})"
-    
-    def accept(self, user):
-        """제안 승인 및 값 적용"""
-        # 라벨에 값 적용
-        if hasattr(self.label, self.field_name):
-            setattr(self.label, self.field_name, self.suggested_value)
-            self.label.save(update_fields=[self.field_name])
-        
-        self.status = 'accepted'
-        self.processed_by = user
-        self.processed_at = timezone.now()
-        self.save()
-    
-    def reject(self, user):
-        """제안 거절"""
-        self.status = 'rejected'
-        self.processed_by = user
-        self.processed_at = timezone.now()
-        self.save()
 
 
 # ==================== 공유 및 권한 관리 (통합) ====================
@@ -929,6 +858,22 @@ class DocumentRequest(models.Model):
                                            null=True, blank=True, verbose_name='첨부 파일')
     created_datetime    = models.DateTimeField(auto_now_add=True, verbose_name='요청일시')
     updated_datetime    = models.DateTimeField(auto_now=True, verbose_name='최종수정일시')
+    linked_label        = models.ForeignKey(
+        'label.MyLabel',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='doc_requests',
+        verbose_name='연결된 제품',
+        help_text='자료 요청과 연결된 제품(표시사항)',
+    )
+    linked_ingredient   = models.ForeignKey(
+        'label.MyIngredient',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='doc_requests',
+        verbose_name='연결된 원료',
+        help_text='자료 요청과 연결된 원료',
+    )
 
     class Meta:
         db_table = 'v2_document_request'

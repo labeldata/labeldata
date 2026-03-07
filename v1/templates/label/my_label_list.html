@@ -240,7 +240,78 @@
     border-color: #007bff !important;
     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
 }
+
+/* 원료 동기화 알림 뱃지 */
+.ingredient-sync-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+    vertical-align: middle;
+    white-space: nowrap;
+    background-color: #e6f4ea;
+    color: #1e7e34;
+    border: 1px solid #a8d5b5;
+}
 </style>
 
 <script src="{% static 'js/label/my_label_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+<script>
+/* ── BOM/원료 동기화 알림 뱃지 (제품 리스트) ────────────────────── */
+function _dismissLabelBadge(labelId) {
+    try {
+        const syncData = JSON.parse(localStorage.getItem('labeldata_bom_sync') || '{"ingredients":{},"labels":{}}');
+        delete syncData.labels[String(labelId)];
+        localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+    } catch(e) { /* 무시 */ }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        const raw = localStorage.getItem('labeldata_bom_sync');
+        if (!raw) return;
+        const syncData = JSON.parse(raw);
+        const labels = syncData.labels || {};
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+        // 만료 항목 정리
+        let changed = false;
+        Object.keys(labels).forEach(id => {
+            if (labels[id].ts < cutoff) { delete labels[id]; changed = true; }
+        });
+        if (changed) {
+            syncData.labels = labels;
+            localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+        }
+
+        const ids = Object.keys(labels);
+        if (!ids.length) return;
+
+        document.querySelectorAll('.clickable-row').forEach(row => {
+            const rowId = String(row.dataset.labelId);
+            if (ids.includes(rowId)) {
+                const cells = row.querySelectorAll('td');
+                const nameCell = cells[3]; // 라벨명 (0:체크, 1:번호, 2:신고, 3:라벨명)
+                if (nameCell && !nameCell.querySelector('.ingredient-sync-badge')) {
+                    const badge = document.createElement('span');
+                    badge.className = 'ingredient-sync-badge';
+                    badge.title = '클릭하면 알림을 해제합니다';
+                    badge.textContent = '원료 업데이트';
+                    badge.style.cursor = 'pointer';
+                    badge.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        _dismissLabelBadge(rowId);
+                        badge.remove();
+                    });
+                    nameCell.appendChild(badge);
+                }
+            }
+        });
+    } catch(e) { /* 무시 */ }
+});
+/* ──────────────────────────────────────────────────────────────── */
+</script>
 {% endblock %}

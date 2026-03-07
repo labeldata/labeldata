@@ -605,6 +605,27 @@ function doSaveMyIngredient(url, formData, queryString, saveBtn) {
                     saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>저장';
                 }, 1500);
             }
+
+            // ── localStorage 동기화 알림 저장 ──────────────────────────
+            if (data.affected_label_ids && data.affected_label_ids.length > 0) {
+                try {
+                    const now = Date.now();
+                    const syncData = JSON.parse(localStorage.getItem('labeldata_bom_sync') || '{"ingredients":{},"labels":{}}');
+                    data.affected_label_ids.forEach(id => {
+                        syncData.labels[id] = { ts: now, type: 'ingredient_updated' };
+                    });
+                    localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+                } catch(e) { /* 무시 */ }
+            }
+            // ────────────────────────────────────────────────────────────
+
+            // BOM 동기화 알림
+            if (data.synced_bom_count > 0 && typeof window.showSnackbar === 'function') {
+                window.showSnackbar(
+                    `연결된 ${data.affected_product_count}개 제품(${data.synced_bom_count}개 항목)에 원료 정보가 자동 업데이트되었습니다.`,
+                    'info'
+                );
+            }
             
             // 버튼 피드백 표시 후 리스트 갱신 (300ms 지연)
             setTimeout(() => {
@@ -744,37 +765,6 @@ function updatePaginationFromServer(queryString) {
     .catch(error => {
         console.error('Error updating pagination info:', error);
     });
-}
-
-// 원료 상세 상단에 연결된 표시사항 조회 버튼 추가 함수
-function addLinkedLabelsButton(my_ingredient_id) {
-    if (!my_ingredient_id) return;
-    fetch(`/label/linked-labels-count/${my_ingredient_id}/`)
-        .then(res => res.json())
-        .then(data => {
-            // 기존 버튼 있으면 제거
-            const oldBtn = document.getElementById('linkedLabelsViewBtn');
-            if (oldBtn) oldBtn.remove();
-            // 버튼 생성
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'btn btn-outline-info btn-sm ms-2';
-            btn.id = 'linkedLabelsViewBtn';
-            btn.innerHTML = `연결된 표시사항(<span id="linkedLabelsCount">${data.count}</span>품목) 조회`;
-            btn.onclick = function() {
-                // v2 컨텍스트이면 제품 관리(product_explorer)로, 아니면 v1 표시사항 목록으로 이동
-                const isV2 = !!document.querySelector('.v2-wrapper');
-                const url = isV2
-                    ? '/products/explorer/?ingredient_id=' + encodeURIComponent(my_ingredient_id)
-                    : '/label/my-labels/?ingredient_id=' + encodeURIComponent(my_ingredient_id);
-                window.location.href = url;
-            };
-            // '원료 수정' 텍스트 옆에 삽입 (예시: id가 ingredientTitle인 요소 옆)
-            const titleElem = document.getElementById('ingredientEditTitle') || document.querySelector('.ingredient-edit-title');
-            if (titleElem) {
-                titleElem.insertAdjacentElement('afterend', btn);
-            }
-        });
 }
 
 // 연결된 표시사항(00품목) 조회 버튼 텍스트 및 이벤트 설정

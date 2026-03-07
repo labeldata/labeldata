@@ -43,12 +43,23 @@ class CompanyDocument(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='company_documents')
-    doc_type = models.CharField(max_length=30, choices=DOC_TYPE_CHOICES, verbose_name="서류 종류")
+    doc_type = models.CharField(
+        max_length=30, choices=DOC_TYPE_CHOICES, verbose_name="서류 종류",
+        blank=True, default='etc',
+    )
     doc_name = models.CharField(max_length=200, blank=True, verbose_name="서류명",
                                 help_text="비워두면 서류 종류 이름으로 자동 저장됩니다")
     doc_file = models.FileField(upload_to='company_documents/%Y/', verbose_name="파일")
     uploaded_at = models.DateTimeField(auto_now_add=True)
     note = models.CharField(max_length=300, blank=True, verbose_name="메모")
+    linked_document_type = models.ForeignKey(
+        'products.DocumentType',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name="제품 문서 구분",
+        related_name='company_documents',
+        help_text="불러오기 시 자동 적용될 제품 문서 구분",
+    )
 
     class Meta:
         ordering = ['doc_type', '-uploaded_at']
@@ -56,8 +67,13 @@ class CompanyDocument(models.Model):
         verbose_name_plural = '회사 고정 서류'
 
     def save(self, *args, **kwargs):
+        if not self.doc_type:
+            self.doc_type = 'etc'
         if not self.doc_name:
-            self.doc_name = self.get_doc_type_display()
+            if self.linked_document_type_id and self.linked_document_type:
+                self.doc_name = self.linked_document_type.type_name
+            else:
+                self.doc_name = self.get_doc_type_display() or '기타'
         super().save(*args, **kwargs)
 
     def __str__(self):

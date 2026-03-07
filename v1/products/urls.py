@@ -69,6 +69,7 @@ urlpatterns = [
     
     path('documents/api/types/', views.document_types_api, name='document_types_api'),
     path('documents/api/upload/<int:label_id>/', views.document_upload_api, name='document_upload_api'),
+    path('documents/api/import-from-company/<int:label_id>/', views.company_document_import_api, name='company_document_import_api'),
     path('documents/api/<int:document_id>/delete/', views.document_delete_api, name='document_delete_api'),
     path('documents/api/<int:document_id>/update/', views.document_update, name='document_update'),
     path('documents/api/bulk-download/', views.bulk_download, name='bulk_download'),
@@ -94,12 +95,6 @@ urlpatterns = [
     path('collaboration/comments/<int:comment_id>/resolve/', views.comment_resolve, name='comment_resolve'),
     path('collaboration/comments/<int:comment_id>/delete/', views.comment_delete, name='comment_delete'),
     
-    path('collaboration/label/<int:label_id>/suggestions/', views.suggestion_list, name='suggestion_list'),
-    path('collaboration/label/<int:label_id>/suggestions/create/', views.suggestion_create, name='suggestion_create'),
-    path('collaboration/suggestions/<int:suggestion_id>/process/', views.suggestion_process, name='suggestion_process'),
-    
-    path('collaboration/label/<int:label_id>/mentionable/', views.mentionable_users, name='mentionable_users'),
-    
     # ==================== 알림 (Notifications) ====================
     path('notifications/', views.notification_list, name='notification_list'),
     path('notifications/mark-read/', views.notification_mark_read, name='notification_mark_read'),
@@ -118,4 +113,7 @@ urlpatterns = [
     path('doc-requests/<int:req_id>/accept/', views.doc_request_accept, name='doc_request_accept'),
     path('contacts/api/doc-types/', views.api_doc_types, name='api_doc_types'),
     path('contacts/api/send-doc-request/', views.api_send_doc_request, name='api_send_doc_request'),
+    path('contacts/api/my-labels/', views.api_my_labels, name='api_my_labels'),
+    path('documents/api/my-company-documents/', views.api_my_company_documents, name='api_my_company_documents'),
+    path('doc-requests/<int:req_id>/update-label/', views.api_update_doc_request_label, name='api_update_doc_request_label'),
 ]

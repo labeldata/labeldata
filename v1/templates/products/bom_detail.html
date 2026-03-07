@@ -1546,13 +1546,36 @@ body.in-iframe .bom-page-header { display: none !important; }
                 // 저장 성공 후 draft save 완전히 비활성화
                 draftSaveDisabled = true;
                 clearDraft();
+                const saveMsg = result.message || '저장되었습니다.';
+
+                // ── localStorage 동기화 알림 저장 ──────────────────────────
+                const now = Date.now();
+                try {
+                    const syncData = JSON.parse(localStorage.getItem('labeldata_bom_sync') || '{"ingredients":{},"labels":{}}');
+                    // 이 저장에서 역동기화된 ingredient IDs
+                    (result.synced_ingredient_ids || []).forEach(id => {
+                        syncData.ingredients[id] = { ts: now, type: 'bom_updated' };
+                    });
+                    // 다른 제품들 중 원료가 업데이트된 label IDs
+                    (result.affected_label_ids || []).forEach(id => {
+                        syncData.labels[id] = { ts: now, type: 'ingredient_updated' };
+                    });
+                    localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+                } catch(e) { /* localStorage 실패 무시 */ }
+                // ────────────────────────────────────────────────────────────
+
                 // 부모/단독 모두 Snackbar만 표시 (페이지 이동 없음 → 계속 편집 가능)
                 if (window.parent && window.parent !== window) {
                     // iframe 내 → 부모 Snackbar만 표시 (중복 방지)
-                    window.parent.postMessage({ type: 'bomSaved', message: '저장되었습니다.' }, '*');
+                    window.parent.postMessage({
+                        type: 'bomSaved',
+                        message: saveMsg,
+                        synced_ingredient_ids: result.synced_ingredient_ids || [],
+                        affected_label_ids: result.affected_label_ids || [],
+                    }, '*');
                 } else {
                     // 단독 페이지 → 로컬 Snackbar
-                    showSnackbar('저장되었습니다.', 'success');
+                    showSnackbar(saveMsg, 'success');
                 }
             } else {
                 showSnackbar('저장 실패: ' + (result.error || '알 수 없는 오류'), 'error');

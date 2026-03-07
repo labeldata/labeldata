@@ -106,29 +106,6 @@ def _render_email(template_name, context):
     return text_body, html_body
 
 
-def _build_email_body(sender_name, sender_company, sender_email, sections, action_label, action_url):
-    """텍스트 이메일 본문 생성 (레거시 폴백용)."""
-    from django.conf import settings as _cfg
-    site_url = getattr(_cfg, 'SITE_URL', 'https://www.ezlabeling.com')
-    SEP  = '━' * 52
-    SEP2 = '─' * 52
-    lines = ['안녕하세요.', '']
-    for title, items in sections:
-        lines.append(title)
-        lines.append(SEP2)
-        for item in items:
-            lines.append(f'  {item}')
-        lines.append('')
-    lines += [f'▶ {action_label}', f'   {action_url}', '', SEP,
-              '■ 요청자 정보', f'  이름  : {sender_name}']
-    if sender_company:
-        lines.append(f'  회사  : {sender_company}')
-    lines += [f'  이메일: {sender_email}', '', SEP,
-              f'  시스템 접속 : {site_url}',
-              '  문의       : administrator@ezlabeling.com', SEP]
-    return '\n'.join(lines)
-
-
 
 
 # ==================== Google Drive 스타일 탐색기 ====================
@@ -553,7 +530,7 @@ def product_detail(request, product_id):
     documents = ProductDocument.objects.filter(
         label=label,
         active_yn=True
-    ).order_by('-uploaded_datetime')
+    ).select_related('document_type', 'uploaded_by', 'uploaded_by__profile').order_by('document_type__display_order', '-uploaded_datetime')
     
     # 문서 타입별 그룹화
     document_types = DocumentType.objects.filter(active_yn=True).order_by('display_order', 'type_name')
@@ -1050,26 +1027,32 @@ def product_create(request):
         metadata.search_tags = search_tags
         metadata.save(update_fields=['raw_material_yn', 'search_tags'])
 
-        # 원료로 사용 체크 시 MyIngredient 자동 등록
+        # 원료로 사용 체크 시 MyIngredient 자동 등록 + LabelIngredientRelation 연동
         if raw_yn:
-            from v1.label.models import MyIngredient as _MyIngredient
-            exists = _MyIngredient.objects.filter(
+            from v1.label.models import MyIngredient as _MyIngredient, LabelIngredientRelation as _LIR
+            product_name = label.prdlst_nm or label.my_label_name
+            ingredient = _MyIngredient.objects.filter(
                 user_id=request.user,
-                prdlst_nm=label.prdlst_nm or label.my_label_name,
-                delete_YN='N'
-            ).exists()
-            if not exists:
-                _MyIngredient.objects.create(
+                prdlst_nm=product_name,
+                delete_YN='N',
+            ).first()
+            if not ingredient:
+                ingredient = _MyIngredient.objects.create(
                     user_id=request.user,
-                    prdlst_nm=label.prdlst_nm or label.my_label_name,
+                    prdlst_nm=product_name,
                     bssh_nm=label.bssh_nm or '',
                     prdlst_dcnm=label.prdlst_dcnm or '',
                     pog_daycnt=label.pog_daycnt or '',
                     rawmtrl_nm=label.rawmtrl_nm or '',
-                    ingredient_display_name=label.rawmtrl_nm or label.prdlst_nm or label.my_label_name,
+                    ingredient_display_name=label.rawmtrl_nm or product_name,
                     food_category='processed',
                     delete_YN='N',
                 )
+            _LIR.objects.get_or_create(
+                label=label,
+                ingredient=ingredient,
+                defaults={'relation_sequence': 1},
+            )
 
         messages.success(request, '새로운 제품이 생성되었습니다.')
         # 생성 후 워크스페이스의 기본정보 탭으로 바로 이동
@@ -1154,26 +1137,32 @@ def product_update(request, product_id):
             meta.search_tags = search_tags
             meta.save(update_fields=['raw_material_yn', 'search_tags'])
 
-            # 원료로 사용 체크 시 MyIngredient 자동 등록
+            # 원료로 사용 체크 시 MyIngredient 자동 등록 + LabelIngredientRelation 연동
             if raw_yn:
-                from v1.label.models import MyIngredient as _MyIngredient
-                exists = _MyIngredient.objects.filter(
+                from v1.label.models import MyIngredient as _MyIngredient, LabelIngredientRelation as _LIR
+                product_name = label.prdlst_nm or label.my_label_name
+                ingredient = _MyIngredient.objects.filter(
                     user_id=request.user,
-                    prdlst_nm=label.prdlst_nm or label.my_label_name,
-                    delete_YN='N'
-                ).exists()
-                if not exists:
-                    _MyIngredient.objects.create(
+                    prdlst_nm=product_name,
+                    delete_YN='N',
+                ).first()
+                if not ingredient:
+                    ingredient = _MyIngredient.objects.create(
                         user_id=request.user,
-                        prdlst_nm=label.prdlst_nm or label.my_label_name,
+                        prdlst_nm=product_name,
                         bssh_nm=label.bssh_nm or '',
                         prdlst_dcnm=label.prdlst_dcnm or '',
                         pog_daycnt=label.pog_daycnt or '',
                         rawmtrl_nm=label.rawmtrl_nm or '',
-                        ingredient_display_name=label.rawmtrl_nm or label.prdlst_nm or label.my_label_name,
+                        ingredient_display_name=label.rawmtrl_nm or product_name,
                         food_category='processed',
                         delete_YN='N',
                     )
+                _LIR.objects.get_or_create(
+                    label=label,
+                    ingredient=ingredient,
+                    defaults={'relation_sequence': 1},
+                )
 
         messages.success(request, '제품이 수정되었습니다.')
         return redirect('products:product_detail_new', product_id=label.my_label_id)
@@ -2134,6 +2123,15 @@ def sharing_inbox(request):
         for m in ProductMetadata.objects.filter(label_id__in=label_ids)
     }
 
+    # label_id → 활성 문서 수 매핑 (미리보기용)
+    from django.db.models import Count
+    doc_count_map = {
+        row['label_id']: row['cnt']
+        for row in ProductDocument.objects.filter(
+            label_id__in=label_ids, active_yn=True
+        ).values('label_id').annotate(cnt=Count('document_id'))
+    }
+
     # 역할별 할 일 매핑
     def _action_needed(role_code, status):
         mapping = {
@@ -2151,6 +2149,7 @@ def sharing_inbox(request):
     result_shares = []
     for share in my_shares:
         share.metadata = metadata_map.get(share.label_id)
+        share.doc_count = doc_count_map.get(share.label_id, 0)
         perm = getattr(share, 'permission', None)
         role_code = perm.role_code if perm else 'VIEWER'
         status = share.metadata.status if share.metadata else 'DRAFT'
@@ -2181,6 +2180,28 @@ def sharing_inbox(request):
             if (s.metadata and s.metadata.status == status_filter)
             or (not s.metadata and status_filter == 'DRAFT')
         ]
+
+    # SharedProductReceipt 자동 생성 및 각 share에 my_receipt 첨부
+    existing_receipts = {
+        r.share_id: r
+        for r in SharedProductReceipt.objects.filter(
+            receiver=request.user,
+            share_id__in=[s.share_id for s in result_shares],
+        )
+    }
+    shares_without_receipt = [s for s in result_shares if s.share_id not in existing_receipts]
+    if shares_without_receipt:
+        SharedProductReceipt.objects.bulk_create(
+            [SharedProductReceipt(share=s, receiver=request.user) for s in shares_without_receipt],
+            ignore_conflicts=True,
+        )
+        for r in SharedProductReceipt.objects.filter(
+            receiver=request.user,
+            share_id__in=[s.share_id for s in shares_without_receipt],
+        ):
+            existing_receipts[r.share_id] = r
+    for share in result_shares:
+        share.my_receipt = existing_receipts.get(share.share_id)
 
     context = {
         'received_shares': filtered,
@@ -2415,9 +2436,36 @@ def received_share_accept(request, receipt_id):
 @require_POST
 def use_as_ingredient(request, receipt_id):
     """원료로 사용"""
-    receipt = get_object_or_404(SharedProductReceipt, receipt_id=receipt_id, receiver=request.user)
+    receipt = get_object_or_404(
+        SharedProductReceipt.objects.select_related('share__label'),
+        receipt_id=receipt_id,
+        receiver=request.user,
+    )
     receipt.used_as_ingredient_yn = True
     receipt.save()
+
+    # 공유받은 제품을 내 원료 목록(MyIngredient)에 자동 등록
+    from v1.label.models import MyIngredient as _MyIngredient
+    label = receipt.share.label
+    product_name = label.prdlst_nm or label.my_label_name
+    existing = _MyIngredient.objects.filter(
+        user_id=request.user,
+        prdlst_nm=product_name,
+        delete_YN='N',
+    ).first()
+    if not existing:
+        _MyIngredient.objects.create(
+            user_id=request.user,
+            prdlst_nm=product_name,
+            bssh_nm=label.bssh_nm or '',
+            prdlst_dcnm=label.prdlst_dcnm or '',
+            pog_daycnt=label.pog_daycnt or '',
+            rawmtrl_nm=label.rawmtrl_nm or '',
+            ingredient_display_name=label.rawmtrl_nm or product_name,
+            food_category='processed',
+            delete_YN='N',
+        )
+
     messages.success(request, '원료로 등록했습니다.')
     return redirect('products:inbox')
 
@@ -2907,6 +2955,20 @@ def document_upload_api(request, label_id):
                 Q(document_id=parent_document.document_id) | Q(parent_document=parent_document)
             ).aggregate(Max('version'))['version__max'] or 1
             version_number = latest_version + 1
+        elif not slot:
+            # 슬롯 없이 업로드 시 같은 label+document_type 기존 문서 중 최신 버전 처리
+            existing_root = ProductDocument.objects.filter(
+                label=label,
+                document_type=document_type,
+                parent_document__isnull=True,
+                active_yn=True,
+            ).order_by('-version', '-uploaded_datetime').first()
+            if existing_root:
+                parent_document = existing_root
+                latest_version = ProductDocument.objects.filter(
+                    Q(document_id=existing_root.document_id) | Q(parent_document=existing_root)
+                ).aggregate(Max('version'))['version__max'] or 1
+                version_number = latest_version + 1
         
         # 문서 생성
         metadata = {'expiry_unlimited': True} if expiry_unlimited else {}
@@ -2997,6 +3059,120 @@ def document_upload_api(request, label_id):
             'success': False,
             'error': f'업로드 중 오류가 발생했습니다: {str(e)}'
         }, status=500)
+
+
+@login_required
+@require_POST
+def company_document_import_api(request, label_id):
+    """
+    고정 서류 관리에서 제품 문서로 불러오기 API
+    - company_document_id: CompanyDocument PK
+    - document_type_id: 대상 DocumentType (없으면 파일명으로 자동 감지)
+    - slot_id: 연결할 슬롯 (선택)
+    """
+    import shutil
+    import os
+    from django.core.files import File
+    from v1.user_management.models import CompanyDocument
+
+    try:
+        label = MyLabel.objects.get(my_label_id=label_id, user_id=request.user, delete_YN='N')
+    except MyLabel.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '제품을 찾을 수 없거나 권한이 없습니다.'}, status=403)
+
+    company_doc_id = request.POST.get('company_document_id')
+    if not company_doc_id:
+        return JsonResponse({'success': False, 'error': 'company_document_id가 필요합니다.'}, status=400)
+
+    try:
+        company_doc = CompanyDocument.objects.get(pk=company_doc_id, user=request.user)
+    except CompanyDocument.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '고정 서류를 찾을 수 없습니다.'}, status=404)
+
+    document_type_id = request.POST.get('document_type_id')
+    slot_id = request.POST.get('slot_id')
+
+    # 문서 타입 결정
+    slot = None
+    if slot_id:
+        try:
+            slot = DocumentSlot.objects.get(slot_id=slot_id, label=label)
+        except DocumentSlot.DoesNotExist:
+            return JsonResponse({'success': False, 'error': '슬롯을 찾을 수 없습니다.'}, status=400)
+        document_type = slot.document_type
+    elif document_type_id:
+        document_type = DocumentType.objects.filter(type_id=document_type_id, active_yn=True).first()
+        if not document_type:
+            # 지정된 타입이 없으면 자동 감지로 fallback
+            document_type = detect_document_type(company_doc.doc_file.name)
+    else:
+        document_type = detect_document_type(company_doc.doc_file.name)
+
+    if not document_type:
+        return JsonResponse({
+            'success': False,
+            'error': '문서 타입을 자동으로 분류할 수 없습니다. 직접 선택해주세요.',
+        }, status=400)
+
+    # 파일 복사하여 ProductDocument 생성
+    original_name = os.path.basename(company_doc.doc_file.name)
+    try:
+        company_doc.doc_file.open('rb')
+        file_content = company_doc.doc_file.read()
+        company_doc.doc_file.close()
+    except Exception:
+        return JsonResponse({'success': False, 'error': '파일을 읽을 수 없습니다. 파일이 존재하는지 확인해주세요.'}, status=400)
+
+    from io import BytesIO
+    with BytesIO(file_content) as buf:
+        document = ProductDocument.objects.create(
+            label=label,
+            document_type=document_type,
+            slot=slot,
+            file=File(buf, name=original_name),
+            original_filename=original_name,
+            file_size=company_doc.doc_file.size,
+            document_title=company_doc.doc_name,
+            uploaded_by=request.user,
+            source_company_document=company_doc,
+        )
+
+    if slot:
+        slot.current_document = document
+        slot.save()
+    else:
+        # slot이 지정되지 않은 경우, document_type에 맞는 기존 슬롯 자동 연결
+        auto_slot = DocumentSlot.objects.filter(
+            label=label,
+            document_type=document_type,
+            hidden_yn=False,
+        ).first()
+        if auto_slot:
+            auto_slot.current_document = document
+            auto_slot.status = DocumentSlot.SlotStatus.ACTIVE
+            auto_slot.save(update_fields=['current_document', 'status'])
+
+    from .models import ProductActivityLog
+    ProductActivityLog.objects.create(
+        label=label,
+        user=request.user,
+        action='DOCUMENT_UPLOADED',
+        details={
+            'file_name': original_name,
+            'document_type': document_type.type_name,
+            'source': 'company_document',
+            'company_document_id': company_doc.pk,
+        },
+    )
+
+    return JsonResponse({
+        'success': True,
+        'document_id': document.document_id,
+        'filename': document.original_filename,
+        'document_type': document.document_type.type_name,
+        'uploaded_at': document.uploaded_datetime.strftime('%Y-%m-%d %H:%M'),
+        'message': f'고정 서류 "{company_doc.doc_name}"를 제품 문서로 불러왔습니다.',
+    })
 
 
 @login_required
@@ -3428,32 +3604,6 @@ def comment_delete(request, comment_id):
 
     comment.delete()
     return JsonResponse({'success': True})
-
-
-@login_required
-def suggestion_list(request, label_id):
-    """제안 목록 API"""
-    return JsonResponse({'suggestions': []})
-
-
-@login_required
-@require_POST
-def suggestion_create(request, label_id):
-    """제안 생성 API"""
-    return JsonResponse({'success': False, 'message': '준비 중입니다.'})
-
-
-@login_required
-@require_POST
-def suggestion_process(request, suggestion_id):
-    """제안 처리 API"""
-    return JsonResponse({'success': False, 'message': '준비 중입니다.'})
-
-
-@login_required
-def mentionable_users(request, label_id):
-    """멘션 가능 사용자 API"""
-    return JsonResponse({'users': []})
 
 
 @login_required
@@ -4196,6 +4346,7 @@ def contacts_api_doc_requests(request):
     dr_list = (
         DocumentRequest.objects
         .filter(requester=request.user, recipient_email__iexact=email)
+        .select_related('linked_label')
         .prefetch_related('submissions')
         .order_by('-created_datetime')
     )
@@ -4222,6 +4373,8 @@ def contacts_api_doc_requests(request):
             'due_date':            dr.due_date.strftime('%Y-%m-%d') if dr.due_date else '',
             'created':             dr.created_datetime.strftime('%Y-%m-%d %H:%M') if dr.created_datetime else '',
             'submissions':         subs,
+            'linked_label_id':     dr.linked_label_id,
+            'linked_label_name':   dr.linked_label.my_label_name if dr.linked_label else None,
         })
     return JsonResponse({'requests': data})
 
@@ -4264,6 +4417,26 @@ def doc_request_submit(request, req_id):
     if saved:
         dr.status = DocumentRequest.STATUS_ACCEPTED
         dr.save(update_fields=['status', 'updated_datetime'])
+
+        # 요청자의 제품(linked_label)에 제출된 파일을 ProductDocument로 자동 등록
+        if dr.linked_label:
+            from django.core.files.base import File as DjangoFile
+            for sub in DocumentSubmission.objects.filter(request=dr, active_yn=True):
+                # document_type 매핑: DocumentSubmission.document_type (문자열) → DocumentType
+                dtype = DocumentType.objects.filter(type_name__iexact=sub.document_type, active_yn=True).first()
+                if dtype and sub.file:
+                    try:
+                        sub.file.seek(0)
+                        ProductDocument.objects.create(
+                            label=dr.linked_label,
+                            document_type=dtype,
+                            file=DjangoFile(sub.file, name=sub.original_filename),
+                            original_filename=sub.original_filename,
+                            file_size=sub.file_size or 0,
+                            uploaded_by=dr.requester,
+                        )
+                    except Exception:
+                        pass  # 파일 복사 실패 시 제출 자체는 유지
 
     return JsonResponse({'success': True, 'submitted': saved})
 
@@ -4359,6 +4532,128 @@ def api_doc_types(request):
 
 
 @login_required
+def api_my_labels(request):
+    """내 제품(MyLabel) 목록 JSON — 자료 요청 연결용"""
+    from v1.label.models import MyLabel
+    labels = (
+        MyLabel.objects.filter(user_id=request.user, delete_YN='N')
+        .order_by('-my_label_id')
+        .values('my_label_id', 'my_label_name', 'prdlst_nm', 'prdlst_dcnm')
+    )
+    data = [
+        {
+            'id': l['my_label_id'],
+            'name': l['my_label_name'] or l['prdlst_nm'] or f"제품 #{l['my_label_id']}",
+            'prdlst_dcnm': l['prdlst_dcnm'] or '',
+        }
+        for l in labels
+    ]
+    return JsonResponse({'labels': data})
+
+
+@login_required
+def api_my_company_documents(request):
+    """내 고정 서류 목록 JSON — 제품 문서 불러오기용"""
+    from v1.user_management.models import CompanyDocument
+    docs = CompanyDocument.objects.filter(user=request.user).select_related('linked_document_type').order_by('doc_type', '-uploaded_at')
+    data = [
+        {
+            'id': d.pk,
+            'doc_type': d.doc_type,
+            'doc_type_display': (d.linked_document_type.type_name if d.linked_document_type else d.get_doc_type_display()),
+            'doc_name': d.doc_name,
+            'file_url': d.doc_file.url if d.doc_file else '',
+            'uploaded_at': d.uploaded_at.strftime('%Y-%m-%d') if d.uploaded_at else '',
+            'note': d.note,
+            'linked_doc_type_id': d.linked_document_type_id,
+            'linked_doc_type_name': d.linked_document_type.type_name if d.linked_document_type else None,
+        }
+        for d in docs
+    ]
+    return JsonResponse({'documents': data})
+
+
+@login_required
+@require_POST
+def api_update_doc_request_label(request, req_id):
+    """이미 보낸 자료 요청에 제품 연결"""
+    from v1.products.models import DocumentRequest
+    from v1.label.models import MyLabel as _MyLabel
+    try:
+        dr = DocumentRequest.objects.get(request_id=req_id, requester=request.user)
+    except DocumentRequest.DoesNotExist:
+        return JsonResponse({'error': '요청을 찾을 수 없습니다.'}, status=404)
+
+    label_id = request.POST.get('linked_label_id') or None
+    if label_id:
+        label = _MyLabel.objects.filter(
+            my_label_id=label_id, user_id=request.user, delete_YN='N'
+        ).first()
+        if not label:
+            return JsonResponse({'error': '해당 제품을 찾을 수 없습니다.'}, status=404)
+        dr.linked_label = label
+    else:
+        dr.linked_label = None
+    dr.save(update_fields=['linked_label', 'updated_datetime'])
+
+    # 새로 제품이 연결된 경우, 이미 제출된 문서를 ProductDocument로 소급 등록
+    imported_count = 0
+    if label:
+        from .models import DocumentSubmission, DocumentType, ProductDocument
+        from django.core.files.base import File as DjangoFile
+
+        for sub in DocumentSubmission.objects.filter(request=dr, active_yn=True):
+            if not sub.file:
+                continue
+            # 동일 파일이 이미 등록돼 있으면 skip (중복 방지)
+            already = ProductDocument.objects.filter(
+                label=label,
+                original_filename=sub.original_filename,
+                file_size=sub.file_size,
+            ).exists()
+            if already:
+                continue
+
+            # requested_documents JSON에서 type_id로 먼저 조회 (더 정확)
+            dtype = None
+            for rd in (dr.requested_documents or []):
+                if rd.get('type_name') == sub.document_type and rd.get('type_id'):
+                    dtype = DocumentType.objects.filter(
+                        type_id=rd['type_id'], active_yn=True
+                    ).first()
+                    if dtype:
+                        break
+
+            # fallback: type_name 문자열로 조회
+            if not dtype:
+                dtype = DocumentType.objects.filter(
+                    type_name__iexact=sub.document_type, active_yn=True
+                ).first()
+
+            if dtype:
+                try:
+                    sub.file.seek(0)
+                    ProductDocument.objects.create(
+                        label=label,
+                        document_type=dtype,
+                        file=DjangoFile(sub.file, name=sub.original_filename),
+                        original_filename=sub.original_filename,
+                        file_size=sub.file_size or 0,
+                        uploaded_by=dr.requester,
+                    )
+                    imported_count += 1
+                except Exception:
+                    pass
+
+    return JsonResponse({
+        'success': True,
+        'linked_label_id': dr.linked_label_id,
+        'linked_label_name': dr.linked_label.my_label_name if dr.linked_label else None,
+        'imported_count': imported_count,
+    })
+
+
+@login_required
 @require_POST
 def api_send_doc_request(request):
     """문서 요청 생성 + 이메일 발송 (multipart/form-data)"""
@@ -4374,8 +4669,19 @@ def api_send_doc_request(request):
     except (ValueError, TypeError):
         return JsonResponse({'error': '잘못된 요청 형식입니다.'}, status=400)
 
-    message_text = request.POST.get('message', '').strip()
-    attachment   = request.FILES.get('attachment')
+    message_text     = request.POST.get('message', '').strip()
+    attachment       = request.FILES.get('attachment')
+    linked_label_id  = request.POST.get('linked_label_id')
+    linked_ingredient_id = request.POST.get('linked_ingredient_id')
+
+    # 연결 제품/원료 검증 (소유자 확인)
+    linked_label = None
+    linked_ingredient = None
+    if linked_label_id:
+        linked_label = MyLabel.objects.filter(my_label_id=linked_label_id, user_id=request.user, delete_YN='N').first()
+    if linked_ingredient_id:
+        from v1.label.models import MyIngredient as _MyIngredient
+        linked_ingredient = _MyIngredient.objects.filter(my_ingredient_id=linked_ingredient_id, user_id=request.user, delete_YN='N').first()
 
     if not recipients:
         return JsonResponse({'error': '수신자를 선택해주세요.'}, status=400)
@@ -4405,6 +4711,8 @@ def api_send_doc_request(request):
             requested_documents  = doc_info,
             message              = message_text,
             attachment           = attachment,
+            linked_label         = linked_label,
+            linked_ingredient    = linked_ingredient,
         )
         created_count += 1
 

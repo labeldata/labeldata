@@ -156,6 +156,16 @@ function updateSelectionActions() {
         actionsBar.classList.remove('d-none');
         actionsBar.classList.add('d-flex');
         countSpan.textContent = count;
+
+        // 선택된 행 중 뱃지가 있는 항목이 있으면 알림 해제 버튼 표시
+        const dismissBtn = document.getElementById('dismiss-badges-btn');
+        if (dismissBtn) {
+            const hasBadge = visibleSelected.some(cb => {
+                const row = cb.closest('tr.product-row');
+                return row && row.querySelector('.ingredient-sync-badge');
+            });
+            dismissBtn.style.display = hasBadge ? '' : 'none';
+        }
     } else {
         actionsBar.classList.remove('d-flex');
         actionsBar.classList.add('d-none');

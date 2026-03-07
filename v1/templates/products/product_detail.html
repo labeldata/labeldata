@@ -1799,6 +1799,23 @@ window.addEventListener('message', function(event) {
     if (event.data.type === 'bomSaved') {
         showSnackbar(event.data.message || '저장되었습니다.', 'success');
         showSaveStatusMsg();
+        // ── localStorage 동기화 알림 저장 ──
+        try {
+            const d = event.data;
+            if ((d.synced_ingredient_ids && d.synced_ingredient_ids.length) ||
+                (d.affected_label_ids && d.affected_label_ids.length)) {
+                const now = Date.now();
+                const syncData = JSON.parse(localStorage.getItem('labeldata_bom_sync') || '{"ingredients":{},"labels":{}}');
+                (d.synced_ingredient_ids || []).forEach(id => {
+                    syncData.ingredients[id] = { ts: now, type: 'bom_updated' };
+                });
+                (d.affected_label_ids || []).forEach(id => {
+                    syncData.labels[id] = { ts: now, type: 'ingredient_updated' };
+                });
+                localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+            }
+        } catch(e) {}
+        // ────────────────────────────────────
         return;
     }
 

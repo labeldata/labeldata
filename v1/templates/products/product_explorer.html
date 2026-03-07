@@ -170,6 +170,9 @@
             <button class="btn btn-xs btn-outline-danger" onclick="deleteSelected()" title="삭제" style="padding:2px 8px;font-size:11px;">
                 <i class="bi bi-trash"></i> 삭제
             </button>
+            <button id="dismiss-badges-btn" class="btn btn-xs btn-outline-warning" onclick="dismissSelectedBadges()" title="선택한 제품의 원료 업데이트 알림을 해제합니다" style="padding:2px 8px;font-size:11px;display:none;">
+                <i class="bi bi-bell-slash"></i> 알림 해제
+            </button>
             <button class="btn btn-xs btn-link text-muted ms-1" onclick="clearAllSelection()" style="padding:2px 6px;font-size:11px;">
                 선택 해제
             </button>
@@ -465,4 +468,103 @@ const PE_EXPLORER_URL = '{% url "products:product_explorer" %}';
 const PE_CSRF_TOKEN = '{{ csrf_token }}';
 </script>
 <script src="{% static 'js/product_explorer.js' %}?v=20260222"></script>
+
+<style>
+.ingredient-sync-badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+    vertical-align: middle;
+    white-space: nowrap;
+    background-color: #e6f4ea;
+    color: #1e7e34;
+    border: 1px solid #a8d5b5;
+}
+</style>
+
+<script>
+/* ── BOM/원료 동기화 알림 뱃지 (제품 탐색기) ────────────────────── */
+function _dismissProductBadge(productId) {
+    try {
+        const syncData = JSON.parse(localStorage.getItem('labeldata_bom_sync') || '{"ingredients":{},"labels":{}}');
+        delete syncData.labels[String(productId)];
+        localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+    } catch(e) { /* 무시 */ }
+}
+
+function dismissSelectedBadges() {
+    const checked = document.querySelectorAll('.product-checkbox:checked');
+    if (!checked.length) return;
+    checked.forEach(cb => {
+        const pid = cb.dataset.productId;
+        _dismissProductBadge(pid);
+        const row = cb.closest('tr.product-row');
+        if (row) row.querySelectorAll('.ingredient-sync-badge').forEach(b => b.remove());
+    });
+    // 해제된 항목이 없으면 버튼 숨김
+    if (!document.querySelector('.ingredient-sync-badge')) {
+        document.getElementById('dismiss-badges-btn').style.display = 'none';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        const raw = localStorage.getItem('labeldata_bom_sync');
+        if (!raw) return;
+        const syncData = JSON.parse(raw);
+        const labels = syncData.labels || {};
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+        // 만료 항목 정리
+        let changed = false;
+        Object.keys(labels).forEach(id => {
+            if (labels[id].ts < cutoff) { delete labels[id]; changed = true; }
+        });
+        if (changed) {
+            syncData.labels = labels;
+            localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+        }
+
+        const ids = Object.keys(labels);
+        if (!ids.length) return;
+
+        let badgeCount = 0;
+        document.querySelectorAll('tr.product-row').forEach(row => {
+            const rowId = String(row.dataset.productId);
+            if (ids.includes(rowId)) {
+                const cells = row.querySelectorAll('td');
+                const nameCell = cells[1];
+                if (nameCell && !nameCell.querySelector('.ingredient-sync-badge')) {
+                    const nameDiv = nameCell.querySelector('.fw-bold');
+                    const badge = document.createElement('span');
+                    badge.className = 'ingredient-sync-badge';
+                    badge.title = '클릭하면 알림을 해제합니다';
+                    badge.textContent = '원료 업데이트';
+                    badge.style.cursor = 'pointer';
+                    badge.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        _dismissProductBadge(rowId);
+                        badge.remove();
+                        if (!document.querySelector('.ingredient-sync-badge')) {
+                            const btn = document.getElementById('dismiss-badges-btn');
+                            if (btn) btn.style.display = 'none';
+                        }
+                    });
+                    if (nameDiv) { nameDiv.appendChild(badge); } else { nameCell.appendChild(badge); }
+                    badgeCount++;
+                }
+            }
+        });
+
+        // 뱃지가 있으면 선택 액션 바의 「알림 해제」 버튼 표시
+        if (badgeCount > 0) {
+            const btn = document.getElementById('dismiss-badges-btn');
+            if (btn) btn.style.display = '';
+        }
+    } catch(e) { /* 무시 */ }
+});
+/* ──────────────────────────────────────────────────────────────── */
+</script>
 {% endblock %}

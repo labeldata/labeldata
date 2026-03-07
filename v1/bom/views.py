@@ -364,7 +364,8 @@ def bom_data_api(request, label_id):
             ingredient_name = bom.ingredient_name
             ingredient_code = ''
             source_type = 'ingredient' if bom.source_ingredient_id else 'manual'
-            source_id = None
+            # ingredient 타입에서도 source_id를 채워야 JS가 source_label_id를 잃어도 복원 가능
+            source_id = bom.source_ingredient_id  # None → 실제 FK 값
             shared_owner = ''
         
         data.append({
@@ -437,16 +438,29 @@ def bom_save_api(request, label_id):
             bom_id     = item.get('bom_id')
             source_type = item.get('source_type', 'manual')
             source_id  = item.get('source_id')
-            sl_id      = item.get('source_label_id')  # JS가 보내는 my_ingredient_id
+            # source_label_id 우선, 없으면 source_id를 fallback으로 사용 (두 값 모두 ingredient PK)
+            sl_id      = item.get('source_label_id') or item.get('source_id')
 
             # ── source_ingredient (FK) 결정 ────────────────────────────────
             source_ingredient = None
 
             if source_type == 'ingredient' and sl_id:
-                # 내 원료 보관함에서 선택한 원료
+                # 내 원료 보관함에서 선택한 원료 → BOM 값으로 역동기화
                 source_ingredient = MI.objects.filter(
                     my_ingredient_id=int(sl_id), delete_YN='N'
                 ).first()
+                if source_ingredient:
+                    # BOM에서 수정된 값을 MyIngredient에 반영
+                    source_ingredient.prdlst_nm              = item.get('ingredient_name') or source_ingredient.prdlst_nm
+                    source_ingredient.ingredient_display_name = (item.get('raw_material_name') or
+                                                                  item.get('ingredient_name') or
+                                                                  source_ingredient.ingredient_display_name)
+                    source_ingredient.prdlst_dcnm            = item.get('food_type') or source_ingredient.prdlst_dcnm
+                    source_ingredient.allergens               = item.get('allergens') or item.get('allergen') or source_ingredient.allergens
+                    source_ingredient.gmo                    = item.get('gmo') or source_ingredient.gmo
+                    source_ingredient.bssh_nm                = item.get('manufacturer') or source_ingredient.bssh_nm
+                    source_ingredient.prdlst_report_no       = item.get('report_no') or source_ingredient.prdlst_report_no
+                    source_ingredient.save()
 
             elif source_type == 'manual':
                 # 직접 입력 → 기존 BOM의 source_ingredient 재사용 또는 새로 생성
@@ -561,7 +575,62 @@ def bom_save_api(request, label_id):
             seq += 1
         # ──────────────────────────────────────────────────────────────────
 
-        return JsonResponse({'success': True, 'message': 'BOM이 저장되었습니다'})
+        # ── 다른 제품 BOM 동기화 (동일 source_ingredient 참조하는 타 제품) ──
+        other_synced_count = 0
+        affected_label_ids = set()
+        saved_with_ingredient = ProductBOM.objects.filter(
+            parent_label=label, active_yn=True,
+            source_ingredient__isnull=False
+        ).select_related('source_ingredient')
+
+        for bom in saved_with_ingredient:
+            ing = bom.source_ingredient
+            # 이 원료를 참조하는 다른 제품의 BOM 행 동기화
+            other_boms = ProductBOM.objects.filter(
+                source_ingredient=ing,
+                active_yn=True,
+            ).exclude(parent_label=label)
+
+            boms_to_update = []
+            for ob in other_boms:
+                ob.ingredient_name    = ing.prdlst_nm or ob.ingredient_name
+                ob.raw_material_name  = ing.ingredient_display_name or ing.prdlst_nm or ''
+                ob.food_type          = ing.prdlst_dcnm or ''
+                ob.allergens          = ing.allergens or ''
+                ob.allergen           = ing.allergens or ''
+                ob.gmo                = ing.gmo or ''
+                ob.gmo_yn             = bool(ing.gmo)
+                ob.manufacturer       = ing.bssh_nm or ''
+                ob.report_no          = ing.prdlst_report_no or ''
+                boms_to_update.append(ob)
+                affected_label_ids.add(ob.parent_label_id)
+            if boms_to_update:
+                ProductBOM.objects.bulk_update(boms_to_update, [
+                    'ingredient_name', 'raw_material_name', 'food_type',
+                    'allergens', 'allergen', 'gmo', 'gmo_yn',
+                    'manufacturer', 'report_no',
+                ])
+                other_synced_count += len(boms_to_update)
+        # ──────────────────────────────────────────────────────────────────
+
+        # ── 역동기화된 ingredient ID 목록 수집 ─────────────────────────────
+        synced_ingredient_ids = []
+        for bom in ProductBOM.objects.filter(parent_label=label, active_yn=True, source_ingredient__isnull=False):
+            if bom.source_ingredient_id not in synced_ingredient_ids:
+                synced_ingredient_ids.append(bom.source_ingredient_id)
+        # ──────────────────────────────────────────────────────────────────
+
+        msg = 'BOM이 저장되었습니다'
+        if other_synced_count:
+            msg += f' (다른 {len(affected_label_ids)}개 제품의 동일 원료 {other_synced_count}개 항목 자동 업데이트)'
+        return JsonResponse({
+            'success': True,
+            'message': msg,
+            'other_synced_count': other_synced_count,
+            'affected_product_count': len(affected_label_ids),
+            'affected_label_ids': list(affected_label_ids),
+            'synced_ingredient_ids': synced_ingredient_ids,
+        })
 
     except Exception as e:
         logger.exception('[BOM 저장] 예외 발생')

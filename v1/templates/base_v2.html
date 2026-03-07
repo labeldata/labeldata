@@ -133,6 +133,7 @@
       #v2Snackbar.snack-show   { transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
       #v2Snackbar.snack-error  { background:#b71c1c; }
       #v2Snackbar.snack-warning{ background:#e65100; }
+      #v2Snackbar.snack-info   { background:#1565c0; }
     </style>
     <script>
     (function(){
@@ -143,10 +144,11 @@
         var msg = document.getElementById('v2SnackbarMsg');
         if (!el || !msg) return;
         if (_t) { clearTimeout(_t); _t = null; }
-        el.classList.remove('snack-show','snack-error','snack-warning');
+        el.classList.remove('snack-show','snack-error','snack-warning','snack-info');
         msg.textContent = message;
         if (type === 'error')        el.classList.add('snack-error');
         else if (type === 'warning') el.classList.add('snack-warning');
+        else if (type === 'info')    el.classList.add('snack-info');
         void el.offsetWidth;
         el.classList.add('snack-show');
         var dur = (type === 'error' || type === 'warning') ? 6000 : 4000;
@@ -154,7 +156,7 @@
       };
       window.hideSnackbar = function() {
         var el = document.getElementById('v2Snackbar');
-        if (el) el.classList.remove('snack-show','snack-error','snack-warning');
+        if (el) el.classList.remove('snack-show','snack-error','snack-warning','snack-info');
         if (_t) { clearTimeout(_t); _t = null; }
       };
     })();

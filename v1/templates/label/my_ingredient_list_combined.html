@@ -175,6 +175,28 @@
         white-space: nowrap;
     }
 
+    /* BOM/원료 동기화 알림 뱃지 */
+    .bom-sync-badge, .ingredient-sync-badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 10px;
+        margin-left: 5px;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    .bom-sync-badge {
+        background-color: #e8f0fe;
+        color: #1967d2;
+        border: 1px solid #aecbfa;
+    }
+    .ingredient-sync-badge {
+        background-color: #e6f4ea;
+        color: #1e7e34;
+        border: 1px solid #a8d5b5;
+    }
+
     #ingredient-selection-actions .act-btn {
         font-size: 11px;
         font-weight: 500;
@@ -568,6 +590,9 @@
                     <button class="act-btn danger" id="bulkDeleteBtn" title="선택한 원료를 삭제합니다">
                         <i class="bi bi-trash"></i> 삭제
                     </button>
+                    <button class="act-btn" id="bulkDismissBadgeBtn" title="선택한 원료의 BOM 업데이트 알림을 해제합니다" style="display:none;">
+                        <i class="bi bi-bell-slash"></i> 알림 해제
+                    </button>
                 </div>
             </div>
             <div class="list-table-wrapper">
@@ -723,6 +748,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (count > 0) {
             actionsBar.classList.add('show');
             selectedCountSpan.textContent = count;
+            // 선택된 항목 중 뱃지가 있으면 알림 해제 버튼 표시
+            const dismissBtn = document.getElementById('bulkDismissBadgeBtn');
+            if (dismissBtn) {
+                const hasBadge = checked.some(cb => {
+                    const row = cb.closest('.ingredient-row');
+                    return row && row.querySelector('.bom-sync-badge');
+                });
+                dismissBtn.style.display = hasBadge ? '' : 'none';
+            }
         } else {
             actionsBar.classList.remove('show');
         }
@@ -808,6 +842,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(() => alert('복사 중 오류가 발생했습니다.'));
+        });
+    }
+
+    // 선택 항목 BOM 알림 일괄 해제
+    const bulkDismissBadgeBtn = document.getElementById('bulkDismissBadgeBtn');
+    if (bulkDismissBadgeBtn) {
+        bulkDismissBadgeBtn.addEventListener('click', function() {
+            const checked = getCheckedBoxes();
+            if (!checked.length) return;
+            try {
+                const syncData = JSON.parse(localStorage.getItem('labeldata_bom_sync') || '{"ingredients":{},"labels":{}}');
+                checked.forEach(cb => {
+                    const ingId = String(cb.dataset.id);
+                    delete syncData.ingredients[ingId];
+                    const row = cb.closest('.ingredient-row');
+                    if (row) row.querySelectorAll('.bom-sync-badge').forEach(b => b.remove());
+                });
+                localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+            } catch(e) { /* 무시 */ }
+            updateSelectionActions();
         });
     }
 
@@ -897,6 +951,55 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return value;
     }
+
+    // ── BOM 동기화 알림 뱃지 표시 (localStorage 기반) ─────────────────
+    (function applyBomSyncBadges() {
+        try {
+            const raw = localStorage.getItem('labeldata_bom_sync');
+            if (!raw) return;
+            const syncData = JSON.parse(raw);
+            const ingredients = syncData.ingredients || {};
+            const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24시간
+
+            // 만료 항목 정리
+            let changed = false;
+            Object.keys(ingredients).forEach(id => {
+                if (ingredients[id].ts < cutoff) { delete ingredients[id]; changed = true; }
+            });
+            if (changed) {
+                syncData.ingredients = ingredients;
+                localStorage.setItem('labeldata_bom_sync', JSON.stringify(syncData));
+            }
+
+            const ids = Object.keys(ingredients);
+            if (!ids.length) return;
+
+            document.querySelectorAll('.ingredient-row').forEach(row => {
+                const rowId = String(row.dataset.id);
+                if (ids.includes(rowId)) {
+                    const nameCell = row.querySelectorAll('td')[3];
+                    if (nameCell && !nameCell.querySelector('.bom-sync-badge')) {
+                        const badge = document.createElement('span');
+                        badge.className = 'bom-sync-badge';
+                        badge.title = '클릭하면 알림을 해제합니다';
+                        badge.textContent = 'BOM 업데이트';
+                        badge.style.cursor = 'pointer';
+                        badge.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            try {
+                                const sd = JSON.parse(localStorage.getItem('labeldata_bom_sync') || '{"ingredients":{},"labels":{}}');
+                                delete sd.ingredients[rowId];
+                                localStorage.setItem('labeldata_bom_sync', JSON.stringify(sd));
+                            } catch(ex) { /* 무시 */ }
+                            badge.remove();
+                        });
+                        nameCell.appendChild(badge);
+                    }
+                }
+            });
+        } catch(e) { /* localStorage 오류 무시 */ }
+    })();
+    // ──────────────────────────────────────────────────────────────────
 });
 </script>
 

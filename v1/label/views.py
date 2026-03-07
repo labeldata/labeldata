@@ -1280,12 +1280,51 @@ def my_ingredient_detail(request, ingredient_id=None):
             new_ingredient = form.save(commit=False)
             new_ingredient.user_id = request.user
             new_ingredient.save()
+
+            # ── BOM 연결 동기화 ──────────────────────────────────────────
+            # 이 원료를 참조하는 모든 ProductBOM 레코드에 변경 내용 반영
+            synced_bom_count = 0
+            affected_product_ids = set()
+            if mode == 'edit':
+                from v1.bom.models import ProductBOM
+                linked_boms = ProductBOM.objects.filter(
+                    source_ingredient=new_ingredient, active_yn=True
+                ).select_related('parent_label')
+                update_fields = []
+                boms_to_update = []
+                for bom in linked_boms:
+                    bom.ingredient_name   = new_ingredient.prdlst_nm or bom.ingredient_name
+                    bom.raw_material_name = new_ingredient.ingredient_display_name or new_ingredient.prdlst_nm or ''
+                    bom.food_type         = new_ingredient.prdlst_dcnm or ''
+                    bom.allergens         = new_ingredient.allergens or ''
+                    bom.allergen          = new_ingredient.allergens or ''
+                    bom.gmo               = new_ingredient.gmo or ''
+                    bom.gmo_yn            = bool(new_ingredient.gmo)
+                    bom.manufacturer      = new_ingredient.bssh_nm or ''
+                    bom.report_no         = new_ingredient.prdlst_report_no or ''
+                    boms_to_update.append(bom)
+                    affected_product_ids.add(bom.parent_label_id)
+                if boms_to_update:
+                    ProductBOM.objects.bulk_update(boms_to_update, [
+                        'ingredient_name', 'raw_material_name', 'food_type',
+                        'allergens', 'allergen', 'gmo', 'gmo_yn',
+                        'manufacturer', 'report_no',
+                    ])
+                    synced_bom_count = len(boms_to_update)
+            # ─────────────────────────────────────────────────────────────
+
             # AJAX 요청 시 ingredient_id 항상 반환
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                msg = '내 원료가 성공적으로 저장되었습니다.'
+                if synced_bom_count:
+                    msg += f' 연결된 {len(affected_product_ids)}개 제품({synced_bom_count}개 항목)에 자동 적용되었습니다.'
                 return JsonResponse({
                     'success': True,
-                    'message': '내 원료가 성공적으로 저장되었습니다.',
-                    'ingredient_id': new_ingredient.my_ingredient_id
+                    'message': msg,
+                    'ingredient_id': new_ingredient.my_ingredient_id,
+                    'synced_bom_count': synced_bom_count,
+                    'affected_product_count': len(affected_product_ids),
+                    'affected_label_ids': list(affected_product_ids),
                 })
             # 메시지 제거
             return redirect('label:my_ingredient_detail', ingredient_id=new_ingredient.my_ingredient_id)

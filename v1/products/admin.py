@@ -2,7 +2,7 @@
 from .models import (
     ProductMetadata, ProductFolder, ProductAccessLog,
     DocumentType, ProductDocument,
-    ProductComment, CommentMention, SuggestionMode,
+    ProductComment,
     ProductShare, SharePermission, SharedProductReceipt,
     ProductActivityLog
 )
@@ -83,24 +83,6 @@ class ProductCommentAdmin(admin.ModelAdmin):
     def content_preview(self, obj):
         return obj.content[:50]
     content_preview.short_description = '내용 미리보기'
-
-
-@admin.register(CommentMention)
-class CommentMentionAdmin(admin.ModelAdmin):
-    list_display = ['mention_id', 'comment', 'mentioned_user', 'notified_yn', 'read_yn', 'created_at']
-    search_fields = ['mentioned_user__username']
-    list_filter = ['notified_yn', 'read_yn', 'created_at']
-    date_hierarchy = 'created_at'
-    readonly_fields = ['created_at']
-
-
-@admin.register(SuggestionMode)
-class SuggestionModeAdmin(admin.ModelAdmin):
-    list_display = ['suggestion_id', 'label', 'field_name', 'suggested_by', 'status', 'processed_by', 'created_at']
-    search_fields = ['field_name', 'suggested_value']
-    list_filter = ['status', 'created_at', 'suggested_by']
-    date_hierarchy = 'created_at'
-    readonly_fields = ['created_at', 'updated_at']
 
 
 # ==================== 공유 관리 Admin ====================

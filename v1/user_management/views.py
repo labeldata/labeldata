@@ -319,21 +319,29 @@ def user_profile(request):
             messages.success(request, '기업 정보가 저장되었습니다.')
 
         elif action == 'upload_document':
-            doc_type = request.POST.get('doc_type', '')
             doc_name = request.POST.get('doc_name', '').strip()
             note = request.POST.get('note', '').strip()
             doc_file = request.FILES.get('doc_file')
-            if doc_file and doc_type:
-                CompanyDocument.objects.create(
-                    user=request.user,
-                    doc_type=doc_type,
-                    doc_name=doc_name,
-                    note=note,
-                    doc_file=doc_file,
-                )
-                messages.success(request, '서류가 등록되었습니다.')
+            linked_doc_type_id = request.POST.get('linked_document_type_id') or None
+            if doc_file and linked_doc_type_id:
+                from v1.products.models import DocumentType as ProductDocType
+                linked_dtype = ProductDocType.objects.filter(
+                    type_id=linked_doc_type_id, active_yn=True
+                ).first()
+                if not linked_dtype:
+                    messages.error(request, '올바른 서류 구분을 선택해주세요.')
+                else:
+                    CompanyDocument.objects.create(
+                        user=request.user,
+                        doc_type='etc',
+                        doc_name=doc_name,
+                        note=note,
+                        doc_file=doc_file,
+                        linked_document_type=linked_dtype,
+                    )
+                    messages.success(request, '서류가 등록되었습니다.')
             else:
-                messages.error(request, '서류 종류와 파일을 모두 선택해주세요.')
+                messages.error(request, '서류 구분과 파일을 모두 선택해주세요.')
 
         elif action == 'change_password':
             if is_guest:
@@ -358,11 +366,15 @@ def user_profile(request):
     for doc in documents:
         docs_by_type.setdefault(doc.doc_type, []).append(doc)
 
+    from v1.products.models import DocumentType as ProductDocType
+    product_doc_types = ProductDocType.objects.filter(active_yn=True).order_by('display_order', 'type_name')
+
     return render(request, 'user_management/user_profile.html', {
         'profile': profile,
         'documents': documents,
         'docs_by_type': docs_by_type,
         'doc_type_choices': doc_type_choices,
+        'product_doc_types': product_doc_types,
         'pw_form': pw_form,
         'is_guest': is_guest,
     })

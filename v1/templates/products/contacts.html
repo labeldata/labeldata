@@ -155,6 +155,19 @@
                               placeholder="예) 수입통관을 위해 원산지 증명서 제출 부탁드립니다."></textarea>
                 </div>
 
+                <!-- 연결 제품 (선택) -->
+                <div class="mb-3">
+                    <div class="fw-semibold mb-1" style="font-size:12px;color:#5f6368;text-transform:uppercase;letter-spacing:.5px;">
+                        연결할 제품 <span class="text-muted fw-normal">(선택)</span>
+                    </div>
+                    <div class="text-muted mb-2" style="font-size:11px;">
+                        선택하면 상대방이 파일을 제출했을 때 해당 제품의 문서함에 자동으로 등록됩니다.
+                    </div>
+                    <select id="docReqLinkedLabel" class="form-select form-select-sm" style="font-size:13px;">
+                        <option value="">-- 연결 안 함 --</option>
+                    </select>
+                </div>
+
                 <!-- 첨부 파일 -->
                 <div class="mb-2">
                     <div class="fw-semibold mb-2" style="font-size:12px;color:#5f6368;text-transform:uppercase;letter-spacing:.5px;">첨부 파일 (선택)</div>
@@ -333,6 +346,7 @@ const SEND_DOC_REQ_API = '{% url "products:api_send_doc_request" %}';
 const CONTACTS_API_DOC_REQUESTS = '{% url "products:contacts_api_doc_requests" %}';
 const CONTACTS_API_RECEIVED = '{% url "products:contacts_api_received_doc_requests" %}';
 const SUBMIT_DOC_REQ_API = '/products/doc-requests/'; // + req_id + '/submit/'
+const MY_LABELS_API = '{% url "products:api_my_labels" %}';
 
 const ROLE_BADGE = {
     OWNER:    '<span class="role-chip role-owner">오너</span>',
@@ -892,10 +906,13 @@ function openDocRequestPanel(contacts) {
     document.getElementById('docReqMessage').value = '';
     document.getElementById('docReqFile').value = '';
     document.getElementById('docReqFileName').textContent = '양식, 참고 파일 등 첨부 (클릭)';
+    document.getElementById('docReqLinkedLabel').value = '';
     document.querySelectorAll('.doc-type-chk').forEach(c => c.checked = false);
 
     // 문서 유형 로드
     loadDocTypes();
+    // 내 제품 목록 로드
+    loadMyLabels();
 
     // 전송 시 참조할 contacts 저장
     panel._recipients = contacts;
@@ -931,6 +948,27 @@ function renderDocTypes(types) {
     ).join('');
 }
 
+// 내 제품 목록 로드 (자료 요청 연결용)
+let _cachedLabels = null;
+async function loadMyLabels() {
+    if (_cachedLabels !== null) { populateLabelSelect(_cachedLabels); return; }
+    try {
+        const res  = await fetch(MY_LABELS_API);
+        const data = await res.json();
+        _cachedLabels = data.labels || [];
+        populateLabelSelect(_cachedLabels);
+    } catch(e) { /* 실패 시 빈 목록 유지 */ }
+}
+
+function populateLabelSelect(labels) {
+    const sel = document.getElementById('docReqLinkedLabel');
+    while (sel.options.length > 1) sel.remove(1);
+    labels.forEach(l => {
+        const opt = new Option(l.name, l.id);
+        sel.add(opt);
+    });
+}
+
 async function sendDocRequest() {
     const panel = document.getElementById('docRequestView');
     const recipients = panel._recipients || [];
@@ -950,6 +988,8 @@ async function sendDocRequest() {
     fd.append('type_ids', JSON.stringify(typeIds));
     fd.append('message', message);
     if (fileInput.files[0]) fd.append('attachment', fileInput.files[0]);
+    const linkedLabelId = document.getElementById('docReqLinkedLabel').value;
+    if (linkedLabelId) fd.append('linked_label_id', linkedLabelId);
 
     try {
         const res  = await fetch(SEND_DOC_REQ_API, {
@@ -1085,6 +1125,37 @@ async function loadDocRequests(email) {
                 <div class="mb-1">${docs || '<span style="color:#bdc1c6;font-size:12px;">문서 종류 미지정</span>'}</div>
                 ${r.message ? `<div class="text-muted" style="font-size:12px;">"${r.message}"</div>` : ''}
                 ${r.due_date ? `<div style="font-size:11px;color:#5f6368;">마감: ${r.due_date}</div>` : ''}
+                <div class="mt-2 pt-2 d-flex align-items-center gap-2 flex-wrap" style="border-top:1px dashed #e8eaed;">
+                    <span style="font-size:11px;color:#5f6368;font-weight:600;"><i class="bi bi-link-45deg me-1"></i>연결 제품</span>
+                    <span id="linked-label-text-${r.request_id}" style="font-size:12px;color:${r.linked_label_id ? '#1967d2' : '#bdc1c6'};">
+                        ${r.linked_label_name || '미연결'}
+                    </span>
+                    <button class="btn btn-xs btn-light border py-0 px-2" style="font-size:11px;"
+                            onclick="toggleLinkLabelSelect(${r.request_id})">
+                        ${r.linked_label_id ? '변경' : '+ 연결'}
+                    </button>
+                    <div id="link-label-select-${r.request_id}" class="d-none w-100 mt-1">
+                        <div class="position-relative">
+                            <input type="text" class="form-control form-control-sm"
+                                   id="link-label-search-${r.request_id}"
+                                   placeholder="품목명 또는 유형으로 검색..."
+                                   style="font-size:12px;padding-right:28px;"
+                                   oninput="filterLabelOptions(${r.request_id}, this.value)"
+                                   autocomplete="off">
+                            <i class="bi bi-search position-absolute" style="right:8px;top:50%;transform:translateY(-50%);color:#9aa0a6;font-size:11px;pointer-events:none;"></i>
+                        </div>
+                        <div id="link-label-dropdown-${r.request_id}"
+                             class="border rounded mt-1 bg-white"
+                             style="max-height:180px;overflow-y:auto;font-size:12px;display:none;"></div>
+                        <input type="hidden" id="link-label-val-${r.request_id}" value="">
+                        <div class="d-flex gap-1 mt-1">
+                            <button class="btn btn-sm btn-primary py-0 px-2" style="font-size:11px;"
+                                    onclick="saveLinkLabel(${r.request_id})">저장</button>
+                            <button class="btn btn-sm btn-light py-0 px-2" style="font-size:11px;"
+                                    onclick="toggleLinkLabelSelect(${r.request_id})">취소</button>
+                        </div>
+                    </div>
+                </div>
                 ${submissionsHtml}
             </div>`;
         }).join('');
@@ -1093,6 +1164,89 @@ async function loadDocRequests(email) {
     } catch(e) {
         loadingEl.classList.add('d-none');
         listEl.innerHTML = '<p class="text-danger" style="font-size:13px;">불러오기 실패</p>';
+    }
+}
+
+let _myLabelsCache = null;
+async function toggleLinkLabelSelect(reqId) {
+    const wrapper = document.getElementById(`link-label-select-${reqId}`);
+    if (!wrapper) return;
+    const isHidden = wrapper.classList.contains('d-none');
+    if (isHidden) {
+        wrapper.classList.remove('d-none');
+        // 레이블 목록 로드 (캐시 사용)
+        if (!_myLabelsCache) {
+            try {
+                const res  = await fetch(MY_LABELS_API);
+                const data = await res.json();
+                _myLabelsCache = data.labels || [];
+            } catch(e) { _myLabelsCache = []; }
+        }
+        // 초기 목록 표시
+        filterLabelOptions(reqId, '');
+        const searchEl = document.getElementById(`link-label-search-${reqId}`);
+        if (searchEl) searchEl.focus();
+    } else {
+        wrapper.classList.add('d-none');
+    }
+}
+
+function filterLabelOptions(reqId, query) {
+    const dropdown = document.getElementById(`link-label-dropdown-${reqId}`);
+    if (!dropdown || !_myLabelsCache) return;
+    const q = query.trim().toLowerCase();
+    const filtered = q
+        ? _myLabelsCache.filter(l =>
+            (l.name || '').toLowerCase().includes(q) ||
+            (l.prdlst_dcnm || '').toLowerCase().includes(q)
+          )
+        : _myLabelsCache;
+
+    if (!filtered.length) {
+        dropdown.style.display = 'block';
+        dropdown.innerHTML = '<div class="px-3 py-2 text-muted" style="font-size:12px;">검색 결과가 없습니다</div>';
+        return;
+    }
+    dropdown.style.display = 'block';
+    dropdown.innerHTML = filtered.slice(0, 50).map(l => `
+        <div class="px-3 py-2 border-bottom label-option"
+             style="cursor:pointer;"
+             onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''"
+             data-lid="${l.id}"
+             data-lname="${(l.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
+             onclick="selectLabelOption(${reqId}, this)">
+            <div style="font-weight:600;">${l.name}</div>
+            ${l.prdlst_dcnm ? `<div style="font-size:11px;color:#5f6368;">${l.prdlst_dcnm}</div>` : ''}
+        </div>`).join('');
+}
+
+function selectLabelOption(reqId, el) {
+    const labelId   = el.dataset.lid;
+    const labelName = el.dataset.lname;
+    document.getElementById(`link-label-val-${reqId}`).value = labelId;
+    const searchEl = document.getElementById(`link-label-search-${reqId}`);
+    if (searchEl) searchEl.value = labelName;
+    const dropdown = document.getElementById(`link-label-dropdown-${reqId}`);
+    if (dropdown) dropdown.style.display = 'none';
+}
+
+async function saveLinkLabel(reqId) {
+    const labelId = document.getElementById(`link-label-val-${reqId}`)?.value || '';
+    const res = await fetch(`/products/doc-requests/${reqId}/update-label/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF_TOKEN },
+        body: new URLSearchParams({ linked_label_id: labelId }),
+    });
+    if (res.ok) {
+        const data = await res.json();
+        const textEl = document.getElementById(`linked-label-text-${reqId}`);
+        if (textEl) {
+            textEl.textContent = data.linked_label_name || '미연결';
+            textEl.style.color  = data.linked_label_id ? '#1967d2' : '#bdc1c6';
+        }
+        document.getElementById(`link-label-select-${reqId}`).classList.add('d-none');
+    } else {
+        alert('저장에 실패했습니다.');
     }
 }
 
