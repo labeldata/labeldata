@@ -24,7 +24,7 @@ from .models import Product, ProductFolder, ProductAccessLog, ProductMetadata, F
 
 # 앱 통합 뷰를 위한 추가 import
 from v1.bom.models import ProductBOM
-from .models import ProductDocument, ProductComment, ProductShare, SharedProductReceipt, DocumentType, DocumentSlot, SharePermission, ProductNotification
+from .models import ProductDocument, ProductComment, ProductShare, SharedProductReceipt, DocumentType, DocumentSlot, SharePermission, ProductNotification, UserContact
 from v1.label.models import MyLabel
 
 from .forms import ProductForm
@@ -2533,16 +2533,28 @@ def share_create(request, label_id):
     recipient_user = User.objects.filter(email__iexact=email).first()
 
     if existing_share and existing_share.active_yn:
-        return JsonResponse({'success': False, 'error': '이미 공유된 사용자입니다.'}, status=400)
+        # 이미 활성 공유 중 → 역할/만료일만 업데이트 (upsert)
+        share = existing_share
+        if recipient_name:
+            share.recipient_name = recipient_name
+        if recipient_company:
+            share.recipient_company = recipient_company
+        share.share_end_date = share_end_date
+        share.save()
+        permission, _ = SharePermission.objects.get_or_create(share=share)
+        permission.apply_role_defaults(role_code=role_code, save=True)
+        return JsonResponse({'success': True, 'updated': True, 'share_id': share.share_id})
 
     if existing_share and not existing_share.active_yn:
         share = existing_share
         share.active_yn = True
+        share.share_mode = 'PRIVATE'  # 재활성화 시 모드를 PRIVATE으로 보장
         share.recipient_email = email
         share.recipient_user = recipient_user
         share.recipient_name = recipient_name
         share.recipient_company = recipient_company
         share.share_end_date = share_end_date
+        share.created_by = request.user  # 재활성화 시 생성자를 현재 사용자로 업데이트
         share.save()
     else:
         share = ProductShare.objects.create(
@@ -2709,23 +2721,45 @@ def share_update_permission(request, share_id):
 @require_http_methods(["POST"])
 def share_update_info(request, share_id):
     """공유 멤버 정보 수정 – 소유자 또는 EDITOR(본인 제외) 접근 가능"""
-    share = ProductShare.objects.filter(share_id=share_id, label__user_id=request.user).first()
-    if not share:
+    # 첫 번째 쿼리가 성공이면 라벨 오너, 실패하면 에디터 경로
+    owner_share = ProductShare.objects.filter(share_id=share_id, label__user_id=request.user).first()
+    is_label_owner = owner_share is not None
+
+    if is_label_owner:
+        share = owner_share
+    else:
         share = get_object_or_404(ProductShare, share_id=share_id)
         editor_share = _get_editor_share_for_label(request, share.label)
         if not editor_share:
             return JsonResponse({'success': False, 'error': '권한이 없습니다.'}, status=403)
         if share.share_id == editor_share.share_id:
             return JsonResponse({'success': False, 'error': '자신의 정보는 변경할 수 없습니다.'}, status=403)
-    
+
     name = request.POST.get('name', '').strip()
     company = request.POST.get('company', '').strip()
+    license_no = request.POST.get('license_no', '').strip()
     role_code = request.POST.get('role', '').strip()
-    
-    # 이름, 회사 업데이트
-    share.recipient_name = name
-    share.recipient_company = company
+
+    # 이름·회사·인허가번호: 라벨 오너만 수정 가능
+    if is_label_owner:
+        share.recipient_name = name or None
+        share.recipient_company = company or None
+        share.recipient_license_no = license_no or None
     share.save()
+
+    # 동일 이메일의 다른 공유 레코드에도 이름·회사·인허가번호 전파 (오너만)
+    if is_label_owner:
+        ProductShare.objects.filter(
+            Q(label__user_id=share.label.user_id) | Q(created_by=share.created_by)
+        ).filter(
+            recipient_email__iexact=share.recipient_email,
+            share_mode='PRIVATE',
+            active_yn=True
+        ).exclude(share_id=share.share_id).update(
+            recipient_name=name or None,
+            recipient_company=company or None,
+            recipient_license_no=license_no or None,
+        )
     
     # 역할 업데이트
     if role_code and role_code in dict(SharePermission.ROLE_CHOICES):
@@ -4148,11 +4182,17 @@ def contacts(request):
     from v1.label.models import MyLabel
 
     # 내가 공유한 이메일 목록 (고유값, 최신 이름/회사명 우선)
+    # 라벨 소유자로서 공유하거나, EDITOR 권한으로 공유를 생성한 경우 모두 포함
     sent_shares = (
         ProductShare.objects
-        .filter(label__user_id=request.user, share_mode='PRIVATE', active_yn=True)
+        .filter(
+            Q(label__user_id=request.user) | Q(created_by=request.user)
+        )
+        .filter(share_mode='PRIVATE', active_yn=True)
         .exclude(recipient_email__isnull=True)
-        .select_related('permission')
+        .exclude(recipient_email='')
+        .select_related('permission', 'recipient_user')
+        .distinct()
         .order_by('recipient_email', '-created_datetime')
     )
 
@@ -4160,38 +4200,33 @@ def contacts(request):
     for s in sent_shares:
         email = s.recipient_email.lower()
         if email not in contact_map:
+            name = (s.recipient_name
+                    or (s.recipient_user.get_full_name() or s.recipient_user.username
+                        if s.recipient_user else '')
+                    or '')
             contact_map[email] = {
                 'email': email,
-                'name': s.recipient_name or '',
+                'name': name,
                 'company': s.recipient_company or '',
-                'license_no': '',  # 추후 모델 확장 시 연결
+                'license_no': s.recipient_license_no or '',
                 'sent': 1,
                 'received': 0,
             }
         else:
             contact_map[email]['sent'] += 1
 
-    # 나에게 공유한 사람들 (received)
-    received_shares = (
-        ProductShare.objects
-        .filter(share_mode='PRIVATE', active_yn=True)
-        .filter(Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email))
-        .select_related('label', 'label__user_id')
-        .order_by('-created_datetime')
-    )
-    for s in received_shares:
-        sharer_email = s.label.user_id.email.lower() if s.label.user_id else ''
-        if sharer_email and sharer_email not in contact_map:
-            contact_map[sharer_email] = {
-                'email': sharer_email,
-                'name': s.label.user_id.get_full_name() or s.label.user_id.username,
-                'company': '',
-                'license_no': '',
+    # UserContact 기반 연락처 추가 (ProductShare에 없는 경우에만)
+    for uc in UserContact.objects.filter(owner=request.user):
+        email = uc.email.lower()
+        if email not in contact_map:
+            contact_map[email] = {
+                'email': email,
+                'name': uc.name or '',
+                'company': uc.company or '',
+                'license_no': uc.license_no or '',
                 'sent': 0,
-                'received': 1,
+                'received': 0,
             }
-        elif sharer_email:
-            contact_map[sharer_email]['received'] += 1
 
     contacts_list = sorted(contact_map.values(), key=lambda x: x['email'])
 
@@ -4233,44 +4268,113 @@ def contacts(request):
 @login_required
 def contacts_api_list(request):
     """연락처 목록 JSON API"""
+    # ① ProductShare 기반 연락처
     sent_shares = (
         ProductShare.objects
-        .filter(label__user_id=request.user, share_mode='PRIVATE', active_yn=True)
+        .filter(
+            Q(label__user_id=request.user) | Q(created_by=request.user)
+        )
+        .filter(share_mode='PRIVATE', active_yn=True)
         .exclude(recipient_email__isnull=True)
-        .values('recipient_email', 'recipient_name', 'recipient_company')
+        .exclude(recipient_email='')
+        .select_related('recipient_user')
         .distinct()
     )
 
     contact_map = {}
     for s in sent_shares:
-        email = (s['recipient_email'] or '').lower()
+        email = (s.recipient_email or '').lower()
         if email and email not in contact_map:
+            name = (s.recipient_name
+                    or (s.recipient_user.get_full_name() or s.recipient_user.username
+                        if s.recipient_user else '')
+                    or '')
             contact_map[email] = {
                 'email': email,
-                'name': s['recipient_name'] or '',
-                'company': s['recipient_company'] or '',
-                'license_no': '',
+                'name': name,
+                'company': s.recipient_company or '',
+                'license_no': s.recipient_license_no or '',
             }
 
-    received_shares = (
-        ProductShare.objects
-        .filter(share_mode='PRIVATE', active_yn=True)
-        .filter(Q(recipient_user=request.user) | Q(recipient_email__iexact=request.user.email))
-        .select_related('label__user_id')
-    )
-    for s in received_shares:
-        if s.label.user_id:
-            email = s.label.user_id.email.lower()
-            if email not in contact_map:
-                contact_map[email] = {
-                    'email': email,
-                    'name': s.label.user_id.get_full_name() or s.label.user_id.username,
-                    'company': '',
-                    'license_no': '',
-                }
+    # ② UserContact 기반 연락처 (ProductShare에 없는 경우에만 추가)
+    for uc in UserContact.objects.filter(owner=request.user):
+        email = uc.email.lower()
+        if email not in contact_map:
+            contact_map[email] = {
+                'email': email,
+                'name': uc.name or '',
+                'company': uc.company or '',
+                'license_no': uc.license_no or '',
+            }
 
     data = sorted(contact_map.values(), key=lambda x: x['email'])
     return JsonResponse({'contacts': data})
+
+
+@login_required
+@require_POST
+def contacts_api_update(request):
+    """연락처 정보 업데이트 API - 이메일 기준으로 내가 추가한 모든 공유 레코드를 일괄 수정"""
+    email = request.POST.get('email', '').strip().lower()
+    name = request.POST.get('name', '').strip()
+    company = request.POST.get('company', '').strip()
+    license_no = request.POST.get('license_no', '').strip()
+
+    if not email:
+        return JsonResponse({'success': False, 'error': '이메일이 필요합니다.'}, status=400)
+
+    # ① ProductShare 레코드 일괄 업데이트
+    updated = (
+        ProductShare.objects
+        .filter(
+            Q(label__user_id=request.user) | Q(created_by=request.user)
+        )
+        .filter(recipient_email__iexact=email, share_mode='PRIVATE', active_yn=True)
+        .distinct()
+        .update(
+            recipient_name=name or None,
+            recipient_company=company or None,
+            recipient_license_no=license_no or None,
+        )
+    )
+
+    # ② UserContact도 동기화 (있으면 업데이트)
+    UserContact.objects.filter(owner=request.user, email__iexact=email).update(
+        name=name or None,
+        company=company or None,
+        license_no=license_no or None,
+    )
+
+    return JsonResponse({'success': True, 'updated': updated})
+
+
+@login_required
+@require_POST
+def contacts_api_add(request):
+    """새 연락처 추가 API – UserContact 테이블에 저장 (이미 있으면 업데이트)"""
+    email = request.POST.get('email', '').strip().lower()
+    name = request.POST.get('name', '').strip()
+    company = request.POST.get('company', '').strip()
+    license_no = request.POST.get('license_no', '').strip()
+
+    if not email:
+        return JsonResponse({'success': False, 'error': '이메일이 필요합니다.'}, status=400)
+
+    # 이메일 기본 검증
+    import re as _re
+    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        return JsonResponse({'success': False, 'error': '유효한 이메일 주소를 입력하세요.'}, status=400)
+
+    contact, created = UserContact.objects.update_or_create(
+        owner=request.user,
+        email=email,
+        defaults={
+            'name': name or None,
+            'company': company or None,
+            'license_no': license_no or None,
+        },
+    )
+    return JsonResponse({'success': True, 'created': created})
 
 
 @login_required
@@ -4280,13 +4384,16 @@ def contacts_api_shares(request):
     if not email:
         return JsonResponse({'sent': [], 'received': []})
 
-    # 내가 그 이메일에 공유한 항목
+    # 내가 그 이메일에 공유한 항목 (라벨 소유자 또는 공유 생성자 기준)
     sent = []
     for s in (
         ProductShare.objects
-        .filter(label__user_id=request.user, recipient_email__iexact=email,
-                share_mode='PRIVATE', active_yn=True)
+        .filter(
+            Q(label__user_id=request.user) | Q(created_by=request.user)
+        )
+        .filter(recipient_email__iexact=email, share_mode='PRIVATE', active_yn=True)
         .select_related('label', 'permission')
+        .distinct()
         .order_by('-created_datetime')
     ):
         try:

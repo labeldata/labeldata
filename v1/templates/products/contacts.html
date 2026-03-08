@@ -203,7 +203,7 @@
                     <div class="share-contact-company" id="shareContactCompany"></div>
                 </div>
                 <div class="ms-auto">
-                    <button class="btn btn-sm btn-outline-primary" onclick="openQuickShare()" title="이 연락처에 새 제품 공유">
+                    <button class="btn btn-sm btn-outline-primary" onclick="openInlineShare()" title="이 연락처에 새 제품 공유">
                         <i class="bi bi-share me-1"></i>제품 공유
                     </button>
                 </div>
@@ -234,27 +234,85 @@
             <div class="tab-content flex-grow-1 overflow-auto" style="min-height:0;">
 
                 <!-- 내가 공유한 제품 탭 -->
-                <div class="tab-pane fade show active p-4" id="tabSent">
-                    <div id="sentLoading" class="text-center py-4 d-none">
-                        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                        <span class="ms-2 text-muted" style="font-size:13px;">불러오는 중...</span>
+                <div class="tab-pane fade show active" id="tabSent">
+
+                    <!-- ★ 인라인 제품 공유 추가 폼 ★ -->
+                    <div id="inlineShareForm" class="d-none" style="border-bottom:2px solid #c8d8f8;background:#f3f7ff;">
+                        <!-- 헤더: 검색 + 전체선택 + 닫기 -->
+                        <div class="d-flex align-items-center gap-2 px-3 py-2"
+                             style="background:#e8f0fe;border-bottom:1px solid #c8d8f8;">
+                            <input type="checkbox" class="form-check-input" id="qsCheckAll" onchange="toggleQsAll(this)"
+                                   style="width:15px;height:15px;flex-shrink:0;cursor:pointer;" title="전체 선택">
+                            <input type="text" id="qsProductSearch" class="form-control form-control-sm flex-grow-1"
+                                   placeholder="제품명 검색..." oninput="filterQsProducts()" autocomplete="off"
+                                   style="font-size:12px;">
+                            <span id="qsSelectedCount" style="font-size:12px;color:#1a73e8;font-weight:600;white-space:nowrap;">0개 선택</span>
+                            <button class="btn btn-sm btn-light border" onclick="closeInlineShare()" title="접기">
+                                <i class="bi bi-chevron-up" style="font-size:11px;"></i>
+                            </button>
+                        </div>
+                        <!-- 일괄 역할 변경 -->
+                        <div class="d-flex align-items-center gap-2 px-3 py-2"
+                             style="background:#edf2ff;border-bottom:1px solid #dce6fb;">
+                            <span style="font-size:11px;color:#5f6368;flex-shrink:0;white-space:nowrap;">
+                                <i class="bi bi-lightning-charge me-1 text-warning"></i>선택 항목 일괄 변경
+                            </span>
+                            <select id="qsBulkRole" class="form-select form-select-sm" style="font-size:12px;">
+                                <option value="">— 역할 선택 —</option>
+                                <option value="UPLOADER">자료 제출 (협력업체)</option>
+                                <option value="EDITOR">공동 편집 (팀원)</option>
+                                <option value="REVIEWER">검토/QA (팀장)</option>
+                                <option value="APPROVER">최종 승인 (임원)</option>
+                                <option value="VIEWER">뷰어 (읽기 전용)</option>
+                            </select>
+                            <button class="btn btn-sm btn-outline-primary" onclick="applyQsBulkRole()"
+                                    style="font-size:12px;white-space:nowrap;flex-shrink:0;">적용</button>
+                        </div>
+                        <!-- 제품 목록 (체크박스 + 개별 역할 드롭다운) -->
+                        <div id="qsProductList" style="max-height:220px;overflow-y:auto;"></div>
+                        <!-- 만료일 + 오류 + 공유 버튼 -->
+                        <div class="d-flex align-items-center gap-2 px-3 py-2"
+                             style="border-top:1px solid #dce6fb;background:#f3f7ff;">
+                            <span style="font-size:12px;color:#5f6368;white-space:nowrap;flex-shrink:0;">
+                                <i class="bi bi-calendar3 me-1"></i>만료일
+                            </span>
+                            <input type="date" id="qsExpiry" class="form-control form-control-sm"
+                                   style="font-size:12px;max-width:140px;flex-shrink:0;">
+                            <span class="text-muted" style="font-size:11px;white-space:nowrap;flex-shrink:0;">비워두면 무기한</span>
+                            <div id="qsError" class="text-danger d-none flex-grow-1" style="font-size:12px;"></div>
+                            <button class="btn btn-sm btn-primary ms-auto" id="qsSendBtn" onclick="doQuickShare()"
+                                    style="white-space:nowrap;flex-shrink:0;">
+                                <i class="bi bi-share me-1"></i>공유하기
+                            </button>
+                        </div>
                     </div>
-                    <div id="sentEmpty" class="text-center py-5 text-muted d-none">
-                        <i class="bi bi-share" style="font-size:28px;display:block;margin-bottom:8px;"></i>
-                        이 연락처에게 공유한 제품이 없습니다.
+
+                    <!-- 기존 공유 목록 -->
+                    <div class="p-4">
+                        <div id="sentLoading" class="text-center py-4 d-none">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <span class="ms-2 text-muted" style="font-size:13px;">불러오는 중...</span>
+                        </div>
+                        <div id="sentEmpty" class="text-center py-5 text-muted d-none">
+                            <i class="bi bi-share" style="font-size:28px;display:block;margin-bottom:8px;"></i>
+                            <div>이 연락처에게 공유한 제품이 없습니다.</div>
+                            <button class="btn btn-sm btn-outline-primary mt-3" onclick="openInlineShare()">
+                                <i class="bi bi-share me-1"></i>첫 번째 제품 공유하기
+                            </button>
+                        </div>
+                        <table class="share-table d-none" id="sentTable">
+                            <thead>
+                                <tr>
+                                    <th>제품명</th>
+                                    <th style="width:110px;">역할</th>
+                                    <th style="width:100px;">공유일</th>
+                                    <th style="width:100px;">만료일</th>
+                                    <th style="width:80px; text-align:center;">관리</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sentTbody"></tbody>
+                        </table>
                     </div>
-                    <table class="share-table d-none" id="sentTable">
-                        <thead>
-                            <tr>
-                                <th>제품명</th>
-                                <th style="width:110px;">역할</th>
-                                <th style="width:100px;">공유일</th>
-                                <th style="width:100px;">만료일</th>
-                                <th style="width:80px; text-align:center;">관리</th>
-                            </tr>
-                        </thead>
-                        <tbody id="sentTbody"></tbody>
-                    </table>
                 </div>
 
                 <!-- 받은 공유 제품 탭 -->
@@ -301,6 +359,8 @@
 
             </div><!-- /.tab-content -->
         </div><!-- /#shareView -->
+
+
     </div><!-- /.contacts-right -->
 
 </div><!-- /.contacts-container -->
@@ -335,7 +395,10 @@
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
 const CONTACTS_API_LIST   = '{% url "products:contacts_api_list" %}';
+const CONTACTS_API_UPDATE = '{% url "products:contacts_api_update" %}';
+const CONTACTS_API_ADD    = '{% url "products:contacts_api_add" %}';
 const CONTACTS_API_SHARES = '{% url "products:contacts_api_shares" %}';
+const SHARE_CREATE_BASE   = '/products/share/create/'; // + label_id + '/'
 const PRODUCT_DETAIL_URL  = '/products/';  // + label_id + '/new/'
 
 // 서버에서 넘어온 초기 연락처 데이터 (json_script 안전 파싱)
@@ -358,10 +421,27 @@ const ROLE_BADGE = {
     '':       '<span class="role-chip role-none">미지정</span>',
 };
 
-let selectedEmail = null;
+let selectedEmail   = null;
+let selectedContact = {};   // 현재 선택된 연락처 { email, name, company }
 let hot = null;
 let allRows = []; // 필터 원본 데이터 보관
 let currentFilter = 'all';
+
+// 선택 UI 업데이트 (전역 – setTableFilter 등에서 호출)
+function updateSelectionUI() {
+    const checkedRows = allRows.filter(r => r._checked && r.email);
+    const n = checkedRows.length;
+    const actionBar = document.getElementById('selection-actions');
+    const countEl   = document.getElementById('selected-count');
+    if (n > 0) {
+        actionBar.classList.remove('d-none');
+        actionBar.classList.add('d-flex');
+        countEl.textContent = n;
+    } else {
+        actionBar.classList.add('d-none');
+        actionBar.classList.remove('d-flex');
+    }
+}
 
 // 필터 바 토글
 function setTableFilter(filter, btn) {
@@ -772,12 +852,62 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 if (hot) updateSelectionUI();
             }
+
+            // 이름·회사명·인허가번호 변경 시 서버에 자동 저장
+            const infoProps = new Set(['name', 'company', 'license_no']);
+            const infoChanges = changes.filter(([, prop]) => infoProps.has(prop));
+            if (infoChanges.length) {
+                // 변경된 행 번호 unique set
+                const rows = [...new Set(infoChanges.map(([r]) => r))];
+                rows.forEach(rowIdx => {
+                    const rowData = hot.getSourceDataAtRow(rowIdx);
+                    if (!rowData || !rowData.email) return;
+                    const body = new URLSearchParams({
+                        email:      rowData.email,
+                        name:       rowData.name       || '',
+                        company:    rowData.company    || '',
+                        license_no: rowData.license_no || '',
+                    });
+                    fetch(CONTACTS_API_UPDATE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+                        body: body.toString(),
+                    }).catch(() => {}); // 오류는 조용히 무시 (UX 방해 최소화)
+                });
+            }
+
+            // 이메일 컬럼이 새로 입력된 경우 → UserContact로 신규 저장
+            const emailChanges = changes.filter(([, prop, oldVal, newVal]) =>
+                prop === 'email' && !oldVal && newVal && typeof newVal === 'string' && newVal.includes('@')
+            );
+            if (emailChanges.length) {
+                emailChanges.forEach(([rowIdx, , , newEmail]) => {
+                    const rowData = hot.getSourceDataAtRow(rowIdx);
+                    const body = new URLSearchParams({
+                        email:      newEmail.trim().toLowerCase(),
+                        name:       (rowData && rowData.name)       || '',
+                        company:    (rowData && rowData.company)    || '',
+                        license_no: (rowData && rowData.license_no) || '',
+                    });
+                    fetch(CONTACTS_API_ADD, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+                        body: body.toString(),
+                    }).catch(() => {});
+                });
+            }
+
             // 행 수 업데이트
             const filled = this.countRows() - this.countEmptyRows(true);
             document.getElementById('contactCount').textContent = filled;
         },
         cells: function (row, col) {
             if (col === 5 || col === 6) return { readOnly: true }; // 공유, 자료요청 콜럼
+            // 이메일 컬럼(col 1)은 기존 데이터 행에서 수정 불가
+            if (col === 1) {
+                const rowData = this.instance.getSourceDataAtRow(row);
+                if (rowData && rowData.email) return { readOnly: true };
+            }
         }
     });
 
@@ -790,22 +920,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (hot) { hot.updateSettings({ colWidths: getColWidths() }); hot.render(); }
             }, 60);
         }).observe(container);
-    }
-
-    // ── 선택 UI 업데이트 ──
-    function updateSelectionUI() {
-        const checkedRows = allRows.filter(r => r._checked && r.email);
-        const n = checkedRows.length;
-        const actionBar = document.getElementById('selection-actions');
-        const countEl   = document.getElementById('selected-count');
-        if (n > 0) {
-            actionBar.classList.remove('d-none');
-            actionBar.classList.add('d-flex');
-            countEl.textContent = n;
-        } else {
-            actionBar.classList.add('d-none');
-            actionBar.classList.remove('d-flex');
-        }
     }
 
     // 전체 체크박스는 afterRender에서 직접 DOM에 바인딩 처리됨
@@ -865,10 +979,13 @@ function onContactSelect(rowData) {
     const company = (rowData.company || '').trim();
     if (!email) return;
 
-    selectedEmail = email;
+    selectedEmail   = email;
+    selectedContact = { email, name, company };
+    _qsAllLabels = null; // 연락처 전환 시 제품 목록 캐시 초기화
 
     document.getElementById('emptyState').classList.add('d-none');
     document.getElementById('shareView').classList.remove('d-none');
+    closeInlineShare();
     document.getElementById('receivedReqView').classList.add('d-none');
     document.getElementById('recvReqFilterBtn').classList.remove('active');
     document.getElementById('shareAvatar').textContent     = (name || email).slice(0, 1).toUpperCase();
@@ -1033,11 +1150,15 @@ function updateFileName(input) {
 async function loadShares(email) {
     ['sentLoading','receivedLoading'].forEach(id => document.getElementById(id).classList.remove('d-none'));
     ['sentTable','receivedTable','sentEmpty','receivedEmpty'].forEach(id => document.getElementById(id).classList.add('d-none'));
-
-    const res  = await fetch(`${CONTACTS_API_SHARES}?email=${encodeURIComponent(email)}`);
-    const data = await res.json();
-    renderShareTable('sent',     data.sent,     'sentTbody',     'sentLoading',     'sentEmpty',     'sentTable',     'sentBadge');
-    renderShareTable('received', data.received, 'receivedTbody', 'receivedLoading', 'receivedEmpty', 'receivedTable', 'receivedBadge');
+    try {
+        const res  = await fetch(`${CONTACTS_API_SHARES}?email=${encodeURIComponent(email)}`);
+        const data = await res.json();
+        renderShareTable('sent',     data.sent     || [], 'sentTbody',     'sentLoading',     'sentEmpty',     'sentTable',     'sentBadge');
+        renderShareTable('received', data.received || [], 'receivedTbody', 'receivedLoading', 'receivedEmpty', 'receivedTable', 'receivedBadge');
+    } catch(e) {
+        ['sentLoading','receivedLoading'].forEach(id => document.getElementById(id).classList.add('d-none'));
+        ['sentEmpty','receivedEmpty'].forEach(id => document.getElementById(id).classList.remove('d-none'));
+    }
 }
 
 // ─────────────── 자료 요청 이력 로드 ───────────────
@@ -1275,6 +1396,7 @@ function openDocRequestFromContact() {
 }
 
 function renderShareTable(type, rows, tbodyId, loadingId, emptyId, tableId, badgeId) {
+    rows = rows || [];
     document.getElementById(loadingId).classList.add('d-none');
     document.getElementById(badgeId).textContent = rows.length;
     if (!rows.length) { document.getElementById(emptyId).classList.remove('d-none'); return; }
@@ -1306,8 +1428,251 @@ async function revokeShare(shareId) {
     else alert('공유 취소에 실패했습니다.');
 }
 
-function openQuickShare() {
-    alert('빠른 공유 기능은 준비 중입니다.\n제품 상세의 권한 설정 탭에서 공유하실 수 있습니다.');
+// ─────────────── 제품 공유 (인라인 폼) ───────────────
+let _qsAllLabels = null;       // 제품 목록 캐시 (연락처 전환 시 초기화)
+const _qsChecked = new Set();  // 체크된 라벨 ID set
+const _qsRoles   = {};         // label_id → role_code 매핑
+
+const QS_ROLE_OPTIONS = `
+    <option value="UPLOADER">자료 제출 (협력업체)</option>
+    <option value="EDITOR">공동 편집 (팀원)</option>
+    <option value="REVIEWER">검토/QA (팀장)</option>
+    <option value="APPROVER">최종 승인 (임원)</option>
+    <option value="VIEWER">뷰어 (읽기 전용)</option>
+`;
+
+function openInlineShare() {
+    if (!selectedEmail) return;
+
+    // 「내가 공유한 제품」 탭으로 전환
+    const sentTabBtn = document.querySelector('[data-bs-target="#tabSent"]');
+    if (sentTabBtn && !sentTabBtn.classList.contains('active')) sentTabBtn.click();
+
+    // 상태 초기화
+    _qsChecked.clear();
+    Object.keys(_qsRoles).forEach(k => delete _qsRoles[k]);
+    document.getElementById('qsProductSearch').value = '';
+    document.getElementById('qsExpiry').value = '';
+    document.getElementById('qsBulkRole').value = '';
+    document.getElementById('qsError').classList.add('d-none');
+    document.getElementById('qsSendBtn').disabled = false;
+    document.getElementById('qsSendBtn').innerHTML = '<i class="bi bi-share me-1"></i>공유하기';
+    const allChk = document.getElementById('qsCheckAll');
+    allChk.checked = false; allChk.indeterminate = false;
+    document.getElementById('qsSelectedCount').textContent = '0개 선택';
+
+    document.getElementById('inlineShareForm').classList.remove('d-none');
+    // 폼이 보이도록 스크롤
+    document.getElementById('inlineShareForm').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    loadQsProducts();
+}
+
+function closeInlineShare() {
+    const f = document.getElementById('inlineShareForm');
+    if (!f) return;
+    f.classList.add('d-none');
+    // 버튼 상태 복원 (성공 표시 중이던 경우 대비)
+    const btn = document.getElementById('qsSendBtn');
+    if (btn) {
+        btn.style.cssText = '';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-share me-1"></i>공유하기';
+    }
+}
+
+async function loadQsProducts() {
+    const listEl = document.getElementById('qsProductList');
+    if (_qsAllLabels !== null) { renderQsProducts(_qsAllLabels); return; }
+    listEl.innerHTML = '<div class="text-center py-4 text-muted" style="font-size:13px;"><div class="spinner-border spinner-border-sm"></div> 불러오는 중...</div>';
+    try {
+        const res  = await fetch(MY_LABELS_API);
+        const data = await res.json();
+        _qsAllLabels = data.labels || [];
+        renderQsProducts(_qsAllLabels);
+    } catch(e) {
+        listEl.innerHTML = '<div class="text-center py-3 text-danger" style="font-size:13px;">제품 목록을 불러올 수 없습니다.</div>';
+    }
+}
+
+function filterQsProducts() {
+    const q = (document.getElementById('qsProductSearch').value || '').toLowerCase();
+    const filtered = (_qsAllLabels || []).filter(l =>
+        (l.name || '').toLowerCase().includes(q) || (l.prdlst_dcnm || '').toLowerCase().includes(q)
+    );
+    renderQsProducts(filtered, true);
+}
+
+function renderQsProducts(labels, filtered) {
+    const listEl = document.getElementById('qsProductList');
+    if (!labels.length) {
+        listEl.innerHTML = '<div class="text-center py-4 text-muted" style="font-size:12px;">' +
+            (filtered ? '검색 결과 없음' : '공유할 수 있는 제품이 없습니다.') + '</div>';
+        updateQsSelectionUI();
+        return;
+    }
+    listEl.innerHTML = labels.map(l => {
+        const sid     = String(l.id);
+        const checked = _qsChecked.has(sid) ? 'checked' : '';
+        return `
+        <div class="qs-product-row d-flex align-items-center gap-2 px-3 py-2"
+             style="border-bottom:1px solid #f0f0f0;" data-id="${sid}">
+            <input type="checkbox" class="qs-chk form-check-input" data-id="${sid}" ${checked}
+                   style="width:15px;height:15px;flex-shrink:0;cursor:pointer;"
+                   onchange="onQsChkChange(this)">
+            <div class="flex-grow-1" style="min-width:0;overflow:hidden;">
+                <div style="font-size:13px;font-weight:500;color:#202124;
+                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                     title="${escHtml(l.name)}">${escHtml(l.name)}</div>
+                ${l.prdlst_dcnm
+                    ? `<div style="font-size:11px;color:#80868b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(l.prdlst_dcnm)}</div>`
+                    : ''}
+            </div>
+            <select class="qs-role-sel form-select form-select-sm" data-id="${sid}"
+                    style="width:136px;flex-shrink:0;font-size:12px;"
+                    onchange="onQsRoleChange(this)">
+                ${QS_ROLE_OPTIONS}
+            </select>
+        </div>`;
+    }).join('');
+
+    // 저장된 역할 값 복원
+    listEl.querySelectorAll('.qs-role-sel').forEach(s => {
+        s.value = _qsRoles[s.dataset.id] || 'UPLOADER';
+    });
+    updateQsSelectionUI();
+}
+
+function onQsChkChange(chk) {
+    if (chk.checked) _qsChecked.add(chk.dataset.id);
+    else _qsChecked.delete(chk.dataset.id);
+    updateQsSelectionUI();
+}
+
+function onQsRoleChange(sel) {
+    _qsRoles[sel.dataset.id] = sel.value;
+}
+
+function toggleQsAll(chk) {
+    document.querySelectorAll('.qs-chk').forEach(c => {
+        c.checked = chk.checked;
+        if (chk.checked) _qsChecked.add(c.dataset.id);
+        else _qsChecked.delete(c.dataset.id);
+    });
+    updateQsSelectionUI();
+}
+
+function applyQsBulkRole() {
+    const role = document.getElementById('qsBulkRole').value;
+    if (!role) return;
+    _qsChecked.forEach(sid => {
+        _qsRoles[sid] = role;
+        const sel = document.querySelector(`.qs-role-sel[data-id="${sid}"]`);
+        if (sel) sel.value = role;
+    });
+    document.getElementById('qsBulkRole').value = '';
+}
+
+function updateQsSelectionUI() {
+    const allChks = document.querySelectorAll('.qs-chk');
+    const n = _qsChecked.size;
+    document.getElementById('qsSelectedCount').textContent = `${n}개 선택`;
+    const allChk = document.getElementById('qsCheckAll');
+    if (allChk && allChks.length > 0) {
+        allChk.checked       = n > 0 && n === allChks.length;
+        allChk.indeterminate = n > 0 && n < allChks.length;
+    }
+}
+
+function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function doQuickShare() {
+    const checkedIds = [..._qsChecked];
+    if (!checkedIds.length) { showQsError('공유할 제품을 하나 이상 선택하세요.'); return; }
+
+    const expiry  = document.getElementById('qsExpiry').value || '';
+    const name    = selectedContact.name    || '';
+    const company = selectedContact.company || '';
+
+    const btn = document.getElementById('qsSendBtn');
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${checkedIds.length}개 공유 중...`;
+    document.getElementById('qsError').classList.add('d-none');
+
+    let successCount = 0;
+    const failMessages = [];
+
+    for (const sid of checkedIds) {
+        const role = _qsRoles[sid] || 'UPLOADER';
+        try {
+            const body = new URLSearchParams({ email: selectedEmail, role, name, company, expiration_date: expiry });
+            const res  = await fetch(SHARE_CREATE_BASE + sid + '/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+                body: body.toString(),
+            });
+            const data = await res.json();
+            if (data.success) successCount++;
+            else failMessages.push(data.error || '오류');
+        } catch(e) { failMessages.push('네트워크 오류'); }
+    }
+
+    if (successCount > 0) {
+        // ① 폼이 열린 상태에서 먼저 목록을 새로고침 → 사용자가 결과를 바로 확인 가능
+        await loadShares(selectedEmail);
+
+        // ② 그리드 sent 카운트 업데이트
+        const rowData = allRows.find(r => (r.email||'').toLowerCase() === selectedEmail.toLowerCase());
+        if (rowData) { rowData.sent = (rowData.sent||0) + successCount; hot.render(); }
+
+        // ③ 체크 상태 초기화 + 목록 리렌더
+        _qsChecked.clear();
+        Object.keys(_qsRoles).forEach(k => delete _qsRoles[k]);
+        document.getElementById('qsProductSearch').value = '';
+        document.getElementById('qsExpiry').value = '';
+        document.getElementById('qsBulkRole').value = '';
+        updateQsSelectionUI();
+        if (_qsAllLabels) renderQsProducts(_qsAllLabels); // 체크 해제된 목록 재렌더
+
+        // ④ 버튼을 성공 상태로 전환
+        btn.disabled = false;
+        btn.style.cssText = 'background:#137333;border-color:#137333;color:#fff;white-space:nowrap;flex-shrink:0;';
+        btn.innerHTML = `<i class="bi bi-check2-circle me-1"></i>${successCount}개 완료!`;
+
+        // 일부 실패 시 에러도 함께 표시
+        if (failMessages.length) {
+            showQsError(`${failMessages.length}개 실패: ${[...new Set(failMessages)].join(', ')}`);
+        }
+
+        // ⑤ 1.5초 뒤 폼 닫기 + 버튼 복원
+        setTimeout(() => {
+            closeInlineShare();
+            btn.style.cssText = '';
+            btn.innerHTML = '<i class="bi bi-share me-1"></i>공유하기';
+            // 새로 추가된 sentTable 행이 보이도록 스크롤
+            const sentTable = document.getElementById('sentTable');
+            if (sentTable && !sentTable.classList.contains('d-none')) {
+                sentTable.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }, 1500);
+
+    } else {
+        // 전부 실패
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-share me-1"></i>공유하기';
+        showQsError(
+            failMessages.length
+                ? `공유 실패: ${[...new Set(failMessages)].join(', ')}`
+                : '공유에 실패했습니다.'
+        );
+    }
+}
+
+function showQsError(msg) {
+    const el = document.getElementById('qsError');
+    el.textContent = msg;
+    el.classList.remove('d-none');
 }
 
 // ─────────────── 리사이즈 핸들 ───────────────

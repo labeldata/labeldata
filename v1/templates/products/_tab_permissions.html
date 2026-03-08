@@ -68,7 +68,8 @@
                             {% if share.share_id %}data-share-id="{{ share.share_id }}"{% endif %}
                             {% if share.permission_record %}data-role="{{ share.permission_record.role_code }}"{% else %}data-role=""{% endif %}
                             data-name="{{ share.recipient_name|default:'' }}" 
-                            data-company="{{ share.recipient_company|default:'' }}">
+                            data-company="{{ share.recipient_company|default:'' }}"
+                            data-license-no="{{ share.recipient_license_no|default:'' }}">
                             <div class="avatar bg-primary text-white">
                                 {{ share.display_name|slice:":1"|upper }}
                             </div>
@@ -349,6 +350,11 @@
                 <div class="mb-3">
                     <label class="form-label">회사명</label>
                     <input type="text" class="form-control form-control-sm" id="detail-company-input" placeholder="회사명을 입력하세요" style="font-size: 12px;">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">인허가번호</label>
+                    <input type="text" class="form-control form-control-sm" id="detail-license-no-input" placeholder="영업허가번호 또는 품목제조보고번호" style="font-size: 12px;">
                 </div>
 
                 <div class="mb-4">
@@ -830,38 +836,55 @@ function selectPerson(card) {
     var email   = card.dataset.email   || '';
     var name    = card.dataset.name    || card.dataset.username || '';
     var company = card.dataset.company || '';
+    var licenseNo = card.dataset.licenseNo || '';
     var role    = card.dataset.role    || '';
     var shareId = card.dataset.shareId || '';
 
     var el;
-    el = document.getElementById('detail-avatar');        if (el) el.textContent = (name || email).charAt(0).toUpperCase();
-    el = document.getElementById('detail-display-name'); if (el) el.textContent = name || email;
-    el = document.getElementById('detail-email');         if (el) el.textContent = email;
-    el = document.getElementById('detail-email-input');  if (el) el.value = email;
-    el = document.getElementById('detail-name-input');   if (el) el.value = name;
-    el = document.getElementById('detail-company-input');if (el) el.value = company;
-    el = document.getElementById('detail-role-select');  if (el) el.value = role;
+    el = document.getElementById('detail-avatar');           if (el) el.textContent = (name || email).charAt(0).toUpperCase();
+    el = document.getElementById('detail-display-name');    if (el) el.textContent = name || email;
+    el = document.getElementById('detail-email');            if (el) el.textContent = email;
+    el = document.getElementById('detail-email-input');     if (el) el.value = email;
+    el = document.getElementById('detail-name-input');      if (el) el.value = name;
+    el = document.getElementById('detail-company-input');   if (el) el.value = company;
+    el = document.getElementById('detail-license-no-input');if (el) el.value = licenseNo;
+    el = document.getElementById('detail-role-select');     if (el) el.value = role;
 
     // 현재 사용자가 이 카드를 편집할 수 있는지 판단
-    //  - OWNER : 소유자 카드(isOwner) 제외 모든 카드 수정 가능
-    //  - EDITOR: 소유자 카드 및 본인 카드 수정 불가, 나머지 가능
-    //  - 그 외 : 편집 불가
+    //  - 정보(이름·회사·인허가번호) 수정: OWNER만 가능 (소유자 카드 제외)
+    //  - 역할(권한) 변경: OWNER 또는 EDITOR 가능 (소유자 카드·본인 카드 제외)
     var isCurrentUser = (email.toLowerCase() === _currentUserEmail);
-    var canManage;
+
+    // 정보 수정 권한: 라벨 오너만
+    var canEditInfo = (_currentUserRole === 'OWNER' && !isOwner);
+
+    // 역할 변경 권한: OWNER 또는 EDITOR
+    var canChangeRole;
     if (_currentUserRole === 'OWNER') {
-        canManage = !isOwner;
+        canChangeRole = !isOwner;
     } else if (_currentUserRole === 'EDITOR') {
-        canManage = !isOwner && !isCurrentUser;
+        canChangeRole = !isOwner && !isCurrentUser;
     } else {
-        canManage = false;
+        canChangeRole = false;
     }
 
-    var saveBtn = document.querySelector('button[onclick="savePersonDetails()"]');
-    if (saveBtn) saveBtn.style.display = canManage ? '' : 'none';
+    // 정보 입력 필드: 오너만 편집 가능, 그 외에는 읽기 전용으로 표시
+    ['detail-name-input', 'detail-company-input', 'detail-license-no-input'].forEach(function(id) {
+        var inp = document.getElementById(id);
+        if (!inp) return;
+        inp.readOnly = !canEditInfo;
+        inp.style.background = canEditInfo ? '' : '#e9ecef';
+        inp.style.cursor = canEditInfo ? '' : 'default';
+    });
 
+    // 저장 버튼: 정보 수정 또는 역할 변경 권한이 있으면 표시
+    var saveBtn = document.querySelector('button[onclick="savePersonDetails()"]');
+    if (saveBtn) saveBtn.style.display = (canEditInfo || canChangeRole) ? '' : 'none';
+
+    // 삭제 버튼: 역할 변경 권한 기준
     var deleteBtn = document.getElementById('delete-person-btn');
     if (deleteBtn) {
-        deleteBtn.style.display   = canManage ? '' : 'none';
+        deleteBtn.style.display   = canChangeRole ? '' : 'none';
         deleteBtn.dataset.shareId = shareId;
     }
 
@@ -874,11 +897,12 @@ function savePersonDetails() {
     var shareId = content.dataset.shareId;
     if (!shareId) { showSnackbar('저장할 공유 정보가 없습니다.', 'warning'); return; }
 
-    var name    = (document.getElementById('detail-name-input')    || {}).value || '';
-    var company = (document.getElementById('detail-company-input') || {}).value || '';
-    var role    = (document.getElementById('detail-role-select')   || {}).value || '';
+    var name      = (document.getElementById('detail-name-input')       || {}).value || '';
+    var company   = (document.getElementById('detail-company-input')    || {}).value || '';
+    var licenseNo = (document.getElementById('detail-license-no-input') || {}).value || '';
+    var role      = (document.getElementById('detail-role-select')      || {}).value || '';
 
-    _permPost('/products/share/' + shareId + '/update-info/', { name: name, company: company, role: role })
+    _permPost('/products/share/' + shareId + '/update-info/', { name: name, company: company, license_no: licenseNo, role: role })
     .then(function(data) {
         if (data.success) _reloadToPermissions();
         else showSnackbar(data.error || '저장에 실패했습니다.', 'error');

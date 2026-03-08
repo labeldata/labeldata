@@ -102,6 +102,8 @@ urlpatterns = [
     # ==================== 연락처 관리 (Contacts) ====================
     path('contacts/', views.contacts, name='contacts'),
     path('contacts/api/list/', views.contacts_api_list, name='contacts_api_list'),
+    path('contacts/api/update/', views.contacts_api_update, name='contacts_api_update'),
+    path('contacts/api/add/',    views.contacts_api_add,    name='contacts_api_add'),
     path('contacts/api/shares/', views.contacts_api_shares, name='contacts_api_shares'),
     path('contacts/api/doc-requests/', views.contacts_api_doc_requests, name='contacts_api_doc_requests'),
     path('contacts/api/received-doc-requests/', views.contacts_api_received_doc_requests, name='contacts_api_received_doc_requests'),

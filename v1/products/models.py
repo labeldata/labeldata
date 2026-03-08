@@ -552,6 +552,7 @@ class ProductShare(models.Model):
     recipient_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="v2_received_shares", verbose_name="수신자 (회원)", help_text="이메일이 회원인 경우 자동 연결")
     recipient_name = models.CharField(max_length=100, verbose_name="수신자 이름", null=True, blank=True, help_text="초대 시 입력한 이름 (선택)")
     recipient_company = models.CharField(max_length=200, verbose_name="수신자 회사명", null=True, blank=True, help_text="초대 시 입력한 회사명 (선택)")
+    recipient_license_no = models.CharField(max_length=100, verbose_name="수신자 인허가번호", null=True, blank=True, help_text="영업허가번호 또는 품목제조보고번호")
     public_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name="공개 토큰", help_text="PUBLIC 모드에서 사용하는 고유 URL 토큰")
     share_message = models.TextField(max_length=1000, verbose_name="공유 메시지", null=True, blank=True)
     share_start_date = models.DateTimeField(default=timezone.now, verbose_name="공유 시작일")
@@ -923,3 +924,28 @@ class DocumentSubmission(models.Model):
 
     def __str__(self):
         return f"{self.document_type} ({self.original_filename})"
+
+
+# ==================== 주소록 (독립 연락처) ====================
+
+class UserContact(models.Model):
+    """
+    사용자 주소록 - ProductShare와 무관한 독립 연락처
+    (연락처 관리 페이지에서 직접 추가된 항목)
+    """
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_contacts', verbose_name='소유자')
+    email = models.EmailField(max_length=255, verbose_name='이메일', db_index=True)
+    name = models.CharField(max_length=100, null=True, blank=True, verbose_name='이름')
+    company = models.CharField(max_length=200, null=True, blank=True, verbose_name='회사명')
+    license_no = models.CharField(max_length=100, null=True, blank=True, verbose_name='인허가번호')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일시')
+
+    class Meta:
+        db_table = 'user_contact'
+        unique_together = [('owner', 'email')]
+        verbose_name = '연락처'
+        verbose_name_plural = '연락처 목록'
+
+    def __str__(self):
+        return f"{self.owner.username} → {self.email}"
