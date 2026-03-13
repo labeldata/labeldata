@@ -1,5 +1,6 @@
 ﻿from django.conf import settings
 from django.utils import timezone
+from django.core.cache import cache
 from datetime import timedelta
 
 def static_build_date(request):
@@ -101,6 +102,12 @@ def regulatory_alerts(request):
     """
     if not request.user.is_authenticated:
         return {'regulatory_alert_count': 0}
+
+    cache_key = f'regulatory_alert_count_{request.user.id}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return {'regulatory_alert_count': cached}
+
     try:
         from v1.regulatory.models import (
             NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction
@@ -142,5 +149,7 @@ def regulatory_alerts(request):
         count = len(matched_ids - actioned_ids)
     except Exception:
         count = 0
+
+    cache.set(cache_key, count, timeout=60)
     return {'regulatory_alert_count': count}
 

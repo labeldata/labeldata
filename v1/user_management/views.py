@@ -11,6 +11,9 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.conf import settings
 from django.utils import timezone
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _send_account_email(subject, template_name, context, to_email):
@@ -75,6 +78,7 @@ def signup(request):
             return render(request, 'user_management/signup_done.html')
             
         except Exception as e:
+            logger.exception("회원가입 오류")
             messages.error(request, "회원가입 중 오류가 발생했습니다. 다시 시도해주세요.")
             return render(request, 'user_management/signup.html')
     else:
@@ -203,6 +207,7 @@ def resend_verification_email(request):
         except User.DoesNotExist:
             messages.error(request, "해당 이메일로 가입된 계정을 찾을 수 없습니다.")
         except Exception as e:
+            logger.exception("인증 메일 재발송 오류")
             messages.error(request, "메일 발송 중 오류가 발생했습니다.")
     
     return redirect('user_management:login')
@@ -265,6 +270,7 @@ def password_reset_confirm(request):
                 messages.success(request, "비밀번호가 성공적으로 변경되었습니다. 로그인하세요.")
                 return redirect('user_management:login')
     except Exception:
+        logger.exception("비밀번호 재설정 오류")
         messages.error(request, "비밀번호 재설정 정보를 확인할 수 없습니다.")
     return render(request, 'user_management/password_reset_confirm.html')
 

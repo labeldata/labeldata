@@ -1,4 +1,5 @@
-﻿from django.shortcuts import render, get_object_or_404, redirect
+﻿import logging
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
@@ -8,7 +9,8 @@ import json
 from v1.disposition.models import AdministrativeDisposition, CrawlingSetting  # import 경로 수정
 from v1.disposition.forms import DispositionForm  # import 경로 수정
 from v1.label.models import FoodType, FoodItem, CountryList, MyLabel  # 데모 페이지용 추가
-from django.core.serializers import serialize
+
+logger = logging.getLogger(__name__)
 
 def home(request):
     """루트 URL: V2 신규홈(home_dashboard)으로 이동"""
@@ -186,43 +188,24 @@ def save_label(request):
         new_prdlst_report_no = data.get('prdlst_report_no', '')
         new_verify_status = data.get('report_no_verify_YN', 'N')  # 클라이언트에서 보낸 검증 상태
         
-        print(f"🔍 [DEBUG] 품목보고번호 처리:")
-        print(f"  - 새 번호: {new_prdlst_report_no}")
-        print(f"  - 새 검증상태: {new_verify_status}")
-        print(f"  - is_update: {is_update}")
-        
         if is_update:
             # 기존 라벨 업데이트 시
             orig_label = MyLabel.objects.get(my_label_id=label_id)
-            print(f"  - 기존 번호: {orig_label.prdlst_report_no}")
-            print(f"  - 기존 검증상태: {orig_label.report_no_verify_YN}")
-            
             label.prdlst_report_no = new_prdlst_report_no
-            
+
             if orig_label.prdlst_report_no != new_prdlst_report_no:
                 # 품목보고번호가 변경된 경우
-                print(f"  ✅ 번호 변경됨 - 새 검증상태 사용: {new_verify_status}")
-                # 클라이언트에서 새 번호에 대한 검증 상태를 보냈으면 사용, 없으면 'N'
                 label.report_no_verify_YN = new_verify_status if new_verify_status else 'N'
             else:
                 # 품목보고번호가 변경되지 않은 경우
-                print(f"  ⚠️ 번호 유지")
-                # 클라이언트에서 검증 상태를 보냈으면 그것을 사용, 없으면 기존 상태 유지
                 if new_verify_status and new_verify_status != 'N':
-                    print(f"  ✅ 새 검증상태 사용: {new_verify_status}")
                     label.report_no_verify_YN = new_verify_status
                 else:
-                    print(f"  ✅ 기존 검증상태 유지: {orig_label.report_no_verify_YN}")
                     label.report_no_verify_YN = orig_label.report_no_verify_YN
         else:
             # 신규 생성 시
-            print(f"  ✅ 신규 생성 - 검증상태: {new_verify_status}")
             label.prdlst_report_no = new_prdlst_report_no
-            # 클라이언트에서 검증 상태를 보냈으면 사용, 없으면 'N'
             label.report_no_verify_YN = new_verify_status if new_verify_status else 'N'
-        
-        print(f"  💾 최종 저장 값: report_no={label.prdlst_report_no}, verify_YN={label.report_no_verify_YN}")
-        print(f"")  # 빈 줄
         
         label.content_weight = data.get('content_weight', '')
         label.weight_calorie = data.get('weight_calorie', '')
@@ -318,9 +301,7 @@ def save_label(request):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': '잘못된 데이터 형식입니다.'}, status=400)
     except Exception as e:
-        import traceback
-        print(f"Error saving label: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("라벨 저장 오류")
         return JsonResponse({'success': False, 'error': f'저장 중 오류가 발생했습니다: {str(e)}'}, status=500)
 
 

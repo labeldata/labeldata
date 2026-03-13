@@ -636,7 +636,7 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
                             logger.error("알 수 없는 비JSON 응답, 페이지 건너뜀")
                             continue
                     data = response.json()
-                except Exception as e:
+                except ValueError as e:
                     logger.error(f"JSON 파싱 오류: {e}")
                     logger.error(f"응답 내용:\n{response.text[:500]}")
                     break
@@ -743,7 +743,7 @@ def call_agricultural_product_api_endpoint(request, pk):
                         logger.error("알 수 없는 비JSON 응답, 페이지 건너뜀")
                         continue
                 data = response.json()
-            except Exception as e:
+            except ValueError as e:
                 logger.error(f"JSON 파싱 오류: {e}")
                 break
 

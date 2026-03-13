@@ -87,8 +87,8 @@ class CustomUserAdmin(UserAdmin):
             _my_label_count=Count('user_label', distinct=True),
             _my_ingredient_count=Count('user_ingredient', filter=Q(user_ingredient__delete_YN='N'), distinct=True)
         ).prefetch_related(
-            'user_label',
-            'user_ingredient'
+            Prefetch('user_label', queryset=MyLabel.objects.only('update_datetime')),
+            Prefetch('user_ingredient', queryset=MyIngredient.objects.only('update_datetime')),
         )
         return queryset
 
