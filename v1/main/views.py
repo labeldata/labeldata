@@ -98,12 +98,6 @@ def disposition_list(request):
     dispositions = AdministrativeDisposition.objects.all().order_by('-disposition_date')
     return render(request, 'disposition/disposition_list.html', {'dispositions': dispositions})
 
-
-@login_required
-def disposition_list(request):
-    dispositions = AdministrativeDisposition.objects.all().order_by('-disposition_date')
-    return render(request, 'disposition/disposition_list.html', {'dispositions': dispositions})
-
 @login_required
 def disposition_detail(request, disposition_id):
     disposition = get_object_or_404(AdministrativeDisposition, id=disposition_id)
