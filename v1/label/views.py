@@ -50,7 +50,7 @@ def log_user_activity(request, category, action, target_id=None):
     - target_id: 대상 ID (선택사항)
     """
     try:
-        from v1.common.models import UserActivityLog
+        from v1.activity_log.models import UserActivityLog
         if request.user.is_authenticated:
             UserActivityLog.objects.create(
                 user=request.user,
@@ -715,7 +715,7 @@ def label_creation(request, label_id=None):
             
             # 알레르기 자동 감지 활동 로깅
             if allergens_input:
-                from v1.common.models import UserActivityLog
+                from v1.activity_log.models import UserActivityLog
                 UserActivityLog.objects.create(
                     user=request.user,
                     category='validation',

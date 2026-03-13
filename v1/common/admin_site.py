@@ -7,7 +7,7 @@ import calendar
 import json
 from v1.label.models import MyLabel, MyIngredient
 from v1.board.models import Board, Comment
-from .models import UserActivityLog, CATEGORY_CHOICES, ACTION_CHOICES
+from v1.activity_log.models import UserActivityLog, CATEGORY_CHOICES, ACTION_CHOICES
 
 
 class CustomAdminSite:

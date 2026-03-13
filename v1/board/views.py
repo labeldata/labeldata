@@ -22,7 +22,7 @@ import os
 def log_board_activity(request, action, target_id=None):
     """게시판 활동 로깅"""
     try:
-        from v1.common.models import UserActivityLog
+        from v1.activity_log.models import UserActivityLog
         if request.user.is_authenticated:
             UserActivityLog.objects.create(
                 user=request.user,

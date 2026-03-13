@@ -1,7 +1,7 @@
 ﻿from django.contrib import admin
 from django.urls import reverse  # reverse는 이미 import되어 있음
 from django.utils.html import format_html  # format_html import 추가
-from .models import ApiKey, ApiEndpoint, UserActivityLog    
+from .models import ApiKey, ApiEndpoint
 
 
 class BaseAdmin(admin.ModelAdmin):
@@ -140,14 +140,6 @@ admin.site.register(User, CustomUserAdmin)
 # 사용자 활동 로그 관리
 # ============================================
 
-@admin.register(UserActivityLog)
-class UserActivityLogAdmin(BaseAdmin):
-    """사용자 활동 로그 관리 (대시보드 데이터 소스)"""
-    list_display = ('user', 'category', 'action', 'target_id', 'created_at')
-    list_filter = ('category', 'action', 'created_at')
-    search_fields = ('user__username', 'ip_address')
-    readonly_fields = ('created_at',)
-    date_hierarchy = 'created_at'
 
 # ============================================
 # Label 앱 모델 관리

@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'v1.products',       # 제품 관리 (documents, collaboration, sharing 통합됨)
     'v1.bom',            # BOM 구조 관리
     'v1.regulatory',     # 부적합.처분 알림
+    'v1.activity_log',   # 사용자 활동 로그
 ]
 
 MIDDLEWARE = [
