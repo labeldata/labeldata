@@ -1,23 +1,34 @@
 /* ============================================================
-   EazyLabel V2 공통 컴포넌트 스타일 (v2_common.css)
+   EazyLabel V2 공통 컴포넌트 스타일 (products_common.css)
    base_v2.html 에서 로드되어 모든 V2 페이지에 한 번 적용됩니다.
    페이지별 CSS에서 이 파일의 스타일을 중복 정의하지 마세요.
    ============================================================ */
 
 /* -------------------------
    1. CSS 변수 (V2 전용)
+   공유 토큰은 variables.css 를 참조하세요.
    ------------------------- */
 :root {
-    --v2-blue:        #1a73e8;
-    --v2-blue-hover:  #1765cc;
-    --v2-blue-light:  #e8f0fe;
-    --v2-border:      #dadce0;
-    --v2-text:        #202124;
-    --v2-text-sub:    #5f6368;
-    --v2-gray-50:     #f8f9fa;
-    --v2-gray-100:    #f1f3f4;
+    --v2-blue:        var(--ez-info,        #1a73e8);
+    --v2-blue-hover:  var(--ez-info-hover,  #1765cc);
+    --v2-blue-light:  var(--ez-info-bg,     #e8f0fe);
+    --v2-border:      var(--ez-gray-300,    #dadce0);
+    --v2-text:        var(--ez-gray-900,    #202124);
+    --v2-text-sub:    var(--ez-gray-700,    #5f6368);
+    --v2-gray-50:     var(--ez-gray-50,     #f8f9fa);
+    --v2-gray-100:    var(--ez-gray-100,    #f1f3f4);
     --v2-avatar-size: 32px;
 }
+
+/* -------------------------
+   Snackbar (전역 알림) — base_v2.html 에서 이동
+   사용: showSnackbar(message, type)
+   type: 'success' | 'error' | 'warning' | 'info'
+   ------------------------- */
+#v2Snackbar.snack-show    { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+#v2Snackbar.snack-error   { background: #b71c1c; }
+#v2Snackbar.snack-warning { background: #e65100; }
+#v2Snackbar.snack-info    { background: #1565c0; }
 
 /* -------------------------
    2. 공통 액션 버튼 — 프라이머리 (파란색 pill)
@@ -145,6 +156,260 @@
 .v2-topbar-subtitle {
     font-size: 12px;
     color:     #5f6368;
+}
+
+/* -------------------------
+   11. 홈 전환 버튼 (.home-switch-btn)
+   V1 ↔ V2 전환 버튼 공통 스타일
+   ------------------------- */
+.home-switch-btn {
+    font-size:     0.8rem;
+    border-radius: 16px;
+    padding:       0.25rem 0.85rem;
+    line-height:   1.5;
+}
+.home-switch-btn .bi {
+    font-size: 0.85rem;
+}
+
+/* -------------------------
+   12. 알림 드롭다운 — _topbar_account.html 에서 이관
+   ------------------------- */
+
+/* 알림 벨 버튼 */
+.v2-notif-bell {
+    width:  40px;
+    height: 40px;
+}
+.v2-notif-bell .bi-bell {
+    font-size: 16px;
+}
+
+/* 알림 뱃지 */
+.v2-notif-badge {
+    font-size:  10px;
+    min-width:  18px;
+    padding:    2px 5px;
+}
+
+/* 알림 패널 (dropdown-menu) */
+.v2-notif-panel {
+    width:         340px;
+    border-radius: 12px;
+    box-shadow:    0 4px 12px rgba(0, 0, 0, .15);
+    overflow:      hidden;
+}
+
+/* 알림 패널 헤더 */
+.v2-notif-header {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    padding:         14px 16px 10px;
+    border-bottom:   1px solid var(--ez-gray-200, #e8eaed);
+}
+.v2-notif-title {
+    font-size:   14px;
+    font-weight: 600;
+    color:       var(--v2-text, #202124);
+}
+.v2-notif-mark-all {
+    font-size:   12px;
+    color:       var(--v2-blue, #1a73e8);
+    background:  none;
+    border:      none;
+    cursor:      pointer;
+    padding:     0;
+}
+
+/* 알림 목록 */
+.v2-notif-list {
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+/* 빈 상태 */
+.v2-notif-empty {
+    padding:    32px 16px;
+    text-align: center;
+    color:      #9aa0a6;
+    font-size:  13px;
+}
+.v2-notif-empty .bi-bell-slash {
+    font-size:     24px;
+    display:       block;
+    margin-bottom: 8px;
+}
+
+/* 개별 알림 아이템 (JS renderNotifications 에서 생성) */
+.notif-item {
+    display:       flex;
+    gap:           10px;
+    padding:       12px 16px;
+    border-bottom: 1px solid #f1f3f4;
+    cursor:        pointer;
+    transition:    background .15s;
+    background:    #fff;
+}
+.notif-item:hover { background: #f8f9fa; }
+.notif-item.is-unread { background: #f0f4ff; }
+.notif-item__dot {
+    width:       8px;
+    height:      8px;
+    border-radius: 50%;
+    margin-top:  5px;
+    flex-shrink: 0;
+}
+.notif-item__body {
+    flex:      1;
+    min-width: 0;
+}
+.notif-item__msg {
+    font-size:   12px;
+    color:       var(--v2-text, #202124);
+    line-height: 1.4;
+    word-break:  keep-all;
+}
+.notif-item__meta {
+    font-size:  11px;
+    color:      #9aa0a6;
+    margin-top: 3px;
+}
+
+/* 규제 알림 푸터 */
+.v2-notif-regulatory {
+    display:         flex;
+    align-items:     center;
+    gap:             8px;
+    padding:         10px 16px;
+    border-top:      1px solid var(--ez-gray-200, #e8eaed);
+    font-size:       12px;
+    text-decoration: none;
+    background:      #fff;
+    color:           var(--v2-text-sub, #5f6368);
+    transition:      background .15s;
+}
+.v2-notif-regulatory--alert {
+    background: #f8f9ff;
+    color:      var(--v2-blue, #1a73e8);
+}
+.v2-notif-regulatory .bi-shield-exclamation { font-size: 14px; }
+.v2-notif-regulatory .bi-arrow-right        { font-size: 12px; }
+
+/* -------------------------
+   13. 계정 드롭다운 — _topbar_account.html 에서 이관
+   ------------------------- */
+
+/* 계정 패널 (dropdown-menu) */
+.v2-account-panel {
+    width:         300px;
+    border-radius: 12px;
+    box-shadow:    0 4px 12px rgba(0, 0, 0, .15), 0 1px 4px rgba(0, 0, 0, .1);
+    overflow:      hidden;
+}
+
+/* 계정 프로필 헤더 */
+.v2-account-header {
+    padding:       20px 24px 16px;
+    border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
+    text-align:    center;
+}
+.v2-account-avatar-lg {
+    width:           56px;
+    height:          56px;
+    border-radius:   50%;
+    background:      var(--v2-blue, #1a73e8);
+    color:           #fff;
+    font-size:       22px;
+    font-weight:     700;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    margin:          0 auto 10px;
+}
+.v2-account-name {
+    font-size:     14px;
+    font-weight:   600;
+    color:         var(--v2-text, #202124);
+    margin-bottom: 2px;
+}
+.v2-account-email {
+    font-size: 12px;
+    color:     var(--v2-text-sub, #5f6368);
+}
+
+/* 계정 메뉴 섹션 */
+.v2-account-section {
+    padding: 8px 12px;
+}
+.v2-account-footer {
+    border-top: 1px solid var(--ez-gray-200, #e8eaed);
+    padding:    8px 12px 12px;
+}
+
+/* 계정 메뉴 아이템 */
+.v2-account-item {
+    display:         flex;
+    align-items:     center;
+    gap:             12px;
+    padding:         10px 12px;
+    border-radius:   8px;
+    text-decoration: none;
+    color:           var(--v2-text, #202124);
+    font-size:       13px;
+    transition:      background .15s;
+}
+.v2-account-item:hover { background: var(--v2-gray-100, #f1f3f4); }
+
+.v2-account-item__icon {
+    width:           32px;
+    height:          32px;
+    border-radius:   50%;
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    flex-shrink:     0;
+}
+.v2-account-item__icon--primary {
+    background: var(--v2-blue-light, #e8f0fe);
+}
+.v2-account-item__icon--primary .bi {
+    color:     var(--v2-blue, #1a73e8);
+    font-size: 14px;
+}
+.v2-account-item__icon--danger {
+    background: var(--ez-danger-bg, #fce8e6);
+}
+.v2-account-item__icon--danger .bi {
+    color:     var(--ez-danger, #c5221f);
+    font-size: 14px;
+}
+.v2-account-item__label { font-weight: 500; }
+
+/* 로그아웃 버튼 */
+.v2-account-logout-btn {
+    width:         100%;
+    display:       flex;
+    align-items:   center;
+    gap:           12px;
+    padding:       10px 12px;
+    border-radius: 8px;
+    border:        none;
+    background:    transparent;
+    cursor:        pointer;
+    color:         var(--ez-danger, #c5221f);
+    font-size:     13px;
+    font-weight:   500;
+    text-align:    left;
+    transition:    background .15s;
+}
+.v2-account-logout-btn:hover { background: var(--ez-danger-bg, #fce8e6); }
+
+/* 비인증 사용자 로그인/회원가입 버튼 */
+.v2-auth-btn {
+    font-size:     13px;
+    border-radius: 20px;
+    padding:       5px 16px;
 }
 
 /* ======================================================

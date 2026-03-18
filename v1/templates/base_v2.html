@@ -10,6 +10,8 @@
     <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     {% bootstrap_css %}
+    <!-- 공유 디자인 토큰 (가장 먼저 로드) -->
+    <link rel="stylesheet" href="{% static 'css/variables.css' %}?v={{ STATIC_BUILD_DATE }}">
     <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20250413">
     <link rel="stylesheet" href="{% static 'css/products_common.css' %}?v=20260222">
     {% block extra_head %}{% endblock %}
@@ -129,12 +131,6 @@
       <button onclick="hideSnackbar()" style="background:none;border:none;color:#90caf9;
         font-size:.8rem;font-weight:600;cursor:pointer;padding:0;flex-shrink:0;letter-spacing:.05em;">닫기</button>
     </div>
-    <style>
-      #v2Snackbar.snack-show   { transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
-      #v2Snackbar.snack-error  { background:#b71c1c; }
-      #v2Snackbar.snack-warning{ background:#e65100; }
-      #v2Snackbar.snack-info   { background:#1565c0; }
-    </style>
     <script>
     (function(){
       let _t = null;

@@ -4,28 +4,30 @@
  * Material Design 기반 컴포넌트
  * ==================== */
 
-/* ==================== CSS Variables (Material Design Colors) ==================== */
+/* ==================== CSS Variables (공유 토큰 매핑) ====================
+   실제 색상값은 variables.css 의 --ez-* 토큰을 참조합니다.
+   ===================================================================== */
 :root {
-    --md-primary: #1a73e8;
-    --md-primary-dark: #1557b0;
+    --md-primary:       var(--ez-info,          #1a73e8);
+    --md-primary-dark:  var(--ez-info-hover,     #1557b0);
     --md-primary-light: #4285f4;
-    --md-secondary: #5f6368;
-    --md-surface: #ffffff;
-    --md-background: #f8f9fa;
-    --md-error: #ea4335;
-    --md-success: #34a853;
-    --md-warning: #f9ab00;
-    --md-info: #1a73e8;
-    
-    --md-shadow-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-    --md-shadow-2: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
-    --md-shadow-3: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
-    --md-shadow-4: 0 14px 28px rgba(0,0,0,0.25), 0 10px 10px rgba(0,0,0,0.22);
+    --md-secondary:     var(--ez-gray-700,       #5f6368);
+    --md-surface:       #ffffff;
+    --md-background:    var(--ez-gray-50,        #f8f9fa);
+    --md-error:         var(--ez-danger,         #c5221f);
+    --md-success:       var(--ez-success,        #1e8e3e);
+    --md-warning:       var(--ez-warning,        #e67700);
+    --md-info:          var(--ez-info,           #1a73e8);
+
+    --md-shadow-1: var(--ez-shadow-xs);
+    --md-shadow-2: var(--ez-shadow-sm);
+    --md-shadow-3: var(--ez-shadow-md);
+    --md-shadow-4: var(--ez-shadow-lg);
     --md-shadow-5: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
-    
-    --md-transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-    --md-transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    --md-transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+    --md-transition-fast:   var(--ez-transition-fast);
+    --md-transition-normal: var(--ez-transition-normal);
+    --md-transition-slow:   var(--ez-transition-slow);
 }
 
 

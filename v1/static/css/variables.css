@@ -1,0 +1,83 @@
+/* ================================================================
+   EzLabeling 공유 디자인 토큰 (variables.css)
+   base.html 과 base_v2.html 에서 가장 먼저 로드됩니다.
+   모든 페이지 CSS 파일에서 이 변수들을 참조하세요.
+   개별 파일에서 동일한 값을 하드코딩하지 마세요.
+   ================================================================ */
+
+:root {
+  /* ── 상태 색상 (V1/V2 공통) ─────────────────────────────── */
+  --ez-success:        #1e8e3e;
+  --ez-success-hover:  #137333;
+  --ez-success-bg:     #e6f4ea;
+  --ez-success-border: #ceead6;
+
+  --ez-danger:         #c5221f;
+  --ez-danger-hover:   #a50e0e;
+  --ez-danger-bg:      #fce8e6;
+  --ez-danger-border:  #f5c6c3;
+
+  --ez-warning:        #e67700;
+  --ez-warning-hover:  #b85e00;
+  --ez-warning-bg:     #fef7e0;
+  --ez-warning-border: #fde68a;
+
+  --ez-info:           #1a73e8;
+  --ez-info-hover:     #1765cc;
+  --ez-info-bg:        #e8f0fe;
+  --ez-info-border:    #c5d9f9;
+
+  /* ── 공통 회색 팔레트 ────────────────────────────────────── */
+  --ez-gray-50:   #f8f9fa;
+  --ez-gray-100:  #f1f3f4;
+  --ez-gray-200:  #e8eaed;
+  --ez-gray-300:  #dadce0;
+  --ez-gray-400:  #bdc1c6;
+  --ez-gray-500:  #9aa0a6;
+  --ez-gray-600:  #80868b;
+  --ez-gray-700:  #5f6368;
+  --ez-gray-800:  #3c4043;
+  --ez-gray-900:  #202124;
+
+  /* ── 타이포그래피 ─────────────────────────────────────────── */
+  --ez-font-family:   'Noto Sans KR', sans-serif;
+  --ez-font-size-xs:  0.75rem;   /* 12px */
+  --ez-font-size-sm:  0.8125rem; /* 13px */
+  --ez-font-size-md:  0.875rem;  /* 14px */
+  --ez-font-size-lg:  1rem;      /* 16px */
+  --ez-font-size-xl:  1.125rem;  /* 18px */
+
+  /* ── 그림자 ───────────────────────────────────────────────── */
+  --ez-shadow-xs: 0 1px 2px rgba(60, 64, 67, 0.20);
+  --ez-shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.30),
+                  0 1px 3px rgba(60, 64, 67, 0.15);
+  --ez-shadow-md: 0 2px 6px rgba(60, 64, 67, 0.30),
+                  0 1px 3px rgba(60, 64, 67, 0.15);
+  --ez-shadow-lg: 0 4px 12px rgba(60, 64, 67, 0.25),
+                  0 2px 4px rgba(60, 64, 67, 0.15);
+
+  /* ── 전환 애니메이션 ─────────────────────────────────────── */
+  --ez-transition-fast:   0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --ez-transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --ez-transition-slow:   0.40s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── 테두리 반경 ──────────────────────────────────────────── */
+  --ez-radius-sm:   4px;
+  --ez-radius-md:   8px;
+  --ez-radius-lg:   12px;
+  --ez-radius-pill: 20px;
+  --ez-radius-full: 9999px;
+
+  /* ── 간격 스케일 ──────────────────────────────────────────── */
+  --ez-space-1: 0.25rem;   /* 4px  */
+  --ez-space-2: 0.5rem;    /* 8px  */
+  --ez-space-3: 0.75rem;   /* 12px */
+  --ez-space-4: 1rem;      /* 16px */
+  --ez-space-5: 1.25rem;   /* 20px */
+  --ez-space-6: 1.5rem;    /* 24px */
+  --ez-space-8: 2rem;      /* 32px */
+
+  /* ── 에러 페이지 공통 ─────────────────────────────────────── */
+  --ez-error-btn-min-width:        120px;
+  --ez-error-btn-min-width-mobile: 100%;
+}

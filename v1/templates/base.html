@@ -18,6 +18,8 @@
   <!-- Font Awesome 추가 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   {% bootstrap_css %}
+  <!-- 공유 디자인 토큰 (가장 먼저 로드) -->
+  <link rel="stylesheet" href="{% static 'css/variables.css' %}?v={{ STATIC_BUILD_DATE }}">
   <!-- 메인 CSS -->
   <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20250413">
   <!-- Material Design Components CSS -->

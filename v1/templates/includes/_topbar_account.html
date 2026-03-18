@@ -1,60 +1,54 @@
-﻿{# 탑바 우측 계정 영역 공통 컴포넌트 — 모든 V2 페이지 topbar 블록에서 include #}
+{# 탑바 우측 계정 영역 공통 컴포넌트 — 모든 V2 페이지 topbar 블록에서 include #}
+{# 알림 드롭다운·계정 드롭다운 스타일은 products_common.css "12-13" 섹션에서 관리됩니다 #}
 <div class="v2-topbar-account">
 
 {% if user.is_authenticated %}
     <!-- 홈 전환 버튼 (→ V1 기존홈) -->
     <a href="{% url 'main:home_v1' %}"
        class="btn btn-outline-secondary btn-sm me-2 d-flex align-items-center home-switch-btn"
-       style="font-size:0.8rem;border-radius:16px;padding:0.25rem 0.85rem;line-height:1.5;"
        title="V1 기존홈으로 전환">
-        <i class="bi bi-arrow-left-right" style="font-size:0.85rem;"></i><span class="home-switch-text ms-1">홈 전환</span>
+        <i class="bi bi-arrow-left-right"></i><span class="home-switch-text ms-1">홈 전환</span>
     </a>
     {# ── 알림 버튼 ── #}
     <div class="dropdown" id="notificationDropdown">
-        <button class="btn btn-light rounded-circle position-relative" type="button"
-                title="알림" style="width:40px;height:40px;"
+        <button class="btn btn-light rounded-circle position-relative v2-notif-bell" type="button"
+                title="알림"
                 data-bs-toggle="dropdown" aria-expanded="false"
                 id="notificationBell">
-            <i class="bi bi-bell" style="font-size:16px;"></i>
+            <i class="bi bi-bell"></i>
             <span id="notificationBadge"
-                  class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                  style="display:none;font-size:10px;min-width:18px;padding:2px 5px;"></span>
+                  class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger v2-notif-badge"
+                  style="display:none;"></span>
         </button>
 
-        <div class="dropdown-menu dropdown-menu-end border-0 p-0 mt-2"
-             style="width:340px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.15);overflow:hidden;"
+        <div class="dropdown-menu dropdown-menu-end border-0 p-0 mt-2 v2-notif-panel"
              id="notificationPanel">
             {# 헤더 #}
-            <div style="display:flex;align-items:center;justify-content:space-between;
-                        padding:14px 16px 10px;border-bottom:1px solid #e8eaed;">
-                <span style="font-size:14px;font-weight:600;color:#202124;">알림</span>
+            <div class="v2-notif-header">
+                <span class="v2-notif-title">알림</span>
                 <button id="markAllReadBtn" onclick="notifMarkAllRead(event)"
-                        style="font-size:12px;color:#1a73e8;background:none;border:none;cursor:pointer;padding:0;">
+                        class="v2-notif-mark-all">
                     모두 읽음
                 </button>
             </div>
             {# 목록 영역 #}
-            <div id="notificationList"
-                 style="max-height:360px;overflow-y:auto;">
-                <div style="padding:32px 16px;text-align:center;color:#9aa0a6;font-size:13px;" id="notifEmpty">
-                    <i class="bi bi-bell-slash" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+            <div id="notificationList" class="v2-notif-list">
+                <div class="v2-notif-empty" id="notifEmpty">
+                    <i class="bi bi-bell-slash"></i>
                     새 알림이 없습니다.
                 </div>
             </div>
             {# 규제 알림 푸터 (항상 표시) #}
             <a href="{% url 'regulatory:list' %}"
                onclick="window.location.href=this.href;return false;"
-               style="display:flex;align-items:center;gap:8px;padding:10px 16px;
-                      border-top:1px solid #e8eaed;font-size:12px;text-decoration:none;
-                      background:{% if regulatory_alert_count > 0 %}#f8f9ff{% else %}#fff{% endif %};
-                      color:{% if regulatory_alert_count > 0 %}#1a73e8{% else %}#5f6368{% endif %};">
-                <i class="bi bi-shield-exclamation" style="font-size:14px;"></i>
+               class="v2-notif-regulatory{% if regulatory_alert_count > 0 %} v2-notif-regulatory--alert{% endif %}">
+                <i class="bi bi-shield-exclamation"></i>
                 {% if regulatory_alert_count > 0 %}
                 <span>부적합 알림 <b>{{ regulatory_alert_count }}건</b></span>
                 {% else %}
                 <span>부적합·처분 알림</span>
                 {% endif %}
-                <i class="bi bi-arrow-right ms-auto" style="font-size:12px;"></i>
+                <i class="bi bi-arrow-right ms-auto"></i>
             </a>
         </div>
     </div>
@@ -65,54 +59,40 @@
         </a>
 
         {# ── Google 스타일 계정 드롭다운 ── #}
-        <div class="dropdown-menu dropdown-menu-end border-0 p-0 mt-2"
-             style="width:300px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.15),0 1px 4px rgba(0,0,0,.1);overflow:hidden;">
+        <div class="dropdown-menu dropdown-menu-end border-0 p-0 mt-2 v2-account-panel">
 
             {# 상단: 아바타 + 이름/이메일 #}
-            <div style="padding:20px 24px 16px;border-bottom:1px solid #e8eaed;text-align:center;">
-                <div style="width:56px;height:56px;border-radius:50%;background:#1a73e8;color:#fff;
-                            font-size:22px;font-weight:700;display:flex;align-items:center;
-                            justify-content:center;margin:0 auto 10px;">
+            <div class="v2-account-header">
+                <div class="v2-account-avatar-lg">
                     {{ request.user.username|slice:":1"|upper }}
                 </div>
-                <div style="font-size:14px;font-weight:600;color:#202124;margin-bottom:2px;">
+                <div class="v2-account-name">
                     {% if request.user.profile.company_name %}
                         {{ request.user.profile.company_name }}
                     {% else %}
                         {{ request.user.username }}
                     {% endif %}
                 </div>
-                <div style="font-size:12px;color:#5f6368;">{{ request.user.email }}</div>
+                <div class="v2-account-email">{{ request.user.email }}</div>
             </div>
 
             {# 내 정보 수정 링크 #}
-            <div style="padding:8px 12px;">
-                <a href="{% url 'user_management:user_profile' %}"
-                   style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;
-                          text-decoration:none;color:#202124;font-size:13px;transition:background .15s;"
-                   onmouseover="this.style.background='#f1f3f4'"
-                   onmouseout="this.style.background='transparent'">
-                    <div style="width:32px;height:32px;border-radius:50%;background:#e8f0fe;
-                                display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <i class="bi bi-person-gear" style="color:#1a73e8;font-size:14px;"></i>
+            <div class="v2-account-section">
+                <a href="{% url 'user_management:user_profile' %}" class="v2-account-item">
+                    <div class="v2-account-item__icon v2-account-item__icon--primary">
+                        <i class="bi bi-person-gear"></i>
                     </div>
-                    <span style="font-weight:500;">내 정보 수정</span>
+                    <span class="v2-account-item__label">내 정보 수정</span>
                 </a>
             </div>
 
             {# 구분선 + 로그아웃 #}
-            <div style="border-top:1px solid #e8eaed;padding:8px 12px 12px;">
+            <div class="v2-account-footer">
                 <form method="post" action="{% url 'user_management:logout' %}" class="m-0">
                     {% csrf_token %}
-                    <button type="submit"
-                            style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;
-                                   border-radius:8px;border:none;background:transparent;cursor:pointer;
-                                   color:#c5221f;font-size:13px;font-weight:500;text-align:left;transition:background .15s;"
-                            onmouseover="this.style.background='#fce8e6'"
-                            onmouseout="this.style.background='transparent'">
-                        <div style="width:32px;height:32px;border-radius:50%;background:#fce8e6;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <i class="bi bi-box-arrow-right" style="color:#c5221f;font-size:14px;"></i>
+                    <button type="submit" class="v2-account-logout-btn">
+                        <div class="v2-account-item__icon v2-account-item__icon--danger">
+                            <i class="bi bi-box-arrow-right"></i>
                         </div>
                         로그아웃
                     </button>
@@ -124,11 +104,11 @@
 {% else %}
 {# ── 비인증(게스트): 로그인/회원가입 버튼 ── #}
     <a href="{% url 'user_management:login' %}?next={{ request.get_full_path }}"
-       class="btn btn-outline-secondary btn-sm me-2" style="font-size:13px;border-radius:20px;padding:5px 16px;">
+       class="btn btn-outline-secondary btn-sm me-2 v2-auth-btn">
         로그인
     </a>
     <a href="{% url 'user_management:signup' %}"
-       class="btn btn-primary btn-sm" style="font-size:13px;border-radius:20px;padding:5px 16px;">
+       class="btn btn-primary btn-sm v2-auth-btn">
         회원가입
     </a>
 {% endif %}
@@ -167,15 +147,13 @@
         }
         if (EMPTY_EL) EMPTY_EL.style.display = 'none';
         LIST_EL.innerHTML = items.map(n => `
-            <div class="notif-item" data-id="${n.id}"
-                 style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #f1f3f4;
-                        background:${n.read_yn ? '#fff' : '#f0f4ff'};cursor:pointer;transition:background .15s;"
+            <div class="notif-item${n.read_yn ? '' : ' is-unread'}" data-id="${n.id}"
                  onclick="notifRead('${n.id}', '${n.url}')">
-                <div style="width:8px;height:8px;border-radius:50%;background:${statusColor(n.status_code)};
-                            margin-top:5px;flex-shrink:0;opacity:${n.read_yn ? 0.3 : 1};"></div>
-                <div style="flex:1;min-width:0;">
-                    <div style="font-size:12px;color:#202124;line-height:1.4;word-break:keep-all;">${n.message}</div>
-                    <div style="font-size:11px;color:#9aa0a6;margin-top:3px;">${n.label_name ? n.label_name + ' · ' : ''}${n.created_at}</div>
+                <div class="notif-item__dot"
+                     style="background:${statusColor(n.status_code)};opacity:${n.read_yn ? 0.3 : 1};"></div>
+                <div class="notif-item__body">
+                    <div class="notif-item__msg">${n.message}</div>
+                    <div class="notif-item__meta">${n.label_name ? n.label_name + ' · ' : ''}${n.created_at}</div>
                 </div>
             </div>`).join('');
     }

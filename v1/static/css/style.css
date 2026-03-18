@@ -64,7 +64,7 @@ body {
     margin-top: 20px;
 }
 /* ====================================================
-   3. Navbar Styles
+   3. Navbar Styles (V1)
    ==================================================== */
 .navbar {
     background-color: var(--navbar-bg-color) !important;
@@ -81,6 +81,122 @@ body {
 .navbar-brand,
 .navbar-nav .nav-item:not(.logout) {
     margin-right: 2rem !important;
+}
+
+/* 브랜드 로고 hover 효과 */
+.navbar-brand {
+    text-decoration: none !important;
+    border-bottom: none !important;
+}
+.navbar-brand:hover {
+    text-decoration: none !important;
+    border-bottom: none !important;
+    color: #ffc107 !important;
+}
+
+/* 네비게이션 메뉴 active/hover */
+.navbar-nav .nav-link {
+    position: relative;
+    transition: color var(--ez-transition-fast, 0.15s);
+    padding-bottom: 8px !important;
+    border-bottom: 2px solid transparent;
+}
+.navbar-nav .nav-link:hover {
+    color: #20c997 !important;
+    border-bottom-color: #20c997;
+}
+.navbar-nav .nav-link.active {
+    color: #20c997 !important;
+    border-bottom-color: #20c997;
+}
+.navbar-nav .nav-link::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: transparent;
+    transition: background-color var(--ez-transition-fast, 0.15s);
+}
+.navbar-nav .nav-link:hover::before,
+.navbar-nav .nav-link.active::before {
+    background-color: #20c997;
+}
+.navbar-nav .nav-item {
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* 메가메뉴 드롭다운 */
+.menu-column {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: #2c3e50;
+    border-top: 1px solid #34495e;
+    box-shadow: var(--ez-shadow-md, 0 4px 6px rgba(0,0,0,.2));
+    display: none;
+    opacity: 0;
+    transition: opacity var(--ez-transition-fast, 0.15s);
+    z-index: 1000;
+    min-width: 200px;
+}
+.menu-column.active {
+    display: block;
+    opacity: 1;
+}
+.menu-column .menu-list {
+    list-style: none;
+    padding: 1rem 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+.menu-column .menu-list li {
+    margin: 0;
+    width: 100%;
+}
+.menu-column .menu-list a {
+    color: #ecf0f1;
+    text-decoration: none;
+    display: block;
+    padding: 0.75rem 1.5rem;
+    transition: all var(--ez-transition-fast, 0.15s);
+    font-size: 0.95rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.menu-column .menu-list a:hover {
+    background-color: #34495e;
+    color: #20c997;
+}
+
+/* 로그아웃 버튼 */
+.btn-link.nav-link {
+    border: none;
+    background: none;
+    text-decoration: none;
+    font-size: inherit;
+    line-height: inherit;
+}
+.btn-link.nav-link:hover {
+    color: #20c997 !important;
+    text-decoration: none;
+}
+
+/* 사용자명 표시 */
+#username-display {
+    transition: color var(--ez-transition-fast, 0.15s);
+}
+#username-display:hover {
+    color: #20c997 !important;
+    text-decoration: underline !important;
+}
+#username-display.guest-user { cursor: default; }
+#username-display.guest-user:hover {
+    color: #ffffff !important;
+    text-decoration: none !important;
 }
 /* ====================================================
    5. Table & Common Table Styles
@@ -1338,6 +1454,124 @@ select.form-control.select2-date-option {
         padding: 1px 3px !important;
         min-width: auto !important;
     }
+}
+
+/* ====================================================
+   로딩 오버레이 (search_filter.html 등 공통 사용)
+   사용: <div id="loadingOverlay" class="ez-loading-overlay d-none">
+   ==================================================== */
+.ez-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(255, 255, 255, 0.82);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.ez-loading-content {
+    text-align: center;
+    background: #fff;
+    padding: 2rem 2.5rem;
+    border-radius: var(--ez-radius-md, 8px);
+    box-shadow: var(--ez-shadow-md);
+    color: var(--text-secondary);
+    font-size: var(--ez-font-size-md, 0.875rem);
+}
+/* 검색 버튼 로딩 상태 */
+#searchBtn.loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+/* 이전 방식 호환 (#loadingOverlay 직접 사용하는 기존 코드) */
+#loadingOverlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(255, 255, 255, 0.82);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.loading-content {
+    text-align: center;
+    background: #fff;
+    padding: 2rem;
+    border-radius: var(--ez-radius-md, 8px);
+    box-shadow: var(--ez-shadow-md);
+}
+
+/* ====================================================
+   빈 상태 컴포넌트 (Empty State)
+   사용: <div class="ez-empty-state">
+           <i class="bi bi-inbox ez-empty-state__icon"></i>
+           <p class="ez-empty-state__text">데이터가 없습니다.</p>
+         </div>
+   ==================================================== */
+.ez-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+    color: var(--text-secondary, #6b7280);
+}
+.ez-empty-state__icon {
+    font-size: 2.25rem;
+    display: block;
+    margin-bottom: 0.75rem;
+    opacity: 0.55;
+}
+.ez-empty-state__title {
+    font-size: var(--ez-font-size-md, 0.875rem);
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary, #1f2937);
+}
+.ez-empty-state__text {
+    font-size: var(--ez-font-size-sm, 0.8125rem);
+    margin: 0;
+    color: var(--text-secondary, #6b7280);
+}
+
+/* ====================================================
+   폼 유효성 오류 메시지 (Form Validation)
+   ==================================================== */
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: var(--ez-danger, #c5221f);
+}
+.invalid-feedback {
+    font-size: var(--ez-font-size-xs, 0.75rem);
+    color: var(--ez-danger, #c5221f);
+    margin-top: 0.25rem;
+}
+.form-control:focus {
+    border-color: var(--secondary-color, #3b82f6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    outline: none;
+}
+.form-control.is-invalid:focus {
+    border-color: var(--ez-danger, #c5221f);
+    box-shadow: 0 0 0 3px var(--ez-danger-bg, rgba(197,34,31,0.12));
+}
+/* 검색 필터 입력값 강조 */
+.form-control.has-value,
+.form-select.has-value {
+    border-color: var(--secondary-color, #3b82f6);
+    background-color: var(--ez-info-bg, #e8f0fe);
+}
+
+/* ====================================================
+   에러 페이지 공통 스타일 (403, 404, 500)
+   ==================================================== */
+.error-page-btn {
+    min-width: var(--ez-error-btn-min-width, 120px);
+}
+@media (max-width: 576px) {
+    .error-page-icon { font-size: 3rem; }
+    .error-page-btn  { min-width: var(--ez-error-btn-min-width-mobile, 100%); }
 }
 
 /* ==================== V2 반응형 테이블 카드 ==================== */
