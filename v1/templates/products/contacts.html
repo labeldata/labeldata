@@ -44,9 +44,18 @@
                     </button>
                 </div>
                 {# ── 검색 (항상 표시) ── #}
-                <div class="input-group input-group-sm" style="width:200px;">
-                    <span class="input-group-text bg-white border-end-0" style="padding:3px 8px;"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" id="contactSearch" class="form-control border-start-0 ps-0" placeholder="이메일, 이름 검색..." autocomplete="off" style="font-size:12px;">
+                <div class="d-flex align-items-center" style="gap:12px;width:320px;">
+                    <select id="contactSearchField" class="form-select form-select-sm" style="width:110px;flex-shrink:0;font-size:13px;">
+                        <option value="all">전체</option>
+                        <option value="email">이메일</option>
+                        <option value="name">이름</option>
+                        <option value="company">회사명</option>
+                        <option value="license_no">인허가번호</option>
+                    </select>
+                    <div class="input-group input-group-sm" style="flex:1;">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" id="contactSearch" class="form-control border-start-0 ps-0" placeholder="검색어 입력..." autocomplete="off" style="font-size:13px;">
+                    </div>
                 </div>
                 <button class="contacts-icon-btn" id="addRowBtn" title="행 추가">
                     <i class="bi bi-person-plus"></i>
@@ -958,11 +967,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 검색
     const searchPlugin = hot.getPlugin('search');
-    document.getElementById('contactSearch').addEventListener('input', function () {
-        const results = searchPlugin.query(this.value);
-        document.getElementById('rowInfo').textContent = this.value ? `${results.length}개 일치` : '';
+    const fieldColMap = { all: null, email: 1, name: 2, company: 3, license_no: 4 };
+
+    function applyContactSearch() {
+        const query = document.getElementById('contactSearch').value;
+        const field = document.getElementById('contactSearchField').value;
+        const colIdx = fieldColMap[field] ?? null;
+
+        if (colIdx !== null) {
+            // 특정 컬럼만 검색하는 커스텀 queryMethod
+            searchPlugin.updatePlugin({
+                queryMethod: function(queryStr, value, cellProperties) {
+                    if (cellProperties.col !== colIdx) return false;
+                    return String(value ?? '').toLowerCase().includes(queryStr.toLowerCase());
+                }
+            });
+        } else {
+            // 전체 검색 (기본 동작)
+            searchPlugin.updatePlugin({ queryMethod: undefined });
+        }
+
+        const results = searchPlugin.query(query);
+        document.getElementById('rowInfo').textContent = query ? `${results.length}개 일치` : '';
         hot.render();
-    });
+    }
+
+    document.getElementById('contactSearch').addEventListener('input', applyContactSearch);
+    document.getElementById('contactSearchField').addEventListener('change', applyContactSearch);
 
     // 페이지 로드 시 받은 요청 배지 카운트
     fetch(CONTACTS_API_RECEIVED).then(r => r.json()).then(data => {

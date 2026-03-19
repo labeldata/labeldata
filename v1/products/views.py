@@ -168,13 +168,26 @@ def product_explorer(request, folder_id=None):
     
     # 검색
     search_query = request.GET.get('q', '')
+    search_field = request.GET.get('search_field', 'all').strip() or 'all'
+    _product_field_map = {
+        'my_label_name': 'my_label_name',
+        'prdlst_nm': 'prdlst_nm',
+        'prdlst_dcnm': 'prdlst_dcnm',
+        'prdlst_report_no': 'prdlst_report_no',
+    }
     if search_query:
-        labels = labels.filter(
-            Q(my_label_name__icontains=search_query) |
-            Q(prdlst_nm__icontains=search_query) |
-            Q(prdlst_dcnm__icontains=search_query) |
-            Q(v2_metadata__search_tags__icontains=search_query)
-        )
+        if search_field != 'all' and search_field in _product_field_map:
+            labels = labels.filter(
+                Q(**{f"{_product_field_map[search_field]}__icontains": search_query})
+            )
+        else:
+            labels = labels.filter(
+                Q(my_label_name__icontains=search_query) |
+                Q(prdlst_nm__icontains=search_query) |
+                Q(prdlst_dcnm__icontains=search_query) |
+                Q(prdlst_report_no__icontains=search_query) |
+                Q(v2_metadata__search_tags__icontains=search_query)
+            )
 
     # 원료 연결 필터: ingredient_id 파라미터가 있으면 해당 원료와 연결된 제품만 표시
     ingredient_id_filter = request.GET.get('ingredient_id')
@@ -194,6 +207,19 @@ def product_explorer(request, folder_id=None):
                 ingredient_name_filter = f'원료 #{ingredient_id_filter}'
         except Exception:
             ingredient_id_filter = None
+
+    # 정확 일치 우선 정렬 (전체 검색 시)
+    if search_query and search_field == 'all':
+        from django.db.models import Case, When, Value, IntegerField
+        labels = labels.annotate(
+            _match_priority=Case(
+                When(my_label_name__iexact=search_query, then=Value(0)),
+                When(prdlst_nm__iexact=search_query, then=Value(0)),
+                When(prdlst_report_no__iexact=search_query, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        ).order_by('_match_priority', '-update_datetime')
 
     # 페이지네이션 적용
     per_page = request.GET.get('per_page', '50')
@@ -426,6 +452,7 @@ def product_explorer(request, folder_id=None):
         'breadcrumb': breadcrumb,
         'view_type': view_type,
         'search_query': search_query,
+        'search_field': search_field,
         'recent_product_ids': list(recent_product_ids),
         'starred_items': starred_items,
         'shared_receipts': shared_receipts,

@@ -162,14 +162,9 @@ def food_item_list(request):
     
     # '통합 검색용' q 파라미터 처리 - 여러 필드에 OR 검색
     search_q = request.GET.get('q', '').strip()
-    if search_q:
-        # q 파라미터가 있으면 여러 필드에서 OR 검색
-        search_or_conditions = Q(prdlst_nm__icontains=search_q) | \
-                               Q(prdlst_report_no__icontains=search_q) | \
-                               Q(prdlst_dcnm__icontains=search_q) | \
-                               Q(bssh_nm__icontains=search_q)
-    else:
-        search_or_conditions = None
+    # 검색 필드 선택 (전체/특정 필드)
+    search_field = request.GET.get('search_field', 'all').strip() or 'all'
+
     imported_search_fields = {
         "prduct_korean_nm": "prdlst_nm",
         "itm_nm": "prdlst_dcnm",
@@ -179,6 +174,7 @@ def food_item_list(request):
         "expirde_dtm": "pog_daycnt",
         "rawmtrl_nm": "rawmtrl_nm",
     }
+
     # 정렬조건 변경
     if food_category == "imported":
         # 수입제품: 단일 컬럼 정렬만 허용 (기본: -expirde_dtm)
@@ -188,30 +184,41 @@ def food_item_list(request):
         imported_mode = True
         imported_conditions = Q()
         imported_search_values = {}
-        has_search_params = False # 검색 파라미터 유무 플래그 추가
+        has_search_params = False  # 검색 파라미터 유무 플래그 추가
         for model_field, query_param in imported_search_fields.items():
             value = request.GET.get(query_param, "").strip()
             if value:
                 imported_conditions &= Q(**{f"{model_field}__icontains": value})
                 imported_search_values[query_param] = value
-                has_search_params = True # 검색 파라미터가 하나라도 있으면 True
-        
-        # q 파라미터로 검색한 경우 OR 조건 추가
-        if search_or_conditions:
-            # 수입 제품 필드명으로 변환하여 OR 검색
-            # 수입 제품: 제품명, 식품유형, 수출국, 수입업체명 (제조사명 제외)
-            imported_conditions &= (Q(prduct_korean_nm__icontains=search_q) | \
-                                   Q(itm_nm__icontains=search_q) | \
-                                   Q(xport_ntncd_nm__icontains=search_q) | \
-                                   Q(bsn_ofc_name__icontains=search_q))
+                has_search_params = True
+
+        # q 파라미터로 검색한 경우 OR 조건 추가 (search_field에 따라 필드 제한)
+        if search_q:
             imported_search_values['q'] = search_q
             has_search_params = True
-        
+            # 수입 제품 필드명 매핑
+            _imported_field_map = {
+                'prduct_korean_nm': 'prduct_korean_nm',
+                'itm_nm': 'itm_nm',
+                'xport_ntncd_nm': 'xport_ntncd_nm',
+                'bsn_ofc_name': 'bsn_ofc_name',
+                'ovsmnfst_nm': 'ovsmnfst_nm',
+            }
+            if search_field != 'all' and search_field in _imported_field_map:
+                imported_conditions &= Q(**{f"{_imported_field_map[search_field]}__icontains": search_q})
+            else:
+                imported_conditions &= (
+                    Q(prduct_korean_nm__icontains=search_q) |
+                    Q(itm_nm__icontains=search_q) |
+                    Q(xport_ntncd_nm__icontains=search_q) |
+                    Q(bsn_ofc_name__icontains=search_q) |
+                    Q(ovsmnfst_nm__icontains=search_q)
+                )
+
         if has_search_params:
-            # 단일 컬럼 정렬 적용
             imported_items_qs = ImportedFood.objects.filter(imported_conditions).order_by(sort_field)
         else:
-            imported_items_qs = ImportedFood.objects.none() # 검색 조건 없으면 빈 쿼리셋
+            imported_items_qs = ImportedFood.objects.none()
 
         total_count = imported_items_qs.count()
         paginator, page_obj, page_range = paginate_queryset(imported_items_qs, page_number, items_per_page)
@@ -222,35 +229,58 @@ def food_item_list(request):
         items_per_page = int(request.GET.get("items_per_page", 10))
         page_number = request.GET.get("page", 1)
         search_conditions, search_values = get_search_conditions(request, search_fields)
-        
-        # q 파라미터로 검색한 경우 OR 조건 추가
-        if search_or_conditions:
-            search_conditions &= search_or_conditions
-            # 통합 검색이므로 search_values에 'q' 값만 저장
+
+        # q 파라미터로 검색한 경우: search_field에 따라 단일 필드 또는 OR 전체 검색
+        if search_q:
             search_values['q'] = search_q
-        
-        has_search_params = any(search_values.values()) # 검색 파라미터 유무 확인
+            _domestic_field_map = {
+                'prdlst_nm': 'prdlst_nm',
+                'prdlst_report_no': 'prdlst_report_no',
+                'prdlst_dcnm': 'prdlst_dcnm',
+                'bssh_nm': 'bssh_nm',
+            }
+            if search_field != 'all' and search_field in _domestic_field_map:
+                search_conditions &= Q(**{f"{_domestic_field_map[search_field]}__icontains": search_q})
+            else:
+                search_conditions &= (
+                    Q(prdlst_nm__icontains=search_q) |
+                    Q(prdlst_report_no__icontains=search_q) |
+                    Q(prdlst_dcnm__icontains=search_q) |
+                    Q(bssh_nm__icontains=search_q)
+                )
+
+        has_search_params = any(search_values.values())  # 검색 파라미터 유무 확인
 
         if has_search_params:
-            # 단일 컬럼 정렬 적용
-            food_items_qs = FoodItem.objects.filter(search_conditions).order_by(sort_field)
+            # 정확 일치 우선 정렬: 검색어가 있고 전체 검색일 때만 적용
+            if search_q and search_field == 'all':
+                from django.db.models import Case, When, Value, IntegerField
+                food_items_qs = FoodItem.objects.filter(search_conditions).annotate(
+                    _match_priority=Case(
+                        When(prdlst_nm__iexact=search_q, then=Value(0)),
+                        When(prdlst_report_no__iexact=search_q, then=Value(0)),
+                        default=Value(1),
+                        output_field=IntegerField(),
+                    )
+                ).order_by('_match_priority', sort_field)
+            else:
+                food_items_qs = FoodItem.objects.filter(search_conditions).order_by(sort_field)
         else:
-            food_items_qs = FoodItem.objects.none() # 검색 조건 없으면 빈 쿼리셋
-            
+            food_items_qs = FoodItem.objects.none()
+
         total_count = food_items_qs.count()
         paginator, page_obj, page_range = paginate_queryset(food_items_qs, page_number, items_per_page)
         # imported_mode 변수를 domestic 케이스에서도 정의
-        imported_mode = False 
+        imported_mode = False
 
     querystring_without_page = get_querystring_without(request, ["page"])
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
 
-    # 검색 조건이 있는지 확인 (위에서 이미 계산된 has_search_params 사용)
-    # search_result_count는 total_count를 사용하되, 검색 조건이 있었을 때만 의미가 있음
+    # 검색 조건이 있는지 확인
     search_result_count = total_count if has_search_params else None
-    
+
     # Context에 search_query 추가 (템플릿에서 사용)
-    search_query = request.GET.get('q', '') or request.GET.get('prdlst_nm', '')
+    search_query = search_q or request.GET.get('prdlst_nm', '')
 
     context = {
         "page_obj": page_obj,
@@ -258,14 +288,15 @@ def food_item_list(request):
         "page_range": page_range,
         "search_values": search_values,
         "search_query": search_query,
+        "search_field": search_field,
         "food_category": food_category,
         "items_per_page": items_per_page,
-        "sort_field": sort_field.lstrip('-') if isinstance(sort_field, str) else sort_field, # 정렬 필드에서 '-' 제거
+        "sort_field": sort_field.lstrip('-') if isinstance(sort_field, str) else sort_field,
         "sort_order": sort_order,
         "querystring_without_page": querystring_without_page,
         "querystring_without_sort": querystring_without_sort,
-        "imported_mode": imported_mode, # food_category 값에 따라 설정된 imported_mode 사용
-        "imported_items": page_obj if imported_mode else [], # imported_mode가 True일 때만 imported_items 전달
+        "imported_mode": imported_mode,
+        "imported_items": page_obj if imported_mode else [],
         "search_result_count": search_result_count,
     }
 
@@ -1168,6 +1199,19 @@ def my_ingredient_list(request):
 @login_required
 def my_ingredient_list_combined(request):
     label_id = request.GET.get('label_id')
+
+    # 통합 검색어 + 검색 필드 선택
+    search_q = request.GET.get('q', '').strip()
+    search_field = request.GET.get('search_field', 'all').strip() or 'all'
+    _ing_field_map = {
+        'prdlst_nm': 'prdlst_nm',
+        'prdlst_report_no': 'prdlst_report_no',
+        'prdlst_dcnm': 'prdlst_dcnm',
+        'bssh_nm': 'bssh_nm',
+        'ingredient_display_name': 'ingredient_display_name',
+        'allergens': 'allergens',
+    }
+
     search_fields = {
         'prdlst_nm': 'prdlst_nm',
         'prdlst_report_no': 'prdlst_report_no',
@@ -1178,6 +1222,22 @@ def my_ingredient_list_combined(request):
         'gmo': 'gmo',
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
+
+    # 통합 검색어 처리
+    if search_q:
+        search_values['q'] = search_q
+        if search_field != 'all' and search_field in _ing_field_map:
+            search_conditions &= Q(**{f"{_ing_field_map[search_field]}__icontains": search_q})
+        else:
+            search_conditions &= (
+                Q(prdlst_nm__icontains=search_q) |
+                Q(prdlst_report_no__icontains=search_q) |
+                Q(prdlst_dcnm__icontains=search_q) |
+                Q(bssh_nm__icontains=search_q) |
+                Q(ingredient_display_name__icontains=search_q) |
+                Q(allergens__icontains=search_q)
+            )
+
     search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
 
     # 식품구분(카테고리) 검색 지원
@@ -1192,7 +1252,7 @@ def my_ingredient_list_combined(request):
     if label_id:
         # 라벨에 연결된 원료만 조회
         ingredient_ids = LabelIngredientRelation.objects.filter(label_id=label_id).values_list('ingredient_id', flat=True)
-        my_ingredients = MyIngredient.objects.filter(my_ingredient_id__in=ingredient_ids).filter(search_conditions).order_by(sort_field)
+        base_qs = MyIngredient.objects.filter(my_ingredient_id__in=ingredient_ids).filter(search_conditions)
         # 라벨명 가져오기
         label_name = None
         try:
@@ -1201,8 +1261,23 @@ def my_ingredient_list_combined(request):
         except MyLabel.DoesNotExist:
             label_name = None
     else:
-        my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
+        base_qs = MyIngredient.objects.filter(search_conditions)
         label_name = None
+
+    # 정확 일치 우선 정렬 (전체 검색 시)
+    if search_q and search_field == 'all':
+        from django.db.models import Case, When, Value, IntegerField
+        my_ingredients = base_qs.annotate(
+            _match_priority=Case(
+                When(prdlst_nm__iexact=search_q, then=Value(0)),
+                When(ingredient_display_name__iexact=search_q, then=Value(0)),
+                When(prdlst_report_no__iexact=search_q, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        ).order_by('_match_priority', sort_field)
+    else:
+        my_ingredients = base_qs.order_by(sort_field)
 
     total_count = my_ingredients.count()
     paginator, page_obj, page_range = paginate_queryset(my_ingredients, page_number, items_per_page)
@@ -1220,15 +1295,8 @@ def my_ingredient_list_combined(request):
         'page_obj': page_obj,
         'paginator': paginator,
         'page_range': page_range,
-        'search_fields': [
-            {'name': 'prdlst_nm', 'placeholder': '원재료명', 'value': search_values.get('prdlst_nm', '')},
-            {'name': 'prdlst_report_no', 'placeholder': '품목제조번호', 'value': search_values.get('prdlst_report_no', '')},
-            {'name': 'prdlst_dcnm', 'placeholder': '식품유형', 'value': search_values.get('prdlst_dcnm', '')},
-            {'name': 'bssh_nm', 'placeholder': '제조사명', 'value': search_values.get('bssh_nm', '')},
-            {'name': 'ingredient_display_name', 'placeholder': '원료 표시명', 'value': search_values.get('ingredient_display_name', '')},
-            {'name': 'allergens', 'placeholder': '알레르기', 'value': search_values.get('allergens', '')},
-            {'name': 'gmo', 'placeholder': 'GMO', 'value': search_values.get('gmo', '')},
-        ],
+        'search_query': search_q,
+        'search_field': search_field,
         'items_per_page': items_per_page,
         'sort_field': sort_field.lstrip('-'),
         'sort_order': sort_order,
@@ -1237,7 +1305,7 @@ def my_ingredient_list_combined(request):
         'label_id': label_id,
         'label_name': label_name,
         'total_count': total_count,
-        'search_result_count': search_result_count,  # 검색 결과 건수 추가
+        'search_result_count': search_result_count,
     }
     return render(request, _get_template(request, 'label/my_ingredient_list_combined.html'), context)
 
@@ -3771,7 +3839,11 @@ def food_additive_search(request):
     """식품첨가물 번호 검색"""
     # 식품첨가물 조회 로깅
     log_user_activity(request, 'search', 'search_additive')
-    
+
+    # 통합 검색어 (단일 입력창에서 name_kr, name_en, alias_name 동시 검색)
+    search_q = request.GET.get('q', '').strip()
+
+    # 개별 필드 검색 (고급 검색 등에서 사용)
     name_kr = request.GET.get('name_kr', '').strip()
     name_en = request.GET.get('name_en', '').strip()
     alias_name = request.GET.get('alias_name', '').strip()
@@ -3780,71 +3852,115 @@ def food_additive_search(request):
     cas_no = request.GET.get('cas_no', '').strip()
     sort_by = request.GET.get('sort', 'name_kr')
     order = request.GET.get('order', 'asc')
-    
+
     items_per_page = int(request.GET.get("items_per_page", 10))
     page_number = request.GET.get("page", 1)
-    
+
     # 혼합제제류는 제외 (내원료 관리 등에서만 사용)
     additives_qs = FoodAdditive.objects.exclude(category='혼합제제류')
-    
-    # 각 필드별 검색 조건 적용 (LIKE 검색 - 부분 일치)
+
+    # 검색 필드 선택 (전체/특정 필드)
+    search_field = request.GET.get('search_field', 'all').strip() or 'all'
+
+    # 유효한 필드명 매핑
+    _valid_fields = {
+        'name_kr': 'name_kr',
+        'name_en': 'name_en',
+        'alias_name': 'alias_name',
+        'ins_no': 'ins_no',
+        'e_no': 'e_no',
+        'cas_no': 'cas_no',
+    }
+
+    # 통합 검색어 처리: search_field에 따라 단일 필드 또는 OR 검색
+    if search_q:
+        if search_field != 'all' and search_field in _valid_fields:
+            # 특정 필드만 검색
+            additives_qs = additives_qs.filter(
+                Q(**{f"{_valid_fields[search_field]}__icontains": search_q})
+        )
+        else:
+            # 전체: 6개 필드 모두 OR 검색 (쉼표 구분 지원)
+            if ',' in search_q:
+                from django.db.models import Q as _Q
+                q_obj = _Q()
+                for term in search_q.split(','):
+                    term = term.strip()
+                    if term:
+                        q_obj |= (
+                            _Q(name_kr__icontains=term) | _Q(name_en__icontains=term) |
+                            _Q(alias_name__icontains=term) | _Q(ins_no__icontains=term) |
+                            _Q(e_no__icontains=term) | _Q(cas_no__icontains=term)
+                        )
+                additives_qs = additives_qs.filter(q_obj)
+            else:
+                additives_qs = additives_qs.filter(
+                    Q(name_kr__icontains=search_q) |
+                    Q(name_en__icontains=search_q) |
+                    Q(alias_name__icontains=search_q) |
+                    Q(ins_no__icontains=search_q) |
+                    Q(e_no__icontains=search_q) |
+                    Q(cas_no__icontains=search_q)
+                )
+
+    # 각 필드별 검색 조건 적용 (개별 필드 검색, LIKE 검색)
     if name_kr:
-        # 쉼표로 구분된 경우 OR 검색
         if ',' in name_kr:
-            from django.db.models import Q
-            q = Q()
+            from django.db.models import Q as _Q
+            q_obj = _Q()
             for term in name_kr.split(','):
                 term = term.strip()
                 if term:
-                    q |= Q(name_kr__icontains=term)
-            additives_qs = additives_qs.filter(q)
+                    q_obj |= _Q(name_kr__icontains=term)
+            additives_qs = additives_qs.filter(q_obj)
         else:
             additives_qs = additives_qs.filter(name_kr__icontains=name_kr)
-    
+
     if name_en:
         if ',' in name_en:
-            from django.db.models import Q
-            q = Q()
+            from django.db.models import Q as _Q
+            q_obj = _Q()
             for term in name_en.split(','):
                 term = term.strip()
                 if term:
-                    q |= Q(name_en__icontains=term)
-            additives_qs = additives_qs.filter(q)
+                    q_obj |= _Q(name_en__icontains=term)
+            additives_qs = additives_qs.filter(q_obj)
         else:
             additives_qs = additives_qs.filter(name_en__icontains=name_en)
-    
+
     if alias_name:
         if ',' in alias_name:
-            from django.db.models import Q
-            q = Q()
+            from django.db.models import Q as _Q
+            q_obj = _Q()
             for term in alias_name.split(','):
                 term = term.strip()
                 if term:
-                    q |= Q(alias_name__icontains=term)
-            additives_qs = additives_qs.filter(q)
+                    q_obj |= _Q(alias_name__icontains=term)
+            additives_qs = additives_qs.filter(q_obj)
         else:
             additives_qs = additives_qs.filter(alias_name__icontains=alias_name)
-    
+
     if ins_no:
         additives_qs = additives_qs.filter(ins_no__icontains=ins_no)
     if e_no:
         additives_qs = additives_qs.filter(e_no__icontains=e_no)
     if cas_no:
         additives_qs = additives_qs.filter(cas_no__icontains=cas_no)
-    
+
     # 정렬
     if order == 'desc':
         sort_by = f'-{sort_by}'
     additives_qs = additives_qs.order_by(sort_by)
-    
+
     total_count = additives_qs.count()
-    
+
     paginator, page_obj, page_range = paginate_queryset(additives_qs, page_number, items_per_page)
     querystring_without_page = get_querystring_without(request, ["page"])
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
-    
+
     # search_values 딕셔너리 생성
     search_values = {
+        'q': search_q,
         'name_kr': name_kr,
         'name_en': name_en,
         'alias_name': alias_name,
@@ -3852,23 +3968,25 @@ def food_additive_search(request):
         'e_no': e_no,
         'cas_no': cas_no,
     }
-    
+
     # 검색 조건이 있으면 검색 결과 수 전달
-    has_search = any([name_kr, name_en, alias_name, ins_no, e_no, cas_no])
+    has_search = any([search_q, name_kr, name_en, alias_name, ins_no, e_no, cas_no])
     search_result_count = total_count if has_search else None
-    
+
     context = {
         "page_obj": page_obj,
         "paginator": paginator,
         "page_range": page_range,
         "search_values": search_values,
+        "search_query": search_q,
+        "search_field": search_field,
         "items_per_page": items_per_page,
         "total_count": total_count,
         "search_result_count": search_result_count,
         "querystring_without_page": querystring_without_page,
         "querystring_without_sort": querystring_without_sort,
     }
-    
+
     return render(request, _get_template(request, "label/food_additive_search.html"), context)
 
 

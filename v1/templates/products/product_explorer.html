@@ -146,9 +146,21 @@
         </div>
         
         <div class="d-flex align-items-center gap-2">
-            <div class="input-group input-group-sm" style="width: 280px;">
-                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" id="product-search" class="form-control border-start-0 ps-0" placeholder="제품명, 코드 검색..." value="{{ search_query }}">
+            <div class="d-flex align-items-center" style="gap:12px;width:480px;">
+                <select id="product-search-field" class="form-select form-select-sm" style="width:110px;flex-shrink:0;font-size:13px;">
+                    <option value="all" {% if search_field == 'all' or not search_field %}selected{% endif %}>전체</option>
+                    <option value="my_label_name" {% if search_field == 'my_label_name' %}selected{% endif %}>제품명</option>
+                    <option value="prdlst_nm" {% if search_field == 'prdlst_nm' %}selected{% endif %}>원재료명</option>
+                    <option value="prdlst_dcnm" {% if search_field == 'prdlst_dcnm' %}selected{% endif %}>식품유형</option>
+                    <option value="prdlst_report_no" {% if search_field == 'prdlst_report_no' %}selected{% endif %}>품목보고번호</option>
+                </select>
+                <div class="input-group input-group-sm" style="flex:1;">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="product-search" class="form-control border-start-0 ps-0"
+                           style="font-size:13px;"
+                           placeholder="검색어 입력 (전체: 제품명·식품유형·품목보고번호 검색)"
+                           value="{{ search_query }}">
+                </div>
             </div>
             <a href="{% url 'products:product_create' %}" class="v2-action-btn">
                 <i class="bi bi-plus-lg"></i> 신규 등록

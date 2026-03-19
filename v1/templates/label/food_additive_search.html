@@ -303,15 +303,25 @@
 <div class="additive-explorer-container">
     <!-- 필터 및 검색 바 -->
     <div class="filter-toolbar">
-        <form method="get" action="" class="d-flex align-items-center" style="gap: 12px; flex: 1;" id="searchForm">
+        <form method="get" action="" class="d-flex align-items-center w-100" style="gap: 12px;" id="searchForm">
+            <!-- 검색 필드 선택 -->
+            <select name="search_field" id="additive-search-field" class="form-select form-select-sm" style="width: 110px; flex-shrink: 0; font-size: 13px;">
+                <option value="all" {% if search_field == 'all' or not search_field %}selected{% endif %}>전체</option>
+                <option value="name_kr" {% if search_field == 'name_kr' %}selected{% endif %}>첨가물명(한글)</option>
+                <option value="name_en" {% if search_field == 'name_en' %}selected{% endif %}>영문명</option>
+                <option value="alias_name" {% if search_field == 'alias_name' %}selected{% endif %}>이명</option>
+                <option value="ins_no" {% if search_field == 'ins_no' %}selected{% endif %}>INS No.</option>
+                <option value="e_no" {% if search_field == 'e_no' %}selected{% endif %}>E No.</option>
+                <option value="cas_no" {% if search_field == 'cas_no' %}selected{% endif %}>CAS No.</option>
+            </select>
             <!-- 통합 검색 -->
-            <div class="input-group" style="max-width: 100%;">
+            <div class="input-group" style="flex: 1;">
                 <span class="input-group-text bg-white border-end-0" style="font-size: 12px;"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" id="search-input" name="q" class="form-control border-start-0 ps-0" 
-                       placeholder="식품첨가물명, 영문명, 이명 중 검색어를 1개 이상 입력하세요" 
+                <input type="text" id="search-input" name="q" class="form-control border-start-0 ps-0"
+                       placeholder="검색어를 입력하세요 (전체: 첨가물명·영문명·이명 동시 검색)"
                        value="{{ search_query|default:'' }}" style="font-size: 13px;">
             </div>
-            
+
             <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
                 <i class="bi bi-search me-1"></i>검색
             </button>
@@ -425,27 +435,27 @@
             <ul class="pagination mb-0">
                 {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page=1">«</a>
+                        <a class="page-link" href="?page=1{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">«</a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹</a>
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">‹</a>
                     </li>
                 {% endif %}
-                
+
                 {% for num in page_obj.paginator.page_range %}
                     {% if page_obj.number == num %}
                         <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                     {% elif num > page_obj.number|add:'-5' and num < page_obj.number|add:'5' %}
-                        <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ num }}</a></li>
                     {% endif %}
                 {% endfor %}
-                
+
                 {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">›</a>
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">›</a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">»</a>
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">»</a>
                     </li>
                 {% endif %}
             </ul>

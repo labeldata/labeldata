@@ -563,8 +563,24 @@
 <div id="main-content">
     <!-- 상단 툴바 -->
     <div class="ingredient-toolbar">
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="원료명, 품목보고번호 검색...">
+        <div class="search-box d-flex align-items-center" style="gap:12px;">
+            <select id="ingredientSearchField" class="form-select form-select-sm"
+                    style="width:110px;flex-shrink:0;font-size:13px;">
+                <option value="all" {% if search_field == 'all' or not search_field %}selected{% endif %}>전체</option>
+                <option value="prdlst_nm" {% if search_field == 'prdlst_nm' %}selected{% endif %}>원재료명</option>
+                <option value="prdlst_report_no" {% if search_field == 'prdlst_report_no' %}selected{% endif %}>품목보고번호</option>
+                <option value="prdlst_dcnm" {% if search_field == 'prdlst_dcnm' %}selected{% endif %}>식품유형</option>
+                <option value="bssh_nm" {% if search_field == 'bssh_nm' %}selected{% endif %}>제조사명</option>
+                <option value="ingredient_display_name" {% if search_field == 'ingredient_display_name' %}selected{% endif %}>표시명</option>
+                <option value="allergens" {% if search_field == 'allergens' %}selected{% endif %}>알레르기</option>
+            </select>
+            <div class="input-group input-group-sm" style="flex:1;">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="searchInput" class="form-control border-start-0 ps-0"
+                       placeholder="검색어 입력 후 Enter"
+                       value="{{ search_query|default:'' }}"
+                       style="font-size:13px;">
+            </div>
         </div>
         <div class="toolbar-buttons">
             {% if user.is_authenticated %}
@@ -640,7 +656,7 @@
                     </span>
                     <div class="pagination-per-page">
                         <label for="perPageSelect">페이지당</label>
-                        <select id="perPageSelect" onchange="location.href='?page=1&items_per_page='+this.value">
+                        <select id="perPageSelect" onchange="(function(v){var p=new URLSearchParams(window.location.search);p.set('items_per_page',v);p.set('page','1');location.href='?'+p.toString();})(this.value)">
                             <option value="10" {% if items_per_page == 10 %}selected{% endif %}>10</option>
                             <option value="25" {% if items_per_page == 25 %}selected{% endif %}>25</option>
                             <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50</option>
@@ -655,10 +671,10 @@
                     <ul class="pagination mb-0">
                         {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page=1&items_per_page={{ items_per_page }}"><i class="bi bi-chevron-double-left"></i></a>
+                            <a class="page-link" href="?page=1{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}"><i class="bi bi-chevron-double-left"></i></a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&items_per_page={{ items_per_page }}"><i class="bi bi-chevron-left"></i></a>
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}"><i class="bi bi-chevron-left"></i></a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-double-left"></i></span></li>
@@ -669,16 +685,16 @@
                             {% if page_obj.number == num %}
                             <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                             {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item"><a class="page-link" href="?page={{ num }}&items_per_page={{ items_per_page }}">{{ num }}</a></li>
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ num }}</a></li>
                             {% endif %}
                         {% endfor %}
 
                         {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}&items_per_page={{ items_per_page }}"><i class="bi bi-chevron-right"></i></a>
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}"><i class="bi bi-chevron-right"></i></a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&items_per_page={{ items_per_page }}"><i class="bi bi-chevron-double-right"></i></a>
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}"><i class="bi bi-chevron-double-right"></i></a>
                         </li>
                         {% else %}
                         <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
@@ -888,13 +904,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // 검색
-    searchInput.addEventListener('keyup', function() {
-        const query = this.value.toLowerCase();
-        ingredientRows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            row.style.display = text.includes(query) ? '' : 'none';
-        });
+    // 검색 (서버사이드)
+    searchInput.addEventListener('keyup', function(e) {
+        if (e.key === 'Enter') {
+            const query = this.value.trim();
+            const fieldEl = document.getElementById('ingredientSearchField');
+            const searchField = fieldEl ? fieldEl.value : 'all';
+            const params = new URLSearchParams(window.location.search);
+            if (query) {
+                params.set('q', query);
+            } else {
+                params.delete('q');
+            }
+            if (searchField && searchField !== 'all') {
+                params.set('search_field', searchField);
+            } else {
+                params.delete('search_field');
+            }
+            params.delete('page');
+            window.location.search = params.toString();
+        }
     });
 
     // 신규 원료 - 우측 패널에 AJAX로 등록 폼 로드

@@ -18,12 +18,14 @@ function changePerPage(perPage) {
 document.getElementById('product-search').addEventListener('keyup', function(e) {
     if (e.key === 'Enter') {
         const query = this.value.trim();
-        const filterParam = (PE_FILTER_TYPE && PE_FILTER_TYPE !== 'ALL') ? `&filter=${PE_FILTER_TYPE}` : '';
-        if (query) {
-            window.location.href = `${PE_EXPLORER_URL}?q=${encodeURIComponent(query)}${filterParam}`;
-        } else {
-            window.location.href = `${PE_EXPLORER_URL}${filterParam ? '?' + filterParam.slice(1) : ''}`;
-        }
+        const fieldEl = document.getElementById('product-search-field');
+        const searchField = fieldEl ? fieldEl.value : 'all';
+        const params = new URLSearchParams();
+        if (query) params.set('q', query);
+        if (searchField && searchField !== 'all') params.set('search_field', searchField);
+        if (PE_FILTER_TYPE && PE_FILTER_TYPE !== 'ALL') params.set('filter', PE_FILTER_TYPE);
+        const qs = params.toString();
+        window.location.href = qs ? `${PE_EXPLORER_URL}?${qs}` : PE_EXPLORER_URL;
     }
 });
 

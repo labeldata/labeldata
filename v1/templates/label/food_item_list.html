@@ -280,16 +280,33 @@
 <div class="product-explorer-container">
     <!-- 필터 및 검색 바 -->
     <div class="filter-toolbar">
-        <form method="get" action="" class="d-flex align-items-center" style="gap: 12px; flex: 1;" id="searchForm">
+        <form method="get" action="" class="d-flex align-items-center w-100" style="gap: 12px;" id="searchForm">
             <input type="hidden" name="food_category" value="{{ food_category }}">
-            <!-- 통합 검색: 모드에 따라 다른 placeholder -->
-            <div class="input-group" style="max-width: 100%;">
+            <!-- 검색 필드 선택 -->
+            <select name="search_field" id="search-field-select" class="form-select form-select-sm" style="width: 110px; flex-shrink: 0; font-size: 13px;">
+                {% if imported_mode %}
+                <option value="all" {% if search_field == 'all' or not search_field %}selected{% endif %}>전체</option>
+                <option value="prduct_korean_nm" {% if search_field == 'prduct_korean_nm' %}selected{% endif %}>제품명</option>
+                <option value="itm_nm" {% if search_field == 'itm_nm' %}selected{% endif %}>식품유형</option>
+                <option value="xport_ntncd_nm" {% if search_field == 'xport_ntncd_nm' %}selected{% endif %}>수출국</option>
+                <option value="bsn_ofc_name" {% if search_field == 'bsn_ofc_name' %}selected{% endif %}>수입업체명</option>
+                <option value="ovsmnfst_nm" {% if search_field == 'ovsmnfst_nm' %}selected{% endif %}>제조사명</option>
+                {% else %}
+                <option value="all" {% if search_field == 'all' or not search_field %}selected{% endif %}>전체</option>
+                <option value="prdlst_nm" {% if search_field == 'prdlst_nm' %}selected{% endif %}>제품명</option>
+                <option value="prdlst_report_no" {% if search_field == 'prdlst_report_no' %}selected{% endif %}>품목보고번호</option>
+                <option value="prdlst_dcnm" {% if search_field == 'prdlst_dcnm' %}selected{% endif %}>식품유형</option>
+                <option value="bssh_nm" {% if search_field == 'bssh_nm' %}selected{% endif %}>제조사명</option>
+                {% endif %}
+            </select>
+            <!-- 통합 검색 -->
+            <div class="input-group" style="flex: 1;">
                 <span class="input-group-text bg-white border-end-0" style="font-size: 12px;"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" id="product-search" name="q" class="form-control border-start-0 ps-0" 
-                       placeholder="{% if imported_mode %}제품명, 식품유형, 수출국, 수입업체명, 제조사명 중 검색어를 1개 이상 입력하세요{% else %}제품명, 품목보고번호, 식품유형, 제조사명 중 검색어를 1개 이상 입력하세요{% endif %}" 
+                <input type="text" id="product-search" name="q" class="form-control border-start-0 ps-0"
+                       placeholder="{% if imported_mode %}제품명, 식품유형, 수출국, 수입업체명, 제조사명 중 검색어를 입력하세요{% else %}제품명, 품목보고번호, 식품유형, 제조사명 중 검색어를 입력하세요{% endif %}"
                        value="{{ search_query|default:'' }}" style="font-size: 13px;">
             </div>
-            
+
             <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
                 <i class="bi bi-search me-1"></i>검색
             </button>
@@ -298,15 +315,16 @@
                 초기화
             </a>
             {% endif %}
+            <!-- 페이지당 항목 수 (form 안에 위치해야 submit 시 전달됨) -->
+            <div class="d-flex align-items-center gap-1" style="flex-shrink: 0;">
+                <span class="text-muted small" style="white-space: nowrap;">페이지당:</span>
+                <select id="per-page-select" name="items_per_page" class="form-select form-select-sm" style="width: 70px;">
+                    <option value="25" {% if items_per_page == 25 %}selected{% endif %}>25</option>
+                    <option value="50" {% if items_per_page == 50 %}selected{% endif %}>50</option>
+                    <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100</option>
+                </select>
+            </div>
         </form>
-        <div class="ms-auto d-flex align-items-center gap-2" style="padding-right: 16px;">
-            <span class="text-muted small">페이지당:</span>
-            <select id="per-page-select" name="per_page" class="form-select form-select-sm" style="width: 70px;">
-                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-            </select>
-        </div>
     </div>
 
     <!-- 제품 데이터 그리드 -->
@@ -402,27 +420,27 @@
             <ul class="pagination mb-0">
                 {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page=1">«</a>
+                        <a class="page-link" href="?page=1{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">«</a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹</a>
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">‹</a>
                     </li>
                 {% endif %}
-                
+
                 {% for num in page_obj.paginator.page_range %}
                     {% if page_obj.number == num %}
                         <li class="page-item active"><span class="page-link">{{ num }}</span></li>
                     {% elif num > page_obj.number|add:'-5' and num < page_obj.number|add:'5' %}
-                        <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ num }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">{{ num }}</a></li>
                     {% endif %}
                 {% endfor %}
-                
+
                 {% if page_obj.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">›</a>
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">›</a>
                     </li>
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">»</a>
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if querystring_without_page %}&{{ querystring_without_page }}{% endif %}">»</a>
                     </li>
                 {% endif %}
             </ul>
