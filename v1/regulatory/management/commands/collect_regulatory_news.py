@@ -103,12 +103,24 @@ class Command(BaseCommand):
             new_items = self._collect(limit)
 
         # ── 2단계: AI 파싱 (신규 + 기존 미분석 항목 포함) ──────────────────
+        newly_parsed = []
         if not match_only:
             unparsed_qs = RegulatoryNews.objects.filter(ai_parsed=False)
-            self._parse_ai(unparsed_qs, ai_delay)
+            newly_parsed = self._parse_ai(unparsed_qs, ai_delay)
 
         # ── 3단계: 매칭 ─────────────────────────────────────────────────────
-        target_qs = RegulatoryNews.objects.filter(ai_parsed=True)
+        # --match-only: 전체 재매칭 / 일반 실행: 이번에 파싱된 것만 매칭
+        if match_only:
+            target_qs = RegulatoryNews.objects.filter(ai_parsed=True)
+        else:
+            if not newly_parsed:
+                self.stdout.write('  → 매칭 대상 없음 (신규 파싱 항목 없음)')
+                total_matches = 0
+                self.stdout.write(self.style.SUCCESS(
+                    f'완료: 신규 수집 {len(new_items)}건 / 매칭 {total_matches}건'
+                ))
+                return
+            target_qs = RegulatoryNews.objects.filter(pk__in=[n.pk for n in newly_parsed])
         total_matches = self._run_matching(target_qs)
 
         self.stdout.write(self.style.SUCCESS(
@@ -214,12 +226,12 @@ class Command(BaseCommand):
         return converted
 
     # 행정처분 서비스는 업체 대상이므로 AI 식품원료 파싱 불필요
-    def _parse_ai(self, qs, ai_delay: float):
-        """AI 파싱 단계"""
+    def _parse_ai(self, qs, ai_delay: float) -> list:
+        """AI 파싱 단계 — 파싱 완료된 RegulatoryNews 목록 반환 (매칭 대상으로 사용)"""
         items = list(qs)
         if not items:
             self.stdout.write('  → AI 파싱 대상 없음')
-            return
+            return []
 
         admin_items = [n for n in items if any(n.external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)]
         parse_items = [n for n in items if not any(n.external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)]
@@ -233,10 +245,10 @@ class Command(BaseCommand):
 
         if not parse_items:
             self.stdout.write('  → AI 파싱 대상 없음')
-            return
+            return admin_items  # 행정처분도 매칭 대상에 포함
 
         self.stdout.write(f'  → AI 파싱 중 ({len(parse_items)}건)...')
-        parsed_count = 0
+        parsed_ok = []
 
         for news in parse_items:
             try:
@@ -255,9 +267,9 @@ class Command(BaseCommand):
                     'ai_summary', 'risk_level', 'violation_type', 'ai_parsed',
                 ])
 
-                parsed_count += 1
+                parsed_ok.append(news)
                 self.stdout.write(
-                    f'     [{parsed_count}/{len(parse_items)}] {news.product_name[:30]} '
+                    f'     [{len(parsed_ok)}/{len(parse_items)}] {news.product_name[:30]} '
                     f'→ 키워드={result["keywords"][:3]}'
                 )
                 time.sleep(ai_delay)
@@ -265,7 +277,8 @@ class Command(BaseCommand):
             except Exception as exc:
                 logger.error(f'[AI 파싱] {news.external_id} 오류: {exc}')
 
-        self.stdout.write(self.style.SUCCESS(f'     AI 파싱 완료: {parsed_count}건'))
+        self.stdout.write(self.style.SUCCESS(f'     AI 파싱 완료: {len(parsed_ok)}건'))
+        return admin_items + parsed_ok  # 행정처분 포함하여 매칭 대상 반환
 
     def _run_matching(self, qs) -> int:
         """매칭 단계"""
@@ -274,22 +287,27 @@ class Command(BaseCommand):
             self.stdout.write('  → 매칭 대상 없음')
             return 0
 
-        self.stdout.write(f'  → 매칭 중 ({len(items)}건)...')
+        total_items = len(items)
+        self.stdout.write(f'  → 매칭 중 ({total_items}건)...')
         total = 0
+        PROGRESS_INTERVAL = 100  # N건마다 진행률 출력
 
-        for news in items:
+        for idx, news in enumerate(items, 1):
             try:
                 count = run_matching_for_all_users(news)
                 if count > 0:
                     self.stdout.write(
                         self.style.WARNING(
-                            f'     ⚠️  [{news.product_name[:30]}] '
+                            f'     ⚠️  [{idx}/{total_items}] [{news.product_name[:30]}] '
                             f'→ {count}개 사용자-제품 매칭됨'
                         )
                     )
                 total += count
             except Exception as exc:
                 logger.error(f'[매칭] {news.external_id} 오류: {exc}')
+
+            if idx % PROGRESS_INTERVAL == 0:
+                self.stdout.write(f'     진행: {idx}/{total_items}건 처리 중...')
 
         self.stdout.write(self.style.SUCCESS(f'     매칭 완료: {total}건'))
         return total
