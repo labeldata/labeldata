@@ -2,15 +2,38 @@
 Management Command: collect_regulatory_news
 PythonAnywhere 스케줄러에 등록하여 매일 오전 실행
 
-사용법:
-  python manage.py collect_regulatory_news           # 전체 실행
-  python manage.py collect_regulatory_news --source domestic   # 국내만
-  python manage.py collect_regulatory_news --source import     # 수입만
-  python manage.py collect_regulatory_news --parse-only        # 이미 수집된 것 중 AI 미분석 항목만 AI 파싱
-  python manage.py collect_regulatory_news --match-only        # AI 분석 완료 건에 대해 매칭만 재실행
+━━━ 수집 대상 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[서버 API] 식품안전나라 OpenAPI — 해외 IP 무관하게 직접 수집
+  I2620  검사부적합(국내)
+  I2640  검사부적합(농산물)
+  I0490  회수·판매중지(국내)
+  I0470  행정처분
+  I0480  행정처분(제조가공업)
+  I0482  행정처분(수입영업자)   ← 수입 행정처분도 API로 함께 수집
+
+[로컬→서버 JSON] impfood.mfds.go.kr AJAX — 해외 IP 차단 대상
+  로컬 PC에서 local_uploader/import_scraper.py 실행 후 서버에 JSON 업로드
+  → 이 명령 실행 시 new_import_data.json 파일이 있으면 자동으로 DB에 반영
+  수입식품정보마루 수입 회수·판매중지   (CFCFF01F01)
+  수입식품정보마루 수입식품 부적합      (CFCEE01F01)
+
+━━━ 사용법 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  python manage.py collect_regulatory_news              # 전체 실행 (스케줄러 기본)
+  python manage.py collect_regulatory_news --parse-only # AI 미분석 항목만 파싱
+  python manage.py collect_regulatory_news --match-only # 매칭만 재실행
+  python manage.py collect_regulatory_news --limit 5   # 테스트: 서비스당 최대 5건
+
+━━━ 매일 작업 흐름 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [로컬 PC, 필요 시] python local_uploader/import_scraper.py
+      → 수입 회수·부적합 수집 후 new_import_data.json 을 PA 서버에 업로드
+  [PA 스케줄러, 매일] python manage.py collect_regulatory_news
+      → JSON 파일 자동 감지·DB 반영 → API 수집 → AI 파싱 → 매칭
 """
+import json
 import logging
+import os
 import time
+from datetime import datetime
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -25,17 +48,17 @@ from v1.regulatory.services.matcher import run_matching_for_all_users
 
 logger = logging.getLogger(__name__)
 
+# 로컬 PC에서 업로드하는 수입 AJAX 데이터 파일 경로
+IMPORT_JSON_PATH = '/home/labeldata/mysite/new_import_data.json'
+
+# 행정처분 external_id 접두사 — 업체 단위 처분이므로 AI 원료 파싱 불필요
+_ADMIN_DISPOSAL_PREFIXES = ('I0470-', 'I0480-', 'I0482-')
+
 
 class Command(BaseCommand):
     help = '부적합 정보를 수집하고 내 원료/제품과 매칭합니다.'
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            '--source',
-            choices=['domestic', 'import', 'imp_insp', 'all'],
-            default='all',
-            help='수집 대상 (domestic/import/imp_insp/all, 기본: all)',
-        )
         parser.add_argument(
             '--parse-only',
             action='store_true',
@@ -60,10 +83,10 @@ class Command(BaseCommand):
             type=int,
             default=0,
             dest='limit',
-            help='테스트용 수집 제한: 국내=서비스당 최대 건수, 수입=최대 페이지수 (0=제한없음)',
+            help='테스트용 수집 제한: 서비스당 최대 건수 (0=제한없음)',
         )
+
     def handle(self, *args, **options):
-        source     = options['source']
         parse_only = options['parse_only']
         match_only = options['match_only']
         ai_delay   = options['ai_delay']
@@ -71,13 +94,13 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.NOTICE(
             f'[{timezone.now():%Y-%m-%d %H:%M}] 규제 모니터링 수집 시작 '
-            f'(source={source}, parse_only={parse_only}, match_only={match_only}, limit={limit or "ALL"})'
+            f'(parse_only={parse_only}, match_only={match_only}, limit={limit or "ALL"})'
         ))
 
         # ── 1단계: 수집 ─────────────────────────────────────────────────────
         new_items = []
         if not parse_only and not match_only:
-            new_items = self._collect(source, limit)
+            new_items = self._collect(limit)
 
         # ── 2단계: AI 파싱 (신규 + 기존 미분석 항목 포함) ──────────────────
         if not match_only:
@@ -85,12 +108,7 @@ class Command(BaseCommand):
             self._parse_ai(unparsed_qs, ai_delay)
 
         # ── 3단계: 매칭 ─────────────────────────────────────────────────────
-        if match_only:
-            target_qs = RegulatoryNews.objects.filter(ai_parsed=True)
-        else:
-            # 방금 파싱한 것들
-            target_qs = RegulatoryNews.objects.filter(ai_parsed=True)
-
+        target_qs = RegulatoryNews.objects.filter(ai_parsed=True)
         total_matches = self._run_matching(target_qs)
 
         self.stdout.write(self.style.SUCCESS(
@@ -99,41 +117,34 @@ class Command(BaseCommand):
 
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _collect(self, source: str, limit: int = 0) -> list:
-        """수집 단계"""
+    def _collect(self, limit: int = 0) -> list:
+        """수집 단계: JSON 파일(수입 AJAX) + OpenAPI(국내·수입행정처분)"""
         raw_items = []
 
-        if source in ('domestic', 'all'):
-            self.stdout.write('  → 국내 부적합 수집 중 (I2620/I2640/I0490/I0470/I0480)...')
-            domestic_items = collect_domestic_news(max_rows=limit)
-            raw_items.extend(domestic_items)
-            self.stdout.write(self.style.SUCCESS(f'     국내 신규: {len(domestic_items)}건'))
+        # ── 수입 AJAX 데이터 (로컬 PC 업로드 JSON) ───────────────────────────
+        json_items = self._load_import_json()
+        raw_items.extend(json_items)
 
-        if source in ('import', 'all'):
-            self.stdout.write('  → 수입 회수·판매중지 수집 중 (impfood.mfds.go.kr/CFCFF01F01)...')
-            import_items = collect_import_news(max_pages=limit)
-            raw_items.extend(import_items)
-            self.stdout.write(self.style.SUCCESS(f'     수입 회수 신규: {len(import_items)}건'))
+        # ── 국내 부적합 OpenAPI ───────────────────────────────────────────────
+        self.stdout.write('  → 국내 부적합 수집 중 (I2620/I2640/I0490/I0470/I0480)...')
+        domestic_items = collect_domestic_news(max_rows=limit)
+        raw_items.extend(domestic_items)
+        self.stdout.write(self.style.SUCCESS(f'     국내 신규: {len(domestic_items)}건'))
 
-            self.stdout.write('  → 수입판매업 행정처분 수집 중 (I0482)...')
-            imp_admin_items = collect_import_admin_news(max_rows=limit)
-            raw_items.extend(imp_admin_items)
-            self.stdout.write(self.style.SUCCESS(f'     수입행정처분 신규: {len(imp_admin_items)}건'))
+        # ── 수입 행정처분 OpenAPI (I0482) ────────────────────────────────────
+        self.stdout.write('  → 수입판매업 행정처분 수집 중 (I0482)...')
+        imp_admin_items = collect_import_admin_news(max_rows=limit)
+        raw_items.extend(imp_admin_items)
+        self.stdout.write(self.style.SUCCESS(f'     수입행정처분 신규: {len(imp_admin_items)}건'))
 
-        if source in ('imp_insp', 'all'):
-            self.stdout.write('  → 수입식품부적합 수집 중 (impfood.mfds.go.kr/CFCEE01F01)...')
-            imp_insp_items = collect_import_insp_news(max_pages=limit)
-            raw_items.extend(imp_insp_items)
-            self.stdout.write(self.style.SUCCESS(f'     수입부적합 신규: {len(imp_insp_items)}건'))
-
-        # DB 저장
+        # ── DB 저장 ───────────────────────────────────────────────────────────
         saved = []
         for item in raw_items:
             try:
-                ext_id = item['external_id']
+                ext_id     = item['external_id']
                 api_source = item.get('api_source', '')
-                # 행정처분(I0470/I0480)은 업체 단위 처분 → AI 원료 파싱 불필요
-                is_admin = ext_id.startswith('I0470-') or ext_id.startswith('I0480-') or ext_id.startswith('I0482-')
+                is_admin   = any(ext_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)
+
                 news, created = RegulatoryNews.objects.get_or_create(
                     external_id=ext_id,
                     source=item['source'],
@@ -147,7 +158,6 @@ class Command(BaseCommand):
                         'ai_parsed':        is_admin,
                     },
                 )
-                # 기존 레코드에 api_source가 없으면 채움
                 if not created and not news.api_source and api_source:
                     news.api_source = api_source
                     news.save(update_fields=['api_source'])
@@ -158,9 +168,52 @@ class Command(BaseCommand):
 
         return saved
 
-    # 행정처분 서비스는 업체 대상이므로 AI 식품원료 파싱 불필요 (국내 + 수입판매업)
-    _ADMIN_DISPOSAL_PREFIXES = ('I0470-', 'I0480-', 'I0482-')
+    def _load_import_json(self) -> list:
+        """
+        로컬 PC 업로드 JSON 파일 감지 및 로드.
+        파일이 없으면 빈 리스트 반환. 처리 후 파일 삭제.
+        """
+        if not os.path.exists(IMPORT_JSON_PATH):
+            self.stdout.write('  → 수입 JSON 파일 없음 (로컬 업로드 미실행)')
+            return []
 
+        try:
+            with open(IMPORT_JSON_PATH, 'r', encoding='utf-8') as f:
+                items = json.load(f)
+        except Exception as exc:
+            logger.error(f'[JSON 로드] 파일 읽기 오류: {exc}')
+            return []
+
+        if not items:
+            self.stdout.write('  → 수입 JSON 파일이 비어 있음')
+            os.remove(IMPORT_JSON_PATH)
+            return []
+
+        self.stdout.write(self.style.SUCCESS(
+            f'  → 수입 JSON 파일 감지: {len(items)}건 로드 ({IMPORT_JSON_PATH})'
+        ))
+
+        # event_date 문자열 → date 객체 변환
+        converted = []
+        for item in items:
+            raw_date = item.get('event_date')
+            if raw_date:
+                try:
+                    item['event_date'] = datetime.strptime(raw_date[:10], '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    item['event_date'] = None
+            converted.append(item)
+
+        # 처리 완료 후 파일 삭제 (다음 실행에서 중복 처리 방지)
+        try:
+            os.remove(IMPORT_JSON_PATH)
+            self.stdout.write(f'     JSON 파일 삭제 완료')
+        except Exception as exc:
+            logger.warning(f'[JSON 로드] 파일 삭제 실패: {exc}')
+
+        return converted
+
+    # 행정처분 서비스는 업체 대상이므로 AI 식품원료 파싱 불필요
     def _parse_ai(self, qs, ai_delay: float):
         """AI 파싱 단계"""
         items = list(qs)
@@ -168,9 +221,8 @@ class Command(BaseCommand):
             self.stdout.write('  → AI 파싱 대상 없음')
             return
 
-        # 행정처분 레코드는 ai_parsed=True, 키워드 빈값으로 즉시 처리
-        admin_items = [n for n in items if any(n.external_id.startswith(p) for p in self._ADMIN_DISPOSAL_PREFIXES)]
-        parse_items = [n for n in items if not any(n.external_id.startswith(p) for p in self._ADMIN_DISPOSAL_PREFIXES)]
+        admin_items = [n for n in items if any(n.external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)]
+        parse_items = [n for n in items if not any(n.external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)]
 
         if admin_items:
             RegulatoryNews.objects.filter(pk__in=[n.pk for n in admin_items]).update(
