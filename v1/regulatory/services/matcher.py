@@ -34,12 +34,17 @@ MIN_KEYWORD_LEN: int = 2
 _WORD_SPLIT_RE = re.compile(r'[\s&/,\(\)\.\[\]\{\}\-\u300c\u300d\u3010\u3011\xb7]+')
 
 
-def find_affected_products(news: RegulatoryNews, user: User) -> list[dict]:
+def find_affected_products(
+    news: RegulatoryNews,
+    user: User,
+    prefetched_boms: list | None = None,
+    prefetched_ingredients: list | None = None,
+) -> list[dict]:
     """
     뉴스의 ai_issues (또는 ai_keywords 폴백)를 해당 사용자의 BOM + 원료 보관함에서 퍼지 매칭.
 
-    ai_issues가 있으면 관련도 카운트 기반 위해도 스코어링 적용.
-    (제조사·원산지·제품명·식품유형 일치 개수로 HIGH/MED/LOW 판정)
+    prefetched_boms / prefetched_ingredients: build_user_match_cache() 로 미리 로드한
+        데이터를 전달하면 DB 재조회 없이 메모리에서 바로 사용한다.
 
     Returns:
         list of {
@@ -47,10 +52,10 @@ def find_affected_products(news: RegulatoryNews, user: User) -> list[dict]:
             'matched_bom':         ProductBOM instance | None,
             'matched_keyword':     str,
             'matched_ingredient':  str,
-            'score':               float,      # 텍스트 유사도 점수
-            'risk_score':          int,        # 관련도 종합 점수
-            'risk_level':          str,        # HIGH / MED / LOW
-            'risk_reasons':        list[str],  # 매칭 근거
+            'score':               float,
+            'risk_score':          int,
+            'risk_level':          str,
+            'risk_reasons':        list[str],
         }
     """
     from v1.bom.models import ProductBOM
@@ -86,7 +91,6 @@ def find_affected_products(news: RegulatoryNews, user: User) -> list[dict]:
 
     def _update_best(product, bom, keyword, ingredient, score, risk_dict):
         pid = product.my_label_id
-        # 위해도 점수(risk_score) 기준 최고값 유지
         cur_risk = best.get(pid, {}).get('risk_score', -1)
         if pid not in best or risk_dict['score'] > cur_risk:
             best[pid] = {
@@ -100,8 +104,8 @@ def find_affected_products(news: RegulatoryNews, user: User) -> list[dict]:
                 'risk_reasons':       risk_dict['reasons'],
             }
 
-    # ① BOM 원료명 매칭
-    user_boms = (
+    # ① BOM 원료명 매칭 (캐시 우선)
+    user_boms = prefetched_boms if prefetched_boms is not None else list(
         ProductBOM.objects
         .filter(parent_label__user_id=user, parent_label__delete_YN='N')
         .select_related('parent_label')
@@ -120,11 +124,11 @@ def find_affected_products(news: RegulatoryNews, user: User) -> list[dict]:
             if score >= MATCH_THRESHOLD:
                 risk_dict = calculate_risk_score(bom, issue)
                 if risk_dict['level'] == 'SAFE':
-                    continue  # 원산지가 확실히 다르면 무시
+                    continue
                 _update_best(bom.parent_label, bom, keyword, bom.ingredient_name, score, risk_dict)
 
-    # ② 원료 보관함(MyIngredient) 매칭 → 해당 원료를 쓰는 완제품 추적
-    user_ingredients = (
+    # ② 원료 보관함(MyIngredient) 매칭 (캐시 우선)
+    user_ingredients = prefetched_ingredients if prefetched_ingredients is not None else list(
         MyIngredient.objects
         .filter(user_id=user, delete_YN='N')
         .prefetch_related('bom_usages__parent_label')
@@ -289,7 +293,11 @@ def save_matches(news: RegulatoryNews, matches: list[dict]) -> int:
     return saved
 
 
-def find_matching_ingredients_unlinked(news: RegulatoryNews, user: User) -> list[dict]:
+def find_matching_ingredients_unlinked(
+    news: RegulatoryNews,
+    user: User,
+    prefetched_ingredients: list | None = None,
+) -> list[dict]:
     """
     어떤 제품 BOM에도 연결되지 않은 원료 보관함(MyIngredient) 항목 중
     뉴스 ai_issues/ai_keywords와 퍼지 매칭되는 원료 정보 목록 반환.
@@ -320,13 +328,19 @@ def find_matching_ingredients_unlinked(news: RegulatoryNews, user: User) -> list
     if not base_issues:
         return []
 
-    # BOM에 연결된 적 없는 원료 보관함 항목만
-    unlinked_ings = list(
-        MyIngredient.objects
-        .filter(user_id=user, delete_YN='N', bom_usages__isnull=True)
-        .only('my_ingredient_id', 'prdlst_nm', 'ingredient_display_name',
-              'bssh_nm', 'prdlst_dcnm')
-    )
+    # BOM에 연결된 적 없는 원료 보관함 항목만 (캐시 우선)
+    if prefetched_ingredients is not None:
+        unlinked_ings = [
+            ing for ing in prefetched_ingredients
+            if not ing.bom_usages.all().exists()  # type: ignore[attr-defined]
+        ]
+    else:
+        unlinked_ings = list(
+            MyIngredient.objects
+            .filter(user_id=user, delete_YN='N', bom_usages__isnull=True)
+            .only('my_ingredient_id', 'prdlst_nm', 'ingredient_display_name',
+                  'bssh_nm', 'prdlst_dcnm')
+        )
 
     results: list[dict] = []
     seen_ids: set[int] = set()
@@ -420,21 +434,84 @@ def save_ingredient_matches(news: RegulatoryNews, user: User,
     return saved
 
 
-def run_matching_for_all_users(news: RegulatoryNews) -> int:
+def build_user_match_cache() -> dict:
+    """
+    모든 활성 사용자의 BOM·원료 보관함 데이터를 한 번에 조회하여 캐시 반환.
+    매칭 배치 실행 전 1회 호출하면 뉴스 건수 × 사용자 수만큼 반복되던
+    DB 쿼리를 사용자 수만큼으로 줄일 수 있다.
+
+    반환 형식:
+        {
+            user_id: {
+                'user':        User instance,
+                'boms':        list[ProductBOM],
+                'ingredients': list[MyIngredient],
+            },
+            ...
+        }
+    """
+    from v1.bom.models import ProductBOM
+    from v1.label.models import MyIngredient
+
+    cache = {}
+    for user in User.objects.filter(is_active=True):
+        boms = list(
+            ProductBOM.objects
+            .filter(parent_label__user_id=user, parent_label__delete_YN='N')
+            .select_related('parent_label')
+            .only('bom_id', 'ingredient_name', 'origin', 'manufacturer', 'food_type',
+                  'parent_label_id', 'parent_label__my_label_id',
+                  'parent_label__my_label_name', 'parent_label__user_id',
+                  'parent_label__delete_YN')
+        )
+        ingredients = list(
+            MyIngredient.objects
+            .filter(user_id=user, delete_YN='N')
+            .prefetch_related('bom_usages__parent_label')
+        )
+        cache[user.pk] = {'user': user, 'boms': boms, 'ingredients': ingredients}
+    return cache
+
+
+def run_matching_for_all_users(news: RegulatoryNews, user_cache: dict | None = None) -> int:
     """
     모든 활성 사용자에 대해 매칭 실행 (제품 매칭 + 원료 보관함 단독 매칭).
+
+    user_cache: build_user_match_cache() 결과. 배치 처리 시 전달하면
+                뉴스 1건마다 DB를 재조회하지 않아 CPU/쿼리 수를 크게 줄인다.
+                None 이면 기존 방식(건별 DB 조회)으로 동작.
+
     Returns: 전체 신규 매칭 건수
     """
     total = 0
-    for user in User.objects.filter(is_active=True):
-        # ① 제품 BOM 매칭
-        product_matches = find_affected_products(news, user)
-        if product_matches:
-            total += save_matches(news, product_matches)
-        # ② 원료 보관함 단독 매칭
-        ing_matches = find_matching_ingredients_unlinked(news, user)
-        if ing_matches:
-            total += save_ingredient_matches(news, user, ing_matches)
+
+    if user_cache is not None:
+        # 캐시 사용: DB 재조회 없이 메모리에서 바로 매칭
+        for entry in user_cache.values():
+            user = entry['user']
+            product_matches = find_affected_products(
+                news, user,
+                prefetched_boms=entry['boms'],
+                prefetched_ingredients=entry['ingredients'],
+            )
+            if product_matches:
+                total += save_matches(news, product_matches)
+            ing_matches = find_matching_ingredients_unlinked(
+                news, user,
+                prefetched_ingredients=entry['ingredients'],
+            )
+            if ing_matches:
+                total += save_ingredient_matches(news, user, ing_matches)
+    else:
+        # 캐시 없음: 기존 방식(signals 등 단건 호출 시)
+        for user in User.objects.filter(is_active=True):
+            product_matches = find_affected_products(news, user)
+            if product_matches:
+                total += save_matches(news, product_matches)
+            ing_matches = find_matching_ingredients_unlinked(news, user)
+            if ing_matches:
+                total += save_ingredient_matches(news, user, ing_matches)
+
     return total
 
 

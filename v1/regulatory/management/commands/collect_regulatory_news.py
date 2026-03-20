@@ -44,7 +44,7 @@ from v1.regulatory.services.collector import (
     collect_import_insp_news, collect_import_admin_news,
 )
 from v1.regulatory.services.ai_parser import extract_keywords
-from v1.regulatory.services.matcher import run_matching_for_all_users
+from v1.regulatory.services.matcher import build_user_match_cache, run_matching_for_all_users
 
 logger = logging.getLogger(__name__)
 
@@ -281,20 +281,26 @@ class Command(BaseCommand):
         return admin_items + parsed_ok  # 행정처분 포함하여 매칭 대상 반환
 
     def _run_matching(self, qs) -> int:
-        """매칭 단계"""
+        """매칭 단계 — 사용자 BOM/원료를 1회 pre-fetch 후 재사용"""
         items = list(qs)
         if not items:
             self.stdout.write('  → 매칭 대상 없음')
             return 0
 
         total_items = len(items)
-        self.stdout.write(f'  → 매칭 중 ({total_items}건)...')
+
+        # 사용자 데이터 1회 pre-fetch (DB 쿼리: 사용자 수만큼만)
+        self.stdout.write('  → 사용자 데이터 캐싱 중...')
+        user_cache = build_user_match_cache()
+        self.stdout.write(f'     캐시 완료: {len(user_cache)}명')
+
+        self.stdout.write(f'  → 매칭 중 ({total_items}건 × {len(user_cache)}명)...')
         total = 0
-        PROGRESS_INTERVAL = 100  # N건마다 진행률 출력
+        PROGRESS_INTERVAL = 50
 
         for idx, news in enumerate(items, 1):
             try:
-                count = run_matching_for_all_users(news)
+                count = run_matching_for_all_users(news, user_cache=user_cache)
                 if count > 0:
                     self.stdout.write(
                         self.style.WARNING(
