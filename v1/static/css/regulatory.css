@@ -361,7 +361,21 @@ details[open] .rd-ai-sum::after { content:"▾"; }
 .rd-bom-item   { display:flex; align-items:center; gap:4px; font-size:11px; }
 .rd-no-bom     { font-size:11px; color:#9aa0a6; padding:4px 10px 7px; border-top:1px solid #f1f3f4; }
 
-/* ── 25. 등급판정 기준 (접기) ──────────────────────────────────── */
+/* ── 25. 원본 수집 데이터 (접기) ────────────────────────────────── */
+.rd-raw-details  { border-bottom:1px solid #e8eaed; }
+.rd-raw-sum      { display:flex; align-items:center; gap:6px; padding:7px 18px;
+                   cursor:pointer; list-style:none; background:#fafafa;
+                   font-size:12px; font-weight:600; color:#5f6368; }
+.rd-raw-sum::-webkit-details-marker { display:none; }
+.rd-raw-sum::after  { content:"▸"; margin-left:auto; color:#9aa0a6; font-size:10px; }
+details[open] .rd-raw-sum::after { content:"▾"; }
+.rd-raw-body     { padding:8px 18px 12px; background:#fff; }
+.rd-raw-table    { width:100%; border-collapse:collapse; font-size:12px; line-height:1.5; }
+.rd-raw-key      { padding:2px 10px 2px 0; color:#5f6368; font-weight:600;
+                   white-space:nowrap; vertical-align:top; width:38%; }
+.rd-raw-val      { padding:2px 0; color:#202124; word-break:break-word; }
+
+/* ── 26. 등급판정 기준 (접기) ──────────────────────────────────── */
 .rd-crit-details { border-bottom:1px solid #f1f3f4; }
 .rd-crit-sum     { font-size:11px; color:#9aa0a6; cursor:pointer; padding:5px 18px;
                    list-style:none; background:#fafafa; display:flex; align-items:center; gap:4px; }

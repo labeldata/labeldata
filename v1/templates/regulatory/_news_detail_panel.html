@@ -62,6 +62,37 @@
     {% endif %}
   </div>
 
+  {# ══ 원본 수집 데이터 (접기) ══ #}
+  {% if news.raw_detail_text %}
+  <details class="rd-raw-details">
+    <summary class="rd-raw-sum"><i class="bi bi-file-text"></i> 원본 수집 데이터</summary>
+    <div class="rd-raw-body">
+      <div class="rd-raw-fields" id="rrf-{{ news.id }}"></div>
+    </div>
+  </details>
+  <script>
+  (function(){
+    var el = document.getElementById('rrf-{{ news.id }}');
+    if (!el) return;
+    var raw = "{{ news.raw_detail_text|escapejs }}";
+    var rows = raw.split('\n');
+    var html = '<table class="rd-raw-table">';
+    rows.forEach(function(line){
+      line = line.trim();
+      if (!line) return;
+      var idx = line.indexOf(': ');
+      var key = idx > -1 ? line.substring(0, idx) : '';
+      var val = idx > -1 ? line.substring(idx + 2) : line;
+      if (!val) return;
+      html += '<tr><td class="rd-raw-key">' + esc(key) + '</td><td class="rd-raw-val">' + esc(val) + '</td></tr>';
+    });
+    html += '</table>';
+    el.innerHTML = html;
+    function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  }());
+  </script>
+  {% endif %}
+
   {# ══ AI 분석 — details 접기/펼치기 ══ #}
   {% if news.ai_parsed %}
   <details class="rd-ai-details">

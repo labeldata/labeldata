@@ -7,7 +7,8 @@ Management Command: sync_import_news  [비상용 유틸리티]
    collect_regulatory_news 스케줄러가 new_import_data.json 파일을 자동으로 감지하여 처리합니다.
 
 비상 시 수동 실행:
-  python manage.py sync_import_news                      # JSON → DB 저장
+  python manage.py sync_import_news                      # JSON → DB 저장 (신규만)
+  python manage.py sync_import_news --update-raw         # 기존 레코드 raw_detail_text·event_date 갱신 (AI/매칭 없음)
   python manage.py sync_import_news --parse-ai           # DB 저장 + AI 파싱/매칭까지
   python manage.py sync_import_news --file /tmp/x.json   # 파일 경로 직접 지정
   python manage.py sync_import_news --keep-file          # 처리 후 파일 유지
@@ -50,11 +51,19 @@ class Command(BaseCommand):
             dest='keep_file',
             help='처리 완료 후 JSON 파일을 삭제하지 않음 (기본: 삭제)',
         )
+        parser.add_argument(
+            '--update-raw',
+            action='store_true',
+            dest='update_raw',
+            help='기존 레코드의 raw_detail_text·event_date를 갱신 (AI 파싱·매칭 없음). '
+                 '필드 추가 후 1회성 백필용.',
+        )
 
     def handle(self, *args, **options):
-        file_path = options['file']
-        run_ai    = options['parse_ai']
-        keep_file = options['keep_file']
+        file_path  = options['file']
+        run_ai     = options['parse_ai']
+        keep_file  = options['keep_file']
+        update_raw = options['update_raw']
 
         # ── JSON 파일 읽기 ─────────────────────────────────────────────────────
         if not os.path.exists(file_path):
@@ -73,10 +82,81 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.NOTICE(f'JSON 파일 로드: {len(items)}건 ({file_path})'))
 
-        # ── DB 저장 ────────────────────────────────────────────────────────────
+        if update_raw:
+            self._update_raw_fields(items)
+        else:
+            self._create_new(items, run_ai)
+
+        # ── JSON 파일 삭제 ─────────────────────────────────────────────────────
+        if not keep_file:
+            try:
+                os.remove(file_path)
+                self.stdout.write(f'JSON 파일 삭제됨: {file_path}')
+            except Exception as exc:
+                logger.warning(f'[sync] 파일 삭제 실패: {exc}')
+
+    def _parse_event_date(self, raw_date):
+        from datetime import datetime
+        if not raw_date:
+            return None
+        try:
+            return datetime.strptime(raw_date[:10], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return None
+
+    def _update_raw_fields(self, items: list):
+        """
+        --update-raw 전용: 기존 레코드의 raw_detail_text·event_date만 갱신.
+        AI 파싱·매칭 없음. 필드 추가 후 1회성 백필용.
+        """
+        updated = skipped = errors = 0
+
+        for item in items:
+            external_id = item.get('external_id', '')
+            source      = item.get('source', RegulatoryNews.SOURCE_IMPORT)
+            if not external_id:
+                errors += 1
+                continue
+            try:
+                news = RegulatoryNews.objects.filter(
+                    source=source, external_id=external_id
+                ).first()
+
+                if not news:
+                    skipped += 1
+                    continue
+
+                new_raw   = item.get('raw_detail_text', '')
+                new_date  = self._parse_event_date(item.get('event_date'))
+                fields_to_update = []
+
+                if new_raw and news.raw_detail_text != new_raw:
+                    news.raw_detail_text = new_raw
+                    fields_to_update.append('raw_detail_text')
+
+                if new_date and news.event_date != new_date:
+                    news.event_date = new_date
+                    fields_to_update.append('event_date')
+
+                if fields_to_update:
+                    news.save(update_fields=fields_to_update)
+                    updated += 1
+                else:
+                    skipped += 1
+
+            except Exception as exc:
+                logger.error(f'[update-raw] {external_id} 오류: {exc}')
+                errors += 1
+
+        self.stdout.write(self.style.SUCCESS(
+            f'\n갱신 완료: 업데이트 {updated}건 / 변경없음 {skipped}건 / 오류 {errors}건'
+        ))
+        self.stdout.write('AI 파싱·매칭은 실행되지 않았습니다.')
+
+    def _create_new(self, items: list, run_ai: bool):
+        """신규 레코드 생성 (기존 방식)"""
         created_news = []
-        skipped = 0
-        errors   = 0
+        skipped = errors = 0
 
         for item in items:
             try:
@@ -85,23 +165,11 @@ class Command(BaseCommand):
                 api_source  = item.get('api_source', '')
 
                 if not external_id:
-                    logger.warning(f'[sync] external_id 없음 → 건너뜀: {item}')
                     errors += 1
                     continue
 
-                # 행정처분은 AI 파싱 불필요 (업체 단위 처분)
-                is_admin = any(external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)
-
-                # event_date: JSON 문자열 → date 객체
-                event_date = None
-                raw_date = item.get('event_date')
-                if raw_date:
-                    from datetime import date as date_type
-                    try:
-                        from datetime import datetime
-                        event_date = datetime.strptime(raw_date[:10], '%Y-%m-%d').date()
-                    except (ValueError, TypeError):
-                        event_date = None
+                is_admin   = any(external_id.startswith(p) for p in _ADMIN_DISPOSAL_PREFIXES)
+                event_date = self._parse_event_date(item.get('event_date'))
 
                 news, created = RegulatoryNews.objects.get_or_create(
                     source=source,
@@ -113,13 +181,10 @@ class Command(BaseCommand):
                         'violation_reason': item.get('violation_reason', ''),
                         'raw_detail_text':  item.get('raw_detail_text', ''),
                         'event_date':       event_date,
-                        # 행정처분은 ai_parsed=True 로 초기화 (파싱 생략)
                         'ai_parsed':        is_admin,
                     },
                 )
-
                 if created:
-                    # api_source 가 비어있는 기존 레코드에도 채워줌
                     if not news.api_source and api_source:
                         news.api_source = api_source
                         news.save(update_fields=['api_source'])
@@ -136,15 +201,6 @@ class Command(BaseCommand):
             f'\n저장 완료: 신규 {len(created_news)}건 / 중복(건너뜀) {skipped}건 / 오류 {errors}건'
         ))
 
-        # ── JSON 파일 삭제 ─────────────────────────────────────────────────────
-        if not keep_file:
-            try:
-                os.remove(file_path)
-                self.stdout.write(f'JSON 파일 삭제됨: {file_path}')
-            except Exception as exc:
-                logger.warning(f'[sync] 파일 삭제 실패: {exc}')
-
-        # ── AI 파싱 + 매칭 ─────────────────────────────────────────────────────
         if not run_ai:
             if created_news:
                 self.stdout.write(self.style.NOTICE(

@@ -81,17 +81,24 @@ def collect_import_recall(max_pages: int = 0) -> list:
             sn = str(row.get('cntntsSn') or '').strip()
             if not sn:
                 continue
-            product  = (row.get('cntntsSj')    or '').strip()
-            company  = (row.get('iemCtntNm2')  or '').strip()
-            reason   = (row.get('iemCtntNm6')  or '').strip()
-            food_type = (row.get('iemCtntNm1') or '').strip()
-            import_no = (row.get('iemCtntNm9') or '').strip()
+            product    = (row.get('cntntsSj')     or '').strip()
+            company    = (row.get('iemCtntNm2')   or '').strip()
+            reason     = (row.get('iemCtntNm6')   or '').strip()
+            food_type  = (row.get('iemCtntNm1')   or '').strip()
+            import_no  = (row.get('iemCtntNm9')   or '').strip()
+            expire_dt  = (row.get('iemCtntNm15')  or '').strip()  # 유통기한/소비기한
+            recall_dt  = (row.get('iemCtntNm16')  or '').strip()  # 회수명령일
+            spec       = (row.get('iemCtntNm12')  or '').strip()  # 규격/용량
+
+            event_date = _parse_date(row, ['iemCtntNm16', 'registDtmYmd'])
 
             detail = _fetch_detail(sn)
             if not detail:
                 parts = [f'제품명: {product}', f'업체명: {company}',
                          f'부적합사유: {reason}', f'식품유형: {food_type}',
-                         f'수입신고번호: {import_no}']
+                         f'수입신고번호: {import_no}',
+                         f'규격/용량: {spec}', f'소비기한: {expire_dt}',
+                         f'회수명령일: {recall_dt}']
                 detail = '\n'.join(p for p in parts if p.split(': ', 1)[1])
 
             results.append({
@@ -101,7 +108,7 @@ def collect_import_recall(max_pages: int = 0) -> list:
                 'company_name': company,
                 'violation_reason': reason,
                 'raw_detail_text': detail,
-                'event_date': None,
+                'event_date': event_date,  # 회수명령일
             })
             time.sleep(0.2)
 
@@ -157,6 +164,7 @@ def collect_import_insp(max_pages: int = 0) -> list:
             country     = (row.get('mnfNtnnm')       or '').strip()
             proc_instt  = (row.get('procsInsttNm')   or '').strip()
             insp_date   = (row.get('impotDtm')       or '').strip()
+            expire_dtm  = (row.get('expireDtm')      or '').strip()  # 제조일자/소비기한
 
             event_date = _parse_date(row, ['impotDtm', 'violtDtm', 'rcvDtm'])
 
@@ -165,13 +173,14 @@ def collect_import_insp(max_pages: int = 0) -> list:
                 parts.append(f'검사원료(수입품목): {product} / {product_eng}')
             elif product:
                 parts.append(f'검사원료(수입품목): {product}')
-            if prod_se:    parts.append(f'제품구분: {prod_se}')
-            if itm_nm:     parts.append(f'품목명(식품유형): {itm_nm}')
-            if country:    parts.append(f'원산지(제조국가): {country}')
-            if company:    parts.append(f'제조/수출회사(제조사): {company}')
-            if violation:  parts.append(f'위반내역: {violation}')
-            if proc_instt: parts.append(f'처리기관: {proc_instt}')
-            if insp_date:  parts.append(f'부적합일자: {insp_date}')
+            if prod_se:     parts.append(f'제품구분: {prod_se}')
+            if itm_nm:      parts.append(f'품목명(식품유형): {itm_nm}')
+            if country:     parts.append(f'원산지(제조국가): {country}')
+            if company:     parts.append(f'제조/수출회사(제조사): {company}')
+            if violation:   parts.append(f'위반내역: {violation}')
+            if proc_instt:  parts.append(f'처리기관: {proc_instt}')
+            if insp_date:   parts.append(f'부적합일자: {insp_date}')
+            if expire_dtm:  parts.append(f'제조일자/소비기한: {expire_dtm}')
 
             results.append({
                 'source': 'import', 'api_source': 'imp_insp',
@@ -259,13 +268,52 @@ def _upload(local_file: Path) -> bool:
 # 메인
 # ─────────────────────────────────────────────────────────────
 
+def _print_fields(label: str, url: str, params: dict, headers: dict):
+    """API 응답의 첫 번째 row에서 전체 필드명과 샘플 값을 출력 (--debug 전용)"""
+    print(f'\n{"="*60}')
+    print(f'[DEBUG] {label} 필드 목록')
+    print(f'{"="*60}')
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=TIMEOUT)
+        resp.raise_for_status()
+        rows = resp.json().get('list') or []
+        if not rows:
+            print('  응답 없음')
+            return
+        row = rows[0]
+        for k, v in row.items():
+            val_preview = str(v)[:60] if v else '(비어있음)'
+            print(f'  {k:<30} = {val_preview}')
+    except Exception as e:
+        print(f'  오류: {e}')
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser(description='수입식품 부적합·회수 수집 후 PA 서버로 전송')
     parser.add_argument('--max-pages', type=int, default=0,
                         help='스크래퍼당 최대 페이지 수 (0=전체)')
     parser.add_argument('--dry-run', action='store_true',
                         help='로컬 저장만, 서버 전송 없음')
+    parser.add_argument('--debug', action='store_true',
+                        help='API 응답 전체 필드명 출력 후 종료 (수집 안 함)')
     args = parser.parse_args()
+
+    if args.debug:
+        _print_fields(
+            '수입 회수·판매중지 (CFCFF01F01)', IMP_LIST_URL,
+            {'page': 1, 'limit': 1, 'gbn': 'N', 'searchInpText': ''},
+            {'User-Agent': _UA, 'Accept': 'application/json, */*; q=0.01',
+             'X-Requested-With': 'XMLHttpRequest', 'Referer': 'https://impfood.mfds.go.kr/'},
+        )
+        _print_fields(
+            '수입식품 부적합 (CFCEE01F01)', IMP_INSP_LIST_URL,
+            {'page': 1, 'limit': 1},
+            {'User-Agent': _UA, 'Accept': 'application/json, */*; q=0.01',
+             'X-Requested-With': 'XMLHttpRequest',
+             'Referer': 'https://impfood.mfds.go.kr/CFCEE01F01'},
+        )
+        return
 
     items = []
     items.extend(collect_import_recall(max_pages=args.max_pages))
