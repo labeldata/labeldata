@@ -3,11 +3,90 @@
    news_list.html + _news_detail_panel.html 통합 CSS
    ================================================================ */
 
-/* ── 1. 전체 레이아웃 (Split View) ─────────────────────────────── */
+/* ── 1. 전체 레이아웃 (필터 바 + Split View) ───────────────────── */
 .v2-content        { padding:0 !important; overflow:hidden !important;
                      display:flex; flex-direction:column; }
+/* 페이지 래퍼 */
+.reg-page          { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+/* 상단 필터 바 (전체 폭) */
+.reg-filter-bar    { background:#fff; border-bottom:2px solid #e8eaed;
+                     flex-shrink:0; position:relative; z-index:50; }
+.rf-main-row,
+.rf-row1           { display:flex; align-items:center; gap:8px;
+                     padding:8px 16px; flex-wrap:nowrap; min-width:0; }
+.rf-row2           { padding:4px 16px 7px; border-top:1px solid #f1f3f4; }
+.rf-search-wrap    { flex:1; min-width:140px; max-width:260px; }
+.rf-date-wrap      { display:flex; align-items:center; gap:3px; flex-shrink:0; }
+.rf-date-wrap .rs-date-input { width:100px !important; flex:0 0 auto !important; min-width:0 !important; }
+.rf-date-wrap .rs-date-clear { flex-shrink:0; }
+.rf-sep            { width:1px; height:18px; background:#dadce0; flex-shrink:0; margin:0 2px; }
+/* 분야 토글 버튼 */
+.rf-cat-toggle     { display:inline-flex; align-items:center; gap:5px; padding:5px 12px;
+                     border:1.5px solid #dadce0; border-radius:8px; cursor:pointer;
+                     font-size:13px; font-weight:600; color:#5f6368; background:#fff;
+                     white-space:nowrap; user-select:none; transition:all .15s; flex-shrink:0; }
+.rf-cat-toggle:hover  { border-color:#bbb; background:#f8f9fa; }
+.rf-cat-toggle.open   { border-color:#1a73e8; background:#e8f0fe; color:#1a73e8; }
+.rf-cat-summary       { font-size:12px; color:#80868b; font-weight:400; }
+.rf-cat-toggle label  { display:flex; align-items:center; gap:3px; font-size:13px;
+                         font-weight:400; cursor:pointer; }
+.rf-cat-toggle label input[type=checkbox] { width:14px; height:14px; accent-color:#1a73e8; cursor:pointer; }
+#catToggleBtn          { font-size:13px; color:#9aa0a6; transition:transform .2s; }
+#catToggleBtn.collapsed { transform:rotate(180deg); }
+/* 등급 칩 인라인 */
+.rf-risk-chips     { display:flex; gap:4px; align-items:center; flex-shrink:0; position:relative; }
+/* 건수 표시 */
+.rf-count          { font-size:13px; color:#5f6368; white-space:nowrap;
+                     flex-shrink:0; padding:0 4px; margin-left:auto; }
+.rf-count strong   { color:#202124; font-weight:700; }
+.rf-alert          { color:#c5221f; font-weight:700; margin-left:4px; }
+/* 분야 드로어 — 가로 레이아웃 (넓으면 1행, 좁으면 2행) */
+.rf-cat-drawer     { display:flex; flex-direction:row; flex-wrap:wrap;
+                     border-top:1px solid #f1f3f4; background:#fafafa; overflow:hidden; }
+.rf-cat-g          { display:flex; align-items:center; gap:4px; flex:0 0 auto;
+                     padding:6px 20px 6px 16px; flex-wrap:wrap; min-width:0; }
+.rf-cat-g + .rf-cat-g { border-left:1px solid #ebebeb; }
+/* 마지막 그룹(새올)만 남은 공간 채움 — 그룹간 공백 동일(padding-right:20px) */
+.rf-cat-g:nth-child(3) { flex: 1 1 0; }
+/* 좁은 화면: 부적합 1행 / 행정처분+새올민원 2행 */
+@media (max-width:920px) {
+  .rf-cat-g:first-child         { flex:0 0 100%; border-bottom:1px solid #ebebeb; border-left:none; }
+  .rf-cat-g + .rf-cat-g         { border-left:none; }
+  .rf-cat-g:nth-child(3)        { border-left:1px solid #ebebeb; flex:1 1 0; }
+}
+.rf-cat-g-title    { font-size:12px; font-weight:700; color:#9aa0a6;
+                     text-transform:uppercase; letter-spacing:.5px;
+                     min-width:56px; flex-shrink:0; }
+.rf-cat-item       { display:flex; align-items:center; gap:5px; padding:3px 8px;
+                     cursor:pointer; border-radius:4px; transition:background .1s; }
+.rf-cat-item:hover { background:#f1f3f4; }
+.rf-cat-item input[type=checkbox] { width:13px; height:13px; accent-color:#1a73e8;
+                                     cursor:pointer; flex-shrink:0; }
+.rf-cat-item-lbl   { font-size:13px; color:#3c4043; white-space:nowrap; }
+.rf-cat-item-cnt   { font-size:11px; color:#9aa0a6; white-space:nowrap; }
+/* 새올민원 정보 아이콘 */
+.rf-saol-wrap      { display:inline-flex; align-items:center; margin-left:4px; }
+.rf-saol-info-btn  { background:none; border:none; cursor:pointer; color:#1a73e8;
+                     font-size:15px; padding:0 4px; line-height:1; }
+.rf-saol-info-btn:hover { color:#0d5db8; }
+/* position:fixed → overflow:hidden 영역 밖으로 탈출, JS에서 좌표 설정 */
+.rf-saol-popover   { display:none; position:fixed; z-index:9999; background:#fff;
+                     border:1px solid #e0e0e0; border-radius:10px;
+                     box-shadow:0 6px 24px rgba(0,0,0,.18); padding:12px 14px;
+                     width:300px; white-space:normal; }
+.rf-saol-popover.open   { display:block; }
+.rf-saol-popover-title  { font-size:12px; font-weight:700; color:#202124;
+                           margin-bottom:8px; display:flex; align-items:center; gap:5px; }
+.rf-saol-popover-body   { font-size:11.5px; color:#5f6368; line-height:1.7; }
+/* 팝오버 위치 — 필터 바 기준 */
+.reg-filter-bar .rs-risk-popover { top:calc(100% + 2px); bottom:auto;
+                                    left:auto; right:auto; width:300px; }
+/* 스플릿 뷰 */
 .reg-wrap          { display:flex; flex:1; min-height:0; overflow:hidden; background:#f8f9fa; }
-.reg-sidebar       { width:460px; flex-shrink:0; display:flex; flex-direction:column;
+.reg-page .reg-sidebar { flex:0 0 40%; min-width:300px; max-width:520px; display:flex; flex-direction:column;
+                          background:#fff; border-right:1px solid #e0e0e0; overflow:hidden; }
+/* 하위 호환: reg-sidebar 단독 사용 시 */
+.reg-sidebar       { flex:0 0 40%; min-width:300px; max-width:520px; display:flex; flex-direction:column;
                      background:#fff; border-right:1px solid #e0e0e0; overflow:hidden; }
 .reg-main          { flex:1; overflow:hidden; display:flex; flex-direction:column; background:#f8f9fa; }
 .rd-content-scroll { flex:1; overflow-y:auto; min-height:0; }
@@ -19,7 +98,7 @@
                         transition:border-color .15s; padding:0 4px 0 10px; }
 .rs-search-inner:focus-within { border-color:#1a73e8; box-shadow:0 0 0 2px #e8f0fe; }
 .rs-search-icon       { color:#9aa0a6; font-size:13px; flex-shrink:0; margin-right:4px; cursor:pointer; }
-.rs-search-inner input { flex:1; border:none; outline:none; font-size:13px;
+.rs-search-inner input { flex:1; border:none; outline:none; font-size:14px;
                          background:transparent; padding:6px 0; color:#202124; min-width:0; }
 .rs-search-inner input::placeholder { color:#bdc1c6; }
 .rs-search-x          { background:none; border:none; padding:4px 6px; cursor:pointer;
@@ -32,16 +111,16 @@
                    border-bottom:1px solid #f1f3f4; flex-wrap:nowrap; }
 .rs-days-group   { display:flex; gap:3px; flex-shrink:0; }
 .rs-day-btn      { padding:4px 8px; border-radius:12px; border:1.5px solid #dadce0;
-                   background:#fff; font-size:11px; font-weight:500; color:#5f6368;
+                   background:#fff; font-size:13px; font-weight:500; color:#5f6368;
                    cursor:pointer; transition:all .15s; white-space:nowrap; line-height:1.2; }
 .rs-day-btn.active { border-color:#1a73e8; background:#e8f0fe; color:#1a73e8; font-weight:700; }
 .rs-day-btn:hover  { border-color:#aaa; color:#202124; }
 .rs-date-range   { display:flex; align-items:center; gap:3px; flex:1; min-width:0; }
 .rs-date-input   { border:1.5px solid #dadce0; border-radius:7px; padding:3px 4px;
-                   font-size:10px; color:#202124; background:#fff;
+                   font-size:12px; color:#202124; background:#fff;
                    cursor:pointer; flex:1; min-width:0; width:0; }
 .rs-date-input:focus { outline:none; border-color:#1a73e8; }
-.rs-date-sep     { font-size:10px; color:#9aa0a6; flex-shrink:0; }
+.rs-date-sep     { font-size:12px; color:#9aa0a6; flex-shrink:0; }
 .rs-date-clear   { background:none; border:none; cursor:pointer; color:#9aa0a6;
                    padding:0 2px; font-size:13px; flex-shrink:0; }
 .rs-date-clear:hover { color:#c5221f; }
@@ -73,9 +152,10 @@
 html.cat-filter-closed .rs-filter-collapse {
   max-height:0 !important; opacity:0 !important;
   pointer-events:none !important; transition:none !important; }
-html.cat-filter-closed #catToggleBtn { transform:rotate(-90deg) !important; }
+html.cat-filter-closed #catToggleBtn { transform:rotate(180deg) !important; }
 
-/* ── 6. 카테고리 그리드 ─────────────────────────────────────────── */
+/* ── 6. 카테고리 그룹 목록 ─────────────────────────────────────── */
+/* 구 그리드 클래스 (하위 호환 유지) */
 .rs-cat-grid        { display:grid; grid-template-columns:32px repeat(3,1fr); gap:0; padding:6px 0; }
 .rs-col-hdr         { font-size:10px; font-weight:700; color:#80868b; text-align:center;
                       padding:2px 2px 5px; border-bottom:2px solid #e8eaed; letter-spacing:-.2px; }
@@ -90,6 +170,20 @@ html.cat-filter-closed #catToggleBtn { transform:rotate(-90deg) !important; }
 .rs-cat-cell:hover  { background:#f1f3f4; }
 .rs-cat-cell input[type=checkbox] { width:14px; height:14px; accent-color:#1a73e8; cursor:pointer; }
 .rs-cat-cell-cnt    { font-size:10px; color:#9aa0a6; }
+/* 신규: 3-그룹 리스트 레이아웃 */
+.rs-cat-groups           { padding:4px 0 6px; }
+.rs-cat-group            { margin-bottom:2px; }
+.rs-cat-group-title      { font-size:10px; font-weight:700; color:#80868b;
+                           text-transform:uppercase; letter-spacing:.4px;
+                           padding:4px 8px 2px; border-bottom:1px solid #f1f3f4; }
+.rs-cat-row              { display:flex; align-items:center; gap:6px;
+                           padding:5px 10px; cursor:pointer;
+                           border-radius:5px; transition:background .1s; }
+.rs-cat-row:hover        { background:#f1f3f4; }
+.rs-cat-row input[type=checkbox] { width:14px; height:14px; accent-color:#1a73e8;
+                                   flex-shrink:0; cursor:pointer; }
+.rs-cat-row-label        { font-size:11px; color:#3c4043; flex:1; min-width:0; }
+.rs-cat-row-cnt          { font-size:10px; color:#9aa0a6; white-space:nowrap; }
 
 /* ── 7. 등급 도움말 팡오버 ──────────────────────────── */
 .rs-risk-help-btn       { background:none; border:none; cursor:pointer; padding:0 2px;
@@ -122,7 +216,7 @@ html.cat-filter-closed #catToggleBtn { transform:rotate(-90deg) !important; }
 .rs-risk-chips        { display:flex; gap:4px; padding:6px 12px 7px;
                         border-bottom:1px solid #f1f3f4; flex-wrap:wrap; align-items:center; }
 .rs-risk-chip         { border-radius:14px; border:1.5px solid #dadce0; background:#fff;
-                        padding:3px 9px; font-size:10px; font-weight:600; cursor:pointer;
+                        padding:3px 9px; font-size:12px; font-weight:600; cursor:pointer;
                         color:#5f6368; transition:all .15s; white-space:nowrap; }
 .rs-risk-chip:hover   { border-color:#bbb; color:#202124; }
 .rs-risk-chip.active-H { background:#fce8e6; border-color:#c5221f; color:#c5221f; }
@@ -389,3 +483,73 @@ details[open] .rd-raw-sum::after { content:"▾"; }
 .rd-nomatch    { display:flex; align-items:center; gap:10px; padding:16px 18px;
                  font-size:12px; color:#5f6368; }
 .rd-bottom-bar { padding:10px 18px; display:flex; gap:8px; }
+
+/* ── 모바일 뒤로가기 바 (기본: 숨김) ────────────────────────── */
+.reg-back-bar  { display:none; }
+.reg-back-btn  { display:inline-flex; align-items:center; gap:5px;
+                 font-size:13px; font-weight:600; color:#1a73e8; text-decoration:none;
+                 padding:6px 14px; }
+.reg-back-btn:hover { text-decoration:underline; }
+
+/* ================================================================
+   반응형 레이아웃
+   ================================================================ */
+
+/* ── 1024px: 사이드바 약간 축소 ─────────────────────────────── */
+@media (max-width:1024px) {
+  .reg-page .reg-sidebar,
+  .reg-sidebar { flex:0 0 36%; min-width:260px; max-width:420px; }
+  .rf-search-wrap { max-width:200px; }
+}
+
+/* ── 768px: 필터 1행 줄바꿈 허용, 날짜범위 숨김→드롭 ────────── */
+@media (max-width:768px) {
+  .rf-row1 { flex-wrap:wrap; row-gap:6px; }
+  .rf-search-wrap { flex:1 1 160px; max-width:none; min-width:120px; }
+  .rs-days-group  { flex-shrink:0; }
+  .rf-date-wrap   { order:10; flex-basis:100%; padding-bottom:2px; }
+  .rf-count       { margin-left:0; }
+  .rf-sep         { display:none; }
+  .rf-cat-toggle  { margin-left:auto; }
+  .rf-row2 .rf-risk-chips { flex-wrap:wrap; }
+}
+
+/* ── 600px: 모바일 스플릿 뷰 ────────────────────────────────── */
+@media (max-width:600px) {
+  /* 사이드바: 전체 폭, 상세 열리면 숨김 */
+  .reg-page .reg-sidebar,
+  .reg-sidebar { flex:none; width:100%; min-width:0; max-width:none;
+                 border-right:none; }
+  .reg-main    { width:100%; }
+
+  /* 기본: 목록 보임, 상세 숨김 */
+  .reg-wrap .reg-main { display:none; }
+  /* 상세 열리면: 목록 숨김, 상세 보임 */
+  .reg-wrap.has-detail .reg-sidebar { display:none; }
+  .reg-wrap.has-detail .reg-main    { display:flex; }
+  /* 상세 패널에 뒤로가기 바 표시 */
+  .reg-wrap.has-detail .reg-back-bar {
+    display:flex; align-items:center;
+    background:#fff; border-bottom:1px solid #e8eaed;
+    flex-shrink:0;
+  }
+
+  /* 분야 드로어: 세로 쌓기 */
+  .rf-cat-g          { flex-basis:100% !important; flex:none !important; }
+  .rf-cat-g + .rf-cat-g { border-left:none; border-top:1px solid #ebebeb; }
+  .rf-cat-g:nth-child(3) { border-left:none; }
+
+  /* 기간 버튼 크기 축소 */
+  .rs-day-btn { padding:3px 6px; font-size:12px; }
+  .rf-count   { font-size:12px; }
+}
+
+/* ── 400px: 초소형 화면 여백 축소 ──────────────────────────── */
+@media (max-width:400px) {
+  .rf-row1 { padding:6px 10px; gap:6px; }
+  .rf-row2 { padding:4px 10px 6px; }
+  .rs-item { padding:8px 10px; }
+  .rs-item.matched, .rs-item.ing-matched { padding-left:8px; }
+  .rd-hdr  { padding:10px 12px 8px; }
+  .rd-sec  { padding:8px 12px; }
+}

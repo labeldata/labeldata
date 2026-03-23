@@ -20,17 +20,18 @@ from v1.regulatory.models import NewsIngredientMatch, NewsProductMatch, Regulato
 
 logger = logging.getLogger(__name__)
 
-# API 서비스별 카테고리 정의 (group: domestic=국내, import=수입)
-# 순서: [국내] 검사부적합·회수판매중지·행정처분 → [수입] 검사부적합·회수판매중지·행정처분
+# API 서비스별 카테고리 정의 — 3그룹: 부적합 / 행정처분 / 새올민원
 API_CATEGORIES = [
-    # ─── 국내 ───
-    {'key': 'insp',   'label': '검사부적합',   'group': 'domestic', 'api_sources': ['I2620', 'I2640']},
-    {'key': 'I0490',  'label': '회수·판매중지', 'group': 'domestic', 'api_sources': ['I0490']},
-    {'key': 'admin',  'label': '행정처분',      'group': 'domestic', 'api_sources': ['I0470', 'I0480']},
-    # ─── 수입 ───
-    {'key': 'imp_insp', 'label': '수입부적합',  'group': 'import',   'api_sources': ['imp_insp']},
-    {'key': 'import',   'label': '회수·판매중지','group': 'import',   'api_sources': ['import']},
-    {'key': 'I0482',    'label': '행정처분',     'group': 'import',   'api_sources': ['I0482']},
+    # ─── 부적합 ───────────────────────────────────────────────────────────────
+    {'key': 'insp',       'label': '국내 검사부적합',   'group': 'insp',  'api_sources': ['I2620', 'I2640']},
+    {'key': 'I0490',      'label': '국내 회수·판매중지', 'group': 'insp',  'api_sources': ['I0490']},
+    {'key': 'imp_insp',   'label': '수입 부적합',        'group': 'insp',  'api_sources': ['imp_insp']},
+    {'key': 'import',     'label': '수입 회수·판매중지', 'group': 'insp',  'api_sources': ['import']},
+    # ─── 행정처분 (중앙 OpenAPI) ──────────────────────────────────────────────
+    {'key': 'admin',      'label': '국내 행정처분',      'group': 'admin', 'api_sources': ['I0470', 'I0480']},
+    {'key': 'I0482',      'label': '수입 행정처분',       'group': 'admin', 'api_sources': ['I0482']},
+    # ─── 새올민원 (지자체) ────────────────────────────────────────────────────
+    {'key': 'saol_admin', 'label': '지자체 행정처분',    'group': 'saol',  'api_sources': ['saol_admin']},
 ]
 _ALL_CAT_KEYS = [c['key'] for c in API_CATEGORIES]
 
@@ -293,8 +294,9 @@ def news_list(request):
         {**cat, 'count': sum(api_counts.get(s, 0) for s in cat['api_sources'])}
         for cat in API_CATEGORIES
     ]
-    dom_cats = [c for c in categories_with_count if c.get('group') == 'domestic']
-    imp_cats = [c for c in categories_with_count if c.get('group') == 'import']
+    insp_cats  = [c for c in categories_with_count if c.get('group') == 'insp']
+    admin_cats = [c for c in categories_with_count if c.get('group') == 'admin']
+    saol_cats  = [c for c in categories_with_count if c.get('group') == 'saol']
 
     # 상세 패널: URL 파라미터로 선택된 뉴스
     selected_id = request.GET.get('id')
@@ -356,8 +358,9 @@ def news_list(request):
         'unlinked_ingredients':    unlinked_ingredients,
         'total_count':             total_count,
         'categories':         categories_with_count,
-        'dom_cats':           dom_cats,
-        'imp_cats':           imp_cats,
+        'insp_cats':          insp_cats,
+        'admin_cats':         admin_cats,
+        'saol_cats':          saol_cats,
         'matched_count':      matched_count,
         'unread_count':       unread_count,
         'no_action_count':    no_action_count,

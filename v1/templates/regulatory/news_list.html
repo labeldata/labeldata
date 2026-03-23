@@ -17,11 +17,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="reg-wrap">
+<div class="reg-page">
 
-  {# ─── 왼쪽: 사이드바 ─── #}
-  <aside class="reg-sidebar">
-    {# 필터 폼 #}
+  {# ─── 상단 필터 바 (전체 폭) ─── #}
+  <div class="reg-filter-bar">
     <form method="get" id="filterForm">
       {% if request.GET.id %}<input type="hidden" name="id" value="{{ request.GET.id }}">{% endif %}
       <input type="hidden" name="risk"      id="f_risk"   value="{{ risk_filter }}">
@@ -29,31 +28,35 @@
       <input type="hidden" name="days"      id="f_days"   value="{{ days }}">
       <input type="hidden" name="cats_sent" value="1">
 
-      {# ── 1. 검색바 ── #}
-      <div class="rs-search-bar">
-        <div class="rs-search-inner">
-          <i class="bi bi-search rs-search-icon"></i>
-          <input type="text" id="searchInput" name="q" value="{{ q }}"
-                 placeholder="제품명, 업체, 키워드 검색…"
-                 onkeydown="if(event.key==='Enter'){doSearch();}"
-                 autocomplete="off">
-          {% if q %}
-          <button type="button" onclick="clearSearch()" class="rs-search-x" title="초기화">
-            <i class="bi bi-x-lg"></i>
-          </button>
-          {% endif %}
-        </div>
-      </div>
+      {# ── 1행: 검색·기간·날짜 + 건수·분야 ── #}
+      <div class="rf-row1">
 
-      {# ── 2. 기간 바 ── #}
-      <div class="rs-period-bar">
+        {# 1. 검색 #}
+        <div class="rf-search-wrap">
+          <div class="rs-search-inner">
+            <i class="bi bi-search rs-search-icon"></i>
+            <input type="text" id="searchInput" name="q" value="{{ q }}"
+                   placeholder="제품명, 업체, 키워드 검색…"
+                   onkeydown="if(event.key==='Enter'){doSearch();}"
+                   autocomplete="off">
+            {% if q %}
+            <button type="button" onclick="clearSearch()" class="rs-search-x" title="초기화">
+              <i class="bi bi-x-lg"></i>
+            </button>
+            {% endif %}
+          </div>
+        </div>
+
+        {# 2. 기간 버튼 #}
         <div class="rs-days-group">
           <button type="button" class="rs-day-btn {% if days == '3'  and not date_from and not date_to %}active{% endif %}" onclick="setDays('3')">3일</button>
           <button type="button" class="rs-day-btn {% if days == '7'  and not date_from and not date_to %}active{% endif %}" onclick="setDays('7')">1주</button>
           <button type="button" class="rs-day-btn {% if days == '30' and not date_from and not date_to %}active{% endif %}" onclick="setDays('30')">1개월</button>
           <button type="button" class="rs-day-btn {% if days == 'all' and not date_from and not date_to %}active{% endif %}" onclick="setDays('all')">전체</button>
         </div>
-        <div class="rs-date-range">
+
+        {# 3. 날짜 범위 #}
+        <div class="rf-date-wrap">
           <input type="date" name="date_from" class="rs-date-input"
                  value="{{ date_from }}" onchange="onDateRangeChange()"
                  {% if date_from %}style="border-color:#1a73e8;background:#e8f0fe;color:#1a73e8;"{% endif %}>
@@ -67,58 +70,30 @@
           </button>
           {% endif %}
         </div>
-      </div>
 
-      {# ── 3. 분야 토글 헤더 ── #}
-      <div class="rs-cat-bar" onclick="toggleCatFilter()">
-        <span class="rs-cat-bar-label">
-          <i class="bi bi-funnel"></i> 분야
+        {# 건수 + 미조치 알림 #}
+        <span class="rf-count">
+          총 <strong>{{ total_count }}</strong>건{% if no_action_count > 0 %}<span class="rf-alert">⚠ {{ no_action_count }}</span>{% endif %}
         </span>
-        <span class="rs-cat-bar-summary">
-          {% if cats|length == 6 %}전체 선택됨{% else %}{{ cats|length }}개 선택{% endif %}
-          &nbsp;·&nbsp;총 <strong>{{ total_count }}</strong>건
-          {% if no_action_count > 0 %}&nbsp;<span class="rs-top-unread">⚠ {{ no_action_count }}</span>{% endif %}
-        </span>
-        <span class="rs-cat-bar-check">
+
+        <span class="rf-sep"></span>
+
+        {# 분야 토글 버튼 (오른쪽 끝) #}
+        <div class="rf-cat-toggle" onclick="toggleCatFilter()" role="button" tabindex="0">
+          <i class="bi bi-funnel"></i>
+          <span>분야&nbsp;<span class="rf-cat-summary">{% if cats|length == 7 %}전체{% else %}{{ cats|length }}개{% endif %}</span></span>
           <label onclick="event.stopPropagation()">
             <input type="checkbox" id="catCheckAll" onchange="toggleAllCats(this)"> 전체
           </label>
-        </span>
-        <span class="rs-toggle-btn" id="catToggleBtn"><i class="bi bi-chevron-down"></i></span>
-      </div>
-
-      {# ── 4. 분야 드로어 (기본 접힘) ── #}
-      <div id="catFilterCollapse" class="rs-cat-drawer rs-filter-collapse">
-        <div class="rs-cat-grid">
-          <div></div>
-          <div class="rs-col-hdr">검사부적합</div>
-          <div class="rs-col-hdr">회수·판매중지</div>
-          <div class="rs-col-hdr">행정처분</div>
-          <div class="rs-row-lbl"><span>🇰🇷</span>국내</div>
-          {% for cat in dom_cats %}
-          <label class="rs-cat-cell">
-            <input type="checkbox" name="cat" value="{{ cat.key }}"
-                   {% if cat.key in cats %}checked{% endif %}
-                   onchange="onCatChange()">
-            <span class="rs-cat-cell-cnt">{{ cat.count }}건</span>
-          </label>
-          {% endfor %}
-          <div class="rs-row-divider"></div>
-          <div class="rs-row-lbl"><span>🌏</span>수입</div>
-          {% for cat in imp_cats %}
-          <label class="rs-cat-cell">
-            <input type="checkbox" name="cat" value="{{ cat.key }}"
-                   {% if cat.key in cats %}checked{% endif %}
-                   onchange="onCatChange()">
-            <span class="rs-cat-cell-cnt">{{ cat.count }}건</span>
-          </label>
-          {% endfor %}
+          <i class="bi bi-chevron-up" id="catToggleBtn"></i>
         </div>
-      </div>
 
-      {# ── 5. 등급 + 진행상태 칩 ── #}
-      <div style="position:relative;">
-        <div class="rs-risk-chips">
+      </div>{# end rf-row1 #}
+
+      {# ── 2행: 등급·상태 필터 칩 ── #}
+      <div class="rf-row2">
+        {# 등급 + 진행상태 칩 #}
+        <div class="rf-risk-chips">
           <button type="button"
                   class="rs-risk-chip {% if risk_filter == 'HIGH' %}active-H{% endif %}"
                   onclick="setRisk('{% if risk_filter == 'HIGH' %}{% else %}HIGH{% endif %}')">&#x1F534; 중요</button>
@@ -141,176 +116,248 @@
           <button type="button"
                   class="rs-risk-chip {% if status_filter == 'resolved' %}active-res{% endif %}"
                   onclick="setStatus('{% if status_filter == 'resolved' %}{% else %}resolved{% endif %}')">&#x2705; 조치완료</button>
+
+          {# 등급 분류 기준 팝오버 #}
+          <div id="riskHelpPopover" class="rs-risk-popover">
+            <div class="rs-rp-title">
+              <i class="bi bi-info-circle text-primary"></i> 등급 분류 기준
+              <button class="rs-rp-close" onclick="toggleRiskHelp(event)"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="rs-rp-section">
+              <div class="rs-rp-cat">🇺🇸 수입 부적합</div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">원산지 · 식품유형 · 제조사 중 2개 이상 일치</span></div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">원산지 · 식품유형 · 제조사 중 1개 일치</span></div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치 (원산지 등 추가 정보 없음)</span></div>
+            </div>
+            <div class="rs-rp-section">
+              <div class="rs-rp-cat">🇰🇷 국내 검사부적합</div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">원료명 + 원산지 일치</span></div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">원료명 + 식품유형 일치</span></div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치</span></div>
+            </div>
+            <div class="rs-rp-section">
+              <div class="rs-rp-cat">🇰🇷 국내가공 부적합</div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">제조사 + 제품명 동시 일치</span></div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">식품유형 + (제조사 또는 원산지) 일치</span></div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치</span></div>
+            </div>
+            <div class="rs-rp-section">
+              <div class="rs-rp-cat">📢 행정처분</div>
+              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">내 제품/원료의 제조사와 업체명 일치</span></div>
+            </div>
+          </div>
         </div>
 
-        {# 등급 분류 기준 팝오버 #}
-        <div id="riskHelpPopover" class="rs-risk-popover">
-          <div class="rs-rp-title">
-            <i class="bi bi-info-circle text-primary"></i> 등급 분류 기준
-            <button class="rs-rp-close" onclick="toggleRiskHelp(event)"><i class="bi bi-x-lg"></i></button>
-          </div>
-          <div class="rs-rp-section">
-            <div class="rs-rp-cat">🇺🇸 수입 부적합</div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">원산지 · 식품유형 · 제조사 중 2개 이상 일치</span></div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">원산지 · 식품유형 · 제조사 중 1개 일치</span></div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치 (원산지 등 추가 정보 없음)</span></div>
-          </div>
-          <div class="rs-rp-section">
-            <div class="rs-rp-cat">🇰🇷 국내 검사부적합</div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">원료명 + 원산지 일치</span></div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">원료명 + 식품유형 일치</span></div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치</span></div>
-          </div>
-          <div class="rs-rp-section">
-            <div class="rs-rp-cat">🇰🇷 국내가공 부적합</div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">제조사 + 제품명 동시 일치</span></div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">식품유형 + (제조사 또는 원산지) 일치</span></div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치</span></div>
-          </div>
-          <div class="rs-rp-section">
-            <div class="rs-rp-cat">📢 행정처분</div>
-            <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">내 제품/원료의 제조사와 업체명 일치</span></div>
-          </div>
+      </div>{# end rf-row2 #}
+
+      {# ── 분야 드로어 (세로 3행, 각 그룹 1줄) ── #}
+      <div id="catFilterCollapse" class="rf-cat-drawer rs-filter-collapse">
+
+        {# 부적합 — 1줄 #}
+        <div class="rf-cat-g">
+          <span class="rf-cat-g-title">부적합</span>
+          {% for cat in insp_cats %}
+          <label class="rf-cat-item">
+            <input type="checkbox" name="cat" value="{{ cat.key }}"
+                   {% if cat.key in cats %}checked{% endif %}
+                   onchange="onCatChange()">
+            <span class="rf-cat-item-lbl">{{ cat.label }}</span>
+            <span class="rf-cat-item-cnt">{{ cat.count }}건</span>
+          </label>
+          {% endfor %}
         </div>
+
+        {# 행정처분 — 1줄 #}
+        <div class="rf-cat-g">
+          <span class="rf-cat-g-title">행정처분</span>
+          {% for cat in admin_cats %}
+          <label class="rf-cat-item">
+            <input type="checkbox" name="cat" value="{{ cat.key }}"
+                   {% if cat.key in cats %}checked{% endif %}
+                   onchange="onCatChange()">
+            <span class="rf-cat-item-lbl">{{ cat.label }}</span>
+            <span class="rf-cat-item-cnt">{{ cat.count }}건</span>
+          </label>
+          {% endfor %}
+        </div>
+
+        {# 새올민원 — 1줄 + ⓘ 사이트 정보 #}
+        <div class="rf-cat-g">
+          <span class="rf-cat-g-title">새올민원</span>
+          {% for cat in saol_cats %}
+          <label class="rf-cat-item">
+            <input type="checkbox" name="cat" value="{{ cat.key }}"
+                   {% if cat.key in cats %}checked{% endif %}
+                   onchange="onCatChange()">
+            <span class="rf-cat-item-lbl">{{ cat.label }}</span>
+            <span class="rf-cat-item-cnt">{{ cat.count }}건</span>
+          </label>
+          {% endfor %}
+          <span class="rf-saol-wrap">
+            <button type="button" class="rf-saol-info-btn" onclick="toggleSaolInfo(event)" title="연결 사이트 정보">
+              <i class="bi bi-info-circle-fill"></i>
+            </button>
+            <div id="saolInfoPopover" class="rf-saol-popover">
+              <div class="rf-saol-popover-title"><i class="bi bi-info-circle text-primary"></i> 새올민원 수집 범위</div>
+              <div class="rf-saol-popover-body">
+                전국 기초지자체 <strong>새올전자민원창구</strong>(eminwon.○○.go.kr)에서 식품 행정처분 정보를 수집합니다.<br>
+                <strong>서울</strong> 25개구&middot;<strong>부산</strong>&middot;<strong>대구</strong>&middot;<strong>인천</strong>&middot;<strong>광주</strong>&middot;<strong>대전</strong>&middot;<strong>울산</strong>&middot;<strong>세종</strong>&middot;
+                <strong>경기</strong>&middot;<strong>강원</strong>&middot;<strong>충북</strong>&middot;<strong>충남</strong>&middot;<strong>전북</strong>&middot;<strong>전남</strong>&middot;<strong>경북</strong>&middot;<strong>경남</strong>&middot;<strong>제주</strong>
+                등 각 지자체 민원시스템에서 수집합니다.
+              </div>
+            </div>
+          </span>
+        </div>
+
       </div>
 
     </form>
+  </div>{# end reg-filter-bar #}
 
-    {# ── 목록 ── #}
-    <div class="rs-list-body">
-      {% for news in news_list %}
-      <div class="rs-item
-                  {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% endif %}
-                  {% if selected_news and selected_news.id == news.id %}active{% endif %}
-                  {% if news.my_action_status == 'resolved' or news.my_ing_action_status == 'resolved' %}rs-item--resolved{% endif %}"
-           onclick="selectNews({{ news.id }})">
+  {# ─── 스플릿 뷰 ─── #}
+  <div class="reg-wrap{% if selected_news %} has-detail{% endif %}">
 
-        {# 줄 1: 국기 + 제품명 + 날짜 #}
-        <div class="rs-row1">
-          {% if news.my_unread_yn or news.ing_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
-          <span class="rs-item-flag">
-            {% if news.source == 'domestic' %}🇰🇷{% else %}🌏{% endif %}
-          </span>
-          <span class="rs-item-name">{{ news.product_name }}</span>
-          <span class="rs-item-date" title="수집: {{ news.collected_date|date:'Y-m-d' }}{% if news.event_date and news.event_date != news.collected_date %} (발생: {{ news.event_date|date:'Y-m-d' }}){% endif %}">{% if news.event_date %}{{ news.event_date|date:"m/d" }}{% else %}{{ news.collected_date|date:"m/d" }}{% endif %}</span>
-          {% if news.my_matched_yn or news.ing_matched_yn %}{% if news.my_action_status != 'resolved' and news.my_ing_action_status != 'resolved' %}<button class="rs-quick-resolve" onclick="quickResolve(event,{{ news.id }})" title="조치 완료로 표시"><i class="bi bi-check-lg"></i></button>{% endif %}{% endif %}
-        </div>
+    {# ── 왼쪽: 목록만 ── #}
+    <aside class="reg-sidebar">
+      <div class="rs-list-body">
+        {% for news in news_list %}
+        <div class="rs-item
+                    {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% endif %}
+                    {% if selected_news and selected_news.id == news.id %}active{% endif %}
+                    {% if news.my_action_status == 'resolved' or news.my_ing_action_status == 'resolved' %}rs-item--resolved{% endif %}"
+             onclick="selectNews({{ news.id }})">
 
-        {# 줄 2: 위반유형 + 등급배지 + 업체명 / 위반요약 #}
-        <div class="rs-row2">
-          {# 위반유형 배지 #}
-          {% if news.api_source == 'I0470' or news.api_source == 'I0480' %}
-            <span class="badge-admin">행정처분</span>
-          {% elif news.api_source == 'I0490' %}
-            <span class="badge-recall">회수</span>
-          {% elif news.api_source == 'I2620' or news.api_source == 'I2640' %}
-            <span class="badge-dom">부적합</span>
-          {% elif news.api_source == 'import' %}
-            <span class="badge-recall">회수(수입)</span>
-          {% elif news.api_source == 'imp_insp' %}
-            <span class="badge-imp">수입부적합</span>
-          {% elif news.api_source == 'I0482' %}
-            <span class="badge-admin">행정(수입)</span>
-          {% endif %}
-          {# 등급 배지 #}
-          {% if news.my_matched_yn %}
-            {% if news.my_risk_level == 'HIGH' %}<span class="badge-risk-H">🔴중요</span>
-            {% elif news.my_risk_level == 'MED' %}<span class="badge-risk-M">🟠관심</span>
-            {% elif news.my_risk_level == 'LOW' %}<span class="badge-risk-L">🔵일반</span>
-            {% endif %}
-          {% elif news.ing_matched_yn %}
-            {% if news.ing_risk_level == 'HIGH' %}<span class="badge-risk-H badge-ing">🔴중요&middot;원료</span>
-            {% elif news.ing_risk_level == 'MED' %}<span class="badge-risk-M badge-ing">🟠관심&middot;원료</span>
-            {% else %}<span class="badge-risk-L badge-ing">🔵일반&middot;원료</span>
-            {% endif %}
-          {% endif %}
-          {# 진행상태 뱃지 (매칭 뉴스만) #}
-          {% if news.my_matched_yn or news.ing_matched_yn %}
-            {% with st=news.my_action_status|default:news.my_ing_action_status %}
-            {% if st == 'monitoring' %}<span class="badge-status-mon">&#x23FA; 진행 중</span>
-            {% elif st == 'resolved' %}<span class="badge-status-res">&#x2705; 조치완료</span>
-            {% else %}<span class="badge-status-no">&#x23F3; 미조치</span>
-            {% endif %}
-            {% endwith %}
-          {% endif %}
-          {# 업체명 + 위반요약 짧게 #}
-          <span class="rs-row2-right">
-            {{ news.company_name|default:""|truncatechars:14 }}
-            {% if news.violation_reason %}
-              &nbsp;·&nbsp;{{ news.violation_reason|truncatechars:24 }}
-            {% endif %}
-          </span>
-        </div>
-      </div>
-      {% empty %}
-      <div class="rs-empty">
-        <i class="bi bi-inbox text-secondary"></i>
-        <div>
-          <div style="font-size:13px;font-weight:600;color:#5f6368;margin-bottom:4px;">
-            조건에 맞는 결과가 없습니다
+          {# 줄 1: 국기 + 제품명 + 날짜 #}
+          <div class="rs-row1">
+            {% if news.my_unread_yn or news.ing_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
+            <span class="rs-item-flag">
+              {% if news.api_source == 'saol_admin' %}🏛{% elif news.source == 'domestic' %}🇰🇷{% else %}🌏{% endif %}
+            </span>
+            <span class="rs-item-name">{{ news.product_name }}</span>
+            <span class="rs-item-date" title="수집: {{ news.collected_date|date:'Y-m-d' }}{% if news.event_date and news.event_date != news.collected_date %} (발생: {{ news.event_date|date:'Y-m-d' }}){% endif %}">{% if news.event_date %}{{ news.event_date|date:"m/d" }}{% else %}{{ news.collected_date|date:"m/d" }}{% endif %}</span>
+            {% if news.my_matched_yn or news.ing_matched_yn %}{% if news.my_action_status != 'resolved' and news.my_ing_action_status != 'resolved' %}<button class="rs-quick-resolve" onclick="quickResolve(event,{{ news.id }})" title="조치 완료로 표시"><i class="bi bi-check-lg"></i></button>{% endif %}{% endif %}
           </div>
-          <div style="font-size:12px;color:#9aa0a6;">분야 선택 또는 기간을 변경해 보세요</div>
+
+          {# 줄 2: 위반유형 + 등급배지 + 업체명 / 위반요약 #}
+          <div class="rs-row2">
+            {# 위반유형 배지 #}
+            {% if news.api_source == 'I0470' or news.api_source == 'I0480' %}
+              <span class="badge-admin">행정처분</span>
+            {% elif news.api_source == 'I0490' %}
+              <span class="badge-recall">회수</span>
+            {% elif news.api_source == 'I2620' or news.api_source == 'I2640' %}
+              <span class="badge-dom">부적합</span>
+            {% elif news.api_source == 'import' %}
+              <span class="badge-recall">회수(수입)</span>
+            {% elif news.api_source == 'imp_insp' %}
+              <span class="badge-imp">수입부적합</span>
+            {% elif news.api_source == 'I0482' %}
+              <span class="badge-admin">행정(수입)</span>
+            {% elif news.api_source == 'saol_admin' %}
+              <span class="badge-admin">지자체처분</span>
+            {% endif %}
+            {# 등급 배지 #}
+            {% if news.my_matched_yn %}
+              {% if news.my_risk_level == 'HIGH' %}<span class="badge-risk-H">🔴중요</span>
+              {% elif news.my_risk_level == 'MED' %}<span class="badge-risk-M">🟠관심</span>
+              {% elif news.my_risk_level == 'LOW' %}<span class="badge-risk-L">🔵일반</span>
+              {% endif %}
+            {% elif news.ing_matched_yn %}
+              {% if news.ing_risk_level == 'HIGH' %}<span class="badge-risk-H badge-ing">🔴중요&middot;원료</span>
+              {% elif news.ing_risk_level == 'MED' %}<span class="badge-risk-M badge-ing">🟠관심&middot;원료</span>
+              {% else %}<span class="badge-risk-L badge-ing">🔵일반&middot;원료</span>
+              {% endif %}
+            {% endif %}
+            {# 진행상태 뱃지 (매칭 뉴스만) #}
+            {% if news.my_matched_yn or news.ing_matched_yn %}
+              {% with st=news.my_action_status|default:news.my_ing_action_status %}
+              {% if st == 'monitoring' %}<span class="badge-status-mon">&#x23FA; 진행 중</span>
+              {% elif st == 'resolved' %}<span class="badge-status-res">&#x2705; 조치완료</span>
+              {% else %}<span class="badge-status-no">&#x23F3; 미조치</span>
+              {% endif %}
+              {% endwith %}
+            {% endif %}
+            {# 업체명 + 위반요약 짧게 #}
+            <span class="rs-row2-right">
+              {{ news.company_name|default:""|truncatechars:14 }}
+              {% if news.violation_reason %}
+                &nbsp;·&nbsp;{{ news.violation_reason|truncatechars:24 }}
+              {% endif %}
+            </span>
+          </div>
         </div>
+        {% empty %}
+        <div class="rs-empty">
+          <i class="bi bi-inbox text-secondary"></i>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#5f6368;margin-bottom:4px;">
+              조건에 맞는 결과가 없습니다
+            </div>
+            <div style="font-size:12px;color:#9aa0a6;">분야 선택 또는 기간을 변경해 보세요</div>
+          </div>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
 
-    {# ── 페이지네이션 ── #}
-    {% if page_obj.paginator.num_pages > 1 %}
-    <div class="rs-pagination">
-      {# 이전 #}
-      {% if page_obj.has_previous %}
-      <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ page_obj.previous_page_number }}">‹</a>
-      {% else %}
-      <span class="rs-page-btn disabled">‹</span>
-      {% endif %}
-
-      {# 페이지 번호 (현재 ±2) #}
-      {% for n in page_obj.paginator.page_range %}
-        {% if n == page_obj.number %}
-        <span class="rs-page-btn active">{{ n }}</span>
-        {% elif n >= page_obj.number|add:"-2" and n <= page_obj.number|add:"2" %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ n }}">{{ n }}</a>
-        {% elif n == 1 or n == page_obj.paginator.num_pages %}
-        <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ n }}">{{ n }}</a>
-        {% elif n == page_obj.number|add:"-3" or n == page_obj.number|add:"3" %}
-        <span class="rs-page-info">…</span>
+      {# ── 페이지네이션 ── #}
+      {% if page_obj.paginator.num_pages > 1 %}
+      <div class="rs-pagination">
+        {% if page_obj.has_previous %}
+        <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ page_obj.previous_page_number }}">‹</a>
+        {% else %}
+        <span class="rs-page-btn disabled">‹</span>
         {% endif %}
-      {% endfor %}
 
-      {# 다음 #}
-      {% if page_obj.has_next %}
-      <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ page_obj.next_page_number }}">›</a>
-      {% else %}
-      <span class="rs-page-btn disabled">›</span>
-      {% endif %}
+        {% for n in page_obj.paginator.page_range %}
+          {% if n == page_obj.number %}
+          <span class="rs-page-btn active">{{ n }}</span>
+          {% elif n >= page_obj.number|add:"-2" and n <= page_obj.number|add:"2" %}
+          <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ n }}">{{ n }}</a>
+          {% elif n == 1 or n == page_obj.paginator.num_pages %}
+          <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ n }}">{{ n }}</a>
+          {% elif n == page_obj.number|add:"-3" or n == page_obj.number|add:"3" %}
+          <span class="rs-page-info">…</span>
+          {% endif %}
+        {% endfor %}
 
-      <span class="rs-page-info" style="margin-left:4px;">
-        {{ page_obj.number }}/{{ page_obj.paginator.num_pages }}p
-      </span>
-    </div>
-    {% endif %}
-  </aside>
-
-  {# ─── 오른쪽: 상세 패널 ─── #}
-  <main class="reg-main">
-    <div class="rd-content-scroll">
-      {% if selected_news %}
-        {% include "regulatory/_news_detail_panel.html" with news=selected_news matches=selected_matches ing_matches=selected_ing_matches %}
-      {% else %}
-      <div class="rd-empty" style="height:100%;">
-        <i class="bi bi-shield-exclamation text-secondary"></i>
-        <div class="rd-empty-title">왼쪽 목록에서 항목을 선택하세요</div>
-        {% if no_action_count > 0 %}
-        <div class="rd-empty-sub">⚠️ 미조치 {{ no_action_count }}건 — 조치가 필요합니다</div>
+        {% if page_obj.has_next %}
+        <a class="rs-page-btn" href="?{{ page_query_string }}&page={{ page_obj.next_page_number }}">›</a>
+        {% else %}
+        <span class="rs-page-btn disabled">›</span>
         {% endif %}
+
+        <span class="rs-page-info" style="margin-left:4px;">
+          {{ page_obj.number }}/{{ page_obj.paginator.num_pages }}p
+        </span>
       </div>
       {% endif %}
-    </div>
-  </main>
+    </aside>
 
-</div>
+    {# ── 오른쪽: 상세 패널 ── #}
+    <main class="reg-main">
+      <div class="reg-back-bar">
+        <a class="reg-back-btn" href="?{{ page_query_string }}"><i class="bi bi-arrow-left"></i> 목록</a>
+      </div>
+      <div class="rd-content-scroll">
+        {% if selected_news %}
+          {% include "regulatory/_news_detail_panel.html" with news=selected_news matches=selected_matches ing_matches=selected_ing_matches %}
+        {% else %}
+        <div class="rd-empty" style="height:100%;">
+          <i class="bi bi-shield-exclamation text-secondary"></i>
+          <div class="rd-empty-title">왼쪽 목록에서 항목을 선택하세요</div>
+          {% if no_action_count > 0 %}
+          <div class="rd-empty-sub">⚠️ 미조치 {{ no_action_count }}건 — 조치가 필요합니다</div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </main>
+
+  </div>{# end reg-wrap #}
+
+</div>{# end reg-page #}
 {% endblock %}
+
 
 {% block extra_js %}
 <script src="{% static 'js/regulatory_list.js' %}"></script>
@@ -334,6 +381,33 @@ function quickResolve(e,newsId){
   }).catch(function(){btn.disabled=false;});
 }
 window.quickResolve=quickResolve;
+
+function toggleSaolInfo(e) {
+  e.stopPropagation();
+  var btn = e.currentTarget;
+  var pop = document.getElementById('saolInfoPopover');
+  if (!pop) return;
+  if (pop.classList.contains('open')) {
+    pop.classList.remove('open');
+    return;
+  }
+  // position:fixed → viewport 기준 좌표 계산
+  var rect = btn.getBoundingClientRect();
+  var popWidth = 300;
+  var left = rect.left;
+  if (left + popWidth > window.innerWidth - 10) { left = window.innerWidth - popWidth - 10; }
+  pop.style.top  = (rect.bottom + 4) + 'px';
+  pop.style.left = Math.max(10, left) + 'px';
+  pop.classList.add('open');
+  function closeHandler(ev) {
+    if (!pop.contains(ev.target)) {
+      pop.classList.remove('open');
+      document.removeEventListener('click', closeHandler);
+    }
+  }
+  document.addEventListener('click', closeHandler);
+}
+window.toggleSaolInfo = toggleSaolInfo;
 }());
 </script>
 {% endblock %}

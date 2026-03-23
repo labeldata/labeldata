@@ -17,10 +17,10 @@ PythonAnywhere 스케줄러에 등록하여 매일 오전 실행
   수입식품정보마루 수입 회수·판매중지   (CFCFF01F01)
   수입식품정보마루 수입식품 부적합      (CFCEE01F01)
 
-━━━ 사용법 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  python manage.py collect_regulatory_news              # 전체 실행 (스케줄러 기본)
-  python manage.py collect_regulatory_news --parse-only # AI 미분석 항목만 파싱
-  python manage.py collect_regulatory_news --match-only # 매칭만 재실행
+[로컬→서버 JSON] 새올전자민원창구 — 해외 IP 차단 대상
+  로컬 PC에서 local_uploader/saol_uploader.py 실행 후 서버에 JSON 업로드
+  → 이 명령 실행 시 new_saol_data.json 파일이 있으면 자동으로 DB에 반영
+  전국 지자체 행정처분 (api_source='saol_admin', AI 파싱 스킵)
   python manage.py collect_regulatory_news --limit 5   # 테스트: 서비스당 최대 5건
 
 ━━━ 매일 작업 흐름 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -48,11 +48,12 @@ from v1.regulatory.services.matcher import build_user_match_cache, run_matching_
 
 logger = logging.getLogger(__name__)
 
-# 로컬 PC에서 업로드하는 수입 AJAX 데이터 파일 경로
+# 로컬 PC에서 업로드하는 데이터 파일 경로
 IMPORT_JSON_PATH = '/home/labeldata/mysite/new_import_data.json'
+SAOL_JSON_PATH   = '/home/labeldata/mysite/new_saol_data.json'
 
 # 행정처분 external_id 접두사 — 업체 단위 처분이므로 AI 원료 파싱 불필요
-_ADMIN_DISPOSAL_PREFIXES = ('I0470-', 'I0480-', 'I0482-')
+_ADMIN_DISPOSAL_PREFIXES = ('I0470-', 'I0480-', 'I0482-', 'saol-')
 
 
 class Command(BaseCommand):
@@ -137,6 +138,10 @@ class Command(BaseCommand):
         json_items = self._load_import_json()
         raw_items.extend(json_items)
 
+        # ── 새올 지자체 행정처분 (로컬 PC 업로드 JSON) ───────────────────────
+        saol_items = self._load_saol_json()
+        raw_items.extend(saol_items)
+
         # ── 국내 부적합 OpenAPI ───────────────────────────────────────────────
         self.stdout.write('  → 국내 부적합 수집 중 (I2620/I2640/I0490/I0470/I0480)...')
         domestic_items = collect_domestic_news(max_rows=limit)
@@ -167,7 +172,9 @@ class Command(BaseCommand):
                         'violation_reason': item.get('violation_reason', ''),
                         'raw_detail_text':  item.get('raw_detail_text', ''),
                         'event_date':       item.get('event_date'),
-                        'ai_parsed':        is_admin,
+                        'ai_parsed':        item.get('ai_parsed', is_admin),
+                        'violation_type':   item.get('violation_type', ''),
+                        'ai_summary':       item.get('ai_summary', ''),
                     },
                 )
                 if not created and not news.api_source and api_source:
@@ -222,6 +229,50 @@ class Command(BaseCommand):
             self.stdout.write(f'     JSON 파일 삭제 완료')
         except Exception as exc:
             logger.warning(f'[JSON 로드] 파일 삭제 실패: {exc}')
+
+        return converted
+
+    def _load_saol_json(self) -> list:
+        """
+        로컬 PC 업로드 새올 JSON 파일 감지 및 로드.
+        파일이 없으면 빈 리스트 반환. 처리 후 파일 삭제.
+        """
+        if not os.path.exists(SAOL_JSON_PATH):
+            self.stdout.write('  → 새올 JSON 파일 없음 (로컬 업로드 미실행)')
+            return []
+
+        try:
+            with open(SAOL_JSON_PATH, 'r', encoding='utf-8') as f:
+                items = json.load(f)
+        except Exception as exc:
+            logger.error(f'[새올 JSON 로드] 파일 읽기 오류: {exc}')
+            return []
+
+        if not items:
+            self.stdout.write('  → 새올 JSON 파일이 비어 있음')
+            os.remove(SAOL_JSON_PATH)
+            return []
+
+        self.stdout.write(self.style.SUCCESS(
+            f'  → 새올 JSON 파일 감지: {len(items)}건 로드 ({SAOL_JSON_PATH})'
+        ))
+
+        # event_date 문자열 → date 객체 변환
+        converted = []
+        for item in items:
+            raw_date = item.get('event_date')
+            if raw_date:
+                try:
+                    item['event_date'] = datetime.strptime(raw_date[:10], '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    item['event_date'] = None
+            converted.append(item)
+
+        try:
+            os.remove(SAOL_JSON_PATH)
+            self.stdout.write('     새올 JSON 파일 삭제 완료')
+        except Exception as exc:
+            logger.warning(f'[새올 JSON 로드] 파일 삭제 실패: {exc}')
 
         return converted
 
