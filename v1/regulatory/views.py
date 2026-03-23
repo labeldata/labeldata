@@ -578,7 +578,7 @@ def mark_false_positive(request):
         return JsonResponse({'success': False, 'error': '매칭 정보를 찾을 수 없습니다.'}, status=404)
 
     unread = NewsProductMatch.objects.filter(
-        product__user_id=request.user, read_yn=False
+        product__user_id=request.user, read_yn=False, false_positive_yn=False
     ).count() + NewsIngredientMatch.objects.filter(
         user=request.user, read_yn=False, dismissed_yn=False
     ).count()

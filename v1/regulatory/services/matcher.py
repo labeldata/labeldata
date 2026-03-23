@@ -33,12 +33,158 @@ MIN_KEYWORD_LEN: int = 2
 # 단어 구분자: 이 문자로 단어를 분리하여 단어 경계 검사
 _WORD_SPLIT_RE = re.compile(r'[\s&/,\(\)\.\[\]\{\}\-\u300c\u300d\u3010\u3011\xb7]+')
 
+# ── 오탐 학습 기반 고도화 상수 ────────────────────────────────────────────────
+# Approach A: 동일 원료에 대한 유사 키워드 오탐 판단 임계값 (0~100)
+_FP_KW_SIMILARITY: int = 85
+# Approach A: 퍼지 확장을 적용할 최소 키워드 길이 (짧은 키워드 오버 필터 방지)
+_FP_MIN_KW_LEN: int = 3
+# Approach C: 위해도 1단계 하향 적용 최소 FP 횟수
+_FP_PENALTY_LIGHT: int = 3
+# Approach C: 위해도 2단계 하향 적용 최소 FP 횟수
+_FP_PENALTY_HEAVY: int = 8
+# 위해도 레벨 순서 (낮은 인덱스 = 낮은 위험)
+_LEVEL_ORDER: list[str] = ['LOW', 'MED', 'HIGH']
+
+
+class _FPPatternCache:
+    """
+    오탐 학습 패턴 캐시 (Approach A + C).
+
+    Approach A — 퍼지 FP 스킵:
+      • 정확 일치 (keyword, ingredient) → 매칭 제외
+      • 동일 원료 + keyword 유사도 ≥ _FP_KW_SIMILARITY → 매칭 제외
+        (keyword 길이 < _FP_MIN_KW_LEN 이면 퍼지 확장 미적용)
+
+    Approach C — 키워드 레벨 위해도 패널티:
+      • 해당 keyword가 FP 누적 횟수 N인 경우 위해도 레벨 자동 하향
+        N < 3  → 변경 없음
+        3 ≤ N < 8 → 1단계 (HIGH→MED, MED→LOW)
+        N ≥ 8     → 2단계 (HIGH→LOW, 나머지 → LOW)
+        LOW 이하로 내려가지 않음
+    """
+
+    def __init__(self, raw_patterns: list[tuple[str, str, int]]) -> None:
+        # (kw_norm, ing_norm) → count
+        self._exact: dict[tuple[str, str], int] = {}
+        # ing_norm → [(kw_norm, count), ...]
+        self._by_ing: dict[str, list[tuple[str, int]]] = {}
+        # kw_norm → 해당 keyword의 전체 FP 누적 횟수
+        self._kw_count: dict[str, int] = {}
+
+        for kw, ing, count in raw_patterns:
+            kw_n, ing_n = kw.strip(), ing.strip()
+            if not kw_n or not ing_n:
+                continue
+            self._exact[(kw_n, ing_n)] = count
+
+            if ing_n not in self._by_ing:
+                self._by_ing[ing_n] = []
+            self._by_ing[ing_n].append((kw_n, count))
+
+            self._kw_count[kw_n] = self._kw_count.get(kw_n, 0) + count
+
+    def is_fp(self, keyword: str, ingredient: str) -> bool:
+        """
+        Approach A: 정확 일치 또는 동일 원료에 대한 유사 키워드 오탐 여부 확인.
+        True 이면 이 매칭을 완전히 제외한다.
+        """
+        kw_n, ing_n = keyword.strip(), ingredient.strip()
+
+        # ① 정확 일치
+        if (kw_n, ing_n) in self._exact:
+            return True
+
+        # ② 퍼지 키워드 확장 — 동일 원료, 표기 변형 키워드
+        if len(kw_n) >= _FP_MIN_KW_LEN:
+            for fp_kw, _ in self._by_ing.get(ing_n, []):
+                if fuzz.ratio(kw_n, fp_kw) >= _FP_KW_SIMILARITY:
+                    return True
+
+        return False
+
+    def keyword_fp_count(self, keyword: str) -> int:
+        """
+        Approach C: keyword의 전체 FP 누적 횟수 반환.
+        이 값이 클수록 위해도 레벨 패널티가 커진다.
+        """
+        return self._kw_count.get(keyword.strip(), 0)
+
+    def __bool__(self) -> bool:
+        return bool(self._exact)
+
+
+def _load_fp_patterns_for_user(user) -> '_FPPatternCache':
+    """
+    별도 테이블 없이 기존 매칭 레코드에서 오탐 패턴을 동적으로 유도한다.
+
+    소스 1 — NewsProductMatch.false_positive_yn=True
+      matched_keyword / matched_ingredient 가 오탐으로 확정된 (키워드, 원료명) 쌍.
+      같은 조합이 반복 오탐될수록 count 증가 → Approach C 패널티 강화.
+
+    소스 2 — NewsIngredientMatch.dismissed_yn=True
+      보관함 원료에 대한 "해당 없음" 처리 이력.
+      ingredient__prdlst_nm 을 원료명으로 사용.
+    """
+    from django.db.models import Count
+
+    prod_fps = list(
+        NewsProductMatch.objects
+        .filter(product__user_id=user, false_positive_yn=True)
+        .values('matched_keyword', 'matched_ingredient')
+        .annotate(count=Count('id'))
+        .values_list('matched_keyword', 'matched_ingredient', 'count')
+    )
+
+    ing_fps_qs = (
+        NewsIngredientMatch.objects
+        .filter(user=user, dismissed_yn=True)
+        .values('matched_keyword', 'ingredient__prdlst_nm')
+        .annotate(count=Count('id'))
+        .values_list('matched_keyword', 'ingredient__prdlst_nm', 'count')
+    )
+    ing_fps = [(kw, ing, cnt) for kw, ing, cnt in ing_fps_qs if ing]
+
+    return _FPPatternCache(prod_fps + ing_fps)
+
+
+def _apply_fp_penalty(risk_dict: dict, fp_count: int) -> dict:
+    """
+    Approach C: FP 키워드 누적 횟수 기반 위해도 레벨 하향 조정.
+
+    패널티 기준:
+      fp_count < 3      → 변경 없음
+      3 ≤ fp_count < 8  → 1단계 하향 (HIGH→MED, MED→LOW)
+      fp_count ≥ 8      → 2단계 하향 (HIGH→LOW, MED→LOW)
+    LOW 이하로 내려가지 않으며 SAFE는 변경 안 함.
+    """
+    level = risk_dict['level']
+    if level in ('SAFE', 'LOW') or fp_count < _FP_PENALTY_LIGHT:
+        return risk_dict
+
+    steps     = 2 if fp_count >= _FP_PENALTY_HEAVY else 1
+    level_idx = _LEVEL_ORDER.index(level)
+    new_level = _LEVEL_ORDER[max(0, level_idx - steps)]
+
+    if new_level == level:
+        return risk_dict
+
+    # 새 레벨의 최대 점수로 조정 (레벨 내 상한선 기준)
+    new_score = {'MED': 15, 'LOW': 5}[new_level]
+    return {
+        'level':   new_level,
+        'score':   new_score,
+        'reasons': risk_dict['reasons'] + [
+            f'오탐 이력({fp_count}회) 반영: {level}→{new_level} 하향',
+        ],
+    }
+
 
 def find_affected_products(
     news: RegulatoryNews,
     user: User,
     prefetched_boms: list | None = None,
     prefetched_ingredients: list | None = None,
+    fp_patterns: '_FPPatternCache | None' = None,
 ) -> list[dict]:
     """
     뉴스의 ai_issues (또는 ai_keywords 폴백)를 해당 사용자의 BOM + 원료 보관함에서 퍼지 매칭.
@@ -65,6 +211,10 @@ def find_affected_products(
     api_source = (news.api_source or '').strip()
     news_pname = (news.product_name or '').strip()
     is_admin   = api_source in ('I0470', 'I0480', 'I0482') or vtype == 'admin'
+
+    # 오탐 패턴 캐시 — Approach A (퍼지 스킵) + C (위해도 패널티) 에 사용
+    if fp_patterns is None:
+        fp_patterns = _load_fp_patterns_for_user(user)
 
     # ── 행정처분 분기: 업체명↔내 제조사 매칭 ──────────────────────────────
     if is_admin:
@@ -122,9 +272,22 @@ def find_affected_products(
             keyword = issue['ingredient']
             score = _fuzzy_score(keyword, bom.ingredient_name)
             if score >= MATCH_THRESHOLD:
+                # Approach A: 정확 일치 또는 유사 키워드 오탐 패턴 → 완전 제외
+                if fp_patterns.is_fp(keyword, bom.ingredient_name):
+                    logger.debug(
+                        f'[오탐 A] {keyword!r} ↔ {bom.ingredient_name!r} — 학습 패턴 제외'
+                    )
+                    continue
                 risk_dict = calculate_risk_score(bom, issue)
                 if risk_dict['level'] == 'SAFE':
                     continue
+                # Approach C: 동일 keyword 누적 FP 횟수 기반 위해도 하향 조정
+                kw_fp = fp_patterns.keyword_fp_count(keyword)
+                if kw_fp >= _FP_PENALTY_LIGHT:
+                    risk_dict = _apply_fp_penalty(risk_dict, kw_fp)
+                    logger.debug(
+                        f'[오탐 C] {keyword!r} FP {kw_fp}회 → {risk_dict["level"]} 하향'
+                    )
                 _update_best(bom.parent_label, bom, keyword, bom.ingredient_name, score, risk_dict)
 
     # ② 원료 보관함(MyIngredient) 매칭 (캐시 우선)
@@ -142,6 +305,14 @@ def find_affected_products(
             keyword = issue['ingredient']
             score = _fuzzy_score(keyword, ing_name)
             if score >= MATCH_THRESHOLD:
+                # Approach A: 정확 일치 또는 유사 키워드 오탐 패턴 → 완전 제외
+                if fp_patterns.is_fp(keyword, ing_name):
+                    logger.debug(
+                        f'[오탐 A] {keyword!r} ↔ {ing_name!r} — 학습 패턴 제외'
+                    )
+                    continue
+                # Approach C: 동일 keyword 누적 FP 횟수 기반 위해도 하향
+                kw_fp = fp_patterns.keyword_fp_count(keyword)
                 for bom in ing.bom_usages.all():
                     product = bom.parent_label
                     if not product or product.delete_YN == 'Y':
@@ -149,6 +320,8 @@ def find_affected_products(
                     risk_dict = calculate_risk_score(bom, issue)
                     if risk_dict['level'] == 'SAFE':
                         continue
+                    if kw_fp >= _FP_PENALTY_LIGHT:
+                        risk_dict = _apply_fp_penalty(risk_dict, kw_fp)
                     _update_best(product, bom, keyword, ing_name, score, risk_dict)
 
     return list(best.values())
@@ -274,6 +447,9 @@ def save_matches(news: RegulatoryNews, matches: list[dict]) -> int:
         if created:
             saved += 1
         else:
+            # 오탐 처리된 레코드는 건드리지 않음 (사용자가 의도적으로 제외한 항목)
+            if obj.false_positive_yn:
+                continue
             # 이미 존재하면 위해도 정보만 갱신
             update_needed = (
                 obj.risk_score != m.get('risk_score', 0) or
@@ -297,6 +473,7 @@ def find_matching_ingredients_unlinked(
     news: RegulatoryNews,
     user: User,
     prefetched_ingredients: list | None = None,
+    fp_patterns: '_FPPatternCache | None' = None,
 ) -> list[dict]:
     """
     어떤 제품 BOM에도 연결되지 않은 원료 보관함(MyIngredient) 항목 중
@@ -320,6 +497,10 @@ def find_matching_ingredients_unlinked(
     # 행정처분 / 표시위반 → 원료 키워드 매칭 불필요
     if is_admin or vtype == 'labeling':
         return []
+
+    # 오탐 패턴 캐시 로드 (A + C)
+    if fp_patterns is None:
+        fp_patterns = _load_fp_patterns_for_user(user)
 
     base_issues = news.ai_issues if news.ai_issues else [
         {'ingredient': kw, 'origin': None, 'manufacturer': None, 'food_type': None}
@@ -362,6 +543,13 @@ def find_matching_ingredients_unlinked(
             if score < MATCH_THRESHOLD:
                 continue
 
+            # Approach A: 정확 일치 또는 유사 키워드 오탐 패턴 → 완전 제외
+            if fp_patterns.is_fp(keyword, ing_name):
+                logger.debug(
+                    f'[오탐 A] {keyword!r} ↔ {ing_name!r} (unlinked) — 학습 패턴 제외'
+                )
+                continue
+
             # 원료 보관함 항목은 BOM 세부정보(origin/manufacturer/food_type)가 없으므로
             # 뉴스의 issue 속성과 원료 자체의 속성만으로 간이 등급 산정
             risk_score = int(score)
@@ -384,6 +572,15 @@ def find_matching_ingredients_unlinked(
             elif origin_match or mfr_match:
                 risk_level = 'MED'
                 risk_score = min(100, int(score) + 10)
+
+            # Approach C: FP 누적 횟수 기반 위해도 레벨 하향 조정
+            kw_fp = fp_patterns.keyword_fp_count(keyword)
+            if kw_fp >= _FP_PENALTY_LIGHT and risk_level not in ('SAFE', 'LOW'):
+                penalized = _apply_fp_penalty(
+                    {'level': risk_level, 'score': risk_score, 'reasons': []}, kw_fp
+                )
+                risk_level = penalized['level']
+                risk_score = min(risk_score, penalized['score'] + int(score))
 
             if score > best_score:
                 best_score = score
@@ -427,6 +624,9 @@ def save_ingredient_matches(news: RegulatoryNews, user: User,
         if created:
             saved += 1
         else:
+            # 해당없음(dismissed) 처리된 레코드는 건드리지 않음
+            if obj.dismissed_yn:
+                continue
             if obj.risk_score != m['risk_score'] or obj.risk_level != m['risk_level']:
                 obj.risk_score = m['risk_score']
                 obj.risk_level = m['risk_level']
@@ -446,6 +646,7 @@ def build_user_match_cache() -> dict:
                 'user':        User instance,
                 'boms':        list[ProductBOM],
                 'ingredients': list[MyIngredient],
+                'fp_patterns': set of (news_keyword, bom_ingredient) tuples,
             },
             ...
         }
@@ -469,7 +670,13 @@ def build_user_match_cache() -> dict:
             .filter(user_id=user, delete_YN='N')
             .prefetch_related('bom_usages__parent_label')
         )
-        cache[user.pk] = {'user': user, 'boms': boms, 'ingredients': ingredients}
+        fp_patterns = _load_fp_patterns_for_user(user)
+        cache[user.pk] = {
+            'user':        user,
+            'boms':        boms,
+            'ingredients': ingredients,
+            'fp_patterns': fp_patterns,
+        }
     return cache
 
 
@@ -489,16 +696,19 @@ def run_matching_for_all_users(news: RegulatoryNews, user_cache: dict | None = N
         # 캐시 사용: DB 재조회 없이 메모리에서 바로 매칭
         for entry in user_cache.values():
             user = entry['user']
+            fp_patterns = entry.get('fp_patterns')
             product_matches = find_affected_products(
                 news, user,
                 prefetched_boms=entry['boms'],
                 prefetched_ingredients=entry['ingredients'],
+                fp_patterns=fp_patterns,
             )
             if product_matches:
                 total += save_matches(news, product_matches)
             ing_matches = find_matching_ingredients_unlinked(
                 news, user,
                 prefetched_ingredients=entry['ingredients'],
+                fp_patterns=fp_patterns,
             )
             if ing_matches:
                 total += save_ingredient_matches(news, user, ing_matches)
