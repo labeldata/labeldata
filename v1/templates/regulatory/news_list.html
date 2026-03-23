@@ -219,6 +219,15 @@
 
     {# ── 왼쪽: 목록만 ── #}
     <aside class="reg-sidebar">
+      <div class="rs-list-header">
+        <span class="rs-list-total">{{ total_count }}건</span>
+        <a class="rs-sort-btn"
+           href="?{{ page_query_string }}&sort={% if sort == 'asc' %}desc{% else %}asc{% endif %}"
+           title="날짜 정렬 순서 변경">
+          <i class="bi bi-sort-{% if sort == 'asc' %}up-alt{% else %}down-alt{% endif %}"></i>
+          {% if sort == 'asc' %}오름차순{% else %}내림차순{% endif %}
+        </a>
+      </div>
       <div class="rs-list-body">
         {% for news in news_list %}
         <div class="rs-item
@@ -234,7 +243,7 @@
               {% if news.api_source == 'saol_admin' %}🏛{% elif news.source == 'domestic' %}🇰🇷{% else %}🌏{% endif %}
             </span>
             <span class="rs-item-name">{{ news.product_name }}</span>
-            <span class="rs-item-date" title="수집: {{ news.collected_date|date:'Y-m-d' }}{% if news.event_date and news.event_date != news.collected_date %} (발생: {{ news.event_date|date:'Y-m-d' }}){% endif %}">{% if news.event_date %}{{ news.event_date|date:"m/d" }}{% else %}{{ news.collected_date|date:"m/d" }}{% endif %}</span>
+            <span class="rs-item-date" title="수집: {{ news.collected_date|date:'Y-m-d' }}{% if news.event_date and news.event_date != news.collected_date %} (발생: {{ news.event_date|date:'Y-m-d' }}){% endif %}">{% if news.event_date %}{% if news.event_date > today %}{{ today|date:"m/d" }}{% else %}{{ news.event_date|date:"m/d" }}{% endif %}{% else %}{% if news.collected_date > today %}{{ today|date:"m/d" }}{% else %}{{ news.collected_date|date:"m/d" }}{% endif %}{% endif %}</span>
             {% if news.my_matched_yn or news.ing_matched_yn %}{% if news.my_action_status != 'resolved' and news.my_ing_action_status != 'resolved' %}<button class="rs-quick-resolve" onclick="quickResolve(event,{{ news.id }})" title="조치 완료로 표시"><i class="bi bi-check-lg"></i></button>{% endif %}{% endif %}
           </div>
 
@@ -277,11 +286,14 @@
               {% endif %}
               {% endwith %}
             {% endif %}
-            {# 업체명 + 위반요약 짧게 #}
+            {# 업체명 + 위반요약 짧게 (saol_admin: 지자체명 + 처분내용) #}
             <span class="rs-row2-right">
-              {{ news.company_name|default:""|truncatechars:14 }}
-              {% if news.violation_reason %}
-                &nbsp;·&nbsp;{{ news.violation_reason|truncatechars:24 }}
+              {% if news.api_source == 'saol_admin' %}
+                {% if news.saol_location %}<span class="rs-saol-loc-tag">{{ news.saol_location }}</span>{% endif %}
+                {% if news.violation_reason %}&nbsp;·&nbsp;{{ news.violation_reason|truncatechars:20 }}{% endif %}
+              {% else %}
+                {{ news.company_name|default:""|truncatechars:14 }}
+                {% if news.violation_reason %}&nbsp;·&nbsp;{{ news.violation_reason|truncatechars:24 }}{% endif %}
               {% endif %}
             </span>
           </div>

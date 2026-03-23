@@ -228,6 +228,17 @@ html.cat-filter-closed #catToggleBtn { transform:rotate(180deg) !important; }
 .rs-chip-divider      { width:1px; height:16px; background:#dadce0; flex-shrink:0; margin:0 2px; }
 
 /* ── 10. 뉴스 목록 아이템 ──────────────────────────────────────── */
+.rs-list-header       { display:flex; align-items:center; justify-content:space-between;
+                        padding:5px 14px; border-bottom:1px solid #e8eaed;
+                        background:#f8f9fa; flex-shrink:0; }
+.rs-list-total        { font-size:11px; color:#80868b; }
+.rs-sort-btn          { font-size:11px; color:#5f6368; text-decoration:none;
+                        display:inline-flex; align-items:center; gap:3px;
+                        padding:2px 6px; border-radius:3px; border:1px solid #dadce0;
+                        background:#fff; transition:background .1s; white-space:nowrap; }
+.rs-sort-btn:hover    { background:#e8eaed; color:#202124; text-decoration:none; }
+.rs-saol-loc-tag      { font-size:10px; color:#7b1fa2; background:#f3e5f5;
+                        padding:0 4px; border-radius:2px; flex-shrink:0; }
 .rs-list-body         { flex:1; overflow-y:auto; min-height:0; }
 .rs-item              { position:relative; padding:10px 14px; border-bottom:1px solid #f1f3f4;
                         cursor:pointer; transition:background .1s; }
@@ -330,8 +341,9 @@ html.cat-filter-closed #catToggleBtn { transform:rotate(180deg) !important; }
 /* ── 16. 헤더 배지 ─────────────────────────────────────────────── */
 .rh-badge   { font-size:10px; font-weight:600; border-radius:3px;
               padding:2px 6px; white-space:nowrap; flex-shrink:0; }
-.rh-src-dom { background:#e8f0fe; color:#1a73e8; }
-.rh-src-imp { background:#fce8e6; color:#c5221f; }
+.rh-src-dom  { background:#e8f0fe; color:#1a73e8; }
+.rh-src-imp  { background:#fce8e6; color:#c5221f; }
+.rh-src-saol { background:#f3e5f5; color:#7b1fa2; }
 .rh-vtype   { background:#f1f3f4; color:#5f6368; }
 .rh-risk-H  { background:#c5221f; color:#fff; }
 .rh-risk-M  { background:#e67700; color:#fff; }
@@ -455,6 +467,13 @@ details[open] .rd-ai-sum::after { content:"▾"; }
 .rd-bom-item   { display:flex; align-items:center; gap:4px; font-size:11px; }
 .rd-no-bom     { font-size:11px; color:#9aa0a6; padding:4px 10px 7px; border-top:1px solid #f1f3f4; }
 
+/* ── 24-b. saol_admin 핵심 정보 카드 ───────────────────────────── */
+.saol-info-card  { padding:10px 18px 12px; border-bottom:1px solid #e8eaed; background:#faf5ff; }
+.saol-key-table  { width:100%; border-collapse:collapse; font-size:12.5px; line-height:1.7; }
+.saol-key-label  { padding:3px 12px 3px 0; color:#6a1b9a; font-weight:700;
+                   white-space:nowrap; vertical-align:top; width:30%; }
+.saol-key-val    { padding:3px 0; color:#202124; word-break:break-word; }
+
 /* ── 25. 원본 수집 데이터 (접기) ────────────────────────────────── */
 .rd-raw-details  { border-bottom:1px solid #e8eaed; }
 .rd-raw-sum      { display:flex; align-items:center; gap:6px; padding:7px 18px;
@@ -468,6 +487,8 @@ details[open] .rd-raw-sum::after { content:"▾"; }
 .rd-raw-key      { padding:2px 10px 2px 0; color:#5f6368; font-weight:600;
                    white-space:nowrap; vertical-align:top; width:38%; }
 .rd-raw-val      { padding:2px 0; color:#202124; word-break:break-word; }
+.rd-raw-section  { padding:6px 0 2px; color:#9aa0a6; font-size:11px;
+                   font-weight:600; letter-spacing:.3px; }
 
 /* ── 26. 등급판정 기준 (접기) ──────────────────────────────────── */
 .rd-crit-details { border-bottom:1px solid #f1f3f4; }

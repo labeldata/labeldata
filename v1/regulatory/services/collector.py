@@ -647,8 +647,48 @@ def _combine_viol(row: dict, keys: list[str], svc_id: str) -> str:
     return _pick(row, keys)
 
 
+# 식품안전나라 OpenAPI 영문 필드명 → 한글 표시명 매핑
+_FIELD_KO: dict[str, str] = {
+    # 공통
+    'PRDTNM':                   '제품명',
+    'PRDT_NM':                  '제품명',
+    'PRDLST_CD_NM':             '식품유형',
+    'BSSHNM':                   '업소명',
+    'BSSH_NM':                  '업소명',
+    'INSTT_NM':                 '검사기관',
+    'ADDR':                     '소재지',
+    # I2620 / I2640 (검사부적합)
+    'TEST_ITMNM':               '검사항목',
+    'TESTANALS_RSLT':           '검출량',
+    'STDR_STND':                '기준규격',
+    'DISTBTMLMT':               '유통기한',
+    # I0490 (회수)
+    'RTRVLPRVNS':               '회수사유',
+    'VIO_CONTNT':               '위반내용',
+    'RECALL_REASON':            '회수이유',
+    'LCNS_NO':                  '허가번호',
+    'PRCSCITYPOINT_BSSHNM':     '처분업소명',
+    # I0470 / I0480 / I0482 (행정처분)
+    'INDUTY_CD_NM':             '업종명',
+    'VILTCN':                   '위반내용',
+    'DSPS_GBN_NM':              '처분구분',
+    'LAWORD_CD_NM':             '법적근거',
+    'DSPSDTLS_SEQ':             '처분번호',
+    'DSPS_DCSNDT':              '처분확정일자',
+    'DSPS_PRCD':                '처분기간',
+    'DSPS_BGNG_DT':             '처분시작일',
+    'DSPS_END_DT':              '처분종료일',
+}
+
+
 def _row_to_text(row: dict, label: str = '') -> str:
-    """OpenAPI row dict → 읽기 좋은 텍스트 (AI 파싱 입력용)"""
+    """OpenAPI row dict → 읽기 좋은 텍스트 (AI 파싱 입력용)
+    영문 API 필드명은 한글 표시명으로 변환합니다.
+    """
     header = f'[{label}]\n' if label else ''
-    lines = [f'{k}: {v}' for k, v in row.items() if v and str(v).strip() and str(v).strip() not in ('-', '데이터없음')]
+    lines = []
+    for k, v in row.items():
+        if v and str(v).strip() and str(v).strip() not in ('-', '데이터없음'):
+            ko_key = _FIELD_KO.get(k, k)
+            lines.append(f'{ko_key}: {v}')
     return header + '\n'.join(lines)

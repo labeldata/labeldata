@@ -6,7 +6,7 @@
 """
 import json
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from v1.regulatory.models import NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews
+from v1.regulatory.saol_url_map import SAOL_URLS
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ def news_list(request):
     risk   = request.GET.get('risk', '')    # 'HIGH' | 'MED' | 'LOW' | ''
     status = request.GET.get('status', '') # 'no_action' | 'monitoring' | 'resolved' | ''
     days   = request.GET.get('days', '30') # '3' | '7' | '30' | 'all'
+    sort   = request.GET.get('sort', 'desc')  # 'desc' | 'asc'
     date_from = request.GET.get('date_from', '').strip()  # YYYY-MM-DD
     date_to   = request.GET.get('date_to',   '').strip()  # YYYY-MM-DD
 
@@ -248,11 +250,19 @@ def news_list(request):
         ing_risk_level=Subquery(ing_risk_subq, output_field=CharField()),
         my_action_status=Subquery(latest_prod_action_subq, output_field=CharField()),
         my_ing_action_status=Subquery(latest_ing_action_subq, output_field=CharField()),
-    ).order_by(
-        F('event_date').desc(nulls_last=True),
-        '-collected_date',
-        '-created_at',
     )
+    if sort == 'asc':
+        qs = qs.order_by(
+            F('event_date').asc(nulls_last=True),
+            'collected_date',
+            'created_at',
+        )
+    else:
+        qs = qs.order_by(
+            F('event_date').desc(nulls_last=True),
+            '-collected_date',
+            '-created_at',
+        )
 
     # 페이지네이션
     page_num = request.GET.get('page', 1)
@@ -263,6 +273,14 @@ def news_list(request):
     qp = request.GET.copy()
     qp.pop('page', None)
     page_query_string = qp.urlencode()
+
+    # saol_admin 지자체명 추출 (목록 패널 표시용)
+    for news_item in page_obj.object_list:
+        if news_item.api_source == 'saol_admin' and news_item.raw_detail_text:
+            first_part = news_item.raw_detail_text.split(' | ')[0]
+            news_item.saol_location = first_part.split(': ', 1)[1].strip() if ': ' in first_part else first_part.strip()
+        else:
+            news_item.saol_location = ''
 
     # 요약 통계 — 현재 기간·카테고리 필터 적용 기준
     total_count   = paginator.count
@@ -347,6 +365,13 @@ def news_list(request):
         except RegulatoryNews.DoesNotExist:
             pass
 
+    # saol_admin 원본 사이트 URL 추출 (external_id: 'saol-{site_code}-{dup_key}')
+    saol_site_url = ''
+    if selected_news and selected_news.api_source == 'saol_admin':
+        ext_parts = selected_news.external_id.split('-', 2)
+        if len(ext_parts) >= 2:
+            saol_site_url = SAOL_URLS.get(ext_parts[1], '')
+
     return render(request, 'regulatory/news_list.html', {
         'news_list':          page_obj,          # 페이지 객체 (이터러블)
         'page_obj':           page_obj,
@@ -371,6 +396,9 @@ def news_list(request):
         'date_to':            date_to,
         'risk_filter':        risk,
         'status_filter':      status,
+        'sort':               sort,
+        'today':              date.today(),
+        'saol_site_url':      saol_site_url,
     })
 
 
