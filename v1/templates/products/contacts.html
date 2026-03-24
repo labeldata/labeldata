@@ -1073,15 +1073,22 @@ function closeDocRequestPanel() {
 
 async function loadDocTypes() {
     if (cachedDocTypes) { renderDocTypes(cachedDocTypes); return; }
-    const res  = await fetch(DOC_TYPES_API);
-    const data = await res.json();
-    cachedDocTypes = data.doc_types;
-    renderDocTypes(cachedDocTypes);
+    try {
+        const res  = await fetch(DOC_TYPES_API);
+        if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+        const data = await res.json();
+        cachedDocTypes = data.doc_types || [];
+        renderDocTypes(cachedDocTypes);
+    } catch(e) {
+        const el = document.getElementById('docTypeList');
+        if (el) el.innerHTML = `<p class="text-danger" style="font-size:13px;">문서 유형을 불러오지 못했습니다. (${e.message})</p>`;
+        console.error('loadDocTypes 실패:', e);
+    }
 }
 
 function renderDocTypes(types) {
     const el = document.getElementById('docTypeList');
-    if (!types.length) {
+    if (!types || !types.length) {
         el.innerHTML = '<p class="text-muted" style="font-size:13px;">등록된 문서 유형이 없습니다.</p>';
         return;
     }
