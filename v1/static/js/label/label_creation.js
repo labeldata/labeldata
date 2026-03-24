@@ -1,5 +1,177 @@
 // 전역 데이터 초기화
 
+// ------------------ OCR 자동 입력 ------------------
+const OCR_FIELD_LABELS = {
+  prdlst_nm: '제품명',
+  prdlst_dcnm: '식품유형',
+  content_weight: '내용량',
+  country_of_origin: '원산지',
+  bssh_nm: '제조원 소재지',
+  storage_method: '보관방법',
+  rawmtrl_nm: '원재료명',
+  cautions: '주의사항',
+  pog_daycnt: '소비기한',
+  distributor_address: '유통전문판매원',
+  ingredient_info: '특정성분 함량',
+  frmlc_mtrqlt: '포장재질',
+};
+
+// 필드명 → 폼 input name 매핑
+const OCR_FORM_FIELDS = {
+  prdlst_nm: 'prdlst_nm',
+  prdlst_dcnm: 'prdlst_dcnm',
+  content_weight: 'content_weight',
+  country_of_origin: 'country_of_origin',
+  bssh_nm: 'bssh_nm',
+  storage_method: 'storage_method',
+  rawmtrl_nm: 'rawmtrl_nm',
+  cautions: 'cautions',
+  pog_daycnt: 'pog_daycnt',
+  distributor_address: 'distributor_address',
+  ingredient_info: 'ingredient_info',
+  frmlc_mtrqlt: 'frmlc_mtrqlt',
+};
+
+document.addEventListener('DOMContentLoaded', function () {
+  const imageInput = document.getElementById('ocrImageInput');
+  const fileNameSpan = document.getElementById('ocrFileName');
+  const extractBtn = document.getElementById('ocrExtractBtn');
+  const statusSpan = document.getElementById('ocrStatus');
+
+  if (!imageInput) return;
+
+  imageInput.addEventListener('change', function () {
+    const file = this.files[0];
+    if (file) {
+      fileNameSpan.textContent = file.name;
+      extractBtn.style.display = 'inline-block';
+      statusSpan.textContent = '';
+    }
+  });
+
+  extractBtn.addEventListener('click', function () {
+    const file = imageInput.files[0];
+    if (!file) return;
+
+    extractBtn.disabled = true;
+    statusSpan.textContent = '분석 중...';
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+
+    fetch('/label/ocr-extract/', {
+      method: 'POST',
+      body: formData,
+    })
+      .then(res => res.json())
+      .then(result => {
+        extractBtn.disabled = false;
+        if (!result.success) {
+          statusSpan.textContent = '오류: ' + result.error;
+          return;
+        }
+        statusSpan.textContent = '';
+        showOcrModal(result.data);
+      })
+      .catch(err => {
+        extractBtn.disabled = false;
+        statusSpan.textContent = '요청 실패: ' + err.message;
+      });
+  });
+});
+
+function showOcrModal(data) {
+  const modalBody = document.getElementById('ocrModalBody');
+  let html = '<table class="table table-bordered table-sm">';
+  html += '<colgroup><col style="width:20%"><col style="width:80%"></colgroup>';
+  html += '<thead><tr><th>필드</th><th>추출 결과</th></tr></thead><tbody>';
+
+  for (const [field, label] of Object.entries(OCR_FIELD_LABELS)) {
+    const item = data[field];
+    if (!item || item.confidence === 'none') continue;
+
+    html += `<tr><td style="font-weight:600; font-size:0.8rem;">${label}</td><td>`;
+
+    if (item.confidence === 'high') {
+      html += `<input type="text" class="form-control form-control-sm ocr-result-input" data-field="${field}" value="${escapeHtml(item.value || '')}">`;
+    } else {
+      // low confidence - 후보 선택지
+      html += `<div style="display:flex; flex-direction:column; gap:4px;">`;
+      const candidates = item.candidates || [];
+      candidates.forEach((candidate, idx) => {
+        html += `<label style="display:flex; align-items:center; gap:6px; margin:0; cursor:pointer;">
+          <input type="radio" name="ocr_candidate_${field}" value="${escapeHtml(candidate)}" ${idx === 0 ? 'checked' : ''}>
+          <span style="font-size:0.9rem;">${escapeHtml(candidate)}</span>
+        </label>`;
+      });
+      html += `<label style="display:flex; align-items:center; gap:6px; margin:0; cursor:pointer;">
+        <input type="radio" name="ocr_candidate_${field}" value="__direct__">
+        <input type="text" class="form-control form-control-sm ocr-direct-input" data-field="${field}" placeholder="직접 입력" style="flex:1;"
+          onfocus="this.previousElementSibling.checked=true;">
+      </label>`;
+      html += `</div>`;
+    }
+
+    html += `</td></tr>`;
+  }
+
+  html += '</tbody></table>';
+  modalBody.innerHTML = html;
+
+  const modal = new bootstrap.Modal(document.getElementById('ocrCandidateModal'));
+  modal.show();
+
+  document.getElementById('ocrApplyBtn').onclick = function () {
+    applyOcrResults(data);
+    modal.hide();
+  };
+}
+
+function applyOcrResults(data) {
+  for (const [field, item] of Object.entries(data)) {
+    if (!item || item.confidence === 'none') continue;
+
+    let value = '';
+
+    if (item.confidence === 'high') {
+      const input = document.querySelector(`.ocr-result-input[data-field="${field}"]`);
+      value = input ? input.value : (item.value || '');
+    } else {
+      const selected = document.querySelector(`input[name="ocr_candidate_${field}"]:checked`);
+      if (selected) {
+        if (selected.value === '__direct__') {
+          const directInput = document.querySelector(`.ocr-direct-input[data-field="${field}"]`);
+          value = directInput ? directInput.value : '';
+        } else {
+          value = selected.value;
+        }
+      }
+    }
+
+    if (!value) continue;
+
+    const formFieldName = OCR_FORM_FIELDS[field];
+    if (!formFieldName) continue;
+
+    const formInput = document.querySelector(`[name="${formFieldName}"]`);
+    if (formInput) {
+      formInput.value = value;
+      formInput.dispatchEvent(new Event('input', { bubbles: true }));
+      formInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // ------------------ 공통 유틸리티 함수 (전역) ------------------
 // CSRF 토큰 쿠키값을 얻는 함수 (Django 공식)
 function getCookie(name) {

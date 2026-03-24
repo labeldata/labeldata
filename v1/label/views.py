@@ -2536,6 +2536,25 @@ def save_preview_settings(request):
 
 @require_POST
 @login_required
+def ocr_extract(request):
+    """표시사항 이미지에서 GPT-4o mini로 필드를 추출합니다."""
+    image_file = request.FILES.get('image')
+    if not image_file:
+        return JsonResponse({'success': False, 'error': '이미지 파일이 없습니다.'}, status=400)
+
+    if image_file.size > 10 * 1024 * 1024:
+        return JsonResponse({'success': False, 'error': '파일 크기는 10MB 이하여야 합니다.'}, status=400)
+
+    if not image_file.content_type.startswith('image/'):
+        return JsonResponse({'success': False, 'error': '이미지 파일만 업로드 가능합니다.'}, status=400)
+
+    from .services.ocr_service import extract_label_from_image
+    result = extract_label_from_image(image_file)
+    return JsonResponse(result)
+
+
+@require_POST
+@login_required
 def upload_label_pdf(request):
     """미리보기 PDF를 문서함에 '한글표시사항도안'으로 등록/업데이트."""
     import traceback

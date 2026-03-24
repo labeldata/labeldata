@@ -87,6 +87,9 @@ urlpatterns = [
     path('linked-labels-count/<int:ingredient_id>/', views.linked_labels_count, name='linked_labels_count'), #삭제했던 url 다시 추가 (원료 관리에서 연결된 표시사항 갯수 확인 용도)
     path('linked-ingredient-count/<int:label_id>/', views.linked_ingredient_count, name='linked_ingredient_count'),
     
+    # OCR
+    path('ocr-extract/', views.ocr_extract, name='ocr_extract'),
+
     # 품목보고번호 검증 관련
     path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
     
