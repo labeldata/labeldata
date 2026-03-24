@@ -233,6 +233,7 @@ def food_item_list(request):
         # q 파라미터로 검색한 경우: search_field에 따라 단일 필드 또는 OR 전체 검색
         if search_q:
             search_values['q'] = search_q
+            search_q_normalized = search_q.replace('-', '')  # 품목보고번호 하이픈 무시 검색용
             _domestic_field_map = {
                 'prdlst_nm': 'prdlst_nm',
                 'prdlst_report_no': 'prdlst_report_no',
@@ -240,31 +241,47 @@ def food_item_list(request):
                 'bssh_nm': 'bssh_nm',
             }
             if search_field != 'all' and search_field in _domestic_field_map:
-                search_conditions &= Q(**{f"{_domestic_field_map[search_field]}__icontains": search_q})
+                if search_field == 'prdlst_report_no':
+                    pass  # 쿼리셋 레벨에서 어노테이션(report_no_normalized)으로 처리
+                else:
+                    search_conditions &= Q(**{f"{_domestic_field_map[search_field]}__icontains": search_q})
             else:
                 search_conditions &= (
                     Q(prdlst_nm__icontains=search_q) |
-                    Q(prdlst_report_no__icontains=search_q) |
+                    Q(report_no_normalized__icontains=search_q_normalized) |
                     Q(prdlst_dcnm__icontains=search_q) |
                     Q(bssh_nm__icontains=search_q)
                 )
+        else:
+            search_q_normalized = ''
 
         has_search_params = any(search_values.values())  # 검색 파라미터 유무 확인
 
         if has_search_params:
-            # 정확 일치 우선 정렬: 검색어가 있고 전체 검색일 때만 적용
-            if search_q and search_field == 'all':
-                from django.db.models import Case, When, Value, IntegerField
-                food_items_qs = FoodItem.objects.filter(search_conditions).annotate(
+            from django.db.models import Case, When, Value, IntegerField
+            from django.db.models.functions import Replace
+            # 품목보고번호 하이픈 무시 검색을 위해 어노테이션 적용
+            base_qs = FoodItem.objects.annotate(
+                report_no_normalized=Replace('prdlst_report_no', Value('-'), Value(''))
+            )
+            if search_q and search_field == 'prdlst_report_no':
+                # 품목보고번호 단독 검색: 하이픈 무시
+                food_items_qs = base_qs.filter(
+                    search_conditions,
+                    report_no_normalized__icontains=search_q_normalized
+                ).order_by(sort_field)
+            elif search_q and search_field == 'all':
+                # 전체 검색: 하이픈 무시 품목보고번호 포함, 정확 일치 우선 정렬
+                food_items_qs = base_qs.filter(search_conditions).annotate(
                     _match_priority=Case(
                         When(prdlst_nm__iexact=search_q, then=Value(0)),
-                        When(prdlst_report_no__iexact=search_q, then=Value(0)),
+                        When(report_no_normalized__iexact=search_q_normalized, then=Value(0)),
                         default=Value(1),
                         output_field=IntegerField(),
                     )
                 ).order_by('_match_priority', sort_field)
             else:
-                food_items_qs = FoodItem.objects.filter(search_conditions).order_by(sort_field)
+                food_items_qs = base_qs.filter(search_conditions).order_by(sort_field)
         else:
             food_items_qs = FoodItem.objects.none()
 

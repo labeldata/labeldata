@@ -15,6 +15,7 @@
       {% elif news.api_source == 'imp_insp' %}<span class="rh-badge rh-src-imp">🌏 수입부적합</span>
       {% elif news.api_source == 'I0470' or news.api_source == 'I0480' %}<span class="rh-badge rh-src-dom">🇰🇷 행정처분</span>
       {% elif news.api_source == 'I0482' %}<span class="rh-badge rh-src-imp">🌏 행정처분</span>
+      {% elif news.api_source == 'saol_admin' %}<span class="rh-badge rh-src-saol">🏛 지자체처분</span>
       {% else %}<span class="rh-badge rh-src-dom">🇰🇷 국내식품</span>
       {% endif %}
       {% if vtype == 'pesticide' %}<span class="rh-badge rh-vtype">🌿 잔류농약</span>
@@ -39,13 +40,27 @@
         {% else %}<span class="rh-badge rh-risk-L rh-risk-ing">🔵 일반·원료</span>{% endif %}
       {% endwith %}{% endif %}
       <div class="ms-auto">
-        <span class="rd-hdr-date">{% if news.event_date %}{{ news.event_date|date:"Y.m.d" }}<span style="font-size:10px;color:#bbb;"> (발생)</span>{% else %}{{ news.collected_date|date:"Y.m.d" }}{% endif %}</span>
-        {% if news.api_source == 'I2620' or news.api_source == 'I2640' or news.api_source == 'I0490' or news.api_source == 'I0470' or news.api_source == 'I0480' %}
-        <a href="https://www.foodsafetykorea.go.kr/portal/specialinfo/searchInfoResult.do?menu_no=54&menu_grp=MENU_NEW04" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식품안전나라</a>
+        <span class="rd-hdr-date">
+          {% if news.event_date %}
+            {% if news.event_date > today %}{{ today|date:"Y.m.d" }}<span style="font-size:10px;color:#f9a825;" title="원본 날짜: {{ news.event_date|date:'Y.m.d' }}"> (날짜 보정)</span>
+            {% else %}{{ news.event_date|date:"Y.m.d" }}<span style="font-size:10px;color:#bbb;"> (발생)</span>{% endif %}
+          {% else %}
+            {% if news.collected_date > today %}{{ today|date:"Y.m.d" }}<span style="font-size:10px;color:#f9a825;" title="원본 날짜: {{ news.collected_date|date:'Y.m.d' }}"> (날짜 보정)</span>
+            {% else %}{{ news.collected_date|date:"Y.m.d" }}{% endif %}
+          {% endif %}
+        </span>
+        {% if news.api_source == 'I2620' or news.api_source == 'I2640' %}
+        <a href="https://www.foodsafetykorea.go.kr/portal/fooddanger/testUnfitDom.do?menu_no=4409&menu_grp=MENU_NEW02" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 국내 검사부적합</a>
+        {% elif news.api_source == 'I0490' %}
+        <a href="https://www.foodsafetykorea.go.kr/portal/fooddanger/suspension.do?menu_no=4408&menu_grp=MENU_NEW02" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 국내 회수·판매중지</a>
+        {% elif news.api_source == 'I0470' or news.api_source == 'I0480' or news.api_source == 'I0482' %}
+        <a href="https://www.foodsafetykorea.go.kr/portal/fooddanger/administMeasureList.do?menu_no=4411&menu_grp=MENU_NEW02" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 행정처분 조회</a>
         {% elif news.api_source == 'imp_insp' %}
-        <a href="https://impfood.mfds.go.kr/CFCEE01F01" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 수입부적합 조회</a>
-        {% elif news.api_source == 'import' or news.api_source == 'I0482' %}
-        <a href="https://impfood.mfds.go.kr/CFCFF01F01" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 회수·판매중지 조회</a>
+        <a href="https://impfood.mfds.go.kr/CFCEE01F01" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 수입 부적합</a>
+        {% elif news.api_source == 'import' %}
+        <a href="https://impfood.mfds.go.kr/CFCFF01F01" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 수입 회수·판매중지</a>
+        {% elif news.api_source == 'saol_admin' %}
+        {% if saol_site_url %}<a href="{{ saol_site_url }}" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 새올전자민원</a>{% else %}<span class="rd-src-link" style="color:#9aa0a6;cursor:default;"><i class="bi bi-box-arrow-up-right"></i> 새올전자민원</span>{% endif %}
         {% endif %}
       </div>
     </div>
@@ -62,9 +77,14 @@
     {% endif %}
   </div>
 
+  {# ══ saol_admin: 핵심 정보 카드 ══ #}
+  {% if news.api_source == 'saol_admin' and news.raw_detail_text %}
+  <div class="saol-info-card" id="saol-info-{{ news.id }}"></div>
+  {% endif %}
+
   {# ══ 원본 수집 데이터 (접기) ══ #}
   {% if news.raw_detail_text %}
-  <details class="rd-raw-details">
+  <details class="rd-raw-details"{% if news.api_source == 'saol_admin' %} open{% endif %}>
     <summary class="rd-raw-sum"><i class="bi bi-file-text"></i> 원본 수집 데이터</summary>
     <div class="rd-raw-body">
       <div class="rd-raw-fields" id="rrf-{{ news.id }}"></div>
@@ -75,20 +95,77 @@
     var el = document.getElementById('rrf-{{ news.id }}');
     if (!el) return;
     var raw = "{{ news.raw_detail_text|escapejs }}";
+    function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    // 영문 API 키 → 한글 표시명 매핑 (식품안전나라 OpenAPI 공통)
+    var FIELD_KO = {
+      'PRDTNM':'제품명','PRDT_NM':'제품명','PRDLST_CD_NM':'식품유형',
+      'BSSHNM':'업소명','BSSH_NM':'업소명','INSTT_NM':'검사기관','ADDR':'소재지',
+      'TEST_ITMNM':'검사항목','TESTANALS_RSLT':'검출량','STDR_STND':'기준규격',
+      'DISTBTMLMT':'유통기한','RTRVLPRVNS':'회수사유','VIO_CONTNT':'위반내용',
+      'RECALL_REASON':'회수이유','LCNS_NO':'허가번호',
+      'PRCSCITYPOINT_BSSHNM':'처분업소명','INDUTY_CD_NM':'업종명',
+      'VILTCN':'위반내용','DSPS_GBN_NM':'처분구분','LAWORD_CD_NM':'법적근거',
+      'DSPSDTLS_SEQ':'처분번호','DSPS_DCSNDT':'처분확정일자',
+      'DSPS_PRCD':'처분기간','DSPS_BGNG_DT':'처분시작일','DSPS_END_DT':'처분종료일',
+    };
+
+    {% if news.api_source == 'saol_admin' %}
+    // saol_admin: 파이프(|) 구분 형식 파싱 (한글 필드명 그대로 사용)
+    var IMPORTANT = {'지자체명':1,'업소명':1,'업종':1,'처분내용':1,'처분일자':1,'위반내용':1};
+    var parts = raw.split(' | ');
+    var fields = [];
+    parts.forEach(function(part){
+      part = part.trim();
+      if (!part) return;
+      var idx = part.indexOf(': ');
+      var key = idx > -1 ? part.substring(0, idx).trim() : '';
+      var val = idx > -1 ? part.substring(idx + 2).trim() : part.trim();
+      if (val) fields.push({key: FIELD_KO[key] || key, val: val});
+    });
+
+    // 핵심 정보 카드 렌더링
+    var cardEl = document.getElementById('saol-info-{{ news.id }}');
+    if (cardEl) {
+      var cHtml = '<table class="saol-key-table">';
+      fields.forEach(function(f){
+        if (IMPORTANT[f.key]) {
+          cHtml += '<tr><td class="saol-key-label">' + esc(f.key) + '</td><td class="saol-key-val">' + esc(f.val) + '</td></tr>';
+        }
+      });
+      cHtml += '</table>';
+      cardEl.innerHTML = cHtml;
+    }
+
+    // 전체 원본 테이블
+    var html = '<table class="rd-raw-table">';
+    fields.forEach(function(f){
+      html += '<tr><td class="rd-raw-key">' + esc(f.key) + '</td><td class="rd-raw-val">' + esc(f.val) + '</td></tr>';
+    });
+    html += '</table>';
+    el.innerHTML = html;
+
+    {% else %}
+    // 일반(국내/수입): 줄바꿈 구분 형식 + 영문 API 키 → 한글 변환
     var rows = raw.split('\n');
     var html = '<table class="rd-raw-table">';
     rows.forEach(function(line){
       line = line.trim();
       if (!line) return;
       var idx = line.indexOf(': ');
-      var key = idx > -1 ? line.substring(0, idx) : '';
-      var val = idx > -1 ? line.substring(idx + 2) : line;
+      if (idx === -1) {
+        // 헤더행 (예: [행정처분]) — 섹션 구분선으로 표시
+        html += '<tr><td colspan="2" class="rd-raw-section">' + esc(line) + '</td></tr>';
+        return;
+      }
+      var key = line.substring(0, idx);
+      var val = line.substring(idx + 2);
       if (!val) return;
-      html += '<tr><td class="rd-raw-key">' + esc(key) + '</td><td class="rd-raw-val">' + esc(val) + '</td></tr>';
+      html += '<tr><td class="rd-raw-key">' + esc(FIELD_KO[key] || key) + '</td><td class="rd-raw-val">' + esc(val) + '</td></tr>';
     });
     html += '</table>';
     el.innerHTML = html;
-    function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    {% endif %}
   }());
   </script>
   {% endif %}

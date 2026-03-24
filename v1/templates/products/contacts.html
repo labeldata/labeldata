@@ -1073,27 +1073,35 @@ function closeDocRequestPanel() {
 
 async function loadDocTypes() {
     if (cachedDocTypes) { renderDocTypes(cachedDocTypes); return; }
-    const res  = await fetch(DOC_TYPES_API);
-    const data = await res.json();
-    cachedDocTypes = data.doc_types;
-    renderDocTypes(cachedDocTypes);
+    try {
+        const res  = await fetch(DOC_TYPES_API);
+        if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+        const data = await res.json();
+        cachedDocTypes = data.doc_types || [];
+        renderDocTypes(cachedDocTypes);
+    } catch(e) {
+        const el = document.getElementById('docTypeList');
+        if (el) el.innerHTML = `<p class="text-danger" style="font-size:13px;">문서 유형을 불러오지 못했습니다. (${e.message})</p>`;
+        console.error('loadDocTypes 실패:', e);
+    }
 }
 
 function renderDocTypes(types) {
     const el = document.getElementById('docTypeList');
-    if (!types.length) {
+    if (!types || !types.length) {
         el.innerHTML = '<p class="text-muted" style="font-size:13px;">등록된 문서 유형이 없습니다.</p>';
         return;
     }
-    el.innerHTML = types.map(t => `
-        <label class="d-flex align-items-center gap-2 p-2 rounded mb-1" style="cursor:pointer;border:1px solid #e8eaed;font-size:13px;"
+    const items = types.map(t => `
+        <label class="d-flex align-items-center gap-2 p-2 rounded" style="cursor:pointer;border:1px solid #e8eaed;font-size:13px;"
                onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background=''">
-            <input type="checkbox" class="doc-type-chk" value="${t.type_id}" style="width:15px;height:15px;">
-            <i class="bi ${t.icon || 'bi-file-earmark'}" style="color:${t.color || '#6c757d'};font-size:15px;"></i>
-            <span>${t.type_name}</span>
-            ${t.required_yn ? '<span class="badge bg-danger ms-auto" style="font-size:10px;">필수</span>' : ''}
+            <input type="checkbox" class="doc-type-chk" value="${t.type_id}" style="width:15px;height:15px;flex-shrink:0;">
+            <i class="bi ${t.icon || 'bi-file-earmark'}" style="color:${t.color || '#6c757d'};font-size:15px;flex-shrink:0;"></i>
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.type_name}</span>
+            ${t.required_yn ? '<span class="badge bg-danger ms-auto" style="font-size:10px;flex-shrink:0;">필수</span>' : ''}
         </label>`
     ).join('');
+    el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px;">${items}</div>`;
 }
 
 // 내 제품 목록 로드 (자료 요청 연결용)
