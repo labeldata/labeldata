@@ -185,6 +185,8 @@ def find_affected_products(
     prefetched_boms: list | None = None,
     prefetched_ingredients: list | None = None,
     fp_patterns: '_FPPatternCache | None' = None,
+    prefetched_labels: list | None = None,
+    prefetched_contacts: list | None = None,
 ) -> list[dict]:
     """
     뉴스의 ai_issues (또는 ai_keywords 폴백)를 해당 사용자의 BOM + 원료 보관함에서 퍼지 매칭.
@@ -218,7 +220,11 @@ def find_affected_products(
 
     # ── 행정처분 분기: 업체명↔내 제조사 매칭 ──────────────────────────────
     if is_admin:
-        return _find_admin_matches(news, user, api_source)
+        return _find_admin_matches(
+            news, user, api_source,
+            prefetched_boms=prefetched_boms,
+            prefetched_contacts=prefetched_contacts,
+        )
 
     # 표시위반은 원료 매칭 불필요
     if vtype == 'labeling':
@@ -324,17 +330,190 @@ def find_affected_products(
                         risk_dict = _apply_fp_penalty(risk_dict, kw_fp)
                     _update_best(product, bom, keyword, ing_name, score, risk_dict)
 
+    # ③ 제품 레벨 매칭 (제품명·식품유형·제조사·연락처 업체명)
+    product_level = _find_product_level_matches(
+        news, user, issues,
+        prefetched_labels=prefetched_labels,
+        prefetched_contacts=prefetched_contacts,
+        prefetched_boms=prefetched_boms,
+    )
+    for m in product_level:
+        _update_best(
+            m['product'], m['matched_bom'],
+            m['matched_keyword'], m['matched_ingredient'],
+            m['score'], {'level': m['risk_level'], 'score': m['risk_score'], 'reasons': m['risk_reasons']},
+        )
+
     return list(best.values())
 
 
-def _find_admin_matches(news: RegulatoryNews, user: User, api_source: str) -> list[dict]:
+def _find_product_level_matches(
+    news: RegulatoryNews,
+    user: User,
+    issues: list[dict],
+    prefetched_labels: list | None = None,
+    prefetched_contacts: list | None = None,
+    prefetched_boms: list | None = None,
+) -> list[dict]:
+    """
+    제품 레벨 매칭: 원료 키워드 매칭 없이 제품·제조사·연락처 정보를 직접 비교.
+      - 제품명  : news.product_name ↔ MyLabel.my_label_name
+      - 식품유형: issues[].food_type ↔ MyLabel.food_type
+      - 제조사  : issues[].manufacturer ↔ MyLabel 제조원/유통전문판매원/소분원/수입원
+                  정확일치 → MED, 부분일치 → LOW
+      - 연락처  : news.company_name / issues[].manufacturer ↔ UserContact.company
+                  → 연락처 회사와 일치하는 BOM 제조사를 가진 제품에 알림
+    """
+    from v1.bom.models import ProductBOM
+    from v1.label.models import MyLabel
+    from v1.products.models import UserContact
+
+    # ── 데이터 로드 (캐시 우선) ──────────────────────────────────────────────
+    user_labels = prefetched_labels if prefetched_labels is not None else list(
+        MyLabel.objects
+        .filter(user_id=user, delete_YN='N')
+        .only('my_label_id', 'my_label_name', 'prdlst_nm', 'food_type', 'prdlst_dcnm',
+              'bssh_nm', 'distributor_address', 'repacker_address', 'importer_address',
+              'user_id', 'delete_YN')
+    )
+    user_contacts = prefetched_contacts if prefetched_contacts is not None else list(
+        UserContact.objects.filter(owner=user).only('company')
+    )
+    user_boms = prefetched_boms if prefetched_boms is not None else list(
+        ProductBOM.objects
+        .filter(parent_label__user_id=user, parent_label__delete_YN='N')
+        .select_related('parent_label')
+        .only('bom_id', 'ingredient_name', 'manufacturer',
+              'parent_label_id', 'parent_label__my_label_id',
+              'parent_label__my_label_name', 'parent_label__user_id',
+              'parent_label__delete_YN')
+    )
+
+    LABEL_COMPANY_FIELDS = [
+        ('bssh_nm',             '제조원'),
+        ('distributor_address', '유통전문판매원'),
+        ('repacker_address',    '소분원'),
+        ('importer_address',    '수입원'),
+    ]
+    LEVEL_SCORE = {'HIGH': 30, 'MED': 15, 'LOW': 7}
+    best: dict[int, dict] = {}
+
+    def _update(label, bom, keyword, ingredient, score, level, reasons):
+        pid = label.my_label_id
+        rs  = LEVEL_SCORE.get(level, 5)
+        if pid not in best or rs > best[pid]['risk_score']:
+            best[pid] = {
+                'product': label, 'matched_bom': bom,
+                'matched_keyword': keyword, 'matched_ingredient': ingredient,
+                'score': score, 'risk_score': rs,
+                'risk_level': level, 'risk_reasons': reasons,
+            }
+
+    news_pname  = (news.product_name or '').strip()
+    news_company = _normalize_corp(news.company_name or '')
+
+    for label in user_labels:
+        # ── 1) 제품명 비교 ───────────────────────────────────────────────────
+        if news_pname:
+            label_pname = (label.my_label_name or label.prdlst_nm or '').strip()
+            if label_pname:
+                ps = fuzz.partial_ratio(label_pname.lower(), news_pname.lower())
+                if ps >= 80:
+                    level = 'MED' if ps >= 92 else 'LOW'
+                    _update(label, None, news_pname, label_pname, float(ps), level,
+                            [f'제품명 유사({ps}%)', f'부적합 제품: {news_pname[:30]}'])
+
+        # ── 2) 식품유형 비교 ─────────────────────────────────────────────────
+        label_ftype = (label.food_type or label.prdlst_dcnm or '').strip()
+        if label_ftype:
+            for issue in issues:
+                issue_ftype = (issue.get('food_type') or '').strip()
+                if issue_ftype and (issue_ftype in label_ftype or label_ftype in issue_ftype):
+                    _update(label, None, issue_ftype, label_ftype, 80.0, 'LOW',
+                            [f'식품유형 일치({issue_ftype})', f'내 제품 유형: {label_ftype[:20]}'])
+
+        # ── 3) 제조사(MyLabel 필드) ↔ issues[].manufacturer ─────────────────
+        for issue in issues:
+            issue_mfr = _normalize_corp(issue.get('manufacturer') or '')
+            if not issue_mfr:
+                continue
+            for field_attr, field_label in LABEL_COMPANY_FIELDS:
+                norm_val = _normalize_corp(getattr(label, field_attr, None) or '')
+                if not norm_val:
+                    continue
+                raw_val = (getattr(label, field_attr, None) or '')
+                if norm_val == issue_mfr:
+                    _update(label, None, issue.get('manufacturer', ''), raw_val[:200],
+                            100.0, 'MED',
+                            [f'제조사 정확일치({issue.get("manufacturer", "")[:20]})',
+                             f'{field_label}: {raw_val[:30]}'])
+                elif issue_mfr in norm_val or norm_val in issue_mfr:
+                    sc = fuzz.ratio(issue_mfr, norm_val)
+                    if sc >= 70:
+                        _update(label, None, issue.get('manufacturer', ''), raw_val[:200],
+                                float(sc), 'LOW',
+                                [f'제조사 부분일치({issue.get("manufacturer", "")[:20]})',
+                                 f'{field_label}: {raw_val[:30]}'])
+
+    # ── 4) 연락처 업체명 비교 → BOM 제조사 경유 제품 연결 ────────────────────
+    # news.company_name 및 issues[].manufacturer 를 연락처 업체명과 비교
+    compare_corps: set[str] = set()
+    if news_company:
+        compare_corps.add(news_company)
+    for issue in issues:
+        c = _normalize_corp(issue.get('manufacturer') or '')
+        if c:
+            compare_corps.add(c)
+
+    if compare_corps and user_contacts:
+        for contact in user_contacts:
+            contact_corp = _normalize_corp(contact.company or '')
+            if not contact_corp:
+                continue
+            for cmp in compare_corps:
+                is_exact   = (contact_corp == cmp)
+                is_partial = not is_exact and (contact_corp in cmp or cmp in contact_corp)
+                if not (is_exact or is_partial):
+                    continue
+                sc = fuzz.ratio(contact_corp, cmp)
+                if sc < 70:
+                    continue
+                level = 'MED' if is_exact else 'LOW'
+                for bom in user_boms:
+                    bom_corp = _normalize_corp(bom.manufacturer or '')
+                    if not bom_corp:
+                        continue
+                    if bom_corp == contact_corp or contact_corp in bom_corp or bom_corp in contact_corp:
+                        if fuzz.ratio(bom_corp, contact_corp) < 70:
+                            continue
+                        _update(
+                            bom.parent_label, bom,
+                            contact.company or '', bom.manufacturer or '',
+                            float(sc), level,
+                            [f'연락처 업체 {"정확" if is_exact else "부분"}일치'
+                             f'({(contact.company or "")[:20]})',
+                             f'원료 제조사: {(bom.manufacturer or "")[:20]}',
+                             f'해당원료: {(bom.ingredient_name or "")[:20]}'],
+                        )
+
+    return list(best.values())
+
+
+def _find_admin_matches(
+    news: RegulatoryNews,
+    user: User,
+    api_source: str,
+    prefetched_boms: list | None = None,
+    prefetched_contacts: list | None = None,
+) -> list[dict]:
     """
     행정처분 전용 매칭: 뉴스 업체명이 내 BOM 원료의 제조사 또는
-    제품 기본정보(제조원·유통전문판매원·소분원)와 일치하는지 확인.
+    제품 기본정보(제조원·유통전문판매원·소분원) 또는 연락처 업체명과 일치하는지 확인.
     일치 시 MED 등급으로 알림. (원료 키워드 매칭 없이 업체명만 비교)
     """
     from v1.bom.models import ProductBOM
     from v1.label.models import MyLabel
+    from v1.products.models import UserContact
 
     news_company = _normalize_corp(news.company_name or '')
     if not news_company:
@@ -343,7 +522,7 @@ def _find_admin_matches(news: RegulatoryNews, user: User, api_source: str) -> li
     best: dict[int, dict] = {}
 
     # ── 1) BOM 원료 제조사 매칭 ────────────────────────────────────
-    user_boms = (
+    user_boms = prefetched_boms if prefetched_boms is not None else list(
         ProductBOM.objects
         .filter(parent_label__user_id=user, parent_label__delete_YN='N')
         .select_related('parent_label')
@@ -416,6 +595,49 @@ def _find_admin_matches(news: RegulatoryNews, user: User, api_source: str) -> li
                     'risk_level':         'MED',
                     'risk_reasons':       [f'처분업체 일치({(news.company_name or "")[:20]})',
                                            f'{field_label}: {field_val[:30]}'],
+                }
+
+    # ── 3) 연락처 업체명 매칭 → BOM 제조사 경유 제품 연결 ──────────────────
+    user_contacts = prefetched_contacts if prefetched_contacts is not None else list(
+        UserContact.objects.filter(owner=user).only('company')
+    )
+    for contact in user_contacts:
+        contact_corp = _normalize_corp(contact.company or '')
+        if not contact_corp:
+            continue
+        if news_company not in contact_corp and contact_corp not in news_company:
+            continue
+        sc = fuzz.ratio(news_company, contact_corp)
+        if sc < 70:
+            continue
+        is_exact = (news_company == contact_corp)
+        level    = 'MED' if is_exact else 'LOW'
+        for bom in user_boms:
+            bom_corp = _normalize_corp(bom.manufacturer or '')
+            if not bom_corp:
+                continue
+            if bom_corp != contact_corp and contact_corp not in bom_corp and bom_corp not in contact_corp:
+                continue
+            if fuzz.ratio(bom_corp, contact_corp) < 70:
+                continue
+            pid = bom.parent_label.my_label_id
+            cur_score = best.get(pid, {}).get('risk_score', -1)
+            if pid not in best or int(sc) > cur_score:
+                best[pid] = {
+                    'product':            bom.parent_label,
+                    'matched_bom':        bom,
+                    'matched_keyword':    news.company_name or '',
+                    'matched_ingredient': bom.manufacturer or '',
+                    'score':              float(sc),
+                    'risk_score':         int(sc),
+                    'risk_level':         level,
+                    'risk_reasons':       [
+                        f'처분업체-연락처 {"정확" if is_exact else "부분"}일치'
+                        f'({(news.company_name or "")[:20]})',
+                        f'연락처: {(contact.company or "")[:20]}',
+                        f'원료 제조사: {(bom.manufacturer or "")[:20]}',
+                        f'해당원료: {(bom.ingredient_name or "")[:20]}',
+                    ],
                 }
 
     return list(best.values())
@@ -636,7 +858,7 @@ def save_ingredient_matches(news: RegulatoryNews, user: User,
 
 def build_user_match_cache() -> dict:
     """
-    모든 활성 사용자의 BOM·원료 보관함 데이터를 한 번에 조회하여 캐시 반환.
+    모든 활성 사용자의 BOM·원료 보관함·제품·연락처 데이터를 한 번에 조회하여 캐시 반환.
     매칭 배치 실행 전 1회 호출하면 뉴스 건수 × 사용자 수만큼 반복되던
     DB 쿼리를 사용자 수만큼으로 줄일 수 있다.
 
@@ -646,13 +868,16 @@ def build_user_match_cache() -> dict:
                 'user':        User instance,
                 'boms':        list[ProductBOM],
                 'ingredients': list[MyIngredient],
-                'fp_patterns': set of (news_keyword, bom_ingredient) tuples,
+                'labels':      list[MyLabel],
+                'contacts':    list[UserContact],
+                'fp_patterns': _FPPatternCache,
             },
             ...
         }
     """
     from v1.bom.models import ProductBOM
-    from v1.label.models import MyIngredient
+    from v1.label.models import MyIngredient, MyLabel
+    from v1.products.models import UserContact
 
     cache = {}
     for user in User.objects.filter(is_active=True):
@@ -670,11 +895,23 @@ def build_user_match_cache() -> dict:
             .filter(user_id=user, delete_YN='N')
             .prefetch_related('bom_usages__parent_label')
         )
+        labels = list(
+            MyLabel.objects
+            .filter(user_id=user, delete_YN='N')
+            .only('my_label_id', 'my_label_name', 'prdlst_nm', 'food_type', 'prdlst_dcnm',
+                  'bssh_nm', 'distributor_address', 'repacker_address', 'importer_address',
+                  'user_id', 'delete_YN')
+        )
+        contacts = list(
+            UserContact.objects.filter(owner=user).only('company')
+        )
         fp_patterns = _load_fp_patterns_for_user(user)
         cache[user.pk] = {
             'user':        user,
             'boms':        boms,
             'ingredients': ingredients,
+            'labels':      labels,
+            'contacts':    contacts,
             'fp_patterns': fp_patterns,
         }
     return cache
@@ -702,6 +939,8 @@ def run_matching_for_all_users(news: RegulatoryNews, user_cache: dict | None = N
                 prefetched_boms=entry['boms'],
                 prefetched_ingredients=entry['ingredients'],
                 fp_patterns=fp_patterns,
+                prefetched_labels=entry.get('labels'),
+                prefetched_contacts=entry.get('contacts'),
             )
             if product_matches:
                 total += save_matches(news, product_matches)
@@ -876,15 +1115,24 @@ def calculate_risk_score(bom, news_issue: dict) -> dict:
             reasons.append(f"원산지 불일치({news_origin} ≠ {bom_origin})")
 
     # ── 공통: 제조사 비교 ────────────────────────────────────────────────────
+    # mfr_exact_match : 정규화 후 완전 일치 → 관심(MED)
+    # mfr_partial_match: 한쪽이 다른쪽을 포함(부분 일치) → 일반(LOW)
     news_mfr = (news_issue.get('manufacturer') or '').strip()
     bom_mfr  = (getattr(bom, 'manufacturer', '') or '').strip()
-    mfr_match = False
+    mfr_exact_match   = False
+    mfr_partial_match = False
     if news_mfr and bom_mfr:
         n_corp = _normalize_corp(news_mfr)
         b_corp = _normalize_corp(bom_mfr)
-        if n_corp and b_corp and (n_corp in b_corp or b_corp in n_corp):
-            mfr_match = True
-            reasons.append(f"제조업체 일치({news_mfr[:15]})")
+        if n_corp and b_corp:
+            if n_corp == b_corp:
+                mfr_exact_match = True
+                reasons.append(f"제조업체 정확일치({news_mfr[:15]})")
+            elif n_corp in b_corp or b_corp in n_corp:
+                mfr_partial_match = True
+                reasons.append(f"제조업체 부분일치({news_mfr[:15]})")
+    # 하위 호환: 기존 mfr_match 참조 코드를 위해 정확일치일 때만 True
+    mfr_match = mfr_exact_match
 
     # ── 공통: 제품명 유사도 ──────────────────────────────────────────────────
     news_pname = (news_issue.get('_news_product_name') or '').strip()
@@ -905,7 +1153,7 @@ def calculate_risk_score(bom, news_issue: dict) -> dict:
         reasons.append(f"식품유형 일치({news_ft})")
 
     # ── 공통: 원산지 확실 불일치 시 SAFE (모든 카테고리 공통) ─────────────────
-    if origin_conflict and not mfr_match and not pname_match and not ftype_match:
+    if origin_conflict and not mfr_exact_match and not mfr_partial_match and not pname_match and not ftype_match:
         return {'level': 'SAFE', 'score': 0, 'reasons': reasons}
 
     # ────────────────────────────────────────────────────────────────────────
@@ -921,26 +1169,32 @@ def calculate_risk_score(bom, news_issue: dict) -> dict:
             level = 'LOW';  score = 5
 
     elif category == 'import':
-        # 수입: 원산지·식품유형·제조사 중 2개+ → HIGH / 1개 → MED
-        match_cnt = sum([origin_match, ftype_match, mfr_match])
+        # 수입: 원산지·식품유형·제조사(정확) 중 2개+ → HIGH / 1개 → MED
+        # 제조사 부분일치 단독 → LOW
+        match_cnt = sum([origin_match, ftype_match, mfr_exact_match])
         if match_cnt >= 2:
             level = 'HIGH'; score = match_cnt * 10
         elif match_cnt == 1:
             level = 'MED';  score = 10
+        elif mfr_partial_match:
+            level = 'LOW';  score = 7
         else:
             level = 'LOW';  score = 5
 
     else:
         # 국내가공 (I2620, I0490 등)
-        # 제조사 + 제품명 일치 → HIGH (특급)
-        if mfr_match and pname_match:
+        # 제조사(정확) + 제품명 일치 → HIGH (특급)
+        if mfr_exact_match and pname_match:
             level = 'HIGH'; score = 30
-        # 식품유형 + (제조사 or 원산지) → MED
-        elif ftype_match and (mfr_match or origin_match):
+        # 식품유형 + (제조사 정확 or 원산지) → MED
+        elif ftype_match and (mfr_exact_match or origin_match):
             level = 'MED';  score = 15
-        # 제조사 단독 or 원산지 단독 → MED
-        elif mfr_match or origin_match:
+        # 제조사 정확 단독 or 원산지 단독 → MED (관심)
+        elif mfr_exact_match or origin_match:
             level = 'MED';  score = 10
+        # 제조사 부분일치 단독 → LOW (일반)
+        elif mfr_partial_match:
+            level = 'LOW';  score = 7
         else:
             level = 'LOW';  score = 5
 
