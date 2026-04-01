@@ -1,4 +1,4 @@
-﻿{% extends "admin/base_site.html" %}
+{% extends "admin/base_site.html" %}
 {% load static %}
 
 {% block extrahead %}
@@ -15,20 +15,23 @@
         padding: 20px;
         max-width: 1600px;
         margin: 0 auto;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
-    /* 헤더 */
+    /* ── 헤더 ── */
     .dashboard-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 30px;
-        padding-bottom: 20px;
+        margin-bottom: 28px;
+        padding-bottom: 18px;
         border-bottom: 3px solid #667eea;
+        flex-wrap: wrap;
+        gap: 12px;
     }
 
     .dashboard-title {
-        font-size: 28px;
+        font-size: 26px;
         font-weight: 700;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
@@ -36,20 +39,29 @@
         background-clip: text;
     }
 
+    .period-display {
+        font-size: 13px;
+        color: #6b7280;
+        margin-top: 4px;
+    }
+
     .period-filter {
         display: flex;
-        gap: 10px;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
     }
 
     .period-btn {
-        padding: 8px 16px;
+        padding: 7px 14px;
         border: 2px solid #667eea;
         background: white;
         color: #667eea;
         border-radius: 8px;
         cursor: pointer;
         font-weight: 600;
-        transition: all 0.3s;
+        font-size: 13px;
+        transition: all 0.2s;
         text-decoration: none;
         display: inline-block;
     }
@@ -57,7 +69,6 @@
     .period-btn:hover {
         background: #667eea;
         color: white;
-        transform: translateY(-2px);
     }
 
     .period-btn.active {
@@ -66,267 +77,308 @@
         border-color: #764ba2;
     }
 
-    .period-display {
-        font-size: 14px;
-        color: #6b7280;
-        margin-top: 10px;
+    /* ── 공통 섹션 ── */
+    .section {
+        background: white;
+        border-radius: 12px;
+        padding: 22px 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
-    /* 통계 카드 그리드 */
+    .section-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1f2937;
+        margin: 0 0 18px 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .section-title .sub {
+        font-size: 12px;
+        font-weight: 400;
+        color: #9ca3af;
+    }
+
+    /* ── 주요 통계 카드 ── */
     .stats-grid {
         display: grid;
         grid-template-columns: repeat(6, 1fr);
-        gap: 20px;
-        margin-bottom: 30px;
+        gap: 16px;
+        margin-bottom: 24px;
     }
 
     @media (max-width: 1400px) {
-        .stats-grid {
-            grid-template-columns: repeat(3, 1fr);
-        }
+        .stats-grid { grid-template-columns: repeat(3, 1fr); }
     }
 
     @media (max-width: 768px) {
-        .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
+        .stats-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
     .stat-card {
         background: white;
         border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        transition: all 0.3s;
+        padding: 18px 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         border-left: 4px solid #667eea;
+        transition: transform 0.2s, box-shadow 0.2s;
     }
 
     .stat-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
+        transform: translateY(-3px);
+        box-shadow: 0 6px 18px rgba(102,126,234,0.18);
     }
 
     .stat-label {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         color: #6b7280;
         text-transform: uppercase;
-        margin-bottom: 8px;
+        letter-spacing: 0.04em;
+        margin-bottom: 6px;
     }
 
     .stat-value {
-        font-size: 32px;
+        font-size: 30px;
         font-weight: 700;
         color: #1f2937;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
+        line-height: 1;
     }
 
-    .stat-meta {
-        font-size: 12px;
-        color: #9ca3af;
+    .stat-meta { font-size: 11px; color: #9ca3af; }
+    .stat-change { font-size: 13px; font-weight: 600; margin-left: 6px; }
+    .positive { color: #10b981; }
+    .negative { color: #ef4444; }
+    .neutral { color: #9ca3af; }
+
+    /* ── UI 버전 현황 ── */
+    .ui-mode-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: center;
     }
 
-    .stat-change {
-        font-size: 14px;
-        font-weight: 600;
-        margin-left: 8px;
-    }
-
-    .stat-change.positive {
-        color: #34d399;
-    }
-
-    .stat-change.negative {
-        color: #f87171;
-    }
-
-    .stat-change.neutral {
-        color: #6b7280;
-    }
-
-    /* 섹션 */
-    .section {
-        background: white;
-        border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 30px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .section-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 20px;
+    .ui-version-card {
         display: flex;
         align-items: center;
-        gap: 10px;
-    }
-
-    /* 카테고리 통계 */
-    .category-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
         gap: 16px;
+        padding: 16px 20px;
+        border-radius: 10px;
+        background: #f9fafb;
     }
 
-    @media (max-width: 1400px) {
-        .category-grid {
+    .ui-version-card.v1 { border-left: 4px solid #6366f1; }
+    .ui-version-card.v2 { border-left: 4px solid #8b5cf6; }
+
+    .ui-version-icon {
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .ui-version-card.v1 .ui-version-icon { color: #6366f1; }
+    .ui-version-card.v2 .ui-version-icon { color: #8b5cf6; }
+
+    .ui-version-info { flex: 1; }
+    .ui-version-label { font-size: 12px; color: #6b7280; font-weight: 600; margin-bottom: 2px; }
+    .ui-version-count { font-size: 26px; font-weight: 700; color: #1f2937; line-height: 1; }
+    .ui-version-pct { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .ui-version-change { font-size: 12px; font-weight: 600; text-align: right; }
+
+    .ui-bar-wrap {
+        grid-column: 1 / -1;
+        margin-top: 4px;
+    }
+
+    .ui-bar-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #6b7280;
+        margin-bottom: 4px;
+    }
+
+    .ui-bar {
+        width: 100%;
+        height: 12px;
+        background: #e5e7eb;
+        border-radius: 6px;
+        overflow: hidden;
+        display: flex;
+    }
+
+    .ui-bar-v1 {
+        background: #6366f1;
+        height: 100%;
+    }
+
+    .ui-bar-v2 {
+        background: #8b5cf6;
+        height: 100%;
+    }
+
+    /* ── 기능 통계 그룹 ── */
+    .feature-group {
+        margin-bottom: 20px;
+    }
+
+    .feature-group:last-child { margin-bottom: 0; }
+
+    .feature-group-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .group-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+    .feature-group-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    /* 그룹별 강조 색상 */
+    .gd-label .group-dot { background: #667eea; }
+    .gd-ingr .group-dot { background: #34d399; }
+    .gd-search .group-dot { background: #60a5fa; }
+    .gd-nutr .group-dot { background: #f59e0b; }
+    .gd-product .group-dot { background: #8b5cf6; }
+    .gd-reg .group-dot { background: #f87171; }
+    .gd-collab .group-dot { background: #ec4899; }
+    .gd-board .group-dot { background: #6b7280; }
+
+    .gd-label .feature-group-header { border-bottom-color: #e0e7ff; }
+    .gd-ingr .feature-group-header { border-bottom-color: #d1fae5; }
+    .gd-search .feature-group-header { border-bottom-color: #dbeafe; }
+    .gd-nutr .feature-group-header { border-bottom-color: #fef3c7; }
+    .gd-product .feature-group-header { border-bottom-color: #ede9fe; }
+    .gd-reg .feature-group-header { border-bottom-color: #fee2e2; }
+    .gd-collab .feature-group-header { border-bottom-color: #fce7f3; }
+    .gd-board .feature-group-header { border-bottom-color: #f3f4f6; }
+
+    .feature-row {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 12px;
+    }
+
+    @media (max-width: 1200px) {
+        .feature-row {
             grid-template-columns: repeat(4, 1fr);
         }
     }
 
     @media (max-width: 768px) {
-        .category-grid {
+        .feature-row {
             grid-template-columns: repeat(2, 1fr);
         }
     }
 
-    .category-item {
-        text-align: center;
-        padding: 16px;
-        background: #f9fafb;
-        border-radius: 8px;
-        transition: all 0.3s;
+    /* 2개 항목만 있는 그룹은 2개 컬럼으로 정렬 */
+    .gd-ingr .feature-row,
+    .gd-reg .feature-row,
+    .gd-board .feature-row {
+        grid-template-columns: repeat(2, 1fr);
     }
 
-    .category-item:hover {
-        background: #f3f4f6;
-        transform: scale(1.05);
-    }
-
-    .category-icon {
-        font-size: 32px;
-        margin-bottom: 8px;
-    }
-
-    .category-name {
-        font-size: 13px;
-        color: #6b7280;
-        margin-bottom: 4px;
-    }
-
-    .category-count {
-        font-size: 24px;
-        font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 4px;
-    }
-
-    .category-change {
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    /* 고급 기능 그리드 */
-    .feature-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
-    }
-
-    @media (max-width: 1400px) {
-        .feature-grid {
-            grid-template-columns: repeat(3, 1fr);
-        }
-    }
-
-    @media (max-width: 768px) {
-        .feature-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-
-    .feature-item {
-        padding: 16px;
-        background: #f9fafb;
-        border-radius: 8px;
-        transition: all 0.3s;
-    }
-
-    .feature-item:hover {
-        background: #f3f4f6;
-    }
-
-    .feature-header {
+    /* 기능 카드 */
+    .fi {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 8px;
-        margin-bottom: 8px;
+        padding: 12px;
+        background: #f9fafb;
+        border-radius: 8px;
+        border-left: 4px solid;
+        transition: all 0.15s;
     }
 
-    .feature-icon {
-        font-size: 20px;
-    }
+    .fi:hover { background: #f3f4f6; }
 
-    .feature-name {
-        font-size: 13px;
+    .gd-label .fi { border-left-color: #a5b4fc; }
+    .gd-ingr .fi { border-left-color: #6ee7b7; }
+    .gd-search .fi { border-left-color: #93c5fd; }
+    .gd-nutr .fi { border-left-color: #fcd34d; }
+    .gd-product .fi { border-left-color: #c4b5fd; }
+    .gd-reg .fi { border-left-color: #fca5a5; }
+    .gd-collab .fi { border-left-color: #f9a8d4; }
+    .gd-board .fi { border-left-color: #d1d5db; }
+
+    .fi-left { flex: 1; min-width: 0; }
+
+    .fi-name {
+        font-size: 12px;
         font-weight: 600;
-        color: #4b5563;
+        color: #1f2937;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.2;
     }
 
-    .feature-count {
-        font-size: 20px;
+    .fi-count {
+        font-size: 18px;
         font-weight: 700;
         color: #1f2937;
-        margin-bottom: 4px;
+        min-width: 40px;
+        text-align: right;
     }
 
-    /* 최근 활동 */
+    .fi-unit { font-size: 10px; font-weight: 400; color: #9ca3af; }
+    .fi-right { display: flex; flex-direction: column; align-items: flex-end; }
+    .fi-change { font-size: 12px; font-weight: 600; text-align: right; }
+    .fi-prev { font-size: 10px; color: #9ca3af; margin-top: 1px; }
+
+    /* ── 최근 활동 ── */
     .recent-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 20px;
     }
 
-    .recent-grid h3 {
-        font-size: 14px;
-        font-weight: 700;
-        margin-bottom: 12px;
-        color: #667eea;
-    }
+    @media (max-width: 1400px) { .recent-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 768px) { .recent-grid { grid-template-columns: 1fr; } }
 
-    @media (max-width: 1400px) {
-        .recent-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-
-    @media (max-width: 768px) {
-        .recent-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-
-    .recent-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .recent-item {
-        padding: 10px 0;
-        border-bottom: 1px solid #e5e7eb;
+    .recent-col-title {
         font-size: 13px;
+        font-weight: 700;
+        color: #667eea;
+        margin-bottom: 12px;
+        display: block;
     }
 
-    .recent-item:last-child {
-        border-bottom: none;
-    }
+    .recent-list { list-style: none; padding: 0; margin: 0; }
+    .recent-item { padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
+    .recent-item:last-child { border-bottom: none; }
 
     .recent-item-title {
+        font-size: 12px;
         font-weight: 600;
         color: #1f2937;
         margin-bottom: 4px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 4px;
     }
 
-    .recent-item-meta {
-        color: #6b7280;
-        font-size: 11px;
-    }
+    .recent-item-meta { color: #9ca3af; font-size: 11px; }
 
     .notice-badge {
         background: #667eea;
@@ -336,8 +388,8 @@
         font-size: 10px;
         font-weight: 600;
         margin-left: 8px;
+        flex-shrink: 0;
     }
-
 </style>
 {% endblock %}
 
@@ -349,7 +401,7 @@
             <h1 class="dashboard-title">{{ site_header }}</h1>
             <div class="period-display">{{ period_display }}</div>
         </div>
-        <div class="period-filter" style="display: flex; gap: 10px; align-items: center;">
+        <div class="period-filter">
             <select id="yearSelector" onchange="changeYear(this.value)" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; background: white; height: 38px; line-height: 1.5; min-width: 90px;">
                 {% for year in available_years %}
                 <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}년</option>
@@ -378,6 +430,26 @@
             <div class="stat-meta">누적 전체 회원</div>
         </div>
         <div class="stat-card">
+            <div class="stat-label">전체 표시사항</div>
+            <div class="stat-value">{{ total_stats.total_labels }}</div>
+            <div class="stat-meta">
+                누적 전체
+                <span class="stat-change {% if total_stats.total_labels_change > 0 %}positive{% elif total_stats.total_labels_change < 0 %}negative{% else %}neutral{% endif %}">
+                    {% if total_stats.total_labels_change > 0 %}▲{% elif total_stats.total_labels_change < 0 %}▼{% else %}●{% endif %}{{ total_stats.total_labels_change }}%
+                </span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">전체 원료</div>
+            <div class="stat-value">{{ total_stats.total_ingredients }}</div>
+            <div class="stat-meta">
+                누적 전체
+                <span class="stat-change {% if total_stats.total_ingredients_change > 0 %}positive{% elif total_stats.total_ingredients_change < 0 %}negative{% else %}neutral{% endif %}">
+                    {% if total_stats.total_ingredients_change > 0 %}▲{% elif total_stats.total_ingredients_change < 0 %}▼{% else %}●{% endif %}{{ total_stats.total_ingredients_change }}%
+                </span>
+            </div>
+        </div>
+        <div class="stat-card">
             <div class="stat-label">신규 사용자</div>
             <div class="stat-value">{{ period_stats.new_users }}</div>
             <div class="stat-meta">
@@ -388,7 +460,7 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">{{ active_user_label }} (활성 사용자)</div>
+            <div class="stat-label">{{ active_user_label }} (활성)</div>
             <div class="stat-value">{{ period_stats.wau }}</div>
             <div class="stat-meta">
                 {{ active_user_period }}
@@ -398,141 +470,150 @@
             </div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">전체 표시사항</div>
-            <div class="stat-value">{{ total_stats.total_labels }}</div>
-            <div class="stat-meta">
-                삭제되지 않은 전체
-                <span class="stat-change {% if total_stats.total_labels_change > 0 %}positive{% elif total_stats.total_labels_change < 0 %}negative{% else %}neutral{% endif %}">
-                    {% if total_stats.total_labels_change > 0 %}▲{% elif total_stats.total_labels_change < 0 %}▼{% else %}●{% endif %}{{ total_stats.total_labels_change }}%
-                </span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-label">전체 원료</div>
-            <div class="stat-value">{{ total_stats.total_ingredients }}</div>
-            <div class="stat-meta">
-                삭제되지 않은 전체
-                <span class="stat-change {% if total_stats.total_ingredients_change > 0 %}positive{% elif total_stats.total_ingredients_change < 0 %}negative{% else %}neutral{% endif %}">
-                    {% if total_stats.total_ingredients_change > 0 %}▲{% elif total_stats.total_ingredients_change < 0 %}▼{% else %}●{% endif %}{{ total_stats.total_ingredients_change }}%
-                </span>
-            </div>
-        </div>
-        <div class="stat-card">
             <div class="stat-label">전체 게시글</div>
             <div class="stat-value">{{ total_stats.total_boards }}</div>
-            <div class="stat-meta">누적 전체 게시글</div>
+            <div class="stat-meta">누적 전체</div>
+        </div>
+    </div>
+
+    <!-- UI 버전 현황 -->
+    <div class="section">
+        <div class="section-title">
+            <i class="bi bi-diagram-3" style="font-size: 16px;"></i>UI 버전 현황
+        </div>
+        <div class="ui-mode-grid">
+            <div class="ui-version-card v1">
+                <div class="ui-version-icon">V1</div>
+                <div class="ui-version-info">
+                    <div class="ui-version-label">홈 V1 방문</div>
+                    <div class="ui-version-count">{{ ui_mode_stats.v1_count }}</div>
+                    <div class="ui-version-pct">{{ ui_mode_stats.v1_pct }}%</div>
+                    <div class="ui-version-change">
+                        {% if ui_mode_stats.v1_change > 0 %}▲{% elif ui_mode_stats.v1_change < 0 %}▼{% else %}●{% endif %}{{ ui_mode_stats.v1_change }}%
+                    </div>
+                </div>
+            </div>
+            <div class="ui-version-card v2">
+                <div class="ui-version-icon">V2</div>
+                <div class="ui-version-info">
+                    <div class="ui-version-label">홈 V2 방문</div>
+                    <div class="ui-version-count">{{ ui_mode_stats.v2_count }}</div>
+                    <div class="ui-version-pct">{{ ui_mode_stats.v2_pct }}%</div>
+                    <div class="ui-version-change">
+                        {% if ui_mode_stats.v2_change > 0 %}▲{% elif ui_mode_stats.v2_change < 0 %}▼{% else %}●{% endif %}{{ ui_mode_stats.v2_change }}%
+                    </div>
+                </div>
+            </div>
+            <div class="ui-bar-wrap">
+                <div class="ui-bar-labels">
+                    <span>V1: {{ ui_mode_stats.v1_pct }}%</span>
+                    <span>V2: {{ ui_mode_stats.v2_pct }}%</span>
+                </div>
+                <div class="ui-bar">
+                    <div class="ui-bar-v1" style="width: {{ ui_mode_stats.v1_pct }}%;" title="V1"></div>
+                    <div class="ui-bar-v2" style="width: {{ ui_mode_stats.v2_pct }}%;"></div>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- 기능별 사용 통계 -->
     <div class="section">
-        <h2 class="section-title">기능별 사용 통계 <span style="font-size: 12px; font-weight: 400; color: #9ca3af;">(선택 기간 내 활동 기준)</span></h2>
-        
-        <!-- 메인 기능 -->
-        <h3 style="font-size: 14px; font-weight: 600; margin-top: 20px; margin-bottom: 10px; color: #374151;">메인 기능</h3>
-        <div class="category-grid">
-            {% for cat in category_stats %}
-            {% if not cat.parent %}
-            <div class="category-item">
-                <div class="category-name">{{ cat.title }}</div>
-                <div class="category-count">{{ cat.current }}회</div>
-                <div class="category-change {% if cat.change > 0 %}positive{% elif cat.change < 0 %}negative{% else %}neutral{% endif %}">
-                    {% if cat.change > 0 %}▲{% elif cat.change < 0 %}▼{% else %}●{% endif %}{{ cat.change }}%
-                </div>
-                <div class="category-meta">이전: {{ cat.previous }}회</div>
-            </div>
-            {% endif %}
-            {% endfor %}
+        <div class="section-title">
+            <i class="bi bi-graph-up" style="font-size: 16px;"></i>기능별 사용 통계
+            <span class="sub">(선택 기간 내 활동 기준)</span>
         </div>
         
-        <!-- 표시사항 작성 세부기능 -->
-        <h3 style="font-size: 14px; font-weight: 600; margin-top: 30px; margin-bottom: 10px; color: #374151;">표시사항 작성</h3>
-        <div class="category-grid">
-            {% for cat in category_stats %}
-            {% if cat.parent == '표시사항 작성' or cat.parent == '조회 복사' %}
-            <div class="category-item">
-                <div class="category-name">{{ cat.title }}</div>
-                <div class="category-count">{{ cat.current }}회</div>
-                <div class="category-change {% if cat.change > 0 %}positive{% elif cat.change < 0 %}negative{% else %}neutral{% endif %}">
-                    {% if cat.change > 0 %}▲{% elif cat.change < 0 %}▼{% else %}●{% endif %}{{ cat.change }}%
-                </div>
-                <div class="category-meta">이전: {{ cat.previous }}회</div>
+        <!-- 그룹별 기능 카드 -->
+        {% regroup category_stats by group as grouped_stats %}
+        {% for group in grouped_stats %}
+        <div class="feature-group gd-{{ group.list.0.group_code }}"">
+            <div class="feature-group-header">
+                <div class="group-dot"></div>
+                <span class="feature-group-title">{{ group.grouper }}</span>
             </div>
-            {% endif %}
-            {% endfor %}
-        </div>
-        
-        <!-- 미리보기 팝업 세부기능 -->
-        <h3 style="font-size: 14px; font-weight: 600; margin-top: 30px; margin-bottom: 10px; color: #374151;">미리보기 팝업</h3>
-        <div class="category-grid">
-            {% for cat in category_stats %}
-            {% if cat.parent == '미리보기 팝업' %}
-            <div class="category-item">
-                <div class="category-name">{{ cat.title }}</div>
-                <div class="category-count">{{ cat.current }}회</div>
-                <div class="category-change {% if cat.change > 0 %}positive{% elif cat.change < 0 %}negative{% else %}neutral{% endif %}">
-                    {% if cat.change > 0 %}▲{% elif cat.change < 0 %}▼{% else %}●{% endif %}{{ cat.change }}%
+            <div class="feature-row">
+                {% for cat in group.list %}
+                <div class="fi">
+                    <div class="fi-left">
+                        <div class="fi-name">{{ cat.title }}</div>
+                    </div>
+                    <div class="fi-right">
+                        <div class="fi-count">{{ cat.current }}</div>
+                        <div class="fi-change {% if cat.change > 0 %}positive{% elif cat.change < 0 %}negative{% else %}neutral{% endif %}">
+                            {% if cat.change > 0 %}▲{% elif cat.change < 0 %}▼{% else %}●{% endif %}{{ cat.change }}%
+                        </div>
+                    </div>
                 </div>
-                <div class="category-meta">이전: {{ cat.previous }}회</div>
+                {% endfor %}
             </div>
-            {% endif %}
-            {% endfor %}
         </div>
-        
+        {% endfor %}
     </div>
 
     <!-- 최근 활동 -->
     <div class="section">
-        <h2 class="section-title">최근 활동 <span style="font-size: 12px; font-weight: 400; color: #9ca3af;">최근 10개, 최신순 정렬</span></h2>
+        <div class="section-title">
+            <i class="bi bi-clock-history" style="font-size: 16px;"></i>최근 활동
+        </div>
         <div class="recent-grid">
+            {% if recent_data.recent_users %}
             <div>
-                <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #667eea;">최근 가입 사용자</h3>
+                <span class="recent-col-title">신규 가입자</span>
                 <ul class="recent-list">
                     {% for user in recent_data.recent_users %}
                     <li class="recent-item">
                         <div class="recent-item-title">{{ user.username }}</div>
-                        <div class="recent-item-meta">{{ user.email }} · {{ user.date_joined|date:"m/d H:i" }}</div>
+                        <div class="recent-item-meta">{{ user.date_joined|date:"Y.m.d" }}</div>
                     </li>
                     {% endfor %}
                 </ul>
             </div>
+            {% endif %}
+
+            {% if recent_data.recent_labels %}
             <div>
-                <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #667eea;">최근 표시사항</h3>
+                <span class="recent-col-title">최근 표시사항</span>
                 <ul class="recent-list">
                     {% for label in recent_data.recent_labels %}
                     <li class="recent-item">
-                        <div class="recent-item-title">{{ label.prdlst_nm|default:"제목 없음"|truncatechars:30 }}</div>
-                        <div class="recent-item-meta">{{ label.user_id.username }} · {{ label.update_datetime|date:"m/d H:i" }}</div>
+                        <div class="recent-item-title">{{ label.my_label_name|truncatewords:3 }}</div>
+                        <div class="recent-item-meta">{{ label.update_datetime|date:"Y.m.d" }}</div>
                     </li>
                     {% endfor %}
                 </ul>
             </div>
+            {% endif %}
+
+            {% if recent_data.recent_ingredients %}
             <div>
-                <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #667eea;">최근 원료</h3>
+                <span class="recent-col-title">최근 원료</span>
                 <ul class="recent-list">
-                    {% for ing in recent_data.recent_ingredients %}
+                    {% for ingredient in recent_data.recent_ingredients %}
                     <li class="recent-item">
-                        <div class="recent-item-title">{{ ing.prdlst_nm|default:"제목 없음"|truncatechars:30 }}</div>
-                        <div class="recent-item-meta">{{ ing.user_id.username }} · {{ ing.update_datetime|date:"m/d H:i" }}</div>
+                        <div class="recent-item-title">{{ ingredient.ingredient_display_name|truncatewords:3 }}</div>
+                        <div class="recent-item-meta">{{ ingredient.update_datetime|date:"Y.m.d" }}</div>
                     </li>
                     {% endfor %}
                 </ul>
             </div>
+            {% endif %}
+
+            {% if recent_data.recent_boards %}
             <div>
-                <h3 style="font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #667eea;">최근 게시글</h3>
+                <span class="recent-col-title">최근 게시글</span>
                 <ul class="recent-list">
                     {% for board in recent_data.recent_boards %}
                     <li class="recent-item">
-                        <div class="recent-item-title">
-                            {{ board.title|truncatechars:30 }}
-                            {% if board.is_notice %}<span class="notice-badge">공지</span>{% endif %}
-                        </div>
-                        <div class="recent-item-meta">{{ board.author.username }} · {{ board.created_at|date:"m/d H:i" }}</div>
+                        <div class="recent-item-title">{{ board.title|truncatewords:3 }}</div>
+                        <div class="recent-item-meta">{{ board.created_at|date:"Y.m.d" }}</div>
                     </li>
                     {% endfor %}
                 </ul>
             </div>
+            {% endif %}
         </div>
     </div>
+
 </div>
 {% endblock %}

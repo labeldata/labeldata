@@ -11,6 +11,7 @@ import json
 from .models import ProductBOM
 from v1.label.models import MyLabel, MyIngredient
 from v1.label.utils import GMO_LIST
+from v1.activity_log.utils import log_activity
 
 
 def _resolve_label_and_permission(request, label_id):
@@ -73,6 +74,7 @@ def bom_workspace(request, label_id):
         'is_owner': is_owner,
     }
 
+    log_activity(request, 'bom', 'bom_view', label_id)
     return render(request, 'products/bom_detail.html', context)
 
 
@@ -623,6 +625,7 @@ def bom_save_api(request, label_id):
         msg = 'BOM이 저장되었습니다'
         if other_synced_count:
             msg += f' (다른 {len(affected_label_ids)}개 제품의 동일 원료 {other_synced_count}개 항목 자동 업데이트)'
+        log_activity(request, 'bom', 'bom_save', label_id)
         return JsonResponse({
             'success': True,
             'message': msg,

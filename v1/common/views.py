@@ -139,6 +139,7 @@ def dashboard_view(request):
         'total_stats': total_stats,
         'period_stats': period_stats,
         'category_stats': custom_site.get_category_stats(period_start, period_end, previous_period_start, previous_period_end),
+        'ui_mode_stats': custom_site.get_ui_mode_stats(period_start, period_end, previous_period_start, previous_period_end),
         'recent_data': custom_site.get_recent_data(),
         'site_header': 'EZLABELING 관리자',
         # 버튼 순환 정보

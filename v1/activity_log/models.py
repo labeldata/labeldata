@@ -10,6 +10,13 @@ CATEGORY_CHOICES = [
     ('search', '조회'),
     ('calculator', '계산기'),
     ('board', '게시판'),
+    ('ui', 'UI 버전'),
+    # V2 신규
+    ('regulatory', '부적합/처분 알림'),
+    ('product', '제품 관리'),
+    ('bom', 'BOM'),
+    ('sharing', '공유/권한'),
+    ('document', '서류 요청'),
 ]
 
 ACTION_CHOICES = [
@@ -48,9 +55,10 @@ ACTION_CHOICES = [
     ('board_post', '게시글 작성'),
     ('board_comment', '댓글 작성'),
 
-    # 표시사항 작성 세부기능 (8개)
+    # 표시사항 작성 세부기능 (9개)
     ('validation_report', '품목보고번호 검증'),
-    ('allergen_auto_detect', '알레르기 감지'),
+    ('allergen_auto_detect', '알레르기 감지(표시)'),
+    ('allergy_auto_detect', '알레르기 감지(원료)'),
     ('ingredient_table_input', '원재료 표로 입력'),
     ('ingredient_quick_register', '원재료 빠른 등록'),
     ('caution_quick_add', '주의문구 빠른 등록'),
@@ -68,6 +76,34 @@ ACTION_CHOICES = [
     ('validation_nutrition', '규정 검증'),
     ('preview_pdf_save', 'PDF 저장'),
     ('preview_settings_save', '설정 저장'),
+
+    # UI 버전 사용
+    ('ui_v1_session', 'V1 홈 방문'),
+    ('ui_v2_session', 'V2 홈 방문'),
+
+    # 부적합/처분 알림 (V2)
+    ('regulatory_view', '부적합/처분 알림 조회'),   # 레거시, 미사용
+    ('regulatory_detail', '알림 상세 조회'),
+    ('regulatory_action', '알림 조치'),
+
+    # 제품 관리 (V2)
+    ('product_create', '제품 생성'),
+    ('product_view', '제품 탐색기 조회'),           # 레거시, 미사용
+    ('workflow_status_change', '워크플로우 상태 변경'),
+    ('nutrition_view', '영양성분 편집기 사용'),
+
+    # BOM (V2)
+    ('bom_view', 'BOM 조회'),
+    ('bom_save', 'BOM 저장'),
+
+    # 공유/권한 (V2)
+    ('share_create', '공유/권한 부여'),
+    ('share_accept', '공유 수락'),
+    ('share_use_ingredient', '공유 원료로 사용'),
+
+    # 서류 요청 (V2)
+    ('doc_request_send', '서류 요청 전송'),
+    ('doc_request_accept', '서류 수락'),
 ]
 
 

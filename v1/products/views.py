@@ -28,6 +28,7 @@ from .models import ProductDocument, ProductComment, ProductShare, SharedProduct
 from v1.label.models import MyLabel
 
 from .forms import ProductForm
+from v1.activity_log.utils import log_activity
 
 
 # ==================== 공통 알림·이메일 헬퍼 ====================
@@ -1082,6 +1083,7 @@ def product_create(request):
             )
 
         messages.success(request, '새로운 제품이 생성되었습니다.')
+        log_activity(request, 'product', 'product_create', label.my_label_id)
         # 생성 후 워크스페이스의 기본정보 탭으로 바로 이동
         return redirect('products:product_detail_new', product_id=label.my_label_id)
 
@@ -1582,6 +1584,7 @@ def product_update_status(request, product_id):
                     # 이메일 전용 공유자(시스템 계정 없음): 이메일만 발송
                     _send_email_safe(subject=_status_email_subject, body=_txt, to_email=perm.share.recipient_email, html_body=_html)
 
+    log_activity(request, 'product', 'workflow_status_change', product_id)
     return JsonResponse({
         'success': True,
         'status': metadata.status,
@@ -2289,6 +2292,7 @@ def nutrition_workspace(request, label_id):
         'STATIC_BUILD_DATE': datetime.now().strftime('%Y%m%d%H%M%S'),
         'can_edit': can_edit,
     }
+    log_activity(request, 'product', 'nutrition_view', label_id)
     return render(request, 'products/nutrition_editor.html', context)
 
 
@@ -2455,6 +2459,7 @@ def received_share_accept(request, receipt_id):
     receipt.accepted_yn = True
     receipt.accepted_datetime = timezone.now()
     receipt.save()
+    log_activity(request, 'sharing', 'share_accept', receipt_id)
     messages.success(request, '공유를 수락했습니다.')
     return redirect('products:inbox')
 
@@ -2493,6 +2498,7 @@ def use_as_ingredient(request, receipt_id):
             delete_YN='N',
         )
 
+    log_activity(request, 'sharing', 'share_use_ingredient', receipt_id)
     messages.success(request, '원료로 등록했습니다.')
     return redirect('products:inbox')
 
@@ -2644,6 +2650,7 @@ def share_create(request, label_id):
         message=f'[{product_name}] {inviter_name}님이 {role_label} 역할로 초대했습니다.',
     )
 
+    log_activity(request, 'sharing', 'share_create', label.my_label_id)
     return JsonResponse({'success': True, 'message': f'{email}님을 초대했습니다.'})
 
 
@@ -4652,6 +4659,7 @@ def doc_request_accept(request, req_id):
         return JsonResponse({'error': '이미 처리된 요청입니다.'}, status=400)
     dr.status = DocumentRequest.STATUS_ACCEPTED
     dr.save(update_fields=['status', 'updated_datetime'])
+    log_activity(request, 'document', 'doc_request_accept', req_id)
     return JsonResponse({'success': True})
 
 
@@ -4883,4 +4891,5 @@ def api_send_doc_request(request):
     if created_count == 0:
         return JsonResponse({'error': '요청 대상 이메일이 없습니다.'}, status=400)
 
+    log_activity(request, 'document', 'doc_request_send')
     return JsonResponse({'success': True, 'created': created_count, 'email_errors': email_errors})

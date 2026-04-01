@@ -18,6 +18,7 @@ from django.views.decorators.http import require_POST
 
 from v1.regulatory.models import NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews
 from v1.regulatory.saol_url_map import SAOL_URLS
+from v1.activity_log.utils import log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -424,6 +425,7 @@ def news_detail(request, pk):
         .prefetch_related('ingredient__bom_usages__parent_label', 'actions')
         .order_by('-risk_score', '-match_score')
     )
+    log_activity(request, 'regulatory', 'regulatory_detail', news.pk)
     return render(request, 'regulatory/news_detail.html', {
         'news':        news,
         'my_matches':  my_matches,
@@ -569,6 +571,7 @@ def save_match_action(request):
             prod_match.false_positive_at = timezone.now()
             prod_match.save(update_fields=['false_positive_yn', 'false_positive_at'])
 
+    log_activity(request, 'regulatory', 'regulatory_action')
     return JsonResponse({
         'success': True,
         'action_id': action.id,

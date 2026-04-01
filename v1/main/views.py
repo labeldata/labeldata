@@ -9,6 +9,7 @@ import json
 from v1.disposition.models import AdministrativeDisposition, CrawlingSetting  # import 경로 수정
 from v1.disposition.forms import DispositionForm  # import 경로 수정
 from v1.label.models import FoodType, FoodItem, CountryList, MyLabel  # 데모 페이지용 추가
+from v1.activity_log.utils import log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ def home_v1(request):
     """
     # UI 모드를 V1으로 설정 (이후 페이지들이 V1 스타일을 사용하도록)
     request.session['ui_mode'] = 'v1'
+    log_activity(request, 'ui', 'ui_v1_session')
     # 식품유형 데이터를 가져옵니다.
     food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
     food_types = list(FoodType.objects.values('food_type', 'food_group').order_by('food_type'))
@@ -317,6 +319,7 @@ def home_dashboard(request):
     """
     # UI 모드를 V2로 설정
     request.session['ui_mode'] = 'v2'
+    log_activity(request, 'ui', 'ui_v2_session')
 
     # ── 비로그인 게스트: 빈 context로 게스트용 화면 렌더링 ──────
     if not request.user.is_authenticated:

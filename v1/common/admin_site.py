@@ -220,110 +220,101 @@ class CustomAdminSite:
             'deleted_ingredients': deleted_ingredients,
         }
 
-    def get_category_stats(self, period_start, previous_period_start):
-        """기능별 사용 통계 - 새로운 구조"""
-        from .models import UserActivityLog
-        
-        category_stats = []
-        
-        # 새로운 구조: 순서대로 정의
-        feature_config = [
-            # 메인 기능 (7개)
-            {'title': '표시사항 저장', 'actions': ['label_save']},
-            {'title': '원료 저장', 'actions': ['ingredient_save']},
-            {'title': '영양성분 계산기', 'actions': ['calculator_calc', 'calculator_save']},
-            {'title': '제품 조회(국내)', 'actions': ['search_domestic']},
-            {'title': '제품 조회(수입)', 'actions': ['search_import']},
-            {'title': '식품첨가물 조회', 'actions': ['search_additive']},
-            {'title': '게시판 등록', 'actions': ['board_post', 'board_comment']},
-        ]
     def get_category_stats(self, period_start, period_end, previous_period_start, previous_period_end):
-        """기능별 사용 통계 - 새로운 구조"""
-        from .models import UserActivityLog
-        
-        category_stats = []
-        
-        # 새로운 구조: 순서대로 정의
+        """기능별 사용 통계 — 기능 중심 그룹 (V1/V2 구분 없음)"""
         feature_config = [
-            # 메인 기능 (7개)
-            {'title': '표시사항 저장', 'actions': ['label_save']},
-            {'title': '원료 저장', 'actions': ['ingredient_save']},
-            {'title': '영양성분 계산기', 'actions': ['calculator_calc', 'calculator_save']},
-            {'title': '제품 조회(국내)', 'actions': ['search_domestic']},
-            {'title': '제품 조회(수입)', 'actions': ['search_import']},
-            {'title': '식품첨가물 조회', 'actions': ['search_additive']},
-            {'title': '게시판 등록', 'actions': ['board_post', 'board_comment']},
-            
-            # 조회 복사 (2개)
-            {'title': '검색에서 표시사항 복사', 'actions': ['search_label_copy'], 'parent': '조회 복사'},
-            {'title': '검색에서 내원료 복사', 'actions': ['search_ingredient_copy'], 'parent': '조회 복사'},
-            
-            # 표시사항 작성 세부기능 (10개)
-            {'title': '품목보고번호 검증', 'actions': ['validation_report'], 'parent': '표시사항 작성'},
-            {'title': '알레르기 감지(표시)', 'actions': ['allergen_auto_detect'], 'parent': '표시사항 작성'},
-            {'title': '알레르기 감지(원료)', 'actions': ['allergy_auto_detect'], 'parent': '표시사항 작성'},
-            {'title': '원재료 표로 입력', 'actions': ['ingredient_table_input'], 'parent': '표시사항 작성'},
-            {'title': '원재료 빠른 등록', 'actions': ['ingredient_quick_register'], 'parent': '표시사항 작성'},
-            {'title': '주의문구 빠른 등록', 'actions': ['caution_quick_add'], 'parent': '표시사항 작성'},
-            {'title': '기타문구 빠른 등록', 'actions': ['other_text_quick_add'], 'parent': '표시사항 작성'},
-            {'title': '맞춤항목 등록', 'actions': ['custom_field_use'], 'parent': '표시사항 작성'},
-            {'title': '간편/상세 전환', 'actions': ['mode_switch'], 'parent': '표시사항 작성'},
-            {'title': '선택 복사', 'actions': ['selection_copy'], 'parent': '표시사항 작성'},
-            
-            # 미리보기 팝업 세부기능 (7개)
-            {'title': '표 설정', 'actions': ['preview_table_settings'], 'parent': '미리보기 팝업'},
-            {'title': '항목 순서', 'actions': ['preview_order'], 'parent': '미리보기 팝업'},
-            {'title': '텍스트 변환', 'actions': ['preview_text_transform'], 'parent': '미리보기 팝업'},
-            {'title': '분리배출마크', 'actions': ['preview_recycling_mark'], 'parent': '미리보기 팝업'},
-            {'title': '규정 검증', 'actions': ['validation_nutrition'], 'parent': '미리보기 팝업'},
-            {'title': 'PDF 저장', 'actions': ['preview_pdf_save'], 'parent': '미리보기 팝업'},
-            {'title': '설정 저장', 'actions': ['preview_settings_save'], 'parent': '미리보기 팝업'},
+            # ── 표시사항 저장·작성
+            {'title': '표시사항 저장', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['label_save']},
+            {'title': '알레르기 자동감지', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['allergy_auto_detect', 'allergen_auto_detect']},
+            {'title': '원재료 표로 입력', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['ingredient_table_input']},
+            {'title': '원재료 빠른 등록', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['ingredient_quick_register']},
+            {'title': '주의문구 빠른 등록', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['caution_quick_add']},
+            {'title': '기타문구 빠른 등록', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['other_text_quick_add']},
+            {'title': '맞춤항목 등록', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['custom_field_use']},
+            {'title': '간편/상세 전환', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['mode_switch']},
+            {'title': '선택 복사', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['selection_copy']},
+            {'title': '품목보고번호 검증', 'group': '표시사항 저장·작성', 'group_code': 'label', 'actions': ['validation_report']},
+
+            # ── 원료 관리
+            {'title': '원료 저장', 'group': '원료 관리', 'group_code': 'ingr', 'actions': ['ingredient_save']},
+            {'title': '검색→내원료 복사', 'group': '원료 관리', 'group_code': 'ingr', 'actions': ['search_ingredient_copy']},
+
+            # ── 조회·검색
+            {'title': '제품 조회(국내)', 'group': '조회·검색', 'group_code': 'search', 'actions': ['search_domestic']},
+            {'title': '제품 조회(수입)', 'group': '조회·검색', 'group_code': 'search', 'actions': ['search_import']},
+            {'title': '식품첨가물 조회', 'group': '조회·검색', 'group_code': 'search', 'actions': ['search_additive']},
+            {'title': '검색→표시사항 복사', 'group': '조회·검색', 'group_code': 'search', 'actions': ['search_label_copy']},
+
+            # ── 영양성분·미리보기
+            {'title': '영양성분 계산기', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['calculator_calc', 'calculator_save']},
+            {'title': '영양성분 편집기', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['nutrition_view']},
+            {'title': '규정 검증', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['validation_nutrition']},
+            {'title': 'PDF 저장', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['preview_pdf_save']},
+            {'title': '표 설정', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['preview_table_settings']},
+            {'title': '텍스트 변환', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['preview_text_transform']},
+            {'title': '분리배출마크', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['preview_recycling_mark']},
+            {'title': '항목 순서', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['preview_order']},
+            {'title': '설정 저장', 'group': '영양성분·미리보기', 'group_code': 'nutr', 'actions': ['preview_settings_save']},
+
+            # ── 제품 관리·BOM
+            {'title': '제품 생성', 'group': '제품 관리·BOM', 'group_code': 'product', 'actions': ['product_create']},
+            {'title': '워크플로우 변경', 'group': '제품 관리·BOM', 'group_code': 'product', 'actions': ['workflow_status_change']},
+            {'title': 'BOM 조회', 'group': '제품 관리·BOM', 'group_code': 'product', 'actions': ['bom_view']},
+            {'title': 'BOM 저장', 'group': '제품 관리·BOM', 'group_code': 'product', 'actions': ['bom_save']},
+
+            # ── 부적합 알림
+            {'title': '알림 상세 조회', 'group': '부적합·처분 알림', 'group_code': 'reg', 'actions': ['regulatory_detail']},
+            {'title': '알림 조치', 'group': '부적합·처분 알림', 'group_code': 'reg', 'actions': ['regulatory_action']},
+
+            # ── 협업
+            {'title': '공유 부여', 'group': '협업', 'group_code': 'collab', 'actions': ['share_create']},
+            {'title': '공유 수락', 'group': '협업', 'group_code': 'collab', 'actions': ['share_accept']},
+            {'title': '원료로 사용', 'group': '협업', 'group_code': 'collab', 'actions': ['share_use_ingredient']},
+            {'title': '서류 전송', 'group': '협업', 'group_code': 'collab', 'actions': ['doc_request_send']},
+            {'title': '서류 수락', 'group': '협업', 'group_code': 'collab', 'actions': ['doc_request_accept']},
+
+            # ── 커뮤니티
+            {'title': '게시글 작성', 'group': '커뮤니티', 'group_code': 'board', 'actions': ['board_post']},
+            {'title': '댓글 작성', 'group': '커뮤니티', 'group_code': 'board', 'actions': ['board_comment']},
         ]
-        
-        # UserActivityLog가 있는 경우
-        if UserActivityLog.objects.exists():
-            for config in feature_config:
-                # 현재 기간 통계
-                current_count = UserActivityLog.objects.filter(
-                    action__in=config['actions'],
-                    created_at__gte=period_start,
-                    created_at__lte=period_end
-                ).count()
-                
-                # 이전 기간 통계
-                previous_count = UserActivityLog.objects.filter(
-                    action__in=config['actions'],
-                    created_at__gte=previous_period_start,
-                    created_at__lte=previous_period_end
-                ).count()
-                
-                change = self.calculate_change_rate(current_count, previous_count)
-                
-                stat = {
-                    'title': config['title'],
-                    'current': current_count,
-                    'previous': previous_count,
-                    'change': change
-                }
-                
-                if 'parent' in config:
-                    stat['parent'] = config['parent']
-                
-                category_stats.append(stat)
-        else:
-            # UserActivityLog가 없는 경우 기본값 반환
-            for config in feature_config:
-                stat = {
-                    'title': config['title'],
-                    'current': 0,
-                    'previous': 0,
-                    'change': 0.0
-                }
-                if 'parent' in config:
-                    stat['parent'] = config['parent']
-                category_stats.append(stat)
-        
+
+        category_stats = []
+        for config in feature_config:
+            current_count = UserActivityLog.objects.filter(
+                action__in=config['actions'],
+                created_at__gte=period_start,
+                created_at__lte=period_end
+            ).count()
+            previous_count = UserActivityLog.objects.filter(
+                action__in=config['actions'],
+                created_at__gte=previous_period_start,
+                created_at__lte=previous_period_end
+            ).count()
+            category_stats.append({
+                'title': config['title'],
+                'group': config['group'],
+                'group_code': config['group_code'],
+                'current': current_count,
+                'previous': previous_count,
+                'change': self.calculate_change_rate(current_count, previous_count),
+            })
         return category_stats
+
+    def get_ui_mode_stats(self, period_start, period_end, previous_period_start, previous_period_end):
+        """V1/V2 전환 버튼 및 체류 현황"""
+        v1_cur  = UserActivityLog.objects.filter(action='ui_v1_session', created_at__gte=period_start,  created_at__lte=period_end).count()
+        v2_cur  = UserActivityLog.objects.filter(action='ui_v2_session', created_at__gte=period_start,  created_at__lte=period_end).count()
+        v1_prev = UserActivityLog.objects.filter(action='ui_v1_session', created_at__gte=previous_period_start, created_at__lte=previous_period_end).count()
+        v2_prev = UserActivityLog.objects.filter(action='ui_v2_session', created_at__gte=previous_period_start, created_at__lte=previous_period_end).count()
+        total_cur = v1_cur + v2_cur or 1
+        return {
+            'v1_cur': v1_cur, 'v1_prev': v1_prev,
+            'v2_cur': v2_cur, 'v2_prev': v2_prev,
+            'v1_pct': round(v1_cur / total_cur * 100),
+            'v2_pct': round(v2_cur / total_cur * 100),
+            'v1_change': self.calculate_change_rate(v1_cur, v1_prev),
+            'v2_change': self.calculate_change_rate(v2_cur, v2_prev),
+        }
 
     def get_recent_data(self):
         """최근 활동 데이터"""
