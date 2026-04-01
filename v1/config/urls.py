@@ -2,9 +2,13 @@
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 from v1.common import views as common_views  # common views import 추가
 
 urlpatterns = [
+    path('sitemap.xml', TemplateView.as_view(template_name='sitemap.xml', content_type='application/xml'), name='sitemap'),
+    path('robots.txt', TemplateView.as_view(template_name='robots.txt', content_type='text/plain'), name='robots'),
+
     path('', include('v1.main.urls')),  # 메인 앱 URL
     path('dashboard/', common_views.dashboard_view, name='dashboard'),  # 관리자 통계 대시보드
     path('common/', include('v1.common.urls', namespace='common')),  # common 앱 URL
