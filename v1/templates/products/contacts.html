@@ -26,41 +26,39 @@
     <div class="contacts-left" id="contactsLeft">
 
         <!-- 패널 헤더 -->
-        <div class="contacts-panel-header">
-            <div class="d-flex align-items-center gap-2">
+        <div class="contacts-panel-header" style="flex-wrap:wrap;gap:6px;padding:8px 12px;">
+            <div class="d-flex align-items-center gap-2" style="flex-shrink:0;">
                 <i class="bi bi-person-lines-fill text-primary"></i>
-                <span class="fw-semibold" style="font-size:14px;">연락처</span>
-                <span class="badge rounded-pill bg-primary ms-1" id="contactCount">{{ contacts_list|length }}</span>
+                <span class="fw-semibold" style="font-size:13px;">연락처</span>
+                <span class="badge rounded-pill bg-primary" id="contactCount" style="font-size:11px;">{{ contacts_list|length }}</span>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                {# ── 선택 시에만 표시되는 액션 바 ── #}
-                <div id="selection-actions" class="d-none align-items-center">
-                    <span class="badge bg-primary" style="font-size:12px;"><span id="selected-count">0</span>개 선택됨</span>
-                    <button class="btn btn-sm btn-outline-danger" id="bulkDeleteBtn">
-                        <i class="bi bi-trash me-1"></i>삭제
-                    </button>
-                    <button class="btn btn-sm btn-primary" id="bulkRequestBtn">
-                        <i class="bi bi-envelope-paper me-1"></i>문서 요청
-                    </button>
-                </div>
-                {# ── 검색 (항상 표시) ── #}
-                <div class="d-flex align-items-center" style="gap:12px;width:320px;">
-                    <select id="contactSearchField" class="form-select form-select-sm" style="width:110px;flex-shrink:0;font-size:13px;">
-                        <option value="all">전체</option>
-                        <option value="email">이메일</option>
-                        <option value="name">이름</option>
-                        <option value="company">회사명</option>
-                        <option value="license_no">인허가번호</option>
-                    </select>
-                    <div class="input-group input-group-sm" style="flex:1;">
-                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                        <input type="text" id="contactSearch" class="form-control border-start-0 ps-0" placeholder="검색어 입력..." autocomplete="off" style="font-size:13px;">
-                    </div>
-                </div>
-                <button class="contacts-icon-btn" id="addRowBtn" title="행 추가">
-                    <i class="bi bi-person-plus"></i>
+            {# ── 선택 시에만 표시되는 액션 바 ── #}
+            <div id="selection-actions" class="d-none align-items-center" style="flex-shrink:0;">
+                <span class="badge bg-primary" style="font-size:11px;"><span id="selected-count">0</span>개</span>
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" id="bulkDeleteBtn" style="font-size:12px;">
+                    <i class="bi bi-trash"></i>
+                </button>
+                <button class="btn btn-sm btn-primary py-0 px-2" id="bulkRequestBtn" style="font-size:12px;">
+                    <i class="bi bi-envelope-paper me-1"></i>요청
                 </button>
             </div>
+            {# ── 검색 (항상 표시) ── #}
+            <div class="d-flex align-items-center" style="gap:6px;flex:1;min-width:180px;">
+                <select id="contactSearchField" class="form-select form-select-sm" style="width:80px;flex-shrink:0;font-size:12px;">
+                    <option value="all">전체</option>
+                    <option value="email">이메일</option>
+                    <option value="name">이름</option>
+                    <option value="company">회사명</option>
+                    <option value="license_no">인허가</option>
+                </select>
+                <div class="input-group input-group-sm" style="flex:1;">
+                    <span class="input-group-text bg-white border-end-0 px-2"><i class="bi bi-search text-muted" style="font-size:11px;"></i></span>
+                    <input type="text" id="contactSearch" class="form-control border-start-0 ps-0" placeholder="검색..." autocomplete="off" style="font-size:12px;">
+                </div>
+            </div>
+            <button class="contacts-icon-btn" id="addRowBtn" title="행 추가" style="flex-shrink:0;font-size:14px;padding:3px 6px;">
+                <i class="bi bi-person-plus"></i>
+            </button>
         </div>
 
         <!-- 필터 바 -->
@@ -680,14 +678,13 @@ async function submitDocFiles() {
 function getColWidths() {
     const wrap = document.getElementById('contactsGrid');
     const total = wrap ? wrap.clientWidth : 800;
-    const CHK  = 28; // 체크박스 콜럼
-    const rest = total - CHK;
-    // 이메일(25%) / 이름•회사명•인허가번호•공유•자료요청 각 15%
-    const ratios = [0.25, 0.15, 0.15, 0.15, 0.15, 0.15];
-    const widths = ratios.map(r => Math.floor(rest * r));
-    const sum = widths.reduce((a, b) => a + b, 0);
-    widths[widths.length - 1] += rest - sum;
-    return [CHK, ...widths];
+    const CHK      = 28;  // 체크박스
+    const DOC_REQ  = 110; // 요청/접수 고정 최소 너비
+    const rest = total - CHK - DOC_REQ;
+    // 이메일(28%) / 이름•회사명•인허가번호•공유 각 18%
+    const ratios = [0.28, 0.18, 0.18, 0.18, 0.18];
+    const widths = ratios.map(r => Math.max(Math.floor(rest * r), 40));
+    return [CHK, ...widths, DOC_REQ];
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -705,7 +702,7 @@ document.addEventListener('DOMContentLoaded', function () {
         rowHeaders: false,
         colHeaders: [
             '<input type="checkbox" id="checkAll" title="전체 선택" style="cursor:pointer;">',
-            '이메일', '이름', '회사명', '인허가번호', '공유', '자료요청'
+            '이메일', '이름', '회사명', '인허가번호', '공유', '요청/접수'
         ],
         columns: [
             {
@@ -756,16 +753,25 @@ document.addEventListener('DOMContentLoaded', function () {
                     const rowData = hotInst.getSourceDataAtRow(row);
                     const sent    = rowData?.doc_sent    || 0;
                     const pending = rowData?.doc_pending || 0;
+                    const received = sent - pending;  // 접수 = 전체 - 요청
+                    
                     if (sent === 0) {
                         TD.innerHTML = '<span style="color:#bdc1c6;">-</span>';
-                    } else if (pending > 0) {
-                        TD.innerHTML = `<span style="background:#fce8b2;color:#e37400;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:500;white-space:nowrap;">⏳ 대기 ${pending}</span>`;
                     } else {
-                        TD.innerHTML = '<span style="background:#e6f4ea;color:#137333;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:500;">✓ 완료</span>';
+                        // "요청 1 + ✓ 접수 2" 한 줄 표시
+                        const parts = [];
+                        if (pending > 0) {
+                            parts.push(`<span style="background:#fce8b2;color:#e37400;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:500;white-space:nowrap;">요청 ${pending}</span>`);
+                        }
+                        if (received > 0) {
+                            parts.push(`<span style="background:#e6f4ea;color:#137333;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:500;white-space:nowrap;">✓ 접수 ${received}</span>`);
+                        }
+                        TD.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;flex-wrap:nowrap;">${parts.join('<span style="color:#bdc1c6;font-size:10px;">+</span>')}</div>`;
                     }
                     TD.style.textAlign = 'center';
                     TD.style.verticalAlign = 'middle';
-                    TD.style.padding = '4px 6px';
+                    TD.style.padding = '2px 4px';
+                    TD.style.whiteSpace = 'nowrap';
                     return TD;
                 }
             }
@@ -862,35 +868,69 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (hot) updateSelectionUI();
             }
 
-            // 이름·회사명·인허가번호 변경 시 서버에 자동 저장
-            const infoProps = new Set(['name', 'company', 'license_no']);
+            // 이메일·이름·회사명·인허가번호 변경 시 서버에 자동 저장
+            const infoProps = new Set(['email', 'name', 'company', 'license_no']);
             const infoChanges = changes.filter(([, prop]) => infoProps.has(prop));
+            
+            // 수정 작업 (기존 row)
             if (infoChanges.length) {
-                // 변경된 행 번호 unique set
                 const rows = [...new Set(infoChanges.map(([r]) => r))];
                 rows.forEach(rowIdx => {
                     const rowData = hot.getSourceDataAtRow(rowIdx);
-                    if (!rowData || !rowData.email) return;
-                    const body = new URLSearchParams({
-                        email:      rowData.email,
-                        name:       rowData.name       || '',
-                        company:    rowData.company    || '',
-                        license_no: rowData.license_no || '',
-                    });
-                    fetch(CONTACTS_API_UPDATE, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
-                        body: body.toString(),
-                    }).catch(() => {}); // 오류는 조용히 무시 (UX 방해 최소화)
+                    if (!rowData) return;
+                    
+                    // 새 이메일이 유효한지 확인 (없으면 저장하지 않음)
+                    const newEmail = (rowData.email || '').trim().toLowerCase();
+                    if (!newEmail || !newEmail.includes('@')) return;
+                    
+                    // 변경 전 이메일 (allRows에서 찾기 - 원본 상태)
+                    const currentEmailInAll = allRows[rowIdx] ? allRows[rowIdx].email : null;
+                    const emailChanged = currentEmailInAll && currentEmailInAll.toLowerCase() !== newEmail;
+                    
+                    // 이메일 변경 여부에 따라 API 결정
+                    if (emailChanged) {
+                        // 이메일 변경: UPDATE (old_email 포함)
+                        const body = new URLSearchParams({
+                            old_email:  (currentEmailInAll || '').toLowerCase(),
+                            email:      newEmail,
+                            name:       rowData.name       || '',
+                            company:    rowData.company    || '',
+                            license_no: rowData.license_no || '',
+                        });
+                        fetch(CONTACTS_API_UPDATE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+                            body: body.toString(),
+                        }).then(r => {
+                            if (r.ok) {
+                                // 성공 시 allRows 동기화
+                                if (allRows[rowIdx]) allRows[rowIdx].email = newEmail;
+                            }
+                        }).catch(() => {});
+                    } else if (newEmail) {
+                        // 이메일 유지, 다른 필드만 수정: UPDATE
+                        const body = new URLSearchParams({
+                            old_email:  newEmail,
+                            email:      newEmail,
+                            name:       rowData.name       || '',
+                            company:    rowData.company    || '',
+                            license_no: rowData.license_no || '',
+                        });
+                        fetch(CONTACTS_API_UPDATE, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
+                            body: body.toString(),
+                        }).catch(() => {});
+                    }
                 });
             }
-
-            // 이메일 컬럼이 새로 입력된 경우 → UserContact로 신규 저장
-            const emailChanges = changes.filter(([, prop, oldVal, newVal]) =>
+            
+            // 새로운 행: 이메일 새로 입력된 경우 → ADD
+            const newRowEmailChanges = changes.filter(([, prop, oldVal, newVal]) =>
                 prop === 'email' && !oldVal && newVal && typeof newVal === 'string' && newVal.includes('@')
             );
-            if (emailChanges.length) {
-                emailChanges.forEach(([rowIdx, , , newEmail]) => {
+            if (newRowEmailChanges.length) {
+                newRowEmailChanges.forEach(([rowIdx, , , newEmail]) => {
                     const rowData = hot.getSourceDataAtRow(rowIdx);
                     const body = new URLSearchParams({
                         email:      newEmail.trim().toLowerCase(),
@@ -902,7 +942,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF_TOKEN },
                         body: body.toString(),
-                    }).catch(() => {});
+                    }).then(r => {
+                        if (r.ok && allRows[rowIdx]) {
+                            allRows[rowIdx].email = newEmail.trim().toLowerCase();
+                        }
+                    }).catch(err => {});
                 });
             }
 
@@ -911,12 +955,9 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('contactCount').textContent = filled;
         },
         cells: function (row, col) {
-            if (col === 5 || col === 6) return { readOnly: true }; // 공유, 자료요청 콜럼
-            // 이메일 컬럼(col 1)은 기존 데이터 행에서 수정 불가
-            if (col === 1) {
-                const rowData = this.instance.getSourceDataAtRow(row);
-                if (rowData && rowData.email) return { readOnly: true };
-            }
+            if (col === 5 || col === 6) return { readOnly: true }; // 공유, 자료요청 컬럼
+            // ✅ 이메일 컬럼 수정 가능하도록 변경
+            // (이전: 기존 이메일은 수정 불가 → 현재: 모두 수정 가능)
         }
     });
 
@@ -1216,11 +1257,26 @@ async function loadDocRequests(email) {
 
     try {
         const res  = await fetch(`${CONTACTS_API_DOC_REQUESTS}?email=${encodeURIComponent(email)}`);
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
         const data = await res.json();
         loadingEl.classList.add('d-none');
+        
+        // API 에러 응답 확인
+        if (data.error) {
+            throw new Error(`서버오류: ${data.error}`);
+        }
 
         const reqs = data.requests || [];
-        badgeEl.textContent = reqs.length;
+        const pending = reqs.filter(r => r.status === 'PENDING').length;
+        const received = reqs.filter(r => r.status !== 'PENDING').length;
+        
+        // 우측 헤더 배지 업데이트: "요청 1건 + 접수 2건"
+        let badgeText = '';
+        if (pending > 0) badgeText += `요청 ${pending}건`;
+        if (received > 0) badgeText += (badgeText ? ' + ' : '') + `접수 ${received}건`;
+        badgeEl.textContent = badgeText || '요청 없음';
 
         if (!reqs.length) {
             emptyEl.classList.remove('d-none');
@@ -1238,14 +1294,14 @@ async function loadDocRequests(email) {
         listEl.innerHTML = reqs.map(r => {
             const st = STATUS_STYLE[r.status] || STATUS_STYLE.PENDING;
             const docs = (r.requested_documents || []).map(d =>
-                `<span style="background:#f1f3f4;border-radius:8px;padding:1px 8px;font-size:11px;margin-right:3px;">${d.type_name}</span>`
-            ).join('');
+                `<span style="background:#f1f3f4;border-radius:6px;padding:1px 7px;font-size:11px;">${d.type_name}</span>`
+            ).join(' ');
             const cancelBtn = r.status === 'PENDING'
-                ? `<button class="btn btn-sm btn-outline-danger py-0 px-2 ms-auto" style="font-size:11px;"
+                ? `<button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:11px;flex-shrink:0;"
                           onclick="cancelDocReq(${r.request_id}, this, '${email}')">취소</button>`
                 : '';
 
-            // 제출된 파일 목록 (ACCEPTED 상태이거나 파일이 있을 때)
+            // 제출된 파일 목록
             const subs = r.submissions || [];
             const submissionsHtml = subs.length
                 ? `<div class="mt-2 pt-2" style="border-top:1px dashed #e8eaed;">
@@ -1256,13 +1312,11 @@ async function loadDocRequests(email) {
                         const kb = s.file_size > 0 ? (s.file_size >= 1048576
                             ? (s.file_size/1048576).toFixed(1)+' MB'
                             : Math.ceil(s.file_size/1024)+' KB') : '';
-                        return `<div class="d-flex align-items-center gap-2 mb-1 p-2 rounded"
+                        return `<div class="d-flex align-items-center gap-1 mb-1 px-2 py-1 rounded"
                                      style="background:#f0f7f0;font-size:12px;">
-                            <i class="bi bi-file-earmark-check text-success" style="flex-shrink:0;font-size:14px;"></i>
-                            <div class="flex-grow-1 overflow-hidden">
-                                <div style="color:#137333;font-weight:600;font-size:11px;">${s.document_type}</div>
-                                <div class="text-truncate text-muted" style="font-size:11px;" title="${s.filename}">${s.filename}</div>
-                            </div>
+                            <i class="bi bi-file-earmark-check text-success" style="flex-shrink:0;font-size:13px;"></i>
+                            <span style="font-size:11px;color:#137333;font-weight:600;flex-shrink:0;white-space:nowrap;">${s.document_type}</span>
+                            <span class="text-truncate text-muted" style="font-size:11px;flex:1;min-width:0;" title="${s.filename}">${s.filename}</span>
                             ${kb ? `<span class="text-muted" style="font-size:10px;flex-shrink:0;">${kb}</span>` : ''}
                             <a href="${s.file_url}" download="${s.filename}"
                                class="btn btn-sm btn-outline-success py-0 px-2"
@@ -1274,27 +1328,31 @@ async function loadDocRequests(email) {
                    </div>`
                 : '';
 
-            return `<div class="border rounded p-3 mb-2" style="font-size:13px;">
-                <div class="d-flex align-items-center gap-2 mb-1">
-                    <span style="background:${st.bg};color:${st.color};border-radius:10px;padding:1px 8px;font-size:11px;font-weight:500;">
+            return `<div class="border rounded mb-2 overflow-hidden" style="font-size:12px;">
+                <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#fafafa;border-bottom:1px solid #f1f3f4;">
+                    <span style="background:${st.bg};color:${st.color};border-radius:10px;padding:1px 8px;font-size:11px;font-weight:500;flex-shrink:0;">
                         <i class="bi ${st.icon} me-1"></i>${st.label}
                     </span>
-                    <span class="text-muted" style="font-size:11px;">${r.created}</span>
+                    <span class="text-muted" style="font-size:11px;flex-shrink:0;">${r.created}</span>
+                    <div style="flex:1;min-width:0;overflow:hidden;">${docs || '<span style="color:#bdc1c6;">문서 미지정</span>'}</div>
+                    ${r.due_date ? `<span style="font-size:11px;color:#c5221f;flex-shrink:0;">~${r.due_date}</span>` : ''}
                     ${cancelBtn}
                 </div>
-                <div class="mb-1">${docs || '<span style="color:#bdc1c6;font-size:12px;">문서 종류 미지정</span>'}</div>
-                ${r.message ? `<div class="text-muted" style="font-size:12px;">"${r.message}"</div>` : ''}
-                ${r.due_date ? `<div style="font-size:11px;color:#5f6368;">마감: ${r.due_date}</div>` : ''}
-                <div class="mt-2 pt-2 d-flex align-items-center gap-2 flex-wrap" style="border-top:1px dashed #e8eaed;">
-                    <span style="font-size:11px;color:#5f6368;font-weight:600;"><i class="bi bi-link-45deg me-1"></i>연결 제품</span>
-                    <span id="linked-label-text-${r.request_id}" style="font-size:12px;color:${r.linked_label_id ? '#1967d2' : '#bdc1c6'};">
-                        ${r.linked_label_name || '미연결'}
-                    </span>
-                    <button class="btn btn-xs btn-light border py-0 px-2" style="font-size:11px;"
-                            onclick="toggleLinkLabelSelect(${r.request_id})">
-                        ${r.linked_label_id ? '변경' : '+ 연결'}
-                    </button>
-                    <div id="link-label-select-${r.request_id}" class="d-none w-100 mt-1">
+                <div class="px-3 py-2">
+                    ${r.message ? `<div class="text-muted mb-2" style="font-size:11px;font-style:italic;">"${r.message}"</div>` : ''}
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span style="font-size:11px;color:#5f6368;font-weight:600;flex-shrink:0;">
+                            <i class="bi bi-link-45deg me-1"></i>연결 제품
+                        </span>
+                        <span id="linked-label-text-${r.request_id}" style="font-size:12px;color:${r.linked_label_id ? '#1967d2' : '#bdc1c6'};">
+                            ${r.linked_label_name || '미연결'}
+                        </span>
+                        <button class="btn btn-xs btn-light border py-0 px-2" style="font-size:11px;"
+                                onclick="toggleLinkLabelSelect(${r.request_id})">
+                            ${r.linked_label_id ? '변경' : '+ 연결'}
+                        </button>
+                    </div>
+                    <div id="link-label-select-${r.request_id}" class="d-none mt-1">
                         <div class="position-relative">
                             <input type="text" class="form-control form-control-sm"
                                    id="link-label-search-${r.request_id}"
@@ -1315,16 +1373,46 @@ async function loadDocRequests(email) {
                                     onclick="toggleLinkLabelSelect(${r.request_id})">취소</button>
                         </div>
                     </div>
+                    ${submissionsHtml}
                 </div>
-                ${submissionsHtml}
             </div>`;
         }).join('');
 
+        // 왼쪽 테이블 동기화: 오른쪽 패널의 데이터로 테이블 업데이트
+        if (hot && email) {
+            const allData = hot.getData();
+            const rowIdx = allData.findIndex(r => r && r.email && r.email.toLowerCase() === email.toLowerCase());
+            
+            if (rowIdx >= 0 && rowIdx < allData.length) {
+                const sentCount = parseInt(reqs.length) || 0;
+                const pendingCount = parseInt(reqs.filter(r => r.status === 'PENDING').length) || 0;
+                
+                // 데이터 직접 업데이트 후 행 리렌더링
+                allData[rowIdx].doc_sent = sentCount;
+                allData[rowIdx].doc_pending = pendingCount;
+                
+                try {
+                    hot.setDataAtRowProp(rowIdx, 'doc_sent', sentCount, 'loadDocRequests_sync');
+                    hot.setDataAtRowProp(rowIdx, 'doc_pending', pendingCount, 'loadDocRequests_sync');
+                } catch (e) {
+                    console.warn('Handsontable update failed, retrying with alternative method:', e);
+                    // 대체 방법: 해당 행 데이터 직접 설정
+                    hot.setSourceDataAtRow(rowIdx, allData[rowIdx]);
+                }
+            }
+        }
+
         if (shortcut) shortcut.classList.remove('d-none');
     } catch(e) {
+        console.error('loadDocRequests 에러:', e);
         loadingEl.classList.add('d-none');
-        listEl.innerHTML = '<p class="text-danger" style="font-size:13px;">불러오기 실패</p>';
+        listEl.innerHTML = '<p class="text-danger" style="font-size:13px;">불러오기 실패: ' + e.message + '</p>';
     }
+}
+
+// AI 분석 화면 열기 (개발 중)
+function openAIReviewForSubmission(submissionId, filename) {
+    alert('AI 분석 기능은 현재 개발 중입니다.\n향후 업데이트에서 제공될 예정입니다.');
 }
 
 let _myLabelsCache = null;

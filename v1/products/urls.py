@@ -118,4 +118,12 @@ urlpatterns = [
     path('contacts/api/my-labels/', views.api_my_labels, name='api_my_labels'),
     path('documents/api/my-company-documents/', views.api_my_company_documents, name='api_my_company_documents'),
     path('doc-requests/<int:req_id>/update-label/', views.api_update_doc_request_label, name='api_update_doc_request_label'),
+
+ 
+    # ==================== AI 문서 리뷰 (Human-in-the-Loop) ====================
+    path('documents/create-from-submission/', views.document_ai_create_from_submission, name='document_ai_create_from_submission'),
+    path('documents/<int:document_id>/ai-review/', views.document_ai_review, name='document_ai_review'),
+    path('documents/<int:document_id>/ai-review/extract/', views.document_ai_extract_api, name='document_ai_extract_api'),
+    path('documents/<int:document_id>/ai-review/save/', views.document_ai_review_save, name='document_ai_review_save'),
+    path('documents/<int:document_id>/ai-review/apply-to-bom/', views.document_ai_apply_to_bom, name='document_ai_apply_to_bom'),
 ]

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{% block title %}서류 제출{% endblock %} - EzLabeling</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+<style>
+  body {
+    background-color: #f8fafc;
+    font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', Arial, sans-serif;
+    color: #1e293b;
+  }
+  .vendor-header {
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 14px 24px;
+  }
+  .vendor-logo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #2563eb;
+    text-decoration: none;
+  }
+  .vendor-logo span { color: #bfdbfe; }
+  .vendor-card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    max-width: 640px;
+    width: 100%;
+    margin: 40px auto;
+    padding: 36px 40px;
+  }
+  @media (max-width: 640px) {
+    .vendor-card { margin: 16px; padding: 24px 20px; }
+  }
+  .file-drop-zone {
+    border: 2px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: #f8fafc;
+  }
+  .file-drop-zone:hover, .file-drop-zone.dragover {
+    border-color: #2563eb;
+    background: #eff6ff;
+  }
+  .file-drop-zone input[type="file"] { display: none; }
+  .file-info {
+    background: #f1f5f9;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: .85rem;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #fff;
+    font-size: .75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+</style>
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+ 
+<div class="vendor-header d-flex align-items-center justify-content-between">
+  <a href="https://www.ezlabeling.com" class="vendor-logo" target="_blank" rel="noopener">
+    Ez<span>Labeling</span>
+  </a>
+  <span class="text-muted" style="font-size:.8rem;">외부 서류 제출 포털</span>
+</div>
+ 
+<div class="container-fluid px-3">
+  {% block content %}{% endblock %}
+</div>
+ 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

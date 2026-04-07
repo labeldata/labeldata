@@ -1,0 +1,46 @@
+{% extends "vendor/base_vendor.html" %}
+{% block title %}제출 완료{% endblock %}
+ 
+{% block content %}
+<div class="vendor-card text-center">
+ 
+  <!-- 완료 아이콘 -->
+  <div class="mb-4">
+    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+         style="width:72px;height:72px;background:#dcfce7;">
+      <i class="bi bi-check2 text-success" style="font-size:2.2rem;"></i>
+    </div>
+    <h5 class="fw-bold mb-1">서류 제출이 완료되었습니다!</h5>
+    <p class="text-muted mb-0" style="font-size:.9rem;">
+      제출하신 서류는 담당자가 검토 후 처리할 예정입니다.
+    </p>
+  </div>
+ 
+  <hr class="my-4">
+ 
+  <!-- PLG 전환 유도 섹션 -->
+  <div class="p-4 rounded-3" style="background:#f8fafc;border:1px solid #e2e8f0;">
+    <h6 class="fw-bold mb-2" style="color:#1e293b;">
+      서류 관리가 번거로우신가요?
+    </h6>
+    <p class="text-muted mb-3" style="font-size:.875rem;line-height:1.6;">
+      EzLabeling에서 식품 표시사항 제작부터 서류 관리, 원료 추적까지<br>
+      한 곳에서 효율적으로 관리할 수 있습니다.
+    </p>
+    <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center">
+      <a href="https://www.ezlabeling.com/user-management/signup/" target="_blank" rel="noopener"
+         class="btn btn-primary fw-semibold px-4">
+        <i class="bi bi-person-plus-fill me-1"></i> 무료로 시작하기
+      </a>
+      <a href="https://www.ezlabeling.com" target="_blank" rel="noopener"
+         class="btn btn-outline-secondary px-4">
+        서비스 둘러보기
+      </a>
+    </div>
+    <p class="text-muted mt-2 mb-0" style="font-size:.75rem;">
+      <!-- "무료 회원가입 · 신용카드 불필요" 제거됨 -->
+    </p>
+  </div>
+ 
+</div>
+{% endblock %}

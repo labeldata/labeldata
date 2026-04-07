@@ -24,6 +24,7 @@ urlpatterns = [
     path('v2/products/', include(('v1.products.urls', 'products'), namespace='products_v2')),
     path('bom/', include('v1.bom.urls', namespace='bom')),
     path('regulatory/', include('v1.regulatory.urls', namespace='regulatory')),  # 부적합.처분 알림
+    path('vendor/', include('v1.products.vendor_urls', namespace='vendor')),     # 협력사 매직링크 포털
     # 마이그레이션은 자동으로 처리됨 (표시사항 저장 시 제품 자동 생성)
 ]
 

@@ -1,0 +1,393 @@
+{% extends "base_v2.html" %}
+{% load static v2_tags %}
+ 
+{% block title %}AI 문서 분석 리뷰 - {{ doc.original_filename }}{% endblock %}
+ 
+{% block extra_css %}
+<style>
+  .review-shell {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 56px); /* base_v2 GNB 높이 제외 */
+  }
+  .review-topbar {
+    padding: 10px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .review-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  /* 좌측: 문서 뷰어 */
+  .panel-viewer {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+    background: #f1f5f9;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 16px;
+  }
+  .panel-viewer iframe,
+  .panel-viewer img {
+    max-width: 100%;
+    border-radius: 6px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.12);
+    background: #fff;
+  }
+  .panel-viewer iframe { width: 100%; height: calc(100vh - 110px); border: none; }
+  /* 우측: AI 리포트 */
+  .panel-report {
+    width: 420px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    border-left: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 20px 24px;
+  }
+  @media (max-width: 900px) {
+    .review-body { flex-direction: column; }
+    .panel-viewer { min-height: 320px; flex: none; }
+    .panel-report { width: 100%; border-left: none; border-top: 1px solid #e2e8f0; }
+  }
+  /* 적합성 배지 */
+  .badge-pass    { background:#dcfce7; color:#15803d; }
+  .badge-warning { background:#fef9c3; color:#854d0e; }
+  .badge-fail    { background:#fee2e2; color:#b91c1c; }
+  .compliance-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 1rem;
+  }
+  /* 테이블 */
+  .coa-table th { font-size:.78rem; color:#64748b; font-weight:600; white-space:nowrap; }
+  .coa-table td { font-size:.85rem; vertical-align:middle; }
+  .judgment-pass { color:#16a34a; font-weight:700; }
+  .judgment-fail { color:#dc2626; font-weight:700; }
+  /* 입력 폼 (Group A) */
+  .extract-label { font-size:.75rem; color:#64748b; font-weight:600; margin-bottom:3px; }
+  .ai-processing { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:12px; min-height:200px; }
+</style>
+{% endblock %}
+ 
+{% block content %}
+<div class="review-shell">
+ 
+  <!-- 상단 바 -->
+  <div class="review-topbar">
+    <a href="{% url 'products:product_detail' doc.label.my_label_id %}" class="btn btn-sm btn-icon btn-light" title="뒤로">
+      <i class="bi bi-arrow-left"></i>
+    </a>
+    <div class="flex-grow-1 min-w-0">
+      <div class="fw-semibold text-truncate" style="font-size:.95rem;">{{ doc.original_filename }}</div>
+      <div class="text-muted" style="font-size:.78rem;">{{ doc.document_type.type_name }}</div>
+    </div>
+    <span class="badge
+      {% if ai_status == 'COMPLETED' %}bg-success
+      {% elif ai_status == 'PROCESSING' %}bg-warning text-dark
+      {% elif ai_status == 'FAILED' %}bg-danger
+      {% else %}bg-secondary{% endif %}">
+      {% if ai_status == 'COMPLETED' %}분석 완료
+      {% elif ai_status == 'PROCESSING' %}분석 중...
+      {% elif ai_status == 'FAILED' %}분석 실패
+      {% else %}대기 중{% endif %}
+    </span>
+  </div>
+ 
+  <div class="review-body">
+ 
+    <!-- ── 좌측: 문서 뷰어 ── -->
+    <div class="panel-viewer">
+      {% if doc.file_extension == '.pdf' %}
+        <iframe src="{{ doc.file.url }}" title="문서 미리보기"></iframe>
+      {% elif doc.file_extension in '.jpg,.jpeg,.png,.gif,.webp' %}
+        <img src="{{ doc.file.url }}" alt="문서 미리보기">
+      {% else %}
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-file-earmark fs-1 d-block mb-2"></i>
+          <p>미리보기를 지원하지 않는 파일 형식입니다.</p>
+          <a href="{% url 'products:document_download' doc.pk %}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-download me-1"></i> 다운로드
+          </a>
+        </div>
+      {% endif %}
+    </div>
+ 
+    <!-- ── 우측: AI 리포트 ── -->
+    <div class="panel-report" id="ai-report-panel">
+ 
+      {% if ai_status == 'PENDING' or ai_status == 'PROCESSING' %}
+      <!-- 분석 진행 중 -->
+      <div class="ai-processing" id="processing-state">
+        <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem;"></div>
+        <div class="text-center">
+          <div class="fw-semibold">AI가 문서를 분석 중입니다</div>
+          <div class="text-muted small mt-1">잠시 후 자동으로 결과가 표시됩니다.</div>
+        </div>
+      </div>
+ 
+      {% elif ai_status == 'FAILED' %}
+      <!-- 분석 실패 -->
+      <div class="text-center py-5 text-danger">
+        <i class="bi bi-exclamation-circle fs-2 d-block mb-2"></i>
+        <div class="fw-semibold">분석에 실패했습니다</div>
+        <p class="text-muted small mt-2">파일 형식을 확인하거나 관리자에게 문의하세요.</p>
+      </div>
+ 
+      {% elif ai_group == 'B' %}
+      <!-- ═══ Group B: 적합성 판정 ═══ -->
+      <div class="mb-4">
+        <div class="text-muted small mb-2">최종 판정</div>
+        {% if compliance_status == 'PASS' %}
+          <span class="compliance-badge badge-pass">
+            <i class="bi bi-check-circle-fill"></i> 적합 (PASS)
+          </span>
+        {% elif compliance_status == 'WARNING' %}
+          <span class="compliance-badge badge-warning">
+            <i class="bi bi-exclamation-triangle-fill"></i> 경고 — 항목 누락 의심
+          </span>
+        {% elif compliance_status == 'FAIL' %}
+          <span class="compliance-badge badge-fail">
+            <i class="bi bi-x-circle-fill"></i> 부적합 (FAIL)
+          </span>
+        {% else %}
+          <span class="compliance-badge" style="background:#f1f5f9;color:#64748b;">
+            판정 결과 없음
+          </span>
+        {% endif %}
+      </div>
+ 
+      {% if extracted.product_name %}
+      <div class="mb-3">
+        <div class="extract-label">제품명</div>
+        <div>{{ extracted.product_name }}</div>
+      </div>
+      {% endif %}
+      {% if extracted.test_institution %}
+      <div class="mb-3">
+        <div class="extract-label">시험기관</div>
+        <div>{{ extracted.test_institution }}</div>
+      </div>
+      {% endif %}
+      {% if extracted.test_date %}
+      <div class="mb-3">
+        <div class="extract-label">시험일자</div>
+        <div>{{ extracted.test_date }}</div>
+      </div>
+      {% endif %}
+ 
+      {% if test_items %}
+      <div class="extract-label mt-3 mb-2">검사 항목 ({{ test_items|length }}건)</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered coa-table">
+          <thead class="table-light">
+            <tr>
+              <th>검사항목</th>
+              <th>기준 규격</th>
+              <th>결과</th>
+              <th>판정</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in test_items %}
+            <tr>
+              <td>{{ item.item_name|default:"-" }}</td>
+              <td class="text-muted">{{ item.standard|default:"-" }}</td>
+              <td>{{ item.result|default:"-" }}</td>
+              <td>
+                {% if item.judgment == 'PASS' %}
+                  <span class="judgment-pass"><i class="bi bi-check2"></i> PASS</span>
+                {% elif item.judgment == 'FAIL' %}
+                  <span class="judgment-fail"><i class="bi bi-x"></i> FAIL</span>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-muted small text-center py-3">추출된 검사 항목이 없습니다.</div>
+      {% endif %}
+ 
+      {% else %}
+      <!-- ═══ Group A: 데이터 추출 ═══ -->
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-bold mb-0">추출된 정보</h6>
+        <button class="btn btn-sm btn-outline-secondary" id="edit-toggle-btn" onclick="toggleEditMode()">
+          <i class="bi bi-pencil me-1"></i> 수정
+        </button>
+      </div>
+ 
+      <form id="extracted-form">
+ 
+        {% if extracted.product_name is not None %}
+        <div class="mb-3">
+          <div class="extract-label">제품명</div>
+          <input class="form-control form-control-sm extract-field" name="product_name"
+                 value="{{ extracted.product_name|default:'' }}" readonly>
+        </div>
+        {% endif %}
+ 
+        {% if extracted.manufacturer is not None %}
+        <div class="mb-3">
+          <div class="extract-label">제조사</div>
+          <input class="form-control form-control-sm extract-field" name="manufacturer"
+                 value="{{ extracted.manufacturer|default:'' }}" readonly>
+        </div>
+        {% endif %}
+ 
+        {% if extracted.storage_method is not None %}
+        <div class="mb-3">
+          <div class="extract-label">보관방법</div>
+          <input class="form-control form-control-sm extract-field" name="storage_method"
+                 value="{{ extracted.storage_method|default:'' }}" readonly>
+        </div>
+        {% endif %}
+ 
+        {% if extracted.raw_materials %}
+        <div class="mb-3">
+          <div class="extract-label">원재료 ({{ extracted.raw_materials|length }}종)</div>
+          <ul class="list-group list-group-flush border rounded" style="font-size:.85rem;">
+            {% for mat in extracted.raw_materials %}
+            <li class="list-group-item py-1 px-2 d-flex justify-content-between">
+              <span>{{ mat }}</span>
+              <span class="text-muted">
+                {% if extracted.blend_ratios %}{{ extracted.blend_ratios|get_item:mat|default:'' }}{% endif %}
+                {% if extracted.origins %}{{ extracted.origins|get_item:mat|default:'' }}{% endif %}
+              </span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+ 
+        {% if extracted.allergens %}
+        <div class="mb-3">
+          <div class="extract-label">알레르기 유발물질</div>
+          <div class="d-flex flex-wrap gap-1 mt-1">
+            {% for a in extracted.allergens %}
+            <span class="badge bg-warning text-dark">{{ a }}</span>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+ 
+      </form>
+ 
+      <div id="edit-actions" class="d-none mt-3 d-flex gap-2">
+        <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="cancelEditMode()">취소</button>
+        <button class="btn btn-sm btn-primary flex-fill" onclick="saveExtracted()">저장</button>
+      </div>
+ 
+      <hr class="my-3">
+ 
+      <div class="d-grid">
+        <button class="btn btn-success fw-semibold" id="bom-apply-btn" onclick="applyToBom()">
+          <i class="bi bi-diagram-3 me-1"></i> BOM 데이터에 병합하기
+        </button>
+        <p class="text-muted small text-center mt-2 mb-0">
+          추출된 원재료 {{ extracted.raw_materials|length|default:0 }}종을 현재 제품 BOM에 추가합니다.
+        </p>
+      </div>
+ 
+      {% endif %}{# end group A/B #}
+ 
+    </div>{# end panel-report #}
+  </div>{# end review-body #}
+</div>{# end review-shell #}
+ 
+<!-- BOM 병합 결과 토스트 -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100;">
+  <div id="result-toast" class="toast align-items-center text-white border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="toast-msg"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+ 
+{% block extra_js %}
+<script>
+const SAVE_URL    = "{% url 'products:document_ai_review_save' doc.pk %}";
+const BOM_URL     = "{% url 'products:document_ai_apply_to_bom' doc.pk %}";
+const POLL_URL    = "{% url 'products:document_ai_review' doc.pk %}";
+const AI_STATUS   = "{{ ai_status }}";
+const CSRF_TOKEN  = "{{ csrf_token }}";
+ 
+// ── 분석 중일 때 3초 폴링 ──
+if (AI_STATUS === 'PENDING' || AI_STATUS === 'PROCESSING') {
+  setTimeout(() => location.reload(), 4000);
+}
+ 
+// ── 수정 모드 토글 ──
+function toggleEditMode() {
+  document.querySelectorAll('.extract-field').forEach(el => el.removeAttribute('readonly'));
+  document.getElementById('edit-toggle-btn').classList.add('d-none');
+  document.getElementById('edit-actions').classList.remove('d-none');
+}
+function cancelEditMode() {
+  location.reload();
+}
+ 
+// ── 수정 내용 저장 ──
+async function saveExtracted() {
+  const form = document.getElementById('extracted-form');
+  const formData = new FormData(form);
+  const extracted = {};
+  formData.forEach((v, k) => { extracted[k] = v || null; });
+ 
+  const res = await fetch(SAVE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+    body: JSON.stringify({ extracted_data: extracted }),
+  });
+  if (res.ok) showToast('저장되었습니다.', 'success');
+  else showToast('저장 실패', 'danger');
+  cancelEditMode();
+}
+ 
+// ── BOM 병합 ──
+async function applyToBom() {
+  const btn = document.getElementById('bom-apply-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>병합 중...';
+ 
+  try {
+    const res = await fetch(BOM_URL, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN },
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`BOM에 ${data.created}종 추가 완료 (전체 ${data.total}종)`, 'success');
+    } else {
+      showToast(data.error || 'BOM 병합 실패', 'danger');
+    }
+  } catch(e) {
+    showToast('네트워크 오류', 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-diagram-3 me-1"></i> BOM 데이터에 병합하기';
+  }
+}
+ 
+// ── 토스트 표시 ──
+function showToast(msg, type) {
+  const toast = document.getElementById('result-toast');
+  const toastMsg = document.getElementById('toast-msg');
+  toast.className = `toast align-items-center text-white border-0 bg-${type}`;
+  toastMsg.textContent = msg;
+  bootstrap.Toast.getOrCreateInstance(toast, { delay: 3000 }).show();
+}
+</script>
+{% endblock %}

@@ -37,10 +37,13 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 8px 12px;
     border-bottom: 1px solid #e8eaed;
     background: #f8f9fa;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 44px;
 }
 
 .contacts-search-bar {

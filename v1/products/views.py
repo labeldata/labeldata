@@ -19,6 +19,10 @@ import zipfile
 import io
 import os
 import json
+import logging
+import time as _time
+
+logger = logging.getLogger('django')
 
 from .models import Product, ProductFolder, ProductAccessLog, ProductMetadata, FoodType, CountryList
 
@@ -4348,36 +4352,55 @@ def contacts_api_list(request):
 @login_required
 @require_POST
 def contacts_api_update(request):
-    """연락처 정보 업데이트 API - 이메일 기준으로 내가 추가한 모든 공유 레코드를 일괄 수정"""
-    email = request.POST.get('email', '').strip().lower()
+    """연락처 정보 업데이트 API - 이메일 수정 지원"""
+    old_email = request.POST.get('old_email', '').strip().lower()  # 기존 이메일
+    new_email = request.POST.get('email', '').strip().lower()      # 새 이메일
     name = request.POST.get('name', '').strip()
     company = request.POST.get('company', '').strip()
     license_no = request.POST.get('license_no', '').strip()
 
-    if not email:
+    if not old_email or not new_email:
         return JsonResponse({'success': False, 'error': '이메일이 필요합니다.'}, status=400)
 
-    # ① ProductShare 레코드 일괄 업데이트
+    # 새 이메일 유효성 검증
+    import re as _re
+    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', new_email):
+        return JsonResponse({'success': False, 'error': '유효한 이메일 주소를 입력하세요.'}, status=400)
+
+    # ① ProductShare 레코드 일괄 업데이트 (이메일 변경 포함)
     updated = (
         ProductShare.objects
         .filter(
             Q(label__user_id=request.user) | Q(created_by=request.user)
         )
-        .filter(recipient_email__iexact=email, share_mode='PRIVATE', active_yn=True)
+        .filter(recipient_email__iexact=old_email, share_mode='PRIVATE', active_yn=True)
         .distinct()
         .update(
+            recipient_email=new_email if old_email != new_email else old_email,  # 이메일 변경
             recipient_name=name or None,
             recipient_company=company or None,
             recipient_license_no=license_no or None,
         )
     )
 
-    # ② UserContact도 동기화 (있으면 업데이트)
-    UserContact.objects.filter(owner=request.user, email__iexact=email).update(
-        name=name or None,
-        company=company or None,
-        license_no=license_no or None,
-    )
+    # ② UserContact 동기화 (있으면 업데이트)
+    if old_email != new_email:
+        # 이메일이 변경되면 기존 레코드 삭제 및 새로 생성
+        UserContact.objects.filter(owner=request.user, email__iexact=old_email).delete()
+        UserContact.objects.create(
+            owner=request.user,
+            email=new_email,
+            name=name or None,
+            company=company or None,
+            license_no=license_no or None,
+        )
+    else:
+        # 이메일은 같고 다른 정보만 수정
+        UserContact.objects.filter(owner=request.user, email__iexact=old_email).update(
+            name=name or None,
+            company=company or None,
+            license_no=license_no or None,
+        )
 
     return JsonResponse({'success': True, 'updated': updated})
 
@@ -4479,45 +4502,59 @@ def contacts_api_shares(request):
 @login_required
 def contacts_api_doc_requests(request):
     """연락처별 자료 요청 이력 JSON API"""
-    from v1.products.models import DocumentRequest, DocumentSubmission
+    from v1.products.models import DocumentRequest, DocumentSubmission, ProductDocument
     email = request.GET.get('email', '').strip().lower()
     if not email:
         return JsonResponse({'requests': []})
 
-    dr_list = (
-        DocumentRequest.objects
-        .filter(requester=request.user, recipient_email__iexact=email)
-        .select_related('linked_label')
-        .prefetch_related('submissions')
-        .order_by('-created_datetime')
-    )
-    data = []
-    for dr in dr_list:
-        subs = [
-            {
-                'submission_id':   s.submission_id,
-                'document_type':   s.document_type,
-                'filename':        s.original_filename,
-                'file_url':        request.build_absolute_uri(s.file.url) if s.file else '',
-                'file_size':       s.file_size,
-                'submitted':       s.submitted_datetime.strftime('%Y-%m-%d %H:%M') if s.submitted_datetime else '',
-                'submitted_by':    s.submitted_by_name or s.submitted_by_email or '',
-            }
-            for s in dr.submissions.filter(active_yn=True)
-        ]
-        data.append({
-            'request_id':          dr.request_id,
-            'status':              dr.status,
-            'status_display':      dr.get_status_display(),
-            'requested_documents': dr.requested_documents or [],
-            'message':             dr.message or '',
-            'due_date':            dr.due_date.strftime('%Y-%m-%d') if dr.due_date else '',
-            'created':             dr.created_datetime.strftime('%Y-%m-%d %H:%M') if dr.created_datetime else '',
-            'submissions':         subs,
-            'linked_label_id':     dr.linked_label_id,
-            'linked_label_name':   dr.linked_label.my_label_name if dr.linked_label else None,
-        })
-    return JsonResponse({'requests': data})
+    try:
+        dr_list = (
+            DocumentRequest.objects
+            .filter(requester=request.user, recipient_email__iexact=email)
+            .select_related('linked_label')
+            .prefetch_related('submissions')
+            .order_by('-created_datetime')
+        )
+        data = []
+        for dr in dr_list:
+            subs = []
+            for s in dr.submissions.filter(active_yn=True):
+                # ProductDocument 찾기 (vendor_submission_id로)
+                try:
+                    pd = ProductDocument.objects.filter(
+                        metadata__vendor_submission_id=s.submission_id
+                    ).first()
+                except Exception as e:
+                    logger.warning(f"ProductDocument lookup error for submission {s.submission_id}: {e}")
+                    pd = None
+                
+                subs.append({
+                    'submission_id':   str(s.submission_id),
+                    'document_type':   s.document_type or '',
+                    'filename':        s.original_filename or '',
+                    'file_url':        request.build_absolute_uri(s.file.url) if s.file else '',
+                    'file_size':       int(s.file_size) if s.file_size else 0,
+                    'submitted':       s.submitted_datetime.strftime('%Y-%m-%d %H:%M') if s.submitted_datetime else '',
+                    'submitted_by':    s.submitted_by_name or s.submitted_by_email or '',
+                    'document_id':     str(pd.document_id) if pd and pd.document_id else None,
+                    'ai_status':       pd.metadata.get('ai_status') if pd and pd.metadata else None,
+                })
+            data.append({
+                'request_id':          str(dr.request_id),
+                'status':              dr.status or '',
+                'status_display':      dr.get_status_display() or '',
+                'requested_documents': [{'type_name': d.get('type_name', '')} for d in (dr.requested_documents or [])],
+                'message':             dr.message or '',
+                'due_date':            dr.due_date.strftime('%Y-%m-%d') if dr.due_date else '',
+                'created':             dr.created_datetime.strftime('%Y-%m-%d %H:%M') if dr.created_datetime else '',
+                'submissions':         subs,
+                'linked_label_id':     str(dr.linked_label_id) if dr.linked_label_id else None,
+                'linked_label_name':   dr.linked_label.my_label_name if dr.linked_label else None,
+            })
+        return JsonResponse({'requests': data})
+    except Exception as e:
+        logger.exception(f"contacts_api_doc_requests error for email={email}, user={request.user}")
+        return JsonResponse({'error': str(e), 'requests': []}, status=400)
 
 
 @login_required
@@ -4860,7 +4897,11 @@ def api_send_doc_request(request):
 
         # ── 이메일 발송 ──
         from django.conf import settings as _ds
-        _site_url = getattr(_ds, 'SITE_URL', 'https://www.ezlabeling.com')
+        # 동적 사이트 URL: 현재 요청 도메인 사용
+        # request.build_absolute_uri('/')는 현재 스킴과 호스트를 기반으로 생성
+        # 예: localhost:8000 또는 ezlabeling.com
+        base_url = request.build_absolute_uri('/').rstrip('/')
+        
         subject = f'[EzLabeling] {requester_name}님이 문서 제출을 요청했습니다'
         _txt, _html = _render_email('emails/doc_request.html', {
             'subject': subject,
@@ -4868,7 +4909,7 @@ def api_send_doc_request(request):
             'recipient_name': r.get('name', ''), 'recipient_company': r.get('company', ''),
             'doc_list': [dt.type_name for dt in doc_types],
             'message_text': message_text,
-            'doc_request_url': f'{_site_url}/products/doc-requests/',
+            'doc_request_url': f'{base_url}/vendor/upload/{dr.upload_token}/',  # ← 동적 URL 사용
         })
 
         # 첨부파일 처리
@@ -4893,3 +4934,310 @@ def api_send_doc_request(request):
 
     log_activity(request, 'document', 'doc_request_send')
     return JsonResponse({'success': True, 'created': created_count, 'email_errors': email_errors})
+
+
+ 
+# ==================== AI 문서 리뷰 (Human-in-the-Loop) ====================
+ 
+@login_required
+def document_ai_review(request, document_id):
+    """AI 문서 리뷰 페이지"""
+    from v1.products.services.vision_service import _pdf_to_base64_images, _image_to_base64
+    
+    doc = get_object_or_404(
+        ProductDocument.objects.select_related('label', 'document_type', 'label__user_id'),
+        pk=document_id,
+        label__user_id=request.user,
+    )
+    
+    meta = doc.metadata or {}
+    ai_group = meta.get('ai_group', 'A')
+    ai_status = meta.get('ai_status', 'PENDING')
+    extracted = meta.get('extracted_data') or {}
+    test_items = extracted.get('test_items') or []
+    
+    # PDF/이미지 변환
+    document_images = []
+    if doc.file:
+        try:
+            file_path = doc.file.path
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext == '.pdf':
+                document_images = _pdf_to_base64_images(file_path, max_pages=2)
+            elif ext in ['.jpg', '.jpeg', '.png', '.gif']:
+                img_b64 = _image_to_base64(file_path)
+                if img_b64:
+                    document_images = [img_b64]
+        except Exception as e:
+            logger.warning(f"Image convert error: {e}")
+    
+    # 필드 설정
+    fields_config = {
+        'product_name': {'label': '제품명', 'desc': '제품 명칭', 'ph': '예: PINE SOFT-T', 'req': True},
+        'food_type': {'label': '제품의유형', 'desc': '식품 분류', 'ph': '예: 음료수', 'req': True},
+        'manufacturer': {'label': '제조업소명', 'desc': '제조사', 'ph': '예: 알글리딘(주)', 'req': True},
+        'raw_materials': {'label': '원재료명', 'desc': '원재료 목록', 'ph': '예: 생강, 민트', 'req': True},
+        'blend_ratios': {'label': '배합비', 'desc': '배합 비율', 'ph': '예: 37%, 17%', 'req': False},
+        'origins': {'label': '원산지', 'desc': '원산지 정보', 'ph': '예: 미국', 'req': False},
+        'allergens': {'label': '알레르기 함유', 'desc': '알레르기 정보', 'ph': '예: 없음', 'req': False},
+        'storage_method': {'label': '보관방법', 'desc': '보관 조건', 'ph': '예: 실온보관', 'req': False},
+        'shelf_life': {'label': '유통기한', 'desc': '유통기한', 'ph': '예: 2년', 'req': False},
+    }
+    
+    extracted_with_labels = [
+        {'key': k, 'label': v['label'], 'value': extracted.get(k, '')}
+        for k, v in fields_config.items()
+    ]
+    
+    return render(request, 'products/document_ai_review_v2.html', {
+        'doc': doc,
+        'ai_group': ai_group,
+        'ai_status': ai_status,
+        'extracted': extracted,
+        'extracted_with_labels': extracted_with_labels,
+        'document_images': document_images,
+        'compliance_status': meta.get('compliance_status', ''),
+        'test_items': test_items,
+    })
+ 
+ 
+@login_required
+@require_POST
+def document_ai_create_from_submission(request):
+    """ProductDocument 생성 API"""
+    import json as _json
+    from v1.products.models import DocumentSubmission, DocumentType
+    
+    try:
+        payload = _json.loads(request.body)
+        submission_id = payload.get('submission_id')
+        if not submission_id:
+            return JsonResponse({'success': False, 'error': 'submission_id required'}, status=400)
+        
+        sub = DocumentSubmission.objects.select_related('document_request__linked_label').get(
+            submission_id=submission_id, active_yn=True
+        )
+        label = sub.document_request.linked_label if sub.document_request else None
+        
+        if not label or (hasattr(label.user_id, 'id') and label.user_id.id != request.user.id) or \
+           (not hasattr(label.user_id, 'id') and label.user_id != request.user.id):
+            return JsonResponse({'success': False, 'error': 'Access denied'}, status=403)
+        
+        existing = ProductDocument.objects.filter(metadata__vendor_submission_id=submission_id).first()
+        if existing:
+            return JsonResponse({
+                'success': True,
+                'document_id': existing.document_id,
+                'redirect_url': f'/products/documents/{existing.document_id}/ai-review/',
+            })
+        
+        doc = ProductDocument()
+        doc.label = label
+        doc_type = DocumentType.objects.filter(active_yn=True).first()
+        if doc_type:
+            doc.document_type = doc_type
+        if sub.file:
+            doc.file = sub.file
+        
+        doc.metadata = {
+            'vendor_submission_id': str(submission_id),
+            'ai_status': 'PENDING',
+            'document_title': sub.original_filename or 'Document',
+            'ai_group': 'A',
+            'extracted_data': {},
+            'compliance_status': 'UNKNOWN',
+            'test_items': [],
+        }
+        doc.save()
+        
+        return JsonResponse({
+            'success': True,
+            'document_id': doc.document_id,
+            'redirect_url': f'/products/documents/{doc.document_id}/ai-review/',
+        })
+    
+    except DocumentSubmission.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Not found'}, status=404)
+    except Exception as e:
+        logger.exception(f"Error: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+@require_POST
+def document_ai_extract_api(request, document_id):
+    """
+    AI 문서 분석 실행 API (비동기)
+    사용자가 "AI 분석" 버튼 클릭 시 호출되어 실제 AI 추출을 수행합니다.
+    
+    Response:
+        {
+            "success": true,
+            "status": "COMPLETED",
+            "extracted_data": {...},
+            "message": "분석 완료"
+        }
+    """
+    import json as _json
+    from v1.products.services.vision_service import VisionAIService
+    
+    doc = get_object_or_404(
+        ProductDocument.objects.select_related('label', 'document_type'),
+        pk=document_id,
+        label__user_id=request.user,
+    )
+    
+    try:
+        # PDF/이미지 경로 확인
+        if not doc.file or not os.path.exists(doc.file.path):
+            return JsonResponse({
+                'success': False,
+                'error': '문서 파일을 찾을 수 없습니다.',
+            }, status=400)
+        
+        file_path = str(doc.file.path)
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
+        # VisionAIService 초기화 및 실행
+        service = VisionAIService()
+        
+        # 문서 타입에 따른 처리
+        if file_ext == '.pdf':
+            # PDF → 처음 2페이지 이미지로 변환 후 분석
+            from v1.products.services.vision_service import _pdf_to_base64_images
+            images_b64 = _pdf_to_base64_images(file_path, max_pages=2)
+            if not images_b64:
+                raise ValueError("PDF에서 이미지를 추출할 수 없습니다.")
+        elif file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+            # 이미지 파일 → Base64
+            from v1.products.services.vision_service import _image_to_base64
+            img_b64 = _image_to_base64(file_path)
+            if not img_b64:
+                raise ValueError("이미지를 처리할 수 없습니다.")
+            images_b64 = [img_b64]
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': f'지원하지 않는 파일 형식: {file_ext}',
+            }, status=400)
+        
+        # ── Group A 실행 (데이터 추출) ──
+        extracted_data = {}
+        try:
+            extracted_data = service.extract_group_a(images_b64)
+            logger.info(f"AI Group A 추출 성공: document_id={document_id}, extracted={extracted_data}")
+        except Exception as e:
+            logger.error(f"AI Group A 추출 실패: document_id={document_id}, error={e}")
+            extracted_data = {}
+        
+        # ── Group B 실행 (규정 검증) ──
+        compliance_data = {}
+        if extracted_data:  # 추출이 성공한 경우만 규정 검증
+            try:
+                compliance_data = service.extract_group_b(images_b64, extracted_data)
+                logger.info(f"AI Group B 검증 성공: document_id={document_id}, compliance={compliance_data}")
+            except Exception as e:
+                logger.error(f"AI Group B 검증 실패: document_id={document_id}, error={e}")
+                compliance_data = {}
+        
+        # ── 결과 저장 ──
+        metadata = doc.metadata or {}
+        metadata['ai_status'] = 'COMPLETED'
+        metadata['extracted_data'] = extracted_data
+        metadata['compliance_status'] = compliance_data.get('overall_status', 'UNKNOWN')
+        metadata['test_items'] = compliance_data.get('test_items', [])
+        
+        doc.metadata = metadata
+        doc.save(update_fields=['metadata'])
+        
+        # ── 응답 ──
+        return JsonResponse({
+            'success': True,
+            'status': 'COMPLETED',
+            'extracted_data': extracted_data,
+            'test_items': compliance_data.get('test_items', []),
+            'message': '분석 완료',
+        })
+    
+    except Exception as e:
+        logger.exception(f"document_ai_extract_api error: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'message': 'AI 분석 중 오류가 발생했습니다.',
+        }, status=500)
+
+
+@login_required
+@require_POST
+def document_ai_review_save(request, document_id):
+    """AI 추출 데이터 수동 수정 저장."""
+    import json as _json
+    doc = get_object_or_404(
+        ProductDocument.objects.select_related('label'),
+        pk=document_id,
+        label__user_id=request.user,
+    )
+ 
+    try:
+        payload = _json.loads(request.body)
+    except (_json.JSONDecodeError, Exception):
+        return JsonResponse({'error': '잘못된 요청입니다.'}, status=400)
+ 
+    meta = dict(doc.metadata) if doc.metadata else {}
+    meta['extracted_data'] = payload.get('extracted_data', meta.get('extracted_data', {}))
+    doc.metadata = meta
+    doc.save(update_fields=['metadata'])
+    return JsonResponse({'success': True})
+ 
+ 
+@login_required
+@require_POST
+def document_ai_apply_to_bom(request, document_id):
+    """
+    Group A 전용: AI 추출 원재료 데이터를 BOM에 병합.
+    extracted_data의 raw_materials / blend_ratios / origins / allergens 활용.
+    """
+    import json as _json
+    from v1.bom.models import ProductBOM
+ 
+    doc = get_object_or_404(
+        ProductDocument.objects.select_related('label'),
+        pk=document_id,
+        label__user_id=request.user,
+    )
+ 
+    meta = doc.metadata or {}
+    extracted = meta.get('extracted_data') or {}
+    raw_materials = extracted.get('raw_materials') or []
+    blend_ratios = extracted.get('blend_ratios') or {}
+    origins = extracted.get('origins') or {}
+    allergens = extracted.get('allergens') or []
+    allergen_str = ', '.join(allergens) if allergens else ''
+ 
+    if not raw_materials:
+        return JsonResponse({'error': '추출된 원재료 데이터가 없습니다.'}, status=400)
+ 
+    created_count = 0
+    for material in raw_materials:
+        if not material:
+            continue
+        ratio_raw = blend_ratios.get(material)
+        try:
+            ratio = float(str(ratio_raw).replace('%', '').strip()) if ratio_raw else None
+        except (ValueError, TypeError):
+            ratio = None
+ 
+        origin = origins.get(material, '')
+ 
+        _, created = ProductBOM.objects.get_or_create(
+            parent_label=doc.label,
+            ingredient_name=material,
+            defaults={
+                'usage_ratio': ratio,
+                'origin': origin,
+                'allergens': allergen_str,
+            },
+        )
+        if created:
+            created_count += 1
+ 
+    log_activity(request, 'document', 'ai_apply_to_bom', document_id)
+    return JsonResponse({'success': True, 'created': created_count, 'total': len(raw_materials)})

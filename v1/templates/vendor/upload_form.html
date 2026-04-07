@@ -1,0 +1,169 @@
+{% extends "vendor/base_vendor.html" %}
+{% block title %}서류 제출 요청{% endblock %}
+ 
+{% block content %}
+<div class="vendor-card">
+ 
+  <!-- 요청 헤더 -->
+  <div class="mb-4">
+    <p class="text-muted mb-1" style="font-size:.85rem;">서류 제출 요청</p>
+    <h5 class="fw-bold mb-0">{{ requester_name }}님이 서류 제출을 요청했습니다</h5>
+    {% if product_name %}
+    <div class="mt-2 d-flex align-items-center gap-2 text-secondary" style="font-size:.9rem;">
+      <i class="bi bi-box-seam"></i>
+      <span>대상 제품: <strong class="text-dark">{{ product_name }}</strong></span>
+    </div>
+    {% endif %}
+    {% if dr.message %}
+    <div class="mt-3 p-3 rounded" style="background:#eff6ff;border-left:3px solid #2563eb;font-size:.88rem;color:#1e3a8a;line-height:1.6;">
+      {{ dr.message }}
+    </div>
+    {% endif %}
+  </div>
+ 
+  <hr class="my-3">
+ 
+  <!-- 오류 메시지 -->
+  {% if error %}
+  <div class="alert alert-danger py-2 mb-3">
+    <i class="bi bi-exclamation-triangle-fill me-1"></i> {{ error }}
+  </div>
+  {% endif %}
+ 
+  <form method="post" action="{% url 'vendor:upload_submit' token=token %}" enctype="multipart/form-data" id="upload-form">
+    {% csrf_token %}
+ 
+    <!-- 제출자 정보 -->
+    <div class="mb-4">
+      <h6 class="fw-semibold mb-3 d-flex align-items-center gap-2">
+        <span class="step-badge">1</span> 제출자 정보
+      </h6>
+      <div class="row g-2">
+        <div class="col-sm-6">
+          <label class="form-label text-muted small">담당자 이름</label>
+          <input type="text" class="form-control" name="vendor_name"
+                 placeholder="홍길동" value="{{ dr.recipient_name }}">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label text-muted small">이메일</label>
+          <input type="email" class="form-control" name="vendor_email"
+                 placeholder="{{ dr.recipient_email }}" value="{{ dr.recipient_email }}" readonly>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- 서류 업로드 -->
+    <div class="mb-4">
+      <h6 class="fw-semibold mb-3 d-flex align-items-center gap-2">
+        <span class="step-badge">2</span> 요청 서류 업로드
+      </h6>
+ 
+      {% if requested_docs %}
+        {% for doc in requested_docs %}
+        <div class="mb-3">
+          <label class="form-label fw-medium">
+            {{ doc.type_name }}
+            <span class="text-danger">*</span>
+          </label>
+          <div class="file-drop-zone" id="drop-{{ forloop.counter }}"
+               onclick="document.getElementById('file_input_{{ doc.type_id }}').click()">
+            <i class="bi bi-cloud-arrow-up fs-3 text-primary mb-1 d-block"></i>
+            <p class="mb-1 fw-medium text-secondary">클릭하거나 파일을 드래그하세요</p>
+            <p class="mb-0 text-muted" style="font-size:.8rem;">PDF, JPG, PNG, DOCX (최대 20MB)</p>
+            <input type="file" id="file_input_{{ doc.type_id }}" name="file_{{ doc.type_id }}"
+                   accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx"
+                   onchange="showFileInfo(this, 'drop-{{ forloop.counter }}', 'info-{{ forloop.counter }}')">
+          </div>
+          <div id="info-{{ forloop.counter }}"></div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <!-- requested_documents가 비어 있는 경우: 범용 업로드 -->
+        <div class="mb-3">
+          <div class="file-drop-zone" id="drop-0" onclick="document.getElementById('file_general').click()">
+            <i class="bi bi-cloud-arrow-up fs-3 text-primary mb-1 d-block"></i>
+            <p class="mb-1 fw-medium text-secondary">파일을 첨부해주세요</p>
+            <p class="mb-0 text-muted" style="font-size:.8rem;">PDF, JPG, PNG (최대 20MB)</p>
+            <input type="file" id="file_general" name="file_0" multiple
+                   accept=".pdf,.jpg,.jpeg,.png,.docx"
+                   onchange="showFileInfo(this, 'drop-0', 'info-0')">
+          </div>
+          <div id="info-0"></div>
+        </div>
+      {% endif %}
+    </div>
+ 
+    <!-- 메모 -->
+    <div class="mb-4">
+      <h6 class="fw-semibold mb-2 d-flex align-items-center gap-2">
+        <span class="step-badge">3</span> 메모 <span class="text-muted fw-normal" style="font-size:.8rem;">(선택)</span>
+      </h6>
+      <textarea class="form-control" name="notes" rows="2"
+                placeholder="전달 사항이 있으면 입력하세요"></textarea>
+    </div>
+ 
+    <!-- 제출 버튼 -->
+    <div class="d-grid">
+      <button type="submit" class="btn btn-primary btn-lg fw-bold py-3" id="submit-btn">
+        <i class="bi bi-send-fill me-2"></i> 서류 제출하기
+      </button>
+    </div>
+ 
+    {% if dr.due_date %}
+    <p class="text-center text-muted mt-3 mb-0" style="font-size:.8rem;">
+      <i class="bi bi-clock me-1"></i> 제출 기한: {{ dr.due_date|date:"Y년 m월 d일" }}
+    </p>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}
+ 
+{% block extra_js %}
+<script>
+function showFileInfo(input, dropId, infoId) {
+  const dropZone = document.getElementById(dropId);
+  const infoDiv = document.getElementById(infoId);
+  infoDiv.innerHTML = '';
+  if (!input.files.length) return;
+  Array.from(input.files).forEach(f => {
+    const size = (f.size / 1024 / 1024).toFixed(2);
+    infoDiv.innerHTML += `
+      <div class="file-info">
+        <i class="bi bi-file-earmark-check text-success"></i>
+        <span>${f.name}</span>
+        <span class="ms-auto text-muted">${size} MB</span>
+      </div>`;
+  });
+  dropZone.style.borderColor = '#16a34a';
+  dropZone.style.background = '#f0fdf4';
+}
+ 
+// 드래그 앤 드롭
+document.querySelectorAll('.file-drop-zone').forEach(zone => {
+  zone.addEventListener('dragover', e => { 
+    e.preventDefault(); 
+    zone.classList.add('dragover'); 
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const input = zone.querySelector('input[type="file"]');
+    if (input && e.dataTransfer.files.length) {
+      // input.files는 read-only이므로 DataTransfer 사용
+      const dt = new DataTransfer();
+      Array.from(e.dataTransfer.files).forEach(file => dt.items.add(file));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+});
+ 
+// 제출 중 버튼 비활성화
+document.getElementById('upload-form').addEventListener('submit', () => {
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>제출 중...';
+});
+</script>
+{% endblock %}

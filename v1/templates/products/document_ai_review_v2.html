@@ -1,0 +1,460 @@
+{% extends 'base_v2.html' %}
+{% load static %}
+
+{% block title %}AI 문서 검토 - {{ doc.document_title }}{% endblock %}
+
+{% block topbar %}
+<div class="v2-topbar-title-wrapper">
+    <i class="bi bi-file-earmark-pdf me-2 v2-topbar-icon"></i>
+    <span class="v2-topbar-title">문서 검토</span>
+    <span class="ms-3 d-none d-md-inline v2-topbar-subtitle">
+        {{ doc.document_title|default:"문서" }} - 
+        <span class="badge bg-{{ ai_status|lower|default:'secondary' }}">
+            {{ ai_status|upper|default:'PENDING' }}
+        </span>
+        <span class="badge" style="background:#e8f0fe;color:#1a73e8;">Group {{ ai_group }}</span>
+    </span>
+</div>
+{% include "includes/_topbar_account.html" %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .ai-review-container {
+        display: flex;
+        height: calc(100vh - 70px);
+        background: #f5f7fa;
+        gap: 0;
+    }
+    
+    /* 왼쪽: 문서 뷰어 */
+    .document-viewer-panel {
+        flex: 1;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-right: 1px solid #e8eaed;
+    }
+    
+    .document-viewer-header {
+        padding: 16px;
+        border-bottom: 1px solid #e8eaed;
+        background: #f8f9fa;
+        font-size: 13px;
+        color: #5f6368;
+    }
+    
+    .document-viewer-header strong {
+        display: block;
+        margin-bottom: 4px;
+        color: #202124;
+    }
+    
+    .document-viewer-content {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    
+    .document-viewer-content img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border-radius: 4px;
+    }
+    
+    .document-viewer-empty {
+        text-align: center;
+        color: #9aa0a6;
+    }
+    
+    .document-viewer-empty i {
+        font-size: 48px;
+        margin-bottom: 12px;
+        opacity: 0.6;
+    }
+    
+    /* 우측: AI 결과 패널 */
+    .ai-results-panel {
+        flex: 1;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    .ai-results-header {
+        padding: 16px;
+        border-bottom: 1px solid #e8eaed;
+        background: #f8f9fa;
+    }
+    
+    .ai-results-header h3 {
+        margin: 0 0 8px 0;
+        font-size: 15px;
+        color: #202124;
+        font-weight: 600;
+    }
+    
+    .badge-group {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-right: 8px;
+    }
+    
+    .badge-group-a {
+        background: #e3f2fd;
+        color: #1a73e8;
+    }
+    
+    .badge-group-b {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+    
+    .ai-results-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+    }
+    
+    .extracted-group {
+        margin-bottom: 24px;
+    }
+    
+    .extracted-group h4 {
+        margin: 0 0 12px 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: #5f6368;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .extracted-item {
+        margin-bottom: 16px;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        border-left: 3px solid #1a73e8;
+    }
+    
+    .extracted-item-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #1a73e8;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+    }
+    
+    .extracted-item-value {
+        font-size: 13px;
+        color: #202124;
+        word-break: break-word;
+        font-family: 'Roboto Mono', monospace;
+    }
+    
+    .extracted-item input,
+    .extracted-item textarea {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #dadce0;
+        border-radius: 4px;
+        font-size: 12px;
+        font-family: 'Roboto Mono', monospace;
+        margin-top: 6px;
+    }
+    
+    .extracted-item input:focus,
+    .extracted-item textarea:focus {
+        outline: none;
+        border-color: #1a73e8;
+        box-shadow: 0 1px 3px rgba(26, 115, 232, 0.3);
+    }
+    
+    .button-group {
+        display: flex;
+        gap: 8px;
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid #e8eaed;
+    }
+    
+    .btn-apply {
+        flex: 1;
+        padding: 10px 16px;
+        background: #1a73e8;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .btn-apply:hover {
+        background: #1557b0;
+        box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+    }
+    
+    /* 로딩 상태 */
+    .loading-spinner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #9aa0a6;
+    }
+    
+    .spinner {
+        width: 24px;
+        height: 24px;
+        border: 2px solid #e8eaed;
+        border-top: 2px solid #1a73e8;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 12px;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .metadata-footer {
+        padding: 12px 16px;
+        background: #f8f9fa;
+        border-top: 1px solid #e8eaed;
+        font-size: 11px;
+        color: #9aa0a6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ai-review-container">
+    <!-- 왼쪽 패널: 문서 이미지 -->
+    <div class="document-viewer-panel">
+        <div class="document-viewer-header">
+            <strong>원본 문서</strong>
+            <span>{{ doc.original_filename|default:"문서" }}</span>
+        </div>
+        <div class="document-viewer-content">
+            {% if document_images %}
+                {% for img_b64 in document_images %}
+                    <img src="data:image/png;base64,{{ img_b64 }}" alt="Document page">
+                {% endfor %}
+            {% else %}
+                <div class="document-viewer-empty">
+                    <div><i class="bi bi-file-pdf"></i></div>
+                    <p>문서를 로드할 수 없습니다</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- 우측 패널: AI 추출 결과 -->
+    <div class="ai-results-panel">
+        <div class="ai-results-header">
+            <h3>추출된 정보</h3>
+            <span class="badge-group badge-group-{{ ai_group|lower }}">GROUP {{ ai_group }}</span>
+            <span class="badge-group" style="background:#d4edda;color:#137333;">{{ ai_status|upper }}</span>
+        </div>
+        
+        <div class="ai-results-content">
+            {% if ai_group == 'A' %}
+                <!-- Group A: 편집 가능 폼 -->
+                <form id="aiReviewForm">
+                    {% csrf_token %}
+                    <div class="extracted-group">
+                        {% for item in extracted_with_labels %}
+                            <div class="extracted-item">
+                                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                                    <label class="extracted-item-label" style="margin-bottom: 0;">
+                                        {{ item.label }}
+                                        {% if item.required %}<span style="color: #ea4335; font-weight: bold;">*</span>{% endif %}
+                                    </label>
+                                    {% if item.description %}
+                                    <span style="font-size: 11px; color: #9aa0a6;" title="{{ item.description }}">
+                                        ⓘ
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% if item.description %}
+                                <div style="font-size: 11px; color: #9aa0a6; margin-bottom: 6px; line-height: 1.4;">
+                                    {{ item.description }}
+                                </div>
+                                {% endif %}
+                                <input 
+                                    type="text" 
+                                    name="{{ item.key }}"
+                                    value="{{ item.value|default:'' }}"
+                                    placeholder="{{ item.placeholder|default:'값을 입력하세요' }}"
+                                    {% if item.required %}required{% endif %}
+                                    style="width: 100%; padding: 10px; border: 1px solid #e8eaed; border-radius: 6px; font-size: 13px;"
+                                >
+                            </div>
+                        {% empty %}
+                            <div style="text-align: center; color: #9aa0a6; padding: 24px;">
+                                <p>추출된 정보가 없습니다</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="button-group">
+                        {% if ai_status == 'PENDING' %}
+                        <button type="button" class="btn-apply" style="background:#ea4335;" onclick="extractAI({{ doc.document_id }})">
+                            <i class="bi bi-lightning-charge me-2"></i>AI 분석 시작
+                        </button>
+                        {% endif %}
+                        <button type="submit" class="btn-apply" name="action" value="save">
+                            <i class="bi bi-check-lg me-2"></i>저장
+                        </button>
+                        <button type="button" class="btn-apply" style="background:#137333;" onclick="applyToBOM({{ doc.document_id }})">
+                            <i class="bi bi-node-plus me-2"></i>BOM 적용
+                        </button>
+                    </div>
+                </form>
+            {% elif ai_group == 'B' %}
+                <!-- Group B: 적합성 검사 (읽기전용) -->
+                <div class="extracted-group">
+                    <h4>적합성 상태</h4>
+                    <div class="extracted-item">
+                        {% if compliance_status %}
+                            <span style="padding: 6px 12px; border-radius: 16px; font-weight: 600; font-size: 12px;
+                                        background: {% if compliance_status == 'PASS' %}#d4edda{% else %}#f8d7da{% endif %};
+                                        color: {% if compliance_status == 'PASS' %}#137333{% else %}#721c24{% endif %};">
+                                {{ compliance_status|upper }}
+                            </span>
+                        {% else %}
+                            <span style="color: #9aa0a6;">미검토</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if test_items %}
+                    <div class="extracted-group">
+                        <h4>검사 항목</h4>
+                        <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+                            <tr style="border-bottom: 1px solid #e8eaed;">
+                                <th style="text-align: left; padding: 8px; color: #5f6368; font-weight: 600;">항목명</th>
+                                <th style="text-align: center; padding: 8px; color: #5f6368; font-weight: 600; width: 80px;">결과</th>
+                            </tr>
+                            {% for item in test_items %}
+                                <tr style="border-bottom: 1px solid #e8eaed;">
+                                    <td style="padding: 8px;">{{ item.name }}</td>
+                                    <td style="text-align: center; padding: 8px;">
+                                        {% if item.result == 'pass' %}
+                                            <span style="color: #137333; font-weight: 600;">✓</span>
+                                        {% elif item.result == 'fail' %}
+                                            <span style="color: #c5221f; font-weight: 600;">✗</span>
+                                        {% else %}
+                                            <span style="color: #9aa0a6;">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </table>
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+        
+        <div class="metadata-footer">
+            📋 문서 ID: {{ doc.document_id }} | 버전: {{ doc.version }} | 
+            {% if doc.uploaded_by %}업로더: {{ doc.uploaded_by }}{% else %}협력사 제출{% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// AI 분석 비동기 실행
+function extractAI(docId) {
+    const btn = event.target.closest('button');
+    const originalText = btn.innerHTML;
+    
+    // 버튼 비활성화 및 로딩 상태 표시
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split spinner me-2"></i>분석 중...';
+    
+    fetch(`/products/documents/${docId}/ai-review/extract/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('AI 분석이 완료되었습니다. 페이지가 새로고침됩니다.');
+            location.reload();
+        } else {
+            alert('분석 실패: ' + (data.error || data.message || '알 수 없는 오류'));
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    })
+    .catch(err => {
+        alert('요청 실패: ' + err);
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    });
+}
+
+function applyToBOM(docId) {
+    if (!confirm('BOM에 이 데이터를 적용하시겠습니까?')) return;
+    
+    fetch(`/products/documents/${docId}/ai-review/apply-to-bom/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('BOM에 정상 적용되었습니다');
+        } else {
+            alert('오류: ' + (data.error || '알 수 없는 오류'));
+        }
+    })
+    .catch(err => alert('요청 실패: ' + err));
+}
+
+document.getElementById('aiReviewForm')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const docId = {{ doc.document_id }};
+    
+    fetch(`/products/documents/${docId}/ai-review/save/`, {
+        method: 'POST',
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('저장되었습니다');
+            location.reload();
+        } else {
+            alert('저장 실패: ' + (data.message || '오류'));
+        }
+    })
+    .catch(err => alert('요청 실패: ' + err));
+});
+</script>
+{% endblock %}

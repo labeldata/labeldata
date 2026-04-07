@@ -1,0 +1,37 @@
+{% extends "vendor/base_vendor.html" %}
+{% block title %}링크 만료{% endblock %}
+ 
+{% block content %}
+<div class="vendor-card text-center">
+  {% if reason == 'already_submitted' %}
+    <div class="mb-4">
+      <i class="bi bi-check-circle-fill text-success" style="font-size:3rem;"></i>
+    </div>
+    <h5 class="fw-bold mb-2">이미 제출 완료된 요청입니다</h5>
+    <p class="text-muted mb-4">해당 서류 요청은 이미 제출이 완료되어 더 이상 이 링크를 사용할 수 없습니다.</p>
+    <p class="text-muted small">추가 제출이 필요하다면 담당자에게 새 링크를 요청해주세요.</p>
+  {% elif reason == 'expired' %}
+    <div class="mb-4">
+      <i class="bi bi-clock-history text-warning" style="font-size:3rem;"></i>
+    </div>
+    <h5 class="fw-bold mb-2">링크 유효기간이 만료되었습니다</h5>
+    <p class="text-muted mb-4">제출 기한이 지나 이 링크는 더 이상 사용할 수 없습니다.</p>
+    <p class="text-muted small">담당자에게 새 링크를 요청해주세요.</p>
+  {% elif reason == 'cancelled' %}
+    <div class="mb-4">
+      <i class="bi bi-x-circle-fill text-secondary" style="font-size:3rem;"></i>
+    </div>
+    <h5 class="fw-bold mb-2">취소된 요청입니다</h5>
+    <p class="text-muted mb-4">이 서류 요청은 담당자에 의해 취소되었습니다.</p>
+  {% else %}
+    <div class="mb-4">
+      <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:3rem;"></i>
+    </div>
+    <h5 class="fw-bold mb-2">유효하지 않은 링크입니다</h5>
+    <p class="text-muted mb-4">링크 주소를 다시 확인하거나 담당자에게 문의해주세요.</p>
+  {% endif %}
+ 
+  <hr class="my-4">
+  <p class="text-muted small mb-0">문의: <a href="mailto:administrator@ezlabeling.com" class="text-muted">administrator@ezlabeling.com</a></p>
+</div>
+{% endblock %}
