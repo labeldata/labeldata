@@ -1547,7 +1547,27 @@ def save_ingredients_to_label(request, label_id):
         # 원산지 표시대상 원재료명을 라벨에 저장
         if origin_targets:
             label.country_of_origin = ', '.join(origin_targets)
-            
+        
+        # 팝업 원료들의 알레르기 정보로 label.allergens 갱신 (이전 잘못된 값 제거)
+        all_allergens = set()
+        shellfish_items = set()
+        shellfish_pat = re.compile(r'^조개류\(([^)]+)\)$')
+        for ingredient_data in ingredients_data:
+            allergen_str = ingredient_data.get('allergen', '')
+            if allergen_str:
+                for a in allergen_str.split(','):
+                    a = a.strip()
+                    if not a:
+                        continue
+                    m = shellfish_pat.match(a)
+                    if m:
+                        shellfish_items.update(x.strip() for x in m.group(1).split(',') if x.strip())
+                    else:
+                        all_allergens.add(a)
+        if shellfish_items:
+            all_allergens.add(f"조개류({', '.join(sorted(shellfish_items))})") 
+        label.allergens = ','.join(sorted(all_allergens)) if all_allergens else ''
+
         label.save()
         
         # 메시지 제거 - JSON 응답만 반환

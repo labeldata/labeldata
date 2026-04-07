@@ -1054,24 +1054,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initRecommendationToggle();
     
     // 4. 기존 알레르기 데이터 로드
-    {% if label and label.allergens %}
-    // 저장된 알레르기 데이터 로드
-    const savedAllergens = "{{ label.allergens|escapejs }}";
-    if (savedAllergens && window.selectedIngredientAllergensLabel) {
-        const allergenArray = savedAllergens.split(',').map(a => a.trim()).filter(a => a);
-        allergenArray.forEach(allergen => {
-            window.selectedIngredientAllergensLabel.add(allergen);
-        });
-        
-        // UI 업데이트
-        if (typeof updateAllergenTagsLabel === 'function') {
-            setTimeout(() => {
-                updateAllergenTagsLabel();
-                console.log('✅ 저장된 알레르기 정보 로드:', allergenArray);
-            }, 100);
-        }
-    }
-    {% endif %}
+    // 저장된 알레르기 데이터는 loadSavedAllergensLabel()에서 처리됨 (selected_ingredient_allergens_label hidden input 기반)
     
     {% if label and label.cautions %}
     // 교차오염 알레르기 파싱

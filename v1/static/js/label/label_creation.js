@@ -3284,7 +3284,12 @@ function detectAllergensLabel() {
     const rawmtrlTextarea = document.getElementById('rawmtrl_nm_display_textarea');
     if (!rawmtrlTextarea) return;
     
-    const rawmtrlText = rawmtrlTextarea.value;
+    // [알레르기 성분: ...] 및 [GMO: ...] 섹션을 제거한 순수 원재료명 텍스트만 스캔
+    // (알레르기 요약 텍스트 자체에서 키워드가 재감지되는 오탐 방지)
+    const rawmtrlText = rawmtrlTextarea.value
+        .replace(/\[알레르기\s*성분\s*[：:]\s*[^\]]+\]/gi, '')
+        .replace(/\[GMO\s*성분?\s*[：:]\s*[^\]]+\]/gi, '')
+        .trim();
     const detectingIndicator = document.getElementById('allergenDetectingIndicatorLabel');
     
     // 로딩 인디케이터 표시
@@ -3358,6 +3363,19 @@ function manualDetectAllergensLabel() {
     detectAllergensLabel();
     updateAllergenButtonStatesLabel();
 }
+
+// 원료 팝업 저장 후 부모 페이지 알레르기 UI를 실제 원료 데이터로 동기화
+// (이전 DB에 잘못 저장된 알레르기 값이 재표시되는 문제 방지)
+window.resetAllergensFromPopup = function(allergens) {
+    selectedIngredientAllergensLabel.clear();
+    (allergens || []).forEach(function(a) {
+        if (a && a.trim()) {
+            selectedIngredientAllergensLabel.set(a.trim(), 'table');
+        }
+    });
+    updateAllergenTagsLabel();
+    updateCrossContaminationUILabel();
+};
 
 // 알레르기 태그 추가 (출처: 'manual' - 사용자 선택)
 function addAllergenTagLabel(allergen) {

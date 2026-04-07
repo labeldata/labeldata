@@ -728,6 +728,11 @@ function saveIngredients() {
                     window.opener.updateCopyButtonVisibility();
                 }
                 
+                // 팝업 저장 후 부모 알레르기 UI를 실제 원료 데이터로 동기화 (이전 DB 값 무효화)
+                if (typeof window.opener.resetAllergensFromPopup === 'function') {
+                    window.opener.resetAllergensFromPopup(summaryInfo.allergens);
+                }
+                
                 // 원재료명(최종표시)는 사용자가 모달에서 수동으로만 업데이트
             }
             

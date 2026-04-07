@@ -1084,6 +1084,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // 탭 이탈 시 iframe 데이터 자동 저장 (편집 내용 보존)
         tabContainer.addEventListener('hide.bs.tab', function(event) {
             const leavingId = event.target?.getAttribute('data-bs-target') || '';
+            if (leavingId === '#tab-bom') {
+                const iframe = document.getElementById('bomEditorFrame');
+                if (iframe && iframe.contentWindow && typeof iframe.contentWindow.saveData === 'function') {
+                    try { iframe.contentWindow.saveData(); } catch(e) {}
+                }
+            }
             if (leavingId === '#tab-nutrition') {
                 const iframe = document.getElementById('nutritionEditorFrame');
                 if (iframe && iframe.contentWindow && iframe.contentWindow.saveData) {
@@ -1109,22 +1115,15 @@ document.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('message', function(e) {
     if (!e.data || e.data.type !== 'copyRawmtrlToBasicInfo') return;
 
-    const rawmtrl   = e.data.rawmtrl   || '';
-    const allergens = Array.isArray(e.data.allergens) ? e.data.allergens : [];
+    const rawmtrl = e.data.rawmtrl || '';
+    /* allergens는 DB 저장값이 부정확할 수 있으므로 무시,
+       원재료명 텍스트 변경 후 자동감지로 계산 */
 
     /* 기본정보 탭의 원재료 표시명 textarea 업데이트 */
     const rawmtrlEl = document.getElementById('field-rawmtrl-nm');
     if (rawmtrlEl) {
         rawmtrlEl.value = rawmtrl;
         rawmtrlEl.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
-    /* 알레르기 hidden input 업데이트 */
-    if (allergens.length > 0) {
-        const allergensEl = document.getElementById('field-allergens');
-        if (allergensEl) {
-            allergensEl.value = allergens.join(', ');
-        }
     }
 
     /* 기본정보 탭으로 전환 */
@@ -1148,8 +1147,9 @@ function loadBomIframe() {
         return;
     }
     
-    // 이미 로드되어 있으면 바로 표시 (loadNutritionIframe과 동일한 패턴)
-    if (iframe.src && iframe.src === bomUrl) {
+    // 이미 로드되어 있으면 바로 표시 (재로드 방지)
+    // iframe.src는 절대 URL, bomUrl은 상대 URL이므로 endsWith로 비교
+    if (iframe.getAttribute('data-bom-loaded') === 'true') {
         loadingMessage.style.display = 'none';
         errorMessage.style.display = 'none';
         iframe.style.display = 'block';
@@ -1166,6 +1166,7 @@ function loadBomIframe() {
         loadingMessage.style.display = 'none';
         errorMessage.style.display = 'none';
         iframe.style.display = 'block';
+        iframe.setAttribute('data-bom-loaded', 'true');
     };
     
     iframe.onerror = function() {
