@@ -29,5 +29,5 @@ urlpatterns = [
     path('devices/<str:device_id>/notifications/<int:noti_id>/', views.notification_delete, name='notification_delete'),
 
     # 앱 버전
-    path('version/', views.app_version, name='app_version'),
+    path('version-check/', views.version_check, name='version_check'),
 ]

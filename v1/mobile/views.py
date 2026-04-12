@@ -12,7 +12,7 @@ from .models import AppDevice, AlertRule, PushNotificationLog, Bookmark, AppVers
 from .serializers import (
     AppDeviceSerializer, AlertRuleSerializer,
     PushNotificationLogSerializer, BookmarkSerializer,
-    RegulatoryNewsSerializer, AppVersionSerializer,
+    RegulatoryNewsSerializer,
 )
 
 
@@ -252,10 +252,25 @@ def notification_delete(request, device_id, noti_id):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def app_version(request):
+def version_check(request):
+    """Flutter 앱 버전 체크 — { force_update, latest_version, store_url, message }"""
     platform = request.query_params.get('platform', 'android')
+    current = request.query_params.get('version', '0.0.0')
     try:
-        version = AppVersion.objects.get(platform=platform)
+        v = AppVersion.objects.get(platform=platform)
     except AppVersion.DoesNotExist:
-        return Response({'error': '버전 정보가 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
-    return Response(AppVersionSerializer(version).data)
+        return Response({'force_update': False, 'latest_version': current, 'store_url': '', 'message': ''})
+
+    try:
+        def _ver(s):
+            return tuple(int(x) for x in s.split('.')[:3])
+        force_update = _ver(current) < _ver(v.min_version)
+    except Exception:
+        force_update = False
+
+    return Response({
+        'force_update': force_update,
+        'latest_version': v.latest_version,
+        'store_url': v.store_url,
+        'message': v.force_message or '',
+    })
