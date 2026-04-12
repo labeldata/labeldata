@@ -94,14 +94,50 @@ def send_mobile_alerts_for_news(news) -> int:
     return sent
 
 
+def _get_fcm_access_token() -> str:
+    """Service Account JSON으로 FCM v1 API용 OAuth2 액세스 토큰 발급."""
+    import json
+    from django.conf import settings
+
+    sa_json = getattr(settings, 'FCM_SERVICE_ACCOUNT_JSON', '')
+    if not sa_json:
+        logger.debug('[FCM] FCM_SERVICE_ACCOUNT_JSON 미설정')
+        return ''
+
+    try:
+        from google.oauth2 import service_account
+        import google.auth.transport.requests
+
+        # 환경변수가 JSON 문자열이면 파싱, 파일 경로면 파일 읽기
+        if sa_json.strip().startswith('{'):
+            sa_info = json.loads(sa_json)
+        else:
+            with open(sa_json, 'r', encoding='utf-8') as f:
+                sa_info = json.load(f)
+
+        credentials = service_account.Credentials.from_service_account_info(
+            sa_info,
+            scopes=['https://www.googleapis.com/auth/firebase.messaging'],
+        )
+        credentials.refresh(google.auth.transport.requests.Request())
+        return credentials.token or ''
+    except Exception as e:
+        logger.warning(f'[FCM] 토큰 발급 실패: {e}')
+        return ''
+
+
 def _send_fcm(token: str, news, keyword: str) -> None:
-    """FCM Legacy HTTP API로 푸시 알림 발송."""
+    """FCM HTTP v1 API로 푸시 알림 발송."""
     import requests
     from django.conf import settings
 
-    server_key = getattr(settings, 'FCM_SERVER_KEY', '')
-    if not server_key:
-        logger.debug('[FCM] FCM_SERVER_KEY 미설정 — 푸시 발송 생략')
+    project_id = getattr(settings, 'FCM_PROJECT_ID', '')
+    if not project_id:
+        logger.debug('[FCM] FCM_PROJECT_ID 미설정 — 푸시 발송 생략')
+        return
+
+    access_token = _get_fcm_access_token()
+    if not access_token:
         return
 
     product_or_company = (news.product_name or news.company_name or '부적합 정보')[:40]
@@ -113,27 +149,33 @@ def _send_fcm(token: str, news, keyword: str) -> None:
     vtype = violation_type_map.get(getattr(news, 'violation_type', ''), '부적합')
 
     try:
-        requests.post(
-            'https://fcm.googleapis.com/fcm/send',
+        resp = requests.post(
+            f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send',
             headers={
-                'Authorization': f'key={server_key}',
+                'Authorization': f'Bearer {access_token}',
                 'Content-Type': 'application/json',
             },
             json={
-                'to': token,
-                'notification': {
-                    'title': f'⚠️ 알림 키워드 매칭: {keyword}',
-                    'body': f'[{vtype}] {product_or_company} 관련 새 정보가 있습니다.',
-                    'sound': 'default',
+                'message': {
+                    'token': token,
+                    'notification': {
+                        'title': f'⚠️ 알림 키워드 매칭: {keyword}',
+                        'body': f'[{vtype}] {product_or_company} 관련 새 정보가 있습니다.',
+                    },
+                    'data': {
+                        'news_id': str(news.pk),
+                        'keyword': keyword,
+                        'type': 'regulatory_alert',
+                    },
+                    'android': {'priority': 'high'},
+                    'apns': {
+                        'payload': {'aps': {'sound': 'default'}},
+                    },
                 },
-                'data': {
-                    'news_id': str(news.pk),
-                    'keyword': keyword,
-                    'type': 'regulatory_alert',
-                },
-                'priority': 'high',
             },
             timeout=5,
         )
+        if resp.status_code != 200:
+            logger.warning(f'[FCM] 발송 실패 {resp.status_code}: {resp.text[:200]}')
     except Exception as e:
         logger.warning(f'[FCM] 발송 실패 (token={token[:20]}...): {e}')

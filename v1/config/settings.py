@@ -247,5 +247,8 @@ MOBILE_GUEST_MAX_BOOKMARKS = 5
 # 회원 보관함 최대 개수
 MOBILE_MEMBER_MAX_BOOKMARKS = 50
 
-# FCM 서버 키 (Firebase Console → 프로젝트 설정 → 클라우드 메시징 → 서버 키)
-FCM_SERVER_KEY = config('FCM_SERVER_KEY', default='')
+# FCM HTTP v1 API 설정
+# Firebase Console → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성 → JSON 파일 내용을
+# 한 줄 문자열로 .env에 저장하거나, 파일 경로를 지정
+FCM_PROJECT_ID = config('FCM_PROJECT_ID', default='labeldata-mobile')
+FCM_SERVICE_ACCOUNT_JSON = config('FCM_SERVICE_ACCOUNT_JSON', default='')
