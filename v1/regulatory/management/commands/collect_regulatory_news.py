@@ -212,13 +212,15 @@ class Command(BaseCommand):
             f'  → 수입 JSON 파일 감지: {len(items)}건 로드 ({IMPORT_JSON_PATH})'
         ))
 
-        # event_date 문자열 → date 객체 변환
+        # event_date 문자열 → date 객체 변환 (미래 날짜는 오늘로 대체)
+        today = datetime.today().date()
         converted = []
         for item in items:
             raw_date = item.get('event_date')
             if raw_date:
                 try:
-                    item['event_date'] = datetime.strptime(raw_date[:10], '%Y-%m-%d').date()
+                    parsed = datetime.strptime(raw_date[:10], '%Y-%m-%d').date()
+                    item['event_date'] = parsed if parsed <= today else today
                 except (ValueError, TypeError):
                     item['event_date'] = None
             converted.append(item)
@@ -257,13 +259,15 @@ class Command(BaseCommand):
             f'  → 새올 JSON 파일 감지: {len(items)}건 로드 ({SAOL_JSON_PATH})'
         ))
 
-        # event_date 문자열 → date 객체 변환
+        # event_date 문자열 → date 객체 변환 (미래 날짜는 오늘로 대체)
+        today = datetime.today().date()
         converted = []
         for item in items:
             raw_date = item.get('event_date')
             if raw_date:
                 try:
-                    item['event_date'] = datetime.strptime(raw_date[:10], '%Y-%m-%d').date()
+                    parsed = datetime.strptime(raw_date[:10], '%Y-%m-%d').date()
+                    item['event_date'] = parsed if parsed <= today else today
                 except (ValueError, TypeError):
                     item['event_date'] = None
             converted.append(item)

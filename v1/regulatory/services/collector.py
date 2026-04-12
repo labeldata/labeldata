@@ -614,7 +614,9 @@ def _pick(row: dict, keys: list[str]) -> str:
 
 def _parse_date_field(row: dict, keys: list[str]) -> 'date | None':
     """날짜 필드 후보 키에서 YYYY-MM-DD 또는 YYYYMMDD 형식 date 반환.
-    파싱 실패 시 None 반환."""
+    파싱 실패 시 None 반환.
+    미래 날짜(오늘 이후)는 수집일(오늘)로 대체한다."""
+    today = datetime.today().date()
     for k in keys:
         val = str(row.get(k) or '').strip()
         if not val or val in ('-', 'null', 'None', 'N/A'):
@@ -622,7 +624,9 @@ def _parse_date_field(row: dict, keys: list[str]) -> 'date | None':
         # YYYY-MM-DD 또는 YYYY.MM.DD
         for fmt in ('%Y-%m-%d', '%Y.%m.%d', '%Y%m%d'):
             try:
-                return datetime.strptime(val[:10] if fmt != '%Y%m%d' else val[:8], fmt).date()
+                parsed = datetime.strptime(val[:10] if fmt != '%Y%m%d' else val[:8], fmt).date()
+                # 미래 날짜 방어: 오늘보다 미래면 오늘로 대체
+                return parsed if parsed <= today else today
             except ValueError:
                 continue
     return None

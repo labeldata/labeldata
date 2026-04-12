@@ -4,13 +4,22 @@ from v1.regulatory.models import RegulatoryNews
 
 
 class RegulatoryNewsSerializer(serializers.ModelSerializer):
+    source_display = serializers.SerializerMethodField()
+    risk_level_display = serializers.SerializerMethodField()
+
     class Meta:
         model = RegulatoryNews
         fields = [
-            'id', 'source', 'product_name', 'company_name',
-            'violation_reason', 'ai_summary', 'risk_level',
-            'ai_keywords', 'event_date', 'collected_date',
+            'id', 'source', 'source_display', 'product_name', 'company_name',
+            'violation_reason', 'ai_summary', 'risk_level', 'risk_level_display',
+            'ai_keywords', 'violation_type', 'event_date', 'collected_date',
         ]
+
+    def get_source_display(self, obj):
+        return obj.get_source_display()
+
+    def get_risk_level_display(self, obj):
+        return obj.get_risk_level_display()
 
 
 class AppDeviceSerializer(serializers.ModelSerializer):
@@ -20,10 +29,19 @@ class AppDeviceSerializer(serializers.ModelSerializer):
 
 
 class AlertRuleSerializer(serializers.ModelSerializer):
+    category_display = serializers.SerializerMethodField()
+    match_type_display = serializers.SerializerMethodField()
+
     class Meta:
         model = AlertRule
-        fields = ['id', 'category', 'keyword', 'match_type', 'is_active', 'created_at']
+        fields = ['id', 'category', 'category_display', 'keyword', 'match_type', 'match_type_display', 'is_active', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+    def get_category_display(self, obj):
+        return obj.get_category_display()
+
+    def get_match_type_display(self, obj):
+        return obj.get_match_type_display()
 
 
 class PushNotificationLogSerializer(serializers.ModelSerializer):
