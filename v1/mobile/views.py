@@ -14,6 +14,7 @@ from .serializers import (
     PushNotificationLogSerializer, BookmarkSerializer,
     RegulatoryNewsSerializer,
 )
+from .services.push_service import backfill_alerts_for_rule
 
 
 def _get_device_or_404(device_id):
@@ -143,7 +144,12 @@ def rules_list(request, device_id):
 
     serializer = AlertRuleSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save(device=device)
+        rule = serializer.save(device=device)
+        # 신규 키워드 등록 즉시 기존 데이터 전체 매칭 (백그라운드 아닌 동기 실행)
+        try:
+            backfill_alerts_for_rule(rule)
+        except Exception:
+            pass  # 백필 실패해도 키워드 등록 자체는 성공 처리
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

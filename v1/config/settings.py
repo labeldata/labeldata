@@ -247,6 +247,9 @@ MOBILE_GUEST_MAX_BOOKMARKS = 5
 # 회원 보관함 최대 개수
 MOBILE_MEMBER_MAX_BOOKMARKS = 50
 
+# 기기당 보관되는 알림 이력 최대 개수 (초과 시 오래된 것부터 삭제)
+MOBILE_MAX_NOTIFICATIONS = 100
+
 # FCM HTTP v1 API 설정
 # Firebase Console → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성 → JSON 파일 내용을
 # 한 줄 문자열로 .env에 저장하거나, 파일 경로를 지정

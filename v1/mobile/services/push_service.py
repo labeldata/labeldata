@@ -49,7 +49,10 @@ def send_mobile_alerts_for_news(news) -> int:
 
     Returns: 신규 생성된 알림 수
     """
+    from django.conf import settings
     from v1.mobile.models import AppDevice, PushNotificationLog
+
+    max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
 
     product_name = (news.product_name or '').lower()
     company_name = (news.company_name or '').lower()
@@ -77,14 +80,17 @@ def send_mobile_alerts_for_news(news) -> int:
             continue
 
         # 중복 방지: 이미 이 기기+뉴스 조합의 알림이 있으면 스킵
-        log, created = PushNotificationLog.objects.get_or_create(
-            device=device,
-            news=news,
-            defaults={'rule_triggered': matched_rule},
-        )
-        if not created:
+        if PushNotificationLog.objects.filter(device=device, news=news).exists():
             continue
 
+        # 알림 수 초과 시 가장 오래된 것 삭제
+        _trim_notifications(device, max_noti)
+
+        PushNotificationLog.objects.create(
+            device=device,
+            news=news,
+            rule_triggered=matched_rule,
+        )
         sent += 1
 
         # FCM 푸시 발송
@@ -92,6 +98,67 @@ def send_mobile_alerts_for_news(news) -> int:
             _send_fcm(device.fcm_token, news, matched_rule.keyword)
 
     return sent
+
+
+def backfill_alerts_for_rule(rule) -> int:
+    """
+    새로 등록된 AlertRule에 대해 기존 수집 데이터 전체를 대상으로 즉시 매칭.
+    이미 알림이 존재하는 (device+news) 쌍은 건너뛴다.
+
+    Returns: 신규 생성된 알림 수
+    """
+    from django.conf import settings
+    from v1.mobile.models import PushNotificationLog
+    from v1.regulatory.models import RegulatoryNews
+
+    max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
+    device = rule.device
+
+    # AI 파싱 완료된 것만 대상
+    qs = RegulatoryNews.objects.filter(ai_parsed=True).order_by('created_at')
+
+    created_count = 0
+    for news in qs:
+        product_name = (news.product_name or '').lower()
+        company_name = (news.company_name or '').lower()
+        ai_keywords = [kw.lower() for kw in (news.ai_keywords or [])]
+        violation_reason = (news.violation_reason or '').lower()
+
+        if not _matches_rule(rule, product_name, company_name, ai_keywords, violation_reason):
+            continue
+
+        # 해당 기기+뉴스 조합 알림이 이미 있으면 스킵
+        if PushNotificationLog.objects.filter(device=device, news=news).exists():
+            continue
+
+        # 알림 수 초과 시 가장 오래된 것 삭제
+        _trim_notifications(device, max_noti)
+
+        PushNotificationLog.objects.create(
+            device=device,
+            news=news,
+            rule_triggered=rule,
+        )
+        created_count += 1
+
+    return created_count
+
+
+def _trim_notifications(device, max_count: int) -> None:
+    """기기의 알림 수가 max_count 이상이면 가장 오래된 것부터 삭제."""
+    from v1.mobile.models import PushNotificationLog
+
+    current = PushNotificationLog.objects.filter(device=device).count()
+    if current >= max_count:
+        # 초과 개수만큼 오래된 것 삭제
+        excess = current - max_count + 1  # +1: 새로 추가될 자리 확보
+        old_ids = (
+            PushNotificationLog.objects
+            .filter(device=device)
+            .order_by('created_at')
+            .values_list('id', flat=True)[:excess]
+        )
+        PushNotificationLog.objects.filter(id__in=list(old_ids)).delete()
 
 
 def _get_fcm_access_token() -> str:
