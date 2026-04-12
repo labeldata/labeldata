@@ -429,6 +429,7 @@ body {
 
 .v2-sidebar {
     width:          250px;
+    flex-shrink:    0;
     background:     #ffffff;
     border-right:   1px solid #e0e0e0;
     display:        flex;
@@ -436,6 +437,8 @@ body {
     padding:        16px;
     gap:            16px;
     font-family:    'Noto Sans KR', sans-serif; /* 페이지별 body font 오버라이드 차단 */
+    overflow:       hidden;
+    transition:     width .25s cubic-bezier(.4,0,.2,1);
 }
 
 .v2-sidebar-logo {
@@ -450,11 +453,15 @@ body {
 .v2-sidebar-logo:hover { color: #1967d2; text-decoration: none; }
 
 .v2-sidebar .nav-link {
+    display:       flex;
+    align-items:   center;
+    gap:           12px;
     color:         #444746;
     border-radius: 24px;
     padding:       10px 20px;
     margin-bottom: 4px;
 }
+.v2-sidebar .nav-link .nav-label { white-space: nowrap; overflow: hidden; }
 
 .v2-sidebar .nav-link:hover {
     background-color: #f0f1f3;
@@ -539,15 +546,67 @@ body {
     .home-switch-btn     { padding: 0.25rem 0.5rem !important; }
 }
 
-@media (max-width: 1200px) {
-    .v2-sidebar { width: 200px; }
+/* ── 사이드바 토글 버튼 ── */
+.v2-sidebar-toggle {
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    width:           36px;
+    height:          36px;
+    background:      none;
+    border:          none;
+    border-radius:   8px;
+    cursor:          pointer;
+    color:           #444746;
+    font-size:       20px;
+    flex-shrink:     0;
+    transition:      background .15s;
+}
+.v2-sidebar-toggle:hover { background: #f0f1f3; }
+
+/* ── 모바일 딤 오버레이 ── */
+.v2-overlay {
+    display:    none;
+    position:   fixed;
+    inset:      0;
+    background: rgba(0,0,0,.45);
+    z-index:    1040;
+    cursor:     pointer;
+}
+.v2-overlay.show { display: block; }
+
+/* ── 데스크톱 접힘(collapsed) 상태 ── */
+@media (min-width: 769px) {
+    .v2-wrapper.sidebar-collapsed .v2-sidebar {
+        width:   64px;
+        padding: 12px 8px;
+        gap:     10px;
+    }
+    .v2-wrapper.sidebar-collapsed .nav-label       { display: none !important; }
+    .v2-wrapper.sidebar-collapsed .v2-sidebar-logo { justify-content: center; }
+    .v2-wrapper.sidebar-collapsed .v2-sidebar .nav-link {
+        padding:         10px;
+        justify-content: center;
+        border-radius:   12px;
+        gap:             0;
+    }
+    .v2-wrapper.sidebar-collapsed .v2-sidebar .nav-link .bi { margin: 0 !important; }
+    .v2-wrapper.sidebar-collapsed .v2-sidebar-footer { display: none; }
+    .v2-wrapper.sidebar-collapsed .v2-sidebar .border-top.my-3 {
+        margin-top: 4px !important; margin-bottom: 4px !important;
+    }
+    .v2-wrapper.sidebar-collapsed .v2-sidebar .btn {
+        width: 40px !important; min-width: 0 !important; height: 40px;
+        padding: 0 !important; border-radius: 50% !important;
+        justify-content: center; gap: 0;
+    }
+    .v2-wrapper.sidebar-collapsed .v2-sidebar .position-absolute.badge {
+        top: 2px !important; right: 2px !important;
+        font-size: 9px !important; min-width: 14px;
+    }
 }
 
-@media (max-width: 991px) {
-    .v2-sidebar { width: 180px; }
-}
-
-/* 노트북 등 화면 높이가 있을 때 네비 세로 간격 축소 */
+/* ── 노트북 등 화면 높이가 낮을 때 간격 축소 ── */
 @media (max-height: 750px) {
     .v2-sidebar { gap: 8px; padding: 10px; }
     .v2-sidebar .nav-link { padding: 6px 14px; margin-bottom: 1px; font-size: 13px; }
@@ -561,16 +620,16 @@ body {
 @media (max-width: 768px) {
     .v2-sidebar {
         position:   fixed;
-        left:       -250px;
+        left:       -260px;
         top:        0;
         width:      250px;
         height:     100vh;
         z-index:    1050;
-        transition: left 0.3s ease;
-        box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+        transition: left .3s cubic-bezier(.4,0,.2,1);
+        box-shadow: 2px 0 8px rgba(0,0,0,0.15);
     }
-    .v2-sidebar.show { left: 0; }
-    .v2-main         { width: 100%; }
+    .v2-sidebar.mobile-open { left: 0; }
+    .v2-main                { width: 100%; }
 }
 
 /* iframe 내 삽입 시 사이드바·탑바 숨김 */

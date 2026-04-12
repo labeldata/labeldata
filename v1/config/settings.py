@@ -45,10 +45,15 @@ INSTALLED_APPS = [
     'v1.bom',            # BOM 구조 관리
     'v1.regulatory',     # 부적합.처분 알림
     'v1.activity_log',   # 사용자 활동 로그
+    'v1.mobile',         # 모바일 앱 API
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -213,3 +218,26 @@ REGULATORY_MATCH_THRESHOLD = config('REGULATORY_MATCH_THRESHOLD', default=72, ca
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 CSRF_TRUSTED_ORIGINS = ['https://*.ngrok-free.dev'] # 외부 접속용 앱 허용
+# ── 모바일 앱 API 설정 ─────────────────────────────────────────────────────────
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+}
+
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000').split(',')
+CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=True, cast=bool)
+
+# 비회원 키워드 최대 수
+MOBILE_GUEST_MAX_RULES = 5
+# 회원 키워드 최대 수
+MOBILE_MEMBER_MAX_RULES = 30

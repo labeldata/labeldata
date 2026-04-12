@@ -34,9 +34,13 @@ def signup(request):
             email = request.POST.get('username', '').strip().lower()
             password1 = request.POST.get('password1')
             password2 = request.POST.get('password2')
+            terms_agree   = request.POST.get('terms_agree')
             privacy_agree = request.POST.get('privacy_agree')
-            
-            # 개인정보 처리방침 동의 확인
+
+            # 이용약관 및 개인정보 처리방침 동의 확인
+            if not terms_agree:
+                messages.error(request, "이용약관에 동의해주세요.")
+                return render(request, 'user_management/signup.html')
             if not privacy_agree:
                 messages.error(request, "개인정보 처리방침에 동의해주세요.")
                 return render(request, 'user_management/signup.html')
@@ -403,3 +407,8 @@ def delete_company_document(request, pk):
 def privacy_policy(request):
     """개인정보 처리방침 페이지"""
     return render(request, 'user_management/privacy_policy.html')
+
+
+def terms_of_service(request):
+    """이용약관 페이지"""
+    return render(request, 'user_management/terms_of_service.html')

@@ -18,53 +18,69 @@
     {% block extra_head %}{% endblock %}
     {% block extra_css %}{% endblock %}
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script>
+    /* 사이드바 주수에서 transition 없이 초기 상태 적용 — FOUC 방지 */
+    (function () {
+        var saved = localStorage.getItem('v2SbCollapsed');
+        var autoCollapse = window.innerWidth < 1100 && window.innerWidth > 768;
+        var isCollapsed  = saved !== null ? saved === '1' : autoCollapse;
+        if (isCollapsed) document.documentElement.classList.add('sb-init-collapsed');
+    })();
+    </script>
+    <style>
+    /* transition 없이 초기 상태 적용 */
+    html.sb-init-collapsed .v2-sidebar { transition: none !important; }
+    html.sb-init-collapsed #v2Wrapper  { transition: none !important; }
+    </style>
 </head>
-<body><div class="v2-wrapper">
-        <nav class="v2-sidebar">
+<body>
+    <div class="v2-overlay" id="v2Overlay"></div>
+    <div class="v2-wrapper" id="v2Wrapper">
+        <nav class="v2-sidebar" id="v2Sidebar">
             <div class="px-2">
                 <a href="{% url 'main:home_dashboard' %}" class="v2-sidebar-logo">
-                    <i class="bi bi-grid-3x3-gap-fill me-2" style="color:#1967d2;"></i>Food Data Portal
+                    <i class="bi bi-grid-3x3-gap-fill" style="color:#1967d2;flex-shrink:0;"></i><span class="nav-label ms-2">Food Data Portal</span>
                 </a>
             </div>
 
             <div class="px-2">
-                <a class="btn btn-white shadow-sm rounded-pill py-2 px-3 w-100 text-start border" href="{% url 'products:product_create' %}">
-                    <i class="bi bi-plus-lg me-2 text-primary"></i><span class="fw-medium">새로 만들기</span>
+                <a class="btn btn-white shadow-sm rounded-pill py-2 px-3 w-100 text-start border d-flex align-items-center gap-2" href="{% url 'products:product_create' %}">
+                    <i class="bi bi-plus-lg text-primary" style="flex-shrink:0;"></i><span class="nav-label fw-medium">새로 만들기</span>
                 </a>
             </div>
 
             <div class="nav flex-column v2-sidebar-nav">
                 <a href="{% url 'products:product_explorer' %}" class="nav-link {% if request.resolver_match.url_name == 'product_explorer' or request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_detail' or request.resolver_match.url_name == 'product_detail_new' %}{% if request.GET.from != 'collab' %}active{% endif %}{% endif %}">
-                    <i class="bi bi-hdd-stack me-3"></i>제품 관리
+                    <i class="bi bi-hdd-stack" style="flex-shrink:0;"></i><span class="nav-label">제품 관리</span>
                 </a>
                 <a href="{% url 'label:my_ingredient_list_combined' %}" class="nav-link {% if request.resolver_match.url_name == 'my_ingredient_list_combined' %}active{% endif %}">
-                    <i class="bi bi-box-seam me-3"></i>원료 관리
+                    <i class="bi bi-box-seam" style="flex-shrink:0;"></i><span class="nav-label">원료 관리</span>
                 </a>
                 <div class="border-top my-3"></div>
 
                 <a href="{% url 'products:inbox' %}" class="nav-link {% if request.resolver_match.url_name == 'inbox' or request.GET.from == 'collab' %}active{% endif %}">
-                    <i class="bi bi-people me-3"></i>공동 작업
+                    <i class="bi bi-people" style="flex-shrink:0;"></i><span class="nav-label">공동 작업</span>
                 </a>
                 <a href="{% url 'products:contacts' %}" class="nav-link {% if request.resolver_match.url_name == 'contacts' or request.resolver_match.url_name == 'doc_requests_dashboard' %}active{% endif %}">
-                    <i class="bi bi-person-lines-fill me-3"></i>연락처 관리
+                    <i class="bi bi-person-lines-fill" style="flex-shrink:0;"></i><span class="nav-label">연락체 관리</span>
                 </a>
                 <div class="border-top my-3"></div>
 
                 <!-- 제품 조회 메뉴 -->
                 <a href="{% url 'label:food_item_list_domestic' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list_domestic' %}active{% endif %}">
-                    <i class="bi bi-search me-3"></i>제품 조회(국내)
+                    <i class="bi bi-search" style="flex-shrink:0;"></i><span class="nav-label">제품 조회(국내)</span>
                 </a>
                 <a href="{% url 'label:food_item_list_imported' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list_imported' %}active{% endif %}">
-                    <i class="bi bi-globe me-3"></i>제품 조회(수입)
+                    <i class="bi bi-globe" style="flex-shrink:0;"></i><span class="nav-label">제품 조회(수입)</span>
                 </a>
                 <a href="{% url 'label:food_additive_search' %}" class="nav-link {% if request.resolver_match.url_name == 'food_additive_search' %}active{% endif %}">
-                    <i class="bi bi-database me-3"></i>식품첨가물 DB
+                    <i class="bi bi-database" style="flex-shrink:0;"></i><span class="nav-label">식품체제물 DB</span>
                 </a>
                 <div class="border-top my-3"></div>
 
                 {# 부적합·처분 알림 #}
                 <a href="{% url 'regulatory:list' %}" class="nav-link position-relative {% if request.resolver_match.namespace == 'regulatory' %}active{% endif %}">
-                    <i class="bi bi-shield-exclamation me-3"></i>부적합·처분 알림
+                    <i class="bi bi-shield-exclamation" style="flex-shrink:0;"></i><span class="nav-label">부적합·정처분 알림</span>
                     {% if regulatory_alert_count > 0 %}
                     <span class="position-absolute badge rounded-pill bg-danger"
                           style="top:6px;right:8px;font-size:10px;min-width:18px;padding:2px 5px;">
@@ -74,22 +90,30 @@
                 </a>
 
                 <a href="{% url 'board:list' %}" class="nav-link {% if request.resolver_match.namespace == 'board' %}active{% endif %}">
-                    <i class="bi bi-chat-dots me-3"></i>게시판
+                    <i class="bi bi-chat-dots" style="flex-shrink:0;"></i><span class="nav-label">게시판</span>
                 </a>
             </div>
 
             <div class="v2-sidebar-footer">
-                <p class="v2-sf-copy">&copy; 2025 Lab.E.L.</p>
+                <p class="v2-sf-copy">&copy; 2026 Lab.E.L.</p>
                 <p class="v2-sf-links">
                     <a href="{% url 'board:list' %}">공지사항</a>
                     <span class="v2-sf-dot">&middot;</span>
                     <a href="{% url 'main:home_v1' %}">기존 사이트 이동</a>
+                </p>
+                <p class="v2-sf-links" style="margin-top:3px;">
+                    <a href="{% url 'user_management:privacy_policy' %}" target="_blank">개인정보처리방침</a>
+                    <span class="v2-sf-dot">&middot;</span>
+                    <a href="{% url 'user_management:terms_of_service' %}" target="_blank">이용약관</a>
                 </p>
             </div>
         </nav>
 
         <div class="v2-main">
             <header class="v2-topbar">
+                <button class="v2-sidebar-toggle" id="v2SidebarToggle" aria-label="사이드바 열기/닫기">
+                    <i class="bi bi-list"></i>
+                </button>
                 {% block topbar %}
                 <form class="input-group v2-topbar-search" style="max-width: 600px;" method="get" action="{% url 'products:product_explorer' %}">
                     <span class="input-group-text bg-light border-0 rounded-start-pill ps-3">
@@ -181,6 +205,81 @@
                 if (cell) setTooltip(cell);
             }
         }, { passive: true });
+    })();
+    </script>
+
+    <script>
+    /* ── 사이드바 접기/폊기 ── */
+    (function () {
+        var MOBILE_BP        = 768;
+        var AUTO_COLLAPSE_BP = 1100;
+        var KEY     = 'v2SbCollapsed';
+        var wrapper = document.getElementById('v2Wrapper');
+        var sidebar = document.getElementById('v2Sidebar');
+        var overlay = document.getElementById('v2Overlay');
+        var btn     = document.getElementById('v2SidebarToggle');
+
+        function isMobile() { return window.innerWidth <= MOBILE_BP; }
+
+        function setDesktopCollapsed(collapsed, save) {
+            wrapper.classList.toggle('sidebar-collapsed', collapsed);
+            if (save) localStorage.setItem(KEY, collapsed ? '1' : '0');
+        }
+
+        function openMobile() {
+            sidebar.classList.add('mobile-open');
+            overlay.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobile() {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('show');
+            document.body.style.overflow = '';
+        }
+
+        function toggle() {
+            if (isMobile()) {
+                sidebar.classList.contains('mobile-open') ? closeMobile() : openMobile();
+            } else {
+                var collapsed = wrapper.classList.contains('sidebar-collapsed');
+                setDesktopCollapsed(!collapsed, true);
+            }
+        }
+
+        function init() {
+            if (isMobile()) {
+                wrapper.classList.remove('sidebar-collapsed');
+                closeMobile();
+            } else {
+                var saved    = localStorage.getItem(KEY);
+                var collapse = saved !== null ? saved === '1' : window.innerWidth < AUTO_COLLAPSE_BP;
+                /* transition 없이 즉시 적용 (FOUC 방지) */
+                wrapper.classList.toggle('sidebar-collapsed', collapse);
+            }
+            /* 초기 상태 적용 완료 후 다음 프레임에 transition 허용 */
+            requestAnimationFrame(function () {
+                document.documentElement.classList.remove('sb-init-collapsed');
+            });
+        }
+
+        if (btn)     btn.addEventListener('click', toggle);
+        if (overlay) overlay.addEventListener('click', closeMobile);
+
+        var _rt;
+        window.addEventListener('resize', function () {
+            clearTimeout(_rt);
+            _rt = setTimeout(function () {
+                if (isMobile()) {
+                    wrapper.classList.remove('sidebar-collapsed');
+                    closeMobile();
+                } else if (localStorage.getItem(KEY) === null) {
+                    setDesktopCollapsed(window.innerWidth < AUTO_COLLAPSE_BP, false);
+                }
+            }, 150);
+        });
+
+        init();
     })();
     </script>
 </body>

@@ -23,7 +23,7 @@
         <div class="login-logo-sub">새 계정 만들기</div>
     </div>
 
-    <div class="login-card">
+    <div class="login-card card-wide">
         <div class="login-card-title">회원가입</div>
         <div class="login-card-desc">이메일 주소로 계정을 만들고, 인증 메일을 통해 가입을 완료하세요</div>
 
@@ -56,6 +56,14 @@
             </div>
 
             <div class="g-check-row">
+                <input type="checkbox" id="terms_agree" name="terms_agree">
+                <label for="terms_agree">
+                    <a href="{% url 'user_management:terms_of_service' %}" target="_blank">이용약관</a>을 읽었으며, 이에 동의합니다.
+                    <span class="required-tag">(필수)</span>
+                </label>
+            </div>
+
+            <div class="g-check-row">
                 <input type="checkbox" id="privacy_agree" name="privacy_agree">
                 <label for="privacy_agree">
                     <a href="{% url 'user_management:privacy_policy' %}" target="_blank">개인정보 처리방침</a>을 읽었으며, 이에 동의합니다.
@@ -75,9 +83,12 @@
 
 <script>
 (function () {
-    var cb  = document.getElementById('privacy_agree');
-    var btn = document.getElementById('signup-btn');
-    cb.addEventListener('change', function () { btn.disabled = !this.checked; });
+    var cbTerms   = document.getElementById('terms_agree');
+    var cbPrivacy = document.getElementById('privacy_agree');
+    var btn       = document.getElementById('signup-btn');
+    function sync() { btn.disabled = !(cbTerms.checked && cbPrivacy.checked); }
+    cbTerms.addEventListener('change', sync);
+    cbPrivacy.addEventListener('change', sync);
 })();
 </script>
 </body>

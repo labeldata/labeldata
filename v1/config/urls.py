@@ -26,6 +26,9 @@ urlpatterns = [
     path('regulatory/', include('v1.regulatory.urls', namespace='regulatory')),  # 부적합.처분 알림
     path('vendor/', include('v1.products.vendor_urls', namespace='vendor')),     # 협력사 매직링크 포털
     # 마이그레이션은 자동으로 처리됨 (표시사항 저장 시 제품 자동 생성)
+
+    # 모바일 앱 API
+    path('api/mobile/', include('v1.mobile.urls', namespace='mobile')),
 ]
 
 # 정적 파일 서빙 (개발 환경과 에러 페이지 테스트를 위해 항상 활성화)
