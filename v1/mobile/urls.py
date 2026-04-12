@@ -25,6 +25,7 @@ urlpatterns = [
 
     # 알림 내역
     path('devices/<str:device_id>/notifications/', views.notifications_list, name='notifications_list'),
+    path('devices/<str:device_id>/notifications/read-all/', views.notification_read_all, name='notification_read_all'),
     path('devices/<str:device_id>/notifications/<int:noti_id>/read/', views.notification_read, name='notification_read'),
     path('devices/<str:device_id>/notifications/<int:noti_id>/', views.notification_delete, name='notification_delete'),
 

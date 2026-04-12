@@ -60,10 +60,18 @@ def login(request):
         AppDevice.objects.filter(device_id=device_id).update(user=user)
 
     refresh = RefreshToken.for_user(user)
+    device_data = None
+    if device_id:
+        try:
+            device = AppDevice.objects.get(device_id=device_id)
+            device_data = AppDeviceSerializer(device).data
+        except AppDevice.DoesNotExist:
+            pass
     return Response({
         'access': str(refresh.access_token),
         'refresh': str(refresh),
         'username': user.username,
+        'device': device_data,
     })
 
 
@@ -176,6 +184,10 @@ def bookmarks_list(request, device_id):
         bookmarks = device.bookmarks.select_related('news').all()
         return Response(BookmarkSerializer(bookmarks, many=True).data)
 
+    max_bookmarks = settings.MOBILE_MEMBER_MAX_BOOKMARKS if device.user else settings.MOBILE_GUEST_MAX_BOOKMARKS
+    if device.bookmarks.count() >= max_bookmarks:
+        return Response({'error': f'최대 {max_bookmarks}개까지 저장 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
     news_id = request.data.get('news_id')
     try:
         news = RegulatoryNews.objects.get(pk=news_id)
@@ -246,6 +258,16 @@ def notification_delete(request, device_id, noti_id):
 
     log.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def notification_read_all(request, device_id):
+    device = _get_device_or_404(device_id)
+    if device is None:
+        return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+    device.notifications.filter(is_read=False).update(is_read=True)
+    return Response({'detail': 'ok'})
 
 
 # ── 앱 버전 ───────────────────────────────────────────────────────────────────

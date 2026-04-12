@@ -23,9 +23,24 @@ class RegulatoryNewsSerializer(serializers.ModelSerializer):
 
 
 class AppDeviceSerializer(serializers.ModelSerializer):
+    max_rules = serializers.SerializerMethodField()
+    max_bookmarks = serializers.SerializerMethodField()
+    username = serializers.SerializerMethodField()
+
     class Meta:
         model = AppDevice
-        fields = ['id', 'device_id', 'platform', 'app_version', 'fcm_token']
+        fields = ['id', 'device_id', 'platform', 'app_version', 'fcm_token', 'max_rules', 'max_bookmarks', 'username']
+
+    def get_max_rules(self, obj):
+        from django.conf import settings
+        return settings.MOBILE_MEMBER_MAX_RULES if obj.user else settings.MOBILE_GUEST_MAX_RULES
+
+    def get_max_bookmarks(self, obj):
+        from django.conf import settings
+        return settings.MOBILE_MEMBER_MAX_BOOKMARKS if obj.user else settings.MOBILE_GUEST_MAX_BOOKMARKS
+
+    def get_username(self, obj):
+        return obj.user.get_username() if obj.user else None
 
 
 class AlertRuleSerializer(serializers.ModelSerializer):
@@ -46,10 +61,20 @@ class AlertRuleSerializer(serializers.ModelSerializer):
 
 class PushNotificationLogSerializer(serializers.ModelSerializer):
     news = RegulatoryNewsSerializer(read_only=True)
+    rule_keyword = serializers.SerializerMethodField()
 
     class Meta:
         model = PushNotificationLog
-        fields = ['id', 'news', 'is_read', 'created_at']
+        fields = ['id', 'news', 'rule_keyword', 'is_read', 'created_at']
+
+    def get_rule_keyword(self, obj):
+        if obj.rule_triggered is None:
+            return None
+        return {
+            'keyword': obj.rule_triggered.keyword,
+            'category': obj.rule_triggered.category,
+            'match_type': obj.rule_triggered.match_type,
+        }
 
 
 class BookmarkSerializer(serializers.ModelSerializer):

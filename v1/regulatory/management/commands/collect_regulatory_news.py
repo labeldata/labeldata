@@ -45,6 +45,7 @@ from v1.regulatory.services.collector import (
 )
 from v1.regulatory.services.ai_parser import extract_keywords
 from v1.regulatory.services.matcher import build_user_match_cache, run_matching_for_all_users
+from v1.mobile.services.push_service import send_mobile_alerts_for_news
 
 logger = logging.getLogger(__name__)
 
@@ -366,6 +367,13 @@ class Command(BaseCommand):
                 total += count
             except Exception as exc:
                 logger.error(f'[매칭] {news.external_id} 오류: {exc}')
+
+            try:
+                push_count = send_mobile_alerts_for_news(news)
+                if push_count > 0:
+                    self.stdout.write(f'     📱 [{idx}/{total_items}] 모바일 알림 {push_count}건 발송')
+            except Exception as exc:
+                logger.error(f'[모바일 알림] {news.external_id} 오류: {exc}')
 
             if idx % PROGRESS_INTERVAL == 0:
                 self.stdout.write(f'     진행: {idx}/{total_items}건 처리 중...')

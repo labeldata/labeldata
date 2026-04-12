@@ -241,3 +241,11 @@ CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=True, cast=boo
 MOBILE_GUEST_MAX_RULES = 5
 # 회원 키워드 최대 수
 MOBILE_MEMBER_MAX_RULES = 30
+
+# 비회원 보관함 최대 개수
+MOBILE_GUEST_MAX_BOOKMARKS = 5
+# 회원 보관함 최대 개수
+MOBILE_MEMBER_MAX_BOOKMARKS = 50
+
+# FCM 서버 키 (Firebase Console → 프로젝트 설정 → 클라우드 메시징 → 서버 키)
+FCM_SERVER_KEY = config('FCM_SERVER_KEY', default='')
