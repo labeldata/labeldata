@@ -127,7 +127,7 @@ def _send_product_ingredient_alerts(news) -> int:
         NewsIngredientMatch.objects
         .filter(news=news, dismissed_yn=False)
         .select_related('ingredient')
-        .values_list('user_id', 'ingredient__ingr_nm')
+        .values_list('user_id', 'ingredient__prdlst_nm')
     )
 
     # user_id → (trigger_type, label) 매핑 (제품 우선)
