@@ -117,6 +117,12 @@
                   class="rs-risk-chip {% if status_filter == 'resolved' %}active-res{% endif %}"
                   onclick="setStatus('{% if status_filter == 'resolved' %}{% else %}resolved{% endif %}')">&#x2705; 조치완료</button>
 
+          {# 알림 키워드 관리 버튼 (오른쪽 끝) #}
+          <button type="button" class="rs-keyword-btn ms-auto" onclick="openKeywordManageModal()" title="앱 알림 키워드 관리">
+            <i class="bi bi-bell{% if alert_rules %}-fill text-warning{% endif %} me-1"></i>키워드
+            <span class="rs-keyword-badge" id="kwBadgeCount">{{ alert_rules|length }}</span>
+          </button>
+
           {# 등급 분류 기준 팝오버 #}
           <div id="riskHelpPopover" class="rs-risk-popover">
             <div class="rs-rp-title">
@@ -213,6 +219,73 @@
 
     </form>
   </div>{# end reg-filter-bar #}
+
+  {# ─── 알림 키워드 관리 모달 ─── #}
+  <div class="modal fade" id="keywordManageModal" tabindex="-1">
+    <div class="modal-dialog modal-md">
+      <div class="modal-content kw-modal">
+        <div class="modal-header kw-modal-header">
+          <span class="kw-modal-title"><i class="bi bi-bell-fill text-warning me-2"></i>앱 알림 키워드 관리</span>
+          <span class="kw-modal-sub">새 부적합 정보 수집 시 키워드 매칭 → 앱 푸시 알림</span>
+          <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body kw-modal-body">
+
+          {# ── 현재 키워드 목록 ── #}
+          <div class="kw-list-section">
+            <div class="kw-list-title">등록된 키워드 <span class="kw-list-count" id="kwModalCount">{{ alert_rules|length }}</span>개</div>
+            <div class="kw-chips-wrap" id="kwChipsWrap">
+              {% if not alert_rules %}
+              <div class="kw-empty" id="kwEmptyMsg">등록된 키워드가 없습니다.</div>
+              {% else %}
+              {% for rule in alert_rules %}
+              <span class="rkb-chip rkb-chip-{{ rule.category|lower }}" data-rule-id="{{ rule.id }}"
+                    title="{{ rule.get_category_display }} · {{ rule.get_match_type_display }}">
+                <span class="rkb-chip-cat">{{ rule.get_category_display }}</span>
+                <span class="rkb-chip-kw">{{ rule.keyword }}</span>
+                {% if rule.match_type == 'EXACT' %}<span class="rkb-chip-exact">=</span>{% endif %}
+                <button class="rkb-chip-del" onclick="deleteKeyword({{ rule.id }}, '{{ rule.keyword|escapejs }}')" title="삭제"><i class="bi bi-x"></i></button>
+              </span>
+              {% endfor %}
+              {% endif %}
+            </div>
+          </div>
+
+          {# ── 기존 데이터 매칭 결과 (키워드 추가 후 표시) ── #}
+          <div id="kwBackfillResult" style="display:none;"></div>
+
+          {# ── 새 키워드 추가 폼 ── #}
+          <div class="kw-add-section">
+            <div class="kw-add-title">새 키워드 추가</div>
+            <div class="kw-add-form">
+              <select id="kwCategory" class="form-select form-select-sm kw-select">
+                <option value="INGREDIENT">원료/제품명</option>
+                <option value="COMPANY">업체명</option>
+                <option value="ORIGIN">원산지</option>
+              </select>
+              <input type="text" id="kwKeyword" class="form-control form-control-sm kw-input"
+                     placeholder="키워드 입력 (예: 살모넬라, 중국산, 홍삼)" maxlength="100"
+                     onkeydown="if(event.key==='Enter'){saveKeyword();}"
+                     oninput="var r=document.getElementById('kwBackfillResult');if(r)r.style.display='none';">
+              <select id="kwMatchType" class="form-select form-select-sm kw-select kw-select-match">
+                <option value="CONTAINS">포함</option>
+                <option value="EXACT">일치</option>
+              </select>
+              <button type="button" class="btn btn-sm btn-primary kw-add-btn" id="kwSaveBtn" onclick="saveKeyword()">
+                <i class="bi bi-plus-lg"></i>
+              </button>
+            </div>
+            <div id="kwError" class="text-danger small mt-1" style="display:none"></div>
+            <div class="kw-add-help text-muted small mt-1">
+              <strong>포함</strong>: 부분 일치 &nbsp;|&nbsp; <strong>일치</strong>: 완전 일치 &nbsp;|&nbsp;
+              등록 즉시 기존 데이터도 소급 매칭됩니다
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
 
   {# ─── 스플릿 뷰 ─── #}
   <div class="reg-wrap{% if selected_news %} has-detail{% endif %}">
@@ -420,6 +493,173 @@ function toggleSaolInfo(e) {
   document.addEventListener('click', closeHandler);
 }
 window.toggleSaolInfo = toggleSaolInfo;
+
+// ── 알림 키워드 관리 ──────────────────────────────────────────────────────────
+
+function openKeywordManageModal() {
+  var kwEl = document.getElementById('kwKeyword');
+  if (kwEl) kwEl.value = '';
+  var errEl = document.getElementById('kwError');
+  if (errEl) errEl.style.display = 'none';
+  var resEl = document.getElementById('kwBackfillResult');
+  if (resEl) resEl.style.display = 'none';
+  var modal = new bootstrap.Modal(document.getElementById('keywordManageModal'));
+  modal.show();
+  setTimeout(function(){ if (kwEl) kwEl.focus(); }, 350);
+}
+window.openKeywordManageModal = openKeywordManageModal;
+
+function saveKeyword() {
+  var category  = document.getElementById('kwCategory').value;
+  var keyword   = document.getElementById('kwKeyword').value.trim();
+  var matchType = document.getElementById('kwMatchType').value;
+  var errEl     = document.getElementById('kwError');
+  var saveBtn   = document.getElementById('kwSaveBtn');
+
+  if (!keyword) { errEl.textContent = '키워드를 입력해주세요'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  saveBtn.disabled = true;
+
+  fetch('{% url "regulatory:alert_rules" %}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+    body: JSON.stringify({category: category, keyword: keyword, match_type: matchType}),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    saveBtn.disabled = false;
+    if (!data.success) {
+      errEl.textContent = data.error || '오류가 발생했습니다.';
+      errEl.style.display = 'block';
+      return;
+    }
+    document.getElementById('kwKeyword').value = '';
+    var r = data.rule;
+
+    // 칩을 모달 내 kwChipsWrap에 추가
+    var wrap = document.getElementById('kwChipsWrap');
+    var emptyMsg = document.getElementById('kwEmptyMsg');
+    if (emptyMsg) emptyMsg.remove();
+
+    var chip = document.createElement('span');
+    chip.className = 'rkb-chip rkb-chip-' + r.category.toLowerCase();
+    chip.dataset.ruleId = r.id;
+    chip.title = r.category_display + ' · ' + r.match_type_display;
+    chip.innerHTML =
+      '<span class="rkb-chip-cat">' + r.category_display + '</span>' +
+      '<span class="rkb-chip-kw">' + escHtml(r.keyword) + '</span>' +
+      (r.match_type === 'EXACT' ? '<span class="rkb-chip-exact">=</span>' : '') +
+      '<button class="rkb-chip-del" onclick="deleteKeyword(' + r.id + ',\'' +
+        r.keyword.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')" title="삭제"><i class="bi bi-x"></i></button>';
+    if (wrap) wrap.appendChild(chip);
+
+    // 카운트 갱신 (모달 + 버튼 배지)
+    _updateKwCount(1);
+
+    // 기존 데이터 매칭 결과 표시
+    showBackfillResult(data.matched_count || 0, data.previews || [], r.keyword);
+  })
+  .catch(function(){ saveBtn.disabled = false; errEl.textContent = '네트워크 오류'; errEl.style.display = 'block'; });
+}
+window.saveKeyword = saveKeyword;
+
+function deleteKeyword(ruleId, keyword) {
+  if (!confirm('[' + keyword + '] 키워드를 삭제하시겠습니까?\n(연결된 모든 기기에서 삭제됩니다)')) return;
+  fetch('{% url "regulatory:alert_rule_delete" rule_id=0 %}'.replace('/0/', '/' + ruleId + '/'), {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (!data.success) { alert(data.error || '삭제 실패'); return; }
+    // 칩 제거 (모달 안)
+    var chip = document.querySelector('.rkb-chip[data-rule-id="' + ruleId + '"]');
+    if (chip) chip.remove();
+    _updateKwCount(-1);
+    // 칩이 하나도 없으면 빈 메시지
+    var wrap = document.getElementById('kwChipsWrap');
+    if (wrap && wrap.querySelectorAll('.rkb-chip').length === 0) {
+      var msg = document.createElement('div');
+      msg.className = 'kw-empty'; msg.id = 'kwEmptyMsg'; msg.textContent = '등록된 키워드가 없습니다.';
+      wrap.appendChild(msg);
+    }
+  });
+}
+window.deleteKeyword = deleteKeyword;
+
+function showBackfillResult(count, previews, keyword) {
+  var el = document.getElementById('kwBackfillResult');
+  if (!el) return;
+
+  if (count === 0) {
+    el.innerHTML =
+      '<div class="kw-backfill kw-backfill--none">' +
+        '<i class="bi bi-check-circle me-1 text-success"></i>' +
+        '기존 부적합·처분 데이터에서 <strong>' + escHtml(keyword) + '</strong> 키워드와 일치하는 정보가 없습니다.' +
+      '</div>';
+  } else {
+    var previewHtml = '';
+    if (previews && previews.length > 0) {
+      previewHtml = '<ul class="kw-backfill-list">' +
+        previews.map(function(p) {
+          var flag = p.source === 'domestic' ? '🇰🇷' : '🌏';
+          var date = p.event_date ? p.event_date.slice(0, 10) : '';
+          return '<li onclick="selectNewsAndClose(' + p.id + ')" title="클릭하면 상세 보기">' +
+            '<span class="kw-bf-flag">' + flag + '</span>' +
+            '<span class="kw-bf-name">' + escHtml(p.product_name || p.company_name) + '</span>' +
+            (date ? '<span class="kw-bf-date">' + date + '</span>' : '') +
+          '</li>';
+        }).join('') +
+      '</ul>' +
+      (count > previews.length
+        ? '<div class="kw-backfill-more">외 ' + (count - previews.length) + '건 더 있습니다 — 알림 탭에서 확인하세요</div>'
+        : '');
+    }
+    el.innerHTML =
+      '<div class="kw-backfill kw-backfill--found">' +
+        '<div class="kw-bf-title">' +
+          '<i class="bi bi-bell-fill text-warning me-1"></i>' +
+          '기존 데이터에서 <strong>' + count + '건</strong> 매칭됨 — 알림에 추가되었습니다' +
+        '</div>' +
+        previewHtml +
+      '</div>';
+  }
+  el.style.display = 'block';
+}
+window.showBackfillResult = showBackfillResult;
+
+function selectNewsAndClose(newsId) {
+  bootstrap.Modal.getInstance(document.getElementById('keywordManageModal'))?.hide();
+  window.location.href = '?id=' + newsId;
+}
+window.selectNewsAndClose = selectNewsAndClose;
+
+function _updateKwCount(delta) {
+  // 모달 내 카운트
+  var modalCnt = document.getElementById('kwModalCount');
+  if (modalCnt) modalCnt.textContent = Math.max(0, (parseInt(modalCnt.textContent) || 0) + delta);
+  // 필터바 배지
+  var badge = document.getElementById('kwBadgeCount');
+  if (badge) {
+    var newN = Math.max(0, (parseInt(badge.textContent) || 0) + delta);
+    badge.textContent = newN;
+    // 벨 아이콘 상태 변경
+    var icon = badge.previousElementSibling;
+    if (icon) {
+      if (newN > 0) { icon.className = 'bi bi-bell-fill text-warning me-1'; }
+      else          { icon.className = 'bi bi-bell me-1'; }
+    }
+  }
+}
+
+function getCookie(name) {
+  var v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return v ? v.pop() : '';
+}
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 }());
 </script>
 {% endblock %}

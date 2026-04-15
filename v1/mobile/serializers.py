@@ -3,6 +3,19 @@ from .models import AppDevice, AlertRule, PushNotificationLog, Bookmark, AppVers
 from v1.regulatory.models import RegulatoryNews
 
 
+_API_SOURCE_LABELS = {
+    'I2620':      '국내 검사부적합',
+    'I2640':      '국내 검사부적합',
+    'I0490':      '국내 회수·판매중지',
+    'imp_insp':   '수입 부적합',
+    'import':     '수입 회수·판매중지',
+    'I0470':      '국내 행정처분',
+    'I0480':      '국내 행정처분',
+    'I0482':      '수입 행정처분',
+    'saol_admin': '지자체 행정처분',
+}
+
+
 class RegulatoryNewsSerializer(serializers.ModelSerializer):
     source_display = serializers.SerializerMethodField()
     risk_level_display = serializers.SerializerMethodField()
@@ -10,13 +23,14 @@ class RegulatoryNewsSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegulatoryNews
         fields = [
-            'id', 'source', 'source_display', 'product_name', 'company_name',
+            'id', 'source', 'source_display', 'api_source',
+            'product_name', 'company_name',
             'violation_reason', 'ai_summary', 'risk_level', 'risk_level_display',
             'ai_keywords', 'violation_type', 'event_date', 'collected_date',
         ]
 
     def get_source_display(self, obj):
-        return obj.get_source_display()
+        return _API_SOURCE_LABELS.get(obj.api_source) or obj.get_source_display()
 
     def get_risk_level_display(self, obj):
         return obj.get_risk_level_display()
@@ -65,7 +79,7 @@ class PushNotificationLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PushNotificationLog
-        fields = ['id', 'news', 'rule_keyword', 'is_read', 'created_at']
+        fields = ['id', 'news', 'rule_keyword', 'trigger_type', 'trigger_label', 'is_read', 'created_at']
 
     def get_rule_keyword(self, obj):
         if obj.rule_triggered is None:

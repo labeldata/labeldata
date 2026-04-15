@@ -14,7 +14,7 @@
 .rf-main-row,
 .rf-row1           { display:flex; align-items:center; gap:8px;
                      padding:8px 16px; flex-wrap:nowrap; min-width:0; }
-.rf-row2           { padding:4px 16px 7px; border-top:1px solid #f1f3f4; }
+.rf-row2           { padding:4px 16px 7px; border-top:1px solid #f1f3f4; display:flex; align-items:center; }
 .rf-search-wrap    { flex:1; min-width:140px; max-width:260px; }
 .rf-date-wrap      { display:flex; align-items:center; gap:3px; flex-shrink:0; }
 .rf-date-wrap .rs-date-input { width:100px !important; flex:0 0 auto !important; min-width:0 !important; }
@@ -34,7 +34,7 @@
 #catToggleBtn          { font-size:13px; color:#9aa0a6; transition:transform .2s; }
 #catToggleBtn.collapsed { transform:rotate(180deg); }
 /* 등급 칩 인라인 */
-.rf-risk-chips     { display:flex; gap:4px; align-items:center; flex-shrink:0; position:relative; }
+.rf-risk-chips     { display:flex; gap:4px; align-items:center; flex:1; position:relative; flex-wrap:wrap; }
 /* 건수 표시 */
 .rf-count          { font-size:13px; color:#5f6368; white-space:nowrap;
                      flex-shrink:0; padding:0 4px; margin-left:auto; }
@@ -574,3 +574,91 @@ details[open] .rd-raw-sum::after { content:"▾"; }
   .rd-hdr  { padding:10px 12px 8px; }
   .rd-sec  { padding:8px 12px; }
 }
+
+/* ── 알림 키워드 버튼 (필터 row2 오른쪽 끝) ───────────────────────────────── */
+.rs-keyword-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 1px solid #e0e0e0;
+  border-radius: 16px; padding: 3px 10px;
+  font-size: 12px; color: #555; cursor: pointer;
+  white-space: nowrap; margin-left: auto;
+  transition: background .15s, border-color .15s;
+}
+.rs-keyword-btn:hover { background: #fffbea; border-color: #ffd700; color: #5a4a00; }
+.rs-keyword-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #ffd700; color: #5a4a00;
+  border-radius: 10px; min-width: 18px; height: 18px;
+  font-size: 11px; font-weight: 700; padding: 0 5px;
+}
+
+/* ── 알림 키워드 관리 모달 ──────────────────────────────────────────────── */
+.kw-modal { border-radius: 12px; overflow: hidden; }
+.kw-modal-header {
+  display: flex; align-items: center; gap: 8px;
+  background: #fffbea; border-bottom: 1px solid #ffe58f;
+  padding: 14px 18px;
+}
+.kw-modal-title { font-weight: 700; font-size: 15px; color: #3d2c00; }
+.kw-modal-sub   { font-size: 11px; color: #888; }
+.kw-modal-body  { padding: 16px 18px; }
+
+.kw-list-section { margin-bottom: 18px; }
+.kw-list-title   { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 8px; }
+.kw-list-count   { display: inline-flex; align-items: center; justify-content: center;
+  background: #ffd700; color: #5a4a00; border-radius: 10px;
+  min-width: 18px; height: 18px; font-size: 11px; font-weight: 700; padding: 0 5px; margin-left: 3px; }
+.kw-chips-wrap   { display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; }
+.kw-empty, .kw-no-device { font-size: 13px; color: #aaa; padding: 4px 0; }
+
+/* 칩 */
+.rkb-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  border-radius: 14px; padding: 4px 8px 4px 10px;
+  font-size: 12px; border: 1px solid #ddd; background: #fff;
+}
+.rkb-chip-ingredient { border-color: #a5d6a7; background: #f1f8f1; }
+.rkb-chip-company    { border-color: #90caf9; background: #f0f6ff; }
+.rkb-chip-origin     { border-color: #ffcc80; background: #fff8f0; }
+.rkb-chip-cat   { font-size: 10px; color: #999; margin-right: 1px; }
+.rkb-chip-kw    { font-weight: 600; color: #333; }
+.rkb-chip-exact { font-size: 10px; color: #e65100; background: #fff3e0; border-radius: 3px; padding: 0 3px; margin-left: 2px; }
+.rkb-chip-del   { background: none; border: none; padding: 0 0 0 3px; color: #bbb; cursor: pointer; font-size: 14px; line-height: 1; }
+.rkb-chip-del:hover { color: #e53935; }
+
+/* 추가 폼 */
+.kw-add-section { border-top: 1px solid #f0f0f0; padding-top: 14px; }
+.kw-add-title   { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 8px; }
+.kw-add-form    { display: flex; gap: 6px; align-items: center; }
+.kw-select      { flex: 0 0 auto; width: auto; min-width: 90px; }
+.kw-select-match { min-width: 72px; }
+.kw-input       { flex: 1 1 auto; }
+.kw-add-btn     { flex: 0 0 auto; padding: 4px 10px; font-size: 14px; }
+.kw-add-help    { font-size: 11px; }
+
+/* ── 키워드 추가 후 기존 데이터 매칭 결과 ───────────────────────────────── */
+.kw-backfill {
+  border-radius: 8px; padding: 10px 14px; font-size: 13px;
+}
+.kw-backfill--none {
+  background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;
+}
+.kw-backfill--found {
+  background: #fffbea; border: 1px solid #fde68a; color: #78350f;
+}
+.kw-bf-title { font-weight: 600; margin-bottom: 8px; }
+.kw-backfill-list {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px;
+}
+.kw-backfill-list li {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; background: #fff; border-radius: 6px;
+  border: 1px solid #fde68a; cursor: pointer; transition: background .12s;
+  font-size: 12px;
+}
+.kw-backfill-list li:hover { background: #fef9c3; }
+.kw-bf-flag  { flex-shrink: 0; font-size: 14px; }
+.kw-bf-name  { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kw-bf-date  { flex-shrink: 0; color: #a16207; font-size: 11px; }
+.kw-backfill-more { font-size: 11px; color: #92400e; margin-top: 6px; padding-left: 4px; }
+.kw-backfill-more a { color: #92400e; }
