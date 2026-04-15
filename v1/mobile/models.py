@@ -3,7 +3,7 @@ from django.db import models
 
 
 class AppDevice(models.Model):
-    PLATFORM_CHOICES = [('android', 'Android'), ('ios', 'iOS')]
+    PLATFORM_CHOICES = [('android', 'Android'), ('ios', 'iOS'), ('web', 'Web')]
 
     device_id = models.CharField('기기 ID', max_length=255, unique=True, help_text='Flutter에서 생성한 UUID')
     fcm_token = models.CharField('FCM 토큰', max_length=500, blank=True, null=True, help_text='Firebase 푸시 알림 발송용 토큰')
