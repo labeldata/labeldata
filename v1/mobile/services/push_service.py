@@ -44,11 +44,20 @@ def _matches_rule(rule, product_name: str, company_name: str,
 
 def send_mobile_alerts_for_news(news) -> int:
     """
-    수집된 뉴스와 활성 AlertRule을 매칭하여
-    PushNotificationLog 생성 + FCM 발송.
+    수집된 뉴스에 대해 두 가지 방식으로 알림 생성 + FCM 발송.
+    1) 활성 AlertRule 키워드 매칭
+    2) 로그인된 사용자의 제품/원료 보관함 매칭 (NewsProductMatch / NewsIngredientMatch)
 
     Returns: 신규 생성된 알림 수
     """
+    sent = 0
+    sent += _send_keyword_alerts(news)
+    sent += _send_product_ingredient_alerts(news)
+    return sent
+
+
+def _send_keyword_alerts(news) -> int:
+    """AlertRule 키워드 기반 알림 발송."""
     from django.conf import settings
     from v1.mobile.models import AppDevice, PushNotificationLog
 
@@ -69,7 +78,6 @@ def send_mobile_alerts_for_news(news) -> int:
 
     sent = 0
     for device in devices:
-        # 기기의 활성 규칙 순서대로 첫 번째 매칭 규칙 찾기
         matched_rule = None
         for rule in device.rules.filter(is_active=True):
             if _matches_rule(rule, product_name, company_name, ai_keywords, violation_reason):
@@ -79,33 +87,101 @@ def send_mobile_alerts_for_news(news) -> int:
         if matched_rule is None:
             continue
 
-        # 중복 방지: 이미 이 기기+뉴스 조합의 알림이 있으면 스킵
         if PushNotificationLog.objects.filter(device=device, news=news).exists():
             continue
 
-        # 알림 수 초과 시 가장 오래된 것 삭제
         _trim_notifications(device, max_noti)
 
         PushNotificationLog.objects.create(
             device=device,
             news=news,
             rule_triggered=matched_rule,
+            trigger_type='keyword',
+            trigger_label=matched_rule.keyword,
         )
         sent += 1
 
-        # FCM 푸시 발송
         if device.fcm_token:
-            _send_fcm(device.fcm_token, news, matched_rule.keyword)
+            _send_fcm(device.fcm_token, news, trigger_type='keyword', trigger_label=matched_rule.keyword)
 
     return sent
 
 
-def backfill_alerts_for_rule(rule) -> int:
+def _send_product_ingredient_alerts(news) -> int:
+    """로그인된 사용자의 제품/원료 매칭 기반 알림 발송."""
+    from django.conf import settings
+    from v1.mobile.models import AppDevice, PushNotificationLog
+    from v1.regulatory.models import NewsProductMatch, NewsIngredientMatch
+
+    max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
+
+    # 이 뉴스와 매칭된 제품을 가진 사용자 조회
+    product_match_users = (
+        NewsProductMatch.objects
+        .filter(news=news, false_positive_yn=False)
+        .select_related('product')
+        .values_list('product__user_id', 'product__prdlst_nm')
+    )
+    # 이 뉴스와 매칭된 원료를 가진 사용자 조회
+    ingredient_match_users = (
+        NewsIngredientMatch.objects
+        .filter(news=news, dismissed_yn=False)
+        .select_related('ingredient')
+        .values_list('user_id', 'ingredient__ingr_nm')
+    )
+
+    # user_id → (trigger_type, label) 매핑 (제품 우선)
+    user_trigger = {}
+    for user_id, product_name in product_match_users:
+        if user_id and user_id not in user_trigger:
+            user_trigger[user_id] = ('product', product_name or '내 제품')
+    for user_id, ingr_name in ingredient_match_users:
+        if user_id and user_id not in user_trigger:
+            user_trigger[user_id] = ('ingredient', ingr_name or '원료')
+
+    if not user_trigger:
+        return 0
+
+    # 해당 사용자들의 로그인된 기기 조회
+    devices = (
+        AppDevice.objects
+        .filter(user_id__in=user_trigger.keys())
+        .select_related('user')
+    )
+
+    sent = 0
+    for device in devices:
+        trigger_type, trigger_label = user_trigger[device.user_id]
+
+        if PushNotificationLog.objects.filter(device=device, news=news).exists():
+            continue
+
+        _trim_notifications(device, max_noti)
+
+        PushNotificationLog.objects.create(
+            device=device,
+            news=news,
+            rule_triggered=None,
+            trigger_type=trigger_type,
+            trigger_label=trigger_label,
+        )
+        sent += 1
+
+        if device.fcm_token:
+            _send_fcm(device.fcm_token, news, trigger_type=trigger_type, trigger_label=trigger_label)
+
+    return sent
+
+
+def backfill_alerts_for_rule(rule) -> dict:
     """
     새로 등록된 AlertRule에 대해 기존 수집 데이터 전체를 대상으로 즉시 매칭.
     이미 알림이 존재하는 (device+news) 쌍은 건너뛴다.
 
-    Returns: 신규 생성된 알림 수
+    Returns: {
+        'created': int,          # 신규 생성된 알림 수
+        'previews': list[dict],  # 최근 매칭 뉴스 미리보기 (최대 5건)
+    }
     """
     from django.conf import settings
     from v1.mobile.models import PushNotificationLog
@@ -114,10 +190,12 @@ def backfill_alerts_for_rule(rule) -> int:
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
     device = rule.device
 
-    # AI 파싱 완료된 것만 대상
-    qs = RegulatoryNews.objects.filter(ai_parsed=True).order_by('created_at')
+    # AI 파싱 완료된 것만 대상 — 최신순으로 읽어 미리보기도 최신 기준
+    qs = RegulatoryNews.objects.filter(ai_parsed=True).order_by('-event_date', '-collected_date')
 
     created_count = 0
+    previews = []
+
     for news in qs:
         product_name = (news.product_name or '').lower()
         company_name = (news.company_name or '').lower()
@@ -127,7 +205,18 @@ def backfill_alerts_for_rule(rule) -> int:
         if not _matches_rule(rule, product_name, company_name, ai_keywords, violation_reason):
             continue
 
-        # 해당 기기+뉴스 조합 알림이 이미 있으면 스킵
+        # 미리보기용 정보 수집 (최대 5건, 새 알림 여부 불문)
+        if len(previews) < 5:
+            previews.append({
+                'id': news.pk,
+                'product_name': news.product_name or '',
+                'company_name': news.company_name or '',
+                'event_date': str(news.event_date) if news.event_date else str(news.collected_date or ''),
+                'violation_reason': (news.violation_reason or '')[:80],
+                'source': news.source,
+            })
+
+        # 해당 기기+뉴스 조합 알림이 이미 있으면 카운트 스킵
         if PushNotificationLog.objects.filter(device=device, news=news).exists():
             continue
 
@@ -138,10 +227,12 @@ def backfill_alerts_for_rule(rule) -> int:
             device=device,
             news=news,
             rule_triggered=rule,
+            trigger_type='keyword',
+            trigger_label=rule.keyword,
         )
         created_count += 1
 
-    return created_count
+    return {'created': created_count, 'previews': previews}
 
 
 def _trim_notifications(device, max_count: int) -> None:
@@ -193,7 +284,7 @@ def _get_fcm_access_token() -> str:
         return ''
 
 
-def _send_fcm(token: str, news, keyword: str) -> None:
+def _send_fcm(token: str, news, trigger_type: str = 'keyword', trigger_label: str = '') -> None:
     """FCM HTTP v1 API로 푸시 알림 발송."""
     import requests
     from django.conf import settings
@@ -215,6 +306,16 @@ def _send_fcm(token: str, news, keyword: str) -> None:
     }
     vtype = violation_type_map.get(getattr(news, 'violation_type', ''), '부적합')
 
+    if trigger_type == 'keyword':
+        title = f'⚠️ 알림 키워드 매칭: {trigger_label}'
+        body = f'[{vtype}] {product_or_company} 관련 새 정보가 있습니다.'
+    elif trigger_type == 'product':
+        title = f'⚠️ 내 제품 관련 알림'
+        body = f'[{vtype}] {trigger_label} — {product_or_company}'
+    else:  # ingredient
+        title = f'⚠️ 원료 보관함 관련 알림'
+        body = f'[{vtype}] {trigger_label} 원료 관련 새 정보가 있습니다.'
+
     try:
         resp = requests.post(
             f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send',
@@ -226,12 +327,13 @@ def _send_fcm(token: str, news, keyword: str) -> None:
                 'message': {
                     'token': token,
                     'notification': {
-                        'title': f'⚠️ 알림 키워드 매칭: {keyword}',
-                        'body': f'[{vtype}] {product_or_company} 관련 새 정보가 있습니다.',
+                        'title': title,
+                        'body': body,
                     },
                     'data': {
                         'news_id': str(news.pk),
-                        'keyword': keyword,
+                        'trigger_type': trigger_type,
+                        'trigger_label': trigger_label,
                         'type': 'regulatory_alert',
                     },
                     'android': {'priority': 'high'},

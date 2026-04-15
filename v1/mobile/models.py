@@ -3,7 +3,7 @@ from django.db import models
 
 
 class AppDevice(models.Model):
-    PLATFORM_CHOICES = [('android', 'Android'), ('ios', 'iOS')]
+    PLATFORM_CHOICES = [('android', 'Android'), ('ios', 'iOS'), ('web', 'Web')]
 
     device_id = models.CharField('기기 ID', max_length=255, unique=True, help_text='Flutter에서 생성한 UUID')
     fcm_token = models.CharField('FCM 토큰', max_length=500, blank=True, null=True, help_text='Firebase 푸시 알림 발송용 토큰')
@@ -55,9 +55,17 @@ class AlertRule(models.Model):
 
 
 class PushNotificationLog(models.Model):
+    TRIGGER_CHOICES = [
+        ('keyword', '키워드 매칭'),
+        ('product', '내 제품 매칭'),
+        ('ingredient', '원료 보관함 매칭'),
+    ]
+
     device = models.ForeignKey(AppDevice, on_delete=models.CASCADE, related_name='notifications', verbose_name='기기')
     news = models.ForeignKey('regulatory.RegulatoryNews', on_delete=models.CASCADE, related_name='push_logs', verbose_name='관련 부적합 정보')
-    rule_triggered = models.ForeignKey(AlertRule, on_delete=models.SET_NULL, null=True, related_name='notifications', verbose_name='트리거된 키워드 규칙')
+    rule_triggered = models.ForeignKey(AlertRule, on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications', verbose_name='트리거된 키워드 규칙')
+    trigger_type = models.CharField('트리거 유형', max_length=20, choices=TRIGGER_CHOICES, default='keyword')
+    trigger_label = models.CharField('트리거 레이블', max_length=200, blank=True, help_text='매칭된 키워드 또는 제품/원료명')
     is_read = models.BooleanField('읽음 여부', default=False, db_index=True)
     created_at = models.DateTimeField('발송일시', auto_now_add=True)
 

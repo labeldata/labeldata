@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from v1.regulatory.models import NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews
+from v1.mobile.models import AlertRule
 from v1.regulatory.saol_url_map import SAOL_URLS
 from v1.activity_log.utils import log_activity
 
@@ -366,6 +367,15 @@ def news_list(request):
         except RegulatoryNews.DoesNotExist:
             pass
 
+    # 사용자의 AlertRule 목록 — 여러 기기에 동일 규칙이 있을 경우 중복 제거
+    seen = set()
+    unique_alert_rules = []
+    for r in AlertRule.objects.filter(device__user=request.user, is_active=True).order_by('category', 'keyword', '-created_at'):
+        key = (r.category, r.keyword, r.match_type)
+        if key not in seen:
+            seen.add(key)
+            unique_alert_rules.append(r)
+
     # saol_admin 원본 사이트 URL 추출 (external_id: 'saol-{site_code}-{dup_key}')
     saol_site_url = ''
     if selected_news and selected_news.api_source == 'saol_admin':
@@ -400,6 +410,7 @@ def news_list(request):
         'sort':               sort,
         'today':              date.today(),
         'saol_site_url':      saol_site_url,
+        'alert_rules':        unique_alert_rules,
     })
 
 
@@ -747,3 +758,147 @@ def mark_all_news_resolved(request):
     ing_matches.update(read_yn=True)
 
     return JsonResponse({'success': True, 'created': created, 'unread': 0})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AlertRule 관리 (웹에서 앱 알림 키워드 추가·수정·삭제)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required
+def alert_rules_api(request):
+    """
+    GET  /regulatory/api/alert-rules/  — 로그인 사용자의 모든 기기 AlertRule 목록
+    POST /regulatory/api/alert-rules/  — 새 AlertRule 등록 (모든 기기에 추가)
+    Body(POST): {"category": "INGREDIENT", "keyword": "...", "match_type": "CONTAINS"}
+    """
+    from v1.mobile.models import AlertRule, AppDevice
+    from v1.mobile.services.push_service import backfill_alerts_for_rule
+
+    user_devices = AppDevice.objects.filter(user=request.user)
+
+    if request.method == 'GET':
+        rules = (
+            AlertRule.objects
+            .filter(device__user=request.user)
+            .select_related('device')
+            .order_by('-created_at')
+        )
+        data = [
+            {
+                'id': r.id,
+                'category': r.category,
+                'category_display': r.get_category_display(),
+                'keyword': r.keyword,
+                'match_type': r.match_type,
+                'match_type_display': r.get_match_type_display(),
+                'is_active': r.is_active,
+                'created_at': r.created_at.strftime('%Y-%m-%d %H:%M'),
+                'device_id': str(r.device.device_id),
+                'device_platform': r.device.platform,
+            }
+            for r in rules
+        ]
+        return JsonResponse({'rules': data})
+
+    # POST — 새 키워드 등록
+    try:
+        body = json.loads(request.body)
+        category   = body.get('category', '').strip()
+        keyword    = body.get('keyword', '').strip()
+        match_type = body.get('match_type', 'CONTAINS').strip()
+    except (ValueError, AttributeError):
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    valid_categories = {'INGREDIENT', 'COMPANY', 'ORIGIN'}
+    valid_match_types = {'EXACT', 'CONTAINS'}
+    if category not in valid_categories:
+        return JsonResponse({'success': False, 'error': '유효하지 않은 분류'}, status=400)
+    if match_type not in valid_match_types:
+        return JsonResponse({'success': False, 'error': '유효하지 않은 매칭 방식'}, status=400)
+    if not keyword:
+        return JsonResponse({'success': False, 'error': '키워드를 입력해주세요'}, status=400)
+    if len(keyword) > 100:
+        return JsonResponse({'success': False, 'error': '키워드는 100자 이내로 입력해주세요'}, status=400)
+
+    # 연결된 기기가 없으면 웹 전용 가상 기기를 자동 생성
+    if not user_devices.exists():
+        import uuid
+        web_device, _ = AppDevice.objects.get_or_create(
+            user=request.user,
+            platform='web',
+            defaults={'device_id': f'web-{uuid.uuid4()}'},
+        )
+        user_devices = AppDevice.objects.filter(pk=web_device.pk)
+
+    created_rules = []
+    for device in user_devices:
+        from django.conf import settings
+        max_rules = settings.MOBILE_MEMBER_MAX_RULES
+        if device.rules.filter(is_active=True).count() >= max_rules:
+            continue
+        rule, created = AlertRule.objects.get_or_create(
+            device=device,
+            category=category,
+            keyword=keyword,
+            match_type=match_type,
+            defaults={'is_active': True},
+        )
+        if created:
+            created_rules.append(rule)
+            try:
+                backfill_result = backfill_alerts_for_rule(rule)
+            except Exception:
+                backfill_result = {'created': 0, 'previews': []}
+        elif not rule.is_active:
+            rule.is_active = True
+            rule.save(update_fields=['is_active'])
+            created_rules.append(rule)
+            try:
+                backfill_result = backfill_alerts_for_rule(rule)
+            except Exception:
+                backfill_result = {'created': 0, 'previews': []}
+
+    if not created_rules:
+        return JsonResponse({'success': False, 'error': '이미 등록된 키워드이거나 최대 개수에 도달했습니다.'}, status=400)
+
+    first = created_rules[0]
+    return JsonResponse({
+        'success': True,
+        'rule': {
+            'id': first.id,
+            'category': first.category,
+            'category_display': first.get_category_display(),
+            'keyword': first.keyword,
+            'match_type': first.match_type,
+            'match_type_display': first.get_match_type_display(),
+            'is_active': first.is_active,
+            'created_at': first.created_at.strftime('%Y-%m-%d %H:%M'),
+        },
+        'matched_count': backfill_result.get('created', 0),
+        'previews': backfill_result.get('previews', []),
+    }, status=201)
+
+
+@login_required
+@require_POST
+def alert_rule_delete_api(request, rule_id):
+    """
+    DELETE(POST) /regulatory/api/alert-rules/<id>/delete/
+    사용자 기기의 해당 키워드 규칙을 모든 기기에서 삭제.
+    """
+    from v1.mobile.models import AlertRule
+
+    # 대표 규칙으로 같은 (category, keyword, match_type) 조합을 모든 기기에서 삭제
+    try:
+        rule = AlertRule.objects.select_related('device').get(pk=rule_id, device__user=request.user)
+    except AlertRule.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '규칙을 찾을 수 없습니다.'}, status=404)
+
+    AlertRule.objects.filter(
+        device__user=request.user,
+        category=rule.category,
+        keyword=rule.keyword,
+        match_type=rule.match_type,
+    ).delete()
+
+    return JsonResponse({'success': True})
