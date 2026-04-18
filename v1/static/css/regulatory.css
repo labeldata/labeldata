@@ -578,13 +578,14 @@ details[open] .rd-raw-sum::after { content:"▾"; }
 /* ── 알림 키워드 버튼 (필터 row2 오른쪽 끝) ───────────────────────────────── */
 .rs-keyword-btn {
   display: inline-flex; align-items: center; gap: 4px;
-  background: none; border: 1px solid #e0e0e0;
-  border-radius: 16px; padding: 3px 10px;
-  font-size: 12px; color: #555; cursor: pointer;
-  white-space: nowrap; margin-left: auto;
-  transition: background .15s, border-color .15s;
+  background: #fffbea; border: 1.5px solid #ffd700;
+  border-radius: 16px; padding: 4px 12px;
+  font-size: 12px; color: #5a4a00; cursor: pointer;
+  white-space: nowrap; margin-left: auto; flex-shrink: 0;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+  font-weight: 600;
 }
-.rs-keyword-btn:hover { background: #fffbea; border-color: #ffd700; color: #5a4a00; }
+.rs-keyword-btn:hover { background: #fff3b0; border-color: #f5c400; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
 .rs-keyword-badge {
   display: inline-flex; align-items: center; justify-content: center;
   background: #ffd700; color: #5a4a00;
@@ -599,8 +600,7 @@ details[open] .rd-raw-sum::after { content:"▾"; }
   background: #fffbea; border-bottom: 1px solid #ffe58f;
   padding: 14px 18px;
 }
-.kw-modal-title { font-weight: 700; font-size: 15px; color: #3d2c00; }
-.kw-modal-sub   { font-size: 11px; color: #888; }
+.kw-modal-title { font-weight: 700; font-size: 15px; color: #3d2c00; flex: 1; }
 .kw-modal-body  { padding: 16px 18px; }
 
 .kw-list-section { margin-bottom: 18px; }
@@ -628,13 +628,12 @@ details[open] .rd-raw-sum::after { content:"▾"; }
 
 /* 추가 폼 */
 .kw-add-section { border-top: 1px solid #f0f0f0; padding-top: 14px; }
-.kw-add-title   { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 8px; }
-.kw-add-form    { display: flex; gap: 6px; align-items: center; }
-.kw-select      { flex: 0 0 auto; width: auto; min-width: 90px; }
-.kw-select-match { min-width: 72px; }
+.kw-add-form    { display: flex; gap: 6px; align-items: stretch; }
+.kw-select      { flex: 0 0 auto; width: auto; min-width: 100px; }
+.kw-select-match { min-width: 76px; }
 .kw-input       { flex: 1 1 auto; }
-.kw-add-btn     { flex: 0 0 auto; padding: 4px 10px; font-size: 14px; }
-.kw-add-help    { font-size: 11px; }
+.kw-add-btn     { flex: 0 0 auto; padding: 4px 14px; font-size: 14px; border-radius: 8px; }
+.kw-add-help    { font-size: 11px; color: #888; margin-top: 8px; line-height: 1.6; }
 
 /* ── 키워드 추가 후 기존 데이터 매칭 결과 ───────────────────────────────── */
 .kw-backfill {

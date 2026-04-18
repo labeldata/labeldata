@@ -90,6 +90,19 @@
     margin-bottom: 10px;
 }
 
+.hero-app-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding: 6px 14px 6px 8px;
+    border-radius: 20px;
+    background: rgba(103,232,249,0.15);
+    border: 1px solid rgba(103,232,249,0.4);
+    font-size: 12px;
+    color: #67e8f9;
+}
+
 .hero-actions {
     display: flex;
     align-items: center;

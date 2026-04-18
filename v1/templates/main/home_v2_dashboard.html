@@ -7,7 +7,7 @@
 <div class="v2-topbar-title-wrapper">
     {% if is_guest %}
     <a href="{% url 'main:home_dashboard' %}" class="guest-gnb-logo">
-        <i class="bi bi-grid-3x3-gap-fill me-2" style="color:#1967d2;"></i>Food Data Portal
+        Food Data Portal
     </a>
     {% else %}
     <span class="fw-semibold" style="font-size:15px; color:#1f1f1f;">홈</span>
@@ -39,6 +39,11 @@
                 <span><i class="bi bi-shield-check me-1" style="color:#4ade80;"></i>식품법규 기반 검증</span>
                 <span><i class="bi bi-people me-1" style="color:#93c5fd;"></i>팀 협업 지원</span>
                 <span><i class="bi bi-file-earmark-pdf me-1" style="color:#f87171;"></i>PDF 출력</span>
+            </div>
+            <!-- 앱 출시 예고 -->
+            <div class="hero-app-badge">
+                <img src="{% static 'img/favicon.png' %}" alt="EZ 알리미" style="width:22px;height:22px;border-radius:6px;flex-shrink:0;">
+                <span><b>EZ 알리미</b> 앱 출시 예정 — 부적합·처분 알림을 스마트폰에서 바로 받아보세요.</span>
             </div>
         </div>
         <div class="hero-visual" aria-hidden="true">
