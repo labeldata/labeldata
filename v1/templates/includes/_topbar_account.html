@@ -39,7 +39,7 @@
                 </div>
             </div>
             {# 규제 알림 푸터 (항상 표시) #}
-            <a href="{% url 'regulatory:list' %}"
+            <a href="{% url 'regulatory:list' %}{% if regulatory_alert_count > 0 %}?status=no_action{% endif %}"
                onclick="window.location.href=this.href;return false;"
                class="v2-notif-regulatory{% if regulatory_alert_count > 0 %} v2-notif-regulatory--alert{% endif %}">
                 <i class="bi bi-shield-exclamation"></i>
@@ -163,7 +163,7 @@
             .then(r => r.json())
             .then(data => {
                 renderNotifications(data.notifications || []);
-                const cnt = (data.unread || 0) + REG_COUNT;
+                const cnt = data.unread || 0;
                 if (BADGE_EL) {
                     BADGE_EL.textContent = cnt > 9 ? '9+' : cnt;
                     BADGE_EL.style.display = cnt > 0 ? '' : 'none';

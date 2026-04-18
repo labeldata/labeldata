@@ -4102,13 +4102,6 @@ def notification_list(request):
         )
         _action_statuses = ('monitoring', 'resolved')
 
-        reg_matches = (
-            NewsProductMatch.objects
-            .filter(product__user_id=request.user, false_positive_yn=False)
-            .select_related('news', 'product')
-            .order_by('-created_at')[:10]
-        )
-
         # 미조치 건수 (matched - actioned) — 컨텍스트 프로세서와 동일 기준
         prod_matched = set(
             NewsProductMatch.objects.filter(
@@ -4137,7 +4130,18 @@ def notification_list(request):
         reg_no_action = len((prod_matched | ing_matched) - (prod_actioned | ing_actioned))
         unread_count += reg_no_action
 
+        # 뉴스 단위로 중복 제거 (같은 뉴스에 여러 제품 매칭돼도 1건만 표시)
+        seen_news_ids = set()
+        reg_matches = (
+            NewsProductMatch.objects
+            .filter(product__user_id=request.user, false_positive_yn=False)
+            .select_related('news', 'product')
+            .order_by('-created_at')
+        )
         for m in reg_matches:
+            if m.news_id in seen_news_ids:
+                continue
+            seen_news_ids.add(m.news_id)
             items.append({
                 'id':          f'reg_{m.id}',
                 'message': (
@@ -4151,6 +4155,8 @@ def notification_list(request):
                 'label_name':  m.product.my_label_name or '',
                 'url':         f'/regulatory/?id={m.news_id}',
             })
+            if len(seen_news_ids) >= 10:
+                break
     except Exception:
         pass  # 앱 미설치 환경 안전 처리
 

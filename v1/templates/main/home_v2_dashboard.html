@@ -275,7 +275,7 @@
             <a href="{% url 'products:inbox' %}" class="qa-btn">
                 <i class="bi bi-people"></i> 공동 작업
             </a>
-            <a href="{% url 'regulatory:list' %}" class="qa-btn{% if regulatory_alert_count > 0 %} qa-btn-alert{% endif %}">
+            <a href="{% url 'regulatory:list' %}{% if regulatory_alert_count > 0 %}?status=no_action{% endif %}" class="qa-btn{% if regulatory_alert_count > 0 %} qa-btn-alert{% endif %}">
                 <i class="bi bi-shield-exclamation"></i> 부적합·처분{% if regulatory_alert_count > 0 %} <span class="badge bg-danger ms-1" style="font-size:10px;vertical-align:middle;">{{ regulatory_alert_count }}</span>{% endif %}
             </a>
         </div>
@@ -289,7 +289,7 @@
             <div style="font-size:14px;font-weight:600;color:#c5221f;margin-bottom:2px;">부적합·처분 알림 {{ regulatory_alert_count }}건 — 확인 필요</div>
             <div style="font-size:12px;color:#5f6368;">내 제품·원료와 연관 가능성이 있는 새 부적합·처분 정보가 있습니다. 위험 수준을 확인하고 필요 시 조치하세요. 연관 없는 항목은 "오탐 제외"로 목록에서 제외할 수 있습니다.</div>
         </div>
-        <a href="{% url 'regulatory:list' %}" class="btn btn-danger btn-sm" style="white-space:nowrap;border-radius:20px;">
+        <a href="{% url 'regulatory:list' %}?status=no_action" class="btn btn-danger btn-sm" style="white-space:nowrap;border-radius:20px;">
             <i class="bi bi-arrow-right me-1"></i>바로 확인
         </a>
     </div>
