@@ -336,9 +336,18 @@ def _send_fcm(token: str, news, trigger_type: str = 'keyword', trigger_label: st
                         'trigger_label': trigger_label,
                         'type': 'regulatory_alert',
                     },
-                    'android': {'priority': 'high'},
+                    'android': {
+                        'priority': 'high',
+                        'notification': {
+                            'channel_id': 'food_safety_high',
+                            'notification_priority': 'PRIORITY_MAX',
+                            'sound': 'default',
+                            'default_vibrate_timings': True,
+                        },
+                    },
                     'apns': {
                         'payload': {'aps': {'sound': 'default'}},
+                        'headers': {'apns-priority': '10'},
                     },
                 },
             },
