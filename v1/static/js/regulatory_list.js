@@ -117,6 +117,14 @@ document.addEventListener('DOMContentLoaded', function () {
   document.documentElement.classList.remove('cat-filter-closed');
 
   _updateGroupBtnState();
+
+  // 선택 후 페이지 이동 시 스크롤 위치 복원
+  const saved = sessionStorage.getItem('rs_scroll');
+  if (saved !== null) {
+    const listBody = document.querySelector('.rs-list-body');
+    if (listBody) listBody.scrollTop = parseInt(saved, 10);
+    sessionStorage.removeItem('rs_scroll');
+  }
 });
 
 function setDays(val) {
@@ -168,6 +176,8 @@ function clearSearch() {
 }
 
 function selectNews(newsId) {
+  const listBody = document.querySelector('.rs-list-body');
+  if (listBody) sessionStorage.setItem('rs_scroll', listBody.scrollTop);
   const url = new URL(window.location.href);
   url.searchParams.set('id', newsId);
   url.searchParams.delete('insp_id');
@@ -175,6 +185,8 @@ function selectNews(newsId) {
 }
 
 function selectInspection(matchId) {
+  const listBody = document.querySelector('.rs-list-body');
+  if (listBody) sessionStorage.setItem('rs_scroll', listBody.scrollTop);
   const url = new URL(window.location.href);
   url.searchParams.set('insp_id', matchId);
   url.searchParams.delete('id');

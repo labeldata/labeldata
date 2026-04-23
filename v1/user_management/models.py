@@ -99,7 +99,8 @@ def backfill_inspection_on_profile_save(sender, instance, created, update_fields
     """
     if created:
         return
-    if update_fields and not ({'license_number', 'company_name'} & set(update_fields)):
+    # update_fields가 지정된 경우: 해당 필드 중 company_name/license_number가 없으면 스�
+    if update_fields is not None and not ({'license_number', 'company_name'} & set(update_fields)):
         return
     try:
         from v1.regulatory.services.collector import backfill_inspection_matches

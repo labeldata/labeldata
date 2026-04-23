@@ -738,6 +738,7 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
     if license_no:
         q |= Q(prdlst_report_no__contains=license_no)
     if company_name:
+        # 정규화 완전일치를 위해 DB에서는 contains로 후보 추출, Python에서 정밀 검사
         q |= Q(bssh_nm__contains=company_name)
     for label in labels:
         if label.prdlst_report_no:
@@ -955,6 +956,20 @@ def collect_inspection_data(last_updt_dtm: str | None = None, page_size: int = 1
     return counts
 
 
+# ── 업체명 정규화: 법인 접미/접두사 제거 ──────────────────────────────────────
+import re as _re
+_CORP_SFXS_RE = _re.compile(
+    r'\s*(주식회사|유한회사|합자회사|합명회사|협동조합|\(주\)|\(유\)|㈜|co\.?,?\s*ltd\.?|inc\.?)\s*',
+    _re.IGNORECASE,
+)
+
+
+def _normalize_corp_name(name: str) -> str:
+    """업체명에서 법인 유형 접미/접두사를 제거하고 공백을 정리합니다."""
+    name = _CORP_SFXS_RE.sub('', name).strip()
+    return name
+
+
 def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> None:
     """
     InspectionResult 1건에 대해 매칭 대상 사용자를 찾아 InspectionMatch를 생성한다.
@@ -962,7 +977,7 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
     매칭 조건 (OR):
       1. 내제품(MyLabel.prdlst_report_no) == inspection.prdlst_report_no
       2. 내정보(UserProfile.license_number) in inspection.prdlst_report_no
-      3. 내정보(UserProfile.company_name)  in inspection.bssh_nm
+      3. 내정보(UserProfile.company_name)  == inspection.bssh_nm  ← 정규화 완전일치
     """
     from django.utils import timezone
     from v1.regulatory.models import InspectionMatch
@@ -1011,7 +1026,7 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
                 'match_reason':  InspectionMatch.REASON_LICENSE,
                 'matched_value': license_no,
             }
-        elif company_name and bssh_nm and len(company_name) >= 4 and company_name in bssh_nm:
+        elif company_name and bssh_nm and company_name in bssh_nm:
             matched[uid] = {
                 'label':         None,
                 'match_reason':  InspectionMatch.REASON_COMPANY,
