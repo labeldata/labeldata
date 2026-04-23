@@ -281,9 +281,11 @@ def news_list(request):
     paginator = Paginator(qs, 50)
     page_obj  = paginator.get_page(page_num)
 
-    # 페이지 이동용 쿼리스트링 (page 파라미터 제거)
+    # 페이지 이동용 쿼리스트링 (page·선택 파라미터 제거)
     qp = request.GET.copy()
-    qp.pop('page', None)
+    qp.pop('page',    None)
+    qp.pop('id',      None)
+    qp.pop('insp_id', None)
     page_query_string = qp.urlencode()
 
     # saol_admin 지자체명 추출 (목록 패널 표시용)
@@ -410,6 +412,23 @@ def news_list(request):
         if len(ext_parts) >= 2:
             saol_site_url = SAOL_URLS.get(ext_parts[1], '')
 
+    # ── 수거검사 상세 패널 (insp_id 파라미터) ────────────────────────────────
+    selected_insp_id = request.GET.get('insp_id')
+    selected_insp = None
+    if selected_insp_id:
+        try:
+            selected_insp = (
+                InspectionMatch.objects
+                .select_related('inspection', 'label')
+                .get(pk=selected_insp_id, user=request.user)
+            )
+            if not selected_insp.read_yn:
+                selected_insp.read_yn = True
+                selected_insp.read_at = timezone.now()
+                selected_insp.save(update_fields=['read_yn', 'read_at'])
+        except InspectionMatch.DoesNotExist:
+            pass
+
     return render(request, 'regulatory/news_list.html', {
         'news_list':          page_obj,          # 페이지 객체 (이터러블)
         'page_obj':           page_obj,
@@ -443,6 +462,7 @@ def news_list(request):
         'inspection_list':    inspection_list,
         'inspection_total':   inspection_total,
         'inspection_unread':  inspection_unread,
+        'selected_insp':      selected_insp,
     })
 
 
@@ -790,6 +810,43 @@ def mark_all_news_resolved(request):
     ing_matches.update(read_yn=True)
 
     return JsonResponse({'success': True, 'created': created, 'unread': 0})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 수거검사(I0460) API
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def inspection_mark_all_read(request):
+    """수거검사 전체 읽음 처리"""
+    updated = InspectionMatch.objects.filter(
+        user=request.user, read_yn=False
+    ).update(read_yn=True, read_at=timezone.now())
+    return JsonResponse({'success': True, 'updated': updated})
+
+
+@login_required
+@require_POST
+def inspection_dismiss(request):
+    """
+    수거검사 매칭 1건 삭제 (오매칭·해당없음 처리)
+    Body: {"insp_match_id": 123}
+    """
+    try:
+        body = json.loads(request.body)
+        match_id = int(body.get('insp_match_id', 0))
+    except (ValueError, AttributeError, TypeError):
+        return JsonResponse({'success': False, 'error': '잘못된 요청'}, status=400)
+
+    try:
+        match = InspectionMatch.objects.get(pk=match_id, user=request.user)
+        match.delete()
+    except InspectionMatch.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '항목을 찾을 수 없습니다.'}, status=404)
+
+    remaining = InspectionMatch.objects.filter(user=request.user, read_yn=False).count()
+    return JsonResponse({'success': True, 'remaining_unread': remaining})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

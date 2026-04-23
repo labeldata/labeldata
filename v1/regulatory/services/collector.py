@@ -1005,13 +1005,13 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
         license_no   = (profile['license_number'] or '').strip()
         company_name = (profile['company_name']   or '').strip()
 
-        if license_no and report_no and license_no in report_no:
+        if license_no and report_no and len(license_no) >= 6 and license_no in report_no:
             matched[uid] = {
                 'label':         None,
                 'match_reason':  InspectionMatch.REASON_LICENSE,
                 'matched_value': license_no,
             }
-        elif company_name and bssh_nm and company_name in bssh_nm:
+        elif company_name and bssh_nm and len(company_name) >= 4 and company_name in bssh_nm:
             matched[uid] = {
                 'label':         None,
                 'match_reason':  InspectionMatch.REASON_COMPANY,

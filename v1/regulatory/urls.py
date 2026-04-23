@@ -18,4 +18,7 @@ urlpatterns = [
     # AlertRule 관리 (웹에서 앱 알림 키워드 추가/삭제)
     path('api/alert-rules/', views.alert_rules_api, name='alert_rules'),
     path('api/alert-rules/<int:rule_id>/delete/', views.alert_rule_delete_api, name='alert_rule_delete'),
+    # 수거검사(I0460) API
+    path('api/inspection/mark-all-read/', views.inspection_mark_all_read, name='inspection_mark_all_read'),
+    path('api/inspection/dismiss/', views.inspection_dismiss, name='inspection_dismiss'),
 ]

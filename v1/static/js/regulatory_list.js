@@ -15,10 +15,21 @@ function toggleRiskHelp(e) {
   const pop = document.getElementById('riskHelpPopover');
   if (pop) pop.classList.toggle('open');
 }
+
+function toggleInsp46Help(e) {
+  e.stopPropagation();
+  const pop = document.getElementById('insp46HelpPopover');
+  if (pop) pop.classList.toggle('open');
+}
+
 document.addEventListener('click', function (e) {
-  const pop = document.getElementById('riskHelpPopover');
-  if (pop && pop.classList.contains('open') && !pop.contains(e.target)) {
-    pop.classList.remove('open');
+  const risk = document.getElementById('riskHelpPopover');
+  if (risk && risk.classList.contains('open') && !risk.contains(e.target)) {
+    risk.classList.remove('open');
+  }
+  const insp = document.getElementById('insp46HelpPopover');
+  if (insp && insp.classList.contains('open') && !insp.contains(e.target)) {
+    insp.classList.remove('open');
   }
 });
 
@@ -159,5 +170,13 @@ function clearSearch() {
 function selectNews(newsId) {
   const url = new URL(window.location.href);
   url.searchParams.set('id', newsId);
+  url.searchParams.delete('insp_id');
+  window.location.href = url.toString();
+}
+
+function selectInspection(matchId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set('insp_id', matchId);
+  url.searchParams.delete('id');
   window.location.href = url.toString();
 }

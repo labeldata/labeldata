@@ -691,6 +691,21 @@ details[open] .rd-raw-sum::after { content:"▾"; }
 .rs-insp-item--unread { background: #fefce8; }
 .rs-insp-item--unread:hover { background: #fef9c3; }
 
+/* 수거검사 항목을 일반 목록 내에 통합 표시 */
+.rs-item--insp           { border-left: 3px solid #818cf8; background: #fafafe; }
+.rs-item--insp:hover     { background: #f0f1ff; border-left-color: #6366f1; }
+.rs-item--insp.active    { background: #eef2ff !important; border-left-color: #4f46e5; }
+.rs-item--insp-unread    { background: #fefce8; border-left-color: #f59e0b; }
+.rs-item--insp-unread:hover { background: #fef9c3; }
+
+/* 목록 구분선 */
+.rs-list-divider {
+  text-align: center; font-size: 11px; color: #9aa0a6;
+  padding: 5px 12px; background: #f8f9fa;
+  border-top: 1px solid #e8eaed; border-bottom: 1px solid #e8eaed;
+  user-select: none;
+}
+
 .rs-insp-row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
 .rs-insp-row2 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }
 .rs-insp-row3 { font-size: 11px; color: #b45309; margin-top: 2px; }
@@ -721,6 +736,70 @@ details[open] .rd-raw-sum::after { content:"▾"; }
   padding: 16px 12px; text-align: center;
   font-size: 13px; color: #94a3b8;
 }
+
+/* ── 수거검사 상세 패널 (오른쪽) ────────────────────────────────── */
+.rd-insp-panel          { padding: 20px 24px; max-width: 700px; }
+.rd-insp-header         { display: flex; align-items: center; gap: 10px;
+                           margin-bottom: 16px; }
+.rd-insp-phase-badge    { display: inline-block; font-size: 12px; font-weight: 700;
+                           padding: 3px 10px; border-radius: 6px; flex-shrink: 0; }
+.rd-insp-phase-badge--1 { background: #dbeafe; color: #1d4ed8; }
+.rd-insp-phase-badge--2 { background: #fef3c7; color: #b45309; }
+.rd-insp-judgment       { display: inline-block; font-size: 13px; font-weight: 700;
+                           padding: 3px 10px; border-radius: 6px; }
+.rd-insp-judgment--fail    { background: #fee2e2; color: #dc2626; }
+.rd-insp-judgment--ok      { background: #dcfce7; color: #15803d; }
+.rd-insp-judgment--pending { background: #f1f5f9; color: #64748b; }
+
+.rd-insp-product        { margin-bottom: 16px; padding-bottom: 14px;
+                           border-bottom: 1px solid #e8eaed; }
+.rd-insp-prdtnm         { font-size: 18px; font-weight: 700; color: #202124;
+                           margin-bottom: 4px; line-height: 1.3; }
+.rd-insp-bssh           { font-size: 14px; color: #5f6368; }
+
+.rd-insp-change-box     { background: #fffbeb; border: 1px solid #fcd34d;
+                           border-radius: 8px; padding: 10px 14px;
+                           margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }
+.rd-insp-change-label   { font-size: 11px; font-weight: 700; color: #b45309;
+                           white-space: nowrap; }
+.rd-insp-change-val     { font-size: 13px; color: #92400e; font-weight: 600; }
+
+.rd-insp-fields         { margin-bottom: 16px; padding-bottom: 14px;
+                           border-bottom: 1px solid #e8eaed; }
+.rd-insp-row            { display: flex; gap: 12px; align-items: baseline;
+                           padding: 5px 0; border-bottom: 1px solid #f1f3f4; }
+.rd-insp-row:last-child { border-bottom: none; }
+.rd-insp-lbl            { font-size: 12px; color: #9aa0a6; font-weight: 600;
+                           min-width: 90px; flex-shrink: 0; }
+.rd-insp-val            { font-size: 13px; color: #202124; }
+
+.rd-insp-match-box      { background: #f0f9ff; border: 1px solid #bae6fd;
+                           border-radius: 8px; padding: 12px 14px; }
+.rd-insp-match-title    { font-size: 11px; font-weight: 700; color: #0369a1;
+                           text-transform: uppercase; letter-spacing: .4px;
+                           margin-bottom: 8px; }
+.rd-insp-match-body     { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rd-insp-match-badge    { font-size: 12px; font-weight: 600; color: #0c4a6e;
+                           background: #e0f2fe; border-radius: 5px;
+                           padding: 2px 8px; }
+.rd-insp-match-val      { font-size: 13px; color: #334155; }
+.rd-insp-matched-code   { font-size: 12px; color: #1d4ed8; background: #eff6ff;
+                           border: 1px solid #bfdbfe; border-radius: 4px;
+                           padding: 1px 6px; font-family: monospace; }
+
+/* 수거검사 전체 읽음 버튼 (리스트 헤더) */
+.rs-insp-readall-btn    { font-size: 11px; font-weight: 600; color: #4f46e5;
+                           background: #eef2ff; border: 1px solid #c7d2fe;
+                           border-radius: 5px; padding: 2px 8px; cursor: pointer;
+                           margin-left: 8px; white-space: nowrap; }
+.rs-insp-readall-btn:hover { background: #e0e7ff; border-color: #a5b4fc; }
+
+/* 수거검사 상세 패널 — 해당없음(삭제) 버튼 */
+.rd-insp-actions        { margin-top: 14px; }
+.rd-insp-dismiss-btn    { font-size: 12px; font-weight: 600; color: #dc2626;
+                           background: #fff; border: 1px solid #fca5a5;
+                           border-radius: 6px; padding: 5px 14px; cursor: pointer; }
+.rd-insp-dismiss-btn:hover { background: #fee2e2; border-color: #f87171; }
 
 /* 수거검사 카테고리 건수 배지 */
 .rf-insp-badge {
@@ -760,3 +839,38 @@ details[open] .rd-raw-sum::after { content:"▾"; }
   transition: all .15s; margin-left: 2px;
 }
 .rf-detail-toggle:hover { border-color: #bbb; background: #eee; }
+
+/* ── 수거검사 ? 도움말 팝오버 ───────────────────────────────────── */
+.rf-insp46-wrap   { position: relative; display: inline-flex; align-items: center; gap: 2px; }
+.rf-insp46-help   {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #e0e7ff; color: #4338ca; font-size: 10px; font-weight: 700;
+  cursor: pointer; flex-shrink: 0; user-select: none;
+  border: 1px solid #c7d2fe;
+}
+.rf-insp46-help:hover { background: #c7d2fe; }
+
+.rf-insp46-popover {
+  display: none; position: absolute; top: calc(100% + 6px); right: 0;
+  width: 260px; background: #fff; border: 1px solid #c7d2fe;
+  border-radius: 10px; box-shadow: 0 4px 16px rgba(79,70,229,.12);
+  z-index: 1000; font-size: 12px; color: #374151;
+}
+.rf-insp46-popover.open { display: block; }
+
+.rf-insp46-pop-title {
+  background: #eef2ff; padding: 8px 12px;
+  font-weight: 700; font-size: 13px; color: #3730a3;
+  border-radius: 10px 10px 0 0;
+}
+.rf-insp46-pop-body  { padding: 10px 12px; line-height: 1.6; }
+.rf-insp46-hr        { border: none; border-top: 1px solid #e0e7ff; margin: 8px 0; }
+.rf-insp46-ul        { margin: 6px 0 0 0; padding-left: 16px; }
+.rf-insp46-ul li     { margin-bottom: 6px; }
+.rf-insp46-ul a      { color: #4338ca; text-decoration: underline; }
+.rf-insp46-pop-note  {
+  margin-top: 8px; padding: 6px 8px;
+  background: #f5f3ff; border-radius: 6px;
+  font-size: 11px; color: #6d28d9; line-height: 1.5;
+}
