@@ -209,7 +209,7 @@ class InspectionResult(models.Model):
     tkawydtm         = models.CharField(max_length=20,  blank=True, verbose_name='수거일자')
     tkawyspci_typecd_nm = models.CharField(max_length=50, blank=True, verbose_name='검체구분')
     exc_instt_nm     = models.CharField(max_length=100, blank=True, verbose_name='수행기관명')
-    last_updt_dtm    = models.CharField(max_length=20,  blank=True, verbose_name='최종수정일시')
+    last_updt_dtm    = models.CharField(max_length=50,  blank=True, verbose_name='최종수정일시')
     collected_at     = models.DateTimeField(auto_now_add=True, verbose_name='수집일시')
 
     class Meta:
