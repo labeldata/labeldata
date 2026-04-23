@@ -27,6 +27,8 @@
       <input type="hidden" name="status"    id="f_status" value="{{ status_filter }}">
       <input type="hidden" name="days"      id="f_days"   value="{{ days }}">
       <input type="hidden" name="cats_sent" value="1">
+      {# 수거검사(I0460)는 버튼으로 제어 — 체크 상태면 hidden으로 전달 #}
+      {% if show_inspection %}<input type="hidden" name="cat" value="I0460" id="hiddenInsp46">{% endif %}
 
       {# ── 1행: 검색·기간·날짜 + 건수·분야 ── #}
       <div class="rf-row1">
@@ -78,14 +80,29 @@
 
         <span class="rf-sep"></span>
 
-        {# 분야 토글 버튼 (오른쪽 끝) #}
-        <div class="rf-cat-toggle" onclick="toggleCatFilter()" role="button" tabindex="0">
-          <i class="bi bi-funnel"></i>
-          <span>분야&nbsp;<span class="rf-cat-summary">{% if cats|length == 7 %}전체{% else %}{{ cats|length }}개{% endif %}</span></span>
-          <label onclick="event.stopPropagation()">
-            <input type="checkbox" id="catCheckAll" onchange="toggleAllCats(this)"> 전체
-          </label>
-          <i class="bi bi-chevron-up" id="catToggleBtn"></i>
+        {# 분야 박스 — 그룹 버튼 + 상세 드로어 토글 #}
+        <div class="rf-cat-box">
+          {# 그룹 버튼 3개 #}
+          {% with insp_keys="insp,I0490,imp_insp,import" admin_keys="admin,I0482,saol_admin" %}
+          <button type="button"
+                  class="rf-grp-btn {% if insp_keys|slice:':4' %}{% for k in insp_cats %}{% if k.key in cats %}rf-grp-btn--on{% endif %}{% endfor %}{% endif %}"
+                  id="grpBtnInsp"
+                  onclick="toggleGroup('insp')">부적합</button>
+          <button type="button"
+                  class="rf-grp-btn"
+                  id="grpBtnAdmin"
+                  onclick="toggleGroup('admin')">처분</button>
+          {% endwith %}
+          <button type="button"
+                  class="rf-grp-btn rf-grp-btn--insp46 {% if show_inspection %}rf-grp-btn--on{% endif %}"
+                  id="grpBtnInsp46"
+                  onclick="toggleInspection()">
+            🔍수거검사{% if inspection_unread > 0 %}<span class="rf-insp-dot">{{ inspection_unread }}</span>{% endif %}
+          </button>
+          {# 상세 드로어 토글 #}
+          <button type="button" class="rf-detail-toggle" onclick="toggleCatFilter()" title="상세 분야 선택">
+            <i class="bi bi-funnel"></i><i class="bi bi-chevron-up" id="catToggleBtn"></i>
+          </button>
         </div>
 
       </div>{# end rf-row1 #}
@@ -290,6 +307,51 @@
 
     {# ── 왼쪽: 목록만 ── #}
     <aside class="reg-sidebar">
+      {# ── 수거검사 현황 (I0460 체크 시 목록 상단에 표시) ── #}
+      {% if show_inspection %}
+      <div class="rs-insp-section">
+        <div class="rs-insp-header">
+          <span class="rs-insp-title">🔍 내 수거검사 현황</span>
+          <span class="rs-insp-count">{{ inspection_total }}건{% if inspection_unread > 0 %} · <span class="rs-insp-unread">미확인 {{ inspection_unread }}건</span>{% endif %}</span>
+        </div>
+        {% if inspection_list %}
+          {% for m in inspection_list %}
+          <div class="rs-insp-item {% if not m.read_yn %}rs-insp-item--unread{% endif %}">
+            <div class="rs-insp-row1">
+              {% if m.alert_phase == 2 %}
+                <span class="rs-insp-badge-phase rs-insp-badge-phase--2">판정변동</span>
+              {% else %}
+                <span class="rs-insp-badge-phase rs-insp-badge-phase--1">수거접수</span>
+              {% endif %}
+              <span class="rs-insp-prdtnm">{{ m.inspection.prdtnm|default:m.inspection.bssh_nm }}</span>
+              <span class="rs-insp-date">{{ m.inspection.tkawydtm }}</span>
+            </div>
+            <div class="rs-insp-row2">
+              <span class="rs-insp-bssh">{{ m.inspection.bssh_nm }}</span>
+              {% if m.inspection.jdgmnt_cd_nm %}
+                <span class="rs-insp-judgment {% if '부적합' in m.inspection.jdgmnt_cd_nm %}rs-insp-judgment--fail{% endif %}">
+                  {{ m.inspection.jdgmnt_cd_nm }}
+                </span>
+              {% else %}
+                <span class="rs-insp-judgment rs-insp-judgment--pending">검사중</span>
+              {% endif %}
+              {% if m.inspection.plan_titl %}
+                <span class="rs-insp-plan">{{ m.inspection.plan_titl }}</span>
+              {% endif %}
+            </div>
+            {% if m.alert_phase == 2 and m.prev_judgment %}
+            <div class="rs-insp-row3">
+              <span class="rs-insp-prev">이전: {{ m.prev_judgment }} → {{ m.inspection.jdgmnt_cd_nm }}</span>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="rs-insp-empty">매칭된 수거검사 정보가 없습니다.</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
       <div class="rs-list-header">
         <span class="rs-list-total">{{ total_count }}건</span>
         <a class="rs-sort-btn"

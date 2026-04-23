@@ -42,26 +42,62 @@ function toggleCatFilter() {
   }
 }
 
-function toggleAllCats(cb) {
-  document.querySelectorAll('input[name="cat"]').forEach(c => c.checked = cb.checked);
+// 드로어 체크박스 변경 시 그룹 버튼 active 상태 갱신
+function onCatChange() {
+  _updateGroupBtnState();
   submitFilter();
 }
 
-function onCatChange() {
-  const all = [...document.querySelectorAll('input[name="cat"]')];
-  const allChecked  = all.every(c => c.checked);
-  const noneChecked = all.every(c => !c.checked);
-  const cb = document.getElementById('catCheckAll');
-  cb.checked = allChecked;
-  cb.indeterminate = !allChecked && !noneChecked;
+// 부적합/처분 그룹 버튼 클릭 — 해당 그룹 체크박스 전체 토글
+function toggleGroup(group) {
+  const groupKeys = {
+    insp:  ['insp', 'I0490', 'imp_insp', 'import'],
+    admin: ['admin', 'I0482', 'saol_admin'],
+  };
+  const keys = groupKeys[group] || [];
+  const boxes = [...document.querySelectorAll('input[name="cat"]')]
+    .filter(c => keys.includes(c.value));
+  // 하나라도 꺼져있으면 전체 ON, 모두 켜져있으면 전체 OFF
+  const allOn = boxes.every(c => c.checked);
+  boxes.forEach(c => c.checked = !allOn);
+  _updateGroupBtnState();
   submitFilter();
+}
+
+// 수거검사 버튼 클릭 — I0460 hidden input 토글 후 제출
+function toggleInspection() {
+  const form = document.getElementById('filterForm');
+  let hidden = document.getElementById('hiddenInsp46');
+  if (hidden) {
+    hidden.remove(); // 현재 ON → OFF
+  } else {
+    hidden = document.createElement('input');
+    hidden.type  = 'hidden';
+    hidden.name  = 'cat';
+    hidden.value = 'I0460';
+    hidden.id    = 'hiddenInsp46';
+    form.appendChild(hidden);
+  }
+  submitFilter();
+}
+
+// 그룹 버튼 active 클래스 갱신
+function _updateGroupBtnState() {
+  const inspKeys  = ['insp', 'I0490', 'imp_insp', 'import'];
+  const adminKeys = ['admin', 'I0482', 'saol_admin'];
+  const all = [...document.querySelectorAll('input[name="cat"]')];
+
+  const inspOn  = inspKeys.some(k  => all.find(c => c.value === k  && c.checked));
+  const adminOn = adminKeys.some(k => all.find(c => c.value === k && c.checked));
+
+  document.getElementById('grpBtnInsp') ?.classList.toggle('rf-grp-btn--on', inspOn);
+  document.getElementById('grpBtnAdmin')?.classList.toggle('rf-grp-btn--on', adminOn);
 }
 
 document.addEventListener('DOMContentLoaded', function () {
   const el  = document.getElementById('catFilterCollapse');
   const btn = document.getElementById('catToggleBtn');
 
-  // 기본 접힘 상태 복원 (localStorage '1'이면 페침, 나머지는 접힌)
   const isOpen = localStorage.getItem('catFilterOpen') === '1';
   if (!isOpen) {
     if (el)  el.classList.add('collapsed');
@@ -69,14 +105,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   document.documentElement.classList.remove('cat-filter-closed');
 
-  const all = [...document.querySelectorAll('input[name="cat"]')];
-  const cb  = document.getElementById('catCheckAll');
-  if (cb) {
-    const allChecked  = all.every(c => c.checked);
-    const noneChecked = all.every(c => !c.checked);
-    cb.checked = allChecked;
-    cb.indeterminate = !allChecked && !noneChecked;
-  }
+  _updateGroupBtnState();
 });
 
 function setDays(val) {

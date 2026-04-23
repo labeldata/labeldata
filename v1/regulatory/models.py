@@ -2,6 +2,8 @@
 부적합·처분 모델
 - RegulatoryNews: 수집된 부적합 정보
 - NewsProductMatch: 부적합 뉴스 ↔ 내 제품 M:N 연결
+- InspectionResult: 수거검사(I0460) 원본
+- InspectionMatch: 수거검사 ↔ 사용자 매칭 이력
 """
 from django.db import models
 from django.db.models import F
@@ -188,3 +190,99 @@ class RegulatoryMatchAction(models.Model):
     def __str__(self):
         target = self.product_match or self.ingredient_match
         return f"[{self.get_action_type_display()}] {target}"
+
+
+class InspectionResult(models.Model):
+    """
+    식약처 수거검사(I0460) 원본 데이터.
+    tkawyprno(수거증번호)를 unique key로 사용하며,
+    판정결과(jdgmnt_cd_nm) 변동을 감지해 2차 알림을 트리거한다.
+    """
+    tkawyprno        = models.CharField(max_length=50, unique=True, verbose_name='수거증번호')
+    plan_titl        = models.CharField(max_length=200, blank=True, verbose_name='수거계획명')
+    bssh_nm          = models.CharField(max_length=200, blank=True, db_index=True, verbose_name='업소명')
+    prdtnm           = models.CharField(max_length=300, blank=True, verbose_name='제품명')
+    prdlst_report_no = models.CharField(max_length=50,  blank=True, db_index=True, verbose_name='품목보고번호')
+    jdgmnt_cd_nm     = models.CharField(max_length=50,  blank=True, verbose_name='판정결과')
+    induty_cd_nm     = models.CharField(max_length=100, blank=True, verbose_name='업종')
+    site_addr        = models.CharField(max_length=300, blank=True, verbose_name='소재지')
+    tkawydtm         = models.CharField(max_length=20,  blank=True, verbose_name='수거일자')
+    tkawyspci_typecd_nm = models.CharField(max_length=50, blank=True, verbose_name='검체구분')
+    exc_instt_nm     = models.CharField(max_length=100, blank=True, verbose_name='수행기관명')
+    last_updt_dtm    = models.CharField(max_length=20,  blank=True, verbose_name='최종수정일시')
+    collected_at     = models.DateTimeField(auto_now_add=True, verbose_name='수집일시')
+
+    class Meta:
+        db_table            = 'inspection_result'
+        ordering            = ['-tkawydtm']
+        verbose_name        = '수거검사 결과'
+        verbose_name_plural = '수거검사 결과 목록'
+        indexes = [
+            models.Index(fields=['tkawydtm']),
+            models.Index(fields=['last_updt_dtm']),
+        ]
+
+    def __str__(self):
+        return f"[{self.tkawydtm}] {self.bssh_nm} / {self.prdtnm} ({self.jdgmnt_cd_nm or '판정전'})"
+
+
+class InspectionMatch(models.Model):
+    """
+    수거검사 결과 ↔ 사용자 매칭 이력.
+    alert_phase:
+      1 = 신규 수거 감지 (최초 매칭)
+      2 = 판정결과 변동 감지
+    match_reason:
+      label_no   = 내제품 품목보고번호 일치
+      license_no = 내정보 인허가번호 포함
+      company    = 내정보 회사명 포함
+    """
+    PHASE_COLLECTION = 1
+    PHASE_JUDGMENT   = 2
+    PHASE_CHOICES = [
+        (PHASE_COLLECTION, '수거 감지'),
+        (PHASE_JUDGMENT,   '판정결과 변동'),
+    ]
+
+    REASON_LABEL   = 'label_no'
+    REASON_LICENSE = 'license_no'
+    REASON_COMPANY = 'company'
+    REASON_CHOICES = [
+        (REASON_LABEL,   '내제품 품목보고번호 일치'),
+        (REASON_LICENSE, '인허가번호 포함'),
+        (REASON_COMPANY, '회사명 포함'),
+    ]
+
+    inspection  = models.ForeignKey(InspectionResult, on_delete=models.CASCADE,
+                                    related_name='matches', verbose_name='수거검사')
+    user        = models.ForeignKey(User, on_delete=models.CASCADE,
+                                    related_name='inspection_matches', verbose_name='사용자')
+    label       = models.ForeignKey('label.MyLabel', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='inspection_matches',
+                                    verbose_name='매칭 제품')
+
+    alert_phase   = models.IntegerField(choices=PHASE_CHOICES, verbose_name='알림 단계')
+    match_reason  = models.CharField(max_length=20, choices=REASON_CHOICES, verbose_name='매칭 사유')
+    matched_value = models.CharField(max_length=100, blank=True, verbose_name='매칭된 값',
+                                     help_text='품목보고번호, 인허가번호, 회사명 중 실제 매칭된 값')
+    prev_judgment = models.CharField(max_length=50, blank=True, verbose_name='이전 판정결과',
+                                     help_text='2차 알림 메시지용')
+
+    notified_at = models.DateTimeField(null=True, blank=True, verbose_name='알림 발송일시')
+    read_yn     = models.BooleanField(default=False, db_index=True, verbose_name='확인 여부')
+    read_at     = models.DateTimeField(null=True, blank=True, verbose_name='확인 일시')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table            = 'inspection_match'
+        ordering            = ['-created_at']
+        verbose_name        = '수거검사 매칭'
+        verbose_name_plural = '수거검사 매칭 목록'
+        indexes = [
+            models.Index(fields=['user', 'read_yn']),
+            models.Index(fields=['inspection', 'user', 'alert_phase']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_alert_phase_display()}] {self.inspection} → {self.user}"

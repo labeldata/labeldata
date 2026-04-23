@@ -16,14 +16,17 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from v1.regulatory.models import NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews
+from v1.regulatory.models import (
+    NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews,
+    InspectionResult, InspectionMatch,
+)
 from v1.mobile.models import AlertRule
 from v1.regulatory.saol_url_map import SAOL_URLS
 from v1.activity_log.utils import log_activity
 
 logger = logging.getLogger(__name__)
 
-# API 서비스별 카테고리 정의 — 3그룹: 부적합 / 행정처분 / 새올민원
+# API 서비스별 카테고리 정의 — 4그룹: 부적합 / 행정처분 / 새올민원 / 수거검사
 API_CATEGORIES = [
     # ─── 부적합 ───────────────────────────────────────────────────────────────
     {'key': 'insp',       'label': '국내 검사부적합',   'group': 'insp',  'api_sources': ['I2620', 'I2640']},
@@ -35,8 +38,11 @@ API_CATEGORIES = [
     {'key': 'I0482',      'label': '수입 행정처분',       'group': 'admin', 'api_sources': ['I0482']},
     # ─── 새올민원 (지자체) ────────────────────────────────────────────────────
     {'key': 'saol_admin', 'label': '지자체 행정처분',    'group': 'saol',  'api_sources': ['saol_admin']},
+    # ─── 수거검사 (I0460) — InspectionResult 별도 모델 ───────────────────────
+    {'key': 'I0460',      'label': '내 수거검사 현황',   'group': 'insp46', 'api_sources': []},
 ]
-_ALL_CAT_KEYS = [c['key'] for c in API_CATEGORIES]
+_ALL_CAT_KEYS     = [c['key'] for c in API_CATEGORIES]
+_REGULAR_CAT_KEYS = [c['key'] for c in API_CATEGORIES if c['group'] != 'insp46']
 
 def _cat_condition(cats):
     """체크박스 카테고리 목록(key들) → Q 객체 (api_source 기반)"""
@@ -71,6 +77,11 @@ def news_list(request):
     cats_submitted = 'cats_sent' in request.GET
     cats = request.GET.getlist('cat') if cats_submitted else _ALL_CAT_KEYS
 
+    # 수거검사 탭 여부 (I0460이 cats에 포함되면 수거검사 목록 표시)
+    show_inspection = 'I0460' in cats
+    # 일반 cat 필터는 I0460 제외하고 처리
+    regular_cats = [c for c in cats if c != 'I0460']
+
     qs = RegulatoryNews.objects.all()
 
     # 기간 필터 — 날짜 범위 우선, 없으면 days
@@ -87,11 +98,10 @@ def news_list(request):
         except (ValueError, TypeError):
             pass
 
-    # 카테고리 필터
-    # 전체 카테고리 선택 시 api_source 필터 생략 → 미정의 api_source 항목도 포함
-    if cats and set(cats) != set(_ALL_CAT_KEYS):
-        qs = qs.filter(_cat_condition(cats))
-    elif not cats:
+    # 카테고리 필터 (수거검사 제외한 일반 카테고리)
+    if regular_cats and set(regular_cats) != set(_REGULAR_CAT_KEYS):
+        qs = qs.filter(_cat_condition(regular_cats))
+    elif not regular_cats:
         qs = qs.none()
 
     # 검색
@@ -318,6 +328,23 @@ def news_list(request):
     admin_cats = [c for c in categories_with_count if c.get('group') == 'admin']
     saol_cats  = [c for c in categories_with_count if c.get('group') == 'saol']
 
+    # ── 수거검사(I0460) — 내 매칭 건수 및 목록 ───────────────────────────────
+    ins_qs = (
+        InspectionMatch.objects
+        .filter(user=request.user)
+        .select_related('inspection', 'label')
+        .order_by('-inspection__tkawydtm', '-alert_phase')
+    )
+    inspection_unread = ins_qs.filter(read_yn=False).count()
+    inspection_total  = ins_qs.count()
+    inspection_list   = ins_qs[:100] if show_inspection else []
+
+    # 수거검사 카테고리 건수 주입
+    insp46_cats = [
+        {**c, 'count': inspection_total}
+        for c in categories_with_count if c.get('group') == 'insp46'
+    ]
+
     # 상세 패널: URL 파라미터로 선택된 뉴스
     selected_id = request.GET.get('id')
     selected_news = None
@@ -411,6 +438,11 @@ def news_list(request):
         'today':              date.today(),
         'saol_site_url':      saol_site_url,
         'alert_rules':        unique_alert_rules,
+        'insp46_cats':        insp46_cats,
+        'show_inspection':    show_inspection,
+        'inspection_list':    inspection_list,
+        'inspection_total':   inspection_total,
+        'inspection_unread':  inspection_unread,
     })
 
 

@@ -89,3 +89,21 @@ def create_user_profile(sender, instance, created, **kwargs):
             email_verification_token='',
             password_reset_token=''
         )
+
+
+@receiver(post_save, sender=UserProfile)
+def backfill_inspection_on_profile_save(sender, instance, created, update_fields, **kwargs):
+    """
+    인허가번호 또는 회사명이 변경될 때 수거검사 소급 매칭 실행.
+    최초 생성(created)은 값이 없으므로 스킵.
+    """
+    if created:
+        return
+    if update_fields and not ({'license_number', 'company_name'} & set(update_fields)):
+        return
+    try:
+        from v1.regulatory.services.collector import backfill_inspection_matches
+        backfill_inspection_matches(instance.user, days=30)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('[I0460 소급] UserProfile 트리거 오류')

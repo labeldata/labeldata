@@ -32,6 +32,7 @@ from datetime import date, datetime
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
+from django.utils import timezone
 
 from v1.regulatory.models import RegulatoryNews
 
@@ -696,3 +697,359 @@ def _row_to_text(row: dict, label: str = '') -> str:
             ko_key = _FIELD_KO.get(k, k)
             lines.append(f'{ko_key}: {v}')
     return header + '\n'.join(lines)
+
+
+# ── 수거검사(I0460) ────────────────────────────────────────────────────────────
+
+def backfill_inspection_matches(user, days: int = 30) -> dict:
+    """
+    사용자가 인허가번호·회사명·품목보고번호를 신규 등록할 때 호출.
+    최근 N일치 InspectionResult를 소급 매칭하고 InspectionMatch를 생성한다.
+
+    - 판정결과가 있는 건(검사 완료): InspectionMatch만 생성, 푸시 없음
+    - 판정결과가 없는 건(검사중):    InspectionMatch 생성 + 묶음 푸시 1건 발송
+
+    Args:
+        user: 소급 매칭 대상 User 인스턴스
+        days: 소급 기간 (기본 30일)
+
+    Returns:
+        {'matched': int, 'pending_push': int}
+    """
+    from datetime import datetime, timedelta
+    from v1.regulatory.models import InspectionResult, InspectionMatch
+    from v1.user_management.models import UserProfile
+    from v1.label.models import MyLabel
+
+    cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
+
+    try:
+        profile = user.userprofile
+        license_no   = (profile.license_number or '').strip()
+        company_name = (profile.company_name   or '').strip()
+    except Exception:
+        license_no   = ''
+        company_name = ''
+
+    labels = MyLabel.objects.filter(user_id=user, delete_YN='N').exclude(prdlst_report_no='')
+
+    # 조건에 해당하는 InspectionResult 추출
+    q = Q()
+    if license_no:
+        q |= Q(prdlst_report_no__contains=license_no)
+    if company_name:
+        q |= Q(bssh_nm__contains=company_name)
+    for label in labels:
+        if label.prdlst_report_no:
+            q |= Q(prdlst_report_no=label.prdlst_report_no)
+
+    if not q:
+        return {'matched': 0, 'pending_push': 0}
+
+    candidates = InspectionResult.objects.filter(q, tkawydtm__gte=cutoff)
+
+    matched      = 0
+    pending_push = []  # 검사중인 건 (판정결과 없음)
+
+    for ins in candidates:
+        # 매칭 사유 결정 (우선순위: 품목보고번호 > 인허가번호 > 회사명)
+        label_obj    = None
+        match_reason = None
+        matched_value = ''
+
+        for label in labels:
+            if label.prdlst_report_no and label.prdlst_report_no == ins.prdlst_report_no:
+                label_obj     = label
+                match_reason  = InspectionMatch.REASON_LABEL
+                matched_value = ins.prdlst_report_no
+                break
+
+        if not match_reason and license_no and license_no in ins.prdlst_report_no:
+            match_reason  = InspectionMatch.REASON_LICENSE
+            matched_value = license_no
+
+        if not match_reason and company_name and company_name in ins.bssh_nm:
+            match_reason  = InspectionMatch.REASON_COMPANY
+            matched_value = company_name
+
+        if not match_reason:
+            continue
+
+        # 이미 매칭된 건 스킵
+        already = InspectionMatch.objects.filter(
+            inspection=ins, user=user, alert_phase=InspectionMatch.PHASE_COLLECTION
+        ).exists()
+        if already:
+            continue
+
+        InspectionMatch.objects.create(
+            inspection    = ins,
+            user          = user,
+            label         = label_obj,
+            alert_phase   = InspectionMatch.PHASE_COLLECTION,
+            match_reason  = match_reason,
+            matched_value = matched_value,
+            prev_judgment = '',
+            notified_at   = None if not ins.jdgmnt_cd_nm else timezone.now(),  # 완료건은 알림 skip
+            read_yn       = False,
+        )
+        matched += 1
+
+        if not ins.jdgmnt_cd_nm:  # 검사중인 건만 푸시 대상
+            pending_push.append(ins)
+
+    # 검사중 건 묶음 푸시 (건별이 아닌 1건 요약 발송)
+    if pending_push:
+        _send_backfill_push(user, pending_push)
+
+    logger.info(f'[I0460 소급] user={user.pk} matched={matched} pending_push={len(pending_push)}')
+    return {'matched': matched, 'pending_push': len(pending_push)}
+
+
+def _send_backfill_push(user, inspections: list) -> None:
+    """소급 매칭된 검사중 건 묶음 푸시."""
+    from v1.mobile.models import AppDevice
+    from v1.mobile.services.push_service import _get_fcm_access_token
+    import requests
+    from django.conf import settings
+
+    project_id = getattr(settings, 'FCM_PROJECT_ID', '')
+    if not project_id:
+        return
+
+    device = AppDevice.objects.filter(user=user).order_by('-updated_at').first()
+    if not device or not device.fcm_token:
+        return
+
+    access_token = _get_fcm_access_token()
+    if not access_token:
+        return
+
+    count = len(inspections)
+    if count == 1:
+        ins   = inspections[0]
+        title = '🔍 수거검사 현황 안내'
+        body  = f'{(ins.prdtnm or ins.bssh_nm)[:30]} — 검사 진행 중'
+    else:
+        title = f'🔍 수거검사 현황 안내 ({count}건)'
+        body  = f'내 제품·업소 관련 수거검사 {count}건이 진행 중입니다.'
+
+    try:
+        resp = requests.post(
+            f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json',
+            },
+            json={
+                'message': {
+                    'token': device.fcm_token,
+                    'notification': {'title': title, 'body': body},
+                    'data': {
+                        'type':       'inspection_backfill',
+                        'count':      str(count),
+                    },
+                    'android': {
+                        'priority': 'high',
+                        'notification': {
+                            'channel_id': 'food_safety_high',
+                            'sound': 'default',
+                        },
+                    },
+                    'apns': {
+                        'payload': {'aps': {'sound': 'default'}},
+                        'headers': {'apns-priority': '10'},
+                    },
+                },
+            },
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            logger.warning(f'[I0460 소급 푸시] 실패 {resp.status_code}: {resp.text[:200]}')
+    except Exception as e:
+        logger.warning(f'[I0460 소급 푸시] 오류: {e}')
+
+
+def collect_inspection_data(last_updt_dtm: str | None = None, page_size: int = 1000) -> dict:
+    """
+    식약처 수거검사(I0460) 데이터를 수집해 InspectionResult에 저장하고,
+    판정결과 변동을 감지해 InspectionMatch를 생성한다.
+
+    Args:
+        last_updt_dtm: 증분 수집 기준일 (YYYYMMDD). None이면 전체 수집.
+        page_size: 1회 API 요청당 건수 (최대 1000).
+
+    Returns:
+        {'created': int, 'updated': int, 'skipped': int}
+    """
+    from v1.regulatory.models import InspectionResult
+
+    api_key  = getattr(settings, 'FOODSAFETY_API_KEY', '')
+    base_url = f'{DOM_API_BASE}/{api_key}/I0460/json'
+
+    counts = {'created': 0, 'updated': 0, 'skipped': 0}
+    start  = 1
+
+    while True:
+        end = start + page_size - 1
+        url = f'{base_url}/{start}/{end}'
+        params = {}
+        if last_updt_dtm:
+            params['LAST_UPDT_DTM'] = last_updt_dtm
+
+        try:
+            resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            logger.error(f'[I0460] API 호출 실패 start={start}: {exc}')
+            break
+
+        rows = (data.get('I0460') or {}).get('row') or []
+        if not rows:
+            break
+
+        for row in rows:
+            prno = (row.get('TKAWYPRNO') or '').strip()
+            if not prno:
+                counts['skipped'] += 1
+                continue
+
+            new_judgment = (row.get('JDGMNT_CD_NM') or '').strip()
+            fields = {
+                'plan_titl':            (row.get('PLAN_TITL')              or '').strip(),
+                'bssh_nm':              (row.get('BSSH_NM')                or '').strip(),
+                'prdtnm':               (row.get('PRDTNM')                 or '').strip(),
+                'prdlst_report_no':     (row.get('PRDLST_REPORT_NO')       or '').strip(),
+                'jdgmnt_cd_nm':         new_judgment,
+                'induty_cd_nm':         (row.get('PRCSCITYPOINT_INDUTYCD_NM') or '').strip(),
+                'site_addr':            (row.get('SITE_ADDR')              or '').strip(),
+                'tkawydtm':             (row.get('TKAWYDTM')               or '').strip(),
+                'tkawyspci_typecd_nm':  (row.get('TKAWYSPCI_TYPECD_NM')    or '').strip(),
+                'exc_instt_nm':         (row.get('EXC_INSTT_NM')           or '').strip(),
+                'last_updt_dtm':        (row.get('LAST_UPDT_DTM')          or '').strip(),
+            }
+
+            try:
+                obj = InspectionResult.objects.get(tkawyprno=prno)
+                # 판정결과 변동 감지
+                prev_judgment = obj.jdgmnt_cd_nm
+                judgment_changed = prev_judgment != new_judgment and new_judgment
+                for attr, val in fields.items():
+                    setattr(obj, attr, val)
+                obj.save()
+                counts['updated'] += 1
+                if judgment_changed:
+                    _trigger_inspection_match(obj, prev_judgment=prev_judgment, is_new=False)
+            except InspectionResult.DoesNotExist:
+                obj = InspectionResult.objects.create(tkawyprno=prno, **fields)
+                counts['created'] += 1
+                _trigger_inspection_match(obj, prev_judgment='', is_new=True)
+
+        if len(rows) < page_size:
+            break
+        start += page_size
+        time.sleep(0.5)
+
+    logger.info(f'[I0460] 수집 완료: {counts}')
+    return counts
+
+
+def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> None:
+    """
+    InspectionResult 1건에 대해 매칭 대상 사용자를 찾아 InspectionMatch를 생성한다.
+
+    매칭 조건 (OR):
+      1. 내제품(MyLabel.prdlst_report_no) == inspection.prdlst_report_no
+      2. 내정보(UserProfile.license_number) in inspection.prdlst_report_no
+      3. 내정보(UserProfile.company_name)  in inspection.bssh_nm
+    """
+    from django.utils import timezone
+    from v1.regulatory.models import InspectionMatch
+    from v1.label.models import MyLabel
+    from v1.user_management.models import UserProfile
+
+    report_no  = inspection.prdlst_report_no
+    bssh_nm    = inspection.bssh_nm
+    alert_phase = InspectionMatch.PHASE_COLLECTION if is_new else InspectionMatch.PHASE_JUDGMENT
+
+    # 매칭된 (user, label, reason, matched_value) 목록 수집 (user 중복 허용 안 함)
+    matched: dict[int, dict] = {}  # user_id → match info
+
+    # ── 조건 1: 내제품 품목보고번호 일치 ──────────────────────────────────────
+    if report_no:
+        labels = (
+            MyLabel.objects
+            .filter(prdlst_report_no=report_no, delete_YN='N')
+            .select_related('user_id')
+        )
+        for label in labels:
+            uid = label.user_id_id
+            if uid not in matched:
+                matched[uid] = {
+                    'label':         label,
+                    'match_reason':  InspectionMatch.REASON_LABEL,
+                    'matched_value': report_no,
+                }
+
+    # ── 조건 2 & 3: 내정보 인허가번호 / 회사명 ────────────────────────────────
+    profiles = UserProfile.objects.exclude(
+        license_number='', company_name=''
+    ).values('user_id', 'license_number', 'company_name')
+
+    for profile in profiles:
+        uid = profile['user_id']
+        if uid in matched:
+            continue
+
+        license_no   = (profile['license_number'] or '').strip()
+        company_name = (profile['company_name']   or '').strip()
+
+        if license_no and report_no and license_no in report_no:
+            matched[uid] = {
+                'label':         None,
+                'match_reason':  InspectionMatch.REASON_LICENSE,
+                'matched_value': license_no,
+            }
+        elif company_name and bssh_nm and company_name in bssh_nm:
+            matched[uid] = {
+                'label':         None,
+                'match_reason':  InspectionMatch.REASON_COMPANY,
+                'matched_value': company_name,
+            }
+
+    if not matched:
+        return
+
+    from django.contrib.auth.models import User
+    now = timezone.now()
+
+    for uid, info in matched.items():
+        try:
+            user = User.objects.get(pk=uid)
+        except User.DoesNotExist:
+            continue
+
+        # 같은 단계의 매칭이 이미 존재하면 스킵
+        exists = InspectionMatch.objects.filter(
+            inspection=inspection, user=user, alert_phase=alert_phase
+        ).exists()
+        if exists:
+            continue
+
+        InspectionMatch.objects.create(
+            inspection    = inspection,
+            user          = user,
+            label         = info['label'],
+            alert_phase   = alert_phase,
+            match_reason  = info['match_reason'],
+            matched_value = info['matched_value'],
+            prev_judgment = prev_judgment if not is_new else '',
+            notified_at   = None,
+            read_yn       = False,
+        )
+
+    logger.info(
+        f'[I0460] InspectionMatch 생성: inspection={inspection.tkawyprno} '
+        f'phase={alert_phase} matched_users={list(matched.keys())}'
+    )

@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils import timezone  # timezone 모듈 import 추가
 from .constants import CATEGORY_CHOICES
 
@@ -559,3 +561,24 @@ class ExpiryRecommendation(models.Model):
             return f"{self.food_type}: {self.shelf_life}{self.unit}"
         return f"{self.food_type}: {self.shelf_life}"
 
+
+
+
+@receiver(post_save, sender=MyLabel)
+def backfill_inspection_on_label_save(sender, instance, created, update_fields, **kwargs):
+    """
+    MyLabel에 품목보고번호가 신규 입력될 때 수거검사 소급 매칭 실행.
+    삭제된 제품(delete_YN='Y')은 스킵.
+    """
+    if instance.delete_YN == 'Y':
+        return
+    if not instance.prdlst_report_no:
+        return
+    if update_fields and 'prdlst_report_no' not in update_fields:
+        return
+    try:
+        from v1.regulatory.services.collector import backfill_inspection_matches
+        backfill_inspection_matches(instance.user_id, days=30)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('[I0460 소급] MyLabel 트리거 오류')

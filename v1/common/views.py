@@ -330,6 +330,8 @@ def call_api_endpoint(request, pk):
         return call_imported_food_api_endpoint(request, pk, start_date=change_date)
     elif endpoint.service_name == "AGRICULTURAL_PRODUCT":
         return call_agricultural_product_api_endpoint(request, pk)
+    elif endpoint.service_name == "I0460":
+        return call_inspection_api_endpoint(request, endpoint, change_date)
 
     service_info = SERVICE_MAPPING.get(endpoint.service_name)
     if not service_info:
@@ -696,6 +698,53 @@ def call_imported_food_api_endpoint(request, pk, start_date=None):
         endpoint.last_status = "failure"
         endpoint.save()
         return JsonResponse({"error": str(e)}, status=500)
+
+def call_inspection_api_endpoint(request, endpoint, last_updt_dtm: str):
+    """
+    수거검사(I0460) 데이터를 수집하고 사용자 매칭 + FCM 알림을 실행한다.
+    Admin에서 ApiEndpoint(service_name='I0460') 등록 후 trigger_action으로 호출.
+    """
+    from v1.regulatory.services.collector import collect_inspection_data
+    from v1.regulatory.models import InspectionMatch
+    from v1.mobile.services.push_service import send_inspection_alerts
+
+    try:
+        counts = collect_inspection_data(last_updt_dtm=last_updt_dtm)
+
+        # 미발송 매칭 건에 대해 FCM 발송
+        pending_inspections = (
+            InspectionMatch.objects
+            .filter(notified_at__isnull=True)
+            .values_list('inspection_id', flat=True)
+            .distinct()
+        )
+        fcm_sent = 0
+        for ins_id in pending_inspections:
+            from v1.regulatory.models import InspectionResult
+            try:
+                ins = InspectionResult.objects.get(pk=ins_id)
+                fcm_sent += send_inspection_alerts(ins)
+            except InspectionResult.DoesNotExist:
+                pass
+
+        endpoint.last_called_at = datetime.now()
+        endpoint.last_status    = 'success'
+        endpoint.save(update_fields=['last_called_at', 'last_status'])
+
+        msg = (
+            f"[I0460] 수집 완료 — "
+            f"신규: {counts['created']}건, 갱신: {counts['updated']}건, "
+            f"알림 발송: {fcm_sent}건"
+        )
+        logger.info(msg)
+        return JsonResponse({'status': 'success', 'message': msg, 'counts': counts})
+
+    except Exception as exc:
+        logger.error(f'[I0460] 수집 오류: {exc}', exc_info=True)
+        endpoint.last_status = 'error'
+        endpoint.save(update_fields=['last_status'])
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=500)
+
 
 def call_agricultural_product_api_endpoint(request, pk):
     """

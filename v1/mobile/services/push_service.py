@@ -357,3 +357,107 @@ def _send_fcm(token: str, news, trigger_type: str = 'keyword', trigger_label: st
             logger.warning(f'[FCM] 발송 실패 {resp.status_code}: {resp.text[:200]}')
     except Exception as e:
         logger.warning(f'[FCM] 발송 실패 (token={token[:20]}...): {e}')
+
+
+def send_inspection_alerts(inspection) -> int:
+    """
+    InspectionResult에 대해 미발송 InspectionMatch를 찾아 FCM 알림을 발송한다.
+
+    Returns: 발송된 알림 수
+    """
+    from django.utils import timezone
+    from v1.regulatory.models import InspectionMatch
+    from v1.mobile.models import AppDevice, PushNotificationLog
+
+    pending = InspectionMatch.objects.filter(
+        inspection=inspection,
+        notified_at__isnull=True,
+    ).select_related('user', 'inspection')
+
+    sent = 0
+    for match in pending:
+        try:
+            device = AppDevice.objects.filter(user=match.user).order_by('-updated_at').first()
+            if not device or not device.fcm_token:
+                continue
+
+            _send_fcm_inspection(device.fcm_token, match)
+
+            match.notified_at = timezone.now()
+            match.save(update_fields=['notified_at'])
+
+            PushNotificationLog.objects.create(
+                device=device,
+                news=None,
+                trigger_type='inspection',
+                trigger_label=match.matched_value,
+            )
+            sent += 1
+        except Exception as exc:
+            logger.warning(f'[I0460] 알림 발송 실패 match={match.pk}: {exc}')
+
+    return sent
+
+
+def _send_fcm_inspection(token: str, match) -> None:
+    """수거검사 전용 FCM 발송."""
+    import requests
+    from django.conf import settings
+
+    project_id = getattr(settings, 'FCM_PROJECT_ID', '')
+    if not project_id:
+        return
+
+    access_token = _get_fcm_access_token()
+    if not access_token:
+        return
+
+    ins = match.inspection
+    product_label = (ins.prdtnm or ins.bssh_nm or '제품')[:40]
+    plan = f' ({ins.plan_titl})' if ins.plan_titl else ''
+
+    if match.alert_phase == match.PHASE_COLLECTION:
+        title = '🔍 수거검사 접수'
+        body  = f'{product_label} 수거 접수{plan}'
+    else:
+        judgment = ins.jdgmnt_cd_nm or '결과 변동'
+        title = '⚠️ 수거검사 판정결과 변동'
+        body  = f'{product_label} → {judgment}'
+
+    try:
+        resp = requests.post(
+            f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json',
+            },
+            json={
+                'message': {
+                    'token': token,
+                    'notification': {'title': title, 'body': body},
+                    'data': {
+                        'inspection_id': str(ins.pk),
+                        'alert_phase':   str(match.alert_phase),
+                        'type':          'inspection_alert',
+                    },
+                    'android': {
+                        'priority': 'high',
+                        'notification': {
+                            'channel_id': 'food_safety_high',
+                            'notification_priority': 'PRIORITY_MAX',
+                            'sound': 'default',
+                            'default_vibrate_timings': True,
+                        },
+                    },
+                    'apns': {
+                        'payload': {'aps': {'sound': 'default'}},
+                        'headers': {'apns-priority': '10'},
+                    },
+                },
+            },
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            logger.warning(f'[FCM-I0460] 발송 실패 {resp.status_code}: {resp.text[:200]}')
+    except Exception as e:
+        logger.warning(f'[FCM-I0460] 발송 실패 (token={token[:20]}...): {e}')
