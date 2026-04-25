@@ -626,6 +626,23 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 
 .rs-insp-empty { padding: 16px 12px; text-align: center; font-size: 13px; color: var(--c-text-hint); }
 
+/* 수거검사 진행상태 badge (접수 / 검사 중 / 적합 / 부적합) */
+.rs-insp-status           { display: inline-block; font-size: 10px; font-weight: 700;
+                             padding: 1px 6px; border-radius: var(--r-xs); flex-shrink: 0; }
+.rs-insp-status--recv     { background: #f1f3f4; color: #5f6368; }                    /* 접수 */
+.rs-insp-status--prog     { background: #e8f0fe; color: #1967d2; }                    /* 검사 중 */
+.rs-insp-status--ok       { background: var(--c-ok-bg); color: var(--c-ok-text); }    /* 적합 */
+.rs-insp-status--fail     { background: var(--c-danger-bg); color: var(--c-danger-text); } /* 부적합 */
+
+/* 2행: 회사명 및 수행기관 */
+.rs-insp-bssh      { font-size: 11px; color: var(--c-text-secondary); flex-shrink: 0;
+                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.rs-insp-excinstt  { font-size: 10px; color: var(--c-text-hint); margin-left: auto;
+                     white-space: nowrap; flex-shrink: 0; }
+.rs-insp-plan-titl { font-size: 11px; color: var(--c-text-muted);
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                     flex: 1; min-width: 0; }
+
 /* ── 31. 수거검사 상세 패널 ──────────────────────────────── */
 .rd-insp-panel  { padding: 20px 24px; max-width: 700px; }
 .rd-insp-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -679,6 +696,17 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
                               border-radius: var(--r-sm); padding: 2px 8px; cursor: pointer;
                               margin-left: 8px; white-space: nowrap; }
 .rs-insp-readall-btn:hover { background: var(--c-primary-bg2); border-color: #8ab4f8; }
+
+/* 수거검사 상태 필터 버튼 */
+.rs-insp-filter            { display: flex; gap: 4px; padding: 6px 12px;
+                              background: var(--c-bg-page); border-bottom: 1px solid var(--c-border-light); }
+.rs-insp-filter-btn        { font-size: 11px; font-weight: 600; padding: 3px 10px;
+                              border-radius: 12px; border: 1px solid #dadce0;
+                              background: #fff; color: var(--c-text-secondary);
+                              cursor: pointer; transition: all .15s; white-space: nowrap; }
+.rs-insp-filter-btn:hover  { border-color: var(--c-primary); color: var(--c-primary); }
+.rs-insp-filter-btn--on    { background: var(--c-primary); border-color: var(--c-primary);
+                              color: #fff; }
 
 /* 해당없음(삭제) 버튼 */
 .rd-insp-actions      { margin-top: 14px; }

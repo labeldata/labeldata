@@ -760,7 +760,7 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
     cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
 
     try:
-        profile = user.userprofile
+        profile = user.profile
         license_no   = (profile.license_number or '').strip()
         company_name = (profile.company_name   or '').strip()
     except Exception:
@@ -809,9 +809,9 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
                 match_reason  = InspectionMatch.REASON_LICENSE
                 matched_value = license_no
 
-        # 조건 3: 회사명 정규화 완전일치 (포함 아님)
+        # 조건 3: 회사명 정규화 후 포함 일치 (법인명 제거 후 사용자 입력이 업체명에 포함되면 매칭)
         if not match_reason and norm_company and len(norm_company) >= 2 and ins.bssh_nm:
-            if norm_company == _normalize_corp_name(ins.bssh_nm):
+            if norm_company in _normalize_corp_name(ins.bssh_nm):
                 match_reason  = InspectionMatch.REASON_COMPANY
                 matched_value = company_name
 
@@ -833,15 +833,15 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
             match_reason  = match_reason,
             matched_value = matched_value,
             prev_judgment = '',
-            notified_at   = None if not ins.jdgmnt_cd_nm else timezone.now(),  # 완료건은 알림 skip
+            notified_at   = None if ins.jdgmnt_cd_nm in ('', '검토중') else timezone.now(),  # 판정 완료건은 알림 skip
             read_yn       = False,
         )
         matched += 1
 
-        if not ins.jdgmnt_cd_nm:  # 검사중인 건만 푸시 대상
+        if ins.jdgmnt_cd_nm in ('', '검토중'):  # 검사중·검토중인 건 모두 푸시 대상
             pending_push.append(ins)
 
-    # 검사중 건 묶음 푸시 (건별이 아닌 1건 요약 발송)
+    # 검사중·검토중 건 묶음 푸시 (건별이 아닌 1건 요약 발송)
     if pending_push:
         _send_backfill_push(user, pending_push)
 
@@ -860,7 +860,7 @@ def _send_backfill_push(user, inspections: list) -> None:
     if not project_id:
         return
 
-    device = AppDevice.objects.filter(user=user).order_by('-updated_at').first()
+    device = AppDevice.objects.filter(user=user).order_by('-last_active_at').first()
     if not device or not device.fcm_token:
         return
 
@@ -870,9 +870,10 @@ def _send_backfill_push(user, inspections: list) -> None:
 
     count = len(inspections)
     if count == 1:
-        ins   = inspections[0]
-        title = '🔍 수거검사 현황 안내'
-        body  = f'{(ins.prdtnm or ins.bssh_nm)[:30]} — 검사 진행 중'
+        ins    = inspections[0]
+        status = '검토중' if ins.jdgmnt_cd_nm == '검토중' else '검사 진행 중'
+        title  = '🔍 수거검사 현황 안내'
+        body   = f'{(ins.prdtnm or ins.bssh_nm)[:30]} — {status}'
     else:
         title = f'🔍 수거검사 현황 안내 ({count}건)'
         body  = f'내 제품·업소 관련 수거검사 {count}건이 진행 중입니다.'
@@ -913,7 +914,11 @@ def _send_backfill_push(user, inspections: list) -> None:
         logger.warning(f'[I0460 소급 푸시] 오류: {e}')
 
 
-def collect_inspection_data(last_updt_dtm: str | None = None, page_size: int = 1000) -> dict:
+def collect_inspection_data(
+    last_updt_dtm: str | None = None,
+    page_size: int = 1000,
+    skip_trigger: bool = False,
+) -> dict:
     """
     식약처 수거검사(I0460) 데이터를 수집해 InspectionResult에 저장하고,
     판정결과 변동을 감지해 InspectionMatch를 생성한다.
@@ -921,6 +926,8 @@ def collect_inspection_data(last_updt_dtm: str | None = None, page_size: int = 1
     Args:
         last_updt_dtm: 증분 수집 기준일 (YYYYMMDD). None이면 전체 수집.
         page_size: 1회 API 요청당 건수 (최대 1000).
+        skip_trigger: True이면 매칭·알림 트리거를 생략하고 DB 저장만 수행.
+                      대량 초기 적재 시 사용 후 --backfill-inspection으로 일괄 매칭.
 
     Returns:
         {'created': int, 'updated': int, 'skipped': int}
@@ -982,14 +989,15 @@ def collect_inspection_data(last_updt_dtm: str | None = None, page_size: int = 1
                     setattr(obj, attr, val)
                 obj.save()
                 counts['updated'] += 1
-                if judgment_changed:
+                if not skip_trigger and judgment_changed:
                     _trigger_inspection_match(obj, prev_judgment=prev_judgment, is_new=False)
                     send_inspection_alerts(obj)
             except InspectionResult.DoesNotExist:
                 obj = InspectionResult.objects.create(tkawyprno=prno, **fields)
                 counts['created'] += 1
-                _trigger_inspection_match(obj, prev_judgment='', is_new=True)
-                send_inspection_alerts(obj)
+                if not skip_trigger:
+                    _trigger_inspection_match(obj, prev_judgment='', is_new=True)
+                    send_inspection_alerts(obj)
 
         if len(rows) < page_size:
             break
@@ -1075,8 +1083,8 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
                 'match_reason':  InspectionMatch.REASON_LICENSE,
                 'matched_value': license_no,
             }
-        # 조건 3: 회사명 정규화 완전일치
-        elif company_name and norm_bssh and len(company_name) >= 2 and _normalize_corp_name(company_name) == norm_bssh:
+        # 조건 3: 회사명 정규화 후 포함 일치 (법인명 제거 후 사용자 입력이 업체명에 포함되면 매칭)
+        elif company_name and norm_bssh and len(company_name) >= 2 and _normalize_corp_name(company_name) in norm_bssh:
             matched[uid] = {
                 'label':         None,
                 'match_reason':  InspectionMatch.REASON_COMPANY,

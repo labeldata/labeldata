@@ -387,7 +387,7 @@ def send_inspection_alerts(inspection) -> int:
     sent = 0
     for match in pending:
         try:
-            device = AppDevice.objects.filter(user=match.user).order_by('-updated_at').first()
+            device = AppDevice.objects.filter(user=match.user).order_by('-last_active_at').first()
             if not device or not device.fcm_token:
                 continue
 
@@ -427,8 +427,12 @@ def _send_fcm_inspection(token: str, match) -> None:
     plan = f' ({ins.plan_titl})' if ins.plan_titl else ''
 
     if match.alert_phase == match.PHASE_COLLECTION:
-        title = '🔍 수거검사 접수'
-        body  = f'{product_label} 수거 접수{plan}'
+        if ins.jdgmnt_cd_nm == '검토중':
+            title = '🔍 수거검사 검토중'
+            body  = f'{product_label} 판정 검토 중{plan}'
+        else:
+            title = '🔍 수거검사 접수'
+            body  = f'{product_label} 수거 접수{plan}'
     else:
         judgment = ins.jdgmnt_cd_nm or '결과 변동'
         title = '⚠️ 수거검사 판정결과 변동'

@@ -345,31 +345,51 @@
       <div class="rs-list-body">
         {# ── 수거검사(I0460) 항목을 리스트 상단에 통합 표시 ── #}
         {% if show_inspection %}
+          {# ── 검사상태 필터 버튼 ── #}
+          {% if inspection_list %}
+          <div class="rs-insp-filter" id="inspFilterBar">
+            <button type="button" class="rs-insp-filter-btn rs-insp-filter-btn--on" id="inspFilterAll"
+                    onclick="inspFilter('all')">전체</button>
+            <button type="button" class="rs-insp-filter-btn" id="inspFilterPending"
+                    onclick="inspFilter('pending')">진행 중</button>
+            <button type="button" class="rs-insp-filter-btn" id="inspFilterDone"
+                    onclick="inspFilter('done')">완료</button>
+          </div>
+          {% endif %}
           {% for m in inspection_list %}
           <div class="rs-item rs-item--insp
                       {% if not m.read_yn %}rs-item--insp-unread{% endif %}
                       {% if selected_insp and selected_insp.id == m.id %}active{% endif %}"
+               data-insp-status="{% if m.inspection.jdgmnt_cd_nm == '' or m.inspection.jdgmnt_cd_nm == '검토중' %}pending{% else %}done{% endif %}"
                onclick="selectInspection({{ m.id }})">
             <div class="rs-row1">
               {% if not m.read_yn %}<span class="rs-unread-dot"></span>{% endif %}
-              <span class="rs-item-flag">🔍</span>
               <span class="rs-item-name">{{ m.inspection.prdtnm|default:m.inspection.bssh_nm }}</span>
+              {# 진행상태 badge #}
+              {% if m.inspection.jdgmnt_cd_nm == '' %}
+                <span class="rs-insp-status rs-insp-status--recv">접수</span>
+              {% elif m.inspection.jdgmnt_cd_nm == '검토중' %}
+                <span class="rs-insp-status rs-insp-status--prog">검사 중</span>
+              {% elif '부적합' in m.inspection.jdgmnt_cd_nm %}
+                <span class="rs-insp-status rs-insp-status--fail">부적합</span>
+              {% else %}
+                <span class="rs-insp-status rs-insp-status--ok">적합</span>
+              {% endif %}
+              {# 수거 날짜 #}
               <span class="rs-item-date">{{ m.inspection.tkawydtm|slice:"4:6" }}/{{ m.inspection.tkawydtm|slice:"6:8" }}</span>
+              {# 수행기관 #}
+              <span class="rs-insp-excinstt">{{ m.inspection.exc_instt_nm|truncatechars:10 }}</span>
             </div>
             <div class="rs-row2">
               {% if m.alert_phase == 2 %}
                 <span class="rs-insp-badge-phase rs-insp-badge-phase--2">판정변동</span>
               {% else %}
-                <span class="rs-insp-badge-phase rs-insp-badge-phase--1">수거접수</span>
+                <span class="rs-insp-badge-phase rs-insp-badge-phase--1">수거검사</span>
               {% endif %}
-              {% if m.inspection.jdgmnt_cd_nm %}
-                <span class="rs-insp-judgment {% if '부적합' in m.inspection.jdgmnt_cd_nm %}rs-insp-judgment--fail{% endif %}">
-                  {{ m.inspection.jdgmnt_cd_nm }}
-                </span>
-              {% else %}
-                <span class="rs-insp-judgment rs-insp-judgment--pending">검사중</span>
+              <span class="rs-insp-bssh">{{ m.inspection.bssh_nm|truncatechars:16 }}</span>
+              {% if m.inspection.plan_titl %}
+              <span class="rs-insp-plan-titl">{{ m.inspection.plan_titl }}</span>
               {% endif %}
-              <span class="rs-row2-right">{{ m.inspection.bssh_nm|truncatechars:18 }}{% if m.inspection.plan_titl %} · {{ m.inspection.plan_titl|truncatechars:14 }}{% endif %}</span>
             </div>
             {% if m.alert_phase == 2 and m.prev_judgment %}
             <div class="rs-insp-row3">
@@ -651,6 +671,29 @@ function inspMarkAllRead() {
   }).catch(function(){});
 }
 window.inspMarkAllRead = inspMarkAllRead;
+
+// ── 수거검사 상태 필터 ─────────────────────────────────────────────────────
+function inspFilter(type) {
+  document.querySelectorAll('.rs-insp-filter-btn').forEach(function(b) {
+    b.classList.remove('rs-insp-filter-btn--on');
+  });
+  var activeBtn = document.getElementById(
+    type === 'pending' ? 'inspFilterPending' : type === 'done' ? 'inspFilterDone' : 'inspFilterAll'
+  );
+  if (activeBtn) activeBtn.classList.add('rs-insp-filter-btn--on');
+
+  document.querySelectorAll('.rs-item--insp').forEach(function(el) {
+    var status = el.dataset.inspStatus;
+    if (type === 'all') {
+      el.style.display = '';
+    } else if (type === 'pending') {
+      el.style.display = (status === 'pending') ? '' : 'none';
+    } else {
+      el.style.display = (status === 'done') ? '' : 'none';
+    }
+  });
+}
+window.inspFilter = inspFilter;
 
 // ── 수거검사 해당없음(삭제) ─────────────────────────────────────────────────
 function inspDismiss(matchId) {
