@@ -735,6 +735,18 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
 
     labels = MyLabel.objects.filter(user_id=user, delete_YN='N').exclude(prdlst_report_no='')
 
+    # AlertRule COMPANY 키워드도 수거검사 매칭에 포함
+    try:
+        from v1.mobile.models import AlertRule
+        alert_company_kws = list(
+            AlertRule.objects
+            .filter(device__user=user, is_active=True, category='COMPANY')
+            .values_list('keyword', flat=True)
+            .distinct()
+        )
+    except Exception:
+        alert_company_kws = []
+
     # 조건에 해당하는 InspectionResult 추출
     q = Q()
     if license_no:
@@ -742,6 +754,9 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
     if company_name and len(company_name) >= 2:
         # 정규화 후 포함 여부를 DB contains로 1차 후보 추출, Python에서 _normalize_corp_name으로 정밀 검사
         q |= Q(bssh_nm__contains=_normalize_corp_name(company_name))
+    for kw in alert_company_kws:
+        if kw and len(kw) >= 2:
+            q |= Q(bssh_nm__contains=kw)
     for label in labels:
         if label.prdlst_report_no:
             q |= Q(prdlst_report_no=label.prdlst_report_no)
@@ -1038,6 +1053,33 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
                 'match_reason':  InspectionMatch.REASON_COMPANY,
                 'matched_value': company_name,
             }
+
+    # ── 조건 4: AlertRule COMPANY 키워드 포함 매칭 ───────────────────────────
+    if norm_bssh or bssh_nm:
+        try:
+            from v1.mobile.models import AlertRule
+            kw_rules = (
+                AlertRule.objects
+                .filter(is_active=True, category='COMPANY')
+                .values('device__user_id', 'keyword', 'match_type')
+            )
+            for r in kw_rules:
+                uid = r['device__user_id']
+                if uid is None or uid in matched:
+                    continue
+                kw = (r['keyword'] or '').strip()
+                if not kw or len(kw) < 2:
+                    continue
+                target = norm_bssh if norm_bssh else bssh_nm
+                hit = (kw in target) if r['match_type'] == 'CONTAINS' else (kw == target)
+                if hit:
+                    matched[uid] = {
+                        'label':         None,
+                        'match_reason':  InspectionMatch.REASON_COMPANY,
+                        'matched_value': kw,
+                    }
+        except Exception:
+            pass
 
     if not matched:
         return

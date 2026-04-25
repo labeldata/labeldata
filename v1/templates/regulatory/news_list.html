@@ -261,7 +261,7 @@
 
   {# ─── 알림 키워드 관리 모달 ─── #}
   <div class="modal fade" id="keywordManageModal" tabindex="-1">
-    <div class="modal-dialog modal-md">
+    <div class="modal-dialog kw-modal-dialog">
       <div class="modal-content kw-modal">
         <div class="modal-header kw-modal-header">
           <span class="kw-modal-title"><i class="bi bi-bell-fill text-warning me-2"></i>앱 알림 키워드 관리</span>
@@ -301,21 +301,20 @@
                 <option value="ORIGIN">원산지</option>
               </select>
               <input type="text" id="kwKeyword" class="form-control form-control-sm kw-input"
-                     placeholder="키워드 입력 (예: 살모넬라, 중국산, 홍삼)" maxlength="100"
+                     placeholder="키워드 입력" maxlength="100"
                      onkeydown="if(event.key==='Enter'){saveKeyword();}"
                      oninput="var r=document.getElementById('kwBackfillResult');if(r)r.style.display='none';">
-              <select id="kwMatchType" class="form-select form-select-sm kw-select kw-select-match">
+              <select id="kwMatchType" class="form-select form-select-sm kw-select-match">
                 <option value="CONTAINS">포함</option>
                 <option value="EXACT">일치</option>
               </select>
               <button type="button" class="btn btn-sm btn-primary kw-add-btn" id="kwSaveBtn" onclick="saveKeyword()">
-                <i class="bi bi-plus-lg"></i>
+                <i class="bi bi-plus-lg"></i> 추가
               </button>
             </div>
             <div id="kwError" class="text-danger small mt-1" style="display:none"></div>
             <div class="kw-add-help text-muted small mt-1">
-              <strong>포함</strong>: 부분 일치 &nbsp;|&nbsp; <strong>일치</strong>: 완전 일치 &nbsp;|&nbsp;
-              등록 즉시 기존 데이터도 소급 매칭됩니다
+              포함: 부분 일치 &nbsp;|&nbsp; 일치: 완전 일치 &nbsp;|&nbsp; 등록 즉시 기존 데이터도 소급 매칭됩니다
             </div>
           </div>
 

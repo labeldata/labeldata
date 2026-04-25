@@ -190,8 +190,12 @@ def backfill_alerts_for_rule(rule) -> dict:
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
     device = rule.device
 
-    # AI 파싱 완료된 것만 대상 — 최신순으로 읽어 미리보기도 최신 기준
-    qs = RegulatoryNews.objects.filter(ai_parsed=True).order_by('-event_date', '-collected_date')
+    # COMPANY 키워드는 AI 파싱 전에도 company_name이 있으므로 전체 대상
+    # INGREDIENT/ORIGIN은 ai_keywords 의존 → ai_parsed=True 필터
+    if rule.category == 'COMPANY':
+        qs = RegulatoryNews.objects.all().order_by('-event_date', '-collected_date')
+    else:
+        qs = RegulatoryNews.objects.filter(ai_parsed=True).order_by('-event_date', '-collected_date')
 
     created_count = 0
     previews = []
