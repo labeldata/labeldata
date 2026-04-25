@@ -32,7 +32,9 @@ from datetime import date, datetime
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
+from v1.mobile.services.push_service import send_inspection_alerts
 
 from v1.regulatory.models import RegulatoryNews
 
@@ -737,9 +739,9 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
     q = Q()
     if license_no:
         q |= Q(prdlst_report_no__contains=license_no)
-    if company_name:
-        # 정규화 완전일치를 위해 DB에서는 contains로 후보 추출, Python에서 정밀 검사
-        q |= Q(bssh_nm__contains=company_name)
+    if company_name and len(company_name) >= 2:
+        # 정규화 후 포함 여부를 DB contains로 1차 후보 추출, Python에서 _normalize_corp_name으로 정밀 검사
+        q |= Q(bssh_nm__contains=_normalize_corp_name(company_name))
     for label in labels:
         if label.prdlst_report_no:
             q |= Q(prdlst_report_no=label.prdlst_report_no)
@@ -769,7 +771,7 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
             match_reason  = InspectionMatch.REASON_LICENSE
             matched_value = license_no
 
-        if not match_reason and company_name and company_name in ins.bssh_nm:
+        if not match_reason and company_name and len(company_name) >= 2 and _normalize_corp_name(company_name) in _normalize_corp_name(ins.bssh_nm):
             match_reason  = InspectionMatch.REASON_COMPANY
             matched_value = company_name
 
@@ -942,10 +944,12 @@ def collect_inspection_data(last_updt_dtm: str | None = None, page_size: int = 1
                 counts['updated'] += 1
                 if judgment_changed:
                     _trigger_inspection_match(obj, prev_judgment=prev_judgment, is_new=False)
+                send_inspection_alerts(obj)
             except InspectionResult.DoesNotExist:
                 obj = InspectionResult.objects.create(tkawyprno=prno, **fields)
                 counts['created'] += 1
                 _trigger_inspection_match(obj, prev_judgment='', is_new=True)
+                send_inspection_alerts(obj)
 
         if len(rows) < page_size:
             break
@@ -1012,6 +1016,8 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
         license_number='', company_name=''
     ).values('user_id', 'license_number', 'company_name')
 
+    norm_bssh = _normalize_corp_name(bssh_nm) if bssh_nm else ''
+
     for profile in profiles:
         uid = profile['user_id']
         if uid in matched:
@@ -1026,7 +1032,7 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
                 'match_reason':  InspectionMatch.REASON_LICENSE,
                 'matched_value': license_no,
             }
-        elif company_name and bssh_nm and company_name in bssh_nm:
+        elif company_name and norm_bssh and len(company_name) >= 2 and _normalize_corp_name(company_name) in norm_bssh:
             matched[uid] = {
                 'label':         None,
                 'match_reason':  InspectionMatch.REASON_COMPANY,

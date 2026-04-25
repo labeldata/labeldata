@@ -42,6 +42,7 @@ from v1.regulatory.models import RegulatoryNews
 from v1.regulatory.services.collector import (
     collect_domestic_news, collect_import_news,
     collect_import_insp_news, collect_import_admin_news,
+    collect_inspection_data,
 )
 from v1.regulatory.services.ai_parser import extract_keywords
 from v1.regulatory.services.matcher import build_user_match_cache, run_matching_for_all_users
@@ -129,7 +130,36 @@ class Command(BaseCommand):
             f'완료: 신규 수집 {len(new_items)}건 / 매칭 {total_matches}건'
         ))
 
+        # ── 4단계: 수거검사(I0460) 수집 + 매칭 + 푸시 ──────────────────────────
+        if not parse_only and not match_only:
+            self._collect_inspection()
+
     # ─────────────────────────────────────────────────────────────────────────
+
+    def _collect_inspection(self) -> None:
+        """수거검사(I0460) 증분 수집 — 마지막 last_updt_dtm 이후 데이터만 가져온다."""
+        from v1.regulatory.models import InspectionResult
+
+        last_dt = (
+            InspectionResult.objects
+            .exclude(last_updt_dtm='')
+            .order_by('-last_updt_dtm')
+            .values_list('last_updt_dtm', flat=True)
+            .first()
+        )
+        # last_updt_dtm은 YYYYMMDD(8자) 또는 YYYYMMDDHHMMSS(14자) — API는 YYYYMMDD만 수용
+        since = last_dt[:8] if last_dt else None
+        self.stdout.write(f'  → 수거검사(I0460) 수집 중 (since={since or "전체"})...')
+
+        try:
+            counts = collect_inspection_data(last_updt_dtm=since)
+            self.stdout.write(self.style.SUCCESS(
+                f'     수거검사 완료: 신규 {counts["created"]}건 / '
+                f'업데이트 {counts["updated"]}건 / 스킵 {counts["skipped"]}건'
+            ))
+        except Exception as exc:
+            logger.error(f'[수거검사 수집] 오류: {exc}')
+            self.stdout.write(self.style.ERROR(f'     수거검사 수집 실패: {exc}'))
 
     def _collect(self, limit: int = 0) -> list:
         """수집 단계: JSON 파일(수입 AJAX) + OpenAPI(국내·수입행정처분)"""

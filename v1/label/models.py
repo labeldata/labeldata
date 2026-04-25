@@ -577,7 +577,10 @@ def backfill_inspection_on_label_save(sender, instance, created, update_fields, 
     if update_fields and 'prdlst_report_no' not in update_fields:
         return
     try:
+        from v1.regulatory.models import InspectionMatch
         from v1.regulatory.services.collector import backfill_inspection_matches
+        # 품목보고번호 변경 시 기존 매칭 전체 삭제 후 재매칭
+        InspectionMatch.objects.filter(user=instance.user_id).delete()
         backfill_inspection_matches(instance.user_id, days=30)
     except Exception:
         import logging

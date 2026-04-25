@@ -103,7 +103,10 @@ def backfill_inspection_on_profile_save(sender, instance, created, update_fields
     if update_fields is not None and not ({'license_number', 'company_name'} & set(update_fields)):
         return
     try:
+        from v1.regulatory.models import InspectionMatch
         from v1.regulatory.services.collector import backfill_inspection_matches
+        # 변경된 키워드 기준으로 완전히 재매칭하므로 기존 매칭 전체 삭제
+        InspectionMatch.objects.filter(user=instance.user).delete()
         backfill_inspection_matches(instance.user, days=30)
     except Exception:
         import logging
