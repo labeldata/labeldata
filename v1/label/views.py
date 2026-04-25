@@ -504,21 +504,18 @@ def food_item_detail(request, prdlst_report_no):
     - 수입식품: ImportedFood에서 제품명(한글) 또는 pk로 조회
     - 일반식품: FoodItem에서 품목보고번호로 조회
     """
-    # 수입식품: ImportedFood의 prduct_korean_nm 또는 pk(일반적으로 id)로 조회
+    # 수입식품: ImportedFood의 prduct_korean_nm 또는 pk로 조회
+    # .get() 대신 .filter().first()를 사용하여 동일 제품명 다중 결과(MultipleObjectsReturned) 방지
     imported_item = None
     imported_mode = False
 
-    # 우선 ImportedFood에서 prdlst_report_no와 일치하는 prduct_korean_nm이 있는지 확인
-    try:
-        imported_item = ImportedFood.objects.get(prduct_korean_nm=prdlst_report_no)
-        imported_mode = True
-    except ImportedFood.DoesNotExist:
+    imported_item = ImportedFood.objects.filter(prduct_korean_nm=prdlst_report_no).first()
+    if not imported_item:
         try:
-            imported_item = ImportedFood.objects.get(pk=prdlst_report_no)
-            imported_mode = True
-        except (ImportedFood.DoesNotExist, ValueError):
+            imported_item = ImportedFood.objects.filter(pk=prdlst_report_no).first()
+        except (ValueError, TypeError):
             imported_item = None
-            imported_mode = False
+    imported_mode = imported_item is not None
 
     if imported_mode and imported_item:
         context = {
@@ -2011,8 +2008,6 @@ def bulk_copy_labels(request):
             return JsonResponse({"success": False, "error": str(e)})
     return JsonResponse({"success": False, "error": "Invalid request method"})
 
-@login_required
-@csrf_exempt
 @login_required
 @csrf_exempt
 def bulk_delete_labels(request):

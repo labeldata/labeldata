@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import CharField, Count, Exists, F, Max, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce, Greatest
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -86,18 +87,18 @@ def news_list(request):
 
     # 기간 필터 — 날짜 범위 우선, 없으면 days
     if date_from or date_to:
+        # event_date OR collected_date 기준으로 days 필터와 동일한 로직 적용
         if date_from:
-            qs = qs.filter(collected_date__gte=date_from)
+            qs = qs.filter(Q(event_date__gte=date_from) | Q(collected_date__gte=date_from))
         if date_to:
-            qs = qs.filter(collected_date__lte=date_to)
+            qs = qs.filter(Q(event_date__lte=date_to) | Q(collected_date__lte=date_to))
         days = 'all'  # 버튼 active 표시 없애는 용도
     elif days != 'all':
         try:
             cutoff = (timezone.now() - timedelta(days=int(days))).date()
-            # event_date 우선 — collected_date(자동입력)보다 실제 발생일이 더 정확
+            # event_date OR collected_date 중 하나라도 기간 내이면 표시
             qs = qs.filter(
-                Q(event_date__gte=cutoff) |
-                Q(event_date__isnull=True, collected_date__gte=cutoff)
+                Q(event_date__gte=cutoff) | Q(collected_date__gte=cutoff)
             )
         except (ValueError, TypeError):
             pass
@@ -257,6 +258,9 @@ def news_list(request):
         .values('action_type')[:1]
     )
 
+    # sort_date = GREATEST(COALESCE(event_date, collected_date), collected_date)
+    # event_date가 NULL이면 collected_date 사용, 아니면 둘 중 더 최근 날짜 기준 정렬
+    # → 오늘 수집된 구 event_date 항목도 상단에 표시
     qs = qs.annotate(
         my_matched_yn=Exists(matched_subq),
         my_unread_yn=Exists(unread_subq),
@@ -266,16 +270,20 @@ def news_list(request):
         ing_risk_level=Subquery(ing_risk_subq, output_field=CharField()),
         my_action_status=Subquery(latest_prod_action_subq, output_field=CharField()),
         my_ing_action_status=Subquery(latest_ing_action_subq, output_field=CharField()),
+        sort_date=Greatest(
+            Coalesce('event_date', 'collected_date'),
+            'collected_date',
+        ),
     )
     if sort == 'asc':
         qs = qs.order_by(
-            F('event_date').asc(nulls_last=True),
+            'sort_date',
             'collected_date',
             'created_at',
         )
     else:
         qs = qs.order_by(
-            F('event_date').desc(nulls_last=True),
+            '-sort_date',
             '-collected_date',
             '-created_at',
         )
@@ -705,39 +713,47 @@ def mark_all_resolved(request):
     if not news_id:
         return JsonResponse({'success': False, 'error': 'news_id 필요'}, status=400)
 
-    created = 0
+    now = timezone.now()
 
     # ── 제품 매칭 일괄 처리 ──
-    prod_matches = NewsProductMatch.objects.filter(
+    prod_matches = list(NewsProductMatch.objects.filter(
         news_id=news_id,
         product__user_id=request.user,
         false_positive_yn=False,
-    )
-    for pm in prod_matches:
-        RegulatoryMatchAction.objects.create(
+    ))
+    prod_actions = [
+        RegulatoryMatchAction(
             user=request.user,
             product_match=pm,
             action_type='resolved',
             memo='모두 확인 완료',
         )
-        created += 1
-    prod_matches.update(read_yn=True, read_at=timezone.now())
+        for pm in prod_matches
+    ]
+    RegulatoryMatchAction.objects.bulk_create(prod_actions, ignore_conflicts=True)
+    NewsProductMatch.objects.filter(id__in=[pm.id for pm in prod_matches]).update(
+        read_yn=True, read_at=now
+    )
+    created = len(prod_actions)
 
     # ── 원료 매칭 일괄 처리 ──
-    ing_matches = NewsIngredientMatch.objects.filter(
+    ing_matches = list(NewsIngredientMatch.objects.filter(
         news_id=news_id,
         user=request.user,
         dismissed_yn=False,
-    )
-    for im in ing_matches:
-        RegulatoryMatchAction.objects.create(
+    ))
+    ing_actions = [
+        RegulatoryMatchAction(
             user=request.user,
             ingredient_match=im,
             action_type='resolved',
             memo='모두 확인 완료',
         )
-        created += 1
-    ing_matches.update(read_yn=True)
+        for im in ing_matches
+    ]
+    RegulatoryMatchAction.objects.bulk_create(ing_actions, ignore_conflicts=True)
+    NewsIngredientMatch.objects.filter(id__in=[im.id for im in ing_matches]).update(read_yn=True)
+    created += len(ing_actions)
 
     # 남은 미확인 건수 (기존 mark_read 기준과 동일)
     prod_news = set(
@@ -777,19 +793,24 @@ def mark_all_news_resolved(request):
             action_type__in=_actioned,
         ).values_list('product_match_id', flat=True)
     )
-    prod_matches = NewsProductMatch.objects.filter(
+    prod_matches = list(NewsProductMatch.objects.filter(
         product__user_id=request.user,
         false_positive_yn=False,
-    ).exclude(id__in=already_prod)
-    for pm in prod_matches:
-        RegulatoryMatchAction.objects.create(
+    ).exclude(id__in=already_prod))
+    prod_actions = [
+        RegulatoryMatchAction(
             user=request.user,
             product_match=pm,
             action_type='resolved',
             memo='모든 알림 일괄 확인 완료',
         )
-        created += 1
-    prod_matches.update(read_yn=True, read_at=timezone.now())
+        for pm in prod_matches
+    ]
+    RegulatoryMatchAction.objects.bulk_create(prod_actions, ignore_conflicts=True)
+    NewsProductMatch.objects.filter(id__in=[pm.id for pm in prod_matches]).update(
+        read_yn=True, read_at=timezone.now()
+    )
+    created = len(prod_actions)
 
     # 이미 조치된 원료 매칭 ID 제외
     already_ing = set(
@@ -799,19 +820,22 @@ def mark_all_news_resolved(request):
             action_type__in=_actioned,
         ).values_list('ingredient_match_id', flat=True)
     )
-    ing_matches = NewsIngredientMatch.objects.filter(
+    ing_matches = list(NewsIngredientMatch.objects.filter(
         user=request.user,
         dismissed_yn=False,
-    ).exclude(id__in=already_ing)
-    for im in ing_matches:
-        RegulatoryMatchAction.objects.create(
+    ).exclude(id__in=already_ing))
+    ing_actions = [
+        RegulatoryMatchAction(
             user=request.user,
             ingredient_match=im,
             action_type='resolved',
             memo='모든 알림 일괄 확인 완료',
         )
-        created += 1
-    ing_matches.update(read_yn=True)
+        for im in ing_matches
+    ]
+    RegulatoryMatchAction.objects.bulk_create(ing_actions, ignore_conflicts=True)
+    NewsIngredientMatch.objects.filter(id__in=[im.id for im in ing_matches]).update(read_yn=True)
+    created += len(ing_actions)
 
     return JsonResponse({'success': True, 'created': created, 'unread': 0})
 

@@ -329,15 +329,12 @@ def product_explorer(request, folder_id=None):
         if label_id not in bom_stats:
             bom_stats[label_id] = {'count': 0, 'ratio': 0, 'complete': False}
     
-    # 영양성분 데이터 입력 여부
+    # 영양성분 데이터 입력 여부 (dict 조회로 O(N²) → O(N))
+    _label_obj_map = {l.my_label_id: l for l in current_page_labels}
     nutrition_stats = {}
     for label_id in label_ids:
-        # V1 MyLabel의 calories 필드로 확인
-        label_obj = next((l for l in current_page_labels if l.my_label_id == label_id), None)
-        has_nutrition = False
-        if label_obj and label_obj.calories:
-            has_nutrition = True
-        nutrition_stats[label_id] = has_nutrition
+        label_obj = _label_obj_map.get(label_id)
+        nutrition_stats[label_id] = bool(label_obj and label_obj.calories)
 
     # 표시사항 체크: PDF 저장(LABEL_DESIGN 문서 존재) 또는 규정 검증(label_create_YN='Y') 완료 여부
     label_design_ids = set(
@@ -349,19 +346,25 @@ def product_explorer(request, folder_id=None):
     )
     label_checked_stats = {}
     for label_id in label_ids:
-        label_obj = next((l for l in current_page_labels if l.my_label_id == label_id), None)
+        label_obj = _label_obj_map.get(label_id)
         pdf_saved = label_id in label_design_ids
         verified = label_obj.label_create_YN == 'Y' if label_obj else False
         label_checked_stats[label_id] = pdf_saved or verified
     
-    # 권한 부여 인원 통계
+    # 권한 부여 인원 통계 (배치 쿼리 - 기존 N+1 방지)
     permission_stats = {}
-    for label_id in label_ids:
-        share_count = ProductShare.objects.filter(
-            label__my_label_id=label_id,
-            active_yn=True
-        ).values('recipient_user').distinct().count()
-        permission_stats[label_id] = share_count
+    _perm_counts = (
+        ProductShare.objects.filter(
+            label__my_label_id__in=label_ids,
+            active_yn=True,
+        )
+        .values('label__my_label_id', 'recipient_user')
+        .distinct()
+        .values('label__my_label_id')
+        .annotate(_cnt=Count('share_id'))
+    )
+    for row in _perm_counts:
+        permission_stats[row['label__my_label_id']] = row['_cnt']
     
     # 현재 페이지 라벨에서 내가 받은 역할 코드 조회
     my_role_map = {}  # label_id → role_code
@@ -941,7 +944,6 @@ def product_recent(request):
     return render(request, 'products/product_recent.html', context)
 
 
-@login_required
 @login_required
 def product_favorite(request):
     """즐겨찾기 항목"""
@@ -2022,16 +2024,19 @@ def folder_delete(request, folder_id):
 @require_POST
 def product_move(request, product_id):
     """제품을 다른 폴더로 이동 (AJAX)"""
-    product = get_object_or_404(Product, product_id=product_id, owner=request.user)
+    # Product는 MyLabel의 alias. PK는 my_label_id, 소유자 FK는 user_id
+    label = get_object_or_404(MyLabel, my_label_id=product_id, user_id=request.user)
+    # folder는 ProductMetadata에 있음
+    metadata = get_object_or_404(ProductMetadata, label=label)
     folder_id = request.POST.get('folder_id')
-    
+
     if folder_id:
         folder = get_object_or_404(ProductFolder, folder_id=folder_id, owner=request.user)
-        product.folder = folder
+        metadata.folder = folder
     else:
-        product.folder = None
-    
-    product.save()
+        metadata.folder = None
+
+    metadata.save(update_fields=['folder'])
     return JsonResponse({'success': True})
 
 
@@ -2098,27 +2103,17 @@ def product_trash(request):
 @login_required
 @require_POST
 def product_restore(request, product_id):
-    """제품 복원"""
-    product = get_object_or_404(Product, product_id=product_id, owner=request.user, deleted_yn=True)
-    
-    product.deleted_yn = False
-    product.deleted_datetime = None
-    product.save()
-    
-    messages.success(request, '제품이 복원되었습니다.')
-    return redirect('products:product_trash')
+    """제품 복원 - 휴지통 기능 구현 전 차단"""
+    messages.info(request, '복원 기능은 준비 중입니다.')
+    return redirect('products:product_explorer')
 
 
 @login_required
 @require_POST
 def product_permanent_delete(request, product_id):
-    """제품 영구 삭제"""
-    product = get_object_or_404(Product, product_id=product_id, owner=request.user, deleted_yn=True)
-    
-    product.delete()
-    
-    messages.success(request, '제품이 영구 삭제되었습니다.')
-    return redirect('products:product_trash')
+    """제품 영구 삭제 - 휴지통 기능 구현 전 차단"""
+    messages.info(request, '영구 삭제 기능은 준비 중입니다.')
+    return redirect('products:product_explorer')
 
 
 # ==================== 검색 ====================
@@ -2550,6 +2545,13 @@ def share_create(request, label_id):
 
     if not email:
         return JsonResponse({'success': False, 'error': '이메일은 필수입니다.'}, status=400)
+
+    from django.core.validators import validate_email as _validate_email
+    from django.core.exceptions import ValidationError as _DjValidationError
+    try:
+        _validate_email(email)
+    except _DjValidationError:
+        return JsonResponse({'success': False, 'error': '올바른 이메일 형식이 아닙니다.'}, status=400)
 
     if role_code not in dict(SharePermission.ROLE_CHOICES):
         return JsonResponse({'success': False, 'error': '잘못된 역할입니다.'}, status=400)
@@ -4368,10 +4370,13 @@ def contacts_api_update(request):
     if not old_email or not new_email:
         return JsonResponse({'success': False, 'error': '이메일이 필요합니다.'}, status=400)
 
-    # 새 이메일 유효성 검증
-    import re as _re
-    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', new_email):
-        return JsonResponse({'success': False, 'error': '유효한 이메일 주소를 입력하세요.'}, status=400)
+    # 새 이메일 유효성 검증 (Django 표준)
+    from django.core.validators import validate_email as _validate_email
+    from django.core.exceptions import ValidationError as _DjValidationError
+    try:
+        _validate_email(new_email)
+    except _DjValidationError:
+        return JsonResponse({'success': False, 'error': '올바른 이메일 형식이 아닙니다.'}, status=400)
 
     # ① ProductShare 레코드 일괄 업데이트 (이메일 변경 포함)
     updated = (
@@ -4423,10 +4428,13 @@ def contacts_api_add(request):
     if not email:
         return JsonResponse({'success': False, 'error': '이메일이 필요합니다.'}, status=400)
 
-    # 이메일 기본 검증
-    import re as _re
-    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
-        return JsonResponse({'success': False, 'error': '유효한 이메일 주소를 입력하세요.'}, status=400)
+    # 이메일 유효성 검증 (Django 표준)
+    from django.core.validators import validate_email as _validate_email
+    from django.core.exceptions import ValidationError as _DjValidationError
+    try:
+        _validate_email(email)
+    except _DjValidationError:
+        return JsonResponse({'success': False, 'error': '올바른 이메일 형식이 아닙니다.'}, status=400)
 
     contact, created = UserContact.objects.update_or_create(
         owner=request.user,

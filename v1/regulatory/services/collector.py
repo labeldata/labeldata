@@ -190,13 +190,12 @@ def collect_domestic_news(target_date: date | None = None, max_rows: int = 0) ->
             if not rows:
                 break
 
+            # 페이지 내 모든 external_id 생성 후 기존 복수 여부를 일괄 조회
+            candidate_ids: list[tuple[str, str]] = []  # [(rec_id, external_id), ...]
             for row in rows:
-                # 고유 ID 생성: 서비스ID + 레코드 식별자
                 id_key = svc['id_key']
                 rec_id = str(row.get(id_key) or '').strip() if id_key else ''
-
                 if not rec_id:
-                    # 안정적 해시: PRDTNM + DISTBTMLMT + ADDR 조합
                     seed = ''.join([
                         str(row.get('PRDTNM') or row.get('PRDT_NM') or ''),
                         str(row.get('DISTBTMLMT') or row.get('DSPS_DCSNDT') or ''),
@@ -209,13 +208,18 @@ def collect_domestic_news(target_date: date | None = None, max_rows: int = 0) ->
                         rec_id = hashlib.md5(
                             ''.join(str(v) for v in row.values()).encode()
                         ).hexdigest()[:12]
+                candidate_ids.append((rec_id, f'{svc_id}-{rec_id}'))
 
-                external_id = f'{svc_id}-{rec_id}'
+            # 페이지 내 external_id 전체를 단일 쿼리로 조회
+            all_ext_ids = [eid for _, eid in candidate_ids]
+            existing_ids: set[str] = set(
+                RegulatoryNews.objects
+                .filter(source=RegulatoryNews.SOURCE_DOMESTIC, external_id__in=all_ext_ids)
+                .values_list('external_id', flat=True)
+            )
 
-                if RegulatoryNews.objects.filter(
-                    source=RegulatoryNews.SOURCE_DOMESTIC,
-                    external_id=external_id,
-                ).exists():
+            for row, (rec_id, external_id) in zip(rows, candidate_ids):
+                if external_id in existing_ids:
                     fetched += 1
                     continue
 
@@ -305,10 +309,11 @@ def collect_import_admin_news(max_rows: int = 0) -> list[dict]:
             if not rows:
                 break
 
+            # 페이지 내 external_id 생성 후 기존 여부 일괄 조회
+            candidate_ids: list[tuple[str, str]] = []
             for row in rows:
                 id_key = svc['id_key']
                 rec_id = str(row.get(id_key) or '').strip() if id_key else ''
-
                 if not rec_id:
                     seed = ''.join([
                         str(row.get('PRDTNM') or row.get('PRDT_NM') or ''),
@@ -318,14 +323,17 @@ def collect_import_admin_news(max_rows: int = 0) -> list[dict]:
                     rec_id = hashlib.md5(seed.encode() if seed.strip() else
                                          ''.join(str(v) for v in row.values()).encode()
                                          ).hexdigest()[:12]
+                candidate_ids.append((rec_id, f'{svc_id}-{rec_id}'))
 
-                external_id = f'{svc_id}-{rec_id}'
+            all_ext_ids = [eid for _, eid in candidate_ids]
+            existing_ids: set[str] = set(
+                RegulatoryNews.objects
+                .filter(source=RegulatoryNews.SOURCE_IMPORT, external_id__in=all_ext_ids)
+                .values_list('external_id', flat=True)
+            )
 
-                # source='import'로 중복 체크
-                if RegulatoryNews.objects.filter(
-                    source=RegulatoryNews.SOURCE_IMPORT,
-                    external_id=external_id,
-                ).exists():
+            for row, (rec_id, external_id) in zip(rows, candidate_ids):
+                if external_id in existing_ids:
                     fetched += 1
                     continue
 
@@ -789,6 +797,15 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
         if not match_reason and company_name and len(company_name) >= 2 and _normalize_corp_name(company_name) in _normalize_corp_name(ins.bssh_nm):
             match_reason  = InspectionMatch.REASON_COMPANY
             matched_value = company_name
+
+        # AlertRule COMPANY 키워드 매칭 (SQL 후보 추출 이후 건별 확인)
+        if not match_reason:
+            norm_bssh_name = _normalize_corp_name(ins.bssh_nm) if ins.bssh_nm else ''
+            for kw in alert_company_kws:
+                if kw and len(kw) >= 2 and (kw in ins.bssh_nm or kw in norm_bssh_name):
+                    match_reason  = InspectionMatch.REASON_COMPANY
+                    matched_value = kw
+                    break
 
         if not match_reason:
             continue

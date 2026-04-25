@@ -90,7 +90,13 @@ def _send_keyword_alerts(news) -> int:
         if PushNotificationLog.objects.filter(device=device, news=news).exists():
             continue
 
+        # fcm_token이 없는 기기는 실제 수신불가 → 로그 생성 자체 스킵
+        if not device.fcm_token:
+            continue
+
         _trim_notifications(device, max_noti)
+
+        _send_fcm(device.fcm_token, news, trigger_type='keyword', trigger_label=matched_rule.keyword)
 
         PushNotificationLog.objects.create(
             device=device,
@@ -100,9 +106,6 @@ def _send_keyword_alerts(news) -> int:
             trigger_label=matched_rule.keyword,
         )
         sent += 1
-
-        if device.fcm_token:
-            _send_fcm(device.fcm_token, news, trigger_type='keyword', trigger_label=matched_rule.keyword)
 
     return sent
 
@@ -156,7 +159,13 @@ def _send_product_ingredient_alerts(news) -> int:
         if PushNotificationLog.objects.filter(device=device, news=news).exists():
             continue
 
+        # fcm_token이 없는 기기는 로그 생성 자체 스킵
+        if not device.fcm_token:
+            continue
+
         _trim_notifications(device, max_noti)
+
+        _send_fcm(device.fcm_token, news, trigger_type=trigger_type, trigger_label=trigger_label)
 
         PushNotificationLog.objects.create(
             device=device,
@@ -166,9 +175,6 @@ def _send_product_ingredient_alerts(news) -> int:
             trigger_label=trigger_label,
         )
         sent += 1
-
-        if device.fcm_token:
-            _send_fcm(device.fcm_token, news, trigger_type=trigger_type, trigger_label=trigger_label)
 
     return sent
 

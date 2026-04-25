@@ -88,12 +88,23 @@ class Command(BaseCommand):
             dest='limit',
             help='테스트용 수집 제한: 서비스당 최대 건수 (0=제한없음)',
         )
+        parser.add_argument(
+            '--backfill-inspection',
+            action='store_true',
+            dest='backfill_inspection',
+            help='모든 사용자의 수거검사 소급 매칭만 재실행 (수집 없음)',
+        )
 
     def handle(self, *args, **options):
-        parse_only = options['parse_only']
-        match_only = options['match_only']
-        ai_delay   = options['ai_delay']
-        limit      = options['limit']
+        parse_only          = options['parse_only']
+        match_only          = options['match_only']
+        ai_delay            = options['ai_delay']
+        limit               = options['limit']
+        backfill_inspection = options['backfill_inspection']
+
+        if backfill_inspection:
+            self._backfill_all_inspection()
+            return
 
         self.stdout.write(self.style.NOTICE(
             f'[{timezone.now():%Y-%m-%d %H:%M}] 규제 모니터링 수집 시작 '
@@ -133,6 +144,26 @@ class Command(BaseCommand):
         # ── 4단계: 수거검사(I0460) 수집 + 매칭 + 푸시 ──────────────────────────
         if not parse_only and not match_only:
             self._collect_inspection()
+
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _backfill_all_inspection(self) -> None:
+        """모든 사용자의 수거검사 InspectionMatch를 초기화하고 재매칭."""
+        from django.contrib.auth.models import User
+        from v1.regulatory.models import InspectionMatch
+        from v1.regulatory.services.collector import backfill_inspection_matches
+
+        users = User.objects.filter(is_active=True)
+        self.stdout.write(f'수거검사 소급 매칭 재실행 — 대상 사용자 {users.count()}명')
+        total = 0
+        for user in users:
+            InspectionMatch.objects.filter(user=user).delete()
+            result = backfill_inspection_matches(user, days=30)
+            matched = result.get('matched', 0)
+            if matched:
+                self.stdout.write(f'  {user.username}: {matched}건 매칭')
+                total += matched
+        self.stdout.write(self.style.SUCCESS(f'완료: 총 {total}건 매칭'))
 
     # ─────────────────────────────────────────────────────────────────────────
 

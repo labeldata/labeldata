@@ -224,6 +224,7 @@ def find_affected_products(
             news, user, api_source,
             prefetched_boms=prefetched_boms,
             prefetched_contacts=prefetched_contacts,
+            prefetched_labels=prefetched_labels,
         )
 
     # 표시위반은 원료 매칭 불필요
@@ -505,6 +506,7 @@ def _find_admin_matches(
     api_source: str,
     prefetched_boms: list | None = None,
     prefetched_contacts: list | None = None,
+    prefetched_labels: list | None = None,
 ) -> list[dict]:
     """
     행정처분 전용 매칭: 뉴스 업체명이 내 BOM 원료의 제조사 또는
@@ -564,12 +566,16 @@ def _find_admin_matches(
         ('repacker_address',     '소분원'),
     ]
 
-    user_labels = (
-        MyLabel.objects
-        .filter(user_id=user, delete_YN='N')
-        .only('my_label_id', 'my_label_name', 'user_id', 'delete_YN',
-              'bssh_nm', 'distributor_address', 'repacker_address')
-    )
+    # prefetched_labels 캐시 우선 사용 (배치 매칭 시 DB 재쿼리 방지)
+    if prefetched_labels is not None:
+        user_labels = prefetched_labels
+    else:
+        user_labels = list(
+            MyLabel.objects
+            .filter(user_id=user, delete_YN='N')
+            .only('my_label_id', 'my_label_name', 'user_id', 'delete_YN',
+                  'bssh_nm', 'distributor_address', 'repacker_address')
+        )
 
     for label in user_labels:
         pid = label.my_label_id
