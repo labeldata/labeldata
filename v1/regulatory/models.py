@@ -5,6 +5,7 @@
 - InspectionResult: 수거검사(I0460) 원본
 - InspectionMatch: 수거검사 ↔ 사용자 매칭 이력
 """
+import datetime
 from django.db import models
 from django.db.models import F
 from django.contrib.auth.models import User
@@ -49,7 +50,7 @@ class RegulatoryNews(models.Model):
 
     # ── 수집 메타 ────────────────────────────────────────────────
     event_date = models.DateField(null=True, blank=True, verbose_name='발생/처분일', db_index=True, help_text='imp_insp=수입검사부적합일, 국내=처분·회수일')
-    collected_date = models.DateField(auto_now_add=True, verbose_name='수집일', db_index=True)
+    collected_date = models.DateField(default=datetime.date.today, verbose_name='수집일', db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일시')
 

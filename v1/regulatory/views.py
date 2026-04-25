@@ -978,17 +978,6 @@ def alert_rules_api(request):
     if not created_rules:
         return JsonResponse({'success': False, 'error': '이미 등록된 키워드이거나 최대 개수에 도달했습니다.'}, status=400)
 
-    # COMPANY 키워드 추가 시 수거검사(InspectionMatch) 소급 매칭
-    if category == 'COMPANY' and request.user.is_authenticated:
-        try:
-            from v1.regulatory.models import InspectionMatch
-            from v1.regulatory.services.collector import backfill_inspection_matches
-            InspectionMatch.objects.filter(user=request.user).delete()
-            backfill_inspection_matches(request.user, days=30)
-        except Exception:
-            import logging
-            logging.getLogger(__name__).exception('[키워드] 수거검사 소급 매칭 오류')
-
     first = created_rules[0]
     return JsonResponse({
         'success': True,

@@ -33,7 +33,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, date
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -234,6 +234,7 @@ class Command(BaseCommand):
                         'violation_reason': item.get('violation_reason', ''),
                         'raw_detail_text':  item.get('raw_detail_text', ''),
                         'event_date':       item.get('event_date'),
+                        'collected_date':   item.get('collected_date') or date.today(),
                         'ai_parsed':        item.get('ai_parsed', is_admin),
                         'violation_type':   item.get('violation_type', ''),
                         'ai_summary':       item.get('ai_summary', ''),

@@ -241,6 +241,7 @@ def collect_domestic_news(target_date: date | None = None, max_rows: int = 0) ->
                     'violation_reason': violation,
                     'raw_detail_text':  _row_to_text(row, label),
                     'event_date':       _parse_date_field(row, svc.get('date_keys', [])),
+                    'collected_date':   _parse_date_field(row, ['CRET_DTM', 'LAST_UPDT_DTM']),
                 })
                 fetched += 1
 
@@ -353,6 +354,7 @@ def collect_import_admin_news(max_rows: int = 0) -> list[dict]:
                     'violation_reason': violation,
                     'raw_detail_text':  _row_to_text(row, label),
                     'event_date':       _parse_date_field(row, svc.get('date_keys', [])),
+                    'collected_date':   _parse_date_field(row, ['CRET_DTM', 'LAST_UPDT_DTM']),
                 })
                 fetched += 1
 
@@ -677,6 +679,8 @@ _FIELD_KO: dict[str, str] = {
     'TESTANALS_RSLT':           '검출량',
     'STDR_STND':                '기준규격',
     'DISTBTMLMT':               '유통기한',
+    'MNFDT':                    '제조일자',
+    'REPORTR_TELNO':            '신고기관 전화번호',
     # I0490 (회수)
     'RTRVLPRVNS':               '회수사유',
     'VIO_CONTNT':               '위반내용',
@@ -693,6 +697,28 @@ _FIELD_KO: dict[str, str] = {
     'DSPS_PRCD':                '처분기간',
     'DSPS_BGNG_DT':             '처분시작일',
     'DSPS_END_DT':              '처분종료일',
+    'DSPS_BGNDT':               '처분시작일',
+    'DSPS_ENDDT':               '처분종료일',
+    'DSPS_TYPECD_NM':           '처분유형',
+    'DSPS_INSTTCD_NM':          '처분기관',
+    'PRSDNT_NM':                '대표자명',
+    'PUBLIC_DT':                '공표일',
+    'DSPSCN':                   '처분내용',
+    'PRCSCITYPOINT_INDUTYCD_NM': '업종명',
+    # I0490 (회수)
+    'PRDLST_CD':                '식품유형코드',
+    'PRDLST_REPORT_NO':         '품목보고번호',
+    'FRMLCUNIT':                '용량/중량',
+    'BRCDNO':                   '바코드',
+    'RTRVLDSUSE_SEQ':           '회수일련번호',
+    'RTRVL_GRDCD_NM':           '회수등급',
+    'IMG_FILE_PATH':            '이미지경로',
+    'PRDLST_TYPE':              '식품유형구분',
+    # 공통
+    'TELNO':                    '전화번호',
+    'LAST_UPDT_DTM':            '최종수정일시',
+    'CRET_DTM':                 '등록일시',
+    'SITE_ADDR':                '소재지',
 }
 
 
@@ -742,29 +768,16 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
         company_name = ''
 
     labels = MyLabel.objects.filter(user_id=user, delete_YN='N').exclude(prdlst_report_no='')
+    norm_company = _normalize_corp_name(company_name) if company_name else ''
 
-    # AlertRule COMPANY 키워드도 수거검사 매칭에 포함
-    try:
-        from v1.mobile.models import AlertRule
-        alert_company_kws = list(
-            AlertRule.objects
-            .filter(device__user=user, is_active=True, category='COMPANY')
-            .values_list('keyword', flat=True)
-            .distinct()
-        )
-    except Exception:
-        alert_company_kws = []
-
-    # 조건에 해당하는 InspectionResult 추출
+    # 조건에 해당하는 InspectionResult 추출 (사용자 정보 기반만, AlertRule 키워드 제외)
     q = Q()
-    if license_no:
-        q |= Q(prdlst_report_no__contains=license_no)
-    if company_name and len(company_name) >= 2:
-        # 정규화 후 포함 여부를 DB contains로 1차 후보 추출, Python에서 _normalize_corp_name으로 정밀 검사
-        q |= Q(bssh_nm__contains=_normalize_corp_name(company_name))
-    for kw in alert_company_kws:
-        if kw and len(kw) >= 2:
-            q |= Q(bssh_nm__contains=kw)
+    if license_no and len(license_no) >= 10:
+        # DB 1차 후보: 품목보고번호 = 인허가번호 완전일치 또는 시작 일치
+        q |= Q(prdlst_report_no=license_no) | Q(prdlst_report_no__startswith=license_no)
+    if norm_company and len(norm_company) >= 2:
+        # DB 1차 후보: 업소명 포함 → Python에서 정규화 완전일치로 정밀 필터
+        q |= Q(bssh_nm__contains=norm_company)
     for label in labels:
         if label.prdlst_report_no:
             q |= Q(prdlst_report_no=label.prdlst_report_no)
@@ -790,22 +803,17 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
                 matched_value = ins.prdlst_report_no
                 break
 
-        if not match_reason and license_no and license_no in ins.prdlst_report_no:
-            match_reason  = InspectionMatch.REASON_LICENSE
-            matched_value = license_no
+        # 조건 2: 인허가번호 — 품목보고번호와 완전일치 또는 앞부분 일치
+        if not match_reason and license_no and len(license_no) >= 10 and ins.prdlst_report_no:
+            if ins.prdlst_report_no == license_no or ins.prdlst_report_no.startswith(license_no):
+                match_reason  = InspectionMatch.REASON_LICENSE
+                matched_value = license_no
 
-        if not match_reason and company_name and len(company_name) >= 2 and _normalize_corp_name(company_name) in _normalize_corp_name(ins.bssh_nm):
-            match_reason  = InspectionMatch.REASON_COMPANY
-            matched_value = company_name
-
-        # AlertRule COMPANY 키워드 매칭 (SQL 후보 추출 이후 건별 확인)
-        if not match_reason:
-            norm_bssh_name = _normalize_corp_name(ins.bssh_nm) if ins.bssh_nm else ''
-            for kw in alert_company_kws:
-                if kw and len(kw) >= 2 and (kw in ins.bssh_nm or kw in norm_bssh_name):
-                    match_reason  = InspectionMatch.REASON_COMPANY
-                    matched_value = kw
-                    break
+        # 조건 3: 회사명 정규화 완전일치 (포함 아님)
+        if not match_reason and norm_company and len(norm_company) >= 2 and ins.bssh_nm:
+            if norm_company == _normalize_corp_name(ins.bssh_nm):
+                match_reason  = InspectionMatch.REASON_COMPANY
+                matched_value = company_name
 
         if not match_reason:
             continue
@@ -976,7 +984,7 @@ def collect_inspection_data(last_updt_dtm: str | None = None, page_size: int = 1
                 counts['updated'] += 1
                 if judgment_changed:
                     _trigger_inspection_match(obj, prev_judgment=prev_judgment, is_new=False)
-                send_inspection_alerts(obj)
+                    send_inspection_alerts(obj)
             except InspectionResult.DoesNotExist:
                 obj = InspectionResult.objects.create(tkawyprno=prno, **fields)
                 counts['created'] += 1
@@ -1010,10 +1018,10 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
     """
     InspectionResult 1건에 대해 매칭 대상 사용자를 찾아 InspectionMatch를 생성한다.
 
-    매칭 조건 (OR):
+    매칭 조건 (OR, 사용자 등록 정보 기반만 적용 — AlertRule 키워드 제외):
       1. 내제품(MyLabel.prdlst_report_no) == inspection.prdlst_report_no
-      2. 내정보(UserProfile.license_number) in inspection.prdlst_report_no
-      3. 내정보(UserProfile.company_name)  == inspection.bssh_nm  ← 정규화 완전일치
+      2. 내정보(UserProfile.license_number): 품목보고번호와 완전일치 또는 앞부분 일치 (len≥10)
+      3. 내정보(UserProfile.company_name) 정규화 완전일치 == inspection.bssh_nm 정규화
     """
     from django.utils import timezone
     from v1.regulatory.models import InspectionMatch
@@ -1058,45 +1066,22 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
         license_no   = (profile['license_number'] or '').strip()
         company_name = (profile['company_name']   or '').strip()
 
-        if license_no and report_no and len(license_no) >= 6 and license_no in report_no:
+        # 조건 2: 인허가번호 — 완전일치 또는 앞부분 일치 (len≥10)
+        if license_no and report_no and len(license_no) >= 10 and (
+            report_no == license_no or report_no.startswith(license_no)
+        ):
             matched[uid] = {
                 'label':         None,
                 'match_reason':  InspectionMatch.REASON_LICENSE,
                 'matched_value': license_no,
             }
-        elif company_name and norm_bssh and len(company_name) >= 2 and _normalize_corp_name(company_name) in norm_bssh:
+        # 조건 3: 회사명 정규화 완전일치
+        elif company_name and norm_bssh and len(company_name) >= 2 and _normalize_corp_name(company_name) == norm_bssh:
             matched[uid] = {
                 'label':         None,
                 'match_reason':  InspectionMatch.REASON_COMPANY,
                 'matched_value': company_name,
             }
-
-    # ── 조건 4: AlertRule COMPANY 키워드 포함 매칭 ───────────────────────────
-    if norm_bssh or bssh_nm:
-        try:
-            from v1.mobile.models import AlertRule
-            kw_rules = (
-                AlertRule.objects
-                .filter(is_active=True, category='COMPANY')
-                .values('device__user_id', 'keyword', 'match_type')
-            )
-            for r in kw_rules:
-                uid = r['device__user_id']
-                if uid is None or uid in matched:
-                    continue
-                kw = (r['keyword'] or '').strip()
-                if not kw or len(kw) < 2:
-                    continue
-                target = norm_bssh if norm_bssh else bssh_nm
-                hit = (kw in target) if r['match_type'] == 'CONTAINS' else (kw == target)
-                if hit:
-                    matched[uid] = {
-                        'label':         None,
-                        'match_reason':  InspectionMatch.REASON_COMPANY,
-                        'matched_value': kw,
-                    }
-        except Exception:
-            pass
 
     if not matched:
         return
