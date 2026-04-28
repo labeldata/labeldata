@@ -1030,15 +1030,35 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
       1. 내제품(MyLabel.prdlst_report_no) == inspection.prdlst_report_no
       2. 내정보(UserProfile.license_number): 품목보고번호와 완전일치 또는 앞부분 일치 (len≥10)
       3. 내정보(UserProfile.company_name) 정규화 완전일치 == inspection.bssh_nm 정규화
+
+    알림 생성 기준 (수거일 tkawydtm 기준):
+      - 신규 수거 (PHASE_COLLECTION): 최근 7일 이내 수거 건만
+      - 판정결과 변동 (PHASE_JUDGMENT): 최근 30일 이내 수거 건만
     """
+    from datetime import datetime, timedelta
     from django.utils import timezone
     from v1.regulatory.models import InspectionMatch
     from v1.label.models import MyLabel
     from v1.user_management.models import UserProfile
 
+    # ── 날짜 필터: 오래된 데이터 알림 차단 ────────────────────────────────────
+    alert_phase = InspectionMatch.PHASE_COLLECTION if is_new else InspectionMatch.PHASE_JUDGMENT
+    max_days = 7 if is_new else 30
+    tkawydtm = (inspection.tkawydtm or '').strip()
+    if tkawydtm and len(tkawydtm) >= 8:
+        try:
+            collect_date = datetime.strptime(tkawydtm[:8], '%Y%m%d').date()
+            cutoff = (timezone.now() - timedelta(days=max_days)).date()
+            if collect_date < cutoff:
+                logger.debug(
+                    f'[I0460] 알림 스킵 (수거일 {collect_date} < {cutoff}): {inspection.tkawyprno}'
+                )
+                return
+        except ValueError:
+            pass  # 날짜 파싱 실패 시 필터 적용 안 함
+
     report_no  = inspection.prdlst_report_no
     bssh_nm    = inspection.bssh_nm
-    alert_phase = InspectionMatch.PHASE_COLLECTION if is_new else InspectionMatch.PHASE_JUDGMENT
 
     # 매칭된 (user, label, reason, matched_value) 목록 수집 (user 중복 허용 안 함)
     matched: dict[int, dict] = {}  # user_id → match info

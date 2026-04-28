@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import CharField, Count, Exists, F, Max, OuterRef, Q, Subquery
+from django.db.models import Case, CharField, Count, Exists, F, IntegerField, Max, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce, Greatest
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -21,7 +21,7 @@ from v1.regulatory.models import (
     NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews,
     InspectionResult, InspectionMatch,
 )
-from v1.mobile.models import AlertRule
+from v1.mobile.models import AlertRule, PushNotificationLog
 from v1.regulatory.saol_url_map import SAOL_URLS
 from v1.activity_log.utils import log_activity
 
@@ -185,7 +185,7 @@ def news_list(request):
             actioned_ids = set(news_latest_action.keys())
             qs = qs.filter(id__in=(matched_ids - actioned_ids))
 
-    # 내 매칭 집합 (제품 매칭 + 원료 보관함 단독 매칭 합산)
+    # 내 매칭 집합 (제품 매칭 + 원료 보관함 단독 매칭 + 키워드 알림 매칭 합산)
     my_matched_news_ids = set(
         NewsProductMatch.objects
         .filter(product__user_id=request.user, false_positive_yn=False)
@@ -193,6 +193,10 @@ def news_list(request):
     ) | set(
         NewsIngredientMatch.objects
         .filter(user=request.user, dismissed_yn=False)
+        .values_list('news_id', flat=True)
+    ) | set(
+        PushNotificationLog.objects
+        .filter(device__user=request.user, trigger_type='keyword', news__isnull=False)
         .values_list('news_id', flat=True)
     )
     my_unread_news_ids = set(
@@ -202,6 +206,10 @@ def news_list(request):
     ) | set(
         NewsIngredientMatch.objects
         .filter(user=request.user, read_yn=False, dismissed_yn=False)
+        .values_list('news_id', flat=True)
+    ) | set(
+        PushNotificationLog.objects
+        .filter(device__user=request.user, trigger_type='keyword', is_read=False, news__isnull=False)
         .values_list('news_id', flat=True)
     )
 
@@ -223,6 +231,10 @@ def news_list(request):
         .filter(news=OuterRef('pk'), product__user_id=request.user, false_positive_yn=False)
         .order_by('-risk_score')
         .values('risk_level')[:1]
+    )
+    # 키워드 알림 매칭 어노테이션
+    kw_matched_subq = PushNotificationLog.objects.filter(
+        news=OuterRef('pk'), device__user=request.user, trigger_type='keyword'
     )
     # 원료 보관함 단독 매칭 어노테이션
     ing_matched_subq = NewsIngredientMatch.objects.filter(
@@ -265,6 +277,7 @@ def news_list(request):
         my_matched_yn=Exists(matched_subq),
         my_unread_yn=Exists(unread_subq),
         ing_unread_yn=Exists(ing_unread_subq),
+        kw_matched_yn=Exists(kw_matched_subq),
         my_risk_level=Subquery(my_risk_subq, output_field=CharField()),
         ing_matched_yn=Exists(ing_matched_subq),
         ing_risk_level=Subquery(ing_risk_subq, output_field=CharField()),
@@ -274,15 +287,25 @@ def news_list(request):
             Coalesce('event_date', 'collected_date'),
             'collected_date',
         ),
+        # 매칭 그룹 우선순위: 0=매칭(상단), 1=일반(하단)
+        match_priority=Case(
+            When(my_matched_yn=True,  then=Value(0)),
+            When(ing_matched_yn=True, then=Value(0)),
+            When(kw_matched_yn=True,  then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        ),
     )
     if sort == 'asc':
         qs = qs.order_by(
+            'match_priority',
             'sort_date',
             'collected_date',
             'created_at',
         )
     else:
         qs = qs.order_by(
+            'match_priority',
             '-sort_date',
             '-collected_date',
             '-created_at',
@@ -364,6 +387,7 @@ def news_list(request):
     selected_news = None
     selected_matches = []
     selected_ing_matches = []   # NewsIngredientMatch 인스턴스 목록
+    selected_kw_logs = []       # PushNotificationLog (키워드 매칭)
     unlinked_ingredients = []   # 구 버전 호환 (이름만 - 미사용)
     if selected_id:
         try:
@@ -405,6 +429,23 @@ def news_list(request):
                 )
                 .order_by('-risk_score', '-match_score')
             )
+            # 키워드 알림 매칭 로그 (중복 제거: category+keyword+match_type 기준)
+            _kw_seen = set()
+            _kw_logs_raw = (
+                PushNotificationLog.objects
+                .filter(news=selected_news, device__user=request.user, trigger_type='keyword')
+                .select_related('rule_triggered')
+                .order_by('rule_triggered__category', 'rule_triggered__keyword')
+            )
+            for log in _kw_logs_raw:
+                rule = log.rule_triggered
+                if rule is None:
+                    key = ('', log.trigger_label, '')
+                else:
+                    key = (rule.category, rule.keyword, rule.match_type)
+                if key not in _kw_seen:
+                    _kw_seen.add(key)
+                    selected_kw_logs.append(log)
         except RegulatoryNews.DoesNotExist:
             pass
 
@@ -449,6 +490,7 @@ def news_list(request):
         'selected_news':           selected_news,
         'selected_matches':        selected_matches,
         'selected_ing_matches':    selected_ing_matches,
+        'selected_kw_logs':        selected_kw_logs,
         'unlinked_ingredients':    unlinked_ingredients,
         'total_count':             total_count,
         'categories':         categories_with_count,

@@ -406,8 +406,15 @@
         {% endif %}
         {# ── 일반 부적합·처분 알림 목록 ── #}
         {% for news in news_list %}
+        {% ifchanged news.match_priority %}
+          {% if news.match_priority == 1 and not forloop.first %}
+          <div class="rs-divider-unmatched">
+            <span>일반 정보</span>
+          </div>
+          {% endif %}
+        {% endifchanged %}
         <div class="rs-item
-                    {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% endif %}
+                    {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% elif news.kw_matched_yn %}kw-matched{% endif %}
                     {% if selected_news and selected_news.id == news.id %}active{% endif %}
                     {% if news.my_action_status == 'resolved' or news.my_ing_action_status == 'resolved' %}rs-item--resolved{% endif %}"
              onclick="selectNews({{ news.id }})">
@@ -452,6 +459,8 @@
               {% elif news.ing_risk_level == 'MED' %}<span class="badge-risk-M badge-ing">🟠관심&middot;원료</span>
               {% else %}<span class="badge-risk-L badge-ing">🔵일반&middot;원료</span>
               {% endif %}
+            {% elif news.kw_matched_yn %}
+              <span class="badge-kw-match">🔔키워드</span>
             {% endif %}
             {# 진행상태 뱃지 (매칭 뉴스만) #}
             {% if news.my_matched_yn or news.ing_matched_yn %}
@@ -610,7 +619,7 @@
           </div>
         </div>
         {% elif selected_news %}
-          {% include "regulatory/_news_detail_panel.html" with news=selected_news matches=selected_matches ing_matches=selected_ing_matches %}
+          {% include "regulatory/_news_detail_panel.html" with news=selected_news matches=selected_matches ing_matches=selected_ing_matches kw_logs=selected_kw_logs %}
         {% else %}
         <div class="rd-empty" style="height:100%;">
           <i class="bi bi-shield-exclamation text-secondary"></i>

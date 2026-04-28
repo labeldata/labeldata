@@ -38,7 +38,9 @@
         {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H rh-risk-ing">🔴 중요·원료</span>
         {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M rh-risk-ing">🟠 관심·원료</span>
         {% else %}<span class="rh-badge rh-risk-L rh-risk-ing">🔵 일반·원료</span>{% endif %}
-      {% endwith %}{% endif %}
+      {% endwith %}{% elif kw_logs %}
+        <span class="rh-badge rh-risk-kw">🔔 키워드 알림</span>
+      {% endif %}
       <div class="ms-auto">
         <span class="rd-hdr-date">
           {% if news.event_date %}
@@ -356,8 +358,39 @@
   </div>
   {% endif %}
 
+  {# ══ 키워드 알림 매칭 섹션 ══ #}
+  {% if kw_logs %}
+  <div class="rd-sec rd-sec--kw">
+    <div class="rd-sec-hdr" style="color:#7b1fa2;">
+      <i class="bi bi-bell-fill" style="color:#9c27b0;"></i>
+      알림 키워드 매칭 <span class="rd-sec-cnt">{{ kw_logs|length }}건</span>
+    </div>
+    {% for log in kw_logs %}
+    <div class="rd-kw-match-item">
+      {% if log.rule_triggered %}
+        <span class="rd-kw-cat rd-kw-cat-{{ log.rule_triggered.category|lower }}">
+          {% if log.rule_triggered.category == 'INGREDIENT' %}원료/제품명
+          {% elif log.rule_triggered.category == 'COMPANY' %}업체명
+          {% elif log.rule_triggered.category == 'ORIGIN' %}원산지
+          {% else %}{{ log.rule_triggered.get_category_display }}
+          {% endif %}
+        </span>
+        <span class="rd-kw-word">{{ log.rule_triggered.keyword }}</span>
+        <span class="rd-kw-mtype">
+          {% if log.rule_triggered.match_type == 'EXACT' %}일치{% else %}포함{% endif %}
+        </span>
+      {% else %}
+        <span class="rd-kw-cat rd-kw-cat-ingredient">키워드</span>
+        <span class="rd-kw-word">{{ log.trigger_label }}</span>
+      {% endif %}
+      <span class="rd-kw-when">{{ log.created_at|date:"m/d H:i" }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {# ══ 매칭 없음 안내 ══ #}
-  {% if not matches and not ing_matches %}
+  {% if not matches and not ing_matches and not kw_logs %}
   <div class="rd-nomatch">
     {% if news.ai_parsed %}
     <i class="bi bi-check-circle-fill text-success" style="font-size:20px;flex-shrink:0;"></i>

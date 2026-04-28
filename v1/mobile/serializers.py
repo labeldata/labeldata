@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import AppDevice, AlertRule, PushNotificationLog, Bookmark, AppVersion
-from v1.regulatory.models import RegulatoryNews
+from v1.regulatory.models import RegulatoryNews, InspectionMatch, InspectionResult
 
 
 _API_SOURCE_LABELS = {
@@ -89,6 +89,44 @@ class PushNotificationLogSerializer(serializers.ModelSerializer):
             'category': obj.rule_triggered.category,
             'match_type': obj.rule_triggered.match_type,
         }
+
+
+class InspectionResultBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InspectionResult
+        fields = [
+            'id', 'tkawyprno', 'prdtnm', 'bssh_nm',
+            'jdgmnt_cd_nm', 'tkawydtm', 'plan_titl',
+        ]
+
+
+class InspectionMatchNotificationSerializer(serializers.ModelSerializer):
+    """앱 알림 목록에서 수거검사 항목을 표현하는 시리얼라이저."""
+    inspection = InspectionResultBriefSerializer(read_only=True)
+    alert_phase_display = serializers.SerializerMethodField()
+    match_reason_display = serializers.SerializerMethodField()
+    # 앱이 PushNotificationLog와 동일 구조로 처리할 수 있도록 공통 필드 제공
+    trigger_type = serializers.SerializerMethodField()
+    trigger_label = serializers.CharField(source='matched_value')
+    is_read = serializers.BooleanField(source='read_yn')
+    created_at = serializers.DateTimeField(source='notified_at')
+
+    class Meta:
+        model = InspectionMatch
+        fields = [
+            'id', 'inspection', 'alert_phase', 'alert_phase_display',
+            'match_reason', 'match_reason_display',
+            'trigger_type', 'trigger_label', 'is_read', 'created_at',
+        ]
+
+    def get_trigger_type(self, obj):
+        return 'inspection'
+
+    def get_alert_phase_display(self, obj):
+        return obj.get_alert_phase_display()
+
+    def get_match_reason_display(self, obj):
+        return obj.get_match_reason_display()
 
 
 class BookmarkSerializer(serializers.ModelSerializer):
