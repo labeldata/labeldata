@@ -22,6 +22,7 @@ from v1.regulatory.models import (
     InspectionResult, InspectionMatch,
 )
 from v1.mobile.models import AlertRule, PushNotificationLog
+from v1.user_management.models import UserProfile
 from v1.regulatory.saol_url_map import SAOL_URLS
 from v1.activity_log.utils import log_activity
 
@@ -374,7 +375,7 @@ def news_list(request):
     )
     inspection_unread = ins_qs.filter(read_yn=False).count()
     inspection_total  = ins_qs.count()
-    inspection_list   = ins_qs[:100] if show_inspection else []
+    inspection_list   = ins_qs[:100]   # 탭 UI: 항상 로드, 뷰 전환은 클라이언트 JS가 처리
 
     # 수거검사 카테고리 건수 주입
     insp46_cats = [
@@ -517,6 +518,7 @@ def news_list(request):
         'inspection_total':   inspection_total,
         'inspection_unread':  inspection_unread,
         'selected_insp':      selected_insp,
+        'user_profile':       UserProfile.objects.filter(user=request.user).first(),
     })
 
 
@@ -989,12 +991,23 @@ def alert_rules_api(request):
         )
         user_devices = AppDevice.objects.filter(pk=web_device.pk)
 
+    from django.conf import settings
+    max_rules = settings.MOBILE_MEMBER_MAX_RULES
+
     created_rules = []
+    all_over_limit = True   # 모든 기기가 한도 초과인지
+
     for device in user_devices:
-        from django.conf import settings
-        max_rules = settings.MOBILE_MEMBER_MAX_RULES
-        if device.rules.filter(is_active=True).count() >= max_rules:
+        active_count = device.rules.filter(is_active=True).count()
+        if active_count >= max_rules:
+            # 이 기기는 한도 초과 — 로그 기록
+            logger.warning(
+                'alert_rule limit reached: user=%s device=%s platform=%s active=%d max=%d',
+                request.user.id, str(device.device_id)[:12], device.platform, active_count, max_rules,
+            )
             continue
+
+        all_over_limit = False
         rule, created = AlertRule.objects.get_or_create(
             device=device,
             category=category,
@@ -1016,9 +1029,24 @@ def alert_rules_api(request):
                 backfill_result = backfill_alerts_for_rule(rule)
             except Exception:
                 backfill_result = {'created': 0, 'previews': []}
+        # else: 이미 활성 상태로 등록된 키워드 — created_rules에 추가하지 않음
 
     if not created_rules:
-        return JsonResponse({'success': False, 'error': '이미 등록된 키워드이거나 최대 개수에 도달했습니다.'}, status=400)
+        if all_over_limit:
+            # 등록된 고유 키워드 수 (중복 제거)
+            unique_count = AlertRule.objects.filter(
+                device__user=request.user, is_active=True
+            ).values('category', 'keyword', 'match_type').distinct().count()
+            return JsonResponse({
+                'success': False,
+                'error': f'등록 한도({max_rules}개)에 도달했습니다. 현재 고유 키워드: {unique_count}개',
+                'debug': {'reason': 'limit', 'max': max_rules, 'unique_count': unique_count},
+            }, status=400)
+        return JsonResponse({
+            'success': False,
+            'error': '이미 등록된 키워드입니다.',
+            'debug': {'reason': 'duplicate'},
+        }, status=400)
 
     first = created_rules[0]
     return JsonResponse({
@@ -1061,3 +1089,21 @@ def alert_rule_delete_api(request, rule_id):
     ).delete()
 
     return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def save_insp_profile(request):
+    """수거검사 모달에서 내정보(회사명·인허가번호) AJAX 저장"""
+    import json as _json
+    try:
+        body = _json.loads(request.body)
+    except Exception:
+        body = request.POST
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+    profile.company_name    = (body.get('company_name', '') or '').strip()
+    profile.license_number  = (body.get('license_number', '') or '').strip()
+    profile.save(update_fields=['company_name', 'license_number'])
+    return JsonResponse({'success': True,
+                         'company_name':   profile.company_name,
+                         'license_number': profile.license_number})

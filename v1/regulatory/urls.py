@@ -21,4 +21,5 @@ urlpatterns = [
     # 수거검사(I0460) API
     path('api/inspection/mark-all-read/', views.inspection_mark_all_read, name='inspection_mark_all_read'),
     path('api/inspection/dismiss/', views.inspection_dismiss, name='inspection_dismiss'),
+    path('api/save-insp-profile/', views.save_insp_profile, name='save_insp_profile'),
 ]

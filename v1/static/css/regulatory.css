@@ -56,8 +56,8 @@
                   flex-shrink: 0; position: relative; z-index: var(--z-filter); }
 .rf-row1    { display: flex; align-items: center; gap: 8px;
               padding: 8px 16px; flex-wrap: nowrap; min-width: 0; }
-.rf-row2    { padding: 5px 16px 7px; border-top: 1px solid var(--c-border-light);
-              display: flex; align-items: center; }
+.rf-row2    { padding: 6px 14px; border-bottom: 1px solid var(--c-border-light);
+              background: #fff; display: flex; align-items: center; flex-shrink: 0; }
 .rf-search-wrap { flex: 1; min-width: 140px; max-width: 260px; }
 .rf-date-wrap   { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
 .rf-date-wrap .rs-date-input { width: 100px; flex: 0 0 auto; min-width: 0; }
@@ -106,8 +106,8 @@
                                  box-shadow: 0 0 0 2px var(--c-primary-bg); }
 .rs-search-icon  { color: var(--c-text-hint); font-size: 13px; flex-shrink: 0;
                    margin-right: 4px; cursor: pointer; }
-.rs-search-inner input { flex: 1; border: none; outline: none; font-size: 14px;
-                          background: transparent; padding: 6px 0; color: var(--c-text-primary);
+.rs-search-inner input { flex: 1; border: none; outline: none; font-size: 13px;
+                          background: transparent; padding: 5px 0; color: var(--c-text-primary);
                           min-width: 0; }
 .rs-search-inner input::placeholder { color: #bdc1c6; }
 .rs-search-x       { background: none; border: none; padding: 4px 6px;
@@ -126,8 +126,8 @@
                      color: var(--c-primary); font-weight: 700; }
 .rs-day-btn:hover  { border-color: #aaa; color: var(--c-text-primary); }
 .rs-date-range  { display: flex; align-items: center; gap: 3px; flex: 1; min-width: 0; }
-.rs-date-input  { border: 1.5px solid #dadce0; border-radius: 7px; padding: 3px 4px;
-                  font-size: 12px; color: var(--c-text-primary); background: #fff;
+.rs-date-input  { border: 1.5px solid #dadce0; border-radius: 7px; padding: 4px 6px;
+                  font-size: 13px; color: var(--c-text-primary); background: #fff;
                   cursor: pointer; flex: 1; min-width: 0; width: 0; }
 .rs-date-input:focus { outline: none; border-color: var(--c-primary); }
 .rs-date-sep    { font-size: 12px; color: var(--c-text-hint); flex-shrink: 0; }
@@ -176,7 +176,7 @@ html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
 .rf-saol-popover-title     { font-size: 12px; font-weight: 700; color: var(--c-text-primary);
                               margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
 .rf-saol-popover-body      { font-size: 11.5px; color: var(--c-text-secondary); line-height: 1.7; }
-.reg-filter-bar .rs-risk-popover { top: calc(100% + 2px); bottom: auto; left: auto; right: auto; width: 300px; }
+.rf-row2 .rs-risk-popover { top: calc(100% + 2px); bottom: auto; left: 14px; right: auto; width: 300px; }
 
 /* ── 6. 등급 도움말 팝오버 ─────────────────────────────────── */
 .rs-risk-help-btn        { background: none; border: none; cursor: pointer; padding: 0 2px;
@@ -210,7 +210,7 @@ html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
 .rs-risk-chips   { display: flex; gap: 4px; padding: 6px 12px 7px;
                    border-bottom: 1px solid var(--c-border-light); flex-wrap: wrap; align-items: center; }
 .rs-risk-chip    { border-radius: 14px; border: 1.5px solid #dadce0; background: #fff;
-                   padding: 3px 9px; font-size: 12px; font-weight: 600; cursor: pointer;
+                   padding: 4px 10px; font-size: 13px; font-weight: 600; cursor: pointer;
                    color: var(--c-text-secondary); transition: all .15s; white-space: nowrap; }
 .rs-risk-chip:hover    { border-color: #bbb; color: var(--c-text-primary); }
 .rs-risk-chip.active-H { background: var(--c-danger-bg); border-color: var(--c-danger); color: var(--c-danger); }
@@ -223,8 +223,8 @@ html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
 
 /* ── 8. 목록 헤더 & 아이템 ──────────────────────────────────── */
 .rs-list-header  { display: flex; align-items: center; justify-content: space-between;
-                   padding: 5px 14px; border-bottom: 1px solid var(--c-border);
-                   background: var(--c-bg-page); flex-shrink: 0; }
+                   padding: 4px 14px; border-bottom: 1px solid var(--c-border-light);
+                   background: #fff; flex-shrink: 0; min-height: 28px; }
 .rs-list-total   { font-size: 11px; color: var(--c-text-muted); }
 .rs-sort-btn     { font-size: 11px; color: var(--c-text-secondary); text-decoration: none;
                    display: inline-flex; align-items: center; gap: 3px;
@@ -239,23 +239,20 @@ html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
 .rs-item:hover   { background: var(--c-bg-page); }
 .rs-item.active  { background: var(--c-primary-bg) !important; }
 
-/* 제품 매칭 아이템 — 빨강 */
-.rs-item.matched       { border-left: 3px solid var(--c-danger); background: #fffaf9; padding-left: 12px; }
-.rs-item.matched:hover { background: #fff5f4; }
-.rs-item.matched.active { background: var(--c-danger-bg) !important; }
+/* 제품 매칭 아이템 — 왼쪽 보더만, 배경은 흰색 유지 */
+.rs-item.matched        { border-left: 3px solid var(--c-danger); padding-left: 12px; }
+.rs-item.matched.active { background: var(--c-primary-bg) !important; }
 
-/* 원료 매칭 아이템 — 주황 (노랑 통합) */
-.rs-item.ing-matched        { border-left: 3px solid var(--c-warn); background: var(--c-warn-bg); padding-left: 12px; }
-.rs-item.ing-matched:hover  { background: #ffe8c8; }
-.rs-item.ing-matched.active { background: #ffd9a0 !important; }
+/* 원료 매칭 아이템 — 왼쪽 보더만 */
+.rs-item.ing-matched        { border-left: 3px solid var(--c-warn); padding-left: 12px; }
+.rs-item.ing-matched.active { background: var(--c-primary-bg) !important; }
 
-/* 키워드 알림 매칭 아이템 — 파랑 (보라 통합) */
-.rs-item.kw-matched        { border-left: 3px solid var(--c-primary); background: var(--c-primary-bg); padding-left: 12px; }
-.rs-item.kw-matched:hover  { background: var(--c-primary-bg2); }
-.rs-item.kw-matched.active { background: #c5d9fc !important; }
-.badge-kw-match { display: inline-block; font-size: 10px; font-weight: 700;
+/* 키워드 알림 매칭 아이템 — 왼쪽 보더만 */
+.rs-item.kw-matched        { border-left: 3px solid #aecbfa; padding-left: 12px; }
+.rs-item.kw-matched.active { background: var(--c-primary-bg) !important; }
+.badge-kw-match { display: inline-block; font-size: 10px; font-weight: 600;
   border-radius: var(--r-xs); padding: 1px 5px; white-space: nowrap; flex-shrink: 0;
-  background: var(--c-primary); color: #fff; }
+  border: 1px solid #aecbfa; background: #f0f4ff; color: #1a56db; }
 
 /* 매칭→일반 구분선 */
 .rs-divider-unmatched {
@@ -307,17 +304,17 @@ html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
   display: inline-block; font-size: 10px; font-weight: 700;
   border-radius: var(--r-xs); padding: 1px 5px; white-space: nowrap; flex-shrink: 0;
 }
-.badge-dom       { background: var(--c-ok-bg);        color: var(--c-ok-text); }       /* 초록 — 국내 부적합 */
-.badge-imp       { background: var(--c-warn-bg);      color: var(--c-warn-text); }      /* 주황 — 수입 */
-.badge-admin     { background: var(--c-border-light);  color: var(--c-text-secondary); } /* 회색 — 행정처분 */
-.badge-recall    { background: var(--c-danger-bg);     color: var(--c-danger-text); }    /* 빨강 — 회수 */
-.badge-risk-H    { background: var(--c-danger);        color: #fff; }                    /* 빨강 — HIGH */
-.badge-risk-M    { background: var(--c-warn);          color: #fff; }                    /* 주황 — MED */
-.badge-risk-L    { background: var(--c-primary);       color: #fff; }                    /* 파랑 — LOW */
-.badge-ing       { opacity: .85; }
-.badge-status-no  { background: var(--c-border-light); color: var(--c-text-secondary); } /* 회색 — 미조치 */
-.badge-status-mon { background: var(--c-warn-bg);      color: var(--c-warn-text); }      /* 주황 — 진행 중 */
-.badge-status-res { background: var(--c-ok-bg);        color: var(--c-ok-text); }        /* 초록 — 완료 */
+.badge-dom       { background: #f1f3f4; color: var(--c-text-secondary); }            /* 회색 — 국내 부적합 */
+.badge-imp       { background: #f1f3f4; color: var(--c-text-secondary); }            /* 회색 — 수입 */
+.badge-admin     { background: #f1f3f4; color: var(--c-text-secondary); }            /* 회색 — 행정처분 */
+.badge-recall    { background: var(--c-danger-bg); color: var(--c-danger-text); }    /* 빨강 — 회수 (위험도 높아 유지) */
+.badge-risk-H    { border: 1px solid var(--c-danger);  background: var(--c-danger-bg);  color: var(--c-danger-text); }  /* 빨강 아웃라인 — HIGH */
+.badge-risk-M    { border: 1px solid #e67700;           background: var(--c-warn-bg);    color: var(--c-warn-text); }    /* 주황 아웃라인 — MED */
+.badge-risk-L    { border: 1px solid #dadce0;           background: #f1f3f4;             color: var(--c-text-secondary); } /* 회색 아웃라인 — LOW */
+.badge-ing       { opacity: .9; }
+.badge-status-no  { display: none; }                                                 /* 미조치: 기본 상태이므로 숨김 */
+.badge-status-mon { background: var(--c-primary-bg); color: var(--c-primary); }      /* 파랑 — 진행 중 */
+.badge-status-res { background: var(--c-ok-bg);     color: var(--c-ok-text); }       /* 초록 — 완료 */
 
 /* ── 10. 목록 빈 상태 ──────────────────────────────────────── */
 .rs-empty    { display: flex; flex-direction: column; align-items: center;
@@ -564,7 +561,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .rs-keyword-btn { display: inline-flex; align-items: center; gap: 4px;
                   background: #fffbea; border: 1.5px solid #ffd700;
                   border-radius: 16px; padding: 4px 12px;
-                  font-size: 12px; color: #5a4a00; cursor: pointer;
+                  font-size: 13px; color: #5a4a00; cursor: pointer;
                   white-space: nowrap; margin-left: auto; flex-shrink: 0;
                   transition: background .15s, border-color .15s; font-weight: 600; }
 .rs-keyword-btn:hover { background: #fff3b0; border-color: #f5c400; }
@@ -572,6 +569,8 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
                     background: #ffd700; color: #5a4a00;
                     border-radius: 10px; min-width: 18px; height: 18px;
                     font-size: 11px; font-weight: 700; padding: 0 5px; }
+.rs-keyword-badge--ok   { background: var(--c-ok-bg); color: var(--c-ok-text); }
+.rs-keyword-badge--warn { background: var(--c-danger-bg); color: var(--c-danger-text); }
 
 /* ── 28. 키워드 모달 ────────────────────────────────────────── */
 .kw-modal-dialog { max-width: 600px; width: 100%; margin: 1.75rem auto; }
@@ -583,7 +582,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .kw-modal-body   { padding: 16px 18px; }
 
 .kw-list-section { margin-bottom: 12px; }
-.kw-list-title   { font-size: 12px; font-weight: 600; color: var(--c-text-secondary); margin-bottom: 8px; }
+.kw-list-title   { font-size: 13px; font-weight: 600; color: var(--c-text-secondary); margin-bottom: 8px; }
 .kw-list-count   { display: inline-flex; align-items: center; justify-content: center;
                    background: #ffd700; color: #5a4a00; border-radius: 10px;
                    min-width: 18px; height: 18px; font-size: 11px; font-weight: 700;
@@ -595,7 +594,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 /* 키워드 칩 */
 .rkb-chip             { display: inline-flex; align-items: center; gap: 3px;
                         border-radius: 14px; padding: 4px 8px 4px 10px;
-                        font-size: 12px; border: 1px solid #ddd; background: #fff; }
+                        font-size: 13px; border: 1px solid #ddd; background: #fff; }
 .rkb-chip-ingredient  { border-color: #a5d6a7; background: #f1f8f1; }
 .rkb-chip-company     { border-color: #90caf9; background: #f0f6ff; }
 .rkb-chip-origin      { border-color: #ffcc80; background: #fff8f0; }
@@ -615,6 +614,34 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .kw-input        { flex: 1 1 0; min-width: 0; }
 .kw-add-btn      { flex: 0 0 auto; padding: 4px 14px; font-size: 13px; border-radius: var(--r-md); white-space: nowrap; }
 .kw-add-help     { font-size: 11px; color: #888; margin-top: 4px; line-height: 1.6; }
+
+/* ── 29a. 수거검사 내정보 모달 ──────────────────────────────── */
+.ipm-info-box  { background: var(--c-primary-bg); border: 1px solid #aecbfa;
+                  border-radius: var(--r-md); padding: 12px 14px; margin-bottom: 16px; }
+.ipm-info-title { font-size: 13px; font-weight: 700; color: var(--c-primary);
+                   margin-bottom: 8px; }
+.ipm-info-body  { display: flex; flex-direction: column; gap: 6px; }
+.ipm-rule-row   { display: flex; align-items: baseline; gap: 8px; }
+.ipm-rule-badge { font-size: 10px; font-weight: 700; border-radius: var(--r-xs);
+                   padding: 1px 7px; white-space: nowrap; flex-shrink: 0; }
+.ipm-rule-badge--1 { background: var(--c-danger); color: #fff; }
+.ipm-rule-badge--2 { background: var(--c-warn);   color: #fff; }
+.ipm-rule-badge--3 { background: var(--c-primary); color: #fff; }
+.ipm-rule-desc  { font-size: 13px; color: var(--c-text-secondary); }
+.ipm-edit-section { margin-top: 4px; }
+.ipm-edit-title { font-size: 13px; font-weight: 700; color: var(--c-text-primary);
+                   margin-bottom: 10px; }
+.ipm-field-row  { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ipm-label      { font-size: 13px; font-weight: 600; color: var(--c-text-secondary);
+                   width: 72px; flex-shrink: 0; }
+.ipm-input      { flex: 1; border: 1.5px solid #dadce0; border-radius: var(--r-sm);
+                   padding: 5px 10px; font-size: 13px; color: var(--c-text-primary);
+                   outline: none; transition: border-color .15s; }
+.ipm-input:focus { border-color: var(--c-primary); }
+.ipm-msg        { font-size: 13px; font-weight: 600; padding: 6px 10px;
+                   border-radius: var(--r-xs); margin-top: 4px; }
+.ipm-msg--ok    { color: var(--c-ok-text); background: var(--c-ok-bg); }
+.ipm-msg--err   { color: var(--c-danger-text); background: var(--c-danger-bg); }
 
 /* ── 29. 키워드 추가 후 소급 매칭 결과 ─────────────────────── */
 .kw-backfill       { border-radius: var(--r-md); padding: 10px 14px; font-size: 13px; }
@@ -730,22 +757,9 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
                          padding: 1px 6px; font-family: monospace; }
 
 /* 전체 읽음 버튼 */
-.rs-insp-readall-btn       { font-size: 11px; font-weight: 600; color: var(--c-primary);
-                              background: var(--c-primary-bg); border: 1px solid #aecbfa;
-                              border-radius: var(--r-sm); padding: 2px 8px; cursor: pointer;
-                              margin-left: 8px; white-space: nowrap; }
-.rs-insp-readall-btn:hover { background: var(--c-primary-bg2); border-color: #8ab4f8; }
-
-/* 수거검사 상태 필터 버튼 */
-.rs-insp-filter            { display: flex; gap: 4px; padding: 6px 12px;
-                              background: var(--c-bg-page); border-bottom: 1px solid var(--c-border-light); }
-.rs-insp-filter-btn        { font-size: 11px; font-weight: 600; padding: 3px 10px;
-                              border-radius: 12px; border: 1px solid #dadce0;
-                              background: #fff; color: var(--c-text-secondary);
-                              cursor: pointer; transition: all .15s; white-space: nowrap; }
-.rs-insp-filter-btn:hover  { border-color: var(--c-primary); color: var(--c-primary); }
-.rs-insp-filter-btn--on    { background: var(--c-primary); border-color: var(--c-primary);
-                              color: #fff; }
+/* rf-row2--insp 내 건수 텍스트 (하위 호환) */
+.rf-insp-total             { font-size: 13px; color: var(--c-text-secondary);
+                              white-space: nowrap; margin-right: 4px; }
 
 /* 해당없음(삭제) 버튼 */
 .rd-insp-actions      { margin-top: 14px; }
@@ -777,8 +791,10 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .rf-detail-toggle { display: inline-flex; align-items: center; gap: 2px;
                     padding: 3px 6px; border-radius: var(--r-sm);
                     border: 1px solid #d0d0d0; background: var(--c-bg-page);
-                    color: #888; cursor: pointer; font-size: 12px; transition: all .15s; margin-left: 2px; }
-.rf-detail-toggle:hover { border-color: #bbb; background: #eee; }
+                    color: #888; cursor: pointer; font-size: 12px; transition: all .15s;
+                    margin-left: auto; }
+.rf-detail-toggle:hover:not(:disabled) { border-color: #bbb; background: #eee; }
+.rf-detail-toggle:disabled { opacity: .35; cursor: not-allowed; border-style: dashed; }
 
 /* ── 33. 수거검사 도움말 팝오버 ─────────────────────────── */
 .rf-insp46-wrap  { position: relative; display: inline-flex; align-items: center; gap: 2px; }
@@ -820,6 +836,95 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   .rf-cat-g + .rf-cat-g  { border-left: none; }
   .rf-cat-g:nth-child(3) { border-left: 1px solid #ebebeb; flex: 1 1 0; }
 }
+
+/* ── 탭 뷰 전환 ─────────────────────────────────────────────────── */
+.rs-view-tabs {
+  display: flex;
+  flex-shrink: 0;
+  background: var(--c-bg-page);
+  border-bottom: 2px solid var(--c-border);  /* active 탭 2px underline과 맞춤 */
+}
+.rs-vtab {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: color .12s, background .12s, border-color .12s;
+  white-space: nowrap;
+  margin-bottom: -2px;  /* 탭 바의 2px border를 active 탭이 덮음 */
+}
+.rs-vtab:hover:not(.rs-vtab--disabled) {
+  color: var(--c-primary);
+  background: var(--c-primary-bg);
+}
+.rs-vtab--active {
+  color: var(--c-primary);
+  background: #fff;
+  border-bottom-color: var(--c-primary);
+}
+.rs-vtab--disabled { opacity: .4; cursor: default; }
+.rs-vtab-badge {
+  background: var(--c-danger); color: #fff;
+  font-size: 10px; font-weight: 700;
+  border-radius: 9px; padding: 1px 5px; min-width: 16px; text-align: center;
+}
+.rs-vtab-count {
+  background: var(--c-border-light); color: var(--c-text-hint);
+  font-size: 10px; font-weight: 400;
+  border-radius: 9px; padding: 1px 5px;
+}
+
+/* ================================================================
+   뷰 모드별 표시 제어 (data-view: insp-news | admin | insp)
+   ================================================================ */
+
+/* ── 사이드바 건수 헤더: 탭별 해당 span만 표시 ── */
+.rs-list-total--insp-news,
+.rs-list-total--admin,
+.rs-list-total--insp                              { display: none; }
+#regSidebar[data-view="insp-news"] .rs-list-total--insp-news { display: inline; }
+#regSidebar[data-view="admin"]     .rs-list-total--admin     { display: inline; }
+#regSidebar[data-view="insp"]      .rs-list-total--insp      { display: inline; }
+/* 수거검사 탭: 정렬 버튼 숨김 (수거검사는 서버 정렬 미지원) */
+#regSidebar[data-view="insp"] .rs-sort-btn        { display: none !important; }
+
+/* ── 부적합 탭: admin 뉴스·수거검사 요소 숨김 ── */
+#regSidebar[data-view="insp-news"] .rs-item[data-group="admin"],
+#regSidebar[data-view="insp-news"] .rs-item--insp,
+#regSidebar[data-view="insp-news"] .rs-list-divider,
+#regSidebar[data-view="insp-news"] .rs-insp-empty { display: none !important; }
+
+/* ── 처분 탭: insp 뉴스·수거검사 요소 숨김 ── */
+#regSidebar[data-view="admin"] .rs-item[data-group="insp"],
+#regSidebar[data-view="admin"] .rs-item--insp,
+#regSidebar[data-view="admin"] .rs-list-divider,
+#regSidebar[data-view="admin"] .rs-insp-empty     { display: none !important; }
+
+/* ── 수거검사 탭: 뉴스 항목·페이지네이션·구분선 숨김 ── */
+#regSidebar[data-view="insp"] .rs-item:not(.rs-item--insp),
+#regSidebar[data-view="insp"] .rs-divider-unmatched,
+#regSidebar[data-view="insp"] .rs-pagination,
+#regSidebar[data-view="insp"] .rs-list-divider,
+#regSidebar[data-view="insp"] .rs-empty           { display: none !important; }
+
+/* ── 우측 패널 필터 바 표시 제어 ── */
+/* rf-row2 (부적합/처분 칩): 뉴스 탭에만 표시 */
+.rf-row2:not(.rf-row2--insp)                      { display: flex; }
+#regPage.reg-page--insp .rf-row2:not(.rf-row2--insp) { display: none !important; }
+/* rf-row2--insp (수거검사): 수거검사 탭에만 표시 */
+.rf-row2--insp                                    { display: none !important; }
+#regPage.reg-page--insp .rf-row2--insp            { display: flex !important; }
+/* 분야 드로어: 수거검사 탭에서 숨김 */
+#regPage.reg-page--insp #catFilterCollapse        { display: none !important; }
 
 /* ── 1024px: 사이드바 축소 ──────────────────────────────── */
 @media (max-width: 1024px) {
