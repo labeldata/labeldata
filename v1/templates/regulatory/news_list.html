@@ -1047,15 +1047,25 @@ window.switchView = switchView;
 
 // 페이지 로드 시 탭 건수 계산 + 초기 탭 활성화
 (function() {
-  // 뉴스 아이템 그룹별 카운트
-  var inspCnt  = document.querySelectorAll('#regSidebar .rs-item[data-group="insp"]').length;
-  var adminCnt = document.querySelectorAll('#regSidebar .rs-item[data-group="admin"]').length;
-  ['vtabInspNewsCnt','sidebarInspNewsCnt'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.textContent = inspCnt + '건';
-  });
-  ['vtabAdminCnt','sidebarAdminCnt'].forEach(function(id) {
-    var el = document.getElementById(id); if (el) el.textContent = adminCnt + '건';
-  });
+  var MATCH_SEL = '.matched, .ing-matched, .kw-matched';
+
+  // 탭 배지: 매칭 아이템만 (수거검사와 동일한 기준)
+  var inspMatched  = document.querySelectorAll('#regSidebar .rs-item[data-group="insp"]:is(' + MATCH_SEL + ')').length;
+  var adminMatched = document.querySelectorAll('#regSidebar .rs-item[data-group="admin"]:is(' + MATCH_SEL + ')').length;
+
+  // 헤더 건수: 전체 아이템 (필터 없는 총 건수)
+  var inspTotal  = document.querySelectorAll('#regSidebar .rs-item[data-group="insp"]').length;
+  var adminTotal = document.querySelectorAll('#regSidebar .rs-item[data-group="admin"]').length;
+
+  var vtabInsp  = document.getElementById('vtabInspNewsCnt');
+  var vtabAdmin = document.getElementById('vtabAdminCnt');
+  if (vtabInsp)  vtabInsp.textContent  = inspMatched;
+  if (vtabAdmin) vtabAdmin.textContent = adminMatched;
+
+  var hdrInsp  = document.getElementById('sidebarInspNewsCnt');
+  var hdrAdmin = document.getElementById('sidebarAdminCnt');
+  if (hdrInsp)  hdrInsp.textContent  = inspTotal  + '건';
+  if (hdrAdmin) hdrAdmin.textContent = adminTotal + '건';
 
   // 초기 탭 — 수거검사 상세가 열려 있으면 insp, 아니면 insp-news
   var sidebar = document.getElementById('regSidebar');
