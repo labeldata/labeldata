@@ -1045,7 +1045,7 @@ def _revalidate_company_matches(inspection) -> None:
     for match in InspectionMatch.objects.filter(
         inspection=inspection,
         match_reason=InspectionMatch.REASON_COMPANY,
-    ).select_related('user__profile'):
+    ).select_related('user'):
         try:
             company_name = (match.user.profile.company_name or '').strip()
         except Exception:
