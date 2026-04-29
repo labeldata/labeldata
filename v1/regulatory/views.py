@@ -67,13 +67,14 @@ def news_list(request):
     - 기간 필터: 3일 / 7일 / 30일 / 전체
     - 내 제품과 매칭된 뉴스 상단 고정
     """
-    q      = request.GET.get('q', '').strip()
-    risk   = request.GET.get('risk', '')    # 'HIGH' | 'MED' | 'LOW' | ''
-    status = request.GET.get('status', '') # 'no_action' | 'monitoring' | 'resolved' | ''
-    days   = request.GET.get('days', '30') # '3' | '7' | '30' | 'all'
-    sort   = request.GET.get('sort', 'desc')  # 'desc' | 'asc'
+    q         = request.GET.get('q', '').strip()
+    risk      = request.GET.get('risk', '')    # 'HIGH' | 'MED' | 'LOW' | ''
+    status    = request.GET.get('status', '') # 'no_action' | 'monitoring' | 'resolved' | ''
+    days      = request.GET.get('days', '30') # '3' | '7' | '30' | 'all'
+    sort      = request.GET.get('sort', 'desc')  # 'desc' | 'asc'
     date_from = request.GET.get('date_from', '').strip()  # YYYY-MM-DD
     date_to   = request.GET.get('date_to',   '').strip()  # YYYY-MM-DD
+    tab       = request.GET.get('tab', '')    # 'insp-news' | 'admin' | 'insp' | ''
 
     # 카테고리 체크박스 (cats_sent 센티넬로 명시적 제출 여부 판별)
     cats_submitted = 'cats_sent' in request.GET
@@ -250,6 +251,15 @@ def news_list(request):
             '-created_at',
         )
 
+    # 탭별 독립 검색: 건수 집계 완료 후 페이지 표시 직전에 qs 범위 제한
+    # (tab_admin_total 등 배지 카운트는 이미 위에서 계산됐으므로 영향 없음)
+    _TAB_ADMIN_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
+    if tab == 'admin':
+        qs = qs.filter(api_source__in=_TAB_ADMIN_SOURCES)
+    elif tab in ('insp-news', ''):
+        qs = qs.exclude(api_source__in=_TAB_ADMIN_SOURCES)
+    # tab == 'insp': 수거검사 탭은 qs 미사용 — 제한 불필요
+
     # 페이지네이션
     page_num = request.GET.get('page', 1)
     paginator = Paginator(qs, 50)
@@ -257,11 +267,12 @@ def news_list(request):
 
     # 페이지 이동용 쿼리스트링 (page·선택 파라미터 제거, tab 파라미터는 유지)
     qp = request.GET.copy()
-    qp.pop('page',    None)
-    qp.pop('id',      None)
-    qp.pop('insp_id', None)
+    qp.pop('page',      None)
+    qp.pop('id',        None)
+    qp.pop('insp_id',   None)
+    qp.pop('insp_page', None)
     page_query_string = qp.urlencode()
-    current_tab = request.GET.get('tab', '')
+    current_tab = tab  # 상단에서 이미 읽은 값 재사용
 
     # saol_admin 지자체명 추출 (목록 패널 표시용)
     for news_item in page_obj.object_list:
@@ -384,15 +395,42 @@ def news_list(request):
     tab_insp_total = sum(r['cnt'] for r in _insp_counts)
 
     # ── 수거검사(I0460) — 내 매칭 건수 및 목록 ───────────────────────────────
-    ins_qs = (
+    ins_qs_base = (
         InspectionMatch.objects
         .filter(user=request.user)
         .select_related('inspection', 'label')
         .order_by('-inspection__tkawydtm', '-alert_phase')
     )
-    inspection_unread = ins_qs.filter(read_yn=False).count()
+    # 탭 배지·읽음 버튼은 항상 전체 기준
+    inspection_unread = ins_qs_base.filter(read_yn=False).count()
+
+    # 수거검사 탭에서만 검색·날짜 필터 적용
+    ins_qs = ins_qs_base
+    if current_tab == 'insp':
+        if q:
+            ins_qs = ins_qs.filter(
+                Q(inspection__prdtnm__icontains=q) |
+                Q(inspection__bssh_nm__icontains=q)
+            )
+        if date_from or date_to:
+            df_str = date_from.replace('-', '') if date_from else ''
+            dt_str = date_to.replace('-', '')   if date_to   else ''
+            if df_str:
+                ins_qs = ins_qs.filter(inspection__tkawydtm__gte=df_str)
+            if dt_str:
+                ins_qs = ins_qs.filter(inspection__tkawydtm__lte=dt_str)
+        elif days != 'all':
+            try:
+                cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
+                ins_qs = ins_qs.filter(inspection__tkawydtm__gte=cutoff_str)
+            except (ValueError, TypeError):
+                pass
+
     inspection_total  = ins_qs.count()
-    inspection_list   = ins_qs[:100]   # 탭 UI: 항상 로드, 뷰 전환은 클라이언트 JS가 처리
+    insp_page_num     = request.GET.get('insp_page', 1)
+    insp_paginator    = Paginator(ins_qs, 20)
+    insp_page_obj     = insp_paginator.get_page(insp_page_num)
+    inspection_list   = insp_page_obj   # 하위 호환 — 템플릿 변수명 유지
 
     # 수거검사 카테고리 건수 주입
     insp46_cats = [
@@ -552,6 +590,8 @@ def news_list(request):
         'insp46_cats':        insp46_cats,
         'show_inspection':    show_inspection,
         'inspection_list':    inspection_list,
+        'insp_page_obj':      insp_page_obj,
+        'insp_paginator':     insp_paginator,
         'inspection_total':   inspection_total,
         'inspection_unread':  inspection_unread,
         'selected_insp':      selected_insp,

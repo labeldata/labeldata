@@ -177,12 +177,12 @@ function setStatus(val) {
 }
 
 function doSearch() {
-  document.getElementById('filterForm').submit();
+  submitFilter();
 }
 
 function clearSearch() {
   document.getElementById('searchInput').value = '';
-  document.getElementById('filterForm').submit();
+  submitFilter();
 }
 
 function selectNews(newsId) {

@@ -901,20 +901,23 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 #regSidebar[data-view="insp-news"] .rs-item[data-group="admin"],
 #regSidebar[data-view="insp-news"] .rs-item--insp,
 #regSidebar[data-view="insp-news"] .rs-list-divider,
-#regSidebar[data-view="insp-news"] .rs-insp-empty { display: none !important; }
+#regSidebar[data-view="insp-news"] .rs-insp-empty,
+#regSidebar[data-view="insp-news"] .rs-pagination--insp { display: none !important; }
 
 /* ── 처분 탭: insp 뉴스·수거검사 요소 숨김 ── */
 #regSidebar[data-view="admin"] .rs-item[data-group="insp"],
 #regSidebar[data-view="admin"] .rs-item--insp,
 #regSidebar[data-view="admin"] .rs-list-divider,
-#regSidebar[data-view="admin"] .rs-insp-empty     { display: none !important; }
+#regSidebar[data-view="admin"] .rs-insp-empty,
+#regSidebar[data-view="admin"] .rs-pagination--insp     { display: none !important; }
 
-/* ── 수거검사 탭: 뉴스 항목·페이지네이션·구분선 숨김 ── */
+/* ── 수거검사 탭: 뉴스 항목·일반 페이지네이션·구분선 숨김, 수거검사 페이지네이션만 표시 ── */
 #regSidebar[data-view="insp"] .rs-item:not(.rs-item--insp),
 #regSidebar[data-view="insp"] .rs-divider-unmatched,
-#regSidebar[data-view="insp"] .rs-pagination,
+#regSidebar[data-view="insp"] .rs-pagination:not(.rs-pagination--insp),
 #regSidebar[data-view="insp"] .rs-list-divider,
 #regSidebar[data-view="insp"] .rs-empty           { display: none !important; }
+#regSidebar[data-view="insp"] .rs-pagination--insp { display: flex !important; }
 
 /* ── 우측 패널 필터 바 표시 제어 ── */
 /* rf-row2 (부적합/처분 칩): 뉴스 탭에만 표시 */

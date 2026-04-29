@@ -358,9 +358,45 @@
             {% endif %}
           </div>
           {% empty %}
-          <div class="rs-insp-empty">매칭된 수거검사 내역이 없습니다.</div>
+          <div class="rs-insp-empty">
+            {% if q %}검색 결과가 없습니다: <strong>{{ q }}</strong>{% else %}매칭된 수거검사 내역이 없습니다.{% endif %}
+          </div>
           {% endfor %}
-          {% if inspection_list %}
+
+          {# ── 수거검사 페이지네이션 ── #}
+          {% if insp_paginator.num_pages > 1 %}
+          <div class="rs-pagination rs-pagination--insp">
+            {% if insp_page_obj.has_previous %}
+            <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ insp_page_obj.previous_page_number }}">‹</a>
+            {% else %}
+            <span class="rs-page-btn disabled">‹</span>
+            {% endif %}
+
+            {% for n in insp_paginator.page_range %}
+              {% if n == insp_page_obj.number %}
+              <span class="rs-page-btn active">{{ n }}</span>
+              {% elif n >= insp_page_obj.number|add:"-2" and n <= insp_page_obj.number|add:"2" %}
+              <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ n }}">{{ n }}</a>
+              {% elif n == 1 or n == insp_paginator.num_pages %}
+              <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ n }}">{{ n }}</a>
+              {% elif n == insp_page_obj.number|add:"-3" or n == insp_page_obj.number|add:"3" %}
+              <span class="rs-page-info">…</span>
+              {% endif %}
+            {% endfor %}
+
+            {% if insp_page_obj.has_next %}
+            <a class="rs-page-btn" href="?{{ page_query_string }}&insp_page={{ insp_page_obj.next_page_number }}">›</a>
+            {% else %}
+            <span class="rs-page-btn disabled">›</span>
+            {% endif %}
+
+            <span class="rs-page-info" style="margin-left:4px;">
+              {{ insp_page_obj.number }}/{{ insp_paginator.num_pages }}p
+            </span>
+          </div>
+          {% endif %}
+
+          {% if inspection_total %}
           <div class="rs-list-divider">── 부적합·처분 알림 ──</div>
           {% endif %}
         {# ── 일반 부적합·처분 알림 목록 ── #}
@@ -565,7 +601,7 @@
           </button>
           <span class="rs-chip-divider"></span>
           {% endif %}
-          {% if inspection_list %}
+          {% if inspection_total %}
           <button type="button" class="rs-risk-chip active-L" id="inspFilterAll"
                   onclick="inspFilter('all')">&#x1F4CB; 전체</button>
           <button type="button" class="rs-risk-chip" id="inspFilterPending"
@@ -1159,24 +1195,6 @@ window.switchView = switchView;
 // 탭 건수(vtabInspNewsCnt, vtabAdminCnt, sidebarInspNewsCnt, sidebarAdminCnt)는
 // 서버에서 필터 적용 후 계산한 값으로 HTML에 이미 렌더링되어 있음
 (function() {
-  // 현재 페이지(DOM)에 admin/insp 항목이 몇 개 있는지 파악
-  var pageAdminCount = document.querySelectorAll('#regSidebar .rs-item[data-group="admin"]').length;
-  var serverAdminTotal = parseInt(document.getElementById('vtabAdminCnt').textContent, 10) || 0;
-
-  // 행정처분 탭: 현재 페이지에 없지만 전체 건수는 있을 때 안내 추가
-  if (pageAdminCount === 0 && serverAdminTotal > 0) {
-    var listBody = document.querySelector('.rs-list-body');
-    if (listBody) {
-      var notice = document.createElement('div');
-      notice.id = 'adminPageNotice';
-      notice.className = 'rs-tab-page-notice';
-      notice.innerHTML =
-        '<i class="bi bi-info-circle me-1"></i>' +
-        '행정처분 ' + serverAdminTotal + '건은 다른 페이지에 있습니다. ' +
-        '페이지를 넘기거나 <strong>검색어</strong>를 사용하세요.';
-      listBody.prepend(notice);
-    }
-  }
 
   // 초기 탭 결정: URL tab 파라미터 > 수거검사 상세 열림 > 기본(insp-news)
   var sidebar = document.getElementById('regSidebar');

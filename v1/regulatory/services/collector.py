@@ -982,8 +982,9 @@ def collect_inspection_data(
 
             try:
                 obj = InspectionResult.objects.get(tkawyprno=prno)
-                # 판정결과 변동 감지
+                # 판정결과·업소명 변동 감지
                 prev_judgment = obj.jdgmnt_cd_nm
+                prev_bssh_nm  = obj.bssh_nm
                 judgment_changed = prev_judgment != new_judgment and new_judgment
                 for attr, val in fields.items():
                     setattr(obj, attr, val)
@@ -992,6 +993,9 @@ def collect_inspection_data(
                 if not skip_trigger and judgment_changed:
                     _trigger_inspection_match(obj, prev_judgment=prev_judgment, is_new=False)
                     send_inspection_alerts(obj)  # PHASE_JUDGMENT: 즉시 개별 발송
+                # 업소명이 바뀌면 REASON_COMPANY 매칭 재검증 (오래된 매칭 삭제)
+                if not skip_trigger and prev_bssh_nm != obj.bssh_nm:
+                    _revalidate_company_matches(obj)
             except InspectionResult.DoesNotExist:
                 obj = InspectionResult.objects.create(tkawyprno=prno, **fields)
                 counts['created'] += 1
@@ -1024,6 +1028,40 @@ def _normalize_corp_name(name: str) -> str:
     """업체명에서 법인 유형 접미/접두사를 제거하고 공백을 정리합니다."""
     name = _CORP_SFXS_RE.sub('', name).strip()
     return name
+
+
+def _revalidate_company_matches(inspection) -> None:
+    """
+    InspectionResult.bssh_nm이 변경됐을 때 REASON_COMPANY 기반 InspectionMatch를 재검증.
+    현재 bssh_nm에 더 이상 사용자 회사명이 포함되지 않으면 해당 매칭을 삭제한다.
+    """
+    import logging as _logging
+    from v1.regulatory.models import InspectionMatch
+
+    _logger = _logging.getLogger(__name__)
+    norm_bssh = _normalize_corp_name(inspection.bssh_nm) if inspection.bssh_nm else ''
+
+    stale = []
+    for match in InspectionMatch.objects.filter(
+        inspection=inspection,
+        match_reason=InspectionMatch.REASON_COMPANY,
+    ).select_related('user__profile'):
+        try:
+            company_name = (match.user.profile.company_name or '').strip()
+        except Exception:
+            company_name = ''
+
+        norm_company = _normalize_corp_name(company_name) if company_name else ''
+        if not norm_company or not norm_bssh or norm_company not in norm_bssh:
+            stale.append(match.pk)
+            _logger.info(
+                '[I0460] bssh_nm 변경으로 매칭 삭제: tkawyprno=%s user_id=%s '
+                'bssh_nm=%r company=%r',
+                inspection.tkawyprno, match.user_id, inspection.bssh_nm, company_name,
+            )
+
+    if stale:
+        InspectionMatch.objects.filter(pk__in=stale).delete()
 
 
 def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> None:
