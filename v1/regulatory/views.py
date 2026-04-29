@@ -124,74 +124,6 @@ def news_list(request):
             qs.filter(violation_reason__icontains=q)
         ).distinct()
 
-    # 위험도 필터 — 현재 사용자의 매칭 등급 기준 (제품 OR 원료 매칭)
-    if risk:
-        risk_from_product = (
-            NewsProductMatch.objects
-            .filter(product__user_id=request.user, false_positive_yn=False, risk_level=risk)
-            .values_list('news_id', flat=True)
-        )
-        risk_from_ingredient = (
-            NewsIngredientMatch.objects
-            .filter(user=request.user, dismissed_yn=False, risk_level=risk)
-            .values_list('news_id', flat=True)
-        )
-        qs = qs.filter(
-            Q(id__in=risk_from_product) | Q(id__in=risk_from_ingredient)
-        )
-
-    # 진행상태 필터 — 뉴스별 최신 조치 기준
-    _action_statuses = ('monitoring', 'resolved')
-    if status in _action_statuses or status == 'no_action':
-        # 뉴스별 최신 조치 타입 계산 (제품 매칭 + 원료 매칭 합산)
-        prod_act_qs = (
-            RegulatoryMatchAction.objects
-            .filter(
-                product_match__product__user_id=request.user,
-                product_match__false_positive_yn=False,
-                action_type__in=_action_statuses,
-            )
-            .values('product_match__news_id', 'action_type')
-            .annotate(max_dt=Max('created_at'))
-        )
-        ing_act_qs = (
-            RegulatoryMatchAction.objects
-            .filter(
-                ingredient_match__user=request.user,
-                ingredient_match__dismissed_yn=False,
-                action_type__in=_action_statuses,
-            )
-            .values('ingredient_match__news_id', 'action_type')
-            .annotate(max_dt=Max('created_at'))
-        )
-        # 뉴스ID별 최신 조치 타입 dict 생성
-        news_latest_action = {}  # {news_id: (action_type, max_dt)}
-        for row in prod_act_qs:
-            nid, at, dt = row['product_match__news_id'], row['action_type'], row['max_dt']
-            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
-                news_latest_action[nid] = (at, dt)
-        for row in ing_act_qs:
-            nid, at, dt = row['ingredient_match__news_id'], row['action_type'], row['max_dt']
-            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
-                news_latest_action[nid] = (at, dt)
-
-        if status in _action_statuses:
-            # 최신 조치가 해당 status인 뉴스만
-            filtered_ids = [nid for nid, (at, _) in news_latest_action.items() if at == status]
-            qs = qs.filter(id__in=filtered_ids)
-        else:  # no_action
-            # 매칭됐지만 조치 이력이 전혀 없는 뉴스
-            matched_ids = set(
-                list(NewsProductMatch.objects
-                     .filter(product__user_id=request.user, false_positive_yn=False)
-                     .values_list('news_id', flat=True)) +
-                list(NewsIngredientMatch.objects
-                     .filter(user=request.user, dismissed_yn=False)
-                     .values_list('news_id', flat=True))
-            )
-            actioned_ids = set(news_latest_action.keys())
-            qs = qs.filter(id__in=(matched_ids - actioned_ids))
-
     # 내 매칭 집합 (제품 매칭 + 원료 보관함 단독 매칭 + 키워드 알림 매칭 합산)
     my_matched_news_ids = set(
         NewsProductMatch.objects
@@ -373,11 +305,83 @@ def news_list(request):
     admin_cats = [c for c in categories_with_count if c.get('group') == 'admin']
     saol_cats  = [c for c in categories_with_count if c.get('group') == 'saol']
 
-    # 현재 필터가 적용된 쿼리셋 기준 탭별 총 건수 (tab 배지에 사용)
+    # ── 탭별 건수 ─────────────────────────────────────────────────────────────
+    # 어노테이션은 완료, 아직 risk/status 필터 미적용 상태
+    # → 행정처분 건수는 여기서 집계 (risk/status 필터 영향 없음)
     _ADMIN_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
-    _tab_counts = qs.values('api_source').annotate(cnt=Count('id'))
-    tab_insp_total  = sum(r['cnt'] for r in _tab_counts if r['api_source'] not in _ADMIN_SOURCES)
-    tab_admin_total = sum(r['cnt'] for r in _tab_counts if r['api_source'] in _ADMIN_SOURCES)
+    _matched_base = qs.filter(
+        Q(my_matched_yn=True) | Q(ing_matched_yn=True) | Q(kw_matched_yn=True)
+    )
+    _admin_counts = _matched_base.filter(
+        api_source__in=_ADMIN_SOURCES
+    ).values('api_source').annotate(cnt=Count('id'))
+    tab_admin_total = sum(r['cnt'] for r in _admin_counts)
+
+    # ── risk / status 필터 (어노테이션 이후 적용 — 부적합 탭 전용) ────────────
+    _action_statuses = ('monitoring', 'resolved')
+    if risk:
+        risk_from_product = (
+            NewsProductMatch.objects
+            .filter(product__user_id=request.user, false_positive_yn=False, risk_level=risk)
+            .values_list('news_id', flat=True)
+        )
+        risk_from_ingredient = (
+            NewsIngredientMatch.objects
+            .filter(user=request.user, dismissed_yn=False, risk_level=risk)
+            .values_list('news_id', flat=True)
+        )
+        qs = qs.filter(Q(id__in=risk_from_product) | Q(id__in=risk_from_ingredient))
+
+    if status in _action_statuses or status == 'no_action':
+        prod_act_qs = (
+            RegulatoryMatchAction.objects
+            .filter(
+                product_match__product__user_id=request.user,
+                product_match__false_positive_yn=False,
+                action_type__in=_action_statuses,
+            )
+            .values('product_match__news_id', 'action_type')
+            .annotate(max_dt=Max('created_at'))
+        )
+        ing_act_qs = (
+            RegulatoryMatchAction.objects
+            .filter(
+                ingredient_match__user=request.user,
+                ingredient_match__dismissed_yn=False,
+                action_type__in=_action_statuses,
+            )
+            .values('ingredient_match__news_id', 'action_type')
+            .annotate(max_dt=Max('created_at'))
+        )
+        news_latest_action: dict = {}
+        for row in prod_act_qs:
+            nid, at, dt = row['product_match__news_id'], row['action_type'], row['max_dt']
+            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
+                news_latest_action[nid] = (at, dt)
+        for row in ing_act_qs:
+            nid, at, dt = row['ingredient_match__news_id'], row['action_type'], row['max_dt']
+            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
+                news_latest_action[nid] = (at, dt)
+
+        if status in _action_statuses:
+            filtered_ids = [nid for nid, (at, _) in news_latest_action.items() if at == status]
+            qs = qs.filter(id__in=filtered_ids)
+        else:  # no_action
+            _na_matched = set(
+                list(NewsProductMatch.objects
+                     .filter(product__user_id=request.user, false_positive_yn=False)
+                     .values_list('news_id', flat=True)) +
+                list(NewsIngredientMatch.objects
+                     .filter(user=request.user, dismissed_yn=False)
+                     .values_list('news_id', flat=True))
+            )
+            qs = qs.filter(id__in=(_na_matched - set(news_latest_action.keys())))
+
+    # 부적합 탭 건수: risk/status 필터 적용 후 집계
+    _insp_counts = qs.filter(
+        Q(my_matched_yn=True) | Q(ing_matched_yn=True) | Q(kw_matched_yn=True)
+    ).exclude(api_source__in=_ADMIN_SOURCES).values('api_source').annotate(cnt=Count('id'))
+    tab_insp_total = sum(r['cnt'] for r in _insp_counts)
 
     # ── 수거검사(I0460) — 내 매칭 건수 및 목록 ───────────────────────────────
     ins_qs = (

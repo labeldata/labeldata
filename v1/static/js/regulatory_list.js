@@ -34,7 +34,17 @@ document.addEventListener('click', function (e) {
 });
 
 function submitFilter() {
-  document.getElementById('filterForm').submit();
+  // 현재 탭을 폼에 주입해 제출 후에도 탭이 유지되도록 함
+  var form = document.getElementById('filterForm');
+  var tabInput = form.querySelector('input[name="tab"]');
+  if (!tabInput) {
+    tabInput = document.createElement('input');
+    tabInput.type  = 'hidden';
+    tabInput.name  = 'tab';
+    form.appendChild(tabInput);
+  }
+  tabInput.value = new URL(window.location.href).searchParams.get('tab') || '';
+  form.submit();
 }
 
 function toggleCatFilter() {

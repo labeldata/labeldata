@@ -1003,3 +1003,10 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   color: #444;
   line-height: 1.4;
 }
+
+/* ── 행정처분 탭: 위험도·상태 필터 버튼 숨기기 ─────────── */
+.reg-page--admin .rf-row2:not(.rf-row2--insp) .rs-risk-chip,
+.reg-page--admin .rf-row2:not(.rf-row2--insp) .rs-chip-divider,
+.reg-page--admin .rf-row2:not(.rf-row2--insp) .rs-risk-help-btn {
+  display: none;
+}

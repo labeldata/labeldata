@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
     'django_bootstrap5',  # django-bootstrap5 사용
     'v1.main',           # Main 앱 (홈 페이지) ⚠️ 반드시 포함 필요!
     'v1.label',          # Label 앱

@@ -1,5 +1,5 @@
 {% extends "base_v2.html" %}
-{% load static %}
+{% load static humanize %}
 
 {% block title %}부적합·처분 알림{% endblock %}
 
@@ -278,19 +278,19 @@
         <button class="rs-vtab{% if not selected_insp %} rs-vtab--active{% endif %}"
                 id="vtabInspNews" onclick="switchView('insp-news')">
           <i class="bi bi-shield-exclamation"></i> 부적합
-          <span class="rs-vtab-count" id="vtabInspNewsCnt">{{ tab_insp_total }}</span>
+          <span class="rs-vtab-count" id="vtabInspNewsCnt">{{ tab_insp_total|intcomma }}</span>
         </button>
         <button class="rs-vtab"
                 id="vtabAdmin" onclick="switchView('admin')">
           <i class="bi bi-gavel"></i> 행정처분
-          <span class="rs-vtab-count" id="vtabAdminCnt">{{ tab_admin_total }}</span>
+          <span class="rs-vtab-count" id="vtabAdminCnt">{{ tab_admin_total|intcomma }}</span>
         </button>
         {% if inspection_total > 0 %}
         <button class="rs-vtab{% if selected_insp %} rs-vtab--active{% endif %}"
                 id="vtabInsp" onclick="switchView('insp')">
           <i class="bi bi-search"></i> 수거검사
-          {% if inspection_unread > 0 %}<span class="rs-vtab-badge">{{ inspection_unread }}</span>
-          {% else %}<span class="rs-vtab-count">{{ inspection_total }}</span>{% endif %}
+          {% if inspection_unread > 0 %}<span class="rs-vtab-badge">{{ inspection_unread|intcomma }}</span>
+          {% else %}<span class="rs-vtab-count">{{ inspection_total|intcomma }}</span>{% endif %}
         </button>
         {% else %}
         <button class="rs-vtab rs-vtab--disabled"
@@ -301,9 +301,9 @@
       </div>
       {# ── 탭 서브 헤더 (모든 탭 공통) ── #}
       <div class="rs-list-header">
-        <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">{{ tab_insp_total }}건</span>
-        <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">{{ tab_admin_total }}건</span>
-        <span class="rs-list-total rs-list-total--insp"> {{ inspection_total }}건</span>
+        <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">{{ tab_insp_total|intcomma }}건</span>
+        <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">{{ tab_admin_total|intcomma }}건</span>
+        <span class="rs-list-total rs-list-total--insp"> {{ inspection_total|intcomma }}건</span>
         <a class="rs-sort-btn"
            href="?{{ page_query_string }}&sort={% if sort == 'asc' %}desc{% else %}asc{% endif %}"
            title="날짜 정렬 순서 변경">
@@ -1138,8 +1138,9 @@ function switchView(v, updateUrl) {
     }
   }
 
-  if (v === 'insp') { page.classList.add('reg-page--insp'); }
-  else              { page.classList.remove('reg-page--insp'); }
+  if (v === 'insp')  { page.classList.add('reg-page--insp');  page.classList.remove('reg-page--admin'); }
+  else if (v === 'admin') { page.classList.add('reg-page--admin'); page.classList.remove('reg-page--insp'); }
+  else               { page.classList.remove('reg-page--insp'); page.classList.remove('reg-page--admin'); }
 
   // URL에 tab 파라미터 반영 (페이지네이션·새로고침 시 탭 복원용)
   if (updateUrl !== false && window.history && window.history.replaceState) {
