@@ -4159,8 +4159,97 @@ def notification_list(request):
             })
             if len(seen_news_ids) >= 10:
                 break
+        # ── 원료 매칭 알림 (NewsIngredientMatch) ──────────────────────────
+        ing_matches = (
+            NewsIngredientMatch.objects
+            .filter(user=request.user, dismissed_yn=False)
+            .select_related('news', 'ingredient')
+            .order_by('-created_at')[:20]
+        )
+        seen_ing_news = set()
+        for m in ing_matches:
+            if not m.news_id or m.news_id in seen_ing_news or m.news_id in seen_news_ids:
+                continue
+            seen_ing_news.add(m.news_id)
+            ingr_name = (getattr(m.ingredient, 'prdlst_nm', '') or '') if m.ingredient else ''
+            pname = (m.news.product_name or '') if m.news else ''
+            items.append({
+                'id':          f'ing_{m.id}',
+                'message':     f"원료 '{ingr_name[:15]}' 관련 부적합 알림: '{pname[:20]}'",
+                'read_yn':     m.read_yn,
+                'status_code': 'REGULATORY',
+                'created_at':  m.created_at.strftime('%Y-%m-%d %H:%M'),
+                'label_id':    None,
+                'label_name':  ingr_name,
+                'url':         f'/regulatory/?id={m.news_id}',
+            })
     except Exception:
         pass  # 앱 미설치 환경 안전 처리
+
+    # ── 키워드 알림 (PushNotificationLog, trigger_type='keyword') ────────
+    try:
+        from v1.mobile.models import AppDevice as _AppDev, PushNotificationLog as _PushLog
+        _dev_ids = list(_AppDev.objects.filter(user=request.user).values_list('id', flat=True))
+        if _dev_ids:
+            _kw_logs = (
+                _PushLog.objects
+                .filter(device_id__in=_dev_ids, trigger_type='keyword')
+                .select_related('news')
+                .order_by('-created_at')[:200]
+            )
+            # 키워드별 그룹핑 → 각 키워드 1건으로 표시
+            _kw_groups = {}
+            for _log in _kw_logs:
+                _kw_groups.setdefault(_log.trigger_label or '', []).append(_log)
+            for _kw, _logs in _kw_groups.items():
+                _first = _logs[0]
+                _cnt = len(_logs)
+                _pname = (_first.news.product_name or '') if _first.news else ''
+                _unread = sum(1 for l in _logs if not l.is_read)
+                unread_count += _unread
+                if _cnt > 1:
+                    _msg = f"키워드 '{_kw}': '{_pname[:15]}' 외 {_cnt - 1}건이 수집되었습니다."
+                else:
+                    _msg = f"키워드 '{_kw}': '{_pname[:20]}' 수집되었습니다."
+                items.append({
+                    'id':          f'kw_{_first.id}',
+                    'message':     _msg,
+                    'read_yn':     _unread == 0,
+                    'status_code': 'KEYWORD',
+                    'created_at':  _first.created_at.strftime('%Y-%m-%d %H:%M'),
+                    'label_id':    None,
+                    'label_name':  _kw,
+                    'url':         f'/regulatory/?q={_kw}',
+                })
+    except Exception:
+        pass
+
+    # ── 수거검사 알림 (InspectionMatch) ─────────────────────────────────
+    try:
+        from v1.regulatory.models import InspectionMatch as _InspMatch
+        _insp_list = (
+            _InspMatch.objects
+            .filter(user=request.user, notified_at__isnull=False)
+            .select_related('inspection')
+            .order_by('-notified_at')[:20]
+        )
+        for _m in _insp_list:
+            if not _m.read_yn:
+                unread_count += 1
+            _pname = (_m.inspection.prdtnm or '') if _m.inspection else ''
+            _phase = _m.get_alert_phase_display() if hasattr(_m, 'get_alert_phase_display') else ''
+            items.append({
+                'id':          f'insp_{_m.id}',
+                'message':     f"수거검사 알림: '{_pname[:20]}' {_phase}",
+                'read_yn':     _m.read_yn,
+                'status_code': 'INSPECTION',
+                'created_at':  _m.notified_at.strftime('%Y-%m-%d %H:%M') if _m.notified_at else '',
+                'label_id':    None,
+                'label_name':  '',
+                'url':         '/regulatory/?tab=insp',
+            })
+    except Exception:
+        pass
 
     # 미읽음 우선 정렬
     items.sort(key=lambda x: (0 if not x['read_yn'] else 1, x['created_at']), reverse=False)
@@ -4181,42 +4270,95 @@ def notification_mark_read(request):
     except (ValueError, AttributeError):
         notification_id = None
 
-    # reg_ 접두사 = 부적합.처분 알림
-    if notification_id and str(notification_id).startswith('reg_'):
+    nid = str(notification_id) if notification_id else ''
+
+    if nid.startswith('reg_'):
+        # 내제품 매칭 알림
         try:
             from v1.regulatory.models import NewsProductMatch
-            reg_id = int(str(notification_id).replace('reg_', ''))
             NewsProductMatch.objects.filter(
-                id=reg_id, product__user_id=request.user
+                id=int(nid[4:]), product__user_id=request.user
             ).update(read_yn=True, read_at=tz.now())
         except Exception:
             pass
-    elif notification_id:
+    elif nid.startswith('ing_'):
+        # 원료 매칭 알림
+        try:
+            from v1.regulatory.models import NewsIngredientMatch
+            NewsIngredientMatch.objects.filter(
+                id=int(nid[4:]), user=request.user
+            ).update(read_yn=True)
+        except Exception:
+            pass
+    elif nid.startswith('kw_'):
+        # 키워드 알림 — 해당 키워드의 모든 로그를 읽음 처리
+        try:
+            from v1.mobile.models import AppDevice as _AppDev, PushNotificationLog as _PushLog
+            _log = _PushLog.objects.filter(
+                id=int(nid[3:]), device__user=request.user
+            ).select_related('device').first()
+            if _log:
+                _dev_ids = list(_AppDev.objects.filter(user=request.user).values_list('id', flat=True))
+                _PushLog.objects.filter(
+                    device_id__in=_dev_ids,
+                    trigger_label=_log.trigger_label,
+                    trigger_type='keyword',
+                    is_read=False,
+                ).update(is_read=True)
+        except Exception:
+            pass
+    elif nid.startswith('insp_'):
+        # 수거검사 알림
+        try:
+            from v1.regulatory.models import InspectionMatch
+            InspectionMatch.objects.filter(
+                id=int(nid[5:]), user=request.user
+            ).update(read_yn=True)
+        except Exception:
+            pass
+    elif nid:
         ProductNotification.objects.filter(
-            id=notification_id, recipient=request.user
+            id=int(nid), recipient=request.user
         ).update(read_yn=True)
     else:
-        # 전체 읽음: 제품 알림 + 부적합.처분 알림 모두
-        ProductNotification.objects.filter(
-            recipient=request.user, read_yn=False
-        ).update(read_yn=True)
+        # 전체 읽음
+        ProductNotification.objects.filter(recipient=request.user, read_yn=False).update(read_yn=True)
         try:
-            from v1.regulatory.models import NewsProductMatch
+            from v1.regulatory.models import NewsProductMatch, NewsIngredientMatch, InspectionMatch
             NewsProductMatch.objects.filter(
                 product__user_id=request.user, read_yn=False
             ).update(read_yn=True, read_at=tz.now())
+            NewsIngredientMatch.objects.filter(user=request.user, read_yn=False).update(read_yn=True)
+            InspectionMatch.objects.filter(user=request.user, read_yn=False, notified_at__isnull=False).update(read_yn=True)
+        except Exception:
+            pass
+        try:
+            from v1.mobile.models import AppDevice as _AppDev, PushNotificationLog as _PushLog
+            _dev_ids = list(_AppDev.objects.filter(user=request.user).values_list('id', flat=True))
+            if _dev_ids:
+                _PushLog.objects.filter(device_id__in=_dev_ids, is_read=False).update(is_read=True)
         except Exception:
             pass
 
-    unread_count = ProductNotification.objects.filter(
-        recipient=request.user, read_yn=False
-    ).count()
+    unread_count = ProductNotification.objects.filter(recipient=request.user, read_yn=False).count()
     try:
-        from v1.regulatory.models import NewsProductMatch
-        unread_count += NewsProductMatch.objects.filter(
-            product__user_id=request.user, read_yn=False,
-            false_positive_yn=False,
-        ).count()
+        from v1.regulatory.models import (
+            NewsProductMatch, NewsIngredientMatch, RegulatoryMatchAction, InspectionMatch
+        )
+        _act = ('monitoring', 'resolved')
+        _prod = set(NewsProductMatch.objects.filter(product__user_id=request.user, false_positive_yn=False).values_list('news_id', flat=True))
+        _ing  = set(NewsIngredientMatch.objects.filter(user=request.user, dismissed_yn=False).values_list('news_id', flat=True))
+        _pa   = set(RegulatoryMatchAction.objects.filter(product_match__product__user_id=request.user, action_type__in=_act).values_list('product_match__news_id', flat=True))
+        _ia   = set(RegulatoryMatchAction.objects.filter(ingredient_match__user=request.user, action_type__in=_act).values_list('ingredient_match__news_id', flat=True))
+        unread_count += len((_prod | _ing) - (_pa | _ia))
+        unread_count += InspectionMatch.objects.filter(user=request.user, read_yn=False, notified_at__isnull=False).count()
+    except Exception:
+        pass
+    try:
+        from v1.mobile.models import AppDevice as _AppDev, PushNotificationLog as _PushLog
+        _dev_ids = list(_AppDev.objects.filter(user=request.user).values_list('id', flat=True))
+        if _dev_ids:
+            unread_count += _PushLog.objects.filter(device_id__in=_dev_ids, trigger_type='keyword', is_read=False).count()
     except Exception:
         pass
 

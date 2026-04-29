@@ -34,7 +34,7 @@ from bs4 import BeautifulSoup
 from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
-from v1.mobile.services.push_service import send_inspection_alerts
+from v1.mobile.services.push_service import send_inspection_alerts, send_inspection_batch_alerts
 
 from v1.regulatory.models import RegulatoryNews
 
@@ -991,18 +991,22 @@ def collect_inspection_data(
                 counts['updated'] += 1
                 if not skip_trigger and judgment_changed:
                     _trigger_inspection_match(obj, prev_judgment=prev_judgment, is_new=False)
-                    send_inspection_alerts(obj)
+                    send_inspection_alerts(obj)  # PHASE_JUDGMENT: 즉시 개별 발송
             except InspectionResult.DoesNotExist:
                 obj = InspectionResult.objects.create(tkawyprno=prno, **fields)
                 counts['created'] += 1
                 if not skip_trigger:
                     _trigger_inspection_match(obj, prev_judgment='', is_new=True)
-                    send_inspection_alerts(obj)
+                    # PHASE_COLLECTION은 루프 종료 후 send_inspection_batch_alerts()로 일괄 발송
 
         if len(rows) < page_size:
             break
         start += page_size
         time.sleep(0.5)
+
+    # PHASE_COLLECTION 알림: 전체 수집 완료 후 사용자별 1건으로 묶어 발송
+    if not skip_trigger:
+        send_inspection_batch_alerts()
 
     logger.info(f'[I0460] 수집 완료: {counts}')
     return counts

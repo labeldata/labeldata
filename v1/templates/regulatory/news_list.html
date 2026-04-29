@@ -278,12 +278,12 @@
         <button class="rs-vtab{% if not selected_insp %} rs-vtab--active{% endif %}"
                 id="vtabInspNews" onclick="switchView('insp-news')">
           <i class="bi bi-shield-exclamation"></i> 부적합
-          <span class="rs-vtab-count" id="vtabInspNewsCnt">-</span>
+          <span class="rs-vtab-count" id="vtabInspNewsCnt">{{ tab_insp_total }}</span>
         </button>
         <button class="rs-vtab"
                 id="vtabAdmin" onclick="switchView('admin')">
           <i class="bi bi-gavel"></i> 행정처분
-          <span class="rs-vtab-count" id="vtabAdminCnt">-</span>
+          <span class="rs-vtab-count" id="vtabAdminCnt">{{ tab_admin_total }}</span>
         </button>
         {% if inspection_total > 0 %}
         <button class="rs-vtab{% if selected_insp %} rs-vtab--active{% endif %}"
@@ -301,8 +301,8 @@
       </div>
       {# ── 탭 서브 헤더 (모든 탭 공통) ── #}
       <div class="rs-list-header">
-        <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">-건</span>
-        <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">-건</span>
+        <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">{{ tab_insp_total }}건</span>
+        <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">{{ tab_admin_total }}건</span>
         <span class="rs-list-total rs-list-total--insp"> {{ inspection_total }}건</span>
         <a class="rs-sort-btn"
            href="?{{ page_query_string }}&sort={% if sort == 'asc' %}desc{% else %}asc{% endif %}"
@@ -316,9 +316,13 @@
           <div class="rs-item rs-item--insp
                       {% if not m.read_yn %}rs-item--insp-unread{% endif %}
                       {% if selected_insp and selected_insp.id == m.id %}active{% endif %}"
+               data-insp-id="{{ m.id }}"
                data-insp-status="{% if m.inspection.jdgmnt_cd_nm == '' or m.inspection.jdgmnt_cd_nm == '검토중' %}pending{% else %}done{% endif %}"
-               onclick="selectInspection({{ m.id }})">
+               onclick="inspItemClick(event, {{ m.id }})">
             <div class="rs-row1">
+              <input type="checkbox" class="insp-select-cb" data-insp-id="{{ m.id }}"
+                     style="display:none;flex-shrink:0;margin-right:6px;accent-color:#e03131;"
+                     onclick="event.stopPropagation();" onchange="onInspCbChange()">
               {% if not m.read_yn %}<span class="rs-unread-dot"></span>{% endif %}
               <span class="rs-item-name">{{ m.inspection.prdtnm|default:m.inspection.bssh_nm }}</span>
               {# 진행상태 badge #}
@@ -568,6 +572,15 @@
                   onclick="inspFilter('pending')">&#x23F3; 진행 중</button>
           <button type="button" class="rs-risk-chip" id="inspFilterDone"
                   onclick="inspFilter('done')">&#x2705; 완료</button>
+          <span class="rs-chip-divider"></span>
+          <button type="button" class="rs-risk-chip" id="inspSelectModeBtn"
+                  onclick="toggleInspSelectMode()" title="여러 항목을 선택해 한꺼번에 삭제">
+            <i class="bi bi-check2-square"></i> 선택 삭제
+          </button>
+          <button type="button" class="rs-risk-chip active-no" id="inspDeleteSelectedBtn"
+                  style="display:none" onclick="inspDismissSelected()">
+            <i class="bi bi-trash3"></i> 선택 항목 삭제 (<span id="inspSelectCount">0</span>)
+          </button>
           {% endif %}
           <button type="button" class="rs-keyword-btn" onclick="openInspProfileModal()" title="수거검사 매칭 기준 및 내 정보 관리">
             <i class="bi bi-person-gear me-1"></i>내 정보
@@ -763,16 +776,89 @@ function inspDismiss(matchId) {
   })
   .then(r => r.json()).then(d => {
     if (d.success) {
-      // 목록에서 해당 아이템 제거 후 상세 닫기
       var item = document.querySelector('.rs-item--insp.active');
       if (item) item.remove();
       var url = new URL(window.location.href);
       url.searchParams.delete('insp_id');
+      url.searchParams.set('tab', 'insp');   // 수거검사 탭 유지
       window.location.href = url.toString();
     }
   }).catch(function(){});
 }
 window.inspDismiss = inspDismiss;
+
+// ── 수거검사 다중 선택 모드 ──────────────────────────────────────────────────
+var _inspSelectMode = false;
+
+function toggleInspSelectMode() {
+  _inspSelectMode = !_inspSelectMode;
+  var cbs   = document.querySelectorAll('.insp-select-cb');
+  var btn   = document.getElementById('inspSelectModeBtn');
+  var delBtn = document.getElementById('inspDeleteSelectedBtn');
+  cbs.forEach(function(cb) { cb.style.display = _inspSelectMode ? 'inline-block' : 'none'; });
+  if (_inspSelectMode) {
+    btn.classList.add('active-L');
+    btn.innerHTML = '<i class="bi bi-x-lg"></i> 취소';
+    if (delBtn) delBtn.style.display = 'inline-flex';
+    // 선택 중 아이템 클릭 시 체크박스만 토글하도록 이벤트 위임 처리됨
+  } else {
+    btn.classList.remove('active-L');
+    btn.innerHTML = '<i class="bi bi-check2-square"></i> 선택 삭제';
+    if (delBtn) delBtn.style.display = 'none';
+    cbs.forEach(function(cb) { cb.checked = false; });
+    var cntEl = document.getElementById('inspSelectCount');
+    if (cntEl) cntEl.textContent = '0';
+  }
+}
+window.toggleInspSelectMode = toggleInspSelectMode;
+
+function onInspCbChange() {
+  var count = document.querySelectorAll('.insp-select-cb:checked').length;
+  var cntEl = document.getElementById('inspSelectCount');
+  if (cntEl) cntEl.textContent = count;
+}
+window.onInspCbChange = onInspCbChange;
+
+function inspItemClick(event, matchId) {
+  if (_inspSelectMode) {
+    // 선택 모드: 체크박스 토글
+    var cb = event.currentTarget.querySelector('.insp-select-cb');
+    if (cb && event.target !== cb) { cb.checked = !cb.checked; onInspCbChange(); }
+    return;
+  }
+  selectInspection(matchId);
+}
+window.inspItemClick = inspItemClick;
+
+function inspDismissSelected() {
+  var checked = document.querySelectorAll('.insp-select-cb:checked');
+  if (checked.length === 0) { alert('삭제할 항목을 선택하세요.'); return; }
+  if (!confirm(checked.length + '개 수거검사 항목을 내 목록에서 삭제합니다.\n실제 수거검사 데이터는 삭제되지 않습니다.')) return;
+
+  var ids = Array.from(checked).map(function(cb) { return parseInt(cb.dataset.inspId, 10); });
+  var promises = ids.map(function(id) {
+    return fetch("{% url 'regulatory:inspection_dismiss' %}", {
+      method: 'POST',
+      headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+      body: JSON.stringify({insp_match_id: id}),
+    }).then(function(r) { return r.json(); });
+  });
+
+  Promise.all(promises).then(function(results) {
+    var successIds = ids.filter(function(id, i) { return results[i] && results[i].success; });
+    successIds.forEach(function(id) {
+      var item = document.querySelector('.rs-item--insp[data-insp-id="' + id + '"]');
+      if (item) item.remove();
+    });
+    toggleInspSelectMode();   // 선택 모드 종료
+    // 탭을 insp(수거검사)로 유지하며 새로고침
+    var url = new URL(window.location.href);
+    url.searchParams.delete('insp_id');
+    url.searchParams.set('tab', 'insp');
+    window.location.href = url.toString();
+  }).catch(function() { alert('삭제 중 오류가 발생했습니다.'); });
+}
+window.inspDismissSelected = inspDismissSelected;
 
 function toggleSaolInfo(e) {
   e.stopPropagation();
@@ -864,7 +950,19 @@ function saveKeyword() {
     _updateKwCount(1);
 
     // 기존 데이터 매칭 결과 표시
-    showBackfillResult(data.matched_count || 0, data.previews || [], r.keyword);
+    var matchedCount = data.matched_count || 0;
+    showBackfillResult(matchedCount, data.previews || [], r.keyword);
+
+    // 매칭 건수가 있으면 모달 닫힌 후 페이지 새로고침 (kw-matched 항목 반영)
+    if (matchedCount > 0) {
+      var modal = document.getElementById('keywordManageModal');
+      if (modal) {
+        modal.addEventListener('hidden.bs.modal', function onHidden() {
+          modal.removeEventListener('hidden.bs.modal', onHidden);
+          window.location.reload();
+        });
+      }
+    }
   })
   .catch(function(){ saveBtn.disabled = false; errEl.textContent = '네트워크 오류'; errEl.style.display = 'block'; });
 }
@@ -1016,7 +1114,7 @@ function saveInspProfile() {
 window.saveInspProfile = saveInspProfile;
 
 // ── 탭 뷰 전환 ───────────────────────────────────────────────────────────────
-function switchView(v) {
+function switchView(v, updateUrl) {
   var sidebar = document.getElementById('regSidebar');
   var page    = document.getElementById('regPage');
   if (!sidebar || !page) return;
@@ -1042,38 +1140,69 @@ function switchView(v) {
 
   if (v === 'insp') { page.classList.add('reg-page--insp'); }
   else              { page.classList.remove('reg-page--insp'); }
+
+  // URL에 tab 파라미터 반영 (페이지네이션·새로고침 시 탭 복원용)
+  if (updateUrl !== false && window.history && window.history.replaceState) {
+    var url = new URL(window.location.href);
+    if (v === 'insp-news') {
+      url.searchParams.delete('tab');
+    } else {
+      url.searchParams.set('tab', v);
+    }
+    window.history.replaceState(null, '', url.toString());
+  }
 }
 window.switchView = switchView;
 
-// 페이지 로드 시 탭 건수 계산 + 초기 탭 활성화
+// 페이지 로드 시 초기 탭 활성화
+// 탭 건수(vtabInspNewsCnt, vtabAdminCnt, sidebarInspNewsCnt, sidebarAdminCnt)는
+// 서버에서 필터 적용 후 계산한 값으로 HTML에 이미 렌더링되어 있음
 (function() {
-  var MATCH_SEL = '.matched, .ing-matched, .kw-matched';
+  // 현재 페이지(DOM)에 admin/insp 항목이 몇 개 있는지 파악
+  var pageAdminCount = document.querySelectorAll('#regSidebar .rs-item[data-group="admin"]').length;
+  var serverAdminTotal = parseInt(document.getElementById('vtabAdminCnt').textContent, 10) || 0;
 
-  // 탭 배지: 매칭 아이템만 (수거검사와 동일한 기준)
-  var inspMatched  = document.querySelectorAll('#regSidebar .rs-item[data-group="insp"]:is(' + MATCH_SEL + ')').length;
-  var adminMatched = document.querySelectorAll('#regSidebar .rs-item[data-group="admin"]:is(' + MATCH_SEL + ')').length;
-
-  // 헤더 건수: 전체 아이템 (필터 없는 총 건수)
-  var inspTotal  = document.querySelectorAll('#regSidebar .rs-item[data-group="insp"]').length;
-  var adminTotal = document.querySelectorAll('#regSidebar .rs-item[data-group="admin"]').length;
-
-  var vtabInsp  = document.getElementById('vtabInspNewsCnt');
-  var vtabAdmin = document.getElementById('vtabAdminCnt');
-  if (vtabInsp)  vtabInsp.textContent  = inspMatched;
-  if (vtabAdmin) vtabAdmin.textContent = adminMatched;
-
-  var hdrInsp  = document.getElementById('sidebarInspNewsCnt');
-  var hdrAdmin = document.getElementById('sidebarAdminCnt');
-  if (hdrInsp)  hdrInsp.textContent  = inspTotal  + '건';
-  if (hdrAdmin) hdrAdmin.textContent = adminTotal + '건';
-
-  // 초기 탭 — 수거검사 상세가 열려 있으면 insp, 아니면 insp-news
-  var sidebar = document.getElementById('regSidebar');
-  if (sidebar && sidebar.dataset.view === 'insp') {
-    switchView('insp');
-  } else {
-    switchView('insp-news');
+  // 행정처분 탭: 현재 페이지에 없지만 전체 건수는 있을 때 안내 추가
+  if (pageAdminCount === 0 && serverAdminTotal > 0) {
+    var listBody = document.querySelector('.rs-list-body');
+    if (listBody) {
+      var notice = document.createElement('div');
+      notice.id = 'adminPageNotice';
+      notice.className = 'rs-tab-page-notice';
+      notice.innerHTML =
+        '<i class="bi bi-info-circle me-1"></i>' +
+        '행정처분 ' + serverAdminTotal + '건은 다른 페이지에 있습니다. ' +
+        '페이지를 넘기거나 <strong>검색어</strong>를 사용하세요.';
+      listBody.prepend(notice);
+    }
   }
+
+  // 초기 탭 결정: URL tab 파라미터 > 수거검사 상세 열림 > 기본(insp-news)
+  var sidebar = document.getElementById('regSidebar');
+  var urlTab  = new URL(window.location.href).searchParams.get('tab');
+  var validTabs = {'insp-news': true, 'admin': true, 'insp': true};
+  var initialTab;
+  if (urlTab && validTabs[urlTab]) {
+    initialTab = urlTab;
+  } else if (sidebar && sidebar.dataset.view === 'insp') {
+    initialTab = 'insp';
+  } else {
+    initialTab = 'insp-news';
+  }
+  // false: 초기 로드 시 URL을 replaceState로 덮어쓰지 않음
+  switchView(initialTab, false);
+
+  // 페이지네이션·정렬 링크 클릭 시 현재 탭을 URL에 주입
+  document.querySelectorAll('.rs-page-btn[href], .rs-sort-btn[href]').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      var curTab = (new URL(window.location.href)).searchParams.get('tab');
+      if (!curTab || curTab === 'insp-news') return; // 기본 탭은 파라미터 불필요
+      e.preventDefault();
+      var dest = new URL(a.href, window.location.href);
+      dest.searchParams.set('tab', curTab);
+      window.location.href = dest.toString();
+    });
+  });
 })();
 
 }());

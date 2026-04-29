@@ -109,7 +109,7 @@ class InspectionMatchNotificationSerializer(serializers.ModelSerializer):
     trigger_type = serializers.SerializerMethodField()
     trigger_label = serializers.CharField(source='matched_value')
     is_read = serializers.BooleanField(source='read_yn')
-    created_at = serializers.DateTimeField(source='notified_at')
+    created_at = serializers.SerializerMethodField()  # 수거일(tkawydtm) 기준 표시
 
     class Meta:
         model = InspectionMatch
@@ -121,6 +121,15 @@ class InspectionMatchNotificationSerializer(serializers.ModelSerializer):
 
     def get_trigger_type(self, obj):
         return 'inspection'
+
+    def get_created_at(self, obj):
+        """수거일(tkawydtm) 을 YYYY-MM-DD 형식으로 반환. 없으면 notified_at 사용."""
+        tdt = (obj.inspection.tkawydtm or '') if obj.inspection else ''
+        if tdt and len(tdt) >= 8:
+            return f"{tdt[:4]}-{tdt[4:6]}-{tdt[6:8]}"
+        if obj.notified_at:
+            return obj.notified_at.strftime('%Y-%m-%d')
+        return None
 
     def get_alert_phase_display(self, obj):
         return obj.get_alert_phase_display()

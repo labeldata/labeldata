@@ -90,13 +90,11 @@ def _send_keyword_alerts(news) -> int:
         if PushNotificationLog.objects.filter(device=device, news=news).exists():
             continue
 
-        # fcm_token이 없는 기기는 실제 수신불가 → 로그 생성 자체 스킵
-        if not device.fcm_token:
-            continue
-
         _trim_notifications(device, max_noti)
 
-        _send_fcm(device.fcm_token, news, trigger_type='keyword', trigger_label=matched_rule.keyword)
+        # fcm_token 있는 기기만 실제 푸시 발송 (web device는 로그만 생성)
+        if device.fcm_token:
+            _send_fcm(device.fcm_token, news, trigger_type='keyword', trigger_label=matched_rule.keyword)
 
         PushNotificationLog.objects.create(
             device=device,
@@ -205,6 +203,7 @@ def backfill_alerts_for_rule(rule) -> dict:
 
     created_count = 0
     previews = []
+    to_create = []  # 생성할 (news, ) 목록
 
     for news in qs:
         product_name = (news.product_name or '').lower()
@@ -226,40 +225,66 @@ def backfill_alerts_for_rule(rule) -> dict:
                 'source': news.source,
             })
 
-        # 해당 기기+뉴스 조합 알림이 이미 있으면 카운트 스킵
+        # 해당 기기+뉴스 조합 알림이 이미 있으면 스킵
         if PushNotificationLog.objects.filter(device=device, news=news).exists():
             continue
 
-        # 알림 수 초과 시 가장 오래된 것 삭제
-        _trim_notifications(device, max_noti)
+        to_create.append(news)
 
-        PushNotificationLog.objects.create(
-            device=device,
-            news=news,
-            rule_triggered=rule,
-            trigger_type='keyword',
-            trigger_label=rule.keyword,
-        )
-        created_count += 1
+    if to_create:
+        # 생성 전에 한 번만 trim — 새로 추가할 자리를 한꺼번에 확보
+        # (매 iteration마다 trim하면 기존 keyword 로그가 반복 삭제되는 문제 방지)
+        target = max(1, max_noti - len(to_create))
+        _trim_notifications(device, target)
+        for news in to_create:
+            PushNotificationLog.objects.create(
+                device=device,
+                news=news,
+                rule_triggered=rule,
+                trigger_type='keyword',
+                trigger_label=rule.keyword,
+            )
+            created_count += 1
 
     return {'created': created_count, 'previews': previews}
 
 
 def _trim_notifications(device, max_count: int) -> None:
-    """기기의 알림 수가 max_count 이상이면 가장 오래된 것부터 삭제."""
+    """기기의 알림 수가 max_count 이상이면 가장 오래된 것부터 삭제.
+    keyword 타입 알림은 non-keyword 알림을 먼저 소진한 뒤에만 삭제한다.
+    """
     from v1.mobile.models import PushNotificationLog
 
     current = PushNotificationLog.objects.filter(device=device).count()
-    if current >= max_count:
-        # 초과 개수만큼 오래된 것 삭제
-        excess = current - max_count + 1  # +1: 새로 추가될 자리 확보
-        old_ids = (
-            PushNotificationLog.objects
-            .filter(device=device)
-            .order_by('created_at')
-            .values_list('id', flat=True)[:excess]
-        )
-        PushNotificationLog.objects.filter(id__in=list(old_ids)).delete()
+    if current < max_count:
+        return
+
+    excess = current - max_count + 1  # +1: 새로 추가될 자리 확보
+
+    # non-keyword 알림 먼저 삭제 (keyword 매칭 기록 보존 우선)
+    non_kw_ids = list(
+        PushNotificationLog.objects
+        .filter(device=device)
+        .exclude(trigger_type='keyword')
+        .order_by('created_at')
+        .values_list('id', flat=True)[:excess]
+    )
+    if non_kw_ids:
+        PushNotificationLog.objects.filter(id__in=non_kw_ids).delete()
+        excess -= len(non_kw_ids)
+
+    if excess <= 0:
+        return
+
+    # non-keyword로 부족한 경우에만 keyword 알림도 삭제
+    kw_ids = list(
+        PushNotificationLog.objects
+        .filter(device=device, trigger_type='keyword')
+        .order_by('created_at')
+        .values_list('id', flat=True)[:excess]
+    )
+    if kw_ids:
+        PushNotificationLog.objects.filter(id__in=kw_ids).delete()
 
 
 def _get_fcm_access_token() -> str:
@@ -371,7 +396,8 @@ def _send_fcm(token: str, news, trigger_type: str = 'keyword', trigger_label: st
 
 def send_inspection_alerts(inspection) -> int:
     """
-    InspectionResult에 대해 미발송 InspectionMatch를 찾아 FCM 알림을 발송한다.
+    PHASE_JUDGMENT(판정결과 변동) 미발송 InspectionMatch를 개별 FCM으로 발송한다.
+    PHASE_COLLECTION 신규 수거는 send_inspection_batch_alerts()로 일괄 처리한다.
 
     Returns: 발송된 알림 수
     """
@@ -381,6 +407,7 @@ def send_inspection_alerts(inspection) -> int:
 
     pending = InspectionMatch.objects.filter(
         inspection=inspection,
+        alert_phase=InspectionMatch.PHASE_JUDGMENT,
         notified_at__isnull=True,
     ).select_related('user', 'inspection')
 
@@ -389,6 +416,9 @@ def send_inspection_alerts(inspection) -> int:
         try:
             device = AppDevice.objects.filter(user=match.user).order_by('-last_active_at').first()
             if not device or not device.fcm_token:
+                # FCM 없어도 notified_at 기록
+                match.notified_at = timezone.now()
+                match.save(update_fields=['notified_at'])
                 continue
 
             _send_fcm_inspection(device.fcm_token, match)
@@ -407,6 +437,142 @@ def send_inspection_alerts(inspection) -> int:
             logger.warning(f'[I0460] 알림 발송 실패 match={match.pk}: {exc}')
 
     return sent
+
+
+def send_inspection_batch_alerts() -> int:
+    """
+    PHASE_COLLECTION(신규 수거) 미발송 InspectionMatch를 사용자별로 묶어
+    1건의 FCM을 발송한다. 최근 3일 내 수집된 건만 대상으로 한다.
+
+    collect_inspection_data() 루프가 끝난 뒤 1회 호출하도록 설계.
+
+    Returns: FCM 발송된 사용자 수
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from v1.regulatory.models import InspectionMatch
+    from v1.mobile.models import AppDevice, PushNotificationLog
+
+    cutoff = timezone.now() - timedelta(days=3)
+
+    pending = (
+        InspectionMatch.objects
+        .filter(
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            notified_at__isnull=True,
+            inspection__collected_at__gte=cutoff,
+        )
+        .select_related('user', 'inspection')
+        .order_by('user_id', '-inspection__collected_at')
+    )
+
+    # user_id → [matches] 그룹핑
+    user_matches: dict = {}
+    for m in pending:
+        user_matches.setdefault(m.user_id, []).append(m)
+
+    if not user_matches:
+        return 0
+
+    now = timezone.now()
+    sent = 0
+
+    for user_id, matches in user_matches.items():
+        try:
+            device = (
+                AppDevice.objects
+                .filter(user_id=user_id)
+                .exclude(fcm_token='')
+                .filter(fcm_token__isnull=False)
+                .order_by('-last_active_at')
+                .first()
+            )
+
+            # FCM 없어도 notified_at 기록 (앱 알림 탭 표시용)
+            for m in matches:
+                m.notified_at = now
+                m.save(update_fields=['notified_at'])
+
+            if not device:
+                continue
+
+            # 대표 제품명 + 건수로 그룹 메시지 구성
+            first_ins = matches[0].inspection
+            pname = (first_ins.prdtnm or first_ins.bssh_nm or '제품')[:30]
+            cnt = len(matches)
+            body = f"'{pname}' 외 {cnt - 1}건이 수거 대상입니다." if cnt > 1 else f"'{pname}'이(가) 수거 대상입니다."
+            title = '🔍 수거검사 접수'
+
+            _send_fcm_raw(
+                token=device.fcm_token,
+                title=title,
+                body=body,
+                data={
+                    'type': 'inspection_batch',
+                    'count': str(cnt),
+                },
+            )
+
+            trigger_label = f"{pname} 외 {cnt - 1}건" if cnt > 1 else pname
+            PushNotificationLog.objects.create(
+                device=device,
+                news=None,
+                trigger_type='inspection',
+                trigger_label=trigger_label,
+            )
+            sent += 1
+        except Exception as exc:
+            logger.warning(f'[I0460] 배치 알림 발송 실패 user_id={user_id}: {exc}')
+
+    return sent
+
+
+def _send_fcm_raw(token: str, title: str, body: str, data: dict | None = None) -> None:
+    """FCM HTTP v1 API 공통 발송 헬퍼."""
+    import requests
+    from django.conf import settings
+
+    project_id = getattr(settings, 'FCM_PROJECT_ID', '')
+    if not project_id:
+        return
+
+    access_token = _get_fcm_access_token()
+    if not access_token:
+        return
+
+    try:
+        resp = requests.post(
+            f'https://fcm.googleapis.com/v1/projects/{project_id}/messages:send',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json',
+            },
+            json={
+                'message': {
+                    'token': token,
+                    'notification': {'title': title, 'body': body},
+                    'data': {k: str(v) for k, v in (data or {}).items()},
+                    'android': {
+                        'priority': 'high',
+                        'notification': {
+                            'channel_id': 'food_safety_high',
+                            'notification_priority': 'PRIORITY_MAX',
+                            'sound': 'default',
+                            'default_vibrate_timings': True,
+                        },
+                    },
+                    'apns': {
+                        'payload': {'aps': {'sound': 'default'}},
+                        'headers': {'apns-priority': '10'},
+                    },
+                },
+            },
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            logger.warning(f'[FCM-raw] 발송 실패 {resp.status_code}: {resp.text[:200]}')
+    except Exception as e:
+        logger.warning(f'[FCM-raw] 발송 실패 (token={token[:20]}...): {e}')
 
 
 def _send_fcm_inspection(token: str, match) -> None:

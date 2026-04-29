@@ -991,3 +991,15 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   .rd-sec  { padding: 8px 12px; }
   .rd-insp-panel { padding: 12px 12px; }
 }
+
+/* ── 행정처분 다른 페이지 안내 ──────────────────────────── */
+.rs-tab-page-notice {
+  margin: 8px 0 4px;
+  padding: 8px 12px;
+  background: #f0f4ff;
+  border-left: 3px solid #4e73df;
+  border-radius: 4px;
+  font-size: .82rem;
+  color: #444;
+  line-height: 1.4;
+}

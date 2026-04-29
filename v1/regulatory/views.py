@@ -86,21 +86,27 @@ def news_list(request):
 
     qs = RegulatoryNews.objects.all()
 
-    # 기간 필터 — 날짜 범위 우선, 없으면 days
+    # 기간 필터 —
+    # 대표 날짜: Greatest(COALESCE(event_date, collected_date), collected_date)
+    # = event_date 가 있으면 max(event_date, collected_date), 없으면 collected_date
+    # 이를 기준으로 필터링하면 "최근 수집된 구 사건 항목이 과거 검색에 잘못 포함되는" 버그 방지
+    from django.db.models import ExpressionWrapper, DateField
+    _eff_date = ExpressionWrapper(
+        Greatest(Coalesce(F('event_date'), F('collected_date')), F('collected_date')),
+        output_field=DateField(),
+    )
+
     if date_from or date_to:
-        # event_date OR collected_date 기준으로 days 필터와 동일한 로직 적용
+        qs = qs.annotate(_eff=_eff_date)
         if date_from:
-            qs = qs.filter(Q(event_date__gte=date_from) | Q(collected_date__gte=date_from))
+            qs = qs.filter(_eff__gte=date_from)
         if date_to:
-            qs = qs.filter(Q(event_date__lte=date_to) | Q(collected_date__lte=date_to))
+            qs = qs.filter(_eff__lte=date_to)
         days = 'all'  # 버튼 active 표시 없애는 용도
     elif days != 'all':
         try:
             cutoff = (timezone.now() - timedelta(days=int(days))).date()
-            # event_date OR collected_date 중 하나라도 기간 내이면 표시
-            qs = qs.filter(
-                Q(event_date__gte=cutoff) | Q(collected_date__gte=cutoff)
-            )
+            qs = qs.annotate(_eff=_eff_date).filter(_eff__gte=cutoff)
         except (ValueError, TypeError):
             pass
 
@@ -317,12 +323,13 @@ def news_list(request):
     paginator = Paginator(qs, 50)
     page_obj  = paginator.get_page(page_num)
 
-    # 페이지 이동용 쿼리스트링 (page·선택 파라미터 제거)
+    # 페이지 이동용 쿼리스트링 (page·선택 파라미터 제거, tab 파라미터는 유지)
     qp = request.GET.copy()
     qp.pop('page',    None)
     qp.pop('id',      None)
     qp.pop('insp_id', None)
     page_query_string = qp.urlencode()
+    current_tab = request.GET.get('tab', '')
 
     # saol_admin 지자체명 추출 (목록 패널 표시용)
     for news_item in page_obj.object_list:
@@ -355,7 +362,7 @@ def news_list(request):
     )
     no_action_count = len(my_matched_news_ids - (_prod_actioned | _ing_actioned))
 
-    # 카테고리별 건수 (api_source 기반)
+    # 카테고리별 건수 (api_source 기반, 전체 DB 기준 — 필터 드로어 표시용)
     api_counts_qs = RegulatoryNews.objects.values('api_source').annotate(cnt=Count('id'))
     api_counts = {row['api_source']: row['cnt'] for row in api_counts_qs}
     categories_with_count = [
@@ -365,6 +372,12 @@ def news_list(request):
     insp_cats  = [c for c in categories_with_count if c.get('group') == 'insp']
     admin_cats = [c for c in categories_with_count if c.get('group') == 'admin']
     saol_cats  = [c for c in categories_with_count if c.get('group') == 'saol']
+
+    # 현재 필터가 적용된 쿼리셋 기준 탭별 총 건수 (tab 배지에 사용)
+    _ADMIN_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
+    _tab_counts = qs.values('api_source').annotate(cnt=Count('id'))
+    tab_insp_total  = sum(r['cnt'] for r in _tab_counts if r['api_source'] not in _ADMIN_SOURCES)
+    tab_admin_total = sum(r['cnt'] for r in _tab_counts if r['api_source'] in _ADMIN_SOURCES)
 
     # ── 수거검사(I0460) — 내 매칭 건수 및 목록 ───────────────────────────────
     ins_qs = (
@@ -450,10 +463,27 @@ def news_list(request):
         except RegulatoryNews.DoesNotExist:
             pass
 
-    # 사용자의 AlertRule 목록 — 여러 기기에 동일 규칙이 있을 경우 중복 제거
+    # 웹 전용 기기를 항상 보장 — 모바일 로그아웃으로 device.user=None이 돼도 웹 키워드 유지
+    from v1.mobile.models import AppDevice as _AppDevice
+    import uuid as _uuid_mod
+    _web_dev, _ = _AppDevice.objects.get_or_create(
+        user=request.user,
+        platform='web',
+        defaults={'device_id': f'web-{_uuid_mod.uuid4()}'},
+    )
+
+    # 사용자의 AlertRule 목록 — 연결된 기기 + 웹 기기 규칙을 합산, 중복 제거
     seen = set()
     unique_alert_rules = []
-    for r in AlertRule.objects.filter(device__user=request.user, is_active=True).order_by('category', 'keyword', '-created_at'):
+    _rule_qs = (
+        AlertRule.objects
+        .filter(
+            Q(device__user=request.user) | Q(device=_web_dev),
+            is_active=True,
+        )
+        .order_by('category', 'keyword', '-created_at')
+    )
+    for r in _rule_qs:
         key = (r.category, r.keyword, r.match_type)
         if key not in seen:
             seen.add(key)
@@ -488,6 +518,7 @@ def news_list(request):
         'page_obj':           page_obj,
         'paginator':          paginator,
         'page_query_string':  page_query_string,
+        'current_tab':        current_tab,
         'selected_news':           selected_news,
         'selected_matches':        selected_matches,
         'selected_ing_matches':    selected_ing_matches,
@@ -495,6 +526,8 @@ def news_list(request):
         'unlinked_ingredients':    unlinked_ingredients,
         'total_count':             total_count,
         'categories':         categories_with_count,
+        'tab_insp_total':     tab_insp_total,
+        'tab_admin_total':    tab_admin_total,
         'insp_cats':          insp_cats,
         'admin_cats':         admin_cats,
         'saol_cats':          saol_cats,
@@ -981,15 +1014,16 @@ def alert_rules_api(request):
     if len(keyword) > 100:
         return JsonResponse({'success': False, 'error': '키워드는 100자 이내로 입력해주세요'}, status=400)
 
-    # 연결된 기기가 없으면 웹 전용 가상 기기를 자동 생성
-    if not user_devices.exists():
-        import uuid
-        web_device, _ = AppDevice.objects.get_or_create(
-            user=request.user,
-            platform='web',
-            defaults={'device_id': f'web-{uuid.uuid4()}'},
-        )
-        user_devices = AppDevice.objects.filter(pk=web_device.pk)
+    # 웹 전용 기기를 항상 보장 — 모바일 기기 로그아웃 시에도 웹 등록 키워드가 유지됨
+    import uuid as _uuid
+    web_device, _ = AppDevice.objects.get_or_create(
+        user=request.user,
+        platform='web',
+        defaults={'device_id': f'web-{_uuid.uuid4()}'},
+    )
+    # 웹 기기 + 현재 연결된 모바일 기기 모두에 키워드 등록
+    device_ids = set(user_devices.values_list('pk', flat=True)) | {web_device.pk}
+    user_devices = AppDevice.objects.filter(pk__in=device_ids)
 
     from django.conf import settings
     max_rules = settings.MOBILE_MEMBER_MAX_RULES
