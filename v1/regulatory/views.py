@@ -595,38 +595,22 @@ def news_detail(request, pk):
 
 @login_required
 def unread_count_api(request):
-    """미조치 매칭 알림 수 반환 (JSON) - 상단 네비게이션 배지용
-    매칭된 뉴스 중 monitoring·resolved 조치 이력이 없는 고유 뉴스 건수
-    (context_processors / 미조치 필터와 동일 기준)
-    """
-    _action_statuses = ('monitoring', 'resolved')
-    prod_matched = set(
+    """읽지 않은 매칭 알림 수 반환 (JSON) - read_yn 기준"""
+    prod_unread = set(
         NewsProductMatch.objects.filter(
             product__user_id=request.user,
             false_positive_yn=False,
+            read_yn=False,
         ).values_list('news_id', flat=True)
     )
-    ing_matched = set(
+    ing_unread = set(
         NewsIngredientMatch.objects.filter(
             user=request.user,
             dismissed_yn=False,
+            read_yn=False,
         ).values_list('news_id', flat=True)
     )
-    prod_actioned = set(
-        RegulatoryMatchAction.objects.filter(
-            product_match__product__user_id=request.user,
-            product_match__false_positive_yn=False,
-            action_type__in=_action_statuses,
-        ).values_list('product_match__news_id', flat=True)
-    )
-    ing_actioned = set(
-        RegulatoryMatchAction.objects.filter(
-            ingredient_match__user=request.user,
-            ingredient_match__dismissed_yn=False,
-            action_type__in=_action_statuses,
-        ).values_list('ingredient_match__news_id', flat=True)
-    )
-    count = len((prod_matched | ing_matched) - (prod_actioned | ing_actioned))
+    count = len(prod_unread | ing_unread)
     return JsonResponse({'unread': count})
 
 

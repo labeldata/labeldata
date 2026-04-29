@@ -4099,38 +4099,21 @@ def notification_list(request):
 
     # ── 부적합.처분 알림 통합 ───────────────────────────────────────────
     try:
-        from v1.regulatory.models import (
-            NewsProductMatch, NewsIngredientMatch, RegulatoryMatchAction
-        )
-        _action_statuses = ('monitoring', 'resolved')
+        from v1.regulatory.models import NewsProductMatch, NewsIngredientMatch
 
-        # 미조치 건수 (matched - actioned) — 컨텍스트 프로세서와 동일 기준
-        prod_matched = set(
+        # 읽지 않은 규제 알림 건수 (read_yn 기반 — "모두 읽음" 처리와 동일 기준)
+        prod_unread = set(
             NewsProductMatch.objects.filter(
-                product__user_id=request.user, false_positive_yn=False,
+                product__user_id=request.user, false_positive_yn=False, read_yn=False,
             ).values_list('news_id', flat=True)
         )
-        ing_matched = set(
+        ing_unread = set(
             NewsIngredientMatch.objects.filter(
-                user=request.user, dismissed_yn=False,
+                user=request.user, dismissed_yn=False, read_yn=False,
             ).values_list('news_id', flat=True)
         )
-        prod_actioned = set(
-            RegulatoryMatchAction.objects.filter(
-                product_match__product__user_id=request.user,
-                product_match__false_positive_yn=False,
-                action_type__in=_action_statuses,
-            ).values_list('product_match__news_id', flat=True)
-        )
-        ing_actioned = set(
-            RegulatoryMatchAction.objects.filter(
-                ingredient_match__user=request.user,
-                ingredient_match__dismissed_yn=False,
-                action_type__in=_action_statuses,
-            ).values_list('ingredient_match__news_id', flat=True)
-        )
-        reg_no_action = len((prod_matched | ing_matched) - (prod_actioned | ing_actioned))
-        unread_count += reg_no_action
+        reg_unread = len(prod_unread | ing_unread)
+        unread_count += reg_unread
 
         # 뉴스 단위로 중복 제거 (같은 뉴스에 여러 제품 매칭돼도 1건만 표시)
         seen_news_ids = set()
@@ -4339,18 +4322,18 @@ def notification_mark_read(request):
                 _PushLog.objects.filter(device_id__in=_dev_ids, is_read=False).update(is_read=True)
         except Exception:
             pass
+        # 규제 알림 사이드바 캐시 무효화
+        from django.core.cache import cache
+        cache.delete(f'regulatory_alert_count_{request.user.id}')
 
     unread_count = ProductNotification.objects.filter(recipient=request.user, read_yn=False).count()
     try:
         from v1.regulatory.models import (
-            NewsProductMatch, NewsIngredientMatch, RegulatoryMatchAction, InspectionMatch
+            NewsProductMatch, NewsIngredientMatch, InspectionMatch
         )
-        _act = ('monitoring', 'resolved')
-        _prod = set(NewsProductMatch.objects.filter(product__user_id=request.user, false_positive_yn=False).values_list('news_id', flat=True))
-        _ing  = set(NewsIngredientMatch.objects.filter(user=request.user, dismissed_yn=False).values_list('news_id', flat=True))
-        _pa   = set(RegulatoryMatchAction.objects.filter(product_match__product__user_id=request.user, action_type__in=_act).values_list('product_match__news_id', flat=True))
-        _ia   = set(RegulatoryMatchAction.objects.filter(ingredient_match__user=request.user, action_type__in=_act).values_list('ingredient_match__news_id', flat=True))
-        unread_count += len((_prod | _ing) - (_pa | _ia))
+        _prod_unread = set(NewsProductMatch.objects.filter(product__user_id=request.user, false_positive_yn=False, read_yn=False).values_list('news_id', flat=True))
+        _ing_unread  = set(NewsIngredientMatch.objects.filter(user=request.user, dismissed_yn=False, read_yn=False).values_list('news_id', flat=True))
+        unread_count += len(_prod_unread | _ing_unread)
         unread_count += InspectionMatch.objects.filter(user=request.user, read_yn=False, notified_at__isnull=False).count()
     except Exception:
         pass

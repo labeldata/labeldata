@@ -39,7 +39,7 @@
                 </div>
             </div>
             {# 규제 알림 푸터 (항상 표시) #}
-            <a href="{% url 'regulatory:list' %}{% if regulatory_alert_count > 0 %}?status=no_action{% endif %}"
+            <a href="{% url 'regulatory:list' %}{% if regulatory_alert_count > 0 %}?status=no_action&days=all{% endif %}"
                onclick="window.location.href=this.href;return false;"
                class="v2-notif-regulatory{% if regulatory_alert_count > 0 %} v2-notif-regulatory--alert{% endif %}">
                 <i class="bi bi-shield-exclamation"></i>
@@ -123,7 +123,6 @@
     const LIST_EL     = document.getElementById('notificationList');
     const BADGE_EL    = document.getElementById('notificationBadge');
     const EMPTY_EL    = document.getElementById('notifEmpty');
-    const REG_COUNT   = {{ regulatory_alert_count|default:0 }};  /* 규제 미확인 매칭 */
 
     function getCsrf() {
         return document.cookie.split('; ')
