@@ -17,7 +17,7 @@ from .serializers import (
     PushNotificationLogSerializer, BookmarkSerializer,
     RegulatoryNewsSerializer, InspectionMatchNotificationSerializer,
 )
-from .services.push_service import backfill_alerts_for_rule
+from .services.push_service import backfill_alerts_for_rule, send_immediate_for_rule
 
 logger = logging.getLogger(__name__)
 
@@ -183,11 +183,12 @@ def rules_list(request, device_id):
     if serializer.is_valid():
         rule = serializer.save(device=device)
         # 신규 키워드 등록 즉시 기존 데이터 전체 매칭 (동기 실행)
-        backfill_result = {'created': 0, 'previews': []}
+        backfill_result = {'created': 0, 'previews': [], 'log_ids': []}
         try:
             backfill_result = backfill_alerts_for_rule(rule)
+            send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
         except Exception:
-            pass  # 백필 실패해도 키워드 등록 자체는 성공 처리
+            pass  # 백필/즉시발송 실패해도 키워드 등록 자체는 성공 처리
         data = serializer.data
         data['matched_count'] = backfill_result.get('created', 0)
         data['previews'] = backfill_result.get('previews', [])
@@ -271,15 +272,24 @@ def notifications_list(request, device_id):
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
     # 일반 알림 (키워드·제품·원료 매칭)
-    logs = device.notifications.select_related('news', 'rule_triggered').all()
+    # sent_at IS NOT NULL: 배치 발송 완료된 항목만 표시 (신규 키워드 즉시 발송분 포함)
+    logs = (
+        device.notifications
+        .filter(sent_at__isnull=False)
+        .select_related('news', 'rule_triggered')
+    )
     log_data = PushNotificationLogSerializer(logs, many=True).data
 
-    # 수거검사 알림 — 기기 소유 사용자의 InspectionMatch (notified_at 있는 것만)
+    # 수거검사 알림 — 기기 소유 사용자의 InspectionMatch (fcm_sent_at 있는 것만)
     insp_data = []
     if device.user_id:
         insp_matches = (
             InspectionMatch.objects
-            .filter(user_id=device.user_id, notified_at__isnull=False)
+            .filter(
+                user_id=device.user_id,
+                notified_at__isnull=False,
+                fcm_sent_at__isnull=False,
+            )
             .select_related('inspection')
             .order_by('-notified_at')
         )
@@ -354,10 +364,12 @@ def notification_read_all(request, device_id):
     device = _get_device_or_404(device_id)
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
-    device.notifications.filter(is_read=False).update(is_read=True)
+    # 발송 완료된 항목만 읽음 처리 (sent_at IS NOT NULL)
+    device.notifications.filter(is_read=False, sent_at__isnull=False).update(is_read=True)
     if device.user_id:
         InspectionMatch.objects.filter(
-            user_id=device.user_id, read_yn=False, notified_at__isnull=False
+            user_id=device.user_id, read_yn=False,
+            notified_at__isnull=False, fcm_sent_at__isnull=False,
         ).update(read_yn=True)
     return Response({'detail': 'ok'})
 

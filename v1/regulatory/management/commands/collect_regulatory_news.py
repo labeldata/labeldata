@@ -431,11 +431,11 @@ class Command(BaseCommand):
                 logger.error(f'[매칭] {news.external_id} 오류: {exc}')
 
             try:
-                push_count = send_mobile_alerts_for_news(news)
-                if push_count > 0:
-                    self.stdout.write(f'     📱 [{idx}/{total_items}] 모바일 알림 {push_count}건 발송')
+                log_count = send_mobile_alerts_for_news(news)
+                if log_count > 0:
+                    self.stdout.write(f'     📋 [{idx}/{total_items}] 알림 로그 {log_count}건 저장 (FCM은 send_pending_alerts에서)')
             except Exception as exc:
-                logger.error(f'[모바일 알림] {news.external_id} 오류: {exc}')
+                logger.error(f'[모바일 알림 로그] {news.external_id} 오류: {exc}')
 
             if idx % PROGRESS_INTERVAL == 0:
                 self.stdout.write(f'     진행: {idx}/{total_items}건 처리 중...')

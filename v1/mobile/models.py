@@ -67,7 +67,9 @@ class PushNotificationLog(models.Model):
     trigger_type = models.CharField('트리거 유형', max_length=20, choices=TRIGGER_CHOICES, default='keyword')
     trigger_label = models.CharField('트리거 레이블', max_length=200, blank=True, help_text='매칭된 키워드 또는 제품/원료명')
     is_read = models.BooleanField('읽음 여부', default=False, db_index=True)
-    created_at = models.DateTimeField('발송일시', auto_now_add=True)
+    sent_at = models.DateTimeField('FCM 발송일시', null=True, blank=True, db_index=True,
+                                   help_text='NULL = 로그 생성됐지만 FCM 미발송 (배치 발송 대기 중)')
+    created_at = models.DateTimeField('로그 생성일시', auto_now_add=True)
 
     class Meta:
         db_table = 'mobile_push_notification_log'

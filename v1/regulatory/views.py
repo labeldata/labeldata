@@ -994,7 +994,7 @@ def alert_rules_api(request):
     Body(POST): {"category": "INGREDIENT", "keyword": "...", "match_type": "CONTAINS"}
     """
     from v1.mobile.models import AlertRule, AppDevice
-    from v1.mobile.services.push_service import backfill_alerts_for_rule
+    from v1.mobile.services.push_service import backfill_alerts_for_rule, send_immediate_for_rule
 
     user_devices = AppDevice.objects.filter(user=request.user)
 
@@ -1081,6 +1081,7 @@ def alert_rules_api(request):
             created_rules.append(rule)
             try:
                 backfill_result = backfill_alerts_for_rule(rule)
+                send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
             except Exception:
                 backfill_result = {'created': 0, 'previews': []}
         elif not rule.is_active:
@@ -1089,6 +1090,7 @@ def alert_rules_api(request):
             created_rules.append(rule)
             try:
                 backfill_result = backfill_alerts_for_rule(rule)
+                send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
             except Exception:
                 backfill_result = {'created': 0, 'previews': []}
         # else: 이미 활성 상태로 등록된 키워드 — created_rules에 추가하지 않음

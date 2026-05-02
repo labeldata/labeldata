@@ -882,6 +882,11 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   font-size: 10px; font-weight: 400;
   border-radius: 9px; padding: 1px 5px;
 }
+.rs-vtab-unread-dot {
+  display: inline-block; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--c-danger);
+  margin-left: 3px; vertical-align: middle; flex-shrink: 0;
+}
 
 /* ================================================================
    뷰 모드별 표시 제어 (data-view: insp-news | admin | insp)

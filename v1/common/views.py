@@ -705,27 +705,10 @@ def call_inspection_api_endpoint(request, endpoint, last_updt_dtm: str):
     Admin에서 ApiEndpoint(service_name='I0460') 등록 후 trigger_action으로 호출.
     """
     from v1.regulatory.services.collector import collect_inspection_data
-    from v1.regulatory.models import InspectionMatch
-    from v1.mobile.services.push_service import send_inspection_alerts
 
     try:
         counts = collect_inspection_data(last_updt_dtm=last_updt_dtm)
-
-        # 미발송 매칭 건에 대해 FCM 발송
-        pending_inspections = (
-            InspectionMatch.objects
-            .filter(notified_at__isnull=True)
-            .values_list('inspection_id', flat=True)
-            .distinct()
-        )
-        fcm_sent = 0
-        for ins_id in pending_inspections:
-            from v1.regulatory.models import InspectionResult
-            try:
-                ins = InspectionResult.objects.get(pk=ins_id)
-                fcm_sent += send_inspection_alerts(ins)
-            except InspectionResult.DoesNotExist:
-                pass
+        fcm_sent = 0  # collect_inspection_data 내부에서 배치 발송 처리됨
 
         endpoint.last_called_at = datetime.now()
         endpoint.last_status    = 'success'

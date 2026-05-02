@@ -148,3 +148,9 @@ cython_debug/
 *.pyo
 *.pyc
 __pycache__/
+# Firebase 서비스 계정 키 (절대 커밋 금지)
+firebase-service-account.json
+firebase_service_account.json
+*firebase*adminsdk*.json
+.gitignore
+.claude/settings.local.json

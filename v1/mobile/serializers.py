@@ -79,7 +79,7 @@ class PushNotificationLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PushNotificationLog
-        fields = ['id', 'news', 'rule_keyword', 'trigger_type', 'trigger_label', 'is_read', 'created_at']
+        fields = ['id', 'news', 'rule_keyword', 'trigger_type', 'trigger_label', 'is_read', 'sent_at', 'created_at']
 
     def get_rule_keyword(self, obj):
         if obj.rule_triggered is None:

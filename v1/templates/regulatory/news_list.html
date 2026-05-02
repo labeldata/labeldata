@@ -244,13 +244,15 @@
               <label class="ipm-label">회사명</label>
               <input type="text" id="inspCompanyName" class="ipm-input"
                      value="{{ user_profile.company_name|default:'' }}"
-                     placeholder="(주)예시식품">
+                     placeholder="(주)예시식품"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();saveInspProfile();}">
             </div>
             <div class="ipm-field-row">
               <label class="ipm-label">인허가번호</label>
               <input type="text" id="inspLicenseNumber" class="ipm-input"
                      value="{{ user_profile.license_number|default:'' }}"
-                     placeholder="2025-서울강남-01234">
+                     placeholder="2025-인허가번호-01234"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();saveInspProfile();}">
             </div>
             <div id="inspProfileMsg" class="ipm-msg" style="display:none;"></div>
           </div>
@@ -289,8 +291,7 @@
         <button class="rs-vtab{% if selected_insp %} rs-vtab--active{% endif %}"
                 id="vtabInsp" onclick="switchView('insp')">
           <i class="bi bi-search"></i> 수거검사
-          {% if inspection_unread > 0 %}<span class="rs-vtab-badge">{{ inspection_unread|intcomma }}</span>
-          {% else %}<span class="rs-vtab-count">{{ inspection_total|intcomma }}</span>{% endif %}
+          <span class="rs-vtab-count" id="vtabInspCnt">{{ inspection_total|intcomma }}</span>{% if inspection_unread > 0 %}<span class="rs-vtab-unread-dot" id="vtabInspUnreadDot"></span>{% endif %}
         </button>
         {% else %}
         <button class="rs-vtab rs-vtab--disabled"
@@ -768,8 +769,16 @@ function inspMarkAllRead() {
         var dot = el.querySelector('.rs-unread-dot');
         if (dot) dot.remove();
       });
-      var btn = document.querySelector('.rs-insp-readall-btn');
-      if (btn) btn.remove();
+      // 탭 미읽음 dot 제거
+      var tabDot = document.getElementById('vtabInspUnreadDot');
+      if (tabDot) tabDot.remove();
+      // "전체 읽음" 버튼 제거
+      var readAllBtn = document.querySelector('.rf-row2--insp .rs-risk-chip[onclick="inspMarkAllRead()"]');
+      if (readAllBtn) {
+        var divider = readAllBtn.nextElementSibling;
+        if (divider && divider.classList.contains('rs-chip-divider')) divider.remove();
+        readAllBtn.remove();
+      }
     }
   }).catch(function(){});
 }
@@ -1138,6 +1147,10 @@ function saveInspProfile() {
       }
       setTimeout(function() {
         bootstrap.Modal.getInstance(document.getElementById('inspProfileModal')).hide();
+        // 새 키워드(회사명/인허가번호)로 수거검사 목록 재조회
+        var url = new URL(window.location.href);
+        url.searchParams.set('tab', 'insp');
+        window.location.href = url.toString();
       }, 800);
     }
   })

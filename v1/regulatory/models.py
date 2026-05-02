@@ -269,9 +269,13 @@ class InspectionMatch(models.Model):
     prev_judgment = models.CharField(max_length=50, blank=True, verbose_name='이전 판정결과',
                                      help_text='2차 알림 메시지용')
 
-    notified_at = models.DateTimeField(null=True, blank=True, verbose_name='알림 발송일시')
-    read_yn     = models.BooleanField(default=False, db_index=True, verbose_name='확인 여부')
-    read_at     = models.DateTimeField(null=True, blank=True, verbose_name='확인 일시')
+    notified_at  = models.DateTimeField(null=True, blank=True, verbose_name='알림 생성일시',
+                                        help_text='NULL = 아직 처리 전')
+    fcm_sent_at  = models.DateTimeField(null=True, blank=True, db_index=True,
+                                        verbose_name='FCM 발송일시',
+                                        help_text='NULL = FCM 미발송 (배치 발송 대기 중)')
+    read_yn      = models.BooleanField(default=False, db_index=True, verbose_name='확인 여부')
+    read_at      = models.DateTimeField(null=True, blank=True, verbose_name='확인 일시')
 
     created_at = models.DateTimeField(auto_now_add=True)
 
