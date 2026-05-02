@@ -58,45 +58,74 @@ def send_mobile_alerts_for_news(news) -> int:
 def _save_keyword_logs(news) -> int:
     """AlertRule 키워드 매칭 — PushNotificationLog 저장 (FCM 발송 없음)."""
     from django.conf import settings
-    from v1.mobile.models import AppDevice, PushNotificationLog
+    from v1.mobile.models import AppDevice, AlertRule, PushNotificationLog
 
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
 
-    product_name    = (news.product_name or '').lower()
-    company_name    = (news.company_name or '').lower()
-    ai_keywords     = [kw.lower() for kw in (news.ai_keywords or [])]
+    product_name     = (news.product_name or '').lower()
+    company_name     = (news.company_name or '').lower()
+    ai_keywords      = [kw.lower() for kw in (news.ai_keywords or [])]
     violation_reason = (news.violation_reason or '').lower()
 
-    devices = (
+    saved = 0
+
+    # ── 1. 유저 기반 규칙 (로그인 사용자) ───────────────────────────────────
+    user_rules = (
+        AlertRule.objects
+        .filter(user__isnull=False, is_active=True)
+        .select_related('user')
+    )
+
+    matched_users: dict = {}  # user_id → matched AlertRule
+    for rule in user_rules:
+        if rule.user_id in matched_users:
+            continue
+        if _matches_rule(rule, product_name, company_name, ai_keywords, violation_reason):
+            matched_users[rule.user_id] = rule
+
+    for user_id, matched_rule in matched_users.items():
+        for device in AppDevice.objects.filter(user_id=user_id):
+            if PushNotificationLog.objects.filter(device=device, news=news).exists():
+                continue
+            _trim_notifications(device, max_noti)
+            PushNotificationLog.objects.create(
+                device=device,
+                news=news,
+                rule_triggered=matched_rule,
+                trigger_type='keyword',
+                trigger_label=matched_rule.keyword,
+                sent_at=None,
+            )
+            saved += 1
+
+    # ── 2. 기기 기반 규칙 (비회원 게스트) ────────────────────────────────────
+    guest_devices = (
         AppDevice.objects
         .prefetch_related('rules')
-        .filter(rules__is_active=True)
+        .filter(user__isnull=True, rules__is_active=True, rules__user__isnull=True)
         .distinct()
     )
 
-    saved = 0
-    for device in devices:
+    for device in guest_devices:
         matched_rule = None
-        for rule in device.rules.filter(is_active=True):
+        for rule in device.rules.filter(is_active=True, user__isnull=True):
             if _matches_rule(rule, product_name, company_name, ai_keywords, violation_reason):
                 matched_rule = rule
                 break
 
         if matched_rule is None:
             continue
-
         if PushNotificationLog.objects.filter(device=device, news=news).exists():
             continue
 
         _trim_notifications(device, max_noti)
-
         PushNotificationLog.objects.create(
             device=device,
             news=news,
             rule_triggered=matched_rule,
             trigger_type='keyword',
             trigger_label=matched_rule.keyword,
-            sent_at=None,   # 배치 발송 대기
+            sent_at=None,
         )
         saved += 1
 
@@ -168,15 +197,20 @@ def backfill_alerts_for_rule(rule) -> dict:
     새로 등록된 AlertRule에 대해 기존 수집 데이터 전체를 소급 매칭.
     소급분은 과거 데이터이므로 sent_at을 즉시 설정해 배치 발송 대상에서 제외한다.
 
-    Returns: {'created': int, 'previews': list[dict]}
+    Returns: {'created': int, 'previews': list[dict], 'log_ids': list[int]}
     """
     from django.conf import settings
     from django.utils import timezone
-    from v1.mobile.models import PushNotificationLog
+    from v1.mobile.models import AppDevice, PushNotificationLog
     from v1.regulatory.models import RegulatoryNews
 
     max_noti = getattr(settings, 'MOBILE_MAX_NOTIFICATIONS', 100)
-    device = rule.device
+
+    # 이 규칙이 알림을 생성할 대상 기기 결정
+    if rule.user:
+        target_devices = list(AppDevice.objects.filter(user=rule.user))
+    else:
+        target_devices = [rule.device]
 
     if rule.category == 'COMPANY':
         qs = RegulatoryNews.objects.all().order_by('-event_date', '-collected_date')
@@ -185,6 +219,7 @@ def backfill_alerts_for_rule(rule) -> dict:
 
     created_count = 0
     previews = []
+    log_ids = []
     to_create = []
 
     for news in qs:
@@ -206,27 +241,27 @@ def backfill_alerts_for_rule(rule) -> dict:
                 'source': news.source,
             })
 
-        if PushNotificationLog.objects.filter(device=device, news=news).exists():
-            continue
-
         to_create.append(news)
 
     created_ids = []
     if to_create:
-        target = max(1, max_noti - len(to_create))
-        _trim_notifications(device, target)
         now = timezone.now()
-        for news in to_create:
-            log = PushNotificationLog.objects.create(
-                device=device,
-                news=news,
-                rule_triggered=rule,
-                trigger_type='keyword',
-                trigger_label=rule.keyword,
-                sent_at=now,  # 소급 데이터 — 배치 발송 대상 제외 (즉시 발송은 호출부에서 처리)
-            )
-            created_ids.append(log.pk)
-            created_count += 1
+        for device in target_devices:
+            target_trim = max(1, max_noti - len(to_create))
+            _trim_notifications(device, target_trim)
+            for news in to_create:
+                if PushNotificationLog.objects.filter(device=device, news=news).exists():
+                    continue
+                log = PushNotificationLog.objects.create(
+                    device=device,
+                    news=news,
+                    rule_triggered=rule,
+                    trigger_type='keyword',
+                    trigger_label=rule.keyword,
+                    sent_at=now,  # 소급 데이터 — 배치 발송 대상 제외
+                )
+                created_ids.append(log.pk)
+                created_count += 1
 
     return {'created': created_count, 'previews': previews, 'log_ids': created_ids}
 
@@ -273,7 +308,8 @@ def send_immediate_for_rule(rule, log_ids: list[int]) -> int:
         PushNotificationLog.objects.filter(pk__in=ids).update(sent_at=now)
 
         token = device.fcm_token
-        if not token:
+        # 비로그인 기기 또는 FCM 토큰 없음 → 앱 내 알림 탭만 표시, FCM 미발송
+        if not device.user_id or not token:
             continue
 
         title, body = _build_immediate_rule_message(rule, dlogs)
@@ -482,7 +518,8 @@ def send_regulatory_batch_alerts() -> dict:
             PushNotificationLog.objects.filter(pk__in=ids).update(sent_at=now)
             logs_marked += len(ids)
 
-            if not token:
+            # 비로그인 기기 또는 FCM 토큰 없음 → 앱 내 알림 탭만 표시, FCM 미발송
+            if not device.user_id or not token:
                 continue
 
             title, body = _build_regulatory_batch_message(logs)
@@ -609,6 +646,7 @@ def send_inspection_judgment_batch(inspections: list) -> int:
 
     for user_id, matches in user_matches.items():
         try:
+            # 로그인된(user_id 있는) 기기만 FCM 발송 대상
             device = (
                 AppDevice.objects
                 .filter(user_id=user_id)

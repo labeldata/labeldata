@@ -36,7 +36,19 @@ class AlertRule(models.Model):
     ]
     MATCH_CHOICES = [('EXACT', '일치'), ('CONTAINS', '포함')]
 
-    device = models.ForeignKey(AppDevice, on_delete=models.CASCADE, related_name='rules', verbose_name='기기')
+    device = models.ForeignKey(
+        AppDevice, on_delete=models.CASCADE, related_name='rules', verbose_name='기기',
+        null=True, blank=True,
+        help_text='비회원 전용. 로그인 사용자는 user 필드 사용',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='alert_rules',
+        verbose_name='소유 유저',
+        help_text='로그인 사용자 키워드. device는 null',
+    )
     category = models.CharField('분류', max_length=20, choices=CATEGORY_CHOICES)
     keyword = models.CharField('키워드', max_length=100)
     match_type = models.CharField('매칭 방식', max_length=20, choices=MATCH_CHOICES, default='CONTAINS')
@@ -48,7 +60,10 @@ class AlertRule(models.Model):
         verbose_name = '알림 키워드'
         verbose_name_plural = '알림 키워드 목록'
         ordering = ['-created_at']
-        unique_together = [('device', 'category', 'keyword', 'match_type')]
+        unique_together = [
+            ('device', 'category', 'keyword', 'match_type'),  # 비회원 기기별 중복 방지
+            ('user', 'category', 'keyword', 'match_type'),    # 로그인 유저별 중복 방지
+        ]
 
     def __str__(self):
         return f'[{self.category}] {self.keyword}'

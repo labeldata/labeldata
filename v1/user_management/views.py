@@ -379,15 +379,11 @@ def user_profile(request):
     from v1.products.models import DocumentType as ProductDocType
     product_doc_types = ProductDocType.objects.filter(active_yn=True).order_by('display_order', 'type_name')
 
-    # 알림 키워드 목록 (여러 기기 중복 제거)
+    # 알림 키워드 목록 (user 기반으로 직접 조회)
     from v1.mobile.models import AlertRule
-    seen = set()
-    unique_alert_rules = []
-    for r in AlertRule.objects.filter(device__user=request.user, is_active=True).order_by('category', 'keyword', '-created_at'):
-        key = (r.category, r.keyword, r.match_type)
-        if key not in seen:
-            seen.add(key)
-            unique_alert_rules.append(r)
+    unique_alert_rules = list(
+        AlertRule.objects.filter(user=request.user, is_active=True).order_by('category', 'keyword')
+    )
 
     return render(request, 'user_management/user_profile.html', {
         'profile': profile,

@@ -507,29 +507,12 @@ def news_list(request):
 
     # 웹 전용 기기를 항상 보장 — 모바일 로그아웃으로 device.user=None이 돼도 웹 키워드 유지
     from v1.mobile.models import AppDevice as _AppDevice
-    import uuid as _uuid_mod
-    _web_dev, _ = _AppDevice.objects.get_or_create(
-        user=request.user,
-        platform='web',
-        defaults={'device_id': f'web-{_uuid_mod.uuid4()}'},
-    )
-
-    # 사용자의 AlertRule 목록 — 연결된 기기 + 웹 기기 규칙을 합산, 중복 제거
-    seen = set()
-    unique_alert_rules = []
-    _rule_qs = (
+    # 사용자의 AlertRule 목록 — user 기반으로 직접 조회
+    unique_alert_rules = list(
         AlertRule.objects
-        .filter(
-            Q(device__user=request.user) | Q(device=_web_dev),
-            is_active=True,
-        )
-        .order_by('category', 'keyword', '-created_at')
+        .filter(user=request.user, is_active=True)
+        .order_by('category', 'keyword')
     )
-    for r in _rule_qs:
-        key = (r.category, r.keyword, r.match_type)
-        if key not in seen:
-            seen.add(key)
-            unique_alert_rules.append(r)
 
     # saol_admin 원본 사이트 URL 추출 (external_id: 'saol-{site_code}-{dup_key}')
     saol_site_url = ''
@@ -989,20 +972,17 @@ def inspection_dismiss(request):
 @login_required
 def alert_rules_api(request):
     """
-    GET  /regulatory/api/alert-rules/  — 로그인 사용자의 모든 기기 AlertRule 목록
-    POST /regulatory/api/alert-rules/  — 새 AlertRule 등록 (모든 기기에 추가)
+    GET  /regulatory/api/alert-rules/  — 로그인 사용자의 AlertRule 목록
+    POST /regulatory/api/alert-rules/  — 새 AlertRule 등록 (user 기반)
     Body(POST): {"category": "INGREDIENT", "keyword": "...", "match_type": "CONTAINS"}
     """
-    from v1.mobile.models import AlertRule, AppDevice
+    from v1.mobile.models import AlertRule
     from v1.mobile.services.push_service import backfill_alerts_for_rule, send_immediate_for_rule
-
-    user_devices = AppDevice.objects.filter(user=request.user)
 
     if request.method == 'GET':
         rules = (
             AlertRule.objects
-            .filter(device__user=request.user)
-            .select_related('device')
+            .filter(user=request.user)
             .order_by('-created_at')
         )
         data = [
@@ -1015,8 +995,6 @@ def alert_rules_api(request):
                 'match_type_display': r.get_match_type_display(),
                 'is_active': r.is_active,
                 'created_at': r.created_at.strftime('%Y-%m-%d %H:%M'),
-                'device_id': str(r.device.device_id),
-                'device_platform': r.device.platform,
             }
             for r in rules
         ]
@@ -1042,88 +1020,48 @@ def alert_rules_api(request):
     if len(keyword) > 100:
         return JsonResponse({'success': False, 'error': '키워드는 100자 이내로 입력해주세요'}, status=400)
 
-    # 웹 전용 기기를 항상 보장 — 모바일 기기 로그아웃 시에도 웹 등록 키워드가 유지됨
-    import uuid as _uuid
-    web_device, _ = AppDevice.objects.get_or_create(
-        user=request.user,
-        platform='web',
-        defaults={'device_id': f'web-{_uuid.uuid4()}'},
-    )
-    # 웹 기기 + 현재 연결된 모바일 기기 모두에 키워드 등록
-    device_ids = set(user_devices.values_list('pk', flat=True)) | {web_device.pk}
-    user_devices = AppDevice.objects.filter(pk__in=device_ids)
-
     from django.conf import settings
     max_rules = settings.MOBILE_MEMBER_MAX_RULES
-
-    created_rules = []
-    all_over_limit = True   # 모든 기기가 한도 초과인지
-
-    for device in user_devices:
-        active_count = device.rules.filter(is_active=True).count()
-        if active_count >= max_rules:
-            # 이 기기는 한도 초과 — 로그 기록
-            logger.warning(
-                'alert_rule limit reached: user=%s device=%s platform=%s active=%d max=%d',
-                request.user.id, str(device.device_id)[:12], device.platform, active_count, max_rules,
-            )
-            continue
-
-        all_over_limit = False
-        rule, created = AlertRule.objects.get_or_create(
-            device=device,
-            category=category,
-            keyword=keyword,
-            match_type=match_type,
-            defaults={'is_active': True},
-        )
-        if created:
-            created_rules.append(rule)
-            try:
-                backfill_result = backfill_alerts_for_rule(rule)
-                send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
-            except Exception:
-                backfill_result = {'created': 0, 'previews': []}
-        elif not rule.is_active:
-            rule.is_active = True
-            rule.save(update_fields=['is_active'])
-            created_rules.append(rule)
-            try:
-                backfill_result = backfill_alerts_for_rule(rule)
-                send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
-            except Exception:
-                backfill_result = {'created': 0, 'previews': []}
-        # else: 이미 활성 상태로 등록된 키워드 — created_rules에 추가하지 않음
-
-    if not created_rules:
-        if all_over_limit:
-            # 등록된 고유 키워드 수 (중복 제거)
-            unique_count = AlertRule.objects.filter(
-                device__user=request.user, is_active=True
-            ).values('category', 'keyword', 'match_type').distinct().count()
-            return JsonResponse({
-                'success': False,
-                'error': f'등록 한도({max_rules}개)에 도달했습니다. 현재 고유 키워드: {unique_count}개',
-                'debug': {'reason': 'limit', 'max': max_rules, 'unique_count': unique_count},
-            }, status=400)
+    active_count = AlertRule.objects.filter(user=request.user, is_active=True).count()
+    if active_count >= max_rules:
         return JsonResponse({
             'success': False,
-            'error': '이미 등록된 키워드입니다.',
-            'debug': {'reason': 'duplicate'},
+            'error': f'등록 한도({max_rules}개)에 도달했습니다. 현재 {active_count}개 등록됨',
         }, status=400)
 
-    first = created_rules[0]
+    rule, created = AlertRule.objects.get_or_create(
+        user=request.user,
+        category=category,
+        keyword=keyword,
+        match_type=match_type,
+        defaults={'is_active': True, 'device': None},
+    )
+    if not created and not rule.is_active:
+        rule.is_active = True
+        rule.save(update_fields=['is_active'])
+        created = True
+
+    if not created:
+        return JsonResponse({'success': False, 'error': '이미 등록된 키워드입니다.'}, status=400)
+
+    backfill_result = {'created': 0, 'previews': []}
+    try:
+        backfill_result = backfill_alerts_for_rule(rule)
+        send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
+    except Exception:
+        pass
+
     return JsonResponse({
         'success': True,
         'rule': {
-            'id': first.id,
-            'category': first.category,
-            'category_display': first.get_category_display(),
-            'keyword': first.keyword,
-            'match_type': first.match_type,
-            'match_type_display': first.get_match_type_display(),
-            'is_active': first.is_active,
-            'created_at': first.created_at.strftime('%Y-%m-%d %H:%M'),
+            'id': rule.id,
+            'category': rule.category,
+            'category_display': rule.get_category_display(),
+            'keyword': rule.keyword,
+            'match_type': rule.match_type,
+            'match_type_display': rule.get_match_type_display(),
+            'is_active': rule.is_active,
+            'created_at': rule.created_at.strftime('%Y-%m-%d %H:%M'),
         },
         'matched_count': backfill_result.get('created', 0),
         'previews': backfill_result.get('previews', []),
@@ -1135,23 +1073,16 @@ def alert_rules_api(request):
 def alert_rule_delete_api(request, rule_id):
     """
     DELETE(POST) /regulatory/api/alert-rules/<id>/delete/
-    사용자 기기의 해당 키워드 규칙을 모든 기기에서 삭제.
+    로그인 사용자 소유 AlertRule 삭제 (user 기반 단건 삭제).
     """
     from v1.mobile.models import AlertRule
 
-    # 대표 규칙으로 같은 (category, keyword, match_type) 조합을 모든 기기에서 삭제
     try:
-        rule = AlertRule.objects.select_related('device').get(pk=rule_id, device__user=request.user)
+        rule = AlertRule.objects.get(pk=rule_id, user=request.user)
     except AlertRule.DoesNotExist:
         return JsonResponse({'success': False, 'error': '규칙을 찾을 수 없습니다.'}, status=404)
 
-    AlertRule.objects.filter(
-        device__user=request.user,
-        category=rule.category,
-        keyword=rule.keyword,
-        match_type=rule.match_type,
-    ).delete()
-
+    rule.delete()
     return JsonResponse({'success': True})
 
 

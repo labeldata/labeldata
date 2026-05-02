@@ -97,6 +97,37 @@ def login(request):
             )
         AppDevice.objects.filter(device_id=device_id).update(user=user)
 
+        # 비회원 상태에서 등록한 device-based 키워드를 user-based로 승격
+        # (로그인 후 웹/앱 양쪽에서 동일 키워드가 보이도록)
+        try:
+            _device = AppDevice.objects.get(device_id=device_id)
+            guest_rules = list(
+                AlertRule.objects.filter(device=_device, user__isnull=True)
+            )
+            migrated = 0
+            for r in guest_rules:
+                dup_exists = AlertRule.objects.filter(
+                    user=user,
+                    category=r.category,
+                    keyword=r.keyword,
+                    match_type=r.match_type,
+                ).exists()
+                if dup_exists:
+                    # 웹/다른 기기에 이미 같은 키워드 있음 → 중복 제거
+                    r.delete()
+                else:
+                    r.user = user
+                    r.device = None
+                    r.save(update_fields=['user', 'device'])
+                    migrated += 1
+            if migrated:
+                logger.info(
+                    '[LOGIN] device_id=%s 비회원 키워드 %d개 → user=%s 로 승격',
+                    device_id, migrated, user.pk,
+                )
+        except AppDevice.DoesNotExist:
+            pass
+
     refresh = RefreshToken.for_user(user)
     device_data = None
     if device_id:
@@ -118,7 +149,44 @@ def login(request):
 def logout(request):
     device_id = request.data.get('device_id')
     if device_id:
+        # user FK를 None으로 먼저 읽어두고 업데이트
+        try:
+            device = AppDevice.objects.get(device_id=device_id)
+            user_obj = device.user  # 로그아웃 전 유저 참조 보존
+        except AppDevice.DoesNotExist:
+            return Response({'detail': 'ok'})
+
         AppDevice.objects.filter(device_id=device_id).update(user=None)
+
+        # 비회원 한도(MOBILE_GUEST_MAX_RULES)를 초과하는 키워드를 비활성화
+        guest_max = settings.MOBILE_GUEST_MAX_RULES
+
+        if user_obj:
+            # 회원 전용(user-based) 규칙에서 초과분 비활성화
+            user_rules_qs = AlertRule.objects.filter(
+                user=user_obj, is_active=True
+            ).order_by('created_at')
+            excess_ids = list(user_rules_qs.values_list('id', flat=True)[guest_max:])
+            if excess_ids:
+                AlertRule.objects.filter(id__in=excess_ids).update(is_active=False)
+                logger.info(
+                    '[LOGOUT] user=%s 초과 키워드 %d개 비활성화',
+                    user_obj.pk, len(excess_ids),
+                )
+        else:
+            # 비회원(device-based) 규칙 초과분 비활성화 (user 없이 등록된 경우)
+            excess_ids = list(
+                device.rules
+                .filter(is_active=True, user__isnull=True)
+                .order_by('created_at')
+                .values_list('id', flat=True)[guest_max:]
+            )
+            if excess_ids:
+                device.rules.filter(id__in=excess_ids).update(is_active=False)
+                logger.info(
+                    '[LOGOUT] device_id=%s 초과 키워드 %d개 비활성화',
+                    device_id, len(excess_ids),
+                )
     return Response({'detail': 'ok'})
 
 
@@ -170,26 +238,62 @@ def rules_list(request, device_id):
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
+    owner_user = device.user  # 로그인이면 User, 비회원이면 None
+
     if request.method == 'GET':
-        rules = device.rules.all()
+        if owner_user:
+            rules = AlertRule.objects.filter(user=owner_user).order_by('-created_at')
+        else:
+            rules = device.rules.filter(user__isnull=True).order_by('-created_at')
         return Response(AlertRuleSerializer(rules, many=True).data)
 
-    # POST
-    max_rules = settings.MOBILE_MEMBER_MAX_RULES if device.user else settings.MOBILE_GUEST_MAX_RULES
-    if device.rules.filter(is_active=True).count() >= max_rules:
+    # POST — 신규 키워드 등록
+    max_rules = settings.MOBILE_MEMBER_MAX_RULES if owner_user else settings.MOBILE_GUEST_MAX_RULES
+
+    if owner_user:
+        active_count = AlertRule.objects.filter(user=owner_user, is_active=True).count()
+    else:
+        active_count = device.rules.filter(user__isnull=True, is_active=True).count()
+
+    if active_count >= max_rules:
         return Response({'error': f'최대 {max_rules}개까지 등록 가능합니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
     serializer = AlertRuleSerializer(data=request.data)
     if serializer.is_valid():
-        rule = serializer.save(device=device)
-        # 신규 키워드 등록 즉시 기존 데이터 전체 매칭 (동기 실행)
+        vd = serializer.validated_data
+        if owner_user:
+            rule, created = AlertRule.objects.get_or_create(
+                user=owner_user,
+                category=vd['category'],
+                keyword=vd['keyword'],
+                match_type=vd['match_type'],
+                defaults={'is_active': True, 'device': None},
+            )
+            if not created and not rule.is_active:
+                rule.is_active = True
+                rule.save(update_fields=['is_active'])
+                created = True
+        else:
+            rule, created = AlertRule.objects.get_or_create(
+                device=device,
+                user=None,
+                category=vd['category'],
+                keyword=vd['keyword'],
+                match_type=vd['match_type'],
+                defaults={'is_active': True},
+            )
+
+        if not created:
+            return Response({'error': '이미 등록된 키워드입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
         backfill_result = {'created': 0, 'previews': [], 'log_ids': []}
         try:
             backfill_result = backfill_alerts_for_rule(rule)
             send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
         except Exception:
-            pass  # 백필/즉시발송 실패해도 키워드 등록 자체는 성공 처리
+            pass
         data = serializer.data
+        data['id'] = rule.pk
         data['matched_count'] = backfill_result.get('created', 0)
         data['previews'] = backfill_result.get('previews', [])
         return Response(data, status=status.HTTP_201_CREATED)
@@ -203,8 +307,13 @@ def rule_detail(request, device_id, rule_id):
     if device is None:
         return Response({'error': '기기를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
+    owner_user = device.user
+
     try:
-        rule = device.rules.get(pk=rule_id)
+        if owner_user:
+            rule = AlertRule.objects.get(pk=rule_id, user=owner_user)
+        else:
+            rule = AlertRule.objects.get(pk=rule_id, device=device, user__isnull=True)
     except AlertRule.DoesNotExist:
         return Response({'error': '규칙을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
