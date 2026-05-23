@@ -292,8 +292,7 @@ def rules_list(request, device_id):
             send_immediate_for_rule(rule, backfill_result.get('log_ids', []))
         except Exception:
             pass
-        data = serializer.data
-        data['id'] = rule.pk
+        data = dict(AlertRuleSerializer(rule).data)
         data['matched_count'] = backfill_result.get('created', 0)
         data['previews'] = backfill_result.get('previews', [])
         return Response(data, status=status.HTTP_201_CREATED)

@@ -986,7 +986,12 @@ def collect_inspection_data(
                 # 판정결과·업소명 변동 감지
                 prev_judgment = obj.jdgmnt_cd_nm
                 prev_bssh_nm  = obj.bssh_nm
-                judgment_changed = prev_judgment != new_judgment and new_judgment
+                # 최종 판정(적합/부적합)으로 확정된 경우에만 변동 알림 발송
+                _FINAL_JUDGMENTS = {'적합', '부적합'}
+                judgment_changed = (
+                    prev_judgment != new_judgment
+                    and new_judgment in _FINAL_JUDGMENTS
+                )
                 for attr, val in fields.items():
                     setattr(obj, attr, val)
                 obj.save()
@@ -1090,6 +1095,17 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
 
     # ── 날짜 필터: 오래된 데이터 알림 차단 ────────────────────────────────────
     alert_phase = InspectionMatch.PHASE_COLLECTION if is_new else InspectionMatch.PHASE_JUDGMENT
+
+    # PHASE_JUDGMENT: 최종 판정(적합/부적합)이 아니면 알림 생성 안 함
+    if alert_phase == InspectionMatch.PHASE_JUDGMENT:
+        _FINAL_JUDGMENTS = {'적합', '부적합'}
+        if inspection.jdgmnt_cd_nm not in _FINAL_JUDGMENTS:
+            logger.debug(
+                '[I0460] 판정변동 알림 스킵 (미확정 판정: %s): %s',
+                inspection.jdgmnt_cd_nm, inspection.tkawyprno,
+            )
+            return
+
     max_days = 7 if is_new else 30
     tkawydtm = (inspection.tkawydtm or '').strip()
     if tkawydtm and len(tkawydtm) >= 8:
