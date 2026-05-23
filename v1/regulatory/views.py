@@ -419,7 +419,10 @@ def news_list(request):
             except (ValueError, TypeError):
                 pass
 
-    inspection_total  = ins_qs.count()
+    # 탭 배지는 항상 전체 기준 (필터 무관하게 일관된 건수 표시)
+    inspection_total        = ins_qs_base.count()
+    # 목록 헤더는 현재 필터 적용 기준
+    inspection_filtered_total = ins_qs.count()
     insp_page_num     = request.GET.get('insp_page', 1)
     insp_paginator    = Paginator(ins_qs, 20)
     insp_page_obj     = insp_paginator.get_page(insp_page_num)
@@ -568,7 +571,8 @@ def news_list(request):
         'inspection_list':    inspection_list,
         'insp_page_obj':      insp_page_obj,
         'insp_paginator':     insp_paginator,
-        'inspection_total':   inspection_total,
+        'inspection_total':          inspection_total,
+        'inspection_filtered_total': inspection_filtered_total,
         'inspection_unread':  inspection_unread,
         'selected_insp':      selected_insp,
         'user_profile':       UserProfile.objects.filter(user=request.user).first(),

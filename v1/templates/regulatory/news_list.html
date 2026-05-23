@@ -304,7 +304,7 @@
       <div class="rs-list-header">
         <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">{{ tab_insp_total|intcomma }}건</span>
         <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">{{ tab_admin_total|intcomma }}건</span>
-        <span class="rs-list-total rs-list-total--insp"> {{ inspection_total|intcomma }}건</span>
+        <span class="rs-list-total rs-list-total--insp"> {{ inspection_filtered_total|intcomma }}건</span>
         <a class="rs-sort-btn"
            href="?{{ page_query_string }}&sort={% if sort == 'asc' %}desc{% else %}asc{% endif %}"
            title="날짜 정렬 순서 변경">
@@ -811,11 +811,9 @@ function inspFilter(type) {
     if (show) visible++;
   });
 
-  // 헤더 건수 + 탭 배지 갱신
+  // 목록 헤더 건수 갱신 (탭 배지는 전체 건수 유지)
   var totalEl = document.querySelector('.rs-list-total--insp');
   if (totalEl) totalEl.textContent = ' ' + visible + '건';
-  var tabBadge = document.querySelector('#vtabInsp .rs-vtab-count');
-  if (tabBadge) tabBadge.textContent = visible;
 }
 window.inspFilter = inspFilter;
 
