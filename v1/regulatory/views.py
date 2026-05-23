@@ -251,9 +251,21 @@ def news_list(request):
             '-created_at',
         )
 
-    # 탭별 독립 검색: 건수 집계 완료 후 페이지 표시 직전에 qs 범위 제한
-    # (tab_admin_total 등 배지 카운트는 이미 위에서 계산됐으므로 영향 없음)
-    _TAB_ADMIN_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
+    # 탭 배지 건수 — 탭 필터 적용 전에 my_matched_news_ids로 계산 (쿼리 1회, 서브쿼리 없음)
+    _ADMIN_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
+    if my_matched_news_ids:
+        _matched_src_map = dict(
+            RegulatoryNews.objects.filter(id__in=my_matched_news_ids)
+            .values_list('id', 'api_source')
+        )
+        tab_admin_total = sum(1 for s in _matched_src_map.values() if s in _ADMIN_SOURCES)
+        tab_insp_total  = sum(1 for s in _matched_src_map.values() if s not in _ADMIN_SOURCES)
+    else:
+        tab_admin_total = 0
+        tab_insp_total  = 0
+
+    # 탭별 독립 검색: 건수 집계 완료 후 qs 범위 제한
+    _TAB_ADMIN_SOURCES = _ADMIN_SOURCES
     if tab == 'admin':
         qs = qs.filter(api_source__in=_TAB_ADMIN_SOURCES)
     elif tab in ('insp-news', ''):
@@ -316,20 +328,7 @@ def news_list(request):
     admin_cats = [c for c in categories_with_count if c.get('group') == 'admin']
     saol_cats  = [c for c in categories_with_count if c.get('group') == 'saol']
 
-    # ── 탭별 건수 ─────────────────────────────────────────────────────────────
-    # 어노테이션은 완료, 아직 risk/status 필터 미적용 상태
-    # → 행정처분 건수는 여기서 집계 (risk/status 필터 영향 없음)
-    _ADMIN_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
-    _matched_base = qs.filter(
-        Q(my_matched_yn=True) | Q(ing_matched_yn=True) | Q(kw_matched_yn=True)
-    )
-    _admin_counts = _matched_base.filter(
-        api_source__in=_ADMIN_SOURCES
-    ).values('api_source').annotate(cnt=Count('id'))
-    tab_admin_total = sum(r['cnt'] for r in _admin_counts)
-
     # ── risk / status 필터 (어노테이션 이후 적용 — 부적합 탭 전용) ────────────
-    _action_statuses = ('monitoring', 'resolved')
     if risk:
         risk_from_product = (
             NewsProductMatch.objects
@@ -387,12 +386,6 @@ def news_list(request):
                      .values_list('news_id', flat=True))
             )
             qs = qs.filter(id__in=(_na_matched - set(news_latest_action.keys())))
-
-    # 부적합 탭 건수: risk/status 필터 적용 후 집계
-    _insp_counts = qs.filter(
-        Q(my_matched_yn=True) | Q(ing_matched_yn=True) | Q(kw_matched_yn=True)
-    ).exclude(api_source__in=_ADMIN_SOURCES).values('api_source').annotate(cnt=Count('id'))
-    tab_insp_total = sum(r['cnt'] for r in _insp_counts)
 
     # ── 수거검사(I0460) — 내 매칭 건수 및 목록 ───────────────────────────────
     ins_qs_base = (
