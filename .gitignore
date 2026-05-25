@@ -138,6 +138,10 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# Node.js
+node_modules/
+frontend/node_modules/
+
 # PyCharm
 .idea/
 

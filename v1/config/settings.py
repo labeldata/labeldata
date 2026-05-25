@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'v1.bom',            # BOM 구조 관리
     'v1.regulatory',     # 부적합.처분 알림
     'v1.activity_log',   # 사용자 활동 로그
+    'v1.label_editor',   # 라벨 에디터 (Figma-like)
     'v1.mobile',         # 모바일 앱 API
     'rest_framework',
     'rest_framework_simplejwt',

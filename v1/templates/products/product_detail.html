@@ -80,6 +80,11 @@
                 </button>
             </li>
             <li class="nav-item">
+                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-label-editor" type="button">
+                    <i class="bi bi-pencil-square me-2 text-secondary"></i> 라벨 편집
+                </button>
+            </li>
+            <li class="nav-item">
                 <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button">
                     <i class="bi bi-file-earmark-text me-2 text-secondary"></i> 문서함
                 </button>
@@ -349,6 +354,10 @@
 
                 <div class="tab-pane" id="tab-label">
                     {% include 'products/_tab_label.html' %}
+                </div>
+
+                <div class="tab-pane" id="tab-label-editor" style="height: 100%;">
+                    {% include 'products/_tab_label_editor.html' %}
                 </div>
             </div>
         </main>

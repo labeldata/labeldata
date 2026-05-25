@@ -27,6 +27,9 @@ urlpatterns = [
     path('vendor/', include('v1.products.vendor_urls', namespace='vendor')),     # 협력사 매직링크 포털
     # 마이그레이션은 자동으로 처리됨 (표시사항 저장 시 제품 자동 생성)
 
+    # 라벨 에디터 API
+    path('api/label-editor/', include('v1.label_editor.urls', namespace='label_editor')),
+
     # 모바일 앱 API
     path('api/mobile/', include('v1.mobile.urls', namespace='mobile')),
 ]
