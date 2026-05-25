@@ -304,7 +304,7 @@
       <div class="rs-list-header">
         <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">{{ tab_insp_total|intcomma }}건</span>
         <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">{{ tab_admin_total|intcomma }}건</span>
-        <span class="rs-list-total rs-list-total--insp"> {{ inspection_total|intcomma }}건</span>
+        <span class="rs-list-total rs-list-total--insp"> {{ inspection_filtered_total|intcomma }}건</span>
         <a class="rs-sort-btn"
            href="?{{ page_query_string }}&sort={% if sort == 'asc' %}desc{% else %}asc{% endif %}"
            title="날짜 정렬 순서 변경">
@@ -730,6 +730,14 @@
   </div>{# end reg-wrap #}
 
 </div>{# end reg-page #}
+
+{# ─── 페이지 로딩 오버레이 ─── #}
+<div id="pageLoadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(255,255,255,0.75);z-index:9999;align-items:center;justify-content:center;">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+    <div class="spinner-border text-primary" role="status" style="width:2rem;height:2rem;"></div>
+    <div style="color:#5f6368;font-size:14px;font-weight:500;">불러오는 중...</div>
+  </div>
+</div>
 {% endblock %}
 
 
@@ -803,11 +811,9 @@ function inspFilter(type) {
     if (show) visible++;
   });
 
-  // 헤더 건수 + 탭 배지 갱신
+  // 목록 헤더 건수 갱신 (탭 배지는 전체 건수 유지)
   var totalEl = document.querySelector('.rs-list-total--insp');
   if (totalEl) totalEl.textContent = ' ' + visible + '건';
-  var tabBadge = document.querySelector('#vtabInsp .rs-vtab-count');
-  if (tabBadge) tabBadge.textContent = visible;
 }
 window.inspFilter = inspFilter;
 
@@ -1162,20 +1168,52 @@ function saveInspProfile() {
 }
 window.saveInspProfile = saveInspProfile;
 
+// ── 로딩 오버레이 ────────────────────────────────────────────────────────────
+function showLoading() {
+  var el = document.getElementById('pageLoadingOverlay');
+  if (el) el.style.display = 'flex';
+}
+window.showLoading = showLoading;
+
 // ── 탭 뷰 전환 ───────────────────────────────────────────────────────────────
+// updateUrl===false 일 때: 초기 로드 시 CSS 전용 적용 (네비게이션 없음)
+// 그 외: 서버에서 해당 탭 데이터를 가져오도록 페이지 이동
 function switchView(v, updateUrl) {
+  if (updateUrl === false) {
+    // 초기 로드 — CSS/active 클래스만 적용
+    _applySwitchViewCSS(v);
+    return;
+  }
+
+  // 탭 전환: 서버에서 해당 탭의 데이터를 받아오도록 페이지 이동
+  var url = new URL(window.location.href);
+  if (v === 'insp-news') {
+    url.searchParams.delete('tab');
+  } else {
+    url.searchParams.set('tab', v);
+  }
+  // 탭 이동 시 페이지·선택 파라미터 초기화
+  url.searchParams.delete('page');
+  url.searchParams.delete('id');
+  url.searchParams.delete('insp_id');
+
+  showLoading();
+  window.location.href = url.toString();
+}
+window.switchView = switchView;
+
+function _applySwitchViewCSS(v) {
   var sidebar = document.getElementById('regSidebar');
   var page    = document.getElementById('regPage');
   if (!sidebar || !page) return;
 
-  sidebar.dataset.view = v;  // 'insp-news' | 'admin' | 'insp'
+  sidebar.dataset.view = v;
 
   document.querySelectorAll('.rs-vtab').forEach(function(b) { b.classList.remove('rs-vtab--active'); });
   var idMap = {'insp-news': 'vtabInspNews', 'admin': 'vtabAdmin', 'insp': 'vtabInsp'};
   var t = document.getElementById(idMap[v]);
   if (t) t.classList.add('rs-vtab--active');
 
-  // 필터 버튼 비활성화: 수거검사 탭에서는 분야 드로어가 무의미
   var filterBtn = document.querySelector('.rf-detail-toggle');
   if (filterBtn) {
     if (v === 'insp') {
@@ -1190,19 +1228,7 @@ function switchView(v, updateUrl) {
   if (v === 'insp')  { page.classList.add('reg-page--insp');  page.classList.remove('reg-page--admin'); }
   else if (v === 'admin') { page.classList.add('reg-page--admin'); page.classList.remove('reg-page--insp'); }
   else               { page.classList.remove('reg-page--insp'); page.classList.remove('reg-page--admin'); }
-
-  // URL에 tab 파라미터 반영 (페이지네이션·새로고침 시 탭 복원용)
-  if (updateUrl !== false && window.history && window.history.replaceState) {
-    var url = new URL(window.location.href);
-    if (v === 'insp-news') {
-      url.searchParams.delete('tab');
-    } else {
-      url.searchParams.set('tab', v);
-    }
-    window.history.replaceState(null, '', url.toString());
-  }
 }
-window.switchView = switchView;
 
 // 페이지 로드 시 초기 탭 활성화
 // 탭 건수(vtabInspNewsCnt, vtabAdminCnt, sidebarInspNewsCnt, sidebarAdminCnt)는
@@ -1224,14 +1250,18 @@ window.switchView = switchView;
   // false: 초기 로드 시 URL을 replaceState로 덮어쓰지 않음
   switchView(initialTab, false);
 
-  // 페이지네이션·정렬 링크 클릭 시 현재 탭을 URL에 주입
+  // 페이지네이션·정렬 링크 클릭 시 현재 탭을 URL에 주입 + 로딩 표시
   document.querySelectorAll('.rs-page-btn[href], .rs-sort-btn[href]').forEach(function(a) {
     a.addEventListener('click', function(e) {
       var curTab = (new URL(window.location.href)).searchParams.get('tab');
-      if (!curTab || curTab === 'insp-news') return; // 기본 탭은 파라미터 불필요
+      if (!curTab || curTab === 'insp-news') {
+        showLoading();
+        return; // 기본 탭은 파라미터 불필요, 링크 그대로 이동
+      }
       e.preventDefault();
       var dest = new URL(a.href, window.location.href);
       dest.searchParams.set('tab', curTab);
+      showLoading();
       window.location.href = dest.toString();
     });
   });

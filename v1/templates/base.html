@@ -7,7 +7,16 @@
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="naver-site-verification" content="406d5bfafa24dae87ea65322fae802c88e03d6dc" />
-  <title>{% block title %}식품 데이터 포털{% endblock %}</title>
+  <title>{% block title %}식품 데이터 포털{% endblock %} | 이지라벨링</title>
+  <meta name="description" content="{% block meta_description %}식품 표시사항 자동 생성, 원료 BOM 관리, 수거검사·행정처분 키워드 알리미, 식품안전 규정 검증까지 — 이지라벨링에서 한 번에 해결하세요.{% endblock %}">
+  <meta name="keywords" content="{% block meta_keywords %}식품 표시사항, 표시사항 자동생성, 식품 라벨, 원료 BOM, 식품안전, 수거검사 알림, 행정처분 알림, 식품안전 키워드 알리미, 부적합 알림, 이지라벨링, ezlabeling{% endblock %}">
+  <!-- Open Graph (카카오톡·네이버 공유 미리보기) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="이지라벨링">
+  <meta property="og:title" content="{% block og_title %}이지라벨링 — 식품 표시사항 자동 생성 플랫폼{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}표시사항 자동 생성부터 원료 BOM 구성, 규정 검증, 최종 승인까지 — 팀 전원이 역할에 맞게 참여하고 실시간으로 협업합니다.{% endblock %}">
+  <meta property="og:url" content="https://www.ezlabeling.com{% block og_url %}{% endblock %}">
+  <meta property="og:image" content="{% block og_image %}{% load static %}https://www.ezlabeling.com{% static 'img/og_thumbnail.png' %}{% endblock %}">
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
   <!-- jQuery -->

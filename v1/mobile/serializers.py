@@ -16,16 +16,33 @@ _API_SOURCE_LABELS = {
 }
 
 
+def _parse_saol_field(raw_detail_text: str, field_name: str) -> str:
+    """saol_admin raw_detail_text(파이프 구분)에서 특정 필드값 추출."""
+    for part in raw_detail_text.split(' | '):
+        part = part.strip()
+        idx = part.find(': ')
+        if idx == -1:
+            continue
+        key = part[:idx].strip()
+        val = part[idx + 2:].strip()
+        if key == field_name and val:
+            return val
+    return ''
+
+
 class RegulatoryNewsSerializer(serializers.ModelSerializer):
     source_display = serializers.SerializerMethodField()
     risk_level_display = serializers.SerializerMethodField()
+    violation_reason = serializers.SerializerMethodField()
+    disposal_content = serializers.SerializerMethodField()
 
     class Meta:
         model = RegulatoryNews
         fields = [
             'id', 'source', 'source_display', 'api_source',
             'product_name', 'company_name',
-            'violation_reason', 'ai_summary', 'risk_level', 'risk_level_display',
+            'violation_reason', 'disposal_content',
+            'ai_summary', 'risk_level', 'risk_level_display',
             'ai_keywords', 'violation_type', 'event_date', 'collected_date',
         ]
 
@@ -34,6 +51,20 @@ class RegulatoryNewsSerializer(serializers.ModelSerializer):
 
     def get_risk_level_display(self, obj):
         return obj.get_risk_level_display()
+
+    def get_violation_reason(self, obj):
+        """saol_admin: raw_detail_text에서 위반내용 추출. 그 외: violation_reason 필드."""
+        if obj.api_source == 'saol_admin' and obj.raw_detail_text:
+            val = _parse_saol_field(obj.raw_detail_text, '위반내용')
+            if val:
+                return val
+        return obj.violation_reason
+
+    def get_disposal_content(self, obj):
+        """saol_admin: raw_detail_text에서 처분내용 추출."""
+        if obj.api_source == 'saol_admin' and obj.raw_detail_text:
+            return _parse_saol_field(obj.raw_detail_text, '처분내용')
+        return ''
 
 
 class AppDeviceSerializer(serializers.ModelSerializer):

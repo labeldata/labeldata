@@ -44,6 +44,7 @@ function submitFilter() {
     form.appendChild(tabInput);
   }
   tabInput.value = new URL(window.location.href).searchParams.get('tab') || '';
+  if (typeof showLoading === 'function') showLoading();
   form.submit();
 }
 
