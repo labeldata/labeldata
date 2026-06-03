@@ -58,15 +58,21 @@ class CustomUserAdmin(UserAdmin):
     """
     # 1. 사용자 목록에 표시할 항목과 순서 변경
     list_display = (
-        'username', 
-        'is_staff', 
+        'username',
+        'is_active',
+        'is_staff',
+        'get_email_verified',   # 이메일 인증 여부
         'get_date_joined',      # 가입일
         'get_last_login',       # 최근 접속일
         'activity_day_count',   # 접속일수
-        'my_label_count', 
+        'my_label_count',
         'my_ingredient_count'
     )
-    
+
+    list_filter = ('is_active', 'is_staff', 'date_joined')
+
+    actions = ['delete_selected_users', 'delete_unverified_users']
+
     # 2. 상세 정보 화면 설정 (기존과 동일)
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
@@ -74,9 +80,38 @@ class CustomUserAdmin(UserAdmin):
         ('Permissions', {'fields': ('active_yn', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
-    
+
     # 상세 정보 화면에서 읽기 전용으로 표시할 필드
     readonly_fields = ('last_login', 'date_joined')
+
+    def delete_selected_users(self, request, queryset):
+        """선택한 계정 삭제 (superuser 제외)"""
+        protected = queryset.filter(is_superuser=True)
+        if protected.exists():
+            self.message_user(request, f'슈퍼유저 {protected.count()}명은 삭제되지 않았습니다.', level='warning')
+        deletable = queryset.filter(is_superuser=False)
+        count = deletable.count()
+        deletable.delete()
+        self.message_user(request, f'{count}개의 계정이 삭제되었습니다.')
+    delete_selected_users.short_description = '선택한 계정 삭제'
+
+    def delete_unverified_users(self, request, queryset):
+        """미인증(이메일 미확인) 계정 일괄 삭제"""
+        unverified = queryset.filter(is_active=False, is_superuser=False)
+        count = unverified.count()
+        unverified.delete()
+        self.message_user(request, f'미인증 계정 {count}개가 삭제되었습니다.')
+    delete_unverified_users.short_description = '선택한 계정 중 미인증 계정만 삭제'
+
+    def get_email_verified(self, obj):
+        try:
+            verified = obj.userprofile.email_verified_yn
+            if verified:
+                return format_html('<span style="color:green;font-weight:bold;">✓ 인증</span>')
+            return format_html('<span style="color:red;">✗ 미인증</span>')
+        except Exception:
+            return '-'
+    get_email_verified.short_description = '이메일 인증'
 
     def get_queryset(self, request):
         """
