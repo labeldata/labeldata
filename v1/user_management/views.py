@@ -12,8 +12,27 @@ from django.utils.html import strip_tags
 from django.conf import settings
 from django.utils import timezone
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
+
+
+def _verify_turnstile(token, remote_ip):
+    """Cloudflare Turnstile 토큰 서버 사이드 검증"""
+    try:
+        resp = requests.post(
+            'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+            data={
+                'secret': settings.TURNSTILE_SECRET_KEY,
+                'response': token,
+                'remoteip': remote_ip,
+            },
+            timeout=5,
+        )
+        return resp.json().get('success', False)
+    except Exception:
+        logger.exception("Turnstile 검증 요청 실패")
+        return False
 
 
 def _send_account_email(subject, template_name, context, to_email):
@@ -36,6 +55,12 @@ def signup(request):
             password2 = request.POST.get('password2')
             terms_agree   = request.POST.get('terms_agree')
             privacy_agree = request.POST.get('privacy_agree')
+
+            # Turnstile 캡챠 검증
+            turnstile_token = request.POST.get('cf-turnstile-response', '')
+            if not _verify_turnstile(turnstile_token, request.META.get('REMOTE_ADDR')):
+                messages.error(request, '보안 인증에 실패했습니다. 다시 시도해주세요.')
+                return render(request, 'user_management/signup.html', {'TURNSTILE_SITE_KEY': settings.TURNSTILE_SITE_KEY})
 
             # 이용약관 및 개인정보 처리방침 동의 확인
             if not terms_agree:
@@ -87,7 +112,10 @@ def signup(request):
             return render(request, 'user_management/signup.html')
     else:
         form = UserCreationForm()
-    return render(request, 'user_management/signup.html', {'form': form})
+    return render(request, 'user_management/signup.html', {
+        'form': form,
+        'TURNSTILE_SITE_KEY': settings.TURNSTILE_SITE_KEY,
+    })
 
 def verify_email(request):
     """이메일 인증 처리 (1시간 유효)"""

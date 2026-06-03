@@ -244,6 +244,10 @@ MOBILE_GUEST_MAX_RULES = 5
 # 회원 키워드 최대 수
 MOBILE_MEMBER_MAX_RULES = 30
 
+# Cloudflare Turnstile
+TURNSTILE_SITE_KEY = config('TURNSTILE_SITE_KEY', default='')
+TURNSTILE_SECRET_KEY = config('TURNSTILE_SECRET_KEY', default='')
+
 # 비회원 보관함 최대 개수
 MOBILE_GUEST_MAX_BOOKMARKS = 5
 # 회원 보관함 최대 개수
