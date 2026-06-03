@@ -1,13 +1,13 @@
 {% extends "base_v2.html" %}
 {% load static %}
 
-{% block title %}홈 대시보드 - Food Data Portal{% endblock %}
+{% block title %}홈 대시보드 - 간편한 표시사항 연구소{% endblock %}
 
 {% block topbar %}
 <div class="v2-topbar-title-wrapper">
     {% if is_guest %}
     <a href="{% url 'main:home_dashboard' %}" class="guest-gnb-logo">
-        Food Data Portal
+        간편한 표시사항 연구소
     </a>
     {% else %}
     <span class="fw-semibold" style="font-size:15px; color:#1f1f1f;">홈</span>
@@ -249,7 +249,7 @@
         <div class="dash-hero-left">
             <div class="dash-greeting">안녕하세요, {{ request.user.username }}님 👋</div>
             <div class="dash-hero-meta">
-                <span class="dash-sub">오늘도 Food Data Portal과 함께 제품 라벨 관리를 시작해보세요.</span>
+                <span class="dash-sub">오늘도 간편한 표시사항 연구소와 함께 제품 라벨 관리를 시작해보세요.</span>
                 {% if expiring_count > 0 %}
                 <a href="{% url 'products:product_explorer' %}" class="dash-alert-chip">
                     <i class="bi bi-exclamation-triangle-fill"></i>
