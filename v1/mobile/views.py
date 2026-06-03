@@ -396,7 +396,6 @@ def notifications_list(request, device_id):
             .filter(
                 user_id=device.user_id,
                 notified_at__isnull=False,
-                fcm_sent_at__isnull=False,
             )
             .select_related('inspection')
             .order_by('-notified_at')
@@ -477,7 +476,7 @@ def notification_read_all(request, device_id):
     if device.user_id:
         InspectionMatch.objects.filter(
             user_id=device.user_id, read_yn=False,
-            notified_at__isnull=False, fcm_sent_at__isnull=False,
+            notified_at__isnull=False,
         ).update(read_yn=True)
     return Response({'detail': 'ok'})
 
