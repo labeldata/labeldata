@@ -3,16 +3,28 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
+from django.views.decorators.cache import cache_page
+from django.http import HttpResponse
 from v1.common import views as common_views  # common views import 추가
+
+def robots_txt(request):
+    content = (
+        "User-agent: *\n"
+        "Disallow: /admin/\n"
+        "Disallow: /dashboard/\n"
+        "Disallow: /user-management/\n"
+        "Disallow: /api/\n"
+    )
+    return HttpResponse(content, content_type="text/plain")
 
 urlpatterns = [
     path('sitemap.xml', TemplateView.as_view(template_name='sitemap.xml', content_type='application/xml'), name='sitemap'),
-    path('robots.txt', TemplateView.as_view(template_name='robots.txt', content_type='text/plain'), name='robots'),
+    path('robots.txt', cache_page(60 * 60 * 24)(robots_txt), name='robots'),
 
     path('', include('v1.main.urls')),  # 메인 앱 URL
     path('dashboard/', common_views.dashboard_view, name='dashboard'),  # 관리자 통계 대시보드
     path('common/', include('v1.common.urls', namespace='common')),  # common 앱 URL
-    path('admin/', admin.site.urls),  # 관리자 페이지
+    path('lbdt-manage/', admin.site.urls),  # 관리자 페이지 (URL 난독화)
     path('label/', include('v1.label.urls', namespace='label')),  # label 앱 URL
     path('disposition/', include('v1.disposition.urls', namespace='disposition')),  # disposition 앱 URL
     path('user-management/', include('v1.user_management.urls', namespace='user_management')),  # user_management 앱
