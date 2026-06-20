@@ -700,9 +700,9 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .rs-insp-status--ok       { background: var(--c-ok-bg); color: var(--c-ok-text); }    /* 적합 */
 .rs-insp-status--fail     { background: var(--c-danger-bg); color: var(--c-danger-text); } /* 부적합 */
 
-/* 2행: 회사명 및 수행기관 */
+/* 2행: 상태badge·알림badge·회사명·수행기관 */
 .rs-insp-bssh      { font-size: 11px; color: var(--c-text-secondary); flex-shrink: 0;
-                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
 .rs-insp-excinstt  { font-size: 10px; color: var(--c-text-hint); margin-left: auto;
                      white-space: nowrap; flex-shrink: 0; }
 .rs-insp-plan-titl { font-size: 11px; color: var(--c-text-muted);
@@ -905,24 +905,31 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 /* ── 부적합 탭: admin 뉴스·수거검사 요소 숨김 ── */
 #regSidebar[data-view="insp-news"] .rs-item[data-group="admin"],
 #regSidebar[data-view="insp-news"] .rs-item--insp,
+#regSidebar[data-view="insp-news"] .rs-item--insp-public,
+#regSidebar[data-view="insp-news"] .rs-pub-list-header,
 #regSidebar[data-view="insp-news"] .rs-list-divider,
 #regSidebar[data-view="insp-news"] .rs-insp-empty,
-#regSidebar[data-view="insp-news"] .rs-pagination--insp { display: none !important; }
+#regSidebar[data-view="insp-news"] .rs-pagination--insp,
+#regSidebar[data-view="insp-news"] .rs-pagination--pub  { display: none !important; }
 
 /* ── 처분 탭: insp 뉴스·수거검사 요소 숨김 ── */
 #regSidebar[data-view="admin"] .rs-item[data-group="insp"],
 #regSidebar[data-view="admin"] .rs-item--insp,
+#regSidebar[data-view="admin"] .rs-item--insp-public,
+#regSidebar[data-view="admin"] .rs-pub-list-header,
 #regSidebar[data-view="admin"] .rs-list-divider,
 #regSidebar[data-view="admin"] .rs-insp-empty,
-#regSidebar[data-view="admin"] .rs-pagination--insp     { display: none !important; }
+#regSidebar[data-view="admin"] .rs-pagination--insp,
+#regSidebar[data-view="admin"] .rs-pagination--pub      { display: none !important; }
 
-/* ── 수거검사 탭: 뉴스 항목·일반 페이지네이션·구분선 숨김, 수거검사 페이지네이션만 표시 ── */
-#regSidebar[data-view="insp"] .rs-item:not(.rs-item--insp),
+/* ── 수거검사 탭: 뉴스 항목·일반 페이지네이션·구분선 숨김 ── */
+#regSidebar[data-view="insp"] .rs-item:not(.rs-item--insp):not(.rs-item--insp-public),
 #regSidebar[data-view="insp"] .rs-divider-unmatched,
-#regSidebar[data-view="insp"] .rs-pagination:not(.rs-pagination--insp),
+#regSidebar[data-view="insp"] .rs-pagination:not(.rs-pagination--insp):not(.rs-pagination--pub),
 #regSidebar[data-view="insp"] .rs-list-divider,
 #regSidebar[data-view="insp"] .rs-empty           { display: none !important; }
-#regSidebar[data-view="insp"] .rs-pagination--insp { display: flex !important; }
+#regSidebar[data-view="insp"] .rs-pagination--insp,
+#regSidebar[data-view="insp"] .rs-pagination--pub  { display: flex !important; }
 
 /* ── 우측 패널 필터 바 표시 제어 ── */
 /* rf-row2 (부적합/처분 칩): 뉴스 탭에만 표시 */
@@ -1017,4 +1024,159 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .reg-page--admin .rf-row2:not(.rf-row2--insp) .rs-chip-divider,
 .reg-page--admin .rf-row2:not(.rf-row2--insp) .rs-risk-help-btn {
   display: none;
+}
+
+/* ── 수거검사 내 정보 미등록 안내 배너 ──────────────────── */
+.rs-insp-no-profile-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 10px 6px;
+  padding: 10px 12px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #6b4c00;
+  line-height: 1.5;
+}
+.rs-insp-no-profile-banner > .bi { font-size: 16px; color: #fa8c16; flex-shrink: 0; margin-top: 2px; }
+.rs-insp-setup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  background: #fa8c16;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rs-insp-setup-btn:hover { background: #d46b08; }
+
+/* 공개 수거검사 목록 아이템 */
+.rs-item--insp-public { cursor: pointer; opacity: .9; }
+.rs-item--insp-public:hover { background: var(--c-bg-hover); }
+
+/* ── 수거검사 오른쪽 알림 가이드 패널 ────────────────────── */
+.rd-insp-guide-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px 24px;
+  text-align: center;
+  gap: 14px;
+}
+.rd-insp-guide-icon { font-size: 40px; color: #fa8c16; }
+.rd-insp-guide-title { font-size: 16px; font-weight: 700; color: var(--c-text); }
+.rd-insp-guide-desc { font-size: 13px; color: var(--c-text-secondary); line-height: 1.65; }
+.rd-insp-guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  width: 100%;
+  max-width: 300px;
+  margin-top: 6px;
+}
+.rd-insp-guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--c-text-secondary);
+  line-height: 1.5;
+}
+.rd-insp-guide-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fa8c16;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.rd-insp-guide-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 9px 20px;
+  background: #fa8c16;
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rd-insp-guide-btn:hover { background: #d46b08; }
+
+/* ── 수거검사 공개 목록 기간 필터 ──────────────────────── */
+.rs-pub-days-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 4px;
+  flex-wrap: wrap;
+}
+.rs-pub-day-btn {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-text-secondary);
+  background: var(--c-bg-hover);
+  border: 1px solid var(--c-border-light);
+  text-decoration: none;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.rs-pub-day-btn:hover { background: var(--c-primary-bg); color: var(--c-primary); border-color: var(--c-primary); }
+.rs-pub-day-btn.active { background: var(--c-primary); color: #fff; border-color: var(--c-primary); }
+.rs-pub-total {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--c-text-hint);
+}
+
+/* ── 수거검사 오른쪽 패널: 내 정보 미등록 안내 박스 ─────── */
+.rd-insp-guide-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+  padding: 12px 14px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #6b4c00;
+  line-height: 1.55;
+  text-align: left;
+  margin-bottom: 4px;
+}
+.rd-insp-guide-notice > .bi { font-size: 16px; color: #fa8c16; flex-shrink: 0; margin-top: 2px; }
+
+/* ── 공개 목록 건수 헤더 ────────────────────────────────── */
+.rs-pub-list-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px 2px;
+}
+.rs-pub-total {
+  font-size: 11px;
+  color: var(--c-text-hint);
+  margin-left: auto;
 }

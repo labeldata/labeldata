@@ -201,5 +201,17 @@ function selectInspection(matchId) {
   const url = new URL(window.location.href);
   url.searchParams.set('insp_id', matchId);
   url.searchParams.delete('id');
+  url.searchParams.delete('pub_insp_id');
   window.location.href = url.toString();
 }
+
+function selectPubInspection(inspResultId) {
+  const listBody = document.querySelector('.rs-list-body');
+  if (listBody) sessionStorage.setItem('rs_scroll', listBody.scrollTop);
+  const url = new URL(window.location.href);
+  url.searchParams.set('pub_insp_id', inspResultId);
+  url.searchParams.delete('id');
+  url.searchParams.delete('insp_id');
+  window.location.href = url.toString();
+}
+window.selectPubInspection = selectPubInspection;

@@ -9,6 +9,7 @@ import logging
 from datetime import date, timedelta
 
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Case, CharField, Count, Exists, F, IntegerField, Max, OuterRef, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce, Greatest
@@ -281,8 +282,9 @@ def news_list(request):
     qp = request.GET.copy()
     qp.pop('page',      None)
     qp.pop('id',        None)
-    qp.pop('insp_id',   None)
-    qp.pop('insp_page', None)
+    qp.pop('insp_id',     None)
+    qp.pop('pub_insp_id', None)
+    qp.pop('insp_page',   None)
     page_query_string = qp.urlencode()
     current_tab = tab  # 상단에서 이미 읽은 값 재사용
 
@@ -428,6 +430,55 @@ def news_list(request):
     insp_page_obj     = insp_paginator.get_page(insp_page_num)
     inspection_list   = insp_page_obj   # 하위 호환 — 템플릿 변수명 유지
 
+    # 내 매칭이 없을 때 보여줄 전체 수거검사 공개 목록 (캐시 적용)
+    # 상단 필터(days / date_from / date_to)를 그대로 사용
+    recent_insp_list = []
+    recent_insp_page_obj = None
+    recent_insp_paginator = None
+    recent_insp_total = 0
+    if inspection_total == 0:
+        pub_page_num = request.GET.get('pub_page', 1)
+
+        # 날짜 범위 지정 시 캐시 우회 (사용자별 동적 조건)
+        if date_from or date_to:
+            qs = InspectionResult.objects.order_by('-tkawydtm')
+            if date_from:
+                qs = qs.filter(tkawydtm__gte=date_from.replace('-', ''))
+            if date_to:
+                qs = qs.filter(tkawydtm__lte=date_to.replace('-', ''))
+            cached = list(qs.values(
+                'id', 'prdtnm', 'bssh_nm', 'tkawydtm', 'jdgmnt_cd_nm',
+                'exc_instt_nm', 'plan_titl', 'tkawyprno',
+            ))
+        else:
+            # days 파라미터 기준 캐시 — 스케줄러 실행 시 무효화
+            cache_key = f'public_insp_list_{days}'
+            cached = cache.get(cache_key)
+            if cached is None:
+                qs = InspectionResult.objects.order_by('-tkawydtm')
+                if days != 'all':
+                    cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
+                    qs = qs.filter(tkawydtm__gte=cutoff_str)
+                cached = list(qs.values(
+                    'id', 'prdtnm', 'bssh_nm', 'tkawydtm', 'jdgmnt_cd_nm',
+                    'exc_instt_nm', 'plan_titl', 'tkawyprno',
+                ))
+                cache.set(cache_key, cached, timeout=60 * 60 * 6)
+
+        # 검색어 필터 (캐시 데이터를 Python에서 필터링)
+        if q:
+            q_lower = q.lower()
+            cached = [
+                r for r in cached
+                if q_lower in (r['prdtnm'] or '').lower()
+                or q_lower in (r['bssh_nm'] or '').lower()
+            ]
+
+        recent_insp_total = len(cached)
+        recent_insp_paginator = Paginator(cached, 20)
+        recent_insp_page_obj = recent_insp_paginator.get_page(pub_page_num)
+        recent_insp_list = list(recent_insp_page_obj)
+
     # 수거검사 카테고리 건수 주입
     insp46_cats = [
         {**c, 'count': inspection_total}
@@ -534,6 +585,15 @@ def news_list(request):
         except InspectionMatch.DoesNotExist:
             pass
 
+    # ── 공개 수거검사 상세 패널 (pub_insp_id 파라미터) ───────────────────────
+    selected_pub_insp_id = request.GET.get('pub_insp_id')
+    selected_pub_insp = None
+    if selected_pub_insp_id and not selected_insp:
+        try:
+            selected_pub_insp = InspectionResult.objects.get(pk=selected_pub_insp_id)
+        except InspectionResult.DoesNotExist:
+            pass
+
     return render(request, 'regulatory/news_list.html', {
         'news_list':          page_obj,          # 페이지 객체 (이터러블)
         'page_obj':           page_obj,
@@ -573,9 +633,14 @@ def news_list(request):
         'insp_paginator':     insp_paginator,
         'inspection_total':          inspection_total,
         'inspection_filtered_total': inspection_filtered_total,
-        'inspection_unread':  inspection_unread,
-        'selected_insp':      selected_insp,
-        'user_profile':       UserProfile.objects.filter(user=request.user).first(),
+        'inspection_unread':       inspection_unread,
+        'selected_insp':           selected_insp,
+        'selected_pub_insp':       selected_pub_insp,
+        'recent_insp_list':        recent_insp_list,
+        'recent_insp_page_obj':    recent_insp_page_obj,
+        'recent_insp_paginator':   recent_insp_paginator,
+        'recent_insp_total':       recent_insp_total,
+        'user_profile':            UserProfile.objects.filter(user=request.user).first(),
     })
 
 

@@ -271,13 +271,13 @@
   </div>
 
   {# ─── 스플릿 뷰 ─── #}
-  <div class="reg-wrap{% if selected_news or selected_insp %} has-detail{% endif %}">
+  <div class="reg-wrap{% if selected_news or selected_insp or selected_pub_insp %} has-detail{% endif %}">
 
     {# ── 왼쪽: 목록만 ── #}
-    <aside class="reg-sidebar" id="regSidebar" data-view="{% if selected_insp %}insp{% else %}insp-news{% endif %}">
+    <aside class="reg-sidebar" id="regSidebar" data-view="{% if selected_insp or selected_pub_insp %}insp{% else %}insp-news{% endif %}">
       {# ── 뷰 탭: 부적합 / 처분 / 수거검사 ── #}
       <div class="rs-view-tabs">
-        <button class="rs-vtab{% if not selected_insp %} rs-vtab--active{% endif %}"
+        <button class="rs-vtab{% if not selected_insp and not selected_pub_insp %} rs-vtab--active{% endif %}"
                 id="vtabInspNews" onclick="switchView('insp-news')">
           <i class="bi bi-shield-exclamation"></i> 부적합
           <span class="rs-vtab-count" id="vtabInspNewsCnt">{{ tab_insp_total|intcomma }}</span>
@@ -287,18 +287,11 @@
           <i class="bi bi-gavel"></i> 행정처분
           <span class="rs-vtab-count" id="vtabAdminCnt">{{ tab_admin_total|intcomma }}</span>
         </button>
-        {% if inspection_total > 0 %}
-        <button class="rs-vtab{% if selected_insp %} rs-vtab--active{% endif %}"
+        <button class="rs-vtab{% if selected_insp or selected_pub_insp %} rs-vtab--active{% endif %}"
                 id="vtabInsp" onclick="switchView('insp')">
           <i class="bi bi-search"></i> 수거검사
-          <span class="rs-vtab-count" id="vtabInspCnt">{{ inspection_total|intcomma }}</span>{% if inspection_unread > 0 %}<span class="rs-vtab-unread-dot" id="vtabInspUnreadDot"></span>{% endif %}
+          {% if inspection_total > 0 %}<span class="rs-vtab-count" id="vtabInspCnt">{{ inspection_total|intcomma }}</span>{% if inspection_unread > 0 %}<span class="rs-vtab-unread-dot" id="vtabInspUnreadDot"></span>{% endif %}{% endif %}
         </button>
-        {% else %}
-        <button class="rs-vtab rs-vtab--disabled"
-                title="수거검사 알림을 받으려면 내 정보에서 인허가번호 또는 회사명을 등록하세요">
-          <i class="bi bi-search"></i> 수거검사
-        </button>
-        {% endif %}
       </div>
       {# ── 탭 서브 헤더 (모든 탭 공통) ── #}
       <div class="rs-list-header">
@@ -326,6 +319,9 @@
                      onclick="event.stopPropagation();" onchange="onInspCbChange()">
               {% if not m.read_yn %}<span class="rs-unread-dot"></span>{% endif %}
               <span class="rs-item-name">{{ m.inspection.prdtnm|default:m.inspection.bssh_nm }}</span>
+              <span class="rs-item-date">{{ m.inspection.tkawydtm|slice:"4:6" }}/{{ m.inspection.tkawydtm|slice:"6:8" }}</span>
+            </div>
+            <div class="rs-row2">
               {# 진행상태 badge #}
               {% if m.inspection.jdgmnt_cd_nm == '' %}
                 <span class="rs-insp-status rs-insp-status--recv">접수</span>
@@ -336,21 +332,16 @@
               {% else %}
                 <span class="rs-insp-status rs-insp-status--ok">적합</span>
               {% endif %}
-              {# 수거 날짜 #}
-              <span class="rs-item-date">{{ m.inspection.tkawydtm|slice:"4:6" }}/{{ m.inspection.tkawydtm|slice:"6:8" }}</span>
-              {# 수행기관 #}
-              <span class="rs-insp-excinstt">{{ m.inspection.exc_instt_nm|truncatechars:10 }}</span>
-            </div>
-            <div class="rs-row2">
               {% if m.alert_phase == 2 %}
                 <span class="rs-insp-badge-phase rs-insp-badge-phase--2">판정변동</span>
               {% else %}
                 <span class="rs-insp-badge-phase rs-insp-badge-phase--1">수거검사</span>
               {% endif %}
-              <span class="rs-insp-bssh">{{ m.inspection.bssh_nm|truncatechars:16 }}</span>
+              <span class="rs-insp-bssh">{{ m.inspection.bssh_nm|truncatechars:14 }}</span>
               {% if m.inspection.plan_titl %}
               <span class="rs-insp-plan-titl">{{ m.inspection.plan_titl }}</span>
               {% endif %}
+              <span class="rs-insp-excinstt">{{ m.inspection.exc_instt_nm|truncatechars:8 }}</span>
             </div>
             {% if m.alert_phase == 2 and m.prev_judgment %}
             <div class="rs-insp-row3">
@@ -359,9 +350,61 @@
             {% endif %}
           </div>
           {% empty %}
-          <div class="rs-insp-empty">
-            {% if q %}검색 결과가 없습니다: <strong>{{ q }}</strong>{% else %}매칭된 수거검사 내역이 없습니다.{% endif %}
+          {# ── 내 정보 미등록: 전체 공개 목록 (배너는 오른쪽 패널에 표시) ── #}
+          <div class="rs-pub-list-header">
+            <span class="rs-pub-total">{{ recent_insp_total|intcomma }}건</span>
           </div>
+
+          {% for r in recent_insp_list %}
+          <div class="rs-item rs-item--insp rs-item--insp-public{% if selected_pub_insp and selected_pub_insp.id == r.id %} active{% endif %}"
+               onclick="selectPubInspection({{ r.id }})">
+            <div class="rs-row1">
+              <span class="rs-item-name">{{ r.prdtnm|default:r.bssh_nm }}</span>
+              <span class="rs-item-date">{{ r.tkawydtm|slice:"4:6" }}/{{ r.tkawydtm|slice:"6:8" }}</span>
+            </div>
+            <div class="rs-row2">
+              {% if r.jdgmnt_cd_nm == '' %}
+                <span class="rs-insp-status rs-insp-status--recv">접수</span>
+              {% elif r.jdgmnt_cd_nm == '검토중' %}
+                <span class="rs-insp-status rs-insp-status--prog">검사 중</span>
+              {% elif '부적합' in r.jdgmnt_cd_nm %}
+                <span class="rs-insp-status rs-insp-status--fail">부적합</span>
+              {% else %}
+                <span class="rs-insp-status rs-insp-status--ok">적합</span>
+              {% endif %}
+              <span class="rs-insp-badge-phase rs-insp-badge-phase--1">수거검사</span>
+              <span class="rs-insp-bssh">{{ r.bssh_nm|truncatechars:14 }}</span>
+              {% if r.plan_titl %}<span class="rs-insp-plan-titl">{{ r.plan_titl }}</span>{% endif %}
+              <span class="rs-insp-excinstt">{{ r.exc_instt_nm|truncatechars:8 }}</span>
+            </div>
+          </div>
+          {% empty %}
+          <div class="rs-insp-empty">수거검사 데이터가 없습니다.</div>
+          {% endfor %}
+
+          {# ── 공개 목록 페이지네이션 ── #}
+          {% if recent_insp_paginator and recent_insp_paginator.num_pages > 1 %}
+          <div class="rs-pagination rs-pagination--pub">
+            {% if recent_insp_page_obj.has_previous %}
+            <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ recent_insp_page_obj.previous_page_number }}">‹</a>
+            {% else %}<span class="rs-page-btn disabled">‹</span>{% endif %}
+            {% for n in recent_insp_paginator.page_range %}
+              {% if n == recent_insp_page_obj.number %}
+              <span class="rs-page-btn active">{{ n }}</span>
+              {% elif n >= recent_insp_page_obj.number|add:"-2" and n <= recent_insp_page_obj.number|add:"2" %}
+              <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ n }}">{{ n }}</a>
+              {% elif n == 1 or n == recent_insp_paginator.num_pages %}
+              <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ n }}">{{ n }}</a>
+              {% elif n == recent_insp_page_obj.number|add:"-3" or n == recent_insp_page_obj.number|add:"3" %}
+              <span class="rs-page-info">…</span>
+              {% endif %}
+            {% endfor %}
+            {% if recent_insp_page_obj.has_next %}
+            <a class="rs-page-btn" href="?{{ page_query_string }}&pub_page={{ recent_insp_page_obj.next_page_number }}">›</a>
+            {% else %}<span class="rs-page-btn disabled">›</span>{% endif %}
+            <span class="rs-page-info" style="margin-left:4px;">{{ recent_insp_page_obj.number }}/{{ recent_insp_paginator.num_pages }}p</span>
+          </div>
+          {% endif %}
           {% endfor %}
 
           {# ── 수거검사 페이지네이션 ── #}
@@ -633,64 +676,67 @@
       <div class="rd-content-scroll">
         {% if selected_insp %}
         {# ── 수거검사 상세 패널 ── #}
-        <div class="rd-insp-panel">
-          <div class="rd-insp-header">
-            {% if selected_insp.alert_phase == 2 %}
-              <span class="rd-insp-phase-badge rd-insp-phase-badge--2">📣 판정결과 변동</span>
-            {% else %}
-              <span class="rd-insp-phase-badge rd-insp-phase-badge--1">🔍 수거 접수</span>
-            {% endif %}
-            {% if selected_insp.inspection.jdgmnt_cd_nm %}
-              <span class="rd-insp-judgment {% if '부적합' in selected_insp.inspection.jdgmnt_cd_nm %}rd-insp-judgment--fail{% else %}rd-insp-judgment--ok{% endif %}">
-                {{ selected_insp.inspection.jdgmnt_cd_nm }}
-              </span>
-            {% else %}
-              <span class="rd-insp-judgment rd-insp-judgment--pending">검사중</span>
-            {% endif %}
+        <div class="rd-wrap">
+
+          {# ══ 헤더 ══ #}
+          <div class="rd-hdr">
+            <div class="rd-hdr-top">
+              {% if selected_insp.alert_phase == 2 %}
+                <span class="rh-badge rh-src-dom">📣 판정결과 변동</span>
+              {% else %}
+                <span class="rh-badge rh-src-dom">🔍 수거검사</span>
+              {% endif %}
+              {% if selected_insp.inspection.jdgmnt_cd_nm %}
+                <span class="rh-badge {% if '부적합' in selected_insp.inspection.jdgmnt_cd_nm %}rh-risk-H{% else %}rh-risk-L{% endif %}">
+                  {{ selected_insp.inspection.jdgmnt_cd_nm }}
+                </span>
+              {% else %}
+                <span class="rh-badge" style="background:#fff8e1;color:#f57f17;">검사중</span>
+              {% endif %}
+              <div class="ms-auto">
+                {% if selected_insp.inspection.tkawydtm %}
+                <span class="rd-hdr-date">{{ selected_insp.inspection.tkawydtm|slice:":4" }}.{{ selected_insp.inspection.tkawydtm|slice:"4:6" }}.{{ selected_insp.inspection.tkawydtm|slice:"6:8" }}<span style="font-size:10px;color:#bbb;"> (수거)</span></span>
+                {% endif %}
+                <a href="https://www.foodsafetykorea.go.kr/portal/healthyfoodlife/collectionInspectionList.do" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식약처 수거검사</a>
+              </div>
+            </div>
+            <div class="rd-title">{{ selected_insp.inspection.prdtnm|default:selected_insp.inspection.bssh_nm }}</div>
+            <div class="rd-subtitle">
+              <b><i class="bi bi-building"></i> {{ selected_insp.inspection.bssh_nm }}</b>
+              {% if selected_insp.inspection.induty_cd_nm %}&nbsp;·&nbsp;{{ selected_insp.inspection.induty_cd_nm }}{% endif %}
+            </div>
           </div>
 
-          <div class="rd-insp-product">
-            <div class="rd-insp-prdtnm">{{ selected_insp.inspection.prdtnm|default:selected_insp.inspection.bssh_nm }}</div>
-            <div class="rd-insp-bssh">{{ selected_insp.inspection.bssh_nm }}</div>
-          </div>
-
+          {# ══ 판정변동 강조 박스 ══ #}
           {% if selected_insp.alert_phase == 2 and selected_insp.prev_judgment %}
-          <div class="rd-insp-change-box">
-            <span class="rd-insp-change-label">판정 변동 내역</span>
+          <div class="rd-insp-change-box" style="margin:0 18px 0;">
+            <span class="rd-insp-change-label">판정 변동</span>
             <span class="rd-insp-change-val">{{ selected_insp.prev_judgment }} → {{ selected_insp.inspection.jdgmnt_cd_nm }}</span>
           </div>
           {% endif %}
 
-          <div class="rd-insp-fields">
-            {% if selected_insp.inspection.tkawyprno %}
-            <div class="rd-insp-row"><span class="rd-insp-lbl">수거증번호</span><span class="rd-insp-val">{{ selected_insp.inspection.tkawyprno }}</span></div>
-            {% endif %}
-            {% if selected_insp.inspection.tkawydtm %}
-            <div class="rd-insp-row"><span class="rd-insp-lbl">수거일자</span><span class="rd-insp-val">{{ selected_insp.inspection.tkawydtm }}</span></div>
-            {% endif %}
-            {% if selected_insp.inspection.plan_titl %}
-            <div class="rd-insp-row"><span class="rd-insp-lbl">수거계획명</span><span class="rd-insp-val">{{ selected_insp.inspection.plan_titl }}</span></div>
-            {% endif %}
-            {% if selected_insp.inspection.tkawyspci_typecd_nm %}
-            <div class="rd-insp-row"><span class="rd-insp-lbl">검체구분</span><span class="rd-insp-val">{{ selected_insp.inspection.tkawyspci_typecd_nm }}</span></div>
-            {% endif %}
-            {% if selected_insp.inspection.induty_cd_nm %}
-            <div class="rd-insp-row"><span class="rd-insp-lbl">업종</span><span class="rd-insp-val">{{ selected_insp.inspection.induty_cd_nm }}</span></div>
-            {% endif %}
-            {% if selected_insp.inspection.site_addr %}
-            <div class="rd-insp-row"><span class="rd-insp-lbl">소재지</span><span class="rd-insp-val">{{ selected_insp.inspection.site_addr }}</span></div>
-            {% endif %}
-            {% if selected_insp.inspection.exc_instt_nm %}
-            <div class="rd-insp-row"><span class="rd-insp-lbl">수행기관</span><span class="rd-insp-val">{{ selected_insp.inspection.exc_instt_nm }}</span></div>
-            {% endif %}
-            {% if selected_insp.inspection.prdlst_report_no %}
-            <div class="rd-insp-row"><span class="rd-insp-lbl">품목보고번호</span><span class="rd-insp-val">{{ selected_insp.inspection.prdlst_report_no }}</span></div>
-            {% endif %}
-          </div>
+          {# ══ 원본 수집 데이터 (접기) ══ #}
+          <details class="rd-raw-details">
+            <summary class="rd-raw-sum"><i class="bi bi-file-text"></i> 수거검사 상세 정보</summary>
+            <div class="rd-raw-body">
+              <table class="rd-raw-table">
+                {% if selected_insp.inspection.tkawyprno %}<tr><td class="rd-raw-key">수거증번호</td><td class="rd-raw-val">{{ selected_insp.inspection.tkawyprno }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.plan_titl %}<tr><td class="rd-raw-key">수거계획명</td><td class="rd-raw-val">{{ selected_insp.inspection.plan_titl }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.tkawyspci_typecd_nm %}<tr><td class="rd-raw-key">검체구분</td><td class="rd-raw-val">{{ selected_insp.inspection.tkawyspci_typecd_nm }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.site_addr %}<tr><td class="rd-raw-key">소재지</td><td class="rd-raw-val">{{ selected_insp.inspection.site_addr }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.exc_instt_nm %}<tr><td class="rd-raw-key">수행기관</td><td class="rd-raw-val">{{ selected_insp.inspection.exc_instt_nm }}</td></tr>{% endif %}
+                {% if selected_insp.inspection.prdlst_report_no %}<tr><td class="rd-raw-key">품목보고번호</td><td class="rd-raw-val">{{ selected_insp.inspection.prdlst_report_no }}</td></tr>{% endif %}
+              </table>
+            </div>
+          </details>
 
-          <div class="rd-insp-match-box">
-            <div class="rd-insp-match-title">매칭 사유</div>
-            <div class="rd-insp-match-body">
+          {# ══ 매칭 사유 ══ #}
+          <div class="rd-sec">
+            <div class="rd-sec-hdr">
+              <i class="bi bi-link-45deg text-primary"></i>
+              내 정보 매칭 사유
+            </div>
+            <div style="padding: 8px 0 4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               {% if selected_insp.match_reason == 'label_no' %}
                 <span class="rd-insp-match-badge">내 제품 품목보고번호 일치</span>
                 {% if selected_insp.label %}<span class="rd-insp-match-val">{{ selected_insp.label.prdlst_nm }}</span>{% endif %}
@@ -705,16 +751,95 @@
             </div>
           </div>
 
+          {# ══ 액션 ══ #}
           <div class="rd-insp-actions">
             <button type="button" class="rd-insp-dismiss-btn"
                     onclick="inspDismiss({{ selected_insp.id }})"
-                    title="이 항목은 내와 관련 없습니다 (삭제)">
+                    title="이 항목은 나와 관련 없습니다 (삭제)">
               <i class="bi bi-x-circle"></i> 해당 없음 (삭제)
             </button>
           </div>
+
+        </div>
+        {% elif selected_pub_insp %}
+        {# ── 공개 수거검사 상세 패널 ── #}
+        <div class="rd-wrap">
+          <div class="rd-hdr">
+            <div class="rd-hdr-top">
+              <span class="rh-badge rh-src-dom">🔍 수거검사</span>
+              {% if selected_pub_insp.jdgmnt_cd_nm %}
+                <span class="rh-badge {% if '부적합' in selected_pub_insp.jdgmnt_cd_nm %}rh-risk-H{% else %}rh-risk-L{% endif %}">
+                  {{ selected_pub_insp.jdgmnt_cd_nm }}
+                </span>
+              {% else %}
+                <span class="rh-badge" style="background:#fff8e1;color:#f57f17;">검사중</span>
+              {% endif %}
+              <div class="ms-auto">
+                {% if selected_pub_insp.tkawydtm %}
+                <span class="rd-hdr-date">{{ selected_pub_insp.tkawydtm|slice:":4" }}.{{ selected_pub_insp.tkawydtm|slice:"4:6" }}.{{ selected_pub_insp.tkawydtm|slice:"6:8" }}<span style="font-size:10px;color:#bbb;"> (수거)</span></span>
+                {% endif %}
+                <a href="https://www.foodsafetykorea.go.kr/portal/healthyfoodlife/collectionInspectionList.do" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식약처 수거검사</a>
+              </div>
+            </div>
+            <div class="rd-title">{{ selected_pub_insp.prdtnm|default:selected_pub_insp.bssh_nm }}</div>
+            <div class="rd-subtitle">
+              <b><i class="bi bi-building"></i> {{ selected_pub_insp.bssh_nm }}</b>
+              {% if selected_pub_insp.induty_cd_nm %}&nbsp;·&nbsp;{{ selected_pub_insp.induty_cd_nm }}{% endif %}
+            </div>
+          </div>
+
+          <details class="rd-raw-details" open>
+            <summary class="rd-raw-sum"><i class="bi bi-file-text"></i> 수거검사 상세 정보</summary>
+            <div class="rd-raw-body">
+              <table class="rd-raw-table">
+                {% if selected_pub_insp.tkawyprno %}<tr><td class="rd-raw-key">수거증번호</td><td class="rd-raw-val">{{ selected_pub_insp.tkawyprno }}</td></tr>{% endif %}
+                {% if selected_pub_insp.plan_titl %}<tr><td class="rd-raw-key">수거계획명</td><td class="rd-raw-val">{{ selected_pub_insp.plan_titl }}</td></tr>{% endif %}
+                {% if selected_pub_insp.tkawyspci_typecd_nm %}<tr><td class="rd-raw-key">검체구분</td><td class="rd-raw-val">{{ selected_pub_insp.tkawyspci_typecd_nm }}</td></tr>{% endif %}
+                {% if selected_pub_insp.site_addr %}<tr><td class="rd-raw-key">소재지</td><td class="rd-raw-val">{{ selected_pub_insp.site_addr }}</td></tr>{% endif %}
+                {% if selected_pub_insp.exc_instt_nm %}<tr><td class="rd-raw-key">수행기관</td><td class="rd-raw-val">{{ selected_pub_insp.exc_instt_nm }}</td></tr>{% endif %}
+                {% if selected_pub_insp.prdlst_report_no %}<tr><td class="rd-raw-key">품목보고번호</td><td class="rd-raw-val">{{ selected_pub_insp.prdlst_report_no }}</td></tr>{% endif %}
+              </table>
+            </div>
+          </details>
         </div>
         {% elif selected_news %}
           {% include "regulatory/_news_detail_panel.html" with news=selected_news matches=selected_matches ing_matches=selected_ing_matches kw_logs=selected_kw_logs %}
+        {% else %}
+        {% if inspection_total == 0 and current_tab == 'insp' %}
+        <div class="rd-insp-guide-panel">
+          <div class="rd-insp-guide-notice">
+            <i class="bi bi-info-circle-fill"></i>
+            <div>
+              <strong>내 정보가 등록되지 않았습니다.</strong><br>
+              왼쪽에는 식약처 수거검사 전체 목록이 표시됩니다.<br>
+              내 정보를 등록하면 관련 검사만 필터링해서 알림으로 받을 수 있습니다.
+            </div>
+          </div>
+          <div class="rd-insp-guide-icon"><i class="bi bi-bell-fill"></i></div>
+          <div class="rd-insp-guide-title">수거검사 맞춤 알림 설정</div>
+          <div class="rd-insp-guide-desc">
+            내 정보(인허가번호 또는 회사명)를 등록하면<br>
+            <strong>해당 업체와 관련된 수거검사 결과</strong>를<br>
+            자동으로 알림으로 받아볼 수 있습니다.
+          </div>
+          <div class="rd-insp-guide-steps">
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">1</span>
+              <span>왼쪽 상단 <strong>내 정보</strong> 버튼을 눌러 인허가번호 또는 회사명 등록</span>
+            </div>
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">2</span>
+              <span>식약처 수거검사 데이터와 자동 매칭</span>
+            </div>
+            <div class="rd-insp-guide-step">
+              <span class="rd-insp-guide-step-num">3</span>
+              <span>관련 제품이 수거검사 대상이 되면 이 탭에 표시 및 앱 푸시 알림 발송</span>
+            </div>
+          </div>
+          <button type="button" class="rd-insp-guide-btn" onclick="openInspProfileModal()">
+            <i class="bi bi-person-gear me-1"></i> 내 정보 등록하기
+          </button>
+        </div>
         {% else %}
         <div class="rd-empty" style="height:100%;">
           <i class="bi bi-shield-exclamation text-secondary"></i>
@@ -723,6 +848,7 @@
           <div class="rd-empty-sub">⚠️ 미조치 {{ no_action_count }}건 — 조치가 필요합니다</div>
           {% endif %}
         </div>
+        {% endif %}
         {% endif %}
       </div>
     </main>
@@ -1196,6 +1322,7 @@ function switchView(v, updateUrl) {
   url.searchParams.delete('page');
   url.searchParams.delete('id');
   url.searchParams.delete('insp_id');
+  url.searchParams.delete('pub_insp_id');
 
   showLoading();
   window.location.href = url.toString();

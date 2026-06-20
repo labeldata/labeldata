@@ -160,6 +160,16 @@ SESSION_COOKIE_AGE = 43200  # 12시간 (12 * 60 * 60 초)
 SESSION_SAVE_EVERY_REQUEST = False  # 세션 내용 변경 시에만 저장 (CPU 절약)
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # 브라우저 닫아도 세션 유지 (12시간까지)
 
+# 파일 기반 캐시 — 수거검사 공개 목록 캐싱용 (스케줄러 실행 시 무효화)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': str(BASE_DIR.parent / 'django_cache'),
+        'TIMEOUT': 60 * 60 * 6,  # 기본 TTL 6시간 (스케줄러 미실행 시 안전망)
+        'OPTIONS': {'MAX_ENTRIES': 500},
+    }
+}
+
 # Django 기본 데이터베이스 세션 사용 (권한 문제로 현재 작동하지 않음)
 # SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # 기본값
 
