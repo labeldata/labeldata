@@ -18,8 +18,6 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from django.core.cache import cache
-
 from v1.regulatory.models import (
     NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews,
     InspectionResult, InspectionMatch,
