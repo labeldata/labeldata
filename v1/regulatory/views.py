@@ -18,6 +18,8 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from django.core.cache import cache
+
 from v1.regulatory.models import (
     NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews,
     InspectionResult, InspectionMatch,
@@ -796,6 +798,7 @@ def save_match_action(request):
             prod_match.false_positive_at = timezone.now()
             prod_match.save(update_fields=['false_positive_yn', 'false_positive_at'])
 
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
     log_activity(request, 'regulatory', 'regulatory_action')
     return JsonResponse({
         'success': True,
@@ -836,6 +839,7 @@ def mark_false_positive(request):
     except NewsProductMatch.DoesNotExist:
         return JsonResponse({'success': False, 'error': '매칭 정보를 찾을 수 없습니다.'}, status=404)
 
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
     unread = NewsProductMatch.objects.filter(
         product__user_id=request.user, read_yn=False, false_positive_yn=False
     ).count() + NewsIngredientMatch.objects.filter(
@@ -918,6 +922,7 @@ def mark_all_resolved(request):
     )
     unread = len(prod_news | ing_news)
 
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
     return JsonResponse({'success': True, 'created': created, 'unread': unread})
 
 
@@ -987,6 +992,7 @@ def mark_all_news_resolved(request):
     NewsIngredientMatch.objects.filter(id__in=[im.id for im in ing_matches]).update(read_yn=True)
     created += len(ing_actions)
 
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
     return JsonResponse({'success': True, 'created': created, 'unread': 0})
 
 

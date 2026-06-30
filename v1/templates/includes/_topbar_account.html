@@ -197,6 +197,9 @@
         ?.addEventListener('show.bs.dropdown', fetchNotifications);
     /* 30초마다 폴링 */
     setInterval(fetchNotifications, 30000);
+
+    /* 다른 스크립트에서 호출할 수 있도록 전역 노출 */
+    window.fetchNotifications = fetchNotifications;
 })();
 </script>
 {% endif %}

@@ -476,6 +476,10 @@ function saveActionMemo(matchType,matchId,areaId){
   .then(r=>r.json()).then(d=>{if(d.success){if(typeof showSnackbar==='function')showSnackbar('메모가 저장됐습니다.','success');setTimeout(()=>window.location.reload(),700);}});
 }
 window.saveActionMemo=saveActionMemo;
-function _updateBadge(unread){const b=document.getElementById('regBadge');if(b){b.textContent=unread>9?'9+':unread;b.style.display=unread>0?'':'none';}}
+function _updateBadge(count){
+  const b=document.getElementById('regAlertBadge');
+  if(b){b.textContent=count>9?'9+':count;b.style.display=count>0?'':'none';}
+  if(typeof window.fetchNotifications==='function') window.fetchNotifications();
+}
 }());
 </script>

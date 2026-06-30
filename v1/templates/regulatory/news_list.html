@@ -885,6 +885,10 @@ function quickResolve(e,newsId){
         var badge=item.querySelector('.badge-status-no');
         if(badge){badge.className='badge-status-res';badge.innerHTML='&#x2705; 조치완료';}
       }
+      // 네비바 부적합·처분 알림 배지 즉시 갱신
+      var navB=document.getElementById('regAlertBadge');
+      if(navB){var n=Math.max(0,(parseInt(navB.textContent)||0)-1);if(n===0){navB.style.display='none';}else{navB.textContent=n>9?'9+':n;}}
+      if(typeof window.fetchNotifications==='function') window.fetchNotifications();
     } else {btn.disabled=false;}
   }).catch(function(){btn.disabled=false;});
 }
