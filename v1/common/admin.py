@@ -71,7 +71,7 @@ class CustomUserAdmin(UserAdmin):
 
     list_filter = ('is_active', 'is_staff', 'date_joined')
 
-    actions = ['delete_selected_users', 'delete_unverified_users']
+    actions = ['delete_selected_users', 'delete_unverified_users', 'send_bulk_email']
 
     # 2. 상세 정보 화면 설정 (기존과 동일)
     fieldsets = (
@@ -102,6 +102,17 @@ class CustomUserAdmin(UserAdmin):
         unverified.delete()
         self.message_user(request, f'미인증 계정 {count}개가 삭제되었습니다.')
     delete_unverified_users.short_description = '선택한 계정 중 미인증 계정만 삭제'
+
+    def send_bulk_email(self, request, queryset):
+        """선택한 사용자에게 안내 메일 발송 (작성 화면으로 이동)"""
+        from django.shortcuts import redirect
+        user_ids = list(queryset.values_list('id', flat=True))
+        if not user_ids:
+            self.message_user(request, '선택된 사용자가 없습니다.', level='warning')
+            return
+        request.session['bulk_email_user_ids'] = user_ids
+        return redirect('user_management:admin_bulk_email_compose')
+    send_bulk_email.short_description = '선택한 사용자에게 알림 메일 발송'
 
     def get_email_verified(self, obj):
         try:

@@ -18,5 +18,6 @@ urlpatterns = [
     path('profile/document/delete/<int:pk>/', views.delete_company_document, name='delete_company_document'),
     path('privacy-policy/', views.privacy_policy, name='privacy_policy'),
     path('terms/', views.terms_of_service, name='terms_of_service'),
+    path('admin/bulk-email/', views.admin_bulk_email_compose, name='admin_bulk_email_compose'),
 ]
 

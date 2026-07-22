@@ -1,0 +1,58 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>선택한 사용자에게 알림 메일 발송</h1>
+
+<div style="margin:16px 0;padding:12px 16px;background:#eff6ff;border-left:3px solid #2563eb;">
+  <strong>발송 대상: {{ valid_users|length }}명</strong>
+  {% if invalid_users %}
+    <br>이메일 형식이 올바르지 않아 <strong>{{ invalid_users|length }}명은 제외</strong>됩니다:
+    {% for u in invalid_users %}{{ u.username }}{% if not forloop.last %}, {% endif %}{% endfor %}
+  {% endif %}
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div style="margin-bottom:14px;">
+    <label for="id_subject"><strong>제목</strong></label><br>
+    <input type="text" id="id_subject" name="subject" value="{{ subject|default:'' }}" style="width:520px;padding:6px;" required>
+  </div>
+  <div style="margin-bottom:14px;">
+    <label for="id_body"><strong>내용</strong></label><br>
+    <textarea id="id_body" name="body" rows="14" style="width:520px;padding:6px;" required>{{ body|default:'' }}</textarea>
+  </div>
+  <div style="margin-bottom:8px;">
+    <label>
+      <input type="checkbox" name="test_only" id="id_test_only" checked>
+      테스트 발송 (아래에서 선택한 사람에게만 발송, 체크 해제 시 전체 대상에게 실제 발송)
+    </label>
+  </div>
+  <div style="margin-bottom:18px;padding-left:22px;">
+    <label>
+      <input type="checkbox" name="include_self" checked>
+      관리자 본인({{ request.user.email }})도 테스트 수신자에 포함
+    </label>
+  </div>
+
+  {% if valid_users %}
+  <h3 style="margin-top:10px;">발송 대상 목록 <small>(테스트 발송 시 아래에서 받을 사람을 선택하세요)</small></h3>
+  <table style="border-collapse:collapse;margin-bottom:18px;">
+    <tr>
+      <th style="text-align:left;padding:4px 12px;border-bottom:1px solid #ddd;">테스트 수신</th>
+      <th style="text-align:left;padding:4px 12px;border-bottom:1px solid #ddd;">아이디</th>
+      <th style="text-align:left;padding:4px 12px;border-bottom:1px solid #ddd;">이메일</th>
+    </tr>
+    {% for u in valid_users %}
+    <tr>
+      <td style="padding:4px 12px;"><input type="checkbox" name="test_recipients" value="{{ u.id }}"></td>
+      <td style="padding:4px 12px;">{{ u.username }}</td>
+      <td style="padding:4px 12px;">{{ u.email }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  <input type="submit" value="발송" class="default" style="padding:8px 20px;">
+  <a href="{% url 'admin:auth_user_changelist' %}" style="margin-left:10px;">취소</a>
+</form>
+{% endblock %}

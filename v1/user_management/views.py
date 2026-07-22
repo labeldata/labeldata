@@ -4,14 +4,18 @@ from django.contrib.auth import login, logout, authenticate, update_session_auth
 from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from .models import UserProfile, CompanyDocument
 from django.utils.crypto import get_random_string
 from django.core.mail import EmailMultiAlternatives
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.conf import settings
 from django.utils import timezone
 import logging
+import time
 import requests
 
 logger = logging.getLogger(__name__)
@@ -45,6 +49,90 @@ def _send_account_email(subject, template_name, context, to_email):
     msg = EmailMultiAlternatives(subject, text_body, _from, [to_email])
     msg.attach_alternative(html_body, 'text/html')
     msg.send()
+
+BULK_EMAIL_THROTTLE_SECONDS = 0.5  # Gmail SMTP 발송 속도 제한 대응
+
+
+@staff_member_required
+def admin_bulk_email_compose(request):
+    """관리자 화면(사용자 목록)에서 선택한 사용자에게 안내 메일 작성/발송"""
+    user_ids = request.session.get('bulk_email_user_ids')
+    if not user_ids:
+        messages.error(request, '발송 대상이 없습니다. 사용자 목록에서 다시 선택해 주세요.')
+        return redirect('admin:auth_user_changelist')
+
+    candidates = User.objects.filter(id__in=user_ids, is_active=True)
+
+    valid_users, invalid_users = [], []
+    for u in candidates:
+        try:
+            validate_email(u.email)
+            valid_users.append(u)
+        except ValidationError:
+            invalid_users.append(u)
+
+    if request.method == 'POST':
+        subject = request.POST.get('subject', '').strip()
+        body = request.POST.get('body', '').strip()
+        test_only = request.POST.get('test_only') == 'on'
+
+        if not subject or not body:
+            messages.error(request, '제목과 내용을 모두 입력해 주세요.')
+            return render(request, 'user_management/admin_bulk_email.html', {
+                'valid_users': valid_users,
+                'invalid_users': invalid_users,
+                'subject': subject,
+                'body': body,
+            })
+
+        if test_only:
+            selected_ids = {i for i in request.POST.getlist('test_recipients') if i.isdigit()}
+            target_emails = [u.email for u in valid_users if str(u.id) in selected_ids]
+            include_self = request.POST.get('include_self') == 'on'
+            if include_self and request.user.email and request.user.email not in target_emails:
+                target_emails.append(request.user.email)
+            if not target_emails:
+                messages.error(request, '테스트 발송 대상을 한 명 이상 선택하거나 "관리자 본인 포함"을 체크해 주세요.')
+                return render(request, 'user_management/admin_bulk_email.html', {
+                    'valid_users': valid_users,
+                    'invalid_users': invalid_users,
+                    'subject': subject,
+                    'body': body,
+                })
+        else:
+            target_emails = [u.email for u in valid_users]
+
+        sent, failed = 0, []
+        for email in target_emails:
+            try:
+                _send_account_email(
+                    subject=subject,
+                    template_name='emails/bulk_notice.html',
+                    context={'body': body},
+                    to_email=email,
+                )
+                sent += 1
+            except Exception:
+                logger.exception('알림 메일 발송 실패: %s', email)
+                failed.append(email)
+            time.sleep(BULK_EMAIL_THROTTLE_SECONDS)
+
+        del request.session['bulk_email_user_ids']
+
+        if test_only:
+            messages.success(request, f'테스트 메일을 {sent}명({", ".join(target_emails)})에게 발송했습니다.')
+        else:
+            summary = f'{sent}명에게 발송 완료했습니다.'
+            if failed:
+                summary += f' 실패 {len(failed)}건: {", ".join(failed)}'
+            messages.success(request, summary)
+        return redirect('admin:auth_user_changelist')
+
+    return render(request, 'user_management/admin_bulk_email.html', {
+        'valid_users': valid_users,
+        'invalid_users': invalid_users,
+    })
+
 
 def signup(request):
     """회원가입 (이메일 인증 방식)"""
