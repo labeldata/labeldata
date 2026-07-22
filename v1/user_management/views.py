@@ -117,15 +117,20 @@ def admin_bulk_email_compose(request):
                 failed.append(email)
             time.sleep(BULK_EMAIL_THROTTLE_SECONDS)
 
-        del request.session['bulk_email_user_ids']
-
         if test_only:
-            messages.success(request, f'테스트 메일을 {sent}명({", ".join(target_emails)})에게 발송했습니다.')
-        else:
-            summary = f'{sent}명에게 발송 완료했습니다.'
-            if failed:
-                summary += f' 실패 {len(failed)}건: {", ".join(failed)}'
-            messages.success(request, summary)
+            messages.success(request, f'테스트 메일을 {sent}명({", ".join(target_emails)})에게 발송했습니다. 내용을 확인하신 뒤 "테스트 발송" 체크를 해제하고 실제 발송해 주세요.')
+            return render(request, 'user_management/admin_bulk_email.html', {
+                'valid_users': valid_users,
+                'invalid_users': invalid_users,
+                'subject': subject,
+                'body': body,
+            })
+
+        del request.session['bulk_email_user_ids']
+        summary = f'{sent}명에게 발송 완료했습니다.'
+        if failed:
+            summary += f' 실패 {len(failed)}건: {", ".join(failed)}'
+        messages.success(request, summary)
         return redirect('admin:auth_user_changelist')
 
     return render(request, 'user_management/admin_bulk_email.html', {
