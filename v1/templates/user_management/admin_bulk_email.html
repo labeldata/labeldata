@@ -11,8 +11,9 @@
   {% endif %}
 </div>
 
-<form method="post">
+<form method="post" id="bulk-email-form" onsubmit="var b=document.getElementById('bulk-email-submit'); if(b.dataset.submitted){return false;} b.dataset.submitted='1'; b.value='발송 중...'; b.disabled=false; return true;">
   {% csrf_token %}
+  <input type="hidden" name="idempotency_token" value="{{ idem_token }}">
   <div style="margin-bottom:14px;">
     <label for="id_subject"><strong>제목</strong></label><br>
     <input type="text" id="id_subject" name="subject" value="{{ subject|default:'' }}" style="width:520px;padding:6px;" required>
@@ -52,7 +53,7 @@
   </table>
   {% endif %}
 
-  <input type="submit" value="발송" class="default" style="padding:8px 20px;">
+  <input type="submit" id="bulk-email-submit" value="발송" class="default" style="padding:8px 20px;">
   <a href="{% url 'admin:auth_user_changelist' %}" style="margin-left:10px;">취소</a>
 </form>
 {% endblock %}

@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from .models import UserProfile, CompanyDocument
+from . import bulk_email_store
 from django.utils.crypto import get_random_string
 from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
@@ -14,8 +15,11 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.conf import settings
 from django.utils import timezone
+from django.db import connection
+from django.http import Http404
 import logging
 import time
+import threading
 import requests
 
 logger = logging.getLogger(__name__)
@@ -53,6 +57,44 @@ def _send_account_email(subject, template_name, context, to_email):
 BULK_EMAIL_THROTTLE_SECONDS = 0.5  # Gmail SMTP 발송 속도 제한 대응
 
 
+def _process_bulk_email_batch(batch_id):
+    """배치의 미발송(pending/failed) 대상을 순회 발송하며 건별로 즉시 파일에 기록.
+    요청-응답 사이클과 분리된 백그라운드 스레드에서 실행되어 HTTP 타임아웃의 영향을 받지 않는다."""
+    try:
+        batch = bulk_email_store.load_batch(batch_id)
+        if not batch:
+            return
+        targets = [r['email'] for r in batch['recipients'] if r['status'] in ('pending', 'failed')]
+        for email in targets:
+            try:
+                _send_account_email(
+                    subject=batch['subject'],
+                    template_name='emails/bulk_notice.html',
+                    context={'body': batch['body']},
+                    to_email=email,
+                )
+                bulk_email_store.update_recipient_status(batch_id, email, 'sent')
+            except Exception as e:
+                logger.exception('알림 메일 발송 실패: %s', email)
+                bulk_email_store.update_recipient_status(batch_id, email, 'failed', error=str(e)[:500])
+            time.sleep(BULK_EMAIL_THROTTLE_SECONDS)
+    except Exception:
+        logger.exception('알림 메일 배치 처리 중 오류 (batch_id=%s)', batch_id)
+    finally:
+        bulk_email_store.release_processing(batch_id)
+        connection.close()
+
+
+def _start_bulk_email_batch(batch_id):
+    """처리 락 파일을 원자적으로 선점하여, 동일 배치에 대한 발송 스레드가
+    중복 실행(재발송 버튼 연타, 요청 재시도 등)되지 않도록 한다."""
+    if not bulk_email_store.claim_processing(batch_id):
+        return False
+    thread = threading.Thread(target=_process_bulk_email_batch, args=(batch_id,), daemon=True)
+    thread.start()
+    return True
+
+
 @staff_member_required
 def admin_bulk_email_compose(request):
     """관리자 화면(사용자 목록)에서 선택한 사용자에게 안내 메일 작성/발송"""
@@ -75,6 +117,7 @@ def admin_bulk_email_compose(request):
         subject = request.POST.get('subject', '').strip()
         body = request.POST.get('body', '').strip()
         test_only = request.POST.get('test_only') == 'on'
+        idem_token = request.POST.get('idempotency_token', '').strip() or get_random_string(32)
 
         if not subject or not body:
             messages.error(request, '제목과 내용을 모두 입력해 주세요.')
@@ -83,6 +126,7 @@ def admin_bulk_email_compose(request):
                 'invalid_users': invalid_users,
                 'subject': subject,
                 'body': body,
+                'idem_token': idem_token,
             })
 
         if test_only:
@@ -98,44 +142,86 @@ def admin_bulk_email_compose(request):
                     'invalid_users': invalid_users,
                     'subject': subject,
                     'body': body,
+                    'idem_token': idem_token,
                 })
-        else:
-            target_emails = [u.email for u in valid_users]
 
-        sent, failed = 0, []
-        for email in target_emails:
-            try:
-                _send_account_email(
-                    subject=subject,
-                    template_name='emails/bulk_notice.html',
-                    context={'body': body},
-                    to_email=email,
-                )
-                sent += 1
-            except Exception:
-                logger.exception('알림 메일 발송 실패: %s', email)
-                failed.append(email)
-            time.sleep(BULK_EMAIL_THROTTLE_SECONDS)
+            # 테스트 발송은 대상이 소수이므로 화면에서 바로 확인할 수 있도록 즉시(동기) 발송
+            sent, failed = 0, []
+            for email in target_emails:
+                try:
+                    _send_account_email(
+                        subject=subject,
+                        template_name='emails/bulk_notice.html',
+                        context={'body': body},
+                        to_email=email,
+                    )
+                    sent += 1
+                except Exception:
+                    logger.exception('테스트 메일 발송 실패: %s', email)
+                    failed.append(email)
+                time.sleep(BULK_EMAIL_THROTTLE_SECONDS)
 
-        if test_only:
             messages.success(request, f'테스트 메일을 {sent}명({", ".join(target_emails)})에게 발송했습니다. 내용을 확인하신 뒤 "테스트 발송" 체크를 해제하고 실제 발송해 주세요.')
             return render(request, 'user_management/admin_bulk_email.html', {
                 'valid_users': valid_users,
                 'invalid_users': invalid_users,
                 'subject': subject,
                 'body': body,
+                'idem_token': idem_token,
             })
 
-        del request.session['bulk_email_user_ids']
-        summary = f'{sent}명에게 발송 완료했습니다.'
-        if failed:
-            summary += f' 실패 {len(failed)}건: {", ".join(failed)}'
-        messages.success(request, summary)
-        return redirect('admin:auth_user_changelist')
+        # 실제 전체 발송: 배치/수신자 상태를 파일로 기록해두고 백그라운드 스레드에서 처리
+        # (요청-응답 시간과 분리되어 서버/프록시 타임아웃에 영향받지 않으며,
+        #  중간에 끊겨도 수신자별 상태가 즉시 저장되어 있어 재발송 시 이어서 진행 가능)
+        #
+        # idem_token 파일을 원자적으로 생성해, 네트워크 재시도 등으로 동일한 제출이
+        # 두 번 들어와도(예: 타임아웃 후 프록시의 자동 재전송) 배치가 두 번 생성되지
+        # 않고 기존 배치로 안내되도록 한다.
+        try:
+            batch_id = bulk_email_store.create_batch(
+                subject=subject, body=body, created_by=request.user.username,
+                emails=[u.email for u in valid_users], token=idem_token,
+            )
+        except bulk_email_store.DuplicateSubmissionError as e:
+            request.session.pop('bulk_email_user_ids', None)
+            messages.warning(request, '이미 처리된 요청입니다(중복 제출 방지). 아래에서 진행 상황을 확인하세요.')
+            return redirect('user_management:admin_bulk_email_status', batch_id=e.batch_id)
+
+        request.session.pop('bulk_email_user_ids', None)
+        _start_bulk_email_batch(batch_id)
+        messages.success(request, f'{len(valid_users)}명에게 발송을 시작했습니다. 아래 화면에서 진행 상황을 확인할 수 있습니다.')
+        return redirect('user_management:admin_bulk_email_status', batch_id=batch_id)
 
     return render(request, 'user_management/admin_bulk_email.html', {
         'valid_users': valid_users,
         'invalid_users': invalid_users,
+        'idem_token': get_random_string(32),
+    })
+
+
+@staff_member_required
+def admin_bulk_email_status(request, batch_id):
+    """알림 메일 배치 발송 진행 상황 확인 및 미발송/실패 건 재발송"""
+    batch = bulk_email_store.load_batch(batch_id)
+    if not batch:
+        raise Http404('발송 배치를 찾을 수 없습니다.')
+
+    if request.method == 'POST' and request.POST.get('action') == 'resend_pending':
+        remaining = sum(1 for r in batch['recipients'] if r['status'] in ('pending', 'failed'))
+        if not remaining:
+            messages.info(request, '재발송할 대상이 없습니다. 모두 발송 완료된 배치입니다.')
+        elif _start_bulk_email_batch(batch_id):
+            messages.success(request, f'미발송/실패 {remaining}건 재발송을 시작했습니다.')
+        else:
+            messages.warning(request, '이미 발송이 진행 중입니다. 잠시 후 다시 확인해 주세요.')
+        return redirect('user_management:admin_bulk_email_status', batch_id=batch_id)
+
+    counts = bulk_email_store.batch_counts(batch)
+    recipients = sorted(batch['recipients'], key=lambda r: (r['status'], r['email']))
+    return render(request, 'user_management/admin_bulk_email_status.html', {
+        'batch': batch,
+        'counts': counts,
+        'recipients': recipients,
     })
 
 

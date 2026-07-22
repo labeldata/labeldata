@@ -19,5 +19,6 @@ urlpatterns = [
     path('privacy-policy/', views.privacy_policy, name='privacy_policy'),
     path('terms/', views.terms_of_service, name='terms_of_service'),
     path('admin/bulk-email/', views.admin_bulk_email_compose, name='admin_bulk_email_compose'),
+    path('admin/bulk-email/status/<str:batch_id>/', views.admin_bulk_email_status, name='admin_bulk_email_status'),
 ]
 
