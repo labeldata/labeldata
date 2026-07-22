@@ -18,8 +18,8 @@
     <input type="text" id="id_subject" name="subject" value="{{ subject|default:'' }}" style="width:520px;padding:6px;" required>
   </div>
   <div style="margin-bottom:14px;">
-    <label for="id_body"><strong>내용</strong></label><br>
-    <textarea id="id_body" name="body" rows="14" style="width:520px;padding:6px;" required>{{ body|default:'' }}</textarea>
+    <label for="id_body"><strong>내용 (HTML 입력 가능 — 입력한 태그가 메일에 그대로 렌더링됩니다)</strong></label><br>
+    <textarea id="id_body" name="body" rows="20" style="width:720px;font-family:monospace;padding:6px;" required>{{ body|default:'' }}</textarea>
   </div>
   <div style="margin-bottom:8px;">
     <label>

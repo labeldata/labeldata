@@ -1,4 +1,4 @@
 {% extends "emails/base_email.html" %}
 {% block content %}
-<div style="font-size:14px;color:#1e293b;line-height:1.8;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;white-space:pre-line;">{{ body }}</div>
+<div style="font-size:14px;color:#1e293b;line-height:1.8;font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">{{ body|safe }}</div>
 {% endblock %}

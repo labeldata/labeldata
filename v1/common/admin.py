@@ -70,6 +70,8 @@ class CustomUserAdmin(UserAdmin):
     )
 
     list_filter = ('is_active', 'is_staff', 'date_joined')
+    list_per_page = 200
+    ordering = ('-last_login',)
 
     actions = ['delete_selected_users', 'delete_unverified_users', 'send_bulk_email']
 
