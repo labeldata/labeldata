@@ -7,6 +7,7 @@
 import hmac
 import json
 import logging
+import re as _re
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -1155,12 +1156,61 @@ def alert_rule_delete_api(request, rule_id):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 수거검사(I0460) 외부 export API — 구글 스프레드시트(GAS) 등 사내 연동용
+# 수거검사(I0460) 외부 export API — 구글 스프레드시트(GAS, SPC 계열사 시트) 연동용
 # ─────────────────────────────────────────────────────────────────────────────
+# 아래 SPC_KEYWORDS / _refine_bssh_name 은 기존 GAS(Code.gs)에 있던 로직을
+# 그대로 이식한 것입니다. InspectionResult.bssh_nm 원본은 건드리지 않고,
+# 이 export 응답을 만들 때만 정제해서 내보냅니다 (다른 기능은 원본 그대로 사용).
+
+INSPECTION_SPC_KEYWORDS = [
+    "리바게", "삼립", "샤니", "던킨", "배스킨", "파스쿠", "빚은", "르뽀미에",
+    "따삐오", "베이커리팩토리", "샌드팜", "잇투고", "파리크라상", "파리바게뜨",
+    "비알코리아", "에스피엘",
+]
+
+_CORP_SUFFIX_RE = _re.compile(r'\(주\)\s?|주식회사\s?')
+
+
+def _refine_bssh_name(raw_name: str, addr: str) -> str:
+    """GAS refineBsshName() 이식 — 공장 주소 충돌 해결 및 표기 정규화."""
+    raw_name = raw_name or ''
+    addr = addr or ''
+
+    # 1단계: 업소명 키워드 우선
+    if any(k in raw_name for k in ("파리크라상", "파리바게뜨", "파스쿠", "리바게")):
+        if "달서구" in addr or "달성군" in addr:
+            return "파리크라상 대구공장"
+        return _CORP_SUFFIX_RE.sub('', raw_name).strip()
+    if any(k in raw_name for k in ("비알코리아", "던킨", "배스킨")):
+        return _CORP_SUFFIX_RE.sub('', raw_name).strip()
+
+    # 2단계: 주소 기반 정제 (구체적 패턴 우선)
+    if "논공중앙로54길 7(A동" in addr: return "샌드팜 영남공장"
+    if "논공중앙로54길 7" in addr:     return "샤니 대구공장"
+    if "101(3층" in addr:              return "샌드팜"
+    if "101(정왕동)" in addr:          return "삼립 시화공장"
+    if "서천군 종천면 종천공단길" in addr:         return "삼립 서천공장"
+    if "달서구 성서로 255" in addr:                return "삼립 대구공장"
+    if "달서구 갈산동 969-3" in addr:              return "파리크라상 대구공장"
+    if "광산구 하남산단5번로 67" in addr:          return "호남샤니"
+    if "성남시 중원구 둔촌대로457번길 13" in addr: return "샤니 성남공장"
+    if "청주시 흥덕구 산단로 88" in addr:          return "삼립 청주공장"
+    if "팽성읍 추팔산단1길 157" in addr:           return "에스피엘"
+
+    # 3단계: 업소명 표기 정규화
+    if "주식회사 에스피씨삼립" in raw_name or "주식회사삼립" in raw_name:
+        return "삼립"
+    if "주식회사샤니" in raw_name:
+        return "샤니"
+    if "에스피엘" in raw_name:
+        return "에스피엘"
+    return _CORP_SUFFIX_RE.sub('', raw_name).strip()
+
 
 def inspection_export_api(request):
     """
-    수거검사 결과를 JSON으로 export (GAS 등 외부 연동용, 읽기 전용).
+    수거검사 결과 중 SPC 계열사 데이터만 정제해서 JSON으로 export
+    (GAS 등 외부 연동용, 읽기 전용).
 
     인증: X-Api-Key 헤더 또는 ?key= 쿼리파라미터 (settings.INSPECTION_EXPORT_API_KEY와 일치해야 함)
     쿼리파라미터:
@@ -1190,23 +1240,33 @@ def inspection_export_api(request):
         except (ValueError, TypeError):
             pass
 
-    data = [
-        {
-            'bssh_name':       row.bssh_nm,
-            'prdt_nm':         row.prdtnm,
-            'judgment':        row.jdgmnt_cd_nm,
-            'induty_cd_nm':    row.induty_cd_nm,
-            'tkawy_dtm':       row.tkawydtm,
-            'spci_type_nm':    row.tkawyspci_typecd_nm,
-            'exc_instt_nm':    row.exc_instt_nm,
-            'report_no':       row.prdlst_report_no,
-            'tkawy_prno':      row.tkawyprno,
-            'plan_titl':       row.plan_titl,
-            'site_addr':       row.site_addr,
-            'last_updt_dtm':   row.last_updt_dtm,
+    # 중복 제거: (수거일자, 정제된 업소명, 보고번호, 수거증번호) 기준, LAST_UPDT_DTM 최신 것 채택
+    dedup: dict = {}
+    for row in qs:
+        # SPC 계열사만 (raw 업소명 기준 — refine 전에 걸러야 원본 GAS 로직과 동일)
+        if not any(k in (row.bssh_nm or '') for k in INSPECTION_SPC_KEYWORDS):
+            continue
+        refined_name = _refine_bssh_name(row.bssh_nm, row.site_addr)
+        dup_key = (row.tkawydtm, refined_name, row.prdlst_report_no, row.tkawyprno)
+        item = {
+            'bssh_name':      refined_name,
+            'prdt_nm':        row.prdtnm,
+            'judgment':       row.jdgmnt_cd_nm,
+            'induty_cd_nm':   row.induty_cd_nm,
+            'tkawy_dtm':      row.tkawydtm,
+            'spci_type_nm':   row.tkawyspci_typecd_nm,
+            'exc_instt_nm':   row.exc_instt_nm,
+            'report_no':      row.prdlst_report_no,
+            'tkawy_prno':     row.tkawyprno,
+            'plan_titl':      row.plan_titl,
+            'site_addr':      row.site_addr,
+            'last_updt_dtm':  row.last_updt_dtm,
         }
-        for row in qs
-    ]
+        existing = dedup.get(dup_key)
+        if existing is None or item['last_updt_dtm'] > existing['last_updt_dtm']:
+            dedup[dup_key] = item
+
+    data = sorted(dedup.values(), key=lambda r: r['tkawy_dtm'], reverse=True)
     return JsonResponse({'data': data, 'count': len(data)})
 
 
