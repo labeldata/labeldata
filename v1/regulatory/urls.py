@@ -22,4 +22,6 @@ urlpatterns = [
     path('api/inspection/mark-all-read/', views.inspection_mark_all_read, name='inspection_mark_all_read'),
     path('api/inspection/dismiss/', views.inspection_dismiss, name='inspection_dismiss'),
     path('api/save-insp-profile/', views.save_insp_profile, name='save_insp_profile'),
+    # 수거검사 외부 export API (GAS 등 사내 연동용, 키 인증)
+    path('api/inspection/export/', views.inspection_export_api, name='inspection_export'),
 ]

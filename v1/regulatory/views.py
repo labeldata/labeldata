@@ -4,10 +4,12 @@
 - 상세: 뉴스 상세 + AI 분석 + 영향받는 내 제품 목록
 - API: 알림 카운트 (JSON), 읽음 처리 (POST)
 """
+import hmac
 import json
 import logging
 from datetime import date, timedelta
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
@@ -1150,6 +1152,62 @@ def alert_rule_delete_api(request, rule_id):
 
     rule.delete()
     return JsonResponse({'success': True})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 수거검사(I0460) 외부 export API — 구글 스프레드시트(GAS) 등 사내 연동용
+# ─────────────────────────────────────────────────────────────────────────────
+
+def inspection_export_api(request):
+    """
+    수거검사 결과를 JSON으로 export (GAS 등 외부 연동용, 읽기 전용).
+
+    인증: X-Api-Key 헤더 또는 ?key= 쿼리파라미터 (settings.INSPECTION_EXPORT_API_KEY와 일치해야 함)
+    쿼리파라미터:
+      - days: 최근 N일만 조회 (기본 90, 'all'이면 전체)
+      - since: YYYYMMDD 형식, tkawydtm(수거일자) 기준 이후 데이터만 조회 (days보다 우선)
+    응답: {"data": [...], "count": N}
+    """
+    api_key = getattr(settings, 'INSPECTION_EXPORT_API_KEY', '')
+    if not api_key:
+        # 서버에 키가 설정 안 돼 있으면 export 자체를 비활성화 (안전 기본값)
+        return JsonResponse({'error': 'API 미설정'}, status=503)
+
+    req_key = request.headers.get('X-Api-Key') or request.GET.get('key', '')
+    if not req_key or not hmac.compare_digest(req_key, api_key):
+        return JsonResponse({'error': '인증 실패'}, status=401)
+
+    qs = InspectionResult.objects.order_by('-tkawydtm')
+
+    since = request.GET.get('since', '').strip()
+    days  = request.GET.get('days', '90').strip()
+    if since:
+        qs = qs.filter(tkawydtm__gte=since)
+    elif days != 'all':
+        try:
+            cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
+            qs = qs.filter(tkawydtm__gte=cutoff_str)
+        except (ValueError, TypeError):
+            pass
+
+    data = [
+        {
+            'bssh_name':       row.bssh_nm,
+            'prdt_nm':         row.prdtnm,
+            'judgment':        row.jdgmnt_cd_nm,
+            'induty_cd_nm':    row.induty_cd_nm,
+            'tkawy_dtm':       row.tkawydtm,
+            'spci_type_nm':    row.tkawyspci_typecd_nm,
+            'exc_instt_nm':    row.exc_instt_nm,
+            'report_no':       row.prdlst_report_no,
+            'tkawy_prno':      row.tkawyprno,
+            'plan_titl':       row.plan_titl,
+            'site_addr':       row.site_addr,
+            'last_updt_dtm':   row.last_updt_dtm,
+        }
+        for row in qs
+    ]
+    return JsonResponse({'data': data, 'count': len(data)})
 
 
 @login_required

@@ -258,6 +258,10 @@ MOBILE_MEMBER_MAX_RULES = 30
 TURNSTILE_SITE_KEY = config('TURNSTILE_SITE_KEY', default='')
 TURNSTILE_SECRET_KEY = config('TURNSTILE_SECRET_KEY', default='')
 
+# GAS(구글 스프레드시트) 등 외부 연동용 수거검사 export API 공유 비밀키
+# .env에 INSPECTION_EXPORT_API_KEY=<임의의 긴 랜덤 문자열> 로 설정
+INSPECTION_EXPORT_API_KEY = config('INSPECTION_EXPORT_API_KEY', default='')
+
 # 비회원 보관함 최대 개수
 MOBILE_GUEST_MAX_BOOKMARKS = 5
 # 회원 보관함 최대 개수
