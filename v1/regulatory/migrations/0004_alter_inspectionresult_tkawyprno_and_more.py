@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('regulatory', '0005_inspectionmatch_fcm_sent_at'),
+        ('regulatory', '0003_inspectionmatch_fcm_sent_at'),
     ]
 
     operations = [
