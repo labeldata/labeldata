@@ -981,8 +981,15 @@ def collect_inspection_data(
                 'last_updt_dtm':        (row.get('LAST_UPDT_DTM')          or '').strip(),
             }
 
+            # tkawyprno(수거증번호)는 기관별 로컬 일련번호라 전국 유일하지 않으므로
+            # (수거일자·업소명·품목보고번호·수거증번호) 4개 조합을 실질 키로 사용한다.
             try:
-                obj = InspectionResult.objects.get(tkawyprno=prno)
+                obj = InspectionResult.objects.get(
+                    tkawydtm=fields['tkawydtm'],
+                    bssh_nm=fields['bssh_nm'],
+                    prdlst_report_no=fields['prdlst_report_no'],
+                    tkawyprno=prno,
+                )
                 # 판정결과·업소명 변동 감지
                 prev_judgment = obj.jdgmnt_cd_nm
                 prev_bssh_nm  = obj.bssh_nm

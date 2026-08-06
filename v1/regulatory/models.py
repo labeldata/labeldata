@@ -196,10 +196,11 @@ class RegulatoryMatchAction(models.Model):
 class InspectionResult(models.Model):
     """
     식약처 수거검사(I0460) 원본 데이터.
-    tkawyprno(수거증번호)를 unique key로 사용하며,
+    tkawyprno(수거증번호)는 기관별 로컬 일련번호라 전국 유일하지 않으므로,
+    (수거일자·업소명·품목보고번호·수거증번호) 4개 조합을 unique key로 사용한다.
     판정결과(jdgmnt_cd_nm) 변동을 감지해 2차 알림을 트리거한다.
     """
-    tkawyprno        = models.CharField(max_length=50, unique=True, verbose_name='수거증번호')
+    tkawyprno        = models.CharField(max_length=50, verbose_name='수거증번호')
     plan_titl        = models.CharField(max_length=200, blank=True, verbose_name='수거계획명')
     bssh_nm          = models.CharField(max_length=200, blank=True, db_index=True, verbose_name='업소명')
     prdtnm           = models.CharField(max_length=300, blank=True, verbose_name='제품명')
@@ -221,6 +222,12 @@ class InspectionResult(models.Model):
         indexes = [
             models.Index(fields=['tkawydtm']),
             models.Index(fields=['last_updt_dtm']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tkawydtm', 'bssh_nm', 'prdlst_report_no', 'tkawyprno'],
+                name='uniq_inspection_result_dedup_key',
+            ),
         ]
 
     def __str__(self):
