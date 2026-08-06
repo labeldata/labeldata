@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('bom', '0002_rename_fields'),
-        ('label', '0019_mylabel_basic_display_type_and_more'),
+        ('label', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
