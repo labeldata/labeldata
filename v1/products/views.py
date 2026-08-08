@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib import messages
 from django.http import JsonResponse
+from django.conf import settings
 from django.db.models import Q, Count, Prefetch, Sum, Case, When, IntegerField
 from django.db import models
 from django.core.paginator import Paginator
@@ -21,6 +22,7 @@ import os
 import json
 import logging
 import time as _time
+import hmac
 
 logger = logging.getLogger('django')
 
@@ -5380,3 +5382,58 @@ def document_ai_apply_to_bom(request, document_id):
  
     log_activity(request, 'document', 'ai_apply_to_bom', document_id)
     return JsonResponse({'success': True, 'created': created_count, 'total': len(raw_materials)})
+
+
+# ============================================================
+# 품목제조보고 정보 외부 export API (GAS 제품설명서 자동화 시트 연동용)
+# ============================================================
+# 식약처 OpenAPI(C002/I1250 등)를 GAS가 직접 호출하면 인증키 미승인·타임아웃 등으로
+# 조회가 불안정해서, 우리 서버에 이미 저장된 MyLabel(표시사항) 데이터로 대신 응답한다.
+# 계정 구분 없이 품목제조보고번호가 일치하는 라벨 중 최신 수정본 1건을 반환한다
+# (수거검사 export API와 인증키를 공유 — settings.INSPECTION_EXPORT_API_KEY).
+#
+# 인증: X-Api-Key 헤더 또는 ?key= 쿼리파라미터 (settings.INSPECTION_EXPORT_API_KEY와 일치해야 함)
+# 쿼리파라미터:
+#   - report_no: 품목제조보고번호 (필수)
+# 응답: {"data": {...}} 또는 매칭 없을 시 {"data": null}
+#
+# 참고: 성상(appearance)/제품용도(usage)/품목제조보고일(report_date)/품목제조변경일(change_date)은
+# MyLabel에 저장되어 있지 않아 이 응답에서 제외한다.
+
+def product_export_api(request):
+    """MyLabel 데이터를 품목제조보고 정보로 JSON export (GAS 등 외부 연동용, 읽기 전용)."""
+    api_key = getattr(settings, 'INSPECTION_EXPORT_API_KEY', '')
+    if not api_key:
+        return JsonResponse({'error': 'API 미설정'}, status=503)
+
+    req_key = request.headers.get('X-Api-Key') or request.GET.get('key', '')
+    if not req_key or not hmac.compare_digest(req_key, api_key):
+        return JsonResponse({'error': '인증 실패'}, status=401)
+
+    report_no = request.GET.get('report_no', '').strip()
+    if not report_no:
+        return JsonResponse({'error': 'report_no 파라미터가 필요합니다.'}, status=400)
+
+    row = (
+        MyLabel.objects
+        .filter(prdlst_report_no=report_no)
+        .exclude(delete_YN='Y')
+        .order_by('-update_datetime')
+        .first()
+    )
+    if not row:
+        return JsonResponse({'data': None})
+
+    data = {
+        'report_no':      row.prdlst_report_no,
+        'prdt_nm':        row.prdlst_nm,
+        'food_type':      row.prdlst_dcnm,
+        'bssh_name':      row.bssh_nm,
+        'sobigihan':      row.pog_daycnt,
+        'packaging':      row.frmlc_mtrqlt,
+        'rawmtrl_nm':     row.rawmtrl_nm_display or row.rawmtrl_nm,
+        'storage_method': row.storage_method,
+        'allergens':      row.allergens,
+        'updated_datetime': row.update_datetime.strftime('%Y-%m-%d %H:%M:%S') if row.update_datetime else '',
+    }
+    return JsonResponse({'data': data})

@@ -119,7 +119,10 @@ urlpatterns = [
     path('documents/api/my-company-documents/', views.api_my_company_documents, name='api_my_company_documents'),
     path('doc-requests/<int:req_id>/update-label/', views.api_update_doc_request_label, name='api_update_doc_request_label'),
 
- 
+    # ==================== 품목제조보고 외부 export API (GAS 연동용) ====================
+    path('api/export/', views.product_export_api, name='product_export_api'),
+
+
     # ==================== AI 문서 리뷰 (Human-in-the-Loop) ====================
     path('documents/create-from-submission/', views.document_ai_create_from_submission, name='document_ai_create_from_submission'),
     path('documents/<int:document_id>/ai-review/', views.document_ai_review, name='document_ai_review'),

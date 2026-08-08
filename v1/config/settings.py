@@ -261,6 +261,7 @@ TURNSTILE_SECRET_KEY = config('TURNSTILE_SECRET_KEY', default='')
 # GAS(구글 스프레드시트) 등 외부 연동용 수거검사 export API 공유 비밀키
 # .env에 INSPECTION_EXPORT_API_KEY=<임의의 긴 랜덤 문자열> 로 설정
 INSPECTION_EXPORT_API_KEY = config('INSPECTION_EXPORT_API_KEY', default='')
+# 품목제조보고 export API(v1/products/views.py:product_export_api)도 이 키를 공유해서 사용한다.
 
 # 비회원 보관함 최대 개수
 MOBILE_GUEST_MAX_BOOKMARKS = 5

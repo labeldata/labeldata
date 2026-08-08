@@ -1214,7 +1214,7 @@ def inspection_export_api(request):
 
     인증: X-Api-Key 헤더 또는 ?key= 쿼리파라미터 (settings.INSPECTION_EXPORT_API_KEY와 일치해야 함)
     쿼리파라미터:
-      - days: 최근 N일만 조회 (기본 90, 'all'이면 전체)
+      - days: 최근 N일만 조회 (미지정/'all'이면 기간 제한 없이 전체 조회)
       - since: YYYYMMDD 형식, tkawydtm(수거일자) 기준 이후 데이터만 조회 (days보다 우선)
     응답: {"data": [...], "count": N}
     """
@@ -1230,21 +1230,26 @@ def inspection_export_api(request):
     qs = InspectionResult.objects.order_by('-tkawydtm')
 
     since = request.GET.get('since', '').strip()
-    days  = request.GET.get('days', '90').strip()
+    days  = request.GET.get('days', '').strip()
     if since:
         qs = qs.filter(tkawydtm__gte=since)
-    elif days != 'all':
+    elif days and days != 'all':
         try:
             cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
             qs = qs.filter(tkawydtm__gte=cutoff_str)
         except (ValueError, TypeError):
             pass
+    # days/since 미지정 시 기간 제한 없이 전체 조회
 
     # 중복 제거: (수거일자, 정제된 업소명, 보고번호, 수거증번호) 기준, LAST_UPDT_DTM 최신 것 채택
     dedup: dict = {}
     for row in qs:
         # SPC 계열사만 (raw 업소명 기준 — refine 전에 걸러야 원본 GAS 로직과 동일)
-        if not any(k in (row.bssh_nm or '') for k in INSPECTION_SPC_KEYWORDS):
+        # 소재지가 비어 있으면 업소명만으로는 자사 여부를 못 거를 수 있어 제품명도 함께 확인
+        is_spc = any(k in (row.bssh_nm or '') for k in INSPECTION_SPC_KEYWORDS)
+        if not is_spc and not (row.site_addr or '').strip():
+            is_spc = any(k in (row.prdtnm or '') for k in INSPECTION_SPC_KEYWORDS)
+        if not is_spc:
             continue
         refined_name = _refine_bssh_name(row.bssh_nm, row.site_addr)
         dup_key = (row.tkawydtm, refined_name, row.prdlst_report_no, row.tkawyprno)
