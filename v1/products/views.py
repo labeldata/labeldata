@@ -31,7 +31,7 @@ from .models import Product, ProductFolder, ProductAccessLog, ProductMetadata, F
 # 앱 통합 뷰를 위한 추가 import
 from v1.bom.models import ProductBOM
 from .models import ProductDocument, ProductComment, ProductShare, SharedProductReceipt, DocumentType, DocumentSlot, SharePermission, ProductNotification, UserContact
-from v1.label.models import MyLabel
+from v1.label.models import MyLabel, FoodItem
 
 from .forms import ProductForm
 from v1.activity_log.utils import log_activity
@@ -5387,21 +5387,20 @@ def document_ai_apply_to_bom(request, document_id):
 # ============================================================
 # 품목제조보고 정보 외부 export API (GAS 제품설명서 자동화 시트 연동용)
 # ============================================================
-# 식약처 OpenAPI(C002/I1250 등)를 GAS가 직접 호출하면 인증키 미승인·타임아웃 등으로
-# 조회가 불안정해서, 우리 서버에 이미 저장된 MyLabel(표시사항) 데이터로 대신 응답한다.
-# 계정 구분 없이 품목제조보고번호가 일치하는 라벨 중 최신 수정본 1건을 반환한다
-# (수거검사 export API와 인증키를 공유 — settings.INSPECTION_EXPORT_API_KEY).
+# 식약처 OpenAPI(C002/I1250/I1310/C006)를 GAS가 직접 호출하면 인증키 미승인·타임아웃 등으로
+# 조회가 불안정해서, 우리 서버가 ApiEndpoint(v1/common)로 매일 수집해 이미 저장해 둔
+# FoodItem(v1/label/models.py, db_table=food_item) 마스터 데이터로 대신 응답한다.
+# FoodItem은 prdlst_report_no가 PK이고 사용자/라벨 등록 여부와 무관하게 전체 품목이
+# 들어 있으므로, 라벨을 만들지 않은 품목도 조회된다.
 #
-# 인증: X-Api-Key 헤더 또는 ?key= 쿼리파라미터 (settings.INSPECTION_EXPORT_API_KEY와 일치해야 함)
+# 인증: X-Api-Key 헤더 또는 ?key= 쿼리파라미터 (settings.INSPECTION_EXPORT_API_KEY와 일치해야 함,
+# 수거검사 export API와 키를 공유한다)
 # 쿼리파라미터:
 #   - report_no: 품목제조보고번호 (필수)
 # 응답: {"data": {...}} 또는 매칭 없을 시 {"data": null}
-#
-# 참고: 성상(appearance)/제품용도(usage)/품목제조보고일(report_date)/품목제조변경일(change_date)은
-# MyLabel에 저장되어 있지 않아 이 응답에서 제외한다.
 
 def product_export_api(request):
-    """MyLabel 데이터를 품목제조보고 정보로 JSON export (GAS 등 외부 연동용, 읽기 전용)."""
+    """FoodItem 데이터를 품목제조보고 정보로 JSON export (GAS 등 외부 연동용, 읽기 전용)."""
     api_key = getattr(settings, 'INSPECTION_EXPORT_API_KEY', '')
     if not api_key:
         return JsonResponse({'error': 'API 미설정'}, status=503)
@@ -5414,13 +5413,7 @@ def product_export_api(request):
     if not report_no:
         return JsonResponse({'error': 'report_no 파라미터가 필요합니다.'}, status=400)
 
-    row = (
-        MyLabel.objects
-        .filter(prdlst_report_no=report_no)
-        .exclude(delete_YN='Y')
-        .order_by('-update_datetime')
-        .first()
-    )
+    row = FoodItem.objects.filter(prdlst_report_no=report_no).first()
     if not row:
         return JsonResponse({'data': None})
 
@@ -5429,11 +5422,13 @@ def product_export_api(request):
         'prdt_nm':        row.prdlst_nm,
         'food_type':      row.prdlst_dcnm,
         'bssh_name':      row.bssh_nm,
+        'appearance':     row.dispos,               # 성상
+        'usage':          row.prpos,                # 제품용도
+        'report_date':    row.prms_dt,               # 품목제조보고일 (YYYYMMDD)
+        'change_date':    row.last_updt_dtm,          # 품목제조변경일 (YYYYMMDD)
         'sobigihan':      row.pog_daycnt,
         'packaging':      row.frmlc_mtrqlt,
-        'rawmtrl_nm':     row.rawmtrl_nm_display or row.rawmtrl_nm,
-        'storage_method': row.storage_method,
-        'allergens':      row.allergens,
+        'rawmtrl_nm':     row.rawmtrl_nm_sorted or row.rawmtrl_nm,
         'updated_datetime': row.update_datetime.strftime('%Y-%m-%d %H:%M:%S') if row.update_datetime else '',
     }
     return JsonResponse({'data': data})
