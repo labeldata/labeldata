@@ -102,6 +102,9 @@ urlpatterns = [
     # 표시사항 등록 화면 "AI검증" 버튼용 통합 검증(규칙기반 + AI 원재료순서 + AI 요약)
     path('<int:label_id>/validate/ai-review/', views.validate_label_ai_review, name='validate_label_ai_review'),
 
+    # 오늘 AI검증 사용량 조회 (계정 단위, label_id 불필요)
+    path('ai-validation-usage/', views.ai_validation_usage, name='ai_validation_usage'),
+
     # 식품첨가물/혼합제제 필드 설정
     path('get-additive-field-settings/', views.get_additive_field_settings, name='get_additive_field_settings'),
 ]

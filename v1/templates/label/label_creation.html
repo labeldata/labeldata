@@ -67,6 +67,9 @@
             <span class="recent-update label-header-date" style="font-size: 0.85rem;">
               <i class="fas fa-pencil-alt me-1"></i>{{ label.update_datetime|date:"m/d H:i" }}
             </span>
+            <button type="button" class="btn btn-outline-secondary" id="ruleValidationBtn" onclick="try { runRuleOnlyValidation(); } catch(e) { console.error('onclick error:', e); }" title="AI 없이 규정만 검증 (무료·무제한)" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">
+              <i class="fas fa-list-check me-1"></i>규정만 검증
+            </button>
             <button type="button" class="btn btn-outline-info" id="aiValidationBtn" onclick="try { runAiValidation(); } catch(e) { console.error('onclick error:', e); }" style="font-size: 0.875rem; padding: 0.375rem 0.75rem;">
               <i class="fas fa-robot me-1"></i>AI검증
             </button>

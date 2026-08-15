@@ -36,8 +36,8 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 from .services.validation_service import validate_label
-from .services.ai_validation_service import check_ingredient_order, run_full_review
-from .services.ai_rate_limit import check_rate_limit
+from .services.ai_validation_service import check_ingredient_order, run_full_review, group_issues_by_category
+from .services.ai_rate_limit import check_rate_limit, get_usage as get_ai_usage
 
 
 # ============================================
@@ -3042,7 +3042,21 @@ def validate_label_server(request, label_id):
     log_user_activity(request, 'validation', 'validation_report', label_id)
 
     result = validate_label(label)
-    return JsonResponse(result)
+    categories = group_issues_by_category(result['issues'])
+    checked_count = len(categories)
+    problem_count = sum(1 for c in categories if not c['ok'])
+    if result['ok']:
+        summary = f'검증한 {checked_count}개 항목 모두 표시 규정에 적합합니다. (AI 미사용 — 규칙 기반 검증)'
+    else:
+        summary = (
+            f'검증한 {checked_count}개 항목 중 {problem_count}개에서 확인이 필요합니다. '
+            f'(AI 미사용 — 규칙 기반 검증)'
+        )
+    return JsonResponse({
+        **result,
+        'summary': summary,
+        'categories': categories,
+    })
 
 
 @login_required
@@ -3057,15 +3071,23 @@ def validate_label_ai(request, label_id):
     """
     label = get_object_or_404(MyLabel, pk=label_id, user_id=request.user)
 
-    allowed, block_message = check_rate_limit(request.user.id)
+    allowed, usage = check_rate_limit(request.user)
     if not allowed:
         return JsonResponse({'checked': False, 'ok': True, 'items': [], 'issues': [],
-                              'rate_limited': True, 'message': block_message}, status=429)
+                              'blocked': True, 'usage': usage}, status=429)
 
     log_user_activity(request, 'validation', 'validation_ai_ingredient_order', label_id)
 
     result = check_ingredient_order(label)
+    result['usage'] = usage
     return JsonResponse(result)
+
+
+@login_required
+@require_GET
+def ai_validation_usage(request):
+    """현재 로그인 사용자의 오늘 AI검증 사용량 조회 (버튼 누르기 전에도 표시용)."""
+    return JsonResponse(get_ai_usage(request.user))
 
 
 @login_required
@@ -3074,27 +3096,20 @@ def validate_label_ai_review(request, label_id):
     """
     표시사항 등록 화면의 "AI검증" 버튼용 통합 검증 엔드포인트.
 
-    규칙 기반 검증(무료) + AI 원재료 순서 검증(파일럿) 결과를 합쳐
-    항목별 상세 내역과, 전체를 요약하는 AI 문장을 함께 반환한다.
+    규칙 기반 검증(무료) + AI 원재료 순서 검증(파일럿) + AI 알레르기
+    검증 결과를 합쳐 항목별 상세 내역과, 전체를 요약하는 AI 문장을
+    함께 반환한다. 일일 사용량 확인·차감은 run_full_review 내부에서
+    캐시 적중 여부를 먼저 따진 뒤 처리한다(캐시 적중 시 차감 없음).
     OpenAI 호출이 섞여 있어 지연이 있을 수 있으므로 저장 시 자동
     실행하지 않고 버튼 클릭 시에만 명시적으로 호출한다.
     """
     label = get_object_or_404(MyLabel, pk=label_id, user_id=request.user)
 
-    # rate limit은 캐시 적중 여부와 무관하게 요청 자체를 세되, 캐시 적중은
-    # OpenAI를 안 부르므로 실제 비용 발생 없이 카운트만 쓰는 셈 —
-    # "같은 라벨 반복 클릭"까지 한도에 포함시켜 남용 방지 효과를 유지한다.
-    allowed, block_message = check_rate_limit(request.user.id)
-    if not allowed:
-        return JsonResponse({
-            'summary': block_message, 'ok': True, 'categories': [],
-            'rate_limited': True,
-        }, status=429)
-
     log_user_activity(request, 'validation', 'validation_ai_review', label_id)
 
-    result = run_full_review(label)
-    return JsonResponse(result)
+    result = run_full_review(label, request.user)
+    status = 429 if result.get('blocked') else 200
+    return JsonResponse(result, status=status)
 
 
 @login_required

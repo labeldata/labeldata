@@ -3020,22 +3020,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
 });
 
-// aiValidationBtn 이벤트 리스너 - 규칙기반+AI 통합 검증(run_full_review) 호출
+// aiValidationBtn/ruleValidationBtn 이벤트 리스너 - 규칙기반(+AI) 통합 검증 호출
 // 기존 window.validateSettings()(전부 클라이언트 JS 검증, "규정 검증" 버튼)를
-// 대체한다. 서버측 검증 API(validate_label_server + AI 원재료순서 파일럿)를
-// 호출해 우회 불가능한 판정 + AI 요약 문장을 함께 보여준다.
+// 대체한다. 서버측 검증 API를 호출해 우회 불가능한 판정을 보여준다.
+// AI검증(비용 발생, 일일 한도 있음)과 규정만 검증(무료·무제한, AI 미사용)
+// 두 경로를 같은 모달 스타일로 보여주되 버튼을 분리해뒀다.
 document.addEventListener('DOMContentLoaded', function() {
 
     const aiValidationBtn = document.getElementById('aiValidationBtn');
-
     if (aiValidationBtn) {
         aiValidationBtn.addEventListener('click', function() {
             runAiValidation();
         });
     }
+
+    const ruleValidationBtn = document.getElementById('ruleValidationBtn');
+    if (ruleValidationBtn) {
+        ruleValidationBtn.addEventListener('click', function() {
+            runRuleOnlyValidation();
+        });
+    }
 });
 
-async function runAiValidation() {
+function runAiValidation() {
+    runValidation(true, 'aiValidationBtn', 'AI검증 중...');
+}
+
+function runRuleOnlyValidation() {
+    runValidation(false, 'ruleValidationBtn', '검증 중...');
+}
+
+async function runValidation(useAi, btnId, loadingText) {
     const urlParams = new URLSearchParams(window.location.search);
     const labelId = urlParams.get('label_id');
     if (!labelId) {
@@ -3054,31 +3069,34 @@ async function runAiValidation() {
         console.warn('로깅 실패:', logError);
     }
 
-    const btn = document.getElementById('aiValidationBtn');
+    const btn = document.getElementById(btnId);
     const originalHtml = btn ? btn.innerHTML : '';
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>AI검증 중...';
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span>${loadingText}`;
     }
 
     try {
-        const resp = await fetch(`/label/${labelId}/validate/ai-review/`, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        const url = useAi
+            ? `/label/${labelId}/validate/ai-review/`
+            : `/label/${labelId}/validate/`;
+        const resp = await fetch(url, {
+            method: useAi ? 'POST' : 'GET',
+            headers: useAi ? { 'X-CSRFToken': getCookie('csrftoken') } : {},
         });
         if (resp.status === 429) {
             const limited = await resp.json().catch(() => ({}));
-            alert(limited.message || 'AI검증 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+            alert((limited.usage && limited.usage.message) || 'AI검증 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
             return;
         }
         if (!resp.ok) {
             throw new Error(`서버 응답 오류 (${resp.status})`);
         }
         const result = await resp.json();
-        showAiValidationModal(result);
+        showAiValidationModal(result, useAi);
     } catch (error) {
-        console.error('AI검증 오류:', error);
-        alert('AI검증 중 오류가 발생했습니다: ' + error.message);
+        console.error('검증 오류:', error);
+        alert('검증 중 오류가 발생했습니다: ' + error.message);
     } finally {
         if (btn) {
             btn.disabled = false;
@@ -3087,7 +3105,7 @@ async function runAiValidation() {
     }
 }
 
-function showAiValidationModal(result) {
+function showAiValidationModal(result, useAi) {
     // 기존 실행 함수가 남긴 모달이 있으면 정리
     const legacy = document.getElementById('validationModal');
     if (legacy) legacy.remove();
@@ -3128,6 +3146,16 @@ function showAiValidationModal(result) {
         ? '<div class="alert alert-secondary py-2 px-3 mb-3" style="font-size:0.85rem;">원재료명에 함량(%)이 2개 이상 명시돼 있지 않아 AI 원재료 표시순서 검증은 이번엔 건너뛰었습니다.</div>'
         : '';
 
+    // AI검증일 때만 오늘 사용량 배지 표시 (규정만 검증은 무제한·무료)
+    let usageBadge = '';
+    if (useAi && result.usage && typeof result.usage.daily_used === 'number') {
+        const u = result.usage;
+        usageBadge = ` <span class="badge bg-light text-dark border" title="오늘 AI검증 사용 횟수">오늘 ${u.daily_used}/${u.daily_limit}회 사용${u.is_paid ? ' · 유료' : ''}</span>`;
+    }
+
+    const titleIcon = useAi ? '<i class="fas fa-robot me-2"></i>' : '<i class="fas fa-list-check me-2"></i>';
+    const titleText = useAi ? 'AI검증 결과' : '규정 검증 결과 (AI 미사용)';
+
     const summaryDiv = document.createElement('div');
     summaryDiv.textContent = result.summary || '';
 
@@ -3135,7 +3163,7 @@ function showAiValidationModal(result) {
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="fas fa-robot me-2"></i>AI검증 결과 ${summaryBadge}</h5>
+                    <h5 class="modal-title">${titleIcon}${titleText} ${summaryBadge}${usageBadge}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">

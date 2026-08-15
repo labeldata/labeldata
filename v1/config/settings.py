@@ -275,8 +275,11 @@ MOBILE_MAX_NOTIFICATIONS = 100
 # (v1/label/services/ai_rate_limit.py). 운영해보고 너무 빡빡하면 .env에서
 # 조정. 동일 라벨 내용 재요청은 이 한도와 별개로 캐시(AI_VALIDATION_RESULT_CACHE_TTL)
 # 로 우선 처리되어 OpenAI 재호출 자체가 없다.
-AI_VALIDATION_MINUTE_LIMIT = config('AI_VALIDATION_MINUTE_LIMIT', default=5, cast=int)
-AI_VALIDATION_DAILY_LIMIT = config('AI_VALIDATION_DAILY_LIMIT', default=30, cast=int)
+AI_VALIDATION_MINUTE_LIMIT = config('AI_VALIDATION_MINUTE_LIMIT', default=15, cast=int)
+# 무료 계정 일일 한도 — UserProfile.paid_yn=False
+AI_VALIDATION_FREE_DAILY_LIMIT = config('AI_VALIDATION_FREE_DAILY_LIMIT', default=10, cast=int)
+# 유료 계정 일일 한도 — UserProfile.paid_yn=True (요금제 생기면 여기만 조정)
+AI_VALIDATION_PAID_DAILY_LIMIT = config('AI_VALIDATION_PAID_DAILY_LIMIT', default=50, cast=int)
 AI_VALIDATION_RESULT_CACHE_TTL = config('AI_VALIDATION_RESULT_CACHE_TTL', default=60 * 15, cast=int)
 
 # FCM HTTP v1 API 설정

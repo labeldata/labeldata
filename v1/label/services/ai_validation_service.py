@@ -282,11 +282,14 @@ def check_allergens_ai(label) -> dict:
     return {'checked': True, 'issues': issues}
 
 
-def _group_by_category(issues: list[dict]) -> list[dict]:
+def group_issues_by_category(issues: list[dict]) -> list[dict]:
     """
     validate_label()/check_ingredient_order()가 내는 flat한 issue 목록을
     showValidationModal()과 같은 "검증 항목별 행" 구조로 묶는다.
     항목에 issue가 하나도 없으면 ok=True인 빈 행으로 표시(적합 표시용).
+
+    views.py의 "AI 없이 검증" 버튼(규칙 기반만 실행)에서도 재사용해
+    두 검증 경로가 화면에 같은 모양으로 보이게 한다.
     """
     grouped: dict[str, dict] = {}
     for code, label in _CATEGORY_LABELS.items():
@@ -382,15 +385,18 @@ def generate_summary(category_results: list[dict]) -> str:
         return fallback
 
 
-def run_full_review(label) -> dict:
+def run_full_review(label, user) -> dict:
     """
     라벨 등록 화면의 "AI검증" 버튼에서 호출하는 통합 검증.
 
-    1) 규칙 기반 검증(validation_service.validate_label) — 무료·즉시
-    2) AI 원재료 순서 검증(check_ingredient_order) — 파일럿
-    3) AI 알레르기 검증(check_allergens_ai) — 성공하면 규칙 기반 키워드
-       매칭 결과를 대체(부정 표현·오탐 문맥에 더 강함), 실패하면 규칙
-       기반 결과를 그대로 사용(graceful fallback)
+    1) 캐시 조회 — 라벨 내용이 직전 요청과 동일하면 OpenAI 호출도, 일일
+       사용량 차감도 없이 최근 결과를 그대로 반환한다. 사용자가 결과를
+       보고 다시 눌러보는 흔한 패턴에서 할당량이 조용히 깎이지 않게 함.
+    2) 일일 사용량 확인 — 캐시 미스일 때만 실제로 1회 소모한다(무료/유료
+       등급별 한도, v1/label/services/ai_rate_limit.py). 한도 초과 시
+       OpenAI를 아예 호출하지 않고 blocked 응답을 반환.
+    3) 규칙 기반 검증(무료) + AI 원재료 순서 검증 + AI 알레르기 검증
+       (성공 시 규칙 기반 키워드매칭 결과를 대체 — 부정 표현에 더 강함)
     4) 위 결과를 항목별로 묶고, 전체를 아우르는 AI 요약 문장 생성
 
     Returns:
@@ -400,19 +406,27 @@ def run_full_review(label) -> dict:
           'categories': [...],        # showValidationModal과 같은 행 구조
           'ingredient_order_checked': bool,  # AI 순서검증이 실제로 판단했는지
           'allergen_ai_checked': bool,       # 알레르기 검증이 AI로 됐는지(False면 규칙기반)
+          'from_cache': bool,
+          'blocked': bool,            # True면 일일 한도 초과 — 나머지 필드는 무의미
+          'usage': {'daily_used', 'daily_limit', 'is_paid', 'message'},
         }
     """
     # 지연 임포트: validation_service가 이 모듈을 참조하지 않아 순환참조는
     # 없지만, 두 서비스의 책임을 명확히 분리하기 위해 여기서만 가져온다.
     from .validation_service import validate_label
-    from .ai_rate_limit import get_cached_result, set_cached_result
+    from .ai_rate_limit import get_cached_result, set_cached_result, check_rate_limit, get_usage
 
-    # 라벨 내용이 직전 요청과 동일하면(수정 없이 재클릭 등) OpenAI를
-    # 다시 호출하지 않고 최근 결과를 그대로 반환 — 가장 흔한 "같은 요청
-    # 반복" 비용을 0으로 만든다.
     cached = get_cached_result(label)
     if cached is not None:
-        return {**cached, 'from_cache': True}
+        return {**cached, 'from_cache': True, 'blocked': False, 'usage': get_usage(user)}
+
+    allowed, usage = check_rate_limit(user)
+    if not allowed:
+        return {
+            'summary': usage['message'], 'ok': True, 'categories': [],
+            'ingredient_order_checked': False, 'allergen_ai_checked': False,
+            'from_cache': False, 'blocked': True, 'usage': usage,
+        }
 
     rule_result = validate_label(label)
     order_result = check_ingredient_order(label)
@@ -426,7 +440,7 @@ def run_full_review(label) -> dict:
         rule_issues += allergen_ai_result['issues']
 
     all_issues = rule_issues + list(order_result['issues'])
-    categories = _group_by_category(all_issues)
+    categories = group_issues_by_category(all_issues)
 
     # AI 순서검증을 판단하지 못한 경우(% 정보 부족 등) 목록에서 빼서
     # "적합"으로 오인되지 않게 한다.
@@ -450,6 +464,8 @@ def run_full_review(label) -> dict:
         'ingredient_order_checked': order_result['checked'],
         'allergen_ai_checked': allergen_ai_result['checked'],
         'from_cache': False,
+        'blocked': False,
+        'usage': usage,
     }
     set_cached_result(label, result)
     return result
