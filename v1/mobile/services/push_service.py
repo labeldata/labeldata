@@ -14,28 +14,41 @@ logger = logging.getLogger(__name__)
 
 def _matches_rule(rule, product_name: str, company_name: str,
                   ai_keywords: list, violation_reason: str) -> bool:
-    """AlertRule 하나가 뉴스 데이터와 매칭되는지 확인."""
+    """
+    AlertRule 하나가 뉴스 데이터와 매칭되는지 확인.
+
+    CONTAINS는 순수 문자열 포함 검사 외에 regulatory.matcher와 동일한
+    RapidFuzz 퍼지매칭(_fuzzy_score, MATCH_THRESHOLD=72)도 함께 적용한다.
+    BOM/원료 보관함 매칭은 오탈자·표기 변이("고추가루"↔"고춧가루")를 잡아내는데
+    앱 키워드 매칭만 완전 문자열 비교여서 놓치는 비대칭을 없애기 위함.
+    EXACT는 사용자가 명시적으로 정확한 표기를 원한 것이므로 그대로 둔다.
+    """
+    from v1.regulatory.services.matcher import _fuzzy_score, MATCH_THRESHOLD
+
     keyword = rule.keyword.lower().strip()
     if not keyword:
         return False
 
+    def _fuzzy_any(targets: list) -> bool:
+        return any(_fuzzy_score(keyword, t) >= MATCH_THRESHOLD for t in targets if t)
+
     if rule.category == 'INGREDIENT':
         targets = [product_name] + ai_keywords
         if rule.match_type == 'CONTAINS':
-            return any(keyword in t for t in targets)
+            return any(keyword in t for t in targets) or _fuzzy_any(targets)
         else:
             return keyword == product_name or keyword in ai_keywords
 
     elif rule.category == 'COMPANY':
         if rule.match_type == 'CONTAINS':
-            return keyword in company_name
+            return keyword in company_name or _fuzzy_any([company_name])
         else:
             return keyword == company_name
 
     elif rule.category == 'ORIGIN':
         targets = ai_keywords + [violation_reason]
         if rule.match_type == 'CONTAINS':
-            return any(keyword in t for t in targets)
+            return any(keyword in t for t in targets) or _fuzzy_any(targets)
         else:
             return any(keyword == t for t in targets)
 
