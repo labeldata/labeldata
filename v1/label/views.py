@@ -36,6 +36,7 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 from .services.validation_service import validate_label
+from .services.ai_validation_service import check_ingredient_order
 
 
 # ============================================
@@ -3040,6 +3041,24 @@ def validate_label_server(request, label_id):
     log_user_activity(request, 'validation', 'validation_report', label_id)
 
     result = validate_label(label)
+    return JsonResponse(result)
+
+
+@login_required
+@require_POST
+def validate_label_ai(request, label_id):
+    """
+    표시사항 AI 2차 검증 (파일럿: 원재료명 표시 순서).
+
+    validate_label_server(규칙 기반, 무료·즉시)와 달리 OpenAI API를
+    호출하므로 비용·지연이 있어 명시적으로 요청했을 때만("AI 검토"
+    버튼 등) 실행하는 opt-in 엔드포인트로 분리했다.
+    """
+    label = get_object_or_404(MyLabel, pk=label_id, user_id=request.user)
+
+    log_user_activity(request, 'validation', 'validation_ai_ingredient_order', label_id)
+
+    result = check_ingredient_order(label)
     return JsonResponse(result)
 
 
