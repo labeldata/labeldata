@@ -903,8 +903,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ===== 검증: 등록 화면에서 바로 실행하는 서버측 검증 =====
-  // "AI검증"(규칙기반 + AI 원재료순서/알레르기 + AI 요약)과
-  // "규정만 검증"(규칙기반만, 비용 없음)을 하나의 흐름으로 처리한다.
+  // "규정 검증(AI)"(규칙기반 + AI 원재료순서/알레르기 + AI 요약)과
+  // "규정 검증"(규칙기반만, 비용 없음)을 하나의 흐름으로 처리한다.
   function getCurrentLabelId() {
     let labelId = document.getElementById('label_id')?.value;
     if (!labelId) {
@@ -938,7 +938,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       if (resp.status === 429) {
         const limited = await resp.json().catch(() => ({}));
-        alert((limited.usage && limited.usage.message) || 'AI검증 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+        alert((limited.usage && limited.usage.message) || '규정 검증(AI) 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
         return;
       }
       if (!resp.ok) {
@@ -958,7 +958,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   window.runAiValidation = function() {
-    runValidation(true, 'aiValidationBtn', 'AI검증 중...');
+    runValidation(true, 'aiValidationBtn', '규정 검증(AI) 중...');
   };
 
   window.runRuleOnlyValidation = function() {
@@ -1004,15 +1004,15 @@ document.addEventListener('DOMContentLoaded', function () {
       ? '<div class="alert alert-secondary py-2 px-3 mb-3" style="font-size:0.85rem;">원재료명에 함량(%)이 2개 이상 명시돼 있지 않아 AI 원재료 표시순서 검증은 이번엔 건너뛰었습니다.</div>'
       : '';
 
-    // AI검증일 때만 오늘 사용량 배지 표시 (규정만 검증은 무제한·무료)
+    // 규정 검증(AI)일 때만 오늘 사용량 배지 표시 (규정 검증은 무제한·무료)
     let usageBadge = '';
     if (useAi && result.usage && typeof result.usage.daily_used === 'number') {
       const u = result.usage;
-      usageBadge = ` <span class="badge bg-light text-dark border" title="오늘 AI검증 사용 횟수">오늘 ${u.daily_used}/${u.daily_limit}회 사용${u.is_paid ? ' · 유료' : ''}</span>`;
+      usageBadge = ` <span class="badge bg-light text-dark border" title="오늘 규정 검증(AI) 사용 횟수">오늘 ${u.daily_used}/${u.daily_limit}회 사용${u.is_paid ? ' · 유료' : ''}</span>`;
     }
 
     const titleIcon = useAi ? '<i class="fas fa-robot me-2"></i>' : '<i class="fas fa-list-check me-2"></i>';
-    const titleText = useAi ? 'AI검증 결과' : '규정 검증 결과 (AI 미사용)';
+    const titleText = useAi ? '규정 검증(AI) 결과' : '규정 검증 결과';
 
     modal.innerHTML = `
       <div class="modal-dialog modal-lg">

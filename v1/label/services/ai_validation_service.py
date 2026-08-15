@@ -437,7 +437,7 @@ def generate_summary(category_results: list[dict], ai_only_checked: bool = False
     """
     problem_rows = [r for r in category_results if not r['ok']]
     all_labels = [r['label'] for r in category_results]
-    ai_note = ', 규정만 검증에는 없는 AI 전용 항목 포함' if ai_only_checked else ''
+    ai_note = ', 규정 검증(비AI)에는 없는 AI 전용 항목 포함' if ai_only_checked else ''
     labels_text = f"{', '.join(all_labels)}{ai_note}"
 
     if not problem_rows:

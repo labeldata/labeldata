@@ -3023,7 +3023,7 @@ document.addEventListener('DOMContentLoaded', function () {
 // aiValidationBtn/ruleValidationBtn 이벤트 리스너 - 규칙기반(+AI) 통합 검증 호출
 // 기존 window.validateSettings()(전부 클라이언트 JS 검증, "규정 검증" 버튼)를
 // 대체한다. 서버측 검증 API를 호출해 우회 불가능한 판정을 보여준다.
-// AI검증(비용 발생, 일일 한도 있음)과 규정만 검증(무료·무제한, AI 미사용)
+// 규정 검증(AI)(비용 발생, 일일 한도 있음)과 규정 검증(무료·무제한, AI 미사용)
 // 두 경로를 같은 모달 스타일로 보여주되 버튼을 분리해뒀다.
 document.addEventListener('DOMContentLoaded', function() {
 
@@ -3043,7 +3043,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function runAiValidation() {
-    runValidation(true, 'aiValidationBtn', 'AI검증 중...');
+    runValidation(true, 'aiValidationBtn', '규정 검증(AI) 중...');
 }
 
 function runRuleOnlyValidation() {
@@ -3086,7 +3086,7 @@ async function runValidation(useAi, btnId, loadingText) {
         });
         if (resp.status === 429) {
             const limited = await resp.json().catch(() => ({}));
-            alert((limited.usage && limited.usage.message) || 'AI검증 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+            alert((limited.usage && limited.usage.message) || '규정 검증(AI) 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
             return;
         }
         if (!resp.ok) {
@@ -3146,15 +3146,15 @@ function showAiValidationModal(result, useAi) {
         ? '<div class="alert alert-secondary py-2 px-3 mb-3" style="font-size:0.85rem;">원재료명에 함량(%)이 2개 이상 명시돼 있지 않아 AI 원재료 표시순서 검증은 이번엔 건너뛰었습니다.</div>'
         : '';
 
-    // AI검증일 때만 오늘 사용량 배지 표시 (규정만 검증은 무제한·무료)
+    // 규정 검증(AI)일 때만 오늘 사용량 배지 표시 (규정 검증은 무제한·무료)
     let usageBadge = '';
     if (useAi && result.usage && typeof result.usage.daily_used === 'number') {
         const u = result.usage;
-        usageBadge = ` <span class="badge bg-light text-dark border" title="오늘 AI검증 사용 횟수">오늘 ${u.daily_used}/${u.daily_limit}회 사용${u.is_paid ? ' · 유료' : ''}</span>`;
+        usageBadge = ` <span class="badge bg-light text-dark border" title="오늘 규정 검증(AI) 사용 횟수">오늘 ${u.daily_used}/${u.daily_limit}회 사용${u.is_paid ? ' · 유료' : ''}</span>`;
     }
 
     const titleIcon = useAi ? '<i class="fas fa-robot me-2"></i>' : '<i class="fas fa-list-check me-2"></i>';
-    const titleText = useAi ? 'AI검증 결과' : '규정 검증 결과 (AI 미사용)';
+    const titleText = useAi ? '규정 검증(AI) 결과' : '규정 검증 결과';
 
     const summaryDiv = document.createElement('div');
     summaryDiv.textContent = result.summary || '';
