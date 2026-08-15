@@ -271,6 +271,14 @@ MOBILE_MEMBER_MAX_BOOKMARKS = 50
 # 기기당 보관되는 알림 이력 최대 개수 (초과 시 오래된 것부터 삭제)
 MOBILE_MAX_NOTIFICATIONS = 100
 
+# 표시사항 AI검증(OpenAI 호출) 비용 관리 — 계정별 rate limit
+# (v1/label/services/ai_rate_limit.py). 운영해보고 너무 빡빡하면 .env에서
+# 조정. 동일 라벨 내용 재요청은 이 한도와 별개로 캐시(AI_VALIDATION_RESULT_CACHE_TTL)
+# 로 우선 처리되어 OpenAI 재호출 자체가 없다.
+AI_VALIDATION_MINUTE_LIMIT = config('AI_VALIDATION_MINUTE_LIMIT', default=5, cast=int)
+AI_VALIDATION_DAILY_LIMIT = config('AI_VALIDATION_DAILY_LIMIT', default=30, cast=int)
+AI_VALIDATION_RESULT_CACHE_TTL = config('AI_VALIDATION_RESULT_CACHE_TTL', default=60 * 15, cast=int)
+
 # FCM HTTP v1 API 설정
 # Firebase Console → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성 → JSON 파일 내용을
 # 한 줄 문자열로 .env에 저장하거나, 파일 경로를 지정

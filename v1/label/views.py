@@ -37,6 +37,7 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 from .services.validation_service import validate_label
 from .services.ai_validation_service import check_ingredient_order, run_full_review
+from .services.ai_rate_limit import check_rate_limit
 
 
 # ============================================
@@ -3056,6 +3057,11 @@ def validate_label_ai(request, label_id):
     """
     label = get_object_or_404(MyLabel, pk=label_id, user_id=request.user)
 
+    allowed, block_message = check_rate_limit(request.user.id)
+    if not allowed:
+        return JsonResponse({'checked': False, 'ok': True, 'items': [], 'issues': [],
+                              'rate_limited': True, 'message': block_message}, status=429)
+
     log_user_activity(request, 'validation', 'validation_ai_ingredient_order', label_id)
 
     result = check_ingredient_order(label)
@@ -3074,6 +3080,16 @@ def validate_label_ai_review(request, label_id):
     실행하지 않고 버튼 클릭 시에만 명시적으로 호출한다.
     """
     label = get_object_or_404(MyLabel, pk=label_id, user_id=request.user)
+
+    # rate limit은 캐시 적중 여부와 무관하게 요청 자체를 세되, 캐시 적중은
+    # OpenAI를 안 부르므로 실제 비용 발생 없이 카운트만 쓰는 셈 —
+    # "같은 라벨 반복 클릭"까지 한도에 포함시켜 남용 방지 효과를 유지한다.
+    allowed, block_message = check_rate_limit(request.user.id)
+    if not allowed:
+        return JsonResponse({
+            'summary': block_message, 'ok': True, 'categories': [],
+            'rate_limited': True,
+        }, status=429)
 
     log_user_activity(request, 'validation', 'validation_ai_review', label_id)
 

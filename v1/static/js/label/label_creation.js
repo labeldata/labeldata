@@ -929,6 +929,11 @@ document.addEventListener('DOMContentLoaded', function () {
         method: 'POST',
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
       });
+      if (resp.status === 429) {
+        const limited = await resp.json().catch(() => ({}));
+        alert(limited.message || 'AI검증 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+        return;
+      }
       if (!resp.ok) {
         throw new Error(`서버 응답 오류 (${resp.status})`);
       }

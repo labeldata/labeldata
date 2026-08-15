@@ -405,6 +405,14 @@ def run_full_review(label) -> dict:
     # 지연 임포트: validation_service가 이 모듈을 참조하지 않아 순환참조는
     # 없지만, 두 서비스의 책임을 명확히 분리하기 위해 여기서만 가져온다.
     from .validation_service import validate_label
+    from .ai_rate_limit import get_cached_result, set_cached_result
+
+    # 라벨 내용이 직전 요청과 동일하면(수정 없이 재클릭 등) OpenAI를
+    # 다시 호출하지 않고 최근 결과를 그대로 반환 — 가장 흔한 "같은 요청
+    # 반복" 비용을 0으로 만든다.
+    cached = get_cached_result(label)
+    if cached is not None:
+        return {**cached, 'from_cache': True}
 
     rule_result = validate_label(label)
     order_result = check_ingredient_order(label)
@@ -433,7 +441,7 @@ def run_full_review(label) -> dict:
 
     summary = generate_summary(categories)
 
-    return {
+    result = {
         'summary': summary,
         # categories가 이미 (알레르기 AI 대체 포함) 최종 병합된 issue 집합을
         # 반영하므로, 그 기준으로 전체 통과 여부를 계산하는 게 가장 정확하다.
@@ -441,4 +449,7 @@ def run_full_review(label) -> dict:
         'categories': categories,
         'ingredient_order_checked': order_result['checked'],
         'allergen_ai_checked': allergen_ai_result['checked'],
+        'from_cache': False,
     }
+    set_cached_result(label, result)
+    return result
