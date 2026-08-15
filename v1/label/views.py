@@ -2949,7 +2949,7 @@ def verify_report_no(request):
     year_part = prdlst_report_no[:4]
     try:
         year = int(year_part)
-        current_year = 2025
+        current_year = timezone.now().year
         if year < 1960 or year > current_year + 1:
             # 규칙 오류 상태 저장
             if label:
