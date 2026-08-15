@@ -35,8 +35,8 @@
         <button class="btn btn-outline-secondary btn-sm" id="zoomInBtn" aria-label="확대"><i class="fas fa-search-plus"></i></button>
       </div>
       {% if not request.GET.readonly %}
-      <button class="btn btn-info btn-sm" id="validateButton" aria-label="규정 검증">
-        <i class="fas fa-check-circle me-1" aria-hidden="true"></i>규정 검증
+      <button class="btn btn-info btn-sm" id="aiValidationBtn" aria-label="AI검증">
+        <i class="fas fa-robot me-1" aria-hidden="true"></i>AI검증
       </button>
       {% if is_owner %}
       <button id="saveSettingsBtn" class="btn btn-success btn-sm" aria-label="설정 저장">
@@ -2147,7 +2147,7 @@
                     }
                 });
                 document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
-                // validateButton 이벤트 리스너는 label_preview.js에서 처리
+                // aiValidationBtn 이벤트 리스너는 label_preview.js에서 처리
                 const saveBtn = document.getElementById('saveSettingsBtn');
                 if (saveBtn) {
                     saveBtn.addEventListener('click', function(e) {

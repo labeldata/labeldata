@@ -3020,22 +3020,143 @@ document.addEventListener('DOMContentLoaded', function () {
 
 });
 
-// validateButton 이벤트 리스너 - 단순하고 안정적인 방식
+// aiValidationBtn 이벤트 리스너 - 규칙기반+AI 통합 검증(run_full_review) 호출
+// 기존 window.validateSettings()(전부 클라이언트 JS 검증, "규정 검증" 버튼)를
+// 대체한다. 서버측 검증 API(validate_label_server + AI 원재료순서 파일럿)를
+// 호출해 우회 불가능한 판정 + AI 요약 문장을 함께 보여준다.
 document.addEventListener('DOMContentLoaded', function() {
-    
-    const validateButton = document.getElementById('validateButton');
-    
-    if (validateButton) {
-        validateButton.addEventListener('click', function() {
-            if (typeof window.validateSettings === 'function') {
-                window.validateSettings();
-            } else {
-                console.error('validateSettings 함수를 찾을 수 없음');
-                alert('검증 함수를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
-            }
+
+    const aiValidationBtn = document.getElementById('aiValidationBtn');
+
+    if (aiValidationBtn) {
+        aiValidationBtn.addEventListener('click', function() {
+            runAiValidation();
         });
     }
 });
+
+async function runAiValidation() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const labelId = urlParams.get('label_id');
+    if (!labelId) {
+        alert('라벨 정보를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+        return;
+    }
+
+    // 검증 로깅 (기존 validateSettings와 동일하게 서버에 기록)
+    try {
+        await fetch('/label/log-validation/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ label_id: labelId })
+        });
+    } catch (logError) {
+        console.warn('로깅 실패:', logError);
+    }
+
+    const btn = document.getElementById('aiValidationBtn');
+    const originalHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>AI검증 중...';
+    }
+
+    try {
+        const resp = await fetch(`/label/${labelId}/validate/ai-review/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        });
+        if (!resp.ok) {
+            throw new Error(`서버 응답 오류 (${resp.status})`);
+        }
+        const result = await resp.json();
+        showAiValidationModal(result);
+    } catch (error) {
+        console.error('AI검증 오류:', error);
+        alert('AI검증 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+}
+
+function showAiValidationModal(result) {
+    // 기존 실행 함수가 남긴 모달이 있으면 정리
+    const legacy = document.getElementById('validationModal');
+    if (legacy) legacy.remove();
+
+    const existingModal = document.getElementById('aiValidationModal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'aiValidationModal';
+    modal.className = 'modal fade';
+
+    const summaryBadge = result.ok
+        ? '<span class="badge bg-success">적합</span>'
+        : '<span class="badge bg-danger">확인 필요</span>';
+
+    let rowsHtml = '';
+    for (const row of (result.categories || [])) {
+        rowsHtml += '<tr>';
+        rowsHtml += `<td>${row.label}</td>`;
+        rowsHtml += row.ok
+            ? '<td><span class="text-success">적합</span></td>'
+            : '<td><span class="text-danger">재검토</span></td>';
+
+        let msg = '';
+        if (row.errors && row.errors.length > 0) {
+            msg += row.errors.map(e => e.includes('<strong>') ? e : `<strong>${e}</strong>`).join('<br>');
+        }
+        if (row.suggestions && row.suggestions.length > 0) {
+            if (msg) msg += '<br><br>';
+            msg += '<strong style="color:#0066cc;">💡 제안:</strong><br>' +
+                row.suggestions.map(s => s.includes('<strong>') ? s : `<strong>${s}</strong>`).join('<br>');
+        }
+        rowsHtml += `<td>${msg}</td>`;
+        rowsHtml += '</tr>';
+    }
+
+    const orderNotice = result.ingredient_order_checked === false
+        ? '<div class="alert alert-secondary py-2 px-3 mb-3" style="font-size:0.85rem;">원재료명에 함량(%)이 2개 이상 명시돼 있지 않아 AI 원재료 표시순서 검증은 이번엔 건너뛰었습니다.</div>'
+        : '';
+
+    const summaryDiv = document.createElement('div');
+    summaryDiv.textContent = result.summary || '';
+
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-robot me-2"></i>AI검증 결과 ${summaryBadge}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert ${result.ok ? 'alert-success' : 'alert-warning'} mb-3" style="white-space: pre-line;">
+                        ${summaryDiv.innerHTML}
+                    </div>
+                    ${orderNotice}
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%">검증 항목</th>
+                                <th style="width: 15%; white-space: nowrap;">상태</th>
+                                <th style="width: 60%">결과 및 제안</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
 
 // 부모창으로부터 데이터 수신 리스너
 window.addEventListener('message', function(e) {
