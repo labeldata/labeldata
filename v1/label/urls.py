@@ -92,7 +92,10 @@ urlpatterns = [
 
     # 품목보고번호 검증 관련
     path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
-    
+
+    # 표시사항 서버측 검증 (클라이언트 우회 방지용 최종 판정)
+    path('<int:label_id>/validate/', views.validate_label_server, name='validate_label_server'),
+
     # 식품첨가물/혼합제제 필드 설정
     path('get-additive-field-settings/', views.get_additive_field_settings, name='get_additive_field_settings'),
 ]

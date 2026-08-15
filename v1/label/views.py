@@ -35,6 +35,7 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
+from .services.validation_service import validate_label
 
 
 # ============================================
@@ -3019,6 +3020,28 @@ def verify_report_no(request):
             'status': 'available',
             'message': '품목보고신고 가능한 번호입니다.'
         })
+
+
+@login_required
+@require_GET
+def validate_label_server(request, label_id):
+    """
+    표시사항 서버측 검증 API.
+
+    label_preview.js의 클라이언트 검증(window.validateSettings)은 브라우저
+    JS에서만 실행돼 API를 직접 호출하면 우회 가능했다. 이 엔드포인트는
+    저장된 MyLabel 레코드를 기준으로 핵심 검증(v1/label/services/
+    validation_service.py)을 서버에서 다시 실행해 "신뢰할 수 있는 최종
+    판정"을 제공한다. 클라이언트 검증을 대체하는 게 아니라 보완한다 —
+    빠른 즉각 피드백은 여전히 JS가, 우회 불가능한 확인은 이 API가 담당.
+    """
+    label = get_object_or_404(MyLabel, pk=label_id, user_id=request.user)
+
+    log_user_activity(request, 'validation', 'validation_report', label_id)
+
+    result = validate_label(label)
+    return JsonResponse(result)
+
 
 @login_required
 def phrases_data_api(request):
