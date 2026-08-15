@@ -7,12 +7,12 @@
     "build": "vite build"
   },
   "dependencies": {
+    "jspdf": "^4.2.1",
     "konva": "^9.3.20",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-konva": "^18.2.10",
-    "use-image": "^1.1.1",
-    "jspdf": "^2.5.2"
+    "use-image": "^1.1.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
