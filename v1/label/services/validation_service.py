@@ -18,12 +18,53 @@
 """
 import re
 
+from django.core.cache import cache
+
 from v1.label.constants import (
     FARM_SEAFOOD_ITEMS,
     FORBIDDEN_PHRASES,
     ALLERGEN_KEYWORDS,
     RECYCLING_MARK_MATERIAL_KEYWORDS,
 )
+
+_FARM_SEAFOOD_CACHE_KEY = 'label_validation:farm_seafood_items'
+_FARM_SEAFOOD_CACHE_TTL = 60 * 60 * 6  # 6시간 — 매 검증마다 DB를 안 때리기 위한 캐시
+
+
+def _get_farm_seafood_items() -> list[str]:
+    """
+    원산지 표시대상 판정용 농수산물 명칭 목록.
+
+    AgriculturalProduct DB(9천여 건, 수시 갱신)와 constants.py의
+    FARM_SEAFOOD_ITEMS(하드코딩)를 합집합으로 병합해서 쓴다 — 실제
+    데이터를 대조해보니 DB 테이블은 이름과 달리 "농산물"(작물)
+    위주이고 쇠고기·돼지고기·닭고기 같은 축산물 항목이 전혀 없어서,
+    DB로 통째 교체하면 육류 원산지 검증이 조용히 빠지는 회귀가
+    생긴다. 하드코딩 목록이 커버하는 축산물·건해산물 등을 안전망으로
+    유지하면서 DB의 훨씬 넓은 작물 커버리지를 추가로 얻는 방식.
+    DB 조회 실패 시에는 하드코딩 목록만으로 폴백.
+    """
+    cached = cache.get(_FARM_SEAFOOD_CACHE_KEY)
+    if cached is not None:
+        return cached
+
+    items = set(FARM_SEAFOOD_ITEMS)
+    try:
+        from v1.label.models import AgriculturalProduct
+        db_names = (
+            AgriculturalProduct.objects
+            .exclude(rprsnt_rawmtrl_nm__isnull=True)
+            .exclude(rprsnt_rawmtrl_nm='')
+            .values_list('rprsnt_rawmtrl_nm', flat=True)
+            .distinct()
+        )
+        items.update(db_names)
+    except Exception:
+        pass  # DB 미연결/테이블 없음 등 — 하드코딩 목록만으로 유지
+
+    items = list(items)
+    cache.set(_FARM_SEAFOOD_CACHE_KEY, items, _FARM_SEAFOOD_CACHE_TTL)
+    return items
 
 _CONTENT_WEIGHT_UNIT_RE = re.compile(r'(\d+(?:\.\d+)?)\s?(mg|g|kg|ml|l)(?![a-zA-Z])', re.IGNORECASE)
 
@@ -82,7 +123,7 @@ def check_farm_seafood_content(label) -> list[dict]:
         return []
 
     found_items = sorted(
-        (item for item in FARM_SEAFOOD_ITEMS if item in product_name),
+        (item for item in _get_farm_seafood_items() if item in product_name),
         key=len, reverse=True,
     )
     issues = []
