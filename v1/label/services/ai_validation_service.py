@@ -20,10 +20,23 @@ v1/label/services/validation_service.py의 규칙 기반 검증은 정규식/키
 """
 import json
 import logging
+import re
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+# validate_label()의 category 코드 -> 화면에 보여줄 검증 항목명
+# (기존 label_preview.js showValidationModal()의 "검증 항목" 열과 같은 스타일)
+_CATEGORY_LABELS = {
+    'content_weight': '내용량 표시',
+    'farm_seafood': '농수산물 함량 표시',
+    'forbidden_phrase': '금지 문구',
+    'allergen': '알레르기 표시',
+    'recycling_mark': '분리배출마크',
+    'origin_missing': '원산지 표시',
+    'ingredient_order': '원재료 표시 순서 (AI)',
+}
 
 
 def extract_ingredient_order(rawmtrl_text: str) -> list[dict]:
@@ -134,3 +147,133 @@ def check_ingredient_order(label) -> dict:
             })
 
     return {'checked': True, 'ok': len(issues) == 0, 'items': items, 'issues': issues}
+
+
+def _group_by_category(issues: list[dict]) -> list[dict]:
+    """
+    validate_label()/check_ingredient_order()가 내는 flat한 issue 목록을
+    showValidationModal()과 같은 "검증 항목별 행" 구조로 묶는다.
+    항목에 issue가 하나도 없으면 ok=True인 빈 행으로 표시(적합 표시용).
+    """
+    grouped: dict[str, dict] = {}
+    for code, label in _CATEGORY_LABELS.items():
+        grouped[code] = {'label': label, 'ok': True, 'errors': [], 'suggestions': []}
+
+    for issue in issues:
+        code = issue.get('category', 'other')
+        label = _CATEGORY_LABELS.get(code, code)
+        row = grouped.setdefault(code, {'label': label, 'ok': True, 'errors': [], 'suggestions': []})
+        row['ok'] = False
+        if issue.get('message'):
+            row['errors'].append(issue['message'])
+        if issue.get('suggestion'):
+            row['suggestions'].append(issue['suggestion'])
+
+    # 검증하지 않은 항목(예: 원재료 순서 - percent 정보 부족)은 목록에서 제외해
+    # "적합"으로 오인되지 않게 한다. 호출부에서 checked 플래그로 별도 안내.
+    return [row for row in grouped.values()]
+
+
+def generate_summary(category_results: list[dict]) -> str:
+    """
+    검증 결과 전체를 사람이 읽기 좋은 한글 요약 문장 2~3개로 압축한다.
+
+    OpenAI 미설정/호출 실패 시에도 항상 뭔가는 보여줘야 하므로, 결정론적
+    폴백 요약("N개 항목에서 확인 필요: ...")을 우선 만들어두고, AI 호출이
+    성공하면 그걸 조금 더 읽기 좋은 문장으로 다듬은 결과로 교체한다.
+    AI가 실패해도 화면이 빈 채로 뜨는 일은 없다.
+    """
+    problem_rows = [r for r in category_results if not r['ok']]
+
+    if not problem_rows:
+        return '검증 결과 확인된 문제가 없습니다. 모든 항목이 표시 규정에 적합합니다.'
+
+    fallback = (
+        f"{len(problem_rows)}개 항목에서 확인이 필요합니다: "
+        + ', '.join(r['label'] for r in problem_rows) + '.'
+    )
+
+    api_key = getattr(settings, 'OPENAI_API_KEY', '')
+    if not api_key:
+        return fallback
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+    except ImportError:
+        return fallback
+
+    issue_lines = []
+    for row in problem_rows:
+        for err in row['errors']:
+            # AI 요약용으로는 HTML 태그(<strong> 등)를 제거해 순수 텍스트만 전달
+            plain = re.sub(r'<[^>]+>', '', err)
+            issue_lines.append(f"- [{row['label']}] {plain}")
+
+    prompt = f"""아래는 식품 표시사항(라벨) 검증에서 발견된 문제 목록입니다.
+이 내용을 식품 라벨을 처음 만들어보는 담당자도 이해할 수 있도록,
+자연스러운 한국어 문장 2~3개로 요약하세요.
+
+규칙:
+- 목록에 없는 내용을 지어내지 마세요(추론 금지, 있는 내용만 요약).
+- 가장 시급하거나 법적으로 중요해 보이는 문제를 먼저 언급하세요.
+- 딱딱한 목록 나열이 아니라 자연스러운 문장으로 쓰세요.
+- 마크다운이나 특수기호(*, #, - 등) 없이 순수 문장만 출력하세요.
+
+문제 목록:
+{chr(10).join(issue_lines)}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[{'role': 'user', 'content': prompt}],
+            temperature=0.2,
+            max_tokens=300,
+        )
+        text = (response.choices[0].message.content or '').strip()
+        return text if text else fallback
+    except Exception as exc:
+        logger.error(f'[검증 결과 AI요약] OpenAI 호출 오류: {exc}')
+        return fallback
+
+
+def run_full_review(label) -> dict:
+    """
+    라벨 등록 화면의 "AI검증" 버튼에서 호출하는 통합 검증.
+
+    1) 규칙 기반 검증(validation_service.validate_label) — 무료·즉시
+    2) AI 원재료 순서 검증(check_ingredient_order) — 이 파일럿 하나만 AI 사용
+    3) 위 결과를 항목별로 묶고, 전체를 아우르는 AI 요약 문장 생성
+
+    Returns:
+        {
+          'summary': str,             # AI가 만든(또는 폴백) 한글 요약 문장
+          'ok': bool,                 # 전체 통과 여부
+          'categories': [...],        # showValidationModal과 같은 행 구조
+          'ingredient_order_checked': bool,  # AI 순서검증이 실제로 판단했는지
+        }
+    """
+    # 지연 임포트: validation_service가 이 모듈을 참조하지 않아 순환참조는
+    # 없지만, 두 서비스의 책임을 명확히 분리하기 위해 여기서만 가져온다.
+    from .validation_service import validate_label
+
+    rule_result = validate_label(label)
+    order_result = check_ingredient_order(label)
+
+    all_issues = list(rule_result['issues']) + list(order_result['issues'])
+    categories = _group_by_category(all_issues)
+
+    # AI 순서검증을 판단하지 못한 경우(% 정보 부족 등) 목록에서 빼서
+    # "적합"으로 오인되지 않게 한다.
+    if not order_result['checked']:
+        categories = [c for c in categories if c['label'] != _CATEGORY_LABELS['ingredient_order']]
+
+    summary = generate_summary(categories)
+
+    return {
+        'summary': summary,
+        'ok': rule_result['ok'] and order_result['ok'],
+        'categories': categories,
+        'ingredient_order_checked': order_result['checked'],
+    }

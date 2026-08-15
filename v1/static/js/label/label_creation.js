@@ -902,6 +902,126 @@ document.addEventListener('DOMContentLoaded', function () {
     console.error('설정 불러오기 실패:', e);
   }
 
+  // ===== AI검증: 등록 화면에서 바로 실행하는 서버측 통합 검증 =====
+  // 규칙 기반 검증(내용량/농수산물함량/금지문구/알레르기/분리배출마크/원산지)
+  // + AI 원재료 순서 검증을 한 번에 실행하고, AI 요약 문장 + 기존
+  // showValidationModal()과 같은 스타일의 상세 표를 함께 보여준다.
+  window.runAiValidation = async function() {
+    let labelId = document.getElementById('label_id')?.value;
+    if (!labelId) {
+      const urlParams = new URLSearchParams(window.location.search);
+      labelId = urlParams.get('label_id');
+    }
+    if (!labelId) {
+      alert('라벨을 먼저 저장해주세요.');
+      return;
+    }
+
+    const btn = document.getElementById('aiValidationBtn');
+    const originalHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>AI검증 중...';
+    }
+
+    try {
+      const resp = await fetch(`/label/${labelId}/validate/ai-review/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      });
+      if (!resp.ok) {
+        throw new Error(`서버 응답 오류 (${resp.status})`);
+      }
+      const result = await resp.json();
+      showAiValidationModal(result);
+    } catch (error) {
+      console.error('AI검증 오류:', error);
+      alert('AI검증 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+    }
+  };
+
+  function showAiValidationModal(result) {
+    const existingModal = document.getElementById('aiValidationModal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'aiValidationModal';
+    modal.className = 'modal fade';
+
+    const summaryBadge = result.ok
+      ? '<span class="badge bg-success">적합</span>'
+      : '<span class="badge bg-danger">확인 필요</span>';
+
+    let rowsHtml = '';
+    for (const row of (result.categories || [])) {
+      rowsHtml += '<tr>';
+      rowsHtml += `<td>${row.label}</td>`;
+      rowsHtml += row.ok
+        ? '<td><span class="text-success">적합</span></td>'
+        : '<td><span class="text-danger">재검토</span></td>';
+
+      let msg = '';
+      if (row.errors && row.errors.length > 0) {
+        msg += row.errors.map(e => e.includes('<strong>') ? e : `<strong>${e}</strong>`).join('<br>');
+      }
+      if (row.suggestions && row.suggestions.length > 0) {
+        if (msg) msg += '<br><br>';
+        msg += '<strong style="color:#0066cc;">💡 제안:</strong><br>' +
+          row.suggestions.map(s => s.includes('<strong>') ? s : `<strong>${s}</strong>`).join('<br>');
+      }
+      rowsHtml += `<td>${msg}</td>`;
+      rowsHtml += '</tr>';
+    }
+
+    const orderNotice = result.ingredient_order_checked === false
+      ? '<div class="alert alert-secondary py-2 px-3 mb-3" style="font-size:0.85rem;">원재료명에 함량(%)이 2개 이상 명시돼 있지 않아 AI 원재료 표시순서 검증은 이번엔 건너뛰었습니다.</div>'
+      : '';
+
+    modal.innerHTML = `
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="fas fa-robot me-2"></i>AI검증 결과 ${summaryBadge}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert ${result.ok ? 'alert-success' : 'alert-warning'} mb-3" style="white-space: pre-line;">
+              ${escapeHtmlForModal(result.summary || '')}
+            </div>
+            ${orderNotice}
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th style="width: 25%">검증 항목</th>
+                  <th style="width: 15%; white-space: nowrap;">상태</th>
+                  <th style="width: 60%">결과 및 제안</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+  }
+
+  function escapeHtmlForModal(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   window.openPreviewPopup = function() {
     const form = document.getElementById("labelForm");
     if (!form) {

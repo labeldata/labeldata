@@ -36,7 +36,7 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
 from .services.validation_service import validate_label
-from .services.ai_validation_service import check_ingredient_order
+from .services.ai_validation_service import check_ingredient_order, run_full_review
 
 
 # ============================================
@@ -3059,6 +3059,25 @@ def validate_label_ai(request, label_id):
     log_user_activity(request, 'validation', 'validation_ai_ingredient_order', label_id)
 
     result = check_ingredient_order(label)
+    return JsonResponse(result)
+
+
+@login_required
+@require_POST
+def validate_label_ai_review(request, label_id):
+    """
+    표시사항 등록 화면의 "AI검증" 버튼용 통합 검증 엔드포인트.
+
+    규칙 기반 검증(무료) + AI 원재료 순서 검증(파일럿) 결과를 합쳐
+    항목별 상세 내역과, 전체를 요약하는 AI 문장을 함께 반환한다.
+    OpenAI 호출이 섞여 있어 지연이 있을 수 있으므로 저장 시 자동
+    실행하지 않고 버튼 클릭 시에만 명시적으로 호출한다.
+    """
+    label = get_object_or_404(MyLabel, pk=label_id, user_id=request.user)
+
+    log_user_activity(request, 'validation', 'validation_ai_review', label_id)
+
+    result = run_full_review(label)
     return JsonResponse(result)
 
 
