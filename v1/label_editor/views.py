@@ -8,7 +8,7 @@ from v1.label.models import MyLabel
 
 
 def _get_label_or_404(label_id, user):
-    return get_object_or_404(MyLabel, pk=label_id, user=user)
+    return get_object_or_404(MyLabel, pk=label_id, user_id=user)
 
 
 @login_required
