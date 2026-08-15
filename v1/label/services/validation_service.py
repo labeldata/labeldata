@@ -97,8 +97,23 @@ _NATURE_CONDITIONS_KO = (
 )
 
 
+# 검증 항목별 법적 근거. 정확성이 확인된 조항 번호(제4조/제6조/제8조)는 이 파일이
+# 아니라 label_preview.js에 원래 있던 것을 그대로 재사용한 값이고, 나머지는 조항
+# 번호까지 특정하면 오히려 틀릴 위험이 있어 법령명 단위로만 인용한다(2026-08 확인).
+_LEGAL_BASIS = {
+    'content_weight': '「식품등의 표시기준」 내용량 표시 규정',
+    'farm_seafood': '「식품등의 표시기준」 제품명에 사용한 원재료의 함량 표시 규정',
+    'forbidden_phrase': '「식품등의 표시기준」 제8조(부당한 표시·광고 금지)',
+    'allergen': '「식품등의 표시기준」 알레르기 유발물질 표시 규정',
+    'recycling_mark': '「자원의 절약과 재활용촉진에 관한 법률 시행규칙」 분리배출 표시 기준',
+    'origin_missing': '「농수산물의 원산지 표시 등에 관한 법률」 및 같은 법 시행령(배합비율 기준 원산지 표시대상)',
+}
+
+
 def _issue(category: str, message: str, suggestion: str = '') -> dict:
-    return {'category': category, 'message': message, 'suggestion': suggestion}
+    basis = _LEGAL_BASIS.get(category)
+    full_message = f'{message} (근거: {basis})' if basis else message
+    return {'category': category, 'message': full_message, 'suggestion': suggestion, 'legal_basis': basis}
 
 
 def check_content_weight(label) -> list[dict]:
@@ -132,7 +147,8 @@ def check_farm_seafood_content(label) -> list[dict]:
         if not pattern.search(ingredient_info):
             issues.append(_issue(
                 'farm_seafood',
-                f"제품명에 사용된 '{item}'의 함량을 '특정성분 함량' 항목에 표시하세요 (예: {item} 100%).",
+                f"제품명에 사용된 '{item}'의 함량이 '특정성분 함량' 항목에서 확인되지 않습니다.",
+                f'특정성분 함량 항목에 함량(%)을 표시하세요. (예: {item} 100%)',
             ))
     return issues
 
@@ -211,7 +227,8 @@ def check_recycling_mark(label) -> list[dict]:
         return []
     return [_issue(
         'recycling_mark',
-        f'포장재질("{label.frmlc_mtrqlt}")과 분리배출마크("{selected_mark}")가 일치하지 않습니다. 사용된 포장재질과 분리배출마크를 재확인하세요.',
+        f'포장재질("{label.frmlc_mtrqlt}")과 분리배출마크("{selected_mark}")가 일치하지 않습니다.',
+        '사용된 포장재질과 분리배출마크를 재확인하세요.',
     )]
 
 
@@ -226,7 +243,8 @@ def check_origin_missing(label) -> list[dict]:
         return []
     return [_issue(
         'origin_missing',
-        f'원재료명에 원산지가 기재되지 않은 항목이 {count}건 있습니다. "(원산지 미표시)"로 표시된 위치에 실제 원산지를 입력하세요.',
+        f'원재료명에 원산지가 기재되지 않은 항목이 {count}건 있습니다.',
+        '"(원산지 미표시)"로 표시된 위치에 실제 원산지를 입력하세요.',
     )]
 
 
@@ -250,4 +268,6 @@ def validate_label(label) -> dict:
         'ok': len(issues) == 0,
         'issue_count': len(issues),
         'issues': issues,
+        # "무엇을 검증했는지"를 통과 여부와 무관하게 명시 (근거 규정 포함)
+        'checked_regulations': list(_LEGAL_BASIS.values()),
     }

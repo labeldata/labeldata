@@ -24,7 +24,13 @@ import re
 
 from django.conf import settings
 
+from v1.label.constants import ALLERGEN_KEYWORDS
+
 logger = logging.getLogger(__name__)
+
+# AI가 반환할 수 있는 알레르기 표준 명칭 화이트리스트 (constants.py의 22종
+# 알레르기 유발요소 카테고리와 동일 — 할루시네이션 방지용 검증에 사용)
+_ALLERGEN_CATEGORY_NAMES = set(ALLERGEN_KEYWORDS.keys())
 
 # validate_label()의 category 코드 -> 화면에 보여줄 검증 항목명
 # (기존 label_preview.js showValidationModal()의 "검증 항목" 열과 같은 스타일)
@@ -37,6 +43,27 @@ _CATEGORY_LABELS = {
     'origin_missing': '원산지 표시',
     'ingredient_order': '원재료 표시 순서 (AI)',
 }
+
+_INGREDIENT_ORDER_BASIS = '「식품등의 표시기준」 원재료명 표시 순서 규정(중량비율이 많은 순서로 표시)'
+_ALLERGEN_BASIS = '「식품등의 표시기준」 알레르기 유발물질 표시 규정'
+
+# ── AI 적용 범위에 대한 판단 메모 ───────────────────────────────────────────
+# 6개 규칙기반 검증 중 이번에 AI로 추가 보강한 건 "알레르기 표시"(아래
+# check_allergens_ai)와 기존 "원재료 표시 순서" 파일럿 2개뿐이다. 나머지는
+# 검토 후 의도적으로 규칙 기반을 유지했다:
+#   - content_weight / origin_missing: 단순 존재 여부 확인이라 AI가 더
+#     정확하게 만들 여지가 없음(오히려 지연·비용만 추가).
+#   - recycling_mark: 포장재질 <-> 마크 매핑은 확정적 대응표라 AI 판단이
+#     끼어들 필요 없는 순수 lookup.
+#   - farm_seafood: 현재 정규식(이름 뒤 콤마 전까지 아무 문자+숫자%)이
+#     이미 폭넓게 매치해서 놓치는 사례가 적고, AI로 바꿔도 이득이 제한적.
+#   - forbidden_phrase("천연"/"자연"): 예외 조건(원물 여부, 상표명 포함
+#     여부 등) 판단은 사실 추출이 아니라 "규정 위반이다/아니다"라는 법적
+#     평가 그 자체다. 이 프로젝트의 AI 설계 원칙(AI는 추출만, 판정은
+#     결정론적 로직)에 정면으로 위배돼 지금은 적용하지 않음 — 대신 항상
+#     보수적으로 전부 플래그하고 사용자가 사용조건을 직접 확인하게 유지.
+#     (오탐이 나더라도 안전한 방향; 반대로 AI가 "괜찮다"고 잘못 판단해
+#     실제 위반을 놓치는 게 훨씬 위험하다.)
 
 
 def extract_ingredient_order(rawmtrl_text: str) -> list[dict]:
@@ -141,12 +168,118 @@ def check_ingredient_order(label) -> dict:
                 'message': (
                     f"원재료명 표시 순서가 함량 내림차순이 아닙니다: "
                     f"\"{cur['name']}\"({cur['percent']}%)가 \"{nxt['name']}\"({nxt['percent']}%)보다 "
-                    f"앞에 있지만 함량은 더 적습니다."
+                    f"앞에 있지만 함량은 더 적습니다. (근거: {_INGREDIENT_ORDER_BASIS})"
                 ),
                 'suggestion': '원재료는 사용된 함량(배합비율)이 많은 순서대로 표시해야 합니다. 순서를 바꿔주세요.',
             })
 
     return {'checked': True, 'ok': len(issues) == 0, 'items': items, 'issues': issues}
+
+
+def extract_allergens_ai(ingredients_text: str) -> list[str] | None:
+    """
+    원재료명 텍스트에서 실제로 "사용된 원료"로서 언급된 알레르기 유발요소만
+    추출한다. constants.ALLERGEN_KEYWORDS의 단순 문자열 포함 매칭과 달리
+    "대두 없음", "우유 미포함(Free)" 같은 부정 표현이나, 알레르기 표시란
+    문구 자체("[알레르기 성분: ...]")를 다시 원료로 오인하는 걸 걸러낼 수
+    있다. 22종 표준 명칭 중 텍스트에 실제로 근거가 있는 것만 추출하고
+    추론하지 않는다. AI 미설정/호출 실패 시 None(호출부가 키워드 매칭
+    방식으로 폴백하도록 — 원재료 순서 검증과 동일한 graceful degradation).
+    """
+    text = (ingredients_text or '').strip()
+    if not text:
+        return []
+
+    api_key = getattr(settings, 'OPENAI_API_KEY', '')
+    if not api_key:
+        logger.warning('[알레르기 AI검증] OPENAI_API_KEY 미설정 – 건너뜀')
+        return None
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+    except ImportError:
+        logger.error('[알레르기 AI검증] openai 패키지 미설치')
+        return None
+
+    allergen_names = ', '.join(_ALLERGEN_CATEGORY_NAMES)
+    prompt = f"""다음은 식품 라벨의 "원재료명" 표시 텍스트입니다.
+아래 22종 알레르기 유발요소 표준 명칭 중, 이 제품에 **실제로 원료로 사용된 것으로
+텍스트에 명시된 것만** 골라내세요.
+
+표준 명칭 목록: {allergen_names}
+
+규칙:
+- "우유 미포함", "대두 프리(free)", "땅콩 없음" 등 부정·제외 표현으로 언급된 것은 제외하세요.
+- "[알레르기 성분: 우유, 대두]"처럼 이미 알레르기 표시란에 선언된 문구 자체는 원료 사용 근거가
+  아니므로 그것만으로 판단하지 말고, 원재료 목록(예: "우유", "탈지분유" 등 실제 원료명)에
+  근거가 있는지로만 판단하세요.
+- 텍스트에 명시된 원료만 근거로 삼고, 표준 명칭과 정확히 일치하지 않아도 같은 알레르기
+  유발요소로 볼 수 있는 원료명(예: "탈지분유"->"우유", "대두유"->"대두")이면 표준 명칭으로
+  변환해 포함하세요.
+- 확실하지 않으면 포함하지 마세요(추론 금지, 과다 검출보다 누락이 나음 — 이건 파이썬 쪽에서
+  선언값과 대조해 안내만 하지 최종 판단은 사람이 하기 때문).
+
+응답 형식(JSON): {{"allergens": ["우유", "대두"]}}
+
+텍스트:
+{text[:3000]}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[{'role': 'user', 'content': prompt}],
+            response_format={'type': 'json_object'},
+            temperature=0.0,
+            max_tokens=300,
+        )
+        result = json.loads(response.choices[0].message.content)
+        raw = result.get('allergens', [])
+        if not isinstance(raw, list):
+            return []
+        # 표준 22종 명칭 밖의 값(할루시네이션 방지)은 제거
+        valid = {str(a).strip() for a in raw if isinstance(a, str)}
+        return sorted(valid & _ALLERGEN_CATEGORY_NAMES)
+
+    except Exception as exc:
+        logger.error(f'[알레르기 AI검증] OpenAI 호출 오류: {exc}')
+        return None
+
+
+def check_allergens_ai(label) -> dict:
+    """
+    AI로 추출한 "실제 사용 알레르기 유발요소" 목록을 선언값(label.allergens)과
+    대조한다. 규칙 기반 check_allergens()(단순 키워드 포함 매칭)보다 부정
+    표현·오탐 문맥에 강하다. AI가 판단하지 못하면(checked=False) 호출부
+    (run_full_review)가 규칙 기반 결과를 그대로 사용하도록 위임한다.
+    """
+    ingredients_text = label.rawmtrl_nm_display or label.rawmtrl_nm or ''
+    if not ingredients_text:
+        return {'checked': False, 'issues': []}
+
+    detected = extract_allergens_ai(ingredients_text)
+    if detected is None:
+        return {'checked': False, 'issues': []}
+
+    declared = {
+        a.strip() for a in re.split(r'[,、，]', label.allergens or '')
+        if a.strip()
+    }
+    missing = set(detected) - declared
+
+    issues = []
+    if missing:
+        issues.append({
+            'category': 'allergen',
+            'message': (
+                f'원재료명에서 실제로 사용된 것으로 보이는 알레르기 유발요소가 '
+                f'알레르기 표시에 선언되지 않았습니다: {", ".join(sorted(missing))} '
+                f'(근거: {_ALLERGEN_BASIS})'
+            ),
+            'suggestion': '원재료명을 확인해 실제로 사용된 원료라면 알레르기 표시 항목에 추가하세요.',
+        })
+    return {'checked': True, 'issues': issues}
 
 
 def _group_by_category(issues: list[dict]) -> list[dict]:
@@ -176,22 +309,27 @@ def _group_by_category(issues: list[dict]) -> list[dict]:
 
 def generate_summary(category_results: list[dict]) -> str:
     """
-    검증 결과 전체를 사람이 읽기 좋은 한글 요약 문장 2~3개로 압축한다.
+    검증 결과 전체를 사람이 읽기 좋은 한글 요약 문장으로 압축한다.
+    어떤 항목을 검증했는지(적합 포함)와, 부적합 항목은 근거 규정과 함께
+    언급하도록 해 "전문성이 느껴지지 않는다"는 문제를 해결한다.
 
     OpenAI 미설정/호출 실패 시에도 항상 뭔가는 보여줘야 하므로, 결정론적
-    폴백 요약("N개 항목에서 확인 필요: ...")을 우선 만들어두고, AI 호출이
-    성공하면 그걸 조금 더 읽기 좋은 문장으로 다듬은 결과로 교체한다.
-    AI가 실패해도 화면이 빈 채로 뜨는 일은 없다.
+    폴백 요약(검증 항목 전체 나열 + 부적합 항목 근거 규정)을 우선
+    만들어두고, AI 호출이 성공하면 그걸 조금 더 읽기 좋은 문장으로
+    다듬은 결과로 교체한다. AI가 실패해도 화면이 빈 채로 뜨는 일은 없다.
     """
     problem_rows = [r for r in category_results if not r['ok']]
+    all_labels = [r['label'] for r in category_results]
 
     if not problem_rows:
-        return '검증 결과 확인된 문제가 없습니다. 모든 항목이 표시 규정에 적합합니다.'
+        checked = ', '.join(all_labels)
+        return f'{checked} 등 {len(all_labels)}개 항목을 검증한 결과 확인된 문제가 없습니다. 모두 표시 규정에 적합합니다.'
 
-    fallback = (
-        f"{len(problem_rows)}개 항목에서 확인이 필요합니다: "
-        + ', '.join(r['label'] for r in problem_rows) + '.'
-    )
+    fallback_lines = [f"검증한 {len(all_labels)}개 항목({', '.join(all_labels)}) 중 {len(problem_rows)}개에서 확인이 필요합니다."]
+    for row in problem_rows:
+        for err in row['errors']:
+            fallback_lines.append(re.sub(r'<[^>]+>', '', err))
+    fallback = ' '.join(fallback_lines)
 
     api_key = getattr(settings, 'OPENAI_API_KEY', '')
     if not api_key:
@@ -210,17 +348,23 @@ def generate_summary(category_results: list[dict]) -> str:
             plain = re.sub(r'<[^>]+>', '', err)
             issue_lines.append(f"- [{row['label']}] {plain}")
 
-    prompt = f"""아래는 식품 표시사항(라벨) 검증에서 발견된 문제 목록입니다.
+    prompt = f"""아래는 식품 표시사항(라벨) 검증 결과입니다.
 이 내용을 식품 라벨을 처음 만들어보는 담당자도 이해할 수 있도록,
-자연스러운 한국어 문장 2~3개로 요약하세요.
+전문적이면서도 자연스러운 한국어 문장 3~4개로 요약하세요.
+
+이번에 검증한 전체 항목({len(all_labels)}개): {', '.join(all_labels)}
 
 규칙:
+- 첫 문장은 몇 개 항목을 검증했는지 간단히 언급하세요.
 - 목록에 없는 내용을 지어내지 마세요(추론 금지, 있는 내용만 요약).
-- 가장 시급하거나 법적으로 중요해 보이는 문제를 먼저 언급하세요.
+- 가장 시급하거나 법적으로 중요해 보이는 문제부터 언급하세요.
+- 문제 목록에 "(근거: 「...」)" 형태로 법령·고시 근거가 적혀 있으면, 요약 문장에도
+  그 근거를 반드시 그대로 포함하세요(생략하거나 바꿔 쓰지 말 것 — 사용자가 어떤
+  규정에 근거해 지적된 건지 알 수 있어야 합니다).
 - 딱딱한 목록 나열이 아니라 자연스러운 문장으로 쓰세요.
 - 마크다운이나 특수기호(*, #, - 등) 없이 순수 문장만 출력하세요.
 
-문제 목록:
+발견된 문제 목록:
 {chr(10).join(issue_lines)}
 """
 
@@ -243,8 +387,11 @@ def run_full_review(label) -> dict:
     라벨 등록 화면의 "AI검증" 버튼에서 호출하는 통합 검증.
 
     1) 규칙 기반 검증(validation_service.validate_label) — 무료·즉시
-    2) AI 원재료 순서 검증(check_ingredient_order) — 이 파일럿 하나만 AI 사용
-    3) 위 결과를 항목별로 묶고, 전체를 아우르는 AI 요약 문장 생성
+    2) AI 원재료 순서 검증(check_ingredient_order) — 파일럿
+    3) AI 알레르기 검증(check_allergens_ai) — 성공하면 규칙 기반 키워드
+       매칭 결과를 대체(부정 표현·오탐 문맥에 더 강함), 실패하면 규칙
+       기반 결과를 그대로 사용(graceful fallback)
+    4) 위 결과를 항목별로 묶고, 전체를 아우르는 AI 요약 문장 생성
 
     Returns:
         {
@@ -252,6 +399,7 @@ def run_full_review(label) -> dict:
           'ok': bool,                 # 전체 통과 여부
           'categories': [...],        # showValidationModal과 같은 행 구조
           'ingredient_order_checked': bool,  # AI 순서검증이 실제로 판단했는지
+          'allergen_ai_checked': bool,       # 알레르기 검증이 AI로 됐는지(False면 규칙기반)
         }
     """
     # 지연 임포트: validation_service가 이 모듈을 참조하지 않아 순환참조는
@@ -260,8 +408,16 @@ def run_full_review(label) -> dict:
 
     rule_result = validate_label(label)
     order_result = check_ingredient_order(label)
+    allergen_ai_result = check_allergens_ai(label)
 
-    all_issues = list(rule_result['issues']) + list(order_result['issues'])
+    rule_issues = list(rule_result['issues'])
+    if allergen_ai_result['checked']:
+        # AI 알레르기 검증이 성공하면 규칙 기반(키워드 단순매칭) allergen
+        # 이슈를 AI 결과로 교체 — 두 결과를 같이 보여주면 오히려 혼란만 줌
+        rule_issues = [i for i in rule_issues if i.get('category') != 'allergen']
+        rule_issues += allergen_ai_result['issues']
+
+    all_issues = rule_issues + list(order_result['issues'])
     categories = _group_by_category(all_issues)
 
     # AI 순서검증을 판단하지 못한 경우(% 정보 부족 등) 목록에서 빼서
@@ -269,11 +425,20 @@ def run_full_review(label) -> dict:
     if not order_result['checked']:
         categories = [c for c in categories if c['label'] != _CATEGORY_LABELS['ingredient_order']]
 
+    # 알레르기 검증이 AI로 됐으면 표에서도 구분되게 라벨 표시 (원재료 순서와 동일한 관례)
+    if allergen_ai_result['checked']:
+        for c in categories:
+            if c['label'] == _CATEGORY_LABELS['allergen']:
+                c['label'] = f"{_CATEGORY_LABELS['allergen']} (AI)"
+
     summary = generate_summary(categories)
 
     return {
         'summary': summary,
-        'ok': rule_result['ok'] and order_result['ok'],
+        # categories가 이미 (알레르기 AI 대체 포함) 최종 병합된 issue 집합을
+        # 반영하므로, 그 기준으로 전체 통과 여부를 계산하는 게 가장 정확하다.
+        'ok': all(c['ok'] for c in categories),
         'categories': categories,
         'ingredient_order_checked': order_result['checked'],
+        'allergen_ai_checked': allergen_ai_result['checked'],
     }
