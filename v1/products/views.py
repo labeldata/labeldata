@@ -4182,20 +4182,21 @@ def notification_list(request):
                 .select_related('news')
                 .order_by('-created_at')[:200]
             )
-            # 키워드별 그룹핑 → 각 키워드 1건으로 표시
+            # 뉴스 단위로 그룹핑 (다른 탭과 동일 규칙) → 같은 뉴스가 여러 키워드에
+            # 매칭돼도 1건만 표시. 매칭된 키워드는 메시지에 모아서 보여준다.
             _kw_groups = {}
             for _log in _kw_logs:
-                _kw_groups.setdefault(_log.trigger_label or '', []).append(_log)
-            for _kw, _logs in _kw_groups.items():
+                _kw_groups.setdefault(_log.news_id, []).append(_log)
+            for _news_id, _logs in _kw_groups.items():
                 _first = _logs[0]
-                _cnt = len(_logs)
                 _pname = (_first.news.product_name or '') if _first.news else ''
                 _unread = sum(1 for l in _logs if not l.is_read)
                 unread_count += _unread
-                if _cnt > 1:
-                    _msg = f"키워드 '{_kw}': '{_pname[:15]}' 외 {_cnt - 1}건이 수집되었습니다."
-                else:
-                    _msg = f"키워드 '{_kw}': '{_pname[:20]}' 수집되었습니다."
+                _kw_labels = list(dict.fromkeys(l.trigger_label for l in _logs if l.trigger_label))
+                _kw_text = ', '.join(_kw_labels[:2])
+                if len(_kw_labels) > 2:
+                    _kw_text += f' 외 {len(_kw_labels) - 2}개'
+                _msg = f"키워드 '{_kw_text}': '{_pname[:20]}' 이(가) 수집되었습니다."
                 items.append({
                     'id':          f'kw_{_first.id}',
                     'message':     _msg,
@@ -4203,8 +4204,8 @@ def notification_list(request):
                     'status_code': 'KEYWORD',
                     'created_at':  _first.created_at.strftime('%Y-%m-%d %H:%M'),
                     'label_id':    None,
-                    'label_name':  _kw,
-                    'url':         f'/regulatory/?q={_kw}',
+                    'label_name':  _kw_text,
+                    'url':         f'/regulatory/?q={_kw_labels[0] if _kw_labels else ""}',
                 })
     except Exception:
         pass
