@@ -52,31 +52,81 @@ function createFoodTypeSelect(selectedValue = "") {
     return select;
 }
 
+// 원산지 표시대상 판정 (markOriginTargets와 updateSummarySection이 공유)
+// eligibleRows: 원산지 표시 예외(정제수/당류 등, 식품첨가물)를 제외한 행
+// ranked: 표시대상으로 선정된 행 -> 순위(1~3) Map
+function computeOriginTargetInfo(rows) {
+    const excludedFoodTypes = [
+        "정제수", "설탕", "당류가공품", "당시럽류", "포도당", "과당", "기타과당", "기타설탕",
+        "기타 엿", "덱스트린", "물엿", "올리고당", "올리고당가공품", "발효식초", "주정"
+    ];
+
+    const eligibleRows = rows.filter(row => {
+        const foodCategory = row.querySelector('.food-category-input')?.dataset.foodCategory.trim();
+        const foodType = row.querySelector('.food-type-input')?.value.trim();
+        return !excludedFoodTypes.includes(foodType) && foodCategory !== 'additive';
+    });
+
+    const ranked = new Map();
+    if (eligibleRows.length > 0) {
+        const ratiosWithRows = eligibleRows.map((row, index) => ({
+            row: row,
+            ratio: parseFloat(row.querySelector('.ratio-input')?.value) || 0,
+            currentPosition: index + 1
+        }));
+
+        const hasHighRatio = ratiosWithRows.some(item => item.ratio >= 98);
+        const topTwoRatioSum = ratiosWithRows.length >= 2 ?
+            ratiosWithRows[0].ratio + ratiosWithRows[1].ratio : 0;
+
+        if (hasHighRatio && ratiosWithRows[0].ratio >= 98) {
+            ranked.set(ratiosWithRows[0].row, 1);
+        } else if (ratiosWithRows.length >= 2 && topTwoRatioSum >= 98) {
+            ranked.set(ratiosWithRows[0].row, 1);
+            ranked.set(ratiosWithRows[1].row, 2);
+        } else {
+            if (ratiosWithRows[0]) ranked.set(ratiosWithRows[0].row, 1);
+            if (ratiosWithRows.length >= 2 && ratiosWithRows[1]) ranked.set(ratiosWithRows[1].row, 2);
+            if (ratiosWithRows.length >= 3 && ratiosWithRows[2]) ranked.set(ratiosWithRows[2].row, 3);
+        }
+    }
+
+    return { eligibleRows, ranked };
+}
+
 // 요약 섹션 업데이트
 function updateSummarySection() {
     const rows = Array.from(document.querySelectorAll('#ingredient-body tr'));
+    const { ranked: originRanked } = computeOriginTargetInfo(rows);
 
     // 1. 모든 행의 데이터를 객체 배열로 추출
     const ingredientsData = rows.map(row => {
         const ratioStr = row.querySelector('.ratio-input')?.value.trim();
         const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
-        
+        const displayName = row.querySelector('.display-name-input')?.value.trim();
+
         // 정제수일 때는 라디오 버튼이 없으므로 기본값 사용
         let summaryType = 'foodType';
         if (ingredientName !== '정제수') {
             summaryType = row.querySelector('.summary-type-radio:checked')?.value || 'foodType';
         }
-        
+
+        // 원산지 표시대상인데 실제 원산지(국가명)가 기재돼 있지 않은지 여부
+        // -> 초안 문구에 "(원산지 미표시)"를 바로 삽입해 어디를 채워야 하는지 시각적으로 드러낸다.
+        const isOriginTarget = originRanked.has(row);
+        const originMissing = isOriginTarget && findCountriesInText(displayName).length === 0;
+
         return {
             ingredientName: ingredientName,
             foodCategory: row.querySelector('.food-category-input')?.dataset.foodCategory || '',
-            displayName: row.querySelector('.display-name-input')?.value.trim(),
+            displayName: displayName,
             foodType: row.querySelector('td:nth-child(6) input, .food-type-input')?.value.trim() || '',
             ratio: parseFloat(ratioStr) || 0,
             ratioStr: ratioStr,
             allergen: row.querySelector('.allergen-input')?.value || '',
             gmo: row.querySelector('.gmo-input')?.value || '',
-            summaryType: summaryType // 요약 방식 선택 값 추가
+            summaryType: summaryType, // 요약 방식 선택 값 추가
+            originMissing: originMissing
         };
     });
 
@@ -112,6 +162,11 @@ function updateSummarySection() {
         } else { // 'foodType'
             baseName = data.summaryFoodType || data.foodType; // 번호가 부여된 식품유형 사용
         }
+
+        // 원산지 표시대상인데 원산지가 기재되지 않았다면, 원산지를 적어야 할 자리에
+        // "(원산지 미표시)" placeholder를 바로 삽입한다 (식품첨가물/정제수 등은 애초에
+        // 표시대상이 아니므로 originMissing이 항상 false).
+        const originSuffix = data.originMissing ? '(원산지 미표시)' : '';
 
         // 식품 분류 및 함량에 따른 표시 규칙 적용
         if (data.foodCategory === 'additive' && displayName) {
@@ -149,9 +204,9 @@ function updateSummarySection() {
             if (count < 5 && buffer.trim()) {
                 items.push(buffer.trim());
             }
-            return `${baseName}[${items.join(', ')}]`;
+            return `${baseName}${originSuffix}[${items.join(', ')}]`;
         } else {
-            return baseName || displayName;
+            return `${baseName || displayName}${originSuffix}`;
         }
     });
 
@@ -502,23 +557,8 @@ function markOriginTargets() {
         row.style.border = '';
     });
 
-    // 예외 항목 배열 (식품유형 포함)
-    const excludedFoodTypes = [
-        "정제수", "설탕", "당류가공품", "당시럽류", "포도당", "과당", "기타과당", "기타설탕",
-        "기타 엿", "덱스트린", "물엿", "올리고당", "올리고당가공품", "발효식초", "주정"
-    ];
-
-    // 필터링 로직
-    const eligibleRows = rows.filter(row => {
-        const ingredientName = row.querySelector('.ingredient-name-input')?.value.trim();
-        const foodCategory = row.querySelector('.food-category-input')?.dataset.foodCategory.trim();
-        const foodType = row.querySelector('.food-type-input')?.value.trim();
-
-        return (
-            !excludedFoodTypes.includes(foodType) && // 예외 식품유형 제외
-            foodCategory !== 'additive'             // 식품첨가물 제외
-        );
-    });
+    // 원산지 표시대상 판정 (updateSummarySection과 공유하는 함수)
+    const { eligibleRows, ranked } = computeOriginTargetInfo(rows);
 
     if (eligibleRows.length === 0) {
         originValidated = false;
@@ -526,31 +566,8 @@ function markOriginTargets() {
         return;
     }
 
-    // 원산지 표시대상 결정: 현재 테이블 순서 그대로 상위 3개 행에 순위 부여
-    const ratiosWithRows = eligibleRows.map((row, index) => ({
-        row: row,
-        ratio: parseFloat(row.querySelector('.ratio-input')?.value) || 0,
-        currentPosition: index + 1
-    }));
+    ranked.forEach((rank, row) => markRowAsOriginTarget(row, rank));
 
-    // 98% 규칙 적용 시에만 비율을 고려, 그 외에는 현재 순서 기준
-    const hasHighRatio = ratiosWithRows.some(item => item.ratio >= 98);
-    const topTwoRatioSum = ratiosWithRows.length >= 2 ? 
-        ratiosWithRows[0].ratio + ratiosWithRows[1].ratio : 0;
-
-    if (hasHighRatio && ratiosWithRows[0].ratio >= 98) {
-        // 1순위가 98% 이상인 경우
-        markRowAsOriginTarget(ratiosWithRows[0].row, 1);
-    } else if (ratiosWithRows.length >= 2 && topTwoRatioSum >= 98) {
-        // 상위 2개 합이 98% 이상인 경우
-        markRowAsOriginTarget(ratiosWithRows[0].row, 1);
-        markRowAsOriginTarget(ratiosWithRows[1].row, 2);
-    } else {
-        // 일반적인 경우: 현재 순서 기준으로 상위 3개
-        if (ratiosWithRows[0]) markRowAsOriginTarget(ratiosWithRows[0].row, 1);
-        if (ratiosWithRows.length >= 2 && ratiosWithRows[1]) markRowAsOriginTarget(ratiosWithRows[1].row, 2);
-        if (ratiosWithRows.length >= 3 && ratiosWithRows[2]) markRowAsOriginTarget(ratiosWithRows[2].row, 3);
-    }
     originValidated = eligibleRows.length > 0;
     updateSaveButtonState();
 }
