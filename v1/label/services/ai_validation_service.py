@@ -42,10 +42,18 @@ _CATEGORY_LABELS = {
     'recycling_mark': '분리배출마크',
     'origin_missing': '원산지 표시',
     'ingredient_order': '원재료 표시 순서 (AI)',
+    'name_ingredient_match': '제품명-원재료 일치성 (AI)',
 }
+
+# "규정만 검증"(규칙 기반)에는 없고 AI검증에만 있는 항목들 — 사용자에게
+# "AI가 규칙 기반보다 더 많이 본다"는 걸 실감하게 하려면 이 목록이
+# 비어있으면 안 된다. run_full_review()의 요약·안내 문구에서 참조.
+AI_ONLY_CATEGORIES = ['ingredient_order', 'name_ingredient_match']
+AI_ONLY_CATEGORIES_KO = [_CATEGORY_LABELS[c] for c in AI_ONLY_CATEGORIES]
 
 _INGREDIENT_ORDER_BASIS = '「식품등의 표시기준」 원재료명 표시 순서 규정(중량비율이 많은 순서로 표시)'
 _ALLERGEN_BASIS = '「식품등의 표시기준」 알레르기 유발물질 표시 규정'
+_NAME_INGREDIENT_BASIS = '「식품등의 표시기준」 제품명에 특정 원재료를 사용하거나 강조하는 경우의 표시 규정'
 
 # ── AI 적용 범위에 대한 판단 메모 ───────────────────────────────────────────
 # 6개 규칙기반 검증 중 이번에 AI로 추가 보강한 건 "알레르기 표시"(아래
@@ -282,6 +290,107 @@ def check_allergens_ai(label) -> dict:
     return {'checked': True, 'issues': issues}
 
 
+def extract_emphasized_ingredients_ai(product_name: str) -> list[str] | None:
+    """
+    제품명에서 "이 제품에 실제로 들어있다고 강조하는 원재료/성분명"만 추출한다.
+
+    규칙 기반 check_farm_seafood_content()는 constants.FARM_SEAFOOD_ITEMS
+    (농수산물 약 1만 종 목록)에 있는 단어만 잡아내므로 "초코", "치즈",
+    "카라멜", "리얼", "고기" 같은 비농산물 강조 표기는 원천적으로 놓친다.
+    이건 규칙(고정 목록 대조)의 구조적 한계라 목록을 아무리 늘려도 못
+    채우는 영역 — AI가 자유 텍스트에서 강조 원료명을 직접 추출해야
+    메울 수 있다. 브랜드명·수식어("맛있는", "정성가득" 등)는 원재료가
+    아니므로 제외하고, 실제 식품 원료/성분으로 보이는 단어만 추출한다.
+    AI 미설정/실패 시 None(호출부가 이 검증을 건너뛰도록).
+    """
+    name = (product_name or '').strip()
+    if not name:
+        return []
+
+    api_key = getattr(settings, 'OPENAI_API_KEY', '')
+    if not api_key:
+        logger.warning('[제품명-원재료 일치성 AI검증] OPENAI_API_KEY 미설정 – 건너뜀')
+        return None
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+    except ImportError:
+        logger.error('[제품명-원재료 일치성 AI검증] openai 패키지 미설치')
+        return None
+
+    prompt = f"""다음은 식품 제품명입니다. 이 제품명에서 "실제로 제품에 사용됐다고
+소비자에게 강조하는 원재료/성분명"만 추출하세요.
+
+규칙:
+- 맛·향·재료를 나타내는 명사만 추출하세요 (예: "딸기요거트"->["딸기"], "초코과자"->["초코"],
+  "치즈스틱"->["치즈"], "리얼바닐라아이스크림"->["바닐라"]).
+- 브랜드명, 회사명, 단순 수식어("맛있는", "정성가득", "프리미엄", "국내산" 등 원산지
+  표현), 포장 형태("스틱", "바", "컵") 등 원재료가 아닌 단어는 제외하세요.
+- 식품유형 자체를 나타내는 일반명사(예: "과자", "아이스크림", "음료", "빵")는
+  원재료가 아니므로 제외하세요.
+- 제품명에 강조할 원재료가 없다고 판단되면 빈 배열을 반환하세요. 억지로 만들어내지 마세요.
+
+응답 형식(JSON): {{"ingredients": ["딸기"]}}
+
+제품명: {name[:200]}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=[{'role': 'user', 'content': prompt}],
+            response_format={'type': 'json_object'},
+            temperature=0.0,
+            max_tokens=200,
+        )
+        result = json.loads(response.choices[0].message.content)
+        raw = result.get('ingredients', [])
+        if not isinstance(raw, list):
+            return []
+        return [str(i).strip() for i in raw if isinstance(i, str) and str(i).strip()]
+
+    except Exception as exc:
+        logger.error(f'[제품명-원재료 일치성 AI검증] OpenAI 호출 오류: {exc}')
+        return None
+
+
+def check_name_ingredient_match_ai(label) -> dict:
+    """
+    제품명에서 AI가 추출한 강조 원료가 실제 원재료명(rawmtrl_nm_display)
+    텍스트에 있는지 대조한다. 대조 자체는 파이썬의 단순 포함 여부
+    확인이라 AI 판단 없이 결정론적이다 — AI는 "제품명에서 원료명을
+    추출"하는 역할만 한다.
+
+    규칙 기반 farm_seafood 검증(농수산물 한정)과 카테고리가 다르므로
+    회사 name_ingredient_match로 별도 관리하고, 규칙 기반 결과와 합치지
+    않는다 — 두 검증이 서로 다른 원료 범위를 보고 있어 대체 관계가
+    아니라 보완 관계이기 때문.
+    """
+    product_name = label.prdlst_nm or ''
+    ingredients_text = (label.rawmtrl_nm_display or label.rawmtrl_nm or '').lower()
+    if not product_name or not ingredients_text:
+        return {'checked': False, 'issues': []}
+
+    emphasized = extract_emphasized_ingredients_ai(product_name)
+    if emphasized is None:
+        return {'checked': False, 'issues': []}
+
+    missing = [item for item in emphasized if item.lower() not in ingredients_text]
+
+    issues = []
+    if missing:
+        issues.append({
+            'category': 'name_ingredient_match',
+            'message': (
+                f'제품명에 강조된 원료 {", ".join(missing)}가 원재료명에서 확인되지 않습니다. '
+                f'(근거: {_NAME_INGREDIENT_BASIS})'
+            ),
+            'suggestion': '실제로 사용된 원료라면 원재료명에 포함하고, 사용하지 않았다면 제품명 표기를 재검토하세요.',
+        })
+    return {'checked': True, 'issues': issues}
+
+
 def group_issues_by_category(issues: list[dict]) -> list[dict]:
     """
     validate_label()/check_ingredient_order()가 내는 flat한 issue 목록을
@@ -310,11 +419,16 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
     return [row for row in grouped.values()]
 
 
-def generate_summary(category_results: list[dict]) -> str:
+def generate_summary(category_results: list[dict], ai_only_checked: bool = False) -> str:
     """
     검증 결과 전체를 사람이 읽기 좋은 한글 요약 문장으로 압축한다.
     어떤 항목을 검증했는지(적합 포함)와, 부적합 항목은 근거 규정과 함께
     언급하도록 해 "전문성이 느껴지지 않는다"는 문제를 해결한다.
+
+    ai_only_checked=True면 이번 검증에 "규정만 검증"(규칙 기반)에는 없는
+    AI 전용 항목(원재료 표시 순서/제품명-원재료 일치성)이 실제로 포함됐다는
+    뜻 — 첫 문장에서 이를 명시해 "AI가 규칙 기반을 그냥 대행하는 것"처럼
+    느껴지지 않게 한다.
 
     OpenAI 미설정/호출 실패 시에도 항상 뭔가는 보여줘야 하므로, 결정론적
     폴백 요약(검증 항목 전체 나열 + 부적합 항목 근거 규정)을 우선
@@ -323,12 +437,13 @@ def generate_summary(category_results: list[dict]) -> str:
     """
     problem_rows = [r for r in category_results if not r['ok']]
     all_labels = [r['label'] for r in category_results]
+    ai_note = ', 규정만 검증에는 없는 AI 전용 항목 포함' if ai_only_checked else ''
+    labels_text = f"{', '.join(all_labels)}{ai_note}"
 
     if not problem_rows:
-        checked = ', '.join(all_labels)
-        return f'{checked} 등 {len(all_labels)}개 항목을 검증한 결과 확인된 문제가 없습니다. 모두 표시 규정에 적합합니다.'
+        return f'{labels_text} 등 {len(all_labels)}개 항목을 검증한 결과 확인된 문제가 없습니다. 모두 표시 규정에 적합합니다.'
 
-    fallback_lines = [f"검증한 {len(all_labels)}개 항목({', '.join(all_labels)}) 중 {len(problem_rows)}개에서 확인이 필요합니다."]
+    fallback_lines = [f"검증한 {len(all_labels)}개 항목({labels_text}) 중 {len(problem_rows)}개에서 확인이 필요합니다."]
     for row in problem_rows:
         for err in row['errors']:
             fallback_lines.append(re.sub(r'<[^>]+>', '', err))
@@ -351,12 +466,18 @@ def generate_summary(category_results: list[dict]) -> str:
             plain = re.sub(r'<[^>]+>', '', err)
             issue_lines.append(f"- [{row['label']}] {plain}")
 
+    ai_coverage_note = (
+        f"이번 검증엔 규칙 기반(정규식·키워드 매칭)만으로는 확인할 수 없는 항목도 포함돼 있습니다 "
+        f"({', '.join(AI_ONLY_CATEGORIES_KO)}). 첫 문장에서 이 점을 자연스럽게 언급하세요.\n"
+        if ai_only_checked else ''
+    )
+
     prompt = f"""아래는 식품 표시사항(라벨) 검증 결과입니다.
 이 내용을 식품 라벨을 처음 만들어보는 담당자도 이해할 수 있도록,
 전문적이면서도 자연스러운 한국어 문장 3~4개로 요약하세요.
 
 이번에 검증한 전체 항목({len(all_labels)}개): {', '.join(all_labels)}
-
+{ai_coverage_note}
 규칙:
 - 첫 문장은 몇 개 항목을 검증했는지 간단히 언급하세요.
 - 목록에 없는 내용을 지어내지 마세요(추론 금지, 있는 내용만 요약).
@@ -431,6 +552,7 @@ def run_full_review(label, user) -> dict:
     rule_result = validate_label(label)
     order_result = check_ingredient_order(label)
     allergen_ai_result = check_allergens_ai(label)
+    name_match_result = check_name_ingredient_match_ai(label)
 
     rule_issues = list(rule_result['issues'])
     if allergen_ai_result['checked']:
@@ -439,13 +561,15 @@ def run_full_review(label, user) -> dict:
         rule_issues = [i for i in rule_issues if i.get('category') != 'allergen']
         rule_issues += allergen_ai_result['issues']
 
-    all_issues = rule_issues + list(order_result['issues'])
+    all_issues = rule_issues + list(order_result['issues']) + list(name_match_result['issues'])
     categories = group_issues_by_category(all_issues)
 
-    # AI 순서검증을 판단하지 못한 경우(% 정보 부족 등) 목록에서 빼서
-    # "적합"으로 오인되지 않게 한다.
+    # AI가 판단하지 못한 항목(% 정보 부족, 제품명/원재료명 미입력 등)은
+    # 목록에서 빼서 "적합"으로 오인되지 않게 한다.
     if not order_result['checked']:
         categories = [c for c in categories if c['label'] != _CATEGORY_LABELS['ingredient_order']]
+    if not name_match_result['checked']:
+        categories = [c for c in categories if c['label'] != _CATEGORY_LABELS['name_ingredient_match']]
 
     # 알레르기 검증이 AI로 됐으면 표에서도 구분되게 라벨 표시 (원재료 순서와 동일한 관례)
     if allergen_ai_result['checked']:
@@ -453,7 +577,7 @@ def run_full_review(label, user) -> dict:
             if c['label'] == _CATEGORY_LABELS['allergen']:
                 c['label'] = f"{_CATEGORY_LABELS['allergen']} (AI)"
 
-    summary = generate_summary(categories)
+    summary = generate_summary(categories, ai_only_checked=(order_result['checked'] or name_match_result['checked']))
 
     result = {
         'summary': summary,
@@ -463,6 +587,8 @@ def run_full_review(label, user) -> dict:
         'categories': categories,
         'ingredient_order_checked': order_result['checked'],
         'allergen_ai_checked': allergen_ai_result['checked'],
+        'name_ingredient_checked': name_match_result['checked'],
+        'ai_extra_coverage': AI_ONLY_CATEGORIES,  # 규정만 검증에는 없는, AI검증만의 확인 항목
         'from_cache': False,
         'blocked': False,
         'usage': usage,
