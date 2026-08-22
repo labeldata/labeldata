@@ -3,6 +3,8 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve as static_serve
+
+from v1.common.media_access import protected_media_serve
 from django.views.generic import TemplateView
 from django.views.decorators.cache import cache_page
 from django.http import HttpResponse
@@ -49,13 +51,17 @@ urlpatterns = [
 
 # 정적 파일 서빙 (개발 환경과 에러 페이지 테스트를 위해 항상 활성화)
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0] if settings.STATICFILES_DIRS else settings.STATIC_ROOT)
+# 업로드 파일(/media/) 서빙
 # 주의: django.conf.urls.static.static()은 DEBUG=False일 때 내부적으로 빈 리스트를
-# 반환한다(Django 자체 안전장치). 운영 서버는 DEBUG=False라서 위 static() 호출로는
+# 반환한다(Django 자체 안전장치). 운영 서버는 DEBUG=False라서 그 호출로는
 # MEDIA_URL 라우팅이 전혀 등록되지 않아 업로드 파일이 404가 났었다(PA Static files
-# 매핑에도 /media/가 없으면 완전히 접근 불가). DEBUG 여부와 무관하게 항상 서빙되도록
-# re_path로 직접 등록한다.
+# 매핑에도 /media/가 없으면 완전히 접근 불가). DEBUG 여부와 무관하게 등록한다.
+#
+# 다만 예전처럼 static_serve 를 그대로 걸면 인증 없이 누구나 파일을 받아갈 수 있다.
+# 협력업체 규격서·성적서가 URL 만 알면 노출되고 공유를 해제해도 막히지 않았다.
+# 권한을 확인하는 protected_media_serve 를 대신 사용한다.
 urlpatterns += [
-    re_path(r'^media/(?P<path>.*)$', static_serve, {'document_root': settings.MEDIA_ROOT}),
+    re_path(r'^media/(?P<path>.*)$', protected_media_serve, name='protected_media'),
 ]
 
 # 커스텀 에러 핸들러 (DEBUG=False일 때만 작동)

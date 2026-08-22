@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib import messages
+from v1.common.media_access import user_can_download_label_files, downloadable_label_ids
 from django.http import JsonResponse
 from django.conf import settings
 from django.db.models import Q, Count, Prefetch, Sum, Case, When, IntegerField
@@ -1489,6 +1490,20 @@ def product_update_status(request, product_id):
     if new_status not in {action_to_status.get(a) for a in available_actions}:
         return JsonResponse({'success': False, 'error': '상태 변경 권한이 없습니다.'}, status=403)
 
+    # 권한 플래그도 함께 확인한다.
+    # 지금까지는 role_code 만 보고 can_review / can_approve 는 어디서도 쓰이지 않아,
+    # 관리자 화면에서 체크를 풀어도 아무 변화가 없었다(화면이 거짓말을 하는 상태).
+    if shared_share and not is_owner:
+        _perm = SharePermission.objects.filter(share=shared_share).first()
+        _needs = {
+            ProductMetadata.Status.PENDING:   ('can_review',  '검토'),
+            ProductMetadata.Status.CONFIRMED: ('can_approve', '승인'),
+        }
+        _need = _needs.get(new_status)
+        if _need and not getattr(_perm, _need[0], False):
+            return JsonResponse(
+                {'success': False, 'error': f'{_need[1]} 권한이 없습니다.'}, status=403)
+
     # ── CONFIRMED → DRAFT: 새 버전 번호 증가 ──
     old_status = metadata.status
     old_status_label = metadata.get_status_display()
@@ -2558,6 +2573,11 @@ def share_create(request, label_id):
     if role_code not in dict(SharePermission.ROLE_CHOICES):
         return JsonResponse({'success': False, 'error': '잘못된 역할입니다.'}, status=400)
 
+    # 이 API 는 PRIVATE(권한 관리) 공유만 만든다. PUBLIC 은 열람 화면이 미구현이다.
+    if request.POST.get('share_mode', 'PRIVATE') != 'PRIVATE':
+        return JsonResponse(
+            {'success': False, 'error': '공개 링크 공유는 현재 지원하지 않습니다.'}, status=400)
+
     share_end_date = None
     if expiration_date:
         try:
@@ -2614,6 +2634,18 @@ def share_create(request, label_id):
 
     if recipient_user:
         SharedProductReceipt.objects.get_or_create(share=share, receiver=recipient_user)
+
+    # 연락처로도 등록해 둔다.
+    # 연락처 목록은 '활성 공유 ∪ UserContact' 인데 여기서 UserContact 를 만들지 않아,
+    # 공유를 해제하면 협력업체 연락처가 목록에서 사라졌다.
+    UserContact.objects.update_or_create(
+        owner=request.user,
+        email=email,
+        defaults={
+            'name': recipient_name or None,
+            'company': recipient_company or None,
+        },
+    )
 
     # 활동 로그 생성
     from .models import ProductActivityLog
@@ -2836,9 +2868,15 @@ def share_update_info(request, share_id):
 
 
 def public_share_view(request, share_token):
-    """공개 공유 보기"""
-    messages.info(request, '공개 공유 기능은 준비 중입니다.')
-    return redirect('products:product_list')
+    """
+    공개 링크 공유 — 미구현.
+
+    ProductShare.share_mode 에 'PUBLIC' 선택지와 public_token 필드가 있지만 열람 화면이
+    없다. 예전에는 "준비 중" 안내 후 제품 목록으로 보냈는데, 인증 없이 닿는 엔드포인트를
+    열어두는 셈이라 404 로 닫는다.
+    구현하려면 토큰 검증·만료·열람 범위 설계가 함께 필요하다.
+    """
+    raise Http404("공개 공유 링크는 제공하지 않습니다.")
 
 
 # ==================== 문서 관리 ====================
@@ -3338,8 +3376,8 @@ def bulk_download(request):
     
     # 문서 조회 (사용자 소유 확인)
     documents = ProductDocument.objects.filter(
+        Q(label__user_id=request.user) | Q(label__my_label_id__in=downloadable_label_ids(request.user)),
         document_id__in=document_ids,
-        label__user_id=request.user,
         active_yn=True
     ).select_related('label', 'document_type')
     
@@ -3412,12 +3450,10 @@ def bulk_download(request):
 @login_required
 @require_POST
 def bulk_download_version(request, label_id):
-    """특정 표시사항의 모든 문서를 ZIP으로 다운로드"""
-    label = get_object_or_404(
-        MyLabel,
-        my_label_id=label_id,
-        user_id=request.user
-    )
+    """특정 표시사항의 모든 문서를 ZIP으로 다운로드 (소유자 + 다운로드 권한 공유자)"""
+    label = get_object_or_404(MyLabel, my_label_id=label_id)
+    if not user_can_download_label_files(request.user, label):
+        raise Http404("표시사항을 찾을 수 없습니다.")
     
     documents = ProductDocument.objects.filter(
         label=label,
@@ -3474,8 +3510,9 @@ def document_detail(request, document_id):
     document = get_object_or_404(
         ProductDocument.objects.select_related('label', 'document_type', 'uploaded_by'),
         document_id=document_id,
-        label__user_id=request.user
     )
+    if not user_can_download_label_files(request.user, document.label):
+        raise Http404("문서를 찾을 수 없습니다.")
     
     context = {
         'document': document,
@@ -3486,13 +3523,19 @@ def document_detail(request, document_id):
 
 @login_required
 def document_download(request, document_id):
-    """문서 다운로드"""
+    """
+    문서 다운로드 — 소유자 또는 다운로드 권한이 있는 공유자.
+
+    이전에는 label__user_id=request.user 로 소유자만 허용해, can_download_documents=True
+    인 검토자·협력사도 404 를 받았다. 제출 자료를 못 보면 검토 단계가 성립하지 않는다.
+    """
     document = get_object_or_404(
         ProductDocument,
         document_id=document_id,
-        label__user_id=request.user,
         active_yn=True
     )
+    if not user_can_download_label_files(request.user, document.label):
+        raise Http404("문서를 찾을 수 없습니다.")
     
     try:
         return FileResponse(
