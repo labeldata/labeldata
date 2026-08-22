@@ -371,36 +371,37 @@ def news_list(request):
     # 미확인 dot·"전체 읽음" 버튼은 필터와 무관한 전 기간 기준
     inspection_unread = ins_qs_base.filter(read_yn=False).count()
 
-    # 수거검사 탭에서만 검색·날짜·판정상태 필터 적용
+    # 공용 필터(검색어·기간)는 활성 탭과 무관하게 적용한다.
+    # 부적합·행정처분 배지도 같은 필터를 반영하므로, 여기만 예외로 두면
+    # 수거검사 탭을 누르는 순간 배지 숫자가 바뀌어 보인다.
     ins_qs = ins_qs_base
-    if current_tab == 'insp':
-        if q:
-            ins_qs = ins_qs.filter(
-                Q(inspection__prdtnm__icontains=q) |
-                Q(inspection__bssh_nm__icontains=q)
-            )
-        if date_from or date_to:
-            df_str = date_from.replace('-', '') if date_from else ''
-            dt_str = date_to.replace('-', '')   if date_to   else ''
-            if df_str:
-                ins_qs = ins_qs.filter(inspection__tkawydtm__gte=df_str)
-            if dt_str:
-                ins_qs = ins_qs.filter(inspection__tkawydtm__lte=dt_str)
-        elif days != 'all':
-            try:
-                cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
-                ins_qs = ins_qs.filter(inspection__tkawydtm__gte=cutoff_str)
-            except (ValueError, TypeError):
-                pass
+    if q:
+        ins_qs = ins_qs.filter(
+            Q(inspection__prdtnm__icontains=q) |
+            Q(inspection__bssh_nm__icontains=q)
+        )
+    if date_from or date_to:
+        df_str = date_from.replace('-', '') if date_from else ''
+        dt_str = date_to.replace('-', '')   if date_to   else ''
+        if df_str:
+            ins_qs = ins_qs.filter(inspection__tkawydtm__gte=df_str)
+        if dt_str:
+            ins_qs = ins_qs.filter(inspection__tkawydtm__lte=dt_str)
+    elif days != 'all':
+        try:
+            cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
+            ins_qs = ins_qs.filter(inspection__tkawydtm__gte=cutoff_str)
+        except (ValueError, TypeError):
+            pass
 
-        # 진행 중 / 완료 필터 — 서버에서 처리해야 페이지네이션·건수가 어긋나지 않는다.
-        # (이전에는 JS 가 현재 페이지의 DOM 만 숨겨서 다음 페이지에는 적용되지 않고,
-        #  목록 헤더 숫자도 "현재 페이지에 보이는 개수"로 덮어써져 탭 배지와 달라졌다)
+    # 진행 중 / 완료 필터 — 수거검사 탭 전용 칩이므로 이 탭에서만 적용된다.
+    # 서버에서 처리해야 페이지네이션·건수가 어긋나지 않는다.
+    # (이전에는 JS 가 현재 페이지의 DOM 만 숨겨서 다음 페이지에는 적용되지 않고,
+    #  목록 헤더 숫자도 "현재 페이지에 보이는 개수"로 덮어써져 탭 배지와 달라졌다)
+    if insp_status:
         _pending_q = Q(inspection__jdgmnt_cd_nm__in=InspectionResult.PENDING_JUDGMENTS)
-        if insp_status == 'pending':
-            ins_qs = ins_qs.filter(_pending_q)
-        elif insp_status == 'done':
-            ins_qs = ins_qs.exclude(_pending_q)
+        ins_qs = (ins_qs.filter(_pending_q) if insp_status == 'pending'
+                  else ins_qs.exclude(_pending_q))
 
     # 탭 배지 = 목록 헤더 = 현재 필터가 적용된 총 건수 (부적합·행정처분 탭과 같은 규칙)
     inspection_total  = ins_qs.count()

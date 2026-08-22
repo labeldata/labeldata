@@ -39,12 +39,12 @@
                 </div>
             </div>
             {# 규제 알림 푸터 (항상 표시) #}
-            <a href="{% url 'regulatory:list' %}{% if regulatory_alert_count > 0 %}?status=no_action&days=all{% endif %}"
+            <a href="{% url 'regulatory:list' %}{% if regulatory_alert_count > 0 %}?days=all{% endif %}"
                onclick="window.location.href=this.href;return false;"
                class="v2-notif-regulatory{% if regulatory_alert_count > 0 %} v2-notif-regulatory--alert{% endif %}">
                 <i class="bi bi-shield-exclamation"></i>
                 {% if regulatory_alert_count > 0 %}
-                <span>부적합 알림 <b>{{ regulatory_alert_count }}건</b></span>
+                <span>부적합 알림 <b>{{ regulatory_alert_count }}건</b> 미확인</span>
                 {% else %}
                 <span>부적합·처분 알림</span>
                 {% endif %}
