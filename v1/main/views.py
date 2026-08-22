@@ -311,6 +311,11 @@ def save_label(request):
 # V2 대시보드 홈
 # ============================================================
 
+# 모바일 앱 '식품 안심 알리미' 스토어 정보 (홈 화면 홍보 배너에서 사용)
+MOBILE_APP_NAME = '식품 안심 알리미'
+MOBILE_APP_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.ezlabeling.food_safety_alarm'
+
+
 def home_dashboard(request):
     """
     V2 메인 대시보드 홈 페이지 (신규홈, 메인 주소)
@@ -336,6 +341,8 @@ def home_dashboard(request):
             'recent_labels': [],
             'unread_notif_count': 0,
             'expiring_count': 0,
+            'mobile_app_name': MOBILE_APP_NAME,
+            'mobile_app_play_url': MOBILE_APP_PLAY_URL,
         }
         return render(request, 'main/home_v2_dashboard.html', context)
 
@@ -419,6 +426,8 @@ def home_dashboard(request):
         'recent_labels': recent_labels,
         'unread_notif_count': unread_notif_count,
         'expiring_count': expiring_count,
+        'mobile_app_name': MOBILE_APP_NAME,
+        'mobile_app_play_url': MOBILE_APP_PLAY_URL,
     }
     return render(request, 'main/home_v2_dashboard.html', context)
 

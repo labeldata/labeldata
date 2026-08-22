@@ -101,7 +101,17 @@
     border: 1px solid rgba(103,232,249,0.4);
     font-size: 12px;
     color: #67e8f9;
+    text-decoration: none;
+    transition: background .18s, border-color .18s, transform .18s;
 }
+a.hero-app-badge:hover {
+    background: rgba(103,232,249,0.28);
+    border-color: rgba(103,232,249,0.75);
+    color: #a5f3fc;
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+.hero-app-badge-cta { font-size: 14px; flex-shrink: 0; }
 
 .hero-actions {
     display: flex;
@@ -194,7 +204,7 @@
 
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
 }
 @media (max-width: 1200px) { .features-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -712,7 +722,7 @@
 
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
 }
 @media (max-width: 1200px) { .features-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -910,4 +920,192 @@
     .guest-footer-links { gap: 24px; }
     .pipe-connector-wrap { min-width: 40px; }
     .pipe-connector-label { display: none; }
+}
+
+/* ============================================================
+   모바일 앱 홍보 — '식품 안심 알리미'
+   - .app-promo  : 게스트 홈 (기능 소개 아래 큰 배너)
+   - .app-strip  : 로그인 대시보드 (닫기 가능한 얇은 스트립)
+   ============================================================ */
+
+/* ── 구글 플레이 버튼 (공통) ─────────────────────────────── */
+.app-store-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px 9px 15px;
+    border-radius: 10px;
+    background: #202124;
+    color: #fff;
+    text-decoration: none;
+    border: 1px solid #3c4043;
+    transition: background .18s, transform .18s, box-shadow .18s;
+    white-space: nowrap;
+}
+.app-store-btn:hover {
+    background: #000;
+    color: #fff;
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.22);
+}
+.app-store-btn > i { font-size: 22px; line-height: 1; }
+.app-store-btn span { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
+.app-store-btn small { font-size: 9px; letter-spacing: .06em; opacity: .75; text-transform: uppercase; }
+.app-store-btn b { font-size: 14px; font-weight: 700; }
+
+.app-store-btn-sm { padding: 7px 14px 7px 12px; border-radius: 9px; }
+.app-store-btn-sm > i { font-size: 18px; }
+.app-store-btn-sm b { font-size: 12px; }
+.app-store-btn-sm small { font-size: 8px; }
+
+/* ── 게스트 홈: 앱 다운로드 배너 ─────────────────────────── */
+.app-promo {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 28px;
+    align-items: center;
+    background: linear-gradient(135deg, #10233f 0%, #163a63 100%);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 12px;
+}
+
+.app-promo-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.app-promo-icon {
+    width: 44px; height: 44px; border-radius: 11px; flex-shrink: 0;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+.app-promo-eyebrow {
+    display: inline-flex; align-items: center;
+    font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    color: #67e8f9;
+}
+.app-promo-title {
+    font-size: 18px; font-weight: 800; color: #fff;
+    letter-spacing: -.02em; line-height: 1.3;
+}
+.app-promo-desc {
+    font-size: 13px; color: rgba(255,255,255,.82);
+    line-height: 1.6; margin: 0 0 10px;
+    max-width: 640px;
+}
+.app-promo-points {
+    list-style: none; padding: 0; margin: 0 0 14px;
+    display: flex; flex-wrap: wrap; gap: 6px 20px;
+}
+.app-promo-points li {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: rgba(255,255,255,.72);
+}
+.app-promo-points i { color: #4ade80; font-size: 13px; }
+
+.app-promo-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.app-promo-note { font-size: 11px; color: rgba(255,255,255,.55); }
+
+.app-promo-qr {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 14px 14px 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.28);
+}
+/* QR 원본(357px)이 조밀해 ~148px 미만으로 줄이면 축소 보간에 모듈이 뭉개져 인식이 실패한다.
+   렌더 결과를 디코딩해 확인한 안전 크기(160px)를 사용한다. 크기를 줄일 때는 반드시 재확인할 것. */
+.app-promo-qr img {
+    width: 160px; height: 160px; display: block;
+}
+.app-promo-qr span {
+    font-size: 10px; font-weight: 600; color: #5f6368;
+    display: flex; align-items: center;
+}
+
+@media (max-width: 760px) {
+    .app-promo { grid-template-columns: 1fr; gap: 18px; padding: 20px; }
+    .app-promo-qr { justify-self: start; }
+    .app-promo-points { flex-direction: column; gap: 4px; }
+}
+
+/* ── 로그인 대시보드: 앱 안내 스트립 ─────────────────────── */
+.app-strip {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(135deg, #10233f 0%, #1b4b80 100%);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    position: relative;
+}
+.app-strip[hidden] { display: none; }
+
+.app-strip-icon {
+    width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
+    background: #fff;
+}
+.app-strip-body { flex: 1; min-width: 0; }
+.app-strip-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 2px;
+}
+.app-strip-new {
+    font-size: 9px; font-weight: 800; letter-spacing: .06em;
+    background: #4ade80; color: #06301a;
+    padding: 2px 6px; border-radius: 5px;
+}
+.app-strip-desc { font-size: 12px; color: rgba(255,255,255,.72); line-height: 1.5; }
+
+.app-strip-qr {
+    position: relative;
+    display: block;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: #fff;
+    padding: 3px;
+    line-height: 0;
+    cursor: zoom-in;
+}
+.app-strip-qr > img { width: 72px; height: 72px; display: block; }
+
+/* 썸네일(72px)은 스캔이 불가능하므로 hover/focus 시 스캔 가능한 크기로 확대 */
+.app-strip-qr-pop {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    right: 0;
+    z-index: 30;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    background: #fff;
+    border-radius: 10px;
+    padding: 14px 14px 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.35);
+    opacity: 0; visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity .15s, transform .15s, visibility .15s;
+}
+.app-strip-qr:hover .app-strip-qr-pop,
+.app-strip-qr:focus .app-strip-qr-pop {
+    opacity: 1; visibility: visible; transform: none;
+}
+.app-strip-qr-pop img { width: 160px; height: 160px; display: block; }  /* 스캔 가능한 최소 크기 이상 */
+.app-strip-qr-pop em {
+    font-style: normal; font-size: 10px; font-weight: 600;
+    color: #5f6368; line-height: 1.2; white-space: nowrap;
+}
+
+.app-strip-close {
+    background: transparent; border: none;
+    color: rgba(255,255,255,.55);
+    font-size: 12px; line-height: 1;
+    padding: 6px; border-radius: 6px; flex-shrink: 0;
+    transition: color .15s, background .15s;
+}
+.app-strip-close:hover { color: #fff; background: rgba(255,255,255,.12); }
+
+@media (max-width: 820px) {
+    .app-strip { flex-wrap: wrap; padding-right: 40px; }
+    .app-strip-qr { display: none; }          /* 좁은 화면은 대부분 모바일 — 버튼으로 바로 이동 */
+    .app-strip-body { flex: 1 1 100%; order: 2; }
+    .app-strip .app-store-btn { order: 3; }
+    .app-strip-close { position: absolute; top: 8px; right: 8px; }
 }
