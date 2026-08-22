@@ -7,7 +7,7 @@
 <div class="d-flex align-items-center" style="flex:1; min-width:0;">
     <i class="bi bi-database me-2" style="color:#1a73e8;font-size:18px;flex-shrink:0;"></i>
     <span style="font-size:17px;font-weight:500;color:#202124;">식품첨가물 DB</span>
-    <span class="ms-3 d-none d-md-inline" style="font-size:12px;color:#5f6368;">식품첨가물의 영문명, 이명, CAS No., INS No., E No.를 제공합니다. 수정이 필요한 경우 데이터 수정 요청을 통해 반영할 수 있습니다.</span>
+    <span class="ms-3 d-none d-md-inline" style="font-size:12px;color:#5f6368;">표시기준 표4·5·6에 따른 원재료 표시명과 주용도, 영문명·이명·CAS/INS/E No.를 제공합니다. 수정이 필요한 경우 데이터 수정 요청을 통해 반영할 수 있습니다.</span>
 </div>
 {% include "includes/_topbar_account.html" %}
 {% endblock %}
@@ -237,6 +237,34 @@
         font-size: 14px;
     }
 
+    /* 표시기준 표 배지 (표4는 명칭 단독 표시 불가라 눈에 띄게) */
+    .tbl-badge {
+        display: inline-block;
+        font-size: 10px; font-weight: 700; line-height: 1;
+        padding: 3px 6px; border-radius: 4px; margin-right: 3px;
+        white-space: nowrap;
+    }
+    .tbl-badge-4 { background: #fce8e6; color: #b31412; }
+    .tbl-badge-5 { background: #e8f0fe; color: #1558b0; }
+    .tbl-badge-6 { background: #e6f4ea; color: #1a7336; }
+
+    .additive-help { color: #9aa0a6; font-size: 11px; cursor: help; }
+
+    /* 원재료 표시명 후보 — 클릭 복사 */
+    .disp-opt-cell { white-space: normal; }
+    .disp-opt {
+        display: inline-block;
+        max-width: 100%;
+        font-size: 11.5px; line-height: 1.3;
+        padding: 3px 8px; margin: 1px 3px 1px 0;
+        background: #e0e8ff; border: 1px solid #c4d3f8; color: #2c4fa0;
+        border-radius: 11px; cursor: pointer;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        vertical-align: middle;
+    }
+    .disp-opt:hover { background: #cfdcff; }
+    .disp-opt.copied { background: #e6f4ea; border-color: #a8d5b5; color: #1a7336; }
+
     /* 헤더에서의 버튼 그룹 — 검색 폼과 한 줄에 유지 (줄바꿈·축소 금지) */
     .header-buttons {
         display: flex;
@@ -315,6 +343,7 @@
                 <option value="ins_no" {% if search_field == 'ins_no' %}selected{% endif %}>INS No.</option>
                 <option value="e_no" {% if search_field == 'e_no' %}selected{% endif %}>E No.</option>
                 <option value="cas_no" {% if search_field == 'cas_no' %}selected{% endif %}>CAS No.</option>
+                <option value="main_purpose" {% if search_field == 'main_purpose' %}selected{% endif %}>주용도</option>
             </select>
             <!-- 통합 검색 -->
             <div class="input-group" style="flex: 1 1 auto; min-width: 0;">
@@ -357,12 +386,18 @@
                         <input type="checkbox" id="check-all" onclick="toggleAllCheckboxes(this)">
                     </th>
                     {% endif %}
-                    <th style="width: 18%;">식품첨가물명</th>
-                    <th style="width: 22%;">영문명</th>
-                    <th style="width: 20%;">이명</th>
-                    <th style="width: 10%;">INS No.</th>
-                    <th style="width: 8%;">E No.</th>
-                    <th style="width: 12%;">CAS No.</th>
+                    <th style="width: 16%;">식품첨가물명</th>
+                    <th style="width: 9%;">표시구분
+                        <i class="bi bi-question-circle additive-help" tabindex="0"
+                           title="「식품등의 표시기준」 표4: 명칭+용도 병기 필수 / 표5: 명칭 또는 간략명 / 표6: 명칭·간략명·용도 중 택1"></i>
+                    </th>
+                    <th style="width: 21%;">원재료 표시명 (사용 가능)</th>
+                    <th style="width: 9%;">주용도</th>
+                    <th style="width: 16%;">영문명</th>
+                    <th style="width: 11%;">이명</th>
+                    <th style="width: 6%;">INS</th>
+                    <th style="width: 5%;">E No.</th>
+                    <th style="width: 7%;">CAS No.</th>
                 </tr>
             </thead>
             <tbody>
@@ -382,6 +417,27 @@
                     {% endif %}
                     <td class="ellipsis-cell" title="{{ additive.name_kr }}">
                         <strong>{{ additive.name_kr }}</strong>
+                    </td>
+                    {# 표시구분 — 표4는 명칭 단독 표시 불가라 강조 #}
+                    <td>
+                        {% for t in additive.display_table_badges %}
+                        <span class="tbl-badge tbl-badge-{{ t.num }}"
+                              title="표{{ t.num }} · {{ t.label }}">표{{ t.num }}</span>
+                        {% empty %}
+                        <span class="text-muted">-</span>
+                        {% endfor %}
+                    </td>
+                    {# 원재료 표시명 후보 — 클릭하면 복사 #}
+                    <td class="disp-opt-cell">
+                        {% for opt in additive.display_name_options %}
+                        <button type="button" class="disp-opt" onclick="copyDisplayName(this)"
+                                title="클릭하면 복사됩니다">{{ opt }}</button>
+                        {% empty %}
+                        <span class="text-muted" title="표시기준 표4·5·6 해당 없음 — 명칭 그대로 표시">{{ additive.name_kr }}</span>
+                        {% endfor %}
+                    </td>
+                    <td class="ellipsis-cell" title="{{ additive.main_purpose|default:'' }}">
+                        {{ additive.main_purpose|default:"-" }}
                     </td>
                     <td class="ellipsis-cell" title="{{ additive.name_en|default:'' }}">
                         {{ additive.name_en|default:"-" }}
@@ -409,7 +465,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if user.is_authenticated %}7{% else %}6{% endif %}" class="text-center text-muted py-5">검색 결과가 없습니다.</td>
+                    <td colspan="{% if user.is_authenticated %}10{% else %}9{% endif %}" class="text-center text-muted py-5">검색 결과가 없습니다.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -506,5 +562,35 @@
 
 <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 <script src="{% static 'js/label/food_additive_search.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script>
+// 원재료 표시명 후보 클릭 → 클립보드 복사 (표시사항에 그대로 붙여넣어 쓰라고)
+function copyDisplayName(btn) {
+    var text = btn.textContent.trim();
+    var done = function () {
+        var prev = btn.textContent;
+        btn.classList.add('copied');
+        btn.textContent = '복사됨';
+        setTimeout(function () {
+            btn.classList.remove('copied');
+            btn.textContent = prev;
+        }, 900);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done).catch(function () { fallback(text, done); });
+    } else {
+        fallback(text, done);
+    }
+    function fallback(t, cb) {
+        // http 로컬 환경 등 Clipboard API 미지원 시
+        var ta = document.createElement('textarea');
+        ta.value = t;
+        ta.style.cssText = 'position:fixed;opacity:0;';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); cb(); } catch (e) { /* 무시 */ }
+        document.body.removeChild(ta);
+    }
+}
+</script>
 
 {% endblock %}

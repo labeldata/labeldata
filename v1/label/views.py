@@ -3243,15 +3243,6 @@ def my_ingredient_pagination_info(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-def _parse_short_names(short_name_value):
-    """간략명 파싱 헬퍼 함수"""
-    if not short_name_value:
-        return []
-    short_name_str = str(short_name_value).strip()
-    return [s.strip() for s in short_name_str.split(',') 
-            if s.strip() and s.strip() not in {"Y", "N", "-"}]
-
-
 @login_required
 @csrf_exempt
 def get_additive_regulation(request):
@@ -3304,110 +3295,27 @@ def get_additive_regulation(request):
                 'buttons': buttons
             })
 
-        # 2. 기타 식품첨가물 (표 정보 포함)
+        # 2. 기타 식품첨가물 — 표시기준 표4·5·6 규칙
+        # 표 판정과 용도 목록은 FoodAdditive 모델 헬퍼가 단일 기준으로 계산한다.
         try:
             additive = FoodAdditive.objects.get(name_kr=food_type)
-            
-            buttons = []
-            applicable_tables = []
-            table_info = {}
-            
-            # 표 4: 명칭+용도 (명칭(용도1), 명칭(용도2) 형태만 생성)
-            # 표 4: 명칭+용도 (명칭(용도1), 명칭(용도2) 형태만 생성)
-            if str(additive.alias_4).strip().upper() == 'Y':
-                applicable_tables.append("4")
-                table_info['4'] = '명칭+용도'
-                if additive.name_kr:
-                    # 각 용도 필드를 체크하여 'Y'로 설정된 용도 추출
-                    purpose_fields = [
-                        ('color_agent', '착색료'),
-                        ('sweetener', '감미료'),
-                        ('nutrient_enhancer', '영양강화제'),
-                        ('preservative', '보존료'),
-                        ('antioxidant', '산화방지제'),
-                        ('bleaching_agent', '표백제'),
-                        ('color_fixative', '발색제'),
-                        ('stabilizer', '안정제'),
-                        ('emulsifier', '유화제'),
-                        ('thickener', '증점제'),
-                        ('coagulant', '응고제'),
-                        ('leavening_agent', '팽창제'),
-                        ('sterilizer', '살균제'),
-                        ('coating_agent', '피막제'),
-                    ]
-                    
-                    purposes = []
-                    for field_name, purpose_label in purpose_fields:
-                        field_value = getattr(additive, field_name, None)
-                        if field_value and str(field_value).strip().upper() == 'Y':
-                            purposes.append(purpose_label)
-                    
-                    # "명칭(용도)" 형태의 버튼 생성
-                    for purpose in purposes:
-                        buttons.append({"value": f"{additive.name_kr}({purpose})"})
 
-            # 표 5: 명칭or간략명 (명칭, 간략명1, 간략명2... 각각 별도 버튼)
-            if str(additive.alias_5).strip().upper() == 'Y':
-                applicable_tables.append("5")
-                table_info['5'] = '명칭or간략명'
-                # 1. 명칭 버튼 추가
-                if additive.name_kr:
-                    buttons.append({"value": additive.name_kr})
-                # 2. 간략명 처리
-                for short_name in _parse_short_names(additive.short_name):
-                    buttons.append({"value": short_name})
+            buttons = [{"value": v} for v in additive.display_name_options()]
+            applicable_tables = additive.display_tables
 
-            # 표 6: 명칭or간략명or용도 (명칭, 간략명1, 간략명2, 용도1, 용도2... 각각 별도 버튼)
-            if str(additive.alias_6).strip().upper() == 'Y':
-                applicable_tables.append("6")
-                table_info['6'] = '명칭or간략명or용도'
-                
-                # 1. 명칭 버튼 추가
-                if additive.name_kr:
-                    buttons.append({"value": additive.name_kr})
-                
-                # 2. 간략명 처리
-                for short_name in _parse_short_names(additive.short_name):
-                    buttons.append({"value": short_name})
-                
-                # 3. 용도 처리 (각 용도 필드를 체크)
-                purpose_fields = [
-                    ('color_agent', '착색료'),
-                    ('sweetener', '감미료'),
-                    ('nutrient_enhancer', '영양강화제'),
-                    ('preservative', '보존료'),
-                    ('antioxidant', '산화방지제'),
-                    ('bleaching_agent', '표백제'),
-                    ('color_fixative', '발색제'),
-                    ('stabilizer', '안정제'),
-                    ('emulsifier', '유화제'),
-                    ('thickener', '증점제'),
-                    ('coagulant', '응고제'),
-                    ('leavening_agent', '팽창제'),
-                    ('sterilizer', '살균제'),
-                    ('coating_agent', '피막제'),
-                ]
-                
-                for field_name, purpose_label in purpose_fields:
-                    field_value = getattr(additive, field_name, None)
-                    if field_value and str(field_value).strip().upper() == 'Y':
-                        buttons.append({"value": purpose_label})
-
-            # 표 정보가 있으면 반환
             if buttons:
                 table_numbers = ", ".join(applicable_tables)
-                # 가장 큰 표 번호의 타입을 헤더에 표시
                 last_table = applicable_tables[-1] if applicable_tables else None
-                table_type = f"({table_info[last_table]})" if last_table and last_table in table_info else ""
+                table_type = f"({FoodAdditive.TABLE_LABELS[last_table]})" if last_table else ""
                 header = f"※ 식품첨가물공전 표 {table_numbers}{table_type}에 해당되어 선택하여 입력하세요."
-                
+
                 return JsonResponse({
                     'success': True,
                     'has_regulation': True,
                     'header': header,
                     'buttons': buttons
                 })
-            
+
             # 표 정보가 없으면 빈 반환
             return JsonResponse({'success': True, 'has_regulation': False})
 
@@ -4013,6 +3921,7 @@ def food_additive_search(request):
         'ins_no': 'ins_no',
         'e_no': 'e_no',
         'cas_no': 'cas_no',
+        'main_purpose': 'main_purpose',   # 감미료·보존료 등 용도로 찾기
     }
 
     # 통합 검색어 처리: search_field에 따라 단일 필드 또는 OR 검색
@@ -4033,7 +3942,8 @@ def food_additive_search(request):
                         q_obj |= (
                             _Q(name_kr__icontains=term) | _Q(name_en__icontains=term) |
                             _Q(alias_name__icontains=term) | _Q(ins_no__icontains=term) |
-                            _Q(e_no__icontains=term) | _Q(cas_no__icontains=term)
+                            _Q(e_no__icontains=term) | _Q(cas_no__icontains=term) |
+                            _Q(main_purpose__icontains=term) | _Q(short_name__icontains=term)
                         )
                 additives_qs = additives_qs.filter(q_obj)
             else:
@@ -4043,7 +3953,9 @@ def food_additive_search(request):
                     Q(alias_name__icontains=search_q) |
                     Q(ins_no__icontains=search_q) |
                     Q(e_no__icontains=search_q) |
-                    Q(cas_no__icontains=search_q)
+                    Q(cas_no__icontains=search_q) |
+                    Q(main_purpose__icontains=search_q) |
+                    Q(short_name__icontains=search_q)
                 )
 
     # 각 필드별 검색 조건 적용 (개별 필드 검색, LIKE 검색)
@@ -4146,10 +4058,17 @@ def copy_additives_to_ingredients(request):
         
         created_count = 0
         skipped_count = 0
-        
+        pending_count = 0   # 표시명을 확정할 수 없어 비워둔 건수
+
+        # 요청에 담긴 이름으로 원본 레코드를 한 번에 조회 (표시기준 판정에 사용)
+        names = [a.get('name_kr') for a in additives if a.get('name_kr')]
+        additive_map = {a.name_kr: a for a in FoodAdditive.objects.filter(name_kr__in=names)}
+
         for additive_data in additives:
             name_kr = additive_data.get('name_kr')
-            
+            if not name_kr:
+                continue
+
             # 이미 존재하는지 확인
             existing = MyIngredient.objects.filter(
                 user_id=request.user,
@@ -4159,24 +4078,40 @@ def copy_additives_to_ingredients(request):
             if existing:
                 skipped_count += 1
                 continue
-            
-            # 새 원료 생성 (식품첨가물명을 모든 필드에 입력)
+
+            # 원재료 표시명은 표시기준 표4·5·6 규칙으로 결정한다.
+            # 표4(명칭+용도) 대상에 명칭만 넣으면 표시기준에 어긋나므로,
+            # 용도가 하나로 확정되지 않으면 비워두고 원료 상세에서 고르게 한다.
+            additive = additive_map.get(name_kr)
+            display_name = additive.default_display_name() if additive else name_kr
+            if not display_name:
+                pending_count += 1
+
             MyIngredient.objects.create(
                 user_id=request.user,
-                prdlst_nm=name_kr,  # 원료명
-                food_category='additive',  # 식품구분 (영문 코드)
-                prdlst_dcnm=name_kr,  # 식품유형
-                rawmtrl_nm=name_kr,  # 원재료명
-                ingredient_display_name=name_kr,  # 원재료 표시명
-                delete_YN='N'  # 삭제되지 않은 상태
+                prdlst_nm=name_kr,                        # 원료명
+                food_category='additive',                 # 식품구분 (영문 코드)
+                prdlst_dcnm=name_kr,                      # 식품유형 (표시규정 조회 키)
+                rawmtrl_nm=name_kr,                       # 원재료명
+                ingredient_display_name=display_name or '',  # 원재료 표시명
+                delete_YN='N'
             )
             created_count += 1
         
-        message = f'{created_count}개의 식품첨가물이 내 원료로 복사되었습니다.'
+        lines = [f'{created_count}개의 식품첨가물이 내 원료로 복사되었습니다.']
         if skipped_count > 0:
-            message += f' ({skipped_count}개는 이미 존재하여 건너뛰었습니다.)'
-        
-        return JsonResponse({'success': True, 'message': message})
+            lines[0] += f' ({skipped_count}개는 이미 존재하여 건너뛰었습니다.)'
+        if pending_count > 0:
+            lines.append(
+                f'{pending_count}개는 "명칭+용도"로 표시해야 하는 첨가물이라 표시명을 비워뒀습니다. '
+                f'원료 상세에서 표시규정 버튼으로 선택해 주세요.'
+            )
+
+        return JsonResponse({
+            'success': True,
+            'message': '\n'.join(lines),
+            'pending': pending_count,
+        })
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})

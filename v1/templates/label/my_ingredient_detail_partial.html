@@ -230,6 +230,17 @@
     font-size: 0.82rem;
   }
 
+  /* 첨가물 DB 바로가기 — 표시명 후보가 안 뜨거나 직접 확인하고 싶을 때 */
+  .regulation-card-link {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #2c4fa0;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .regulation-card-link:hover { text-decoration: underline; color: #1a3a80; }
+  .regulation-card-link i { font-size: 0.72rem; }
+
   .regulation-card-text {
     font-size: 0.78rem;
     color: #374060;
@@ -333,6 +344,11 @@
                                     <div class="regulation-card-header">
                                         <i class="bi bi-info-circle-fill"></i>
                                         <span>식품첨가물 표시규정</span>
+                                        <a href="{% url 'label:food_additive_search' %}" target="_blank" rel="noopener"
+                                           class="regulation-card-link ms-auto"
+                                           title="식품첨가물 DB에서 표시구분·주용도·표시명을 찾아봅니다">
+                                            <i class="bi bi-box-arrow-up-right"></i> 첨가물 DB
+                                        </a>
                                     </div>
                                     <div id="display_regulation_display" class="regulation-card-text"></div>
                                     <div id="display_regulation_buttons" style="display: none;" class="regulation-card-buttons d-flex flex-wrap gap-2"></div>

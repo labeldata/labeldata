@@ -509,6 +509,99 @@ class FoodAdditive(models.Model):
 
     notes = models.TextField(blank=True, null=True, verbose_name="비고")
 
+    # ── 표시기준 관련 헬퍼 ───────────────────────────────────────────────────
+    # 「식품등의 표시기준」 표4·5·6 에 따른 원재료 표시명 규칙.
+    #   표4 = 명칭과 용도를 함께 표시 (예: "D-소비톨(감미료)")
+    #   표5 = 명칭 또는 간략명
+    #   표6 = 명칭 또는 간략명 또는 용도
+    # 용도 플래그는 표4·표6 대상 첨가물에만 채워져 있다.
+    PURPOSE_FIELDS = (
+        ('color_agent',       '착색료'),
+        ('sweetener',         '감미료'),
+        ('nutrient_enhancer', '영양강화제'),
+        ('preservative',      '보존료'),
+        ('antioxidant',       '산화방지제'),
+        ('bleaching_agent',   '표백제'),
+        ('color_fixative',    '발색제'),
+        ('stabilizer',        '안정제'),
+        ('emulsifier',        '유화제'),
+        ('thickener',         '증점제'),
+        ('coagulant',         '응고제'),
+        ('leavening_agent',   '팽창제'),
+        ('sterilizer',        '살균제'),
+        ('coating_agent',     '피막제'),
+    )
+    TABLE_LABELS = {'4': '명칭+용도', '5': '명칭·간략명', '6': '명칭·간략명·용도'}
+
+    @staticmethod
+    def _is_y(value) -> bool:
+        return str(value or '').strip().upper() == 'Y'
+
+    @property
+    def purposes(self) -> list:
+        """용도 플래그가 Y 인 용도명 목록 (예: ['감미료'])"""
+        return [label for field, label in self.PURPOSE_FIELDS
+                if self._is_y(getattr(self, field, None))]
+
+    @property
+    def display_tables(self) -> list:
+        """해당되는 표시기준 표 번호 목록 (예: ['4', '5'])"""
+        return [num for num, flag in (('4', self.alias_4), ('5', self.alias_5), ('6', self.alias_6))
+                if self._is_y(flag)]
+
+    @property
+    def display_table_badges(self) -> list:
+        """템플릿 표시용 — [{'num': '4', 'label': '명칭+용도'}, ...] (dict 는 템플릿에서 키 조회가 안 된다)"""
+        return [{'num': n, 'label': self.TABLE_LABELS[n]} for n in self.display_tables]
+
+    # 간략명 칼럼에 플래그 문자가 섞여 들어온 적이 있어 걸러낸다
+    _SHORT_NAME_SENTINELS = {'Y', 'N', '-'}
+
+    @property
+    def short_names(self) -> list:
+        """간략명 목록 (쉼표 구분 문자열을 분리)"""
+        return [t for t in (x.strip() for x in str(self.short_name or '').split(','))
+                if t and t not in self._SHORT_NAME_SENTINELS]
+
+    def display_name_options(self) -> list:
+        """
+        표4·5·6 규칙에 따라 원재료 표시명으로 쓸 수 있는 후보 목록.
+        원료 상세의 '식품첨가물 표시규정' 버튼과 첨가물 DB 목록이 같은 값을 쓴다.
+        """
+        options = []
+        def add(v):
+            if v and v not in options:
+                options.append(v)
+
+        tables = self.display_tables
+        if '4' in tables:
+            # 표4는 명칭 단독 표시가 불가 — 반드시 "명칭(용도)"
+            for purpose in self.purposes:
+                add(f'{self.name_kr}({purpose})')
+        if '5' in tables:
+            add(self.name_kr)
+            for sn in self.short_names:
+                add(sn)
+        if '6' in tables:
+            add(self.name_kr)
+            for sn in self.short_names:
+                add(sn)
+            for purpose in self.purposes:
+                add(purpose)
+        return options
+
+    def default_display_name(self):
+        """
+        복사·자동입력에 쓸 기본 표시명. 확정할 수 없으면 None 을 돌려주고,
+        사용자가 원료 상세에서 직접 고르게 한다.
+          - 표4 대상은 명칭만으로는 표시기준 위반이므로 용도가 하나일 때만 확정
+          - 표4가 아니면 명칭이 유효한 표시명
+        """
+        if '4' in self.display_tables:
+            purposes = self.purposes
+            return f'{self.name_kr}({purposes[0]})' if len(purposes) == 1 else None
+        return self.name_kr
+
     class Meta:
         db_table = "food_additives"
         indexes = [
