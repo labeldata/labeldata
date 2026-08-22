@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}{% if mode == 'create' %}원료 등록{% else %}원료 수정{% endif %} - LabelData{% endblock %}
+{% block title %}{% if mode == 'create' %}원료 등록{% else %}원료 수정{% endif %}{% endblock %}
 
 {% block extra_css %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
