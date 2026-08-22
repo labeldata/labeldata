@@ -75,12 +75,9 @@
                 </a>
                 <div class="border-top my-3"></div>
 
-                <!-- 제품 조회 메뉴 -->
-                <a href="{% url 'label:food_item_list_domestic' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list_domestic' %}active{% endif %}">
-                    <i class="bi bi-search" style="flex-shrink:0;"></i><span class="nav-label">제품 조회(국내)</span>
-                </a>
-                <a href="{% url 'label:food_item_list_imported' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list_imported' %}active{% endif %}">
-                    <i class="bi bi-globe" style="flex-shrink:0;"></i><span class="nav-label">제품 조회(수입)</span>
+                {# 제품 조회 — 국내/수입은 화면 안 탭으로 전환한다 (메뉴 통합) #}
+                <a href="{% url 'label:food_item_list_domestic' %}" class="nav-link {% if request.resolver_match.url_name == 'food_item_list_domestic' or request.resolver_match.url_name == 'food_item_list_imported' or request.resolver_match.url_name == 'food_item_list' %}active{% endif %}">
+                    <i class="bi bi-search" style="flex-shrink:0;"></i><span class="nav-label">제품 조회</span>
                 </a>
                 <a href="{% url 'label:food_additive_search' %}" class="nav-link {% if request.resolver_match.url_name == 'food_additive_search' %}active{% endif %}">
                     <i class="bi bi-database" style="flex-shrink:0;"></i><span class="nav-label">식품첨가물 DB</span>

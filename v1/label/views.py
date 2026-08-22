@@ -29,6 +29,7 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 # --- [수정] Local Application Imports ---
 from .constants import CATEGORY_CHOICES
 from .forms import LabelCreationForm, MyIngredientsForm
+from v1.label.services import product_search
 from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem, 
                      FoodType, ImportedFood, LabelIngredientRelation, MyIngredient, 
                      MyLabel, MyPhrase)
@@ -195,36 +196,19 @@ def food_item_list(request):
                 imported_search_values[query_param] = value
                 has_search_params = True
 
-        # q 파라미터로 검색한 경우 OR 조건 추가 (search_field에 따라 필드 제한)
+        # q 파라미터 검색 (조건 생성은 product_search 가 담당 - 탭 배지 건수와 동일 기준)
         if search_q:
             imported_search_values['q'] = search_q
             has_search_params = True
-            # 수입 제품 필드명 매핑
-            _imported_field_map = {
-                'prduct_korean_nm': 'prduct_korean_nm',
-                'itm_nm': 'itm_nm',
-                'xport_ntncd_nm': 'xport_ntncd_nm',
-                'bsn_ofc_name': 'bsn_ofc_name',
-                'ovsmnfst_nm': 'ovsmnfst_nm',
-            }
-            if search_field != 'all' and search_field in _imported_field_map:
-                imported_conditions &= Q(**{f"{_imported_field_map[search_field]}__icontains": search_q})
-            else:
-                imported_conditions &= (
-                    Q(prduct_korean_nm__icontains=search_q) |
-                    Q(itm_nm__icontains=search_q) |
-                    Q(xport_ntncd_nm__icontains=search_q) |
-                    Q(bsn_ofc_name__icontains=search_q) |
-                    Q(ovsmnfst_nm__icontains=search_q)
-                )
+            imported_conditions &= product_search.imported_q(search_q, search_field)
 
         if has_search_params:
             imported_items_qs = ImportedFood.objects.filter(imported_conditions).order_by(sort_field)
         else:
             imported_items_qs = ImportedFood.objects.none()
 
-        total_count = imported_items_qs.count()
         paginator, page_obj, page_range = paginate_queryset(imported_items_qs, page_number, items_per_page)
+        total_count = paginator.count   # Paginator 가 이미 센 값을 재사용 (COUNT 중복 실행 방지)
         search_values = imported_search_values
     else:
         # 국내제품: 단일 컬럼 정렬만 허용 (기본: -prms_dt)
@@ -234,51 +218,26 @@ def food_item_list(request):
         search_conditions, search_values = get_search_conditions(request, search_fields)
 
         # q 파라미터로 검색한 경우: search_field에 따라 단일 필드 또는 OR 전체 검색
+        #
+        # 품목보고번호는 DB 에 하이픈이 저장돼 있지 않다(전수 확인). 이전 구현은 컬럼에
+        # REPLACE() 를 걸어 모든 행에 함수를 실행했는데, 검색어 쪽에서 하이픈을 지우면
+        # 인덱스를 그대로 쓸 수 있다.
+        search_q_normalized = product_search.normalize_report_no(search_q) if search_q else ''
         if search_q:
             search_values['q'] = search_q
-            search_q_normalized = search_q.replace('-', '')  # 품목보고번호 하이픈 무시 검색용
-            _domestic_field_map = {
-                'prdlst_nm': 'prdlst_nm',
-                'prdlst_report_no': 'prdlst_report_no',
-                'prdlst_dcnm': 'prdlst_dcnm',
-                'bssh_nm': 'bssh_nm',
-            }
-            if search_field != 'all' and search_field in _domestic_field_map:
-                if search_field == 'prdlst_report_no':
-                    pass  # 쿼리셋 레벨에서 어노테이션(report_no_normalized)으로 처리
-                else:
-                    search_conditions &= Q(**{f"{_domestic_field_map[search_field]}__icontains": search_q})
-            else:
-                search_conditions &= (
-                    Q(prdlst_nm__icontains=search_q) |
-                    Q(report_no_normalized__icontains=search_q_normalized) |
-                    Q(prdlst_dcnm__icontains=search_q) |
-                    Q(bssh_nm__icontains=search_q)
-                )
-        else:
-            search_q_normalized = ''
+            search_conditions &= product_search.domestic_q(search_q, search_field)
 
         has_search_params = any(search_values.values())  # 검색 파라미터 유무 확인
 
         if has_search_params:
             from django.db.models import Case, When, Value, IntegerField
-            from django.db.models.functions import Replace
-            # 품목보고번호 하이픈 무시 검색을 위해 어노테이션 적용
-            base_qs = FoodItem.objects.annotate(
-                report_no_normalized=Replace('prdlst_report_no', Value('-'), Value(''))
-            )
-            if search_q and search_field == 'prdlst_report_no':
-                # 품목보고번호 단독 검색: 하이픈 무시
-                food_items_qs = base_qs.filter(
-                    search_conditions,
-                    report_no_normalized__icontains=search_q_normalized
-                ).order_by(sort_field)
-            elif search_q and search_field == 'all':
-                # 전체 검색: 하이픈 무시 품목보고번호 포함, 정확 일치 우선 정렬
+            base_qs = FoodItem.objects.all()
+            if search_q and search_field == 'all':
+                # 정확 일치를 상단으로
                 food_items_qs = base_qs.filter(search_conditions).annotate(
                     _match_priority=Case(
                         When(prdlst_nm__iexact=search_q, then=Value(0)),
-                        When(report_no_normalized__iexact=search_q_normalized, then=Value(0)),
+                        When(prdlst_report_no__iexact=search_q_normalized, then=Value(0)),
                         default=Value(1),
                         output_field=IntegerField(),
                     )
@@ -288,8 +247,8 @@ def food_item_list(request):
         else:
             food_items_qs = FoodItem.objects.none()
 
-        total_count = food_items_qs.count()
         paginator, page_obj, page_range = paginate_queryset(food_items_qs, page_number, items_per_page)
+        total_count = paginator.count   # Paginator 가 이미 센 값을 재사용 (COUNT 중복 실행 방지)
         # imported_mode 변수를 domestic 케이스에서도 정의
         imported_mode = False
 
@@ -298,6 +257,25 @@ def food_item_list(request):
 
     # 검색 조건이 있는지 확인
     search_result_count = total_count if has_search_params else None
+
+    # ── 탭 배지 ──────────────────────────────────────────────────────────────
+    # 한 번 검색하면 국내·수입 양쪽 건수를 모두 보여준다.
+    # 찾는 제품이 국내산인지 수입산인지 모르고 오는 경우가 많아, 탭만 눌러 넘나들 수 있게 한다.
+    if search_q:
+        other_count = product_search.counterpart_count(food_category, search_q, search_field)
+    else:
+        other_count = 0
+    if food_category == 'imported':
+        tab_counts = {'domestic': other_count, 'imported': total_count}
+    else:
+        tab_counts = {'domestic': total_count, 'imported': other_count}
+
+    # ── 검색 전 안내 화면 ────────────────────────────────────────────────────
+    # 이전에는 검색 전 빈 결과에 "데이터가 없습니다."만 떠서 DB가 비어 보였다.
+    intro = None if has_search_params else product_search.get_intro_data()
+
+    # 탭을 유지한 채 페이지 이동/정렬하기 위한 쿼리스트링
+    querystring_without_tab = get_querystring_without(request, ["page", "food_category"])
 
     # Context에 search_query 추가 (템플릿에서 사용)
     search_query = search_q or request.GET.get('prdlst_nm', '')
@@ -318,6 +296,10 @@ def food_item_list(request):
         "imported_mode": imported_mode,
         "imported_items": page_obj if imported_mode else [],
         "search_result_count": search_result_count,
+        "has_search_params": has_search_params,
+        "tab_counts": tab_counts,
+        "intro": intro,
+        "querystring_without_tab": querystring_without_tab,
     }
 
     return render(request, _get_template(request, "label/food_item_list.html"), context)

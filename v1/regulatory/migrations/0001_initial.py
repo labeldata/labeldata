@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('bom', '0002_rename_fields'),
+        ('bom', '0002_rename_is_fields'),
         ('label', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]

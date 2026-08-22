@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('label', '0019_mylabel_basic_display_type_and_more'),
+        ('label', '0007_add_display_type_fields'),
         ('regulatory', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
