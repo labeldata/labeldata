@@ -56,11 +56,9 @@
                   flex-shrink: 0; position: relative; z-index: var(--z-filter); }
 .rf-row1    { display: flex; align-items: center; gap: 8px;
               padding: 8px 16px; flex-wrap: nowrap; min-width: 0; }
-/* 목록을 거르는 컨트롤이라 좌측 목록 패널 안(목록 헤더 아래)에 둔다.
-   폭이 좁아졌으므로 줄바꿈을 허용하고 칩 간격을 조금 좁힌다. */
-.rf-row2    { padding: 7px 16px; border-bottom: 1px solid var(--c-border-light);
-              background: var(--c-bg-page, #f8f9fa); display: flex; align-items: center;
-              flex-shrink: 0; flex-wrap: wrap; row-gap: 5px; }
+/* 목록 헤더 안에 들어가므로 자체 여백·테두리·배경을 두지 않는다 */
+.rf-row2    { display: flex; align-items: center; flex: 1; min-width: 0;
+              flex-wrap: nowrap; padding: 0; border: 0; background: none; gap: 5px; }
 .rf-search-wrap { flex: 1; min-width: 140px; max-width: 260px; }
 .rf-date-wrap   { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
 .rf-date-wrap .rs-date-input { width: 100px; flex: 0 0 auto; min-width: 0; }
@@ -82,8 +80,9 @@
 #catToggleBtn.collapsed { transform: rotate(180deg); }
 
 /* 등급 칩 영역 */
-.rf-risk-chips { display: flex; gap: 4px; align-items: center; flex: 1;
-                 position: relative; flex-wrap: wrap; }
+/* 목록 헤더 한 줄에 유지한다. 칩이 넘치면 줄바꿈 대신 가로 스크롤(.rf-row2)로 넘긴다 */
+.rf-risk-chips { display: flex; gap: 5px; align-items: center; flex: 1; min-width: 0;
+                 position: relative; flex-wrap: nowrap; }
 
 /* 건수 표시 */
 .rf-count        { font-size: 13px; color: var(--c-text-secondary); white-space: nowrap;
@@ -215,24 +214,36 @@ html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
 /* ── 7. 등급 칩 필터 ────────────────────────────────────────── */
 .rs-risk-chips   { display: flex; gap: 4px; padding: 6px 12px 7px;
                    border-bottom: 1px solid var(--c-border-light); flex-wrap: wrap; align-items: center; }
-.rs-risk-chip    { border-radius: 14px; border: 1.5px solid #dadce0; background: #fff;
-                   padding: 4px 10px; font-size: 13px; font-weight: 600; cursor: pointer;
-                   color: var(--c-text-secondary); transition: all .15s; white-space: nowrap; }
+/* 사이트 공통 버튼(.v2-action-btn-outline)과 같은 톤 — 흰 배경, 얇은 테두리, 13px */
+.rs-risk-chip    { display: inline-flex; align-items: center; gap: 5px;
+                   border-radius: 16px; border: 1px solid #dadce0; background: #fff;
+                   padding: 4px 9px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+                   color: var(--c-text-secondary); transition: background .15s, border-color .15s,
+                   color .15s; white-space: nowrap; line-height: 1.4; }
+/* 등급 표시용 작은 점 — 이모지 대신 사용 */
+.chip-dot        { font-size: 8px; }
+.chip-dot--h     { color: var(--c-danger); }
+.chip-dot--m     { color: var(--c-warn); }
+.chip-dot--l     { color: var(--c-primary); }
 .rs-risk-chip:hover    { border-color: #bbb; color: var(--c-text-primary); }
-.rs-risk-chip.active-H { background: var(--c-danger-bg); border-color: var(--c-danger); color: var(--c-danger); }
-.rs-risk-chip.active-M { background: var(--c-warn-bg); border-color: var(--c-warn); color: var(--c-warn); }
-.rs-risk-chip.active-L { background: var(--c-primary-bg); border-color: var(--c-primary); color: var(--c-primary); }
-.rs-risk-chip.active-no  { background: var(--c-warn-bg); border-color: var(--c-warn); color: var(--c-warn-text); }
-.rs-risk-chip.active-mon { background: var(--c-primary-bg); border-color: #1976d2; color: #1565c0; }
-.rs-risk-chip.active-res { background: var(--c-ok-bg); border-color: #388e3c; color: var(--c-ok-text); }
+/* 선택 상태는 옅은 배경 + 같은 계열 테두리로만 구분한다 (예전에는 채도가 높아 요란했다) */
+.rs-risk-chip.active-H,
+.rs-risk-chip.active-M,
+.rs-risk-chip.active-L,
+.rs-risk-chip.active-no,
+.rs-risk-chip.active-mon,
+.rs-risk-chip.active-res { background: var(--c-primary-bg); border-color: var(--c-primary);
+                           color: var(--c-primary); font-weight: 600; }
 .rs-chip-divider { width: 1px; height: 16px; background: #dadce0; flex-shrink: 0; margin: 0 2px; }
 
 /* ── 8. 목록 헤더 & 아이템 ──────────────────────────────────── */
-.rs-list-header  { display: flex; align-items: center; justify-content: space-between;
-                   padding: 8px 16px; border-bottom: 1px solid var(--c-border-light);
-                   background: #fff; flex-shrink: 0; min-height: 34px; }
-.rs-list-total   { font-size: 12px; color: var(--c-text-secondary); font-weight: 600; }
-.rs-sort-btn     { font-size: 11px; color: var(--c-text-secondary); text-decoration: none;
+/* 건수 · 필터 칩 · 정렬을 한 줄에 담는다 (예전에는 건수 줄과 칩 줄이 따로였다) */
+.rs-list-header  { display: flex; align-items: center; gap: 8px;
+                   padding: 7px 14px; border-bottom: 1px solid var(--c-border-light);
+                   background: #fff; flex-shrink: 0; min-height: 40px; flex-wrap: nowrap; }
+.rs-list-total   { font-size: 12px; color: var(--c-text-secondary); font-weight: 600;
+                   flex-shrink: 0; }
+.rs-sort-btn     { flex-shrink: 0; font-size: 11px; color: var(--c-text-secondary); text-decoration: none;
                    display: inline-flex; align-items: center; gap: 3px;
                    padding: 2px 6px; border-radius: var(--r-xs); border: 1px solid #dadce0;
                    background: #fff; transition: background .1s; white-space: nowrap; }
@@ -344,9 +355,10 @@ html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
 /* ── 12. 우측 패널 빈 상태 ────────────────────────────────── */
 .rd-empty        { display: flex; flex-direction: column; align-items: center;
                    justify-content: center; height: 100%; color: var(--c-text-hint); gap: 14px; }
-.rd-empty i      { font-size: 52px; }
+.rd-empty > i    { font-size: 52px; }   /* 큰 아이콘은 최상단 하나만 */
 .rd-empty-title  { font-size: 14px; color: var(--c-text-secondary); }
 .rd-empty-sub    { font-size: 12px; color: var(--c-danger); font-weight: 600; }
+.rd-empty-sub i  { font-size: 12px; }
 
 /* ── 모바일 뒤로가기 바 ─────────────────────────────────── */
 .reg-back-bar  { display: none; }
@@ -564,13 +576,18 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
    ================================================================ */
 
 /* ── 27. 키워드 버튼 (필터 row2) ────────────────────────────── */
-.rs-keyword-btn { display: inline-flex; align-items: center; gap: 4px;
-                  background: #fffbea; border: 1.5px solid #ffd700;
-                  border-radius: 16px; padding: 4px 12px;
-                  font-size: 13px; color: #5a4a00; cursor: pointer;
-                  white-space: nowrap; flex-shrink: 0;
-                  transition: background .15s, border-color .15s; font-weight: 600; }
-.rs-keyword-btn:hover { background: #fff3b0; border-color: #f5c400; }
+/* 알림 설정 버튼 — 노란 배경/금색 테두리가 유독 튀어서 사이트 공통 아웃라인 톤으로 맞춘다 */
+.rs-settings-btn { display: inline-flex; align-items: center; gap: 5px;
+                   background: #fff; border: 1px solid var(--c-primary);
+                   border-radius: 16px; padding: 4px 12px;
+                   font-size: 12.5px; color: var(--c-primary); cursor: pointer;
+                   white-space: nowrap; flex-shrink: 0; font-weight: 500;
+                   transition: background .15s; }
+.rs-settings-btn:hover { background: var(--c-primary-bg); }
+.rs-settings-badge { display: inline-flex; align-items: center; justify-content: center;
+                     min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+                     background: var(--c-primary); color: #fff;
+                     font-size: 10px; font-weight: 700; }
 .rs-keyword-badge { display: inline-flex; align-items: center; justify-content: center;
                     background: #ffd700; color: #5a4a00;
                     border-radius: 10px; min-width: 18px; height: 18px;
@@ -581,16 +598,18 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 /* ── 28. 키워드 모달 ────────────────────────────────────────── */
 .kw-modal-dialog { max-width: 600px; width: 100%; margin: 1.75rem auto; }
 .kw-modal        { border-radius: var(--r-lg); overflow: hidden; }
+/* 노란 배경/테두리가 다른 모달과 달라 튀어서 흰 배경 + 얇은 구분선으로 맞춘다 */
 .kw-modal-header { display: flex; align-items: center; gap: 8px;
-                   background: #fffbea; border-bottom: 1px solid #ffe58f;
-                   padding: 14px 18px; }
-.kw-modal-title  { font-weight: 700; font-size: 15px; color: #3d2c00; flex: 1; }
-.kw-modal-body   { padding: 16px 18px; }
+                   background: #fff; border-bottom: 1px solid var(--c-border-light);
+                   padding: 14px 20px; }
+.kw-modal-title  { font-weight: 600; font-size: 15px; color: var(--c-text-primary); flex: 1; }
+.kw-modal-title .bi { color: var(--c-primary); }
+.kw-modal-body   { padding: 16px 20px; }
 
 .kw-list-section { margin-bottom: 12px; }
 .kw-list-title   { font-size: 13px; font-weight: 600; color: var(--c-text-secondary); margin-bottom: 8px; }
 .kw-list-count   { display: inline-flex; align-items: center; justify-content: center;
-                   background: #ffd700; color: #5a4a00; border-radius: 10px;
+                   background: var(--c-primary); color: #fff; border-radius: 10px;
                    min-width: 18px; height: 18px; font-size: 11px; font-weight: 700;
                    padding: 0 5px; margin-left: 3px; }
 .kw-chips-wrap   { display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px;
@@ -1185,3 +1204,57 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   background: #fff;
   border-bottom: 1px solid var(--c-border-light);
 }
+
+/* ── 알림 설정 모달 (키워드 알림 + 수거검사 알림 통합) ──────────── */
+.as-intro {
+  padding: 10px 20px 0;
+  font-size: 12.5px;
+  color: var(--c-text-secondary);
+  line-height: 1.6;
+}
+.as-tabs {
+  padding: 8px 20px 0;
+  border-bottom: 1px solid var(--c-border-light);
+  gap: 4px;
+}
+.as-tabs .nav-link {
+  border: none; border-bottom: 2px solid transparent;
+  padding: 8px 12px; font-size: 13px; font-weight: 600;
+  color: var(--c-text-secondary); background: none;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.as-tabs .nav-link:hover   { color: var(--c-primary); }
+.as-tabs .nav-link.active  { color: var(--c-primary); border-bottom-color: var(--c-primary); background: none; }
+.as-tab-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--c-border); color: var(--c-text-secondary);
+  font-size: 10px; font-weight: 700;
+}
+.as-tabs .nav-link.active .as-tab-count { background: var(--c-primary); color: #fff; }
+
+.as-desc {
+  font-size: 12.5px; color: var(--c-text-secondary);
+  line-height: 1.7; margin: 0 0 14px;
+}
+.as-desc b { color: var(--c-text-primary); font-weight: 600; }
+
+.as-actions {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--c-border-light);
+}
+.as-actions .btn { margin-left: auto; }
+.as-btn-sm { padding: 5px 12px !important; font-size: 12.5px !important; }
+
+/* 수거검사 매칭 기준 안내 — 번호 배지를 단색으로 단순화 */
+.ipm-rule-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--c-primary-bg); color: var(--c-primary);
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+
+
+/* 정렬 버튼은 헤더 끝에 고정 — 칩이 많아져도 밀려나거나 줄바꿈되지 않는다 */
+.rs-sort-btn { flex-shrink: 0; margin-left: auto; }
