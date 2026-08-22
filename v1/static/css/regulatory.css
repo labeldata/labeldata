@@ -56,8 +56,11 @@
                   flex-shrink: 0; position: relative; z-index: var(--z-filter); }
 .rf-row1    { display: flex; align-items: center; gap: 8px;
               padding: 8px 16px; flex-wrap: nowrap; min-width: 0; }
-.rf-row2    { padding: 6px 14px; border-bottom: 1px solid var(--c-border-light);
-              background: #fff; display: flex; align-items: center; flex-shrink: 0; }
+/* 목록을 거르는 컨트롤이라 좌측 목록 패널 안(목록 헤더 아래)에 둔다.
+   폭이 좁아졌으므로 줄바꿈을 허용하고 칩 간격을 조금 좁힌다. */
+.rf-row2    { padding: 7px 16px; border-bottom: 1px solid var(--c-border-light);
+              background: var(--c-bg-page, #f8f9fa); display: flex; align-items: center;
+              flex-shrink: 0; flex-wrap: wrap; row-gap: 5px; }
 .rf-search-wrap { flex: 1; min-width: 140px; max-width: 260px; }
 .rf-date-wrap   { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
 .rf-date-wrap .rs-date-input { width: 100px; flex: 0 0 auto; min-width: 0; }
@@ -91,7 +94,10 @@
 /* 스플릿 뷰 */
 .reg-wrap    { display: flex; flex: 1; min-height: 0; overflow: hidden; background: var(--c-bg-page); }
 .reg-page .reg-sidebar,
-.reg-sidebar { flex: 0 0 40%; min-width: 300px; max-width: 520px; display: flex;
+/* 좌우 비율은 원료 관리 화면(.ingredient-list-panel: flex 0 0 45%)과 맞춘다.
+   이전에는 40% + max-width 520px 이라 넓은 화면에서 목록이 유독 좁아 보였고,
+   같은 좌우 분할 화면인데 비율이 달라 통일감이 없었다. */
+.reg-sidebar { flex: 0 0 45%; min-width: 320px; max-width: 720px; display: flex;
                flex-direction: column; background: #fff;
                border-right: 1px solid #e0e0e0; overflow: hidden; }
 .reg-main         { flex: 1; overflow: hidden; display: flex; flex-direction: column; background: var(--c-bg-page); }
@@ -223,9 +229,9 @@ html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
 
 /* ── 8. 목록 헤더 & 아이템 ──────────────────────────────────── */
 .rs-list-header  { display: flex; align-items: center; justify-content: space-between;
-                   padding: 4px 14px; border-bottom: 1px solid var(--c-border-light);
-                   background: #fff; flex-shrink: 0; min-height: 28px; }
-.rs-list-total   { font-size: 11px; color: var(--c-text-muted); }
+                   padding: 8px 16px; border-bottom: 1px solid var(--c-border-light);
+                   background: #fff; flex-shrink: 0; min-height: 34px; }
+.rs-list-total   { font-size: 12px; color: var(--c-text-secondary); font-weight: 600; }
 .rs-sort-btn     { font-size: 11px; color: var(--c-text-secondary); text-decoration: none;
                    display: inline-flex; align-items: center; gap: 3px;
                    padding: 2px 6px; border-radius: var(--r-xs); border: 1px solid #dadce0;
@@ -562,7 +568,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
                   background: #fffbea; border: 1.5px solid #ffd700;
                   border-radius: 16px; padding: 4px 12px;
                   font-size: 13px; color: #5a4a00; cursor: pointer;
-                  white-space: nowrap; margin-left: auto; flex-shrink: 0;
+                  white-space: nowrap; flex-shrink: 0;
                   transition: background .15s, border-color .15s; font-weight: 600; }
 .rs-keyword-btn:hover { background: #fff3b0; border-color: #f5c400; }
 .rs-keyword-badge { display: inline-flex; align-items: center; justify-content: center;
@@ -1162,3 +1168,20 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 }
 .rd-insp-guide-notice > .bi { font-size: 16px; color: #fa8c16; flex-shrink: 0; margin-top: 2px; }
 
+
+
+/* ── 우측 상세 패널 헤더 ────────────────────────────────────────
+   원료 관리 화면의 '상세 정보' 헤더와 같은 톤으로 맞춰, 두 화면이
+   '좌=목록 / 우=상세'라는 같은 구조로 읽히게 한다. */
+.rd-panel-header {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  background: #fff;
+  border-bottom: 1px solid var(--c-border-light);
+}

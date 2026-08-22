@@ -1,10 +1,15 @@
 import json
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods, require_POST
 from .models import LabelLayout, EditorImage
 from v1.label.models import MyLabel
+
+# 라벨 편집은 아직 개발 중이라 관리자에게만 연다.
+# 화면(product_detail.html)에서 탭을 감추는 것만으로는 API 가 그대로 열려 있어,
+# 서버에서도 함께 막는다.
+staff_only = user_passes_test(lambda u: u.is_active and u.is_staff)
 
 
 def _get_label_or_404(label_id, user):
@@ -12,6 +17,7 @@ def _get_label_or_404(label_id, user):
 
 
 @login_required
+@staff_only
 @require_http_methods(['GET'])
 def layout_get(request, label_id):
     label = _get_label_or_404(label_id, request.user)
@@ -29,6 +35,7 @@ def layout_get(request, label_id):
 
 
 @login_required
+@staff_only
 @require_POST
 def layout_save(request, label_id):
     label = _get_label_or_404(label_id, request.user)
@@ -48,6 +55,7 @@ def layout_save(request, label_id):
 
 
 @login_required
+@staff_only
 @require_POST
 def image_upload(request, label_id):
     label = _get_label_or_404(label_id, request.user)
@@ -73,6 +81,7 @@ def image_upload(request, label_id):
 
 
 @login_required
+@staff_only
 @require_http_methods(['GET'])
 def image_list(request, label_id):
     label = _get_label_or_404(label_id, request.user)

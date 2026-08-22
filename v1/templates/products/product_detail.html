@@ -79,11 +79,14 @@
                     <i class="bi bi-tag me-2 text-secondary"></i> 표시사항
                 </button>
             </li>
+            {# 라벨 편집: 개발 중인 기능이라 관리자에게만 노출 #}
+            {% if user.is_staff %}
             <li class="nav-item">
                 <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-label-editor" type="button">
                     <i class="bi bi-pencil-square me-2 text-secondary"></i> 라벨 편집
                 </button>
             </li>
+            {% endif %}
             <li class="nav-item">
                 <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button">
                     <i class="bi bi-file-earmark-text me-2 text-secondary"></i> 문서함
@@ -356,9 +359,11 @@
                     {% include 'products/_tab_label.html' %}
                 </div>
 
+                {% if user.is_staff %}
                 <div class="tab-pane" id="tab-label-editor" style="height: 100%;">
                     {% include 'products/_tab_label_editor.html' %}
                 </div>
+                {% endif %}
             </div>
         </main>
 
