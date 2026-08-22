@@ -32,11 +32,11 @@ class FoodItem(models.Model):
 
     class Meta:
         db_table = "food_item"
+        # lcns_no / prdlst_nm 은 필드의 db_index=True 가, prdlst_report_no 는 PK 가
+        # 이미 인덱스를 만든다. 같은 컬럼에 두 벌씩 걸려 있어(인덱스 16MB > 데이터 9.5MB)
+        # ensure_search_indexes --drop-duplicates 로 제거했고, 선언도 실제와 맞춘다.
         indexes = [
-            models.Index(fields=["lcns_no"], name="idx_lcns_no"),
-            models.Index(fields=["prdlst_report_no"], name="idx_prdlst_report_no"),
-            models.Index(fields=["prdlst_nm"], name="idx_prdlst_nm"),
-            models.Index(fields=["last_updt_dtm"], name="idx_last_updt_dtm"),  # 추가
+            models.Index(fields=["last_updt_dtm"], name="idx_last_updt_dtm"),
         ]
 
     def __str__(self):
@@ -468,10 +468,8 @@ class ImportedFood(models.Model):
 
     class Meta:
         db_table = "imported_food"
-        indexes = [
-            models.Index(fields=["bsn_ofc_name"], name="idx_bsn_ofc_name"),
-            models.Index(fields=["itm_nm"], name="idx_itm_nm")
-        ]
+        # bsn_ofc_name / itm_nm 은 필드의 db_index=True 가 이미 인덱스를 만든다 (중복 제거됨)
+        indexes = []
 
     def __str__(self):
         return self.prduct_korean_nm
