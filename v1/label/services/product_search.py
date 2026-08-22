@@ -241,19 +241,15 @@ def get_intro_data() -> dict:
     if cached is not None:
         return cached
 
-    from django.db.models import Count, Max
+    from django.db.models import Count
     from v1.label.models import FoodItem, ImportedFood
 
-    def _fmt_date(v):
-        v = (v or '').strip()
-        return f'{v[:4]}.{v[4:6]}.{v[6:8]}' if len(v) >= 8 else ''
-
+    # 최신 날짜는 표시하지 않는다. prms_dt 는 허가일자라 "데이터 최신성"을 뜻하지 않는데다,
+    # 원본에 5015-07-10 처럼 오신고된 건이 섞여 있어 MAX() 가 그 값에 끌려간다.
     try:
         data = {
             'domestic_total': FoodItem.objects.count(),
             'imported_total': ImportedFood.objects.count(),
-            'domestic_latest': _fmt_date(FoodItem.objects.aggregate(m=Max('prms_dt'))['m']),
-            'imported_latest': _fmt_date(ImportedFood.objects.aggregate(m=Max('procs_dtm'))['m']),
             'domestic_types': [
                 r['prdlst_dcnm'] for r in FoodItem.objects
                 .exclude(prdlst_dcnm='').exclude(prdlst_dcnm=None)

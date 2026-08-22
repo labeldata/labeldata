@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.utils.timezone import now
 from .models import ApiEndpoint
+from v1.common.date_utils import PAST_ONLY_DATE_FIELDS, sanitize_past_date
 from v1.label.models import FoodItem, ImportedFood, AgriculturalProduct
 from datetime import datetime, timedelta
 from django.db import close_old_connections  # 추가
@@ -295,7 +296,10 @@ def build_defaults(field_mapping, item):
         model_field_name, api_key = mapping_tuple
         if unique_field_name and model_field_name == unique_field_name:
             continue  # lookup에 이미 사용된 필드는 defaults에서 제외
-        defaults[model_field_name] = item.get(api_key, '')
+        value = item.get(api_key, '')
+        if model_field_name in PAST_ONLY_DATE_FIELDS:
+            value = sanitize_past_date(value, context='공개데이터 수집')
+        defaults[model_field_name] = value
     return defaults
 
 def call_api_endpoint(request, pk):

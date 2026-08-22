@@ -36,6 +36,7 @@ from django.db.models import Q
 from django.utils import timezone
 from v1.mobile.services.push_service import send_inspection_judgment_batch, send_inspection_batch_alerts
 
+from v1.common.date_utils import sanitize_past_date
 from v1.regulatory.models import RegulatoryNews
 
 logger = logging.getLogger(__name__)
@@ -975,10 +976,12 @@ def collect_inspection_data(
                 'jdgmnt_cd_nm':         new_judgment,
                 'induty_cd_nm':         (row.get('PRCSCITYPOINT_INDUTYCD_NM') or '').strip(),
                 'site_addr':            (row.get('SITE_ADDR')              or '').strip(),
-                'tkawydtm':             (row.get('TKAWYDTM')               or '').strip(),
+                # 수거일자·최종수정일자는 과거여야 한다. 원본에 미래 날짜가 섞이면
+                # 목록 정렬(-tkawydtm)에서 맨 위로 올라오고 최근 N일 알림에도 걸린다.
+                'tkawydtm':             sanitize_past_date(row.get('TKAWYDTM'), context='I0460'),
                 'tkawyspci_typecd_nm':  (row.get('TKAWYSPCI_TYPECD_NM')    or '').strip(),
                 'exc_instt_nm':         (row.get('EXC_INSTT_NM')           or '').strip(),
-                'last_updt_dtm':        (row.get('LAST_UPDT_DTM')          or '').strip(),
+                'last_updt_dtm':        sanitize_past_date(row.get('LAST_UPDT_DTM'), context='I0460'),
             }
 
             # tkawyprno(수거증번호)는 기관별 로컬 일련번호라 전국 유일하지 않으므로
