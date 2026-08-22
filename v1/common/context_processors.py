@@ -116,27 +116,8 @@ def regulatory_alerts(request):
         return {'regulatory_alert_count': cached}
 
     try:
-        from v1.regulatory.models import (
-            NewsIngredientMatch, NewsProductMatch,
-        )
-
-        # 읽지 않은 뉴스 ID (제품 + 원료) — read_yn 기준으로 통일
-        prod_unread = set(
-            NewsProductMatch.objects.filter(
-                product__user_id=request.user,
-                false_positive_yn=False,
-                read_yn=False,
-            ).values_list('news_id', flat=True)
-        )
-        ing_unread = set(
-            NewsIngredientMatch.objects.filter(
-                user=request.user,
-                dismissed_yn=False,
-                read_yn=False,
-            ).values_list('news_id', flat=True)
-        )
-
-        count = len(prod_unread | ing_unread)
+        from v1.regulatory import selectors
+        count = selectors.unread_news_count(request.user)
     except Exception:
         count = 0
 

@@ -833,12 +833,12 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
             match_reason  = match_reason,
             matched_value = matched_value,
             prev_judgment = '',
-            notified_at   = None if ins.jdgmnt_cd_nm in ('', '검토중') else timezone.now(),  # 판정 완료건은 알림 skip
+            notified_at   = None if ins.judgment_pending else timezone.now(),  # 판정 완료건은 알림 skip
             read_yn       = False,
         )
         matched += 1
 
-        if ins.jdgmnt_cd_nm in ('', '검토중'):  # 검사중·검토중인 건 모두 푸시 대상
+        if ins.judgment_pending:  # 검사중·검토중인 건 모두 푸시 대상
             pending_push.append(ins)
 
     # 검사중·검토중 건 묶음 푸시 (건별이 아닌 1건 요약 발송)
@@ -994,10 +994,9 @@ def collect_inspection_data(
                 prev_judgment = obj.jdgmnt_cd_nm
                 prev_bssh_nm  = obj.bssh_nm
                 # 최종 판정(적합/부적합)으로 확정된 경우에만 변동 알림 발송
-                _FINAL_JUDGMENTS = {'적합', '부적합'}
                 judgment_changed = (
                     prev_judgment != new_judgment
-                    and new_judgment in _FINAL_JUDGMENTS
+                    and new_judgment in InspectionResult.FINAL_JUDGMENTS
                 )
                 for attr, val in fields.items():
                     setattr(obj, attr, val)
@@ -1105,8 +1104,7 @@ def _trigger_inspection_match(inspection, prev_judgment: str, is_new: bool) -> N
 
     # PHASE_JUDGMENT: 최종 판정(적합/부적합)이 아니면 알림 생성 안 함
     if alert_phase == InspectionMatch.PHASE_JUDGMENT:
-        _FINAL_JUDGMENTS = {'적합', '부적합'}
-        if inspection.jdgmnt_cd_nm not in _FINAL_JUDGMENTS:
+        if inspection.jdgmnt_cd_nm not in inspection.FINAL_JUDGMENTS:
             logger.debug(
                 '[I0460] 판정변동 알림 스킵 (미확정 판정: %s): %s',
                 inspection.jdgmnt_cd_nm, inspection.tkawyprno,

@@ -21,9 +21,10 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from v1.regulatory import selectors
 from v1.regulatory.models import (
     NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews,
-    InspectionResult, InspectionMatch,
+    InspectionResult, InspectionMatch, judgment_status_of,
 )
 from v1.mobile.models import AlertRule, PushNotificationLog
 from v1.user_management.models import UserProfile
@@ -79,6 +80,9 @@ def news_list(request):
     date_from = request.GET.get('date_from', '').strip()  # YYYY-MM-DD
     date_to   = request.GET.get('date_to',   '').strip()  # YYYY-MM-DD
     tab       = request.GET.get('tab', '')    # 'insp-news' | 'admin' | 'insp' | ''
+    insp_status = request.GET.get('insp_status', '')  # '' (전체) | 'pending' | 'done'
+    if insp_status not in ('pending', 'done'):
+        insp_status = ''
 
     # 카테고리 체크박스 (cats_sent 센티넬로 명시적 제출 여부 판별)
     cats_submitted = 'cats_sent' in request.GET
@@ -129,33 +133,68 @@ def news_list(request):
             qs.filter(violation_reason__icontains=q)
         ).distinct()
 
-    # 내 매칭 집합 (제품 매칭 + 원료 보관함 단독 매칭 + 키워드 알림 매칭 합산)
-    my_matched_news_ids = set(
-        NewsProductMatch.objects
-        .filter(product__user_id=request.user, false_positive_yn=False)
-        .values_list('news_id', flat=True)
-    ) | set(
-        NewsIngredientMatch.objects
-        .filter(user=request.user, dismissed_yn=False)
-        .values_list('news_id', flat=True)
-    ) | set(
-        PushNotificationLog.objects
-        .filter(device__user=request.user, trigger_type='keyword', news__isnull=False)
-        .values_list('news_id', flat=True)
-    )
-    my_unread_news_ids = set(
-        NewsProductMatch.objects
-        .filter(product__user_id=request.user, read_yn=False, false_positive_yn=False)
-        .values_list('news_id', flat=True)
-    ) | set(
-        NewsIngredientMatch.objects
-        .filter(user=request.user, read_yn=False, dismissed_yn=False)
-        .values_list('news_id', flat=True)
-    ) | set(
-        PushNotificationLog.objects
-        .filter(device__user=request.user, trigger_type='keyword', is_read=False, news__isnull=False)
-        .values_list('news_id', flat=True)
-    )
+    # 미확인 집합 — 집계 규칙은 selectors 한 곳에서 관리한다 (탭 미확인 dot 표시용)
+    my_unread_news_ids = selectors.unread_news_ids(request.user)
+
+    # ── risk / status 필터 (부적합·행정처분 탭) ──────────────────────────────
+    # 반드시 Paginator 생성 전에 적용해야 한다.
+    # (이전에는 페이지네이션 뒤에서 qs 를 재할당해 필터가 목록에 반영되지 않았다)
+    if risk:
+        risk_from_product = (
+            NewsProductMatch.objects
+            .filter(product__user_id=request.user, false_positive_yn=False, risk_level=risk)
+            .values_list('news_id', flat=True)
+        )
+        risk_from_ingredient = (
+            NewsIngredientMatch.objects
+            .filter(user=request.user, dismissed_yn=False, risk_level=risk)
+            .values_list('news_id', flat=True)
+        )
+        qs = qs.filter(Q(id__in=risk_from_product) | Q(id__in=risk_from_ingredient))
+
+    if status in selectors.ACTION_STATUSES or status == 'no_action':
+        prod_act_qs = (
+            RegulatoryMatchAction.objects
+            .filter(
+                product_match__product__user_id=request.user,
+                product_match__false_positive_yn=False,
+                action_type__in=selectors.ACTION_STATUSES,
+            )
+            .values('product_match__news_id', 'action_type')
+            .annotate(max_dt=Max('created_at'))
+        )
+        ing_act_qs = (
+            RegulatoryMatchAction.objects
+            .filter(
+                ingredient_match__user=request.user,
+                ingredient_match__dismissed_yn=False,
+                action_type__in=selectors.ACTION_STATUSES,
+            )
+            .values('ingredient_match__news_id', 'action_type')
+            .annotate(max_dt=Max('created_at'))
+        )
+        news_latest_action: dict = {}
+        for row in prod_act_qs:
+            nid, at, dt = row['product_match__news_id'], row['action_type'], row['max_dt']
+            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
+                news_latest_action[nid] = (at, dt)
+        for row in ing_act_qs:
+            nid, at, dt = row['ingredient_match__news_id'], row['action_type'], row['max_dt']
+            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
+                news_latest_action[nid] = (at, dt)
+
+        if status in selectors.ACTION_STATUSES:
+            filtered_ids = [nid for nid, (at, _) in news_latest_action.items() if at == status]
+            qs = qs.filter(id__in=filtered_ids)
+        else:  # no_action — 조치 가능한 매칭 중 조치 이력이 없는 건
+            qs = qs.filter(
+                id__in=(selectors.actionable_news_ids(request.user)
+                        - set(news_latest_action.keys()))
+            )
+
+    # 탭 배지 건수용 스냅샷 — 어노테이션(Exists/Subquery) 이 붙기 전 queryset 을 쓴다.
+    # 어노테이션된 qs 로 COUNT 하면 불필요한 서브쿼리가 함께 실행될 수 있다.
+    count_qs = qs
 
     # DB 레벨 어노테이션으로 정렬 (매칭→미읽음→최신)
     matched_subq = NewsProductMatch.objects.filter(
@@ -255,25 +294,31 @@ def news_list(request):
             '-created_at',
         )
 
-    # 탭 배지 건수 — 탭 필터 적용 전에 my_matched_news_ids로 계산 (쿼리 1회, 서브쿼리 없음)
+    # ── 탭 배지 건수 ─────────────────────────────────────────────────────────
+    # 규칙(3개 탭 공통): 배지 숫자 = 그 탭에서 실제로 보게 될 목록의 총 건수
+    #                    (현재 검색·기간·분야·등급·상태 필터가 모두 적용된 값)
+    #                    미확인 여부는 숫자가 아니라 빨간 점으로만 표시한다.
     _ADMIN_SOURCES = {'I0470', 'I0480', 'I0482', 'saol_admin'}
-    if my_matched_news_ids:
-        _matched_src_map = dict(
-            RegulatoryNews.objects.filter(id__in=my_matched_news_ids)
+    tab_admin_total = count_qs.filter(api_source__in=_ADMIN_SOURCES).count()
+    tab_insp_total  = count_qs.exclude(api_source__in=_ADMIN_SOURCES).count()
+
+    # 미확인 dot — 필터와 무관한 전 기간 기준 (알림 표시등 성격)
+    if my_unread_news_ids:
+        _unread_src_map = dict(
+            RegulatoryNews.objects.filter(id__in=my_unread_news_ids)
             .values_list('id', 'api_source')
         )
-        tab_admin_total = sum(1 for s in _matched_src_map.values() if s in _ADMIN_SOURCES)
-        tab_insp_total  = sum(1 for s in _matched_src_map.values() if s not in _ADMIN_SOURCES)
+        tab_admin_unread = sum(1 for src in _unread_src_map.values() if src in _ADMIN_SOURCES)
+        tab_insp_unread  = len(_unread_src_map) - tab_admin_unread
     else:
-        tab_admin_total = 0
-        tab_insp_total  = 0
+        tab_admin_unread = 0
+        tab_insp_unread  = 0
 
     # 탭별 독립 검색: 건수 집계 완료 후 qs 범위 제한
-    _TAB_ADMIN_SOURCES = _ADMIN_SOURCES
     if tab == 'admin':
-        qs = qs.filter(api_source__in=_TAB_ADMIN_SOURCES)
+        qs = qs.filter(api_source__in=_ADMIN_SOURCES)
     elif tab in ('insp-news', ''):
-        qs = qs.exclude(api_source__in=_TAB_ADMIN_SOURCES)
+        qs = qs.exclude(api_source__in=_ADMIN_SOURCES)
     # tab == 'insp': 수거검사 탭은 qs 미사용 — 제한 불필요
 
     # 페이지네이션
@@ -288,6 +333,7 @@ def news_list(request):
     qp.pop('insp_id',     None)
     qp.pop('pub_insp_id', None)
     qp.pop('insp_page',   None)
+    qp.pop('pub_page',    None)
     page_query_string = qp.urlencode()
     current_tab = tab  # 상단에서 이미 읽은 값 재사용
 
@@ -299,28 +345,8 @@ def news_list(request):
         else:
             news_item.saol_location = ''
 
-    # 요약 통계 — 현재 기간·카테고리 필터 적용 기준
-    total_count   = paginator.count
-    matched_count = len(my_matched_news_ids)          # 이미 위에서 제품+원료 합산
-    unread_count  = len(my_unread_news_ids)
-
-    # 미조치 건수 — 전 기간, 사이드바·헤더 배지와 동일 기준
-    _action_statuses = ('monitoring', 'resolved')
-    _prod_actioned = set(
-        RegulatoryMatchAction.objects.filter(
-            product_match__product__user_id=request.user,
-            product_match__false_positive_yn=False,
-            action_type__in=_action_statuses,
-        ).values_list('product_match__news_id', flat=True)
-    )
-    _ing_actioned = set(
-        RegulatoryMatchAction.objects.filter(
-            ingredient_match__user=request.user,
-            ingredient_match__dismissed_yn=False,
-            action_type__in=_action_statuses,
-        ).values_list('ingredient_match__news_id', flat=True)
-    )
-    no_action_count = len(my_matched_news_ids - (_prod_actioned | _ing_actioned))
+    # 미조치 건수 — 전 기간 기준 (사이드바·홈 배지와 동일한 selectors 규칙)
+    no_action_count = len(selectors.no_action_news_ids(request.user))
 
     # 카테고리별 건수 (api_source 기반, 전체 DB 기준 — 필터 드로어 표시용)
     api_counts_qs = RegulatoryNews.objects.values('api_source').annotate(cnt=Count('id'))
@@ -333,65 +359,6 @@ def news_list(request):
     admin_cats = [c for c in categories_with_count if c.get('group') == 'admin']
     saol_cats  = [c for c in categories_with_count if c.get('group') == 'saol']
 
-    # ── risk / status 필터 (어노테이션 이후 적용 — 부적합 탭 전용) ────────────
-    if risk:
-        risk_from_product = (
-            NewsProductMatch.objects
-            .filter(product__user_id=request.user, false_positive_yn=False, risk_level=risk)
-            .values_list('news_id', flat=True)
-        )
-        risk_from_ingredient = (
-            NewsIngredientMatch.objects
-            .filter(user=request.user, dismissed_yn=False, risk_level=risk)
-            .values_list('news_id', flat=True)
-        )
-        qs = qs.filter(Q(id__in=risk_from_product) | Q(id__in=risk_from_ingredient))
-
-    if status in _action_statuses or status == 'no_action':
-        prod_act_qs = (
-            RegulatoryMatchAction.objects
-            .filter(
-                product_match__product__user_id=request.user,
-                product_match__false_positive_yn=False,
-                action_type__in=_action_statuses,
-            )
-            .values('product_match__news_id', 'action_type')
-            .annotate(max_dt=Max('created_at'))
-        )
-        ing_act_qs = (
-            RegulatoryMatchAction.objects
-            .filter(
-                ingredient_match__user=request.user,
-                ingredient_match__dismissed_yn=False,
-                action_type__in=_action_statuses,
-            )
-            .values('ingredient_match__news_id', 'action_type')
-            .annotate(max_dt=Max('created_at'))
-        )
-        news_latest_action: dict = {}
-        for row in prod_act_qs:
-            nid, at, dt = row['product_match__news_id'], row['action_type'], row['max_dt']
-            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
-                news_latest_action[nid] = (at, dt)
-        for row in ing_act_qs:
-            nid, at, dt = row['ingredient_match__news_id'], row['action_type'], row['max_dt']
-            if nid not in news_latest_action or dt > news_latest_action[nid][1]:
-                news_latest_action[nid] = (at, dt)
-
-        if status in _action_statuses:
-            filtered_ids = [nid for nid, (at, _) in news_latest_action.items() if at == status]
-            qs = qs.filter(id__in=filtered_ids)
-        else:  # no_action
-            _na_matched = set(
-                list(NewsProductMatch.objects
-                     .filter(product__user_id=request.user, false_positive_yn=False)
-                     .values_list('news_id', flat=True)) +
-                list(NewsIngredientMatch.objects
-                     .filter(user=request.user, dismissed_yn=False)
-                     .values_list('news_id', flat=True))
-            )
-            qs = qs.filter(id__in=(_na_matched - set(news_latest_action.keys())))
-
     # ── 수거검사(I0460) — 내 매칭 건수 및 목록 ───────────────────────────────
     ins_qs_base = (
         InspectionMatch.objects
@@ -399,10 +366,12 @@ def news_list(request):
         .select_related('inspection', 'label')
         .order_by('-inspection__tkawydtm', '-alert_phase')
     )
-    # 탭 배지·읽음 버튼은 항상 전체 기준
+    # 내 매칭 보유 여부 — 공개 목록(대체 화면) 노출 판단용. 필터와 무관하다.
+    inspection_has_matches = ins_qs_base.exists()
+    # 미확인 dot·"전체 읽음" 버튼은 필터와 무관한 전 기간 기준
     inspection_unread = ins_qs_base.filter(read_yn=False).count()
 
-    # 수거검사 탭에서만 검색·날짜 필터 적용
+    # 수거검사 탭에서만 검색·날짜·판정상태 필터 적용
     ins_qs = ins_qs_base
     if current_tab == 'insp':
         if q:
@@ -424,10 +393,17 @@ def news_list(request):
             except (ValueError, TypeError):
                 pass
 
-    # 탭 배지는 항상 전체 기준 (필터 무관하게 일관된 건수 표시)
-    inspection_total        = ins_qs_base.count()
-    # 목록 헤더는 현재 필터 적용 기준
-    inspection_filtered_total = ins_qs.count()
+        # 진행 중 / 완료 필터 — 서버에서 처리해야 페이지네이션·건수가 어긋나지 않는다.
+        # (이전에는 JS 가 현재 페이지의 DOM 만 숨겨서 다음 페이지에는 적용되지 않고,
+        #  목록 헤더 숫자도 "현재 페이지에 보이는 개수"로 덮어써져 탭 배지와 달라졌다)
+        _pending_q = Q(inspection__jdgmnt_cd_nm__in=InspectionResult.PENDING_JUDGMENTS)
+        if insp_status == 'pending':
+            ins_qs = ins_qs.filter(_pending_q)
+        elif insp_status == 'done':
+            ins_qs = ins_qs.exclude(_pending_q)
+
+    # 탭 배지 = 목록 헤더 = 현재 필터가 적용된 총 건수 (부적합·행정처분 탭과 같은 규칙)
+    inspection_total  = ins_qs.count()
     insp_page_num     = request.GET.get('insp_page', 1)
     insp_paginator    = Paginator(ins_qs, 20)
     insp_page_obj     = insp_paginator.get_page(insp_page_num)
@@ -439,33 +415,32 @@ def news_list(request):
     recent_insp_page_obj = None
     recent_insp_paginator = None
     recent_insp_total = 0
-    if inspection_total == 0:
+    # 필터 결과가 0건인 것과 매칭 자체가 없는 것은 다르다 — 후자일 때만 공개 목록으로 대체
+    if not inspection_has_matches:
         pub_page_num = request.GET.get('pub_page', 1)
+        _PUB_FIELDS = (
+            'id', 'prdtnm', 'bssh_nm', 'tkawydtm', 'jdgmnt_cd_nm',
+            'exc_instt_nm', 'plan_titl', 'tkawyprno',
+        )
 
         # 날짜 범위 지정 시 캐시 우회 (사용자별 동적 조건)
         if date_from or date_to:
-            qs = InspectionResult.objects.order_by('-tkawydtm')
+            pub_qs = InspectionResult.objects.order_by('-tkawydtm')
             if date_from:
-                qs = qs.filter(tkawydtm__gte=date_from.replace('-', ''))
+                pub_qs = pub_qs.filter(tkawydtm__gte=date_from.replace('-', ''))
             if date_to:
-                qs = qs.filter(tkawydtm__lte=date_to.replace('-', ''))
-            cached = list(qs.values(
-                'id', 'prdtnm', 'bssh_nm', 'tkawydtm', 'jdgmnt_cd_nm',
-                'exc_instt_nm', 'plan_titl', 'tkawyprno',
-            ))
+                pub_qs = pub_qs.filter(tkawydtm__lte=date_to.replace('-', ''))
+            cached = list(pub_qs.values(*_PUB_FIELDS))
         else:
             # days 파라미터 기준 캐시 — 스케줄러 실행 시 무효화
             cache_key = f'public_insp_list_{days}'
             cached = cache.get(cache_key)
             if cached is None:
-                qs = InspectionResult.objects.order_by('-tkawydtm')
+                pub_qs = InspectionResult.objects.order_by('-tkawydtm')
                 if days != 'all':
                     cutoff_str = (timezone.now() - timedelta(days=int(days))).strftime('%Y%m%d')
-                    qs = qs.filter(tkawydtm__gte=cutoff_str)
-                cached = list(qs.values(
-                    'id', 'prdtnm', 'bssh_nm', 'tkawydtm', 'jdgmnt_cd_nm',
-                    'exc_instt_nm', 'plan_titl', 'tkawyprno',
-                ))
+                    pub_qs = pub_qs.filter(tkawydtm__gte=cutoff_str)
+                cached = list(pub_qs.values(*_PUB_FIELDS))
                 cache.set(cache_key, cached, timeout=60 * 60 * 6)
 
         # 검색어 필터 (캐시 데이터를 Python에서 필터링)
@@ -477,16 +452,23 @@ def news_list(request):
                 or q_lower in (r['bssh_nm'] or '').lower()
             ]
 
+        # 진행 중 / 완료 필터 — 내 목록과 같은 판정 기준을 적용
+        if insp_status:
+            want_pending = (insp_status == 'pending')
+            cached = [
+                r for r in cached
+                if ((r['jdgmnt_cd_nm'] or '').strip()
+                    in InspectionResult.PENDING_JUDGMENTS) == want_pending
+            ]
+
         recent_insp_total = len(cached)
         recent_insp_paginator = Paginator(cached, 20)
         recent_insp_page_obj = recent_insp_paginator.get_page(pub_page_num)
-        recent_insp_list = list(recent_insp_page_obj)
-
-    # 수거검사 카테고리 건수 주입
-    insp46_cats = [
-        {**c, 'count': inspection_total}
-        for c in categories_with_count if c.get('group') == 'insp46'
-    ]
+        # 목록 배지는 모델 프로퍼티와 같은 규칙으로 계산해 넣는다 (.values() 라 프로퍼티 사용 불가)
+        recent_insp_list = [
+            {**r, 'judgment_status': judgment_status_of(r['jdgmnt_cd_nm'])}
+            for r in recent_insp_page_obj
+        ]
 
     # 상세 패널: URL 파라미터로 선택된 뉴스
     selected_id = request.GET.get('id')
@@ -494,7 +476,6 @@ def news_list(request):
     selected_matches = []
     selected_ing_matches = []   # NewsIngredientMatch 인스턴스 목록
     selected_kw_logs = []       # PushNotificationLog (키워드 매칭)
-    unlinked_ingredients = []   # 구 버전 호환 (이름만 - 미사용)
     if selected_id:
         try:
             selected_news = RegulatoryNews.objects.get(pk=selected_id)
@@ -607,16 +588,15 @@ def news_list(request):
         'selected_matches':        selected_matches,
         'selected_ing_matches':    selected_ing_matches,
         'selected_kw_logs':        selected_kw_logs,
-        'unlinked_ingredients':    unlinked_ingredients,
-        'total_count':             total_count,
         'categories':         categories_with_count,
+        # 탭 배지 = 해당 탭 목록의 총 건수(필터 적용) / *_unread = 빨간 점 표시용
         'tab_insp_total':     tab_insp_total,
         'tab_admin_total':    tab_admin_total,
+        'tab_insp_unread':    tab_insp_unread,
+        'tab_admin_unread':   tab_admin_unread,
         'insp_cats':          insp_cats,
         'admin_cats':         admin_cats,
         'saol_cats':          saol_cats,
-        'matched_count':      matched_count,
-        'unread_count':       unread_count,
         'no_action_count':    no_action_count,
         'q':                  q,
         'cats':               cats,
@@ -629,14 +609,14 @@ def news_list(request):
         'today':              date.today(),
         'saol_site_url':      saol_site_url,
         'alert_rules':        unique_alert_rules,
-        'insp46_cats':        insp46_cats,
         'show_inspection':    show_inspection,
         'inspection_list':    inspection_list,
         'insp_page_obj':      insp_page_obj,
         'insp_paginator':     insp_paginator,
-        'inspection_total':          inspection_total,
-        'inspection_filtered_total': inspection_filtered_total,
+        'inspection_total':        inspection_total,
+        'inspection_has_matches':  inspection_has_matches,
         'inspection_unread':       inspection_unread,
+        'insp_status':             insp_status,
         'selected_insp':           selected_insp,
         'selected_pub_insp':       selected_pub_insp,
         'recent_insp_list':        recent_insp_list,
@@ -683,23 +663,8 @@ def news_detail(request, pk):
 
 @login_required
 def unread_count_api(request):
-    """읽지 않은 매칭 알림 수 반환 (JSON) - read_yn 기준"""
-    prod_unread = set(
-        NewsProductMatch.objects.filter(
-            product__user_id=request.user,
-            false_positive_yn=False,
-            read_yn=False,
-        ).values_list('news_id', flat=True)
-    )
-    ing_unread = set(
-        NewsIngredientMatch.objects.filter(
-            user=request.user,
-            dismissed_yn=False,
-            read_yn=False,
-        ).values_list('news_id', flat=True)
-    )
-    count = len(prod_unread | ing_unread)
-    return JsonResponse({'unread': count})
+    """읽지 않은 매칭 알림 수 반환 (JSON) — 사이드바 배지와 동일 기준"""
+    return JsonResponse({'unread': selectors.unread_news_count(request.user)})
 
 
 @login_required
@@ -726,18 +691,9 @@ def mark_as_read(request):
         ing_qs = ing_qs.filter(news_id=news_id)
     ing_qs.update(read_yn=True)
 
-    # 읽음 처리 후 남은 미확인 뉴스 건수 (context_processors 와 동일 기준)
-    prod_news = set(
-        NewsProductMatch.objects.filter(
-            product__user_id=request.user, read_yn=False, false_positive_yn=False,
-        ).values_list('news_id', flat=True)
-    )
-    ing_news = set(
-        NewsIngredientMatch.objects.filter(
-            user=request.user, read_yn=False, dismissed_yn=False,
-        ).values_list('news_id', flat=True)
-    )
-    unread = len(prod_news | ing_news)
+    # 읽음 처리 후 남은 미확인 뉴스 건수 (사이드바 배지와 동일 기준)
+    cache.delete(f'regulatory_alert_count_{request.user.id}')
+    unread = selectors.unread_news_count(request.user)
 
     return JsonResponse({'success': True, 'updated': updated, 'unread': unread})
 
@@ -841,11 +797,8 @@ def mark_false_positive(request):
         return JsonResponse({'success': False, 'error': '매칭 정보를 찾을 수 없습니다.'}, status=404)
 
     cache.delete(f'regulatory_alert_count_{request.user.id}')
-    unread = NewsProductMatch.objects.filter(
-        product__user_id=request.user, read_yn=False, false_positive_yn=False
-    ).count() + NewsIngredientMatch.objects.filter(
-        user=request.user, read_yn=False, dismissed_yn=False
-    ).count()
+    # 고유 뉴스 건수 기준 (사이드바 배지와 동일) — 매칭 행 수를 세면 화면마다 숫자가 달라진다
+    unread = selectors.unread_news_count(request.user)
     return JsonResponse({'success': True, 'unread': unread})
 
 
@@ -910,20 +863,9 @@ def mark_all_resolved(request):
     NewsIngredientMatch.objects.filter(id__in=[im.id for im in ing_matches]).update(read_yn=True)
     created += len(ing_actions)
 
-    # 남은 미확인 건수 (기존 mark_read 기준과 동일)
-    prod_news = set(
-        NewsProductMatch.objects.filter(
-            product__user_id=request.user, read_yn=False, false_positive_yn=False,
-        ).values_list('news_id', flat=True)
-    )
-    ing_news = set(
-        NewsIngredientMatch.objects.filter(
-            user=request.user, read_yn=False, dismissed_yn=False,
-        ).values_list('news_id', flat=True)
-    )
-    unread = len(prod_news | ing_news)
-
     cache.delete(f'regulatory_alert_count_{request.user.id}')
+    # 남은 미확인 건수 — 사이드바 배지와 동일 기준
+    unread = selectors.unread_news_count(request.user)
     return JsonResponse({'success': True, 'created': created, 'unread': unread})
 
 
@@ -938,7 +880,7 @@ def mark_all_news_resolved(request):
     - dismissed_yn=False 인 원료 매칭 전체에 resolved 조치 기록
     - 이미 resolved/monitoring 조치가 있는 매칭은 중복 생성하지 않음
     """
-    _actioned = ('monitoring', 'resolved')
+    _actioned = selectors.ACTION_STATUSES
     created = 0
 
     # 이미 조치된 제품 매칭 ID 제외
@@ -980,6 +922,7 @@ def mark_all_news_resolved(request):
         user=request.user,
         dismissed_yn=False,
     ).exclude(id__in=already_ing))
+
     ing_actions = [
         RegulatoryMatchAction(
             user=request.user,
@@ -990,11 +933,22 @@ def mark_all_news_resolved(request):
         for im in ing_matches
     ]
     RegulatoryMatchAction.objects.bulk_create(ing_actions, ignore_conflicts=True)
-    NewsIngredientMatch.objects.filter(id__in=[im.id for im in ing_matches]).update(read_yn=True)
     created += len(ing_actions)
 
+    # "모든 알림 확인" 이므로 이미 조치된 매칭까지 포함해 전부 읽음 처리한다.
+    # (조치 이력이 있는 매칭을 빼두면 미확인이 남는데도 배지를 0으로 표시하게 된다)
+    NewsProductMatch.objects.filter(
+        product__user_id=request.user, false_positive_yn=False, read_yn=False,
+    ).update(read_yn=True, read_at=timezone.now())
+    NewsIngredientMatch.objects.filter(
+        user=request.user, dismissed_yn=False, read_yn=False,
+    ).update(read_yn=True)
+
     cache.delete(f'regulatory_alert_count_{request.user.id}')
-    return JsonResponse({'success': True, 'created': created, 'unread': 0})
+    return JsonResponse({
+        'success': True, 'created': created,
+        'unread': selectors.unread_news_count(request.user),
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────

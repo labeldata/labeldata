@@ -230,8 +230,39 @@ class InspectionResult(models.Model):
             ),
         ]
 
+    # ── 판정 상태 ────────────────────────────────────────────────────────────
+    # 수집기(services/collector.py)의 알림 발송 기준과 동일한 값.
+    # 목록 필터·배지·알림 로직이 모두 이 정의를 참조한다.
+    PENDING_JUDGMENTS = ('', '검토중')      # 아직 판정 전 (접수 / 검토중)
+    FINAL_JUDGMENTS   = ('적합', '부적합')   # 확정 판정
+
+    @property
+    def judgment_pending(self) -> bool:
+        """판정이 아직 확정되지 않았는지 (목록 '진행 중' 필터 기준)"""
+        return (self.jdgmnt_cd_nm or '').strip() in self.PENDING_JUDGMENTS
+
+    @property
+    def judgment_status(self) -> str:
+        """목록 배지용 상태 코드 — recv(접수) | prog(검사 중) | fail(부적합) | ok(적합)"""
+        return judgment_status_of(self.jdgmnt_cd_nm)
+
     def __str__(self):
         return f"[{self.tkawydtm}] {self.bssh_nm} / {self.prdtnm} ({self.jdgmnt_cd_nm or '판정전'})"
+
+
+def judgment_status_of(judgment) -> str:
+    """
+    수거검사 판정결과 문자열 → 목록 배지용 상태 코드.
+    InspectionResult 인스턴스가 없는 곳(.values() 캐시 등)에서도 같은 규칙을 쓰기 위한 헬퍼.
+    """
+    j = (judgment or '').strip()
+    if j == '':
+        return 'recv'
+    if j == '검토중':
+        return 'prog'
+    if '부적합' in j:
+        return 'fail'
+    return 'ok'
 
 
 class InspectionMatch(models.Model):

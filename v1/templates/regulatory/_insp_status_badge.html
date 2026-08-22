@@ -1,0 +1,6 @@
+{# 수거검사 판정 상태 배지 — status 코드는 regulatory.models.judgment_status_of() 가 계산한다.
+   내 매칭 목록과 공개 목록이 같은 규칙으로 같은 배지를 그리도록 이 include 하나만 사용한다. #}
+{% if status == 'recv' %}<span class="rs-insp-status rs-insp-status--recv">접수</span>
+{% elif status == 'prog' %}<span class="rs-insp-status rs-insp-status--prog">검사 중</span>
+{% elif status == 'fail' %}<span class="rs-insp-status rs-insp-status--fail">부적합</span>
+{% else %}<span class="rs-insp-status rs-insp-status--ok">적합</span>{% endif %}

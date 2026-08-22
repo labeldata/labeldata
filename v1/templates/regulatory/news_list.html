@@ -277,27 +277,34 @@
     <aside class="reg-sidebar" id="regSidebar" data-view="{% if selected_insp or selected_pub_insp %}insp{% else %}insp-news{% endif %}">
       {# ── 뷰 탭: 부적합 / 처분 / 수거검사 ── #}
       <div class="rs-view-tabs">
+        {# 배지 숫자 = 그 탭 목록의 총 건수(현재 필터 적용), 빨간 점 = 미확인 존재 #}
         <button class="rs-vtab{% if not selected_insp and not selected_pub_insp %} rs-vtab--active{% endif %}"
-                id="vtabInspNews" onclick="switchView('insp-news')">
+                id="vtabInspNews" onclick="switchView('insp-news')"
+                {% if tab_insp_unread %}title="미확인 {{ tab_insp_unread }}건"{% endif %}>
           <i class="bi bi-shield-exclamation"></i> 부적합
           <span class="rs-vtab-count" id="vtabInspNewsCnt">{{ tab_insp_total|intcomma }}</span>
+          {% if tab_insp_unread %}<span class="rs-vtab-unread-dot" id="vtabInspNewsUnreadDot"></span>{% endif %}
         </button>
         <button class="rs-vtab"
-                id="vtabAdmin" onclick="switchView('admin')">
+                id="vtabAdmin" onclick="switchView('admin')"
+                {% if tab_admin_unread %}title="미확인 {{ tab_admin_unread }}건"{% endif %}>
           <i class="bi bi-gavel"></i> 행정처분
           <span class="rs-vtab-count" id="vtabAdminCnt">{{ tab_admin_total|intcomma }}</span>
+          {% if tab_admin_unread %}<span class="rs-vtab-unread-dot" id="vtabAdminUnreadDot"></span>{% endif %}
         </button>
         <button class="rs-vtab{% if selected_insp or selected_pub_insp %} rs-vtab--active{% endif %}"
-                id="vtabInsp" onclick="switchView('insp')">
+                id="vtabInsp" onclick="switchView('insp')"
+                {% if inspection_unread %}title="미확인 {{ inspection_unread }}건"{% endif %}>
           <i class="bi bi-search"></i> 수거검사
-          {% if inspection_total > 0 %}<span class="rs-vtab-count" id="vtabInspCnt">{{ inspection_total|intcomma }}</span>{% if inspection_unread > 0 %}<span class="rs-vtab-unread-dot" id="vtabInspUnreadDot"></span>{% endif %}{% endif %}
+          <span class="rs-vtab-count" id="vtabInspCnt">{% if inspection_has_matches %}{{ inspection_total|intcomma }}{% else %}{{ recent_insp_total|intcomma }}{% endif %}</span>
+          {% if inspection_unread %}<span class="rs-vtab-unread-dot" id="vtabInspUnreadDot"></span>{% endif %}
         </button>
       </div>
       {# ── 탭 서브 헤더 (모든 탭 공통) ── #}
       <div class="rs-list-header">
         <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">{{ tab_insp_total|intcomma }}건</span>
         <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">{{ tab_admin_total|intcomma }}건</span>
-        <span class="rs-list-total rs-list-total--insp"> {{ inspection_filtered_total|intcomma }}건</span>
+        <span class="rs-list-total rs-list-total--insp">{% if inspection_has_matches %}{{ inspection_total|intcomma }}{% else %}{{ recent_insp_total|intcomma }}{% endif %}건</span>
         <a class="rs-sort-btn"
            href="?{{ page_query_string }}&sort={% if sort == 'asc' %}desc{% else %}asc{% endif %}"
            title="날짜 정렬 순서 변경">
@@ -311,7 +318,6 @@
                       {% if not m.read_yn %}rs-item--insp-unread{% endif %}
                       {% if selected_insp and selected_insp.id == m.id %}active{% endif %}"
                data-insp-id="{{ m.id }}"
-               data-insp-status="{% if m.inspection.jdgmnt_cd_nm == '' or m.inspection.jdgmnt_cd_nm == '검토중' %}pending{% else %}done{% endif %}"
                onclick="inspItemClick(event, {{ m.id }})">
             <div class="rs-row1">
               <input type="checkbox" class="insp-select-cb" data-insp-id="{{ m.id }}"
@@ -323,15 +329,7 @@
             </div>
             <div class="rs-row2">
               {# 진행상태 badge #}
-              {% if m.inspection.jdgmnt_cd_nm == '' %}
-                <span class="rs-insp-status rs-insp-status--recv">접수</span>
-              {% elif m.inspection.jdgmnt_cd_nm == '검토중' %}
-                <span class="rs-insp-status rs-insp-status--prog">검사 중</span>
-              {% elif '부적합' in m.inspection.jdgmnt_cd_nm %}
-                <span class="rs-insp-status rs-insp-status--fail">부적합</span>
-              {% else %}
-                <span class="rs-insp-status rs-insp-status--ok">적합</span>
-              {% endif %}
+              {% include "regulatory/_insp_status_badge.html" with status=m.inspection.judgment_status %}
               {% if m.alert_phase == 2 %}
                 <span class="rs-insp-badge-phase rs-insp-badge-phase--2">판정변동</span>
               {% else %}
@@ -351,10 +349,6 @@
           </div>
           {% empty %}
           {# ── 내 정보 미등록: 전체 공개 목록 (배너는 오른쪽 패널에 표시) ── #}
-          <div class="rs-pub-list-header">
-            <span class="rs-pub-total">{{ recent_insp_total|intcomma }}건</span>
-          </div>
-
           {% for r in recent_insp_list %}
           <div class="rs-item rs-item--insp rs-item--insp-public{% if selected_pub_insp and selected_pub_insp.id == r.id %} active{% endif %}"
                onclick="selectPubInspection({{ r.id }})">
@@ -363,15 +357,7 @@
               <span class="rs-item-date">{{ r.tkawydtm|slice:"4:6" }}/{{ r.tkawydtm|slice:"6:8" }}</span>
             </div>
             <div class="rs-row2">
-              {% if r.jdgmnt_cd_nm == '' %}
-                <span class="rs-insp-status rs-insp-status--recv">접수</span>
-              {% elif r.jdgmnt_cd_nm == '검토중' %}
-                <span class="rs-insp-status rs-insp-status--prog">검사 중</span>
-              {% elif '부적합' in r.jdgmnt_cd_nm %}
-                <span class="rs-insp-status rs-insp-status--fail">부적합</span>
-              {% else %}
-                <span class="rs-insp-status rs-insp-status--ok">적합</span>
-              {% endif %}
+              {% include "regulatory/_insp_status_badge.html" with status=r.judgment_status %}
               <span class="rs-insp-badge-phase rs-insp-badge-phase--1">수거검사</span>
               <span class="rs-insp-bssh">{{ r.bssh_nm|truncatechars:14 }}</span>
               {% if r.plan_titl %}<span class="rs-insp-plan-titl">{{ r.plan_titl }}</span>{% endif %}
@@ -440,7 +426,7 @@
           </div>
           {% endif %}
 
-          {% if inspection_total %}
+          {% if inspection_has_matches %}
           <div class="rs-list-divider">── 부적합·처분 알림 ──</div>
           {% endif %}
         {# ── 일반 부적합·처분 알림 목록 ── #}
@@ -645,13 +631,14 @@
           </button>
           <span class="rs-chip-divider"></span>
           {% endif %}
-          {% if inspection_total %}
-          <button type="button" class="rs-risk-chip active-L" id="inspFilterAll"
+          {# 진행 중/완료 필터는 서버에서 처리한다 (insp_status 파라미터). 활성 상태도 서버 렌더 #}
+          <button type="button" class="rs-risk-chip{% if not insp_status %} active-L{% endif %}" id="inspFilterAll"
                   onclick="inspFilter('all')">&#x1F4CB; 전체</button>
-          <button type="button" class="rs-risk-chip" id="inspFilterPending"
-                  onclick="inspFilter('pending')">&#x23F3; 진행 중</button>
-          <button type="button" class="rs-risk-chip" id="inspFilterDone"
-                  onclick="inspFilter('done')">&#x2705; 완료</button>
+          <button type="button" class="rs-risk-chip{% if insp_status == 'pending' %} active-no{% endif %}" id="inspFilterPending"
+                  onclick="inspFilter('{% if insp_status == 'pending' %}all{% else %}pending{% endif %}')">&#x23F3; 진행 중</button>
+          <button type="button" class="rs-risk-chip{% if insp_status == 'done' %} active-res{% endif %}" id="inspFilterDone"
+                  onclick="inspFilter('{% if insp_status == 'done' %}all{% else %}done{% endif %}')">&#x2705; 완료</button>
+          {% if inspection_has_matches %}
           <span class="rs-chip-divider"></span>
           <button type="button" class="rs-risk-chip" id="inspSelectModeBtn"
                   onclick="toggleInspSelectMode()" title="여러 항목을 선택해 한꺼번에 삭제">
@@ -805,7 +792,7 @@
         {% elif selected_news %}
           {% include "regulatory/_news_detail_panel.html" with news=selected_news matches=selected_matches ing_matches=selected_ing_matches kw_logs=selected_kw_logs %}
         {% else %}
-        {% if inspection_total == 0 and current_tab == 'insp' %}
+        {% if not inspection_has_matches and current_tab == 'insp' %}
         <div class="rd-insp-guide-panel">
           <div class="rd-insp-guide-notice">
             <i class="bi bi-info-circle-fill"></i>
@@ -922,28 +909,24 @@ function inspMarkAllRead() {
 }
 window.inspMarkAllRead = inspMarkAllRead;
 
-// ── 수거검사 상태 필터 ─────────────────────────────────────────────────────
-var _inspActiveClasses = {'all': 'active-L', 'pending': 'active-no', 'done': 'active-res'};
-var _inspBtnIds = {'all': 'inspFilterAll', 'pending': 'inspFilterPending', 'done': 'inspFilterDone'};
+// ── 수거검사 상태 필터 (서버 처리) ────────────────────────────────────────
+// 예전에는 현재 페이지의 DOM 만 숨겼기 때문에 2페이지 이후에는 필터가 적용되지 않고,
+// 목록 헤더 숫자만 "보이는 개수"로 덮어써져 탭 배지와 어긋났다.
+// 이제 insp_status 파라미터로 서버에서 걸러 페이지네이션·건수가 항상 일치한다.
 function inspFilter(type) {
-  Object.keys(_inspBtnIds).forEach(function(t) {
-    var btn = document.getElementById(_inspBtnIds[t]);
-    if (btn) Object.values(_inspActiveClasses).forEach(function(c) { btn.classList.remove(c); });
-  });
-  var activeBtn = document.getElementById(_inspBtnIds[type] || _inspBtnIds['all']);
-  if (activeBtn) activeBtn.classList.add(_inspActiveClasses[type] || 'active-L');
-
-  var visible = 0;
-  document.querySelectorAll('.rs-item--insp').forEach(function(el) {
-    var status = el.dataset.inspStatus;
-    var show = type === 'all' || (type === 'pending' && status === 'pending') || (type === 'done' && status === 'done');
-    el.style.display = show ? '' : 'none';
-    if (show) visible++;
-  });
-
-  // 목록 헤더 건수 갱신 (탭 배지는 전체 건수 유지)
-  var totalEl = document.querySelector('.rs-list-total--insp');
-  if (totalEl) totalEl.textContent = ' ' + visible + '건';
+  var url = new URL(window.location.href);
+  if (type === 'pending' || type === 'done') {
+    url.searchParams.set('insp_status', type);
+  } else {
+    url.searchParams.delete('insp_status');
+  }
+  // 필터가 바뀌면 목록 첫 페이지부터 다시 보고, 열려 있던 상세는 닫는다
+  url.searchParams.delete('insp_page');
+  url.searchParams.delete('pub_page');
+  url.searchParams.delete('insp_id');
+  url.searchParams.delete('pub_insp_id');
+  if (typeof showLoading === 'function') showLoading();
+  window.location.href = url.toString();
 }
 window.inspFilter = inspFilter;
 
