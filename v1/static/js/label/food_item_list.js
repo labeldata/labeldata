@@ -170,40 +170,49 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+/**
+ * 제품 상세 팝업 열기 (국내·수입 공통)
+ *
+ * 크기는 화면에 맞춰 계산한다. 기존 고정 1000x600 은 수입식품 '표시사항' 탭의
+ * 한글표시사항이 중앙값 20줄이라 33% 만 스크롤 없이 보였다.
+ * 900px 높이면 90% 가 한 화면에 들어온다(실측). 폭은 한글표시사항에 줄바꿈이
+ * 많아 넓혀도 줄 수가 거의 안 줄어들어(중앙 20줄 그대로) 크게 키우지 않는다.
+ * 작은 노트북(768p)에서도 화면을 넘지 않도록 availHeight 기준으로 상한을 둔다.
+ */
+function openProductDetailPopup(url, title) {
+    const avail = window.screen.availHeight || window.screen.height || 800;
+    const availW = window.screen.availWidth || window.screen.width || 1280;
+    const height = Math.min(920, Math.max(520, avail - 120));
+    const width = Math.min(1200, Math.max(880, availW - 240));
+    const left = Math.max(0, (availW - width) / 2);
+    const top = Math.max(0, (avail - height) / 2);
+
+    const popup = window.open(
+        url,
+        title,
+        `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
+    );
+    if (!popup || popup.closed || typeof popup.closed === "undefined") {
+        alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
+        return null;
+    }
+    popup.focus();
+    return popup;
+}
+
 function openDetailPopup(reportNo) {
     if (!reportNo) {
         alert("유효한 품목보고번호가 없습니다.");
         return;
     }
-    const url = `/label/food-item-detail/${reportNo}/`;
-    const width = 1000; // 가로 크기
-    const height = 600; // 세로 크기
-    const left = (screen.width - width) / 2;
-    const top = (screen.height - height) / 2;
-    const popup = window.open(
-        url,
-        "제품 상세 정보",
-        `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
-    );
-    if (!popup || popup.closed || typeof popup.closed === "undefined") {
-        alert("팝업이 차단되었습니다. 브라우저 설정을 확인하세요.");
-    }
+    openProductDetailPopup(`/label/food-item-detail/${reportNo}/`, "제품 상세 정보");
 }
 
-// 수입식품 상세 팝업 열기 함수 (제품 목록에서 사용)
+// 수입식품 상세는 id(pk)로 접근한다
 function openImportedDetailPopup(id) {
     if (!id) {
         alert("수입식품 ID가 없습니다.");
         return;
     }
-    const width = 1000;
-    const height = 600;
-    const left = (screen.width - width) / 2;
-    const top = (screen.height - height) / 2;
-    const url = `/label/food-item-detail/${id}/`;
-    window.open(
-        url,
-        "수입식품 상세 정보",
-        `width=${width},height=${height},resizable=yes,scrollbars=yes,top=${top},left=${left}`
-    );
+    openProductDetailPopup(`/label/food-item-detail/${id}/`, "수입식품 상세 정보");
 }

@@ -159,7 +159,7 @@
       display: flex;
       flex-direction: column;
     }
-    .preview-container > .tab-content > .tab-pane.active {
+    .preview-container > .tab-content > .tab-pane.show.active {
       flex: 1;
       min-height: 0;
       display: flex;
@@ -275,8 +275,15 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
-    .detail-text::-webkit-scrollbar { width: 8px; }
-    .detail-text::-webkit-scrollbar-thumb {
+    .detail-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    .detail-text::-webkit-scrollbar,
+    .detail-scroll::-webkit-scrollbar { width: 8px; }
+    .detail-text::-webkit-scrollbar-thumb,
+    .detail-scroll::-webkit-scrollbar-thumb {
       background: #dadce0; border-radius: 4px;
     }
 
@@ -677,25 +684,19 @@
       <!-- 표시사항 탭 -->
       {% if imported_mode %}
       <div class="tab-pane fade" id="label-content" role="tabpanel" aria-labelledby="label-tab">
-        <div class="info-card">
-          <div class="panel-title">
-            <i class="bi bi-file-earmark-text" style="color: var(--google-blue);"></i>
-            수입식품 한글표시사항
-          </div>
-          <div class="text-area-card">{{ item.korlabel|default:"-" }}</div>
+        <div class="detail-flex">
+          <div class="detail-sec-title"><i class="bi bi-file-earmark-text"></i> 수입식품 한글표시사항</div>
+          <div class="detail-text">{{ item.korlabel|default:"-" }}</div>
         </div>
       </div>
       {% endif %}
 
       <!-- 행정처분 탭 -->
       <div class="tab-pane fade" id="action-content" role="tabpanel" aria-labelledby="action-tab">
-        <div class="info-card">
-          <div class="panel-title">
-            <i class="bi bi-exclamation-circle" style="color: #d32f2f;"></i>
-            관련 행정처분
-          </div>
+        <div class="detail-flex">
+          <div class="detail-sec-title"><i class="bi bi-exclamation-circle" style="color:#d32f2f;"></i> 관련 행정처분</div>
           {% if actions %}
-            <div style="padding: 0;">
+            <div class="detail-scroll">
               {% for action in actions %}
                 <div class="list-group-item" style="border-left: 4px solid #d32f2f;">
                   <div style="font-weight: 500; color: var(--text-primary);">{{ action.action_name }}</div>
