@@ -51,10 +51,10 @@
 
         {# 2. 기간 버튼 #}
         <div class="rs-days-group">
-          <button type="button" class="rs-day-btn {% if days == '3'  and not date_from and not date_to %}active{% endif %}" onclick="setDays('3')">3일</button>
-          <button type="button" class="rs-day-btn {% if days == '7'  and not date_from and not date_to %}active{% endif %}" onclick="setDays('7')">1주</button>
-          <button type="button" class="rs-day-btn {% if days == '30' and not date_from and not date_to %}active{% endif %}" onclick="setDays('30')">1개월</button>
-          <button type="button" class="rs-day-btn {% if days == 'all' and not date_from and not date_to %}active{% endif %}" onclick="setDays('all')">전체</button>
+          <button type="button" class="rs-day-btn {% if days == '3'  and not date_from and not date_to %}active{% endif %}" onclick="setDays('3')" title="최근 3일 이내에 등록된 정보만">3일</button>
+          <button type="button" class="rs-day-btn {% if days == '7'  and not date_from and not date_to %}active{% endif %}" onclick="setDays('7')" title="최근 1주 이내에 등록된 정보만">1주</button>
+          <button type="button" class="rs-day-btn {% if days == '30' and not date_from and not date_to %}active{% endif %}" onclick="setDays('30')" title="최근 1개월 이내에 등록된 정보만">1개월</button>
+          <button type="button" class="rs-day-btn {% if days == 'all' and not date_from and not date_to %}active{% endif %}" onclick="setDays('all')" title="기간 제한 없이 전체를 봅니다 (기본값)">전체</button>
         </div>
 
         {# 3. 날짜 범위 #}
@@ -325,6 +325,12 @@
         <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">{{ tab_insp_total|intcomma }}건</span>
         <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">{{ tab_admin_total|intcomma }}건</span>
         <span class="rs-list-total rs-list-total--insp">{% if inspection_has_matches %}{{ inspection_total|intcomma }}{% else %}{{ recent_insp_total|intcomma }}{% endif %}건</span>
+        {% if active_filters %}
+        <span class="rs-active-filters" title="적용 중인 조건: {{ active_filters|join:', ' }}">
+          <i class="bi bi-funnel-fill"></i>{{ active_filters|length }}
+          <a href="?" class="rs-filter-reset" title="모든 조건을 지우고 전체를 봅니다">전체 보기</a>
+        </span>
+        {% endif %}
       {# ── 등급·상태 필터 바 — 목록을 거르는 컨트롤이라 목록 위에 둔다 ── #}
       <div class="rf-row2">
         <div class="rf-risk-chips">
@@ -413,9 +419,8 @@
       </div>{# end rf-row2--insp #}
         <a class="rs-sort-btn"
            href="?{{ page_query_string }}&sort={% if sort == 'asc' %}desc{% else %}asc{% endif %}"
-           title="날짜 정렬 순서 변경">
+           title="날짜 정렬: 현재 {% if sort == 'asc' %}오름차순{% else %}내림차순{% endif %} — 눌러서 반대로">
           <i class="bi bi-sort-{% if sort == 'asc' %}up-alt{% else %}down-alt{% endif %}"></i>
-          <span class="rs-sort-label">{% if sort == 'asc' %}오름차순{% else %}내림차순{% endif %}</span>
         </a>
       </div>
       <div class="rs-list-body">
@@ -555,7 +560,7 @@
           <div class="rs-row1">
             {% if news.my_unread_yn or news.ing_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
             <span class="rs-item-flag">
-              {% if news.api_source == 'saol_admin' %}🏛{% elif news.source == 'domestic' %}🇰🇷{% else %}🌏{% endif %}
+              {% if news.api_source == 'saol_admin' %}<i class="bi bi-bank"></i>{% elif news.source == 'domestic' %}<span class="rs-src-tag">국내</span>{% else %}<span class="rs-src-tag rs-src-tag--imp">수입</span>{% endif %}
             </span>
             <span class="rs-item-name">{{ news.product_name }}</span>
             <span class="rs-item-date" title="수집: {{ news.collected_date|date:'Y-m-d' }}{% if news.event_date and news.event_date != news.collected_date %} (발생: {{ news.event_date|date:'Y-m-d' }}){% endif %}">{% if news.event_date %}{% if news.event_date > today %}{{ today|date:"m/d" }}{% else %}{{ news.event_date|date:"m/d" }}{% endif %}{% else %}{% if news.collected_date > today %}{{ today|date:"m/d" }}{% else %}{{ news.collected_date|date:"m/d" }}{% endif %}{% endif %}</span>
@@ -621,7 +626,14 @@
             <div style="font-size:13px;font-weight:600;color:#5f6368;margin-bottom:4px;">
               조건에 맞는 결과가 없습니다
             </div>
-            <div style="font-size:12px;color:#9aa0a6;">분야 선택 또는 기간을 변경해 보세요</div>
+            <div style="font-size:12px;color:#9aa0a6;">
+              {% if active_filters %}
+                적용 중인 조건: {{ active_filters|join:" · " }}<br>
+                <a href="?" style="color:#1967d2;font-weight:600;">조건을 모두 지우고 전체 보기</a>
+              {% else %}
+                검색어나 분야를 바꿔 보세요
+              {% endif %}
+            </div>
           </div>
         </div>
         {% endfor %}
@@ -1198,7 +1210,7 @@ function showBackfillResult(count, previews, keyword) {
     if (previews && previews.length > 0) {
       previewHtml = '<ul class="kw-backfill-list">' +
         previews.map(function(p) {
-          var flag = p.source === 'domestic' ? '🇰🇷' : '🌏';
+          var flag = p.source === 'domestic' ? '<i class="bi bi-geo-alt"></i>' : '<i class="bi bi-globe2"></i>';
           var date = p.event_date ? p.event_date.slice(0, 10) : '';
           return '<li onclick="selectNewsAndClose(' + p.id + ')" title="클릭하면 상세 보기">' +
             '<span class="kw-bf-flag">' + flag + '</span>' +
@@ -1283,7 +1295,7 @@ function saveInspProfile() {
       var badge = document.getElementById('inspProfileBadge');
       if (badge) {
         if (company || license) {
-          badge.textContent = '✓';
+          badge.innerHTML = '<i class="bi bi-check2"></i>';
           badge.className = 'rs-keyword-badge rs-keyword-badge--ok';
         } else {
           badge.textContent = '!';

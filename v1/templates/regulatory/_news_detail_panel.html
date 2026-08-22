@@ -11,35 +11,35 @@
     <div class="rd-hdr-top">
       {% if news.api_source == 'I2620' or news.api_source == 'I2640' %}<span class="rh-badge rh-src-dom">🇰🇷 검사부적합</span>
       {% elif news.api_source == 'I0490' %}<span class="rh-badge rh-src-dom">🇰🇷 회수</span>
-      {% elif news.api_source == 'import' %}<span class="rh-badge rh-src-imp">🌏 수입회수</span>
-      {% elif news.api_source == 'imp_insp' %}<span class="rh-badge rh-src-imp">🌏 수입부적합</span>
+      {% elif news.api_source == 'import' %}<span class="rh-badge rh-src-imp"><i class="bi bi-globe2 me-1"></i>수입회수</span>
+      {% elif news.api_source == 'imp_insp' %}<span class="rh-badge rh-src-imp"><i class="bi bi-globe2 me-1"></i>수입부적합</span>
       {% elif news.api_source == 'I0470' or news.api_source == 'I0480' %}<span class="rh-badge rh-src-dom">🇰🇷 행정처분</span>
-      {% elif news.api_source == 'I0482' %}<span class="rh-badge rh-src-imp">🌏 행정처분</span>
-      {% elif news.api_source == 'saol_admin' %}<span class="rh-badge rh-src-saol">🏛 지자체처분</span>
+      {% elif news.api_source == 'I0482' %}<span class="rh-badge rh-src-imp"><i class="bi bi-globe2 me-1"></i>행정처분</span>
+      {% elif news.api_source == 'saol_admin' %}<span class="rh-badge rh-src-saol"><i class="bi bi-bank me-1"></i>지자체처분</span>
       {% else %}<span class="rh-badge rh-src-dom">🇰🇷 국내식품</span>
       {% endif %}
-      {% if vtype == 'pesticide' %}<span class="rh-badge rh-vtype">🌿 잔류농약</span>
-      {% elif vtype == 'microbe' %}<span class="rh-badge rh-vtype">🦠 미생물</span>
-      {% elif vtype == 'heavy_metal' %}<span class="rh-badge rh-vtype">⚗️ 중금속</span>
-      {% elif vtype == 'additive' %}<span class="rh-badge rh-vtype">🧪 식품첨가물</span>
-      {% elif vtype == 'foreign_body' %}<span class="rh-badge rh-vtype">🔍 이물혼입</span>
-      {% elif vtype == 'deficiency' %}<span class="rh-badge rh-vtype">📉 성분미달</span>
-      {% elif vtype == 'labeling' %}<span class="rh-badge rh-vtype">🏷️ 표시위반</span>
-      {% elif vtype == 'admin' %}<span class="rh-badge rh-vtype">🏢 행정처분</span>
-      {% elif vtype == 'import_ban' %}<span class="rh-badge rh-vtype">🚫 수입금지</span>
-      {% elif vtype == 'recall' %}<span class="rh-badge rh-vtype">📦 회수·폐기</span>
+      {% if vtype == 'pesticide' %}<span class="rh-badge rh-vtype"><i class="bi bi-flower2 me-1"></i>잔류농약</span>
+      {% elif vtype == 'microbe' %}<span class="rh-badge rh-vtype"><i class="bi bi-virus me-1"></i>미생물</span>
+      {% elif vtype == 'heavy_metal' %}<span class="rh-badge rh-vtype"><i class="bi bi-thermometer-half me-1"></i>중금속</span>
+      {% elif vtype == 'additive' %}<span class="rh-badge rh-vtype"><i class="bi bi-droplet me-1"></i>식품첨가물</span>
+      {% elif vtype == 'foreign_body' %}<span class="rh-badge rh-vtype"><i class="bi bi-search me-1"></i>이물혼입</span>
+      {% elif vtype == 'deficiency' %}<span class="rh-badge rh-vtype"><i class="bi bi-graph-down me-1"></i>성분미달</span>
+      {% elif vtype == 'labeling' %}<span class="rh-badge rh-vtype"><i class="bi bi-tag me-1"></i>표시위반</span>
+      {% elif vtype == 'admin' %}<span class="rh-badge rh-vtype"><i class="bi bi-building me-1"></i>행정처분</span>
+      {% elif vtype == 'import_ban' %}<span class="rh-badge rh-vtype"><i class="bi bi-slash-circle me-1"></i>수입금지</span>
+      {% elif vtype == 'recall' %}<span class="rh-badge rh-vtype"><i class="bi bi-box-seam me-1"></i>회수·폐기</span>
       {% elif vtype %}<span class="rh-badge rh-vtype">기타</span>
       {% endif %}
       {% if matches %}{% with top=matches|first %}
-        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H">🔴 중요</span>
-        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M">🟠 관심</span>
-        {% else %}<span class="rh-badge rh-risk-L">🔵 일반</span>{% endif %}
+        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>중요</span>
+        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>관심</span>
+        {% else %}<span class="rh-badge rh-risk-L"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>일반</span>{% endif %}
       {% endwith %}{% elif ing_matches %}{% with top=ing_matches|first %}
-        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H rh-risk-ing">🔴 중요·원료</span>
-        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M rh-risk-ing">🟠 관심·원료</span>
-        {% else %}<span class="rh-badge rh-risk-L rh-risk-ing">🔵 일반·원료</span>{% endif %}
+        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H rh-risk-ing"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>중요·원료</span>
+        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M rh-risk-ing"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>관심·원료</span>
+        {% else %}<span class="rh-badge rh-risk-L rh-risk-ing"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>일반·원료</span>{% endif %}
       {% endwith %}{% elif kw_logs %}
-        <span class="rh-badge rh-risk-kw">🔔 키워드 알림</span>
+        <span class="rh-badge rh-risk-kw"><i class="bi bi-bell me-1"></i>키워드 알림</span>
       {% endif %}
       <div class="ms-auto">
         <span class="rd-hdr-date">
@@ -188,7 +188,7 @@
       {% if news.ai_substances %}
       <div class="rd-ai-lbl">검출 물질</div>
       <div class="rd-ai-chips" style="margin-bottom:8px;">
-        {% for sub in news.ai_substances %}<span class="rd-sub-chip">⚗ {{ sub }}</span>{% endfor %}
+        {% for sub in news.ai_substances %}<span class="rd-sub-chip"><i class="bi bi-thermometer-half me-1"></i>{{ sub }}</span>{% endfor %}
       </div>
       {% endif %}
       {% if news.ai_issues %}
@@ -196,9 +196,9 @@
       <div class="rd-ai-ing-list">
         {% for issue in news.ai_issues %}
         <div class="rd-ai-ing-row">
-          <span class="rd-ai-ing-name">🥬 {{ issue.ingredient }}</span>
-          {% if issue.origin %}<span class="rd-ai-ing-meta">📍 {{ issue.origin }}</span>{% endif %}
-          {% if issue.manufacturer %}<span class="rd-ai-ing-meta">🏭 {{ issue.manufacturer }}</span>{% endif %}
+          <span class="rd-ai-ing-name"><i class="bi bi-basket me-1"></i>{{ issue.ingredient }}</span>
+          {% if issue.origin %}<span class="rd-ai-ing-meta"><i class="bi bi-geo-alt me-1"></i>{{ issue.origin }}</span>{% endif %}
+          {% if issue.manufacturer %}<span class="rd-ai-ing-meta"><i class="bi bi-building me-1"></i>{{ issue.manufacturer }}</span>{% endif %}
           {% if issue.food_type %}<span class="rd-ai-ing-meta">{{ issue.food_type }}</span>{% endif %}
         </div>
         {% endfor %}
@@ -222,25 +222,25 @@
     <div class="rd-crit-body">
       {% if news.api_source == 'I2640' %}
       <div class="rd-crit-row"><span class="rd-crit-src">국내 농산물</span>
-        <span class="rh-cH">🔴중요</span><span>원료명+원산지 일치</span>
-        <span class="rh-cM">🟠관심</span><span>원료명+식품유형 일치</span>
-        <span class="rh-cL">🔵일반</span><span>원료명만 일치</span>
+        <span class="rh-cH"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>중요</span><span>원료명+원산지 일치</span>
+        <span class="rh-cM"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>관심</span><span>원료명+식품유형 일치</span>
+        <span class="rh-cL"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>일반</span><span>원료명만 일치</span>
       </div>
       {% elif news.api_source == 'import' or news.api_source == 'imp_insp' %}
       <div class="rd-crit-row"><span class="rd-crit-src">수입식품</span>
-        <span class="rh-cH">🔴중요</span><span>원산지/식품유형/제조사 2개+ 일치</span>
-        <span class="rh-cM">🟠관심</span><span>1개 일치</span>
-        <span class="rh-cL">🔵일반</span><span>원료명만 일치</span>
+        <span class="rh-cH"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>중요</span><span>원산지/식품유형/제조사 2개+ 일치</span>
+        <span class="rh-cM"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>관심</span><span>1개 일치</span>
+        <span class="rh-cL"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>일반</span><span>원료명만 일치</span>
       </div>
       {% elif news.api_source == 'I0470' or news.api_source == 'I0480' or news.api_source == 'I0482' %}
       <div class="rd-crit-row"><span class="rd-crit-src">행정처분</span>
-        <span class="rh-cM">🟠관심</span><span>처분업체명 = 내 원료 제조사</span>
+        <span class="rh-cM"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>관심</span><span>처분업체명 = 내 원료 제조사</span>
       </div>
       {% else %}
       <div class="rd-crit-row"><span class="rd-crit-src">국내가공</span>
-        <span class="rh-cH">🔴중요</span><span>제조사+제품명 동일</span>
-        <span class="rh-cM">🟠관심</span><span>식품유형+(제조사 or 원산지) 일치</span>
-        <span class="rh-cL">🔵일반</span><span>원료명만 일치</span>
+        <span class="rh-cH"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>중요</span><span>제조사+제품명 동일</span>
+        <span class="rh-cM"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>관심</span><span>식품유형+(제조사 or 원산지) 일치</span>
+        <span class="rh-cL"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>일반</span><span>원료명만 일치</span>
       </div>
       {% endif %}
       <div class="rd-crit-note">• SAFE: 원산지 확실 불일치 시 제외&nbsp;&nbsp;• 중요·관심은 원료명 일치가 기본 조건</div>
@@ -258,7 +258,7 @@
     {% for m in matches %}
     <div class="rd-item" id="match-{{ m.id }}">
       <div class="rd-item-head">
-        {% if m.risk_level == 'HIGH' %}🔴{% elif m.risk_level == 'MED' %}🟠{% else %}🔵{% endif %}
+        <i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>
         <span class="rd-item-name" title="{{ m.product.my_label_name|default:m.product.prdlst_nm }}">
           {{ m.product.my_label_name|default:m.product.prdlst_nm }}
         </span>
@@ -286,10 +286,10 @@
       </div>
       {% endif %}{% endwith %}
       <div class="rd-act-row">
-        <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'monitoring',this)">⏳ 진행 중</button>
-        <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'resolved',this)">✅ 조치완료</button>
-        <button class="rd-act-btn" onclick="doAction('product',{{ m.id }},'dismissed',this)">❌ 해당없음</button>
-        <button class="rd-act-btn" onclick="toggleMemo('pm-{{ m.id }}')">📝 메모</button>
+        <button class="rd-act-btn" data-action="monitoring" onclick="doAction('product',{{ m.id }},'monitoring',this)"><i class="bi bi-hourglass-split me-1"></i>진행 중</button>
+        <button class="rd-act-btn" data-action="resolved" onclick="doAction('product',{{ m.id }},'resolved',this)"><i class="bi bi-check2-circle me-1"></i>조치완료</button>
+        <button class="rd-act-btn" data-action="dismissed" onclick="doAction('product',{{ m.id }},'dismissed',this)"><i class="bi bi-slash-circle me-1"></i>해당없음</button>
+        <button class="rd-act-btn" onclick="toggleMemo('pm-{{ m.id }}')"><i class="bi bi-pencil me-1"></i>메모</button>
         <span class="rd-act-spacer"></span>
         <a href="/products/{{ m.product.my_label_id }}/" class="rd-item-link">제품 워크스페이스 <i class="bi bi-arrow-right-short"></i></a>
         <button class="rd-act-btn" style="font-size:9px;color:#9aa0a6;" onclick="markFalsePositive({{ m.id }})">오탐지</button>
@@ -314,7 +314,7 @@
     {% for im in ing_matches %}
     <div class="rd-item" id="ing-match-{{ im.id }}" style="border-color:#ffd54f;">
       <div class="rd-item-head">
-        {% if im.risk_level == 'HIGH' %}🔴{% elif im.risk_level == 'MED' %}🟠{% else %}🔵{% endif %}
+        <i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>
         <span class="rd-item-name">{{ im.ingredient.prdlst_nm|default:im.ingredient.ingredient_display_name }}</span>
         <span class="rd-item-lv lv-{{ im.risk_level }}">{% if im.risk_level == 'HIGH' %}중요{% elif im.risk_level == 'MED' %}관심{% else %}일반{% endif %}</span>
       </div>
@@ -342,10 +342,10 @@
       </div>
       {% endif %}{% endwith %}
       <div class="rd-act-row">
-        <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'monitoring',this)">⏳ 진행 중</button>
-        <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'resolved',this)">✅ 조치완료</button>
-        <button class="rd-act-btn" onclick="doAction('ingredient',{{ im.id }},'dismissed',this)">❌ 해당없음</button>
-        <button class="rd-act-btn" onclick="toggleMemo('im-{{ im.id }}')">📝 메모</button>
+        <button class="rd-act-btn" data-action="monitoring" onclick="doAction('ingredient',{{ im.id }},'monitoring',this)"><i class="bi bi-hourglass-split me-1"></i>진행 중</button>
+        <button class="rd-act-btn" data-action="resolved" onclick="doAction('ingredient',{{ im.id }},'resolved',this)"><i class="bi bi-check2-circle me-1"></i>조치완료</button>
+        <button class="rd-act-btn" data-action="dismissed" onclick="doAction('ingredient',{{ im.id }},'dismissed',this)"><i class="bi bi-slash-circle me-1"></i>해당없음</button>
+        <button class="rd-act-btn" onclick="toggleMemo('im-{{ im.id }}')"><i class="bi bi-pencil me-1"></i>메모</button>
         <span class="rd-act-spacer"></span>
         <a href="{% url 'label:my_ingredient_list_combined' %}" class="rd-item-link">원료 보관함 <i class="bi bi-arrow-right-short"></i></a>
       </div>
@@ -435,7 +435,11 @@ function markAllResolved(id){
     if(d.success){
       if(typeof showSnackbar==='function')showSnackbar('이 알림의 모든 매칭이 조치 완료로 처리됐습니다.','success');
       _updateBadge(d.unread);
-      setTimeout(()=>window.location.reload(),800);
+      _syncListBadge('resolved');
+      document.querySelectorAll('.rd-act-btn').forEach(function(b){
+        b.classList.remove('active-monitoring');
+        if(b.dataset.action==='resolved') b.classList.add('active-resolved');
+      });
     }
   });
 }
@@ -447,7 +451,7 @@ function markAllNewsResolved(){
     if(d.success){
       if(typeof showSnackbar==='function')showSnackbar('전체 '+d.created+'건의 매칭이 조치 완료로 처리됐습니다.','success');
       _updateBadge(0);
-      setTimeout(()=>window.location.reload(),900);
+      setTimeout(()=>window.location.reload(),300);  // 목록 전체가 바뀌므로 새로고침
     }
   });
 }
@@ -465,7 +469,19 @@ function doAction(matchType,matchId,actionType,btn){
   .then(r=>r.json()).then(d=>{
     if(d.success){
       if(actionType==='dismissed'){const c=matchType==='product'?document.getElementById('match-'+matchId):document.getElementById('ing-match-'+matchId);if(c){c.style.opacity='0.3';setTimeout(()=>c.remove(),500);}if(typeof showSnackbar==='function')showSnackbar('해당 없음으로 처리됐습니다.','info');}
-      else{if(btn)btn.classList.add('active-'+actionType);if(typeof showSnackbar==='function')showSnackbar('['+d.action_label+'] 기록됐습니다.','success');setTimeout(()=>window.location.reload(),700);}
+      else{
+        // 예전에는 0.7초 대기 후 페이지를 통째로 다시 불러와 반응이 느리게 느껴졌다.
+        // 바뀌는 건 버튼 상태와 좌측 목록의 상태 배지뿐이라 그 자리에서 갱신한다.
+        if(btn){
+          var group=btn.parentElement;
+          if(group) group.querySelectorAll('button').forEach(function(b){
+            b.classList.remove('active-monitoring','active-resolved');
+          });
+          btn.classList.add('active-'+actionType);
+        }
+        _syncListBadge(actionType);
+        if(typeof showSnackbar==='function')showSnackbar('['+d.action_label+'] 기록됐습니다.','success');
+      }
     }
   });
 }
@@ -473,9 +489,27 @@ window.doAction=doAction;
 function saveActionMemo(matchType,matchId,areaId){
   const area=document.getElementById(areaId);const ta=area?area.querySelector('textarea'):null;const memo=ta?ta.value.trim():'';
   fetch("{% url 'regulatory:save_action' %}",{method:'POST',headers:{'X-CSRFToken':getCsrf(),'Content-Type':'application/json'},body:JSON.stringify({match_type:matchType,match_id:matchId,action_type:'memo',memo:memo})})
-  .then(r=>r.json()).then(d=>{if(d.success){if(typeof showSnackbar==='function')showSnackbar('메모가 저장됐습니다.','success');setTimeout(()=>window.location.reload(),700);}});
+  .then(r=>r.json()).then(d=>{if(d.success){if(typeof showSnackbar==='function')showSnackbar('메모가 저장됐습니다.','success');}});
 }
 window.saveActionMemo=saveActionMemo;
+/**
+ * 좌측 목록에서 지금 열려 있는 항목의 상태 배지를 갱신한다.
+ * 조치 결과를 확인하려고 페이지를 다시 불러올 필요가 없게 한다.
+ */
+function _syncListBadge(actionType){
+  var item=document.querySelector('.rs-item.active');
+  if(!item) return;
+  var badge=item.querySelector('.badge-status-no,.badge-status-mon,.badge-status-res');
+  if(actionType==='resolved'){
+    item.classList.add('rs-item--resolved');
+    var q=item.querySelector('.rs-quick-resolve'); if(q) q.remove();
+    if(badge){badge.className='badge-status-res';badge.innerHTML='<i class="bi bi-check2-circle me-1"></i>조치완료';}
+  }else if(actionType==='monitoring'){
+    if(badge){badge.className='badge-status-mon';badge.textContent='진행 중';}
+  }
+}
+window._syncListBadge=_syncListBadge;
+
 function _updateBadge(count){
   const b=document.getElementById('regAlertBadge');
   if(b){b.textContent=count>9?'9+':count;b.style.display=count>0?'':'none';}

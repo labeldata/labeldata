@@ -1258,3 +1258,29 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 
 /* 정렬 버튼은 헤더 끝에 고정 — 칩이 많아져도 밀려나거나 줄바꿈되지 않는다 */
 .rs-sort-btn { flex-shrink: 0; margin-left: auto; }
+
+/* 목록 항목의 출처 표시 — 국기 이모지 대신 짧은 텍스트 태그 */
+.rs-src-tag {
+  display: inline-block; flex-shrink: 0;
+  font-size: 10px; font-weight: 600; line-height: 1.5;
+  padding: 0 5px; border-radius: 4px;
+  background: var(--c-border-light, #f1f3f4); color: var(--c-text-secondary);
+}
+.rs-src-tag--imp { background: #e8f0fe; color: #1558b0; }
+
+/* 적용 중인 필터 요약 — 조건이 여기저기 흩어져 있어 "왜 이것만 보이지?" 하기 쉽다.
+   몇 개가 걸려 있는지 알려주고 한 번에 지울 수 있게 한다. */
+.rs-active-filters {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  font-size: 11px; font-weight: 600;
+  color: var(--c-primary);
+  background: var(--c-primary-bg);
+  border-radius: 12px; padding: 2px 4px 2px 8px;
+}
+.rs-active-filters .bi { font-size: 10px; }
+.rs-filter-reset {
+  font-size: 11px; font-weight: 600; text-decoration: none;
+  color: #fff; background: var(--c-primary);
+  border-radius: 10px; padding: 1px 7px; white-space: nowrap;
+}
+.rs-filter-reset:hover { background: #1558b0; color: #fff; text-decoration: none; }

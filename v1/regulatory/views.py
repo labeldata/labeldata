@@ -64,6 +64,31 @@ def _cat_condition(cats):
 # 목록 뷰
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _active_filter_labels(q, days, date_from, date_to, risk, status,
+                          insp_status, cats_submitted, regular_cats):
+    """
+    지금 적용 중인 필터를 사람이 읽는 문구로 만든다.
+    조건이 여기저기 흩어져 있어 "왜 이것만 보이지?" 하기 쉬워, 화면에 요약해 보여준다.
+    """
+    labels = []
+    if q:
+        labels.append(f'검색 "{q}"')
+    if date_from or date_to:
+        labels.append(f'기간 {date_from or "처음"}~{date_to or "오늘"}')
+    elif days != 'all':
+        labels.append({'3': '최근 3일', '7': '최근 1주', '30': '최근 1개월'}.get(days, f'최근 {days}일'))
+    if risk:
+        labels.append({'HIGH': '중요', 'MED': '관심', 'LOW': '일반'}.get(risk, risk))
+    if status:
+        labels.append({'no_action': '미조치', 'monitoring': '진행 중',
+                       'resolved': '완료'}.get(status, status))
+    if insp_status:
+        labels.append({'pending': '검사 진행 중', 'done': '판정 완료'}.get(insp_status, insp_status))
+    if cats_submitted and regular_cats and set(regular_cats) != set(_REGULAR_CAT_KEYS):
+        labels.append(f'분야 {len(regular_cats)}개 선택')
+    return labels
+
+
 @login_required
 def news_list(request):
     """
@@ -75,7 +100,9 @@ def news_list(request):
     q         = request.GET.get('q', '').strip()
     risk      = request.GET.get('risk', '')    # 'HIGH' | 'MED' | 'LOW' | ''
     status    = request.GET.get('status', '') # 'no_action' | 'monitoring' | 'resolved' | ''
-    days      = request.GET.get('days', '30') # '3' | '7' | '30' | 'all'
+    # 기본은 전체 기간. 예전 기본값(30일)에서는 처음 들어온 사용자가
+    # "내 알림이 왜 안 보이지?" 하게 되는 경우가 많았다.
+    days      = request.GET.get('days', 'all')  # '3' | '7' | '30' | 'all'
     sort      = request.GET.get('sort', 'desc')  # 'desc' | 'asc'
     date_from = request.GET.get('date_from', '').strip()  # YYYY-MM-DD
     date_to   = request.GET.get('date_to',   '').strip()  # YYYY-MM-DD
@@ -135,6 +162,9 @@ def news_list(request):
 
     # 미확인 집합 — 집계 규칙은 selectors 한 곳에서 관리한다 (탭 미확인 dot 표시용)
     my_unread_news_ids = selectors.unread_news_ids(request.user)
+
+    # 목록 렌더에 쓰는 매칭 정보를 한 번에 모아 온다 (행별 서브쿼리 제거)
+    match_ctx = selectors.user_match_context(request.user)
 
     # ── risk / status 필터 (부적합·행정처분 탭) ──────────────────────────────
     # 반드시 Paginator 생성 전에 적용해야 한다.
@@ -196,89 +226,29 @@ def news_list(request):
     # 어노테이션된 qs 로 COUNT 하면 불필요한 서브쿼리가 함께 실행될 수 있다.
     count_qs = qs
 
-    # DB 레벨 어노테이션으로 정렬 (매칭→미읽음→최신)
-    matched_subq = NewsProductMatch.objects.filter(
-        news=OuterRef('pk'), product__user_id=request.user, false_positive_yn=False
-    )
-    unread_subq = NewsProductMatch.objects.filter(
-        news=OuterRef('pk'), product__user_id=request.user,
-        read_yn=False, false_positive_yn=False
-    )
-    ing_unread_subq = NewsIngredientMatch.objects.filter(
-        news=OuterRef('pk'), user=request.user,
-        read_yn=False, dismissed_yn=False
-    )
-    # 현재 사용자의 최고 등급 매칭 risk_level (제품 or 원료)
-    my_risk_subq = (
-        NewsProductMatch.objects
-        .filter(news=OuterRef('pk'), product__user_id=request.user, false_positive_yn=False)
-        .order_by('-risk_score')
-        .values('risk_level')[:1]
-    )
-    # 키워드 알림 매칭 어노테이션
-    kw_matched_subq = PushNotificationLog.objects.filter(
-        news=OuterRef('pk'), device__user=request.user, trigger_type='keyword'
-    )
-    # 원료 보관함 단독 매칭 어노테이션
-    ing_matched_subq = NewsIngredientMatch.objects.filter(
-        news=OuterRef('pk'), user=request.user, dismissed_yn=False
-    )
-    ing_risk_subq = (
-        NewsIngredientMatch.objects
-        .filter(news=OuterRef('pk'), user=request.user, dismissed_yn=False)
-        .order_by('-risk_score')
-        .values('risk_level')[:1]
-    )
-    # 최근 조치 상태 서브쿼리 (제품 매칭 / 원료 매칭)
-    latest_prod_action_subq = (
-        RegulatoryMatchAction.objects
-        .filter(
-            product_match__news=OuterRef('pk'),
-            product_match__product__user_id=request.user,
-            product_match__false_positive_yn=False,
-            action_type__in=('monitoring', 'resolved'),
-        )
-        .order_by('-created_at')
-        .values('action_type')[:1]
-    )
-    latest_ing_action_subq = (
-        RegulatoryMatchAction.objects
-        .filter(
-            ingredient_match__news=OuterRef('pk'),
-            ingredient_match__user=request.user,
-            ingredient_match__dismissed_yn=False,
-            action_type__in=('monitoring', 'resolved'),
-        )
-        .order_by('-created_at')
-        .values('action_type')[:1]
-    )
+    # 정렬용 어노테이션.
+    # 예전에는 Exists/Subquery 8개를 붙여 상관 서브쿼리가 행마다 실행됐다.
+    # 매칭 정보는 selectors 에서 한 번에 모아 오고, 여기서는 상수 IN 목록만 쓴다.
+    matched_ids = match_ctx['all_matched']
 
-    # sort_date = GREATEST(COALESCE(event_date, collected_date), collected_date)
-    # event_date가 NULL이면 collected_date 사용, 아니면 둘 중 더 최근 날짜 기준 정렬
-    # → 오늘 수집된 구 event_date 항목도 상단에 표시
     qs = qs.annotate(
-        my_matched_yn=Exists(matched_subq),
-        my_unread_yn=Exists(unread_subq),
-        ing_unread_yn=Exists(ing_unread_subq),
-        kw_matched_yn=Exists(kw_matched_subq),
-        my_risk_level=Subquery(my_risk_subq, output_field=CharField()),
-        ing_matched_yn=Exists(ing_matched_subq),
-        ing_risk_level=Subquery(ing_risk_subq, output_field=CharField()),
-        my_action_status=Subquery(latest_prod_action_subq, output_field=CharField()),
-        my_ing_action_status=Subquery(latest_ing_action_subq, output_field=CharField()),
+        # sort_date = GREATEST(COALESCE(event_date, collected_date), collected_date)
+        # event_date 가 NULL 이면 collected_date, 아니면 둘 중 더 최근 날짜로 정렬한다
+        # (오늘 수집된 구 event_date 항목도 상단에 오도록)
         sort_date=Greatest(
             Coalesce('event_date', 'collected_date'),
             'collected_date',
         ),
         # 매칭 그룹 우선순위: 0=매칭(상단), 1=일반(하단)
-        match_priority=Case(
-            When(my_matched_yn=True,  then=Value(0)),
-            When(ing_matched_yn=True, then=Value(0)),
-            When(kw_matched_yn=True,  then=Value(0)),
-            default=Value(1),
-            output_field=IntegerField(),
+        match_priority=(
+            Case(
+                When(id__in=matched_ids, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            ) if matched_ids else Value(1, output_field=IntegerField())
         ),
     )
+
     if sort == 'asc':
         qs = qs.order_by(
             'match_priority',
@@ -337,6 +307,9 @@ def news_list(request):
     page_query_string = qp.urlencode()
     current_tab = tab  # 상단에서 이미 읽은 값 재사용
 
+    # 페이지에 실제로 보이는 행에만 매칭 정보를 붙인다 (보통 50건)
+    selectors.attach_match_info(page_obj.object_list, match_ctx)
+
     # saol_admin 지자체명 추출 (목록 패널 표시용)
     for news_item in page_obj.object_list:
         if news_item.api_source == 'saol_admin' and news_item.raw_detail_text:
@@ -349,8 +322,15 @@ def news_list(request):
     no_action_count = len(selectors.no_action_news_ids(request.user))
 
     # 카테고리별 건수 (api_source 기반, 전체 DB 기준 — 필터 드로어 표시용)
-    api_counts_qs = RegulatoryNews.objects.values('api_source').annotate(cnt=Count('id'))
-    api_counts = {row['api_source']: row['cnt'] for row in api_counts_qs}
+    # 전체 테이블 GROUP BY 라 매 요청마다 돌리면 비싸다(로컬 4,750건에서 16ms).
+    # 드로어에만 쓰는 참고 수치이므로 캐시한다. 수집 스케줄러가 돌면 자연히 갱신된다.
+    api_counts = cache.get('regulatory_api_counts')
+    if api_counts is None:
+        api_counts = {
+            row['api_source']: row['cnt']
+            for row in RegulatoryNews.objects.values('api_source').annotate(cnt=Count('id'))
+        }
+        cache.set('regulatory_api_counts', api_counts, 60 * 60 * 3)
     categories_with_count = [
         {**cat, 'count': sum(api_counts.get(s, 0) for s in cat['api_sources'])}
         for cat in API_CATEGORIES
@@ -618,6 +598,9 @@ def news_list(request):
         'inspection_has_matches':  inspection_has_matches,
         'inspection_unread':       inspection_unread,
         'insp_status':             insp_status,
+        'active_filters':          _active_filter_labels(
+                                       q, days, date_from, date_to, risk, status,
+                                       insp_status, cats_submitted, regular_cats),
         'selected_insp':           selected_insp,
         'selected_pub_insp':       selected_pub_insp,
         'recent_insp_list':        recent_insp_list,

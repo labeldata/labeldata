@@ -104,3 +104,101 @@ def no_action_news_ids(user, actionable_ids=None) -> set:
     """미조치 뉴스 ID — 조치 대상 중 monitoring/resolved 이력이 없는 건"""
     base = actionable_news_ids(user) if actionable_ids is None else actionable_ids
     return base - actioned_news_ids(user)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 목록 렌더용 사용자 매칭 정보
+# ─────────────────────────────────────────────────────────────────────────────
+
+def user_match_context(user) -> dict:
+    """
+    목록을 그리는 데 필요한 '내 매칭' 정보를 한 번에 모아 온다.
+
+    예전에는 목록 쿼리에 Exists/Subquery 어노테이션을 8개 붙여 상관 서브쿼리가
+    행마다 실행됐다(EXPLAIN 기준 13개). 정렬 키까지 그 결과로 계산해 필터된 전체
+    행에 대해 서브쿼리를 돌린 뒤 filesort 를 했다.
+    사용자별 매칭 건수는 보통 수십 건 수준이라, 여기서 집합·사전으로 미리 만들어
+    두고 목록 쿼리에서는 상수 IN 목록만 쓰는 편이 훨씬 싸다.
+    """
+    from v1.mobile.models import PushNotificationLog
+
+    prod_qs = (NewsProductMatch.objects
+               .filter(product__user_id=user, false_positive_yn=False)
+               .values_list('news_id', 'read_yn', 'risk_level', 'risk_score'))
+    ing_qs = (NewsIngredientMatch.objects
+              .filter(user=user, dismissed_yn=False)
+              .values_list('news_id', 'read_yn', 'risk_level', 'risk_score'))
+
+    prod_matched, prod_unread, prod_risk = set(), set(), {}
+    _prod_best = {}
+    for nid, read_yn, risk, score in prod_qs:
+        prod_matched.add(nid)
+        if not read_yn:
+            prod_unread.add(nid)
+        if score is not None and score >= _prod_best.get(nid, -1):
+            _prod_best[nid] = score
+            prod_risk[nid] = risk
+
+    ing_matched, ing_unread, ing_risk = set(), set(), {}
+    _ing_best = {}
+    for nid, read_yn, risk, score in ing_qs:
+        ing_matched.add(nid)
+        if not read_yn:
+            ing_unread.add(nid)
+        if score is not None and score >= _ing_best.get(nid, -1):
+            _ing_best[nid] = score
+            ing_risk[nid] = risk
+
+    kw_matched = set(
+        PushNotificationLog.objects
+        .filter(device__user=user, trigger_type='keyword')
+        .values_list('news_id', flat=True)
+    )
+
+    # 최신 조치 상태 (monitoring / resolved)
+    def _latest_action(qs, news_field):
+        latest = {}
+        for nid, action, created in qs.values_list(news_field, 'action_type', 'created_at'):
+            cur = latest.get(nid)
+            if cur is None or created > cur[1]:
+                latest[nid] = (action, created)
+        return {nid: a for nid, (a, _) in latest.items()}
+
+    prod_action = _latest_action(
+        RegulatoryMatchAction.objects.filter(
+            product_match__product__user_id=user,
+            product_match__false_positive_yn=False,
+            action_type__in=ACTION_STATUSES),
+        'product_match__news_id')
+    ing_action = _latest_action(
+        RegulatoryMatchAction.objects.filter(
+            ingredient_match__user=user,
+            ingredient_match__dismissed_yn=False,
+            action_type__in=ACTION_STATUSES),
+        'ingredient_match__news_id')
+
+    return {
+        'prod_matched': prod_matched, 'prod_unread': prod_unread, 'prod_risk': prod_risk,
+        'ing_matched': ing_matched,   'ing_unread': ing_unread,   'ing_risk': ing_risk,
+        'kw_matched': kw_matched,
+        'prod_action': prod_action,   'ing_action': ing_action,
+        'all_matched': prod_matched | ing_matched | kw_matched,
+    }
+
+
+def attach_match_info(news_items, ctx) -> None:
+    """
+    페이지에 실제로 보이는 행에만 매칭 정보를 붙인다(보통 50건).
+    템플릿이 쓰는 속성 이름은 기존 어노테이션과 동일하게 맞춘다.
+    """
+    for n in news_items:
+        nid = n.id
+        n.my_matched_yn       = nid in ctx['prod_matched']
+        n.my_unread_yn        = nid in ctx['prod_unread']
+        n.ing_matched_yn      = nid in ctx['ing_matched']
+        n.ing_unread_yn       = nid in ctx['ing_unread']
+        n.kw_matched_yn       = nid in ctx['kw_matched']
+        n.my_risk_level       = ctx['prod_risk'].get(nid)
+        n.ing_risk_level      = ctx['ing_risk'].get(nid)
+        n.my_action_status    = ctx['prod_action'].get(nid)
+        n.my_ing_action_status = ctx['ing_action'].get(nid)
