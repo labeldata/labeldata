@@ -1504,6 +1504,30 @@ def product_update_status(request, product_id):
             return JsonResponse(
                 {'success': False, 'error': f'{_need[1]} 권한이 없습니다.'}, status=403)
 
+    # ── 승인 완료 전 표시사항 검증 ──────────────────────────────────────────
+    # 실제로 잣(알레르기) 누락을 표시사항에 반영하지 못한 채 확정해 행정처분을 받은
+    # 사례가 있었다. 검증 기능은 있었지만 확정 단계에서 강제되지 않아, 돌리지 않고
+    # 넘어가면 그대로 통과됐다. 규칙 기반 검증(무료·무제한)을 확정 직전에 다시 돌린다.
+    #
+    # 오탐 여지가 있으므로 사유를 적으면 넘길 수 있게 하되, 넘긴 사실은 활동 로그에 남긴다.
+    validation_override_reason = (request.POST.get('override_reason') or '').strip()
+    if new_status == ProductMetadata.Status.CONFIRMED:
+        from v1.label.services import validation_service as _vs
+        try:
+            _result = _vs.validate_label(label)
+        except Exception:
+            logger.exception('[승인 전 검증] 실행 실패 — 검증을 건너뛰고 진행합니다')
+            _result = {'ok': True, 'issues': []}
+
+        if not _result.get('ok') and not validation_override_reason:
+            return JsonResponse({
+                'success': False,
+                'error': '표시사항 검증에서 확인이 필요한 항목이 있습니다.',
+                'validation_blocked': True,
+                'issue_count': _result.get('issue_count', 0),
+                'issues': _result.get('issues', []),
+            }, status=400)
+
     # ── CONFIRMED → DRAFT: 새 버전 번호 증가 ──
     old_status = metadata.status
     old_status_label = metadata.get_status_display()
@@ -1521,16 +1545,21 @@ def product_update_status(request, product_id):
 
     # ── 활동 로그 기록 ──
     from .models import ProductActivityLog
+    _log_details = {
+        'old_status': old_status,
+        'old_status_label': old_status_label,
+        'new_status': new_status,
+        'new_status_label': metadata.get_status_display(),
+    }
+    if validation_override_reason:
+        # 검증 이슈를 남긴 채 승인한 경우 — 누가 왜 넘겼는지 추적할 수 있어야 한다
+        _log_details['validation_override'] = True
+        _log_details['override_reason'] = validation_override_reason
     ProductActivityLog.objects.create(
         label=label,
         user=request.user,
         action='STATUS_CHANGED',
-        details={
-            'old_status': old_status,
-            'old_status_label': old_status_label,
-            'new_status': new_status,
-            'new_status_label': metadata.get_status_display(),
-        }
+        details=_log_details,
     )
 
     # ── 새 상태에서 담당 역할을 가진 공유자에게 인앱 알림 발송 ──
@@ -1607,12 +1636,104 @@ def product_update_status(request, product_id):
                     # 이메일 전용 공유자(시스템 계정 없음): 이메일만 발송
                     _send_email_safe(subject=_status_email_subject, body=_txt, to_email=perm.share.recipient_email, html_body=_html)
 
+    # ── 승인 완료 시 거래처(공유 대상)에 확정 통보 ──────────────────────────
+    # 원산지를 바꾸고 사내·거래처 공유가 누락돼, 일부 거래처가 이전 표시사항으로
+    # 계속 판매하다 행정처분을 받은 사례가 있었다. 확정 알림이 담당 역할(OWNER/EDITOR)
+    # 에게만 가고 정작 물건을 파는 쪽에는 가지 않았던 것이 원인이다.
+    # 확정 시점에 공유받은 전원에게 알리고, 표시사항 도안 PDF 가 있으면 첨부한다.
+    if new_status == ProductMetadata.Status.CONFIRMED:
+        _notify_confirmed_to_partners(request, label, product_name, changer_name, changer_company)
+
     log_activity(request, 'product', 'workflow_status_change', product_id)
     return JsonResponse({
         'success': True,
         'status': metadata.status,
         'status_label': metadata.get_status_display()
     })
+
+
+def _latest_label_pdf(label):
+    """
+    문서함에 저장된 최신 '한글표시사항도안' PDF 를 (파일명, 바이트, mimetype) 로 반환.
+    없으면 None. 미리보기에서 PDF 저장을 하면 이 타입으로 등록된다.
+    """
+    try:
+        doc = (ProductDocument.objects
+               .filter(label=label, active_yn=True,
+                       document_type__type_name__contains='표시사항')
+               .order_by('-uploaded_datetime', '-document_id')
+               .first())
+        if not doc or not doc.file:
+            return None
+        with doc.file.open('rb') as fh:
+            content = fh.read()
+        return (doc.original_filename or 'label.pdf', content, 'application/pdf')
+    except Exception:
+        logger.exception('[확정 통보] 표시사항 PDF 첨부 실패 (첨부 없이 발송)')
+        return None
+
+
+def _notify_confirmed_to_partners(request, label, product_name, changer_name, changer_company):
+    """
+    표시사항 확정 사실을 공유받은 거래처 전원에게 알린다.
+
+    - 유효한 공유(active / 기간 내)만 대상으로 한다
+    - 역할과 무관하게 보낸다. 물건을 파는 쪽은 보통 VIEWER 라서 역할 기준으로 거르면
+      정작 알아야 할 사람이 빠진다(이번 사고의 원인)
+    - 회원이면 인앱 알림 + 이메일, 이메일 전용 공유자면 이메일만
+    """
+    from django.conf import settings as _ds
+    site_url = getattr(_ds, 'SITE_URL', 'https://labeldata.pythonanywhere.com')
+
+    shares = (ProductShare.objects
+              .filter(label=label, active_yn=True, share_mode='PRIVATE')
+              .filter(Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now()))
+              .select_related('recipient_user', 'permission'))
+    if not shares:
+        return
+
+    attachment = _latest_label_pdf(label)
+    subject = f'[EzLabeling] {product_name} 표시사항이 확정되었습니다'
+    sent = 0
+
+    for share in shares:
+        recipient = share.recipient_user
+        to_email = (recipient.email if recipient else '') or share.recipient_email
+        if recipient and recipient == request.user:
+            continue
+
+        ctx = {
+            'subject': subject,
+            'sender_name': changer_name,
+            'sender_company': changer_company,
+            'sender_email': request.user.email,
+            'product_name': product_name,
+            'new_status_label': '승인 완료',
+            'role_label': getattr(share.permission, 'role_code', '') if hasattr(share, 'permission') else '',
+            'task_description': (
+                '이 제품의 표시사항이 확정되었습니다. '
+                '기존에 받으신 표시사항이 있다면 최신본으로 교체해 주세요. '
+                + ('확정된 표시사항 도안을 첨부합니다.' if attachment else
+                   '시스템에서 최신 표시사항을 확인하실 수 있습니다.')
+            ),
+            'inbox_url': f'{site_url}/products/inbox/',
+        }
+        txt, html = _render_email('emails/workflow_status.html', ctx)
+
+        if recipient:
+            ProductNotification.objects.create(
+                label=label,
+                recipient=recipient,
+                message=f'[{product_name}] 표시사항이 확정되었습니다. 최신본을 확인해 주세요.',
+                status_code=ProductMetadata.Status.CONFIRMED,
+            )
+        if to_email:
+            _send_email_safe(subject=subject, body=txt, to_email=to_email,
+                             html_body=html, attachment=attachment)
+            sent += 1
+
+    logger.info('[확정 통보] %s — 거래처 %d곳에 발송 (첨부 %s)',
+                product_name, sent, '있음' if attachment else '없음')
 
 
 @login_required

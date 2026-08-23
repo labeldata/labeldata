@@ -1430,9 +1430,10 @@ function skipWithToast(newStatus, message) {
     setTimeout(function() { changeStatus(newStatus); }, 900);
 }
 
-async function changeStatus(newStatus) {
+async function changeStatus(newStatus, overrideReason) {
     const formData = new FormData();
     formData.append('status', newStatus);
+    if (overrideReason) formData.append('override_reason', overrideReason);
 
     try {
         const response = await fetch(STATUS_UPDATE_URL, {
@@ -1449,6 +1450,10 @@ async function changeStatus(newStatus) {
             localStorage.setItem('show-activity-log', 'true');
             saveCurrentTab();
             window.location.reload();
+        } else if (result.validation_blocked) {
+            // 승인 전 표시사항 검증에서 걸린 경우 — 무엇이 문제인지 보여주고
+            // 그래도 승인하려면 사유를 받는다 (넘긴 사실은 활동 로그에 남는다)
+            showValidationBlock(newStatus, result);
         } else {
             showSnackbar(result.error || '상태 변경에 실패했습니다.', 'error');
         }
@@ -1456,6 +1461,38 @@ async function changeStatus(newStatus) {
         console.error('Status change error:', error);
         showSnackbar('상태 변경 중 오류가 발생했습니다.', 'error');
     }
+}
+
+/** 승인 차단 사유를 모달로 보여준다 */
+function showValidationBlock(newStatus, result) {
+    const issues = result.issues || [];
+    const list = issues.map(function (i) {
+        const sug = i.suggestion ? '<div class="vb-sug">' + escapeHtml(i.suggestion) + '</div>' : '';
+        return '<li><div class="vb-msg">' + escapeHtml(i.message || '') + '</div>' + sug + '</li>';
+    }).join('');
+
+    document.getElementById('vbList').innerHTML = list;
+    document.getElementById('vbCount').textContent = result.issue_count || issues.length;
+    const reasonEl = document.getElementById('vbReason');
+    reasonEl.value = '';
+    const modal = new bootstrap.Modal(document.getElementById('validationBlockModal'));
+    document.getElementById('vbProceed').onclick = function () {
+        const reason = reasonEl.value.trim();
+        if (!reason) {
+            reasonEl.focus();
+            showSnackbar('그래도 승인하려면 사유를 입력해 주세요.', 'error');
+            return;
+        }
+        modal.hide();
+        changeStatus(newStatus, reason);
+    };
+    modal.show();
+}
+
+function escapeHtml(t) {
+    const d = document.createElement('div');
+    d.textContent = t == null ? '' : String(t);
+    return d.innerHTML;
 }
 
 function getActiveTabLabel() {
@@ -3132,6 +3169,54 @@ function getCookie(name) {
 
 <!-- 스마트 업로드 JavaScript -->
 <script src="{% static 'js/smart_upload.js' %}?v=20260218"></script>
+
+<!-- 승인 전 표시사항 검증 결과 모달 -->
+<div class="modal fade" id="validationBlockModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width: 560px;">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
+      <div class="modal-header border-0 pb-2 px-4 pt-4">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-exclamation-triangle text-warning me-2"></i>승인 전 확인이 필요합니다
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4 pt-1">
+        <p class="text-muted mb-3" style="font-size:13px;line-height:1.6;">
+          표시사항 검증에서 <b class="text-dark"><span id="vbCount">0</span>건</b>이 확인됐습니다.
+          이대로 승인하면 표시기준 위반이 될 수 있습니다.
+        </p>
+        <ul class="vb-list" id="vbList"></ul>
+        <label class="form-label mt-3 mb-1" style="font-size:12.5px;font-weight:600;">
+          그래도 승인해야 한다면 사유를 적어주세요
+        </label>
+        <textarea id="vbReason" class="form-control" rows="2"
+                  placeholder="예: 인쇄 도안에는 이미 반영됨, 시스템 입력만 누락"
+                  style="font-size:13px;"></textarea>
+        <div class="text-muted mt-1" style="font-size:11.5px;">
+          입력한 사유는 활동 로그에 기록됩니다.
+        </div>
+      </div>
+      <div class="modal-footer border-0 px-4 pb-4 pt-2">
+        <button type="button" class="btn btn-primary btn-sm" data-bs-dismiss="modal">
+          <i class="bi bi-pencil me-1"></i>수정하러 가기
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="vbProceed">
+          사유 남기고 승인
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .vb-list { list-style: none; padding: 0; margin: 0; max-height: 240px; overflow-y: auto; }
+  .vb-list li {
+    padding: 9px 12px; margin-bottom: 6px;
+    background: #fff8f6; border: 1px solid #f5d0c8; border-radius: 8px;
+  }
+  .vb-msg { font-size: 12.5px; color: #202124; line-height: 1.55; }
+  .vb-sug { font-size: 11.5px; color: #5f6368; margin-top: 4px; }
+</style>
 
 <!-- 필수 문서 추가 모달 -->
 <div class="modal fade" id="addSlotModal" tabindex="-1" aria-hidden="true">
