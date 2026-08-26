@@ -64,8 +64,10 @@
           <span class="rs-settings-badge" id="kwBadgeCount">{{ alert_rules|length }}</span>
         </button>
 
-        {# 미조치만 보기 — 가장 자주 쓰는 조작이라 목록 쪽에 단축 버튼으로 남긴다.
-           오른쪽 '상세 검색' 의 조치상태 조건과 같은 것을 가리킨다. #}
+        {% comment %}
+ 미조치만 보기 — 가장 자주 쓰는 조작이라 목록 쪽에 단축 버튼으로 남긴다.
+           오른쪽 '상세 검색' 의 조치상태 조건과 같은 것을 가리킨다.
+{% endcomment %}
         <a class="rs-quick-chip{% if no_action_on %} rs-quick-chip--on{% endif %}"
            href="?{{ no_action_qs }}"
            title="{% if no_action_on %}미조치 조건을 끕니다{% else %}아직 조치하지 않은 건만 봅니다{% endif %}">
@@ -197,8 +199,10 @@
               </div>
               <div class="ipm-field-row">
                 <label class="ipm-label">인허가번호</label>
-                {# 인허가번호는 하이픈 없는 11자리 숫자다 (품목보고번호 데이터 전수 확인).
-                   예전 예시 "2025-인허가번호-01234" 는 실제 형식과 달라 혼동을 줬다. #}
+                {% comment %}
+ 인허가번호는 하이픈 없는 11자리 숫자다 (품목보고번호 데이터 전수 확인).
+                   예전 예시 "2025-인허가번호-01234" 는 실제 형식과 달라 혼동을 줬다.
+{% endcomment %}
                 <input type="text" id="inspLicenseNumber" class="ipm-input"
                        value="{{ user_profile.license_number|default:'' }}"
                        placeholder="19630364001 (숫자 11자리)"
@@ -262,8 +266,10 @@
           <a href="?" class="rs-filter-reset" title="모든 조건을 지우고 전체를 봅니다">전체 보기</a>
         </span>
         {% endif %}
-      {# ── 목록 조작 바 — 거르는 조건은 위 '상세 조건' 으로 모았고,
-             여기에는 보는 방식(정렬·개수)만 둔다 ── #}
+      {% comment %}
+ ── 목록 조작 바 — 거르는 조건은 위 '상세 조건' 으로 모았고,
+             여기에는 보는 방식(정렬·개수)만 둔다 ──
+{% endcomment %}
       <div class="rf-row2">
         <div class="rf-listctl">
           <span class="rf-listctl-label">정렬</span>
@@ -575,13 +581,15 @@
         <a class="reg-back-btn" href="?{{ page_query_string }}"><i class="bi bi-arrow-left"></i> 목록</a>
       </div>
 
-      {# ── 상세 검색 ──────────────────────────────────────────────────
+      {% comment %}
+ ── 상세 검색 ──────────────────────────────────────────────────
          왼쪽은 '무엇을 볼지 고르는 곳'(기간·탭·목록), 오른쪽은 '자세히 보는 곳'.
          조건을 여기 두면 목록을 보면서 조건을 다듬을 수 있고, 왼쪽 폭도 목록에
          온전히 쓸 수 있다.
 
          왼쪽 필터 폼(#filterForm)과는 별개의 폼이다. 폼은 겹쳐 쓸 수 없어서,
-         왼쪽에서 고른 검색어·기간·탭은 hidden 으로 함께 보낸다. #}
+         왼쪽에서 고른 검색어·기간·탭은 hidden 으로 함께 보낸다.
+{% endcomment %}
       <div class="rd-cond-box">
         <div class="rd-cond-title">
           <i class="bi bi-sliders2"></i> 상세 검색
@@ -777,10 +785,12 @@
           </button>
         </div>
         {% else %}
-        {# ── 항목을 고르기 전 자리 ─────────────────────────────────────
+        {% comment %}
+ ── 항목을 고르기 전 자리 ─────────────────────────────────────
            예전에는 "왼쪽에서 선택하세요" 한 줄뿐이라 화면의 40%가 비어 있었다.
            이 자리에 '내가 지금 어떤 기준으로 알림을 받고 있는지' 를 보여준다.
-           목록에 원하는 게 안 뜰 때 "키워드를 더 넣어야겠다" 로 바로 이어진다. #}
+           목록에 원하는 게 안 뜰 때 "키워드를 더 넣어야겠다" 로 바로 이어진다.
+{% endcomment %}
         <div class="rd-alert-summary">
           <div class="rd-as-lead">
             <i class="bi bi-shield-exclamation"></i>
