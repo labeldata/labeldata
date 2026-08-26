@@ -1,0 +1,248 @@
+/* ================================================================
+   list_common.css — 목록 화면 공용 컴포넌트
+
+   제품 조회 · 식품첨가물 · 부적합·처분 알림이 같은 모양으로 보이도록
+   조건 패널 · 정렬 헤더 · 목록 조작 바를 한곳에 모았다.
+
+   화면마다 스타일이 흩어져 있으면(제품 조회는 템플릿 인라인,
+   부적합은 regulatory.css) 같은 컨트롤이 화면마다 조금씩 달라진다.
+   여기 있는 규칙은 어느 화면에서 고쳐도 전부에 반영된다.
+
+   조건 패널의 규칙은 label/_condition_panel.html 이 자체 <style> 로
+   들고 있다(파셜 하나로 완결되게). 여기는 그 바깥의 공용 요소만 둔다.
+   ================================================================ */
+
+/* ── 정렬 가능한 목록 헤더 (테이블형 화면) ─────────────────────── */
+.pv-sort {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+.pv-sort:hover { color: #1558b0; text-decoration: none; }
+.pv-sort .bi { font-size: 9px; opacity: .35; }
+.pv-sort:hover .bi { opacity: .8; }
+.pv-sort--on { color: #1558b0; font-weight: 700; }
+.pv-sort--on .bi { opacity: 1; font-size: 10px; }
+
+/* ── 목록 조작 바 (카드형 화면의 정렬·페이지당 개수) ───────────── */
+.rf-listctl {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+.rf-listctl-label {
+    font-size: 11.5px;
+    color: #5f6368;
+    white-space: nowrap;
+}
+.rf-listctl-select {
+    font-size: 12.5px;
+    color: #3c4043;
+    background: #fff;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+.rf-listctl-select:hover { border-color: #1967d2; }
+.rf-listctl-dir {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 28px;
+    background: #fff;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    color: #5f6368;
+    cursor: pointer;
+}
+.rf-listctl-dir:hover { border-color: #1967d2; color: #1558b0; background: #e8f0fe; }
+
+
+/* ── 화면 간 모양 맞추기 ────────────────────────────────────────
+   부적합·처분 알림은 좁은 사이드바 목록이라 여백·글자 크기까지 제품 조회와
+   똑같이 맞추면 오히려 좁아 보인다. 그래서 "같아 보여야 하는 것"만 맞춘다.
+   (이 파일은 regulatory.css 뒤에 실리므로 같은 우선순위면 여기가 이긴다)
+   ──────────────────────────────────────────────────────────── */
+
+/* 탭 건수 배지 — 제품 조회의 .pv-tab-count 와 같은 모양 */
+.rs-vtab-count {
+    background: #e8eaed;
+    color: #5f6368;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 9px;
+    padding: 1px 6px;
+}
+.rs-vtab--active .rs-vtab-count { background: #e8f0fe; color: #1558b0; }
+
+/* 목록 총 건수 — 제품 조회 하단 "전체 N개" 와 같은 톤 */
+.rs-list-total { font-size: 12px; font-weight: 600; color: #5f6368; }
+
+/* 초기화 — 제품 조회 툴바의 '초기화' 버튼과 같은 알약 모양 */
+.rs-filter-reset {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #dadce0;
+    border-radius: 20px;
+    padding: 2px 12px;
+    margin-left: 6px;
+    font-size: 12px;
+    color: #5f6368;
+    background: #fff;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.rs-filter-reset:hover {
+    border-color: #d93025;
+    color: #d93025;
+    background: #fce8e6;
+    text-decoration: none;
+}
+
+/* 페이지 버튼 — 제품 조회 페이지네이션과 같은 파랑 */
+.rs-page-btn.active {
+    background: #1967d2;
+    border-color: #1967d2;
+    color: #fff;
+}
+.rs-page-btn:hover { border-color: #1967d2; color: #1558b0; }
+
+/* 기간 프리셋 — 제품 조회의 .pv-chip 과 같은 모양 */
+.rs-day-btn {
+    border: 1px solid #dadce0;
+    border-radius: 16px;
+    font-size: 12.5px;
+    color: #3c4043;
+    background: #fff;
+}
+.rs-day-btn:hover { background: #e8f0fe; border-color: #1967d2; color: #1558b0; }
+.rs-day-btn.active { background: #e8f0fe; border-color: #1967d2; color: #1558b0; font-weight: 700; }
+
+
+/* ── 오른쪽 패널의 '상세 검색' 상자 ──────────────────────────── */
+.rd-cond-box {
+    border-bottom: 1px solid #e0e0e0;
+    background: #fff;
+    padding: 10px 14px 12px;
+    flex-shrink: 0;
+}
+.rd-cond-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #3c4043;
+    margin-bottom: 8px;
+}
+.rd-cond-title .bi { color: #1967d2; }
+.rd-cond-n {
+    background: #1967d2; color: #fff;
+    font-size: 10px; font-weight: 700;
+    border-radius: 9px; padding: 1px 6px;
+}
+/* 상시 노출 자리라 바깥 여백을 줄인다 (접히는 패널과 달리 제목 바로 아래) */
+.rd-cond-box .pv-cond { margin-top: 0; }
+.rd-cond-actions { margin-top: 8px; }
+.rd-cond-submit { border-radius: 20px; padding: 5px 16px; font-size: 12.5px; }
+
+/* ── 목록 쪽 단축 칩 (미조치만 보기) ─────────────────────────── */
+.rs-quick-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    flex-shrink: 0; white-space: nowrap;
+    border: 1px solid #dadce0; border-radius: 16px;
+    padding: 4px 12px;
+    font-size: 12.5px; color: #3c4043; background: #fff;
+    text-decoration: none;
+}
+.rs-quick-chip:hover { background: #e8f0fe; border-color: #1967d2; color: #1558b0; text-decoration: none; }
+.rs-quick-chip--on { background: #fef7e0; border-color: #f9ab00; color: #7a5b06; font-weight: 700; }
+.rs-quick-chip--on:hover { background: #feefc3; border-color: #f9ab00; color: #7a5b06; }
+.rs-quick-chip-n {
+    background: #e8eaed; color: #5f6368;
+    font-size: 10px; font-weight: 700;
+    border-radius: 9px; padding: 1px 5px;
+}
+.rs-quick-chip--on .rs-quick-chip-n { background: #fce8b2; color: #7a5b06; }
+
+
+/* ── 오른쪽 패널: 항목을 고르기 전 보여줄 '내 알림 기준' ────────
+   이 자리는 예전에 "왼쪽에서 선택하세요" 한 줄뿐이라 화면의 40%가
+   비어 있었다. 알림 기준은 목록을 보다가 고치는 일이 잦아 여기 둔다. */
+.rd-alert-summary {
+    padding: 18px 16px 24px;
+    overflow-y: auto;
+    height: 100%;
+}
+.rd-as-lead {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12.5px; color: #5f6368;
+    padding-bottom: 14px;
+}
+.rd-as-lead .bi { font-size: 15px; color: #9aa0a6; }
+
+/* 미조치 알림 줄 — 눌러서 바로 그 조건으로 */
+.rd-as-todo {
+    display: flex; align-items: center; gap: 7px;
+    padding: 10px 13px; margin-bottom: 14px;
+    background: #fef7e0; border: 1px solid #fadf9a; border-radius: 10px;
+    font-size: 12.5px; color: #7a5b06; text-decoration: none;
+}
+.rd-as-todo:hover { background: #feefc3; color: #5f4405; text-decoration: none; }
+.rd-as-todo b { color: #5f4405; }
+
+.rd-as-card {
+    border: 1px solid #e0e2e0; border-radius: 12px;
+    background: #fff; overflow: hidden;
+}
+.rd-as-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 14px;
+    background: #f8f9fa; border-bottom: 1px solid #e8eaed;
+    font-size: 12.5px; font-weight: 700; color: #3c4043;
+}
+.rd-as-head .bi { color: #1967d2; margin-right: 5px; }
+.rd-as-edit {
+    border: 1px solid #dadce0; background: #fff; color: #5f6368;
+    border-radius: 16px; padding: 3px 11px; font-size: 11.5px;
+    display: inline-flex; align-items: center; gap: 4px;
+}
+.rd-as-edit:hover { border-color: #1967d2; color: #1558b0; background: #e8f0fe; }
+.rd-as-edit .bi { color: inherit; margin: 0; }
+
+.rd-as-sec { padding: 12px 14px; border-bottom: 1px solid #f1f3f4; }
+.rd-as-sec:last-of-type { border-bottom: none; }
+.rd-as-sec-title {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11.5px; font-weight: 700; color: #5f6368;
+    margin-bottom: 8px;
+}
+.rd-as-count {
+    background: #e8f0fe; color: #1558b0;
+    font-size: 10px; font-weight: 700;
+    border-radius: 9px; padding: 1px 6px;
+}
+.rd-as-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.rd-as-empty { font-size: 11.5px; color: #80868b; line-height: 1.65; }
+.rd-as-kv { display: flex; flex-direction: column; gap: 5px; }
+.rd-as-kv > div { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; }
+.rd-as-k { flex-shrink: 0; width: 66px; color: #80868b; font-size: 11.5px; }
+.rd-as-v { color: #3c4043; font-weight: 600; word-break: break-all; }
+.rd-as-note {
+    margin-top: 9px; padding: 7px 10px;
+    background: #f8f9fa; border-radius: 7px;
+    font-size: 11px; color: #5f6368; line-height: 1.6;
+}
+.rd-as-note b { color: #3c4043; }
+.rd-as-foot {
+    padding: 9px 14px;
+    border-top: 1px solid #f1f3f4;
+    font-size: 11px; color: #9aa0a6;
+}
+.rd-as-foot .bi { margin-right: 4px; }

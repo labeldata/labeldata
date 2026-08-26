@@ -18,6 +18,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
 
+<link rel="stylesheet" href="{% static 'css/list_common.css' %}?v={{ STATIC_BUILD_DATE }}">
 <style>
     /* Material Design 3 기반 타이포그래피 */
     body {
@@ -308,17 +309,6 @@
     .pv-blocked-title { font-size: 14.5px; font-weight: 700; margin-bottom: 8px; color: #5f4405; }
     .pv-blocked b { color: #5f4405; }
 
-    /* ── 정렬 가능한 목록 헤더 ──────────────────────────────── */
-    .pv-sort {
-        color: inherit; text-decoration: none;
-        display: inline-flex; align-items: center; gap: 4px;
-        white-space: nowrap;
-    }
-    .pv-sort:hover { color: #1558b0; text-decoration: none; }
-    .pv-sort .bi { font-size: 9px; opacity: .35; }
-    .pv-sort:hover .bi { opacity: .8; }
-    .pv-sort--on { color: #1558b0; font-weight: 700; }
-    .pv-sort--on .bi { opacity: 1; font-size: 10px; }
 
     /* ── 검색 전 안내 화면 ─────────────────────────────────── */
     .pv-intro { max-width: 860px; margin: 0 auto; padding: 34px 24px 40px; }
@@ -417,7 +407,7 @@
             <!-- 통합 검색 -->
             <div class="input-group" style="flex: 1;">
                 <span class="input-group-text bg-white border-end-0" style="font-size: 12px;"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" id="product-search" name="q" class="form-control border-start-0 ps-0"
+                <input type="text" id="product-search" name="q" data-search-enter class="form-control border-start-0 ps-0"
                        placeholder="{% if imported_mode %}제품명, 식품유형, 수출국, 수입업체명, 제조사명 중 검색어를 입력하세요{% else %}제품명, 품목보고번호, 식품유형, 제조사명 중 검색어를 입력하세요{% endif %}"
                        value="{{ search_query|default:'' }}" style="font-size: 13px;">
             </div>
@@ -703,4 +693,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </script>
 
+<script src="{% static 'js/list_common.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

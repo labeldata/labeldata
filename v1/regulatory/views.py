@@ -22,6 +22,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from v1.regulatory import selectors
+from v1.regulatory.services import news_search
 from v1.regulatory.models import (
     NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews,
     InspectionResult, InspectionMatch, judgment_status_of,
@@ -50,6 +51,32 @@ API_CATEGORIES = [
 ]
 _ALL_CAT_KEYS     = [c['key'] for c in API_CATEGORIES]
 _REGULAR_CAT_KEYS = [c['key'] for c in API_CATEGORIES if c['group'] != 'insp46']
+
+def _toggle_condition_qs(request, conditions, key, value):
+    """
+    조건 하나(key=value)를 켜고 끄는 주소를 만든다 — '미조치만 보기' 같은 단축 버튼용.
+
+    조건은 f/v 가 같은 순서로 짝지어 들어오므로, 통째로 다시 쓴다.
+    이미 켜져 있으면 그 값만 빼고, 없으면 붙인다.
+    """
+    params = request.GET.copy()
+    for k in ('f', 'v', 'page'):
+        params.pop(k, None)
+
+    for cond in conditions or []:
+        picked = cond['value'].split(',')
+        if cond['key'] == key:
+            picked = [p for p in picked if p != value] if value in picked else picked + [value]
+            if not picked:
+                continue          # 마지막 값을 껐으면 조건 자체를 뺀다
+        params.appendlist('f', cond['key'])
+        params.appendlist('v', ','.join(picked))
+
+    if not any(c['key'] == key for c in (conditions or [])):
+        params.appendlist('f', key)
+        params.appendlist('v', value)
+    return params.urlencode()
+
 
 def _cat_condition(cats):
     """체크박스 카테고리 목록(key들) → Q 객체 (api_source 기반)"""
@@ -111,29 +138,50 @@ def news_list(request):
     if insp_status not in ('pending', 'done'):
         insp_status = ''
 
+    # ── 다중 조건 검색 ──────────────────────────────────────────────────────
+    # 제품 조회·식품첨가물과 같은 f=키&v=값 규약. 흩어져 있던 분야·위험도·조치상태·
+    # 날짜 필터를 조건 한 줄로 흡수한다. 옛 파라미터(cat/risk/status)로 들어와도
+    # 동작하도록 아래에서 조건 값과 합쳐 쓴다.
+    conditions = news_search.parse_conditions(
+        request.GET.getlist('f'), request.GET.getlist('v')
+    )
+
+    # 조건으로 들어온 위험도·조치상태는 사용자별 계산이라 여기서 꺼내 쓴다
+    cond_risks = news_search.picked(conditions, 'risk')
+    cond_statuses = news_search.picked(conditions, 'status')
+    if cond_risks and not risk:
+        risk = cond_risks[0] if len(cond_risks) == 1 else ''
+    if cond_statuses and not status:
+        status = cond_statuses[0] if len(cond_statuses) == 1 else ''
+
     # 카테고리 체크박스 (cats_sent 센티넬로 명시적 제출 여부 판별)
-    cats_submitted = 'cats_sent' in request.GET
-    cats = request.GET.getlist('cat') if cats_submitted else _ALL_CAT_KEYS
+    # 조건 패널의 '분야' 가 우선이고, 없으면 기존 cat 파라미터를 쓴다
+    cond_cats = news_search.picked(conditions, 'cat')
+    cats_submitted = bool(cond_cats) or 'cats_sent' in request.GET
+    if cond_cats:
+        cats = cond_cats + (['I0460'] if 'I0460' in request.GET.getlist('cat') else [])
+    else:
+        cats = request.GET.getlist('cat') if 'cats_sent' in request.GET else _ALL_CAT_KEYS
 
     # 수거검사 탭 여부 (I0460이 cats에 포함되면 수거검사 목록 표시)
     show_inspection = 'I0460' in cats
     # 일반 cat 필터는 I0460 제외하고 처리
     regular_cats = [c for c in cats if c != 'I0460']
 
-    qs = RegulatoryNews.objects.all()
-
-    # 기간 필터 —
-    # 대표 날짜: Greatest(COALESCE(event_date, collected_date), collected_date)
-    # = event_date 가 있으면 max(event_date, collected_date), 없으면 collected_date
-    # 이를 기준으로 필터링하면 "최근 수집된 구 사건 항목이 과거 검색에 잘못 포함되는" 버그 방지
+    # 대표 날짜 _eff = Greatest(COALESCE(event_date, collected_date), collected_date)
+    # = event_date 가 있으면 max(event_date, collected_date), 없으면 collected_date.
+    # event_date 는 대부분 비어 있어(로컬 4,750건 중 4,728건) 이 값을 기준으로 잡아야
+    # "최근 수집된 구 사건 항목이 과거 검색에 잘못 포함되는" 문제도 막을 수 있다.
+    # 기간 필터·날짜 조건·날짜 정렬이 모두 이 이름을 쓰므로 항상 붙여 둔다.
     from django.db.models import ExpressionWrapper, DateField
     _eff_date = ExpressionWrapper(
         Greatest(Coalesce(F('event_date'), F('collected_date')), F('collected_date')),
         output_field=DateField(),
     )
+    qs = RegulatoryNews.objects.annotate(_eff=_eff_date)
 
+    # 기간 필터 (조건 패널의 날짜 조건과 별개로, 자주 쓰는 단축 버튼)
     if date_from or date_to:
-        qs = qs.annotate(_eff=_eff_date)
         if date_from:
             qs = qs.filter(_eff__gte=date_from)
         if date_to:
@@ -142,7 +190,7 @@ def news_list(request):
     elif days != 'all':
         try:
             cutoff = (timezone.now() - timedelta(days=int(days))).date()
-            qs = qs.annotate(_eff=_eff_date).filter(_eff__gte=cutoff)
+            qs = qs.filter(_eff__gte=cutoff)
         except (ValueError, TypeError):
             pass
 
@@ -160,6 +208,10 @@ def news_list(request):
             qs.filter(violation_reason__icontains=q)
         ).distinct()
 
+    # 다중 조건 (분야·위반유형·날짜·텍스트). 위험도·조치상태는 아래에서 따로 처리한다.
+    if conditions:
+        qs = qs.filter(news_search.conditions_q(conditions))
+
     # 미확인 집합 — 집계 규칙은 selectors 한 곳에서 관리한다 (탭 미확인 dot 표시용)
     my_unread_news_ids = selectors.unread_news_ids(request.user)
 
@@ -169,15 +221,18 @@ def news_list(request):
     # ── risk / status 필터 (부적합·행정처분 탭) ──────────────────────────────
     # 반드시 Paginator 생성 전에 적용해야 한다.
     # (이전에는 페이지네이션 뒤에서 qs 를 재할당해 필터가 목록에 반영되지 않았다)
-    if risk:
+    # 조건 패널에서는 위험도를 여러 개 고를 수 있다 (묶음 안에서는 OR)
+    risk_levels = cond_risks or ([risk] if risk else [])
+    if risk_levels:
         risk_from_product = (
             NewsProductMatch.objects
-            .filter(product__user_id=request.user, false_positive_yn=False, risk_level=risk)
+            .filter(product__user_id=request.user, false_positive_yn=False,
+                    risk_level__in=risk_levels)
             .values_list('news_id', flat=True)
         )
         risk_from_ingredient = (
             NewsIngredientMatch.objects
-            .filter(user=request.user, dismissed_yn=False, risk_level=risk)
+            .filter(user=request.user, dismissed_yn=False, risk_level__in=risk_levels)
             .values_list('news_id', flat=True)
         )
         qs = qs.filter(Q(id__in=risk_from_product) | Q(id__in=risk_from_ingredient))
@@ -232,13 +287,6 @@ def news_list(request):
     matched_ids = match_ctx['all_matched']
 
     qs = qs.annotate(
-        # sort_date = GREATEST(COALESCE(event_date, collected_date), collected_date)
-        # event_date 가 NULL 이면 collected_date, 아니면 둘 중 더 최근 날짜로 정렬한다
-        # (오늘 수집된 구 event_date 항목도 상단에 오도록)
-        sort_date=Greatest(
-            Coalesce('event_date', 'collected_date'),
-            'collected_date',
-        ),
         # 매칭 그룹 우선순위: 0=매칭(상단), 1=일반(하단)
         match_priority=(
             Case(
@@ -249,20 +297,15 @@ def news_list(request):
         ),
     )
 
-    if sort == 'asc':
-        qs = qs.order_by(
-            'match_priority',
-            'sort_date',
-            'collected_date',
-            'created_at',
-        )
-    else:
-        qs = qs.order_by(
-            'match_priority',
-            '-sort_date',
-            '-collected_date',
-            '-created_at',
-        )
+    # 정렬 — 화이트리스트로 검증한다 (다른 목록 화면과 같은 방식).
+    # 날짜 기준은 _eff(대표 날짜)를 쓴다. event_date 만으로는 대부분 NULL 이라
+    # 오늘 수집된 구 사건 항목이 아래로 밀린다.
+    # 매칭된 뉴스를 위로 고정하는 규칙은 어떤 정렬에서도 유지한다.
+    sort_field, active_sort, sort_order = news_search.resolve_sort(
+        request.GET.get('sort'), request.GET.get('order')
+    )
+    tiebreak = '-created_at' if sort_order == 'desc' else 'created_at'
+    qs = qs.order_by('match_priority', sort_field, tiebreak)
 
     # ── 탭 배지 건수 ─────────────────────────────────────────────────────────
     # 규칙(3개 탭 공통): 배지 숫자 = 그 탭에서 실제로 보게 될 목록의 총 건수
@@ -293,7 +336,8 @@ def news_list(request):
 
     # 페이지네이션
     page_num = request.GET.get('page', 1)
-    paginator = Paginator(qs, 50)
+    per_page = news_search.safe_per_page(request.GET.get('per_page'))
+    paginator = Paginator(qs, per_page)
     page_obj  = paginator.get_page(page_num)
 
     # 페이지 이동용 쿼리스트링 (page·선택 파라미터 제거, tab 파라미터는 유지)
@@ -304,6 +348,13 @@ def news_list(request):
     qp.pop('pub_insp_id', None)
     qp.pop('insp_page',   None)
     qp.pop('pub_page',    None)
+    # '미조치만 보기' 단축 버튼용 주소.
+    # 조치상태는 조건 패널의 체크박스 묶음으로 옮겼지만, 가장 자주 쓰는 조작이라
+    # 목록 위에 한 번 누르면 켜지고 다시 누르면 꺼지는 버튼을 남긴다.
+    # (같은 조건을 가리키는 지름길일 뿐, 별도의 필터가 아니다)
+    no_action_on = 'no_action' in news_search.picked(conditions, 'status')
+    no_action_qs = _toggle_condition_qs(request, conditions, 'status', 'no_action')
+
     page_query_string = qp.urlencode()
     current_tab = tab  # 상단에서 이미 읽은 값 재사용
 
@@ -579,6 +630,10 @@ def news_list(request):
         'admin_cats':         admin_cats,
         'saol_cats':          saol_cats,
         'no_action_count':    no_action_count,
+        'no_action_on':       no_action_on,
+        # 알림 기준 요약에 "언제까지 모은 자료인지" 를 함께 보여준다
+        'last_collected':     RegulatoryNews.objects.aggregate(m=Max('collected_date'))['m'],
+        'no_action_qs':       no_action_qs,
         'q':                  q,
         'cats':               cats,
         'days':               days,
@@ -587,6 +642,20 @@ def news_list(request):
         'risk_filter':        risk,
         'status_filter':      status,
         'sort':               sort,
+        # ── 조건 패널 (제품 조회·식품첨가물과 공용) ──────────────────────
+        'conditions':         conditions,
+        'condition_specs':    news_search.conditions_catalog(),
+        'max_conditions':     news_search.MAX_CONDITIONS,
+        'require_fast':       False,   # 5천 행이라 조건을 강제할 이유가 없다
+        # 오른쪽 패널 상단에 늘 보이는 자리라 접지 않는다 (여닫는 버튼도 없다)
+        'panel_always_open':  True,
+        'q_input_id':         'searchInput',
+        # ── 정렬 / 페이지당 개수 ────────────────────────────────────────
+        'sort_options':       news_search.SORT_OPTIONS,
+        'active_sort':        active_sort,
+        'sort_order':         sort_order,
+        'per_page':           per_page,
+        'per_page_choices':   news_search.PER_PAGE_CHOICES,
         'today':              date.today(),
         'saol_site_url':      saol_site_url,
         'alert_rules':        unique_alert_rules,

@@ -14,6 +14,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/regulatory.css' %}">
+<link rel="stylesheet" href="{% static 'css/list_common.css' %}?v={{ STATIC_BUILD_DATE }}">
 {% endblock %}
 
 {% block content %}
@@ -39,7 +40,7 @@
             <i class="bi bi-search rs-search-icon"></i>
             <input type="text" id="searchInput" name="q" value="{{ q }}"
                    placeholder="제품명, 업체, 키워드 검색…"
-                   onkeydown="if(event.key==='Enter'){doSearch();}"
+                   data-search-enter
                    autocomplete="off">
             {% if q %}
             <button type="button" onclick="clearSearch()" class="rs-search-x" title="초기화">
@@ -57,95 +58,23 @@
           <button type="button" class="rs-day-btn {% if days == 'all' and not date_from and not date_to %}active{% endif %}" onclick="setDays('all')" title="기간 제한 없이 전체를 봅니다 (기본값)">전체</button>
         </div>
 
-        {# 3. 날짜 범위 #}
-        <div class="rf-date-wrap">
-          <input type="date" name="date_from" class="rs-date-input"
-                 value="{{ date_from }}" onchange="onDateRangeChange()"
-                 {% if date_from %}style="border-color:#1a73e8;background:#e8f0fe;color:#1a73e8;"{% endif %}>
-          <span class="rs-date-sep">~</span>
-          <input type="date" name="date_to" class="rs-date-input"
-                 value="{{ date_to }}" onchange="onDateRangeChange()"
-                 {% if date_to %}style="border-color:#1a73e8;background:#e8f0fe;color:#1a73e8;"{% endif %}>
-          {% if date_from or date_to %}
-          <button type="button" class="rs-date-clear" onclick="clearDateRange()" title="기간 초기화">
-            <i class="bi bi-x-circle"></i>
-          </button>
-          {% endif %}
-        </div>
-
         {# 알림 설정 — 키워드 알림과 수거검사 알림을 한 곳에서 관리한다 #}
         <button type="button" class="rs-settings-btn" onclick="openAlertSettings()" title="키워드·수거검사 알림 설정">
           <i class="bi bi-bell"></i>알림 설정
           <span class="rs-settings-badge" id="kwBadgeCount">{{ alert_rules|length }}</span>
         </button>
 
-        {# 상세 분야 필터 토글 #}
-        <button type="button" class="rf-detail-toggle" onclick="toggleCatFilter()" title="상세 분야 선택">
-          <i class="bi bi-funnel"></i><i class="bi bi-chevron-up" id="catToggleBtn"></i>
-        </button>
+        {# 미조치만 보기 — 가장 자주 쓰는 조작이라 목록 쪽에 단축 버튼으로 남긴다.
+           오른쪽 '상세 검색' 의 조치상태 조건과 같은 것을 가리킨다. #}
+        <a class="rs-quick-chip{% if no_action_on %} rs-quick-chip--on{% endif %}"
+           href="?{{ no_action_qs }}"
+           title="{% if no_action_on %}미조치 조건을 끕니다{% else %}아직 조치하지 않은 건만 봅니다{% endif %}">
+          <i class="bi bi-hourglass-split"></i>미조치만
+          {% if no_action_count %}<span class="rs-quick-chip-n">{{ no_action_count|intcomma }}</span>{% endif %}
+        </a>
 
       </div>{# end rf-row1 #}
 
-      {# ── 분야 드로어 (세로 3행, 각 그룹 1줄) ── #}
-      <div id="catFilterCollapse" class="rf-cat-drawer rs-filter-collapse">
-
-        {# 부적합 — 1줄 #}
-        <div class="rf-cat-g">
-          <span class="rf-cat-g-title">부적합</span>
-          {% for cat in insp_cats %}
-          <label class="rf-cat-item">
-            <input type="checkbox" name="cat" value="{{ cat.key }}"
-                   {% if cat.key in cats %}checked{% endif %}
-                   onchange="onCatChange()">
-            <span class="rf-cat-item-lbl">{{ cat.label }}</span>
-            <span class="rf-cat-item-cnt">{{ cat.count }}건</span>
-          </label>
-          {% endfor %}
-        </div>
-
-        {# 행정처분 — 1줄 #}
-        <div class="rf-cat-g">
-          <span class="rf-cat-g-title">행정처분</span>
-          {% for cat in admin_cats %}
-          <label class="rf-cat-item">
-            <input type="checkbox" name="cat" value="{{ cat.key }}"
-                   {% if cat.key in cats %}checked{% endif %}
-                   onchange="onCatChange()">
-            <span class="rf-cat-item-lbl">{{ cat.label }}</span>
-            <span class="rf-cat-item-cnt">{{ cat.count }}건</span>
-          </label>
-          {% endfor %}
-        </div>
-
-        {# 새올민원 — 1줄 + ⓘ 사이트 정보 #}
-        <div class="rf-cat-g">
-          <span class="rf-cat-g-title">새올민원</span>
-          {% for cat in saol_cats %}
-          <label class="rf-cat-item">
-            <input type="checkbox" name="cat" value="{{ cat.key }}"
-                   {% if cat.key in cats %}checked{% endif %}
-                   onchange="onCatChange()">
-            <span class="rf-cat-item-lbl">{{ cat.label }}</span>
-            <span class="rf-cat-item-cnt">{{ cat.count }}건</span>
-          </label>
-          {% endfor %}
-          <span class="rf-saol-wrap">
-            <button type="button" class="rf-saol-info-btn" onclick="toggleSaolInfo(event)" title="연결 사이트 정보">
-              <i class="bi bi-info-circle-fill"></i>
-            </button>
-            <div id="saolInfoPopover" class="rf-saol-popover">
-              <div class="rf-saol-popover-title"><i class="bi bi-info-circle text-primary"></i> 새올민원 수집 범위</div>
-              <div class="rf-saol-popover-body">
-                전국 기초지자체 <strong>새올전자민원창구</strong>(eminwon.○○.go.kr)에서 식품 행정처분 정보를 수집합니다.<br>
-                <strong>서울</strong> 25개구&middot;<strong>부산</strong>&middot;<strong>대구</strong>&middot;<strong>인천</strong>&middot;<strong>광주</strong>&middot;<strong>대전</strong>&middot;<strong>울산</strong>&middot;<strong>세종</strong>&middot;
-                <strong>경기</strong>&middot;<strong>강원</strong>&middot;<strong>충북</strong>&middot;<strong>충남</strong>&middot;<strong>전북</strong>&middot;<strong>전남</strong>&middot;<strong>경북</strong>&middot;<strong>경남</strong>&middot;<strong>제주</strong>
-                등 각 지자체 민원시스템에서 수집합니다.
-              </div>
-            </div>
-          </span>
-        </div>
-
-      </div>
 
     </form>
   </div>{# end reg-filter-bar #}
@@ -250,7 +179,7 @@
               </div>
               <div class="ipm-rule-row">
                 <span class="ipm-rule-badge">2</span>
-                <span class="ipm-rule-desc"><b>인허가번호</b> — 아래 번호가 수거검사 업체 정보에 포함될 때</span>
+                <span class="ipm-rule-desc"><b>인허가번호</b> — 아래 번호가 수거검사 업체 정보에 포함될 때 (하이픈 없는 숫자 11자리)</span>
               </div>
               <div class="ipm-rule-row">
                 <span class="ipm-rule-badge">3</span>
@@ -268,9 +197,11 @@
               </div>
               <div class="ipm-field-row">
                 <label class="ipm-label">인허가번호</label>
+                {# 인허가번호는 하이픈 없는 11자리 숫자다 (품목보고번호 데이터 전수 확인).
+                   예전 예시 "2025-인허가번호-01234" 는 실제 형식과 달라 혼동을 줬다. #}
                 <input type="text" id="inspLicenseNumber" class="ipm-input"
                        value="{{ user_profile.license_number|default:'' }}"
-                       placeholder="2025-인허가번호-01234"
+                       placeholder="19630364001 (숫자 11자리)"
                        onkeydown="if(event.key==='Enter'){event.preventDefault();saveInspProfile();}">
               </div>
               <div id="inspProfileMsg" class="ipm-msg" style="display:none;"></div>
@@ -331,62 +262,32 @@
           <a href="?" class="rs-filter-reset" title="모든 조건을 지우고 전체를 봅니다">전체 보기</a>
         </span>
         {% endif %}
-      {# ── 등급·상태 필터 바 — 목록을 거르는 컨트롤이라 목록 위에 둔다 ── #}
+      {# ── 목록 조작 바 — 거르는 조건은 위 '상세 조건' 으로 모았고,
+             여기에는 보는 방식(정렬·개수)만 둔다 ── #}
       <div class="rf-row2">
-        <div class="rf-risk-chips">
-          <button type="button"
-                  class="rs-risk-chip {% if risk_filter == 'HIGH' %}active-H{% endif %}"
-                  onclick="setRisk('{% if risk_filter == 'HIGH' %}{% else %}HIGH{% endif %}')"><i class="bi bi-circle-fill chip-dot chip-dot--h"></i>중요</button>
-          <button type="button"
-                  class="rs-risk-chip {% if risk_filter == 'MED' %}active-M{% endif %}"
-                  onclick="setRisk('{% if risk_filter == 'MED' %}{% else %}MED{% endif %}')"><i class="bi bi-circle-fill chip-dot chip-dot--m"></i>관심</button>
-          <button type="button"
-                  class="rs-risk-chip {% if risk_filter == 'LOW' %}active-L{% endif %}"
-                  onclick="setRisk('{% if risk_filter == 'LOW' %}{% else %}LOW{% endif %}')"><i class="bi bi-circle-fill chip-dot chip-dot--l"></i>일반</button>
-          <button type="button" class="rs-risk-help-btn" onclick="toggleRiskHelp(event)" title="등급 기준 보기">
-            <i class="bi bi-question-circle"></i>
+        <div class="rf-listctl">
+          <span class="rf-listctl-label">정렬</span>
+          <select class="rf-listctl-select" onchange="setSort(this.value)" title="정렬 기준">
+            {% for opt in sort_options %}
+            <option value="{{ opt.field }}"{% if opt.field == active_sort %} selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="rf-listctl-dir"
+                  onclick="setOrder('{% if sort_order == 'asc' %}desc{% else %}asc{% endif %}')"
+                  title="현재 {% if sort_order == 'asc' %}오름차순{% else %}내림차순{% endif %} — 눌러서 반대로">
+            <i class="bi bi-sort-{% if sort_order == 'asc' %}up-alt{% else %}down-alt{% endif %}"></i>
           </button>
+
           <span class="rs-chip-divider"></span>
-          <button type="button"
-                  class="rs-risk-chip {% if status_filter == 'no_action' %}active-no{% endif %}"
-                  onclick="setStatus('{% if status_filter == 'no_action' %}{% else %}no_action{% endif %}')"><i class="bi bi-hourglass-split"></i>미조치</button>
-          <button type="button"
-                  class="rs-risk-chip {% if status_filter == 'monitoring' %}active-mon{% endif %}"
-                  onclick="setStatus('{% if status_filter == 'monitoring' %}{% else %}monitoring{% endif %}')"><i class="bi bi-play-circle"></i>진행 중</button>
-          <button type="button"
-                  class="rs-risk-chip {% if status_filter == 'resolved' %}active-res{% endif %}"
-                  onclick="setStatus('{% if status_filter == 'resolved' %}{% else %}resolved{% endif %}')"><i class="bi bi-check2-circle"></i>완료</button>
-          {# 등급 분류 기준 팝오버 #}
-          <div id="riskHelpPopover" class="rs-risk-popover">
-            <div class="rs-rp-title">
-              <i class="bi bi-info-circle text-primary"></i> 등급 분류 기준
-              <button class="rs-rp-close" onclick="toggleRiskHelp(event)"><i class="bi bi-x-lg"></i></button>
-            </div>
-            <div class="rs-rp-section">
-              <div class="rs-rp-cat">🇺🇸 수입 부적합</div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">원산지 · 식품유형 · 제조사 중 2개 이상 일치</span></div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">원산지 · 식품유형 · 제조사 중 1개 일치</span></div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치 (원산지 등 추가 정보 없음)</span></div>
-            </div>
-            <div class="rs-rp-section">
-              <div class="rs-rp-cat">🇰🇷 국내 검사부적합</div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">원료명 + 원산지 일치</span></div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">원료명 + 식품유형 일치</span></div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치</span></div>
-            </div>
-            <div class="rs-rp-section">
-              <div class="rs-rp-cat">🇰🇷 국내가공 부적합</div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-H">중요</span><span class="rs-rp-desc">제조사 + 제품명 동시 일치</span></div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">식품유형 + (제조사 또는 원산지) 일치</span></div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-L">일반</span><span class="rs-rp-desc">원료명만 일치</span></div>
-            </div>
-            <div class="rs-rp-section">
-              <div class="rs-rp-cat"><i class="bi bi-megaphone me-1"></i>행정처분</div>
-              <div class="rs-rp-row"><span class="rs-rp-badge rs-rp-badge-M">관심</span><span class="rs-rp-desc">내 제품/원료의 제조사와 업체명 일치</span></div>
-            </div>
-          </div>
+
+          <span class="rf-listctl-label">페이지당</span>
+          <select class="rf-listctl-select" onchange="setPerPage(this.value)" title="한 페이지에 보여줄 건수">
+            {% for n in per_page_choices %}
+            <option value="{{ n }}"{% if n == per_page %} selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
         </div>
-      </div>{# end rf-row2 (부적합·처분 탭) #}
+      </div>{# end rf-row2 #}
 
       {# ── 수거검사 필터 바 (수거검사 탭 활성 시) ── #}
       <div class="rf-row2 rf-row2--insp">
@@ -417,11 +318,6 @@
           {% endif %}
         </div>
       </div>{# end rf-row2--insp #}
-        <a class="rs-sort-btn"
-           href="?{{ page_query_string }}&sort={% if sort == 'asc' %}desc{% else %}asc{% endif %}"
-           title="날짜 정렬: 현재 {% if sort == 'asc' %}오름차순{% else %}내림차순{% endif %} — 눌러서 반대로">
-          <i class="bi bi-sort-{% if sort == 'asc' %}up-alt{% else %}down-alt{% endif %}"></i>
-        </a>
       </div>
       <div class="rs-list-body">
           {% for m in inspection_list %}
@@ -679,6 +575,36 @@
         <a class="reg-back-btn" href="?{{ page_query_string }}"><i class="bi bi-arrow-left"></i> 목록</a>
       </div>
 
+      {# ── 상세 검색 ──────────────────────────────────────────────────
+         왼쪽은 '무엇을 볼지 고르는 곳'(기간·탭·목록), 오른쪽은 '자세히 보는 곳'.
+         조건을 여기 두면 목록을 보면서 조건을 다듬을 수 있고, 왼쪽 폭도 목록에
+         온전히 쓸 수 있다.
+
+         왼쪽 필터 폼(#filterForm)과는 별개의 폼이다. 폼은 겹쳐 쓸 수 없어서,
+         왼쪽에서 고른 검색어·기간·탭은 hidden 으로 함께 보낸다. #}
+      <div class="rd-cond-box">
+        <div class="rd-cond-title">
+          <i class="bi bi-sliders2"></i> 상세 검색
+          <span class="rd-cond-n" id="condCount" {% if not conditions %}hidden{% endif %}>{{ conditions|length }}</span>
+        </div>
+        <form method="get" id="condForm">
+          {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+          {% if days and days != 'all' %}<input type="hidden" name="days" value="{{ days }}">{% endif %}
+          {% if current_tab %}<input type="hidden" name="tab" value="{{ current_tab }}">{% endif %}
+          {% if active_sort %}<input type="hidden" name="sort" value="{{ active_sort }}">{% endif %}
+          {% if sort_order %}<input type="hidden" name="order" value="{{ sort_order }}">{% endif %}
+          {% if per_page %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+          {% if insp_status %}<input type="hidden" name="insp_status" value="{{ insp_status }}">{% endif %}
+          {% if show_inspection %}<input type="hidden" name="cat" value="I0460"><input type="hidden" name="cats_sent" value="1">{% endif %}
+          {% include "label/_condition_panel.html" %}
+          <div class="rd-cond-actions">
+            <button type="submit" class="btn btn-primary btn-sm rd-cond-submit">
+              <i class="bi bi-search me-1"></i>이 조건으로 검색
+            </button>
+          </div>
+        </form>
+      </div>
+
       {# 원료 관리 화면과 같은 '좌=목록 / 우=상세' 구조를 맞추기 위한 패널 헤더 #}
       <div class="rd-panel-header">상세 정보</div>
 
@@ -851,12 +777,82 @@
           </button>
         </div>
         {% else %}
-        <div class="rd-empty" style="height:100%;">
-          <i class="bi bi-shield-exclamation text-secondary"></i>
-          <div class="rd-empty-title">왼쪽 목록에서 항목을 선택하세요</div>
+        {# ── 항목을 고르기 전 자리 ─────────────────────────────────────
+           예전에는 "왼쪽에서 선택하세요" 한 줄뿐이라 화면의 40%가 비어 있었다.
+           이 자리에 '내가 지금 어떤 기준으로 알림을 받고 있는지' 를 보여준다.
+           목록에 원하는 게 안 뜰 때 "키워드를 더 넣어야겠다" 로 바로 이어진다. #}
+        <div class="rd-alert-summary">
+          <div class="rd-as-lead">
+            <i class="bi bi-shield-exclamation"></i>
+            왼쪽 목록에서 항목을 선택하면 여기에 상세가 나옵니다.
+          </div>
+
           {% if no_action_count > 0 %}
-          <div class="rd-empty-sub"><i class="bi bi-exclamation-triangle me-1"></i>미조치 {{ no_action_count }}건 — 조치가 필요합니다</div>
+          <a class="rd-as-todo" href="?{{ no_action_qs }}">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            미조치 <b>{{ no_action_count|intcomma }}건</b> — 눌러서 그 건만 보기
+          </a>
           {% endif %}
+
+          <div class="rd-as-card">
+            <div class="rd-as-head">
+              <span><i class="bi bi-bell-fill"></i> 내 알림 기준</span>
+              <button type="button" class="rd-as-edit" onclick="openAlertSettings()">
+                <i class="bi bi-gear"></i> 설정 변경
+              </button>
+            </div>
+
+            <div class="rd-as-sec">
+              <div class="rd-as-sec-title">
+                키워드 알림
+                <span class="rd-as-count">{{ alert_rules|length }}</span>
+              </div>
+              {% if alert_rules %}
+              <div class="rd-as-chips">
+                {% for rule in alert_rules %}
+                <span class="rkb-chip rkb-chip-{{ rule.category|lower }}"
+                      title="{{ rule.get_category_display }} · {{ rule.get_match_type_display }}">
+                  <span class="rkb-chip-cat">{{ rule.get_category_display }}</span>
+                  <span class="rkb-chip-kw">{{ rule.keyword }}</span>
+                  {% if rule.match_type == 'EXACT' %}<span class="rkb-chip-exact">=</span>{% endif %}
+                </span>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="rd-as-empty">
+                등록된 키워드가 없습니다.
+                제품명·원료명·업체명을 넣어두면 그 말이 들어간 부적합·처분이 올라올 때 알려드립니다.
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="rd-as-sec">
+              <div class="rd-as-sec-title">수거검사 알림</div>
+              {% if user_profile.company_name or user_profile.license_number %}
+              <div class="rd-as-kv">
+                {% if user_profile.company_name %}
+                <div><span class="rd-as-k">회사명</span><span class="rd-as-v">{{ user_profile.company_name }}</span></div>
+                {% endif %}
+                {% if user_profile.license_number %}
+                <div><span class="rd-as-k">인허가번호</span><span class="rd-as-v">{{ user_profile.license_number }}</span></div>
+                {% endif %}
+              </div>
+              {% else %}
+              <div class="rd-as-empty">
+                회사명이나 인허가번호를 등록하면 내 업체의 수거검사 결과를 자동으로 받습니다.
+              </div>
+              {% endif %}
+              <div class="rd-as-note">
+                내가 등록한 제품의 <b>품목보고번호</b>가 일치하면 등록 없이도 자동으로 잡힙니다.
+              </div>
+            </div>
+
+            {% if last_collected %}
+            <div class="rd-as-foot">
+              <i class="bi bi-clock-history"></i> 마지막 수집 {{ last_collected|date:"Y-m-d" }}
+            </div>
+            {% endif %}
+          </div>
         </div>
         {% endif %}
         {% endif %}
@@ -1366,14 +1362,14 @@ function _applySwitchViewCSS(v) {
   var t = document.getElementById(idMap[v]);
   if (t) t.classList.add('rs-vtab--active');
 
-  var filterBtn = document.querySelector('.rf-detail-toggle');
+  var filterBtn = document.getElementById('condToggle');
   if (filterBtn) {
     if (v === 'insp') {
       filterBtn.disabled = true;
-      filterBtn.setAttribute('title', '수거검사 탭에서는 분야 필터를 사용할 수 없습니다');
+      filterBtn.setAttribute('title', '수거검사 탭에서는 상세 조건을 사용할 수 없습니다');
     } else {
       filterBtn.disabled = false;
-      filterBtn.setAttribute('title', '상세 분야 선택');
+      filterBtn.setAttribute('title', '상세 조건으로 좁혀 보기');
     }
   }
 
@@ -1403,7 +1399,7 @@ function _applySwitchViewCSS(v) {
   switchView(initialTab, false);
 
   // 페이지네이션·정렬 링크 클릭 시 현재 탭을 URL에 주입 + 로딩 표시
-  document.querySelectorAll('.rs-page-btn[href], .rs-sort-btn[href]').forEach(function(a) {
+  document.querySelectorAll('.rs-page-btn[href]').forEach(function(a) {
     a.addEventListener('click', function(e) {
       var curTab = (new URL(window.location.href)).searchParams.get('tab');
       if (!curTab || curTab === 'insp-news') {
@@ -1421,4 +1417,5 @@ function _applySwitchViewCSS(v) {
 
 }());
 </script>
+<script src="{% static 'js/list_common.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

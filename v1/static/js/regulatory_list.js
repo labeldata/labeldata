@@ -2,14 +2,6 @@
    regulatory_list.js — 부적합·처분 알림 목록 페이지 JavaScript
    ================================================================ */
 
-// ── 분야 필터 접기 플래시 방지: DOMContentLoaded 이전에 즉시 실행 ──
-// 기본값 = 접힌 (localStorage에 '1'이 저장된 경우만 펙침)
-(function () {
-  if (localStorage.getItem('catFilterOpen') !== '1') {
-    document.documentElement.classList.add('cat-filter-closed');
-  }
-})();
-
 function toggleRiskHelp(e) {
   e.stopPropagation();
   const pop = document.getElementById('riskHelpPopover');
@@ -45,46 +37,13 @@ function submitFilter() {
   }
   tabInput.value = new URL(window.location.href).searchParams.get('tab') || '';
   if (typeof showLoading === 'function') showLoading();
-  form.submit();
+  // requestSubmit 이라야 조건 패널의 submit 핸들러(값이 빈 조건 제외)가 함께 돈다.
+  // form.submit() 은 그것을 건너뛰어 f=&v= 가 URL 에 쌓인다.
+  if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
 }
 
-function toggleCatFilter() {
-  const el  = document.getElementById('catFilterCollapse');
-  const btn = document.getElementById('catToggleBtn');
-  if (!el || !btn) return;
-  const isCollapsed = el.classList.contains('collapsed');
-  if (isCollapsed) {
-    el.classList.remove('collapsed');
-    btn.classList.remove('collapsed');
-    localStorage.setItem('catFilterOpen', '1');
-  } else {
-    el.classList.add('collapsed');
-    btn.classList.add('collapsed');
-    localStorage.setItem('catFilterOpen', '0');
-  }
-}
-
-// 드로어 체크박스 변경 시 그룹 버튼 active 상태 갱신
-function onCatChange() {
-  _updateGroupBtnState();
-  submitFilter();
-}
-
-// 부적합/처분 그룹 버튼 클릭 — 해당 그룹 체크박스 전체 토글
-function toggleGroup(group) {
-  const groupKeys = {
-    insp:  ['insp', 'I0490', 'imp_insp', 'import'],
-    admin: ['admin', 'I0482', 'saol_admin'],
-  };
-  const keys = groupKeys[group] || [];
-  const boxes = [...document.querySelectorAll('input[name="cat"]')]
-    .filter(c => keys.includes(c.value));
-  // 하나라도 꺼져있으면 전체 ON, 모두 켜져있으면 전체 OFF
-  const allOn = boxes.every(c => c.checked);
-  boxes.forEach(c => c.checked = !allOn);
-  _updateGroupBtnState();
-  submitFilter();
-}
+// 분야 체크박스는 '상세 조건' 패널의 체크박스 묶음으로 옮겼다.
+// 드로어를 여닫던 toggleCatFilter / 그룹 토글 / 상태 갱신 함수는 함께 사라졌다.
 
 // 수거검사 버튼 클릭 — I0460 hidden input 토글 후 제출
 function toggleInspection() {
@@ -103,32 +62,7 @@ function toggleInspection() {
   submitFilter();
 }
 
-// 그룹 버튼 active 클래스 갱신
-function _updateGroupBtnState() {
-  const inspKeys  = ['insp', 'I0490', 'imp_insp', 'import'];
-  const adminKeys = ['admin', 'I0482', 'saol_admin'];
-  const all = [...document.querySelectorAll('input[name="cat"]')];
-
-  const inspOn  = inspKeys.some(k  => all.find(c => c.value === k  && c.checked));
-  const adminOn = adminKeys.some(k => all.find(c => c.value === k && c.checked));
-
-  document.getElementById('grpBtnInsp') ?.classList.toggle('rf-grp-btn--on', inspOn);
-  document.getElementById('grpBtnAdmin')?.classList.toggle('rf-grp-btn--on', adminOn);
-}
-
 document.addEventListener('DOMContentLoaded', function () {
-  const el  = document.getElementById('catFilterCollapse');
-  const btn = document.getElementById('catToggleBtn');
-
-  const isOpen = localStorage.getItem('catFilterOpen') === '1';
-  if (!isOpen) {
-    if (el)  el.classList.add('collapsed');
-    if (btn) btn.classList.add('collapsed');
-  }
-  document.documentElement.classList.remove('cat-filter-closed');
-
-  _updateGroupBtnState();
-
   // 선택 후 페이지 이동 시 스크롤 위치 복원
   const saved = sessionStorage.getItem('rs_scroll');
   if (saved !== null) {
@@ -138,43 +72,39 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 });
 
+// 기간 단축 버튼 (3일/1주/1개월/전체) — 자주 쓰는 조작이라 조건 패널과 별개로 남겼다.
+// 정확한 구간이 필요하면 조건 패널의 '발생·처분일(부터/까지)' 를 쓴다.
 function setDays(val) {
   document.getElementById('f_days').value = val;
-  // 날짜 범위 초기화
-  const df = document.querySelector('input[name="date_from"]');
-  const dt = document.querySelector('input[name="date_to"]');
-  if (df) df.value = '';
-  if (dt) dt.value = '';
   submitFilter();
 }
 
-function onDateRangeChange() {
-  const df = document.querySelector('input[name="date_from"]').value;
-  const dt = document.querySelector('input[name="date_to"]').value;
-  // 날짜 범위 지정 시 기간 버튼 비활성화
-  if (df || dt) {
-    document.getElementById('f_days').value = 'all';
-  }
-  submitFilter();
+// 위험도·조치상태는 '상세 조건' 패널의 체크박스 묶음으로 옮겼다.
+// 예전 링크·북마크(?risk=HIGH 등)는 서버가 그대로 읽으므로 계속 동작한다.
+
+// ── 목록 조작 (정렬 / 페이지당 개수) ──────────────────────────────────────
+// 거르는 조건과 달리 폼 바깥에 있어 주소를 직접 고쳐 이동한다.
+function _navWith(changes) {
+  const url = new URL(window.location.href);
+  Object.keys(changes).forEach(function (k) {
+    if (changes[k] === null) { url.searchParams.delete(k); }
+    else { url.searchParams.set(k, changes[k]); }
+  });
+  url.searchParams.delete('page');   // 보는 방식이 바뀌면 첫 페이지부터
+  if (typeof showLoading === 'function') showLoading();
+  window.location.href = url.toString();
 }
 
-function clearDateRange() {
-  const df = document.querySelector('input[name="date_from"]');
-  const dt = document.querySelector('input[name="date_to"]');
-  if (df) df.value = '';
-  if (dt) dt.value = '';
-  document.getElementById('f_days').value = '30';
-  submitFilter();
+function setSort(field) {
+  _navWith({ sort: field });
 }
 
-function setRisk(val) {
-  document.getElementById('f_risk').value = val;
-  submitFilter();
+function setOrder(order) {
+  _navWith({ order: order });
 }
 
-function setStatus(val) {
-  document.getElementById('f_status').value = val;
-  submitFilter();
+function setPerPage(n) {
+  _navWith({ per_page: n });
 }
 
 function doSearch() {

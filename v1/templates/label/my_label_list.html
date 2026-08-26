@@ -2,18 +2,10 @@
 {% load static %}
 {% block title %}표시사항 관리{% endblock %}
 
-<style>
-    /* ── 정렬 가능한 목록 헤더 (제품 조회·식품첨가물과 같은 토글 방식) ── */
-    .pv-sort {
-        color: inherit; text-decoration: none;
-        display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
-    }
-    .pv-sort:hover { color: #1558b0; text-decoration: none; }
-    .pv-sort .bi { font-size: 9px; opacity: .35; }
-    .pv-sort:hover .bi { opacity: .8; }
-    .pv-sort--on { color: #1558b0; font-weight: 700; }
-    .pv-sort--on .bi { opacity: 1; font-size: 10px; }
-</style>
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/list_common.css' %}?v={{ STATIC_BUILD_DATE }}">
+{% endblock %}
+
 
 {% block content %}
 <div class="container mt-4">
@@ -249,4 +241,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 /* ──────────────────────────────────────────────────────────────── */
 </script>
+<script src="{% static 'js/list_common.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

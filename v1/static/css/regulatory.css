@@ -93,10 +93,11 @@
 /* 스플릿 뷰 */
 .reg-wrap    { display: flex; flex: 1; min-height: 0; overflow: hidden; background: var(--c-bg-page); }
 .reg-page .reg-sidebar,
-/* 좌우 비율은 원료 관리 화면(.ingredient-list-panel: flex 0 0 45%)과 맞춘다.
-   이전에는 40% + max-width 520px 이라 넓은 화면에서 목록이 유독 좁아 보였고,
-   같은 좌우 분할 화면인데 비율이 달라 통일감이 없었다. */
-.reg-sidebar { flex: 0 0 45%; min-width: 320px; max-width: 720px; display: flex;
+/* 좌 60 / 우 40.
+   왼쪽은 '무엇을 볼지 고르는 곳'(기간·탭·목록), 오른쪽은 '자세히 보는 곳'
+   (상세 검색 조건 + 선택한 항목의 상세)이다. 목록에서 제품명·업체명을 읽어야
+   해서 왼쪽에 더 준다. 이전에는 45%였는데 목록 줄이 자주 잘렸다. */
+.reg-sidebar { flex: 0 0 60%; min-width: 360px; max-width: 900px; display: flex;
                flex-direction: column; background: #fff;
                border-right: 1px solid #e0e0e0; overflow: hidden; }
 .reg-main         { flex: 1; overflow: hidden; display: flex; flex-direction: column; background: var(--c-bg-page); }
@@ -147,8 +148,6 @@
                                color: var(--c-text-hint); font-size: 13px; line-height: 1;
                                transition: transform .2s; display: flex; align-items: center; flex-shrink: 0; }
 .rs-toggle-btn.collapsed     { transform: rotate(-90deg); }
-html.cat-filter-closed .rs-filter-collapse { max-height: 0; opacity: 0; pointer-events: none; transition: none; }
-html.cat-filter-closed #catToggleBtn        { transform: rotate(180deg); }
 
 /* ── 5. 분야 드로어 ─────────────────────────────────────────── */
 .rf-cat-drawer   { display: flex; flex-direction: row; flex-wrap: wrap;
@@ -967,7 +966,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 /* ── 1024px: 사이드바 축소 ──────────────────────────────── */
 @media (max-width: 1024px) {
   .reg-page .reg-sidebar,
-  .reg-sidebar { flex: 0 0 36%; min-width: 260px; max-width: 420px; }
+  .reg-sidebar { flex: 0 0 55%; min-width: 300px; max-width: 560px; }
   .rf-search-wrap { max-width: 200px; }
 }
 

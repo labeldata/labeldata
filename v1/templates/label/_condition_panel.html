@@ -8,7 +8,8 @@
      max_conditions   한 번에 걸 수 있는 조건 수 상한
      require_fast     True 면 ⚡ 빠른 조건을 하나 이상 요구한다
                       (제품 조회처럼 행이 많은 화면에서만 켠다)
-     q_input_id       같은 폼에 있는 통합검색 입력칸의 id
+     q_input_id       통합검색 입력칸의 id (다른 폼에 있어도 된다)
+     panel_always_open  True 면 접지 않고 늘 펼쳐 둔다 (여닫는 버튼이 없는 자리)
 
    부르는 쪽이 직접 두어야 하는 것:
      - 이 패널을 여닫는 버튼 (id="condToggle")
@@ -79,7 +80,8 @@
     }
 </style>
 
-<div class="pv-cond" id="condPanel" {% if not conditions %}hidden{% endif %}>
+<div class="pv-cond{% if panel_always_open %} pv-cond--open{% endif %}" id="condPanel"
+     {% if not conditions and not panel_always_open %}hidden{% endif %}>
     <div id="condRows"></div>
     <div class="pv-cond-foot">
         <button type="button" class="pv-cond-add" id="condAdd">
@@ -212,6 +214,8 @@
                 el.value = value || '';
                 el.placeholder = spec.label + ' 검색어';
             }
+            // 엔터로도 검색되게 한다 (list_common.js 가 처리)
+            el.setAttribute('data-search-enter', '');
         }
         el.name = 'v';
         return el;
