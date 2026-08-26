@@ -1,4 +1,5 @@
-{# ============================================================================
+{% comment %}
+============================================================================
    다중 조건 검색 패널 — 제품 조회 / 식품첨가물 공용
 
    부르는 쪽이 넘겨야 하는 값:
@@ -12,7 +13,8 @@
    부르는 쪽이 직접 두어야 하는 것:
      - 이 패널을 여닫는 버튼 (id="condToggle")
      - 이 include 는 <form> 안에 두어야 조건이 함께 제출된다
-   ========================================================================= #}
+   =========================================================================
+{% endcomment %}
 <style>
     .pv-cond { margin-top: 10px; padding: 12px 14px; background: #f8f9fa; border-radius: 10px; }
     .pv-cond[hidden] { display: none; }
@@ -35,6 +37,16 @@
     }
     .pv-cond-add:hover { border-color: #1967d2; background: #e8f0fe; }
     .pv-cond-add:disabled { color: #9aa0a6; border-color: #dadce0; background: #f1f3f4; }
+    .pv-cond-clear {
+        border: 1px solid #dadce0; background: #fff; color: #5f6368;
+        border-radius: 8px; padding: 5px 12px; font-size: 12.5px;
+    }
+    .pv-cond-clear:hover { border-color: #d93025; color: #d93025; background: #fce8e6; }
+    .pv-cond-clear:disabled {
+        color: #b8bcc0; border-color: #e8eaed; background: #fff;
+        cursor: default;
+    }
+    .pv-cond-clear:disabled:hover { border-color: #e8eaed; color: #b8bcc0; background: #fff; }
     .pv-cond-hint { font-size: 11.5px; color: #5f6368; }
     .pv-cond-warn { display: none; margin-top: 7px; font-size: 12px; color: #b3261e; }
     .pv-cond-warn.pv-cond-warn--on { display: block; }
@@ -58,6 +70,9 @@
     <div class="pv-cond-foot">
         <button type="button" class="pv-cond-add" id="condAdd">
             <i class="bi bi-plus-lg"></i> 조건 추가
+        </button>
+        <button type="button" class="pv-cond-clear" id="condClear">
+            <i class="bi bi-arrow-counterclockwise"></i> 조건 초기화
         </button>
         <span class="pv-cond-hint">
             조건을 <b>모두 만족</b>하는 결과만 나옵니다 (최대 {{ max_conditions }}개).
@@ -96,6 +111,7 @@
     var panel = document.getElementById('condPanel');
     var rows = document.getElementById('condRows');
     var addBtn = document.getElementById('condAdd');
+    var clearBtn = document.getElementById('condClear');
     var toggle = document.getElementById('condToggle');
     var countBadge = document.getElementById('condCount');
     var warn = document.getElementById('condWarn');
@@ -186,7 +202,7 @@
         del.addEventListener('click', function () {
             row.remove();
             if (!rows.children.length) addRow();
-            syncAddBtn();
+            syncButtons();
             refreshWarn();
         });
 
@@ -207,12 +223,14 @@
         row.appendChild(val);
         row.appendChild(del);
         rows.appendChild(row);
-        syncAddBtn();
+        syncButtons();
         return row;
     }
 
-    function syncAddBtn() {
+    function syncButtons() {
         addBtn.disabled = rows.children.length >= MAX;
+        // 지울 게 없으면 눌러도 아무 일이 없으므로 비활성으로 둔다
+        clearBtn.disabled = !anyValue() && !ACTIVE.length;
     }
 
     // 값이 채워진 빠른 조건이 하나라도 있는지 — 서버 search_allowed 와 같은 규칙
@@ -241,6 +259,7 @@
 
     function refreshWarn() {
         if (warn) warn.classList.toggle('pv-cond-warn--on', isBlocked());
+        syncButtons();
     }
 
     ACTIVE.forEach(function (c) { addRow(c.key, c.value); });
@@ -252,6 +271,23 @@
     addBtn.addEventListener('click', function () {
         var row = addRow();
         if (row) row.querySelector('.pv-cond-value').focus();
+    });
+
+    // 조건 초기화 — 행을 모두 비우고 빈 줄 하나만 남긴다.
+    // 이미 적용된 조건이 있으면 결과도 같이 되돌려야 하므로 폼을 다시 보낸다.
+    clearBtn.addEventListener('click', function () {
+        var hadApplied = ACTIVE.length > 0;
+        while (rows.firstChild) rows.removeChild(rows.firstChild);
+        addRow();
+        rows.querySelector('.pv-cond-field').classList.remove('pv-cond-field--bad');
+        refreshWarn();
+        if (hadApplied) {
+            // requestSubmit 이라야 submit 핸들러(빈 행 제외)가 함께 돈다.
+            // form.submit() 은 핸들러를 건너뛰어 f=&v= 가 URL 에 남는다.
+            if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+        } else {
+            rows.querySelector('.pv-cond-value').focus();
+        }
     });
 
     if (toggle) {

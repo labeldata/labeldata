@@ -413,8 +413,7 @@
                         <input type="checkbox" id="check-all" onclick="toggleAllCheckboxes(this)">
                     </th>
                     {% endif %}
-                    {# 정렬 가능한 컬럼만 링크가 걸린다. 표시구분·원재료 표시명은
-                       표4/5/6 을 조합해 만드는 값이라 DB 정렬 대상이 아니다. #}
+                    {# 정렬 가능한 컬럼만 링크가 걸린다 (표시구분·원재료 표시명은 표4/5/6 조합값이라 제외) #}
                     {% for col in list_columns %}
                     <th style="width: {{ col.width }}; text-align: {{ col.align }};">
                         {% if col.field %}

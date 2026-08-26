@@ -368,14 +368,14 @@
     {# 국내/수입 탭 — 한 번 검색하면 양쪽 건수가 배지에 뜬다 #}
     <div class="pv-tabs">
         <a class="pv-tab{% if not imported_mode %} pv-tab--active{% endif %}"
-           href="?food_category=domestic{% if querystring_without_tab %}&{{ querystring_without_tab }}{% endif %}">
+           href="?food_category=domestic{% if imported_mode %}{% if other_tab_qs %}&{{ other_tab_qs }}{% endif %}{% else %}{% if querystring_without_tab %}&{{ querystring_without_tab }}{% endif %}{% endif %}">
             <i class="bi bi-house-door"></i> 국내 품목보고
             {% if has_search_params %}<span class="pv-tab-count{% if tab_counts.domestic is None %} pv-tab-count--pending{% endif %}"
                   {% if tab_counts.domestic is None %}data-tab-count="domestic"{% endif %}
             >{% if tab_counts.domestic is None %}···{% else %}{{ tab_counts.domestic|intcomma }}{% if total_capped %}+{% endif %}{% endif %}</span>{% endif %}
         </a>
         <a class="pv-tab{% if imported_mode %} pv-tab--active{% endif %}"
-           href="?food_category=imported{% if querystring_without_tab %}&{{ querystring_without_tab }}{% endif %}">
+           href="?food_category=imported{% if imported_mode %}{% if querystring_without_tab %}&{{ querystring_without_tab }}{% endif %}{% else %}{% if other_tab_qs %}&{{ other_tab_qs }}{% endif %}{% endif %}">
             <i class="bi bi-globe"></i> 수입식품
             {% if has_search_params %}<span class="pv-tab-count{% if tab_counts.imported is None %} pv-tab-count--pending{% endif %}"
                   {% if tab_counts.imported is None %}data-tab-count="imported"{% endif %}
@@ -423,7 +423,7 @@
             <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
                 <i class="bi bi-search me-1"></i>검색
             </button>
-            {% if search_query or conditions %}
+            {% if can_reset %}
             <a href="?food_category={{ food_category }}" class="btn btn-outline-secondary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
                 초기화
             </a>
@@ -651,8 +651,14 @@ document.addEventListener('DOMContentLoaded', function() {
 (function () {
     var slots = document.querySelectorAll('[data-tab-count]');
     if (!slots.length) return;
-    var url = '{% url "label:food_item_tab_count" %}?food_category={{ other_tab }}'
-            + '{% if tab_count_qs %}&{{ tab_count_qs }}{% endif %}';
+    // 쿼리스트링을 템플릿 문자열로 끼워 넣지 않는다 — <script> 안에서는 자동
+    // 이스케이프된 &amp; 가 그대로 남아 파라미터가 깨진다. 현재 주소에서 읽는다.
+    var params = new URLSearchParams(window.location.search);
+    // 엔드포인트는 "현재 탭" 을 받아 반대쪽을 센다. f/v 도 현재 탭 기준 키이므로
+    // 여기서 탭을 뒤집으면 조건이 통째로 버려져 항상 0건이 나온다.
+    params.set('food_category', '{{ food_category }}');
+    ['page', 'sort', 'order'].forEach(function (k) { params.delete(k); });
+    var url = '{% url "label:food_item_tab_count" %}?' + params.toString();
 
     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function (r) { return r.ok ? r.json() : null; })

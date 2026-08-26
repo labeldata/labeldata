@@ -162,6 +162,23 @@ def _safe_items_per_page(request, default=10):
     return value if value in _ITEMS_PER_PAGE_CHOICES else default
 
 
+def _tab_querystring(request, other_tab, conditions):
+    """
+    반대쪽 탭 링크용 쿼리스트링.
+    조건은 CONDITION_TWINS 로 그쪽 필드에 옮겨 담고, 대응이 없는 것은 버린다.
+    페이지·정렬은 탭마다 기준이 달라 빼고 넘긴다.
+    """
+    params = request.GET.copy()
+    for key in ("page", "food_category", "sort", "order", "f", "v"):
+        params.pop(key, None)
+
+    moved, _ = product_search.translate_conditions(conditions, other_tab)
+    for cond in moved:
+        params.appendlist("f", cond["key"])
+        params.appendlist("v", cond["value"])
+    return params.urlencode()
+
+
 def to_bool(val):
     """imported_mode 값을 명확히 True/False로 변환"""
     if isinstance(val, bool):
@@ -354,6 +371,10 @@ def food_item_list(request):
     # 탭을 유지한 채 페이지 이동/정렬하기 위한 쿼리스트링
     querystring_without_tab = get_querystring_without(request, ["page", "food_category"])
 
+    # 반대쪽 탭으로 갈 때 쓸 쿼리스트링 — 조건을 그쪽 필드로 옮겨 담는다.
+    # 정렬은 탭마다 컬럼이 달라 넘기지 않는다 (넘겨도 화이트리스트에서 걸러진다).
+    other_tab_qs = _tab_querystring(request, other_tab, conditions)
+
     # Context에 search_query 추가 (템플릿에서 사용)
     search_query = search_q or request.GET.get('prdlst_nm', '')
 
@@ -396,6 +417,11 @@ def food_item_list(request):
         "intro": intro,
         "intro_date": intro_date,
         "querystring_without_tab": querystring_without_tab,
+        "other_tab_qs": other_tab_qs,
+        # 초기화 버튼은 지울 게 있으면 항상 보여야 한다.
+        # conditions 만 보면, 반대 탭으로 옮겨져 조건이 비었을 때 버튼이 사라져
+        # 조건을 지울 방법이 없어진다.
+        "can_reset": bool([k for k in request.GET if k != 'food_category']),
     }
 
     return render(request, _get_template(request, "label/food_item_list.html"), context)
