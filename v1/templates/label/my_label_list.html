@@ -2,6 +2,19 @@
 {% load static %}
 {% block title %}표시사항 관리{% endblock %}
 
+<style>
+    /* ── 정렬 가능한 목록 헤더 (제품 조회·식품첨가물과 같은 토글 방식) ── */
+    .pv-sort {
+        color: inherit; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+    }
+    .pv-sort:hover { color: #1558b0; text-decoration: none; }
+    .pv-sort .bi { font-size: 9px; opacity: .35; }
+    .pv-sort:hover .bi { opacity: .8; }
+    .pv-sort--on { color: #1558b0; font-weight: 700; }
+    .pv-sort--on .bi { opacity: 1; font-size: 10px; }
+</style>
+
 {% block content %}
 <div class="container mt-4">
     <h2 class="mb-1">표시사항 관리</h2>
@@ -50,96 +63,18 @@
                 <tr>
                     <th class="text-center align-middle" style="width: 3%;"><input type="checkbox" id="check-all"></th>
                     <th class="text-center align-middle" style="width: 4%;">번호</th>
-                    <th style="width: 9%;">품보신고
-                        <span class="sort-buttons">
-                            <a href="?sort=report_no_verify_yn&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=report_no_verify_yn&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
+                    {# 같은 컬럼을 다시 누르면 방향이 뒤집힌다 (토글) #}
+                    {% for col in list_columns %}
+                    <th style="width: {{ col.width }}; text-align: {{ col.align }};">
+                        {% if col.field %}
+                        <a class="pv-sort{% if col.active %} pv-sort--on{% endif %}"
+                           href="?{{ querystring_base }}{% if querystring_base %}&{% endif %}sort={{ col.field }}&order={{ col.next_order }}"
+                           title="{{ col.label }} {% if col.next_order == 'asc' %}오름차순{% else %}내림차순{% endif %}으로 정렬">
+                            {{ col.label }}<i class="bi {{ col.icon }}"></i>
+                        </a>
+                        {% else %}{{ col.label }}{% endif %}
                     </th>
-                    <th style="width: 16%;">라벨명
-                        <span class="sort-buttons">
-                            <a href="?sort=my_label_name&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=my_label_name&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 16%;">제품명
-                        <span class="sort-buttons">
-                            <a href="?sort=prdlst_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=prdlst_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 9%;">식품유형
-                        <span class="sort-buttons">
-                            <a href="?sort=prdlst_dcnm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=prdlst_dcnm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 12%;">품목보고번호
-                        <span class="sort-buttons">
-                            <a href="?sort=prdlst_report_no&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=prdlst_report_no&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 11%;">제조사명
-                        <span class="sort-buttons">
-                            <a href="?sort=bssh_nm&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=bssh_nm&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 9%;">보관조건
-                        <span class="sort-buttons">
-                            <a href="?sort=storage_method&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=storage_method&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 9%;">포장재질
-                        <span class="sort-buttons">
-                            <a href="?sort=frmlc_mtrqlt&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=frmlc_mtrqlt&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
-                    <th style="width: 10%;">작성일
-                        <span class="sort-buttons">
-                            <a href="?sort=update_datetime&order=asc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="오름차순">
-                                <i class="fas fa-caret-up"></i>
-                            </a>
-                            <a href="?sort=update_datetime&order=desc{% if querystring_without_sort %}&{{ querystring_without_sort }}{% endif %}" class="sort-btn" title="내림차순">
-                                <i class="fas fa-caret-down"></i>
-                            </a>
-                        </span>
-                    </th>
+                    {% endfor %}
                 </tr>
             </thead>
             <tbody>

@@ -6,6 +6,8 @@ app_name = 'label'
 urlpatterns = [
     # 제품 목록 및 상세
     path('food-items/', views.food_item_list, name='food_item_list'),
+    # 반대쪽 탭 배지 건수만 따로 받아간다 (검색 화면을 먼저 띄우기 위해)
+    path('food-items/tab-count/', views.food_item_tab_count, name='food_item_tab_count'),
     path('food-items/domestic/', views.food_item_list_domestic, name='food_item_list_domestic'),
     path('food-items/imported/', views.food_item_list_imported, name='food_item_list_imported'),
     path('food-item-detail/<str:prdlst_report_no>/', views.food_item_detail, name='food_item_detail'),

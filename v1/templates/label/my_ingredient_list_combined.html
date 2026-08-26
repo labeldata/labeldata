@@ -559,6 +559,19 @@
 </style>
 {% endblock %}
 
+<style>
+    /* ── 정렬 가능한 목록 헤더 (제품 조회·식품첨가물과 같은 토글 방식) ── */
+    .pv-sort {
+        color: inherit; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+    }
+    .pv-sort:hover { color: #1558b0; text-decoration: none; }
+    .pv-sort .bi { font-size: 9px; opacity: .35; }
+    .pv-sort:hover .bi { opacity: .8; }
+    .pv-sort--on { color: #1558b0; font-weight: 700; }
+    .pv-sort--on .bi { opacity: 1; font-size: 10px; }
+</style>
+
 {% block content %}
 <div id="main-content">
     <!-- 상단 툴바 -->
@@ -616,10 +629,16 @@
                     <thead>
                         <tr>
                             <th style="width: 38px;"><input type="checkbox" class="ingredient-check-all" id="checkAllIngredients"></th>
-                            <th style="width: 12%;">분류</th>
-                            <th style="width: 20%;">품목보고번호</th>
-                            <th style="width: 35%;">원재료명</th>
-                            <th style="width: 28%;">식품유형</th>
+                            {# 같은 컬럼을 다시 누르면 방향이 뒤집힌다 (토글) #}
+                            {% for col in list_columns %}
+                            <th style="width: {{ col.width }}; text-align: {{ col.align }};">
+                                <a class="pv-sort{% if col.active %} pv-sort--on{% endif %}"
+                                   href="?{{ querystring_base }}{% if querystring_base %}&{% endif %}sort={{ col.field }}&order={{ col.next_order }}"
+                                   title="{{ col.label }} {% if col.next_order == 'asc' %}오름차순{% else %}내림차순{% endif %}으로 정렬">
+                                    {{ col.label }}<i class="bi {{ col.icon }}"></i>
+                                </a>
+                            </th>
+                            {% endfor %}
                         </tr>
                     </thead>
                     <tbody>

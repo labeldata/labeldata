@@ -284,6 +284,32 @@
         border-radius: 9px; padding: 1px 6px;
     }
     .pv-tab--active .pv-tab-count { background: #e8f0fe; color: #1558b0; }
+    /* 반대쪽 탭 건수는 화면이 뜬 뒤에 채워진다 */
+    .pv-tab-count--pending { color: #b0b4b8; letter-spacing: 1px; }
+
+    /* ── 다중 조건 검색 ─────────────────────────────────────── */
+    .filter-toolbar--stack { display: block; padding-top: 10px; padding-bottom: 10px; }
+
+    /* 빠른 조건이 없어 검색을 실행하지 않았을 때 */
+    .pv-blocked {
+        max-width: 720px; margin: 40px auto; padding: 22px 24px;
+        background: #fef7e0; border: 1px solid #fadf9a; border-radius: 12px;
+        font-size: 13px; color: #7a5b06; line-height: 1.75;
+    }
+    .pv-blocked-title { font-size: 14.5px; font-weight: 700; margin-bottom: 8px; color: #5f4405; }
+    .pv-blocked b { color: #5f4405; }
+
+    /* ── 정렬 가능한 목록 헤더 ──────────────────────────────── */
+    .pv-sort {
+        color: inherit; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 4px;
+        white-space: nowrap;
+    }
+    .pv-sort:hover { color: #1558b0; text-decoration: none; }
+    .pv-sort .bi { font-size: 9px; opacity: .35; }
+    .pv-sort:hover .bi { opacity: .8; }
+    .pv-sort--on { color: #1558b0; font-weight: 700; }
+    .pv-sort--on .bi { opacity: 1; font-size: 10px; }
 
     /* ── 검색 전 안내 화면 ─────────────────────────────────── */
     .pv-intro { max-width: 860px; margin: 0 auto; padding: 34px 24px 40px; }
@@ -344,18 +370,23 @@
         <a class="pv-tab{% if not imported_mode %} pv-tab--active{% endif %}"
            href="?food_category=domestic{% if querystring_without_tab %}&{{ querystring_without_tab }}{% endif %}">
             <i class="bi bi-house-door"></i> 국내 품목보고
-            {% if has_search_params %}<span class="pv-tab-count">{{ tab_counts.domestic|intcomma }}</span>{% endif %}
+            {% if has_search_params %}<span class="pv-tab-count{% if tab_counts.domestic is None %} pv-tab-count--pending{% endif %}"
+                  {% if tab_counts.domestic is None %}data-tab-count="domestic"{% endif %}
+            >{% if tab_counts.domestic is None %}···{% else %}{{ tab_counts.domestic|intcomma }}{% if total_capped %}+{% endif %}{% endif %}</span>{% endif %}
         </a>
         <a class="pv-tab{% if imported_mode %} pv-tab--active{% endif %}"
            href="?food_category=imported{% if querystring_without_tab %}&{{ querystring_without_tab }}{% endif %}">
             <i class="bi bi-globe"></i> 수입식품
-            {% if has_search_params %}<span class="pv-tab-count">{{ tab_counts.imported|intcomma }}</span>{% endif %}
+            {% if has_search_params %}<span class="pv-tab-count{% if tab_counts.imported is None %} pv-tab-count--pending{% endif %}"
+                  {% if tab_counts.imported is None %}data-tab-count="imported"{% endif %}
+            >{% if tab_counts.imported is None %}···{% else %}{{ tab_counts.imported|intcomma }}{% if total_capped %}+{% endif %}{% endif %}</span>{% endif %}
         </a>
     </div>
 
     <!-- 필터 및 검색 바 -->
-    <div class="filter-toolbar">
-        <form method="get" action="" class="d-flex align-items-center w-100" style="gap: 12px;" id="searchForm">
+    <div class="filter-toolbar filter-toolbar--stack">
+        <form method="get" action="" class="w-100" id="searchForm">
+          <div class="d-flex align-items-center w-100" style="gap: 12px;">
             <input type="hidden" name="food_category" value="{{ food_category }}">
             <!-- 검색 필드 선택 -->
             <select name="search_field" id="search-field-select" class="form-select form-select-sm" style="width: 110px; flex-shrink: 0; font-size: 13px;">
@@ -382,10 +413,17 @@
                        value="{{ search_query|default:'' }}" style="font-size: 13px;">
             </div>
 
+            <button type="button" id="condToggle"
+                    class="pv-cond-toggle{% if conditions %} pv-cond-toggle--on{% endif %}"
+                    aria-expanded="{% if conditions %}true{% else %}false{% endif %}">
+                <i class="bi bi-sliders2"></i> 상세 조건
+                <span class="pv-cond-n" id="condCount" {% if not conditions %}hidden{% endif %}>{{ conditions|length }}</span>
+            </button>
+
             <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
                 <i class="bi bi-search me-1"></i>검색
             </button>
-            {% if search_query %}
+            {% if search_query or conditions %}
             <a href="?food_category={{ food_category }}" class="btn btn-outline-secondary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
                 초기화
             </a>
@@ -399,35 +437,46 @@
                     <option value="100" {% if items_per_page == 100 %}selected{% endif %}>100</option>
                 </select>
             </div>
+          </div>
+
+          {# 다중 조건 패널 (식품첨가물과 공용) #}
+          {% include "label/_condition_panel.html" %}
         </form>
     </div>
 
+
     <!-- 제품 데이터 그리드 -->
     <div class="flex-grow-1 overflow-auto custom-scrollbar">
-        {% if imported_items or page_obj %}
+        {% if search_blocked %}
+        <div class="pv-blocked">
+            <div class="pv-blocked-title">
+                <i class="bi bi-lightning-charge-fill"></i> 빠른 조건을 하나 이상 넣어주세요
+            </div>
+            국내 품목보고 183만 건, 수입식품 59만 건에서 지금 조건만으로 찾으면
+            전체를 한 줄씩 훑어야 해서 결과가 나오기까지 오래 걸립니다.
+            그래서 검색을 실행하지 않았습니다.<br><br>
+            아래 조건 중 <b>하나만 함께 넣어도</b> 인덱스를 타서 결과가 바로 나옵니다.<br>
+            <b>{{ fast_labels }}</b><br><br>
+            위쪽 검색창에 검색어를 넣어도 됩니다.
+            이름으로 찾는 조건은 <b>2글자 이상</b>이어야 인덱스가 걸립니다.
+        </div>
+        {% elif imported_items or page_obj %}
         <table class="table table-hover align-middle mb-0 product-table">
             <thead>
                 <tr>
                     <th class="text-center">번호</th>
-                    {% if imported_mode %}
-                        <th style="width: 15%; text-align: left;">제품명</th>
-                        <th style="width: 10%; text-align: center;">식품유형</th>
-                        <th style="width: 10%; text-align: center;">수출국</th>
-                        <th style="width: 12%; text-align: center;">수입업체명</th>
-                        <th style="width: 15%; text-align: center;">제조사명</th>
-                        <th style="width: 15%; text-align: center;">원재료명</th>
-                        <th style="width: 10%; text-align: center;">소비기한</th>
-                        <th style="width: 8%; text-align: center;">수입일</th>
-                    {% else %}
-                        <th style="width: 15%; text-align: left;">품목보고번호</th>
-                        <th style="width: 18%; text-align: left;">제품명</th>
-                        <th style="width: 10%; text-align: center;">식품유형</th>
-                        <th style="width: 12%; text-align: center;">제조사명</th>
-                        <th style="width: 10%; text-align: center;">소비기한</th>
-                        <th style="width: 10%; text-align: center;">포장재질</th>
-                        <th style="width: 12%; text-align: center;">원재료명</th>
-                        <th style="width: 10%; text-align: center;">허가일자</th>
-                    {% endif %}
+                    {# 정렬 가능한 컬럼만 링크가 걸린다 (인덱스 없는 TEXT 컬럼은 제외) #}
+                    {% for col in list_columns %}
+                    <th style="width: {{ col.width }}; text-align: {{ col.align }};">
+                        {% if col.field %}
+                        <a class="pv-sort{% if col.active %} pv-sort--on{% endif %}"
+                           href="?{{ querystring_base }}{% if querystring_base %}&{% endif %}sort={{ col.field }}&order={{ col.next_order }}"
+                           title="{{ col.label }} {% if col.next_order == 'asc' %}오름차순{% else %}내림차순{% endif %}으로 정렬">
+                            {{ col.label }}<i class="bi {{ col.icon }}"></i>
+                        </a>
+                        {% else %}{{ col.label }}{% endif %}
+                    </th>
+                    {% endfor %}
                 </tr>
             </thead>
             <tbody>
@@ -522,7 +571,7 @@
             <p class="text-muted mb-1">"{{ search_query }}" 검색 결과가 없습니다.</p>
             <p class="text-muted small">
                 {% if imported_mode %}국내 품목보고{% else %}수입식품{% endif %} 탭에는
-                {% if imported_mode %}{{ tab_counts.domestic|intcomma }}{% else %}{{ tab_counts.imported|intcomma }}{% endif %}건이 있습니다.
+                <span data-tab-count="{{ other_tab }}">···</span>건이 있습니다.
             </p>
         </div>
         {% endif %}
@@ -533,7 +582,9 @@
         <div class="d-flex align-items-center gap-3">
             <div class="text-muted small">
                 {% if page_obj %}
-                    전체 <span class="fw-semibold text-dark">{{ page_obj.paginator.count }}</span>개 제품
+                    전체 <span class="fw-semibold text-dark"
+                          {% if total_capped %}title="결과가 많아 {{ page_obj.paginator.count|intcomma }}건까지만 셌습니다. 조건을 좁히면 정확한 건수가 나옵니다."{% endif %}
+                    >{{ page_obj.paginator.count|intcomma }}{% if total_capped %}+{% endif %}</span>개 제품
                     ({{ page_obj.start_index }}-{{ page_obj.end_index }})
                 {% elif imported_items %}
                     전체 <span class="fw-semibold text-dark">{{ imported_items|length }}</span>개 제품
@@ -592,4 +643,40 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script src="{% static 'js/label/food_item_list.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+<script>
+// ── 반대쪽 탭 배지 지연 로드 ───────────────────────────────────────────────
+// 검색할 때마다 다른 테이블에 COUNT 를 한 번 더 돌리면 검색 자체가 느려진다.
+// 결과 화면을 먼저 띄우고 이 숫자만 따로 받아 채운다.
+(function () {
+    var slots = document.querySelectorAll('[data-tab-count]');
+    if (!slots.length) return;
+    var url = '{% url "label:food_item_tab_count" %}?food_category={{ other_tab }}'
+            + '{% if tab_count_qs %}&{{ tab_count_qs }}{% endif %}';
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+            if (!data || data.count === null || data.count === undefined) throw 0;
+            var text = data.count.toLocaleString('ko-KR');
+            // 반대쪽 탭에 없는 조건은 빼고 센 값이라 실제보다 많을 수 있다
+            if (!data.exact) text = '~' + text;
+            Array.prototype.forEach.call(slots, function (el) {
+                el.textContent = text;
+                el.classList.remove('pv-tab-count--pending');
+                if (!data.exact) el.title = '반대쪽 탭에 없는 조건은 빼고 센 값이라 실제보다 많을 수 있습니다';
+            });
+        })
+        .catch(function () {
+            // 실패해도 화면은 이미 정상이다. 자리표시만 지운다.
+            Array.prototype.forEach.call(slots, function (el) {
+                el.textContent = '';
+                el.classList.remove('pv-tab-count--pending');
+            });
+        });
+})();
+
+
+</script>
+
 {% endblock %}

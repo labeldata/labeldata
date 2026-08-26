@@ -1,4 +1,5 @@
 ﻿import json
+import logging
 import re  # 정규식 처리를 위해 추가
 from datetime import datetime, timedelta  # datetime과 timedelta를 import 추가
 from decimal import Decimal, InvalidOperation
@@ -18,6 +19,7 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
 from django.db.models import F, Q
+from django.utils.functional import cached_property
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse # [추가] URL 생성을 위해 import
@@ -27,6 +29,9 @@ from django.views.decorators.http import require_POST, require_GET
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 # --- [수정] Local Application Imports ---
+logger = logging.getLogger(__name__)
+
+from .services import additive_search, list_sort
 from .constants import CATEGORY_CHOICES
 from .forms import LabelCreationForm, MyIngredientsForm
 from v1.label.services import product_search
@@ -91,24 +96,48 @@ def format_cautions_text(text):
     return result
 
 
-def paginate_queryset(queryset, page_number, items_per_page):
+class CappedPaginator(Paginator):
+    """
+    전체 건수를 끝까지 세지 않는 Paginator.
+
+    기본 Paginator 는 COUNT(*) 로 결과 전체를 센다. "식품유형=과자" 처럼 넓은 조건이면
+    운영 데이터에서 수십만 건을 세는데, 정작 사용자는 앞 몇 페이지만 본다.
+    LIMIT 을 걸어 세면 MySQL 이 상한에서 멈추므로 넓은 검색이 눈에 띄게 빨라진다.
+
+    상한을 넘으면 count 는 상한값을 돌려주고 is_capped 가 True 가 된다.
+    화면은 그때 "5,000+ 건" 처럼 표시한다.
+    """
+    cap = 5000
+
+    @cached_property
+    def _counted(self):
+        # 상한+1 까지만 센다 — 넘쳤는지 알아야 "+" 를 붙일 수 있다
+        try:
+            return self.object_list[: self.cap + 1].count()
+        except (AttributeError, TypeError):
+            # 리스트 등 슬라이스 count 가 없는 객체는 원래 방식으로
+            return len(self.object_list)
+
+    @property
+    def count(self):
+        return min(self._counted, self.cap)
+
+    @property
+    def is_capped(self):
+        return self._counted > self.cap
+
+
+def paginate_queryset(queryset, page_number, items_per_page, cap=False):
     """
     페이징 처리를 수행합니다.
+
+    cap=True 면 전체 건수를 CappedPaginator.cap 까지만 센다 (넓은 검색 속도).
     """
-    paginator = Paginator(queryset, items_per_page)
+    paginator_cls = CappedPaginator if cap else Paginator
+    paginator = paginator_cls(queryset, items_per_page)
     page_obj = paginator.get_page(page_number)
     page_range = range(max(1, page_obj.number - 5), min(paginator.num_pages + 1, page_obj.number + 5))
     return paginator, page_obj, page_range
-
-def process_sorting(request, default_sort):
-    """
-    정렬 필드와 정렬 순서를 처리합니다.
-    """
-    sort_field = request.GET.get("sort", default_sort)
-    sort_order = request.GET.get("order", "asc")
-    if sort_order == "desc":
-        sort_field = f"-{sort_field}"
-    return sort_field, sort_order
 
 def get_querystring_without(request, keys):
     """
@@ -118,6 +147,20 @@ def get_querystring_without(request, keys):
     for key in keys:
         q.pop(key, None)
     return q.urlencode()
+
+# 페이지당 항목 수는 정해진 값만 허용한다.
+# 기존에는 int(request.GET.get(...)) 를 그대로 써서 ?items_per_page=abc 로 500 이 났고,
+# 큰 값을 넣으면 한 페이지에 수천 행을 그리게 할 수도 있었다.
+_ITEMS_PER_PAGE_CHOICES = (10, 25, 50, 100)
+
+
+def _safe_items_per_page(request, default=10):
+    try:
+        value = int(request.GET.get("items_per_page", default))
+    except (TypeError, ValueError):
+        return default
+    return value if value in _ITEMS_PER_PAGE_CHOICES else default
+
 
 def to_bool(val):
     """imported_mode 값을 명확히 True/False로 변환"""
@@ -169,6 +212,19 @@ def food_item_list(request):
     # 검색 필드 선택 (전체/특정 필드)
     search_field = request.GET.get('search_field', 'all').strip() or 'all'
 
+    # 다중 조건 검색 — f=필드키&v=값 쌍이 반복해서 들어온다.
+    # 카탈로그에 없는 키·빈 값은 parse_conditions 가 버린다.
+    conditions = product_search.parse_conditions(
+        food_category, request.GET.getlist('f'), request.GET.getlist('v')
+    )
+    # 인덱스를 타는 조건이 하나도 없으면 183만 행 풀스캔이라 검색을 실행하지 않는다.
+    # (화면에서도 막지만, URL 을 직접 만들어 들어올 수 있으니 여기서 최종 판정한다)
+    search_allowed = product_search.search_allowed(food_category, conditions, search_q)
+    if not search_allowed:
+        conditions_filter = Q()
+    else:
+        conditions_filter = product_search.conditions_q(food_category, conditions)
+
     imported_search_fields = {
         "prduct_korean_nm": "prdlst_nm",
         "itm_nm": "prdlst_dcnm",
@@ -181,9 +237,11 @@ def food_item_list(request):
 
     # 정렬조건 변경
     if food_category == "imported":
-        # 수입제품: 단일 컬럼 정렬만 허용 (기본: -expirde_dtm)
-        sort_field, sort_order = process_sorting(request, "-expirde_dtm")
-        items_per_page = int(request.GET.get("items_per_page", 10))
+        # 수입제품: 화이트리스트에 있는 컬럼만 정렬 허용 (기본: 소비기한 내림차순)
+        sort_field, active_sort, sort_order = product_search.resolve_sort(
+            'imported', request.GET.get("sort"), request.GET.get("order")
+        )
+        items_per_page = _safe_items_per_page(request)
         page_number = request.GET.get("page", 1)
         imported_mode = True
         imported_conditions = Q()
@@ -202,18 +260,30 @@ def food_item_list(request):
             has_search_params = True
             imported_conditions &= product_search.imported_q(search_q, search_field)
 
-        if has_search_params:
-            imported_items_qs = ImportedFood.objects.filter(imported_conditions).order_by(sort_field)
+        if conditions:
+            has_search_params = True
+            imported_conditions &= conditions_filter
+
+        if has_search_params and search_allowed:
+            # 목록이 쓰는 컬럼만 가져온다 — korlabel(한글표시사항) 같은 TEXT 를
+            # 행마다 통째로 실어오지 않도록 한다
+            imported_items_qs = (ImportedFood.objects
+                                 .filter(imported_conditions)
+                                 .only(*product_search.IMPORTED_LIST_FIELDS)
+                                 .order_by(sort_field))
         else:
             imported_items_qs = ImportedFood.objects.none()
 
-        paginator, page_obj, page_range = paginate_queryset(imported_items_qs, page_number, items_per_page)
+        paginator, page_obj, page_range = paginate_queryset(
+            imported_items_qs, page_number, items_per_page, cap=True)
         total_count = paginator.count   # Paginator 가 이미 센 값을 재사용 (COUNT 중복 실행 방지)
         search_values = imported_search_values
     else:
-        # 국내제품: 단일 컬럼 정렬만 허용 (기본: -prms_dt)
-        sort_field, sort_order = process_sorting(request, "-prms_dt")
-        items_per_page = int(request.GET.get("items_per_page", 10))
+        # 국내제품: 화이트리스트에 있는 컬럼만 정렬 허용 (기본: 허가일자 내림차순)
+        sort_field, active_sort, sort_order = product_search.resolve_sort(
+            'domestic', request.GET.get("sort"), request.GET.get("order")
+        )
+        items_per_page = _safe_items_per_page(request)
         page_number = request.GET.get("page", 1)
         search_conditions, search_values = get_search_conditions(request, search_fields)
 
@@ -227,11 +297,15 @@ def food_item_list(request):
             search_values['q'] = search_q
             search_conditions &= product_search.domestic_q(search_q, search_field)
 
-        has_search_params = any(search_values.values())  # 검색 파라미터 유무 확인
+        if conditions:
+            search_conditions &= conditions_filter
 
-        if has_search_params:
+        has_search_params = any(search_values.values()) or bool(conditions)
+
+        if has_search_params and search_allowed:
             from django.db.models import Case, When, Value, IntegerField
-            base_qs = FoodItem.objects.all()
+            # 목록이 쓰는 컬럼만 가져온다 (usages 4000자 등은 목록에 필요 없다)
+            base_qs = FoodItem.objects.only(*product_search.DOMESTIC_LIST_FIELDS)
             if search_q and search_field == 'all':
                 # 정확 일치를 상단으로
                 food_items_qs = base_qs.filter(search_conditions).annotate(
@@ -247,7 +321,8 @@ def food_item_list(request):
         else:
             food_items_qs = FoodItem.objects.none()
 
-        paginator, page_obj, page_range = paginate_queryset(food_items_qs, page_number, items_per_page)
+        paginator, page_obj, page_range = paginate_queryset(
+            food_items_qs, page_number, items_per_page, cap=True)
         total_count = paginator.count   # Paginator 가 이미 센 값을 재사용 (COUNT 중복 실행 방지)
         # imported_mode 변수를 domestic 케이스에서도 정의
         imported_mode = False
@@ -261,14 +336,14 @@ def food_item_list(request):
     # ── 탭 배지 ──────────────────────────────────────────────────────────────
     # 한 번 검색하면 국내·수입 양쪽 건수를 모두 보여준다.
     # 찾는 제품이 국내산인지 수입산인지 모르고 오는 경우가 많아, 탭만 눌러 넘나들 수 있게 한다.
-    if search_q:
-        other_count = product_search.counterpart_count(food_category, search_q, search_field)
-    else:
-        other_count = 0
+    # 반대쪽 탭 건수는 여기서 세지 않는다.
+    # 검색할 때마다 다른 테이블에 COUNT 를 한 번 더 돌리는 비용이라(검색 DB 비용의 약 1/3)
+    # 화면을 먼저 띄우고 food_item_tab_count 로 따로 받아 채운다.
     if food_category == 'imported':
-        tab_counts = {'domestic': other_count, 'imported': total_count}
+        tab_counts = {'domestic': None, 'imported': total_count}
     else:
-        tab_counts = {'domestic': total_count, 'imported': other_count}
+        tab_counts = {'domestic': total_count, 'imported': None}
+    other_tab = 'domestic' if food_category == 'imported' else 'imported'
 
     # ── 검색 전 안내 화면 ────────────────────────────────────────────────────
     # 이전에는 검색 전 빈 결과에 "데이터가 없습니다."만 떠서 DB가 비어 보였다.
@@ -300,12 +375,62 @@ def food_item_list(request):
         "search_result_count": search_result_count,
         "has_search_params": has_search_params,
         "tab_counts": tab_counts,
+        "other_tab": other_tab,
+        # 배지를 나중에 받아 채울 때 쓸 쿼리스트링 (탭만 반대로 바꾼다)
+        "tab_count_qs": get_querystring_without(request, ["page", "sort", "order", "food_category"]),
+        "total_capped": getattr(paginator, 'is_capped', False),
+        "conditions": conditions,
+        "condition_specs": (product_search.IMPORTED_CONDITIONS if imported_mode
+                            else product_search.DOMESTIC_CONDITIONS),
+        "max_conditions": product_search.MAX_CONDITIONS,
+        "require_fast": True,          # 제품 조회는 행이 많아 빠른 조건을 강제한다
+        "q_input_id": "product-search",
+        # 빠른 조건이 없어 검색을 실행하지 않았다 — 화면에서 이유를 알린다
+        "search_blocked": not search_allowed,
+        "fast_labels": ", ".join(
+            c["label"] for c in (product_search.IMPORTED_CONDITIONS if imported_mode
+                                 else product_search.DOMESTIC_CONDITIONS) if c.get("fast")
+        ),
+        "list_columns": product_search.list_columns(food_category, active_sort, sort_order),
+        "querystring_base": get_querystring_without(request, ["page", "sort", "order"]),
         "intro": intro,
         "intro_date": intro_date,
         "querystring_without_tab": querystring_without_tab,
     }
 
     return render(request, _get_template(request, "label/food_item_list.html"), context)
+
+@login_required
+def food_item_tab_count(request):
+    """
+    제품 조회의 반대쪽 탭 배지 건수만 돌려준다 (JSON).
+
+    검색 결과 화면을 먼저 띄우고 이 값만 나중에 채우기 위해 분리했다.
+    같은 쿼리스트링을 그대로 받아 목록 화면과 동일한 규칙으로 판정한다.
+    """
+    category = request.GET.get('food_category', 'domestic')
+    if category not in ('domestic', 'imported'):
+        category = 'domestic'
+    search_q = request.GET.get('q', '').strip()
+    search_field = request.GET.get('search_field', 'all').strip() or 'all'
+    conditions = product_search.parse_conditions(
+        category, request.GET.getlist('f'), request.GET.getlist('v')
+    )
+
+    if not (search_q or conditions):
+        return JsonResponse({'count': 0, 'exact': True})
+    if not product_search.search_allowed(category, conditions, search_q):
+        return JsonResponse({'count': 0, 'exact': True})
+
+    try:
+        count, exact = product_search.counterpart_count(
+            category, search_q, search_field, conditions
+        )
+    except Exception:
+        logger.exception('[제품 조회] 탭 배지 건수 계산 실패')
+        return JsonResponse({'count': None, 'exact': True})
+    return JsonResponse({'count': count, 'exact': exact})
+
 
 @login_required
 def my_label_list(request):
@@ -323,12 +448,13 @@ def my_label_list(request):
         "pog_daycnt": "pog_daycnt",  # 소비기한 검색 추가
     }
     search_conditions, search_values = get_search_conditions(request, search_fields)
-    # 표시사항 관리: 작성일 내림차순, 라벨명 오름차순(가나다순)
-    sort_field, sort_order = process_sorting(request, "-update_datetime")
-    # ↓ 추가: report_no_verify_yn → report_no_verify_YN로 변환
-    if sort_field.lstrip('-') == 'report_no_verify_yn':
-        sort_field = sort_field.replace('report_no_verify_yn', 'report_no_verify_YN')
-    items_per_page = int(request.GET.get("items_per_page", 10))
+    # 표시사항 관리: 기본 작성일 내림차순.
+    # 화이트리스트 밖의 sort 는 기본값으로 되돌린다 (없는 필드면 order_by 가 500 을 낸다).
+    # 품보신고는 URL 키가 소문자인데 실제 컬럼은 report_no_verify_YN 이라 db 매핑으로 처리한다.
+    sort_field, active_sort, sort_order = list_sort.my_label(
+        request.GET.get("sort"), request.GET.get("order")
+    )
+    items_per_page = _safe_items_per_page(request)
     page_number = request.GET.get("page", 1)
 
     ingredient_id = request.GET.get("ingredient_id")
@@ -387,7 +513,10 @@ def my_label_list(request):
         "ingredient_name": ingredient_name,
         "search_result_count": search_result_count,  # 검색 결과 건수 추가
         "prdlst_report_status": prdlst_report_status,  # 품보 신고 상태 추가
-    }
+            # 정렬 헤더 (제품 조회·식품첨가물과 같은 토글 방식)
+        "list_columns": list_sort.columns(list_sort.MY_LABEL_COLUMNS, active_sort, sort_order),
+        "querystring_base": get_querystring_without(request, ["page", "sort", "order"]),
+}
 
     return render(request, _get_template(request, "label/my_label_list.html"), context)
 
@@ -1247,8 +1376,9 @@ def my_ingredient_list_combined(request):
     if food_category:
         search_conditions &= Q(food_category=food_category)
 
-    sort_field, sort_order = process_sorting(request, 'prdlst_nm')
-    items_per_page = int(request.GET.get('items_per_page', 10))
+    sort_field, active_sort, sort_order = list_sort.my_ingredient(
+        request.GET.get('sort'), request.GET.get('order'))
+    items_per_page = _safe_items_per_page(request)
     page_number = request.GET.get('page', 1)
 
     if label_id:
@@ -1308,7 +1438,10 @@ def my_ingredient_list_combined(request):
         'label_name': label_name,
         'total_count': total_count,
         'search_result_count': search_result_count,
-    }
+            # 정렬 헤더 (제품 조회·식품첨가물과 같은 토글 방식)
+        "list_columns": list_sort.columns(list_sort.MY_INGREDIENT_COLUMNS, active_sort, sort_order),
+        "querystring_base": get_querystring_without(request, ["page", "sort", "order"]),
+}
     return render(request, _get_template(request, 'label/my_ingredient_list_combined.html'), context)
 
 @login_required
@@ -2470,9 +2603,11 @@ def my_ingredient_table_partial(request):
     search_conditions, search_values = get_search_conditions(request, search_fields)
     # 기존: search_conditions &= Q(delete_YN='N') & Q(user_id=request.user)
     search_conditions &= Q(delete_YN='N') & (Q(user_id=request.user) | Q(user_id__isnull=True))
-    sort_field, sort_order = process_sorting(request, 'prdlst_nm')
+    sort_field, active_sort, sort_order = list_sort.my_ingredient(
+        request.GET.get('sort'), request.GET.get('order'))
     my_ingredients = MyIngredient.objects.filter(search_conditions).order_by(sort_field)
-    paginator, page_obj, page_range = paginate_queryset(my_ingredients, request.GET.get('page', 1), request.GET.get('items_per_page', 10))
+    paginator, page_obj, page_range = paginate_queryset(
+        my_ingredients, request.GET.get('page', 1), _safe_items_per_page(request))
     context = {
         'page_obj': page_obj,
         'paginator': paginator,
@@ -3153,7 +3288,7 @@ def my_ingredient_calculate_page(request):
         if gmo:
             search_conditions &= Q(gmo__icontains=gmo)
         
-        items_per_page = int(request.GET.get('items_per_page', 10))
+        items_per_page = _safe_items_per_page(request)
         
         # 전체 원료 리스트에서 해당 원료의 위치 찾기
         my_ingredients = MyIngredient.objects.filter(search_conditions).order_by('-prms_dt', 'food_category', 'prdlst_nm')
@@ -3207,9 +3342,10 @@ def my_ingredient_pagination_info(request):
         if gmo:
             search_conditions &= Q(gmo__icontains=gmo)
 
-        items_per_page = int(request.GET.get('items_per_page', 10))
+        items_per_page = _safe_items_per_page(request)
         page_number = request.GET.get('page', 1)
-        sort_field, sort_order = process_sorting(request, 'prdlst_nm')
+        sort_field, active_sort, sort_order = list_sort.my_ingredient(
+        request.GET.get('sort'), request.GET.get('order'))
         if sort_field.lstrip('-') == 'report_no_verify_yn':
             sort_field = sort_field.replace('report_no_verify_yn', 'report_no_verify_YN')
 
@@ -3886,11 +4022,18 @@ def food_additive_search(request):
     ins_no = request.GET.get('ins_no', '').strip()
     e_no = request.GET.get('e_no', '').strip()
     cas_no = request.GET.get('cas_no', '').strip()
-    sort_by = request.GET.get('sort', 'name_kr')
-    order = request.GET.get('order', 'asc')
-
-    items_per_page = int(request.GET.get("items_per_page", 10))
+    # 정렬은 화이트리스트로 검증한다 (기존에는 sort 를 그대로 order_by 에 넘겨
+    # 없는 필드를 주면 FieldError 로 500 이 났다)
+    sort_field, active_sort, sort_order = additive_search.resolve_sort(
+        request.GET.get('sort'), request.GET.get('order')
+    )
+    items_per_page = _safe_items_per_page(request)
     page_number = request.GET.get("page", 1)
+
+    # 다중 조건 검색 — 제품 조회와 같은 f=키&v=값 규약
+    conditions = additive_search.parse_conditions(
+        request.GET.getlist('f'), request.GET.getlist('v')
+    )
 
     # 혼합제제류는 제외 (내원료 관리 등에서만 사용)
     additives_qs = FoodAdditive.objects.exclude(category='혼합제제류')
@@ -3987,14 +4130,15 @@ def food_additive_search(request):
     if cas_no:
         additives_qs = additives_qs.filter(cas_no__icontains=cas_no)
 
-    # 정렬
-    if order == 'desc':
-        sort_by = f'-{sort_by}'
-    additives_qs = additives_qs.order_by(sort_by)
+    # 다중 조건 (모두 만족해야 한다)
+    if conditions:
+        additives_qs = additives_qs.filter(additive_search.conditions_q(conditions))
 
-    total_count = additives_qs.count()
+    additives_qs = additives_qs.order_by(sort_field)
 
     paginator, page_obj, page_range = paginate_queryset(additives_qs, page_number, items_per_page)
+    # Paginator 가 이미 센 값을 재사용한다 (COUNT 중복 실행 방지)
+    total_count = paginator.count
     querystring_without_page = get_querystring_without(request, ["page"])
     querystring_without_sort = get_querystring_without(request, ["sort", "order"])
 
@@ -4010,7 +4154,7 @@ def food_additive_search(request):
     }
 
     # 검색 조건이 있으면 검색 결과 수 전달
-    has_search = any([search_q, name_kr, name_en, alias_name, ins_no, e_no, cas_no])
+    has_search = any([search_q, name_kr, name_en, alias_name, ins_no, e_no, cas_no]) or bool(conditions)
     search_result_count = total_count if has_search else None
 
     context = {
@@ -4027,6 +4171,18 @@ def food_additive_search(request):
         "querystring_without_sort": querystring_without_sort,
     }
 
+    context.update({
+        "conditions": conditions,
+        "condition_specs": additive_search.conditions_catalog(),
+        "max_conditions": additive_search.MAX_CONDITIONS,
+        # 662행짜리 참조 테이블이라 조건을 강제할 이유가 없다 (제품 조회와 다른 점)
+        "require_fast": False,
+        "q_input_id": "search-input",
+        "list_columns": additive_search.list_columns(active_sort, sort_order),
+        "querystring_base": get_querystring_without(request, ["page", "sort", "order"]),
+        "sort_field": active_sort,
+        "sort_order": sort_order,
+    })
     return render(request, _get_template(request, "label/food_additive_search.html"), context)
 
 

@@ -329,11 +329,27 @@
 </style>
 {% endblock %}
 
+<style>
+    .filter-toolbar--stack { display: block; padding-top: 10px; padding-bottom: 10px; }
+
+    /* ── 정렬 가능한 목록 헤더 ──────────────────────────────── */
+    .pv-sort {
+        color: inherit; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+    }
+    .pv-sort:hover { color: #1558b0; text-decoration: none; }
+    .pv-sort .bi { font-size: 9px; opacity: .35; }
+    .pv-sort:hover .bi { opacity: .8; }
+    .pv-sort--on { color: #1558b0; font-weight: 700; }
+    .pv-sort--on .bi { opacity: 1; font-size: 10px; }
+</style>
+
 {% block content %}
 <div class="additive-explorer-container">
     <!-- 필터 및 검색 바 -->
-    <div class="filter-toolbar">
-        <form method="get" action="" class="d-flex align-items-center" style="flex:1 1 auto; min-width:0; gap: 12px;" id="searchForm">
+    <div class="filter-toolbar filter-toolbar--stack">
+        <form method="get" action="" style="flex:1 1 auto; min-width:0;" id="searchForm">
+          <div class="d-flex align-items-center" style="min-width:0; gap: 12px;">
             <!-- 검색 필드 선택 -->
             <select name="search_field" id="additive-search-field" class="form-select form-select-sm" style="width: 110px; flex-shrink: 0; font-size: 13px;">
                 <option value="all" {% if search_field == 'all' or not search_field %}selected{% endif %}>전체</option>
@@ -353,14 +369,25 @@
                        value="{{ search_query|default:'' }}" style="font-size: 13px;">
             </div>
 
+            <button type="button" id="condToggle"
+                    class="pv-cond-toggle{% if conditions %} pv-cond-toggle--on{% endif %}"
+                    aria-expanded="{% if conditions %}true{% else %}false{% endif %}">
+                <i class="bi bi-sliders2"></i> 상세 조건
+                <span class="pv-cond-n" id="condCount" {% if not conditions %}hidden{% endif %}>{{ conditions|length }}</span>
+            </button>
+
             <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
                 <i class="bi bi-search me-1"></i>검색
             </button>
-            {% if search_query %}
+            {% if search_query or conditions %}
             <a href="?" class="btn btn-outline-primary" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
                 초기화
             </a>
             {% endif %}
+          </div>
+
+          {# 다중 조건 패널 (제품 조회와 공용) #}
+          {% include "label/_condition_panel.html" %}
         </form>
 
         {% if user.is_authenticated %}
@@ -386,18 +413,23 @@
                         <input type="checkbox" id="check-all" onclick="toggleAllCheckboxes(this)">
                     </th>
                     {% endif %}
-                    <th style="width: 16%;">식품첨가물명</th>
-                    <th style="width: 9%;">표시구분
+                    {# 정렬 가능한 컬럼만 링크가 걸린다. 표시구분·원재료 표시명은
+                       표4/5/6 을 조합해 만드는 값이라 DB 정렬 대상이 아니다. #}
+                    {% for col in list_columns %}
+                    <th style="width: {{ col.width }}; text-align: {{ col.align }};">
+                        {% if col.field %}
+                        <a class="pv-sort{% if col.active %} pv-sort--on{% endif %}"
+                           href="?{{ querystring_base }}{% if querystring_base %}&{% endif %}sort={{ col.field }}&order={{ col.next_order }}"
+                           title="{{ col.label }} {% if col.next_order == 'asc' %}오름차순{% else %}내림차순{% endif %}으로 정렬">
+                            {{ col.label }}<i class="bi {{ col.icon }}"></i>
+                        </a>
+                        {% else %}{{ col.label }}{% endif %}
+                        {% if col.label == '표시구분' %}
                         <i class="bi bi-question-circle additive-help" tabindex="0"
                            title="「식품등의 표시기준」 표4: 명칭+용도 병기 필수 / 표5: 명칭 또는 간략명 / 표6: 명칭·간략명·용도 중 택1"></i>
+                        {% endif %}
                     </th>
-                    <th style="width: 21%;">원재료 표시명 (사용 가능)</th>
-                    <th style="width: 9%;">주용도</th>
-                    <th style="width: 16%;">영문명</th>
-                    <th style="width: 11%;">이명</th>
-                    <th style="width: 6%;">INS</th>
-                    <th style="width: 5%;">E No.</th>
-                    <th style="width: 7%;">CAS No.</th>
+                    {% endfor %}
                 </tr>
             </thead>
             <tbody>

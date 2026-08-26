@@ -1,0 +1,298 @@
+{# ============================================================================
+   다중 조건 검색 패널 — 제품 조회 / 식품첨가물 공용
+
+   부르는 쪽이 넘겨야 하는 값:
+     condition_specs  검색 가능한 필드 카탈로그 (services 의 *_CONDITIONS)
+     conditions       지금 걸려 있는 조건 (parse_conditions 결과)
+     max_conditions   한 번에 걸 수 있는 조건 수 상한
+     require_fast     True 면 ⚡ 빠른 조건을 하나 이상 요구한다
+                      (제품 조회처럼 행이 많은 화면에서만 켠다)
+     q_input_id       같은 폼에 있는 통합검색 입력칸의 id
+
+   부르는 쪽이 직접 두어야 하는 것:
+     - 이 패널을 여닫는 버튼 (id="condToggle")
+     - 이 include 는 <form> 안에 두어야 조건이 함께 제출된다
+   ========================================================================= #}
+<style>
+    .pv-cond { margin-top: 10px; padding: 12px 14px; background: #f8f9fa; border-radius: 10px; }
+    .pv-cond[hidden] { display: none; }
+    .pv-cond-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+    .pv-cond-row .pv-cond-field { width: 178px; flex-shrink: 0; font-size: 13px; }
+    .pv-cond-row .pv-cond-op {
+        flex-shrink: 0; width: 34px; text-align: center;
+        font-size: 11.5px; color: #5f6368;
+    }
+    .pv-cond-row .pv-cond-value { flex: 1; font-size: 13px; }
+    .pv-cond-del {
+        flex-shrink: 0; border: none; background: none; color: #9aa0a6;
+        font-size: 17px; line-height: 1; padding: 2px 7px; border-radius: 6px;
+    }
+    .pv-cond-del:hover { background: #e8eaed; color: #d93025; }
+    .pv-cond-foot { display: flex; align-items: center; gap: 12px; margin-top: 3px; flex-wrap: wrap; }
+    .pv-cond-add {
+        border: 1px dashed #b8bcc0; background: #fff; color: #1967d2;
+        border-radius: 8px; padding: 5px 12px; font-size: 12.5px;
+    }
+    .pv-cond-add:hover { border-color: #1967d2; background: #e8f0fe; }
+    .pv-cond-add:disabled { color: #9aa0a6; border-color: #dadce0; background: #f1f3f4; }
+    .pv-cond-hint { font-size: 11.5px; color: #5f6368; }
+    .pv-cond-warn { display: none; margin-top: 7px; font-size: 12px; color: #b3261e; }
+    .pv-cond-warn.pv-cond-warn--on { display: block; }
+    .pv-cond-field.pv-cond-field--bad { border-color: #b3261e; }
+
+    .pv-cond-toggle {
+        flex-shrink: 0; white-space: nowrap;
+        border: 1px solid #dadce0; background: #fff; color: #3c4043;
+        border-radius: 20px; padding: 6px 14px; font-size: 13px;
+    }
+    .pv-cond-toggle:hover { background: #f1f3f4; }
+    .pv-cond-toggle--on { background: #e8f0fe; border-color: #1967d2; color: #1558b0; }
+    .pv-cond-toggle .pv-cond-n {
+        background: #1967d2; color: #fff; font-size: 10px; font-weight: 700;
+        border-radius: 9px; padding: 1px 6px; margin-left: 5px;
+    }
+</style>
+
+<div class="pv-cond" id="condPanel" {% if not conditions %}hidden{% endif %}>
+    <div id="condRows"></div>
+    <div class="pv-cond-foot">
+        <button type="button" class="pv-cond-add" id="condAdd">
+            <i class="bi bi-plus-lg"></i> 조건 추가
+        </button>
+        <span class="pv-cond-hint">
+            조건을 <b>모두 만족</b>하는 결과만 나옵니다 (최대 {{ max_conditions }}개).
+            {% if require_fast %}<b>⚡ 표시된 조건</b>을 하나 이상 넣어야 검색됩니다.{% endif %}
+        </span>
+    </div>
+    {% if require_fast %}
+    <div class="pv-cond-warn" id="condWarn">
+        <i class="bi bi-exclamation-circle"></i>
+        ⚡ 표시된 빠른 조건을 하나 이상 입력해 주세요. 그래야 인덱스를 타서 결과가 바로 나옵니다.
+        (이름으로 찾는 조건은 <b>2글자 이상</b>이어야 합니다)
+    </div>
+    {% endif %}
+</div>
+
+{{ condition_specs|json_script:"cond-specs" }}
+{{ conditions|json_script:"cond-active" }}
+
+<script>
+// ── 다중 조건 검색 ─────────────────────────────────────────────────────────
+// 조건 행은 f=<필드키>&v=<값> 쌍으로 제출된다. 서버(parse_conditions)가 카탈로그로
+// 검증하므로 여기서는 입력 편의와 사전 안내만 담당한다. 최종 판정은 항상 서버가 한다.
+(function () {
+    var specsEl = document.getElementById('cond-specs');
+    if (!specsEl) return;
+
+    var SPECS = JSON.parse(specsEl.textContent);
+    var activeEl = document.getElementById('cond-active');
+    var ACTIVE = activeEl ? JSON.parse(activeEl.textContent) : [];
+    var MAX = {{ max_conditions }};
+    var REQUIRE_FAST = {% if require_fast %}true{% else %}false{% endif %};
+    // FULLTEXT(ngram token_size=2) 라 이름 조건은 2글자 이상이어야 인덱스를 탄다
+    var MIN_FAST_LEN = 2;
+    var OP_LABEL = { icontains: '포함', exact: '일치', gte: '이상', lte: '이하', startswith: '시작' };
+
+    var panel = document.getElementById('condPanel');
+    var rows = document.getElementById('condRows');
+    var addBtn = document.getElementById('condAdd');
+    var toggle = document.getElementById('condToggle');
+    var countBadge = document.getElementById('condCount');
+    var warn = document.getElementById('condWarn');
+    var qInput = document.getElementById('{{ q_input_id|default:"product-search" }}');
+    var form = panel.closest('form');
+
+    function specOf(key) {
+        for (var i = 0; i < SPECS.length; i++) if (SPECS[i].key === key) return SPECS[i];
+        return SPECS[0];
+    }
+
+    // 값 위젯은 필드 종류에 따라 달라진다 (텍스트 / 선택 / 날짜)
+    function buildValueInput(spec, value) {
+        var el;
+        if (spec.type === 'choice') {
+            el = document.createElement('select');
+            el.className = 'form-select form-select-sm pv-cond-value';
+            (spec.choices || []).forEach(function (ch) {
+                var o = document.createElement('option');
+                o.value = ch; o.textContent = ch;
+                if (ch === value) o.selected = true;
+                el.appendChild(o);
+            });
+        } else {
+            el = document.createElement('input');
+            el.className = 'form-control form-control-sm pv-cond-value';
+            if (spec.type === 'date') {
+                el.type = 'date';
+                // DB 는 yyyymmdd, <input type=date> 는 yyyy-mm-dd
+                el.value = /^\d{8}$/.test(value || '')
+                    ? value.slice(0, 4) + '-' + value.slice(4, 6) + '-' + value.slice(6, 8)
+                    : '';
+            } else {
+                el.type = 'text';
+                el.value = value || '';
+                el.placeholder = spec.label + ' 검색어';
+            }
+        }
+        el.name = 'v';
+        return el;
+    }
+
+    function addRow(key, value) {
+        if (rows.children.length >= MAX) return;
+        var spec = specOf(key || SPECS[0].key);
+
+        var row = document.createElement('div');
+        row.className = 'pv-cond-row';
+
+        var sel = document.createElement('select');
+        sel.className = 'form-select form-select-sm pv-cond-field';
+        sel.name = 'f';
+        if (REQUIRE_FAST) {
+            // 빠른 조건을 위쪽 그룹으로 묶어 무엇을 골라야 하는지 눈에 띄게 한다
+            var fastGrp = document.createElement('optgroup');
+            fastGrp.label = '⚡ 빠른 조건 (하나 이상 필수)';
+            var restGrp = document.createElement('optgroup');
+            restGrp.label = '추가 조건 (단독 사용 불가)';
+            SPECS.forEach(function (sp) {
+                var o = document.createElement('option');
+                o.value = sp.key;
+                o.textContent = (sp.fast ? '⚡ ' : '') + sp.label;
+                if (sp.key === spec.key) o.selected = true;
+                (sp.fast ? fastGrp : restGrp).appendChild(o);
+            });
+            sel.appendChild(fastGrp);
+            sel.appendChild(restGrp);
+        } else {
+            SPECS.forEach(function (sp) {
+                var o = document.createElement('option');
+                o.value = sp.key; o.textContent = sp.label;
+                if (sp.key === spec.key) o.selected = true;
+                sel.appendChild(o);
+            });
+        }
+
+        var op = document.createElement('span');
+        op.className = 'pv-cond-op';
+        op.textContent = OP_LABEL[spec.lookup] || '';
+
+        var val = buildValueInput(spec, value);
+
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'pv-cond-del';
+        del.innerHTML = '&times;';
+        del.title = '이 조건 삭제';
+        del.addEventListener('click', function () {
+            row.remove();
+            if (!rows.children.length) addRow();
+            syncAddBtn();
+            refreshWarn();
+        });
+
+        // 필드를 바꾸면 연산자 표시와 값 위젯을 그에 맞게 갈아끼운다
+        sel.addEventListener('change', function () {
+            var next = specOf(sel.value);
+            op.textContent = OP_LABEL[next.lookup] || '';
+            var fresh = buildValueInput(next, '');
+            row.replaceChild(fresh, row.querySelector('.pv-cond-value'));
+            fresh.addEventListener('input', refreshWarn);
+            fresh.focus();
+            refreshWarn();
+        });
+        val.addEventListener('input', refreshWarn);
+
+        row.appendChild(sel);
+        row.appendChild(op);
+        row.appendChild(val);
+        row.appendChild(del);
+        rows.appendChild(row);
+        syncAddBtn();
+        return row;
+    }
+
+    function syncAddBtn() {
+        addBtn.disabled = rows.children.length >= MAX;
+    }
+
+    // 값이 채워진 빠른 조건이 하나라도 있는지 — 서버 search_allowed 와 같은 규칙
+    function hasFast() {
+        return Array.prototype.some.call(rows.children, function (row) {
+            var spec = specOf(row.querySelector('.pv-cond-field').value);
+            if (!spec.fast) return false;
+            var v = row.querySelector('.pv-cond-value').value.trim();
+            if (!v) return false;
+            // 이름 조건은 2글자 미만이면 FULLTEXT 를 못 탄다
+            if (spec.type === 'text' && spec.lookup === 'icontains' && v.length < MIN_FAST_LEN) return false;
+            return true;
+        });
+    }
+
+    function anyValue() {
+        return Array.prototype.some.call(rows.children, function (row) {
+            return row.querySelector('.pv-cond-value').value.trim();
+        });
+    }
+
+    function isBlocked() {
+        if (!REQUIRE_FAST) return false;
+        return anyValue() && !hasFast() && !(qInput && qInput.value.trim());
+    }
+
+    function refreshWarn() {
+        if (warn) warn.classList.toggle('pv-cond-warn--on', isBlocked());
+    }
+
+    ACTIVE.forEach(function (c) { addRow(c.key, c.value); });
+    if (!rows.children.length) addRow();
+
+    if (qInput) qInput.addEventListener('input', refreshWarn);
+    refreshWarn();
+
+    addBtn.addEventListener('click', function () {
+        var row = addRow();
+        if (row) row.querySelector('.pv-cond-value').focus();
+    });
+
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            var opening = panel.hasAttribute('hidden');
+            if (opening) { panel.removeAttribute('hidden'); } else { panel.setAttribute('hidden', ''); }
+            toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+            toggle.classList.toggle('pv-cond-toggle--on', opening);
+            if (opening) rows.querySelector('.pv-cond-value').focus();
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            // 빠른 조건이 없으면 서버에서 어차피 막힌다. 왕복하지 말고 여기서 잡아준다.
+            if (isBlocked()) {
+                e.preventDefault();
+                panel.removeAttribute('hidden');
+                if (toggle) {
+                    toggle.setAttribute('aria-expanded', 'true');
+                    toggle.classList.add('pv-cond-toggle--on');
+                }
+                refreshWarn();
+                var first = rows.querySelector('.pv-cond-field');
+                if (first) { first.classList.add('pv-cond-field--bad'); first.focus(); }
+                return;
+            }
+            // 값이 빈 행은 제출하지 않는다 (URL 에 f=&v= 가 쌓이지 않도록)
+            Array.prototype.forEach.call(rows.children, function (row) {
+                var v = row.querySelector('.pv-cond-value');
+                var f = row.querySelector('.pv-cond-field');
+                var empty = !v.value.trim();
+                v.disabled = empty;
+                f.disabled = empty;
+            });
+            if (countBadge) {
+                countBadge.textContent = Array.prototype.filter.call(rows.children, function (row) {
+                    return row.querySelector('.pv-cond-value').value.trim();
+                }).length;
+            }
+        });
+    }
+})();
+</script>
