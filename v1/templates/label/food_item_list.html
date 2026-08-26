@@ -290,6 +290,15 @@
     /* ── 다중 조건 검색 ─────────────────────────────────────── */
     .filter-toolbar--stack { display: block; padding-top: 10px; padding-bottom: 10px; }
 
+    /* 탭을 옮기며 두고 온 조건 안내 */
+    .pv-moved {
+        margin: 12px 24px 0; padding: 10px 14px;
+        background: #e8f0fe; border: 1px solid #c6dafc; border-radius: 8px;
+        font-size: 12.5px; color: #1558b0; line-height: 1.6;
+    }
+    .pv-moved .bi { margin-right: 5px; }
+    .pv-moved b { color: #174ea6; }
+
     /* 빠른 조건이 없어 검색을 실행하지 않았을 때 */
     .pv-blocked {
         max-width: 720px; margin: 40px auto; padding: 22px 24px;
@@ -444,6 +453,15 @@
         </form>
     </div>
 
+
+    {% if cond_lost %}
+    <div class="pv-moved">
+        <i class="bi bi-info-circle"></i>
+        <b>{{ cond_lost }}</b> 조건은 {% if imported_mode %}수입식품{% else %}국내 품목보고{% endif %}에 없는 항목이라
+        탭을 옮기면서 함께 가져오지 못했습니다.
+        {% if not has_search_params %}남은 조건이 없어 검색을 하지 않았습니다.{% endif %}
+    </div>
+    {% endif %}
 
     <!-- 제품 데이터 그리드 -->
     <div class="flex-grow-1 overflow-auto custom-scrollbar">

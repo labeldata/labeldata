@@ -167,15 +167,26 @@ def _tab_querystring(request, other_tab, conditions):
     반대쪽 탭 링크용 쿼리스트링.
     조건은 CONDITION_TWINS 로 그쪽 필드에 옮겨 담고, 대응이 없는 것은 버린다.
     페이지·정렬은 탭마다 기준이 달라 빼고 넘긴다.
+
+    버린 조건이 있으면 cond_lost 로 그 이름을 함께 넘긴다. 조용히 버리면
+    (대응이 하나도 없을 때) 검색이 통째로 초기화된 것처럼 보이기 때문이다.
     """
     params = request.GET.copy()
-    for key in ("page", "food_category", "sort", "order", "f", "v"):
+    for key in ("page", "food_category", "sort", "order", "f", "v", "cond_lost"):
         params.pop(key, None)
 
     moved, _ = product_search.translate_conditions(conditions, other_tab)
     for cond in moved:
         params.appendlist("f", cond["key"])
         params.appendlist("v", cond["value"])
+
+    moved_keys = {c["key"] for c in moved}
+    twins = product_search.CONDITION_TWINS
+    lost = [c["label"] for c in (conditions or [])
+            if c["key"] not in moved_keys and twins.get(c["key"]) not in moved_keys]
+    if lost:
+        # URL 이 길어지지 않게 앞 세 개만 (나머지는 "외 N개")
+        params["cond_lost"] = ", ".join(lost[:3]) + (f" 외 {len(lost) - 3}개" if len(lost) > 3 else "")
     return params.urlencode()
 
 
@@ -344,8 +355,8 @@ def food_item_list(request):
         # imported_mode 변수를 domestic 케이스에서도 정의
         imported_mode = False
 
-    querystring_without_page = get_querystring_without(request, ["page"])
-    querystring_without_sort = get_querystring_without(request, ["sort", "order"])
+    querystring_without_page = get_querystring_without(request, ["page", "cond_lost"])
+    querystring_without_sort = get_querystring_without(request, ["sort", "order", "cond_lost"])
 
     # 검색 조건이 있는지 확인
     search_result_count = total_count if has_search_params else None
@@ -369,7 +380,7 @@ def food_item_list(request):
     intro_date = product_search.intro_generated_date(intro) if intro else ''
 
     # 탭을 유지한 채 페이지 이동/정렬하기 위한 쿼리스트링
-    querystring_without_tab = get_querystring_without(request, ["page", "food_category"])
+    querystring_without_tab = get_querystring_without(request, ["page", "food_category", "cond_lost"])
 
     # 반대쪽 탭으로 갈 때 쓸 쿼리스트링 — 조건을 그쪽 필드로 옮겨 담는다.
     # 정렬은 탭마다 컬럼이 달라 넘기지 않는다 (넘겨도 화이트리스트에서 걸러진다).
@@ -413,15 +424,17 @@ def food_item_list(request):
                                  else product_search.DOMESTIC_CONDITIONS) if c.get("fast")
         ),
         "list_columns": product_search.list_columns(food_category, active_sort, sort_order),
-        "querystring_base": get_querystring_without(request, ["page", "sort", "order"]),
+        "querystring_base": get_querystring_without(request, ["page", "sort", "order", "cond_lost"]),
         "intro": intro,
         "intro_date": intro_date,
         "querystring_without_tab": querystring_without_tab,
         "other_tab_qs": other_tab_qs,
+        # 탭을 옮기며 두고 온 조건 (반대쪽 탭에 같은 항목이 없어 못 옮긴 것)
+        "cond_lost": request.GET.get("cond_lost", "").strip(),
         # 초기화 버튼은 지울 게 있으면 항상 보여야 한다.
         # conditions 만 보면, 반대 탭으로 옮겨져 조건이 비었을 때 버튼이 사라져
         # 조건을 지울 방법이 없어진다.
-        "can_reset": bool([k for k in request.GET if k != 'food_category']),
+        "can_reset": bool([k for k in request.GET if k not in ('food_category', 'cond_lost')]),
     }
 
     return render(request, _get_template(request, "label/food_item_list.html"), context)
@@ -4009,26 +4022,33 @@ def phrases_api(request):
 
 # 제품 조회 - 국내 제품
 @login_required
-def food_item_list_domestic(request):
-    """국내 제품 조회"""
-    # 기존 food_item_list에 food_category=domestic 파라미터 추가
-    from django.http import QueryDict
+def _food_item_list_with_default(request, default_category):
+    """
+    /food-items/domestic/ · /food-items/imported/ 공통 진입점.
+
+    경로가 정하는 건 "처음 들어왔을 때의 탭" 일 뿐이다. 화면 안의 탭은 경로를 바꾸지
+    않고 ?food_category= 만 갈아끼우므로(폼 action 도 ""), 여기서 값을 덮어쓰면
+    수입식품 탭을 눌러도 국내로 되돌아간다. 그러면 조건 키(itm_nm 등)가 국내
+    카탈로그에 없어 통째로 버려지고 검색 전 안내화면이 떠서, 검색이 초기화된 것처럼
+    보인다. 그래서 값이 없거나 이상할 때만 경로의 기본값을 쓴다.
+    """
     query_dict = request.GET.copy()
-    query_dict['food_category'] = 'domestic'
+    if query_dict.get('food_category') not in ('domestic', 'imported'):
+        query_dict['food_category'] = default_category
     request.GET = query_dict
     return food_item_list(request)
+
+
+def food_item_list_domestic(request):
+    """제품 조회 (국내 탭으로 시작)"""
+    return _food_item_list_with_default(request, 'domestic')
 
 
 # 제품 조회 - 수입 제품
 @login_required
 def food_item_list_imported(request):
-    """수입 제품 조회"""
-    # 기존 food_item_list에 food_category=imported 파라미터 추가
-    from django.http import QueryDict
-    query_dict = request.GET.copy()
-    query_dict['food_category'] = 'imported'
-    request.GET = query_dict
-    return food_item_list(request)
+    """제품 조회 (수입 탭으로 시작)"""
+    return _food_item_list_with_default(request, 'imported')
 
 
 # 식품첨가물 검색

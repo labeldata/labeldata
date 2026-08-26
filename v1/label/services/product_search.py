@@ -380,7 +380,14 @@ def parse_conditions(category, keys, values):
     catalog = CONDITION_CATALOG.get(category, {})
     parsed = []
     for key, raw in zip(keys, values):
-        spec = catalog.get((key or '').strip())
+        key = (key or '').strip()
+        spec = catalog.get(key)
+        if spec is None:
+            # 반대쪽 탭의 키로 들어온 경우 이쪽 필드로 옮겨 받는다.
+            # 탭 링크는 이미 옮겨서 넘기지만, 예전에 만들어진 링크·북마크나
+            # 브라우저에 캐시된 페이지에서 들어오면 옛 키가 그대로 온다.
+            # 여기서 받아주지 않으면 조건이 통째로 사라져 검색이 초기화된 것처럼 보인다.
+            spec = catalog.get(CONDITION_TWINS.get(key))
         if spec is None:
             continue
         value = (raw or '').strip()

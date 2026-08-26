@@ -47,6 +47,20 @@
         cursor: default;
     }
     .pv-cond-clear:disabled:hover { border-color: #e8eaed; color: #b8bcc0; background: #fff; }
+    /* 체크박스 묶음 (표시기준·용도처럼 한 갈래 안에서 여러 개를 고르는 조건) */
+    .pv-cond-checks {
+        display: flex; flex-wrap: wrap; gap: 4px 10px;
+        padding: 5px 8px; background: #fff;
+        border: 1px solid #dee2e6; border-radius: 6px;
+    }
+    .pv-check {
+        display: inline-flex; align-items: center; gap: 4px;
+        font-size: 12.5px; color: #3c4043; cursor: pointer;
+        padding: 2px 4px; border-radius: 4px; white-space: nowrap;
+    }
+    .pv-check:hover { background: #f1f3f4; }
+    .pv-check input { cursor: pointer; margin: 0; }
+    .pv-check--on { color: #1558b0; font-weight: 600; }
     .pv-cond-hint { font-size: 11.5px; color: #5f6368; }
     .pv-cond-warn { display: none; margin-top: 7px; font-size: 12px; color: #b3261e; }
     .pv-cond-warn.pv-cond-warn--on { display: block; }
@@ -123,9 +137,58 @@
         return SPECS[0];
     }
 
-    // 값 위젯은 필드 종류에 따라 달라진다 (텍스트 / 선택 / 날짜)
+    // 조건 값을 실제로 제출하는 입력칸.
+    // 체크박스 묶음은 눈에 보이는 건 체크박스지만, 제출되는 건 그 안의 hidden 하나다.
+    function rawInput(row) {
+        return row.querySelector('.pv-cond-raw') || row.querySelector('.pv-cond-value');
+    }
+
+    function valueOf(row) {
+        var el = rawInput(row);
+        return el && el.value ? el.value.trim() : '';
+    }
+
+    // 값 위젯은 필드 종류에 따라 달라진다 (텍스트 / 선택 / 날짜 / 체크박스 묶음)
     function buildValueInput(spec, value) {
         var el;
+        if (spec.type === 'checkgroup') {
+            // 표시기준·용도처럼 한 갈래 안에서 여러 개를 고르는 조건.
+            // 고른 값들을 쉼표로 이어 hidden 에 담아 보내고, 서버는 묶음 안에서 OR 로 찾는다.
+            el = document.createElement('div');
+            el.className = 'pv-cond-value pv-cond-checks';
+
+            var hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'v';
+            hidden.className = 'pv-cond-raw';
+
+            var picked = (value || '').split(',');
+            var sync = function () {
+                var on = [];
+                Array.prototype.forEach.call(el.querySelectorAll('input[type=checkbox]'), function (cb) {
+                    cb.parentNode.classList.toggle('pv-check--on', cb.checked);
+                    if (cb.checked) on.push(cb.value);
+                });
+                hidden.value = on.join(',');
+                refreshWarn();
+            };
+
+            (spec.options || []).forEach(function (opt) {
+                var lab = document.createElement('label');
+                lab.className = 'pv-check';
+                var cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.value = opt.value;
+                cb.checked = picked.indexOf(opt.value) !== -1;
+                cb.addEventListener('change', sync);
+                lab.appendChild(cb);
+                lab.appendChild(document.createTextNode(opt.label));
+                el.appendChild(lab);
+            });
+            el.appendChild(hidden);
+            sync();
+            return el;
+        }
         if (spec.type === 'choice') {
             el = document.createElement('select');
             el.className = 'form-select form-select-sm pv-cond-value';
@@ -212,11 +275,10 @@
             op.textContent = OP_LABEL[next.lookup] || '';
             var fresh = buildValueInput(next, '');
             row.replaceChild(fresh, row.querySelector('.pv-cond-value'));
-            fresh.addEventListener('input', refreshWarn);
-            fresh.focus();
+            bindValue(fresh);
             refreshWarn();
         });
-        val.addEventListener('input', refreshWarn);
+        bindValue(val);
 
         row.appendChild(sel);
         row.appendChild(op);
@@ -225,6 +287,13 @@
         rows.appendChild(row);
         syncButtons();
         return row;
+    }
+
+    // 체크박스 묶음은 스스로 갱신하므로 input 이벤트를 걸 필요가 없다 (div 라 focus 도 없다)
+    function bindValue(el) {
+        if (el.classList.contains('pv-cond-checks')) return;
+        el.addEventListener('input', refreshWarn);
+        el.focus();
     }
 
     function syncButtons() {
@@ -238,7 +307,7 @@
         return Array.prototype.some.call(rows.children, function (row) {
             var spec = specOf(row.querySelector('.pv-cond-field').value);
             if (!spec.fast) return false;
-            var v = row.querySelector('.pv-cond-value').value.trim();
+            var v = valueOf(row);
             if (!v) return false;
             // 이름 조건은 2글자 미만이면 FULLTEXT 를 못 탄다
             if (spec.type === 'text' && spec.lookup === 'icontains' && v.length < MIN_FAST_LEN) return false;
@@ -248,7 +317,7 @@
 
     function anyValue() {
         return Array.prototype.some.call(rows.children, function (row) {
-            return row.querySelector('.pv-cond-value').value.trim();
+            return valueOf(row);
         });
     }
 
@@ -270,7 +339,7 @@
 
     addBtn.addEventListener('click', function () {
         var row = addRow();
-        if (row) row.querySelector('.pv-cond-value').focus();
+        if (row) bindValue(row.querySelector('.pv-cond-value'));
     });
 
     // 조건 초기화 — 행을 모두 비우고 빈 줄 하나만 남긴다.
@@ -286,7 +355,8 @@
             // form.submit() 은 핸들러를 건너뛰어 f=&v= 가 URL 에 남는다.
             if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
         } else {
-            rows.querySelector('.pv-cond-value').focus();
+            var first = rows.querySelector('.pv-cond-value');
+            if (first && first.focus) first.focus();
         }
     });
 
@@ -296,7 +366,10 @@
             if (opening) { panel.removeAttribute('hidden'); } else { panel.setAttribute('hidden', ''); }
             toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
             toggle.classList.toggle('pv-cond-toggle--on', opening);
-            if (opening) rows.querySelector('.pv-cond-value').focus();
+            if (opening) {
+                var first = rows.querySelector('.pv-cond-value');
+                if (first && first.focus) first.focus();
+            }
         });
     }
 
@@ -317,15 +390,13 @@
             }
             // 값이 빈 행은 제출하지 않는다 (URL 에 f=&v= 가 쌓이지 않도록)
             Array.prototype.forEach.call(rows.children, function (row) {
-                var v = row.querySelector('.pv-cond-value');
-                var f = row.querySelector('.pv-cond-field');
-                var empty = !v.value.trim();
-                v.disabled = empty;
-                f.disabled = empty;
+                var empty = !valueOf(row);
+                rawInput(row).disabled = empty;
+                row.querySelector('.pv-cond-field').disabled = empty;
             });
             if (countBadge) {
                 countBadge.textContent = Array.prototype.filter.call(rows.children, function (row) {
-                    return row.querySelector('.pv-cond-value').value.trim();
+                    return valueOf(row);
                 }).length;
             }
         });
