@@ -58,12 +58,6 @@
           <button type="button" class="rs-day-btn {% if days == 'all' and not date_from and not date_to %}active{% endif %}" onclick="setDays('all')" title="기간 제한 없이 전체를 봅니다 (기본값)">전체</button>
         </div>
 
-        {# 알림 설정 — 키워드 알림과 수거검사 알림을 한 곳에서 관리한다 #}
-        <button type="button" class="rs-settings-btn" onclick="openAlertSettings()" title="키워드·수거검사 알림 설정">
-          <i class="bi bi-bell"></i>알림 설정
-          <span class="rs-settings-badge" id="kwBadgeCount">{{ alert_rules|length }}</span>
-        </button>
-
         {% comment %}
  미조치만 보기 — 가장 자주 쓰는 조작이라 목록 쪽에 단축 버튼으로 남긴다.
            오른쪽 '상세 검색' 의 조치상태 조건과 같은 것을 가리킨다.
@@ -74,6 +68,17 @@
           <i class="bi bi-hourglass-split"></i>미조치만
           {% if no_action_count %}<span class="rs-quick-chip-n">{{ no_action_count|intcomma }}</span>{% endif %}
         </a>
+
+        {% comment %}
+ 알림 설정은 '지금 목록을 거르는' 다른 컨트롤과 성격이 다르다.
+           앞으로 무엇을 받을지 정하는 것이라 필터들과 같은 줄에 섞이면 필터의
+           하나처럼 보인다. 오른쪽 끝으로 밀어 구분한다.
+{% endcomment %}
+        <button type="button" class="rs-settings-btn rf-push-right" onclick="openAlertSettings()"
+                title="키워드·수거검사 알림 설정">
+          <i class="bi bi-bell"></i>알림 설정
+          <span class="rs-settings-badge" id="kwBadgeCount">{{ alert_rules|length }}</span>
+        </button>
 
       </div>{# end rf-row1 #}
 
@@ -255,7 +260,7 @@
           {% if inspection_unread %}<span class="rs-vtab-unread-dot" id="vtabInspUnreadDot"></span>{% endif %}
         </button>
       </div>
-      {# ── 목록 헤더: 건수 + 필터 칩 + 정렬을 한 줄에 ── #}
+      {# ── 목록 헤더: 건수는 왼쪽, 보는 방식(정렬·개수)은 오른쪽 ── #}
       <div class="rs-list-header">
         <span class="rs-list-total rs-list-total--insp-news" id="sidebarInspNewsCnt">{{ tab_insp_total|intcomma }}건</span>
         <span class="rs-list-total rs-list-total--admin" id="sidebarAdminCnt">{{ tab_admin_total|intcomma }}건</span>
@@ -270,7 +275,7 @@
  ── 목록 조작 바 — 거르는 조건은 위 '상세 조건' 으로 모았고,
              여기에는 보는 방식(정렬·개수)만 둔다 ──
 {% endcomment %}
-      <div class="rf-row2">
+      <div class="rf-row2 rf-push-right">
         <div class="rf-listctl">
           <span class="rf-listctl-label">정렬</span>
           <select class="rf-listctl-select" onchange="setSort(this.value)" title="정렬 기준">
@@ -605,7 +610,7 @@
           {% if insp_status %}<input type="hidden" name="insp_status" value="{{ insp_status }}">{% endif %}
           {% if show_inspection %}<input type="hidden" name="cat" value="I0460"><input type="hidden" name="cats_sent" value="1">{% endif %}
           {% include "label/_condition_panel.html" %}
-          <div class="rd-cond-actions">
+          <div class="rd-cond-actions rd-cond-actions--right">
             <button type="submit" class="btn btn-primary btn-sm rd-cond-submit">
               <i class="bi bi-search me-1"></i>이 조건으로 검색
             </button>

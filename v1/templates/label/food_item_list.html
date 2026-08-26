@@ -405,7 +405,7 @@
                 {% endif %}
             </select>
             <!-- 통합 검색 -->
-            <div class="input-group" style="flex: 1;">
+            <div class="input-group" style="flex: 1 1 auto; max-width: 520px;">
                 <span class="input-group-text bg-white border-end-0" style="font-size: 12px;"><i class="bi bi-search text-muted"></i></span>
                 <input type="text" id="product-search" name="q" data-search-enter class="form-control border-start-0 ps-0"
                        placeholder="{% if imported_mode %}제품명, 식품유형, 수출국, 수입업체명, 제조사명 중 검색어를 입력하세요{% else %}제품명, 품목보고번호, 식품유형, 제조사명 중 검색어를 입력하세요{% endif %}"
@@ -427,8 +427,8 @@
                 초기화
             </a>
             {% endif %}
-            <!-- 페이지당 항목 수 (form 안에 위치해야 submit 시 전달됨) -->
-            <div class="d-flex align-items-center gap-1" style="flex-shrink: 0;">
+            {# 페이지당 = '보는 방식' 이라 찾는 컨트롤과 떼어 오른쪽 끝에 둔다 (폼 안이어야 submit 시 전달됨) #}
+            <div class="d-flex align-items-center gap-1 rf-push-right" style="flex-shrink: 0;">
                 <span class="text-muted small" style="white-space: nowrap;">페이지당:</span>
                 <select id="per-page-select" name="items_per_page" class="form-select form-select-sm" style="width: 70px;">
                     <option value="25" {% if items_per_page == 25 %}selected{% endif %}>25</option>

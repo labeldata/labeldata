@@ -267,3 +267,21 @@
     width: 7px; height: 7px; border-radius: 50%;
     background: #d93025;
 }
+
+
+/* ── 정렬(좌우 배치) 규칙 ───────────────────────────────────────
+   한 줄에 있는 컨트롤이라도 성격이 다르면 좌우로 나눈다.
+
+     왼쪽  지금 무엇을 보고 있는지 · 무엇을 찾을지
+           (검색어 · 기간 · 자주 쓰는 필터 지름길 · 건수)
+     오른쪽 그것을 어떻게 볼지 · 앞으로 어떻게 받을지
+           (정렬 · 페이지당 개수 · 알림 설정 · 제출 버튼)
+
+   전부 왼쪽에 붙여 두면 성격이 다른 것이 한 덩어리로 보인다. */
+.rf-push-right { margin-left: auto; }
+
+/* .rf-row2 는 목록 헤더 안에서 flex:1 로 늘어나 있었다.
+   오른쪽으로 밀려면 늘어나지 않아야 한다. */
+.rf-row2.rf-push-right { flex: 0 0 auto; }
+
+.rd-cond-actions--right { display: flex; justify-content: flex-end; }
