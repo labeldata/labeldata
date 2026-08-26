@@ -273,6 +273,8 @@ def food_item_list(request):
     # ── 검색 전 안내 화면 ────────────────────────────────────────────────────
     # 이전에는 검색 전 빈 결과에 "데이터가 없습니다."만 떠서 DB가 비어 보였다.
     intro = None if has_search_params else product_search.get_intro_data()
+    # 숫자는 새벽 배치가 찍어둔 스냅샷이라 기준일을 같이 보여준다 (낡은 값 오해 방지)
+    intro_date = product_search.intro_generated_date(intro) if intro else ''
 
     # 탭을 유지한 채 페이지 이동/정렬하기 위한 쿼리스트링
     querystring_without_tab = get_querystring_without(request, ["page", "food_category"])
@@ -299,6 +301,7 @@ def food_item_list(request):
         "has_search_params": has_search_params,
         "tab_counts": tab_counts,
         "intro": intro,
+        "intro_date": intro_date,
         "querystring_without_tab": querystring_without_tab,
     }
 
