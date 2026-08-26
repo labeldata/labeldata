@@ -246,3 +246,24 @@
     font-size: 11px; color: #9aa0a6;
 }
 .rd-as-foot .bi { margin-right: 4px; }
+
+
+/* 늘 펼쳐 두는 자리(오른쪽 '상세 검색')에서는 패널이 스스로 상자를 만들지 않는다.
+   바깥의 .rd-cond-box 가 이미 흰 상자와 여백을 갖고 있어, 그대로 두면
+   회색 상자가 겹쳐 보인다. */
+.pv-cond--open {
+    background: transparent;
+    padding: 0;
+    border-radius: 0;
+}
+
+/* 아직 확인하지 않은 수거검사 항목.
+   클래스는 붙고 있었는데 대응하는 규칙이 없어 읽은 것과 구분이 되지 않았다. */
+.rs-item--insp-unread { background: #fffdf5; }
+.rs-item--insp-unread .rs-item-name { font-weight: 700; color: #202124; }
+.rs-item--insp-unread::after {
+    content: '';
+    position: absolute; top: 12px; right: 10px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #d93025;
+}
