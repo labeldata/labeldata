@@ -158,3 +158,9 @@ firebase_service_account.json
 *firebase*adminsdk*.json
 .gitignore
 .claude/settings.local.json
+
+# 런타임 생성물 (settings.CACHES 의 FileBasedCache 저장 위치)
+django_cache/
+
+# 런타임 생성물 (refresh_product_intro 가 찍는 통계 스냅샷)
+data/
