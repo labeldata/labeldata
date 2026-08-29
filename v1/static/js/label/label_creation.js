@@ -1000,9 +1000,23 @@ document.addEventListener('DOMContentLoaded', function () {
       rowsHtml += '</tr>';
     }
 
-    const orderNotice = result.ingredient_order_checked === false
-      ? '<div class="alert alert-secondary py-2 px-3 mb-3" style="font-size:0.85rem;">원재료명에 함량(%)이 2개 이상 명시돼 있지 않아 AI 원재료 표시순서 검증은 이번엔 건너뛰었습니다.</div>'
-      : '';
+    // 검증하지 못한 AI 항목을 사유와 함께 그대로 보여준다.
+    // 예전에는 원인과 무관하게 "함량(%)이 명시돼 있지 않아서" 라고만 안내해서,
+    // API 가 죽어 있어도 사용자는 자기 입력 탓인 줄 알았다. 규정 준수 도구에서
+    // "확인 안 됨" 이 "적합" 처럼 보이는 건 가장 나쁜 실패 방식이다.
+    const unchecked = result.unchecked || [];
+    let orderNotice = '';
+    if (unchecked.length > 0) {
+      const systemFailure = unchecked.some(u => u.system_failure);
+      const rows = unchecked
+        .map(u => `<li><strong>${escapeHtml(u.label)}</strong> — ${escapeHtml(u.message)}</li>`)
+        .join('');
+      orderNotice =
+        `<div class="alert ${systemFailure ? 'alert-warning' : 'alert-secondary'} py-2 px-3 mb-3" style="font-size:0.85rem;">` +
+        `<div class="mb-1"><strong>확인하지 못한 항목 ${unchecked.length}건</strong>` +
+        (systemFailure ? ' <span class="badge bg-warning text-dark">사용 횟수는 차감되지 않았습니다</span>' : '') +
+        `</div><ul class="mb-0 ps-3">${rows}</ul></div>`;
+    }
 
     // 규정 검증(AI)일 때만 오늘 사용량 배지 표시 (규정 검증은 무제한·무료)
     let usageBadge = '';

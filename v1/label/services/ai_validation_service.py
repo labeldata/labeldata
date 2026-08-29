@@ -21,6 +21,7 @@ v1/label/services/validation_service.py의 규칙 기반 검증은 정규식/키
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from django.conf import settings
 
@@ -75,29 +76,115 @@ _NAME_INGREDIENT_BASIS = '「식품등의 표시기준」 제품명에 특정 �
 #     실제 위반을 놓치는 게 훨씬 위험하다.)
 
 
+# ── OpenAI 호출 공통 ────────────────────────────────────────────────────────
+# 타임아웃을 명시하지 않으면 openai 클라이언트 기본값이 적용된다 —
+# read 600초 × 재시도 2회 = 호출 하나가 최대 30분. PythonAnywhere 는 웹 요청을
+# 300초에 끊으므로 워커가 죽고 500 이 난다. 실제로 그렇게 났다.
+# gpt-4o-mini 한 번 호출은 정상이면 2~5초라, 20초면 넉넉하다.
+_DEFAULT_AI_TIMEOUT = 20        # 초
+_DEFAULT_AI_MAX_RETRIES = 1
+
+# 검증하지 못한 이유. 화면이 "왜 못 봤는지" 를 사실대로 말할 수 있게 한다 —
+# 예전에는 원인과 무관하게 "함량(%)이 명시돼 있지 않아서" 라고만 안내해서,
+# API 가 죽어 있어도 사용자는 자기 입력 탓인 줄 알았다.
+REASON_OK             = 'ok'
+REASON_NO_INPUT       = 'no_input'         # 볼 텍스트 자체가 없음
+REASON_NO_PERCENT     = 'no_percent'       # % 표기가 2개 미만이라 순서 판단 불가
+REASON_NOT_CONFIGURED = 'not_configured'   # OPENAI_API_KEY 미설정
+REASON_NO_PACKAGE     = 'no_package'       # openai 패키지 미설치
+REASON_TIMEOUT        = 'timeout'          # 응답 지연
+REASON_API_ERROR      = 'api_error'        # 그 외 호출 실패
+
+REASON_MESSAGES = {
+    REASON_NO_INPUT:       '원재료명이 비어 있어 확인하지 못했습니다.',
+    REASON_NO_PERCENT:     '원재료명에 함량(%)이 2개 이상 명시돼 있지 않아 확인하지 못했습니다.',
+    REASON_NOT_CONFIGURED: 'AI 검증이 설정돼 있지 않아 확인하지 못했습니다. (관리자 문의)',
+    REASON_NO_PACKAGE:     'AI 검증 구성요소가 설치돼 있지 않아 확인하지 못했습니다. (관리자 문의)',
+    REASON_TIMEOUT:        'AI 응답이 늦어 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    REASON_API_ERROR:      'AI 호출에 실패해 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+}
+
+# 사용자 입력 때문이 아니라 시스템 쪽 문제로 못 본 경우 — 사용 횟수를 차감하지 않는다.
+SYSTEM_FAILURE_REASONS = {
+    REASON_NOT_CONFIGURED, REASON_NO_PACKAGE, REASON_TIMEOUT, REASON_API_ERROR,
+}
+
+
+def _ai_timeout() -> float:
+    return getattr(settings, 'AI_VALIDATION_TIMEOUT', _DEFAULT_AI_TIMEOUT)
+
+
+def _ai_max_retries() -> int:
+    return getattr(settings, 'AI_VALIDATION_MAX_RETRIES', _DEFAULT_AI_MAX_RETRIES)
+
+
+def get_openai_client():
+    """(client, reason). 만들지 못하면 client 는 None."""
+    api_key = getattr(settings, 'OPENAI_API_KEY', '')
+    if not api_key:
+        return None, REASON_NOT_CONFIGURED
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return None, REASON_NO_PACKAGE
+    return OpenAI(
+        api_key=api_key,
+        timeout=_ai_timeout(),
+        max_retries=_ai_max_retries(),
+    ), REASON_OK
+
+
+def call_openai(tag: str, prompt: str, max_tokens: int,
+                temperature: float = 0.0, json_mode: bool = True):
+    """
+    OpenAI 한 번 호출. (내용, 사유) 를 돌려주고 예외는 밖으로 내보내지 않는다.
+    json_mode 면 파싱된 dict, 아니면 문자열. 실패하면 내용은 None.
+    """
+    client, reason = get_openai_client()
+    if client is None:
+        logger.warning('[%s] %s', tag, REASON_MESSAGES.get(reason, reason))
+        return None, reason
+
+    kwargs = {
+        'model': 'gpt-4o-mini',
+        'messages': [{'role': 'user', 'content': prompt}],
+        'temperature': temperature,
+        'max_tokens': max_tokens,
+    }
+    if json_mode:
+        kwargs['response_format'] = {'type': 'json_object'}
+
+    try:
+        response = client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        # 타임아웃을 따로 구분해야 "잠시 후 다시" 안내가 맞는 말이 된다.
+        name = type(exc).__name__.lower()
+        is_timeout = 'timeout' in name or 'timeout' in str(exc).lower()
+        reason = REASON_TIMEOUT if is_timeout else REASON_API_ERROR
+        logger.error('[%s] OpenAI 호출 오류(%s): %s', tag, reason, exc)
+        return None, reason
+
+    content = (response.choices[0].message.content or '').strip()
+    if not json_mode:
+        return content, REASON_OK
+    try:
+        return json.loads(content), REASON_OK
+    except Exception as exc:
+        logger.error('[%s] 응답 JSON 파싱 실패: %s', tag, exc)
+        return None, REASON_API_ERROR
+
+
 def extract_ingredient_order(rawmtrl_text: str) -> list[dict]:
     """
     원재료명 표시 텍스트에서 원재료명과 명시된 함량(%)을 등장 순서 그대로 추출.
 
     Returns: [{'name': str, 'percent': float | None}, ...]
     텍스트에 명시된 숫자만 사용하고 없으면 percent=None (추론 금지).
-    실패 시 빈 리스트 반환(예외 전파 안 함 — ai_parser.py와 동일 원칙).
+    (items, reason) 를 돌려준다. 실패해도 예외를 밖으로 내보내지 않는다.
     """
     text = (rawmtrl_text or '').strip()
     if not text:
-        return []
-
-    api_key = getattr(settings, 'OPENAI_API_KEY', '')
-    if not api_key:
-        logger.warning('[원재료 순서 AI검증] OPENAI_API_KEY 미설정 – 건너뜀')
-        return []
-
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-    except ImportError:
-        logger.error('[원재료 순서 AI검증] openai 패키지 미설치')
-        return []
+        return [], REASON_NO_INPUT
 
     prompt = f"""다음은 식품 라벨의 "원재료명" 표시 텍스트입니다.
 텍스트에 나열된 순서 그대로, 각 원재료명과 그 옆에 명시적으로 적힌 함량(%)을 추출하세요.
@@ -115,18 +202,14 @@ def extract_ingredient_order(rawmtrl_text: str) -> list[dict]:
 {text[:3000]}
 """
 
+    result, reason = call_openai('원재료 순서 AI검증', prompt, max_tokens=800)
+    if result is None:
+        return [], reason
+
     try:
-        response = client.chat.completions.create(
-            model='gpt-4o-mini',
-            messages=[{'role': 'user', 'content': prompt}],
-            response_format={'type': 'json_object'},
-            temperature=0.0,
-            max_tokens=800,
-        )
-        result = json.loads(response.choices[0].message.content)
         raw_items = result.get('items', [])
         if not isinstance(raw_items, list):
-            return []
+            return [], REASON_API_ERROR
 
         items = []
         for item in raw_items:
@@ -141,11 +224,11 @@ def extract_ingredient_order(rawmtrl_text: str) -> list[dict]:
             except (TypeError, ValueError):
                 percent = None
             items.append({'name': name, 'percent': percent})
-        return items
+        return items, REASON_OK
 
     except Exception as exc:
-        logger.error(f'[원재료 순서 AI검증] OpenAI 호출 오류: {exc}')
-        return []
+        logger.error(f'[원재료 순서 AI검증] 응답 처리 오류: {exc}')
+        return [], REASON_API_ERROR
 
 
 def check_ingredient_order(label) -> dict:
@@ -162,11 +245,15 @@ def check_ingredient_order(label) -> dict:
         텍스트에 % 표기 자체가 없음) 판단할 근거가 없다는 뜻 — "위반
         없음"과 구분해야 하므로 ok와 별도 필드로 노출한다.
     """
-    items = extract_ingredient_order(label.rawmtrl_nm_display or label.rawmtrl_nm or '')
+    items, reason = extract_ingredient_order(label.rawmtrl_nm_display or label.rawmtrl_nm or '')
+    if reason != REASON_OK:
+        return {'checked': False, 'ok': True, 'items': items, 'issues': [], 'reason': reason}
+
     dated = [i for i in items if i['percent'] is not None]
 
     if len(dated) < 2:
-        return {'checked': False, 'ok': True, 'items': items, 'issues': []}
+        return {'checked': False, 'ok': True, 'items': items, 'issues': [],
+                'reason': REASON_NO_PERCENT}
 
     issues = []
     for i in range(len(dated) - 1):
@@ -182,7 +269,8 @@ def check_ingredient_order(label) -> dict:
                 'suggestion': '원재료는 사용된 함량(배합비율)이 많은 순서대로 표시해야 합니다. 순서를 바꿔주세요.',
             })
 
-    return {'checked': True, 'ok': len(issues) == 0, 'items': items, 'issues': issues}
+    return {'checked': True, 'ok': len(issues) == 0, 'items': items, 'issues': issues,
+            'reason': REASON_OK}
 
 
 def extract_allergens_ai(ingredients_text: str) -> list[str] | None:
@@ -197,19 +285,7 @@ def extract_allergens_ai(ingredients_text: str) -> list[str] | None:
     """
     text = (ingredients_text or '').strip()
     if not text:
-        return []
-
-    api_key = getattr(settings, 'OPENAI_API_KEY', '')
-    if not api_key:
-        logger.warning('[알레르기 AI검증] OPENAI_API_KEY 미설정 – 건너뜀')
-        return None
-
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-    except ImportError:
-        logger.error('[알레르기 AI검증] openai 패키지 미설치')
-        return None
+        return [], REASON_NO_INPUT
 
     allergen_names = ', '.join(_ALLERGEN_CATEGORY_NAMES)
     prompt = f"""다음은 식품 라벨의 "원재료명" 표시 텍스트입니다.
@@ -235,25 +311,21 @@ def extract_allergens_ai(ingredients_text: str) -> list[str] | None:
 {text[:3000]}
 """
 
+    result, reason = call_openai('알레르기 AI검증', prompt, max_tokens=300)
+    if result is None:
+        return None, reason
+
     try:
-        response = client.chat.completions.create(
-            model='gpt-4o-mini',
-            messages=[{'role': 'user', 'content': prompt}],
-            response_format={'type': 'json_object'},
-            temperature=0.0,
-            max_tokens=300,
-        )
-        result = json.loads(response.choices[0].message.content)
         raw = result.get('allergens', [])
         if not isinstance(raw, list):
-            return []
+            return [], REASON_OK
         # 표준 22종 명칭 밖의 값(할루시네이션 방지)은 제거
         valid = {str(a).strip() for a in raw if isinstance(a, str)}
-        return sorted(valid & _ALLERGEN_CATEGORY_NAMES)
+        return sorted(valid & _ALLERGEN_CATEGORY_NAMES), REASON_OK
 
     except Exception as exc:
-        logger.error(f'[알레르기 AI검증] OpenAI 호출 오류: {exc}')
-        return None
+        logger.error(f'[알레르기 AI검증] 응답 처리 오류: {exc}')
+        return None, REASON_API_ERROR
 
 
 def check_allergens_ai(label) -> dict:
@@ -265,11 +337,11 @@ def check_allergens_ai(label) -> dict:
     """
     ingredients_text = label.rawmtrl_nm_display or label.rawmtrl_nm or ''
     if not ingredients_text:
-        return {'checked': False, 'issues': []}
+        return {'checked': False, 'issues': [], 'reason': REASON_NO_INPUT}
 
-    detected = extract_allergens_ai(ingredients_text)
-    if detected is None:
-        return {'checked': False, 'issues': []}
+    detected, reason = extract_allergens_ai(ingredients_text)
+    if detected is None or reason != REASON_OK:
+        return {'checked': False, 'issues': [], 'reason': reason}
 
     declared = {
         a.strip() for a in re.split(r'[,、，]', label.allergens or '')
@@ -288,7 +360,7 @@ def check_allergens_ai(label) -> dict:
             ),
             'suggestion': '원재료명을 확인해 실제로 사용된 원료라면 알레르기 표시 항목에 추가하세요.',
         })
-    return {'checked': True, 'issues': issues}
+    return {'checked': True, 'issues': issues, 'reason': REASON_OK}
 
 
 def extract_emphasized_ingredients_ai(product_name: str) -> list[str] | None:
@@ -306,19 +378,7 @@ def extract_emphasized_ingredients_ai(product_name: str) -> list[str] | None:
     """
     name = (product_name or '').strip()
     if not name:
-        return []
-
-    api_key = getattr(settings, 'OPENAI_API_KEY', '')
-    if not api_key:
-        logger.warning('[제품명-원재료 일치성 AI검증] OPENAI_API_KEY 미설정 – 건너뜀')
-        return None
-
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-    except ImportError:
-        logger.error('[제품명-원재료 일치성 AI검증] openai 패키지 미설치')
-        return None
+        return [], REASON_NO_INPUT
 
     prompt = f"""다음은 식품 제품명입니다. 이 제품명에서 "실제로 제품에 사용됐다고
 소비자에게 강조하는 원재료/성분명"만 추출하세요.
@@ -337,23 +397,19 @@ def extract_emphasized_ingredients_ai(product_name: str) -> list[str] | None:
 제품명: {name[:200]}
 """
 
+    result, reason = call_openai('제품명-원재료 AI검증', prompt, max_tokens=200)
+    if result is None:
+        return None, reason
+
     try:
-        response = client.chat.completions.create(
-            model='gpt-4o-mini',
-            messages=[{'role': 'user', 'content': prompt}],
-            response_format={'type': 'json_object'},
-            temperature=0.0,
-            max_tokens=200,
-        )
-        result = json.loads(response.choices[0].message.content)
         raw = result.get('ingredients', [])
         if not isinstance(raw, list):
-            return []
-        return [str(i).strip() for i in raw if isinstance(i, str) and str(i).strip()]
+            return [], REASON_OK
+        return [str(i).strip() for i in raw if isinstance(i, str) and str(i).strip()], REASON_OK
 
     except Exception as exc:
-        logger.error(f'[제품명-원재료 일치성 AI검증] OpenAI 호출 오류: {exc}')
-        return None
+        logger.error(f'[제품명-원재료 일치성 AI검증] 응답 처리 오류: {exc}')
+        return None, REASON_API_ERROR
 
 
 def check_name_ingredient_match_ai(label) -> dict:
@@ -371,11 +427,11 @@ def check_name_ingredient_match_ai(label) -> dict:
     product_name = label.prdlst_nm or ''
     ingredients_text = (label.rawmtrl_nm_display or label.rawmtrl_nm or '').lower()
     if not product_name or not ingredients_text:
-        return {'checked': False, 'issues': []}
+        return {'checked': False, 'issues': [], 'reason': REASON_NO_INPUT}
 
-    emphasized = extract_emphasized_ingredients_ai(product_name)
-    if emphasized is None:
-        return {'checked': False, 'issues': []}
+    emphasized, reason = extract_emphasized_ingredients_ai(product_name)
+    if emphasized is None or reason != REASON_OK:
+        return {'checked': False, 'issues': [], 'reason': reason}
 
     missing = [item for item in emphasized if item.lower() not in ingredients_text]
 
@@ -389,7 +445,7 @@ def check_name_ingredient_match_ai(label) -> dict:
             ),
             'suggestion': '실제로 사용된 원료라면 원재료명에 포함하고, 사용하지 않았다면 제품명 표기를 재검토하세요.',
         })
-    return {'checked': True, 'issues': issues}
+    return {'checked': True, 'issues': issues, 'reason': REASON_OK}
 
 
 def group_issues_by_category(issues: list[dict]) -> list[dict]:
@@ -493,18 +549,33 @@ def generate_summary(category_results: list[dict], ai_only_checked: bool = False
 {chr(10).join(issue_lines)}
 """
 
-    try:
-        response = client.chat.completions.create(
-            model='gpt-4o-mini',
-            messages=[{'role': 'user', 'content': prompt}],
-            temperature=0.2,
-            max_tokens=300,
-        )
-        text = (response.choices[0].message.content or '').strip()
-        return text if text else fallback
-    except Exception as exc:
-        logger.error(f'[검증 결과 AI요약] OpenAI 호출 오류: {exc}')
-        return fallback
+    text, _reason = call_openai('검증 결과 AI요약', prompt, max_tokens=300,
+                                temperature=0.2, json_mode=False)
+    return text if text else fallback
+
+
+def _collect_unchecked(order_result, allergen_result, name_result) -> list[dict]:
+    """
+    검증하지 못한 AI 항목을 [{label, reason, message}] 로 모은다.
+    사용자가 "무엇이 확인됐고 무엇이 안 됐는지" 를 구분할 수 있어야 한다.
+    """
+    rows = []
+    for result, category in (
+        (order_result,    'ingredient_order'),
+        (allergen_result, 'allergen'),
+        (name_result,     'name_ingredient_match'),
+    ):
+        if result.get('checked'):
+            continue
+        reason = result.get('reason') or REASON_API_ERROR
+        rows.append({
+            'category': category,
+            'label': _CATEGORY_LABELS.get(category, category),
+            'reason': reason,
+            'message': REASON_MESSAGES.get(reason, 'AI 검증을 확인하지 못했습니다.'),
+            'system_failure': reason in SYSTEM_FAILURE_REASONS,
+        })
+    return rows
 
 
 def run_full_review(label, user) -> dict:
@@ -551,9 +622,29 @@ def run_full_review(label, user) -> dict:
         }
 
     rule_result = validate_label(label)
-    order_result = check_ingredient_order(label)
-    allergen_ai_result = check_allergens_ai(label)
-    name_match_result = check_name_ingredient_match_ai(label)
+
+    # AI 검사 셋은 서로 독립이고(요약만 이 결과들에 의존한다) DB 를 건드리지
+    # 않으므로 동시에 돌린다. 순차로 돌리면 대기시간이 그대로 더해져서,
+    # 하나만 느려도 전체가 웹 요청 제한(PythonAnywhere 300초)에 걸린다.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {
+            'order':    pool.submit(check_ingredient_order, label),
+            'allergen': pool.submit(check_allergens_ai, label),
+            'name':     pool.submit(check_name_ingredient_match_ai, label),
+        }
+        def _resolve(key, empty):
+            try:
+                return futures[key].result()
+            except Exception:
+                logger.exception('[AI검증] %s 검사 실패', key)
+                return empty
+
+        order_result       = _resolve('order', {'checked': False, 'ok': True, 'items': [],
+                                                'issues': [], 'reason': REASON_API_ERROR})
+        allergen_ai_result = _resolve('allergen', {'checked': False, 'issues': [],
+                                                   'reason': REASON_API_ERROR})
+        name_match_result  = _resolve('name', {'checked': False, 'issues': [],
+                                               'reason': REASON_API_ERROR})
 
     rule_issues = list(rule_result['issues'])
     if allergen_ai_result['checked']:
@@ -589,6 +680,10 @@ def run_full_review(label, user) -> dict:
         'ingredient_order_checked': order_result['checked'],
         'allergen_ai_checked': allergen_ai_result['checked'],
         'name_ingredient_checked': name_match_result['checked'],
+        # 검증하지 못한 항목과 그 사유. 화면이 "확인하지 못했다" 를 사실대로
+        # 말할 수 있게 한다 — 예전에는 원인과 무관하게 "함량(%)이 명시돼 있지
+        # 않아서" 라고만 안내해서 API 가 죽어도 사용자 입력 탓으로 보였다.
+        'unchecked': _collect_unchecked(order_result, allergen_ai_result, name_match_result),
         'ai_extra_coverage': AI_ONLY_CATEGORIES,  # 규정만 검증에는 없는, AI검증만의 확인 항목
         'from_cache': False,
         'blocked': False,

@@ -3326,7 +3326,33 @@ def validate_label_ai_review(request, label_id):
 
     log_user_activity(request, 'validation', 'validation_ai_review', label_id)
 
-    result = run_full_review(label, request.user)
+    try:
+        result = run_full_review(label, request.user)
+    except Exception:
+        # AI 쪽이 통째로 실패해도 규칙 기반 검증(0.01초, 무료)까지 버릴 이유는
+        # 없다. 예전에는 여기서 예외가 그대로 새어 500 이 나면서 화면에는
+        # "통신오류" 만 떴다.
+        logger.exception('[AI검증] run_full_review 실패 (label=%s)', label_id)
+        from .services.ai_validation_service import REASON_API_ERROR, REASON_MESSAGES
+        rule_result = validate_label(label)
+        result = {
+            'summary': 'AI 검증에 실패해 규칙 기반 검증 결과만 표시합니다.',
+            'ok': rule_result['ok'],
+            'categories': group_issues_by_category(rule_result['issues']),
+            'ingredient_order_checked': False,
+            'allergen_ai_checked': False,
+            'name_ingredient_checked': False,
+            'unchecked': [{
+                'category': 'ai', 'label': 'AI 검증',
+                'reason': REASON_API_ERROR,
+                'message': REASON_MESSAGES[REASON_API_ERROR],
+                'system_failure': True,
+            }],
+            'from_cache': False,
+            'blocked': False,
+            'usage': get_ai_usage(request.user),
+        }
+
     status = 429 if result.get('blocked') else 200
     return JsonResponse(result, status=status)
 

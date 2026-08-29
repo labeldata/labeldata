@@ -7,6 +7,7 @@
   - 식품유형 검색 API: 이름이 겹치는 항목의 판정 순서가 조용히 뒤집힐 수 있다.
   - 표시사항 검증 규칙: 판정이 조용히 느슨해져도 화면은 "적합"으로 보인다.
   - 원재료명 생성 순서: 화면마다 다른 순서가 나와도 각 화면만 보면 멀쩡해 보인다.
+  - AI 검증 실패 처리: 확인이 안 된 것이 "적합"처럼 보이면 가장 위험하다.
   - 표시사항 저장 응답: 자동저장이 활동로그를 오염시키거나, 폼 오류가 500이 되어도
     화면에서는 그냥 "저장 실패"로만 보인다.
 """
@@ -419,3 +420,130 @@ class RawmtrlNmOrderTests(TestCase):
 
         html = self._generated_text()
         self.assertLess(html.index('가루류'), html.index('당류'))
+
+
+class AiValidationFailureTests(TestCase):
+    """
+    AI 검증이 실패했을 때의 처리.
+
+    원래는 OpenAI 호출에 타임아웃이 없었다. 클라이언트 기본값이 read 600초 ×
+    재시도 2회라 호출 하나가 최대 30분을 붙잡을 수 있었고, 그 4개를 순차로
+    돌렸다. PythonAnywhere 는 웹 요청을 300초에 끊으므로 워커가 죽고 500 이
+    났다. 게다가 실패해도 화면은 "함량(%)이 명시돼 있지 않아서" 라고만 안내해서
+    사용자는 자기 입력 탓인 줄 알았다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='aiuser', password='x')
+        self.label = MyLabel.objects.create(
+            user_id=self.user,
+            my_label_name='AI 검증 테스트',
+            prdlst_nm='딸기 우유',
+            rawmtrl_nm_display='정제수, 딸기과즙 30%, 설탕 10%',
+        )
+
+    def _clear_cache(self):
+        from django.core.cache import cache
+        from v1.label.services.ai_rate_limit import _result_cache_key
+        cache.clear()
+        cache.delete(_result_cache_key(self.label))
+
+    # ── 클라이언트 설정 ─────────────────────────────────────────────────────
+
+    def test_클라이언트에_타임아웃과_재시도_상한이_걸려_있다(self):
+        """
+        빠뜨리면 openai 기본값(read 600초 × 재시도 2회)이 적용돼
+        호출 하나가 30분까지 늘어난다.
+        """
+        import openai
+
+        from v1.label.services import ai_validation_service as avs
+
+        captured = {}
+
+        class _Capture:
+            def __init__(self, **kw):
+                captured.update(kw)
+
+        with patch.object(openai, 'OpenAI', _Capture):
+            client, reason = avs.get_openai_client()
+
+        self.assertEqual(reason, avs.REASON_OK)
+        self.assertIsNotNone(captured.get('timeout'), '타임아웃이 지정돼야 한다')
+        self.assertLessEqual(captured['timeout'], 60)
+        self.assertLessEqual(captured['max_retries'], 1)
+
+    def test_키가_없으면_사유를_돌려준다(self):
+        from django.test import override_settings
+
+        from v1.label.services import ai_validation_service as avs
+
+        with override_settings(OPENAI_API_KEY=''):
+            client, reason = avs.get_openai_client()
+        self.assertIsNone(client)
+        self.assertEqual(reason, avs.REASON_NOT_CONFIGURED)
+
+    # ── 실패 사유 전달 ──────────────────────────────────────────────────────
+
+    def _run_with_failure(self, exc):
+        from v1.label.services import ai_validation_service as avs
+
+        self._clear_cache()
+        with patch.object(avs, 'call_openai', side_effect=None) as mock_call:
+            mock_call.side_effect = lambda *a, **kw: (None, avs.REASON_TIMEOUT
+                                                      if isinstance(exc, TimeoutError)
+                                                      else avs.REASON_API_ERROR)
+            return avs.run_full_review(self.label, self.user)
+
+    def test_타임아웃이면_그렇게_알린다(self):
+        result = self._run_with_failure(TimeoutError())
+        reasons = {u['reason'] for u in result['unchecked']}
+        self.assertEqual(reasons, {'timeout'})
+        for u in result['unchecked']:
+            self.assertTrue(u['system_failure'])
+            self.assertIn('늦어', u['message'])
+
+    def test_호출_실패면_함량_탓으로_돌리지_않는다(self):
+        """예전에는 원인과 무관하게 "함량(%)이 명시돼 있지 않아서" 라고 안내했다."""
+        result = self._run_with_failure(RuntimeError())
+        for u in result['unchecked']:
+            self.assertEqual(u['reason'], 'api_error')
+            self.assertNotIn('함량', u['message'])
+
+    def test_실패해도_규칙_기반_검증_결과는_남는다(self):
+        result = self._run_with_failure(RuntimeError())
+        self.assertTrue(result['categories'], 'AI 가 죽어도 규칙 기반 항목은 보여야 한다')
+        self.assertFalse(result['ingredient_order_checked'])
+        self.assertFalse(result['allergen_ai_checked'])
+        self.assertFalse(result['name_ingredient_checked'])
+
+    def test_모두_성공하면_미검증_목록이_비어_있다(self):
+        from v1.label.services import ai_validation_service as avs
+
+        self._clear_cache()
+
+        def _fake(tag, prompt, max_tokens, temperature=0.0, json_mode=True):
+            if not json_mode:
+                return '요약', avs.REASON_OK
+            return {'items': [{'name': '딸기과즙', 'percent': 30.0},
+                              {'name': '설탕', 'percent': 10.0}],
+                    'allergens': [], 'ingredients': []}, avs.REASON_OK
+
+        with patch.object(avs, 'call_openai', _fake):
+            result = avs.run_full_review(self.label, self.user)
+
+        self.assertEqual(result['unchecked'], [])
+        self.assertTrue(result['ingredient_order_checked'])
+
+    # ── 뷰가 500 을 내지 않는다 ─────────────────────────────────────────────
+
+    def test_run_full_review_가_터져도_뷰는_500이_아니다(self):
+        self.client.force_login(self.user)
+        self._clear_cache()
+        with patch('v1.label.views.run_full_review', side_effect=RuntimeError('폭발')):
+            resp = self.client.post('/label/%s/validate/ai-review/' % self.label.my_label_id)
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['categories'], '규칙 기반 결과는 살아 있어야 한다')
+        self.assertTrue(data['unchecked'][0]['system_failure'])
