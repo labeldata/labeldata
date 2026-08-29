@@ -12,6 +12,8 @@
 
 포팅 범위 (1차): 내용량 단위, 농수산물 함량 표시, 금지 문구,
 알레르기 표시, 분리배출마크 호환성, 원산지 미표시.
+추가: 배합비 내림차순 입력 순서, 식품첨가물 표시명 공란 — 둘 다 구조화된
+원재료 데이터(LabelIngredientRelation)를 그대로 보므로 AI 없이 판정한다.
 미포함(추후 별도 작업): 식품유형별 필수문구(냉동/냉장 조건 등),
 소비기한 권장값 비교 — DOM/window 전역 상태에 강하게 결합돼 있어
 서버 로직으로 안전하게 재현하려면 별도 검증이 필요하다.
@@ -107,6 +109,8 @@ _LEGAL_BASIS = {
     'allergen': '「식품등의 표시기준」 알레르기 유발물질 표시 규정',
     'recycling_mark': '「자원의 절약과 재활용촉진에 관한 법률 시행규칙」 분리배출 표시 기준',
     'origin_missing': '「농수산물의 원산지 표시 등에 관한 법률」 및 같은 법 시행령(배합비율 기준 원산지 표시대상)',
+    'ingredient_ratio_order': '「식품등의 표시기준」 원재료명 표시 순서 규정(중량비율이 많은 순서로 표시)',
+    'additive_display_name': '「식품등의 표시기준」 [별표 4] 식품첨가물의 표시 방법(명칭과 용도를 함께 표시)',
 }
 
 
@@ -248,6 +252,126 @@ def check_origin_missing(label) -> list[dict]:
     )]
 
 
+def _short_name(name: str, limit: int = 22) -> str:
+    """
+    메시지에 넣을 원료명을 줄인다.
+
+    혼합제제의 표시명은 하위 원료를 전부 나열해 100자를 넘기도 한다.
+    그대로 넣으면 어느 행이 문제인지가 오히려 안 보인다.
+    """
+    name = (name or '').strip()
+    return name if len(name) <= limit else name[:limit] + '…'
+
+
+def _ordered_relations(label):
+    """원재료 팝업에 입력된 순서 그대로의 (relation, ingredient) 목록."""
+    try:
+        return list(
+            label.ingredient_relations
+            .select_related('ingredient')
+            .order_by('relation_sequence')
+        )
+    except Exception:
+        return []
+
+
+def check_ingredient_ratio_order(label) -> list[dict]:
+    """
+    원재료가 배합비 내림차순으로 입력됐는지 확인.
+
+    같은 규정을 보는 AI 검사(ai_validation_service.check_ingredient_order)가
+    따로 있지만 둘은 대상이 다르다.
+      - 이 검사   : 원재료 팝업에 입력된 구조화 데이터(LabelIngredientRelation.
+                    ingredient_ratio). 정확한 값이 이미 DB에 있으므로 AI 없이,
+                    무료로, 언제나 판정할 수 있다.
+      - AI 검사   : 사용자가 손으로 다듬은 최종 표시 문구. 텍스트에 %가 적혀
+                    있어야만 판정할 수 있다.
+    표시 문구는 보통 이 입력 순서에서 만들어지므로, 여기서 먼저 잡으면
+    최종 문구까지 가기 전에 고칠 수 있다.
+
+    배합비가 비어 있는 행은 비교에서 제외한다(모르는 값을 추측하지 않는다).
+    """
+    rows = []
+    for rel in _ordered_relations(label):
+        ratio = rel.ingredient_ratio
+        if ratio is None:
+            continue
+        try:
+            ratio = float(ratio)
+        except (TypeError, ValueError):
+            continue
+        name = (rel.ingredient.ingredient_display_name
+                or rel.ingredient.prdlst_nm
+                or '이름 없음')
+        rows.append((name, ratio))
+
+    if len(rows) < 2:
+        return []
+
+    issues = []
+    for (cur_name, cur_ratio), (next_name, next_ratio) in zip(rows, rows[1:]):
+        if cur_ratio < next_ratio:
+            issues.append(_issue(
+                'ingredient_ratio_order',
+                f'원재료 입력 순서가 배합비 내림차순이 아닙니다: '
+                f'"{_short_name(cur_name)}"({cur_ratio:g}%)가 '
+                f'"{_short_name(next_name)}"({next_ratio:g}%)보다 앞에 있습니다.',
+                '원재료 팝업에서 "함량 순 정렬"을 누르거나 행 순서를 직접 바꿔주세요.',
+            ))
+    return issues
+
+
+def check_additive_display_name(label) -> list[dict]:
+    """
+    표시명이 비어 있는 식품첨가물이 연결돼 있는지 확인.
+
+    원재료명 요약을 만드는 쪽(views.py)은 표시명이 비면 원료명(prdlst_nm)으로
+    대체한다. 표4 대상 첨가물은 "명칭(용도)"로 써야 해서 명칭 단독은 표시기준에
+    어긋나는데, 그게 화면에 아무 표시 없이 지나간다. 여기서 잡는다.
+    """
+    from v1.label.models import FoodAdditive
+
+    blanks = []
+    for rel in _ordered_relations(label):
+        ing = rel.ingredient
+        if (getattr(ing, 'food_category', '') or '') != 'additive':
+            continue
+        if (ing.ingredient_display_name or '').strip():
+            continue
+        blanks.append(ing.prdlst_nm or '이름 없음')
+
+    if not blanks:
+        return []
+
+    # 표4(명칭+용도) 대상은 명칭 단독 표시 자체가 위반이라 따로 짚어준다.
+    table4 = set()
+    try:
+        for add in FoodAdditive.objects.filter(name_kr__in=blanks):
+            if '4' in add.display_tables:
+                table4.add(add.name_kr)
+    except Exception:
+        pass
+
+    issues = []
+    plain = [n for n in blanks if n not in table4]
+    if table4:
+        names = ', '.join(_short_name(n) for n in sorted(table4))
+        issues.append(_issue(
+            'additive_display_name',
+            f'표시명이 비어 있는 식품첨가물이 있습니다: {names}. '
+            f'이 첨가물은 명칭과 용도를 함께 표시해야 하는데, 지금은 명칭만 표시됩니다.',
+            '내 원료 상세에서 "식품첨가물 표시규정" 버튼으로 "명칭(용도)" 형태의 표시명을 골라주세요.',
+        ))
+    if plain:
+        names = ', '.join(_short_name(n) for n in sorted(set(plain)))
+        issues.append(_issue(
+            'additive_display_name',
+            f'표시명이 비어 있는 식품첨가물이 있습니다: {names}. 원료명이 그대로 표시됩니다.',
+            '내 원료 상세에서 표시명을 확인해 주세요.',
+        ))
+    return issues
+
+
 _CHECKS = [
     check_content_weight,
     check_farm_seafood_content,
@@ -255,6 +379,8 @@ _CHECKS = [
     check_allergens,
     check_recycling_mark,
     check_origin_missing,
+    check_ingredient_ratio_order,
+    check_additive_display_name,
 ]
 
 

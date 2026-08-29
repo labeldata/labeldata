@@ -48,3 +48,17 @@ CACHES = {
 
 # 비밀번호 해싱은 테스트 속도에만 영향을 준다.
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+
+# regulatory/signals.py 는 원료 저장 때마다 백그라운드 스레드로 규제뉴스 재매칭을
+# 돌린다. 테스트에서는 그 스레드가 롤백되는 트랜잭션 밖의 커넥션을 보게 되어
+# "database table is locked" / "User matching query does not exist" 를 로그로
+# 쏟아낸다(시그널이 예외를 삼키므로 테스트는 통과한다). 실제 검사 결과가 그
+# 소음에 묻히지 않게 이 로거만 끈다.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'null': {'class': 'logging.NullHandler'}},
+    'loggers': {
+        'v1.regulatory.signals': {'handlers': ['null'], 'propagate': False},
+    },
+}

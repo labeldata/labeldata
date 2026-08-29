@@ -5,6 +5,7 @@
   - 수거검사 소급 매칭 트리거(MyLabel post_save): 화면에 아무것도 드러내지 않으면서
     알림 데이터를 지우고 FCM을 발송한다.
   - 식품유형 검색 API: 이름이 겹치는 항목의 판정 순서가 조용히 뒤집힐 수 있다.
+  - 표시사항 검증 규칙: 판정이 조용히 느슨해져도 화면은 "적합"으로 보인다.
 """
 
 from unittest.mock import patch
@@ -17,6 +18,8 @@ from v1.label.models import (
     AgriculturalProduct,
     FoodAdditive,
     FoodType,
+    LabelIngredientRelation,
+    MyIngredient,
     MyLabel,
 )
 from v1.regulatory.models import InspectionMatch, InspectionResult
@@ -213,3 +216,156 @@ class FoodTypeOptionsApiTests(TestCase):
         self.client.logout()
         resp = self.client.get('/label/food-type-options/', {'q': '사과'})
         self.assertIn(resp.status_code, (302, 403))
+
+
+class IngredientRatioOrderCheckTests(TestCase):
+    """
+    배합비 내림차순 검사(validation_service.check_ingredient_ratio_order).
+
+    같은 규정을 보는 AI 검사가 따로 있지만 그쪽은 표시 문구에 %가 적혀 있어야만
+    판정한다. 이 검사는 원재료 팝업에 입력된 배합비를 그대로 보므로 AI 없이,
+    무료로, 언제나 판정한다. 실제 데이터에서도 AI 검사가 놓치던 건을 잡았다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='ratio', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='검사용 라벨')
+
+    def _add(self, name, ratio, sequence, display_name='', category='processed'):
+        ing = MyIngredient.objects.create(
+            user_id=self.user,
+            prdlst_nm=name,
+            ingredient_display_name=display_name,
+            food_category=category,
+            delete_YN='N',
+        )
+        return LabelIngredientRelation.objects.create(
+            label=self.label,
+            ingredient=ing,
+            relation_sequence=sequence,
+            ingredient_ratio=ratio,
+        )
+
+    def _messages(self):
+        from v1.label.services.validation_service import check_ingredient_ratio_order
+        return [i['message'] for i in check_ingredient_ratio_order(self.label)]
+
+    def test_내림차순이면_지적하지_않는다(self):
+        self._add('밀가루', 50, 1)
+        self._add('설탕', 30, 2)
+        self._add('소금', 5, 3)
+        self.assertEqual(self._messages(), [])
+
+    def test_역순이면_어느_행인지_짚어준다(self):
+        self._add('밀가루', 30, 1)
+        self._add('설탕', 50, 2)
+        msgs = self._messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('밀가루', msgs[0])
+        self.assertIn('설탕', msgs[0])
+        self.assertIn('30%', msgs[0])
+        self.assertIn('50%', msgs[0])
+
+    def test_배합비가_빈_행은_비교에서_뺀다(self):
+        """모르는 값을 추측해서 위반이라고 하면 안 된다."""
+        self._add('밀가루', 50, 1)
+        self._add('향료', None, 2)
+        self._add('설탕', 30, 3)
+        self.assertEqual(self._messages(), [])
+
+    def test_비교할_값이_하나뿐이면_판정하지_않는다(self):
+        self._add('밀가루', 50, 1)
+        self._add('향료', None, 2)
+        self.assertEqual(self._messages(), [])
+
+    def test_같은_값은_위반이_아니다(self):
+        self._add('밀가루', 30, 1)
+        self._add('설탕', 30, 2)
+        self.assertEqual(self._messages(), [])
+
+    def test_역순이_여러_번이면_각각_짚는다(self):
+        self._add('가', 10, 1)
+        self._add('나', 20, 2)
+        self._add('다', 30, 3)
+        self.assertEqual(len(self._messages()), 2)
+
+    def test_긴_원료명은_줄여서_보여준다(self):
+        """혼합제제 표시명은 100자를 넘기도 해서, 그대로 넣으면 메시지를 못 읽는다."""
+        long_name = '산성피로인산나트륨, 옥수수전분(옥수수-외국산:러시아,헝가리), 탄산수소나트륨, 제일인산칼슘'
+        self._add('정제소금', 10, 1)
+        self._add(long_name, 20, 2, display_name=long_name)
+        msg = self._messages()[0]
+        self.assertIn('…', msg)
+        self.assertNotIn('제일인산칼슘', msg)
+
+
+class AdditiveDisplayNameCheckTests(TestCase):
+    """
+    식품첨가물 표시명 공란 검사(validation_service.check_additive_display_name).
+
+    원재료명 요약을 만드는 쪽은 표시명이 비면 원료명으로 대체한다. 표4 대상
+    첨가물은 "명칭(용도)"로 써야 해서 명칭 단독은 표시기준 위반인데, 그게
+    화면에 아무 표시 없이 지나간다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='additive', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='첨가물 라벨')
+
+    def _link(self, name, display_name='', category='additive'):
+        ing = MyIngredient.objects.create(
+            user_id=self.user,
+            prdlst_nm=name,
+            ingredient_display_name=display_name,
+            food_category=category,
+            delete_YN='N',
+        )
+        LabelIngredientRelation.objects.create(
+            label=self.label, ingredient=ing, relation_sequence=1,
+        )
+
+    def _issues(self):
+        from v1.label.services.validation_service import check_additive_display_name
+        return check_additive_display_name(self.label)
+
+    def test_표시명이_있으면_지적하지_않는다(self):
+        self._link('아질산나트륨', display_name='아질산나트륨(발색제)')
+        self.assertEqual(self._issues(), [])
+
+    def test_표4_대상이_공란이면_명칭_용도를_함께_쓰라고_안내한다(self):
+        FoodAdditive.objects.create(name_kr='아질산나트륨', alias_4='Y', color_fixative='Y')
+        self._link('아질산나트륨')
+        msgs = [i['message'] for i in self._issues()]
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('아질산나트륨', msgs[0])
+        self.assertIn('용도', msgs[0])
+
+    def test_표4가_아닌_첨가물_공란은_원료명_대체만_알린다(self):
+        FoodAdditive.objects.create(name_kr='구연산', alias_5='Y')
+        self._link('구연산')
+        msgs = [i['message'] for i in self._issues()]
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('원료명이 그대로 표시', msgs[0])
+
+    def test_첨가물이_아닌_원료는_보지_않는다(self):
+        self._link('밀가루', category='processed')
+        self.assertEqual(self._issues(), [])
+
+
+class ValidateLabelWiringTests(TestCase):
+    """새 검사가 실제로 '규정만 검증' 경로에 물려 있는지."""
+
+    def test_새_검사가_무료_검증에_포함된다(self):
+        from v1.label.services.validation_service import _CHECKS, validate_label
+
+        names = {c.__name__ for c in _CHECKS}
+        self.assertIn('check_ingredient_ratio_order', names)
+        self.assertIn('check_additive_display_name', names)
+
+        user = User.objects.create_user(username='wiring', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='빈 라벨')
+        result = validate_label(label)
+        # 근거 규정 목록에도 새 항목이 드러나야 한다 (검증 범위를 사용자에게 보여주는 값)
+        joined = ' '.join(result['checked_regulations'])
+        self.assertIn('원재료명 표시 순서', joined)
+        self.assertIn('식품첨가물의 표시 방법', joined)

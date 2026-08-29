@@ -386,6 +386,14 @@ document.addEventListener('DOMContentLoaded', function() {
     attachRatioInputListeners();
     updateSaveButtonState();
 
+    const sortByRatioBtn = document.getElementById('sort-by-ratio-btn');
+    if (sortByRatioBtn) {
+        sortByRatioBtn.addEventListener('click', function() {
+            sortRowsByRatio();
+        });
+    }
+    updateRatioOrderWarning();
+
     const modalFoodCategorySelect = document.getElementById('modalSearchInputFoodCategory');
     const modalFoodTypeSelect = document.getElementById('modalSearchInput3');
     if (modalFoodCategorySelect) {
@@ -482,6 +490,7 @@ function attachRatioInputListeners() {
             updateSummarySection();
             markOriginTargets();
             updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
+            updateRatioOrderWarning();
         });
         
         input.addEventListener('keydown', function(event) {
@@ -517,6 +526,54 @@ function updateSaveButtonState() {
     }
 }
 
+// 배합비 내림차순인지 확인한다.
+// 서버 검증(validation_service.check_ingredient_ratio_order)과 같은 기준 —
+// 비율이 비어 있는 행은 비교에서 뺀다(모르는 값을 추측하지 않는다).
+function findRatioOrderProblem() {
+    const tbody = document.getElementById('ingredient-body');
+    if (!tbody) return null;
+
+    const known = [];
+    Array.from(tbody.getElementsByTagName('tr')).forEach(row => {
+        const raw = row.querySelector('.ratio-input')?.value.trim();
+        if (!raw) return;
+        const value = parseFloat(raw);
+        if (isNaN(value)) return;
+        known.push({
+            name: row.querySelector('.ingredient-name-input')?.value.trim() || '이름 없음',
+            value: value,
+        });
+    });
+
+    for (let i = 0; i < known.length - 1; i++) {
+        if (known[i].value < known[i + 1].value) {
+            return { earlier: known[i], later: known[i + 1] };
+        }
+    }
+    return null;
+}
+
+// 순서가 어긋나면 경고와 정렬 버튼을 띄운다. 자동으로 다시 정렬하지는 않는다 —
+// 순서를 바꾸면 최종 표시 문구가 바뀌므로 누를지 말지는 사용자가 정한다.
+function updateRatioOrderWarning() {
+    const box = document.getElementById('ratio-order-warning');
+    const text = document.getElementById('ratio-order-warning-text');
+    if (!box || !text) return;
+
+    const problem = findRatioOrderProblem();
+    if (!problem) {
+        box.style.display = 'none';
+        return;
+    }
+
+    const shorten = s => (s.length <= 18 ? s : s.slice(0, 18) + '…');
+    text.innerHTML =
+        '원재료는 함량이 많은 순서로 표시해야 합니다. ' +
+        `<strong>${escapeHtml(shorten(problem.earlier.name))}</strong>(${problem.earlier.value}%)가 ` +
+        `<strong>${escapeHtml(shorten(problem.later.name))}</strong>(${problem.later.value}%)보다 앞에 있습니다.`;
+    box.style.display = 'flex';
+}
+
 function sortRowsByRatio() {
     const tbody = document.getElementById('ingredient-body');
     const rows = Array.from(tbody.getElementsByTagName('tr'));
@@ -544,6 +601,7 @@ function sortRowsByRatio() {
     updateSummarySection();
     attachRatioInputListeners();
     updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
+    updateRatioOrderWarning();
 }
 
 // 초기 로드 시 정렬: 비율이 있으면 비율 기준, 없으면 relation_sequence 순서 유지
@@ -566,6 +624,7 @@ function sortRowsInitialLoad() {
         markOriginTargets();
         updateSummarySection();
         attachRatioInputListeners();
+        updateRatioOrderWarning();
     }
 }
 
@@ -950,6 +1009,7 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
             updateSummarySection();
             markOriginTargets();
             updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
+            updateRatioOrderWarning();
         });
         ratioInput.addEventListener('keydown', function(event) {
             if (event.key === 'Enter') {
@@ -965,6 +1025,7 @@ function addIngredientRowWithData(ingredient, fromModal = true) {
     updateSummarySection();
     attachRatioInputListeners();
     updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
+    updateRatioOrderWarning();
 }
 
 function removeSelectedRows() {
@@ -975,6 +1036,7 @@ function removeSelectedRows() {
     updateSummarySection();
     attachRatioInputListeners();
     updateAndValidateRatios(); // [수정] 비율 유효성 검사 호출
+    updateRatioOrderWarning();
 }
 
 function selectIngredient(ingredient, button) {
