@@ -8,8 +8,10 @@ PythonAnywhere 의 300초 제한에 먼저 걸려서 원인을 못 본다.
     python manage.py check_openai
     python manage.py check_openai --timeout 5      # 더 짧게 끊어보기
     python manage.py check_openai --repeat 3       # 편차 확인
+    python manage.py check_openai --label 123      # 실제 라벨로 전 구간 측정
 
-더미 프롬프트에 max_tokens=1 이라 비용은 사실상 0이다.
+더미 프롬프트에 max_tokens=1 이라 기본 점검 비용은 사실상 0이다.
+--label 은 실제 AI검증을 한 번 돌리므로 그 계정의 일일 사용 횟수를 1회 쓴다.
 """
 import time
 
@@ -35,6 +37,11 @@ class Command(BaseCommand):
         parser.add_argument(
             '--repeat', type=int, default=1,
             help='반복 횟수 (응답시간 편차 확인용)',
+        )
+        parser.add_argument(
+            '--label', type=int, default=None,
+            help='이 라벨로 실제 AI검증을 한 번 돌려 구간별 시간과 결과를 본다 '
+                 '(일일 사용 횟수 1회 소모)',
         )
 
     def handle(self, *args, **options):
@@ -101,3 +108,68 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('  정상 범위입니다.'))
         if reason != REASON_OK:
             self.stdout.write(f'  (참고: {reason})')
+
+        if options['label']:
+            self._run_full(options['label'])
+
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _run_full(self, label_id):
+        """실제 라벨로 AI검증 전 구간을 돌려 어디서 시간이 가는지 본다."""
+        from v1.label.models import MyLabel
+        from v1.label.services.ai_validation_service import run_full_review
+        from v1.label.services.validation_service import validate_label
+
+        label = MyLabel.objects.filter(my_label_id=label_id).select_related('user_id').first()
+        if not label:
+            self.stdout.write(self.style.ERROR(f'\n라벨 #{label_id} 을 찾을 수 없습니다.'))
+            return
+
+        self.stdout.write(f'\n── 실제 검증: #{label.my_label_id} {label.my_label_name} ──')
+        self.stdout.write(f'  원재료명(최종표시) {len(label.rawmtrl_nm_display or "")}자 / '
+                          f'원재료명(참고) {len(label.rawmtrl_nm or "")}자')
+        self.stdout.write(f'  제품명: {label.prdlst_nm or "(비어 있음)"}')
+
+        t0 = time.time()
+        rule = validate_label(label)
+        t_rule = time.time() - t0
+        self.stdout.write(f'\n  규칙 기반 검증 : {t_rule:.2f}초, 이슈 {rule["issue_count"]}건 '
+                          f'(검증 항목 {len(rule["checked_regulations"])}종)')
+
+        t0 = time.time()
+        result = run_full_review(label, label.user_id)
+        t_full = time.time() - t0
+        self.stdout.write(f'  통합 검증 전체 : {t_full:.2f}초 '
+                          f'(캐시적중={result.get("from_cache")}, 한도차단={result.get("blocked")})')
+
+        if result.get('blocked'):
+            self.stdout.write(self.style.WARNING(
+                f'  일일 한도에 걸렸습니다: {result["usage"].get("message")}'))
+            return
+
+        self.stdout.write('\n  AI 항목 판정')
+        for key, name in (
+            ('ingredient_order_checked', '원재료 표시 순서'),
+            ('allergen_ai_checked',      '알레르기(AI)'),
+            ('name_ingredient_checked',  '제품명-원재료 일치성'),
+        ):
+            ok = result.get(key)
+            mark = self.style.SUCCESS('확인함') if ok else self.style.WARNING('확인 못함')
+            self.stdout.write(f'    {name:<22} {mark}')
+
+        for u in result.get('unchecked', []):
+            self.stdout.write(f'    └ {u["label"]}: {u["message"]} [{u["reason"]}]')
+
+        self.stdout.write('\n  결과 요약')
+        self.stdout.write(f'    전체 판정 : {"적합" if result.get("ok") else "확인 필요"}')
+        for row in result.get('categories', []):
+            state = '적합' if row['ok'] else '재검토'
+            self.stdout.write(f'    {row["label"]:<26} {state}')
+            for e in row.get('errors', [])[:2]:
+                self.stdout.write(f'        - {e[:100]}')
+        self.stdout.write(f'\n    AI 요약: {(result.get("summary") or "")[:200]}')
+
+        if t_full > 60:
+            self.stdout.write(self.style.WARNING(
+                f'\n  {t_full:.0f}초 걸렸습니다. PythonAnywhere 웹 요청 제한(300초)에는 '
+                f'못 미치지만 사용자가 기다리기엔 깁니다.'))
