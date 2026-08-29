@@ -614,13 +614,6 @@ def create_new_label(request):
             my_label_name=new_label_name
         )
         
-        # ==================== V2 제품 자동 동기화 ====================
-        try:
-            from v1.products.utils import sync_from_v1_label
-            sync_from_v1_label(new_label)
-        except Exception:
-            pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
-        # =========================================================
 
         # 생성된 라벨의 편집 페이지 URL 생성
         mode = request.GET.get('mode', '')
@@ -747,13 +740,6 @@ def save_to_my_label(request, prdlst_report_no):
                 # 기타 필드는 필요시 추가
             )
             
-            # ==================== V2 제품 자동 동기화 ====================
-            try:
-                from v1.products.utils import sync_from_v1_label
-                sync_from_v1_label(new_label)
-            except Exception:
-                pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
-            # =========================================================
             
             return JsonResponse({
                 "success": True, 
@@ -773,13 +759,6 @@ def save_to_my_label(request, prdlst_report_no):
         if existing_label and confirm_flag:
             new_label = MyLabel.objects.create(user_id=request.user, my_label_name=label_name, **data_mapping)
             
-            # ==================== V2 제품 자동 동기화 ====================
-            try:
-                from v1.products.utils import sync_from_v1_label
-                sync_from_v1_label(new_label)
-            except Exception:
-                pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
-            # =========================================================
             
             return JsonResponse({
                 "success": True, 
@@ -789,13 +768,6 @@ def save_to_my_label(request, prdlst_report_no):
         
         new_label = MyLabel.objects.create(user_id=request.user, my_label_name=label_name, **data_mapping)
         
-        # ==================== V2 제품 자동 동기화 ====================
-        try:
-            from v1.products.utils import sync_from_v1_label
-            sync_from_v1_label(new_label)
-        except Exception:
-            pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
-        # =========================================================
         
         return JsonResponse({
             "success": True, 
@@ -941,13 +913,6 @@ def label_creation(request, label_id=None):
 
             label.save()
             
-            # ==================== V2 제품 자동 동기화 ====================
-            try:
-                from v1.products.utils import sync_from_v1_label
-                sync_from_v1_label(label)
-            except Exception:
-                pass  # V2 동기화 실패해도 V1 저장은 성공으로 처리
-            # =========================================================
             
             # 표시사항 수정 로깅
             log_user_activity(request, 'label', 'label_update', label.my_label_id)
@@ -2106,13 +2071,6 @@ def duplicate_label(request, label_id):
     # 표시사항 복사 로깅
     log_user_activity(request, 'label', 'label_copy', original.my_label_id)
     
-    # ==================== V2 제품 자동 동기화 ====================
-    try:
-        from v1.products.utils import sync_from_v1_label
-        sync_from_v1_label(original)
-    except Exception:
-        pass  # V2 동기화 실패해도 V1 복사는 성공으로 처리
-    # =========================================================
     
     return redirect('label:label_creation', label_id=original.my_label_id)
 
@@ -2155,13 +2113,6 @@ def bulk_copy_labels(request):
                 # 선택 복사 로깅
                 log_user_activity(request, 'label', 'selection_copy', new_label.my_label_id)
                 
-                # ==================== V2 제품 자동 동기화 ====================
-                try:
-                    from v1.products.utils import sync_from_v1_label
-                    sync_from_v1_label(new_label)
-                except Exception:
-                    pass  # V2 동기화 실패해도 V1 복사는 성공으로 처리
-                # =========================================================
             
             return JsonResponse({"success": True})
         except Exception as e:
