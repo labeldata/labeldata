@@ -18,7 +18,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
-from django.db.models import F, Q
+from django.db.models import Q
 from django.utils.functional import cached_property
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -1326,7 +1326,7 @@ def ingredient_popup(request):
         'country_names': country_names,  # 국가 목록 추가
         'allergen_list': ALLERGEN_LIST,  # 알레르기 목록 추가
         'food_types': list(FoodType.objects.all().values('food_type')),
-        'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
+        # 농수축산물(1만 건)은 여기서 내려보내지 않는다 — food_type_options API 로 검색한다.
         'food_additives': list(FoodAdditive.objects.all().values('name_kr'))
     }
     return render(request, 'label/ingredient_popup.html', context)
@@ -1583,7 +1583,7 @@ def my_ingredient_detail(request, ingredient_id=None):
         'form': form,
         'mode': mode,
         'food_types': list(FoodType.objects.all().values('food_type', 'food_group').order_by('food_type')),
-        'agricultural_products': list(AgriculturalProduct.objects.all().values(name_kr=F('rprsnt_rawmtrl_nm'))),
+        # 농수축산물(1만 건)은 여기서 내려보내지 않는다 — food_type_options API 로 검색한다.
         'food_additives': list(FoodAdditive.objects.all().values('name_kr')),
         'allergen_list': ALLERGEN_LIST,
         'gmo_list': GMO_LIST,
@@ -2315,6 +2315,84 @@ def food_types_by_group(request):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@login_required
+@require_GET
+def food_type_options(request):
+    """
+    식품유형 선택용 검색 API.
+
+    농수축산물(AgriculturalProduct)은 1만 건 가까이 되고 명칭이 대부분
+    "Abobra tenuifolia열매" 같은 개별 학명이라 목록으로 훑을 수 있는 데이터가
+    아니다. 화면에 통째로 내려보내는 대신 여기서 검색해서 필요한 만큼만 준다.
+
+    두 가지 모드가 있다.
+
+      1) 검색  ?category=agricultural&q=사과&limit=30
+         → {'success': True, 'results': [{'id','text','category'}], 'more': bool}
+         category 를 비우면 3종 전체를 찾는다.
+
+      2) 역방향 조회  ?exact=백미
+         → {'success': True, 'category': 'agricultural'}
+         이름만 알 때 식품구분을 되짚는 용도(품목보고 조회 결과 자동 채움 등).
+         어디에도 없으면 category 는 None.
+    """
+    CATEGORIES = ('processed', 'agricultural', 'additive')
+
+    def _queryset(category, q):
+        """(category, 이름 리스트) 를 돌려주는 조회. q 가 비면 앞에서부터."""
+        if category == 'processed':
+            qs = FoodType.objects.all()
+            if q:
+                qs = qs.filter(food_type__icontains=q)
+            return qs.order_by('food_type').values_list('food_type', flat=True)
+        if category == 'agricultural':
+            qs = AgriculturalProduct.objects.exclude(rprsnt_rawmtrl_nm__isnull=True)
+            if q:
+                qs = qs.filter(rprsnt_rawmtrl_nm__icontains=q)
+            return qs.order_by('rprsnt_rawmtrl_nm').values_list('rprsnt_rawmtrl_nm', flat=True)
+        qs = FoodAdditive.objects.all()
+        if q:
+            qs = qs.filter(name_kr__icontains=q)
+        return qs.order_by('name_kr').values_list('name_kr', flat=True)
+
+    # ── 역방향 조회 ──────────────────────────────────────────────────────────
+    exact = (request.GET.get('exact') or '').strip()
+    if exact:
+        # 순서가 결과를 바꾼다 — '차추출물'처럼 농수축산물·첨가물 양쪽에 있는 이름이 있다.
+        # 화면에서 쓰던 판정 순서(가공식품 → 농수축산물 → 첨가물)를 그대로 유지한다.
+        found = None
+        if FoodType.objects.filter(food_type=exact).exists():
+            found = 'processed'
+        elif AgriculturalProduct.objects.filter(rprsnt_rawmtrl_nm=exact).exists():
+            found = 'agricultural'
+        elif FoodAdditive.objects.filter(name_kr=exact).exists():
+            found = 'additive'
+        return JsonResponse({'success': True, 'category': found})
+
+    # ── 검색 ────────────────────────────────────────────────────────────────
+    q = (request.GET.get('q') or '').strip()
+    category = (request.GET.get('category') or '').strip()
+    try:
+        limit = int(request.GET.get('limit') or 30)
+    except ValueError:
+        limit = 30
+    limit = max(1, min(limit, 100))
+
+    targets = [category] if category in CATEGORIES else list(CATEGORIES)
+
+    results = []
+    more = False
+    for cat in targets:
+        # limit+1 을 가져와 "더 있음" 여부를 별도 count 쿼리 없이 판단한다.
+        rows = list(_queryset(cat, q)[:limit + 1])
+        if len(rows) > limit:
+            more = True
+            rows = rows[:limit]
+        results.extend({'id': name, 'text': name, 'category': cat} for name in rows if name)
+
+    return JsonResponse({'success': True, 'results': results, 'more': more})
 
 
 @login_required

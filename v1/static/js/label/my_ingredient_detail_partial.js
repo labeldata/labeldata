@@ -333,50 +333,33 @@ function fetchFoodItemByReportNo() {
                 // 식품유형 자동 입력
                 if (data.prdlst_dcnm) {
                     const foodType = data.prdlst_dcnm;
-                    let detectedCategory = 'processed'; // 기본값
-                    
-                    // 식품유형 데이터 가져오기
-                    const foodTypesData = document.getElementById('food-types-data');
-                    const agriProductsData = document.getElementById('agricultural-products-data');
-                    const foodAdditivesData = document.getElementById('food-additives-data');
-                    
-                    if (foodTypesData && agriProductsData && foodAdditivesData) {
-                        const foodTypes = JSON.parse(foodTypesData.textContent || '[]');
-                        const agriProducts = JSON.parse(agriProductsData.textContent || '[]');
-                        const foodAdditives = JSON.parse(foodAdditivesData.textContent || '[]');
-                        
-                        // 식품유형으로 식품구분 추측
-                        if (foodTypes.some(opt => opt.food_type === foodType)) {
-                            detectedCategory = 'processed';
-                        } else if (agriProducts.some(opt => opt.name_kr === foodType)) {
-                            detectedCategory = 'agricultural';
-                        } else if (foodAdditives.some(opt => opt.name_kr === foodType)) {
-                            detectedCategory = 'additive';
+                    // 농수축산물 목록은 화면에 없으므로 필요할 때만 서버에 물어본다.
+                    lookupFoodCategory(foodType).then(found => {
+                        const detectedCategory = found || 'processed';
+
+                        // 라디오 버튼 선택
+                        const targetRadio = document.querySelector(`input[name="food_category"][value="${detectedCategory}"]`);
+                        if (targetRadio) {
+                            targetRadio.checked = true;
+                            // 품목보고번호 행 표시/숨김 처리
+                            if (typeof toggleReportNoRow === 'function') {
+                                toggleReportNoRow();
+                            }
                         }
-                    }
-                    
-                    // 라디오 버튼 선택
-                    const targetRadio = document.querySelector(`input[name="food_category"][value="${detectedCategory}"]`);
-                    if (targetRadio) {
-                        targetRadio.checked = true;
-                        // 품목보고번호 행 표시/숨김 처리
-                        if (typeof toggleReportNoRow === 'function') {
-                            toggleReportNoRow();
+
+                        // 식품유형 옵션 업데이트 및 선택
+                        if (typeof initFoodTypeSelect === 'function') {
+                            initFoodTypeSelect();
                         }
-                    }
-                    
-                    // 식품유형 옵션 업데이트 및 선택
-                    if (typeof initFoodTypeSelect === 'function') {
-                        initFoodTypeSelect();
-                    }
-                    
-                    // select2로 식품유형 선택
-                    const foodTypeSelect = document.getElementById('foodTypeSelect');
-                    if (foodTypeSelect && typeof $ !== 'undefined' && $.fn.select2) {
-                        setTimeout(() => {
-                            $(foodTypeSelect).val(foodType).trigger('change.select2');
-                        }, 100);
-                    }
+
+                        // select2로 식품유형 선택
+                        const foodTypeSelect = document.getElementById('foodTypeSelect');
+                        if (foodTypeSelect && typeof $ !== 'undefined' && $.fn.select2) {
+                            setTimeout(() => {
+                                seedFoodTypeSelect2(foodTypeSelect, foodType);
+                            }, 100);
+                        }
+                    });
                 }
                 
                 // 제조사 자동 입력
@@ -848,19 +831,50 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// 식품유형 선택용 검색 API.
+// 농수축산물(1만 건)은 화면에 싣지 않고 여기서 찾는다.
+const FOOD_TYPE_OPTIONS_URL = '/label/food-type-options/';
+
+// 화면에 실려 온 목록(가공식품·식품첨가물)을 읽는다. 농수축산물은 여기 없다.
+function readLocalFoodOptions() {
+    let foodTypes = [], foodAdditives = [];
+    try {
+        foodTypes = JSON.parse(document.getElementById('food-types-data')?.textContent || '[]');
+    } catch (e) { foodTypes = []; }
+    try {
+        foodAdditives = JSON.parse(document.getElementById('food-additives-data')?.textContent || '[]');
+    } catch (e) { foodAdditives = []; }
+    return { foodTypes, foodAdditives };
+}
+
+// 식품유형 이름으로 식품구분을 되짚는다.
+// 로컬 목록에서 먼저 찾고, 없으면 서버에 물어본다(농수축산물).
+function lookupFoodCategory(name) {
+    if (!name) return Promise.resolve(null);
+    const { foodTypes } = readLocalFoodOptions();
+    if (foodTypes.some(opt => opt.food_type === name)) return Promise.resolve('processed');
+    // 첨가물도 로컬에 있지만 여기서 먼저 맞추면 안 된다 — 판정 순서는
+    // 가공식품 → 농수축산물 → 첨가물 이고, 농수축산물은 서버에만 있다.
+    return fetch(`${FOOD_TYPE_OPTIONS_URL}?exact=${encodeURIComponent(name)}`)
+        .then(r => r.json())
+        .then(d => d.category || null)
+        .catch(() => null);
+}
+
+// ajax Select2 는 옵션이 비어 있어 이미 정해진 값을 화면에 못 띄운다.
+// 선택된 값 하나만 미리 넣어준다.
+function seedFoodTypeSelect2(el, value) {
+    if (!value) return;
+    const $el = $(el);
+    if (!$el.find(`option[value="${CSS.escape(value)}"]`).length) {
+        $el.append(new Option(value, value, true, true));
+    }
+    $el.val(value).trigger('change.select2');
+}
+
 // select2 식품유형 드롭다운 초기화
 function initFoodTypeSelect() {
-    const foodTypesRaw = document.getElementById('food-types-data')?.textContent;
-    const agriProductsRaw = document.getElementById('agricultural-products-data')?.textContent;
-    const foodAdditivesRaw = document.getElementById('food-additives-data')?.textContent;
-    
-    let foodTypes = [], agriProducts = [], foodAdditives = [];
-    try {
-        foodTypes = JSON.parse(foodTypesRaw || '[]');
-        agriProducts = JSON.parse(agriProductsRaw || '[]');
-        foodAdditives = JSON.parse(foodAdditivesRaw || '[]');    } catch (e) {
-        return;
-    }
+    const { foodTypes, foodAdditives } = readLocalFoodOptions();
     
     const select = document.getElementById('foodTypeSelect');
     if (!select) {
@@ -873,21 +887,15 @@ function initFoodTypeSelect() {
     const currentFoodCategory = selectedCategoryRadio ? selectedCategoryRadio.value : 'processed';
     const actualFoodCategory = currentFoodCategory || 'processed';
     
-    // 식품 구분에 따라 옵션 필터링
+    // 식품 구분에 따라 옵션 필터링.
+    // 농수축산물은 목록이 없어(1만 건) options 를 비워 두고 아래에서 서버 검색을 붙인다.
+    const useRemoteSearch = actualFoodCategory === 'agricultural';
     let options = [];
-    
+
     if (actualFoodCategory === 'processed') {
         options = foodTypes.map(ft => {
             if (ft.food_type) {
                 return { id: ft.food_type, text: ft.food_type, category: 'processed' };
-            }
-            return null;
-        }).filter(Boolean);
-    } else if (actualFoodCategory === 'agricultural') {
-        options = agriProducts.map(ap => {
-            const name = ap.name_kr;
-            if (name) {
-                return { id: name, text: name, category: 'agricultural' };
             }
             return null;
         }).filter(Boolean);
@@ -898,7 +906,8 @@ function initFoodTypeSelect() {
                 return { id: name, text: name, category: 'additive' };
             }
             return null;
-        }).filter(Boolean);    }
+        }).filter(Boolean);
+    }
     
     // 옵션을 select에 직접 추가
     select.innerHTML = '<option></option>';
@@ -916,17 +925,34 @@ function initFoodTypeSelect() {
         $(select).off('change.foodtype');
         $(select).select2('destroy');
     }
-    $(select).select2({
+    const select2Config = {
         width: '100%',
-        placeholder: '식품유형 선택',
+        placeholder: useRemoteSearch ? '식품유형을 검색하세요' : '식품유형 선택',
         allowClear: true,
         dropdownParent: $('body')
-    });
-    
+    };
+    if (useRemoteSearch) {
+        select2Config.ajax = {
+            url: FOOD_TYPE_OPTIONS_URL,
+            dataType: 'json',
+            delay: 200,
+            data: params => ({ q: params.term || '', category: 'agricultural', limit: 30 }),
+            processResults: data => ({
+                results: (data.results || []).map(r => ({ id: r.id, text: r.text, category: r.category })),
+            }),
+            cache: true,
+        };
+    }
+    $(select).select2(select2Config);
+
     // 기존 값이 있으면 선택
     const currentValue = select.getAttribute('data-selected') || select.value;
     if (currentValue) {
-        $(select).val(currentValue).trigger('change.select2');
+        if (useRemoteSearch) {
+            seedFoodTypeSelect2(select, currentValue);
+        } else {
+            $(select).val(currentValue).trigger('change.select2');
+        }
     } else {
         $(select).val(null).trigger('change.select2');
     }
@@ -936,7 +962,7 @@ function initFoodTypeSelect() {
         if (window.IngredientDetailPartial.isSyncing) return;
         const selectedOption = select.options[select.selectedIndex];
         if (!selectedOption) return;
-        const selectedCategory = selectedOption.getAttribute('data-category');
+        const selectedCategory = selectedOption.getAttribute('data-category') || actualFoodCategory;
         if (!selectedCategory) return;
         
         // 라디오 버튼 값 변경

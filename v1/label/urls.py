@@ -36,6 +36,8 @@ urlpatterns = [
     path('preview/', views.preview_popup, name='preview_popup'),
     path('tab-json/', views.label_tab_json, name='label_tab_json'),  
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
+    # 식품유형 선택용 검색 (농수축산물 1만 건을 화면에 통째로 싣지 않기 위한 것)
+    path('food-type-options/', views.food_type_options, name='food_type_options'),
     path('save_preview_settings/', views.save_preview_settings, name='save_preview_settings'),
     path('upload-label-pdf/', views.upload_label_pdf, name='upload_label_pdf'),
     path('log-validation/', views.log_validation, name='log_validation'),
