@@ -1822,6 +1822,22 @@ document.addEventListener('DOMContentLoaded', function () {
     window.checkboxesLoadedFromDB = true;
   }
 
+  // 저장 직전에 화면 상태를 폼 필드로 옮긴다.
+  // 수동 저장과 자동 저장이 같은 것을 보내야 하므로 한 곳에 모아둔다 —
+  // 여기가 갈라지면 자동저장이 낡은 값을 덮어쓰는 사고가 난다.
+  function syncFormBeforeSave() {
+    // 라벨명: v1 템플릿은 상단 입력칸과 hidden 이 따로 있다(v2 는 한 칸이라 없음)
+    const topInput = document.getElementById('my_label_name_top');
+    const hiddenInput = document.getElementById('my_label_name_hidden');
+    if (topInput && hiddenInput) {
+      hiddenInput.value = topInput.value;
+    }
+
+    $('#hidden_food_group').val($('#food_group').val());
+    $('#hidden_food_type').val($('#food_type').val());
+    prepareFormData();
+  }
+
   function prepareFormData() {
     document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(function(checkbox) {
       const id = checkbox.id;
@@ -1961,15 +1977,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       
       // 최종 동기화
-      const topInput = document.getElementById('my_label_name_top');
-      const hiddenInput = document.getElementById('my_label_name_hidden');
-      if (topInput && hiddenInput) {
-        hiddenInput.value = topInput.value;
-      }
-      
-      $('#hidden_food_group').val($('#food_group').val());
-      $('#hidden_food_type').val($('#food_type').val());
-      prepareFormData();
+      syncFormBeforeSave();
       
       // AJAX로 저장
       const saveBtn = document.getElementById('saveBtn');
@@ -2026,6 +2034,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const newUrl = `/label/label-creation/${data.label_id}/`;
             window.history.replaceState({}, '', newUrl);
           }
+
+          // 저장된 내용을 자동저장·이탈경고의 기준선으로 삼는다
+          if (typeof window.markLabelSaved === 'function') {
+            window.markLabelSaved();
+          }
         } else {
           // 실패 피드백
           if (saveBtn) {
@@ -2071,6 +2084,141 @@ document.addEventListener('DOMContentLoaded', function () {
       
       return false;
     });
+
+    // ------------------ 자동저장 / 이탈 경고 ------------------
+    // 이 화면은 입력칸이 25개인데 자동저장도 이탈 경고도 없었다. 원재료 팝업을
+    // 오가며 한참 채우다가 탭을 닫으면 그대로 사라진다.
+    //
+    // 자동저장은 "바뀐 게 있을 때만" 보낸다. 30초마다 무조건 보내면 편집 세션
+    // 하나가 활동로그를 수십 줄 차지하고 update_datetime 도 계속 흔들려
+    // 대시보드의 "최근 수정" 이 편집 중인 라벨로 도배된다.
+    (function initAutosaveAndUnloadGuard() {
+      const AUTOSAVE_IDLE_MS = 30000;  // 마지막 입력 후 이만큼 조용하면 저장
+
+      const labelForm = document.getElementById('labelForm');
+      const statusEl = document.getElementById('autosaveStatus');
+      if (!labelForm) return;
+
+      let savedSnapshot = null;
+      let idleTimer = null;
+      let saving = false;
+
+      // 폼 상태를 비교 가능한 문자열로 만든다.
+      // prepareFormData() 는 부르지 않는다 — hidden 필드를 새로 만드는 등 부작용이
+      // 있어서 "변경 여부만 보는" 용도로 매번 돌리기엔 무겁다. 체크박스는 아래에서
+      // 따로 읽는다.
+      function snapshotForm() {
+        try {
+          const parts = [];
+          new FormData(labelForm).forEach((value, key) => {
+            if (value instanceof File) return;  // 파일은 매번 다른 객체라 비교 불가
+            parts.push(key + '=' + value);
+          });
+          labelForm.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(cb => {
+            parts.push(cb.id + '=' + (cb.checked ? 'Y' : 'N'));
+          });
+          return parts.join('\u001f');
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function isDirty() {
+        if (savedSnapshot === null) return false;
+        const now = snapshotForm();
+        return now !== null && now !== savedSnapshot;
+      }
+
+      function setStatus(text, isError) {
+        if (!statusEl) return;
+        statusEl.textContent = text;
+        statusEl.classList.toggle('text-danger', !!isError);
+        statusEl.classList.toggle('text-muted', !isError);
+      }
+
+      function timeLabel() {
+        const d = new Date();
+        return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      }
+
+      // 저장이 성공한 시점의 폼 상태가 기준선이 된다. 수동 저장 쪽에서도 부른다.
+      window.markLabelSaved = function () {
+        savedSnapshot = snapshotForm();
+        setStatus('');
+      };
+
+      function autosave() {
+        if (saving || !isDirty()) return;
+
+        // 새 라벨(URL 에 id 가 없는 상태)은 자동저장하지 않는다.
+        // 저장 응답으로 id 가 생기면서 URL 이 바뀌는데, 사용자가 저장을 누르지도
+        // 않았는데 그런 일이 벌어지면 화면이 제멋대로 움직이는 것처럼 보인다.
+        const labelIdField = document.getElementById('label_id');
+        if (!labelIdField || !labelIdField.value) return;
+
+        saving = true;
+        setStatus('자동 저장 중…');
+
+        syncFormBeforeSave();
+        const formData = new FormData(labelForm);
+        formData.append('autosave', '1');
+
+        // 이 요청으로 저장될 내용을 미리 잡아둔다. 응답이 오는 사이에 사용자가
+        // 더 입력했다면 그건 아직 저장 안 된 것이므로 기준선에 넣으면 안 된다.
+        const sentSnapshot = snapshotForm();
+
+        fetch(window.location.pathname, {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+        })
+          .then(r => r.json())
+          .then(data => {
+            // prepareFormData() 가 임시로 켠 원산지 칸을 되돌린다 (수동 저장과 동일)
+            const countryInput = document.getElementById('countryInputDetail');
+            if (countryInput && countryInput.dataset.wasDisabled === 'true') {
+              countryInput.disabled = true;
+              delete countryInput.dataset.wasDisabled;
+            }
+
+            if (data && data.success) {
+              savedSnapshot = sentSnapshot;
+              setStatus('자동 저장됨 ' + timeLabel());
+            } else {
+              setStatus('자동 저장 실패 — 저장 버튼을 눌러주세요', true);
+            }
+          })
+          .catch(() => {
+            setStatus('자동 저장 실패 — 저장 버튼을 눌러주세요', true);
+          })
+          .then(() => {
+            saving = false;
+          });
+      }
+
+      function scheduleAutosave() {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(autosave, AUTOSAVE_IDLE_MS);
+      }
+
+      labelForm.addEventListener('input', scheduleAutosave);
+      labelForm.addEventListener('change', scheduleAutosave);
+
+      // 자동저장이 못 도는 경우(실패·새 라벨·직전 입력)를 위한 마지막 안전망.
+      // 브라우저가 문구를 무시하고 자체 문구를 띄우므로 내용은 중요하지 않다.
+      window.addEventListener('beforeunload', function (e) {
+        if (!isDirty()) return;
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      });
+
+      // 화면이 다 준비된 뒤의 상태를 기준선으로 삼는다. select2·체크박스 초기화가
+      // 폼 값을 건드리기 때문에, 너무 일찍 잡으면 열자마자 "변경됨" 이 된다.
+      setTimeout(function () {
+        savedSnapshot = snapshotForm();
+      }, 1500);
+    })();
 
     $('.select2-food-type, input[type="checkbox"], input[name="processing_condition"]').on('change input', updateSummary);
 

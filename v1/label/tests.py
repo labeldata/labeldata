@@ -6,6 +6,8 @@
     알림 데이터를 지우고 FCM을 발송한다.
   - 식품유형 검색 API: 이름이 겹치는 항목의 판정 순서가 조용히 뒤집힐 수 있다.
   - 표시사항 검증 규칙: 판정이 조용히 느슨해져도 화면은 "적합"으로 보인다.
+  - 표시사항 저장 응답: 자동저장이 활동로그를 오염시키거나, 폼 오류가 500이 되어도
+    화면에서는 그냥 "저장 실패"로만 보인다.
 """
 
 from unittest.mock import patch
@@ -369,3 +371,66 @@ class ValidateLabelWiringTests(TestCase):
         joined = ' '.join(result['checked_regulations'])
         self.assertIn('원재료명 표시 순서', joined)
         self.assertIn('식품첨가물의 표시 방법', joined)
+
+
+class LabelSavePostTests(TestCase):
+    """
+    표시사항 저장(POST /label/label-creation/<id>/) 응답.
+
+    자동저장을 붙이면서 두 가지가 걸렸다.
+      - 자동저장(30초 주기)까지 활동로그에 남기면 편집 세션 하나가 로그를 수십 줄
+        차지해 "사용자가 언제 저장했는가"를 읽을 수 없게 된다.
+      - 폼이 무효일 때 뷰가 아무것도 반환하지 않아 500이 났다. 마지막 render 가
+        GET 분기 안에 있어서 POST-무효 경로는 return 없이 함수가 끝난다.
+        라벨명이 유일한 필수 필드라 이름을 비우고 저장하면 재현된다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='saver', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='저장 테스트')
+        self.url = '/label/label-creation/%s/' % self.label.my_label_id
+
+    def _post(self, **extra):
+        body = {'my_label_name': '저장 테스트'}
+        body.update(extra)
+        return self.client.post(self.url, data=body,
+                                HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+    def _log_count(self):
+        from v1.activity_log.models import UserActivityLog
+        return UserActivityLog.objects.filter(user=self.user, action='label_update').count()
+
+    def test_수동저장은_활동로그를_남긴다(self):
+        before = self._log_count()
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        self.assertEqual(self._log_count(), before + 1)
+
+    def test_자동저장은_활동로그를_남기지_않는다(self):
+        before = self._log_count()
+        resp = self._post(autosave='1')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertTrue(data['autosave'])
+        self.assertEqual(self._log_count(), before, '자동저장이 활동로그를 남기면 안 된다')
+
+    def test_자동저장도_내용은_저장한다(self):
+        self._post(autosave='1', my_label_name='자동저장으로 바뀐 이름')
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.my_label_name, '자동저장으로 바뀐 이름')
+
+    def test_폼이_무효면_500이_아니라_400_JSON_을_준다(self):
+        """라벨명을 비우면 예전에는 뷰가 None 을 반환해 500 이 났다."""
+        resp = self._post(my_label_name='')
+        self.assertEqual(resp.status_code, 400)
+        data = resp.json()
+        self.assertFalse(data['success'])
+        self.assertIn('my_label_name', data['errors'])
+
+    def test_폼이_무효면_저장되지_않는다(self):
+        self._post(my_label_name='')
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.my_label_name, '저장 테스트')

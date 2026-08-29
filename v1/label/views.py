@@ -914,15 +914,21 @@ def label_creation(request, label_id=None):
             label.save()
             
             
-            # 표시사항 수정 로깅
-            log_user_activity(request, 'label', 'label_update', label.my_label_id)
+            # 표시사항 수정 로깅.
+            # 자동저장(30초 주기)은 남기지 않는다 — 편집 세션 하나가 로그를 수십 줄
+            # 차지하면 "사용자가 언제 저장했는가" 를 읽을 수 없게 된다.
+            # 사용자가 저장 버튼을 눌러 생긴 저장만 기록한다.
+            is_autosave = request.POST.get('autosave') == '1'
+            if not is_autosave:
+                log_user_activity(request, 'label', 'label_update', label.my_label_id)
             
             # AJAX 요청인 경우 JSON 응답 반환
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({
                     'success': True,
-                    'message': '저장되었습니다.',
-                    'label_id': str(label.my_label_id)
+                    'message': '자동 저장되었습니다.' if is_autosave else '저장되었습니다.',
+                    'label_id': str(label.my_label_id),
+                    'autosave': is_autosave,
                 })
             
             # V2에서 넘어온 경우 V2로 복귀
@@ -933,7 +939,21 @@ def label_creation(request, label_id=None):
             
             return redirect('label:label_creation', label_id=label.my_label_id)
         else:
+            # 폼이 무효일 때 여기서 끝내야 한다. 아래로 흘려보내면 GET 분기를 타지
+            # 않아 함수가 return 없이 끝나고(마지막 render 가 else 안에 있다)
+            # "didn't return an HttpResponse" 로 500 이 된다.
+            # 라벨명(my_label_name)이 유일한 필수 필드라, 이름을 비우고 저장하면
+            # 그대로 재현된다.
             messages.error(request, '입력 정보에 오류가 있습니다.')
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'message': '입력 정보에 오류가 있습니다.',
+                    'errors': {f: [str(e) for e in errs] for f, errs in form.errors.items()},
+                }, status=400)
+            if label_id:
+                return redirect('label:label_creation', label_id=label_id)
+            return redirect('label:my_label_list')
     else:
         has_ingredient_relations = False
         
