@@ -41,7 +41,6 @@ _CATEGORY_LABELS = {
     'allergen': '알레르기 표시',
     'recycling_mark': '분리배출마크',
     'origin_missing': '원산지 표시',
-    'ingredient_ratio_order': '원재료 입력 순서 (배합비)',
     'additive_display_name': '식품첨가물 표시명',
     'ingredient_order': '원재료 표시 순서 (AI)',
     'name_ingredient_match': '제품명-원재료 일치성 (AI)',

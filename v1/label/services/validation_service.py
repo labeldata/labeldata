@@ -12,8 +12,15 @@
 
 포팅 범위 (1차): 내용량 단위, 농수산물 함량 표시, 금지 문구,
 알레르기 표시, 분리배출마크 호환성, 원산지 미표시.
-추가: 배합비 내림차순 입력 순서, 식품첨가물 표시명 공란 — 둘 다 구조화된
-원재료 데이터(LabelIngredientRelation)를 그대로 보므로 AI 없이 판정한다.
+추가: 식품첨가물 표시명 공란 — 구조화된 원재료 데이터를 그대로 보므로 AI 없이
+판정한다.
+
+원재료 표시 순서(배합비 내림차순)는 여기서 검사하지 않는다. 표시 문구를 만드는
+쪽(label/views.py 의 rawmtrl_nm 생성, products/bom_detail.html 의 BOM 요약)이
+둘 다 배합비 내림차순으로 정렬하므로, 입력 순서가 어떻든 표시 문구는 규정을
+지킨다. 입력 순서를 위반이라고 알리면 표시 문구에 도달하지 않는 것을 두고
+사용자를 탓하게 된다. 손으로 고친 최종 문구의 순서는 AI 검사
+(ai_validation_service.check_ingredient_order)가 따로 본다.
 미포함(추후 별도 작업): 식품유형별 필수문구(냉동/냉장 조건 등),
 소비기한 권장값 비교 — DOM/window 전역 상태에 강하게 결합돼 있어
 서버 로직으로 안전하게 재현하려면 별도 검증이 필요하다.
@@ -109,7 +116,6 @@ _LEGAL_BASIS = {
     'allergen': '「식품등의 표시기준」 알레르기 유발물질 표시 규정',
     'recycling_mark': '「자원의 절약과 재활용촉진에 관한 법률 시행규칙」 분리배출 표시 기준',
     'origin_missing': '「농수산물의 원산지 표시 등에 관한 법률」 및 같은 법 시행령(배합비율 기준 원산지 표시대상)',
-    'ingredient_ratio_order': '「식품등의 표시기준」 원재료명 표시 순서 규정(중량비율이 많은 순서로 표시)',
     'additive_display_name': '「식품등의 표시기준」 [별표 4] 식품첨가물의 표시 방법(명칭과 용도를 함께 표시)',
 }
 
@@ -275,52 +281,6 @@ def _ordered_relations(label):
         return []
 
 
-def check_ingredient_ratio_order(label) -> list[dict]:
-    """
-    원재료가 배합비 내림차순으로 입력됐는지 확인.
-
-    같은 규정을 보는 AI 검사(ai_validation_service.check_ingredient_order)가
-    따로 있지만 둘은 대상이 다르다.
-      - 이 검사   : 원재료 팝업에 입력된 구조화 데이터(LabelIngredientRelation.
-                    ingredient_ratio). 정확한 값이 이미 DB에 있으므로 AI 없이,
-                    무료로, 언제나 판정할 수 있다.
-      - AI 검사   : 사용자가 손으로 다듬은 최종 표시 문구. 텍스트에 %가 적혀
-                    있어야만 판정할 수 있다.
-    표시 문구는 보통 이 입력 순서에서 만들어지므로, 여기서 먼저 잡으면
-    최종 문구까지 가기 전에 고칠 수 있다.
-
-    배합비가 비어 있는 행은 비교에서 제외한다(모르는 값을 추측하지 않는다).
-    """
-    rows = []
-    for rel in _ordered_relations(label):
-        ratio = rel.ingredient_ratio
-        if ratio is None:
-            continue
-        try:
-            ratio = float(ratio)
-        except (TypeError, ValueError):
-            continue
-        name = (rel.ingredient.ingredient_display_name
-                or rel.ingredient.prdlst_nm
-                or '이름 없음')
-        rows.append((name, ratio))
-
-    if len(rows) < 2:
-        return []
-
-    issues = []
-    for (cur_name, cur_ratio), (next_name, next_ratio) in zip(rows, rows[1:]):
-        if cur_ratio < next_ratio:
-            issues.append(_issue(
-                'ingredient_ratio_order',
-                f'원재료 입력 순서가 배합비 내림차순이 아닙니다: '
-                f'"{_short_name(cur_name)}"({cur_ratio:g}%)가 '
-                f'"{_short_name(next_name)}"({next_ratio:g}%)보다 앞에 있습니다.',
-                '원재료 팝업에서 "함량 순 정렬"을 누르거나 행 순서를 직접 바꿔주세요.',
-            ))
-    return issues
-
-
 def check_additive_display_name(label) -> list[dict]:
     """
     표시명이 비어 있는 식품첨가물이 연결돼 있는지 확인.
@@ -379,7 +339,6 @@ _CHECKS = [
     check_allergens,
     check_recycling_mark,
     check_origin_missing,
-    check_ingredient_ratio_order,
     check_additive_display_name,
 ]
 

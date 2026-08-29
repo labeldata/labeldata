@@ -966,11 +966,22 @@ def label_creation(request, label_id=None):
 
             # 내 원료에 연결된 원재료명 가져오기
             if has_ingredient_relations:
-                relations = LabelIngredientRelation.objects.filter(
-                    label_id=label.my_label_id
-                ).select_related('ingredient').order_by('relation_sequence')
-                
-                # 원재료명 정보를 생성 (순서대로)
+                # 원재료는 함량이 많은 순서로 표시해야 한다(「식품등의 표시기준」).
+                # BOM 에디터는 요약 문구를 만들 때 이미 배합비 내림차순으로 정렬한다
+                # (products/bom_detail.html 의 generateBomSummary). 여기서 입력 순서를
+                # 그대로 쓰면 같은 데이터인데 화면마다 원재료 순서가 달라진다.
+                # 두 생성기가 같은 규칙을 쓰도록 여기서도 정렬한다.
+                #
+                # 배합비가 없는 행은 0 으로 보아 뒤로 보낸다(BOM 에디터와 동일).
+                # 값이 같으면 입력 순서를 지킨다 — 파이썬 sort 는 안정 정렬이다.
+                relations = sorted(
+                    LabelIngredientRelation.objects.filter(
+                        label_id=label.my_label_id
+                    ).select_related('ingredient').order_by('relation_sequence'),
+                    key=lambda rel: -float(rel.ingredient_ratio or 0),
+                )
+
+                # 원재료명 정보를 생성 (배합비 많은 순)
                 ingredients_info = []
                 allergens_set = set()
                 gmo_set = set()

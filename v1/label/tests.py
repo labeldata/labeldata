@@ -6,6 +6,7 @@
     알림 데이터를 지우고 FCM을 발송한다.
   - 식품유형 검색 API: 이름이 겹치는 항목의 판정 순서가 조용히 뒤집힐 수 있다.
   - 표시사항 검증 규칙: 판정이 조용히 느슨해져도 화면은 "적합"으로 보인다.
+  - 원재료명 생성 순서: 화면마다 다른 순서가 나와도 각 화면만 보면 멀쩡해 보인다.
   - 표시사항 저장 응답: 자동저장이 활동로그를 오염시키거나, 폼 오류가 500이 되어도
     화면에서는 그냥 "저장 실패"로만 보인다.
 """
@@ -220,87 +221,6 @@ class FoodTypeOptionsApiTests(TestCase):
         self.assertIn(resp.status_code, (302, 403))
 
 
-class IngredientRatioOrderCheckTests(TestCase):
-    """
-    배합비 내림차순 검사(validation_service.check_ingredient_ratio_order).
-
-    같은 규정을 보는 AI 검사가 따로 있지만 그쪽은 표시 문구에 %가 적혀 있어야만
-    판정한다. 이 검사는 원재료 팝업에 입력된 배합비를 그대로 보므로 AI 없이,
-    무료로, 언제나 판정한다. 실제 데이터에서도 AI 검사가 놓치던 건을 잡았다.
-    """
-
-    def setUp(self):
-        self.user = User.objects.create_user(username='ratio', password='x')
-        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='검사용 라벨')
-
-    def _add(self, name, ratio, sequence, display_name='', category='processed'):
-        ing = MyIngredient.objects.create(
-            user_id=self.user,
-            prdlst_nm=name,
-            ingredient_display_name=display_name,
-            food_category=category,
-            delete_YN='N',
-        )
-        return LabelIngredientRelation.objects.create(
-            label=self.label,
-            ingredient=ing,
-            relation_sequence=sequence,
-            ingredient_ratio=ratio,
-        )
-
-    def _messages(self):
-        from v1.label.services.validation_service import check_ingredient_ratio_order
-        return [i['message'] for i in check_ingredient_ratio_order(self.label)]
-
-    def test_내림차순이면_지적하지_않는다(self):
-        self._add('밀가루', 50, 1)
-        self._add('설탕', 30, 2)
-        self._add('소금', 5, 3)
-        self.assertEqual(self._messages(), [])
-
-    def test_역순이면_어느_행인지_짚어준다(self):
-        self._add('밀가루', 30, 1)
-        self._add('설탕', 50, 2)
-        msgs = self._messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn('밀가루', msgs[0])
-        self.assertIn('설탕', msgs[0])
-        self.assertIn('30%', msgs[0])
-        self.assertIn('50%', msgs[0])
-
-    def test_배합비가_빈_행은_비교에서_뺀다(self):
-        """모르는 값을 추측해서 위반이라고 하면 안 된다."""
-        self._add('밀가루', 50, 1)
-        self._add('향료', None, 2)
-        self._add('설탕', 30, 3)
-        self.assertEqual(self._messages(), [])
-
-    def test_비교할_값이_하나뿐이면_판정하지_않는다(self):
-        self._add('밀가루', 50, 1)
-        self._add('향료', None, 2)
-        self.assertEqual(self._messages(), [])
-
-    def test_같은_값은_위반이_아니다(self):
-        self._add('밀가루', 30, 1)
-        self._add('설탕', 30, 2)
-        self.assertEqual(self._messages(), [])
-
-    def test_역순이_여러_번이면_각각_짚는다(self):
-        self._add('가', 10, 1)
-        self._add('나', 20, 2)
-        self._add('다', 30, 3)
-        self.assertEqual(len(self._messages()), 2)
-
-    def test_긴_원료명은_줄여서_보여준다(self):
-        """혼합제제 표시명은 100자를 넘기도 해서, 그대로 넣으면 메시지를 못 읽는다."""
-        long_name = '산성피로인산나트륨, 옥수수전분(옥수수-외국산:러시아,헝가리), 탄산수소나트륨, 제일인산칼슘'
-        self._add('정제소금', 10, 1)
-        self._add(long_name, 20, 2, display_name=long_name)
-        msg = self._messages()[0]
-        self.assertIn('…', msg)
-        self.assertNotIn('제일인산칼슘', msg)
-
-
 class AdditiveDisplayNameCheckTests(TestCase):
     """
     식품첨가물 표시명 공란 검사(validation_service.check_additive_display_name).
@@ -355,13 +275,12 @@ class AdditiveDisplayNameCheckTests(TestCase):
 
 
 class ValidateLabelWiringTests(TestCase):
-    """새 검사가 실제로 '규정만 검증' 경로에 물려 있는지."""
+    """검사가 실제로 '규정만 검증' 경로에 물려 있는지."""
 
     def test_새_검사가_무료_검증에_포함된다(self):
         from v1.label.services.validation_service import _CHECKS, validate_label
 
         names = {c.__name__ for c in _CHECKS}
-        self.assertIn('check_ingredient_ratio_order', names)
         self.assertIn('check_additive_display_name', names)
 
         user = User.objects.create_user(username='wiring', password='x')
@@ -369,7 +288,6 @@ class ValidateLabelWiringTests(TestCase):
         result = validate_label(label)
         # 근거 규정 목록에도 새 항목이 드러나야 한다 (검증 범위를 사용자에게 보여주는 값)
         joined = ' '.join(result['checked_regulations'])
-        self.assertIn('원재료명 표시 순서', joined)
         self.assertIn('식품첨가물의 표시 방법', joined)
 
 
@@ -434,3 +352,70 @@ class LabelSavePostTests(TestCase):
         self._post(my_label_name='')
         self.label.refresh_from_db()
         self.assertEqual(self.label.my_label_name, '저장 테스트')
+
+
+class RawmtrlNmOrderTests(TestCase):
+    """
+    라벨 편집 화면이 만드는 원재료명(rawmtrl_nm)의 순서.
+
+    원재료는 함량이 많은 순서로 표시해야 한다(「식품등의 표시기준」).
+    표시 문구를 만드는 곳이 두 군데인데 규칙이 서로 달랐다.
+      - BOM 에디터 요약(products/bom_detail.html generateBomSummary): 배합비 내림차순
+      - 라벨 편집 화면 rawmtrl_nm(label/views.py): 입력 순서 그대로
+    같은 데이터인데 어느 화면에서 보느냐에 따라 원재료 순서가 달라졌다.
+    두 곳이 같은 규칙을 쓰도록 맞췄고, 여기서 그걸 고정한다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='order', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='순서 테스트')
+
+    def _link(self, food_type, ratio, sequence):
+        """배합비 5% 이상이면 생성기가 '식품유형[표시명]' 으로 찍는다."""
+        ing = MyIngredient.objects.create(
+            user_id=self.user,
+            prdlst_nm=food_type,
+            prdlst_dcnm=food_type,
+            ingredient_display_name=food_type,
+            food_category='processed',
+            delete_YN='N',
+        )
+        LabelIngredientRelation.objects.create(
+            label=self.label, ingredient=ing,
+            relation_sequence=sequence, ingredient_ratio=ratio,
+        )
+
+    def _generated_text(self):
+        resp = self.client.get('/label/label-creation/%s/' % self.label.my_label_id)
+        self.assertEqual(resp.status_code, 200)
+        return resp.content.decode('utf-8')
+
+    def _positions(self, html, *names):
+        return [html.index(n) for n in names]
+
+    def test_입력_순서가_거꾸로여도_배합비_많은_순으로_찍는다(self):
+        self._link('가루류', 10, 1)   # 입력은 1번인데 함량은 적다
+        self._link('당류', 50, 2)
+        self._link('유지류', 30, 3)
+
+        html = self._generated_text()
+        pos_50, pos_30, pos_10 = self._positions(html, '당류', '유지류', '가루류')
+        self.assertLess(pos_50, pos_30)
+        self.assertLess(pos_30, pos_10)
+
+    def test_배합비가_없는_행은_뒤로_보낸다(self):
+        """BOM 에디터도 빈 값을 0 으로 보고 뒤로 보낸다 — 같은 규칙."""
+        self._link('향료류', None, 1)
+        self._link('당류', 20, 2)
+
+        html = self._generated_text()
+        self.assertLess(html.index('당류'), html.index('향료류'))
+
+    def test_배합비가_같으면_입력_순서를_지킨다(self):
+        """안정 정렬이라 같은 값끼리는 사용자가 넣은 순서가 유지돼야 한다."""
+        self._link('가루류', 20, 1)
+        self._link('당류', 20, 2)
+
+        html = self._generated_text()
+        self.assertLess(html.index('가루류'), html.index('당류'))

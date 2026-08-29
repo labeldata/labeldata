@@ -348,14 +348,6 @@
                 총 비율: <span id="ratio-sum">0.00</span>%
             </div>
         </div>
-        {# 배합비 내림차순이 아닐 때만 JS 가 flex 로 켠다. d-flex 는 !important 라 못 숨기므로 쓰지 않는다. #}
-        <div id="ratio-order-warning" class="alert alert-warning py-2 px-3 mb-2"
-             style="display: none; align-items: center; justify-content: space-between; gap: 10px;">
-            <span id="ratio-order-warning-text" style="font-size: 0.85rem;"></span>
-            <button type="button" id="sort-by-ratio-btn" class="btn btn-sm btn-warning" style="flex-shrink: 0; white-space: nowrap;">
-                <i class="bi bi-sort-numeric-down"></i> 함량 순 정렬
-            </button>
-        </div>
         <div class="table-responsive">
             <table class="table styled-table table-hover">
                 <thead>
