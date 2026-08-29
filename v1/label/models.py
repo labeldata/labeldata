@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone  # timezone 모듈 import 추가
 from .constants import CATEGORY_CHOICES
@@ -655,11 +655,40 @@ class ExpiryRecommendation(models.Model):
 
 
 
+@receiver(pre_save, sender=MyLabel)
+def stash_prev_report_no(sender, instance, **kwargs):
+    """
+    저장 직전 DB에 들어 있던 품목보고번호를 인스턴스에 담아둔다.
+    post_save에서 "번호가 실제로 바뀐 저장"만 골라내기 위한 것 — 라벨 저장은
+    대부분 폼 전체 저장이라 update_fields가 비어 있어 그것만으로는 판별할 수 없다.
+    """
+    if not instance.pk:
+        instance._prev_prdlst_report_no = None
+        return
+    try:
+        instance._prev_prdlst_report_no = (
+            sender.objects.filter(pk=instance.pk)
+            .values_list('prdlst_report_no', flat=True)
+            .first()
+        )
+    except Exception:
+        # 조회 실패 시엔 "안 바뀐 것"으로 두고 넘어간다.
+        # 소급 매칭은 놓쳐도 스케줄러가 다시 잡지만, 과다 실행은 알림 중복을 만든다.
+        instance._prev_prdlst_report_no = instance.prdlst_report_no
+
+
 @receiver(post_save, sender=MyLabel)
 def backfill_inspection_on_label_save(sender, instance, created, update_fields, **kwargs):
     """
-    MyLabel에 품목보고번호가 신규 입력될 때 수거검사 소급 매칭 실행.
+    MyLabel의 품목보고번호가 실제로 새로 입력되거나 바뀔 때만 수거검사 소급 매칭 실행.
     삭제된 제품(delete_YN='Y')은 스킵.
+
+    여기서 InspectionMatch를 사용자 단위로 전량 삭제하면 안 된다 —
+      - PHASE_JUDGMENT(판정결과 변동 = 부적합 알림)는 backfill_inspection_matches()가
+        다시 만들어주지 않는다(수거감지 PHASE_COLLECTION만 생성). 지우면 영구 소실이다.
+      - 전량 삭제하면 collector의 중복 검사(already)가 항상 빗나가서, 저장할 때마다
+        같은 건이 pending_push에 다시 담겨 FCM 푸시가 재발송된다.
+    그래서 번호가 바뀐 이 라벨의 수거감지 매칭만 정리하고 재매칭한다.
     """
     if instance.delete_YN == 'Y':
         return
@@ -667,12 +696,21 @@ def backfill_inspection_on_label_save(sender, instance, created, update_fields, 
         return
     if update_fields and 'prdlst_report_no' not in update_fields:
         return
+    prev = getattr(instance, '_prev_prdlst_report_no', None)
+    if not created and prev == instance.prdlst_report_no:
+        return  # 품목보고번호는 그대로 — 다른 필드만 바뀐 저장이므로 재매칭할 이유가 없다
     try:
         from v1.regulatory.models import InspectionMatch
         from v1.regulatory.services.collector import backfill_inspection_matches
-        # 품목보고번호 변경 시 기존 매칭 전체 삭제 후 재매칭
-        InspectionMatch.objects.filter(user=instance.user_id).delete()
-        backfill_inspection_matches(instance.user_id, days=30)
+        # 옛 번호 기준으로 이 라벨에 붙어 있던 수거감지 매칭만 정리한다.
+        # 다른 라벨의 매칭과 판정 알림(PHASE_JUDGMENT)은 건드리지 않는다.
+        InspectionMatch.objects.filter(
+            user=instance.user_id,
+            label=instance,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+        ).delete()
+        # 웹 요청 안이므로 FCM 발송은 백그라운드로 넘긴다(저장 응답 지연 방지).
+        backfill_inspection_matches(instance.user_id, days=30, push_async=True)
     except Exception:
         import logging
         logging.getLogger(__name__).exception('[I0460 소급] MyLabel 트리거 오류')

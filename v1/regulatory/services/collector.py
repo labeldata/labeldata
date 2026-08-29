@@ -26,6 +26,7 @@
 """
 import hashlib
 import logging
+import threading
 import time
 from datetime import date, datetime
 
@@ -738,7 +739,7 @@ def _row_to_text(row: dict, label: str = '') -> str:
 
 # ── 수거검사(I0460) ────────────────────────────────────────────────────────────
 
-def backfill_inspection_matches(user, days: int = 30) -> dict:
+def backfill_inspection_matches(user, days: int = 30, push_async: bool = False) -> dict:
     """
     사용자가 인허가번호·회사명·품목보고번호를 신규 등록할 때 호출.
     최근 N일치 InspectionResult를 소급 매칭하고 InspectionMatch를 생성한다.
@@ -749,6 +750,11 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
     Args:
         user: 소급 매칭 대상 User 인스턴스
         days: 소급 기간 (기본 30일)
+        push_async: True면 FCM 발송을 백그라운드 스레드로 넘긴다.
+                    웹 요청 안에서 호출될 때(라벨·프로필 저장 시그널) 쓰라고 있는 것 —
+                    FCM 왕복(timeout 5초)이 저장 응답 시간에 얹히지 않게 한다.
+                    관리 커맨드처럼 프로세스가 곧 끝나는 곳에서는 스레드가 중간에
+                    죽을 수 있으므로 기본값(동기)을 그대로 써야 한다.
 
     Returns:
         {'matched': int, 'pending_push': int}
@@ -844,10 +850,35 @@ def backfill_inspection_matches(user, days: int = 30) -> dict:
 
     # 검사중·검토중 건 묶음 푸시 (건별이 아닌 1건 요약 발송)
     if pending_push:
-        _send_backfill_push(user, pending_push)
+        if push_async:
+            _send_backfill_push_async(user, pending_push)
+        else:
+            _send_backfill_push(user, pending_push)
 
     logger.info(f'[I0460 소급] user={user.pk} matched={matched} pending_push={len(pending_push)}')
     return {'matched': matched, 'pending_push': len(pending_push)}
+
+
+def _send_backfill_push_async(user, inspections: list) -> None:
+    """
+    묶음 푸시를 백그라운드 스레드로 보낸다.
+
+    FCM 호출은 외부 HTTP 왕복이라 웹 요청 안에서 그대로 돌리면 저장 응답이
+    그만큼 늦어진다. 푸시는 실패해도 InspectionMatch(=알림함 데이터)는 이미
+    저장돼 있으므로 best-effort 로 다뤄도 된다.
+
+    스레드에서 ORM 을 쓰므로(AppDevice 조회) 끝날 때 커넥션을 닫아준다.
+    """
+    def _run():
+        from django.db import connection
+        try:
+            _send_backfill_push(user, inspections)
+        except Exception:
+            logger.exception('[I0460 소급 푸시] 백그라운드 발송 오류')
+        finally:
+            connection.close()
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _send_backfill_push(user, inspections: list) -> None:
