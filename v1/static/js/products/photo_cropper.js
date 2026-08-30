@@ -48,8 +48,10 @@
       + '          </div>'
       + '        </div>'
       + '        <div class="crop-stage">'
-      + '          <canvas class="crop-canvas"></canvas>'
-      + '          <div class="crop-box" hidden></div>'
+      + '          <div class="crop-frame">'
+      + '            <canvas class="crop-canvas"></canvas>'
+      + '            <div class="crop-box" hidden></div>'
+      + '          </div>'
       + '        </div>'
       + '        <div class="crop-info text-muted mt-2" style="font-size:12px;"></div>'
       + '      </div>'
@@ -96,7 +98,7 @@
         var ctx = canvas.getContext('2d');
 
         var deg = 0;            // 화면에 그릴 회전각
-        var sel = null;         // 화면 좌표 {x, y, w, h}
+        var sel = null;         // 캔버스 내부 픽셀 {x, y, w, h}
         var drag = null;
 
         // 회전을 반영해 캔버스에 그린다. 이후 좌표 계산은 모두 이 캔버스 기준.
@@ -106,7 +108,9 @@
           var cw = swapped ? h : w, ch = swapped ? w : h;
 
           // 화면에 들어갈 크기로만 줄여 그린다 (자를 때는 원본에서 다시 자른다)
-          var maxW = modalEl.querySelector('.crop-stage').clientWidth || 900;
+          var stage = modalEl.querySelector('.crop-stage');
+          // 안쪽 여백(8px x 2)을 빼야 CSS 가 캔버스를 다시 줄이지 않는다
+          var maxW = Math.max((stage.clientWidth || 900) - 16, 200);
           var maxH = Math.round(window.innerHeight * 0.6);
           var scale = Math.min(maxW / cw, maxH / ch, 1);
 
@@ -133,11 +137,16 @@
 
         function drawSel() {
           if (!sel) return;
+          // sel 은 캔버스 내부 픽셀이다. 화면에 그릴 때는 표시 크기로 되돌린다.
+          var r = canvas.getBoundingClientRect();
+          var kx = canvas.width ? r.width / canvas.width : 1;
+          var ky = canvas.height ? r.height / canvas.height : 1;
+
           box.hidden = false;
-          box.style.left = sel.x + 'px';
-          box.style.top = sel.y + 'px';
-          box.style.width = sel.w + 'px';
-          box.style.height = sel.h + 'px';
+          box.style.left = (sel.x * kx) + 'px';
+          box.style.top = (sel.y * ky) + 'px';
+          box.style.width = (sel.w * kx) + 'px';
+          box.style.height = (sel.h * ky) + 'px';
 
           var scale = parseFloat(canvas.dataset.scale) || 1;
           var ow = Math.round(sel.w / scale), oh = Math.round(sel.h / scale);
@@ -148,11 +157,18 @@
             : '너무 작습니다. 조금 더 넓게 골라 주세요.';
         }
 
+        // 화면 좌표를 캔버스 **내부 픽셀**로 옮긴다.
+        //
+        // getBoundingClientRect() 는 CSS 로 그려진 크기를 준다. 캔버스가
+        // max-width 로 줄어들면 내부 픽셀과 다르므로 비율로 되돌려야 한다.
+        // 이 값을 그대로 쓰면 오른쪽 끝에 닿지 못한다.
         function pos(e) {
           var r = canvas.getBoundingClientRect();
+          var kx = r.width ? canvas.width / r.width : 1;
+          var ky = r.height ? canvas.height / r.height : 1;
           return {
-            x: Math.min(Math.max(e.clientX - r.left, 0), canvas.width),
-            y: Math.min(Math.max(e.clientY - r.top, 0), canvas.height)
+            x: Math.min(Math.max((e.clientX - r.left) * kx, 0), canvas.width),
+            y: Math.min(Math.max((e.clientY - r.top) * ky, 0), canvas.height)
           };
         }
 

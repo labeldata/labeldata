@@ -276,6 +276,13 @@
     overflow:   hidden;
     padding:    8px;
 }
+/* 선택 상자는 캔버스에 딱 맞물려야 한다. 스테이지 기준으로 놓으면 캔버스가
+   가운데 정렬된 만큼 통째로 밀려서, 오른쪽 끝에 닿을 수가 없었다. */
+.crop-frame {
+    position:    relative;
+    line-height: 0;          /* 캔버스 아래 여백 제거 */
+    max-width:   100%;
+}
 .crop-canvas {
     display:      block;
     cursor:       crosshair;

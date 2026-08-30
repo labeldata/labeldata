@@ -1186,3 +1186,25 @@ class PhotoCropperWiringTests(TestCase):
 
     def test_너무_작은_선택을_막는다(self):
         self.assertIn('MIN_SIDE', self.cropper)
+
+    def test_선택_상자가_캔버스에_맞물린다(self):
+        """
+        스테이지 기준으로 놓으면 캔버스가 가운데 정렬된 만큼 상자가 통째로
+        밀린다. 실제로 오른쪽 끝을 고를 수 없었다.
+        """
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        self.assertIn('crop-frame', self.cropper)
+        css = (Path(dj.BASE_DIR) / 'static/css/products_common.css'
+               ).read_text(encoding='utf-8')
+        self.assertIn('.crop-frame', css)
+        self.assertIn('position:    relative', css)
+
+    def test_표시_크기와_내부_픽셀을_환산한다(self):
+        """
+        캔버스가 CSS 로 줄어들면 화면 좌표와 내부 픽셀이 어긋난다.
+        환산하지 않으면 오른쪽 끝에 닿지 못한다.
+        """
+        self.assertIn('canvas.width / r.width', self.cropper)
+        self.assertIn('r.width / canvas.width', self.cropper)
