@@ -328,3 +328,66 @@ class DisplayItemPanelTests(TestCase):
             else:
                 self.assertIn(item['anchor'], ids,
                               f"{item['label']} 의 이동 대상 {item['anchor']} 없음")
+
+
+class BasicInfoChoiceTests(TestCase):
+    """
+    장기보존식품·제조방법 선택지.
+
+    템플릿이 preservation_choices 로 루프를 돌면서 {% empty %} 에 같은 목록을
+    손으로 또 적어 뒀는데, 그 변수를 넘기는 뷰가 하나도 없어서 **항상 폴백만**
+    그려지고 있었다. 목록을 뷰로 올려 한 곳에서만 관리한다.
+    """
+
+    def _render(self):
+        from django.template.loader import render_to_string
+        from v1.products.views import PRESERVATION_CHOICES, PROCESSING_CHOICES
+
+        return render_to_string('products/_tab_basic_info.html', {
+            'product': self.label, 'can_edit': True,
+            'food_types': [], 'food_groups': [], 'countries': [],
+            'display_items': [], 'custom_fields_json': '[]',
+            'preservation_choices': PRESERVATION_CHOICES,
+            'processing_choices': PROCESSING_CHOICES,
+        })
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='choice', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='선택지')
+
+    def test_선택지가_빠짐없이_그려진다(self):
+        import re
+        from v1.products.views import PRESERVATION_CHOICES, PROCESSING_CHOICES
+
+        html = self._render()
+        for value, label in PRESERVATION_CHOICES:
+            self.assertIn(f'id="field-preservation-{value}"', html, label)
+        for value, label in PROCESSING_CHOICES:
+            self.assertIn(f'id="field-processing-{value}"', html, label)
+        # 폴백이 함께 그려져 id 가 겹치면 라벨 클릭이 엉뚱한 칸을 켠다
+        ids = re.findall(r'id="(field-[a-z-]+)"', html)
+        self.assertEqual(len(ids), len(set(ids)), '중복 id 가 있다')
+
+    def test_저장되는_값을_바꾸지_않았다(self):
+        """value 는 DB 에 그대로 들어가는 문자열이라 바꾸면 기존 데이터와 어긋난다."""
+        from v1.products.views import PRESERVATION_CHOICES, PROCESSING_CHOICES
+
+        self.assertEqual([v for v, _ in PRESERVATION_CHOICES],
+                         ['frozen_heated', 'frozen_nonheated', 'canned', 'retort'])
+        self.assertEqual([v for v, _ in PROCESSING_CHOICES],
+                         ['sanitized', 'aseptic', 'yutang', 'unsanitized'])
+
+    def test_값을_읽는_클래스가_그대로다(self):
+        """칩으로 바꿔도 :checked 로 값을 읽는 코드가 계속 동작해야 한다."""
+        html = self._render()
+        self.assertIn('grp-preservation', html)
+        self.assertIn('grp-processing', html)
+
+    def test_칩을_쓰는_화면_모두에_선택지를_넘긴다(self):
+        """뷰가 안 넘기면 칩이 하나도 안 그려진다 — 예전에 그래서 폴백이 필요했다."""
+        import inspect
+        from v1.products import views
+
+        src = inspect.getsource(views)
+        self.assertEqual(src.count("'preservation_choices': PRESERVATION_CHOICES"), 3)
+        self.assertEqual(src.count("'processing_choices': PROCESSING_CHOICES"), 3)

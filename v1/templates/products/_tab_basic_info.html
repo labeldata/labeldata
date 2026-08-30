@@ -6,28 +6,51 @@
     flex-shrink: 0 !important;
     width: 150px !important;
 }
-.btn-storage-badge {
+/* 보관방법·장기보존식품·제조방법이 쓰는 칩.
+   장기보존식품과 제조방법은 체크박스 그대로 두고 화면에서만 칩으로 보인다 —
+   :checked 로 값을 읽는 코드(.grp-preservation / .grp-processing)가 여러 곳에
+   있어서, 마크업을 버튼으로 바꾸면 전부 손봐야 한다. */
+.btn-storage-badge,
+.v2-chip-check > label {
+    display: inline-block;
     border: 1.5px solid #dee2e6;
     border-radius: 20px;
     padding: 4px 14px;
     font-size: 12px;
+    line-height: 1.5;
     background: #f8f9fa;
     color: #6c757d;
     cursor: pointer;
     transition: all .15s ease;
     white-space: nowrap;
     flex-shrink: 0;
+    margin: 0;
 }
-.btn-storage-badge:hover {
+.btn-storage-badge:hover,
+.v2-chip-check > label:hover {
     border-color: #86b7fe;
     background: #f0f6ff;
     color: #0d6efd;
 }
-.btn-storage-badge.active {
+.btn-storage-badge.active,
+.v2-chip-check > input:checked + label {
     border-color: #0d6efd;
     background: #e7f1ff;
     color: #0d6efd;
     font-weight: 600;
+}
+/* 체크박스는 자리를 차지하지 않게 숨기되, 키보드 초점은 살려 둔다 */
+.v2-chip-check { display: inline-flex; }
+.v2-chip-check > input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+}
+.v2-chip-check > input:focus-visible + label {
+    outline: 2px solid #0d6efd;
+    outline-offset: 1px;
 }
 </style>
 
@@ -83,7 +106,7 @@
 
         <!-- 식품유형 3열: 대분류 | 소분류 | 표시용 -->
         <div class="row g-2 mb-2">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label v2-field-label">식품유형 대분류</label>
                 <select id="field-food-group" name="food_group"
                         class="form-select bg-light border-0 v2-field-input"
@@ -97,7 +120,7 @@
                     <option value="농수축산물" {% if product.food_group == "농수축산물" %}selected{% endif %}>농수축산물</option>
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label v2-field-label">소분류</label>
                 <select id="field-food-type" name="food_type"
                         class="form-select bg-light border-0 v2-field-input"
@@ -112,7 +135,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <label class="form-label v2-field-label">식품유형 (표시용)</label>
                 <input type="text" id="field-prdlst-dcnm" name="prdlst_dcnm"
                        class="form-control bg-light border-0 v2-field-input"
@@ -126,88 +149,45 @@
             <button type="button" class="btn btn-link v2-link-btn p-0 ms-1" onclick="updatePrdlstDcnm(true)">↻ 수동 생성</button>
         </div>
 
-        <!-- 장기보존식품 1줄 -->
-        <div class="mb-3">
-            <label class="form-label v2-field-label">장기보존식품</label>
-            <div class="d-flex flex-wrap gap-3">
-                {% for val, lbl in preservation_choices %}
-                <div class="form-check">
-                    <input class="form-check-input grp-preservation" type="checkbox"
-                           name="preservation_type" value="{{ val }}"
-                           id="field-preservation-{{ val }}"
-                           {% if product.preservation_type == val %}checked{% endif %}>
-                    <label class="form-check-label" for="field-preservation-{{ val }}" style="font-size:13px;">{{ lbl }}</label>
+        {% comment %}
+          장기보존식품·제조방법을 보관방법과 같은 칩 모양으로. 둘을 한 줄에 둔다.
+          체크박스 자체는 그대로 두고 화면에서만 숨긴다 — :checked 로 값을 읽는
+          코드(.grp-preservation / .grp-processing)가 여러 곳에 있다.
+        {% endcomment %}
+        <div class="row g-2 mb-2">
+            <div class="col-md-5">
+                <label class="form-label v2-field-label">장기보존식품</label>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for val, lbl in preservation_choices %}
+                    <div class="v2-chip-check">
+                        <input class="form-check-input grp-preservation" type="checkbox"
+                               name="preservation_type" value="{{ val }}"
+                               id="field-preservation-{{ val }}"
+                               {% if product.preservation_type == val %}checked{% endif %}>
+                        <label for="field-preservation-{{ val }}">{{ lbl }}</label>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% empty %}
-                <div class="form-check">
-                    <input class="form-check-input grp-preservation" type="checkbox"
-                           name="preservation_type" value="frozen_heated"
-                           id="field-preservation-frozen-heated"
-                           {% if product.preservation_type == "frozen_heated" %}checked{% endif %}>
-                    <label class="form-check-label" for="field-preservation-frozen-heated" style="font-size:13px;">냉동(가열)</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input grp-preservation" type="checkbox"
-                           name="preservation_type" value="frozen_nonheated"
-                           id="field-preservation-frozen-nonheated"
-                           {% if product.preservation_type == "frozen_nonheated" %}checked{% endif %}>
-                    <label class="form-check-label" for="field-preservation-frozen-nonheated" style="font-size:13px;">냉동(비가열)</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input grp-preservation" type="checkbox"
-                           name="preservation_type" value="canned"
-                           id="field-preservation-canned"
-                           {% if product.preservation_type == "canned" %}checked{% endif %}>
-                    <label class="form-check-label" for="field-preservation-canned" style="font-size:13px;">통·병조림</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input grp-preservation" type="checkbox"
-                           name="preservation_type" value="retort"
-                           id="field-preservation-retort"
-                           {% if product.preservation_type == "retort" %}checked{% endif %}>
-                    <label class="form-check-label" for="field-preservation-retort" style="font-size:13px;">레토르트</label>
-                </div>
-                {% endfor %}
             </div>
-        </div>
 
-        <!-- 제조방법 1줄: 체크박스 + 조건 입력 인라인 -->
-        <div class="v2-field-block">
-            <label class="form-label v2-field-label">제조방법</label>
-            <div class="d-flex align-items-center gap-3 flex-wrap">
-                <div class="form-check">
-                    <input class="form-check-input grp-processing" type="checkbox"
-                           name="processing_method" value="sanitized"
-                           id="field-processing-sanitized"
-                           {% if product.processing_method == "sanitized" %}checked{% endif %}>
-                    <label class="form-check-label" for="field-processing-sanitized" style="font-size:13px;">살균</label>
+            <div class="col-md-7">
+                <label class="form-label v2-field-label">제조방법</label>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    {% for val, lbl in processing_choices %}
+                    <div class="v2-chip-check">
+                        <input class="form-check-input grp-processing" type="checkbox"
+                               name="processing_method" value="{{ val }}"
+                               id="field-processing-{{ val }}"
+                               {% if product.processing_method == val %}checked{% endif %}>
+                        <label for="field-processing-{{ val }}">{{ lbl }}</label>
+                    </div>
+                    {% endfor %}
+                    <input type="text" id="field-processing-condition" name="processing_condition"
+                           class="form-control bg-light border-0 v2-field-input"
+                           value="{{ product.processing_condition|default:'' }}"
+                           placeholder="조건 상세 입력"
+                           style="flex:1; min-width:140px;">
                 </div>
-                <div class="form-check">
-                    <input class="form-check-input grp-processing" type="checkbox"
-                           name="processing_method" value="aseptic"
-                           id="field-processing-aseptic"
-                           {% if product.processing_method == "aseptic" %}checked{% endif %}>
-                    <label class="form-check-label" for="field-processing-aseptic" style="font-size:13px;">멸균</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input grp-processing" type="checkbox"
-                           name="processing_method" value="yutang"
-                           id="field-processing-yutang"
-                           {% if product.processing_method == "yutang" %}checked{% endif %}>
-                    <label class="form-check-label" for="field-processing-yutang" style="font-size:13px;">유탕/유처리</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input grp-processing" type="checkbox"
-                           name="processing_method" value="unsanitized"
-                           id="field-processing-unsanitized"
-                           {% if product.processing_method == "unsanitized" %}checked{% endif %}>
-                    <label class="form-check-label" for="field-processing-unsanitized" style="font-size:13px;">비살균</label>
-                </div>
-                <input type="text" id="field-processing-condition" name="processing_condition"
-                       class="form-control bg-light border-0 v2-field-input"
-                       value="{{ product.processing_condition|default:'' }}"
-                       placeholder="조건 상세 입력"
-                       style="flex:1; min-width:160px;">
             </div>
         </div>
     </div>
@@ -222,25 +202,24 @@
         <div class="row g-2">
             <div class="col-12">
                 <label class="form-label v2-field-label">품목보고번호</label>
-                <textarea id="field-prdlst-report-no" name="prdlst_report_no"
+                {# 입력칸과 검증 버튼을 한 줄에 — 버튼만 아래로 밀려나 있었다 #}
+                <div class="d-flex align-items-start gap-2">
+                    <textarea id="field-prdlst-report-no" name="prdlst_report_no"
                           class="form-control bg-light border-0 v2-field-input"
                           rows="1"
                           placeholder="예) 19950000000000 (2개 이상은 줄바꿈)"
-                          style="resize:none; overflow:hidden; font-family:monospace;">{{ product.prdlst_report_no|default:'' }}</textarea>
-                <div class="d-flex gap-2 mt-1">
+                          style="resize:none; overflow:hidden; font-family:monospace; flex:1; min-width:0;">{{ product.prdlst_report_no|default:'' }}</textarea>
+                    <div class="d-flex gap-2 flex-shrink-0">
                     <button type="button" id="verifyReportNoBtn"
                             class="btn btn-outline-primary v2-btn-sm"
                             onclick="verifyReportNoInline()"
                            >번호검증</button>
                     <button type="button" id="copyProductDataBtn"
+                            class="btn btn-outline-secondary v2-btn-sm"
                             onclick="copyVerifiedDataInline()"
-                            style="display:none; white-space:nowrap; border-radius:20px; padding:6px 14px;
-                                   background:#fff; border:1.5px solid #dadce0; color:#3c4043; font-size:13px;
-                                   font-weight:500; cursor:pointer; transition:all .15s ease;
-                                   box-shadow:0 1px 2px rgba(60,64,67,.15);"
-                            onmouseover="this.style.background='#f8f9fa';this.style.borderColor='#1a73e8';this.style.color='#1a73e8';"
-                            onmouseout="this.style.background='#fff';this.style.borderColor='#dadce0';this.style.color='#3c4043';">
-                        <i class="bi bi-copy me-1"></i>복사하기</button>
+                            style="display:none;">
+                        <i class="bi bi-copy"></i>복사하기</button>
+                    </div>
                 </div>
                 <div id="verifyResultMessage" style="display:none; margin-top:6px; font-size:0.84rem;"></div>
             </div>

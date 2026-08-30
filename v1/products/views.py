@@ -929,9 +929,30 @@ def product_detail(request, product_id):
         # 필수 입력 검사가 chckd_* 를 근거로 삼으면서 "해당하지 않으면 체크를
         # 해제하세요" 라는 안내를 따를 방법이 없었다.
         'display_items': _build_display_items(label),
+        'preservation_choices': PRESERVATION_CHOICES,
+        'processing_choices': PROCESSING_CHOICES,
     }
 
     return render(request, 'products/product_detail.html', context)
+
+
+# 장기보존식품·제조방법 선택지.
+#
+# 지금까지 템플릿이 preservation_choices 로 돌리고 {% empty %} 에 같은 목록을
+# 손으로 또 적어 뒀는데, 그 변수를 넘기는 뷰가 없어서 **항상 폴백만** 그려졌다.
+# 값(value)은 저장되는 문자열이라 바꾸면 기존 데이터와 어긋난다.
+PRESERVATION_CHOICES = [
+    ('frozen_heated',    '냉동(가열)'),
+    ('frozen_nonheated', '냉동(비가열)'),
+    ('canned',           '통·병조림'),
+    ('retort',           '레토르트'),
+]
+PROCESSING_CHOICES = [
+    ('sanitized',   '살균'),
+    ('aseptic',     '멸균'),
+    ('yutang',      '유탕/유처리'),
+    ('unsanitized', '비살균'),
+]
 
 
 # 오른쪽 패널에 뿌릴 순서. 인쇄되는 순서와 대체로 맞춘다.
@@ -1186,6 +1207,8 @@ def product_create(request):
         'food_groups': food_groups,
         'countries': countries,
         'can_edit': True,
+        'preservation_choices': PRESERVATION_CHOICES,
+        'processing_choices': PROCESSING_CHOICES,
         'custom_fields_json': '[]',
     }
     return render(request, 'products/product_form.html', context)
@@ -1298,6 +1321,8 @@ def product_update(request, product_id):
         'countries': countries,
         'metadata': meta,
         'can_edit': True,
+        'preservation_choices': PRESERVATION_CHOICES,
+        'processing_choices': PROCESSING_CHOICES,
         'custom_fields_json': json.dumps(label.custom_fields or [], ensure_ascii=False),
     }
     return render(request, 'products/product_form.html', context)
