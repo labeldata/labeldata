@@ -90,7 +90,9 @@ class Command(BaseCommand):
                   env, None)
 
         self.stdout.write('  덤프 적용...')
-        opener = gzip.open if dump.suffix == '.gz' else open
+        # 확장자가 아니라 내용을 보고 판단한다. 브라우저로 받으면 .gz 이름 그대로
+        # 압축이 풀려 있는 경우가 있다 - 실제로 두 번 그랬다.
+        opener = gzip.open if self._is_gzip(dump) else open
         with opener(dump, 'rb') as fh:
             self._run(base + ['--default-character-set=utf8mb4', name], env, fh)
 
@@ -98,6 +100,11 @@ class Command(BaseCommand):
         after = len(connection.introspection.table_names())
         self.stdout.write(self.style.SUCCESS(f'  완료: 테이블 {after}개'))
         self.stdout.write('  다음: python manage.py check_migration_state')
+
+    @staticmethod
+    def _is_gzip(path):
+        with open(path, 'rb') as fh:
+            return fh.read(2) == b'\x1f\x8b'
 
     @staticmethod
     def _run(cmd, env, stdin):
