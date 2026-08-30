@@ -2149,3 +2149,114 @@ class OcrVariantComparisonTests(TestCase):
         self._rec('prdlst_nm', 'A', 'A')
         stats = accuracy_stats(group='variant')
         self.assertEqual(stats[0]['key'], '(없음)')
+
+
+class OcrBenchmarkTests(TestCase):
+    """
+    정답과 대조해 점수를 내는 규칙.
+
+    채점이 틀리면 측정 전체를 못 믿는다. 특히 "경미한 오독" 과 "통째로 지어냄"
+    을 가르지 못하면 개선이 보이지 않는다.
+    """
+
+    def _score(self, expected, actual):
+        from v1.label.services.ocr_benchmark import score_one
+        return score_one(expected, actual)
+
+    def test_띄어쓰기_차이는_같은_것으로_본다(self):
+        score, grade = self._score('냉장(0~10 ℃)에서 보관', '냉장(0~10℃)에서  보관')
+        self.assertEqual(grade, 'exact')
+
+    def test_경미한_오독과_통째로_틀린_것을_가른다(self):
+        """
+        '쉬레드치즈'를 '쉐르드치즈'로 읽은 것과 지어낸 것은 다른 실패다.
+        같은 칸에 넣으면 개선이 보이지 않는다.
+        """
+        near, close = self._score('쉬레드치즈, 양배추, 양상추', '쉐르드치즈, 양배추, 양상추')
+        far, wrong = self._score('쉬레드치즈, 양배추, 양상추', '유지, 함박스테이크, 살라미')
+        self.assertEqual(close, 'close')
+        self.assertEqual(wrong, 'wrong')
+        # 점수 차이가 실제로 크게 벌어져야 등급이 의미가 있다
+        self.assertGreater(near - far, 40)
+
+    def test_정답이_있는데_못_읽으면_0점(self):
+        score, grade = self._score('별도표기일까지', '')
+        self.assertEqual(score, 0.0)
+        self.assertEqual(grade, 'miss')
+
+    def test_정답이_비면_채점하지_않는다(self):
+        """그 라벨에 없는 항목까지 0점 처리하면 점수가 무의미해진다."""
+        score, grade = self._score('', '아무 값')
+        self.assertIsNone(score)
+        self.assertEqual(grade, 'skip')
+
+    def test_전각_괄호를_맞춰_본다(self):
+        _, grade = self._score('PET（용기）', 'PET(용기)')
+        self.assertEqual(grade, 'exact')
+
+    def test_판독_결과를_정답과_묶어_채점한다(self):
+        from v1.label.services.ocr_benchmark import compare
+
+        expected = {'prdlst_nm': '더블치즈 샐러드',
+                    'pog_daycnt': '별도표기일까지',
+                    'cautions': ''}
+        ocr = {'prdlst_nm': {'value': '더블치즈 샐러드', 'confidence': 'high'},
+               'pog_daycnt': {'value': None, 'confidence': 'none'},
+               'cautions': {'value': '아무거나', 'confidence': 'low'}}
+
+        result = compare(expected, ocr)
+        self.assertEqual(result['counted'], 2)          # cautions 는 제외
+        self.assertEqual(result['fields']['prdlst_nm']['grade'], 'exact')
+        self.assertEqual(result['fields']['pog_daycnt']['grade'], 'miss')
+
+    def test_여러_번_돌린_결과의_편차를_낸다(self):
+        """
+        평균만 보면 안 된다. 90점과 20점이 번갈아 나오는 항목과 늘 55점인
+        항목은 전혀 다른 문제다.
+        """
+        from v1.label.services.ocr_benchmark import summarize
+
+        runs = [
+            {'fields': {'rawmtrl_nm': {'score': 90.0}, 'prdlst_nm': {'score': 55.0}}},
+            {'fields': {'rawmtrl_nm': {'score': 20.0}, 'prdlst_nm': {'score': 55.0}}},
+        ]
+        rows = {r['field']: r for r in summarize(runs)}
+        self.assertEqual(rows['rawmtrl_nm']['spread'], 70.0)
+        self.assertEqual(rows['prdlst_nm']['spread'], 0.0)
+        self.assertEqual(rows['rawmtrl_nm']['mean'], 55.0)
+
+    def test_사진과_정답_짝을_모은다(self):
+        import json as _json
+        import tempfile
+        from pathlib import Path
+
+        from PIL import Image
+        from v1.label.services.ocr_benchmark import load_cases
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            Image.new('RGB', (40, 40), 'white').save(root / 'a.jpg')
+            (root / 'a.json').write_text(
+                _json.dumps({'prdlst_nm': '가나다', 'crop': [1, 2, 3, 4]}),
+                encoding='utf-8')
+            # 짝이 없는 정답은 건너뛴다
+            (root / 'b.json').write_text('{}', encoding='utf-8')
+
+            cases = load_cases(root)
+            self.assertEqual(len(cases), 1)
+            self.assertEqual(cases[0]['name'], 'a')
+            self.assertEqual(cases[0]['crop'], [1, 2, 3, 4])
+            self.assertNotIn('crop', cases[0]['expected'])
+
+    def test_영역을_잘라_읽을_수_있다(self):
+        import tempfile
+        from pathlib import Path
+
+        from PIL import Image
+        from v1.label.services.ocr_benchmark import crop_image
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'x.png'
+            Image.new('RGB', (200, 100), 'white').save(path)
+            buf = crop_image(path, [10, 10, 50, 40])
+            self.assertEqual(Image.open(buf).size, (50, 40))
