@@ -60,10 +60,21 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - cholesterols: 콜레스테롤. 예: "25 mg"
 - proteins: 단백질. 예: "13 g"
 
+**가장 중요한 규칙 — 지어내지 마시오.**
+- 글자가 실제로 읽히지 않으면 절대 값을 만들어 내지 마시오.
+  흐리거나 너무 작아 읽을 수 없으면 {"value": null, "confidence": "none"} 으로 두시오.
+- 식품 표시사항에 흔히 나오는 문구를 "그럴듯하게" 채우는 것은 **틀린 답**이다.
+  이 결과는 법적 표시물에 그대로 들어간다. 빈 값이 잘못된 값보다 낫다.
+- 다른 제품에서 본 원재료·주의사항을 옮겨 적지 마시오. 이 사진에 적힌 것만 쓰시오.
+- 한 항목의 값에 옆 칸의 항목명이나 내용을 섞지 마시오.
+  예: 소비기한 칸에 "별도표기일까지" 만 있으면 옆의 "주의사항" 을 붙이지 마시오.
+- 여러 장의 이미지가 주어지면 같은 사진을 확대한 조각들이다. 겹치는 부분은
+  한 번만 세고, 조각에서 더 또렷하게 읽힌 쪽을 택하시오.
+
 응답 규칙:
 - 텍스트가 명확하게 읽히면: {"value": "실제추출값", "confidence": "high"}
-- 불명확하거나 여러 해석이 가능하면: {"value": null, "confidence": "low", "candidates": ["가능한값1", "가능한값2", "가능한값3"]}
-- 이미지에 해당 항목이 없으면: {"value": null, "confidence": "none"}
+- 글자는 보이는데 확신이 없으면: {"value": null, "confidence": "low", "candidates": ["가능한값1", "가능한값2"]}
+- 읽을 수 없거나 이미지에 없으면: {"value": null, "confidence": "none"}
 
 반드시 아래 키를 모두 포함한 JSON으로만 응답하세요:
 {
@@ -134,6 +145,63 @@ def preprocess_image(image_file, max_size=2000):
     return base64.b64encode(buffer.read()).decode('utf-8')
 
 
+# 큰 사진은 조각으로 나눠 보낸다.
+#
+# detail:high 는 이미지를 2048 박스에 맞춘 뒤 **짧은 변을 768px 로 맞춘다.**
+# 그래서 우리가 아무리 큰 사진을 보내도 모델이 보는 해상도는 거기서 멈춘다.
+# 2585x1755 짜리 작업지시서를 통째로 보내면 모델은 1131x768 로 본다 - 그 안의
+# 원형 라벨은 폭 600px 남짓이고 본문 한 줄이 5px 다. 읽을 수 없다.
+# 실제로 원재료명과 주의사항을 통째로 지어내는 일이 있었다.
+#
+# 조각을 따로 보내면 조각마다 768px 이 다시 배정된다. 2x2 로 나누면 유효
+# 해상도가 축마다 두 배가 된다. 겹치게 잘라 경계에 걸친 줄이 잘리지 않게 한다.
+TILE_MIN_SIDE = 1400     # 이보다 작으면 나눌 이유가 없다
+TILE_OVERLAP = 0.12      # 조각끼리 겹치는 비율
+
+
+def build_image_payload(image_file, max_size=2000):
+    """
+    보낼 이미지 목록을 만든다. [전체, 조각1, 조각2, ...]
+
+    전체 사진을 먼저 넣는다 - 어느 칸이 어느 항목인지는 전체 배치를 봐야 안다.
+    조각은 글자를 읽기 위한 것이다.
+    """
+    img = Image.open(image_file)
+    try:
+        img = ImageOps.exif_transpose(img)
+    except Exception:
+        pass
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+
+    def encode(im):
+        buf = io.BytesIO()
+        im.save(buf, format='JPEG', quality=92)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode('utf-8')
+
+    full = img.copy()
+    full.thumbnail((max_size, max_size), Image.LANCZOS)
+    images = [encode(full)]
+
+    w, h = img.size
+    if max(w, h) < TILE_MIN_SIDE:
+        return images
+
+    ox, oy = int(w * TILE_OVERLAP), int(h * TILE_OVERLAP)
+    halves = [
+        (0, 0, w // 2 + ox, h // 2 + oy),
+        (w // 2 - ox, 0, w, h // 2 + oy),
+        (0, h // 2 - oy, w // 2 + ox, h),
+        (w // 2 - ox, h // 2 - oy, w, h),
+    ]
+    for box in halves:
+        tile = img.crop(box)
+        tile.thumbnail((max_size, max_size), Image.LANCZOS)
+        images.append(encode(tile))
+    return images
+
+
 def extract_label_from_image(image_file):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
@@ -150,28 +218,31 @@ def extract_label_from_image(image_file):
     """
     try:
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        image_data = preprocess_image(image_file)
+        images = build_image_payload(image_file)
+
+        content = [
+            {"type": "image_url",
+             "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}}
+            for b64 in images
+        ]
+        content.append({
+            "type": "text",
+            "text": (
+                f"이 식품 표시사항에서 정보를 추출해주세요. "
+                f"이미지 {len(images)}장은 같은 사진입니다 - 첫 장은 전체 배치이고 "
+                f"나머지는 글자를 읽기 위해 확대한 조각입니다. "
+                f"읽을 수 없는 항목은 지어내지 말고 none 으로 두세요."
+                if len(images) > 1 else
+                "이 식품 표시사항 이미지에서 정보를 추출해주세요. "
+                "읽을 수 없는 항목은 지어내지 말고 none 으로 두세요."
+            ),
+        })
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_data}",
-                                "detail": "high"
-                            }
-                        },
-                        {
-                            "type": "text",
-                            "text": "이 식품 표시사항 이미지에서 정보를 추출해주세요."
-                        }
-                    ]
-                }
+                {"role": "user", "content": content},
             ],
             max_tokens=4000,
             response_format={"type": "json_object"}

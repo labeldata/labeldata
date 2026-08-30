@@ -1924,3 +1924,67 @@ class OcrApplyExtrasTests(TestCase):
         label.refresh_from_db()
         # PP 마크인데 포장재질에 PP 가 없다 -> 검증이 잡아야 한다
         self.assertTrue(check_recycling_mark(label))
+
+
+class OcrImagePayloadTests(TestCase):
+    """
+    큰 사진은 조각으로 나눠 보낸다.
+
+    detail:high 는 이미지를 2048 박스에 맞춘 뒤 짧은 변을 768px 로 맞춘다.
+    아무리 큰 사진을 보내도 모델이 보는 해상도는 거기서 멈춘다. 작업지시서처럼
+    라벨이 화면의 일부인 사진은 본문 한 줄이 5px 가 되어 읽히지 않고, 그러면
+    모델이 그럴듯한 값을 지어낸다. 실제로 원재료명과 주의사항을 통째로
+    다른 제품 것으로 채운 일이 있었다.
+    """
+
+    def _image(self, width, height):
+        import io as _io
+        from PIL import Image
+
+        buf = _io.BytesIO()
+        Image.new('RGB', (width, height), 'white').save(buf, format='PNG')
+        buf.seek(0)
+        return buf
+
+    def test_큰_사진은_전체와_조각을_함께_보낸다(self):
+        from v1.label.services.ocr_service import build_image_payload
+
+        images = build_image_payload(self._image(2585, 1755))
+        self.assertEqual(len(images), 5, '전체 1장 + 2x2 조각 4장')
+
+    def test_작은_사진은_나누지_않는다(self):
+        from v1.label.services.ocr_service import build_image_payload
+
+        self.assertEqual(len(build_image_payload(self._image(900, 600))), 1)
+
+    def test_조각이_겹친다(self):
+        """경계에 걸친 줄이 양쪽에서 잘리면 안 된다."""
+        from v1.label.services import ocr_service
+
+        self.assertGreater(ocr_service.TILE_OVERLAP, 0)
+
+    def test_투명_이미지도_처리한다(self):
+        """PNG 는 RGBA 로 온다. 변환 없이 JPEG 로 저장하면 죽는다."""
+        import io as _io
+        from PIL import Image
+        from v1.label.services.ocr_service import build_image_payload
+
+        buf = _io.BytesIO()
+        Image.new('RGBA', (1600, 1200), (255, 255, 255, 0)).save(buf, format='PNG')
+        buf.seek(0)
+        self.assertEqual(len(build_image_payload(buf)), 5)
+
+    def test_지어내지_말라는_지시가_있다(self):
+        """
+        읽을 수 없을 때 값을 만들어 내면 법적 표시물에 그대로 들어간다.
+        빈 값이 잘못된 값보다 낫다.
+        """
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('지어내지', SYSTEM_PROMPT)
+        self.assertIn('빈 값이 잘못된 값보다 낫다', SYSTEM_PROMPT)
+
+    def test_모델을_설정으로_바꿀_수_있다(self):
+        from django.conf import settings
+
+        self.assertTrue(hasattr(settings, 'OCR_MODEL'))

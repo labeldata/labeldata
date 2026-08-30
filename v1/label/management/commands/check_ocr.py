@@ -37,6 +37,9 @@ class Command(BaseCommand):
             ok = False
             self.stdout.write(self.style.ERROR('  [1] OPENAI_API_KEY 가 비어 있다'))
 
+        model = getattr(settings, 'OCR_MODEL', 'gpt-4o-mini')
+        self.stdout.write(f'  [1b] 판독 모델: {model}')
+
         # 2. 라이브러리
         try:
             from PIL import Image  # noqa: F401
@@ -86,15 +89,37 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(
                 '  10MB 를 넘는다. 화면에서는 올리기 전에 막힌다.'))
 
-        # 5. 전처리
+        # 5. 전처리 - 몇 장으로 나눠 보내는지, 모델이 실제로 보는 크기가 얼마인지
         try:
-            from v1.label.services.ocr_service import preprocess_image
+            from PIL import Image
+            from v1.label.services.ocr_service import build_image_payload
+
             with open(path, 'rb') as fh:
-                started = time.time()
-                b64 = preprocess_image(io.BytesIO(fh.read()))
+                data = fh.read()
+            w, h = Image.open(io.BytesIO(data)).size
+            started = time.time()
+            images = build_image_payload(io.BytesIO(data))
             self.stdout.write(self.style.SUCCESS(
-                f'  [5] 전처리 OK (base64 {len(b64) / 1024:.0f}KB, '
-                f'{time.time() - started:.1f}초)'))
+                f'  [5] 전처리 OK - 원본 {w}x{h}, 보낼 이미지 {len(images)}장 '
+                f'({time.time() - started:.1f}초)'))
+
+            # detail:high 는 2048 박스에 맞춘 뒤 짧은 변을 768 로 맞춘다.
+            # 조각을 나눠 보내는 이유가 여기 있다 - 조각마다 768 이 다시 배정된다.
+            def seen(width, height):
+                k = min(2048 / max(width, height), 1)
+                width, height = width * k, height * k
+                k = 768 / min(width, height)
+                return int(width * k), int(height * k)
+
+            sw, sh = seen(w, h)
+            self.stdout.write(f'      전체를 보낼 때 모델이 보는 크기: {sw}x{sh}')
+            if len(images) > 1:
+                # 조각도 같은 픽셀 크기로 렌더된다(짧은 변 768 규칙). 이득은
+                # 크기가 아니라 배율이다 - 같은 글자가 그만큼 크게 보인다.
+                self.stdout.write(
+                    f'      조각은 절반 영역을 같은 크기로 채우므로 글자가 약 2배로 보인다')
+            else:
+                self.stdout.write('      작은 사진이라 나누지 않았다')
         except Exception as exc:
             self.stdout.write(self.style.ERROR(f'  [5] 전처리 실패: {exc}'))
             raise CommandError('전처리에서 끊겼다.')

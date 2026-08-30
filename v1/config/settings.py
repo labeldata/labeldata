@@ -215,6 +215,14 @@ SITE_URL = config('SITE_URL', default='https://www.ezlabeling.com')
 # OpenAI API Key (gpt-4o-mini 사용)
 OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 
+# 표시사항 사진 판독에 쓸 모델.
+#
+# 기본은 gpt-4o-mini 다. 작은 글씨가 빽빽한 라벨에서 정확도가 아쉬우면
+# .env 에 OCR_MODEL=gpt-4o 를 넣어 올릴 수 있다 - 한글 소자 판독이 눈에 띄게
+# 낫지만 호출 비용이 10배가 넘는다. 다른 AI 기능(검증·문서분석)은 이 값을
+# 쓰지 않는다. 판독만 바꾼다.
+OCR_MODEL = config('OCR_MODEL', default='gpt-4o-mini')
+
 # 식품안전나라 OpenAPI Key (https://openapi.foodsafetykorea.go.kr)
 FOODSAFETY_API_KEY = config('FOODSAFETY_API_KEY', default='')
 
