@@ -251,12 +251,45 @@ class Command(BaseCommand):
                 f'    {g["n"]:3}개  {(g["prdlst_nm"] or "(이름 없음)")[:30]:<32}'
                 f' {g["prdlst_dcnm"] or "":<14} {g["prdlst_report_no"] or ""}')
 
-        if wasted / total >= 0.1:
-            self.stdout.write(self.style.WARNING(
-                '  여분이 10%를 넘는다 - get_or_create 로 바꿀 값이 있다.'))
-        else:
-            self.stdout.write(
-                '  여분이 적다. 트랜잭션·검색 상한을 먼저 하고 이건 뒤로 미뤄도 된다.')
+        self._split_mergeable(qs, dup_groups, key)
+
+    # 키 말고 실제 내용이 담기는 칸들. 이게 서로 다르면 합칠 때 정보가 사라진다.
+    _CONTENT_FIELDS = ('ingredient_display_name', 'bssh_nm', 'allergens', 'gmo',
+                       'food_category', 'pog_daycnt', 'frmlc_mtrqlt', 'rawmtrl_nm')
+
+    def _split_mergeable(self, qs, dup_groups, key):
+        """
+        합쳐도 되는 그룹과 사람이 봐야 하는 그룹을 가른다.
+
+        같은 "피자치즈" 라도 알레르기·표시명이 다르게 채워져 있으면 하나로 합칠 때
+        정보가 사라진다. 내용이 완전히 같은 그룹만 "안전" 이라고 말한다.
+        """
+        safe, needs_review = [], []
+        for g in dup_groups:
+            rows = list(qs.filter(**{k: g[k] for k in key})
+                          .values('my_ingredient_id', *self._CONTENT_FIELDS))
+            contents = {tuple((r[f] or '').strip() for f in self._CONTENT_FIELDS)
+                        for r in rows}
+            (safe if len(contents) == 1 else needs_review).append((g, rows, contents))
+
+        self.stdout.write('')
+        self.stdout.write(f'  내용까지 같아 합쳐도 안전한 그룹  : {len(safe)}개'
+                          f' (여분 {sum(g["n"] - 1 for g, _, _ in safe)}건)')
+        self.stdout.write(f'  내용이 달라 사람이 봐야 하는 그룹: {len(needs_review)}개'
+                          f' (여분 {sum(g["n"] - 1 for g, _, _ in needs_review)}건)')
+
+        if needs_review:
+            self.stdout.write('    무엇이 다른지:')
+            for g, rows, contents in needs_review[:8]:
+                differing = [f for i, f in enumerate(self._CONTENT_FIELDS)
+                             if len({c[i] for c in contents}) > 1]
+                self.stdout.write(
+                    f'      {(g["prdlst_nm"] or "(이름 없음)")[:26]:<28}'
+                    f' {g["n"]}개, 다른 칸: {", ".join(differing)}')
+
+        self.stdout.write(
+            '  자동 병합은 하지 않는다. 앞으로 새로 생기지 않게 막는 것까지만 했다\n'
+            '  (get_or_create). 위 목록은 정리할지 판단하는 자료다.')
 
         # 언제 손댔는지 — MyIngredient 에는 생성일시가 없고 update_datetime 만 있다
         from datetime import timedelta

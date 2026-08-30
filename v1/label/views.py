@@ -1595,6 +1595,34 @@ def my_ingredient_detail(request, ingredient_id=None):
     else:
         return render(request, _get_template(request, 'label/my_ingredient_detail.html'), context)
 
+
+def _get_or_create_my_ingredient(user, *, prdlst_nm, prdlst_report_no, prdlst_dcnm,
+                                 **defaults):
+    """
+    같은 원료를 두 번 만들지 않는다.
+
+    지금까지 라벨마다 새 MyIngredient 를 만들어서, 운영 데이터에 같은 원료가
+    13개씩 쌓여 있었다(548건 중 여분 108건, 19.7%). 원료 검색 결과가 같은 이름으로
+    도배되고, 하나를 고쳐도 다른 라벨은 옛 값을 본다.
+
+    키는 (사용자, 원료명, 품목보고번호, 식품유형) 이다 — 이름만으로는 제조사가
+    다른 같은 이름을 하나로 묶어 버린다.
+
+    **이미 있으면 그대로 쓴다. 넘어온 값으로 덮어쓰지 않는다.**
+    MyIngredient 는 여러 라벨이 함께 쓰는 레코드라, 한 라벨에서 저장했다고 다른
+    라벨이 보던 값이 바뀌면 안 된다. 원료 자체를 고칠 곳은 "내 원료 상세" 다.
+
+    Returns: (ingredient, created)
+    """
+    return MyIngredient.objects.get_or_create(
+        user_id=user,
+        prdlst_nm=prdlst_nm or '',
+        prdlst_report_no=prdlst_report_no or '',
+        prdlst_dcnm=prdlst_dcnm or '',
+        delete_YN='N',
+        defaults=defaults,
+    )
+
 @login_required
 @csrf_exempt
 @transaction.atomic
@@ -1649,8 +1677,8 @@ def save_ingredients_to_label(request, label_id):
             # 원재료 ID가 없거나 빈 문자열인 경우 새 원재료 생성
             if not my_ingredient_id:
                 # 새 원재료 생성
-                ingredient = MyIngredient.objects.create(
-                    user_id=request.user,
+                ingredient, _ = _get_or_create_my_ingredient(
+                    request.user,
                     prdlst_nm=ingredient_data.get('ingredient_name', ''),
                     prdlst_report_no=ingredient_data.get('prdlst_report_no', ''),
                     prdlst_dcnm=ingredient_data.get('food_type', ''),
@@ -1658,8 +1686,7 @@ def save_ingredients_to_label(request, label_id):
                     bssh_nm=ingredient_data.get('manufacturer', ''),
                     allergens=ingredient_data.get('allergen', ''),
                     gmo=ingredient_data.get('gmo', ''),
-                    summary_type_flag=ingredient_data.get('summary_type_flag', 'Y'),  # summary_type_flag 추가
-                    delete_YN='N'
+                    summary_type_flag=ingredient_data.get('summary_type_flag', 'Y'),
                 )
             else:
                 # 기존 원재료 사용
@@ -1670,8 +1697,8 @@ def save_ingredients_to_label(request, label_id):
                     ingredient.save()
                 except MyIngredient.DoesNotExist:
                     # 원재료가 존재하지 않는 경우 새로 생성
-                    ingredient = MyIngredient.objects.create(
-                        user_id=request.user,
+                    ingredient, _ = _get_or_create_my_ingredient(
+                        request.user,
                         prdlst_nm=ingredient_data.get('ingredient_name', ''),
                         prdlst_report_no=ingredient_data.get('prdlst_report_no', ''),
                         prdlst_dcnm=ingredient_data.get('food_type', ''),
@@ -1679,8 +1706,7 @@ def save_ingredients_to_label(request, label_id):
                         bssh_nm=ingredient_data.get('manufacturer', ''),
                         allergens=ingredient_data.get('allergen', ''),
                         gmo=ingredient_data.get('gmo', ''),
-                        summary_type_flag=ingredient_data.get('summary_type_flag', 'Y'),  # summary_type_flag 추가
-                        delete_YN='N'
+                        summary_type_flag=ingredient_data.get('summary_type_flag', 'Y'),
                     )
             
             # 원재료와 라벨 사이의 관계 생성
@@ -1927,25 +1953,26 @@ def quick_register_ingredient(request):
         if not display_name:
             display_name = ingredient_name
         
-        # 새 원료 생성
-        new_ingredient = MyIngredient.objects.create(
-            user_id=request.user,
+        # 같은 원료가 이미 있으면 그것을 쓴다 (_get_or_create_my_ingredient 참고)
+        new_ingredient, created = _get_or_create_my_ingredient(
+            request.user,
             prdlst_nm=ingredient_name,
-            food_category=food_category,
-            prdlst_dcnm=food_type,
-            bssh_nm=manufacturer,
             prdlst_report_no=report_no,
+            prdlst_dcnm=food_type,
+            food_category=food_category,
+            bssh_nm=manufacturer,
             ingredient_display_name=display_name,
             summary_type_flag='Y',  # 기본값: 식품유형 요약
             allergens=allergens,
             gmo=gmo,
-            delete_YN='N'
         )
-        
+
         return JsonResponse({
             'success': True,
             'my_ingredient_id': new_ingredient.my_ingredient_id,
-            'message': '원료가 성공적으로 등록되었습니다.'
+            'created': created,
+            'message': ('원료가 성공적으로 등록되었습니다.' if created
+                        else '같은 원료가 이미 등록돼 있어 그 원료를 사용합니다.'),
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)

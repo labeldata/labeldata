@@ -1401,3 +1401,138 @@ class PrintedOrderCheckTests(TestCase):
         out = self._run()
         self.assertNotIn('규정에 어긋나는', out)
         self.assertIn('건너뛴', out)
+
+
+class IngredientDedupeTests(TestCase):
+    """
+    같은 원료를 두 번 만들지 않는다.
+
+    라벨마다 새 MyIngredient 를 만들어서 운영 데이터에 같은 원료가 13개씩 쌓여
+    있었다(548건 중 여분 108건, 19.7%). 원료 검색이 같은 이름으로 도배되고,
+    하나를 고쳐도 다른 라벨은 옛 값을 본다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='dedupe', password='x')
+        self.client.force_login(self.user)
+
+    def _register(self, **body):
+        payload = {'ingredient_name': '피자치즈', 'food_category': 'processed',
+                   'food_type': '치즈'}
+        payload.update(body)
+        return self.client.post('/label/quick-register-ingredient/',
+                                data=json.dumps(payload),
+                                content_type='application/json').json()
+
+    def test_같은_원료를_두_번_등록해도_하나만_남는다(self):
+        from v1.label.models import MyIngredient
+
+        first = self._register()
+        second = self._register()
+
+        self.assertTrue(first['created'])
+        self.assertFalse(second['created'])
+        self.assertEqual(first['my_ingredient_id'], second['my_ingredient_id'])
+        self.assertEqual(MyIngredient.objects.filter(prdlst_nm='피자치즈').count(), 1)
+
+    def test_품목보고번호가_다르면_다른_원료다(self):
+        """이름만으로 묶으면 제조사가 다른 같은 이름을 하나로 만들어 버린다."""
+        from v1.label.models import MyIngredient
+
+        self._register(report_no='111')
+        self._register(report_no='222')
+        self.assertEqual(MyIngredient.objects.filter(prdlst_nm='피자치즈').count(), 2)
+
+    def test_식품유형이_다르면_다른_원료다(self):
+        from v1.label.models import MyIngredient
+
+        self._register(food_type='치즈')
+        self._register(food_type='가공유류')
+        self.assertEqual(MyIngredient.objects.filter(prdlst_nm='피자치즈').count(), 2)
+
+    def test_사용자가_다르면_섞이지_않는다(self):
+        from v1.label.models import MyIngredient
+
+        self._register()
+        other = User.objects.create_user(username='other', password='x')
+        self.client.force_login(other)
+        self._register()
+
+        self.assertEqual(MyIngredient.objects.filter(prdlst_nm='피자치즈').count(), 2)
+
+    def test_이미_있으면_넘어온_값으로_덮어쓰지_않는다(self):
+        """
+        MyIngredient 는 여러 라벨이 함께 쓰는 레코드다. 한 라벨에서 저장했다고
+        다른 라벨이 보던 값이 바뀌면 안 된다.
+        """
+        from v1.label.models import MyIngredient
+
+        self._register(allergens='우유', display_name='피자치즈(자연치즈)')
+        self._register(allergens='', display_name='다른 표시명')
+
+        ing = MyIngredient.objects.get(prdlst_nm='피자치즈')
+        self.assertEqual(ing.allergens, '우유')
+        self.assertEqual(ing.ingredient_display_name, '피자치즈(자연치즈)')
+
+    def test_원재료_표_저장도_같은_원료를_다시_만들지_않는다(self):
+        from v1.label.models import MyIngredient
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='표')
+        url = f'/label/save-ingredients-to-label/{label.my_label_id}/'
+        body = json.dumps({'ingredients': [
+            {'ingredient_name': '펭귄도우', 'food_type': '빵류'},
+        ]})
+        for _ in range(3):
+            self.client.post(url, data=body, content_type='application/json')
+
+        self.assertEqual(MyIngredient.objects.filter(prdlst_nm='펭귄도우').count(), 1)
+
+
+class DuplicateSplitTests(TestCase):
+    """
+    합쳐도 되는 그룹과 사람이 봐야 하는 그룹을 가른다.
+
+    같은 "피자치즈" 라도 알레르기·표시명이 다르게 채워져 있으면 하나로 합칠 때
+    정보가 사라진다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='split', password='x')
+
+    def _make(self, name, **fields):
+        from v1.label.models import MyIngredient
+        return MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm=name, prdlst_report_no='', prdlst_dcnm='',
+            delete_YN='N', **fields)
+
+    def _run(self):
+        from io import StringIO
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('check_data_health', only='duplicate', stdout=out)
+        return out.getvalue()
+
+    def test_내용이_같으면_안전하다고_말한다(self):
+        self._make('피자치즈', allergens='우유')
+        self._make('피자치즈', allergens='우유')
+        out = self._run()
+        self.assertIn('합쳐도 안전한 그룹  : 1개', out)
+        self.assertIn('사람이 봐야 하는 그룹: 0개', out)
+
+    def test_내용이_다르면_무엇이_다른지_알려준다(self):
+        self._make('피자치즈', allergens='우유')
+        self._make('피자치즈', allergens='')
+        out = self._run()
+        self.assertIn('합쳐도 안전한 그룹  : 0개', out)
+        self.assertIn('사람이 봐야 하는 그룹: 1개', out)
+        self.assertIn('allergens', out)
+
+    def test_자동_병합은_하지_않는다고_밝힌다(self):
+        from v1.label.models import MyIngredient
+
+        self._make('피자치즈')
+        self._make('피자치즈')
+        out = self._run()
+        self.assertIn('자동 병합은 하지 않는다', out)
+        self.assertEqual(MyIngredient.objects.filter(prdlst_nm='피자치즈').count(), 2)
