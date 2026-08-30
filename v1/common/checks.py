@@ -125,3 +125,37 @@ def check_product_button_sizing(app_configs, **kwargs):
                     id='products.W001',
                 ))
     return warnings
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CSS 캐시 무효화 문자열
+#
+# ?v=20260222 처럼 손으로 박아 둔 버전은 캐시를 갈아주는 것처럼 보이지만, CSS 를
+# 고쳐도 URL 이 그대로라 브라우저는 계속 옛 파일을 쓴다. 실제로 products_common.css
+# 를 고쳐 배포했는데 화면이 그대로였고, collectstatic 도 check 도 통과해서
+# 원인을 찾는 데 시간이 걸렸다.
+#
+# STATIC_BUILD_DATE(서버 재시작 시각)를 쓰면 배포할 때마다 자동으로 갈린다.
+
+_FIXED_CSS_VERSION = re.compile(r"\{%\s*static\s+'([^']+\.css)'\s*%\}\?v=(?!\{\{)([^\"'\s]+)")
+
+
+@register()
+def check_static_cache_busting(app_configs, **kwargs):
+    """CSS 링크에 고정 버전 문자열을 쓴 곳을 찾는다."""
+    warnings = []
+    for root in _template_dirs():
+        for path in sorted(root.rglob('*.html')):
+            try:
+                text = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                continue
+            for m in _FIXED_CSS_VERSION.finditer(text):
+                line = text.count('\n', 0, m.start()) + 1
+                warnings.append(Warning(
+                    f'{path.name}:{line} {m.group(1)} 의 캐시 버전이 고정값(?v={m.group(2)})입니다.',
+                    hint='?v={{ STATIC_BUILD_DATE }} 로 바꾸세요. 고정값은 CSS 를 고쳐도 갈리지 않습니다.',
+                    obj=str(path),
+                    id='templates.W001',
+                ))
+    return warnings

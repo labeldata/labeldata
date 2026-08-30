@@ -12,7 +12,7 @@
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="{% static 'img/favicon.ico' %}">
   <!-- Label Preview CSS -->
-  <link href="{% static 'css/label_preview.css' %}?v=20.0" rel="stylesheet">
+  <link href="{% static 'css/label_preview.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
   <!-- 라벨 상수 로드 -->
   <script src="{% static 'js/label/constants.js' %}"></script>
 </head>

@@ -4,7 +4,7 @@
 {% block title %}{{ product.my_label_name|default:product.prdlst_nm }} - 워크스페이스{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/products_detail.css' %}">
+<link rel="stylesheet" href="{% static 'css/products_detail.css' %}?v={{ STATIC_BUILD_DATE }}">
 {% comment %} 구 인라인 스타일 제거됨 → products_detail.css 로 이동 {% endcomment %}
 {% endblock %}
 

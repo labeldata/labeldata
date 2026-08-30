@@ -22,8 +22,13 @@
     {% bootstrap_css %}
     <!-- 공유 디자인 토큰 (가장 먼저 로드) -->
     <link rel="stylesheet" href="{% static 'css/variables.css' %}?v={{ STATIC_BUILD_DATE }}">
-    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=20250413">
-    <link rel="stylesheet" href="{% static 'css/products_common.css' %}?v=20260222">
+    {% comment %}
+      버전 문자열을 손으로 박아 두면 CSS 를 고쳐도 브라우저가 캐시를 계속 쓴다.
+      실제로 products_common.css 를 고치고 배포했는데 화면이 그대로였다.
+      STATIC_BUILD_DATE 는 서버 재시작마다 바뀌므로 배포하면 자동으로 갈린다.
+    {% endcomment %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v={{ STATIC_BUILD_DATE }}">
+    <link rel="stylesheet" href="{% static 'css/products_common.css' %}?v={{ STATIC_BUILD_DATE }}">
     {% block extra_head %}{% endblock %}
     {% block extra_css %}{% endblock %}
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
