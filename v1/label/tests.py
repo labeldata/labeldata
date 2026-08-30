@@ -1184,7 +1184,7 @@ class DataHealthCommandTests(TestCase):
             LabelIngredientRelation.objects.create(
                 label=label, ingredient=ing, relation_sequence=seq, ingredient_ratio=ratio)
 
-        self.assertIn('전부 배합비 내림차순', self._run(only='order'))
+        self.assertIn('입력 순서는 전부 내림차순', self._run(only='order'))
 
     def test_배합비를_모르는_행끼리는_따지지_않는다(self):
         """
@@ -1343,3 +1343,61 @@ class IngredientSearchLimitTests(TestCase):
         """정렬이 없으면 같은 검색을 두 번 해도 순서가 달라질 수 있다."""
         names = [i['prdlst_nm'] for i in self._search()['ingredients']]
         self.assertEqual(names, sorted(names))
+
+
+class PrintedOrderCheckTests(TestCase):
+    """
+    인쇄되는 문구의 순서 점검.
+
+    입력 순서는 표시 문구를 만드는 쪽이 정렬하므로 문제가 아니다. 정작 규정을
+    어길 수 있는 건 손으로 고친 최종 문구다 — 그건 아무도 다시 정렬해 주지 않는다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='printed', password='x')
+
+    def _label(self, text, pairs):
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='문구',
+                                       rawmtrl_nm_display=text)
+        for seq, (name, ratio) in enumerate(pairs, start=1):
+            ing = MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm=name, delete_YN='N')
+            LabelIngredientRelation.objects.create(
+                label=label, ingredient=ing, relation_sequence=seq,
+                ingredient_ratio=ratio)
+        return label
+
+    def _run(self):
+        from io import StringIO
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('check_data_health', only='order', stdout=out)
+        return out.getvalue()
+
+    def test_문구가_역순이면_인쇄물_문제로_잡는다(self):
+        """입력 순서와 달리 이건 실제로 규정 위반이다."""
+        self._label('설탕, 밀가루', [('밀가루', 30), ('설탕', 10)])
+        out = self._run()
+        self.assertIn('규정에 어긋나는 라벨 1건', out)
+        self.assertIn('"설탕"(10)가 "밀가루"(30)보다 앞', out)
+
+    def test_문구가_내림차순이면_통과라고_말한다(self):
+        self._label('밀가루, 설탕', [('밀가루', 30), ('설탕', 10)])
+        self.assertIn('인쇄되는 문구는 전부 배합비 내림차순', self._run())
+
+    def test_입력_순서가_뒤집혀도_문구가_맞으면_넘어간다(self):
+        """생성기가 정렬해 주므로 입력 순서는 인쇄물과 무관하다."""
+        self._label('밀가루, 설탕', [('설탕', 10), ('밀가루', 30)])
+        out = self._run()
+        self.assertIn('입력 순서가 내림차순이 아닌 라벨 1건', out)
+        self.assertIn('인쇄되는 문구는 전부 배합비 내림차순', out)
+
+    def test_문구에서_이름을_못_찾으면_위반이라고_하지_않는다(self):
+        """표시명이 원료명과 다르게 적혀 있으면 못 찾는다. 모르는 것과 위반은 다르다."""
+        self._label('밀 가공품, 정제당', [('밀가루', 30), ('설탕', 10)])
+        out = self._run()
+        self.assertNotIn('규정에 어긋나는', out)
+        self.assertIn('건너뛴', out)

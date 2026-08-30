@@ -142,20 +142,75 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(f'  배합비로 순서를 따질 수 있는 라벨 {checked}건')
-        if not bad:
-            self.stdout.write(self.style.SUCCESS('  전부 배합비 내림차순입니다.'))
-            return
-
-        self.stdout.write(self.style.WARNING(f'  내림차순이 아닌 라벨 {len(bad)}건:'))
+        self.stdout.write(f'  입력 순서가 내림차순이 아닌 라벨 {len(bad)}건'
+                          if bad else '  입력 순서는 전부 내림차순')
         names = dict(labels.values_list('my_label_id', 'my_label_name'))
-        for label_id, n1, r1, n2, r2 in bad[:15]:
+        for label_id, n1, r1, n2, r2 in bad[:10]:
             self.stdout.write(
                 f'    #{label_id} {(names.get(label_id) or "")[:24]}'
                 f' - "{n1}"({r1:g}) 다음에 "{n2}"({r2:g})')
-        self.stdout.write(
-            '    입력 순서 자체는 문제가 아니다. 표시 문구를 만드는 쪽이 정렬하므로'
-            ' 인쇄물은 규정을 지킨다.\n'
-            '    다만 손으로 고친 최종 문구는 그대로 남으니 위 라벨은 미리보기를 확인할 것.')
+        if bad:
+            self.stdout.write(
+                '    입력 순서 자체는 문제가 아니다. 표시 문구를 만드는 쪽이 정렬한다.')
+
+        self._check_printed_order(labels, ratios, names)
+
+    def _check_printed_order(self, labels, ratios, names):
+        """
+        실제로 인쇄되는 문구의 순서를 본다.
+
+        입력 순서는 표시 문구를 만드는 쪽이 정렬하므로 문제가 아니다. 정작 규정을
+        어길 수 있는 건 **손으로 고친 최종 문구** 다 - 그건 아무도 다시 정렬해 주지
+        않는다. 원료명이 문구 어디에 나오는지를 찾아 배합비 순서와 맞춰 본다.
+        """
+        self.stdout.write('')
+        self.stdout.write('  인쇄되는 문구(원재료명)의 순서:')
+
+        texts = dict(labels.values_list(
+            'my_label_id', 'rawmtrl_nm_display'))
+        refs = dict(labels.values_list('my_label_id', 'rawmtrl_nm'))
+
+        checked, wrong, skipped = 0, [], 0
+        for label_id, items in ratios.items():
+            text = (texts.get(label_id) or refs.get(label_id) or '').strip()
+            known = [(n, float(r)) for n, r in items if r is not None and n]
+            if not text or len(known) < 2:
+                continue
+
+            # 문구에 이름이 나오는 원료만 본다. 표시명이 원료명과 다르게 적혀
+            # 있으면 못 찾는데, 못 찾은 걸 위반이라고 하면 안 된다.
+            placed = [(text.find(name), name, ratio)
+                      for name, ratio in known if name in text]
+            if len(placed) < 2:
+                skipped += 1
+                continue
+
+            checked += 1
+            placed.sort()   # 문구에 나온 순서대로
+            for (_, n1, r1), (_, n2, r2) in zip(placed, placed[1:]):
+                if r1 < r2:
+                    wrong.append((label_id, n1, r1, n2, r2))
+                    break
+
+        if checked == 0:
+            self.stdout.write(
+                '    문구에서 원료명을 2개 이상 찾은 라벨이 없어 판단하지 못했다'
+                f' (이름을 못 찾아 건너뛴 라벨 {skipped}건).')
+            return
+
+        self.stdout.write(f'    판단한 라벨 {checked}건'
+                          + (f' (이름을 못 찾아 건너뜀 {skipped}건)' if skipped else ''))
+        if not wrong:
+            self.stdout.write(self.style.SUCCESS(
+                '    인쇄되는 문구는 전부 배합비 내림차순이다.'))
+            return
+
+        self.stdout.write(self.style.ERROR(
+            f'    규정에 어긋나는 라벨 {len(wrong)}건 - 이건 인쇄물에 그대로 나간다:'))
+        for label_id, n1, r1, n2, r2 in wrong[:10]:
+            self.stdout.write(
+                f'      #{label_id} {(names.get(label_id) or "")[:24]}'
+                f' - "{n1}"({r1:g})가 "{n2}"({r2:g})보다 앞')
 
     # ── 3. 원료 중복 등록 ────────────────────────────────────────────────────
 
