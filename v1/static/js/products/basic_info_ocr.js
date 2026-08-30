@@ -92,53 +92,69 @@
     return document.getElementById('basicInfoOcrModal');
   }
 
+  // 값이 긴 항목만 여러 줄로 둔다. 나머지는 한 줄이면 충분한데 예전에는 전부
+  // textarea + 테두리 상자였고, 후보는 라디오를 세로로 늘어놓아서 16개 항목이
+  // 화면을 몇 번씩 넘겼다. 실제 값보다 칸이 훨씬 컸다.
+  function isLongValue(text) {
+    return (text || '').length > 40 || (text || '').indexOf('\n') !== -1;
+  }
+
   function rowHtml(field, item, meta) {
     var target = document.getElementById(meta.id);
     var current = target ? (target.value || '').trim() : '';
+    var value = item.value || '';
     var isLow = item.confidence !== 'high';
     var candidates = item.candidates || [];
     // 이미 값이 있으면 기본으로 끈다 (덮어쓰기 방지)
     var checked = current ? '' : 'checked';
 
-    var html = [
-      '<div class="border rounded p-2 mb-2 ocr-row" data-field="' + field + '">',
-      '  <div class="d-flex align-items-center gap-2 mb-1">',
-      '    <input class="form-check-input mt-0 ocr-pick" type="checkbox" ' + checked + '>',
-      '    <span class="fw-semibold" style="font-size:13px;">' + esc(meta.label) + '</span>'
-    ];
-    if (isLow) {
-      html.push('    <span class="badge bg-warning text-dark" style="font-size:10px;">확인 필요</span>');
-    }
-    if (current) {
-      html.push('    <span class="badge bg-secondary" style="font-size:10px;">이미 입력됨</span>');
-    }
-    html.push('  </div>');
-
-    if (current) {
-      html.push('  <div class="text-muted mb-1" style="font-size:11px;">현재: ' + esc(current) + '</div>');
-    }
-
+    var control;
     if (isLow && candidates.length) {
-      candidates.forEach(function (c, idx) {
-        html.push(
-          '  <label class="d-flex align-items-center gap-2 mb-1" style="font-size:13px;">' +
-          '    <input type="radio" name="ocr_c_' + field + '" value="' + esc(c) + '" ' +
-                 (idx === 0 ? 'checked' : '') + '>' + esc(c) +
-          '  </label>');
-      });
-      html.push(
-        '  <label class="d-flex align-items-center gap-2" style="font-size:13px;">' +
-        '    <input type="radio" name="ocr_c_' + field + '" value="__direct__">' +
-        '    <input type="text" class="form-control form-control-sm ocr-direct" placeholder="직접 입력">' +
-        '  </label>');
+      // 후보는 목록으로. 라디오를 세로로 늘어놓으면 항목 하나가 네 줄을 먹는다.
+      control =
+        '<select class="form-select form-select-sm ocr-choice">'
+        + candidates.map(function (c) {
+            return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+          }).join('')
+        + '<option value="__direct__">직접 입력…</option>'
+        + '</select>'
+        + '<input type="text" class="form-control form-control-sm ocr-direct mt-1"'
+        + ' placeholder="직접 입력" style="display:none;">';
+    } else if (isLongValue(value)) {
+      control = '<textarea class="form-control form-control-sm ocr-value" rows="2">'
+        + esc(value) + '</textarea>';
     } else {
-      html.push(
-        '  <textarea class="form-control form-control-sm ocr-value" rows="' +
-        ((item.value || '').length > 60 ? 3 : 1) + '">' + esc(item.value || '') + '</textarea>');
+      control = '<input type="text" class="form-control form-control-sm ocr-value"'
+        + ' value="' + esc(value) + '">';
     }
 
-    html.push('</div>');
-    return html.join('');
+    // 현재 값과 새 값을 나란히 둔다. 무엇이 바뀌는지 눈으로 바로 보여야
+    // "이걸 반영할까" 를 판단할 수 있다.
+    var same = current && current === value.trim();
+    var state, stateClass;
+    if (same) {
+      state = '같음';
+      stateClass = 'ocr-state-same';
+    } else if (current) {
+      state = '덮어씀';
+      stateClass = 'ocr-state-replace';
+    } else {
+      state = '새로 채움';
+      stateClass = 'ocr-state-new';
+    }
+
+    return ''
+      + '<div class="ocr-row' + (same ? ' ocr-row-same' : '') + '" data-field="' + field + '">'
+      + '  <input class="form-check-input ocr-pick" type="checkbox" ' + checked + '>'
+      + '  <div class="ocr-label">' + esc(meta.label)
+      + (isLow ? ' <span class="ocr-flag ocr-flag-warn" title="읽은 값이 불확실합니다">확인</span>' : '')
+      + '  </div>'
+      + '  <div class="ocr-current" title="' + esc(current) + '">'
+      + (current ? esc(current) : '<span class="ocr-empty">비어 있음</span>')
+      + '  </div>'
+      + '  <div class="ocr-arrow"><span class="' + stateClass + '">' + state + '</span></div>'
+      + '  <div class="ocr-control">' + control + '</div>'
+      + '</div>';
   }
 
   function showModal(data) {
@@ -163,10 +179,27 @@
       modalEl.querySelector('#basicInfoOcrApply').disabled = true;
     } else {
       body.innerHTML =
-        '<div class="text-muted mb-2" style="font-size:12px;">' +
-        '읽은 값이 맞는지 확인하세요. 이미 입력된 칸은 덮어쓰지 않도록 체크를 꺼 뒀습니다.' +
-        '</div>' + rows.join('');
+        '<div class="text-muted mb-2" style="font-size:12px;">'
+        + '체크한 항목만 반영합니다. 이미 값이 있는 칸은 덮어쓰지 않도록 체크를 꺼 뒀습니다.'
+        + '</div>'
+        + '<div class="ocr-table">'
+        + '  <div class="ocr-row ocr-head">'
+        + '    <div></div><div>항목</div><div>현재 값</div><div></div><div>사진에서 읽은 값</div>'
+        + '  </div>'
+        + rows.join('')
+        + '</div>';
       modalEl.querySelector('#basicInfoOcrApply').disabled = false;
+
+      // "직접 입력…" 을 고르면 입력칸을 연다
+      body.querySelectorAll('.ocr-choice').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          var direct = sel.parentElement.querySelector('.ocr-direct');
+          if (!direct) return;
+          var on = sel.value === '__direct__';
+          direct.style.display = on ? '' : 'none';
+          if (on) direct.focus();
+        });
+      });
     }
 
     var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -186,15 +219,15 @@
       var meta = FIELD_MAP[field];
       var value = '';
 
-      var textarea = row.querySelector('.ocr-value');
-      if (textarea) {
-        value = textarea.value.trim();
+      var direct = row.querySelector('.ocr-value');
+      if (direct) {
+        value = direct.value.trim();
       } else {
-        var picked = row.querySelector('input[type="radio"]:checked');
-        if (picked) {
-          value = picked.value === '__direct__'
+        var choice = row.querySelector('.ocr-choice');
+        if (choice) {
+          value = choice.value === '__direct__'
             ? (row.querySelector('.ocr-direct').value || '').trim()
-            : picked.value;
+            : choice.value;
         }
       }
       if (!value) return;
@@ -378,6 +411,9 @@
     return m ? decodeURIComponent(m[1]) : '';
   }
 
+  // 불러오기 모달이 결과를 기다렸다가 창을 닫을 수 있도록 약속을 돌려준다.
+  // 예전에는 파일을 고르는 즉시 모달이 닫혀서, 읽는 동안 화면에 아무 표시가
+  // 없었다 - 사용자는 눌린 건지 아닌지 알 수 없었다.
   function extract(file) {
     var btn = document.getElementById('basicInfoOcrBtn');
     var form = new FormData();
@@ -390,7 +426,7 @@
     // 응답이 JSON 이 아닐 때(로그인 만료, 500, 프록시 오류 등) 무엇이 왔는지
     // 알려 준다. 예전에는 전부 "오류가 발생했습니다" 한 줄로 삼켜서, 사진 탓인지
     // 서버 탓인지 구분할 수 없었다.
-    fetch('/label/ocr-extract/', { method: 'POST', body: form })
+    return fetch('/label/ocr-extract/', { method: 'POST', body: form })
       .then(function (res) {
         return res.text().then(function (text) {
           var result;
@@ -419,8 +455,9 @@
       .then(function (result) {
         // 응답은 {success, data} 로 감싸여 온다
         if (!result || !result.success) {
-          status((result && result.error) || '사진을 읽지 못했습니다.', true);
-          return;
+          var msg = (result && result.error) || '사진을 읽지 못했습니다.';
+          status(msg, true);
+          throw new Error(msg);   // 부른 쪽(불러오기 모달)이 알아야 한다
         }
         status('');
         showModal(result.data || {});
@@ -428,6 +465,7 @@
       .catch(function (err) {
         console.error(err);
         status(err.message || '사진을 읽는 중 오류가 발생했습니다.', true);
+        throw err;
       })
       .finally(function () {
         if (btn) btn.disabled = false;
@@ -455,12 +493,21 @@
       ['origin', '원산지', false],
       ['allergens', '알레르기', false]
     ].map(function (f) {
-      return '<div class="mb-2">'
-        + '<label class="form-label small text-muted mb-1">' + f[1]
+      var value = fields[f[0]] || '';
+      // 원재료명은 길다. 나머지는 한 줄이면 충분한데 전부 같은 크기로 두면
+      // 짧은 값에도 넓은 칸이 붙어 창이 쓸데없이 길어진다.
+      var control = isLongValue(value)
+        ? '<textarea class="form-control form-control-sm ing-field" rows="2"'
+          + ' data-key="' + f[0] + '">' + esc(value) + '</textarea>'
+        : '<input type="text" class="form-control form-control-sm ing-field"'
+          + ' data-key="' + f[0] + '" value="' + esc(value) + '">';
+      return '<div class="ing-row">'
+        + '<label class="ing-label">' + f[1]
         + (f[2] ? ' <span class="text-danger">*</span>' : '') + '</label>'
-        + '<input type="text" class="form-control form-control-sm ing-field" '
-        + 'data-key="' + f[0] + '" value="' + esc(fields[f[0]] || '') + '">'
-        + '</div>';
+        + '<div class="ing-control">' + control
+        + (value ? '' : '<span class="ocr-empty" style="font-size:11px;">'
+                        + '사진에서 읽지 못했습니다</span>')
+        + '</div></div>';
     }).join('');
 
     var head = '<div class="text-muted mb-3" style="font-size:12px;">'
@@ -520,13 +567,14 @@
     form.append('csrfmiddlewaretoken', csrfToken());
     status('사진을 문서함에 저장하고 읽는 중입니다...');
 
-    fetch('/products/labels/' + labelId() + '/ingredient-photo/upload/',
-          { method: 'POST', body: form })
+    return fetch('/products/labels/' + labelId() + '/ingredient-photo/upload/',
+                 { method: 'POST', body: form })
       .then(function (res) { return res.json(); })
       .then(function (body) {
         if (!body.success) {
-          status(body.error || '사진을 읽지 못했습니다.', true);
-          return;
+          var msg = body.error || '사진을 읽지 못했습니다.';
+          status(msg, true);
+          throw new Error(msg);   // 부른 쪽(불러오기 모달)이 알아야 한다
         }
         status('');
         ingredientConfirm(body.fields, function (edited, modalEl) {
@@ -537,7 +585,8 @@
       })
       .catch(function (err) {
         console.error(err);
-        status('사진을 처리하는 중 오류가 발생했습니다.', true);
+        status(err.message || '사진을 처리하는 중 오류가 발생했습니다.', true);
+        throw err;
       });
   };
 

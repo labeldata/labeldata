@@ -635,6 +635,17 @@ class BasicInfoOcrWiringTests(TestCase):
         self.assertIn('openImportModal()', self.tab)
         self.assertIn('basic_info_ocr.js', self.detail)
 
+    def test_제품이_없으면_불러오기를_숨긴다(self):
+        """
+        신규 등록 화면에는 아직 제품이 없다. 읽어낸 원료를 붙일 곳(BOM·문서함)이
+        없으므로 버튼이 보이면 눌러도 아무 일도 일어나지 않는다.
+        """
+        from django.template.loader import render_to_string
+
+        html = render_to_string('products/_tab_basic_info.html',
+                                {'product': None, 'can_edit': True})
+        self.assertNotIn('openImportModal()', html)
+
     def test_스크립트가_고정_캐시버스터를_쓰지_않는다(self):
         self.assertIn("basic_info_ocr.js' %}?v={{ STATIC_BUILD_DATE }}", self.detail)
 

@@ -264,6 +264,100 @@
 }
 
 /* -------------------------
+   사진에서 읽은 값 확인 표
+   현재 값과 새 값을 나란히 두어 무엇이 바뀌는지 한눈에 보이게 한다.
+   예전에는 항목마다 테두리 상자 + 세로 라디오 목록이라 16개가 화면을
+   몇 번씩 넘겼다 — 실제 값보다 칸이 훨씬 컸다.
+   ------------------------- */
+.ocr-table { display: flex; flex-direction: column; }
+.ocr-row {
+    display:               grid;
+    grid-template-columns: 22px 130px minmax(0, 1fr) 68px minmax(0, 1.2fr);
+    align-items:           center;
+    gap:                   8px;
+    padding:               5px 4px;
+    border-bottom:         1px solid var(--ez-border-light, #f1f3f4);
+    font-size:             12.5px;
+}
+.ocr-row:last-child { border-bottom: none; }
+.ocr-row-same       { opacity: .6; }
+
+.ocr-head {
+    font-size:     11px;
+    font-weight:   600;
+    color:         var(--ez-text-muted, #5f6368);
+    border-bottom: 1px solid var(--ez-border, #dadce0);
+    padding-bottom: 6px;
+}
+
+.ocr-label   { font-weight: 500; line-height: 1.35; }
+.ocr-current {
+    color:         var(--ez-text-muted, #5f6368);
+    overflow:      hidden;
+    text-overflow: ellipsis;
+    white-space:   nowrap;
+}
+.ocr-empty   { color: #b0b5ba; font-style: italic; }
+.ocr-arrow   { text-align: center; }
+
+.ocr-state-same,
+.ocr-state-replace,
+.ocr-state-new {
+    font-size:     10.5px;
+    font-weight:   600;
+    padding:       1px 6px;
+    border-radius: 999px;
+    white-space:   nowrap;
+}
+.ocr-state-same    { background: #f1f3f4; color: #5f6368; }
+.ocr-state-replace { background: #fef7e0; color: #b06000; }
+.ocr-state-new     { background: #e6f4ea; color: #1e8e3e; }
+
+.ocr-control .form-control,
+.ocr-control .form-select { font-size: 12.5px; padding: 3px 8px; }
+.ocr-control textarea     { line-height: 1.4; }
+
+.ocr-flag {
+    font-size:     10px;
+    padding:       0 5px;
+    border-radius: 999px;
+    background:    #f1f3f4;
+    color:         #5f6368;
+    white-space:   nowrap;
+}
+.ocr-flag-warn { background: #fef7e0; color: #b06000; }
+
+/* 원료 확인 창 — 항목명과 값을 한 줄에 */
+.ing-row {
+    display:               grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    align-items:           start;
+    gap:                   8px;
+    padding:               4px 0;
+    font-size:             12.5px;
+}
+.ing-label { color: var(--ez-text-muted, #5f6368); padding-top: 5px; line-height: 1.35; }
+.ing-control .form-control { font-size: 12.5px; padding: 3px 8px; }
+
+@media (max-width: 575px) {
+    .ing-row { grid-template-columns: 1fr; gap: 2px; }
+    .ing-label { padding-top: 0; }
+}
+
+/* 좁은 화면에서는 비교를 위아래로 쌓는다 */
+@media (max-width: 767px) {
+    .ocr-row {
+        grid-template-columns: 22px 1fr;
+        row-gap: 3px;
+    }
+    .ocr-head { display: none; }
+    .ocr-current,
+    .ocr-arrow,
+    .ocr-control { grid-column: 2; }
+    .ocr-arrow   { text-align: left; }
+}
+
+/* -------------------------
    불러오기 모달의 드롭 영역
    제품/원료 두 갈래를 나란히 두고, 사진을 끌어다 놓을 수 있게 한다.
    ------------------------- */

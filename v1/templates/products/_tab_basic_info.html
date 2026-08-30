@@ -61,11 +61,14 @@
 </div>
 {% endif %}
 
-{% if can_edit %}
+{% if can_edit and product %}
 {% comment %}
 사진이나 품목보고번호로 한 번에 불러오는 입구.
 읽은 값을 바로 저장하지 않는다 — 확인 창에서 고른 것만 칸에 들어가고,
 저장은 평소대로 사용자가 한다.
+
+product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이 없어서 읽어낸
+원료를 붙일 곳(BOM·문서함)이 없다 — 버튼만 있고 눌러도 안 되는 상태였다.
 {% endcomment %}
 <div class="d-flex align-items-center gap-2 mb-3 px-1 flex-wrap ocr-fill-bar">
     <i class="bi bi-magic text-primary"></i>

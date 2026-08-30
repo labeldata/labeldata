@@ -207,18 +207,72 @@
     });
   }
 
+  // 읽는 동안 모달을 열어 둔다. 예전에는 파일을 고르는 즉시 닫혀서, 결과가
+  // 뜰 때까지 화면에 아무 표시가 없었다 - 눌린 건지 아닌지 알 수 없었다.
+  function setBusy(modalEl, message) {
+    var body = modalEl.querySelector('.modal-body');
+    if (!body) return;
+    body.dataset.saved = body.dataset.saved || '';
+    if (!body.dataset.saved) {
+      body._restore = body.innerHTML;
+      body.dataset.saved = '1';
+    }
+    body.innerHTML =
+      '<div class="text-center py-5">'
+      + '  <div class="spinner-border text-primary mb-3" role="status">'
+      + '    <span class="visually-hidden">읽는 중</span>'
+      + '  </div>'
+      + '  <div class="fw-semibold" style="font-size:14px;">' + esc(message) + '</div>'
+      + '  <div class="text-muted mt-1" style="font-size:12px;">'
+      + '    사진의 글자를 읽는 중입니다. 보통 5~15초 걸립니다.'
+      + '  </div>'
+      + '</div>';
+    // 읽는 중에 닫히면 결과를 놓친다
+    modalEl.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function (b) {
+      b.disabled = true;
+    });
+  }
+
+  function clearBusy(modalEl) {
+    var body = modalEl.querySelector('.modal-body');
+    if (body && body.dataset.saved) {
+      body.innerHTML = body._restore;
+      body.dataset.saved = '';
+      wire(modalEl);
+      setLookupButtons(modalEl, !!lookupFields);
+    }
+    modalEl.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function (b) {
+      b.disabled = false;
+    });
+  }
+
   function handleFile(side, file, modalEl) {
     if (file.size > 10 * 1024 * 1024) {
       note('파일 크기는 10MB 이하여야 합니다.', 'error');
       return;
     }
-    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-    if (side === 'product') {
-      // 기존 흐름 그대로 — 확인 창에서 고른 항목만 채우고, 원재료는 BOM 으로 쪼갠다
-      window.basicInfoOcrExtract(file);
-    } else {
-      window.ingredientPhotoUpload(file);
-    }
+
+    setBusy(modalEl, side === 'product'
+      ? '표시사항을 읽는 중입니다…'
+      : '사진을 문서함에 저장하고 읽는 중입니다…');
+
+    // 결과 확인 창은 각 처리기가 띄운다. 다 읽고 나서 이 창을 닫아야 두 창이
+    // 겹치지 않는다.
+    var run = (side === 'product')
+      ? window.basicInfoOcrExtract(file)
+      : window.ingredientPhotoUpload(file);
+
+    Promise.resolve(run)
+      .then(function () {
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        clearBusy(modalEl);
+      })
+      .catch(function (err) {
+        // 실패하면 창을 닫지 않는다. 왜 안 됐는지 여기서 보여 주고 다시 시도할 수
+        // 있게 한다 - 닫아 버리면 사용자는 처음부터 다시 열어야 한다.
+        clearBusy(modalEl);
+        note((err && err.message) || '사진을 읽지 못했습니다.', 'error');
+      });
   }
 
   function useLookup(side, modalEl) {
