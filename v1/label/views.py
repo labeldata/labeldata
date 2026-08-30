@@ -41,6 +41,7 @@ from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem,
 
 # --- [Import] utils에서 유틸리티 함수 및 상수 import ---
 from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_search_conditions
+from .services import food_type_settings as fts
 from .services.validation_service import validate_label
 from .services.ai_validation_service import check_ingredient_order, run_full_review, group_issues_by_category
 from .services.ai_rate_limit import check_rate_limit, get_usage as get_ai_usage
@@ -4473,116 +4474,70 @@ def request_additive_correction(request):
 
 
 def get_additive_field_settings(request):
-    """식품첨가물/혼합제제/농수축산물 선택 시 필드 표시 규칙을 반환하는 API"""
-    try:
-        food_group = request.GET.get('food_group', '')
-        food_type = request.GET.get('food_type', '')  # 농수축산물 소분류 판별용
-        
-        # 식품첨가물 또는 혼합제제인 경우
-        if food_group in ['식품첨가물', '혼합제제']:
-            settings = {
-                'prdlst_nm': 'Y',  # 제품명: 필수
-                'ingredient_info': 'N',  # 특정성분 함량: 선택
-                'prdlst_dcnm': 'Y',  # 식품유형명: 필수
-                'content_weight': 'Y',  # 내용량: 필수
-                'weight_calorie': 'Y',  # 내용량(열량): 필수
-                'prdlst_report_no': 'Y',  # 품목보고번호: 필수
-                'country_of_origin': 'N',  # 원산지: 선택
-                'frmlc_mtrqlt': 'Y',  # 포장재질: 필수
-                'pog_daycnt': 'Y',  # 소비기한: 필수
-                'rawmtrl_nm': 'Y',  # 원재료명: 필수
-                'storage_method': 'Y',  # 보관방법: 필수
-                'bssh_nm': 'Y',  # 제조원: 필수
-                'nutritions': 'D',  # 영양성분: 조회불가
-                'cautions': 'Y',  # 주의사항: 필수
-            }
-            
-            return JsonResponse({
-                'success': True,
-                'settings': settings
-            })
-        
-        # 농수축산물인 경우
-        elif food_group == '농수축산물':
-            # 기본 설정 (공통 비활성화 항목)
-            settings = {
-                'prdlst_nm': 'Y',  # 제품명: 필수
-                'ingredient_info': 'D',  # 특정성분 함량: 비활성화
-                'prdlst_dcnm': 'D',  # 식품유형명: 비활성화
-                'content_weight': 'Y',  # 내용량: 필수
-                'weight_calorie': 'D',  # 내용량(열량): 비활성화
-                'prdlst_report_no': 'D',  # 품목보고번호: 비활성화
-                'country_of_origin': 'Y',  # 원산지: 필수
-                'frmlc_mtrqlt': 'D',  # 포장재질: 비활성화
-                'pog_daycnt': 'N',  # 소비기한: 기본 선택
-                'rawmtrl_nm': 'N',  # 원재료명: 기본 선택
-                'storage_method': 'N',  # 보관방법: 기본 선택
-                'bssh_nm': 'Y',  # 제조원/생산자: 필수
-                'nutritions': 'D',  # 영양성분: 비활성화
-                'cautions': 'D',  # 주의사항: 비활성화
-            }
-            
-            custom_fields = []
-            
-            # 농산물 (사과, 채소 등)
-            if food_type == '농산물':
-                settings.update({
-                    'pog_daycnt': 'N',  # 소비기한: 선택
-                    'rawmtrl_nm': 'D',  # 원재료명: 비활성화
-                    'storage_method': 'N',  # 보관방법: 선택
-                })
-                custom_fields = [
-                    {'label': '생산연도 (또는 생산연월일)', 'value': ''},
-                    {'label': '포장일', 'value': ''},
-                    {'label': '품종', 'value': ''},
-                    {'label': '등급 (표준규격품인 경우)', 'value': ''},
-                ]
-            
-            # 수산물 (생선, 조개 등)
-            elif food_type == '수산물':
-                settings.update({
-                    'pog_daycnt': 'N',  # 소비기한: 선택
-                    'rawmtrl_nm': 'D',  # 원재료명: 비활성화
-                    'storage_method': 'N',  # 보관방법: 선택
-                })
-                custom_fields = [
-                    {'label': '생산연월일', 'value': ''},
-                    {'label': '포장일', 'value': ''},
-                    {'label': '등급', 'value': ''},
-                    {'label': '마릿수', 'value': ''},
-                ]
-            
-            # 축산물 (생고기 등)
-            elif food_type == '축산물':
-                settings.update({
-                    'pog_daycnt': 'Y',  # 소비기한: 필수
-                    'rawmtrl_nm': 'Y',  # 원재료명: 필수
-                    'storage_method': 'N',  # 보관방법: 선택 (냉장/냉동)
-                })
-                custom_fields = [
-                    {'label': '이력관리번호', 'value': ''},
-                    {'label': '등급', 'value': ''},
-                    {'label': '부위', 'value': ''},
-                    {'label': '도축일', 'value': ''},
-                    {'label': '포장일', 'value': ''},
-                    {'label': '도축장명', 'value': ''},
-                    {'label': '보관방법 (냉장/냉동)', 'value': ''},
-                ]
-            
-            return JsonResponse({
-                'success': True,
-                'settings': settings,
-                'custom_fields': custom_fields  # 맞춤항목 추가
-            })
-        
-        else:
-            return JsonResponse({
-                'success': False,
-                'error': '식품첨가물, 혼합제제 또는 농수축산물이 아닙니다.'
-            })
-            
-    except Exception as e:
+    """
+    식품첨가물/혼합제제/농수축산물 선택 시 필드 표시 규칙을 반환하는 API.
+
+    규칙 자체는 services/food_type_settings.py 로 옮겼다. 같은 판단을 가공식품
+    경로(food_type_settings)와 V2 저장, 일괄 적용 커맨드에서도 써야 해서
+    뷰 안에 두면 네 곳에 복사본이 생긴다.
+    """
+    food_group = request.GET.get('food_group', '')
+    food_type = request.GET.get('food_type', '')
+
+    if food_group not in fts.SPECIAL_GROUPS:
         return JsonResponse({
             'success': False,
-            'error': str(e)
-        }, status=500)
+            'error': '식품첨가물, 혼합제제 또는 농수축산물이 아닙니다.'
+        })
+
+    try:
+        resolved = fts.resolve_settings(food_group, food_type)
+    except Exception as exc:
+        logger.exception('[식품유형 설정] 조회 실패 (%s/%s)', food_group, food_type)
+        return JsonResponse({'success': False, 'error': str(exc)}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'settings': resolved['settings'],
+        'custom_fields': resolved['custom_fields'],
+    })
+
+
+@login_required
+@require_GET
+def food_type_settings(request):
+    """
+    가공식품 식품유형을 고를 때 표시 항목 규칙을 반환한다.
+
+    label_creation.js:1448 이 예전부터 이 URL 을 부르고 있었는데 urls.py 에
+    없어서 404 가 났고, .catch(console.error) 로 삼켜져 아무 일도 일어나지
+    않았다. 그래서 식품유형을 무엇으로 고르든 체크박스가 모델 기본값 그대로
+    였다. FoodType 293행의 Y/D/N 은 준비돼 있는데 쓰이지 않고 있었다.
+    """
+    food_type = request.GET.get('food_type', '')
+    food_group = request.GET.get('food_group', '')
+
+    resolved = fts.resolve_settings(food_group, food_type)
+    if not resolved['found']:
+        return JsonResponse({
+            'success': False,
+            'error': f'식품유형 "{food_type}" 을(를) 찾을 수 없습니다.',
+        })
+
+    # 화면은 체크박스용 Y/D/N 과 날짜 드롭다운 선택지를 따로 기대한다.
+    settings = dict(resolved['settings'])
+    settings['relevant_regulations'] = resolved['relevant_regulations']
+    settings['pog_daycnt_options'] = resolved['pog_daycnt_options']
+
+    return JsonResponse({'success': True, 'settings': settings})
+
+
+@login_required
+@require_GET
+def get_food_group(request):
+    """식품유형(소분류)으로 대분류를 되짚는다. label_creation.js 가 부른다."""
+    food_type = (request.GET.get('food_type') or '').strip()
+    row = FoodType.objects.filter(food_type=food_type).only('food_group').first()
+    if row is None:
+        return JsonResponse({'success': False, 'error': '식품유형을 찾을 수 없습니다.'})
+    return JsonResponse({'success': True, 'food_group': row.food_group})

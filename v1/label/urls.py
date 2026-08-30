@@ -111,4 +111,8 @@ urlpatterns = [
 
     # 식품첨가물/혼합제제 필드 설정
     path('get-additive-field-settings/', views.get_additive_field_settings, name='get_additive_field_settings'),
+
+    # 가공식품 식품유형별 표시 항목 규칙 (label_creation.js 가 예전부터 부르던 URL)
+    path('food-type-settings/', views.food_type_settings, name='food_type_settings'),
+    path('get-food-group/', views.get_food_group, name='get_food_group'),
 ]

@@ -213,16 +213,19 @@ const fieldMappings = {
   // updateCheckboxesByFoodType에서 사용하는 id 매핑
   prdlst_dcnm: 'chk_prdlst_dcnm',
   rawmtrl_nm: 'chk_rawmtrl_nm_display',
-  nutritions: 'chk_calories',
+  // 템플릿의 실제 id 는 chk_nutrition_text 다. chk_calories 는 존재한 적이 없어
+  // 식품유형을 골라도 영양성분 체크만 조용히 안 켜졌다.
+  nutritions: 'chk_nutrition_text',
   prdlst_nm: 'chk_prdlst_nm',
-  ingredients_info: 'chk_ingredients_info',
+  ingredient_info: 'chk_ingredient_info',
   content_weight: 'chk_content_weight',
-  weight_calorie: 'chk_weight_calorie',
+  // weight_calorie 는 체크박스가 아니라 내용량 표시방식 선택으로 다룬다
+  // (아래 updateContentTypeByFoodType). 매핑을 두면 없는 id 를 찾게 된다.
   prdlst_report_no: 'chk_prdlst_report_no',
   country_of_origin: 'chk_country_of_origin',
   storage_method: 'chk_storage_method',
   frmlc_mtrqlt: 'chk_frmlc_mtrqlt',
-  manufacturer_info: 'chk_manufacturer_info',
+  bssh_nm: 'chk_bssh_nm',
   distributor_address: 'chk_distributor_address',
   repacker_address: 'chk_repacker_address',
   importer_address: 'chk_importer_address',

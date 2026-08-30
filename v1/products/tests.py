@@ -6,6 +6,8 @@
 조용히 느슨해지면 필수 항목이 빈 제품이 그대로 확정된다.
 """
 
+import json
+
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
@@ -142,3 +144,94 @@ class ConfirmValidationGateTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(self._status(), ProductMetadata.Status.CONFIRMED)
         self.assertNotIn('validation_override', self._log_details())
+
+
+class DisplayItemSaveTests(TestCase):
+    """
+    V2 기본정보 탭의 표시 항목(chckd_*) 저장.
+
+    지금까지 이 화면에는 표시 항목을 볼 수도 바꿀 수도 없었다. 필수 입력 검사가
+    chckd_* 를 근거로 삼으면서 "해당하지 않으면 표시 항목 체크를 해제하세요" 라는
+    안내가 나가는데, V2 에는 그럴 UI 가 없어 따를 방법이 없었다.
+    """
+
+    def setUp(self):
+        from v1.label.models import FoodType
+
+        self.user = User.objects.create_user(username='disp', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='표시항목 테스트')
+        ProductMetadata.objects.create(label=self.label)
+        FoodType.objects.create(
+            food_group='과자류', food_type='과자',
+            prdlst_dcnm='Y', nutritions='Y', country_of_origin='Y',
+            prdlst_report_no='D', cautions='N', pog_daycnt='소비기한',
+        )
+        self.url = reverse('products:product_update_fields',
+                           args=[self.label.my_label_id])
+        self.client.force_login(self.user)
+
+    def _post(self, payload):
+        return self.client.post(self.url, data=json.dumps(payload),
+                                content_type='application/json')
+
+    def _reload(self):
+        self.label.refresh_from_db()
+        return self.label
+
+    def test_체크를_켜고_끈_것이_저장된다(self):
+        resp = self._post({'chckd_cautions': False, 'chckd_storage_method': True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+        self.assertEqual(self._reload().chckd_cautions, 'N')
+        self.assertEqual(self.label.chckd_storage_method, 'Y')
+
+    def test_보내지_않은_체크는_건드리지_않는다(self):
+        """켠 것만 보내는 화면이 생기면 나머지가 조용히 꺼진다."""
+        before = self._reload().chckd_frmlc_mtrqlt
+        self._post({'prdlst_nm': '이름만 바꿈'})
+        self.assertEqual(self._reload().chckd_frmlc_mtrqlt, before)
+
+    def test_식품유형을_바꾸면_그_유형의_필수가_켜진다(self):
+        self.label.chckd_nutrition_text = 'N'
+        self.label.chckd_country_of_origin = 'N'
+        self.label.save()
+
+        self._post({'food_type': '과자', 'food_group': '과자류'})
+
+        self.assertEqual(self._reload().chckd_nutrition_text, 'Y')
+        self.assertEqual(self.label.chckd_country_of_origin, 'Y')
+
+    def test_해당없음은_값이_비어_있을_때만_꺼진다(self):
+        self.label.chckd_prdlst_report_no = 'Y'
+        self.label.prdlst_report_no = '19950000000000'
+        self.label.save()
+
+        self._post({'food_type': '과자', 'food_group': '과자류'})
+
+        # 값이 들어 있으므로 끄지 않는다 — 끄면 인쇄물에서 줄이 사라진다
+        self.assertEqual(self._reload().chckd_prdlst_report_no, 'Y')
+
+    def test_식품유형이_그대로면_자동_적용이_돌지_않는다(self):
+        """저장할 때마다 사용자가 끈 항목이 다시 켜지면 끌 수가 없다."""
+        self.label.food_type = '과자'
+        self.label.food_group = '과자류'
+        self.label.chckd_nutrition_text = 'N'
+        self.label.save()
+
+        self._post({'food_type': '과자', 'food_group': '과자류',
+                    'chckd_nutrition_text': False})
+
+        self.assertEqual(self._reload().chckd_nutrition_text, 'N')
+
+    def test_표시_항목_목록이_식품유형_규칙을_함께_준다(self):
+        from v1.products.views import _build_display_items
+
+        self.label.food_type = '과자'
+        self.label.food_group = '과자류'
+        self.label.save()
+
+        by_field = {i['field']: i for i in _build_display_items(self.label)}
+        self.assertEqual(by_field['nutrition_text']['rule'], 'Y')
+        self.assertEqual(by_field['prdlst_report_no']['rule'], 'D')
+        self.assertEqual(by_field['prdlst_nm']['label'], '제품명')

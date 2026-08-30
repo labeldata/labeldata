@@ -687,3 +687,159 @@ class AiValidationFailureTests(TestCase):
         data = resp.json()
         self.assertTrue(data['categories'], '규칙 기반 결과는 살아 있어야 한다')
         self.assertTrue(data['unchecked'][0]['system_failure'])
+
+
+class FoodTypeSettingsTests(TestCase):
+    """
+    식품유형 -> 표시 항목 규칙(services/food_type_settings.py).
+
+    FoodType 293행의 Y/D/N 은 준비돼 있었지만 이 판단을 하는 코드가 없어서,
+    식품유형을 무엇으로 고르든 새 라벨은 모델 기본값 9개로만 시작했다.
+    필수 입력 검사가 chckd_* 를 근거로 삼으면서 그게 곧 "무엇이 필수인가" 가 됐다.
+    """
+
+    def setUp(self):
+        FoodType.objects.create(
+            food_group='과자류', food_type='과자',
+            prdlst_dcnm='Y', weight_calorie='Y', prdlst_report_no='Y',
+            country_of_origin='Y', frmlc_mtrqlt='Y', rawmtrl_nm='Y',
+            storage_method='N', nutritions='Y', cautions='N',
+            pog_daycnt='소비기한, 품질유지기한',
+            relevant_regulations='과자류 관련 규정',
+        )
+
+    def _settings(self, food_group='', food_type=''):
+        from v1.label.services.food_type_settings import resolve_settings
+        return resolve_settings(food_group, food_type)
+
+    def test_가공식품은_FoodType_의_YDN_을_그대로_읽는다(self):
+        r = self._settings(food_type='과자')
+        self.assertTrue(r['found'])
+        self.assertEqual(r['settings']['nutritions'], 'Y')
+        self.assertEqual(r['settings']['storage_method'], 'N')
+        self.assertEqual(r['settings']['cautions'], 'N')
+        self.assertEqual(r['relevant_regulations'], '과자류 관련 규정')
+
+    def test_FoodType_에_컬럼이_없는_항목은_고정값으로_채운다(self):
+        """제품명·내용량은 유형별로 갈리지 않는데 테이블에 컬럼이 없다."""
+        s = self._settings(food_type='과자')['settings']
+        self.assertEqual(s['prdlst_nm'], 'Y')
+        self.assertEqual(s['content_weight'], 'Y')
+
+    def test_소비기한은_YDN_이_아니라_텍스트라_갈라서_준다(self):
+        r = self._settings(food_type='과자')
+        self.assertEqual(r['settings']['pog_daycnt'], 'Y')
+        self.assertEqual(r['pog_daycnt_options'], ['소비기한', '품질유지기한'])
+
+    def test_모르는_식품유형은_found_False(self):
+        self.assertFalse(self._settings(food_type='없는유형')['found'])
+
+    def test_식품첨가물과_농수축산물은_하드코딩_규칙을_쓴다(self):
+        self.assertEqual(self._settings('식품첨가물', '')['settings']['nutritions'], 'D')
+        beef = self._settings('농수축산물', '축산물')
+        self.assertEqual(beef['settings']['prdlst_report_no'], 'D')
+        self.assertIn('이력관리번호', [c['label'] for c in beef['custom_fields']])
+
+    def test_모든_규칙_키가_체크박스로_이어진다(self):
+        """키 하나가 어긋나면 그 항목만 조용히 반영되지 않는다."""
+        from v1.label.services.food_type_settings import FIELD_TO_CHECKBOX
+        for group, ftype in [('', '과자'), ('식품첨가물', ''), ('농수축산물', '축산물')]:
+            for field in self._settings(group, ftype)['settings']:
+                self.assertIn(field, FIELD_TO_CHECKBOX, f'{field} 매핑 없음')
+                self.assertTrue(hasattr(MyLabel(), FIELD_TO_CHECKBOX[field]))
+
+
+class ApplyFoodTypeSettingsTests(TestCase):
+    """
+    규칙을 라벨에 반영할 때의 보수적인 규칙.
+
+    규칙을 그대로 덮어쓰면 사용자가 켜 둔 항목이 조용히 꺼지고 인쇄물에서 줄이
+    사라진다. FoodType.cautions 는 293행 중 288행이 'N' 이라, 그대로 적용하면
+    주의사항이 거의 모든 라벨에서 빠진다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='apply', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨')
+
+    def _apply(self, settings):
+        from v1.label.services.food_type_settings import apply_to_label
+        return apply_to_label(self.label, settings)
+
+    def test_Y는_켠다(self):
+        self.label.chckd_nutrition_text = 'N'
+        result = self._apply({'nutritions': 'Y'})
+        self.assertEqual(self.label.chckd_nutrition_text, 'Y')
+        self.assertEqual(result['turned_on'], ['chckd_nutrition_text'])
+
+    def test_N은_건드리지_않는다(self):
+        """사용자 재량 항목이다. 껐다고 단정하면 주의사항이 사라진다."""
+        self.label.chckd_cautions = 'Y'
+        self._apply({'cautions': 'N'})
+        self.assertEqual(self.label.chckd_cautions, 'Y')
+
+    def test_D는_값이_비어_있을_때만_끈다(self):
+        self.label.chckd_prdlst_report_no = 'Y'
+        self.label.prdlst_report_no = ''
+        result = self._apply({'prdlst_report_no': 'D'})
+        self.assertEqual(self.label.chckd_prdlst_report_no, 'N')
+        self.assertEqual(result['turned_off'], ['chckd_prdlst_report_no'])
+
+    def test_D라도_값이_있으면_끄지_않고_보고한다(self):
+        """끄면 인쇄물에서 그 줄이 사라진다. 사람이 보고 정할 일이다."""
+        self.label.chckd_prdlst_report_no = 'Y'
+        self.label.prdlst_report_no = '19950000000000'
+        result = self._apply({'prdlst_report_no': 'D'})
+        self.assertEqual(self.label.chckd_prdlst_report_no, 'Y')
+        self.assertEqual(result['kept_filled'], ['chckd_prdlst_report_no'])
+        self.assertEqual(result['turned_off'], [])
+
+
+class FoodTypeSettingsApiTests(TestCase):
+    """
+    label_creation.js 가 예전부터 부르던 두 URL. 없어서 404 가 났고
+    .catch(console.error) 로 삼켜져 아무 일도 일어나지 않았다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='api', password='x')
+        self.client.force_login(self.user)
+        FoodType.objects.create(
+            food_group='빵류', food_type='빵류',
+            prdlst_dcnm='Y', nutritions='Y', pog_daycnt='소비기한',
+        )
+
+    def test_식품유형_설정을_돌려준다(self):
+        resp = self.client.get('/label/food-type-settings/?food_type=빵류')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['settings']['nutritions'], 'Y')
+        self.assertEqual(data['settings']['pog_daycnt_options'], ['소비기한'])
+
+    def test_모르는_식품유형은_success_False(self):
+        data = self.client.get('/label/food-type-settings/?food_type=없음').json()
+        self.assertFalse(data['success'])
+
+    def test_소분류로_대분류를_되짚는다(self):
+        data = self.client.get('/label/get-food-group/?food_type=빵류').json()
+        self.assertEqual(data['food_group'], '빵류')
+
+    def test_JS_가_찾는_체크박스_id_가_템플릿에_있다(self):
+        """
+        fieldMappings 가 없는 id 를 가리키면 그 항목만 조용히 안 켜진다.
+        실제로 nutritions -> chk_calories 였는데 그런 id 는 존재한 적이 없다.
+        """
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        js = (base / 'static/js/label/label_creation.js').read_text(encoding='utf-8')
+        html = (base / 'templates/label/label_creation.html').read_text(encoding='utf-8')
+
+        block = js[js.index('const fieldMappings = {'):]
+        block = block[:block.index('\n};')]
+        ids = set(re.findall(r'id="(chk_[a-z_]+)"', html))
+        for key, target in re.findall(r"^\s*(\w+):\s*'(chk_[a-z_]+)'", block, re.M):
+            self.assertIn(target, ids, f'fieldMappings.{key} 가 없는 id {target} 를 가리킨다')

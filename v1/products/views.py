@@ -925,9 +925,60 @@ def product_detail(request, product_id):
         'available_doc_types': available_doc_types,
         'from_source': request.GET.get('from', ''),
         'custom_fields_json': json.dumps(label.custom_fields or [], ensure_ascii=False),
+        # 표시 항목(chckd_*). 지금까지 이 화면에는 이걸 볼 수도 바꿀 수도 없었는데,
+        # 필수 입력 검사가 chckd_* 를 근거로 삼으면서 "해당하지 않으면 체크를
+        # 해제하세요" 라는 안내를 따를 방법이 없었다.
+        'display_items': _build_display_items(label),
     }
-    
+
     return render(request, 'products/product_detail.html', context)
+
+
+# 표시 항목 카드에 뿌릴 순서. 인쇄되는 순서와 대체로 맞춘다.
+_DISPLAY_ITEM_ORDER = [
+    'chckd_prdlst_dcnm', 'chckd_prdlst_nm', 'chckd_ingredient_info',
+    'chckd_content_weight', 'chckd_weight_calorie', 'chckd_prdlst_report_no',
+    'chckd_country_of_origin', 'chckd_pog_daycnt', 'chckd_storage_method',
+    'chckd_frmlc_mtrqlt', 'chckd_rawmtrl_nm_display', 'chckd_nutrition_text',
+    'chckd_bssh_nm', 'chckd_distributor_address', 'chckd_repacker_address',
+    'chckd_importer_address', 'chckd_cautions', 'chckd_additional_info',
+]
+
+
+def _build_display_items(label):
+    """
+    표시 항목 체크박스 목록. 식품유형이 정하는 값(Y/D/N)을 함께 실어 보내
+    화면이 "이 유형에서는 필수" / "해당 없음" 을 표시할 수 있게 한다.
+    """
+    from v1.label.services import food_type_settings as fts
+
+    try:
+        rule = fts.resolve_settings(label.food_group or '', label.food_type or '')
+    except Exception:
+        logger.exception('[표시 항목] 식품유형 규칙 조회 실패 (label=%s)', label.pk)
+        rule = {'settings': {}, 'found': False}
+
+    by_checkbox = {fts.FIELD_TO_CHECKBOX[f]: v
+                   for f, v in rule['settings'].items()
+                   if f in fts.FIELD_TO_CHECKBOX}
+
+    items = []
+    for checkbox in _DISPLAY_ITEM_ORDER:
+        field = checkbox[len('chckd_'):]
+        try:
+            name = str(MyLabel._meta.get_field(field).verbose_name)
+        except Exception:
+            name = field
+        value = (getattr(label, field, '') or '').strip()
+        items.append({
+            'checkbox': checkbox,
+            'field': field,
+            'label': name,
+            'checked': (getattr(label, checkbox, '') or '') == 'Y',
+            'rule': by_checkbox.get(checkbox, ''),   # 'Y' 필수 / 'D' 해당없음 / '' 규칙없음
+            'filled': bool(value),
+        })
+    return items
 
 
 # ==================== 최근 항목 / 즐겨찾기 ====================
@@ -1307,6 +1358,11 @@ def product_update_fields(request, product_id):
             'allergens': '알레르기 성분',
         }
         
+        food_type_changed = (
+            'food_type' in data
+            and str(data['food_type'] or '') != str(label.food_type or '')
+        )
+
         for field_name in allowed_fields:
             if field_name in data:
                 old_value = getattr(label, field_name, '')
@@ -1314,7 +1370,31 @@ def product_update_fields(request, product_id):
                 if str(old_value) != str(new_value):
                     changed_fields.append(field_labels.get(field_name, field_name))
                 setattr(label, field_name, data[field_name])
-        
+
+        # ── 표시 항목(chckd_*) ─────────────────────────────────────────────
+        # 화면이 보낸 체크 상태를 그대로 반영한 뒤, 식품유형이 바뀐 경우에만
+        # 그 유형의 규칙을 덧씌운다. 규칙은 필수('Y')를 켜고 해당 없음('D')을
+        # 끄기만 하므로, 사용자 재량('N') 항목의 선택은 그대로 남는다.
+        from v1.label.services import food_type_settings as fts
+
+        checkbox_changed = []
+        for item_checkbox in fts.FIELD_TO_CHECKBOX.values():
+            if item_checkbox not in data:
+                continue
+            new_state = 'Y' if data[item_checkbox] in (True, 'Y', 'true', 1) else 'N'
+            if (getattr(label, item_checkbox, '') or '') != new_state:
+                checkbox_changed.append(item_checkbox)
+            setattr(label, item_checkbox, new_state)
+
+        if food_type_changed:
+            rule = fts.resolve_settings(label.food_group or '', label.food_type or '')
+            if rule['found']:
+                applied = fts.apply_to_label(label, rule['settings'])
+                checkbox_changed.extend(applied['turned_on'] + applied['turned_off'])
+
+        if checkbox_changed:
+            changed_fields.append('표시 항목')
+
         # 맞춤항목 JSON 처리
         if 'custom_fields_json' in data:
             import json as _json

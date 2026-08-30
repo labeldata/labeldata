@@ -249,7 +249,9 @@
                                        href="#section-manufacturing" data-section="section-manufacturing">제조 정보</a>
                                     <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent" 
                                        href="#section-details" data-section="section-details">상세 정보</a>
-                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent" 
+                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent"
+                                       href="#section-display-items" data-section="section-display-items">표시 항목</a>
+                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent"
                                        href="#section-custom-fields" data-section="section-custom-fields">맞춤항목</a>
                                 </nav>
                             </div>
@@ -3064,6 +3066,12 @@ function saveBasicInfo() {
     Object.entries(textFieldMap).forEach(([elemId, fieldName]) => {
         const el = document.getElementById(elemId);
         if (el) payload[fieldName] = el.value || '';
+    });
+
+    // 표시 항목(chckd_*) — 체크된 것만이 아니라 전부 보낸다.
+    // 켠 것만 보내면 서버가 "끈 것"과 "화면에 없던 것"을 구분할 수 없다.
+    document.querySelectorAll('.display-item-check').forEach(function (el) {
+        payload[el.name] = el.checked;
     });
 
     // 배타적 체크박스 그룹: preservation_type
