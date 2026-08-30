@@ -57,7 +57,7 @@
       + '    <div class="import-drop border rounded py-4 px-2 mb-2">'
       + '      <i class="bi bi-cloud-arrow-up d-block mb-1" style="font-size:22px; opacity:.5;"></i>'
       + '      <div class="text-muted" style="font-size:12px;">사진을 끌어다 놓거나 누르세요</div>'
-      + '      <div class="text-muted mt-1" style="font-size:11px;">고른 뒤 읽을 영역을 지정합니다</div>'
+      + '      <div class="text-primary mt-1" style="font-size:11px;">표시사항 부분만 골라내면 더 정확합니다</div>'
       + '      <input type="file" accept="image/*" hidden>'
       + '    </div>'
       + '    <button type="button" class="btn btn-outline-secondary v2-btn-sm w-100 import-use-lookup" disabled>'

@@ -35,9 +35,15 @@
       + '        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>'
       + '      </div>'
       + '      <div class="modal-body">'
+      + '        <div class="alert alert-info py-2 px-3 mb-2" style="font-size:12px;">'
+      + '          <i class="bi bi-info-circle me-1"></i>'
+      + '          <strong>표시사항 부분만 골라 주세요.</strong> 고른 영역만 확대해서 읽으므로'
+      + '          글자가 더 크게 보이고, 그만큼 정확해집니다.'
+      + '          작업지시서·포장 전체처럼 표시사항이 사진의 일부일 때 특히 차이가 큽니다.'
+      + '        </div>'
       + '        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">'
       + '          <span class="text-muted" style="font-size:12px;">'
-      + '            표시사항 부분만 끌어서 고르세요. 고른 만큼만 확대해 읽습니다.'
+      + '            끌어서 고르세요. 고른 영역이 클수록 잘 읽힙니다.'
       + '          </span>'
       + '          <div class="ms-auto d-flex align-items-center gap-1">'
       + '            <button type="button" class="btn btn-light v2-btn-icon" data-crop="rot-left" title="왼쪽으로 회전">'
@@ -152,9 +158,20 @@
           var ow = Math.round(sel.w / scale), oh = Math.round(sel.h / scale);
           var ok = ow >= MIN_SIDE && oh >= MIN_SIDE;
           useBtn.disabled = !ok;
-          info.textContent = ok
-            ? '고른 영역 ' + ow + '×' + oh + 'px 를 읽습니다.'
-            : '너무 작습니다. 조금 더 넓게 골라 주세요.';
+          if (!ok) {
+            info.className = 'crop-info text-danger mt-2';
+            info.textContent = '너무 작습니다. 조금 더 넓게 골라 주세요.';
+            return;
+          }
+          // 짧은 변이 얼마나 되는지가 판독 품질을 가른다. 모델은 짧은 변을
+          // 768px 로 맞춰 보므로, 그보다 작으면 확대해도 글자가 안 늘어난다.
+          var shortSide = Math.min(ow, oh);
+          var grade, cls;
+          if (shortSide >= 900) { grade = '충분합니다'; cls = 'text-success'; }
+          else if (shortSide >= 600) { grade = '읽을 만합니다'; cls = 'text-muted'; }
+          else { grade = '작은 글씨는 놓칠 수 있습니다'; cls = 'text-warning'; }
+          info.className = 'crop-info mt-2 ' + cls;
+          info.textContent = '고른 영역 ' + ow + '×' + oh + 'px — ' + grade + '.';
         }
 
         // 화면 좌표를 캔버스 **내부 픽셀**로 옮긴다.
