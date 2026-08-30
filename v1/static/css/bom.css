@@ -90,6 +90,24 @@
     border-color:     var(--v2-blue);
 }
 
+/* ── 요약 방식 선택 (식품유형 / 원재료명) ─────────────────── */
+/* 크기·테두리를 버튼마다 인라인으로 적어 뒀던 것을 여기로 모은다 */
+.summary-type-btn {
+    font-size:   11px;
+    padding:     4px 10px;
+    border:      1px solid var(--v2-border, #dadce0);
+    font-weight: 500;
+    transition:  all 0.15s ease;
+}
+.summary-type-btn:hover:not(.active) {
+    background-color: rgba(60, 64, 67, 0.08);
+}
+.summary-type-btn.active {
+    background-color: var(--v2-blue);
+    color:            #ffffff;
+    border-color:     var(--v2-blue);
+}
+
 /* ── 빠른 알레르기 버튼 ───────────────────────────────────── */
 .quick-allergen-btn {
     font-size:     11px;

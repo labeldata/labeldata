@@ -478,6 +478,17 @@ class ProductDocument(models.Model):
         delta = self.expiry_date - timezone.now().date()
         return delta.days
     
+    def days_since_expiry(self):
+        """
+        만료된 지 며칠 지났는지. 만료 전이면 None.
+
+        만료 문서 목록 템플릿이 days_until_expiry 의 음수를 `|abs` 로 뒤집으려
+        했는데 Django 에 abs 필터는 없다. 그래서 그 페이지는 열기만 하면
+        TemplateSyntaxError 로 죽었다. 계산은 모델이 한다.
+        """
+        days = self.days_until_expiry()
+        return -days if days is not None and days < 0 else None
+
     def needs_alert(self):
         """만료 알림 필요 여부"""
         if not self.expiry_date or not self.document_type.expiry_alert_days:

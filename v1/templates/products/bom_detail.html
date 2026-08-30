@@ -34,7 +34,7 @@ body.in-iframe .bom-page-header { display: none !important; }
     <div class="bom-page-header">
         <div class="bom-header d-flex justify-content-between align-items-center mb-3">
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <a href="{% url 'products:product_detail_new' product_id=label.my_label_id %}" class="btn btn-sm btn-outline-secondary" title="제품 상세로 돌아가기">
+                <a href="{% url 'products:product_detail_new' product_id=label.my_label_id %}" class="btn btn-outline-secondary v2-btn-sm" title="제품 상세로 돌아가기">
                     <i class="bi bi-arrow-left"></i>
                 </a>
                 <h5 class="fw-bold mb-0">
@@ -42,7 +42,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                     <span class="badge bg-secondary">BOM</span>
                 </h5>
                 <div class="vr"></div>
-                <button class="btn btn-sm btn-outline-dark" data-bs-toggle="modal" data-bs-target="#loadLabelModal">
+                <button class="btn btn-outline-dark v2-btn-sm" data-bs-toggle="modal" data-bs-target="#loadLabelModal">
                     <i class="bi bi-card-text"></i> 라벨 정보 불러오기
                 </button>
             </div>
@@ -50,7 +50,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 <span class="me-3 small text-muted">총 배합비</span>
                 <span id="total-ratio" class="fw-semibold">0.00%</span>
                 {% if can_edit %}
-                <button class="btn btn-primary btn-sm" id="save-btn" onclick="saveData()" style="border-radius: 4px; font-weight: 500;">
+                <button class="btn btn-primary v2-btn" id="save-btn" onclick="saveData()">
                     <i class="bi bi-cloud-arrow-up me-1"></i> 저장하기
                 </button>
                 {% else %}
@@ -87,7 +87,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                         <h6 class="mb-0 fw-semibold" style="font-size:13px; color:#333;">
                             <i class="bi bi-list-ul text-primary me-1"></i>원재료 표시명 요약
                         </h6>
-                        <button type="button" class="btn btn-sm btn-primary"
+                        <button type="button" class="btn btn-primary v2-btn-sm"
                                 onclick="copyRawmtrlToBasicInfo()"
                                 style="font-size:11px; padding:3px 12px; border-radius:6px;">
                             <i class="bi bi-arrow-left-circle me-1"></i>기본정보 탭 원재료 표시명으로 복사
@@ -193,28 +193,28 @@ body.in-iframe .bom-page-header { display: none !important; }
                                         <div style="border: 1px solid #dadce0; border-radius: 8px; padding: 10px; background-color: #f8f9fa;">
                                             <div class="d-flex align-items-center justify-content-between mb-2">
                                                 <div id="allergenSelectedDisplay" style="font-size: 11px; color: #5f6368; flex: 1;">선택된 항목 없음</div>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary" id="allergenToggleBtn" style="font-size: 10px; padding: 2px 8px;">전체선택</button>
+                                                <button type="button" class="btn btn-outline-secondary v2-btn-sm" id="allergenToggleBtn">전체선택</button>
                                             </div>
                                             <div id="allergen-quick-buttons" class="d-flex flex-wrap gap-1 mb-1">
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="알류">알류</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="우유">우유</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="메밀">메밀</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="땅콩">땅콩</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="대두">대두</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="밀">밀</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="고등어">고등어</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="게">게</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="새우">새우</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="돼지고기">돼지고기</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="복숭아">복숭아</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="토마토">토마토</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="아황산류">아황산류</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="호두">호두</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="잣">잣</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="닭고기">닭고기</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="쇠고기">쇠고기</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="오징어">오징어</button>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary quick-allergen-btn" data-allergen="조개류">조개류</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="알류">알류</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="우유">우유</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="메밀">메밀</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="땅콩">땅콩</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="대두">대두</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="밀">밀</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="고등어">고등어</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="게">게</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="새우">새우</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="돼지고기">돼지고기</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="복숭아">복숭아</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="토마토">토마토</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="아황산류">아황산류</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="호두">호두</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="잣">잣</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="닭고기">닭고기</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="쇠고기">쇠고기</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="오징어">오징어</button>
+                                                <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="조개류">조개류</button>
                                             </div>
                                             <input type="hidden" id="field-allergens">
                                         </div>
@@ -224,11 +224,11 @@ body.in-iframe .bom-page-header { display: none !important; }
                                         <div style="border: 1px solid #dadce0; border-radius: 8px; padding: 10px; background-color: #f8f9fa;">
                                             <div class="d-flex align-items-center justify-content-between mb-2">
                                                 <div id="gmoSelectedDisplay" style="font-size: 11px; color: #5f6368; flex: 1;">선택된 항목 없음</div>
-                                                <button type="button" class="btn btn-sm btn-outline-secondary" id="gmoToggleBtn" style="font-size: 10px; padding: 2px 8px;">전체선택</button>
+                                                <button type="button" class="btn btn-outline-secondary v2-btn-sm" id="gmoToggleBtn">전체선택</button>
                                             </div>
                                             <div id="gmoBtnList" class="d-flex flex-wrap gap-1 mb-1">
                                                 {% for gmo in gmo_list %}
-                                                <button type="button" class="btn btn-sm btn-outline-secondary gmo-btn" data-gmo="{{ gmo }}">{{ gmo }}</button>
+                                                <button type="button" class="btn btn-outline-secondary gmo-btn" data-gmo="{{ gmo }}">{{ gmo }}</button>
                                                 {% endfor %}
                                             </div>
                                             <input type="hidden" id="field-gmo" value="">
@@ -237,10 +237,10 @@ body.in-iframe .bom-page-header { display: none !important; }
                                     <div class="mb-3">
                                         <label class="bom-field-label mb-2">원재료 표시명 기준</label>
                                         <div class="d-flex gap-2">
-                                            <button type="button" class="btn btn-sm flex-fill summary-type-btn" data-value="식품유형" id="summaryTypeFoodType" style="font-size: 11px; border: 1px solid #dadce0;">
+                                            <button type="button" class="btn flex-fill summary-type-btn" data-value="식품유형" id="summaryTypeFoodType">
                                                 식품유형
                                             </button>
-                                            <button type="button" class="btn btn-sm flex-fill summary-type-btn" data-value="원재료명" id="summaryTypeIngredientName" style="font-size: 11px; border: 1px solid #dadce0;">
+                                            <button type="button" class="btn flex-fill summary-type-btn" data-value="원재료명" id="summaryTypeIngredientName">
                                                 원재료명
                                             </button>
                                         </div>
@@ -738,7 +738,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                         <div class="fw-semibold">${ingredientName}</div>
                         <span class="palette-meta">${item.food_type || ''}</span>
                     </div>
-                    <button type="button" class="btn btn-sm btn-outline-primary">추가</button>
+                    <button type="button" class="btn btn-outline-primary v2-btn-sm">추가</button>
                 </div>
             `;
 
@@ -751,9 +751,9 @@ body.in-iframe .bom-page-header { display: none !important; }
         const pagination = document.createElement('div');
         pagination.className = 'palette-pagination';
         pagination.innerHTML = `
-            <button type="button" class="btn btn-outline-secondary" ${state.page === 1 ? 'disabled' : ''}>이전</button>
+            <button type="button" class="btn btn-outline-secondary v2-btn-sm" ${state.page === 1 ? 'disabled' : ''}>이전</button>
             <span>${state.page} / ${totalPages}</span>
-            <button type="button" class="btn btn-outline-secondary" ${state.page === totalPages ? 'disabled' : ''}>다음</button>
+            <button type="button" class="btn btn-outline-secondary v2-btn-sm" ${state.page === totalPages ? 'disabled' : ''}>다음</button>
         `;
         const prevButton = pagination.querySelector('button:first-child');
         const nextButton = pagination.querySelector('button:last-child');

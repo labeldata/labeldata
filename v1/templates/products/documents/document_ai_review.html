@@ -81,7 +81,7 @@
  
   <!-- 상단 바 -->
   <div class="review-topbar">
-    <a href="{% url 'products:product_detail' doc.label.my_label_id %}" class="btn btn-sm btn-icon btn-light" title="뒤로">
+    <a href="{% url 'products:product_detail' doc.label.my_label_id %}" class="btn v2-btn-sm btn-icon btn-light" title="뒤로">
       <i class="bi bi-arrow-left"></i>
     </a>
     <div class="flex-grow-1 min-w-0">
@@ -112,7 +112,7 @@
         <div class="text-center text-muted py-5">
           <i class="bi bi-file-earmark fs-1 d-block mb-2"></i>
           <p>미리보기를 지원하지 않는 파일 형식입니다.</p>
-          <a href="{% url 'products:document_download' doc.pk %}" class="btn btn-sm btn-outline-primary">
+          <a href="{% url 'products:document_download' doc.pk %}" class="btn v2-btn-sm btn-outline-primary">
             <i class="bi bi-download me-1"></i> 다운로드
           </a>
         </div>
@@ -222,7 +222,7 @@
       <!-- ═══ Group A: 데이터 추출 ═══ -->
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h6 class="fw-bold mb-0">추출된 정보</h6>
-        <button class="btn btn-sm btn-outline-secondary" id="edit-toggle-btn" onclick="toggleEditMode()">
+        <button class="btn v2-btn-sm btn-outline-secondary" id="edit-toggle-btn" onclick="toggleEditMode()">
           <i class="bi bi-pencil me-1"></i> 수정
         </button>
       </div>
@@ -284,8 +284,8 @@
       </form>
  
       <div id="edit-actions" class="d-none mt-3 d-flex gap-2">
-        <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="cancelEditMode()">취소</button>
-        <button class="btn btn-sm btn-primary flex-fill" onclick="saveExtracted()">저장</button>
+        <button class="btn v2-btn-sm btn-outline-secondary flex-fill" onclick="cancelEditMode()">취소</button>
+        <button class="btn v2-btn-sm btn-primary flex-fill" onclick="saveExtracted()">저장</button>
       </div>
  
       <hr class="my-3">

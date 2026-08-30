@@ -169,11 +169,11 @@
                     <h6>{{ document.label.my_label_name|default:document.label.prdlst_nm }}</h6>
                     <div class="d-grid gap-2">
                         <a href="{% url 'products:product_detail_new' document.label.my_label_id %}" 
-                           class="btn btn-outline-primary btn-sm">
+                           class="btn v2-btn-sm btn-outline-primary">
                             <i class="fas fa-cube me-2"></i>제품 보기
                         </a>
                         <a href="{% url 'products:product_detail_new' document.label.my_label_id %}#tab-docs" 
-                           class="btn btn-outline-secondary btn-sm">
+                           class="btn v2-btn-sm btn-outline-secondary">
                             <i class="fas fa-folder-open me-2"></i>문서 탭으로
                         </a>
                     </div>

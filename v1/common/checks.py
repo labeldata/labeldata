@@ -75,24 +75,25 @@ def check_multiline_template_comments(app_configs, **kwargs):
 #
 # 크기(font-size/padding)만 본다 — 색·표시여부·폭 같은 인라인은 정상적인 쓰임이 많다.
 #
-# 범위를 제품 상세 화면으로 한정한다. products/ 전체를 보면 아직 정리하지 않은
-# 화면(제품 탐색기·BOM·연락처 등)까지 122건이 잡히는데, 배포 때마다 도는
-# manage.py check 가 매번 100줄을 뱉으면 아무도 안 읽게 된다. 다른 화면을 정리할
-# 때 여기에 파일을 하나씩 추가하는 방식으로 넓힌다.
-
-_CHECKED_TEMPLATES = (
-    'product_detail.html',
-    '_tab_basic_info.html',
-    '_tab_documents.html',
-    '_tab_permissions.html',
-    '_tab_label.html',
-)
+# 처음에는 제품 상세 5개 파일만 봤다. products/ 전체를 보면 아직 정리하지 않은
+# 화면까지 잡혀서, 배포 때마다 도는 manage.py check 가 매번 100줄을 뱉으면 아무도
+# 안 읽게 되기 때문이다. 나머지 화면(BOM·연락처·탐색기·문서함 등 76건)을 정리하고
+# 나서 범위를 products/ 전체로 넓혔다.
 
 _BTN_TAG = re.compile(r'<(?:button|a)\b[^>]*\bclass="[^"]*\bbtn\b[^"]*"[^>]*>', re.I)
 _SIZE_IN_STYLE = re.compile(r'style="[^"]*\b(?:font-size|padding)\s*:', re.I)
 # 크기를 담당하는 부트스트랩 클래스 (v2-btn-sm 안의 btn-sm 은 제외하려고 경계를 씀)
 _BS_SIZE_CLASS = re.compile(r'(?<!-)\bbtn-(?:sm|lg|xs)\b')
-_SIZED_BY_CLASS = ('v2-btn', 'v2-chip-btn', 'v2-link-btn', 'product-quick-text-btn')
+# 자체 CSS 로 크기를 정하는 컴포넌트들. 공통 3단계와 별개의 크기 체계를 갖는다
+# (조밀한 칩·아이콘 버튼). 이들에 btn-sm 을 겹쳐 쓰면 오히려 두 규칙이 싸운다.
+_SIZED_BY_CLASS = (
+    'v2-btn', 'v2-chip-btn', 'v2-link-btn',
+    'product-quick-text-btn',    # 상용문구 칩
+    'quick-allergen-btn',        # BOM 알레르기 칩
+    'gmo-btn',                   # BOM GMO 칩
+    'summary-type-btn',          # BOM 요약 방식 선택
+    'contacts-icon-btn',         # 연락처 아이콘 버튼
+)
 
 
 @register()
@@ -103,10 +104,7 @@ def check_product_button_sizing(app_configs, **kwargs):
         products = root / 'products'
         if not products.is_dir():
             continue
-        for name in _CHECKED_TEMPLATES:
-            path = products / name
-            if not path.is_file():
-                continue
+        for path in sorted(products.rglob('*.html')):
             try:
                 text = path.read_text(encoding='utf-8')
             except (OSError, UnicodeDecodeError):
@@ -202,4 +200,40 @@ def check_migration_dependencies(app_configs, **kwargs):
                       '이 상태에서는 migrate 가 그래프를 만들지 못하고 죽습니다.'),
                 id='migrations.E001',
             ))
+    return errors
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 템플릿이 컴파일되는가
+#
+# products/documents/expired_documents.html 이 {{ ...|abs }} 를 쓰고 있었다.
+# Django 에 abs 필터는 없다. 그 페이지(/products/documents/expired/)는 열기만
+# 하면 TemplateSyntaxError 로 죽었는데, 아무도 몰랐다 - 열어 본 사람이 없었으니까.
+#
+# 존재하지 않는 필터·태그, 닫히지 않은 블록은 전부 컴파일 단계에서 걸린다.
+# 렌더링이 아니라 컴파일만 하므로 DB 도 컨텍스트도 필요 없고 빠르다.
+
+@register()
+def check_templates_compile(app_configs, **kwargs):
+    """모든 템플릿이 컴파일되는지 확인한다."""
+    from django.template import TemplateSyntaxError
+    from django.template.loader import get_template
+
+    errors = []
+    for root in _template_dirs():
+        for path in sorted(root.rglob('*.html')):
+            rel = str(path.relative_to(root)).replace(chr(92), '/')
+            try:
+                get_template(rel)
+            except TemplateSyntaxError as exc:
+                errors.append(Error(
+                    f'{rel} 이 컴파일되지 않습니다: {exc}',
+                    hint='이 템플릿을 쓰는 화면은 열면 500 이 납니다.',
+                    obj=str(path),
+                    id='templates.E002',
+                ))
+            except Exception:
+                # 로더가 못 찾는 경우(앱 하위 templates 중복 등)는 여기서 다루지
+                # 않는다. 문법 오류만 본다.
+                continue
     return errors

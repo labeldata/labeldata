@@ -98,7 +98,7 @@
             <i class="bi bi-send"></i>
             아직 보낸 문서 요청이 없습니다.<br>
             <small class="mt-2 d-block">연락처 관리에서 연락처를 선택해 문서 요청을 보내보세요.</small>
-            <a href="{% url 'products:contacts' %}" class="btn btn-sm btn-primary mt-4">연락처 관리로 이동</a>
+            <a href="{% url 'products:contacts' %}" class="btn v2-btn-sm btn-primary mt-4">연락처 관리로 이동</a>
         </div>
         {% else %}
         {% for req in sent_requests %}
@@ -127,7 +127,7 @@
                     {{ req.get_status_display }}
                 </span>
                 {% if req.status == 'PENDING' %}
-                <button class="btn btn-sm btn-outline-danger"
+                <button class="btn v2-btn-sm btn-outline-danger"
                         onclick="cancelRequest({{ req.request_id }}, this)">
                     <i class="bi bi-x me-1"></i>취소
                 </button>
@@ -171,7 +171,7 @@
                     {{ req.get_status_display }}
                 </span>
                 {% if req.status == 'PENDING' %}
-                <button class="btn btn-sm btn-success"
+                <button class="btn v2-btn-sm btn-success"
                         onclick="acceptRequest({{ req.request_id }}, this)">
                     <i class="bi bi-check2 me-1"></i>수락
                 </button>

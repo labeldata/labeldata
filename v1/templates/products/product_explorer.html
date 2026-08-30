@@ -91,7 +91,7 @@
     <div class="d-flex align-items-center px-4 py-2 gap-2" style="background:#fff3cd;border-bottom:1px solid #ffc107;font-size:0.875rem;">
         <i class="bi bi-funnel-fill text-warning"></i>
         <span>원료 <strong>{{ ingredient_name_filter }}</strong>와(과) 연결된 제품만 표시 중입니다.</span>
-        <a href="{% url 'products:product_explorer' %}" class="ms-auto btn btn-sm btn-outline-secondary py-0">
+        <a href="{% url 'products:product_explorer' %}" class="ms-auto btn v2-btn-sm btn-outline-secondary">
             <i class="bi bi-x"></i> 필터 해제
         </a>
     </div>
@@ -173,19 +173,19 @@
         <!-- 선택시 액션 바 (테이블 위) -->
         <div id="selection-actions" class="d-none align-items-center gap-1 py-2 border-bottom" style="min-height: 38px;">
             <span class="badge bg-primary me-1" style="font-size:11px;"><span id="selected-count">0</span>개 선택됨</span>
-            <button class="btn btn-xs btn-outline-success" onclick="openExcelDownloadModal()" title="엑셀 다운로드" style="padding:2px 8px;font-size:11px;">
+            <button class="btn v2-btn-sm btn-xs btn-outline-success" onclick="openExcelDownloadModal()" title="엑셀 다운로드" style="padding:2px 8px;font-size:11px;">
                 <i class="bi bi-file-earmark-excel"></i> 엑셀다운로드
             </button>
-            <button class="btn btn-xs btn-outline-secondary" onclick="copySelected()" title="복사" style="padding:2px 8px;font-size:11px;">
+            <button class="btn v2-btn-sm btn-xs btn-outline-secondary" onclick="copySelected()" title="복사" style="padding:2px 8px;font-size:11px;">
                 <i class="bi bi-files"></i> 복사
             </button>
-            <button class="btn btn-xs btn-outline-danger" onclick="deleteSelected()" title="삭제" style="padding:2px 8px;font-size:11px;">
+            <button class="btn v2-btn-sm btn-xs btn-outline-danger" onclick="deleteSelected()" title="삭제" style="padding:2px 8px;font-size:11px;">
                 <i class="bi bi-trash"></i> 삭제
             </button>
-            <button id="dismiss-badges-btn" class="btn btn-xs btn-outline-warning" onclick="dismissSelectedBadges()" title="선택한 제품의 원료 업데이트 알림을 해제합니다" style="padding:2px 8px;font-size:11px;display:none;">
+            <button id="dismiss-badges-btn" class="btn v2-btn-sm btn-xs btn-outline-warning" onclick="dismissSelectedBadges()" title="선택한 제품의 원료 업데이트 알림을 해제합니다" style="padding:2px 8px;font-size:11px;display:none;">
                 <i class="bi bi-bell-slash"></i> 알림 해제
             </button>
-            <button class="btn btn-xs btn-link text-muted ms-1" onclick="clearAllSelection()" style="padding:2px 6px;font-size:11px;">
+            <button class="btn v2-link-btn btn-xs btn-link text-muted ms-1" onclick="clearAllSelection()" style="padding:2px 6px;font-size:11px;">
                 선택 해제
             </button>
         </div>
@@ -403,7 +403,7 @@
                 <p class="mt-3 text-muted">권한을 부여받은 제품이 없습니다</p>
                 {% else %}
                 <p class="mt-3 text-muted">등록된 제품이 없습니다</p>
-                <a href="{% url 'products:product_create' %}" class="btn btn-primary btn-sm mt-2">
+                <a href="{% url 'products:product_create' %}" class="btn v2-btn-sm btn-primary mt-2">
                     <i class="bi bi-plus-lg me-1"></i> 첫 제품 등록하기
                 </a>
                 {% endif %}
@@ -465,8 +465,8 @@
                 </div>
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-success btn-sm rounded-pill px-4" id="excel-download-btn" onclick="submitExcelDownload()">
+                <button type="button" class="btn v2-btn-sm btn-light" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn v2-btn-sm btn-success" id="excel-download-btn" onclick="submitExcelDownload()">
                     <i class="bi bi-download me-1"></i>다운로드
                 </button>
             </div>
