@@ -37,6 +37,7 @@ _ALLERGEN_CATEGORY_NAMES = set(ALLERGEN_KEYWORDS.keys())
 # (기존 label_preview.js showValidationModal()의 "검증 항목" 열과 같은 스타일)
 _CATEGORY_LABELS = {
     'required_missing': '필수 입력 항목',
+    'calorie_consistency': '열량 표시 정합성',
     'content_weight': '내용량 표시',
     'farm_seafood': '농수산물 함량 표시',
     'forbidden_phrase': '금지 문구',

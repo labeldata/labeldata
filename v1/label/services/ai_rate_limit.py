@@ -123,7 +123,7 @@ def _content_fingerprint(label) -> str:
     소비기한을 채우고 다시 검증해도 캐시 TTL(15분) 동안 "미입력" 결과가 그대로
     나온다.
     """
-    from .validation_service import _REQUIRED_CHECKBOX_FIELDS
+    from .validation_service import _REQUIRED_CHECKBOX_FIELDS, content_sources
 
     fields = [
         label.rawmtrl_nm_display or '', label.rawmtrl_nm or '',
@@ -134,7 +134,11 @@ def _content_fingerprint(label) -> str:
     ]
     for checkbox in _REQUIRED_CHECKBOX_FIELDS:
         fields.append(getattr(label, checkbox, '') or '')
-        fields.append(getattr(label, checkbox[len('chckd_'):], '') or '')
+        # 그 항목의 값을 담을 수 있는 자리 전부. 다른 탭이 채우는 곳(영양성분
+        # 개별 항목, 내용량에 병기한 열량 등)을 빠뜨리면, 채우고 다시 검증해도
+        # 캐시 TTL(15분) 동안 "미입력" 결과가 그대로 나온다.
+        for src in content_sources(checkbox[len('chckd_'):]):
+            fields.append(getattr(label, src, '') or '')
 
     raw = '\x1f'.join(fields)
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]

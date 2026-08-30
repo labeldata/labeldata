@@ -114,6 +114,7 @@ _NATURE_CONDITIONS_KO = (
 # 번호까지 특정하면 오히려 틀릴 위험이 있어 법령명 단위로만 인용한다(2026-08 확인).
 _LEGAL_BASIS = {
     'required_missing': '「식품 등의 표시·광고에 관한 법률」 및 「식품등의 표시기준」 의무표시사항 기재 규정',
+    'calorie_consistency': '「식품등의 표시기준」 내용량 표시 규정(내용량에 열량 병기) 및 영양성분 표시 규정',
     'content_weight': '「식품등의 표시기준」 내용량 표시 규정',
     'farm_seafood': '「식품등의 표시기준」 제품명에 사용한 원재료의 함량 표시 규정',
     'forbidden_phrase': '「식품등의 표시기준」 제8조(부당한 표시·광고 금지)',
@@ -141,6 +142,60 @@ _REQUIRED_CHECKBOX_FIELDS = (
     'chckd_importer_address', 'chckd_pog_daycnt', 'chckd_rawmtrl_nm_display',
     'chckd_cautions', 'chckd_additional_info', 'chckd_nutrition_text',
 )
+
+
+# 그 칸 자체는 비어 있어도 인쇄에는 지장이 없는 경우. 화면마다 저장하는 필드가
+# 달라서 생긴 것이라, 검사가 그 사정을 알고 있어야 한다.
+#
+#   rawmtrl_nm_display : V2 기본정보 탭과 BOM "기본정보로 복사" 는 rawmtrl_nm(참고)
+#       에 쓴다. 표시사항 탭(_tab_label.html)이 rawmtrl_nm_display 가 비면 그 값으로
+#       폴백해 미리보기에 넣으므로 인쇄물에는 원재료명이 나온다.
+#   nutrition_text : 영양성분은 미리보기에서 별도 표로 그려지고, 이 필드는
+#       label_preview.html 의 ORDERED_FIELDS 에서 아예 빠져 있다(주석 처리).
+#       V2 영양성분 탭(nutrition_save_api)은 개별 항목만 저장하고 이 요약 문구를
+#       만들지 않는다. 값이 있느냐는 개별 항목으로 판단해야 맞다.
+_ALTERNATIVE_SOURCES = {
+    'rawmtrl_nm_display': ('rawmtrl_nm',),
+    'nutrition_text': ('calories', 'natriums', 'carbohydrates', 'proteins', 'fats'),
+}
+
+_KCAL_RE = re.compile(r'(\d[\d,]*(?:\.\d+)?)\s*k\s*cal', re.IGNORECASE)
+
+# 값이 "있다" 를 공백 여부만으로 볼 수 없는 항목.
+#
+# 내용량(열량)은 별도 줄이 아니라 내용량에 함께 적는 게 보통이다 —
+# "250 g (100 kcal)". 그래서 전용 칸이 비어 있어도 내용량에 열량이 적혀 있으면
+# 표시된 것이고, 반대로 전용 칸에 숫자만 있고 kcal 이 없으면 표시가 아니다.
+# 공백 여부로 보면 둘 다 틀린다.
+_CONTENT_PATTERNS = {
+    'weight_calorie': (('weight_calorie', 'content_weight'), _KCAL_RE),
+}
+
+# 위 항목들은 "비어 있습니다" 만으로는 무엇을 하라는 건지 알 수 없다.
+_REQUIRED_HINTS = {
+    'weight_calorie': '내용량에 열량을 함께 적어도 됩니다. (예: 250 g (100 kcal))',
+}
+
+
+def content_sources(field: str) -> tuple[str, ...]:
+    """그 항목의 값을 담을 수 있는 필드 전부. 캐시 지문이 함께 본다."""
+    spec = _CONTENT_PATTERNS.get(field)
+    if spec:
+        return spec[0]
+    return (field,) + tuple(_ALTERNATIVE_SOURCES.get(field, ()))
+
+
+def _has_content(label, field: str) -> bool:
+    """그 항목이 실제로 채워져 있는가 (다른 화면이 채운 자리까지 본다)."""
+    spec = _CONTENT_PATTERNS.get(field)
+    if spec:
+        sources, pattern = spec
+        return any(pattern.search(getattr(label, src, '') or '') for src in sources)
+
+    if (getattr(label, field, '') or '').strip():
+        return True
+    return any((getattr(label, alt, '') or '').strip()
+               for alt in _ALTERNATIVE_SOURCES.get(field, ()))
 
 
 def _verbose_name(model, field_name: str) -> str:
@@ -172,13 +227,17 @@ def check_required_fields(label) -> list[dict]:
         field = checkbox[len('chckd_'):]
         if (getattr(label, checkbox, '') or '') != 'Y':
             continue
-        if (getattr(label, field, '') or '').strip():
+        if _has_content(label, field):
             continue
         name = _verbose_name(type(label), field)
+        hint = _REQUIRED_HINTS.get(field)
+        suggestion = f'"{name}"을(를) 입력하거나, 이 제품에 해당하지 않으면 표시 항목 체크를 해제하세요.'
+        if hint:
+            suggestion = f'{hint} {suggestion}'
         issue = _issue(
             'required_missing',
             f'표시하기로 선택한 "{name}" 항목이 비어 있습니다.',
-            f'"{name}"을(를) 입력하거나, 이 제품에 해당하지 않으면 표시 항목 체크를 해제하세요.',
+            suggestion,
         )
         # 어느 칸인지 문장을 파싱하지 않고 알 수 있게 따로 실어 보낸다 —
         # 확정 차단 화면이 "비어 있는 항목: 내용량, 소비기한" 처럼 쓴다.
@@ -186,6 +245,70 @@ def check_required_fields(label) -> list[dict]:
         issue['field_label'] = name
         issues.append(issue)
     return issues
+
+
+# 내용량에서 총량을 읽기 위한 것. 단위별로 g/ml 로 환산한다.
+_AMOUNT_RE = re.compile(r'(\d[\d,]*(?:\.\d+)?)\s*(mg|kg|ml|g|l)(?![a-z])', re.IGNORECASE)
+_AMOUNT_SCALE = {'mg': 0.001, 'g': 1.0, 'kg': 1000.0, 'ml': 1.0, 'l': 1000.0}
+
+
+def _number(text: str) -> float | None:
+    try:
+        return float(text.replace(',', ''))
+    except (TypeError, ValueError):
+        return None
+
+
+def _total_amount(text: str) -> float | None:
+    """내용량 문구에서 총량(g 또는 ml)을 읽는다. 없으면 None."""
+    m = _AMOUNT_RE.search(text or '')
+    if not m:
+        return None
+    value = _number(m.group(1))
+    if value is None:
+        return None
+    return value * _AMOUNT_SCALE[m.group(2).lower()]
+
+
+def check_calorie_consistency(label) -> list[dict]:
+    """
+    내용량에 병기한 열량과 영양성분 탭의 계산값이 맞는지 확인.
+
+    영양성분 탭이 저장하는 calories 는 **100g(ml) 당** 값이다
+    (nutrition_calculator_popup.js 의 generateBasicDisplayV3 이 표시할 때
+    multiplier = 총량/100 을 곱한다). 그래서 내용량에 적는 총 열량은
+
+        calories x 총량 / 100
+
+    이어야 한다. 실제 데이터로 확인했다 — "800 g (1240 kcal)" 인 라벨의
+    calories 가 155 이고, 155 x 800 / 100 = 1240 으로 정확히 맞는다.
+
+    두 값 중 하나라도 읽을 수 없으면 검사하지 않는다. 열량은 표시기준상
+    5kcal 단위로 반올림하므로 그만큼은 차이를 허용한다.
+    """
+    text = f"{label.content_weight or ''} {label.weight_calorie or ''}"
+    kcal_match = _KCAL_RE.search(text)
+    if not kcal_match:
+        return []
+
+    stated = _number(kcal_match.group(1))
+    per_100 = _number((label.calories or '').strip())
+    amount = _total_amount(text)
+    if stated is None or per_100 is None or amount is None or amount <= 0:
+        return []   # 셋 다 있어야 비교할 수 있다
+
+    expected = per_100 * amount / 100
+    tolerance = max(5.0, expected * 0.05)
+    if abs(stated - expected) <= tolerance:
+        return []
+
+    return [_issue(
+        'calorie_consistency',
+        f'내용량에 적힌 열량({stated:,.0f} kcal)이 영양성분 값과 맞지 않습니다. '
+        f'영양성분 탭의 100g당 {per_100:,.0f} kcal 을 총량 {amount:,.0f}g 에 적용하면 '
+        f'{expected:,.0f} kcal 입니다.',
+        '영양성분 탭의 값을 고치거나, 내용량에 적은 열량을 다시 확인하세요.',
+    )]
 
 
 def check_content_weight(label) -> list[dict]:
@@ -395,7 +518,8 @@ def check_additive_display_name(label) -> list[dict]:
 
 
 _CHECKS = [
-    check_required_fields,   # 비어 있는 것부터 — 나머지 검사는 값이 있을 때만 본다
+    check_required_fields,
+    check_calorie_consistency,   # 비어 있는 것부터 — 나머지 검사는 값이 있을 때만 본다
     check_content_weight,
     check_farm_seafood_content,
     check_forbidden_phrases,

@@ -843,3 +843,162 @@ class FoodTypeSettingsApiTests(TestCase):
         ids = set(re.findall(r'id="(chk_[a-z_]+)"', html))
         for key, target in re.findall(r"^\s*(\w+):\s*'(chk_[a-z_]+)'", block, re.M):
             self.assertIn(target, ids, f'fieldMappings.{key} 가 없는 id {target} 를 가리킨다')
+
+
+class RequiredFieldAlternativeSourceTests(TestCase):
+    """
+    다른 탭이 채우는 자리를 인정한다.
+
+    필수 입력 검사를 붙일 때 "그 필드가 비었으면 미입력" 으로만 봤는데, 제품
+    관리(V2)는 항목마다 저장하는 필드가 다르다. 그대로 두면 실제로는 인쇄물에
+    나오는데 "미입력" 이라고 지적하는 오탐이 난다. 로컬 활성 라벨에서만
+    원재료명 1건, 영양성분 4건이 이 경우였다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='altsrc', password='x')
+
+    def _messages(self, **kwargs):
+        from v1.label.services.validation_service import check_required_fields
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨', **kwargs)
+        return ' '.join(i['message'] for i in check_required_fields(label))
+
+    def test_원재료명은_참고_필드가_차있으면_통과한다(self):
+        """
+        V2 기본정보 탭과 BOM "기본정보로 복사" 는 rawmtrl_nm 에 쓴다. 표시사항
+        탭이 rawmtrl_nm_display 가 비면 그 값으로 폴백해 미리보기에 넣는다.
+        """
+        self.assertIn('원재료명(표시)', self._messages())
+        self.assertNotIn('원재료명(표시)',
+                         self._messages(rawmtrl_nm='밀가루(밀:미국산), 설탕'))
+
+    def test_영양성분은_개별_항목이_있으면_통과한다(self):
+        """
+        영양성분은 미리보기에서 별도 표로 그려지고 nutrition_text 는
+        ORDERED_FIELDS 에서 빠져 있다. V2 영양성분 탭은 개별 항목만 저장한다.
+        """
+        self.assertIn('영양성분 표시', self._messages(chckd_nutrition_text='Y'))
+        self.assertNotIn('영양성분 표시',
+                         self._messages(chckd_nutrition_text='Y', calories='120'))
+
+    def test_대체_자리도_비면_여전히_지적한다(self):
+        msgs = self._messages(chckd_nutrition_text='Y')
+        self.assertIn('영양성분 표시', msgs)
+        self.assertIn('원재료명(표시)', msgs)
+
+    def test_대체_자리가_캐시_지문에_반영된다(self):
+        """빠뜨리면 열량을 채우고 다시 검증해도 15분간 "미입력" 이 그대로 나온다."""
+        from v1.label.services.ai_rate_limit import _result_cache_key
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨')
+        before = _result_cache_key(label)
+        label.calories = '120'
+        self.assertNotEqual(_result_cache_key(label), before)
+
+
+class WeightCalorieCheckTests(TestCase):
+    """
+    내용량(열량)은 별도 줄이 아니라 내용량에 함께 적는다 — "250 g (100 kcal)".
+
+    공백 여부로만 보면 두 방향으로 틀린다. 내용량에 병기했는데 전용 칸이 비었다고
+    지적하거나, 전용 칸에 숫자만 있고 kcal 이 없는데 통과시킨다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='kcal', password='x')
+
+    def _messages(self, **kwargs):
+        from v1.label.services.validation_service import check_required_fields
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='라벨',
+            chckd_weight_calorie='Y', **kwargs)
+        return ' '.join(i['message'] for i in check_required_fields(label))
+
+    def test_내용량에_병기하면_통과한다(self):
+        self.assertNotIn('내용량(열량)', self._messages(content_weight='250 g (100 kcal)'))
+
+    def test_전용_칸에_적어도_통과한다(self):
+        self.assertNotIn('내용량(열량)', self._messages(weight_calorie='100 kcal'))
+
+    def test_열량_표기가_없으면_지적한다(self):
+        self.assertIn('내용량(열량)', self._messages(content_weight='250 g'))
+
+    def test_숫자만_있고_단위가_없으면_지적한다(self):
+        """전용 칸이 비지 않았다는 이유만으로 통과시키면 안 된다."""
+        self.assertIn('내용량(열량)', self._messages(weight_calorie='100'))
+
+    def test_표기_흔들림을_받아준다(self):
+        for text in ('250g(100kcal)', '250 g (100 Kcal)', '내용량 250g, 100 KCAL'):
+            self.assertNotIn('내용량(열량)', self._messages(content_weight=text), text)
+
+    def test_어떻게_적으라는지_알려준다(self):
+        from v1.label.services.validation_service import check_required_fields
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨',
+                                       chckd_weight_calorie='Y', content_weight='250 g')
+        hint = next(i['suggestion'] for i in check_required_fields(label)
+                    if i['field'] == 'weight_calorie')
+        self.assertIn('kcal', hint)
+
+    def test_내용량에_적은_열량이_캐시_지문에_반영된다(self):
+        from v1.label.services.ai_rate_limit import _result_cache_key
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨',
+                                       content_weight='250 g')
+        before = _result_cache_key(label)
+        label.content_weight = '250 g (100 kcal)'
+        self.assertNotEqual(_result_cache_key(label), before)
+
+
+class CalorieConsistencyTests(TestCase):
+    """
+    내용량에 병기한 열량과 영양성분 탭 계산값의 정합성.
+
+    영양성분 탭이 저장하는 calories 는 100g(ml) 당 값이다
+    (nutrition_calculator_popup.js 의 generateBasicDisplayV3 이 표시할 때
+    multiplier = 총량/100 을 곱한다). 실제 라벨로 확인했다 —
+    "800 g (1240 kcal)" 인 라벨의 calories 가 155 이고 155 x 800/100 = 1240.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='cal', password='x')
+
+    def _issues(self, **kwargs):
+        from v1.label.services.validation_service import check_calorie_consistency
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨', **kwargs)
+        return check_calorie_consistency(label)
+
+    def test_맞으면_지적하지_않는다(self):
+        self.assertEqual(self._issues(content_weight='800 g (1240 kcal)', calories='155'), [])
+
+    def test_어긋나면_계산_근거까지_보여준다(self):
+        issues = self._issues(content_weight='800 g (400 kcal)', calories='155')
+        self.assertEqual(len(issues), 1)
+        msg = issues[0]['message']
+        self.assertIn('400', msg)      # 적힌 값
+        self.assertIn('1,240', msg)    # 계산값
+        self.assertIn('155', msg)      # 100g당
+
+    def test_반올림_차이는_넘어간다(self):
+        """열량은 표시기준상 5kcal 단위로 반올림한다."""
+        self.assertEqual(self._issues(content_weight='100 g (123 kcal)', calories='125'), [])
+
+    def test_단위가_kg_l_이어도_환산한다(self):
+        self.assertEqual(self._issues(content_weight='1 kg (1550 kcal)', calories='155'), [])
+        self.assertEqual(len(self._issues(content_weight='1 kg (155 kcal)', calories='155')), 1)
+
+    def test_쉼표가_있어도_읽는다(self):
+        self.assertEqual(self._issues(content_weight='600g(2,346kcal)', calories='391'), [])
+
+    def test_한쪽이_없으면_검사하지_않는다(self):
+        """비교할 근거가 없는 것과 어긋나는 것은 다르다."""
+        self.assertEqual(self._issues(content_weight='800 g (1240 kcal)'), [])   # 영양성분 없음
+        self.assertEqual(self._issues(content_weight='800 g', calories='155'), [])  # 열량 병기 없음
+        self.assertEqual(self._issues(weight_calorie='1240 kcal', calories='155'), [])  # 총량 못 읽음
+
+    def test_전용_칸에_적어도_비교한다(self):
+        issues = self._issues(content_weight='800 g', weight_calorie='400 kcal', calories='155')
+        self.assertEqual(len(issues), 1)
+
+    def test_무료_검증에_물려_있다(self):
+        from v1.label.services.validation_service import _CHECKS
+        self.assertIn('check_calorie_consistency', {c.__name__ for c in _CHECKS})

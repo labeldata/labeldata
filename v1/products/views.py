@@ -951,6 +951,7 @@ def _build_display_items(label):
     화면이 "이 유형에서는 필수" / "해당 없음" 을 표시할 수 있게 한다.
     """
     from v1.label.services import food_type_settings as fts
+    from v1.label.services.validation_service import _has_content
 
     try:
         rule = fts.resolve_settings(label.food_group or '', label.food_type or '')
@@ -969,14 +970,15 @@ def _build_display_items(label):
             name = str(MyLabel._meta.get_field(field).verbose_name)
         except Exception:
             name = field
-        value = (getattr(label, field, '') or '').strip()
         items.append({
             'checkbox': checkbox,
             'field': field,
             'label': name,
             'checked': (getattr(label, checkbox, '') or '') == 'Y',
             'rule': by_checkbox.get(checkbox, ''),   # 'Y' 필수 / 'D' 해당없음 / '' 규칙없음
-            'filled': bool(value),
+            # 다른 탭이 채우는 자리까지 본다 — 영양성분은 영양성분 탭이,
+            # 원재료명(표시)은 BOM/기본정보의 rawmtrl_nm 이 채운다.
+            'filled': _has_content(label, field),
         })
     return items
 
