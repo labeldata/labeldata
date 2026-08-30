@@ -31,9 +31,13 @@ class Command(BaseCommand):
                             help='상태를 맞출 때 쓸 명령을 함께 보여준다 (실행하지는 않는다)')
 
     def handle(self, *args, **options):
-        loader = MigrationLoader(connection, ignore_no_migrations=True)
-        applied = set(loader.applied_migrations)
+        # 그래프를 만들지 않는다. 이 커맨드는 그래프가 안 만들어지는 상태를
+        # 진단하려고 있는 것이라, MigrationLoader() 를 그냥 부르면 진단 대상과
+        # 똑같은 예외로 같이 죽는다. 실제로 서버에서 NodeNotFoundError 로 죽었다.
+        loader = MigrationLoader(None, load=False)
+        loader.load_disk()
         disk = set(loader.disk_migrations)
+        applied = self._applied_from_db()
 
         self.stdout.write(self.style.MIGRATE_HEADING('── 요약 ──'))
         self.stdout.write(f'  마이그레이션 파일 {len(disk)}개 / DB 적용 기록 {len(applied)}개')
@@ -41,12 +45,50 @@ class Command(BaseCommand):
         ghosts = sorted(applied - disk)
         pending = sorted(disk - applied)
 
+        self._report_missing_files(loader, disk)
         self._report_ghosts(ghosts)
         existing = self._report_pending(loader, pending)
-        self._report_inconsistency(loader, applied)
+        self._report_inconsistency(loader, applied, disk)
 
         if options['sql']:
             self._report_fix(pending, existing)
+
+    @staticmethod
+    def _applied_from_db():
+        """django_migrations 를 직접 읽는다 (로더를 거치지 않는다)."""
+        with connection.cursor() as cursor:
+            try:
+                cursor.execute('SELECT app, name FROM django_migrations')
+            except Exception:
+                return set()
+            return {(app, name) for app, name in cursor.fetchall()}
+
+    def _report_missing_files(self, loader, disk):
+        """
+        의존 대상이 디스크에 없는 경우. migrate 가 NodeNotFoundError 로 죽는 이유다.
+
+        마이그레이션 파일이 .gitignore 에 걸려 있으면 배포된 곳마다 파일 구성이
+        달라져서 이런 일이 생긴다.
+        """
+        self.stdout.write('')
+        self.stdout.write(self.style.MIGRATE_HEADING('── 의존 대상 파일이 없는 것 ──'))
+        broken = []
+        for (app, name), migration in sorted(loader.disk_migrations.items()):
+            for dep in migration.dependencies:
+                if dep[0] == '__setting__' or dep[1] in ('__first__', '__latest__'):
+                    continue
+                if dep not in disk:
+                    broken.append((app, name, dep))
+
+        if not broken:
+            self.stdout.write('  없음')
+            return
+        self.stdout.write(self.style.ERROR(
+            f'  {len(broken)}건. 이 상태에서는 migrate 가 그래프를 만들지 못하고 죽는다.'))
+        for app, name, dep in broken:
+            self.stdout.write(f'    {app}.{name} -> {dep[0]}.{dep[1]} (파일 없음)')
+        self.stdout.write(
+            '  마이그레이션 파일이 .gitignore 에 걸려 있으면 배포된 곳마다 구성이 달라진다.')
 
     # ── 유령 기록 ────────────────────────────────────────────────────────────
 
@@ -113,8 +155,8 @@ class Command(BaseCommand):
 
     # ── 의존성 불일치 ────────────────────────────────────────────────────────
 
-    def _report_inconsistency(self, loader, applied):
-        """migrate 가 죽는 바로 그 이유를 짚는다."""
+    def _report_inconsistency(self, loader, applied, disk):
+        """적용됐다고 기록된 것이 미적용에 의존하는 경우."""
         self.stdout.write('')
         self.stdout.write(self.style.MIGRATE_HEADING('── 의존성이 어긋난 지점 ──'))
 
@@ -124,9 +166,9 @@ class Command(BaseCommand):
             if migration is None:
                 continue   # 유령은 위에서 따로 봤다
             for dep in migration.dependencies:
-                if dep[0] == '__setting__' or dep[1] == '__first__':
+                if dep[0] == '__setting__' or dep[1] in ('__first__', '__latest__'):
                     continue
-                if dep in loader.disk_migrations and dep not in applied:
+                if dep in disk and dep not in applied:
                     broken.append((app, name, dep))
 
         if not broken:
