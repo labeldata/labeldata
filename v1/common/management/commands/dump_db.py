@@ -16,6 +16,9 @@ DB 를 파일로 덤프한다. Django 설정의 접속 정보를 그대로 쓴�
     python manage.py dump_db
     python manage.py dump_db --out ~/backup.sql.gz
     python manage.py dump_db --schema-only     # 구조만 (데이터 없이)
+
+    # 마이그레이션 상태만 맞출 때 - 운영 데이터를 옮기지 않는다
+    python manage.py dump_db --schema-only --data-for django_migrations
 """
 import gzip
 import os
@@ -35,6 +38,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--out', default=None, help='저장 경로 (기본: ~/<DB이름>_<날짜>.sql.gz)')
         parser.add_argument('--schema-only', action='store_true', help='구조만, 데이터 제외')
+        parser.add_argument('--data-for', action='append', default=[], metavar='TABLE',
+                            help='--schema-only 일 때 이 테이블의 데이터만 포함 (여러 번 지정 가능)')
         parser.add_argument('--database', default='default', help='DATABASES 별칭')
         parser.add_argument('--mysqldump', default=None,
                             help='mysqldump 경로 (PATH 에 없을 때. 윈도우 개발 환경 등)')
@@ -64,31 +69,47 @@ class Command(BaseCommand):
                    Path.home() / f'{name.replace("$", "_")}_{datetime.now():%Y%m%d_%H%M}.sql.gz')
         out = out.expanduser()
 
-        cmd = [
+        base = [
             dump, '-h', host, '-P', port, '-u', user,
             '--single-transaction',
             '--no-tablespaces',      # PythonAnywhere 는 PROCESS 권한이 없다
             '--default-character-set=utf8mb4',
         ]
+
+        # 실행할 mysqldump 를 순서대로 모은다.
+        # 구조만 받으면서 특정 테이블의 데이터만 넣으려면 두 번 돌려 이어붙여야
+        # 한다 - --no-data 는 DB 전체에 걸리기 때문이다.
+        passes = []
         if options['schema_only']:
-            cmd.append('--no-data')
-        cmd.append(name)
+            passes.append(base + ['--no-data', name])
+            for table in options['data_for']:
+                passes.append(base + ['--no-create-info', name, table])
+        else:
+            passes.append(base + [name])
 
         env = dict(os.environ)
         if db.get('PASSWORD'):
             env['MYSQL_PWD'] = db['PASSWORD']   # 명령줄에 안 남는다
 
         self.stdout.write(f'  저장  : {out}')
+        if options['schema_only']:
+            extra = (', 데이터 포함: ' + ', '.join(options['data_for'])
+                     if options['data_for'] else '')
+            self.stdout.write(f'  범위  : 구조만{extra}')
         self.stdout.write('  덤프 중...')
 
+        stderr, code = '', 0
         try:
             with gzip.open(out, 'wb') as fh:
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE, env=env)
-                shutil.copyfileobj(proc.stdout, fh)
-                proc.stdout.close()
-                stderr = proc.stderr.read().decode('utf-8', 'replace')
-                code = proc.wait()
+                for cmd in passes:
+                    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE, env=env)
+                    shutil.copyfileobj(proc.stdout, fh)
+                    proc.stdout.close()
+                    stderr += proc.stderr.read().decode('utf-8', 'replace')
+                    code = proc.wait()
+                    if code != 0:
+                        break
         except Exception as exc:
             out.unlink(missing_ok=True)
             raise CommandError(f'덤프 실패: {exc}')
@@ -100,7 +121,7 @@ class Command(BaseCommand):
             raise CommandError(f'mysqldump 가 {code} 로 끝났다. 파일을 지웠다.\n{stderr.strip()}')
 
         size = out.stat().st_size
-        if size < 1024:
+        if size < 512:
             out.unlink(missing_ok=True)
             raise CommandError(f'덤프가 {size} 바이트뿐이다. 뭔가 잘못됐다. 파일을 지웠다.\n{stderr.strip()}')
 
