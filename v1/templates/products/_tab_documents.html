@@ -261,7 +261,8 @@
 배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
 {% endcomment %}
 <div class="modal fade" id="ingredientPhotoModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable">
+    {# 사진을 옆에 놓고 비교하므로 넓게 쓴다 #}
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" style="font-size:16px;">
@@ -1051,14 +1052,25 @@ async function submitImportCompanyDoc() {
         }
 
         const f = body.fields || {};
-        const rows = INGREDIENT_FIELDS.map(([key, label, required]) => `
-            <div class="mb-2">
-                <label class="form-label small text-muted mb-1">
+        // 항목명과 값을 한 줄에 둔다. 원재료명만 길어서 여러 줄로 두고, 나머지는
+        // 한 줄이면 충분하다 - 전부 같은 크기로 두면 짧은 값에도 넓은 칸이 붙는다.
+        const rows = INGREDIENT_FIELDS.map(([key, label, required]) => {
+            const value = f[key] || '';
+            const control = value.length > 40
+                ? `<textarea class="form-control form-control-sm ing-field" rows="2"
+                             data-key="${key}">${escapeAttr(value)}</textarea>`
+                : `<input type="text" class="form-control form-control-sm ing-field"
+                          data-key="${key}" value="${escapeAttr(value)}">`;
+            return `
+            <div class="ing-row">
+                <label class="ing-label">
                     ${label}${required ? ' <span class="text-danger">*</span>' : ''}
                 </label>
-                <input type="text" class="form-control form-control-sm ing-field"
-                       data-key="${key}" value="${escapeAttr(f[key] || '')}">
-            </div>`).join('');
+                <div class="ing-control">${control}
+                    ${value ? '' : '<span class="ocr-empty" style="font-size:11px;">사진에서 읽지 못했습니다</span>'}
+                </div>
+            </div>`;
+        }).join('');
 
         let matchNote = '';
         if (body.matched_existing) {
@@ -1072,13 +1084,18 @@ async function submitImportCompanyDoc() {
         }
 
         const modalEl = document.getElementById('ingredientPhotoModal');
-        modalEl.querySelector('.modal-body').innerHTML = `
+        const docMeta = documentData[docId] || {};
+        // 사진 파일일 때만 옆에 띄운다. PDF 는 이 경로로 오지 않지만, 문서함에는
+        // 다른 형식도 있으므로 확장자를 본다.
+        const photoUrl = /\.(jpe?g|png|webp|gif|bmp)$/i.test(docMeta.filename || '')
+            ? docMeta.mediaUrl : '';
+        window.photoViewerLayout(modalEl.querySelector('.modal-body'), photoUrl, `
             <div class="text-muted mb-3" style="font-size:12px;">
                 사진에서 읽은 값입니다. 틀린 곳은 고친 뒤 등록하세요.
                 함량(%)은 사진에 없으므로 BOM 탭에서 넣으셔야 합니다.
             </div>
             ${matchNote}
-            ${rows}`;
+            ${rows}`);
         modalEl.querySelector('#ingredientPhotoApply').onclick = () => applyIngredientPhoto(docId);
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     };

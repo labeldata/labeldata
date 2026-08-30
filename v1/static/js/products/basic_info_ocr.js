@@ -66,7 +66,7 @@
     var wrap = document.createElement('div');
     wrap.innerHTML = [
       '<div class="modal fade" id="basicInfoOcrModal" tabindex="-1" aria-hidden="true">',
-      '  <div class="modal-dialog modal-lg modal-dialog-scrollable">',
+      '  <div class="modal-dialog modal-xl modal-dialog-scrollable">',
       '    <div class="modal-content">',
       '      <div class="modal-header">',
       '        <h5 class="modal-title" style="font-size:16px;">',
@@ -157,7 +157,9 @@
       + '</div>';
   }
 
-  function showModal(data) {
+  // 읽어낸 값이 맞는지는 결국 사진을 봐야 안다. 원본을 옆에 두고 비교한다.
+  // photoFile 이 없으면(품목보고번호로 불러온 경우) 표만 그린다.
+  function showModal(data, photoFile) {
     // 모달을 먼저 만든다. 그 안의 요소를 먼저 찾으면 첫 실행에서 항상 null 이라
     // "Cannot set properties of null" 로 죽는다.
     var modalEl = ensureModal();
@@ -178,7 +180,7 @@
         '표시사항이 또렷하게 나온 사진인지 확인해 주세요.</div>';
       modalEl.querySelector('#basicInfoOcrApply').disabled = true;
     } else {
-      body.innerHTML =
+      var table =
         '<div class="text-muted mb-2" style="font-size:12px;">'
         + '체크한 항목만 반영합니다. 이미 값이 있는 칸은 덮어쓰지 않도록 체크를 꺼 뒀습니다.'
         + '</div>'
@@ -188,6 +190,7 @@
         + '  </div>'
         + rows.join('')
         + '</div>';
+      window.photoViewerLayout(body, photoFile, table);
       modalEl.querySelector('#basicInfoOcrApply').disabled = false;
 
       // "직접 입력…" 을 고르면 입력칸을 연다
@@ -460,7 +463,7 @@
           throw new Error(msg);   // 부른 쪽(불러오기 모달)이 알아야 한다
         }
         status('');
-        showModal(result.data || {});
+        showModal(result.data || {}, file);
       })
       .catch(function (err) {
         console.error(err);
@@ -477,7 +480,7 @@
   // 사진은 문서함에 남기고(원료 표시사항은 근거 자료다), 읽은 값을 확인 창에
   // 보여 준 뒤 BOM 원료 1건을 만든다. 확인 창은 문서함 탭이 쓰던 것을 그대로
   // 쓴다 - 같은 일을 두 벌로 만들 이유가 없다.
-  function ingredientConfirm(fields, onApply, meta) {
+  function ingredientConfirm(fields, onApply, meta, photoFile) {
     var modalEl = document.getElementById('ingredientPhotoModal');
     if (!modalEl) {
       // 문서함 탭이 없는 화면. 확인 없이 넣지 않고 그만둔다.
@@ -528,7 +531,8 @@
         + ' 똑같이 고쳐 주세요.</div>';
     }
 
-    modalEl.querySelector('.modal-body').innerHTML = head + rows;
+    window.photoViewerLayout(modalEl.querySelector('.modal-body'),
+                             photoFile, head + rows);
     modalEl.querySelector('#ingredientPhotoApply').onclick = function () {
       var edited = {};
       modalEl.querySelectorAll('.ing-field').forEach(function (el) {
@@ -581,7 +585,7 @@
           postJson('/products/documents/' + body.document_id + '/ingredient-photo/apply/',
                    { fields: edited })
             .then(function (res) { finishIngredient(res, modalEl); });
-        }, body);
+        }, body, file);
       })
       .catch(function (err) {
         console.error(err);

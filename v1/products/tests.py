@@ -1033,3 +1033,46 @@ class ImportModalWiringTests(TestCase):
         """확인 창을 두 벌로 만들지 않는다."""
         self.assertIn('ingredientPhotoModal', self.docs)
         self.assertIn('ingredientPhotoModal', self.ocr)
+
+
+class PhotoViewerWiringTests(TestCase):
+    """
+    확인 창 옆의 사진 뷰어.
+
+    읽어낸 값이 맞는지는 결국 사진을 봐야 안다. 값만 늘어놓으면 "이게 정말 저기
+    적힌 값인가" 를 확인할 방법이 없어서, 창을 닫고 사진을 따로 열어야 했다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.viewer = (base / 'static/js/products/photo_viewer.js').read_text(encoding='utf-8')
+        self.ocr = (base / 'static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.detail = (base / 'templates/products/product_detail.html').read_text(encoding='utf-8')
+        self.docs = (base / 'templates/products/_tab_documents.html').read_text(encoding='utf-8')
+
+    def test_뷰어가_먼저_실린다(self):
+        """basic_info_ocr 가 부를 때 이미 정의돼 있어야 한다."""
+        self.assertLess(self.detail.index('photo_viewer.js'),
+                        self.detail.index('basic_info_ocr.js'))
+
+    def test_두_확인창이_같은_뷰어를_쓴다(self):
+        self.assertIn('window.photoViewerLayout', self.viewer)
+        self.assertIn('photoViewerLayout(', self.ocr)
+        self.assertIn('photoViewerLayout(', self.docs)
+
+    def test_회전과_확대가_있다(self):
+        for act in ['rot-left', 'rot-right', 'zoom-in', 'zoom-out', 'reset']:
+            self.assertIn(act, self.viewer, f'{act} 버튼이 없다')
+        self.assertIn("addEventListener('wheel'", self.viewer)
+
+    def test_문서함_사진_주소를_넘긴다(self):
+        """서버에 이미 있는 사진은 주소로 띄운다."""
+        self.assertIn('mediaUrl', self.detail)
+        self.assertIn('mediaUrl', self.docs)
+
+    def test_objectURL_을_놓아_준다(self):
+        """창을 닫아도 안 풀면 사진이 메모리에 남는다."""
+        self.assertIn('revokeObjectURL', self.viewer)

@@ -264,6 +264,76 @@
 }
 
 /* -------------------------
+   확인 창의 사진 뷰어
+   읽어낸 값이 맞는지는 결국 사진을 봐야 안다. 표시사항은 글씨가 작고 세로로
+   찍힌 것도 흔해서, 회전과 확대가 있어야 실제로 읽힌다.
+   ------------------------- */
+.photo-compare-table { max-height: 62vh; overflow-y: auto; }
+
+.photo-viewer {
+    position:       sticky;
+    top:            0;
+    display:        flex;
+    flex-direction: column;
+    gap:            6px;
+}
+.photo-viewer-bar {
+    display:         flex;
+    align-items:     center;
+    gap:             8px;
+    justify-content: space-between;
+    flex-wrap:       wrap;
+}
+.photo-viewer-name {
+    font-size:     12px;
+    font-weight:   600;
+    color:         var(--ez-text-muted, #5f6368);
+    overflow:      hidden;
+    text-overflow: ellipsis;
+    white-space:   nowrap;
+    min-width:     0;
+}
+.photo-viewer-tools { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.photo-viewer-zoom {
+    font-size:     11px;
+    color:         var(--ez-text-muted, #5f6368);
+    min-width:     38px;
+    text-align:    center;
+    font-variant-numeric: tabular-nums;
+}
+.photo-viewer-stage {
+    position:   relative;
+    overflow:   hidden;
+    height:     58vh;
+    min-height: 280px;
+    background: #202124;
+    border-radius: 8px;
+    display:    flex;
+    align-items:     center;
+    justify-content: center;
+}
+.photo-viewer-stage img {
+    max-width:      100%;
+    max-height:     100%;
+    transform-origin: center center;
+    transition:     transform .12s ease-out;
+    user-select:    none;
+}
+.photo-viewer-pannable        { cursor: grab; }
+.photo-viewer-pannable:active { cursor: grabbing; }
+.photo-viewer-hint {
+    font-size:  11px;
+    color:      var(--ez-text-muted, #5f6368);
+    text-align: center;
+}
+
+@media (max-width: 991px) {
+    .photo-viewer          { position: static; }
+    .photo-viewer-stage    { height: 40vh; }
+    .photo-compare-table   { max-height: none; }
+}
+
+/* -------------------------
    사진에서 읽은 값 확인 표
    현재 값과 새 값을 나란히 두어 무엇이 바뀌는지 한눈에 보이게 한다.
    예전에는 항목마다 테두리 상자 + 세로 라디오 목록이라 16개가 화면을

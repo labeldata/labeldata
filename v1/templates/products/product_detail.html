@@ -2364,6 +2364,8 @@ const documentData = {
             typeCode: "{{ doc.document_type.type_code|default:''|escapejs }}",
             {# 이미 BOM 에 등록했으면 그 행 번호. 같은 사진을 두 번 읽지 않게 한다 #}
             ingredientBomId: {{ doc.metadata.ingredient_bom_id|default:"null" }},
+            {# 확인 창에서 원본을 옆에 놓고 비교하는 데 쓴다 #}
+            mediaUrl: "{{ doc.file.url|escapejs }}",
             slotId: {% if doc.slot %}{{ doc.slot.slot_id }}{% else %}null{% endif %},
             fileSize: {{ doc.file_size }},
             uploadedBy: "{{ doc.uploaded_by.username|default:'시스템'|escapejs }}",
@@ -3284,6 +3286,7 @@ function getCookie(name) {
 <script src="{% static 'js/smart_upload.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
 <!-- 사진·품목보고번호로 제품/원료 불러오기 -->
+<script src="{% static 'js/products/photo_viewer.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script src="{% static 'js/products/basic_info_ocr.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script src="{% static 'js/products/import_modal.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
