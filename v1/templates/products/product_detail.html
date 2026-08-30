@@ -3009,22 +3009,20 @@ function checkFormChanges() {
     });
     
     hasUnsavedChanges = hasChanges;
-    
-    // 플로팅 저장 바 표시/숨김
+
+    // 플로팅 저장 바는 띄우지 않는다.
+    //
+    // 칸을 하나 고칠 때마다 "저장하지 않은 변경사항이 있습니다" 가 화면 아래를
+    // 덮었다. 사진에서 항목을 한꺼번에 채우면 특히 거슬린다 - 방금 본인이 채운
+    // 것을 두고 경고를 받는 꼴이다.
+    //
+    // 안 고쳐진 채로 나가는 것은 beforeunload 가 막고, 저장은 상단 툴바의 저장
+    // 버튼이 맡는다(#tab-info 는 saveBasicInfo() 로 위임된다). 변경 추적
+    // (hasUnsavedChanges)은 그대로 둔다 - 이탈 경고가 그것을 본다.
     const floatingBar = document.getElementById('floating-save-bar');
     if (floatingBar) {
-        if (hasChanges) {
-            floatingBar.style.display = 'block';
-            // 애니메이션 트리거
-            setTimeout(() => {
-                floatingBar.classList.add('show');
-            }, 10);
-        } else {
-            floatingBar.classList.remove('show');
-            setTimeout(() => {
-                floatingBar.style.display = 'none';
-            }, 300);
-        }
+        floatingBar.classList.remove('show');
+        floatingBar.style.display = 'none';
     }
 }
 

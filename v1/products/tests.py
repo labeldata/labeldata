@@ -745,3 +745,67 @@ class RawmtrlToBomTests(TestCase):
         other = User.objects.create_user(username='r2b2', password='x')
         self.client.force_login(other)
         self.assertEqual(self._preview().status_code, 404)
+
+
+class IngredientPhotoDisplayNameTests(TestCase):
+    """
+    원료 사진으로 만든 BOM 행의 "원재료 표시명".
+
+    원료명을 그대로 복사하면 BOM 표의 앞 두 칸이 똑같아 보여 "원재료명을 못
+    읽었다" 로 읽힌다. 실제로 읽은 원재료명은 표에 컬럼이 없는 sub_ingredients
+    에만 들어가 보이지 않았다. 표시명에는 사진의 원재료명과 함량이 들어간다.
+    """
+
+    RAWMTRL = ('새송이버섯(국산)57.64%, 표고버섯채(중국산)21.63%, '
+               '애느타리버섯(국산)17.28%, 콩기름(대두:외국산)')
+
+    def setUp(self):
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='photodisp', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='만두')
+        self.doc = ProductDocument.objects.create(
+            label=self.label,
+            document_type=DocumentType.objects.create(
+                type_code='INGREDIENT_LABEL', type_name='원료 표시사항'),
+            file='v2/product_documents/ing.jpg',
+            original_filename='표고버섯볶음.jpg',
+        )
+
+    def _apply(self, **over):
+        fields = {
+            'ingredient_name': '표고버섯볶음(라그릴리아)',
+            'sub_ingredients': self.RAWMTRL,
+            'food_type': '조림류',
+        }
+        fields.update(over)
+        url = reverse('products:document_ingredient_photo_to_bom',
+                      kwargs={'document_id': self.doc.pk})
+        return self.client.post(url, data=json.dumps({'fields': fields}),
+                                content_type='application/json')
+
+    def test_표시명에_사진의_원재료명과_함량이_들어간다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply()
+        bom = ProductBOM.objects.get(parent_label=self.label)
+        self.assertEqual(bom.ingredient_name, '표고버섯볶음(라그릴리아)')
+        self.assertEqual(bom.raw_material_name, self.RAWMTRL)
+        self.assertNotEqual(bom.raw_material_name, bom.ingredient_name)
+
+    def test_원재료명을_못_읽으면_원료명을_쓴다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply(sub_ingredients='')
+        bom = ProductBOM.objects.get(parent_label=self.label)
+        self.assertEqual(bom.raw_material_name, '표고버섯볶음(라그릴리아)')
+
+    def test_다시_읽으면_행을_늘리지_않고_갱신한다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply(sub_ingredients='옛 원재료명')
+        self._apply()
+        boms = ProductBOM.objects.filter(parent_label=self.label)
+        self.assertEqual(boms.count(), 1)
+        self.assertEqual(boms.first().raw_material_name, self.RAWMTRL)

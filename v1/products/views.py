@@ -5934,6 +5934,13 @@ def document_ingredient_photo_to_bom(request, document_id):
                 delete_YN='N',
             )
 
+        # 원재료 표시명에는 **사진에 적힌 원재료명과 함량**을 넣는다.
+        # 이 원료가 완제품에 쓰이면 표시 문구는 "표고버섯볶음(새송이버섯 57.64%, …)"
+        # 처럼 나가야 한다. 원료명을 그대로 복사하면 BOM 표의 앞 두 칸이 똑같아
+        # "원재료명을 못 읽었다" 로 보이고, 실제로 읽은 원재료명은 표에 컬럼이
+        # 없는 sub_ingredients 에만 들어가 보이지 않는다.
+        printed = (fields.get('sub_ingredients') or '').strip()
+
         # 같은 원료가 이 제품 BOM 에 이미 있으면 다시 만들지 않는다
         bom = ProductBOM.objects.filter(
             parent_label=label, source_ingredient=ingredient, active_yn=True
@@ -5946,7 +5953,7 @@ def document_ingredient_photo_to_bom(request, document_id):
                 parent_label=label,
                 created_by=request.user,
                 ingredient_name=name,
-                raw_material_name=name,
+                raw_material_name=printed or name,
                 food_type=fields.get('food_type') or '',
                 sub_ingredients=fields.get('sub_ingredients') or '',
                 allergens=fields.get('allergens') or '',
@@ -5959,6 +5966,18 @@ def document_ingredient_photo_to_bom(request, document_id):
                 active_yn=True,
             )
             created = True
+        else:
+            # "다시 읽기" 로 들어온 경우. 행을 새로 만들지 않고 값을 갱신한다.
+            bom.ingredient_name = name
+            bom.raw_material_name = printed or name
+            bom.food_type = fields.get('food_type') or bom.food_type
+            bom.sub_ingredients = printed or bom.sub_ingredients
+            bom.allergens = fields.get('allergens') or bom.allergens
+            bom.allergen = fields.get('allergens') or bom.allergen
+            bom.origin = fields.get('origin') or bom.origin
+            bom.manufacturer = fields.get('manufacturer') or bom.manufacturer
+            bom.report_no = fields.get('report_no') or bom.report_no
+            bom.save()
 
         # 문서에 "무엇으로 등록했는지" 를 남긴다. 같은 사진을 두 번 읽지 않게 하고,
         # 나중에 이 BOM 행이 어디서 왔는지 되짚을 수 있다.

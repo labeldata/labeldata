@@ -1014,13 +1014,13 @@ async function submitImportCompanyDoc() {
     // 함량(%)은 넣지 않는다. 원료 봉지에는 그 원료가 완제품에서 몇 %인지
     // 적히지 않는다. BOM 화면에서 사람이 넣는다.
     const INGREDIENT_FIELDS = [
-        ['ingredient_name',  '원료명',        true],
-        ['food_type',        '식품유형',      false],
-        ['sub_ingredients',  '하위 원료',     false],
-        ['manufacturer',     '제조사',        false],
-        ['report_no',        '품목보고번호',  false],
-        ['origin',           '원산지',        false],
-        ['allergens',        '알레르기',      false]
+        ['ingredient_name',  '원료명 (BOM 원료명)',            true],
+        ['sub_ingredients',  '원재료명 및 함량 (원재료 표시명)', false],
+        ['food_type',        '식품유형',                       false],
+        ['manufacturer',     '제조사',                         false],
+        ['report_no',        '품목보고번호',                   false],
+        ['origin',           '원산지',                         false],
+        ['allergens',        '알레르기',                       false]
     ];
 
     function ingredientCsrf() {

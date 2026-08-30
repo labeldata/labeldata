@@ -142,7 +142,10 @@
   }
 
   function showModal(data) {
-    var body = document.getElementById('basicInfoOcrBody');
+    // 모달을 먼저 만든다. 그 안의 요소를 먼저 찾으면 첫 실행에서 항상 null 이라
+    // "Cannot set properties of null" 로 죽는다.
+    var modalEl = ensureModal();
+    var body = modalEl.querySelector('#basicInfoOcrBody');
     var rows = [];
 
     Object.keys(FIELD_MAP).forEach(function (field) {
@@ -157,18 +160,17 @@
         '<div class="text-center text-muted py-4">' +
         '사진에서 읽어낸 항목이 없습니다.<br>' +
         '표시사항이 또렷하게 나온 사진인지 확인해 주세요.</div>';
-      document.getElementById('basicInfoOcrApply').disabled = true;
+      modalEl.querySelector('#basicInfoOcrApply').disabled = true;
     } else {
       body.innerHTML =
         '<div class="text-muted mb-2" style="font-size:12px;">' +
         '읽은 값이 맞는지 확인하세요. 이미 입력된 칸은 덮어쓰지 않도록 체크를 꺼 뒀습니다.' +
         '</div>' + rows.join('');
-      document.getElementById('basicInfoOcrApply').disabled = false;
+      modalEl.querySelector('#basicInfoOcrApply').disabled = false;
     }
 
-    var modalEl = ensureModal();
     var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-    document.getElementById('basicInfoOcrApply').onclick = function () {
+    modalEl.querySelector('#basicInfoOcrApply').onclick = function () {
       applySelected();
       modal.hide();
     };
