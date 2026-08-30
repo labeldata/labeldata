@@ -416,7 +416,10 @@
 .rd-ab-title       { font-size: 11px; font-weight: 700; color: var(--c-text-primary); }
 .rd-ab-desc        { font-size: 10px; color: var(--c-text-secondary); line-height: 1.4; }
 .rd-ab-desc strong { color: #1e7e34; }
-.rd-ab-btn         { white-space: nowrap; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+/* 글자 크기만 정해 두고 여백은 btn-sm 에 얹혀 있었다. 두 규칙이 겹치면 어느 쪽이
+   이기는지가 로드 순서에 달리므로, 크기는 여기서 다 정한다. */
+.rd-ab-btn         { white-space: nowrap; font-size: 12px; font-weight: 600; flex-shrink: 0;
+                     padding: 4px 12px; border-radius: var(--r-md); }
 .rd-ab-divider     { width: 1px; background: var(--c-border); align-self: stretch; flex-shrink: 0; margin: 0 4px; }
 
 /* ── 16. AI 분석 섹션 ──────────────────────────────────────── */

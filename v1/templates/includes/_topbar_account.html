@@ -5,7 +5,7 @@
 {% if user.is_authenticated %}
     <!-- 홈 전환 버튼 (→ V1 기존홈) -->
     <a href="{% url 'main:home_v1' %}"
-       class="btn btn-outline-secondary btn-sm me-2 d-flex align-items-center home-switch-btn"
+       class="btn btn-outline-secondary me-2 d-flex align-items-center home-switch-btn"
        title="V1 기존홈으로 전환">
         <i class="bi bi-arrow-left-right"></i><span class="home-switch-text ms-1">홈 전환</span>
     </a>
@@ -104,11 +104,11 @@
 {% else %}
 {# ── 비인증(게스트): 로그인/회원가입 버튼 ── #}
     <a href="{% url 'user_management:login' %}?next={{ request.get_full_path }}"
-       class="btn btn-outline-secondary btn-sm me-2 v2-auth-btn">
+       class="btn btn-outline-secondary me-2 v2-auth-btn">
         로그인
     </a>
     <a href="{% url 'user_management:signup' %}"
-       class="btn btn-primary btn-sm v2-auth-btn">
+       class="btn btn-primary v2-auth-btn">
         회원가입
     </a>
 {% endif %}

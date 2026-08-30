@@ -131,6 +131,17 @@
     border-color: #1765cc !important;
   }
 
+  /* 칩 옆의 자동감지·전체선택 토글. 칩과 같은 크기라야 한 줄로 나란히 앉는다.
+     예전에는 버튼마다 인라인으로 0.7rem/0.15rem 을 적어 두어 칩(11px/3px 10px)과
+     미묘하게 어긋나 있었다. */
+  .ag-toggle-btn {
+    font-size:     11px;
+    padding:       3px 10px;
+    border-radius: 14px;
+    font-weight:   600;
+    white-space:   nowrap;
+  }
+
   /* 선택 표시 텍스트 */
   .selected-display {
     font-size: 11px;
@@ -307,7 +318,7 @@
                         <td colspan="3">
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control" name="prdlst_report_no" id="prdlst_report_no" value="{{ ingredient.prdlst_report_no|default:'' }}" maxlength="15" placeholder="예: 19950000000000" style="flex: 1;">
-                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="fetchFoodItemByReportNo()" title="품목보고번호로 불러오기" style="white-space: nowrap;">
+                                <button type="button" class="btn btn-outline-primary v2-btn-sm" onclick="fetchFoodItemByReportNo()" title="품목보고번호로 불러오기">
                                     <i class="bi bi-download"></i> 불러오기
                                 </button>
                             </div>
@@ -365,15 +376,15 @@
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <div id="allergySelectedDisplay" class="selected-display">선택된 항목 없음</div>
                                     <div class="d-flex gap-1">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="allergyAutoDetectBtn" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 12px;" title="원재료명으로 알레르기 자동감지">
+                                        <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="allergyAutoDetectBtn" title="원재료명으로 알레르기 자동감지">
                                             <i class="fas fa-sync-alt"></i> 자동감지
                                         </button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="allergyToggleBtn" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 12px;">전체선택</button>
+                                        <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="allergyToggleBtn">전체선택</button>
                                     </div>
                                 </div>
                                 <div id="allergyBtnList" class="d-flex flex-wrap gap-1 mb-1">
                                     {% for allergen in allergen_list %}
-                                    <button type="button" class="btn btn-sm btn-outline-primary allergy-btn" data-allergen="{{ allergen }}">{{ allergen }}</button>
+                                    <button type="button" class="btn btn-outline-primary allergy-btn" data-allergen="{{ allergen }}">{{ allergen }}</button>
                                     {% endfor %}
                                 </div>
                                 <input type="hidden" name="allergens" id="allergy_info" value="{{ ingredient.allergens|default:'' }}">
@@ -387,7 +398,7 @@
                             <div class="allergy-gmo-panel">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
                                     <div id="gmoSelectedDisplay" class="selected-display">선택된 항목 없음</div>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="gmoToggleBtn" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 12px;">전체선택</button>
+                                    <button type="button" class="btn btn-outline-secondary ag-toggle-btn" id="gmoToggleBtn">전체선택</button>
                                 </div>
                                 <div id="gmoBtnList" class="d-flex flex-wrap gap-1 mb-1">
                                     {% for gmo in gmo_list %}

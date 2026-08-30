@@ -361,11 +361,11 @@
                 <span class="pv-cond-n" id="condCount" {% if not conditions %}hidden{% endif %}>{{ conditions|length }}</span>
             </button>
 
-            <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
+            <button type="submit" class="btn btn-primary v2-btn">
                 <i class="bi bi-search me-1"></i>검색
             </button>
             {% if search_query or conditions %}
-            <a href="?" class="btn btn-outline-primary" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
+            <a href="?" class="btn btn-outline-primary v2-btn">
                 초기화
             </a>
             {% endif %}

@@ -343,7 +343,7 @@
             <div style="font-size:14px;font-weight:600;color:#c5221f;margin-bottom:2px;">부적합·처분 알림 {{ regulatory_alert_count }}건 미확인</div>
             <div style="font-size:12px;color:#5f6368;">내 제품·원료와 연관 가능성이 있는 새 부적합·처분 정보가 있습니다. 위험 수준을 확인하고 필요 시 조치하세요. 연관 없는 항목은 "오탐 제외"로 목록에서 제외할 수 있습니다.</div>
         </div>
-        <a href="{% url 'regulatory:list' %}" class="btn btn-danger btn-sm" style="white-space:nowrap;border-radius:20px;">
+        <a href="{% url 'regulatory:list' %}" class="btn btn-danger v2-btn-sm">
             <i class="bi bi-arrow-right me-1"></i>바로 확인
         </a>
     </div>
@@ -354,7 +354,7 @@
             <div style="font-size:13px;font-weight:600;color:#3c4043;margin-bottom:1px;">부적합·처분 알림 — 현재 연관 항목 없음 ✓</div>
             <div style="font-size:12px;color:#5f6368;">식품안전나라 부적합·행정처분 정보를 AI로 분석해 내 제품·원료와의 연관성을 자동 모니터링합니다. 새 부적합 정보 등록 시 즉시 알림을 받습니다.</div>
         </div>
-        <a href="{% url 'regulatory:list' %}" class="btn btn-outline-secondary btn-sm" style="white-space:nowrap;border-radius:20px;font-size:12px;">
+        <a href="{% url 'regulatory:list' %}" class="btn btn-outline-secondary v2-btn-sm">
             <i class="bi bi-shield-exclamation me-1"></i>모니터링 현황
         </a>
     </div>
@@ -438,7 +438,7 @@
                 <div class="text-center py-4">
                     <i class="bi bi-inbox" style="font-size:36px;color:#dadce0;"></i>
                     <p class="mt-2 text-muted" style="font-size:13px;">진행 중인 제품이 없습니다.</p>
-                    <a href="{% url 'products:product_create' %}" class="btn btn-sm btn-primary mt-1">신규 등록</a>
+                    <a href="{% url 'products:product_create' %}" class="btn btn-primary v2-btn-sm mt-1">신규 등록</a>
                 </div>
                 {% else %}
                 {% with max_val=total_with_meta %}
@@ -548,7 +548,7 @@
                 <div class="text-center py-4">
                     <i class="bi bi-inbox" style="font-size:36px;color:#dadce0;"></i>
                     <p class="mt-2 text-muted" style="font-size:13px;">아직 등록된 제품이 없습니다.</p>
-                    <a href="{% url 'products:product_create' %}" class="btn btn-sm btn-primary mt-1">첫 제품 등록하기</a>
+                    <a href="{% url 'products:product_create' %}" class="btn btn-primary v2-btn-sm mt-1">첫 제품 등록하기</a>
                 </div>
                 {% endif %}
             </div>

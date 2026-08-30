@@ -75,10 +75,18 @@ def check_multiline_template_comments(app_configs, **kwargs):
 #
 # 크기(font-size/padding)만 본다 — 색·표시여부·폭 같은 인라인은 정상적인 쓰임이 많다.
 #
-# 처음에는 제품 상세 5개 파일만 봤다. products/ 전체를 보면 아직 정리하지 않은
-# 화면까지 잡혀서, 배포 때마다 도는 manage.py check 가 매번 100줄을 뱉으면 아무도
-# 안 읽게 되기 때문이다. 나머지 화면(BOM·연락처·탐색기·문서함 등 76건)을 정리하고
-# 나서 범위를 products/ 전체로 넓혔다.
+# 범위는 "products/ 안" 이 아니라 "V2 디자인 시스템이 닿는 화면" 이다.
+#
+# .v2-btn 계열은 products_common.css 에 있고, 그 파일은 base_v2.html 만 읽어들인다.
+# 그래서 base.html 을 쓰는 화면에서 .v2-btn 으로 바꾸면 크기 규칙이 통째로 사라진다.
+# 실제로 남아 있는 경고 324건 중 300건이 base.html 계열이었다 - 그걸 모르고 바꿨으면
+# 표시사항 작성 화면과 홈의 버튼이 전부 스타일 없는 상태가 됐을 것이다.
+#
+# 그래서 extends 사슬이 base_v2.html 에 닿는 템플릿과, 그런 템플릿이 include 하는
+# 부분 템플릿만 본다. 화면이 base_v2 로 옮겨오면 검사 범위도 저절로 따라온다.
+
+_EXTENDS = re.compile(r'{%\s*extends\s+["\']([^"\']+)["\']')
+_INCLUDE = re.compile(r'{%\s*include\s+["\']([^"\']+)["\']')
 
 _BTN_TAG = re.compile(r'<(?:button|a)\b[^>]*\bclass="[^"]*\bbtn\b[^"]*"[^>]*>', re.I)
 _SIZE_IN_STYLE = re.compile(r'style="[^"]*\b(?:font-size|padding)\s*:', re.I)
@@ -93,35 +101,68 @@ _SIZED_BY_CLASS = (
     'gmo-btn',                   # BOM GMO 칩
     'summary-type-btn',          # BOM 요약 방식 선택
     'contacts-icon-btn',         # 연락처 아이콘 버튼
+    'allergy-btn',               # 원료 상세 알레르기 칩
+    'ag-toggle-btn',             # 원료 상세 알레르기·GMO 토글
+    'kw-add-btn',                # 키워드 추가 (regulatory.css)
+    'rd-act-btn',                # 부적합 상세 조치 버튼
+    'rd-ab-btn',                 # 부적합 일괄 조치 버튼
+    'rd-cond-submit',            # 목록 검색 조건 적용 (list_common.css)
+    'home-switch-btn',           # V1↔V2 전환
+    'v2-auth-btn',               # 로그인·회원가입
 )
+
+
+def _v2_templates():
+    """products_common.css 가 실제로 닿는 템플릿 (경로, 본문) 을 모은다."""
+    text = {}
+    for root in _template_dirs():
+        for path in root.rglob('*.html'):
+            try:
+                text.setdefault(
+                    str(path.relative_to(root)).replace(chr(92), '/'),
+                    (path, path.read_text(encoding='utf-8')))
+            except (OSError, UnicodeDecodeError):
+                continue
+
+    def reaches_v2(rel):
+        seen = set()
+        while rel and rel not in seen:
+            if rel == 'base_v2.html':
+                return True
+            seen.add(rel)
+            m = _EXTENDS.search(text[rel][1]) if rel in text else None
+            rel = m.group(1) if m else None
+        return False
+
+    found = {r for r in text if reaches_v2(r)}
+    # include 를 타고 부분 템플릿까지 넓힌다
+    pending = list(found)
+    while pending:
+        for inc in _INCLUDE.findall(text[pending.pop()][1]):
+            if inc in text and inc not in found:
+                found.add(inc)
+                pending.append(inc)
+    return [(rel, *text[rel]) for rel in sorted(found)]
 
 
 @register()
 def check_product_button_sizing(app_configs, **kwargs):
-    """제품 상세 템플릿에서 버튼 크기를 인라인·부트스트랩으로 지정한 곳을 찾는다."""
+    """V2 화면에서 버튼 크기를 인라인·부트스트랩으로 지정한 곳을 찾는다."""
     warnings = []
-    for root in _template_dirs():
-        products = root / 'products'
-        if not products.is_dir():
-            continue
-        for path in sorted(products.rglob('*.html')):
-            try:
-                text = path.read_text(encoding='utf-8')
-            except (OSError, UnicodeDecodeError):
+    for rel, path, text in _v2_templates():
+        for m in _BTN_TAG.finditer(text):
+            tag = m.group(0)
+            if any(cls in tag for cls in _SIZED_BY_CLASS):
                 continue
-            for m in _BTN_TAG.finditer(text):
-                tag = m.group(0)
-                if any(cls in tag for cls in _SIZED_BY_CLASS):
-                    continue
-                if not (_SIZE_IN_STYLE.search(tag) or _BS_SIZE_CLASS.search(tag)):
-                    continue
-                line = text.count('\n', 0, m.start()) + 1
-                warnings.append(Warning(
-                    f'{path.name}:{line} 버튼 크기를 인라인/btn-sm 으로 지정했습니다.',
-                    hint='products_common.css 의 .v2-btn / .v2-btn-sm / .v2-btn-icon 중 하나를 쓰세요.',
-                    obj=str(path),
-                    id='products.W001',
-                ))
+            if not (_SIZE_IN_STYLE.search(tag) or _BS_SIZE_CLASS.search(tag)):
+                continue
+            line = text.count('\n', 0, m.start()) + 1
+            warnings.append(Warning(
+                f'{rel}:{line} 버튼 크기를 인라인/btn-sm 으로 지정했습니다.',
+                hint='products_common.css 의 .v2-btn / .v2-btn-sm / .v2-btn-icon 중 하나를 쓰세요.',
+                obj=str(path),
+                id='products.W001',
+            ))
     return warnings
 
 

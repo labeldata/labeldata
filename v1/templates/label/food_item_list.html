@@ -419,11 +419,11 @@
                 <span class="pv-cond-n" id="condCount" {% if not conditions %}hidden{% endif %}>{{ conditions|length }}</span>
             </button>
 
-            <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
+            <button type="submit" class="btn btn-primary v2-btn">
                 <i class="bi bi-search me-1"></i>검색
             </button>
             {% if can_reset %}
-            <a href="?food_category={{ food_category }}" class="btn btn-outline-secondary btn-sm" style="border-radius: 20px; padding: 6px 18px; font-size: 13px; white-space: nowrap;">
+            <a href="?food_category={{ food_category }}" class="btn btn-outline-secondary v2-btn">
                 초기화
             </a>
             {% endif %}
