@@ -65,13 +65,6 @@ ls -la /home/labeldata/mysite/staticfiles/css/list_common.css
 `No planned migration operations.` 면 적용할 게 없다는 뜻이다. 뭔가 나오면 그게
 무엇인지 확인하고 나서 `migrate` 를 돌린다.
 
-상태가 의심스러우면 읽기 전용 진단을 쓴다.
-
-```bash
-python manage.py check_migration_state          # 요약
-python manage.py check_migration_state --files  # 앱별 파일·기록 이름까지
-```
-
 **마이그레이션 파일을 `.gitignore` 에 다시 넣지 말 것.** 그게 이 사고의 원인이었다.
 의존 대상이 사라지면 `manage.py check` 가 `migrations.E001` 로 잡는다.
 
