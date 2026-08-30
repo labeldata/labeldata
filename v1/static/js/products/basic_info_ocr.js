@@ -214,6 +214,158 @@
     status(filled
       ? filled + '개 항목을 채웠습니다. 확인 후 저장하세요.'
       : '채운 항목이 없습니다.');
+
+    // 원재료명을 채웠으면 그 안의 원료들을 BOM 행으로 만들 수 있다.
+    // 한 줄짜리 문자열로 두면 배합비 순서 검사·알레르기 수집·표시 문구가
+    // 올라갈 자리가 없다.
+    var rawmtrl = document.getElementById(FIELD_MAP.rawmtrl_nm.id);
+    if (filled && rawmtrl && rawmtrl.value.trim()) {
+      offerBomSplit(rawmtrl.value.trim());
+    }
+  }
+
+  // ── 원재료명 → BOM 원료별 행 ────────────────────────────────────────────
+  function labelId() {
+    // product_detail.html 이 PRODUCT_ID 전역을 놓아 둔다. URL 에서 캐내는 것보다
+    // 확실하다 - 제품 상세는 /products/<id>/ 와 /products/<id>/new/ 두 벌이다.
+    if (typeof PRODUCT_ID !== 'undefined' && PRODUCT_ID) return PRODUCT_ID;
+    var m = window.location.pathname.match(/\/products\/(\d+)/);
+    return m ? m[1] : '';
+  }
+
+  function offerBomSplit(text) {
+    var id = labelId();
+    if (!id) return;
+
+    fetch('/products/labels/' + id + '/rawmtrl-to-bom/preview/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify({ text: text })
+    })
+      .then(function (res) { return res.json().catch(function () { return null; }); })
+      .then(function (body) {
+        if (!body || !body.success || !body.rows.length) return;
+        showBomModal(id, body);
+      })
+      .catch(function (err) { console.error(err); });
+  }
+
+  function showBomModal(id, body) {
+    var modalEl = ensureBomModal();
+    var rows = body.rows.map(function (r, i) {
+      var note = r.matched
+        ? '<span class="badge bg-success" style="font-size:10px;">기존 원료</span>'
+        : (r.candidates.length
+            ? '<span class="badge bg-warning text-dark" style="font-size:10px;">신규 (비슷: '
+              + esc(r.candidates.join(', ')) + ')</span>'
+            : '<span class="badge bg-secondary" style="font-size:10px;">신규</span>');
+      return '<tr data-i="' + i + '">'
+        + '<td><input type="checkbox" class="form-check-input bom-pick" checked></td>'
+        + '<td><input type="text" class="form-control form-control-sm bom-name" value="' + esc(r.name) + '"></td>'
+        + '<td style="width:90px;"><input type="text" class="form-control form-control-sm bom-ratio" value="'
+        + (r.ratio == null ? '' : r.ratio) + '" placeholder="%"></td>'
+        + '<td style="width:110px;"><input type="text" class="form-control form-control-sm bom-origin" value="' + esc(r.origin) + '"></td>'
+        + '<td style="font-size:11px;">' + esc(r.sub_ingredients) + '</td>'
+        + '<td>' + note + '</td>'
+        + '</tr>';
+    }).join('');
+
+    modalEl.querySelector('.modal-body').innerHTML =
+      '<div class="text-muted mb-2" style="font-size:12px;">'
+      + '원재료명에서 원료 ' + body.rows.length + '개를 찾았습니다. '
+      + '체크한 것만 BOM에 등록합니다.'
+      + (body.allergen_note
+          ? ' 알레르기 문구(<strong>' + esc(body.allergen_note) + '</strong>)는 원료가 아니라 제외했습니다.'
+          : '')
+      + '</div>'
+      + (body.existing_bom
+          ? '<div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="bomReplace">'
+            + '<label class="form-check-label" for="bomReplace" style="font-size:12px;">'
+            + '기존 BOM ' + body.existing_bom + '행을 비우고 새로 채우기</label></div>'
+          : '')
+      + '<div class="table-responsive"><table class="table table-sm align-middle mb-0">'
+      + '<thead><tr style="font-size:11px;"><th></th><th>원료명</th><th>배합비</th>'
+      + '<th>원산지</th><th>하위 원료</th><th>상태</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table></div>';
+
+    modalEl.querySelector('#bomApply').onclick = function () { applyBom(id, modalEl); };
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  function ensureBomModal() {
+    var existing = document.getElementById('rawmtrlBomModal');
+    if (existing) return existing;
+    var wrap = document.createElement('div');
+    wrap.innerHTML = [
+      '<div class="modal fade" id="rawmtrlBomModal" tabindex="-1" aria-hidden="true">',
+      '  <div class="modal-dialog modal-xl modal-dialog-scrollable">',
+      '    <div class="modal-content">',
+      '      <div class="modal-header">',
+      '        <h5 class="modal-title" style="font-size:16px;">',
+      '          <i class="bi bi-diagram-3 me-2 text-primary"></i>원재료를 BOM에 등록',
+      '        </h5>',
+      '        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>',
+      '      </div>',
+      '      <div class="modal-body"></div>',
+      '      <div class="modal-footer">',
+      '        <span class="me-auto text-muted" style="font-size:12px;">',
+      '          BOM 탭에서 확인·수정한 뒤 저장하세요.',
+      '        </span>',
+      '        <button type="button" class="btn btn-light v2-btn-sm" data-bs-dismiss="modal">나중에</button>',
+      '        <button type="button" class="btn btn-primary v2-btn-sm" id="bomApply">',
+      '          <i class="bi bi-plus-lg"></i>BOM에 등록',
+      '        </button>',
+      '      </div>',
+      '    </div>',
+      '  </div>',
+      '</div>'
+    ].join('');
+    document.body.appendChild(wrap.firstChild);
+    return document.getElementById('rawmtrlBomModal');
+  }
+
+  function applyBom(id, modalEl) {
+    var rows = [];
+    modalEl.querySelectorAll('tbody tr').forEach(function (tr) {
+      if (!tr.querySelector('.bom-pick').checked) return;
+      var ratio = tr.querySelector('.bom-ratio').value.trim();
+      rows.push({
+        name: tr.querySelector('.bom-name').value.trim(),
+        ratio: ratio === '' ? null : parseFloat(ratio),
+        origin: tr.querySelector('.bom-origin').value.trim(),
+        sub_ingredients: tr.querySelector('td:nth-child(5)').textContent.trim()
+      });
+    });
+    if (!rows.length) {
+      alert('등록할 원료를 하나 이상 고르세요.');
+      return;
+    }
+
+    var replaceEl = modalEl.querySelector('#bomReplace');
+    var btn = modalEl.querySelector('#bomApply');
+    btn.disabled = true;
+
+    fetch('/products/labels/' + id + '/rawmtrl-to-bom/apply/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify({ rows: rows, replace: replaceEl ? replaceEl.checked : false })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (body) {
+        if (!body.success) {
+          alert(body.error || 'BOM에 등록하지 못했습니다.');
+          return;
+        }
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        status('원료 ' + body.total + '개를 BOM에 등록했습니다 '
+             + '(새로 만든 원료 ' + body.created + '개, 기존 원료 연결 '
+             + body.matched_existing + '개). BOM 탭에서 확인하세요.');
+      })
+      .catch(function (err) {
+        console.error(err);
+        alert('BOM 등록 중 오류가 발생했습니다.');
+      })
+      .finally(function () { btn.disabled = false; });
   }
 
   function csrfToken() {

@@ -5673,6 +5673,191 @@ def document_ai_review_save(request, document_id):
     return JsonResponse({'success': True})
  
  
+def _resolve_editable_label(request, label_id):
+    """내 라벨이거나 편집 권한이 있는 공유 라벨을 돌려준다."""
+    return get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+
+
+@login_required
+@require_POST
+def rawmtrl_to_bom_preview(request, label_id):
+    """
+    표시사항의 원재료명 한 줄을 원료 목록으로 쪼개 보여 준다. 저장하지 않는다.
+
+    사진에서 읽은 원재료명은 "새송이버섯(국산)57.64%,과·채가공품/표고버섯채
+    (중국산)21.63%(표고버섯,정제수,정제소금,구연산),..." 같은 한 줄이다.
+    이걸 원료마다 한 행으로 만들어야 배합비 순서 검사·알레르기 수집·표시 문구가
+    올라갈 자리가 생긴다.
+
+    쪼갠 결과를 바로 넣지 않는다. 화면이 목록을 보여 주고 사용자가 고친 뒤
+    apply 로 저장한다.
+    """
+    from v1.label.services.ingredient_matching import load_pool, match_my_ingredient
+    from v1.label.services.ingredient_text import parse_ingredient_list
+
+    label = _resolve_editable_label(request, label_id)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    text = (payload.get('text') or '').strip()
+    if not text:
+        text = (label.rawmtrl_nm_display or label.rawmtrl_nm or '').strip()
+    if not text:
+        return JsonResponse({
+            'success': False,
+            'error': '원재료명이 비어 있습니다.',
+        }, status=400)
+
+    parsed = parse_ingredient_list(text)
+    if not parsed['items']:
+        return JsonResponse({
+            'success': False,
+            'error': '원재료명에서 원료를 찾지 못했습니다.',
+        }, status=400)
+
+    pool = load_pool(request.user)
+    rows = []
+    for item in parsed['items']:
+        ingredient, score, candidates = match_my_ingredient(
+            request.user, item['name'], pool=pool)
+        rows.append({
+            **item,
+            'matched': ingredient is not None,
+            'matched_name': ingredient.prdlst_nm if ingredient else '',
+            'score': score,
+            'candidates': candidates,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'rows': rows,
+        'allergen_note': parsed['allergen_note'],
+        'existing_bom': _active_bom_count(label),
+    })
+
+
+def _active_bom_count(label):
+    from v1.bom.models import ProductBOM
+    return ProductBOM.objects.filter(parent_label=label, active_yn=True).count()
+
+
+@login_required
+@require_POST
+def rawmtrl_to_bom_apply(request, label_id):
+    """
+    쪼갠 원료들을 BOM 행으로 만든다.
+
+    replace=True 면 기존 BOM 을 비우고 새로 채운다. 사진으로 다시 읽을 때
+    같은 원료가 두 벌로 쌓이지 않게 하려는 것이라, 기본은 False 다.
+
+    배합비는 사진에 적힌 값을 그대로 쓴다. 없는 원료는 비워 둔다 — 라벨에
+    함량이 적히지 않은 원료가 흔하고, 없는 값을 0 으로 채우면 순서 검사가
+    "함량 0" 을 사실로 받아들인다.
+    """
+    from django.db import transaction
+
+    from v1.bom.models import ProductBOM
+    from v1.bom.services import sync_relations_from_bom
+    from v1.label.services.ingredient_matching import (
+        get_or_create_my_ingredient, load_pool, match_my_ingredient, normalize_name,
+    )
+
+    label = _resolve_editable_label(request, label_id)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    rows = payload.get('rows') or []
+    if not rows:
+        return JsonResponse({'success': False, 'error': '등록할 원료가 없습니다.'},
+                            status=400)
+
+    replace = bool(payload.get('replace'))
+    pool = load_pool(request.user)
+    created = matched = 0
+
+    with transaction.atomic():
+        if replace:
+            ProductBOM.objects.filter(parent_label=label).update(active_yn=False)
+            order = 0
+        else:
+            order = _active_bom_count(label)
+
+        for row in rows:
+            name = (row.get('name') or '').strip()
+            if not name:
+                continue
+
+            ratio = row.get('ratio')
+            try:
+                ratio = float(ratio) if ratio not in (None, '') else None
+            except (TypeError, ValueError):
+                ratio = None
+
+            subs = (row.get('sub_ingredients') or '').strip()
+            origin = (row.get('origin') or '').strip()
+
+            ingredient, _score, _cands = match_my_ingredient(
+                request.user, name, pool=pool)
+            if ingredient:
+                matched += 1
+            else:
+                ingredient, _new = get_or_create_my_ingredient(
+                    request.user,
+                    prdlst_nm=name,
+                    prdlst_report_no='',
+                    prdlst_dcnm='',
+                    ingredient_display_name=name,
+                    rawmtrl_nm=subs,
+                    delete_YN='N',
+                )
+                pool.setdefault(normalize_name(name), []).append(ingredient)
+
+            bom = ProductBOM.objects.filter(
+                parent_label=label, source_ingredient=ingredient).first()
+            if bom:
+                bom.ingredient_name = name
+                bom.raw_material_name = name
+                bom.usage_ratio = ratio
+                bom.origin = origin
+                bom.sub_ingredients = subs
+                bom.active_yn = True
+                bom.sort_order = order
+                bom.save()
+            else:
+                ProductBOM.objects.create(
+                    parent_label=label,
+                    created_by=request.user,
+                    ingredient_name=name,
+                    raw_material_name=name,
+                    usage_ratio=ratio,
+                    origin=origin,
+                    sub_ingredients=subs,
+                    source_ingredient=ingredient,
+                    sort_order=order,
+                    active_yn=True,
+                )
+                created += 1
+            order += 1
+
+        linked, skipped = sync_relations_from_bom(label)
+
+    log_activity(request, 'product', 'rawmtrl_to_bom', label.my_label_id)
+    return JsonResponse({
+        'success': True,
+        'created': created,
+        'matched_existing': matched,
+        'linked_to_label': linked,
+        'skipped_no_ingredient': skipped,
+        'total': len(rows),
+    })
+
+
 @login_required
 @require_POST
 def document_ingredient_photo_to_bom(request, document_id):

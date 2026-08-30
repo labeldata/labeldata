@@ -636,3 +636,112 @@ class BasicInfoOcrWiringTests(TestCase):
 
     def test_스크립트가_고정_캐시버스터를_쓰지_않는다(self):
         self.assertIn("basic_info_ocr.js' %}?v={{ STATIC_BUILD_DATE }}", self.detail)
+
+
+class RawmtrlToBomTests(TestCase):
+    """
+    표시사항의 원재료명 한 줄 → 원료별 BOM 행.
+
+    사진에서 읽은 원재료명은 한 줄짜리 문자열이다. 그대로 두면 배합비 순서
+    검사·알레르기 수집·표시 문구가 올라갈 자리가 없다.
+    """
+
+    TEXT = ('새송이버섯(국산)57.64%,과·채가공품/표고버섯채(중국산)21.63%'
+            '(표고버섯,정제수,정제소금,구연산),애느타리버섯(국산)17.28%,'
+            '콩기름(대두:외국산),천일염(국산),흑후추')
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='r2b', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user,
+                                            my_label_name='표고버섯볶음')
+
+    def _preview(self, text=None):
+        url = reverse('products:rawmtrl_to_bom_preview',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(url,
+                                data=json.dumps({'text': text or self.TEXT}),
+                                content_type='application/json')
+
+    def _apply(self, rows, replace=False):
+        url = reverse('products:rawmtrl_to_bom_apply',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(
+            url, data=json.dumps({'rows': rows, 'replace': replace}),
+            content_type='application/json')
+
+    def test_미리보기는_저장하지_않는다(self):
+        from v1.bom.models import ProductBOM
+
+        body = self._preview().json()
+        self.assertTrue(body['success'])
+        self.assertEqual(len(body['rows']), 6)
+        self.assertEqual(body['rows'][0]['name'], '새송이버섯')
+        self.assertEqual(body['rows'][0]['ratio'], 57.64)
+        self.assertEqual(ProductBOM.objects.filter(parent_label=self.label).count(), 0)
+
+    def test_BOM_행과_표시사항_원재료가_함께_생긴다(self):
+        from v1.bom.models import ProductBOM
+        from v1.label.models import LabelIngredientRelation
+
+        rows = self._preview().json()['rows']
+        body = self._apply(rows).json()
+        self.assertEqual(body['created'], 6)
+        self.assertEqual(body['linked_to_label'], 6)
+
+        boms = ProductBOM.objects.filter(parent_label=self.label, active_yn=True)
+        self.assertEqual(boms.count(), 6)
+        self.assertEqual(
+            LabelIngredientRelation.objects.filter(label=self.label).count(), 6)
+
+    def test_배합비가_그대로_들어간다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply(self._preview().json()['rows'])
+        bom = ProductBOM.objects.get(parent_label=self.label,
+                                     ingredient_name='새송이버섯')
+        self.assertEqual(float(bom.usage_ratio), 57.64)
+
+    def test_함량이_없는_원료는_비워_둔다(self):
+        """없는 값을 0 으로 채우면 순서 검사가 '함량 0' 을 사실로 받아들인다."""
+        from v1.bom.models import ProductBOM
+
+        self._apply(self._preview().json()['rows'])
+        bom = ProductBOM.objects.get(parent_label=self.label, ingredient_name='흑후추')
+        self.assertIsNone(bom.usage_ratio)
+
+    def test_하위_원료가_보존된다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply(self._preview().json()['rows'])
+        bom = ProductBOM.objects.get(parent_label=self.label,
+                                     ingredient_name='과·채가공품/표고버섯채')
+        self.assertEqual(bom.sub_ingredients, '표고버섯, 정제수, 정제소금, 구연산')
+        self.assertEqual(bom.origin, '중국산')
+
+    def test_두_번_등록해도_행이_늘지_않는다(self):
+        from v1.bom.models import ProductBOM
+
+        rows = self._preview().json()['rows']
+        self._apply(rows)
+        self._apply(rows)
+        self.assertEqual(
+            ProductBOM.objects.filter(parent_label=self.label, active_yn=True).count(), 6)
+
+    def test_replace_는_기존_BOM_을_비운다(self):
+        from v1.bom.models import ProductBOM
+
+        ProductBOM.objects.create(parent_label=self.label, ingredient_name='옛원료',
+                                  created_by=self.user, active_yn=True)
+        self._apply(self._preview().json()['rows'], replace=True)
+        names = set(ProductBOM.objects.filter(
+            parent_label=self.label, active_yn=True).values_list('ingredient_name', flat=True))
+        self.assertNotIn('옛원료', names)
+
+    def test_원재료명이_비면_400(self):
+        self.assertEqual(self._preview(text=' ').status_code, 400)
+
+    def test_남의_라벨은_못_건드린다(self):
+        other = User.objects.create_user(username='r2b2', password='x')
+        self.client.force_login(other)
+        self.assertEqual(self._preview().status_code, 404)

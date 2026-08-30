@@ -1705,3 +1705,74 @@ class RawmtrlDisplayGeneratorTests(TestCase):
         self.client.force_login(other)
         res = self.client.get(f'/label/{self.label.my_label_id}/rawmtrl-display/')
         self.assertEqual(res.status_code, 404)
+
+
+class IngredientTextParseTests(TestCase):
+    """
+    인쇄된 원재료명 한 줄을 원료 목록으로 쪼갠다.
+
+    실제 라벨 세 장에서 가져온 문구로 고정한다. 괄호 안 쉼표에서 자르면 첨가물
+    하나가 여러 원료로 쪼개지고, 알레르기 선언을 안 떼면 "대두" 가 원료로 들어간다.
+    """
+
+    def _parse(self, text):
+        from v1.label.services.ingredient_text import parse_ingredient_list
+        return parse_ingredient_list(text)
+
+    def test_괄호_안_쉼표에서_자르지_않는다(self):
+        res = self._parse('혼합제제(초산전분, 히드록시프로필인산이전분), 정제소금')
+        self.assertEqual([i['name'] for i in res['items']], ['혼합제제', '정제소금'])
+        self.assertEqual(res['items'][0]['sub_ingredients'],
+                         '초산전분, 히드록시프로필인산이전분')
+
+    def test_원산지와_함량을_떼어낸다(self):
+        res = self._parse('새송이버섯(국산)57.64%')
+        item = res['items'][0]
+        self.assertEqual(item['name'], '새송이버섯')
+        self.assertEqual(item['origin'], '국산')
+        self.assertEqual(item['ratio'], 57.64)
+
+    def test_원산지와_하위원료가_같이_있는_경우(self):
+        res = self._parse('과·채가공품/표고버섯채(중국산)21.63%(표고버섯,정제수,정제소금,구연산)')
+        item = res['items'][0]
+        self.assertEqual(item['name'], '과·채가공품/표고버섯채')
+        self.assertEqual(item['origin'], '중국산')
+        self.assertEqual(item['ratio'], 21.63)
+        self.assertEqual(item['sub_ingredients'], '표고버섯, 정제수, 정제소금, 구연산')
+
+    def test_콜론이_들어간_원산지(self):
+        res = self._parse('녹차(국산:제주산) 89%, 콩기름(대두:외국산)')
+        self.assertEqual(res['items'][0]['origin'], '국산:제주산')
+        self.assertEqual(res['items'][1]['origin'], '대두:외국산')
+
+    def test_끝에_붙은_알레르기_선언을_떼어낸다(self):
+        res = self._parse('밀가루, 설탕, 탈지분유, 밀, 우유 함유')
+        self.assertEqual([i['name'] for i in res['items']],
+                         ['밀가루', '설탕', '탈지분유'])
+        self.assertEqual(res['allergen_note'], '밀, 우유 함유')
+
+    def test_쉼표를_놓친_알레르기_선언도_떼어낸다(self):
+        """OCR 이 원료와 알레르기 선언 사이 쉼표를 놓치는 경우."""
+        res = self._parse('구연산, 카로틴 알류(계란), 대두 함유')
+        self.assertEqual([i['name'] for i in res['items']], ['구연산', '카로틴'])
+        self.assertEqual(res['allergen_note'], '알류(계란), 대두 함유')
+
+    def test_괄호_안의_함유는_원료_설명이라_두고_본다(self):
+        res = self._parse('정제수, 향료(바닐라 함유)')
+        self.assertEqual([i['name'] for i in res['items']], ['정제수', '향료'])
+        self.assertEqual(res['allergen_note'], '')
+
+    def test_구연산은_원산지가_아니다(self):
+        """끝이 '산' 이라 원산지로 헷갈리는 첨가물."""
+        res = self._parse('과일농축액(구연산)')
+        self.assertEqual(res['items'][0]['origin'], '')
+        self.assertEqual(res['items'][0]['sub_ingredients'], '구연산')
+
+    def test_대괄호_알레르기_표기도_떼어낸다(self):
+        res = self._parse('밀가루, 설탕  [알레르기 성분: 밀 함유]')
+        self.assertEqual([i['name'] for i in res['items']], ['밀가루', '설탕'])
+        self.assertIn('밀', res['allergen_note'])
+
+    def test_빈_문자열은_빈_목록(self):
+        self.assertEqual(self._parse('')['items'], [])
+        self.assertEqual(self._parse(None)['items'], [])
