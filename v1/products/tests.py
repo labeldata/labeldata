@@ -630,8 +630,9 @@ class BasicInfoOcrWiringTests(TestCase):
         missing = [i for i in self._mapped_ids() if f"'{i}'" not in self.detail]
         self.assertEqual(missing, [], f'saveBasicInfo 가 안 읽는 칸: {missing}')
 
-    def test_사진_선택_입구가_있다(self):
-        self.assertIn('basicInfoOcrInput', self.tab)
+    def test_불러오기_입구가_있다(self):
+        # 사진 입력칸은 불러오기 모달 안으로 옮겼다(import_modal.js).
+        self.assertIn('openImportModal()', self.tab)
         self.assertIn('basic_info_ocr.js', self.detail)
 
     def test_스크립트가_고정_캐시버스터를_쓰지_않는다(self):
@@ -849,3 +850,142 @@ class ProductCreatePageTests(TestCase):
                 ).read_text(encoding='utf-8')
         bad = re.findall(r'\|\s*default:\s*(?:product|label|form)\.[\w.]+', html)
         self.assertEqual(bad, [], f'필터 인자에서 객체를 다시 읽는 곳: {bad}')
+
+
+class ReportNoLookupTests(TestCase):
+    """품목보고번호로 등록 정보를 불러온다. OCR 을 거치지 않아 가장 정확하다."""
+
+    def setUp(self):
+        from v1.label.models import FoodItem
+
+        self.user = User.objects.create_user(username='lookup', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='만두')
+        FoodItem.objects.create(
+            prdlst_report_no='20220460436160',
+            prdlst_nm='표고버섯볶음',
+            prdlst_dcnm='조림류',
+            rawmtrl_nm='새송이버섯(국산)57.64%, 표고버섯채(중국산)21.63%',
+            bssh_nm='하늘농가(주)',
+        )
+
+    def _lookup(self, no):
+        url = reverse('products:report_no_lookup',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(url, data=json.dumps({'report_no': no}),
+                                content_type='application/json')
+
+    def test_등록_정보를_돌려준다(self):
+        body = self._lookup('20220460436160').json()
+        self.assertTrue(body['success'])
+        self.assertEqual(body['fields']['prdlst_nm'], '표고버섯볶음')
+        self.assertIn('새송이버섯', body['fields']['rawmtrl_nm'])
+
+    def test_공백이_섞여도_찾는다(self):
+        self.assertTrue(self._lookup(' 2022046 0436160 ').json()['success'])
+
+    def test_없는_번호는_404(self):
+        self.assertEqual(self._lookup('99999999999999').status_code, 404)
+
+    def test_번호가_비면_400(self):
+        self.assertEqual(self._lookup('').status_code, 400)
+
+
+class IngredientToBomTests(TestCase):
+    """
+    사진 없이 원료를 BOM 에 넣는다 (품목보고번호로 불러온 경우).
+    첨부 파일이 없으므로 문서함에는 아무것도 남기지 않는다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='ing2bom', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='만두')
+
+    def _apply(self, **over):
+        fields = {
+            'ingredient_name': '표고버섯볶음',
+            'food_type': '조림류',
+            'sub_ingredients': '새송이버섯(국산)57.64%, 표고버섯채(중국산)21.63%',
+            'report_no': '20220460436160',
+        }
+        fields.update(over)
+        url = reverse('products:ingredient_to_bom',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(url, data=json.dumps({'fields': fields}),
+                                content_type='application/json')
+
+    def test_BOM_원료만_만든다(self):
+        from v1.bom.models import ProductBOM
+        from v1.products.models import ProductDocument
+
+        body = self._apply().json()
+        self.assertTrue(body['created'])
+        bom = ProductBOM.objects.get(parent_label=self.label)
+        self.assertEqual(bom.ingredient_name, '표고버섯볶음')
+        self.assertIn('새송이버섯', bom.raw_material_name)
+        self.assertEqual(bom.report_no, '20220460436160')
+        # 문서함에는 아무것도 남기지 않는다
+        self.assertEqual(ProductDocument.objects.filter(label=self.label).count(), 0)
+
+    def test_배합비는_비워_둔다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply()
+        self.assertIsNone(ProductBOM.objects.get(parent_label=self.label).usage_ratio)
+
+    def test_두_번_넣어도_행이_늘지_않는다(self):
+        from v1.bom.models import ProductBOM
+
+        self._apply()
+        self._apply()
+        self.assertEqual(ProductBOM.objects.filter(parent_label=self.label).count(), 1)
+
+    def test_원료명이_없으면_400(self):
+        self.assertEqual(self._apply(ingredient_name='').status_code, 400)
+
+    def test_남의_라벨은_못_건드린다(self):
+        other = User.objects.create_user(username='ing2bom2', password='x')
+        self.client.force_login(other)
+        self.assertEqual(self._apply().status_code, 404)
+
+
+class ImportModalWiringTests(TestCase):
+    """
+    불러오기 모달의 배선.
+
+    모달(import_modal.js)과 실제 처리(basic_info_ocr.js)가 나뉘어 있어, 한쪽이
+    부르는 이름이 다른 쪽에 없으면 버튼만 조용히 죽는다. 눈으로는 "안 눌린다"
+    로 보인다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.modal = (base / 'static/js/products/import_modal.js').read_text(encoding='utf-8')
+        self.ocr = (base / 'static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.tab = (base / 'templates/products/_tab_basic_info.html').read_text(encoding='utf-8')
+        self.detail = (base / 'templates/products/product_detail.html').read_text(encoding='utf-8')
+        self.docs = (base / 'templates/products/_tab_documents.html').read_text(encoding='utf-8')
+
+    def test_모달이_부르는_함수가_모두_있다(self):
+        import re
+        called = set(re.findall(r'window\.(basicInfoOcr\w+|ingredient\w+)\(', self.modal))
+        defined = set(re.findall(r'window\.(\w+)\s*=', self.ocr))
+        missing = sorted(called - defined)
+        self.assertEqual(missing, [], f'정의되지 않은 함수: {missing}')
+
+    def test_불러오기_버튼이_모달을_연다(self):
+        self.assertIn('openImportModal()', self.tab)
+        self.assertIn('window.openImportModal', self.modal)
+
+    def test_두_스크립트가_모두_실린다(self):
+        self.assertIn('basic_info_ocr.js', self.detail)
+        self.assertIn('import_modal.js', self.detail)
+
+    def test_원료_확인창을_문서함_탭과_함께_쓴다(self):
+        """확인 창을 두 벌로 만들지 않는다."""
+        self.assertIn('ingredientPhotoModal', self.docs)
+        self.assertIn('ingredientPhotoModal', self.ocr)

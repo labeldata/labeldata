@@ -130,6 +130,11 @@ urlpatterns = [
     path('documents/<int:document_id>/ai-review/save/', views.document_ai_review_save, name='document_ai_review_save'),
     path('documents/<int:document_id>/ai-review/apply-to-bom/', views.document_ai_apply_to_bom, name='document_ai_apply_to_bom'),
 
+    # 불러오기 모달 — 품목보고번호 조회 / 원료 사진 업로드 / 원료 BOM 등록
+    path('labels/<int:label_id>/lookup/report-no/', views.report_no_lookup, name='report_no_lookup'),
+    path('labels/<int:label_id>/ingredient-photo/upload/', views.ingredient_photo_upload, name='ingredient_photo_upload'),
+    path('labels/<int:label_id>/ingredient/to-bom/', views.ingredient_to_bom, name='ingredient_to_bom'),
+
     # 표시사항의 원재료명 한 줄 → 원료별 BOM 행 (미리보기 후 확인)
     path('labels/<int:label_id>/rawmtrl-to-bom/preview/', views.rawmtrl_to_bom_preview, name='rawmtrl_to_bom_preview'),
     path('labels/<int:label_id>/rawmtrl-to-bom/apply/', views.rawmtrl_to_bom_apply, name='rawmtrl_to_bom_apply'),

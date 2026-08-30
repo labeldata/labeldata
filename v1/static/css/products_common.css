@@ -264,6 +264,24 @@
 }
 
 /* -------------------------
+   불러오기 모달의 드롭 영역
+   제품/원료 두 갈래를 나란히 두고, 사진을 끌어다 놓을 수 있게 한다.
+   ------------------------- */
+.import-zone            { transition: border-color .15s ease, background .15s ease; }
+.import-zone:hover      { border-color: var(--ez-primary, #1a73e8) !important; }
+.import-drop {
+    cursor:      pointer;
+    border-style: dashed !important;
+    background:  #fafbfc;
+    transition:  background .15s ease, border-color .15s ease;
+}
+.import-drop:hover,
+.import-drop-over {
+    background:   #e8f0fe;
+    border-color: var(--ez-primary, #1a73e8) !important;
+}
+
+/* -------------------------
    11. 홈 전환 버튼 (.home-switch-btn)
    V1 ↔ V2 전환 버튼 공통 스타일
    ------------------------- */

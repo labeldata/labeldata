@@ -5673,6 +5673,248 @@ def document_ai_review_save(request, document_id):
     return JsonResponse({'success': True})
  
  
+def register_ingredient_bom(user, label, fields):
+    """
+    원료 한 건을 BOM 에 넣는다. 사진에서 왔든 품목보고번호에서 왔든 규칙은 같다.
+
+    같은 원료를 두 번 만들지 않는다 - 이름이 비슷하면(RapidFuzz) 기존 "내 원료"
+    에 붙이고, 없을 때만 만든다. 같은 원료가 이 제품 BOM 에 이미 있으면 행을
+    늘리지 않고 값을 갱신한다.
+
+    배합비는 넣지 않는다. 그 원료가 완제품에서 몇 %인지는 원료 봉지에도
+    품목보고 정보에도 없다. BOM 화면에서 사람이 넣는다.
+
+    Returns: (bom, 만들었는지, 기존 원료에 붙었는지, 유사도, 후보 목록)
+    """
+    from v1.bom.models import ProductBOM
+    from v1.label.services.ingredient_matching import (
+        get_or_create_my_ingredient, load_pool, match_my_ingredient,
+    )
+
+    name = (fields.get('ingredient_name') or '').strip()
+    pool = load_pool(user)
+    ingredient, score, candidates = match_my_ingredient(user, name, pool=pool)
+    matched = ingredient is not None
+
+    if not matched:
+        ingredient, _created = get_or_create_my_ingredient(
+            user,
+            prdlst_nm=name,
+            prdlst_report_no=fields.get('report_no') or '',
+            prdlst_dcnm=fields.get('food_type') or '',
+            ingredient_display_name=name,
+            allergens=fields.get('allergens') or '',
+            bssh_nm=fields.get('manufacturer') or '',
+            rawmtrl_nm=fields.get('sub_ingredients') or '',
+            delete_YN='N',
+        )
+
+    # 원재료 표시명에는 **읽어낸 원재료명과 함량**을 넣는다. 이 원료가 완제품에
+    # 쓰이면 표시 문구가 "표고버섯볶음(새송이버섯 57.64%, ...)" 로 나가야 한다.
+    # 원료명을 그대로 복사하면 BOM 표의 앞 두 칸이 똑같아 "원재료명을 못 읽었다"
+    # 로 보이고, 정작 읽은 값은 표에 컬럼이 없는 sub_ingredients 에만 남는다.
+    printed = (fields.get('sub_ingredients') or '').strip()
+
+    bom = ProductBOM.objects.filter(
+        parent_label=label, source_ingredient=ingredient, active_yn=True).first()
+    created = False
+    if bom is None:
+        bom = ProductBOM.objects.create(
+            parent_label=label,
+            created_by=user,
+            ingredient_name=name,
+            raw_material_name=printed or name,
+            food_type=fields.get('food_type') or '',
+            sub_ingredients=printed,
+            allergens=fields.get('allergens') or '',
+            allergen=fields.get('allergens') or '',
+            origin=fields.get('origin') or '',
+            manufacturer=fields.get('manufacturer') or '',
+            report_no=fields.get('report_no') or '',
+            source_ingredient=ingredient,
+            sort_order=ProductBOM.objects.filter(
+                parent_label=label, active_yn=True).count(),
+            active_yn=True,
+        )
+        created = True
+    else:
+        # 다시 읽은 경우. 행을 새로 만들지 않고 값을 갱신한다.
+        bom.ingredient_name = name
+        bom.raw_material_name = printed or name
+        bom.food_type = fields.get('food_type') or bom.food_type
+        bom.sub_ingredients = printed or bom.sub_ingredients
+        bom.allergens = fields.get('allergens') or bom.allergens
+        bom.allergen = fields.get('allergens') or bom.allergen
+        bom.origin = fields.get('origin') or bom.origin
+        bom.manufacturer = fields.get('manufacturer') or bom.manufacturer
+        bom.report_no = fields.get('report_no') or bom.report_no
+        bom.save()
+
+    return bom, created, matched, score, candidates
+
+
+@login_required
+@require_POST
+def ingredient_to_bom(request, label_id):
+    """
+    사진 없이 원료 한 건을 BOM 에 넣는다 (품목보고번호로 불러온 경우).
+
+    첨부 파일이 없으므로 문서함에는 아무것도 남기지 않는다. 사진으로 올린
+    경우와 달리 근거 자료가 파일이 아니라 품목보고번호 자체다 - 그 번호를
+    BOM 행에 적어 둔다.
+    """
+    from django.db import transaction
+
+    label = _resolve_editable_label(request, label_id)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    fields = payload.get('fields') or {}
+    if not (fields.get('ingredient_name') or '').strip():
+        return JsonResponse({
+            'success': False,
+            'error': '원료명이 없습니다.',
+        }, status=400)
+
+    with transaction.atomic():
+        bom, created, matched, score, candidates = register_ingredient_bom(
+            request.user, label, fields)
+
+    log_activity(request, 'product', 'ingredient_to_bom', label.my_label_id)
+    return JsonResponse({
+        'success': True,
+        'created': created,
+        'matched_existing': matched,
+        'match_score': score,
+        'candidates': candidates,
+        'bom_id': bom.bom_id,
+        'ingredient_name': bom.ingredient_name,
+        'message': ('BOM 에 원료를 추가했습니다.' if created
+                    else '이미 BOM 에 있는 원료라 정보를 갱신했습니다.'),
+    })
+
+
+@login_required
+@require_POST
+def ingredient_photo_upload(request, label_id):
+    """
+    원료 표시사항 사진을 문서함에 넣고 바로 읽는다. BOM 에는 아직 쓰지 않는다.
+
+    "원료로 등록" 은 두 가지를 한 번에 한다 - 사진을 문서함에 남기고, 그 내용을
+    BOM 원료로 만든다. 사진이 문서함에 남아야 나중에 "이 원료 정보가 어디서
+    왔는지" 를 되짚을 수 있다(원료 표시사항은 근거 자료다).
+
+    여기서는 저장과 읽기까지만 한다. BOM 쓰기는 사용자가 확인한 뒤
+    document_ingredient_photo_to_bom 이 맡는다 - OCR 은 틀리고, 틀린 원료가
+    BOM 에 들어가면 배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
+    """
+    from v1.products.services.ingredient_photo import (
+        parse_ingredient_photo, read_document_image,
+    )
+    from v1.label.services.ingredient_matching import match_my_ingredient
+
+    label = _resolve_editable_label(request, label_id)
+
+    uploaded = request.FILES.get('image')
+    if not uploaded:
+        return JsonResponse({'success': False, 'error': '사진이 없습니다.'}, status=400)
+    if uploaded.size > 10 * 1024 * 1024:
+        return JsonResponse({
+            'success': False,
+            'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {uploaded.size / 1024 / 1024:.1f}MB).',
+        }, status=400)
+
+    doc_type = DocumentType.objects.filter(type_code='INGREDIENT_LABEL').first()
+    if doc_type is None:
+        return JsonResponse({
+            'success': False,
+            'error': '"원료 표시사항" 문서 타입이 없습니다. migrate 를 먼저 실행하세요.',
+        }, status=500)
+
+    _, ext = os.path.splitext(uploaded.name)
+    document = ProductDocument.objects.create(
+        label=label,
+        document_type=doc_type,
+        file=uploaded,
+        original_filename=uploaded.name,
+        file_size=uploaded.size,
+        file_extension=ext.lower(),
+        document_title=doc_type.type_name,
+        uploaded_by=request.user,
+        metadata={'source': 'ingredient_photo_upload'},
+    )
+
+    ocr_data, error = read_document_image(document)
+    if error:
+        # 문서는 남긴다. 사진 자체는 근거 자료로 쓸모가 있고, 사용자가 문서함에서
+        # 다시 읽어 볼 수 있다.
+        return JsonResponse({
+            'success': False,
+            'error': error,
+            'document_id': document.document_id,
+        }, status=400)
+
+    fields = parse_ingredient_photo(ocr_data)
+    ingredient, score, candidates = match_my_ingredient(
+        request.user, fields.get('ingredient_name') or '')
+
+    return JsonResponse({
+        'success': True,
+        'document_id': document.document_id,
+        'filename': document.original_filename,
+        'fields': fields,
+        'matched_existing': ingredient is not None,
+        'matched_name': ingredient.prdlst_nm if ingredient else '',
+        'match_score': score,
+        'candidates': candidates,
+    })
+
+
+@login_required
+@require_POST
+def report_no_lookup(request, label_id):
+    """
+    품목보고번호로 식약처 등록 정보를 불러온다.
+
+    사진이 없어도 되는 입구다. 번호만 알면 제품명·식품유형·원재료명·제조사가
+    나온다 - 사진을 읽는 것보다 정확하다(OCR 을 거치지 않는다).
+
+    제품으로 쓸지 원료로 쓸지는 화면이 정한다. 여기서는 찾아서 돌려주기만 한다.
+    """
+    _resolve_editable_label(request, label_id)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    report_no = ''.join(str(payload.get('report_no') or '').split())
+    if not report_no:
+        return JsonResponse({'success': False, 'error': '품목보고번호를 입력하세요.'},
+                            status=400)
+
+    item = FoodItem.objects.filter(prdlst_report_no=report_no).first()
+    if item is None:
+        return JsonResponse({
+            'success': False,
+            'error': f'등록된 품목을 찾지 못했습니다 ({report_no}). 번호를 확인해 주세요.',
+        }, status=404)
+
+    return JsonResponse({
+        'success': True,
+        'fields': {
+            'prdlst_report_no': item.prdlst_report_no or '',
+            'prdlst_nm': item.prdlst_nm or '',
+            'prdlst_dcnm': item.prdlst_dcnm or '',
+            'rawmtrl_nm': item.rawmtrl_nm or '',
+            'bssh_nm': item.bssh_nm or '',
+        },
+    })
+
+
 def _resolve_editable_label(request, label_id):
     """내 라벨이거나 편집 권한이 있는 공유 라벨을 돌려준다."""
     return get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
@@ -5916,68 +6158,11 @@ def document_ingredient_photo_to_bom(request, document_id):
         }, status=400)
 
     label = doc.label
-    pool = load_pool(request.user)
-    ingredient, score, candidates = match_my_ingredient(request.user, name, pool=pool)
-    matched = ingredient is not None
 
     with transaction.atomic():
-        if not matched:
-            ingredient, _created = get_or_create_my_ingredient(
-                request.user,
-                prdlst_nm=name,
-                prdlst_report_no=fields.get('report_no') or '',
-                prdlst_dcnm=fields.get('food_type') or '',
-                ingredient_display_name=name,
-                allergens=fields.get('allergens') or '',
-                bssh_nm=fields.get('manufacturer') or '',
-                rawmtrl_nm=fields.get('sub_ingredients') or '',
-                delete_YN='N',
-            )
-
-        # 원재료 표시명에는 **사진에 적힌 원재료명과 함량**을 넣는다.
-        # 이 원료가 완제품에 쓰이면 표시 문구는 "표고버섯볶음(새송이버섯 57.64%, …)"
-        # 처럼 나가야 한다. 원료명을 그대로 복사하면 BOM 표의 앞 두 칸이 똑같아
-        # "원재료명을 못 읽었다" 로 보이고, 실제로 읽은 원재료명은 표에 컬럼이
-        # 없는 sub_ingredients 에만 들어가 보이지 않는다.
-        printed = (fields.get('sub_ingredients') or '').strip()
-
-        # 같은 원료가 이 제품 BOM 에 이미 있으면 다시 만들지 않는다
-        bom = ProductBOM.objects.filter(
-            parent_label=label, source_ingredient=ingredient, active_yn=True
-        ).first()
-        created = False
-        if bom is None:
-            next_order = ProductBOM.objects.filter(
-                parent_label=label, active_yn=True).count()
-            bom = ProductBOM.objects.create(
-                parent_label=label,
-                created_by=request.user,
-                ingredient_name=name,
-                raw_material_name=printed or name,
-                food_type=fields.get('food_type') or '',
-                sub_ingredients=fields.get('sub_ingredients') or '',
-                allergens=fields.get('allergens') or '',
-                allergen=fields.get('allergens') or '',
-                origin=fields.get('origin') or '',
-                manufacturer=fields.get('manufacturer') or '',
-                report_no=fields.get('report_no') or '',
-                source_ingredient=ingredient,
-                sort_order=next_order,
-                active_yn=True,
-            )
-            created = True
-        else:
-            # "다시 읽기" 로 들어온 경우. 행을 새로 만들지 않고 값을 갱신한다.
-            bom.ingredient_name = name
-            bom.raw_material_name = printed or name
-            bom.food_type = fields.get('food_type') or bom.food_type
-            bom.sub_ingredients = printed or bom.sub_ingredients
-            bom.allergens = fields.get('allergens') or bom.allergens
-            bom.allergen = fields.get('allergens') or bom.allergen
-            bom.origin = fields.get('origin') or bom.origin
-            bom.manufacturer = fields.get('manufacturer') or bom.manufacturer
-            bom.report_no = fields.get('report_no') or bom.report_no
-            bom.save()
+        # 등록 규칙은 품목보고번호 경로와 같다 - register_ingredient_bom 한 곳에 있다.
+        bom, created, matched, score, candidates = register_ingredient_bom(
+            request.user, label, fields)
 
         # 문서에 "무엇으로 등록했는지" 를 남긴다. 같은 사진을 두 번 읽지 않게 하고,
         # 나중에 이 BOM 행이 어디서 왔는지 되짚을 수 있다.

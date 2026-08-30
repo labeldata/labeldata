@@ -63,19 +63,19 @@
 
 {% if can_edit %}
 {% comment %}
-표시사항 사진에서 이 탭의 항목들을 한 번에 채운다.
+사진이나 품목보고번호로 한 번에 불러오는 입구.
 읽은 값을 바로 저장하지 않는다 — 확인 창에서 고른 것만 칸에 들어가고,
 저장은 평소대로 사용자가 한다.
 {% endcomment %}
 <div class="d-flex align-items-center gap-2 mb-3 px-1 flex-wrap ocr-fill-bar">
-    <i class="bi bi-camera text-primary"></i>
-    <span class="fw-semibold" style="font-size:13px;">표시사항 사진에서 불러오기</span>
-    <span class="text-muted" style="font-size:12px;">사진 속 항목을 읽어 아래 칸을 채웁니다</span>
-    <input type="file" id="basicInfoOcrInput" accept="image/*" hidden>
+    <i class="bi bi-magic text-primary"></i>
+    <span class="fw-semibold" style="font-size:13px;">불러오기</span>
+    <span class="text-muted" style="font-size:12px;">
+        표시사항 사진이나 품목보고번호로 제품 정보와 원료를 한 번에 채웁니다
+    </span>
     <button type="button" class="btn btn-outline-primary v2-btn-sm ms-auto"
-            id="basicInfoOcrBtn"
-            onclick="document.getElementById('basicInfoOcrInput').click()">
-        <i class="bi bi-upload"></i>사진 선택
+            id="basicInfoOcrBtn" onclick="openImportModal()">
+        <i class="bi bi-box-arrow-in-down"></i>불러오기
     </button>
     <span id="basicInfoOcrStatus" class="text-muted" style="font-size:12px;"></span>
 </div>

@@ -3283,8 +3283,9 @@ function getCookie(name) {
 <!-- 스마트 업로드 JavaScript -->
 <script src="{% static 'js/smart_upload.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
-<!-- 표시사항 사진 -> 기본 정보 탭 채우기 -->
+<!-- 사진·품목보고번호로 제품/원료 불러오기 -->
 <script src="{% static 'js/products/basic_info_ocr.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/products/import_modal.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
 <!-- 승인 전 표시사항 검증 결과 모달 -->
 <div class="modal fade" id="validationBlockModal" tabindex="-1" aria-hidden="true">

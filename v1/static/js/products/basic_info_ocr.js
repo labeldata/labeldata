@@ -434,19 +434,123 @@
       });
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    var input = document.getElementById('basicInfoOcrInput');
-    if (!input) return;
-    input.addEventListener('change', function () {
-      var file = input.files && input.files[0];
-      if (!file) return;
-      if (file.size > 10 * 1024 * 1024) {
-        status('파일 크기는 10MB 이하여야 합니다.', true);
-        input.value = '';
+  // ── 원료로 등록 ────────────────────────────────────────────────────────
+  //
+  // 사진은 문서함에 남기고(원료 표시사항은 근거 자료다), 읽은 값을 확인 창에
+  // 보여 준 뒤 BOM 원료 1건을 만든다. 확인 창은 문서함 탭이 쓰던 것을 그대로
+  // 쓴다 - 같은 일을 두 벌로 만들 이유가 없다.
+  function ingredientConfirm(fields, onApply, meta) {
+    var modalEl = document.getElementById('ingredientPhotoModal');
+    if (!modalEl) {
+      // 문서함 탭이 없는 화면. 확인 없이 넣지 않고 그만둔다.
+      status('원료 확인 창을 찾지 못했습니다. 문서함 탭을 한 번 연 뒤 다시 시도하세요.', true);
+      return;
+    }
+    var rows = [
+      ['ingredient_name', '원료명 (BOM 원료명)', true],
+      ['sub_ingredients', '원재료명 및 함량 (원재료 표시명)', false],
+      ['food_type', '식품유형', false],
+      ['manufacturer', '제조사', false],
+      ['report_no', '품목보고번호', false],
+      ['origin', '원산지', false],
+      ['allergens', '알레르기', false]
+    ].map(function (f) {
+      return '<div class="mb-2">'
+        + '<label class="form-label small text-muted mb-1">' + f[1]
+        + (f[2] ? ' <span class="text-danger">*</span>' : '') + '</label>'
+        + '<input type="text" class="form-control form-control-sm ing-field" '
+        + 'data-key="' + f[0] + '" value="' + esc(fields[f[0]] || '') + '">'
+        + '</div>';
+    }).join('');
+
+    var head = '<div class="text-muted mb-3" style="font-size:12px;">'
+      + (meta && meta.filename
+          ? '<strong>' + esc(meta.filename) + '</strong> 을 문서함에 저장했습니다. '
+          : '')
+      + '읽은 값입니다. 틀린 곳은 고친 뒤 등록하세요. '
+      + '함량(%)은 BOM 탭에서 넣으셔야 합니다.</div>';
+
+    if (meta && meta.matched_existing) {
+      head += '<div class="alert alert-success py-2 px-3 mb-3" style="font-size:12px;">'
+        + '이미 등록된 원료 <strong>' + esc(meta.matched_name) + '</strong> 에 연결합니다'
+        + ' (유사도 ' + meta.match_score + ').</div>';
+    } else if (meta && meta.candidates && meta.candidates.length) {
+      head += '<div class="alert alert-warning py-2 px-3 mb-3" style="font-size:12px;">'
+        + '비슷한 원료가 있습니다: ' + esc(meta.candidates.join(', '))
+        + ' (유사도 ' + meta.match_score + '). 같은 원료라면 원료명을 그 이름과'
+        + ' 똑같이 고쳐 주세요.</div>';
+    }
+
+    modalEl.querySelector('.modal-body').innerHTML = head + rows;
+    modalEl.querySelector('#ingredientPhotoApply').onclick = function () {
+      var edited = {};
+      modalEl.querySelectorAll('.ing-field').forEach(function (el) {
+        edited[el.dataset.key] = el.value.trim();
+      });
+      if (!edited.ingredient_name) {
+        alert('원료명을 입력하세요.');
         return;
       }
-      extract(file);
-      input.value = '';   // 같은 파일을 다시 골라도 change 가 걸리게
-    });
-  });
+      onApply(edited, modalEl);
+    };
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  function postJson(url, body) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify(body)
+    }).then(function (res) { return res.json(); });
+  }
+
+  function finishIngredient(body, modalEl) {
+    if (!body.success) {
+      alert(body.error || '등록하지 못했습니다.');
+      return;
+    }
+    if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    status(body.message + ' BOM 탭에서 함량을 넣고 저장하세요.');
+  }
+
+  // 사진 -> 문서함 저장 -> 확인 -> BOM
+  window.ingredientPhotoUpload = function (file) {
+    var form = new FormData();
+    form.append('image', file);
+    form.append('csrfmiddlewaretoken', csrfToken());
+    status('사진을 문서함에 저장하고 읽는 중입니다...');
+
+    fetch('/products/labels/' + labelId() + '/ingredient-photo/upload/',
+          { method: 'POST', body: form })
+      .then(function (res) { return res.json(); })
+      .then(function (body) {
+        if (!body.success) {
+          status(body.error || '사진을 읽지 못했습니다.', true);
+          return;
+        }
+        status('');
+        ingredientConfirm(body.fields, function (edited, modalEl) {
+          postJson('/products/documents/' + body.document_id + '/ingredient-photo/apply/',
+                   { fields: edited })
+            .then(function (res) { finishIngredient(res, modalEl); });
+        }, body);
+      })
+      .catch(function (err) {
+        console.error(err);
+        status('사진을 처리하는 중 오류가 발생했습니다.', true);
+      });
+  };
+
+  // 품목보고번호 -> 확인 -> BOM (첨부 파일이 없으니 문서함에는 남기지 않는다)
+  window.ingredientFromLookup = function (fields) {
+    ingredientConfirm(fields, function (edited, modalEl) {
+      postJson('/products/labels/' + labelId() + '/ingredient/to-bom/',
+               { fields: edited })
+        .then(function (res) { finishIngredient(res, modalEl); });
+    }, null);
+  };
+
+  // 불러오기 모달이 부른다
+  window.basicInfoOcrExtract = extract;
+  window.basicInfoOcrShow = showModal;
 })();
