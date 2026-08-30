@@ -1002,3 +1002,75 @@ class CalorieConsistencyTests(TestCase):
     def test_무료_검증에_물려_있다(self):
         from v1.label.services.validation_service import _CHECKS
         self.assertIn('check_calorie_consistency', {c.__name__ for c in _CHECKS})
+
+
+class ListColumnAlignTests(TestCase):
+    """
+    목록 표의 머리글과 본문 정렬.
+
+    머리글은 컬럼 정의(list_sort.py 의 align)를 따랐는데 본문 칸은 화면마다
+    제각각이었다. 내 원료 관리는 "원재료명" 머리글이 왼쪽인데 값은 가운데라
+    같은 열인지 알아보기 어려웠고, 제품 조회는 반대로 값만 가운데였다.
+    """
+
+    def _render(self, specs, table, offset):
+        from django.template.loader import render_to_string
+        from v1.label.services import list_sort
+
+        cols = list_sort.columns(specs, specs[0]['field'], 'asc')
+        return render_to_string('label/_list_column_align.html',
+                                {'list_columns': cols,
+                                 'align_table': table, 'align_offset': offset})
+
+    def _rules(self, css):
+        """(열 번호, 정렬) 목록"""
+        import re
+        return re.findall(
+            r'th:nth-child\((\d+)\),\s*\S+ tbody td:nth-child\(\d+\) \{\s*text-align: (\w+);',
+            css)
+
+    def test_머리글과_본문에_같은_규칙이_걸린다(self):
+        from v1.label.services import list_sort
+
+        css = self._render(list_sort.MY_INGREDIENT_COLUMNS, '.list-table', 1)
+        for n in range(2, 6):
+            self.assertIn(f'.list-table thead th:nth-child({n})', css)
+            self.assertIn(f'.list-table tbody td:nth-child({n})', css)
+
+    def test_컬럼_정의의_정렬이_그대로_나온다(self):
+        from v1.label.services import list_sort
+
+        specs = list_sort.MY_INGREDIENT_COLUMNS
+        rules = self._rules(self._render(specs, '.list-table', 1))
+        self.assertEqual(len(rules), len(specs))
+        for (col_no, align), spec in zip(rules, specs):
+            self.assertEqual(align, spec['align'], f"{spec['label']} 정렬이 다르다")
+
+        # 사용자가 지적한 그 열 — 머리글은 왼쪽인데 값은 가운데였다
+        by_label = dict(zip([s['label'] for s in specs], [a for _, a in rules]))
+        self.assertEqual(by_label['원재료명'], 'left')
+
+    def test_앞쪽_열_수만큼_밀린다(self):
+        """체크박스·순번처럼 컬럼 정의에 없는 열이 앞에 있다."""
+        from v1.label.services import list_sort
+
+        rules = self._rules(self._render(list_sort.MY_LABEL_COLUMNS, '.common-table', 2))
+        self.assertEqual(rules[0][0], '3')   # 체크박스 + 순번 다음
+        self.assertEqual(rules[0][1], list_sort.MY_LABEL_COLUMNS[0]['align'])
+
+    def test_손으로_박은_nth_child_가_남아_있지_않다(self):
+        """
+        컬럼이 늘거나 순서가 바뀌면 따라오지 않아 조용히 어긋난다.
+        실제로 내 원료 관리의 nth-child(2)/(5) 가 컬럼 순서와 맞지 않았다.
+        """
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR) / 'templates'
+        for rel in ('label/my_ingredient_list_combined.html',
+                    'label/food_additive_search.html'):
+            text = (base / rel).read_text(encoding='utf-8')
+            style = ' '.join(re.findall(r'<style>(.*?)</style>', text, re.S))
+            leftover = re.findall(r'(td:nth-child\(\d+\)[^{]*\{[^}]*text-align)', style)
+            self.assertEqual(leftover, [], f'{rel} 에 손으로 박은 정렬이 남아 있다')

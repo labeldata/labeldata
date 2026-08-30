@@ -799,6 +799,36 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 }
 #save-status            { font-size: 0.8rem; transition: opacity 0.4s ease; }
 
+/* ── 기본정보 탭: 입력칸 크기를 한 기준으로 ──────────────────
+   textarea.form-control 에 min-height:90px 가 걸려 있어서, rows="1" 인
+   품목보고번호·제조원까지 세 줄짜리 상자로 보였다. rows 가 정한 높이를 쓰게 한다.
+
+   원산지는 Select2 가 자기 마크업(.select2-selection)을 따로 그려서 옆의
+   네이티브 입력칸(14px)과 글자 크기가 달랐다. 같은 값으로 맞춘다. */
+#tab-info textarea.v2-field-input { min-height: 0; }
+
+#tab-info .select2-container .select2-selection--single {
+    height:        auto;
+    padding:       7px 12px;
+    border:        1px solid transparent;
+    border-radius: var(--ez-radius-md, 8px);
+    background:    rgba(60, 64, 67, 0.05);
+}
+#tab-info .select2-container .select2-selection--single .select2-selection__rendered {
+    padding:     0;
+    font-size:   14px;
+    line-height: 1.5;
+    color:       var(--text-primary, #202124);
+}
+#tab-info .select2-container .select2-selection--single .select2-selection__arrow { top: 50%; }
+#tab-info .select2-container .select2-selection--single .select2-selection__placeholder {
+    color: var(--text-hint, #9aa0a6);
+}
+/* 드롭다운은 select2 가 body 로 옮겨 붙이므로 #tab-info 로 좁힐 수 없다 */
+.select2-dropdown,
+.select2-results__option,
+.select2-search__field { font-size: 14px; }
+
 /* ── 기본정보 탭: 항목명과 입력칸을 한 줄에 ───────────────────
    항목명이 윗줄, 입력칸이 아랫줄이면 한 필드가 두 줄을 먹는다. 한 행에 필드가
    2~3개인데도 한 화면에 몇 개 안 들어가던 이유다. 항목명을 왼쪽으로 보내

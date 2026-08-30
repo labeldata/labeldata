@@ -193,18 +193,19 @@
         <table class="table table-hover align-middle mb-0 product-table">
             <thead>
                 <tr class="text-muted">
-                    <th style="width: 40px;" class="ps-4"><input type="checkbox" class="form-check-input" id="select-all-products"></th>
+                    {# 머리글 정렬은 본문 칸과 같아야 한다. 긴 텍스트인 제품명만 왼쪽. #}
+                    <th style="width: 40px;" class="ps-4 text-center"><input type="checkbox" class="form-check-input" id="select-all-products"></th>
                     <th style="width: 25%;">제품명</th>
-                    <th style="width: 8%;">식품유형</th>
-                    <th style="width: 7%;">최종 수정</th>
-                    <th style="width: 8%;">진행상태</th>
-                    <th style="width: 10%;">문서함</th>
-                    <th style="width: 8%;">BOM</th>
-                    <th style="width: 7%;">표시사항</th>
-                    <th style="width: 7%;">영양성분</th>
-                    <th style="width: 7%;">권한</th>
-                    <th style="width: 8%;">내 권한</th>
-                    <th style="width: 5%;">즐겨찾기</th>
+                    <th style="width: 8%;" class="text-center">식품유형</th>
+                    <th style="width: 7%;" class="text-center">최종 수정</th>
+                    <th style="width: 8%;" class="text-center">진행상태</th>
+                    <th style="width: 10%;" class="text-center">문서함</th>
+                    <th style="width: 8%;" class="text-center">BOM</th>
+                    <th style="width: 7%;" class="text-center">표시사항</th>
+                    <th style="width: 7%;" class="text-center">영양성분</th>
+                    <th style="width: 7%;" class="text-center">권한</th>
+                    <th style="width: 8%;" class="text-center">내 권한</th>
+                    <th style="width: 5%;" class="text-center">즐겨찾기</th>
                 </tr>
             </thead>
             <tbody id="product-tbody">

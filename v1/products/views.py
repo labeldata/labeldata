@@ -940,15 +940,18 @@ def product_detail(request, product_id):
 # 병기하는 값이라("250 g (100 kcal)") 켜고 끌 대상이 아니다. 표시 여부는 식품유형이
 # 정하고, 값이 적혔는지는 validation_service 가 내용량의 kcal 표기로 판정한다.
 #
-# 영양성분은 이 탭에 칸이 없어 누르면 다른 탭으로 넘어간다. 흐름이 끊기는
-# 항목이라 목록 끝에 둔다.
+# 순서는 기본정보 탭의 입력칸 순서와 같게 맞춘다. 목록이 곧 목차 역할을 하므로
+# 화면을 훑는 순서와 어긋나면 찾기 어려워진다.
+#
+# 영양성분만 예외로 맨 끝이다 — 이 탭에 칸이 없어 누르면 다른 탭으로 넘어가고,
+# 흐름이 끊기는 항목이라 입력을 다 마친 뒤 보이는 게 낫다.
 _DISPLAY_ITEM_ORDER = [
-    'chckd_prdlst_dcnm', 'chckd_prdlst_nm', 'chckd_ingredient_info',
-    'chckd_content_weight', 'chckd_prdlst_report_no',
-    'chckd_country_of_origin', 'chckd_pog_daycnt', 'chckd_storage_method',
-    'chckd_frmlc_mtrqlt', 'chckd_rawmtrl_nm_display',
+    'chckd_prdlst_nm', 'chckd_ingredient_info', 'chckd_prdlst_dcnm',
+    'chckd_prdlst_report_no', 'chckd_content_weight', 'chckd_country_of_origin',
+    'chckd_storage_method', 'chckd_frmlc_mtrqlt',
     'chckd_bssh_nm', 'chckd_distributor_address', 'chckd_repacker_address',
-    'chckd_importer_address', 'chckd_cautions', 'chckd_additional_info',
+    'chckd_importer_address', 'chckd_pog_daycnt', 'chckd_rawmtrl_nm_display',
+    'chckd_cautions', 'chckd_additional_info',
     'chckd_nutrition_text',
 ]
 

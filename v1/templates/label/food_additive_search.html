@@ -106,12 +106,6 @@
         text-align: center;
     }
 
-    .additive-table tbody td:nth-child(3),
-    .additive-table tbody td:nth-child(4),
-    .additive-table tbody td:nth-child(5) {
-        text-align: left;
-    }
-
     /* 스크롤바 커스텀 - M3 스타일 */
     .custom-scrollbar::-webkit-scrollbar {
         width: 10px;
@@ -396,6 +390,7 @@
     <!-- 식품첨가물 데이터 그리드 -->
     <div class="flex-grow-1 overflow-auto custom-scrollbar">
         {% if page_obj %}
+        {% if user.is_authenticated %}{% include "label/_list_column_align.html" with align_table=".additive-table" align_offset=1 %}{% else %}{% include "label/_list_column_align.html" with align_table=".additive-table" align_offset=0 %}{% endif %}
         <table class="table table-hover align-middle mb-0 additive-table">
             <thead>
                 <tr>

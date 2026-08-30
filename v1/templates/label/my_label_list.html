@@ -50,6 +50,7 @@
     {% include 'includes/search_filter.html' with action_url='label:my_label_list' page_type='label' search_values=search_values items_per_page=items_per_page prdlst_report_status=prdlst_report_status %}
 
     <div class="table-responsive">
+        {% include "label/_list_column_align.html" with align_table=".common-table" align_offset=2 %}
         <table class="table table-bordered table-hover common-table align-middle">
             <thead>
                 <tr>

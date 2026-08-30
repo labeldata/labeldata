@@ -287,6 +287,25 @@ class DisplayItemPanelTests(TestCase):
             self.assertGreaterEqual(items.index(item), len(items) - len(tabbed))
             self.assertTrue(item['tab_label'], '어느 탭으로 가는지 이름이 있어야 한다')
 
+    def test_패널_순서가_폼_순서와_같다(self):
+        """
+        목록이 곧 목차 역할을 한다. 화면을 훑는 순서와 어긋나면 찾기 어려워진다.
+        영양성분은 다른 탭으로 넘어가는 항목이라 순서 비교에서 뺀다.
+        """
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        from v1.products.views import _build_display_items
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+                ).read_text(encoding='utf-8')
+        form_order = [m.group(1) for m in re.finditer(r'id="(field-[a-z-]+)"', html)]
+
+        panel = [i['anchor'] for i in _build_display_items(self.label)
+                 if not i['tab'] and i['anchor'] in form_order]
+        expected = sorted(panel, key=form_order.index)
+        self.assertEqual(panel, expected, '우측 패널 순서가 폼 순서와 다르다')
+
     def test_이동_대상이_템플릿에_실제로_있다(self):
         """
         없는 id 를 가리키면 그 항목만 눌러도 아무 일이 안 일어난다.

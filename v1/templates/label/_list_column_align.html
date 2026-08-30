@@ -1,0 +1,29 @@
+{% comment %}
+  목록 표의 가로·세로 정렬을 컬럼 정의(list_sort.py / additive_search.py 의 align)
+  하나로 맞춘다.
+
+  머리글은 `text-align: {{ col.align }}` 으로 컬럼 정의를 따랐는데 본문 칸은
+  화면마다 제각각이었다. 내 원료 관리는 "원재료명" 머리글이 왼쪽인데 값은
+  가운데였고(둘이 같은 열인지 알아보기 어려웠다), 제품 조회는 반대로 값만
+  가운데였다. nth-child 를 손으로 박아 둔 곳도 컬럼 순서와 어긋나 있었다.
+
+  머리글과 본문에 같은 규칙을 걸어 어긋날 수 없게 한다. 컬럼이 늘거나 순서가
+  바뀌어도 따라온다.
+
+  쓰는 법 — 표 앞이나 뒤에 두면 된다.
+
+    {% include "label/_list_column_align.html" with align_table=".list-table" align_offset=1 %}
+
+    align_table  : 표를 가리키는 선택자
+    align_offset : 컬럼 정의에 없는 앞쪽 열 수 (체크박스·순번 등)
+{% endcomment %}
+<style>
+{% for col in list_columns %}
+{{ align_table }} thead th:nth-child({{ forloop.counter|add:align_offset }}),
+{{ align_table }} tbody td:nth-child({{ forloop.counter|add:align_offset }}) {
+    text-align: {{ col.align }};
+}
+{% endfor %}
+{{ align_table }} thead th,
+{{ align_table }} tbody td { vertical-align: middle; }
+</style>
