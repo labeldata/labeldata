@@ -1498,3 +1498,210 @@ class AiUsageCounterTests(TestCase):
             with patch('v1.common.models.AiValidationUsage.objects') as objs:
                 objs.filter.side_effect = RuntimeError('DB 장애')
                 self.assertEqual(self._usage()['daily_used'], 0)
+
+
+class TempLabelNumberingTests(TestCase):
+    """
+    "임시 - 제품명 - N" 채번을 DB 가 하게 했다.
+
+    예전에는 그 이름으로 시작하는 라벨을 전부 가져와 파이썬 정규식으로 최대값을
+    찾았다. 이탈한 빈 라벨이 쌓이는 화면이라 목록이 계속 길어지고, 신규 작성
+    버튼이 그만큼 느려진다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='numbering', password='x')
+        self.client.force_login(self.user)
+
+    def _create(self):
+        res = self.client.post('/label/create-new/',
+                               data=json.dumps({}),
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 200, res.content[:200])
+        return MyLabel.objects.filter(user_id=self.user).order_by('-my_label_id').first()
+
+    def test_첫_라벨은_1번(self):
+        self.assertEqual(self._create().my_label_name, '임시 - 제품명 - 1')
+
+    def test_최대값_다음_번호를_쓴다(self):
+        MyLabel.objects.create(user_id=self.user, my_label_name='임시 - 제품명 - 7')
+        MyLabel.objects.create(user_id=self.user, my_label_name='임시 - 제품명 - 3')
+        self.assertEqual(self._create().my_label_name, '임시 - 제품명 - 8')
+
+    def test_다른_사용자_라벨은_세지_않는다(self):
+        other = User.objects.create_user(username='numbering2', password='x')
+        MyLabel.objects.create(user_id=other, my_label_name='임시 - 제품명 - 99')
+        self.assertEqual(self._create().my_label_name, '임시 - 제품명 - 1')
+
+    def test_숫자가_아닌_꼬리는_최대값을_흔들지_않는다(self):
+        # 사용자가 이름을 고쳐 둔 경우. 캐스팅이 0 이 되어야 한다.
+        MyLabel.objects.create(user_id=self.user, my_label_name='임시 - 제품명 - 초코')
+        MyLabel.objects.create(user_id=self.user, my_label_name='임시 - 제품명 - 2')
+        self.assertEqual(self._create().my_label_name, '임시 - 제품명 - 3')
+
+
+class CleanupTempLabelsTests(TestCase):
+    """
+    만들어만 놓고 손대지 않은 임시 라벨을 치운다.
+
+    지우지 않고 delete_YN 만 바꾼다 — 실제로 지우면 BOM·문서함·공유·알림이
+    CASCADE 로 함께 사라진다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='cleanup', password='x')
+
+    def _old_temp(self, name='임시 - 제품명 - 1', **fields):
+        label = MyLabel.objects.create(user_id=self.user, my_label_name=name, **fields)
+        # update_datetime 은 auto_now 라 save() 로는 과거로 못 민다
+        MyLabel.objects.filter(pk=label.pk).update(
+            update_datetime=timezone.now() - timezone.timedelta(days=90))
+        return MyLabel.objects.get(pk=label.pk)
+
+    def _run(self, *args):
+        from django.core.management import call_command
+        from io import StringIO
+        out = StringIO()
+        call_command('cleanup_temp_labels', *args, stdout=out)
+        return out.getvalue()
+
+    def test_기본은_미리보기라_아무것도_안_바꾼다(self):
+        label = self._old_temp()
+        self._run()
+        label.refresh_from_db()
+        self.assertEqual(label.delete_YN, 'N')
+
+    def test_손대지_않은_것은_숨긴다(self):
+        label = self._old_temp()
+        self._run('--apply')
+        label.refresh_from_db()
+        self.assertEqual(label.delete_YN, 'Y')
+
+    def test_내용이_있으면_남긴다(self):
+        label = self._old_temp(prdlst_nm='초코쿠키')
+        self._run('--apply')
+        label.refresh_from_db()
+        self.assertEqual(label.delete_YN, 'N')
+
+    def test_최근_라벨은_건드리지_않는다(self):
+        label = MyLabel.objects.create(user_id=self.user,
+                                       my_label_name='임시 - 제품명 - 2')
+        self._run('--apply')
+        label.refresh_from_db()
+        self.assertEqual(label.delete_YN, 'N')
+
+    def test_이름을_바꾼_라벨은_대상이_아니다(self):
+        label = self._old_temp(name='초코쿠키 표시사항')
+        self._run('--apply')
+        label.refresh_from_db()
+        self.assertEqual(label.delete_YN, 'N')
+
+    def test_원재료가_붙어_있으면_남긴다(self):
+        label = self._old_temp()
+        ing = MyIngredient.objects.create(user_id=self.user, prdlst_nm='밀가루',
+                                          delete_YN='N')
+        LabelIngredientRelation.objects.create(label=label, ingredient=ing,
+                                               ingredient_ratio=50)
+        self._run('--apply')
+        label.refresh_from_db()
+        self.assertEqual(label.delete_YN, 'N')
+
+
+class RawmtrlDisplayGeneratorTests(TestCase):
+    """
+    인쇄되는 원재료명 문구를 규칙으로 만든다.
+
+    여태 사람이 손으로 조립하던 구간이다. 참고용 요약을 복사해 옮긴 뒤 함량
+    순서를 맞추고, 첨가물 간략명을 고르고, 복합원재료 괄호를 치고, 알레르기
+    문구를 붙였다. 라벨에서 법적 리스크가 가장 큰 산출물인데 자동화가 없었다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='display', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user,
+                                            my_label_name='초코쿠키')
+
+    def _add(self, name, ratio, *, seq=1, **fields):
+        ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm=name, delete_YN='N', **fields)
+        LabelIngredientRelation.objects.create(
+            label=self.label, ingredient=ing,
+            ingredient_ratio=ratio, relation_sequence=seq)
+        return ing
+
+    def _generate(self):
+        res = self.client.get(f'/label/{self.label.my_label_id}/rawmtrl-display/')
+        return res.status_code, res.json()
+
+    def test_배합비_내림차순으로_적는다(self):
+        self._add('정제소금', 5, seq=1)
+        self._add('밀가루', 60, seq=2)
+        self._add('설탕', 20, seq=3)
+        status, body = self._generate()
+        self.assertEqual(status, 200)
+        self.assertEqual(body['text'].split('  ')[0], '밀가루, 설탕, 정제소금')
+
+    def test_복합원재료는_하위원료를_괄호에_적는다(self):
+        self._add('빵가루', 30, rawmtrl_nm='밀가루, 정제소금')
+        status, body = self._generate()
+        self.assertIn('빵가루(밀가루, 정제소금)', body['text'])
+
+    def test_이름에_이미_괄호가_있으면_두_겹으로_안_만든다(self):
+        self._add('빵가루(밀가루)', 30, rawmtrl_nm='밀가루, 정제소금')
+        status, body = self._generate()
+        self.assertIn('빵가루(밀가루)', body['text'])
+        self.assertNotIn('))', body['text'])
+
+    def test_표4_첨가물은_명칭과_용도를_함께_적는다(self):
+        FoodAdditive.objects.create(name_kr='사카린나트륨', alias_4='Y',
+                                    sweetener='Y')
+        self._add('사카린나트륨', 1, food_category='additive')
+        status, body = self._generate()
+        self.assertIn('사카린나트륨(감미료)', body['text'])
+        self.assertEqual(body['needs_review'], [])
+
+    def test_표4인데_용도가_여럿이면_사람이_고르게_한다(self):
+        FoodAdditive.objects.create(name_kr='이산화황', alias_4='Y',
+                                    preservative='Y', antioxidant='Y')
+        self._add('이산화황', 1, food_category='additive')
+        status, body = self._generate()
+        self.assertEqual(body['needs_review'], ['이산화황'])
+
+    def test_표5_첨가물은_명칭만으로_충분하다(self):
+        FoodAdditive.objects.create(name_kr='구연산', alias_5='Y')
+        self._add('구연산', 2, food_category='additive')
+        status, body = self._generate()
+        self.assertIn('구연산', body['text'])
+        self.assertEqual(body['needs_review'], [])
+
+    def test_사용자가_고른_표시명이_규칙에_맞으면_그것을_쓴다(self):
+        FoodAdditive.objects.create(name_kr='구연산', alias_5='Y',
+                                    short_name='산미료용구연산')
+        self._add('구연산', 2, food_category='additive',
+                  ingredient_display_name='산미료용구연산')
+        status, body = self._generate()
+        self.assertIn('산미료용구연산', body['text'])
+
+    def test_알레르기는_함유_형태로_뒤에_붙는다(self):
+        self._add('탈지분유', 30, allergens='우유')
+        self._add('밀가루', 60, allergens='밀', seq=2)
+        status, body = self._generate()
+        self.assertIn('[알레르기 성분: 밀, 우유 함유]', body['text'])
+
+    def test_원재료가_없으면_400_과_안내(self):
+        status, body = self._generate()
+        self.assertEqual(status, 400)
+        self.assertFalse(body['success'])
+
+    def test_저장하지_않는다(self):
+        self._add('밀가루', 60)
+        self._generate()
+        self.label.refresh_from_db()
+        self.assertFalse(self.label.rawmtrl_nm_display)
+
+    def test_남의_라벨은_못_본다(self):
+        other = User.objects.create_user(username='display2', password='x')
+        self.client.force_login(other)
+        res = self.client.get(f'/label/{self.label.my_label_id}/rawmtrl-display/')
+        self.assertEqual(res.status_code, 404)

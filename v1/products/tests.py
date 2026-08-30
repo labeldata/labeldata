@@ -465,3 +465,114 @@ class RawmtrlDisplayFieldTests(TestCase):
         self.label.refresh_from_db()
         self.assertEqual(self.label.rawmtrl_nm, '참고용 문구')
         self.assertEqual(self.label.rawmtrl_nm_display, '새 문구')
+
+
+class DocumentAiApplyToBomTests(TestCase):
+    """
+    서류에서 뽑은 원재료가 **표시사항 원재료까지** 들어가는가.
+
+    이 경로는 예전에 ProductBOM 행만 만들고 끝났다. BOM 을
+    LabelIngredientRelation 으로 잇는 것은 source_ingredient FK 하나뿐인데
+    그것을 비워 뒀기 때문에, AI 가 원재료를 읽어와도 표시사항 쪽에는 한 줄도
+    들어가지 않았다. 배합비 순서 검사·알레르기 수집·인쇄 문구가 전부 그 위에
+    올라가 있으므로, 여기가 끊기면 뒤가 전부 빈다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType, ProductDocument
+
+        self.user = User.objects.create_user(username='aibom', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user,
+                                            my_label_name='초코쿠키')
+        doc_type = DocumentType.objects.create(
+            type_code='ANALYSIS_INGREDIENT', type_name='성분 분석서')
+        self.doc = ProductDocument.objects.create(
+            label=self.label,
+            document_type=doc_type,
+            file='v2/product_documents/x.pdf',
+            original_filename='성분분석서.pdf',
+            metadata={'extracted_data': {
+                'manufacturer': '한국식품(주)',
+                'raw_materials': ['밀가루 50%', '탈지분유(우유)', '정제소금'],
+                'blend_ratios': {'밀가루 50%': '50%', '탈지분유(우유)': '30%'},
+                'origins': {'밀가루 50%': '미국산'},
+                'allergens': ['우유', '밀'],
+            }},
+        )
+
+    def _apply(self):
+        url = reverse('products:document_ai_apply_to_bom',
+                      kwargs={'document_id': self.doc.pk})
+        res = self.client.post(url)
+        self.assertEqual(res.status_code, 200, res.content[:300])
+        return res.json()
+
+    def test_표시사항_원재료까지_연결된다(self):
+        from v1.label.models import LabelIngredientRelation
+
+        body = self._apply()
+        self.assertEqual(body['linked_to_label'], 3)
+        self.assertEqual(body['skipped_no_ingredient'], 0)
+
+        rels = LabelIngredientRelation.objects.filter(label=self.label)
+        self.assertEqual(rels.count(), 3)
+        names = sorted(r.ingredient.prdlst_nm for r in rels)
+        self.assertEqual(names, ['밀가루', '정제소금', '탈지분유'])
+
+    def test_원재료명에_붙은_함량을_읽는다(self):
+        from v1.label.models import LabelIngredientRelation
+
+        self._apply()
+        rel = LabelIngredientRelation.objects.get(
+            label=self.label, ingredient__prdlst_nm='밀가루')
+        self.assertEqual(float(rel.ingredient_ratio), 50.0)
+
+    def test_알레르기는_근거가_보이는_행에만_붙는다(self):
+        """
+        예전에는 제품 전체 알레르기 목록을 모든 행에 통째로 붙였다.
+        그러면 정제소금에까지 우유·밀이 달려 알레르기 요약이 틀어진다.
+        """
+        from v1.label.models import MyIngredient
+
+        self._apply()
+        milk = MyIngredient.objects.get(user_id=self.user, prdlst_nm='탈지분유')
+        salt = MyIngredient.objects.get(user_id=self.user, prdlst_nm='정제소금')
+        self.assertIn('우유', milk.allergens or '')
+        self.assertEqual((salt.allergens or ''), '')
+
+    def test_이미_있는_내_원료를_다시_만들지_않는다(self):
+        from v1.label.models import MyIngredient
+
+        MyIngredient.objects.create(user_id=self.user, prdlst_nm='밀가루',
+                                    prdlst_report_no='', prdlst_dcnm='',
+                                    delete_YN='N')
+        body = self._apply()
+        self.assertGreaterEqual(body['matched_existing'], 1)
+        self.assertEqual(
+            MyIngredient.objects.filter(user_id=self.user,
+                                        prdlst_nm='밀가루').count(), 1)
+
+    def test_두_번_적용해도_원료가_불어나지_않는다(self):
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+
+        self._apply()
+        self._apply()
+        self.assertEqual(
+            LabelIngredientRelation.objects.filter(label=self.label).count(), 3)
+        self.assertEqual(
+            MyIngredient.objects.filter(user_id=self.user).count(), 3)
+
+    def test_추출된_원재료가_없으면_400(self):
+        self.doc.metadata = {'extracted_data': {'raw_materials': []}}
+        self.doc.save(update_fields=['metadata'])
+        url = reverse('products:document_ai_apply_to_bom',
+                      kwargs={'document_id': self.doc.pk})
+        self.assertEqual(self.client.post(url).status_code, 400)
+
+    def test_남의_문서는_못_건드린다(self):
+        other = User.objects.create_user(username='aibom2', password='x')
+        self.client.force_login(other)
+        url = reverse('products:document_ai_apply_to_bom',
+                      kwargs={'document_id': self.doc.pk})
+        self.assertEqual(self.client.post(url).status_code, 404)

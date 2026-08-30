@@ -18,7 +18,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction  # 엑셀 업로드 무결성 보증 추가
-from django.db.models import Q
+from django.db.models import IntegerField, Max, Q
+from django.db.models.functions import Cast, Substr
 from django.utils.functional import cached_property
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -49,6 +50,8 @@ from .services import food_type_settings as fts
 from .services.validation_service import validate_label
 from .services.ai_validation_service import check_ingredient_order, run_full_review, group_issues_by_category
 from .services.ai_rate_limit import check_rate_limit, get_usage as get_ai_usage
+from .services.ingredient_matching import get_or_create_my_ingredient
+from .services.ingredient_display import build_display_text, build_reference_text
 
 
 # ============================================
@@ -593,23 +596,24 @@ def create_new_label(request):
     log_user_activity(request, 'label', 'label_create')
     try:
         base_name = "임시 - 제품명"
-        
-        # 현재 사용자의 "임시 - 제품명 - X" 라벨들을 조회
-        existing_labels = MyLabel.objects.filter(
-            user_id=request.user,
-            my_label_name__startswith=base_name
-        ).values_list('my_label_name', flat=True)
 
-        max_num = 0
-        # 정규식을 사용하여 이름에서 숫자 부분을 추출하고 최대값을 찾음
-        pattern = re.compile(rf'^{re.escape(base_name)}\s*-\s*(\d+)$')
-        for name in existing_labels:
-            match = pattern.match(name)
-            if match:
-                num = int(match.group(1))
-                if num > max_num:
-                    max_num = num
-        
+        # 다음 번호는 DB 가 구한다.
+        #
+        # 예전에는 "임시 - 제품명" 으로 시작하는 이름을 전부 가져와 파이썬에서
+        # 정규식으로 최대값을 찾았다. 이탈한 빈 라벨이 쌓이는 화면이라 그 목록이
+        # 계속 길어지고, 신규 작성 버튼이 그만큼 느려진다.
+        #
+        # 숫자 부분만 잘라 정수로 바꿔 MAX 를 구한다. 숫자가 아닌 꼬리는
+        # MySQL·SQLite 모두 0 으로 변환하므로 최대값에 영향을 주지 않는다.
+        prefix = f"{base_name} - "
+        max_num = (
+            MyLabel.objects
+            .filter(user_id=request.user, my_label_name__startswith=prefix)
+            .annotate(seq=Cast(Substr('my_label_name', len(prefix) + 1),
+                               IntegerField()))
+            .aggregate(top=Max('seq'))['top'] or 0
+        )
+
         # 새 라벨 이름 생성 (최대값 + 1)
         new_label_name = f"{base_name} - {max_num + 1}"
 
@@ -971,128 +975,10 @@ def label_creation(request, label_id=None):
 
             # 내 원료에 연결된 원재료명 가져오기
             if has_ingredient_relations:
-                # 원재료는 함량이 많은 순서로 표시해야 한다(「식품등의 표시기준」).
-                # BOM 에디터는 요약 문구를 만들 때 이미 배합비 내림차순으로 정렬한다
-                # (products/bom_detail.html 의 generateBomSummary). 여기서 입력 순서를
-                # 그대로 쓰면 같은 데이터인데 화면마다 원재료 순서가 달라진다.
-                # 두 생성기가 같은 규칙을 쓰도록 여기서도 정렬한다.
-                #
-                # 배합비가 없는 행은 0 으로 보아 뒤로 보낸다(BOM 에디터와 동일).
-                # 값이 같으면 입력 순서를 지킨다 — 파이썬 sort 는 안정 정렬이다.
-                relations = sorted(
-                    LabelIngredientRelation.objects.filter(
-                        label_id=label.my_label_id
-                    ).select_related('ingredient').order_by('relation_sequence'),
-                    key=lambda rel: -float(rel.ingredient_ratio or 0),
-                )
-
-                # 원재료명 정보를 생성 (배합비 많은 순)
-                ingredients_info = []
-                allergens_set = set()
-                gmo_set = set()
-                shellfish_collected = set()
-                shellfish_pattern = re.compile(r'^조개류\(([^)]+)\)$')  # 조개류 패턴 정규식
-
-                # 향료/동일 용도 카운터
-                flavor_counter = {}
-                purpose_counter = {}
-
-                for relation in relations:
-                    ingredient = relation.ingredient
-                    food_category = getattr(ingredient, 'food_category', None) or getattr(ingredient, 'food_group', None) or ''
-                    display_name = ingredient.ingredient_display_name or ingredient.prdlst_nm or ""
-                    # display_name이 콤마로 여러 개일 때 최대 5개까지만 표시 (팝업과 동일)
-                    if display_name and "," in display_name:
-                        display_name = ", ".join([x.strip() for x in display_name.split(",")][:5])
-                    food_type = ingredient.prdlst_dcnm or ""
-                    ratio = None
-                    try:
-                        ratio = float(relation.ingredient_ratio) if relation.ingredient_ratio is not None else None
-                    except Exception:
-                        ratio = None
-
-                    # 혼합제제(식품첨가물) 처리
-                    if food_category == 'additive' and '혼합제제' in display_name:
-                        ingredients_info.append(f"혼합제제[{display_name}]")
-                        continue
-
-                    # 향료/동일 용도(영양강화제 등) 번호 붙이기
-                    # 향료: "향료" 또는 "향료(00향)" 형태
-                    if food_category == 'additive' and (display_name.startswith('향료') or re.match(r'^향료(\(.+\))?$', display_name)):
-                        flavor_counter[display_name] = flavor_counter.get(display_name, 0) + 1
-                        count = flavor_counter[display_name]
-                        suffix = f"{count}" if count > 1 else ""
-                        ingredients_info.append(f"향료{suffix}{display_name[2:] if display_name.startswith('향료') else ''}")
-                        continue
-                    # 동일 용도(예: 영양강화제, 산화방지제 등) 번호 붙이기
-                    m = re.match(r'^([가-힣]+제)(\(.+\))?$', display_name)
-                    if food_category == 'additive' and m:
-                        purpose = m.group(1)
-                        purpose_counter[purpose] = purpose_counter.get(purpose, 0) + 1
-                        count = purpose_counter[purpose]
-                        suffix = f"{count}" if count > 1 else ""
-                        ingredients_info.append(f"{purpose}{suffix}{m.group(2) or ''}")
-                        continue
-
-                    # 정제수는 식품유형만 표시(팝업과 동일)
-                    if display_name == '정제수':
-                        summary_item = food_type or display_name
-                    # 팝업과 동일하게: 첨가물 또는 비율 5% 이상이면 식품유형[원재료명], 그 외는 식품유형만 표시
-                    elif (food_category == 'additive') or (ratio is not None and ratio >= 5):
-                        if food_type and display_name:
-                            summary_item = f"{food_type}[{display_name}]"
-                        elif food_type:
-                            summary_item = food_type
-                        else:
-                            summary_item = display_name
-                    else:
-                        summary_item = food_type or display_name
-                    if summary_item:
-                        ingredients_info.append(summary_item)
-                    # 알레르기/GMO 수집
-                    if ingredient.allergens:
-                        allergen_list = ingredient.allergens.split(',')
-                        for allergen in allergen_list:
-                            allergen = allergen.strip() if allergen else ""
-                            if not allergen:
-                                continue
-                            match = shellfish_pattern.match(allergen)
-                            if match:
-                                # 조개류(홍합,전복) 형태 처리
-                                items = [item.strip() for item in match.group(1).split(',') if item.strip()]
-                                shellfish_collected.update(items)
-                            elif '조개류' in allergen:
-                                allergens_set.add(allergen)
-                            else:
-                                allergens_set.add(allergen)
-                    if ingredient.gmo:
-                        for g in ingredient.gmo.split(','):
-                            g = g.strip() if g else ""
-                            if g:
-                                gmo_set.add(g)  # GMO를 별도 집합에 추가
-                
-                # 조개류 항목이 있으면 통합
-                if shellfish_collected:
-                    shellfish_str = f"조개류({', '.join(sorted(shellfish_collected))})"
-                    allergens_set.add(shellfish_str)
-                
-                # 콤마로 연결하여 원재료명(참고) 필드에 설정
-                rawmtrl_nm_str = ", ".join(ingredients_info)
-                # 알레르기/GMO 요약 추가 (각각 별도 대괄호로 분리)
-                summary_parts = []
-                if allergens_set:
-                    # 문자열로 안전하게 변환
-                    allergens_list = [str(allergen) for allergen in sorted(allergens_set) if allergen]
-                    if allergens_list:
-                        summary_parts.append(f"[알레르기 성분: {', '.join(allergens_list)}]")
-                if gmo_set:
-                    # 문자열로 안전하게 변환
-                    gmo_list = [str(gmo) for gmo in sorted(gmo_set) if gmo]
-                    if gmo_list:
-                        summary_parts.append(f"[GMO: {', '.join(gmo_list)}]")
-                if summary_parts:
-                    rawmtrl_nm_str += f"  {' '.join(summary_parts)}"
-                label.rawmtrl_nm = rawmtrl_nm_str
+                # 참고용 요약. 예전에는 이 자리에 120줄짜리 생성기가 그대로
+                # 들어 있었다. 인쇄되는 문구를 만드는 쪽과 규칙을 나눠 쓸 수
+                # 없어서 services 로 뺐다 — 동작은 그대로다.
+                label.rawmtrl_nm = build_reference_text(label)
             
             if request.method == 'POST':
                 # POST 요청 처리
@@ -1596,32 +1482,10 @@ def my_ingredient_detail(request, ingredient_id=None):
         return render(request, _get_template(request, 'label/my_ingredient_detail.html'), context)
 
 
-def _get_or_create_my_ingredient(user, *, prdlst_nm, prdlst_report_no, prdlst_dcnm,
-                                 **defaults):
-    """
-    같은 원료를 두 번 만들지 않는다.
-
-    지금까지 라벨마다 새 MyIngredient 를 만들어서, 운영 데이터에 같은 원료가
-    13개씩 쌓여 있었다(548건 중 여분 108건, 19.7%). 원료 검색 결과가 같은 이름으로
-    도배되고, 하나를 고쳐도 다른 라벨은 옛 값을 본다.
-
-    키는 (사용자, 원료명, 품목보고번호, 식품유형) 이다 — 이름만으로는 제조사가
-    다른 같은 이름을 하나로 묶어 버린다.
-
-    **이미 있으면 그대로 쓴다. 넘어온 값으로 덮어쓰지 않는다.**
-    MyIngredient 는 여러 라벨이 함께 쓰는 레코드라, 한 라벨에서 저장했다고 다른
-    라벨이 보던 값이 바뀌면 안 된다. 원료 자체를 고칠 곳은 "내 원료 상세" 다.
-
-    Returns: (ingredient, created)
-    """
-    return MyIngredient.objects.get_or_create(
-        user_id=user,
-        prdlst_nm=prdlst_nm or '',
-        prdlst_report_no=prdlst_report_no or '',
-        prdlst_dcnm=prdlst_dcnm or '',
-        delete_YN='N',
-        defaults=defaults,
-    )
+# 중복 방지 헬퍼는 services/ingredient_matching.py 로 옮겼다.
+# 서류에서 원재료를 뽑아 넣는 경로(products)도 같은 규칙을 써야 하는데,
+# 뷰 모듈을 import 하게 만들 수는 없어서다. 여기서는 이름만 유지한다.
+_get_or_create_my_ingredient = get_or_create_my_ingredient
 
 @login_required
 @csrf_exempt
@@ -3298,6 +3162,41 @@ def verify_report_no(request):
             'status': 'available',
             'message': '품목보고신고 가능한 번호입니다.'
         })
+
+
+@login_required
+@require_GET
+def generate_rawmtrl_display(request, label_id):
+    """
+    인쇄되는 원재료명 문구를 만들어 돌려준다. **저장하지 않는다.**
+
+    여태 이 문구는 사람이 손으로 조립했다. 참고용 요약을 "복사하기" 로 옮긴 뒤
+    함량 순서를 맞추고, 첨가물 간략명을 고르고, 복합원재료 괄호를 치고, 알레르기
+    문구를 붙였다. 라벨에서 법적 리스크가 가장 큰 산출물인데 자동화가 하나도
+    없었다.
+
+    규칙은 전부 DB 에 있으므로 AI 를 쓰지 않는다 — 배합비는 relation 에,
+    첨가물 표시 규칙은 FoodAdditive 에, 하위 원료는 MyIngredient 에 있다.
+
+    저장은 사용자가 확인한 뒤 폼 저장으로 한다. 자동으로 덮어쓰면 손으로 다듬어
+    둔 문구가 조용히 사라진다.
+    """
+    label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+    result = build_display_text(label)
+
+    if not result['count']:
+        return JsonResponse({
+            'success': False,
+            'message': '연결된 원재료가 없습니다. 원재료를 먼저 입력하세요.',
+        }, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'text': result['text'],
+        'count': result['count'],
+        'needs_review': result['needs_review'],
+        'current': label.rawmtrl_nm_display or '',
+    })
 
 
 @login_required

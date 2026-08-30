@@ -692,6 +692,63 @@ document.addEventListener('DOMContentLoaded', function () {
   // 팝업에서 접근 가능하도록 window 객체에도 할당
   window.copyRawmtrlToDisplay = copyRawmtrlToDisplay;
 
+  // ------------------ 인쇄되는 원재료명 문구 생성 ------------------
+  // 서버가 원재료 표를 보고 표시 규칙대로 만들어 준다 — 함량 내림차순,
+  // 첨가물 표시명(표4·5·6), 복합원재료 괄호, 알레르기 문구.
+  // 여태 사용자가 참고용 문구를 복사해 손으로 다듬던 구간이다.
+  //
+  // 자동으로 저장하지 않는다. 칸에 채워 넣기만 하고, 저장은 평소대로 사용자가
+  // 한다. 손으로 다듬어 둔 문구가 있으면 먼저 확인을 받는다.
+  window.generateRawmtrlDisplay = async function () {
+    const labelId = getLabelIdFromPage();
+    const target = document.getElementById('rawmtrl_nm_display_textarea');
+    const hint = document.getElementById('rawmtrlDisplayHint');
+    const btn = document.getElementById('generateRawmtrlDisplayBtn');
+    if (!labelId || !target) return;
+
+    const existing = target.value.trim();
+    if (existing && !confirm('이미 입력된 원재료명(최종표시)을 덮어씁니다. 계속할까요?')) {
+      return;
+    }
+
+    if (btn) { btn.disabled = true; }
+    try {
+      const res = await fetch(`/label/${labelId}/rawmtrl-display/`);
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        alert(data.message || '문구를 만들지 못했습니다.');
+        return;
+      }
+
+      target.value = data.text;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+
+      const checkbox = document.getElementById('chk_rawmtrl_nm_display');
+      if (checkbox) checkbox.checked = true;
+
+      if (hint) {
+        if (data.needs_review && data.needs_review.length) {
+          // 표4 첨가물인데 용도가 여럿이라 코드가 못 정한 것들.
+          // 어느 것을 봐야 하는지 짚어 주면 전부 다시 읽을 필요가 없다.
+          hint.className = 'mt-1 text-danger';
+          hint.textContent =
+            `원료 ${data.count}개로 만들었습니다. 표시명을 직접 골라야 하는 첨가물: `
+            + data.needs_review.join(', ');
+        } else {
+          hint.className = 'mt-1 text-muted';
+          hint.textContent = `원료 ${data.count}개로 만들었습니다. 확인 후 저장하세요.`;
+        }
+        hint.style.display = '';
+      }
+    } catch (err) {
+      console.error(err);
+      alert('문구 생성 중 오류가 발생했습니다.');
+    } finally {
+      if (btn) { btn.disabled = false; }
+    }
+  };
+
   // ------------------ 라벨 관리 기능 ------------------
   window.copyLabel = function (labelId) {
     if (!labelId) return alert('복사할 라벨이 없습니다.');

@@ -551,30 +551,9 @@ def bom_save_api(request, label_id):
             )
 
         # ── LabelIngredientRelation 동기화 (source_ingredient FK 기반) ──────
-        saved_boms = ProductBOM.objects.filter(
-            parent_label=label, active_yn=True
-        ).select_related('source_ingredient')
-
-        valid_ing_ids = {
-            b.source_ingredient_id for b in saved_boms if b.source_ingredient_id
-        }
-        LabelIngredientRelation.objects.filter(label=label).exclude(
-            ingredient_id__in=valid_ing_ids
-        ).delete()
-
-        seq = 1
-        for bom in saved_boms:
-            if not bom.source_ingredient_id:
-                continue
-            LabelIngredientRelation.objects.update_or_create(
-                label=label,
-                ingredient_id=bom.source_ingredient_id,
-                defaults={
-                    'ingredient_ratio': bom.usage_ratio,
-                    'relation_sequence': seq,
-                }
-            )
-            seq += 1
+        # 서류에서 원재료를 뽑아 넣는 경로도 같은 일을 해야 해서 services 로 뺐다.
+        from v1.bom.services import sync_relations_from_bom
+        sync_relations_from_bom(label)
         # ──────────────────────────────────────────────────────────────────
 
         # ── 다른 제품 BOM 동기화 (동일 source_ingredient 참조하는 타 제품) ──

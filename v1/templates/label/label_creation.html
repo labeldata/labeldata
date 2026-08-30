@@ -526,7 +526,16 @@
                 <label for="chk_rawmtrl_nm_display" class="m-0">원재료명 <br> (최종표시)</label>
               </div>
               <div style="width:90%;">
-                <textarea name="rawmtrl_nm_display" id="rawmtrl_nm_display_textarea" class="form-control auto-expand textarea" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
+                <div class="input-container">
+                  <textarea name="rawmtrl_nm_display" id="rawmtrl_nm_display_textarea" class="form-control auto-expand textarea" rows="2" placeholder="원재료명(표시)을 입력하세요">{{ form.rawmtrl_nm_display.value|default:form.rawmtrl_nm.value|default:'' }}</textarea>
+                  <button type="button" id="generateRawmtrlDisplayBtn" class="btn btn-outline-success"
+                          onclick="generateRawmtrlDisplay()"
+                          title="원재료 표에서 표시 규칙에 맞게 문구를 만듭니다 (함량 내림차순·첨가물 표시명·복합원재료 괄호·알레르기)"
+                          style="font-size: 0.875rem; padding: 0.375rem 0.75rem; white-space: nowrap;">
+                    <i class="fas fa-wand-magic-sparkles me-1"></i>문구 생성
+                  </button>
+                </div>
+                <div id="rawmtrlDisplayHint" class="mt-1" style="display:none; font-size:0.8rem;"></div>
               </div>
             </div>
             

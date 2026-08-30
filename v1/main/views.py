@@ -376,12 +376,23 @@ def home_dashboard(request):
     ).count()
 
     # 상태별 카운트 (내 제품 기준)
+    #
+    # 예전에는 전 행을 가져와 파이썬에서 셌다. 제품 수에 비례해 비용이 늘고,
+    # 대시보드는 로그인할 때마다 열리는 화면이다. DB 가 세게 한다.
+    #
+    # Count('pk') 를 쓴다 — Count('status') 는 NULL 을 빼버려서, 상태가 없는
+    # 행이 DRAFT 로 합류하지 못하고 사라진다.
     status_counts = {'DRAFT': 0, 'REQUESTING': 0, 'SUBMITTED': 0,
                      'REVIEW': 0, 'PENDING': 0, 'CONFIRMED': 0}
-    for meta in ProductMetadata.objects.filter(label__user_id=user, label__delete_YN='N').values('status'):
-        s = meta['status'] or 'DRAFT'
+    grouped = (ProductMetadata.objects
+               .filter(label__user_id=user, label__delete_YN='N')
+               .values('status')
+               .annotate(n=Count('pk')))
+    for row in grouped:
+        # 상태가 비어 있으면 작성 중으로 본다 (NULL 과 '' 이 각각 따로 묶여 온다)
+        s = row['status'] or 'DRAFT'
         if s in status_counts:
-            status_counts[s] += 1
+            status_counts[s] += row['n']
 
     # 총 완료(승인 완료) 비율
     total_with_meta = sum(status_counts.values())

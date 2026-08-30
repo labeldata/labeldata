@@ -5677,55 +5677,151 @@ def document_ai_review_save(request, document_id):
 @require_POST
 def document_ai_apply_to_bom(request, document_id):
     """
-    Group A 전용: AI 추출 원재료 데이터를 BOM에 병합.
-    extracted_data의 raw_materials / blend_ratios / origins / allergens 활용.
+    Group A 전용: AI 추출 원재료 데이터를 BOM 과 표시사항 원재료에 반영.
+
+    예전에는 ProductBOM 행만 만들고 끝냈다. 그런데 BOM 을 표시사항 원재료
+    (LabelIngredientRelation)로 잇는 것은 source_ingredient FK 하나뿐이고,
+    여기서는 그 FK 를 채우지 않았다. 그래서 AI 가 원재료를 읽어와도
+
+      - 배합비 순서 검사에 잡히지 않고
+      - 알레르기가 자동으로 모이지 않고
+      - 인쇄되는 원재료명 문구에도 한 줄도 들어가지 않았다.
+
+    이제 원재료마다 "내 원료" 를 찾아 붙인다. 이미 있는 원료면 그것을 쓰고
+    (RapidFuzz 로 표기 흔들림까지 흡수), 없으면 만든다. 그 다음 BOM 저장과
+    같은 동기화를 돌려 표시사항 원재료까지 채운다.
+
+    **AI 는 추출만 한다.** 붙인 결과는 BOM 편집 화면에서 사람이 확인·수정한다.
+    낮은 점수로 새로 만든 건은 응답에 후보를 함께 담아 화면이 알려줄 수 있게 한다.
     """
-    import json as _json
+    from django.db import transaction
+
     from v1.bom.models import ProductBOM
- 
+    from v1.bom.services import sync_relations_from_bom
+    from v1.label.services.ingredient_matching import (
+        attributed_allergens, clean_material_name, get_or_create_my_ingredient,
+        load_pool, match_my_ingredient, normalize_name, parse_ratio,
+        split_name_and_ratio, sub_ingredients_of,
+    )
+
     doc = get_object_or_404(
         ProductDocument.objects.select_related('label'),
         pk=document_id,
         label__user_id=request.user,
     )
- 
+
     meta = doc.metadata or {}
     extracted = meta.get('extracted_data') or {}
     raw_materials = extracted.get('raw_materials') or []
     blend_ratios = extracted.get('blend_ratios') or {}
     origins = extracted.get('origins') or {}
     allergens = extracted.get('allergens') or []
-    allergen_str = ', '.join(allergens) if allergens else ''
- 
+    manufacturer = (extracted.get('manufacturer') or '').strip()
+
     if not raw_materials:
         return JsonResponse({'error': '추출된 원재료 데이터가 없습니다.'}, status=400)
- 
-    created_count = 0
-    for material in raw_materials:
-        if not material:
-            continue
-        ratio_raw = blend_ratios.get(material)
-        try:
-            ratio = float(str(ratio_raw).replace('%', '').strip()) if ratio_raw else None
-        except (ValueError, TypeError):
-            ratio = None
- 
-        origin = origins.get(material, '')
- 
-        _, created = ProductBOM.objects.get_or_create(
-            parent_label=doc.label,
-            ingredient_name=material,
-            defaults={
-                'usage_ratio': ratio,
-                'origin': origin,
-                'allergens': allergen_str,
-            },
-        )
-        if created:
-            created_count += 1
- 
+
+    label = doc.label
+    pool = load_pool(request.user)          # 원재료마다 다시 읽지 않는다
+    created_bom = matched = created_ing = 0
+    rows = []
+
+    with transaction.atomic():
+        # 정렬 순서는 서류에 적힌 순서를 그대로 따른다. 표시 규정상 함량 내림차순이
+        # 맞지만, 서류에 함량이 없는 행도 있어 여기서 순서를 바꾸면 근거가 사라진다.
+        # 내림차순 정렬은 표시 문구를 만드는 쪽이 맡는다.
+        next_order = (ProductBOM.objects
+                      .filter(parent_label=label, active_yn=True)
+                      .count())
+
+        for material in raw_materials:
+            # 함량이 blend_ratios 가 아니라 원재료명에 붙어 오는 경우가 많다
+            inline_ratio = split_name_and_ratio(material)[1]
+            # 괄호 안(하위 원료·알레르기)은 이름에서 빼고 sub_ingredients 로 보낸다
+            name = clean_material_name(material)
+            if not name:
+                continue
+
+            ratio = parse_ratio(blend_ratios.get(material))
+            if ratio is None:
+                ratio = parse_ratio(blend_ratios.get(name))
+            if ratio is None:
+                ratio = inline_ratio
+
+            origin = (origins.get(material) or origins.get(name) or '').strip()
+            row_allergens = attributed_allergens(material, allergens)
+            subs = sub_ingredients_of(material)
+
+            ingredient, score, candidates = match_my_ingredient(
+                request.user, name, pool=pool)
+            was_matched = ingredient is not None
+
+            if was_matched:
+                matched += 1
+            else:
+                ingredient, was_created = get_or_create_my_ingredient(
+                    request.user,
+                    prdlst_nm=name,
+                    prdlst_report_no='',
+                    prdlst_dcnm='',
+                    ingredient_display_name=name,
+                    allergens=row_allergens,
+                    bssh_nm=manufacturer,
+                    rawmtrl_nm=subs,
+                    delete_YN='N',
+                )
+                created_ing += int(was_created)
+                # 방금 만든 것도 풀에 넣는다 — 서류에 같은 원료가 두 번 적혀 있어도
+                # 두 벌로 만들지 않는다.
+                pool.setdefault(normalize_name(ingredient.prdlst_nm), []).append(ingredient)
+
+            bom, was_new = ProductBOM.objects.get_or_create(
+                parent_label=label,
+                ingredient_name=name,
+                defaults={
+                    'created_by': request.user,
+                    'usage_ratio': ratio,
+                    'origin': origin,
+                    'allergen': row_allergens,
+                    'allergens': row_allergens,
+                    'sub_ingredients': subs,
+                    'raw_material_name': name,
+                    'manufacturer': manufacturer,
+                    'source_ingredient': ingredient,
+                    'sort_order': next_order,
+                    'active_yn': True,
+                },
+            )
+            if was_new:
+                created_bom += 1
+                next_order += 1
+            elif not bom.source_ingredient_id:
+                # 예전에 이 화면으로 만들어져 FK 가 비어 있던 행을 이제야 잇는다
+                bom.source_ingredient = ingredient
+                bom.active_yn = True
+                bom.save(update_fields=['source_ingredient', 'active_yn'])
+
+            rows.append({
+                'name': name,
+                'ratio': ratio,
+                'matched': was_matched,
+                'score': score,
+                'candidates': candidates,
+            })
+
+        linked, skipped = sync_relations_from_bom(label)
+
     log_activity(request, 'document', 'ai_apply_to_bom', document_id)
-    return JsonResponse({'success': True, 'created': created_count, 'total': len(raw_materials)})
+    return JsonResponse({
+        'success': True,
+        'created': created_bom,
+        'total': len(raw_materials),
+        'matched_existing': matched,
+        'created_ingredients': created_ing,
+        'linked_to_label': linked,
+        'skipped_no_ingredient': skipped,
+        'rows': rows,
+    })
 
 
 # ============================================================

@@ -97,6 +97,9 @@ urlpatterns = [
     # 품목보고번호 검증 관련
     path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
 
+    # 인쇄되는 원재료명 문구 생성 (규칙 기반, 저장은 사용자가)
+    path('<int:label_id>/rawmtrl-display/', views.generate_rawmtrl_display, name='generate_rawmtrl_display'),
+
     # 표시사항 서버측 검증 (클라이언트 우회 방지용 최종 판정)
     path('<int:label_id>/validate/', views.validate_label_server, name='validate_label_server'),
 
