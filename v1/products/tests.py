@@ -1076,3 +1076,63 @@ class PhotoViewerWiringTests(TestCase):
     def test_objectURL_을_놓아_준다(self):
         """창을 닫아도 안 풀면 사진이 메모리에 남는다."""
         self.assertIn('revokeObjectURL', self.viewer)
+
+
+class OcrApplyExtrasEndpointTests(TestCase):
+    """사진에서 읽은 영양성분·분리배출을 저장하는 경로."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='extras', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='샐러드')
+
+    def _post(self, **body):
+        url = reverse('products:ocr_apply_extras',
+                      kwargs={'label_id': self.label.my_label_id})
+        return self.client.post(url, data=json.dumps(body),
+                                content_type='application/json')
+
+    def test_영양성분이_저장된다(self):
+        res = self._post(nutrition=[
+            {'field': 'natriums', 'raw': '630 mg'},
+            {'field': 'proteins', 'raw': '13 g'},
+            {'field': 'calories', 'raw': '182 kcal'},
+        ])
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['nutrition_applied'], 3)
+
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.natriums, '630')
+        self.assertEqual(self.label.natriums_unit, 'mg')
+        self.assertEqual(self.label.calories, '182')
+
+    def test_표의_기준이_1회_제공량에_들어간다(self):
+        self._post(nutrition=[{'field': 'calories', 'raw': '182 kcal'}],
+                   nutrition_basis='총 내용량 139 g')
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.serving_size, '139')
+        self.assertEqual(self.label.serving_size_unit, 'g')
+
+    def test_기준을_못_읽으면_건드리지_않는다(self):
+        """기준을 잘못 바꾸면 모든 수치의 뜻이 달라진다."""
+        self.label.serving_size = '100'
+        self.label.save(update_fields=['serving_size'])
+        self._post(nutrition=[{'field': 'calories', 'raw': '182 kcal'}],
+                   nutrition_basis='알 수 없음')
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.serving_size, '100')
+
+    def test_분리배출_문구가_종류로_바뀌어_저장된다(self):
+        res = self._post(recycling_mark_text='비닐류 PP / 띠지:PP, 리드지:PET')
+        self.assertEqual(res.json()['recycling_type'], '비닐(PP)')
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.prv_recycling_mark_type, '비닐(PP)')
+        self.assertEqual(self.label.prv_recycling_mark_enabled, 'Y')
+
+    def test_아무것도_안_보내도_깨지지_않는다(self):
+        self.assertEqual(self._post().status_code, 200)
+
+    def test_남의_라벨은_못_건드린다(self):
+        other = User.objects.create_user(username='extras2', password='x')
+        self.client.force_login(other)
+        self.assertEqual(self._post(nutrition=[]).status_code, 404)

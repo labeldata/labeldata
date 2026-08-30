@@ -5817,6 +5817,60 @@ def report_no_lookup(request, label_id):
     })
 
 
+@login_required
+@require_POST
+def ocr_apply_extras(request, label_id):
+    """
+    사진에서 읽은 값 중 기본 정보 탭 밖으로 가는 것을 반영한다.
+
+    영양성분은 별도 탭(iframe)이고 분리배출은 미리보기 설정이라, 기본 정보 탭의
+    폼으로는 채울 수가 없다. 화면이 확인받은 것만 여기로 보낸다.
+
+    **고른 것만 쓴다.** 영양성분 저장 API(nutrition_save_api)는 넘어오지 않은
+    항목을 빈 값으로 덮으므로 여기서 쓸 수 없다 - 사진에 없던 성분이 지워진다.
+    """
+    from v1.label.services.ocr_apply import (
+        apply_nutrition, apply_recycling_mark, parse_nutrition_basis,
+    )
+
+    label = _resolve_editable_label(request, label_id)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    nutrition = payload.get('nutrition') or []
+    applied = apply_nutrition(label, nutrition)
+
+    # 표의 기준(총 내용량 / 100g당)이 읽혔으면 함께 맞춘다. 기준이 어긋나면
+    # 수치는 맞는데 표시가 틀린다.
+    basis_value, basis_unit = parse_nutrition_basis(payload.get('nutrition_basis'))
+    if basis_value:
+        label.serving_size = basis_value
+        label.serving_size_unit = basis_unit or label.serving_size_unit or 'g'
+        label.save(update_fields=['serving_size', 'serving_size_unit'])
+        applied += ['serving_size']
+
+    # 분리배출은 읽은 문구를 저장용 종류로 바꿔 준다. 종류를 못 정하면 문구만
+    # 남기고 켜지 않는다 - 틀린 종류를 넣으면 포장재질 대조 검증이 엉뚱하게 운다.
+    from v1.label.services.ocr_apply import map_recycling_mark
+
+    mark_text = (payload.get('recycling_mark_text') or '').strip()
+    mark_type = (payload.get('recycling_mark_type') or '').strip()
+    if mark_text and not mark_type:
+        mark_type, mark_text = map_recycling_mark(mark_text)
+    marked = apply_recycling_mark(label, mark_type, mark_text) if mark_text or mark_type else []
+
+    log_activity(request, 'product', 'ocr_apply_extras', label.my_label_id)
+    return JsonResponse({
+        'success': True,
+        'nutrition_applied': len([f for f in applied if not f.endswith('_unit')]),
+        'recycling_applied': bool(marked),
+        'recycling_type': mark_type,
+    })
+
+
 def _resolve_editable_label(request, label_id):
     """내 라벨이거나 편집 권한이 있는 공유 라벨을 돌려준다."""
     return get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)

@@ -1830,3 +1830,97 @@ class OcrPromptTests(TestCase):
         src = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
                ).read_text(encoding='utf-8')
         self.assertIn('max_tokens=4000', src)
+
+
+class OcrApplyExtrasTests(TestCase):
+    """
+    사진에서 읽은 영양성분·분리배출을 라벨에 반영하는 규칙.
+
+    기본 정보 탭에 칸이 없는 항목들이다 - 영양성분은 별도 탭(iframe),
+    분리배출은 미리보기 설정.
+    """
+
+    def test_숫자와_단위를_가른다(self):
+        from v1.label.services.ocr_apply import split_value_unit
+
+        self.assertEqual(split_value_unit('630 mg', 'natriums'), ('630', 'mg'))
+        self.assertEqual(split_value_unit('4.3g', 'saturated_fats'), ('4.3', 'g'))
+        self.assertEqual(split_value_unit('1,200 mg', 'natriums'), ('1200', 'mg'))
+
+    def test_단위를_못_읽으면_규정_단위를_붙인다(self):
+        """단위가 틀리면 표시가 통째로 틀린다. 비워 두는 것보다 규정값이 낫다."""
+        from v1.label.services.ocr_apply import split_value_unit
+
+        self.assertEqual(split_value_unit('630', 'natriums'), ('630', 'mg'))
+        self.assertEqual(split_value_unit('10', 'carbohydrates'), ('10', 'g'))
+        self.assertEqual(split_value_unit('182', 'calories'), ('182', 'kcal'))
+
+    def test_고른_성분만_쓰고_나머지는_두다(self):
+        from v1.label.services.ocr_apply import apply_nutrition
+
+        user = User.objects.create_user(username='nutri', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='샐러드',
+                                       dietary_fiber='3')
+        apply_nutrition(label, [{'field': 'natriums', 'raw': '630 mg'},
+                                {'field': 'proteins', 'raw': '13 g'}])
+        label.refresh_from_db()
+        self.assertEqual(label.natriums, '630')
+        self.assertEqual(label.natriums_unit, 'mg')
+        self.assertEqual(label.proteins, '13')
+        # 사진에 없던 성분은 지워지지 않는다
+        self.assertEqual(label.dietary_fiber, '3')
+
+    def test_표의_기준을_읽는다(self):
+        from v1.label.services.ocr_apply import parse_nutrition_basis
+
+        self.assertEqual(parse_nutrition_basis('총 내용량 139 g'), ('139', 'g'))
+        self.assertEqual(parse_nutrition_basis('100 g당'), ('100', 'g'))
+        self.assertEqual(parse_nutrition_basis('1회 제공량 200 mL'), ('200', 'mL'))
+        self.assertEqual(parse_nutrition_basis('알 수 없음'), (None, None))
+
+    def test_분리배출_표기를_저장용_종류로_바꾼다(self):
+        from v1.label.services.ocr_apply import map_recycling_mark
+
+        self.assertEqual(map_recycling_mark('비닐류 PP / 띠지:PP, 리드지:PET')[0],
+                         '비닐(PP)')
+        self.assertEqual(map_recycling_mark('플라스틱 OTHER')[0], '기타플라스틱')
+        self.assertEqual(map_recycling_mark('플라스틱 PET')[0], '플라스틱(PET)')
+        self.assertEqual(map_recycling_mark('유리')[0], '유리')
+        self.assertEqual(map_recycling_mark('캔류 알미늄')[0], '캔류(알미늄)')
+
+    def test_종류를_못_정하면_문구만_남긴다(self):
+        """틀린 종류를 넣으면 포장재질 대조 검증이 엉뚱하게 운다."""
+        from v1.label.services.ocr_apply import map_recycling_mark
+
+        mark, text = map_recycling_mark('알 수 없는 표기')
+        self.assertEqual(mark, '')
+        self.assertEqual(text, '알 수 없는 표기')
+
+    def test_종류가_있어야_마크를_켠다(self):
+        from v1.label.services.ocr_apply import apply_recycling_mark
+
+        user = User.objects.create_user(username='recycle', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='샐러드')
+
+        apply_recycling_mark(label, '', '알 수 없는 표기')
+        label.refresh_from_db()
+        self.assertEqual(label.prv_recycling_mark_enabled, 'N')
+        self.assertEqual(label.prv_recycling_mark_text, '알 수 없는 표기')
+
+        apply_recycling_mark(label, '비닐(PP)', '비닐류 PP')
+        label.refresh_from_db()
+        self.assertEqual(label.prv_recycling_mark_enabled, 'Y')
+        self.assertEqual(label.prv_recycling_mark_type, '비닐(PP)')
+
+    def test_읽은_종류가_검증과_맞물린다(self):
+        """저장한 종류를 포장재질 대조 검증이 실제로 본다."""
+        from v1.label.services.ocr_apply import apply_recycling_mark
+        from v1.label.services.validation_service import check_recycling_mark
+
+        user = User.objects.create_user(username='recycle2', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='샐러드',
+                                       frmlc_mtrqlt='PET(용기, 리드지), PE(드레싱)')
+        apply_recycling_mark(label, '비닐(PP)', '비닐류 PP')
+        label.refresh_from_db()
+        # PP 마크인데 포장재질에 PP 가 없다 -> 검증이 잡아야 한다
+        self.assertTrue(check_recycling_mark(label))

@@ -130,6 +130,9 @@ urlpatterns = [
     path('documents/<int:document_id>/ai-review/save/', views.document_ai_review_save, name='document_ai_review_save'),
     path('documents/<int:document_id>/ai-review/apply-to-bom/', views.document_ai_apply_to_bom, name='document_ai_apply_to_bom'),
 
+    # 사진에서 읽은 영양성분·분리배출 반영 (기본 정보 탭 밖의 항목)
+    path('labels/<int:label_id>/ocr-extras/', views.ocr_apply_extras, name='ocr_apply_extras'),
+
     # 불러오기 모달 — 품목보고번호 조회 / 원료 사진 업로드 / 원료 BOM 등록
     path('labels/<int:label_id>/lookup/report-no/', views.report_no_lookup, name='report_no_lookup'),
     path('labels/<int:label_id>/ingredient-photo/upload/', views.ingredient_photo_upload, name='ingredient_photo_upload'),

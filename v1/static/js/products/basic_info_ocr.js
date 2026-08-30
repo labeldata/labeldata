@@ -41,6 +41,20 @@
     additional_info:     { id: 'field-additional-info',      label: '기타 표시사항' }
   };
 
+  // 영양성분과 분리배출은 기본 정보 탭에 칸이 없다 - 영양성분은 별도 탭(iframe),
+  // 분리배출은 미리보기 설정이다. 화면에서 채울 수가 없어 서버가 맡는다.
+  var NUTRITION_MAP = {
+    calories:       '열량',
+    natriums:       '나트륨',
+    carbohydrates:  '탄수화물',
+    sugars:         '당류',
+    fats:           '지방',
+    trans_fats:     '트랜스지방',
+    saturated_fats: '포화지방',
+    cholesterols:   '콜레스테롤',
+    proteins:       '단백질'
+  };
+
   // 채운 항목은 "표시 항목" 체크도 켠다. 값만 있고 체크가 꺼져 있으면 인쇄되지
   // 않고 규정 검증에서도 빠져서, 사용자가 채웠다고 여기는 것과 어긋난다.
   function checkboxFor(ocrField) {
@@ -195,7 +209,8 @@
         + '    <div></div><div>항목</div><div>현재 값</div><div></div><div>사진에서 읽은 값</div>'
         + '  </div>'
         + rows.join('')
-        + '</div>';
+        + '</div>'
+        + extrasHtml(data);
       window.photoViewerLayout(body, photoFile, table);
       modalEl.querySelector('#basicInfoOcrApply').disabled = false;
 
@@ -217,6 +232,108 @@
       modal.hide();
     };
     modal.show();
+  }
+
+  // 영양성분·분리배출은 기본 정보 탭에 칸이 없어 서버가 반영한다. 값은 이
+  // 확인 창에서 같이 보여 주고 고른 것만 보낸다.
+  function extrasHtml(data) {
+    var val = function (k) {
+      var item = data[k];
+      return (item && item.confidence !== 'none' && item.value) ? String(item.value) : '';
+    };
+
+    var nutriRows = Object.keys(NUTRITION_MAP)
+      .filter(function (k) { return val(k); })
+      .map(function (k) {
+        return '<div class="ocr-row" data-nutri="' + k + '">'
+          + '  <input class="form-check-input ocr-pick" type="checkbox" checked>'
+          + '  <div class="ocr-label">' + esc(NUTRITION_MAP[k]) + '</div>'
+          + '  <div class="ocr-current"><span class="ocr-empty">영양성분 탭</span></div>'
+          + '  <div class="ocr-arrow"><span class="ocr-state-new">채움</span></div>'
+          + '  <div class="ocr-control">'
+          + '    <input type="text" class="form-control form-control-sm ocr-value"'
+          + '           value="' + esc(val(k)) + '"></div>'
+          + '</div>';
+      });
+
+    var html = '';
+    if (nutriRows.length) {
+      html += '<div class="mt-3 pt-2 border-top">'
+        + '<div class="fw-semibold mb-1" style="font-size:13px;">영양정보</div>'
+        + '<div class="text-muted mb-2" style="font-size:11px;">'
+        + (val('nutrition_basis')
+            ? '기준: ' + esc(val('nutrition_basis')) + '. '
+            : '')
+        + '영양성분 탭에 바로 저장됩니다. 기본 정보의 저장 버튼과 별개입니다.'
+        + '</div>'
+        + '<input type="hidden" id="ocrNutritionBasis" value="' + esc(val('nutrition_basis')) + '">'
+        + '<div class="ocr-table">' + nutriRows.join('') + '</div></div>';
+    }
+
+    if (val('recycling_mark')) {
+      html += '<div class="mt-3 pt-2 border-top">'
+        + '<div class="fw-semibold mb-1" style="font-size:13px;">분리배출 표시</div>'
+        + '<div class="text-muted mb-2" style="font-size:11px;">'
+        + '미리보기의 분리배출마크 설정에 저장되고, 포장재질과 맞는지 검증에 쓰입니다.'
+        + '</div>'
+        + '<div class="ocr-row" data-recycle="1">'
+        + '  <input class="form-check-input ocr-pick" type="checkbox" checked>'
+        + '  <div class="ocr-label">분리배출</div>'
+        + '  <div class="ocr-current"><span class="ocr-empty">미리보기 설정</span></div>'
+        + '  <div class="ocr-arrow"><span class="ocr-state-new">채움</span></div>'
+        + '  <div class="ocr-control">'
+        + '    <input type="text" class="form-control form-control-sm ocr-value"'
+        + '           value="' + esc(val('recycling_mark')) + '"></div>'
+        + '</div></div>';
+    }
+    return html;
+  }
+
+  // 고른 영양성분·분리배출을 서버로 보낸다
+  function applyExtras() {
+    var body = document.getElementById('basicInfoOcrBody');
+    if (!body) return;
+
+    var nutrition = [];
+    body.querySelectorAll('[data-nutri]').forEach(function (row) {
+      if (!row.querySelector('.ocr-pick').checked) return;
+      var text = (row.querySelector('.ocr-value').value || '').trim();
+      if (!text) return;
+      // 숫자와 단위 가르기는 서버가 한다 - 규정 단위를 서버가 갖고 있다
+      nutrition.push({ field: row.dataset.nutri, raw: text });
+    });
+
+    var recycle = body.querySelector('[data-recycle]');
+    var markText = '';
+    if (recycle && recycle.querySelector('.ocr-pick').checked) {
+      markText = (recycle.querySelector('.ocr-value').value || '').trim();
+    }
+
+    if (!nutrition.length && !markText) return;
+
+    var basisEl = document.getElementById('ocrNutritionBasis');
+    fetch('/products/labels/' + labelId() + '/ocr-extras/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify({
+        nutrition: nutrition,
+        nutrition_basis: basisEl ? basisEl.value : '',
+        recycling_mark_text: markText
+      })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (r) {
+        if (!r.success) return;
+        var parts = [];
+        if (r.nutrition_applied) parts.push('영양성분 ' + r.nutrition_applied + '개');
+        if (r.recycling_applied) {
+          parts.push('분리배출' + (r.recycling_type ? '(' + r.recycling_type + ')' : ''));
+        }
+        if (parts.length) {
+          status(parts.join(', ') + ' 을(를) 저장했습니다. 영양성분 탭에서 확인하세요.');
+        }
+      })
+      .catch(function (err) { console.error(err); });
   }
 
   function applySelected() {
@@ -264,6 +381,10 @@
     status(filled
       ? filled + '개 항목을 채웠습니다. 확인 후 저장하세요.'
       : '채운 항목이 없습니다.');
+
+    // 영양성분·분리배출은 이 탭에 칸이 없어 서버가 바로 저장한다.
+    // 창이 닫히기 전에 값을 읽어야 하므로 여기서 부른다.
+    applyExtras();
 
     // 원재료명을 채웠으면 그 안의 원료들을 BOM 행으로 만들 수 있다.
     // 한 줄짜리 문자열로 두면 배합비 순서 검사·알레르기 수집·표시 문구가

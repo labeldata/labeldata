@@ -41,8 +41,24 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - pog_daycnt: 소비기한 / 유통기한 (예: 별도표기일까지, 제조일로부터 12개월)
 - cautions: 주의사항 칸의 내용 전체. 같은 제조시설 혼입 가능 문구,
     섭취·보관 주의, 용기 팽창 주의 등
-- additional_info: 위에 없는 기타 표시사항. 제품교환장소, 소비자상담실 번호,
-    부정불량식품 신고번호, 분리배출 안내 등을 이어서 적는다
+- additional_info: 위에 없는 기타 표시사항. **제품교환장소, 고객상담실/소비자상담실
+    번호, 부정불량식품 신고번호, 질소가스충전 표시, 홈페이지 주소, 환경 문구** 등
+    규정 항목에 해당하지 않는 문구를 줄바꿈으로 이어서 적는다
+- recycling_mark: 분리배출 표시. 마크 안의 재질 구분과 그 옆/아래 보조 표기를
+    함께 적는다. 예: "비닐류 PP / 띠지:PP, 리드지:PET", "플라스틱 OTHER"
+
+영양정보(영양성분표)가 있으면 아래도 채운다. 표에 적힌 **숫자와 단위를 그대로**
+옮긴다. 1일 영양성분 기준치 비율(%)은 빼고 값만 적는다.
+- nutrition_basis: 표의 기준 표기. 예: "총 내용량 139 g", "100 g당", "1회 제공량 30 g"
+- calories: 열량. 예: "182 kcal"
+- natriums: 나트륨. 예: "630 mg"
+- carbohydrates: 탄수화물. 예: "10 g"
+- sugars: 당류. 예: "7 g"
+- fats: 지방. 예: "10 g"
+- trans_fats: 트랜스지방. 예: "0 g"
+- saturated_fats: 포화지방. 예: "4.3 g"
+- cholesterols: 콜레스테롤. 예: "25 mg"
+- proteins: 단백질. 예: "13 g"
 
 응답 규칙:
 - 텍스트가 명확하게 읽히면: {"value": "실제추출값", "confidence": "high"}
@@ -68,7 +84,18 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
   "frmlc_mtrqlt": {"value": null, "confidence": "none"},
   "pog_daycnt": {"value": null, "confidence": "none"},
   "cautions": {"value": null, "confidence": "none"},
-  "additional_info": {"value": null, "confidence": "none"}
+  "additional_info": {"value": null, "confidence": "none"},
+  "recycling_mark": {"value": null, "confidence": "none"},
+  "nutrition_basis": {"value": null, "confidence": "none"},
+  "calories": {"value": null, "confidence": "none"},
+  "natriums": {"value": null, "confidence": "none"},
+  "carbohydrates": {"value": null, "confidence": "none"},
+  "sugars": {"value": null, "confidence": "none"},
+  "fats": {"value": null, "confidence": "none"},
+  "trans_fats": {"value": null, "confidence": "none"},
+  "saturated_fats": {"value": null, "confidence": "none"},
+  "cholesterols": {"value": null, "confidence": "none"},
+  "proteins": {"value": null, "confidence": "none"}
 }
 """
 
