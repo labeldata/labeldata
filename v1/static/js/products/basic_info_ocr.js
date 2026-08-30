@@ -331,7 +331,11 @@
     fetch('/products/labels/' + labelId() + '/ocr-corrections/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
-      body: JSON.stringify({ rows: rows })
+      body: JSON.stringify({
+        rows: rows,
+        // 영역을 골라 읽었는지(crop) 전체를 읽었는지(whole)
+        variant: window.__ocrVariant || ''
+      })
     }).catch(function (err) { console.debug('교정 이력 기록 실패', err); });
   }
 

@@ -27,6 +27,13 @@ class Command(BaseCommand):
                             help='그 항목이 어떻게 틀렸는지 실제 사례')
         parser.add_argument('--limit', type=int, default=15,
                             help='사례 개수 (기본 15)')
+        parser.add_argument('--by', choices=['field', 'model', 'variant'],
+                            default='field',
+                            help='무엇을 기준으로 묶을지 (기본 field). '
+                                 'model 은 모델 비교, variant 는 영역선택/전체 비교')
+        parser.add_argument('--model', help='이 모델로 읽은 것만')
+        parser.add_argument('--variant', choices=['crop', 'whole'],
+                            help='crop=영역 선택, whole=사진 전체')
 
     def handle(self, *args, **options):
         from v1.label.services.ocr_learning import accuracy_stats, hints_text
@@ -45,7 +52,9 @@ class Command(BaseCommand):
             self._samples(options['samples'], options['limit'], options['days'])
             return
 
-        stats = accuracy_stats(days=options['days'])
+        stats = accuracy_stats(days=options['days'], group=options['by'],
+                               model=options.get('model'),
+                               variant=options.get('variant'))
         if not stats:
             self.stdout.write('  아직 쌓인 판독 이력이 없다.')
             self.stdout.write('  제품 기본 정보 탭에서 사진을 불러오고 '
@@ -53,24 +62,40 @@ class Command(BaseCommand):
             return
 
         scope = f'최근 {options["days"]}일' if options['days'] else '전체'
+        if options.get('model'):
+            scope += f' · 모델 {options["model"]}'
+        if options.get('variant'):
+            scope += f' · {"영역 선택" if options["variant"] == "crop" else "사진 전체"}'
         total = sum(s['total'] for s in stats)
         wrong = sum(s['corrected'] for s in stats)
         overall = (total - wrong) / total * 100 if total else 0
 
         self.stdout.write(f'  {scope} 판독 {total}건 중 {wrong}건을 사용자가 고쳤다')
         self.stdout.write(self.style.SUCCESS(f'  전체 정답률 {overall:.1f}%'))
+        titles = {'field': '항목별', 'model': '모델별', 'variant': '방식별'}
+        labels = {'crop': '영역 선택', 'whole': '사진 전체'}
+
         self.stdout.write('')
-        self.stdout.write('  항목별 (정답률 낮은 순)')
-        self.stdout.write('  %-22s %6s %6s %8s' % ('항목', '판독', '고침', '정답률'))
+        self.stdout.write(f'  {titles[options["by"]]} (정답률 낮은 순)')
+        self.stdout.write('  %-22s %6s %6s %8s' % (
+            titles[options['by']][:2], '판독', '고침', '정답률'))
         for row in stats:
+            name = labels.get(row['key'], row['key'])
             line = '  %-22s %6d %6d %7.1f%%' % (
-                row['field'], row['total'], row['corrected'], row['rate'])
+                name, row['total'], row['corrected'], row['rate'])
             if row['total'] >= 3 and row['rate'] < 60:
                 self.stdout.write(self.style.WARNING(line))
             else:
                 self.stdout.write(line)
 
+        if options['by'] != 'field' and len(stats) < 2:
+            self.stdout.write('')
+            self.stdout.write(self.style.WARNING(
+                '  비교할 짝이 아직 하나뿐이다. 다른 쪽으로도 몇 번 돌려야 '
+                '견줄 수 있다.'))
+
         self.stdout.write('')
+        self.stdout.write('  모델 비교: --by model     방식 비교: --by variant')
         self.stdout.write('  어떻게 틀렸는지: --samples <항목>')
 
     def _samples(self, field, limit, days):

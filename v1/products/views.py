@@ -5844,6 +5844,9 @@ def ocr_record_corrections(request, label_id):
 
     rows = payload.get('rows') or []
     model = getattr(settings, 'OCR_MODEL', '')
+    # 영역을 골라 읽었는지(crop) 사진 전체를 읽었는지(whole).
+    # 나눠 재지 않으면 "영역을 고르는 게 나은가" 를 답할 수 없다.
+    variant = (payload.get('variant') or '')[:20]
     saved = 0
     corrected = 0
     for row in rows[:60]:      # 한 번에 들어올 수 있는 항목 수의 상한
@@ -5853,7 +5856,7 @@ def ocr_record_corrections(request, label_id):
         entry = record(
             request.user, field,
             row.get('ocr_value'), row.get('final_value'),
-            confidence=row.get('confidence'), model=model,
+            confidence=row.get('confidence'), model=model, variant=variant,
         )
         if entry is not None:
             saved += 1

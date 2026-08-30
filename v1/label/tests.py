@@ -2092,3 +2092,60 @@ class OcrLearningTests(TestCase):
 
         for phrase in ['작업지시서', '항목명을 값에 넣지', '혼입', '고유명사']:
             self.assertIn(phrase, SYSTEM_PROMPT, f'"{phrase}" 규칙이 빠졌다')
+
+
+class OcrVariantComparisonTests(TestCase):
+    """
+    영역 선택과 사진 전체를 나눠 재는 고리.
+
+    나눠 재지 않으면 "영역을 고르는 게 나은가" 를 영영 인상으로만 답하게 된다.
+    실제로 두 번 돌려 본 결과가 서로 엇갈렸다 - 한 항목은 이쪽이, 다른 항목은
+    저쪽이 나았다. 표본 두 개로는 못 정한다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='variant', password='x')
+
+    def _rec(self, field, ocr, final, variant='', model='', times=1):
+        from v1.label.services.ocr_learning import record
+        for _ in range(times):
+            record(self.user, field, ocr, final, variant=variant, model=model)
+
+    def test_방식별로_묶어_센다(self):
+        from v1.label.services.ocr_learning import accuracy_stats
+
+        self._rec('rawmtrl_nm', 'A', 'A', variant='crop', times=3)
+        self._rec('rawmtrl_nm', 'A', 'B', variant='crop', times=1)
+        self._rec('rawmtrl_nm', 'A', 'B', variant='whole', times=3)
+
+        stats = {s['key']: s for s in accuracy_stats(group='variant')}
+        self.assertEqual(stats['crop']['rate'], 75.0)
+        self.assertEqual(stats['whole']['rate'], 0.0)
+
+    def test_모델별로도_묶는다(self):
+        from v1.label.services.ocr_learning import accuracy_stats
+
+        self._rec('cautions', 'A', 'A', model='gpt-4o', times=4)
+        self._rec('cautions', 'A', 'B', model='gpt-4o-mini', times=2)
+
+        stats = {s['key']: s for s in accuracy_stats(group='model')}
+        self.assertEqual(stats['gpt-4o']['rate'], 100.0)
+        self.assertEqual(stats['gpt-4o-mini']['rate'], 0.0)
+
+    def test_한쪽만_걸러_볼_수_있다(self):
+        from v1.label.services.ocr_learning import accuracy_stats
+
+        self._rec('bssh_nm', 'A', 'A', variant='crop', times=2)
+        self._rec('bssh_nm', 'A', 'B', variant='whole', times=2)
+
+        only_crop = accuracy_stats(variant='crop')
+        self.assertEqual(len(only_crop), 1)
+        self.assertEqual(only_crop[0]['total'], 2)
+        self.assertEqual(only_crop[0]['rate'], 100.0)
+
+    def test_방식을_안_보내도_깨지지_않는다(self):
+        from v1.label.services.ocr_learning import accuracy_stats
+
+        self._rec('prdlst_nm', 'A', 'A')
+        stats = accuracy_stats(group='variant')
+        self.assertEqual(stats[0]['key'], '(없음)')

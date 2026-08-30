@@ -140,6 +140,10 @@ class OcrCorrection(models.Model):
                                   verbose_name='판독 확신도')
     model = models.CharField(max_length=40, blank=True, default='',
                              verbose_name='판독 모델')
+    # 어떤 방식으로 읽었는지. 'crop'(영역을 골랐다) / 'whole'(사진 전체).
+    # 방식을 나눠 재지 않으면 "영역을 고르는 게 나은가" 를 영영 답할 수 없다.
+    variant = models.CharField(max_length=20, blank=True, default='',
+                               verbose_name='판독 방식')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -149,6 +153,7 @@ class OcrCorrection(models.Model):
         indexes = [
             models.Index(fields=['field', 'corrected'], name='idx_ocr_corr_field'),
             models.Index(fields=['created_at'], name='idx_ocr_corr_date'),
+            models.Index(fields=['model', 'variant'], name='idx_ocr_corr_how'),
         ]
 
     def __str__(self):

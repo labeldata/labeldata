@@ -266,6 +266,9 @@
     }
     window.cropPhoto(file).then(function (picked) {
       if (!picked) return;
+      // 영역을 골랐는지 전체를 썼는지 남긴다. 교정 이력에 함께 저장돼야
+      // "영역을 고르는 게 나은가" 를 나중에 숫자로 답할 수 있다.
+      window.__ocrVariant = (picked !== file) ? 'crop' : 'whole';
       startRead(side, picked, modalEl);
     }).catch(function (err) {
       console.error(err);

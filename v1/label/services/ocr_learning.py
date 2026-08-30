@@ -30,7 +30,8 @@ _CACHE_KEY = 'ocr:correction_hints'
 _CACHE_TTL = 60 * 30      # 교정은 천천히 쌓인다. 30분이면 충분하다.
 
 
-def record(user, field, ocr_value, final_value, confidence='', model=''):
+def record(user, field, ocr_value, final_value, confidence='', model='',
+           variant=''):
     """
     한 항목의 판독 결과와 사용자가 실제로 쓴 값을 남긴다.
 
@@ -51,6 +52,7 @@ def record(user, field, ocr_value, final_value, confidence='', model=''):
             corrected=(ocr_value != final_value),
             confidence=(confidence or '')[:10],
             model=(model or '')[:40],
+            variant=(variant or '')[:20],
         )
     except Exception:
         logger.exception('판독 교정 이력 기록 실패 (field=%s)', field)
@@ -131,11 +133,16 @@ def invalidate():
     cache.delete(_CACHE_KEY)
 
 
-def accuracy_stats(days=None):
+def accuracy_stats(days=None, group='field', **filters):
     """
-    항목별 정답률. 프롬프트를 고친 뒤 나아졌는지 재는 데 쓴다.
+    정답률 집계. 프롬프트·모델·방식을 바꾼 뒤 나아졌는지 재는 데 쓴다.
 
-    Returns: [{field, total, corrected, rate}, ...] 틀린 비율이 높은 순.
+    group 으로 무엇을 기준으로 묶을지 정한다.
+      'field'    항목별 (기본)
+      'model'    모델별   — gpt-4o-mini 와 gpt-4o 비교
+      'variant'  방식별   — 영역 선택(crop) 과 전체(whole) 비교
+
+    Returns: [{key, total, corrected, rate}, ...] 정답률 낮은 순.
     """
     from datetime import timedelta
 
@@ -147,8 +154,11 @@ def accuracy_stats(days=None):
     qs = OcrCorrection.objects.all()
     if days:
         qs = qs.filter(created_at__gte=timezone.now() - timedelta(days=days))
+    for key, value in filters.items():
+        if value:
+            qs = qs.filter(**{key: value})
 
-    rows = (qs.values('field')
+    rows = (qs.values(group)
             .annotate(total=Count('id'), wrong=Count('id', filter=Q(corrected=True)))
             .order_by())
     out = []
@@ -156,7 +166,8 @@ def accuracy_stats(days=None):
         total = row['total'] or 0
         wrong = row['wrong'] or 0
         out.append({
-            'field': row['field'],
+            'key': row[group] or '(없음)',
+            'field': row[group] or '(없음)',   # 예전 이름도 남겨 둔다
             'total': total,
             'corrected': wrong,
             'rate': round((total - wrong) / total * 100, 1) if total else 0.0,
