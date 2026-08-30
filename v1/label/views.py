@@ -52,6 +52,7 @@ from .services.ai_validation_service import check_ingredient_order, run_full_rev
 from .services.ai_rate_limit import check_rate_limit, get_usage as get_ai_usage
 from .services.ingredient_matching import get_or_create_my_ingredient
 from .services.ingredient_display import build_display_text, build_reference_text
+from .services.label_naming import next_temp_label_name
 
 
 # ============================================
@@ -595,27 +596,9 @@ def create_new_label(request):
     # 표시사항 생성 로깅
     log_user_activity(request, 'label', 'label_create')
     try:
-        base_name = "임시 - 제품명"
-
-        # 다음 번호는 DB 가 구한다.
-        #
-        # 예전에는 "임시 - 제품명" 으로 시작하는 이름을 전부 가져와 파이썬에서
-        # 정규식으로 최대값을 찾았다. 이탈한 빈 라벨이 쌓이는 화면이라 그 목록이
-        # 계속 길어지고, 신규 작성 버튼이 그만큼 느려진다.
-        #
-        # 숫자 부분만 잘라 정수로 바꿔 MAX 를 구한다. 숫자가 아닌 꼬리는
-        # MySQL·SQLite 모두 0 으로 변환하므로 최대값에 영향을 주지 않는다.
-        prefix = f"{base_name} - "
-        max_num = (
-            MyLabel.objects
-            .filter(user_id=request.user, my_label_name__startswith=prefix)
-            .annotate(seq=Cast(Substr('my_label_name', len(prefix) + 1),
-                               IntegerField()))
-            .aggregate(top=Max('seq'))['top'] or 0
-        )
-
-        # 새 라벨 이름 생성 (최대값 + 1)
-        new_label_name = f"{base_name} - {max_num + 1}"
+        # 제품 관리의 "새로 만들기" 와 같은 규칙을 쓴다 — cleanup_temp_labels 가
+        # 이 이름을 보고 손대지 않은 빈 것을 치운다.
+        new_label_name = next_temp_label_name(request.user)
 
         # 새 라벨 객체 생성
         new_label = MyLabel.objects.create(

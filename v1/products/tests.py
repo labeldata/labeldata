@@ -384,13 +384,22 @@ class BasicInfoChoiceTests(TestCase):
         self.assertIn('grp-processing', html)
 
     def test_칩을_쓰는_화면_모두에_선택지를_넘긴다(self):
-        """뷰가 안 넘기면 칩이 하나도 안 그려진다 — 예전에 그래서 폴백이 필요했다."""
+        """
+        뷰가 안 넘기면 칩이 하나도 안 그려진다 - 예전에 그래서 폴백이 필요했다.
+
+        개수를 못 박지 않는다. 기본 정보 탭을 그리는 화면은 이제 제품 상세
+        하나지만(등록·수정 폼을 워크스페이스로 합쳤다), 나중에 늘 수 있다.
+        두 선택지를 짝으로 넘기는지, 하나라도 넘기는지를 본다.
+        """
         import inspect
         from v1.products import views
 
         src = inspect.getsource(views)
-        self.assertEqual(src.count("'preservation_choices': PRESERVATION_CHOICES"), 3)
-        self.assertEqual(src.count("'processing_choices': PROCESSING_CHOICES"), 3)
+        preservation = src.count("'preservation_choices': PRESERVATION_CHOICES")
+        processing = src.count("'processing_choices': PROCESSING_CHOICES")
+        self.assertGreaterEqual(preservation, 1)
+        self.assertEqual(preservation, processing,
+                         '두 선택지는 같은 곳에서 함께 넘겨야 한다')
 
 
 class RawmtrlDisplayFieldTests(TestCase):
@@ -840,9 +849,33 @@ class ProductCreatePageTests(TestCase):
         self.user = User.objects.create_user(username='newproduct', password='x')
         self.client.force_login(self.user)
 
-    def test_신규_등록_화면이_열린다(self):
+    def test_신규_등록은_제품을_만들고_워크스페이스로_보낸다(self):
+        before = MyLabel.objects.filter(user_id=self.user).count()
         res = self.client.get(reverse('products:product_create'))
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(MyLabel.objects.filter(user_id=self.user).count(), before + 1)
+
+        label = MyLabel.objects.filter(user_id=self.user).latest('my_label_id')
+        self.assertIn(str(label.my_label_id), res['Location'])
+        # cleanup_temp_labels 가 치울 수 있는 이름이어야 한다
+        self.assertTrue(label.my_label_name.startswith('임시 - 제품명 - '))
+
+    def test_만들어진_제품에_메타데이터가_붙는다(self):
+        from v1.products.models import ProductMetadata
+
+        self.client.get(reverse('products:product_create'))
+        label = MyLabel.objects.filter(user_id=self.user).latest('my_label_id')
+        self.assertTrue(ProductMetadata.objects.filter(label=label).exists())
+
+    def test_제품_코드가_겹치지_않는다(self):
+        from v1.products.models import ProductMetadata
+
+        for _ in range(3):
+            self.client.get(reverse('products:product_create'))
+        codes = list(ProductMetadata.objects
+                     .filter(label__user_id=self.user)
+                     .values_list('product_code', flat=True))
+        self.assertEqual(len(codes), len(set(codes)))
 
     def test_제품_없이도_기본정보_조각이_그려진다(self):
         from django.template.loader import render_to_string

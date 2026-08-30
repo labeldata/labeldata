@@ -33,6 +33,7 @@ from .models import Product, ProductFolder, ProductAccessLog, ProductMetadata, F
 from v1.bom.models import ProductBOM
 from .models import ProductDocument, ProductComment, ProductShare, SharedProductReceipt, DocumentType, DocumentSlot, SharePermission, ProductNotification, UserContact
 from v1.label.models import MyLabel, FoodItem
+from v1.label.services.label_naming import next_temp_label_name
 
 from .forms import ProductForm
 from v1.activity_log.utils import log_activity
@@ -1079,140 +1080,53 @@ def product_favorite(request):
 
 @login_required
 def product_create(request):
-    """제품 생성 (MyLabel 기반)"""
-    if request.method == 'POST':
-        # MyLabel 직접 생성
-        label = MyLabel()
-        label.user_id = request.user
-        label.my_label_name = request.POST.get('my_label_name', '새 제품')
-        label.prdlst_nm = request.POST.get('prdlst_nm', '')
-        label.ingredient_info = request.POST.get('ingredient_info', '')
-        label.prdlst_dcnm = request.POST.get('prdlst_dcnm', '')
-        label.prdlst_report_no = request.POST.get('prdlst_report_no', '')
-        label.content_weight = request.POST.get('content_weight', '')
-        label.country_of_origin = request.POST.get('country_of_origin', '')
-        label.storage_method = request.POST.get('storage_method', '')
-        label.frmlc_mtrqlt = request.POST.get('frmlc_mtrqlt', '')
-        label.bssh_nm = request.POST.get('bssh_nm', '')
-        label.pog_daycnt = request.POST.get('pog_daycnt', '')
-        label.rawmtrl_nm_display = request.POST.get(
-            'rawmtrl_nm_display', label.rawmtrl_nm_display)
-        label.cautions = request.POST.get('cautions', '')
-        label.additional_info = request.POST.get('additional_info', '')
-        label.food_group = request.POST.get('food_group', '')
-        label.food_type = request.POST.get('food_type', '')
-        label.processing_method = request.POST.get('processing_method', '')
-        label.processing_condition = request.POST.get('processing_condition', '')
-        label.preservation_type = request.POST.get('preservation_type', '')
-        label.distributor_address = request.POST.get('distributor_address', '')
-        label.repacker_address = request.POST.get('repacker_address', '')
-        label.importer_address = request.POST.get('importer_address', '')
-        import json as _json
-        raw_cf = request.POST.get('custom_fields_json', '[]')
-        try:
-            label.custom_fields = _json.loads(raw_cf)
-        except Exception:
-            label.custom_fields = []
-        label.delete_YN = 'N'
-        label.save()
-        
-        # 고유한 product_code 생성
-        user_product_count = ProductMetadata.objects.filter(
-            label__user_id=request.user
-        ).count()
-        
-        # 중복되지 않는 고유 코드 찾기
-        product_code = None
-        max_attempts = 100
-        for i in range(max_attempts):
-            candidate_code = f"PRD-{request.user.id}-{user_product_count + i + 1:04d}"
-            if not ProductMetadata.objects.filter(product_code=candidate_code).exists():
-                product_code = candidate_code
-                break
-        
-        # 고유 코드를 찾지 못한 경우 타임스탬프 추가
-        if not product_code:
-            import time
-            product_code = f"PRD-{request.user.id}-{int(time.time())}"
-        
-        # ProductMetadata 생성 (중복 방지)
-        metadata, created = ProductMetadata.objects.get_or_create(
-            label=label,
-            defaults={
-                'product_code': product_code,
-                'starred_yn': False,
-            }
-        )
-        
-        # 활동 로그 기록
-        if created:
-            from .models import ProductActivityLog
-            ProductActivityLog.objects.create(
-                label=label,
-                user=request.user,
-                action='CREATED',
-                details={
-                    'product_code': product_code,
-                    'product_name': label.my_label_name,
-                }
-            )
+    """
+    새 제품을 즉시 만들고 워크스페이스로 보낸다.
 
-        # raw_material_yn / search_tags 저장
-        raw_yn = request.POST.get('raw_material_yn') == 'on'
-        search_tags = request.POST.get('search_tags', '').strip()
-        metadata.raw_material_yn = raw_yn
-        metadata.search_tags = search_tags
-        metadata.save(update_fields=['raw_material_yn', 'search_tags'])
+    예전에는 별도의 등록 폼(product_form.html)을 먼저 보여 주고, 저장해야 제품이
+    생겼다. 그래서 화면이 두 벌이 됐고 - 등록 폼과 제품 상세가 생김새도 저장
+    방식도 달랐다 - 등록 폼에서는 사진 불러오기·BOM·문서함이 아무것도 되지
+    않았다. 붙일 제품이 아직 없었기 때문이다.
 
-        # 원료로 사용 체크 시 MyIngredient 자동 등록 + LabelIngredientRelation 연동
-        if raw_yn:
-            from v1.label.models import MyIngredient as _MyIngredient, LabelIngredientRelation as _LIR
-            product_name = label.prdlst_nm or label.my_label_name
-            ingredient = _MyIngredient.objects.filter(
-                user_id=request.user,
-                prdlst_nm=product_name,
-                delete_YN='N',
-            ).first()
-            if not ingredient:
-                ingredient = _MyIngredient.objects.create(
-                    user_id=request.user,
-                    prdlst_nm=product_name,
-                    bssh_nm=label.bssh_nm or '',
-                    prdlst_dcnm=label.prdlst_dcnm or '',
-                    pog_daycnt=label.pog_daycnt or '',
-                    rawmtrl_nm=label.rawmtrl_nm or '',
-                    ingredient_display_name=label.rawmtrl_nm or product_name,
-                    food_category='processed',
-                    delete_YN='N',
-                )
-            _LIR.objects.get_or_create(
-                label=label,
-                ingredient=ingredient,
-                defaults={'relation_sequence': 1},
-            )
+    표시사항 작성(label:create_new_label)은 원래 이 방식이었다. 제품 관리만
+    달라서 두 벌이 된 것이라, 그쪽에 맞춘다.
 
-        messages.success(request, '새로운 제품이 생성되었습니다.')
-        log_activity(request, 'product', 'product_create', label.my_label_id)
-        # 생성 후 워크스페이스의 기본정보 탭으로 바로 이동
-        return redirect('products:product_detail_new', product_id=label.my_label_id)
+    빈 제품이 쌓이는 것이 이 방식의 대가다. 손대지 않은 것은
+    `manage.py cleanup_temp_labels` 가 치운다(지우지 않고 숨김 처리).
+    """
+    label = MyLabel.objects.create(
+        user_id=request.user,
+        my_label_name=next_temp_label_name(request.user),
+        delete_YN='N',
+    )
 
-    # GET: 폼 렌더링
-    food_types = FoodType.objects.all().order_by('food_group', 'food_type')
-    food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
-    countries = CountryList.objects.all().order_by('country_name_ko')
+    # 제품 코드는 사용자 안에서 겹치지 않으면 된다. 번호가 비어 있어도(지운 제품)
+    # 다시 쓰지 않고 뒤로 민다 - 옛 제품의 코드가 되살아나면 이력이 헷갈린다.
+    used = set(
+        ProductMetadata.objects
+        .filter(label__user_id=request.user)
+        .values_list('product_code', flat=True)
+    )
+    seq = len(used) + 1
+    while f'PRD-{request.user.id}-{seq:04d}' in used:
+        seq += 1
+    product_code = f'PRD-{request.user.id}-{seq:04d}'
 
-    context = {
-        'product': None,  # 새 제품 생성이므로 None
-        'title': '새 제품 만들기',
-        'food_types': food_types,
-        'food_groups': food_groups,
-        'countries': countries,
-        'can_edit': True,
-        'preservation_choices': PRESERVATION_CHOICES,
-        'processing_choices': PROCESSING_CHOICES,
-        'custom_fields_json': '[]',
-    }
-    return render(request, 'products/product_form.html', context)
+    ProductMetadata.objects.get_or_create(
+        label=label,
+        defaults={'product_code': product_code, 'starred_yn': False},
+    )
+
+    from .models import ProductActivityLog
+    ProductActivityLog.objects.create(
+        label=label,
+        user=request.user,
+        action='CREATED',
+        details={'product_code': product_code, 'product_name': label.my_label_name},
+    )
+
+    log_activity(request, 'product', 'product_create', label.my_label_id)
+    return redirect('products:product_detail_new', product_id=label.my_label_id)
 
 
 @login_required
@@ -1308,26 +1222,14 @@ def product_update(request, product_id):
         messages.success(request, '제품이 수정되었습니다.')
         return redirect('products:product_detail_new', product_id=label.my_label_id)
 
-    # 식품유형과 원산지 목록 추가
-    food_types = FoodType.objects.all().order_by('food_group', 'food_type')
-    food_groups = FoodType.objects.values_list('food_group', flat=True).distinct().order_by('food_group')
-    countries = CountryList.objects.all().order_by('country_name_ko')
-    meta = ProductMetadata.objects.filter(label=label).first()
-
-    context = {
-        'product': label,
-        'label': label,
-        'title': '제품 수정',
-        'food_types': food_types,
-        'food_groups': food_groups,
-        'countries': countries,
-        'metadata': meta,
-        'can_edit': True,
-        'preservation_choices': PRESERVATION_CHOICES,
-        'processing_choices': PROCESSING_CHOICES,
-        'custom_fields_json': json.dumps(label.custom_fields or [], ensure_ascii=False),
-    }
-    return render(request, 'products/product_form.html', context)
+    # GET 은 워크스페이스로 보낸다.
+    #
+    # 예전에는 별도의 수정 폼(product_form.html)을 그렸다. 제품 상세의 기본
+    # 정보 탭이 같은 일을 더 잘 하고(부분 저장·자동저장·불러오기), 어느 화면도
+    # 이 주소로 링크하지 않는다. 폼을 두 벌로 두면 한쪽만 고쳐지는 날이 온다.
+    #
+    # POST 는 그대로 둔다 - 밖에서 부르고 있을지 모른다.
+    return redirect('products:product_detail_new', product_id=label.my_label_id)
 
 
 @login_required
