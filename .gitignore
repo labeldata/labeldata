@@ -56,13 +56,10 @@ coverage.xml
 *.log
 local_settings.py
 db.sqlite3
-migrations/
-v1/label/migrations/
-v1/disposition/migrations/
-v1/common/migrations/
-v1/main/migrations/
-v1/user_management/migrations/
-**/migrations/
+# 마이그레이션은 소스 코드다. 무시하면 배포된 곳마다 스키마 이력이 제멋대로
+# 갈라진다 - 실제로 그래서 로컬과 서버의 파일 구성이 달라졌고, 서버에서는
+# 없는 파일을 의존하는 바람에 migrate 가 아예 돌지 않았다.
+# (예전 규칙: migrations/, **/migrations/ 등 7줄)
 
 # Django media files
 media/

@@ -29,6 +29,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--sql', action='store_true',
                             help='상태를 맞출 때 쓸 명령을 함께 보여준다 (실행하지는 않는다)')
+        parser.add_argument('--files', action='store_true',
+                            help='앱별 파일·기록 이름을 전부 보여준다')
 
     def handle(self, *args, **options):
         # 그래프를 만들지 않는다. 이 커맨드는 그래프가 안 만들어지는 상태를
@@ -45,6 +47,7 @@ class Command(BaseCommand):
         ghosts = sorted(applied - disk)
         pending = sorted(disk - applied)
 
+        self._report_by_app(disk, applied, options['files'])
         self._report_missing_files(loader, disk)
         self._report_ghosts(ghosts)
         existing = self._report_pending(loader, pending)
@@ -87,8 +90,38 @@ class Command(BaseCommand):
             f'  {len(broken)}건. 이 상태에서는 migrate 가 그래프를 만들지 못하고 죽는다.'))
         for app, name, dep in broken:
             self.stdout.write(f'    {app}.{name} -> {dep[0]}.{dep[1]} (파일 없음)')
+            have = sorted(n for a, n in disk if a == dep[0])
+            self.stdout.write(f'        {dep[0]} 에 있는 파일: '
+                              + (', '.join(have) if have else '(없음)'))
         self.stdout.write(
             '  마이그레이션 파일이 .gitignore 에 걸려 있으면 배포된 곳마다 구성이 달라진다.')
+
+    def _report_by_app(self, disk, applied, verbose):
+        """
+        앱별로 파일과 기록을 나란히 센다.
+
+        두 환경의 마이그레이션 구성이 다를 때, 어느 앱이 얼마나 어긋났는지를
+        한눈에 맞춰 보려면 이 표가 필요하다.
+        """
+        self.stdout.write('')
+        self.stdout.write(self.style.MIGRATE_HEADING('── 앱별 ──'))
+        apps = sorted({a for a, _ in disk} | {a for a, _ in applied})
+        self.stdout.write(f'  {"앱":<18}{"파일":>5}{"기록":>5}{"유령":>5}{"미적용":>7}')
+        for app in apps:
+            files = {n for a, n in disk if a == app}
+            rows = {n for a, n in applied if a == app}
+            ghost, pending = len(rows - files), len(files - rows)
+            flag = '' if not (ghost or pending) else '  <-'
+            self.stdout.write(
+                f'  {app:<18}{len(files):>5}{len(rows):>5}{ghost:>5}{pending:>7}{flag}')
+            if not verbose:
+                continue
+            for name in sorted(files | rows):
+                mark = ('둘 다' if name in files and name in rows
+                        else '파일만' if name in files else '기록만')
+                self.stdout.write(f'      [{mark}] {name}')
+        if not verbose:
+            self.stdout.write('  이름까지 보려면 --files')
 
     # ── 유령 기록 ────────────────────────────────────────────────────────────
 

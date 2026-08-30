@@ -10,7 +10,11 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('bom', '0002_rename_is_fields'),
+        # 필요한 건 bom.productbom 뿐이고 그건 0001_initial 이 만든다.
+        # 원래는 0002_rename_is_fields 를 가리켰는데, 그 이름은 로컬에만 있고
+        # 서버에는 같은 내용이 0002_rename_fields 로 있어서 서버에서 그래프가
+        # 끊겼다(NodeNotFoundError). 양쪽에 다 있는 이름으로 맞춘다.
+        ('bom', '0001_initial'),
         ('label', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]

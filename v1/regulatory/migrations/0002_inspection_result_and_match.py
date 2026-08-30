@@ -8,7 +8,10 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('label', '0007_add_display_type_fields'),
+        # 필요한 건 label.mylabel 뿐이고 그건 0001_initial 이 만든다.
+        # 원래는 0007_add_display_type_fields 를 가리켰는데 그 파일이 서버에 없다
+        # (서버의 label 은 0001_initial 과 0019_... 두 개뿐이다).
+        ('label', '0001_initial'),
         ('regulatory', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
