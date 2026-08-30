@@ -16,25 +16,22 @@
                 <i class="bi bi-arrow-left fs-5"></i>
             </a>
 
-            <div>
+            <div class="flex-grow-1 min-w-0">
                 <div class="d-flex align-items-center gap-2">
                     <input
                         id="workspace-product-name"
                         type="text"
-                        class="form-control form-control-plaintext fw-bold fs-6 p-0"
+                        class="form-control form-control-plaintext fw-bold p-0"
                         value="{{ product.my_label_name|default:product.prdlst_nm }}"
                         {% if not can_edit %}readonly{% endif %}
                         placeholder="라벨명을 입력하세요"
+                        title="{{ product.my_label_name|default:product.prdlst_nm }}"
                     >
-                    <i id="favorite-star" 
-                       class="bi {% if metadata.starred_yn %}bi-star-fill text-warning{% else %}bi-star text-muted{% endif %} cursor-pointer"
+                    <i id="favorite-star"
+                       class="bi {% if metadata.starred_yn %}bi-star-fill text-warning{% else %}bi-star text-muted{% endif %} cursor-pointer flex-shrink-0"
                        onclick="toggleFavorite()"
                        title="{% if metadata.starred_yn %}즐겨찾기 해제{% else %}즐겨찾기 추가{% endif %}"></i>
-
-                    <button class="btn v2-link-btn btn-link p-0 text-decoration-none text-muted d-flex align-items-center ms-2" type="button" onclick="saveProductInfo()">
-                        <i class="bi bi-cloud-arrow-up me-1"></i> 저장
-                    </button>
-                    <span id="save-status" class="text-success" style="opacity:0;transition:opacity 0.4s ease;">
+                    <span id="save-status" class="text-success flex-shrink-0" style="opacity:0;transition:opacity 0.4s ease;">
                         <i class="bi bi-check2"></i> 저장되었습니다
                     </span>
                 </div>
@@ -48,8 +45,20 @@
 
             <div class="vr mx-2"></div>
 
-            <button class="btn btn-primary d-flex align-items-center px-4 py-2 shadow-sm fw-bold" type="button" onclick="switchToShareTab()">
-                <i class="bi bi-person-plus-fill me-2"></i>
+            {% comment %}
+              저장은 라벨명 옆의 작은 글자 링크였다. 화면에서 가장 많이 누르는
+              버튼인데 눈에 안 띄었고, 라벨명·즐겨찾기 사이에 끼어 있어 무엇을
+              저장하는 건지도 애매했다. 다른 액션과 같은 줄, 공유 왼쪽으로 옮긴다.
+            {% endcomment %}
+            {% if can_edit %}
+            <button class="btn btn-outline-primary v2-btn" type="button" onclick="saveProductInfo()">
+                <i class="bi bi-cloud-arrow-up"></i>
+                <span>저장</span>
+            </button>
+            {% endif %}
+
+            <button class="btn btn-primary v2-btn" type="button" onclick="switchToShareTab()">
+                <i class="bi bi-person-plus-fill"></i>
                 <span>공유</span>
             </button>
 
@@ -251,8 +260,8 @@
                                 </div>
                                 <div id="display-items-panel" class="mb-3">
                                     {% for item in display_items %}
-                                    <div class="di-row{% if item.rule == 'D' %} di-na{% endif %}"
-                                         title="{{ item.label }}{% if item.rule == 'Y' %} · 식품유형상 표시 대상{% elif item.rule == 'D' %} · 이 식품유형에는 해당 없음{% endif %}{% if item.checked and not item.filled %} · 아직 입력되지 않음{% endif %}">
+                                    <div class="di-row{% if item.rule == 'D' %} di-na{% endif %}{% if item.tab %} di-tab-row{% endif %}"
+                                         title="{{ item.label }}{% if item.rule == 'Y' %} · 식품유형상 표시 대상{% elif item.rule == 'D' %} · 이 식품유형에는 해당 없음{% endif %}{% if item.checked and not item.filled %} · 아직 입력되지 않음{% endif %}{% if item.tab %} · 누르면 {{ item.tab_label }} 탭으로 이동합니다{% endif %}">
                                         <input class="form-check-input display-item-check" type="checkbox"
                                                id="{{ item.checkbox }}" name="{{ item.checkbox }}"
                                                {% if item.checked %}checked{% endif %}
@@ -260,11 +269,15 @@
                                         <button type="button" class="di-name"
                                                 data-anchor="{{ item.anchor }}" data-tab="{{ item.tab }}">
                                             {{ item.label }}{% if item.rule == 'Y' %}<span class="di-req">*</span>{% endif %}
+                                            {% if item.tab %}<i class="bi bi-box-arrow-up-right di-tab-icon"></i>{% endif %}
                                         </button>
                                         {% if item.checked and not item.filled %}
                                         <span class="di-empty" aria-label="미입력">!</span>
                                         {% endif %}
                                     </div>
+                                    {% if item.tab %}
+                                    <div class="di-tab-hint">{{ item.tab_label }} 탭에서 입력합니다</div>
+                                    {% endif %}
                                     {% endfor %}
                                 </div>
 
@@ -3362,6 +3375,13 @@ function getCookie(name) {
   }
   /* 이 식품유형에는 해당 없는 항목 */
   .di-na .di-name { color: var(--text-hint, #9aa0a6); }
+  /* 다른 탭으로 넘어가는 항목 — 흐름이 끊기므로 목록 끝에 두고 티를 낸다 */
+  .di-tab-row { margin-top: 6px; padding-top: 7px; border-top: 1px solid var(--v2-border, #dadce0); }
+  .di-tab-icon { font-size: 9px; color: var(--text-hint, #9aa0a6); margin-left: 3px; vertical-align: 1px; }
+  .di-tab-hint {
+    padding: 0 8px 2px 30px;
+    font-size: 10.5px; line-height: 1.4; color: var(--text-hint, #9aa0a6);
+  }
   /* 이동한 칸을 잠깐 드러낸다 */
   .di-highlight {
     box-shadow: 0 0 0 2px var(--v2-blue, #1a73e8) !important;

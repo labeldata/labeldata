@@ -939,13 +939,17 @@ def product_detail(request, product_id):
 # chckd_weight_calorie(내용량(열량))는 뺐다. 별도로 입력하는 칸이 아니라 내용량에
 # 병기하는 값이라("250 g (100 kcal)") 켜고 끌 대상이 아니다. 표시 여부는 식품유형이
 # 정하고, 값이 적혔는지는 validation_service 가 내용량의 kcal 표기로 판정한다.
+#
+# 영양성분은 이 탭에 칸이 없어 누르면 다른 탭으로 넘어간다. 흐름이 끊기는
+# 항목이라 목록 끝에 둔다.
 _DISPLAY_ITEM_ORDER = [
     'chckd_prdlst_dcnm', 'chckd_prdlst_nm', 'chckd_ingredient_info',
     'chckd_content_weight', 'chckd_prdlst_report_no',
     'chckd_country_of_origin', 'chckd_pog_daycnt', 'chckd_storage_method',
-    'chckd_frmlc_mtrqlt', 'chckd_rawmtrl_nm_display', 'chckd_nutrition_text',
+    'chckd_frmlc_mtrqlt', 'chckd_rawmtrl_nm_display',
     'chckd_bssh_nm', 'chckd_distributor_address', 'chckd_repacker_address',
     'chckd_importer_address', 'chckd_cautions', 'chckd_additional_info',
+    'chckd_nutrition_text',
 ]
 
 # 항목 이름을 눌렀을 때 갈 곳. 기본은 'field-<필드명을 하이픈으로>' 인데 둘이 다르다.
@@ -953,9 +957,9 @@ _DISPLAY_ITEM_ANCHORS = {
     # V2 에는 rawmtrl_nm(참고) 칸 하나뿐이다. 이동 대상은 그 칸이 맞다.
     'rawmtrl_nm_display': 'field-rawmtrl-nm',
 }
-# 이 탭에 칸이 없어 다른 탭으로 보내야 하는 항목
+# 이 탭에 칸이 없어 다른 탭으로 보내야 하는 항목. (탭 id, 탭 이름)
 _DISPLAY_ITEM_TABS = {
-    'nutrition_text': 'tab-nutrition',
+    'nutrition_text': ('tab-nutrition', '영양성분'),
 }
 
 
@@ -995,7 +999,8 @@ def _build_display_items(label):
             'filled': _has_content(label, field),
             'anchor': _DISPLAY_ITEM_ANCHORS.get(
                 field, 'field-' + field.replace('_', '-')),
-            'tab': _DISPLAY_ITEM_TABS.get(field, ''),
+            'tab': _DISPLAY_ITEM_TABS.get(field, ('', ''))[0],
+            'tab_label': _DISPLAY_ITEM_TABS.get(field, ('', ''))[1],
         })
     return items
 

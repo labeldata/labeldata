@@ -172,7 +172,7 @@
         </div>
 
         <!-- 제조방법 1줄: 체크박스 + 조건 입력 인라인 -->
-        <div>
+        <div class="v2-field-block">
             <label class="form-label v2-field-label">제조방법</label>
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <div class="form-check">
@@ -207,7 +207,7 @@
                        class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.processing_condition|default:'' }}"
                        placeholder="조건 상세 입력"
-                       style="border-radius:8px; padding:8px 12px; flex:1; min-width:160px;">
+                       style="flex:1; min-width:160px;">
             </div>
         </div>
     </div>
@@ -291,7 +291,7 @@
                            class="form-control bg-light border-0 v2-field-input"
                            value="{{ product.storage_method|default:'' }}"
                            placeholder="직접 입력"
-                           style="border-radius:8px; padding:8px 12px; flex:1; min-width:80px;">
+                           style="flex:1; min-width:80px;">
                 </div>
             </div>
             <!-- 용기포장재질 -->
@@ -339,7 +339,7 @@
                         <div class="col-12">
                             <label class="form-label v2-field-label">유통전문판매원</label>
                             <input type="text" id="field-distributor-address" name="distributor_address"
-                                   class="form-control bg-white border-0"
+                                   class="form-control bg-white border-0 v2-field-input"
                                    value="{{ product.distributor_address|default:'' }}"
                                    placeholder="유통전문판매원을 입력하세요"
                                   >
@@ -347,7 +347,7 @@
                         <div class="col-md-6">
                             <label class="form-label v2-field-label">소분원</label>
                             <input type="text" id="field-repacker-address" name="repacker_address"
-                                   class="form-control bg-white border-0"
+                                   class="form-control bg-white border-0 v2-field-input"
                                    value="{{ product.repacker_address|default:'' }}"
                                    placeholder="소분원을 입력하세요"
                                   >
@@ -355,7 +355,7 @@
                         <div class="col-md-6">
                             <label class="form-label v2-field-label">수입원</label>
                             <input type="text" id="field-importer-address" name="importer_address"
-                                   class="form-control bg-white border-0"
+                                   class="form-control bg-white border-0 v2-field-input"
                                    value="{{ product.importer_address|default:'' }}"
                                    placeholder="수입원을 입력하세요"
                                   >

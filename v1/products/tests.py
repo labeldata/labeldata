@@ -276,6 +276,17 @@ class DisplayItemPanelTests(TestCase):
         self.label.refresh_from_db()
         self.assertEqual(self.label.chckd_weight_calorie, 'Y')
 
+    def test_탭으로_보내는_항목은_목록_끝에_둔다(self):
+        """흐름이 끊기는 항목이라 입력을 다 마친 뒤 보이는 게 낫다."""
+        from v1.products.views import _build_display_items
+
+        items = _build_display_items(self.label)
+        tabbed = [i for i in items if i['tab']]
+        self.assertTrue(tabbed)
+        for item in tabbed:
+            self.assertGreaterEqual(items.index(item), len(items) - len(tabbed))
+            self.assertTrue(item['tab_label'], '어느 탭으로 가는지 이름이 있어야 한다')
+
     def test_이동_대상이_템플릿에_실제로_있다(self):
         """
         없는 id 를 가리키면 그 항목만 눌러도 아무 일이 안 일어난다.
