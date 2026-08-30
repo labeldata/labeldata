@@ -17,10 +17,13 @@ config() 환경변수 오버라이드)를 그대로 따랐고, 저장소는 이�
 파일 기반 캐시(CACHES['default'])를 재사용해 별도 인프라가 필요 없다.
 """
 import hashlib
+import logging
 
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 # 기본값은 settings.py에서 오버라이드 가능.
 # 분당 한도는 사용자에게 노출하는 지표가 아니라 자동화 남용을 걸러내기
@@ -62,18 +65,63 @@ def _daily_limit_for(user) -> int:
     return _paid_daily_limit() if is_paid_user(user) else _free_daily_limit()
 
 
-def _day_key(user_id) -> str:
-    return f'ai_validation:rl:day:{user_id}:{timezone.now().strftime("%Y%m%d")}'
+# ── 일일 카운터: DB(활동 로그) ─────────────────────────────────────────────
+#
+# 원래 파일 캐시에 있었다. CACHES['default'] 는 MAX_ENTRIES 500 이고 검증 결과
+# 캐시·농수산물 목록 캐시가 같은 칸을 나눠 쓴다. 항목이 넘치면 Django 가 1/3 을
+# 잘라내는데(FileBasedCache._cull), 그때 카운터가 같이 날아가면 **한도가 조용히
+# 초기화된다.** 유료 기능의 사용량이 캐시 정리에 좌우되면 안 된다.
+#
+# DB 로 옮기려면 보통 테이블을 하나 만들지만, 이 저장소는 마이그레이션 그래프가
+# 깨져 있어 migrate 자체가 안 돈다(4-1 참고). 그래서 이미 있고 마이그레이션이
+# 끝난 UserActivityLog 에 소비 기록을 남기고 그걸 센다. 하루 최대 50행이라
+# 부담이 없고, (user, category) / (category, action) 인덱스가 이미 있다.
+ACTIVITY_CATEGORY = 'validation'
+ACTIVITY_ACTION = 'ai_validation_charge'
+
+
+def _today_range():
+    """오늘 0시부터 지금까지. 서버 시간대(TIME_ZONE) 기준."""
+    now = timezone.localtime()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start, now
+
+
+def _daily_used(user) -> int:
+    """오늘 실제로 차감된 횟수. 캐시가 아니라 DB 를 센다."""
+    from v1.activity_log.models import UserActivityLog
+
+    start, _ = _today_range()
+    try:
+        return UserActivityLog.objects.filter(
+            user=user,
+            category=ACTIVITY_CATEGORY,
+            action=ACTIVITY_ACTION,
+            created_at__gte=start,
+        ).count()
+    except Exception:
+        # 로그 테이블을 못 읽으면 한도를 0 으로 보고 막지 않는다. 사용자를 막는
+        # 것보다 몇 번 더 나가는 쪽이 낫다 — 대신 로그에 남긴다.
+        logger.exception('[AI검증 한도] 사용량 조회 실패 (user=%s)', getattr(user, 'id', None))
+        return 0
+
+
+def _charge(user) -> None:
+    """1회 소비를 기록한다."""
+    from v1.activity_log.models import UserActivityLog
+
+    UserActivityLog.objects.create(
+        user=user, category=ACTIVITY_CATEGORY, action=ACTIVITY_ACTION)
 
 
 def get_usage(user) -> dict:
     """
-    현재 사용량을 카운트 증가 없이 조회한다. 버튼을 누르기 전에도 화면에
+    현재 사용량을 차감 없이 조회한다. 버튼을 누르기 전에도 화면에
     "오늘 N/한도회 사용"을 보여줄 수 있게 별도로 분리해뒀다.
     """
     limit = _daily_limit_for(user)
-    used = cache.get(_day_key(user.id)) or 0
-    return {'daily_used': used, 'daily_limit': limit, 'is_paid': is_paid_user(user)}
+    return {'daily_used': _daily_used(user), 'daily_limit': limit,
+            'is_paid': is_paid_user(user)}
 
 
 def check_rate_limit(user) -> tuple[bool, dict]:
@@ -88,9 +136,8 @@ def check_rate_limit(user) -> tuple[bool, dict]:
     limit = _daily_limit_for(user)
     now = timezone.now()
     minute_key = f'ai_validation:rl:min:{user.id}:{now.strftime("%Y%m%d%H%M")}'
-    day_key = _day_key(user.id)
 
-    day_count = cache.get(day_key) or 0
+    day_count = _daily_used(user)
     if day_count >= limit:
         return False, {
             'daily_used': day_count, 'daily_limit': limit, 'is_paid': is_paid_user(user),
@@ -104,9 +151,10 @@ def check_rate_limit(user) -> tuple[bool, dict]:
             'message': '짧은 시간에 요청이 너무 많았습니다. 1분 후 다시 시도해주세요.',
         }
 
-    # 통과 — 카운터 증가 (완벽한 원자성은 아니지만 rate limit 용도로는 충분)
+    # 통과 — 소비 기록. 분당 한도는 연타를 막는 조용한 안전장치라 캐시로 충분하다
+    # (사라져도 일일 한도가 남는다). 일일 한도만 DB 에 남긴다.
     cache.set(minute_key, minute_count + 1, timeout=70)
-    cache.set(day_key, day_count + 1, timeout=60 * 60 * 26)  # 자정 경계 여유
+    _charge(user)
     return True, {
         'daily_used': day_count + 1, 'daily_limit': limit, 'is_paid': is_paid_user(user),
         'message': '',
