@@ -117,7 +117,14 @@ def _content_fingerprint(label) -> str:
     """
     검증 결과에 실제로 영향을 주는 필드만 모아 해시. 저장 시각처럼
     무관한 필드는 넣지 않아, 내용이 안 바뀌었으면 캐시가 항상 맞는다.
+
+    필수 입력 검사(validation_service.check_required_fields)가 붙으면서 표시
+    여부 체크박스와 그 대응 필드 전부가 판정에 영향을 준다. 여기에 넣지 않으면
+    소비기한을 채우고 다시 검증해도 캐시 TTL(15분) 동안 "미입력" 결과가 그대로
+    나온다.
     """
+    from .validation_service import _REQUIRED_CHECKBOX_FIELDS
+
     fields = [
         label.rawmtrl_nm_display or '', label.rawmtrl_nm or '',
         label.prdlst_nm or '', label.content_weight or '',
@@ -125,6 +132,10 @@ def _content_fingerprint(label) -> str:
         label.additional_info or '', label.allergens or '',
         label.frmlc_mtrqlt or '', label.prv_recycling_mark_type or '',
     ]
+    for checkbox in _REQUIRED_CHECKBOX_FIELDS:
+        fields.append(getattr(label, checkbox, '') or '')
+        fields.append(getattr(label, checkbox[len('chckd_'):], '') or '')
+
     raw = '\x1f'.join(fields)
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]
 

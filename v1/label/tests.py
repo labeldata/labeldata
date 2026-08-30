@@ -283,6 +283,7 @@ class ValidateLabelWiringTests(TestCase):
 
         names = {c.__name__ for c in _CHECKS}
         self.assertIn('check_additive_display_name', names)
+        self.assertIn('check_required_fields', names)
 
         user = User.objects.create_user(username='wiring', password='x')
         label = MyLabel.objects.create(user_id=user, my_label_name='빈 라벨')
@@ -290,6 +291,145 @@ class ValidateLabelWiringTests(TestCase):
         # 근거 규정 목록에도 새 항목이 드러나야 한다 (검증 범위를 사용자에게 보여주는 값)
         joined = ' '.join(result['checked_regulations'])
         self.assertIn('식품첨가물의 표시 방법', joined)
+
+
+class RequiredFieldTests(TestCase):
+    """
+    필수 입력 항목 공란 검사(validation_service.check_required_fields).
+
+    나머지 검사는 전부 "값이 있을 때만" 본다 — 내용량이 비면 지적이 없고,
+    원재료명이 비면 알레르기·원산지 검사가 통째로 건너뛰어진다. 그래서
+    아무것도 입력하지 않은 라벨이 지적 0건, 즉 "모두 표시 규정에 적합"으로
+    판정됐다. 화면에는 초록색 "적합" 배지만 뜨므로 눈으로는 절대 안 잡힌다.
+    """
+
+    # 모델 기본값이 'Y' 인 체크박스들 — 새 라벨은 이 항목들을 표시하기로 시작한다
+    DEFAULT_ON = [
+        'prdlst_dcnm', 'prdlst_nm', 'content_weight', 'prdlst_report_no',
+        'frmlc_mtrqlt', 'bssh_nm', 'pog_daycnt', 'rawmtrl_nm_display', 'cautions',
+    ]
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='required', password='x')
+
+    def _issues(self, label):
+        from v1.label.services.validation_service import check_required_fields
+        return check_required_fields(label)
+
+    def test_빈_라벨은_적합이_아니다(self):
+        from v1.label.services.validation_service import validate_label
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='빈 라벨')
+        result = validate_label(label)
+        self.assertFalse(result['ok'], '아무것도 입력하지 않은 라벨이 적합으로 나오면 안 된다')
+
+        categories = {i['category'] for i in result['issues']}
+        self.assertEqual(categories, {'required_missing'},
+                         '빈 라벨에서 나올 수 있는 지적은 필수 미입력뿐이다')
+        self.assertEqual(len(result['issues']), len(self.DEFAULT_ON))
+
+    def test_미입력_항목이_한글_이름으로_나온다(self):
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='빈 라벨')
+        joined = ' '.join(i['message'] for i in self._issues(label))
+        for name in ('제품명', '내용량', '소비기한', '원재료명(표시)', '제조원 소재지'):
+            self.assertIn(name, joined)
+
+    def test_체크가_꺼진_항목은_비어도_통과한다(self):
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨')
+        for field in self.DEFAULT_ON:
+            setattr(label, 'chckd_' + field, 'N')
+        label.save()
+        self.assertEqual(self._issues(label), [])
+
+    def test_값을_채우면_지적이_사라진다(self):
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨')
+        for field in self.DEFAULT_ON:
+            setattr(label, field, '값')
+        label.save()
+        self.assertEqual(self._issues(label), [])
+
+    def test_켜져_있는데_공백만_있으면_비어_있는_것으로_본다(self):
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨')
+        for field in self.DEFAULT_ON:
+            setattr(label, field, '값')
+        label.content_weight = '   '
+        label.save()
+        msgs = [i['message'] for i in self._issues(label)]
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('내용량', msgs[0])
+
+    def test_기본이_꺼진_항목도_켜면_검사한다(self):
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨')
+        for field in self.DEFAULT_ON:
+            setattr(label, field, '값')
+        label.chckd_storage_method = 'Y'   # 기본값 'N'
+        label.save()
+        msgs = [i['message'] for i in self._issues(label)]
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('보관방법', msgs[0])
+
+
+class RequiredFieldAiGateTests(TestCase):
+    """
+    필수 미입력 라벨에서 AI검증이 무엇을 하는가.
+
+    AI 검사 셋은 전부 제품명 아니면 원재료명을 본다. 둘 다 비면 셋 다
+    확인할 게 없는데도 예전에는 일일 한도가 1회 깎였다. 게다가 필수 입력
+    검사가 붙으면 지적거리가 생겨 요약용 OpenAI 호출이 새로 발생한다.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = User.objects.create_user(username='aigate', password='x')
+
+    def test_제품명과_원재료명이_비면_OpenAI를_부르지_않고_한도도_안_깎는다(self):
+        from v1.label.services import ai_validation_service as avs
+        from v1.label.services.ai_rate_limit import get_usage
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='빈 라벨')
+        before = get_usage(self.user)['daily_used']
+
+        with patch.object(avs, 'call_openai') as mock_call:
+            result = avs.run_full_review(label, self.user)
+
+        self.assertEqual(mock_call.call_count, 0, 'OpenAI 를 부를 이유가 없다')
+        self.assertEqual(get_usage(self.user)['daily_used'], before, '한도를 깎으면 안 된다')
+        self.assertFalse(result['ok'])
+        self.assertFalse(result['blocked'])
+
+    def test_필수_미입력_행은_표에서_지워지지_않는다(self):
+        """
+        AI 가 확인 못 한 항목은 "적합"으로 오인되지 않게 표에서 지운다.
+        필수 미입력은 그 처리에 휩쓸리면 안 된다 — 지워지면 남은 행이 전부
+        ok 라서 전체 판정이 다시 "적합"이 된다.
+        """
+        from v1.label.services import ai_validation_service as avs
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='빈 라벨')
+        with patch.object(avs, 'call_openai'):
+            result = avs.run_full_review(label, self.user)
+
+        labels = [c['label'] for c in result['categories']]
+        self.assertIn('필수 입력 항목', labels)
+        self.assertFalse(next(c for c in result['categories'] if c['label'] == '필수 입력 항목')['ok'])
+
+    def test_체크박스만_바뀌어도_결과_캐시가_갈린다(self):
+        """
+        지문에 chckd_* 가 없으면 소비기한을 채워도 15분간 "미입력" 결과가
+        그대로 나온다.
+        """
+        from v1.label.services.ai_rate_limit import _result_cache_key
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨')
+        before = _result_cache_key(label)
+
+        label.chckd_pog_daycnt = 'N'
+        self.assertNotEqual(_result_cache_key(label), before)
+
+        label.chckd_pog_daycnt = 'Y'
+        label.pog_daycnt = '제조일로부터 12개월'
+        self.assertNotEqual(_result_cache_key(label), before)
 
 
 class LabelSavePostTests(TestCase):

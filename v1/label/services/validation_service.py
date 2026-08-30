@@ -14,6 +14,9 @@
 알레르기 표시, 분리배출마크 호환성, 원산지 미표시.
 추가: 식품첨가물 표시명 공란 — 구조화된 원재료 데이터를 그대로 보므로 AI 없이
 판정한다.
+추가: 필수 입력 항목 공란(check_required_fields) — 나머지 검사가 전부 "값이 있을
+때만" 보기 때문에 아무것도 입력하지 않은 라벨이 "모두 적합"으로 판정되던 구멍을
+막는다. 이 검사만 유일하게 "값이 없는 것" 자체를 지적한다.
 
 원재료 표시 순서(배합비 내림차순)는 여기서 검사하지 않는다. 표시 문구를 만드는
 쪽(label/views.py 의 rawmtrl_nm 생성, products/bom_detail.html 의 BOM 요약)이
@@ -110,6 +113,7 @@ _NATURE_CONDITIONS_KO = (
 # 아니라 label_preview.js에 원래 있던 것을 그대로 재사용한 값이고, 나머지는 조항
 # 번호까지 특정하면 오히려 틀릴 위험이 있어 법령명 단위로만 인용한다(2026-08 확인).
 _LEGAL_BASIS = {
+    'required_missing': '「식품 등의 표시·광고에 관한 법률」 및 「식품등의 표시기준」 의무표시사항 기재 규정',
     'content_weight': '「식품등의 표시기준」 내용량 표시 규정',
     'farm_seafood': '「식품등의 표시기준」 제품명에 사용한 원재료의 함량 표시 규정',
     'forbidden_phrase': '「식품등의 표시기준」 제8조(부당한 표시·광고 금지)',
@@ -124,6 +128,64 @@ def _issue(category: str, message: str, suggestion: str = '') -> dict:
     basis = _LEGAL_BASIS.get(category)
     full_message = f'{message} (근거: {basis})' if basis else message
     return {'category': category, 'message': full_message, 'suggestion': suggestion, 'legal_basis': basis}
+
+
+# 표시 여부 체크박스. 접두어 'chckd_' 를 떼면 그대로 MyLabel 필드명이 된다(18개 확인).
+# 화면(label_creation.html)의 chk_* 이름과는 다르다 — 예: chk_manufacturer_info 는
+# chckd_bssh_nm 이다. 여기서는 모델 필드명만 쓴다.
+_REQUIRED_CHECKBOX_FIELDS = (
+    'chckd_prdlst_dcnm', 'chckd_prdlst_nm', 'chckd_ingredient_info',
+    'chckd_content_weight', 'chckd_weight_calorie', 'chckd_prdlst_report_no',
+    'chckd_country_of_origin', 'chckd_storage_method', 'chckd_frmlc_mtrqlt',
+    'chckd_bssh_nm', 'chckd_distributor_address', 'chckd_repacker_address',
+    'chckd_importer_address', 'chckd_pog_daycnt', 'chckd_rawmtrl_nm_display',
+    'chckd_cautions', 'chckd_additional_info', 'chckd_nutrition_text',
+)
+
+
+def _verbose_name(model, field_name: str) -> str:
+    """모델의 verbose_name 을 화면 표기로 재사용 (한글 라벨을 두 번 적지 않기 위함)."""
+    try:
+        return str(model._meta.get_field(field_name).verbose_name)
+    except Exception:
+        return field_name
+
+
+def check_required_fields(label) -> list[dict]:
+    """
+    표시하기로 선택한 항목(chckd_* == 'Y')이 비어 있는지 확인.
+
+    나머지 검사들은 전부 "값이 있을 때만" 본다 — 내용량이 비면
+    check_content_weight 가 [] 를 돌려주는 식이다. 그래서 아무것도 입력하지
+    않은 라벨이 지적 0건, 즉 "모든 항목이 표시 규정에 적합"으로 판정됐다.
+    이 검사가 그 구멍을 막는다.
+
+    필수의 근거는 chckd_* 하나만 쓴다. 체크가 켜져 있다는 건 그 항목을 라벨에
+    인쇄하겠다는 선언이므로, 비어 있으면 빈 줄이 인쇄된다 — 근거가 명확하고
+    오탐이 없다. FoodType 의 Y/D/N 컬럼도 "식품유형별 필수"를 담고 있지만
+    지금은 라벨에 반영되는 경로가 끊겨 있고(/label/food-type-settings/ 미구현),
+    weight_calorie·nutritions 는 실제 데이터에서 거의 전량이 걸려 안내가 아니라
+    소음이 된다. 그쪽은 그 엔드포인트를 만들 때 의미를 확정하고 함께 다룬다.
+    """
+    issues = []
+    for checkbox in _REQUIRED_CHECKBOX_FIELDS:
+        field = checkbox[len('chckd_'):]
+        if (getattr(label, checkbox, '') or '') != 'Y':
+            continue
+        if (getattr(label, field, '') or '').strip():
+            continue
+        name = _verbose_name(type(label), field)
+        issue = _issue(
+            'required_missing',
+            f'표시하기로 선택한 "{name}" 항목이 비어 있습니다.',
+            f'"{name}"을(를) 입력하거나, 이 제품에 해당하지 않으면 표시 항목 체크를 해제하세요.',
+        )
+        # 어느 칸인지 문장을 파싱하지 않고 알 수 있게 따로 실어 보낸다 —
+        # 확정 차단 화면이 "비어 있는 항목: 내용량, 소비기한" 처럼 쓴다.
+        issue['field'] = field
+        issue['field_label'] = name
+        issues.append(issue)
+    return issues
 
 
 def check_content_weight(label) -> list[dict]:
@@ -333,6 +395,7 @@ def check_additive_display_name(label) -> list[dict]:
 
 
 _CHECKS = [
+    check_required_fields,   # 비어 있는 것부터 — 나머지 검사는 값이 있을 때만 본다
     check_content_weight,
     check_farm_seafood_content,
     check_forbidden_phrases,

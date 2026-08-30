@@ -36,6 +36,7 @@ _ALLERGEN_CATEGORY_NAMES = set(ALLERGEN_KEYWORDS.keys())
 # validate_label()의 category 코드 -> 화면에 보여줄 검증 항목명
 # (기존 label_preview.js showValidationModal()의 "검증 항목" 열과 같은 스타일)
 _CATEGORY_LABELS = {
+    'required_missing': '필수 입력 항목',
     'content_weight': '내용량 표시',
     'farm_seafood': '농수산물 함량 표시',
     'forbidden_phrase': '금지 문구',
@@ -476,6 +477,26 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
     return [row for row in grouped.values()]
 
 
+def deterministic_summary(category_results: list[dict], ai_only_checked: bool = False) -> str:
+    """
+    OpenAI 없이 만드는 요약. generate_summary 의 폴백이자, AI 를 아예 부르지
+    않기로 한 경로(run_full_review 의 조기 반환)가 쓰는 문장이기도 하다.
+    """
+    problem_rows = [r for r in category_results if not r['ok']]
+    all_labels = [r['label'] for r in category_results]
+    ai_note = ', 규정 검증(비AI)에는 없는 AI 전용 항목 포함' if ai_only_checked else ''
+    labels_text = f"{', '.join(all_labels)}{ai_note}"
+
+    if not problem_rows:
+        return f'{labels_text} 등 {len(all_labels)}개 항목을 검증한 결과 확인된 문제가 없습니다. 모두 표시 규정에 적합합니다.'
+
+    lines = [f"검증한 {len(all_labels)}개 항목({labels_text}) 중 {len(problem_rows)}개에서 확인이 필요합니다."]
+    for row in problem_rows:
+        for err in row['errors']:
+            lines.append(re.sub(r'<[^>]+>', '', err))
+    return ' '.join(lines)
+
+
 def generate_summary(category_results: list[dict], ai_only_checked: bool = False) -> str:
     """
     검증 결과 전체를 사람이 읽기 좋은 한글 요약 문장으로 압축한다.
@@ -494,17 +515,10 @@ def generate_summary(category_results: list[dict], ai_only_checked: bool = False
     """
     problem_rows = [r for r in category_results if not r['ok']]
     all_labels = [r['label'] for r in category_results]
-    ai_note = ', 규정 검증(비AI)에는 없는 AI 전용 항목 포함' if ai_only_checked else ''
-    labels_text = f"{', '.join(all_labels)}{ai_note}"
+    fallback = deterministic_summary(category_results, ai_only_checked)
 
     if not problem_rows:
-        return f'{labels_text} 등 {len(all_labels)}개 항목을 검증한 결과 확인된 문제가 없습니다. 모두 표시 규정에 적합합니다.'
-
-    fallback_lines = [f"검증한 {len(all_labels)}개 항목({labels_text}) 중 {len(problem_rows)}개에서 확인이 필요합니다."]
-    for row in problem_rows:
-        for err in row['errors']:
-            fallback_lines.append(re.sub(r'<[^>]+>', '', err))
-    fallback = ' '.join(fallback_lines)
+        return fallback
 
     api_key = getattr(settings, 'OPENAI_API_KEY', '')
     if not api_key:
@@ -612,6 +626,38 @@ def run_full_review(label, user) -> dict:
     cached = get_cached_result(label)
     if cached is not None:
         return {**cached, 'from_cache': True, 'blocked': False, 'usage': get_usage(user)}
+
+    # AI 검사 셋은 전부 제품명 아니면 원재료명(표시)을 본다. 둘 다 비어 있으면
+    # 셋 다 REASON_NO_INPUT 으로 되돌아오므로 OpenAI 를 부를 일이 애초에 없다.
+    # 그런데도 지금까지는 일일 한도가 1회 깎였고, 필수 입력 검사가 붙은 뒤로는
+    # 지적거리가 생겨 요약용 호출까지 새로 발생하게 된다. 그 전에 끊는다.
+    if not (label.prdlst_nm or '').strip() and not (label.rawmtrl_nm_display or label.rawmtrl_nm or '').strip():
+        rule_result = validate_label(label)
+        categories = group_issues_by_category(rule_result['issues'])
+        categories = [c for c in categories
+                      if c['label'] not in (_CATEGORY_LABELS['ingredient_order'],
+                                            _CATEGORY_LABELS['name_ingredient_match'])]
+        return {
+            'summary': (
+                '제품명과 원재료명이 비어 있어 AI 검증을 실행하지 않았습니다'
+                '(일일 사용 횟수는 차감하지 않았습니다). '
+                + deterministic_summary(categories)
+            ),
+            'ok': all(c['ok'] for c in categories),
+            'categories': categories,
+            'ingredient_order_checked': False,
+            'allergen_ai_checked': False,
+            'name_ingredient_checked': False,
+            'unchecked': [
+                {'category': c, 'label': _CATEGORY_LABELS[c], 'reason': REASON_NO_INPUT,
+                 'message': REASON_MESSAGES[REASON_NO_INPUT], 'system_failure': False}
+                for c in ('ingredient_order', 'allergen', 'name_ingredient_match')
+            ],
+            'ai_extra_coverage': AI_ONLY_CATEGORIES,
+            'from_cache': False,
+            'blocked': False,
+            'usage': get_usage(user),
+        }
 
     allowed, usage = check_rate_limit(user)
     if not allowed:

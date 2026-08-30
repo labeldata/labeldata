@@ -1509,8 +1509,17 @@ def product_update_status(request, product_id):
     # 사례가 있었다. 검증 기능은 있었지만 확정 단계에서 강제되지 않아, 돌리지 않고
     # 넘어가면 그대로 통과됐다. 규칙 기반 검증(무료·무제한)을 확정 직전에 다시 돌린다.
     #
-    # 오탐 여지가 있으므로 사유를 적으면 넘길 수 있게 하되, 넘긴 사실은 활동 로그에 남긴다.
+    # 오탐 여지가 있으므로 넘길 수 있게 하되, 넘긴 사실은 활동 로그에 남긴다.
+    # 무엇을 요구하느냐는 이 제품에 검토·승인 역할이 배정돼 있는지에 따라 갈린다.
+    #   - 배정돼 있다: 확정하는 사람과 작성한 사람이 다르다. 예외로 넘긴다는 판단을
+    #     남겨야 하므로 사유를 받는다.
+    #   - 배정돼 있지 않다: 혼자 쓰는 제품이다. 자기가 쓴 것을 자기에게 해명하게 만드는
+    #     절차라 값이 없다. 무엇이 비었는지 보여주고 확인만 받는다.
+    # 어느 쪽이든 첫 요청은 목록을 돌려주고 멈춘다 — 무엇이 빠졌는지 못 본 채로
+    # 확정되는 경로가 있으면 안 된다.
     validation_override_reason = (request.POST.get('override_reason') or '').strip()
+    validation_acknowledged = request.POST.get('validation_ack') == '1'
+    validation_override = None
     if new_status == ProductMetadata.Status.CONFIRMED:
         from v1.label.services import validation_service as _vs
         try:
@@ -1519,14 +1528,40 @@ def product_update_status(request, product_id):
             logger.exception('[승인 전 검증] 실행 실패 — 검증을 건너뛰고 진행합니다')
             _result = {'ok': True, 'issues': []}
 
-        if not _result.get('ok') and not validation_override_reason:
-            return JsonResponse({
-                'success': False,
-                'error': '표시사항 검증에서 확인이 필요한 항목이 있습니다.',
-                'validation_blocked': True,
-                'issue_count': _result.get('issue_count', 0),
-                'issues': _result.get('issues', []),
-            }, status=400)
+        if not _result.get('ok'):
+            _issues = _result.get('issues', [])
+            _missing = [i for i in _issues if i.get('category') == 'required_missing']
+
+            _has_workflow_roles = SharePermission.objects.filter(
+                share__label=label,
+                share__active_yn=True,
+                role_code__in=['REVIEWER', 'APPROVER'],
+            ).filter(
+                Q(share__share_end_date__isnull=True) | Q(share__share_end_date__gt=timezone.now())
+            ).exists()
+
+            if _has_workflow_roles:
+                _passed = bool(validation_override_reason)
+            else:
+                _passed = validation_acknowledged or bool(validation_override_reason)
+
+            if not _passed:
+                return JsonResponse({
+                    'success': False,
+                    'error': '표시사항 검증에서 확인이 필요한 항목이 있습니다.',
+                    'validation_blocked': True,
+                    # False 면 화면이 사유 입력 없이 "확인하고 계속"만 받는다
+                    'requires_reason': _has_workflow_roles,
+                    'issue_count': _result.get('issue_count', len(_issues)),
+                    'issues': _issues,
+                    'missing_required': [i.get('field_label') for i in _missing if i.get('field_label')],
+                }, status=400)
+
+            validation_override = {
+                'reason': validation_override_reason,
+                'issue_count': len(_issues),
+                'missing_required': [i.get('field_label') for i in _missing if i.get('field_label')],
+            }
 
     # ── CONFIRMED → DRAFT: 새 버전 번호 증가 ──
     old_status = metadata.status
@@ -1551,10 +1586,17 @@ def product_update_status(request, product_id):
         'new_status': new_status,
         'new_status_label': metadata.get_status_display(),
     }
-    if validation_override_reason:
-        # 검증 이슈를 남긴 채 승인한 경우 — 누가 왜 넘겼는지 추적할 수 있어야 한다
+    if validation_override:
+        # 검증 이슈를 남긴 채 확정한 경우 — 누가, 무엇을 알고도 넘겼는지 남긴다.
+        # 사유가 없는 건(검토·승인 역할 미배정) 확인만 받고 넘어간 경우다.
         _log_details['validation_override'] = True
-        _log_details['override_reason'] = validation_override_reason
+        _log_details['override_issue_count'] = validation_override['issue_count']
+        if validation_override['missing_required']:
+            _log_details['override_missing_required'] = validation_override['missing_required']
+        if validation_override['reason']:
+            _log_details['override_reason'] = validation_override['reason']
+        else:
+            _log_details['override_acknowledged'] = True
     ProductActivityLog.objects.create(
         label=label,
         user=request.user,

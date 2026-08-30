@@ -1430,10 +1430,12 @@ function skipWithToast(newStatus, message) {
     setTimeout(function() { changeStatus(newStatus); }, 900);
 }
 
-async function changeStatus(newStatus, overrideReason) {
+async function changeStatus(newStatus, overrideReason, acknowledged) {
     const formData = new FormData();
     formData.append('status', newStatus);
     if (overrideReason) formData.append('override_reason', overrideReason);
+    // 검토·승인 담당자가 없는 제품에서 "무엇이 비었는지 보고 그래도 확정한다"는 확인
+    if (acknowledged) formData.append('validation_ack', '1');
 
     try {
         const response = await fetch(STATUS_UPDATE_URL, {
@@ -1463,28 +1465,73 @@ async function changeStatus(newStatus, overrideReason) {
     }
 }
 
-/** 승인 차단 사유를 모달로 보여준다 */
+/**
+ * 확정 전 검증에서 걸린 내용을 모달로 보여준다.
+ *
+ * 비어 있는 필수 입력 항목을 맨 위에 따로 묶는다 — 나머지 지적과 성격이 달라서
+ * (아예 판정이 안 된 칸이다) 섞어 놓으면 무엇을 채워야 하는지가 안 보인다.
+ *
+ * requires_reason 은 서버가 정한다. 검토자·승인자가 배정된 제품이면 사유를 받고,
+ * 혼자 쓰는 제품이면 확인만 받는다.
+ */
 function showValidationBlock(newStatus, result) {
     const issues = result.issues || [];
-    const list = issues.map(function (i) {
-        const sug = i.suggestion ? '<div class="vb-sug">' + escapeHtml(i.suggestion) + '</div>' : '';
-        return '<li><div class="vb-msg">' + escapeHtml(i.message || '') + '</div>' + sug + '</li>';
-    }).join('');
+    const missing = issues.filter(function (i) { return i.category === 'required_missing'; });
+    const others  = issues.filter(function (i) { return i.category !== 'required_missing'; });
+    const requiresReason = result.requires_reason !== false;
 
-    document.getElementById('vbList').innerHTML = list;
-    document.getElementById('vbCount').textContent = result.issue_count || issues.length;
-    const reasonEl = document.getElementById('vbReason');
+    const item = function (i, cls) {
+        const sug = i.suggestion ? '<div class="vb-sug">' + escapeHtml(i.suggestion) + '</div>' : '';
+        return '<li class="' + cls + '"><div class="vb-msg">' + escapeHtml(i.message || '') + '</div>' + sug + '</li>';
+    };
+    let html = '';
+    if (missing.length) {
+        html += '<li class="vb-head">비어 있는 필수 입력 항목 ' + missing.length + '건</li>';
+        html += missing.map(function (i) { return item(i, 'vb-req'); }).join('');
+    }
+    if (others.length) {
+        html += '<li class="vb-head">그 밖에 확인이 필요한 항목 ' + others.length + '건</li>';
+        html += others.map(function (i) { return item(i, ''); }).join('');
+    }
+    document.getElementById('vbList').innerHTML = html;
+    const count = result.issue_count || issues.length;
+
+    const titleEl   = document.getElementById('vbTitle');
+    const leadEl    = document.getElementById('vbLead');
+    const reasonWrap = document.getElementById('vbReasonWrap');
+    const reasonEl  = document.getElementById('vbReason');
+    const proceedEl = document.getElementById('vbProceed');
+
     reasonEl.value = '';
+    reasonWrap.style.display = requiresReason ? '' : 'none';
+    if (requiresReason) {
+        titleEl.textContent = '승인 전 확인이 필요합니다';
+        leadEl.innerHTML = '표시사항 검증에서 <b class="text-dark">' + count + '건</b>이 확인됐습니다. '
+            + '이대로 승인하면 표시기준 위반이 될 수 있습니다.';
+        proceedEl.textContent = '사유 남기고 승인';
+    } else {
+        titleEl.textContent = '확정 전 확인해 주세요';
+        leadEl.innerHTML = '아래 <b class="text-dark">' + count + '건</b>이 채워지지 않았습니다. '
+            + '그대로 확정하려면 "확인하고 계속"을 눌러주세요. '
+            + '확정 사실과 함께 활동 로그에 남습니다.';
+        proceedEl.textContent = '확인하고 계속';
+    }
+
     const modal = new bootstrap.Modal(document.getElementById('validationBlockModal'));
-    document.getElementById('vbProceed').onclick = function () {
-        const reason = reasonEl.value.trim();
-        if (!reason) {
-            reasonEl.focus();
-            showSnackbar('그래도 승인하려면 사유를 입력해 주세요.', 'error');
+    proceedEl.onclick = function () {
+        if (requiresReason) {
+            const reason = reasonEl.value.trim();
+            if (!reason) {
+                reasonEl.focus();
+                showSnackbar('그래도 승인하려면 사유를 입력해 주세요.', 'error');
+                return;
+            }
+            modal.hide();
+            changeStatus(newStatus, reason);
             return;
         }
         modal.hide();
-        changeStatus(newStatus, reason);
+        changeStatus(newStatus, '', true);
     };
     modal.show();
 }
@@ -3176,24 +3223,24 @@ function getCookie(name) {
     <div class="modal-content border-0 shadow-lg" style="border-radius: 14px;">
       <div class="modal-header border-0 pb-2 px-4 pt-4">
         <h6 class="mb-0 fw-semibold">
-          <i class="bi bi-exclamation-triangle text-warning me-2"></i>승인 전 확인이 필요합니다
+          <i class="bi bi-exclamation-triangle text-warning me-2"></i><span id="vbTitle">승인 전 확인이 필요합니다</span>
         </h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body px-4 pt-1">
-        <p class="text-muted mb-3" style="font-size:13px;line-height:1.6;">
-          표시사항 검증에서 <b class="text-dark"><span id="vbCount">0</span>건</b>이 확인됐습니다.
-          이대로 승인하면 표시기준 위반이 될 수 있습니다.
-        </p>
+        <!-- 제목·안내문·버튼 문구는 showValidationBlock() 이 상황에 맞게 바꿔 쓴다 -->
+        <p class="text-muted mb-3" id="vbLead" style="font-size:13px;line-height:1.6;"></p>
         <ul class="vb-list" id="vbList"></ul>
-        <label class="form-label mt-3 mb-1" style="font-size:12.5px;font-weight:600;">
-          그래도 승인해야 한다면 사유를 적어주세요
-        </label>
-        <textarea id="vbReason" class="form-control" rows="2"
-                  placeholder="예: 인쇄 도안에는 이미 반영됨, 시스템 입력만 누락"
-                  style="font-size:13px;"></textarea>
-        <div class="text-muted mt-1" style="font-size:11.5px;">
-          입력한 사유는 활동 로그에 기록됩니다.
+        <div id="vbReasonWrap">
+          <label class="form-label mt-3 mb-1" style="font-size:12.5px;font-weight:600;">
+            그래도 승인해야 한다면 사유를 적어주세요
+          </label>
+          <textarea id="vbReason" class="form-control" rows="2"
+                    placeholder="예: 인쇄 도안에는 이미 반영됨, 시스템 입력만 누락"
+                    style="font-size:13px;"></textarea>
+          <div class="text-muted mt-1" style="font-size:11.5px;">
+            입력한 사유는 활동 로그에 기록됩니다.
+          </div>
         </div>
       </div>
       <div class="modal-footer border-0 px-4 pb-4 pt-2">
@@ -3216,6 +3263,15 @@ function getCookie(name) {
   }
   .vb-msg { font-size: 12.5px; color: #202124; line-height: 1.55; }
   .vb-sug { font-size: 11.5px; color: #5f6368; margin-top: 4px; }
+  /* 구분 머리글 — 카드가 아니라 목록의 라벨이라 배경·테두리를 지운다 */
+  .vb-list li.vb-head {
+    background: transparent; border: 0; border-radius: 0;
+    padding: 10px 2px 4px; margin-bottom: 0;
+    font-size: 11.5px; font-weight: 700; color: #5f6368; letter-spacing: .02em;
+  }
+  .vb-list li.vb-head:first-child { padding-top: 0; }
+  /* 비어 있는 필수 항목은 "고쳐야 채워지는 칸"이라 나머지 지적과 구분한다 */
+  .vb-list li.vb-req { border-left: 3px solid #c5221f; }
 </style>
 
 <!-- 필수 문서 추가 모달 -->

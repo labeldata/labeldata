@@ -3264,8 +3264,17 @@ def validate_label_server(request, label_id):
     categories = group_issues_by_category(result['issues'])
     checked_count = len(categories)
     problem_count = sum(1 for c in categories if not c['ok'])
+    # 필수 입력 누락은 다른 지적과 성격이 다르다 — 그 항목들은 아예 판정 자체가
+    # 안 된 상태라, 나머지가 몇 개 적합인지보다 먼저 말해야 오해가 없다.
+    missing_count = sum(1 for i in result['issues'] if i.get('category') == 'required_missing')
     if result['ok']:
         summary = f'검증한 {checked_count}개 항목 모두 표시 규정에 적합합니다. (AI 미사용 — 규칙 기반 검증)'
+    elif missing_count:
+        summary = (
+            f'표시하기로 선택한 항목 중 {missing_count}개가 비어 있습니다. '
+            f'검증한 {checked_count}개 항목 중 {problem_count}개에서 확인이 필요합니다. '
+            f'(AI 미사용 — 규칙 기반 검증)'
+        )
     else:
         summary = (
             f'검증한 {checked_count}개 항목 중 {problem_count}개에서 확인이 필요합니다. '
