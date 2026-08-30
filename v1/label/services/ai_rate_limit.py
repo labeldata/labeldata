@@ -65,53 +65,61 @@ def _daily_limit_for(user) -> int:
     return _paid_daily_limit() if is_paid_user(user) else _free_daily_limit()
 
 
-# ── 일일 카운터: DB(활동 로그) ─────────────────────────────────────────────
+# ── 일일 카운터: DB ────────────────────────────────────────────────────────
 #
-# 원래 파일 캐시에 있었다. CACHES['default'] 는 MAX_ENTRIES 500 이고 검증 결과
-# 캐시·농수산물 목록 캐시가 같은 칸을 나눠 쓴다. 항목이 넘치면 Django 가 1/3 을
-# 잘라내는데(FileBasedCache._cull), 그때 카운터가 같이 날아가면 **한도가 조용히
-# 초기화된다.** 유료 기능의 사용량이 캐시 정리에 좌우되면 안 된다.
+# 원래 파일 캐시에 있었다. CACHES['default'] 는 항목이 MAX_ENTRIES 를 넘으면
+# Django 가 1/3 을 잘라내는데(FileBasedCache._cull), 그때 카운터가 같이 날아가면
+# 한도가 조용히 초기화된다. 유료 기능의 사용량이 캐시 정리에 좌우되면 안 된다.
 #
-# DB 로 옮기려면 보통 테이블을 하나 만들지만, 이 저장소는 마이그레이션 그래프가
-# 깨져 있어 migrate 자체가 안 돈다(4-1 참고). 그래서 이미 있고 마이그레이션이
-# 끝난 UserActivityLog 에 소비 기록을 남기고 그걸 센다. 하루 최대 50행이라
-# 부담이 없고, (user, category) / (category, action) 인덱스가 이미 있다.
-ACTIVITY_CATEGORY = 'validation'
-ACTIVITY_ACTION = 'ai_validation_charge'
+# 어디에 무엇을 두는지
+#   일일 한도 -> DB.   사라지면 안 된다.
+#   분당 한도 -> 캐시. 연타를 막는 안전장치라 사라져도 일일 한도가 남는다.
+#   검증 결과 -> 캐시. 사라져도 OpenAI 를 한 번 더 부를 뿐이다.
 
 
-def _today_range():
-    """오늘 0시부터 지금까지. 서버 시간대(TIME_ZONE) 기준."""
-    now = timezone.localtime()
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return start, now
+def _today():
+    """서버 시간대 기준 오늘 날짜."""
+    return timezone.localdate()
 
 
 def _daily_used(user) -> int:
-    """오늘 실제로 차감된 횟수. 캐시가 아니라 DB 를 센다."""
-    from v1.activity_log.models import UserActivityLog
+    """오늘 실제로 차감된 횟수."""
+    from v1.common.models import AiValidationUsage
 
-    start, _ = _today_range()
     try:
-        return UserActivityLog.objects.filter(
-            user=user,
-            category=ACTIVITY_CATEGORY,
-            action=ACTIVITY_ACTION,
-            created_at__gte=start,
-        ).count()
+        row = AiValidationUsage.objects.filter(user=user, used_date=_today()).first()
+        return row.count if row else 0
     except Exception:
-        # 로그 테이블을 못 읽으면 한도를 0 으로 보고 막지 않는다. 사용자를 막는
-        # 것보다 몇 번 더 나가는 쪽이 낫다 — 대신 로그에 남긴다.
+        # 조회에 실패하면 막지 않는다. 사용자를 막는 것보다 몇 번 더 나가는 쪽이
+        # 낫다 - 대신 로그에 남긴다.
         logger.exception('[AI검증 한도] 사용량 조회 실패 (user=%s)', getattr(user, 'id', None))
         return 0
 
 
 def _charge(user) -> None:
-    """1회 소비를 기록한다."""
-    from v1.activity_log.models import UserActivityLog
+    """
+    1회 소비를 기록한다.
 
-    UserActivityLog.objects.create(
-        user=user, category=ACTIVITY_CATEGORY, action=ACTIVITY_ACTION)
+    행을 읽어 +1 해서 저장하면 동시 요청에서 하나가 묻힌다. DB 가 더하게 한다.
+    """
+    from django.db.models import F
+    from v1.common.models import AiValidationUsage
+
+    today = _today()
+    updated = (AiValidationUsage.objects
+               .filter(user=user, used_date=today)
+               .update(count=F('count') + 1))
+    if not updated:
+        # 오늘 첫 사용. 동시에 둘이 들어오면 하나는 IntegrityError 가 나는데,
+        # 그때는 이미 만들어진 행을 올리면 된다.
+        from django.db import IntegrityError, transaction
+        try:
+            with transaction.atomic():
+                AiValidationUsage.objects.create(user=user, used_date=today, count=1)
+        except IntegrityError:
+            (AiValidationUsage.objects
+             .filter(user=user, used_date=today)
+             .update(count=F('count') + 1))
 
 
 def get_usage(user) -> dict:
@@ -119,8 +127,7 @@ def get_usage(user) -> dict:
     현재 사용량을 차감 없이 조회한다. 버튼을 누르기 전에도 화면에
     "오늘 N/한도회 사용"을 보여줄 수 있게 별도로 분리해뒀다.
     """
-    limit = _daily_limit_for(user)
-    return {'daily_used': _daily_used(user), 'daily_limit': limit,
+    return {'daily_used': _daily_used(user), 'daily_limit': _daily_limit_for(user),
             'is_paid': is_paid_user(user)}
 
 

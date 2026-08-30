@@ -67,3 +67,47 @@ class AdministrativeAction(models.Model):
 
     def __str__(self):
         return f"{self.company_name} - {self.action_name} ({self.action_date})"
+
+
+class AiValidationUsage(models.Model):
+    """
+    AI검증 일일 사용량. 사용자·날짜마다 한 행.
+
+    원래 파일 캐시에 있었다. CACHES['default'] 는 항목이 MAX_ENTRIES 를 넘으면
+    Django 가 1/3 을 잘라내는데(FileBasedCache._cull), 그때 카운터가 같이 날아가면
+    **한도가 조용히 초기화된다.** 유료 기능의 사용량이 캐시 정리에 좌우되면 안 된다.
+
+    한동안 활동 로그(UserActivityLog)에 소비 기록을 남기고 세는 방식을 썼는데,
+    그건 마이그레이션이 깨져 있어 새 테이블을 못 만들던 때의 임시방편이었다.
+    이제 migrate 가 돌므로 제 자리를 만든다.
+
+    행을 세지 않고 count 를 올린다 — 하루 한 행이라 조회가 항상 한 건이고,
+    F('count') + 1 은 DB 가 원자적으로 처리한다.
+
+    label 앱이 아니라 여기 있는 이유: 사용량 집계는 도메인이라기보다 인프라이고,
+    label 앱은 아직 모델과 마이그레이션이 어긋난 곳이 있어(인덱스 5건 등) 새
+    마이그레이션을 만들면 그것까지 함께 담긴다.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
+                             related_name='ai_validation_usage', verbose_name='사용자')
+    used_date = models.DateField(verbose_name='사용일',
+                                 help_text='서버 시간대 기준 날짜')
+    count = models.PositiveIntegerField(default=0, verbose_name='사용 횟수')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ai_validation_usage'
+        verbose_name = 'AI검증 사용량'
+        verbose_name_plural = 'AI검증 사용량'
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'used_date'],
+                                    name='uniq_ai_usage_user_date'),
+        ]
+        indexes = [
+            models.Index(fields=['used_date'], name='idx_ai_usage_date'),
+        ]
+
+    def __str__(self):
+        return f'{self.user} {self.used_date} {self.count}회'

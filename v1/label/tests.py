@@ -1630,3 +1630,98 @@ class IngredientOrderByRatioTests(TestCase):
         rows = [c for c in result['categories'] if '원재료 표시 순서' in c['label']]
         self.assertEqual(len(rows), 1, '규칙 기반 지적이 있으면 행이 남아야 한다')
         self.assertFalse(rows[0]['ok'])
+
+
+class AiUsageCounterTests(TestCase):
+    """
+    AI검증 일일 한도 카운터.
+
+    파일 캐시에 있었는데, CACHES['default'] 는 항목이 MAX_ENTRIES 를 넘으면
+    Django 가 1/3 을 잘라낸다(FileBasedCache._cull). 그때 카운터가 날아가면
+    한도가 조용히 초기화된다. 유료 기능의 사용량이 캐시 정리에 좌우되면 안 된다.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = User.objects.create_user(username='quota', password='x')
+
+    def _usage(self):
+        from v1.label.services.ai_rate_limit import get_usage
+        return get_usage(self.user)
+
+    def _check(self):
+        from v1.label.services.ai_rate_limit import check_rate_limit
+        return check_rate_limit(self.user)
+
+    def test_처음에는_0회다(self):
+        self.assertEqual(self._usage()['daily_used'], 0)
+
+    def test_통과할_때마다_한_번씩_오른다(self):
+        for expected in (1, 2, 3):
+            allowed, usage = self._check()
+            self.assertTrue(allowed)
+            self.assertEqual(usage['daily_used'], expected)
+        self.assertEqual(self._usage()['daily_used'], 3)
+
+    def test_하루에_한_행만_쓴다(self):
+        from v1.common.models import AiValidationUsage
+
+        for _ in range(3):
+            self._check()
+        rows = AiValidationUsage.objects.filter(user=self.user)
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().count, 3)
+
+    def test_한도를_넘으면_막는다(self):
+        from v1.label.services.ai_rate_limit import _free_daily_limit
+
+        limit = _free_daily_limit()
+        for _ in range(limit):
+            self.assertTrue(self._check()[0])
+
+        allowed, usage = self._check()
+        self.assertFalse(allowed)
+        self.assertIn('한도', usage['message'])
+        self.assertEqual(usage['daily_used'], limit, '막힌 요청은 차감하지 않는다')
+
+    def test_캐시를_비워도_사용량이_남는다(self):
+        """이 검사가 이 작업의 이유다. 캐시에 있을 때는 여기서 0 으로 돌아갔다."""
+        from django.core.cache import cache
+
+        self._check()
+        self._check()
+        cache.clear()
+        self.assertEqual(self._usage()['daily_used'], 2)
+
+    def test_어제_사용량은_오늘에_안_섞인다(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from v1.common.models import AiValidationUsage
+
+        AiValidationUsage.objects.create(
+            user=self.user, used_date=timezone.localdate() - timedelta(days=1), count=9)
+        self.assertEqual(self._usage()['daily_used'], 0)
+
+    def test_사용자끼리_섞이지_않는다(self):
+        other = User.objects.create_user(username='quota2', password='x')
+        from v1.label.services.ai_rate_limit import check_rate_limit, get_usage
+
+        self._check()
+        self._check()
+        check_rate_limit(other)
+        self.assertEqual(self._usage()['daily_used'], 2)
+        self.assertEqual(get_usage(other)['daily_used'], 1)
+
+    def test_조회가_실패해도_막지_않는다(self):
+        """
+        사용자를 막는 것보다 몇 번 더 나가는 쪽이 낫다. 조용히 넘기지 않고
+        로그에 남긴다.
+        """
+        from unittest.mock import patch
+        from v1.label.services import ai_rate_limit
+
+        with patch.object(ai_rate_limit, 'AiValidationUsage', create=True):
+            with patch('v1.common.models.AiValidationUsage.objects') as objs:
+                objs.filter.side_effect = RuntimeError('DB 장애')
+                self.assertEqual(self._usage()['daily_used'], 0)
