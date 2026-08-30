@@ -1666,6 +1666,8 @@ def product_update_status(request, product_id):
         if not _result.get('ok'):
             _issues = _result.get('issues', [])
             _missing = [i for i in _issues if i.get('category') == 'required_missing']
+            # 필수 미입력은 한 건에 여러 항목이 담겨 온다(같은 문구 반복을 피하려고)
+            _missing_names = [n for i in _missing for n in i.get('field_labels', [])]
 
             _has_workflow_roles = SharePermission.objects.filter(
                 share__label=label,
@@ -1689,13 +1691,13 @@ def product_update_status(request, product_id):
                     'requires_reason': _has_workflow_roles,
                     'issue_count': _result.get('issue_count', len(_issues)),
                     'issues': _issues,
-                    'missing_required': [i.get('field_label') for i in _missing if i.get('field_label')],
+                    'missing_required': _missing_names,
                 }, status=400)
 
             validation_override = {
                 'reason': validation_override_reason,
                 'issue_count': len(_issues),
-                'missing_required': [i.get('field_label') for i in _missing if i.get('field_label')],
+                'missing_required': _missing_names,
             }
 
     # ── CONFIRMED → DRAFT: 새 버전 번호 증가 ──

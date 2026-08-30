@@ -222,29 +222,39 @@ def check_required_fields(label) -> list[dict]:
     weight_calorie·nutritions 는 실제 데이터에서 거의 전량이 걸려 안내가 아니라
     소음이 된다. 그쪽은 그 엔드포인트를 만들 때 의미를 확정하고 함께 다룬다.
     """
-    issues = []
+    missing = []
     for checkbox in _REQUIRED_CHECKBOX_FIELDS:
         field = checkbox[len('chckd_'):]
         if (getattr(label, checkbox, '') or '') != 'Y':
             continue
         if _has_content(label, field):
             continue
-        name = _verbose_name(type(label), field)
-        hint = _REQUIRED_HINTS.get(field)
-        suggestion = f'"{name}"을(를) 입력하거나, 이 제품에 해당하지 않으면 표시 항목 체크를 해제하세요.'
-        if hint:
-            suggestion = f'{hint} {suggestion}'
-        issue = _issue(
-            'required_missing',
-            f'표시하기로 선택한 "{name}" 항목이 비어 있습니다.',
-            suggestion,
-        )
-        # 어느 칸인지 문장을 파싱하지 않고 알 수 있게 따로 실어 보낸다 —
-        # 확정 차단 화면이 "비어 있는 항목: 내용량, 소비기한" 처럼 쓴다.
-        issue['field'] = field
-        issue['field_label'] = name
-        issues.append(issue)
-    return issues
+        missing.append((field, _verbose_name(type(label), field)))
+
+    if not missing:
+        return []
+
+    # 항목마다 따로 내면 같은 문장이 근거 규정까지 통째로 되풀이된다.
+    # 실제로 세 항목이 빈 라벨에서 같은 문구가 세 번, 제안도 세 번 나왔다.
+    # 한 문장에 모아서 낸다.
+    names = [name for _, name in missing]
+    if len(names) == 1:
+        message = f'표시하기로 선택한 "{names[0]}" 항목이 비어 있습니다.'
+    else:
+        listed = ', '.join(f'"{name}"' for name in names)
+        message = f'표시하기로 선택한 {len(names)}개 항목이 비어 있습니다: {listed}'
+
+    suggestion = '비어 있는 항목을 입력하거나, 이 제품에 해당하지 않으면 표시 항목 체크를 해제하세요.'
+    hints = [_REQUIRED_HINTS[field] for field, _ in missing if field in _REQUIRED_HINTS]
+    if hints:
+        suggestion = ' '.join(hints) + ' ' + suggestion
+
+    issue = _issue('required_missing', message, suggestion)
+    # 어느 칸인지 문장을 파싱하지 않고 알 수 있게 따로 실어 보낸다 —
+    # 확정 차단 화면이 "비어 있는 항목: 내용량, 소비기한" 처럼 쓴다.
+    issue['fields'] = [field for field, _ in missing]
+    issue['field_labels'] = names
+    return [issue]
 
 
 # 내용량에서 총량을 읽기 위한 것. 단위별로 g/ml 로 환산한다.

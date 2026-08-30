@@ -326,7 +326,10 @@ class RequiredFieldTests(TestCase):
         categories = {i['category'] for i in result['issues']}
         self.assertEqual(categories, {'required_missing'},
                          '빈 라벨에서 나올 수 있는 지적은 필수 미입력뿐이다')
-        self.assertEqual(len(result['issues']), len(self.DEFAULT_ON))
+        # 항목마다 따로 내면 같은 문장이 근거 규정까지 통째로 되풀이된다.
+        # 한 건에 모으고 항목 목록을 따로 실어 보낸다.
+        self.assertEqual(len(result['issues']), 1, '한 문장으로 모아야 한다')
+        self.assertEqual(len(result['issues'][0]['field_labels']), len(self.DEFAULT_ON))
 
     def test_미입력_항목이_한글_이름으로_나온다(self):
         label = MyLabel.objects.create(user_id=self.user, my_label_name='빈 라벨')
@@ -935,9 +938,9 @@ class WeightCalorieCheckTests(TestCase):
         from v1.label.services.validation_service import check_required_fields
         label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨',
                                        chckd_weight_calorie='Y', content_weight='250 g')
-        hint = next(i['suggestion'] for i in check_required_fields(label)
-                    if i['field'] == 'weight_calorie')
-        self.assertIn('kcal', hint)
+        issues = check_required_fields(label)
+        self.assertIn('weight_calorie', issues[0]['fields'])
+        self.assertIn('kcal', issues[0]['suggestion'])
 
     def test_내용량에_적은_열량이_캐시_지문에_반영된다(self):
         from v1.label.services.ai_rate_limit import _result_cache_key
@@ -1074,3 +1077,53 @@ class ListColumnAlignTests(TestCase):
             style = ' '.join(re.findall(r'<style>(.*?)</style>', text, re.S))
             leftover = re.findall(r'(td:nth-child\(\d+\)[^{]*\{[^}]*text-align)', style)
             self.assertEqual(leftover, [], f'{rel} 에 손으로 박은 정렬이 남아 있다')
+
+
+class RequiredFieldMessageTests(TestCase):
+    """
+    필수 미입력을 한 문장으로 모은다.
+
+    항목마다 따로 내면 근거 규정까지 통째로 되풀이된다. 세 항목이 빈 라벨에서
+    같은 문구가 세 번, 제안도 세 번 나왔다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='msg', password='x')
+
+    def _issues(self, **kwargs):
+        from v1.label.services.validation_service import check_required_fields
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨', **kwargs)
+        return check_required_fields(label)
+
+    def _filled(self, **overrides):
+        base = {f: '값' for f in ('prdlst_dcnm', 'prdlst_nm', 'content_weight',
+                                  'prdlst_report_no', 'frmlc_mtrqlt', 'bssh_nm',
+                                  'pog_daycnt', 'rawmtrl_nm_display', 'cautions')}
+        base.update(overrides)
+        return base
+
+    def test_여러_개가_비어도_한_건으로_낸다(self):
+        issues = self._issues(**self._filled(content_weight='', prdlst_report_no='',
+                                             frmlc_mtrqlt=''))
+        self.assertEqual(len(issues), 1)
+        msg = issues[0]['message']
+        for name in ('내용량', '품목보고번호', '포장재질'):
+            self.assertIn(name, msg)
+        # 근거 규정이 한 번만 나온다
+        self.assertEqual(msg.count('의무표시사항 기재 규정'), 1)
+        self.assertIn('3개 항목', msg)
+
+    def test_제안도_한_번만_낸다(self):
+        issues = self._issues(**self._filled(content_weight='', prdlst_report_no=''))
+        self.assertEqual(issues[0]['suggestion'].count('표시 항목 체크를 해제'), 1)
+
+    def test_하나뿐이면_그_이름만_말한다(self):
+        issues = self._issues(**self._filled(content_weight=''))
+        self.assertIn('"내용량" 항목이 비어 있습니다', issues[0]['message'])
+        self.assertNotIn('개 항목', issues[0]['message'])
+
+    def test_항목_목록을_따로_실어_보낸다(self):
+        """확정 차단 화면이 문장을 파싱하지 않고 항목명을 쓴다."""
+        issues = self._issues(**self._filled(content_weight='', frmlc_mtrqlt=''))
+        self.assertEqual(issues[0]['field_labels'], ['내용량', '포장재질'])
+        self.assertEqual(issues[0]['fields'], ['content_weight', 'frmlc_mtrqlt'])
