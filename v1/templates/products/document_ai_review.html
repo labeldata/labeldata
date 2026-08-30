@@ -366,31 +366,10 @@ function applyToBOM(docId) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // 무엇이 어떻게 붙었는지 알려준다. 이름이 비슷해 기존 원료에 붙은
-                // 것과 새로 만든 것은 확인해야 할 내용이 다르다.
-                const lines = [
-                    `원재료 ${data.total}개를 처리했습니다.`,
-                    `· 기존 "내 원료"에 연결: ${data.matched_existing}개`,
-                    `· 새로 만든 원료: ${data.created_ingredients}개`,
-                    `· 표시사항 원재료로 등록: ${data.linked_to_label}개`,
-                ];
-                if (data.skipped_no_ingredient) {
-                    lines.push(`· 연결하지 못한 BOM 행: ${data.skipped_no_ingredient}개`);
-                }
-                const guessed = (data.rows || []).filter(r => !r.matched && r.candidates.length);
-                if (guessed.length) {
-                    lines.push('');
-                    lines.push('비슷한 원료가 있어 확인이 필요합니다:');
-                    guessed.slice(0, 5).forEach(r => {
-                        lines.push(`  ${r.name} → ${r.candidates.join(', ')} (유사도 ${r.score})`);
-                    });
-                }
-                lines.push('');
-                lines.push('BOM 화면에서 확인·수정한 뒤 저장하세요.');
-                alert(lines.join('\n'));
+                alert('✅ BOM에 정상 적용되었습니다.');
                 window.location.href = `/products/documents/${docId}/`;
             } else {
-                alert('❌ 오류: ' + (data.error || data.message || '알 수 없는 오류'));
+                alert('❌ 오류: ' + (data.message || '알 수 없는 오류'));
             }
         })
         .catch(error => {
