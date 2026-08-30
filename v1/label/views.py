@@ -2712,19 +2712,45 @@ def save_preview_settings(request):
 @require_POST
 @login_required
 def ocr_extract(request):
-    """표시사항 이미지에서 GPT-4o mini로 필드를 추출합니다."""
+    """
+    표시사항 이미지에서 GPT-4o mini로 필드를 추출합니다.
+
+    **어떤 경우에도 JSON 으로 답한다.** 화면은 이 응답을 JSON 으로 읽으므로,
+    여기서 예외가 새어 나가면 브라우저는 HTML 오류 페이지를 받고 파싱에 실패해
+    "오류가 발생했습니다" 밖에 못 보여 준다. 무엇이 잘못됐는지 사용자도 우리도
+    알 수 없게 된다.
+    """
     image_file = request.FILES.get('image')
     if not image_file:
         return JsonResponse({'success': False, 'error': '이미지 파일이 없습니다.'}, status=400)
 
     if image_file.size > 10 * 1024 * 1024:
-        return JsonResponse({'success': False, 'error': '파일 크기는 10MB 이하여야 합니다.'}, status=400)
+        return JsonResponse({
+            'success': False,
+            'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {image_file.size / 1024 / 1024:.1f}MB).',
+        }, status=400)
 
-    if not image_file.content_type.startswith('image/'):
-        return JsonResponse({'success': False, 'error': '이미지 파일만 업로드 가능합니다.'}, status=400)
+    # content_type 이 없는 업로드가 있다 (일부 브라우저·자동화 도구).
+    # 예전에는 여기서 AttributeError 로 500 이 났다.
+    content_type = (getattr(image_file, 'content_type', '') or '').lower()
+    name = (getattr(image_file, 'name', '') or '').lower()
+    looks_like_image = content_type.startswith('image/') or name.endswith(
+        ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'))
+    if not looks_like_image:
+        return JsonResponse({
+            'success': False,
+            'error': f'이미지 파일만 업로드 가능합니다 (받은 형식: {content_type or "알 수 없음"}).',
+        }, status=400)
 
     from .services.ocr_service import extract_label_from_image
-    result = extract_label_from_image(image_file)
+    try:
+        result = extract_label_from_image(image_file)
+    except Exception as exc:
+        logger.exception('OCR 처리 중 예외 (user=%s, file=%s)', request.user, name)
+        return JsonResponse({
+            'success': False,
+            'error': f'사진 처리 중 오류가 발생했습니다: {exc}',
+        }, status=500)
     return JsonResponse(result)
 
 

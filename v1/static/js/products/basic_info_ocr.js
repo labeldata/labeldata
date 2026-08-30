@@ -233,8 +233,35 @@
     if (btn) btn.disabled = true;
     status('사진을 읽는 중입니다...');
 
+    // 응답이 JSON 이 아닐 때(로그인 만료, 500, 프록시 오류 등) 무엇이 왔는지
+    // 알려 준다. 예전에는 전부 "오류가 발생했습니다" 한 줄로 삼켜서, 사진 탓인지
+    // 서버 탓인지 구분할 수 없었다.
     fetch('/label/ocr-extract/', { method: 'POST', body: form })
-      .then(function (res) { return res.json(); })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          var result;
+          try {
+            result = JSON.parse(text);
+          } catch (e) {
+            // 세션이 끊기면 login_required 가 로그인 화면으로 넘긴다. fetch 가
+            // 리다이렉트를 따라가서 HTTP 200 에 HTML 이 온다 — 오류로 안 보인다.
+            if (res.redirected || /login/i.test(res.url || '')) {
+              throw new Error('로그인이 풀렸습니다. 새로고침 후 다시 시도하세요.');
+            }
+            var hint = '';
+            if (res.status === 403) hint = ' 로그인이 풀렸을 수 있습니다. 새로고침 후 다시 시도하세요.';
+            else if (res.status === 413) hint = ' 사진 용량이 너무 큽니다.';
+            else if (res.status === 502 || res.status === 504) hint = ' 서버 응답이 너무 늦었습니다.';
+            else if (res.status >= 500) hint = ' 서버 오류입니다.';
+            console.error('OCR 응답이 JSON 이 아님', res.status, res.url, text.slice(0, 500));
+            throw new Error('서버 응답 오류 (HTTP ' + res.status + ').' + hint);
+          }
+          if (!res.ok) {
+            throw new Error(result.error || ('서버 오류 (HTTP ' + res.status + ')'));
+          }
+          return result;
+        });
+      })
       .then(function (result) {
         // 응답은 {success, data} 로 감싸여 온다
         if (!result || !result.success) {
@@ -246,7 +273,7 @@
       })
       .catch(function (err) {
         console.error(err);
-        status('사진을 읽는 중 오류가 발생했습니다.', true);
+        status(err.message || '사진을 읽는 중 오류가 발생했습니다.', true);
       })
       .finally(function () {
         if (btn) btn.disabled = false;
