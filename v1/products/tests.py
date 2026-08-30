@@ -809,3 +809,43 @@ class IngredientPhotoDisplayNameTests(TestCase):
         boms = ProductBOM.objects.filter(parent_label=self.label)
         self.assertEqual(boms.count(), 1)
         self.assertEqual(boms.first().raw_material_name, self.RAWMTRL)
+
+
+class ProductCreatePageTests(TestCase):
+    """
+    신규 제품 등록 화면이 열리는가.
+
+    _tab_basic_info.html 은 product_detail(제품이 있다)과 product_form(없다)이
+    함께 쓴다. 그래서 "{{ product.a|default:product.b }}" 처럼 **필터 인자**로
+    product 를 다시 읽으면, 신규 등록 화면에서 VariableDoesNotExist 로 500 이
+    난다 - 필터 인자는 조용히 넘어가지 않는다.
+
+    실제로 그렇게 깨진 적이 있다. 좌측 "새로 만들기" 와 대시보드 "신규 제품 등록"
+    이 둘 다 이 화면으로 온다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='newproduct', password='x')
+        self.client.force_login(self.user)
+
+    def test_신규_등록_화면이_열린다(self):
+        res = self.client.get(reverse('products:product_create'))
+        self.assertEqual(res.status_code, 200)
+
+    def test_제품_없이도_기본정보_조각이_그려진다(self):
+        from django.template.loader import render_to_string
+
+        html = render_to_string('products/_tab_basic_info.html',
+                                {'product': None, 'can_edit': True})
+        self.assertIn('field-rawmtrl-nm', html)
+
+    def test_필터_인자로_product_를_다시_읽지_않는다(self):
+        """이 패턴이 다시 들어오면 신규 등록 화면이 500 이 된다."""
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+                ).read_text(encoding='utf-8')
+        bad = re.findall(r'\|\s*default:\s*(?:product|label|form)\.[\w.]+', html)
+        self.assertEqual(bad, [], f'필터 인자에서 객체를 다시 읽는 곳: {bad}')

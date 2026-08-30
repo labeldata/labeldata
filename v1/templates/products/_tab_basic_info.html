@@ -401,11 +401,16 @@
                   값이 아직 표시 필드에 없으면 참고 값을 채워 준다 — 미리보기가
                   쓰는 폴백(_tab_label.html)과 같은 규칙이라 화면에 보이던 문구가
                   그대로 남는다.
+
+                  firstof 를 쓴다. default 필터의 인자로 product 를 다시 읽으면
+                  신규 등록 화면(product 가 없다)에서 그 인자를 못 찾아 500 이
+                  났다 — 필터 인자는 조용히 넘어가지 않는다.
+                  이 조각은 product_detail 과 product_form 이 함께 쓴다.
                 {% endcomment %}
                 <textarea id="field-rawmtrl-nm" name="rawmtrl_nm_display"
                           class="form-control bg-light border-0 v2-field-input" rows="3"
                           placeholder="BOM 탭에서 원재료를 등록하면 자동으로 연결됩니다. 직접 입력도 가능합니다."
-                         >{{ product.rawmtrl_nm_display|default:product.rawmtrl_nm|default:"" }}</textarea>
+                         >{% firstof product.rawmtrl_nm_display product.rawmtrl_nm "" %}</textarea>
 
                 <!-- ── 알레르기 감지 패널 (Google Material Style) ── -->
                 <div class="allergen-panel-root mt-2">
