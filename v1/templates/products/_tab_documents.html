@@ -22,15 +22,15 @@
                               fill="none" 
                               d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                     </svg>
-                    <span class="position-absolute top-50 start-50 translate-middle fw-bold text-primary" style="font-size: 11px;">{{ compliance_rate|floatformat:0 }}%</span>
+                    <span class="position-absolute top-50 start-50 translate-middle fw-bold text-primary strip-sub">{{ compliance_rate|floatformat:0 }}%</span>
                 </div>
                 <div>
-                    <div class="fw-semibold" style="font-size: 12px; line-height: 1.2;">문서 준수율</div>
-                    <div class="text-muted" style="font-size: 10px;">{{ filled_slots }}/{{ total_slots }} 완료</div>
+                    <div class="fw-semibold strip-title">문서 준수율</div>
+                    <div class="text-muted strip-sub">{{ filled_slots }}/{{ total_slots }} 완료</div>
                 </div>
             </div>
             {% if can_upload_documents %}
-            <button class="goog-btn-manage ms-1" onclick="openAddSlotModal()" title="필수 문서 관리">
+            <button class="btn btn-outline-primary v2-btn-sm ms-1" onclick="openAddSlotModal()" title="필수 문서 관리">
                 <i class="bi bi-list-check"></i>
                 <span>관리</span>
             </button>
@@ -44,7 +44,6 @@
             {% for slot in document_slots %}
             <div class="status-chip border rounded-pill d-flex align-items-center cursor-pointer flex-shrink-0
                         {% if slot.status == 'VALID' %}bg-white{% elif slot.status == 'EXPIRING' %}bg-warning bg-opacity-10 border-warning{% elif slot.status == 'EXPIRED' %}bg-danger bg-opacity-10 border-danger{% else %}bg-white border-dashed{% endif %}"
-                 style="padding: 2px 8px 2px 4px;"
                  data-slot-id="{{ slot.slot_id }}"
                  data-doc-type-id="{{ slot.document_type.type_id }}"
                  data-doc-type-name="{{ slot.document_type.type_name }}"
@@ -55,9 +54,8 @@
                     <i class="bi {% if slot.status == 'VALID' %}bi-check-lg{% elif slot.status == 'EMPTY' %}bi-plus-lg{% else %}bi-exclamation-lg{% endif %}"></i>
                 </div>
                 <div>
-                    <div class="fw-semibold text-dark" style="font-size: 10px; white-space: nowrap; line-height: 1.3;">{{ slot.document_type.type_name }}</div>
-                    <div style="font-size: 9px; white-space: nowrap; line-height: 1.2;"
-                         class="{% if slot.status == 'VALID' %}text-success{% elif slot.status == 'EXPIRING' %}text-warning{% elif slot.status == 'EXPIRED' %}text-danger fw-bold{% else %}text-danger{% endif %}">
+                    <div class="fw-semibold text-dark strip-title text-nowrap">{{ slot.document_type.type_name }}</div>
+                    <div class="strip-sub text-nowrap {% if slot.status == 'VALID' %}text-success{% elif slot.status == 'EXPIRING' %}text-warning{% elif slot.status == 'EXPIRED' %}text-danger fw-bold{% else %}text-danger{% endif %}">
                         {% if slot.status == 'VALID' %}유효
                         {% elif slot.status == 'EXPIRING' %}만료임박
                         {% elif slot.status == 'EXPIRED' %}만료됨
@@ -69,7 +67,7 @@
         </div>
         {% if not can_upload_documents %}
         <div class="ms-auto flex-shrink-0 d-flex align-items-center gap-2 ps-2">
-            <span class="badge bg-secondary" style="font-size: 10px;"><i class="bi bi-lock-fill me-1"></i>읽기 전용</span>
+            <span class="badge bg-secondary strip-sub"><i class="bi bi-lock-fill me-1"></i>읽기 전용</span>
         </div>
         {% endif %}
     </div>
@@ -481,38 +479,19 @@ async function submitImportCompanyDoc() {
     }
     .compliance-strip::-webkit-scrollbar { display: none; }
 
-    /* 구글 스타일 필수문서 관리 버튼 */
-    .goog-btn-manage {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 4px 10px;
-        font-size: 11px;
-        font-weight: 500;
-        line-height: 1.4;
-        color: #1a73e8;
-        background: #fff;
-        border: 1px solid #dadce0;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background 0.15s, box-shadow 0.15s;
-        white-space: nowrap;
-        letter-spacing: 0.01em;
-    }
-    .goog-btn-manage:hover {
-        background: #f0f4ff;
-        box-shadow: 0 1px 3px rgba(60,64,67,0.2);
-        border-color: #1a73e8;
-    }
-    .goog-btn-manage:active {
-        background: #e8f0fe;
-        box-shadow: none;
-    }
+    /* 준수율 바의 글자 크기.
+       원래 관리 버튼 11px(라운드 4px) / 칩 제목 10px / 칩 상태 9px / 준수율 부제
+       10px 로 네 종류가 섞여 있었고, 관리 버튼만 사각이라 옆의 pill 칩들과 따로
+       놀았다. 12px(제목)·11px(보조) 두 단계로 줄이고 모양은 pill 로 맞춘다.
+       칩이 넓어지지만 이 줄은 원래 가로 스크롤이고 실제로는 남는 폭이 많다. */
+    .compliance-strip .strip-title { font-size: 12px; line-height: 1.25; }
+    .compliance-strip .strip-sub   { font-size: 11px; line-height: 1.2; }
 
-    .status-chip { 
-        transition: all 0.15s; 
+    .status-chip {
+        transition: all 0.15s;
         min-width: 0;
-        border-radius: 999px; 
+        border-radius: 999px;
+        padding: 3px 10px 3px 4px;
     }
     .status-chip:hover { 
         transform: translateY(-1px); 
@@ -522,9 +501,9 @@ async function submitImportCompanyDoc() {
         background-color: rgba(26, 115, 232, 0.12) !important; 
         border-color: #1a73e8 !important; 
     }
-    .icon-circle { 
-        width: 20px; 
-        height: 20px; 
+    .icon-circle {
+        width: 22px;
+        height: 22px;
         border-radius: 50%; 
         display: flex; 
         align-items: center; 

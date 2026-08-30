@@ -791,7 +791,11 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 #save-status            { font-size: 0.8rem; transition: opacity 0.4s ease; }
 
 .info-tab-main               { min-width: 0; overflow-y: auto; }
-.info-tab-main > .container-fluid { max-width: 1000px; }
+/* 1000px 로 묶어 두니 1400px 짜리 본문 영역에서 좌우 200px 씩이 빈 채였다.
+   상한을 없애지는 않는다 — 필드가 col-md-6 라 컨테이너를 그대로 늘리면 초광폭
+   화면에서 "제품명" 입력칸 하나가 1000px 가 된다. 한 칸이 편하게 읽히는 폭
+   (약 700px)의 두 칸 + 여백을 상한으로 잡는다. */
+.info-tab-main > .container-fluid { max-width: 1500px; }
 .bottom-spacer               { height: 100px; }
 
 .toc-sidebar      { width: 240px; min-width: 240px; flex-shrink: 0; }
