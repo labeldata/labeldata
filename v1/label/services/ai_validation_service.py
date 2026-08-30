@@ -45,7 +45,7 @@ _CATEGORY_LABELS = {
     'recycling_mark': '분리배출마크',
     'origin_missing': '원산지 표시',
     'additive_display_name': '식품첨가물 표시명',
-    'ingredient_order': '원재료 표시 순서 (AI)',
+    'ingredient_order': '원재료 표시 순서',
     'name_ingredient_match': '제품명-원재료 일치성 (AI)',
 }
 
@@ -706,7 +706,10 @@ def run_full_review(label, user) -> dict:
     # AI가 판단하지 못한 항목(% 정보 부족, 제품명/원재료명 미입력 등)은
     # 목록에서 빼서 "적합"으로 오인되지 않게 한다.
     if not order_result['checked']:
-        categories = [c for c in categories if c['label'] != _CATEGORY_LABELS['ingredient_order']]
+        # AI 가 판단 못 했다고 행을 지울 때, 규칙 기반(배합비 대조) 지적까지 지우면
+        # 안 된다. 실제 위반이 조용히 사라진다.
+        categories = [c for c in categories
+                      if c['label'] != _CATEGORY_LABELS['ingredient_order'] or not c['ok']]
     if not name_match_result['checked']:
         categories = [c for c in categories if c['label'] != _CATEGORY_LABELS['name_ingredient_match']]
 
@@ -715,6 +718,10 @@ def run_full_review(label, user) -> dict:
         for c in categories:
             if c['label'] == _CATEGORY_LABELS['allergen']:
                 c['label'] = f"{_CATEGORY_LABELS['allergen']} (AI)"
+    if order_result['checked']:
+        for c in categories:
+            if c['label'] == _CATEGORY_LABELS['ingredient_order']:
+                c['label'] = f"{_CATEGORY_LABELS['ingredient_order']} (AI 문구분석 포함)"
 
     summary = generate_summary(categories, ai_only_checked=(order_result['checked'] or name_match_result['checked']))
 

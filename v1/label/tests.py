@@ -1536,3 +1536,97 @@ class DuplicateSplitTests(TestCase):
         out = self._run()
         self.assertIn('자동 병합은 하지 않는다', out)
         self.assertEqual(MyIngredient.objects.filter(prdlst_nm='피자치즈').count(), 2)
+
+
+class IngredientOrderByRatioTests(TestCase):
+    """
+    인쇄되는 원재료명 문구가 배합비 내림차순인지, DB 배합비와 대조한다.
+
+    이 파일은 원래 표시 순서를 검사하지 않았다 — 생성기가 정렬하니까. 그건
+    생성기가 만든 문구에 대해서는 맞지만, 사용자가 손으로 고친 문구는 아무도 다시
+    정렬해 주지 않는다. 운영에서 실제로 3건 나왔고 그중 하나는 보존료(0.03%)가
+    주원료(87.32%)보다 앞이었다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='order', password='x')
+
+    def _label(self, text, pairs):
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='순서',
+                                       rawmtrl_nm_display=text)
+        for seq, (name, ratio) in enumerate(pairs, start=1):
+            ing = MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm=name, delete_YN='N')
+            LabelIngredientRelation.objects.create(
+                label=label, ingredient=ing, relation_sequence=seq,
+                ingredient_ratio=ratio)
+        return label
+
+    def _issues(self, label):
+        from v1.label.services.validation_service import check_ingredient_order_by_ratio
+        return check_ingredient_order_by_ratio(label)
+
+    def test_문구가_역순이면_지적한다(self):
+        label = self._label('소브산칼륨, 소홍두깨살',
+                            [('소홍두깨살', 87.32), ('소브산칼륨', 0.03)])
+        issues = self._issues(label)
+        self.assertEqual(len(issues), 1)
+        self.assertIn('"소브산칼륨"(0.03%)가 "소홍두깨살"(87.32%)보다 앞', issues[0]['message'])
+
+    def test_문구가_내림차순이면_통과한다(self):
+        label = self._label('소홍두깨살, 소브산칼륨',
+                            [('소홍두깨살', 87.32), ('소브산칼륨', 0.03)])
+        self.assertEqual(self._issues(label), [])
+
+    def test_입력_순서가_뒤집혀도_문구가_맞으면_넘어간다(self):
+        """생성기가 정렬하므로 입력 순서로 사용자를 탓하면 안 된다."""
+        label = self._label('밀가루, 설탕', [('설탕', 10), ('밀가루', 30)])
+        self.assertEqual(self._issues(label), [])
+
+    def test_문구에서_이름을_못_찾으면_지적하지_않는다(self):
+        """표시명이 다르게 적혀 있을 수 있다. 모르는 것과 위반은 다르다."""
+        label = self._label('밀 가공품, 정제당', [('밀가루', 30), ('설탕', 10)])
+        self.assertEqual(self._issues(label), [])
+
+    def test_배합비가_없으면_판단하지_않는다(self):
+        label = self._label('설탕, 밀가루', [('설탕', None), ('밀가루', None)])
+        self.assertEqual(self._issues(label), [])
+
+    def test_퍼센트_표기가_없어도_잡는다(self):
+        """AI 검사는 문구에 적힌 %를 읽는다. 안 적었으면 판단하지 못한다."""
+        label = self._label('설탕, 밀가루', [('밀가루', 30), ('설탕', 10)])
+        self.assertNotIn('%', label.rawmtrl_nm_display)
+        self.assertEqual(len(self._issues(label)), 1)
+
+    def test_참고_필드로도_본다(self):
+        """V2 로만 작업한 제품은 표시 필드가 비고 참고 필드에 문구가 있다."""
+        label = self._label('', [('밀가루', 30), ('설탕', 10)])
+        label.rawmtrl_nm = '설탕, 밀가루'
+        label.save()
+        self.assertEqual(len(self._issues(label)), 1)
+
+    def test_무료_검증에_물려_있다(self):
+        from v1.label.services.validation_service import _CHECKS
+        self.assertIn('check_ingredient_order_by_ratio', {c.__name__ for c in _CHECKS})
+
+    def test_AI가_판단_못_해도_규칙_기반_지적은_남는다(self):
+        """
+        AI 가 못 본 항목은 "적합" 으로 오인되지 않게 표에서 지운다. 그 처리에
+        규칙 기반 지적까지 휩쓸리면 실제 위반이 조용히 사라진다.
+        """
+        from django.core.cache import cache
+        from v1.label.services import ai_validation_service as avs
+
+        cache.clear()
+        label = self._label('설탕, 밀가루', [('밀가루', 30), ('설탕', 10)])
+        label.prdlst_nm = '제품'
+        label.save()
+
+        with patch.object(avs, 'call_openai', return_value=(None, avs.REASON_API_ERROR)):
+            result = avs.run_full_review(label, self.user)
+
+        rows = [c for c in result['categories'] if '원재료 표시 순서' in c['label']]
+        self.assertEqual(len(rows), 1, '규칙 기반 지적이 있으면 행이 남아야 한다')
+        self.assertFalse(rows[0]['ok'])

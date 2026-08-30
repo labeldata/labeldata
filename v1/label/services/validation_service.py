@@ -18,12 +18,13 @@
 때만" 보기 때문에 아무것도 입력하지 않은 라벨이 "모두 적합"으로 판정되던 구멍을
 막는다. 이 검사만 유일하게 "값이 없는 것" 자체를 지적한다.
 
-원재료 표시 순서(배합비 내림차순)는 여기서 검사하지 않는다. 표시 문구를 만드는
-쪽(label/views.py 의 rawmtrl_nm 생성, products/bom_detail.html 의 BOM 요약)이
-둘 다 배합비 내림차순으로 정렬하므로, 입력 순서가 어떻든 표시 문구는 규정을
-지킨다. 입력 순서를 위반이라고 알리면 표시 문구에 도달하지 않는 것을 두고
-사용자를 탓하게 된다. 손으로 고친 최종 문구의 순서는 AI 검사
-(ai_validation_service.check_ingredient_order)가 따로 본다.
+원재료 표시 순서: **입력 순서**는 검사하지 않는다. 표시 문구를 만드는 쪽
+(label/views.py 의 rawmtrl_nm 생성, products/bom_detail.html 의 BOM 요약)이 둘 다
+배합비 내림차순으로 정렬하므로, 입력 순서가 어떻든 생성된 문구는 규정을 지킨다.
+입력 순서를 위반이라고 알리면 표시 문구에 도달하지 않는 것을 두고 사용자를 탓하게
+된다. 다만 **손으로 고친 문구**는 아무도 다시 정렬해 주지 않아서, 그건
+check_ingredient_order_by_ratio 가 DB 의 배합비와 대조해 본다(운영에서 실제로
+3건 나왔다).
 미포함(추후 별도 작업): 식품유형별 필수문구(냉동/냉장 조건 등),
 소비기한 권장값 비교 — DOM/window 전역 상태에 강하게 결합돼 있어
 서버 로직으로 안전하게 재현하려면 별도 검증이 필요하다.
@@ -115,6 +116,7 @@ _NATURE_CONDITIONS_KO = (
 _LEGAL_BASIS = {
     'required_missing': '「식품 등의 표시·광고에 관한 법률」 및 「식품등의 표시기준」 의무표시사항 기재 규정',
     'calorie_consistency': '「식품등의 표시기준」 내용량 표시 규정(내용량에 열량 병기) 및 영양성분 표시 규정',
+    'ingredient_order': '「식품등의 표시기준」 원재료명 표시 순서 규정(중량비율이 많은 순서로 표시)',
     'content_weight': '「식품등의 표시기준」 내용량 표시 규정',
     'farm_seafood': '「식품등의 표시기준」 제품명에 사용한 원재료의 함량 표시 규정',
     'forbidden_phrase': '「식품등의 표시기준」 제8조(부당한 표시·광고 금지)',
@@ -319,6 +321,58 @@ def check_calorie_consistency(label) -> list[dict]:
         f'{expected:,.0f} kcal 입니다.',
         '영양성분 탭의 값을 고치거나, 내용량에 적은 열량을 다시 확인하세요.',
     )]
+
+
+def check_ingredient_order_by_ratio(label) -> list[dict]:
+    """
+    인쇄되는 원재료명 문구가 배합비 내림차순인지, DB 의 배합비와 대조해 확인.
+
+    이 파일은 원래 표시 순서를 검사하지 않았다. 이유는 "표시 문구를 만드는 쪽이
+    배합비 내림차순으로 정렬하므로 입력 순서가 어떻든 문구는 규정을 지킨다" 였고,
+    그건 **생성기가 만든 문구**에 대해서는 맞다. 문제는 사용자가 그 문구를 손으로
+    고칠 수 있다는 것이다 - 고친 문구는 아무도 다시 정렬해 주지 않는다.
+
+    운영 데이터에서 실제로 3건 나왔다. 그중 하나는 보존료(0.03%)가 주원료
+    (87.32%)보다 앞에 적혀 있었다.
+
+    AI 검사(ai_validation_service.check_ingredient_order)도 순서를 보지만, 그건
+    **문구에 적힌 %** 를 읽는다. % 를 안 적은 제품은 판단할 수 없다. 여기서는
+    DB 의 배합비를 쓰므로 % 표기 없이도 확인되고, AI 도 필요 없다.
+
+    문구에서 이름을 찾지 못한 원료는 세지 않는다. 표시명이 원료명과 다르게 적혀
+    있으면(예: "밀가루" -> "밀 가공품") 못 찾는데, 모르는 것과 위반은 다르다.
+    """
+    text = (label.rawmtrl_nm_display or label.rawmtrl_nm or '').strip()
+    if not text:
+        return []
+
+    try:
+        relations = (label.ingredient_relations
+                     .select_related('ingredient')
+                     .order_by('relation_sequence'))
+        known = [(rel.ingredient.prdlst_nm, float(rel.ingredient_ratio))
+                 for rel in relations
+                 if rel.ingredient_ratio is not None and rel.ingredient.prdlst_nm]
+    except Exception:
+        return []
+
+    placed = [(text.find(name), name, ratio) for name, ratio in known if name in text]
+    if len(placed) < 2:
+        return []   # 문구에서 짚어낸 원료가 2개 미만이면 순서를 따질 수 없다
+
+    placed.sort()   # 문구에 나온 순서대로
+    issues = []
+    for (_, n1, r1), (_, n2, r2) in zip(placed, placed[1:]):
+        if r1 >= r2:
+            continue
+        issues.append(_issue(
+            'ingredient_order',
+            f'원재료명 표시 순서가 배합비 내림차순이 아닙니다: '
+            f'"{n1}"({r1:g}%)가 "{n2}"({r2:g}%)보다 앞에 있습니다.',
+            '원재료는 사용된 배합비가 많은 순서대로 표시해야 합니다. '
+            '문구의 순서를 바꾸거나, BOM 에서 다시 생성하세요.',
+        ))
+    return issues
 
 
 def check_content_weight(label) -> list[dict]:
@@ -529,7 +583,8 @@ def check_additive_display_name(label) -> list[dict]:
 
 _CHECKS = [
     check_required_fields,
-    check_calorie_consistency,   # 비어 있는 것부터 — 나머지 검사는 값이 있을 때만 본다
+    check_calorie_consistency,
+    check_ingredient_order_by_ratio,   # 비어 있는 것부터 — 나머지 검사는 값이 있을 때만 본다
     check_content_weight,
     check_farm_seafood_content,
     check_forbidden_phrases,
