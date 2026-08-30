@@ -1988,3 +1988,107 @@ class OcrImagePayloadTests(TestCase):
         from django.conf import settings
 
         self.assertTrue(hasattr(settings, 'OCR_MODEL'))
+
+
+class OcrLearningTests(TestCase):
+    """
+    판독 교정을 쌓아 다음 판독에 되먹이는 고리.
+
+    지금까지 이 기록이 한 건도 없었다. 그래서 "무엇을 얼마나 틀리는지" 를 셀 수
+    없었고, 프롬프트를 고쳐도 나아졌는지 알 수 없었다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='learn', password='x')
+        from django.core.cache import cache
+        cache.clear()
+
+    def _record(self, field, ocr, final, times=1):
+        from v1.label.services.ocr_learning import record
+        for _ in range(times):
+            record(self.user, field, ocr, final)
+
+    def test_고친_것과_그대로_쓴_것을_모두_남긴다(self):
+        from v1.common.models import OcrCorrection
+
+        self._record('prdlst_nm', '삼진', '삼립')
+        self._record('prdlst_dcnm', '즉석섭취식품', '즉석섭취식품')
+
+        self.assertEqual(OcrCorrection.objects.count(), 2)
+        self.assertTrue(OcrCorrection.objects.get(field='prdlst_nm').corrected)
+        self.assertFalse(OcrCorrection.objects.get(field='prdlst_dcnm').corrected)
+
+    def test_정답률을_항목별로_센다(self):
+        from v1.label.services.ocr_learning import accuracy_stats
+
+        self._record('pog_daycnt', '주요사항 별도표기일까지', '별도표기일까지', times=3)
+        self._record('pog_daycnt', '별도표기일까지', '별도표기일까지', times=1)
+        self._record('prdlst_nm', '더블치즈', '더블치즈', times=4)
+
+        stats = {s['field']: s for s in accuracy_stats()}
+        self.assertEqual(stats['pog_daycnt']['total'], 4)
+        self.assertEqual(stats['pog_daycnt']['corrected'], 3)
+        self.assertEqual(stats['pog_daycnt']['rate'], 25.0)
+        self.assertEqual(stats['prdlst_nm']['rate'], 100.0)
+        # 정답률이 낮은 항목이 앞에 온다
+        self.assertEqual(accuracy_stats()[0]['field'], 'pog_daycnt')
+
+    def test_두_번_이상_반복된_실수만_힌트가_된다(self):
+        """한 번뿐인 교정은 그 라벨 사정일 수 있어 일반화하면 해롭다."""
+        from v1.label.services.ocr_learning import build_hints
+
+        self._record('bssh_nm', '삼진', '삼립', times=1)
+        self.assertEqual(build_hints(), [])
+
+        self._record('bssh_nm', '삼진', '삼립', times=1)
+        hints = build_hints()
+        self.assertEqual(len(hints), 1)
+        self.assertEqual(hints[0]['field'], 'bssh_nm')
+        self.assertEqual(hints[0]['count'], 2)
+
+    def test_긴_값은_힌트로_쓰지_않는다(self):
+        """원재료명 300자를 프롬프트에 통째로 넣을 수 없다."""
+        from v1.label.services.ocr_learning import build_hints
+
+        self._record('rawmtrl_nm', '가' * 300, '나' * 300, times=3)
+        self.assertEqual(build_hints(), [])
+
+    def test_힌트가_프롬프트_문단이_된다(self):
+        from v1.label.services.ocr_learning import hints_text
+
+        self._record('bssh_nm', '삼진 청주공장', '삼립 청주공장', times=2)
+        text = hints_text(use_cache=False)
+        self.assertIn('bssh_nm', text)
+        self.assertIn('삼립 청주공장', text)
+        self.assertIn('그대로 쓰라는 뜻이 아니다', text)
+
+    def test_쌓인_게_없으면_프롬프트가_그대로다(self):
+        from v1.label.services.ocr_learning import hints_text
+
+        self.assertEqual(hints_text(use_cache=False), '')
+
+    def test_판독이_힌트를_붙여_부른다(self):
+        from v1.label.services.ocr_learning import invalidate
+        from v1.label.services.ocr_service import SYSTEM_PROMPT, learned_hints
+
+        # 기본 프롬프트에 없는 값을 써야 "덧붙였다" 를 확인할 수 있다
+        self._record('bssh_nm', '가나다식품', '가나다에프엔비', times=2)
+        invalidate()
+        self.assertIn('가나다에프엔비', learned_hints())
+        # 원래 프롬프트는 건드리지 않는다 (덧붙일 뿐)
+        self.assertNotIn('가나다에프엔비', SYSTEM_PROMPT)
+
+    def test_힌트_조회가_실패해도_판독은_계속된다(self):
+        from unittest.mock import patch
+        from v1.label.services.ocr_service import learned_hints
+
+        with patch('v1.label.services.ocr_learning.hints_text',
+                   side_effect=RuntimeError('DB 장애')):
+            self.assertEqual(learned_hints(), '')
+
+    def test_관찰된_오류_유형이_프롬프트에_있다(self):
+        """실제 라벨에서 반복된 실수들. 프롬프트에서 사라지면 다시 그렇게 된다."""
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        for phrase in ['작업지시서', '항목명을 값에 넣지', '혼입', '고유명사']:
+            self.assertIn(phrase, SYSTEM_PROMPT, f'"{phrase}" 규칙이 빠졌다')

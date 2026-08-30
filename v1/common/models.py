@@ -111,3 +111,46 @@ class AiValidationUsage(models.Model):
 
     def __str__(self):
         return f'{self.user} {self.used_date} {self.count}회'
+
+
+class OcrCorrection(models.Model):
+    """
+    사진 판독 결과를 사용자가 어떻게 고쳤는지 남긴다.
+
+    지금까지 이 기록이 한 건도 없었다. 그래서 "무엇을 얼마나 틀리는지" 를
+    셀 수도 없었고, 프롬프트를 고쳐도 나아졌는지 알 수 없었다. 튜닝을 하려
+    해도 학습 데이터가 없다 - 원본과 정답의 쌍이 안 쌓이기 때문이다.
+
+    쌓이면 세 가지에 쓴다.
+      1. 어느 항목이 자주 틀리는지 (ocr_corrections --stats)
+      2. 자주 틀리는 패턴을 프롬프트에 예시로 넣기 (지금 하는 것)
+      3. 나중에 실제 튜닝을 할 때의 학습셋
+
+    사용자가 고치지 않고 그대로 쓴 것도 남긴다(corrected=False). 정답률을
+    재려면 맞은 것도 세야 한다.
+    """
+    id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
+                             related_name='ocr_corrections', verbose_name='사용자')
+    field = models.CharField(max_length=40, verbose_name='항목')
+    ocr_value = models.TextField(blank=True, default='', verbose_name='판독값')
+    final_value = models.TextField(blank=True, default='', verbose_name='사용자가 쓴 값')
+    corrected = models.BooleanField(default=False, verbose_name='고쳤는지')
+    confidence = models.CharField(max_length=10, blank=True, default='',
+                                  verbose_name='판독 확신도')
+    model = models.CharField(max_length=40, blank=True, default='',
+                             verbose_name='판독 모델')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ocr_correction'
+        verbose_name = '판독 교정 이력'
+        verbose_name_plural = '판독 교정 이력'
+        indexes = [
+            models.Index(fields=['field', 'corrected'], name='idx_ocr_corr_field'),
+            models.Index(fields=['created_at'], name='idx_ocr_corr_date'),
+        ]
+
+    def __str__(self):
+        mark = '고침' if self.corrected else '그대로'
+        return f'{self.field} {mark}'

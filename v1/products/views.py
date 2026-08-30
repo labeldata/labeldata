@@ -5819,6 +5819,55 @@ def report_no_lookup(request, label_id):
 
 @login_required
 @require_POST
+def ocr_record_corrections(request, label_id):
+    """
+    판독 결과를 사용자가 어떻게 고쳤는지 남긴다.
+
+    이 기록이 없으면 "무엇을 얼마나 틀리는지" 를 셀 수 없고, 프롬프트를 고쳐도
+    나아졌는지 알 수 없다. 튜닝을 하려 해도 원본과 정답의 쌍이 안 쌓인다.
+
+    고치지 않고 그대로 쓴 것도 남긴다 - 정답률을 재려면 맞은 것도 세야 한다.
+
+    기록에 실패해도 200 을 돌려준다. 값은 이미 화면에 채워진 뒤이고, 이력이
+    안 남았다고 사용자에게 오류를 보일 이유가 없다.
+    """
+    from django.conf import settings
+
+    from v1.label.services.ocr_learning import invalidate, record
+
+    _resolve_editable_label(request, label_id)
+
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        payload = {}
+
+    rows = payload.get('rows') or []
+    model = getattr(settings, 'OCR_MODEL', '')
+    saved = 0
+    corrected = 0
+    for row in rows[:60]:      # 한 번에 들어올 수 있는 항목 수의 상한
+        field = (row.get('field') or '').strip()
+        if not field:
+            continue
+        entry = record(
+            request.user, field,
+            row.get('ocr_value'), row.get('final_value'),
+            confidence=row.get('confidence'), model=model,
+        )
+        if entry is not None:
+            saved += 1
+            corrected += int(entry.corrected)
+
+    if corrected:
+        # 다음 판독부터 새 교정이 반영되게 한다
+        invalidate()
+
+    return JsonResponse({'success': True, 'saved': saved, 'corrected': corrected})
+
+
+@login_required
+@require_POST
 def ocr_apply_extras(request, label_id):
     """
     사진에서 읽은 값 중 기본 정보 탭 밖으로 가는 것을 반영한다.

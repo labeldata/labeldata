@@ -163,8 +163,11 @@
       stateClass = 'ocr-state-new';
     }
 
+    // 원본 판독값을 행에 남긴다. 사용자가 고친 값과 대조해 교정 이력을 남기고,
+    // 그 이력이 다음 판독의 프롬프트로 되먹여진다.
     return ''
-      + '<div class="ocr-row' + (same ? ' ocr-row-same' : '') + '" data-field="' + field + '">'
+      + '<div class="ocr-row' + (same ? ' ocr-row-same' : '') + '" data-field="' + field + '"'
+      + ' data-ocr="' + esc(value) + '" data-conf="' + esc(item.confidence || '') + '">'
       + '  <input class="form-check-input ocr-pick" type="checkbox" ' + checked + '>'
       + '  <div class="ocr-label">' + esc(meta.label)
       + (isLow ? ' <span class="ocr-flag ocr-flag-warn" title="읽은 값이 불확실합니다">확인</span>' : '')
@@ -289,6 +292,49 @@
     return html;
   }
 
+  // 판독값과 사용자가 실제로 쓴 값을 함께 보낸다.
+  //
+  // 이 기록이 쌓여야 "무엇을 얼마나 틀리는지" 를 셀 수 있고, 자주 틀리는 패턴을
+  // 다음 판독의 프롬프트에 넣을 수 있다. 지금까지는 한 건도 안 쌓이고 있었다.
+  //
+  // 고치지 않고 그대로 쓴 것도 보낸다 - 정답률을 재려면 맞은 것도 세야 한다.
+  // 체크를 끈 항목은 판단을 안 한 것이므로 보내지 않는다.
+  function recordCorrections() {
+    var rows = [];
+    document.querySelectorAll('#basicInfoOcrBody .ocr-row[data-field]').forEach(function (row) {
+      var pick = row.querySelector('.ocr-pick');
+      if (!pick || !pick.checked) return;
+
+      var input = row.querySelector('.ocr-value');
+      var final = '';
+      if (input) {
+        final = input.value.trim();
+      } else {
+        var choice = row.querySelector('.ocr-choice');
+        if (choice) {
+          final = choice.value === '__direct__'
+            ? (row.querySelector('.ocr-direct').value || '').trim()
+            : choice.value;
+        }
+      }
+      rows.push({
+        field: row.dataset.field,
+        ocr_value: row.dataset.ocr || '',
+        final_value: final,
+        confidence: row.dataset.conf || ''
+      });
+    });
+    if (!rows.length) return;
+
+    // 실패해도 조용히 넘어간다. 값은 이미 화면에 채워졌고, 이력이 안 남았다고
+    // 사용자에게 오류를 보일 이유가 없다.
+    fetch('/products/labels/' + labelId() + '/ocr-corrections/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify({ rows: rows })
+    }).catch(function (err) { console.debug('교정 이력 기록 실패', err); });
+  }
+
   // 고른 영양성분·분리배출을 서버로 보낸다
   function applyExtras() {
     var body = document.getElementById('basicInfoOcrBody');
@@ -296,8 +342,10 @@
 
     var nutrition = [];
     body.querySelectorAll('[data-nutri]').forEach(function (row) {
-      if (!row.querySelector('.ocr-pick').checked) return;
-      var text = (row.querySelector('.ocr-value').value || '').trim();
+      var pick = row.querySelector('.ocr-pick');
+      var input = row.querySelector('.ocr-value');
+      if (!pick || !pick.checked || !input) return;
+      var text = (input.value || '').trim();
       if (!text) return;
       // 숫자와 단위 가르기는 서버가 한다 - 규정 단위를 서버가 갖고 있다
       nutrition.push({ field: row.dataset.nutri, raw: text });
@@ -305,8 +353,12 @@
 
     var recycle = body.querySelector('[data-recycle]');
     var markText = '';
-    if (recycle && recycle.querySelector('.ocr-pick').checked) {
-      markText = (recycle.querySelector('.ocr-value').value || '').trim();
+    if (recycle) {
+      var rPick = recycle.querySelector('.ocr-pick');
+      var rInput = recycle.querySelector('.ocr-value');
+      if (rPick && rPick.checked && rInput) {
+        markText = (rInput.value || '').trim();
+      }
     }
 
     if (!nutrition.length && !markText) return;
@@ -338,11 +390,17 @@
 
   function applySelected() {
     var filled = 0;
-    document.querySelectorAll('#basicInfoOcrBody .ocr-row').forEach(function (row) {
-      if (!row.querySelector('.ocr-pick').checked) return;
+    // data-field 가 있는 줄만 본다.
+    //   - 표 머리글(.ocr-head)에는 체크박스가 없다
+    //   - 영양성분·분리배출 줄은 applyExtras 가 따로 맡는다
+    // 예전에는 .ocr-row 를 전부 훑어서 머리글에서 null.checked 로 죽었다.
+    document.querySelectorAll('#basicInfoOcrBody .ocr-row[data-field]').forEach(function (row) {
+      var pick = row.querySelector('.ocr-pick');
+      if (!pick || !pick.checked) return;
 
       var field = row.dataset.field;
       var meta = FIELD_MAP[field];
+      if (!meta) return;
       var value = '';
 
       var direct = row.querySelector('.ocr-value');
@@ -385,6 +443,7 @@
     // 영양성분·분리배출은 이 탭에 칸이 없어 서버가 바로 저장한다.
     // 창이 닫히기 전에 값을 읽어야 하므로 여기서 부른다.
     applyExtras();
+    recordCorrections();
 
     // 원재료명을 채웠으면 그 안의 원료들을 BOM 행으로 만들 수 있다.
     // 한 줄짜리 문자열로 두면 배합비 순서 검사·알레르기 수집·표시 문구가

@@ -71,6 +71,21 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - 여러 장의 이미지가 주어지면 같은 사진을 확대한 조각들이다. 겹치는 부분은
   한 번만 세고, 조각에서 더 또렷하게 읽힌 쪽을 택하시오.
 
+실제로 자주 나온 실수들이다. 특히 조심하시오.
+- **작업지시서·시안의 표를 라벨로 착각하지 마시오.** 사진 한쪽에 "품명/사이즈/
+  발주일/담당자" 같은 제작 정보 표가 있을 수 있다. 그것은 인쇄 지시서다.
+  값은 **실제 라벨(원형·사각 도안) 안**에서만 읽으시오.
+  예: 지시서 품명이 "PIG더블치즈&바질치킨 샐러드_후면" 이어도, 라벨 안
+  제품명이 "더블치즈&바질치킨 샐러드" 면 후자가 답이다.
+- 항목명을 값에 넣지 마시오. "포장재질 PET(용기)" 가 아니라 "PET(용기)" 다.
+- 알레르기(allergens)와 혼입 주의(cautions)는 다르다.
+  "○○ 함유" 는 알레르기, "○○ 혼입 가능성 있음" 은 주의사항이다.
+  혼입 가능 물질을 알레르기에 옮겨 적지 마시오.
+- 주의사항은 요약하지 말고 적힌 문장을 그대로 옮기시오.
+- 업체명·지명 같은 고유명사는 획을 하나씩 확인하시오
+  (삼립/삼진, 송정동/성동동 처럼 한 획 차이가 흔하다). 확신이 없으면
+  candidates 에 두 후보를 넣고 confidence 를 low 로 두시오.
+
 응답 규칙:
 - 텍스트가 명확하게 읽히면: {"value": "실제추출값", "confidence": "high"}
 - 글자는 보이는데 확신이 없으면: {"value": null, "confidence": "low", "candidates": ["가능한값1", "가능한값2"]}
@@ -202,6 +217,21 @@ def build_image_payload(image_file, max_size=2000):
     return images
 
 
+def learned_hints():
+    """
+    지금까지 사용자가 고친 이력에서 뽑은 주의사항.
+
+    쌓인 게 없으면 빈 문자열이다. 조회에 실패해도 판독은 계속돼야 하므로
+    조용히 넘어간다.
+    """
+    try:
+        from v1.label.services.ocr_learning import hints_text
+        return hints_text()
+    except Exception:
+        logger.exception('판독 힌트를 붙이지 못했다')
+        return ''
+
+
 def extract_label_from_image(image_file):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
@@ -241,7 +271,7 @@ def extract_label_from_image(image_file):
         response = client.chat.completions.create(
             model=getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": SYSTEM_PROMPT + learned_hints()},
                 {"role": "user", "content": content},
             ],
             max_tokens=4000,
