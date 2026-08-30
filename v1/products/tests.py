@@ -1136,3 +1136,53 @@ class OcrApplyExtrasEndpointTests(TestCase):
         other = User.objects.create_user(username='extras2', password='x')
         self.client.force_login(other)
         self.assertEqual(self._post(nutrition=[]).status_code, 404)
+
+
+class PhotoCropperWiringTests(TestCase):
+    """
+    파일 -> 영역 선택 -> 판독 순서.
+
+    판독이 틀리는 가장 큰 이유는 해상도다. detail:high 는 짧은 변을 768px 로
+    맞추므로, 작업지시서처럼 라벨이 사진의 일부이면 본문이 몇 픽셀로 줄어
+    읽히지 않고 모델이 지어낸다. 읽을 곳만 잘라 보내면 그 해상도가 전부
+    라벨에 배정된다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.cropper = (base / 'static/js/products/photo_cropper.js').read_text(encoding='utf-8')
+        self.modal = (base / 'static/js/products/import_modal.js').read_text(encoding='utf-8')
+        self.detail = (base / 'templates/products/product_detail.html').read_text(encoding='utf-8')
+
+    def test_불러오기가_자르기를_먼저_부른다(self):
+        self.assertIn('window.cropPhoto', self.cropper)
+        self.assertIn('window.cropPhoto(file)', self.modal)
+
+    def test_자르기가_없어도_판독은_된다(self):
+        """스크립트 로드가 실패해도 불러오기가 멈추면 안 된다."""
+        self.assertIn("typeof window.cropPhoto !== 'function'", self.modal)
+
+    def test_취소하면_아무것도_하지_않는다(self):
+        self.assertIn('if (!picked) return;', self.modal)
+
+    def test_스크립트가_실린다(self):
+        self.assertIn('photo_cropper.js', self.detail)
+
+    def test_원본_해상도로_잘라낸다(self):
+        """화면에 줄여 그린 것이 아니라 원본에서 잘라야 해상도가 남는다."""
+        self.assertIn('naturalWidth', self.cropper)
+        self.assertIn('sel.w / scale', self.cropper)
+
+    def test_회전이_있다(self):
+        """눕혀 찍힌 사진은 세워야 영역을 고를 수 있다."""
+        self.assertIn('rot-left', self.cropper)
+        self.assertIn('rot-right', self.cropper)
+
+    def test_전체_사용도_고를_수_있다(self):
+        self.assertIn("'whole'", self.cropper)
+
+    def test_너무_작은_선택을_막는다(self):
+        self.assertIn('MIN_SIDE', self.cropper)

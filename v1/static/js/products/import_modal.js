@@ -57,6 +57,7 @@
       + '    <div class="import-drop border rounded py-4 px-2 mb-2">'
       + '      <i class="bi bi-cloud-arrow-up d-block mb-1" style="font-size:22px; opacity:.5;"></i>'
       + '      <div class="text-muted" style="font-size:12px;">사진을 끌어다 놓거나 누르세요</div>'
+      + '      <div class="text-muted mt-1" style="font-size:11px;">고른 뒤 읽을 영역을 지정합니다</div>'
       + '      <input type="file" accept="image/*" hidden>'
       + '    </div>'
       + '    <button type="button" class="btn btn-outline-secondary v2-btn-sm w-100 import-use-lookup" disabled>'
@@ -252,6 +253,27 @@
       return;
     }
 
+    // 파일 -> 영역 선택 -> 판독.
+    //
+    // 판독이 틀리는 가장 큰 이유는 해상도다. 작업지시서처럼 라벨이 사진의
+    // 일부이면 라벨 본문이 몇 픽셀로 줄어 읽히지 않는다. 읽을 곳만 잘라 보내면
+    // 그 해상도가 전부 라벨에 배정된다.
+    //
+    // 자르기 창을 취소하면 아무 일도 하지 않는다(불러오기 창은 그대로 둔다).
+    if (typeof window.cropPhoto !== 'function') {
+      startRead(side, file, modalEl);
+      return;
+    }
+    window.cropPhoto(file).then(function (picked) {
+      if (!picked) return;
+      startRead(side, picked, modalEl);
+    }).catch(function (err) {
+      console.error(err);
+      note((err && err.message) || '사진을 열지 못했습니다.', 'error');
+    });
+  }
+
+  function startRead(side, file, modalEl) {
     setBusy(modalEl, side === 'product'
       ? '표시사항을 읽는 중입니다…'
       : '사진을 문서함에 저장하고 읽는 중입니다…');
