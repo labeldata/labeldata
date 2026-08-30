@@ -17,10 +17,10 @@
 |---|---|---|---|---|
 | 1 | **필수 입력 항목 검증** — 비어 있어도 "적합"이 나오는 구멍 | 반나절 | **구현 완료 · 미커밋** | 3장 P4 |
 | 2 | 운영 확인 — AI검증 판정 품질(`check_openai --label`) | 30분 | 대기 | 2-1 |
-| 3 | 운영 확인 — 수거검사 알림 보존 / 자동저장 / 원재료 순서 | 30분 | 대기 | 2-2~2-4 |
+| 3 | 운영 확인 — 수거검사 알림 보존 / 자동저장 / 원재료 순서 | 30분 | **커맨드로 대체** | 2-5 |
 | 4 | **제품 관리 탭 디자인 통일·공간 효율** | 1~2일 | **구현 완료 · 미커밋** | 3장 P8 |
 | 5 | 식품유형별 필수항목 자동 세팅(B1) — 1번의 근거 보강 | 1일 | **구현 완료 · 미커밋** | 3장 P4-4 |
-| 6 | 원료 중복 방지 + 검색 상한 | 반나절 | 미착수 | 3장 P5 |
+| 6 | 원료 중복 방지 + 검색 상한 | 반나절 | **(a)(b) 완료 · (c) 보류** | 3장 P5 |
 | 7 | AI 한도 카운터를 캐시 → DB | 반나절 | 미착수 | 3장 P7 |
 | 8 | AI 서류 추출 → 원재료 연결 | 3~5일 | 선행결정 대기 | 3장 P6 |
 | 9 | 마이그레이션 그래프 복구 ★ | 미정 | 별건 | 4-1 |
@@ -105,6 +105,29 @@ tail -f /var/log/labeldata.pythonanywhere.com.server.log | grep 'I0460 소급'
 
 배합비가 들어간 제품에서 **BOM 등록 화면의 원재료명 요약**과 **표시사항 작성
 화면의 원재료명(표로입력) 칸**의 원재료 순서가 같아야 한다. 예전에는 달랐다.
+
+### 2-5. 운영 점검 커맨드 (신규)
+
+2-2·2-4 는 "화면에서 눈으로" 라고 적어 뒀는데, 실은 데이터만 읽으면 답이 나온다.
+읽기 전용 커맨드로 만들었다.
+
+```bash
+/home/labeldata/.virtualenvs/mysite-env/bin/python manage.py check_data_health
+python manage.py check_data_health --only inspection   # 한 가지만
+python manage.py check_data_health --user user@x.com   # 한 사람만
+```
+
+| 항목 | 무엇을 보나 |
+|---|---|
+| `inspection` | InspectionMatch 를 단계별로 센다. **판정결과 변동(부적합)** 은 소급 매칭이 다시 만들어 주지 않으므로 이 숫자가 보존돼야 한다. 사용자별로도 갈라 보여 준다 |
+| `order` | 배합비가 2개 이상 입력된 라벨에서 입력 순서가 내림차순인지 |
+| `duplicate` | `(user, prdlst_nm, prdlst_report_no, prdlst_dcnm)` 이 겹치는 원료 그룹과 여분 건수 |
+
+**0건과 "지워졌다" 를 구분해서 말한다.** 판정 알림이 0건이면 원래 없었을 수도
+있으므로 단정하지 않고, 지금 숫자를 적어 두고 라벨 저장 후 다시 보라고 안내한다.
+가장 오래된 판정 알림의 날짜도 보여준다 — 저장으로 지워졌다면 최근 것만 남는다.
+
+로컬 결과: 판정 알림 0건(수거 감지 12건), 순서 역전 1건(#291), 중복 그룹 1개(여분 1건).
 
 ---
 
@@ -569,21 +592,44 @@ V2 기본정보 탭의 그 칸은 이름과 달리 `rawmtrl_nm`(참고)에 썼�
 저장하면 표시 필드로 옮겨온다. 일괄 복사는 위의 4건처럼 두 값이 다른 경우
 어느 쪽이 맞는지 사람이 봐야 해서 하지 않았다.
 
-### P5. 원료 중복 방지 + 검색 상한 — 반나절
+### P5. 원료 중복 방지 + 검색 상한 — (a)(b) 완료, (c) 보류
 
-- `search_ingredient_add_row` (`v1/label/views.py`): `icontains` 다중 필터에
-  **LIMIT 없음, 정렬 없음**. 넓은 검색어 하나로 전체 행 반환 가능.
-  → `order_by(...)[:50]` + 총건수 표기
-- `quick_register_ingredient` / `save_ingredients_to_label`: 같은 원료를 매번
-  새 `MyIngredient` 로 생성. → `(user, prdlst_nm, prdlst_report_no, prdlst_dcnm)`
-  키로 `get_or_create`
-- `save_ingredients_to_label` 전체가 **트랜잭션 밖**. relation 을 먼저 전량
-  DELETE 하므로 중간 실패 시 원재료가 통째로 날아간다.
-  → `transaction.atomic()` (데코레이터 한 줄)
+#### (a) 트랜잭션 부재 — 완료
 
-**현재 규모**: MyIngredient 203행, 중복 원료명 그룹 1개.
-지금은 거의 발생하지 않지만 트랜잭션 부재는 데이터 유실 위험이라 값이 싸다.
-*로컬 개발 DB 기준 수치이므로 운영 건수를 먼저 확인할 것.*
+`save_ingredients_to_label` 이 맨 처음 하는 일이 기존 연결의 **전량 삭제**다.
+그 뒤 새로 넣는 중에 하나라도 터지면 원재료가 통째로 사라진 채 남는다 —
+지우기는 커밋됐고 넣기는 안 됐으니까. 화면에는 "저장 실패" 만 뜬다.
+
+`@transaction.atomic` 을 붙였는데 **그것만으로는 안 됐다.** 함수 끝의
+`except Exception` 이 예외를 삼켜서 atomic 블록이 "정상 종료" 로 보고 커밋해
+버린다. `transaction.set_rollback(True)` 를 함께 넣어야 한다.
+
+테스트가 실제로 회귀를 잡는지 확인했다 — 롤백을 빼고 돌리니 원래 있던 원재료
+(설탕)가 사라지고 새로 만들다 만 것(밀가루)만 남았다. **건수는 그대로 1건이라
+개수만 세는 검사로는 못 잡는다.** 어떤 원료가 남았는지까지 본다.
+
+#### (b) 검색 상한 — 완료
+
+`search_ingredient_add_row` 에 LIMIT 도 정렬도 없었다. 조건을 하나도 안 걸거나
+"가" 같은 넓은 검색어 하나만 넣으면 내 원료 전체가 그대로 넘어온다. 순서도 DB
+마음이라 같은 검색을 두 번 하면 결과가 달라질 수 있었다.
+
+`INGREDIENT_SEARCH_LIMIT = 50` + `order_by('prdlst_nm', 'my_ingredient_id')`.
+응답에 `total` / `truncated` / `limit` 을 실어 보내고, 팝업이 잘렸을 때
+"검색 결과 N건 중 앞 50건만 보여줍니다" 를 띄운다. **모르면 사용자는 없는 원료라고
+생각하고 같은 원료를 또 등록한다** — (c) 의 원인 중 하나다.
+
+#### (c) 원료 중복 생성 — 보류
+
+`quick_register_ingredient` / `save_ingredients_to_label` 이 같은 원료를 매번 새
+`MyIngredient` 로 만든다. `(user, prdlst_nm, prdlst_report_no, prdlst_dcnm)` 키로
+`get_or_create` 하면 되지만, **먼저 규모를 봐야 한다.**
+
+`check_data_health --only duplicate` 로 센다(2-5). 로컬은 98건 중 겹치는 그룹 1개,
+여분 1건(1.0%)이라 급하지 않다. **운영에서 여분이 10%를 넘으면 값이 있다.**
+
+`get_or_create` 로 바꾸면 기존 중복을 합치는 문제가 따라온다 — 어느 쪽을 남길지,
+그 원료를 참조하는 relation 을 어떻게 옮길지. 규모를 보고 정한다.
 
 ### P6. AI 서류 추출 결과가 원재료로 이어지지 않는 문제 — 3~5일
 
@@ -823,7 +869,7 @@ python manage.py test --settings=v1.config.settings_test
 `v1/config/settings_test.py` 가 메모리 SQLite + 마이그레이션 우회로 돌린다.
 운영 `settings.py` 는 건드리지 않았다. **서버에서는 돌리지 않는다.**
 
-현재 112개. 저장소의 기존 회귀 방지 관례는 Django system check
+현재 126개. 저장소의 기존 회귀 방지 관례는 Django system check
 (`v1/common/checks.py`)지만, 이번 건들은 정적 검사로 못 잡는 런타임 동작이라
 `TestCase` 를 썼다.
 

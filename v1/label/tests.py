@@ -12,6 +12,7 @@
     화면에서는 그냥 "저장 실패"로만 보인다.
 """
 
+import json
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -1127,3 +1128,218 @@ class RequiredFieldMessageTests(TestCase):
         issues = self._issues(**self._filled(content_weight='', frmlc_mtrqlt=''))
         self.assertEqual(issues[0]['field_labels'], ['내용량', '포장재질'])
         self.assertEqual(issues[0]['fields'], ['content_weight', 'frmlc_mtrqlt'])
+
+
+class DataHealthCommandTests(TestCase):
+    """
+    운영 점검 커맨드(check_data_health).
+
+    "눈으로 봐야 한다"고 미뤄 둔 것들이 실은 데이터만 읽으면 답이 나온다.
+    아무것도 고치지 않는지, 판정이 맞는지를 고정한다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='health', password='x')
+
+    def _run(self, **opts):
+        from io import StringIO
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('check_data_health', stdout=out, **opts)
+        return out.getvalue()
+
+    def test_아무것도_바꾸지_않는다(self):
+        from v1.label.models import MyIngredient
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨')
+        ing = MyIngredient.objects.create(user_id=self.user, prdlst_nm='설탕', delete_YN='N')
+        before = (label.update_datetime, ing.update_datetime, MyLabel.objects.count())
+
+        self._run()
+
+        label.refresh_from_db(); ing.refresh_from_db()
+        self.assertEqual((label.update_datetime, ing.update_datetime, MyLabel.objects.count()),
+                         before)
+
+    def test_배합비가_역순인_라벨을_찾는다(self):
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='역순 라벨')
+        for seq, (name, ratio) in enumerate([('설탕', 10), ('밀가루', 30)], start=1):
+            ing = MyIngredient.objects.create(user_id=self.user, prdlst_nm=name, delete_YN='N')
+            LabelIngredientRelation.objects.create(
+                label=label, ingredient=ing, relation_sequence=seq, ingredient_ratio=ratio)
+
+        out = self._run(only='order')
+        self.assertIn('내림차순이 아닌', out)
+        self.assertIn('역순 라벨', out)
+
+    def test_배합비가_내림차순이면_통과라고_말한다(self):
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='정순 라벨')
+        for seq, (name, ratio) in enumerate([('밀가루', 30), ('설탕', 10)], start=1):
+            ing = MyIngredient.objects.create(user_id=self.user, prdlst_nm=name, delete_YN='N')
+            LabelIngredientRelation.objects.create(
+                label=label, ingredient=ing, relation_sequence=seq, ingredient_ratio=ratio)
+
+        self.assertIn('전부 배합비 내림차순', self._run(only='order'))
+
+    def test_배합비를_모르는_행끼리는_따지지_않는다(self):
+        """
+        「식품등의 표시기준」은 함량이 많은 순서로 적으라고 하지만, 함량을 모르는
+        원료끼리의 순서는 판단할 근거가 없다.
+        """
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='배합비 없음')
+        for seq, name in enumerate(['설탕', '밀가루'], start=1):
+            ing = MyIngredient.objects.create(user_id=self.user, prdlst_nm=name, delete_YN='N')
+            LabelIngredientRelation.objects.create(
+                label=label, ingredient=ing, relation_sequence=seq, ingredient_ratio=None)
+
+        self.assertIn('따질 수 없습니다', self._run(only='order'))
+
+    def test_같은_키로_겹치는_원료를_센다(self):
+        from v1.label.models import MyIngredient
+
+        for _ in range(3):
+            MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm='설탕', prdlst_report_no='123',
+                prdlst_dcnm='당류', delete_YN='N')
+        MyIngredient.objects.create(user_id=self.user, prdlst_nm='소금', delete_YN='N')
+
+        out = self._run(only='duplicate')
+        self.assertIn('그룹 1개', out)
+        self.assertIn('여분 2건', out)     # 3개 중 2개가 여분
+
+    def test_매칭이_없으면_없다고_말한다(self):
+        """0건과 "지워졌다" 는 다르다. 단정하지 않는다."""
+        self.assertIn('매칭 이력이 없습니다', self._run(only='inspection'))
+
+    def test_판정_알림_건수를_따로_보여준다(self):
+        """
+        판정결과 변동(부적합)은 소급 매칭이 다시 만들어 주지 않는다.
+        지워졌으면 영구 소실이라 이 숫자만 따로 볼 수 있어야 한다.
+        """
+        inspection = InspectionResult.objects.create(prdlst_report_no='123')
+        InspectionMatch.objects.create(
+            inspection=inspection, user=self.user,
+            alert_phase=InspectionMatch.PHASE_JUDGMENT,
+            match_reason=InspectionMatch.REASON_LABEL)
+        InspectionMatch.objects.create(
+            inspection=inspection, user=self.user,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            match_reason=InspectionMatch.REASON_LABEL)
+
+        out = self._run(only='inspection')
+        self.assertIn('전체 2건', out)
+        self.assertIn('판정결과 변동(다시 안 만들어짐): 1건', out)
+        self.assertIn('수거 감지(다시 만들어짐)     : 1건', out)
+
+    def test_모르는_사용자는_그렇게_말한다(self):
+        out = self._run(user='없는사람@example.com')
+        self.assertIn('찾을 수 없습니다', out)
+
+
+class IngredientSaveIntegrityTests(TestCase):
+    """
+    원재료 표 저장(save_ingredients_to_label).
+
+    맨 처음 하는 일이 기존 연결의 전량 삭제다. 그 뒤 새로 넣는 중에 하나라도
+    터지면 원재료가 통째로 사라진 채 남는다 — 지우기는 커밋됐고 넣기는 안 됐으니까.
+    화면에는 "저장 실패" 만 뜬다.
+    """
+
+    def setUp(self):
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+
+        self.user = User.objects.create_user(username='save', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='원재료')
+        self.ing = MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='설탕', delete_YN='N')
+        LabelIngredientRelation.objects.create(
+            label=self.label, ingredient=self.ing, relation_sequence=1)
+        self.url = f'/label/save-ingredients-to-label/{self.label.my_label_id}/'
+
+    def _relations(self):
+        from v1.label.models import LabelIngredientRelation
+        return LabelIngredientRelation.objects.filter(label=self.label).count()
+
+    def test_저장이_중간에_터져도_기존_원재료가_남는다(self):
+        """
+        전량 삭제는 이미 끝난 시점에서 터뜨린다. 롤백이 없으면 원재료가 0건으로
+        남고, 화면에는 "저장 실패" 만 뜬다.
+        """
+        from v1.label.models import LabelIngredientRelation
+
+        self.assertEqual(self._relations(), 1)
+        with patch('v1.label.views.MyLabel.save', side_effect=RuntimeError('중간에 폭발')):
+            resp = self.client.post(
+                self.url,
+                data=json.dumps({'ingredients': [{'ingredient_name': '밀가루'}]}),
+                content_type='application/json')
+
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(self._relations(), 1, '지우기까지 되돌려야 한다')
+        kept = LabelIngredientRelation.objects.get(label=self.label)
+        self.assertEqual(kept.ingredient.prdlst_nm, '설탕', '원래 있던 것이 그대로여야 한다')
+
+    def test_정상_저장은_그대로_동작한다(self):
+        resp = self.client.post(
+            self.url,
+            data=json.dumps({'ingredients': [
+                {'ingredient_name': '설탕', 'my_ingredient_id': self.ing.my_ingredient_id},
+            ]}),
+            content_type='application/json')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+
+
+class IngredientSearchLimitTests(TestCase):
+    """
+    내 원료 검색(search_ingredient_add_row).
+
+    상한도 정렬도 없었다. 조건을 하나도 안 걸거나 "가" 같은 넓은 검색어 하나만
+    넣으면 내 원료 전체가 그대로 넘어온다.
+    """
+
+    def setUp(self):
+        from v1.label.models import MyIngredient
+        from v1.label.views import INGREDIENT_SEARCH_LIMIT
+
+        self.limit = INGREDIENT_SEARCH_LIMIT
+        self.user = User.objects.create_user(username='search', password='x')
+        self.client.force_login(self.user)
+        for i in range(self.limit + 15):
+            MyIngredient.objects.create(
+                user_id=self.user, prdlst_nm=f'원료{i:03}', delete_YN='N')
+
+    def _search(self, **body):
+        return self.client.post('/label/search-ingredient-add-row/',
+                                data=json.dumps(body),
+                                content_type='application/json').json()
+
+    def test_상한을_넘겨_돌려주지_않는다(self):
+        data = self._search()
+        self.assertEqual(len(data['ingredients']), self.limit)
+
+    def test_잘렸다는_것과_전체_건수를_알려준다(self):
+        """모르면 사용자는 없는 원료라고 생각하고 같은 원료를 다시 등록한다."""
+        data = self._search()
+        self.assertTrue(data['truncated'])
+        self.assertEqual(data['total'], self.limit + 15)
+        self.assertEqual(data['limit'], self.limit)
+
+    def test_다_들어가면_잘리지_않았다고_말한다(self):
+        data = self._search(ingredient_name='원료001')
+        self.assertFalse(data['truncated'])
+        self.assertEqual(data['total'], len(data['ingredients']))
+
+    def test_순서가_정해져_있다(self):
+        """정렬이 없으면 같은 검색을 두 번 해도 순서가 달라질 수 있다."""
+        names = [i['prdlst_nm'] for i in self._search()['ingredients']]
+        self.assertEqual(names, sorted(names))

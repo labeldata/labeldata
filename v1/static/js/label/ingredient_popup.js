@@ -1237,6 +1237,18 @@ function searchMyIngredientInModal() {
         }
 
         if (data.success && data.ingredients && data.ingredients.length > 0) {
+            // 결과가 잘렸으면 말해 준다. 모르면 없는 원료라고 생각하고
+            // 같은 원료를 또 등록하게 된다.
+            if (data.truncated) {
+                const notice = document.createElement('div');
+                notice.className = 'alert alert-warning py-2 px-3 mb-2';
+                notice.style.fontSize = '13px';
+                notice.textContent =
+                    `검색 결과 ${data.total}건 중 앞 ${data.ingredients.length}건만 보여줍니다. `
+                    + '검색어를 좁혀 주세요.';
+                resultsDiv.appendChild(notice);
+            }
+
             const container = document.createElement('div');
             container.classList.add('list-group');
             container.style.maxWidth = '100%';

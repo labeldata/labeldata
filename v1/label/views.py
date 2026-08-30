@@ -31,6 +31,10 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 # --- [수정] Local Application Imports ---
 logger = logging.getLogger(__name__)
 
+# 내 원료 검색이 한 번에 돌려주는 최대 건수.
+# 원래는 상한이 없어서 넓은 검색어 하나로 전체 행이 넘어왔다.
+INGREDIENT_SEARCH_LIMIT = 50
+
 from .services import additive_search, list_sort
 from .constants import CATEGORY_CHOICES
 from .forms import LabelCreationForm, MyIngredientsForm
@@ -1593,7 +1597,16 @@ def my_ingredient_detail(request, ingredient_id=None):
 
 @login_required
 @csrf_exempt
+@transaction.atomic
 def save_ingredients_to_label(request, label_id):
+    """
+    원재료 표 입력을 라벨에 저장한다.
+
+    맨 처음 하는 일이 기존 연결(LabelIngredientRelation)의 **전량 삭제**다.
+    그 뒤 새로 넣는 중에 하나라도 터지면 원재료가 통째로 사라진 채로 남는다 —
+    지우기는 커밋됐고 넣기는 안 됐으니까. 화면에는 "저장 실패" 만 뜬다.
+    atomic 으로 묶어 실패하면 지우기까지 되돌린다.
+    """
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid request method'})
     
@@ -1727,6 +1740,10 @@ def save_ingredients_to_label(request, label_id):
         # 메시지 제거 - JSON 응답만 반환
         return JsonResponse({'success': True, 'message': '저장되었습니다.'})
     except Exception as e:
+        # 여기서 예외를 삼키므로 atomic 블록은 "정상 종료"로 보고 커밋해 버린다.
+        # 그러면 데코레이터를 붙인 의미가 없다 — 맨 앞의 전량 삭제만 남는다.
+        # 되돌리라고 명시한다.
+        transaction.set_rollback(True)
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
@@ -1851,7 +1868,11 @@ def search_ingredient_add_row(request):
         if gmo:
             qs = qs.filter(gmo__icontains=gmo)
         
-        ingredients = list(qs.values(
+        # 상한도 정렬도 없었다. 조건을 하나도 안 걸거나 "가" 같은 넓은 검색어
+        # 하나만 넣으면 내 원료 전체가 그대로 넘어온다. 순서도 DB 마음이라
+        # 같은 검색을 두 번 하면 결과 순서가 달라질 수 있었다.
+        total = qs.count()
+        ingredients = list(qs.order_by('prdlst_nm', 'my_ingredient_id').values(
             'prdlst_nm',
             'prdlst_report_no',
             'prdlst_dcnm',
@@ -1861,10 +1882,18 @@ def search_ingredient_add_row(request):
             'food_category',  # 식품 구분 필드 추가
             'allergens',  # 알레르기 정보 추가
             'gmo',  # GMO 정보 추가
-        ))
+        )[:INGREDIENT_SEARCH_LIMIT])
 
         if ingredients:
-            return JsonResponse({'success': True, 'ingredients': ingredients})
+            return JsonResponse({
+                'success': True,
+                'ingredients': ingredients,
+                # 잘렸으면 화면이 "N건 중 앞 50건" 이라고 말할 수 있어야 한다.
+                # 안 그러면 사용자는 없는 원료라고 생각하고 다시 등록한다.
+                'total': total,
+                'truncated': total > len(ingredients),
+                'limit': INGREDIENT_SEARCH_LIMIT,
+            })
         else:
             return JsonResponse({'success': False, 'error': '검색 결과가 없습니다.'})
     except Exception as e:
