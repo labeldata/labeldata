@@ -767,48 +767,6 @@
 </div>
 
 <!--  맞춤항목 카드 -->
-<!-- 표시 항목 (chckd_*) -->
-<div class="card border-0 shadow-sm mb-3 v2-card" id="section-display-items">
-    <div class="card-body p-3">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <h6 class="fw-semibold mb-0 v2-card-title">
-                <i class="bi bi-check2-square text-primary me-2"></i>표시 항목
-            </h6>
-            <span class="text-muted" style="font-size:12px;">
-                체크한 항목이 표시사항에 인쇄되고, 규정 검증에서 필수로 확인됩니다.
-            </span>
-        </div>
-        <div class="form-text mb-3">
-            식품유형(소분류)을 고르면 그 유형에 필요한 항목이 자동으로 켜집니다.
-            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis">필수</span> 는 식품유형상 표시 대상,
-            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">해당없음</span> 은 그 유형에 쓰지 않는 항목입니다.
-        </div>
-        <div class="row g-2" id="display-items-grid">
-            {% for item in display_items %}
-            <div class="col-6 col-md-4 col-xl-3">
-                <div class="form-check d-flex align-items-center gap-1 py-1">
-                    <input class="form-check-input display-item-check mt-0" type="checkbox"
-                           id="{{ item.checkbox }}" name="{{ item.checkbox }}"
-                           {% if item.checked %}checked{% endif %}>
-                    <label class="form-check-label d-flex align-items-center gap-1 flex-wrap"
-                           for="{{ item.checkbox }}" style="font-size:13px;">
-                        {{ item.label }}
-                        {% if item.rule == 'Y' %}
-                        <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis" style="font-size:10px;">필수</span>
-                        {% elif item.rule == 'D' %}
-                        <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis" style="font-size:10px;">해당없음</span>
-                        {% endif %}
-                        {% if item.checked and not item.filled %}
-                        <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis" style="font-size:10px;">미입력</span>
-                        {% endif %}
-                    </label>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-
 <div class="card border-0 shadow-sm mb-3 v2-card" id="section-custom-fields">
     <div class="card-body p-3">
         <div class="d-flex align-items-center justify-content-between mb-3">

@@ -239,6 +239,35 @@
                         <!-- 우측 목차 컬럼 (고정 너비 240px) -->
                         <div class="d-none d-lg-block border-start bg-white toc-sidebar">
                             <div class="sticky-top overflow-y-auto custom-scrollbar p-3 toc-sticky-inner">
+                                {% comment %}
+                                  표시 항목 — 무엇이 인쇄되는지와 어디로 가는지를 한 자리에 둔다.
+                                  본문 카드로 두면 식품유형을 고른 뒤 한참 아래로 내려가야 보이고,
+                                  다른 항목을 입력하는 동안에는 안 보인다.
+                                {% endcomment %}
+                                <h6 class="fw-bold text-muted small text-uppercase mb-2 mt-2 ps-2">표시 항목</h6>
+                                <div class="text-muted ps-2 mb-2" style="font-size:11px; line-height:1.5;">
+                                    체크한 항목이 인쇄되고 규정 검증에서 확인됩니다.
+                                    식품유형을 고르면 자동으로 맞춰집니다.
+                                </div>
+                                <div id="display-items-panel" class="mb-3">
+                                    {% for item in display_items %}
+                                    <div class="di-row{% if item.rule == 'D' %} di-na{% endif %}"
+                                         title="{{ item.label }}{% if item.rule == 'Y' %} · 식품유형상 표시 대상{% elif item.rule == 'D' %} · 이 식품유형에는 해당 없음{% endif %}{% if item.checked and not item.filled %} · 아직 입력되지 않음{% endif %}">
+                                        <input class="form-check-input display-item-check" type="checkbox"
+                                               id="{{ item.checkbox }}" name="{{ item.checkbox }}"
+                                               {% if item.checked %}checked{% endif %}
+                                               {% if not can_edit %}disabled{% endif %}>
+                                        <button type="button" class="di-name"
+                                                data-anchor="{{ item.anchor }}" data-tab="{{ item.tab }}">
+                                            {{ item.label }}{% if item.rule == 'Y' %}<span class="di-req">*</span>{% endif %}
+                                        </button>
+                                        {% if item.checked and not item.filled %}
+                                        <span class="di-empty" aria-label="미입력">!</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+
                                 <h6 class="fw-bold text-muted small text-uppercase mb-3 mt-2 ps-2">On this page</h6>
                                 <nav id="navbar-toc" class="nav flex-column small">
                                     <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent active" 
@@ -249,8 +278,6 @@
                                        href="#section-manufacturing" data-section="section-manufacturing">제조 정보</a>
                                     <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent" 
                                        href="#section-details" data-section="section-details">상세 정보</a>
-                                    <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent"
-                                       href="#section-display-items" data-section="section-display-items">표시 항목</a>
                                     <a class="nav-link text-muted py-2 ps-3 border-start border-2 border-transparent"
                                        href="#section-custom-fields" data-section="section-custom-fields">맞춤항목</a>
                                 </nav>
@@ -1543,6 +1570,35 @@ function escapeHtml(t) {
     d.textContent = t == null ? '' : String(t);
     return d.innerHTML;
 }
+
+/**
+ * 우측 표시 항목 패널: 이름을 누르면 그 입력칸으로 이동한다.
+ * 영양성분처럼 이 탭에 칸이 없는 항목은 해당 탭으로 보낸다.
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    const panel = document.getElementById('display-items-panel');
+    if (!panel) return;
+
+    panel.addEventListener('click', function (e) {
+        const btn = e.target.closest('.di-name');
+        if (!btn) return;
+
+        const tabTarget = btn.dataset.tab;
+        if (tabTarget) {
+            const tabBtn = document.querySelector('[data-bs-target="#' + tabTarget + '"]');
+            if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
+            return;
+        }
+
+        const field = document.getElementById(btn.dataset.anchor);
+        if (!field) return;
+        field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // 어디로 왔는지 잠깐 드러내 준다 — 스크롤만 하면 어느 칸인지 알기 어렵다
+        field.classList.add('di-highlight');
+        setTimeout(function () { field.classList.remove('di-highlight'); }, 1200);
+        if (typeof field.focus === 'function') field.focus({ preventScroll: true });
+    });
+});
 
 function getActiveTabLabel() {
     const activeTab = document.querySelector('#workspaceTab .nav-link.active');
@@ -3280,6 +3336,37 @@ function getCookie(name) {
   .vb-list li.vb-head:first-child { padding-top: 0; }
   /* 비어 있는 필수 항목은 "고쳐야 채워지는 칸"이라 나머지 지적과 구분한다 */
   .vb-list li.vb-req { border-left: 3px solid #c5221f; }
+
+  /* 우측 패널의 표시 항목 — 240px 안에 18줄이 들어가야 해서 조밀하다 */
+  .di-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border-radius: 6px;
+  }
+  .di-row:hover { background: var(--v2-gray-100, #f1f3f4); }
+  .di-row .form-check-input { margin: 0; flex-shrink: 0; }
+  .di-name {
+    flex: 1; min-width: 0; text-align: left;
+    padding: 0; border: 0; background: none;
+    font-size: 12px; line-height: 1.5; color: var(--text-primary, #202124);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .di-name:hover { color: var(--v2-blue, #1a73e8); text-decoration: underline; }
+  /* 식품유형상 표시 대상 */
+  .di-req { color: var(--v2-blue, #1a73e8); font-weight: 700; margin-left: 2px; }
+  /* 켜져 있는데 아직 안 채워진 항목 */
+  .di-empty {
+    flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%;
+    background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f);
+    font-size: 10px; font-weight: 700; line-height: 15px; text-align: center;
+  }
+  /* 이 식품유형에는 해당 없는 항목 */
+  .di-na .di-name { color: var(--text-hint, #9aa0a6); }
+  /* 이동한 칸을 잠깐 드러낸다 */
+  .di-highlight {
+    box-shadow: 0 0 0 2px var(--v2-blue, #1a73e8) !important;
+    transition: box-shadow 0.2s ease;
+  }
 </style>
 
 <!-- 필수 문서 추가 모달 -->

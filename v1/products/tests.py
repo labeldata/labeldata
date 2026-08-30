@@ -235,3 +235,66 @@ class DisplayItemSaveTests(TestCase):
         self.assertEqual(by_field['nutrition_text']['rule'], 'Y')
         self.assertEqual(by_field['prdlst_report_no']['rule'], 'D')
         self.assertEqual(by_field['prdlst_nm']['label'], '제품명')
+
+
+class DisplayItemPanelTests(TestCase):
+    """
+    우측 패널의 표시 항목 목록.
+
+    본문 카드로 두면 식품유형을 고른 뒤 한참 아래로 내려가야 보이고, 다른 항목을
+    입력하는 동안에는 안 보인다. 무엇이 인쇄되는지와 어디로 가는지를 항상 보이는
+    한 자리에 뒀다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='panel', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='패널')
+
+    def test_내용량_열량은_목록에_없다(self):
+        """
+        별도로 입력하는 칸이 아니라 내용량에 병기하는 값이라("250 g (100 kcal)")
+        켜고 끌 대상이 아니다. 표시 여부는 식품유형이 정하고, 값이 적혔는지는
+        내용량의 kcal 표기로 판정한다.
+        """
+        from v1.products.views import _build_display_items
+
+        fields = {i['field'] for i in _build_display_items(self.label)}
+        self.assertNotIn('weight_calorie', fields)
+        self.assertIn('content_weight', fields)
+
+    def test_목록에서_빠진_항목은_저장에서도_건드리지_않는다(self):
+        """화면이 안 보내면 서버가 기존 값을 그대로 둬야 한다."""
+        self.label.chckd_weight_calorie = 'Y'
+        self.label.save()
+
+        ProductMetadata.objects.create(label=self.label)
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('products:product_update_fields', args=[self.label.my_label_id]),
+            data=json.dumps({'prdlst_nm': '이름'}), content_type='application/json')
+
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.chckd_weight_calorie, 'Y')
+
+    def test_이동_대상이_템플릿에_실제로_있다(self):
+        """
+        없는 id 를 가리키면 그 항목만 눌러도 아무 일이 안 일어난다.
+        label_creation.js 의 chk_calories 가 정확히 그랬다.
+        """
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        from v1.products.views import _build_display_items
+
+        base = Path(dj.BASE_DIR)
+        html = (base / 'templates/products/_tab_basic_info.html').read_text(encoding='utf-8')
+        detail = (base / 'templates/products/product_detail.html').read_text(encoding='utf-8')
+        ids = set(re.findall(r'id="(field-[a-z-]+)"', html))
+        tabs = set(re.findall(r'id="(tab-[a-z-]+)"', detail))
+
+        for item in _build_display_items(self.label):
+            if item['tab']:
+                self.assertIn(item['tab'], tabs, f"{item['label']} 의 탭 {item['tab']} 없음")
+            else:
+                self.assertIn(item['anchor'], ids,
+                              f"{item['label']} 의 이동 대상 {item['anchor']} 없음")
