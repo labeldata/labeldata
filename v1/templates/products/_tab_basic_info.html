@@ -39,57 +39,55 @@
 {% endif %}
 
 <!--  기본정보 카드 (식품유형  장기보존식품  제조방법  제품 개요 통합) -->
-<div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;" id="section-food-info">
-    <div class="card-body p-4">
-        <h6 class="fw-semibold mb-4" style="color: var(--text-primary); font-size: 16px;">
+<div class="card border-0 shadow-sm mb-3 v2-card" id="section-food-info">
+    <div class="card-body p-3">
+        <h6 class="fw-semibold mb-3 v2-card-title">
             <i class="bi bi-gear text-primary me-2"></i>기본정보
         </h6>
 
         <!-- 라벨명: 신규 작성 시에만 표시 (detail 뷰에서는 상단 헤더에서 편집) -->
         {% if not product %}
         <div class="mb-3">
-            <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">
+            <label class="form-label v2-field-label">
                 라벨명 <span class="text-danger">*</span>
             </label>
             <input type="text" id="field-my-label-name" name="my_label_name"
-                   class="form-control bg-light border-0"
+                   class="form-control bg-light border-0 v2-field-input"
                    value="{{ product.my_label_name|default:'' }}"
                    placeholder="라벨명을 입력하세요" required
-                   style="border-radius:8px; padding:10px 14px;">
+                  >
         </div>
         {% endif %}
 
         <!-- 제품명 + 특정성분 -->
-        <div class="row g-3 mb-4">
+        <div class="row g-3 mb-3">
             <div class="col-md-6">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">
+                <label class="form-label v2-field-label">
                     제품명 <span class="text-danger">*</span>
                 </label>
                 <input type="text" id="field-prdlst-nm" name="prdlst_nm"
-                       class="form-control bg-light border-0"
+                       class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.prdlst_nm|default:'' }}"
                        placeholder="제품명을 입력하세요" required
-                       style="border-radius:8px; padding:10px 14px;">
+                      >
             </div>
             <div class="col-md-6">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">특정성분 함량</label>
+                <label class="form-label v2-field-label">특정성분 함량</label>
                 <input type="text" id="field-ingredient-info" name="ingredient_info"
-                       class="form-control bg-light border-0"
+                       class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.ingredient_info|default:'' }}"
                        placeholder="예) 레몬즙 5%"
-                       style="border-radius:8px; padding:10px 14px;">
+                      >
             </div>
         </div>
-
-        <hr class="my-3" style="border-color:#f0f0f0;">
 
         <!-- 식품유형 3열: 대분류 | 소분류 | 표시용 -->
         <div class="row g-3 mb-2">
             <div class="col-md-4">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">식품유형 대분류</label>
+                <label class="form-label v2-field-label">식품유형 대분류</label>
                 <select id="field-food-group" name="food_group"
-                        class="form-select bg-light border-0"
-                        style="border-radius:8px; padding:10px 14px;">
+                        class="form-select bg-light border-0 v2-field-input"
+                       >
                     <option value="">대분류 선택</option>
                     {% for group in food_groups %}
                     <option value="{{ group }}" {% if product.food_group == group %}selected{% endif %}>{{ group }}</option>
@@ -100,10 +98,10 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">소분류</label>
+                <label class="form-label v2-field-label">소분류</label>
                 <select id="field-food-type" name="food_type"
-                        class="form-select bg-light border-0"
-                        style="border-radius:8px; padding:10px 14px;">
+                        class="form-select bg-light border-0 v2-field-input"
+                       >
                     <option value="">소분류 선택</option>
                     {% for ft in food_types %}
                     <option value="{{ ft.food_type }}"
@@ -115,22 +113,22 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">식품유형 (표시용)</label>
+                <label class="form-label v2-field-label">식품유형 (표시용)</label>
                 <input type="text" id="field-prdlst-dcnm" name="prdlst_dcnm"
-                       class="form-control bg-light border-0"
+                       class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.prdlst_dcnm|default:'' }}"
                        placeholder="소분류 선택 시 자동 입력"
-                       style="border-radius:8px; padding:10px 14px;">
+                      >
             </div>
         </div>
         <div class="form-text mb-3">
             소분류·장기보존식품·제조방법을 선택하면 식품유형(표시용)이 자동 반영됩니다.
-            <button type="button" class="btn btn-link btn-sm p-0 ms-1" onclick="updatePrdlstDcnm(true)" style="font-size:12px; vertical-align:baseline;">↻ 수동 생성</button>
+            <button type="button" class="btn btn-link v2-link-btn p-0 ms-1" onclick="updatePrdlstDcnm(true)">↻ 수동 생성</button>
         </div>
 
         <!-- 장기보존식품 1줄 -->
         <div class="mb-3">
-            <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">장기보존식품</label>
+            <label class="form-label v2-field-label">장기보존식품</label>
             <div class="d-flex flex-wrap gap-3">
                 {% for val, lbl in preservation_choices %}
                 <div class="form-check">
@@ -175,7 +173,7 @@
 
         <!-- 제조방법 1줄: 체크박스 + 조건 입력 인라인 -->
         <div>
-            <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">제조방법</label>
+            <label class="form-label v2-field-label">제조방법</label>
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <div class="form-check">
                     <input class="form-check-input grp-processing" type="checkbox"
@@ -206,7 +204,7 @@
                     <label class="form-check-label" for="field-processing-unsanitized" style="font-size:13px;">비살균</label>
                 </div>
                 <input type="text" id="field-processing-condition" name="processing_condition"
-                       class="form-control bg-light border-0"
+                       class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.processing_condition|default:'' }}"
                        placeholder="조건 상세 입력"
                        style="border-radius:8px; padding:8px 12px; flex:1; min-width:160px;">
@@ -216,25 +214,25 @@
 </div>
 
 <!--  제품 정보 카드 (품목보고번호 검증 포함) -->
-<div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;" id="section-product-info">
-    <div class="card-body p-4">
-        <h6 class="fw-semibold mb-4" style="color: var(--text-primary); font-size: 16px;">
+<div class="card border-0 shadow-sm mb-3 v2-card" id="section-product-info">
+    <div class="card-body p-3">
+        <h6 class="fw-semibold mb-3 v2-card-title">
             <i class="bi bi-info-circle text-primary me-2"></i>제품 정보
         </h6>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">
+                <label class="form-label v2-field-label">
                     품목보고번호
                     <span class="text-muted ms-1" style="font-size:11px; font-weight:400;">(2개 이상 입력 시 줄바꿈으로 구분)</span>
                 </label>
                 <textarea id="field-prdlst-report-no" name="prdlst_report_no"
-                          class="form-control bg-light border-0"
+                          class="form-control bg-light border-0 v2-field-input"
                           rows="1"
                           placeholder="예) 19950000000000&#10;예) 19960000000001"
-                          style="border-radius:8px; padding:10px 14px; resize:none; overflow:hidden; font-family:monospace; font-size:13px;">{{ product.prdlst_report_no|default:'' }}</textarea>
+                          style="resize:none; overflow:hidden; font-family:monospace; font-size:13px;">{{ product.prdlst_report_no|default:'' }}</textarea>
                 <div class="d-flex gap-2 mt-1">
                     <button type="button" id="verifyReportNoBtn"
-                            class="btn btn-outline-primary btn-sm"
+                            class="btn btn-outline-primary v2-btn-sm"
                             onclick="verifyReportNoInline()"
                             style="white-space:nowrap; border-radius:8px; padding:6px 12px;">번호검증</button>
                     <button type="button" id="copyProductDataBtn"
@@ -250,23 +248,23 @@
                 <div id="verifyResultMessage" style="display:none; margin-top:6px; font-size:0.84rem;"></div>
             </div>
             <div class="col-md-6">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">내용량</label>
+                <label class="form-label v2-field-label">내용량</label>
                 <input type="text" id="field-content-weight" name="content_weight"
-                       class="form-control bg-light border-0"
+                       class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.content_weight|default:'' }}"
                        placeholder="예: 500g, 1L"
-                       style="border-radius:8px; padding:10px 14px;">
+                      >
             </div>
             <div class="col-md-6">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">원산지</label>
+                <label class="form-label v2-field-label">원산지</label>
                 <div class="d-flex gap-2">
                     <input type="text" id="field-country-of-origin" name="country_of_origin"
-                           class="form-control bg-light border-0"
+                           class="form-control bg-light border-0 v2-field-input"
                            value="{{ product.country_of_origin|default:'' }}"
                            placeholder="원산지를 입력하세요"
-                           style="border-radius:8px; padding:10px 14px; flex:1;">
-                    <select id="field-country-select" class="form-select bg-light border-0"
-                            style="border-radius:8px; padding:10px 14px; width:130px; flex-shrink:0;">
+                           style="flex:1;">
+                    <select id="field-country-select" class="form-select bg-light border-0 v2-field-input"
+                            style="width:130px; flex-shrink:0;">
                         <option value="">선택</option>
                         {% for country in countries %}
                         <option value="{{ country.country_name_ko }}"
@@ -279,7 +277,7 @@
             </div>
             <!-- 보관방법: 배지 목록 + 직접 입력 (원산지와 같은 줄) -->
             <div class="col-md-6">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">보관방법</label>
+                <label class="form-label v2-field-label">보관방법</label>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <button type="button" class="btn-storage-badge{% if '냉동' in product.storage_method|default:'' %} active{% endif %}"
                             data-storage-value="냉동" onclick="toggleStorageBadge(this)">냉동</button>
@@ -290,7 +288,7 @@
                     <button type="button" class="btn-storage-badge{% if '상온' in product.storage_method|default:'' %} active{% endif %}"
                             data-storage-value="상온" onclick="toggleStorageBadge(this)">상온</button>
                     <input type="text" id="field-storage-method" name="storage_method"
-                           class="form-control bg-light border-0"
+                           class="form-control bg-light border-0 v2-field-input"
                            value="{{ product.storage_method|default:'' }}"
                            placeholder="직접 입력"
                            style="border-radius:8px; padding:8px 12px; flex:1; min-width:80px;">
@@ -298,29 +296,29 @@
             </div>
             <!-- 용기포장재질 -->
             <div class="col-md-6">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">용기·포장재질</label>
+                <label class="form-label v2-field-label">용기·포장재질</label>
                 <input type="text" id="field-frmlc-mtrqlt" name="frmlc_mtrqlt"
-                       class="form-control bg-light border-0"
+                       class="form-control bg-light border-0 v2-field-input"
                        value="{{ product.frmlc_mtrqlt|default:'' }}"
                        placeholder="용기·포장재질을 입력하세요"
-                       style="border-radius:8px; padding:10px 14px;">
+                      >
             </div>
         </div>
     </div>
 </div>
 
 <!--  제조 정보 카드 -->
-<div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;" id="section-manufacturing">
-    <div class="card-body p-4">
-        <h6 class="fw-semibold mb-4" style="color: var(--text-primary); font-size: 16px;">
+<div class="card border-0 shadow-sm mb-3 v2-card" id="section-manufacturing">
+    <div class="card-body p-3">
+        <h6 class="fw-semibold mb-3 v2-card-title">
             <i class="bi bi-building text-primary me-2"></i>제조 정보
         </h6>
         <div class="row g-3">
             <!-- 제조원 + 유통전문판매원 등 토글 -->
             <div class="col-12">
                 <div class="d-flex align-items-center gap-2 mb-1">
-                    <label class="form-label mb-0" style="font-size:13px; font-weight:500; color:var(--text-secondary);">제조원</label>
-                    <button type="button" class="btn btn-sm btn-link p-0 text-muted"
+                    <label class="form-label v2-field-label mb-0">제조원</label>
+                    <button type="button" class="btn btn-link v2-link-btn p-0 text-muted"
                             data-bs-toggle="collapse" data-bs-target="#extra-manufacturers"
                             aria-expanded="{% if product.distributor_address or product.repacker_address or product.importer_address %}true{% else %}false{% endif %}"
                             style="font-size:12px; text-decoration:none;">
@@ -328,10 +326,10 @@
                     </button>
                 </div>
                 <textarea id="field-bssh-nm" name="bssh_nm"
-                          class="form-control bg-light border-0"
+                          class="form-control bg-light border-0 v2-field-input"
                           rows="1"
                           placeholder="제조원 소재지를 입력하세요 (엔터로 줄바꾸기 가능)"
-                          style="border-radius:8px; padding:10px 14px; resize:none; overflow:hidden;">{{ product.bssh_nm|default:'' }}</textarea>
+                          style="resize:none; overflow:hidden;">{{ product.bssh_nm|default:'' }}</textarea>
             </div>
             <!-- 접힘: 유통전문판매원소분원수입원 -->
             <div class="col-12 collapse {% if product.distributor_address or product.repacker_address or product.importer_address %}show{% endif %}"
@@ -339,39 +337,39 @@
                 <div class="p-3 rounded" style="background:#f8f9fa; border:1px solid #e8eaed;">
                     <div class="row g-3">
                         <div class="col-12">
-                            <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">유통전문판매원</label>
+                            <label class="form-label v2-field-label">유통전문판매원</label>
                             <input type="text" id="field-distributor-address" name="distributor_address"
                                    class="form-control bg-white border-0"
                                    value="{{ product.distributor_address|default:'' }}"
                                    placeholder="유통전문판매원을 입력하세요"
-                                   style="border-radius:8px; padding:10px 14px;">
+                                  >
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">소분원</label>
+                            <label class="form-label v2-field-label">소분원</label>
                             <input type="text" id="field-repacker-address" name="repacker_address"
                                    class="form-control bg-white border-0"
                                    value="{{ product.repacker_address|default:'' }}"
                                    placeholder="소분원을 입력하세요"
-                                   style="border-radius:8px; padding:10px 14px;">
+                                  >
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">수입원</label>
+                            <label class="form-label v2-field-label">수입원</label>
                             <input type="text" id="field-importer-address" name="importer_address"
                                    class="form-control bg-white border-0"
                                    value="{{ product.importer_address|default:'' }}"
                                    placeholder="수입원을 입력하세요"
-                                   style="border-radius:8px; padding:10px 14px;">
+                                  >
                         </div>
                     </div>
                 </div>
             </div>
             <!-- 소비기한: 유형 선택 + 텍스트 -->
             <div class="col-12">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">소비기한 유형</label>
+                <label class="form-label v2-field-label">소비기한 유형</label>
                 <div class="d-flex gap-2">
                     <select id="field-date-option" name="date_option_display"
-                            class="form-select bg-light border-0"
-                            style="border-radius:8px; padding:10px 14px; width:160px; flex-shrink:0;"
+                            class="form-select bg-light border-0 v2-field-input"
+                            style="width:160px; flex-shrink:0;"
                             onchange="document.querySelector('label[for=field-pog-daycnt]').textContent = this.options[this.selectedIndex].text;">
                         <option value="소비기한" {% if not product.date_option_display or product.date_option_display == '소비기한' %}selected{% endif %}>소비기한</option>
                         <option value="품질유지기한" {% if product.date_option_display == '품질유지기한' %}selected{% endif %}>품질유지기한</option>
@@ -379,10 +377,10 @@
                         <option value="생산연도" {% if product.date_option_display == '생산연도' %}selected{% endif %}>생산연도</option>
                     </select>
                     <input type="text" id="field-pog-daycnt" name="pog_daycnt"
-                           class="form-control bg-light border-0"
+                           class="form-control bg-light border-0 v2-field-input"
                            value="{{ product.pog_daycnt|default:'' }}"
                            placeholder="소비기한 등을 입력하세요"
-                           style="border-radius:8px; padding:10px 14px; flex:1;">
+                           style="flex:1;">
                 </div>
                 <div class="form-text">유통기한이 아닌 소비기한을 기준으로 작성하세요</div>
             </div>
@@ -391,18 +389,18 @@
 </div>
 
 <!--  상세 정보 카드 -->
-<div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;" id="section-details">
-    <div class="card-body p-4">
-        <h6 class="fw-semibold mb-4" style="color: var(--text-primary); font-size: 16px;">
+<div class="card border-0 shadow-sm mb-3 v2-card" id="section-details">
+    <div class="card-body p-3">
+        <h6 class="fw-semibold mb-3 v2-card-title">
             <i class="bi bi-list-ul text-primary me-2"></i>상세 정보
         </h6>
         <div class="row g-3">
             <div class="col-12">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">원재료명 표시명</label>
+                <label class="form-label v2-field-label">원재료명 표시명</label>
                 <textarea id="field-rawmtrl-nm" name="rawmtrl_nm"
-                          class="form-control bg-light border-0" rows="3"
+                          class="form-control bg-light border-0 v2-field-input" rows="3"
                           placeholder="BOM 탭에서 원재료를 등록하면 자동으로 연결됩니다. 직접 입력도 가능합니다."
-                          style="border-radius:8px; padding:10px 14px;">{{ product.rawmtrl_nm|default:"" }}</textarea>
+                         >{{ product.rawmtrl_nm|default:"" }}</textarea>
 
                 <!-- ── 알레르기 감지 패널 (Google Material Style) ── -->
                 <div class="allergen-panel-root mt-2">
@@ -691,76 +689,76 @@
                 <input type="hidden" id="field-allergens" name="allergens" value="{{ product.allergens|default:'' }}">
             </div>
             <div class="col-12">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">주의사항</label>
+                <label class="form-label v2-field-label">주의사항</label>
                 <textarea id="field-cautions" name="cautions"
-                          class="form-control bg-light border-0" rows="3"
+                          class="form-control bg-light border-0 v2-field-input" rows="3"
                           placeholder="주의사항을 입력하세요"
-                          style="border-radius:8px; padding:10px 14px;">{{ product.cautions|default:"" }}</textarea>
+                         >{{ product.cautions|default:"" }}</textarea>
                 <!-- 주의사항 빠른 입력 버튼 패널 -->
                 <div class="mt-2 p-2 rounded" style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px;">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <small style="color:#666; font-weight:500; font-size:11px;"><i class="fas fa-bolt me-1 text-warning"></i>자주 사용하는 문구</small>
                         <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllProductQuickTexts('cautions')" style="font-size:0.65rem; padding:0.1rem 0.5rem;">
+                            <button type="button" class="btn btn-outline-success v2-chip-btn" onclick="addAllProductQuickTexts('cautions')">
                                 <i class="fas fa-plus-circle me-1"></i>전체 추가
                             </button>
-                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllProductQuickTexts('cautions')" style="font-size:0.65rem; padding:0.1rem 0.5rem;">
+                            <button type="button" class="btn btn-outline-danger v2-chip-btn" onclick="clearAllProductQuickTexts('cautions')">
                                 <i class="fas fa-eraser me-1"></i>일괄 해제
                             </button>
                         </div>
                     </div>
                     <div class="d-flex flex-wrap gap-1">
-                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="부정·불량식품 신고는 국번없이 1399" title="부정불량식품 신고 (법정 의무)" style="font-size:0.65rem;"><i class="fas fa-phone-alt me-1"></i>1399</button>
-                        <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="이 제품에는 페닐알라닌이 함유되어 있습니다. (페닐케톤뇨증 환자 주의)" title="아스파탐 법정 필수 표시" style="font-size:0.65rem;"><i class="fas fa-exclamation-circle me-1"></i>페닐알라닌</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="개봉 후에는 변질될 우려가 있으니 반드시 밀봉하여 냉장 보관하시고, 가급적 빨리 섭취하시기 바랍니다." title="개봉 후 보관 및 취급" style="font-size:0.65rem;"><i class="fas fa-box-open me-1"></i>개봉후보관</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="직사광선을 피하고 서늘한 곳에 보관하시기 바랍니다." title="보관 조건" style="font-size:0.65rem;"><i class="fas fa-sun me-1"></i>직사광선</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="냉동 제품은 해동 후 재냉동하지 마시기 바랍니다." title="재냉동 금지" style="font-size:0.65rem;"><i class="fas fa-snowflake me-1"></i>재냉동금지</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="용기가 파손되거나 부풀어 있는 경우 섭취하지 마시기 바랍니다." title="용기 파손 주의" style="font-size:0.65rem;"><i class="fas fa-box me-1"></i>용기파손</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="어린이가 먹을 경우 보호자의 지도가 필요합니다." title="어린이 주의" style="font-size:0.65rem;"><i class="fas fa-child me-1"></i>어린이</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="질식의 위험이 있으니 주의하시기 바랍니다." title="질식 주의" style="font-size:0.65rem;"><i class="fas fa-lungs me-1"></i>질식</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="뜨거우니 화상에 주의하시기 바랍니다." title="화상 주의" style="font-size:0.65rem;"><i class="fas fa-fire me-1"></i>화상</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="제품 개봉 시 내용물이 튈 수 있으니 주의하시기 바랍니다." title="개봉 주의" style="font-size:0.65rem;"><i class="fas fa-exclamation me-1"></i>튐주의</button>
-                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="특정 질환이 있거나 의약품 복용 중이신 분은 섭취 전 의사 및 전문가와 상담하시기 바랍니다. 본 제품은 질병의 예방 및 치료를 위한 의약품이 아닙니다." title="건강기능식품 일반 주의" style="font-size:0.65rem;"><i class="fas fa-user-md me-1"></i>의약품복용자</button>
-                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="임산부 및 수유부, 어린이(또는 특정 연령층)는 섭취에 주의해야 합니다." title="특정 대상 주의" style="font-size:0.65rem;"><i class="fas fa-baby me-1"></i>임산부/어린이</button>
-                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 product-quick-text-btn" data-field="cautions" data-text="본 제품 섭취 시 이상 사례 발생 또는 불편함을 느끼는 경우, 섭취를 중단하고 소비자 상담실 또는 1577-2488(이상사례 신고 핫라인)로 신고하여 주십시오." title="이상사례 신고" style="font-size:0.65rem;"><i class="fas fa-phone-volume me-1"></i>이상사례</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm product-quick-text-btn" data-field="cautions" data-text="부정·불량식품 신고는 국번없이 1399" title="부정불량식품 신고 (법정 의무)"><i class="fas fa-phone-alt me-1"></i>1399</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm product-quick-text-btn" data-field="cautions" data-text="이 제품에는 페닐알라닌이 함유되어 있습니다. (페닐케톤뇨증 환자 주의)" title="아스파탐 법정 필수 표시"><i class="fas fa-exclamation-circle me-1"></i>페닐알라닌</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="개봉 후에는 변질될 우려가 있으니 반드시 밀봉하여 냉장 보관하시고, 가급적 빨리 섭취하시기 바랍니다." title="개봉 후 보관 및 취급"><i class="fas fa-box-open me-1"></i>개봉후보관</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="직사광선을 피하고 서늘한 곳에 보관하시기 바랍니다." title="보관 조건"><i class="fas fa-sun me-1"></i>직사광선</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="냉동 제품은 해동 후 재냉동하지 마시기 바랍니다." title="재냉동 금지"><i class="fas fa-snowflake me-1"></i>재냉동금지</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="용기가 파손되거나 부풀어 있는 경우 섭취하지 마시기 바랍니다." title="용기 파손 주의"><i class="fas fa-box me-1"></i>용기파손</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="어린이가 먹을 경우 보호자의 지도가 필요합니다." title="어린이 주의"><i class="fas fa-child me-1"></i>어린이</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="질식의 위험이 있으니 주의하시기 바랍니다." title="질식 주의"><i class="fas fa-lungs me-1"></i>질식</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="뜨거우니 화상에 주의하시기 바랍니다." title="화상 주의"><i class="fas fa-fire me-1"></i>화상</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="제품 개봉 시 내용물이 튈 수 있으니 주의하시기 바랍니다." title="개봉 주의"><i class="fas fa-exclamation me-1"></i>튐주의</button>
+                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="cautions" data-text="특정 질환이 있거나 의약품 복용 중이신 분은 섭취 전 의사 및 전문가와 상담하시기 바랍니다. 본 제품은 질병의 예방 및 치료를 위한 의약품이 아닙니다." title="건강기능식품 일반 주의"><i class="fas fa-user-md me-1"></i>의약품복용자</button>
+                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="cautions" data-text="임산부 및 수유부, 어린이(또는 특정 연령층)는 섭취에 주의해야 합니다." title="특정 대상 주의"><i class="fas fa-baby me-1"></i>임산부/어린이</button>
+                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="cautions" data-text="본 제품 섭취 시 이상 사례 발생 또는 불편함을 느끼는 경우, 섭취를 중단하고 소비자 상담실 또는 1577-2488(이상사례 신고 핫라인)로 신고하여 주십시오." title="이상사례 신고"><i class="fas fa-phone-volume me-1"></i>이상사례</button>
                     </div>
                 </div>
             </div>
             <div class="col-12">
-                <label class="form-label" style="font-size:13px; font-weight:500; color:var(--text-secondary);">기타표시사항</label>
+                <label class="form-label v2-field-label">기타표시사항</label>
                 <textarea id="field-additional-info" name="additional_info"
-                          class="form-control bg-light border-0" rows="3"
+                          class="form-control bg-light border-0 v2-field-input" rows="3"
                           placeholder="기타 표시사항을 입력하세요"
-                          style="border-radius:8px; padding:10px 14px;">{{ product.additional_info|default:"" }}</textarea>
+                         >{{ product.additional_info|default:"" }}</textarea>
                 <!-- 기타표시사항 빠른 입력 버튼 패널 -->
                 <div class="mt-2 p-2 rounded" style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px;">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <small style="color:#666; font-weight:500; font-size:11px;"><i class="fas fa-bolt me-1 text-warning"></i>자주 사용하는 문구</small>
                         <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-success btn-sm" onclick="addAllProductQuickTexts('additional_info')" style="font-size:0.65rem; padding:0.1rem 0.5rem;">
+                            <button type="button" class="btn btn-outline-success v2-chip-btn" onclick="addAllProductQuickTexts('additional_info')">
                                 <i class="fas fa-plus-circle me-1"></i>전체 추가
                             </button>
-                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearAllProductQuickTexts('additional_info')" style="font-size:0.65rem; padding:0.1rem 0.5rem;">
+                            <button type="button" class="btn btn-outline-danger v2-chip-btn" onclick="clearAllProductQuickTexts('additional_info')">
                                 <i class="fas fa-eraser me-1"></i>일괄 해제
                             </button>
                         </div>
                     </div>
                     <div class="d-flex flex-wrap gap-1">
-                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="제품에 대한 문의 사항 및 상담은 종합상담센터 1577-1255 (유료)로 연락 주시기 바랍니다." title="소비자 상담실" style="font-size:0.65rem;"><i class="fas fa-headset me-1"></i>상담센터</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="본 제품은 공정거래위원회 고시 소비자분쟁해결기준에 의거, 교환 또는 보상받을 수 있습니다." title="품질보증" style="font-size:0.65rem;"><i class="fas fa-certificate me-1"></i>품질보증</button>
-                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="HACCP 인증 제품" title="HACCP 인증" style="font-size:0.65rem;"><i class="fas fa-check-circle me-1"></i>HACCP</button>
-                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="ISO 22000 인증" title="ISO 22000" style="font-size:0.65rem;"><i class="fas fa-award me-1"></i>ISO22000</button>
-                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="유기농 인증 제품" title="유기농 인증" style="font-size:0.65rem;"><i class="fas fa-leaf me-1"></i>유기농</button>
-                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="KS 인증 제품" title="KS 인증" style="font-size:0.65rem;"><i class="fas fa-stamp me-1"></i>KS</button>
-                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="전통식품 품질인증" title="전통식품" style="font-size:0.65rem;"><i class="fas fa-landmark me-1"></i>전통식품</button>
-                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="우수식품인증(GMP)" title="GMP" style="font-size:0.65rem;"><i class="fas fa-star me-1"></i>GMP</button>
-                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="저탄소 인증 제품" title="저탄소 인증" style="font-size:0.65rem;"><i class="fas fa-seedling me-1"></i>저탄소</button>
-                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="무 글루텐 (Gluten Free)" title="글루텐 프리" style="font-size:0.65rem;"><i class="fas fa-ban me-1"></i>무글루텐</button>
-                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="비건 인증 (Vegan)" title="비건 인증" style="font-size:0.65rem;"><i class="fas fa-leaf me-1"></i>비건</button>
-                        <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="할랄(Halal) 인증 제품" title="할랄 인증" style="font-size:0.65rem;"><i class="fas fa-moon me-1"></i>할랄</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="무(無) MSG, 무(無) 합성보존료, 무(無) 합성착색료" title="무첨가" style="font-size:0.65rem;"><i class="fas fa-ban me-1"></i>무첨가</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="Non-GMO 제품" title="Non-GMO" style="font-size:0.65rem;"><i class="fas fa-dna me-1"></i>Non-GMO</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 product-quick-text-btn" data-field="additional_info" data-text="저나트륨 제품" title="저나트륨" style="font-size:0.65rem;"><i class="fas fa-heart me-1"></i>저나트륨</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm product-quick-text-btn" data-field="additional_info" data-text="제품에 대한 문의 사항 및 상담은 종합상담센터 1577-1255 (유료)로 연락 주시기 바랍니다." title="소비자 상담실"><i class="fas fa-headset me-1"></i>상담센터</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm product-quick-text-btn" data-field="additional_info" data-text="본 제품은 공정거래위원회 고시 소비자분쟁해결기준에 의거, 교환 또는 보상받을 수 있습니다." title="품질보증"><i class="fas fa-certificate me-1"></i>품질보증</button>
+                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="HACCP 인증 제품" title="HACCP 인증"><i class="fas fa-check-circle me-1"></i>HACCP</button>
+                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="ISO 22000 인증" title="ISO 22000"><i class="fas fa-award me-1"></i>ISO22000</button>
+                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="유기농 인증 제품" title="유기농 인증"><i class="fas fa-leaf me-1"></i>유기농</button>
+                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="KS 인증 제품" title="KS 인증"><i class="fas fa-stamp me-1"></i>KS</button>
+                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="전통식품 품질인증" title="전통식품"><i class="fas fa-landmark me-1"></i>전통식품</button>
+                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="우수식품인증(GMP)" title="GMP"><i class="fas fa-star me-1"></i>GMP</button>
+                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="저탄소 인증 제품" title="저탄소 인증"><i class="fas fa-seedling me-1"></i>저탄소</button>
+                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="additional_info" data-text="무 글루텐 (Gluten Free)" title="글루텐 프리"><i class="fas fa-ban me-1"></i>무글루텐</button>
+                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="additional_info" data-text="비건 인증 (Vegan)" title="비건 인증"><i class="fas fa-leaf me-1"></i>비건</button>
+                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="additional_info" data-text="할랄(Halal) 인증 제품" title="할랄 인증"><i class="fas fa-moon me-1"></i>할랄</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="additional_info" data-text="무(無) MSG, 무(無) 합성보존료, 무(無) 합성착색료" title="무첨가"><i class="fas fa-ban me-1"></i>무첨가</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="additional_info" data-text="Non-GMO 제품" title="Non-GMO"><i class="fas fa-dna me-1"></i>Non-GMO</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="additional_info" data-text="저나트륨 제품" title="저나트륨"><i class="fas fa-heart me-1"></i>저나트륨</button>
                     </div>
                 </div>
             </div>
@@ -769,14 +767,14 @@
 </div>
 
 <!--  맞춤항목 카드 -->
-<div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;" id="section-custom-fields">
-    <div class="card-body p-4">
+<div class="card border-0 shadow-sm mb-3 v2-card" id="section-custom-fields">
+    <div class="card-body p-3">
         <div class="d-flex align-items-center justify-content-between mb-3">
-            <h6 class="fw-semibold mb-0" style="color: var(--text-primary); font-size: 16px;">
+            <h6 class="fw-semibold mb-0 v2-card-title">
                 <i class="bi bi-tags text-primary me-2"></i>맞춤항목
             </h6>
-            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addCustomFieldRow()">
-                <i class="bi bi-plus-lg me-1"></i>항목 추가
+            <button type="button" class="btn btn-outline-primary v2-btn-sm" onclick="addCustomFieldRow()">
+                <i class="bi bi-plus-lg"></i>항목 추가
             </button>
         </div>
         <div class="row g-2 mb-2 d-none" id="custom-fields-header">
@@ -1415,7 +1413,7 @@ function addCustomFieldRow(name, value) {
                  'style="border-radius:6px;" oninput="syncCustomFieldsJson()">' +
         '</div>' +
         '<div class="col-auto">' +
-          '<button type="button" class="btn btn-sm btn-outline-danger px-2" onclick="removeCustomFieldRow(this)">' +
+          '<button type="button" class="btn btn-outline-danger v2-btn-sm" onclick="removeCustomFieldRow(this)">' +
             '<i class="bi bi-x-lg"></i>' +
           '</button>' +
         '</div>';

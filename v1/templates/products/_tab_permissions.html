@@ -16,8 +16,8 @@
                 <div class="fw-bold mb-3" style="font-size: 13px; color: #202124;">
                     <i class="bi bi-people me-1"></i>팀 멤버
                 </div>
-                <button class="btn btn-sm btn-primary w-100 mb-3" type="button" onclick="openQuickInvite()" style="font-size: 13px;{% if user_role != 'OWNER' and user_role != 'EDITOR' %} display:none;{% endif %}">
-                    <i class="bi bi-person-plus me-1"></i>새 사람 초대
+                <button class="btn btn-primary v2-btn w-100 mb-3" type="button" onclick="openQuickInvite()" style="{% if user_role != 'OWNER' and user_role != 'EDITOR' %}display:none;{% endif %}">
+                    <i class="bi bi-person-plus"></i>새 사람 초대
                 </button>
                 <div class="mb-3">
                     <input type="text" class="form-control form-control-sm" id="palette-search" placeholder="이름 또는 이메일 검색..." onkeyup="filterPalette()" style="font-size: 12px;">
@@ -369,11 +369,11 @@
                 </div>
 
                 <div class="d-grid gap-2">
-                    <button class="btn btn-sm btn-primary" onclick="savePersonDetails()" style="font-size: 12px;">
-                        <i class="bi bi-check2 me-1"></i>변경사항 저장
+                    <button class="btn btn-primary v2-btn-sm" onclick="savePersonDetails()">
+                        <i class="bi bi-check2"></i>변경사항 저장
                     </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deletePerson()" id="delete-person-btn" style="font-size: 12px;">
-                        <i class="bi bi-trash me-1"></i>공유 완전 삭제
+                    <button class="btn btn-outline-danger v2-btn-sm" onclick="deletePerson()" id="delete-person-btn">
+                        <i class="bi bi-trash"></i>공유 완전 삭제
                     </button>
                     <div class="alert alert-info mb-0 mt-2" style="font-size: 11px; padding: 8px;">
                         <i class="bi bi-info-circle me-1"></i>

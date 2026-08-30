@@ -91,6 +91,111 @@
 }
 
 /* -------------------------
+   3-1. 부트스트랩 버튼의 크기·모양 통일 (.btn 과 함께 쓴다)
+
+   위의 .v2-action-btn 은 색까지 정해진 완성형이라, 위험(삭제)·성공(무기한)
+   같은 색이 필요한 자리에는 쓸 수 없어서 화면마다 부트스트랩 .btn 을 쓰되
+   크기를 인라인 style 로 제각각 지정해 왔다. 문서함 한 화면에만 13px / 11px /
+   10px / 기본(14px) 네 종류에 radius 도 4px / pill / 원형 / 기본이 섞여 있었다.
+
+   색은 부트스트랩(btn-outline-danger 등)에 맡기고 **크기와 모양만** 아래 세
+   가지로 고정한다. .btn 과 함께 써서 부트스트랩의 .btn-sm 보다 우선한다
+   (0-2-0 > 0-1-0) — 로드 순서에 기대지 않기 위함.
+
+     .v2-btn      주 액션·툴바        13px
+     .v2-btn-sm   패널 안, 인라인      12px
+     .v2-btn-icon 아이콘 전용 원형     28x28
+
+   12px 아래로는 만들지 않는다. 토큰의 본문 최소치(--ez-font-size-xs)이고,
+   그보다 작던 자리(10px 카드 액션)가 실제로 읽기 어려웠다.
+   ------------------------- */
+.btn.v2-btn,
+.btn.v2-btn-sm {
+    display:         inline-flex;
+    align-items:     center;
+    justify-content: center;
+    gap:             5px;
+    border-radius:   var(--ez-radius-pill, 20px);
+    font-weight:     500;
+    line-height:     1.4;
+    white-space:     nowrap;
+}
+.btn.v2-btn    { padding: 7px 18px; font-size: 13px; }
+.btn.v2-btn-sm { padding: 4px 12px; font-size: 12px; }
+
+/* 세로 쌓기(아이콘 위, 글자 아래) — 문서함 편집 패널의 3열 액션 */
+.btn.v2-btn-sm.v2-btn-stack {
+    flex-direction: column;
+    gap:            2px;
+    padding:        6px 4px;
+}
+.btn.v2-btn-stack .bi { font-size: 14px; }
+
+/* 본문 안에 섞여 들어가는 텍스트 링크형 버튼 — 위 3단계의 크기 체계가 아니다.
+   주변 글에 맞춰 12px, 패딩 없음. */
+.btn.v2-link-btn {
+    padding:        0;
+    font-size:      12px;
+    line-height:    inherit;
+    vertical-align: baseline;
+}
+
+.btn.v2-btn-icon {
+    display:         inline-flex;
+    align-items:     center;
+    justify-content: center;
+    width:           28px;
+    height:          28px;
+    padding:         0;
+    border-radius:   50%;
+    font-size:       12px;
+    line-height:     1;
+}
+
+/* -------------------------
+   3-2. 폼 필드 라벨 (제품 상세 기본정보 탭 등)
+   같은 선언(13px / 500 / --text-secondary)이 템플릿마다 수십 번 인라인으로
+   반복돼 있었다.
+   ------------------------- */
+.v2-field-label {
+    display:       block;
+    margin-bottom: 4px;
+    font-size:     13px;
+    font-weight:   500;
+    color:         var(--text-secondary, #5f6368);
+}
+
+/* 같은 카드 안에서 반복되는 입력칸. 세로 패딩을 10px -> 7px 로 줄였다 —
+   한 행에 필드가 2~3개인데 행 간격까지 24px 이라 한 화면에 6~8필드밖에
+   안 들어갔다. */
+.form-control.v2-field-input,
+.form-select.v2-field-input {
+    border-radius: var(--ez-radius-md, 8px);
+    padding:       7px 12px;
+}
+
+/* 섹션 카드와 그 제목 */
+.v2-card       { border-radius: var(--ez-radius-lg, 12px); }
+.v2-card-title {
+    color:     var(--text-primary, #202124);
+    font-size: 16px;
+}
+
+/* 상용문구 칩 (주의사항·기타표시사항 빠른 입력).
+   28개가 한 줄에 늘어서는 조밀한 도구모음이라 위의 버튼 3단계와는 크기 체계가
+   다르다. 같은 선언이 버튼마다 인라인으로 붙어 있던 것만 여기로 모았다.
+   크기는 그대로 뒀다 — 12px 로 올리면 줄바꿈이 크게 달라져서, 눈으로 보고
+   정할 일이다. */
+.btn.product-quick-text-btn,
+.btn.v2-chip-btn {
+    padding:       0.1rem 0.5rem;
+    font-size:     0.65rem;
+    border-radius: var(--ez-radius-sm, 4px);
+    line-height:   1.7;
+    white-space:   nowrap;
+}
+
+/* -------------------------
    4. 탑바 검색 필드 (내 제품 드라이브·즐겨찾기 공용)
    .v2-topbar-search 를 <form> 에 추가
    ------------------------- */

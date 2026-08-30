@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 
 from django.conf import settings
-from django.core.checks import Error, register
+from django.core.checks import Error, Warning, register
 
 _OPEN = re.compile(r'\{#')
 
@@ -60,3 +60,68 @@ def check_multiline_template_comments(app_configs, **kwargs):
                     id='templates.E001',
                 ))
     return errors
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 제품 관리 화면의 버튼 크기 통일
+#
+# 탭 7개가 서로 다른 시대의 스타일로 쌓이면서, 문서함 한 화면에만 버튼 크기가
+# 13px / 11px / 10px / 기본(14px) 네 종류였고 radius 도 4px / pill / 원형 /
+# 기본이 섞여 있었다. products_common.css 에 크기 3단계(.v2-btn / .v2-btn-sm /
+# .v2-btn-icon)를 두고 전부 그리로 옮겼다.
+#
+# 다시 인라인으로 크기를 지정하기 시작하면 같은 상태로 돌아간다. 눈으로는
+# "조금 다르다" 정도로만 보여서 리뷰에서 잘 안 걸린다. 경고로 남겨 둔다.
+#
+# 크기(font-size/padding)만 본다 — 색·표시여부·폭 같은 인라인은 정상적인 쓰임이 많다.
+#
+# 범위를 제품 상세 화면으로 한정한다. products/ 전체를 보면 아직 정리하지 않은
+# 화면(제품 탐색기·BOM·연락처 등)까지 122건이 잡히는데, 배포 때마다 도는
+# manage.py check 가 매번 100줄을 뱉으면 아무도 안 읽게 된다. 다른 화면을 정리할
+# 때 여기에 파일을 하나씩 추가하는 방식으로 넓힌다.
+
+_CHECKED_TEMPLATES = (
+    'product_detail.html',
+    '_tab_basic_info.html',
+    '_tab_documents.html',
+    '_tab_permissions.html',
+    '_tab_label.html',
+)
+
+_BTN_TAG = re.compile(r'<(?:button|a)\b[^>]*\bclass="[^"]*\bbtn\b[^"]*"[^>]*>', re.I)
+_SIZE_IN_STYLE = re.compile(r'style="[^"]*\b(?:font-size|padding)\s*:', re.I)
+# 크기를 담당하는 부트스트랩 클래스 (v2-btn-sm 안의 btn-sm 은 제외하려고 경계를 씀)
+_BS_SIZE_CLASS = re.compile(r'(?<!-)\bbtn-(?:sm|lg|xs)\b')
+_SIZED_BY_CLASS = ('v2-btn', 'v2-chip-btn', 'v2-link-btn', 'product-quick-text-btn')
+
+
+@register()
+def check_product_button_sizing(app_configs, **kwargs):
+    """제품 상세 템플릿에서 버튼 크기를 인라인·부트스트랩으로 지정한 곳을 찾는다."""
+    warnings = []
+    for root in _template_dirs():
+        products = root / 'products'
+        if not products.is_dir():
+            continue
+        for name in _CHECKED_TEMPLATES:
+            path = products / name
+            if not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding='utf-8')
+            except (OSError, UnicodeDecodeError):
+                continue
+            for m in _BTN_TAG.finditer(text):
+                tag = m.group(0)
+                if any(cls in tag for cls in _SIZED_BY_CLASS):
+                    continue
+                if not (_SIZE_IN_STYLE.search(tag) or _BS_SIZE_CLASS.search(tag)):
+                    continue
+                line = text.count('\n', 0, m.start()) + 1
+                warnings.append(Warning(
+                    f'{path.name}:{line} 버튼 크기를 인라인/btn-sm 으로 지정했습니다.',
+                    hint='products_common.css 의 .v2-btn / .v2-btn-sm / .v2-btn-icon 중 하나를 쓰세요.',
+                    obj=str(path),
+                    id='products.W001',
+                ))
+    return warnings

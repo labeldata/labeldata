@@ -31,7 +31,7 @@
                        onclick="toggleFavorite()"
                        title="{% if metadata.starred_yn %}즐겨찾기 해제{% else %}즐겨찾기 추가{% endif %}"></i>
 
-                    <button class="btn btn-sm btn-link p-0 text-decoration-none text-muted d-flex align-items-center ms-2" type="button" onclick="saveProductInfo()">
+                    <button class="btn v2-link-btn btn-link p-0 text-decoration-none text-muted d-flex align-items-center ms-2" type="button" onclick="saveProductInfo()">
                         <i class="bi bi-cloud-arrow-up me-1"></i> 저장
                     </button>
                     <span id="save-status" class="text-success" style="opacity:0;transition:opacity 0.4s ease;">
@@ -121,73 +121,73 @@
             <span id="status-action-btns" class="d-flex align-items-center gap-1">
             {% if product_status == 'DRAFT' %}
                 {% if 'requesting' in available_actions %}
-                <button class="btn btn-sm btn-outline-primary me-1" type="button" onclick="requestStatusChange('REQUESTING')">
-                    자료 요청 <i class="bi bi-arrow-right ms-1"></i>
+                <button class="btn v2-btn-sm btn-outline-primary me-1" type="button" onclick="requestStatusChange('REQUESTING')">
+                    자료 요청 <i class="bi bi-arrow-right"></i>
                 </button>
                 {% elif 'review' in available_actions %}
-                <button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('REVIEW', '협력업체 담당자가 지정되지 않아 검토 단계로 바로 이동합니다.')">
-                    검토 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i>
+                <button class="btn v2-btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('REVIEW', '협력업체 담당자가 지정되지 않아 검토 단계로 바로 이동합니다.')">
+                    검토 요청으로 건너뛰기 <i class="bi bi-skip-forward"></i>
                 </button>
                 {% elif 'pending' in available_actions %}
-                <button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '협력업체·검토자가 미지정으로 승인 대기 단계로 바로 이동합니다.')">
-                    승인 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i>
+                <button class="btn v2-btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '협력업체·검토자가 미지정으로 승인 대기 단계로 바로 이동합니다.')">
+                    승인 요청으로 건너뛰기 <i class="bi bi-skip-forward"></i>
                 </button>
                 {% elif 'confirmed' in available_actions %}
-                <button class="btn btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '담당자가 지정되지 않아 바로 승인 완료 처리합니다.')">
-                    바로 승인 완료 <i class="bi bi-skip-forward ms-1"></i>
+                <button class="btn v2-btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '담당자가 지정되지 않아 바로 승인 완료 처리합니다.')">
+                    바로 승인 완료 <i class="bi bi-skip-forward"></i>
                 </button>
                 {% endif %}
             {% elif product_status == 'REQUESTING' %}
                 {% if 'submitted' in available_actions %}
-                <button class="btn btn-sm btn-primary me-1" type="button" onclick="changeStatus('SUBMITTED')">
-                    제출 완료 <i class="bi bi-check2 ms-1"></i>
+                <button class="btn v2-btn-sm btn-primary me-1" type="button" onclick="changeStatus('SUBMITTED')">
+                    제출 완료 <i class="bi bi-check2"></i>
                 </button>
                 {% endif %}
                 {% if 'draft' in available_actions %}
-                <button class="btn btn-sm btn-outline-danger" type="button" onclick="changeStatus('DRAFT')">요청 취소</button>
+                <button class="btn v2-btn-sm btn-outline-danger" type="button" onclick="changeStatus('DRAFT')">요청 취소</button>
                 {% endif %}
             {% elif product_status == 'SUBMITTED' %}
                 {% if 'review' in available_actions %}
-                <button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('REVIEW')">
-                    검토 시작 <i class="bi bi-arrow-right ms-1"></i>
+                <button class="btn v2-btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('REVIEW')">
+                    검토 시작 <i class="bi bi-arrow-right"></i>
                 </button>
                 {% elif 'pending' in available_actions %}
-                <button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '검토자가 지정되지 않아 승인 대기 단계로 바로 이동합니다.')">
-                    승인 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i>
+                <button class="btn v2-btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '검토자가 지정되지 않아 승인 대기 단계로 바로 이동합니다.')">
+                    승인 요청으로 건너뛰기 <i class="bi bi-skip-forward"></i>
                 </button>
                 {% elif 'confirmed' in available_actions %}
-                <button class="btn btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '검토자·승인자가 미지정으로 바로 승인 완료 처리합니다.')">
-                    바로 승인 완료 <i class="bi bi-skip-forward ms-1"></i>
+                <button class="btn v2-btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '검토자·승인자가 미지정으로 바로 승인 완료 처리합니다.')">
+                    바로 승인 완료 <i class="bi bi-skip-forward"></i>
                 </button>
                 {% endif %}
                 {% if 'requesting' in available_actions %}
-                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="changeStatus('REQUESTING')">보완 요청</button>
+                <button class="btn v2-btn-sm btn-outline-secondary" type="button" onclick="changeStatus('REQUESTING')">보완 요청</button>
                 {% endif %}
             {% elif product_status == 'REVIEW' %}
                 {% if 'pending' in available_actions %}
-                <button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('PENDING')">
-                    승인 요청 <i class="bi bi-arrow-right ms-1"></i>
+                <button class="btn v2-btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('PENDING')">
+                    승인 요청 <i class="bi bi-arrow-right"></i>
                 </button>
                 {% endif %}
                 {% if 'submitted' in available_actions %}
-                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="changeStatus('SUBMITTED')">재검토</button>
+                <button class="btn v2-btn-sm btn-outline-secondary" type="button" onclick="changeStatus('SUBMITTED')">재검토</button>
                 {% endif %}
             {% elif product_status == 'PENDING' %}
                 {% if 'confirmed' in available_actions %}
-                <button class="btn btn-sm btn-success me-1" type="button" onclick="changeStatus('CONFIRMED')">
-                    최종 승인 <i class="bi bi-patch-check ms-1"></i>
+                <button class="btn v2-btn-sm btn-success me-1" type="button" onclick="changeStatus('CONFIRMED')">
+                    최종 승인 <i class="bi bi-patch-check"></i>
                 </button>
                 {% endif %}
                 {% if 'review' in available_actions %}
-                <button class="btn btn-sm btn-outline-danger" type="button" onclick="changeStatus('REVIEW')">반려</button>
+                <button class="btn v2-btn-sm btn-outline-danger" type="button" onclick="changeStatus('REVIEW')">반려</button>
                 {% endif %}
             {% elif product_status == 'CONFIRMED' %}
                 {% if 'draft' in available_actions %}
-                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="changeStatus('DRAFT')">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>신규 버전 작성
+                <button class="btn v2-btn-sm btn-outline-secondary" type="button" onclick="changeStatus('DRAFT')">
+                    <i class="bi bi-arrow-counterclockwise"></i>신규 버전 작성
                 </button>
                 {% else %}
-                <button class="btn btn-sm btn-light border" type="button" disabled>승인 완료</button>
+                <button class="btn v2-btn-sm btn-light border" type="button" disabled>승인 완료</button>
                 {% endif %}
             {% endif %}
             </span>
@@ -221,11 +221,11 @@
                                     <span>저장하지 않은 변경사항이 있습니다</span>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-light" onclick="discardChanges()">
-                                        <i class="bi bi-x-circle me-1"></i>취소
+                                    <button type="button" class="btn v2-btn-sm btn-light" onclick="discardChanges()">
+                                        <i class="bi bi-x-circle"></i>취소
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-primary" onclick="saveBasicInfo()">
-                                        <i class="bi bi-check-circle me-1"></i>변경사항 저장
+                                    <button type="button" class="btn v2-btn-sm btn-primary" onclick="saveBasicInfo()">
+                                        <i class="bi bi-check-circle"></i>변경사항 저장
                                     </button>
                                 </div>
                             </div>
@@ -371,7 +371,7 @@
             <div class="p-3 border-bottom">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <strong id="comment-sidebar-title">댓글 및 활동</strong>
-                    <button class="btn btn-sm btn-link text-muted" type="button" onclick="toggleWorkspaceSidebar()">
+                    <button class="btn v2-link-btn btn-link text-muted" type="button" onclick="toggleWorkspaceSidebar()">
                         <i class="bi bi-x-lg"></i>
                     </button>
                 </div>
@@ -438,9 +438,9 @@
                             {% endif %}{{ comment.content }}
                         </div>
                         <div class="d-flex gap-2 mt-2">
-                            <button class="btn btn-sm btn-link p-0 text-decoration-none comment-action-btn" type="button" onclick="toggleReplyInput({{ comment.comment_id }})">답글</button>
+                            <button class="btn v2-link-btn btn-link p-0 text-decoration-none comment-action-btn" type="button" onclick="toggleReplyInput({{ comment.comment_id }})">답글</button>
                             {% if comment.author == request.user or user_role == 'OWNER' %}
-                            <button class="btn btn-sm btn-link p-0 text-decoration-none text-danger comment-action-btn" type="button" onclick="deleteComment({{ comment.comment_id }})">삭제</button>
+                            <button class="btn v2-link-btn btn-link p-0 text-decoration-none text-danger comment-action-btn" type="button" onclick="deleteComment({{ comment.comment_id }})">삭제</button>
                             {% endif %}
                         </div>
                         <div id="reply-box-{{ comment.comment_id }}" class="mt-2 d-none">
@@ -478,7 +478,7 @@
                                     <div class="mt-1 reply-body">{{ reply.content }}</div>
                                     {% if reply.author == request.user or user_role == 'OWNER' %}
                                     <div classd-flex justify-content-end mt-1">
-                                        <button class="btn btn-sm btn-link p-0 text-decoration-none text-danger reply-action-btn" type="button" onclick="deleteComment({{ reply.comment_id }})">삭제</button>
+                                        <button class="btn v2-link-btn btn-link p-0 text-decoration-none text-danger reply-action-btn" type="button" onclick="deleteComment({{ reply.comment_id }})">삭제</button>
                                     </div>
                                     {% endif %}
                                 </div>
@@ -771,7 +771,7 @@
                     <div class="text-center text-muted py-3">
                         <i class="bi bi-inbox"></i>
                         <p class="mb-0 mt-2 sidebar-info-text">공유된 멤버가 없습니다.</p>
-                        <button class="btn btn-sm btn-primary mt-2" 
+                        <button class="btn v2-btn-sm btn-primary mt-2" 
                                 data-bs-toggle="modal" 
                                 data-bs-target="#quickInviteModal"
                                 onclick="closeRoleAssignModal()">
@@ -894,9 +894,9 @@
                 해당 단계의 담당자가 지정되지 않았습니다.
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="goToShareTab()">
-                    <i class="bi bi-person-plus me-1"></i>권한 설정으로 이동
+                <button type="button" class="btn v2-btn-sm btn-outline-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn v2-btn-sm btn-primary" onclick="goToShareTab()">
+                    <i class="bi bi-person-plus"></i>권한 설정으로 이동
                 </button>
             </div>
         </div>
@@ -1371,23 +1371,23 @@ function _updateStatusButtons() {
     let html = '';
     if (PRODUCT_STATUS === 'DRAFT') {
         if (HAS_UPLOADER) {
-            html = `<button class="btn btn-sm btn-outline-primary me-1" type="button" onclick="requestStatusChange('REQUESTING')">자료 요청 <i class="bi bi-arrow-right ms-1"></i></button>`;
+            html = `<button class="btn v2-btn-sm btn-outline-primary me-1" type="button" onclick="requestStatusChange('REQUESTING')">자료 요청 <i class="bi bi-arrow-right"></i></button>`;
         } else if (HAS_REVIEWER) {
-            html = `<button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('REVIEW', '협력업체 담당자가 지정되지 않아 검토 단계로 바로 이동합니다.')">검토 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i></button>`;
+            html = `<button class="btn v2-btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('REVIEW', '협력업체 담당자가 지정되지 않아 검토 단계로 바로 이동합니다.')">검토 요청으로 건너뛰기 <i class="bi bi-skip-forward"></i></button>`;
         } else if (HAS_APPROVER) {
-            html = `<button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '협력업체·검토자가 미지정으로 승인 대기 단계로 바로 이동합니다.')">승인 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i></button>`;
+            html = `<button class="btn v2-btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '협력업체·검토자가 미지정으로 승인 대기 단계로 바로 이동합니다.')">승인 요청으로 건너뛰기 <i class="bi bi-skip-forward"></i></button>`;
         } else {
-            html = `<button class="btn btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '담당자가 지정되지 않아 바로 승인 완료 처리합니다.')">바로 승인 완료 <i class="bi bi-skip-forward ms-1"></i></button>`;
+            html = `<button class="btn v2-btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '담당자가 지정되지 않아 바로 승인 완료 처리합니다.')">바로 승인 완료 <i class="bi bi-skip-forward"></i></button>`;
         }
     } else if (PRODUCT_STATUS === 'SUBMITTED') {
         if (HAS_REVIEWER) {
-            html = `<button class="btn btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('REVIEW')">검토 시작 <i class="bi bi-arrow-right ms-1"></i></button>`;
+            html = `<button class="btn v2-btn-sm btn-warning text-dark me-1" type="button" onclick="requestStatusChange('REVIEW')">검토 시작 <i class="bi bi-arrow-right"></i></button>`;
         } else if (HAS_APPROVER) {
-            html = `<button class="btn btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '검토자가 지정되지 않아 승인 대기 단계로 바로 이동합니다.')">승인 요청으로 건너뛰기 <i class="bi bi-skip-forward ms-1"></i></button>`;
+            html = `<button class="btn v2-btn-sm btn-outline-warning me-1" type="button" onclick="skipWithToast('PENDING', '검토자가 지정되지 않아 승인 대기 단계로 바로 이동합니다.')">승인 요청으로 건너뛰기 <i class="bi bi-skip-forward"></i></button>`;
         } else {
-            html = `<button class="btn btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '검토자·승인자가 미지정으로 바로 승인 완료 처리합니다.')">바로 승인 완료 <i class="bi bi-skip-forward ms-1"></i></button>`;
+            html = `<button class="btn v2-btn-sm btn-outline-success me-1" type="button" onclick="skipWithToast('CONFIRMED', '검토자·승인자가 미지정으로 바로 승인 완료 처리합니다.')">바로 승인 완료 <i class="bi bi-skip-forward"></i></button>`;
         }
-        html += `<button class="btn btn-sm btn-outline-secondary" type="button" onclick="changeStatus('REQUESTING')">보완 요청</button>`;
+        html += `<button class="btn v2-btn-sm btn-outline-secondary" type="button" onclick="changeStatus('REQUESTING')">보완 요청</button>`;
     } else {
         return; // 기타 상태는 동적 변경 불필요
     }
@@ -1605,7 +1605,7 @@ async function submitComment(parentId = null) {
                             </div>
                             <div class="mt-1 reply-body"></div>
                             <div class="d-flex justify-content-end mt-1">
-                                <button class="btn btn-sm btn-link p-0 text-decoration-none text-danger reply-action-btn" type="button" onclick="deleteComment(${result.comment.comment_id})">삭제</button>
+                                <button class="btn v2-link-btn btn-link p-0 text-decoration-none text-danger reply-action-btn" type="button" onclick="deleteComment(${result.comment.comment_id})">삭제</button>
                             </div>
                         </div>
                     `;
@@ -1636,8 +1636,8 @@ async function submitComment(parentId = null) {
                             </div>
                             <div class="mt-1 comment-body"></div>
                             <div class="d-flex gap-2 mt-2">
-                                <button class="btn btn-sm btn-link p-0 text-decoration-none comment-action-btn" type="button" onclick="toggleReplyInput(${result.comment.comment_id})">답글</button>
-                                <button class="btn btn-sm btn-link p-0 text-decoration-none text-danger comment-action-btn" type="button" onclick="deleteComment(${result.comment.comment_id})">삭제</button>
+                                <button class="btn v2-link-btn btn-link p-0 text-decoration-none comment-action-btn" type="button" onclick="toggleReplyInput(${result.comment.comment_id})">답글</button>
+                                <button class="btn v2-link-btn btn-link p-0 text-decoration-none text-danger comment-action-btn" type="button" onclick="deleteComment(${result.comment.comment_id})">삭제</button>
                             </div>
                             <div id="reply-box-${result.comment.comment_id}" class="mt-2 d-none">
                                 <div class="input-group input-group-sm">
@@ -2390,12 +2390,12 @@ function previewDocument(docId) {
                     ${extension === 'pdf' ? `
                     <div class="modal-footer bg-light border-top">
                         <div class="d-flex align-items-center gap-2 flex-grow-1">
-                            <button class="btn btn-sm btn-light" id="pdf-prev-page"><i class="bi bi-chevron-left"></i></button>
+                            <button class="btn v2-btn-sm btn-light" id="pdf-prev-page"><i class="bi bi-chevron-left"></i></button>
                             <span id="pdf-page-info" class="text-muted small">페이지 <span id="pdf-page-num">-</span> / <span id="pdf-page-count">-</span></span>
-                            <button class="btn btn-sm btn-light" id="pdf-next-page"><i class="bi bi-chevron-right"></i></button>
+                            <button class="btn v2-btn-sm btn-light" id="pdf-next-page"><i class="bi bi-chevron-right"></i></button>
                         </div>
-                        <a href="${previewUrl}" class="btn btn-primary btn-sm" download>
-                            <i class="bi bi-download me-1"></i>다운로드
+                        <a href="${previewUrl}" class="btn v2-btn-sm btn-primary" download>
+                            <i class="bi bi-download"></i>다운로드
                         </a>
                     </div>` : ''}
                 </div>
@@ -2630,7 +2630,7 @@ function displayVersionHistory(versions) {
                                 </small>
                             </td>
                             <td class="text-center">
-                                <a href="${v.file_url}" class="btn btn-sm btn-light border" download title="다운로드">
+                                <a href="${v.file_url}" class="btn v2-btn-sm btn-light border" download title="다운로드">
                                     <i class="bi bi-download"></i>
                                 </a>
                             </td>
@@ -3244,10 +3244,10 @@ function getCookie(name) {
         </div>
       </div>
       <div class="modal-footer border-0 px-4 pb-4 pt-2">
-        <button type="button" class="btn btn-primary btn-sm" data-bs-dismiss="modal">
-          <i class="bi bi-pencil me-1"></i>수정하러 가기
+        <button type="button" class="btn v2-btn-sm btn-primary" data-bs-dismiss="modal">
+          <i class="bi bi-pencil"></i>수정하러 가기
         </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="vbProceed">
+        <button type="button" class="btn v2-btn-sm btn-outline-secondary" id="vbProceed">
           사유 남기고 승인
         </button>
       </div>
