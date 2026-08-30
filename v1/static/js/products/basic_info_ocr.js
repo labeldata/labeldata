@@ -31,6 +31,9 @@
     importer_address:    { id: 'field-importer-address',     label: '수입원' },
     storage_method:      { id: 'field-storage-method',       label: '보관방법' },
     rawmtrl_nm:          { id: 'field-rawmtrl-nm',           label: '원재료명(최종표시)' },
+    // 원재료명 아래 별도 칸(검은 바탕)의 "우유, 대두, 밀 함유" 문구.
+    // 원재료가 아니라 알레르기 선언이라 따로 받는다.
+    allergens:           { id: 'field-allergens',            label: '알레르기 유발물질' },
     ingredient_info:     { id: 'field-ingredient-info',      label: '특정성분 함량' },
     frmlc_mtrqlt:        { id: 'field-frmlc-mtrqlt',         label: '포장재질' },
     pog_daycnt:          { id: 'field-pog-daycnt',           label: '소비기한' },
@@ -121,8 +124,11 @@
         + '<input type="text" class="form-control form-control-sm ocr-direct mt-1"'
         + ' placeholder="직접 입력" style="display:none;">';
     } else if (isLongValue(value)) {
-      control = '<textarea class="form-control form-control-sm ocr-value" rows="2">'
-        + esc(value) + '</textarea>';
+      // 줄 수를 내용에 맞춘다. 원재료명은 300자가 넘기도 한다 - 2줄로 고정하면
+      // 스크롤 안에 갇혀서 무엇이 들어왔는지 확인할 수가 없다.
+      var lines = Math.min(12, Math.max(2, Math.ceil(value.length / 42)));
+      control = '<textarea class="form-control form-control-sm ocr-value" rows="'
+        + lines + '">' + esc(value) + '</textarea>';
     } else {
       control = '<input type="text" class="form-control form-control-sm ocr-value"'
         + ' value="' + esc(value) + '">';
@@ -240,6 +246,12 @@
       target.value = value;
       target.dispatchEvent(new Event('input', { bubbles: true }));
       target.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // 알레르기는 hidden input 뒤에 칩 패널이 따로 있다. 값만 넣으면 칩이
+      // 안 그려지고, 저장은 되는데 화면에는 아무것도 안 보인다.
+      if (field === 'allergens' && typeof window.setProductAllergens === 'function') {
+        window.setProductAllergens(value);
+      }
 
       var box = checkboxFor(field);
       if (box && !box.disabled) {

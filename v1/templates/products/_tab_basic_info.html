@@ -1019,6 +1019,21 @@ function filterFoodTypes(selectedGroup) {
         removeCrossContaminationWarningProduct();
     };
 
+    // ── 밖에서 태그를 넣는 통로 ──
+    //
+    // 이 패널은 페이지가 열릴 때 hidden input 을 한 번 읽고 만다. 사진에서
+    // 읽은 알레르기를 나중에 hidden input 에 써 넣어도 칩이 안 그려진다.
+    // 사진 불러오기(basic_info_ocr.js)가 이 함수로 넣는다.
+    window.setProductAllergens = function(text) {
+        String(text || '')
+            .replace(/함유/g, '')
+            .split(/[,·]/)
+            .map(function (s) { return s.trim(); })
+            .filter(Boolean)
+            .forEach(function (a) { _productAllergens.set(a, 'manual'); });
+        renderAllergenTagsProduct();
+    };
+
     // ── UI 렌더 ──
     function renderAllergenTagsProduct() {
         var container = document.getElementById('field-allergen-tags');

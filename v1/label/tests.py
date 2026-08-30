@@ -1776,3 +1776,57 @@ class IngredientTextParseTests(TestCase):
     def test_빈_문자열은_빈_목록(self):
         self.assertEqual(self._parse('')['items'], [])
         self.assertEqual(self._parse(None)['items'], [])
+
+
+class OcrPromptTests(TestCase):
+    """
+    OCR 프롬프트의 항목 목록과 응답 스키마가 어긋나지 않아야 한다.
+
+    설명에만 있고 스키마에 없으면 모델이 그 키를 안 내고, 스키마에만 있고
+    설명이 없으면 무엇을 넣어야 할지 모른 채 빈 값을 낸다. 어느 쪽이든 그
+    항목만 조용히 비어서 "사진이 흐렸나" 로 보인다.
+    """
+
+    def setUp(self):
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+        self.prompt = SYSTEM_PROMPT
+
+    def _keys(self):
+        import re
+        schema = re.search(r'\{[^{]*"prdlst_nm".*\}', self.prompt, re.S).group(0)
+        return set(re.findall(r'"(\w+)":\s*\{', schema))
+
+    def _described(self):
+        import re
+        return set(re.findall(r'^- (\w+):', self.prompt, re.M))
+
+    def test_스키마와_설명이_일치한다(self):
+        self.assertEqual(self._keys(), self._described())
+
+    def test_화면이_쓰는_항목이_모두_있다(self):
+        """basic_info_ocr.js 의 FIELD_MAP 이 없는 키를 찾으면 그 칸은 안 채워진다."""
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/products/basic_info_ocr.js'
+              ).read_text(encoding='utf-8')
+        block = re.search(r'var FIELD_MAP = \{(.*?)\n  \};', js, re.S).group(1)
+        used = set(re.findall(r'^\s{4}(\w+):', block, re.M))
+        missing = sorted(used - self._keys())
+        self.assertEqual(missing, [], f'프롬프트에 없는 항목: {missing}')
+
+    def test_실제_라벨에_있는_항목을_빠뜨리지_않는다(self):
+        """운영 라벨에서 통째로 안 읽히던 것들. 프롬프트에서 사라지면 다시 그렇게 된다."""
+        for key in ['bssh_nm', 'pog_daycnt', 'storage_method', 'cautions',
+                    'allergens', 'content_weight', 'frmlc_mtrqlt']:
+            self.assertIn(key, self._keys(), f'{key} 가 스키마에서 빠졌다')
+
+    def test_응답_길이가_충분하다(self):
+        """빽빽한 라벨은 응답이 길다. 2000 이면 원재료명이 끊기고 뒤가 통째로 빠졌다."""
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
+               ).read_text(encoding='utf-8')
+        self.assertIn('max_tokens=4000', src)

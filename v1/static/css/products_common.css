@@ -268,7 +268,15 @@
    읽어낸 값이 맞는지는 결국 사진을 봐야 안다. 표시사항은 글씨가 작고 세로로
    찍힌 것도 흔해서, 회전과 확대가 있어야 실제로 읽힌다.
    ------------------------- */
-.photo-compare-table { max-height: 62vh; overflow-y: auto; }
+/* 확인 창은 화면을 넓게 쓴다. 읽을 것이 많고, 사진과 나란히 놓아야 한다. */
+#basicInfoOcrModal .modal-dialog,
+#ingredientPhotoModal .modal-dialog {
+    max-width: min(1500px, 96vw);
+}
+#basicInfoOcrModal .modal-content,
+#ingredientPhotoModal .modal-content { max-height: 94vh; }
+
+.photo-compare-table { max-height: 76vh; overflow-y: auto; padding-right: 4px; }
 
 .photo-viewer {
     position:       sticky;
@@ -304,8 +312,8 @@
 .photo-viewer-stage {
     position:   relative;
     overflow:   hidden;
-    height:     58vh;
-    min-height: 280px;
+    height:     70vh;
+    min-height: 320px;
     background: #202124;
     border-radius: 8px;
     display:    flex;
@@ -341,14 +349,20 @@
    ------------------------- */
 .ocr-table { display: flex; flex-direction: column; }
 .ocr-row {
+    /* 읽은 값 칸을 가장 넓게 둔다. 원재료명·주의사항은 한 줄이 200자를 넘는다 —
+       현재 값보다 읽은 값을 더 잘 보여야 판단할 수 있다. */
     display:               grid;
-    grid-template-columns: 22px 130px minmax(0, 1fr) 68px minmax(0, 1.2fr);
-    align-items:           center;
+    grid-template-columns: 22px 116px minmax(0, 0.8fr) 62px minmax(0, 2fr);
+    align-items:           start;
     gap:                   8px;
-    padding:               5px 4px;
+    padding:               6px 4px;
     border-bottom:         1px solid var(--ez-border-light, #f1f3f4);
     font-size:             12.5px;
 }
+.ocr-row > .ocr-pick  { margin-top: 5px; }
+.ocr-row > .ocr-label,
+.ocr-row > .ocr-current,
+.ocr-row > .ocr-arrow { padding-top: 4px; }
 .ocr-row:last-child { border-bottom: none; }
 .ocr-row-same       { opacity: .6; }
 
