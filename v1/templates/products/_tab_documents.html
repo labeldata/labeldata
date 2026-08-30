@@ -255,6 +255,31 @@
 
 
 <!-- 문서 수정 모달 (숨김처리 - 사이드 패널로 대체) -->
+{% comment %}
+원료 표시사항 사진에서 읽은 값을 확인하는 창.
+읽은 값을 바로 넣지 않는다 — OCR 은 틀리고, 틀린 원료가 BOM 에 들어가면
+배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
+{% endcomment %}
+<div class="modal fade" id="ingredientPhotoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" style="font-size:16px;">
+                    <i class="bi bi-box-seam me-2 text-primary"></i>사진에서 읽은 원료 정보
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+            </div>
+            <div class="modal-body"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light v2-btn-sm" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary v2-btn-sm" id="ingredientPhotoApply">
+                    <i class="bi bi-plus-lg"></i>BOM에 추가
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="editDocumentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
@@ -980,6 +1005,124 @@ async function submitImportCompanyDoc() {
     };
 
     // 문서 수정 패널 열기
+    // ── 원료 표시사항 사진 → BOM 원료 등록 ──────────────────────────────
+    //
+    // 두 걸음으로 나눈다. 먼저 preview 로 무엇이 읽혔는지 보여 주고, 사용자가
+    // 고친 값으로 apply 한다. OCR 은 틀리고, 틀린 원료가 BOM 에 들어가면
+    // 배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
+    //
+    // 함량(%)은 넣지 않는다. 원료 봉지에는 그 원료가 완제품에서 몇 %인지
+    // 적히지 않는다. BOM 화면에서 사람이 넣는다.
+    const INGREDIENT_FIELDS = [
+        ['ingredient_name',  '원료명',        true],
+        ['food_type',        '식품유형',      false],
+        ['sub_ingredients',  '하위 원료',     false],
+        ['manufacturer',     '제조사',        false],
+        ['report_no',        '품목보고번호',  false],
+        ['origin',           '원산지',        false],
+        ['allergens',        '알레르기',      false]
+    ];
+
+    function ingredientCsrf() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+
+    function escapeAttr(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    window.previewIngredientPhoto = async function (docId) {
+        showSnackbar('사진을 읽는 중입니다...', 'info');
+        let body;
+        try {
+            const res = await fetch(`/products/documents/${docId}/ingredient-photo/preview/`);
+            body = await res.json();
+            if (!res.ok || !body.success) {
+                showSnackbar(body.error || '사진을 읽지 못했습니다.', 'error');
+                return;
+            }
+        } catch (err) {
+            console.error(err);
+            showSnackbar('사진을 읽는 중 오류가 발생했습니다.', 'error');
+            return;
+        }
+
+        const f = body.fields || {};
+        const rows = INGREDIENT_FIELDS.map(([key, label, required]) => `
+            <div class="mb-2">
+                <label class="form-label small text-muted mb-1">
+                    ${label}${required ? ' <span class="text-danger">*</span>' : ''}
+                </label>
+                <input type="text" class="form-control form-control-sm ing-field"
+                       data-key="${key}" value="${escapeAttr(f[key] || '')}">
+            </div>`).join('');
+
+        let matchNote = '';
+        if (body.matched_existing) {
+            matchNote = `<div class="alert alert-success py-2 px-3 mb-3" style="font-size:12px;">
+                이미 등록된 원료 <strong>${escapeAttr(body.matched_name)}</strong> 에 연결합니다
+                (유사도 ${body.match_score}). 새 원료를 만들지 않습니다.</div>`;
+        } else if ((body.candidates || []).length) {
+            matchNote = `<div class="alert alert-warning py-2 px-3 mb-3" style="font-size:12px;">
+                비슷한 원료가 있습니다: ${escapeAttr(body.candidates.join(', '))} (유사도 ${body.match_score}).
+                같은 원료라면 원료명을 그 이름과 똑같이 고쳐 주세요.</div>`;
+        }
+
+        const modalEl = document.getElementById('ingredientPhotoModal');
+        modalEl.querySelector('.modal-body').innerHTML = `
+            <div class="text-muted mb-3" style="font-size:12px;">
+                사진에서 읽은 값입니다. 틀린 곳은 고친 뒤 등록하세요.
+                함량(%)은 사진에 없으므로 BOM 탭에서 넣으셔야 합니다.
+            </div>
+            ${matchNote}
+            ${rows}`;
+        modalEl.querySelector('#ingredientPhotoApply').onclick = () => applyIngredientPhoto(docId);
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    };
+
+    async function applyIngredientPhoto(docId) {
+        const modalEl = document.getElementById('ingredientPhotoModal');
+        const fields = {};
+        modalEl.querySelectorAll('.ing-field').forEach(el => {
+            fields[el.dataset.key] = el.value.trim();
+        });
+
+        if (!fields.ingredient_name) {
+            showSnackbar('원료명을 입력하세요.', 'warning');
+            return;
+        }
+
+        const btn = modalEl.querySelector('#ingredientPhotoApply');
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/products/documents/${docId}/ingredient-photo/apply/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': ingredientCsrf()
+                },
+                body: JSON.stringify({ fields })
+            });
+            const body = await res.json();
+            if (!res.ok || !body.success) {
+                showSnackbar(body.error || '등록하지 못했습니다.', 'error');
+                return;
+            }
+            bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            showSnackbar(
+                body.message + ' BOM 탭에서 함량을 넣고 저장하세요.',
+                body.created ? 'success' : 'info');
+        } catch (err) {
+            console.error(err);
+            showSnackbar('등록 중 오류가 발생했습니다.', 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
     window.openEditPanel = function(docId) {
         const doc = documentData[docId];
         if (!doc) {
@@ -1021,7 +1164,23 @@ async function submitImportCompanyDoc() {
                     </button>
                 </div>
             </div>
-            
+
+            ${doc.typeCode === 'INGREDIENT_LABEL' ? `
+            <div class="border rounded p-2 mb-3" style="background:#f6f2fc; border-color:#d9c8f0 !important;">
+                <div class="fw-semibold mb-1" style="font-size:13px; color:#6b21a8;">
+                    <i class="bi bi-box-seam me-1"></i>원료 표시사항
+                </div>
+                <div class="text-muted mb-2" style="font-size:11px; line-height:1.5;">
+                    사진을 읽어 BOM 탭에 원료로 등록합니다.
+                    ${doc.ingredientBomId ? '이미 등록된 사진입니다.' : '함량(%)은 사진에 없어 BOM에서 직접 넣으셔야 합니다.'}
+                </div>
+                <button class="btn btn-outline-primary v2-btn-sm w-100"
+                        onclick="previewIngredientPhoto(${docId})">
+                    <i class="bi bi-magic"></i>${doc.ingredientBomId ? '다시 읽기' : '사진 읽어서 BOM에 추가'}
+                </button>
+            </div>
+            ` : ''}
+
             <hr>
             
             <div class="mb-3">

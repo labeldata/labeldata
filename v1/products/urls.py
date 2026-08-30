@@ -129,4 +129,8 @@ urlpatterns = [
     path('documents/<int:document_id>/ai-review/extract/', views.document_ai_extract_api, name='document_ai_extract_api'),
     path('documents/<int:document_id>/ai-review/save/', views.document_ai_review_save, name='document_ai_review_save'),
     path('documents/<int:document_id>/ai-review/apply-to-bom/', views.document_ai_apply_to_bom, name='document_ai_apply_to_bom'),
+
+    # 원료 표시사항 사진 → BOM 원료 등록 (미리보기 후 확인)
+    path('documents/<int:document_id>/ingredient-photo/preview/', views.document_ingredient_photo_preview, name='document_ingredient_photo_preview'),
+    path('documents/<int:document_id>/ingredient-photo/apply/', views.document_ingredient_photo_to_bom, name='document_ingredient_photo_to_bom'),
 ]

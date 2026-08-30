@@ -2360,6 +2360,10 @@ const documentData = {
             type: "{{ doc.document_type.type_name|default:'미분류'|escapejs }}",
             typeId: {{ doc.document_type.type_id }},
             typeName: "{{ doc.document_type.type_name|default:'미분류'|escapejs }}",
+            {# 원료 표시사항 사진인지 판별하는 데 쓴다 (INGREDIENT_LABEL) #}
+            typeCode: "{{ doc.document_type.type_code|default:''|escapejs }}",
+            {# 이미 BOM 에 등록했으면 그 행 번호. 같은 사진을 두 번 읽지 않게 한다 #}
+            ingredientBomId: {{ doc.metadata.ingredient_bom_id|default:"null" }},
             slotId: {% if doc.slot %}{{ doc.slot.slot_id }}{% else %}null{% endif %},
             fileSize: {{ doc.file_size }},
             uploadedBy: "{{ doc.uploaded_by.username|default:'시스템'|escapejs }}",
@@ -3279,7 +3283,10 @@ function getCookie(name) {
 {% include 'products/_modal_upload.html' %}
 
 <!-- 스마트 업로드 JavaScript -->
-<script src="{% static 'js/smart_upload.js' %}?v=20260218"></script>
+<script src="{% static 'js/smart_upload.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+<!-- 표시사항 사진 -> 기본 정보 탭 채우기 -->
+<script src="{% static 'js/products/basic_info_ocr.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 
 <!-- 승인 전 표시사항 검증 결과 모달 -->
 <div class="modal fade" id="validationBlockModal" tabindex="-1" aria-hidden="true">
