@@ -52,7 +52,29 @@ ls -la /home/labeldata/mysite/staticfiles/css/list_common.css
 
 ## 마이그레이션
 
-이 저장소는 마이그레이션 그래프가 정리되기 전이라 `migrate` 를 돌리지 않는다.
+**서버에서 `migrate` 가 다시 돈다** (2026-08-30 복구). 넉 달 동안 막혀 있었다 —
+`.gitignore` 가 `migrations/` 를 빼고 있어서 배포된 곳마다 파일 구성이 갈라졌고,
+서버에 없는 파일을 의존하는 바람에 그래프조차 만들어지지 않았다.
+
+배포 전에 계획을 먼저 본다. 실행이 아니라 목록만 보여주므로 안전하다.
+
+```bash
+/home/labeldata/.virtualenvs/mysite-env/bin/python manage.py migrate --plan
+```
+
+`No planned migration operations.` 면 적용할 게 없다는 뜻이다. 뭔가 나오면 그게
+무엇인지 확인하고 나서 `migrate` 를 돌린다.
+
+상태가 의심스러우면 읽기 전용 진단을 쓴다.
+
+```bash
+python manage.py check_migration_state          # 요약
+python manage.py check_migration_state --files  # 앱별 파일·기록 이름까지
+```
+
+**마이그레이션 파일을 `.gitignore` 에 다시 넣지 말 것.** 그게 이 사고의 원인이었다.
+의존 대상이 사라지면 `manage.py check` 가 `migrations.E001` 로 잡는다.
+
 DB 인덱스가 필요하면 관리 명령으로 만든다.
 
 ```bash

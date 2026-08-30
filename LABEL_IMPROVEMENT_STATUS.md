@@ -832,26 +832,73 @@ ProductBOM(active) 74행, 배합비 56행, source_ingredient 34행
 
 ## 4. 별건으로 남긴 것
 
-### 4-1. 마이그레이션 그래프가 깨져 있다 ★
+### 4-1. 마이그레이션 그래프 — 서버는 복구됨 (2026-08-30)
 
-**`manage.py migrate` 가 실행 자체가 안 된다.**
+**서버에서 `migrate --plan` 이 `No planned migration operations.` 를 낸다.**
+넉 달 동안 막혀 있던 것이 풀렸다.
+
+#### 원인 — `.gitignore`
 
 ```
-InconsistentMigrationHistory: user_management.0004_companydocument_linked_document_type
-is applied before its dependency products.0002_combined
+migrations/
+**/migrations/     (외 5줄)
 ```
 
-- `regulatory` 앱 리프가 둘로 갈라져 있다
-  (`0004_alter_inspectionresult_tkawyprno_and_more`, `0010_remove_false_positive_pattern`)
-- `regulatory.0002~0004` 가 **미적용인데 `inspection_result`·`inspection_match`
-  테이블은 존재한다** — 스키마가 마이그레이션 밖에서 관리되고 있다
+마이그레이션 파일이 버전 관리에서 빠져 있었다. git 에 들어 있던 건 products 3개와
+regulatory 4개뿐이고, 나머지는 각 환경에 제멋대로 남았다. **그래서 로컬과 서버가
+서로 다른 마이그레이션 파일을 갖게 됐고, 증상도 달랐다.**
 
-지금 운영에 지장은 없다(`manage.py check` 통과, 런타임 정상). 다만 **신규 배포나
-DB 재구축이 불가능하고, 앞으로 모델을 바꿀 때 마이그레이션을 만들 수 없다.**
-`DEPLOY.md` 도 "이 저장소는 마이그레이션 그래프가 정리되기 전이라 migrate 를
-돌리지 않는다"고 적고 있다.
+| | 파일 | 기록 | 증상 |
+|---|---|---|---|
+| 서버 | 43 | 63 | `NodeNotFoundError` — 의존 대상 **파일이 없음** |
+| 로컬 | 54 | 88 | `InconsistentMigrationHistory` — 기록이 어긋남 |
 
-테스트는 `v1/config/settings_test.py` 에서 마이그레이션을 우회해 돌린다.
+앞선 기록에 "`regulatory` 리프가 둘로 갈라져 있다", "`regulatory.0002~0004` 가
+미적용인데 테이블은 존재한다" 고 적었는데, 둘 다 **로컬 이야기였다.** 서버는
+미적용 0건, 의존성 어긋남 0건이다.
+
+#### 서버를 막던 것 — 딱 두 줄
+
+```
+regulatory.0001_initial              -> bom.0002_rename_is_fields   (파일 없음)
+regulatory.0002_inspection_result... -> label.0007_add_display_type_fields (없음)
+```
+
+이름만 달랐다. 서버에는 같은 내용이 `bom/0002_rename_fields.py` 로 있고,
+label 은 `0001_initial` 과 `0019_...` 두 개뿐이다.
+
+서버 이름으로 바꾸면 로컬이 깨진다. 그래서 **두 의존성이 실제로 필요로 하는 것**을
+봤다 — FK 대상 모델뿐이다.
+
+```
+regulatory.0001 -> bom.productbom   : bom/0001_initial 이 만든다
+regulatory.0002 -> label.mylabel    : label/0001_initial 이 만든다
+```
+
+이름 바꾸기(`0002_rename_*`)나 필드 추가(`0007`/`0019`)는 FK 와 무관하다.
+**양쪽에 다 있는 `0001_initial` 을 가리키게 했다.** 추측이 필요 없고 어느 환경
+에서도 맞는다. 이미 적용된 마이그레이션의 `dependencies` 만 바꾼 것이라 스키마는
+건드리지 않는다 — 그래프 순서에만 쓰인다.
+
+#### 회귀 방지
+
+- `.gitignore` 의 마이그레이션 무시 규칙 7줄을 걷어냈다.
+- `manage.py check` 에 `migrations.E001` 추가 — 의존 대상 파일이 없으면 잡는다.
+  DB 없이 돌고 그래프를 만들지 않으므로 깨진 상태에서도 동작한다.
+  일부러 깨뜨려 잡히는 것을 확인했다.
+- `manage.py check_migration_state` (읽기 전용) — 앱별 파일·기록·유령·미적용 표.
+  **`MigrationLoader(connection)` 을 쓰지 않는다.** 그건 생성자에서 그래프를
+  만들어서, 진단 대상과 똑같은 예외로 같이 죽는다(서버에서 실제로 그랬다).
+
+#### 남은 것
+
+- **git 을 서버 기준으로 채우기.** 서버의 마이그레이션 파일 25개가 아직 git 에
+  없다. 서버에서 커밋해야 정본이 된다. 로컬 파일을 올리면 안 된다 — 서버에 없던
+  마이그레이션이 생겨 실제로 실행하려 든다.
+- **로컬을 서버와 맞추기.** 서버 DB 덤프를 받아 로컬에 넣고, 로컬에만 있는
+  마이그레이션 파일을 지운다. 로컬의 유령 39개와 `products.0002_combined`
+  불일치는 그때 함께 사라진다.
+- 유령 기록 정리(서버 20개)는 무해하므로 급하지 않다.
 
 ### 4-2. UserProfile 저장 시그널의 전량 삭제
 

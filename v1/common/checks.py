@@ -159,3 +159,47 @@ def check_static_cache_busting(app_configs, **kwargs):
                     id='templates.W001',
                 ))
     return warnings
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 마이그레이션 의존 대상이 실제로 있는가
+#
+# regulatory.0001_initial 이 bom.0002_rename_is_fields 를 의존했는데 그 파일이
+# 서버에 없었다(이름이 0002_rename_fields 였다). 그래서 서버에서는 migrate 가
+# 그래프조차 만들지 못하고 NodeNotFoundError 로 죽었고, 넉 달 동안 아무도
+# 마이그레이션을 돌리지 못했다.
+#
+# 원인은 .gitignore 가 migrations/ 를 빼고 있어서 배포된 곳마다 파일 구성이
+# 갈라진 것이었다. 그 규칙은 걷어냈지만, 의존 대상이 사라지는 사고는 파일을
+# 지우거나 이름을 바꿀 때도 난다.
+#
+# manage.py check 는 DB 없이도 돌고 마이그레이션 그래프를 만들지 않는다.
+# 여기서 파일만 읽어 대조하면 배포 전에 잡을 수 있다.
+
+@register()
+def check_migration_dependencies(app_configs, **kwargs):
+    """마이그레이션이 의존하는 대상 파일이 실제로 있는지 확인한다."""
+    from django.db.migrations.loader import MigrationLoader
+
+    try:
+        loader = MigrationLoader(None, load=False)
+        loader.load_disk()
+    except Exception:
+        return []   # 여기서 죽으면 check 자체를 못 쓴다. 조용히 넘어간다.
+
+    disk = set(loader.disk_migrations)
+    errors = []
+    for (app, name), migration in sorted(loader.disk_migrations.items()):
+        for dep in migration.dependencies:
+            if dep[0] == '__setting__' or dep[1] in ('__first__', '__latest__'):
+                continue
+            if dep in disk:
+                continue
+            have = sorted(n for a, n in disk if a == dep[0])
+            errors.append(Error(
+                f'{app}.{name} 이 없는 마이그레이션 {dep[0]}.{dep[1]} 을 의존합니다.',
+                hint=(f'{dep[0]} 에 있는 파일: {", ".join(have) or "(없음)"}. '
+                      '이 상태에서는 migrate 가 그래프를 만들지 못하고 죽습니다.'),
+                id='migrations.E001',
+            ))
+    return errors
