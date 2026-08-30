@@ -859,6 +859,12 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 #tab-info .v2-field-block:has(> .v2-field-label) > *:nth-child(n+3) {
     grid-column: 2;
 }
+/* 입력칸이 끝없이 눌리지 않게 바닥을 둔다. 넘치는 대신 줄이 바뀐다
+   (부모가 d-flex flex-wrap 인 곳: 원산지, 보관방법, 제조방법). */
+#tab-info .v2-field-input { min-width: 0; }
+#tab-info .d-flex.flex-wrap > .v2-field-input { min-width: 140px; }
+#tab-info .select2-container { min-width: 130px; }
+
 /* 좁아지면 다시 위아래로 — 104px 을 떼고 나면 입력칸이 너무 좁다 */
 @media (max-width: 991px) {
     #tab-info [class*="col-"]:has(> .v2-field-label),

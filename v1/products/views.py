@@ -978,7 +978,7 @@ _DISPLAY_ITEM_ORDER = [
 
 # 항목 이름을 눌렀을 때 갈 곳. 기본은 'field-<필드명을 하이픈으로>' 인데 둘이 다르다.
 _DISPLAY_ITEM_ANCHORS = {
-    # V2 에는 rawmtrl_nm(참고) 칸 하나뿐이다. 이동 대상은 그 칸이 맞다.
+    # 칸의 id 는 예전 이름 그대로다(참조하는 JS 가 여럿). 값은 표시 필드를 쓴다.
     'rawmtrl_nm_display': 'field-rawmtrl-nm',
 }
 # 이 탭에 칸이 없어 다른 탭으로 보내야 하는 항목. (탭 id, 탭 이름)
@@ -1095,7 +1095,8 @@ def product_create(request):
         label.frmlc_mtrqlt = request.POST.get('frmlc_mtrqlt', '')
         label.bssh_nm = request.POST.get('bssh_nm', '')
         label.pog_daycnt = request.POST.get('pog_daycnt', '')
-        label.rawmtrl_nm = request.POST.get('rawmtrl_nm', '')
+        label.rawmtrl_nm_display = request.POST.get(
+            'rawmtrl_nm_display', label.rawmtrl_nm_display)
         label.cautions = request.POST.get('cautions', '')
         label.additional_info = request.POST.get('additional_info', '')
         label.food_group = request.POST.get('food_group', '')
@@ -1247,7 +1248,8 @@ def product_update(request, product_id):
         label.frmlc_mtrqlt = request.POST.get('frmlc_mtrqlt', label.frmlc_mtrqlt)
         label.bssh_nm = request.POST.get('bssh_nm', label.bssh_nm)
         label.pog_daycnt = request.POST.get('pog_daycnt', label.pog_daycnt)
-        label.rawmtrl_nm = request.POST.get('rawmtrl_nm', label.rawmtrl_nm)
+        label.rawmtrl_nm_display = request.POST.get(
+            'rawmtrl_nm_display', label.rawmtrl_nm_display)
         label.cautions = request.POST.get('cautions', label.cautions)
         label.additional_info = request.POST.get('additional_info', label.additional_info)
         label.food_group = request.POST.get('food_group', label.food_group)
@@ -1375,7 +1377,7 @@ def product_update_fields(request, product_id):
         allowed_fields = [
             'my_label_name', 'prdlst_dcnm', 'prdlst_nm', 'content_weight',
             'country_of_origin', 'pog_daycnt', 'storage_method', 'bssh_nm',
-            'rawmtrl_nm', 'cautions', 'additional_info', 'ingredient_info',
+            'rawmtrl_nm', 'rawmtrl_nm_display', 'cautions', 'additional_info', 'ingredient_info',
             'prdlst_report_no', 'frmlc_mtrqlt',
             'food_group', 'food_type', 'processing_method', 'processing_condition',
             'preservation_type', 'distributor_address', 'repacker_address', 'importer_address',
@@ -1393,7 +1395,8 @@ def product_update_fields(request, product_id):
             'pog_daycnt': '소비기한',
             'storage_method': '보관방법',
             'bssh_nm': '제조원',
-            'rawmtrl_nm': '원재료명',
+            'rawmtrl_nm': '원재료명(참고)',
+            'rawmtrl_nm_display': '원재료명(표시)',
             'cautions': '주의사항',
             'additional_info': '기타표시사항',
             'ingredient_info': '특정성분 함량',

@@ -106,7 +106,7 @@
 
         <!-- 식품유형 3열: 대분류 | 소분류 | 표시용 -->
         <div class="row g-2 mb-2">
-            <div class="col-md-3">
+            <div class="col-md-6 col-xl-3">
                 <label class="form-label v2-field-label">식품유형 대분류</label>
                 <select id="field-food-group" name="food_group"
                         class="form-select bg-light border-0 v2-field-input"
@@ -120,7 +120,7 @@
                     <option value="농수축산물" {% if product.food_group == "농수축산물" %}selected{% endif %}>농수축산물</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-6 col-xl-3">
                 <label class="form-label v2-field-label">소분류</label>
                 <select id="field-food-type" name="food_type"
                         class="form-select bg-light border-0 v2-field-input"
@@ -135,7 +135,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-6">
+            <div class="col-12 col-xl-6">
                 <label class="form-label v2-field-label">식품유형 (표시용)</label>
                 <input type="text" id="field-prdlst-dcnm" name="prdlst_dcnm"
                        class="form-control bg-light border-0 v2-field-input"
@@ -233,12 +233,12 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label v2-field-label">원산지</label>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 flex-wrap">
                     <input type="text" id="field-country-of-origin" name="country_of_origin"
                            class="form-control bg-light border-0 v2-field-input"
                            value="{{ product.country_of_origin|default:'' }}"
                            placeholder="원산지를 입력하세요"
-                           style="flex:1;">
+                           style="flex:1 1 160px; min-width:160px;">
                     <select id="field-country-select" class="form-select bg-light border-0 v2-field-input"
                             style="width:130px; flex-shrink:0;">
                         <option value="">선택</option>
@@ -373,10 +373,19 @@
         <div class="row g-2">
             <div class="col-12">
                 <label class="form-label v2-field-label">원재료명 표시명</label>
-                <textarea id="field-rawmtrl-nm" name="rawmtrl_nm"
+                {% comment %}
+                  라벨에 인쇄되는 값은 rawmtrl_nm_display 다. 이 칸은 이름과 달리
+                  rawmtrl_nm(참고)에 쓰고 있어서, 여기서 고쳐도 인쇄물은 그대로였다.
+                  실제로 두 값이 완전히 다른 라벨이 있었다.
+
+                  값이 아직 표시 필드에 없으면 참고 값을 채워 준다 — 미리보기가
+                  쓰는 폴백(_tab_label.html)과 같은 규칙이라 화면에 보이던 문구가
+                  그대로 남는다.
+                {% endcomment %}
+                <textarea id="field-rawmtrl-nm" name="rawmtrl_nm_display"
                           class="form-control bg-light border-0 v2-field-input" rows="3"
                           placeholder="BOM 탭에서 원재료를 등록하면 자동으로 연결됩니다. 직접 입력도 가능합니다."
-                         >{{ product.rawmtrl_nm|default:"" }}</textarea>
+                         >{{ product.rawmtrl_nm_display|default:product.rawmtrl_nm|default:"" }}</textarea>
 
                 <!-- ── 알레르기 감지 패널 (Google Material Style) ── -->
                 <div class="allergen-panel-root mt-2">

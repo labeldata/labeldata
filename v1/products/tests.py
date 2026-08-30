@@ -391,3 +391,77 @@ class BasicInfoChoiceTests(TestCase):
         src = inspect.getsource(views)
         self.assertEqual(src.count("'preservation_choices': PRESERVATION_CHOICES"), 3)
         self.assertEqual(src.count("'processing_choices': PROCESSING_CHOICES"), 3)
+
+
+class RawmtrlDisplayFieldTests(TestCase):
+    """
+    V2 기본정보 탭의 "원재료명 표시명" 칸.
+
+    이름과 달리 rawmtrl_nm(참고)에 쓰고 있었다. 라벨에 인쇄되는 값은
+    rawmtrl_nm_display 라, 여기서 고쳐도 인쇄물은 그대로였다 — 사용자는 자기
+    수정이 반영되지 않았다는 걸 알 방법이 없었다. 실제로 두 값이 완전히 다른
+    라벨이 로컬에만 4건 있었다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='rawmtrl', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='원재료명')
+        ProductMetadata.objects.create(label=self.label)
+        self.url = reverse('products:product_update_fields',
+                           args=[self.label.my_label_id])
+        self.client.force_login(self.user)
+
+    def _render(self):
+        from django.template.loader import render_to_string
+        from v1.products.views import PRESERVATION_CHOICES, PROCESSING_CHOICES
+
+        return render_to_string('products/_tab_basic_info.html', {
+            'product': self.label, 'can_edit': True,
+            'food_types': [], 'food_groups': [], 'countries': [],
+            'display_items': [], 'custom_fields_json': '[]',
+            'preservation_choices': PRESERVATION_CHOICES,
+            'processing_choices': PROCESSING_CHOICES,
+        })
+
+    def test_인쇄되는_필드를_편집한다(self):
+        self.assertIn('name="rawmtrl_nm_display"', self._render())
+
+    def test_저장하면_인쇄되는_필드에_들어간다(self):
+        resp = self.client.post(
+            self.url, data=json.dumps({'rawmtrl_nm_display': '밀가루(밀:미국산), 설탕'}),
+            content_type='application/json')
+
+        self.assertEqual(resp.status_code, 200)
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.rawmtrl_nm_display, '밀가루(밀:미국산), 설탕')
+
+    def test_표시_필드가_비면_참고_값을_채워_보여준다(self):
+        """
+        미리보기가 쓰는 폴백과 같은 규칙이다. 안 그러면 V2 로만 작업하던 제품이
+        갑자기 빈 칸으로 보인다.
+        """
+        self.label.rawmtrl_nm = '정제수, 가공두유'
+        self.label.save()
+        self.assertIn('정제수, 가공두유', self._render())
+
+    def test_표시_필드가_있으면_그것을_보여준다(self):
+        """둘이 다를 때 인쇄되는 쪽을 보여줘야 한다."""
+        self.label.rawmtrl_nm = '참고용 문구'
+        self.label.rawmtrl_nm_display = '실제 인쇄 문구'
+        self.label.save()
+
+        html = self._render()
+        self.assertIn('실제 인쇄 문구', html)
+        self.assertNotIn('참고용 문구', html)
+
+    def test_참고_필드는_건드리지_않는다(self):
+        """relation 에서 다시 만들어지는 파생값이다. 저장이 덮어쓰면 안 된다."""
+        self.label.rawmtrl_nm = '참고용 문구'
+        self.label.save()
+
+        self.client.post(self.url, data=json.dumps({'rawmtrl_nm_display': '새 문구'}),
+                         content_type='application/json')
+
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.rawmtrl_nm, '참고용 문구')
+        self.assertEqual(self.label.rawmtrl_nm_display, '새 문구')
