@@ -3770,7 +3770,8 @@ class CrossContaminationPromptTests(TestCase):
         from v1.label.services.ocr_service import SYSTEM_PROMPT
 
         self.assertIn('같은 자리를 두 번 읽는 것이 맞다', SYSTEM_PROMPT)
-        self.assertIn('문장은 그대로 cautions 로', SYSTEM_PROMPT)
+        # 산문으로 세 번 말했는데 세 번 다 사라졌다. 이제는 칸을 가리킨다.
+        self.assertIn('cross_contamination', SYSTEM_PROMPT)
 
 
 class ReportNoNearMissTests(TestCase):
@@ -3875,3 +3876,101 @@ class ReportNoNearMissTests(TestCase):
         from v1.label.services.ocr_reconcile import reconcile
 
         self.assertEqual(reconcile({'prdlst_nm': {'value': '뭔가'}})['summary'], '')
+
+
+class CrossContaminationFieldTests(TestCase):
+    """
+    "…혼입가능성 있음" 문장에 **자기 칸**을 준다.
+
+    라벨에서는 알레르기 선언과 같은 검은 박스에 함께 적히는데, 모델이 그 박스를
+    allergens 에 쓰고 나면 같은 자리를 두 번 쓰지 않는다. 산문으로 "cautions
+    에도 옮겨라" 고 세 번 말했는데 세 번 다 문장이 통째로 사라졌다.
+    칸을 따로 만들어 주면 그 칸을 채운다.
+    """
+
+    def test_스키마에_칸이_있다(self):
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('"cross_contamination"', SYSTEM_PROMPT)
+        self.assertIn('- cross_contamination:', SYSTEM_PROMPT)
+
+    def test_주의사항_앞에_붙인다(self):
+        """규정상 이 문구가 들어갈 자리는 주의사항이다."""
+        from v1.label.services.ocr_service import fold_cross_contamination
+
+        data = fold_cross_contamination({
+            'cross_contamination': {'value': '우유,대두 혼입가능성 있음',
+                                    'confidence': 'high'},
+            'cautions': {'value': '가급적 빨리 드십시오.', 'confidence': 'high'},
+        })
+        self.assertTrue(data['cautions']['value'].startswith('우유,대두 혼입가능성 있음'))
+        self.assertIn('가급적 빨리', data['cautions']['value'])
+
+    def test_이미_들어_있으면_두_번_넣지_않는다(self):
+        from v1.label.services.ocr_service import fold_cross_contamination
+
+        original = '우유, 대두 혼입가능성 있음. 가급적 빨리 드십시오.'
+        data = fold_cross_contamination({
+            'cross_contamination': {'value': '우유,대두 혼입가능성 있음'},
+            'cautions': {'value': original, 'confidence': 'high'},
+        })
+        self.assertEqual(data['cautions']['value'], original)
+
+    def test_주의사항이_비어_있어도_넣는다(self):
+        from v1.label.services.ocr_service import fold_cross_contamination
+
+        data = fold_cross_contamination({
+            'cross_contamination': {'value': '우유 혼입가능성 있음', 'confidence': 'high'},
+            'cautions': {'value': None, 'confidence': 'none'},
+        })
+        self.assertEqual(data['cautions']['value'], '우유 혼입가능성 있음')
+        self.assertNotEqual(data['cautions']['confidence'], 'none')
+
+    def test_없으면_건드리지_않는다(self):
+        from v1.label.services.ocr_service import fold_cross_contamination
+
+        data = fold_cross_contamination({'cautions': {'value': 'x', 'confidence': 'high'}})
+        self.assertEqual(data['cautions'], {'value': 'x', 'confidence': 'high'})
+
+
+class HallucinatedIngredientTests(TestCase):
+    """
+    같은 사진을 두 번 읽었는데 한 번은 "다시마추출물, 다른가공품, L-아르지닌"
+    이 나왔다. 못 읽은 게 아니라 **없는 것을 만든 것**이고, 그런 이름이 등록
+    정보에 있을 리가 없다. 편차 34 가 그 증거다.
+    """
+
+    API = ('돼지고기,돼지지방,정제수,정제소금,설탕,소콜라겐,향신료조제품,복합조미식품,'
+           '혼합제제,기타가공품,L-아스코르빈산나트륨,코치닐추출색소,아질산나트륨,기타가공품')
+
+    def _warnings(self, 읽음):
+        from v1.label.services.ocr_reconcile import merge
+
+        out = merge(
+            {'rawmtrl_nm': {'value': 읽음, 'confidence': 'high'}},
+            {'matched': True, 'report_no': '1', 'fields': {
+                'rawmtrl_nm': {'label': '원재료명', 'api_value': self.API,
+                               'ocr_value': 읽음, 'score': 57,
+                               'verdict': 'unsure'}}})
+        return out['rawmtrl_nm'].get('warnings') or []
+
+    def test_등록_정보에_없는_이름을_짚는다(self):
+        읽음 = ('돼지고기/국산,돼지지방/국산,정제수,설탕,다시마추출물,다른가공품,'
+                'L-아르지닌')
+        found = [w for w in self._warnings(읽음) if '등록 정보에 없는' in w]
+        self.assertEqual(len(found), 1)
+        self.assertIn('다시마추출물', found[0])
+
+    def test_다_맞으면_아무_말도_안_한다(self):
+        읽음 = ('돼지고기/국산,돼지지방/국산,정제수,정제소금/국산,설탕,소콜라겐/네덜란드산,'
+                '향신료조제품,복합조미식품,혼합제제,기타가공품,L-아스코르빈산나트륨,'
+                '코치닐추출색소,아질산나트륨,기타가공품')
+        self.assertEqual(self._warnings(읽음), [])
+
+    def test_진단은_합치지_않고도_된다(self):
+        """합칠 만큼 확신이 없을 때가 오히려 사람에게 가장 필요한 순간이다."""
+        from v1.label.services.ocr_rawmtrl import diagnose
+
+        out = diagnose('사과,배,포도', self.API)
+        self.assertEqual(out['matched'], 0)
+        self.assertEqual(len(out['ocr_only']), 3)

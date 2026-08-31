@@ -395,21 +395,37 @@ def _flag_truncated_rawmtrl(data, row):
     "대조하면 +0점" 만 떴고, 무엇이 잘못됐는지는 아무 데도 안 적혔다.
     """
     try:
-        from v1.label.services.ocr_rawmtrl import split_top_level
-        ocr_count = len(split_top_level(row['ocr_value']))
-        api_count = len(split_top_level(row['api_value']))
+        from v1.label.services.ocr_rawmtrl import diagnose
+        found = diagnose(row['ocr_value'], row['api_value'])
     except Exception:
-        logger.exception('원재료 개수를 세지 못했다')
+        logger.exception('원재료 대조 진단 실패')
         return
 
-    if api_count < 2 or ocr_count >= api_count * 0.8:
+    api_count, ocr_count = found['api_count'], found['ocr_count']
+    if api_count < 2:
+        return
+    # 개수가 비슷해도 **이름이 안 맞으면** 문제다. 둘을 따로 본다.
+    if ocr_count >= api_count * 0.8 and not found['ocr_only']:
+        return
+
+    notes = []
+    if ocr_count < api_count * 0.8:
+        notes.append(
+            f'사진에서 읽은 원재료가 {ocr_count}개인데 등록 정보에는 {api_count}개입니다 — '
+            f'목록이 중간에서 끊겼을 수 있습니다. 원재료명 영역만 잘라 다시 읽어 보세요.')
+    if found['ocr_only']:
+        # 지어낸 원료를 잡는 가장 확실한 신호다. 같은 사진을 두 번 읽었는데
+        # 한 번은 "다시마추출물, 다른가공품, L-아르지닌" 이 나왔다 — 못 읽은
+        # 게 아니라 없는 것을 만든 것이고, 등록 정보에 있을 리가 없다.
+        notes.append(
+            '등록 정보에 없는 원재료가 %d개 읽혔습니다 (%s) — 잘못 읽었거나 '
+            '지어낸 값일 수 있습니다.'
+            % (len(found['ocr_only']), ', '.join(found['ocr_only'][:5])))
+    if not notes:
         return
 
     item = dict(data.get('rawmtrl_nm') or {})
-    item['warnings'] = list(item.get('warnings') or []) + [
-        f'사진에서 읽은 원재료가 {ocr_count}개인데 등록 정보에는 {api_count}개입니다 — '
-        f'목록이 중간에서 끊겼을 수 있습니다. 원재료명 영역만 잘라 다시 읽어 보세요.'
-    ]
+    item['warnings'] = list(item.get('warnings') or []) + notes
     candidates = [c for c in (item.get('candidates') or []) if c]
     for value in (row['ocr_value'], row['api_value']):
         if value and value not in candidates:
@@ -516,4 +532,13 @@ def _align_rawmtrl(data, result):
         'api_only': aligned['api_only'],
         'ocr_only': aligned['ocr_only'],
     }
+    # 등록 정보에 없는 이름이 여럿 나오면 지어냈을 가능성이 높다. 확인 창이
+    # 붉게 짚어 사람이 그 자리만 보게 한다.
+    if len(aligned['ocr_only']) >= 2:
+        item['warnings'] = list(item.get('warnings') or []) + [
+            '등록 정보에 없는 원재료가 %d개 읽혔습니다 (%s) — 잘못 읽었거나 '
+            '지어낸 값일 수 있습니다.'
+            % (len(aligned['ocr_only']), ', '.join(aligned['ocr_only'][:5]))
+        ]
+        item['confidence'] = 'low'
     data['rawmtrl_nm'] = item

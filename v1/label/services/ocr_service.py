@@ -39,6 +39,11 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
     검은 바탕에 흰 글씨)으로 "우유, 대두, 밀, 토마토 함유" 처럼 적힌다.
     "함유" 를 뺀 물질 이름만 쉼표로 이어 적는다. 예: "우유, 대두, 밀, 토마토"
     같은 제조시설 문구(주의사항)는 여기가 아니라 cautions 다
+- cross_contamination: 혼입 가능성 문구 **전체 문장**. allergens 와 같은 검은
+    박스에 함께 적히는 일이 많다. 예: "알류(달걀),우유,밀,메밀,대두,땅콩,
+    고등어,게,새우,복숭아,토마토,아황산류,호두,닭고기,오징어,조개류(굴,전복,
+    홍합 포함) 혼입가능성 있음"
+    물질 이름이 스물이 넘어도 **끝까지** 적는다. 없으면 none
 - ingredient_info: 특정성분 함량 (예: 홍삼농축액 30%)
 - frmlc_mtrqlt: 포장재질 (예: PET(용기, 리드지), PE(드레싱), PP, 종이)
 - pog_daycnt: 소비기한 / 유통기한 (예: 별도표기일까지, 제조일로부터 12개월)
@@ -86,7 +91,7 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
   혼입 가능 물질을 알레르기에 옮겨 적지 마시오.
 - **검은 박스 하나에 둘이 같이 있는 경우가 많다.** 그럴 때 그 박스를
   allergens 에만 쓰고 끝내지 마시오. "○○ 함유" 는 allergens 로,
-  "○○ 혼입가능성 있음" **문장은 그대로 cautions 로** 옮긴다.
+  "○○ 혼입가능성 있음" 문장은 **cross_contamination** 으로 옮긴다.
   **같은 자리를 두 번 읽는 것이 맞다.** 실제로 이 문장이 통째로 사라졌다 —
   물질 이름이 스물이 넘어 길어도 끝까지 옮기시오.
 - 주의사항은 요약하지 말고 적힌 문장을 그대로 옮기시오.
@@ -134,6 +139,7 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
   "storage_method": {"value": null, "confidence": "none"},
   "rawmtrl_nm": {"value": null, "confidence": "none"},
   "allergens": {"value": null, "confidence": "none"},
+  "cross_contamination": {"value": null, "confidence": "none"},
   "ingredient_info": {"value": null, "confidence": "none"},
   "frmlc_mtrqlt": {"value": null, "confidence": "none"},
   "pog_daycnt": {"value": null, "confidence": "none"},
@@ -307,6 +313,42 @@ def build_image_payload(image_file, max_size=2000, layout='grid'):
             for region in build_image_regions(image_file, max_size, layout)]
 
 
+def fold_cross_contamination(data):
+    """
+    혼입 가능성 문장을 주의사항 앞에 붙인다. **원본은 건드리지 않는다.**
+
+    이 문장에 자기 칸을 준 이유가 있다. 라벨에서는 알레르기 선언과 같은 검은
+    박스에 함께 적히는데, 모델이 그 박스를 allergens 에 쓰고 나면 **같은 자리를
+    두 번 쓰지 않는다.** 산문으로 "cautions 에도 옮겨라" 고 아무리 말해도
+    문장이 통째로 사라졌다. 칸을 따로 만들어 주면 그 칸을 채운다.
+
+    규정상 이 문구가 들어갈 자리는 주의사항이므로, 받은 뒤 여기서 합친다.
+    화면도 채점도 cautions 하나만 보면 되게 남겨 둔다.
+
+    이미 cautions 안에 있으면 두 번 넣지 않는다 — 모델이 양쪽에 다 적는 날도
+    있다.
+    """
+    data = dict(data or {})
+    item = data.get('cross_contamination')
+    text = str((item or {}).get('value') if isinstance(item, dict) else item or '').strip()
+    if not text:
+        return data
+
+    cautions = data.get('cautions')
+    cautions = dict(cautions) if isinstance(cautions, dict) else {
+        'value': str(cautions or '') or None,
+        'confidence': 'high' if cautions else 'none',
+    }
+    current = str(cautions.get('value') or '').strip()
+    key = ''.join(text.split())
+    if key and key not in ''.join(current.split()):
+        cautions['value'] = f'{text} {current}'.strip()
+        if cautions.get('confidence') in (None, '', 'none'):
+            cautions['confidence'] = (item or {}).get('confidence') or 'low'
+        data['cautions'] = cautions
+    return data
+
+
 def learned_hints():
     """
     지금까지 사용자가 고친 이력에서 뽑은 주의사항.
@@ -420,6 +462,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         )
 
         result = json.loads(response.choices[0].message.content)
+        result = fold_cross_contamination(result)
 
         if want_boxes:
             # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이

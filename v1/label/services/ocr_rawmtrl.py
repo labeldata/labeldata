@@ -203,6 +203,65 @@ def _squeeze(text):
     return _WS.sub('', str(text or '')).lower()
 
 
+def _match(api_names, parsed):
+    """
+    등록 정보의 이름을 사진에서 읽은 토막에 하나씩 짝지어 본다.
+
+    Returns: (matched {판독 index: 등록 이름}, renamed, api_only, 매칭 순서)
+    """
+    used = set()
+    matched, renamed, api_only, order_of_match = {}, [], [], []
+
+    for name in api_names:
+        target = _squeeze(name)
+        best_index, best_distance, best_score = -1, 99, 0
+        for index, (head, _amount, _extra) in enumerate(parsed):
+            if index in used:
+                continue
+            squeezed = _squeeze(head)
+            distance = _distance(target, squeezed)
+            if distance < best_distance:
+                best_index = index
+                best_distance = distance
+                best_score = _ratio(target, squeezed)
+
+        budget = _edit_budget(max(len(target), 1))
+        if best_index < 0 or best_distance > budget or best_score < MATCH_MIN_SCORE:
+            api_only.append(name)
+            continue
+
+        used.add(best_index)
+        order_of_match.append(best_index)
+        matched[best_index] = name
+        head, _amount, _extra = parsed[best_index]
+        if _squeeze(head) != target:
+            renamed.append({'from': head, 'to': name, 'score': best_score})
+    return matched, renamed, api_only, order_of_match
+
+
+def diagnose(ocr_text, api_text):
+    """
+    합치지 않고 **무엇이 어긋났는지만** 본다.
+
+    합칠 만큼 확신이 없을 때도 진단은 할 수 있다. 오히려 그때가 사람에게
+    가장 필요한 순간이다 — 판독이 무너졌다는 뜻이니까.
+
+    Returns: {'api_count', 'ocr_count', 'matched', 'api_only', 'ocr_only'}
+    """
+    api_tokens = split_top_level(api_text)
+    ocr_tokens = split_top_level(ocr_text)
+    api_names = [n for n in (split_token(t)[0] for t in api_tokens) if n]
+    parsed = [split_token(token) for token in ocr_tokens]
+    matched, _renamed, api_only, _order = _match(api_names, parsed)
+    return {
+        'api_count': len(api_names),
+        'ocr_count': len(ocr_tokens),
+        'matched': len(matched),
+        'api_only': api_only,
+        'ocr_only': [t for i, t in enumerate(ocr_tokens) if i not in matched],
+    }
+
+
 def align_with_api(ocr_text, api_text):
     """
     사진에서 읽은 원재료명을 등록 정보의 **순서와 이름**에 맞춰 다시 쓴다.
@@ -226,35 +285,8 @@ def align_with_api(ocr_text, api_text):
         return None
 
     parsed = [split_token(token) for token in ocr_tokens]
-    used = [False] * len(parsed)
-
-    matched = {}          # 판독 토막 index -> 등록 정보 이름
-    renamed, api_only = [], []
-    order_of_match = []
-    for name in api_names:
-        target = _squeeze(name)
-        best_index, best_distance, best_score = -1, 99, 0
-        for index, (head, _amount, _extra) in enumerate(parsed):
-            if used[index]:
-                continue
-            squeezed = _squeeze(head)
-            distance = _distance(target, squeezed)
-            if distance < best_distance:
-                best_index = index
-                best_distance = distance
-                best_score = _ratio(target, squeezed)
-
-        budget = _edit_budget(max(len(target), 1))
-        if best_index < 0 or best_distance > budget or best_score < MATCH_MIN_SCORE:
-            api_only.append(name)
-            continue
-
-        used[best_index] = True
-        order_of_match.append(best_index)
-        matched[best_index] = name
-        head, _amount, _extra = parsed[best_index]
-        if _squeeze(head) != target:
-            renamed.append({'from': head, 'to': name, 'score': best_score})
+    matched, renamed, api_only, order_of_match = _match(api_names, parsed)
+    used = [index in matched for index in range(len(parsed))]
 
     if len(matched) < len(api_names) * ALIGN_MIN_COVERAGE:
         # 등록 정보의 원재료를 사진에서 거의 못 찾았다. 다른 제품이거나 판독이
@@ -304,6 +336,16 @@ def align_summary(result):
     if result['api_only']:
         parts.append('등록 정보에는 있는데 사진에서 못 읽은 원재료가 있습니다: '
                      + ', '.join(result['api_only'][:5]))
+    if result['ocr_only']:
+        # **지어낸 원료를 잡는 가장 확실한 신호다.**
+        #
+        # 같은 사진을 두 번 읽었는데 한 번은 "다시마추출물, 다른가공품,
+        # L-아르지닌" 이 나왔다. 못 읽은 게 아니라 없는 것을 만든 것이고,
+        # 그런 이름은 등록 정보에 있을 리가 없다. 등록 정보가 오래됐을 수도
+        # 있으니 지우지는 않고 짚어만 준다.
+        parts.append('등록 정보에 없는 원재료가 사진에서 읽혔습니다: '
+                     + ', '.join(result['ocr_only'][:5])
+                     + ' — 잘못 읽었거나 지어낸 값일 수 있으니 확인해 주세요')
     if not parts:
         return ''
     return ' · '.join(parts) + '. 사진과 다르면 값을 직접 고쳐 주세요.'
