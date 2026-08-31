@@ -1151,6 +1151,23 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // 홈의 "사진으로 시작" 으로 들어온 경우 불러오기 창을 바로 연다.
+    //
+    // 이 표시가 없으면 사용자는 빈 제품 화면에 떨어져서 어느 버튼이 사진
+    // 읽기인지 다시 찾아야 한다. 스크립트가 아직 안 실려 있을 수 있어
+    // 준비될 때까지 잠깐 기다렸다 연다.
+    if (new URLSearchParams(window.location.search).get('import') === '1') {
+        let tries = 0;
+        const openWhenReady = function () {
+            if (typeof window.openImportModal === 'function') {
+                window.openImportModal();
+                return;
+            }
+            if (++tries < 40) setTimeout(openWhenReady, 100);
+        };
+        openWhenReady();
+    }
+
     // 초기 해시 기반 iframe 로딩
     if (hash === '#tab-bom' || hash === '#bom') {
         loadBomIframe();

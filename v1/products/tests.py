@@ -1289,3 +1289,84 @@ class OcrApiMatchWiringTests(TestCase):
         """
         self.assertIn("source: row.dataset.source", self.ocr)
         self.assertIn('data-source=', self.ocr)
+
+
+class HomePhotoEntryTests(TestCase):
+    """
+    홈에서 "사진으로 시작하기" 를 누르면 제품이 만들어지고 불러오기 창이 바로 열린다.
+
+    표시를 안 넘기면 사용자는 빈 제품 화면에 떨어져서 어느 버튼이 사진 읽기인지
+    다시 찾아야 한다. 홈에서 광고해 놓고 도착지에서 길을 잃게 하면 안 된다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='homeuser', password='x')
+        self.client.force_login(self.user)
+
+    def test_사진으로_시작하면_불러오기_표시를_달고_이동한다(self):
+        res = self.client.get(reverse('products:product_create') + '?import=1')
+        self.assertEqual(res.status_code, 302)
+        self.assertIn('import=1', res['Location'])
+
+    def test_그냥_만들면_표시가_붙지_않는다(self):
+        """평소 신규 등록에서 창이 튀어나오면 방해가 된다."""
+        res = self.client.get(reverse('products:product_create'))
+        self.assertEqual(res.status_code, 302)
+        self.assertNotIn('import=1', res['Location'])
+
+    def test_제품_화면이_그_표시를_보고_창을_연다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        detail = (Path(dj.BASE_DIR) / 'templates/products/product_detail.html'
+                  ).read_text(encoding='utf-8')
+        self.assertIn("get('import') === '1'", detail)
+        self.assertIn('window.openImportModal()', detail)
+
+
+class HomeUpdateStripTests(TestCase):
+    """
+    홈의 "최신 업데이트" 안내.
+
+    새 기능은 만들어 두는 것으로 끝나지 않는다. 쓰는 사람이 있는 자리에서
+    보이지 않으면 없는 기능이다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='stripuser', password='x')
+
+    def _html(self, logged_in):
+        if logged_in:
+            self.client.force_login(self.user)
+        return self.client.get(reverse('main:home_dashboard')).content.decode()
+
+    def test_로그인_홈에_안내가_있다(self):
+        html = self._html(True)
+        self.assertIn('updStrip', html)
+        self.assertIn('최신 업데이트', html)
+        self.assertIn('사진으로 시작하기', html)
+
+    def test_안내가_사진으로_시작하기로_이어진다(self):
+        self.assertIn(reverse('products:product_create') + '?import=1', self._html(True))
+
+    def test_닫으면_기억한다(self):
+        """같은 안내가 매번 뜨면 배너가 아니라 소음이 된다."""
+        html = self._html(True)
+        self.assertIn('updStripClose', html)
+        self.assertIn('ez_upd_strip_dismissed_v1', html)
+
+    def test_앱_안내도_함께_동작한다(self):
+        """
+        닫기 처리를 함수 하나로 합쳤다. 합치면서 기존 앱 스트립이 안 뜨게 되는
+        일이 실제로 흔하다.
+        """
+        html = self._html(True)
+        self.assertIn('appStrip', html)
+        self.assertIn('ez_app_strip_dismissed_v1', html)
+
+    def test_비로그인_표지에도_기능이_보인다(self):
+        html = self._html(False)
+        self.assertIn('사진으로 등록', html)
+        self.assertIn('최신 업데이트', html)
+

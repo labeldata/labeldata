@@ -247,6 +247,10 @@ a.hero-app-badge:hover {
     width: fit-content;
     letter-spacing: 0.01em;
 }
+/* 새로 붙인 기능은 테두리로 한 번 더 짚는다. 카드가 여섯 장이라 배지만으로는
+   눈이 안 간다. */
+.feature-card-new { border-color: #c4a7e7; box-shadow: 0 0 0 3px rgba(196,167,231,.14); }
+
 .fc-badge-blue   { background: #e8f0fe; color: #1558b0; }
 .fc-badge-green  { background: #e6f4ea; color: #1a7336; }
 .fc-badge-yellow { background: #fef7e0; color: #b06000; }
@@ -1025,6 +1029,76 @@ a.hero-app-badge:hover {
     .app-promo { grid-template-columns: 1fr; gap: 18px; padding: 20px; }
     .app-promo-qr { justify-self: start; }
     .app-promo-points { flex-direction: column; gap: 4px; }
+}
+
+/* ── 로그인 대시보드: 최신 업데이트 안내 ───────────────────
+   앱 스트립(.app-strip)과 나란히 놓이므로 색을 달리한다. 같은 남색 두 줄이
+   붙어 있으면 하나로 읽혀서 둘 다 안 읽힌다. */
+.upd-strip {
+    background: #fff;
+    border: 1px solid var(--v2-border, #dadce0);
+    border-left: 4px solid #1a73e8;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    position: relative;
+}
+.upd-strip[hidden] { display: none; }
+
+.upd-strip-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 6px; padding-right: 28px;
+}
+.upd-strip-tag {
+    flex-shrink: 0;
+    font-size: 9.5px; font-weight: 800; letter-spacing: .06em;
+    background: #e8f0fe; color: #1a5fb4;
+    padding: 3px 7px; border-radius: 5px;
+}
+.upd-strip-title { font-size: 14px; font-weight: 700; color: #1f1f1f; }
+.upd-strip-desc {
+    font-size: 12.5px; line-height: 1.65; color: #5f6368;
+    margin-bottom: 12px;
+}
+.upd-strip-desc strong { color: #3c4043; }
+
+.upd-strip-close {
+    position: absolute; top: 10px; right: 10px;
+    border: 0; background: none; color: #9aa0a6;
+    width: 26px; height: 26px; border-radius: 6px; line-height: 1;
+}
+.upd-strip-close:hover { color: #3c4043; background: #f1f3f4; }
+
+/* 세 걸음 — 무엇이 자동이고 어디서 사람이 확인하는지가 한눈에 보여야 한다 */
+.upd-steps {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap; margin-bottom: 12px;
+}
+.upd-step {
+    display: flex; align-items: center; gap: 8px;
+    background: #f8f9fa; border-radius: 8px;
+    padding: 8px 12px; flex: 1 1 200px; min-width: 0;
+}
+.upd-step-no {
+    flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #1a73e8; color: #fff;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+}
+.upd-step b { display: block; font-size: 12.5px; color: #1f1f1f; font-weight: 600; }
+.upd-step em {
+    display: block; font-style: normal;
+    font-size: 11px; color: #5f6368; line-height: 1.45; margin-top: 1px;
+}
+.upd-step-arrow { color: #c0c4c9; font-size: 12px; flex-shrink: 0; }
+
+.upd-strip-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.upd-strip-note { font-size: 11.5px; color: #80868b; line-height: 1.5; flex: 1 1 260px; }
+
+@media (max-width: 767px) {
+    .upd-step-arrow { display: none; }
+    .upd-step { flex: 1 1 100%; }
 }
 
 /* ── 로그인 대시보드: 앱 안내 스트립 ─────────────────────── */

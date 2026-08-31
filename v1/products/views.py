@@ -1126,7 +1126,14 @@ def product_create(request):
     )
 
     log_activity(request, 'product', 'product_create', label.my_label_id)
-    return redirect('products:product_detail_new', product_id=label.my_label_id)
+
+    # 홈의 "사진으로 시작" 처럼 곧바로 사진을 읽으러 온 경우, 워크스페이스가
+    # 열리자마자 불러오기 창을 띄운다. 이 표시를 안 넘기면 사용자는 빈 제품
+    # 화면에 떨어져서 어느 버튼이 사진 읽기인지 다시 찾아야 한다.
+    target = reverse('products:product_detail_new', args=[label.my_label_id])
+    if request.GET.get('import') == '1':
+        target += '?import=1'
+    return redirect(target)
 
 
 @login_required

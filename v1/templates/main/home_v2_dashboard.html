@@ -39,6 +39,7 @@
                 <span><i class="bi bi-shield-check me-1" style="color:#4ade80;"></i>식품법규 기반 검증</span>
                 <span><i class="bi bi-people me-1" style="color:#93c5fd;"></i>팀 협업 지원</span>
                 <span><i class="bi bi-file-earmark-pdf me-1" style="color:#f87171;"></i>PDF 출력</span>
+                <span><i class="bi bi-camera me-1" style="color:#c4b5fd;"></i>사진으로 자동 입력</span>
             </div>
             <!-- 앱 출시 안내 (구글 플레이 바로가기) -->
             <a class="hero-app-badge" href="{{ mobile_app_play_url }}" target="_blank" rel="noopener"
@@ -104,6 +105,16 @@
     <div class="features-section">
         <div class="section-label"><i class="bi bi-stars me-2 text-primary"></i>주요 기능</div>
         <div class="features-grid">
+            {% comment %}
+              가장 먼저 놓는다. 새로 온 사람이 "손으로 다 쳐야 하나" 를 가장 먼저
+              걱정하는데, 그 답이 이 카드다.
+            {% endcomment %}
+            <div class="feature-card feature-card-new">
+                <div class="fc-icon si-purple"><i class="bi bi-camera"></i></div>
+                <div class="fc-title">사진으로 등록 &amp; 검증</div>
+                <div class="fc-desc">표시사항 사진을 올리면 제품명·원재료명·소비기한·영양성분까지 읽어 칸을 채웁니다. 품목보고번호가 함께 읽히면 식약처 등록 정보와 대조해 정확도를 올리고, 값을 확인해 저장하면 그대로 규정 검증까지 이어집니다.</div>
+                <span class="fc-badge fc-badge-purple" style="margin-top:auto;">최신 업데이트</span>
+            </div>
             <div class="feature-card">
                 <div class="fc-icon si-blue"><i class="bi bi-hdd-stack"></i></div>
                 <div class="fc-title">제품 통합 관리</div>
@@ -360,6 +371,56 @@
     </div>
     {% endif %}
 
+    <!-- 최신 업데이트: 사진 한 장으로 등록 -> 검증 (닫기 가능) -->
+    <div class="upd-strip" id="updStrip" hidden>
+        <div class="upd-strip-head">
+            <span class="upd-strip-tag">최신 업데이트</span>
+            <span class="upd-strip-title">사진 한 장으로 등록부터 규정 검증까지</span>
+            <button type="button" class="upd-strip-close" id="updStripClose" aria-label="안내 닫기">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="upd-strip-desc">
+            표시사항 사진을 올리면 제품명·원재료명·소비기한까지 읽어 칸을 채웁니다.
+            품목보고번호가 함께 읽히면 <strong>식약처 등록 정보와 대조</strong>해 사진이 못 읽은 자리를 메우고,
+            두 쪽이 어긋나는 항목만 짚어 줍니다. 값을 확인해 저장하면 그대로 규정 검증까지 이어집니다.
+        </div>
+        <div class="upd-steps">
+            <div class="upd-step">
+                <span class="upd-step-no">1</span>
+                <div>
+                    <b>사진 올리기</b>
+                    <em>읽을 영역만 잘라내면 더 정확합니다</em>
+                </div>
+            </div>
+            <i class="bi bi-chevron-right upd-step-arrow"></i>
+            <div class="upd-step">
+                <span class="upd-step-no">2</span>
+                <div>
+                    <b>확인하고 채우기</b>
+                    <em>체크한 항목만 반영 — 바로 저장되지 않습니다</em>
+                </div>
+            </div>
+            <i class="bi bi-chevron-right upd-step-arrow"></i>
+            <div class="upd-step">
+                <span class="upd-step-no">3</span>
+                <div>
+                    <b>규정 검증</b>
+                    <em>표시기준 위반 여부를 근거 규정과 함께</em>
+                </div>
+            </div>
+        </div>
+        <div class="upd-strip-foot">
+            <a href="{% url 'products:product_create' %}?import=1" class="btn btn-primary v2-btn-sm">
+                <i class="bi bi-camera me-1"></i>사진으로 시작하기
+            </a>
+            <span class="upd-strip-note">
+                새 제품을 만들고 불러오기 창을 바로 엽니다. 이미 만든 제품이라면
+                제품 화면의 "불러오기" 에서도 같은 기능을 쓸 수 있습니다.
+            </span>
+        </div>
+    </div>
+
     <!-- 모바일 앱 안내 스트립 (닫기 가능) -->
     <div class="app-strip" id="appStrip" hidden>
         <img class="app-strip-icon" src="{% static 'img/favicon.png' %}" alt="">
@@ -563,23 +624,31 @@
 
 {% block extra_js %}
 <script>
-// 모바일 앱 안내 스트립: 사용자가 닫으면 로컬에 기억 (버전을 올리면 다시 노출)
+// 안내 스트립: 사용자가 닫으면 로컬에 기억 (STORAGE_KEY 버전을 올리면 다시 노출)
+//
+// 저장소가 막힌 환경(사생활 보호 창 등)에서는 읽기·쓰기가 모두 던진다. 그때는
+// 그냥 매번 보이게 두는 게 맞다 - 안내가 한 줄 더 보이는 것보다 화면이 깨지는
+// 쪽이 나쁘다.
 (function () {
-    var STORAGE_KEY = 'ez_app_strip_dismissed_v1';
-    var strip = document.getElementById('appStrip');
-    if (!strip) return;
+    function wireStrip(stripId, closeId, storageKey) {
+        var strip = document.getElementById(stripId);
+        if (!strip) return;
 
-    var dismissed = false;
-    try { dismissed = localStorage.getItem(STORAGE_KEY) === '1'; } catch (e) { /* 저장소 차단 환경 */ }
-    if (!dismissed) strip.hidden = false;
+        var dismissed = false;
+        try { dismissed = localStorage.getItem(storageKey) === '1'; } catch (e) { /* 저장소 차단 환경 */ }
+        if (!dismissed) strip.hidden = false;
 
-    var closeBtn = document.getElementById('appStripClose');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', function () {
-            strip.hidden = true;
-            try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) { /* 무시 */ }
-        });
+        var closeBtn = document.getElementById(closeId);
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function () {
+                strip.hidden = true;
+                try { localStorage.setItem(storageKey, '1'); } catch (e) { /* 무시 */ }
+            });
+        }
     }
+
+    wireStrip('updStrip', 'updStripClose', 'ez_upd_strip_dismissed_v1');
+    wireStrip('appStrip', 'appStripClose', 'ez_app_strip_dismissed_v1');
 })();
 </script>
 {% endblock %}
