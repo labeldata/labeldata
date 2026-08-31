@@ -3770,20 +3770,26 @@ class MeasurementHonestyTests(TestCase):
         self.assertIn('회만 성공', js)
 
 
-class CrossContaminationPromptTests(TestCase):
+class AllergenBoxPromptTests(TestCase):
     """
-    "…혼입가능성 있음" 문장이 주의사항에서 통째로 사라졌다.
+    검은 박스 한 칸에 "○○ 함유" 와 "○○ 혼입가능성 있음" 이 같이 있다.
 
-    알레르기 물질은 제대로 읽혔다(100점). 같은 검은 박스를 allergens 에 쓰고
-    나면 모델이 그 자리를 두 번 쓰지 않는 것이다.
+    전용 칸(cross_contamination)을 만들어 봤지만 되돌렸다 — 혼입 문장은 여전히
+    안 나왔고, 대신 **알레르기 칸이 나빠졌다**(두 제품 모두). 세 칸이 같은 박스를
+    두고 다투면서 "함유" 줄이 통째로 주의사항으로 넘어가는 일까지 생겼다.
     """
 
-    def test_같은_박스를_두_번_읽으라고_말한다(self):
+    def test_두_줄을_각자_제자리에_넣으라고_말한다(self):
         from v1.label.services.ocr_service import SYSTEM_PROMPT
 
-        self.assertIn('같은 자리를 두 번 읽는 것이 맞다', SYSTEM_PROMPT)
-        # 산문으로 세 번 말했는데 세 번 다 사라졌다. 이제는 칸을 가리킨다.
-        self.assertIn('cross_contamination', SYSTEM_PROMPT)
+        self.assertIn('한쪽을 다른 쪽에 옮겨 적지 마시오', SYSTEM_PROMPT)
+        self.assertIn('안 들어 있는데 같은 시설을 쓴', SYSTEM_PROMPT)
+
+    def test_전용_칸은_되돌렸다(self):
+        """칸을 만들면 채운다는 기대가 이 자리에서는 빗나갔다."""
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertNotIn('cross_contamination', SYSTEM_PROMPT)
 
 
 class ReportNoNearMissTests(TestCase):
@@ -3890,61 +3896,6 @@ class ReportNoNearMissTests(TestCase):
         self.assertEqual(reconcile({'prdlst_nm': {'value': '뭔가'}})['summary'], '')
 
 
-class CrossContaminationFieldTests(TestCase):
-    """
-    "…혼입가능성 있음" 문장에 **자기 칸**을 준다.
-
-    라벨에서는 알레르기 선언과 같은 검은 박스에 함께 적히는데, 모델이 그 박스를
-    allergens 에 쓰고 나면 같은 자리를 두 번 쓰지 않는다. 산문으로 "cautions
-    에도 옮겨라" 고 세 번 말했는데 세 번 다 문장이 통째로 사라졌다.
-    칸을 따로 만들어 주면 그 칸을 채운다.
-    """
-
-    def test_스키마에_칸이_있다(self):
-        from v1.label.services.ocr_service import SYSTEM_PROMPT
-
-        self.assertIn('"cross_contamination"', SYSTEM_PROMPT)
-        self.assertIn('- cross_contamination:', SYSTEM_PROMPT)
-
-    def test_주의사항_앞에_붙인다(self):
-        """규정상 이 문구가 들어갈 자리는 주의사항이다."""
-        from v1.label.services.ocr_service import fold_cross_contamination
-
-        data = fold_cross_contamination({
-            'cross_contamination': {'value': '우유,대두 혼입가능성 있음',
-                                    'confidence': 'high'},
-            'cautions': {'value': '가급적 빨리 드십시오.', 'confidence': 'high'},
-        })
-        self.assertTrue(data['cautions']['value'].startswith('우유,대두 혼입가능성 있음'))
-        self.assertIn('가급적 빨리', data['cautions']['value'])
-
-    def test_이미_들어_있으면_두_번_넣지_않는다(self):
-        from v1.label.services.ocr_service import fold_cross_contamination
-
-        original = '우유, 대두 혼입가능성 있음. 가급적 빨리 드십시오.'
-        data = fold_cross_contamination({
-            'cross_contamination': {'value': '우유,대두 혼입가능성 있음'},
-            'cautions': {'value': original, 'confidence': 'high'},
-        })
-        self.assertEqual(data['cautions']['value'], original)
-
-    def test_주의사항이_비어_있어도_넣는다(self):
-        from v1.label.services.ocr_service import fold_cross_contamination
-
-        data = fold_cross_contamination({
-            'cross_contamination': {'value': '우유 혼입가능성 있음', 'confidence': 'high'},
-            'cautions': {'value': None, 'confidence': 'none'},
-        })
-        self.assertEqual(data['cautions']['value'], '우유 혼입가능성 있음')
-        self.assertNotEqual(data['cautions']['confidence'], 'none')
-
-    def test_없으면_건드리지_않는다(self):
-        from v1.label.services.ocr_service import fold_cross_contamination
-
-        data = fold_cross_contamination({'cautions': {'value': 'x', 'confidence': 'high'}})
-        self.assertEqual(data['cautions'], {'value': 'x', 'confidence': 'high'})
-
-
 class HallucinatedIngredientTests(TestCase):
     """
     같은 사진을 두 번 읽었는데 한 번은 "다시마추출물, 다른가공품, L-아르지닌"
@@ -3986,44 +3937,6 @@ class HallucinatedIngredientTests(TestCase):
         out = diagnose('사과,배,포도', self.API)
         self.assertEqual(out['matched'], 0)
         self.assertEqual(len(out['ocr_only']), 3)
-
-
-class CrossContaminationNoneTests(TestCase):
-    """
-    괄호를 잘못 묶어 `str(None)` 이 되면서 문자열 "None" 이 주의사항 앞에
-    붙어 나갔다. 값이 없을 때가 보통이라 거의 매번 붙었다.
-
-        판독  "None 가급적 빨리 사용하시시오. ..."
-
-    법적 표시물에 그대로 들어가는 값이다.
-    """
-
-    def _fold(self, item):
-        from v1.label.services.ocr_service import fold_cross_contamination
-
-        return fold_cross_contamination({
-            'cross_contamination': item,
-            'cautions': {'value': '가급적 빨리 드십시오.', 'confidence': 'high'},
-        })['cautions']['value']
-
-    def test_값이_null_이면_아무것도_안_붙인다(self):
-        self.assertEqual(self._fold({'value': None, 'confidence': 'none'}),
-                         '가급적 빨리 드십시오.')
-
-    def test_칸_자체가_없어도_안_붙인다(self):
-        from v1.label.services.ocr_service import fold_cross_contamination
-
-        data = fold_cross_contamination(
-            {'cautions': {'value': '가급적 빨리 드십시오.', 'confidence': 'high'}})
-        self.assertEqual(data['cautions']['value'], '가급적 빨리 드십시오.')
-
-    def test_빈_문자열도_안_붙인다(self):
-        self.assertEqual(self._fold({'value': '  ', 'confidence': 'none'}),
-                         '가급적 빨리 드십시오.')
-
-    def test_문자열_None_이_어디에도_안_남는다(self):
-        for item in ({'value': None}, {'value': ''}, None, ''):
-            self.assertNotIn('None', self._fold(item), repr(item))
 
 
 class RateLimitRetryTests(TestCase):
@@ -4086,3 +3999,50 @@ class DesignSuffixTests(TestCase):
 
         data = strip_design_suffix({'prdlst_nm': {'value': None, 'confidence': 'none'}})
         self.assertIsNone(data['prdlst_nm']['value'])
+
+
+class TranscribeNotRewriteTests(TestCase):
+    """
+    모델이 문구를 옮겨 적지 않고 **다시 썼다.**
+
+        정답  고객상담실 080-739-8572(수신자 부담)
+        판독  상품명에 대한 문의는 080-739-8572로 하시기 바랍니다
+
+    번호는 맞았지만 라벨에 없는 문장이고, 이 결과는 인쇄물에 그대로 들어간다.
+    """
+
+    def test_다시_쓰지_말라고_못박는다(self):
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('옮겨 적는 것이지 다시 쓰는 것이 아니다', SYSTEM_PROMPT)
+        self.assertIn('한 글자도 바꾸지 말고 옮기시오', SYSTEM_PROMPT)
+
+    def test_기타표시사항까지_함께_묶는다(self):
+        """예전에는 주의사항에만 걸려 있었다."""
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('주의사항과 기타표시사항은', SYSTEM_PROMPT)
+
+
+class CompoundIngredientPromptTests(TestCase):
+    """
+    복합원재료의 대괄호를 첫 하위 원료에서 닫아 버린다.
+
+        정답  쉬레드치즈[모짜렐라, 체다, 혼합제제(…)]
+        판독  쉬레드치즈[모짜렐라], 체다, 혼합제제(…)
+
+    나머지가 별개의 원재료로 밀려 나가 **원재료 수가 늘고 함량 순서가 뒤틀린다.**
+    괄호 짝은 맞으므로 bracket_problems 가 못 잡는다.
+    """
+
+    def test_하위_원료를_전부_넣으라고_말한다(self):
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('하위 원료를 전부', SYSTEM_PROMPT)
+        self.assertIn('첫 하위 원료만 넣고 닫아 버리면', SYSTEM_PROMPT)
+
+    def test_짝이_맞는_잘못은_괄호_검사가_못_잡는다(self):
+        """그래서 프롬프트로 다뤄야 하는 자리다 — 시험으로 그 사실을 남긴다."""
+        from v1.label.services.ocr_rawmtrl import bracket_problems
+
+        self.assertEqual(bracket_problems('쉬레드치즈[모짜렐라], 체다, 혼합제제(분말셀룰로스)'), [])

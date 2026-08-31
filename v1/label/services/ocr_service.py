@@ -37,11 +37,6 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
     검은 바탕에 흰 글씨)으로 "우유, 대두, 밀, 토마토 함유" 처럼 적힌다.
     "함유" 를 뺀 물질 이름만 쉼표로 이어 적는다. 예: "우유, 대두, 밀, 토마토"
     같은 제조시설 문구(주의사항)는 여기가 아니라 cautions 다
-- cross_contamination: 혼입 가능성 문구 **전체 문장**. allergens 와 같은 검은
-    박스에 함께 적히는 일이 많다. 예: "알류(달걀),우유,밀,메밀,대두,땅콩,
-    고등어,게,새우,복숭아,토마토,아황산류,호두,닭고기,오징어,조개류(굴,전복,
-    홍합 포함) 혼입가능성 있음"
-    물질 이름이 스물이 넘어도 **끝까지** 적는다. 없으면 none
 - ingredient_info: 특정성분 함량 (예: 홍삼농축액 30%)
 - frmlc_mtrqlt: 포장재질 (예: PET(용기, 리드지), PE(드레싱), PP, 종이)
 - pog_daycnt: 소비기한 / 유통기한 (예: 별도표기일까지, 제조일로부터 12개월)
@@ -87,12 +82,18 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - 알레르기(allergens)와 혼입 주의(cautions)는 다르다.
   "○○ 함유" 는 알레르기, "○○ 혼입 가능성 있음" 은 주의사항이다.
   혼입 가능 물질을 알레르기에 옮겨 적지 마시오.
-- **검은 박스 하나에 둘이 같이 있는 경우가 많다.** 그럴 때 그 박스를
-  allergens 에만 쓰고 끝내지 마시오. "○○ 함유" 는 allergens 로,
-  "○○ 혼입가능성 있음" 문장은 **cross_contamination** 으로 옮긴다.
-  **같은 자리를 두 번 읽는 것이 맞다.** 실제로 이 문장이 통째로 사라졌다 —
-  물질 이름이 스물이 넘어 길어도 끝까지 옮기시오.
-- 주의사항은 요약하지 말고 적힌 문장을 그대로 옮기시오.
+- **검은 박스 하나에 둘이 같이 있는 경우가 많다.** 두 줄은 서로 다른 것이다.
+  "○○ 함유" 는 **그 제품에 실제로 들어 있는** 물질이다 -> allergens (물질 이름만)
+  "○○ 혼입가능성 있음" 은 **안 들어 있는데 같은 시설을 쓴** 물질이다 -> cautions
+  **한쪽을 다른 쪽에 옮겨 적지 마시오.** 실제로 "함유" 줄을 통째로 주의사항에
+  옮겨 적고 알레르기 칸은 절반만 채운 일이 있었다. 두 줄을 다 읽되 각자
+  제자리에 넣으시오.
+- **주의사항과 기타표시사항은 옮겨 적는 것이지 다시 쓰는 것이 아니다.**
+  요약하지도, 말을 다듬지도, 뜻이 같은 다른 문장으로 바꾸지도 마시오.
+  실제로 "고객상담실 080-739-8572(수신자 부담)" 을
+  "상품명에 대한 문의는 080-739-8572로 하시기 바랍니다" 로 고쳐 쓴 일이 있었다.
+  번호는 맞았지만 라벨에 없는 문장이고, 이 결과는 인쇄물에 그대로 들어간다.
+  **읽은 글자를 그 순서 그대로, 한 글자도 바꾸지 말고 옮기시오.**
 - 업체명·지명 같은 고유명사는 획을 하나씩 확인하시오
   (삼립/삼진, 송정동/성동동 처럼 한 획 차이가 흔하다). 확신이 없으면
   candidates 에 두 후보를 넣고 confidence 를 low 로 두시오.
@@ -106,6 +107,13 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
     다 옮긴 뒤 여는 괄호와 닫는 괄호의 수와 종류가 맞는지 세어 보시오.
     맞지 않으면 그 자리를 잘못 읽은 것이다 — 짝을 지어내 맞추지 말고 그 자리를
     다시 보고, 그래도 안 읽히면 confidence 를 low 로 두시오.
+
+  복합원재료. "쉬레드치즈[모짜렐라, 체다, 혼합제제(...)]" 처럼 한 원재료 안에
+    여러 하위 원료가 들어간다. 괄호 안에 **하위 원료를 전부** 넣고 마지막
+    것까지 넣은 뒤에 닫는다. 첫 하위 원료만 넣고 닫아 버리면 나머지가 별개의
+    원재료로 밀려 나가 **원재료 수가 늘고 함량 순서가 뒤틀린다.**
+    실제로 "쉬레드치즈[모짜렐라, 체다, 혼합제제]" 가
+    "쉬레드치즈[모짜렐라], 체다, 혼합제제" 로 나온 일이 잦다.
 
   순서. 라벨에 적힌 **순서 그대로** 옮긴다. 원재료 순서가 곧 함량 순이라
     순서를 바꾸면 다른 뜻이 된다. 보기 좋게 정렬하지 마시오.
@@ -151,7 +159,6 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
   "storage_method": {"value": null, "confidence": "none"},
   "rawmtrl_nm": {"value": null, "confidence": "none"},
   "allergens": {"value": null, "confidence": "none"},
-  "cross_contamination": {"value": null, "confidence": "none"},
   "ingredient_info": {"value": null, "confidence": "none"},
   "frmlc_mtrqlt": {"value": null, "confidence": "none"},
   "pog_daycnt": {"value": null, "confidence": "none"},
@@ -353,45 +360,6 @@ def strip_design_suffix(data):
     return data
 
 
-def fold_cross_contamination(data):
-    """
-    혼입 가능성 문장을 주의사항 앞에 붙인다. **원본은 건드리지 않는다.**
-
-    이 문장에 자기 칸을 준 이유가 있다. 라벨에서는 알레르기 선언과 같은 검은
-    박스에 함께 적히는데, 모델이 그 박스를 allergens 에 쓰고 나면 **같은 자리를
-    두 번 쓰지 않는다.** 산문으로 "cautions 에도 옮겨라" 고 아무리 말해도
-    문장이 통째로 사라졌다. 칸을 따로 만들어 주면 그 칸을 채운다.
-
-    규정상 이 문구가 들어갈 자리는 주의사항이므로, 받은 뒤 여기서 합친다.
-    화면도 채점도 cautions 하나만 보면 되게 남겨 둔다.
-
-    이미 cautions 안에 있으면 두 번 넣지 않는다 — 모델이 양쪽에 다 적는 날도
-    있다.
-    """
-    data = dict(data or {})
-    item = data.get('cross_contamination')
-    # 괄호를 잘못 묶어 `str(None)` 이 되면서 문자열 "None" 이 주의사항 앞에
-    # 붙어 나갔다. 값이 없을 때가 보통이라 거의 매번 붙었다.
-    raw = item.get('value') if isinstance(item, dict) else item
-    text = str(raw or '').strip()
-    if not text:
-        return data
-
-    cautions = data.get('cautions')
-    cautions = dict(cautions) if isinstance(cautions, dict) else {
-        'value': str(cautions or '') or None,
-        'confidence': 'high' if cautions else 'none',
-    }
-    current = str(cautions.get('value') or '').strip()
-    key = ''.join(text.split())
-    if key and key not in ''.join(current.split()):
-        cautions['value'] = f'{text} {current}'.strip()
-        if cautions.get('confidence') in (None, '', 'none'):
-            cautions['confidence'] = (item or {}).get('confidence') or 'low'
-        data['cautions'] = cautions
-    return data
-
-
 def learned_hints():
     """
     지금까지 사용자가 고친 이력에서 뽑은 주의사항.
@@ -505,7 +473,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         )
 
         result = json.loads(response.choices[0].message.content)
-        result = strip_design_suffix(fold_cross_contamination(result))
+        result = strip_design_suffix(result)
 
         if want_boxes:
             # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이
