@@ -383,10 +383,13 @@
    ------------------------- */
 .ocr-table { display: flex; flex-direction: column; }
 .ocr-row {
-    /* 읽은 값 칸을 가장 넓게 둔다. 원재료명·주의사항은 한 줄이 200자를 넘는다 —
-       현재 값보다 읽은 값을 더 잘 보여야 판단할 수 있다. */
+    /* 두 값을 나란히 **끝까지** 보여 준다.
+       예전에는 현재 값 칸을 좁게 두고 한 줄로 잘랐다(말줄임). 그런데 이 표가
+       있는 이유가 두 값을 견주는 것인데, 원재료명·주의사항처럼 정작 견주기
+       어려운 긴 항목이 통째로 잘려서 무엇이 다른지 볼 수가 없었다.
+       읽은 값 칸은 편집을 하므로 조금 더 넓게 둔다. */
     display:               grid;
-    grid-template-columns: 22px 116px minmax(0, 0.8fr) 62px minmax(0, 2fr);
+    grid-template-columns: 22px 116px minmax(0, 1fr) 62px minmax(0, 1.35fr);
     align-items:           start;
     gap:                   8px;
     padding:               6px 4px;
@@ -410,10 +413,15 @@
 
 .ocr-label   { font-weight: 500; line-height: 1.35; }
 .ocr-current {
-    color:         var(--ez-text-muted, #5f6368);
-    overflow:      hidden;
-    text-overflow: ellipsis;
-    white-space:   nowrap;
+    color:          var(--ez-text-muted, #5f6368);
+    /* 줄바꿈을 살린다 - 주의사항과 기타표시사항은 여러 줄이 한 값이다. */
+    white-space:    pre-wrap;
+    overflow-wrap:  anywhere;
+    line-height:    1.45;
+    /* 900자짜리 원재료명 하나가 화면을 통째로 밀어내지 않게 한다. 옆의
+       입력칸도 같은 식으로 늘었다 멈추므로 두 칸의 높이가 비슷하게 간다. */
+    max-height:     320px;
+    overflow-y:     auto;
 }
 .ocr-empty   { color: #b0b5ba; font-style: italic; }
 .ocr-arrow   { text-align: center; }
