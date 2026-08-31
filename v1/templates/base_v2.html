@@ -103,6 +103,17 @@
                 <a href="{% url 'board:list' %}" class="nav-link {% if request.resolver_match.namespace == 'board' %}active{% endif %}">
                     <i class="bi bi-chat-dots" style="flex-shrink:0;"></i><span class="nav-label">게시판</span>
                 </a>
+
+                {% comment %}
+                  관리자 도구. 일반 사용자에게는 보이지 않는다 — 링크만 숨기는 게
+                  아니라 화면 자체가 staff 전용이다(staff_member_required).
+                {% endcomment %}
+                {% if user.is_staff %}
+                <div class="border-top my-3"></div>
+                <a href="{% url 'label:ocr_lab' %}" class="nav-link {% if request.resolver_match.url_name == 'ocr_lab' %}active{% endif %}">
+                    <i class="bi bi-braces-asterisk" style="flex-shrink:0;"></i><span class="nav-label">판독 고도화</span>
+                </a>
+                {% endif %}
             </div>
 
             <div class="v2-sidebar-footer">

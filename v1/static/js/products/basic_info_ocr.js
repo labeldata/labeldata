@@ -116,6 +116,37 @@
     return (text || '').length > 40 || (text || '').indexOf('\n') !== -1;
   }
 
+  // 식약처 등록 정보와 대조한 결과를 한눈에.
+  //
+  // 사진만 보면 어느 값을 믿어야 할지 알 수 없다. 등록 정보와 같은 말을 하는
+  // 항목은 그냥 넘겨도 되고, 다른 항목만 눈으로 보면 된다 - 확인해야 할 줄이
+  // 열여섯에서 두셋으로 줄어든다.
+  var API_BADGES = {
+    both:     ['ocr-flag-ok',   '일치', '식약처 등록 정보와 같습니다'],
+    api:      ['ocr-flag-api',  '등록', '사진에서 못 읽어 식약처 등록 정보로 채웠습니다'],
+    conflict: ['ocr-flag-warn', '다름', '사진과 식약처 등록 정보가 다릅니다 - 확인하세요']
+  };
+
+  function apiBadgeHtml(item) {
+    var badge = API_BADGES[item.source];
+    if (!badge) return '';
+    return ' <span class="ocr-flag ' + badge[0] + '" title="' + esc(badge[2]) + '">'
+      + badge[1] + '</span>';
+  }
+
+  function apiNoteHtml(item) {
+    var notes = '';
+    if (item.snapped_from) {
+      notes += '<div class="ocr-api-note">사진에서는 "' + esc(item.snapped_from)
+        + '" 로 읽었고, 표시기준 목록에 맞춰 고쳤습니다.</div>';
+    }
+    if (item.api_value && item.source !== 'both') {
+      var lead = item.source === 'api' ? '등록 정보' : '식약처 등록';
+      notes += '<div class="ocr-api-note">' + esc(lead) + ': ' + esc(item.api_value) + '</div>';
+    }
+    return notes;
+  }
+
   function rowHtml(field, item, meta) {
     var target = document.getElementById(meta.id);
     var current = target ? (target.value || '').trim() : '';
@@ -167,22 +198,50 @@
     // 그 이력이 다음 판독의 프롬프트로 되먹여진다.
     return ''
       + '<div class="ocr-row' + (same ? ' ocr-row-same' : '') + '" data-field="' + field + '"'
-      + ' data-ocr="' + esc(value) + '" data-conf="' + esc(item.confidence || '') + '">'
+      + ' data-ocr="' + esc(value) + '" data-conf="' + esc(item.confidence || '') + '"'
+      + ' data-source="' + esc(item.source || '') + '">'
       + '  <input class="form-check-input ocr-pick" type="checkbox" ' + checked + '>'
       + '  <div class="ocr-label">' + esc(meta.label)
-      + (isLow ? ' <span class="ocr-flag ocr-flag-warn" title="읽은 값이 불확실합니다">확인</span>' : '')
+      + (isLow && !item.source ? ' <span class="ocr-flag ocr-flag-warn" title="읽은 값이 불확실합니다">확인</span>' : '')
+      + apiBadgeHtml(item)
       + '  </div>'
       + '  <div class="ocr-current" title="' + esc(current) + '">'
       + (current ? esc(current) : '<span class="ocr-empty">비어 있음</span>')
       + '  </div>'
       + '  <div class="ocr-arrow"><span class="' + stateClass + '">' + state + '</span></div>'
-      + '  <div class="ocr-control">' + control + '</div>'
+      + '  <div class="ocr-control">' + control + apiNoteHtml(item) + '</div>'
+      + '</div>';
+  }
+
+  // 사전에 맞춰 고친 값이 있으면 먼저 알린다.
+  //
+  // 말없이 고치면 "내가 사진에서 본 글자와 다른데?" 가 된다. 무엇을 무엇으로
+  // 바꿨는지 밝혀 두고, 잘못 맞췄으면 그 자리에서 되돌릴 수 있게 한다.
+  function snapHtml(info) {
+    if (!info || !info.summary) return '';
+    return ''
+      + '<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:12px;">'
+      + '  <i class="bi bi-journal-check me-1"></i>' + esc(info.summary)
+      + '</div>';
+  }
+
+  // 품목보고번호로 등록 정보를 찾았으면 무엇을 대조했는지 먼저 알린다.
+  //
+  // 줄마다 뱃지만 붙이면 "왜 갑자기 확신도가 올라갔는지" 를 알 수 없다.
+  // 무엇과 대조했는지 한 줄로 밝혀 두면 사용자가 그 판단을 믿을지 스스로 정한다.
+  function apiMatchHtml(match) {
+    if (!match || !match.matched) return '';
+    var tone = (match.conflicts && match.conflicts.length) ? 'warning' : 'info';
+    return ''
+      + '<div class="alert alert-' + tone + ' py-2 px-3 mb-2" style="font-size:12px;">'
+      + '  <i class="bi bi-shield-check me-1"></i>'
+      + '  <strong>' + esc(match.source) + '</strong> 대조: ' + esc(match.summary)
       + '</div>';
   }
 
   // 읽어낸 값이 맞는지는 결국 사진을 봐야 안다. 원본을 옆에 두고 비교한다.
   // photoFile 이 없으면(품목보고번호로 불러온 경우) 표만 그린다.
-  function showModal(data, photoFile) {
+  function showModal(data, photoFile, apiMatch, snapInfo) {
     // 모달을 먼저 만든다. 그 안의 요소를 먼저 찾으면 첫 실행에서 항상 null 이라
     // "Cannot set properties of null" 로 죽는다.
     var modalEl = ensureModal();
@@ -204,7 +263,9 @@
       modalEl.querySelector('#basicInfoOcrApply').disabled = true;
     } else {
       var table =
-        '<div class="text-muted mb-2" style="font-size:12px;">'
+        snapHtml(snapInfo)
+        + apiMatchHtml(apiMatch)
+        + '<div class="text-muted mb-2" style="font-size:12px;">'
         + '체크한 항목만 반영합니다. 이미 값이 있는 칸은 덮어쓰지 않도록 체크를 꺼 뒀습니다.'
         + '</div>'
         + '<div class="ocr-table">'
@@ -321,7 +382,10 @@
         field: row.dataset.field,
         ocr_value: row.dataset.ocr || '',
         final_value: final,
-        confidence: row.dataset.conf || ''
+        confidence: row.dataset.conf || '',
+        // 사진만 봤는지, 등록 정보와 대조했는지. 나눠 재지 않으면 "대조가
+        // 정확도를 올렸는가" 를 나중에 숫자로 답할 수 없다.
+        source: row.dataset.source || ''
       });
     });
     if (!rows.length) return;
@@ -440,9 +504,17 @@
       filled += 1;
     });
 
+    // 저장 전에는 서버가 이 값을 모른다 — 검증도 확정도 **저장된 값**을 다시
+    // 읽어 판정하므로, 저장하지 않고 검증하면 방금 채운 항목을 두고
+    // "비어 있습니다" 가 나온다. 그 말을 여기서 분명히 해 둔다.
+    // (탭을 옮기면 product_detail.html 이 자동으로 저장하지만, 무슨 일이
+    //  일어나는지는 사용자가 알고 있어야 한다.)
     status(filled
-      ? filled + '개 항목을 채웠습니다. 확인 후 저장하세요.'
+      ? filled + '개 항목을 채웠습니다. 저장해야 검증에 반영됩니다.'
       : '채운 항목이 없습니다.');
+    if (filled && typeof window.showSnackbar === 'function') {
+      window.showSnackbar(filled + '개 항목을 채웠습니다. 저장해 주세요.', 'info');
+    }
 
     // 영양성분·분리배출은 이 탭에 칸이 없어 서버가 바로 저장한다.
     // 창이 닫히기 전에 값을 읽어야 하므로 여기서 부른다.
@@ -659,7 +731,7 @@
           throw new Error(msg);   // 부른 쪽(불러오기 모달)이 알아야 한다
         }
         status('');
-        showModal(result.data || {}, file);
+        showModal(result.data || {}, file, result.api_match, result.snap);
       })
       .catch(function (err) {
         console.error(err);

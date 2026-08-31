@@ -79,6 +79,27 @@ def _get_farm_seafood_items() -> list[str]:
     cache.set(_FARM_SEAFOOD_CACHE_KEY, items, _FARM_SEAFOOD_CACHE_TTL)
     return items
 
+# 인쇄물의 단위는 ASCII 로만 오지 않는다. 라벨 조판에는 한 칸에 들어가는 조합
+# 문자(㎖·㎏·㎉…)가 흔하고, 사진에서 읽어 온 값은 그 글자를 그대로 담아 온다.
+# 단위를 보는 검사(내용량 단위, 열량 병기, 총량 환산)가 전부 여기를 지나가므로
+# 비교하기 전에 한 번 되돌려 놓는다. 표시용 값은 건드리지 않는다 — 사용자가
+# 적은 그대로 보여 줘야 한다.
+_UNIT_ALIASES = {
+    '㎎': 'mg', '㎍': 'ug', '㎏': 'kg', '㎖': 'ml', '㎗': 'dl',
+    'ℓ': 'l', 'ℒ': 'l', '㏄': 'ml', '㎉': 'kcal', '㎈': 'cal',
+    'ｇ': 'g', 'ｍ': 'm', 'ｌ': 'l', 'Ｌ': 'l',
+}
+
+
+def normalize_units(text: str) -> str:
+    """단위 조합 문자를 ASCII 표기로 되돌린다 (비교용)."""
+    out = text or ''
+    for src, dst in _UNIT_ALIASES.items():
+        if src in out:
+            out = out.replace(src, dst)
+    return out
+
+
 _CONTENT_WEIGHT_UNIT_RE = re.compile(r'(\d+(?:\.\d+)?)\s?(mg|g|kg|ml|l)(?![a-zA-Z])', re.IGNORECASE)
 
 _FIELD_LABELS = {
@@ -161,7 +182,11 @@ _ALTERNATIVE_SOURCES = {
     'nutrition_text': ('calories', 'natriums', 'carbohydrates', 'proteins', 'fats'),
 }
 
-_KCAL_RE = re.compile(r'(\d[\d,]*(?:\.\d+)?)\s*k\s*cal', re.IGNORECASE)
+# 열량 표기를 찾는 자. 라벨은 "kcal" 만 쓰지 않는다 — 인쇄물에는 조판용 조합
+# 문자 ㎉ 가 흔하고, 사진에서 읽어 온 값은 그 글자를 그대로 담아 온다.
+# ASCII 만 보면 실제로는 병기된 라벨을 "열량을 안 적었다" 고 지적하게 된다.
+_KCAL_RE = re.compile(
+    r'(\d[\d,]*(?:\.\d+)?)\s*(?:k\s*cal|㎉|㎈|킬로\s*칼로리)', re.IGNORECASE)
 
 # 값이 "있다" 를 공백 여부만으로 볼 수 없는 항목.
 #
@@ -178,6 +203,57 @@ _REQUIRED_HINTS = {
     'weight_calorie': '내용량에 열량을 함께 적어도 됩니다. (예: 250 g (100 kcal))',
 }
 
+# 영양성분 개별 항목. "영양표시를 하는 제품인가" 를 이 값들로 판단한다.
+_NUTRITION_VALUE_FIELDS = ('calories', 'natriums', 'carbohydrates', 'sugars',
+                           'fats', 'trans_fats', 'saturated_fats',
+                           'cholesterols', 'proteins')
+
+
+def _has_nutrition_display(label) -> bool:
+    """이 라벨이 영양성분을 표시하는 제품인가."""
+    if (getattr(label, 'chckd_nutrition_text', '') or '') == 'Y':
+        return True
+    return any((getattr(label, f, '') or '').strip()
+               for f in _NUTRITION_VALUE_FIELDS)
+
+
+def is_required(label, field: str) -> bool:
+    """
+    체크가 켜져 있어도 그 항목을 "비었다" 고 지적해도 되는가.
+
+    내용량(열량)만 예외다. 열량 병기는 **영양성분 표시 대상 식품**의 의무이지
+    모든 제품의 의무가 아니다. 게다가 이 항목은 어느 화면에도 입력칸이 없고
+    (내용량에 함께 적는 값이라 뺐다) 표시 항목 목록에도 없어서 끌 수도 없다.
+    영양표시가 없는 제품에까지 지적하면 **고칠 방법이 없는 경고**가 된다 —
+    실제로 "숨겼는데도 계속 나온다" 는 신고가 여기서 나왔다.
+
+    그래서 영양성분을 표시하는 제품일 때만 본다. 그때는 값이 있으므로
+    "내용량에 이렇게 적으세요" 라고 계산까지 해서 알려 줄 수 있다.
+    """
+    if field == 'weight_calorie':
+        return _has_nutrition_display(label)
+    return True
+
+
+def _weight_calorie_hint(label) -> str:
+    """
+    내용량에 무엇을 적으면 되는지, 가능하면 계산해서 알려 준다.
+
+    영양성분 탭의 calories 는 100g(ml) 당 값이라 총량을 곱해야 병기할 값이 된다.
+    둘 다 읽히면 완성된 문구를 그대로 보여 준다 — 사용자가 다시 계산하지 않는다.
+    """
+    base = _REQUIRED_HINTS['weight_calorie']
+    per_100 = _number((getattr(label, 'calories', '') or '').strip())
+    amount = _total_amount(getattr(label, 'content_weight', '') or '')
+    if per_100 is None or amount is None or amount <= 0:
+        return base
+    total = per_100 * amount / 100
+    # 표시기준상 열량은 5kcal 단위로 반올림한다
+    total = round(total / 5) * 5
+    weight = (label.content_weight or '').strip()
+    return (f'영양성분 탭의 100g(ml)당 {per_100:,.0f} kcal 로 계산하면 '
+            f'내용량 칸에 "{weight} ({total:,.0f} kcal)" 라고 적으면 됩니다.')
+
 
 def content_sources(field: str) -> tuple[str, ...]:
     """그 항목의 값을 담을 수 있는 필드 전부. 캐시 지문이 함께 본다."""
@@ -192,7 +268,8 @@ def _has_content(label, field: str) -> bool:
     spec = _CONTENT_PATTERNS.get(field)
     if spec:
         sources, pattern = spec
-        return any(pattern.search(getattr(label, src, '') or '') for src in sources)
+        return any(pattern.search(normalize_units(getattr(label, src, '') or ''))
+                   for src in sources)
 
     if (getattr(label, field, '') or '').strip():
         return True
@@ -231,6 +308,8 @@ def check_required_fields(label) -> list[dict]:
             continue
         if _has_content(label, field):
             continue
+        if not is_required(label, field):
+            continue
         missing.append((field, _verbose_name(type(label), field)))
 
     if not missing:
@@ -247,7 +326,12 @@ def check_required_fields(label) -> list[dict]:
         message = f'표시하기로 선택한 {len(names)}개 항목이 비어 있습니다: {listed}'
 
     suggestion = '비어 있는 항목을 입력하거나, 이 제품에 해당하지 않으면 표시 항목 체크를 해제하세요.'
-    hints = [_REQUIRED_HINTS[field] for field, _ in missing if field in _REQUIRED_HINTS]
+    hints = []
+    for field, _ in missing:
+        if field == 'weight_calorie':
+            hints.append(_weight_calorie_hint(label))
+        elif field in _REQUIRED_HINTS:
+            hints.append(_REQUIRED_HINTS[field])
     if hints:
         suggestion = ' '.join(hints) + ' ' + suggestion
 
@@ -273,7 +357,7 @@ def _number(text: str) -> float | None:
 
 def _total_amount(text: str) -> float | None:
     """내용량 문구에서 총량(g 또는 ml)을 읽는다. 없으면 None."""
-    m = _AMOUNT_RE.search(text or '')
+    m = _AMOUNT_RE.search(normalize_units(text or ''))
     if not m:
         return None
     value = _number(m.group(1))
@@ -298,7 +382,7 @@ def check_calorie_consistency(label) -> list[dict]:
     두 값 중 하나라도 읽을 수 없으면 검사하지 않는다. 열량은 표시기준상
     5kcal 단위로 반올림하므로 그만큼은 차이를 허용한다.
     """
-    text = f"{label.content_weight or ''} {label.weight_calorie or ''}"
+    text = normalize_units(f"{label.content_weight or ''} {label.weight_calorie or ''}")
     kcal_match = _KCAL_RE.search(text)
     if not kcal_match:
         return []
@@ -380,7 +464,7 @@ def check_content_weight(label) -> list[dict]:
     content_weight = (label.content_weight or '').strip()
     if not content_weight:
         return []
-    if _CONTENT_WEIGHT_UNIT_RE.search(content_weight):
+    if _CONTENT_WEIGHT_UNIT_RE.search(normalize_units(content_weight)):
         return []
     return [_issue(
         'content_weight',

@@ -27,10 +27,11 @@ class Command(BaseCommand):
                             help='그 항목이 어떻게 틀렸는지 실제 사례')
         parser.add_argument('--limit', type=int, default=15,
                             help='사례 개수 (기본 15)')
-        parser.add_argument('--by', choices=['field', 'model', 'variant'],
+        parser.add_argument('--by', choices=['field', 'model', 'variant', 'source'],
                             default='field',
                             help='무엇을 기준으로 묶을지 (기본 field). '
-                                 'model 은 모델 비교, variant 는 영역선택/전체 비교')
+                                 'model 은 모델 비교, variant 는 영역선택/전체 비교, '
+                                 'source 는 사진만/등록정보 대조 비교')
         parser.add_argument('--model', help='이 모델로 읽은 것만')
         parser.add_argument('--variant', choices=['crop', 'whole'],
                             help='crop=영역 선택, whole=사진 전체')
@@ -72,8 +73,11 @@ class Command(BaseCommand):
 
         self.stdout.write(f'  {scope} 판독 {total}건 중 {wrong}건을 사용자가 고쳤다')
         self.stdout.write(self.style.SUCCESS(f'  전체 정답률 {overall:.1f}%'))
-        titles = {'field': '항목별', 'model': '모델별', 'variant': '방식별'}
-        labels = {'crop': '영역 선택', 'whole': '사진 전체'}
+        titles = {'field': '항목별', 'model': '모델별', 'variant': '방식별',
+                  'source': '출처별'}
+        labels = {'crop': '영역 선택', 'whole': '사진 전체',
+                  'photo': '사진만', 'api': '등록 정보로 채움',
+                  'both': '사진·등록 정보 일치', 'conflict': '사진·등록 정보 불일치'}
 
         self.stdout.write('')
         self.stdout.write(f'  {titles[options["by"]]} (정답률 낮은 순)')
@@ -95,7 +99,8 @@ class Command(BaseCommand):
                 '견줄 수 있다.'))
 
         self.stdout.write('')
-        self.stdout.write('  모델 비교: --by model     방식 비교: --by variant')
+        self.stdout.write('  모델 비교: --by model     방식 비교: --by variant'
+                          '     대조 효과: --by source')
         self.stdout.write('  어떻게 틀렸는지: --samples <항목>')
 
     def _samples(self, field, limit, days):

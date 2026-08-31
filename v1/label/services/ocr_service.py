@@ -232,9 +232,32 @@ def learned_hints():
         return ''
 
 
-def extract_label_from_image(image_file):
+def active_prompt(version=None):
+    """
+    이번 판독에 쓸 프롬프트.
+
+    관리자 화면에서 켜 둔 판이 있으면 그것을, 없으면 이 파일의 SYSTEM_PROMPT 를
+    쓴다. 조회에 실패해도 판독은 그대로 돌아야 하므로 조용히 기본값으로 내려간다.
+    """
+    try:
+        from v1.label.services.ocr_prompt import resolve
+        return resolve(version)
+    except Exception:
+        logger.exception('활성 프롬프트를 가져오지 못했다 - 기본 프롬프트로 읽는다')
+        return SYSTEM_PROMPT
+
+
+def extract_label_from_image(image_file, model=None, prompt_version=None,
+                             use_hints=True):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
+
+    model / prompt_version 은 **측정용 덮어쓰기**다. 정확도 화면이 판끼리
+    견주려면 같은 사진을 다른 판으로 읽어 봐야 한다. 평소 판독은 둘 다 비우고
+    부르므로 설정값과 활성 판을 그대로 쓴다.
+
+    use_hints=False 면 교정 이력 힌트를 붙이지 않는다 - 프롬프트 자체의 힘만
+    재고 싶을 때 쓴다(힌트가 섞이면 무엇이 점수를 올렸는지 알 수 없다).
 
     Returns:
         dict: {
@@ -268,10 +291,14 @@ def extract_label_from_image(image_file):
             ),
         })
 
+        system = active_prompt(prompt_version)
+        if use_hints:
+            system += learned_hints()
+
         response = client.chat.completions.create(
-            model=getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
+            model=model or getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT + learned_hints()},
+                {"role": "system", "content": system},
                 {"role": "user", "content": content},
             ],
             max_tokens=4000,

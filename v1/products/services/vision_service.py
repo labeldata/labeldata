@@ -97,6 +97,52 @@ def infer_ai_group(type_name: str, type_code: str = '') -> str:
     return 'A'
  
  
+# PDF 에서 글자를 이만큼도 못 뽑으면 텍스트 레이어가 없는 것(스캔본)으로 본다.
+# 도장·서명만 벡터로 들어간 스캔 PDF 가 몇 글자를 흘리는 경우가 있어서, 있고
+# 없고가 아니라 양으로 가른다.
+PDF_TEXT_MIN_CHARS = 40
+# 프롬프트에 실을 원문의 상한. 품목제조보고서 두 장이면 보통 3~5천 자다.
+# 상한이 없으면 표가 빽빽한 문서에서 입력 토큰이 폭발한다.
+PDF_TEXT_MAX_CHARS = 12000
+
+
+def extract_pdf_text(file_path: str, max_pages: int = 2) -> str:
+    """
+    PDF 에 박혀 있는 텍스트 레이어를 그대로 읽는다.
+
+    **이걸 안 쓰면 공짜로 정확한 글자를 버리는 셈이다.** 인쇄용 라벨 도안과
+    품목제조보고서는 대개 문서 프로그램에서 뽑은 PDF 라 글자가 그대로 들어 있다.
+    지금까지는 그걸 그림으로 되돌려(_pdf_to_base64_images) 모델에게 다시 읽혔다 —
+    확실한 원문을 버리고 오독 가능성이 있는 경로로 돌아간 것이다.
+
+    스캔한 PDF 는 텍스트 레이어가 없으므로 빈 문자열이 나온다. 그때는 예전처럼
+    그림으로만 읽는다.
+
+    Returns: 페이지별 텍스트를 이어 붙인 문자열 (없으면 '')
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        logger.error('PyMuPDF(fitz) 미설치 — PDF 텍스트 레이어를 읽지 못한다')
+        return ''
+
+    try:
+        with fitz.open(file_path) as doc:
+            parts = []
+            for page_num in range(min(max_pages, len(doc))):
+                text = (doc[page_num].get_text() or '').strip()
+                if text:
+                    parts.append(text)
+        joined = '\n\n'.join(parts).strip()
+    except Exception:
+        logger.exception('PDF 텍스트 레이어 추출 실패 (file=%s)', file_path)
+        return ''
+
+    # 너무 적으면 스캔본이다. 몇 글자를 "원문" 이라고 넘기면 모델이 그 조각을
+    # 믿고 나머지를 지어낼 수 있다.
+    return joined if len(joined) >= PDF_TEXT_MIN_CHARS else ''
+
+
 def _pdf_to_base64_images(file_path: str, max_pages: int = 2) -> list:
     """PDF → JPEG Base64 이미지 목록 변환 (PyMuPDF 사용)."""
     images = []
@@ -138,8 +184,13 @@ def _image_to_base64(file_path: str) -> str | None:
         return None
  
  
-def _call_vision_api(images_b64: list, prompt: str) -> dict:
-    """OpenAI gpt-4o-mini Vision API 호출 및 JSON 파싱."""
+def _call_vision_api(images_b64: list, prompt: str, pdf_text: str = '') -> dict:
+    """
+    OpenAI gpt-4o-mini Vision API 호출 및 JSON 파싱.
+
+    pdf_text 가 있으면 함께 넘긴다 — PDF 에 박혀 있는 원문이라 그림에서 읽은
+    글자보다 언제나 정확하다. 모델은 배치 판단에만 그림을 쓴다.
+    """
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
  
     content = [
@@ -152,6 +203,21 @@ def _call_vision_api(images_b64: list, prompt: str) -> dict:
         }
         for img in images_b64
     ]
+    if pdf_text:
+        # 글자는 이쪽이 정답이다. 모델은 "어느 항목이 어느 칸인지" 를 판단하는 데
+        # 그림을 쓰고, 값 자체는 원문에서 그대로 옮기게 한다. 그림만 줬을 때
+        # 업체명·지명의 획을 잘못 읽던 것이 여기서 사라진다.
+        content.append({
+            "type": "text",
+            "text": (
+                "아래는 이 PDF 에 실제로 박혀 있는 텍스트입니다. "
+                "**글자는 이 원문을 그대로 옮기시오** — 그림에서 다시 읽지 마시오. "
+                "그림은 어느 글자가 어느 항목의 값인지(표의 행·열, 칸의 배치)를 "
+                "판단하는 데만 쓰시오. "
+                "원문에 없는 값은 지어내지 마시오.\n\n"
+                f"=== PDF 원문 ===\n{pdf_text[:PDF_TEXT_MAX_CHARS]}"
+            ),
+        })
     content.append({"type": "text", "text": "이 문서에서 정보를 추출해주세요."})
  
     response = client.chat.completions.create(
@@ -214,7 +280,13 @@ def process_document_vision(document_id: int) -> None:
         ai_group = meta.get('ai_group', 'A')
  
         # 파일 → 이미지 변환 (PDF는 최대 2페이지만 처리 - 토큰 폭탄 방지)
+        #
+        # PDF 는 글자를 먼저 뽑는다. 문서 프로그램에서 만든 PDF 는 원문이 그대로
+        # 들어 있어서, 그림으로 되돌려 읽히면 확실한 값을 버리고 오독 가능성이
+        # 있는 경로로 돌아가게 된다. 스캔본이면 빈 문자열이 오고 예전 그대로다.
+        pdf_text = ''
         if ext == '.pdf':
+            pdf_text = extract_pdf_text(file_path, max_pages=2)
             images_b64 = _pdf_to_base64_images(file_path, max_pages=2)
         else:
             img = _image_to_base64(file_path)
@@ -224,10 +296,13 @@ def process_document_vision(document_id: int) -> None:
             raise ValueError("처리 가능한 이미지를 생성하지 못했습니다.")
  
         prompt = GROUP_B_PROMPT if ai_group == 'B' else GROUP_A_PROMPT
-        extracted = _call_vision_api(images_b64, prompt)
+        extracted = _call_vision_api(images_b64, prompt, pdf_text=pdf_text)
  
         meta['ai_status'] = 'COMPLETED'
         meta['extracted_data'] = extracted
+        # 원문을 썼는지 남긴다. 정확도를 나눠 볼 때 "그림만 봤을 때" 와
+        # "원문을 함께 봤을 때" 를 구분할 수 없으면 효과를 잴 수 없다.
+        meta['pdf_text_used'] = bool(pdf_text)
         if ai_group == 'B':
             meta['compliance_status'] = _compliance_check(extracted)
  

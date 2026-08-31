@@ -22,6 +22,7 @@ from django.utils import timezone
 from v1.label.models import (
     AgriculturalProduct,
     FoodAdditive,
+    FoodItem,
     FoodType,
     LabelIngredientRelation,
     MyIngredient,
@@ -906,6 +907,10 @@ class WeightCalorieCheckTests(TestCase):
 
     공백 여부로만 보면 두 방향으로 틀린다. 내용량에 병기했는데 전용 칸이 비었다고
     지적하거나, 전용 칸에 숫자만 있고 kcal 이 없는데 통과시킨다.
+
+    라벨은 **영양표시를 하는 제품일 때만** 만든다(calories 를 넣는다). 열량 병기는
+    영양성분 표시 대상 식품의 의무라서, 영양표시가 없는 제품에는 이 검사가 아예
+    돌지 않는다 — 그쪽은 WeightCalorieScopeTests 가 본다.
     """
 
     def setUp(self):
@@ -913,6 +918,7 @@ class WeightCalorieCheckTests(TestCase):
 
     def _messages(self, **kwargs):
         from v1.label.services.validation_service import check_required_fields
+        kwargs.setdefault('calories', '120')
         label = MyLabel.objects.create(
             user_id=self.user, my_label_name='라벨',
             chckd_weight_calorie='Y', **kwargs)
@@ -938,10 +944,61 @@ class WeightCalorieCheckTests(TestCase):
     def test_어떻게_적으라는지_알려준다(self):
         from v1.label.services.validation_service import check_required_fields
         label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨',
-                                       chckd_weight_calorie='Y', content_weight='250 g')
+                                       chckd_weight_calorie='Y', calories='120',
+                                       content_weight='250 g')
         issues = check_required_fields(label)
         self.assertIn('weight_calorie', issues[0]['fields'])
         self.assertIn('kcal', issues[0]['suggestion'])
+
+    def test_적을_값을_계산해서_보여준다(self):
+        """
+        100g 당 값을 총량에 적용하는 계산을 사용자가 다시 하게 두지 않는다.
+        120 kcal x 250 g / 100 = 300 kcal.
+        """
+        from v1.label.services.validation_service import check_required_fields
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='라벨',
+                                       chckd_weight_calorie='Y', calories='120',
+                                       content_weight='250 g')
+        suggestion = check_required_fields(label)[0]['suggestion']
+        self.assertIn('250 g (300 kcal)', suggestion)
+
+    def test_조합_문자로_적은_열량도_읽는다(self):
+        """
+        라벨 인쇄물과 사진 판독값에는 ㎉·㎖ 같은 조합 문자가 그대로 들어온다.
+        ASCII 만 보면 실제로는 병기된 라벨을 "안 적었다" 고 지적하게 된다.
+        """
+        for text in ('250g(300㎉)', '250㎖ (300 ㎉)', '250 g / 300킬로칼로리'):
+            self.assertNotIn('내용량(열량)', self._messages(content_weight=text), text)
+
+
+class WeightCalorieScopeTests(TestCase):
+    """
+    열량 병기는 **영양성분 표시 대상 식품**의 의무다. 모든 제품의 의무가 아니다.
+
+    내용량(열량)은 어느 화면에도 입력칸이 없고(내용량에 함께 적는 값이라 뺐다)
+    표시 항목 목록에도 없어서 끌 수도 없다. 영양표시가 없는 제품에까지 지적하면
+    **고칠 방법이 없는 경고**가 된다 — 운영에서 "숨겼는데도 계속 나온다" 는
+    신고가 여기서 나왔다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='kcalscope', password='x')
+
+    def _messages(self, **kwargs):
+        from v1.label.services.validation_service import check_required_fields
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='라벨',
+            chckd_weight_calorie='Y', content_weight='250 g', **kwargs)
+        return ' '.join(i['message'] for i in check_required_fields(label))
+
+    def test_영양표시가_없으면_지적하지_않는다(self):
+        self.assertNotIn('내용량(열량)', self._messages())
+
+    def test_영양성분_값이_있으면_지적한다(self):
+        self.assertIn('내용량(열량)', self._messages(calories='120'))
+
+    def test_영양성분_표시_체크만_켜도_지적한다(self):
+        self.assertIn('내용량(열량)', self._messages(chckd_nutrition_text='Y'))
 
     def test_내용량에_적은_열량이_캐시_지문에_반영된다(self):
         from v1.label.services.ai_rate_limit import _result_cache_key
@@ -2260,3 +2317,514 @@ class OcrBenchmarkTests(TestCase):
             Image.new('RGB', (200, 100), 'white').save(path)
             buf = crop_image(path, [10, 10, 50, 40])
             self.assertEqual(Image.open(buf).size, (50, 40))
+
+
+class OcrReconcileTests(TestCase):
+    """
+    사진에서 읽은 값을 식약처 품목보고 정보와 대조한다.
+
+    사진에서 품목보고번호가 읽히면 등록된 정보를 그대로 가져올 수 있다 — OCR 을
+    거치지 않으므로 틀릴 이유가 없는 값이다. 그런데 두 입구(사진 판독 / 번호
+    조회)가 서로를 몰라서, 번호가 읽혔는데도 등록 정보를 한 번도 보지 않았다.
+
+    여기서 고정하는 것은 **말없이 덮어쓰지 않는다** 는 규칙이다. 등록 정보라고
+    무조건 맞는 것도 아니다 — 포장을 바꾸고 변경 보고를 안 한 제품이 흔하다.
+    """
+
+    REPORT_NO = '20220460436160'
+
+    def setUp(self):
+        FoodItem.objects.create(
+            prdlst_report_no=self.REPORT_NO,
+            prdlst_nm='더블치즈&바질치킨 샐러드',
+            prdlst_dcnm='즉석섭취식품',
+            bssh_nm='(주)삼립식품',
+            pog_daycnt='제조일로부터 5일',
+            frmlc_mtrqlt='PET(용기), PE(드레싱)',
+            rawmtrl_nm='양상추, 닭가슴살, 치즈',
+        )
+
+    def _ocr(self, **overrides):
+        data = {'prdlst_report_no': {'value': self.REPORT_NO, 'confidence': 'high'}}
+        for key, value in overrides.items():
+            data[key] = ({'value': value, 'confidence': 'high'} if value
+                         else {'value': None, 'confidence': 'none'})
+        return data
+
+    # ── 번호 찾기 ───────────────────────────────────────────────────────────
+
+    def test_항목명과_띄어쓰기가_섞여_와도_찾는다(self):
+        """사진에서는 "품목보고번호: 2022 0460 436160" 처럼 읽힌다."""
+        from v1.label.services.ocr_reconcile import reconcile
+
+        data = {'prdlst_report_no': {'value': '품목보고번호: 2022 0460 436160',
+                                     'confidence': 'high'}}
+        self.assertTrue(reconcile(data)['matched'])
+
+    def test_확신도가_낮아_후보만_와도_찾는다(self):
+        """
+        후보 중 하나가 실제로 등록돼 있으면 그게 정답일 가능성이 높다.
+        조회 자체가 번호를 검증해 준다.
+        """
+        from v1.label.services.ocr_reconcile import reconcile
+
+        data = {'prdlst_report_no': {
+            'value': None, 'confidence': 'low',
+            'candidates': ['20220460436161', self.REPORT_NO]}}
+        result = reconcile(data)
+        self.assertTrue(result['matched'])
+        self.assertEqual(result['report_no'], self.REPORT_NO)
+
+    def test_번호가_없으면_아무것도_하지_않는다(self):
+        from v1.label.services.ocr_reconcile import reconcile
+
+        self.assertFalse(reconcile({'prdlst_nm': {'value': '아무거나'}})['matched'])
+
+    # ── 판정 ────────────────────────────────────────────────────────────────
+
+    def test_못_읽은_자리는_등록_정보로_채운다(self):
+        from v1.label.services.ocr_reconcile import merge, reconcile
+
+        data = self._ocr(prdlst_dcnm=None)
+        result = reconcile(data)
+        self.assertIn('prdlst_dcnm', result['filled'])
+
+        merged = merge(data, result)
+        self.assertEqual(merged['prdlst_dcnm']['value'], '즉석섭취식품')
+        self.assertEqual(merged['prdlst_dcnm']['confidence'], 'high')
+        self.assertEqual(merged['prdlst_dcnm']['source'], 'api')
+
+    def test_두_쪽이_같으면_확신도를_올린다(self):
+        """사용자가 눈으로 다시 확인해야 할 항목이 줄어든다."""
+        from v1.label.services.ocr_reconcile import merge, reconcile
+
+        data = self._ocr(prdlst_nm='더블치즈&바질치킨 샐러드')
+        data['prdlst_nm']['confidence'] = 'low'
+        merged = merge(data, reconcile(data))
+        self.assertEqual(merged['prdlst_nm']['confidence'], 'high')
+        self.assertEqual(merged['prdlst_nm']['source'], 'both')
+
+    def test_제조원은_주소가_붙어_있어도_같다고_본다(self):
+        """사진의 제조원은 "회사명 + 주소" 인데 등록 정보에는 회사명만 있다."""
+        from v1.label.services.ocr_reconcile import reconcile
+
+        data = self._ocr(bssh_nm='(주)삼립식품 서울시 성동구 성수동 1-2')
+        self.assertIn('bssh_nm', reconcile(data)['agreed'])
+
+    def test_다르면_어느_쪽도_고르지_않는다(self):
+        """
+        사진이 틀렸을 수도, 등록 정보가 오래됐을 수도 있다. 값은 사진 것을 두고
+        둘 다 후보로 올려 사용자가 고르게 한다.
+        """
+        from v1.label.services.ocr_reconcile import merge, reconcile
+
+        data = self._ocr(prdlst_nm='전혀 다른 제품명입니다')
+        result = reconcile(data)
+        self.assertIn('prdlst_nm', result['conflicts'])
+
+        merged = merge(data, result)
+        self.assertEqual(merged['prdlst_nm']['value'], '전혀 다른 제품명입니다')
+        self.assertEqual(merged['prdlst_nm']['confidence'], 'low')
+        self.assertIn('더블치즈&바질치킨 샐러드', merged['prdlst_nm']['candidates'])
+
+    def test_원본을_건드리지_않는다(self):
+        """확인 창의 재료일 뿐이다. 원본이 바뀌면 무엇이 판독값인지 알 수 없다."""
+        from v1.label.services.ocr_reconcile import merge
+
+        data = self._ocr(prdlst_dcnm=None)
+        merge(data)
+        self.assertIsNone(data['prdlst_dcnm']['value'])
+
+    # ── 소비기한: 글자가 아니라 기간을 본다 ────────────────────────────────
+
+    def test_기간이_다르면_짚는다(self):
+        """
+        "제조일로부터 12개월" 과 "제조일로부터 5일" 은 글자로는 66점이지만
+        완전히 다른 제품이다. 글자만 견주면 이걸 놓친다.
+        """
+        from v1.label.services.ocr_reconcile import reconcile
+
+        data = self._ocr(pog_daycnt='제조일로부터 12개월')
+        self.assertIn('pog_daycnt', reconcile(data)['conflicts'])
+
+    def test_단위만_다르고_기간이_같으면_같다고_본다(self):
+        from v1.label.services.ocr_reconcile import _compare
+
+        self.assertEqual(_compare('제조일로부터 1년', '제조일로부터 12개월', 'period')[1],
+                         'agree')
+
+    def test_별도표기는_어긋난_것이_아니다(self):
+        """
+        라벨의 "별도표기일까지" 는 날짜를 따로 찍는다는 말이지, 등록 정보와
+        모순되는 게 아니다. 이걸 불일치로 울리면 매번 나오는 경고가 된다.
+        """
+        from v1.label.services.ocr_reconcile import reconcile
+
+        data = self._ocr(pog_daycnt='별도표기일까지')
+        self.assertNotIn('pog_daycnt', reconcile(data)['conflicts'])
+
+    def test_원재료명은_표기가_달라도_틀렸다고_하지_않는다(self):
+        """인쇄물에는 원산지·함량이 붙고 등록 정보에는 없다. 늘 벌어진다."""
+        from v1.label.services.ocr_reconcile import reconcile
+
+        data = self._ocr(
+            rawmtrl_nm='양상추(국산) 40%, 닭가슴살(국내산) 30%, 자연치즈(수입산) 12%')
+        self.assertNotIn('rawmtrl_nm', reconcile(data)['conflicts'])
+
+
+class OcrPromptVersionTests(TestCase):
+    """
+    프롬프트 판을 DB 에 둔다. 켜져 있는 판은 언제나 하나뿐이어야 한다.
+
+    표가 비어 있어도, 조회가 실패해도 판독은 그대로 돌아야 한다 — 코드에 박힌
+    기본 프롬프트로 내려간다.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def test_켜진_판이_없으면_기본_프롬프트를_쓴다(self):
+        from v1.label.services.ocr_prompt import base_prompt, resolve
+
+        self.assertEqual(resolve(use_cache=False), base_prompt())
+
+    def test_켜면_그_판을_쓴다(self):
+        from v1.common.models import OcrPromptVersion
+        from v1.label.services.ocr_prompt import resolve
+
+        version = OcrPromptVersion.objects.create(name='판1', prompt='새 프롬프트')
+        version.activate()
+        self.assertEqual(resolve(use_cache=False), '새 프롬프트')
+
+    def test_켜진_판은_언제나_하나다(self):
+        from v1.common.models import OcrPromptVersion
+
+        a = OcrPromptVersion.objects.create(name='판1', prompt='a', active=True)
+        b = OcrPromptVersion.objects.create(name='판2', prompt='b')
+        b.activate()
+
+        a.refresh_from_db()
+        self.assertFalse(a.active)
+        self.assertTrue(OcrPromptVersion.objects.get(pk=b.pk).active)
+        self.assertEqual(OcrPromptVersion.objects.filter(active=True).count(), 1)
+
+    def test_자동_초안은_켜지지_않은_채_만들어진다(self):
+        """
+        아무도 안 본 프롬프트가 조용히 현업에 걸리면 안 된다. 판독 결과는 법적
+        표시물에 그대로 들어간다.
+        """
+        from v1.common.models import OcrPromptVersion
+
+        version = OcrPromptVersion.objects.create(
+            name='자동 초안', prompt='x', auto_generated=True)
+        self.assertFalse(version.active)
+
+
+class OcrLabScoringTests(TestCase):
+    """
+    정답지 채점. 규칙은 파일로 재는 길(ocr_benchmark.py)과 같은 모듈을 쓴다 —
+    두 벌로 만들면 어느 날 한쪽만 고쳐져서 두 숫자가 어긋난다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='lab', password='x')
+
+    def test_검증된_표시사항을_정답으로_가져온다(self):
+        """
+        판독값이 아니라 실제로 인쇄에 쓰인 값이다. 손으로 옮겨 적다 틀리면
+        정답지가 틀린다.
+        """
+        from v1.label.services.ocr_lab import expected_from_label
+
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='라벨',
+            prdlst_nm='제품명', content_weight='250 g (300 kcal)',
+            pog_daycnt='제조일로부터 12개월',
+            rawmtrl_nm_display='밀가루(밀:미국산), 설탕')
+        expected = expected_from_label(label)
+
+        self.assertEqual(expected['prdlst_nm'], '제품명')
+        self.assertEqual(expected['rawmtrl_nm'], '밀가루(밀:미국산), 설탕')
+        # 빈 항목은 넣지 않는다 — 채점기가 어차피 건너뛰는데 화면만 지저분해진다
+        self.assertNotIn('cautions', expected)
+
+    def test_원재료명은_표시용이_비면_참고_필드에서_가져온다(self):
+        from v1.label.services.ocr_lab import expected_from_label
+
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='라벨',
+            rawmtrl_nm='정제수, 설탕')
+        self.assertEqual(expected_from_label(label)['rawmtrl_nm'], '정제수, 설탕')
+
+    def test_약한_항목은_평균과_편차를_함께_본다(self):
+        """
+        늘 55점인 항목과 90점·20점을 오가는 항목은 전혀 다른 문제이고, 후자가
+        더 급하다 — 같은 사진을 매번 다르게 읽는다는 뜻이다.
+        """
+        from v1.label.services.ocr_prompt import weak_fields
+
+        detail = {'fields': [
+            {'field': '안정적', 'mean': 95, 'worst': 93, 'best': 97, 'spread': 4, 'runs': 3},
+            {'field': '늘낮음', 'mean': 55, 'worst': 52, 'best': 58, 'spread': 6, 'runs': 3},
+            {'field': '들쭉날쭉', 'mean': 60, 'worst': 20, 'best': 95, 'spread': 75, 'runs': 3},
+        ]}
+        picked = [r['field'] for r in weak_fields(detail)]
+        self.assertEqual(picked[0], '들쭉날쭉')
+        self.assertIn('늘낮음', picked)
+        self.assertNotIn('안정적', picked)
+
+
+class OcrSnapTests(TestCase):
+    """
+    식품유형과 알레르기는 표시기준이 정한 **목록**이 있다. 자유 문구로 받을
+    이유가 없다.
+
+    이 값들은 뒤에서 키로 쓰인다 — 식품유형은 유형별 표시항목 규칙을 찾는 키이고,
+    알레르기는 원재료에서 검출한 것과 대조하는 키다. 한 글자가 어긋나면 규칙을
+    못 찾고, 못 찾은 것을 화면은 조용히 넘긴다.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        FoodType.objects.create(food_group='가공식품', food_type='즉석섭취식품')
+        FoodType.objects.create(food_group='가공식품', food_type='과자')
+
+    def _data(self, **kwargs):
+        return {k: {'value': v, 'confidence': 'high'} for k, v in kwargs.items()}
+
+    def test_한_글자_차이는_목록에_맞춘다(self):
+        from v1.label.services.ocr_snap import snap
+
+        data, report = snap(self._data(prdlst_dcnm='즉석섭취식품류'))
+        self.assertEqual(data['prdlst_dcnm']['value'], '즉석섭취식품')
+        self.assertEqual(report[0]['field'], 'prdlst_dcnm')
+
+    def test_무엇을_고쳤는지_남긴다(self):
+        """말없이 고치면 "내가 사진에서 본 글자와 다른데?" 가 된다."""
+        from v1.label.services.ocr_snap import snap, summary
+
+        data, report = snap(self._data(prdlst_dcnm='즉석섭취식품류'))
+        self.assertEqual(data['prdlst_dcnm']['snapped_from'], '즉석섭취식품류')
+        self.assertIn('즉석섭취식품류', summary(report))
+
+    def test_이미_맞으면_건드리지_않는다(self):
+        from v1.label.services.ocr_snap import snap
+
+        data, report = snap(self._data(prdlst_dcnm='즉석섭취식품'))
+        self.assertEqual(report, [])
+        self.assertNotIn('snapped_from', data['prdlst_dcnm'])
+
+    def test_비슷한_것이_없으면_손대지_않는다(self):
+        """목록에 없는 유형을 억지로 맞추면 판독이 맞았을 때보다 나쁘다."""
+        from v1.label.services.ocr_snap import snap
+
+        data, report = snap(self._data(prdlst_dcnm='전혀없는유형이름'))
+        self.assertEqual(report, [])
+        self.assertEqual(data['prdlst_dcnm']['value'], '전혀없는유형이름')
+
+    def test_두_후보가_같은_거리면_손대지_않는다(self):
+        """어느 쪽인지 알 수 없을 때 임의로 고르면 규칙을 엉뚱한 곳에서 찾는다."""
+        from v1.label.services.ocr_snap import snap_one
+
+        # "과지류" 는 "과자류" 와 "과채류" 에서 똑같이 한 글자 거리다
+        snapped, _, verdict = snap_one('과지류', ['과자류', '과채류'])
+        self.assertEqual(verdict, 'ambiguous')
+        self.assertEqual(snapped, '과지류', '모호하면 판독값을 그대로 둔다')
+
+    def test_짧은_이름은_한_글자만_달라도_손대지_않는다(self):
+        """
+        두 글자짜리 이름에서 한 글자를 고치면 절반을 바꾸는 것이다.
+        "빵류" 를 "면류" 로 맞추는 일이 생긴다.
+        """
+        from v1.label.services.ocr_snap import snap_one
+
+        _, _, verdict = snap_one('빵류', ['면류', '떡류'])
+        self.assertEqual(verdict, 'unknown')
+
+    def test_긴_이름은_두_글자까지_맞춘다(self):
+        from v1.label.services.ocr_snap import snap_one
+
+        snapped, _, verdict = snap_one('즉석섭취식퓸', ['즉석섭취식품', '과자류'])
+        self.assertEqual(verdict, 'snapped')
+        self.assertEqual(snapped, '즉석섭취식품')
+
+    def test_원본을_건드리지_않는다(self):
+        from v1.label.services.ocr_snap import snap
+
+        original = self._data(prdlst_dcnm='즉석섭취식품류')
+        snap(original)
+        self.assertEqual(original['prdlst_dcnm']['value'], '즉석섭취식품류')
+
+    # ── 알레르기 ────────────────────────────────────────────────────────────
+
+    def test_알레르기는_항목마다_맞춘다(self):
+        from v1.label.services.ocr_snap import snap_allergens
+
+        snapped, changes = snap_allergens('우유, 대두류, 밀 함유')
+        self.assertEqual(snapped, '우유, 대두, 밀')
+        self.assertEqual([c['from'] for c in changes], ['대두류'])
+
+    def test_목록에_없는_문구는_지우지_않는다(self):
+        """22종 밖의 문구를 적어 두는 라벨이 있다. 지우면 정보가 사라진다."""
+        from v1.label.services.ocr_snap import snap_allergens
+
+        snapped, _ = snap_allergens('우유, 참깨오일추출물')
+        self.assertIn('참깨오일추출물', snapped)
+
+    def test_맞추고_나서_겹치면_한_번만_남긴다(self):
+        from v1.label.services.ocr_snap import snap_allergens
+
+        snapped, _ = snap_allergens('대두류, 대두')
+        self.assertEqual(snapped, '대두')
+
+
+class OcrHintClusteringTests(TestCase):
+    """
+    교정 이력을 묶어서 센다.
+
+    예전에는 (항목, 판독값, 고친값) 세 값이 **완전히 같은** 교정만 2회 이상일 때
+    힌트가 됐다. 실제 오독은 매번 조금씩 달라서 — "송정동" 을 한 번은 "성정동",
+    한 번은 "송전동" 으로 읽으면 각각 1회 — 힌트가 거의 안 붙었다.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = User.objects.create_user(username='hint', password='x')
+
+    def _record(self, field, before, after, times=1):
+        from v1.common.models import OcrCorrection
+
+        for _ in range(times):
+            OcrCorrection.objects.create(
+                user=self.user, field=field, ocr_value=before,
+                final_value=after, corrected=True)
+
+    def test_판독값이_달라도_같은_정답이면_묶인다(self):
+        from v1.label.services.ocr_learning import build_hints
+
+        self._record('bssh_nm', '성정동', '송정동')
+        self._record('bssh_nm', '송전동', '송정동')
+
+        hints = build_hints()
+        self.assertEqual(len(hints), 1)
+        self.assertEqual(hints[0]['count'], 2)
+        self.assertEqual(hints[0]['after'], '송정동')
+        self.assertIn('성정동', hints[0]['before'])
+        self.assertIn('송전동', hints[0]['before'])
+
+    def test_한_번뿐인_교정은_힌트가_아니다(self):
+        """그 라벨 사정일 수 있어 일반화하면 오히려 해롭다."""
+        from v1.label.services.ocr_learning import build_hints
+
+        self._record('bssh_nm', '성정동', '송정동')
+        self.assertEqual(build_hints(), [])
+
+    def test_띄어쓰기만_다른_것은_교정으로_세지_않는다(self):
+        from v1.label.services.ocr_learning import build_hints
+
+        self._record('prdlst_nm', '치즈 케익', '치즈케익', times=3)
+        self.assertEqual(build_hints(), [])
+
+    # ── 문자 혼동 행렬 ──────────────────────────────────────────────────────
+
+    def test_바뀐_글자를_모아_센다(self):
+        """
+        값 전체를 통으로 세면 사례마다 달라 아무것도 안 남는다. 바뀐 글자만
+        떼어 모으면 같은 혼동이 반복된다.
+        """
+        from v1.label.services.ocr_learning import char_confusions
+
+        self._record('bssh_nm', '삼립식품', '삼진식품')
+        self._record('prdlst_nm', '립스틱젤리', '진스틱젤리')
+
+        pairs = char_confusions()
+        self.assertIn({'from': '립', 'to': '진', 'count': 2}, pairs)
+
+    def test_한_번뿐인_혼동은_넣지_않는다(self):
+        from v1.label.services.ocr_learning import char_confusions
+
+        self._record('bssh_nm', '삼립식품', '삼진식품')
+        self.assertEqual(char_confusions(), [])
+
+    def test_값을_통째로_갈아_끼운_것은_글자_혼동이_아니다(self):
+        """우연히 겹친 글자쌍을 배우게 된다."""
+        from v1.label.services.ocr_learning import char_confusions
+
+        self._record('cautions', '직사광선을 피해 보관', '어린이 손이 닿지 않는 곳', times=3)
+        self.assertEqual(char_confusions(), [])
+
+    def test_두_종류의_힌트가_모두_프롬프트에_붙는다(self):
+        from v1.label.services.ocr_learning import hints_text
+
+        self._record('bssh_nm', '성정동', '송정동')
+        self._record('bssh_nm', '송전동', '송정동')
+        self._record('prdlst_nm', '삼립식품', '삼진식품')
+        self._record('prdlst_nm', '립스틱젤리', '진스틱젤리')
+
+        text = hints_text(use_cache=False)
+        self.assertIn('송정동', text)          # 값 단위
+        self.assertIn('"립"→"진"', text)       # 글자 단위
+
+    def test_쌓인_것이_없으면_아무것도_붙이지_않는다(self):
+        from v1.label.services.ocr_learning import hints_text
+
+        self.assertEqual(hints_text(use_cache=False), '')
+
+
+class PdfTextLayerTests(TestCase):
+    """
+    PDF 에 박혀 있는 글자를 그대로 읽는다.
+
+    인쇄용 라벨 도안과 품목제조보고서는 대개 문서 프로그램에서 뽑은 PDF 라 글자가
+    그대로 들어 있다. 지금까지는 그걸 그림으로 되돌려 모델에게 다시 읽혔다 —
+    확실한 원문을 버리고 오독 가능성이 있는 경로로 돌아간 것이다.
+    """
+
+    def _pdf(self, text):
+        """텍스트 레이어가 있는 PDF 를 만든다 (PyMuPDF)."""
+        import tempfile
+
+        import fitz
+
+        doc = fitz.open()
+        page = doc.new_page()
+        page.insert_text((72, 100), text, fontsize=11, fontname='helv')
+        path = tempfile.mktemp(suffix='.pdf')
+        doc.save(path)
+        doc.close()
+        return path
+
+    def test_텍스트_레이어를_읽는다(self):
+        from v1.products.services.vision_service import extract_pdf_text
+
+        path = self._pdf('Product Name: PINE SOFT-T / Manufacturer: ALGLIDIN CO LTD')
+        self.assertIn('PINE SOFT-T', extract_pdf_text(path))
+
+    def test_글자가_거의_없으면_스캔본으로_본다(self):
+        """
+        몇 글자를 "원문" 이라고 넘기면 모델이 그 조각을 믿고 나머지를 지어낸다.
+        """
+        from v1.products.services.vision_service import extract_pdf_text
+
+        self.assertEqual(extract_pdf_text(self._pdf('x')), '')
+
+    def test_읽지_못해도_예외를_내지_않는다(self):
+        """PDF 를 못 읽었다고 문서 분석 전체가 멈추면 안 된다."""
+        from v1.products.services.vision_service import extract_pdf_text
+
+        self.assertEqual(extract_pdf_text('/없는/경로.pdf'), '')
+
+    def test_원문이_있으면_모델에게_그것을_쓰라고_말한다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'products/services/vision_service.py'
+                  ).read_text(encoding='utf-8')
+        # 그림에서 다시 읽으면 원문을 넘긴 뜻이 없다
+        self.assertIn('그림에서 다시 읽지 마시오', source)
+        self.assertIn('extract_pdf_text(file_path', source)
+        self.assertIn("meta['pdf_text_used']", source)

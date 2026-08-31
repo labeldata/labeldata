@@ -5857,6 +5857,9 @@ def ocr_record_corrections(request, label_id):
             request.user, field,
             row.get('ocr_value'), row.get('final_value'),
             confidence=row.get('confidence'), model=model, variant=variant,
+            # 사진만 봤는지, 품목보고 등록 정보와 대조했는지. 나눠 재지 않으면
+            # "대조가 정확도를 올렸는가" 를 나중에 숫자로 답할 수 없다.
+            source=row.get('source'),
         )
         if entry is not None:
             saved += 1

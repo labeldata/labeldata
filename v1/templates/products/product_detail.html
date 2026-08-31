@@ -1127,6 +1127,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // 탭 이탈 시 iframe 데이터 자동 저장 (편집 내용 보존)
         tabContainer.addEventListener('hide.bs.tab', function(event) {
             const leavingId = event.target?.getAttribute('data-bs-target') || '';
+            // 기본 정보 탭을 떠날 때 저장하지 않은 값이 있으면 먼저 저장한다.
+            //
+            // 다른 탭(표시사항 검증, 확정)은 전부 **저장된 값**을 서버에서 다시
+            // 읽어 판정한다. 사진에서 항목을 채운 뒤 저장하지 않고 넘어가면
+            // 서버는 예전 값을 보고 "비어 있습니다" 라고 답한다.
+            // 플로팅 저장 바를 없앤 뒤로는 저장하라는 안내도 눈에 띄지 않는다.
+            if (leavingId === '#tab-info' && hasUnsavedChanges) {
+                flushBasicInfo();
+            }
             if (leavingId === '#tab-bom') {
                 const iframe = document.getElementById('bomEditorFrame');
                 if (iframe && iframe.contentWindow && typeof iframe.contentWindow.saveData === 'function') {
@@ -1460,6 +1469,11 @@ function skipWithToast(newStatus, message) {
 }
 
 async function changeStatus(newStatus, overrideReason, acknowledged) {
+    // 확정은 서버가 저장된 값을 다시 읽어 검증한다. 화면에만 있는 값이 남아
+    // 있으면 방금 채운 항목을 두고 "비어 있습니다" 로 막힌다.
+    await flushBasicInfo();
+    if (pendingBasicInfoSave) await pendingBasicInfoSave;
+
     const formData = new FormData();
     formData.append('status', newStatus);
     if (overrideReason) formData.append('override_reason', overrideReason);
@@ -2904,13 +2918,30 @@ document.addEventListener('DOMContentLoaded', function() {
 let hasUnsavedChanges = false;
 let originalFormData = {};
 
+/**
+ * 변경을 추적할 요소 전부.
+ *
+ * 표시 항목 체크박스(.display-item-check)는 오른쪽 목차에 있어 폼 **밖**이다.
+ * 그래서 체크를 켜고 껐을 때 "저장하지 않은 변경" 으로 잡히지 않았고, 저장하지
+ * 않은 채 다른 탭으로 넘어가면 조용히 사라졌다. 사진 불러오기는 값을 채우면서
+ * 그 체크도 함께 켜므로, 이 구멍이 그대로 드러난다.
+ */
+function trackedFormElements() {
+    const basicInfoForm = document.getElementById('basic-info-form');
+    if (!basicInfoForm) return [];
+    return [
+        ...basicInfoForm.querySelectorAll('input, textarea, select'),
+        ...document.querySelectorAll('.display-item-check'),
+    ];
+}
+
 // 폼 초기값 저장
 document.addEventListener('DOMContentLoaded', function() {
     const basicInfoForm = document.getElementById('basic-info-form');
     if (!basicInfoForm) return;
     
     // 모든 입력 필드의 초기값 저장
-    const formElements = basicInfoForm.querySelectorAll('input, textarea, select');
+    const formElements = trackedFormElements();
     formElements.forEach(element => {
         if (element.id) {
             if (element.type === 'checkbox') {
@@ -2993,10 +3024,9 @@ function validateForm() {
 
 // 폼 변경사항 확인
 function checkFormChanges() {
-    const basicInfoForm = document.getElementById('basic-info-form');
-    if (!basicInfoForm) return;
-    
-    const formElements = basicInfoForm.querySelectorAll('input, textarea, select');
+    const formElements = trackedFormElements();
+    if (!formElements.length) return;
+
     let hasChanges = false;
     
     formElements.forEach(element => {
@@ -3030,11 +3060,10 @@ function checkFormChanges() {
 
 // 변경사항 취소
 function discardChanges() {
-    const basicInfoForm = document.getElementById('basic-info-form');
-    if (!basicInfoForm) return;
-    
-    // 모든 필드를 원래 값으로 복원
-    const formElements = basicInfoForm.querySelectorAll('input, textarea, select');
+    // 모든 필드를 원래 값으로 복원 (표시 항목 체크박스까지)
+    const formElements = trackedFormElements();
+    if (!formElements.length) return;
+
     formElements.forEach(element => {
         if (element.id && originalFormData.hasOwnProperty(element.id)) {
             if (element.type === 'checkbox') {
@@ -3076,6 +3105,21 @@ function showToast(message, type) { showSnackbar(message, type || 'success'); }
 // ============================================
 // 기본 정보 저장 함수 (기존 함수 수정)
 // ============================================
+
+/**
+ * 기본 정보에 저장하지 않은 값이 있으면 저장하고, 그 저장을 기다릴 수 있게 한다.
+ *
+ * 검증·확정은 서버가 **저장된 라벨**을 다시 읽어 판정하므로, 화면에만 있는 값은
+ * 판정에 반영되지 않는다. 두 경로가 이 함수를 먼저 기다리게 해서 "분명히 입력했는데
+ * 비어 있다고 나온다" 를 없앤다.
+ */
+let pendingBasicInfoSave = null;
+
+function flushBasicInfo() {
+    if (!hasUnsavedChanges) return Promise.resolve();
+    pendingBasicInfoSave = Promise.resolve(saveBasicInfo()).catch(function () {});
+    return pendingBasicInfoSave;
+}
 
 // 기존 saveBasicInfo 함수를 수정하여 Toast 알림 및 플로팅 바 처리
 const originalSaveBasicInfo = typeof saveBasicInfo !== 'undefined' ? saveBasicInfo : null;
@@ -3155,7 +3199,14 @@ function saveBasicInfo() {
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
                    || getCookie('csrftoken');
 
-    fetch(UPDATE_URL, {
+    // 결과를 기다릴 수 있게 프라미스를 돌려준다.
+    //
+    // 검증(표시사항 탭)과 확정(상태 변경)은 **저장된 값**을 서버에서 다시 읽어
+    // 판정한다. 화면에만 있는 값은 서버가 모른다 - 사진에서 소비기한을 채운 뒤
+    // 저장하지 않고 검증하면 "소비기한이 비어 있습니다" 가 나왔다. 사용자에게는
+    // 분명히 적혀 있으니 영문을 알 수 없는 지적이 된다.
+    // 그래서 그 두 경로가 저장이 끝날 때까지 기다린다.
+    return fetch(UPDATE_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -3167,8 +3218,8 @@ function saveBasicInfo() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // 원본 데이터 갱신
-            const formElements = basicInfoForm.querySelectorAll('input, textarea, select');
+            // 원본 데이터 갱신 (표시 항목 체크박스까지 — 폼 밖에 있다)
+            const formElements = trackedFormElements();
             formElements.forEach(element => {
                 if (element.id) {
                     if (element.type === 'checkbox') {

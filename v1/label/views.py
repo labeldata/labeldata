@@ -2734,6 +2734,41 @@ def ocr_extract(request):
             'success': False,
             'error': f'사진 처리 중 오류가 발생했습니다: {exc}',
         }, status=500)
+
+    # 판독 뒤에 두 가지를 더 얹는다. 둘 다 실패해도 판독 결과는 그대로 돌려준다.
+    #
+    #   1) 사전 스냅   식품유형·알레르기는 표시기준이 정한 **목록**이 있다.
+    #                  한 글자가 어긋나면 뒤에서 그 값을 키로 쓰는 곳(유형별
+    #                  표시항목 규칙, 알레르기 대조)이 통째로 못 찾는다.
+    #   2) 등록 정보 대조
+    #                  품목보고번호가 읽혔으면 식약처 등록 정보와 견준다. 그쪽은
+    #                  OCR 을 거치지 않으므로 틀릴 이유가 없다. 못 읽은 자리를
+    #                  메우고, 같은 말을 하는 항목은 확신도를 올린다. 다른 항목은
+    #                  어느 쪽도 고르지 않고 둘 다 보여 준다 — 등록 정보가
+    #                  오래됐을 수도 있다(포장을 바꾸고 변경 보고를 안 한 제품이
+    #                  흔하다).
+    #
+    # 스냅을 먼저 한다. 표기를 목록에 맞춘 뒤에 대조해야 "같은 유형인데 표기만
+    # 다른 것" 이 불일치로 잡히지 않는다.
+    if result.get('success'):
+        try:
+            from .services.ocr_snap import snap, summary as snap_summary
+            snapped, report = snap(result.get('data') or {})
+            result['data'] = snapped
+            if report:
+                result['snap'] = {'changes': report, 'summary': snap_summary(report)}
+        except Exception:
+            logger.exception('판독값 사전 대조 실패 (user=%s)', request.user)
+
+        try:
+            from .services.ocr_reconcile import merge, reconcile
+            match = reconcile(result.get('data') or {})
+            if match.get('matched'):
+                result['data'] = merge(result.get('data') or {}, match)
+            result['api_match'] = match
+        except Exception:
+            logger.exception('품목보고 정보 대조 실패 (user=%s)', request.user)
+
     return JsonResponse(result)
 
 

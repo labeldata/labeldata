@@ -444,6 +444,17 @@
     white-space:   nowrap;
 }
 .ocr-flag-warn { background: #fef7e0; color: #b06000; }
+/* 식약처 등록 정보와 대조한 결과. 일치는 눈에 덜 띄게, 불일치는 눈에 띄게 —
+   확인해야 하는 것은 다른 줄뿐이다. */
+.ocr-flag-ok   { background: #e6f4ea; color: #1e8e3e; }
+.ocr-flag-api  { background: #e8f0fe; color: #1a5fb4; }
+
+.ocr-api-note {
+    margin-top: 3px;
+    font-size:  11px;
+    color:      var(--ez-text-muted, #5f6368);
+    word-break: break-all;
+}
 
 /* 원료 확인 창 — 항목명과 값을 한 줄에 */
 .ing-row {

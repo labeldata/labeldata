@@ -1208,3 +1208,84 @@ class PhotoCropperWiringTests(TestCase):
         """
         self.assertIn('canvas.width / r.width', self.cropper)
         self.assertIn('r.width / canvas.width', self.cropper)
+
+
+class UnsavedBeforeValidationTests(TestCase):
+    """
+    검증·확정은 서버가 **저장된 라벨**을 다시 읽어 판정한다. 화면에만 있는 값은
+    서버가 모른다.
+
+    사진에서 소비기한을 채운 뒤 저장하지 않고 표시사항 탭에서 검증하면
+    "소비기한이 비어 있습니다" 가 나왔다. 사용자에게는 분명히 적혀 있으니 영문을
+    알 수 없는 지적이 된다. 플로팅 저장 바를 없앤 뒤로는 저장하라는 안내조차
+    눈에 띄지 않는다.
+
+    그래서 기본 정보 탭을 떠날 때와 확정 직전에 먼저 저장한다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.detail = (base / 'templates/products/product_detail.html').read_text(encoding='utf-8')
+
+    def test_저장을_기다릴_수_있다(self):
+        """saveBasicInfo 가 프라미스를 돌려주지 않으면 아무도 기다릴 수 없다."""
+        self.assertIn('return fetch(UPDATE_URL', self.detail)
+
+    def test_기본정보_탭을_떠날_때_저장한다(self):
+        head = self.detail.index("hide.bs.tab")
+        tail = self.detail.index("leavingId === '#tab-bom'")
+        self.assertIn('flushBasicInfo', self.detail[head:tail],
+                      '기본 정보 탭 이탈 시 저장이 걸려 있어야 한다')
+
+    def test_확정_전에_저장을_기다린다(self):
+        head = self.detail.index('async function changeStatus')
+        self.assertIn('await flushBasicInfo()', self.detail[head:head + 800])
+
+    def test_표시_항목_체크박스도_변경으로_친다(self):
+        """
+        .display-item-check 는 오른쪽 목차에 있어 폼 밖이다. 폼만 훑으면 체크를
+        켜고 끈 것이 "저장하지 않은 변경" 으로 잡히지 않아 조용히 사라진다.
+        """
+        self.assertIn('function trackedFormElements', self.detail)
+        self.assertIn(".display-item-check'),", self.detail)
+        # 폼만 훑는 자리는 trackedFormElements 안의 한 곳뿐이어야 한다.
+        # 다른 곳에 남아 있으면 그쪽에서 체크박스가 다시 새어 나간다.
+        self.assertEqual(
+            self.detail.count("basicInfoForm.querySelectorAll('input, textarea, select')"), 1)
+
+
+class OcrApiMatchWiringTests(TestCase):
+    """
+    사진에서 품목보고번호가 읽히면 식약처 등록 정보와 대조한다.
+
+    확인 창이 그 결과를 보여 주지 않으면 확신도가 왜 올라갔는지 알 수 없고,
+    사용자는 여전히 열여섯 줄을 전부 눈으로 봐야 한다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.ocr = (base / 'static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
+
+    def test_대조_결과를_확인창에_넘긴다(self):
+        self.assertIn('result.api_match', self.ocr)
+        self.assertIn('apiMatchHtml', self.ocr)
+
+    def test_항목마다_어디서_온_값인지_보인다(self):
+        for key in ('both', 'api', 'conflict'):
+            self.assertIn(key, self.ocr, f'{key} 뱃지가 없다')
+        for cls in ('.ocr-flag-ok', '.ocr-flag-api', '.ocr-api-note'):
+            self.assertIn(cls, self.css, f'{cls} 스타일이 없다')
+
+    def test_출처를_교정_이력에_남긴다(self):
+        """
+        나눠 재지 않으면 "등록 정보 대조가 정확도를 올렸는가" 를 영영 답할 수 없다.
+        """
+        self.assertIn("source: row.dataset.source", self.ocr)
+        self.assertIn('data-source=', self.ocr)

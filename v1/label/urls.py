@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import views_ocr_lab
 
 app_name = 'label'
 
@@ -93,6 +94,31 @@ urlpatterns = [
     
     # OCR
     path('ocr-extract/', views.ocr_extract, name='ocr_extract'),
+
+    # 판독 고도화 (관리자 전용) — 정답지를 쌓고, 재고, 프롬프트를 고친다
+    path('ocr-lab/', views_ocr_lab.ocr_lab, name='ocr_lab'),
+    path('ocr-lab/truth/', views_ocr_lab.truth_create, name='ocr_lab_truth_create'),
+    path('ocr-lab/truth/from-label/', views_ocr_lab.truth_from_label,
+         name='ocr_lab_truth_from_label'),
+    path('ocr-lab/truth/<int:case_id>/', views_ocr_lab.truth_detail,
+         name='ocr_lab_truth_detail'),
+    path('ocr-lab/truth/<int:case_id>/save/', views_ocr_lab.truth_update,
+         name='ocr_lab_truth_update'),
+    path('ocr-lab/truth/<int:case_id>/delete/', views_ocr_lab.truth_delete,
+         name='ocr_lab_truth_delete'),
+    path('ocr-lab/run/', views_ocr_lab.run_benchmark, name='ocr_lab_run'),
+    path('ocr-lab/run/<int:run_id>/', views_ocr_lab.run_detail, name='ocr_lab_run_detail'),
+    path('ocr-lab/run/<int:run_id>/brief/', views_ocr_lab.revision_brief,
+         name='ocr_lab_revision_brief'),
+    path('ocr-lab/run/<int:run_id>/suggest/', views_ocr_lab.prompt_suggest,
+         name='ocr_lab_prompt_suggest'),
+    path('ocr-lab/prompt/', views_ocr_lab.prompt_save, name='ocr_lab_prompt_save'),
+    path('ocr-lab/prompt/<int:version_id>/', views_ocr_lab.prompt_detail,
+         name='ocr_lab_prompt_detail'),
+    path('ocr-lab/prompt/<int:version_id>/activate/', views_ocr_lab.prompt_activate,
+         name='ocr_lab_prompt_activate'),
+    path('ocr-lab/prompt/deactivate/', views_ocr_lab.prompt_deactivate,
+         name='ocr_lab_prompt_deactivate'),
 
     # 품목보고번호 검증 관련
     path('verify-report-no/', views.verify_report_no, name='verify_report_no'),
