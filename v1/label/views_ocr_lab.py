@@ -341,6 +341,7 @@ def run_benchmark(request):
             use_boxes=bool(payload.get('use_boxes')),
             layout=(payload.get('layout') if payload.get('layout') in TILE_LAYOUTS
                     else 'grid'),
+            read_freetext=bool(payload.get('read_freetext')),
             user=request.user,
         )
     except Exception as exc:
@@ -376,6 +377,7 @@ def _run_json(run, full=False):
         'box_mean': (run.detail or {}).get('box_mean'),
         'tiling': (run.detail or {}).get('tiling') or 'grid',
         'runs_asked': (run.detail or {}).get('runs_asked') or run.runs,
+        'read_freetext': (run.detail or {}).get('read_freetext', False),
     }
     if full:
         out['cases'] = (run.detail or {}).get('cases', [])

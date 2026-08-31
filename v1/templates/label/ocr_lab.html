@@ -475,6 +475,17 @@
               원료에 붙습니다). <strong>가로 띠</strong> 는 폭을 그대로 두고 위아래로만
               갈라 <strong>줄을 끊지 않습니다.</strong> 해상도는 같고 이미지 장수가
               줄어 비용도 조금 내려갑니다. <strong>같은 정답지로 둘을 견줘 보세요</strong></dd>
+          <dt>주의사항·기타표시사항도 읽기</dt>
+          <dd><strong>평소에는 이 두 칸을 읽지 않습니다.</strong> 무엇을 해도 흔들렸습니다 —
+              상용 문구 목록을 프롬프트에 실으면 그 문장을 지어내고, 빼면 새 문장을
+              지어내고, 전용 칸을 만들면 알레르기 칸을 망쳤습니다(편차 80 이상).
+              그런데 이 두 칸에는 <strong>이미 빠른 입력 버튼 28개</strong>가 있어서
+              두어 번 누르면 정확한 문장이 들어갑니다. 지어낸 문구가 법적 표시물에
+              들어가는 위험이 버튼 두 번보다 큽니다.<br>
+              여기서 켜면 <strong>읽어서 채점까지</strong> 합니다 — 모델을 바꿨을 때
+              나아졌는지 확인하는 자리입니다. 끄면 두 칸은 <strong>0점이 아니라
+              채점 제외</strong>입니다(일부러 안 읽은 것을 "못 읽었다" 로 세면
+              평균이 거짓말을 합니다)</dd>
           <dt>읽은 위치도 재기</dt>
           <dd>판독에 <strong>좌표까지 물어보고</strong> ①에서 적어 둔 정답 위치와
               얼마나 겹치는지 잽니다. 정답 위치를 적어 둔 항목만 셉니다.
@@ -549,6 +560,10 @@
       <div class="form-check">
         <input class="form-check-input" type="checkbox" id="runBoxes">
         <label class="form-check-label" for="runBoxes" style="font-size:12px;">읽은 위치도 재기</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="runFreetext">
+        <label class="form-check-label" for="runFreetext" style="font-size:12px;">주의사항·기타표시사항도 읽기</label>
       </div>
       <button type="button" class="btn btn-primary v2-btn-sm" id="runBtn">
         <i class="bi bi-play-fill"></i>고른 정답지로 재기

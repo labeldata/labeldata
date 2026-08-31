@@ -223,6 +223,18 @@ OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 # 쓰지 않는다. 판독만 바꾼다.
 OCR_MODEL = config('OCR_MODEL', default='gpt-4o-mini')
 
+# 주의사항·기타표시사항을 사진에서 읽을 것인가. 기본은 **읽지 않는다.**
+#
+# 이 두 칸은 무엇을 해도 흔들렸다 - 상용 문구 목록을 프롬프트에 실으면 그
+# 문장을 지어내고, 빼면 새 문장을 지어내고, 전용 칸을 만들면 알레르기 칸을
+# 망쳤다(편차 80 이상). 그런데 이 두 칸에는 이미 화면에 빠른 입력 버튼
+# 스물여덟 개가 있어서 두어 번 눌러 정확한 문장을 넣을 수 있다.
+# 지어낸 문구가 법적 표시물에 들어가는 위험이 버튼 두 번보다 크다.
+#
+# 나중에 모델이 나아지면 되돌릴 자리다. 측정 화면(/label/ocr-lab/)에서는
+# 이 값과 무관하게 켜서 견줄 수 있다.
+OCR_READ_FREETEXT = config('OCR_READ_FREETEXT', default=False, cast=bool)
+
 # 식품안전나라 OpenAPI Key (https://openapi.foodsafetykorea.go.kr)
 FOODSAFETY_API_KEY = config('FOODSAFETY_API_KEY', default='')
 

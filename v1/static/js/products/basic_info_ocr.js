@@ -243,6 +243,24 @@
   //
   // 줄마다 뱃지만 붙이면 "왜 갑자기 확신도가 올라갔는지" 를 알 수 없다.
   // 무엇과 대조했는지 한 줄로 밝혀 두면 사용자가 그 판단을 믿을지 스스로 정한다.
+  // 주의사항·기타표시사항을 일부러 안 읽었다는 사실을 밝힌다.
+  //
+  // 그냥 빠져 있으면 "사진에 없었나 보다" 로 읽힌다. 실제로는 읽지 않기로
+  // 정한 것이고, 채울 방법(빠른 입력 버튼)이 따로 있다는 것을 알려야 한다.
+  function skippedHtml(data) {
+    var names = [];
+    if (data.cautions && data.cautions.skipped) names.push('주의사항');
+    if (data.additional_info && data.additional_info.skipped) names.push('기타 표시사항');
+    if (!names.length) return '';
+    return ''
+      + '<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:12px;">'
+      + '  <i class="bi bi-info-circle me-1"></i>'
+      + '  <strong>' + names.join('·') + '</strong> 은 사진에서 읽지 않습니다 — '
+      + '  라벨에 없는 문구를 지어내는 일이 잦아 빼 두었습니다. '
+      + '  아래 칸의 <strong>"자주 사용하는 문구"</strong> 버튼으로 채워 주세요.'
+      + '</div>';
+  }
+
   function apiMatchHtml(match) {
     if (!match) return '';
     // 번호를 읽었는데 못 찾은 것과, 번호가 안 읽힌 것은 다른 일이다.
@@ -384,6 +402,7 @@
       var table =
         snapHtml(snapInfo)
         + apiMatchHtml(apiMatch)
+        + skippedHtml(data)
         + pickBarHtml()
         + '<div class="ocr-table">'
         + '  <div class="ocr-row ocr-head">'

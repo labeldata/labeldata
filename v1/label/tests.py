@@ -4046,3 +4046,73 @@ class CompoundIngredientPromptTests(TestCase):
         from v1.label.services.ocr_rawmtrl import bracket_problems
 
         self.assertEqual(bracket_problems('쉬레드치즈[모짜렐라], 체다, 혼합제제(분말셀룰로스)'), [])
+
+
+class FreetextOptionTests(TestCase):
+    """
+    주의사항·기타표시사항은 무엇을 해도 흔들렸다 — 목록을 실으면 그 문장을
+    지어내고, 빼면 새 문장을 지어내고, 전용 칸을 만들면 알레르기 칸을 망쳤다.
+    이 두 칸에는 이미 빠른 입력 버튼 스물여덟 개가 있다.
+    """
+
+    def _data(self):
+        return {
+            'prdlst_nm': {'value': '샐러드', 'confidence': 'high'},
+            'cautions': {'value': '지어낸 문구', 'confidence': 'high'},
+            'additional_info': {'value': '지어낸 문구', 'confidence': 'high'},
+        }
+
+    def test_기본은_읽지_않는다(self):
+        from v1.label.services.ocr_service import drop_freetext
+
+        out = drop_freetext(self._data())
+        for key in ('cautions', 'additional_info'):
+            self.assertIsNone(out[key]['value'])
+            self.assertTrue(out[key]['skipped'])
+        self.assertEqual(out['prdlst_nm']['value'], '샐러드')
+
+    def test_켜면_그대로_둔다(self):
+        from v1.label.services.ocr_service import drop_freetext
+
+        out = drop_freetext(self._data(), read_freetext=True)
+        self.assertEqual(out['cautions']['value'], '지어낸 문구')
+
+    def test_설정으로도_켤_수_있다(self):
+        from django.test import override_settings
+
+        from v1.label.services.ocr_service import drop_freetext
+
+        with override_settings(OCR_READ_FREETEXT=True):
+            self.assertEqual(drop_freetext(self._data())['cautions']['value'],
+                             '지어낸 문구')
+
+    def test_안_읽은_칸은_0점이_아니라_채점_제외다(self):
+        """일부러 안 읽은 것을 "못 읽었다" 로 세면 평균이 거짓말을 한다."""
+        from v1.label.services.ocr_benchmark import compare
+        from v1.label.services.ocr_service import drop_freetext
+
+        expected = {'prdlst_nm': '샐러드', 'cautions': '무언가 적힌 주의사항'}
+        out = compare(expected, drop_freetext(self._data()))
+        self.assertNotIn('cautions', out['fields'])
+        self.assertEqual(out['mean'], 100.0)
+        self.assertEqual(out['counted'], 1)
+
+    def test_켜면_다시_채점한다(self):
+        from v1.label.services.ocr_benchmark import compare
+        from v1.label.services.ocr_service import drop_freetext
+
+        expected = {'prdlst_nm': '샐러드', 'cautions': '무언가 적힌 주의사항'}
+        out = compare(expected, drop_freetext(self._data(), read_freetext=True))
+        self.assertIn('cautions', out['fields'])
+
+    def test_확인_창이_왜_없는지_말해_준다(self):
+        """그냥 빠져 있으면 "사진에 없었나 보다" 로 읽힌다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/products/basic_info_ocr.js'
+              ).read_text(encoding='utf-8')
+        self.assertIn('function skippedHtml', js)
+        self.assertIn('+ skippedHtml(data)', js)
+        self.assertIn('자주 사용하는 문구', js)

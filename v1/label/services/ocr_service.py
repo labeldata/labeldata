@@ -340,6 +340,40 @@ _DESIGN_SUFFIX = re.compile(
     re.IGNORECASE)
 
 
+# 사진에서 읽지 않을 항목.
+#
+# 주의사항과 기타표시사항은 무엇을 해도 흔들렸다. 상용 문구 목록을 프롬프트에
+# 실으면 그 문장을 지어내고, 빼면 새 문장을 지어내고, 전용 칸을 만들면 옆
+# 칸(알레르기)을 망쳤다. 편차가 80을 넘는 회차도 있었다.
+#
+# 그런데 이 두 칸에는 **이미 사용자용 빠른 입력 버튼 스물여덟 개**가 있다.
+# 두어 번 눌러 정확한 문장을 넣을 수 있다. 지어낸 문구가 법적 표시물에
+# 들어가는 위험이, 버튼 두 번 누르는 수고보다 크다.
+#
+# 그래서 기본으로 읽지 않는다. `.env` 에 OCR_READ_FREETEXT=True 를 넣거나
+# 측정 화면에서 켜서 견줄 수 있다 — 나중에 모델이 나아지면 되돌릴 자리다.
+FREETEXT_FIELDS = ('cautions', 'additional_info')
+
+
+def drop_freetext(data, read_freetext=None):
+    """
+    자유 문구 칸을 비운다. **값이 없는 것과 구분해서 표시한다.**
+
+    `skipped` 를 남겨야 채점이 이 칸을 0점이 아니라 **채점 제외**로 다룰 수
+    있다. 일부러 안 읽은 것을 "못 읽었다" 로 세면 평균이 거짓말을 한다.
+    """
+    if read_freetext is None:
+        read_freetext = getattr(settings, 'OCR_READ_FREETEXT', False)
+    if read_freetext:
+        return data
+
+    data = dict(data or {})
+    for key in FREETEXT_FIELDS:
+        if key in data:
+            data[key] = {'value': None, 'confidence': 'none', 'skipped': True}
+    return data
+
+
 def strip_design_suffix(data):
     """제품명 끝에 붙은 도안 표기를 뗀다. **원본은 건드리지 않는다.**"""
     data = dict(data or {})
@@ -391,7 +425,8 @@ def active_prompt(version=None):
 
 
 def extract_label_from_image(image_file, model=None, prompt_version=None,
-                             use_hints=True, want_boxes=False, layout='grid'):
+                             use_hints=True, want_boxes=False, layout='grid',
+                             read_freetext=None):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
 
@@ -473,7 +508,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         )
 
         result = json.loads(response.choices[0].message.content)
-        result = strip_design_suffix(result)
+        result = drop_freetext(strip_design_suffix(result), read_freetext)
 
         if want_boxes:
             # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이

@@ -482,7 +482,8 @@
       use_api: document.getElementById('runApi').checked,
       use_hints: document.getElementById('runHints').checked,
       use_boxes: document.getElementById('runBoxes').checked,
-      layout: document.getElementById('runLayout').value
+      layout: document.getElementById('runLayout').value,
+      read_freetext: document.getElementById('runFreetext').checked
     })
       .then(function (body) {
         note('평균 ' + body.run.mean_score + '점입니다.', 'ok');
@@ -557,6 +558,7 @@
       + '      <span class="text-muted" style="font-size:12px;"> · ' + esc(run.prompt)
       + '      · ' + esc(run.model) + ' · ' + esc(run.variant)
       + '      · ' + (run.tiling === 'bands' ? '가로 띠' : '2×2')
+      + (run.read_freetext ? ' · 자유문구 포함' : ' · 자유문구 제외')
       + ' · ' + run.runs + '회'
       // 부탁한 회차만큼 못 돈 경우. 분당 토큰 한도(429)에 걸리면 회차가
       // 조용히 줄어드는데, 그러면 편차가 0 으로 나와 "안정적" 으로 읽힌다.

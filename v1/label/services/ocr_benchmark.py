@@ -100,9 +100,15 @@ def compare(expected, ocr_data):
     Returns: {'fields': {키: {score, grade, expected, actual}}, 'mean': …}
     """
     actual = flatten(ocr_data)
+    # 일부러 안 읽은 칸(자유 문구 옵션)은 **채점에서 뺀다.** "못 읽었다" 로 0점을
+    # 주면 평균이 그만큼 내려가서, 옵션을 껐다 켰다 하는 비교가 거짓말이 된다.
+    skipped = {key for key, item in (ocr_data or {}).items()
+               if isinstance(item, dict) and item.get('skipped')}
     fields = {}
     scores = []
     for key, exp in (expected or {}).items():
+        if key in skipped:
+            continue
         score, grade = score_one(exp, actual.get(key))
         if grade == 'skip':
             continue
