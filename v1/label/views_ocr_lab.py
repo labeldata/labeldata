@@ -375,6 +375,7 @@ def _run_json(run, full=False):
         'api_mean': (run.detail or {}).get('api_mean'),
         'box_mean': (run.detail or {}).get('box_mean'),
         'tiling': (run.detail or {}).get('tiling') or 'grid',
+        'runs_asked': (run.detail or {}).get('runs_asked') or run.runs,
     }
     if full:
         out['cases'] = (run.detail or {}).get('cases', [])

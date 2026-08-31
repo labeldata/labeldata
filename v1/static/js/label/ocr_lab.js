@@ -557,7 +557,14 @@
       + '      <span class="text-muted" style="font-size:12px;"> · ' + esc(run.prompt)
       + '      · ' + esc(run.model) + ' · ' + esc(run.variant)
       + '      · ' + (run.tiling === 'bands' ? '가로 띠' : '2×2')
-      + ' · ' + run.runs + '회</span></div>'
+      + ' · ' + run.runs + '회'
+      // 부탁한 회차만큼 못 돈 경우. 분당 토큰 한도(429)에 걸리면 회차가
+      // 조용히 줄어드는데, 그러면 편차가 0 으로 나와 "안정적" 으로 읽힌다.
+      + (run.runs_asked && run.runs_asked > run.runs
+          ? ' <span class="lab-pill lab-pill-warn">' + run.runs_asked
+            + '회 요청했으나 ' + run.runs + '회만 성공</span>'
+          : '')
+      + '</span></div>'
       + '    <button type="button" class="btn btn-outline-primary v2-btn-sm run-suggest" data-run="' + run.id + '">'
       + '      <i class="bi bi-magic"></i>이 결과로 프롬프트 초안 만들기</button>'
       + '  </div>'

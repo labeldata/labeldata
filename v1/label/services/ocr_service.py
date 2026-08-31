@@ -84,6 +84,11 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - 알레르기(allergens)와 혼입 주의(cautions)는 다르다.
   "○○ 함유" 는 알레르기, "○○ 혼입 가능성 있음" 은 주의사항이다.
   혼입 가능 물질을 알레르기에 옮겨 적지 마시오.
+- **검은 박스 하나에 둘이 같이 있는 경우가 많다.** 그럴 때 그 박스를
+  allergens 에만 쓰고 끝내지 마시오. "○○ 함유" 는 allergens 로,
+  "○○ 혼입가능성 있음" **문장은 그대로 cautions 로** 옮긴다.
+  **같은 자리를 두 번 읽는 것이 맞다.** 실제로 이 문장이 통째로 사라졌다 —
+  물질 이름이 스물이 넘어 길어도 끝까지 옮기시오.
 - 주의사항은 요약하지 말고 적힌 문장을 그대로 옮기시오.
 - 업체명·지명 같은 고유명사는 획을 하나씩 확인하시오
   (삼립/삼진, 송정동/성동동 처럼 한 획 차이가 흔하다). 확신이 없으면
@@ -361,7 +366,16 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         }
     """
     try:
-        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        # 429(분당 토큰 한도)를 만나면 SDK 가 서버가 알려 준 시간만큼 기다렸다
+        # 다시 부른다. 기본값 2회로는 모자랐다 — 측정에서 회차 3을 걸었는데
+        # 2회와 3회가 모두 429 로 죽고 1회만 성공했다. 표에는 "3회" 로 뜨는데
+        # 실제로는 한 번이라, 편차가 0 으로 나와 "안정적" 으로 보인다.
+        # **측정이 조용히 거짓말을 한다.**
+        #
+        # 사진 한 장 판독이 6~7만 토큰이라, 분당 20만 토큰 한도면 **분당 세 번**
+        # 이 한계다. 기다리는 것 말고 할 수 있는 일이 없다.
+        client = OpenAI(api_key=settings.OPENAI_API_KEY,
+                        max_retries=getattr(settings, 'OCR_MAX_RETRIES', 5))
         regions = build_image_regions(image_file, layout=layout)
         images = [region['b64'] for region in regions]
 

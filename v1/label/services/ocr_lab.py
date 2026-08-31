@@ -204,6 +204,11 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
     scored = [r for r in case_rows if r['runs']]
     mean = round(statistics.mean(r['mean'] for r in scored), 1) if scored else 0.0
 
+    # **부탁한 회차가 아니라 실제로 성공한 회차를 남긴다.**
+    # 429(분당 토큰 한도)로 두 번이 죽고 한 번만 돌았는데 표에 "3회" 라고 뜨면,
+    # 편차 0 을 보고 "안정적이다" 라고 읽게 된다. 측정이 거짓말을 하는 것이다.
+    done = max((r['runs'] for r in case_rows), default=0)
+
     # 판독 원본은 남기지 않는다. 사진 한 장에 수 KB 씩 쌓이는데 화면이 쓰지
     # 않고, 이 표는 오래 남는다.
     for row in case_rows:
@@ -214,6 +219,7 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
         'fields': _merge_field_rows(case_rows),
         'api_mean': _api_overall(case_rows),
         'box_mean': _box_overall(case_rows),
+        'runs_asked': runs,
         # 조각을 어느 방향으로 잘랐는가. 모델을 안 바꿔도 이것만으로 긴 항목의
         # 점수가 크게 움직인다 - 남기지 않으면 어느 판이 어느 방식이었는지
         # 나중에 알 수 없다.
@@ -226,7 +232,7 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
         variant='crop' if use_crop else 'whole',
         use_api=use_api,
         case_count=len(case_rows),
-        runs=runs,
+        runs=done or runs,
         mean_score=mean,
         detail=detail,
         created_by=user if (user and user.is_authenticated) else None,

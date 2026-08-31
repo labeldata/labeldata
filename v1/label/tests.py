@@ -3718,3 +3718,56 @@ class AllergenSuffixTests(TestCase):
             {'allergens': {'value': '우유, 대두', 'confidence': 'high'}})
         self.assertEqual(report, [])
         self.assertNotIn('snapped_from', data['allergens'])
+
+
+class MeasurementHonestyTests(TestCase):
+    """
+    측정이 조용히 거짓말을 하면 안 된다.
+
+    회차 3 을 걸었는데 429(분당 토큰 한도)로 두 번이 죽고 한 번만 돌았다.
+    그런데 표에는 "3회" 로 뜨고 편차가 0 이었다 — "안정적" 으로 읽힌다.
+    실제로는 한 번밖에 안 잰 것이다.
+    """
+
+    def test_분당_한도를_만나면_기다렸다_다시_부른다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
+                  ).read_text(encoding='utf-8')
+        self.assertIn("max_retries=getattr(settings, 'OCR_MAX_RETRIES'", source)
+
+    def test_실제로_성공한_회차를_남긴다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_lab.py'
+                  ).read_text(encoding='utf-8')
+        self.assertIn("runs=done or runs", source)
+        self.assertIn("'runs_asked': runs", source)
+
+    def test_못_돈_회차를_화면이_알린다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/ocr_lab.js'
+              ).read_text(encoding='utf-8')
+        self.assertIn('회만 성공', js)
+
+
+class CrossContaminationPromptTests(TestCase):
+    """
+    "…혼입가능성 있음" 문장이 주의사항에서 통째로 사라졌다.
+
+    알레르기 물질은 제대로 읽혔다(100점). 같은 검은 박스를 allergens 에 쓰고
+    나면 모델이 그 자리를 두 번 쓰지 않는 것이다.
+    """
+
+    def test_같은_박스를_두_번_읽으라고_말한다(self):
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('같은 자리를 두 번 읽는 것이 맞다', SYSTEM_PROMPT)
+        self.assertIn('문장은 그대로 cautions 로', SYSTEM_PROMPT)
