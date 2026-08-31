@@ -3068,3 +3068,383 @@ class OcrLabScreenTests(TestCase):
         js = (Path(dj.BASE_DIR) / 'static/js/label/ocr_lab.js'
               ).read_text(encoding='utf-8')
         self.assertIn('window.photoViewerLayout', js)
+
+
+class OcrBoxTests(TestCase):
+    """
+    읽은 자리를 받고, 되돌리고, 채점한다.
+
+    값과 위치는 **따로** 판정한다. 좌표가 틀렸다고 값을 버리지 않고, 위치가
+    맞았다고 값을 믿지도 않는다.
+    """
+
+    def test_조각_좌표를_원본_좌표로_되돌린다(self):
+        """조각을 우리가 잘랐으니 이 계산은 확실하다."""
+        from v1.label.services.ocr_boxes import to_original
+
+        # 오른쪽 아래 조각 (원본 2000x1000 의 (1000,500)~(2000,1000))
+        region = (1000, 500, 2000, 1000)
+        # 그 조각의 한가운데 절반
+        self.assertEqual(to_original((250, 250, 500, 500), region),
+                         [1250, 625, 500, 250])
+
+    def test_전체_사진은_그대로_옮겨진다(self):
+        from v1.label.services.ocr_boxes import to_original
+
+        self.assertEqual(to_original((0, 0, 1000, 1000), (0, 0, 800, 600)),
+                         [0, 0, 800, 600])
+
+    def test_상자를_못_주면_없는_채로_둔다(self):
+        """없는 좌표를 지어내면 사람을 엉뚱한 데로 보낸다."""
+        from v1.label.services.ocr_boxes import attach
+
+        regions = [{'box': (0, 0, 100, 100), 'label': '사진 전체'}]
+        data, found = attach({'prdlst_nm': {'value': '가나다', 'confidence': 'high'}},
+                             regions)
+        self.assertEqual(found, 0)
+        self.assertNotIn('box', data['prdlst_nm'])
+        # 값은 그대로 살아 있어야 한다
+        self.assertEqual(data['prdlst_nm']['value'], '가나다')
+
+    def test_망가진_좌표는_버린다(self):
+        from v1.label.services.ocr_boxes import parse_box
+
+        self.assertIsNone(parse_box(None))
+        self.assertIsNone(parse_box([1, 2, 3]))
+        self.assertIsNone(parse_box([10, 10, 0, 50]))       # 크기 0
+        self.assertIsNone(parse_box(['a', 'b', 'c', 'd']))
+        self.assertEqual(parse_box([10, 20, 30, 40]), (10, 20, 30, 40))
+
+    def test_이미지_밖으로_나간_상자를_잘라_넣는다(self):
+        from v1.label.services.ocr_boxes import parse_box
+
+        # 오른쪽으로 넘겨 온 상자는 이미지 끝에서 멈춘다
+        self.assertEqual(parse_box([900, 900, 400, 400]), (900, 900, 100, 100))
+
+    def test_어느_조각에서_읽었는지_남긴다(self):
+        from v1.label.services.ocr_boxes import attach
+
+        regions = [
+            {'box': (0, 0, 200, 200), 'label': '사진 전체'},
+            {'box': (100, 100, 200, 200), 'label': '조각 오른쪽 아래'},
+        ]
+        data, found = attach(
+            {'pog_daycnt': {'value': 'x', 'img': 1, 'bbox': [0, 0, 500, 500]}},
+            regions)
+        self.assertEqual(found, 1)
+        self.assertEqual(data['pog_daycnt']['box'], [100, 100, 50, 50])
+        self.assertEqual(data['pog_daycnt']['box_from'], '조각 오른쪽 아래')
+        # 원본 응답의 임시 키는 남기지 않는다 - 화면과 채점이 볼 것은 box 뿐이다
+        self.assertNotIn('bbox', data['pog_daycnt'])
+        self.assertNotIn('img', data['pog_daycnt'])
+
+    def test_겹치는_정도로_잰다(self):
+        from v1.label.services.ocr_boxes import iou
+
+        self.assertEqual(iou([0, 0, 100, 100], [0, 0, 100, 100]), 100)
+        self.assertEqual(iou([0, 0, 100, 100], [200, 200, 100, 100]), 0)
+        # 절반만 겹치면 합집합이 1.5배라 33%
+        self.assertEqual(iou([0, 0, 100, 100], [50, 0, 100, 100]), 33)
+
+    def test_사진_전체를_상자로_주면_만점이_아니다(self):
+        """한쪽이 다른 쪽을 품기만 해도 만점인 방식은 이 답에 100점을 준다."""
+        from v1.label.services.ocr_boxes import iou
+
+        self.assertLess(iou([0, 0, 2000, 1500], [100, 100, 200, 60]), 5)
+
+    def test_정답_위치를_안_적은_항목은_채점에서_뺀다(self):
+        """"위치를 모른다" 와 "위치가 틀렸다" 는 다르다."""
+        from v1.label.services.ocr_boxes import score
+
+        out = score({'prdlst_nm': [0, 0, 100, 100]},
+                    {'prdlst_nm': {'box': [0, 0, 100, 100]},
+                     'pog_daycnt': {'box': [500, 500, 50, 50]}})
+        self.assertEqual(len(out['fields']), 1)
+        self.assertEqual(out['mean'], 100.0)
+
+    def test_상자를_못_준_항목은_0점이고_따로_센다(self):
+        from v1.label.services.ocr_boxes import score
+
+        out = score({'prdlst_nm': [0, 0, 100, 100]},
+                    {'prdlst_nm': {'value': '가나다'}})
+        self.assertEqual(out['mean'], 0.0)
+        self.assertEqual(out['missing'], ['prdlst_nm'])
+
+    def test_다시_읽을_영역에_여백을_붙인다(self):
+        """딱 잘라 보내면 항목명이 잘려 무슨 항목인지 모른다."""
+        from v1.label.services.ocr_boxes import pad
+
+        x, y, w, h = pad([500, 500, 100, 100], 2000, 2000)
+        self.assertLess(x, 500)
+        self.assertGreater(w, 100)
+
+    def test_여백을_붙여도_사진_밖으로_나가지_않는다(self):
+        from v1.label.services.ocr_boxes import pad
+
+        self.assertEqual(pad([0, 0, 100, 100], 100, 100), [0, 0, 100, 100])
+
+
+class OcrBoxPromptTests(TestCase):
+    """
+    위치를 물어보는 것은 **기본이 꺼져 있어야 한다.**
+
+    좌표를 요구하면 항목마다 숫자 네 개를 더 뱉게 되고 그만큼 값에 쓸 주의가
+    갈린다. 값이 본질이고 위치는 편의다.
+    """
+
+    def test_평소_판독에는_좌표를_묻지_않는다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
+                  ).read_text(encoding='utf-8')
+        self.assertIn('want_boxes=False', source)
+
+    def test_좌표는_정규화해서_받는다(self):
+        """보내기 전에 리사이즈하므로 모델이 보는 크기와 원본 크기가 다르다."""
+        from v1.label.services.ocr_boxes import PROMPT_ADDENDUM
+
+        self.assertIn('0~1000', PROMPT_ADDENDUM)
+        self.assertIn('픽셀이 아니다', PROMPT_ADDENDUM)
+
+    def test_못_짚으면_빼라고_말한다(self):
+        from v1.label.services.ocr_boxes import PROMPT_ADDENDUM
+
+        self.assertIn('bbox 를 넣지 마시오', PROMPT_ADDENDUM)
+        self.assertIn('위치 때문에 값을 흐리게 하지 마시오', PROMPT_ADDENDUM)
+
+    def test_조각마다_원본_어디인지_들고_있다(self):
+        from io import BytesIO
+
+        from PIL import Image
+
+        from v1.label.services.ocr_service import build_image_regions
+
+        buf = BytesIO()
+        Image.new('RGB', (1600, 1200), 'white').save(buf, format='PNG')
+        buf.seek(0)
+        regions = build_image_regions(buf)
+
+        self.assertEqual(len(regions), 5)
+        self.assertEqual(regions[0]['box'], (0, 0, 1600, 1200))
+        for region in regions:
+            left, top, right, bottom = region['box']
+            self.assertLess(left, right)
+            self.assertLess(top, bottom)
+            self.assertTrue(region['label'])
+
+    def test_작은_사진은_조각내지_않는다(self):
+        from io import BytesIO
+
+        from PIL import Image
+
+        from v1.label.services.ocr_service import build_image_regions
+
+        buf = BytesIO()
+        Image.new('RGB', (900, 700), 'white').save(buf, format='PNG')
+        buf.seek(0)
+        self.assertEqual(len(build_image_regions(buf)), 1)
+
+
+class OcrTruthBoxViewTests(TestCase):
+    """
+    정답 위치는 관리자 화면에만 있다 — 좌표가 맞는지 재려면 정답이 필요하고,
+    정답은 여기에만 있다.
+    """
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from io import BytesIO
+
+        from PIL import Image
+
+        from v1.common.models import OcrTruthCase
+
+        self.staff = User.objects.create_user(
+            username='boxstaff', password='x', is_staff=True)
+        buf = BytesIO()
+        Image.new('RGB', (800, 600), 'white').save(buf, format='JPEG')
+        self.case = OcrTruthCase.objects.create(
+            name='상자 시험',
+            image=SimpleUploadedFile('t.jpg', buf.getvalue(), 'image/jpeg'),
+            expected={'prdlst_nm': '가나다'},
+        )
+        self.client.force_login(self.staff)
+
+    def _save(self, payload):
+        import json as _json
+
+        return self.client.post(
+            f'/label/ocr-lab/truth/{self.case.pk}/save/',
+            data=_json.dumps(payload), content_type='application/json')
+
+    def test_정답_위치를_저장한다(self):
+        res = self._save({'expected_boxes': {'prdlst_nm': [10, 20, 30, 40]}})
+        self.assertEqual(res.status_code, 200)
+        self.case.refresh_from_db()
+        self.assertEqual(self.case.expected_boxes, {'prdlst_nm': [10, 20, 30, 40]})
+
+    def test_망가진_상자는_버리고_나머지는_남긴다(self):
+        """반쯤 적힌 위치를 채점에 쓰면 못 찾은 것과 안 적은 것이 섞인다."""
+        res = self._save({'expected_boxes': {
+            'prdlst_nm': [10, 20, 30, 40],
+            'pog_daycnt': [1, 2, 3],
+            'cautions': None,
+        }})
+        self.assertEqual(res.status_code, 200)
+        self.case.refresh_from_db()
+        self.assertEqual(list(self.case.expected_boxes), ['prdlst_nm'])
+
+    def test_위치를_안_보내면_예전_위치를_지우지_않는다(self):
+        self.case.expected_boxes = {'prdlst_nm': [1, 2, 3, 4]}
+        self.case.save(update_fields=['expected_boxes'])
+        self._save({'name': '이름만 바꿈'})
+        self.case.refresh_from_db()
+        self.assertEqual(self.case.expected_boxes, {'prdlst_nm': [1, 2, 3, 4]})
+
+    def test_사진_크기를_함께_내려준다(self):
+        """화면이 원본 픽셀 좌표를 화면 좌표로 옮기려면 이게 있어야 한다."""
+        res = self.client.get(f'/label/ocr-lab/truth/{self.case.pk}/')
+        self.assertEqual(res.json()['case']['image_size'], [800, 600])
+
+    def test_영역_없이_다시_읽기를_부르면_거절한다(self):
+        import json as _json
+
+        res = self.client.post(
+            f'/label/ocr-lab/truth/{self.case.pk}/reread/',
+            data=_json.dumps({'field': 'prdlst_nm'}),
+            content_type='application/json')
+        self.assertEqual(res.status_code, 400)
+
+    def test_staff_가_아니면_들어갈_수_없다(self):
+        self.client.logout()
+        User.objects.create_user(username='plain', password='x')
+        self.client.login(username='plain', password='x')
+        res = self.client.post(f'/label/ocr-lab/truth/{self.case.pk}/locate/')
+        self.assertNotEqual(res.status_code, 200)
+
+
+class OcrCurrentValueTests(TestCase):
+    """
+    확인 창은 두 값을 견주라고 있는 표다. 한쪽을 잘라 버리면 그 이유가 사라진다.
+    """
+
+    def test_현재_값을_한_줄로_자르지_않는다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        css = (Path(dj.BASE_DIR) / 'static/css/products_common.css'
+               ).read_text(encoding='utf-8')
+        block = css.split('.ocr-current {')[1].split('}')[0]
+        self.assertNotIn('nowrap', block)
+        self.assertNotIn('ellipsis', block)
+        # 줄바꿈이 있는 값(주의사항)은 줄바꿈째로 보여야 견줄 수 있다
+        self.assertIn('pre-wrap', block)
+
+
+class RecyclingMarkFixTests(TestCase):
+    """
+    분리배출 표시 두 가지 버그.
+
+    ① 포장재질 "PE" 에 기타플라스틱 마크를 찍으면 검증이 어긋났다고 울었다.
+       PE 는 분리배출 표시가 정한 일곱 재질에 없는 표기라 HDPE·LDPE·기타 어느
+       쪽으로도 표시할 수 있는데, 호환표에 PE 가 아예 없었다.
+    ② 마크를 그려 놓고 그 **옆에 읽은 문구를 통째로 또 적었다.** 마크가 이미
+       하는 말을 글자로 한 번 더 쓴 것이다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='recycfix', password='x')
+
+    def _label(self, material):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='시험',
+                                      frmlc_mtrqlt=material)
+
+    # ── ① 검증 ──────────────────────────────────────────────────────────────
+
+    def test_PE_는_기타플라스틱과_어긋나지_않는다(self):
+        from v1.label.services.validation_service import check_recycling_mark
+
+        label = self._label('PE(드레싱)')
+        label.prv_recycling_mark_type = '기타플라스틱'
+        self.assertEqual(check_recycling_mark(label), [])
+
+    def test_PE_는_HDPE_LDPE_로_표시해도_어긋나지_않는다(self):
+        """라벨의 "PE" 는 고밀도인지 저밀도인지 가려지지 않은 표기다."""
+        from v1.label.services.validation_service import check_recycling_mark
+
+        for mark in ('플라스틱(HDPE)', '플라스틱(LDPE)'):
+            label = self._label('PE')
+            label.prv_recycling_mark_type = mark
+            self.assertEqual(check_recycling_mark(label), [], mark)
+
+    def test_PET_에_PE_계열_마크를_찍으면_잡는다(self):
+        """
+        예전에는 통과했다 - "PET" 안에 "PE" 가 들어 있어서 그냥 포함으로 보면
+        걸리지 않는다. 잡아야 할 오류를 놓치는 쪽이라 더 나쁘다.
+        """
+        from v1.label.services.validation_service import check_recycling_mark
+
+        label = self._label('PET(용기)')
+        label.prv_recycling_mark_type = '플라스틱(LDPE)'
+        self.assertTrue(check_recycling_mark(label))
+
+    def test_PET_에_페트_마크는_통과한다(self):
+        from v1.label.services.validation_service import check_recycling_mark
+
+        label = self._label('PET(용기, 리드지)')
+        label.prv_recycling_mark_type = '무색페트'
+        self.assertEqual(check_recycling_mark(label), [])
+
+    def test_한글_재질명은_붙여_써도_통과한다(self):
+        """"폴리에틸렌수지" 처럼 붙여 쓰는 표기가 흔하다."""
+        from v1.label.services.validation_service import check_recycling_mark
+
+        label = self._label('폴리에틸렌수지')
+        label.prv_recycling_mark_type = '플라스틱(HDPE)'
+        self.assertEqual(check_recycling_mark(label), [])
+
+    # ── ② 마크 옆 문구 ──────────────────────────────────────────────────────
+
+    def test_마크가_하는_말을_옆에_또_적지_않는다(self):
+        from v1.label.services.ocr_apply import extra_mark_text
+
+        self.assertEqual(extra_mark_text('비닐류 PP', '비닐(PP)'), '')
+        self.assertEqual(extra_mark_text('플라스틱 OTHER', '기타플라스틱'), '')
+
+    def test_마크로_표현할_수_없는_부속만_남긴다(self):
+        from v1.label.services.ocr_apply import extra_mark_text
+
+        self.assertEqual(
+            extra_mark_text('비닐류 PP / 띠지:PP, 리드지:PET', '비닐(PP)'),
+            '띠지:PP, 리드지:PET')
+
+    def test_종류를_못_정하면_읽은_문구를_그대로_남긴다(self):
+        """마크를 못 그리므로 사람이 무엇을 봤는지 알아야 직접 고를 수 있다."""
+        from v1.label.services.ocr_apply import extra_mark_text
+
+        self.assertEqual(extra_mark_text('알 수 없는 표기', ''), '알 수 없는 표기')
+
+    def test_마크를_읽어도_옆_문구가_붙지_않는다(self):
+        from v1.label.services.ocr_apply import apply_recycling_mark
+
+        label = self._label('PP')
+        apply_recycling_mark(label, '비닐(PP)', '비닐류 PP')
+        label.refresh_from_db()
+        self.assertEqual(label.prv_recycling_mark_type, '비닐(PP)')
+        self.assertEqual(label.prv_recycling_mark_enabled, 'Y')
+        self.assertFalse(label.prv_recycling_mark_text)
+
+    def test_사람이_적어_둔_문구를_지우지_않는다(self):
+        """사진 한 장 읽었다고 이미 맞춰 둔 표시가 사라지면 안 된다."""
+        from v1.label.services.ocr_apply import apply_recycling_mark
+
+        label = self._label('PP')
+        label.prv_recycling_mark_text = '띠지 별도 배출'
+        label.save(update_fields=['prv_recycling_mark_text'])
+
+        apply_recycling_mark(label, '비닐(PP)', '비닐류 PP')
+        label.refresh_from_db()
+        self.assertEqual(label.prv_recycling_mark_text, '띠지 별도 배출')
