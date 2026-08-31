@@ -244,8 +244,19 @@
   // 줄마다 뱃지만 붙이면 "왜 갑자기 확신도가 올라갔는지" 를 알 수 없다.
   // 무엇과 대조했는지 한 줄로 밝혀 두면 사용자가 그 판단을 믿을지 스스로 정한다.
   function apiMatchHtml(match) {
-    if (!match || !match.matched) return '';
-    var tone = (match.conflicts && match.conflicts.length) ? 'warning' : 'info';
+    if (!match) return '';
+    // 번호를 읽었는데 못 찾은 것과, 번호가 안 읽힌 것은 다른 일이다.
+    // 앞의 경우 아무 말도 안 하면 "대조가 도움이 안 된다" 로 읽힌다 - 실제로는
+    // 한 자리를 잘못 읽어 조회가 통째로 실패한 것이고, 번호만 고치면 제품명·
+    // 제조원·원재료명을 전부 대조할 수 있다.
+    if (!match.matched) {
+      if (!match.summary) return '';
+      return '<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:12px;">'
+        + '<i class="bi bi-exclamation-triangle me-1"></i>' + esc(match.summary)
+        + '</div>';
+    }
+    var tone = (match.conflicts && match.conflicts.length) || match.corrected_report_no
+      ? 'warning' : 'info';
     return ''
       + '<div class="alert alert-' + tone + ' py-2 px-3 mb-2" style="font-size:12px;">'
       + '  <i class="bi bi-shield-check me-1"></i>'

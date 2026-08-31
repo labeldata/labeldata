@@ -164,6 +164,99 @@ def _candidates_of(item):
     return []
 
 
+def _digit_variants(text, limit=600):
+    """
+    숫자 **한 자리**가 어긋난 후보들. 지움 / 바꿈 / 끼움.
+
+    품목보고번호는 열대여섯 자리 숫자라 한 자리만 틀려도 조회가 통째로 실패한다.
+    실제로 "19980448010-697" 을 "199804480101-697" 로 읽어(1 이 하나 더 붙음)
+    등록 정보를 못 찾았고, 화면에는 "대조하면 +0점" 만 떴다. 무엇이 잘못됐는지는
+    아무 데도 안 적혔다.
+
+    후보를 마구 만들어도 **실제로 등록된 번호만 살아남는다** — 조회 자체가
+    후보를 걸러 준다. 그래도 우연히 다른 제품에 맞을 수 있으므로, 채택 여부는
+    부르는 쪽에서 제품명·제조원으로 교차 검증한다.
+
+    하이픈은 건드리지 않는다. 자리를 세는 것은 숫자뿐이다.
+    """
+    out = []
+    seen = {text}
+    positions = [i for i, ch in enumerate(text) if ch.isdigit()]
+
+    def add(candidate):
+        if candidate not in seen and len(out) < limit:
+            seen.add(candidate)
+            out.append(candidate)
+
+    for i in positions:                       # 한 자리 지움
+        add(text[:i] + text[i + 1:])
+    for i in positions:                       # 한 자리 바꿈
+        for d in '0123456789':
+            if d != text[i]:
+                add(text[:i] + d + text[i + 1:])
+    # 끼우는 자리는 **모든 자리**다. 숫자 자리만 보면 하이픈 바로 앞을 놓친다 —
+    # "1998044801-697" 에 0 을 끼워 "19980448010-697" 을 만드는 자리가 정확히
+    # 거기다.
+    for i in range(len(text) + 1):            # 한 자리 끼움
+        for d in '0123456789':
+            add(text[:i] + d + text[i:])
+    return out
+
+
+# 번호가 어긋났을 때 "같은 제품이 맞다" 고 볼 닮은 정도.
+#
+# 번호 하나로 정하지 않는다. 한 자리를 고쳐 찾은 품목이 **제품명이나 제조원까지
+# 판독값과 맞아야** 채택한다 - 열다섯 자리 중 하나를 바꾸면 다른 회사의 멀쩡한
+# 제품에 맞을 수 있고, 그 등록 정보를 끌어오면 사진에 없는 값이 들어온다.
+NEAR_MISS_CONFIRM = 70
+
+
+def _confirms(item, ocr_data):
+    """한 자리 고쳐 찾은 품목이 사진의 다른 값과도 맞는가."""
+    for key, attr, mode in (('prdlst_nm', 'prdlst_nm', 'exact'),
+                            ('bssh_nm', 'bssh_nm', 'contains')):
+        ocr_value = _value_of((ocr_data or {}).get(key))
+        api_value = str(getattr(item, attr, '') or '').strip()
+        if ocr_value and api_value:
+            if _ratio(ocr_value, api_value, mode) >= NEAR_MISS_CONFIRM:
+                return True
+    return False
+
+
+def find_near_miss(tries, ocr_data):
+    """
+    한 자리가 어긋난 번호로 등록 품목을 찾는다.
+
+    Returns: (FoodItem 또는 None, 실제로 맞은 번호)
+
+    **교차 검증을 통과한 것만** 돌려준다. 둘 이상이 통과하면 포기한다 —
+    어느 쪽인지 모르는데 하나를 고르면 사진에 없는 값이 들어온다.
+    """
+    from v1.label.models import FoodItem
+
+    candidates = []
+    seen = set(tries)
+    for form in tries:
+        for variant in _digit_variants(form):
+            if variant not in seen and len(variant) >= 10:
+                seen.add(variant)
+                candidates.append(variant)
+    if not candidates:
+        return None, ''
+
+    try:
+        found = list(FoodItem.objects.filter(prdlst_report_no__in=candidates)[:20])
+    except Exception:
+        logger.exception('품목보고번호 근사 조회 실패')
+        return None, ''
+
+    confirmed = [item for item in found if _confirms(item, ocr_data)]
+    if len(confirmed) != 1:
+        # 하나도 없으면 못 찾은 것이고, 둘 이상이면 어느 쪽인지 알 수 없다.
+        return None, ''
+    return confirmed[0], confirmed[0].prdlst_report_no
+
+
 def find_food_item(ocr_data):
     """
     판독 결과의 품목보고번호로 등록 품목을 찾는다.
@@ -194,7 +287,9 @@ def find_food_item(ocr_data):
     for form in tries:                 # 원문에 가까운 꼴을 먼저 채택한다
         if form in found:
             return found[form], form
-    return None, ''
+
+    # 곧이곧대로는 못 찾았다. 한 자리가 어긋났을 뿐일 수 있다.
+    return find_near_miss(tries, ocr_data)
 
 
 def reconcile(ocr_data):
@@ -222,6 +317,17 @@ def reconcile(ocr_data):
 
     item, report_no = find_food_item(ocr_data)
     if item is None:
+        # **조용히 넘어가지 않는다.** 번호를 읽었는데 못 찾은 것과, 번호 자체가
+        # 안 읽힌 것은 완전히 다른 일이다. 앞의 경우 화면에는 "대조하면 +0점" 만
+        # 뜨는데, 그건 "대조가 도움이 안 된다" 로 읽힌다 — 실제로는 한 자리를
+        # 잘못 읽어 조회가 통째로 실패한 것이다.
+        read = _value_of((ocr_data or {}).get('prdlst_report_no'))
+        if read:
+            empty['summary'] = (
+                f'품목보고번호 "{read}" 로 등록 정보를 찾지 못했습니다. '
+                '번호를 한 자리 잘못 읽었을 수 있습니다 — 번호를 고치면 제품명·'
+                '제조원·원재료명을 등록 정보와 대조할 수 있습니다.')
+            empty['not_found'] = read
         return empty
 
     fields = {}
@@ -245,7 +351,13 @@ def reconcile(ocr_data):
                 conflicts.append(key)
         fields[key] = row
 
+    read = _value_of((ocr_data or {}).get('prdlst_report_no'))
+    corrected = bool(read) and report_no not in normalize_report_no(read)
     parts = [f'품목보고번호 {report_no} 로 등록 정보를 찾았습니다.']
+    if corrected:
+        parts.insert(0, f'사진에서는 "{read}" 로 읽었는데 그 번호는 등록돼 있지 '
+                        f'않습니다. 한 자리만 다른 {report_no} 가 등록돼 있고 '
+                        f'제품명·제조원도 맞아 그것으로 대조했습니다.')
     if agreed:
         parts.append(f'{len(agreed)}개 항목이 등록 정보와 일치합니다.')
     if filled:
@@ -258,6 +370,7 @@ def reconcile(ocr_data):
     return {
         'matched': True,
         'report_no': report_no,
+        'corrected_report_no': corrected,
         'source': '식약처 품목보고',
         'fields': fields,
         'agreed': agreed,

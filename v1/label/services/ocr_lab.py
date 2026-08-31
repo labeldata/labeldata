@@ -15,6 +15,9 @@
 """
 import logging
 import statistics
+import time
+
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +67,15 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
     last_data = None
 
     for i in range(max(1, runs)):
+        # 회차 사이에 숨을 돌린다.
+        #
+        # 사진 한 장이 6~7만 토큰이라 분당 20만 토큰 한도면 세 번이 한계다.
+        # 잇달아 부르면 뒤 회차가 429 로 죽고, 그러면 편차가 0 으로 나와
+        # "안정적" 으로 읽힌다. 재시도만으로는 모자랐다 - 창이 아직 안 열렸는데
+        # 다시 두드리는 것이라, 아예 창이 열릴 때까지 기다리는 편이 확실하다.
+        if i:
+            time.sleep(getattr(settings, 'OCR_RUN_PAUSE_SEC', 4))
+
         source = None
         try:
             if use_crop:

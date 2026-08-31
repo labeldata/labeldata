@@ -3771,3 +3771,107 @@ class CrossContaminationPromptTests(TestCase):
 
         self.assertIn('같은 자리를 두 번 읽는 것이 맞다', SYSTEM_PROMPT)
         self.assertIn('문장은 그대로 cautions 로', SYSTEM_PROMPT)
+
+
+class ReportNoNearMissTests(TestCase):
+    """
+    품목보고번호는 열대여섯 자리라 **한 자리만 틀려도 조회가 통째로 실패**한다.
+
+    실제로 "19980448010-697" 을 "199804480101-697" 로 읽어(1 이 하나 더 붙음)
+    등록 정보를 못 찾았다. 화면에는 "대조하면 +0점" 만 떴는데, 그건 "대조가
+    도움이 안 된다" 로 읽힌다 — 실제로는 조회가 아예 안 된 것이고, 번호만
+    고치면 제품명·제조원·원재료명을 전부 대조할 수 있다.
+    """
+
+    def setUp(self):
+        from v1.label.models import FoodItem
+
+        self.item = FoodItem.objects.create(
+            prdlst_report_no='19980448010-697',
+            prdlst_nm='삼립베이커리소시지',
+            bssh_nm='㈜삼립 서천공장',
+            prdlst_dcnm='소시지',
+        )
+
+    def test_한_자리가_더_붙어도_찾는다(self):
+        from v1.label.services.ocr_reconcile import find_food_item
+
+        found, number = find_food_item({
+            'prdlst_report_no': {'value': '199804480101-697'},
+            'prdlst_nm': {'value': '삼립베이커리소시지'},
+        })
+        self.assertIsNotNone(found)
+        self.assertEqual(number, '19980448010-697')
+
+    def test_한_자리가_빠져도_찾는다(self):
+        from v1.label.services.ocr_reconcile import find_food_item
+
+        found, _ = find_food_item({
+            'prdlst_report_no': {'value': '1998044801-697'},
+            'prdlst_nm': {'value': '삼립베이커리소시지'},
+        })
+        self.assertIsNotNone(found)
+
+    def test_한_자리가_달라도_찾는다(self):
+        from v1.label.services.ocr_reconcile import find_food_item
+
+        found, _ = find_food_item({
+            'prdlst_report_no': {'value': '19980448010-627'},
+            'prdlst_nm': {'value': '삼립베이커리소시지'},
+        })
+        self.assertIsNotNone(found)
+
+    def test_제품명도_제조원도_안_맞으면_채택하지_않는다(self):
+        """
+        번호 하나로 정하면 안 된다. 열다섯 자리 중 하나를 바꾸면 다른 회사의
+        멀쩡한 제품에 맞을 수 있고, 그 등록 정보를 끌어오면 사진에 없는 값이
+        들어온다.
+        """
+        from v1.label.services.ocr_reconcile import find_food_item
+
+        found, _ = find_food_item({
+            'prdlst_report_no': {'value': '199804480101-697'},
+            'prdlst_nm': {'value': '전혀 다른 과자'},
+            'bssh_nm': {'value': '다른회사'},
+        })
+        self.assertIsNone(found)
+
+    def test_교차_검증할_값이_없으면_채택하지_않는다(self):
+        from v1.label.services.ocr_reconcile import find_food_item
+
+        found, _ = find_food_item(
+            {'prdlst_report_no': {'value': '199804480101-697'}})
+        self.assertIsNone(found)
+
+    def test_두_자리가_틀리면_손대지_않는다(self):
+        from v1.label.services.ocr_reconcile import find_food_item
+
+        found, _ = find_food_item({
+            'prdlst_report_no': {'value': '199804488811-697'},
+            'prdlst_nm': {'value': '삼립베이커리소시지'},
+        })
+        self.assertIsNone(found)
+
+    def test_고쳐_찾았으면_그_사실을_밝힌다(self):
+        """말없이 다른 번호의 정보를 끌어오면 안 된다."""
+        from v1.label.services.ocr_reconcile import reconcile
+
+        out = reconcile({
+            'prdlst_report_no': {'value': '199804480101-697'},
+            'prdlst_nm': {'value': '삼립베이커리소시지'},
+        })
+        self.assertTrue(out['matched'])
+        self.assertTrue(out['corrected_report_no'])
+        self.assertIn('한 자리만 다른', out['summary'])
+
+    def test_못_찾으면_조용히_넘어가지_않는다(self):
+        from v1.label.services.ocr_reconcile import reconcile
+
+        out = reconcile({'prdlst_report_no': {'value': '99999999999-999'}})
+        self.assertFalse(out['matched'])
+        self.assertIn('찾지 못했습니다', out['summary'])
+
+    def test_번호를_아예_못_읽었으면_할_말이_없다(self):
+        from v1.label.services.ocr_reconcile import reconcile
+
+        self.assertEqual(reconcile({'prdlst_nm': {'value': '뭔가'}})['summary'], '')
