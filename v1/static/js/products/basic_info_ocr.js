@@ -199,7 +199,13 @@
     return ''
       + '<div class="ocr-row' + (same ? ' ocr-row-same' : '') + '" data-field="' + field + '"'
       + ' data-ocr="' + esc(value) + '" data-conf="' + esc(item.confidence || '') + '"'
-      + ' data-source="' + esc(item.source || '') + '">'
+      + ' data-source="' + esc(item.source || '') + '"'
+      // 이 줄을 체크하면 어떤 일이 일어나는가. 위에서 배지로 이미 계산한 값을
+      // 그대로 남긴다 - 두 곳에서 따로 판단하면 배지와 색이 어긋난다.
+      //   new     비어 있는 칸을 채운다
+      //   replace 손으로 채워 둔 값을 덮어쓴다  <- 눈에 띄어야 하는 줄
+      //   same    이미 같은 값이라 할 일이 없다
+      + ' data-state="' + (same ? 'same' : (current ? 'replace' : 'new')) + '">'
       + '  <input class="form-check-input ocr-pick" type="checkbox" ' + checked + '>'
       + '  <div class="ocr-label">' + esc(meta.label)
       + (isLow && !item.source ? ' <span class="ocr-flag ocr-flag-warn" title="읽은 값이 불확실합니다">확인</span>' : '')
@@ -239,6 +245,100 @@
       + '</div>';
   }
 
+  // 무엇이 반영되고 무엇이 안 되는지를 창 안에서 한눈에.
+  //
+  // 이미 값이 있는 칸은 덮어쓰지 않으려고 체크를 꺼 두는데, 그걸 못 보고
+  // "선택 항목 채우기" 를 누르면 아무것도 안 채워진 채 창이 닫힌다. 사용자는
+  // 반영된 줄 알고 저장을 누르고, 판독 결과는 그대로 날아간다.
+  //
+  // 그래서 셋을 더한다.
+  //   - 일괄 선택 버튼 (전체 / 해제 / 빈 칸만)
+  //   - 지금 몇 개가 선택됐고 그중 몇 개가 덮어쓰기인지 실시간 표시
+  //   - 하나도 안 골랐으면 창을 닫지 않는다
+  function pickBarHtml() {
+    return ''
+      + '<div class="ocr-pickbar">'
+      + '  <div class="ocr-pickbar-btns">'
+      + '    <button type="button" class="btn btn-outline-primary v2-btn-sm" data-pick="all">'
+      + '      <i class="bi bi-check2-all"></i>전체 선택</button>'
+      + '    <button type="button" class="btn btn-light v2-btn-sm" data-pick="empty">'
+      + '      빈 칸만</button>'
+      + '    <button type="button" class="btn btn-light v2-btn-sm" data-pick="none">'
+      + '      전체 해제</button>'
+      + '  </div>'
+      + '  <div class="ocr-pickbar-count" id="ocrPickCount"></div>'
+      + '</div>'
+      + '<div class="ocr-pickbar-note" id="ocrPickNote"></div>';
+  }
+
+  // 선택 상태가 바뀔 때마다 다시 그린다. 숫자가 눈앞에서 움직여야 "지금 무엇을
+  // 하는 중인지" 가 전달된다.
+  function refreshPickState() {
+    var rows = document.querySelectorAll('#basicInfoOcrBody .ocr-row[data-field]');
+    var picked = 0, overwrite = 0, total = rows.length;
+
+    rows.forEach(function (row) {
+      var box = row.querySelector('.ocr-pick');
+      var on = !!(box && box.checked);
+      var isOverwrite = row.dataset.state === 'replace';
+      row.classList.toggle('ocr-row-picked', on);
+      row.classList.toggle('ocr-row-danger', on && isOverwrite);
+      if (on) {
+        picked += 1;
+        if (isOverwrite) overwrite += 1;
+      }
+    });
+
+    var count = document.getElementById('ocrPickCount');
+    if (count) {
+      count.innerHTML = total
+        ? '<strong>' + total + '개</strong> 중 <strong class="' +
+          (picked ? 'text-primary' : 'text-danger') + '">' + picked + '개</strong> 선택'
+        : '';
+    }
+
+    var note = document.getElementById('ocrPickNote');
+    if (note) {
+      if (!picked) {
+        note.className = 'ocr-pickbar-note ocr-note-danger';
+        note.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>'
+          + '하나도 선택하지 않았습니다. 이대로 누르면 <strong>아무것도 채워지지 않고</strong> '
+          + '읽어낸 값이 사라집니다.';
+      } else if (overwrite) {
+        note.className = 'ocr-pickbar-note ocr-note-warn';
+        note.innerHTML = '<i class="bi bi-pencil-fill me-1"></i>'
+          + '선택한 ' + picked + '개 중 <strong>' + overwrite + '개는 이미 값이 있는 칸</strong>입니다. '
+          + '반영하면 <strong>기존 값을 덮어씁니다</strong>. 아래 주황색 줄을 확인하세요.';
+      } else {
+        note.className = 'ocr-pickbar-note ocr-note-ok';
+        note.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>'
+          + '선택한 ' + picked + '개는 모두 비어 있는 칸입니다. 지워지는 값이 없습니다.';
+      }
+    }
+
+    var apply = document.getElementById('basicInfoOcrApply');
+    if (apply) {
+      apply.innerHTML = '<i class="bi bi-check2"></i>선택 항목 채우기'
+        + (picked ? ' (' + picked + ')' : '');
+      apply.classList.toggle('btn-primary', picked > 0);
+      apply.classList.toggle('btn-outline-secondary', picked === 0);
+    }
+    return { picked: picked, overwrite: overwrite };
+  }
+
+  function applyPickPreset(mode) {
+    document.querySelectorAll('#basicInfoOcrBody .ocr-row[data-field]').forEach(function (row) {
+      var box = row.querySelector('.ocr-pick');
+      if (!box) return;
+      if (mode === 'all') box.checked = true;
+      else if (mode === 'none') box.checked = false;
+      // 'empty' — 비어 있는 칸만. 값이 같은 줄은 채워 봐야 달라지는 게 없으므로
+      // 함께 뺀다(체크가 늘어나면 무엇을 확인해야 하는지가 흐려진다).
+      else box.checked = row.dataset.state === 'new';
+    });
+    refreshPickState();
+  }
+
   // 읽어낸 값이 맞는지는 결국 사진을 봐야 안다. 원본을 옆에 두고 비교한다.
   // photoFile 이 없으면(품목보고번호로 불러온 경우) 표만 그린다.
   function showModal(data, photoFile, apiMatch, snapInfo) {
@@ -265,9 +365,7 @@
       var table =
         snapHtml(snapInfo)
         + apiMatchHtml(apiMatch)
-        + '<div class="text-muted mb-2" style="font-size:12px;">'
-        + '체크한 항목만 반영합니다. 이미 값이 있는 칸은 덮어쓰지 않도록 체크를 꺼 뒀습니다.'
-        + '</div>'
+        + pickBarHtml()
         + '<div class="ocr-table">'
         + '  <div class="ocr-row ocr-head">'
         + '    <div></div><div>항목</div><div>현재 값</div><div></div><div>사진에서 읽은 값</div>'
@@ -288,10 +386,35 @@
           if (on) direct.focus();
         });
       });
+
+      // 일괄 선택 버튼과 체크 변화를 한 곳에서 받는다 (표는 매번 다시 그려진다)
+      body.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-pick]');
+        if (btn) { applyPickPreset(btn.dataset.pick); return; }
+      });
+      body.addEventListener('change', function (e) {
+        if (e.target.classList.contains('ocr-pick')) refreshPickState();
+      });
+      refreshPickState();
     }
 
     var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modalEl.querySelector('#basicInfoOcrApply').onclick = function () {
+      // 하나도 안 골랐으면 닫지 않는다.
+      //
+      // 예전에는 그대로 닫혔다. 사용자는 반영된 줄 알고 저장을 누르고, 사진을
+      // 읽느라 들인 시간과 비용이 통째로 날아갔다. 무엇이 잘못됐는지 알려 주고
+      // 창을 열어 둔다.
+      var state = refreshPickState();
+      if (!state.picked) {
+        var note = document.getElementById('ocrPickNote');
+        if (note) {
+          note.classList.add('ocr-note-shake');
+          note.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          setTimeout(function () { note.classList.remove('ocr-note-shake'); }, 600);
+        }
+        return;
+      }
       applySelected();
       modal.hide();
     };

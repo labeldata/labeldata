@@ -444,6 +444,52 @@
     white-space:   nowrap;
 }
 .ocr-flag-warn { background: #fef7e0; color: #b06000; }
+
+/* ── 확인 창의 선택 상태 ─────────────────────────────────────
+   이미 값이 있는 칸은 덮어쓰지 않으려고 체크를 꺼 두는데, 그걸 못 보고
+   "선택 항목 채우기" 를 누르면 아무것도 안 채워진 채 창이 닫힌다. 사용자는
+   반영된 줄 알고 저장을 누르고 판독 결과가 날아간다.
+   선택 상태를 숫자와 색으로 계속 보여 줘서 그 침묵을 없앤다. */
+.ocr-pickbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+    padding: 8px 10px; margin-bottom: 6px;
+    background: var(--ez-bg-subtle, #f8f9fa);
+    border: 1px solid var(--ez-border-light, #f1f3f4);
+    border-radius: 8px;
+}
+.ocr-pickbar-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.ocr-pickbar-count { font-size: 12px; color: var(--ez-text-muted, #5f6368); }
+
+.ocr-pickbar-note {
+    font-size: 12px; line-height: 1.55;
+    padding: 7px 10px; border-radius: 8px; margin-bottom: 8px;
+}
+.ocr-note-ok     { background: #e6f4ea; color: #1a7336; }
+.ocr-note-warn   { background: #fef7e0; color: #96540b; }
+.ocr-note-danger { background: #fce8e6; color: #b31412; }
+
+/* 아무것도 안 고른 채 눌렀을 때 — 창을 닫지 않고 여기를 흔든다 */
+@keyframes ocrNoteShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-4px); }
+    40%, 80% { transform: translateX(4px); }
+}
+.ocr-note-shake { animation: ocrNoteShake .45s ease; }
+@media (prefers-reduced-motion: reduce) {
+    .ocr-note-shake { animation: none; outline: 2px solid #d93025; }
+}
+
+/* 고른 줄은 배경으로, 그중 기존 값을 덮어쓰는 줄은 주황 띠로 구분한다 */
+.ocr-row-picked { background: #f4f8ff; }
+.ocr-row-danger {
+    background: #fffaf0;
+    box-shadow: inset 3px 0 0 #f9ab00;
+}
+.ocr-row-danger .ocr-current {
+    text-decoration: line-through;
+    color: #b06000;
+}
 /* 식약처 등록 정보와 대조한 결과. 일치는 눈에 덜 띄게, 불일치는 눈에 띄게 —
    확인해야 하는 것은 다른 줄뿐이다. */
 .ocr-flag-ok   { background: #e6f4ea; color: #1e8e3e; }

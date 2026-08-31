@@ -1370,3 +1370,64 @@ class HomeUpdateStripTests(TestCase):
         self.assertIn('사진으로 등록', html)
         self.assertIn('최신 업데이트', html)
 
+class OcrPickBarTests(TestCase):
+    """
+    확인 창의 선택 상태를 사용자가 알아볼 수 있어야 한다.
+
+    이미 값이 있는 칸은 덮어쓰지 않으려고 체크를 꺼 둔다. 그런데 그걸 못 보고
+    "선택 항목 채우기" 를 누르면 **아무것도 안 채워진 채 창이 닫혔다.** 사용자는
+    반영된 줄 알고 저장을 누르고, 사진을 읽느라 들인 시간과 비용이 통째로
+    날아갔다. 운영에서 실제로 나온 신고다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.ocr = (base / 'static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
+
+    def test_일괄_선택_버튼이_있다(self):
+        for mode in ("data-pick=\"all\"", "data-pick=\"empty\"", "data-pick=\"none\""):
+            self.assertIn(mode, self.ocr, f'{mode} 버튼이 없다')
+        self.assertIn('전체 선택', self.ocr)
+        self.assertIn('전체 해제', self.ocr)
+
+    def test_줄마다_무슨_일이_일어나는지_남긴다(self):
+        """배지와 색이 어긋나지 않으려면 판단을 한 곳에서 해야 한다."""
+        self.assertIn("data-state=", self.ocr)
+        self.assertIn("row.dataset.state === 'replace'", self.ocr)
+        self.assertIn("row.dataset.state === 'new'", self.ocr)
+
+    def test_덮어쓰는_줄을_눈에_띄게_표시한다(self):
+        self.assertIn('ocr-row-danger', self.ocr)
+        self.assertIn('.ocr-row-danger', self.css)
+        # 지워질 값에 취소선을 그어 무엇이 사라지는지 보여 준다
+        self.assertIn('line-through', self.css)
+
+    def test_선택_개수를_실시간으로_보여준다(self):
+        self.assertIn('ocrPickCount', self.ocr)
+        self.assertIn('refreshPickState', self.ocr)
+        # 체크가 바뀔 때마다 다시 그린다
+        self.assertIn("classList.contains('ocr-pick')", self.ocr)
+
+    def test_덮어쓰기가_섞이면_경고한다(self):
+        self.assertIn('기존 값을 덮어씁니다', self.ocr)
+        self.assertIn('ocr-note-warn', self.css)
+
+    def test_하나도_안_고르면_창을_닫지_않는다(self):
+        """
+        닫혀 버리면 사용자는 반영된 줄 알고 저장을 누른다. 무엇이 잘못됐는지
+        알려 주고 창을 열어 둬야 한다.
+        """
+        self.assertIn('if (!state.picked)', self.ocr)
+        self.assertIn('ocr-note-shake', self.ocr)
+        self.assertIn('ocr-note-danger', self.css)
+        # 움직임을 줄인 환경에서도 무언가는 보여야 한다
+        self.assertIn('prefers-reduced-motion', self.css)
+
+    def test_반영_버튼에_개수를_적는다(self):
+        self.assertIn("apply.innerHTML = ", self.ocr)
+        self.assertIn("' (' + picked + ')'", self.ocr)
