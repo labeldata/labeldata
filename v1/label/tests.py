@@ -3974,3 +3974,66 @@ class HallucinatedIngredientTests(TestCase):
         out = diagnose('사과,배,포도', self.API)
         self.assertEqual(out['matched'], 0)
         self.assertEqual(len(out['ocr_only']), 3)
+
+
+class CrossContaminationNoneTests(TestCase):
+    """
+    괄호를 잘못 묶어 `str(None)` 이 되면서 문자열 "None" 이 주의사항 앞에
+    붙어 나갔다. 값이 없을 때가 보통이라 거의 매번 붙었다.
+
+        판독  "None 가급적 빨리 사용하시시오. ..."
+
+    법적 표시물에 그대로 들어가는 값이다.
+    """
+
+    def _fold(self, item):
+        from v1.label.services.ocr_service import fold_cross_contamination
+
+        return fold_cross_contamination({
+            'cross_contamination': item,
+            'cautions': {'value': '가급적 빨리 드십시오.', 'confidence': 'high'},
+        })['cautions']['value']
+
+    def test_값이_null_이면_아무것도_안_붙인다(self):
+        self.assertEqual(self._fold({'value': None, 'confidence': 'none'}),
+                         '가급적 빨리 드십시오.')
+
+    def test_칸_자체가_없어도_안_붙인다(self):
+        from v1.label.services.ocr_service import fold_cross_contamination
+
+        data = fold_cross_contamination(
+            {'cautions': {'value': '가급적 빨리 드십시오.', 'confidence': 'high'}})
+        self.assertEqual(data['cautions']['value'], '가급적 빨리 드십시오.')
+
+    def test_빈_문자열도_안_붙인다(self):
+        self.assertEqual(self._fold({'value': '  ', 'confidence': 'none'}),
+                         '가급적 빨리 드십시오.')
+
+    def test_문자열_None_이_어디에도_안_남는다(self):
+        for item in ({'value': None}, {'value': ''}, None, ''):
+            self.assertNotIn('None', self._fold(item), repr(item))
+
+
+class RateLimitRetryTests(TestCase):
+    """
+    분당 토큰 한도로 회차가 조용히 줄면 편차가 0 으로 나와 "안정적" 으로 읽힌다.
+    """
+
+    def test_한도에_걸린_실패를_알아본다(self):
+        from v1.label.services.ocr_lab import _is_rate_limited
+
+        self.assertTrue(_is_rate_limited(
+            'Error code: 429 - Rate limit reached for gpt-4o-mini'))
+        self.assertTrue(_is_rate_limited('rate_limit_exceeded'))
+        self.assertFalse(_is_rate_limited('사진을 읽지 못했습니다'))
+        self.assertFalse(_is_rate_limited(None))
+
+    def test_한도에_걸리면_기다렸다_다시_해_본다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_lab.py'
+                  ).read_text(encoding='utf-8')
+        self.assertIn("OCR_RATE_LIMIT_WAIT_SEC", source)
+        self.assertIn("_is_rate_limited(out.get('error'))", source)

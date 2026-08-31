@@ -330,7 +330,10 @@ def fold_cross_contamination(data):
     """
     data = dict(data or {})
     item = data.get('cross_contamination')
-    text = str((item or {}).get('value') if isinstance(item, dict) else item or '').strip()
+    # 괄호를 잘못 묶어 `str(None)` 이 되면서 문자열 "None" 이 주의사항 앞에
+    # 붙어 나갔다. 값이 없을 때가 보통이라 거의 매번 붙었다.
+    raw = item.get('value') if isinstance(item, dict) else item
+    text = str(raw or '').strip()
     if not text:
         return data
 

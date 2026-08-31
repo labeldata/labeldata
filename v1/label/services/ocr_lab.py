@@ -74,7 +74,7 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
         # "안정적" 으로 읽힌다. 재시도만으로는 모자랐다 - 창이 아직 안 열렸는데
         # 다시 두드리는 것이라, 아예 창이 열릴 때까지 기다리는 편이 확실하다.
         if i:
-            time.sleep(getattr(settings, 'OCR_RUN_PAUSE_SEC', 4))
+            time.sleep(getattr(settings, 'OCR_RUN_PAUSE_SEC', 12))
 
         source = None
         try:
@@ -100,6 +100,26 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
                     source.close()
                 except Exception:
                     pass
+
+        if not out.get('success') and _is_rate_limited(out.get('error')):
+            # 분당 토큰 한도다. 창이 열릴 때까지 한 번 더 기다렸다 해 본다 -
+            # 여기서 포기하면 회차가 조용히 줄고, 편차가 0 으로 나와
+            # "안정적" 으로 읽힌다.
+            time.sleep(getattr(settings, 'OCR_RATE_LIMIT_WAIT_SEC', 25))
+            try:
+                source = case.image.open('rb')
+                out = extract_label_from_image(
+                    source, model=model, prompt_version=prompt_version,
+                    use_hints=use_hints, want_boxes=use_boxes, layout=layout)
+            except Exception as exc:
+                logger.exception('정답지 재판독 실패 (case=%s)', case.pk)
+                out = {'success': False, 'error': str(exc)}
+            finally:
+                if source is not None and hasattr(source, 'close'):
+                    try:
+                        source.close()
+                    except Exception:
+                        pass
 
         if not out.get('success'):
             errors.append(f'{i + 1}회 실패: {out.get("error")}')
@@ -151,6 +171,12 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
         }
     row['_raw'] = last_data
     return row
+
+
+def _is_rate_limited(error):
+    """분당 토큰 한도에 걸린 실패인가."""
+    text = str(error or '').lower()
+    return '429' in text or 'rate limit' in text or 'rate_limit' in text
 
 
 def _box_summary(box_results):
