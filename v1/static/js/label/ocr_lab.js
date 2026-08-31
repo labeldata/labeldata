@@ -185,39 +185,51 @@
       return '<div>' + esc(k) + '</div><div>' + control + '</div>';
     }).join('');
 
-    var html = ''
-      + '<div class="row g-3">'
-      + '  <div class="col-lg-5">'
-      + '    <img src="' + esc(c.image_url) + '" style="width:100%; border-radius:8px; border:1px solid #dadce0;" alt="">'
-      + '    <div class="mt-2 text-muted" style="font-size:11.5px; line-height:1.6;">'
-      + '      사진을 보며 값을 고치세요. 라벨에 없는 항목은 비워 두면 채점에서 빠집니다.'
-      + '    </div>'
-      + '  </div>'
-      + '  <div class="col-lg-7">'
-      + '    <div class="mb-2">'
-      + '      <label class="form-label" style="font-size:11.5px;">이름</label>'
-      + '      <input type="text" id="caseName" class="form-control form-control-sm" value="' + esc(c.name) + '">'
-      + '    </div>'
-      + '    <div class="mb-2">'
-      + '      <label class="form-label" style="font-size:11.5px;">품목보고번호 (등록 정보 대조에 씁니다)</label>'
-      + '      <input type="text" id="caseReportNo" class="form-control form-control-sm" value="' + esc(c.report_no) + '">'
-      + '    </div>'
-      + '    <div class="mb-2">'
-      + '      <label class="form-label" style="font-size:11.5px;">읽을 영역 x, y, 너비, 높이 (원본 픽셀 · 비우면 사진 전체)</label>'
-      + '      <input type="text" id="caseCrop" class="form-control form-control-sm" value="'
+    var form = ''
+      + '<div class="mb-2">'
+      + '  <label class="form-label" style="font-size:11.5px;">이름</label>'
+      + '  <input type="text" id="caseName" class="form-control form-control-sm" value="' + esc(c.name) + '">'
+      + '</div>'
+      + '<div class="mb-2">'
+      + '  <label class="form-label" style="font-size:11.5px;">품목보고번호 (등록 정보 대조에 씁니다)</label>'
+      + '  <input type="text" id="caseReportNo" class="form-control form-control-sm" value="' + esc(c.report_no) + '">'
+      + '</div>'
+      + '<div class="mb-2">'
+      + '  <label class="form-label" style="font-size:11.5px;">읽을 영역 x, y, 너비, 높이 (원본 픽셀 · 비우면 사진 전체)</label>'
+      + '  <input type="text" id="caseCrop" class="form-control form-control-sm" value="'
       + esc((c.crop_box || []).join(', ')) + '" placeholder="예: 120, 340, 900, 620">'
-      + '    </div>'
-      + '    <div class="form-check mb-3">'
-      + '      <input class="form-check-input" type="checkbox" id="caseVerified"' + (c.verified ? ' checked' : '') + '>'
-      + '      <label class="form-check-label" for="caseVerified" style="font-size:12.5px;">'
-      + '        <strong>정답 확인</strong> — 이 값이 사진과 맞다고 확인했습니다. 켜야 채점에 쓰입니다.'
-      + '      </label>'
-      + '    </div>'
-      + '    <div class="lab-kv">' + (rows || '<div class="lab-empty" style="grid-column:1/-1;">정답이 비어 있습니다.</div>') + '</div>'
-      + '  </div>'
-      + '</div>';
+      + '</div>'
+      + '<div class="form-check mb-3">'
+      + '  <input class="form-check-input" type="checkbox" id="caseVerified"' + (c.verified ? ' checked' : '') + '>'
+      + '  <label class="form-check-label" for="caseVerified" style="font-size:12.5px;">'
+      + '    <strong>정답 확인</strong> — 이 값이 사진과 맞다고 확인했습니다. 켜야 채점에 쓰입니다.'
+      + '  </label>'
+      + '</div>'
+      + '<div class="text-muted mb-2" style="font-size:11.5px; line-height:1.6;">'
+      + '  사진을 확대해 가며 값을 고치세요. 라벨에 없는 항목은 비워 두면 채점에서 빠집니다.'
+      + '</div>'
+      + '<div class="lab-kv">' + (rows || '<div class="lab-empty" style="grid-column:1/-1;">정답이 비어 있습니다.</div>') + '</div>';
 
-    document.getElementById('caseBody').innerHTML = html;
+    var body = document.getElementById('caseBody');
+
+    // 정답지는 **사진을 보고 손으로 고치는** 것이라 사진이 읽혀야 한다.
+    // 표시사항 글씨는 작고, 눕혀 찍힌 사진도 흔하다. 예전에는 폭에 맞춘 <img>
+    // 하나였고, 그 크기로는 원재료명 한 줄이 읽히지 않아서 정답지를 만들다
+    // 말고 사진 파일을 따로 열어 봐야 했다.
+    //
+    // 제품 화면의 확인 창이 쓰는 것과 **같은 뷰어**다(회전·확대·이동).
+    // 정답을 적을 때와 판독값을 볼 때가 같은 도구여야 눈이 헷갈리지 않는다.
+    if (window.photoViewerLayout) {
+      window.photoViewerLayout(body, c.image_url, form, c.name);
+    } else {
+      body.innerHTML = ''
+        + '<div class="row g-3">'
+        + '  <div class="col-lg-5">'
+        + '    <img src="' + esc(c.image_url) + '" style="width:100%; border-radius:8px; border:1px solid #dadce0;" alt="">'
+        + '  </div>'
+        + '  <div class="col-lg-7">' + form + '</div>'
+        + '</div>';
+    }
     modal('caseModal').show();
   }
 

@@ -137,9 +137,17 @@
   function apiNoteHtml(item) {
     var notes = '';
     if (item.snapped_from) {
-      notes += '<div class="ocr-api-note">사진에서는 "' + esc(item.snapped_from)
-        + '" 로 읽었고, 표시기준 목록에 맞춰 고쳤습니다.</div>';
+      // 무엇을 왜 고쳤는지는 고친 쪽이 말한다 - 사전 스냅, 상용 문구, 등록
+      // 정보 순서 맞추기가 각각 다른 이유로 값을 바꾼다. 여기서 다시 판단하면
+      // 어느 날 한쪽만 맞는 설명이 붙는다.
+      notes += '<div class="ocr-api-note">사진에서는 "' + esc(item.snapped_from) + '" 로 읽었습니다. '
+        + esc(item.snapped_note || '표시기준 목록에 맞춰 고쳤습니다.') + '</div>';
     }
+    // 괄호 짝이 안 맞는 자리. 값은 고치지 않는다 - 어느 쪽을 잘못 읽었는지는
+    // 사진을 봐야 안다. 다시 볼 자리를 짚어 줄 뿐이다.
+    (item.warnings || []).forEach(function (w) {
+      notes += '<div class="ocr-api-note text-danger">' + esc(w) + '</div>';
+    });
     if (item.api_value && item.source !== 'both') {
       var lead = item.source === 'api' ? '등록 정보' : '식약처 등록';
       notes += '<div class="ocr-api-note">' + esc(lead) + ': ' + esc(item.api_value) + '</div>';

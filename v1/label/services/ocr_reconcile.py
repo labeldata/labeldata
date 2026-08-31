@@ -308,4 +308,52 @@ def merge(ocr_data, result=None):
             item['source'] = {'filled': 'api', 'agree': 'both',
                               'conflict': 'conflict'}.get(verdict, 'photo')
         data[key] = item
+
+    _align_rawmtrl(data, result)
     return data
+
+
+def _align_rawmtrl(data, result):
+    """
+    원재료명은 등록 정보를 **뼈대**로 쓴다.
+
+    등록 정보의 원재료는 원산지와 복합원재료를 뺀 채 라벨과 같은 순서로 적혀
+    있다 — OCR 을 거치지 않았으니 이름과 순서가 틀릴 이유가 없다. 사진에서 읽은
+    쪽은 반대로 원산지·복합원재료·함량이 붙어 있지만 이름이 흔들린다.
+    그래서 **이름과 순서는 등록 정보에서, 나머지는 사진에서** 가져와 합친다.
+
+    'loose' 판정이라 지금까지 원재료명은 대조해도 아무 일도 일어나지 않았다 —
+    표기가 달라 점수가 낮게 나오는 게 정상이라 'unsure' 로 끝났다.
+
+    합친 값은 확인 창이 무엇을 어떻게 바꿨는지 보여 준다. **말없이 고치지
+    않는다.**
+    """
+    row = (result.get('fields') or {}).get('rawmtrl_nm')
+    if not row or row['verdict'] == 'filled':
+        return
+    ocr_value = row['ocr_value']
+    if not ocr_value or not row['api_value']:
+        return
+
+    try:
+        from v1.label.services.ocr_rawmtrl import align_summary, align_with_api
+        aligned = align_with_api(ocr_value, row['api_value'])
+    except Exception:
+        logger.exception('원재료명 순서 맞추기 실패')
+        return
+
+    if not aligned or aligned['text'].strip() == ocr_value.strip():
+        return
+
+    item = dict(data.get('rawmtrl_nm') or {})
+    item['value'] = aligned['text']
+    item['snapped_from'] = ocr_value
+    item['snapped_note'] = (align_summary(aligned)
+                            or '등록 정보의 원재료 순서·명칭에 맞췄습니다.')
+    item['aligned'] = {
+        'renamed': aligned['renamed'],
+        'reordered': aligned['reordered'],
+        'api_only': aligned['api_only'],
+        'ocr_only': aligned['ocr_only'],
+    }
+    data['rawmtrl_nm'] = item

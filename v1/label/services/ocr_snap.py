@@ -3,7 +3,8 @@
 
 식품유형과 알레르기 유발물질은 아무 말이나 쓸 수 있는 값이 아니다. 식품유형은
 「식품의 기준 및 규격」이 정한 목록이고, 알레르기는 표시기준이 정한 22종이다.
-그런데 지금까지는 판독 결과를 자유 문구 그대로 받았다.
+주의사항과 기타표시사항도 대부분 우리가 만들어 둔 상용 문구다
+(`label_phrases.py`). 그런데 지금까지는 판독 결과를 자유 문구 그대로 받았다.
 
 그래서 한 글자 차이가 그대로 남는다.
 
@@ -198,6 +199,8 @@ def snap(ocr_data):
         item = dict(item) if isinstance(item, dict) else {'value': new_value,
                                                           'confidence': 'high'}
         item['snapped_from'] = note['from']
+        if note.get('note'):
+            item['snapped_note'] = note['note']
         item['value'] = new_value
         data[key] = item
 
@@ -224,13 +227,41 @@ def snap(ocr_data):
             write('allergens', snapped, note)
             report.append(note)
 
+    # 주의사항·기타표시사항 — 대부분 우리가 만들어 둔 상용 문구로 되어 있다.
+    # 문장이 길어서 한두 글자가 뭉개져도 "그 문장" 인 것은 확실한데, 그 한두
+    # 글자가 그대로 인쇄물에 들어간다. 문장이 거의 같으면 원문으로 확정한다.
+    #
+    # 여기서 확정하는 것은 **읽은 문장뿐**이다. 목록에 있다는 이유로 없는 문구를
+    # 채우지는 않는다 - 그건 지어낸 값이다.
+    from v1.label.services.label_phrases import FIELD_LABELS, snap_text
+
+    for key, label in FIELD_LABELS.items():
+        current = value_of(key)
+        if not current:
+            continue
+        snapped, changes = snap_text(key, current)
+        if changes and snapped != current:
+            note = {'field': key, 'label': label,
+                    'from': changes[0]['from'], 'to': changes[0]['to'],
+                    'score': min(c['score'] for c in changes),
+                    'note': f'자주 쓰는 {label} 문구 {len(changes)}건을 원문 그대로 맞췄습니다.'}
+            write(key, snapped, note)
+            report.append(note)
+
     return data, report
+
+
+def _short(text, limit=28):
+    """긴 문구는 잘라 보여 준다. 주의사항 한 문장이 80자를 넘는다."""
+    text = str(text or '')
+    return text if len(text) <= limit else text[:limit] + '…'
 
 
 def summary(report):
     """확인 창 위에 한 줄로 띄울 문장. 바꾼 게 없으면 빈 문자열."""
     if not report:
         return ''
-    parts = [f'{row["label"]} "{row["from"]}" → "{row["to"]}"' for row in report]
-    return ('표시기준이 정한 목록에 맞춰 고쳤습니다: ' + ', '.join(parts)
+    parts = [f'{row["label"]} "{_short(row["from"])}" → "{_short(row["to"])}"'
+             for row in report]
+    return ('표시기준·상용 문구에 맞춰 고쳤습니다: ' + ', '.join(parts)
             + '. 잘못 맞췄다면 값을 직접 고쳐 주세요.')

@@ -1,4 +1,5 @@
-﻿<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+{% load quick_phrases %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet">
 <style>
 /* 원산지 Select2 콘테이너: flex 레이아웃 유지 */
@@ -720,19 +721,17 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                         </div>
                     </div>
                     <div class="d-flex flex-wrap gap-1">
-                        <button type="button" class="btn btn-outline-danger btn-sm product-quick-text-btn" data-field="cautions" data-text="부정·불량식품 신고는 국번없이 1399" title="부정불량식품 신고 (법정 의무)"><i class="fas fa-phone-alt me-1"></i>1399</button>
-                        <button type="button" class="btn btn-outline-danger btn-sm product-quick-text-btn" data-field="cautions" data-text="이 제품에는 페닐알라닌이 함유되어 있습니다. (페닐케톤뇨증 환자 주의)" title="아스파탐 법정 필수 표시"><i class="fas fa-exclamation-circle me-1"></i>페닐알라닌</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="개봉 후에는 변질될 우려가 있으니 반드시 밀봉하여 냉장 보관하시고, 가급적 빨리 섭취하시기 바랍니다." title="개봉 후 보관 및 취급"><i class="fas fa-box-open me-1"></i>개봉후보관</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="직사광선을 피하고 서늘한 곳에 보관하시기 바랍니다." title="보관 조건"><i class="fas fa-sun me-1"></i>직사광선</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="냉동 제품은 해동 후 재냉동하지 마시기 바랍니다." title="재냉동 금지"><i class="fas fa-snowflake me-1"></i>재냉동금지</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="용기가 파손되거나 부풀어 있는 경우 섭취하지 마시기 바랍니다." title="용기 파손 주의"><i class="fas fa-box me-1"></i>용기파손</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="어린이가 먹을 경우 보호자의 지도가 필요합니다." title="어린이 주의"><i class="fas fa-child me-1"></i>어린이</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="질식의 위험이 있으니 주의하시기 바랍니다." title="질식 주의"><i class="fas fa-lungs me-1"></i>질식</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="뜨거우니 화상에 주의하시기 바랍니다." title="화상 주의"><i class="fas fa-fire me-1"></i>화상</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="cautions" data-text="제품 개봉 시 내용물이 튈 수 있으니 주의하시기 바랍니다." title="개봉 주의"><i class="fas fa-exclamation me-1"></i>튐주의</button>
-                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="cautions" data-text="특정 질환이 있거나 의약품 복용 중이신 분은 섭취 전 의사 및 전문가와 상담하시기 바랍니다. 본 제품은 질병의 예방 및 치료를 위한 의약품이 아닙니다." title="건강기능식품 일반 주의"><i class="fas fa-user-md me-1"></i>의약품복용자</button>
-                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="cautions" data-text="임산부 및 수유부, 어린이(또는 특정 연령층)는 섭취에 주의해야 합니다." title="특정 대상 주의"><i class="fas fa-baby me-1"></i>임산부/어린이</button>
-                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="cautions" data-text="본 제품 섭취 시 이상 사례 발생 또는 불편함을 느끼는 경우, 섭취를 중단하고 소비자 상담실 또는 1577-2488(이상사례 신고 핫라인)로 신고하여 주십시오." title="이상사례 신고"><i class="fas fa-phone-volume me-1"></i>이상사례</button>
+                        {% comment %}
+                          문구 목록은 v1/label/services/label_phrases.py 한 곳에 있다.
+                          판독 프롬프트도 같은 목록을 싣는다 - 화면에만 박아 두면
+                          문구를 고쳤을 때 버튼만 바뀌고 판독은 옛 문장을 기다린다.
+                        {% endcomment %}
+                        {% quick_phrases "cautions" as cautions_phrases %}
+                        {% for phrase in cautions_phrases %}
+                        <button type="button" class="btn btn-outline-{{ phrase.tone }} btn-sm product-quick-text-btn"
+                                data-field="cautions" data-text="{{ phrase.text }}" title="{{ phrase.title }}">
+                            <i class="{{ phrase.icon }} me-1"></i>{{ phrase.chip }}</button>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -756,21 +755,17 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                         </div>
                     </div>
                     <div class="d-flex flex-wrap gap-1">
-                        <button type="button" class="btn btn-outline-primary btn-sm product-quick-text-btn" data-field="additional_info" data-text="제품에 대한 문의 사항 및 상담은 종합상담센터 1577-1255 (유료)로 연락 주시기 바랍니다." title="소비자 상담실"><i class="fas fa-headset me-1"></i>상담센터</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm product-quick-text-btn" data-field="additional_info" data-text="본 제품은 공정거래위원회 고시 소비자분쟁해결기준에 의거, 교환 또는 보상받을 수 있습니다." title="품질보증"><i class="fas fa-certificate me-1"></i>품질보증</button>
-                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="HACCP 인증 제품" title="HACCP 인증"><i class="fas fa-check-circle me-1"></i>HACCP</button>
-                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="ISO 22000 인증" title="ISO 22000"><i class="fas fa-award me-1"></i>ISO22000</button>
-                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="유기농 인증 제품" title="유기농 인증"><i class="fas fa-leaf me-1"></i>유기농</button>
-                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="KS 인증 제품" title="KS 인증"><i class="fas fa-stamp me-1"></i>KS</button>
-                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="전통식품 품질인증" title="전통식품"><i class="fas fa-landmark me-1"></i>전통식품</button>
-                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="우수식품인증(GMP)" title="GMP"><i class="fas fa-star me-1"></i>GMP</button>
-                        <button type="button" class="btn btn-outline-success btn-sm product-quick-text-btn" data-field="additional_info" data-text="저탄소 인증 제품" title="저탄소 인증"><i class="fas fa-seedling me-1"></i>저탄소</button>
-                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="additional_info" data-text="무 글루텐 (Gluten Free)" title="글루텐 프리"><i class="fas fa-ban me-1"></i>무글루텐</button>
-                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="additional_info" data-text="비건 인증 (Vegan)" title="비건 인증"><i class="fas fa-leaf me-1"></i>비건</button>
-                        <button type="button" class="btn btn-outline-info btn-sm product-quick-text-btn" data-field="additional_info" data-text="할랄(Halal) 인증 제품" title="할랄 인증"><i class="fas fa-moon me-1"></i>할랄</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="additional_info" data-text="무(無) MSG, 무(無) 합성보존료, 무(無) 합성착색료" title="무첨가"><i class="fas fa-ban me-1"></i>무첨가</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="additional_info" data-text="Non-GMO 제품" title="Non-GMO"><i class="fas fa-dna me-1"></i>Non-GMO</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm product-quick-text-btn" data-field="additional_info" data-text="저나트륨 제품" title="저나트륨"><i class="fas fa-heart me-1"></i>저나트륨</button>
+                        {% comment %}
+                          문구 목록은 v1/label/services/label_phrases.py 한 곳에 있다.
+                          판독 프롬프트도 같은 목록을 싣는다 - 화면에만 박아 두면
+                          문구를 고쳤을 때 버튼만 바뀌고 판독은 옛 문장을 기다린다.
+                        {% endcomment %}
+                        {% quick_phrases "additional_info" as additional_info_phrases %}
+                        {% for phrase in additional_info_phrases %}
+                        <button type="button" class="btn btn-outline-{{ phrase.tone }} btn-sm product-quick-text-btn"
+                                data-field="additional_info" data-text="{{ phrase.text }}" title="{{ phrase.title }}">
+                            <i class="{{ phrase.icon }} me-1"></i>{{ phrase.chip }}</button>
+                        {% endfor %}
                     </div>
                 </div>
             </div>

@@ -57,6 +57,38 @@
               border-radius: 6px; padding: 10px; max-height: 260px; overflow: auto; }
 .lab-opts { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; }
 .lab-opts label { font-size: 11.5px; color: var(--ez-text-muted, #5f6368); display: block; margin-bottom: 2px; }
+
+/* 사용법.
+   화면을 처음 여는 사람은 버튼 이름만 보고는 무엇이 일어나는지 모른다.
+   그렇다고 설명을 늘 펼쳐 두면 정작 자주 쓰는 사람에게는 방해가 된다 —
+   접어 두고 필요할 때 편다. */
+.lab-help { margin-bottom: 12px; }
+.lab-help > summary {
+    font-size: 11.5px; font-weight: 600; color: #1a5fb4; cursor: pointer;
+    list-style: none; display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border: 1px solid #d2e3fc; border-radius: 999px; background: #f8fbff;
+}
+.lab-help > summary::-webkit-details-marker { display: none; }
+.lab-help > summary::before { content: "?"; font-weight: 700; }
+.lab-help[open] > summary { margin-bottom: 8px; }
+.lab-help-body {
+    font-size: 12px; line-height: 1.7; color: #3c4043;
+    background: #f8f9fa; border-left: 3px solid #d2e3fc;
+    border-radius: 0 6px 6px 0; padding: 10px 12px;
+}
+.lab-help-body dl { display: grid; grid-template-columns: 168px minmax(0,1fr); gap: 4px 12px; margin: 6px 0 0; }
+.lab-help-body dt { font-weight: 600; color: #202124; }
+.lab-help-body dd { margin: 0; }
+.lab-help-body ol, .lab-help-body ul { margin: 6px 0 0; padding-left: 18px; }
+.lab-help-body code {
+    font-size: 11px; background: #e8eaed; border-radius: 3px; padding: 0 4px; color: #202124;
+}
+.lab-term { color: #5f6368; }
+
+/* 정답지 편집 창은 사진을 크게 봐야 한다 — 정답은 사진을 보고 손으로 적는다.
+   제품 화면의 확인 창과 같은 크기로 맞춘다. */
+#caseModal .modal-dialog { max-width: min(1500px, 96vw); }
+#caseModal .modal-content { max-height: 94vh; }
 </style>
 {% endblock %}
 
@@ -88,6 +120,72 @@
 
   <div id="labNote"></div>
 
+  <!-- 이 화면은 무엇인가 ---------------------------------------------------- -->
+  <div class="lab-card">
+    <details class="lab-help mb-0">
+      <summary>이 화면은 무엇을 하는 곳인가 · 어떤 순서로 쓰나 · 이게 AI 개발의 어느 단계인가</summary>
+      <div class="lab-help-body">
+        <p class="mb-2">
+          <strong>모델을 학습시키는 화면이 아닙니다.</strong> 여기서 하는 일은
+          <strong>재고 → 고치고 → 다시 재는</strong> 것입니다. 사진 판독은 같은 사진도
+          매번 조금씩 다르게 읽히기 때문에, 무엇을 고쳤을 때 정말 나아졌는지는
+          <strong>재 보지 않으면 알 수 없습니다.</strong> 이 화면은 그 잣대를 만드는 곳입니다.
+        </p>
+
+        <div class="fw-semibold mt-3">처음 쓸 때 순서</div>
+        <ol class="mb-2">
+          <li><strong>① 정답지</strong> — 검증된 표시사항 3~5건으로 정답을 적어 둡니다 (30분)</li>
+          <li><strong>② 측정</strong> — 회차 3으로 잽니다. 지금 실력이 몇 점인지 (5분)</li>
+          <li>결과에서 <strong>약함 / 들쭉날쭉</strong> 항목을 봅니다 (10분)</li>
+          <li><strong>③ 프롬프트</strong> — 초안을 만들어 전문을 읽습니다 (20분)</li>
+          <li>그 판으로 <strong>다시 ②</strong> — 점수가 올랐으면 켭니다 (5분)</li>
+          <li>2주 뒤 <strong>④ 실사용</strong> 으로 진짜 효과를 확인합니다</li>
+        </ol>
+
+        <div class="fw-semibold mt-3">이 방식은 AI 개발의 어느 단계인가</div>
+        <p class="mb-1">
+          모델의 가중치를 바꾸는 <strong>학습(fine-tuning)</strong> 이 아니라, 그 앞 단계인
+          <strong>평가 주도 개발(eval-driven development)</strong> 입니다. 모델은 그대로 두고
+          <strong>지시문(프롬프트)만</strong> 바꿔 가며 점수로 고릅니다. 파인튜닝은
+          되돌리기 어렵고 모델 버전에 묶이므로, 짜낼 것을 다 짜낸 뒤에 갑니다.
+        </p>
+        <dl>
+          <dt>① 정답지 만들기</dt>
+          <dd><span class="lab-term">데이터 라벨링(annotation) · 골든셋/평가셋 구축</span> —
+              모든 측정의 잣대입니다. 여기가 틀리면 뒤가 전부 틀립니다</dd>
+          <dt>② 재기 (회차 ≥ 3)</dt>
+          <dd><span class="lab-term">오프라인 평가 · 회귀 테스트(regression eval)</span>,
+              여러 번 재는 것은 <span class="lab-term">편차를 감안한 평가</span></dd>
+          <dt>② 판·모델 바꿔 재기</dt>
+          <dd><span class="lab-term">A/B 비교 · 절제 실험(ablation)</span> —
+              "교정 이력 힌트 끄기" 가 전형적인 절제 실험입니다</dd>
+          <dt>③ 프롬프트 고치기</dt>
+          <dd><span class="lab-term">프롬프트 엔지니어링</span>, 자동 초안은
+              <span class="lab-term">자동 프롬프트 최적화(APE/OPRO 계열)</span></dd>
+          <dt>③ 판 관리</dt>
+          <dd><span class="lab-term">버전 관리 + 배포 게이트</span> — 재 보지 않은 판은 켜지 않습니다</dd>
+          <dt>④ 실사용 통계</dt>
+          <dd><span class="lab-term">온라인 평가 · 암묵적 피드백(implicit feedback)</span> —
+              "고치지 않고 그대로 쓴 비율" 이 곧 수용률(acceptance rate)</dd>
+          <dt>사용자 교정 이력</dt>
+          <dd><span class="lab-term">Human-in-the-loop 피드백 루프</span> — 자동으로 돕니다.
+              이 화면에서 켜고 끌 것이 없습니다</dd>
+        </dl>
+
+        <div class="fw-semibold mt-3">학습에는 두 가지가 있습니다</div>
+        <table class="lab-table mt-1">
+          <thead><tr><th style="width:120px;"></th><th>자동 학습</th><th>이 화면(수동 고도화)</th></tr></thead>
+          <tbody>
+            <tr><td>무엇이</td><td>사용자가 확인 창에서 고친 값</td><td>정답지로 잰 점수</td></tr>
+            <tr><td>누가</td><td>평소 쓰기만 하면 쌓입니다</td><td>관리자가 여기서 돌립니다</td></tr>
+            <tr><td>언제 반영</td><td>30분 뒤 다음 판독 프롬프트에 힌트로 자동</td><td>프롬프트 판을 만들어 <strong>사람이 켜야</strong></td></tr>
+            <tr><td>할 일</td><td>없음</td><td>아래 ①~③</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
   <!-- ① 정답지 ------------------------------------------------------------ -->
   <div class="lab-card">
     <div class="lab-step">① 정답지</div>
@@ -99,6 +197,60 @@
       채점하면 자기 답을 자기가 채점하는 꼴이라 점수가 아무 뜻도 없습니다.
       지금 확인된 정답지는 <strong id="verifiedCount">{{ verified_count }}</strong>장입니다.
     </div>
+
+    <details class="lab-help">
+      <summary>정답지 만드는 법 — 두 가지 길과, 각 칸이 무엇인지</summary>
+      <div class="lab-help-body">
+        <div class="fw-semibold">(가) 사진으로 만들기 — 새 사진으로 시작할 때</div>
+        <ol>
+          <li>사진 고르기 → 이름 입력 → (있으면) 품목보고번호 입력</li>
+          <li><strong>"판독해서 초안을 채우기"</strong> 를 켠 채로 "정답지 만들기".
+              5~15초 뒤 판독 결과가 초안으로 채워지고 편집 창이 열립니다</li>
+          <li><strong>사진을 확대해 가며 틀린 값을 손으로 고칩니다</strong></li>
+          <li><strong>"정답 확인"</strong> 을 켜고 저장</li>
+        </ol>
+        <p class="mb-2 text-danger">
+          3번을 건너뛰면 안 됩니다. 초안은 판독 결과입니다. 그대로 확인 처리하면
+          자기 답을 자기가 채점하는 꼴이라, 점수가 100점 가까이 나오면서 아무 뜻도 갖지 않습니다.
+        </p>
+
+        <div class="fw-semibold mt-2">(나) 검증된 표시사항에서 가져오기 — 더 정확하고 빠릅니다</div>
+        <ol>
+          <li>검토·승인까지 마친 제품의 <strong>표시사항(제품) 번호</strong>를 입력
+              (제품 화면 주소 <code>/products/123/</code> 의 <code>123</code>)</li>
+          <li>그 제품의 표시사항 <strong>사진</strong>을 함께 올림</li>
+          <li>값이 자동으로 채워집니다 — 판독값이 아니라 <strong>실제로 인쇄에 쓰인 값</strong>입니다</li>
+          <li>사진이 그 제품의 것이 맞는지만 확인하고 <strong>"정답 확인"</strong> 켜기</li>
+        </ol>
+
+        <div class="fw-semibold mt-2">편집 창의 각 칸</div>
+        <dl>
+          <dt>사진 뷰어</dt>
+          <dd>회전 · 확대(버튼 · 휠 · 더블클릭으로 원래대로) · 확대한 뒤 끌어서 이동.
+              표시사항 글씨는 작습니다 — <strong>확대해서 읽고 적으세요</strong></dd>
+          <dt>이름</dt>
+          <dd>목록과 측정 결과에 표시됩니다. 채점에는 쓰이지 않습니다</dd>
+          <dt>품목보고번호</dt>
+          <dd>적어 두면 <strong>등록 정보 대조의 효과</strong>까지 함께 잽니다.
+              비우면 사진만으로 잰 점수만 나옵니다</dd>
+          <dt>읽을 영역</dt>
+          <dd><code>x, y, 너비, 높이</code> (원본 픽셀). 적어 두면 ②의
+              "영역만 읽기" 로 <strong>영역 선택 방식</strong>도 함께 잴 수 있습니다.
+              안 적으면 사진 전체로만 잽니다</dd>
+          <dt>항목 값</dt>
+          <dd>라벨에 <strong>없는 항목은 비워 둡니다</strong> — 채점에서 자동으로 빠집니다.
+              억지로 채우면 "못 읽었다" 고 감점됩니다</dd>
+          <dt>정답 확인</dt>
+          <dd>켜야 채점에 쓰입니다. 목록의 체크박스도 이 값을 따라 기본으로 켜집니다</dd>
+        </dl>
+
+        <p class="mb-0 mt-2">
+          <strong>몇 장이 필요한가.</strong> 5~10장이면 방향은 보입니다. 다만
+          <strong>식품유형을 섞으세요</strong> — 같은 유형 열 장보다 다른 유형 다섯 장이 낫습니다.
+          잘 틀리는 사진(빽빽한 원형 라벨, 작업지시서에 얹힌 라벨)을 일부러 넣으세요.
+        </p>
+      </div>
+    </details>
 
     <div class="row g-3 mb-3">
       <div class="col-lg-6">
@@ -187,6 +339,58 @@
       한 번에 {{ max_calls }}번까지 읽습니다(정답지 수 × 회차) — 그보다 크면 요청이 먼저 끊깁니다.
     </div>
 
+    <details class="lab-help">
+      <summary>재는 법 — 각 옵션이 무엇을 바꾸는지, 결과를 어떻게 읽는지</summary>
+      <div class="lab-help-body">
+        <p class="mb-2">
+          위 <strong>①의 목록에서 체크한 정답지</strong>를 잽니다(기본으로 "확인됨" 인 것이
+          켜져 있습니다). 아무것도 체크하지 않으면 확인된 정답지를 전부 잽니다.
+        </p>
+        <dl>
+          <dt>프롬프트 판</dt>
+          <dd>비우면 <strong>지금 켜져 있는 판</strong>. 판끼리 견줄 때만 지정합니다.
+              여기서 고른다고 그 판이 켜지지는 않습니다 — 이번 측정에만 씁니다</dd>
+          <dt>모델</dt>
+          <dd>비우면 설정값(<code>{{ current_model }}</code>). <code>gpt-4o</code> 같은
+              다른 모델 이름을 넣어 "돈을 더 쓰면 얼마나 나아지는가" 를 잽니다</dd>
+          <dt>회차</dt>
+          <dd><strong>3 이상을 권합니다.</strong> 같은 사진도 매번 다르게 읽힙니다.
+              1회로 재면 운이 좋았는지 나빴는지 알 수 없습니다</dd>
+          <dt>영역만 읽기</dt>
+          <dd>정답지에 <strong>읽을 영역을 적어 둔 것만</strong> 의미가 있습니다.
+              사진 전체를 보내는 것과 표시사항 부분만 잘라 보내는 것 중 무엇이 나은지를 잽니다</dd>
+          <dt>등록 정보 대조</dt>
+          <dd>켜면 <strong>대조 전/후 점수를 함께</strong> 냅니다. 정답지에 품목보고번호가
+              적혀 있어야 효과가 보입니다</dd>
+          <dt>교정 이력 힌트</dt>
+          <dd>끄면 <strong>프롬프트 자체의 힘만</strong> 잽니다. 힌트가 섞이면 무엇이
+              점수를 올렸는지 가릴 수 없습니다</dd>
+        </dl>
+
+        <div class="fw-semibold mt-3">결과 읽는 법</div>
+        <dl>
+          <dt>평균</dt>
+          <dd>전체 점수. 85점 이상이면 쓸 만합니다</dd>
+          <dt>편차 (최고 − 최저)</dt>
+          <dd><strong>30점 이상이면 "들쭉날쭉"</strong> 으로 표시됩니다. 평균 60점이어도
+              편차가 크면 늘 55점인 항목보다 <strong>더 급합니다</strong> — 같은 사진을 매번
+              다르게 읽는다는 뜻이라 사용자가 결과를 믿을 수 없습니다</dd>
+          <dt>"약함"(빨강)</dt>
+          <dd>평균 60점 미만. 프롬프트로 겨냥할 첫 후보입니다</dd>
+          <dt>파란 줄</dt>
+          <dd>등록 정보를 대조하면 몇 점이 오르는지</dd>
+          <dt>"자세히"</dt>
+          <dd>사진별로 무엇을 어떻게 틀렸는지(정답 vs 판독) 나옵니다.
+              점수만 보지 말고 <strong>실제 오독을 눈으로 보세요</strong> — 프롬프트를 고칠 근거입니다</dd>
+        </dl>
+        <p class="mb-0 mt-2 text-danger">
+          한 번에 {{ max_calls }}번까지입니다(정답지 수 × 회차). 사진 한 장에 5~15초라
+          그 이상은 웹 요청이 먼저 끊기고, 끊기면 <strong>돈만 쓰고 결과가 안 남습니다.</strong>
+          정답지 10장을 3회 재려면 5장씩 두 번에 나눠 돌리세요.
+        </p>
+      </div>
+    </details>
+
     <div class="lab-opts mb-3">
       <div>
         <label>프롬프트 판</label>
@@ -270,6 +474,52 @@
       내용을 읽고, 정확도를 재 본 뒤에 켜세요 — 판독 결과는 법적 표시물에 그대로 들어갑니다.
     </div>
 
+    <details class="lab-help">
+      <summary>프롬프트 고치는 법 — 버튼마다 무슨 일이 일어나는지</summary>
+      <div class="lab-help-body">
+        <div class="fw-semibold">(가) 자동 초안 — 측정 결과에서 시작</div>
+        <ol>
+          <li>②의 측정 결과에서 <strong>"이 결과로 프롬프트 초안 만들기"</strong></li>
+          <li><strong>무엇을 근거로 고치려는지 먼저 보여 줍니다</strong> — 약한 항목과 실제 오독 사례.
+              이걸 읽어야 나중에 초안을 검토할 기준이 생깁니다</li>
+          <li>"초안 만들기" → <strong>꺼진 채로</strong> 저장됩니다</li>
+          <li>아래 목록에서 <strong>열어서 전문을 끝까지 읽습니다</strong></li>
+          <li>②에서 "프롬프트 판" 에 그 판을 지정해 <strong>다시 잽니다</strong></li>
+          <li>점수가 올랐으면 <strong>"사용"</strong> 으로 켭니다</li>
+        </ol>
+
+        <div class="fw-semibold mt-2">(나) 직접 고치기</div>
+        <ol>
+          <li><strong>"기본 프롬프트 보기"</strong> → 전문을 보고 → "이 내용으로 새 판 만들기"</li>
+          <li>판을 열어 고치고 저장 → 재 보고 → "사용"</li>
+        </ol>
+
+        <div class="fw-semibold mt-2">각 버튼</div>
+        <dl>
+          <dt>기본 프롬프트 보기</dt>
+          <dd>코드에 박힌 원본을 봅니다. 읽기 전용이라 "새 판 만들기" 로만 손댈 수 있습니다</dd>
+          <dt>기본 프롬프트로 되돌리기</dt>
+          <dd>켜져 있는 판을 <strong>끕니다</strong>. 판을 지우지는 않습니다 — 잘못 켰을 때
+              가장 빠른 되돌리기입니다</dd>
+          <dt>열기</dt>
+          <dd>판 이름 · "무엇을 왜 바꿨는가" · 프롬프트 전문을 고칩니다</dd>
+          <dt>사용</dt>
+          <dd>이 판을 켭니다. 켜져 있는 판은 언제나 하나입니다</dd>
+          <dt>최근 점수</dt>
+          <dd>이 판으로 마지막에 잰 평균. <code>—</code> 이면 <strong>한 번도 재지 않은 판</strong>입니다</dd>
+        </dl>
+
+        <p class="mb-1 mt-2 text-danger">
+          <strong>"사용" 을 누르는 순간 모든 사용자의 판독에 쓰입니다.</strong>
+          판독 결과는 법적 표시물에 그대로 들어갑니다. 재 보지 않은 판은 켜지 마세요.
+        </p>
+        <p class="mb-0">
+          응답 형식(맨 끝 JSON 키 목록)을 지운 프롬프트는 <strong>저장을 거부합니다.</strong>
+          그 키가 없으면 판독 결과를 화면이 못 읽는데, 켠 뒤에 알게 되면 그 사이의 판독이 전부 헛돕니다.
+        </p>
+      </div>
+    </details>
+
     <div class="d-flex gap-2 mb-3 flex-wrap">
       <button type="button" class="btn btn-outline-secondary v2-btn-sm" id="promptBaseBtn">
         기본 프롬프트 보기
@@ -331,6 +581,36 @@
       정답지 채점과는 다른 각도입니다. 정답지는 우리가 고른 사진이고, 이쪽은 사용자가
       실제로 올린 사진입니다. 확인 창에서 <strong>고치지 않고 그대로 쓴 비율</strong>을 셉니다.
     </div>
+
+    <details class="lab-help">
+      <summary>네 개의 표가 각각 무엇을 말하는지</summary>
+      <div class="lab-help-body">
+        <p class="mb-2">
+          여기 숫자는 <strong>사용자가 만든 것</strong>입니다. 제품 화면에서 사진을 읽고
+          "선택 항목 채우기" 를 누를 때마다 (판독값, 사용자가 쓴 값) 쌍이 쌓입니다.
+          같은 실수가 2번 이상 반복되면 <strong>30분 뒤</strong> 다음 판독부터 프롬프트에
+          경고로 자동으로 붙습니다 — 관리자가 켜고 끌 것이 없습니다.
+        </p>
+        <dl>
+          <dt>항목별</dt>
+          <dd>어느 칸을 자주 고치는가. ②의 정답지 점수와 <strong>어긋나면</strong> 정답지가
+              실제 사진을 대표하지 못한다는 뜻입니다 — 정답지를 더 넣으세요</dd>
+          <dt>값의 출처별</dt>
+          <dd><code>photo</code> 사진만 · <code>api</code> 등록 정보로 채움 ·
+              <code>both</code> 둘이 일치 · <code>conflict</code> 둘이 다름.
+              <strong>등록 정보 대조가 실제로 도움이 되는지</strong>가 여기서 보입니다</dd>
+          <dt>판독 방식별</dt>
+          <dd><code>crop</code> 영역 선택이 <code>whole</code> 사진 전체보다 나은가</dd>
+          <dt>모델별</dt>
+          <dd>모델을 바꿔 본 효과. 실사용에서 모델을 바꾼 적이 없으면 한 줄만 나옵니다</dd>
+        </dl>
+        <p class="mb-0 mt-2">
+          정답률이 <strong>60% 미만이면 빨간색</strong>입니다. 다만 판독 건수가 적을 때는
+          한두 건이 비율을 크게 흔듭니다 — 건수를 함께 보세요.
+        </p>
+      </div>
+    </details>
+
     <div class="row g-3">
       {% for group, rows in live.items %}
       <div class="col-lg-6">
@@ -395,5 +675,11 @@
 {% endblock %}
 
 {% block extra_js %}
+{% comment %}
+  정답지를 만들 때도 제품 화면의 확인 창과 **같은 사진 뷰어**를 쓴다
+  (회전·확대·이동). 정답을 적는 눈과 판독값을 보는 눈이 같아야 한다.
+  ocr_lab.js 보다 먼저 실어야 window.photoViewerLayout 이 준비된다.
+{% endcomment %}
+<script src="{% static 'js/products/photo_viewer.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script src="{% static 'js/label/ocr_lab.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

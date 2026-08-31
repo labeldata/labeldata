@@ -2769,6 +2769,21 @@ def ocr_extract(request):
         except Exception:
             logger.exception('품목보고 정보 대조 실패 (user=%s)', request.user)
 
+        # 3) 괄호 짝 검사
+        #    원재료명의 괄호는 열림과 닫힘이 반드시 짝이다. 그 규칙이 깨졌다는
+        #    것은 그 자리를 잘못 읽었다는 뜻이라, 값을 하나하나 대조하지 않고도
+        #    **어디를 다시 봐야 하는지** 짚을 수 있다. 고치지는 않는다 — 어느
+        #    쪽을 잘못 읽었는지는 사진을 봐야 알고, 임의로 닫으면 틀린 자리를
+        #    덮어 버린다. 등록 정보로 순서를 맞춘 뒤에 봐야 합친 결과까지 본다.
+        try:
+            from .services.ocr_rawmtrl import inspect as inspect_rawmtrl
+            checked, problems = inspect_rawmtrl(result.get('data') or {})
+            result['data'] = checked
+            if problems:
+                result['bracket_warnings'] = problems
+        except Exception:
+            logger.exception('원재료명 괄호 검사 실패 (user=%s)', request.user)
+
     return JsonResponse(result)
 
 

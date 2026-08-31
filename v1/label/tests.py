@@ -2828,3 +2828,243 @@ class PdfTextLayerTests(TestCase):
         self.assertIn('그림에서 다시 읽지 마시오', source)
         self.assertIn('extract_pdf_text(file_path', source)
         self.assertIn("meta['pdf_text_used']", source)
+
+
+class LabelPhraseTests(TestCase):
+    """
+    주의사항·기타표시사항은 대부분 우리가 만들어 둔 상용 문구다.
+
+    목록이 화면과 판독 두 곳에 따로 있으면 어느 날 한쪽만 고쳐진다. 한 곳에서
+    가져다 쓰는지, 그리고 **없는 문구를 채우지 않는지**를 지킨다.
+    """
+
+    def test_화면_버튼과_프롬프트가_같은_목록을_쓴다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        from v1.label.services.label_phrases import texts_for
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+                ).read_text(encoding='utf-8')
+        # 문구가 템플릿에 다시 박히면(하드코딩) 두 벌이 된다
+        self.assertIn('{% quick_phrases "cautions"', html)
+        self.assertIn('{% quick_phrases "additional_info"', html)
+        for text in texts_for('cautions'):
+            self.assertNotIn(text, html)
+
+    def test_프롬프트에_문구가_실린다(self):
+        from v1.label.services.label_phrases import texts_for
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn(texts_for('cautions')[0], SYSTEM_PROMPT)
+        self.assertIn(texts_for('additional_info')[0], SYSTEM_PROMPT)
+
+    def test_목록에서_가져와_채우지_말라고_못박는다(self):
+        """
+        흔한 문구를 프롬프트에 실으면 모델이 사진에 없는 것도 채우려 든다.
+        그것이 곧 지어낸 값이고, 법적 표시물에 그대로 들어간다.
+        """
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('사진에 없는 문구를 이 목록에서 가져와 채우지 마시오', SYSTEM_PROMPT)
+
+    def test_거의_같은_문장은_원문으로_확정한다(self):
+        from v1.label.services.label_phrases import snap_text
+
+        value, changes = snap_text('cautions', '뜨거우니 화상에 주의하시기바랍니다.')
+        self.assertEqual(value, '뜨거우니 화상에 주의하시기 바랍니다.')
+        self.assertEqual(len(changes), 1)
+
+    def test_한_줄에_이어_적은_문장도_따로_맞춘다(self):
+        from v1.label.services.label_phrases import snap_text
+
+        value, changes = snap_text(
+            'cautions',
+            '뜨거우니 화상에 주의하시기바랍니다. 질식의 위험이 있으니 주의하시기바랍니다.')
+        self.assertEqual(len(changes), 2)
+        self.assertIn('화상에 주의하시기 바랍니다', value)
+        self.assertIn('질식의 위험이 있으니 주의하시기 바랍니다', value)
+
+    def test_숫자가_다르면_맞추지_않는다(self):
+        """상담 번호는 회사마다 다르다. 글자만 보면 두 문장은 98점이다."""
+        from v1.label.services.label_phrases import snap_text
+
+        original = '제품에 대한 문의 사항 및 상담은 종합상담센터 1577-9999 (유료)로 연락 주시기 바랍니다.'
+        value, changes = snap_text('additional_info', original)
+        self.assertEqual(value, original)
+        self.assertEqual(changes, [])
+
+    def test_다른_문장은_건드리지_않는다(self):
+        from v1.label.services.label_phrases import snap_text
+
+        original = '본 제품은 우리 공장에서만 만듭니다.'
+        value, changes = snap_text('cautions', original)
+        self.assertEqual(value, original)
+        self.assertEqual(changes, [])
+
+    def test_판독값도_상용_문구에_맞춘다(self):
+        from v1.label.services.ocr_snap import snap
+
+        data, report = snap({
+            'cautions': {'value': '뜨거우니 화상에 주의하시기바랍니다.', 'confidence': 'high'},
+        })
+        self.assertEqual(data['cautions']['value'], '뜨거우니 화상에 주의하시기 바랍니다.')
+        # 말없이 고치지 않는다 - 확인 창이 무엇을 바꿨는지 보여 줘야 한다
+        self.assertTrue(data['cautions']['snapped_from'])
+        self.assertTrue(data['cautions']['snapped_note'])
+        self.assertEqual(len(report), 1)
+
+
+class RawmtrlBracketTests(TestCase):
+    """
+    괄호는 열림과 닫힘이 짝이다. 그 규칙이 깨졌다는 것은 그 자리를 잘못 읽었다는
+    뜻이라, 값을 하나하나 대조하지 않고도 다시 볼 자리를 짚을 수 있다.
+    """
+
+    def test_짝이_맞으면_아무_말도_안_한다(self):
+        from v1.label.services.ocr_rawmtrl import bracket_problems
+
+        self.assertEqual(bracket_problems('면류[밀가루(밀:미국산), 정제수], 소스'), [])
+
+    def test_종류가_다른_괄호로_닫으면_짚는다(self):
+        from v1.label.services.ocr_rawmtrl import bracket_problems
+
+        problems = bracket_problems('정제소금(국산]')
+        self.assertEqual(len(problems), 1)
+        self.assertIn('혼동', problems[0])
+
+    def test_닫히지_않은_괄호를_짚는다(self):
+        from v1.label.services.ocr_rawmtrl import bracket_problems
+
+        self.assertEqual(len(bracket_problems('면류(밀가루(밀:미국산), 정제수')), 1)
+
+    def test_열린_적_없이_닫히면_짚는다(self):
+        from v1.label.services.ocr_rawmtrl import bracket_problems
+
+        self.assertEqual(len(bracket_problems('정제소금 국산)')), 1)
+
+    def test_괄호_안의_쉼표로_가르지_않는다(self):
+        """복합원재료가 통째로 부서진다."""
+        from v1.label.services.ocr_rawmtrl import split_top_level
+
+        self.assertEqual(
+            split_top_level('면류(밀가루(밀:미국산), 정제수), 소스, 돼지고기 30%(국내산)'),
+            ['면류(밀가루(밀:미국산), 정제수)', '소스', '돼지고기 30%(국내산)'])
+
+    def test_이름과_함량과_원산지를_가른다(self):
+        from v1.label.services.ocr_rawmtrl import split_token
+
+        self.assertEqual(split_token('돼지고기 30%(국내산)'), ('돼지고기', '30%', '(국내산)'))
+
+    def test_괄호가_깨지면_확신도를_내리고_경고를_남긴다(self):
+        from v1.label.services.ocr_rawmtrl import inspect
+
+        data, problems = inspect(
+            {'rawmtrl_nm': {'value': '정제소금(국산]', 'confidence': 'high'}})
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(data['rawmtrl_nm']['confidence'], 'low')
+        self.assertTrue(data['rawmtrl_nm']['warnings'])
+        # 값은 고치지 않는다 - 어느 쪽을 잘못 읽었는지는 사진을 봐야 안다
+        self.assertEqual(data['rawmtrl_nm']['value'], '정제소금(국산]')
+
+
+class RawmtrlAlignTests(TestCase):
+    """
+    등록 정보의 원재료는 원산지·복합원재료를 뺀 채 라벨과 같은 순서로 적혀 있다.
+    뼈대는 등록 정보에서, 원산지·복합원재료·함량은 사진에서 가져와 합친다.
+    """
+
+    def test_이름과_순서를_등록_정보에_맞추고_원산지는_사진에서_가져온다(self):
+        from v1.label.services.ocr_rawmtrl import align_with_api
+
+        result = align_with_api(
+            '정재소금(국산), 돼지고가(국내산), 백설탕 2%',
+            '돼지고기, 정제소금, 백설탕')
+        self.assertEqual(result['text'], '돼지고기(국내산), 정제소금(국산), 백설탕 2%')
+        self.assertTrue(result['reordered'])
+        self.assertEqual(len(result['renamed']), 2)
+
+    def test_사진에만_있는_원재료는_버리지_않는다(self):
+        from v1.label.services.ocr_rawmtrl import align_with_api
+
+        result = align_with_api(
+            '돼지고기(국내산), 정제소금, 백설탕, 향신료', '돼지고기, 정제소금, 백설탕')
+        self.assertIn('향신료', result['text'])
+        self.assertEqual(result['ocr_only'], ['향신료'])
+
+    def test_거의_못_찾으면_손대지_않는다(self):
+        """다른 제품이거나 판독이 무너진 것이다. 합치면 없는 원재료를 인쇄한다."""
+        from v1.label.services.ocr_rawmtrl import align_with_api
+
+        self.assertIsNone(align_with_api('사과, 배, 포도', '돼지고기, 정제소금, 백설탕'))
+
+    def test_등록_정보가_한_가지뿐이면_손대지_않는다(self):
+        from v1.label.services.ocr_rawmtrl import align_with_api
+
+        self.assertIsNone(align_with_api('돼지고기(국내산), 정제소금', '돼지고기'))
+
+    def test_대조_결과에_합친_값이_들어간다(self):
+        from v1.label.services.ocr_reconcile import merge
+
+        data = merge(
+            {'rawmtrl_nm': {'value': '정재소금(국산), 돼지고가(국내산)', 'confidence': 'high'}},
+            {'matched': True, 'report_no': '1', 'fields': {
+                'rawmtrl_nm': {'label': '원재료명', 'api_value': '돼지고기, 정제소금',
+                               'ocr_value': '정재소금(국산), 돼지고가(국내산)',
+                               'score': 50, 'verdict': 'unsure'},
+            }})
+        self.assertEqual(data['rawmtrl_nm']['value'], '돼지고기(국내산), 정제소금(국산)')
+        # 말없이 고치지 않는다
+        self.assertEqual(data['rawmtrl_nm']['snapped_from'], '정재소금(국산), 돼지고가(국내산)')
+        self.assertTrue(data['rawmtrl_nm']['snapped_note'])
+
+    def test_못_읽은_자리는_등록_정보로_채우기만_한다(self):
+        """채운 값은 등록 정보 그대로다. 거기에 없는 원산지를 붙일 수 없다."""
+        from v1.label.services.ocr_reconcile import merge
+
+        data = merge(
+            {'rawmtrl_nm': {'value': None, 'confidence': 'none'}},
+            {'matched': True, 'report_no': '1', 'fields': {
+                'rawmtrl_nm': {'label': '원재료명', 'api_value': '돼지고기, 정제소금',
+                               'ocr_value': '', 'score': 0, 'verdict': 'filled'},
+            }})
+        self.assertEqual(data['rawmtrl_nm']['value'], '돼지고기, 정제소금')
+        self.assertNotIn('snapped_from', data['rawmtrl_nm'])
+
+
+class OcrLabScreenTests(TestCase):
+    """
+    관리자 화면은 **무엇을 하는 곳인지 화면 안에서** 알 수 있어야 한다.
+    문서를 따로 열어야 알 수 있으면 아무도 안 읽는다.
+    """
+
+    def _html(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / 'templates/label/ocr_lab.html'
+                ).read_text(encoding='utf-8')
+
+    def test_메뉴마다_사용법이_붙어_있다(self):
+        html = self._html()
+        self.assertEqual(html.count('<details class="lab-help">'), 4)
+
+    def test_이_방식이_AI_개발의_어느_단계인지_설명한다(self):
+        html = self._html()
+        self.assertIn('평가 주도 개발', html)
+        self.assertIn('데이터 라벨링', html)
+        self.assertIn('오프라인 평가', html)
+
+    def test_정답지_사진을_확대할_수_있다(self):
+        """정답은 사진을 보고 손으로 적는다. 안 읽히면 정답지가 안 만들어진다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        html = self._html()
+        self.assertIn('js/products/photo_viewer.js', html)
+        js = (Path(dj.BASE_DIR) / 'static/js/label/ocr_lab.js'
+              ).read_text(encoding='utf-8')
+        self.assertIn('window.photoViewerLayout', js)
