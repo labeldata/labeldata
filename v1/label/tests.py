@@ -2853,21 +2853,33 @@ class LabelPhraseTests(TestCase):
         for text in texts_for('cautions'):
             self.assertNotIn(text, html)
 
-    def test_프롬프트에_문구가_실린다(self):
+    def test_프롬프트에는_문구를_싣지_않는다(self):
+        """
+        실으면 모델이 **사진에 없는 것도 채운다.** 실제로 그렇게 됐다 —
+        샐러드 라벨의 주의사항에 다른 제품의 보관 문구가, 기타표시사항에
+        분쟁해결기준 문구가 통째로 들어갔다. 둘 다 목록에 있던 문장이다.
+
+        목록은 판독 **뒤에** 읽은 문장을 확정하는 데만 쓴다(ocr_snap).
+        그쪽은 모델이 실제로 읽은 문장에만 손대므로 없는 것을 만들지 않는다.
+        """
         from v1.label.services.label_phrases import texts_for
         from v1.label.services.ocr_service import SYSTEM_PROMPT
 
-        self.assertIn(texts_for('cautions')[0], SYSTEM_PROMPT)
-        self.assertIn(texts_for('additional_info')[0], SYSTEM_PROMPT)
+        for field in ('cautions', 'additional_info'):
+            for text in texts_for(field):
+                self.assertNotIn(text, SYSTEM_PROMPT, text[:20])
 
-    def test_목록에서_가져와_채우지_말라고_못박는다(self):
-        """
-        흔한 문구를 프롬프트에 실으면 모델이 사진에 없는 것도 채우려 든다.
-        그것이 곧 지어낸 값이고, 법적 표시물에 그대로 들어간다.
-        """
+    def test_흔한_문구일수록_지어내지_말라고_못박는다(self):
         from v1.label.services.ocr_service import SYSTEM_PROMPT
 
-        self.assertIn('사진에 없는 문구를 이 목록에서 가져와 채우지 마시오', SYSTEM_PROMPT)
+        self.assertIn('사진에서 그 글자를 직접 읽지 않았으면 적지 마시오', SYSTEM_PROMPT)
+        self.assertIn('이 칸이 비어 있는 것은 잘못이 아니다', SYSTEM_PROMPT)
+
+    def test_어느_칸인지는_뜻으로_가르게_한다(self):
+        """문장을 싣지 않고도 칸 구분은 알려 줄 수 있다."""
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('어느 칸에 넣을지는 뜻으로 가른다', SYSTEM_PROMPT)
 
     def test_거의_같은_문장은_원문으로_확정한다(self):
         from v1.label.services.label_phrases import snap_text
@@ -4037,3 +4049,40 @@ class RateLimitRetryTests(TestCase):
                   ).read_text(encoding='utf-8')
         self.assertIn("OCR_RATE_LIMIT_WAIT_SEC", source)
         self.assertIn("_is_rate_limited(out.get('error'))", source)
+
+
+class DesignSuffixTests(TestCase):
+    """
+    작업지시서·도안 파일 이름이 제품명에 붙어 온다.
+
+    프롬프트에 이 예시를 그대로 넣어 두었는데도 "더블치즈&바질치킨 샐러드_후면"
+    이 나왔다. 설득이 안 되는 것은 코드로 뗀다.
+    """
+
+    def _name(self, value):
+        from v1.label.services.ocr_service import strip_design_suffix
+
+        return strip_design_suffix(
+            {'prdlst_nm': {'value': value, 'confidence': 'high'}})['prdlst_nm']
+
+    def test_후면_표기를_뗀다(self):
+        item = self._name('더블치즈&바질치킨 샐러드_후면')
+        self.assertEqual(item['value'], '더블치즈&바질치킨 샐러드')
+        # 말없이 고치지 않는다
+        self.assertEqual(item['snapped_from'], '더블치즈&바질치킨 샐러드_후면')
+
+    def test_여러_표기를_뗀다(self):
+        for suffix in ('_전면', ' 앞면', '_뒷면', '_시안', '-도안', '_인쇄용'):
+            self.assertEqual(self._name('홍삼정과' + suffix)['value'], '홍삼정과')
+
+    def test_멀쩡한_이름은_건드리지_않는다(self):
+        for name in ('더블치즈&바질치킨 샐러드', '홍삼정과', '참치통조림'):
+            item = self._name(name)
+            self.assertEqual(item['value'], name)
+            self.assertNotIn('snapped_from', item)
+
+    def test_빈_값은_건드리지_않는다(self):
+        from v1.label.services.ocr_service import strip_design_suffix
+
+        data = strip_design_suffix({'prdlst_nm': {'value': None, 'confidence': 'none'}})
+        self.assertIsNone(data['prdlst_nm']['value'])

@@ -6,12 +6,10 @@ import io
 import base64
 import json
 import logging
+import re
 from PIL import Image, ImageOps
 from django.conf import settings
 from openai import OpenAI
-
-# 주의사항·기타표시사항 상용 문구. 화면 버튼과 **같은 목록**을 쓴다.
-from v1.label.services.label_phrases import prompt_block
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +115,21 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
     원산지는 "(국내산)" 이다. 셋을 뒤섞거나 빠뜨리지 마시오.
 
 
-""" + prompt_block() + """
+주의사항(cautions)·기타표시사항(additional_info) 은 **지어내기 가장 쉬운 칸**이다.
+
+  이 두 칸에 들어가는 문구는 회사마다 거의 정해져 있어서, 모델이 "이런 라벨에는
+  보통 이런 문장이 있다" 는 것을 이미 알고 있다. 그래서 **사진에서 그 문장을
+  못 읽었는데도 그럴듯하게 채우는 일이 실제로 일어났다** — 다른 제품의 보관
+  문구와 분쟁해결기준 문구가 통째로 들어갔다.
+
+  **사진에서 그 글자를 직접 읽지 않았으면 적지 마시오.** 흔한 문구일수록
+  더 그렇다. 이 칸이 비어 있는 것은 잘못이 아니다.
+  라벨에 두 문장만 있으면 두 문장만 적는다.
+
+  어느 칸에 넣을지는 뜻으로 가른다.
+    주의사항     섭취·보관·취급 주의, 혼입 가능, 경고, 신고 번호(1399)
+    기타표시사항 인증 표시(HACCP·유기농·비건 등), 상담 번호, 교환 장소,
+                 홈페이지, 질소가스충전 표시
 
 응답 규칙:
 - 텍스트가 명확하게 읽히면: {"value": "실제추출값", "confidence": "high"}
@@ -313,6 +325,34 @@ def build_image_payload(image_file, max_size=2000, layout='grid'):
             for region in build_image_regions(image_file, max_size, layout)]
 
 
+# 작업지시서·도안 파일 이름이 제품명에 붙어 온다. 프롬프트에 예시까지 넣어
+# 두었는데도 "더블치즈&바질치킨 샐러드_후면" 이 그대로 나왔다.
+# 설득이 안 되는 것은 코드로 뗀다 — 이런 접미사로 끝나는 제품명은 없다.
+_DESIGN_SUFFIX = re.compile(
+    r'[\s_\-]*(후면|전면|앞면|뒷면|back|front|시안|도안|출력용|인쇄용)\s*$',
+    re.IGNORECASE)
+
+
+def strip_design_suffix(data):
+    """제품명 끝에 붙은 도안 표기를 뗀다. **원본은 건드리지 않는다.**"""
+    data = dict(data or {})
+    item = data.get('prdlst_nm')
+    value = item.get('value') if isinstance(item, dict) else item
+    text = str(value or '').strip()
+    if not text:
+        return data
+
+    stripped = _DESIGN_SUFFIX.sub('', text).strip()
+    if stripped and stripped != text:
+        item = dict(item) if isinstance(item, dict) else {'value': stripped,
+                                                          'confidence': 'high'}
+        item['value'] = stripped
+        item['snapped_from'] = text
+        item['snapped_note'] = '제품명 끝의 도안 표기를 뗐습니다.'
+        data['prdlst_nm'] = item
+    return data
+
+
 def fold_cross_contamination(data):
     """
     혼입 가능성 문장을 주의사항 앞에 붙인다. **원본은 건드리지 않는다.**
@@ -465,7 +505,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         )
 
         result = json.loads(response.choices[0].message.content)
-        result = fold_cross_contamination(result)
+        result = strip_design_suffix(fold_cross_contamination(result))
 
         if want_boxes:
             # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이
