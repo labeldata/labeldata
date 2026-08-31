@@ -548,6 +548,26 @@ def check_allergens(label) -> list[dict]:
     return issues
 
 
+def _material_has(package_material, keywords):
+    """
+    포장재질 문구에 이 마크의 재질이 적혀 있는가.
+
+    영문 코드는 **낱말 단위로** 본다. 그냥 포함으로 보면 "PET(용기)" 안에
+    "PE" 가 들어 있어서, PET 용기에 PE 계열 마크를 찍어도 통과한다 - 잡아야 할
+    오류를 놓치는 쪽이라 더 나쁘다.
+
+    한글 낱말은 그대로 포함으로 본다. "폴리에틸렌수지" 처럼 붙여 쓰는 표기가
+    흔해서 경계를 요구하면 멀쩡한 것이 걸린다.
+    """
+    for keyword in keywords or ():
+        if keyword.isascii() and keyword.isalpha():
+            if re.search(r'(?<![a-z])' + keyword + r'(?![a-z])', package_material):
+                return True
+        elif keyword in package_material:
+            return True
+    return False
+
+
 def check_recycling_mark(label) -> list[dict]:
     """선택된 분리배출마크가 실제 포장재질과 호환되는지 확인."""
     package_material = (label.frmlc_mtrqlt or '').strip().lower()
@@ -564,7 +584,8 @@ def check_recycling_mark(label) -> list[dict]:
         compatible = '멸균' in package_material and '팩' in package_material
     else:
         keywords = RECYCLING_MARK_MATERIAL_KEYWORDS.get(selected_mark)
-        compatible = any(kw in package_material for kw in keywords) if keywords else True  # 매핑 없는 마크는 통과(추천 로직 미포함)
+        # 매핑 없는 마크는 통과시킨다(추천 로직 미포함)
+        compatible = _material_has(package_material, keywords) if keywords else True
 
     if compatible:
         return []

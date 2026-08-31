@@ -198,17 +198,46 @@ def map_recycling_mark(text):
     return '', raw
 
 
+def extra_mark_text(text, mark_type):
+    """
+    마크 **옆에 덧붙일 문구**만 골라낸다.
+
+    `prv_recycling_mark_text` 는 미리보기에서 마크 옆에 그대로 인쇄되는 글자다.
+    그런데 지금까지 읽은 문구를 통째로 여기에 넣었다. 그래서 "비닐류 PP" 를
+    읽으면 비닐(PP) 마크를 그려 놓고 그 옆에 "비닐류 PP" 를 또 적었다 —
+    마크가 이미 하는 말을 글자로 한 번 더 쓴 것이다.
+
+    종류를 정했으면 마크가 재질을 말한다. 덧붙일 것은 **마크 하나로 표현할 수
+    없는 나머지**뿐이다: "비닐류 PP / 띠지:PP, 리드지:PET" 에서 "/" 뒤쪽,
+    즉 부속의 재질이다.
+
+    종류를 못 정했으면 읽은 문구를 그대로 남긴다 — 마크를 못 그리므로 사람이
+    무엇을 봤는지 알아야 직접 고를 수 있다.
+    """
+    raw = (text or '').strip()
+    if not raw:
+        return ''
+    if not mark_type:
+        return raw
+    parts = re.split(r'\s*[/|]\s*', raw, maxsplit=1)
+    return parts[1].strip() if len(parts) > 1 else ''
+
+
 def apply_recycling_mark(label, mark_type, text):
     """
     분리배출 표시를 라벨에 쓴다.
 
     종류를 못 정했으면 켜지 않는다. 미리보기에 마크를 그리는 설정이라, 종류
     없이 켜면 무엇을 그릴지 모른다.
+
+    덧붙일 문구가 없으면 **기존 문구를 건드리지 않는다.** 사람이 적어 둔
+    문구를 빈 값으로 밀어 버리면, 사진 한 장 읽었다고 이미 맞춰 둔 표시가
+    사라진다.
     """
     changed = []
-    text = (text or '').strip()
-    if text:
-        label.prv_recycling_mark_text = text[:200]
+    extra = extra_mark_text(text, mark_type)
+    if extra and extra != (label.prv_recycling_mark_text or '').strip():
+        label.prv_recycling_mark_text = extra[:200]
         changed.append('prv_recycling_mark_text')
     if mark_type:
         label.prv_recycling_mark_type = mark_type
