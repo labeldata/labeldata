@@ -220,10 +220,15 @@ def snap(ocr_data):
     current = value_of('allergens')
     if current:
         snapped, changes = snap_allergens(current)
-        if changes and snapped != current:
+        # **changes 를 조건으로 걸면 안 된다.** snap_allergens 는 목록에 맞추는
+        # 일 말고도 "○○ 함유" 의 "함유" 를 떼고 중복을 지운다. 그 둘만 일어난
+        # 경우 changes 가 비는데, 예전에는 그때 결과를 통째로 버려서
+        # "돼지고기, 쇠고기 함유" 가 그대로 저장됐다. 알레르기는 뒤에서 키로
+        # 쓰이므로 "쇠고기 함유" 는 어느 목록에서도 안 찾힌다.
+        if snapped != current:
             note = {'field': 'allergens', 'label': '알레르기 유발물질',
                     'from': current, 'to': snapped,
-                    'score': min(c['score'] for c in changes)}
+                    'score': min((c['score'] for c in changes), default=100)}
             write('allergens', snapped, note)
             report.append(note)
 

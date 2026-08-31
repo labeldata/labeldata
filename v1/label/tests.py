@@ -2975,22 +2975,36 @@ class RawmtrlAlignTests(TestCase):
     뼈대는 등록 정보에서, 원산지·복합원재료·함량은 사진에서 가져와 합친다.
     """
 
-    def test_이름과_순서를_등록_정보에_맞추고_원산지는_사진에서_가져온다(self):
+    def test_이름만_등록_정보에_맞추고_순서는_사진_그대로_둔다(self):
+        """
+        처음에는 등록 정보 순서로 다시 늘어놓았다. 실제로 재 보니 점수가
+        내려갔다 — 매칭 안 된 토막이 뒤로 밀려 순서가 흐트러지고, 등록 정보가
+        최신이라는 보장도 없다. 원재료 순서는 함량 순이라 뜻이 달라진다.
+        """
         from v1.label.services.ocr_rawmtrl import align_with_api
 
         result = align_with_api(
             '정재소금(국산), 돼지고가(국내산), 백설탕 2%',
             '돼지고기, 정제소금, 백설탕')
-        self.assertEqual(result['text'], '돼지고기(국내산), 정제소금(국산), 백설탕 2%')
-        self.assertTrue(result['reordered'])
+        self.assertEqual(result['text'], '정제소금(국산), 돼지고기(국내산), 백설탕 2%')
         self.assertEqual(len(result['renamed']), 2)
+        # 순서가 다르다는 것은 알리되 고치지는 않는다
+        self.assertTrue(result['reordered'])
 
-    def test_사진에만_있는_원재료는_버리지_않는다(self):
+    def test_순서가_다르면_알리기만_한다(self):
+        from v1.label.services.ocr_rawmtrl import align_summary, align_with_api
+
+        result = align_with_api('정제소금, 돼지고기, 백설탕', '돼지고기, 정제소금, 백설탕')
+        self.assertEqual(result['text'], '정제소금, 돼지고기, 백설탕')
+        self.assertIn('순서는 고치지 않았습니다', align_summary(result))
+
+    def test_사진에만_있는_원재료는_제자리에_그대로_둔다(self):
+        """뒤로 몰아 붙이면 순서가 통째로 흐트러진다."""
         from v1.label.services.ocr_rawmtrl import align_with_api
 
         result = align_with_api(
-            '돼지고기(국내산), 정제소금, 백설탕, 향신료', '돼지고기, 정제소금, 백설탕')
-        self.assertIn('향신료', result['text'])
+            '돼지고기(국내산), 향신료, 정제소금, 백설탕', '돼지고기, 정제소금, 백설탕')
+        self.assertEqual(result['text'], '돼지고기(국내산), 향신료, 정제소금, 백설탕')
         self.assertEqual(result['ocr_only'], ['향신료'])
 
     def test_거의_못_찾으면_손대지_않는다(self):
@@ -3014,7 +3028,7 @@ class RawmtrlAlignTests(TestCase):
                                'ocr_value': '정재소금(국산), 돼지고가(국내산)',
                                'score': 50, 'verdict': 'unsure'},
             }})
-        self.assertEqual(data['rawmtrl_nm']['value'], '돼지고기(국내산), 정제소금(국산)')
+        self.assertEqual(data['rawmtrl_nm']['value'], '정제소금(국산), 돼지고기(국내산)')
         # 말없이 고치지 않는다
         self.assertEqual(data['rawmtrl_nm']['snapped_from'], '정재소금(국산), 돼지고가(국내산)')
         self.assertTrue(data['rawmtrl_nm']['snapped_note'])
@@ -3643,3 +3657,64 @@ class RecyclingMarkOrderTests(TestCase):
         for text in ('OTHER / 비닐류 PP', '비닐류 PP / 띠지:PP, 리드지:PET'):
             mark, _ = map_recycling_mark(text)
             self.assertNotIn('비닐류 PP', extra_mark_text(text, mark), text)
+
+
+class ScoringNoiseTests(TestCase):
+    """
+    뜻이 같은 표기 차이에 점수를 깎으면 진짜 오독이 그 안에 묻힌다.
+    """
+
+    def test_섭씨_기호는_한_글자든_두_글자든_같은_값이다(self):
+        """실제 측정에서 옳게 읽고도 89.7점으로 깎였다."""
+        from v1.label.services.ocr_benchmark import score_one
+
+        score, grade = score_one('냉동(-18 °C 이하)에서 보관', '냉동(-18 ℃ 이하)에서 보관')
+        self.assertEqual(grade, 'exact')
+
+    def test_단위_합자도_펼쳐서_견준다(self):
+        from v1.label.services.ocr_benchmark import score_one
+
+        self.assertEqual(score_one('500㎖', '500ml')[1], 'exact')
+        self.assertEqual(score_one('1㎏', '1kg')[1], 'exact')
+
+    def test_표시할_때는_사진에_적힌_글자_그대로_둔다(self):
+        """사람에게는 원문을 보여 줘야 무엇을 읽었는지 알 수 있다."""
+        from v1.label.services.ocr_benchmark import normalize
+
+        self.assertIn('℃', normalize('냉동(-18 ℃ 이하)'))
+
+
+class AllergenSuffixTests(TestCase):
+    """
+    "○○ 함유" 의 "함유" 를 떼는 일이 조용히 버려지고 있었다.
+
+    알레르기는 뒤에서 **키로 쓰인다** — 원재료에서 검출한 것과 대조하는 키다.
+    "쇠고기 함유" 는 어느 목록에서도 안 찾힌다.
+    """
+
+    def test_함유를_뗀다(self):
+        from v1.label.services.ocr_snap import snap
+
+        data, report = snap(
+            {'allergens': {'value': '돼지고기, 쇠고기 함유', 'confidence': 'high'}})
+        self.assertEqual(data['allergens']['value'], '돼지고기, 쇠고기')
+        self.assertEqual(len(report), 1)
+
+    def test_목록_대조가_필요_없을_때도_뗀다(self):
+        """
+        예전에는 목록에 맞춘 것이 하나도 없으면(changes 가 비면) 결과를 통째로
+        버렸다. 두 물질 다 목록에 그대로 있는 흔한 경우가 그렇다.
+        """
+        from v1.label.services.ocr_snap import snap_allergens
+
+        value, changes = snap_allergens('우유, 대두 함유')
+        self.assertEqual(value, '우유, 대두')
+        self.assertEqual(changes, [])
+
+    def test_이미_깨끗하면_건드리지_않는다(self):
+        from v1.label.services.ocr_snap import snap
+
+        data, report = snap(
+            {'allergens': {'value': '우유, 대두', 'confidence': 'high'}})
+        self.assertEqual(report, [])
+        self.assertNotIn('snapped_from', data['allergens'])

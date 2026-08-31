@@ -15,6 +15,7 @@ import json
 import logging
 import re
 import statistics
+import unicodedata
 from pathlib import Path
 
 from rapidfuzz import fuzz
@@ -45,13 +46,20 @@ def normalize(text):
 
 def squeeze(text):
     """
-    비교할 때만 쓰는 형태. 공백을 아예 없앤다.
+    비교할 때만 쓰는 형태. 공백을 없애고 **호환 문자를 펼친다.**
 
     "냉장(0~10 ℃)에서 보관" 과 "냉장(0~10℃)에서 보관" 은 같은 값이다. 공백을
     남겨 두면 띄어쓰기 하나에 2점씩 깎여, 제대로 읽은 것이 "다름" 으로 잡힌다.
-    표시할 때는 normalize() 한 읽기 좋은 형태를 쓴다.
+
+    ℃(한 글자)와 °C(두 글자)도 같은 값이다. 라벨은 둘을 섞어 쓰고 모델도 섞어
+    낸다. NFKC 로 펼치면 ℃ -> °C, ㎖ -> ml, ㎏ -> kg 로 한쪽에 모인다 —
+    실제로 "냉동(-18 °C 이하)" 를 "냉동(-18 ℃ 이하)" 로 옳게 읽고도 89.7점으로
+    깎였다. 뜻이 같은 표기 차이에 점수를 깎으면 진짜 오독이 묻힌다.
+
+    표시할 때는 normalize() 한 읽기 좋은 형태를 쓴다 — 사람에게는 사진에 적힌
+    글자 그대로를 보여 줘야 한다.
     """
-    return _WS.sub('', normalize(text))
+    return _WS.sub('', unicodedata.normalize('NFKC', normalize(text)))
 
 
 def score_one(expected, actual):

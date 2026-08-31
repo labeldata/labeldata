@@ -18,11 +18,15 @@
     "뼈대" 다 — OCR 을 거치지 않았으니 이름과 순서가 틀릴 이유가 없다.
 
     사진에서 읽은 것은 반대로 원산지·복합원재료·함량이 붙어 있지만 이름이
-    흔들린다. 그래서 **뼈대는 등록 정보에서, 살은 사진에서** 가져와 합친다.
+    흔들린다. 그래서 **이름은 등록 정보에서, 순서와 나머지는 사진에서** 가져온다.
 
         등록 정보  돼지고기, 정제소금, 백설탕
-        사진 판독  돼지고가(국내산), 정재소금(국산), 백설탕 2%
-        합친 결과  돼지고기(국내산), 정제소금(국산), 백설탕 2%
+        사진 판독  정재소금(국산), 돼지고가(국내산), 백설탕 2%
+        합친 결과  정제소금(국산), 돼지고기(국내산), 백설탕 2%
+                   ^^^^^^ 이름만 고치고 순서는 사진 그대로 둔다
+
+    **순서는 바꾸지 않는다.** 원재료 순서는 함량 순이라 법적 의미가 있고,
+    등록 정보가 최신이라는 보장도 없다. 순서가 다르면 알리기만 한다.
 
     **확신이 없으면 손대지 않는다.** 등록 정보의 원재료 중 사진에서 찾은 것이
     너무 적으면 다른 제품이거나 판독이 무너진 것이다. 그때 합치면 사진에 없는
@@ -224,7 +228,8 @@ def align_with_api(ocr_text, api_text):
     parsed = [split_token(token) for token in ocr_tokens]
     used = [False] * len(parsed)
 
-    out, renamed, api_only = [], [], []
+    matched = {}          # 판독 토막 index -> 등록 정보 이름
+    renamed, api_only = [], []
     order_of_match = []
     for name in api_names:
         target = _squeeze(name)
@@ -246,21 +251,35 @@ def align_with_api(ocr_text, api_text):
 
         used[best_index] = True
         order_of_match.append(best_index)
-        head, amount, extra = parsed[best_index]
+        matched[best_index] = name
+        head, _amount, _extra = parsed[best_index]
         if _squeeze(head) != target:
             renamed.append({'from': head, 'to': name, 'score': best_score})
-        out.append(join_token(name, amount, extra))
 
-    if len(out) < len(api_names) * ALIGN_MIN_COVERAGE:
+    if len(matched) < len(api_names) * ALIGN_MIN_COVERAGE:
         # 등록 정보의 원재료를 사진에서 거의 못 찾았다. 다른 제품이거나 판독이
         # 무너진 것이다 — 여기서 합치면 사진에 없는 원재료를 인쇄한다.
         return None
 
-    # 사진에만 있는 것은 버리지 않는다. 등록 정보가 오래됐을 수도 있고,
-    # 복합원재료를 따로 떼어 적은 라벨일 수도 있다. 뒤에 그대로 붙이고 알린다.
-    ocr_only = [ocr_tokens[i] for i, taken in enumerate(used) if not taken]
-    out.extend(ocr_only)
+    # **순서는 사진에 적힌 그대로 둔다.**
+    #
+    # 처음에는 등록 정보 순서로 다시 늘어놓았다. 등록 정보가 라벨과 같은 순서라는
+    # 전제였는데, 실제로 재 보니 점수가 내려갔다. 이유가 둘이다.
+    #   - 매칭 안 된 판독 토막이 전부 뒤로 밀려 순서가 통째로 흐트러진다.
+    #   - 등록 정보가 최신이라는 보장이 없다. 변경 보고를 안 한 제품이 흔하다.
+    # 그리고 **원재료 순서는 함량 순이라 법적 의미가 있다.** 이름을 고치는 것은
+    # 표기 수정이지만 순서를 바꾸는 것은 뜻을 바꾸는 일이다 — 확신 없이 할 일이
+    # 아니다. 순서가 다르면 값을 바꾸는 대신 알리기만 한다.
+    out = []
+    for index, token in enumerate(ocr_tokens):
+        name = matched.get(index)
+        if name is None:
+            out.append(token)          # 사진에만 있는 것도 제자리에 둔다
+            continue
+        _head, amount, extra = parsed[index]
+        out.append(join_token(name, amount, extra))
 
+    ocr_only = [ocr_tokens[i] for i, taken in enumerate(used) if not taken]
     return {
         'text': ', '.join(out),
         'renamed': renamed,
@@ -280,7 +299,8 @@ def align_summary(result):
                           for row in result['renamed'][:4])
         parts.append('원재료 이름을 등록 정보에 맞췄습니다: ' + names)
     if result['reordered']:
-        parts.append('등록 정보의 순서(함량 순)로 다시 늘어놓았습니다')
+        parts.append('사진의 원재료 순서가 등록 정보와 다릅니다 — 순서는 함량 순이라 '
+                     '뜻이 달라집니다. 사진을 다시 확인해 주세요(순서는 고치지 않았습니다)')
     if result['api_only']:
         parts.append('등록 정보에는 있는데 사진에서 못 읽은 원재료가 있습니다: '
                      + ', '.join(result['api_only'][:5]))

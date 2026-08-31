@@ -20,6 +20,7 @@
 """
 import logging
 import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +51,12 @@ _FIELD_POLICY = {
 
 
 def _squeeze(text):
-    """비교할 때만 쓰는 형태. 공백과 흔한 구분기호를 지운다."""
-    s = _WS.sub('', str(text or ''))
+    """
+    비교할 때만 쓰는 형태. 공백과 흔한 구분기호를 지운다.
+
+    NFKC 로 호환 문자를 펼친다 — ℃ 와 °C, ㎖ 와 ml 은 같은 값이다.
+    """
+    s = _WS.sub('', unicodedata.normalize('NFKC', str(text or '')))
     for a, b in (('（', '('), ('）', ')'), ('［', '['), ('］', ']'), ('，', ',')):
         s = s.replace(a, b)
     return s.lower()
