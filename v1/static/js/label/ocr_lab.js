@@ -170,19 +170,40 @@
   }
 
   var editing = null;
+  var boxEditor = null;     // 위치 보정을 켠 적이 없으면 null 이다
+  var boxKeys = [];         // 번호 순서 (항목명)
+  var boxDetected = {};     // 모델이 말한 자리 (값도 함께 들고 있다)
+
+  // 정답지에 값이 없는 항목도 판독은 읽을 수 있다. 그런 항목의 자리도 보여
+  // 준다 - "정답지에 없는데 여기서 뭔가를 읽었다" 가 곧 오독의 단서다.
+  function caseFieldKeys(c) {
+    var keys = Object.keys(c.expected || {});
+    Object.keys(c.expected_boxes || {}).forEach(function (k) {
+      if (keys.indexOf(k) < 0) keys.push(k);
+    });
+    return keys;
+  }
+
+  function fieldRowHtml(key, index, value) {
+    var long = value.length > 40 || value.indexOf('\n') !== -1;
+    var control = long
+      ? '<textarea class="form-control form-control-sm truth-val" data-key="' + esc(key) + '" rows="'
+        + Math.min(10, Math.max(2, Math.ceil(value.length / 60))) + '">' + esc(value) + '</textarea>'
+      : '<input type="text" class="form-control form-control-sm truth-val" data-key="' + esc(key)
+        + '" value="' + esc(value) + '">';
+    return '<div class="truth-key" data-pick="' + esc(key) + '">'
+      + '<span class="bx-num">' + (index + 1) + '</span>' + esc(key) + '</div>'
+      + '<div>' + control + '</div>';
+  }
 
   function openCase(c) {
     editing = c;
-    var keys = Object.keys(c.expected || {});
-    var rows = keys.map(function (k) {
-      var v = c.expected[k] || '';
-      var long = v.length > 40 || v.indexOf('\n') !== -1;
-      var control = long
-        ? '<textarea class="form-control form-control-sm truth-val" data-key="' + esc(k) + '" rows="'
-          + Math.min(10, Math.max(2, Math.ceil(v.length / 60))) + '">' + esc(v) + '</textarea>'
-        : '<input type="text" class="form-control form-control-sm truth-val" data-key="' + esc(k)
-          + '" value="' + esc(v) + '">';
-      return '<div>' + esc(k) + '</div><div>' + control + '</div>';
+    boxEditor = null;
+    boxDetected = {};
+    boxKeys = caseFieldKeys(c);
+
+    var rows = boxKeys.map(function (k, i) {
+      return fieldRowHtml(k, i, c.expected[k] || '');
     }).join('');
 
     var form = ''
@@ -205,10 +226,14 @@
       + '    <strong>정답 확인</strong> — 이 값이 사진과 맞다고 확인했습니다. 켜야 채점에 쓰입니다.'
       + '  </label>'
       + '</div>'
+      + '<div id="casePickPanel" class="bx-pick" hidden></div>'
       + '<div class="text-muted mb-2" style="font-size:11.5px; line-height:1.6;">'
       + '  사진을 확대해 가며 값을 고치세요. 라벨에 없는 항목은 비워 두면 채점에서 빠집니다.'
+      + '  왼쪽에서 <strong>위치 보정</strong>을 켜면 판독이 어디를 읽었는지 번호로 볼 수 있습니다.'
       + '</div>'
-      + '<div class="lab-kv">' + (rows || '<div class="lab-empty" style="grid-column:1/-1;">정답이 비어 있습니다.</div>') + '</div>';
+      + '<div class="lab-kv" id="caseFields">'
+      + (rows || '<div class="lab-empty" style="grid-column:1/-1;">정답이 비어 있습니다.</div>')
+      + '</div>';
 
     var body = document.getElementById('caseBody');
 
@@ -221,6 +246,7 @@
     // 정답을 적을 때와 판독값을 볼 때가 같은 도구여야 눈이 헷갈리지 않는다.
     if (window.photoViewerLayout) {
       window.photoViewerLayout(body, c.image_url, form, c.name);
+      mountBoxSide(body, c);
     } else {
       body.innerHTML = ''
         + '<div class="row g-3">'
@@ -231,6 +257,158 @@
         + '</div>';
     }
     modal('caseModal').show();
+  }
+
+  // ── 위치 보정 ────────────────────────────────────────────────────────────
+  //
+  // 사진 칸을 두 모드로 쓴다. 늘 켜 두지 않는 이유는, 위치를 보려면 판독을
+  // 한 번 더 불러야 하고(=돈) 대부분의 정답지 작업에는 필요 없기 때문이다.
+
+  function mountBoxSide(body, c) {
+    var slot = body.querySelector('.photo-viewer-slot');
+    if (!slot) return;
+
+    slot.insertAdjacentHTML('beforebegin',
+      '<div class="bx-tabs">'
+      + '  <button type="button" class="btn btn-light v2-btn-sm bx-tab-on" data-mode="photo">사진 보기</button>'
+      + '  <button type="button" class="btn btn-light v2-btn-sm" data-mode="boxes">위치 보정</button>'
+      + '</div>');
+    slot.insertAdjacentHTML('afterend', '<div class="bx-wrap" hidden></div>');
+
+    var tabs = body.querySelector('.bx-tabs');
+    var wrap = body.querySelector('.bx-wrap');
+
+    tabs.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-mode]');
+      if (!btn) return;
+      var boxes = btn.dataset.mode === 'boxes';
+      tabs.querySelectorAll('[data-mode]').forEach(function (b) {
+        b.classList.toggle('bx-tab-on', b === btn);
+      });
+      slot.hidden = boxes;
+      wrap.hidden = !boxes;
+      if (boxes && !boxEditor) buildBoxEditor(wrap, c);
+    });
+  }
+
+  function buildBoxEditor(wrap, c) {
+    if (!window.ocrBoxEditor) {
+      wrap.innerHTML = '<div class="lab-empty">위치 편집기를 불러오지 못했습니다.</div>';
+      return;
+    }
+    wrap.innerHTML = ''
+      + '<div class="bx-tools">'
+      + '  <button type="button" class="btn btn-outline-primary v2-btn-sm" id="bxLocate">'
+      + '    <i class="bi bi-crosshair"></i>판독 위치 보기</button>'
+      + '  <button type="button" class="btn btn-outline-secondary v2-btn-sm" id="bxAdoptAll">'
+      + '    판독 위치 모두 채택</button>'
+      + '</div>'
+      + '<div class="bx-stage-host"></div>';
+
+    boxEditor = window.ocrBoxEditor.mount(wrap.querySelector('.bx-stage-host'), {
+      imageUrl: c.image_url,
+      imageSize: c.image_size,
+      onSelect: showPickPanel,
+      onChange: function (field) { showPickPanel(field); }
+    });
+    if (!boxEditor) return;
+    boxEditor.setOrder(boxKeys);
+    boxEditor.setTruth(c.expected_boxes || {});
+  }
+
+  // 선택한 항목 하나에 대한 조작만 띄운다. 항목마다 버튼을 늘어놓으면
+  // 스물아홉 줄이 버튼 밭이 되고, 정작 값이 안 보인다.
+  function showPickPanel(field) {
+    var panel = document.getElementById('casePickPanel');
+    if (!panel) return;
+    if (!field) { panel.hidden = true; return; }
+
+    document.querySelectorAll('#caseFields .truth-key').forEach(function (el) {
+      el.classList.toggle('truth-key-on', el.dataset.pick === field);
+    });
+
+    var found = boxDetected[field];
+    var hasTruth = boxEditor && boxEditor.truthBoxes()[field];
+    panel.hidden = false;
+    panel.innerHTML = ''
+      + '<div class="bx-pick-head"><span class="bx-num">'
+      + (boxEditor ? boxEditor.numberOf(field) : '') + '</span>'
+      + '<strong>' + esc(field) + '</strong>'
+      + '<span class="text-muted" style="font-size:11px;">'
+      + (hasTruth ? '정답 위치 있음' : '정답 위치 없음')
+      + (found ? ' · 판독은 ' + esc(found.box_from || '사진') + '에서 읽음' : '')
+      + '</span></div>'
+      + (found && found.value
+          ? '<div class="bx-pick-read">판독값 <span>' + esc(found.value) + '</span></div>' : '')
+      + '<div class="bx-pick-acts">'
+      + (found ? '<button type="button" class="btn btn-light v2-btn-sm" data-bxact="adopt">판독 위치를 정답으로</button>' : '')
+      + '<button type="button" class="btn btn-light v2-btn-sm" data-bxact="reread">이 영역만 다시 읽기</button>'
+      + (hasTruth ? '<button type="button" class="btn btn-light v2-btn-sm text-danger" data-bxact="clear">위치 지우기</button>' : '')
+      + '</div>'
+      + '<div class="bx-pick-note" id="bxNote"></div>';
+    panel.dataset.field = field;
+  }
+
+  function locateBoxes(btn) {
+    if (!editing || !boxEditor) return;
+    busy(btn, true, '읽는 중…');
+    postJson(BASE + 'truth/' + editing.id + '/locate/', {
+      model: document.getElementById('runModel').value,
+      prompt_version_id: document.getElementById('runPrompt').value || null,
+      use_hints: document.getElementById('runHints').checked
+    })
+      .then(function (body) {
+        boxDetected = body.fields || {};
+        var boxes = {};
+        Object.keys(boxDetected).forEach(function (k) {
+          if (boxDetected[k].box) boxes[k] = boxDetected[k].box;
+          // 정답지에 없던 항목도 번호를 받아야 상자가 보인다
+          if (boxKeys.indexOf(k) < 0 && boxDetected[k].box) boxKeys.push(k);
+        });
+        boxEditor.setOrder(boxKeys);
+        boxEditor.setDetected(boxes);
+        note(body.message, body.found ? 'ok' : 'warn');
+      })
+      .catch(function (err) { note(err.message, 'error'); })
+      .finally(function () { busy(btn, false); });
+  }
+
+  function rereadRegion(field, btn) {
+    if (!editing || !boxEditor) return;
+    var box = boxEditor.boxOf(field);
+    if (!box) {
+      note('먼저 영역을 그리거나 판독 위치를 채택해 주세요.', 'error');
+      return;
+    }
+    busy(btn, true, '읽는 중…');
+    postJson(BASE + 'truth/' + editing.id + '/reread/', {
+      field: field,
+      box: box,
+      model: document.getElementById('runModel').value,
+      prompt_version_id: document.getElementById('runPrompt').value || null,
+      use_hints: document.getElementById('runHints').checked
+    })
+      .then(function (body) {
+        var out = body.result || {};
+        var target = document.querySelector('#caseFields .truth-val[data-key="' + field + '"]');
+        var others = Object.keys(out.others || {}).slice(0, 4)
+          .map(function (k) { return k + '=' + out.others[k]; }).join(' / ');
+        var box = document.getElementById('bxNote');
+        if (!box) return;
+
+        // **값을 자동으로 넣지 않는다.** 다시 읽은 값도 판독값이라 틀릴 수 있고,
+        // 여기 들어가는 것은 채점의 잣대가 될 정답이다. 사람이 보고 누른다.
+        box.innerHTML = out.value
+          ? '<div class="bx-read-ok">이 영역에서 <strong>' + esc(out.value) + '</strong> 를 읽었습니다.'
+            + ' <button type="button" class="btn btn-outline-primary v2-btn-sm" data-bxact="take"'
+            + ' data-value="' + esc(out.value) + '">정답 칸에 넣기</button></div>'
+            + (others ? '<div class="text-muted" style="font-size:11px;">함께 읽힌 것: ' + esc(others) + '</div>' : '')
+          : '<div class="text-danger">이 영역에서는 그 항목을 읽지 못했습니다.'
+            + (others ? ' 대신 읽힌 것: ' + esc(others) : ' 영역을 넓혀 보세요.') + '</div>';
+        if (target) target.classList.add('bx-target');
+      })
+      .catch(function (err) { note(err.message, 'error'); })
+      .finally(function () { busy(btn, false); });
   }
 
   function saveCase() {
@@ -249,14 +427,19 @@
       return;
     }
 
-    busy(btn, true, '저장 중…');
-    postJson(BASE + 'truth/' + editing.id + '/save/', {
+    var payload = {
       expected: expected,
       name: document.getElementById('caseName').value,
       report_no: document.getElementById('caseReportNo').value,
       crop_box: crop,
       verified: document.getElementById('caseVerified').checked
-    })
+    };
+    // 위치 보정을 연 적이 없으면 위치는 손대지 않는다. 빈 값을 보내면
+    // 예전에 적어 둔 정답 위치가 통째로 지워진다.
+    if (boxEditor) payload.expected_boxes = boxEditor.truthBoxes();
+
+    busy(btn, true, '저장 중…');
+    postJson(BASE + 'truth/' + editing.id + '/save/', payload)
       .then(function (body) {
         var tr = document.querySelector('[data-case="' + body.case.id + '"]');
         if (tr) tr.innerHTML = caseRowHtml(body.case);
@@ -268,6 +451,7 @@
       .catch(function (err) { note(err.message, 'error'); })
       .finally(function () { busy(btn, false); });
   }
+
 
   function refreshVerifiedCount() {
     var n = document.querySelectorAll('#caseRows .lab-pill-on').length;
@@ -296,7 +480,8 @@
       prompt_version_id: document.getElementById('runPrompt').value || null,
       use_crop: document.getElementById('runCrop').checked,
       use_api: document.getElementById('runApi').checked,
-      use_hints: document.getElementById('runHints').checked
+      use_hints: document.getElementById('runHints').checked,
+      use_boxes: document.getElementById('runBoxes').checked
     })
       .then(function (body) {
         note('평균 ' + body.run.mean_score + '점입니다.', 'ok');
@@ -345,6 +530,18 @@
       + '</tbody></table>';
   }
 
+  // 위치 점수는 값 점수와 **따로** 보여 준다. 한 숫자로 합치면 "값이 나빠지고
+  // 위치가 좋아진" 경우를 알 수 없는데, 그게 정확히 우리가 봐야 하는 것이다.
+  function boxSummaryHtml(box) {
+    if (!box) return '';
+    return '<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:12.5px;">'
+      + '<i class="bi bi-crosshair me-1"></i>읽은 위치: 정답 위치와 평균 <strong>'
+      + box.mean + '%</strong> 겹침, <strong>' + box.hit_rate
+      + '%</strong> 가 같은 자리를 가리켰습니다 (' + box.graded + '개 항목 채점).'
+      + ' 값 점수와 견줘 보세요 — 위치를 물어보느라 값이 내려갔다면 켤 이유가 없습니다.'
+      + '</div>';
+  }
+
   function runSummaryHtml(run) {
     var api = run.api_mean
       ? '<div class="alert alert-info py-2 px-3 mb-2" style="font-size:12.5px;">'
@@ -362,6 +559,7 @@
       + '      <i class="bi bi-magic"></i>이 결과로 프롬프트 초안 만들기</button>'
       + '  </div>'
       + api
+      + boxSummaryHtml(run.box_mean)
       + fieldTableHtml(run.fields)
       + '</div>';
   }
@@ -512,10 +710,50 @@
         .catch(function (err) { note(err.message, 'error'); });
     });
 
+    // 항목 이름을 누르면 그 항목의 상자를 고른다. 사진에서 상자를 눌러도
+    // 같은 일이 일어난다 - 어느 쪽에서 시작하든 같은 자리를 가리켜야 한다.
+    document.addEventListener('click', function (e) {
+      var key = e.target.closest('[data-pick]');
+      if (key && boxEditor) boxEditor.select(key.dataset.pick);
+    });
+
     // 목록은 다시 그려지므로 위임으로 받는다
     document.addEventListener('click', function (e) {
       var el = e.target.closest('button');
       if (!el) return;
+
+      if (el.id === 'bxLocate') { locateBoxes(el); return; }
+      if (el.id === 'bxAdoptAll') {
+        if (!boxEditor) return;
+        var n = boxEditor.adoptAll();
+        showPickPanel(boxEditor.selected());
+        note(n ? n + '개 항목의 판독 위치를 정답 위치로 옮겼습니다. 틀린 상자는 끌어서 고치세요.'
+               : '채택할 판독 위치가 없습니다. "판독 위치 보기" 를 먼저 누르세요.',
+             n ? 'ok' : 'warn');
+        return;
+      }
+      if (el.dataset.bxact) {
+        var field = (document.getElementById('casePickPanel') || {}).dataset;
+        field = field ? field.field : '';
+        if (!field || !boxEditor) return;
+        if (el.dataset.bxact === 'adopt') {
+          boxEditor.adopt(field);
+          showPickPanel(field);
+        } else if (el.dataset.bxact === 'clear') {
+          boxEditor.clear(field);
+          showPickPanel(field);
+        } else if (el.dataset.bxact === 'reread') {
+          rereadRegion(field, el);
+        } else if (el.dataset.bxact === 'take') {
+          var target = document.querySelector(
+            '#caseFields .truth-val[data-key="' + field + '"]');
+          if (target) {
+            target.value = el.dataset.value;
+            target.focus();
+          }
+        }
+        return;
+      }
 
       if (el.classList.contains('case-edit')) {
         // 정답 전문은 목록에 없다(원재료명 한 줄이 300자를 넘는다). 열 때 받아 온다.

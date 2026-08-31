@@ -219,6 +219,20 @@ def truth_update(request, case_id):
         except (TypeError, ValueError):
             return JsonResponse({'success': False,
                                  'error': '읽을 영역은 숫자 네 개여야 합니다.'}, status=400)
+    if 'expected_boxes' in payload:
+        boxes = payload['expected_boxes']
+        if not isinstance(boxes, dict):
+            return JsonResponse({'success': False, 'error': '정답 위치 형식이 잘못됐습니다.'},
+                                status=400)
+        # 위치는 값과 따로 둔다. 빈 상자·형식이 깨진 상자는 버린다 - 반쯤 적힌
+        # 위치를 채점에 쓰면 "위치를 못 찾았다" 와 "위치를 안 적었다" 가 섞인다.
+        from v1.label.services.ocr_boxes import clamp_free
+        cleaned = {}
+        for key, box in boxes.items():
+            fixed = clamp_free(box)
+            if fixed:
+                cleaned[key] = fixed
+        case.expected_boxes = cleaned
     if 'verified' in payload:
         if payload['verified'] and not case.expected:
             return JsonResponse(
@@ -240,14 +254,31 @@ def truth_delete(request, case_id):
     return JsonResponse({'success': True})
 
 
+def _image_size(case):
+    """
+    사진의 원본 크기. 화면이 상자를 그리려면 이게 있어야 한다.
+
+    화면에서는 사진이 줄어들어 보이므로, 원본 픽셀 좌표를 화면 좌표로 옮기려면
+    원본이 몇 픽셀인지 알아야 한다. 못 읽으면 (0, 0) 이고 화면은 상자 기능을
+    끈다 - 어림한 크기로 그리면 상자가 엉뚱한 데 얹힌다.
+    """
+    try:
+        return [case.image.width, case.image.height]
+    except Exception:
+        logger.exception('정답지 사진 크기를 읽지 못했다 (case=%s)', case.pk)
+        return [0, 0]
+
+
 def _case_json(case):
     return {
         'id': case.pk,
         'name': case.name,
         'image_url': case.image.url if case.image else '',
+        'image_size': _image_size(case),
         'report_no': case.report_no,
         'crop_box': case.crop_box,
         'expected': case.expected or {},
+        'expected_boxes': case.expected_boxes or {},
         'source': case.get_source_display(),
         'verified': case.verified,
         'note': case.note,
@@ -306,6 +337,7 @@ def run_benchmark(request):
             use_crop=bool(payload.get('use_crop')),
             use_api=bool(payload.get('use_api')),
             use_hints=payload.get('use_hints', True),
+            use_boxes=bool(payload.get('use_boxes')),
             user=request.user,
         )
     except Exception as exc:
@@ -338,6 +370,7 @@ def _run_json(run, full=False):
         'prompt_version_id': run.prompt_version_id,
         'fields': (run.detail or {}).get('fields', []),
         'api_mean': (run.detail or {}).get('api_mean'),
+        'box_mean': (run.detail or {}).get('box_mean'),
     }
     if full:
         out['cases'] = (run.detail or {}).get('cases', [])
@@ -484,3 +517,100 @@ def _prompt_json(version, full=False):
     if full:
         out['prompt'] = version.prompt
     return out
+
+
+# ── 읽은 자리 ────────────────────────────────────────────────────────────────
+#
+# 여기가 관리자 화면에만 있는 이유.
+#
+# 좌표가 맞는지 재려면 **정답이 필요하고, 정답은 여기에만 있다.** 맞는지도
+# 모르는 상자를 사용자 확인 창에 먼저 띄우면, 맞는 값에 틀린 상자가 붙는
+# 순간 사용자가 멀쩡한 값을 의심해 지운다. 지금 없는 불신을 만드는 것이다.
+#
+# 그래서 순서가 이렇다.
+#   1. 여기서 상자를 받아 본다        (locate)
+#   2. 사람이 자리를 고친다            (save 의 expected_boxes)
+#   3. 고친 자리만 다시 읽혀 본다      (reread)
+#   4. 다음 측정부터 위치도 채점된다   (run 의 use_boxes)
+# 이 넷이 돌고 나서야 사용자 화면 이야기를 할 수 있다.
+
+@staff_member_required
+@require_POST
+def truth_locate(request, case_id):
+    """
+    정답지 사진을 한 번 읽어 **값과 읽은 자리**를 함께 가져온다.
+
+    판독을 한 번 더 부르므로 돈이 든다. 그래서 화면이 자동으로 부르지 않고
+    사람이 누를 때만 돈다.
+    """
+    from v1.common.models import OcrPromptVersion, OcrTruthCase
+    from v1.label.services.ocr_lab import locate_case
+
+    case = get_object_or_404(OcrTruthCase, pk=case_id)
+    payload = _json_body(request)
+
+    version = None
+    if payload.get('prompt_version_id'):
+        version = OcrPromptVersion.objects.filter(
+            pk=payload['prompt_version_id']).first()
+
+    out = locate_case(
+        case,
+        model=(payload.get('model') or '').strip() or None,
+        prompt_version=version,
+        use_hints=payload.get('use_hints', True),
+    )
+    if out['error']:
+        return JsonResponse({'success': False, 'error': out['error']}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'fields': out['fields'],
+        'found': out['found'],
+        'message': (f"{out['found']}개 항목의 자리를 짚었습니다. "
+                    '상자가 엉뚱하면 끌어서 고친 뒤 "이 영역만 다시 읽기" 를 눌러 보세요.'
+                    if out['found'] else
+                    '자리를 하나도 짚지 못했습니다. 이 모델이 좌표를 잘 못 내는 것이니 '
+                    '값 판독만 믿고 쓰세요 — 위치는 직접 그려도 됩니다.'),
+    })
+
+
+@staff_member_required
+@require_POST
+def truth_reread(request, case_id):
+    """
+    사람이 고친 영역만 잘라 그 항목을 다시 읽는다 (표적 재질의).
+
+    **값을 저장하지 않는다.** 읽어서 돌려줄 뿐이고, 정답으로 삼을지는 사람이
+    보고 정한다 — 다시 읽은 값도 판독값이라 틀릴 수 있다.
+    """
+    from v1.common.models import OcrPromptVersion, OcrTruthCase
+    from v1.label.services.ocr_lab import reread_region
+
+    case = get_object_or_404(OcrTruthCase, pk=case_id)
+    payload = _json_body(request)
+
+    field = (payload.get('field') or '').strip()
+    box = payload.get('box')
+    if not field:
+        return JsonResponse({'success': False, 'error': '어느 항목인지 알 수 없습니다.'},
+                            status=400)
+    if not isinstance(box, (list, tuple)) or len(box) != 4:
+        return JsonResponse(
+            {'success': False, 'error': '영역은 숫자 네 개(x, y, 너비, 높이)여야 합니다.'},
+            status=400)
+
+    version = None
+    if payload.get('prompt_version_id'):
+        version = OcrPromptVersion.objects.filter(
+            pk=payload['prompt_version_id']).first()
+
+    out = reread_region(
+        case, field, box,
+        model=(payload.get('model') or '').strip() or None,
+        prompt_version=version,
+        use_hints=payload.get('use_hints', True),
+    )
+    if out['error']:
+        return JsonResponse({'success': False, 'error': out['error']}, status=500)
+    return JsonResponse({'success': True, 'field': field, 'result': out})

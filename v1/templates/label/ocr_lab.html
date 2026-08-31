@@ -89,6 +89,70 @@
    제품 화면의 확인 창과 같은 크기로 맞춘다. */
 #caseModal .modal-dialog { max-width: min(1500px, 96vw); }
 #caseModal .modal-content { max-height: 94vh; }
+
+/* 읽은 자리 표시.
+   상자는 두 가지다. 파란 점선은 모델이 "여기서 읽었다" 고 한 자리라 틀릴 수
+   있고, 초록 실선은 사람이 확정한 정답 위치라 채점의 잣대가 된다. 색과 선이
+   달라야 둘을 섞지 않는다. */
+.bx-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.bx-tabs .bx-tab-on { background: #e8f0fe; color: #1a5fb4; font-weight: 600; }
+
+.bx-bar { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+.bx-hint { font-size: 11px; color: var(--ez-text-muted, #5f6368); line-height: 1.5; flex: 1; }
+.bx-zoom { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.bx-zoom-label { font-size: 11px; min-width: 38px; text-align: center;
+                 font-variant-numeric: tabular-nums; }
+.bx-tools { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+
+.bx-scroll { height: 66vh; min-height: 320px; overflow: auto; background: #202124;
+             border-radius: 8px; }
+.bx-stage { position: relative; width: 100%; user-select: none; }
+.bx-stage img { display: block; width: 100%; height: auto; }
+.bx-layer { position: absolute; inset: 0; }
+
+.bx-box { position: absolute; box-sizing: border-box; }
+.bx-found { border: 2px dashed #4285f4; background: rgba(66,133,244,.10); }
+.bx-truth { border: 2px solid #1e8e3e; background: rgba(30,142,62,.10); cursor: move; }
+.bx-truth.bx-on { border-color: #f9ab00; background: rgba(249,171,0,.18);
+                  box-shadow: 0 0 0 2px rgba(249,171,0,.35); }
+.bx-tag {
+    position: absolute; top: -9px; left: -9px; min-width: 18px; height: 18px;
+    border-radius: 9px; background: #202124; color: #fff; font-size: 10px;
+    font-weight: 700; line-height: 18px; text-align: center; padding: 0 4px;
+}
+.bx-found > .bx-tag { background: #4285f4; }
+.bx-truth > .bx-tag { background: #1e8e3e; }
+.bx-truth.bx-on > .bx-tag { background: #b06000; }
+.bx-grip { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px;
+           background: #1e8e3e; border: 1px solid #fff; cursor: nwse-resize; }
+
+.bx-legend { display: flex; gap: 14px; font-size: 11px; color: var(--ez-text-muted, #5f6368);
+             margin-top: 6px; }
+.bx-swatch { display: inline-block; width: 12px; height: 8px; margin-right: 4px;
+             vertical-align: middle; }
+.bx-swatch-truth { border: 2px solid #1e8e3e; background: rgba(30,142,62,.15); }
+.bx-swatch-found { border: 2px dashed #4285f4; background: rgba(66,133,244,.15); }
+
+/* 선택한 항목 하나에 대한 조작. 항목마다 버튼을 늘어놓으면 스물아홉 줄이
+   버튼 밭이 되고 정작 값이 안 보인다. */
+.bx-pick { background: #fef7e0; border: 1px solid #feefc3; border-radius: 8px;
+           padding: 8px 10px; margin-bottom: 10px; font-size: 12px; }
+.bx-pick-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.bx-pick-read { color: #3c4043; margin-bottom: 6px; }
+.bx-pick-read span { font-weight: 600; }
+.bx-pick-acts { display: flex; gap: 5px; flex-wrap: wrap; }
+.bx-pick-note { margin-top: 6px; font-size: 11.5px; line-height: 1.6; }
+.bx-read-ok { color: #1e8e3e; }
+
+.bx-num {
+    display: inline-block; min-width: 17px; height: 17px; border-radius: 9px;
+    background: #e8eaed; color: #3c4043; font-size: 10px; font-weight: 700;
+    line-height: 17px; text-align: center; margin-right: 5px; padding: 0 4px;
+}
+.truth-key { cursor: pointer; }
+.truth-key-on { color: #b06000; font-weight: 700; }
+.truth-key-on .bx-num { background: #f9ab00; color: #fff; }
+.bx-target { border-color: #1e8e3e !important; }
 </style>
 {% endblock %}
 
@@ -244,6 +308,39 @@
           <dd>켜야 채점에 쓰입니다. 목록의 체크박스도 이 값을 따라 기본으로 켜집니다</dd>
         </dl>
 
+        <div class="fw-semibold mt-3">위치 보정 — 판독이 <em>어디를</em> 읽었는지 보고 고치기</div>
+        <p class="mb-2">
+          값이 틀렸을 때 알 수 있는 것은 "틀렸다" 뿐입니다. 읽은 자리가 보이면
+          <strong>왜</strong> 틀렸는지가 보입니다 — 옆 칸을 읽었는지, 작업지시서의 표를
+          읽었는지, 아예 못 찾았는지.
+        </p>
+        <ol>
+          <li>사진 위 <strong>"위치 보정"</strong> 을 누릅니다</li>
+          <li><strong>"판독 위치 보기"</strong> — 판독을 한 번 돌려 항목마다 번호 상자를
+              겹쳐 그립니다. <span class="lab-term">이 버튼은 돈이 듭니다(판독 1회).</span>
+              그래서 자동으로 돌지 않습니다</li>
+          <li>상자가 맞으면 <strong>"판독 위치를 정답으로"</strong>, 틀렸으면
+              <strong>끌어서 옮기고 모서리로 크기를 고칩니다.</strong> 상자가 없으면
+              항목을 고른 뒤 빈 곳을 끌어 새로 그립니다</li>
+          <li><strong>"이 영역만 다시 읽기"</strong> — 고친 자리만 잘라 다시 읽힙니다.
+              그 영역에 해상도가 전부 배정되므로 전체로 읽을 때보다 잘 읽힙니다</li>
+          <li>저장하면 그 자리가 <strong>정답 위치</strong>로 남고, ②에서
+              <strong>"읽은 위치도 재기"</strong> 를 켜면 다음 측정부터 위치도 채점됩니다</li>
+        </ol>
+        <dl>
+          <dt><span class="bx-swatch bx-swatch-found"></span>파란 점선</dt>
+          <dd><strong>판독 위치</strong> — 모델이 "여기서 읽었다" 고 한 자리. 틀릴 수 있고,
+              끌어서 고칠 수 없습니다(고치면 모델이 뭐라고 했는지가 사라집니다)</dd>
+          <dt><span class="bx-swatch bx-swatch-truth"></span>초록 실선</dt>
+          <dd><strong>정답 위치</strong> — 사람이 확정한 자리. 채점의 잣대이고 이것만
+              끌어서 고칩니다</dd>
+        </dl>
+        <p class="mb-0 mt-2">
+          다시 읽은 값은 <strong>정답 칸에 자동으로 들어가지 않습니다.</strong> 그것도
+          판독값이라 틀릴 수 있는데, 여기 들어가는 값은 채점의 잣대가 됩니다 — 보고
+          "정답 칸에 넣기" 를 눌러야 들어갑니다.
+        </p>
+
         <p class="mb-0 mt-2">
           <strong>몇 장이 필요한가.</strong> 5~10장이면 방향은 보입니다. 다만
           <strong>식품유형을 섞으세요</strong> — 같은 유형 열 장보다 다른 유형 다섯 장이 낫습니다.
@@ -365,6 +462,12 @@
           <dt>교정 이력 힌트</dt>
           <dd>끄면 <strong>프롬프트 자체의 힘만</strong> 잽니다. 힌트가 섞이면 무엇이
               점수를 올렸는지 가릴 수 없습니다</dd>
+          <dt>읽은 위치도 재기</dt>
+          <dd>판독에 <strong>좌표까지 물어보고</strong> ①에서 적어 둔 정답 위치와
+              얼마나 겹치는지 잽니다. 정답 위치를 적어 둔 항목만 셉니다.
+              <strong>값 점수와 위치 점수는 따로 나옵니다</strong> — 좌표를 물어보면
+              값이 흐려질 수 있어서, 그 대가를 보려면 두 숫자가 갈라져 있어야 합니다.
+              켜고 끈 두 결과의 <em>값</em> 점수를 견주는 것이 이 옵션의 진짜 쓸모입니다</dd>
         </dl>
 
         <div class="fw-semibold mt-3">결과 읽는 법</div>
@@ -422,6 +525,10 @@
       <div class="form-check">
         <input class="form-check-input" type="checkbox" id="runHints" checked>
         <label class="form-check-label" for="runHints" style="font-size:12px;">교정 이력 힌트 붙이기</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="runBoxes">
+        <label class="form-check-label" for="runBoxes" style="font-size:12px;">읽은 위치도 재기</label>
       </div>
       <button type="button" class="btn btn-primary v2-btn-sm" id="runBtn">
         <i class="bi bi-play-fill"></i>고른 정답지로 재기
@@ -681,5 +788,6 @@
   ocr_lab.js 보다 먼저 실어야 window.photoViewerLayout 이 준비된다.
 {% endcomment %}
 <script src="{% static 'js/products/photo_viewer.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/label/ocr_box_editor.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script src="{% static 'js/label/ocr_lab.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {% endblock %}

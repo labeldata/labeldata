@@ -197,12 +197,19 @@ TILE_MIN_SIDE = 1400     # 이보다 작으면 나눌 이유가 없다
 TILE_OVERLAP = 0.12      # 조각끼리 겹치는 비율
 
 
-def build_image_payload(image_file, max_size=2000):
+def build_image_regions(image_file, max_size=2000):
     """
-    보낼 이미지 목록을 만든다. [전체, 조각1, 조각2, ...]
+    보낼 이미지와 **그 이미지가 원본의 어디인지**를 함께 만든다.
 
     전체 사진을 먼저 넣는다 - 어느 칸이 어느 항목인지는 전체 배치를 봐야 안다.
     조각은 글자를 읽기 위한 것이다.
+
+    조각을 우리가 잘랐으니 원본에서의 자리는 **확실하다.** 그래서 모델이
+    "2번 조각의 여기" 라고만 답해도 원본 좌표로 되돌릴 수 있다. 위치 표시가
+    이 값 위에 선다.
+
+    Returns: [{'b64', 'box': (left, top, right, bottom), 'label'} ...]
+             box 는 원본 픽셀. 첫 항목은 사진 전체다.
     """
     img = Image.open(image_file)
     try:
@@ -218,26 +225,31 @@ def build_image_payload(image_file, max_size=2000):
         buf.seek(0)
         return base64.b64encode(buf.read()).decode('utf-8')
 
+    w, h = img.size
     full = img.copy()
     full.thumbnail((max_size, max_size), Image.LANCZOS)
-    images = [encode(full)]
+    regions = [{'b64': encode(full), 'box': (0, 0, w, h), 'label': '사진 전체'}]
 
-    w, h = img.size
     if max(w, h) < TILE_MIN_SIDE:
-        return images
+        return regions
 
     ox, oy = int(w * TILE_OVERLAP), int(h * TILE_OVERLAP)
     halves = [
-        (0, 0, w // 2 + ox, h // 2 + oy),
-        (w // 2 - ox, 0, w, h // 2 + oy),
-        (0, h // 2 - oy, w // 2 + ox, h),
-        (w // 2 - ox, h // 2 - oy, w, h),
+        ('왼쪽 위',   (0, 0, w // 2 + ox, h // 2 + oy)),
+        ('오른쪽 위', (w // 2 - ox, 0, w, h // 2 + oy)),
+        ('왼쪽 아래', (0, h // 2 - oy, w // 2 + ox, h)),
+        ('오른쪽 아래', (w // 2 - ox, h // 2 - oy, w, h)),
     ]
-    for box in halves:
+    for label, box in halves:
         tile = img.crop(box)
         tile.thumbnail((max_size, max_size), Image.LANCZOS)
-        images.append(encode(tile))
-    return images
+        regions.append({'b64': encode(tile), 'box': box, 'label': f'조각 {label}'})
+    return regions
+
+
+def build_image_payload(image_file, max_size=2000):
+    """보낼 이미지 목록만. [전체, 조각1, 조각2, ...]"""
+    return [region['b64'] for region in build_image_regions(image_file, max_size)]
 
 
 def learned_hints():
@@ -271,7 +283,7 @@ def active_prompt(version=None):
 
 
 def extract_label_from_image(image_file, model=None, prompt_version=None,
-                             use_hints=True):
+                             use_hints=True, want_boxes=False):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
 
@@ -281,6 +293,12 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
 
     use_hints=False 면 교정 이력 힌트를 붙이지 않는다 - 프롬프트 자체의 힘만
     재고 싶을 때 쓴다(힌트가 섞이면 무엇이 점수를 올렸는지 알 수 없다).
+
+    want_boxes=True 면 **읽은 자리**도 함께 받아 원본 픽셀 좌표로 돌려준다
+    (`data[항목]['box'] = [x, y, w, h]`). 기본은 꺼져 있다 - 좌표를 요구하면
+    항목마다 숫자 네 개를 더 뱉게 되고 그만큼 값에 쓸 주의가 갈린다. **값이
+    본질이고 위치는 편의다.** 관리자 화면에서 앞뒤를 재 보기 전에는 평소
+    판독에 켜지 않는다.
 
     Returns:
         dict: {
@@ -294,7 +312,8 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
     """
     try:
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        images = build_image_payload(image_file)
+        regions = build_image_regions(image_file)
+        images = [region['b64'] for region in regions]
 
         content = [
             {"type": "image_url",
@@ -317,6 +336,9 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         system = active_prompt(prompt_version)
         if use_hints:
             system += learned_hints()
+        if want_boxes:
+            from v1.label.services.ocr_boxes import PROMPT_ADDENDUM
+            system += PROMPT_ADDENDUM
 
         response = client.chat.completions.create(
             model=model or getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
@@ -329,6 +351,14 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         )
 
         result = json.loads(response.choices[0].message.content)
+
+        if want_boxes:
+            # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이
+            # 계산은 확실하다 - 틀릴 여지는 모델이 준 상자 쪽에만 있다.
+            from v1.label.services.ocr_boxes import attach
+            result, located = attach(result, regions)
+            return {"success": True, "data": result, "boxes_found": located}
+
         return {"success": True, "data": result}
 
     except Exception as e:

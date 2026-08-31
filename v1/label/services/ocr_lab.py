@@ -41,17 +41,24 @@ def _open_source(case):
 
 
 def measure_case(case, runs=1, model=None, prompt_version=None,
-                 use_crop=False, use_api=False, use_hints=True):
+                 use_crop=False, use_api=False, use_hints=True, use_boxes=False):
     """
     정답지 한 장을 여러 번 읽어 채점한다.
 
-    Returns: {'name', 'runs', 'mean', 'fields', 'last', 'api': {...}, 'errors': [...]}
+    use_boxes=True 면 **읽은 자리도 함께 받아 채점한다.** 정답 위치를 적어 둔
+    항목만 센다 - 안 적어 둔 항목은 "위치를 모른다" 는 뜻이지 "틀렸다" 가 아니다.
+    값 점수와 위치 점수는 **따로** 낸다. 좌표를 요구하면 값이 흐려질 수 있어서,
+    그 대가를 보려면 두 숫자가 갈라져 있어야 한다.
+
+    Returns: {'name', 'runs', 'mean', 'fields', 'last', 'api': {...},
+              'boxes': {...} 또는 None, 'errors': [...]}
     """
     from v1.label.services.ocr_benchmark import compare, summarize
     from v1.label.services.ocr_service import extract_label_from_image
 
     results = []
     api_results = []
+    box_results = []
     errors = []
     last_data = None
 
@@ -69,7 +76,7 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
 
             out = extract_label_from_image(
                 source, model=model, prompt_version=prompt_version,
-                use_hints=use_hints)
+                use_hints=use_hints, want_boxes=use_boxes)
         except Exception as exc:
             logger.exception('정답지 판독 실패 (case=%s)', case.pk)
             errors.append(f'{i + 1}회 실패: {exc}')
@@ -96,11 +103,19 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
                 api_results.append(compare(case.expected, merge(data)))
             except Exception:
                 logger.exception('등록 정보 대조 채점 실패 (case=%s)', case.pk)
+
+        if use_boxes and (case.expected_boxes or {}):
+            try:
+                from v1.label.services.ocr_boxes import score as score_boxes
+                box_results.append(score_boxes(case.expected_boxes, data))
+            except Exception:
+                logger.exception('위치 채점 실패 (case=%s)', case.pk)
         last_data = data
 
     if not results:
         return {'name': case.name, 'case_id': case.pk, 'runs': 0, 'mean': 0.0,
-                'fields': [], 'last': {}, 'api': None, 'errors': errors}
+                'fields': [], 'last': {}, 'api': None, 'boxes': None,
+                'errors': errors}
 
     row = {
         'name': case.name,
@@ -111,6 +126,7 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
         'last': results[-1]['fields'],
         'errors': errors,
         'api': None,
+        'boxes': _box_summary(box_results),
     }
     if api_results:
         api_mean = round(statistics.mean(r['mean'] for r in api_results), 1)
@@ -122,6 +138,25 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
         }
     row['_raw'] = last_data
     return row
+
+
+def _box_summary(box_results):
+    """
+    회차별 위치 채점을 한 줄로 합친다. 잰 게 없으면 None.
+
+    마지막 회차의 항목별 겹침을 그대로 남긴다 - 평균만 보면 "어느 항목의
+    자리를 못 찾는가" 를 알 수 없고, 그게 정작 고쳐야 할 것이다.
+    """
+    rows = [r for r in box_results if r and r['fields']]
+    if not rows:
+        return None
+    return {
+        'mean': round(statistics.mean(r['mean'] for r in rows), 1),
+        'hit_rate': round(statistics.mean(r['hit_rate'] for r in rows), 1),
+        'graded': len(rows[-1]['fields']),
+        'fields': rows[-1]['fields'],
+        'missing': rows[-1]['missing'],
+    }
 
 
 def _api_field_gain(before, after):
@@ -146,7 +181,8 @@ def _api_field_gain(before, after):
 
 
 def run_benchmark(cases, runs=1, model=None, prompt_version=None,
-                  use_crop=False, use_api=False, use_hints=True, user=None):
+                  use_crop=False, use_api=False, use_hints=True,
+                  use_boxes=False, user=None):
     """
     정답지 여러 장을 재고 결과를 OcrBenchmarkRun 으로 남긴다.
 
@@ -161,7 +197,8 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
     for case in cases:
         case_rows.append(measure_case(
             case, runs=runs, model=model, prompt_version=prompt_version,
-            use_crop=use_crop, use_api=use_api, use_hints=use_hints))
+            use_crop=use_crop, use_api=use_api, use_hints=use_hints,
+            use_boxes=use_boxes))
 
     scored = [r for r in case_rows if r['runs']]
     mean = round(statistics.mean(r['mean'] for r in scored), 1) if scored else 0.0
@@ -175,6 +212,7 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
         'cases': case_rows,
         'fields': _merge_field_rows(case_rows),
         'api_mean': _api_overall(case_rows),
+        'box_mean': _box_overall(case_rows),
     }
 
     run = OcrBenchmarkRun.objects.create(
@@ -229,6 +267,18 @@ def _api_overall(case_rows):
     return {
         'mean': round(statistics.mean(r['mean'] for r in rows), 1),
         'gain': round(statistics.mean(r['gain'] for r in rows), 1),
+    }
+
+
+def _box_overall(case_rows):
+    """위치를 켜고 잰 경우의 전체 평균."""
+    rows = [c['boxes'] for c in case_rows if c.get('boxes')]
+    if not rows:
+        return None
+    return {
+        'mean': round(statistics.mean(r['mean'] for r in rows), 1),
+        'hit_rate': round(statistics.mean(r['hit_rate'] for r in rows), 1),
+        'graded': sum(r['graded'] for r in rows),
     }
 
 
@@ -297,3 +347,133 @@ def expected_from_label(label):
         if value:
             out[key] = value
     return out
+
+
+# ── 읽은 자리 ────────────────────────────────────────────────────────────────
+#
+# 값이 틀렸을 때 지금까지 알 수 있는 것은 "틀렸다" 뿐이었다. 어디를 읽고 그
+# 답을 냈는지 보이면 **왜** 틀렸는지가 보인다 — 옆 칸을 읽었는지, 작업지시서의
+# 표를 읽었는지, 아예 못 찾았는지.
+#
+# 그리고 자리를 알면 고칠 수 있다. 자리를 고쳐 그 영역만 다시 읽히고, 그 자리를
+# 정답 위치로 적어 두면 다음 측정부터 **위치도 채점 대상**이 된다.
+#
+# 이건 관리자 화면에만 있다. 좌표가 맞는지 재려면 정답이 필요하고, 정답은
+# 여기에만 있기 때문이다.
+
+def locate_case(case, model=None, prompt_version=None, use_hints=True):
+    """
+    정답지 사진을 한 번 읽어 **값과 읽은 자리**를 함께 가져온다.
+
+    Returns: {'fields': {항목: {'value','box','box_from','confidence'}},
+              'found': 자리를 짚은 항목 수, 'error': ''}
+    """
+    from v1.label.services.ocr_service import extract_label_from_image
+
+    source = None
+    try:
+        source = case.image.open('rb')
+        out = extract_label_from_image(
+            source, model=model, prompt_version=prompt_version,
+            use_hints=use_hints, want_boxes=True)
+    except Exception as exc:
+        logger.exception('위치 판독 실패 (case=%s)', case.pk)
+        return {'fields': {}, 'found': 0, 'error': str(exc)}
+    finally:
+        if source is not None and hasattr(source, 'close'):
+            try:
+                source.close()
+            except Exception:
+                pass
+
+    if not out.get('success'):
+        return {'fields': {}, 'found': 0,
+                'error': out.get('error') or '사진을 읽지 못했습니다.'}
+
+    fields = {}
+    for key, item in (out.get('data') or {}).items():
+        if not isinstance(item, dict):
+            continue
+        value = str(item.get('value') or '').strip()
+        box = item.get('box')
+        if not value and not box:
+            continue
+        fields[key] = {
+            'value': value,
+            'box': box,
+            'box_from': item.get('box_from') or '',
+            'confidence': item.get('confidence') or '',
+        }
+    return {'fields': fields, 'found': out.get('boxes_found') or 0, 'error': ''}
+
+
+def reread_region(case, field, box, model=None, prompt_version=None,
+                  use_hints=True):
+    """
+    사람이 고친 영역만 잘라 다시 읽는다 (표적 재질의).
+
+    전체를 다시 읽는 것보다 훨씬 싸고, 그 영역에 해상도가 전부 배정되므로 잘
+      읽힌다 — 화면의 "영역 선택" 판독이 통하는 이유와 같다.
+
+    **평소 판독 경로를 그대로 쓴다.** 잘라 낸 조각을 같은 함수에 넣을 뿐이라,
+    활성 프롬프트도 사전 스냅도 그대로 걸린다. 그 항목만 따로 묻는 전용
+    프롬프트를 새로 만들면 두 벌이 되고, 어느 날 한쪽만 고쳐진다.
+
+    영역이 작으면 조각내기(TILE_MIN_SIDE)가 안 걸려 이미지 한 장만 나간다.
+
+    Returns: {'value', 'confidence', 'others': {항목: 값}, 'error': ''}
+             others 는 그 영역에서 함께 읽힌 다른 항목들이다 — 영역을 잘못
+             잡았을 때 "여기엔 이게 적혀 있다" 를 보여 준다.
+    """
+    from io import BytesIO
+
+    from PIL import Image, ImageOps
+
+    from v1.label.services.ocr_boxes import pad
+    from v1.label.services.ocr_service import extract_label_from_image
+
+    try:
+        img = Image.open(case.image.path)
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        area = pad(box, img.width, img.height)
+        if not area:
+            return {'value': '', 'confidence': '', 'others': {},
+                    'error': '영역이 사진 밖이거나 크기가 0 입니다.'}
+
+        x, y, w, h = area
+        buf = BytesIO()
+        img.crop((x, y, x + w, y + h)).save(buf, format='JPEG', quality=95)
+        buf.seek(0)
+
+        out = extract_label_from_image(
+            buf, model=model, prompt_version=prompt_version, use_hints=use_hints)
+    except Exception as exc:
+        logger.exception('영역 재판독 실패 (case=%s, field=%s)', case.pk, field)
+        return {'value': '', 'confidence': '', 'others': {}, 'error': str(exc)}
+
+    if not out.get('success'):
+        return {'value': '', 'confidence': '', 'others': {},
+                'error': out.get('error') or '영역을 읽지 못했습니다.'}
+
+    data = out.get('data') or {}
+    item = data.get(field) if isinstance(data.get(field), dict) else {}
+    others = {}
+    for key, row in data.items():
+        if key == field or not isinstance(row, dict):
+            continue
+        value = str(row.get('value') or '').strip()
+        if value:
+            others[key] = value
+
+    return {
+        'value': str((item or {}).get('value') or '').strip(),
+        'confidence': (item or {}).get('confidence') or '',
+        'others': others,
+        'error': '',
+    }

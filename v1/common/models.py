@@ -248,6 +248,12 @@ class OcrTruthCase(models.Model):
     report_no = models.CharField(max_length=32, blank=True, default='',
                                  verbose_name='품목보고번호')
     expected = models.JSONField(default=dict, verbose_name='정답')
+    # 각 항목이 사진의 **어디에** 적혀 있는가. {항목: [x, y, 너비, 높이]} (원본 픽셀).
+    #
+    # 값의 정답과 위치의 정답은 다른 것이라 따로 둔다. 위치를 안 적어 둔 항목은
+    # "위치를 모른다" 는 뜻이지 "위치가 없다" 는 뜻이 아니다 - 채점에서 뺀다.
+    expected_boxes = models.JSONField(default=dict, blank=True,
+                                      verbose_name='정답 위치')
     source = models.CharField(max_length=10, choices=Source.choices,
                               default=Source.MANUAL, verbose_name='정답의 출처')
     # 사람이 정답이라고 확인했는가. 확인 전 초안을 채점에 쓰면 자기 답을 자기가
