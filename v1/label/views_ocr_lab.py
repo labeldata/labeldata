@@ -299,6 +299,7 @@ def run_benchmark(request):
     """
     from v1.common.models import OcrPromptVersion, OcrTruthCase
     from v1.label.services.ocr_lab import run_benchmark as run_it
+    from v1.label.services.ocr_service import TILE_LAYOUTS
 
     payload = _json_body(request)
     case_ids = payload.get('case_ids') or []
@@ -338,6 +339,8 @@ def run_benchmark(request):
             use_api=bool(payload.get('use_api')),
             use_hints=payload.get('use_hints', True),
             use_boxes=bool(payload.get('use_boxes')),
+            layout=(payload.get('layout') if payload.get('layout') in TILE_LAYOUTS
+                    else 'grid'),
             user=request.user,
         )
     except Exception as exc:
@@ -371,6 +374,7 @@ def _run_json(run, full=False):
         'fields': (run.detail or {}).get('fields', []),
         'api_mean': (run.detail or {}).get('api_mean'),
         'box_mean': (run.detail or {}).get('box_mean'),
+        'tiling': (run.detail or {}).get('tiling') or 'grid',
     }
     if full:
         out['cases'] = (run.detail or {}).get('cases', [])

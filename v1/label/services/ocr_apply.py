@@ -148,6 +148,23 @@ def parse_nutrition_basis(text):
     return m.group(1).replace(',', ''), 'mL' if unit.lower() in ('ml', '㎖') else unit
 
 
+def _mark_segment(segments):
+    """
+    구분(비닐류·플라스틱 …)이 적힌 도막을 고른다. 없으면 None.
+
+    부속 표기는 "띠지:PP" 처럼 부위 이름이 붙고 구분이 안 붙는다. 그래서
+    구분이 있는 도막이 마크 자체다.
+    """
+    for segment in segments:
+        for group, _table in _MARK_GROUPS:
+            if group in segment:
+                return segment
+        for word in _SIMPLE_MARKS:
+            if word in segment:
+                return segment
+    return None
+
+
 def map_recycling_mark(text):
     """
     분리배출 표기를 저장용 종류로 바꾼다.
@@ -161,10 +178,18 @@ def map_recycling_mark(text):
     if not raw:
         return '', ''
 
-    # 마크 자체의 재질은 앞부분에 적힌다. 뒤에 오는 "띠지:PP, 리드지:PET" 는
-    # 다른 부속의 재질이라, 문자열 전체에서 찾으면 그쪽을 집는다.
-    # 실제로 "비닐류 PP / 띠지:PP, 리드지:PET" 가 비닐(PET) 로 잡혔다.
-    head = re.split(r'[/|]', raw)[0]
+    # 마크 자체의 재질이 어느 도막에 있는지는 라벨마다 다르다.
+    #
+    #   "비닐류 PP / 띠지:PP, 리드지:PET"   앞이 마크, 뒤가 부속
+    #   "OTHER / 비닐류 PP"                 뒤가 마크
+    #
+    # 앞을 무조건 마크로 보면 두 번째가 비닐(기타)로 잡히고, 진짜 마크인
+    # "비닐류 PP" 가 마크 옆에 인쇄할 문구로 밀려난다.
+    #
+    # 그래서 **구분(비닐류/플라스틱 …)이 적힌 도막**을 마크로 본다. 그런 도막이
+    # 없으면 예전처럼 앞을 쓴다 - 부속 표기("띠지:PP")에는 구분이 안 붙는다.
+    segments = [seg.strip() for seg in re.split(r'[/|]', raw) if seg.strip()]
+    head = _mark_segment(segments) or (segments[0] if segments else raw)
 
     def find_code(segment):
         lowered = segment.lower()
@@ -219,8 +244,12 @@ def extra_mark_text(text, mark_type):
         return ''
     if not mark_type:
         return raw
-    parts = re.split(r'\s*[/|]\s*', raw, maxsplit=1)
-    return parts[1].strip() if len(parts) > 1 else ''
+    segments = [seg.strip() for seg in re.split(r'[/|]', raw) if seg.strip()]
+    mark_segment = _mark_segment(segments)
+    if mark_segment is None:
+        # 구분이 없다("OTHER / 띠지:PP"). 앞이 마크였으므로 나머지가 부속이다.
+        return ', '.join(segments[1:])
+    return ', '.join(seg for seg in segments if seg is not mark_segment)
 
 
 def apply_recycling_mark(label, mark_type, text):

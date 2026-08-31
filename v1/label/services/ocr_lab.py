@@ -41,7 +41,8 @@ def _open_source(case):
 
 
 def measure_case(case, runs=1, model=None, prompt_version=None,
-                 use_crop=False, use_api=False, use_hints=True, use_boxes=False):
+                 use_crop=False, use_api=False, use_hints=True, use_boxes=False,
+                 layout='grid'):
     """
     정답지 한 장을 여러 번 읽어 채점한다.
 
@@ -76,7 +77,7 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
 
             out = extract_label_from_image(
                 source, model=model, prompt_version=prompt_version,
-                use_hints=use_hints, want_boxes=use_boxes)
+                use_hints=use_hints, want_boxes=use_boxes, layout=layout)
         except Exception as exc:
             logger.exception('정답지 판독 실패 (case=%s)', case.pk)
             errors.append(f'{i + 1}회 실패: {exc}')
@@ -182,7 +183,7 @@ def _api_field_gain(before, after):
 
 def run_benchmark(cases, runs=1, model=None, prompt_version=None,
                   use_crop=False, use_api=False, use_hints=True,
-                  use_boxes=False, user=None):
+                  use_boxes=False, layout='grid', user=None):
     """
     정답지 여러 장을 재고 결과를 OcrBenchmarkRun 으로 남긴다.
 
@@ -198,7 +199,7 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
         case_rows.append(measure_case(
             case, runs=runs, model=model, prompt_version=prompt_version,
             use_crop=use_crop, use_api=use_api, use_hints=use_hints,
-            use_boxes=use_boxes))
+            use_boxes=use_boxes, layout=layout))
 
     scored = [r for r in case_rows if r['runs']]
     mean = round(statistics.mean(r['mean'] for r in scored), 1) if scored else 0.0
@@ -213,6 +214,10 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
         'fields': _merge_field_rows(case_rows),
         'api_mean': _api_overall(case_rows),
         'box_mean': _box_overall(case_rows),
+        # 조각을 어느 방향으로 잘랐는가. 모델을 안 바꿔도 이것만으로 긴 항목의
+        # 점수가 크게 움직인다 - 남기지 않으면 어느 판이 어느 방식이었는지
+        # 나중에 알 수 없다.
+        'tiling': layout,
     }
 
     run = OcrBenchmarkRun.objects.create(

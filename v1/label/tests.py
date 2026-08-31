@@ -3448,3 +3448,198 @@ class RecyclingMarkFixTests(TestCase):
         apply_recycling_mark(label, '비닐(PP)', '비닐류 PP')
         label.refresh_from_db()
         self.assertEqual(label.prv_recycling_mark_text, '띠지 별도 배출')
+
+
+class TileLayoutTests(TestCase):
+    """
+    조각을 **어느 방향으로** 자르는가.
+
+    2x2 는 한가운데를 세로로 가른다. 그런데 표시사항 본문은 폭 전체를 쓰는
+    줄이라 모든 줄이 반토막 난다 — 모델이 좌우 조각을 이어 붙이다 실패하면
+    원재료명 같은 긴 목록이 중간부터 무너진다.
+
+    운영에서 그대로 재현됐다. 원재료 15개짜리 라벨에서 6개만 읽히고, 원산지가
+    없는 원료에 원산지가 붙고, 없는 원료("전분")가 생겼다. 같은 사진의
+    **원재료명 영역만 잘라 한 번에 읽히자 15개가 다 나왔다.**
+    """
+
+    def _image(self, width, height):
+        from io import BytesIO
+
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new('RGB', (width, height), 'white').save(buf, format='PNG')
+        buf.seek(0)
+        return buf
+
+    def test_가로_띠는_줄을_끊지_않는다(self):
+        from v1.label.services.ocr_service import build_image_regions
+
+        regions = build_image_regions(self._image(2000, 1500), layout='bands')
+        for region in regions[1:]:
+            left, _top, right, _bottom = region['box']
+            self.assertEqual((left, right), (0, 2000), '띠는 폭 전체여야 한다')
+
+    def test_2x2_는_줄을_끊는다(self):
+        """지금 방식이 무엇을 하는지 못 박아 둔다 — 견주려면 둘 다 있어야 한다."""
+        from v1.label.services.ocr_service import build_image_regions
+
+        regions = build_image_regions(self._image(2000, 1500), layout='grid')
+        widths = {(r['box'][0], r['box'][2]) for r in regions[1:]}
+        self.assertNotIn((0, 2000), widths)
+
+    def test_띠는_장수가_적다(self):
+        """이미지 장수가 줄면 호출 비용도 조금 내려간다."""
+        from v1.label.services.ocr_service import build_image_regions
+
+        grid = build_image_regions(self._image(2000, 1500), layout='grid')
+        bands = build_image_regions(self._image(2000, 1500), layout='bands')
+        self.assertEqual(len(grid), 5)
+        self.assertEqual(len(bands), 3)
+
+    def test_세로로_긴_라벨은_더_나눈다(self):
+        """띠가 가로로 길어야 2x2 와 같은 배율을 받는다."""
+        from v1.label.services.ocr_service import build_image_regions
+
+        bands = build_image_regions(self._image(1200, 3000), layout='bands')
+        self.assertEqual(len(bands), 4)      # 전체 + 띠 3
+
+    def test_띠끼리_겹친다(self):
+        """경계에 걸친 줄이 어느 쪽에서도 안 읽히면 안 된다."""
+        from v1.label.services.ocr_service import build_image_regions
+
+        bands = build_image_regions(self._image(2000, 1500), layout='bands')
+        first, second = bands[1]['box'], bands[2]['box']
+        self.assertGreater(first[3], second[1], '아래 띠가 위 띠와 겹쳐야 한다')
+
+    def test_작은_사진은_어느_방식이든_안_나눈다(self):
+        from v1.label.services.ocr_service import build_image_regions
+
+        for layout in ('grid', 'bands'):
+            self.assertEqual(
+                len(build_image_regions(self._image(900, 700), layout=layout)), 1)
+
+    def test_측정이_어느_방향으로_잘랐는지_남긴다(self):
+        """남기지 않으면 어느 결과가 어느 방식이었는지 나중에 알 수 없다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_lab.py'
+                  ).read_text(encoding='utf-8')
+        self.assertIn("'tiling': layout", source)
+
+    def test_조각을_이어_붙이라고_지시한다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
+                  ).read_text(encoding='utf-8')
+        self.assertIn('이어 붙이세요', source)
+        # 이을 수 없을 때 메우지 말라고까지 말해야 한다 - 끊긴 자리를 메우려다
+        # 없는 원료와 없는 원산지가 생겼다
+        self.assertIn('없는 원료나 없는 원산지', source)
+
+
+class RawmtrlSlashOriginTests(TestCase):
+    """
+    원산지를 괄호로만 쓰는 게 아니다. "소콜라겐/네덜란드산" 처럼 빗금으로
+    붙이는 라벨이 흔한데, 괄호만 보면 이름과 원산지가 한 덩어리로 묶여
+    등록 정보와 아무것도 맞출 수 없다.
+    """
+
+    def test_빗금_원산지를_가른다(self):
+        from v1.label.services.ocr_rawmtrl import split_token
+
+        self.assertEqual(split_token('돼지고기 95.36 %/국산'),
+                         ('돼지고기', '95.36 %', '/국산'))
+        self.assertEqual(split_token('소콜라겐/네덜란드산'),
+                         ('소콜라겐', '', '/네덜란드산'))
+
+    def test_괄호_표기도_그대로_된다(self):
+        from v1.label.services.ocr_rawmtrl import split_token
+
+        self.assertEqual(split_token('돼지고기 30%(국내산)'),
+                         ('돼지고기', '30%', '(국내산)'))
+
+    def test_빗금_라벨도_등록_정보와_맞춘다(self):
+        """예전에는 이름에 원산지가 붙어 있어 하나도 못 맞췄다."""
+        from v1.label.services.ocr_rawmtrl import align_with_api
+
+        api = '돼지고기,돼지지방,정제수,정제소금,설탕,소금,소콜라겐'
+        읽음 = ('돼지고기 95.36 %/국산,돼지지방/국산,정제수,정제소금/국산,'
+                '설탕,소금,소금라겐/네덜란드산')
+        out = align_with_api(읽음, api)
+        self.assertIsNotNone(out)
+        self.assertIn('소콜라겐/네덜란드산', out['text'])
+        self.assertEqual([r['to'] for r in out['renamed']], ['소콜라겐'])
+
+
+class TruncatedRawmtrlTests(TestCase):
+    """
+    등록 정보의 원재료를 사진에서 거의 못 찾으면 합치지 않는다. 그런데
+    **판독이 중간에서 끊겼을 때가 바로 그 경우**이고, 하필 그때가 등록 정보가
+    가장 필요한 순간이다. 값은 그대로 두되 끊긴 것 같다고 알린다.
+    """
+
+    API = ('돼지고기,돼지지방,정제수,정제소금,설탕,소금,소콜라겐,향신료조제품,'
+           '복합조미식품,혼합제제,기타가공품,L-아스코르빈산나트륨,코치닐추출색소,'
+           '아질산나트륨,기타가공품')
+
+    def _merge(self, 읽음):
+        from v1.label.services.ocr_reconcile import merge
+
+        return merge(
+            {'rawmtrl_nm': {'value': 읽음, 'confidence': 'high'}},
+            {'matched': True, 'report_no': '1', 'fields': {
+                'rawmtrl_nm': {'label': '원재료명', 'api_value': self.API,
+                               'ocr_value': 읽음, 'score': 39,
+                               'verdict': 'unsure'}}})['rawmtrl_nm']
+
+    def test_끊긴_목록을_짚는다(self):
+        읽음 = '돼지고기 95.36 %/국산,돼지복합육/국산,정제수/국산,설탕,소금/국산,전분'
+        item = self._merge(읽음)
+        self.assertEqual(item['value'], 읽음, '값은 건드리지 않는다')
+        self.assertEqual(item['confidence'], 'low')
+        self.assertIn('중간에서 끊겼을 수', item['warnings'][0])
+        self.assertIn(self.API, item['candidates'])
+
+    def test_다_읽었으면_짚지_않는다(self):
+        읽음 = ('돼지고기/국산,돼지지방/국산,정제수,정제소금/국산,설탕,소금,'
+                '소콜라겐/네덜란드산,향신료조제품,복합조미식품,혼합제제,기타가공품,'
+                'L-아스코르빈산나트륨,코치닐추출색소,아질산나트륨,기타가공품')
+        item = self._merge(읽음)
+        self.assertNotIn('warnings', item)
+
+
+class RecyclingMarkOrderTests(TestCase):
+    """
+    마크가 앞에 오는 라벨도 있고 뒤에 오는 라벨도 있다.
+    앞을 무조건 마크로 보면 "OTHER / 비닐류 PP" 가 비닐(기타)로 잡히고,
+    진짜 마크인 "비닐류 PP" 가 마크 옆에 인쇄할 문구로 밀려난다.
+    """
+
+    def test_마크가_뒤에_있어도_찾는다(self):
+        from v1.label.services.ocr_apply import map_recycling_mark
+
+        self.assertEqual(map_recycling_mark('OTHER / 비닐류 PP')[0], '비닐(PP)')
+
+    def test_마크가_앞에_있어도_찾는다(self):
+        from v1.label.services.ocr_apply import map_recycling_mark
+
+        self.assertEqual(
+            map_recycling_mark('비닐류 PP / 띠지:PP, 리드지:PET')[0], '비닐(PP)')
+
+    def test_구분이_없으면_앞을_마크로_본다(self):
+        from v1.label.services.ocr_apply import map_recycling_mark
+
+        self.assertEqual(map_recycling_mark('OTHER / 띠지:PP')[0], '기타플라스틱')
+
+    def test_마크로_쓴_도막은_옆_문구에서_뺀다(self):
+        from v1.label.services.ocr_apply import extra_mark_text, map_recycling_mark
+
+        for text in ('OTHER / 비닐류 PP', '비닐류 PP / 띠지:PP, 리드지:PET'):
+            mark, _ = map_recycling_mark(text)
+            self.assertNotIn('비닐류 PP', extra_mark_text(text, mark), text)

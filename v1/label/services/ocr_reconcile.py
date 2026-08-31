@@ -262,6 +262,45 @@ def reconcile(ocr_data):
     }
 
 
+def _flag_truncated_rawmtrl(data, row):
+    """
+    합치지 못했을 때 **왜 못 했는지**를 짚는다.
+
+    등록 정보의 원재료를 사진에서 거의 못 찾으면 합치지 않는다 — 그때 합치면
+    사진에 없는 원재료를 인쇄한다. 그런데 **판독이 중간에서 끊겼을 때가 바로
+    그 경우**이고, 하필 그때가 등록 정보가 가장 필요한 순간이다.
+
+    그래서 값은 그대로 두되, 등록 정보 쪽이 훨씬 길면 "끊긴 것 같다" 고 알리고
+    등록 정보를 후보로 올린다. 고를지는 확인 창에서 사람이 정한다.
+
+    실제로 원재료 15개짜리 라벨에서 6개만 읽힌 적이 있다. 그때 화면에는
+    "대조하면 +0점" 만 떴고, 무엇이 잘못됐는지는 아무 데도 안 적혔다.
+    """
+    try:
+        from v1.label.services.ocr_rawmtrl import split_top_level
+        ocr_count = len(split_top_level(row['ocr_value']))
+        api_count = len(split_top_level(row['api_value']))
+    except Exception:
+        logger.exception('원재료 개수를 세지 못했다')
+        return
+
+    if api_count < 2 or ocr_count >= api_count * 0.8:
+        return
+
+    item = dict(data.get('rawmtrl_nm') or {})
+    item['warnings'] = list(item.get('warnings') or []) + [
+        f'사진에서 읽은 원재료가 {ocr_count}개인데 등록 정보에는 {api_count}개입니다 — '
+        f'목록이 중간에서 끊겼을 수 있습니다. 원재료명 영역만 잘라 다시 읽어 보세요.'
+    ]
+    candidates = [c for c in (item.get('candidates') or []) if c]
+    for value in (row['ocr_value'], row['api_value']):
+        if value and value not in candidates:
+            candidates.append(value)
+    item['candidates'] = candidates
+    item['confidence'] = 'low'
+    data['rawmtrl_nm'] = item
+
+
 def merge(ocr_data, result=None):
     """
     대조 결과를 판독 결과에 반영한 **새 dict** 를 만든다.
@@ -342,7 +381,10 @@ def _align_rawmtrl(data, result):
         logger.exception('원재료명 순서 맞추기 실패')
         return
 
-    if not aligned or aligned['text'].strip() == ocr_value.strip():
+    if not aligned:
+        _flag_truncated_rawmtrl(data, row)
+        return
+    if aligned['text'].strip() == ocr_value.strip():
         return
 
     item = dict(data.get('rawmtrl_nm') or {})

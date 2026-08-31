@@ -197,7 +197,41 @@ TILE_MIN_SIDE = 1400     # 이보다 작으면 나눌 이유가 없다
 TILE_OVERLAP = 0.12      # 조각끼리 겹치는 비율
 
 
-def build_image_regions(image_file, max_size=2000):
+# 조각을 어느 방향으로 자를 것인가.
+#
+#   'grid'   2x2. 한가운데를 **세로로** 가른다. 오래 쓰던 방식이다.
+#   'bands'  가로 띠. 폭은 그대로 두고 **위아래로만** 가른다.
+#
+# 왜 방향이 문제인가. 표시사항 본문은 **폭 전체를 쓰는 줄**이다. 세로로 자르면
+# 모든 줄이 반토막 나서, 왼쪽 조각에 줄의 왼쪽 62%, 오른쪽 조각에 오른쪽 62%가
+# 들어간다. 모델이 그 둘을 이어 붙여야 하는데 원재료명처럼 여러 줄로 감기는
+# 긴 목록에서 그 봉합이 무너진다.
+#
+# 실제로 그렇게 무너졌다. 원재료 15개짜리 라벨에서 앞 몇 개는 맞고, 중간부터
+# 원산지가 엉뚱한 원료에 붙고, 없는 원료("전분")가 생기고, 7번째에서 멈췄다.
+# 같은 사진의 **원재료명 영역만 잘라 한 번에 읽히자 15개가 다 나왔다** —
+# 글자가 안 읽힌 게 아니라 봉합이 실패한 것이다.
+#
+# 해상도는 손해가 아니다. 띠의 높이를 2x2 의 행 높이와 같게 두면 짧은 변이
+# 같으므로 API 가 맞추는 배율도 같다. 오히려 이미지 장수가 5장에서 3장으로
+# 줄어 호출 비용이 조금 내려간다.
+TILE_LAYOUTS = ('grid', 'bands')
+MAX_BANDS = 4            # 띠가 늘수록 장수가 늘고 비용이 붙는다
+
+
+def _band_count(width, height):
+    """
+    띠를 몇 개로 나눌 것인가.
+
+    띠가 가로로 길어야(높이 <= 폭) 짧은 변이 높이가 되고, 그래야 2x2 와 같은
+    배율을 받는다. 세로로 긴 라벨은 그만큼 더 나눈다.
+    """
+    if width <= 0 or height <= 0:
+        return 2
+    return max(2, min(MAX_BANDS, -(-height // width)))
+
+
+def build_image_regions(image_file, max_size=2000, layout='grid'):
     """
     보낼 이미지와 **그 이미지가 원본의 어디인지**를 함께 만든다.
 
@@ -207,6 +241,9 @@ def build_image_regions(image_file, max_size=2000):
     조각을 우리가 잘랐으니 원본에서의 자리는 **확실하다.** 그래서 모델이
     "2번 조각의 여기" 라고만 답해도 원본 좌표로 되돌릴 수 있다. 위치 표시가
     이 값 위에 선다.
+
+    layout 은 조각을 자르는 방향이다 (TILE_LAYOUTS 참고). 'bands' 는 줄을
+    끊지 않는다 — 긴 원재료명처럼 여러 줄로 감기는 값에서 차이가 크다.
 
     Returns: [{'b64', 'box': (left, top, right, bottom), 'label'} ...]
              box 는 원본 픽셀. 첫 항목은 사진 전체다.
@@ -234,22 +271,35 @@ def build_image_regions(image_file, max_size=2000):
         return regions
 
     ox, oy = int(w * TILE_OVERLAP), int(h * TILE_OVERLAP)
-    halves = [
-        ('왼쪽 위',   (0, 0, w // 2 + ox, h // 2 + oy)),
-        ('오른쪽 위', (w // 2 - ox, 0, w, h // 2 + oy)),
-        ('왼쪽 아래', (0, h // 2 - oy, w // 2 + ox, h)),
-        ('오른쪽 아래', (w // 2 - ox, h // 2 - oy, w, h)),
-    ]
-    for label, box in halves:
+
+    if layout == 'bands':
+        # 폭은 그대로 두고 위아래로만 가른다. 줄이 끊기지 않는다.
+        count = _band_count(w, h)
+        step = h / count
+        pieces = []
+        for i in range(count):
+            top = max(0, int(i * step) - (oy if i else 0))
+            bottom = min(h, int((i + 1) * step) + (oy if i < count - 1 else 0))
+            pieces.append((f'가로 띠 {i + 1}/{count}', (0, top, w, bottom)))
+    else:
+        pieces = [
+            ('왼쪽 위',     (0, 0, w // 2 + ox, h // 2 + oy)),
+            ('오른쪽 위',   (w // 2 - ox, 0, w, h // 2 + oy)),
+            ('왼쪽 아래',   (0, h // 2 - oy, w // 2 + ox, h)),
+            ('오른쪽 아래', (w // 2 - ox, h // 2 - oy, w, h)),
+        ]
+
+    for label, box in pieces:
         tile = img.crop(box)
         tile.thumbnail((max_size, max_size), Image.LANCZOS)
         regions.append({'b64': encode(tile), 'box': box, 'label': f'조각 {label}'})
     return regions
 
 
-def build_image_payload(image_file, max_size=2000):
+def build_image_payload(image_file, max_size=2000, layout='grid'):
     """보낼 이미지 목록만. [전체, 조각1, 조각2, ...]"""
-    return [region['b64'] for region in build_image_regions(image_file, max_size)]
+    return [region['b64']
+            for region in build_image_regions(image_file, max_size, layout)]
 
 
 def learned_hints():
@@ -283,7 +333,7 @@ def active_prompt(version=None):
 
 
 def extract_label_from_image(image_file, model=None, prompt_version=None,
-                             use_hints=True, want_boxes=False):
+                             use_hints=True, want_boxes=False, layout='grid'):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
 
@@ -312,7 +362,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
     """
     try:
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        regions = build_image_regions(image_file)
+        regions = build_image_regions(image_file, layout=layout)
         images = [region['b64'] for region in regions]
 
         content = [
@@ -325,7 +375,12 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
             "text": (
                 f"이 식품 표시사항에서 정보를 추출해주세요. "
                 f"이미지 {len(images)}장은 같은 사진입니다 - 첫 장은 전체 배치이고 "
-                f"나머지는 글자를 읽기 위해 확대한 조각입니다. "
+                f"나머지는 글자를 읽기 위해 확대한 조각입니다"
+                f"({', '.join(r['label'] for r in regions[1:])}). "
+                f"한 줄이나 한 목록이 조각 경계에서 끊겼으면 이웃한 조각에서 "
+                f"그 나머지를 찾아 **이어 붙이세요.** 이을 수 없으면 지어내지 말고 "
+                f"거기서 끊고 confidence 를 low 로 두세요 - 특히 원재료명은 "
+                f"끊긴 자리를 메우려다 없는 원료나 없는 원산지를 만들기 쉽습니다. "
                 f"읽을 수 없는 항목은 지어내지 말고 none 으로 두세요."
                 if len(images) > 1 else
                 "이 식품 표시사항 이미지에서 정보를 추출해주세요. "

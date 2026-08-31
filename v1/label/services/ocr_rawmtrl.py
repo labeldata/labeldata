@@ -77,6 +77,8 @@ def _distance(a, b):
     except ImportError:
         return 0 if a == b else 99
     return Levenshtein.distance(a, b)
+
+
 # 등록 정보의 원재료 중 이만큼은 사진에서 찾아야 합친다. 그보다 적으면
 # 다른 제품이거나 판독이 무너진 것이다.
 ALIGN_MIN_COVERAGE = 0.6
@@ -146,18 +148,24 @@ def split_top_level(text):
 
 def split_token(token):
     """
-    원재료 하나를 (이름, 함량, 괄호부분) 으로 가른다.
+    원재료 하나를 (이름, 함량, 원산지·하위원료) 으로 가른다.
 
-        "돼지고기 30%(국내산)"  ->  ("돼지고기", "30%", "(국내산)")
-        "면류(밀가루(밀:미국산))" -> ("면류", "", "(밀가루(밀:미국산))")
+        "돼지고기 30%(국내산)"   ->  ("돼지고기", "30%", "(국내산)")
+        "면류(밀가루(밀:미국산))" ->  ("면류", "", "(밀가루(밀:미국산))")
+        "돼지고기 95.36 %/국산"  ->  ("돼지고기", "95.36 %", "/국산")
 
-    이름만 등록 정보와 견주고, 함량과 괄호부분은 사진에서 읽은 것을 그대로
+    **원산지를 괄호로만 쓰는 게 아니다.** "소콜라겐/네덜란드산" 처럼 빗금으로
+    붙이는 라벨이 흔하다. 괄호만 보면 이런 라벨에서 이름과 원산지가 한 덩어리로
+    묶여, 등록 정보(원산지가 없다)와 아무것도 맞출 수 없게 된다.
+
+    이름만 등록 정보와 견주고, 함량과 원산지는 사진에서 읽은 것을 그대로
     옮긴다 — 등록 정보에는 없는 정보다.
     """
     text = str(token or '').strip()
     head, extra = text, ''
     for index, char in enumerate(text):
-        if char in PAIRS:
+        # 빗금은 괄호와 같은 일을 한다 — 뒤쪽이 원산지다.
+        if char in PAIRS or char == '/':
             head, extra = text[:index].strip(), text[index:].strip()
             break
 
@@ -174,6 +182,7 @@ def join_token(name, amount, extra):
     if amount:
         parts += ' ' + amount
     if extra:
+        # 빗금 표기는 이름에 바로 붙는다("소콜라겐/네덜란드산"). 괄호도 마찬가지다.
         parts += extra
     return parts
 

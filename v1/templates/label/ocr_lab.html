@@ -462,6 +462,14 @@
           <dt>교정 이력 힌트</dt>
           <dd>끄면 <strong>프롬프트 자체의 힘만</strong> 잽니다. 힌트가 섞이면 무엇이
               점수를 올렸는지 가릴 수 없습니다</dd>
+          <dt>조각 자르는 방향</dt>
+          <dd>큰 사진은 조각으로 나눠 보냅니다. <strong>2×2</strong> 는 한가운데를
+              세로로 가르는 오래된 방식이라 <strong>폭 전체를 쓰는 줄이 반토막</strong>
+              납니다 — 모델이 좌우 조각을 이어 붙이다 실패하면 원재료명 같은 긴
+              목록이 중간부터 무너집니다(없는 원료가 생기고, 원산지가 엉뚱한
+              원료에 붙습니다). <strong>가로 띠</strong> 는 폭을 그대로 두고 위아래로만
+              갈라 <strong>줄을 끊지 않습니다.</strong> 해상도는 같고 이미지 장수가
+              줄어 비용도 조금 내려갑니다. <strong>같은 정답지로 둘을 견줘 보세요</strong></dd>
           <dt>읽은 위치도 재기</dt>
           <dd>판독에 <strong>좌표까지 물어보고</strong> ①에서 적어 둔 정답 위치와
               얼마나 겹치는지 잽니다. 정답 위치를 적어 둔 항목만 셉니다.
@@ -508,6 +516,13 @@
         <label>모델</label>
         <input type="text" id="runModel" class="form-control form-control-sm"
                style="width:170px;" placeholder="{{ current_model }}">
+      </div>
+      <div>
+        <label>조각 자르는 방향</label>
+        <select id="runLayout" class="form-select form-select-sm" style="width:150px;">
+          <option value="grid">2×2 (세로로 가름)</option>
+          <option value="bands">가로 띠 (줄을 안 끊음)</option>
+        </select>
       </div>
       <div>
         <label>회차</label>

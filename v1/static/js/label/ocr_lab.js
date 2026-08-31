@@ -481,7 +481,8 @@
       use_crop: document.getElementById('runCrop').checked,
       use_api: document.getElementById('runApi').checked,
       use_hints: document.getElementById('runHints').checked,
-      use_boxes: document.getElementById('runBoxes').checked
+      use_boxes: document.getElementById('runBoxes').checked,
+      layout: document.getElementById('runLayout').value
     })
       .then(function (body) {
         note('평균 ' + body.run.mean_score + '점입니다.', 'ok');
@@ -554,7 +555,9 @@
       + '  <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">'
       + '    <div><strong>평균 ' + run.mean_score + '점</strong>'
       + '      <span class="text-muted" style="font-size:12px;"> · ' + esc(run.prompt)
-      + '      · ' + esc(run.model) + ' · ' + esc(run.variant) + ' · ' + run.runs + '회</span></div>'
+      + '      · ' + esc(run.model) + ' · ' + esc(run.variant)
+      + '      · ' + (run.tiling === 'bands' ? '가로 띠' : '2×2')
+      + ' · ' + run.runs + '회</span></div>'
       + '    <button type="button" class="btn btn-outline-primary v2-btn-sm run-suggest" data-run="' + run.id + '">'
       + '      <i class="bi bi-magic"></i>이 결과로 프롬프트 초안 만들기</button>'
       + '  </div>'
