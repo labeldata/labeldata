@@ -56,3 +56,43 @@ class VinylOtherMarkTests(TestCase):
         from v1.label.services.validation_service import check_recycling_mark
 
         self.assertTrue(check_recycling_mark(self._label('종이', '비닐(기타)')))
+
+
+class ImportedReportNoTests(TestCase):
+    """
+    수입식품에는 품목제조보고번호가 없다.
+
+    체크박스 기본값이 'Y' 라, 수입 제품을 등록하면 곧바로 "품목보고번호가
+    비어 있습니다" 가 떴다. 고칠 방법이 없는 지적이라 검증 결과 전체를
+    믿지 않게 된다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='imported', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='시험',
+                                      chckd_prdlst_report_no='Y', **kwargs)
+
+    def _messages(self, label):
+        from v1.label.services.validation_service import check_required_fields
+
+        return ' '.join(i['message'] for i in check_required_fields(label))
+
+    def test_수입원을_적었으면_품목보고번호를_묻지_않는다(self):
+        label = self._label(importer_address='서울시 ○○구 수입식품㈜')
+        self.assertNotIn('품목보고번호', self._messages(label))
+
+    def test_수입원_표시를_켰으면_묻지_않는다(self):
+        label = self._label(chckd_importer_address='Y')
+        self.assertNotIn('품목보고번호', self._messages(label))
+
+    def test_국내_제조는_그대로_묻는다(self):
+        label = self._label(bssh_nm='경기도 ○○시 ○○식품')
+        self.assertIn('품목보고번호', self._messages(label))
+
+    def test_is_imported_판정(self):
+        from v1.label.services.validation_service import is_imported
+
+        self.assertTrue(is_imported(self._label(importer_address='수입원')))
+        self.assertFalse(is_imported(self._label()))

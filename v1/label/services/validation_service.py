@@ -217,11 +217,27 @@ def _has_nutrition_display(label) -> bool:
                for f in _NUTRITION_VALUE_FIELDS)
 
 
+def is_imported(label) -> bool:
+    """
+    수입식품인가.
+
+    수입원(수입원 소재지)을 적었거나 표시 항목으로 켰으면 수입식품으로 본다.
+    수입식품은 「수입식품안전관리 특별법」의 수입신고 대상이라 국내 제조업체가
+    받는 **품목제조보고번호가 아예 없다.** 원산지만으로는 가릴 수 없다 —
+    원산지 칸에는 원재료 원산지를 적는 제품도 많다.
+    """
+    if (getattr(label, 'importer_address', '') or '').strip():
+        return True
+    return (getattr(label, 'chckd_importer_address', '') or '') == 'Y'
+
+
 def is_required(label, field: str) -> bool:
     """
     체크가 켜져 있어도 그 항목을 "비었다" 고 지적해도 되는가.
 
-    내용량(열량)만 예외다. 열량 병기는 **영양성분 표시 대상 식품**의 의무이지
+    예외가 둘이다 — 내용량(열량)과 품목보고번호.
+
+    열량 병기는 **영양성분 표시 대상 식품**의 의무이지
     모든 제품의 의무가 아니다. 게다가 이 항목은 어느 화면에도 입력칸이 없고
     (내용량에 함께 적는 값이라 뺐다) 표시 항목 목록에도 없어서 끌 수도 없다.
     영양표시가 없는 제품에까지 지적하면 **고칠 방법이 없는 경고**가 된다 —
@@ -229,9 +245,16 @@ def is_required(label, field: str) -> bool:
 
     그래서 영양성분을 표시하는 제품일 때만 본다. 그때는 값이 있으므로
     "내용량에 이렇게 적으세요" 라고 계산까지 해서 알려 줄 수 있다.
+
+    품목보고번호는 **수입식품이면 보지 않는다.** 수입식품에는 품목제조보고번호가
+    없어서(수입신고번호를 대신 적는다) 비어 있는 게 정상인데, 체크박스 기본값이
+    'Y' 라 수입 제품을 등록하면 곧바로 "비어 있습니다" 가 떴다. 고칠 수 없는
+    지적이라 사용자는 검증 결과 전체를 믿지 않게 된다.
     """
     if field == 'weight_calorie':
         return _has_nutrition_display(label)
+    if field == 'prdlst_report_no':
+        return not is_imported(label)
     return True
 
 
