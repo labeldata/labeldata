@@ -246,7 +246,8 @@ const fieldMappings = {
   distributor_address_arr: ['input[name="distributor_address"]'],
   repacker_address_arr: ['input[name="repacker_address"]'],
   importer_address_arr: ['input[name="importer_address"]'],
-  pog_daycnt_arr: ['input[name="pog_daycnt"]', 'select[name="date_option_display"]'],
+  // 날짜 칸은 textarea 다 — 여러 줄(소비기한 + 제조연월일)을 담기 때문에
+  pog_daycnt_arr: ['[name="pog_daycnt"]', 'select[name="date_option_display"]'],
   rawmtrl_nm_display_arr: ['textarea[name="rawmtrl_nm_display"]'],
   rawmtrl_nm_arr: ['textarea[name="rawmtrl_nm"]'],
   cautions_arr: ['textarea[name="cautions"]'],

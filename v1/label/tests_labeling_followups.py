@@ -261,3 +261,40 @@ class OcrRegionRoleTests(TestCase):
         keys = set(re.findall(r"\{ key: '([a-z]+)'", js))
         self.assertTrue(keys)
         self.assertTrue(keys <= set(REGION_ROLES), keys - set(REGION_ROLES))
+
+
+class MultiDateFieldTests(TestCase):
+    """
+    소비기한·제조연월일을 한 칸에 여러 줄로 담는다 (DB 칸은 하나 그대로).
+
+    합치고 가르는 규약은 date_entries.js 한 곳에 있고, 입력 화면과 미리보기가
+    그것을 함께 쓴다. 두 벌로 두면 한쪽만 고쳐질 수 있다.
+    """
+
+    def _read(self, rel):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+    def test_규약이_한_곳에_있다(self):
+        js = self._read('static/js/label/date_entries.js')
+        self.assertIn('window.DateEntries', js)
+        self.assertIn('function serialize', js)
+        self.assertIn('제조연월일', js)
+
+    def test_미리보기가_그_규약으로_읽는다(self):
+        js = self._read('static/js/label/label_preview.js')
+        self.assertIn('window.DateEntries.parse(value, data.date_option)', js)
+
+    def test_입력_화면이_같은_규약을_쓴다(self):
+        js = self._read('static/js/products/date_fields.js')
+        self.assertIn('window.DateEntries.serialize', js)
+        # 저장·사진판독이 이 id 로 값을 읽고 쓴다
+        self.assertIn("field-pog-daycnt", js)
+
+    def test_옛_화면의_날짜_칸이_줄바꿈을_잃지_않는다(self):
+        """text 입력칸은 브라우저가 줄바꿈을 지운다."""
+        html = self._read('templates/label/label_creation.html')
+        self.assertIn('<textarea name="pog_daycnt"', html)

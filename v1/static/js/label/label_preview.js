@@ -4500,7 +4500,26 @@ function renderVerticalLayout(tbody, data, fieldMap) {
         if (fieldKey === 'country_of_origin' && typeof window.boldCountryNames === 'function') {
             value = window.boldCountryNames(value, window.countryList || []);
         }
-        
+
+        // 날짜 항목: 한 칸에 줄로 쌓인 값을 줄마다 한 행으로 편다.
+        // ("제조연월일: 별도 표기" + "소비기한: 제조일로부터 12개월")
+        // DB 칸은 하나지만 인쇄물에는 두 줄로 나와야 한다.
+        if (fieldKey === 'pog_daycnt' && window.DateEntries) {
+            window.DateEntries.parse(value, data.date_option).forEach(entry => {
+                const dtr = document.createElement('tr');
+                const dth = document.createElement('th');
+                const dtd = document.createElement('td');
+                dth.textContent = entry.type;
+                dtd.style.wordWrap = 'break-word';
+                dtd.style.overflowWrap = 'break-word';
+                dtd.textContent = entry.value;
+                dtr.appendChild(dth);
+                dtr.appendChild(dtd);
+                tbody.appendChild(dtr);
+            });
+            return;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <th>${field.label}</th>
@@ -4577,6 +4596,20 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
             }
         }
         
+        // 날짜 항목은 줄 수만큼 별개 항목이 된다. 가로 레이아웃은 항목을 둘씩
+        // 짝지어 한 행으로 만들므로, 여기서 늘려 두면 그 규칙이 그대로 적용된다.
+        if (fieldKey === 'pog_daycnt' && window.DateEntries) {
+            window.DateEntries.parse(value, data.date_option).forEach(entry => {
+                visibleItems.push({
+                    key: fieldKey,
+                    label: entry.type,
+                    value: entry.value,
+                    width: width
+                });
+            });
+            return;
+        }
+
         visibleItems.push({
             key: fieldKey,
             label: field.label,

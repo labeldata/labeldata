@@ -15,6 +15,7 @@
   <link href="{% static 'css/label_preview.css' %}?v={{ STATIC_BUILD_DATE }}" rel="stylesheet">
   <!-- 라벨 상수 로드 -->
   <script src="{% static 'js/label/constants.js' %}"></script>
+  <script src="{% static 'js/label/date_entries.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 </head>
 <body{% if request.GET.readonly %} class="readonly-mode"{% endif %}>
   <header class="preview-page-header">
@@ -889,16 +890,23 @@
                     } else if (key === 'country_of_origin'){
                          td.innerHTML = boldCountryNames(convertCountryCodeToKorean(value), countryList);
                     } else if (key === 'pog_daycnt') {
-                        // 소비기한 필드: 선택된 항목명과 입력값을 간단하게 표시
-                        const dateOption = data.date_option || '소비기한';
-                        const dateValue = value || '';
-                        
-                        // 테이블 헤더는 선택된 옵션으로, 내용은 입력값만 표시
-                        th.textContent = dateOption;  // 항목명을 테이블 헤더로
-                        td.innerHTML = dateValue || '';
-                        tr.appendChild(th);
-                        tr.appendChild(td);
-                        tbody.appendChild(tr);
+                        // 날짜 항목: 한 칸에 여러 줄로 담긴 값을 줄마다 한 행으로 편다
+                        // ("제조연월일: 별도 표기" + "소비기한: 제조일로부터 12개월").
+                        // 줄머리가 없는 옛 값은 소비기한 한 건으로 읽힌다.
+                        const entries = (window.DateEntries
+                            ? window.DateEntries.parse(value, data.date_option)
+                            : [{ type: data.date_option || '소비기한', value: value || '' }]);
+                        if (entries.length && !entries[0].value) entries.length = 0;
+                        entries.forEach((entry, idx) => {
+                            const row  = idx === 0 ? tr : document.createElement('tr');
+                            const head = idx === 0 ? th : document.createElement('th');
+                            const cell = idx === 0 ? td : document.createElement('td');
+                            head.textContent = entry.type;
+                            cell.textContent = entry.value;
+                            row.appendChild(head);
+                            row.appendChild(cell);
+                            tbody.appendChild(row);
+                        });
                         return; // 기본 처리 로직을 건너뛰기 위해 return
                     } else {
                         td.innerHTML = value;

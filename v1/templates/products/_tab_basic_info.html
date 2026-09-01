@@ -363,26 +363,30 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                     </div>
                 </div>
             </div>
-            <!-- 소비기한: 유형 선택 + 텍스트 -->
+            {% comment %}
+              날짜 표시 — 소비기한·제조연월일을 여러 건 등록한다.
+
+              "제조연월일: 별도 표기" 와 "소비기한: 제조일로부터 12개월" 을 함께
+              인쇄하는 제품이 흔한데, DB 에는 이 값을 담을 칸이 pog_daycnt 하나뿐이다.
+              칸을 늘리는 대신 **한 칸에 줄로 쌓는다** — 한 줄이 항목 하나이고 줄머리의
+              "유형:" 이 그 줄의 항목명이다. 저장·불러오기는 date_entries.js 가 맡고,
+              이 화면은 줄을 늘렸다 줄였다 하는 자리만 준다.
+
+              hidden 칸의 id 는 그대로 둔다 — 저장(product_detail.html 의 textFieldMap)과
+              사진 판독(basic_info_ocr.js)이 이 id 로 값을 넣고 읽는다.
+            {% endcomment %}
             <div class="col-12">
-                <label class="form-label v2-field-label">소비기한 유형</label>
-                <div class="d-flex gap-2">
-                    <select id="field-date-option" name="date_option_display"
-                            class="form-select bg-light border-0 v2-field-input"
-                            style="width:160px; flex-shrink:0;"
-                            onchange="document.querySelector('label[for=field-pog-daycnt]').textContent = this.options[this.selectedIndex].text;">
-                        <option value="소비기한" {% if not product.date_option_display or product.date_option_display == '소비기한' %}selected{% endif %}>소비기한</option>
-                        <option value="품질유지기한" {% if product.date_option_display == '품질유지기한' %}selected{% endif %}>품질유지기한</option>
-                        <option value="제조연월일" {% if product.date_option_display == '제조연월일' %}selected{% endif %}>제조연월일</option>
-                        <option value="생산연도" {% if product.date_option_display == '생산연도' %}selected{% endif %}>생산연도</option>
-                    </select>
-                    <input type="text" id="field-pog-daycnt" name="pog_daycnt"
-                           class="form-control bg-light border-0 v2-field-input"
-                           value="{{ product.pog_daycnt|default:'' }}"
-                           placeholder="소비기한 등을 입력하세요"
-                           style="flex:1;">
+                <label class="form-label v2-field-label">날짜 표시</label>
+                <div id="date-entry-rows" class="d-flex flex-column gap-2"></div>
+                <button type="button" class="btn btn-outline-secondary v2-btn-sm mt-2" id="date-entry-add">
+                    <i class="bi bi-plus-lg me-1"></i>항목 추가
+                </button>
+                <input type="hidden" id="field-pog-daycnt" name="pog_daycnt"
+                       value="{{ product.pog_daycnt|default:'' }}">
+                <div class="form-text">
+                    유통기한이 아닌 소비기한을 기준으로 작성하세요.
+                    제조연월일·품질유지기한을 함께 표시해야 하면 항목을 추가하세요.
                 </div>
-                <div class="form-text">유통기한이 아닌 소비기한을 기준으로 작성하세요</div>
             </div>
         </div>
     </div>
