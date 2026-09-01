@@ -2692,6 +2692,11 @@ def save_preview_settings(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
+# 한 번에 받을 표시면 개수 상한. 화면(photo_cropper.js)이 그보다 많이 고르게
+# 두지는 않지만, 요청은 화면을 거치지 않고도 올 수 있다.
+OCR_MAX_REGIONS = 6
+
+
 @require_POST
 @login_required
 def ocr_extract(request):
@@ -2703,33 +2708,60 @@ def ocr_extract(request):
     "오류가 발생했습니다" 밖에 못 보여 준다. 무엇이 잘못됐는지 사용자도 우리도
     알 수 없게 된다.
     """
-    image_file = request.FILES.get('image')
-    if not image_file:
+    # 표시면마다 하나씩 잘라 보낼 수 있다 (주표시면·일괄표시면·영양성분표…).
+    # role 은 image 와 같은 순서로 들어온다. 예전처럼 한 장만 오면 그대로 동작한다.
+    image_files = request.FILES.getlist('image')
+    roles = request.POST.getlist('role')
+    if not image_files:
         return JsonResponse({'success': False, 'error': '이미지 파일이 없습니다.'}, status=400)
-
-    if image_file.size > 10 * 1024 * 1024:
+    if len(image_files) > OCR_MAX_REGIONS:
         return JsonResponse({
             'success': False,
-            'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {image_file.size / 1024 / 1024:.1f}MB).',
+            'error': f'한 번에 보낼 수 있는 영역은 {OCR_MAX_REGIONS}개까지입니다.',
         }, status=400)
 
-    # content_type 이 없는 업로드가 있다 (일부 브라우저·자동화 도구).
-    # 예전에는 여기서 AttributeError 로 500 이 났다.
-    content_type = (getattr(image_file, 'content_type', '') or '').lower()
-    name = (getattr(image_file, 'name', '') or '').lower()
-    looks_like_image = content_type.startswith('image/') or name.endswith(
-        ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'))
-    if not looks_like_image:
+    total_size = sum(f.size for f in image_files)
+    if total_size > 20 * 1024 * 1024:
         return JsonResponse({
             'success': False,
-            'error': f'이미지 파일만 업로드 가능합니다 (받은 형식: {content_type or "알 수 없음"}).',
+            'error': f'사진 용량 합계는 20MB 이하여야 합니다 (현재 {total_size / 1024 / 1024:.1f}MB).',
         }, status=400)
 
-    from .services.ocr_service import extract_label_from_image
+    name = ''
+    for image_file in image_files:
+        if image_file.size > 10 * 1024 * 1024:
+            return JsonResponse({
+                'success': False,
+                'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {image_file.size / 1024 / 1024:.1f}MB).',
+            }, status=400)
+
+        # content_type 이 없는 업로드가 있다 (일부 브라우저·자동화 도구).
+        # 예전에는 여기서 AttributeError 로 500 이 났다.
+        content_type = (getattr(image_file, 'content_type', '') or '').lower()
+        name = (getattr(image_file, 'name', '') or '').lower()
+        looks_like_image = content_type.startswith('image/') or name.endswith(
+            ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'))
+        if not looks_like_image:
+            return JsonResponse({
+                'success': False,
+                'error': f'이미지 파일만 업로드 가능합니다 (받은 형식: {content_type or "알 수 없음"}).',
+            }, status=400)
+
+    # role 이 비었거나 모자라면 '구분 없음' 으로 채운다 — 옛 화면에서 오는 요청이다
+    roles = (roles + ['whole'] * len(image_files))[:len(image_files)]
+    parts = list(zip(image_files, roles))
+
+    from .services.ocr_service import extract_label_from_image, extract_label_from_parts
     try:
-        result = extract_label_from_image(image_file)
+        # 영역을 하나만, 그것도 구분 없이 보냈으면 예전 경로 그대로 간다.
+        # 그동안 그 경로로 맞춰 온 판독 품질을 건드릴 이유가 없다.
+        if len(parts) == 1 and parts[0][1] in ('whole', ''):
+            result = extract_label_from_image(image_files[0])
+        else:
+            result = extract_label_from_parts(parts)
     except Exception as exc:
-        logger.exception('OCR 처리 중 예외 (user=%s, file=%s)', request.user, name)
+        logger.exception('OCR 처리 중 예외 (user=%s, file=%s, 영역=%s)',
+                         request.user, name, len(parts))
         return JsonResponse({
             'success': False,
             'error': f'사진 처리 중 오류가 발생했습니다: {exc}',

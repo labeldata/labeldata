@@ -1166,7 +1166,30 @@ class PhotoCropperWiringTests(TestCase):
         self.assertIn("typeof window.cropPhoto !== 'function'", self.modal)
 
     def test_취소하면_아무것도_하지_않는다(self):
-        self.assertIn('if (!picked) return;', self.modal)
+        self.assertIn('if (!parts || !parts.length) return;', self.modal)
+
+    def test_표시면마다_영역을_고를_수_있다(self):
+        """
+        포장 사진에는 주표시면과 일괄표시면이 따로 떨어져 있다. 하나로 다
+        담으려면 사이의 빈 곳까지 들어와 해상도가 다시 낮아지고, 어느 값이
+        어느 면에서 나온 것인지도 알 수 없다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.assertIn('var ROLES', self.cropper)
+        self.assertIn('주표시면', self.cropper)
+        self.assertIn('일괄표시면', self.cropper)
+        # 고를 때 그 면에서 무엇을 읽는지 알려 준다
+        self.assertIn('crop-pick-hint', self.cropper)
+        # 여러 장을 표시면 이름과 짝지어 보낸다
+        ocr = (Path(dj.BASE_DIR) / 'static/js/products/basic_info_ocr.js'
+               ).read_text(encoding='utf-8')
+        self.assertIn("form.append('role'", ocr)
+
+    def test_영역마다_따로_잘라낸다(self):
+        self.assertIn('picks.map(cutOut)', self.cropper)
 
     def test_스크립트가_실린다(self):
         self.assertIn('photo_cropper.js', self.detail)

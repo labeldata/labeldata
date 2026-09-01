@@ -846,11 +846,22 @@
   // 불러오기 모달이 결과를 기다렸다가 창을 닫을 수 있도록 약속을 돌려준다.
   // 예전에는 파일을 고르는 즉시 모달이 닫혀서, 읽는 동안 화면에 아무 표시가
   // 없었다 - 사용자는 눌린 건지 아닌지 알 수 없었다.
-  function extract(file) {
+  // parts — [{file, role}, ...]. 표시면(주표시면·일괄표시면·영양성분표…)마다
+  // 하나씩 잘라 보낸다. 면 이름을 함께 보내야 서버가 "이 조각에서는 이 항목을
+  // 찾아라" 라고 지시할 수 있다. 파일 하나만 받던 예전 호출도 그대로 받는다.
+  function extract(parts, sourceFile) {
+    if (!Array.isArray(parts)) parts = [{ file: parts, role: 'whole' }];
     var btn = document.getElementById('basicInfoOcrBtn');
     var form = new FormData();
-    form.append('image', file);
+    parts.forEach(function (p) {
+      form.append('image', p.file);
+      form.append('role', p.role || 'other');
+    });
     form.append('csrfmiddlewaretoken', csrfToken());
+
+    // 확인 창에 나란히 띄우는 사진. 영역을 여럿 골랐으면 **원본**을 보여 준다 —
+    // 조각 하나만 띄우면 다른 면에서 읽어 온 값을 눈으로 대조할 수가 없다.
+    var file = (parts.length > 1 && sourceFile) ? sourceFile : parts[0].file;
 
     if (btn) btn.disabled = true;
     status('사진을 읽는 중입니다...');

@@ -261,31 +261,36 @@
     //
     // 자르기 창을 취소하면 아무 일도 하지 않는다(불러오기 창은 그대로 둔다).
     if (typeof window.cropPhoto !== 'function') {
-      startRead(side, file, modalEl);
+      startRead(side, [{ file: file, role: 'whole' }], modalEl, file);
       return;
     }
-    window.cropPhoto(file).then(function (picked) {
-      if (!picked) return;
+    window.cropPhoto(file).then(function (parts) {
+      if (!parts || !parts.length) return;
       // 영역을 골랐는지 전체를 썼는지 남긴다. 교정 이력에 함께 저장돼야
       // "영역을 고르는 게 나은가" 를 나중에 숫자로 답할 수 있다.
-      window.__ocrVariant = (picked !== file) ? 'crop' : 'whole';
-      startRead(side, picked, modalEl);
+      var cropped = parts.some(function (p) { return p.role !== 'whole'; });
+      window.__ocrVariant = cropped ? ('crop' + (parts.length > 1 ? parts.length : '')) : 'whole';
+      startRead(side, parts, modalEl, file);
     }).catch(function (err) {
       console.error(err);
       note((err && err.message) || '사진을 열지 못했습니다.', 'error');
     });
   }
 
-  function startRead(side, file, modalEl) {
+  // parts — [{file, role}, ...]. 표시면마다 하나씩이라 여러 장일 수 있다.
+  // sourceFile 은 자르기 전 원본. 확인 창에서 값을 대조할 때 쓴다.
+  function startRead(side, parts, modalEl, sourceFile) {
     setBusy(modalEl, side === 'product'
       ? '표시사항을 읽는 중입니다…'
       : '사진을 문서함에 저장하고 읽는 중입니다…');
 
     // 결과 확인 창은 각 처리기가 띄운다. 다 읽고 나서 이 창을 닫아야 두 창이
     // 겹치지 않는다.
+    // 원료 등록은 문서함에 사진 한 장을 남기는 흐름이라 여러 장을 받지 않는다.
+    // 여러 영역을 골랐으면 첫 영역만 쓴다.
     var run = (side === 'product')
-      ? window.basicInfoOcrExtract(file)
-      : window.ingredientPhotoUpload(file);
+      ? window.basicInfoOcrExtract(parts, sourceFile)
+      : window.ingredientPhotoUpload(parts[0].file);
 
     Promise.resolve(run)
       .then(function () {

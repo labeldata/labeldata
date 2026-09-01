@@ -424,6 +424,163 @@ def active_prompt(version=None):
         return SYSTEM_PROMPT
 
 
+# ── 표시면별로 잘라 보내기 ────────────────────────────────────────────────
+#
+# 사진 하나에 영역 하나로는 부족했다. 포장 사진에는 주표시면과 일괄표시면이
+# 따로 떨어져 있어서, 둘을 다 담으려면 사이의 빈 곳까지 넣어야 하고 그만큼
+# 해상도가 다시 낮아진다. 게다가 어느 값이 어느 면에서 나온 것인지도 알 수 없다.
+#
+# 그래서 화면(photo_cropper.js)에서 면마다 하나씩 고르게 하고, 그 면이 무엇인지
+# 이름을 붙여 보낸다. 이름이 붙으면 **그 조각에서 무엇을 찾을지 짚어 줄 수 있다.**
+# key 는 photo_cropper.js 의 ROLES 와 같아야 한다 — 화면에서 고른 이름과 모델이
+# 받는 지시가 어긋나면 사용자가 본 설명과 실제 판독이 달라진다.
+REGION_ROLES = {
+    'main':      ('주표시면',      '제품명, 내용량, 내용량(열량), 특정성분 함량'),
+    'info':      ('일괄표시면',    '식품유형, 품목보고번호, 원재료명, 제조원·수입원, '
+                                   '소비기한, 보관방법, 포장재질'),
+    'rawmtrl':   ('원재료명 영역', '원재료명 및 함량, 알레르기 표시'),
+    'nutrition': ('영양성분표',    '열량, 나트륨, 탄수화물, 당류, 지방, 트랜스지방, '
+                                   '포화지방, 콜레스테롤, 단백질'),
+    'recycle':   ('분리배출마크',  '분리배출 표시(재질 구분)'),
+    'other':     ('표시사항 일부', ''),
+    'whole':     ('사진 전체',     ''),
+}
+
+# 한 번에 보낼 이미지 장수 상한. 장수가 곧 비용이고, 너무 많으면 모델이
+# 어느 장을 보고 있는지도 흐려진다.
+MAX_REGION_IMAGES = 8
+
+# 조각으로 더 나눌 만한 면. 원재료명처럼 여러 줄로 감기는 긴 목록이 있는
+# 쪽만 나눈다 — 제품명 몇 줄뿐인 주표시면을 나누면 장수만 늘고 얻는 게 없다.
+_DENSE_ROLES = ('info', 'rawmtrl', 'other', 'whole')
+
+
+def build_multi_regions(parts, max_size=2000, layout='grid'):
+    """
+    표시면별 이미지 목록을 모델에 보낼 순서대로 만든다.
+
+    parts: [(file, role), ...] — role 은 REGION_ROLES 의 key.
+
+    영역이 하나뿐이면 예전과 똑같이 (전체 + 조각) 을 만든다. 그동안 그 경로로
+    맞춰 온 판독 품질을 건드리지 않기 위해서다.
+
+    여럿이면 면마다 그 면 하나를 통째로 넣고, 글자가 빽빽한 면(일괄표시면·
+    원재료명)만 추가로 띠를 나눈다. 이미 사람이 면 단위로 잘라 준 뒤라
+    2x2 조각까지 붙일 이유가 없다 — 장수만 늘고 어느 장이 무엇인지 흐려진다.
+
+    Returns: [{'b64', 'box', 'label'} ...] — build_image_regions 와 같은 모양.
+    """
+    if len(parts) == 1:
+        image_file, role = parts[0]
+        title = REGION_ROLES.get(role, REGION_ROLES['other'])[0]
+        regions = build_image_regions(image_file, max_size, layout)
+        # 면 이름을 앞에 붙여 준다 — 지시문이 그 이름으로 조각을 가리킨다
+        for region in regions:
+            region['role'] = role
+            region['label'] = f'{title} {region["label"]}'
+        return regions[:MAX_REGION_IMAGES]
+
+    fulls, tiles = [], []
+    for image_file, role in parts:
+        title = REGION_ROLES.get(role, REGION_ROLES['other'])[0]
+        # 글자가 빽빽한 면은 가로 띠로 나눈다. 표시사항 본문은 폭 전체를 쓰는
+        # 줄이라, 세로로 가르면 모든 줄이 반토막 나 봉합이 무너진다.
+        regions = build_image_regions(
+            image_file, max_size, 'bands' if role in _DENSE_ROLES else 'grid')
+        head, rest = regions[0], regions[1:]
+        head['role'] = role
+        head['label'] = title
+        fulls.append(head)
+        if role not in _DENSE_ROLES:
+            continue
+        for region in rest:
+            region['role'] = role
+            region['label'] = f'{title} {region["label"]}'
+            tiles.append(region)
+
+    room = max(0, MAX_REGION_IMAGES - len(fulls))
+    return fulls + tiles[:room]
+
+
+def region_instructions(regions):
+    """
+    "몇 번째 장이 무엇이고 거기서 뭘 찾아야 하는지" 를 적은 지시문.
+
+    조각을 우리가 잘랐으니 순서도 우리가 안다. 모델에게 장 번호로 말해 주면
+    "어느 사진 얘기냐" 로 흔들리지 않는다.
+    """
+    lines = []
+    for i, region in enumerate(regions, start=1):
+        role = region.get('role') or 'other'
+        _, wants = REGION_ROLES.get(role, REGION_ROLES['other'])
+        line = f'{i}) {region["label"]}'
+        if wants and not region['label'].startswith(REGION_ROLES.get(role, ("",))[0] + ' 조각'):
+            line += f' — 여기서 찾을 항목: {wants}'
+        lines.append(line)
+    return '\n'.join(lines)
+
+
+def extract_label_from_parts(parts, model=None, prompt_version=None,
+                             use_hints=True, layout='grid', read_freetext=None):
+    """
+    표시면별로 잘라 온 사진들에서 한 번에 필드를 뽑는다.
+
+    parts: [(file, role), ...]
+
+    여러 장을 **한 번의 호출로** 보낸다. 면마다 따로 부르면 같은 항목을 두 면이
+    서로 다르게 답할 때 어느 쪽을 믿을지 정할 근거가 없고, 값을 합치는 규칙을
+    우리가 또 만들어야 한다. 한 번에 보여 주면 모델이 그 자리에서 맞춘다.
+    """
+    if not parts:
+        return {"success": False, "error": "이미지가 없습니다."}
+    try:
+        client = OpenAI(api_key=settings.OPENAI_API_KEY,
+                        max_retries=getattr(settings, 'OCR_MAX_RETRIES', 5))
+        regions = build_multi_regions(parts, layout=layout)
+
+        content = [
+            {"type": "image_url",
+             "image_url": {"url": f"data:image/jpeg;base64,{r['b64']}", "detail": "high"}}
+            for r in regions
+        ]
+        content.append({
+            "type": "text",
+            "text": (
+                f"이 식품 표시사항에서 정보를 추출해주세요.\n"
+                f"이미지 {len(regions)}장은 **같은 제품**의 서로 다른 부분입니다.\n"
+                f"{region_instructions(regions)}\n"
+                f"각 장에 적힌 것만 읽으세요. 어느 장에도 없는 항목은 지어내지 말고 "
+                f"none 으로 두세요. 한 줄이나 한 목록이 조각 경계에서 끊겼으면 "
+                f"이웃한 조각에서 그 나머지를 찾아 **이어 붙이세요.** 이을 수 없으면 "
+                f"거기서 끊고 confidence 를 low 로 두세요 - 특히 원재료명은 끊긴 자리를 "
+                f"메우려다 없는 원료나 없는 원산지를 만들기 쉽습니다."
+            ),
+        })
+
+        system = active_prompt(prompt_version)
+        if use_hints:
+            system += learned_hints()
+
+        response = client.chat.completions.create(
+            model=model or getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": content},
+            ],
+            max_tokens=4000,
+            response_format={"type": "json_object"}
+        )
+
+        result = json.loads(response.choices[0].message.content)
+        result = drop_freetext(strip_design_suffix(result), read_freetext)
+        return {"success": True, "data": result,
+                "regions": [r['label'] for r in regions]}
+
+    except Exception as e:
+        logger.exception("OCR 처리 실패 (표시면 %s장)", len(parts))
+        return {"success": False, "error": str(e)}
+
+
 def extract_label_from_image(image_file, model=None, prompt_version=None,
                              use_hints=True, want_boxes=False, layout='grid',
                              read_freetext=None):
