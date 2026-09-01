@@ -96,3 +96,77 @@ class ImportedReportNoTests(TestCase):
 
         self.assertTrue(is_imported(self._label(importer_address='수입원')))
         self.assertFalse(is_imported(self._label()))
+
+
+class FarmSeafoodEvidenceTests(TestCase):
+    """
+    제품명에 쓴 원재료의 함량 검증.
+
+    보는 곳이 셋이다 — 특정성분 함량(의무 표시 자리), 원재료명 및 함량,
+    BOM 배합비. 예전에는 첫 번째만 봐서 "원재료명에는 적어 뒀는데 왜 지적하지?"
+    와 "둘 다 적었는데 숫자가 다르다" 를 둘 다 놓쳤다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='farmsea', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='시험', **kwargs)
+
+    def _issues(self, label):
+        from v1.label.services.validation_service import check_farm_seafood_content
+
+        return check_farm_seafood_content(label)
+
+    def test_특정성분_함량에_적었으면_통과한다(self):
+        label = self._label(prdlst_nm='토마토 케첩', ingredient_info='토마토 30%')
+        self.assertEqual(self._issues(label), [])
+
+    def test_원재료명에만_적혀_있으면_그_값을_짚어_준다(self):
+        label = self._label(prdlst_nm='토마토 케첩',
+                            rawmtrl_nm_display='토마토(국산) 30%, 설탕, 소금')
+        issues = self._issues(label)
+        self.assertEqual(len(issues), 1)
+        self.assertIn('30', issues[0]['message'])
+        self.assertIn('원재료명', issues[0]['message'])
+
+    def test_두_곳의_합이_다르면_지적한다(self):
+        label = self._label(prdlst_nm='토마토 케첩',
+                            ingredient_info='토마토 30%',
+                            rawmtrl_nm_display='토마토(국산) 20%, 설탕')
+        issues = self._issues(label)
+        self.assertEqual(len(issues), 1)
+        self.assertIn('서로 다릅니다', issues[0]['message'])
+
+    def test_원재료명에_나뉘어_적혀_있으면_합으로_본다(self):
+        label = self._label(prdlst_nm='토마토 케첩',
+                            ingredient_info='토마토 30%',
+                            rawmtrl_nm_display='토마토(국산) 20%, 토마토페이스트 10%')
+        self.assertEqual(self._issues(label), [])
+
+    def test_괄호_안의_쉼표는_조각을_가르지_않는다(self):
+        """"토마토(국산, 30%)" 가 두 조각이 되면 함량이 원료에서 떨어져 나간다."""
+        label = self._label(prdlst_nm='토마토 케첩',
+                            ingredient_info='토마토(국산, 30%)')
+        self.assertEqual(self._issues(label), [])
+
+    def test_지적에는_각_칸의_모양이_함께_실린다(self):
+        label = self._label(prdlst_nm='토마토 케첩',
+                            rawmtrl_nm_display='토마토(국산) 30%')
+        evidence = self._issues(label)[0]['evidence']
+        fields = [row['field'] for row in evidence]
+        self.assertEqual(fields, ['특정성분 함량', '원재료명 및 함량', 'BOM 배합비'])
+        self.assertFalse(evidence[0]['found'])
+        self.assertTrue(evidence[1]['found'])
+        self.assertEqual(evidence[1]['percent'], '30%')
+
+    def test_검증_화면_행에_근거가_실려_나간다(self):
+        from v1.label.services.ai_validation_service import group_issues_by_category
+        from v1.label.services.validation_service import validate_label
+
+        label = self._label(prdlst_nm='토마토 케첩',
+                            rawmtrl_nm_display='토마토(국산) 30%')
+        rows = group_issues_by_category(validate_label(label)['issues'])
+        farm = [r for r in rows if r['label'] == '농수산물 함량 표시'][0]
+        self.assertTrue(farm['evidence'])
+        self.assertTrue(farm['evidence'][0]['rows'])

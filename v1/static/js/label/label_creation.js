@@ -1025,6 +1025,33 @@ document.addEventListener('DOMContentLoaded', function () {
     runValidation(false, 'ruleValidationBtn', '검증 중...');
   };
 
+
+  // 근거 표 — 그 지적이 어느 칸의 어떤 값에서 나왔는지를 그대로 보여 준다.
+  // 제품명 함량 지적이 특히 그렇다. "특정성분 함량에 없다" 는 말만으로는
+  // 원재료명에 적어 둔 값이 왜 안 쳐주는지 알 수 없어, 사용자가 세 칸을
+  // 번갈아 열어 보며 대조해야 했다.
+  function evidenceHtml(evidence) {
+    if (!evidence || !evidence.length) return '';
+    return evidence.map(function (block) {
+      var rows = (block.rows || []).map(function (r) {
+        var value = r.found
+          ? escapeHtml(r.text)
+          : '<span class="text-muted">적혀 있지 않음</span>';
+        return '<tr>'
+          + '<td class="text-nowrap text-muted" style="width:34%;">' + escapeHtml(r.field) + '</td>'
+          + '<td>' + value + '</td>'
+          + '<td class="text-nowrap text-end" style="width:18%;">'
+          + (r.percent ? '<strong>' + escapeHtml(r.percent) + '</strong>' : '-')
+          + '</td></tr>';
+      }).join('');
+      return '<div class="mt-2">'
+        + (block.title ? '<div class="text-muted" style="font-size:0.8rem;">'
+                         + escapeHtml(block.title) + '</div>' : '')
+        + '<table class="table table-sm table-borderless mb-0" style="font-size:0.82rem;">'
+        + '<tbody>' + rows + '</tbody></table></div>';
+    }).join('');
+  }
+
   function showAiValidationModal(result, useAi) {
     const existingModal = document.getElementById('aiValidationModal');
     if (existingModal) {
@@ -1056,6 +1083,7 @@ document.addEventListener('DOMContentLoaded', function () {
         msg += '<strong style="color:#0066cc;">💡 제안:</strong><br>' +
           row.suggestions.map(s => s.includes('<strong>') ? s : `<strong>${s}</strong>`).join('<br>');
       }
+      msg += evidenceHtml(row.evidence);
       rowsHtml += `<td>${msg}</td>`;
       rowsHtml += '</tr>';
     }

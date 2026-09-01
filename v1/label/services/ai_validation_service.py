@@ -459,19 +459,27 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
     views.py의 "AI 없이 검증" 버튼(규칙 기반만 실행)에서도 재사용해
     두 검증 경로가 화면에 같은 모양으로 보이게 한다.
     """
+    def blank(label):
+        # evidence — 그 지적의 근거가 각 칸에 어떻게 적혀 있는지. 화면이 표로 그린다.
+        # 메시지에 다 담으면 문장이 길어지고, 무엇이 어느 칸의 값인지 흐려진다.
+        return {'label': label, 'ok': True, 'errors': [], 'suggestions': [], 'evidence': []}
+
     grouped: dict[str, dict] = {}
     for code, label in _CATEGORY_LABELS.items():
-        grouped[code] = {'label': label, 'ok': True, 'errors': [], 'suggestions': []}
+        grouped[code] = blank(label)
 
     for issue in issues:
         code = issue.get('category', 'other')
         label = _CATEGORY_LABELS.get(code, code)
-        row = grouped.setdefault(code, {'label': label, 'ok': True, 'errors': [], 'suggestions': []})
+        row = grouped.setdefault(code, blank(label))
         row['ok'] = False
         if issue.get('message'):
             row['errors'].append(issue['message'])
         if issue.get('suggestion'):
             row['suggestions'].append(issue['suggestion'])
+        if issue.get('evidence'):
+            row['evidence'].append({'title': issue.get('evidence_title', ''),
+                                    'rows': issue['evidence']})
 
     # 검증하지 않은 항목(예: 원재료 순서 - percent 정보 부족)은 목록에서 제외해
     # "적합"으로 오인되지 않게 한다. 호출부에서 checked 플래그로 별도 안내.

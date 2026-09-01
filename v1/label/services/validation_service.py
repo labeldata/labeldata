@@ -496,26 +496,169 @@ def check_content_weight(label) -> list[dict]:
     )]
 
 
-def check_farm_seafood_content(label) -> list[dict]:
-    """제품명에 포함된 농수산물의 함량이 특정성분 함량 항목에 표시돼 있는지 확인."""
-    product_name = label.prdlst_nm or ''
-    ingredient_info = label.ingredient_info or ''
-    if not product_name:
-        return []
+# 함량 표기를 찾는 자. "20%", "20 %", "20.5%" 를 모두 받는다.
+_PERCENT_RE = re.compile(r'(\d+(?:\.\d+)?)\s*%')
 
-    found_items = sorted(
+# 원재료명 문구를 조각으로 가를 때 무시할 괄호. 괄호 안의 쉼표까지 가르면
+# "새우(베트남산, 30%)" 가 두 조각이 되어 함량이 원료에서 떨어져 나간다.
+_BRACKET_OPEN = '([{（［〔'
+_BRACKET_CLOSE = ')]}）］〕'
+
+
+def _split_top_level(text: str) -> list[str]:
+    """쉼표로 가르되, 괄호 안의 쉼표는 건드리지 않는다."""
+    depth = 0
+    buf: list[str] = []
+    out: list[str] = []
+    for ch in text or '':
+        if ch in _BRACKET_OPEN:
+            depth += 1
+        elif ch in _BRACKET_CLOSE:
+            depth = max(0, depth - 1)
+        if ch == ',' and depth == 0:
+            out.append(''.join(buf))
+            buf = []
+            continue
+        buf.append(ch)
+    out.append(''.join(buf))
+    return [seg.strip() for seg in out if seg.strip()]
+
+
+def _content_hits(text: str, item: str) -> list[dict]:
+    """
+    문구에서 그 원료가 적힌 조각과 거기 붙은 함량(%)을 모은다.
+
+    조각 안에서 **원료 이름 뒤에 오는** 첫 % 를 그 원료의 함량으로 본다.
+    앞에 있는 % 는 다른 원료의 것이다.
+    """
+    hits = []
+    for seg in _split_top_level(text):
+        pos = seg.find(item)
+        if pos < 0:
+            continue
+        m = _PERCENT_RE.search(seg, pos)
+        hits.append({'text': seg, 'percent': float(m.group(1)) if m else None})
+    return hits
+
+
+def _bom_hits(label, item: str) -> list[dict]:
+    """BOM 에 등록된 배합비 중 그 원료에 해당하는 것."""
+    try:
+        relations = label.ingredient_relations.select_related('ingredient')
+        rows = [(rel.ingredient.prdlst_nm, rel.ingredient_ratio)
+                for rel in relations if rel.ingredient.prdlst_nm]
+    except Exception:
+        return []
+    hits = []
+    for name, ratio in rows:
+        if item not in name:
+            continue
+        value = None
+        if ratio is not None:
+            try:
+                value = float(ratio)
+            except (TypeError, ValueError):
+                value = None
+        hits.append({'text': f'{name}{f" {value:g}%" if value is not None else ""}',
+                     'percent': value})
+    return hits
+
+
+def _hit_sum(hits: list[dict]) -> float | None:
+    """조각들의 함량 합. 하나도 못 읽었으면 None (0 과 구분해야 한다)."""
+    values = [h['percent'] for h in hits if h['percent'] is not None]
+    return sum(values) if values else None
+
+
+def _evidence_row(field_label: str, hits: list[dict]) -> dict:
+    """검증 화면에 그대로 그릴 한 줄."""
+    total = _hit_sum(hits)
+    return {
+        'field': field_label,
+        'found': bool(hits),
+        'text': ' / '.join(h['text'] for h in hits) if hits else '',
+        'percent': f'{total:g}%' if total is not None else '',
+    }
+
+
+def _named_items(product_name: str) -> list[str]:
+    """
+    제품명에 쓰인 농수산물. 긴 이름부터 본다.
+
+    한 글자짜리 품목명이 긴 이름 안에 들어가 있는 경우를 걸러 낸다 —
+    목록에 "마"(마과 뿌리)가 있어서 "토마토 케첩"이 **토마토와 마 두 건**으로
+    잡혔다. 제품명에 "마" 가 들어간 이름은 흔해서(고구마·마늘·토마토) 이
+    한 글자가 사실상 모든 제품에 지적을 하나씩 붙이고 있었다.
+    """
+    found = sorted(
         (item for item in _get_farm_seafood_items() if item in product_name),
         key=len, reverse=True,
     )
+    return [item for item in found
+            if not any(item != other and item in other for other in found)]
+
+
+def check_farm_seafood_content(label) -> list[dict]:
+    """
+    제품명에 쓴 농수산물의 함량이 표시돼 있는지 확인한다.
+
+    보는 곳이 셋이다. **특정성분 함량**(의무 표시 자리), **원재료명 및 함량**,
+    **BOM 배합비**. 예전에는 첫 번째만 봤는데, 그래서 "원재료명에는 적어 뒀는데
+    왜 지적하지?" 와 "둘 다 적었는데 숫자가 다르다" 를 둘 다 놓쳤다.
+
+    지적할 때는 세 자리에 각각 무엇이 적혀 있는지를 함께 실어 보낸다
+    (`issue['evidence']`). 어느 칸이 비었는지, 숫자가 어디서 어긋났는지를
+    화면에서 바로 볼 수 있어야 사용자가 자기 입력을 다시 뒤지지 않는다.
+    """
+    product_name = label.prdlst_nm or ''
+    if not product_name:
+        return []
+
+    ingredient_info = label.ingredient_info or ''
+    rawmtrl_text = label.rawmtrl_nm_display or label.rawmtrl_nm or ''
+
+    found_items = _named_items(product_name)
     issues = []
     for item in found_items:
-        pattern = re.compile(re.escape(item) + r'[^,]*\d+(?:\.\d+)?\s*%')
-        if not pattern.search(ingredient_info):
-            issues.append(_issue(
+        info_hits = _content_hits(ingredient_info, item)
+        raw_hits = _content_hits(rawmtrl_text, item)
+        bom_hits = _bom_hits(label, item)
+        evidence = [
+            _evidence_row('특정성분 함량', info_hits),
+            _evidence_row('원재료명 및 함량', raw_hits),
+            _evidence_row('BOM 배합비', bom_hits),
+        ]
+        info_sum = _hit_sum(info_hits)
+        raw_sum = _hit_sum(raw_hits)
+
+        if info_sum is None:
+            if raw_sum is not None:
+                message = (f"제품명에 사용된 '{item}'의 함량이 '특정성분 함량' 항목에 "
+                           f"없습니다. 원재료명에는 {raw_sum:g}% 로 적혀 있습니다.")
+                suggestion = (f'특정성분 함량 항목에 "{item} {raw_sum:g}%" 를 적으세요. '
+                              f'제품명에 쓴 원재료의 함량은 주표시면에도 표시해야 합니다.')
+            else:
+                message = (f"제품명에 사용된 '{item}'의 함량이 '특정성분 함량' 항목에서 "
+                           f"확인되지 않습니다.")
+                suggestion = f'특정성분 함량 항목에 함량(%)을 표시하세요. (예: {item} 100%)'
+            issue = _issue('farm_seafood', message, suggestion)
+            issue['evidence'] = evidence
+            issue['evidence_title'] = f"'{item}' 함량이 각 칸에 적힌 모양"
+            issues.append(issue)
+            continue
+
+        # 두 곳 다 적혀 있으면 숫자가 같아야 한다. 소수점 반올림 차이는 넘긴다.
+        if raw_sum is not None and abs(info_sum - raw_sum) > 0.05:
+            issue = _issue(
                 'farm_seafood',
-                f"제품명에 사용된 '{item}'의 함량이 '특정성분 함량' 항목에서 확인되지 않습니다.",
-                f'특정성분 함량 항목에 함량(%)을 표시하세요. (예: {item} 100%)',
-            ))
+                f"'{item}'의 함량이 서로 다릅니다 — 특정성분 함량 {info_sum:g}%, "
+                f"원재료명 {raw_sum:g}%.",
+                '두 곳의 함량은 같아야 합니다. 어느 쪽이 맞는지 확인해 고치세요. '
+                '원재료명에 같은 원료가 여러 줄로 나뉘어 있으면 그 합과 견줍니다.',
+            )
+            issue['evidence'] = evidence
+            issue['evidence_title'] = f"'{item}' 함량이 각 칸에 적힌 모양"
+            issues.append(issue)
     return issues
 
 

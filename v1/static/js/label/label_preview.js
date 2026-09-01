@@ -3105,6 +3105,36 @@ async function runValidation(useAi, btnId, loadingText) {
     }
 }
 
+
+// 근거 표 — 그 지적이 어느 칸의 어떤 값에서 나왔는지를 그대로 보여 준다.
+// 제품명 함량 지적이 특히 그렇다. "특정성분 함량에 없다" 는 말만으로는
+// 원재료명에 적어 둔 값이 왜 안 쳐주는지 알 수 없어, 사용자가 세 칸을
+// 번갈아 열어 보며 대조해야 했다.
+function validationEvidenceHtml(evidence) {
+    if (!evidence || !evidence.length) return '';
+    const esc = (str) => String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return evidence.map(function (block) {
+        const rows = (block.rows || []).map(function (r) {
+            const value = r.found
+                ? esc(r.text)
+                : '<span class="text-muted">적혀 있지 않음</span>';
+            return '<tr>'
+                + '<td class="text-nowrap text-muted" style="width:34%;">' + esc(r.field) + '</td>'
+                + '<td>' + value + '</td>'
+                + '<td class="text-nowrap text-end" style="width:18%;">'
+                + (r.percent ? '<strong>' + esc(r.percent) + '</strong>' : '-')
+                + '</td></tr>';
+        }).join('');
+        return '<div class="mt-2">'
+            + (block.title ? '<div class="text-muted" style="font-size:0.8rem;">'
+                             + esc(block.title) + '</div>' : '')
+            + '<table class="table table-sm table-borderless mb-0" style="font-size:0.82rem;">'
+            + '<tbody>' + rows + '</tbody></table></div>';
+    }).join('');
+}
+
 function showAiValidationModal(result, useAi) {
     // 기존 실행 함수가 남긴 모달이 있으면 정리
     const legacy = document.getElementById('validationModal');
@@ -3138,6 +3168,7 @@ function showAiValidationModal(result, useAi) {
             msg += '<strong style="color:#0066cc;">💡 제안:</strong><br>' +
                 row.suggestions.map(s => s.includes('<strong>') ? s : `<strong>${s}</strong>`).join('<br>');
         }
+        msg += validationEvidenceHtml(row.evidence);
         rowsHtml += `<td>${msg}</td>`;
         rowsHtml += '</tr>';
     }
