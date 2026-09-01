@@ -1286,3 +1286,46 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   border-radius: 10px; padding: 1px 7px; white-space: nowrap;
 }
 .rs-filter-reset:hover { background: #1558b0; color: #fff; text-decoration: none; }
+
+/* ================================================================
+   내 알림 / 일반 알림 가르기
+   ----------------------------------------------------------------
+   내 부적합 알림이 많으면 목록 위쪽을 통째로 차지해서 일반 알림에
+   닿을 수가 없었다. 위쪽 칩으로 범위를 고르고, 기본 화면에서는
+   내 알림을 다섯 건만 고정해 보여 준다.
+   ================================================================ */
+.rs-scope-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg-page);
+}
+.rs-scope-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--c-border); background: #fff;
+  font-size: 12px; font-weight: 600; color: var(--c-text-muted);
+  text-decoration: none; white-space: nowrap;
+}
+.rs-scope-chip:hover     { border-color: #aecbfa; color: #1a56db; }
+.rs-scope-chip--on       { border-color: #1a56db; background: #e8f0fe; color: #1a56db; }
+.rs-scope-n {
+  font-size: 11px; font-weight: 700; color: var(--c-text-hint);
+  background: var(--c-bg-page); border-radius: 999px; padding: 0 5px;
+}
+.rs-scope-chip--on .rs-scope-n { background: #fff; color: #1a56db; }
+/* 수거검사 탭에는 '내 알림/일반' 구분이 없다 */
+#regPage.reg-page--insp .rs-scope-bar { display: none !important; }
+
+/* 고정 블록 머리 */
+.rs-pin-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; background: #f8faff;
+  border-top: 1px solid var(--c-border); border-bottom: 1px solid #dbe6ff;
+  font-size: 11px;
+}
+.rs-pin-head-title  { font-weight: 700; color: #1a56db; display: inline-flex; align-items: center; gap: 4px; }
+.rs-pin-head-count  { color: var(--c-text-hint); }
+.rs-pin-head-more   { margin-left: auto; color: #1a56db; font-weight: 600; text-decoration: none;
+                      display: inline-flex; align-items: center; gap: 2px; }
+.rs-pin-head-more:hover { text-decoration: underline; }
+#regSidebar[data-view="insp"] .rs-pin-head { display: none !important; }

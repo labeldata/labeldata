@@ -52,6 +52,22 @@ API_CATEGORIES = [
 _ALL_CAT_KEYS     = [c['key'] for c in API_CATEGORIES]
 _REGULAR_CAT_KEYS = [c['key'] for c in API_CATEGORIES if c['group'] != 'insp46']
 
+# 기본 화면에서 목록 위에 고정해 보여 줄 '내 알림' 건수.
+# 다섯 건이면 "새로 온 것이 있나" 를 확인하기에 충분하고, 목록의 나머지는
+# 일반 알림에 남는다.
+PINNED_MATCH_LIMIT = 5
+
+
+def _scope_qs(request, scope):
+    """내 알림 / 일반 알림 / 전체 를 오가는 주소."""
+    params = request.GET.copy()
+    params.pop('page', None)
+    params.pop('scope', None)
+    if scope:
+        params['scope'] = scope
+    return params.urlencode()
+
+
 def _toggle_condition_qs(request, conditions, key, value):
     """
     조건 하나(key=value)를 켜고 끄는 주소를 만든다 — '미조치만 보기' 같은 단축 버튼용.
@@ -134,6 +150,10 @@ def news_list(request):
     date_from = request.GET.get('date_from', '').strip()  # YYYY-MM-DD
     date_to   = request.GET.get('date_to',   '').strip()  # YYYY-MM-DD
     tab       = request.GET.get('tab', '')    # 'insp-news' | 'admin' | 'insp' | ''
+    # 내 알림 / 일반 알림 가르기. '' = 기본(내 알림 몇 건만 고정 + 일반 알림 목록)
+    scope     = request.GET.get('scope', '')
+    if scope not in ('mine', 'others'):
+        scope = ''
     insp_status = request.GET.get('insp_status', '')  # '' (전체) | 'pending' | 'done'
     if insp_status not in ('pending', 'done'):
         insp_status = ''
@@ -334,6 +354,29 @@ def news_list(request):
         qs = qs.exclude(api_source__in=_ADMIN_SOURCES)
     # tab == 'insp': 수거검사 탭은 qs 미사용 — 제한 불필요
 
+    # ── 내 알림 / 일반 알림 가르기 ───────────────────────────────────────────
+    # 매칭된 건을 전부 위로 고정하면, 매칭이 수십 건인 사용자에게는 목록 앞
+    # 몇 페이지가 통째로 내 알림이 된다. 일반 알림을 보려면 몇 페이지를 넘겨야
+    # 하는지 알 방법이 없다 — 개발자도 못 찾았다는 신고가 여기서 나왔다.
+    #
+    # 그래서 기본 화면에서는 내 알림을 **위에 다섯 건만** 고정하고, 목록 본문은
+    # 일반 알림으로 둔다. 내 알림 전체는 'scope=mine' 으로 따로 본다.
+    # 정렬·페이지네이션이 어긋나지 않도록 서버에서 가른다.
+    mine_total = qs.filter(id__in=matched_ids).count() if matched_ids else 0
+    scope_all_total = qs.count()
+    other_total = scope_all_total - mine_total
+
+    pinned_news = []
+    if scope == 'mine':
+        qs = qs.filter(id__in=matched_ids) if matched_ids else qs.none()
+    elif matched_ids:
+        if scope == '' and mine_total > PINNED_MATCH_LIMIT:
+            # 다섯 건 이하면 굳이 가르지 않는다 — 목록이 두 덩이로 쪼개지기만 한다
+            pinned_news = list(qs.filter(id__in=matched_ids)[:PINNED_MATCH_LIMIT])
+            qs = qs.exclude(id__in=matched_ids)
+        elif scope == 'others':
+            qs = qs.exclude(id__in=matched_ids)
+
     # 페이지네이션
     page_num = request.GET.get('page', 1)
     per_page = news_search.safe_per_page(request.GET.get('per_page'))
@@ -358,11 +401,17 @@ def news_list(request):
     page_query_string = qp.urlencode()
     current_tab = tab  # 상단에서 이미 읽은 값 재사용
 
+    # 고정 블록은 첫 페이지에만 둔다. 뒤 페이지마다 같은 다섯 건이 다시 나오면
+    # 스크롤한 만큼 나아가지 않는 것처럼 보인다.
+    if page_obj.number != 1:
+        pinned_news = []
+
     # 페이지에 실제로 보이는 행에만 매칭 정보를 붙인다 (보통 50건)
     selectors.attach_match_info(page_obj.object_list, match_ctx)
+    selectors.attach_match_info(pinned_news, match_ctx)
 
     # saol_admin 지자체명 추출 (목록 패널 표시용)
-    for news_item in page_obj.object_list:
+    for news_item in list(page_obj.object_list) + pinned_news:
         if news_item.api_source == 'saol_admin' and news_item.raw_detail_text:
             first_part = news_item.raw_detail_text.split(' | ')[0]
             news_item.saol_location = first_part.split(': ', 1)[1].strip() if ': ' in first_part else first_part.strip()
@@ -631,6 +680,15 @@ def news_list(request):
         'saol_cats':          saol_cats,
         'no_action_count':    no_action_count,
         'no_action_on':       no_action_on,
+        # ── 내 알림 / 일반 알림 가르기 ──────────────────────────────────
+        'scope':              scope,
+        'pinned_news':        pinned_news,
+        'mine_total':         mine_total,
+        'other_total':        other_total,
+        'scope_all_total':    scope_all_total,
+        'scope_qs_all':       _scope_qs(request, ''),
+        'scope_qs_mine':      _scope_qs(request, 'mine'),
+        'scope_qs_others':    _scope_qs(request, 'others'),
         # 알림 기준 요약에 "언제까지 모은 자료인지" 를 함께 보여준다
         'last_collected':     RegulatoryNews.objects.aggregate(m=Max('collected_date'))['m'],
         'no_action_qs':       no_action_qs,
