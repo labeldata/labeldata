@@ -478,29 +478,55 @@ def hybrid_enabled(use_hybrid=None) -> bool:
     return bool(getattr(settings, 'OCR_HYBRID', False))
 
 
-def source_text(image_bytes_list, use_ground=None, use_hybrid=None) -> str:
+def source_sections(items, use_ground=None, use_hybrid=None) -> list[dict]:
     """
-    사진들의 글자 원문. 대조에도 주입에도 **이 한 번을 나눠 쓴다.**
+    사진들의 글자 원문을 **어느 표시면에서 나왔는지와 함께** 받는다.
 
-    따로 부르면 판독 한 번에 Vision 을 두 번 호출하게 된다 - 비용이 두 배가
-    되고, 두 원문이 미묘하게 달라 "대조는 통과했는데 주입된 원문에는 없다"
-    같은 일이 생긴다.
+    items: [(image_bytes, role)] - role 은 REGION_ROLES 의 key 또는 None.
 
-    표시면이 여러 장이면 면마다 받아 이어 붙인다. 면을 나눠 다루면 안 된다 -
-    어느 면에 적혀 있든 "사진에 있었다" 는 같은데, 면별로 보면 제 면이 아닌
-    값이 전부 지어냄으로 잡힌다.
+    대조에도 주입에도 **이 한 번을 나눠 쓴다.** 따로 부르면 판독 한 번에
+    Vision 을 두 번 호출하게 되고, 두 원문이 미묘하게 달라 "대조는 통과했는데
+    주입된 원문에는 없다" 같은 일이 생긴다.
+
+    **면 이름을 버리지 않는다.** 사용자가 화면에서 주표시면·일괄표시면·
+    영양성분표를 하나씩 골라 준다. 그 이름이 곧 "이 글자 안에 무엇이 있는가"
+    이고, 그것이 원문에서 가장 아쉬운 것을 메운다 - 원문은 줄을 늘어놓을 뿐
+    구조가 없어서, 영양성분표의 머리글인지 옆 칸 글자인지 알 수가 없다.
+    실제로 nutrition_basis 가 100 -> 37 로 무너진 것이 그 때문이었다.
+
+    이어 붙여 버리면 그 정보가 사라진다. 면마다 따로 들고 있다가 이름표를
+    붙여 보낸다.
     """
     if not (ground_enabled(use_ground) or hybrid_enabled(use_hybrid)):
-        return ''
+        return []
     try:
         from v1.label.services.ocr_text import extract_text
 
-        texts = [t for t in (extract_text(raw) for raw in image_bytes_list if raw) if t]
-        return '\n'.join(texts)
+        sections = []
+        for image_bytes, role in items:
+            if not image_bytes:
+                continue
+            text = extract_text(image_bytes)
+            if not text:
+                continue
+            title, wants = REGION_ROLES.get(role or 'whole', REGION_ROLES['other'])
+            sections.append({'role': role, 'title': title, 'wants': wants,
+                             'text': text})
+        return sections
     except Exception:
         # 원문은 곁들이는 것이다. 실패해도 판독은 지금처럼 돌아야 한다.
         logger.exception('사진 원문을 받지 못했다 - 원문 없이 판독한다')
-        return ''
+        return []
+
+
+def sections_text(sections) -> str:
+    """
+    대조에 쓸 원문 전체.
+
+    대조는 면을 가리지 않는다 - **어느 면에 적혀 있든 "사진에 있었다" 는
+    같다.** 면별로 따로 대조하면 제 면이 아닌 값이 전부 지어냄으로 잡힌다.
+    """
+    return '\n'.join(s['text'] for s in (sections or []))
 
 
 # 프롬프트에 싣는 원문의 상한.
@@ -553,16 +579,45 @@ _HYBRID_INSTRUCTION = (
     "- 원문은 줄 순서가 뒤섞여 있을 수 있습니다. 어느 글자가 어느 항목인지는 "
     "사진의 배치를 보고 정하세요.\n"
     "- 원문에 없는 항목은 지어내지 말고 none 으로 두세요.\n"
-    "- 원문이 잘못 읽힌 것 같으면(뜻이 통하지 않으면) 사진을 믿고 고쳐 적으세요.\n\n"
+    "- 원문이 잘못 읽힌 것 같으면(뜻이 통하지 않으면) 사진을 믿고 고쳐 적으세요.\n"
+    "\n"
+    "원문이 **표시면별로 나뉘어** 있으면 각 토막 앞에 그 면의 이름과 거기 있는 "
+    "항목이 적혀 있습니다. **그 항목은 그 토막에서 찾으세요.** 영양성분표의 "
+    "기준 표기는 영양성분표 토막에, 알레르기 표시는 원재료명 토막에 있습니다 - "
+    "다른 토막의 비슷한 글자를 끌어오지 마세요.\n\n"
     "--- 사진에서 읽은 글자 ---\n"
 )
 
 
-def hybrid_text_block(text: str) -> dict | None:
-    """원문을 프롬프트에 실을 형태로. 원문이 없으면 None."""
-    if not text:
+def hybrid_text_block(sections) -> dict | None:
+    """
+    원문을 프롬프트에 실을 형태로. 원문이 없으면 None.
+
+    **면마다 이름표를 붙인다.** 사용자가 주표시면·일괄표시면·영양성분표를
+    골라 줬으면, 그 이름과 "그 면에서 찾을 항목" 을 원문 토막 앞에 적는다.
+
+    원문의 가장 큰 약점이 구조가 없다는 것이다 - 줄을 늘어놓을 뿐이라 어느
+    글자가 영양성분표의 머리글이고 어느 것이 옆 칸인지 알 수 없다. 면 이름이
+    그 자리를 메운다. 사람이 이미 손으로 잘라 준 정보를 버릴 이유가 없다.
+    """
+    if not sections:
         return None
-    return {"type": "text", "text": _HYBRID_INSTRUCTION + text[:OCR_TEXT_MAX_CHARS]}
+
+    budget = OCR_TEXT_MAX_CHARS
+    parts = []
+    for index, section in enumerate(sections, start=1):
+        if budget <= 0:
+            break
+        head = f'[{index}) {section["title"]}'
+        if section.get('wants'):
+            head += f' — 이 면에 있는 항목: {section["wants"]}'
+        head += ']'
+        body = section['text'][:budget]
+        budget -= len(body)
+        parts.append(f'{head}\n{body}')
+
+    return {"type": "text",
+            "text": _HYBRID_INSTRUCTION + '\n\n'.join(parts)}
 
 
 def _repaired(data, text, use_hybrid=None):
@@ -822,14 +877,17 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
                         max_retries=getattr(settings, 'OCR_MAX_RETRIES', 5))
         # 원문이 필요할 때만 원본을 읽는다. 면마다 받아 이어 붙인다.
         need_text = ground_enabled(use_ground) or hybrid_enabled(use_hybrid)
-        raws = [_read_bytes(f) for f, _ in parts] if need_text else []
-        ocr_text = source_text(raws, use_ground, use_hybrid)
+        # **면 이름을 함께 넘긴다.** 사용자가 주표시면·영양성분표를 골라
+        # 줬으면 그 이름이 곧 '이 글자 안에 무엇이 있는가' 다.
+        items = [(_read_bytes(f), role) for f, role in parts] if need_text else []
+        sections = source_sections(items, use_ground, use_hybrid)
+        ocr_text = sections_text(sections)
 
         regions = build_multi_regions(parts, layout=layout)
         # 원문이 있으면 **면마다 한 장씩만** 남기고 조각을 뺀다. 사람이 이미
         # 면 단위로 잘라 준 뒤라 남는 조각은 글자를 읽기 위한 것뿐이고,
         # 그 일은 OCR 이 더 잘한다.
-        if hybrid_enabled(use_hybrid) and ocr_text and drop_tiles_enabled(drop_tiles):
+        if hybrid_enabled(use_hybrid) and sections and drop_tiles_enabled(drop_tiles):
             seen, heads = set(), []
             for region in regions:
                 role = region.get('role')
@@ -860,7 +918,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 
         # 원문은 맨 뒤에 (extract_label_from_image 와 같은 이유)
         if hybrid_enabled(use_hybrid):
-            block = hybrid_text_block(ocr_text)
+            block = hybrid_text_block(sections)
             if block:
                 content.append(block)
 
@@ -941,14 +999,15 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         # 원문이 필요할 때만 원본을 읽는다. Pillow 가 파일을 소비하므로 먼저 읽는다.
         need_text = ground_enabled(use_ground) or hybrid_enabled(use_hybrid)
         raw = _read_bytes(image_file) if need_text else b''
-        ocr_text = source_text([raw], use_ground, use_hybrid)
+        sections = source_sections([(raw, None)], use_ground, use_hybrid)
+        ocr_text = sections_text(sections)
 
         regions = build_image_regions(image_file, layout=layout)
         # **원문이 있으면 조각을 뺀다.** 조각은 오직 글자를 읽으려고 붙인 것이고,
         # 그 일은 OCR 이 더 잘한다. 남기는 것은 전체 한 장 - 어느 값이 어느
         # 항목인지는 배치를 봐야 알고, 그게 VLM 이 잘하는 일이다.
         # 이미지 다섯 장이 한 장이 되니 토큰이 6~7만에서 1.5~2만으로 준다.
-        if hybrid_enabled(use_hybrid) and ocr_text and drop_tiles_enabled(drop_tiles):
+        if hybrid_enabled(use_hybrid) and sections and drop_tiles_enabled(drop_tiles):
             regions = regions[:1]
         images = [region['b64'] for region in regions]
 
@@ -978,7 +1037,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         # 원문은 **맨 뒤에** 붙인다. 사진을 먼저 보고 배치를 잡은 뒤 글자를
         # 옮기는 순서가 되도록.
         if hybrid_enabled(use_hybrid):
-            block = hybrid_text_block(ocr_text)
+            block = hybrid_text_block(sections)
             if block:
                 content.append(block)
 

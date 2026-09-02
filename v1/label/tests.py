@@ -2119,23 +2119,58 @@ class HybridReadTests(TestCase):
         """
         from unittest.mock import patch
 
-        from v1.label.services.ocr_service import source_text
+        from v1.label.services.ocr_service import sections_text, source_sections
 
         with patch('v1.label.services.ocr_text.extract_text',
                    return_value='원문') as call:
-            text = source_text([b'a'], use_ground=True, use_hybrid=True)
+            sections = source_sections([(b'a', None)], use_ground=True,
+                                       use_hybrid=True)
 
-        self.assertEqual(text, '원문')
+        self.assertEqual(sections_text(sections), '원문')
         self.assertEqual(call.call_count, 1)
+
+    def test_어느_표시면에서_나온_글자인지_들고_있는다(self):
+        """
+        사용자가 주표시면·영양성분표를 골라 준다. 그 이름이 곧 "이 글자 안에
+        무엇이 있는가" 다. 이어 붙여 버리면 그 정보가 사라진다 - 원문은 줄을
+        늘어놓을 뿐 구조가 없어서, 영양성분표의 머리글인지 옆 칸 글자인지
+        알 수가 없다.
+        """
+        from unittest.mock import patch
+
+        from v1.label.services.ocr_service import source_sections
+
+        with patch('v1.label.services.ocr_text.extract_text',
+                   side_effect=['앞면 글자', '표 글자']):
+            sections = source_sections(
+                [(b'a', 'main'), (b'b', 'nutrition')], use_hybrid=True)
+
+        self.assertEqual([s['title'] for s in sections],
+                         ['주표시면', '영양성분표'])
+        self.assertIn('열량', sections[1]['wants'])
+
+    def test_원문_토막마다_면_이름을_붙여_보낸다(self):
+        from v1.label.services.ocr_service import hybrid_text_block
+
+        text = hybrid_text_block([
+            {'title': '주표시면', 'wants': '제품명, 내용량', 'text': '초코쿠키'},
+            {'title': '영양성분표', 'wants': '열량, 나트륨', 'text': '총 내용량 87 g'},
+        ])['text']
+
+        self.assertIn('1) 주표시면', text)
+        self.assertIn('2) 영양성분표', text)
+        self.assertIn('이 면에 있는 항목: 열량, 나트륨', text)
+        # 다른 토막의 비슷한 글자를 끌어오지 말라고 해야 한다
+        self.assertIn('다른 토막', text)
 
     def test_꺼져_있으면_원문을_받지_않는다(self):
         from unittest.mock import patch
 
-        from v1.label.services.ocr_service import source_text
+        from v1.label.services.ocr_service import source_sections
 
         with patch('v1.label.services.ocr_text.extract_text') as call:
-            self.assertEqual(source_text([b'a'], use_ground=False,
-                                         use_hybrid=False), '')
+            self.assertEqual(source_sections([(b'a', None)], use_ground=False,
+                                             use_hybrid=False), [])
         call.assert_not_called()
 
     def test_원문_지시문이_쓸_자리를_정해_준다(self):
@@ -2150,7 +2185,8 @@ class HybridReadTests(TestCase):
         """
         from v1.label.services.ocr_service import hybrid_text_block
 
-        text = hybrid_text_block('제품명 초코쿠키')['text']
+        text = hybrid_text_block([{'title': '사진 전체', 'wants': '',
+                                   'text': '제품명 초코쿠키'}])['text']
 
         self.assertIn('제품명 초코쿠키', text)
         self.assertIn('참고이지 정답이 아닙니다', text)
@@ -2166,14 +2202,16 @@ class HybridReadTests(TestCase):
     def test_원문이_없으면_붙이지_않는다(self):
         from v1.label.services.ocr_service import hybrid_text_block
 
-        self.assertIsNone(hybrid_text_block(''))
+        self.assertIsNone(hybrid_text_block([]))
 
     def test_원문_길이를_제한한다(self):
         from v1.label.services.ocr_service import OCR_TEXT_MAX_CHARS, hybrid_text_block
 
-        block = hybrid_text_block('가' * (OCR_TEXT_MAX_CHARS + 500))
-        tail = block['text'].split('--- 사진에서 읽은 글자 ---\n', 1)[1]
-        self.assertEqual(len(tail), OCR_TEXT_MAX_CHARS)
+        block = hybrid_text_block([{'title': '사진 전체', 'wants': '',
+                                    'text': '가' * (OCR_TEXT_MAX_CHARS + 500)}])
+        # 지시문에도 '가' 가 들어 있다. 원문 토막만 세야 한다.
+        body = block['text'].split('--- 사진에서 읽은 글자 ---\n', 1)[1]
+        self.assertEqual(body.count('가'), OCR_TEXT_MAX_CHARS)
 
 
 class FreetextPairTests(TestCase):
