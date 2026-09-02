@@ -279,6 +279,22 @@ OCR_GROUND = config('OCR_GROUND', default=False, cast=bool)
 # 뒤에 켠다.
 OCR_HYBRID = config('OCR_HYBRID', default=False, cast=bool)
 
+# 원문을 넣을 때 **조각 이미지까지 뺄 것인가.** 기본은 빼지 않는다.
+#
+# 토큰은 조각을 빼야 줄지만(6~7만 -> 1.5~2만), 측정이 그 대가를 보여 줬다.
+#
+#     rawmtrl_nm       80.2 -> 99.4    원문이 이겼다
+#     nutrition_basis 100.0 -> 37.0    조각을 뺀 대가
+#     recycling_mark  100.0 -> 84.8
+#     storage_method  100.0 -> 88.9
+#
+# 무너진 셋은 **배치를 봐야 읽히는 칸**이다 - 표의 머리글, 도형, 표 칸.
+# 원문은 줄을 늘어놓을 뿐 그 구조를 담지 못한다.
+#
+# 그래서 정확도(OCR_HYBRID)와 토큰 절감(이 값)을 갈라 둔다. 아끼려면 켜되
+# 먼저 재라.
+OCR_HYBRID_DROP_TILES = config('OCR_HYBRID_DROP_TILES', default=False, cast=bool)
+
 # OpenAI 의 분당 토큰 한도(TPM). 정답지 측정이 판독 사이를 얼마나 쉴지 계산하는
 # 데 쓴다 (ocr_lab.pace_seconds).
 #

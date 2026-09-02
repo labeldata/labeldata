@@ -32,6 +32,9 @@ class Command(BaseCommand):
                             help='OCR 원문 주입(조각 이미지 제거) 전후를 잰다')
         parser.add_argument('--ground', action='store_true',
                             help='판독값 원문 대조 전후를 잰다')
+        parser.add_argument('--drop-tiles', action='store_true',
+                            help='--hybrid 와 함께: 조각 이미지까지 뺀다(토큰 절감). '
+                                 '배치를 봐야 읽히는 칸이 무너질 수 있다')
         parser.add_argument('--runs', type=int, default=1,
                             help='정답지 한 장을 몇 번씩 읽을지 (기본 1)')
         parser.add_argument('--case', type=int, help='정답지 하나만')
@@ -140,6 +143,7 @@ class Command(BaseCommand):
             read_freetext=bool(options['freetext']),
             use_ground=ground,
             use_hybrid=hybrid,
+            drop_tiles=bool(options['drop_tiles']) if hybrid else False,
         )
         self.stdout.write(f'  평균 {run.mean_score}  (기록 #{run.pk})')
         return run

@@ -85,7 +85,7 @@ def _open_source(case):
 def measure_case(case, runs=1, model=None, prompt_version=None,
                  use_crop=False, use_api=False, use_hints=True, use_boxes=False,
                  layout='grid', read_freetext=None, use_ground=None,
-                 use_hybrid=None):
+                 use_hybrid=None, drop_tiles=None):
     """
     정답지 한 장을 여러 번 읽어 채점한다.
 
@@ -131,7 +131,7 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
                 source, model=model, prompt_version=prompt_version,
                 use_hints=use_hints, want_boxes=use_boxes, layout=layout,
                 read_freetext=read_freetext, use_ground=use_ground,
-                use_hybrid=use_hybrid)
+                use_hybrid=use_hybrid, drop_tiles=drop_tiles)
         except Exception as exc:
             logger.exception('정답지 판독 실패 (case=%s)', case.pk)
             errors.append(f'{i + 1}회 실패: {exc}')
@@ -166,7 +166,7 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
                     source, model=model, prompt_version=prompt_version,
                     use_hints=use_hints, want_boxes=use_boxes, layout=layout,
                     read_freetext=read_freetext, use_ground=use_ground,
-                    use_hybrid=use_hybrid)
+                    use_hybrid=use_hybrid, drop_tiles=drop_tiles)
             except Exception as exc:
                 logger.exception('정답지 재판독 실패 (case=%s)', case.pk)
                 from v1.label.services.ocr_service import failure
@@ -292,7 +292,7 @@ def _api_field_gain(before, after):
 def run_benchmark(cases, runs=1, model=None, prompt_version=None,
                   use_crop=False, use_api=False, use_hints=True,
                   use_boxes=False, layout='grid', read_freetext=None,
-                  use_ground=None, use_hybrid=None, user=None):
+                  use_ground=None, use_hybrid=None, drop_tiles=None, user=None):
     """
     정답지 여러 장을 재고 결과를 OcrBenchmarkRun 으로 남긴다.
 
@@ -314,7 +314,8 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
             case, runs=runs, model=model, prompt_version=prompt_version,
             use_crop=use_crop, use_api=use_api, use_hints=use_hints,
             use_boxes=use_boxes, layout=layout, read_freetext=read_freetext,
-            use_ground=use_ground, use_hybrid=use_hybrid))
+            use_ground=use_ground, use_hybrid=use_hybrid,
+            drop_tiles=drop_tiles))
 
     scored = [r for r in case_rows if r['runs']]
     mean = round(statistics.mean(r['mean'] for r in scored), 1) if scored else 0.0
@@ -338,6 +339,7 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
         'read_freetext': bool(read_freetext),
         'ground': bool(use_ground),
         'hybrid': bool(use_hybrid),
+        'drop_tiles': bool(drop_tiles),
         # 조각을 어느 방향으로 잘랐는가. 모델을 안 바꿔도 이것만으로 긴 항목의
         # 점수가 크게 움직인다 - 남기지 않으면 어느 판이 어느 방식이었는지
         # 나중에 알 수 없다.

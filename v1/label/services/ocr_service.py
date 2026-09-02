@@ -430,6 +430,36 @@ def ground_enabled(use_ground=None) -> bool:
     return bool(getattr(settings, 'OCR_GROUND', False))
 
 
+def drop_tiles_enabled(drop_tiles=None) -> bool:
+    """
+    원문을 넣을 때 **조각 이미지까지 뺄 것인가.** 기본은 빼지 않는다.
+
+    처음에는 원문 주입과 조각 제거를 한 덩어리로 묶었다. 측정이 그게 두 가지
+    다른 일이라는 것을 보여 줬다(정답지 #1, 1회).
+
+        rawmtrl_nm       80.2 -> 99.4   원문이 이겼다
+        allergens        92.3 -> 100.0
+        nutrition_basis 100.0 -> 37.0   조각을 뺀 대가
+        recycling_mark  100.0 -> 84.8
+        storage_method  100.0 -> 88.9
+
+    무너진 셋은 성격이 같다 - **배치를 봐야 읽히는 칸**이다. 영양성분표의
+    기준 표기는 표의 머리글이라 표 모양을 봐야 알고, 분리배출은 도형이며,
+    보관방법은 표 칸에 들어 있다. 원문은 줄을 늘어놓을 뿐 그 구조를 담지
+    못한다. 조각은 그걸 보여 주던 것이었다.
+
+    그래서 둘을 가른다.
+
+        OCR_HYBRID              원문을 넣는다 (정확도)
+        OCR_HYBRID_DROP_TILES   조각까지 뺀다 (토큰 절감)
+
+    토큰을 아끼려면 켜되, **먼저 재라.** 위 숫자가 그 대가다.
+    """
+    if drop_tiles is not None:
+        return bool(drop_tiles)
+    return bool(getattr(settings, 'OCR_HYBRID_DROP_TILES', False))
+
+
 def hybrid_enabled(use_hybrid=None) -> bool:
     """
     OCR 원문을 판독에 **함께 넣을 것인가.** 기본은 끔.
@@ -726,7 +756,7 @@ def region_instructions(regions):
 
 def extract_label_from_parts(parts, model=None, prompt_version=None,
                              use_hints=True, layout='grid', read_freetext=None,
-                             use_ground=None, use_hybrid=None):
+                             use_ground=None, use_hybrid=None, drop_tiles=None):
     """
     표시면별로 잘라 온 사진들에서 한 번에 필드를 뽑는다.
 
@@ -750,7 +780,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         # 원문이 있으면 **면마다 한 장씩만** 남기고 조각을 뺀다. 사람이 이미
         # 면 단위로 잘라 준 뒤라 남는 조각은 글자를 읽기 위한 것뿐이고,
         # 그 일은 OCR 이 더 잘한다.
-        if hybrid_enabled(use_hybrid) and ocr_text:
+        if hybrid_enabled(use_hybrid) and ocr_text and drop_tiles_enabled(drop_tiles):
             seen, heads = set(), []
             for region in regions:
                 role = region.get('role')
@@ -817,7 +847,8 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 
 def extract_label_from_image(image_file, model=None, prompt_version=None,
                              use_hints=True, want_boxes=False, layout='grid',
-                             read_freetext=None, use_ground=None, use_hybrid=None):
+                             read_freetext=None, use_ground=None, use_hybrid=None,
+                             drop_tiles=None):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
 
@@ -865,7 +896,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         # 그 일은 OCR 이 더 잘한다. 남기는 것은 전체 한 장 - 어느 값이 어느
         # 항목인지는 배치를 봐야 알고, 그게 VLM 이 잘하는 일이다.
         # 이미지 다섯 장이 한 장이 되니 토큰이 6~7만에서 1.5~2만으로 준다.
-        if hybrid_enabled(use_hybrid) and ocr_text:
+        if hybrid_enabled(use_hybrid) and ocr_text and drop_tiles_enabled(drop_tiles):
             regions = regions[:1]
         images = [region['b64'] for region in regions]
 
