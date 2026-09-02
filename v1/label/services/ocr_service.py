@@ -565,6 +565,26 @@ def hybrid_text_block(text: str) -> dict | None:
     return {"type": "text", "text": _HYBRID_INSTRUCTION + text[:OCR_TEXT_MAX_CHARS]}
 
 
+def _repaired(data, text, use_hybrid=None):
+    """
+    원문을 넣었기 때문에 생긴 오독을 되돌린다.
+
+    지금은 한 가지다 - 혼입가능 물질이 알레르기 칸으로 넘어오는 것.
+    왜 원문을 넣으면 그 일이 생기는지는 ocr_ground.repair_allergens 에 있다.
+
+    **원문을 넣었을 때만 돈다.** 사진만 볼 때는 모델이 두 줄을 제대로 가른다
+    (100점). 안 넣었는데 여기서 값을 덜어 내면 멀쩡한 것을 건드리게 된다.
+    """
+    if not hybrid_enabled(use_hybrid) or not text:
+        return data
+    try:
+        from v1.label.services.ocr_ground import repair_allergens
+        data, _ = repair_allergens(data, text)
+    except Exception:
+        logger.exception('판독값 수리 실패')
+    return data
+
+
 def _grounded(data, text, use_ground=None):
     """
     판독값을 사진의 글자 원문과 대조한다. 실패하면 그대로 돌려준다.
@@ -860,6 +880,9 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 
         result = json.loads(response.choices[0].message.content)
         # 대조를 먼저. 아래 줄은 값을 일부러 바꾸는 단계다 (_grounded 주석 참고).
+        # 원문 때문에 생긴 오독을 먼저 되돌린 뒤 대조한다 - 순서가 반대면
+        # 우리가 고칠 값을 두고 "지어냈다" 고 표시하게 된다.
+        result = _repaired(result, ocr_text, use_hybrid)
         result, ground_report = _grounded(result, ocr_text, use_ground)
         result = drop_freetext(strip_design_suffix(result), read_freetext)
 
@@ -979,6 +1002,9 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         result = json.loads(response.choices[0].message.content)
         # **대조를 먼저 한다.** 아래 세 줄은 값을 일부러 바꾸는 단계라,
         # 뒤에서 대조하면 우리가 바꾼 값이 "지어냄" 으로 잡힌다.
+        # 원문 때문에 생긴 오독을 먼저 되돌린 뒤 대조한다 - 순서가 반대면
+        # 우리가 고칠 값을 두고 "지어냈다" 고 표시하게 된다.
+        result = _repaired(result, ocr_text, use_hybrid)
         result, ground_report = _grounded(result, ocr_text, use_ground)
         result = drop_freetext(strip_design_suffix(result), read_freetext)
 

@@ -30,6 +30,7 @@ VLM 은 값을 지어낸다. 전통 OCR 은 글자를 보고 글자를 내므로
 `json.loads` 직후, 어떤 변형보다 **앞에서** 돈다.
 """
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,100 @@ def ground(data: dict, text: str) -> tuple[dict, dict]:
                     len(ungrounded), ', '.join(ungrounded))
 
     return result, {'checked': len(scores), 'ungrounded': ungrounded, 'scores': scores}
+
+
+# ── 혼입가능 물질이 알레르기 칸으로 넘어오는 것 ──────────────────────────────
+#
+# 라벨의 검은 박스에는 두 줄이 나란히 인쇄된다.
+#
+#     쇠고기, 조개류(굴) 함유                          <- 실제로 들어 있다
+#     메밀, 땅콩, 닭고기, 게, 새우, ... 혼입가능성 있음  <- 같은 시설을 쓸 뿐이다
+#
+# 앞줄만 알레르기(allergens)고 뒷줄은 주의사항(cautions)이다. 시스템 프롬프트가
+# 이 구분을 길게 설명하고, 사진만 볼 때는 모델이 지킨다(100점).
+#
+# **원문을 함께 넣으면 무너진다.** 원문에서 두 줄은 그냥 이어진 글자라 시각적
+# 경계가 없고, 뒷줄이 훨씬 길어서 그쪽이 답으로 나온다. 실측 100.0 -> 13.1.
+#
+# 지시문을 두 번 고쳤지만 움직이지 않았다. 설득이 안 되는 것은 코드로 뗀다 -
+# 우리는 원문을 갖고 있으니 **어느 물질이 어느 줄에 적혔는지 알 수 있다.**
+_CONTAIN_MARK = ('함유',)
+_CROSSMIX_MARK = ('혼입', '혼입가능', '혼입될')
+
+# 물질 이름을 가르는 구분자. 쉼표·가운뎃점·슬래시.
+_SUBSTANCE_SPLIT = re.compile(r'[,、，·/]')
+
+
+def _substances(segment: str) -> set:
+    """한 줄에서 물질 이름만. 표시 문구와 괄호 주석은 뗀다."""
+    names = set()
+    for part in _SUBSTANCE_SPLIT.split(segment or ''):
+        name = re.sub(r'[(（][^)）]*[)）]', '', part)
+        name = re.sub(r'(함유|혼입가능성\s*있음|혼입될\s*수\s*있음|있음)', '', name)
+        name = name.strip(' \t·-*[]')
+        if name:
+            names.add(name)
+    return names
+
+
+def crossmix_only(text: str) -> set:
+    """
+    원문에서 **혼입가능 줄에만** 적힌 물질. 함유 줄에도 있으면 뺀다.
+
+    한 물질이 양쪽에 다 적힐 수 있다(실제로 들어 있고 다른 것도 혼입될 때).
+    그때는 알레르기가 맞으므로 지우면 안 된다.
+    """
+    contained, crossmix = set(), set()
+    for line in re.split(r'[\n.]', str(text or '')):
+        if any(m in line for m in _CROSSMIX_MARK):
+            crossmix |= _substances(re.split(r'혼입', line)[0])
+        elif any(m in line for m in _CONTAIN_MARK):
+            contained |= _substances(line)
+    return crossmix - contained
+
+
+def repair_allergens(data: dict, text: str) -> tuple[dict, list]:
+    """
+    알레르기 칸에 넘어온 혼입가능 물질을 뺀다.
+
+    **값을 지우지 않는다** - 넘어온 물질만 덜어 낸다. 덜어 낸 뒤 아무것도
+    안 남으면 그 칸은 애초에 혼입가능 줄이었다는 뜻이라 비운다.
+
+    Returns: (고친 결과, 덜어 낸 물질 목록)
+    """
+    if not text or not isinstance(data, dict):
+        return data, []
+
+    item = data.get('allergens')
+    value = _value_of(item)
+    if not str(value or '').strip():
+        return data, []
+
+    crossmix = crossmix_only(text)
+    if not crossmix:
+        return data, []
+
+    kept, removed = [], []
+    for part in _SUBSTANCE_SPLIT.split(str(value)):
+        name = part.strip()
+        if not name:
+            continue
+        bare = re.sub(r'[(（][^)）]*[)）]', '', name).strip()
+        (removed if (bare in crossmix or name in crossmix) else kept).append(name)
+
+    if not removed:
+        return data, []
+
+    result = dict(data)
+    marked = dict(item) if isinstance(item, dict) else {'value': value}
+    marked['value'] = ', '.join(kept)
+    marked['crossmix_removed'] = removed
+    marked['ground_note'] = (
+        f'사진에서 "{", ".join(removed)}" 는 혼입가능 물질로 적혀 있어 '
+        f'알레르기 표시에서 뺐습니다. 혼입가능은 주의사항에 적습니다.')
+    result['allergens'] = marked
+    logger.info('[판독 대조] 알레르기에서 혼입가능 물질을 뺐다: %s', removed)
+    return result, removed
 
 
 def summary_text(report: dict) -> str:

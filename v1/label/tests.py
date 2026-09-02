@@ -2020,6 +2020,89 @@ class HybridReadTests(TestCase):
         with self.assertRaises(CommandError):
             call_command('ocr_ab')
 
+    # ── 혼입가능 물질이 알레르기 칸으로 넘어오는 것 ────────────────────
+
+    BOX = ('쇠고기, 조개류(굴) 함유\n'
+           '메밀, 땅콩, 닭고기, 게, 새우, 복숭아, 호두, 오징어, 잣 혼입가능성 있음.\n')
+
+    def test_혼입가능_물질을_알레르기에서_뺀다(self):
+        """
+        라벨의 검은 박스에는 두 줄이 나란히 있다. 앞줄만 알레르기고 뒷줄은
+        주의사항이다. 사진만 볼 때는 모델이 지키는데(100점), 원문을 넣으면
+        두 줄이 그냥 이어진 글자라 긴 뒷줄이 답으로 나온다(13.1점).
+        지시문을 두 번 고쳐도 안 움직여서 코드로 뗀다.
+        """
+        from v1.label.services.ocr_ground import repair_allergens
+
+        data = {'allergens': {'value': '쇠고기, 조개류, 메밀, 땅콩, 게, 새우'}}
+        out, removed = repair_allergens(data, self.BOX)
+
+        self.assertEqual(out['allergens']['value'], '쇠고기, 조개류')
+        self.assertIn('메밀', removed)
+        self.assertIn('새우', removed)
+        self.assertIn('혼입가능', out['allergens']['ground_note'])
+
+    def test_양쪽에_다_적힌_물질은_남긴다(self):
+        """
+        실제로 들어 있으면서 다른 것도 혼입될 수 있다. 그때는 알레르기가
+        맞으므로 지우면 안 된다.
+        """
+        from v1.label.services.ocr_ground import repair_allergens
+
+        text = '우유, 대두 함유\n우유, 메밀 혼입가능성 있음.\n'
+        data = {'allergens': {'value': '우유, 대두, 메밀'}}
+        out, removed = repair_allergens(data, text)
+
+        self.assertEqual(out['allergens']['value'], '우유, 대두')
+        self.assertEqual(removed, ['메밀'])
+
+    def test_제대로_읽었으면_건드리지_않는다(self):
+        from v1.label.services.ocr_ground import repair_allergens
+
+        data = {'allergens': {'value': '쇠고기, 조개류'}}
+        out, removed = repair_allergens(data, self.BOX)
+
+        self.assertEqual(removed, [])
+        self.assertEqual(out, data)
+
+    def test_혼입_줄이_없으면_아무것도_안_한다(self):
+        from v1.label.services.ocr_ground import repair_allergens
+
+        data = {'allergens': {'value': '우유, 대두'}}
+        out, removed = repair_allergens(data, '우유, 대두 함유\n')
+        self.assertEqual(removed, [])
+        self.assertEqual(out, data)
+
+    def test_원문을_안_넣었으면_수리하지_않는다(self):
+        """
+        사진만 볼 때는 모델이 두 줄을 제대로 가른다. 그때 값을 덜어 내면
+        멀쩡한 것을 건드리게 된다.
+        """
+        from v1.label.services import ocr_service
+
+        data = {'allergens': {'value': '쇠고기, 조개류, 메밀'}}
+        self.assertEqual(
+            ocr_service._repaired(data, self.BOX, use_hybrid=False), data)
+        self.assertNotEqual(
+            ocr_service._repaired(data, self.BOX, use_hybrid=True), data)
+
+    def test_수리가_대조보다_먼저_돈다(self):
+        """
+        순서가 반대면 우리가 고칠 값을 두고 "지어냈다" 고 표시하게 된다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
+                  ).read_text(encoding='utf-8')
+        at = 0
+        for _ in range(2):
+            repair_at = source.index('_repaired(result, ocr_text', at)
+            ground_at = source.index('_grounded(result, ocr_text', repair_at)
+            self.assertLess(repair_at, ground_at)
+            at = ground_at + 1
+
     def test_기본은_꺼져_있다(self):
         """판독의 핵심 경로를 바꾸는 일이다. 측정 없이 켜면 안 된다."""
         from v1.label.services.ocr_service import hybrid_enabled
