@@ -279,6 +279,16 @@ OCR_GROUND = config('OCR_GROUND', default=False, cast=bool)
 # 뒤에 켠다.
 OCR_HYBRID = config('OCR_HYBRID', default=False, cast=bool)
 
+# OpenAI 의 분당 토큰 한도(TPM). 정답지 측정이 판독 사이를 얼마나 쉴지 계산하는
+# 데 쓴다 (ocr_lab.pace_seconds).
+#
+# 기본 200,000 은 gpt-4o-mini 의 사용 등급 1 값이다. 판독 한 번이 6~7만
+# 토큰이니 **분당 세 번**이 한계고, 그보다 빨리 부르면 429 다.
+#
+# 등급이 오르면 이 값을 함께 올려야 측정이 빨라진다. 안 올리면 필요 없는
+# 대기로 시간만 쓴다 - 5장 3회 A/B 가 11분에서 2분이 될 수도 있다.
+OCR_TPM_LIMIT = config('OCR_TPM_LIMIT', default=200000, cast=int)
+
 # 식품안전나라 OpenAPI Key (https://openapi.foodsafetykorea.go.kr)
 FOODSAFETY_API_KEY = config('FOODSAFETY_API_KEY', default='')
 

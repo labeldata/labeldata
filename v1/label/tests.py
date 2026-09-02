@@ -1825,6 +1825,48 @@ class HybridReadTests(TestCase):
     (정답지 5장, 긴 칸 회수율 0.977). VLM 에게는 배치 판단만 맡긴다.
     """
 
+    def test_토큰_한도에_맞춰_쉰다(self):
+        """
+        판독 한 번이 6~7만 토큰이라 분당 20만 한도면 세 번이 한계다. 예전에는
+        12초 고정이었고, 그것도 회차 사이에만 쉬었다 - 정답지 다섯 장을 3회씩
+        재는 A/B 가 첫 회차부터 429 로 죽었다.
+        """
+        from django.test import override_settings
+
+        from v1.label.services.ocr_lab import pace_seconds
+
+        with override_settings(OCR_TPM_LIMIT=200_000):
+            self.assertGreaterEqual(pace_seconds(False), 19)   # 65k -> 분당 3번
+            self.assertGreaterEqual(pace_seconds(True), 12)    # 18k -> 하한이 이긴다
+            self.assertLess(pace_seconds(True), pace_seconds(False))
+
+        # 등급이 오르면 대기가 짧아진다
+        with override_settings(OCR_TPM_LIMIT=2_000_000):
+            self.assertLessEqual(pace_seconds(False), 12)
+
+    def test_정답지_사이에도_쉰다(self):
+        """
+        예전에는 회차 사이에만 쉬어서 앞 정답지의 마지막 회차와 다음 정답지의
+        첫 회차가 붙어 나갔다.
+        """
+        from unittest.mock import patch
+
+        from v1.common.models import OcrTruthCase
+        from v1.label.services import ocr_lab
+
+        cases = [OcrTruthCase.objects.create(name=f'#{i}', expected={'prdlst_nm': 'x'})
+                 for i in range(3)]
+
+        with patch.object(ocr_lab, 'measure_case',
+                          return_value={'runs': 1, 'mean': 90.0, 'fields': [],
+                                        'last': {}, 'errors': [], 'api': None,
+                                        'boxes': None}), \
+             patch.object(ocr_lab.time, 'sleep') as slept:
+            ocr_lab.run_benchmark(cases, runs=1)
+
+        # 정답지 세 장이면 사이가 둘이다
+        self.assertEqual(slept.call_count, 2)
+
     def test_명령줄로_A_B_를_돌린다(self):
         """
         화면은 웹 요청 시간 제한에 걸려 한 번에 열두 번까지만 부를 수 있다.

@@ -63,6 +63,8 @@ class Command(BaseCommand):
         self.stdout.write(
             f'정답지 {len(cases)}장 x {runs}회 x 2(켜고/끄고) = '
             f'**판독 {calls}번**. 옵션: {option}')
+        self.stdout.write(self._eta(len(cases), runs, options))
+
         if not options['yes'] and not self._confirm():
             self.stdout.write('그만둔다.')
             return
@@ -76,6 +78,28 @@ class Command(BaseCommand):
         self._report(before, after, option)
 
     # ── 실행 ──────────────────────────────────────────────────────────────
+
+    def _eta(self, case_count, runs, options):
+        """
+        얼마나 걸리는지 미리 알린다.
+
+        분당 토큰 한도 때문에 판독 사이를 쉬어야 하고, 그 대기가 판독 시간보다
+        길다. 5장 3회면 끈 쪽만 5분이 넘는데, 모르고 시작하면 멈춘 줄 안다.
+        """
+        from django.conf import settings
+
+        from v1.label.services.ocr_lab import pace_seconds
+
+        each = case_count * runs
+        call = 12.0     # 판독 한 번에 걸리는 시간 (실측 5~15초)
+        off = each * (call + pace_seconds(False))
+        on = each * (call + pace_seconds(
+            True if options['hybrid'] else False))
+        total = (off + on) / 60.0
+        limit = getattr(settings, 'OCR_TPM_LIMIT', 200_000)
+        return (f'분당 토큰 한도 {limit:,} 기준으로 판독 사이를 쉰다 — '
+                f'대략 {total:.0f}분 걸린다.\n'
+                f'(한도가 올랐으면 .env 의 OCR_TPM_LIMIT 을 고쳐야 빨라진다)')
 
     def _confirm(self):
         try:

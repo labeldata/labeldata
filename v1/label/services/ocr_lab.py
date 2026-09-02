@@ -28,6 +28,38 @@ from v1.label.services.ocr_reconcile import _FIELD_POLICY as _API_FIELDS  # noqa
 API_TOUCHED_FIELDS = tuple(_API_FIELDS.keys())
 
 
+# 판독 한 번이 쓰는 입력 토큰의 어림값.
+#
+# 사진은 조각까지 다섯 장을 detail:high 로 보낸다. gpt-4o-mini 는 이미지
+# 토큰 배수가 커서 한 장이 2만 안팎이고, 실측(§11)에서 한 번에 6~7만이었다.
+# 원문을 함께 넣으면(use_hybrid) 조각을 빼므로 전체 한 장 + 원문 2천자다.
+_TOKENS_PER_CALL = 65_000
+_TOKENS_PER_CALL_HYBRID = 18_000
+
+
+def pace_seconds(use_hybrid=False) -> float:
+    """
+    다음 판독까지 쉴 시간.
+
+    **분당 토큰 한도를 판독 한 번의 토큰으로 나누면 분당 몇 번이 한계인지
+    나온다.** 그보다 빨리 부르면 429 다. 기다리는 것 말고 할 수 있는 일이 없다.
+
+        한도 200,000 / 한 번 65,000 = 분당 3번 -> 20초 간격
+        원문을 넣으면 18,000     = 분당 11번 -> 하한(12초)이 이긴다
+
+    예전에는 12초 고정이었다. 그것도 회차 사이에만 쉬고 **정답지 사이에는 안
+    쉬었다.** 정답지 다섯 장을 3회씩 재는 A/B 를 돌렸더니 첫 회차부터 429 가
+    났다 - 12초 간격이면 분당 다섯 번, 32만 토큰이라 한도의 1.6배다.
+
+    한도를 올렸으면(OpenAI 사용 등급이 오르면 열 배가 된다) OCR_TPM_LIMIT 에
+    적어 준다. 그만큼 측정이 빨라진다.
+    """
+    limit = getattr(settings, 'OCR_TPM_LIMIT', 200_000)
+    cost = _TOKENS_PER_CALL_HYBRID if use_hybrid else _TOKENS_PER_CALL
+    needed = 60.0 * cost / max(1, limit)
+    return max(getattr(settings, 'OCR_RUN_PAUSE_SEC', 12), needed)
+
+
 def _open_source(case):
     """
     이 정답지를 읽을 때 모델에 넘길 파일.
@@ -70,12 +102,12 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
     for i in range(max(1, runs)):
         # 회차 사이에 숨을 돌린다.
         #
-        # 사진 한 장이 6~7만 토큰이라 분당 20만 토큰 한도면 세 번이 한계다.
         # 잇달아 부르면 뒤 회차가 429 로 죽고, 그러면 편차가 0 으로 나와
         # "안정적" 으로 읽힌다. 재시도만으로는 모자랐다 - 창이 아직 안 열렸는데
         # 다시 두드리는 것이라, 아예 창이 열릴 때까지 기다리는 편이 확실하다.
+        # 얼마나 쉬어야 하는지는 pace_seconds 가 토큰으로 계산한다.
         if i:
-            time.sleep(getattr(settings, 'OCR_RUN_PAUSE_SEC', 12))
+            time.sleep(pace_seconds(use_hybrid))
 
         source = None
         try:
@@ -253,7 +285,12 @@ def run_benchmark(cases, runs=1, model=None, prompt_version=None,
 
     model = model or getattr(settings, 'OCR_MODEL', 'gpt-4o-mini')
     case_rows = []
-    for case in cases:
+    for index, case in enumerate(cases):
+        # **정답지 사이에도 쉰다.** 예전에는 회차 사이에만 쉬어서, 앞 정답지의
+        # 마지막 회차와 다음 정답지의 첫 회차가 붙어 나갔다. 정답지가 여러
+        # 장이면 그 자리에서 429 가 난다.
+        if index:
+            time.sleep(pace_seconds(use_hybrid))
         case_rows.append(measure_case(
             case, runs=runs, model=model, prompt_version=prompt_version,
             use_crop=use_crop, use_api=use_api, use_hints=use_hints,
