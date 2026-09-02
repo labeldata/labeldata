@@ -227,6 +227,23 @@ def _normalize(text) -> str:
     return re.sub(r'\s+', '', str(text or ''))
 
 
+def _normalize_with_map(text) -> tuple[str, list[int]]:
+    """
+    공백을 없앤 문자열과, 그 각 글자가 **원문 어디에서 왔는지** 의 자리표.
+
+    자리표가 있어야 "원문의 이 대목을 보고 그 점수가 나왔다" 를 되짚어 보여
+    줄 수 있다. 점수만 보여 주면 왜 낮은지 알 수 없어서 추측하게 되고,
+    실제로 그 추측이 틀렸다 - additional_info 가 낮은 이유를 "조각을 이어
+    붙였기 때문" 이라고 짚었는데, 정작 그 값에는 줄바꿈이 없었다.
+    """
+    chars, index = [], []
+    for i, ch in enumerate(str(text or '')):
+        if not ch.isspace():
+            chars.append(ch)
+            index.append(i)
+    return ''.join(chars), index
+
+
 def _fragments(value) -> list[str]:
     """
     한 칸의 값을 **원문에서 따로 찾아야 하는 조각**으로 가른다.
@@ -270,6 +287,49 @@ def match_score(value, text) -> float:
         weighted += fuzz.partial_ratio(needle, haystack) * len(needle)
         total += len(needle)
     return round(weighted / total, 1) if total else 0.0
+
+
+def explain(value, text, pad: int = 12) -> list[dict]:
+    """
+    왜 그 점수가 나왔는지 — 조각마다 **원문의 어느 대목과 견줬는지** 보여 준다.
+
+    점수만 보면 낮은 이유를 알 수 없어서 추측하게 된다. 실제로 그랬다 -
+    additional_info 가 55.8 인 것을 "여러 문구를 이어 붙여서" 라고 짚고
+    조각 분할을 넣었는데, 그 값에는 애초에 줄바꿈이 없어서 아무것도 바뀌지
+    않았다. **보지 않고 고쳤다.**
+
+    Returns: [{'fragment', 'score', 'nearest'}, ...]
+             nearest 는 원문에서 가장 가까운 대목(앞뒤 pad 글자 포함).
+    """
+    from rapidfuzz import fuzz
+
+    haystack, index = _normalize_with_map(text)
+    raw = str(text or '')
+    rows = []
+    for fragment in _fragments(value):
+        needle = _normalize(fragment)
+        if not needle:
+            continue
+        if not haystack:
+            rows.append({'fragment': fragment, 'score': 0.0, 'nearest': ''})
+            continue
+
+        align = fuzz.partial_ratio_alignment(needle, haystack)
+        if align is None:
+            rows.append({'fragment': fragment, 'score': 0.0, 'nearest': ''})
+            continue
+
+        # 정규화 자리를 원문 자리로 되돌린다. 원문 그대로 보여야 띄어쓰기와
+        # 줄바꿈까지 눈에 들어온다.
+        start = index[align.dest_start] if align.dest_start < len(index) else 0
+        end_i = min(align.dest_end, len(index)) - 1
+        end = index[end_i] + 1 if end_i >= 0 else start
+        rows.append({
+            'fragment': fragment,
+            'score': round(align.score, 1),
+            'nearest': raw[max(0, start - pad):end + pad].replace('\n', ' ⏎ '),
+        })
+    return rows
 
 
 def field_recall(expected: dict, text: str) -> list[dict]:
@@ -399,6 +459,13 @@ def measure_case(case, refresh: bool = False) -> dict:
         }
 
     rows = field_recall(case.expected or {}, text)
+    # 못 찾은 항목만 "무엇을 찾았고 원문의 어디가 가장 가까웠는지" 를 붙인다.
+    # 전부 붙이면 출력이 길어지기만 하고, 알고 싶은 것은 빗나간 자리뿐이다.
+    for row in rows:
+        if row['skipped'] or row['found']:
+            continue
+        row['expected'] = str((case.expected or {}).get(row['field']) or '')
+        row['detail'] = explain(row['expected'], text)
     summary = recall_summary(rows)
     return {
         'case_id': case.pk,

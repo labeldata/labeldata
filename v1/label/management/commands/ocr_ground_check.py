@@ -127,6 +127,7 @@ class Command(BaseCommand):
                     f'{row["score"]:>8.1f}  {mark}')
             style = self.style.SUCCESS if row['found'] else self.style.WARNING
             self.stdout.write(style(line))
+            self._print_miss(row)
 
         recall = result['recall']
         long_recall = result['long_recall']
@@ -141,6 +142,18 @@ class Command(BaseCommand):
             self.stdout.write('  ── 원문 ──')
             for line in (result.get('text') or '').splitlines()[:60]:
                 self.stdout.write(f'  | {line}')
+
+    def _print_miss(self, row):
+        """
+        빗나간 항목만 **무엇을 찾았고 원문의 어디가 가장 가까웠는지** 보여 준다.
+
+        점수만 보면 왜 낮은지 알 수 없어 추측하게 된다. 실제로 그 추측이
+        틀렸다 - 원문에 그 값이 아예 없는 것과, 있는데 표기가 다른 것과,
+        우리가 이어 붙인 방식 때문인 것은 대응이 전부 다르다.
+        """
+        for part in row.get('detail') or []:
+            self.stdout.write(f'      찾은 값 : {part["fragment"][:70]}')
+            self.stdout.write(f'      원문 근처: {part["nearest"][:70] or "(비슷한 대목 없음)"}')
 
     def _print_blocked(self, failed):
         """

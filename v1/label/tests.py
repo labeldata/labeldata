@@ -1408,6 +1408,44 @@ class OcrGroundTextTests(TestCase):
         defaults.update(kwargs)
         return OcrTruthCase.objects.create(**defaults)
 
+    def test_왜_못_찾았는지_원문의_자리를_보여준다(self):
+        """
+        점수만 보면 낮은 이유를 알 수 없어 추측하게 된다. 실제로 그 추측이
+        틀렸다 - additional_info 가 낮은 이유를 "여러 문구를 이어 붙여서" 라고
+        짚고 조각 분할을 넣었는데, 그 값에는 애초에 줄바꿈이 없었다.
+        """
+        from v1.label.services.ocr_text import explain
+
+        text = '제품명 초코쿠키\n고객상담실 080-999-0000\n'
+        rows = explain('고객상담실 080-123-4567', text)
+
+        self.assertEqual(len(rows), 1)
+        self.assertLess(rows[0]['score'], 100)
+        # 원문에서 실제로 견준 대목이 보여야 한다
+        self.assertIn('080-999-0000', rows[0]['nearest'])
+
+    def test_원문_자리는_띄어쓰기까지_그대로_보여준다(self):
+        """정규화한 문자열을 보여 주면 표기 차이가 눈에 안 들어온다."""
+        from v1.label.services.ocr_text import explain
+
+        rows = explain('냉장(0~10℃)에서보관', '보관방법 냉장 (0~10 ℃) 에서 보관')
+        self.assertIn(' ', rows[0]['nearest'])
+
+    def test_찾은_항목에는_설명을_붙이지_않는다(self):
+        """전부 붙이면 출력이 길어지기만 한다. 알고 싶은 것은 빗나간 자리뿐이다."""
+        from unittest.mock import patch
+
+        from v1.label.services import ocr_text
+
+        case = self._case_with_text(
+            '제품명 초코쿠키\n원재료명 밀가루, 설탕, 코코아분말, 정제소금')
+        with patch.object(ocr_text, 'extract_text', return_value=case.ocr_text):
+            result = ocr_text.measure_case(case)
+
+        found = [r for r in result['rows'] if r['found']]
+        self.assertTrue(found)
+        self.assertTrue(all('detail' not in r for r in found))
+
     def test_명령이_판정까지_찍는다(self):
         from io import StringIO
 
@@ -1642,6 +1680,7 @@ class OcrGroundVerifierTests(TestCase):
 
         self.assertEqual(match_score('초코쿠키', '제품명 초코쿠키'), 100.0)
         self.assertLess(match_score('없는문구입니다', '제품명 초코쿠키'), 60)
+
 
 
 class ListColumnAlignTests(TestCase):
