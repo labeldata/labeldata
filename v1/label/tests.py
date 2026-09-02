@@ -1060,9 +1060,140 @@ class CalorieConsistencyTests(TestCase):
         issues = self._issues(content_weight='800 g', weight_calorie='400 kcal', calories='155')
         self.assertEqual(len(issues), 1)
 
+    def test_5kcal_단위로_반올림한다(self):
+        """화면(processNutritionValue)과 같은 규칙이어야 한다."""
+        from v1.label.services.validation_service import round_calories
+
+        self.assertEqual(round_calories(276.66), 275)   # 87 g x 318/100
+        self.assertEqual(round_calories(277.5), 280)    # 5 는 위로 (JS Math.round)
+        self.assertEqual(round_calories(282.5), 285)    # 파이썬 round 면 280 이 된다
+        self.assertEqual(round_calories(1240), 1240)
+
+    def test_고치라는_숫자가_화면이_그리는_숫자와_같다(self):
+        """
+        검증이 반올림을 안 겪으면 앱이 절대 만들지 않는 숫자를 요구하게 된다.
+        운영에서 "277 kcal 입니다" 라고 했는데 표에는 275 가 찍혀 있었다.
+        고치라는 대로 고쳐도 경고가 안 사라진다.
+        """
+        issues = self._issues(content_weight='87 g (500 kcal)', calories='318')
+        self.assertEqual(len(issues), 1)
+        self.assertIn('275', issues[0]['message'])
+        self.assertNotIn('277', issues[0]['message'])
+
+    def test_총량이_커도_눈이_멀지_않는다(self):
+        """
+        허용오차가 5% 였을 때는 1,240 kcal 짜리에서 ±62 를 통과시켰다.
+        자릿수를 하나 잘못 적어도 지나갈 수 있었다.
+        """
+        self.assertEqual(len(self._issues(content_weight='800 g (1290 kcal)',
+                                          calories='155')), 1)
+
     def test_무료_검증에_물려_있다(self):
         from v1.label.services.validation_service import _CHECKS
         self.assertIn('check_calorie_consistency', {c.__name__ for c in _CHECKS})
+
+
+class AllergenDeclarationMatchTests(TestCase):
+    """
+    선언한 알레르기 성분을 **선언한 것으로 알아보는가.**
+
+    예전에는 쉼표로 자른 뒤 문자열이 정확히 같은지 봤다. 그래서 표시기준이
+    권장하는 표기인 "알류(달걀)" 이 표준 명칭 "알류" 와 다른 것으로 잡혀
+    **규정대로 적을수록 미선언 경고가 나왔다.** 운영에서 그대로 나왔다 -
+    "알류(달걀), 우유, 대두, 밀" 중 괄호가 붙은 알류만 누락으로 보고됐다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='allergen', password='x')
+
+    def _issues(self, rawmtrl, allergens):
+        from v1.label.services.validation_service import check_allergens
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='라벨',
+            rawmtrl_nm_display=rawmtrl, allergens=allergens)
+        return check_allergens(label)
+
+    RAW = '밀가루, 달걀, 탈지분유, 대두유, 설탕'
+
+    def test_괄호_주석이_붙어도_선언으로_본다(self):
+        self.assertEqual(self._issues(self.RAW, '알류(달걀), 우유, 대두, 밀'), [])
+
+    def test_함유_꼬리말이_붙어도_선언으로_본다(self):
+        self.assertEqual(self._issues(self.RAW, '알류, 우유, 대두, 밀 함유'), [])
+
+    def test_띄어쓰기가_달라도_선언으로_본다(self):
+        self.assertEqual(self._issues(self.RAW, '알류 (달걀) , 우유 , 대두 , 밀'), [])
+
+    def test_한_줄로_적어도_선언으로_본다(self):
+        self.assertEqual(self._issues(self.RAW, '알류(달걀)·우유·대두·밀 함유'), [])
+
+    def test_진짜_빠지면_그대로_잡는다(self):
+        """오탐을 막느라 실제 누락까지 놓치면 안 된다."""
+        issues = self._issues(self.RAW, '우유, 대두, 밀')
+        self.assertEqual(len(issues), 1)
+        self.assertIn('알류', issues[0]['message'])
+
+    def test_아무것도_선언하지_않으면_전부_잡는다(self):
+        issues = self._issues(self.RAW, '')
+        self.assertEqual(len(issues), 1)
+        for name in ('알류', '우유', '대두', '밀'):
+            self.assertIn(name, issues[0]['message'])
+
+
+class OcrNutritionBasisTests(TestCase):
+    """
+    사진에서 읽은 영양성분표를 **어떤 기준으로 저장하는가.**
+
+    라벨의 표는 그 표가 밝힌 기준으로 인쇄돼 있고, MyLabel 의 영양성분 칸은
+    언제나 100 g 당이다. 환산 없이 그대로 넣으면 그 약속이 깨진다.
+    """
+
+    def test_총_내용량_기준을_100g_당으로_바꾼다(self):
+        from v1.label.services.ocr_apply import to_per_100
+
+        rows = [{'field': 'calories', 'value': '318', 'unit': 'kcal'},
+                {'field': 'natriums', 'value': '630', 'unit': 'mg'}]
+        out = to_per_100(rows, '87')
+        self.assertEqual(out[0]['value'], '365.52')     # 318 x 100/87
+        self.assertEqual(out[1]['value'], '724.14')
+        self.assertEqual(out[0]['unit'], 'kcal')        # 단위는 그대로
+
+    def test_100g_당_이면_건드리지_않는다(self):
+        from v1.label.services.ocr_apply import to_per_100
+
+        rows = [{'field': 'calories', 'value': '318', 'unit': 'kcal'}]
+        self.assertEqual(to_per_100(rows, '100')[0]['value'], '318')
+
+    def test_기준을_못_읽으면_건드리지_않는다(self):
+        """기준을 모르면서 환산하면 모든 수치의 뜻이 바뀐다. 그게 더 나쁘다."""
+        from v1.label.services.ocr_apply import to_per_100
+
+        rows = [{'field': 'calories', 'value': '318', 'unit': 'kcal'}]
+        for basis in (None, '', '알 수 없음', '0'):
+            self.assertEqual(to_per_100(rows, basis)[0]['value'], '318')
+
+    def test_숫자가_아니면_손대지_않는다(self):
+        from v1.label.services.ocr_apply import to_per_100
+
+        rows = [{'field': 'calories', 'value': '5kcal 미만', 'unit': 'kcal'}]
+        self.assertEqual(to_per_100(rows, '87')[0]['value'], '5kcal 미만')
+
+    def test_사진으로_채운_라벨이_열량_경고를_받지_않는다(self):
+        """
+        보고된 그 건이다. "총 내용량 87 g / 318 kcal" 로 인쇄된 라벨을 읽어
+        넣었더니, 사진에도 내용량 칸에도 318 로 맞게 적혀 있는데 검증이
+        "열량이 맞지 않습니다" 라고 했다.
+        """
+        from v1.label.services.ocr_apply import apply_nutrition, to_per_100
+        from v1.label.services.validation_service import check_calorie_consistency
+
+        user = User.objects.create_user(username='ocrcal', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='라벨',
+                                       content_weight='87 g(318 kcal)')
+        rows = [{'field': 'calories', 'value': '318', 'unit': 'kcal'}]
+        apply_nutrition(label, to_per_100(rows, '87'))
+
+        self.assertEqual(check_calorie_consistency(label), [])
 
 
 class ListColumnAlignTests(TestCase):
@@ -1436,6 +1567,43 @@ class IngredientOrderByRatioTests(TestCase):
         label.rawmtrl_nm = '설탕, 밀가루'
         label.save()
         self.assertEqual(len(self._issues(label)), 1)
+
+    def test_같은_이름이_BOM_에_두_줄이면_지적하지_않는다(self):
+        """
+        text.find 는 언제나 첫 자리를 돌려주므로 같은 이름 둘이 같은 숫자를
+        받는다. 그러면 정렬이 배합비 오름차순으로 줄을 세우고, 그 줄은 정의상
+        위반이라 **문구를 어떻게 적든 반드시** 운다.
+
+        운영에서 이렇게 나왔다:
+            "코코아분말"(0.97%)가 "코코아분말"(1.58%)보다 앞에 있습니다.
+        """
+        label = self._label('설탕, 코코아분말, 소금',
+                            [('설탕', 50), ('코코아분말', 1.58),
+                             ('코코아분말', 0.97), ('소금', 0.5)])
+        self.assertEqual(self._issues(label), [])
+
+    def test_같은_이름이_문구에_두_번이면_지적하지_않는다(self):
+        label = self._label('설탕, 코코아분말, 유청, 코코아분말',
+                            [('설탕', 50), ('코코아분말', 1.5)])
+        self.assertEqual(self._issues(label), [])
+
+    def test_다른_원료명_안에_들어_있으면_지적하지_않는다(self):
+        """
+        "코코아분말" 은 "코코아분말가공품" 안에서도 걸린다. find 가 남의 자리를
+        돌려주므로 그 자리로 순서를 매기면 안 된다.
+        """
+        label = self._label('코코아분말가공품, 설탕',
+                            [('코코아분말가공품', 40), ('코코아분말', 0.9),
+                             ('설탕', 30)])
+        self.assertEqual(self._issues(label), [])
+
+    def test_이름이_겹치지_않는_진짜_위반은_그대로_잡는다(self):
+        """오탐을 막느라 실제 위반까지 놓치면 안 된다."""
+        label = self._label('소브산칼륨, 코코아분말, 소홍두깨살',
+                            [('소홍두깨살', 87.32), ('코코아분말', 1.5),
+                             ('소브산칼륨', 0.03)])
+        messages = ' '.join(i['message'] for i in self._issues(label))
+        self.assertIn('"소브산칼륨"(0.03%)', messages)
 
     def test_무료_검증에_물려_있다(self):
         from v1.label.services.validation_service import _CHECKS

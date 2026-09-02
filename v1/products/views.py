@@ -5892,7 +5892,7 @@ def ocr_apply_extras(request, label_id):
     항목을 빈 값으로 덮으므로 여기서 쓸 수 없다 - 사진에 없던 성분이 지워진다.
     """
     from v1.label.services.ocr_apply import (
-        apply_nutrition, apply_recycling_mark, parse_nutrition_basis,
+        apply_nutrition, apply_recycling_mark, parse_nutrition_basis, to_per_100,
     )
 
     label = _resolve_editable_label(request, label_id)
@@ -5902,12 +5902,19 @@ def ocr_apply_extras(request, label_id):
     except (ValueError, TypeError):
         payload = {}
 
+    # **기준을 먼저 읽는다.** 사진의 표는 그 표가 밝힌 기준(총 내용량 87 g 등)으로
+    # 인쇄돼 있고, 저장 칸은 언제나 100 g 당이다. 기준을 알아야 환산할 수 있다.
+    #
+    # 예전에는 값을 먼저 넣고 기준으로 serving_size 만 맞췄다. 분모(87)는
+    # 바뀌는데 분자는 인쇄값 그대로라, 화면이 318 kcal 를 275 로 바꿔 보여 주고
+    # 검증은 "열량이 맞지 않습니다" 라고 했다. 사진에도 라벨에도 318 인데도.
+    basis_value, basis_unit = parse_nutrition_basis(payload.get('nutrition_basis'))
+
     nutrition = payload.get('nutrition') or []
-    applied = apply_nutrition(label, nutrition)
+    applied = apply_nutrition(label, to_per_100(nutrition, basis_value))
 
     # 표의 기준(총 내용량 / 100g당)이 읽혔으면 함께 맞춘다. 기준이 어긋나면
     # 수치는 맞는데 표시가 틀린다.
-    basis_value, basis_unit = parse_nutrition_basis(payload.get('nutrition_basis'))
     if basis_value:
         label.serving_size = basis_value
         label.serving_size_unit = basis_unit or label.serving_size_unit or 'g'

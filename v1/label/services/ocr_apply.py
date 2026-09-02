@@ -93,12 +93,63 @@ def parse_nutrition(data):
     return rows
 
 
+def _trim_number(value: float) -> str:
+    """소수점 뒤 군더더기를 뗀 짧은 표기. 저장 칸이 10자다."""
+    text = f'{value:.2f}'.rstrip('0').rstrip('.')
+    return text or '0'
+
+
+def to_per_100(rows, basis_amount):
+    """
+    사진에서 읽은 표의 값을 **100 g(mL) 당** 으로 환산한다.
+
+    라벨의 영양성분표는 그 표가 밝힌 기준(총 내용량 / 1회 제공량 / 100 g)으로
+    인쇄돼 있다. 그런데 MyLabel 의 영양성분 칸이 담는 값은 **언제나 100 g 당**
+    이다 - 영양성분 계산기(nutrition_calculator_popup.js)가 그렇게 넣고, 표를
+    그릴 때 generateBasicDisplayV3 이 `값 x 표시량/100` 으로 되돌린다.
+
+    사진에서 읽은 값을 환산 없이 그대로 넣으면 그 약속이 깨진다. 실제로 이렇게
+    났다 - "총 내용량 87 g / 318 kcal" 로 인쇄된 라벨을 판독해 넣었더니
+
+        표시:   318 x 87/100 = 276.66 -> 5 kcal 단위 반올림 -> **275 kcal**
+        검증:   318 x 87/100 = 277 != 318  -> "열량이 맞지 않습니다"
+
+    사진에도 318, 내용량 칸에도 318 로 **맞게** 적혀 있는데 화면은 275 로 바꿔
+    보여 주고 검증은 틀렸다고 했다. 기준을 읽어 serving_size 는 87 로 맞추면서
+    **분자는 인쇄된 값 그대로 두어**, 분모만 바뀐 셈이었다.
+
+    basis_amount 가 없거나(기준을 못 읽음) 100 이면 그대로 둔다. 기준을
+    모르면서 환산하면 모든 수치의 뜻이 바뀐다 - 그건 더 나쁘다.
+    """
+    try:
+        basis = float(basis_amount)
+    except (TypeError, ValueError):
+        return rows
+    if basis <= 0 or basis == 100:
+        return rows
+
+    factor = 100.0 / basis
+    converted = []
+    for row in rows:
+        value = row.get('value')
+        try:
+            number = float(str(value).replace(',', ''))
+        except (TypeError, ValueError):
+            converted.append(row)   # 숫자가 아니면 손대지 않는다
+            continue
+        converted.append(dict(row, value=_trim_number(number * factor)))
+    return converted
+
+
 def apply_nutrition(label, rows):
     """
     고른 영양성분만 라벨에 쓴다. 안 고른 것은 건드리지 않는다.
 
     각 행은 {'field': …, 'raw': '630 mg'} 또는 {'field': …, 'value': …, 'unit': …}.
     숫자와 단위를 가르는 일은 서버가 한다 - 규정 단위 표를 서버가 갖고 있다.
+
+    **여기 오는 값은 이미 100 g 당이어야 한다.** 사진에서 읽은 값은 to_per_100
+    으로 환산해서 넘긴다 - 그 이유는 to_per_100 주석에 있다.
 
     **nutrition_save_api 를 쓰지 않는 이유**: 그 API 는 넘어오지 않은 항목을 빈
     값으로 덮는다. 사진에 없던 성분(식이섬유·칼슘 등)이 지워진다.

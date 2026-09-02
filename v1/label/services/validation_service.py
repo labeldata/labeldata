@@ -29,6 +29,7 @@ check_ingredient_order_by_ratio 가 DB 의 배합비와 대조해 본다(운영�
 소비기한 권장값 비교 — DOM/window 전역 상태에 강하게 결합돼 있어
 서버 로직으로 안전하게 재현하려면 별도 검증이 필요하다.
 """
+import math
 import re
 
 from django.core.cache import cache
@@ -389,6 +390,34 @@ def _total_amount(text: str) -> float | None:
     return value * _AMOUNT_SCALE[m.group(2).lower()]
 
 
+# 열량 비교 허용오차.
+#
+# 5 kcal 단위로 반올림한 값끼리 견주므로, 정당하게 벌어질 수 있는 차이는 그
+# 반올림 폭(±2.5) 뿐이다. 여유를 조금 두어 5 로 잡는다.
+#
+# 예전에는 `max(5.0, expected * 0.05)` 이었다. 5% 상대오차는 반올림과 성격이
+# 다른 이야기인데 섞여 있었고, 총량이 큰 제품일수록 눈이 멀었다 - 1,240 kcal
+# 라면 ±62 kcal 를 통과시킨다. 자릿수를 하나 잘못 적어도 지나갈 수 있다.
+_CALORIE_TOLERANCE = 5.0
+
+
+def round_calories(value: float) -> float:
+    """
+    표시기준의 5 kcal 단위 반올림. 화면(processNutritionValue)과 같은 규칙이다.
+
+    검증이 이 규칙을 안 겪으면 **앱이 절대 만들지 않는 숫자를 요구하게 된다.**
+    실제로 87 g 짜리 라벨에서 검증은 "277 kcal 입니다" 라고 했는데 화면이 그린
+    표에는 275 가 찍혀 있었다(276.66 -> 275). 사용자가 277 을 적으면 표와 여전히
+    어긋난다 - 고치라는 대로 고쳐도 경고가 안 사라진다.
+
+    파이썬의 round() 는 5 를 짝수 쪽으로 보내므로(banker's rounding) 쓰지 않는다.
+    자바스크립트 Math.round 와 같이 늘 위로 올린다.
+    """
+    if value < 5:
+        return value
+    return math.floor(value / 5 + 0.5) * 5
+
+
 def check_calorie_consistency(label) -> list[dict]:
     """
     내용량에 병기한 열량과 영양성분 탭의 계산값이 맞는지 확인.
@@ -402,8 +431,7 @@ def check_calorie_consistency(label) -> list[dict]:
     이어야 한다. 실제 데이터로 확인했다 — "800 g (1240 kcal)" 인 라벨의
     calories 가 155 이고, 155 x 800 / 100 = 1240 으로 정확히 맞는다.
 
-    두 값 중 하나라도 읽을 수 없으면 검사하지 않는다. 열량은 표시기준상
-    5kcal 단위로 반올림하므로 그만큼은 차이를 허용한다.
+    두 값 중 하나라도 읽을 수 없으면 검사하지 않는다.
     """
     text = normalize_units(f"{label.content_weight or ''} {label.weight_calorie or ''}")
     kcal_match = _KCAL_RE.search(text)
@@ -416,9 +444,8 @@ def check_calorie_consistency(label) -> list[dict]:
     if stated is None or per_100 is None or amount is None or amount <= 0:
         return []   # 셋 다 있어야 비교할 수 있다
 
-    expected = per_100 * amount / 100
-    tolerance = max(5.0, expected * 0.05)
-    if abs(stated - expected) <= tolerance:
+    expected = round_calories(per_100 * amount / 100)
+    if abs(stated - expected) <= _CALORIE_TOLERANCE:
         return []
 
     return [_issue(
@@ -428,6 +455,49 @@ def check_calorie_consistency(label) -> list[dict]:
         f'{expected:,.0f} kcal 입니다.',
         '영양성분 탭의 값을 고치거나, 내용량에 적은 열량을 다시 확인하세요.',
     )]
+
+
+def _placeable(known, text):
+    """
+    문구에서 **자리를 하나로 확정할 수 있는** 원료만 남긴다.
+
+    이 함수가 없던 시절 순서 검사는 `text.find(name)` 하나로 자리를 잡았다.
+    find 는 언제나 **첫 번째** 자리를 돌려주므로, 같은 이름이 둘이면 둘 다 같은
+    숫자를 받는다. 그러면 정렬이 자리로 순서를 못 정하고 튜플의 다음 원소
+    (이름, 배합비)로 넘어가 **배합비 오름차순**으로 줄을 세운다. 그 줄은 정의상
+    내림차순 위반이라, 다음 줄의 검사가 반드시 운다.
+
+    운영에서 이렇게 나왔다:
+
+        "코코아분말"(0.97%)가 "코코아분말"(1.58%)보다 앞에 있습니다.
+
+    같은 이름이 양쪽에 찍힌 것이 증거다. 같은 원료를 두 공정에 나눠 쓰거나 같은
+    첨가물을 두 줄로 넣은 제품은 문구를 어떻게 적든 100% 위반으로 보고됐다.
+
+    걸러내는 세 가지 - 셋 다 "자리를 못 짚는다" 는 같은 이야기다.
+
+      1) BOM 에 같은 이름이 여러 줄     어느 줄이 문구의 그 자리인지 알 수 없다
+      2) 문구에 같은 이름이 여러 번     어느 자리를 뜻하는지 알 수 없다
+      3) 다른 원료명 안에 들어 있는 이름 ("코코아분말" ⊂ "코코아분말가공품")
+                                        find 가 남의 자리를 돌려준다
+
+    모르는 것과 위반은 다르다. 짚을 수 없으면 세지 않는다 - 이 함수의 원래
+    원칙 그대로다. 놓치는 위반이 생길 수 있지만, 없는 위반을 만들어 내는 것보다
+    낫다. 지어낸 지적은 검사 전체의 신뢰를 깎는다.
+    """
+    names = [name for name, _ in known]
+    duplicated = {name for name in names if names.count(name) > 1}
+
+    kept = []
+    for name, ratio in known:
+        if name in duplicated:
+            continue
+        if text.count(name) != 1:
+            continue
+        if any(name != other and name in other for other in names):
+            continue
+        kept.append((name, ratio))
+    return kept
 
 
 def check_ingredient_order_by_ratio(label) -> list[dict]:
@@ -448,6 +518,8 @@ def check_ingredient_order_by_ratio(label) -> list[dict]:
 
     문구에서 이름을 찾지 못한 원료는 세지 않는다. 표시명이 원료명과 다르게 적혀
     있으면(예: "밀가루" -> "밀 가공품") 못 찾는데, 모르는 것과 위반은 다르다.
+    **이름이 문구의 어느 자리를 가리키는지 확정할 수 없을 때도 마찬가지다** -
+    아래 _placeable 참고.
     """
     text = (label.rawmtrl_nm_display or label.rawmtrl_nm or '').strip()
     if not text:
@@ -463,7 +535,8 @@ def check_ingredient_order_by_ratio(label) -> list[dict]:
     except Exception:
         return []
 
-    placed = [(text.find(name), name, ratio) for name, ratio in known if name in text]
+    placed = [(text.find(name), name, ratio)
+              for name, ratio in _placeable(known, text)]
     if len(placed) < 2:
         return []   # 문구에서 짚어낸 원료가 2개 미만이면 순서를 따질 수 없다
 
@@ -693,17 +766,25 @@ def check_allergens(label) -> list[dict]:
     if not ingredients_text:
         return []
 
-    declared = {
-        a.strip() for a in re.split(r'[,、，]', label.allergens or '')
-        if a.strip()
-    }
+    # 선언 문구는 **통째로** 놓고 표준 명칭이 그 안에 있는지 본다.
+    #
+    # 예전에는 쉼표로 자른 뒤 문자열이 정확히 같은지 봤다. 그래서 표시기준이
+    # 권장하는 표기인 "알류(달걀)" 이 표준 명칭 "알류" 와 다른 것으로 잡혀,
+    # **규정대로 적을수록 미선언 경고가 나왔다.** 운영에서 그대로 나왔다 -
+    # "알류(달걀), 우유, 대두, 밀" 중 괄호가 붙은 알류만 누락으로 보고됐다.
+    #
+    # 라벨에 실제로 쓰이는 표기를 늘어놓고 보면 잘라서 맞추는 쪽이 이길 수 없다:
+    #   "알류(달걀)"  "우유(유당)"  "밀 함유"  "대두, 밀 함유"  "난류"
+    # 괄호 주석·꼬리말·띄어쓰기가 제각각이고, 규정이 요구하는 것은 **표준 명칭이
+    # 적혀 있는가** 뿐이다. 그러니 그것만 본다.
+    declared_text = re.sub(r'\s+', '', label.allergens or '')
 
     detected = set()
     for allergen, keywords in ALLERGEN_KEYWORDS.items():
         if any(kw.lower() in ingredients_text.lower() for kw in keywords):
             detected.add(allergen)
 
-    missing = detected - declared
+    missing = {a for a in detected if a not in declared_text}
     issues = []
     if missing:
         issues.append(_issue(
