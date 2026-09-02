@@ -246,6 +246,46 @@ def truth_update(request, case_id):
 
 @staff_member_required
 @require_POST
+def truth_ocr_text(request, case_id):
+    """
+    이 정답지 사진의 **글자 원문**을 뽑고, 정답을 얼마나 담고 있는지 잰다.
+
+    판독이 아니다. 어느 글자가 어느 항목인지는 보지 않는다 - 사진에 적힌 글자를
+    그대로 받아 와서, 정답지의 값들이 그 안에 실제로 있는지만 센다.
+
+    이게 OCR 원문 도입의 1단계이고 **여기서 가부가 갈린다.** 우리 라벨(6pt 원형
+    스티커, 곡면 용기)을 OCR 이 못 읽으면 그 다음이 전부 무의미하다.
+    자세한 것은 services/ocr_text.py 와 OCR_UPGRADE_PLAN.md §13.
+
+    한 번 읽은 원문은 정답지에 붙어 있어 다시 부르지 않는다. 다시 읽히려면
+    refresh 를 준다.
+    """
+    from v1.common.models import OcrTruthCase
+    from v1.label.services.ocr_text import measure_case
+
+    case = get_object_or_404(OcrTruthCase, pk=case_id)
+    payload = _json_body(request)
+
+    try:
+        result = measure_case(case, refresh=bool(payload.get('refresh')))
+    except Exception as exc:
+        logger.exception('[OCR 원문] 측정 실패 (case=%s)', case_id)
+        return JsonResponse({'success': False,
+                             'error': f'원문을 뽑지 못했습니다: {exc}'}, status=500)
+
+    if not result['chars']:
+        return JsonResponse({
+            'success': False,
+            'error': ('원문이 비었습니다. 서비스 계정 설정'
+                      '(GOOGLE_VISION_SERVICE_ACCOUNT_JSON)이나 사진을 확인하세요 — '
+                      '자세한 이유는 서버 로그에 있습니다.'),
+        }, status=502)
+
+    return JsonResponse({'success': True, 'result': result})
+
+
+@staff_member_required
+@require_POST
 def truth_delete(request, case_id):
     from v1.common.models import OcrTruthCase
 

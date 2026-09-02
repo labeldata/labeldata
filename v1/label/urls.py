@@ -108,6 +108,8 @@ urlpatterns = [
          name='ocr_lab_truth_locate'),
     path('ocr-lab/truth/<int:case_id>/reread/', views_ocr_lab.truth_reread,
          name='ocr_lab_truth_reread'),
+    path('ocr-lab/truth/<int:case_id>/ocr-text/', views_ocr_lab.truth_ocr_text,
+         name='ocr_lab_truth_ocr_text'),
     path('ocr-lab/truth/<int:case_id>/delete/', views_ocr_lab.truth_delete,
          name='ocr_lab_truth_delete'),
     path('ocr-lab/run/', views_ocr_lab.run_benchmark, name='ocr_lab_run'),

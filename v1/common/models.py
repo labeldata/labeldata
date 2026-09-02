@@ -259,6 +259,19 @@ class OcrTruthCase(models.Model):
     # 사람이 정답이라고 확인했는가. 확인 전 초안을 채점에 쓰면 자기 답을 자기가
     # 채점하는 꼴이 된다.
     verified = models.BooleanField(default=False, verbose_name='정답 확인됨')
+
+    # 이 사진의 글자 원문 (Google Vision). 판독값이 아니라 **사진에 적힌 글자**다.
+    #
+    # 한 번 읽으면 여기 붙여 두고 다시 읽지 않는다. 측정은 같은 사진을 회차 x
+    # 정답지 수 x 프롬프트 판 수만큼 읽는데, 매번 Vision 을 부르면 잴수록 돈이
+    # 나가고 원문이 회차마다 달라져 무엇을 재는지 알 수 없게 된다. 파일 캐시는
+    # MAX_ENTRIES 를 넘으면 잘려 나가므로(ai_rate_limit 이 같은 이유로 DB 로
+    # 옮겼다) 쓰지 않는다. 사진이 고정이니 사진 옆에 두는 것이 맞다.
+    ocr_text = models.TextField(blank=True, default='', verbose_name='OCR 원문')
+    ocr_engine = models.CharField(max_length=20, blank=True, default='',
+                                  verbose_name='OCR 엔진')
+    ocr_fetched_at = models.DateTimeField(null=True, blank=True,
+                                          verbose_name='OCR 읽은 시각')
     note = models.TextField(blank=True, default='', verbose_name='메모')
     created_by = models.ForeignKey(User, null=True, blank=True,
                                    on_delete=models.SET_NULL,

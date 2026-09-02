@@ -1196,6 +1196,223 @@ class OcrNutritionBasisTests(TestCase):
         self.assertEqual(check_calorie_consistency(label), [])
 
 
+class OcrGroundTextTests(TestCase):
+    """
+    사진에서 글자 원문만 뽑는 길 (Google Vision) — 1단계.
+
+    이 단계의 목적은 판독을 고치는 게 아니라 **가부를 가르는 것**이다.
+    OCR 이 우리 라벨(6pt 원형 스티커·곡면 용기)을 못 읽으면 그 다음이 전부
+    무의미하다. 그래서 "읽히나" 를 사람 눈이 아니라 정답지로 잰다.
+    """
+
+    def _vision_response(self, text):
+        from unittest.mock import Mock
+
+        resp = Mock()
+        resp.status_code = 200
+        resp.json.return_value = {
+            'responses': [{'fullTextAnnotation': {'text': text}}]}
+        return resp
+
+    def test_원문을_받아_온다(self):
+        from unittest.mock import patch
+
+        from v1.label.services import ocr_text
+
+        long_text = '제품명 초코쿠키\n원재료명 밀가루(밀:미국산), 설탕, 코코아분말' * 2
+        with patch.object(ocr_text, '_access_token', return_value='t'), \
+             patch('requests.post', return_value=self._vision_response(long_text)):
+            self.assertEqual(ocr_text.extract_text(b'\xff\xd8fake'), long_text.strip())
+
+    def test_글자가_몇_개뿐이면_버린다(self):
+        """
+        도장·서명만 몇 글자 흘러나온 조각을 "사진에 이렇게 적혀 있다" 고 넘기면
+        모델이 그것을 믿고 나머지를 지어낸다. PDF 경로에서 이미 겪은 일이라
+        같은 가드를 둔다. 없는 원문이 나쁜 원문보다 낫다.
+        """
+        from unittest.mock import patch
+
+        from v1.label.services import ocr_text
+
+        with patch.object(ocr_text, '_access_token', return_value='t'), \
+             patch('requests.post', return_value=self._vision_response('(주)가나다')):
+            self.assertEqual(ocr_text.extract_text(b'x'), '')
+
+    def test_설정이_없으면_조용히_비운다(self):
+        """원문은 곁들이는 것이다. 없다고 판독이 멈추면 안 된다."""
+        from django.test import override_settings
+
+        from v1.label.services import ocr_text
+
+        with override_settings(GOOGLE_VISION_SERVICE_ACCOUNT_JSON='',
+                               FCM_SERVICE_ACCOUNT_JSON=''):
+            self.assertEqual(ocr_text.extract_text(b'x'), '')
+
+    def test_호출이_터져도_빈_문자열이다(self):
+        from unittest.mock import patch
+
+        from v1.label.services import ocr_text
+
+        with patch.object(ocr_text, '_access_token', return_value='t'), \
+             patch('requests.post', side_effect=RuntimeError('망')):
+            self.assertEqual(ocr_text.extract_text(b'x'), '')
+
+    def test_Vision_이_오류를_돌려주면_빈_문자열이다(self):
+        from unittest.mock import Mock, patch
+
+        from v1.label.services import ocr_text
+
+        resp = Mock(status_code=200)
+        resp.json.return_value = {'responses': [{'error': {'message': 'quota'}}]}
+        with patch.object(ocr_text, '_access_token', return_value='t'), \
+             patch('requests.post', return_value=resp):
+            self.assertEqual(ocr_text.extract_text(b'x'), '')
+
+    # ── 정답지로 재기 ────────────────────────────────────────────────────
+
+    def test_정답이_원문에_있는지_센다(self):
+        from v1.label.services.ocr_text import field_recall
+
+        expected = {'prdlst_nm': '초코쿠키',
+                    'rawmtrl_nm': '밀가루(밀:미국산), 설탕, 코코아분말',
+                    'cautions': '이 제품은 알류를 사용한 제품과 같은 시설에서 제조'}
+        text = ('제품명 초코쿠키\n'
+                '원재료명 밀가루( 밀 : 미국산 ), 설탕, 코코아분말\n')
+        rows = {r['field']: r for r in field_recall(expected, text)}
+
+        self.assertTrue(rows['prdlst_nm']['found'])
+        self.assertTrue(rows['rawmtrl_nm']['found'])   # 띄어쓰기 차이는 넘어간다
+        self.assertFalse(rows['cautions']['found'])    # 원문에 없다
+        self.assertTrue(rows['rawmtrl_nm']['long'])
+        self.assertFalse(rows['prdlst_nm']['long'])
+
+    def test_비어_있는_정답은_채점하지_않는다(self):
+        """그 라벨에 없는 항목이지 못 읽은 항목이 아니다."""
+        from v1.label.services.ocr_text import field_recall
+
+        rows = field_recall({'prdlst_nm': '초코쿠키', 'importer_address': ''},
+                            '제품명 초코쿠키')
+        self.assertEqual([r['field'] for r in rows], ['prdlst_nm'])
+
+    def test_가부는_긴_칸으로_가른다(self):
+        """짧은 칸은 판독이 이미 100점이라 원문이 도울 여지가 없다."""
+        from v1.label.services.ocr_text import field_recall, recall_summary
+
+        rows = field_recall({'prdlst_nm': '초코쿠키', 'rawmtrl_nm': '밀가루, 설탕'},
+                            '제품명 초코쿠키')
+        summary = recall_summary(rows)
+        self.assertEqual(summary['long_fields'], 1)
+        self.assertLess(summary['long_recall'], 0.9)
+
+    def test_긴_칸이_없으면_판단을_보류한다(self):
+        """못 읽은 것과 잴 것이 없는 것은 다르다. 0 이 아니라 None 이다."""
+        from v1.label.services.ocr_text import field_recall, recall_summary, verdict
+
+        summary = recall_summary(field_recall({'prdlst_nm': '초코쿠키'}, '초코쿠키'))
+        self.assertIsNone(summary['long_recall'])
+        self.assertIn('판단할 수 없다', verdict(None))
+
+    def test_문턱이_문장으로_나온다(self):
+        from v1.label.services.ocr_text import verdict
+
+        self.assertIn('읽힌다', verdict(0.95))
+        self.assertIn('검증자로만', verdict(0.75))
+        self.assertIn('접는다', verdict(0.4))
+
+    def test_한_번_읽은_원문은_다시_부르지_않는다(self):
+        """
+        측정은 같은 사진을 회차 x 정답지 x 프롬프트 판 수만큼 읽는다. 매번
+        Vision 을 부르면 잴수록 돈이 나가고, 원문이 회차마다 달라지면 무엇을
+        재고 있는지 알 수 없게 된다.
+        """
+        from io import BytesIO
+        from unittest.mock import patch
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        from v1.common.models import OcrTruthCase
+        from v1.label.services import ocr_text
+
+        buf = BytesIO()
+        Image.new('RGB', (200, 150), 'white').save(buf, format='JPEG')
+        case = OcrTruthCase.objects.create(
+            name='원문 시험',
+            image=SimpleUploadedFile('t.jpg', buf.getvalue(), 'image/jpeg'),
+            expected={'prdlst_nm': '초코쿠키'})
+
+        long_text = '제품명 초코쿠키\n원재료명 밀가루, 설탕, 코코아분말, 정제소금' * 2
+        with patch.object(ocr_text, 'extract_text', return_value=long_text) as call:
+            first = ocr_text.text_for_case(case)
+            second = ocr_text.text_for_case(case)
+
+        self.assertEqual(first, second)
+        self.assertEqual(call.call_count, 1)          # 두 번째는 저장된 것을 쓴다
+        case.refresh_from_db()
+        self.assertEqual(case.ocr_engine, 'google')
+        self.assertTrue(case.ocr_fetched_at)
+
+    def _case_with_text(self, text, **kwargs):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        from v1.common.models import OcrTruthCase
+
+        buf = BytesIO()
+        Image.new('RGB', (200, 150), 'white').save(buf, format='JPEG')
+        defaults = dict(
+            name='원문 시험',
+            image=SimpleUploadedFile('t.jpg', buf.getvalue(), 'image/jpeg'),
+            expected={'prdlst_nm': '초코쿠키',
+                      'rawmtrl_nm': '밀가루, 설탕, 코코아분말, 정제소금'},
+            verified=True, ocr_text=text, ocr_engine='google')
+        defaults.update(kwargs)
+        return OcrTruthCase.objects.create(**defaults)
+
+    def test_명령이_판정까지_찍는다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        self._case_with_text('제품명 초코쿠키\n원재료명 밀가루, 설탕, 코코아분말, 정제소금')
+        out = StringIO()
+        call_command('ocr_ground_check', stdout=out)
+        text = out.getvalue()
+
+        self.assertIn('rawmtrl_nm', text)
+        self.assertIn('긴 칸 회수율 평균', text)
+        self.assertIn('판정:', text)
+        # 정답지가 5장 미만이면 성공 판정은 못 한다고 알려야 한다
+        self.assertIn('성공 판정은 못 한다', text)
+
+    def test_명령이_잴_것이_없어도_안_터진다(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('ocr_ground_check', stdout=out)
+        self.assertIn('잴 정답지가 없다', out.getvalue())
+
+    def test_확인_안_된_정답지는_기본으로_빼놓는다(self):
+        """확인 전 초안을 자로 쓰면 자기 답을 자기가 채점하는 꼴이 된다."""
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        self._case_with_text('제품명 초코쿠키\n원재료명 밀가루, 설탕', verified=False)
+
+        out = StringIO()
+        call_command('ocr_ground_check', stdout=out)
+        self.assertIn('잴 정답지가 없다', out.getvalue())
+
+        out = StringIO()
+        call_command('ocr_ground_check', all=True, stdout=out)
+        self.assertIn('판정:', out.getvalue())
+
+
 class ListColumnAlignTests(TestCase):
     """
     목록 표의 머리글과 본문 정렬.
