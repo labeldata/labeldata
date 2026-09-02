@@ -2055,14 +2055,30 @@ class HybridReadTests(TestCase):
                                          use_hybrid=False), '')
         call.assert_not_called()
 
-    def test_원문_지시문이_옮겨_적으라고_말한다(self):
+    def test_원문_지시문이_쓸_자리를_정해_준다(self):
+        """
+        "글자는 원문을 그대로 옮기라" 만으로는 너무 넓었다. 정답지 넷에서
+        rawmtrl_nm 은 +14.5~+79.5 로 올랐는데 allergens(-87.7), prdlst_nm
+        (-37.9), nutrition_basis(-53.8) 가 무너졌다.
+
+        무너진 셋은 **원문을 그대로 옮기면 안 되는 칸**이다 - 알레르기는
+        "함유" 를 떼야 하고, 제품명은 작업지시서 품명을 걸러야 한다.
+        모델은 시킨 대로 한 것이다.
+        """
         from v1.label.services.ocr_service import hybrid_text_block
 
-        block = hybrid_text_block('제품명 초코쿠키')
-        self.assertIn('그대로 옮기고', block['text'])
-        self.assertIn('제품명 초코쿠키', block['text'])
-        # 원문이 정답은 아니다 - 뜻이 안 통하면 사진을 믿으라고 해야 한다
-        self.assertIn('참고이지 정답이 아닙니다', block['text'])
+        text = hybrid_text_block('제품명 초코쿠키')['text']
+
+        self.assertIn('제품명 초코쿠키', text)
+        self.assertIn('참고이지 정답이 아닙니다', text)
+        # 원문을 그대로 쓸 칸을 이름으로 짚는다
+        for field in ('원재료명', '주의사항', '기타표시사항'):
+            self.assertIn(field, text)
+        # 그대로 옮기면 틀리는 칸도 이름으로 짚는다
+        for field in ('알레르기', '제품명', 'nutrition_basis', '분리배출'):
+            self.assertIn(field, text)
+        # 라벨 밖 글자가 섞여 든다는 것을 알려야 한다
+        self.assertIn('작업지시서', text)
 
     def test_원문이_없으면_붙이지_않는다(self):
         from v1.label.services.ocr_service import hybrid_text_block
