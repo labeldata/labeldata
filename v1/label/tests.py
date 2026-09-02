@@ -1730,6 +1730,76 @@ class OcrGroundTextTests(TestCase):
         self.assertIn('판정:', out.getvalue())
 
 
+class FreetextPairTests(TestCase):
+    """
+    주의사항과 기타표시사항은 **경계가 사람마다 다르다.**
+
+    표시기준이 둘을 칼같이 가르지 않아서 같은 문구를 한 사람은 주의사항에,
+    다른 사람은 기타표시사항에 적는다. 인쇄물에는 두 칸이 나란히 찍히므로
+    어느 쪽에 있든 표시는 온전하다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='pair', password='x')
+
+    def test_옆_칸에_넣었다고_0점이_되지_않는다(self):
+        from v1.label.services.ocr_benchmark import compare
+
+        expected = {'cautions': '직사광선을 피해 서늘한 곳에 보관하십시오'}
+        # 모델이 같은 문구를 기타표시사항에 넣었다
+        data = {'cautions': {'value': ''},
+                'additional_info': {'value': '직사광선을 피해 서늘한 곳에 보관하십시오'}}
+
+        out = compare(expected, data)
+        self.assertGreaterEqual(out['fields']['cautions']['score'], 98)
+
+    def test_제자리에_있으면_그대로_채점한다(self):
+        from v1.label.services.ocr_benchmark import compare
+
+        expected = {'cautions': '직사광선을 피해 보관'}
+        data = {'cautions': {'value': '직사광선을 피해 보관'},
+                'additional_info': {'value': '고객상담실 080-000-0000'}}
+
+        out = compare(expected, data)
+        self.assertGreaterEqual(out['fields']['cautions']['score'], 98)
+
+    def test_둘_다_틀리면_여전히_틀린다(self):
+        """오탐을 막느라 진짜 오독까지 넘어가면 안 된다."""
+        from v1.label.services.ocr_benchmark import compare
+
+        expected = {'cautions': '직사광선을 피해 서늘한 곳에 보관하십시오'}
+        data = {'cautions': {'value': '없는 문구입니다'},
+                'additional_info': {'value': '고객상담실 080-000-0000'}}
+
+        out = compare(expected, data)
+        self.assertLess(out['fields']['cautions']['score'], 75)
+
+    def test_한쪽에만_적어도_미입력으로_보지_않는다(self):
+        """
+        표시하기로 켠 칸이 비어 있어도, 그 문구가 짝 칸에 있으면 인쇄물은
+        온전하다. 규정을 지킨 라벨을 탓하면 안 된다.
+        """
+        from v1.label.services.validation_service import check_required_fields
+
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='라벨',
+            chckd_cautions='Y', cautions='',
+            additional_info='직사광선을 피해 보관하십시오')
+
+        messages = ' '.join(i['message'] for i in check_required_fields(label))
+        self.assertNotIn('주의사항', messages)
+
+    def test_양쪽_모두_비면_지적한다(self):
+        from v1.label.services.validation_service import check_required_fields
+
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='라벨',
+            chckd_cautions='Y', cautions='', additional_info='')
+
+        messages = ' '.join(i['message'] for i in check_required_fields(label))
+        self.assertIn('주의사항', messages)
+
+
 class OcrGroundVerifierTests(TestCase):
     """
     판독값이 사진에 실제로 있던 글자인가 — OCR 원문으로 대조한다 (2단계).

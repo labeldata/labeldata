@@ -178,9 +178,17 @@ _REQUIRED_CHECKBOX_FIELDS = (
 #       label_preview.html 의 ORDERED_FIELDS 에서 아예 빠져 있다(주석 처리).
 #       V2 영양성분 탭(nutrition_save_api)은 개별 항목만 저장하고 이 요약 문구를
 #       만들지 않는다. 값이 있느냐는 개별 항목으로 판단해야 맞다.
+#   cautions / additional_info : **두 칸의 경계는 사람마다 다르다.** 표시기준이
+#       "주의사항" 과 "기타표시사항" 을 칼같이 가르지 않아서, 같은 문구를 한
+#       사람은 주의사항에, 다른 사람은 기타표시사항에 적는다. 실제 라벨에서도
+#       혼입가능 문구·보관 주의·고객상담실 번호가 양쪽에 섞여 나온다.
+#       인쇄물에는 두 칸이 나란히 찍히므로 어느 쪽에 있든 표시는 온전하다.
+#       한쪽이 비었다고 "미입력" 이라 하면, 규정을 지킨 라벨을 탓하게 된다.
 _ALTERNATIVE_SOURCES = {
     'rawmtrl_nm_display': ('rawmtrl_nm',),
     'nutrition_text': ('calories', 'natriums', 'carbohydrates', 'proteins', 'fats'),
+    'cautions': ('additional_info',),
+    'additional_info': ('cautions',),
 }
 
 # 열량 표기를 찾는 자. 라벨은 "kcal" 만 쓰지 않는다 — 인쇄물에는 조판용 조합

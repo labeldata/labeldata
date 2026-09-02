@@ -93,13 +93,48 @@ def flatten(ocr_data):
     return out
 
 
+# 주의사항과 기타표시사항은 **경계가 사람마다 다르다.**
+#
+# 표시기준이 둘을 칼같이 가르지 않아서, 같은 문구를 한 사람은 주의사항에 다른
+# 사람은 기타표시사항에 적는다. 정답지도 그렇게 쌓이고 모델도 그렇게 읽는다.
+#
+# 그러면 채점이 두 번 거짓말을 한다 - 모델이 옳은 문구를 옆 칸에 넣었을 뿐인데
+# 두 칸 모두 0점이 되고("정답 칸엔 없다", "이 칸엔 엉뚱한 게 있다"), 그 0점이
+# 평균을 끌어내려 프롬프트를 고쳐도 나아진 것이 안 보인다.
+#
+# 인쇄물에는 두 칸이 나란히 찍히므로 **어느 쪽에 있든 표시는 온전하다.**
+# 그래서 채점할 때만 둘을 한 묶음으로 본다.
+_FREETEXT_PAIR = ('cautions', 'additional_info')
+
+
+def _pool_freetext(actual, expected):
+    """
+    자유 문구 두 칸이 서로 바뀌어 들어왔으면 제자리를 찾아 준다.
+
+    정답이 있는 칸의 값이 비었거나 크게 어긋나는데 짝 칸에 그 문구가 있으면,
+    채점에 쓸 값으로 짝 칸의 것을 쓴다. **원본은 건드리지 않는다** - 화면에
+    보여 주는 값은 모델이 실제로 넣은 자리 그대로여야 한다.
+    """
+    pooled = dict(actual)
+    for field, other in (_FREETEXT_PAIR, _FREETEXT_PAIR[::-1]):
+        exp = squeeze((expected or {}).get(field))
+        if not exp:
+            continue
+        here, there = squeeze(pooled.get(field)), squeeze(pooled.get(other))
+        if not there:
+            continue
+        if fuzz.ratio(exp, there) > fuzz.ratio(exp, here):
+            pooled[field] = pooled.get(other)
+    return pooled
+
+
 def compare(expected, ocr_data):
     """
     정답과 판독 결과를 항목별로 채점한다.
 
     Returns: {'fields': {키: {score, grade, expected, actual}}, 'mean': …}
     """
-    actual = flatten(ocr_data)
+    actual = _pool_freetext(flatten(ocr_data), expected)
     # 일부러 안 읽은 칸(자유 문구 옵션)은 **채점에서 뺀다.** "못 읽었다" 로 0점을
     # 주면 평균이 그만큼 내려가서, 옵션을 껐다 켰다 하는 비교가 거짓말이 된다.
     skipped = {key for key, item in (ocr_data or {}).items()
