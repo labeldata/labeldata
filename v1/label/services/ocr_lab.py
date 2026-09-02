@@ -376,6 +376,51 @@ def draft_expected(image_file, model=None):
     return flatten(out.get('data')), ''
 
 
+# 정답지가 담는 항목과 그 값을 가져올 MyLabel 필드.
+#
+# **화면의 입력 칸 목록도 이것이다.** 예전에는 화면이 "이미 값이 있는 항목" 만
+# 입력 줄로 그렸다. 그래서 판독이 못 읽었거나 일부러 안 읽은 칸은 줄 자체가
+# 안 생겨, 손으로 채워 넣을 방법이 없었다 - 주의사항·기타표시사항이 정확히
+# 그 경우였다. 정답지에 그 두 칸이 영영 안 쌓이니 그 칸의 정확도도 잴 수
+# 없었다. 빈 칸이라도 **늘 보여야** 사람이 채울 수 있다.
+#
+# 순서가 곧 화면 순서다. 라벨을 읽는 순서(제품 -> 업체 -> 원재료 -> 문구 ->
+# 영양성분)로 둔다.
+TRUTH_FIELDS = (
+    ('prdlst_nm', 'prdlst_nm'),
+    ('prdlst_dcnm', 'prdlst_dcnm'),
+    ('content_weight', 'content_weight'),
+    ('weight_calorie', 'weight_calorie'),
+    ('prdlst_report_no', 'prdlst_report_no'),
+    ('country_of_origin', 'country_of_origin'),
+    ('bssh_nm', 'bssh_nm'),
+    ('distributor_address', 'distributor_address'),
+    ('repacker_address', 'repacker_address'),
+    ('importer_address', 'importer_address'),
+    ('storage_method', 'storage_method'),
+    ('pog_daycnt', 'pog_daycnt'),
+    ('rawmtrl_nm', 'rawmtrl_nm_display'),
+    ('allergens', 'allergens'),
+    ('ingredient_info', 'ingredient_info'),
+    ('frmlc_mtrqlt', 'frmlc_mtrqlt'),
+    ('recycling_mark', 'prv_recycling_mark_type'),
+    ('cautions', 'cautions'),
+    ('additional_info', 'additional_info'),
+    ('nutrition_basis', 'serving_size'),
+    ('calories', 'calories'),
+    ('natriums', 'natriums'),
+    ('carbohydrates', 'carbohydrates'),
+    ('sugars', 'sugars'),
+    ('fats', 'fats'),
+    ('trans_fats', 'trans_fats'),
+    ('saturated_fats', 'saturated_fats'),
+    ('cholesterols', 'cholesterols'),
+    ('proteins', 'proteins'),
+)
+
+TRUTH_FIELD_KEYS = tuple(key for key, _ in TRUTH_FIELDS)
+
+
 def expected_from_label(label):
     """
     사람이 검증하고 판정까지 낸 표시사항을 정답으로 가져온다.
@@ -388,37 +433,8 @@ def expected_from_label(label):
     없는 항목" 으로 보고 건너뛰므로, 빈 값을 넣어도 결과가 달라지지 않는데
     화면만 지저분해진다.
     """
-    mapping = {
-        'prdlst_nm': 'prdlst_nm',
-        'prdlst_dcnm': 'prdlst_dcnm',
-        'content_weight': 'content_weight',
-        'weight_calorie': 'weight_calorie',
-        'prdlst_report_no': 'prdlst_report_no',
-        'country_of_origin': 'country_of_origin',
-        'bssh_nm': 'bssh_nm',
-        'distributor_address': 'distributor_address',
-        'repacker_address': 'repacker_address',
-        'importer_address': 'importer_address',
-        'storage_method': 'storage_method',
-        'rawmtrl_nm': 'rawmtrl_nm_display',
-        'allergens': 'allergens',
-        'ingredient_info': 'ingredient_info',
-        'frmlc_mtrqlt': 'frmlc_mtrqlt',
-        'pog_daycnt': 'pog_daycnt',
-        'cautions': 'cautions',
-        'additional_info': 'additional_info',
-        'calories': 'calories',
-        'natriums': 'natriums',
-        'carbohydrates': 'carbohydrates',
-        'sugars': 'sugars',
-        'fats': 'fats',
-        'trans_fats': 'trans_fats',
-        'saturated_fats': 'saturated_fats',
-        'cholesterols': 'cholesterols',
-        'proteins': 'proteins',
-    }
     out = {}
-    for key, attr in mapping.items():
+    for key, attr in TRUTH_FIELDS:
         value = str(getattr(label, attr, '') or '').strip()
         if key == 'rawmtrl_nm' and not value:
             value = str(getattr(label, 'rawmtrl_nm', '') or '').strip()

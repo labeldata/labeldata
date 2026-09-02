@@ -1428,6 +1428,46 @@ class OcrGroundTextTests(TestCase):
 
         self.assertTrue(read.call_args.kwargs['read_freetext'])
 
+    def test_정답지_화면이_빈_칸도_보여준다(self):
+        """
+        예전에는 이미 값이 있는 항목만 입력 줄로 그렸다. 그래서 판독이 못
+        읽은 칸은 줄 자체가 안 생겨 손으로 채울 방법이 없었다 - 주의사항·
+        기타표시사항이 정확히 그 경우였고, 그 두 칸이 정답지에 영영 안
+        쌓이니 정확도도 잴 수 없었다.
+        """
+        from v1.label.services.ocr_lab import TRUTH_FIELD_KEYS
+
+        staff = User.objects.create_user(username='fieldstaff', password='x',
+                                         is_staff=True, is_superuser=True)
+        self.client.force_login(staff)
+        resp = self.client.get('/label/ocr-lab/')
+
+        self.assertEqual(resp.status_code, 200)
+        fields = resp.context['truth_fields']
+        for key in ('cautions', 'additional_info', 'recycling_mark', 'pog_daycnt'):
+            self.assertIn(key, fields)
+        self.assertEqual(fields, list(TRUTH_FIELD_KEYS))
+        # 화면이 읽어 갈 수 있게 실려 나가야 한다
+        self.assertContains(resp, 'truth-fields-data')
+
+    def test_정답지_항목_목록이_한_곳에만_있다(self):
+        """
+        화면이 그리는 칸과 표시사항에서 값을 가져오는 칸이 갈라지면, 한쪽에만
+        있는 항목이 조용히 생긴다.
+        """
+        from v1.label.models import MyLabel
+        from v1.label.services.ocr_lab import TRUTH_FIELD_KEYS, expected_from_label
+
+        user = User.objects.create_user(username='truthmap', password='x')
+        label = MyLabel.objects.create(
+            user_id=user, my_label_name='라벨', prdlst_nm='초코쿠키',
+            cautions='직사광선을 피해 보관', additional_info='고객상담실 080-000-0000')
+        out = expected_from_label(label)
+
+        self.assertEqual(out['cautions'], '직사광선을 피해 보관')
+        self.assertEqual(out['additional_info'], '고객상담실 080-000-0000')
+        self.assertTrue(set(out).issubset(set(TRUTH_FIELD_KEYS)))
+
     def test_초안_경고가_위험한_칸을_이름으로_짚는다(self):
         from unittest.mock import patch
 

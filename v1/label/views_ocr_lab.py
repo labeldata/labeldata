@@ -51,6 +51,7 @@ def ocr_lab(request):
     from django.conf import settings
 
     from v1.common.models import OcrBenchmarkRun, OcrCorrection, OcrPromptVersion, OcrTruthCase
+    from v1.label.services.ocr_lab import TRUTH_FIELD_KEYS
     from v1.label.services.ocr_learning import accuracy_stats
 
     cases = list(OcrTruthCase.objects.all()[:100])
@@ -79,6 +80,10 @@ def ocr_lab(request):
         'current_model': getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
         'verified_count': sum(1 for c in cases if c.verified),
         'max_calls': MAX_CALLS_PER_RUN,
+        # 정답지에 값이 없어도 **입력 칸은 늘 보여야** 사람이 채울 수 있다.
+        # 예전에는 화면이 이미 값이 있는 항목만 줄로 그려서, 판독이 못 읽은
+        # 칸은 손으로 넣을 방법조차 없었다 (TRUTH_FIELDS 주석 참고).
+        'truth_fields': list(TRUTH_FIELD_KEYS),
     })
 
 

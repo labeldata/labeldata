@@ -174,10 +174,27 @@
   var boxKeys = [];         // 번호 순서 (항목명)
   var boxDetected = {};     // 모델이 말한 자리 (값도 함께 들고 있다)
 
-  // 정답지에 값이 없는 항목도 판독은 읽을 수 있다. 그런 항목의 자리도 보여
-  // 준다 - "정답지에 없는데 여기서 뭔가를 읽었다" 가 곧 오독의 단서다.
+  // 채점 대상 항목 전체 (서버의 ocr_lab.TRUTH_FIELDS). 화면이 그릴 입력 칸의
+  // 기준이다.
+  var TRUTH_FIELDS = (function () {
+    var el = document.getElementById('truth-fields-data');
+    try { return el ? JSON.parse(el.textContent) : []; } catch (e) { return []; }
+  })();
+
+  // **값이 없는 항목도 입력 칸을 그린다.**
+  //
+  // 예전에는 이미 값이 있는 항목만 줄로 그렸다. 그래서 판독이 못 읽었거나
+  // 일부러 안 읽은 칸은 줄 자체가 안 생겨, 손으로 채워 넣을 방법이 없었다 -
+  // 주의사항·기타표시사항이 정확히 그 경우였고, 그 두 칸이 정답지에 영영
+  // 안 쌓이니 정확도도 잴 수 없었다.
+  //
+  // 목록에 없는 옛 항목도 뒤에 붙인다. 판독은 정답지에 없는 항목도 읽을 수
+  // 있고, "정답지에 없는데 여기서 뭔가를 읽었다" 가 곧 오독의 단서다.
   function caseFieldKeys(c) {
-    var keys = Object.keys(c.expected || {});
+    var keys = TRUTH_FIELDS.slice();
+    Object.keys(c.expected || {}).forEach(function (k) {
+      if (keys.indexOf(k) < 0) keys.push(k);
+    });
     Object.keys(c.expected_boxes || {}).forEach(function (k) {
       if (keys.indexOf(k) < 0) keys.push(k);
     });
@@ -203,7 +220,7 @@
     boxKeys = caseFieldKeys(c);
 
     var rows = boxKeys.map(function (k, i) {
-      return fieldRowHtml(k, i, c.expected[k] || '');
+      return fieldRowHtml(k, i, (c.expected || {})[k] || '');
     }).join('');
 
     var form = ''
