@@ -357,11 +357,20 @@ def draft_expected(image_file, model=None):
 
     **초안은 판독 결과다.** 그대로 확인 처리하면 자기 답을 자기가 채점하는 꼴이
     되므로, 화면은 verified=False 로 두고 사람이 고친 뒤에야 채점에 쓴다.
+
+    **주의사항·기타표시사항도 읽는다**(read_freetext=True). 평소 판독은 이 두
+    칸을 읽지 않는다 - 무엇을 해도 흔들려서(25~52점, 편차 80) 지어낸 문구가
+    법적 표시물에 들어가는 위험이 크기 때문이다. 그런데 그건 **인쇄로 나가는
+    값**에 대한 판단이고, 정답지는 사람이 사진을 보며 고치는 초안이다.
+
+    오히려 여기서 안 읽으면 두 칸이 빈 채로 정답지에 쌓이고, 그러면 그 칸의
+    정확도를 **영원히 잴 수 없다.** 지금 하는 일(OCR 원문 대조)이 바로 그 두
+    칸을 되살리려는 것인데, 재는 자에 그 칸이 없으면 되살렸는지 알 방법이 없다.
     """
     from v1.label.services.ocr_benchmark import flatten
     from v1.label.services.ocr_service import extract_label_from_image
 
-    out = extract_label_from_image(image_file, model=model)
+    out = extract_label_from_image(image_file, model=model, read_freetext=True)
     if not out.get('success'):
         return None, out.get('error') or '사진을 읽지 못했습니다.'
     return flatten(out.get('data')), ''
@@ -442,9 +451,11 @@ def locate_case(case, model=None, prompt_version=None, use_hints=True):
     source = None
     try:
         source = case.image.open('rb')
+        # 정답지 화면이라 주의사항·기타표시사항의 자리도 짚어야 한다
+        # (draft_expected 주석 참고).
         out = extract_label_from_image(
             source, model=model, prompt_version=prompt_version,
-            use_hints=use_hints, want_boxes=True)
+            use_hints=use_hints, want_boxes=True, read_freetext=True)
     except Exception as exc:
         logger.exception('위치 판독 실패 (case=%s)', case.pk)
         return {'fields': {}, 'found': 0, 'error': str(exc)}
@@ -520,8 +531,12 @@ def reread_region(case, field, box, model=None, prompt_version=None,
         img.crop((x, y, x + w, y + h)).save(buf, format='JPEG', quality=95)
         buf.seek(0)
 
+        # 정답지를 만드는 자리라 주의사항·기타표시사항도 읽는다
+        # (draft_expected 주석 참고). 안 읽으면 그 두 칸은 영역을 지정해도
+        # 빈 값만 돌아와, 왜 안 되는지 알 수 없다.
         out = extract_label_from_image(
-            buf, model=model, prompt_version=prompt_version, use_hints=use_hints)
+            buf, model=model, prompt_version=prompt_version, use_hints=use_hints,
+            read_freetext=True)
     except Exception as exc:
         logger.exception('영역 재판독 실패 (case=%s, field=%s)', case.pk, field)
         return {'value': '', 'confidence': '', 'others': {}, 'error': str(exc)}

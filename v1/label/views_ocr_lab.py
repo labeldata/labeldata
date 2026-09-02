@@ -127,6 +127,15 @@ def truth_create(request):
             warning = ('판독 결과로 초안을 채웠습니다. **이대로 두면 자기 답을 자기가 '
                        '채점하는 꼴입니다.** 사진을 보며 틀린 값을 고친 뒤 "정답 확인" 을 '
                        '켜 주세요.')
+            # 주의사항·기타표시사항은 판독이 가장 못하는 칸이다(25~52점, 편차 80).
+            # 정답지를 만들려면 읽어야 하지만, 읽은 값을 그대로 두면 가장 못 믿을
+            # 값이 정답 자리에 앉는다. 어느 칸인지 이름을 대어 알린다.
+            from v1.label.services.ocr_service import FREETEXT_FIELDS
+
+            risky = [f for f in FREETEXT_FIELDS if str(case.expected.get(f) or '').strip()]
+            if risky:
+                warning += (f' 특히 {", ".join(risky)} 는 판독이 가장 자주 지어내는 '
+                            f'칸입니다. 사진의 문구와 한 글자씩 견주어 주세요.')
         else:
             warning = f'초안을 만들지 못했습니다: {error}'
 

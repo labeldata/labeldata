@@ -1408,6 +1408,51 @@ class OcrGroundTextTests(TestCase):
         defaults.update(kwargs)
         return OcrTruthCase.objects.create(**defaults)
 
+    def test_정답지_초안은_주의사항도_읽는다(self):
+        """
+        평소 판독은 주의사항·기타표시사항을 읽지 않는다 - 지어낸 문구가 법적
+        표시물에 들어가는 위험이 크기 때문이다. 그건 **인쇄로 나가는 값**에
+        대한 판단이고, 정답지는 사람이 사진을 보며 고치는 초안이다.
+
+        여기서 안 읽으면 두 칸이 빈 채로 정답지에 쌓이고, 그러면 그 칸의
+        정확도를 영원히 잴 수 없다. 지금 하는 일이 바로 그 두 칸을 되살리려는
+        것인데 재는 자에 그 칸이 없으면 되살렸는지 알 방법이 없다.
+        """
+        from unittest.mock import patch
+
+        from v1.label.services.ocr_lab import draft_expected
+
+        with patch('v1.label.services.ocr_service.extract_label_from_image',
+                   return_value={'success': True, 'data': {}}) as read:
+            draft_expected(b'fake')
+
+        self.assertTrue(read.call_args.kwargs['read_freetext'])
+
+    def test_초안_경고가_위험한_칸을_이름으로_짚는다(self):
+        from unittest.mock import patch
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from io import BytesIO
+
+        from PIL import Image
+
+        staff = User.objects.create_user(username='draftstaff', password='x',
+                                         is_staff=True, is_superuser=True)
+        self.client.force_login(staff)
+        buf = BytesIO()
+        Image.new('RGB', (300, 200), 'white').save(buf, format='JPEG')
+
+        draft = {'prdlst_nm': '초코쿠키', 'cautions': '직사광선을 피해 보관하십시오'}
+        with patch('v1.label.services.ocr_lab.draft_expected',
+                   return_value=(draft, '')):
+            resp = self.client.post('/label/ocr-lab/truth/', {
+                'image': SimpleUploadedFile('t.jpg', buf.getvalue(), 'image/jpeg'),
+                'name': '초안 시험', 'draft': '1'})
+
+        warning = resp.json()['warning']
+        self.assertIn('cautions', warning)
+        self.assertIn('지어내는', warning)
+
     def test_호환_문자를_같은_것으로_본다(self):
         """
         ℃(U+2103) 하나와 °C 두 글자는 같은 것이다. 이걸 안 폈더니 멀쩡한
