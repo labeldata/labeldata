@@ -1825,6 +1825,75 @@ class HybridReadTests(TestCase):
     (정답지 5장, 긴 칸 회수율 0.977). VLM 에게는 배치 판단만 맡긴다.
     """
 
+    def test_명령줄로_A_B_를_돌린다(self):
+        """
+        화면은 웹 요청 시간 제한에 걸려 한 번에 열두 번까지만 부를 수 있다.
+        명령줄에는 그 제한이 없다.
+        """
+        from io import StringIO
+        from unittest.mock import patch
+
+        from django.core.management import call_command
+
+        from v1.common.models import OcrBenchmarkRun, OcrTruthCase
+
+        OcrTruthCase.objects.create(name='A/B 시험', expected={'prdlst_nm': '초코쿠키'},
+                                    verified=True)
+
+        def fake_run(cases, **kw):
+            return OcrBenchmarkRun.objects.create(
+                model='gpt-4o-mini', variant='whole', case_count=1, runs=1,
+                mean_score=90.0 if kw.get('use_hybrid') else 80.0,
+                detail={'fields': [{'field': 'cautions',
+                                    'mean': 90.0 if kw.get('use_hybrid') else 80.0,
+                                    'spread': 0.0}]})
+
+        out = StringIO()
+        with patch('v1.label.services.ocr_lab.run_benchmark', side_effect=fake_run):
+            call_command('ocr_ab', '--hybrid', '--yes', stdout=out)
+        text = out.getvalue()
+
+        self.assertIn('cautions', text)
+        self.assertIn('+10.0', text)          # 전후 차이
+        self.assertIn('OCR_HYBRID', text)     # 채택 안내
+
+    def test_무너진_칸이_있으면_채택하지_않는다(self):
+        """평균이 올라도 그렇다. 잘 읽던 칸이 깨지는 것은 다른 문제다."""
+        from io import StringIO
+        from unittest.mock import patch
+
+        from django.core.management import call_command
+
+        from v1.common.models import OcrBenchmarkRun, OcrTruthCase
+
+        OcrTruthCase.objects.create(name='A/B 시험', expected={'prdlst_nm': '초코쿠키'},
+                                    verified=True)
+
+        def fake_run(cases, **kw):
+            on = kw.get('use_hybrid')
+            return OcrBenchmarkRun.objects.create(
+                model='gpt-4o-mini', variant='whole', case_count=1, runs=1,
+                mean_score=95.0 if on else 90.0,
+                detail={'fields': [
+                    {'field': 'cautions', 'mean': 95.0 if on else 60.0, 'spread': 0.0},
+                    {'field': 'prdlst_nm', 'mean': 80.0 if on else 100.0, 'spread': 0.0}]})
+
+        out = StringIO()
+        with patch('v1.label.services.ocr_lab.run_benchmark', side_effect=fake_run):
+            call_command('ocr_ab', '--hybrid', '--yes', stdout=out)
+        text = out.getvalue()
+
+        self.assertIn('채택하지 않는다', text)
+        self.assertIn('prdlst_nm', text)
+        self.assertNotIn('채택할 만하다', text)
+
+    def test_무엇을_잴지_안_주면_거부한다(self):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        with self.assertRaises(CommandError):
+            call_command('ocr_ab')
+
     def test_기본은_꺼져_있다(self):
         """판독의 핵심 경로를 바꾸는 일이다. 측정 없이 켜면 안 된다."""
         from v1.label.services.ocr_service import hybrid_enabled
