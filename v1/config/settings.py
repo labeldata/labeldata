@@ -256,6 +256,15 @@ GOOGLE_VISION_API_KEY = config('GOOGLE_VISION_API_KEY', default='')
 GOOGLE_VISION_SERVICE_ACCOUNT_JSON = config(
     'GOOGLE_VISION_SERVICE_ACCOUNT_JSON', default='')
 
+# 판독값을 사진의 글자 원문과 대조할 것인가. 기본은 **끔**.
+#
+# 켜면 판독 한 번에 Vision 호출이 하나 더 붙는다 - 비용(월 1,000건 무료)과
+# 시간이 늘고, 무엇보다 지금 100점인 칸들에 새 판단이 얹힌다. 값을 바꾸지는
+# 않고 확신도만 내리지만, 그래도 앞뒤를 재 보고 켠다.
+#
+# 측정 화면(/label/ocr-lab/)에서는 이 값과 무관하게 켜서 견줄 수 있다.
+OCR_GROUND = config('OCR_GROUND', default=False, cast=bool)
+
 # 식품안전나라 OpenAPI Key (https://openapi.foodsafetykorea.go.kr)
 FOODSAFETY_API_KEY = config('FOODSAFETY_API_KEY', default='')
 

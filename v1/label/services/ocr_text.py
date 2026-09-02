@@ -59,6 +59,16 @@ MAX_IMAGE_BYTES = 18 * 1024 * 1024
 # 오직 이 세 칸이라, 여기서 안 읽히면 나머지가 아무리 읽혀도 의미가 없다.
 LONG_FIELDS = ('rawmtrl_nm', 'cautions', 'additional_info')
 
+# **글자가 아닌 칸.** 채점에서 뺀다.
+#
+# 분리배출 표시는 도형 안의 재질 코드다. 저장하는 값("비닐류 PP / 띠지:PP")도
+# 우리가 정규화한 형태라 인쇄면과 애초에 다르다. OCR 이 도울 수 있는 칸이
+# 아니고 도울 필요도 없다 - ocr_apply.map_recycling_mark 가 맡고 있다.
+#
+# 이걸 "OCR 이 못 읽었다" 로 세면 회수율이 실제보다 낮게 나오고, 그 숫자로
+# 방향을 정하게 된다.
+NON_TEXT_FIELDS = ('recycling_mark',)
+
 # 이 점수 이상이면 "원문에 있다" 로 센다.
 FOUND_THRESHOLD = 90
 
@@ -217,33 +227,75 @@ def _normalize(text) -> str:
     return re.sub(r'\s+', '', str(text or ''))
 
 
-def field_recall(expected: dict, text: str) -> list[dict]:
+def _fragments(value) -> list[str]:
     """
-    정답의 각 값이 원문에 있는가. 항목별 점수 목록.
+    한 칸의 값을 **원문에서 따로 찾아야 하는 조각**으로 가른다.
 
-    RapidFuzz 의 partial_ratio 로 본다 - 원문은 줄바꿈과 띄어쓰기가 라벨과
-    다르고, 한두 글자는 늘 어긋난다. 정확히 같은지 보면 전부 "없다" 가 된다.
+    기타표시사항(additional_info)은 고객상담실 번호, 부정불량식품 신고번호,
+    홈페이지 주소처럼 **서로 무관한 문구를 줄바꿈으로 이어 붙인** 칸이다
+    (판독 프롬프트가 그렇게 적으라고 지시한다). 라벨에서 그 문구들은 여기저기
+    떨어져 인쇄돼 있으니, 이어 붙인 문자열 하나가 원문에 **연속해서** 있는지
+    물으면 당연히 낮게 나온다.
 
-    짧은 값은 우연히 맞을 수 있다("g" 두 글자가 어딘가엔 있다). 그래서 가부
-    판단은 이 목록 전체가 아니라 긴 칸(LONG_FIELDS)으로 한다 - long_recall 참고.
+    실제로 그렇게 나왔다 - 원문에 세 문구가 다 있는데도 55.8 점이었다. 그건
+    OCR 이 못 읽은 게 아니라 **우리가 이어 붙인 방식을 재고 있었던 것**이다.
+
+    조각이 하나뿐이면 예전과 똑같이 동작한다.
+    """
+    parts = [p.strip() for p in re.split(r'[\r\n]+', str(value or ''))]
+    return [p for p in parts if p]
+
+
+def match_score(value, text) -> float:
+    """
+    값이 원문에 있는가. 0~100.
+
+    조각마다 따로 찾고 **글자 수로 가중평균** 한다. 길이로 가중하지 않으면
+    "(주)" 세 글자가 200자짜리 문구와 같은 무게를 갖는다.
+
+    RapidFuzz 의 partial_ratio 를 쓴다 - 원문은 줄바꿈과 띄어쓰기가 라벨과
+    다르고 한두 글자는 늘 어긋난다. 정확히 같은지 보면 전부 "없다" 가 된다.
     """
     from rapidfuzz import fuzz
 
     haystack = _normalize(text)
+    if not haystack:
+        return 0.0
+
+    total, weighted = 0, 0.0
+    for fragment in _fragments(value):
+        needle = _normalize(fragment)
+        if not needle:
+            continue
+        weighted += fuzz.partial_ratio(needle, haystack) * len(needle)
+        total += len(needle)
+    return round(weighted / total, 1) if total else 0.0
+
+
+def field_recall(expected: dict, text: str) -> list[dict]:
+    """
+    정답의 각 값이 원문에 있는가. 항목별 점수 목록.
+
+    짧은 값은 우연히 맞을 수 있다("2g" 가 어딘가엔 있다). 그래서 가부 판단은
+    이 목록 전체가 아니라 긴 칸(LONG_FIELDS)으로 한다 - long_recall 참고.
+    """
     rows = []
     for field, value in (expected or {}).items():
         needle = _normalize(value)
         if not needle:
             continue   # 그 라벨에 없는 항목이다. 채점 대상이 아니다
-        score = fuzz.partial_ratio(needle, haystack) if haystack else 0.0
+        skipped = field in NON_TEXT_FIELDS
+        score = 0.0 if skipped else match_score(value, text)
         rows.append({
             'field': field,
             'length': len(needle),
+            'fragments': len(_fragments(value)),
             'score': round(score, 1),
-            'found': score >= FOUND_THRESHOLD,
+            'found': (not skipped) and score >= FOUND_THRESHOLD,
             'long': field in LONG_FIELDS,
+            'skipped': skipped,
         })
-    rows.sort(key=lambda r: (not r['long'], -r['length']))
+    rows.sort(key=lambda r: (r['skipped'], not r['long'], -r['length']))
     return rows
 
 
@@ -260,11 +312,14 @@ def recall_summary(rows: list[dict]) -> dict:
     긴 칸이 정답지에 하나도 없으면 long_recall 은 None 이다. **0 이 아니다** -
     못 읽은 것과 잴 것이 없는 것은 다르다.
     """
-    long_rows = [r for r in rows if r['long']]
+    scored = [r for r in rows if not r['skipped']]
+    long_rows = [r for r in scored if r['long']]
     return {
-        'fields': len(rows),
-        'found': sum(1 for r in rows if r['found']),
-        'recall': round(sum(r['found'] for r in rows) / len(rows), 3) if rows else None,
+        'fields': len(scored),
+        'skipped': len(rows) - len(scored),
+        'found': sum(1 for r in scored if r['found']),
+        'recall': (round(sum(r['found'] for r in scored) / len(scored), 3)
+                   if scored else None),
         'long_fields': len(long_rows),
         'long_recall': (round(sum(r['score'] for r in long_rows) / len(long_rows) / 100, 3)
                         if long_rows else None),
@@ -337,7 +392,7 @@ def measure_case(case, refresh: bool = False) -> dict:
             'chars': 0,
             'text': '',
             'rows': [],
-            'fields': 0, 'found': 0, 'recall': None,
+            'fields': 0, 'skipped': 0, 'found': 0, 'recall': None,
             'long_fields': 0, 'long_recall': None,
             'measured': False,
             'verdict': '원문을 받지 못해 아직 재지 못했다',

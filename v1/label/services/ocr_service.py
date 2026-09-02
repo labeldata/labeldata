@@ -417,6 +417,84 @@ def classify_error(exc):
     return kind, _ERROR_MESSAGES.get(kind, _ERROR_MESSAGES['unknown'])
 
 
+def ground_enabled(use_ground=None) -> bool:
+    """
+    판독값을 OCR 원문과 대조할 것인가. 기본은 **끔**.
+
+    켜면 판독 한 번에 Vision 호출이 하나 더 붙는다 - 비용과 시간이 늘고, 무엇
+    보다 지금 100점인 칸들에 새 판단이 얹힌다. 측정 화면에서 앞뒤를 재 보기
+    전에 평소 판독에 켜지 않는다. `.env` 에 OCR_GROUND=True 로 켠다.
+    """
+    if use_ground is not None:
+        return bool(use_ground)
+    return bool(getattr(settings, 'OCR_GROUND', False))
+
+
+def _grounded(data, image_bytes, use_ground=None):
+    """
+    판독값을 사진의 글자 원문과 대조한다. 실패하면 그대로 돌려준다.
+
+    **여기서 부르는 자리가 중요하다.** strip_design_suffix·drop_freetext·
+    ocr_snap·ocr_reconcile 보다 앞이어야 한다 - 그 넷은 값을 일부러 바꾸는
+    단계라, 뒤에서 대조하면 우리가 바꾼 값이 "지어냄" 으로 잡힌다.
+
+    Returns: (표시가 붙은 결과, 요약 또는 None)
+    """
+    if not ground_enabled(use_ground) or not image_bytes:
+        return data, None
+    try:
+        from v1.label.services.ocr_ground import ground
+        from v1.label.services.ocr_text import extract_text
+
+        text = extract_text(image_bytes)
+        if not text:
+            return data, None
+        return ground(data, text)
+    except Exception:
+        # 대조는 얹는 것이다. 실패해도 판독 결과는 그대로 나가야 한다.
+        logger.exception('판독값 대조 실패')
+        return data, None
+
+
+def _grounded_parts(data, raws, use_ground=None):
+    """
+    표시면이 여러 장일 때의 대조. 면마다 원문을 받아 이어 붙인 뒤 한 번에 본다.
+
+    면을 나눠 대조하면 안 된다 - 어느 면에 적혀 있든 "사진에 있었다" 는 같은데,
+    면별로 보면 제 면이 아닌 값이 전부 지어냄으로 잡힌다.
+    """
+    if not ground_enabled(use_ground) or not raws:
+        return data, None
+    try:
+        from v1.label.services.ocr_ground import ground
+        from v1.label.services.ocr_text import extract_text
+
+        texts = [t for t in (extract_text(raw) for raw in raws if raw) if t]
+        if not texts:
+            return data, None
+        return ground(data, '\n'.join(texts))
+    except Exception:
+        logger.exception('판독값 대조 실패 (표시면 %s장)', len(raws))
+        return data, None
+
+
+def _read_bytes(image_file):
+    """
+    대조에 쓸 원본 바이트. 필요할 때만 읽는다.
+
+    Pillow 가 파일을 소비하므로 **먼저** 읽고 처음으로 되감아 둔다. 안 그러면
+    build_image_regions 가 빈 파일을 받는다.
+    """
+    try:
+        image_file.seek(0)
+        data = image_file.read()
+        image_file.seek(0)
+        return data
+    except Exception:
+        logger.exception('사진 원본을 읽지 못했다 - 대조 없이 진행한다')
+        return b''
+
+
 def failure(exc):
     """
     판독 실패 응답.
@@ -598,7 +676,8 @@ def region_instructions(regions):
 
 
 def extract_label_from_parts(parts, model=None, prompt_version=None,
-                             use_hints=True, layout='grid', read_freetext=None):
+                             use_hints=True, layout='grid', read_freetext=None,
+                             use_ground=None):
     """
     표시면별로 잘라 온 사진들에서 한 번에 필드를 뽑는다.
 
@@ -613,6 +692,10 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
     try:
         client = OpenAI(api_key=settings.OPENAI_API_KEY,
                         max_retries=getattr(settings, 'OCR_MAX_RETRIES', 5))
+        # 대조를 켰을 때만 원본을 읽는다. 표시면이 여러 장이면 면마다 원문을
+        # 받아 이어 붙인다 - 어느 면에 적혀 있든 "사진에 있었다" 는 같다.
+        raws = ([_read_bytes(f) for f, _ in parts]
+                if ground_enabled(use_ground) else [])
         regions = build_multi_regions(parts, layout=layout)
 
         content = [
@@ -649,9 +732,15 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         )
 
         result = json.loads(response.choices[0].message.content)
+        # 대조를 먼저. 아래 줄은 값을 일부러 바꾸는 단계다 (_grounded 주석 참고).
+        result, ground_report = _grounded_parts(result, raws, use_ground)
         result = drop_freetext(strip_design_suffix(result), read_freetext)
-        return {"success": True, "data": result,
-                "regions": [r['label'] for r in regions]}
+
+        out = {"success": True, "data": result,
+               "regions": [r['label'] for r in regions]}
+        if ground_report:
+            out['ground'] = ground_report
+        return out
 
     except Exception as e:
         logger.exception("OCR 처리 실패 (표시면 %s장)", len(parts))
@@ -660,7 +749,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 
 def extract_label_from_image(image_file, model=None, prompt_version=None,
                              use_hints=True, want_boxes=False, layout='grid',
-                             read_freetext=None):
+                             read_freetext=None, use_ground=None):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
 
@@ -698,6 +787,8 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         # 이 한계다. 기다리는 것 말고 할 수 있는 일이 없다.
         client = OpenAI(api_key=settings.OPENAI_API_KEY,
                         max_retries=getattr(settings, 'OCR_MAX_RETRIES', 5))
+        # 대조를 켰을 때만 원본을 읽는다. Pillow 가 파일을 소비하므로 먼저 읽는다.
+        raw = _read_bytes(image_file) if ground_enabled(use_ground) else b''
         regions = build_image_regions(image_file, layout=layout)
         images = [region['b64'] for region in regions]
 
@@ -742,16 +833,24 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         )
 
         result = json.loads(response.choices[0].message.content)
+        # **대조를 먼저 한다.** 아래 세 줄은 값을 일부러 바꾸는 단계라,
+        # 뒤에서 대조하면 우리가 바꾼 값이 "지어냄" 으로 잡힌다.
+        result, ground_report = _grounded(result, raw, use_ground)
         result = drop_freetext(strip_design_suffix(result), read_freetext)
+
+        out = {"success": True, "data": result}
+        if ground_report:
+            out['ground'] = ground_report
 
         if want_boxes:
             # 조각 좌표를 원본 좌표로 되돌린다. 조각을 우리가 잘랐으니 이
             # 계산은 확실하다 - 틀릴 여지는 모델이 준 상자 쪽에만 있다.
             from v1.label.services.ocr_boxes import attach
             result, located = attach(result, regions)
-            return {"success": True, "data": result, "boxes_found": located}
+            out['data'] = result
+            out['boxes_found'] = located
 
-        return {"success": True, "data": result}
+        return out
 
     except Exception as e:
         logger.exception("OCR 처리 실패")

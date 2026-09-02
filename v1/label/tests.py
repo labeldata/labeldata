@@ -1507,6 +1507,143 @@ class OcrGroundTextTests(TestCase):
         self.assertIn('판정:', out.getvalue())
 
 
+class OcrGroundVerifierTests(TestCase):
+    """
+    판독값이 사진에 실제로 있던 글자인가 — OCR 원문으로 대조한다 (2단계).
+
+    VLM 은 값을 지어내고 OCR 은 지어낼 수 없다. 그래서 원문을 정답이 아니라
+    **증인**으로 쓴다. 값은 고치지 않고 확신도만 내린다 - OCR 도 틀리므로
+    원문을 정답으로 삼으면 그 오독이 그대로 굳는다.
+    """
+
+    TEXT = ('제품명 초코쿠키\n'
+            '식품유형 과자\n'
+            '원재료명 밀가루(밀:미국산), 설탕, 코코아분말\n'
+            '고객상담실 080-123-4567\n')
+
+    def test_원문에_있는_값은_건드리지_않는다(self):
+        from v1.label.services.ocr_ground import ground
+
+        data = {'prdlst_nm': {'value': '초코쿠키', 'confidence': 'high'}}
+        out, report = ground(data, self.TEXT)
+
+        self.assertEqual(out['prdlst_nm']['confidence'], 'high')
+        self.assertNotIn('grounded', out['prdlst_nm'])
+        self.assertEqual(report['ungrounded'], [])
+
+    def test_원문에_없는_값은_짚되_지우지_않는다(self):
+        from v1.label.services.ocr_ground import ground
+
+        data = {'cautions': {'value': '직사광선을 피해 서늘한 곳에 보관하십시오',
+                             'confidence': 'high'}}
+        out, report = ground(data, self.TEXT)
+
+        self.assertEqual(report['ungrounded'], ['cautions'])
+        self.assertFalse(out['cautions']['grounded'])
+        self.assertEqual(out['cautions']['confidence'], 'low')
+        # **값은 그대로다.** OCR 도 틀리므로 원문을 정답으로 삼으면 안 된다
+        self.assertEqual(out['cautions']['value'],
+                         '직사광선을 피해 서늘한 곳에 보관하십시오')
+        self.assertIn('찾지 못했', out['cautions']['ground_note'])
+
+    def test_띄어쓰기가_달라도_있는_것으로_본다(self):
+        from v1.label.services.ocr_ground import ground
+
+        data = {'rawmtrl_nm': {'value': '밀가루(밀 : 미국산), 설탕, 코코아분말'}}
+        _, report = ground(data, self.TEXT)
+        self.assertEqual(report['ungrounded'], [])
+
+    def test_안_읽은_항목은_지어낸_것이_아니다(self):
+        from v1.label.services.ocr_ground import ground
+
+        data = {'importer_address': {'value': None, 'confidence': 'none'},
+                'bssh_nm': {'value': '', 'confidence': 'none'}}
+        out, report = ground(data, self.TEXT)
+
+        self.assertEqual(report['ungrounded'], [])
+        self.assertEqual(report['checked'], 0)
+        self.assertNotIn('grounded', out['importer_address'])
+
+    def test_글자가_아닌_칸은_대조하지_않는다(self):
+        """분리배출 표시는 도형이다. 글자로 찾을 수 없다."""
+        from v1.label.services.ocr_ground import ground
+
+        data = {'recycling_mark': {'value': '비닐류 PP / 띠지:PP'}}
+        _, report = ground(data, self.TEXT)
+        self.assertEqual(report['ungrounded'], [])
+        self.assertEqual(report['checked'], 0)
+
+    def test_원문이_없으면_아무것도_하지_않는다(self):
+        """원문은 곁들이는 것이다. 없다고 판독 결과가 달라지면 안 된다."""
+        from v1.label.services.ocr_ground import ground
+
+        data = {'cautions': {'value': '아무 문구', 'confidence': 'high'}}
+        out, report = ground(data, '')
+
+        self.assertEqual(out, data)
+        self.assertEqual(report['checked'], 0)
+
+    def test_기본은_꺼져_있다(self):
+        """
+        켜면 판독 한 번에 Vision 호출이 하나 더 붙고, 지금 100점인 칸들에
+        새 판단이 얹힌다. 측정으로 앞뒤를 재기 전에는 켜지 않는다.
+        """
+        from v1.label.services.ocr_service import ground_enabled
+
+        self.assertFalse(ground_enabled())
+        self.assertTrue(ground_enabled(True))
+        self.assertFalse(ground_enabled(False))
+
+    def test_값을_바꾸는_단계보다_먼저_돈다(self):
+        """
+        strip_design_suffix·ocr_snap·ocr_reconcile 은 값을 일부러 바꾼다.
+        대조가 그 뒤에 있으면 우리가 바꾼 값이 전부 지어냄으로 잡힌다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
+                  ).read_text(encoding='utf-8')
+        for body in ('_grounded(result, raw, use_ground)',
+                     '_grounded_parts(result, raws, use_ground)'):
+            ground_at = source.index(body)
+            drop_at = source.index('drop_freetext(strip_design_suffix', ground_at)
+            self.assertLess(ground_at, drop_at)
+
+    def test_대조가_터져도_판독_결과는_나온다(self):
+        from unittest.mock import patch
+
+        from v1.label.services import ocr_service
+
+        data = {'prdlst_nm': {'value': '초코쿠키'}}
+        with patch('v1.label.services.ocr_text.extract_text',
+                   side_effect=RuntimeError('망')):
+            out, report = ocr_service._grounded(data, b'bytes', use_ground=True)
+
+        self.assertEqual(out, data)
+        self.assertIsNone(report)
+
+    def test_조각으로_갈라_채점한다(self):
+        """
+        기타표시사항은 서로 무관한 문구를 줄바꿈으로 이어 붙인 칸이다.
+        라벨에서 그 문구들은 떨어져 인쇄돼 있으니, 이어 붙인 문자열이 통째로
+        연속해서 있는지 물으면 안 된다 - 실제로 55.8 점이 나왔었다.
+        """
+        from v1.label.services.ocr_text import match_score
+
+        joined = '고객상담실 080-123-4567\n부정불량식품 신고는 국번없이 1399'
+        text = ('제품명 초코쿠키\n고객상담실 080-123-4567\n'
+                '(중략)\n부정불량식품 신고는 국번없이 1399\n')
+        self.assertGreaterEqual(match_score(joined, text), 95)
+
+    def test_조각이_하나면_예전과_같다(self):
+        from v1.label.services.ocr_text import match_score
+
+        self.assertEqual(match_score('초코쿠키', '제품명 초코쿠키'), 100.0)
+        self.assertLess(match_score('없는문구입니다', '제품명 초코쿠키'), 60)
+
+
 class ListColumnAlignTests(TestCase):
     """
     목록 표의 머리글과 본문 정렬.

@@ -113,19 +113,27 @@ class Command(BaseCommand):
                 '  이유는 로그(django_errors.log)의 [OCR 원문] 줄에 그대로 있다.'))
             return
 
-        self.stdout.write(f'  {"항목":<22}{"글자수":>7}{"점수":>8}   ')
+        self.stdout.write(f'  {"항목":<22}{"글자수":>7}{"조각":>5}{"점수":>8}   ')
         for row in result['rows']:
-            mark = '○' if row['found'] else '×'
             name = ('* ' if row['long'] else '  ') + row['field']
-            line = f'  {name:<22}{row["length"]:>7}{row["score"]:>8.1f}  {mark}'
+            if row['skipped']:
+                # 글자가 아닌 칸. 점수 대신 왜 뺐는지를 적는다
+                self.stdout.write(
+                    f'  {name:<22}{row["length"]:>7}{row["fragments"]:>5}'
+                    f'{"—":>8}  제외(글자 아님)')
+                continue
+            mark = '○' if row['found'] else '×'
+            line = (f'  {name:<22}{row["length"]:>7}{row["fragments"]:>5}'
+                    f'{row["score"]:>8.1f}  {mark}')
             style = self.style.SUCCESS if row['found'] else self.style.WARNING
             self.stdout.write(style(line))
 
         recall = result['recall']
         long_recall = result['long_recall']
+        skipped = f', 제외 {result["skipped"]}개' if result.get('skipped') else ''
         self.stdout.write(
             f'  전체 회수율 {recall if recall is not None else "-"} '
-            f'({result["found"]}/{result["fields"]}), '
+            f'({result["found"]}/{result["fields"]}{skipped}), '
             f'긴 칸 {long_recall if long_recall is not None else "-"} '
             f'({result["long_fields"]}개)')
 
