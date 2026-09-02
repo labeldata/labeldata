@@ -316,10 +316,32 @@ def process_document_vision(document_id: int) -> None:
     doc.save(update_fields=['metadata'])
  
  
+def _process_and_close(document_id: int) -> None:
+    """
+    스레드에서 도는 몫. 끝나면 **DB 커넥션을 닫는다.**
+
+    요청 밖에서 연 커넥션은 아무도 닫아 주지 않는다 - Django 는 요청이 끝날 때만
+    정리한다. 이걸 빠뜨린 백그라운드 작업들 때문에 커넥션이 쌓여 계정 한도(79)를
+    넘겼고, 그 순간 사이트 전체가 500 이 났다. 문서 판독은 수십 초가 걸려서
+    커넥션을 오래 잡고 있는 쪽이라 특히 그렇다.
+
+    process_document_vision 자체에 넣지 않는 이유는, 그쪽은 요청 안에서 그대로
+    불릴 수도 있어서다. 그때 닫으면 남의 커넥션을 끊는다.
+    """
+    from django.db import connections
+    try:
+        process_document_vision(document_id)
+    finally:
+        try:
+            connections.close_all()
+        except Exception:
+            logger.exception("Vision AI 커넥션 정리 실패 (document_id=%s)", document_id)
+
+
 def process_document_vision_async(document_id: int) -> None:
     """백그라운드 스레드에서 Vision AI 처리 실행."""
     t = threading.Thread(
-        target=process_document_vision,
+        target=_process_and_close,
         args=(document_id,),
         daemon=True,
     )

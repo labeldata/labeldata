@@ -862,6 +862,63 @@ def save_ingredient_matches(news: RegulatoryNews, user: User,
     return saved
 
 
+def build_match_cache_for_user(user) -> dict:
+    """
+    사용자 한 명의 BOM·원료 보관함·제품·연락처·오탐패턴을 한 번에 조회한다.
+    build_user_match_cache() 의 1인분이고, 반환 형식은 그 dict 의 값 하나와 같다.
+
+    유저 한 명만 여러 뉴스에 대해 재매칭할 때(regulatory/signals.py) 쓴다.
+    이걸 안 넘기면 find_affected_products 가 뉴스 한 건마다 이 다섯 가지를
+    다시 읽는다 - 180일치면 뉴스 수만큼 반복된다.
+
+    반환 형식:
+        {
+            'user':        User instance,
+            'boms':        list[ProductBOM],
+            'ingredients': list[MyIngredient],
+            'labels':      list[MyLabel],
+            'contacts':    list[UserContact],
+            'fp_patterns': _FPPatternCache,
+        }
+    """
+    from v1.bom.models import ProductBOM
+    from v1.label.models import MyIngredient, MyLabel
+    from v1.products.models import UserContact
+
+    boms = list(
+        ProductBOM.objects
+        .filter(parent_label__user_id=user, parent_label__delete_YN='N')
+        .select_related('parent_label')
+        .only('bom_id', 'ingredient_name', 'origin', 'manufacturer', 'food_type',
+              'parent_label_id', 'parent_label__my_label_id',
+              'parent_label__my_label_name', 'parent_label__user_id',
+              'parent_label__delete_YN')
+    )
+    ingredients = list(
+        MyIngredient.objects
+        .filter(user_id=user, delete_YN='N')
+        .prefetch_related('bom_usages__parent_label')
+    )
+    labels = list(
+        MyLabel.objects
+        .filter(user_id=user, delete_YN='N')
+        .only('my_label_id', 'my_label_name', 'prdlst_nm', 'food_type', 'prdlst_dcnm',
+              'bssh_nm', 'distributor_address', 'repacker_address', 'importer_address',
+              'user_id', 'delete_YN')
+    )
+    contacts = list(
+        UserContact.objects.filter(owner=user).only('company')
+    )
+    return {
+        'user':        user,
+        'boms':        boms,
+        'ingredients': ingredients,
+        'labels':      labels,
+        'contacts':    contacts,
+        'fp_patterns': _load_fp_patterns_for_user(user),
+    }
+
+
 def build_user_match_cache() -> dict:
     """
     모든 활성 사용자의 BOM·원료 보관함·제품·연락처 데이터를 한 번에 조회하여 캐시 반환.
@@ -881,46 +938,10 @@ def build_user_match_cache() -> dict:
             ...
         }
     """
-    from v1.bom.models import ProductBOM
-    from v1.label.models import MyIngredient, MyLabel
-    from v1.products.models import UserContact
-
-    cache = {}
-    for user in User.objects.filter(is_active=True):
-        boms = list(
-            ProductBOM.objects
-            .filter(parent_label__user_id=user, parent_label__delete_YN='N')
-            .select_related('parent_label')
-            .only('bom_id', 'ingredient_name', 'origin', 'manufacturer', 'food_type',
-                  'parent_label_id', 'parent_label__my_label_id',
-                  'parent_label__my_label_name', 'parent_label__user_id',
-                  'parent_label__delete_YN')
-        )
-        ingredients = list(
-            MyIngredient.objects
-            .filter(user_id=user, delete_YN='N')
-            .prefetch_related('bom_usages__parent_label')
-        )
-        labels = list(
-            MyLabel.objects
-            .filter(user_id=user, delete_YN='N')
-            .only('my_label_id', 'my_label_name', 'prdlst_nm', 'food_type', 'prdlst_dcnm',
-                  'bssh_nm', 'distributor_address', 'repacker_address', 'importer_address',
-                  'user_id', 'delete_YN')
-        )
-        contacts = list(
-            UserContact.objects.filter(owner=user).only('company')
-        )
-        fp_patterns = _load_fp_patterns_for_user(user)
-        cache[user.pk] = {
-            'user':        user,
-            'boms':        boms,
-            'ingredients': ingredients,
-            'labels':      labels,
-            'contacts':    contacts,
-            'fp_patterns': fp_patterns,
-        }
-    return cache
+    return {
+        user.pk: build_match_cache_for_user(user)
+        for user in User.objects.filter(is_active=True)
+    }
 
 
 def run_matching_for_all_users(news: RegulatoryNews, user_cache: dict | None = None) -> int:
