@@ -155,6 +155,38 @@
     return notes;
   }
 
+  // 값을 담을 칸. **언제나 고칠 수 있다.**
+  //
+  // 줄 수를 내용에 맞춘다. 원재료명은 300자가 넘기도 하는데 2줄로 고정하면
+  // 스크롤 안에 갇혀서 무엇이 들어왔는지 확인할 수가 없다.
+  function editorHtml(value) {
+    value = value || '';
+    if (!isLongValue(value)) {
+      return '<input type="text" class="form-control form-control-sm ocr-value"'
+        + ' value="' + esc(value) + '">';
+    }
+    var lines = Math.min(12, Math.max(2, Math.ceil(value.length / 42)));
+    return '<textarea class="form-control form-control-sm ocr-value" rows="'
+      + lines + '">' + esc(value) + '</textarea>';
+  }
+
+  // 후보 목록. 눌러서 위 칸을 채운다.
+  //
+  // **값을 통째로 보여 준다.** 예전에는 <select> 라 긴 값이 잘려서, 원재료명
+  // 후보 둘 중 무엇이 다른지 볼 수가 없었다. 고르는 일인데 고를 근거가 화면에
+  // 없었던 셈이다.
+  function candidatesHtml(candidates, current) {
+    var long = candidates.some(isLongValue);
+    var items = candidates.map(function (c) {
+      var on = (c === current) ? ' ocr-cand-on' : '';
+      return '<button type="button" class="ocr-cand' + on + '"'
+        + ' data-value="' + esc(c) + '">' + esc(c) + '</button>';
+    }).join('');
+    return '<div class="ocr-cands' + (long ? ' ocr-cands-long' : '') + '">'
+      + '<span class="ocr-cands-label">후보 ' + candidates.length + '개 — 눌러서 채우고, 채운 뒤에도 고칠 수 있습니다</span>'
+      + items + '</div>';
+  }
+
   function rowHtml(field, item, meta) {
     var target = document.getElementById(meta.id);
     var current = target ? (target.value || '').trim() : '';
@@ -164,28 +196,20 @@
     // 이미 값이 있으면 기본으로 끈다 (덮어쓰기 방지)
     var checked = current ? '' : 'checked';
 
-    var control;
-    if (isLow && candidates.length) {
-      // 후보는 목록으로. 라디오를 세로로 늘어놓으면 항목 하나가 네 줄을 먹는다.
-      control =
-        '<select class="form-select form-select-sm ocr-choice">'
-        + candidates.map(function (c) {
-            return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
-          }).join('')
-        + '<option value="__direct__">직접 입력…</option>'
-        + '</select>'
-        + '<input type="text" class="form-control form-control-sm ocr-direct mt-1"'
-        + ' placeholder="직접 입력" style="display:none;">';
-    } else if (isLongValue(value)) {
-      // 줄 수를 내용에 맞춘다. 원재료명은 300자가 넘기도 한다 - 2줄로 고정하면
-      // 스크롤 안에 갇혀서 무엇이 들어왔는지 확인할 수가 없다.
-      var lines = Math.min(12, Math.max(2, Math.ceil(value.length / 42)));
-      control = '<textarea class="form-control form-control-sm ocr-value" rows="'
-        + lines + '">' + esc(value) + '</textarea>';
-    } else {
-      control = '<input type="text" class="form-control form-control-sm ocr-value"'
-        + ' value="' + esc(value) + '">';
-    }
+    // 후보가 여럿이어도 **고칠 수 있는 칸은 언제나 하나**다.
+    //
+    // 예전에는 후보를 <select> 로 뒀다. 두 가지가 잘못이었다.
+    //   - 목록 안에서 긴 값이 잘린다. 원재료명은 300자가 넘어서 무엇을 고르는
+    //     것인지 볼 수가 없었다.
+    //   - 고른 뒤에는 못 고친다. 한 글자만 틀렸어도 "직접 입력…" 을 다시
+    //     골라 300자를 통째로 다시 쳐야 했다.
+    //
+    // 후보는 **눌러서 칸을 채우는 단추**로 둔다. 값은 늘 칸 안에 있고, 채운
+    // 뒤에도 그대로 고칠 수 있다.
+    var filled = value || (candidates.length ? candidates[0] : '');
+    var control = (isLow && candidates.length)
+      ? candidatesHtml(candidates, filled) + editorHtml(filled)
+      : editorHtml(value);
 
     // 현재 값과 새 값을 나란히 둔다. 무엇이 바뀌는지 눈으로 바로 보여야
     // "이걸 반영할까" 를 판단할 수 있다.
@@ -414,15 +438,26 @@
       window.photoViewerLayout(body, photoFile, table);
       modalEl.querySelector('#basicInfoOcrApply').disabled = false;
 
-      // "직접 입력…" 을 고르면 입력칸을 연다
-      body.querySelectorAll('.ocr-choice').forEach(function (sel) {
-        sel.addEventListener('change', function () {
-          var direct = sel.parentElement.querySelector('.ocr-direct');
-          if (!direct) return;
-          var on = sel.value === '__direct__';
-          direct.style.display = on ? '' : 'none';
-          if (on) direct.focus();
+      // 후보를 누르면 그 값으로 칸을 채운다. **채운 뒤에도 고칠 수 있다** -
+      // 한 글자만 틀렸을 때 300자를 다시 치게 하지 않는다.
+      body.addEventListener('click', function (event) {
+        var button = event.target.closest('.ocr-cand');
+        if (!button) return;
+        var row = button.closest('.ocr-row');
+        var input = row && row.querySelector('.ocr-value');
+        if (!input) return;
+
+        input.value = button.dataset.value || '';
+        row.querySelectorAll('.ocr-cand').forEach(function (other) {
+          other.classList.toggle('ocr-cand-on', other === button);
         });
+        // 후보를 골랐다는 것은 이 항목을 쓰겠다는 뜻이다
+        var pick = row.querySelector('.ocr-pick');
+        if (pick && !pick.checked) {
+          pick.checked = true;
+          pick.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        input.focus();
       });
 
       // 일괄 선택 버튼과 체크 변화를 한 곳에서 받는다 (표는 매번 다시 그려진다)
@@ -527,18 +562,9 @@
       var pick = row.querySelector('.ocr-pick');
       if (!pick || !pick.checked) return;
 
+      // 후보가 있든 없든 값은 늘 .ocr-value 안에 있다 (editorHtml).
       var input = row.querySelector('.ocr-value');
-      var final = '';
-      if (input) {
-        final = input.value.trim();
-      } else {
-        var choice = row.querySelector('.ocr-choice');
-        if (choice) {
-          final = choice.value === '__direct__'
-            ? (row.querySelector('.ocr-direct').value || '').trim()
-            : choice.value;
-        }
-      }
+      var final = input ? input.value.trim() : '';
       rows.push({
         field: row.dataset.field,
         ocr_value: row.dataset.ocr || '',
@@ -693,19 +719,9 @@
       var field = row.dataset.field;
       var meta = FIELD_MAP[field];
       if (!meta) return;
-      var value = '';
-
+      // 후보가 있든 없든 값은 늘 .ocr-value 안에 있다 (editorHtml).
       var direct = row.querySelector('.ocr-value');
-      if (direct) {
-        value = direct.value.trim();
-      } else {
-        var choice = row.querySelector('.ocr-choice');
-        if (choice) {
-          value = choice.value === '__direct__'
-            ? (row.querySelector('.ocr-direct').value || '').trim()
-            : choice.value;
-        }
-      }
+      var value = direct ? direct.value.trim() : '';
       if (!value) return;
 
       var target = document.getElementById(meta.id);

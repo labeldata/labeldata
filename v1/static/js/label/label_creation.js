@@ -91,6 +91,11 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
+// 값이 길면 여러 줄 칸으로. 원재료명은 300자가 넘는다.
+function isLongOcrValue(text) {
+  return (text || '').length > 40 || (text || '').indexOf('\n') !== -1;
+}
+
 function showOcrModal(data) {
   const modalBody = document.getElementById('ocrModalBody');
   let html = '<table class="table table-bordered table-sm">';
@@ -103,31 +108,50 @@ function showOcrModal(data) {
 
     html += `<tr><td style="font-weight:600; font-size:0.8rem;">${label}</td><td>`;
 
-    if (item.confidence === 'high') {
-      html += `<input type="text" class="form-control form-control-sm ocr-result-input" data-field="${field}" value="${escapeHtml(item.value || '')}">`;
-    } else {
-      // low confidence - 후보 선택지
-      html += `<div style="display:flex; flex-direction:column; gap:4px;">`;
-      const candidates = item.candidates || [];
-      candidates.forEach((candidate, idx) => {
-        html += `<label style="display:flex; align-items:center; gap:6px; margin:0; cursor:pointer;">
-          <input type="radio" name="ocr_candidate_${field}" value="${escapeHtml(candidate)}" ${idx === 0 ? 'checked' : ''}>
-          <span style="font-size:0.9rem;">${escapeHtml(candidate)}</span>
-        </label>`;
+    // 후보가 있든 없든 **고칠 수 있는 칸은 언제나 하나**다.
+    //
+    // 예전에는 후보를 라디오로 두고 "직접 입력" 을 따로 뒀다. 고르고 나면
+    // 고칠 수가 없어서, 한 글자만 틀렸어도 직접 입력을 골라 원재료명 300자를
+    // 통째로 다시 쳐야 했다. 후보는 **눌러서 칸을 채우는 단추**로 둔다.
+    const candidates = (item.confidence === 'high') ? [] : (item.candidates || []);
+    const filled = item.value || (candidates.length ? candidates[0] : '');
+
+    if (candidates.length) {
+      html += `<div class="ocr-cands${candidates.some(isLongOcrValue) ? ' ocr-cands-long' : ''}">`;
+      html += `<span class="ocr-cands-label">후보 ${candidates.length}개 — 눌러서 채우고, 채운 뒤에도 고칠 수 있습니다</span>`;
+      candidates.forEach((candidate) => {
+        const on = candidate === filled ? ' ocr-cand-on' : '';
+        html += `<button type="button" class="ocr-cand${on}" data-field="${field}"
+          data-value="${escapeHtml(candidate)}">${escapeHtml(candidate)}</button>`;
       });
-      html += `<label style="display:flex; align-items:center; gap:6px; margin:0; cursor:pointer;">
-        <input type="radio" name="ocr_candidate_${field}" value="__direct__">
-        <input type="text" class="form-control form-control-sm ocr-direct-input" data-field="${field}" placeholder="직접 입력" style="flex:1;"
-          onfocus="this.previousElementSibling.checked=true;">
-      </label>`;
       html += `</div>`;
     }
+    // 긴 값은 여러 줄로. 원재료명은 300자가 넘어서 한 줄 칸에 넣으면 무엇이
+    // 들어왔는지 확인할 수가 없다.
+    html += isLongOcrValue(filled)
+      ? `<textarea class="form-control form-control-sm ocr-result-input" data-field="${field}"
+           rows="${Math.min(12, Math.max(2, Math.ceil(filled.length / 42)))}">${escapeHtml(filled)}</textarea>`
+      : `<input type="text" class="form-control form-control-sm ocr-result-input" data-field="${field}" value="${escapeHtml(filled)}">`;
 
     html += `</td></tr>`;
   }
 
   html += '</tbody></table>';
   modalBody.innerHTML = html;
+
+  // 후보를 누르면 그 값으로 칸을 채운다. 채운 뒤에도 그대로 고칠 수 있다.
+  modalBody.addEventListener('click', function (event) {
+    const button = event.target.closest('.ocr-cand');
+    if (!button) return;
+    const input = modalBody.querySelector(
+      `.ocr-result-input[data-field="${button.dataset.field}"]`);
+    if (!input) return;
+    input.value = button.dataset.value || '';
+    button.closest('.ocr-cands').querySelectorAll('.ocr-cand').forEach((other) => {
+      other.classList.toggle('ocr-cand-on', other === button);
+    });
+    input.focus();
+  });
 
   const modal = new bootstrap.Modal(document.getElementById('ocrCandidateModal'));
   modal.show();
@@ -142,23 +166,9 @@ function applyOcrResults(data) {
   for (const [field, item] of Object.entries(data)) {
     if (!item || item.confidence === 'none') continue;
 
-    let value = '';
-
-    if (item.confidence === 'high') {
-      const input = document.querySelector(`.ocr-result-input[data-field="${field}"]`);
-      value = input ? input.value : (item.value || '');
-    } else {
-      const selected = document.querySelector(`input[name="ocr_candidate_${field}"]:checked`);
-      if (selected) {
-        if (selected.value === '__direct__') {
-          const directInput = document.querySelector(`.ocr-direct-input[data-field="${field}"]`);
-          value = directInput ? directInput.value : '';
-        } else {
-          value = selected.value;
-        }
-      }
-    }
-
+    // 후보가 있든 없든 값은 늘 .ocr-result-input 안에 있다.
+    const input = document.querySelector(`.ocr-result-input[data-field="${field}"]`);
+    const value = (input ? input.value : (item.value || '')).trim();
     if (!value) continue;
 
     const formFieldName = OCR_FORM_FIELDS[field];

@@ -1598,3 +1598,54 @@ select.form-control.select2-date-option {
         color: #666;
     }
 }
+
+/* 판독 후보 — 눌러서 값 칸을 채운다.
+
+   예전에는 <select> 였다. 목록 안에서 긴 값이 잘려 원재료명(300자가 넘는다)
+   후보 둘 중 무엇이 다른지 볼 수가 없었고, 고른 뒤에는 고칠 수도 없었다.
+   고르는 일인데 고를 근거가 화면에 없었던 셈이다.
+
+   그래서 **값을 통째로 보여 준다.** 짧은 후보는 한 줄에 늘어놓고, 긴 후보는
+   세로로 쌓아 전문을 편다. */
+.ocr-cands {
+    display:     flex;
+    flex-wrap:   wrap;
+    gap:         4px;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.ocr-cands-label {
+    width:     100%;
+    font-size: 11px;
+    color:     var(--ez-text-muted, #5f6368);
+}
+
+.ocr-cand {
+    max-width:     100%;
+    padding:       3px 8px;
+    border:        1px solid var(--ez-border, #dadce0);
+    border-radius: 4px;
+    background:    #fff;
+    font-size:     12px;
+    line-height:   1.45;
+    text-align:    left;
+    /* 잘리지 않는다. 값을 보고 고르는 것이 이 단추의 목적이다. */
+    white-space:   normal;
+    word-break:    break-all;
+    cursor:        pointer;
+}
+
+.ocr-cand:hover { background: #f1f3f4; }
+
+/* 지금 칸에 들어가 있는 후보 */
+.ocr-cand-on {
+    border-color: #1a5fb4;
+    background:   #e8f0fe;
+    color:        #1a5fb4;
+    font-weight:  600;
+}
+
+/* 긴 후보는 한 줄에 하나씩. 나란히 두면 어느 것이 어디서 끝나는지 안 보인다. */
+.ocr-cands-long { flex-direction: column; align-items: stretch; }
+.ocr-cands-long .ocr-cand { max-height: 8.5em; overflow-y: auto; }

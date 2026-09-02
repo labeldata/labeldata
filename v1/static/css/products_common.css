@@ -534,6 +534,10 @@
     word-break: break-all;
 }
 
+/* 판독 후보(.ocr-cand) 스타일은 style.css 로 옮겼다 —
+   표시사항 작성 화면(base.html)은 이 파일을 싣지 않는데, 같은
+   확인 창을 그쪽에서도 쓴다. */
+
 /* 원료 확인 창 — 항목명과 값을 한 줄에 */
 .ing-row {
     display:               grid;
