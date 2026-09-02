@@ -34,6 +34,7 @@ import io
 import json
 import logging
 import re
+import unicodedata
 
 from django.conf import settings
 
@@ -68,6 +69,20 @@ LONG_FIELDS = ('rawmtrl_nm', 'cautions', 'additional_info')
 # 이걸 "OCR 이 못 읽었다" 로 세면 회수율이 실제보다 낮게 나오고, 그 숫자로
 # 방향을 정하게 된다.
 NON_TEXT_FIELDS = ('recycling_mark',)
+
+# **여러 문구를 하나로 모아 담는 칸.**
+#
+# 기타표시사항은 판독 프롬프트가 "위에 없는 기타 표시사항을 이어서 적으라" 고
+# 지시하는 칸이다. 제품교환장소, 고객상담실 번호, 부정불량식품 신고번호,
+# 홈페이지 주소 - 서로 무관한 문구들이고 라벨에서도 여기저기 흩어져 인쇄된다.
+#
+# 그러니 이 칸만은 "이어 붙인 문자열이 원문에 연속으로 있는가" 를 물으면 안
+# 된다. 조각이 다 있는지를 봐야 한다.
+#
+# **다른 칸에는 쓰지 않는다.** 흩어져도 된다고 하면 검사가 그만큼 헐거워져,
+# 지어낸 문장이 흔한 낱말들로 점수를 채울 수 있다. 원문 주입(4단계) 전에
+# 정밀도를 따로 재야 하는 이유가 여기에도 있다.
+ASSEMBLED_FIELDS = ('additional_info',)
 
 # 이 점수 이상이면 "원문에 있다" 로 센다.
 FOUND_THRESHOLD = 90
@@ -217,31 +232,42 @@ def extract_text(image_bytes: bytes) -> str:
 
 # ── 읽히는가 — 정답지로 재기 ──────────────────────────────────────────────────
 
-def _normalize(text) -> str:
+def _normalize_with_map(text) -> tuple[str, list[int], str]:
     """
-    견주기 전에 공백만 없앤다.
+    견줄 문자열, 그 각 글자가 **어디에서 왔는지** 의 자리표, 그리고 발췌용 원문.
+
+    하는 일 세 가지.
+
+      NFKC    호환 문자를 표준형으로 편다. 이게 없어서 멀쩡한 값이 빗나갔다 -
+              보관방법 정답은 "냉장(0~10 ℃)" 인데 OCR 은 "냉장(0~10°C)" 로
+              읽었다. ℃(U+2103) 하나와 °C 두 글자는 **같은 것**이고, NFKC 가
+              전자를 후자로 편다. 76.9 -> 92.9, 86.7 -> 100 이 됐다.
+              ㎎->mg, ㎖->ml, ④->4, 전각->반각도 같이 정리되고, 자모로 풀린
+              한글(NFD)도 음절로 합쳐진다 - 파일명에서 실제로 섞여 들어온다.
+      casefold  영문 대소문자를 지운다. www 와 WWW 는 같은 주소다.
+      공백 제거  줄바꿈과 띄어쓰기는 라벨과 원문이 늘 다르다.
 
     괄호와 쉼표는 **남긴다.** 원재료명의 괄호 구조가 지금 가장 자주 무너지는
     자리라, 그걸 지우고 재면 정작 알고 싶은 것을 못 재게 된다.
-    """
-    return re.sub(r'\s+', '', str(text or ''))
 
-
-def _normalize_with_map(text) -> tuple[str, list[int]]:
+    자리표는 세 번째로 돌려주는 NFKC 문자열 기준이다. 원문 그대로가 아니라
+    **실제로 견준 문자열** 을 발췌해 보여 줘야, 왜 그 점수가 나왔는지가 눈에
+    들어온다.
     """
-    공백을 없앤 문자열과, 그 각 글자가 **원문 어디에서 왔는지** 의 자리표.
-
-    자리표가 있어야 "원문의 이 대목을 보고 그 점수가 나왔다" 를 되짚어 보여
-    줄 수 있다. 점수만 보여 주면 왜 낮은지 알 수 없어서 추측하게 되고,
-    실제로 그 추측이 틀렸다 - additional_info 가 낮은 이유를 "조각을 이어
-    붙였기 때문" 이라고 짚었는데, 정작 그 값에는 줄바꿈이 없었다.
-    """
+    base = unicodedata.normalize('NFKC', str(text or ''))
     chars, index = [], []
-    for i, ch in enumerate(str(text or '')):
-        if not ch.isspace():
-            chars.append(ch)
+    for i, ch in enumerate(base):
+        if ch.isspace():
+            continue
+        for folded in ch.casefold():
+            chars.append(folded)
             index.append(i)
-    return ''.join(chars), index
+    return ''.join(chars), index, base
+
+
+def _normalize(text) -> str:
+    """견줄 문자열만. 자리표 쪽과 규칙이 갈라지면 점수와 설명이 어긋난다."""
+    return _normalize_with_map(text)[0]
 
 
 def _fragments(value) -> list[str]:
@@ -263,30 +289,66 @@ def _fragments(value) -> list[str]:
     return [p for p in parts if p]
 
 
-def match_score(value, text) -> float:
-    """
-    값이 원문에 있는가. 0~100.
-
-    조각마다 따로 찾고 **글자 수로 가중평균** 한다. 길이로 가중하지 않으면
-    "(주)" 세 글자가 200자짜리 문구와 같은 무게를 갖는다.
-
-    RapidFuzz 의 partial_ratio 를 쓴다 - 원문은 줄바꿈과 띄어쓰기가 라벨과
-    다르고 한두 글자는 늘 어긋난다. 정확히 같은지 보면 전부 "없다" 가 된다.
-    """
+def _weighted(pieces, haystack) -> float | None:
+    """조각마다 찾아 **글자 수로 가중평균.** 길이로 가중하지 않으면 "(주)" 세 글자가 200자짜리 문구와 같은 무게를 갖는다."""
     from rapidfuzz import fuzz
 
-    haystack = _normalize(text)
-    if not haystack:
-        return 0.0
-
     total, weighted = 0, 0.0
-    for fragment in _fragments(value):
-        needle = _normalize(fragment)
+    for piece in pieces:
+        needle = _normalize(piece)
         if not needle:
             continue
         weighted += fuzz.partial_ratio(needle, haystack) * len(needle)
         total += len(needle)
-    return round(weighted / total, 1) if total else 0.0
+    return weighted / total if total else None
+
+
+def _scattered_score(value, haystack) -> float | None:
+    """
+    값의 조각들이 원문 **여기저기에 흩어져 있어도** 있는 것으로 본다.
+
+    ASSEMBLED_FIELDS 에만 쓴다. 왜 필요한지는 실제 사례가 말해 준다.
+
+        찾은 값 : 고객상담실 080-739-8572 (수신자 부담) www.spcsamlip.co.kr
+        원문 근처: 1399 ⏎ 90mm ⏎ "안전관리인증 ⏎ HACCP. ⏎ 비닐류 ⏎ ④ 고객상담실
+                  ⏎ 080-739-8572 (수신자 부담
+
+    원문에 그 조각들이 **다 있다.** 다만 라벨 여기저기에 인쇄돼 있어 사이에
+    다른 내용이 끼어 있을 뿐이다. 이어 붙인 문자열이 연속으로 있는지 물으면
+    55.8 점이 나오는데, 그건 OCR 이 못 읽어서가 아니다.
+
+    띄어쓰기로 가른다. 두 글자 미만은 버린다 - 한 글자는 어디에나 있어서
+    점수를 부풀린다.
+    """
+    tokens = [t for t in re.split(r'\s+', str(value or '')) if len(_normalize(t)) >= 2]
+    if len(tokens) < 2:
+        return None    # 토큰이 하나뿐이면 흩어질 것도 없다
+    return _weighted(tokens, haystack)
+
+
+def match_score(value, text, assembled: bool = False) -> float:
+    """
+    값이 원문에 있는가. 0~100.
+
+    줄바꿈으로 가른 조각마다 찾아 글자 수로 가중평균한다. RapidFuzz 의
+    partial_ratio 를 쓴다 - 원문은 줄바꿈과 띄어쓰기가 라벨과 다르고 한두
+    글자는 늘 어긋난다. 정확히 같은지 보면 전부 "없다" 가 된다.
+
+    assembled=True 면 흩어져 인쇄된 경우도 함께 보고 **높은 쪽**을 쓴다.
+    ASSEMBLED_FIELDS 주석 참고.
+    """
+    haystack = _normalize(text)
+    if not haystack:
+        return 0.0
+
+    score = _weighted(_fragments(value), haystack)
+    if score is None:
+        return 0.0
+    if assembled:
+        scattered = _scattered_score(value, haystack)
+        if scattered is not None:
+            score = max(score, scattered)
+    return round(score, 1)
 
 
 def explain(value, text, pad: int = 12) -> list[dict]:
@@ -303,8 +365,7 @@ def explain(value, text, pad: int = 12) -> list[dict]:
     """
     from rapidfuzz import fuzz
 
-    haystack, index = _normalize_with_map(text)
-    raw = str(text or '')
+    haystack, index, base = _normalize_with_map(text)
     rows = []
     for fragment in _fragments(value):
         needle = _normalize(fragment)
@@ -327,7 +388,7 @@ def explain(value, text, pad: int = 12) -> list[dict]:
         rows.append({
             'fragment': fragment,
             'score': round(align.score, 1),
-            'nearest': raw[max(0, start - pad):end + pad].replace('\n', ' ⏎ '),
+            'nearest': base[max(0, start - pad):end + pad].replace('\n', ' ⏎ '),
         })
     return rows
 
@@ -345,7 +406,8 @@ def field_recall(expected: dict, text: str) -> list[dict]:
         if not needle:
             continue   # 그 라벨에 없는 항목이다. 채점 대상이 아니다
         skipped = field in NON_TEXT_FIELDS
-        score = 0.0 if skipped else match_score(value, text)
+        score = 0.0 if skipped else match_score(
+            value, text, assembled=field in ASSEMBLED_FIELDS)
         rows.append({
             'field': field,
             'length': len(needle),

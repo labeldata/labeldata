@@ -79,7 +79,7 @@ def ground(data: dict, text: str) -> tuple[dict, dict]:
     if not text or not isinstance(data, dict):
         return data, {'checked': 0, 'ungrounded': [], 'scores': {}}
 
-    from v1.label.services.ocr_text import match_score
+    from v1.label.services.ocr_text import ASSEMBLED_FIELDS, match_score
 
     result = dict(data)
     scores, ungrounded = {}, []
@@ -92,7 +92,9 @@ def ground(data: dict, text: str) -> tuple[dict, dict]:
             continue   # 안 읽은 항목이다. 지어낸 것이 아니다
 
         try:
-            score = match_score(value, text)
+            # 측정(ocr_text.field_recall)과 **같은 규칙**으로 센다. 두 곳이
+            # 갈라지면 "측정에서는 괜찮았는데 실제로는 경고가 뜬다" 가 된다.
+            score = match_score(value, text, assembled=field in ASSEMBLED_FIELDS)
         except Exception:
             logger.exception('[판독 대조] 점수를 못 냈다 (항목=%s)', field)
             continue

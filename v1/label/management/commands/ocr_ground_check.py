@@ -151,9 +151,11 @@ class Command(BaseCommand):
         틀렸다 - 원문에 그 값이 아예 없는 것과, 있는데 표기가 다른 것과,
         우리가 이어 붙인 방식 때문인 것은 대응이 전부 다르다.
         """
+        # 넉넉히 보여 준다. 70자에서 잘랐더니 정작 근거가 되는 대목이 잘려
+        # 나가 "원문에 있는가 없는가" 를 판단할 수 없었다.
         for part in row.get('detail') or []:
-            self.stdout.write(f'      찾은 값 : {part["fragment"][:70]}')
-            self.stdout.write(f'      원문 근처: {part["nearest"][:70] or "(비슷한 대목 없음)"}')
+            self.stdout.write(f'      찾은 값 : {part["fragment"][:160]}')
+            self.stdout.write(f'      원문 근처: {part["nearest"][:160] or "(비슷한 대목 없음)"}')
 
     def _print_blocked(self, failed):
         """

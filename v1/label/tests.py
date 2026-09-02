@@ -1408,6 +1408,55 @@ class OcrGroundTextTests(TestCase):
         defaults.update(kwargs)
         return OcrTruthCase.objects.create(**defaults)
 
+    def test_호환_문자를_같은_것으로_본다(self):
+        """
+        ℃(U+2103) 하나와 °C 두 글자는 같은 것이다. 이걸 안 폈더니 멀쩡한
+        보관방법이 76.9 / 86.7 로 빗나갔다 - OCR 은 제대로 읽었는데도.
+        """
+        from v1.label.services.ocr_text import match_score
+
+        self.assertGreaterEqual(
+            match_score('냉장(0~10 ℃)에서 보관', '보관방법 냉장(0~10°C)에서 보관'), 95)
+        self.assertEqual(
+            match_score('냉동(-18 °C 이하)에서 보관', '보관방법 냉동(-18℃ 이하)에서 보관'), 100.0)
+        # ㎎/㎖ 같은 조합 문자와 전각도 같이 정리된다
+        self.assertEqual(match_score('나트륨 630 ㎎', '나트륨 630 mg'), 100.0)
+
+    def test_영문_대소문자는_구분하지_않는다(self):
+        from v1.label.services.ocr_text import match_score
+
+        self.assertEqual(match_score('WWW.SPCSAMLIP.CO.KR',
+                                     'www.spcsamlip.co.kr'), 100.0)
+
+    def test_흩어져_인쇄된_기타표시사항을_찾아낸다(self):
+        """
+        기타표시사항은 서로 무관한 문구를 모아 담는 칸이고, 라벨에서는
+        그 문구들이 여기저기 떨어져 인쇄된다. 이어 붙인 문자열이 연속으로
+        있는지 물으면 원문에 다 있는데도 55.8 점이 나온다.
+        """
+        from v1.label.services.ocr_text import match_score
+
+        value = '고객상담실 080-739-8572 (수신자 부담) www.spcsamlip.co.kr'
+        # 조각 사이에 라벨의 다른 내용이 끼어 있다 — 실제 원문이 그랬다
+        text = ('제품교환장소 본사 및 구입처\n부정불량식품신고는 국번없이 1399\n'
+                '④ 고객상담실\n안전관리인증기준 HACCP 적용업소\n비닐류 분리배출\n'
+                '080-739-8572 (수신자 부담)\n보관방법 냉동(-18℃ 이하)에서 보관\n'
+                '홈페이지 www.spcsamlip.co.kr\n')
+
+        self.assertLess(match_score(value, text), 80)                  # 연속으로는 없다
+        self.assertGreaterEqual(match_score(value, text, assembled=True), 95)
+
+    def test_흩어짐_허용은_그_칸에만_쓴다(self):
+        """
+        흩어져도 된다고 하면 검사가 헐거워진다. 지어낸 문장이 흔한 낱말로
+        점수를 채울 수 있어서, 기타표시사항 말고는 쓰지 않는다.
+        """
+        from v1.label.services.ocr_text import ASSEMBLED_FIELDS
+
+        self.assertEqual(ASSEMBLED_FIELDS, ('additional_info',))
+        self.assertNotIn('cautions', ASSEMBLED_FIELDS)
+        self.assertNotIn('rawmtrl_nm', ASSEMBLED_FIELDS)
+
     def test_왜_못_찾았는지_원문의_자리를_보여준다(self):
         """
         점수만 보면 낮은 이유를 알 수 없어 추측하게 된다. 실제로 그 추측이
