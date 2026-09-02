@@ -1424,6 +1424,63 @@ class OcrGroundTextTests(TestCase):
         # 정답지가 5장 미만이면 성공 판정은 못 한다고 알려야 한다
         self.assertIn('성공 판정은 못 한다', text)
 
+    def test_원문을_못_받으면_0_이_아니라_판단_보류다(self):
+        """
+        원문을 못 받은 것과 OCR 이 못 읽은 것은 전혀 다르다. 이걸 안 갈랐다가
+        결제가 안 걸린 프로젝트에서 403 이 왔는데 "회수율 0.000 / 접는다" 가
+        찍혔다. OCR 은 한 번도 돌지 않았는데 방향을 접을 뻔했다.
+        """
+        from unittest.mock import patch
+
+        from v1.label.services import ocr_text
+
+        case = self._case_with_text('', ocr_engine='')
+        with patch.object(ocr_text, 'extract_text', return_value=''):
+            result = ocr_text.measure_case(case)
+
+        self.assertFalse(result['measured'])
+        self.assertIsNone(result['long_recall'])
+        self.assertIsNone(result['recall'])
+        self.assertNotIn('접는다', result['verdict'])
+
+    def test_한_장도_못_받으면_판정을_내지_않는다(self):
+        from io import StringIO
+        from unittest.mock import patch
+
+        from django.core.management import call_command
+
+        from v1.label.services import ocr_text
+
+        self._case_with_text('', ocr_engine='')
+        out = StringIO()
+        with patch.object(ocr_text, 'extract_text', return_value=''):
+            call_command('ocr_ground_check', stdout=out)
+        text = out.getvalue()
+
+        self.assertIn('판정을 내지 않는다', text)
+        self.assertNotIn('접는다', text)
+        self.assertIn('billing', text)      # 자주 걸리는 원인을 짚어 준다
+
+    def test_읽힌_장이_하나라도_있으면_판정은_낸다(self):
+        """못 받은 장은 평균에서 빼되, 근거가 얇아졌다고 알린다."""
+        from io import StringIO
+        from unittest.mock import patch
+
+        from django.core.management import call_command
+
+        from v1.label.services import ocr_text
+
+        self._case_with_text('제품명 초코쿠키\n원재료명 밀가루, 설탕, 코코아분말, 정제소금')
+        self._case_with_text('', name='못 읽은 것', ocr_engine='')
+
+        out = StringIO()
+        with patch.object(ocr_text, 'extract_text', return_value=''):
+            call_command('ocr_ground_check', stdout=out)
+        text = out.getvalue()
+
+        self.assertIn('판정:', text)
+        self.assertIn('1장은 원문을 받지 못해', text)
+
     def test_명령이_잴_것이_없어도_안_터진다(self):
         from io import StringIO
 

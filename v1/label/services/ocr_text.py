@@ -315,14 +315,41 @@ def text_for_case(case, refresh: bool = False) -> str:
 
 
 def measure_case(case, refresh: bool = False) -> dict:
-    """정답지 한 장에 대해 "원문이 정답을 얼마나 담고 있는가" 를 낸다."""
+    """
+    정답지 한 장에 대해 "원문이 정답을 얼마나 담고 있는가" 를 낸다.
+
+    원문을 못 받았으면 회수율은 **0 이 아니라 None** 이다. 이 둘은 전혀 다르다.
+
+        원문을 받았는데 정답이 그 안에 없다   -> OCR 이 못 읽었다. 0 이 맞다
+        원문 자체를 못 받았다                 -> 아직 아무것도 재지 못했다
+
+    처음에 이걸 안 갈랐다가 실제로 틀린 결론이 나왔다 - Google Cloud 프로젝트에
+    결제가 안 걸려 있어 403 이 왔는데, 화면에는 "긴 칸 회수율 0.000 / 판정: 못
+    읽는다 - 이 방향을 접는다" 가 찍혔다. **OCR 은 한 번도 돌지 않았다.**
+    설정 문제로 프로젝트를 접을 뻔했다.
+    """
     text = text_for_case(case, refresh=refresh)
+    if not text:
+        return {
+            'case_id': case.pk,
+            'name': case.name,
+            'engine': 'google',
+            'chars': 0,
+            'text': '',
+            'rows': [],
+            'fields': 0, 'found': 0, 'recall': None,
+            'long_fields': 0, 'long_recall': None,
+            'measured': False,
+            'verdict': '원문을 받지 못해 아직 재지 못했다',
+        }
+
     rows = field_recall(case.expected or {}, text)
     summary = recall_summary(rows)
     return {
         'case_id': case.pk,
         'name': case.name,
         'engine': 'google',
+        'measured': True,
         'chars': len(text),
         'text': text,
         'rows': rows,

@@ -57,14 +57,27 @@ class Command(BaseCommand):
                 '(--all 을 주면 확인 안 된 것도 포함).'))
             return
 
-        long_values = []
+        long_values, failed = [], []
         for case in cases:
             result = measure_case(case, refresh=options['refresh'])
             self._print_case(result, show_text=options['text'])
-            if result['long_recall'] is not None:
+            if not result['measured']:
+                failed.append(case)
+            elif result['long_recall'] is not None:
                 long_values.append(result['long_recall'])
 
+        # **원문을 한 장도 못 받았으면 판정을 내지 않는다.** 호출이 실패한 것과
+        # OCR 이 못 읽은 것은 전혀 다른데, 예전에는 둘 다 0.000 으로 뭉개서
+        # "접는다" 를 찍었다. 결제 설정 하나 때문에 프로젝트를 접을 뻔했다.
+        if failed and not long_values:
+            self._print_blocked(failed)
+            return
+
         self._print_verdict(cases, long_values, verdict, LONG_FIELDS)
+        if failed:
+            self.stdout.write(self.style.WARNING(
+                f'\n다만 {len(failed)}장은 원문을 받지 못해 이 평균에서 빠졌다. '
+                '그만큼 판정의 근거가 얇다.'))
 
     # ── 출력 ──────────────────────────────────────────────────────────────
 
@@ -93,10 +106,11 @@ class Command(BaseCommand):
         self.stdout.write(self.style.MIGRATE_HEADING(
             f'#{result["case_id"]} {result["name"]}  (원문 {result["chars"]:,}자)'))
 
-        if not result['chars']:
+        if not result['measured']:
             self.stdout.write(self.style.ERROR(
-                '  원문이 비었다. 설정(GOOGLE_VISION_SERVICE_ACCOUNT_JSON)이나 '
-                '사진을 확인하라 — 자세한 이유는 로그에 있다.'))
+                '  원문을 받지 못했다. **이것은 "OCR 이 못 읽었다" 가 아니다** — '
+                '아직 아무것도 재지 못한 것이다.\n'
+                '  이유는 로그(django_errors.log)의 [OCR 원문] 줄에 그대로 있다.'))
             return
 
         self.stdout.write(f'  {"항목":<22}{"글자수":>7}{"점수":>8}   ')
@@ -119,6 +133,30 @@ class Command(BaseCommand):
             self.stdout.write('  ── 원문 ──')
             for line in (result.get('text') or '').splitlines()[:60]:
                 self.stdout.write(f'  | {line}')
+
+    def _print_blocked(self, failed):
+        """
+        한 장도 못 받았다. **판정을 내지 않는다.**
+
+        여기서 0.000 과 "접는다" 를 찍으면 안 된다. 재지 못한 것을 못 읽은
+        것으로 읽게 되고, 설정 문제로 방향 전체가 접힌다. 실제로 그럴 뻔했다.
+        """
+        self.stdout.write('')
+        self.stdout.write('=' * 60)
+        self.stdout.write(self.style.ERROR(
+            f'{len(failed)}장 모두 원문을 받지 못해 **판정을 내지 않는다.**'))
+        self.stdout.write(
+            '\n호출이 실패한 것이지 OCR 이 못 읽은 것이 아니다. 자주 걸리는 것:\n'
+            '\n'
+            '  403 billing to be enabled   그 프로젝트에 결제 계정이 없다.\n'
+            '                              Vision 은 무료 사용량(월 1,000건)을 쓰더라도\n'
+            '                              결제 계정 연결이 필요하다.\n'
+            '  403 SERVICE_DISABLED        Cloud Vision API 를 아직 켜지 않았다.\n'
+            '  403 PERMISSION_DENIED       서비스 계정에 권한이 없다. API 키를 쓰면\n'
+            '                              이 문제가 없다.\n'
+            '  400 API key not valid       키가 잘려 들어갔거나 제한에 걸렸다.\n'
+            '\n'
+            '어느 것인지는 로그(django_errors.log)의 [OCR 원문] 줄에 그대로 적혀 있다.')
 
     def _print_verdict(self, cases, long_values, verdict, long_fields):
         self.stdout.write('')
