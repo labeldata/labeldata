@@ -41,6 +41,8 @@ class Command(BaseCommand):
         from v1.common.models import OcrTruthCase
         from v1.label.services.ocr_text import LONG_FIELDS, measure_case, verdict
 
+        self._print_auth()
+
         cases = OcrTruthCase.objects.all()
         if options['case']:
             cases = cases.filter(pk=options['case'])
@@ -65,6 +67,26 @@ class Command(BaseCommand):
         self._print_verdict(cases, long_values, verdict, LONG_FIELDS)
 
     # ── 출력 ──────────────────────────────────────────────────────────────
+
+    def _print_auth(self):
+        """
+        어떤 인증으로 부르는지 먼저 알린다.
+
+        원문이 비어서 돌아왔을 때 "설정이 없는 건지, 있는데 거절당한 건지" 를
+        가리는 데 몇 분씩 쓰게 된다. 부르기 전에 말해 주면 그 시간이 없어진다.
+        """
+        from django.conf import settings
+
+        if getattr(settings, 'GOOGLE_VISION_API_KEY', ''):
+            self.stdout.write('인증: API 키 (GOOGLE_VISION_API_KEY)')
+        elif getattr(settings, 'GOOGLE_VISION_SERVICE_ACCOUNT_JSON', ''):
+            self.stdout.write('인증: 서비스 계정 (GOOGLE_VISION_SERVICE_ACCOUNT_JSON)')
+        elif getattr(settings, 'FCM_SERVICE_ACCOUNT_JSON', ''):
+            self.stdout.write('인증: 서비스 계정 (FCM_SERVICE_ACCOUNT_JSON 을 빌려 씀)')
+        else:
+            self.stdout.write(self.style.ERROR(
+                '인증 설정이 없다. .env 에 GOOGLE_VISION_API_KEY 또는\n'
+                'GOOGLE_VISION_SERVICE_ACCOUNT_JSON 을 넣어야 원문을 못 받는다.'))
 
     def _print_case(self, result, show_text=False):
         self.stdout.write('')

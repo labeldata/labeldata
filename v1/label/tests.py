@@ -1244,9 +1244,46 @@ class OcrGroundTextTests(TestCase):
 
         from v1.label.services import ocr_text
 
-        with override_settings(GOOGLE_VISION_SERVICE_ACCOUNT_JSON='',
+        with override_settings(GOOGLE_VISION_API_KEY='',
+                               GOOGLE_VISION_SERVICE_ACCOUNT_JSON='',
                                FCM_SERVICE_ACCOUNT_JSON=''):
             self.assertEqual(ocr_text.extract_text(b'x'), '')
+
+    def test_API_키가_있으면_서비스_계정을_안_쓴다(self):
+        from unittest.mock import patch
+
+        from django.test import override_settings
+
+        from v1.label.services import ocr_text
+
+        long_text = '제품명 초코쿠키\n원재료명 밀가루, 설탕, 코코아분말, 정제소금' * 2
+        with override_settings(GOOGLE_VISION_API_KEY='key-abc'), \
+             patch.object(ocr_text, '_access_token') as token, \
+             patch('requests.post', return_value=self._vision_response(long_text)) as post:
+            ocr_text.extract_text(b'x')
+
+        token.assert_not_called()
+        self.assertIn('key=key-abc', post.call_args.args[0])
+        self.assertNotIn('Authorization', post.call_args.kwargs['headers'])
+
+    def test_오류_로그에_API_키를_남기지_않는다(self):
+        """키가 URL 에 들어가므로 응답 본문에 섞여 나올 수 있다."""
+        from unittest.mock import Mock, patch
+
+        from django.test import override_settings
+
+        from v1.label.services import ocr_text
+
+        resp = Mock(status_code=400)
+        resp.text = 'API key not valid: key-abc'
+        with override_settings(GOOGLE_VISION_API_KEY='key-abc'), \
+             patch('requests.post', return_value=resp), \
+             self.assertLogs('v1.label.services.ocr_text', level='ERROR') as logs:
+            self.assertEqual(ocr_text.extract_text(b'x'), '')
+
+        joined = '\n'.join(logs.output)
+        self.assertNotIn('key-abc', joined)
+        self.assertIn('***', joined)
 
     def test_호출이_터져도_빈_문자열이다(self):
         from unittest.mock import patch

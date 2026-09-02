@@ -63,12 +63,28 @@ LONG_FIELDS = ('rawmtrl_nm', 'cautions', 'additional_info')
 FOUND_THRESHOLD = 90
 
 
+def _api_key() -> str:
+    """
+    API 키. 있으면 이걸 먼저 쓴다.
+
+    Vision 의 images:annotate 는 API 키로도 부를 수 있고, 서비스 계정 JSON 을
+    서버에 두는 것보다 붙이기가 훨씬 쉽다. "API 키를 쓰면 파일이 공개돼 있어야
+    한다" 는 제약은 이미지를 **URL 로 가리킬 때**의 이야기다. 우리는 사진을
+    base64 로 실어 보내므로 해당되지 않는다.
+
+    대신 키에는 **Cloud Vision API 로만 쓰도록 제한**을 걸어야 한다. 제한 없는
+    키가 새면 그 프로젝트의 다른 API 까지 열린다.
+    """
+    return getattr(settings, 'GOOGLE_VISION_API_KEY', '') or ''
+
+
 def _access_token() -> str:
     """
     서비스 계정 JSON 으로 Vision 용 액세스 토큰을 받는다.
 
-    FCM 이 쓰는 방식과 같다(mobile/services/push_service._get_fcm_access_token).
-    JSON 본문을 그대로 넣어도 되고 파일 경로를 넣어도 된다.
+    API 키가 없을 때만 쓴다. 방식은 FCM 과 같다
+    (mobile/services/push_service._get_fcm_access_token). JSON 본문을 그대로
+    넣어도 되고 파일 경로를 넣어도 된다.
 
     전용 설정이 비어 있으면 FCM 것을 쓴다 - 대개 같은 Google Cloud 프로젝트라
     서비스 계정을 하나 더 만들 이유가 없다. 다만 그 계정에 **Vision API 사용
@@ -134,9 +150,16 @@ def extract_text(image_bytes: bytes) -> str:
     if not image_bytes:
         return ''
 
-    token = _access_token()
-    if not token:
-        return ''
+    # API 키가 있으면 그걸로, 없으면 서비스 계정으로. 둘 다 없으면 조용히 비운다.
+    key = _api_key()
+    url, headers = VISION_ENDPOINT, {'Content-Type': 'application/json'}
+    if key:
+        url = f'{VISION_ENDPOINT}?key={key}'
+    else:
+        token = _access_token()
+        if not token:
+            return ''
+        headers['Authorization'] = f'Bearer {token}'
 
     import requests
 
@@ -150,18 +173,18 @@ def extract_text(image_bytes: bytes) -> str:
     }
 
     try:
-        response = requests.post(
-            VISION_ENDPOINT,
-            headers={'Authorization': f'Bearer {token}',
-                     'Content-Type': 'application/json'},
-            json=payload, timeout=60)
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
     except Exception:
         logger.exception('[OCR 원문] Vision 호출 실패')
         return ''
 
     if response.status_code != 200:
-        logger.error('[OCR 원문] Vision 응답 %s: %s',
-                     response.status_code, response.text[:500])
+        # 키가 URL 에 들어 있으므로 응답 본문에 섞여 나올 수 있다. 로그에
+        # 남기기 전에 가린다.
+        detail = response.text[:500]
+        if key:
+            detail = detail.replace(key, '***')
+        logger.error('[OCR 원문] Vision 응답 %s: %s', response.status_code, detail)
         return ''
 
     try:

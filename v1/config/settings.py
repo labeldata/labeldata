@@ -235,18 +235,24 @@ OCR_MODEL = config('OCR_MODEL', default='gpt-4o-mini')
 # 이 값과 무관하게 켜서 견줄 수 있다.
 OCR_READ_FREETEXT = config('OCR_READ_FREETEXT', default=False, cast=bool)
 
-# 사진에서 **글자 원문만** 뽑는 Google Cloud Vision 의 서비스 계정.
+# 사진에서 **글자 원문만** 뽑는 Google Cloud Vision.
 #
 # 판독(VLM)과 별개다. VLM 은 레이아웃 이해가 탁월한 대신 긴 문자열의 축자
 # 전사를 못 하고, OCR 은 정확히 반대다 - 그 원문으로 판독값이 사진에 실제로
 # 있던 글자인지 대조하려는 것이다 (OCR_UPGRADE_PLAN.md §13).
 #
-# JSON 본문을 그대로 넣어도 되고 파일 경로를 넣어도 된다. 비워 두면 FCM 것을
-# 쓴다 - 대개 같은 프로젝트라 계정을 하나 더 만들 이유가 없다. 다만 그 계정에
-# **Vision API 사용 설정이 켜져 있어야** 한다.
+# 인증은 둘 중 하나면 된다. **API 키가 있으면 그걸 먼저 쓴다.**
 #
-# 안 넣어도 판독은 지금 그대로 돈다. 원문은 곁들이는 것이지 있어야 하는 것이
-# 아니다.
+#   GOOGLE_VISION_API_KEY                 붙이기 쉽다. 키에 "Cloud Vision API
+#                                         로만" 제한을 반드시 걸 것
+#   GOOGLE_VISION_SERVICE_ACCOUNT_JSON    JSON 본문 또는 파일 경로. 비워 두면
+#                                         FCM 것을 쓴다 (대개 같은 프로젝트)
+#
+# 어느 쪽이든 그 프로젝트에서 **Cloud Vision API 를 켜 두어야** 한다.
+#
+# 둘 다 안 넣어도 판독은 지금 그대로 돈다. 원문은 곁들이는 것이지 있어야 하는
+# 것이 아니다.
+GOOGLE_VISION_API_KEY = config('GOOGLE_VISION_API_KEY', default='')
 GOOGLE_VISION_SERVICE_ACCOUNT_JSON = config(
     'GOOGLE_VISION_SERVICE_ACCOUNT_JSON', default='')
 
