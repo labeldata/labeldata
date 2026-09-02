@@ -1730,6 +1730,158 @@ class OcrGroundTextTests(TestCase):
         self.assertIn('판정:', out.getvalue())
 
 
+class DeriveBasicsTests(TestCase):
+    """
+    사진값에서 화면 버튼 상태를 유도한다.
+
+    장기보존식품·제조방법·보관방법은 글자 칸이 아니라 눌러서 고르는 것이라,
+    값만 채워서는 화면이 그대로다. 사진에는 그 정보가 글자로 적혀 있다.
+    """
+
+    def _derive(self, **fields):
+        from v1.label.services.ocr_apply import derive_basics
+
+        return derive_basics({k: {'value': v} for k, v in fields.items()})
+
+    def test_보관방법에서_배지를_고른다(self):
+        out = self._derive(storage_method='냉동(-18 ℃ 이하)에서 보관')
+        self.assertEqual(out['storage_badges'], ['냉동'])
+
+    def test_보관방법_칸만_본다(self):
+        """
+        주의사항에 "냉장 보관하십시오" 가 있다고 배지를 누르면, 정작 실온
+        제품에 냉장이 켜진다.
+        """
+        out = self._derive(storage_method='실온 보관',
+                           cautions='개봉 후에는 냉장 보관하십시오')
+        self.assertEqual(out['storage_badges'], ['실온'])
+
+    def test_비살균을_살균으로_읽지_않는다(self):
+        """"비살균" 은 "살균" 을 품고 있다. 긴 말부터 봐야 한다."""
+        self.assertEqual(self._derive(prdlst_dcnm='즉석섭취식품(비살균제품)')
+                         ['processing_method'], 'unsanitized')
+        self.assertEqual(self._derive(prdlst_dcnm='멸균제품')
+                         ['processing_method'], 'aseptic')
+        self.assertEqual(self._derive(prdlst_dcnm='살균제품')
+                         ['processing_method'], 'sanitized')
+
+    def test_장기보존식품을_가려낸다(self):
+        self.assertEqual(self._derive(prdlst_dcnm='레토르트식품')
+                         ['preservation_type'], 'retort')
+        self.assertEqual(self._derive(prdlst_dcnm='통조림식품')
+                         ['preservation_type'], 'canned')
+        self.assertEqual(self._derive(prdlst_dcnm='가열하여 섭취하는 냉동식품')
+                         ['preservation_type'], 'frozen_heated')
+
+    def test_모르면_비운다(self):
+        """
+        틀린 버튼을 눌러 두면 사용자가 알아채고 되돌려야 한다. 그건 안 누른
+        것보다 나쁘다. 냉동인 것만 알고 가열/비가열을 모르면 비운다.
+        """
+        out = self._derive(prdlst_dcnm='과자류', storage_method='냉동 보관')
+        self.assertEqual(out['preservation_type'], '')
+        self.assertEqual(out['processing_method'], '')
+        self.assertEqual(out['storage_badges'], ['냉동'])
+
+    def test_빈_판독에도_안_터진다(self):
+        from v1.label.services.ocr_apply import derive_basics
+
+        for data in ({}, None, {'prdlst_nm': {'value': None}}):
+            out = derive_basics(data)
+            self.assertEqual(out['preservation_type'], '')
+            self.assertEqual(out['storage_badges'], [])
+
+    def test_판독_응답에_실려_나간다(self):
+        from unittest.mock import patch
+
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        user = User.objects.create_user(username='derive', password='x')
+        self.client.force_login(user)
+        buf = BytesIO()
+        Image.new('RGB', (300, 200), 'white').save(buf, format='JPEG')
+
+        fake = {'success': True, 'data': {
+            'storage_method': {'value': '냉동(-18℃ 이하)에서 보관'},
+            'prdlst_dcnm': {'value': '레토르트식품'}}}
+        with patch('v1.label.services.ocr_service.extract_label_from_image',
+                   return_value=fake):
+            resp = self.client.post('/label/ocr-extract/', {
+                'image': SimpleUploadedFile('t.jpg', buf.getvalue(), 'image/jpeg')})
+
+        derived = resp.json()['derived']
+        self.assertEqual(derived['preservation_type'], 'retort')
+        self.assertEqual(derived['storage_badges'], ['냉동'])
+
+
+class HybridReadTests(TestCase):
+    """
+    OCR 원문을 판독에 함께 넣고 조각 이미지를 뺀다.
+
+    조각은 오직 글자를 읽으려고 붙인 것인데 그 일은 OCR 이 더 잘한다
+    (정답지 5장, 긴 칸 회수율 0.977). VLM 에게는 배치 판단만 맡긴다.
+    """
+
+    def test_기본은_꺼져_있다(self):
+        """판독의 핵심 경로를 바꾸는 일이다. 측정 없이 켜면 안 된다."""
+        from v1.label.services.ocr_service import hybrid_enabled
+
+        self.assertFalse(hybrid_enabled())
+        self.assertTrue(hybrid_enabled(True))
+        self.assertFalse(hybrid_enabled(False))
+
+    def test_원문을_한_번만_받는다(self):
+        """
+        대조와 주입이 따로 부르면 판독 한 번에 Vision 을 두 번 호출하게 된다.
+        비용이 두 배가 되고, 두 원문이 달라 "대조는 통과했는데 주입된 원문에는
+        없다" 같은 일이 생긴다.
+        """
+        from unittest.mock import patch
+
+        from v1.label.services.ocr_service import source_text
+
+        with patch('v1.label.services.ocr_text.extract_text',
+                   return_value='원문') as call:
+            text = source_text([b'a'], use_ground=True, use_hybrid=True)
+
+        self.assertEqual(text, '원문')
+        self.assertEqual(call.call_count, 1)
+
+    def test_꺼져_있으면_원문을_받지_않는다(self):
+        from unittest.mock import patch
+
+        from v1.label.services.ocr_service import source_text
+
+        with patch('v1.label.services.ocr_text.extract_text') as call:
+            self.assertEqual(source_text([b'a'], use_ground=False,
+                                         use_hybrid=False), '')
+        call.assert_not_called()
+
+    def test_원문_지시문이_옮겨_적으라고_말한다(self):
+        from v1.label.services.ocr_service import hybrid_text_block
+
+        block = hybrid_text_block('제품명 초코쿠키')
+        self.assertIn('그대로 옮기고', block['text'])
+        self.assertIn('제품명 초코쿠키', block['text'])
+        # 원문이 정답은 아니다 - 뜻이 안 통하면 사진을 믿으라고 해야 한다
+        self.assertIn('참고이지 정답이 아닙니다', block['text'])
+
+    def test_원문이_없으면_붙이지_않는다(self):
+        from v1.label.services.ocr_service import hybrid_text_block
+
+        self.assertIsNone(hybrid_text_block(''))
+
+    def test_원문_길이를_제한한다(self):
+        from v1.label.services.ocr_service import OCR_TEXT_MAX_CHARS, hybrid_text_block
+
+        block = hybrid_text_block('가' * (OCR_TEXT_MAX_CHARS + 500))
+        tail = block['text'].split('--- 사진에서 읽은 글자 ---\n', 1)[1]
+        self.assertEqual(len(tail), OCR_TEXT_MAX_CHARS)
+
+
 class FreetextPairTests(TestCase):
     """
     주의사항과 기타표시사항은 **경계가 사람마다 다르다.**
@@ -1898,11 +2050,14 @@ class OcrGroundVerifierTests(TestCase):
 
         source = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
                   ).read_text(encoding='utf-8')
-        for body in ('_grounded(result, raw, use_ground)',
-                     '_grounded_parts(result, raws, use_ground)'):
-            ground_at = source.index(body)
+        marker = '_grounded(result, ocr_text, use_ground)'
+        self.assertEqual(source.count(marker), 2)   # 사진 한 장 / 표시면 여러 장
+        at = 0
+        for _ in range(2):
+            ground_at = source.index(marker, at)
             drop_at = source.index('drop_freetext(strip_design_suffix', ground_at)
             self.assertLess(ground_at, drop_at)
+            at = ground_at + 1
 
     def test_대조가_터져도_판독_결과는_나온다(self):
         from unittest.mock import patch
@@ -1910,9 +2065,9 @@ class OcrGroundVerifierTests(TestCase):
         from v1.label.services import ocr_service
 
         data = {'prdlst_nm': {'value': '초코쿠키'}}
-        with patch('v1.label.services.ocr_text.extract_text',
+        with patch('v1.label.services.ocr_ground.ground',
                    side_effect=RuntimeError('망')):
-            out, report = ocr_service._grounded(data, b'bytes', use_ground=True)
+            out, report = ocr_service._grounded(data, '원문', use_ground=True)
 
         self.assertEqual(out, data)
         self.assertIsNone(report)

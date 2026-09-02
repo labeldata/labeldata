@@ -199,6 +199,91 @@ def parse_nutrition_basis(text):
     return m.group(1).replace(',', ''), 'mL' if unit.lower() in ('ml', '㎖') else unit
 
 
+# ── 사진값에서 화면 버튼 상태를 유도한다 ────────────────────────────────────
+#
+# 기본정보 탭에는 글자 칸 말고도 **눌러서 고르는 것**이 셋 있다.
+#
+#   장기보존식품   냉동(가열)·냉동(비가열)·통병조림·레토르트   (배타 선택)
+#   제조방법       살균·멸균·유탕유처리·비살균                 (배타 선택)
+#   보관방법       냉동·냉장·실온·상온 배지                    (여러 개 가능)
+#
+# 사진에는 그 정보가 **글자로** 적혀 있다 - 식품유형에 "레토르트식품", 보관방법에
+# "냉동(-18 ℃ 이하)", 주의사항에 "살균제품" 같은 식이다. 사람이 그걸 읽고 다시
+# 버튼을 누르게 두면, 사진으로 불러오는 의미가 절반으로 준다.
+#
+# **판정은 서버가 한다.** 화면이 둘(표시사항 작성 / 제품 기본정보)이라 여기서
+# 하지 않으면 같은 규칙을 두 벌로 만들게 되고, 어느 날 한쪽만 고쳐진다.
+
+# 긴 말부터 본다. "비살균" 은 "살균" 을 품고 있어서 순서를 바꾸면 늘 살균으로
+# 잡힌다. 같은 이유로 "멸균" 도 "살균" 보다 앞이다.
+_PROCESSING_RULES = (
+    ('unsanitized', ('비살균',)),
+    ('aseptic',     ('멸균',)),
+    ('yutang',      ('유탕', '유처리')),
+    ('sanitized',   ('살균',)),
+)
+
+_PRESERVATION_RULES = (
+    ('retort',           ('레토르트',)),
+    ('canned',           ('통조림', '병조림', '통·병조림')),
+    ('frozen_nonheated', ('비가열',)),
+    ('frozen_heated',    ('가열하여 섭취', '가열하여섭취')),
+)
+
+# 보관방법 배지. 화면의 data-storage-value 와 같아야 한다.
+_STORAGE_BADGES = ('냉동', '냉장', '실온', '상온')
+
+
+def _haystack(data, *fields) -> str:
+    """고른 항목들의 값을 한 덩어리로. 판정은 여러 칸에 흩어진 단서를 함께 본다."""
+    parts = []
+    for field in fields:
+        item = (data or {}).get(field)
+        value = item.get('value') if isinstance(item, dict) else item
+        if value:
+            parts.append(str(value))
+    return ' '.join(parts)
+
+
+def derive_basics(data) -> dict:
+    """
+    판독값에서 화면 버튼 상태를 유도한다.
+
+    Returns: {'preservation_type': str, 'processing_method': str,
+              'storage_badges': [str, ...]}
+      값이 없으면 빈 문자열 / 빈 목록이다. **모르면 비운다** - 틀린 버튼을
+      눌러 두면 사용자가 그걸 알아채고 되돌려야 하는데, 그건 안 누른 것보다
+      나쁘다.
+
+    냉동 판정만 두 갈래다. 라벨은 "가열하여 섭취하는 냉동식품" / "비가열"
+    로 그 구분을 적어 두는데, 둘 다 없으면 냉동인 것만 알고 어느 쪽인지는
+    모른다. 그때는 비운다.
+    """
+    text = _haystack(data, 'prdlst_dcnm', 'storage_method', 'cautions',
+                     'additional_info', 'prdlst_nm')
+    storage = _haystack(data, 'storage_method')
+
+    processing = ''
+    for value, needles in _PROCESSING_RULES:
+        if any(n in text for n in needles):
+            processing = value
+            break
+
+    preservation = ''
+    for value, needles in _PRESERVATION_RULES:
+        if any(n in text for n in needles):
+            preservation = value
+            break
+
+    return {
+        'preservation_type': preservation,
+        'processing_method': processing,
+        # 배지는 보관방법 칸의 글자만 본다. 주의사항에 "냉장 보관하십시오" 가
+        # 있다고 보관방법 배지를 누르면, 정작 실온 제품에 냉장이 켜진다.
+        'storage_badges': [b for b in _STORAGE_BADGES if b in storage],
+    }
+
+
 def _mark_segment(segments):
     """
     구분(비닐류·플라스틱 …)이 적힌 도막을 고른다. 없으면 None.

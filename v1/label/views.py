@@ -2822,6 +2822,16 @@ def ocr_extract(request):
         except Exception:
             logger.exception('원재료명 괄호 검사 실패 (user=%s)', request.user)
 
+        # 4) 화면 버튼 상태
+        #    장기보존식품·제조방법·보관방법은 글자 칸이 아니라 눌러서 고르는
+        #    것이라, 값만 채워서는 화면이 그대로다. 사진에 글자로 적혀 있으니
+        #    서버가 판정해 함께 내려보낸다 - 두 화면이 같은 규칙을 쓰도록.
+        try:
+            from .services.ocr_apply import derive_basics
+            result['derived'] = derive_basics(result.get('data') or {})
+        except Exception:
+            logger.exception('버튼 상태 유도 실패 (user=%s)', request.user)
+
     return JsonResponse(result)
 
 

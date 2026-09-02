@@ -430,7 +430,83 @@ def ground_enabled(use_ground=None) -> bool:
     return bool(getattr(settings, 'OCR_GROUND', False))
 
 
-def _grounded(data, image_bytes, use_ground=None):
+def hybrid_enabled(use_hybrid=None) -> bool:
+    """
+    OCR 원문을 판독에 **함께 넣을 것인가.** 기본은 끔.
+
+    켜면 조각 이미지를 빼고 원문을 대신 싣는다. 조각은 오직 글자를 읽으려고
+    붙인 것인데, 그 일은 OCR 이 더 잘한다(정답지 5장에서 긴 칸 회수율 0.977).
+    VLM 에게는 그 대신 **어느 값이 어느 항목인가** 만 맡긴다 - 거기서는
+    100점·편차 0 이다.
+
+    토큰이 6~7만에서 1.5~2만으로 줄고 자유 문구의 정확도가 오를 것으로 본다.
+    다만 판독의 핵심 경로를 바꾸는 일이라, 측정 화면에서 앞뒤를 재 보기 전에
+    평소 판독에 켜지 않는다. `.env` 에 OCR_HYBRID=True 로 켠다.
+    """
+    if use_hybrid is not None:
+        return bool(use_hybrid)
+    return bool(getattr(settings, 'OCR_HYBRID', False))
+
+
+def source_text(image_bytes_list, use_ground=None, use_hybrid=None) -> str:
+    """
+    사진들의 글자 원문. 대조에도 주입에도 **이 한 번을 나눠 쓴다.**
+
+    따로 부르면 판독 한 번에 Vision 을 두 번 호출하게 된다 - 비용이 두 배가
+    되고, 두 원문이 미묘하게 달라 "대조는 통과했는데 주입된 원문에는 없다"
+    같은 일이 생긴다.
+
+    표시면이 여러 장이면 면마다 받아 이어 붙인다. 면을 나눠 다루면 안 된다 -
+    어느 면에 적혀 있든 "사진에 있었다" 는 같은데, 면별로 보면 제 면이 아닌
+    값이 전부 지어냄으로 잡힌다.
+    """
+    if not (ground_enabled(use_ground) or hybrid_enabled(use_hybrid)):
+        return ''
+    try:
+        from v1.label.services.ocr_text import extract_text
+
+        texts = [t for t in (extract_text(raw) for raw in image_bytes_list if raw) if t]
+        return '\n'.join(texts)
+    except Exception:
+        # 원문은 곁들이는 것이다. 실패해도 판독은 지금처럼 돌아야 한다.
+        logger.exception('사진 원문을 받지 못했다 - 원문 없이 판독한다')
+        return ''
+
+
+# 프롬프트에 싣는 원문의 상한.
+#
+# 문서함 PDF 경로가 12,000자를 쓴다(vision_service.PDF_TEXT_MAX_CHARS). 사진
+# 원문은 정답지 다섯 장에서 1,100~2,100자였으니 넉넉하다. 표가 빽빽한 라벨에서
+# 입력 토큰이 폭발하는 것만 막는다.
+OCR_TEXT_MAX_CHARS = 8000
+
+# 원문을 함께 보낼 때의 지시문.
+#
+# 문서함 PDF 와 **같은 말**이다(vision_service). 거기서 이미 효과가 확인됐고,
+# 두 경로가 다른 말을 하면 어느 쪽이 나은지 견줄 수 없게 된다.
+_HYBRID_INSTRUCTION = (
+    "\n\n아래는 이 사진에서 **기계가 그대로 읽어 낸 글자**입니다. "
+    "글자는 이 원문을 그대로 옮기고, 사진은 어느 값이 어느 항목인지 판단하는 "
+    "데만 쓰세요.\n"
+    "- 원문에 있는 문구는 **한 글자도 바꾸지 말고** 옮기세요. 다듬거나 요약하지 "
+    "마세요.\n"
+    "- 원문은 줄 순서가 뒤섞여 있을 수 있습니다. 어느 글자가 어느 항목인지는 "
+    "사진의 배치를 보고 정하세요.\n"
+    "- 원문에 없는 항목은 지어내지 말고 none 으로 두세요.\n"
+    "- 원문이 잘못 읽힌 것 같으면(뜻이 통하지 않으면) 사진을 믿고 고쳐 적으세요. "
+    "원문은 참고이지 정답이 아닙니다.\n\n"
+    "--- 사진에서 읽은 글자 ---\n"
+)
+
+
+def hybrid_text_block(text: str) -> dict | None:
+    """원문을 프롬프트에 실을 형태로. 원문이 없으면 None."""
+    if not text:
+        return None
+    return {"type": "text", "text": _HYBRID_INSTRUCTION + text[:OCR_TEXT_MAX_CHARS]}
+
+
+def _grounded(data, text, use_ground=None):
     """
     판독값을 사진의 글자 원문과 대조한다. 실패하면 그대로 돌려준다.
 
@@ -440,41 +516,14 @@ def _grounded(data, image_bytes, use_ground=None):
 
     Returns: (표시가 붙은 결과, 요약 또는 None)
     """
-    if not ground_enabled(use_ground) or not image_bytes:
+    if not ground_enabled(use_ground) or not text:
         return data, None
     try:
         from v1.label.services.ocr_ground import ground
-        from v1.label.services.ocr_text import extract_text
-
-        text = extract_text(image_bytes)
-        if not text:
-            return data, None
         return ground(data, text)
     except Exception:
         # 대조는 얹는 것이다. 실패해도 판독 결과는 그대로 나가야 한다.
         logger.exception('판독값 대조 실패')
-        return data, None
-
-
-def _grounded_parts(data, raws, use_ground=None):
-    """
-    표시면이 여러 장일 때의 대조. 면마다 원문을 받아 이어 붙인 뒤 한 번에 본다.
-
-    면을 나눠 대조하면 안 된다 - 어느 면에 적혀 있든 "사진에 있었다" 는 같은데,
-    면별로 보면 제 면이 아닌 값이 전부 지어냄으로 잡힌다.
-    """
-    if not ground_enabled(use_ground) or not raws:
-        return data, None
-    try:
-        from v1.label.services.ocr_ground import ground
-        from v1.label.services.ocr_text import extract_text
-
-        texts = [t for t in (extract_text(raw) for raw in raws if raw) if t]
-        if not texts:
-            return data, None
-        return ground(data, '\n'.join(texts))
-    except Exception:
-        logger.exception('판독값 대조 실패 (표시면 %s장)', len(raws))
         return data, None
 
 
@@ -677,7 +726,7 @@ def region_instructions(regions):
 
 def extract_label_from_parts(parts, model=None, prompt_version=None,
                              use_hints=True, layout='grid', read_freetext=None,
-                             use_ground=None):
+                             use_ground=None, use_hybrid=None):
     """
     표시면별로 잘라 온 사진들에서 한 번에 필드를 뽑는다.
 
@@ -692,11 +741,24 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
     try:
         client = OpenAI(api_key=settings.OPENAI_API_KEY,
                         max_retries=getattr(settings, 'OCR_MAX_RETRIES', 5))
-        # 대조를 켰을 때만 원본을 읽는다. 표시면이 여러 장이면 면마다 원문을
-        # 받아 이어 붙인다 - 어느 면에 적혀 있든 "사진에 있었다" 는 같다.
-        raws = ([_read_bytes(f) for f, _ in parts]
-                if ground_enabled(use_ground) else [])
+        # 원문이 필요할 때만 원본을 읽는다. 면마다 받아 이어 붙인다.
+        need_text = ground_enabled(use_ground) or hybrid_enabled(use_hybrid)
+        raws = [_read_bytes(f) for f, _ in parts] if need_text else []
+        ocr_text = source_text(raws, use_ground, use_hybrid)
+
         regions = build_multi_regions(parts, layout=layout)
+        # 원문이 있으면 **면마다 한 장씩만** 남기고 조각을 뺀다. 사람이 이미
+        # 면 단위로 잘라 준 뒤라 남는 조각은 글자를 읽기 위한 것뿐이고,
+        # 그 일은 OCR 이 더 잘한다.
+        if hybrid_enabled(use_hybrid) and ocr_text:
+            seen, heads = set(), []
+            for region in regions:
+                role = region.get('role')
+                if role in seen:
+                    continue
+                seen.add(role)
+                heads.append(region)
+            regions = heads
 
         content = [
             {"type": "image_url",
@@ -717,6 +779,12 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
             ),
         })
 
+        # 원문은 맨 뒤에 (extract_label_from_image 와 같은 이유)
+        if hybrid_enabled(use_hybrid):
+            block = hybrid_text_block(ocr_text)
+            if block:
+                content.append(block)
+
         system = active_prompt(prompt_version)
         if use_hints:
             system += learned_hints()
@@ -733,7 +801,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 
         result = json.loads(response.choices[0].message.content)
         # 대조를 먼저. 아래 줄은 값을 일부러 바꾸는 단계다 (_grounded 주석 참고).
-        result, ground_report = _grounded_parts(result, raws, use_ground)
+        result, ground_report = _grounded(result, ocr_text, use_ground)
         result = drop_freetext(strip_design_suffix(result), read_freetext)
 
         out = {"success": True, "data": result,
@@ -749,7 +817,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 
 def extract_label_from_image(image_file, model=None, prompt_version=None,
                              use_hints=True, want_boxes=False, layout='grid',
-                             read_freetext=None, use_ground=None):
+                             read_freetext=None, use_ground=None, use_hybrid=None):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
 
@@ -787,9 +855,18 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         # 이 한계다. 기다리는 것 말고 할 수 있는 일이 없다.
         client = OpenAI(api_key=settings.OPENAI_API_KEY,
                         max_retries=getattr(settings, 'OCR_MAX_RETRIES', 5))
-        # 대조를 켰을 때만 원본을 읽는다. Pillow 가 파일을 소비하므로 먼저 읽는다.
-        raw = _read_bytes(image_file) if ground_enabled(use_ground) else b''
+        # 원문이 필요할 때만 원본을 읽는다. Pillow 가 파일을 소비하므로 먼저 읽는다.
+        need_text = ground_enabled(use_ground) or hybrid_enabled(use_hybrid)
+        raw = _read_bytes(image_file) if need_text else b''
+        ocr_text = source_text([raw], use_ground, use_hybrid)
+
         regions = build_image_regions(image_file, layout=layout)
+        # **원문이 있으면 조각을 뺀다.** 조각은 오직 글자를 읽으려고 붙인 것이고,
+        # 그 일은 OCR 이 더 잘한다. 남기는 것은 전체 한 장 - 어느 값이 어느
+        # 항목인지는 배치를 봐야 알고, 그게 VLM 이 잘하는 일이다.
+        # 이미지 다섯 장이 한 장이 되니 토큰이 6~7만에서 1.5~2만으로 준다.
+        if hybrid_enabled(use_hybrid) and ocr_text:
+            regions = regions[:1]
         images = [region['b64'] for region in regions]
 
         content = [
@@ -815,6 +892,13 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
             ),
         })
 
+        # 원문은 **맨 뒤에** 붙인다. 사진을 먼저 보고 배치를 잡은 뒤 글자를
+        # 옮기는 순서가 되도록.
+        if hybrid_enabled(use_hybrid):
+            block = hybrid_text_block(ocr_text)
+            if block:
+                content.append(block)
+
         system = active_prompt(prompt_version)
         if use_hints:
             system += learned_hints()
@@ -835,7 +919,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         result = json.loads(response.choices[0].message.content)
         # **대조를 먼저 한다.** 아래 세 줄은 값을 일부러 바꾸는 단계라,
         # 뒤에서 대조하면 우리가 바꾼 값이 "지어냄" 으로 잡힌다.
-        result, ground_report = _grounded(result, raw, use_ground)
+        result, ground_report = _grounded(result, ocr_text, use_ground)
         result = drop_freetext(strip_design_suffix(result), read_freetext)
 
         out = {"success": True, "data": result}

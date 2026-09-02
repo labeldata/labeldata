@@ -265,6 +265,20 @@ GOOGLE_VISION_SERVICE_ACCOUNT_JSON = config(
 # 측정 화면(/label/ocr-lab/)에서는 이 값과 무관하게 켜서 견줄 수 있다.
 OCR_GROUND = config('OCR_GROUND', default=False, cast=bool)
 
+# OCR 원문을 판독에 **함께 넣을 것인가.** 기본은 끔.
+#
+# 켜면 조각 이미지를 빼고 원문을 대신 싣는다. 조각은 오직 글자를 읽으려고
+# 붙인 것인데 그 일은 OCR 이 더 잘한다(정답지 5장, 긴 칸 회수율 0.977).
+# VLM 에게는 어느 값이 어느 항목인가만 맡긴다 - 거기서는 100점·편차 0 이다.
+#
+#   토큰   6~7만 -> 1.5~2만 (약 70% 절감)
+#   정확도 자유 문구 두 칸(25~52점)에서 오를 것으로 본다
+#
+# **측정 없이 켜지 마시오.** 판독의 핵심 경로를 바꾸는 일이고, 지금 100점인
+# 칸들이 흔들릴 수 있다. /label/ocr-lab/ 에서 이 옵션을 켜고 끈 결과를 견준
+# 뒤에 켠다.
+OCR_HYBRID = config('OCR_HYBRID', default=False, cast=bool)
+
 # 식품안전나라 OpenAPI Key (https://openapi.foodsafetykorea.go.kr)
 FOODSAFETY_API_KEY = config('FOODSAFETY_API_KEY', default='')
 

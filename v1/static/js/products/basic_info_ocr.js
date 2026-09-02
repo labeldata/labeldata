@@ -565,6 +565,69 @@
   }
 
   // 고른 영양성분·분리배출을 서버로 보낸다
+  // 서버가 사진값에서 유도한 버튼 상태 (ocr_apply.derive_basics).
+  // 장기보존식품·제조방법·보관방법은 글자 칸이 아니라 눌러서 고르는 것이라
+  // 값만 채워서는 화면이 그대로다.
+  var derived = null;
+
+  // **사진에서 읽은 대로 덮어쓴다.**
+  //
+  // 사진으로 불러오기는 "이 사진 내용으로 채워라" 는 뜻이므로, 이미 눌려
+  // 있던 버튼이 있어도 사진 쪽을 따른다. 다만 **사진에서 판정하지 못한
+  // 것은 건드리지 않는다** - 모르는 것과 "아니다" 는 다르고, 모른다고
+  // 기존 선택을 지우면 사용자가 넣어 둔 정보를 잃는다.
+  function applyDerived() {
+    if (!derived) return;
+    var changed = [];
+
+    if (derived.preservation_type) {
+      if (setExclusive('.grp-preservation', derived.preservation_type)) {
+        changed.push('장기보존식품');
+      }
+    }
+    if (derived.processing_method) {
+      if (setExclusive('.grp-processing', derived.processing_method)) {
+        changed.push('제조방법');
+      }
+    }
+    if (derived.storage_badges && derived.storage_badges.length) {
+      if (setStorageBadges(derived.storage_badges)) changed.push('보관방법');
+    }
+
+    if (changed.length) {
+      status(changed.join(', ') + ' 을(를) 사진에서 읽은 값으로 맞췄습니다.');
+    }
+  }
+
+  // 배타 선택 묶음. 하나만 켜고 나머지는 끈다.
+  function setExclusive(selector, value) {
+    var boxes = document.querySelectorAll(selector);
+    if (!boxes.length) return false;
+    var hit = false;
+    boxes.forEach(function (box) {
+      var on = box.value === value;
+      if (box.checked !== on) {
+        box.checked = on;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (on) hit = true;
+    });
+    return hit;
+  }
+
+  // 보관방법 배지. 화면은 active 클래스로 눌린 상태를 나타내고, 실제 값은
+  // 옆의 글자 칸에 있다 - 배지는 그 글자를 넣고 빼는 단추다. 그래서 여기서는
+  // 칸의 글자를 기준으로 눌린 모양만 맞춘다 (칸은 applySelected 가 이미 채웠다).
+  function setStorageBadges(values) {
+    var badges = document.querySelectorAll('.btn-storage-badge');
+    if (!badges.length) return false;
+    badges.forEach(function (badge) {
+      var on = values.indexOf(badge.dataset.storageValue) >= 0;
+      badge.classList.toggle('active', on);
+    });
+    return true;
+  }
+
   function applyExtras() {
     var body = document.getElementById('basicInfoOcrBody');
     if (!body) return;
@@ -680,6 +743,7 @@
     // 영양성분·분리배출은 이 탭에 칸이 없어 서버가 바로 저장한다.
     // 창이 닫히기 전에 값을 읽어야 하므로 여기서 부른다.
     applyExtras();
+    applyDerived();
     recordCorrections();
 
     // 원재료명을 채웠으면 그 안의 원료들을 BOM 행으로 만들 수 있다.
@@ -903,6 +967,7 @@
           throw new Error(msg);   // 부른 쪽(불러오기 모달)이 알아야 한다
         }
         status('');
+        derived = result.derived || null;
         showModal(result.data || {}, file, result.api_match, result.snap);
       })
       .catch(function (err) {

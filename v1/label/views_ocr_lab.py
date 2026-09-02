@@ -399,6 +399,9 @@ def run_benchmark(request):
             # 판독값을 사진의 글자 원문과 대조할 것인가. 켜면 판독 한 번에
             # Vision 호출이 하나 더 붙는다 - 여기서 앞뒤를 재 보고 켠다.
             use_ground=bool(payload.get('use_ground')),
+            # OCR 원문을 함께 넣고 조각 이미지를 뺀다. 토큰이 6~7만에서
+            # 1.5~2만으로 줄어드는 대신 판독 경로가 바뀌므로 여기서 잰다.
+            use_hybrid=bool(payload.get('use_hybrid')),
             user=request.user,
         )
     except Exception as exc:
@@ -436,6 +439,7 @@ def _run_json(run, full=False):
         'runs_asked': (run.detail or {}).get('runs_asked') or run.runs,
         'read_freetext': (run.detail or {}).get('read_freetext', False),
         'ground': (run.detail or {}).get('ground', False),
+        'hybrid': (run.detail or {}).get('hybrid', False),
     }
     if full:
         out['cases'] = (run.detail or {}).get('cases', [])
