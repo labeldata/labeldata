@@ -1867,6 +1867,86 @@ class HybridReadTests(TestCase):
         # 정답지 세 장이면 사이가 둘이다
         self.assertEqual(slept.call_count, 2)
 
+    def _truth_case(self, name='한도'):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        from v1.common.models import OcrTruthCase
+
+        buf = BytesIO()
+        Image.new('RGB', (200, 150), 'white').save(buf, format='JPEG')
+        return OcrTruthCase.objects.create(
+            name=name, expected={'prdlst_nm': 'x'}, verified=True,
+            image=SimpleUploadedFile('t.jpg', buf.getvalue(), 'image/jpeg'))
+
+    def test_한도에_걸리면_여러_번_다시_해_본다(self):
+        """
+        한 번으로는 모자랐다. 이 열쇠는 실서비스와 함께 쓰므로, 우리가 아무리
+        아껴 불러도 사용자가 사진을 올리고 있으면 창이 남의 요청으로 차 있다.
+        실제로 "Used 200000, Requested 4692" 가 나왔다 - 우리 요청은 4천인데
+        창은 이미 꽉 차 있었다.
+        """
+        from unittest.mock import patch
+
+        from v1.common.models import OcrTruthCase
+        from v1.label.services import ocr_lab
+
+        case = self._truth_case()
+        limited = {'success': False, 'error_kind': 'rate_limit', 'error': '...'}
+
+        with patch('v1.label.services.ocr_service.extract_label_from_image',
+                   return_value=limited) as read, \
+             patch.object(ocr_lab.time, 'sleep'):
+            ocr_lab.measure_case(case, runs=1)
+
+        # 첫 판독 + 재시도 세 번
+        self.assertEqual(read.call_count, 1 + ocr_lab._RATE_LIMIT_RETRIES)
+
+    def test_성공하면_더_두드리지_않는다(self):
+        from unittest.mock import patch
+
+        from v1.common.models import OcrTruthCase
+        from v1.label.services import ocr_lab
+
+        case = self._truth_case()
+        outs = [{'success': False, 'error_kind': 'rate_limit', 'error': '...'},
+                {'success': True, 'data': {'prdlst_nm': {'value': 'x'}}}]
+
+        with patch('v1.label.services.ocr_service.extract_label_from_image',
+                   side_effect=outs) as read, \
+             patch.object(ocr_lab.time, 'sleep'):
+            ocr_lab.measure_case(case, runs=1)
+
+        self.assertEqual(read.call_count, 2)
+
+    def test_두_회차_사이에도_쉰다(self):
+        """
+        정답지가 하나면 회차 안에는 쉴 자리가 없다. 끈 쪽과 켠 쪽의 두 호출이
+        그대로 붙어 나가 --case 1 --runs 1 이 429 로 죽었다.
+        """
+        from io import StringIO
+        from unittest.mock import patch
+
+        from django.core.management import call_command
+
+        from v1.common.models import OcrBenchmarkRun, OcrTruthCase
+
+        OcrTruthCase.objects.create(name='간격', expected={'prdlst_nm': 'x'},
+                                    verified=True)
+
+        def fake_run(cases, **kw):
+            return OcrBenchmarkRun.objects.create(
+                model='m', variant='whole', case_count=1, runs=1,
+                mean_score=90.0, detail={'fields': []})
+
+        with patch('v1.label.services.ocr_lab.run_benchmark', side_effect=fake_run), \
+             patch('time.sleep') as slept:
+            call_command('ocr_ab', '--hybrid', '--yes', stdout=StringIO())
+
+        slept.assert_called_once()
+
     def test_명령줄로_A_B_를_돌린다(self):
         """
         화면은 웹 요청 시간 제한에 걸려 한 번에 열두 번까지만 부를 수 있다.
@@ -1891,7 +1971,9 @@ class HybridReadTests(TestCase):
                                     'spread': 0.0}]})
 
         out = StringIO()
-        with patch('v1.label.services.ocr_lab.run_benchmark', side_effect=fake_run):
+        # 회차 사이 대기는 실제로 자면 시험이 20초씩 멈춘다
+        with patch('v1.label.services.ocr_lab.run_benchmark',
+                   side_effect=fake_run), patch('time.sleep'):
             call_command('ocr_ab', '--hybrid', '--yes', stdout=out)
         text = out.getvalue()
 
@@ -1921,7 +2003,9 @@ class HybridReadTests(TestCase):
                     {'field': 'prdlst_nm', 'mean': 80.0 if on else 100.0, 'spread': 0.0}]})
 
         out = StringIO()
-        with patch('v1.label.services.ocr_lab.run_benchmark', side_effect=fake_run):
+        # 회차 사이 대기는 실제로 자면 시험이 20초씩 멈춘다
+        with patch('v1.label.services.ocr_lab.run_benchmark',
+                   side_effect=fake_run), patch('time.sleep'):
             call_command('ocr_ab', '--hybrid', '--yes', stdout=out)
         text = out.getvalue()
 

@@ -36,6 +36,13 @@ API_TOUCHED_FIELDS = tuple(_API_FIELDS.keys())
 _TOKENS_PER_CALL = 65_000
 _TOKENS_PER_CALL_HYBRID = 18_000
 
+# 분당 한도에 걸렸을 때 다시 해 보는 횟수. 기다리는 시간은 회차마다 늘어난다
+# (25초, 50초, 75초).
+#
+# 한 번으로는 모자랐다. 이 열쇠는 실서비스와 함께 쓰므로, 우리가 아무리 아껴
+# 불러도 사용자가 사진을 올리고 있으면 창이 남의 요청으로 차 있다.
+_RATE_LIMIT_RETRIES = 3
+
 
 def pace_seconds(use_hybrid=False) -> float:
     """
@@ -136,11 +143,23 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
                 except Exception:
                     pass
 
-        if not out.get('success') and _is_rate_limited(out):
-            # 분당 토큰 한도다. 창이 열릴 때까지 한 번 더 기다렸다 해 본다 -
-            # 여기서 포기하면 회차가 조용히 줄고, 편차가 0 으로 나와
-            # "안정적" 으로 읽힌다.
-            time.sleep(getattr(settings, 'OCR_RATE_LIMIT_WAIT_SEC', 25))
+        # 분당 토큰 한도에 걸리면 창이 열릴 때까지 기다렸다 다시 해 본다.
+        # 여기서 포기하면 회차가 조용히 줄고, 편차가 0 으로 나와 "안정적" 으로
+        # 읽힌다 - 측정이 거짓말을 한다.
+        #
+        # **한 번만 기다려서는 모자랐다.** 이 열쇠는 실서비스와 함께 쓴다.
+        # 사용자가 사진을 올리고 있으면 우리가 얼마나 아껴 불러도 창이 남의
+        # 요청으로 차 있다. 실제로 "Used 200000, Requested 4692" 가 나왔다 -
+        # 우리 요청은 4천인데 창은 이미 꽉 차 있었다. 우리 몫만 계산해서는
+        # 맞출 수 없는 값이라, 열릴 때까지 몇 번 더 두드린다.
+        for attempt in range(_RATE_LIMIT_RETRIES):
+            if out.get('success') or not _is_rate_limited(out):
+                break
+            wait = getattr(settings, 'OCR_RATE_LIMIT_WAIT_SEC', 25) * (attempt + 1)
+            logger.info('[정답지 측정] 분당 한도 - %s초 기다렸다 다시 (case=%s, %s/%s)',
+                        wait, case.pk, attempt + 1, _RATE_LIMIT_RETRIES)
+            time.sleep(wait)
+            source = None
             try:
                 source = case.image.open('rb')
                 out = extract_label_from_image(

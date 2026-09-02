@@ -72,12 +72,29 @@ class Command(BaseCommand):
         # 끈 쪽을 먼저 돈다. 켠 쪽이 먼저면, 앞 회차가 분당 토큰 한도를 다 쓴
         # 상태에서 뒤 회차가 429 로 죽어 "옵션을 껐더니 실패했다" 로 읽힌다.
         before = self._measure(cases, options, hybrid=False, ground=False)
+
+        # **두 회차 사이에도 쉰다.** 이걸 빠뜨려서 --case 1 --runs 1 이 429 로
+        # 죽었다 - 정답지가 하나면 회차 안에는 쉴 자리가 없어, 끈 쪽과 켠 쪽의
+        # 두 호출이 그대로 붙어 나간다. 끈 쪽이 토큰을 많이 쓰므로 그 기준으로
+        # 쉰다.
+        self._rest()
+
         after = self._measure(cases, options,
                               hybrid=options['hybrid'], ground=options['ground'])
 
         self._report(before, after, option)
 
     # ── 실행 ──────────────────────────────────────────────────────────────
+
+    def _rest(self):
+        """끈 쪽과 켠 쪽 사이에 창이 열릴 때까지 쉰다."""
+        import time
+
+        from v1.label.services.ocr_lab import pace_seconds
+
+        wait = pace_seconds(False)
+        self.stdout.write(f'  분당 한도가 풀리도록 {wait:.0f}초 쉰다…')
+        time.sleep(wait)
 
     def _eta(self, case_count, runs, options):
         """
