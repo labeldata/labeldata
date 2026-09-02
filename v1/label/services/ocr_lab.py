@@ -102,7 +102,7 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
                 except Exception:
                     pass
 
-        if not out.get('success') and _is_rate_limited(out.get('error')):
+        if not out.get('success') and _is_rate_limited(out):
             # 분당 토큰 한도다. 창이 열릴 때까지 한 번 더 기다렸다 해 본다 -
             # 여기서 포기하면 회차가 조용히 줄고, 편차가 0 으로 나와
             # "안정적" 으로 읽힌다.
@@ -115,7 +115,8 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
                 read_freetext=read_freetext)
             except Exception as exc:
                 logger.exception('정답지 재판독 실패 (case=%s)', case.pk)
-                out = {'success': False, 'error': str(exc)}
+                from v1.label.services.ocr_service import failure
+                out = failure(exc)
             finally:
                 if source is not None and hasattr(source, 'close'):
                     try:
@@ -124,7 +125,10 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
                         pass
 
         if not out.get('success'):
-            errors.append(f'{i + 1}회 실패: {out.get("error")}')
+            # 여기는 관리자 측정 화면이다. 무엇이 왜 실패했는지 봐야 하므로
+            # 다듬은 문구가 아니라 기술적인 원문을 남긴다.
+            errors.append(f'{i + 1}회 실패: '
+                          f'{out.get("error_detail") or out.get("error")}')
             continue
 
         data = out.get('data') or {}
@@ -175,9 +179,19 @@ def measure_case(case, runs=1, model=None, prompt_version=None,
     return row
 
 
-def _is_rate_limited(error):
-    """분당 토큰 한도에 걸린 실패인가."""
-    text = str(error or '').lower()
+def _is_rate_limited(out):
+    """
+    분당 토큰 한도에 걸린 실패인가.
+
+    ocr_service 가 error_kind 를 붙여 준다. 화면에 보이는 문구는 사람이 읽을
+    말로 다듬여 있어서, 그 글자를 뒤지면 문구를 손볼 때마다 이 판단이 조용히
+    깨진다. 옛 응답(문구뿐인 dict, 문자열)도 그대로 받아 준다.
+    """
+    if isinstance(out, dict):
+        if out.get('error_kind'):
+            return out['error_kind'] == 'rate_limit'
+        out = out.get('error_detail') or out.get('error')
+    text = str(out or '').lower()
     return '429' in text or 'rate limit' in text or 'rate_limit' in text
 
 

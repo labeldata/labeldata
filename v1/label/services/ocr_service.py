@@ -355,6 +355,83 @@ _DESIGN_SUFFIX = re.compile(
 FREETEXT_FIELDS = ('cautions', 'additional_info')
 
 
+# ── 실패했을 때 사용자에게 뭐라고 말할 것인가 ─────────────────────────────────
+#
+# 예전에는 예외를 str() 그대로 돌려줬고, 화면이 그걸 그대로 띄웠다
+# (label_creation.js 의 `'오류: ' + result.error`). 분당 토큰 한도에 걸린 날
+# 사용자가 실제로 본 문장이 이것이다:
+#
+#   오류: Error code: 429 - {'error': {'message': 'Rate limit reached for
+#   gpt-4o-mini in organization org-s0ksFMnn... on tokens per min (TPM):
+#   Limit 200000, Used 200000, Requested 7040. ...
+#
+# **조직 ID가 그대로 나간다.** 그리고 이걸 읽은 사용자가 무엇을 해야 하는지는
+# 한 글자도 없다. 한도만의 문제가 아니다 - 인증 실패든 시간 초과든 똑같이
+# 새어 나간다. 기술적인 내용은 로그(logger.exception)에 이미 다 있으니,
+# 화면에는 **무엇을 하면 되는지**만 말한다.
+#
+# error_kind 는 화면이 아니라 코드가 읽는 값이다 (ocr_lab 이 한도 실패를
+# 가려내는 데 쓴다). 문구를 다듬어도 그 판단이 깨지지 않게 따로 둔다.
+_ERROR_MESSAGES = {
+    'rate_limit': '지금 판독 요청이 몰려 있습니다. 잠시 후 다시 시도해 주세요.',
+    'timeout':    '사진 판독이 제한 시간 안에 끝나지 않았습니다. '
+                  '영역 수를 줄이거나 잠시 후 다시 시도해 주세요.',
+    'network':    '판독 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    'auth':       '판독 서비스 설정에 문제가 있습니다. 관리자에게 알려 주세요.',
+    'bad_image':  '이 사진으로는 판독을 시작할 수 없습니다. '
+                  '다른 사진으로 다시 시도해 주세요.',
+    'bad_output': '판독 결과를 읽지 못했습니다. 다시 시도해 주세요.',
+    'unknown':    '사진을 읽지 못했습니다. 잠시 후 다시 시도해 주세요.',
+}
+
+
+def classify_error(exc):
+    """
+    예외를 (종류, 사용자에게 보일 문구) 로 바꾼다.
+
+    종류를 못 가려도 실패는 실패다 - 모르면 'unknown' 으로 두고 넘어간다.
+    여기서 또 터져서 원래 오류를 덮는 일이 없어야 한다.
+    """
+    try:
+        from openai import (APIConnectionError, APITimeoutError,
+                            AuthenticationError, BadRequestError, RateLimitError)
+
+        if isinstance(exc, RateLimitError):
+            kind = 'rate_limit'
+        elif isinstance(exc, APITimeoutError):
+            kind = 'timeout'
+        elif isinstance(exc, AuthenticationError):
+            kind = 'auth'
+        elif isinstance(exc, BadRequestError):
+            kind = 'bad_image'
+        elif isinstance(exc, APIConnectionError):
+            kind = 'network'
+        elif isinstance(exc, (json.JSONDecodeError, ValueError)):
+            # 모델이 JSON 이 아닌 것을 돌려줬다 (response_format 을 걸어 뒀으니 드물다).
+            kind = 'bad_output'
+        else:
+            kind = 'unknown'
+    except Exception:
+        kind = 'unknown'
+
+    return kind, _ERROR_MESSAGES.get(kind, _ERROR_MESSAGES['unknown'])
+
+
+def failure(exc):
+    """
+    판독 실패 응답.
+
+    error        - 화면에 그대로 띄워도 되는 문구
+    error_kind   - 코드가 읽는 종류
+    error_detail - 기술적인 원문. **사용자에게 나가면 안 된다** - 공개 응답을
+                   만드는 views.ocr_extract 가 걷어낸다. 관리자 측정 화면과
+                   management command 는 그대로 본다.
+    """
+    kind, message = classify_error(exc)
+    return {'success': False, 'error': message,
+            'error_kind': kind, 'error_detail': str(exc)}
+
+
 def drop_freetext(data, read_freetext=None):
     """
     자유 문구 칸을 비운다. **값이 없는 것과 구분해서 표시한다.**
@@ -578,7 +655,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 
     except Exception as e:
         logger.exception("OCR 처리 실패 (표시면 %s장)", len(parts))
-        return {"success": False, "error": str(e)}
+        return failure(e)
 
 
 def extract_label_from_image(image_file, model=None, prompt_version=None,
@@ -678,4 +755,4 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
 
     except Exception as e:
         logger.exception("OCR 처리 실패")
-        return {"success": False, "error": str(e)}
+        return failure(e)

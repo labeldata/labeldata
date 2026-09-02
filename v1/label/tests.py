@@ -3947,6 +3947,15 @@ class RateLimitRetryTests(TestCase):
     def test_한도에_걸린_실패를_알아본다(self):
         from v1.label.services.ocr_lab import _is_rate_limited
 
+        # 판독 응답에 붙는 종류로 가린다. 화면 문구는 사람이 읽을 말로 다듬여
+        # 있어서, 그 글자를 뒤지면 문구를 손볼 때 이 판단이 조용히 깨진다.
+        self.assertTrue(_is_rate_limited(
+            {'success': False, 'error_kind': 'rate_limit',
+             'error': '지금 판독 요청이 몰려 있습니다. 잠시 후 다시 시도해 주세요.'}))
+        self.assertFalse(_is_rate_limited(
+            {'success': False, 'error_kind': 'timeout', 'error': '...'}))
+
+        # 종류가 없는 옛 응답·문자열도 그대로 받아 준다
         self.assertTrue(_is_rate_limited(
             'Error code: 429 - Rate limit reached for gpt-4o-mini'))
         self.assertTrue(_is_rate_limited('rate_limit_exceeded'))
@@ -3961,7 +3970,74 @@ class RateLimitRetryTests(TestCase):
         source = (Path(dj.BASE_DIR) / 'label/services/ocr_lab.py'
                   ).read_text(encoding='utf-8')
         self.assertIn("OCR_RATE_LIMIT_WAIT_SEC", source)
-        self.assertIn("_is_rate_limited(out.get('error'))", source)
+        self.assertIn("_is_rate_limited(out)", source)
+
+
+class OcrErrorMessageTests(TestCase):
+    """
+    판독이 실패했을 때 **사용자에게 무엇이 보이는가.**
+
+    예전에는 예외를 str() 그대로 돌려줬고 화면이 그걸 그대로 띄웠다. 분당 토큰
+    한도에 걸린 날 사용자가 본 문장에는 조직 ID(org-...)가 들어 있었고, 무엇을
+    해야 하는지는 한 글자도 없었다.
+    """
+
+    def _rate_limit_error(self):
+        import httpx
+        from openai import RateLimitError
+
+        body = {'error': {
+            'message': ('Rate limit reached for gpt-4o-mini in organization '
+                        'org-s0ksFMnngAHweQs4lHwa9S4k on tokens per min (TPM): '
+                        'Limit 200000, Used 200000, Requested 7040.'),
+            'type': 'tokens', 'code': 'rate_limit_exceeded'}}
+        response = httpx.Response(
+            429, request=httpx.Request('POST', 'https://api.openai.com/v1/chat/completions'),
+            json=body)
+        return RateLimitError('429', response=response, body=body['error'])
+
+    def test_한도_실패는_사람이_읽을_말로_바뀐다(self):
+        from v1.label.services.ocr_service import failure
+
+        out = failure(self._rate_limit_error())
+        self.assertFalse(out['success'])
+        self.assertEqual(out['error_kind'], 'rate_limit')
+        self.assertIn('잠시 후 다시', out['error'])
+        self.assertNotIn('org-', out['error'])
+        self.assertNotIn('429', out['error'])
+
+    def test_종류를_못_가려도_문구는_나온다(self):
+        from v1.label.services.ocr_service import failure
+
+        out = failure(RuntimeError('무언가 터졌다'))
+        self.assertEqual(out['error_kind'], 'unknown')
+        self.assertNotIn('무언가 터졌다', out['error'])
+        # 원문은 버리지 않는다 - 관리자 화면과 로그가 본다
+        self.assertIn('무언가 터졌다', out['error_detail'])
+
+    def test_화면에는_기술적_원문이_나가지_않는다(self):
+        from io import BytesIO
+        from unittest.mock import patch
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        user = User.objects.create_user(username='ocrerr', password='x')
+        self.client.force_login(user)
+        buf = BytesIO()
+        Image.new('RGB', (400, 300), 'white').save(buf, format='JPEG')
+        image = SimpleUploadedFile('label.jpg', buf.getvalue(), 'image/jpeg')
+
+        with patch('v1.label.services.ocr_service.OpenAI',
+                   side_effect=self._rate_limit_error()):
+            resp = self.client.post('/label/ocr-extract/', {'image': image})
+
+        payload = resp.json()
+        self.assertFalse(payload['success'])
+        self.assertNotIn('error_detail', payload)
+        body = resp.content.decode('utf-8')
+        self.assertNotIn('org-s0ksFMnngAHweQs4lHwa9S4k', body)
+        self.assertIn('잠시 후 다시', payload['error'])
 
 
 class DesignSuffixTests(TestCase):

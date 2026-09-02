@@ -2751,7 +2751,8 @@ def ocr_extract(request):
     roles = (roles + ['whole'] * len(image_files))[:len(image_files)]
     parts = list(zip(image_files, roles))
 
-    from .services.ocr_service import extract_label_from_image, extract_label_from_parts
+    from .services.ocr_service import (extract_label_from_image,
+                                       extract_label_from_parts, failure)
     try:
         # 영역을 하나만, 그것도 구분 없이 보냈으면 예전 경로 그대로 간다.
         # 그동안 그 경로로 맞춰 온 판독 품질을 건드릴 이유가 없다.
@@ -2762,10 +2763,15 @@ def ocr_extract(request):
     except Exception as exc:
         logger.exception('OCR 처리 중 예외 (user=%s, file=%s, 영역=%s)',
                          request.user, name, len(parts))
-        return JsonResponse({
-            'success': False,
-            'error': f'사진 처리 중 오류가 발생했습니다: {exc}',
-        }, status=500)
+        payload = failure(exc)
+        payload.pop('error_detail', None)
+        return JsonResponse(payload, status=500)
+
+    # 기술적인 원문은 여기서 끊는다. 화면(label_creation.js)이 result.error 를
+    # 그대로 띄우기 때문에, 예전에는 OpenAI 오류 원문이 조직 ID까지 달고
+    # 사용자에게 나갔다. 원문은 로그에 남아 있고, 관리자 측정 화면은 서비스
+    # 함수를 직접 불러 그대로 본다.
+    result.pop('error_detail', None)
 
     # 판독 뒤에 두 가지를 더 얹는다. 둘 다 실패해도 판독 결과는 그대로 돌려준다.
     #
