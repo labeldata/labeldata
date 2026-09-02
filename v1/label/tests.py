@@ -1531,16 +1531,67 @@ class OcrGroundTextTests(TestCase):
         self.assertLess(match_score(value, text), 80)                  # 연속으로는 없다
         self.assertGreaterEqual(match_score(value, text, assembled=True), 95)
 
-    def test_흩어짐_허용은_그_칸에만_쓴다(self):
+    def test_흩어진_주의사항도_문장_단위로_찾아낸다(self):
         """
-        흩어져도 된다고 하면 검사가 헐거워진다. 지어낸 문장이 흔한 낱말로
-        점수를 채울 수 있어서, 기타표시사항 말고는 쓰지 않는다.
+        주의사항도 서로 무관한 문구를 모아 담는 칸이고, 라벨에서는 사이에
+        다른 주의사항이 끼어 인쇄된다. 실제로 59.1 점이 나왔다.
         """
+        from v1.label.services.ocr_text import match_score
+
+        value = ('메밀, 땅콩, 잣 혼입가능성 있음. 가급적 빨리 드시기 바랍니다. '
+                 '부정.불량식품 신고는 국번없이 1399')
+        text = ('쇠고기, 조개류(굴) 함유\n메밀, 땅콩, 잣 혼입가능성 있음. '
+                '포장지의 끝부분만 찢은 후에 전자레인지를 돌려\n주세요.\n'
+                '가급적 빨리 드시기 바랍니다.\n부정.불량식품 신고는 국번없이 1399\n')
+
+        plain = match_score(value, text)
+        self.assertGreater(match_score(value, text, assembled=True), plain)
+        self.assertGreaterEqual(match_score(value, text, assembled=True), 95)
+
+    def test_지어낸_문장은_흩어짐을_허용해도_잡힌다(self):
+        """
+        **이게 흩어짐 허용의 안전장치다.** 문장으로 가르기 때문에, 지어낸
+        문장은 쓰인 낱말이 아무리 흔해도 문장 전체로는 원문에 안 나온다.
+        낱말로 갈랐다면 주의사항에는 쓰지 못했을 것이다.
+        """
+        from v1.label.services.ocr_text import match_score
+
+        text = ('메밀, 땅콩 혼입가능성 있음.\n제품을 개봉한 후에는 빨리 드십시오.\n'
+                '직사광선을 피하고 서늘한 곳에 두십시오.\n')
+        # 낱말은 전부 원문에 있지만 이런 문장은 라벨에 없다
+        made_up = '제품을 냉장 보관하고 개봉 후에는 서늘한 곳에 두십시오.'
+        self.assertLess(match_score(made_up, text, assembled=True), 80)
+
+    def test_흩어짐_허용은_모아_담는_칸에만_쓴다(self):
         from v1.label.services.ocr_text import ASSEMBLED_FIELDS
 
-        self.assertEqual(ASSEMBLED_FIELDS, ('additional_info',))
-        self.assertNotIn('cautions', ASSEMBLED_FIELDS)
+        self.assertEqual(ASSEMBLED_FIELDS, ('cautions', 'additional_info'))
+        # 한 덩어리의 값이라 흩어질 일이 없는 칸들
         self.assertNotIn('rawmtrl_nm', ASSEMBLED_FIELDS)
+        self.assertNotIn('bssh_nm', ASSEMBLED_FIELDS)
+
+    def test_문장이_없는_값은_띄어쓰기로_가른다(self):
+        """연락처·주소처럼 문장이 아닌 값이 있다."""
+        from v1.label.services.ocr_text import _scatter_pieces
+
+        pieces = _scatter_pieces('고객상담실 080-739-8572 (수신자 부담)')
+        self.assertIn('고객상담실', pieces)
+        self.assertIn('080-739-8572', pieces)
+
+    def test_낱말_안의_마침표로_가르지_않는다(self):
+        """
+        마침표는 뒤에 공백이나 끝이 올 때만 문장을 끊는다. 그냥 '.' 로 가르면
+        "www.spcsamlip.co.kr" 이 부서지고 "부정.불량식품" 의 "부정" 이 떨어져
+        나간다. 둘 다 실제 라벨에 있는 표기다.
+        """
+        from v1.label.services.ocr_text import _scatter_pieces
+
+        pieces = _scatter_pieces('가급적 빨리 드시기 바랍니다. 부정.불량식품 신고는 1399')
+        self.assertNotIn('부정', [p.strip() for p in pieces])
+        self.assertTrue(any('부정.불량식품' in p for p in pieces))
+
+        pieces = _scatter_pieces('고객상담실 080-1234-5678 www.example.co.kr')
+        self.assertIn('www.example.co.kr', pieces)
 
     def test_왜_못_찾았는지_원문의_자리를_보여준다(self):
         """
