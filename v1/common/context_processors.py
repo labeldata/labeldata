@@ -1,7 +1,29 @@
-﻿from django.conf import settings
+﻿import logging
+
+from django.conf import settings
 from django.utils import timezone
 from django.core.cache import cache
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
+
+
+def _authenticated_user(request):
+    """
+    로그인한 사용자, 아니면 None.
+
+    request.user 를 건드리는 순간 세션을 DB 에서 읽는다. 컨텍스트 프로세서는
+    **모든 페이지**에서 도는데, DB 가 닿지 않는 상황이라면 여기서 다시 터진다.
+    알림 개수는 없어도 되는 정보라 조용히 비운다 - 이것 때문에 페이지 전체가
+    못 뜨는 쪽이 훨씬 나쁘다.
+    """
+    try:
+        user = request.user
+        return user if user.is_authenticated else None
+    except Exception:
+        logger.warning('알림 개수를 건너뛴다 - 사용자 조회 실패', exc_info=True)
+        return None
+
 
 def static_build_date(request):
     return {'STATIC_BUILD_DATE': getattr(settings, 'STATIC_BUILD_DATE', '')}
@@ -30,10 +52,11 @@ def board_notifications(request):
     - 세션 만료 시: last_login 사용 (최대 12시간 전까지만)
     - 둘 다 없으면: 기본값 (3일 전)
     """
-    if not request.user.is_authenticated:
+    user = _authenticated_user(request)
+    if user is None:
         return {'board_notification_count': 0}
 
-    cache_key = f'board_notification_count_{request.user.id}'
+    cache_key = f'board_notification_count_{user.id}'
     cached = cache.get(cache_key)
     if cached is not None:
         return {'board_notification_count': cached}
@@ -64,39 +87,45 @@ def board_notifications(request):
             last_visit_dt = None
 
     # 2. 세션에 없거나 만료되었으면 last_login 사용
-    if not last_visit_dt and request.user.last_login:
+    if not last_visit_dt and user.last_login:
         # last_login도 12시간 이내일 때만 사용
-        if now - request.user.last_login <= session_duration:
-            last_visit_dt = request.user.last_login
+        if now - user.last_login <= session_duration:
+            last_visit_dt = user.last_login
 
     # 3. 둘 다 없거나 오래되었으면 기본값 (3일 전)
     if not last_visit_dt:
         last_visit_dt = now - timedelta(days=3)
 
-    # 1. 공지글 알림 (전체 사용자) - 최대 7일
-    seven_days_ago = now - timedelta(days=7)
-    new_notices = Board.objects.filter(
-        is_notice=True,
-        created_at__gte=max(last_visit_dt, seven_days_ago)
-    ).count()
-    notification_count += new_notices
-
-    # 2. 새 게시글 알림 (관리자만) - 최대 3일
-    if request.user.is_staff:
-        three_days_ago = now - timedelta(days=3)
-        new_posts = Board.objects.filter(
-            is_notice=False,
-            created_at__gte=max(last_visit_dt, three_days_ago)
+    # 세는 데 실패해도 페이지는 떠야 한다. 알림 개수 하나 때문에 모든 화면이
+    # 500 이 되는 쪽이 훨씬 나쁘다 (_authenticated_user 주석 참고).
+    try:
+        # 1. 공지글 알림 (전체 사용자) - 최대 7일
+        seven_days_ago = now - timedelta(days=7)
+        new_notices = Board.objects.filter(
+            is_notice=True,
+            created_at__gte=max(last_visit_dt, seven_days_ago)
         ).count()
-        notification_count += new_posts
+        notification_count += new_notices
 
-    # 3. 새 답변 알림 (작성자에게만) - 최대 5일
-    five_days_ago = now - timedelta(days=5)
-    new_comments = Comment.objects.filter(
-        board__author=request.user,
-        created_at__gte=max(last_visit_dt, five_days_ago)
-    ).exclude(author=request.user).count()
-    notification_count += new_comments
+        # 2. 새 게시글 알림 (관리자만) - 최대 3일
+        if user.is_staff:
+            three_days_ago = now - timedelta(days=3)
+            new_posts = Board.objects.filter(
+                is_notice=False,
+                created_at__gte=max(last_visit_dt, three_days_ago)
+            ).count()
+            notification_count += new_posts
+
+        # 3. 새 답변 알림 (작성자에게만) - 최대 5일
+        five_days_ago = now - timedelta(days=5)
+        new_comments = Comment.objects.filter(
+            board__author=user,
+            created_at__gte=max(last_visit_dt, five_days_ago)
+        ).exclude(author=user).count()
+        notification_count += new_comments
+    except Exception:
+        logger.warning('게시판 알림 개수 조회 실패', exc_info=True)
+        return {'board_notification_count': 0}
 
     cache.set(cache_key, notification_count, timeout=60)
     return {'board_notification_count': notification_count}
@@ -107,17 +136,18 @@ def regulatory_alerts(request):
     규제 모니터링 읽지 않은 알림 카운트
     매칭된 뉴스 중 read_yn=False 인 고유 뉴스 건수
     """
-    if not request.user.is_authenticated:
+    user = _authenticated_user(request)
+    if user is None:
         return {'regulatory_alert_count': 0}
 
-    cache_key = f'regulatory_alert_count_{request.user.id}'
+    cache_key = f'regulatory_alert_count_{user.id}'
     cached = cache.get(cache_key)
     if cached is not None:
         return {'regulatory_alert_count': cached}
 
     try:
         from v1.regulatory import selectors
-        count = selectors.unread_news_count(request.user)
+        count = selectors.unread_news_count(user)
     except Exception:
         count = 0
 

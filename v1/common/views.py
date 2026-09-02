@@ -5,6 +5,7 @@ import time
 import re
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
+from django.template import loader
 from django.utils.timezone import now
 from .models import ApiEndpoint
 from v1.common.date_utils import PAST_ONLY_DATE_FIELDS, sanitize_past_date
@@ -836,8 +837,19 @@ def custom_403(request, exception):
     return render(request, '404.html', status=404)
 
 def custom_500(request):
-    """커스텀 500 에러 페이지"""
-    return render(request, '500.html', status=500)
+    """
+    커스텀 500 에러 페이지.
+
+    **request 를 넘기지 않는다.** render(request, ...) 는 컨텍스트 프로세서를
+    태우고, board_notifications·regulatory_alerts 가 request.user 를 건드리는
+    순간 세션을 DB 에서 읽는다. 500 의 원인이 DB 자체일 때(커넥션 한도 초과 등)
+    오류 페이지가 같은 이유로 또 죽어, 사용자는 이 페이지 대신 서버 원시 오류를
+    본다 - 실제로 그렇게 났다.
+
+    500.html 은 처음부터 standalone 이라(그 파일 주석에도 적혀 있다) 컨텍스트가
+    필요 없다. **오류 페이지는 아무것도 조회하지 않아야 한다.**
+    """
+    return HttpResponseServerError(loader.get_template('500.html').render({}))
 
 # 사용자 친화적인 403 처리가 필요한 경우를 위한 별도 뷰
 def permission_denied_view(request):
