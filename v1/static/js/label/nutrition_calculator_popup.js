@@ -401,7 +401,10 @@ function sendNutritionDataToParent() {
   const baseAmount = parseFloat(document.getElementById('serving_size').value.replace(/,/g, '')) || 100;
   const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value.replace(/,/g, '')) || 1;
   const style = document.getElementById('nutrition_display_unit').value;
-  const basicDisplayType = document.getElementById('basic_display_type')?.value || 'per_100g';
+  // 표를 그리는 쪽(generateBasicDisplayV3)과 같은 이름을 쓴다.
+  // 예전 기본값 'per_100g' 는 그쪽 switch 에 없어 조용히 총량당이 됐다.
+  const basicDisplayType = normalizeBasicDisplayType(
+    document.getElementById('basic_display_type')?.value);
   const parallelDisplayType = document.getElementById('parallel_display_type')?.value || 'per_serving';
 
   // 입력된 영양성분만 전달 (빈 값 제외)
@@ -1124,34 +1127,49 @@ function loadDataFromUrlParams() {
 function generateBasicDisplayV3(nutritionInputs, baseAmount, servingsPerPackage) {
   
   // 표시 기준 확인
-  const displayType = document.getElementById('basic_display_type')?.value || 'total';
-  let displayAmount, multiplier;
-  
+  const displayType = window.normalizeBasicDisplayType(
+    document.getElementById('basic_display_type')?.value);
+  let multiplier;
+
   // 단위 확인 (g 또는 ml)
   const baseUnit = document.getElementById('serving_size_unit')?.value || 'g';
-  
+
+  /*
+   * **표 머리와 표 본문은 서로 다른 것을 말한다.**
+   *
+   *   머리   "총 내용량 ⃝⃝g / ⃝⃝kcal"  — 언제나 포장 전체다
+   *   본문   "총량당 / 단위량당 / 100g당" — 사용자가 고른 기준이다
+   *
+   * 예전에는 머리도 기준을 따라갔다. 그래서 65 g 짜리 제품에 100g당을 고르면
+   * 라벨에 "총 내용량 100g" 이 인쇄됐고, 옆의 열량도 100 g 당 값이 총 열량인
+   * 것처럼 찍혔다. 그 숫자를 그대로 내용량 칸에 옮겨 적은 사용자가 규정 검증
+   * 에서 "열량이 맞지 않습니다" 를 계속 봤다 — 검증이 아니라 표가 틀렸다.
+   *
+   * 병행표시(generateParallelDisplayV3)는 처음부터 이렇게 그리고 있었다.
+   */
+  const totalAmount = baseAmount * servingsPerPackage;
   switch (displayType) {
     case 'unit':
-      displayAmount = baseAmount;
       multiplier = baseAmount / 100;
       break;
     case '100g':
-      displayAmount = 100;
       multiplier = 1;
       break;
     case 'total':
     default:
-      displayAmount = (baseAmount * servingsPerPackage);
-      multiplier = displayAmount / 100;
+      multiplier = totalAmount / 100;
       break;
   }
-  
-  const calories = window.processNutritionValue('calories', (nutritionInputs['calories'] || 0) * multiplier);
+
+  // 머리의 열량은 **총 내용량 전체의 열량**이다. 내용량 칸에 병기하는 열량도
+  // 같은 값이라, 둘이 어긋나면 규정 검증이 운다.
+  const calories = window.processNutritionValue(
+    'calories', (nutritionInputs['calories'] || 0) * (totalAmount / 100));
 
   // 표시기준 텍스트 생성
   let displayTypeText = '';
   switch (displayType) {
-    case 'unit':  displayTypeText = '단위내용량당'; break;
+    case 'unit':  displayTypeText = `단위내용량(${baseAmount.toLocaleString()}${baseUnit})당`; break;
     case '100g':  displayTypeText = `100${baseUnit}당`; break;
     case 'total':
     default:      displayTypeText = '총내용량당'; break;
@@ -1191,7 +1209,7 @@ function generateBasicDisplayV3(nutritionInputs, baseAmount, servingsPerPackage)
     <div class="nutrition-header">
       <div class="nutrition-title">영양정보</div>
       <div class="nutrition-subtitle">
-        <div class="nutrition-total-amount">총 내용량 ${displayAmount.toLocaleString()}${baseUnit}</div>
+        <div class="nutrition-total-amount">총 내용량 ${totalAmount.toLocaleString()}${baseUnit}</div>
         <div class="nutrition-calories">${calories}kcal</div>
       </div>
     </div>
@@ -1363,6 +1381,26 @@ window.loadExistingData = loadExistingData;
 window.buildInputForm = buildInputForm;
 window.NUTRITION_DATA = NUTRITION_DATA;
 window.loadDataAfterFormReady = loadDataAfterFormReady;
+/*
+ * 기본형 표시기준 값 정규화.
+ *
+ * 이 값은 두 벌의 이름으로 돌아다녔다. 팝업의 <select> 와 표를 그리는 쪽은
+ * 'total' / 'unit' / '100g' 을 쓰는데, 값을 보내는 쪽(sendNutritionDataToParent)
+ * 과 표시사항 작성 화면은 'per_100g' / 'per_serving' 을 기본값으로 넣었다.
+ * 그 이름들은 switch 에 없어서 **조용히 default(총량당)로 떨어졌다.**
+ *
+ * 그러니 지금 저장돼 있는 'per_100g' 라벨들은 이미 총량당으로 인쇄돼 왔다.
+ * 여기서 100g당으로 "고치면" 이미 승인된 라벨의 표가 말없이 바뀐다. 그래서
+ * **모르는 이름은 예전과 같이 총량당으로 본다.** 이름을 통일하는 일은 여기까지고,
+ * 뜻을 바꾸지는 않는다.
+ */
+function normalizeBasicDisplayType(value) {
+  var v = String(value || '').trim();
+  if (v === 'unit' || v === '100g' || v === 'total') return v;
+  return 'total';
+}
+window.normalizeBasicDisplayType = normalizeBasicDisplayType;
+
 window.processNutritionValue = processNutritionValue;
 window.calculateDailyValuePercent = calculateDailyValuePercent;
 window.displayEmphasisValidation = displayEmphasisValidation;

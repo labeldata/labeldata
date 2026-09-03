@@ -8,7 +8,20 @@
 여기서도 **확인 없이 쓰지 않는다.** 화면이 읽은 값을 보여 주고, 사용자가 고른
 것만 넘어온다.
 """
+import logging
 import re
+
+logger = logging.getLogger(__name__)
+
+# 식품유형 사전 캐시. 이 표는 하루에 몇 번 바뀌지 않는다.
+_FOOD_TYPE_INDEX_KEY = 'ocr_apply:food_type_index'
+_FOOD_TYPE_INDEX_TTL = 60 * 60 * 6
+
+
+def _squeeze(text):
+    """공백을 지우고 소문자로. 라벨의 띄어쓰기는 인쇄물마다 다르다."""
+    return ''.join(str(text or '').split()).lower()
+
 
 # 표에 적힌 값을 숫자와 단위로 가른다. "630 mg" -> ("630", "mg")
 _VALUE_UNIT = re.compile(r'^\s*([\d.,]+)\s*([a-zA-Z가-힣㎎㎍μµ]*)\s*$')
@@ -179,6 +192,23 @@ def apply_nutrition(label, rows):
     return changed
 
 
+def basis_is_total(text):
+    """
+    표의 기준이 **포장 전체**인가. "총 내용량 139 g" -> True.
+
+    이걸 알아야 포장개수를 1 로 맞출 수 있다. 저장 칸의 총 내용량은
+    `단위량 x 포장개수` 인데, 기준이 총 내용량이면 단위량이 곧 총량이므로
+    개수는 1 이어야 한다. 예전에는 단위량만 바꾸고 개수를 그대로 뒀다 -
+    개수가 2 로 남아 있으면 표의 총량이 두 배가 되고, 인쇄된 내용량과
+    영양정보 표의 머리가 서로 다른 총량을 말하게 된다.
+
+    "1회 제공량 30 g" 처럼 한 번 먹는 양이 기준이면 총량을 알 수 없다.
+    그때는 False - 개수를 건드리지 않는다.
+    """
+    raw = ''.join(str(text or '').split())
+    return ('총내용량' in raw) or ('총량' in raw)
+
+
 def parse_nutrition_basis(text):
     """
     "총 내용량 139 g" -> ('139', 'g'). 표의 기준이 1회 제공량이면 그 값을 쓴다.
@@ -223,11 +253,29 @@ _PROCESSING_RULES = (
     ('sanitized',   ('살균',)),
 )
 
+# 라벨이 장기보존식품을 적는 말은 **표시기준의 문장 그대로**다. 화면이 식품유형
+# (표시용)을 만들 때 쓰는 문구(updatePrdlstDcnm)와 같은 말이라, 그 목록을 여기에
+# 옮겨 둔다.
+#
+#     frozen_heated     "가열하여 섭취하는 냉동식품"
+#     frozen_nonheated  "가열하지 않고 섭취하는 냉동식품"
+#     canned            "통.병조림"
+#     retort            "레토르트식품"
+#
+# 예전에는 frozen_nonheated 를 "비가열" 한 낱말로만 찾았다. 그런데 라벨에 그렇게
+# 적힌 경우가 거의 없다 — 실제 인쇄물은 "빵류(가열하지 않고 섭취하는 냉동식품)"
+# 이다. 그래서 사진에서 그 유형을 읽어도 버튼이 안 눌렸다.
+#
+# 비교는 공백을 지운 문자열로 한다. 라벨마다 "가열하지 않고" / "가열하지않고" /
+# "가열하지 아니하고" 가 섞여 있다.
 _PRESERVATION_RULES = (
     ('retort',           ('레토르트',)),
-    ('canned',           ('통조림', '병조림', '통·병조림')),
-    ('frozen_nonheated', ('비가열',)),
-    ('frozen_heated',    ('가열하여 섭취', '가열하여섭취')),
+    ('canned',           ('통조림', '병조림')),
+    # 비가열을 먼저 본다. "가열하지않고섭취" 안에 "가열하" 가 들어 있어서,
+    # 가열 쪽을 먼저 보면 넓게 잡히는 규칙이 뒤에 생겼을 때 뒤집힌다.
+    ('frozen_nonheated', ('비가열', '가열하지않고섭취', '가열하지아니하고섭취',
+                          '가열없이섭취')),
+    ('frozen_heated',    ('가열하여섭취', '가열후섭취')),
 )
 
 # 보관방법 배지. 화면의 data-storage-value 와 같아야 한다.
@@ -245,22 +293,94 @@ def _haystack(data, *fields) -> str:
     return ' '.join(parts)
 
 
+# 식품유형(표시용)에서 소분류를 가르는 자리.
+#
+# 라벨은 소분류에 장기보존·제조방법을 덧붙여 한 줄로 적는다.
+#
+#     빵류(가열하지 않고 섭취하는 냉동식품)
+#     기타가공품 | 살균제품
+#     즉석섭취식품(살균제품)
+#
+# 소분류는 그 덧붙임 앞의 머리다. 다만 소분류 자체에 괄호가 들어가는 유형도
+# 있어서(예: "과·채가공품(과채음료 제외)"), 자르기 전에 **통째로 먼저** 맞춰 본다.
+_TYPE_SPLIT = re.compile(r'[(\[|,/]')
+
+
+def _food_type_index():
+    """
+    소분류 -> (소분류, 대분류) 사전. 조회에 실패하면 빈 사전이다.
+
+    사전이 없으면 대분류·소분류를 못 고를 뿐, 나머지 판정은 그대로 돌아야 한다.
+    """
+    from django.core.cache import cache
+
+    cached = cache.get(_FOOD_TYPE_INDEX_KEY)
+    if cached is not None:
+        return cached
+
+    index = {}
+    try:
+        from v1.label.models import FoodType
+        for food_type, food_group in (FoodType.objects
+                                      .exclude(food_type__isnull=True)
+                                      .exclude(food_type='')
+                                      .values_list('food_type', 'food_group')):
+            key = _squeeze(food_type)
+            if key and key not in index:
+                index[key] = (food_type, food_group or '')
+    except Exception:
+        logger.exception('식품유형 사전 조회 실패 — 대분류·소분류 없이 계속한다')
+
+    cache.set(_FOOD_TYPE_INDEX_KEY, index, _FOOD_TYPE_INDEX_TTL)
+    return index
+
+
+def match_food_type(prdlst_dcnm):
+    """
+    식품유형(표시용) -> (소분류, 대분류). 못 찾으면 ('', '').
+
+    "빵류(가열하지 않고 섭취하는 냉동식품)" -> ('빵류', '과자류, 빵류 또는 떡류')
+
+    **긴 후보부터 본다.** 소분류에 괄호가 들어가는 유형이 있어서, 무조건 괄호
+    앞을 잘라 버리면 그런 유형을 영영 못 찾는다.
+    """
+    text = str(prdlst_dcnm or '').strip()
+    if not text:
+        return '', ''
+
+    index = _food_type_index()
+    if not index:
+        return '', ''
+
+    candidates = [text]
+    head = _TYPE_SPLIT.split(text)[0].strip()
+    if head and head != text:
+        candidates.append(head)
+
+    for candidate in candidates:
+        hit = index.get(_squeeze(candidate))
+        if hit:
+            return hit
+    return '', ''
+
+
 def derive_basics(data) -> dict:
     """
     판독값에서 화면 버튼 상태를 유도한다.
 
-    Returns: {'preservation_type': str, 'processing_method': str,
+    Returns: {'food_type': str, 'food_group': str,
+              'preservation_type': str, 'processing_method': str,
               'storage_badges': [str, ...]}
       값이 없으면 빈 문자열 / 빈 목록이다. **모르면 비운다** - 틀린 버튼을
       눌러 두면 사용자가 그걸 알아채고 되돌려야 하는데, 그건 안 누른 것보다
       나쁘다.
 
-    냉동 판정만 두 갈래다. 라벨은 "가열하여 섭취하는 냉동식품" / "비가열"
-    로 그 구분을 적어 두는데, 둘 다 없으면 냉동인 것만 알고 어느 쪽인지는
-    모른다. 그때는 비운다.
+    냉동 판정만 두 갈래다. 라벨은 "가열하여 섭취하는 냉동식품" / "가열하지 않고
+    섭취하는 냉동식품" 으로 그 구분을 적어 두는데, 둘 다 없으면 냉동인 것만 알고
+    어느 쪽인지는 모른다. 그때는 비운다.
     """
-    text = _haystack(data, 'prdlst_dcnm', 'storage_method', 'cautions',
-                     'additional_info', 'prdlst_nm')
+    text = _squeeze(_haystack(data, 'prdlst_dcnm', 'storage_method', 'cautions',
+                              'additional_info', 'prdlst_nm'))
     storage = _haystack(data, 'storage_method')
 
     processing = ''
@@ -275,7 +395,14 @@ def derive_basics(data) -> dict:
             preservation = value
             break
 
+    food_type, food_group = match_food_type(
+        _haystack(data, 'prdlst_dcnm'))
+
     return {
+        # 대분류·소분류는 화면의 드롭다운이다. 값(표시용 글자)만 채우면 그 둘은
+        # 비어 있고, 유형별 표시항목 규칙과 검증이 유형을 못 찾는다.
+        'food_type':        food_type,
+        'food_group':       food_group,
         'preservation_type': preservation,
         'processing_method': processing,
         # 배지는 보관방법 칸의 글자만 본다. 주의사항에 "냉장 보관하십시오" 가

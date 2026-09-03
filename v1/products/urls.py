@@ -138,6 +138,8 @@ urlpatterns = [
 
     # 불러오기 모달 — 품목보고번호 조회 / 원료 사진 업로드 / 원료 BOM 등록
     path('labels/<int:label_id>/lookup/report-no/', views.report_no_lookup, name='report_no_lookup'),
+    # 사진으로 불러오기에 쓴 원본 사진을 문서함에 남긴다
+    path('labels/<int:label_id>/label-photo/', views.label_photo_upload, name='label_photo_upload'),
     path('labels/<int:label_id>/ingredient-photo/upload/', views.ingredient_photo_upload, name='ingredient_photo_upload'),
     path('labels/<int:label_id>/ingredient/to-bom/', views.ingredient_to_bom, name='ingredient_to_bom'),
 

@@ -232,8 +232,22 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
 }
+
+/* 어느 칸에 무엇을 넣는지 — 입력하는 자리에 적어 둔다.
+   문서에만 적어 두면 아무도 안 읽는다. */
+.basis-hint {
+  margin-bottom: 20px;
+  padding: 9px 12px;
+  background: #e8f0fe;
+  border: 1px solid #c5d9f9;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #1558b0;
+}
+.basis-hint strong { color: #0b3d91; }
 
 .display-style-row {
   display: grid;

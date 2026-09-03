@@ -894,11 +894,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       }
       
-      // 표시 기준 설정 필드가 없으면 기본값 사용
+      // 표시 기준 설정 필드가 없으면 기본값 사용.
+      // 값 이름은 표를 그리는 쪽(generateBasicDisplayV3 / generateParallelDisplayV3)과
+      // 같아야 한다. 예전 기본값 'per_100g' 는 그쪽 switch 에 없어 조용히
+      // 총량당으로 떨어졌다 — 이름과 실제 동작이 달랐다.
       if (['basic_display_type', 'parallel_display_type'].includes(fieldName) && !field) {
         const defaultValues = {
-          'basic_display_type': 'per_100g',
-          'parallel_display_type': 'per_serving'
+          'basic_display_type': 'total',
+          'parallel_display_type': 'unit_total'
         };
         data[fieldName] = defaultValues[fieldName];
       }
@@ -3352,8 +3355,8 @@ document.addEventListener('DOMContentLoaded', function () {
         'serving_size_unit': data.settings.serving_size_unit || 'g',
         'units_per_package': data.settings.units_per_package || data.settings.servings_per_package || '1',
         'nutrition_display_unit': data.settings.nutrition_display_unit || data.settings.style || '',
-        'basic_display_type': data.settings.basic_display_type || 'per_100g',
-        'parallel_display_type': data.settings.parallel_display_type || 'per_serving'
+        'basic_display_type': data.settings.basic_display_type || 'total',
+        'parallel_display_type': data.settings.parallel_display_type || 'unit_total'
       };
       
       Object.entries(settingsMap).forEach(([fieldName, value]) => {

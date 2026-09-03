@@ -272,17 +272,33 @@
   // 그냥 빠져 있으면 "사진에 없었나 보다" 로 읽힌다. 실제로는 읽지 않기로
   // 정한 것이고, 채울 방법(빠른 입력 버튼)이 따로 있다는 것을 알려야 한다.
   function skippedHtml(data) {
+    var html = '';
     var names = [];
     if (data.cautions && data.cautions.skipped) names.push('주의사항');
     if (data.additional_info && data.additional_info.skipped) names.push('기타 표시사항');
-    if (!names.length) return '';
-    return ''
-      + '<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:12px;">'
-      + '  <i class="bi bi-info-circle me-1"></i>'
-      + '  <strong>' + names.join('·') + '</strong> 은 사진에서 읽지 않습니다 — '
-      + '  라벨에 없는 문구를 지어내는 일이 잦아 빼 두었습니다. '
-      + '  아래 칸의 <strong>"자주 사용하는 문구"</strong> 버튼으로 채워 주세요.'
-      + '</div>';
+    if (names.length) {
+      html += ''
+        + '<div class="alert alert-secondary py-2 px-3 mb-2" style="font-size:12px;">'
+        + '  <i class="bi bi-info-circle me-1"></i>'
+        + '  <strong>' + names.join('·') + '</strong> 은 사진에서 읽지 않습니다 — '
+        + '  라벨에 없는 문구를 지어내는 일이 잦아 빼 두었습니다. '
+        + '  아래 칸의 <strong>"자주 사용하는 문구"</strong> 버튼으로 채워 주세요.'
+        + '</div>';
+    }
+    // 우리가 **떼어 낸** 값은 그 사실을 말해 준다. 그냥 빠져 있으면
+    // "사진에 없었나 보다" 로 읽히는데, 실제로는 읽어 놓고 버린 것이다.
+    Object.keys(FIELD_MAP).forEach(function (field) {
+      var item = data[field];
+      if (!item || !item.dropped_note) return;
+      html += ''
+        + '<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:12px;">'
+        + '  <i class="bi bi-scissors me-1"></i>'
+        + '  <strong>' + esc(FIELD_MAP[field].label) + '</strong> 에서 읽은 '
+        + '  <strong>' + esc(item.dropped_from || '') + '</strong> 은(는) 넣지 않았습니다 — '
+        + esc(item.dropped_note)
+        + '</div>';
+    });
+    return html;
   }
 
   function apiMatchHtml(match) {
@@ -606,6 +622,15 @@
     if (!derived) return;
     var changed = [];
 
+    // 대분류를 먼저. 대분류가 바뀌면 소분류 목록이 통째로 다시 그려지므로,
+    // 순서가 뒤바뀌면 방금 고른 소분류가 지워진다.
+    if (derived.food_group && setSelect('field-food-group', derived.food_group)) {
+      changed.push('식품유형 대분류');
+    }
+    if (derived.food_type && setSelect('field-food-type', derived.food_type)) {
+      changed.push('소분류');
+    }
+
     if (derived.preservation_type) {
       if (setExclusive('.grp-preservation', derived.preservation_type)) {
         changed.push('장기보존식품');
@@ -623,6 +648,29 @@
     if (changed.length) {
       status(changed.join(', ') + ' 을(를) 사진에서 읽은 값으로 맞췄습니다.');
     }
+  }
+
+  // 드롭다운 고르기.
+  //
+  // 이 두 칸(대분류·소분류)은 Select2 로 감싸여 있어서, value 만 바꾸면 화면에
+  // 보이는 글자가 그대로다. jQuery 로 change 를 울려야 Select2 가 다시 그리고,
+  // 대분류의 change 핸들러(filterFoodTypes)도 그때 돈다.
+  //
+  // **목록에 없는 값은 고르지 않는다.** 없는 값을 넣으면 select 는 조용히 빈
+  // 값이 되고, 사용자는 골라 준 줄 안다.
+  function setSelect(id, value) {
+    var el = document.getElementById(id);
+    if (!el || !value) return false;
+    var found = false;
+    for (var i = 0; i < el.options.length; i++) {
+      if (el.options[i].value === value) { found = true; break; }
+    }
+    if (!found) return false;
+    if (el.value === value) return true;   // 이미 그 값이면 건드리지 않는다
+    el.value = value;
+    if (window.jQuery) window.jQuery(el).trigger('change');
+    else el.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
   }
 
   // 배타 선택 묶음. 하나만 켜고 나머지는 끈다.
@@ -929,6 +977,30 @@
   // parts — [{file, role}, ...]. 표시면(주표시면·일괄표시면·영양성분표…)마다
   // 하나씩 잘라 보낸다. 면 이름을 함께 보내야 서버가 "이 조각에서는 이 항목을
   // 찾아라" 라고 지시할 수 있다. 파일 하나만 받던 예전 호출도 그대로 받는다.
+  /*
+   * 판독에 쓴 사진을 문서함의 '한글표시사항도안' 으로 남긴다.
+   *
+   * 판독값은 사진에서 나온 것이고, 그 사진이 없으면 나중에 "이 값이 어디서
+   * 왔는지" 를 되짚을 수가 없다. 표시사항은 법적 표시물이라 근거가 남아야 한다.
+   *
+   * 실패해도 조용히 넘어간다. 사용자가 지금 하려는 일은 판독이고, 문서 저장이
+   * 안 됐다고 그 앞을 막으면 잃는 것이 더 크다. 상태줄로만 알린다.
+   */
+  function saveSourcePhoto(file) {
+    var id = labelId();
+    if (!file || !id) return;
+    var form = new FormData();
+    form.append('image', file);
+    form.append('csrfmiddlewaretoken', csrfToken());
+    fetch('/products/labels/' + id + '/label-photo/', { method: 'POST', body: form })
+      .then(function (res) { return res.json(); })
+      .then(function (body) {
+        if (!body || !body.success) return;
+        status('판독에 사용한 사진을 문서함(한글표시사항도안)에 남겼습니다.');
+      })
+      .catch(function (err) { console.error('표시사항 사진 저장 실패', err); });
+  }
+
   function extract(parts, sourceFile) {
     if (!Array.isArray(parts)) parts = [{ file: parts, role: 'whole' }];
     var btn = document.getElementById('basicInfoOcrBtn');
@@ -984,6 +1056,10 @@
         }
         status('');
         derived = result.derived || null;
+        // 판독에 쓴 사진을 문서함에 남긴다. 확인 창을 띄우기 전에 보내되
+        // **기다리지 않는다** — 문서 저장이 늦거나 실패해도 판독 결과를 보는
+        // 일이 막히면 안 된다. 원본을 보낸다(조각은 우리가 만든 것이다).
+        saveSourcePhoto(sourceFile || parts[0].file);
         showModal(result.data || {}, file, result.api_match, result.snap);
       })
       .catch(function (err) {

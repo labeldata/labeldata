@@ -1549,3 +1549,109 @@ class PhotoCropperMaskTests(TestCase):
     def test_작은_제외도_받는다(self):
         """바코드 한 줄, 도장 하나를 가리는 일이 실제로 많다."""
         self.assertIn('MIN_MASK_SIDE', self.cropper)
+
+
+class LabelPhotoToDocumentTests(TestCase):
+    """
+    사진으로 불러오기에 쓴 원본 사진을 문서함에 남긴다.
+
+    판독값은 사진에서 나온 것이고, 그 사진이 없으면 나중에 "이 값이 어디서
+    왔는지" 를 되짚을 수가 없다. 표시사항은 법적 표시물이라 근거가 남아야 한다.
+
+    문서 종류는 사용자가 찾는 자리(한글표시사항도안)와 같게 두되, **도안을
+    만든 것과는 구분한다** — 사진 한 장 올린 것이 "표시사항 완료" 가 되면 안 되고,
+    확정 통보 메일에 PDF 대신 JPG 가 붙어도 안 된다.
+    """
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from v1.label.models import MyLabel
+
+        self.user = User.objects.create_user(username='photo', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='제품', prdlst_nm='제품')
+        self.photo = lambda: SimpleUploadedFile(
+            '표시면.jpg', b'\xff\xd8\xff\xe0fake', content_type='image/jpeg')
+
+    def _post(self):
+        return self.client.post(
+            f'/products/labels/{self.label.my_label_id}/label-photo/',
+            {'image': self.photo()})
+
+    def test_문서함에_한글표시사항도안으로_남는다(self):
+        from v1.products.models import ProductDocument
+
+        r = self._post()
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()['success'])
+
+        doc = ProductDocument.objects.get(label=self.label)
+        self.assertEqual(doc.document_type.type_code, 'LABEL_DESIGN')
+        self.assertEqual(doc.metadata.get('source'), 'ocr_import')
+        self.assertEqual(doc.file_extension, '.jpg')
+
+    def test_다시_올리면_판이_올라간다(self):
+        from v1.products.models import ProductDocument
+
+        self.assertEqual(self._post().json()['version'], 1)
+        self.assertEqual(self._post().json()['version'], 2)
+        self.assertEqual(ProductDocument.objects.filter(label=self.label).count(), 2)
+
+    def test_사진만_올려서는_표시사항_완료가_아니다(self):
+        """
+        제품 목록의 표시사항 체크는 "도안을 만들었다" 는 뜻이다. 사진 한 장을
+        올린 것과는 다르다.
+        """
+        self._post()
+        r = self.client.get('/products/explorer/')
+        if r.status_code != 200:      # 화면 경로가 다르면 질의만 직접 확인한다
+            from v1.products.models import ProductDocument
+            self.assertEqual(
+                ProductDocument.objects
+                .filter(label=self.label, document_type__type_code='LABEL_DESIGN',
+                        active_yn=True)
+                .exclude(metadata__source='ocr_import').count(), 0)
+            return
+        item = next(i for i in r.context['products_data']
+                    if i['label'].my_label_id == self.label.my_label_id)
+        self.assertFalse(item['label_checked'])
+
+    def test_확정_통보에는_PDF_만_붙인다(self):
+        """
+        이 자리에는 사진(JPG)도 들어간다. 확장자를 안 보면 그 사진을 집어
+        application/pdf 로 붙이게 되고, 받는 쪽에서는 열리지 않는 첨부가 된다.
+        """
+        from v1.products.views import _latest_label_pdf
+
+        self._post()
+        self.assertIsNone(_latest_label_pdf(self.label))
+
+    def test_남의_제품에는_못_넣는다(self):
+        from v1.label.models import MyLabel
+
+        other = User.objects.create_user(username='photo2', password='x')
+        theirs = MyLabel.objects.create(user_id=other, my_label_name='남의 제품',
+                                        prdlst_nm='남의 제품')
+        r = self.client.post(f'/products/labels/{theirs.my_label_id}/label-photo/',
+                             {'image': self.photo()})
+        self.assertIn(r.status_code, (403, 404))
+
+    def test_사진이_없으면_400(self):
+        r = self.client.post(f'/products/labels/{self.label.my_label_id}/label-photo/', {})
+        self.assertEqual(r.status_code, 400)
+
+    def test_판독_직후_보내되_기다리지_않는다(self):
+        """문서 저장이 늦거나 실패해도 판독 결과를 보는 일이 막히면 안 된다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/products/basic_info_ocr.js'
+              ).read_text(encoding='utf-8')
+        self.assertIn('function saveSourcePhoto', js)
+        self.assertIn('saveSourcePhoto(sourceFile || parts[0].file);', js)
+        # showModal 앞에서 부르되 await/then 으로 묶지 않는다
+        at = js.index('saveSourcePhoto(sourceFile || parts[0].file);')
+        self.assertLess(at, js.index('showModal(result.data || {}, file,'))

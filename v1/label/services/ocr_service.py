@@ -24,6 +24,8 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
     예: 100kcal/100g. 내용량 칸에 함께 있으면 여기는 none
 - prdlst_report_no: 품목보고번호 (예: 20240123456789, 20170415080-1271)
 - country_of_origin: 원산지. 원재료마다 붙은 원산지가 아니라 제품 전체의 원산지 칸
+    **"원산지" 라는 항목이 라벨에 없으면 none 이다.** 제조원 주소가 한국이라고
+    "국산" 이라고 적지 마시오. 원재료명 뒤 괄호의 "(국내산)" 도 이 칸이 아니다.
 - bssh_nm: 제조원 / **업소명 및 소재지** / 제조업소명 (업체명 + 주소 전체)
     라벨마다 이름이 다르다: "제조원", "업소명 및 소재지", "제조업소명", "제조사"
 - distributor_address: 유통전문판매원 소재지 (업체명 + 주소 전체)
@@ -734,6 +736,53 @@ def strip_design_suffix(data):
     return data
 
 
+# 원산지 칸에 들어온 "국내산 계열" 낱말.
+#
+# 이 값들만 단독으로 오면 **읽은 것이 아니라 추론한 것**이다. 라벨에 제품 전체
+# 원산지 칸이 있는 경우는 대개 수입품이고, 그때는 나라 이름이 적힌다.
+# 국내 제조 제품은 원산지를 원재료명 뒤 괄호로 적지 별도 칸을 두지 않는다.
+#
+# 모델은 제조원 주소가 한국인 것을 보고 "국산" 을 채운다. 프롬프트로 두 번
+# 막아 봤지만 계속 나왔다 — 설득이 안 되는 것은 코드로 뗀다.
+_DOMESTIC_ORIGIN = {
+    '국산', '국내산', '한국산', '대한민국', '한국', '국내', '대한민국산',
+    'korea', 'republicofkorea', 'kor', 'madeinkorea',
+}
+
+
+def drop_inferred_origin(data):
+    """
+    원산지 칸의 "국산" 류 단독 값을 버린다. **원본은 건드리지 않는다.**
+
+    나라 이름이 적혔거나("중국", "베트남"), 여러 나라가 함께 적혔거나
+    ("국산, 중국산"), 다른 말이 섞였으면("쌀: 국내산") 그대로 둔다 — 그건
+    실제로 그 칸을 읽은 것이다.
+
+    지운 자리에는 `dropped_note` 를 남긴다. 그냥 비어 있으면 "사진에 없었나
+    보다" 로 읽히는데, 실제로는 우리가 뗀 것이고 사용자가 직접 넣을 수도 있어야
+    한다.
+    """
+    data = dict(data or {})
+    item = data.get('country_of_origin')
+    value = item.get('value') if isinstance(item, dict) else item
+    text = str(value or '').strip()
+    if not text:
+        return data
+
+    squeezed = ''.join(text.split()).lower()
+    if squeezed not in _DOMESTIC_ORIGIN:
+        return data
+
+    data['country_of_origin'] = {
+        'value': None, 'confidence': 'none',
+        'dropped_from': text,
+        'dropped_note': ('사진에 원산지 칸이 없는데 제조원 주소를 보고 "국산" 이라고 '
+                         '적어 내는 일이 잦아 뺐습니다. 라벨에 실제로 적혀 있으면 '
+                         '직접 넣어 주세요.'),
+    }
+    return data
+
+
 def learned_hints():
     """
     지금까지 사용자가 고친 이력에서 뽑은 주의사항.
@@ -955,7 +1004,8 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         # 우리가 고칠 값을 두고 "지어냈다" 고 표시하게 된다.
         result = _repaired(result, ocr_text, use_hybrid)
         result, ground_report = _grounded(result, ocr_text, use_ground)
-        result = drop_freetext(strip_design_suffix(result), read_freetext)
+        result = drop_freetext(
+            drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 
         out = {"success": True, "data": result,
                "regions": [r['label'] for r in regions]}
@@ -1078,7 +1128,8 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         # 우리가 고칠 값을 두고 "지어냈다" 고 표시하게 된다.
         result = _repaired(result, ocr_text, use_hybrid)
         result, ground_report = _grounded(result, ocr_text, use_ground)
-        result = drop_freetext(strip_design_suffix(result), read_freetext)
+        result = drop_freetext(
+            drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 
         out = {"success": True, "data": result}
         if ground_report:

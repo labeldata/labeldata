@@ -2387,9 +2387,13 @@ class OcrGroundVerifierTests(TestCase):
         at = 0
         for _ in range(2):
             ground_at = source.index(marker, at)
-            drop_at = source.index('drop_freetext(strip_design_suffix', ground_at)
+            # 값을 바꾸는 단계는 전부 이 한 줄에 묶여 있다
+            # (strip_design_suffix -> drop_inferred_origin -> drop_freetext).
+            drop_at = source.index('drop_freetext(', ground_at)
             self.assertLess(ground_at, drop_at)
             at = ground_at + 1
+        # 값을 바꾸는 것들은 한 덩어리로 유지한다 — 사이에 대조가 끼면 순서가 깨진다
+        self.assertEqual(source.count('drop_inferred_origin(strip_design_suffix(result))'), 2)
 
     def test_대조가_터져도_판독_결과는_나온다(self):
         from unittest.mock import patch
@@ -5672,3 +5676,421 @@ class RegionRoleWantsTests(TestCase):
         block = js[head:head + 400]
         for name in ('주의사항', '기타표시사항', '원산지', '알레르기'):
             self.assertIn(name, block, f'화면 설명에 {name} 이 없다')
+
+
+class FoodTypeDeriveTests(TestCase):
+    """
+    사진에서 읽은 식품유형 한 줄로 **화면의 드롭다운과 버튼까지** 맞춘다.
+
+    라벨은 소분류에 장기보존·제조방법을 덧붙여 한 줄로 적는다.
+
+        빵류(가열하지 않고 섭취하는 냉동식품)
+
+    예전에는 이 줄을 식품유형(표시용) 칸에만 넣었다. 대분류·소분류 드롭다운은
+    비어 있었고 — 그 둘이 유형별 표시항목 규칙을 찾는 키다 — 냉동(비가열)
+    버튼도 안 눌렸다. frozen_nonheated 를 "비가열" 한 낱말로만 찾았기 때문인데,
+    라벨에 그렇게 적힌 경우가 거의 없다.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        from v1.label.models import FoodType
+
+        cache.clear()
+        self.addCleanup(cache.clear)
+        FoodType.objects.create(food_group='과자류, 빵류 또는 떡류', food_type='빵류')
+        FoodType.objects.create(food_group='면류', food_type='만두류')
+        FoodType.objects.create(food_group='음료류', food_type='과·채가공품(과채음료 제외)')
+
+    def _derive(self, dcnm):
+        from v1.label.services.ocr_apply import derive_basics
+        return derive_basics({'prdlst_dcnm': {'value': dcnm}})
+
+    def test_괄호_앞의_소분류와_그_대분류를_고른다(self):
+        out = self._derive('빵류(가열하지 않고 섭취하는 냉동식품)')
+        self.assertEqual(out['food_type'], '빵류')
+        self.assertEqual(out['food_group'], '과자류, 빵류 또는 떡류')
+
+    def test_가열하지_않고_섭취하는_냉동식품은_비가열이다(self):
+        """라벨이 "비가열" 이라고 적는 일은 거의 없다 — 표시기준 문장 그대로 적는다."""
+        self.assertEqual(
+            self._derive('빵류(가열하지 않고 섭취하는 냉동식품)')['preservation_type'],
+            'frozen_nonheated')
+
+    def test_가열하여_섭취하는_냉동식품은_가열이다(self):
+        self.assertEqual(
+            self._derive('만두류(가열하여 섭취하는 냉동식품)')['preservation_type'],
+            'frozen_heated')
+
+    def test_띄어쓰기가_달라도_찾는다(self):
+        """인쇄물마다 "가열하지 않고" / "가열하지않고" 가 섞여 있다."""
+        for text in ('빵류(가열하지않고 섭취하는 냉동식품)',
+                     '빵류 | 가열하지 않고 섭취하는 냉동식품'):
+            self.assertEqual(self._derive(text)['preservation_type'],
+                             'frozen_nonheated', text)
+
+    def test_소분류에_괄호가_들어가도_찾는다(self):
+        """무조건 괄호 앞을 자르면 그런 유형을 영영 못 찾는다."""
+        out = self._derive('과·채가공품(과채음료 제외)')
+        self.assertEqual(out['food_type'], '과·채가공품(과채음료 제외)')
+        self.assertEqual(out['food_group'], '음료류')
+
+    def test_목록에_없으면_비운다(self):
+        """모르는 것과 "아니다" 는 다르다 — 틀린 값을 골라 두면 더 나쁘다."""
+        out = self._derive('없는유형류')
+        self.assertEqual(out['food_type'], '')
+        self.assertEqual(out['food_group'], '')
+
+    def test_제조방법도_함께_읽는다(self):
+        self.assertEqual(self._derive('기타가공품(살균제품)')['processing_method'],
+                         'sanitized')
+        self.assertEqual(self._derive('기타가공품(비살균제품)')['processing_method'],
+                         'unsanitized')
+
+    def test_화면이_드롭다운을_고른다(self):
+        """
+        서버가 판정해도 화면이 안 고르면 그대로다. 대분류를 먼저 골라야 한다 —
+        대분류가 바뀌면 소분류 목록이 통째로 다시 그려진다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/products/basic_info_ocr.js'
+              ).read_text(encoding='utf-8')
+        self.assertIn("setSelect('field-food-group', derived.food_group)", js)
+        self.assertIn("setSelect('field-food-type', derived.food_type)", js)
+        self.assertLess(js.index("derived.food_group"), js.index("derived.food_type"))
+        # Select2 로 감싸여 있어 value 만 바꾸면 화면이 그대로다
+        self.assertIn("window.jQuery(el).trigger('change')", js)
+
+
+class InferredOriginTests(TestCase):
+    """
+    원산지 칸에 "국산" 이 저절로 채워지던 것.
+
+    라벨에 제품 전체 원산지 칸이 있는 경우는 대개 수입품이고, 그때는 나라
+    이름이 적힌다. 국내 제조 제품은 원산지를 원재료명 뒤 괄호로 적지 별도 칸을
+    두지 않는다. 모델은 제조원 주소가 한국인 것을 보고 "국산" 을 채웠다.
+    """
+
+    def _drop(self, value):
+        from v1.label.services.ocr_service import drop_inferred_origin
+        out = drop_inferred_origin({'country_of_origin': {'value': value,
+                                                          'confidence': 'high'}})
+        return out['country_of_origin']
+
+    def test_국산류_단독_값은_버린다(self):
+        for value in ('국산', '국내산', '한국산', '대한민국', ' 국내 '):
+            item = self._drop(value)
+            self.assertIsNone(item['value'], value)
+            self.assertEqual(item['confidence'], 'none')
+
+    def test_왜_뺐는지_남긴다(self):
+        """그냥 비어 있으면 "사진에 없었나 보다" 로 읽힌다."""
+        item = self._drop('국산')
+        self.assertEqual(item['dropped_from'], '국산')
+        self.assertIn('직접 넣어', item['dropped_note'])
+
+    def test_나라_이름은_그대로_둔다(self):
+        """수입품의 원산지 칸은 실제로 읽은 것이다."""
+        for value in ('중국', '베트남', '국산, 중국산', '쌀: 국내산'):
+            self.assertEqual(self._drop(value)['value'], value, value)
+
+    def test_판독_경로에_걸려_있다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
+                  ).read_text(encoding='utf-8')
+        self.assertEqual(source.count('drop_inferred_origin(strip_design_suffix(result))'), 2)
+
+    def test_프롬프트도_같은_말을_한다(self):
+        """코드로 떼더라도 애초에 안 만들게 하는 편이 낫다."""
+        from v1.label.services.ocr_service import SYSTEM_PROMPT
+
+        self.assertIn('"원산지" 라는 항목이 라벨에 없으면 none', SYSTEM_PROMPT)
+
+    def test_확인_창이_뺀_사실을_말한다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/products/basic_info_ocr.js'
+              ).read_text(encoding='utf-8')
+        self.assertIn('item.dropped_note', js)
+        self.assertIn('넣지 않았습니다', js)
+
+
+class ContentWeightBasisTests(TestCase):
+    """
+    내용량과 영양성분 탭이 서로 다른 총량을 말하던 것.
+
+    이 화면에는 총 내용량이 두 군데 적힌다.
+
+        내용량 칸      "65 g (200 kcal)"      인쇄되는 값
+        영양성분 탭    단위량 x 포장개수       표를 그리는 값
+
+    둘이 어긋나도 예전에는 열량만 견주고 총량은 안 봤다. 그래서 사용자가 열량을
+    고쳐도 표는 여전히 다른 총량을 그렸다 — 고치라는 대로 고쳐도 안 맞았다.
+    """
+
+    def _label(self, **kw):
+        from v1.label.models import MyLabel
+
+        user = User.objects.create_user(
+            username=f'cw{User.objects.count()}', password='x')
+        defaults = dict(user_id=user, my_label_name='제품', prdlst_nm='제품')
+        defaults.update(kw)
+        return MyLabel(**defaults)
+
+    def _cats(self, label):
+        from v1.label.services.validation_service import check_content_weight_basis
+        return [i['category'] for i in check_content_weight_basis(label)]
+
+    def test_총량이_같으면_조용하다(self):
+        label = self._label(content_weight='65 g', serving_size='65',
+                            units_per_package='1', calories='309')
+        self.assertEqual(self._cats(label), [])
+
+    def test_단위량_곱하기_포장개수로_본다(self):
+        label = self._label(content_weight='130 g', serving_size='65',
+                            units_per_package='2', calories='309')
+        self.assertEqual(self._cats(label), [])
+
+    def test_표를_안_그리면_건너뛴다(self):
+        """
+        단위량은 여러 곳에서 기본값 100 으로 채워진다. 영양성분을 한 번도 안
+        넣은 65 g 제품이 "100 != 65" 로 늘 걸리면 고칠 것도 없는 경고가 쌓인다.
+        """
+        label = self._label(content_weight='65 g', serving_size='100',
+                            units_per_package='1')
+        self.assertEqual(self._cats(label), [])
+
+    def test_어긋나면_알려_준다(self):
+        label = self._label(content_weight='65 g', serving_size='65',
+                            units_per_package='2', calories='309')
+        from v1.label.services.validation_service import check_content_weight_basis
+
+        issues = check_content_weight_basis(label)
+        self.assertEqual(len(issues), 1)
+        self.assertIn('영양성분 탭', issues[0]['message'])
+        self.assertIn('포장개수', issues[0]['message'])
+
+    def test_영양성분_탭이_비었으면_검사하지_않는다(self):
+        """그건 다른 검사(필수항목)가 할 말이다."""
+        label = self._label(content_weight='65 g')
+        self.assertEqual(self._cats(label), [])
+
+
+class CalorieMessageTests(TestCase):
+    """
+    열량 경고가 **어느 칸에 무엇을 넣어야 하는지**를 말해야 한다.
+
+    예전 문구는 "맞지 않습니다 / 값을 고치거나 다시 확인하세요" 로 끝났다.
+    이 경고를 받은 사용자가 영양성분 탭에 총 열량을 넣어 보고, 내용량에는
+    100g당 열량을 넣어 보다가 두 값이 계속 어긋났다.
+    """
+
+    def _issue(self, content_weight, calories):
+        from v1.label.models import MyLabel
+        from v1.label.services.validation_service import check_calorie_consistency
+
+        user = User.objects.create_user(
+            username=f'cal{User.objects.count()}', password='x')
+        label = MyLabel(user_id=user, my_label_name='제품', prdlst_nm='제품',
+                        content_weight=content_weight, calories=calories)
+        return check_calorie_consistency(label)
+
+    def test_맞으면_조용하다(self):
+        """65 g 짜리에 100g당 309 kcal 이면 총 200 kcal 이다."""
+        self.assertEqual(self._issue('65 g (200 kcal)', '309'), [])
+
+    def test_두_칸이_담는_것을_말해_준다(self):
+        issues = self._issue('65 g (309 kcal)', '309')
+        self.assertEqual(len(issues), 1)
+        message = issues[0]['message']
+        self.assertIn('총 내용량', message)
+        self.assertIn('100 g(mL) 당', message)
+
+    def test_고칠_값을_둘_다_준다(self):
+        """어느 쪽을 고쳐도 되는 일이라, 양쪽 값을 다 준다."""
+        suggestion = self._issue('65 g (309 kcal)', '309')[0]['suggestion']
+        self.assertIn('200 kcal', suggestion)     # 내용량을 고칠 경우
+        self.assertIn('475', suggestion)          # 영양성분 탭을 고칠 경우
+
+    def test_단위를_지어내지_않는다(self):
+        """음료(mL)에 "65 g" 로 고치라고 말하면 안 된다."""
+        suggestion = self._issue('500 mL (900 kcal)', '100')[0]['suggestion']
+        self.assertIn('mL', suggestion)
+        self.assertNotIn('500 g', suggestion)
+
+
+class CollectedChecksInValidationTests(TestCase):
+    """
+    판독이 값을 넣기 전에 하던 검사를 저장된 라벨에도 댄다.
+
+    괄호 짝·식품유형 목록·알레르기 표기는 사진에서 왔든 손으로 넣었든 똑같이
+    틀린 것인데, 판독을 거치지 않은 라벨에는 아무도 그 말을 해 주지 않았다.
+    """
+
+    def _label(self, **kw):
+        from v1.label.models import MyLabel
+
+        user = User.objects.create_user(
+            username=f'vv{User.objects.count()}', password='x')
+        defaults = dict(user_id=user, my_label_name='제품', prdlst_nm='제품')
+        defaults.update(kw)
+        return MyLabel(**defaults)
+
+    def test_괄호_짝이_깨지면_지적한다(self):
+        from v1.label.services.validation_service import check_rawmtrl_brackets
+
+        label = self._label(rawmtrl_nm_display='정제수, 혼합제제(구연산, 향료')
+        issues = check_rawmtrl_brackets(label)
+        self.assertTrue(issues)
+        self.assertEqual(issues[0]['category'], 'rawmtrl_bracket')
+
+    def test_짝이_맞으면_조용하다(self):
+        from v1.label.services.validation_service import check_rawmtrl_brackets
+
+        label = self._label(rawmtrl_nm_display='정제수, 혼합제제(구연산, 향료)')
+        self.assertEqual(check_rawmtrl_brackets(label), [])
+
+    def test_판독과_같은_함수를_쓴다(self):
+        """규칙을 두 벌로 만들면 어느 날 한쪽만 고쳐진다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/validation_service.py'
+                  ).read_text(encoding='utf-8')
+        self.assertIn('from v1.label.services.ocr_rawmtrl import bracket_problems', source)
+        self.assertIn('from v1.label.services.ocr_snap import food_type_vocabulary', source)
+
+    def test_식품유형이_목록_밖이면_지적한다(self):
+        from django.core.cache import cache
+
+        from v1.label.models import FoodType
+        from v1.label.services.validation_service import check_food_type_known
+
+        cache.clear()
+        self.addCleanup(cache.clear)
+        FoodType.objects.create(food_group='과자류, 빵류 또는 떡류', food_type='빵류')
+
+        self.assertEqual(check_food_type_known(self._label(food_type='빵류')), [])
+        issues = check_food_type_known(self._label(food_type='없는유형류'))
+        self.assertTrue(issues)
+        self.assertEqual(issues[0]['category'], 'food_type_unknown')
+        self.assertIn('의무 표시사항', issues[0]['suggestion'])
+
+    def test_알레르기_표기가_다르면_고칠_값을_준다(self):
+        from v1.label.services.validation_service import check_allergen_vocabulary
+
+        self.assertEqual(check_allergen_vocabulary(self._label(allergens='우유, 대두')), [])
+        issues = check_allergen_vocabulary(self._label(allergens='우유, 대두 함유'))
+        self.assertTrue(issues)
+        self.assertIn('우유, 대두', issues[0]['suggestion'])
+
+    def test_검사_목록에_올라_있다(self):
+        """함수만 만들고 목록에 안 넣으면 아무 데서도 안 돈다."""
+        from v1.label.services import validation_service as vs
+
+        for check in (vs.check_content_weight_basis, vs.check_rawmtrl_brackets,
+                      vs.check_food_type_known, vs.check_allergen_vocabulary):
+            self.assertIn(check, vs._CHECKS, check.__name__)
+
+    def test_근거_규정을_함께_말한다(self):
+        from v1.label.services import validation_service as vs
+
+        for category in ('content_weight_basis', 'rawmtrl_bracket',
+                         'food_type_unknown', 'allergen_vocabulary'):
+            self.assertIn(category, vs._LEGAL_BASIS, category)
+
+
+class NutritionHeaderTests(TestCase):
+    """
+    영양정보 표의 머리는 **언제나 포장 전체**를 말한다.
+
+    예전에는 머리도 표시기준을 따라갔다. 65 g 짜리 제품에 "100g당" 을 고르면
+    라벨에 "총 내용량 100g" 이 인쇄됐고, 옆의 열량도 100 g 당 값이 총 열량인
+    것처럼 찍혔다. 그 숫자를 내용량 칸에 옮겨 적은 사용자가 규정 검증에서
+    "열량이 맞지 않습니다" 를 계속 봤다 — 검증이 아니라 표가 틀렸다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.js = (Path(dj.BASE_DIR) / 'static/js/label/nutrition_calculator_popup.js'
+                   ).read_text(encoding='utf-8')
+
+    def test_머리는_총_내용량이다(self):
+        self.assertIn('총 내용량 ${totalAmount.toLocaleString()}${baseUnit}', self.js)
+        self.assertNotIn('총 내용량 ${displayAmount', self.js)
+
+    def test_머리의_열량도_총_열량이다(self):
+        head = self.js.index('function generateBasicDisplayV3')
+        block = self.js[head:head + 2600]
+        self.assertIn("'calories', (nutritionInputs['calories'] || 0) * (totalAmount / 100)", block)
+
+    def test_표시기준_이름이_한_벌이다(self):
+        """
+        'per_100g' 는 표를 그리는 switch 에 없어 조용히 총량당으로 떨어졌다 —
+        이름과 실제 동작이 달랐다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.assertIn('function normalizeBasicDisplayType', self.js)
+        creation = (Path(dj.BASE_DIR) / 'static/js/label/label_creation.js'
+                    ).read_text(encoding='utf-8')
+        # 주석에는 남는다(왜 바꿨는지를 적어 뒀다). 값으로 쓰이지만 않으면 된다.
+        code = '\n'.join(line for line in creation.split('\n')
+                         if not line.strip().startswith('//'))
+        self.assertNotIn("'basic_display_type': 'per_100g'", code)
+        self.assertNotIn("basic_display_type || 'per_100g'", code)
+        self.assertNotIn("'parallel_display_type': 'per_serving'", code)
+
+    def test_모르는_이름은_예전처럼_총량당이다(self):
+        """
+        이미 저장된 'per_100g' 라벨들은 그동안 총량당으로 인쇄돼 왔다.
+        여기서 100g당으로 "고치면" 승인된 라벨의 표가 말없이 바뀐다.
+        """
+        head = self.js.index('function normalizeBasicDisplayType')
+        block = self.js[head:head + 260]
+        self.assertIn("return 'total';", block)
+
+
+class OcrNutritionBasisTests(TestCase):
+    """
+    사진의 표가 총 내용량 기준이면 포장개수도 1 로 맞춰야 한다.
+
+    저장 칸의 총 내용량은 `단위량 x 포장개수` 다. 단위량만 바꾸고 개수를 그대로
+    두면(2 등) 표의 총량이 그 배수가 되고, 인쇄된 내용량과 영양정보 표의 머리가
+    서로 다른 총량을 말한다.
+    """
+
+    def test_총_내용량_기준을_알아본다(self):
+        from v1.label.services.ocr_apply import basis_is_total
+
+        self.assertTrue(basis_is_total('총 내용량 139 g'))
+        self.assertTrue(basis_is_total('총내용량139g'))
+        self.assertFalse(basis_is_total('1회 제공량 30 g'))
+        self.assertFalse(basis_is_total('100 g당'))
+        self.assertFalse(basis_is_total(''))
+
+    def test_적용하는_쪽이_개수를_맞춘다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'products/views.py').read_text(encoding='utf-8')
+        head = source.index('basis_value, basis_unit = parse_nutrition_basis')
+        block = source[head:head + 1400]
+        self.assertIn('basis_is_total(basis_text)', block)
+        self.assertIn("label.units_per_package = '1'", block)

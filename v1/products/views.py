@@ -1,4 +1,4 @@
-﻿# ==================== 제품 관리 Views (V2) ====================
+# ==================== 제품 관리 Views (V2) ====================
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -341,12 +341,18 @@ def product_explorer(request, folder_id=None):
         nutrition_stats[label_id] = bool(label_obj and label_obj.calories)
 
     # 표시사항 체크: PDF 저장(LABEL_DESIGN 문서 존재) 또는 규정 검증(label_create_YN='Y') 완료 여부
+    #
+    # **판독에 쓴 사진은 빼야 한다.** 그 사진도 같은 문서 종류로 들어가지만
+    # (사용자가 문서함의 '한글표시사항도안' 자리에서 찾기 때문), 사진을 한 장
+    # 올린 것과 도안을 만든 것은 다른 일이다. 빼지 않으면 사진만 올려도 목록에
+    # 표시사항 완료 표시가 켜진다.
     label_design_ids = set(
         ProductDocument.objects.filter(
             label__my_label_id__in=label_ids,
             document_type__type_code='LABEL_DESIGN',
             active_yn=True,
-        ).values_list('label__my_label_id', flat=True)
+        ).exclude(metadata__source='ocr_import')
+        .values_list('label__my_label_id', flat=True)
     )
     label_checked_stats = {}
     for label_id in label_ids:
@@ -1746,9 +1752,14 @@ def _latest_label_pdf(label):
     없으면 None. 미리보기에서 PDF 저장을 하면 이 타입으로 등록된다.
     """
     try:
+        # **PDF 만 고른다.** 이 자리에는 판독에 쓴 표시사항 사진(JPG/PNG)도
+        # 들어간다. 확장자를 안 보면 그 사진을 집어 application/pdf 로 붙이게
+        # 되고, 받는 쪽에서는 열리지 않는 첨부가 된다.
         doc = (ProductDocument.objects
                .filter(label=label, active_yn=True,
                        document_type__type_name__contains='표시사항')
+               .filter(Q(file_extension__iexact='.pdf')
+                       | Q(original_filename__iendswith='.pdf'))
                .order_by('-uploaded_datetime', '-document_id')
                .first())
         if not doc or not doc.file:
@@ -5708,6 +5719,107 @@ def ingredient_to_bom(request, label_id):
 
 @login_required
 @require_POST
+def label_photo_upload(request, label_id):
+    """
+    사진으로 불러오기에 쓴 **원본 사진**을 문서함의 '한글표시사항도안' 으로 남긴다.
+
+    판독값은 사진에서 나온 것이고, 그 사진이 없으면 나중에 "이 값이 어디서
+    왔는지" 를 되짚을 수가 없다. 표시사항은 법적 표시물이라 근거가 남아야 한다.
+
+    **원본을 남긴다.** 영역을 골라 읽었더라도 문서함에는 자르기 전 사진을 넣는다 —
+    조각은 판독을 위해 우리가 만든 것이지 사용자가 가진 자료가 아니다.
+
+    미리보기 PDF 저장(upload_label_pdf)과 같은 문서 종류를 쓰고, 같은 방식으로
+    판을 올린다. 다만 metadata 의 source 가 다르다 — 그 값으로 "도안을 만들었다"
+    와 "판독에 쓴 사진" 을 가른다(제품 목록의 표시사항 완료 판정, 확정 통보
+    메일의 PDF 첨부가 그 구분을 본다).
+    """
+    from django.db.models import Max, Q
+
+    label = _resolve_editable_label(request, label_id)
+
+    uploaded = request.FILES.get('image')
+    if not uploaded:
+        return JsonResponse({'success': False, 'error': '사진이 없습니다.'}, status=400)
+    if uploaded.size > 10 * 1024 * 1024:
+        return JsonResponse({
+            'success': False,
+            'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {uploaded.size / 1024 / 1024:.1f}MB).',
+        }, status=400)
+
+    doc_type, _ = DocumentType.objects.get_or_create(
+        type_code='LABEL_DESIGN',
+        defaults={
+            'type_name': '한글표시사항도안',
+            'description': '한글표시사항 도안 PDF 및 판독에 사용한 표시사항 사진',
+            'required_yn': False, 'active_yn': True, 'display_order': 0,
+            'icon': 'bi-file-pdf', 'color': '#e8710a',
+            'detection_keywords': '한글표시사항,표시사항도안',
+            'expiry_alert_days': 30, 'requires_expiry': False,
+        },
+    )
+
+    existing = (ProductDocument.objects
+                .filter(label=label, document_type=doc_type, active_yn=True)
+                .order_by('-version', '-uploaded_datetime').first())
+    version_number = 1
+    parent_document = None
+    if existing:
+        parent_document = existing
+        latest = ProductDocument.objects.filter(
+            Q(document_id=existing.document_id) | Q(parent_document=existing)
+        ).aggregate(Max('version'))['version__max'] or 1
+        version_number = latest + 1
+
+    _, ext = os.path.splitext(uploaded.name or '')
+    ext = (ext or '.jpg').lower()
+    product_name = label.prdlst_nm or label.my_label_name or 'label'
+    filename = f'표시사항사진_{product_name}_{timezone.now().strftime("%Y%m%d")}{ext}'
+
+    document = ProductDocument.objects.create(
+        label=label,
+        document_type=doc_type,
+        file=uploaded,
+        original_filename=filename,
+        file_size=uploaded.size,
+        file_extension=ext,
+        document_title='표시사항 사진 (판독 원본)',
+        uploaded_by=request.user,
+        parent_document=parent_document,
+        version=version_number,
+        metadata={'expiry_unlimited': True, 'source': 'ocr_import'},
+    )
+
+    # 준수율 카드가 보는 슬롯. 사진도 이 칸을 채운 것은 맞다 - 도안 PDF 를
+    # 나중에 저장하면 그때 다시 최신 문서로 바뀐다.
+    slot, _created = DocumentSlot.objects.get_or_create(
+        label=label, document_type=doc_type,
+        defaults={'status': DocumentSlot.SlotStatus.VALID})
+    slot.current_document = document
+    slot.update_status()
+    slot.save()
+
+    from v1.products.models import ProductActivityLog
+
+    ProductActivityLog.objects.create(
+        label=label, user=request.user, action='DOCUMENT_UPLOADED',
+        details={'file_name': filename, 'document_type': doc_type.type_name,
+                 'file_size': uploaded.size, 'source': 'ocr_import',
+                 'version': version_number},
+    )
+    log_activity(request, 'product', 'ocr_photo_saved', label.my_label_id)
+
+    return JsonResponse({
+        'success': True,
+        'document_id': document.document_id,
+        'filename': filename,
+        'version': version_number,
+        'message': '판독에 사용한 사진을 문서함에 남겼습니다.',
+    })
+
+
+@login_required
+@require_POST
 def ingredient_photo_upload(request, label_id):
     """
     원료 표시사항 사진을 문서함에 넣고 바로 읽는다. BOM 에는 아직 쓰지 않는다.
@@ -5892,7 +6004,8 @@ def ocr_apply_extras(request, label_id):
     항목을 빈 값으로 덮으므로 여기서 쓸 수 없다 - 사진에 없던 성분이 지워진다.
     """
     from v1.label.services.ocr_apply import (
-        apply_nutrition, apply_recycling_mark, parse_nutrition_basis, to_per_100,
+        apply_nutrition, apply_recycling_mark, basis_is_total,
+        parse_nutrition_basis, to_per_100,
     )
 
     label = _resolve_editable_label(request, label_id)
@@ -5908,7 +6021,8 @@ def ocr_apply_extras(request, label_id):
     # 예전에는 값을 먼저 넣고 기준으로 serving_size 만 맞췄다. 분모(87)는
     # 바뀌는데 분자는 인쇄값 그대로라, 화면이 318 kcal 를 275 로 바꿔 보여 주고
     # 검증은 "열량이 맞지 않습니다" 라고 했다. 사진에도 라벨에도 318 인데도.
-    basis_value, basis_unit = parse_nutrition_basis(payload.get('nutrition_basis'))
+    basis_text = payload.get('nutrition_basis')
+    basis_value, basis_unit = parse_nutrition_basis(basis_text)
 
     nutrition = payload.get('nutrition') or []
     applied = apply_nutrition(label, to_per_100(nutrition, basis_value))
@@ -5918,8 +6032,15 @@ def ocr_apply_extras(request, label_id):
     if basis_value:
         label.serving_size = basis_value
         label.serving_size_unit = basis_unit or label.serving_size_unit or 'g'
-        label.save(update_fields=['serving_size', 'serving_size_unit'])
-        applied += ['serving_size']
+        fields = ['serving_size', 'serving_size_unit']
+        # 표의 기준이 총 내용량이면 단위량이 곧 총량이다. 포장개수가 예전 값으로
+        # 남아 있으면(2 등) 표의 총량이 그 배수가 되고, 인쇄된 내용량과 영양정보
+        # 표의 머리가 서로 다른 총량을 말한다.
+        if basis_is_total(basis_text):
+            label.units_per_package = '1'
+            fields.append('units_per_package')
+        label.save(update_fields=fields)
+        applied += fields
 
     # 분리배출은 읽은 문구를 저장용 종류로 바꿔 준다. 종류를 못 정하면 문구만
     # 남기고 켜지 않는다 - 틀린 종류를 넣으면 포장재질 대조 검증이 엉뚱하게 운다.

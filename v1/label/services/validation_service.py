@@ -29,10 +29,13 @@ check_ingredient_order_by_ratio 가 DB 의 배합비와 대조해 본다(운영�
 소비기한 권장값 비교 — DOM/window 전역 상태에 강하게 결합돼 있어
 서버 로직으로 안전하게 재현하려면 별도 검증이 필요하다.
 """
+import logging
 import math
 import re
 
 from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
 
 from v1.label.constants import (
     FARM_SEAFOOD_ITEMS,
@@ -146,6 +149,10 @@ _LEGAL_BASIS = {
     'recycling_mark': '「자원의 절약과 재활용촉진에 관한 법률 시행규칙」 분리배출 표시 기준',
     'origin_missing': '「농수산물의 원산지 표시 등에 관한 법률」 및 같은 법 시행령(배합비율 기준 원산지 표시대상)',
     'additive_display_name': '「식품등의 표시기준」 [별표 4] 식품첨가물의 표시 방법(명칭과 용도를 함께 표시)',
+    'content_weight_basis': '「식품등의 표시기준」 내용량 표시 규정 및 영양성분 표시 규정(총 내용량 기준)',
+    'rawmtrl_bracket': '「식품등의 표시기준」 원재료명 표시 규정(복합원재료의 하위 원료 표시)',
+    'food_type_unknown': '「식품등의 표시기준」 식품유형별 표시사항 규정',
+    'allergen_vocabulary': '「식품등의 표시기준」 알레르기 유발물질 표시 규정(표시 명칭)',
 }
 
 
@@ -456,13 +463,40 @@ def check_calorie_consistency(label) -> list[dict]:
     if abs(stated - expected) <= _CALORIE_TOLERANCE:
         return []
 
+    # **두 칸이 담는 것이 다르다는 말부터 한다.**
+    #
+    # 예전 문구는 "맞지 않습니다 / 값을 고치거나 다시 확인하세요" 로 끝나서,
+    # 어느 쪽을 어떻게 고쳐야 하는지가 없었다. 실제로 이 경고를 받은 사용자가
+    # 영양성분 탭에 총 열량을 넣어 보고, 내용량에 100g당 열량을 넣어 보다가
+    # 두 값이 계속 어긋났다. 규칙을 문장으로 적어 준다.
+    #
+    # 두 자리에 들어가는 것은 이렇다.
+    #     내용량 칸     총 내용량과 **그 전체의 열량**       "65 g (200 kcal)"
+    #     영양성분 탭   언제나 **100 g(mL) 당** 값          "309"
+    per_total = round_calories(per_100 * amount / 100)
+    back = stated * 100 / amount
     return [_issue(
         'calorie_consistency',
-        f'내용량에 적힌 열량({stated:,.0f} kcal)이 영양성분 값과 맞지 않습니다. '
-        f'영양성분 탭의 100g당 {per_100:,.0f} kcal 을 총량 {amount:,.0f}g 에 적용하면 '
-        f'{expected:,.0f} kcal 입니다.',
-        '영양성분 탭의 값을 고치거나, 내용량에 적은 열량을 다시 확인하세요.',
+        f'내용량에 병기한 열량({stated:,.0f} kcal)과 영양성분 탭의 값이 서로 다른 총량을 '
+        f'말하고 있습니다. 내용량 칸의 열량은 총 내용량 {_format_amount(text, amount)} '
+        f'전체의 열량이고, '
+        f'영양성분 탭의 값은 100 g(mL) 당입니다. '
+        f'탭의 {per_100:,.0f} kcal 로는 총 {per_total:,.0f} kcal 이 됩니다.',
+        f'둘 중 하나를 고르세요 — 내용량을 "{_format_amount(text, amount)} '
+        f'({per_total:,.0f} kcal)" 로 고치거나, 영양성분 탭의 열량을 '
+        f'{round_calories(back):,.0f}(100 {_amount_unit(text)} 당)으로 고치세요.',
     )]
+
+
+def _amount_unit(text):
+    """내용량 글자에 적힌 단위. 임의로 g 를 붙이면 음료(mL)에 g 라고 말하게 된다."""
+    m = _AMOUNT_RE.search(text or '')
+    return m.group(2) if m else 'g'
+
+
+def _format_amount(text, amount):
+    """경고 문구에 쓸 "65 g" 꼴. 단위는 내용량 글자에서 그대로 가져온다."""
+    return f'{amount:,.0f} {_amount_unit(text)}'
 
 
 def _placeable(known, text):
@@ -941,6 +975,167 @@ def check_additive_display_name(label) -> list[dict]:
     return issues
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 내용량·영양성분의 총량이 서로 맞는가
+#
+# 이 화면에는 "총 내용량" 이 **두 군데** 적힌다.
+#
+#   내용량 칸        "65 g (200 kcal)"   ← 인쇄되는 값
+#   영양성분 탭      단위량 × 포장개수    ← 표를 그리는 값
+#
+# 둘이 어긋나면 인쇄된 내용량과 영양정보 표의 머리가 서로 다른 총량을 말한다.
+# 그런데 예전에는 열량만 견주고 총량은 안 봐서, 사용자가 열량을 고쳐도 표는
+# 여전히 다른 총량을 그렸다 — 고치라는 대로 고쳐도 라벨이 안 맞았다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 총량 비교 허용오차(g·mL). 반올림해 적는 관행을 감안한 폭이다.
+_AMOUNT_TOLERANCE = 0.5
+
+
+def _nutrition_total(label):
+    """영양성분 탭이 말하는 총 내용량 = 단위량 × 포장개수. 못 읽으면 None."""
+    unit_amount = _number((label.serving_size or '').strip())
+    if unit_amount is None or unit_amount <= 0:
+        return None
+    count = _number((label.units_per_package or '').strip())
+    if count is None or count <= 0:
+        count = 1.0
+    return unit_amount * count
+
+
+def check_content_weight_basis(label) -> list[dict]:
+    """
+    내용량 칸의 총량과 영양성분 탭의 총량(단위량 × 포장개수)이 같은지 본다.
+
+    영양성분 탭을 아직 안 채웠으면 검사하지 않는다 — 그건 다른 검사(필수항목)가
+    할 말이다.
+
+    **표를 안 그리는 라벨은 건너뛴다.** 단위량은 여러 곳에서 기본값 100 으로
+    채워지므로, 영양성분을 한 번도 안 넣은 65 g 짜리 제품은 "100 != 65" 로 늘
+    걸린다. 표가 인쇄되지 않는데 총량이 어긋난다고 말해 봐야 고칠 것이 없다.
+    """
+    if not (label.calories or '').strip():
+        return []
+
+    text = normalize_units(label.content_weight or '')
+    stated = _total_amount(text)
+    nutrition = _nutrition_total(label)
+    if stated is None or nutrition is None or stated <= 0:
+        return []
+    if abs(stated - nutrition) <= _AMOUNT_TOLERANCE:
+        return []
+
+    unit_amount = _number((label.serving_size or '').strip())
+    count = _number((label.units_per_package or '').strip()) or 1
+    return [_issue(
+        'content_weight_basis',
+        f'내용량({_format_amount(text, stated)})과 영양성분 탭의 총 내용량'
+        f'({nutrition:,.0f} {_amount_unit(text)})이 다릅니다. '
+        f'영양성분 탭은 단위량 {unit_amount:,.0f} × 포장개수 {count:,.0f} 로 계산합니다.',
+        '내용량 칸에는 포장 전체의 양을 적습니다. 영양성분 탭의 단위량·포장개수를 '
+        '그 값에 맞추거나(한 개짜리면 단위량 = 총 내용량, 포장개수 = 1), '
+        '내용량 칸을 고치세요.',
+    )]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 판독에서 하던 검사를 저장된 라벨에도 적용한다
+#
+# 사진 판독은 값을 넣기 전에 두 가지를 본다 — 원재료명의 괄호 짝이 맞는지
+# (ocr_rawmtrl.bracket_problems), 식품유형이 표시기준 목록에 있는 이름인지
+# (ocr_snap). 둘 다 **사진에서 왔든 손으로 넣었든 똑같이 틀린 것**인데, 판독을
+# 거치지 않고 손으로 채운 라벨에는 아무도 그 말을 해 주지 않았다.
+#
+# 검사 자체는 그쪽 모듈을 그대로 부른다. 규칙을 두 벌로 만들면 어느 날 한쪽만
+# 고쳐진다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def check_rawmtrl_brackets(label) -> list[dict]:
+    """
+    원재료명의 괄호 짝이 맞는지.
+
+    괄호는 복합원재료와 그 하위 원료를 가르는 표시 장치다. 짝이 깨지면 어디부터
+    어디까지가 하위 원료인지 읽을 수 없고, 인쇄물에 그대로 나간다.
+    """
+    text = (label.rawmtrl_nm_display or label.rawmtrl_nm or '').strip()
+    if not text:
+        return []
+    try:
+        from v1.label.services.ocr_rawmtrl import bracket_problems
+        problems = bracket_problems(text)
+    except Exception:      # 검사를 못 하는 것뿐이다 — 나머지 검증은 계속돼야 한다
+        logger.exception('원재료명 괄호 검사 실패')
+        return []
+
+    return [_issue('rawmtrl_bracket', f'원재료명의 괄호가 맞지 않습니다: {p}',
+                   '여는 괄호와 닫는 괄호의 짝을 맞추세요. 복합원재료의 하위 원료는 '
+                   '괄호 안에 넣습니다.')
+            for p in problems]
+
+
+def check_food_type_known(label) -> list[dict]:
+    """
+    식품유형(소분류)이 표시기준 목록에 있는 이름인가.
+
+    이 값은 **유형별 표시항목 규칙을 찾는 키**다. 한 글자가 어긋나면 규칙을
+    통째로 못 찾고, 화면은 그것을 조용히 "규칙 없음" 으로 넘긴다. 그러면 그
+    유형에만 있는 의무 표시사항이 검사조차 되지 않는다.
+    """
+    food_type = (label.food_type or '').strip()
+    if not food_type:
+        return []
+    try:
+        from v1.label.services.ocr_snap import food_type_vocabulary, snap_one
+        snapped, score, verdict = snap_one(food_type, food_type_vocabulary())
+    except Exception:
+        logger.exception('식품유형 목록 대조 실패')
+        return []
+
+    if verdict == 'exact' or not verdict:
+        return []
+    if verdict == 'snapped' and snapped:
+        return [_issue(
+            'food_type_unknown',
+            f'식품유형 "{food_type}" 이(가) 표시기준 목록에 없습니다. '
+            f'"{snapped}" 을(를) 뜻하는 것으로 보입니다.',
+            f'소분류를 "{snapped}" 로 고르면 그 유형의 의무 표시사항까지 함께 검사합니다.',
+        )]
+    return [_issue(
+        'food_type_unknown',
+        f'식품유형 "{food_type}" 이(가) 표시기준 목록에 없습니다.',
+        '소분류를 목록에서 골라 주세요. 목록 밖의 이름은 유형별 의무 표시사항을 '
+        '찾지 못해 그 항목들이 검사에서 통째로 빠집니다.',
+    )]
+
+
+def check_allergen_vocabulary(label) -> list[dict]:
+    """
+    알레르기 표시가 표시기준의 22종 이름으로 적혀 있는가.
+
+    이 칸은 뒤에서 **키로 쓰인다**(원재료명 대조). "쇠고기 함유" 처럼 꼬리말이
+    붙거나 목록에 없는 이름이 적히면 어느 목록에서도 안 찾히고, 이미 선언한
+    물질을 "선언 안 됨" 으로 지적하게 된다.
+    """
+    declared = (label.allergens or '').strip()
+    if not declared:
+        return []
+    try:
+        from v1.label.services.ocr_snap import snap_allergens
+        snapped, changes = snap_allergens(declared)
+    except Exception:
+        logger.exception('알레르기 표기 대조 실패')
+        return []
+
+    if not snapped or snapped == declared:
+        return []
+    return [_issue(
+        'allergen_vocabulary',
+        f'알레르기 표시가 표시기준 명칭과 다릅니다: "{declared}"',
+        f'"{snapped}" 로 적으면 원재료명 대조가 정확해집니다. '
+        f'("함유" 같은 꼬리말은 빼고 물질 이름만 적습니다)',
+    )]
+
+
 _CHECKS = [
     check_required_fields,
     check_calorie_consistency,
@@ -952,6 +1147,11 @@ _CHECKS = [
     check_recycling_mark,
     check_origin_missing,
     check_additive_display_name,
+    # 판독이 값을 넣기 전에 하던 검사. 손으로 채운 라벨에도 같은 잣대를 댄다.
+    check_content_weight_basis,
+    check_rawmtrl_brackets,
+    check_food_type_known,
+    check_allergen_vocabulary,
 ]
 
 

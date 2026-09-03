@@ -47,6 +47,19 @@
         <span class="unit-label">개</span>
       </div>
     </div>
+    <!--
+      어느 칸에 무엇을 넣는지가 계속 헷갈렸다. 아래 영양성분 칸은 100g 기준인데
+      총 열량을 넣거나, 내용량 칸에 100g당 열량을 적어 두고 "규정 검증이 틀렸다"
+      고 보는 일이 잦았다. 규칙을 입력하는 자리에 적어 둔다.
+    -->
+    <div class="basis-hint">
+      <strong>총 내용량 = 단위량 × 포장개수</strong> 입니다.
+      한 개짜리 제품이면 단위량에 총 내용량을 넣고 포장개수는 1 로 둡니다.
+      아래 영양성분은 <strong>언제나 100 g(mL) 당</strong> 값을 넣습니다 —
+      표시기준(총량당·단위량당·100g당)은 표를 그리는 방식일 뿐, 넣는 값의 뜻을
+      바꾸지 않습니다. 표시사항의 내용량 칸에 병기하는 열량은
+      <strong>총 내용량 전체의 열량</strong>입니다.
+    </div>
     
     <!-- 표시 방식 -->
     <div class="display-style-row">
@@ -83,7 +96,7 @@
     <!-- 영양성분 입력 -->
     <div class="nutrition-section">
       <div class="nutrition-header" onclick="toggleNutritionSection()">
-        <span class="panel-title">🥄 영양성분 (100g 기준)</span>
+        <span class="panel-title">🥄 영양성분 — 100 g(mL) 당 값을 넣으세요</span>
         <span class="toggle-text">
           <span id="nutrition-toggle-text">성분 추가</span>
           <span class="toggle-icon" id="nutrition-toggle">▼</span>
