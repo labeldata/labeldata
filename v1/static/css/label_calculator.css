@@ -249,6 +249,54 @@ body {
 }
 .basis-hint strong { color: #0b3d91; }
 
+/* 칸 이름 옆의 물음표. 마우스를 올리면 무엇을 넣는지 말해 준다 */
+.field-why {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: #e8f0fe;
+  color: #1558b0;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: help;
+  vertical-align: middle;
+}
+
+/* 입력 기준 — 라벨에 인쇄된 값이 무엇 당인지 고르는 자리.
+   영양성분 칸 바로 위에 둔다. 값을 넣기 전에 정해야 하는 것이다. */
+.input-basis-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: #3c4043;
+}
+.input-basis-row label { margin: 0; font-weight: 600; }
+.input-basis-row select {
+  padding: 4px 8px;
+  border: 1px solid #1a73e8;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #1558b0;
+  background: #fff;
+  cursor: pointer;
+}
+.input-basis-note {
+  display: none;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  background: #fef7e0;
+  border: 1px solid #fadf9a;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #7a5b06;
+}
+
 .display-style-row {
   display: grid;
   grid-template-columns: 1fr 1fr;

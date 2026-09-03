@@ -475,6 +475,30 @@ def check_calorie_consistency(label) -> list[dict]:
     #     영양성분 탭   언제나 **100 g(mL) 당** 값          "309"
     per_total = round_calories(per_100 * amount / 100)
     back = stated * 100 / amount
+
+    # **라벨 값을 그대로 옮겨 적은 흔적**을 알아본다.
+    #
+    # 라벨의 영양성분표가 "총 내용량 65 g / 65 g 당 309 kcal" 이면, 표의 숫자는
+    # 65 g 당이다. 그걸 그대로 영양성분 탭에 넣으면 두 값이 똑같아진다
+    # (내용량의 병기 열량 = 탭의 열량). 그때는 "값이 틀렸다" 가 아니라
+    # "기준이 다르다" 고 말해야 고칠 데를 찾는다.
+    #
+    # 실제로 이 경고를 받은 사용자가 단위량을 100 으로 바꿔 표를 맞췄고,
+    # 그러면 총 내용량이 100 g 으로 찍혔다 — 한 오류를 다른 오류로 바꾼 셈이다.
+    if abs(stated - per_100) <= _CALORIE_TOLERANCE and abs(amount - 100) > 0.5:
+        return [_issue(
+            'calorie_consistency',
+            f'영양성분 탭에 라벨에 인쇄된 값({stated:,.0f} kcal)을 그대로 넣으신 것 같습니다. '
+            f'이 제품의 표는 총 내용량 {_format_amount(text, amount)} 당으로 인쇄돼 있는데, '
+            f'영양성분 탭은 100 g(mL) 당 값을 담습니다. '
+            f'지금 값으로는 표가 {per_total:,.0f} kcal 로 그려집니다.',
+            f'영양성분 계산기의 "아래 값은" 을 <총 내용량당> 으로 두고 라벨의 숫자를 '
+            f'그대로 다시 넣으면 저장할 때 환산합니다. 손으로 넣으려면 열량을 '
+            f'{round_calories(back):,.0f}(100 g 당)으로 고치세요. '
+            f'단위량을 100 으로 바꾸는 것은 표는 맞아 보여도 총 내용량이 '
+            f'100 으로 찍혀 내용량 칸과 어긋납니다.',
+        )]
+
     return [_issue(
         'calorie_consistency',
         f'내용량에 병기한 열량({stated:,.0f} kcal)과 영양성분 탭의 값이 서로 다른 총량을 '

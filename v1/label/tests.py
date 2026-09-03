@@ -5917,9 +5917,26 @@ class CalorieMessageTests(TestCase):
 
     def test_고칠_값을_둘_다_준다(self):
         """어느 쪽을 고쳐도 되는 일이라, 양쪽 값을 다 준다."""
-        suggestion = self._issue('65 g (309 kcal)', '309')[0]['suggestion']
+        suggestion = self._issue('65 g (250 kcal)', '309')[0]['suggestion']
         self.assertIn('200 kcal', suggestion)     # 내용량을 고칠 경우
-        self.assertIn('475', suggestion)          # 영양성분 탭을 고칠 경우
+        self.assertIn('385', suggestion)          # 영양성분 탭을 고칠 경우
+
+    def test_라벨_값을_그대로_넣은_것을_알아본다(self):
+        """
+        라벨의 표가 "65 g 당 309 kcal" 이면 그 숫자를 그대로 넣었을 때 두 값이
+        똑같아진다. 그때는 "값이 틀렸다" 가 아니라 "기준이 다르다" 고 말해야
+        고칠 데를 찾는다.
+        """
+        issues = self._issue('65 g (309 kcal)', '309')
+        self.assertEqual(len(issues), 1)
+        self.assertIn('그대로 넣으신 것 같습니다', issues[0]['message'])
+        self.assertIn('총 내용량당', issues[0]['suggestion'])
+        # 사용자가 실제로 쓴 우회를 미리 막는다
+        self.assertIn('단위량을 100 으로 바꾸는 것은', issues[0]['suggestion'])
+
+    def test_100g_기준_제품에는_그_말을_하지_않는다(self):
+        """총량이 100 이면 두 값이 같은 것이 정상이다."""
+        self.assertEqual(self._issue('100 g (309 kcal)', '309'), [])
 
     def test_단위를_지어내지_않는다(self):
         """음료(mL)에 "65 g" 로 고치라고 말하면 안 된다."""
@@ -6449,3 +6466,79 @@ class ForbiddenPhraseExceptionTests(TestCase):
         """확실한 것만 예외로 뒀다 — 넓히면 잡아야 할 것을 놓친다."""
         self.assertTrue(self._issues('prdlst_nm', '천연 그대로 주스'))
         self.assertTrue(self._issues('rawmtrl_nm_display', '자연산 대구'))
+
+
+class NutritionInputBasisTests(TestCase):
+    """
+    라벨에 인쇄된 값을 **그대로** 넣을 수 있어야 한다.
+
+    라벨의 영양성분표는 그 표가 밝힌 기준으로 인쇄돼 있다.
+
+        총 내용량 65 g / 65 g 당 309 kcal
+
+    그런데 저장 칸은 언제나 100 g 당이라, 예전에는 사용자가 손으로 환산해야
+    했다. 라벨을 옮겨 적는 사람이 그걸 알 리가 없어서 309 를 그대로 넣었고,
+    화면은 309 × 65/100 = 200 kcal 로 표를 그렸다. 사용자는 단위량을 100 으로
+    바꿔 표를 맞췄고, 그러면 총 내용량이 100 g 으로 찍혔다 — **한 오류를 다른
+    오류로 바꾼 셈이다.**
+
+    사진 판독은 표의 기준을 읽어 이미 환산한다(ocr_apply.to_per_100).
+    손으로 넣는 쪽도 같은 일을 하게 했다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/nutrition_calculator_popup.js'
+                   ).read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/nutrition_calculator_popup.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_입력_기준을_고를_수_있다(self):
+        self.assertIn('id="nutrition_input_basis"', self.html)
+        for value in ('per_100', 'total', 'unit'):
+            self.assertIn(f'value="{value}"', self.html)
+
+    def test_환산은_한_곳에서_한다(self):
+        """
+        미리보기도 저장도 getNutritionInputsFromDOM 을 지난다. 환산을 한 곳에서
+        하면 화면에 그린 표와 저장되는 값이 어긋날 수가 없다.
+        """
+        head = self.js.index('function getNutritionInputsFromDOM')
+        block = self.js[head:head + 1400]
+        self.assertIn('inputBasisFactor()', block)
+        self.assertIn('numericValue * factor', block)
+        # 환산 함수를 부르는 곳은 그 한 곳과 안내 문구뿐이다
+        self.assertEqual(self.js.count('inputBasisFactor()'), 3)   # 정의 + 안내 + 수집
+
+    def test_기준량을_모르면_환산하지_않는다(self):
+        """분모를 모르면서 곱하면 모든 수치의 뜻이 바뀐다."""
+        head = self.js.index('function inputBasisFactor')
+        block = self.js[head:head + 700]
+        self.assertIn('if (!(amount > 0)) return 1;', block)
+
+    def test_다시_열면_기준을_되돌린다(self):
+        """
+        저장된 값이 이미 100 g 당이라, 기준이 '총 내용량당' 인 채로 다시
+        저장하면 같은 값에 환산이 두 번 걸린다(309 → 475 → 731).
+        """
+        self.assertIn("inputBasisEl.value = 'per_100';", self.js)
+
+    def test_무엇이_저장되는지_그_자리에서_보여_준다(self):
+        """말해 두지 않으면 "내가 넣은 숫자가 왜 바뀌었지" 가 된다."""
+        self.assertIn('function updateInputBasisNote', self.js)
+        self.assertIn('id="inputBasisNote"', self.html)
+        self.assertIn('다시 열면 환산된 값이 보입니다', self.js)
+
+    def test_기준량이_바뀌면_안내도_바뀐다(self):
+        head = self.js.index("[servingSizeInput, unitsPerPackageInput].forEach")
+        block = self.js[head:head + 600]
+        self.assertIn("addEventListener('input', updateInputBasisNote)", block)
+
+    def test_단위량이_무엇인지_화면이_말해_준다(self):
+        """이 칸에 무엇을 넣을지 몰라 100 을 넣은 것이 이번 사고의 출발이었다."""
+        self.assertIn('총 내용량 = 단위량 × 포장개수', self.html)
+        self.assertIn('포장개수는 1 로 둡니다', self.html)

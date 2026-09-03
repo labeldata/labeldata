@@ -34,15 +34,15 @@
     <!-- 기본 정보 -->
     <div class="basic-info-row">
       <div class="info-group">
-        <label>단위량</label>
-        <input type="text" inputmode="decimal" id="serving_size" placeholder="100">
+        <label for="serving_size" title="한 개(단위)의 양. 한 개짜리 제품이면 총 내용량과 같습니다">단위량 <span class="field-why">?</span></label>
+        <input type="text" inputmode="decimal" id="serving_size" placeholder="총 내용량">
         <select id="serving_size_unit">
           <option value="g" selected>g</option>
           <option value="ml">ml</option>
         </select>
       </div>
       <div class="info-group">
-        <label>포장개수</label>
+        <label for="units_per_package" title="포장 안에 든 개수. 낱개 포장이면 1 입니다">포장개수 <span class="field-why">?</span></label>
         <input type="text" inputmode="decimal" id="units_per_package" placeholder="1">
         <span class="unit-label">개</span>
       </div>
@@ -54,10 +54,9 @@
     -->
     <div class="basis-hint">
       <strong>총 내용량 = 단위량 × 포장개수</strong> 입니다.
-      한 개짜리 제품이면 단위량에 총 내용량을 넣고 포장개수는 1 로 둡니다.
-      아래 영양성분은 <strong>언제나 100 g(mL) 당</strong> 값을 넣습니다 —
-      표시기준(총량당·단위량당·100g당)은 표를 그리는 방식일 뿐, 넣는 값의 뜻을
-      바꾸지 않습니다. 표시사항의 내용량 칸에 병기하는 열량은
+      한 개짜리 제품이면 단위량에 총 내용량을 넣고 포장개수는 1 로 둡니다
+      (예: 65 g 짜리 브라우니 한 개 → 단위량 65, 포장개수 1).
+      표시사항의 내용량 칸에 병기하는 열량은
       <strong>총 내용량 전체의 열량</strong>입니다.
     </div>
     
@@ -95,8 +94,27 @@
     
     <!-- 영양성분 입력 -->
     <div class="nutrition-section">
+      <!--
+        입력 기준. 라벨의 영양성분표는 그 표가 밝힌 기준으로 인쇄돼 있다 —
+        "총 내용량 65 g / 65 g 당 309 kcal" 이면 표의 숫자는 65 g 당이다.
+        그런데 저장 칸은 언제나 100 g 당이라, 예전에는 사용자가 손으로 환산해
+        넣어야 했다. 라벨을 옮겨 적는 사람이 그걸 알 리가 없어서 인쇄된 값을
+        그대로 넣었고, 그때마다 규정 검증이 "열량이 맞지 않습니다" 를 냈다.
+        무엇 당인지 골라 두면 저장할 때 환산한다(사진 판독이 하던 것과 같다).
+      -->
+      <div class="input-basis-row">
+        <label for="nutrition_input_basis">아래 값은</label>
+        <select id="nutrition_input_basis" onchange="updateInputBasisNote()">
+          <option value="per_100">100 g(mL) 당</option>
+          <option value="total">총 내용량당</option>
+          <option value="unit">단위량당</option>
+        </select>
+        <span>입니다 — 라벨에 인쇄된 그대로 넣으세요.</span>
+      </div>
+      <div class="input-basis-note" id="inputBasisNote"></div>
+
       <div class="nutrition-header" onclick="toggleNutritionSection()">
-        <span class="panel-title">🥄 영양성분 — 100 g(mL) 당 값을 넣으세요</span>
+        <span class="panel-title">🥄 영양성분</span>
         <span class="toggle-text">
           <span id="nutrition-toggle-text">성분 추가</span>
           <span class="toggle-icon" id="nutrition-toggle">▼</span>

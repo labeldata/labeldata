@@ -157,12 +157,87 @@ function calculateDailyValuePercent(key, processedValue, originalValue) {
   return formatNumberWithCommas(roundedPercent);
 }
 
+/*
+ * 입력 기준 -> 100 g(mL) 당 환산 계수.
+ *
+ * 라벨의 영양성분표는 그 표가 밝힌 기준으로 인쇄돼 있다.
+ *
+ *     총 내용량 65 g / 65 g 당 309 kcal
+ *
+ * 그런데 저장 칸(MyLabel.calories 등)은 **언제나 100 g 당**이다. 표를 그릴 때
+ * generateBasicDisplayV3 이 `값 x 표시량/100` 으로 되돌리고, 규정 검증도 그
+ * 약속 위에서 내용량의 병기 열량과 견준다.
+ *
+ * 예전에는 그 환산을 사용자가 손으로 해야 했다. 라벨을 옮겨 적는 사람이 그걸
+ * 알 리가 없어서 309 를 그대로 넣었고, 화면은 309 x 65/100 = 200 kcal 로 표를
+ * 그렸으며, 검증은 "열량이 맞지 않습니다" 를 냈다. **셋 다 자기 규칙에는
+ * 맞았고, 사용자만 고칠 데를 못 찾았다.**
+ *
+ * 사진 판독은 표의 기준을 읽어 이미 이 환산을 한다(ocr_apply.to_per_100).
+ * 손으로 넣는 쪽도 같은 일을 하게 한다.
+ */
+function numberFrom(id, fallback) {
+  var el = document.getElementById(id);
+  var value = el ? parseFloat(String(el.value || '').replace(/,/g, '')) : NaN;
+  return isNaN(value) ? fallback : value;
+}
+
+function inputBasisFactor() {
+  var basis = document.getElementById('nutrition_input_basis');
+  var mode = basis ? basis.value : 'per_100';
+  if (mode !== 'total' && mode !== 'unit') return 1;
+
+  var baseAmount = numberFrom('serving_size', 0);
+  var count = numberFrom('units_per_package', 1);
+  var amount = (mode === 'total') ? baseAmount * count : baseAmount;
+
+  // 기준량을 모르면 환산하지 않는다. 분모를 모르면서 곱하면 모든 수치의 뜻이
+  // 바뀐다 — 그건 안 고치느니만 못하다.
+  if (!(amount > 0)) return 1;
+  return 100 / amount;
+}
+
+/* 지금 고른 기준으로 무엇이 저장되는지 그 자리에서 보여 준다.
+   환산은 저장할 때 한 번 일어나고, 다시 열면 100 g 당 값이 보인다.
+   말해 두지 않으면 "내가 넣은 숫자가 왜 바뀌었지" 가 된다. */
+function updateInputBasisNote() {
+  var note = document.getElementById('inputBasisNote');
+  if (!note) return;
+  var basis = document.getElementById('nutrition_input_basis');
+  var mode = basis ? basis.value : 'per_100';
+  if (mode === 'per_100') {
+    note.textContent = '';
+    note.style.display = 'none';
+    return;
+  }
+  var factor = inputBasisFactor();
+  if (factor === 1) {
+    note.textContent = '단위량(과 포장개수)을 먼저 넣어 주세요. 기준량을 모르면 환산할 수 없습니다.';
+    note.style.display = 'block';
+    return;
+  }
+  var kcal = numberFrom('calories', NaN);
+  var label = (mode === 'total') ? '총 내용량' : '단위량';
+  var sample = isNaN(kcal) ? ''
+    : ' (예: 열량 ' + kcal + ' → ' + Math.round(kcal * factor) + ')';
+  note.textContent = label + '당으로 넣은 값을 100 g(mL) 당으로 환산해 저장합니다'
+    + sample + '. 다시 열면 환산된 값이 보입니다.';
+  note.style.display = 'block';
+}
+window.updateInputBasisNote = updateInputBasisNote;
+
 // ===== 데이터 수집 헬퍼 함수 =====
 /**
  * @description DOM에서 현재 입력된 모든 영양성분 값을 읽어 객체로 반환합니다.
  * @returns {Object} 영양성분 키와 숫자 값으로 구성된 객체
  */
 function getNutritionInputsFromDOM() {
+  // **여기서 100 g(mL) 당으로 맞춘다.** 미리보기도 저장도 이 함수를 지나므로,
+  // 환산을 한 곳에서 하면 화면에 그린 표와 저장되는 값이 어긋날 수가 없다.
+  // (예전에는 환산이 아예 없어서, 라벨의 "65 g 당 309 kcal" 을 그대로 넣으면
+  //  표가 309 x 65/100 = 200 kcal 로 그려졌다. 사용자는 단위량을 100 으로
+  //  바꿔 표를 맞췄고, 그러면 총 내용량이 100 g 으로 찍혔다.)
+  const factor = inputBasisFactor();
   const nutritionInputs = {};
   Object.keys(NUTRITION_DATA).forEach(key => {
     const input = document.getElementById(key);
@@ -171,7 +246,7 @@ function getNutritionInputsFromDOM() {
       const numericValue = parseFloat(input.value.replace(/,/g, ''));
       if (!isNaN(numericValue) && numericValue >= 0) {
         // 소수점 2자리까지 반올림
-        nutritionInputs[key] = Math.round(numericValue * 100) / 100;
+        nutritionInputs[key] = Math.round(numericValue * factor * 100) / 100;
       }
     }
   });
@@ -222,6 +297,10 @@ function buildInputForm() {
     
   // 모든 영양성분 입력 필드에 3자리 쉼표 이벤트 리스너 추가
   attachCommaFormattingToInputs();
+
+  // 환산 예시("열량 309 -> 475")를 열량 칸에 맞춰 갱신한다
+  var caloriesInput = document.getElementById('calories');
+  if (caloriesInput) caloriesInput.addEventListener('input', updateInputBasisNote);
 }
 
 // 쉼표 포맷팅 공통 함수
@@ -647,6 +726,15 @@ function loadExistingData(data) {
       }
     }
     
+    // 입력 기준은 **언제나 100 g 당으로 되돌린다.**
+    // 저장된 값이 이미 100 g 당이라, 기준이 '총 내용량당' 인 채로 다시 저장하면
+    // 같은 값에 환산이 두 번 걸린다(309 -> 475 -> 731).
+    const inputBasisEl = document.getElementById('nutrition_input_basis');
+    if (inputBasisEl) {
+      inputBasisEl.value = 'per_100';
+      if (typeof window.updateInputBasisNote === 'function') window.updateInputBasisNote();
+    }
+
     // 표시기준 로드
     if (data.basic_display_type) {
       const basicDisplayElement = document.getElementById('basic_display_type');
@@ -973,6 +1061,8 @@ document.addEventListener('DOMContentLoaded', function() {
       input.removeEventListener('input', applyCommaFormatting);
       // 공통 함수 사용
       input.addEventListener('input', applyCommaFormatting);
+      // 환산 안내는 기준량이 바뀌면 같이 바뀐다
+      input.addEventListener('input', updateInputBasisNote);
     }
   });
   
