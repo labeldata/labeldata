@@ -6306,3 +6306,146 @@ class AllergenValidationTests(TestCase):
         issues = check_allergens(label)
         self.assertTrue(issues)
         self.assertIn('알류', issues[0]['message'])
+
+
+class FalsePositiveNameMatchTests(TestCase):
+    """
+    한국어에는 낱말 경계가 없다. 목록의 이름이 다른 낱말 안에 그대로 들어간다.
+
+        오리지널 타코    -> "오리"      오리엔탈 드레싱 -> "오리"
+        굴소스 볶음밥    -> "굴"        무스케이크      -> "무"
+
+    "오리지널 타코" 가 「제품명에 사용한 원재료의 함량 표시」 위반으로 지적됐다.
+    글자가 겹쳤을 뿐인데 사용자는 고칠 방법이 없다.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        from v1.label.services import validation_service as vs
+
+        # DB(AgriculturalProduct)에서 오는 이름을 흉내 낸다. 하드코딩 목록에는
+        # "오리" 가 없어서, 이 사고는 DB 목록이 실린 서버에서만 났다.
+        cache.set(vs._FARM_SEAFOOD_CACHE_KEY,
+                  list(vs.FARM_SEAFOOD_ITEMS) + ['오리', '굴'], 60)
+        self.addCleanup(cache.clear)
+        self.user = User.objects.create_user(username='fp', password='x')
+
+    def _label(self, name, rawmtrl='', info=''):
+        return MyLabel(user_id=self.user, my_label_name=name, prdlst_nm=name,
+                       rawmtrl_nm_display=rawmtrl, ingredient_info=info)
+
+    def _check(self, name, rawmtrl='', info=''):
+        from v1.label.services.validation_service import check_farm_seafood_content
+        return check_farm_seafood_content(self._label(name, rawmtrl, info))
+
+    def test_들어_있지_않으면_제품명이_그_원료를_쓴_것이_아니다(self):
+        """규정이 요구하는 것은 「제품명에 **사용한** 원재료」의 함량이다."""
+        self.assertEqual(
+            self._check('오리지널 타코', '밀가루, 토마토페이스트, 정제수, 오리엔탈소스'), [])
+        self.assertEqual(self._check('굴소스 볶음밥', '쌀, 굴소스(대두), 양파'), [])
+        self.assertEqual(self._check('무스케이크', '밀가루, 무염버터 20%, 설탕'), [])
+
+    def test_진짜로_들어_있으면_지적한다(self):
+        issues = self._check('굴 죽', '쌀, 굴 12%, 참기름')
+        self.assertEqual(len(issues), 1)
+        self.assertIn('굴', issues[0]['message'])
+
+    def test_형태_꼬리말이_붙어도_같은_원료다(self):
+        """"오리고기 45%" 는 분명히 오리다."""
+        issues = self._check('오리불고기', '오리고기 45%, 양파, 간장')
+        self.assertEqual(len(issues), 1)
+        self.assertIn('오리', issues[0]['message'])
+
+    def test_함량을_적었으면_조용하다(self):
+        self.assertEqual(
+            self._check('오리불고기', '오리고기 45%, 양파', '오리고기 45%'), [])
+
+    def test_괄호_안의_이름도_찾는다(self):
+        """"쇠고기(한우, 국산) 20%" 의 한우는 괄호 안에 있다."""
+        issues = self._check('한우 곰탕', '쇠고기(한우, 국산) 20%, 정제수')
+        self.assertEqual(len(issues), 1)
+        self.assertIn('한우', issues[0]['message'])
+
+    def test_다른_낱말_안의_글자는_원료가_아니다(self):
+        from v1.label.services.validation_service import _is_same_item
+
+        for token, item, same in (
+            ('오리', '오리', True),
+            ('오리고기', '오리', True),
+            ('오리엔탈소스', '오리', False),
+            ('무염버터', '무', False),
+            ('단무지', '무', False),
+            ('새우살', '새우', True),
+            ('굴소스', '굴', False),
+        ):
+            self.assertIs(_is_same_item(token, item), same, f'{token} vs {item}')
+
+    def test_원재료명에_없으면_침묵한다(self):
+        """
+        제품명에는 썼는데 원재료명에 안 적은 라벨은 조용히 넘어간다. 그건 함량
+        미표시가 아니라 원재료 누락이고, "함량이 확인되지 않습니다" 라고 말하면
+        사용자를 엉뚱한 칸으로 보낸다. 잘못 지적하는 쪽보다 침묵을 골랐다.
+        """
+        self.assertEqual(self._check('오리 만두', '밀가루, 양파, 정제수'), [])
+
+
+class AllergenFalseFriendTests(TestCase):
+    """
+    알레르기 키워드를 글자로 품고 있지만 그 물질이 아닌 원료 이름.
+
+    한 글자 키워드("밀", "게")가 긴 이름 안에 그대로 들어간다. 알레르기는
+    놓치는 쪽이 훨씬 나쁘므로 관대하게 잡는 것이 기본이지만, 확실히 아닌 것을
+    지적하면 사용자가 **없는 알레르기를 선언하게** 된다.
+    """
+
+    def _issues(self, rawmtrl, declared=''):
+        from v1.label.services.validation_service import check_allergens
+
+        user = User.objects.create_user(username=f'ff{User.objects.count()}', password='x')
+        label = MyLabel(user_id=user, my_label_name='제품', prdlst_nm='제품',
+                        rawmtrl_nm_display=rawmtrl, allergens=declared)
+        return check_allergens(label)
+
+    def test_밀이_아닌_것을_밀로_보지_않는다(self):
+        for text in ('정제수, 아밀라아제, 옥수수전분', '밀랍, 정제수', '설탕, 당밀'):
+            self.assertEqual(self._issues(text), [], text)
+
+    def test_게가_아닌_것을_게로_보지_않는다(self):
+        self.assertEqual(self._issues('게르마늄효모, 정제수'), [])
+
+    def test_진짜는_그대로_잡는다(self):
+        """목록에 없는 것은 예전처럼 관대하게 잡는다."""
+        self.assertTrue(self._issues('밀가루 40%, 정제수'))
+        self.assertTrue(self._issues('어묵(연육, 게살)'))
+        # 대두레시틴은 정말 대두다 — 빼지 않았다
+        self.assertTrue(self._issues('정제수, 대두레시틴'))
+
+    def test_선언했으면_조용하다(self):
+        self.assertEqual(self._issues('밀가루 40%', '밀'), [])
+
+
+class ForbiddenPhraseExceptionTests(TestCase):
+    """
+    금지 문구를 글자로 품고 있지만 고시된 표준 용어라 쓸 수 있는 말.
+
+    "자연치즈" 는 식품유형 이름이고 "천연향료" 는 식품첨가물 공전의 명칭이다.
+    규정대로 적은 라벨이 금지 문구로 지적되면 고치라는 대로 고칠 수가 없다.
+    """
+
+    def _issues(self, field, value):
+        from v1.label.services.validation_service import check_forbidden_phrases
+
+        user = User.objects.create_user(username=f'fp{User.objects.count()}', password='x')
+        label = MyLabel(user_id=user, my_label_name='제품', prdlst_nm='제품')
+        setattr(label, field, value)
+        return check_forbidden_phrases(label)
+
+    def test_고시된_용어는_지적하지_않는다(self):
+        self.assertEqual(self._issues('rawmtrl_nm_display', '자연치즈 25%, 정제수'), [])
+        self.assertEqual(self._issues('rawmtrl_nm_display', '정제수, 천연향료'), [])
+
+    def test_그_밖에는_예전처럼_지적한다(self):
+        """확실한 것만 예외로 뒀다 — 넓히면 잡아야 할 것을 놓친다."""
+        self.assertTrue(self._issues('prdlst_nm', '천연 그대로 주스'))
+        self.assertTrue(self._issues('rawmtrl_nm_display', '자연산 대구'))

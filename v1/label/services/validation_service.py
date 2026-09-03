@@ -639,19 +639,80 @@ def _split_top_level(text: str) -> list[str]:
     return [seg.strip() for seg in out if seg.strip()]
 
 
+# 원료 이름 뒤에 붙어 **그 원료의 형태**를 말하는 꼬리말.
+#
+# 한국어에는 낱말 경계가 없어서 "오리" 가 "오리엔탈소스" 안에도 들어 있다.
+# 그냥 포함으로 보면 원료가 아닌 것을 원료로 세게 된다. 그렇다고 이름이 정확히
+# 같을 때만 인정하면 "오리고기 45%" 를 못 찾는다 — 그건 분명히 오리다.
+#
+# 그래서 **원료의 형태를 말하는 꼬리말이 붙은 경우만** 같은 원료로 본다.
+# 목록에 없는 글자가 붙으면 다른 낱말이다("오리엔탈", "무염").
+_FORM_SUFFIXES = (
+    '고기', '살', '육', '알', '즙', '유', '분말', '가루', '분',
+    '엑기스', '추출물', '추출액', '농축액', '농축물', '페이스트', '퓨레',
+    '잼', '청', '차', '유래', '박', '씨', '순', '잎', '뿌리', '껍질',
+    '통조림', '건조', '건조물', '액', '油',
+)
+
+# 원재료명 조각을 원료 이름 단위로 더 가르는 자리.
+# "쇠고기(한우, 국산) 20%" -> 쇠고기 / 한우 / 국산
+_TOKEN_SPLIT = re.compile(r'[,()\[\]{}（）［］〔〕/·|]+')
+
+# 이름 뒤에 붙는 군더더기. 함량·원산지 표기는 이름이 아니다.
+_TOKEN_TAIL = re.compile(r'(\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*(?:g|kg|mg|ml|l))\s*$',
+                         re.IGNORECASE)
+
+
+def _tokens(text: str) -> list[str]:
+    """문구를 원료 이름 후보로 가른다."""
+    out = []
+    for raw in _TOKEN_SPLIT.split(text or ''):
+        token = _TOKEN_TAIL.sub('', raw).strip()
+        token = re.sub(r'\s+', '', token)
+        if token:
+            out.append(token)
+    return out
+
+
+def _is_same_item(token: str, item: str) -> bool:
+    """
+    이 원료 이름이 그 품목인가. **낱말로** 본다.
+
+        "오리"        == "오리"     그대로
+        "오리고기"    == "오리"     형태 꼬리말이 붙은 것
+        "오리엔탈소스" != "오리"     다른 낱말이다
+        "단무지"      != "무"       품목명으로 시작하지도 않는다
+        "무염버터"    != "무"       "염버터" 는 형태 꼬리말이 아니다
+    """
+    if token == item:
+        return True
+    if not token.startswith(item):
+        return False
+    tail = token[len(item):]
+    return tail in _FORM_SUFFIXES
+
+
+def _segment_has_item(seg: str, item: str) -> bool:
+    """조각 안에 그 원료가 낱말로 적혀 있는가."""
+    return any(_is_same_item(token, item) for token in _tokens(seg))
+
+
 def _content_hits(text: str, item: str) -> list[dict]:
     """
     문구에서 그 원료가 적힌 조각과 거기 붙은 함량(%)을 모은다.
 
     조각 안에서 **원료 이름 뒤에 오는** 첫 % 를 그 원료의 함량으로 본다.
     앞에 있는 % 는 다른 원료의 것이다.
+
+    이름은 낱말로 견준다(_is_same_item). 그냥 포함으로 보면 "무" 를 찾다가
+    "무염버터" 를 집어, 엉뚱한 조각의 함량을 그 원료의 것으로 더한다.
     """
     hits = []
     for seg in _split_top_level(text):
-        pos = seg.find(item)
-        if pos < 0:
+        if not _segment_has_item(seg, item):
             continue
-        m = _PERCENT_RE.search(seg, pos)
+        pos = seg.find(item)
+        m = _PERCENT_RE.search(seg, pos if pos >= 0 else 0)
         hits.append({'text': seg, 'percent': float(m.group(1)) if m else None})
     return hits
 
@@ -666,7 +727,7 @@ def _bom_hits(label, item: str) -> list[dict]:
         return []
     hits = []
     for name, ratio in rows:
-        if item not in name:
+        if not _segment_has_item(name, item):
             continue
         value = None
         if ratio is not None:
@@ -698,12 +759,21 @@ def _evidence_row(field_label: str, hits: list[dict]) -> dict:
 
 def _named_items(product_name: str) -> list[str]:
     """
-    제품명에 쓰인 농수산물. 긴 이름부터 본다.
+    제품명에 쓰인 것으로 **보이는** 농수산물. 긴 이름부터 본다.
 
     한 글자짜리 품목명이 긴 이름 안에 들어가 있는 경우를 걸러 낸다 —
     목록에 "마"(마과 뿌리)가 있어서 "토마토 케첩"이 **토마토와 마 두 건**으로
     잡혔다. 제품명에 "마" 가 들어간 이름은 흔해서(고구마·마늘·토마토) 이
     한 글자가 사실상 모든 제품에 지적을 하나씩 붙이고 있었다.
+
+    여기서 걸러도 남는 것이 있다. 제품명은 자유 문구라 낱말 경계가 없어서,
+    목록의 이름이 다른 낱말 안에 그대로 들어간다.
+
+        오리지널 타코    -> 오리      오리엔탈 드레싱 -> 오리
+        굴소스 볶음밥    -> 굴        무스케이크      -> 무
+
+    그건 이 함수 혼자서는 가릴 수 없다. 부르는 쪽(_used_named_items)이 원재료명
+    과 대조해 가린다.
     """
     found = sorted(
         (item for item in _get_farm_seafood_items() if item in product_name),
@@ -711,6 +781,27 @@ def _named_items(product_name: str) -> list[str]:
     )
     return [item for item in found
             if not any(item != other and item in other for other in found)]
+
+
+def _used_named_items(label, product_name: str, rawmtrl_text: str) -> list[str]:
+    """
+    제품명에 쓴 농수산물 중 **그 제품에 실제로 들어 있는 것**만.
+
+    규정이 요구하는 것은 「제품명에 **사용한** 원재료의 함량 표시」다. 그러니
+    제품명의 그 글자가 그 원재료를 가리키는지는 **그 원재료가 들어 있는가**로
+    가린다. 안 들어 있으면 제품명이 그 원료를 쓴 것이 아니다 — 글자가 겹쳤을 뿐이다.
+
+        "오리지널 타코"  원재료명에 오리가 없다 -> 제품명의 "오리" 는 오리가 아니다
+        "오리불고기"     원재료명에 오리고기 45% -> 진짜다
+
+    **여기서 놓치는 경우가 하나 있다.** 제품명에는 썼는데 원재료명에 안 적은
+    라벨은 조용히 넘어간다. 그건 함량 미표시가 아니라 원재료 누락(또는 허위표시)
+    이고, "함량이 확인되지 않습니다" 라고 말하면 사용자를 엉뚱한 칸으로 보낸다.
+    지적하려면 그 뜻으로 따로 말해야 하는데, 그러려면 "오리지널" 을 가려낼 수
+    있어야 한다 — 지금은 못 가린다. 잘못 지적하는 쪽보다 침묵을 고른다.
+    """
+    return [item for item in _named_items(product_name)
+            if _content_hits(rawmtrl_text, item) or _bom_hits(label, item)]
 
 
 def check_farm_seafood_content(label) -> list[dict]:
@@ -732,7 +823,7 @@ def check_farm_seafood_content(label) -> list[dict]:
     ingredient_info = label.ingredient_info or ''
     rawmtrl_text = label.rawmtrl_nm_display or label.rawmtrl_nm or ''
 
-    found_items = _named_items(product_name)
+    found_items = _used_named_items(label, product_name, rawmtrl_text)
     issues = []
     for item in found_items:
         info_hits = _content_hits(ingredient_info, item)
@@ -777,13 +868,32 @@ def check_farm_seafood_content(label) -> list[dict]:
     return issues
 
 
+# 금지 문구를 글자로 품고 있지만 **고시된 표준 용어**라 쓸 수 있는 말.
+#
+# "자연치즈" 는 식품유형 이름이고 "천연향료" 는 식품첨가물 공전의 명칭이다.
+# 규정대로 적은 라벨이 금지 문구로 지적되면, 고치라는 대로 고칠 수가 없다.
+#
+# **여기 없는 말은 예전처럼 지적한다.** 확실한 것만 넣는다 — "자연산" 처럼
+# 규정이 명시적으로 막은 말을 여기 넣으면 잡아야 할 것을 놓친다.
+_FORBIDDEN_EXCEPTIONS = ('자연치즈', '천연향료')
+
+
+def _without_exceptions(text: str) -> str:
+    """고시된 표준 용어를 지운 문구. 그 안의 금지 글자는 세지 않는다."""
+    out = text or ''
+    for word in _FORBIDDEN_EXCEPTIONS:
+        out = out.replace(word, ' ')
+    return out
+
+
 def check_forbidden_phrases(label) -> list[dict]:
     """제품명/원재료명 등 5개 필드에서 사용 금지 문구('천연', '자연' 등) 검출."""
     issues = []
     for field, field_label in _FIELD_LABELS.items():
         value = getattr(label, field, '') or ''
+        scanned = _without_exceptions(value)
         for phrase in FORBIDDEN_PHRASES:
-            if not re.search(re.escape(phrase), value, re.IGNORECASE):
+            if not re.search(re.escape(phrase), scanned, re.IGNORECASE):
                 continue
 
             message = f'"{field_label}" 항목에 사용 금지 문구 "{phrase}"가 표시되어 있습니다.'
@@ -795,6 +905,33 @@ def check_forbidden_phrases(label) -> list[dict]:
                 suggestion = f'"{field_label}"에서 "{phrase}" 문구를 삭제하세요.'
             issues.append(_issue('forbidden_phrase', message, suggestion))
     return issues
+
+
+# 알레르기 키워드를 글자로 품고 있지만 **그 물질이 아닌** 원료 이름.
+#
+# 원재료명은 자유 문구라 낱말 경계가 없다. 한 글자 키워드("밀", "게")가 긴
+# 이름 안에 그대로 들어가 있으면 그냥 포함으로는 가릴 수가 없다.
+#
+#     아밀라아제 -> 효소다. 밀이 아니다
+#     밀랍       -> 벌집에서 나온 왁스다
+#     당밀       -> 사탕수수 부산물이다
+#     게르마늄   -> 원소 이름이다
+#
+# **여기 없는 것은 예전처럼 관대하게 잡는다.** 알레르기는 놓치는 쪽이 훨씬
+# 나쁘므로, 확실히 아닌 것만 하나씩 적는다. 예를 들어 "대두레시틴" 은 빼지
+# 않는다 — 그건 정말 대두다.
+_ALLERGEN_FALSE_FRIENDS = {
+    '밀': ('아밀라아제', '아밀레이스', '아밀로스', '아밀로펙틴', '밀랍', '당밀'),
+    '게': ('게르마늄',),
+}
+
+
+def _drop_false_friends(text: str, allergen: str) -> str:
+    """그 물질이 아닌 이름을 지운 문구. 그 안의 글자는 세지 않는다."""
+    out = text or ''
+    for word in _ALLERGEN_FALSE_FRIENDS.get(allergen, ()):
+        out = out.replace(word, ' ')
+    return out
 
 
 def check_allergens(label) -> list[dict]:
@@ -833,7 +970,8 @@ def check_allergens(label) -> list[dict]:
 
     detected = set()
     for allergen, keywords in ALLERGEN_KEYWORDS.items():
-        if any(kw.lower() in ingredients_text.lower() for kw in keywords):
+        scanned = _drop_false_friends(ingredients_text, allergen).lower()
+        if any(kw.lower() in scanned for kw in keywords):
             detected.add(allergen)
 
     missing = {a for a in detected
