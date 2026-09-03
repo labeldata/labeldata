@@ -197,3 +197,80 @@ class AutoRematchTriggerTests(TestCase):
              patch('v1.regulatory.signals.connections') as conns:
             signals._run_rematch_for_user(self.user.pk, '테스트')
         conns.close_all.assert_called_once()
+
+
+class MarkAllNewsResolvedTests(TestCase):
+    """
+    "전체 알림" 일괄 확인은 **세 탭을 모두** 턴다.
+
+    이 버튼은 부적합 탭 상세에 있지만 문구는 "전체 알림 일괄 처리" 다. 예전에는
+    뉴스 매칭만 읽음 처리해서, 눌러 놓고 수거검사 탭으로 넘어가면 빨간 점과
+    "전체 읽음" 칩이 그대로 남아 있었다. 무엇을 더 확인해야 하는지 알 수 없다는
+    신고가 본서버 시험에서 나왔다.
+    """
+
+    def setUp(self):
+        from v1.regulatory.models import InspectionMatch, InspectionResult
+
+        cache.clear()
+        self.user = User.objects.create_user(username='markall', password='x')
+        self.client.force_login(self.user)
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                       prdlst_nm='내 제품')
+        news = RegulatoryNews.objects.create(
+            external_id='m1', api_source='I2620', source='domestic',
+            product_name='부적합 알림', collected_date='2026-08-01')
+        NewsProductMatch.objects.create(news=news, product=label,
+                                        match_score=90, risk_score=50)
+
+        insp = InspectionResult.objects.create(
+            tkawyprno='1', bssh_nm='업소', prdtnm='제품',
+            prdlst_report_no='20250101', tkawydtm='20260801')
+        InspectionMatch.objects.create(
+            inspection=insp, user=self.user, label=label,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            match_reason=InspectionMatch.REASON_LABEL)
+        self.insp_match_ids = list(
+            InspectionMatch.objects.filter(user=self.user).values_list('id', flat=True))
+
+    def test_수거검사도_함께_확인_처리된다(self):
+        from v1.regulatory.models import InspectionMatch
+
+        r = self.client.post('/regulatory/api/mark-all-news-resolved/',
+                             data='{}', content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body['success'])
+        self.assertEqual(body['inspection_read'], 1)
+        self.assertEqual(
+            InspectionMatch.objects.filter(user=self.user, read_yn=False).count(), 0)
+
+    def test_목록_화면의_수거검사_미확인이_0이_된다(self):
+        """배지와 빨간 점은 이 숫자를 본다."""
+        r = self.client.get('/regulatory/')
+        self.assertEqual(r.context['inspection_unread'], 1)
+
+        self.client.post('/regulatory/api/mark-all-news-resolved/',
+                         data='{}', content_type='application/json')
+
+        r = self.client.get('/regulatory/')
+        self.assertEqual(r.context['inspection_unread'], 0)
+
+    def test_남의_수거검사는_건드리지_않는다(self):
+        from v1.regulatory.models import InspectionMatch, InspectionResult
+
+        other = User.objects.create_user(username='markall2', password='x')
+        insp = InspectionResult.objects.create(
+            tkawyprno='2', bssh_nm='업소2', prdtnm='제품2',
+            prdlst_report_no='20250102', tkawydtm='20260802')
+        InspectionMatch.objects.create(
+            inspection=insp, user=other,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            match_reason=InspectionMatch.REASON_COMPANY)
+
+        self.client.post('/regulatory/api/mark-all-news-resolved/',
+                         data='{}', content_type='application/json')
+
+        self.assertEqual(
+            InspectionMatch.objects.filter(user=other, read_yn=False).count(), 1)

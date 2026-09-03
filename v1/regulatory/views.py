@@ -1055,9 +1055,19 @@ def mark_all_news_resolved(request):
         user=request.user, dismissed_yn=False, read_yn=False,
     ).update(read_yn=True)
 
+    # 수거검사 매칭도 함께 읽음 처리한다.
+    #
+    # 이 버튼은 부적합 탭에 있지만 문구는 "**전체 알림** 일괄 처리" 다. 눌러
+    # 놓고 수거검사 탭으로 넘어가면 빨간 점과 "전체 읽음" 칩이 그대로 남아
+    # 있어서, 무엇을 더 확인해야 하는지 알 수 없었다. 한 화면 안의 세 탭이
+    # 같은 "알림" 이므로 여기서 같이 턴다.
+    insp_updated = InspectionMatch.objects.filter(
+        user=request.user, read_yn=False,
+    ).update(read_yn=True, read_at=timezone.now())
+
     cache.delete(f'regulatory_alert_count_{request.user.id}')
     return JsonResponse({
-        'success': True, 'created': created,
+        'success': True, 'created': created, 'inspection_read': insp_updated,
         'unread': selectors.unread_news_count(request.user),
     })
 
