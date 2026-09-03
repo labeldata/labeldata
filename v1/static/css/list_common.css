@@ -64,122 +64,23 @@
 .rf-listctl-dir:hover { border-color: #1967d2; color: #1558b0; background: #e8f0fe; }
 
 
-/* ── 화면 간 모양 맞추기 ────────────────────────────────────────
-   부적합·처분 알림은 좁은 사이드바 목록이라 여백·글자 크기까지 제품 조회와
-   똑같이 맞추면 오히려 좁아 보인다. 그래서 "같아 보여야 하는 것"만 맞춘다.
-   (이 파일은 regulatory.css 뒤에 실리므로 같은 우선순위면 여기가 이긴다)
+/* ── 부적합·처분 알림과의 관계 ──────────────────────────────────
+   예전에는 이 자리에 "부적합 화면을 제품 조회처럼 보이게 하는" 덮어쓰기가
+   스무 개쯤 있었다. regulatory.css 가 자기 팔레트와 자기 컴포넌트를 들고
+   있어서, 밖에서 하나씩 되돌려야 했기 때문이다.
+
+   지금은 regulatory.css 가 variables.css 의 공용 토큰을 쓰고 컴포넌트 규격도
+   제품 관리·원료 관리와 같다. 덮어쓸 것이 없어져 전부 걷어냈다. 여기 남은
+   것은 **부적합 화면에만 있는 것**뿐이다.
    ──────────────────────────────────────────────────────────── */
-
-/* 탭 건수 배지 — 제품 조회의 .pv-tab-count 와 같은 모양 */
-.rs-vtab-count {
-    background: #e8eaed;
-    color: #5f6368;
-    font-size: 10px;
-    font-weight: 700;
-    border-radius: 9px;
-    padding: 1px 6px;
-}
-.rs-vtab--active .rs-vtab-count { background: #e8f0fe; color: #1558b0; }
-
-/* 목록 총 건수 — 제품 조회 하단 "전체 N개" 와 같은 톤 */
-.rs-list-total { font-size: 12px; font-weight: 600; color: #5f6368; }
-
-/* 초기화 — 제품 조회 툴바의 '초기화' 버튼과 같은 알약 모양 */
-.rs-filter-reset {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid #dadce0;
-    border-radius: 20px;
-    padding: 2px 12px;
-    margin-left: 6px;
-    font-size: 12px;
-    color: #5f6368;
-    background: #fff;
-    text-decoration: none;
-    white-space: nowrap;
-}
-.rs-filter-reset:hover {
-    border-color: #d93025;
-    color: #d93025;
-    background: #fce8e6;
-    text-decoration: none;
-}
-
-/* 페이지 버튼 — 제품 조회 페이지네이션과 같은 파랑 */
-.rs-page-btn.active {
-    background: #1967d2;
-    border-color: #1967d2;
-    color: #fff;
-}
-.rs-page-btn:hover { border-color: #1967d2; color: #1558b0; }
-
-/* 기간 프리셋 — 제품 조회의 .pv-chip 과 같은 모양 */
-.rs-day-btn {
-    border: 1px solid #dadce0;
-    border-radius: 16px;
-    font-size: 12.5px;
-    color: #3c4043;
-    background: #fff;
-}
-.rs-day-btn:hover { background: #e8f0fe; border-color: #1967d2; color: #1558b0; }
-.rs-day-btn.active { background: #e8f0fe; border-color: #1967d2; color: #1558b0; font-weight: 700; }
-
-
-/* ── 오른쪽 패널의 '상세 검색' 상자 ──────────────────────────── */
-.rd-cond-box {
-    border-bottom: 1px solid #e0e0e0;
-    background: #fff;
-    padding: 10px 14px 12px;
-    flex-shrink: 0;
-}
-.rd-cond-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12.5px;
-    font-weight: 700;
-    color: #3c4043;
-    margin-bottom: 8px;
-}
-.rd-cond-title .bi { color: #1967d2; }
-.rd-cond-n {
-    background: #1967d2; color: #fff;
-    font-size: 10px; font-weight: 700;
-    border-radius: 9px; padding: 1px 6px;
-}
-/* 상시 노출 자리라 바깥 여백을 줄인다 (접히는 패널과 달리 제목 바로 아래) */
-.rd-cond-box .pv-cond { margin-top: 0; }
-.rd-cond-actions { margin-top: 8px; }
-.rd-cond-submit { border-radius: 20px; padding: 5px 16px; font-size: 12.5px; }
-
-/* ── 목록 쪽 단축 칩 (미조치만 보기) ─────────────────────────── */
-.rs-quick-chip {
-    display: inline-flex; align-items: center; gap: 4px;
-    flex-shrink: 0; white-space: nowrap;
-    border: 1px solid #dadce0; border-radius: 16px;
-    padding: 4px 12px;
-    font-size: 12.5px; color: #3c4043; background: #fff;
-    text-decoration: none;
-}
-.rs-quick-chip:hover { background: #e8f0fe; border-color: #1967d2; color: #1558b0; text-decoration: none; }
-.rs-quick-chip--on { background: #fef7e0; border-color: #f9ab00; color: #7a5b06; font-weight: 700; }
-.rs-quick-chip--on:hover { background: #feefc3; border-color: #f9ab00; color: #7a5b06; }
-.rs-quick-chip-n {
-    background: #e8eaed; color: #5f6368;
-    font-size: 10px; font-weight: 700;
-    border-radius: 9px; padding: 1px 5px;
-}
-.rs-quick-chip--on .rs-quick-chip-n { background: #fce8b2; color: #7a5b06; }
-
 
 /* ── 오른쪽 패널: 항목을 고르기 전 보여줄 '내 알림 기준' ────────
    이 자리는 예전에 "왼쪽에서 선택하세요" 한 줄뿐이라 화면의 40%가
    비어 있었다. 알림 기준은 목록을 보다가 고치는 일이 잦아 여기 둔다. */
-.rd-alert-summary {
-    padding: 18px 16px 24px;
-    overflow-y: auto;
-    height: 100%;
-}
+/* 바깥의 .rd-content-scroll 이 이미 16px 여백과 스크롤을 갖고 있다.
+   여기서 또 주면 여백이 두 겹이 되고, height:100% 는 그 안에서 두 번째
+   스크롤 막대를 만든다. */
+.rd-alert-summary { padding: 0; }
 .rd-as-lead {
     display: flex; align-items: center; gap: 7px;
     font-size: 12.5px; color: #5f6368;
@@ -248,25 +149,20 @@
 .rd-as-foot .bi { margin-right: 4px; }
 
 
-/* 늘 펼쳐 두는 자리(오른쪽 '상세 검색')에서는 패널이 스스로 상자를 만들지 않는다.
-   바깥의 .rd-cond-box 가 이미 흰 상자와 여백을 갖고 있어, 그대로 두면
-   회색 상자가 겹쳐 보인다. */
+/* 조건 패널이 스스로 회색 상자를 만들지 않게 한다. 부적합 화면에서는 바깥의
+   서랍(.reg-cond-drawer)이 이미 흰 바탕과 여백을 갖고 있어, 그대로 두면
+   상자가 겹쳐 보인다. */
 .pv-cond--open {
     background: transparent;
     padding: 0;
     border-radius: 0;
 }
 
-/* 아직 확인하지 않은 수거검사 항목.
-   클래스는 붙고 있었는데 대응하는 규칙이 없어 읽은 것과 구분이 되지 않았다. */
-.rs-item--insp-unread { background: #fffdf5; }
+/* 아직 확인하지 않은 수거검사 줄 — 이름만 진하게.
+   예전에는 여기서 ::after 로 빨간 점을 하나 더 찍었다. 목록이 표로 바뀌면서
+   줄이 <tr> 이 되어 그 점이 붙을 자리가 없어졌고, 점은 이제 이름 칸 안의
+   .rs-unread-dot 하나뿐이다. */
 .rs-item--insp-unread .rs-item-name { font-weight: 700; color: #202124; }
-.rs-item--insp-unread::after {
-    content: '';
-    position: absolute; top: 12px; right: 10px;
-    width: 7px; height: 7px; border-radius: 50%;
-    background: #d93025;
-}
 
 
 /* ── 정렬(좌우 배치) 규칙 ───────────────────────────────────────
@@ -279,9 +175,3 @@
 
    전부 왼쪽에 붙여 두면 성격이 다른 것이 한 덩어리로 보인다. */
 .rf-push-right { margin-left: auto; }
-
-/* .rf-row2 는 목록 헤더 안에서 flex:1 로 늘어나 있었다.
-   오른쪽으로 밀려면 늘어나지 않아야 한다. */
-.rf-row2.rf-push-right { flex: 0 0 auto; }
-
-.rd-cond-actions--right { display: flex; justify-content: flex-end; }

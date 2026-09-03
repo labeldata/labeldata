@@ -705,7 +705,8 @@ def news_list(request):
         'condition_specs':    news_search.conditions_catalog(),
         'max_conditions':     news_search.MAX_CONDITIONS,
         'require_fast':       False,   # 5천 행이라 조건을 강제할 이유가 없다
-        # 오른쪽 패널 상단에 늘 보이는 자리라 접지 않는다 (여닫는 버튼도 없다)
+        # 패널 자체는 늘 펼쳐 둔다. 접는 것은 그 바깥의 서랍(#regCondDrawer)이라
+        # 여기서 접으면 서랍 안이 제출 단추만 남은 채 열린다.
         'panel_always_open':  True,
         'q_input_id':         'searchInput',
         # ── 정렬 / 페이지당 개수 ────────────────────────────────────────

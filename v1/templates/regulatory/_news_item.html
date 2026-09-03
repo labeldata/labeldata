@@ -3,48 +3,67 @@
 
   '내 알림' 고정 블록과 일반 목록이 같은 마크업을 쓴다 - 두 벌로 두면 배지
   하나를 고칠 때마다 두 곳을 고쳐야 하고, 실제로 한쪽만 고쳐진 적이 있다.
+
+  칸 순서는 제품 관리·원료 관리의 표와 같다 — 구분이 맨 앞, 이름이 그다음,
+  곁가지가 가운데, 상태와 날짜가 오른쪽. 좁은 화면에서는 업체·위반내용부터
+  접힌다(regulatory.css 의 .reg-col--company / --reason).
 {% endcomment %}
-<div class="rs-item
-            {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% elif news.kw_matched_yn %}kw-matched{% endif %}
-            {% if selected_news and selected_news.id == news.id %}active{% endif %}
-            {% if news.my_action_status == 'resolved' or news.my_ing_action_status == 'resolved' %}rs-item--resolved{% endif %}"
-     data-group="{% if news.api_source == 'I0470' or news.api_source == 'I0480' or news.api_source == 'I0482' or news.api_source == 'saol_admin' %}admin{% else %}insp{% endif %}"
-     onclick="selectNews({{ news.id }})">
+<tr class="rs-item
+           {% if news.my_matched_yn %}matched{% elif news.ing_matched_yn %}ing-matched{% elif news.kw_matched_yn %}kw-matched{% endif %}
+           {% if news.my_unread_yn or news.ing_unread_yn %}rs-item--unread{% endif %}
+           {% if selected_news and selected_news.id == news.id %}active{% endif %}
+           {% if news.my_action_status == 'resolved' or news.my_ing_action_status == 'resolved' %}rs-item--resolved{% endif %}"
+    data-group="{% if news.api_source == 'I0470' or news.api_source == 'I0480' or news.api_source == 'I0482' or news.api_source == 'saol_admin' %}admin{% else %}insp{% endif %}"
+    onclick="selectNews({{ news.id }})">
 
-  {# 줄 1: 국기 + 제품명 + 날짜 #}
-  <div class="rs-row1">
-    {% if news.my_unread_yn or news.ing_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
-    <span class="rs-item-flag">
-      {% if news.api_source == 'saol_admin' %}<i class="bi bi-bank"></i>{% elif news.source == 'domestic' %}<span class="rs-src-tag">국내</span>{% else %}<span class="rs-src-tag rs-src-tag--imp">수입</span>{% endif %}
-    </span>
-    <span class="rs-item-name">{{ news.product_name }}</span>
-    <span class="rs-item-date" title="수집: {{ news.collected_date|date:'Y-m-d' }}{% if news.event_date and news.event_date != news.collected_date %} (발생: {{ news.event_date|date:'Y-m-d' }}){% endif %}">{% if news.event_date %}{% if news.event_date > today %}{{ today|date:"m/d" }}{% else %}{{ news.event_date|date:"m/d" }}{% endif %}{% else %}{% if news.collected_date > today %}{{ today|date:"m/d" }}{% else %}{{ news.collected_date|date:"m/d" }}{% endif %}{% endif %}</span>
-    {% if news.my_matched_yn or news.ing_matched_yn %}{% if news.my_action_status != 'resolved' and news.my_ing_action_status != 'resolved' %}<button class="rs-quick-resolve" onclick="quickResolve(event,{{ news.id }})" title="조치 완료로 표시"><i class="bi bi-check-lg"></i></button>{% endif %}{% endif %}
-  </div>
-
-  {# 줄 2: 위반유형 + 등급배지 + 업체명 / 위반요약 #}
-  <div class="rs-row2">
-    {# 위반유형 배지 #}
-    {% if news.api_source == 'I0470' or news.api_source == 'I0480' %}
-      <span class="badge-admin">행정처분</span>
-    {% elif news.api_source == 'I0490' %}
-      <span class="badge-recall">회수</span>
-    {% elif news.api_source == 'I2620' or news.api_source == 'I2640' %}
-      <span class="badge-dom">부적합</span>
-    {% elif news.api_source == 'import' %}
-      <span class="badge-recall">회수(수입)</span>
-    {% elif news.api_source == 'imp_insp' %}
-      <span class="badge-imp">수입부적합</span>
-    {% elif news.api_source == 'I0482' %}
-      <span class="badge-admin">행정(수입)</span>
-    {% elif news.api_source == 'saol_admin' %}
-      <span class="badge-admin">지자체처분</span>
+  {# 1. 구분 — 어디서 온 정보인가 #}
+  <td>
+    {% if news.api_source == 'I0470' or news.api_source == 'I0480' %}<span class="badge-admin">행정처분</span>
+    {% elif news.api_source == 'I0482' %}<span class="badge-admin">행정(수입)</span>
+    {% elif news.api_source == 'saol_admin' %}<span class="badge-admin">지자체</span>
+    {% elif news.api_source == 'I0490' %}<span class="badge-recall">회수</span>
+    {% elif news.api_source == 'import' %}<span class="badge-recall">회수(수입)</span>
+    {% elif news.api_source == 'imp_insp' %}<span class="badge-imp">수입부적합</span>
+    {% else %}<span class="badge-dom">부적합</span>
     {% endif %}
-    {# 등급 배지 #}
+  </td>
+
+  {# 2. 제품명 — 안 읽은 표시와 빠른 조치가 함께 산다 #}
+  <td>
+    <div class="rs-name-cell">
+      {% if news.my_unread_yn or news.ing_unread_yn %}<span class="rs-unread-dot"></span>{% endif %}
+      <span class="rs-item-name" title="{{ news.product_name }}">{{ news.product_name }}</span>
+      {% if news.my_matched_yn or news.ing_matched_yn %}{% if news.my_action_status != 'resolved' and news.my_ing_action_status != 'resolved' %}
+      <button class="rs-quick-resolve" onclick="quickResolve(event,{{ news.id }})" title="조치 완료로 표시">
+        <i class="bi bi-check-lg"></i>
+      </button>
+      {% endif %}{% endif %}
+    </div>
+  </td>
+
+  {# 3. 업체 (지자체 처분은 지자체명) #}
+  <td class="reg-col--company">
+    <span class="rs-item-sub">
+      {% if news.api_source == 'saol_admin' %}
+        {% if news.saol_location %}<span class="rs-saol-loc-tag">{{ news.saol_location }}</span>{% else %}—{% endif %}
+      {% else %}
+        {% if news.source == 'domestic' %}<span class="rs-src-tag">국내</span>{% else %}<span class="rs-src-tag rs-src-tag--imp">수입</span>{% endif %}
+        {{ news.company_name|default:"—" }}
+      {% endif %}
+    </span>
+  </td>
+
+  {# 4. 위반내용 #}
+  <td class="reg-col--reason">
+    <span class="rs-item-sub" title="{{ news.violation_reason|default:'' }}">{{ news.violation_reason|default:"—" }}</span>
+  </td>
+
+  {# 5. 등급 — 내 제품/원료 매칭이 있을 때만 #}
+  <td class="tc">
     {% if news.my_matched_yn %}
       {% if news.my_risk_level == 'HIGH' %}<span class="badge-risk-H">중요</span>
       {% elif news.my_risk_level == 'MED' %}<span class="badge-risk-M">관심</span>
-      {% elif news.my_risk_level == 'LOW' %}<span class="badge-risk-L">일반</span>
+      {% else %}<span class="badge-risk-L">일반</span>
       {% endif %}
     {% elif news.ing_matched_yn %}
       {% if news.ing_risk_level == 'HIGH' %}<span class="badge-risk-H badge-ing">중요&middot;원료</span>
@@ -53,24 +72,26 @@
       {% endif %}
     {% elif news.kw_matched_yn %}
       <span class="badge-kw-match">키워드</span>
+    {% else %}
+      <span class="rs-item-sub">—</span>
     {% endif %}
-    {# 진행상태 뱃지 — 진행중·완료만 표시, 미조치는 기본상태이므로 생략 #}
+  </td>
+
+  {# 6. 조치 상태 — 미조치는 기본이라 비워 둔다 #}
+  <td class="tc rs-status-cell">
     {% if news.my_matched_yn or news.ing_matched_yn %}
       {% with st=news.my_action_status|default:news.my_ing_action_status %}
       {% if st == 'monitoring' %}<span class="badge-status-mon">진행 중</span>
       {% elif st == 'resolved' %}<span class="badge-status-res">조치완료</span>
+      {% else %}<span class="rs-item-sub">—</span>
       {% endif %}
       {% endwith %}
+    {% else %}<span class="rs-item-sub">—</span>
     {% endif %}
-    {# 업체명 + 위반요약 짧게 (saol_admin: 지자체명 + 처분내용) #}
-    <span class="rs-row2-right">
-      {% if news.api_source == 'saol_admin' %}
-        {% if news.saol_location %}<span class="rs-saol-loc-tag">{{ news.saol_location }}</span>{% endif %}
-        {% if news.violation_reason %}&nbsp;·&nbsp;{{ news.violation_reason|truncatechars:20 }}{% endif %}
-      {% else %}
-        {{ news.company_name|default:""|truncatechars:14 }}
-        {% if news.violation_reason %}&nbsp;·&nbsp;{{ news.violation_reason|truncatechars:24 }}{% endif %}
-      {% endif %}
-    </span>
-  </div>
-</div>
+  </td>
+
+  {# 7. 날짜 #}
+  <td class="tc">
+    <span class="rs-item-date" title="수집: {{ news.collected_date|date:'Y-m-d' }}{% if news.event_date and news.event_date != news.collected_date %} (발생: {{ news.event_date|date:'Y-m-d' }}){% endif %}">{% if news.event_date %}{% if news.event_date > today %}{{ today|date:"m/d" }}{% else %}{{ news.event_date|date:"m/d" }}{% endif %}{% else %}{% if news.collected_date > today %}{{ today|date:"m/d" }}{% else %}{{ news.collected_date|date:"m/d" }}{% endif %}{% endif %}</span>
+  </td>
+</tr>

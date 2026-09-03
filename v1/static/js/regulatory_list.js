@@ -2,28 +2,8 @@
    regulatory_list.js — 부적합·처분 알림 목록 페이지 JavaScript
    ================================================================ */
 
-function toggleRiskHelp(e) {
-  e.stopPropagation();
-  const pop = document.getElementById('riskHelpPopover');
-  if (pop) pop.classList.toggle('open');
-}
-
-function toggleInsp46Help(e) {
-  e.stopPropagation();
-  const pop = document.getElementById('insp46HelpPopover');
-  if (pop) pop.classList.toggle('open');
-}
-
-document.addEventListener('click', function (e) {
-  const risk = document.getElementById('riskHelpPopover');
-  if (risk && risk.classList.contains('open') && !risk.contains(e.target)) {
-    risk.classList.remove('open');
-  }
-  const insp = document.getElementById('insp46HelpPopover');
-  if (insp && insp.classList.contains('open') && !insp.contains(e.target)) {
-    insp.classList.remove('open');
-  }
-});
+// 등급·수거검사 도움말 팝오버는 화면에서 사라졌다(조건은 '상세 조건' 서랍으로,
+// 수거검사는 자기 탭으로 갔다). 그 여닫기 함수도 함께 걷어냈다.
 
 function submitFilter() {
   // 현재 탭을 폼에 주입해 제출 후에도 탭이 유지되도록 함
@@ -44,23 +24,7 @@ function submitFilter() {
 
 // 분야 체크박스는 '상세 조건' 패널의 체크박스 묶음으로 옮겼다.
 // 드로어를 여닫던 toggleCatFilter / 그룹 토글 / 상태 갱신 함수는 함께 사라졌다.
-
-// 수거검사 버튼 클릭 — I0460 hidden input 토글 후 제출
-function toggleInspection() {
-  const form = document.getElementById('filterForm');
-  let hidden = document.getElementById('hiddenInsp46');
-  if (hidden) {
-    hidden.remove(); // 현재 ON → OFF
-  } else {
-    hidden = document.createElement('input');
-    hidden.type  = 'hidden';
-    hidden.name  = 'cat';
-    hidden.value = 'I0460';
-    hidden.id    = 'hiddenInsp46';
-    form.appendChild(hidden);
-  }
-  submitFilter();
-}
+// 수거검사를 켜고 끄던 toggleInspection 도 마찬가지다 — 지금은 탭으로 간다.
 
 document.addEventListener('DOMContentLoaded', function () {
   // 선택 후 페이지 이동 시 스크롤 위치 복원
@@ -105,10 +69,6 @@ function setOrder(order) {
 
 function setPerPage(n) {
   _navWith({ per_page: n });
-}
-
-function doSearch() {
-  submitFilter();
 }
 
 function clearSearch() {

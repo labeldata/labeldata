@@ -274,3 +274,188 @@ class MarkAllNewsResolvedTests(TestCase):
 
         self.assertEqual(
             InspectionMatch.objects.filter(user=other, read_yn=False).count(), 1)
+
+
+class RegulatoryLayoutTests(TestCase):
+    """
+    부적합·처분 알림 화면의 뼈대 — 제품 관리 상단 + 원료 관리 본문.
+
+    이 화면만 자기 팔레트(--c-*)와 자기 컴포넌트를 들고 있어서, 제품 관리·원료
+    관리를 오가면 같은 뜻의 색과 같은 뜻의 컨트롤이 미묘하게 달라 보였다.
+    아래 조건들은 그 통일을 지킨다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        from v1.regulatory.models import InspectionMatch, InspectionResult
+
+        cache.clear()
+        self.user = User.objects.create_user(username='layout', password='x')
+        self.client.force_login(self.user)
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='내 제품',
+                                       prdlst_nm='내 제품')
+        for i in range(4):
+            news = RegulatoryNews.objects.create(
+                external_id=f'l{i}', api_source='I2620', source='domestic',
+                product_name=f'제품 {i}', company_name=f'업체 {i}',
+                violation_reason='대장균 기준 초과', collected_date='2026-08-01')
+            if i < 2:
+                NewsProductMatch.objects.create(news=news, product=label,
+                                                match_score=90, risk_score=50,
+                                                risk_level='HIGH')
+        insp = InspectionResult.objects.create(
+            tkawyprno='1', bssh_nm='업소', prdtnm='검사 제품',
+            prdlst_report_no='20250101', tkawydtm='20260801',
+            plan_titl='2026 상반기', exc_instt_nm='식약처')
+        InspectionMatch.objects.create(
+            inspection=insp, user=self.user, label=label,
+            alert_phase=InspectionMatch.PHASE_COLLECTION,
+            match_reason=InspectionMatch.REASON_LABEL)
+
+        base = Path(dj.BASE_DIR)
+        self.tpl = (base / 'templates/regulatory/news_list.html').read_text(encoding='utf-8')
+        self.item = (base / 'templates/regulatory/_news_item.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/regulatory.css').read_text(encoding='utf-8')
+        self.html = self.client.get('/regulatory/').content.decode('utf-8')
+
+    # ── 상단: 제품 관리와 같은 통계 카드 줄 ──────────────────────────────
+    def test_통계_카드_줄이_있다(self):
+        """이 화면에 들어와 제일 먼저 묻는 것이 "지금 볼 게 몇 건인가" 다."""
+        self.assertIn('class="reg-stats"', self.html)
+        self.assertEqual(self.html.count('class="reg-stat-icon'), 4)
+        for label in ('전체 알림', '내 알림', '미조치', '수거검사 미확인'):
+            self.assertIn(label, self.html)
+
+    def test_카드가_눌러서_거르는_지름길이다(self):
+        """숫자만 보여 주면 그 숫자를 만든 목록으로 갈 방법이 없다."""
+        self.assertIn('href="?scope=mine"', self.html)
+        self.assertIn('href="?tab=insp"', self.html)
+
+    # ── 본문: 원료 관리와 같은 좌 목록 / 우 상세 ─────────────────────────
+    def test_목록이_표다(self):
+        """제품 관리·원료 관리와 같은 44px 표 행 — 둘짜리 카드가 아니다."""
+        self.assertIn('<table class="reg-table">', self.html)
+        self.assertIn('<tr class="rs-item', self.html)
+        self.assertIn('<td>', self.html)
+        # 예전 카드 마크업의 두 줄 구조가 남아 있으면 안 된다
+        self.assertNotIn('class="rs-row1"', self.html)
+        self.assertNotIn('class="rs-row2"', self.html)
+
+    def test_표가_한_번만_열리고_닫힌다(self):
+        self.assertEqual(self.html.count('<table class="reg-table">'), 1)
+        self.assertEqual(self.html.count('</table>'), 1)
+        self.assertEqual(self.html.count('<tbody>'), 1)
+        self.assertEqual(self.html.count('</tbody>'), 1)
+
+    def test_페이지네이션이_표_밖에_있다(self):
+        """
+        <tbody> 안의 <div> 는 브라우저가 표 앞으로 끌어낸다. 예전 마크업에서는
+        수거검사 페이지네이션이 실제로 목록 위에 떠 있었다.
+        """
+        body = self.html[self.html.index('<tbody>'):self.html.index('</tbody>')]
+        self.assertNotIn('class="rs-pagination', body)
+        self.assertNotIn('<div', body.replace('<div class="rs-name-cell">', '')
+                                     .replace('<div class="reg-sep-line">', '')
+                                     .replace('<div class="rs-empty">', ''))
+
+    def test_세_탭이_한_표를_쓴다(self):
+        """
+        탭마다 목록을 따로 그리면 정렬·페이지네이션·선택 상태를 세 벌 맞춰야
+        한다. 지금 탭에 없는 줄은 CSS 가 감춘다.
+        """
+        self.assertIn('reg-thead--news', self.html)
+        self.assertIn('reg-thead--insp', self.html)
+        self.assertIn('#regSidebar[data-view="insp"] .rs-item:not(.rs-item--insp)', self.css)
+
+    def test_오른쪽은_읽는_자리다(self):
+        """상세 검색 폼이 상세 패널을 밀어내던 것을 툴바 서랍으로 옮겼다."""
+        self.assertIn('class="rd-panel-header"', self.html)
+        self.assertNotIn('rd-cond-box', self.html)
+        self.assertNotIn('id="condForm"', self.html)
+
+    def test_폼이_하나다(self):
+        """
+        예전에는 검색 폼과 조건 폼이 따로라 같은 값(검색어·기간·정렬)을 두 벌
+        hidden 으로 들고 다녔고, 한쪽만 고치면 조건이 조용히 사라졌다.
+        """
+        self.assertEqual(self.html.count('<form method="get"'), 1)
+        self.assertIn('id="filterForm"', self.html)
+
+    def test_상세_조건은_접어_둔다(self):
+        self.assertIn('id="regCondDrawer"', self.html)
+        self.assertIn('id="regCondToggle"', self.html)
+        # 조건이 없으면 서랍은 닫혀 있다
+        drawer = self.html[self.html.index('id="regCondDrawer"'):][:60]
+        self.assertIn('hidden', drawer)
+
+    # ── 색·규격을 공용 토큰에서 가져온다 ─────────────────────────────────
+    def test_자체_팔레트를_두지_않는다(self):
+        """
+        같은 "빨강" 이 제품 관리에서는 #c5221f, 여기서는 #b31412 였다.
+        :root 블록은 이제 variables.css 의 --ez-* 만 가리킨다.
+        """
+        head = self.css.index(':root {')
+        block = self.css[head:self.css.index('}', head)]
+        # 뜻이 있는 색(파랑·빨강·주황·초록·회색 계열)은 전부 공용 토큰이어야 한다.
+        # 두 바닥색(--c-bg-surface / --c-bg-detail)은 예외다 — 원료 관리 패널의
+        # 값을 그대로 맞춘 것이라, 공용 토큰이 아니라 그 화면이 기준이다.
+        exempt = ('--c-bg-surface', '--c-bg-detail')
+        checked = 0
+        for line in block.split('\n'):
+            if '--c-' not in line or ':' not in line or any(e in line for e in exempt):
+                continue
+            value = line.split(':', 1)[1].split(';')[0]
+            if '#' in value:
+                self.fail(f'토큰이 색을 직접 들고 있다: {line.strip()}')
+            if 'var(--ez-' in value:
+                checked += 1
+        self.assertGreater(checked, 15, ':root 에서 공용 토큰을 거의 안 쓰고 있다')
+
+    def test_수거검사_줄도_같은_표에_있다(self):
+        r = self.client.get('/regulatory/?tab=insp')
+        html = r.content.decode('utf-8')
+        self.assertIn('<tr class="rs-item rs-item--insp', html)
+        self.assertIn('rs-item--insp-unread', html)
+
+    def test_상세가_카드로_쌓인다(self):
+        """
+        예전에는 패널 전체가 흰 종이 한 장이고 구역을 실선으로만 갈랐다.
+        어디까지가 한 덩어리인지 눈으로 잡히지 않았다.
+        """
+        match = NewsProductMatch.objects.first()
+        html = self.client.get(f'/regulatory/?id={match.news_id}').content.decode('utf-8')
+        self.assertIn('class="rd-wrap"', html)
+        self.assertIn('class="rd-sec-body"', html)
+        # 카드 공통 규칙이 헤더·구역·접기를 한꺼번에 잡는다
+        self.assertIn('.rd-hdr, .rd-sec, .rd-ai-details', self.css)
+
+    def test_국기_이모지를_쓰지_않는다(self):
+        """이모지는 OS마다 모양·너비가 달라 배지 높이가 들쭉날쭉했다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        panel = (Path(dj.BASE_DIR) / 'templates/regulatory/_news_detail_panel.html'
+                 ).read_text(encoding='utf-8')
+        self.assertNotIn('🇰🇷', panel)
+        self.assertNotIn('🇰🇷', self.item)
+
+    def test_조치_칸을_통째로_다시_쓴다(self):
+        """
+        미조치 상태에는 배지가 없다(칸이 '—' 다). 예전 스크립트는 배지 요소를
+        찾아 갈아 끼웠기 때문에, 첫 조치가 목록에 반영되지 않았다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        panel = (Path(dj.BASE_DIR) / 'templates/regulatory/_news_detail_panel.html'
+                 ).read_text(encoding='utf-8')
+        self.assertIn('rs-status-cell', self.item)
+        for source in (self.tpl, panel):
+            self.assertIn(".querySelector('.rs-status-cell')", source)
+            self.assertNotIn('.badge-status-no', source)

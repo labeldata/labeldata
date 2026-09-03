@@ -9,14 +9,14 @@
   <div class="rd-hdr">
     {# 배지 + 날짜 행 #}
     <div class="rd-hdr-top">
-      {% if news.api_source == 'I2620' or news.api_source == 'I2640' %}<span class="rh-badge rh-src-dom">🇰🇷 검사부적합</span>
-      {% elif news.api_source == 'I0490' %}<span class="rh-badge rh-src-dom">🇰🇷 회수</span>
+      {% if news.api_source == 'I2620' or news.api_source == 'I2640' %}<span class="rh-badge rh-src-dom"><i class="bi bi-geo-alt-fill me-1"></i>검사부적합</span>
+      {% elif news.api_source == 'I0490' %}<span class="rh-badge rh-src-dom"><i class="bi bi-geo-alt-fill me-1"></i>회수</span>
       {% elif news.api_source == 'import' %}<span class="rh-badge rh-src-imp"><i class="bi bi-globe2 me-1"></i>수입회수</span>
       {% elif news.api_source == 'imp_insp' %}<span class="rh-badge rh-src-imp"><i class="bi bi-globe2 me-1"></i>수입부적합</span>
-      {% elif news.api_source == 'I0470' or news.api_source == 'I0480' %}<span class="rh-badge rh-src-dom">🇰🇷 행정처분</span>
+      {% elif news.api_source == 'I0470' or news.api_source == 'I0480' %}<span class="rh-badge rh-src-dom"><i class="bi bi-geo-alt-fill me-1"></i>행정처분</span>
       {% elif news.api_source == 'I0482' %}<span class="rh-badge rh-src-imp"><i class="bi bi-globe2 me-1"></i>행정처분</span>
       {% elif news.api_source == 'saol_admin' %}<span class="rh-badge rh-src-saol"><i class="bi bi-bank me-1"></i>지자체처분</span>
-      {% else %}<span class="rh-badge rh-src-dom">🇰🇷 국내식품</span>
+      {% else %}<span class="rh-badge rh-src-dom"><i class="bi bi-geo-alt-fill me-1"></i>국내식품</span>
       {% endif %}
       {% if vtype == 'pesticide' %}<span class="rh-badge rh-vtype"><i class="bi bi-flower2 me-1"></i>잔류농약</span>
       {% elif vtype == 'microbe' %}<span class="rh-badge rh-vtype"><i class="bi bi-virus me-1"></i>미생물</span>
@@ -210,8 +210,9 @@
     </div>
   </details>
   {% else %}
-  <div style="padding:9px 18px;font-size:12px;color:#9aa0a6;background:#fafafa;border-bottom:1px solid #e8eaed;">
-    <i class="bi bi-hourglass-split"></i> AI 분석 대기 중 — 다음 수집 스케줄에서 자동 분석됩니다.
+  <div class="rd-nomatch">
+    <i class="bi bi-hourglass-split" style="font-size:19px;color:#f9a825;flex-shrink:0;"></i>
+    <div><strong>AI 분석 대기 중</strong><br>다음 수집 스케줄에서 자동으로 분석합니다.</div>
   </div>
   {% endif %}
 
@@ -255,6 +256,7 @@
       <i class="bi bi-exclamation-triangle-fill text-danger"></i>
       영향받는 내 제품 <span class="rd-sec-cnt">{{ matches|length }}건</span>
     </div>
+    <div class="rd-sec-body">
     {% for m in matches %}
     <div class="rd-item" id="match-{{ m.id }}">
       <div class="rd-item-head">
@@ -300,17 +302,19 @@
       </div>
     </div>
     {% endfor %}
+    </div>
   </div>
   {% endif %}
 
   {# ══ 원료 보관함 단독 매칭 ══ #}
   {% if ing_matches %}
   <div class="rd-sec">
-    <div class="rd-sec-hdr" style="color:#f9a825;">
+    <div class="rd-sec-hdr">
       <i class="bi bi-box-seam" style="color:#f9a825;"></i>
       원료 보관함 연관 원료 <span class="rd-sec-cnt">{{ ing_matches|length }}건</span>
-      <span style="font-size:10px;font-weight:400;color:#9aa0a6;margin-left:2px;">BOM 미연결</span>
+      <span style="font-size:11px;font-weight:400;color:#9aa0a6;margin-left:2px;">BOM 미연결</span>
     </div>
+    <div class="rd-sec-body">
     {% for im in ing_matches %}
     <div class="rd-item" id="ing-match-{{ im.id }}" style="border-color:#ffd54f;">
       <div class="rd-item-head">
@@ -355,16 +359,18 @@
       </div>
     </div>
     {% endfor %}
+    </div>
   </div>
   {% endif %}
 
   {# ══ 키워드 알림 매칭 섹션 ══ #}
   {% if kw_logs %}
   <div class="rd-sec rd-sec--kw">
-    <div class="rd-sec-hdr" style="color:#7b1fa2;">
+    <div class="rd-sec-hdr">
       <i class="bi bi-bell-fill" style="color:#9c27b0;"></i>
       알림 키워드 매칭 <span class="rd-sec-cnt">{{ kw_logs|length }}건</span>
     </div>
+    <div class="rd-sec-body">
     {% for log in kw_logs %}
     <div class="rd-kw-match-item">
       {% if log.rule_triggered %}
@@ -386,6 +392,7 @@
       <span class="rd-kw-when">{{ log.created_at|date:"m/d H:i" }}</span>
     </div>
     {% endfor %}
+    </div>
   </div>
   {% endif %}
 
@@ -497,15 +504,20 @@ window.saveActionMemo=saveActionMemo;
  * 조치 결과를 확인하려고 페이지를 다시 불러올 필요가 없게 한다.
  */
 function _syncListBadge(actionType){
+  // 왼쪽 목록에서 지금 열려 있는 줄의 '조치' 칸을 그 자리에서 고친다.
+  // 예전에는 배지 요소를 찾아 갈아 끼웠는데, 미조치 상태에는 배지가 없어서
+  // (칸이 '—' 다) 첫 조치가 목록에 반영되지 않았다. 칸을 통째로 다시 쓴다.
   var item=document.querySelector('.rs-item.active');
   if(!item) return;
-  var badge=item.querySelector('.badge-status-no,.badge-status-mon,.badge-status-res');
+  var cell=item.querySelector('.rs-status-cell');
   if(actionType==='resolved'){
     item.classList.add('rs-item--resolved');
+    item.classList.remove('rs-item--unread');
+    var dot=item.querySelector('.rs-unread-dot'); if(dot) dot.remove();
     var q=item.querySelector('.rs-quick-resolve'); if(q) q.remove();
-    if(badge){badge.className='badge-status-res';badge.innerHTML='<i class="bi bi-check2-circle me-1"></i>조치완료';}
+    if(cell) cell.innerHTML='<span class="badge-status-res">조치완료</span>';
   }else if(actionType==='monitoring'){
-    if(badge){badge.className='badge-status-mon';badge.textContent='진행 중';}
+    if(cell) cell.innerHTML='<span class="badge-status-mon">진행 중</span>';
   }
 }
 window._syncListBadge=_syncListBadge;
