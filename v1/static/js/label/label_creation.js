@@ -684,7 +684,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (extractedAllergens.size > 0) {
         selectedIngredientAllergensLabel.clear();
         extractedAllergens.forEach(allergen => {
-          selectedIngredientAllergensLabel.set(allergen, 'table');
+          setAllergenLabel(allergen, 'table');
         });
         
         updateAllergenTagsLabel();
@@ -3756,7 +3756,7 @@ function detectAllergensLabel() {
     }
     
     // 기존 선택된 알레르기와 병합
-    detectedAllergens.forEach(a => selectedIngredientAllergensLabel.set(a, 'auto'));
+    detectedAllergens.forEach(a => setAllergenLabel(a, 'auto'));
     
     // UI 업데이트
     updateAllergenTagsLabel();
@@ -3784,16 +3784,34 @@ window.resetAllergensFromPopup = function(allergens) {
     selectedIngredientAllergensLabel.clear();
     (allergens || []).forEach(function(a) {
         if (a && a.trim()) {
-            selectedIngredientAllergensLabel.set(a.trim(), 'table');
+            setAllergenLabel(a.trim(), 'table');
         }
     });
     updateAllergenTagsLabel();
     updateCrossContaminationUILabel();
 };
 
+/*
+ * 태그 저장소에 하나 넣는다. **같은 물질의 다른 표기를 합친다.**
+ *
+ * 이 Map 은 표기 문자열을 그대로 키로 쓴다. 저장값에서 온 "알류(달걀)" 과
+ * 원재료명 자동 감지가 찾아낸 "알류" 가 서로 다른 키라, 한 줄에 같은 물질이
+ * 두 번 적혔다 — "알류(달걀), 우유, 대두, 밀, 알류".
+ *
+ * 판정은 allergen_names.js 가 한다(서버와 같은 규칙). 그 파일이 없으면 예전처럼
+ * 그냥 넣는다 — 태그가 안 붙는 것보다는 낫다.
+ */
+function setAllergenLabel(allergen, source) {
+    if (typeof window.mergeAllergen === 'function') {
+        window.mergeAllergen(selectedIngredientAllergensLabel, allergen, source);
+    } else {
+        selectedIngredientAllergensLabel.set(allergen, source);
+    }
+}
+
 // 알레르기 태그 추가 (출처: 'manual' - 사용자 선택)
 function addAllergenTagLabel(allergen) {
-    selectedIngredientAllergensLabel.set(allergen, 'manual');
+    setAllergenLabel(allergen, 'manual');
     updateAllergenTagsLabel();
     updateCrossContaminationUILabel();
     
@@ -4356,7 +4374,7 @@ function loadSavedAllergensLabel() {
     if (ingredientInput && ingredientInput.value) {
         const allergens = ingredientInput.value.split(',').filter(a => a.trim() !== '');
         // 저장된 데이터는 출처가 불명확하므로 'manual'로 처리
-        allergens.forEach(a => selectedIngredientAllergensLabel.set(a.trim(), 'manual'));
+        allergens.forEach(a => setAllergenLabel(a.trim(), 'manual'));
         updateAllergenTagsLabel();
     }
     

@@ -6094,3 +6094,215 @@ class OcrNutritionBasisTests(TestCase):
         block = source[head:head + 1400]
         self.assertIn('basis_is_total(basis_text)', block)
         self.assertIn("label.units_per_package = '1'", block)
+
+
+class AllergenNameTests(TestCase):
+    """
+    같은 물질의 다른 표기를 하나로 본다.
+
+        알류  /  알류(달걀)  /  달걀  /  알류 함유  /  난류
+
+    표시기준이 정한 명칭은 "알류" 이고 괄호는 부연이다. 그런데 이 값을 다루는
+    자리가 다섯이었고(사진 판독·원재료명 감지·칩·저장값 로드·규정 검증), 전부
+    문자열을 그대로 키로 썼다. 운영에서 이렇게 나왔다.
+
+        알류(달걀), 우유, 대두, 밀, 알류      <- 같은 것이 둘
+    """
+
+    def test_괄호는_부연이다(self):
+        from v1.label.services.allergen_names import canonical
+
+        self.assertEqual(canonical('알류(달걀)'), '알류')
+        self.assertEqual(canonical('우유(유당)'), '우유')
+        self.assertEqual(canonical('조개류(굴)'), '조개류')
+
+    def test_키워드도_그_물질이다(self):
+        from v1.label.services.allergen_names import canonical
+
+        for token, name in (('달걀', '알류'), ('계란', '알류'), ('난류', '알류'),
+                            ('두부', '대두'), ('치즈', '우유')):
+            self.assertEqual(canonical(token), name, token)
+
+    def test_꼬리말을_뗀다(self):
+        from v1.label.services.allergen_names import canonical
+
+        self.assertEqual(canonical('알류 함유'), '알류')
+        self.assertEqual(canonical('대두 포함'), '대두')
+
+    def test_모르면_비운다(self):
+        """
+        억지로 가장 닮은 것을 고르면, 목록 밖의 문구를 적어 둔 라벨의 값을
+        엉뚱한 물질로 바꿔 버린다.
+        """
+        from v1.label.services.allergen_names import canonical
+
+        self.assertEqual(canonical('홍삼'), '')
+        self.assertEqual(canonical(''), '')
+
+    def test_한_글자_차이는_맞춰_준다(self):
+        from v1.label.services.allergen_names import canonical
+
+        self.assertEqual(canonical('대두류'), '대두')
+
+    def test_같은_물질을_합친다(self):
+        """운영에서 나온 그 줄."""
+        from v1.label.services.allergen_names import normalize
+
+        out, changes = normalize('알류(달걀),우유,대두,밀,알류')
+        self.assertEqual(out, '알류(달걀), 우유, 대두, 밀')
+        self.assertEqual([c['name'] for c in changes], ['알류'])
+
+    def test_자세한_표기를_남긴다(self):
+        """"알류(달걀)" 은 무엇을 넣었는지까지 말한다."""
+        from v1.label.services.allergen_names import normalize
+
+        self.assertEqual(normalize('알류, 알류(달걀)')[0], '알류(달걀)')
+        self.assertEqual(normalize('알류(달걀), 알류')[0], '알류(달걀)')
+
+    def test_명칭이_아닌_표기는_명칭으로_바꾼다(self):
+        """
+        규정이 요구하는 것은 명칭이고, 뒤에서 이 값을 키로 쓰는 곳이 그 명칭을
+        찾는다. "달걀" 만 적혀 있으면 어느 목록에서도 정확히 안 찾힌다.
+        """
+        from v1.label.services.allergen_names import normalize
+
+        self.assertEqual(normalize('달걀, 우유')[0], '알류, 우유')
+        self.assertEqual(normalize('우유, 대두류, 밀 함유')[0], '우유, 대두, 밀')
+
+    def test_목록_밖의_문구는_지우지_않는다(self):
+        """그런 것을 적어 두는 라벨이 있고, 지우면 정보가 사라진다."""
+        from v1.label.services.allergen_names import normalize
+
+        self.assertEqual(normalize('알류(달걀), 홍삼')[0], '알류(달걀), 홍삼')
+
+    def test_이미_맞으면_그대로_둔다(self):
+        from v1.label.services.allergen_names import normalize
+
+        for text in ('알류(달걀), 우유, 대두, 밀', '우유, 대두, 밀'):
+            self.assertEqual(normalize(text)[0], text, text)
+
+    def test_판독도_같은_판정을_쓴다(self):
+        """규칙을 여러 벌로 만들면 어느 날 한쪽만 고쳐진다."""
+        from v1.label.services.ocr_snap import snap_allergens
+
+        snapped, changes = snap_allergens('알류(달걀),우유,대두,밀,알류')
+        self.assertEqual(snapped, '알류(달걀), 우유, 대두, 밀')
+        self.assertTrue(changes)
+
+    def test_화면도_같은_판정을_쓴다(self):
+        """
+        화면(JS)이 자기 규칙을 들고 있으면 서버가 정리한 값을 다시 흩뜨린다.
+        같은 이름의 함수가 있는지, 태그를 넣는 자리가 그걸 부르는지 본다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        shared = (base / 'static/js/label/allergen_names.js').read_text(encoding='utf-8')
+        for fn in ('function canonicalAllergen', 'function displayAllergen',
+                   'function mergeAllergen'):
+            self.assertIn(fn, shared)
+
+        creation = (base / 'static/js/label/label_creation.js').read_text(encoding='utf-8')
+        # 태그를 넣는 자리가 전부 한 통로를 지난다
+        self.assertEqual(creation.count('selectedIngredientAllergensLabel.set('), 1)
+        self.assertIn('window.mergeAllergen(selectedIngredientAllergensLabel', creation)
+
+        tab = (base / 'templates/products/_tab_basic_info.html').read_text(encoding='utf-8')
+        self.assertEqual(tab.count('_productAllergens.set('), 1)
+        self.assertIn('window.mergeAllergen(_productAllergens', tab)
+
+    def test_화면이_판정_파일을_싣는다(self):
+        """부르는 함수가 없으면 예전처럼 그냥 넣는다 — 조용히 되돌아간다."""
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        for path in ('templates/label/label_creation.html',
+                     'templates/products/_tab_basic_info.html'):
+            self.assertIn('js/label/allergen_names.js',
+                          (base / path).read_text(encoding='utf-8'), path)
+
+    def test_서버와_화면의_물질_목록이_같다(self):
+        """
+        키워드 표가 세 벌이다(파이썬 상수·constants.js·기본정보 탭 인라인).
+        판정이 그 표를 쓰므로, 이름이 어긋나면 화면과 서버가 다른 답을 낸다.
+        """
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        from v1.label.services.allergen_names import CANONICAL_NAMES
+
+        base = Path(dj.BASE_DIR)
+
+        def names_in(text, marker):
+            block = text[text.index(marker):]
+            block = block[:block.index('};')]
+            return set(re.findall(r"'([^']+)':\s*\[", block))
+
+        js = names_in((base / 'static/js/label/constants.js').read_text(encoding='utf-8'),
+                      'const ALLERGEN_KEYWORDS = {')
+        tab = names_in((base / 'templates/products/_tab_basic_info.html').read_text(encoding='utf-8'),
+                       'var PRODUCT_ALLERGEN_KEYWORDS = {')
+        self.assertEqual(js, set(CANONICAL_NAMES), 'constants.js 의 물질 목록이 서버와 다르다')
+        self.assertEqual(tab, set(CANONICAL_NAMES), '기본정보 탭의 물질 목록이 서버와 다르다')
+
+
+class AllergenValidationTests(TestCase):
+    """규정 검증도 같은 판정을 쓴다."""
+
+    def _label(self, allergens, rawmtrl=''):
+        return MyLabel(user_id=User.objects.create_user(
+            username=f'al{User.objects.count()}', password='x'),
+            my_label_name='제품', prdlst_nm='제품',
+            allergens=allergens, rawmtrl_nm_display=rawmtrl)
+
+    def test_같은_물질이_두_번이면_그렇게_말한다(self):
+        from v1.label.services.validation_service import check_allergen_vocabulary
+
+        issues = check_allergen_vocabulary(self._label('알류(달걀),우유,대두,밀,알류'))
+        self.assertEqual(len(issues), 1)
+        self.assertIn('두 번 적혀', issues[0]['message'])
+        self.assertIn('알류', issues[0]['message'])
+        self.assertIn('알류(달걀), 우유, 대두, 밀', issues[0]['suggestion'])
+
+    def test_정리된_값에는_조용하다(self):
+        from v1.label.services.validation_service import check_allergen_vocabulary
+
+        self.assertEqual(
+            check_allergen_vocabulary(self._label('알류(달걀), 우유, 대두, 밀')), [])
+
+    def test_띄어쓰기만_다른_것은_지적하지_않는다(self):
+        """제안이 원문과 똑같아 보이는 쪽지를 계속 받게 된다."""
+        from v1.label.services.validation_service import check_allergen_vocabulary
+
+        self.assertEqual(
+            check_allergen_vocabulary(self._label('알류(달걀),우유,대두,밀')), [])
+
+    def test_괄호_표기를_미선언으로_보지_않는다(self):
+        """
+        "알류(달걀)" 이라고 적힌 라벨을 "알류 미선언" 으로 지적하면, 규정대로
+        적을수록 경고가 나온다.
+        """
+        from v1.label.services.validation_service import check_allergens
+
+        label = self._label('알류(달걀), 우유', rawmtrl='정제수, 달걀, 우유')
+        self.assertEqual(check_allergens(label), [])
+
+    def test_키워드로만_적혀_있어도_미선언이_아니다(self):
+        from v1.label.services.validation_service import check_allergens
+
+        label = self._label('달걀, 우유', rawmtrl='정제수, 달걀, 우유')
+        self.assertEqual(check_allergens(label), [])
+
+    def test_정말_빠졌으면_지적한다(self):
+        from v1.label.services.validation_service import check_allergens
+
+        label = self._label('우유', rawmtrl='정제수, 달걀, 우유')
+        issues = check_allergens(label)
+        self.assertTrue(issues)
+        self.assertIn('알류', issues[0]['message'])

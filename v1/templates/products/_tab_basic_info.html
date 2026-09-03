@@ -1,4 +1,5 @@
 {% load quick_phrases %}
+{% load static %}
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet">
 <style>
@@ -799,6 +800,12 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
 </div>
 
 <!-- 공통 JS: 그룹 체크박스드롭다운 연동품목보고번호 검증맞춤항목 -->
+{% comment %}
+  알레르기 표기 판정. 아래 인라인 스크립트가 이 함수를 부르므로 **먼저** 실어야
+  한다 — 이 탭은 product_detail.html 안에 include 되어 페이지 아래쪽 script
+  묶음보다 일찍 돈다. 저장값을 읽어 태그를 만드는 것이 그 자리다.
+{% endcomment %}
+<script src="{% static 'js/label/allergen_names.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script>
 /* ── 식품유형(표시용) 자동 생성 ─────────────────────────────── */
 function updatePrdlstDcnm(force) {
@@ -957,14 +964,28 @@ function filterFoodTypes(selectedGroup) {
         '아황산류': ['아황산나트륨','메타중아황산칼륨','무수아황산','산성아황산나트륨','이산화황','sulfite','sulfur dioxide']
     };
 
+    // 알레르기 표기 판정(allergen_names.js)이 이 표를 쓴다. 사본을 하나 더
+    // 만들지 않는다 — 표가 두 벌이면 어느 날 한쪽만 고쳐진다.
+    window.PRODUCT_ALLERGEN_KEYWORDS = PRODUCT_ALLERGEN_KEYWORDS;
+
     // 태그 저장소 (allergen -> 'auto' | 'manual')
     var _productAllergens = new Map();
+
+    // 같은 물질의 다른 표기를 합쳐서 넣는다. 그냥 set 하면
+    // "알류(달걀)" 과 "알류" 가 서로 다른 키가 되어 한 줄에 두 번 적힌다.
+    function _setAllergen(name, source) {
+        if (typeof window.mergeAllergen === 'function') {
+            window.mergeAllergen(_productAllergens, name, source);
+        } else {
+            _productAllergens.set(name, source);
+        }
+    }
 
     // 저장된 allergens 값으로 초기화
     var _initAllergensEl = document.getElementById('field-allergens');
     if (_initAllergensEl && _initAllergensEl.value) {
         _initAllergensEl.value.split(',').map(function(s){ return s.trim(); }).filter(Boolean).forEach(function(a) {
-            _productAllergens.set(a, 'manual');
+            _setAllergen(a, 'manual');
         });
     }
 
@@ -1005,7 +1026,7 @@ function filterFoodTypes(selectedGroup) {
                 }
                 if (matched) { found = true; break; }
             }
-            if (found) _productAllergens.set(allergen, 'auto');
+            if (found) _setAllergen(allergen, 'auto');
         }
         renderAllergenTagsProduct();
     };
@@ -1029,7 +1050,7 @@ function filterFoodTypes(selectedGroup) {
             .split(/[,·]/)
             .map(function (s) { return s.trim(); })
             .filter(Boolean)
-            .forEach(function (a) { _productAllergens.set(a, 'manual'); });
+            .forEach(function (a) { _setAllergen(a, 'manual'); });
         renderAllergenTagsProduct();
     };
 
@@ -1216,7 +1237,7 @@ function filterFoodTypes(selectedGroup) {
             if (_productAllergens.has(allergen)) {
                 _productAllergens.delete(allergen);
             } else {
-                _productAllergens.set(allergen, 'manual');
+                _setAllergen(allergen, 'manual');
             }
             renderAllergenTagsProduct();
             // 원재료 변경 시 기존 혼입 문구 초기화

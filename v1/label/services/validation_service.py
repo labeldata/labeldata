@@ -821,12 +821,23 @@ def check_allergens(label) -> list[dict]:
     # 적혀 있는가** 뿐이다. 그러니 그것만 본다.
     declared_text = re.sub(r'\s+', '', label.allergens or '')
 
+    # 선언 문구를 **표시 명칭으로 풀어** 둔다. 글자만 보면 "달걀" 이라고만 적힌
+    # 라벨을 "알류 미선언" 으로 지적하게 된다 — 같은 물질인데.
+    try:
+        from v1.label.services.allergen_names import canonical
+        declared_names = {canonical(t) for t in re.split(r'[,、，/·]', label.allergens or '')}
+        declared_names.discard('')
+    except Exception:
+        logger.exception('알레르기 선언 명칭 판정 실패 — 글자 대조만 한다')
+        declared_names = set()
+
     detected = set()
     for allergen, keywords in ALLERGEN_KEYWORDS.items():
         if any(kw.lower() in ingredients_text.lower() for kw in keywords):
             detected.add(allergen)
 
-    missing = {a for a in detected if a not in declared_text}
+    missing = {a for a in detected
+               if a not in declared_text and a not in declared_names}
     issues = []
     if missing:
         issues.append(_issue(
@@ -1120,20 +1131,45 @@ def check_allergen_vocabulary(label) -> list[dict]:
     if not declared:
         return []
     try:
-        from v1.label.services.ocr_snap import snap_allergens
-        snapped, changes = snap_allergens(declared)
+        from v1.label.services.allergen_names import normalize
+        snapped, changes = normalize(declared)
     except Exception:
         logger.exception('알레르기 표기 대조 실패')
         return []
 
-    if not snapped or snapped == declared:
+    # 띄어쓰기만 다른 것은 지적하지 않는다. 예전에는 그 차이로도 경고가 떠서,
+    # 제안이 원문과 똑같아 보이는 쪽지를 사용자가 계속 받았다.
+    if not snapped or _squeeze(snapped) == _squeeze(declared):
         return []
+
+    # 같은 물질이 두 번 적힌 것은 표기 문제가 아니라 중복이다. 그렇게 말해 준다.
+    dupes = [c for c in changes if canonical_of(c) and c['kept'] != c['dropped']
+             and _squeeze(c['kept']).startswith(_squeeze(c['name']))
+             and _squeeze(c['dropped']).startswith(_squeeze(c['name']))]
+    if dupes:
+        names = ', '.join(sorted({c['name'] for c in dupes}))
+        return [_issue(
+            'allergen_vocabulary',
+            f'같은 알레르기 물질이 두 번 적혀 있습니다: {names} '
+            f'(적힌 값: "{declared}")',
+            f'"{snapped}" 로 적으면 됩니다. 괄호는 무엇을 넣었는지 밝히는 부연이라 '
+            f'"알류" 와 "알류(달걀)" 은 같은 물질입니다.',
+        )]
     return [_issue(
         'allergen_vocabulary',
         f'알레르기 표시가 표시기준 명칭과 다릅니다: "{declared}"',
         f'"{snapped}" 로 적으면 원재료명 대조가 정확해집니다. '
         f'("함유" 같은 꼬리말은 빼고 물질 이름만 적습니다)',
     )]
+
+
+def canonical_of(change):
+    """merge 가 남긴 변경 기록에서 표시 명칭. 없으면 빈 문자열."""
+    return (change or {}).get('name') or ''
+
+
+def _squeeze(text):
+    return ''.join(str(text or '').split()).lower()
 
 
 _CHECKS = [

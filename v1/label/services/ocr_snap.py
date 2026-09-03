@@ -143,37 +143,19 @@ def snap_allergens(value):
     """
     "우유, 대두류, 밀 함유" -> ("우유, 대두, 밀", [바꾼 것])
 
-    쉼표로 갈라 하나씩 맞춘다. 목록에 없는 것은 지우지 않고 그대로 둔다 —
-    표시기준 22종 밖의 문구를 적어 두는 라벨이 있고, 지우면 정보가 사라진다.
+    판정은 allergen_names 가 한다. 예전에는 여기서 쉼표로 갈라 문자열을 그대로
+    비교했는데, 그러면 **같은 물질의 다른 표기를 못 알아본다.** 운영에서
+    "알류(달걀)" 과 "알류" 가 둘 다 남아 한 줄에 같은 물질이 두 번 적혔다.
+
+    목록에 없는 것은 지우지 않고 그대로 둔다 — 표시기준 목록 밖의 문구를
+    적어 두는 라벨이 있고, 지우면 정보가 사라진다.
     """
-    import re
+    from v1.label.services.allergen_names import normalize
 
-    text = str(value or '').strip()
-    if not text:
-        return '', []
-
-    vocabulary = allergen_vocabulary()
-    changes = []
-    out = []
-    for token in re.split(r'[,、，/]', text):
-        token = re.sub(r'\s*함유\s*$', '', token).strip()
-        if not token:
-            continue
-        snapped, score, verdict = snap_one(token, vocabulary)
-        if verdict == 'snapped':
-            changes.append({'from': token, 'to': snapped, 'score': score})
-            out.append(snapped)
-        else:
-            out.append(token)
-
-    # 같은 물질이 두 번 들어오는 일이 있다("대두류, 대두"). 스냅하면 겹치므로
-    # 순서를 지키며 중복만 지운다.
-    seen, unique = set(), []
-    for name in out:
-        if name not in seen:
-            seen.add(name)
-            unique.append(name)
-    return ', '.join(unique), changes
+    snapped, merged = normalize(value)
+    changes = [{'from': c['dropped'], 'to': c['kept'], 'score': 100}
+               for c in merged]
+    return snapped, changes
 
 
 def snap(ocr_data):
