@@ -14,6 +14,16 @@
  * ·원재료명) 이름을 붙여 보낸다. 이름이 붙으면 모델에게 "이 조각에서는 이
  * 항목들을 찾아라" 라고 말할 수 있다.
  *
+ * **화면에 꼭 맞춘 사진으로는 경계를 짚을 수 없었다.** 4000px 짜리 사진이
+ * 900px 로 줄어 보이므로 일괄표시면의 위아래 끝이 몇 픽셀 안에 뭉친다.
+ * 그래서 확대·축소를 둔다. 확대는 **보는 배율만** 바꾼다 - 자를 때는 언제나
+ * 원본에서 잘라내므로 확대해서 골랐다고 화질이 달라지지 않는다.
+ *
+ * **제외할 영역도 고른다.** 일괄표시면 옆에 작업지시서 표나 다른 제품의
+ * 라벨이 같이 찍혀 있으면, 사각형 하나로는 그것을 피해 갈 수가 없다. 읽을
+ * 영역 안에서 빼고 싶은 자리를 덮어 두면 그 자리는 흰색으로 지워 보낸다 -
+ * 모델이 아예 못 본다.
+ *
  * **자르기는 브라우저에서 한다.** 원본 파일에서 직접 잘라내므로 화면에 줄여
  * 보여 준 것과 무관하게 원본 해상도가 그대로 남는다. 서버로 올리는 양도 준다.
  *
@@ -27,6 +37,21 @@
   // 이보다 작게 고르면 잘못 끌었을 가능성이 높다 (원본 기준 픽셀)
   var MIN_SIDE = 80;
 
+  // 제외 영역은 이보다 작아도 받는다. 바코드 한 줄, 도장 하나처럼 작은 것을
+  // 가리는 일이 실제로 많다 - 읽을 영역과 같은 잣대로 막으면 쓸 수가 없다.
+  var MIN_MASK_SIDE = 16;
+
+  // 확대 배율의 위아래. 1 이 "화면에 꼭 맞춤" 이다. 그보다 작게 줄이는 것은
+  // 이미 다 보이는 사진을 더 작게 만드는 일이라 쓸 데가 없다.
+  var ZOOM_MIN = 1;
+  var ZOOM_MAX = 8;
+  var ZOOM_STEP = 1.25;
+
+  // 캔버스 한 장의 픽셀 상한. 4000×3000 사진을 8배로 늘리면 3천만 픽셀이 넘고
+  // 브라우저가 캔버스를 통째로 버린다(그리면 빈 화면이 된다). 원본 픽셀보다
+  // 크게 늘려 봐야 흐려질 뿐이라, 여기서 배율의 위쪽을 사진 크기에 맞춰 깎는다.
+  var MAX_CANVAS_PIXELS = 16e6;
+
   // 표시면 종류와, 그 면에서 보통 읽히는 항목.
   //
   // hint 는 고르는 사람에게 "여기서 무엇을 찾는지" 를 알려 준다. 같은 이름이
@@ -36,9 +61,10 @@
     { key: 'main',      label: '주표시면',
       hint: '제품명, 내용량, 내용량(열량), 특정성분 함량' },
     { key: 'info',      label: '일괄표시면',
-      hint: '식품유형, 품목보고번호, 원재료명, 제조원·수입원, 소비기한, 보관방법, 포장재질' },
+      hint: '식품유형, 품목보고번호, 원재료명, 알레르기, 원산지, 제조원·유통전문판매원, '
+          + '소비기한, 보관방법, 포장재질, 주의사항, 기타표시사항' },
     { key: 'rawmtrl',   label: '원재료명',
-      hint: '원재료명 및 함량, 알레르기 표시' },
+      hint: '원재료명 및 함량, 알레르기 표시, 원산지' },
     { key: 'nutrition', label: '영양성분표',
       hint: '열량, 나트륨, 탄수화물, 당류, 지방, 트랜스지방, 포화지방, 콜레스테롤, 단백질' },
     { key: 'recycle',   label: '분리배출마크',
@@ -49,6 +75,10 @@
 
   // 고른 순서대로 돌려 쓰는 상자 색. 어느 줄이 어느 상자인지 눈으로 잇는다.
   var COLORS = ['#8ab4f8', '#81c995', '#fdd663', '#f28b82', '#c58af9', '#78d9ec'];
+
+  // 제외 영역은 색을 돌려 쓰지 않는다. 한 가지 색으로 묶어야 "읽는 것" 과
+  // "빼는 것" 이 한눈에 갈린다.
+  var MASK_COLOR = '#ea4335';
 
   function roleOf(key) {
     for (var i = 0; i < ROLES.length; i++) {
@@ -90,10 +120,24 @@
       + '          찾을지도 알려 줄 수 있습니다. 필요 없는 영역은 아예 빠집니다.'
       + '        </div>'
       + '        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">'
-      + '          <span class="text-muted" style="font-size:12px;">'
-      + '            끌어서 고르세요. 여러 번 끌면 영역이 계속 더해집니다.'
-      + '          </span>'
+      + '          <div class="btn-group btn-group-sm crop-mode" role="group">'
+      + '            <button type="button" class="btn btn-primary" data-crop="mode-read">'
+      + '              <i class="bi bi-bounding-box"></i> 읽을 영역'
+      + '            </button>'
+      + '            <button type="button" class="btn btn-outline-danger" data-crop="mode-mask">'
+      + '              <i class="bi bi-eraser"></i> 제외할 영역'
+      + '            </button>'
+      + '          </div>'
+      + '          <span class="text-muted crop-mode-hint" style="font-size:12px;"></span>'
       + '          <div class="ms-auto d-flex align-items-center gap-1">'
+      + '            <button type="button" class="btn btn-light v2-btn-icon" data-crop="zoom-out" title="축소">'
+      + '              <i class="bi bi-zoom-out"></i></button>'
+      + '            <span class="crop-zoom-level" title="보는 배율 — 잘라내는 화질과는 무관합니다">100%</span>'
+      + '            <button type="button" class="btn btn-light v2-btn-icon" data-crop="zoom-in" title="확대">'
+      + '              <i class="bi bi-zoom-in"></i></button>'
+      + '            <button type="button" class="btn btn-light v2-btn-sm" data-crop="zoom-fit" title="화면에 맞춥니다">'
+      + '              맞춤</button>'
+      + '            <span class="crop-tool-divider"></span>'
       + '            <button type="button" class="btn btn-light v2-btn-icon" data-crop="rot-left" title="왼쪽으로 회전">'
       + '              <i class="bi bi-arrow-counterclockwise"></i></button>'
       + '            <button type="button" class="btn btn-light v2-btn-icon" data-crop="rot-right" title="오른쪽으로 회전">'
@@ -156,30 +200,66 @@
         var modalEl = ensureModal();
         var canvas = modalEl.querySelector('.crop-canvas');
         var frame = modalEl.querySelector('.crop-frame');
+        var stage = modalEl.querySelector('.crop-stage');
         var picksEl = modalEl.querySelector('.crop-picks');
         var info = modalEl.querySelector('.crop-info');
+        var modeHint = modalEl.querySelector('.crop-mode-hint');
+        var zoomLabel = modalEl.querySelector('.crop-zoom-level');
         var useBtn = modalEl.querySelector('[data-crop="use"]');
         var roleTemplate = modalEl.querySelector('.crop-role-template');
         var ctx = canvas.getContext('2d');
 
         var deg = 0;            // 화면에 그릴 회전각
+        var zoom = 1;           // 보는 배율 (1 = 화면에 꼭 맞춤)
+        var fitScale = 0;       // 화면에 꼭 맞을 때의 축소율
+        var maxZoom = ZOOM_MAX; // 이 사진에서 감당되는 배율 상한
+        var mode = 'read';      // 'read' = 읽을 영역, 'mask' = 제외할 영역
         var picks = [];         // [{x,y,w,h,role}] — 캔버스 내부 픽셀
+        var masks = [];         // [{x,y,w,h}] — 제외할 자리, 같은 좌표계
         var drag = null;
         var draft = null;       // 끌고 있는 중인 상자
 
-        // 회전을 반영해 캔버스에 그린다. 이후 좌표 계산은 모두 이 캔버스 기준.
-        function render() {
+        function rotatedSize() {
           var w = loaded.img.naturalWidth, h = loaded.img.naturalHeight;
           var swapped = (deg % 180 !== 0);
-          var cw = swapped ? h : w, ch = swapped ? w : h;
+          return { w: w, h: h, cw: swapped ? h : w, ch: swapped ? w : h };
+        }
 
-          // 화면에 들어갈 크기로만 줄여 그린다 (자를 때는 원본에서 다시 자른다)
-          var stage = modalEl.querySelector('.crop-stage');
-          // 안쪽 여백(8px x 2)을 빼야 CSS 가 캔버스를 다시 줄이지 않는다
-          var maxW = Math.max((stage.clientWidth || 900) - 16, 200);
-          // 아래에 고른 영역 목록이 붙으므로 예전보다 조금 낮게 잡는다
-          var maxH = Math.round(window.innerHeight * 0.5);
-          var scale = Math.min(maxW / cw, maxH / ch, 1);
+        /*
+         * 캔버스를 다시 그린다.
+         *
+         * refit=true 면 화면에 꼭 맞는 축소율을 새로 잰다(첫 그리기·회전).
+         * 그때는 배율도 100% 로 돌린다.
+         *
+         * 확대만 바뀐 경우에는 **고른 상자를 그대로 둔다.** 상자는 캔버스 내부
+         * 픽셀로 들고 있으므로 축소율이 바뀐 만큼 같이 늘려 준다 - 확대할
+         * 때마다 다시 고르게 하면 확대가 아무 쓸모가 없다.
+         */
+        function draw(refit) {
+          var size = rotatedSize();
+          var w = size.w, h = size.h, cw = size.cw, ch = size.ch;
+
+          if (refit || !fitScale) {
+            // 폭을 재기 전에 캔버스를 접는다. 확대해 둔 상태에서 회전하면
+            // 스크롤막대가 아직 떠 있어 clientWidth 가 그만큼 좁게 나온다.
+            canvas.width = 1;
+            canvas.height = 1;
+            stage.style.maxHeight = '';
+            // 안쪽 여백(8px x 2)을 빼야 CSS 가 캔버스를 다시 줄이지 않는다
+            var maxW = Math.max((stage.clientWidth || 900) - 16, 200);
+            // 아래에 고른 영역 목록이 붙으므로 예전보다 조금 낮게 잡는다
+            var maxH = Math.round(window.innerHeight * 0.5);
+            fitScale = Math.min(maxW / cw, maxH / ch, 1);
+            // 확대해도 창이 늘어나면 안 된다. 스테이지 높이를 맞춤 상태로
+            // 묶어 두고, 넘치는 만큼은 스테이지 안에서 스크롤한다.
+            stage.style.maxHeight = (Math.round(ch * fitScale) + 16) + 'px';
+            // 이 사진에서 감당되는 배율 상한 (캔버스 픽셀 수로 깎는다)
+            var scaleCap = Math.sqrt(MAX_CANVAS_PIXELS / (cw * ch));
+            maxZoom = Math.min(ZOOM_MAX, Math.max(1, scaleCap / fitScale));
+          }
+
+          var scale = fitScale * zoom;
+          var prev = parseFloat(canvas.dataset.scale) || scale;
 
           canvas.width = Math.round(cw * scale);
           canvas.height = Math.round(ch * scale);
@@ -192,12 +272,26 @@
           ctx.restore();
 
           canvas.dataset.scale = scale;
-          // 회전하면 좌표계가 통째로 바뀐다. 고른 것을 옮겨 주는 것보다 다시
-          // 고르게 하는 편이 확실하다 - 회전은 보통 맨 처음에 한 번 한다.
-          picks = [];
-          draft = null;
+
+          if (refit) {
+            // 회전하면 좌표계가 통째로 바뀐다. 고른 것을 옮겨 주는 것보다 다시
+            // 고르게 하는 편이 확실하다 - 회전은 보통 맨 처음에 한 번 한다.
+            picks = [];
+            masks = [];
+            draft = null;
+          } else if (prev && Math.abs(scale - prev) > 1e-9) {
+            var k = scale / prev;
+            [picks, masks].forEach(function (list) {
+              list.forEach(function (sel) {
+                sel.x *= k; sel.y *= k; sel.w *= k; sel.h *= k;
+              });
+            });
+          }
           drawAll();
+          updateZoomLabel();
         }
+
+        function render() { draw(true); }
 
         function originalSize(sel) {
           var scale = parseFloat(canvas.dataset.scale) || 1;
@@ -206,7 +300,8 @@
 
         function bigEnough(sel) {
           var o = originalSize(sel);
-          return o.w >= MIN_SIDE && o.h >= MIN_SIDE;
+          var min = (mode === 'mask') ? MIN_MASK_SIDE : MIN_SIDE;
+          return o.w >= min && o.h >= min;
         }
 
         // 화면에 상자를 다시 깐다. 상자는 캔버스 표시 크기 기준으로 놓는다.
@@ -220,14 +315,22 @@
             frame.appendChild(boxEl(sel, kx, ky, COLORS[i % COLORS.length],
                                     (i + 1) + '. ' + roleOf(sel.role).label));
           });
-          if (draft) frame.appendChild(boxEl(draft, kx, ky, '#ffffff', ''));
+          masks.forEach(function (sel, i) {
+            frame.appendChild(boxEl(sel, kx, ky, MASK_COLOR,
+                                    '제외 ' + (i + 1), true));
+          });
+          if (draft) {
+            frame.appendChild(boxEl(draft, kx, ky,
+                                    mode === 'mask' ? MASK_COLOR : '#ffffff', '',
+                                    mode === 'mask'));
+          }
 
           renderPicks();
         }
 
-        function boxEl(sel, kx, ky, color, text) {
+        function boxEl(sel, kx, ky, color, text, isMask) {
           var box = document.createElement('div');
-          box.className = 'crop-box';
+          box.className = 'crop-box' + (isMask ? ' crop-box--mask' : '');
           box.style.borderColor = color;
           box.style.left = (sel.x * kx) + 'px';
           box.style.top = (sel.y * ky) + 'px';
@@ -237,6 +340,7 @@
             var tag = document.createElement('span');
             tag.className = 'crop-box-tag';
             tag.style.background = color;
+            if (isMask) tag.style.color = '#ffffff';
             tag.textContent = text;
             box.appendChild(tag);
           }
@@ -245,17 +349,11 @@
 
         function renderPicks() {
           useBtn.disabled = picks.length === 0;
-          if (!picks.length) {
-            picksEl.innerHTML = '';
-            info.className = 'crop-info text-muted mt-2';
-            info.textContent = '영역을 고르지 않으면 "전체 사용" 으로 사진 전체를 읽습니다.';
-            return;
-          }
 
-          picksEl.innerHTML = picks.map(function (sel, i) {
+          var rows = picks.map(function (sel, i) {
             var o = originalSize(sel);
             var g = grade(Math.min(o.w, o.h));
-            return '<div class="crop-pick-row" data-idx="' + i + '">'
+            return '<div class="crop-pick-row" data-kind="pick" data-idx="' + i + '">'
               + '<span class="crop-pick-dot" style="background:' + COLORS[i % COLORS.length] + '"></span>'
               + '<select class="form-select form-select-sm crop-pick-role">'
               + roleTemplate.innerHTML + '</select>'
@@ -264,17 +362,77 @@
               + '<button type="button" class="btn btn-light v2-btn-icon crop-pick-del" title="이 영역을 지웁니다">'
               + '<i class="bi bi-x-lg"></i></button>'
               + '</div>';
-          }).join('');
+          }).concat(masks.map(function (sel, i) {
+            var o = originalSize(sel);
+            return '<div class="crop-pick-row crop-pick-row--mask" data-kind="mask" data-idx="' + i + '">'
+              + '<span class="crop-pick-dot" style="background:' + MASK_COLOR + '"></span>'
+              + '<span class="crop-pick-mask-name">제외 ' + (i + 1) + '</span>'
+              + '<span class="crop-pick-hint">이 자리는 흰색으로 지워 보냅니다 — 모델이 못 봅니다</span>'
+              + '<span class="crop-pick-size text-muted">' + o.w + '×' + o.h + 'px</span>'
+              + '<button type="button" class="btn btn-light v2-btn-icon crop-pick-del" title="이 제외 영역을 지웁니다">'
+              + '<i class="bi bi-x-lg"></i></button>'
+              + '</div>';
+          }));
 
-          picksEl.querySelectorAll('.crop-pick-row').forEach(function (row) {
+          picksEl.innerHTML = rows.join('');
+          picksEl.querySelectorAll('.crop-pick-row[data-kind="pick"]').forEach(function (row) {
             var idx = parseInt(row.dataset.idx, 10);
             row.querySelector('.crop-pick-role').value = picks[idx].role;
             row.querySelector('.crop-pick-hint').textContent = roleOf(picks[idx].role).hint;
           });
 
           info.className = 'crop-info text-muted mt-2';
+          if (!picks.length) {
+            info.textContent = masks.length
+              ? '읽을 영역을 고르지 않으면 "전체 사용" 으로 사진 전체를 읽습니다 '
+                + '(제외 영역 ' + masks.length + '곳은 지워서 보냅니다).'
+              : '영역을 고르지 않으면 "전체 사용" 으로 사진 전체를 읽습니다.';
+            return;
+          }
           info.textContent = picks.length + '개 영역을 읽습니다. '
-            + '표시면 이름을 골라 두면 그 면에서 찾을 항목을 짚어 읽습니다.';
+            + '표시면 이름을 골라 두면 그 면에서 찾을 항목을 짚어 읽습니다.'
+            + (masks.length ? ' 제외 영역 ' + masks.length + '곳은 흰색으로 지워 보냅니다.' : '');
+        }
+
+        function setMode(next) {
+          mode = next;
+          var readBtn = modalEl.querySelector('[data-crop="mode-read"]');
+          var maskBtn = modalEl.querySelector('[data-crop="mode-mask"]');
+          readBtn.className = 'btn ' + (next === 'read' ? 'btn-primary' : 'btn-outline-primary');
+          maskBtn.className = 'btn ' + (next === 'mask' ? 'btn-danger' : 'btn-outline-danger');
+          modeHint.textContent = (next === 'mask')
+            ? '가릴 자리를 끌어서 덮으세요. 그 자리는 흰색으로 지워 보냅니다.'
+            : '끌어서 고르세요. 여러 번 끌면 영역이 계속 더해집니다.';
+          canvas.classList.toggle('crop-canvas--mask', next === 'mask');
+        }
+
+        function updateZoomLabel() {
+          zoomLabel.textContent = Math.round(zoom * 100) + '%';
+          // 더 못 늘리는데도 단추가 살아 있으면 눌러도 아무 일이 없다.
+          modalEl.querySelector('[data-crop="zoom-in"]').disabled = zoom >= maxZoom - 1e-6;
+          modalEl.querySelector('[data-crop="zoom-out"]').disabled = zoom <= ZOOM_MIN + 1e-6;
+        }
+
+        /*
+         * 배율을 바꾼다. 화면 좌표(clientX/Y)를 주면 그 자리를 붙잡고 늘린다 -
+         * 안 그러면 확대할 때마다 보던 곳이 화면 밖으로 밀려난다.
+         */
+        function zoomTo(next, clientX, clientY) {
+          next = Math.min(maxZoom, Math.max(ZOOM_MIN, next));
+          if (Math.abs(next - zoom) < 1e-6) return;
+
+          var r = stage.getBoundingClientRect();
+          var vx = (clientX == null) ? stage.clientWidth / 2 : (clientX - r.left);
+          var vy = (clientY == null) ? stage.clientHeight / 2 : (clientY - r.top);
+          var cx = stage.scrollLeft + vx;
+          var cy = stage.scrollTop + vy;
+          var ratio = next / zoom;
+
+          zoom = next;
+          draw(false);
+          updateZoomLabel();
+          stage.scrollLeft = cx * ratio - vx;
+          stage.scrollTop = cy * ratio - vy;
         }
 
         // 화면 좌표를 캔버스 **내부 픽셀**로 옮긴다.
@@ -322,8 +480,12 @@
           drag = null;
           if (!draft) return;
           if (bigEnough(draft)) {
-            draft.role = nextRole();
-            picks.push(draft);
+            if (mode === 'mask') {
+              masks.push(draft);
+            } else {
+              draft.role = nextRole();
+              picks.push(draft);
+            }
             draft = null;
             drawAll();
             return;
@@ -337,6 +499,14 @@
           }
         };
 
+        // 휠은 Ctrl(맥은 ⌘)과 함께일 때만 배율을 바꾼다. 그냥 굴리면 스테이지가
+        // 스크롤돼야 한다 - 확대한 상태에서 사진을 훑는 것이 그 방법이다.
+        canvas.onwheel = function (e) {
+          if (!e.ctrlKey && !e.metaKey) return;
+          e.preventDefault();
+          zoomTo(zoom * (e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP), e.clientX, e.clientY);
+        };
+
         picksEl.onchange = function (e) {
           var select = e.target.closest('.crop-pick-role');
           if (!select) return;
@@ -347,8 +517,9 @@
         picksEl.onclick = function (e) {
           var del = e.target.closest('.crop-pick-del');
           if (!del) return;
-          var idx = parseInt(del.closest('.crop-pick-row').dataset.idx, 10);
-          picks.splice(idx, 1);
+          var row = del.closest('.crop-pick-row');
+          var idx = parseInt(row.dataset.idx, 10);
+          (row.dataset.kind === 'mask' ? masks : picks).splice(idx, 1);
           drawAll();
         };
 
@@ -378,6 +549,14 @@
             octx.drawImage(loaded.img, -w / 2, -h / 2, w, h);
             octx.restore();
 
+            // 제외 영역을 흰색으로 덮는다. 이 캔버스는 고른 영역 크기뿐이라
+            // 밖으로 나간 부분은 저절로 잘린다 - 겹침을 따로 계산할 필요가 없다.
+            octx.fillStyle = '#ffffff';
+            masks.forEach(function (m) {
+              octx.fillRect((m.x - sel.x) / scale, (m.y - sel.y) / scale,
+                            m.w / scale, m.h / scale);
+            });
+
             out.toBlob(function (blob) {
               if (!blob) { done(null); return; }
               var base = (file.name || 'label').replace(/\.[^.]+$/, '');
@@ -390,17 +569,24 @@
         modalEl.querySelector('.modal-body').onclick = function (e) {
           var btn = e.target.closest('[data-crop]');
           if (!btn) return;
-          if (btn.dataset.crop === 'rot-left') { deg -= 90; render(); }
-          if (btn.dataset.crop === 'rot-right') { deg += 90; render(); }
-          if (btn.dataset.crop === 'clear') { picks = []; draft = null; drawAll(); }
+          var what = btn.dataset.crop;
+          if (what === 'rot-left')  { deg -= 90; zoom = 1; render(); }
+          if (what === 'rot-right') { deg += 90; zoom = 1; render(); }
+          if (what === 'clear') { picks = []; masks = []; draft = null; drawAll(); }
+          if (what === 'zoom-in') zoomTo(zoom * ZOOM_STEP);
+          if (what === 'zoom-out') zoomTo(zoom / ZOOM_STEP);
+          if (what === 'zoom-fit') zoomTo(1);
+          if (what === 'mode-read') setMode('read');
+          if (what === 'mode-mask') setMode('mask');
         };
         modalEl.querySelector('.modal-footer').onclick = function (e) {
           var btn = e.target.closest('[data-crop]');
           if (!btn) return;
 
           if (btn.dataset.crop === 'whole') {
-            // 회전만 했으면 회전을 반영해 내보낸다. 아무것도 안 했으면 원본 그대로.
-            if (deg % 360 === 0) { finish([{ file: file, role: 'whole' }]); return; }
+            // 회전도 제외 영역도 없으면 원본 그대로. 둘 중 하나라도 있으면
+            // 그것을 반영한 사진을 새로 만들어 보낸다.
+            if (deg % 360 === 0 && !masks.length) { finish([{ file: file, role: 'whole' }]); return; }
             cutOut({ x: 0, y: 0, w: canvas.width, h: canvas.height, role: 'other' }, 0)
               .then(function (part) {
                 finish([{ file: part ? part.file : file, role: 'whole' }]);
@@ -426,7 +612,10 @@
         // 모달이 열린 뒤에 그려야 폭을 잴 수 있다
         modalEl.addEventListener('shown.bs.modal', function once() {
           modalEl.removeEventListener('shown.bs.modal', once);
-          render();
+          zoom = 1;
+          canvas.dataset.scale = '';
+          setMode('read');
+          render();   // 배율 표시는 render 안에서 함께 맞춘다
         });
       });
     });

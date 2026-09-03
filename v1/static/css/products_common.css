@@ -267,13 +267,16 @@
    읽을 영역 고르기
    라벨만 잘라 보내면 모델이 쓰는 해상도가 전부 라벨에 배정된다.
    ------------------------- */
+/* 확대하면 캔버스가 스테이지보다 커진다. 그때 넘치는 만큼은 여기서 스크롤해
+   훑는다 - 모달 자체가 늘어나면 아래의 영역 목록이 화면 밖으로 밀려난다.
+   가운데 정렬을 justify-content 로 하면 넘칠 때 왼쪽이 잘려 닿을 수가 없어서,
+   프레임의 margin:auto 로 한다. */
 .crop-stage {
     position:   relative;
     display:    flex;
-    justify-content: center;
     background: #202124;
     border-radius: 8px;
-    overflow:   hidden;
+    overflow:   auto;
     padding:    8px;
 }
 /* 선택 상자는 캔버스에 딱 맞물려야 한다. 스테이지 기준으로 놓으면 캔버스가
@@ -281,13 +284,31 @@
 .crop-frame {
     position:    relative;
     line-height: 0;          /* 캔버스 아래 여백 제거 */
-    max-width:   100%;
+    margin:      auto;
+    flex:        0 0 auto;
 }
+/* max-width 를 두면 확대해도 CSS 가 도로 줄여 버린다. 크기는 JS 가 캔버스
+   내부 픽셀로 정한다. */
 .crop-canvas {
     display:      block;
     cursor:       crosshair;
     touch-action: none;      /* 끌어서 고르는 동안 화면이 스크롤되지 않게 */
-    max-width:    100%;
+}
+.crop-canvas--mask { cursor: cell; }
+
+/* 확대 배율 표시와 도구 사이 칸막이 */
+.crop-zoom-level {
+    font-size:   12px;
+    color:       #5f6368;
+    min-width:   42px;
+    text-align:  center;
+    font-variant-numeric: tabular-nums;
+}
+.crop-tool-divider {
+    width:      1px;
+    height:     18px;
+    background: #dadce0;
+    margin:     0 2px;
 }
 /* 영역은 여러 개가 동시에 놓인다. 예전에는 하나뿐이라 바깥을 통째로 어둡게
    덮었는데(box-shadow spread), 상자가 둘이면 뒤 상자의 그늘이 앞 상자를 덮어
@@ -297,6 +318,16 @@
     border:         2px solid #8ab4f8;
     background:     rgba(138, 180, 248, 0.14);
     pointer-events: none;
+}
+/* 제외 영역 — 읽을 영역과 한눈에 갈려야 한다. 빗금을 깔아 "여기는 지운다" 를
+   색만이 아니라 무늬로도 말한다(색만으로는 색각 이상에서 구분이 안 된다). */
+.crop-box--mask {
+    border-style: dashed;
+    background:   rgba(234, 67, 53, 0.18);
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(234, 67, 53, 0.35) 0, rgba(234, 67, 53, 0.35) 4px,
+        transparent 4px, transparent 9px);
 }
 .crop-box-tag {
     position:    absolute;
@@ -320,6 +351,10 @@
                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crop-pick-size   { font-size: 11px; white-space: nowrap; flex: 0 0 auto; }
 .crop-pick-del    { flex: 0 0 auto; }
+/* 제외 영역 줄 — 표시면 선택 칸이 없으므로 그 자리만큼 이름표를 둔다 */
+.crop-pick-row--mask     { opacity: 0.95; }
+.crop-pick-mask-name     { width: 150px; flex: 0 0 auto; font-size: 12px;
+                           font-weight: 600; color: #c5221f; }
 
 /* -------------------------
    확인 창의 사진 뷰어

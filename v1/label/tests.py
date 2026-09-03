@@ -5523,9 +5523,15 @@ class CompoundIngredientPromptTests(TestCase):
 
 class FreetextOptionTests(TestCase):
     """
-    주의사항·기타표시사항은 무엇을 해도 흔들렸다 — 목록을 실으면 그 문장을
-    지어내고, 빼면 새 문장을 지어내고, 전용 칸을 만들면 알레르기 칸을 망쳤다.
-    이 두 칸에는 이미 빠른 입력 버튼 스물여덟 개가 있다.
+    주의사항·기타표시사항을 사진에서 읽을 것인가.
+
+    한동안 껐었다. 이 두 칸은 무엇을 해도 흔들렸고 — 목록을 실으면 그 문장을
+    지어내고, 빼면 새 문장을 지어내고, 전용 칸을 만들면 알레르기 칸을 망쳤다 —
+    화면에 빠른 입력 버튼 스물여덟 개가 있으니 손으로 채우라고 봤다.
+
+    운영에서 뒤집혔다. 인쇄된 문장은 버튼 목록에 없는 것이 많았고, 사진을 올린
+    사람은 그 칸이 왜 비어 있는지부터 물었다. 지금은 기본으로 읽고, 끄는 쪽이
+    설정이다. 읽은 값은 확인 창을 반드시 거치므로 지어낸 문장은 걷어낼 수 있다.
     """
 
     def _data(self):
@@ -5535,14 +5541,20 @@ class FreetextOptionTests(TestCase):
             'additional_info': {'value': '지어낸 문구', 'confidence': 'high'},
         }
 
-    def test_기본은_읽지_않는다(self):
+    def test_기본은_읽는다(self):
         from v1.label.services.ocr_service import drop_freetext
 
         out = drop_freetext(self._data())
         for key in ('cautions', 'additional_info'):
-            self.assertIsNone(out[key]['value'])
-            self.assertTrue(out[key]['skipped'])
+            self.assertEqual(out[key]['value'], '지어낸 문구')
+            self.assertNotIn('skipped', out[key])
         self.assertEqual(out['prdlst_nm']['value'], '샐러드')
+
+    def test_설정_기본값이_켬이다(self):
+        """`.env` 에 아무것도 안 넣은 서버가 읽는 쪽이어야 한다."""
+        from django.conf import settings as dj
+
+        self.assertTrue(getattr(dj, 'OCR_READ_FREETEXT', False))
 
     def test_켜면_그대로_둔다(self):
         from v1.label.services.ocr_service import drop_freetext
@@ -5550,14 +5562,21 @@ class FreetextOptionTests(TestCase):
         out = drop_freetext(self._data(), read_freetext=True)
         self.assertEqual(out['cautions']['value'], '지어낸 문구')
 
-    def test_설정으로도_켤_수_있다(self):
+    def test_끄면_비운다(self):
+        from v1.label.services.ocr_service import drop_freetext
+
+        out = drop_freetext(self._data(), read_freetext=False)
+        for key in ('cautions', 'additional_info'):
+            self.assertIsNone(out[key]['value'])
+            self.assertTrue(out[key]['skipped'])
+
+    def test_설정으로도_끌_수_있다(self):
         from django.test import override_settings
 
         from v1.label.services.ocr_service import drop_freetext
 
-        with override_settings(OCR_READ_FREETEXT=True):
-            self.assertEqual(drop_freetext(self._data())['cautions']['value'],
-                             '지어낸 문구')
+        with override_settings(OCR_READ_FREETEXT=False):
+            self.assertIsNone(drop_freetext(self._data())['cautions']['value'])
 
     def test_안_읽은_칸은_0점이_아니라_채점_제외다(self):
         """일부러 안 읽은 것을 "못 읽었다" 로 세면 평균이 거짓말을 한다."""
@@ -5565,7 +5584,7 @@ class FreetextOptionTests(TestCase):
         from v1.label.services.ocr_service import drop_freetext
 
         expected = {'prdlst_nm': '샐러드', 'cautions': '무언가 적힌 주의사항'}
-        out = compare(expected, drop_freetext(self._data()))
+        out = compare(expected, drop_freetext(self._data(), read_freetext=False))
         self.assertNotIn('cautions', out['fields'])
         self.assertEqual(out['mean'], 100.0)
         self.assertEqual(out['counted'], 1)
@@ -5589,3 +5608,67 @@ class FreetextOptionTests(TestCase):
         self.assertIn('function skippedHtml', js)
         self.assertIn('+ skippedHtml(data)', js)
         self.assertIn('자주 사용하는 문구', js)
+
+
+class RegionRoleWantsTests(TestCase):
+    """
+    표시면 지시문의 "여기서 찾을 항목" 목록.
+
+    이 목록은 "각 장에 적힌 것만 읽으세요" 와 함께 나간다. 그래서 **목록에서
+    빠진 칸은 안 읽힌다.** 본서버 시험에서 일괄표시면을 골라 읽었더니
+    원산지·유통전문판매원·주의사항·기타표시사항이 통째로 비어서 왔다 — 사진에는
+    다 인쇄돼 있었다.
+    """
+
+    def test_일괄표시면에_인쇄되는_것이_빠짐없이_적혀_있다(self):
+        from v1.label.services.ocr_service import REGION_ROLES
+
+        wants = REGION_ROLES['info'][1]
+        for name in ('식품유형', '품목보고번호', '원재료명', '알레르기',
+                     '원산지', '유통전문판매원', '소비기한', '보관방법',
+                     '포장재질', '주의사항', '기타표시사항'):
+            self.assertIn(name, wants, f'일괄표시면 지시문에 {name} 이 없다')
+
+    def test_원재료명_영역은_원산지도_본다(self):
+        """원산지는 원재료 이름 뒤에 괄호로 붙는다 — 같은 자리에 있다."""
+        from v1.label.services.ocr_service import REGION_ROLES
+
+        self.assertIn('원산지', REGION_ROLES['rawmtrl'][1])
+
+    def test_목록이_전부가_아니라고_말한다(self):
+        """
+        목록은 거들 뿐이다. 그렇게 말해 두지 않으면 목록에 없는 칸을 모델이
+        아예 찾지 않는다 — 목록을 아무리 채워도 새 칸을 넣을 때마다 같은 사고가
+        난다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        source = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py'
+                  ).read_text(encoding='utf-8')
+        self.assertIn('거기까지만 읽으라는 뜻이 아닙니다', source)
+
+    def test_화면_설명과_서버_지시문이_같은_면을_말한다(self):
+        """
+        photo_cropper.js 의 hint 는 고르는 사람이 보고, REGION_ROLES 의 wants 는
+        모델이 본다. 둘이 어긋나면 사용자가 본 설명과 실제 판독이 달라진다.
+        """
+        import re
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        from v1.label.services.ocr_service import REGION_ROLES
+
+        js = (Path(dj.BASE_DIR) / 'static/js/products/photo_cropper.js'
+              ).read_text(encoding='utf-8')
+        keys = set(re.findall(r"\{ key: '(\w+)'", js))
+        self.assertTrue(keys, '화면의 ROLES 를 못 읽었다')
+        for key in keys:
+            self.assertIn(key, REGION_ROLES, f'화면에만 있는 표시면: {key}')
+        # 일괄표시면 설명도 새 항목을 담고 있어야 한다
+        head = js.index("key: 'info'")
+        block = js[head:head + 400]
+        for name in ('주의사항', '기타표시사항', '원산지', '알레르기'):
+            self.assertIn(name, block, f'화면 설명에 {name} 이 없다')

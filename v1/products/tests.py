@@ -1454,3 +1454,98 @@ class OcrPickBarTests(TestCase):
     def test_반영_버튼에_개수를_적는다(self):
         self.assertIn("apply.innerHTML = ", self.ocr)
         self.assertIn("' (' + picked + ')'", self.ocr)
+
+
+class PhotoCropperZoomTests(TestCase):
+    """
+    확대·축소.
+
+    4000px 짜리 사진이 화면에 900px 로 줄어 보인다. 일괄표시면의 위아래 끝이
+    몇 픽셀 안에 뭉쳐서, 어디가 경계인지 짚을 수가 없었다.
+
+    확대는 **보는 배율만** 바꾼다 — 자를 때는 언제나 원본에서 잘라내므로
+    확대해서 골랐다고 화질이 달라지지 않는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.cropper = (base / 'static/js/products/photo_cropper.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
+
+    def test_확대_축소_맞춤_단추가_있다(self):
+        for what in ('zoom-in', 'zoom-out', 'zoom-fit'):
+            self.assertIn(what, self.cropper)
+
+    def test_확대해도_고른_영역이_남는다(self):
+        """확대할 때마다 다시 고르게 하면 확대가 아무 쓸모가 없다."""
+        # 좌표계가 통째로 바뀌는 회전(refit)에서만 비운다
+        head = self.cropper.index('if (refit) {')
+        block = self.cropper[head:head + 400]
+        self.assertIn('picks = [];', block)
+        # 배율만 바뀌었으면 바뀐 만큼 늘려 준다
+        self.assertIn('var k = scale / prev;', self.cropper)
+
+    def test_확대해도_창이_늘어나지_않는다(self):
+        """스테이지 안에서 스크롤해 훑는다 — 아래의 영역 목록이 밀려나면 안 된다."""
+        self.assertIn('stage.style.maxHeight', self.cropper)
+        head = self.css.index('.crop-stage {')
+        self.assertIn('overflow:   auto', self.css[head:head + 300])
+
+    def test_확대하면_CSS_가_도로_줄이지_않는다(self):
+        """max-width 가 남아 있으면 캔버스를 키워도 화면에서는 그대로다."""
+        head = self.css.index('.crop-canvas {')
+        self.assertNotIn('max-width', self.css[head:head + 200])
+
+    def test_자를_때는_배율과_무관하게_원본에서_자른다(self):
+        self.assertIn('sel.w / scale', self.cropper)
+        self.assertIn('naturalWidth', self.cropper)
+
+
+class PhotoCropperMaskTests(TestCase):
+    """
+    제외할 영역.
+
+    일괄표시면 옆에 작업지시서 표나 다른 제품의 라벨이 같이 찍혀 있으면
+    사각형 하나로는 피해 갈 수가 없다. 빼고 싶은 자리를 덮어 두면 그 자리는
+    흰색으로 지워 보낸다 — 모델이 아예 못 본다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.cropper = (base / 'static/js/products/photo_cropper.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
+
+    def test_제외_모드로_바꿀_수_있다(self):
+        self.assertIn('mode-mask', self.cropper)
+        self.assertIn('제외할 영역', self.cropper)
+
+    def test_제외한_자리를_흰색으로_지워_보낸다(self):
+        head = self.cropper.index('function cutOut')
+        block = self.cropper[head:self.cropper.index('modalEl.querySelector(\'.modal-body\')')]
+        self.assertIn("octx.fillStyle = '#ffffff'", block)
+        self.assertIn('masks.forEach', block)
+
+    def test_전체_사용도_제외를_반영한다(self):
+        """제외만 골랐으면 원본을 그대로 보내면 안 된다."""
+        self.assertIn("deg % 360 === 0 && !masks.length", self.cropper)
+
+    def test_모두_지우기가_제외도_지운다(self):
+        head = self.cropper.index("if (what === 'clear')")
+        self.assertIn('masks = []', self.cropper[head:head + 120])
+
+    def test_제외_상자는_색만으로_구분하지_않는다(self):
+        """색각 이상에서도 갈려야 한다 — 빗금을 깐다."""
+        self.assertIn('.crop-box--mask', self.css)
+        self.assertIn('repeating-linear-gradient', self.css)
+
+    def test_작은_제외도_받는다(self):
+        """바코드 한 줄, 도장 하나를 가리는 일이 실제로 많다."""
+        self.assertIn('MIN_MASK_SIDE', self.cropper)
