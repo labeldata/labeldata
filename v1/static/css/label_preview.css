@@ -1272,3 +1272,25 @@ tbody.layout-vertical tr td {
 /* 표에 얹힌 번호는 눌러서 내용을 볼 수 있다 */
 .pv-issue-badge-link { cursor: pointer; }
 .pv-issue-badge-link:hover { outline: 2px solid #f28b82; }
+
+/* ==================== 내보내기 메뉴 ====================
+   PDF · 워드 · 텍스트를 한 자리에서 고른다. 무엇을 고를지 알려면 각각이
+   무엇인지 알아야 해서, 이름 아래 한 줄 설명을 둔다. */
+.vr-export-menu .dropdown-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+}
+
+.vr-export-menu .dropdown-item .export-note {
+    margin-left: 22px;
+    color: var(--text-muted, #9ca3af);
+    font-size: 0.72rem;
+    line-height: 1.4;
+}
+
+.vr-export-menu .dropdown-item:hover .export-note {
+    color: #5f6368;
+}

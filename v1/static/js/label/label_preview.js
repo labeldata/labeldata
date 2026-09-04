@@ -2674,7 +2674,10 @@ document.addEventListener('DOMContentLoaded', function () {
      * 인라인 쪽을 걷어내고 여기로 모았다.
      */
     async function exportToPDF() {
-        const pdfBtn = document.getElementById('exportPdfBtn');
+        // 진행 표시는 메뉴 단추에 건다. 메뉴 항목에 걸면 눌리는 순간
+        // 메뉴가 닫혀서 "PDF 생성 중" 을 아무도 못 본다.
+        const pdfBtn = document.getElementById('exportMenuBtn')
+                    || document.getElementById('exportPdfBtn');
         const previewContent = document.getElementById('previewContent');
         if (!previewContent) {
             alert('미리보기 내용을 찾을 수 없습니다.');
@@ -2772,7 +2775,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (typeof window.restorePreviewZoom === 'function') window.restorePreviewZoom();
             if (pdfBtn) {
                 pdfBtn.disabled = false;
-                pdfBtn.innerHTML = originalBtnHtml || '<i class="fas fa-file-arrow-down me-1"></i>PDF 저장';
+                pdfBtn.innerHTML = originalBtnHtml || '<i class="fas fa-file-export me-1"></i>내보내기';
             }
         }
     }    // 천 단위 콤마
@@ -3073,6 +3076,7 @@ document.addEventListener('DOMContentLoaded', function () {
     safeAddEventListener('exportPdfBtn', 'click', exportToPDF);
     safeAddEventListener('copyTextBtn', 'click', copyLabelText);
     safeAddEventListener('downloadTextBtn', 'click', downloadLabelText);
+    safeAddEventListener('downloadDocBtn', 'click', downloadLabelDoc);
     safeAddEventListener('saveSettingsBtn', 'click', savePreviewSettings);
     // 부모 프레임(탭에 끼워 넣은 미리보기)이 부를 수 있게 노출한다
     window.savePreviewSettings = savePreviewSettings;
@@ -4730,11 +4734,15 @@ function initializeLayoutButtons() {
  */
 
 /* 인쇄될 그대로의 글자. 화면 전용 표시는 뺀다. */
-function labelTextLines() {
-    const lines = [];
-
+/*
+ * 인쇄될 그대로의 내용을 **한 곳에서** 모은다.
+ *
+ * 글자로도(텍스트 복사·txt) 표로도(워드) 나가야 하는데, 어디서 무엇을 걸러
+ * 내는지가 두 벌이면 어느 날 한쪽만 고쳐진다. 걸러 내는 규칙은 여기 하나다.
+ */
+function labelRowData() {
     const header = document.querySelector('.preview-header-box .header-text');
-    if (header) lines.push(header.textContent.trim(), '');
+    const rows = [];
 
     document.querySelectorAll('#previewTableBody [data-field-row]').forEach(function (row) {
         // 2단 배치는 한 <tr> 에 항목이 둘이라 칸이 이름을 갖는다.
@@ -4744,22 +4752,41 @@ function labelTextLines() {
         const cells = row.tagName === 'TR'
             ? [row.querySelector('th'), row.querySelector('td')]
             : [row, row.nextElementSibling];
-        const head = cells[0];
-        const body = cells[1];
-        if (!head || !body) return;
-
-        lines.push(`${cleanCellText(head)}\t${cleanCellText(body)}`);
+        if (!cells[0] || !cells[1]) return;
+        rows.push({ head: cells[0], body: cells[1] });
     });
 
-    const nutrition = document.getElementById('nutritionPreview');
-    if (nutrition && nutrition.style.display !== 'none' && nutrition.textContent.trim()) {
-        lines.push('', '[영양정보]');
-        nutrition.querySelectorAll('tr').forEach(function (tr) {
-            const cells = Array.from(tr.children).map(cleanCellText).filter(Boolean);
-            if (cells.length) lines.push(cells.join('\t'));
+    const nutrition = [];
+    const box = document.getElementById('nutritionPreview');
+    if (box && box.style.display !== 'none' && box.textContent.trim()) {
+        box.querySelectorAll('tr').forEach(function (tr) {
+            const cells = Array.from(tr.children);
+            if (cells.length) nutrition.push(cells);
         });
     }
 
+    return {
+        title: header ? header.textContent.trim() : '',
+        rows: rows,
+        nutrition: nutrition,
+    };
+}
+
+/* 붙여넣기용 글자. 항목명과 값을 탭으로 가르면 워드·엑셀에서 표가 된다. */
+function labelTextLines() {
+    const data = labelRowData();
+    const lines = [];
+    if (data.title) lines.push(data.title, '');
+    data.rows.forEach(function (row) {
+        lines.push(cleanCellText(row.head) + '\t' + cleanCellText(row.body));
+    });
+    if (data.nutrition.length) {
+        lines.push('', '[영양정보]');
+        data.nutrition.forEach(function (cells) {
+            const texts = cells.map(cleanCellText).filter(Boolean);
+            if (texts.length) lines.push(texts.join('\t'));
+        });
+    }
     return lines;
 }
 
@@ -4773,6 +4800,97 @@ function cleanCellText(cell) {
         el.textContent = ' ' + el.textContent.trim();
     });
     return copy.textContent.replace(/\s+/g, ' ').trim();
+}
+
+/*
+ * 워드에 넣을 칸 내용.
+ *
+ * 글자만 뽑으면 **원산지 굵게 표시가 사라진다.** 그건 규정이 요구하는
+ * 표시라 없어지면 안 된다. 그래서 여기서는 HTML 을 그대로 살리되,
+ * 화면 전용 표시만 걷어내고 클래스로만 그리던 것(알레르기 선언 박스)은
+ * 인라인 스타일로 바꾼다 — 워드는 우리 CSS 파일을 읽지 않는다.
+ */
+function cellHtmlForDoc(cell) {
+    if (!cell) return '';
+    const copy = cell.cloneNode(true);
+    copy.querySelectorAll('.pv-empty-hint, .pv-issue-badge').forEach(function (el) { el.remove(); });
+    copy.querySelectorAll('.pv-allergen-box').forEach(function (el) {
+        el.removeAttribute('class');
+        el.setAttribute('style',
+            'background:#000;color:#fff;font-weight:bold;padding:2px 6px;'
+            + 'margin-left:4px;white-space:nowrap;');
+    });
+    return copy.innerHTML.trim();
+}
+
+/*
+ * 워드가 여는 문서.
+ *
+ * .docx 는 zip+XML 이라 만들려면 라이브러리가 필요하다. 그런데 워드는
+ * **HTML 을 그대로 연다** — 확장자와 MIME 만 워드로 주면 표도 서식도 살아서
+ * 들어간다. 새 의존성 없이 오늘 쓸 수 있는 길이다.
+ *
+ * 서식은 <style> 이 아니라 칸마다 인라인으로 넣는다. 워드의 HTML 해석은
+ * 선택자 지원이 들쭉날쭉해서, 인라인이라야 어느 버전에서든 같게 나온다.
+ */
+function labelDocHtml() {
+    const data = labelRowData();
+    const cellStyle = 'border:1px solid #444;padding:4px 8px;font-size:10pt;'
+        + "font-family:'Malgun Gothic',sans-serif;vertical-align:middle;";
+    const headStyle = cellStyle + 'background:#f2f2f2;font-weight:bold;'
+        + 'width:110px;white-space:nowrap;';
+
+    const body = data.rows.map(function (row) {
+        return '<tr><td style="' + headStyle + '">' + cellHtmlForDoc(row.head) + '</td>'
+            + '<td style="' + cellStyle + '">' + cellHtmlForDoc(row.body) + '</td></tr>';
+    }).join('');
+
+    let nutrition = '';
+    if (data.nutrition.length) {
+        const rows = data.nutrition.map(function (cells) {
+            return '<tr>' + cells.map(function (cell) {
+                return '<td style="' + cellStyle + '">' + cellHtmlForDoc(cell) + '</td>';
+            }).join('') + '</tr>';
+        }).join('');
+        nutrition = '<p style="margin:14px 0 4px;font-weight:bold;">영양정보</p>'
+            + '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;">'
+            + rows + '</table>';
+    }
+
+    return '<html xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
+        + '<meta charset="utf-8">'
+        + '<title>' + (data.title || '한글표시사항') + '</title>'
+        + '</head><body>'
+        + (data.title ? '<p style="font-weight:bold;margin:0 0 8px;">' + data.title + '</p>' : '')
+        + '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;">'
+        + body + '</table>'
+        + nutrition
+        + '</body></html>';
+}
+
+/* 내려받기 한 곳. 파일 종류만 달라진다. */
+function saveLabelFile(blob, extension) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = labelFileName(extension);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+function downloadLabelDoc() {
+    const data = labelRowData();
+    if (!data.rows.length) {
+        showPreviewToast('저장할 표시사항이 없습니다.', 'warning');
+        return;
+    }
+    // BOM 을 붙여야 워드가 한글을 UTF-8 로 읽는다
+    saveLabelFile(
+        new Blob(['\ufeff' + labelDocHtml()], { type: 'application/msword;charset=utf-8' }),
+        'doc');
+    showPreviewToast('워드 파일로 저장했습니다. 표 그대로 열립니다.', 'success');
 }
 
 /* 한 줄만 복사. 원재료명 하나만 넘겨 달라는 요청이 잦다. */
@@ -4835,15 +4953,7 @@ function downloadLabelText() {
         return;
     }
     // 엑셀이 한글을 깨뜨리지 않게 BOM 을 붙인다
-    const blob = new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = labelFileName('txt');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    saveLabelFile(new Blob(['﻿' + text], { type: 'text/plain;charset=utf-8' }), 'txt');
     showPreviewToast('텍스트 파일로 저장했습니다.', 'success');
 }
 

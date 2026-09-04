@@ -62,21 +62,32 @@
         글자를 선택할 수 없다 — 받는 사람이 원재료명 300자를 손으로 다시 치게
         되고, 거기서 오타가 난다(검수에서 나온 "과당1"이 그 흔적이다).
       {% endcomment %}
-      <div class="btn-group">
-        <button class="btn btn-outline-secondary btn-sm" id="copyTextBtn"
-                aria-label="글자 복사" title="표시사항을 글자로 복사합니다. 워드·엑셀에 그대로 붙여넣을 수 있습니다">
-          <i class="fas fa-clipboard me-1" aria-hidden="true"></i>글자 복사
-        </button>
-        <button class="btn btn-outline-secondary btn-sm" id="downloadTextBtn"
-                aria-label="텍스트 파일 저장" title="표시사항을 텍스트 파일로 저장합니다">
-          <i class="fas fa-file-lines" aria-hidden="true"></i>
-        </button>
-      </div>
-      {% if can_upload_pdf %}
-      <button class="btn btn-primary btn-sm" id="exportPdfBtn" aria-label="PDF 저장">
-        <i class="fas fa-file-arrow-down me-1" aria-hidden="true"></i>PDF 저장
+      <button class="btn btn-outline-secondary btn-sm" id="copyTextBtn"
+              aria-label="글자 복사" title="표시사항을 글자로 복사합니다. 워드·엑셀에 그대로 붙여넣을 수 있습니다">
+        <i class="fas fa-clipboard me-1" aria-hidden="true"></i>글자 복사
       </button>
-      {% endif %}
+      <div class="dropdown">
+        <button class="btn btn-primary btn-sm dropdown-toggle" id="exportMenuBtn"
+                data-bs-toggle="dropdown" aria-expanded="false" aria-label="내보내기">
+          <i class="fas fa-file-export me-1" aria-hidden="true"></i>내보내기
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end vr-export-menu">
+          {% if can_upload_pdf %}
+          <li><button class="dropdown-item" type="button" id="exportPdfBtn">
+            <i class="fas fa-file-pdf me-2 text-danger"></i>PDF
+            <span class="export-note">인쇄용 도안 · 문서함에도 등록</span>
+          </button></li>
+          {% endif %}
+          <li><button class="dropdown-item" type="button" id="downloadDocBtn">
+            <i class="fas fa-file-word me-2 text-primary"></i>워드 (.doc)
+            <span class="export-note">표 그대로 열린다 · 글자를 고칠 수 있다</span>
+          </button></li>
+          <li><button class="dropdown-item" type="button" id="downloadTextBtn">
+            <i class="fas fa-file-lines me-2 text-secondary"></i>텍스트 (.txt)
+            <span class="export-note">어디에나 붙여넣을 수 있다</span>
+          </button></li>
+        </ul>
+      </div>
       {% if not request.GET.readonly and not request.GET.in_tab %}
       <button class="btn btn-secondary btn-sm" onclick="window.close()" aria-label="창 닫기">
         <i class="fas fa-times me-1" aria-hidden="true"></i>닫기

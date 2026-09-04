@@ -7685,14 +7685,14 @@ class LabelTextExportTests(TestCase):
         self.assertIn('.pv-issue-badge', block)
 
     def test_영양정보도_함께_나간다(self):
-        head = self.js.index('function labelTextLines')
+        head = self.js.index('function labelRowData')
         block = self.js[head:head + 2000]
         self.assertIn('nutritionPreview', block)
-        self.assertIn('[영양정보]', block)
+        self.assertIn('[영양정보]', self.js[self.js.index('function labelTextLines'):][:900])
 
     def test_2단_배치에서_같은_줄이_두_번_나오지_않는다(self):
         """한 <tr> 에 항목이 둘이면 칸이 이름을 갖는다. tr 까지 세면 겹친다."""
-        head = self.js.index('function labelTextLines')
+        head = self.js.index('function labelRowData')
         block = self.js[head:head + 2000]
         self.assertIn("row.tagName === 'TR' && row.querySelector('[data-field-row]')", block)
 
@@ -7902,3 +7902,110 @@ class ZoomControlsFitTests(TestCase):
     def test_버튼_줄도_접힌다(self):
         head = self.css.index('.preview-actions {')
         self.assertIn('flex-wrap: wrap', self.css[head:self.css.index('}', head)])
+
+class ExportMenuTests(TestCase):
+    """
+    내보내기는 한 자리에서 고른다 — PDF · 워드 · 텍스트.
+
+    산출물이 늘 때마다 머리줄에 단추가 하나씩 붙으면 좁은 화면에서 줄이
+    넘친다. 그리고 무엇을 고를지 알려면 각각이 무엇인지 알아야 해서 이름
+    아래 한 줄 설명을 둔다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+
+    def test_세_가지를_한_메뉴에서(self):
+        self.assertIn('id="exportMenuBtn"', self.html)
+        for target in ('id="exportPdfBtn"', 'id="downloadDocBtn"', 'id="downloadTextBtn"'):
+            self.assertIn(target, self.html)
+
+    def test_각각이_무엇인지_적어_둔다(self):
+        self.assertIn('export-note', self.html)
+        self.assertIn('.vr-export-menu .dropdown-item .export-note', self.css)
+
+    def test_pdf_는_권한이_있을_때만(self):
+        """문서함 등록이 딸려 있어 권한을 본다."""
+        head = self.html.index('id="exportMenuBtn"')
+        block = self.html[head:head + 1200]
+        self.assertIn('{% if can_upload_pdf %}', block)
+
+    def test_진행_표시는_메뉴_단추에_건다(self):
+        """메뉴 항목에 걸면 눌리는 순간 메뉴가 닫혀 아무도 못 본다."""
+        self.assertIn("document.getElementById('exportMenuBtn')", self.js)
+
+    def test_세_동작이_모두_붙어_있다(self):
+        for wiring in ("'exportPdfBtn', 'click', exportToPDF",
+                       "'downloadDocBtn', 'click', downloadLabelDoc",
+                       "'downloadTextBtn', 'click', downloadLabelText"):
+            self.assertIn(wiring, self.js)
+
+
+class WordExportTests(TestCase):
+    """
+    워드로 내보내기 — 새 의존성 없이.
+
+    .docx 는 zip+XML 이라 만들려면 라이브러리가 필요하다. 그런데 워드는
+    HTML 을 그대로 연다 — 확장자와 MIME 만 워드로 주면 표도 서식도 살아서
+    들어간다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        self.js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js'
+                   ).read_text(encoding='utf-8')
+
+    def test_워드가_여는_형식으로_준다(self):
+        head = self.js.index('function downloadLabelDoc')
+        block = self.js[head:head + 700]
+        self.assertIn('application/msword', block)
+        self.assertIn("'doc'", block)
+        # BOM 을 붙여야 워드가 한글을 UTF-8 로 읽는다
+        self.assertIn(chr(92) + 'ufeff', block)
+
+    def test_진짜_표로_만든다(self):
+        head = self.js.index('function labelDocHtml')
+        block = self.js[head:head + 2500]
+        self.assertIn('<table', block)
+        self.assertIn('border-collapse:collapse', block)
+
+    def test_원산지_굵게가_살아_있다(self):
+        """
+        글자만 뽑으면 굵게 표시가 사라진다. 그건 규정이 요구하는 표시라
+        없어지면 안 된다.
+        """
+        self.assertIn('function cellHtmlForDoc', self.js)
+        head = self.js.index('function cellHtmlForDoc')
+        block = self.js[head:head + 900]
+        self.assertIn('innerHTML', block)
+        # 화면 전용 표시는 여전히 걷어낸다
+        self.assertIn('.pv-empty-hint, .pv-issue-badge', block)
+
+    def test_클래스로만_그리던_것은_인라인으로(self):
+        """워드는 우리 CSS 파일을 읽지 않는다."""
+        head = self.js.index('function cellHtmlForDoc')
+        block = self.js[head:head + 900]
+        self.assertIn('.pv-allergen-box', block)
+        self.assertIn("setAttribute('style'", block)
+
+    def test_내용을_모으는_곳은_하나다(self):
+        """
+        글자로도 표로도 나가는데 걸러 내는 규칙이 두 벌이면 어느 날 한쪽만
+        고쳐진다.
+        """
+        self.assertIn('function labelRowData', self.js)
+        for user in ('function labelTextLines', 'function labelDocHtml'):
+            head = self.js.index(user)
+            self.assertIn('labelRowData()', self.js[head:head + 400])
+
+    def test_내려받기는_한_곳에서(self):
+        self.assertIn('function saveLabelFile', self.js)
+        self.assertEqual(self.js.count('URL.createObjectURL'), 1)
