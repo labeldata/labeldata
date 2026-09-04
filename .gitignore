@@ -161,3 +161,19 @@ django_cache/
 
 # 런타임 생성물 (refresh_product_intro 가 찍는 통계 스냅샷)
 data/
+
+# 작업 문서는 개발 PC 에만 둔다.
+#
+# 배포가 본서버에서 main 을 그대로 받아 가는 방식이라, 계획·현황 문서까지
+# 운영 서버에 실린다. 서버에서 읽을 일이 없는 것들이고, 내부 검토 내용이
+# 배포물에 섞이는 것도 좋지 않다. README 만 남긴다 — 저장소의 문 역할이고
+# 어느 문서가 어디 있는지 그것만 적는다.
+#
+# 저장소에서 뺀 날까지의 내용은 이력에 있다:
+#   git log --follow -- OCR_UPGRADE_PLAN.md
+PROJECT_DESIGN.md
+REFACTORING_PLAN.md
+DEPLOY.md
+LABEL_WORKFLOW_PLAN.md
+LAW_MONITOR_INTEGRATION_PLAN.md
+OCR_UPGRADE_PLAN.md
