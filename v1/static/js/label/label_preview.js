@@ -2835,9 +2835,17 @@ document.addEventListener('DOMContentLoaded', function () {
             '100g': `100${servingUnit}당`
         };
 
+        /*
+         * 표의 열 머리는 **기준을 밝히는 말**이라 "당" 이 빠지면 안 된다.
+         * "총 내용량" 만 적으면 그 열의 숫자가 총량인지 100 g 당인지 알 수
+         * 없다 — 검수에서 "총 내용량 당 으로 수정" 지적이 나온 자리다.
+         *
+         * 머리 블록에는 이미 "총 내용량 65 g" 이 적히므로 여기에 다시 양을
+         * 쓰지 않는다. 두 번 적으면 그것도 지적 대상이다.
+         */
         const tabMapShort = {
-            total: `총 내용량`,
-            unit: `단위내용량`,
+            total: `총 내용량 당`,
+            unit: `단위내용량 당`,
             '100g': `100${servingUnit}당`
         };
 
@@ -3308,9 +3316,14 @@ function showAiValidationModal(result, useAi) {
         const anchor = (row.fields || []).find(f => document.querySelector(`[data-field-row="${f}"]`));
         rowsHtml += `<tr${anchor ? ` class="vr-jump" data-jump="${anchor}" title="누르면 표의 그 줄로 갑니다"` : ''}>`;
         rowsHtml += `<td>${row.label}${anchor ? '<div class="vr-where">표의 <strong>' + tableRowName(anchor) + '</strong> 줄</div>' : ''}</td>`;
+        /* 권고는 "고치면 좋다" 이지 "틀렸다" 가 아니다. 확정도 막지 않는다.
+           같은 무게로 보이면 진짜 지적이 그 안에 묻힌다. */
+        const badges = (row._numbers || []).map(n => `<span class="pv-issue-badge">${n}</span>`).join('');
         rowsHtml += row.ok
             ? '<td><span class="text-success">적합</span></td>'
-            : `<td><span class="text-danger">재검토</span>${(row._numbers || []).map(n => `<span class="pv-issue-badge">${n}</span>`).join('')}</td>`;
+            : (row.advisory
+                ? `<td><span class="text-warning-emphasis">권고</span>${badges}</td>`
+                : `<td><span class="text-danger">재검토</span>${badges}</td>`);
 
         let msg = '';
         if (row.errors && row.errors.length > 0) {

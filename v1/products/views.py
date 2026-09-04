@@ -1645,8 +1645,11 @@ def product_update_status(request, product_id):
             logger.exception('[승인 전 검증] 실행 실패 — 검증을 건너뛰고 진행합니다')
             _result = {'ok': True, 'issues': []}
 
-        if not _result.get('ok'):
-            _issues = _result.get('issues', [])
+        # 권고 항목만 남았으면 길을 막지 않는다. 확인이나 사유를 받는 무게는
+        # 표시기준이 그렇게 적으라고 한 것에만 쓴다 — 그러지 않으면 절차가
+        # 늘 뜨는 창이 되고, 사람은 읽지 않고 넘기는 법을 익힌다.
+        _issues = [i for i in _result.get('issues', []) if not i.get('advisory')]
+        if _issues:
             _missing = [i for i in _issues if i.get('category') == 'required_missing']
             # 필수 미입력은 한 건에 여러 항목이 담겨 온다(같은 문구 반복을 피하려고)
             _missing_names = [n for i in _missing for n in i.get('field_labels', [])]

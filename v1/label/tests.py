@@ -7160,3 +7160,215 @@ class AllergenBoxFlowsInlineTests(TestCase):
         block = self.css[head:head + 700]
         self.assertIn('display: inline-block;', block)
         self.assertNotIn('display: block;', block)
+
+class HumanReviewFindingsTests(TestCase):
+    """
+    사람이 도안을 검수하며 짚어 낸 것을 코드가 같이 잡는가.
+
+    실제 검수 의견(브라우니 케이크)이 일곱 건이었다.
+
+        1·2. 영양정보 머리글의 "65 g 당" -> "총 내용량 당"   (표를 그리는 쪽)
+        3.   함량·비율을 계산식에 맞추어 수정                (check_calorie_matches_macros)
+        4.   해동방법 표시                                   (check_thawing_method)
+        5.   제품교환장소 추가                               (check_exchange_notice)
+        6.   혼합분유/네덜란드산 볼드 표시                    (check_origin_emphasis)
+        7.   과당1 -> 과당]                                  (check_rawmtrl_brackets, 이미 있던 것)
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()   # 국가명 목록이 시험 사이에 남아 돌아다니지 않게
+        self.user = User.objects.create_user(username='review', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='검수', **kwargs)
+
+    # ── 3. 함량과 열량이 서로 다른 기준으로 적혀 있다 ──────────────────────
+
+    def test_열량이_탄단지_계산값과_어긋나면_지적한다(self):
+        """
+        도안은 65 g 에 309 kcal 인데 탄수화물 9 · 지방 4.5 · 단백질 1 로 계산하면
+        80 kcal 다. 열량만 총량 기준이고 나머지는 다른 기준으로 적힌 것이다.
+        """
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        issues = check_calorie_matches_macros(self._label(
+            calories='309', carbohydrates='9', fats='4.5', proteins='1'))
+        self.assertEqual(len(issues), 1)
+        self.assertIn('309', issues[0]['message'])
+        self.assertIn('80 kcal', issues[0]['message'])
+
+    def test_계산이_맞으면_조용하다(self):
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        # 66 x 4 + 4.5 x 9 + 1 x 4 = 308.5
+        self.assertEqual(check_calorie_matches_macros(self._label(
+            calories='309', carbohydrates='66', fats='4.5', proteins='1')), [])
+
+    def test_반올림_폭으로는_지적하지_않는다(self):
+        """
+        표시기준의 반올림만으로도 몇 kcal 는 벌어진다. 그런 폭으로 울면
+        정상인 라벨이 계속 지적된다.
+        """
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        # 계산값 100, 적어 둔 값 120 — 20 kcal 차이
+        self.assertEqual(check_calorie_matches_macros(self._label(
+            calories='120', carbohydrates='10', fats='5', proteins='5')), [])
+
+    def test_값이_없으면_계산하지_않는다(self):
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        self.assertEqual(check_calorie_matches_macros(self._label(calories='309')), [])
+        self.assertEqual(check_calorie_matches_macros(self._label(
+            carbohydrates='9', fats='4.5', proteins='1')), [])
+
+    # ── 4. 해동방법 ────────────────────────────────────────────────────────
+
+    def test_냉동식품에_해동방법이_없으면_지적한다(self):
+        from v1.label.services.validation_service import check_thawing_method
+
+        issues = check_thawing_method(self._label(
+            prdlst_dcnm='빵류(가열하지 않고 섭취하는 냉동식품)',
+            storage_method='냉동보관(-18℃ 이하)',
+            cautions='부정불량식품 신고는 국번없이 1399'))
+        self.assertEqual(len(issues), 1)
+        self.assertIn('해동', issues[0]['message'])
+
+    def test_해동_문구가_있으면_조용하다(self):
+        from v1.label.services.validation_service import check_thawing_method
+
+        self.assertEqual(check_thawing_method(self._label(
+            storage_method='냉동보관(-18℃ 이하)',
+            cautions='냉장실에서 3시간 해동 후 드십시오')), [])
+
+    def test_냉동이_아니면_보지_않는다(self):
+        from v1.label.services.validation_service import check_thawing_method
+
+        self.assertEqual(check_thawing_method(self._label(
+            storage_method='직사광선을 피해 실온 보관', cautions='')), [])
+
+    # ── 5. 제품 교환 안내 ──────────────────────────────────────────────────
+
+    def test_교환_안내가_없으면_지적한다(self):
+        """신고 번호는 적으면서 교환 안내는 빠뜨린 라벨이 많다."""
+        from v1.label.services.validation_service import check_exchange_notice
+
+        issues = check_exchange_notice(self._label(
+            cautions='부정불량식품 신고는 국번없이 1399'))
+        self.assertEqual(len(issues), 1)
+        self.assertIn('교환', issues[0]['message'])
+
+    def test_교환_문구가_있으면_조용하다(self):
+        from v1.label.services.validation_service import check_exchange_notice
+
+        self.assertEqual(check_exchange_notice(self._label(
+            cautions='제품에 이상이 있을 경우 구입처에서 교환해 드립니다')), [])
+
+    def test_주의사항_자체가_비면_보지_않는다(self):
+        """그건 필수 입력 검사가 말할 몫이다 — 같은 말을 두 번 하지 않는다."""
+        from v1.label.services.validation_service import check_exchange_notice
+
+        self.assertEqual(check_exchange_notice(self._label()), [])
+
+    # ── 6. 원산지 굵게 표시 ────────────────────────────────────────────────
+
+    def test_모르는_원산지는_굵게_못_칠한다고_알린다(self):
+        from v1.label.models import CountryList
+        from v1.label.services.validation_service import check_origin_emphasis
+
+        CountryList.objects.create(country_code2='NL', country_name_ko='네덜란드')
+        CountryList.objects.create(country_code2='US', country_name_ko='미국')
+
+        issues = check_origin_emphasis(self._label(
+            rawmtrl_nm_display='혼합분유/네덜란드산, 밀가루[밀/미국산], 코코아분말/왈론산'))
+        self.assertEqual(len(issues), 1)
+        self.assertIn('"왈론산"', issues[0]['message'])
+        self.assertNotIn('네덜란드', issues[0]['message'])
+
+    def test_국내산은_국가_목록에_없어도_괜찮다(self):
+        from v1.label.models import CountryList
+        from v1.label.services.validation_service import check_origin_emphasis
+
+        CountryList.objects.create(country_code2='KR', country_name_ko='대한민국')
+        self.assertEqual(check_origin_emphasis(self._label(
+            rawmtrl_nm_display='전란액/국산, 정제소금/국내산')), [])
+
+    def test_국가_목록을_못_읽으면_판정하지_않는다(self):
+        """모르는 것을 근거로 지적하면 고칠 방법이 없는 경고가 된다."""
+        from v1.label.services.validation_service import check_origin_emphasis
+
+        self.assertEqual(check_origin_emphasis(self._label(
+            rawmtrl_nm_display='혼합분유/네덜란드산')), [])
+
+    # ── 7. 괄호 — 이미 있던 검사가 잡는다 ──────────────────────────────────
+
+    def test_닫히지_않은_괄호를_잡는다(self):
+        """도안의 "과당1" 은 "과당]" 이어야 했다. 그러면 과자[ 가 안 닫힌다."""
+        from v1.label.services.validation_service import check_rawmtrl_brackets
+
+        issues = check_rawmtrl_brackets(self._label(
+            rawmtrl_nm_display='초콜릿(혼합형), 과자[밀가루, 설탕, 과당1 코코아분말'))
+        self.assertTrue(issues)
+        self.assertIn('닫히지 않았습니다', issues[0]['message'])
+
+    # ── 전체 검증에 실려 있는가 ────────────────────────────────────────────
+
+    def test_네_검사가_모두_돈다(self):
+        from v1.label.services.validation_service import validate_label
+
+        label = self._label(
+            prdlst_dcnm='빵류(가열하지 않고 섭취하는 냉동식품)',
+            storage_method='냉동보관(-18℃ 이하)',
+            cautions='부정불량식품 신고는 국번없이 1399',
+            calories='309', carbohydrates='9', fats='4.5', proteins='1')
+        categories = {i['category'] for i in validate_label(label)['issues']}
+        self.assertIn('calorie_macros', categories)
+        self.assertIn('thawing_method', categories)
+        self.assertIn('exchange_notice', categories)
+
+    def test_권고_항목은_확정을_막지_않는다(self):
+        """
+        확인이나 사유를 받는 무게는 표시기준이 그렇게 적으라고 한 것에만 쓴다.
+        교환 안내가 없다고 지금까지 만든 라벨 전부가 확인 절차를 거치면,
+        사람은 그 창을 읽지 않고 넘기는 법을 익힌다.
+        """
+        from v1.label.services.validation_service import (
+            check_exchange_notice, check_origin_emphasis, check_thawing_method,
+        )
+
+        advisory = check_exchange_notice(self._label(cautions='신고는 1399'))
+        self.assertTrue(advisory[0]['advisory'])
+
+        blocking = check_thawing_method(self._label(
+            storage_method='냉동보관(-18℃ 이하)', cautions='신고는 1399'))
+        self.assertFalse(blocking[0]['advisory'])
+
+        self.assertEqual(check_origin_emphasis.__name__, 'check_origin_emphasis')
+
+    def test_근거_규정을_밝힌다(self):
+        from v1.label.services.validation_service import validate_label
+
+        listed = ' '.join(validate_label(self._label())['checked_regulations'])
+        for word in ('열량 산출', '해동', '교환', '원산지 표시 방법'):
+            self.assertIn(word, listed)
+
+
+class NutritionHeaderBasisTests(TestCase):
+    """
+    영양정보 표의 열 머리는 기준을 밝히는 말이다.
+
+    검수에서 "영양정보 아래 65 g 당 -> 총 내용량 당 으로 수정" 이 나왔다.
+    "당" 이 빠지면 그 열의 숫자가 총량인지 100 g 당인지 알 수 없다.
+    """
+
+    def test_머리글에_당이_붙는다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        head = js.index('const tabMapShort = {')
+        block = js[head:js.index('}', head)]
+        self.assertIn('총 내용량 당', block)
+        self.assertIn('단위내용량 당', block)

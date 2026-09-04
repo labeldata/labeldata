@@ -46,6 +46,7 @@ from v1.label.constants import (
 
 _FARM_SEAFOOD_CACHE_KEY = 'label_validation:farm_seafood_items'
 _FARM_SEAFOOD_CACHE_TTL = 60 * 60 * 6  # 6시간 — 매 검증마다 DB를 안 때리기 위한 캐시
+_COUNTRY_CACHE_KEY = 'label_validation:country_names'
 
 
 def _get_farm_seafood_items() -> list[str]:
@@ -154,6 +155,10 @@ _LEGAL_BASIS = {
     'food_type_unknown': '「식품등의 표시기준」 식품유형별 표시사항 규정',
     'allergen_vocabulary': '「식품등의 표시기준」 알레르기 유발물질 표시 규정(표시 명칭)',
     'font_size': '「식품등의 표시기준」 표시사항의 활자 크기 규정(10포인트 이상)',
+    'calorie_macros': '「식품등의 표시기준」 영양성분 표시 규정(열량 산출 방법 — 탄수화물·단백질 4 kcal/g, 지방 9 kcal/g)',
+    'thawing_method': '「식품등의 표시기준」 냉동식품의 조리·해동방법 표시 규정',
+    'exchange_notice': '「소비자기본법」 소비자분쟁해결기준에 따른 제품 교환 안내',
+    'origin_emphasis': '「농수산물의 원산지 표시 등에 관한 법률 시행규칙」 원산지 표시 방법(포장재 바탕색과 구분되는 색·굵기)',
 }
 
 
@@ -180,8 +185,28 @@ _ISSUE_FIELDS = {
     'food_type_unknown':     ('prdlst_dcnm',),
     'allergen_vocabulary':   ('rawmtrl_nm_display',),
     'font_size':             (),
+    'calorie_macros':        ('content_weight',),
+    'thawing_method':        ('cautions',),
+    'exchange_notice':       ('cautions',),
+    'origin_emphasis':       ('rawmtrl_nm_display',),
     # forbidden_phrase / required_missing 은 지적마다 칸이 달라 그때그때 싣는다
 }
+
+
+# 확정을 막지 않는 지적.
+#
+# 확정 직전 검사는 지적이 하나라도 있으면 길을 막고 확인이나 사유를 받는다.
+# 그 무게를 받아도 되는 것은 **표시기준이 그렇게 적으라고 한 것**뿐이다.
+#
+#   exchange_notice   교환 안내는 표시기준의 의무표시사항이 아니라 소비자분쟁
+#                     해결기준에 따른 관행이다. 이것으로 확정을 막으면 지금까지
+#                     만든 라벨 거의 전부가 갑자기 확인 절차를 거쳐야 한다.
+#   origin_emphasis   "굵게 안 칠했다" 가 아니라 "국가명으로 못 알아봤다" 는
+#                     말이다. 우리 국가 목록이 부족한 경우가 섞여 있어서,
+#                     사용자가 고칠 방법이 없는 지적이 될 수 있다.
+#
+# 둘 다 규정 검증 결과에는 그대로 나온다 — 사람이 검수에서 짚는 항목들이다.
+_ADVISORY_CATEGORIES = frozenset({'exchange_notice', 'origin_emphasis'})
 
 
 def _issue(category: str, message: str, suggestion: str = '', fields=None) -> dict:
@@ -193,6 +218,8 @@ def _issue(category: str, message: str, suggestion: str = '', fields=None) -> di
         'suggestion': suggestion,
         'legal_basis': basis,
         'fields': list(fields if fields is not None else _ISSUE_FIELDS.get(category, ())),
+        # True 면 확정을 막지 않는다 (product_update_status 가 본다)
+        'advisory': category in _ADVISORY_CATEGORIES,
     }
 
 
@@ -1400,6 +1427,206 @@ def check_font_size(label) -> list[dict]:
     )]
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 사람이 검수하며 짚어 낸 것을 코드로 옮긴 검사들
+#
+# 실제 검수 의견(브라우니 케이크 도안)에서 왔다. 일곱 건 중 넷이 여기 있고,
+# 원재료명 괄호(과당1 -> 과당])는 check_rawmtrl_brackets 가 이미 잡으며,
+# 영양정보 표의 머리글 표기는 검증이 아니라 표를 그리는 쪽에서 고쳤다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 열량 환산 계수. 「식품등의 표시기준」의 열량 산출 방법.
+_ATWATER = {'carbohydrates': 4.0, 'proteins': 4.0, 'fats': 9.0}
+
+
+def check_calorie_matches_macros(label) -> list[dict]:
+    """
+    적어 둔 열량이 탄수화물·지방·단백질로 계산한 값과 맞는가.
+
+    검수에서 "영양정보 함량 및 비율을 계산식에 맞추어 전부 수정" 이라고 나온
+    자리다. 그 도안은 총 내용량 65 g 에 309 kcal 인데, 표의 탄수화물 9 g ·
+    지방 4.5 g · 단백질 1 g 으로 계산하면 80 kcal 밖에 안 된다. **열량만 총량
+    기준이고 나머지는 다른 기준으로 적힌 것**인데, 숫자만 봐서는 어느 쪽이
+    틀렸는지 알 수 없어 사람이 표 전체를 다시 계산해야 했다.
+
+    비율(%)은 따로 보지 않는다 — 그 값은 이 앱이 함량에서 직접 계산해 그리므로
+    함량이 맞으면 따라 맞는다. 틀릴 수 있는 것은 함량 쪽이다.
+
+    문턱을 넉넉히 잡는다. 표시기준의 반올림(열량 5 kcal, 지방 0.1 g 단위)만으로도
+    몇 kcal 는 벌어지고, 식이섬유·당알코올처럼 이 계산에 안 들어가는 성분이 있는
+    제품도 있다. 그런 폭이 아니라 **기준이 어긋난 자릿수 차이**를 잡는 검사다.
+    """
+    calories = _number((getattr(label, 'calories', '') or '').strip())
+    if calories is None or calories <= 0:
+        return []
+
+    macros = {}
+    for field in _ATWATER:
+        value = _number((getattr(label, field, '') or '').strip())
+        if value is None:
+            return []       # 하나라도 없으면 계산할 수 없다
+        macros[field] = value
+
+    computed = sum(macros[f] * factor for f, factor in _ATWATER.items())
+    if computed <= 0:
+        return []
+
+    gap = abs(calories - computed)
+    if gap <= max(25.0, computed * 0.3):
+        return []
+
+    return [_issue(
+        'calorie_macros',
+        f'열량({calories:g} kcal)이 탄수화물·지방·단백질로 계산한 값'
+        f'({computed:,.0f} kcal)과 크게 다릅니다 — '
+        f'탄수화물 {macros["carbohydrates"]:g} g × 4 + 지방 {macros["fats"]:g} g × 9 + '
+        f'단백질 {macros["proteins"]:g} g × 4.',
+        '한쪽만 다른 기준으로 적힌 경우가 많습니다. 영양성분 탭의 값이 모두 '
+        '같은 기준(100 g 당)인지 확인하세요. 라벨에 인쇄된 값을 옮겨 적었다면 '
+        '계산기의 "아래 값은" 에서 그 기준을 고르고 다시 넣으면 환산해 줍니다.',
+    )]
+
+
+# 냉동 제품인지 가리는 말. 보관방법·식품유형·장기보존식품 어디에 적혀 있어도 된다.
+_FROZEN_HINTS = ('냉동', '-18')
+
+
+def _is_frozen(label) -> bool:
+    haystack = ' '.join(str(getattr(label, f, '') or '') for f in (
+        'preservation_type', 'storage_method', 'prdlst_dcnm', 'food_type'))
+    if 'frozen' in haystack:
+        return True
+    return any(hint in haystack for hint in _FROZEN_HINTS)
+
+
+def check_thawing_method(label) -> list[dict]:
+    """
+    냉동식품인데 해동(조리) 방법이 적혀 있는가.
+
+    검수에서 "해동방법 표시 바랍니다" 로 나온 자리다. 냉동식품은 "가열하여
+    섭취하는" / "가열하지 않고 섭취하는" 구분과 함께 조리 또는 해동 방법을
+    적어야 하는데, 이 앱은 앞의 구분만 챙기고 뒤는 아무도 보지 않았다.
+
+    문구는 주의사항·기타표시사항·보관방법 어디에 있어도 된다. 라벨마다 적는
+    자리가 다르고, 어디에 적혔든 인쇄물에는 나오기 때문이다.
+    """
+    if not _is_frozen(label):
+        return []
+
+    haystack = ' '.join(str(getattr(label, f, '') or '') for f in (
+        'cautions', 'additional_info', 'storage_method'))
+    if '해동' in haystack or '조리' in haystack:
+        return []
+
+    return [_issue(
+        'thawing_method',
+        '냉동식품인데 해동(조리) 방법이 보이지 않습니다.',
+        '주의사항이나 기타 표시사항에 해동 방법을 적으세요. '
+        '(예: "냉장실에서 3시간 해동 후 드십시오")',
+    )]
+
+
+def check_exchange_notice(label) -> list[dict]:
+    """
+    제품에 이상이 있을 때 어디서 바꿀 수 있는지 적혀 있는가.
+
+    검수에서 "제품교환장소 추가 바람" 으로 나온 자리다. 부정·불량식품 신고
+    번호(1399)는 적어 두면서 교환 안내는 빠뜨린 라벨이 많다 — 둘은 다른
+    이야기인데 "소비자 안내는 넣었다" 고 여기게 된다.
+    """
+    haystack = ' '.join(str(getattr(label, f, '') or '') for f in (
+        'cautions', 'additional_info'))
+    if not haystack.strip():
+        return []       # 주의사항 자체가 비었으면 필수 입력 검사가 말한다
+    if '교환' in haystack or '반품' in haystack:
+        return []
+
+    return [_issue(
+        'exchange_notice',
+        '제품 교환 안내(교환 장소)가 보이지 않습니다.',
+        '주의사항에 교환 장소를 함께 적으세요. '
+        '(예: "제품에 이상이 있을 경우 구입처 및 본사에서 교환해 드립니다")',
+    )]
+
+
+# "○○산" 이지만 국가명이 아닌 말. 굵게 표시할 대상이 아니거나, 국가 목록에
+# 없어도 정상인 것들이다.
+_NOT_A_COUNTRY = frozenset({
+    '국내', '국', '수입', '원양', '연근해', '자연', '양식', '지역', '현지',
+    '재래', '토', '한', '냉동', '냉장', '유기농', '무농약',
+})
+
+_ORIGIN_RE = re.compile(r'([가-힣]{1,10})산(?![가-힣])')
+
+
+def _country_names() -> set:
+    """국가명 목록(한글). 미리보기가 굵게 칠할 때 쓰는 것과 같은 표다."""
+    cached = cache.get(_COUNTRY_CACHE_KEY)
+    if cached is not None:
+        return cached
+
+    from v1.label.models import CountryList
+
+    try:
+        names = {
+            (row or '').strip()
+            for row in CountryList.objects.values_list('country_name_ko', flat=True)
+            if row and row.strip()
+        }
+    except Exception:
+        logger.exception('국가명 목록 조회 실패')
+        return set()
+
+    # 빈 결과는 캐시하지 않는다. 조회가 한 번 어긋난 것을 여섯 시간 동안
+    # "국가가 하나도 없다" 로 붙들고 있으면 그동안 이 검사가 통째로 멈춘다.
+    if names:
+        cache.set(_COUNTRY_CACHE_KEY, names, _FARM_SEAFOOD_CACHE_TTL)
+    return names
+
+
+def check_origin_emphasis(label) -> list[dict]:
+    """
+    원재료명의 원산지 표기를 국가명으로 알아보았는가.
+
+    검수에서 "혼합분유/네덜란드산 볼드 표시" 로 나온 자리다. 수입 원산지는 굵게
+    표시해야 하고 미리보기가 그 일을 자동으로 한다 — **국가명 목록에 있는 이름만.**
+    목록에 없거나 철자가 어긋나면 조용히 안 굵어지고, 인쇄물이 나온 뒤에야 사람
+    눈에 걸린다.
+
+    그래서 "굵게 칠하지 못한 ○○산" 을 이름째로 알려 준다. 목록에 없는 국가면
+    추가하면 되고, 철자가 틀렸으면 원재료명을 고치면 된다.
+    """
+    text = (label.rawmtrl_nm_display or label.rawmtrl_nm or '').strip()
+    if not text:
+        return []
+
+    known = _country_names()
+    if not known:
+        return []       # 목록을 못 읽었으면 판정하지 않는다
+
+    unknown = []
+    for name in _ORIGIN_RE.findall(text):
+        if name in _NOT_A_COUNTRY or name in known:
+            continue
+        if f'{name}산' in known:      # 목록에 "○○산" 째로 들어 있는 경우
+            continue
+        if name not in unknown:
+            unknown.append(name)
+
+    if not unknown:
+        return []
+
+    listed = ', '.join(f'"{name}산"' for name in unknown)
+    return [_issue(
+        'origin_emphasis',
+        f'원재료명의 {listed} 을(를) 국가명으로 알아보지 못해 굵게 표시하지 '
+        f'못했습니다.',
+        '수입 원산지는 굵게 표시해야 합니다. 국가명의 철자를 확인하시고, '
+        '철자가 맞다면 국가 목록에 없는 이름이니 알려 주세요.',
+    )]
+
+
 _CHECKS = [
     check_required_fields,
     check_calorie_consistency,
@@ -1417,6 +1644,11 @@ _CHECKS = [
     check_food_type_known,
     check_allergen_vocabulary,
     check_font_size,
+    # 사람이 검수하며 짚어 낸 것들
+    check_calorie_matches_macros,
+    check_thawing_method,
+    check_exchange_notice,
+    check_origin_emphasis,
 ]
 
 

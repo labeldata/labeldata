@@ -138,6 +138,7 @@ class ConfirmValidationGateTests(TestCase):
             setattr(self.label, field, '값')
         self.label.content_weight = '500g'   # 단위 검사도 통과해야 한다
         self.label.save()
+        # 주의사항에 교환 안내가 없지만 그것은 권고라 길을 막지 않는다
 
         resp = self._post()
 

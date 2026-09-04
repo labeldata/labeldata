@@ -466,7 +466,7 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
         # 행에 표시를 얹고, 지적을 누르면 그 행으로 데려간다. 없으면 빈 목록이고
         # 그때는 목록으로만 보여 준다(예: 글자 크기는 표의 한 줄이 아니다).
         return {'label': label, 'ok': True, 'errors': [], 'suggestions': [],
-                'evidence': [], 'fields': []}
+                'evidence': [], 'fields': [], 'advisory': True}
 
     grouped: dict[str, dict] = {}
     for code, label in _CATEGORY_LABELS.items():
@@ -487,6 +487,9 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
         for field in issue.get('fields') or ():
             if field not in row['fields']:
                 row['fields'].append(field)
+        # 한 항목에 확정을 막는 지적이 하나라도 있으면 그 항목은 권고가 아니다
+        if not issue.get('advisory'):
+            row['advisory'] = False
 
     # 검증하지 않은 항목(예: 원재료 순서 - percent 정보 부족)은 목록에서 제외해
     # "적합"으로 오인되지 않게 한다. 호출부에서 checked 플래그로 별도 안내.
