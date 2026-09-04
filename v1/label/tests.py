@@ -7372,3 +7372,111 @@ class NutritionHeaderBasisTests(TestCase):
         block = js[head:js.index('}', head)]
         self.assertIn('총 내용량 당', block)
         self.assertIn('단위내용량 당', block)
+
+class DesignRepeatConflictTests(TestCase):
+    """
+    같은 값이 도안 안에서 두 번 적히는 자리를 대조한다.
+
+    디자인 시안은 표시사항 표 하나로 끝나지 않는다. 내용량과 열량은 보통 세 곳에
+    따로 적힌다 — 표, 영양정보 머리, 앞면 박스("-18℃ 이하 냉동보관 65 g
+    (309 kcal)"). 표를 고치면서 박스를 안 고치는 일이 잦고, 판독은 표 값만
+    뽑아 오므로 그 어긋남을 알 방법이 없었다. 원문에는 셋 다 들어 있는데도.
+    """
+
+    def _data(self, **values):
+        return {field: {'value': value, 'confidence': 'high'}
+                for field, value in values.items()}
+
+    def test_앞면_박스의_내용량이_다르면_알린다(self):
+        from v1.label.services.ocr_repeats import attach
+
+        data = attach(self._data(content_weight='65 g'),
+                      '내용량 65 g\n-18℃ 이하 냉동보관  70 g (309 kcal)')
+        warnings = data['content_weight']['warnings']
+        self.assertTrue(warnings)
+        self.assertIn('70 g', warnings[0])
+        self.assertIn('65 g', warnings[0])
+
+    def test_열량이_다르면_알린다(self):
+        from v1.label.services.ocr_repeats import attach
+
+        data = attach(self._data(content_weight='65 g (309 kcal)'),
+                      '내용량 65 g (309 kcal)\n총 내용량 65 g  475 kcal')
+        warnings = data['content_weight']['warnings']
+        self.assertTrue(any('475 kcal' in w for w in warnings))
+
+    def test_같으면_조용하다(self):
+        from v1.label.services.ocr_repeats import attach
+
+        data = attach(self._data(content_weight='65 g (309 kcal)'),
+                      '내용량 65 g (309 kcal)\n총 내용량 65 g  309 kcal')
+        self.assertNotIn('warnings', data['content_weight'])
+
+    def test_영양성분_표의_숫자는_내용량이_아니다(self):
+        """
+        나트륨 30 mg · 지방 4.5 g 까지 세면 표의 모든 줄이 "다른 내용량" 이 된다.
+        """
+        from v1.label.services.ocr_repeats import attach
+
+        data = attach(
+            self._data(content_weight='65 g'),
+            '내용량 65 g\n나트륨 30 mg  탄수화물 9 g  지방 4.5 g  단백질 1 g')
+        self.assertNotIn('warnings', data['content_weight'])
+
+    def test_단위가_다르면_견주지_않는다(self):
+        """65 g 과 1 L 는 서로 다른 것을 말할 수 있다."""
+        from v1.label.services.ocr_repeats import attach
+
+        data = attach(self._data(content_weight='65 g'),
+                      '내용량 65 g\n권장 섭취량 1 L 의 물과 함께')
+        self.assertNotIn('warnings', data['content_weight'])
+
+    def test_값을_고치지는_않는다(self):
+        """어느 쪽이 맞는지는 사진을 봐야 안다. 고르면 틀린 쪽을 고를 수도 있다."""
+        from v1.label.services.ocr_repeats import attach
+
+        data = attach(self._data(content_weight='65 g'), '내용량 65 g\n70 g')
+        self.assertEqual(data['content_weight']['value'], '65 g')
+
+    def test_읽은_값이_없으면_견주지_않는다(self):
+        from v1.label.services.ocr_repeats import attach
+
+        data = attach(self._data(content_weight=None), '어딘가에 70 g')
+        self.assertNotIn('warnings', data['content_weight'])
+
+    def test_판독_경로에_걸려_있다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        src = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py').read_text(encoding='utf-8')
+        self.assertIn('def _repeats_checked', src)
+        # 한 장 경로와 여러 장 경로 둘 다
+        self.assertEqual(src.count('result = _repeats_checked(result, ocr_text)'), 2)
+
+
+class NutritionPlacementTests(TestCase):
+    """표시사항이 세로로 길면 영양정보를 옆에, 가로로 넓으면 아래에."""
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+
+    def test_표의_모양으로_자리를_정한다(self):
+        self.assertIn('function placeNutritionBlock', self.js)
+        head = self.js.index('function placeNutritionBlock')
+        block = self.js[head:head + 1200]
+        self.assertIn('table.offsetHeight > table.offsetWidth', block)
+        self.assertIn("classList.toggle('pv-nutrition-side'", block)
+
+    def test_옆에_세우는_배치가_정의돼_있다(self):
+        self.assertIn('#previewContent.pv-nutrition-side {', self.css)
+        head = self.css.index('#previewContent.pv-nutrition-side {')
+        self.assertIn('display: flex', self.css[head:head + 200])
+
+    def test_켜고_끌_때마다_다시_정한다(self):
+        """자리를 한 번만 정하면 항목을 지우거나 더한 뒤에 어긋난 채로 남는다."""
+        self.assertGreaterEqual(self.js.count('placeNutritionBlock();'), 2)

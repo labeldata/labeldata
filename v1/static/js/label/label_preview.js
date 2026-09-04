@@ -2943,6 +2943,7 @@ document.addEventListener('DOMContentLoaded', function () {
          * 나오지 않았다.
          */
         nutritionPreview.style.display = isNutritionShown() ? 'block' : 'none';
+        placeNutritionBlock();
         if (typeof calculateHeight === 'function') calculateHeight();
     }
 
@@ -2965,8 +2966,38 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         el.style.display = isNutritionShown() ? 'block' : 'none';
+        placeNutritionBlock();
         if (typeof calculateHeight === 'function') calculateHeight();
     };
+
+    /*
+     * 영양정보 표를 어디에 둘 것인가.
+     *
+     * 실제 인쇄물은 남는 자리를 따라간다 — 표시사항이 세로로 길면 옆에 나란히
+     * 세우고, 가로로 넓으면 아래에 길게 깐다. 늘 아래에 붙이면 세로로 긴
+     * 라벨은 더 길어지기만 하고 옆의 빈 자리는 그대로 남는다.
+     *
+     * 판정은 표시사항 표의 **가로세로 비**로 한다. 라벨의 가로 크기는
+     * 사용자가 정하지만 세로는 내용에 따라 자동으로 늘어나므로, 그 둘의 비가
+     * 곧 "지금 이 라벨이 세로로 긴가" 다.
+     */
+    function placeNutritionBlock() {
+        const box = document.getElementById('nutritionPreview');
+        const content = document.getElementById('previewContent');
+        const table = document.querySelector('.preview-table');
+        if (!box || !content || !table) return;
+
+        if (box.style.display === 'none') {
+            content.classList.remove('pv-nutrition-side');
+            return;
+        }
+
+        // 표가 가로보다 눈에 띄게 길면 옆에 세운다. 1.2 는 "조금 긴" 정도가
+        // 아니라 확실히 세로로 긴 경우만 고르려고 둔 여유다.
+        const tall = table.offsetHeight > table.offsetWidth * 1.2;
+        content.classList.toggle('pv-nutrition-side', tall);
+    }
+    window.placeNutritionBlock = placeNutritionBlock;
 
     // 영양성분 데이터 수신
     window.addEventListener('message', function(e) {

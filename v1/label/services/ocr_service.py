@@ -665,6 +665,27 @@ def _grounded(data, text, use_ground=None):
         return data, None
 
 
+def _repeats_checked(data, text):
+    """
+    같은 값이 도안 안에서 두 번 적히는 자리를 대조한다.
+
+    내용량과 열량은 표시사항 표 말고도 앞면 박스와 영양정보 머리에 또 적힌다.
+    표를 고치면서 그쪽을 안 고치는 일이 잦은데, 판독은 표 값만 뽑아 오므로 그
+    어긋남을 알 방법이 없었다 — 원문에는 셋 다 들어 있는데도.
+
+    값은 고치지 않고 알리기만 한다. 어느 쪽이 맞는지는 사진을 봐야 안다.
+    """
+    if not text:
+        return data
+    try:
+        from v1.label.services.ocr_repeats import attach
+        return attach(data, text)
+    except Exception:
+        # 얹는 것이다. 실패해도 판독 결과는 그대로 나가야 한다.
+        logger.exception('도안 안의 중복 표기 대조 실패')
+        return data
+
+
 def _read_bytes(image_file):
     """
     대조에 쓸 원본 바이트. 필요할 때만 읽는다.
@@ -1004,6 +1025,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         # 우리가 고칠 값을 두고 "지어냈다" 고 표시하게 된다.
         result = _repaired(result, ocr_text, use_hybrid)
         result, ground_report = _grounded(result, ocr_text, use_ground)
+        result = _repeats_checked(result, ocr_text)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 
@@ -1128,6 +1150,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         # 우리가 고칠 값을 두고 "지어냈다" 고 표시하게 된다.
         result = _repaired(result, ocr_text, use_hybrid)
         result, ground_report = _grounded(result, ocr_text, use_ground)
+        result = _repeats_checked(result, ocr_text)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 
