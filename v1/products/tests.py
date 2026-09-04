@@ -2022,3 +2022,141 @@ class WorkflowStepTabsTests(TestCase):
         self.assertIn('wf-no', html)
         self.assertIn('#workspaceTab .wf-step + .wf-step::before', css)
         self.assertIn('#workspaceTab .wf-aside', css)
+
+
+class DocumentVersionStackTests(TestCase):
+    """
+    같은 문서가 목록에 세 번 나오는 것은 세 개의 문서가 아니라 한 문서의 세
+    판이다. 줄이 늘어날수록 "무슨 문서를 갖고 있는가" 가 판 수에 묻힌다.
+    """
+
+    def setUp(self):
+        from v1.products.models import DocumentType, ProductDocument
+        self.DocumentType, self.ProductDocument = DocumentType, ProductDocument
+        self.user = User.objects.create_user(username='docstack', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user,
+                                            my_label_name='브라우니')
+        self.dtype = self.DocumentType.objects.create(
+            type_code='KR_LABEL', type_name='한글표시사항도안')
+
+    def _doc(self, name, version=1, parent=None):
+        return self.ProductDocument.objects.create(
+            label=self.label, document_type=self.dtype,
+            file='v2/product_documents/%s' % name,
+            original_filename=name, version=version, parent_document=parent)
+
+    def test_판이_쌓여도_줄은_하나다(self):
+        from v1.products.views import version_stacks
+        root = self._doc('도안.jpg', 1)
+        self._doc('도안.jpg', 2, root)
+        self._doc('도안.jpg', 3, root)
+        groups = version_stacks(
+            self.ProductDocument.objects.filter(label=self.label))
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]['count'], 3)
+        self.assertEqual(groups[0]['latest'].version, 3)
+        self.assertEqual([d.version for d in groups[0]['older']], [2, 1])
+
+    def test_다른_문서는_따로_센다(self):
+        from v1.products.views import version_stacks
+        root = self._doc('도안.jpg', 1)
+        self._doc('도안.jpg', 2, root)
+        self._doc('시안.jpg', 1)
+        groups = version_stacks(
+            self.ProductDocument.objects.filter(label=self.label))
+        self.assertEqual(len(groups), 2)
+        self.assertEqual(sorted(g['count'] for g in groups), [1, 2])
+
+    def test_판이_하나면_묶을_것도_없다(self):
+        from v1.products.views import version_stacks
+        self._doc('혼자.jpg', 1)
+        groups = version_stacks(
+            self.ProductDocument.objects.filter(label=self.label))
+        self.assertEqual(groups[0]['older'], [])
+
+    def test_들어온_순서를_지킨다(self):
+        # 최신 판이 나왔을 자리에 그 묶음이 선다
+        from v1.products.views import version_stacks
+        first = self._doc('가.jpg', 1)
+        self._doc('나.jpg', 1)
+        self._doc('가.jpg', 2, first)
+        docs = list(self.ProductDocument.objects.filter(label=self.label)
+                    .order_by('document_id'))
+        groups = version_stacks(docs)
+        self.assertEqual([g['latest'].original_filename for g in groups],
+                         ['가.jpg', '나.jpg'])
+
+    def test_빈_목록도_받는다(self):
+        from v1.products.views import version_stacks
+        self.assertEqual(version_stacks([]), [])
+
+
+class DocumentTabLooksLikeTheRestTests(TestCase):
+    """
+    준수율 바가 도넛에 두 줄짜리 칩이라 이 줄 하나가 60px 을 넘게 먹었고,
+    구분·상태·버전이 저마다 색 있는 배지라 표가 알록달록했다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.html = (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_도넛_차트는_없앴다(self):
+        self.assertNotIn('circular-chart', self.html)
+        self.assertNotIn('compliance-dial', self.html)
+        self.assertNotIn('compliance-strip', self.html)
+
+    def test_한_줄짜리_현황_바를_쓴다(self):
+        self.assertIn('doc-status-bar', self.html)
+        self.assertIn('doc-progress-bar', self.html)
+        self.assertIn('min-height: 40px', self.html)
+
+    def test_갖춘_칩은_조용하다(self):
+        # 다섯이 다 색을 쓰면 어느 것이 문제인지 알 수 없다
+        head = self.html.index("{% if slot.status != 'VALID' %}")
+        self.assertIn('없음', self.html[head:head + 260])
+
+    def test_목록은_묶음을_돈다(self):
+        self.assertIn('{% for group in document_groups %}', self.html)
+        self.assertNotIn('{% for doc in documents %}', self.html)
+
+    def test_이전_판은_접혀_있다(self):
+        self.assertIn('.doc-version-row { display: none; }', self.html)
+        self.assertIn('.doc-version-row.open { display: table-row; }', self.html)
+        self.assertIn('function toggleDocVersions', self.html)
+
+    def test_걸러낼_때_판_줄도_같이_감춘다(self):
+        self.assertIn('function showDocRow', self.html)
+        self.assertIn('showDocRow(row, shouldShow)', self.html)
+        self.assertNotIn("row.style.display = shouldShow ? '' : 'none';", self.html)
+
+
+class DocumentTabRendersTests(TestCase):
+    """탭이 실제로 그려지는가. 틀만 고쳐 놓고 깨뜨리면 아무 소용이 없다."""
+
+    def test_판이_쌓인_제품_화면이_열린다(self):
+        from v1.products.models import DocumentType, ProductDocument
+        user = User.objects.create_user(username='docrender', password='x')
+        self.client.force_login(user)
+        label = MyLabel.objects.create(user_id=user, my_label_name='브라우니')
+        dtype = DocumentType.objects.create(type_code='KR_LABEL',
+                                            type_name='한글표시사항도안')
+        root = ProductDocument.objects.create(
+            label=label, document_type=dtype, file='v2/product_documents/a.jpg',
+            original_filename='도안.jpg', version=1, uploaded_by=user)
+        ProductDocument.objects.create(
+            label=label, document_type=dtype, file='v2/product_documents/b.jpg',
+            original_filename='도안.jpg', version=2, parent_document=root,
+            uploaded_by=user)
+
+        res = self.client.get(reverse('products:product_detail',
+                                      args=[label.my_label_id]))
+        self.assertEqual(res.status_code, 200)
+        body = res.content.decode('utf-8')
+        self.assertIn('doc-status-bar', body)
+        # 두 판이 한 줄로 묶여 이전 판 줄이 하나 따라붙는다
+        self.assertEqual(body.count('class="document-row cursor-pointer"'), 1)
+        self.assertEqual(body.count('class="doc-version-row"'), 1)
+        self.assertIn('toggleDocVersions', body)

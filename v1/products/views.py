@@ -494,6 +494,42 @@ def product_explorer(request, folder_id=None):
 
 # ==================== 제품 상세 ====================
 
+def version_stacks(documents):
+    """
+    같은 문서의 여러 판을 한 줄로 묶는다.
+
+    새 판을 올려도 예전 판은 지워지지 않고 parent_document 로 이어 달린다.
+    그런데 목록은 그 판들을 **각각 한 줄씩** 그렸다. 문서 세 종류를 가진
+    제품이 여섯 줄로 보이고 같은 이름이 연달아 세 번 나온다 - 정작 알고 싶은
+    "무슨 문서를 갖고 있는가" 가 판 수에 묻힌다.
+
+    한 줄에 최신 판을 놓고 예전 판은 그 아래에 접어 둔다. 예전 판을 감추는
+    것이 아니다 - 문서 하나에 이력이 쌓이는 것이 원래 모습이고, 목록은 문서를
+    세는 자리다.
+
+    documents 의 순서를 지킨다. 최신 판이 나왔을 자리에 그 묶음이 선다.
+
+    Returns: [{'root', 'latest', 'older', 'count'}…]
+    """
+    order, stacks = [], {}
+    for doc in documents:
+        root = doc.parent_document_id or doc.document_id
+        if root not in stacks:
+            stacks[root] = []
+            order.append(root)
+        stacks[root].append(doc)
+
+    groups = []
+    for root in order:
+        # 판 번호가 같거나 없는 옛 자료가 있어 올린 시각까지 함께 본다.
+        docs = sorted(stacks[root],
+                      key=lambda d: (d.version or 1, d.uploaded_datetime or 0),
+                      reverse=True)
+        groups.append({'root': root, 'latest': docs[0],
+                       'older': docs[1:], 'count': len(docs)})
+    return groups
+
+
 @login_required
 def product_detail(request, product_id):
     """제품 상세 보기 - V2 스타일 (BOM, 문서 등록 등)"""
@@ -577,6 +613,9 @@ def product_detail(request, product_id):
         active_yn=True
     ).select_related('document_type', 'uploaded_by', 'uploaded_by__profile').order_by('document_type__display_order', '-uploaded_datetime')
     
+    # 같은 문서의 여러 판을 한 줄로
+    document_groups = version_stacks(documents)
+
     # 문서 타입별 그룹화
     document_types = DocumentType.objects.filter(active_yn=True).order_by('display_order', 'type_name')
     documents_by_type = {}
@@ -894,6 +933,7 @@ def product_detail(request, product_id):
         'metadata': metadata,
         'bom_items': bom_items,
         'documents': documents,
+        'document_groups': document_groups,
         'food_types': food_types,
         'food_groups': food_groups,
         'countries': countries,
