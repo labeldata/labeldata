@@ -2114,6 +2114,45 @@ class DocumentVersionStackTests(TestCase):
         self.assertEqual([g['latest'].original_filename for g in groups],
                          ['가.jpg', '나.jpg'])
 
+    def test_사슬이_끊긴_판도_이어_붙인다(self):
+        """
+        판 번호는 (제품, 문서 종류) 안에서 하나의 줄로 매겨진다. 그러니 판 2
+        이상인데 위로 이어진 데가 없는 것은 홀로 선 문서가 아니라 사슬이 끊긴
+        판이다. 옛 자료나 이어 달기 전에 들어온 것이 그렇게 남아 있다.
+        """
+        from v1.products.views import version_stacks
+        self._doc('도안.jpg', 1)
+        self._doc('도안.jpg', 2)      # 이어진 데가 없다
+        self._doc('도안.jpg', 3)
+        groups = version_stacks(
+            self.ProductDocument.objects.filter(label=self.label))
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]['count'], 3)
+        self.assertEqual(groups[0]['latest'].version, 3)
+
+    def test_판_1_은_따로_선다(self):
+        # 판 1 은 정말 새 문서일 수 있다. 번호로 넘겨짚지 않는다.
+        from v1.products.views import version_stacks
+        self._doc('가.jpg', 1)
+        self._doc('나.jpg', 1)
+        groups = version_stacks(
+            self.ProductDocument.objects.filter(label=self.label))
+        self.assertEqual(len(groups), 2)
+
+    def test_종류가_다르면_번호가_겹쳐도_안_섞인다(self):
+        from v1.products.views import version_stacks
+        other = self.DocumentType.objects.create(type_code='PROOF',
+                                                 type_name='포장지 시안')
+        self._doc('도안.jpg', 1)
+        self._doc('도안.jpg', 2)
+        self.ProductDocument.objects.create(
+            label=self.label, document_type=other,
+            file='v2/product_documents/s.jpg', original_filename='시안.jpg',
+            version=2)
+        groups = version_stacks(
+            self.ProductDocument.objects.filter(label=self.label))
+        self.assertEqual(sorted(g['count'] for g in groups), [1, 2])
+
     def test_빈_목록도_받는다(self):
         from v1.products.views import version_stacks
         self.assertEqual(version_stacks([]), [])

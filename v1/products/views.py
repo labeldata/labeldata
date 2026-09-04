@@ -522,6 +522,38 @@ def _version_root(doc, by_id):
         node = nxt
 
 
+def _mend_broken_chains(docs, roots):
+    """
+    사슬이 끊긴 판을 판 번호로 이어 붙인다. **roots 를 제자리에서 고친다.**
+
+    판 번호는 (제품, 문서 종류) 안에서 **하나의 줄**로 매겨진다 - 올리는 쪽이
+    언제나 "그 종류의 가장 높은 판 + 1" 로 정한다. 입구가 셋인데(직접 업로드,
+    표시사항 사진 저장, 시안 대조) 셋 다 그 규칙을 쓴다.
+
+    그러니 **판 2 이상인데 위로 이어진 데가 없는 것**은 홀로 선 문서가 아니라
+    사슬이 끊긴 판이다. 그 종류의 가장 낮은 판에 이어 붙인다. 옛 자료나, 이어
+    달기 전에 들어온 것이 그렇게 남아 있다.
+
+    판 1 은 건드리지 않는다. 그것은 정말 새 문서일 수 있다.
+    """
+    lowest = {}
+    for doc in sorted(docs, key=lambda d: ((d.version or 1), d.document_id)):
+        lowest.setdefault(doc.document_type_id, roots[doc.document_id])
+
+    for doc in docs:
+        if doc.parent_document_id is None and (doc.version or 1) > 1:
+            roots[doc.document_id] = lowest.get(doc.document_type_id,
+                                                roots[doc.document_id])
+
+    # 뿌리가 다시 이어졌으면 그 끝까지 따라간다
+    for doc in docs:
+        seen, node = set(), roots[doc.document_id]
+        while node in roots and roots[node] != node and node not in seen:
+            seen.add(node)
+            node = roots[node]
+        roots[doc.document_id] = node
+
+
 def version_stacks(documents):
     """
     같은 문서의 여러 판을 한 줄로 묶는다.
@@ -541,10 +573,12 @@ def version_stacks(documents):
     """
     docs = list(documents)
     by_id = {d.document_id: d for d in docs}
+    roots = {d.document_id: _version_root(d, by_id) for d in docs}
+    _mend_broken_chains(docs, roots)
 
     order, stacks = [], {}
     for doc in docs:
-        root = _version_root(doc, by_id)
+        root = roots[doc.document_id]
         if root not in stacks:
             stacks[root] = []
             order.append(root)
