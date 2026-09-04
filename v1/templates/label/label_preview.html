@@ -52,26 +52,35 @@
       </button>
       {% endif %}
       {% if is_owner %}
-      <button id="saveSettingsBtn" class="btn btn-success btn-sm" aria-label="설정 저장">
-        <i class="fas fa-save me-1" aria-hidden="true"></i>설정 저장
+      {% comment %}
+        표 설정·항목 순서·분리배출마크는 여기서 저장하지 않으면 창을 닫는
+        순간 사라진다. 잃을 수 있는 일이라 도구 줄에서 가장 눈에 띄어야 한다.
+      {% endcomment %}
+      <button id="saveSettingsBtn" class="btn btn-success btn-sm btn-save-emphasis" aria-label="설정 저장">
+        <i class="fas fa-floppy-disk me-1" aria-hidden="true"></i>설정 저장
       </button>
       {% endif %}
       {% endif %}
       {% comment %}
-        디자인 담당자에게 넘길 **글자**. PDF 는 화면을 이미지로 떠서 붙인 것이라
-        글자를 선택할 수 없다 — 받는 사람이 원재료명 300자를 손으로 다시 치게
-        되고, 거기서 오타가 난다(검수에서 나온 "과당1"이 그 흔적이다).
+        디자인 담당자에게 넘기는 길은 전부 여기 모은다 — 복사도 내보내기의
+        한 갈래다. 단추를 따로 두면 도구 줄이 길어지기만 하고, 사용자는
+        "글자 복사" 와 "내보내기 > 텍스트" 가 무엇이 다른지 물어보게 된다.
+
+        PDF 는 화면을 이미지로 떠서 붙인 것이라 글자를 선택할 수 없다 —
+        받는 사람이 원재료명 300자를 손으로 다시 치고 거기서 오타가 난다
+        (검수에서 나온 "과당1" 이 그 흔적이다).
       {% endcomment %}
-      <button class="btn btn-outline-secondary btn-sm" id="copyTextBtn"
-              aria-label="글자 복사" title="표시사항을 글자로 복사합니다. 워드·엑셀에 그대로 붙여넣을 수 있습니다">
-        <i class="fas fa-clipboard me-1" aria-hidden="true"></i>글자 복사
-      </button>
       <div class="dropdown">
         <button class="btn btn-primary btn-sm dropdown-toggle" id="exportMenuBtn"
                 data-bs-toggle="dropdown" aria-expanded="false" aria-label="내보내기">
           <i class="fas fa-file-export me-1" aria-hidden="true"></i>내보내기
         </button>
         <ul class="dropdown-menu dropdown-menu-end vr-export-menu">
+          <li><button class="dropdown-item" type="button" id="copyTextBtn">
+            <i class="fas fa-clipboard me-2 text-success"></i>글자 복사
+            <span class="export-note">클립보드로 · 워드·엑셀에 바로 붙여넣기</span>
+          </button></li>
+          <li><hr class="dropdown-divider"></li>
           {% if can_upload_pdf %}
           <li><button class="dropdown-item" type="button" id="exportPdfBtn">
             <i class="fas fa-file-pdf me-2 text-danger"></i>PDF
@@ -99,48 +108,47 @@
   <main class="preview-container">
     <aside class="settings-panel"{% if request.GET.readonly %} style="display: none;"{% endif %}>
       <!-- 탭 네비게이션 -->
-      <div class="preview-tabs" style="display: flex; gap: 0.15rem; margin-bottom: 1rem; border-bottom: 2px solid #e9ecef; overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; align-items: center;">
-        <button class="preview-tab active" data-tab="table-settings" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
+      <div class="preview-tabs">
+        <button class="preview-tab active" data-tab="table-settings">
           표 설정
         </button>
-        <button class="preview-tab" data-tab="field-order" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
+        <button class="preview-tab" data-tab="field-order">
           항목 순서
         </button>
-        <button class="preview-tab" data-tab="text-format" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
+        <button class="preview-tab" data-tab="text-format">
           텍스트 변환
         </button>
-        <button class="preview-tab" data-tab="recycling-mark" style="padding: 0.4rem 0.6rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: #6c757d; font-weight: 500; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; flex-shrink: 0;">
+        <button class="preview-tab" data-tab="recycling-mark">
           분리배출마크
         </button>
-        <div style="flex: 1;"></div>
-        <button class="btn btn-sm btn-outline-secondary" id="resetSettingsBtn" style="border: none; padding: 0.4rem 0.6rem; font-size: 0.9rem;" title="설정 초기화">
+        <button class="btn btn-sm settings-reset" id="resetSettingsBtn" title="설정 초기화">
           <i class="fas fa-undo"></i>
         </button>
       </div>
       
       <!-- 표 설정 탭 -->
       <section class="preview-tab-content active" id="table-settings-content">
-        <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
+        <div class="settings-hint">
           <i class="fas fa-info-circle"></i> 라벨의 가로 크기, 글꼴, 글자 크기, 자간, 줄간격을 설정합니다. 세로 크기는 자동으로 계산됩니다.
         </div>
         
-        <div class="area-info text-primary mb-3" style="font-size: 0.85rem; font-weight: 600;">
+        <div class="area-info">
           정보표시면 면적: <span id="areaDisplay">100</span> cm²
         </div>
         
         <div class="settings-row-pair">
           <div class="settings-row">
-            <label class="form-label required" for="widthInput" style="font-size: 0.85rem; font-weight: 600;">가로 (cm)</label>
+            <label class="form-label required" for="widthInput">가로 (cm)</label>
             <input type="number" class="form-control form-control-sm" id="widthInput" value="10" min="4" max="50" step="1">
           </div>
           <div class="settings-row">
-            <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">세로 (cm) - 자동 계산</label>
+            <label class="form-label">세로 (cm) - 자동 계산</label>
             <input type="text" class="form-control form-control-sm" id="heightInput" readonly>
           </div>
         </div>
         <div class="settings-row-pair">
           <div class="settings-row">
-            <label class="form-label" for="fontFamilySelect" style="font-size: 0.85rem; font-weight: 600;">글꼴</label>
+            <label class="form-label" for="fontFamilySelect">글꼴</label>
             <select class="form-select form-select-sm" id="fontFamilySelect">
               <option value="'Noto Sans KR', sans-serif" selected>노토 산스</option>
               <option value="'Nanum Gothic', sans-serif">나눔고딕</option>
@@ -148,22 +156,22 @@
             </select>
           </div>
           <div class="settings-row">
-            <label class="form-label" for="fontSizeInput" style="font-size: 0.85rem; font-weight: 600;">기본 글자 크기 (pt)</label>
+            <label class="form-label" for="fontSizeInput">기본 글자 크기 (pt)</label>
             <input type="number" class="form-control form-control-sm" id="fontSizeInput" value="10" min="10" max="72" step="0.5">
           </div>
         </div>
         <div class="settings-row-pair">
           <div class="settings-row">
-            <label class="form-label" for="labelColWidthInput" style="font-size: 0.85rem; font-weight: 600;">항목명 칸 (mm, 최소)</label>
+            <label class="form-label" for="labelColWidthInput">항목명 칸 (mm, 최소)</label>
             <input type="number" class="form-control form-control-sm" id="labelColWidthInput" value="24" min="10" max="60" step="1"
                    title="최소 너비입니다. '유통전문판매원' 처럼 이 폭에 안 들어가는 이름이 있으면 자동으로 넓어집니다.">
           </div>
           <div class="settings-row">
-            <label class="form-label" for="letterSpacingInput" style="font-size: 0.85rem; font-weight: 600;">자간 (%)</label>
+            <label class="form-label" for="letterSpacingInput">자간 (%)</label>
             <input type="number" class="form-control form-control-sm" id="letterSpacingInput" value="-5" min="-20" max="20" step="1">
           </div>
           <div class="settings-row">
-            <label class="form-label" for="lineHeightInput" style="font-size: 0.85rem; font-weight: 600;">줄간격</label>
+            <label class="form-label" for="lineHeightInput">줄간격</label>
             <input type="number" class="form-control form-control-sm" id="lineHeightInput" value="1.5" min="1" max="3.0" step="0.1">
           </div>
         </div>
@@ -171,13 +179,13 @@
       
       <!-- 항목 순서 탭 -->
       <section class="preview-tab-content" id="field-order-content">
-        <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
+        <div class="settings-hint">
           <i class="fas fa-info-circle"></i> 드래그하여 항목 순서를 변경하고, 눈 아이콘으로 표시/숨김을 전환할 수 있습니다.
         </div>
         
         <!-- 레이아웃 배치 방식 선택 -->
         <div class="mb-3">
-          <label class="form-label mb-2" style="font-size: 0.85rem; font-weight: 600;">레이아웃 배치</label>
+          <label class="form-label">레이아웃 배치</label>
           <div id="layoutButtonGrid" class="layout-button-grid">
             <button class="layout-btn active" data-layout="vertical">
               <i class="fas fa-bars"></i>
@@ -191,23 +199,23 @@
           </div>
         </div>
         
-        <p style="font-size: 0.75rem; color: #666; margin-bottom: 0.5rem;">
+        <p class="settings-note">
           드래그 또는 버튼으로 순서 변경, 눈 아이콘으로 표시/숨김.
           <br>눈 아이콘은 <strong>표시 항목 체크</strong>와 같은 스위치입니다 —
           끄면 인쇄되지 않고 규정 검증에서도 빠집니다.
         </p>
         
-        <div class="mb-2" style="display: flex; gap: 4px;">
-          <button class="btn btn-sm btn-outline-secondary" onclick="resetFieldOrder()" style="flex: 1; font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+        <div class="settings-actions">
+          <button class="btn btn-sm btn-outline-secondary settings-action" onclick="resetFieldOrder()">
             <i class="fas fa-undo"></i> 초기화
           </button>
-          <button class="btn btn-sm btn-outline-primary" onclick="toggleAllFieldsVisibility()" style="flex: 1; font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+          <button class="btn btn-sm btn-outline-primary settings-action" onclick="toggleAllFieldsVisibility()">
             <i class="fas fa-eye"></i> 표시/숨김
           </button>
-          <button class="btn btn-sm btn-outline-info" onclick="setAllFieldsWidth('50%')" style="flex: 1; font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+          <button class="btn btn-sm btn-outline-info settings-action" onclick="setAllFieldsWidth('50%')">
             <i class="fas fa-columns"></i> 50%
           </button>
-          <button class="btn btn-sm btn-outline-warning" onclick="setAllFieldsWidth('100%')" style="flex: 1; font-size: 0.7rem; padding: 0.2rem 0.3rem;">
+          <button class="btn btn-sm btn-outline-warning settings-action" onclick="setAllFieldsWidth('100%')">
             <i class="fas fa-expand-arrows-alt"></i> 100%
           </button>
         </div>
@@ -219,12 +227,12 @@
       
       <!-- 텍스트 변환 설정 탭 -->
       <section class="preview-tab-content" id="text-format-content">
-        <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
+        <div class="settings-hint">
           <i class="fas fa-info-circle"></i> 주의사항과 기타표시사항의 표시 방식을 선택합니다. 줄바꿈을 그대로 보거나, 한 줄로 연결하거나, 구분 기호로 연결할 수 있습니다.
         </div>
         
         <div class="settings-row mb-3">
-          <label class="form-label" for="textFormatMode" style="font-size: 0.85rem; font-weight: 600;">표시 방식</label>
+          <label class="form-label" for="textFormatMode">표시 방식</label>
           <select class="form-select form-select-sm" id="textFormatMode">
             <option value="KEEP">입력 데이터 그대로 보기</option>
             <option value="REMOVE">줄바꿈 없애기 (한 줄로)</option>
@@ -233,7 +241,7 @@
         </div>
         
         <div class="settings-row" id="delimiterRow">
-          <label class="form-label" for="textDelimiter" style="font-size: 0.85rem; font-weight: 600;">구분 기호</label>
+          <label class="form-label" for="textDelimiter">구분 기호</label>
           <select class="form-select form-select-sm mb-2" id="textDelimiter">
             <option value="|" selected>| (수직선)</option>
             <option value=",">, (쉼표)</option>
@@ -621,11 +629,10 @@
         // 탭 전환 함수
         function switchPreviewTab(tabName) {
             // 모든 탭 버튼의 active 클래스 제거
+            // 색은 CSS(.preview-tab / .preview-tab.active)가 정한다. 여기서
+            // 인라인으로 칠하면 CSS 를 고쳐도 화면이 그대로다.
             document.querySelectorAll('.preview-tab').forEach(tab => {
                 tab.classList.remove('active');
-                tab.style.color = '#6c757d';
-                tab.style.borderBottomColor = 'transparent';
-                tab.style.fontWeight = '500';
             });
             
             // 모든 탭 콘텐츠 숨기기
@@ -640,9 +647,6 @@
             
             if (selectedTab) {
                 selectedTab.classList.add('active');
-                selectedTab.style.color = '#0d6efd';
-                selectedTab.style.borderBottomColor = '#0d6efd';
-                selectedTab.style.fontWeight = '600';
             }
             
             if (selectedContent) {
@@ -1246,7 +1250,7 @@
             if (!target || document.getElementById('recyclingMarkControls')) return;
 
             target.innerHTML = `
-                <div class="alert alert-info" style="border-radius: 8px; background-color: #e7f3ff; border: 1px solid #b3d9ff; padding: 10px; margin-bottom: 0.75rem; font-size: 0.75rem;">
+                <div class="settings-hint">
                     <i class="fas fa-info-circle"></i> 분리배출마크를 선택하고 추가하세요. 복합재질인 경우 재질 정보를 입력할 수 있으며, 최대 ${MAX_RECYCLING_MARKS}개까지 추가 가능합니다.
                 </div>
                 
@@ -1254,7 +1258,7 @@
                     <!-- 1. 마크 선택 + 복합재질 정보 입력 -->
                     <div class="settings-row-pair mb-3">
                         <div class="settings-row">
-                            <label class="form-label" for="recyclingMarkSelect" style="font-size: 0.85rem; font-weight: 600;">마크 선택</label>
+                            <label class="form-label" for="recyclingMarkSelect">마크 선택</label>
                             <select class="form-select form-select-sm" id="recyclingMarkSelect">
                                 <option value="">마크를 선택하세요</option>
                                 ${recyclingMarkGroups.map(group => 
@@ -1267,7 +1271,7 @@
                             </select>
                         </div>
                         <div class="settings-row">
-                            <label class="form-label" for="additionalRecyclingText" style="font-size: 0.85rem; font-weight: 600;">복합재질 정보 (선택)</label>
+                            <label class="form-label" for="additionalRecyclingText">복합재질 정보 (선택)</label>
                             <input type="text" class="form-control form-control-sm" 
                                    id="additionalRecyclingText" 
                                    placeholder="예: 몸체(종이)/뚜껑(PP)">
@@ -1289,7 +1293,7 @@
                     
                     <!-- 3. 추가된 마크 목록 -->
                     <div class="mt-3">
-                        <label class="form-label" style="font-size: 0.85rem; font-weight: 600;">추가된 마크</label>
+                        <label class="form-label">추가된 마크</label>
                         <div id="recyclingMarkList" class="border rounded p-2" style="min-height: 60px; background-color: #f8f9fa;">
                             <div class="text-muted small">추가된 마크가 없습니다.</div>
                         </div>

@@ -68,26 +68,25 @@
 
     <div class="d-flex justify-content-between align-items-center px-3 border-bottom bg-light workspace-toolbar">
         <ul class="nav nav-underline h-100 gap-2" id="workspaceTab" role="tablist">
-            <li class="nav-item">
-                <button class="nav-link active h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-info" type="button">
-                    <i class="bi bi-info-circle me-2 text-secondary"></i> 기본 정보
+            {% comment %}
+              이 넷은 **업무 순서**다. 나란한 탭으로만 두면 처음 쓰는 사람은
+              어디부터 손대야 하는지 알 수 없다. 번호를 달고 화살표로 잇고,
+              마친 단계는 체크로 바꾼다 — 어디까지 왔는지가 한눈에 보인다.
+
+              마쳤다는 표시는 판정이 아니라 길잡이다. 판정은 규정 검증이 한다.
+            {% endcomment %}
+            {% for step in workflow_steps %}
+            <li class="nav-item wf-step">
+                <button class="nav-link {% if forloop.first %}active {% endif %}h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center"
+                        data-bs-toggle="tab" data-bs-target="#{{ step.tab }}" type="button"
+                        title="{{ step.no }}단계 · {{ step.hint }}">
+                    <span class="wf-no{% if step.done %} wf-no-done{% endif %}">
+                        {% if step.done %}<i class="bi bi-check-lg"></i>{% else %}{{ step.no }}{% endif %}
+                    </span>
+                    {{ step.name }}
                 </button>
             </li>
-            <li class="nav-item">
-                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-bom" type="button">
-                    <i class="bi bi-table me-2 text-secondary"></i> BOM
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-nutrition" type="button">
-                    <i class="bi bi-egg me-2 text-secondary"></i> 영양성분
-                </button>
-            </li>
-            <li class="nav-item">
-                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-label" type="button">
-                    <i class="bi bi-tag me-2 text-secondary"></i> 표시사항
-                </button>
-            </li>
+            {% endfor %}
             {# 라벨 편집: 개발 중인 기능이라 관리자에게만 노출 #}
             {% if user.is_staff %}
             <li class="nav-item">
@@ -96,8 +95,10 @@
                 </button>
             </li>
             {% endif %}
-            <li class="nav-item">
-                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button">
+            {# 문서함부터는 단계가 아니라 곁에 두는 것이다 — 줄을 그어 가른다 #}
+            <li class="nav-item wf-aside">
+                <button class="nav-link h-100 text-dark px-3 border-0 bg-transparent d-flex align-items-center" data-bs-toggle="tab" data-bs-target="#tab-docs" type="button"
+                        title="원료 규격서·시험성적서·포장지 시안 등 이 제품에 딸린 서류">
                     <i class="bi bi-file-earmark-text me-2 text-secondary"></i> 문서함
                 </button>
             </li>

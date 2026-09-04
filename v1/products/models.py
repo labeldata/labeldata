@@ -806,6 +806,7 @@ class ProductActivityLog(models.Model):
         ('SHARE_CREATED', '공유 생성'),
         ('SHARE_UPDATED', '공유 수정'),
         ('SHARE_DELETED', '공유 삭제'),
+        ('DESIGN_COMPARED', '시안 대조'),
     ]
     
     log_id = models.AutoField(primary_key=True, verbose_name="로그 ID")

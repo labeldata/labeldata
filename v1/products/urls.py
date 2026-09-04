@@ -135,6 +135,9 @@ urlpatterns = [
 
     # 사진에서 읽은 영양성분·분리배출 반영 (기본 정보 탭 밖의 항목)
     path('labels/<int:label_id>/ocr-extras/', views.ocr_apply_extras, name='ocr_apply_extras'),
+    # 디자인 시안 대조 기록 — 파일은 문서함에, 결과는 그 파일에 붙는다
+    path('labels/<int:label_id>/design-compare/', views.design_compare_record,
+         name='design_compare_record'),
 
     # 불러오기 모달 — 품목보고번호 조회 / 원료 사진 업로드 / 원료 BOM 등록
     path('labels/<int:label_id>/lookup/report-no/', views.report_no_lookup, name='report_no_lookup'),

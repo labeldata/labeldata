@@ -584,6 +584,7 @@
   function showCompare(modalEl, body, data, photoFile, apiMatch) {
     var diff = [];
     var same = [];
+    var record = [];      // 문서함에 남길 것 — 화면 HTML 이 아니라 값 자체다
 
     Object.keys(FIELD_MAP).forEach(function (field) {
       var item = data[field];
@@ -597,8 +598,12 @@
       if (!mine && !theirs) return;
 
       var html = compareRowHtml(field, item || {}, meta);
-      if (mine && theirs && mine === theirs) same.push(html);
-      else diff.push(html);
+      if (mine && theirs && mine === theirs) {
+        same.push(html);
+      } else {
+        diff.push(html);
+        record.push({ field: field, label: meta.label, mine: mine, design: theirs });
+      }
     });
 
     var head = ''
@@ -614,7 +619,8 @@
             + '이 창은 값을 고치지 않습니다.'
           : '<i class="bi bi-check-circle-fill me-1"></i><strong>다른 항목이 없습니다.</strong> '
             + '시안과 표시사항이 같습니다.')
-      + '</div>';
+      + '</div>'
+      + '<div id="cmpRecordNote" class="cmp-record-note"></div>';
 
     var table = summary
       + apiMatchHtml(apiMatch)
@@ -642,6 +648,43 @@
     }
 
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    recordCompare(photoFile, record, same.length);
+  }
+
+  /*
+   * 대조 기록을 남긴다.
+   *
+   * 대조만 하고 아무것도 안 남기면 "확인했다" 는 말만 남는다. 누가 언제 어느
+   * 시안과 맞춰 봤고 무엇이 달랐는지가 있어야 절차가 된다. 시안 파일은
+   * 문서함의 "포장지 시안" 으로 들어가고 결과는 그 파일에 붙는다.
+   *
+   * 실패해도 조용히 넘어간다 — 대조 결과는 이미 화면에 있고, 기록이 안 남았다고
+   * 사용자를 막을 이유가 없다.
+   */
+  function recordCompare(photoFile, diff, sameCount) {
+    var id = labelId();
+    if (!id) return;
+
+    var form = new FormData();
+    if (photoFile) form.append('design_file', photoFile);
+    form.append('result', JSON.stringify({ diff: diff, same: sameCount }));
+
+    fetch('/products/labels/' + id + '/design-compare/', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken() },
+      body: form,
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (r) {
+        if (!r || !r.success) return;
+        var note = document.getElementById('cmpRecordNote');
+        if (note) {
+          note.innerHTML = '<i class="bi bi-archive me-1"></i>'
+            + '이 대조를 문서함의 <strong>포장지 시안</strong>'
+            + (r.version ? ' (버전 ' + r.version + ')' : '') + '에 기록했습니다.';
+        }
+      })
+      .catch(function (err) { console.debug('대조 기록 실패', err); });
   }
 
   // 영양성분·분리배출은 기본 정보 탭에 칸이 없어 서버가 반영한다. 값은 이

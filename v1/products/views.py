@@ -936,6 +936,7 @@ def product_detail(request, product_id):
         # 필수 입력 검사가 chckd_* 를 근거로 삼으면서 "해당하지 않으면 체크를
         # 해제하세요" 라는 안내를 따를 방법이 없었다.
         'display_items': _build_display_items(label),
+        'workflow_steps': _build_workflow_steps(label),
         'preservation_choices': PRESERVATION_CHOICES,
         'processing_choices': PROCESSING_CHOICES,
     }
@@ -1034,6 +1035,47 @@ def _display_item_sources(field):
         if element_id not in ids:
             ids.append(element_id)
     return ids
+
+
+# 제품 화면의 탭은 **업무 순서**다. 그런데 화면에는 나란한 네 개로만 보여서,
+# 처음 쓰는 사람은 어디부터 손대야 하는지 알 수 없었다. 순서와 뜻을 여기 적어
+# 화면이 번호·화살표로 드러내게 한다.
+#
+# 문서함·권한 설정은 단계가 아니라 곁에 두는 것이라 여기 없다.
+_WORKFLOW_STEPS = (
+    ('tab-info', '기본 정보',
+     '제품명·내용량·보관방법처럼 라벨에 인쇄될 값을 채웁니다.'),
+    ('tab-bom', 'BOM',
+     '원료와 배합비를 넣습니다. 원재료명과 알레르기 표시가 여기서 나옵니다.'),
+    ('tab-nutrition', '영양성분',
+     '영양성분표의 값을 넣습니다. 표시사항의 영양정보 표로 함께 그려집니다.'),
+    ('tab-label', '표시사항',
+     '앞의 셋을 모아 표로 그립니다. 규정 검증·내보내기·시안 대조를 여기서 합니다.'),
+)
+
+
+def _build_workflow_steps(label):
+    """
+    각 단계를 마쳤는가.
+
+    "마쳤다" 를 엄격하게 보지 않는다 — 이 표시는 **어디까지 왔는지 눈으로 알게
+    하려는 것**이지 판정이 아니다. 판정은 규정 검증이 한다. 여기서 빡빡하게
+    굴면 멀쩡히 진행 중인 제품이 계속 "안 함" 으로 보여 오히려 헷갈린다.
+    """
+    from v1.bom.models import ProductBOM
+
+    done = {
+        'tab-info': bool((label.prdlst_nm or '').strip()
+                         and (label.content_weight or '').strip()),
+        'tab-bom': ProductBOM.objects.filter(parent_label=label).exists(),
+        'tab-nutrition': bool((label.calories or '').strip()),
+        'tab-label': bool((label.rawmtrl_nm_display or label.rawmtrl_nm or '').strip()),
+    }
+
+    return [
+        {'no': index, 'tab': tab, 'name': name, 'hint': hint, 'done': done.get(tab, False)}
+        for index, (tab, name, hint) in enumerate(_WORKFLOW_STEPS, start=1)
+    ]
 
 
 def _build_display_items(label):
@@ -6128,6 +6170,105 @@ def ocr_apply_extras(request, label_id):
         'nutrition_applied': len([f for f in applied if not f.endswith('_unit')]),
         'recycling_applied': bool(marked),
         'recycling_type': mark_type,
+    })
+
+
+@login_required
+@require_POST
+def design_compare_record(request, label_id):
+    """
+    디자인 시안 대조 결과를 문서함에 남긴다.
+
+    대조만 하고 아무것도 안 남기면 "확인했다" 는 말만 남는다. 누가 언제 어느
+    시안과 맞춰 봤고 무엇이 달랐는지가 있어야 절차가 된다 — 인쇄가 나온 뒤에
+    "그때 뭘 봤더라" 를 다시 세지 않아도 된다.
+
+    시안 파일은 우리가 만든 도안(LABEL_DESIGN)과 **다른 종류**로 둔다. 하나는
+    우리가 낸 것이고 하나는 받은 것이라, 같은 칸에 쌓으면 어느 것이 정본인지
+    알 수 없다.
+    """
+    from v1.products.models import (
+        DocumentType, ProductActivityLog, ProductDocument,
+    )
+
+    label = _resolve_editable_label(request, label_id)
+    design_file = request.FILES.get('design_file')
+
+    try:
+        result = json.loads(request.POST.get('result') or '{}')
+    except (ValueError, TypeError):
+        result = {}
+
+    diff = result.get('diff') or []
+    same = int(result.get('same') or 0)
+
+    doc_type, _ = DocumentType.objects.get_or_create(
+        type_code='DESIGN_PROOF',
+        defaults={
+            'type_name': '포장지 시안',
+            'description': '디자인 담당자가 만든 포장지 시안. 표시사항과 대조한 기록이 함께 남는다',
+            'required_yn': False,
+            'active_yn': True,
+            'display_order': 1,
+            'icon': 'bi-image',
+            'color': '#1a73e8',
+            'detection_keywords': '시안,도안,포장지',
+            'expiry_alert_days': 0,
+            'requires_expiry': False,
+        },
+    )
+
+    document = None
+    if design_file:
+        if design_file.size > 20 * 1024 * 1024:
+            return JsonResponse({'success': False, 'error': '파일 크기는 20MB 를 초과할 수 없습니다.'},
+                                status=400)
+        latest = ProductDocument.objects.filter(
+            label=label, document_type=doc_type, active_yn=True,
+        ).order_by('-version', '-uploaded_datetime').first()
+
+        document = ProductDocument.objects.create(
+            label=label,
+            document_type=doc_type,
+            file=design_file,
+            original_filename=design_file.name,
+            file_size=design_file.size,
+            uploaded_by=request.user,
+            parent_document=latest,
+            version=(latest.version + 1) if latest else 1,
+            metadata={
+                'expiry_unlimited': True,
+                'source': 'design_compare',
+                # 대조 기록은 그 파일에 붙어 있어야 한다 — 파일과 결과가
+                # 따로 놀면 "이 시안을 본 결과인가" 를 알 수 없다.
+                'compare': {
+                    'checked_at': timezone.now().isoformat(timespec='seconds'),
+                    'checked_by': request.user.get_username(),
+                    'diff_count': len(diff),
+                    'same_count': same,
+                    'diff': diff[:40],      # 화면이 보여 줄 만큼만
+                },
+            },
+        )
+
+    ProductActivityLog.objects.create(
+        label=label,
+        user=request.user,
+        action='DESIGN_COMPARED',
+        details={
+            'diff_count': len(diff),
+            'same_count': same,
+            'file_name': design_file.name if design_file else '',
+            'fields': [d.get('label') for d in diff][:20],
+        },
+    )
+
+    log_activity(request, 'product', 'design_compare', label.my_label_id)
+    return JsonResponse({
+        'success': True,
+        'document_id': document.document_id if document else None,
+        'version': document.version if document else None,
+        'diff_count': len(diff),
     })
 
 

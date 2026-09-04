@@ -7,7 +7,10 @@
  *   상단        품목보고번호로 조회 (OCR 을 거치지 않아 가장 정확하다)
  *   좌측        제품으로 등록 — 기본 정보 탭을 채우고 원재료를 BOM 으로 쪼갠다
  *   우측        원료로 등록   — 사진은 문서함에 남기고 BOM 원료 1건을 만든다
- *   아래        디자인 시안 대조 — **채우지 않는다.** 다른 곳만 보여 준다
+ *
+ * 디자인 시안 대조는 여기 없다. 그것은 값을 채우는 일이 아니라 **확정한 값이
+ * 시안과 같은지 보는 일**이라, 표시사항 탭에 있다(_tab_label.html). 한 창에
+ * 두면 인쇄 직전에 "채우기" 를 눌러 확정한 값을 시안으로 덮어쓰게 된다.
  *
  * 사진은 끌어다 놓거나 눌러서 고른다.
  *
@@ -69,33 +72,6 @@
       + '</div>';
   }
 
-  /*
-   * 디자인 시안 대조.
-   *
-   * 위의 둘과 **뜻이 반대**라 자리를 따로 뒀다. 저 둘은 값을 채우는 일이고
-   * 이것은 이미 확정한 값이 시안과 같은지 보는 일이다. 같은 칸에 두면
-   * 인쇄 직전에 확정한 값을 시안으로 덮어쓰는 사고가 난다.
-   */
-  function compareZone() {
-    return ''
-      + '<div class="import-zone import-zone-compare border rounded p-3 mt-3" data-side="compare">'
-      + '  <div class="d-flex align-items-center gap-2 mb-1">'
-      + '    <i class="bi bi-git-compare text-primary"></i>'
-      + '    <span class="fw-semibold" style="font-size:14px;">디자인 시안과 대조</span>'
-      + '    <span class="badge bg-light text-dark border" style="font-size:10px;">인쇄 전 확인</span>'
-      + '  </div>'
-      + '  <div class="text-muted mb-2" style="font-size:12px; line-height:1.5;">'
-      + '    디자인 담당자가 만든 포장지 시안을 올리면 <strong>지금 표시사항과 다른 곳</strong>만 보여 줍니다.'
-      + '    <strong>값은 바뀌지 않습니다.</strong>'
-      + '  </div>'
-      + '  <div class="import-drop border rounded py-3 px-2">'
-      + '    <i class="bi bi-cloud-arrow-up d-block mb-1" style="font-size:20px; opacity:.5;"></i>'
-      + '    <div class="text-muted" style="font-size:12px;">시안 사진을 끌어다 놓거나 누르세요</div>'
-      + '    <input type="file" accept="image/*" hidden>'
-      + '  </div>'
-      + '</div>';
-  }
-
   function ensureModal() {
     var existing = document.getElementById('importModal');
     if (existing) return existing;
@@ -132,7 +108,6 @@
                  '이 제품에 넣는 원료의 표시사항입니다.',
                  '사진은 문서함에 남기고, BOM에 원료 1건을 만듭니다.')
       + '        </div>'
-      + compareZone()
       + '        <div id="importModalNote" class="small text-muted mt-3"></div>'
       + '      </div>'
       + '    </div>'

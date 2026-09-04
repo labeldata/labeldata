@@ -35,6 +35,30 @@
         <span class="text-muted" style="font-size:12px;">현재 역할로는 표시사항 설정을 수정하거나 PDF를 저장할 수 없습니다.</span>
     </div>
     {% endif %}
+    {% comment %}
+      디자인 시안 대조 — **5단계 도구는 5단계 자리에.**
+
+      예전에는 기본 정보 탭의 "불러오기" 창에 있었다. 그 창은 값을 채우는
+      도구라(1·2단계) 뜻이 반대다. 인쇄 직전에 실수로 "채우기" 를 누르면
+      확정한 값 위에 시안에서 읽은 값이 덮인다.
+
+      대조의 대상은 기본 정보의 개별 칸이 아니라 **표시사항 표 전체**이고,
+      사용자가 "내 정본" 으로 보는 화면이 여기다.
+    {% endcomment %}
+    {% if can_edit %}
+    <div class="lt-toolbar">
+      <i class="bi bi-git-compare text-primary"></i>
+      <span class="lt-toolbar-title">디자인 시안 대조</span>
+      <span class="lt-toolbar-note">
+        디자인 담당자가 만든 포장지 시안을 올리면 아래 표시사항과
+        <strong>다른 곳만</strong> 보여 줍니다. 값은 바뀌지 않습니다.
+      </span>
+      <button type="button" class="btn btn-outline-primary v2-btn-sm ms-auto" id="ltCompareBtn">
+        <i class="bi bi-upload"></i>시안 올려 대조
+      </button>
+      <input type="file" id="ltCompareFile" accept="image/*" hidden>
+    </div>
+    {% endif %}
     <div id="lt-loading">
         <div class="spinner-border text-primary" style="width:1.8rem;height:1.8rem;" role="status"></div>
         <span>표시사항 미리보기를 불러오는 중...</span>
@@ -239,8 +263,50 @@
         });
     }
 
+    /* 시안을 골라 대조로 보낸다. 판독과 대조 창은 basic_info_ocr.js 가 맡는다. */
+    function wireCompare() {
+        var btn = document.getElementById('ltCompareBtn');
+        var input = document.getElementById('ltCompareFile');
+        if (!btn || !input) return;
+
+        btn.addEventListener('click', function () { input.click(); });
+        input.addEventListener('change', function () {
+            var file = input.files && input.files[0];
+            input.value = '';
+            if (!file) return;
+            if (file.size > 10 * 1024 * 1024) {
+                if (window.showSnackbar) window.showSnackbar('파일 크기는 10MB 이하여야 합니다.', 'error');
+                return;
+            }
+            if (typeof window.basicInfoOcrCompare !== 'function') return;
+
+            btn.disabled = true;
+            var label = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>읽는 중…';
+
+            /* 영역을 골라 읽으면 훨씬 정확하다. 자르기 창이 있으면 거친다. */
+            var pick = (typeof window.cropPhoto === 'function')
+                ? window.cropPhoto(file)
+                : Promise.resolve([{ file: file, role: 'whole' }]);
+
+            pick.then(function (parts) {
+                if (!parts || !parts.length) return null;
+                return window.basicInfoOcrCompare(parts, file);
+            }).catch(function (err) {
+                console.error(err);
+                if (window.showSnackbar) {
+                    window.showSnackbar((err && err.message) || '시안을 읽지 못했습니다.', 'error');
+                }
+            }).then(function () {
+                btn.disabled = false;
+                btn.innerHTML = label;
+            });
+        });
+    }
+
     function init() {
         watchDisplayItems();
+        wireCompare();
         var tabBtn = document.querySelector('button[data-bs-target="#tab-label"]');
         if (tabBtn) {
             tabBtn.addEventListener('shown.bs.tab', function() {

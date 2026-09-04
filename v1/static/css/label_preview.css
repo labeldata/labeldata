@@ -1294,3 +1294,124 @@ tbody.layout-vertical tr td {
 .vr-export-menu .dropdown-item:hover .export-note {
     color: #5f6368;
 }
+
+/* ==================== 왼쪽 설정 패널 ====================
+ *
+ * 탭 넷이 각자 다른 인라인 스타일을 달고 있었다 — 같은 뜻의 요소가 탭마다
+ * 조금씩 다르게 보였고, 하나를 고치면 나머지 셋이 남았다. 모양은 여기 한
+ * 곳에서 정한다.
+ */
+.preview-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 14px;
+    padding-bottom: 0;
+    border-bottom: 2px solid var(--bg-muted, #e9ecef);
+    overflow-x: auto;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    align-items: center;
+}
+
+.preview-tab {
+    flex-shrink: 0;
+    padding: 7px 10px;
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    color: var(--text-secondary, #6b7280);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+}
+
+.preview-tab:hover { color: var(--text-primary, #1f2937); }
+
+.settings-reset {
+    margin-left: auto;      /* 오른쪽 끝. 빈 div 로 밀지 않는다 */
+    flex-shrink: 0;
+    border: none;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    color: var(--text-muted, #9ca3af);
+}
+
+.settings-reset:hover { color: var(--text-primary, #1f2937); }
+
+/* 탭 머리의 안내 — 넷이 같은 모양이어야 한다 */
+.settings-hint {
+    margin-bottom: 12px;
+    padding: 9px 11px;
+    border: 1px solid #b3d9ff;
+    border-radius: 8px;
+    background: #e7f3ff;
+    color: #1f3d7a;
+    font-size: 0.75rem;
+    line-height: 1.6;
+}
+
+.settings-hint i { margin-right: 2px; }
+
+/* 잔글씨 안내 */
+.settings-note {
+    margin-bottom: 8px;
+    color: var(--text-secondary, #6b7280);
+    font-size: 0.75rem;
+    line-height: 1.6;
+}
+
+/* 칸 이름 — 탭마다 크기가 달랐다 */
+.settings-panel .form-label {
+    margin-bottom: 4px;
+    color: var(--text-primary, #1f2937);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.settings-panel .form-label.required::after {
+    content: ' *';
+    color: var(--danger-color, #dc3545);
+}
+
+/* 면적 표시 */
+.area-info {
+    margin-bottom: 14px;
+    padding: 8px 11px;
+    border-radius: 8px;
+    background: var(--bg-secondary, #f8f9fa);
+    color: var(--primary-color, #023047);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+/* 항목 순서 탭의 단추 줄 */
+.settings-actions {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.settings-actions .settings-action {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.preview-tab.active {
+    color: var(--secondary-color, #3b82f6);
+    border-bottom-color: var(--secondary-color, #3b82f6);
+    font-weight: 700;
+}
+
+/* 설정 저장 — 여기서 저장하지 않으면 창을 닫는 순간 사라진다.
+   잃을 수 있는 일이라 도구 줄에서 가장 눈에 띄어야 한다. */
+.btn-save-emphasis {
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(25, 135, 84, .35);
+}
+
+.btn-save-emphasis:hover {
+    box-shadow: 0 2px 6px rgba(25, 135, 84, .45);
+}

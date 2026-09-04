@@ -1345,3 +1345,35 @@ table th[title] {
 }
 
 .cmp-row.cmp-same { opacity: 0.72; }
+
+/* 표시사항 탭 머리의 대조 줄 — 5단계 도구는 5단계 자리에 */
+.lt-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--v2-border, #dadce0);
+    background: #f8f9ff;
+    flex-shrink: 0;
+}
+
+.lt-toolbar-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary, #202124);
+}
+
+.lt-toolbar-note {
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary, #5f6368);
+}
+
+/* 대조를 문서함에 남겼다는 안내 */
+.cmp-record-note {
+    margin-bottom: 10px;
+    color: var(--text-secondary, #5f6368);
+    font-size: 11.5px;
+    line-height: 1.6;
+}

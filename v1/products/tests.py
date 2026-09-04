@@ -1774,12 +1774,21 @@ class DesignCompareModeTests(TestCase):
         base = Path(dj.BASE_DIR)
         self.ocr = (base / 'static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
         self.modal = (base / 'static/js/products/import_modal.js').read_text(encoding='utf-8')
+        self.tab = (base / 'templates/products/_tab_label.html').read_text(encoding='utf-8')
         self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
 
-    def test_대조_입구가_따로_있다(self):
+    def test_대조는_표시사항_탭에_있다(self):
+        """
+        5단계 도구는 5단계 자리에. 값을 채우는 창(불러오기)에 두면 인쇄
+        직전에 "채우기" 를 눌러 확정한 값을 시안으로 덮어쓰게 된다.
+        """
         self.assertIn('window.basicInfoOcrCompare', self.ocr)
-        self.assertIn("side === 'compare'", self.modal)
-        self.assertIn('function compareZone', self.modal)
+        self.assertIn('id="ltCompareBtn"', self.tab)
+        self.assertIn('basicInfoOcrCompare', self.tab)
+
+    def test_불러오기_창에는_없다(self):
+        self.assertNotIn('function compareZone', self.modal)
+        self.assertNotIn("data-side=\"compare\"", self.modal)
 
     def test_대조_창에는_채우기가_없다(self):
         """고칠 수 있으면 "시안이 이렇다" 와 "내 값을 바꾸겠다" 가 섞인다."""
@@ -1817,7 +1826,169 @@ class DesignCompareModeTests(TestCase):
         block = self.ocr[head:head + 3000]
         self.assertLess(block.index('다른 항목 '), block.index('같은 항목 '))
 
-    def test_채우는_칸과_색이_다르다(self):
-        """같아 보이면 인쇄 직전에 확정한 값을 시안으로 덮어쓰는 사고가 난다."""
-        self.assertIn('.import-zone-compare', self.css)
+    def test_다른_줄이_눈에_띈다(self):
         self.assertIn('.cmp-row.cmp-diff', self.css)
+        self.assertIn('.lt-toolbar', self.css)
+
+    def test_대조를_문서함에_남긴다(self):
+        """
+        대조만 하고 아무것도 안 남기면 "확인했다" 는 말만 남는다. 누가 언제
+        어느 시안과 맞춰 봤고 무엇이 달랐는지가 있어야 절차가 된다.
+        """
+        self.assertIn('function recordCompare', self.ocr)
+        self.assertIn('/design-compare/', self.ocr)
+        # 화면 HTML 이 아니라 값 자체를 남긴다
+        self.assertIn("record.push({ field: field, label: meta.label", self.ocr)
+
+class DesignCompareRecordTests(TestCase):
+    """
+    ③ 대조 기록 + ④ 도안 슬롯.
+
+    대조만 하고 아무것도 안 남기면 "확인했다" 는 말만 남는다. 누가 언제 어느
+    시안과 맞춰 봤고 무엇이 달랐는지가 있어야 절차가 된다 — 인쇄가 나온 뒤에
+    "그때 뭘 봤더라" 를 다시 세지 않아도 된다.
+    """
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.upload = SimpleUploadedFile
+        self.user = User.objects.create_user(username='cmp', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='대조')
+        ProductMetadata.objects.create(label=self.label)
+        self.client.force_login(self.user)
+        self.url = reverse('products:design_compare_record', args=[self.label.my_label_id])
+
+    def _post(self, diff=None, same=3, with_file=True):
+        data = {'result': json.dumps({'diff': diff or [], 'same': same})}
+        if with_file:
+            data['design_file'] = self.upload('시안.png', b'fake-image', content_type='image/png')
+        return self.client.post(self.url, data)
+
+    def test_시안이_문서함에_들어간다(self):
+        from v1.products.models import ProductDocument
+
+        resp = self._post(diff=[{'field': 'prdlst_nm', 'label': '제품명',
+                                 'mine': '브라우니 케이크', 'design': '브라우니케이크'}])
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['success'])
+
+        doc = ProductDocument.objects.get(label=self.label)
+        self.assertEqual(doc.document_type.type_code, 'DESIGN_PROOF')
+        self.assertEqual(doc.version, 1)
+
+    def test_대조_결과가_그_파일에_붙는다(self):
+        """파일과 결과가 따로 놀면 "이 시안을 본 결과인가" 를 알 수 없다."""
+        from v1.products.models import ProductDocument
+
+        self._post(diff=[{'field': 'content_weight', 'label': '내용량',
+                          'mine': '65 g', 'design': '70 g'}], same=5)
+        compare = ProductDocument.objects.get(label=self.label).metadata['compare']
+        self.assertEqual(compare['diff_count'], 1)
+        self.assertEqual(compare['same_count'], 5)
+        self.assertEqual(compare['diff'][0]['label'], '내용량')
+        self.assertEqual(compare['checked_by'], 'cmp')
+        self.assertTrue(compare['checked_at'])
+
+    def test_활동_로그에도_남는다(self):
+        from v1.products.models import ProductActivityLog
+
+        self._post(diff=[{'field': 'prdlst_nm', 'label': '제품명',
+                          'mine': 'A', 'design': 'B'}])
+        log = ProductActivityLog.objects.get(label=self.label, action='DESIGN_COMPARED')
+        self.assertEqual(log.details['diff_count'], 1)
+        self.assertEqual(log.details['fields'], ['제품명'])
+        self.assertEqual(log.details['file_name'], '시안.png')
+
+    def test_같은_제품을_다시_대조하면_버전이_오른다(self):
+        from v1.products.models import ProductDocument
+
+        self._post()
+        self._post()
+        versions = sorted(ProductDocument.objects.filter(label=self.label)
+                          .values_list('version', flat=True))
+        self.assertEqual(versions, [1, 2])
+
+    def test_우리가_낸_도안과_다른_칸에_쌓인다(self):
+        """
+        하나는 우리가 낸 것(한글표시사항도안)이고 하나는 받은 것이다.
+        같은 칸에 쌓으면 어느 것이 정본인지 알 수 없다.
+        """
+        from v1.products.models import DocumentType
+
+        self._post()
+        self.assertNotEqual(
+            DocumentType.objects.get(type_code='DESIGN_PROOF').type_code, 'LABEL_DESIGN')
+
+    def test_파일_없이도_기록은_남는다(self):
+        from v1.products.models import ProductActivityLog, ProductDocument
+
+        resp = self._post(with_file=False)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.json()['document_id'])
+        self.assertFalse(ProductDocument.objects.filter(label=self.label).exists())
+        self.assertTrue(ProductActivityLog.objects.filter(
+            label=self.label, action='DESIGN_COMPARED').exists())
+
+    def test_남의_제품에는_남길_수_없다(self):
+        other = User.objects.create_user(username='other', password='x')
+        self.client.force_login(other)
+        self.assertEqual(self._post().status_code, 404)
+
+
+class WorkflowStepTabsTests(TestCase):
+    """
+    탭이 업무 순서라는 것을 화면이 드러내야 한다.
+
+    기본 정보 → BOM → 영양성분 → 표시사항. 나란한 탭으로만 두면 처음 쓰는
+    사람은 어디부터 손대야 하는지 알 수 없었다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='wf', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='순서')
+        ProductMetadata.objects.create(label=self.label)
+
+    def test_네_단계에_번호와_설명이_붙는다(self):
+        from v1.products.views import _build_workflow_steps
+
+        steps = _build_workflow_steps(self.label)
+        self.assertEqual([s['no'] for s in steps], [1, 2, 3, 4])
+        self.assertEqual([s['tab'] for s in steps],
+                         ['tab-info', 'tab-bom', 'tab-nutrition', 'tab-label'])
+        for step in steps:
+            self.assertTrue(step['hint'], f"{step['name']} 에 설명이 없다")
+
+    def test_채운_단계는_마친_것으로_보인다(self):
+        from v1.products.views import _build_workflow_steps
+
+        done = {s['tab']: s['done'] for s in _build_workflow_steps(self.label)}
+        self.assertFalse(done['tab-info'])
+
+        self.label.prdlst_nm = '브라우니'
+        self.label.content_weight = '65 g'
+        self.label.calories = '475'
+        self.label.save()
+        done = {s['tab']: s['done'] for s in _build_workflow_steps(self.label)}
+        self.assertTrue(done['tab-info'])
+        self.assertTrue(done['tab-nutrition'])
+
+    def test_문서함과_권한은_단계가_아니다(self):
+        from v1.products.views import _build_workflow_steps
+
+        tabs = [s['tab'] for s in _build_workflow_steps(self.label)]
+        self.assertNotIn('tab-docs', tabs)
+        self.assertNotIn('tab-share', tabs)
+
+    def test_화면이_번호와_화살표를_그린다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        html = (base / 'templates/products/product_detail.html').read_text(encoding='utf-8')
+        css = (base / 'static/css/products_detail.css').read_text(encoding='utf-8')
+
+        self.assertIn('workflow_steps', html)
+        self.assertIn('wf-no', html)
+        self.assertIn('#workspaceTab .wf-step + .wf-step::before', css)
+        self.assertIn('#workspaceTab .wf-aside', css)
