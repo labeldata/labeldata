@@ -1462,3 +1462,55 @@ table th[title] {
     .cmp-row > .ocr-control { grid-column: 1; }
     .cmp-row > .ocr-arrow   { text-align: left; }
 }
+
+/* -------------------------
+   문서 모달은 하나의 결로
+   -------------------------
+   넷이 저마다 달랐다. 모서리가 16px·14px·기본으로 셋, 머리글이 회색 바탕인
+   것과 아닌 것, 제목이 h5 16px·h6·h5 굵게로 셋, 단추가 v2-btn·v2-btn-sm·
+   rounded-pill px-4 fw-bold 로 셋. 같은 문서함 안에서 열리는 창들인데 열 때
+   마다 다른 화면처럼 보였다.
+
+   .doc-modal 하나로 모아 둔다. 각 창은 내용만 신경 쓰면 된다.
+   ------------------------- */
+.doc-modal .modal-content {
+    border: 0;
+    border-radius: var(--ez-radius-lg, 12px);
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(60, 64, 67, .2);
+}
+.doc-modal .modal-header {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--ez-border-light, #f1f3f4);
+}
+.doc-modal .modal-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ez-gray-900, #202124);
+}
+.doc-modal .modal-subtitle {
+    margin: 3px 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ez-text-muted, #5f6368);
+}
+.doc-modal .modal-body   { padding: 16px 20px; }
+.doc-modal .modal-footer {
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--ez-border-light, #f1f3f4);
+}
+.doc-modal .form-label {
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ez-text-muted, #5f6368);
+}
+.doc-modal .form-control,
+.doc-modal .form-select {
+    font-size: 13px;
+    border-radius: var(--ez-radius-sm, 6px);
+}

@@ -1,11 +1,20 @@
 <!-- 스마트 업로드 모달 (Smart Upload Modal) -->
-<div class="modal fade smart-upload-modal" id="smartUploadModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-label-id="{{ product.my_label_id }}">
+<div class="modal fade smart-upload-modal doc-modal" id="smartUploadModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-label-id="{{ product.my_label_id }}">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg smart-upload-shell">
+        <div class="modal-content smart-upload-shell">
             <form id="smart-upload-form">
                 {% csrf_token %}
                 <input type="hidden" id="target-slot-id" name="slot_id">
-                
+
+                {# 제목이 오른쪽 칸 안에 있어 다른 문서 모달과 자리가 달랐다 #}
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="upload-modal-title">문서 등록</h5>
+                        <p class="modal-subtitle">파일을 올리고 문서 종류와 유효기간을 정합니다.</p>
+                    </div>
+                    <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="닫기"></button>
+                </div>
+
                 <div class="modal-body p-0">
                     <div class="row g-0 smart-upload-split">
                         <!-- 좌측: 파일 영역 -->
@@ -41,15 +50,10 @@
                         
                         <!-- 우측: 메타데이터 영역 -->
                         <div class="col-md-7 bg-white p-4 d-flex flex-column">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <h5 class="fw-bold m-0" id="upload-modal-title">문서 등록</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            
                             <div class="d-flex flex-column gap-3 flex-grow-1">
                                 <div>
-                                    <label for="document-type-select" class="form-label small fw-bold text-muted mb-1">문서 종류</label>
-                                    <select class="form-select border-light-subtle bg-light" id="document-type-select" name="document_type" required>
+                                    <label for="document-type-select" class="form-label">문서 종류</label>
+                                    <select class="form-select" id="document-type-select" name="document_type" required>
                                         <option value="">-- 문서 종류를 선택하세요 --</option>
                                         {% for dtype in document_types %}
                                         <option value="{{ dtype.type_id }}" data-validity="{{ dtype.default_validity_days|default:'' }}">
@@ -60,7 +64,7 @@
                                 </div>
                                 
                                 <div class="smart-expiry-box">
-                                    <label class="small fw-bold text-muted mb-2 d-block">유효기간 설정</label>
+                                    <label class="form-label d-block">유효기간 설정</label>
                                     <div class="d-flex flex-wrap gap-2 pb-1 smart-expiry-chips" role="group">
                                         <input type="radio" class="btn-check" name="expiry-option" id="expiry-1m" value="30">
                                         <label class="btn btn-sm btn-outline-secondary rounded-pill px-3" for="expiry-1m">+1개월</label>
@@ -106,14 +110,15 @@
                                 </div>
                             </div>
                             
-                            <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-                                <button type="button" class="btn btn-light rounded-pill px-4 fw-bold text-secondary" data-bs-dismiss="modal">취소</button>
-                                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" id="upload-submit-btn">
-                                    <i class="bi bi-cloud-arrow-up me-1"></i>등록하기
-                                </button>
-                            </div>
                         </div>
                     </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light v2-btn" data-bs-dismiss="modal">취소</button>
+                    <button type="submit" class="btn btn-primary v2-btn" id="upload-submit-btn">
+                        <i class="bi bi-cloud-arrow-up"></i>등록하기
+                    </button>
                 </div>
             </form>
         </div>
@@ -122,14 +127,11 @@
 
 <style>
 /* Smart Upload Modal */
-#smartUploadModal .smart-upload-shell {
-    border-radius: 16px;
-    overflow: hidden;
-}
-
+/* 모서리·그림자·머리글·바닥글은 .doc-modal 이 정한다 (products_common.css).
+   여기서는 이 창에만 있는 것 — 왼쪽 파일 칸 — 만 손댄다. */
 #smartUploadModal .smart-upload-left {
-    background: #f1f3f4;
-    min-height: 480px;
+    background: var(--ez-gray-100, #f1f3f4);
+    min-height: 420px;
 }
 
 #smartUploadModal .smart-dropzone {

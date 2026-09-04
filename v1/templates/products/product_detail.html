@@ -3614,17 +3614,17 @@ function getCookie(name) {
 </style>
 
 <!-- 필수 문서 추가 모달 -->
-<div class="modal fade" id="addSlotModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade doc-modal" id="addSlotModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 420px;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-            <div class="modal-header border-0 pb-0 px-4 pt-4">
+        <div class="modal-content">
+            <div class="modal-header">
                 <div>
-                    <h6 class="modal-title fw-bold mb-0">필수 문서 관리</h6>
-                    <p class="text-muted small mb-0 mt-1">체크된 문서가 문서함에 표시됩니다.</p>
+                    <h5 class="modal-title"><i class="bi bi-sliders me-2 text-primary"></i>필수 문서 관리</h5>
+                    <p class="modal-subtitle">체크된 문서가 문서함에 표시됩니다.</p>
                 </div>
-                <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="닫기"></button>
             </div>
-            <div class="modal-body px-3 py-2" style="max-height: 55vh; overflow-y: auto;">
+            <div class="modal-body px-2 py-1" style="max-height: 55vh; overflow-y: auto;">
                 <div class="list-group list-group-flush">
                     {% for slot in document_slots %}
                     <label class="list-group-item list-group-item-action d-flex align-items-center gap-3 px-3 py-2 cursor-pointer">
@@ -3671,10 +3671,10 @@ function getCookie(name) {
                     {% endif %}
                 </div>
             </div>
-            <div class="modal-footer border-0 px-4 pt-0 pb-4">
-                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-primary rounded-pill px-4" id="slot-mgr-submit-btn" onclick="submitSlotManager()">
-                    <i class="bi bi-check-lg me-1"></i>저장
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light v2-btn" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary v2-btn" id="slot-mgr-submit-btn" onclick="submitSlotManager()">
+                    <i class="bi bi-check-lg"></i>저장
                 </button>
             </div>
         </div>

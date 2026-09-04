@@ -259,12 +259,12 @@
 읽은 값을 바로 넣지 않는다 — OCR 은 틀리고, 틀린 원료가 BOM 에 들어가면
 배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
 {% endcomment %}
-<div class="modal fade" id="ingredientPhotoModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade doc-modal" id="ingredientPhotoModal" tabindex="-1" aria-hidden="true">
     {# 사진을 옆에 놓고 비교하므로 넓게 쓴다 #}
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" style="font-size:16px;">
+                <h5 class="modal-title">
                     <i class="bi bi-box-seam me-2 text-primary"></i>사진에서 읽은 원료 정보
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
@@ -280,21 +280,21 @@
     </div>
 </div>
 
-<div class="modal fade" id="editDocumentModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade doc-modal" id="editDocumentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-            <div class="modal-header border-0 bg-light">
+        <div class="modal-content">
+            <div class="modal-header">
                 <div>
-                    <h6 class="modal-title fw-bold mb-1"><i class="bi bi-pencil-square me-2"></i>문서 정보 수정</h6>
-                    <p class="mb-0 text-muted small" id="edit-doc-filename"></p>
+                    <h5 class="modal-title"><i class="bi bi-pencil-square me-2 text-primary"></i>문서 정보 수정</h5>
+                    <p class="modal-subtitle" id="edit-doc-filename"></p>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="닫기"></button>
             </div>
-            <div class="modal-body pt-3">
+            <div class="modal-body">
                 <input type="hidden" id="edit-doc-id">
                 
                 <div class="mb-3">
-                    <label for="edit-doc-type" class="form-label fw-semibold small text-muted">문서 구분</label>
+                    <label for="edit-doc-type" class="form-label">문서 구분</label>
                     <select class="form-select" id="edit-doc-type">
                         {% for dtype in document_types %}
                         <option value="{{ dtype.type_id }}">{{ dtype.type_name }}</option>
@@ -304,21 +304,21 @@
                 
                 <div class="row mb-3">
                     <div class="col-6">
-                        <label for="edit-issue-date" class="form-label fw-semibold small text-muted">발행일</label>
+                        <label for="edit-issue-date" class="form-label">발행일</label>
                         <input type="date" class="form-control" id="edit-issue-date">
                     </div>
                     <div class="col-6">
-                        <label for="edit-expiry-date" class="form-label fw-semibold small text-muted">만료일</label>
+                        <label for="edit-expiry-date" class="form-label">만료일</label>
                         <input type="date" class="form-control" id="edit-expiry-date">
                     </div>
                 </div>
                 
                 <div class="mb-3">
-                    <label for="edit-description" class="form-label fw-semibold small text-muted">설명</label>
+                    <label for="edit-description" class="form-label">설명</label>
                     <textarea class="form-control" id="edit-description" rows="3" placeholder="문서에 대한 설명을 입력하세요..."></textarea>
                 </div>
             </div>
-            <div class="modal-footer border-0">
+            <div class="modal-footer">
                 <button type="button" class="btn btn-light v2-btn" data-bs-dismiss="modal">취소</button>
                 <button type="button" class="btn btn-primary v2-btn" onclick="submitDocumentUpdate()">
                     <i class="bi bi-check-lg"></i>저장
@@ -338,20 +338,19 @@
 </div>
 
 <!-- 고정 서류 불러오기 모달 -->
-<div class="modal fade" id="importCompanyDocModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade doc-modal" id="importCompanyDocModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" style="max-width: 520px;">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden;">
-            <div class="modal-header border-0 px-4 pt-4 pb-2">
+        <div class="modal-content">
+            <div class="modal-header">
                 <div>
-                    <h5 class="fw-bold mb-1"><i class="bi bi-folder-symlink me-2 text-primary"></i>고정 서류에서 불러오기</h5>
-                    <p class="text-muted mb-0" style="font-size: 12px;">내 정보 수정 &gt; 고정 서류 관리에 등록된 서류를 이 제품 문서로 연결합니다.</p>
+                    <h5 class="modal-title"><i class="bi bi-folder-symlink me-2 text-primary"></i>고정 서류에서 불러오기</h5>
+                    <p class="modal-subtitle">내 정보 수정 &gt; 고정 서류 관리에 등록된 서류를 이 제품 문서로 연결합니다.</p>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="닫기"></button>
             </div>
-            <div class="modal-body px-4 pb-2">
-                <!-- 고정 서류 목록 -->
+            <div class="modal-body">
                 <div class="mb-2">
-                    <label class="form-label fw-semibold small text-muted">불러올 고정 서류 선택 <span class="text-danger">*</span></label>
+                    <label class="form-label">불러올 고정 서류 선택 <span class="text-danger">*</span></label>
                     <p class="text-muted mb-2" style="font-size:11px;"><i class="bi bi-info-circle me-1"></i>각 서류에 지정된 구분값이 자동 적용됩니다. 미지정 서류는 구분 없이 등록됩니다.</p>
                     <div id="companyDocList" style="max-height: 340px; overflow-y: auto;">
                         <div class="text-center py-4 text-muted">
@@ -360,7 +359,7 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer border-0 px-4 pb-4">
+            <div class="modal-footer">
                 <button type="button" class="btn btn-light v2-btn" data-bs-dismiss="modal">취소</button>
                 <button type="button" class="btn btn-primary v2-btn" id="importCompanyDocBtn" onclick="submitImportCompanyDoc()">
                     <i class="bi bi-folder-symlink"></i>불러오기
@@ -1102,6 +1101,21 @@ async function submitImportCompanyDoc() {
 
         const files = e.dataTransfer.files;
         if (!files || files.length === 0) return;
+
+        /*
+         * 창이 **이미 열려 있으면 다시 열지 않는다.**
+         *
+         * openUploadModal 은 폼을 초기화한다. 그래서 문서 종류를 고른 뒤
+         * 파일을 끌어다 놓으면 고른 종류가 지워졌다. 게다가 끌기 시작하면
+         * 화면 전체를 덮는 오버레이가 뜨는 탓에 창 안의 드롭 영역은 파일을
+         * 받을 수가 없어서, 창 안에 놓아도 늘 이쪽으로 왔다.
+         */
+        const alreadyOpen = document.querySelector('#smartUploadModal.show');
+        if (alreadyOpen) {
+            if (typeof handleFileSelect === 'function') handleFileSelect(files[0]);
+            dragTargetSlot = null;
+            return;
+        }
 
         if (typeof openUploadModal === 'function') {
             const fallbackContext = window.lastUploadSlotContext || null;

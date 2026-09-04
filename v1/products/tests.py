@@ -2046,6 +2046,27 @@ class DocumentVersionStackTests(TestCase):
             original_filename=name, version=version, parent_document=parent)
 
     def test_판이_쌓여도_줄은_하나다(self):
+        """
+        새 판은 **바로 앞 판**을 가리킨다. 뿌리가 아니다.
+
+            v1 <- v2 <- v3
+
+        한 칸만 보고 묶으면 v1·v2 만 한 묶음이 되고 v3 은 새 문서로 선다.
+        실제로 그렇게 나왔다 - 다섯 판짜리 도안이 목록에 네 줄로 있었다.
+        """
+        from v1.products.views import version_stacks
+        v1 = self._doc('도안.jpg', 1)
+        v2 = self._doc('도안.jpg', 2, v1)
+        self._doc('도안.jpg', 3, v2)
+        groups = version_stacks(
+            self.ProductDocument.objects.filter(label=self.label))
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]['count'], 3)
+        self.assertEqual(groups[0]['latest'].version, 3)
+        self.assertEqual([d.version for d in groups[0]['older']], [2, 1])
+
+    def test_뿌리를_가리키는_옛_자료도_묶는다(self):
+        # 예전에 올린 것들은 전부 뿌리를 가리킨다. 둘 다 한 묶음이어야 한다.
         from v1.products.views import version_stacks
         root = self._doc('도안.jpg', 1)
         self._doc('도안.jpg', 2, root)
@@ -2054,8 +2075,15 @@ class DocumentVersionStackTests(TestCase):
             self.ProductDocument.objects.filter(label=self.label))
         self.assertEqual(len(groups), 1)
         self.assertEqual(groups[0]['count'], 3)
-        self.assertEqual(groups[0]['latest'].version, 3)
-        self.assertEqual([d.version for d in groups[0]['older']], [2, 1])
+
+    def test_사라진_조상을_가리켜도_형제는_한_묶음이다(self):
+        from v1.products.views import version_stacks
+        gone = self._doc('없어질것.jpg', 1)
+        a = self._doc('도안.jpg', 2, gone)
+        b = self._doc('도안.jpg', 3, gone)
+        groups = version_stacks([b, a])          # 조상은 목록에 없다
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]['latest'].document_id, b.document_id)
 
     def test_다른_문서는_따로_센다(self):
         from v1.products.views import version_stacks
@@ -2143,13 +2171,14 @@ class DocumentTabRendersTests(TestCase):
         label = MyLabel.objects.create(user_id=user, my_label_name='브라우니')
         dtype = DocumentType.objects.create(type_code='KR_LABEL',
                                             type_name='한글표시사항도안')
-        root = ProductDocument.objects.create(
-            label=label, document_type=dtype, file='v2/product_documents/a.jpg',
-            original_filename='도안.jpg', version=1, uploaded_by=user)
-        ProductDocument.objects.create(
-            label=label, document_type=dtype, file='v2/product_documents/b.jpg',
-            original_filename='도안.jpg', version=2, parent_document=root,
-            uploaded_by=user)
+        # 실제 화면에서 나온 모양 그대로: 판이 줄로 이어진다 (v1 <- v2 <- v3 <- v4)
+        prev = None
+        for n in range(1, 5):
+            prev = ProductDocument.objects.create(
+                label=label, document_type=dtype,
+                file='v2/product_documents/%d.jpg' % n,
+                original_filename='도안.jpg', version=n,
+                parent_document=prev, uploaded_by=user)
 
         res = self.client.get(reverse('products:product_detail',
                                       args=[label.my_label_id]))
@@ -2160,3 +2189,93 @@ class DocumentTabRendersTests(TestCase):
         self.assertEqual(body.count('class="document-row cursor-pointer"'), 1)
         self.assertEqual(body.count('class="doc-version-row"'), 1)
         self.assertIn('toggleDocVersions', body)
+        self.assertIn('>4</span>', body)      # 판 수
+
+
+class DocumentModalsShareOneSkinTests(TestCase):
+    """
+    문서 모달 넷이 저마다 달랐다. 모서리가 16px·14px·기본으로 셋, 머리글이
+    회색 바탕인 것과 아닌 것, 제목이 h5 16px·h6·h5 굵게로 셋, 단추가
+    v2-btn·v2-btn-sm·rounded-pill px-4 fw-bold 로 셋.
+
+    같은 문서함에서 열리는 창들인데 열 때마다 다른 화면처럼 보였다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.upload = (base / 'templates/products/_modal_upload.html'
+                       ).read_text(encoding='utf-8')
+        self.docs = (base / 'templates/products/_tab_documents.html'
+                     ).read_text(encoding='utf-8')
+        self.detail = (base / 'templates/products/product_detail.html'
+                       ).read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_common.css'
+                    ).read_text(encoding='utf-8')
+
+    def test_넷_다_같은_껍데기를_쓴다(self):
+        self.assertIn('smart-upload-modal doc-modal', self.upload)
+        for html, modal in ((self.docs, 'editDocumentModal'),
+                            (self.docs, 'importCompanyDocModal'),
+                            (self.docs, 'ingredientPhotoModal'),
+                            (self.detail, 'addSlotModal')):
+            head = html.index('id="%s"' % modal)
+            self.assertIn('doc-modal', html[head - 90:head], modal)
+
+    def test_껍데기가_한_곳에_있다(self):
+        for rule in ('.doc-modal .modal-content',
+                     '.doc-modal .modal-header',
+                     '.doc-modal .modal-footer',
+                     '.doc-modal .form-label'):
+            self.assertIn(rule, self.css)
+
+    def test_모서리를_저마다_정하지_않는다(self):
+        self.assertNotIn('border-radius: 16px;', self.upload)
+        for html in (self.docs, self.detail):
+            self.assertNotIn('style="border-radius: 16px;"', html)
+            self.assertNotIn('style="border-radius: 14px; overflow: hidden;"', html)
+
+    def test_단추는_v2_하나로(self):
+        self.assertNotIn('rounded-pill px-4 fw-bold', self.upload)
+        self.assertNotIn('btn btn-primary rounded-pill px-4"', self.detail)
+
+    def test_업로드_창의_제목은_머리에_있다(self):
+        head = self.upload.index('id="smartUploadModal"')
+        block = self.upload[head:head + 1800]
+        self.assertLess(block.index('class="modal-header"'),
+                        block.index('class="modal-body'))
+        self.assertIn('id="upload-modal-title"', block)
+
+
+class DropKeepsTheChosenTypeTests(TestCase):
+    """
+    문서 종류를 고른 뒤 파일을 끌어다 놓으면 고른 종류가 지워졌다.
+
+    끌기 시작하면 화면 전체를 덮는 오버레이가 뜨는 탓에 창 안의 드롭 영역이
+    파일을 받을 수 없어서, 창 안에 놓아도 늘 window 의 drop 으로 왔다. 거기서
+    openUploadModal 을 다시 부르는데 그 함수가 폼을 초기화한다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.html = (Path(dj.BASE_DIR) / 'templates/products/_tab_documents.html'
+                     ).read_text(encoding='utf-8')
+        self.js = (Path(dj.BASE_DIR) / 'static/js/smart_upload.js'
+                   ).read_text(encoding='utf-8')
+
+    def test_이미_열려_있으면_다시_열지_않는다(self):
+        head = self.html.index("window.addEventListener('drop'")
+        block = self.html[head:head + 1600]
+        self.assertIn("querySelector('#smartUploadModal.show')", block)
+        self.assertLess(block.index('alreadyOpen'), block.index('openUploadModal('))
+
+    def test_그래도_파일은_받는다(self):
+        head = self.html.index('const alreadyOpen')
+        self.assertIn('handleFileSelect(files[0])', self.html[head:head + 320])
+
+    def test_여는_함수가_폼을_초기화한다는_사실은_그대로다(self):
+        # 이 전제가 깨지면 위 우회가 필요 없어진다 - 그때 같이 지워야 한다
+        head = self.js.index('function openUploadModal')
+        self.assertIn('resetUploadForm();', self.js[head:head + 400])

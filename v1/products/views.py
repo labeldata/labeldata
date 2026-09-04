@@ -494,6 +494,34 @@ def product_explorer(request, folder_id=None):
 
 # ==================== 제품 상세 ====================
 
+def _version_root(doc, by_id):
+    """
+    이 판이 어느 문서의 판인가. **끝까지 거슬러 올라간다.**
+
+    새 판은 바로 앞 판을 parent_document 로 가리킨다. 뿌리를 가리키는 것이
+    아니라 **줄로 이어지는** 구조다.
+
+        v1 <- v2 <- v3 <- v4
+
+    한 칸만 보고 묶으면 v1·v2 만 한 묶음이 되고 v3 과 v4 는 저마다 새 문서로
+    선다. 실제로 그렇게 나왔다 - 다섯 판짜리 도안이 목록에 네 줄로 있었다.
+
+    사라진 조상을 만나면 그 id 를 뿌리로 삼는다. 형제들이 같은 조상을 가리키고
+    있으면 그 조상이 목록에 없어도 한 묶음이어야 한다.
+    """
+    seen = set()
+    node = doc
+    while True:
+        parent_id = node.parent_document_id
+        if not parent_id or parent_id in seen:
+            return node.document_id
+        seen.add(parent_id)
+        nxt = by_id.get(parent_id)
+        if nxt is None:
+            return parent_id
+        node = nxt
+
+
 def version_stacks(documents):
     """
     같은 문서의 여러 판을 한 줄로 묶는다.
@@ -511,9 +539,12 @@ def version_stacks(documents):
 
     Returns: [{'root', 'latest', 'older', 'count'}…]
     """
+    docs = list(documents)
+    by_id = {d.document_id: d for d in docs}
+
     order, stacks = [], {}
-    for doc in documents:
-        root = doc.parent_document_id or doc.document_id
+    for doc in docs:
+        root = _version_root(doc, by_id)
         if root not in stacks:
             stacks[root] = []
             order.append(root)
