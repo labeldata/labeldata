@@ -8009,3 +8009,167 @@ class WordExportTests(TestCase):
     def test_내려받기는_한_곳에서(self):
         self.assertIn('function saveLabelFile', self.js)
         self.assertEqual(self.js.count('URL.createObjectURL'), 1)
+
+
+def _src(rel):
+    """v1/ 아래 파일의 내용. BASE_DIR 가 v1 을 가리킨다."""
+    from pathlib import Path
+    from django.conf import settings as dj
+    return (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+
+
+class CompanyRolesTests(TestCase):
+    """
+    제조원·유통전문판매원·소분원·수입원은 서로 다른 회사다.
+
+    라벨에서는 네 줄이 한 칸에 붙어 찍히고, 넷이 전부 "업체명 + 주소" 로 똑같이
+    생겼다. 값만 보고는 어느 칸의 것인지 알 수 없어서 판독이 자주 헷갈렸다.
+    """
+
+    def setUp(self):
+        from v1.label.services import ocr_company
+        self.C = ocr_company
+
+    def test_한_칸에_붙어_온_두_회사를_가른다(self):
+        blob = ('제조원 (주)가나다식품 경기도 안성시 공단로 12 '
+                '유통전문판매원 (주)라마바 서울특별시 강남구 테헤란로 5')
+        out = self.C.tidy({'bssh_nm': {'value': blob, 'confidence': 'high'}})
+        self.assertEqual(out['bssh_nm']['value'],
+                         '(주)가나다식품 경기도 안성시 공단로 12')
+        self.assertEqual(out['distributor_address']['value'],
+                         '(주)라마바 서울특별시 강남구 테헤란로 5')
+
+    def test_이미_찬_칸은_덮어쓰지_않는다(self):
+        blob = '제조원 (주)가나다 경기도 안성시 공단로 12 소분원 (주)마바사 부산광역시'
+        out = self.C.tidy({
+            'bssh_nm': {'value': blob},
+            'repacker_address': {'value': '(주)이미있음 대구광역시'},
+        })
+        self.assertEqual(out['repacker_address']['value'], '(주)이미있음 대구광역시')
+        self.assertIn('(주)마바사 부산광역시', out['repacker_address']['candidates'])
+
+    def test_항목_이름은_값이_아니다(self):
+        out = self.C.tidy({'bssh_nm': {'value': '제조원 : (주)가나다 경기도 안성시 공단로 1'}})
+        self.assertEqual(out['bssh_nm']['value'], '(주)가나다 경기도 안성시 공단로 1')
+
+    def test_원료라는_말은_항목_이름이_아니다(self):
+        # "제조원료" 안의 "제조원" 을 항목 이름으로 보면 값이 잘린다
+        self.assertEqual(self.C.split_roles('제조원료 배합비'), {})
+
+    def test_두_칸에_같은_회사면_짚는다(self):
+        same = '(주)가나다식품 경기도 안성시 공단로 12'
+        out = self.C.tidy({'bssh_nm': {'value': same},
+                           'distributor_address': {'value': same}})
+        self.assertTrue(any('같은 회사' in w
+                            for w in out['bssh_nm']['warnings']))
+        # 지우지는 않는다 - 정말 같은 회사인 제품도 있다
+        self.assertEqual(out['distributor_address']['value'], same)
+
+    def test_소재지가_없으면_짚는다(self):
+        out = self.C.tidy({'bssh_nm': {'value': '(주)가나다식품'}})
+        self.assertTrue(any('소재지' in w for w in out['bssh_nm']['warnings']))
+
+    def test_업체명이_없으면_짚는다(self):
+        out = self.C.tidy({'bssh_nm': {'value': '경기도 안성시 공단로 12'}})
+        self.assertTrue(any('업체명' in w for w in out['bssh_nm']['warnings']))
+
+    def test_법인격_표기가_달라도_같은_회사다(self):
+        for written in ('(주)샤니', '주식회사 샤니', '샤니(주)', '㈜샤니'):
+            self.assertGreaterEqual(
+                self.C.match_registered_name(written + ' 경기도 성남시', '샤니'),
+                self.C.SAME_COMPANY, written)
+
+    def test_주소_속_지명이_업소명에_맞지_않는다(self):
+        # 등록 업소명 "대한" 이 "충청남도 대한로" 에 걸려 일치가 나던 오탐
+        self.assertLess(
+            self.C.match_registered_name('(주)라마바 충청남도 천안시 대한로 3', '대한'),
+            self.C.SAME_COMPANY)
+
+    def test_등록_업소명이_판매원_칸에_있으면_자리_바뀜이다(self):
+        data = {'bssh_nm': {'value': '주식회사 오뚜기 경기도 안양시 흥안대로 405'},
+                'distributor_address': {'value': '(주)샤니 경기도 성남시 둔촌대로 13'}}
+        self.assertEqual(self.C.misplaced_registered_name(data, '(주)샤니'),
+                         'distributor_address')
+
+    def test_제조원이_맞으면_자리_바뀜이_아니다(self):
+        data = {'bssh_nm': {'value': '(주)샤니 경기도 성남시 둔촌대로 13'},
+                'distributor_address': {'value': '주식회사 오뚜기 경기도 안양시'}}
+        self.assertIsNone(self.C.misplaced_registered_name(data, '(주)샤니'))
+
+
+class RegisteredNameIsTheMakerTests(TestCase):
+    """식약처에 등록된 업소명은 제조원이다. 유통전문판매원이 아니다."""
+
+    def setUp(self):
+        self.src = _src('label/services/ocr_reconcile.py')
+
+    def test_제조원은_업체명만_견준다(self):
+        self.assertIn("'bssh_nm':          ('bssh_nm',          '제조원',       'company')",
+                      self.src)
+
+    def test_번호_교차검증도_업체명만_본다(self):
+        self.assertIn("('bssh_nm', 'bssh_nm', 'company')", self.src)
+
+    def test_등록_정보에는_주소가_없다고_알린다(self):
+        self.assertIn('_mark_company_roles', self.src)
+        self.assertIn('소재지가 없습니다', self.src)
+
+
+class CompanyTidyRunsInPipelineTests(TestCase):
+    """판독 뒤에 실제로 돈다. 안 부르면 위의 것이 다 소용없다."""
+
+    def setUp(self):
+        self.src = _src('label/services/ocr_service.py')
+
+    def test_두_입구_모두에서_돈다(self):
+        self.assertEqual(self.src.count('_companies_tidied(result)'), 2)
+
+    def test_프롬프트가_서로_다른_회사라고_말한다(self):
+        self.assertIn('위 네 항목은 **서로 다른 회사**다', self.src)
+
+
+class CompareRowHasFourColumnsTests(TestCase):
+    """대조 줄은 칸이 넷인데 다섯 칸 틀에 들어가 한 칸씩 밀려 있었다."""
+
+    def setUp(self):
+        self.css = _src('static/css/products_common.css')
+        self.js = _src('static/js/products/basic_info_ocr.js')
+
+    def test_대조_줄에는_대조_줄의_틀이_있다(self):
+        head = self.css.index('.cmp-row,')
+        self.assertIn('grid-template-columns: 130px', self.css[head:head + 200])
+
+    def test_머리줄도_같은_틀을_쓴다(self):
+        self.assertIn('ocr-row ocr-head cmp-head', self.js)
+        self.assertIn('.ocr-row.cmp-head', self.css)
+
+
+class PreviewConsoleIsQuietTests(TestCase):
+    """
+    없는 것이 정상인 요소를 두고 열 때마다 경고가 셋 떴다.
+
+    그 소음 때문에 진짜 오류가 묻혔다 - PDF 저장이 통째로 죽었을 때 콘솔은
+    이 경고들로 차 있었다.
+    """
+
+    def setUp(self):
+        self.js = _src('static/js/label/label_preview.js')
+        self.html = _src('templates/label/label_preview.html')
+
+    def test_이_화면에_없는_칸을_찾지_않는다(self):
+        head = self.js.index('const criticalElements')
+        block = self.js[head:head + 300]
+        for gone in ('servingSizeDisplay', 'servingsPerPackageDisplay',
+                     'nutritionDisplayUnit'):
+            self.assertNotIn(gone, block)
+            self.assertNotIn('id="%s"' % gone, self.html)
+
+    def test_세어야_할_것은_실제로_있다(self):
+        head = self.js.index('const criticalElements')
+        block = self.js[head:head + 300]
+        for real in ('nutrition-data', 'nutritionPreview'):
+            self.assertIn(real, block)
+            self.assertIn('id="%s"' % real, self.html)
+
+    def test_탭은_부모_페이지에_있다(self):
+        self.assertNotIn('활성 탭을 찾을 수 없음', self.js)

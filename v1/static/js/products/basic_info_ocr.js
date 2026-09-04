@@ -706,7 +706,7 @@
     });
 
     var head = ''
-      + '<div class="ocr-row ocr-head">'
+      + '<div class="ocr-row ocr-head cmp-head">'
       + '  <div>항목</div><div>내 표시사항</div><div></div><div>시안에서 읽은 값</div>'
       + '</div>';
 

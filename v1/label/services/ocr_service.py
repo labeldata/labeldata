@@ -31,6 +31,14 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - distributor_address: 유통전문판매원 소재지 (업체명 + 주소 전체)
 - repacker_address: 소분원 소재지 (업체명 + 주소 전체, 없으면 none)
 - importer_address: 수입원 소재지 (업체명 + 주소 전체, 없으면 none)
+
+  ※ 위 네 항목은 **서로 다른 회사**다. 라벨에서는 네 줄이 한 칸 안에 세로로
+    붙어 적히는 일이 많으니 **어느 줄이 어느 항목인지 항목 이름을 보고 갈라라.**
+    - 한 항목 칸에 다른 항목의 회사까지 이어 적지 마라.
+    - 라벨에 그 항목 이름이 없으면 **none** 이다. 다른 회사를 대신 넣지 마라.
+    - 같은 값을 두 항목에 옮겨 적지 마라. 라벨이 "제조원 및 유통전문판매원"
+      처럼 **한 줄로 묶어 적었을 때만** 두 항목에 같은 값을 넣는다.
+    - 값에는 항목 이름("제조원:")을 빼고 업체명과 주소만 적는다.
 - storage_method: 보관방법 (예: 냉장(0~10 ℃)에서 보관, 직사광선을 피해 실온 보관)
 - rawmtrl_nm: 원재료명 항목의 내용 **전체**. 길어도 끊지 말고 끝까지 적는다.
     괄호와 대괄호 안의 하위 원료·원산지·함량을 모두 그대로 옮긴다.
@@ -686,6 +694,23 @@ def _repeats_checked(data, text):
         return data
 
 
+def _companies_tidied(data):
+    """
+    제조원·유통전문판매원·소분원·수입원을 제자리로 가른다.
+
+    넷은 거의 언제나 다른 회사인데 라벨에서는 붙어 찍힌다. 한 칸을 읽으면 다음
+    회사까지 딸려 오고, 값만 보고는 어느 칸의 것인지 알 수 없어 그 자리에서는
+    아무도 이상한 것을 모른다. 왜 그런지는 ocr_company 에 있다.
+    """
+    try:
+        from v1.label.services.ocr_company import tidy
+        return tidy(data)
+    except Exception:
+        # 얹는 것이다. 실패해도 판독 결과는 그대로 나가야 한다.
+        logger.exception('업소 항목 정리 실패')
+        return data
+
+
 def _read_bytes(image_file):
     """
     대조에 쓸 원본 바이트. 필요할 때만 읽는다.
@@ -1026,6 +1051,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         result = _repaired(result, ocr_text, use_hybrid)
         result, ground_report = _grounded(result, ocr_text, use_ground)
         result = _repeats_checked(result, ocr_text)
+        result = _companies_tidied(result)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 
@@ -1151,6 +1177,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         result = _repaired(result, ocr_text, use_hybrid)
         result, ground_report = _grounded(result, ocr_text, use_ground)
         result = _repeats_checked(result, ocr_text)
+        result = _companies_tidied(result)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 

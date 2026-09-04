@@ -1428,3 +1428,37 @@ table th[title] {
 /* 접어 둔 무리 */
 .cmp-group > summary { list-style: revert; }
 .cmp-group[open] > .cmp-group-title { margin-bottom: 6px; }
+
+/* -------------------------
+   대조 줄의 칸은 넷이다
+   -------------------------
+   .ocr-row 는 채우는 창의 틀이라 칸이 다섯이다 — 맨 앞이 고르는 동그라미(22px)
+   이고 맨 뒤가 편집칸이다. 대조 창에는 고를 것도 고칠 것도 없어서 칸을 넷만
+   내놓는데, 그러면 다섯 칸 틀에 하나씩 밀려 들어간다.
+
+       항목명   -> 22px 칸  ("식품유형(표시용)" 이 한 글자씩 세로로 쌓인다)
+       시안 값  -> 62px 칸  (300자짜리 원재료명이 여기 눌린다)
+
+   실제로 그렇게 나왔다. 대조하라고 만든 화면인데 두 값을 나란히 볼 수가
+   없었다. 대조 줄에는 대조 줄의 틀을 준다.
+   ------------------------- */
+.cmp-row,
+.ocr-row.cmp-head {
+    grid-template-columns: 130px minmax(0, 1fr) 74px minmax(0, 1.1fr);
+}
+
+/* 좁은 화면에서는 위아래로 쌓는다. .ocr-row 의 좁은 화면 규칙은 2번째 칸으로
+   몰아넣는데, 대조 줄에는 그 첫 칸(동그라미)이 없다. */
+@media (max-width: 991px) {
+    .cmp-row,
+    .ocr-row.cmp-head {
+        grid-template-columns: 1fr;
+        row-gap: 3px;
+    }
+    .ocr-row.cmp-head { display: none; }
+    .cmp-row > .ocr-label   { font-weight: 700; }
+    .cmp-row > .ocr-current,
+    .cmp-row > .ocr-arrow,
+    .cmp-row > .ocr-control { grid-column: 1; }
+    .cmp-row > .ocr-arrow   { text-align: left; }
+}

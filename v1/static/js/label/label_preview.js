@@ -1623,7 +1623,9 @@ document.addEventListener('DOMContentLoaded', function () {
         
             // 영양성분 UI 업데이트 (중복 제거된 코드)
             if (nutritionData.serving_size && nutritionData.serving_size_unit) {
-                safeSetElementValue('servingSizeDisplay', `${nutritionData.serving_size}${nutritionData.serving_size_unit}`, true);
+                // 이 화면에는 없는 칸이다(위 criticalElements 주석 참고). 있으면 채우고
+                // 없으면 조용히 넘어간다 — 없는 것이 정상이라 경고할 일이 아니다.
+                safeSetElementValue('servingSizeDisplay', `${nutritionData.serving_size}${nutritionData.serving_size_unit}`);
             }
         
             if (nutritionData.units_per_package) {
@@ -3086,10 +3088,18 @@ document.addEventListener('DOMContentLoaded', function () {
     addEventListenersToElements(heightCalculationInputs, 'change', calculateHeight);
     window.addEventListener('load', calculateHeight);
     
-    // DOM 요소들의 존재 여부 확인 (중복 제거된 코드)
+    /*
+      이 화면에 **정말 있어야 하는** 것만 센다.
+
+      servingSizeDisplay·servingsPerPackageDisplay·nutritionDisplayUnit 은
+      영양성분을 여기서 고치던 시절의 입력칸이다. 지금 영양성분은 별도 탭에서
+      넣고 이 화면은 그리기만 하므로 그 셋은 **없는 것이 맞다.** 그런데도
+      목록에 남아 있어서 열 때마다 경고가 셋 떴고, 그 소음 때문에 진짜 오류가
+      묻혔다 — PDF 저장이 통째로 죽었을 때 콘솔은 이 경고들로 차 있었다.
+    */
     const criticalElements = [
         'nutrition-data', 'country-mapping-data', 'expiry-recommendation-data',
-        'nutritionPreview', 'servingSizeDisplay', 'servingsPerPackageDisplay', 'nutritionDisplayUnit'
+        'nutritionPreview'
     ];
     
     const missingElements = criticalElements.filter(id => !document.getElementById(id));
@@ -3134,19 +3144,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // 포장재질 감지기 설정
     setTimeout(setupPackageMaterialWatcher, 500);
     
-    // 페이지 로드 후 탭 상태 확인
-    setTimeout(() => {
-        // 지연 후 탭 상태 재검사 (debug removed)
-        const activeTab = document.querySelector('.nav-link.active');
-        if (!activeTab) {
-            console.warn('⚠️ 활성 탭을 찾을 수 없음');
-        }
-        // 현재 영양성분 표시 상태 확인
-        const nutritionPreview = document.getElementById('nutritionPreview');
-        if (nutritionPreview) {
-            // (debug removed)
-        }
-    }, 1000);
+    // 탭 상태를 여기서 보지 않는다. 탭은 이 화면을 끼워 넣은 **부모 페이지**에
+    // 있고, 미리보기 안에 .nav-link 가 없는 것이 정상이다.
 
 });
 

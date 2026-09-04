@@ -35,15 +35,18 @@ _WS = re.compile(r'\s+')
 # 대조할 항목과 비교 방식.
 #
 #   exact     짧고 정형화된 값. 표기 흔들림만 감안해 곧이곧대로 견준다.
-#   contains  한쪽이 다른 쪽을 품는다. 사진의 제조원은 "회사명 + 주소" 인데
-#             등록 정보에는 회사명만 있다. 곧이곧대로 견주면 늘 불일치가 난다.
+#   company   등록된 업소명은 **제조원 이름만**이고 주소가 없다. 사진 쪽은
+#             "회사명 + 주소" 다. 그래서 사진 값에서 회사명 부분만 떼어 견준다.
+#             예전에는 통째로 품는지만 봤는데(contains), 짧은 업소명이 긴 주소
+#             안의 지명에 우연히 걸려 "일치" 가 나왔다 — 등록 업소명 "대한" 이
+#             "충청남도 대한로" 에 맞는 식이다. 자세한 것은 ocr_company 에 있다.
 #   loose     길고 표기가 자유로운 값. 다르다고 곧장 단정하지 않고 참고로만 둔다.
 #             원재료명은 인쇄물에 원산지·함량이 붙고 등록 정보에는 없다.
 _FIELD_POLICY = {
     'prdlst_report_no': ('prdlst_report_no', '품목보고번호', 'exact'),
     'prdlst_nm':        ('prdlst_nm',        '제품명',       'exact'),
     'prdlst_dcnm':      ('prdlst_dcnm',      '식품유형',     'exact'),
-    'bssh_nm':          ('bssh_nm',          '제조원',       'contains'),
+    'bssh_nm':          ('bssh_nm',          '제조원',       'company'),
     'pog_daycnt':       ('pog_daycnt',       '소비기한',     'period'),
     'frmlc_mtrqlt':     ('frmlc_mtrqlt',     '포장재질',     'loose'),
     'rawmtrl_nm':       ('rawmtrl_nm',       '원재료명',     'loose'),
@@ -81,6 +84,11 @@ def parse_period_days(text):
 
 def _ratio(a, b, mode):
     """두 값의 닮은 정도(0~100). rapidfuzz 가 없으면 완전일치만 본다."""
+    if mode == 'company':
+        # 회사명은 법인격 표기가 저마다 다르다 — "(주)샤니", "샤니(주)",
+        # "주식회사 샤니" 는 같은 회사다. 그 표기를 지우고 이름만 견준다.
+        from v1.label.services.ocr_company import match_registered_name
+        return match_registered_name(a, b)
     x, y = _squeeze(a), _squeeze(b)
     if not x or not y:
         return 0
@@ -214,7 +222,7 @@ NEAR_MISS_CONFIRM = 70
 def _confirms(item, ocr_data):
     """한 자리 고쳐 찾은 품목이 사진의 다른 값과도 맞는가."""
     for key, attr, mode in (('prdlst_nm', 'prdlst_nm', 'exact'),
-                            ('bssh_nm', 'bssh_nm', 'contains')):
+                            ('bssh_nm', 'bssh_nm', 'company')):
         ocr_value = _value_of((ocr_data or {}).get(key))
         api_value = str(getattr(item, attr, '') or '').strip()
         if ocr_value and api_value:
@@ -351,6 +359,18 @@ def reconcile(ocr_data):
                 conflicts.append(key)
         fields[key] = row
 
+    # 등록된 업소명은 **제조원**이다. 그것이 유통전문판매원·소분원·수입원
+    # 칸에서 발견되면 두 줄이 자리를 바꿔 읽힌 것이다. 값만 봐서는 알 수 없고
+    # 등록 정보가 있어야 비로소 드러나는 오독이라 여기서 짚는다.
+    role_swap = ''
+    try:
+        from v1.label.services.ocr_company import (
+            ROLE_LABELS, misplaced_registered_name)
+        role_swap = misplaced_registered_name(
+            ocr_data, str(getattr(item, 'bssh_nm', '') or '').strip()) or ''
+    except Exception:
+        logger.exception('업소 항목 자리 확인 실패')
+
     read = _value_of((ocr_data or {}).get('prdlst_report_no'))
     corrected = bool(read) and report_no not in normalize_report_no(read)
     parts = [f'품목보고번호 {report_no} 로 등록 정보를 찾았습니다.']
@@ -366,11 +386,16 @@ def reconcile(ocr_data):
     if conflicts:
         names = ', '.join(fields[k]['label'] for k in conflicts)
         parts.append(f'{names} 은(는) 사진과 등록 정보가 다릅니다 — 확인이 필요합니다.')
+    if role_swap:
+        parts.append(
+            f'등록된 업소명이 제조원 칸이 아니라 {ROLE_LABELS[role_swap]} 칸에서 '
+            f'읽혔습니다 — 두 줄이 자리를 바꿔 읽혔을 수 있습니다.')
 
     return {
         'matched': True,
         'report_no': report_no,
         'corrected_report_no': corrected,
+        'role_swap': role_swap,
         'source': '식약처 품목보고',
         'fields': fields,
         'agreed': agreed,
@@ -482,8 +507,47 @@ def merge(ocr_data, result=None):
                               'conflict': 'conflict'}.get(verdict, 'photo')
         data[key] = item
 
+    _mark_company_roles(data, result)
     _align_rawmtrl(data, result)
     return data
+
+
+def _mark_company_roles(data, result):
+    """
+    업소 항목에만 있는 두 가지를 짚는다.
+
+    1. **등록 정보에는 주소가 없다.** 제조원 칸을 등록 업소명으로 채우면
+       업체명만 들어간다. 라벨에는 소재지까지 적어야 하므로, 채워 놓고 가만히
+       있으면 사용자는 다 된 줄 알고 넘어간다.
+    2. **자리가 바뀌었다.** 등록된 업소명이 유통전문판매원 칸에서 읽혔다면
+       두 줄을 바꿔 읽은 것이다. 값은 건드리지 않고 후보로 올려 둔다 —
+       어느 쪽이 맞는지는 사진을 봐야 안다.
+    """
+    try:
+        from v1.label.services.ocr_company import ROLE_LABELS, has_address
+    except Exception:
+        return
+
+    row = (result.get('fields') or {}).get('bssh_nm')
+    if row and row['verdict'] == 'filled' and not has_address(row['api_value']):
+        item = dict(data.get('bssh_nm') or {})
+        item['warnings'] = list(item.get('warnings') or []) + [
+            '등록 정보에는 업소명만 있고 소재지가 없습니다 — 주소는 사진을 보고 '
+            '직접 넣어야 합니다.']
+        item['confidence'] = 'low'
+        data['bssh_nm'] = item
+
+    swapped = result.get('role_swap')
+    if not swapped:
+        return
+    note = ('등록된 업소명(%s)이 제조원이 아니라 %s 칸에서 읽혔습니다 — 두 줄이 '
+            '자리를 바꿔 읽혔을 수 있습니다. 사진을 보고 정하세요.'
+            % (row['api_value'] if row else '', ROLE_LABELS[swapped]))
+    for field in ('bssh_nm', swapped):
+        item = dict(data.get(field) or {})
+        item['warnings'] = list(item.get('warnings') or []) + [note]
+        item['confidence'] = 'low'
+        data[field] = item
 
 
 def _align_rawmtrl(data, result):
