@@ -224,6 +224,57 @@ class DisplayItemSaveTests(TestCase):
 
         self.assertEqual(self._reload().chckd_nutrition_text, 'N')
 
+    def test_규칙표에_없는_체크도_저장된다(self):
+        """
+        유통전문판매원·소분원·수입원·기타표시사항은 식품유형 규칙표
+        (FIELD_TO_CHECKBOX)에 없다. 그 표를 저장 대상으로 삼는 바람에, 넷 다
+        오른쪽 패널에 있고 규정 검증의 근거인데도 껐다 켠 것이 저장되지 않았다.
+        """
+        self.label.chckd_additional_info = 'Y'
+        self.label.chckd_importer_address = 'N'
+        self.label.save()
+
+        self._post({'chckd_additional_info': False,
+                    'chckd_distributor_address': True,
+                    'chckd_repacker_address': True,
+                    'chckd_importer_address': True})
+
+        self.assertEqual(self._reload().chckd_additional_info, 'N')
+        self.assertEqual(self.label.chckd_distributor_address, 'Y')
+        self.assertEqual(self.label.chckd_repacker_address, 'Y')
+        self.assertEqual(self.label.chckd_importer_address, 'Y')
+
+    def test_규칙이_켠_항목을_응답이_알려_준다(self):
+        """조용히 켜 두면 켠 적 없는 체크를 근거로 한 지적을 받게 된다."""
+        self.label.chckd_nutrition_text = 'N'
+        self.label.save()
+
+        resp = self._post({'food_type': '과자', 'food_group': '과자류'})
+
+        on = {i['checkbox']: i['label'] for i in resp.json()['rule_applied']['turned_on']}
+        self.assertIn('chckd_nutrition_text', on)
+        self.assertEqual(on['chckd_nutrition_text'], '영양성분 표시')
+
+    def test_규칙이_손대지_않으면_알릴_것도_없다(self):
+        resp = self._post({'prdlst_nm': '이름만 바꿈'})
+        self.assertEqual(resp.json()['rule_applied'],
+                         {'turned_on': [], 'turned_off': []})
+
+    def test_저장_응답이_바뀐_표시_항목을_돌려준다(self):
+        """
+        식품유형을 바꾸면 서버가 그 유형의 규칙으로 체크를 켠다. 돌려주지 않으면
+        오른쪽 패널은 사용자가 켠 적 없는 체크를 꺼진 채로 계속 보여 주고,
+        규정 검증만 "표시하기로 선택했는데 비어 있습니다" 라고 말하게 된다.
+        """
+        self.label.chckd_nutrition_text = 'N'
+        self.label.save()
+
+        resp = self._post({'food_type': '과자', 'food_group': '과자류'})
+
+        items = {i['checkbox']: i for i in resp.json()['display_items']}
+        self.assertTrue(items['chckd_nutrition_text']['checked'])
+        self.assertFalse(items['chckd_nutrition_text']['filled'])
+
     def test_표시_항목_목록이_식품유형_규칙을_함께_준다(self):
         from v1.products.views import _build_display_items
 
@@ -305,6 +356,51 @@ class DisplayItemPanelTests(TestCase):
                  if not i['tab'] and i['anchor'] in form_order]
         expected = sorted(panel, key=form_order.index)
         self.assertEqual(panel, expected, '우측 패널 순서가 폼 순서와 다르다')
+
+    def test_미입력_표시는_그려_두고_숨긴다(self):
+        """
+        느낌표를 조건부로 **그리면** 페이지를 그릴 때의 상태에 못 박힌다.
+        사진으로 열여섯 칸을 채워도 느낌표가 그대로 남아, 다 채운 화면이
+        전부 미입력으로 보였다. 늘 그려 두고 보이고 숨기는 일만 JS 가 한다.
+        """
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        detail = (Path(dj.BASE_DIR) / 'templates/products/product_detail.html'
+                  ).read_text(encoding='utf-8')
+        self.assertIn('function refreshDisplayItemFlags', detail)
+        # 값을 비우면 체크는 그대로 두고 느낌표로 알린다. 체크를 대신 꺼 주면
+        # 인쇄물에서 줄이 조용히 사라져, 지우려던 것이 아니라 고쳐 쓰려던
+        # 사용자가 그 사실을 모른 채 확정하게 된다.
+        self.assertIn('mark.hidden = !(box.checked && !filled)', detail)
+        self.assertNotIn('box.checked = false', detail)
+        # 값·체크가 바뀌면 다시 계산한다
+        self.assertIn("document.addEventListener('input', refreshDisplayItemFlags)", detail)
+        self.assertIn("document.addEventListener('change', refreshDisplayItemFlags)", detail)
+        # 저장 응답이 돌려준 상태를 패널에 반영한다
+        self.assertIn('applyDisplayItems(data.display_items)', detail)
+
+    def test_미입력_판정이_검증과_같은_자리를_본다(self):
+        """
+        주의사항과 기타표시사항은 한쪽에만 적어도 표시가 온전하다
+        (validation_service 의 _ALTERNATIVE_SOURCES). 화면이 자기 규칙을 따로
+        가지면 패널은 "미입력", 검증은 "괜찮다" 라고 서로 다른 말을 한다.
+        """
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        from v1.products.views import _build_display_items
+
+        html = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+                ).read_text(encoding='utf-8')
+        ids = set(re.findall(r'id="(field-[a-z-]+)"', html))
+
+        by_field = {i['field']: i['sources'].split(',') for i in _build_display_items(self.label)}
+        self.assertEqual(sorted(by_field['cautions']),
+                         ['field-additional-info', 'field-cautions'])
+        # 영양성분은 이 탭에 칸이 없다 — 화면이 읽을 자리가 없으므로
+        # 서버가 계산해 준 값을 그대로 쓰게 둔다
+        self.assertFalse([s for s in by_field['nutrition_text'] if s in ids])
 
     def test_이동_대상이_템플릿에_실제로_있다(self):
         """

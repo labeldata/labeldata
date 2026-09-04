@@ -994,6 +994,48 @@ _DISPLAY_ITEM_TABS = {
 }
 
 
+# 모델에 있는 표시 항목 체크박스 전부.
+#
+# 저장이 반영할 대상을 여기서 한 번만 정한다. 예전에는 식품유형 규칙표를
+# 대신 썼는데 그 표에 없는 넷(유통전문판매원·소분원·수입원·기타표시사항)이
+# 조용히 빠졌다. 모델을 근거로 삼으면 칸이 늘어도 같은 일이 되풀이되지 않는다.
+_CHECKBOX_FIELDS = tuple(
+    f.name for f in MyLabel._meta.get_fields()
+    if getattr(f, 'name', '').startswith('chckd_')
+)
+
+
+def _checkbox_label(checkbox):
+    """'chckd_nutrition_text' -> '영양성분'. 화면에 그대로 내보내는 이름."""
+    field = checkbox[len('chckd_'):]
+    try:
+        return str(MyLabel._meta.get_field(field).verbose_name)
+    except Exception:
+        return field
+
+
+def _display_item_sources(field):
+    """
+    그 항목이 "채워졌다" 를 판정할 때 볼 입력칸 id 전부.
+
+    화면은 저장하기 전에도 미입력 표시를 갱신해야 한다. 서버가 보는 자리
+    (validation_service.content_sources)와 같은 목록을 그대로 넘겨 주지 않으면,
+    주의사항/기타표시사항처럼 한쪽에만 적어도 되는 항목에서 화면과 검증이
+    서로 다른 말을 하게 된다.
+
+    이 탭에 칸이 없는 항목(영양성분)은 존재하지 않는 id 만 나오는데, 그때는
+    화면이 서버가 계산해 준 값을 그대로 쓴다.
+    """
+    from v1.label.services.validation_service import content_sources
+
+    ids = []
+    for src in content_sources(field):
+        element_id = _DISPLAY_ITEM_ANCHORS.get(src, 'field-' + src.replace('_', '-'))
+        if element_id not in ids:
+            ids.append(element_id)
+    return ids
+
+
 def _build_display_items(label):
     """
     표시 항목 체크박스 목록. 식품유형이 정하는 값(Y/D/N)을 함께 실어 보내
@@ -1015,19 +1057,17 @@ def _build_display_items(label):
     items = []
     for checkbox in _DISPLAY_ITEM_ORDER:
         field = checkbox[len('chckd_'):]
-        try:
-            name = str(MyLabel._meta.get_field(field).verbose_name)
-        except Exception:
-            name = field
         items.append({
             'checkbox': checkbox,
             'field': field,
-            'label': name,
+            'label': _checkbox_label(checkbox),
             'checked': (getattr(label, checkbox, '') or '') == 'Y',
             'rule': by_checkbox.get(checkbox, ''),   # 'Y' 필수 / 'D' 해당없음 / '' 규칙없음
             # 다른 탭이 채우는 자리까지 본다 — 영양성분은 영양성분 탭이,
             # 원재료명(표시)은 BOM/기본정보의 rawmtrl_nm 이 채운다.
             'filled': _has_content(label, field),
+            # 화면이 저장 전에도 같은 판정을 할 수 있게 볼 자리를 알려 준다
+            'sources': ','.join(_display_item_sources(field)),
             'anchor': _DISPLAY_ITEM_ANCHORS.get(
                 field, 'field-' + field.replace('_', '-')),
             'tab': _DISPLAY_ITEM_TABS.get(field, ('', ''))[0],
@@ -1345,10 +1385,16 @@ def product_update_fields(request, product_id):
         # 화면이 보낸 체크 상태를 그대로 반영한 뒤, 식품유형이 바뀐 경우에만
         # 그 유형의 규칙을 덧씌운다. 규칙은 필수('Y')를 켜고 해당 없음('D')을
         # 끄기만 하므로, 사용자 재량('N') 항목의 선택은 그대로 남는다.
+        #
+        # 반영 대상은 **모델에 있는 chckd_* 전부**다. 예전에는 식품유형 규칙표
+        # (FIELD_TO_CHECKBOX)에 있는 것만 봤는데, 그 표에는 유통전문판매원·
+        # 소분원·수입원·기타표시사항이 없다. 넷 다 오른쪽 패널에 있고 규정
+        # 검증의 근거이기도 해서, 화면에서 껐다 켜도 저장이 안 되고 검증만
+        # "표시하기로 선택했는데 비어 있습니다" 라고 말하는 상태였다.
         from v1.label.services import food_type_settings as fts
 
         checkbox_changed = []
-        for item_checkbox in fts.FIELD_TO_CHECKBOX.values():
+        for item_checkbox in _CHECKBOX_FIELDS:
             if item_checkbox not in data:
                 continue
             new_state = 'Y' if data[item_checkbox] in (True, 'Y', 'true', 1) else 'N'
@@ -1356,11 +1402,20 @@ def product_update_fields(request, product_id):
                 checkbox_changed.append(item_checkbox)
             setattr(label, item_checkbox, new_state)
 
+        # 규칙이 손댄 항목은 따로 모아 화면에 알린다. 조용히 켜 두면 사용자는
+        # 켠 적 없는 체크를 근거로 한 지적을 받고, 무엇을 고쳐야 하는지 알 수 없다.
+        rule_applied = {'turned_on': [], 'turned_off': []}
         if food_type_changed:
             rule = fts.resolve_settings(label.food_group or '', label.food_type or '')
             if rule['found']:
                 applied = fts.apply_to_label(label, rule['settings'])
                 checkbox_changed.extend(applied['turned_on'] + applied['turned_off'])
+                rule_applied = {
+                    'turned_on': [{'checkbox': cb, 'label': _checkbox_label(cb)}
+                                  for cb in applied['turned_on']],
+                    'turned_off': [{'checkbox': cb, 'label': _checkbox_label(cb)}
+                                   for cb in applied['turned_off']],
+                }
 
         if checkbox_changed:
             changed_fields.append('표시 항목')
@@ -1389,8 +1444,20 @@ def product_update_fields(request, product_id):
                 }
             )
         
-        return JsonResponse({'success': True, 'message': '저장되었습니다'})
-    
+        # 저장된 값으로 표시 항목 목록을 다시 계산해서 돌려준다.
+        #
+        # 이 목록은 지금까지 페이지를 그릴 때 한 번만 만들어졌다. 그런데 저장
+        # 뒤의 상태는 화면이 보낸 것과 다를 수 있다 — 식품유형이 바뀌면 위에서
+        # 그 유형의 규칙이 체크를 켜고 끄고(apply_to_label), 미입력 표시는
+        # 다른 탭이 채운 자리까지 봐야 한다. 돌려주지 않으면 오른쪽 패널이
+        # **검증이 보는 값과 다른 화면**을 계속 보여 준다.
+        return JsonResponse({
+            'success': True,
+            'message': '저장되었습니다',
+            'display_items': _build_display_items(label),
+            'rule_applied': rule_applied,
+        })
+
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
     except Exception as e:
