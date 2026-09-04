@@ -1042,6 +1042,8 @@ def label_creation(request, label_id=None):
             'has_ingredient_relations': has_ingredient_relations,
             'count_ingredient_relations': count_ingredient_relations,
             'custom_fields_json': custom_fields_json,
+            # 규정 검증(AI) 버튼을 보일 것인가 (settings.SHOW_AI_VALIDATION 주석 참고)
+            'show_ai_validation': getattr(settings, 'SHOW_AI_VALIDATION', False),
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
         return render(request, _get_template(request, 'label/label_creation.html'), context)
@@ -2485,6 +2487,9 @@ def preview_popup(request):
             # 같은 모양을 본다 — 예전에는 브라우저 localStorage 에만 있었다.
             'display_checked': json.dumps(preview_display_checked(label), ensure_ascii=False),
             'field_layout': json.dumps(label.prv_field_layout or {}, ensure_ascii=False),
+            # 규정 검증(AI) 버튼을 보일 것인가. 기능은 그대로 두고 버튼만 감춘다
+            # (settings.SHOW_AI_VALIDATION 주석 참고).
+            'show_ai_validation': getattr(settings, 'SHOW_AI_VALIDATION', False),
             'is_owner': is_owner,          # 설정 저장 버튼 표시 여부 결정
             'can_upload_pdf': can_upload_pdf,  # PDF 문서함 업로드 버튼 표시 여부
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨

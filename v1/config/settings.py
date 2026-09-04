@@ -312,6 +312,17 @@ OCR_HYBRID_DROP_TILES = config('OCR_HYBRID_DROP_TILES', default=False, cast=bool
 # 대기로 시간만 쓴다 - 5장 3회 A/B 가 11분에서 2분이 될 수도 있다.
 OCR_TPM_LIMIT = config('OCR_TPM_LIMIT', default=200000, cast=int)
 
+# 규정 검증(AI) 버튼을 화면에 보일 것인가. 기본은 **끔**.
+#
+# 규칙 기반 검증과 결과가 크게 다르지 않다는 판단으로 감췄다. 기능은 그대로
+# 남아 있다 — 버튼만 안 보인다. 판정 코드(ai_validation_service), 엔드포인트
+# (/label/<id>/validate/ai-review/), 화면 쪽 호출(runAiValidation)이 모두
+# 그대로이므로, 이 값을 켜면 곧바로 다시 쓸 수 있다.
+#
+# AI 전용으로만 보는 항목이 둘 있다(원재료 표시 순서, 제품명-원재료 일치성).
+# 그 둘이 필요해지면 여기를 켠다.
+SHOW_AI_VALIDATION = config('SHOW_AI_VALIDATION', default=False, cast=bool)
+
 # 식품안전나라 OpenAPI Key (https://openapi.foodsafetykorea.go.kr)
 FOODSAFETY_API_KEY = config('FOODSAFETY_API_KEY', default='')
 

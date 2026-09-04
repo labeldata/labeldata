@@ -7823,3 +7823,82 @@ class ValidationResultLayoutTests(TestCase):
         self.assertIn('function vrUncheckedHtml', self.js)
         head = self.js.index('function vrUncheckedHtml')
         self.assertIn('확인하지 못한 항목', self.js[head:head + 800])
+
+class AiValidationHiddenTests(TestCase):
+    """
+    규정 검증(AI) 버튼은 감춰 둔다.
+
+    규칙 기반과 결과가 크게 다르지 않다는 판단이다. **지운 것이 아니라 안
+    보이게 한 것**이다 — 판정 코드도 엔드포인트도 화면 쪽 호출도 그대로이므로
+    settings.SHOW_AI_VALIDATION 을 켜면 곧바로 다시 쓸 수 있다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='hideai', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='AI')
+        self.client.force_login(self.user)
+
+    def _preview(self):
+        return self.client.get(reverse('label:preview_popup'),
+                               {'label_id': self.label.my_label_id})
+
+    def test_기본은_안_보인다(self):
+        self.assertNotContains(self._preview(), 'id="aiValidationBtn"')
+
+    def test_켜면_다시_보인다(self):
+        with self.settings(SHOW_AI_VALIDATION=True):
+            self.assertContains(self._preview(), 'id="aiValidationBtn"')
+
+    def test_규칙_기반_검증은_그대로_있다(self):
+        self.assertContains(self._preview(), 'id="ruleValidationBtn"')
+
+    def test_기능은_지우지_않았다(self):
+        """되돌릴 수 있어야 감춘 것이지, 못 되돌리면 지운 것이다."""
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.assertIn('function runAiValidation',
+                      (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8'))
+        self.assertTrue((base / 'label/services/ai_validation_service.py').exists())
+
+    def test_ai_검증_경로도_살아_있다(self):
+        from django.urls import reverse as _reverse
+
+        self.assertTrue(_reverse('label:validate_label_ai_review', args=[self.label.my_label_id]))
+
+
+class ZoomControlsFitTests(TestCase):
+    """
+    확대·축소 단추가 서로 겹쳤다.
+
+    .zoom-controls button 에 32px 정사각형이 걸려 있어서, 글자가 든 단추
+    ("100%", "맞춤")가 그 칸을 넘쳐 옆 단추 위로 올라왔다. 창이 좁아질 때
+    머리줄이 접히지 못한 것도 겹침을 키웠다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        self.css = (Path(dj.BASE_DIR) / 'static/css/label_preview.css'
+                    ).read_text(encoding='utf-8')
+
+    def test_아이콘_단추만_정사각형이다(self):
+        self.assertIn('.zoom-controls > button {', self.css)
+        self.assertIn('.zoom-controls > button.zoom-value {', self.css)
+        head = self.css.index('.zoom-controls > button.zoom-value {')
+        self.assertIn('width: auto', self.css[head:head + 300])
+
+    def test_좁아지면_접힌다(self):
+        head = self.css.index('.preview-page-header {')
+        block = self.css[head:self.css.index('}', head)]
+        self.assertIn('flex-wrap: wrap', block)
+        # height 를 못박아 두면 접힐 자리가 없다 (min-height 는 괜찮다)
+        lines = [line.strip() for line in block.splitlines()]
+        self.assertNotIn('height: 70px;', lines)
+        self.assertIn('min-height: 70px;', lines)
+
+    def test_버튼_줄도_접힌다(self):
+        head = self.css.index('.preview-actions {')
+        self.assertIn('flex-wrap: wrap', self.css[head:self.css.index('}', head)])

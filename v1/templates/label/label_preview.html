@@ -40,9 +40,17 @@
       <button class="btn btn-outline-secondary btn-sm" id="ruleValidationBtn" aria-label="규정 검증" title="AI 없이 규정 검증 (무료·무제한)">
         <i class="fas fa-list-check me-1" aria-hidden="true"></i>규정 검증
       </button>
+      {% comment %}
+        규정 검증(AI)은 감춰 두었다 — 규칙 기반과 결과가 크게 다르지 않다는
+        판단이다. **지운 것이 아니라 안 보이게 한 것**이다. 판정 코드도
+        엔드포인트도 화면 쪽 호출(runAiValidation)도 그대로이므로,
+        settings.SHOW_AI_VALIDATION 을 켜면 곧바로 다시 쓸 수 있다.
+      {% endcomment %}
+      {% if show_ai_validation %}
       <button class="btn btn-info btn-sm" id="aiValidationBtn" aria-label="규정 검증(AI)" title="원재료 표시 순서, 제품명-원재료 일치성 등 규정 검증보다 더 많은 항목을 AI로 확인합니다">
         <i class="fas fa-robot me-1" aria-hidden="true"></i>규정 검증(AI)
       </button>
+      {% endif %}
       {% if is_owner %}
       <button id="saveSettingsBtn" class="btn btn-success btn-sm" aria-label="설정 저장">
         <i class="fas fa-save me-1" aria-hidden="true"></i>설정 저장
