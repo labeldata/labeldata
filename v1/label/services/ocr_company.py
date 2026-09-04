@@ -379,3 +379,143 @@ def misplaced_registered_name(data, api_name):
         if value and match_registered_name(value, api_name) >= SAME_COMPANY:
             return field
     return None
+
+
+# ── 다시 봐야 할 때 ────────────────────────────────────────────────────────
+#
+# 첨부된 실제 라벨이 왜 틀렸는지가 여기 다 들어 있다.
+#
+#     ┌──────────┬───────────────────────────────────┐
+#     │ 유통전문 │ [오뚜기 로고]  주식회사 오뚜기      │
+#     │ 판매원   │                경기도 안양시 동안   │
+#     │          │                구 흥안대로 405     │
+#     ├──────────┼───────────────────────────────────┤
+#     │ 제조원   │ ㈜샤니                             │
+#     │          │ 경기도 성남시 중원구 둔촌대        │
+#     │          │ 로457번길 13(상대원동)             │
+#     └──────────┴───────────────────────────────────┘
+#
+#   - 항목 이름이 **왼쪽 칸**에 있고 칸이 좁아 두 줄로 접힌다("유통전문/판매원")
+#   - 로고 그림이 항목 이름과 회사 이름 사이에 끼어 있다
+#   - **유통전문판매원이 제조원보다 위**에 있다 (순서가 정해져 있지 않다)
+#   - 오뚜기 쪽이 로고에 굵은 글씨라 눈에 먼저 들어온다
+#   - 주소가 줄 끝에서 단어 중간에 끊긴다("동안 / 구", "둔촌대 / 로457번길")
+#
+# 그래서 판독이 "제조원" 을 보고도 가장 도드라진 회사(오뚜기)를 집어 두 칸에
+# 같은 회사를 넣었다. 값만 보고는 알 수 없다 — 둘 다 멀쩡한 "업체명 + 주소" 다.
+#
+# 이럴 때는 **그 네 줄만 다시 본다.** 서른 항목을 한 번에 읽는 프롬프트에서는
+# 이 네 줄에 갈 주의가 얼마 없지만, 네 줄만 물으면 전부가 거기로 간다.
+
+RECHECK_PROMPT = """이 사진에서 **업소 항목만** 찾아 그대로 옮겨 적으세요.
+
+찾을 항목: 제조원(제조사·제조업소·생산자), 유통전문판매원(판매원), 소분원, 수입원
+
+규칙
+1. 항목 이름은 대개 표의 **왼쪽 칸**에 있고, 칸이 좁아 두 줄로 접힙니다.
+   "유통전문 / 판매원" 은 접힌 한 항목입니다. 이어서 읽으세요.
+2. 각 항목의 값은 그 이름의 **오른쪽(또는 바로 아래)** 에서 시작해 다음 항목
+   이름 전까지입니다.
+3. **로고 그림은 값이 아닙니다.** 로고 옆이나 아래의 회사 이름이 값입니다.
+4. **순서는 정해져 있지 않습니다.** 유통전문판매원이 제조원보다 위에 오기도
+   합니다. 눈에 먼저 띄는 회사가 아니라 **그 항목 이름과 같은 칸**의 회사를
+   적으세요.
+5. 이 항목들은 **서로 다른 회사**입니다. 두 항목에 같은 회사를 적지 마세요.
+   사진에 "제조원 및 유통전문판매원" 처럼 한 줄로 묶여 있을 때만 같습니다.
+6. 주소가 줄 끝에서 단어 중간에 끊겨 있으면 이어 붙이세요("동안 / 구" →
+   "동안구"). 사진에 없는 항목은 목록에서 빼세요. 지어내지 마세요.
+
+아래 형식의 JSON 으로만 답하세요.
+{"companies": [{"role": "제조원", "name": "㈜샤니", "address": "경기도 …"}]}"""
+
+
+def needs_recheck(data):
+    """
+    업소 항목을 다시 봐야 하는가. 이유를 돌려준다. 없으면 ''.
+
+    다시 보는 데는 호출이 하나 더 든다. **틀린 낌새가 보일 때만** 본다.
+    """
+    if not isinstance(data, dict):
+        return ''
+    filled = {f: _value_of(data.get(f)) for f in ROLE_FIELDS}
+    filled = {f: v for f, v in filled.items() if v}
+    if not filled:
+        return ''
+
+    # 두 칸에 같은 회사. 이 항목들은 대개 다른 회사이므로 적어도 한쪽은 틀렸다.
+    keys = {}
+    for field, value in filled.items():
+        k = key(company_part(value)) or key(value)
+        if k:
+            keys.setdefault(k, []).append(field)
+    for fields in keys.values():
+        if len(fields) > 1:
+            return '%s 이(가) 같은 회사로 읽혔습니다' % (
+                ' · '.join(ROLE_LABELS[f] for f in fields))
+
+    # 제조원은 거의 모든 라벨에 있다. 다른 역할만 읽혔다면 자리를 밀려 읽었을
+    # 가능성이 높다.
+    if 'bssh_nm' not in filled:
+        return '제조원이 비어 있는데 %s 만 읽혔습니다' % (
+            ', '.join(ROLE_LABELS[f] for f in filled))
+    return ''
+
+
+def _joined(entry):
+    """다시 읽은 한 줄을 "업체명 주소" 로 잇는다."""
+    name = str(entry.get('name') or '').strip()
+    address = str(entry.get('address') or '').strip()
+    return (name + ' ' + address).strip()
+
+
+def apply_recheck(data, companies):
+    """
+    네 줄만 다시 읽은 결과를 반영한다. **새 dict 를 돌려준다.**
+
+    다시 읽은 쪽이 반드시 옳다고 보지는 않는다. 다만 이 호출은 그 네 줄만
+    물었으므로 서른 항목을 한꺼번에 읽은 쪽보다 그 자리에서는 낫다. 값이
+    바뀌는 자리마다 무엇을 왜 바꿨는지 남기고 확신도를 내린다 — 확인 창이
+    그 줄을 붉게 짚어 사람이 거기만 보게 한다.
+
+    companies: [{'role': '제조원', 'name': …, 'address': …}, …]
+    """
+    if not isinstance(data, dict) or not companies:
+        return data
+    out = dict(data)
+
+    fresh = {}
+    for entry in companies:
+        if not isinstance(entry, dict):
+            continue
+        marks = find_roles(str(entry.get('role') or ''))
+        if not marks:
+            continue
+        value = _joined(entry)
+        # 회사도 주소도 아닌 것은 안 받는다. 지어낸 값을 넣느니 그냥 둔다.
+        if not value or not (has_company(value) or has_address(value)):
+            continue
+        fresh.setdefault(marks[0][0], value)
+
+    if not fresh:
+        return out
+
+    for field, value in fresh.items():
+        before = _value_of(out.get(field))
+        if before and key(company_part(before)) == key(company_part(value)):
+            continue          # 같은 회사다. 건드릴 것이 없다
+        item = _as_item(out.get(field), value)
+        item['confidence'] = 'low'
+        if before:
+            item = _add_candidate(item, before)
+            item = _warn(
+                item,
+                f'{ROLE_LABELS[field]} 줄만 다시 읽었습니다. 처음에는 '
+                f'"{before}" 로 읽었는데, 이 항목들은 서로 다른 회사라 그 자리를 '
+                f'다시 확인했습니다. 사진을 보고 맞는 쪽을 고르세요.')
+        else:
+            item = _warn(
+                item,
+                f'{ROLE_LABELS[field]} 줄만 다시 읽어 채웠습니다. 사진과 맞는지 '
+                f'확인하세요.')
+        out[field] = item
+    return out

@@ -302,6 +302,16 @@ OCR_HYBRID = config('OCR_HYBRID', default=False, cast=bool)
 # 먼저 재라.
 OCR_HYBRID_DROP_TILES = config('OCR_HYBRID_DROP_TILES', default=False, cast=bool)
 
+# 제조원·유통전문판매원·소분원·수입원이 수상하면 **그 네 줄만** 다시 읽는다.
+#
+# 넷은 거의 언제나 다른 회사인데 라벨에서는 한 표 안에 붙어 찍히고, 넷이 전부
+# "업체명 + 주소" 로 똑같이 생겼다. 값만 보고는 어느 칸의 것인지 알 수 없어서
+# 두 칸에 같은 회사가 들어와도 그 자리에서는 아무도 모른다.
+#
+# 켜 두는 이유는 **틀린 낌새가 보일 때만 돌기 때문**이다(ocr_company.
+# needs_recheck). 값이 멀쩡하면 한 번도 돌지 않아 평소 비용은 그대로다.
+OCR_COMPANY_RECHECK = config('OCR_COMPANY_RECHECK', default=True, cast=bool)
+
 # OpenAI 의 분당 토큰 한도(TPM). 정답지 측정이 판독 사이를 얼마나 쉴지 계산하는
 # 데 쓴다 (ocr_lab.pace_seconds).
 #

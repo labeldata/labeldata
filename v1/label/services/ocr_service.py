@@ -32,12 +32,28 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - repacker_address: 소분원 소재지 (업체명 + 주소 전체, 없으면 none)
 - importer_address: 수입원 소재지 (업체명 + 주소 전체, 없으면 none)
 
-  ※ 위 네 항목은 **서로 다른 회사**다. 라벨에서는 네 줄이 한 칸 안에 세로로
-    붙어 적히는 일이 많으니 **어느 줄이 어느 항목인지 항목 이름을 보고 갈라라.**
-    - 한 항목 칸에 다른 항목의 회사까지 이어 적지 마라.
-    - 라벨에 그 항목 이름이 없으면 **none** 이다. 다른 회사를 대신 넣지 마라.
+  ※ 위 네 항목은 **서로 다른 회사**다. 표에서 이 넷은 이렇게 생겼다.
+
+        ┌──────────┬───────────────────────────────┐
+        │ 유통전문 │ [로고]  주식회사 오뚜기        │
+        │ 판매원   │         경기도 안양시 동안     │
+        │          │         구 흥안대로 405       │
+        ├──────────┼───────────────────────────────┤
+        │ 제조원   │ ㈜샤니                        │
+        │          │ 경기도 성남시 중원구 둔촌대   │
+        │          │ 로457번길 13(상대원동)        │
+        └──────────┴───────────────────────────────┘
+
+    - 항목 이름은 **왼쪽 칸**에 있고 칸이 좁아 두 줄로 접힌다. "유통전문 /
+      판매원" 은 접힌 한 항목이다. 이어서 읽어라.
+    - 각 항목의 값은 **그 이름과 같은 칸**의 회사다. 눈에 먼저 띄는 회사가
+      아니다. 로고가 크거나 글씨가 굵다고 그쪽을 집지 마라.
+    - **로고 그림은 값이 아니다.** 로고 옆이나 아래의 회사 이름이 값이다.
+    - **순서는 정해져 있지 않다.** 유통전문판매원이 제조원보다 위에 오기도 한다.
     - 같은 값을 두 항목에 옮겨 적지 마라. 라벨이 "제조원 및 유통전문판매원"
       처럼 **한 줄로 묶어 적었을 때만** 두 항목에 같은 값을 넣는다.
+    - 주소가 줄 끝에서 단어 중간에 끊기면 이어 붙여라 ("동안 / 구" → "동안구").
+    - 라벨에 그 항목 이름이 없으면 **none** 이다. 다른 회사를 대신 넣지 마라.
     - 값에는 항목 이름("제조원:")을 빼고 업체명과 주소만 적는다.
 - storage_method: 보관방법 (예: 냉장(0~10 ℃)에서 보관, 직사광선을 피해 실온 보관)
 - rawmtrl_nm: 원재료명 항목의 내용 **전체**. 길어도 끊지 말고 끝까지 적는다.
@@ -711,6 +727,62 @@ def _companies_tidied(data):
         return data
 
 
+def company_recheck_enabled(use_recheck=None) -> bool:
+    """
+    업소 항목이 수상할 때 그 네 줄만 다시 볼 것인가. 기본은 **켬**.
+
+    호출이 하나 더 붙지만 **틀린 낌새가 보일 때만** 붙는다(ocr_company.
+    needs_recheck). 값이 멀쩡하면 한 번도 돌지 않으므로 평소 판독의 비용은
+    그대로다. `.env` 에 OCR_COMPANY_RECHECK=False 로 끈다.
+    """
+    if use_recheck is not None:
+        return bool(use_recheck)
+    return bool(getattr(settings, 'OCR_COMPANY_RECHECK', True))
+
+
+def _companies_rechecked(client, model, images, data, use_recheck=None):
+    """
+    업소 항목이 수상하면 **그 네 줄만** 다시 읽는다.
+
+    서른 항목을 한 번에 읽는 프롬프트에서 이 네 줄에 갈 주의는 얼마 없다.
+    게다가 넷이 전부 "업체명 + 주소" 라 값만 보고는 어느 칸의 것인지 알 수
+    없어서, 두 칸에 같은 회사가 들어와도 그 자리에서는 아무도 모른다. 실제
+    라벨에서 로고가 큰 유통전문판매원이 제조원 칸까지 차지했다.
+
+    네 줄만 물으면 주의가 전부 거기로 간다. 왜 그 배치가 어려운지는
+    ocr_company.RECHECK_PROMPT 에 그림으로 적어 두었다.
+    """
+    if not company_recheck_enabled(use_recheck) or not images:
+        return data
+    try:
+        from v1.label.services.ocr_company import (
+            RECHECK_PROMPT, apply_recheck, needs_recheck, tidy)
+        reason = needs_recheck(data)
+        if not reason:
+            return data
+        logger.info('업소 항목을 다시 읽는다: %s', reason)
+
+        content = [
+            {"type": "image_url",
+             "image_url": {"url": f"data:image/jpeg;base64,{b64}",
+                           "detail": "high"}}
+            for b64 in images[:1]      # 전체 배치 한 장이면 된다. 칸을 봐야 하는 일이다
+        ]
+        content.append({"type": "text", "text": RECHECK_PROMPT})
+        response = client.chat.completions.create(
+            model=model or getattr(settings, 'OCR_MODEL', 'gpt-4o-mini'),
+            messages=[{"role": "user", "content": content}],
+            max_tokens=600,
+            response_format={"type": "json_object"},
+        )
+        found = json.loads(response.choices[0].message.content)
+        return tidy(apply_recheck(data, found.get('companies') or []))
+    except Exception:
+        # 얹는 것이다. 실패해도 처음 읽은 값은 그대로 나가야 한다.
+        logger.exception('업소 항목 다시 읽기 실패')
+        return data
+
+
 def _read_bytes(image_file):
     """
     대조에 쓸 원본 바이트. 필요할 때만 읽는다.
@@ -1052,6 +1124,8 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         result, ground_report = _grounded(result, ocr_text, use_ground)
         result = _repeats_checked(result, ocr_text)
         result = _companies_tidied(result)
+        result = _companies_rechecked(
+            client, model, [r['b64'] for r in regions], result)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 
@@ -1178,6 +1252,7 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         result, ground_report = _grounded(result, ocr_text, use_ground)
         result = _repeats_checked(result, ocr_text)
         result = _companies_tidied(result)
+        result = _companies_rechecked(client, model, images, result)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 

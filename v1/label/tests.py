@@ -8173,3 +8173,118 @@ class PreviewConsoleIsQuietTests(TestCase):
 
     def test_탭은_부모_페이지에_있다(self):
         self.assertNotIn('활성 탭을 찾을 수 없음', self.js)
+
+
+class CompanyRecheckTests(TestCase):
+    """
+    첨부된 실제 라벨이 왜 틀렸는지.
+
+        ┌──────────┬───────────────────────────────┐
+        │ 유통전문 │ [로고]  주식회사 오뚜기        │
+        │ 판매원   │         경기도 안양시 …        │
+        ├──────────┼───────────────────────────────┤
+        │ 제조원   │ ㈜샤니 경기도 성남시 …         │
+        └──────────┴───────────────────────────────┘
+
+    항목 이름이 왼쪽 칸에서 두 줄로 접히고, 로고가 이름과 회사 사이에 끼고,
+    유통전문판매원이 제조원보다 위에 있다. 판독이 눈에 먼저 띄는 오뚜기를 집어
+    두 칸에 같은 회사를 넣었다 - 둘 다 멀쩡한 "업체명 + 주소" 라 값만 보고는
+    알 수가 없다.
+    """
+
+    def setUp(self):
+        from v1.label.services import ocr_company
+        self.C = ocr_company
+
+    def test_두_칸이_같은_회사면_다시_본다(self):
+        same = '주식회사 오뚜기 경기도 안양시 동안구 흥안대로 405'
+        why = self.C.needs_recheck({'bssh_nm': {'value': same},
+                                    'distributor_address': {'value': same}})
+        self.assertIn('같은 회사', why)
+
+    def test_제조원이_비면_다시_본다(self):
+        why = self.C.needs_recheck({
+            'distributor_address': {'value': '주식회사 오뚜기 경기도 안양시'}})
+        self.assertIn('제조원', why)
+
+    def test_멀쩡하면_다시_보지_않는다(self):
+        self.assertEqual('', self.C.needs_recheck({
+            'bssh_nm': {'value': '(주)샤니 경기도 성남시 둔촌대로457번길 13'},
+            'distributor_address': {'value': '주식회사 오뚜기 경기도 안양시'}}))
+
+    def test_빈_결과에는_다시_볼_것이_없다(self):
+        self.assertEqual('', self.C.needs_recheck({}))
+
+    def test_다시_읽은_것으로_자리를_바로잡는다(self):
+        same = '주식회사 오뚜기 경기도 안양시 동안구 흥안대로 405'
+        data = {'bssh_nm': {'value': same, 'confidence': 'high'},
+                'distributor_address': {'value': same, 'confidence': 'high'}}
+        out = self.C.apply_recheck(data, [
+            {'role': '유통전문판매원', 'name': '주식회사 오뚜기',
+             'address': '경기도 안양시 동안구 흥안대로 405'},
+            {'role': '제조원', 'name': '㈜샤니',
+             'address': '경기도 성남시 중원구 둔촌대로457번길 13(상대원동)'},
+        ])
+        self.assertEqual(
+            out['bssh_nm']['value'],
+            '㈜샤니 경기도 성남시 중원구 둔촌대로457번길 13(상대원동)')
+        self.assertEqual(out['distributor_address']['value'], same)
+
+    def test_바꾼_자리는_처음_읽은_값을_후보로_남긴다(self):
+        same = '주식회사 오뚜기 경기도 안양시'
+        out = self.C.apply_recheck(
+            {'bssh_nm': {'value': same}},
+            [{'role': '제조원', 'name': '㈜샤니', 'address': '경기도 성남시'}])
+        self.assertIn(same, out['bssh_nm']['candidates'])
+        self.assertEqual(out['bssh_nm']['confidence'], 'low')
+        self.assertTrue(out['bssh_nm']['warnings'])
+
+    def test_같은_회사를_다시_읽었으면_건드리지_않는다(self):
+        mine = '(주)샤니 경기도 성남시 중원구 둔촌대로457번길 13'
+        out = self.C.apply_recheck(
+            {'bssh_nm': {'value': mine, 'confidence': 'high'}},
+            [{'role': '제조원', 'name': '주식회사 샤니', 'address': '경기도 성남시'}])
+        self.assertEqual(out['bssh_nm']['value'], mine)
+        self.assertEqual(out['bssh_nm']['confidence'], 'high')
+
+    def test_회사도_주소도_아닌_것은_안_받는다(self):
+        out = self.C.apply_recheck(
+            {'bssh_nm': {'value': '(주)샤니 경기도 성남시'}},
+            [{'role': '제조원', 'name': '없음', 'address': ''}])
+        self.assertEqual(out['bssh_nm']['value'], '(주)샤니 경기도 성남시')
+
+    def test_접힌_항목_이름을_이어_읽는다(self):
+        # "유통전문 / 판매원" 은 한 항목이다
+        marks = self.C.find_roles('유통전문\n판매원')
+        self.assertEqual(marks[0][0], 'distributor_address')
+
+
+class CompanyRecheckWiringTests(TestCase):
+    """다시 읽기가 실제로 판독 뒤에 붙어 있는가."""
+
+    def setUp(self):
+        self.src = _src('label/services/ocr_service.py')
+
+    def test_두_입구_모두에서_돈다(self):
+        self.assertEqual(self.src.count('_companies_rechecked('), 3)
+
+    def test_틀린_낌새가_보일_때만_돈다(self):
+        head = self.src.index('def _companies_rechecked')
+        block = self.src[head:head + 2200]
+        self.assertIn('needs_recheck(data)', block)
+        self.assertIn('if not reason:', block)
+
+    def test_전체_배치_한_장만_보낸다(self):
+        head = self.src.index('def _companies_rechecked')
+        self.assertIn('images[:1]', self.src[head:head + 2200])
+
+    def test_프롬프트가_배치를_설명한다(self):
+        for said in ('항목 이름은 **왼쪽 칸**에 있고',
+                     '**로고 그림은 값이 아니다.**',
+                     '**순서는 정해져 있지 않다.**'):
+            self.assertIn(said, self.src)
+
+    def test_끌_수_있다(self):
+        self.assertIn("getattr(settings, 'OCR_COMPANY_RECHECK', True)", self.src)
+        self.assertIn('OCR_COMPANY_RECHECK',
+                      _src('config/settings.py'))
