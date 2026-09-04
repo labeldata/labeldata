@@ -547,7 +547,10 @@ def check_calorie_consistency(label) -> list[dict]:
     # 실제로 이 경고를 받은 사용자가 단위량을 100 으로 바꿔 표를 맞췄고,
     # 그러면 총 내용량이 100 g 으로 찍혔다 — 한 오류를 다른 오류로 바꾼 셈이다.
     if abs(stated - per_100) <= _CALORIE_TOLERANCE and abs(amount - 100) > 0.5:
-        return [_issue(
+        # 이 한 건이 원인을 다 말한다. 같은 원인에서 갈라져 나오는 지적들
+        # (열량-영양성분 계산, 내용량-총 내용량 일치)은 뒤에서 걷어낸다 —
+        # 사용자에게는 고칠 데가 하나인데 세 번 말하면 무엇부터 볼지 흐려진다.
+        root = _issue(
             'calorie_consistency',
             f'영양성분 탭에 라벨에 인쇄된 값({stated:,.0f} kcal)을 그대로 넣으신 것 같습니다. '
             f'이 제품의 표는 총 내용량 {_format_amount(text, amount)} 당으로 인쇄돼 있는데, '
@@ -558,7 +561,9 @@ def check_calorie_consistency(label) -> list[dict]:
             f'{round_calories(back):,.0f}(100 g 당)으로 고치세요. '
             f'단위량을 100 으로 바꾸는 것은 표는 맞아 보여도 총 내용량이 '
             f'100 으로 찍혀 내용량 칸과 어긋납니다.',
-        )]
+        )
+        root['root_cause'] = 'nutrition_basis'
+        return [root]
 
     return [_issue(
         'calorie_consistency',
@@ -1652,11 +1657,29 @@ _CHECKS = [
 ]
 
 
+# 같은 원인에서 갈라져 나오는 지적.
+#
+# 영양성분 탭의 값이 100 g 당이 아닌 다른 기준으로 들어가면 세 검사가 한꺼번에
+# 운다 — 병기 열량이 안 맞고, 탄단지 계산이 안 맞고, 총 내용량이 안 맞는다.
+# 사용자가 고칠 데는 **하나**인데 세 번 말하면 무엇부터 볼지 흐려지고, 고친 뒤
+# 나머지 둘이 저절로 사라지는 것도 설명이 안 된다.
+#
+# 원인을 짚은 지적(root_cause)이 있으면 그 자식들은 접는다.
+_ROOT_CONSEQUENCES = {
+    'nutrition_basis': ('calorie_macros', 'content_weight_basis'),
+}
+
+
 def validate_label(label) -> dict:
     """MyLabel 인스턴스에 대해 서버측 검증 전체를 실행하고 결과를 반환한다."""
     issues = []
     for check in _CHECKS:
         issues.extend(check(label))
+
+    roots = {i['root_cause'] for i in issues if i.get('root_cause')}
+    if roots:
+        folded = {c for r in roots for c in _ROOT_CONSEQUENCES.get(r, ())}
+        issues = [i for i in issues if i.get('category') not in folded]
 
     return {
         'ok': len(issues) == 0,

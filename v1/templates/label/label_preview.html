@@ -380,6 +380,16 @@
     /* 파라미터
        is_owner       : 현재 로그인 사용자가 라벨 소유자인지 여부
        can_upload_pdf : PDF 문서함 업로드 권한 여부 */
+    /*
+     * 분리배출마크는 **이 파일이 맡는다.**
+     *
+     * label_preview.js 에도 같은 이름의 구현이 한 벌 더 있다. 그쪽은 마크를
+     * 하나만 두는 옛 구현이라 끌거나 지울 수가 없고, 둘 다 돌면 화면에 마크가
+     * 두 개 그려진다 — 하나는 지워지고 하나는 꿈쩍도 안 하던 것이 이것이다.
+     * 여기(여러 개·드래그·삭제·목록)가 실제로 쓰는 구현이라 이쪽을 남긴다.
+     */
+    window.__recyclingMarkOwner = 'inline';
+
     const IS_OWNER       = {{ is_owner|yesno:'true,false' }};
     const CAN_UPLOAD_PDF = {{ can_upload_pdf|yesno:'true,false' }};
 
@@ -734,15 +744,23 @@
                 cell.style.wordBreak = 'keep-all';
             });
 
-            /* 먼저 칸을 풀어 글자가 실제로 얼마나 넓은지 재고, 그 다음 정한다.
-               좁혀 둔 채로 재면 이미 잘린 폭이 나온다. */
-            previewContent.style.setProperty('--label-col-width', 'auto');
+            /* 글자가 실제로 얼마나 넓은지 잰다.
+               칸을 'auto' 로 풀고 재면 안 된다 — table-layout:fixed 에서 auto 는
+               남는 폭을 열끼리 나눠 갖는 것이라, scrollWidth 가 **글자 폭이 아니라
+               표의 절반**을 돌려준다. 그래서 항목명 칸이 통째로 넓어졌다.
+               1px 로 좁혀 두면 칸이 글자를 못 담아 넘치고, 그때의 scrollWidth 가
+               곧 글자 폭이다. */
+            previewContent.style.setProperty('--label-col-width', '1px');
+            void previewContent.offsetHeight;      // 강제 리플로우
             let neededPx = 0;
             headCells.forEach(cell => {
                 neededPx = Math.max(neededPx, cell.scrollWidth);
             });
-            previewContent.style.setProperty('--label-col-width',
-                `${Math.max(minPx, Math.ceil(neededPx) + 2).toFixed(1)}px`);
+            /* 그래도 표의 절반을 넘기지는 않는다. 항목명이 값보다 넓어지면
+               읽을 수가 없다 — 그때는 이름이 접히는 편이 낫다. */
+            const capPx = Math.max(minPx, (previewContent.clientWidth || 0) * 0.45);
+            const finalPx = Math.min(capPx, Math.max(minPx, Math.ceil(neededPx) + 8));
+            previewContent.style.setProperty('--label-col-width', `${finalPx.toFixed(1)}px`);
 
             // 복합재질 텍스트 기본 스타일 적용
             const recyclingTextElements = previewContent.querySelectorAll('.recycling-text-line');

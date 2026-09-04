@@ -2404,7 +2404,11 @@ def preview_popup(request):
             'serving_size': label.serving_size or '',
             'serving_size_unit': label.serving_size_unit or 'g',
             'units_per_package': label.units_per_package or '1',
-            'display_unit': label.nutrition_display_unit or 'unit',
+            # 표의 기준은 basic_display_type(total/unit/100g)이다.
+            # nutrition_display_unit 은 표의 **모양**(기본형/병행표시)이라
+            # 그 값을 기준으로 쓰면 tabMap 에 없는 키가 되어 머리글이
+            # "undefined" 로 찍힌다.
+            'display_unit': label.basic_display_type or 'total',
             'nutrients': {
                 'calorie': {
                     'value': label.calories,

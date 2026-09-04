@@ -888,6 +888,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function removeRecyclingMarkUI() {
+        // 분리배출마크는 label_preview.html 인라인 구현이 맡는다.
+        // 둘 다 돌면 마크가 두 개 그려지고, 이쪽 것은 드래그도 삭제도 안 된다.
+        if (window.__recyclingMarkOwner === 'inline') return;
         const container = document.getElementById('recyclingMarkContainer');
         if (container) container.remove();
         clearRecyclingListUI();
@@ -1019,6 +1022,9 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // 분리배출마크 UI 생성 및 삽입 (더 견고한 삽입 로직)
     function renderRecyclingMarkUI() {
+        // 분리배출마크는 label_preview.html 인라인 구현이 맡는다.
+        // 둘 다 돌면 마크가 두 개 그려지고, 이쪽 것은 드래그도 삭제도 안 된다.
+        if (window.__recyclingMarkOwner === 'inline') return;
         // 1) 우선 플레이스홀더가 있으면 사용
         const existingPlaceholder = document.getElementById('recyclingMarkUiBox');
 
@@ -1127,6 +1133,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 추천 마크 갱신 및 자동 적용 (전역 함수로 만들어 HTML에서 접근 가능)
     window.updateRecyclingMarkUI = function(packageText, autoApply = false) {
+        // 분리배출마크는 label_preview.html 인라인 구현이 맡는다.
+        // 둘 다 돌면 마크가 두 개 그려지고, 이쪽 것은 드래그도 삭제도 안 된다.
+        if (window.__recyclingMarkOwner === 'inline') return;
         const recommended = recommendRecyclingMarkByMaterial(packageText);
         
         // DOM 요소가 준비될 때까지 대기
@@ -1246,6 +1255,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // [수정] 미리보기 영역에 마크(이미지+텍스트) 추가 및 드래그
     function setRecyclingMark(markValue, auto = false) {
+        // 분리배출마크는 label_preview.html 인라인 구현이 맡는다.
+        // 둘 다 돌면 마크가 두 개 그려지고, 이쪽 것은 드래그도 삭제도 안 된다.
+        if (window.__recyclingMarkOwner === 'inline') return;
         const markObj = recyclingMarkMap[markValue];
         const previewContent = document.getElementById('previewContent');
         if (!previewContent || !markObj) return;
@@ -1951,7 +1963,12 @@ document.addEventListener('DOMContentLoaded', function () {
             
             if (frmlc) {
                 // 포장재질 감지: frmlc
-                const recommendedMark = recommendRecyclingMarkByMaterial(frmlc);
+                // 이 함수는 label_preview.html 인라인 스크립트에 있다. 없는
+                // 화면에서 부르면 ReferenceError 가 나고, **그 순간 이 핸들러가
+                // 통째로 멈춘다** — 분리배출마크를 옮기지도 지우지도 못하게 된
+                // 것이 이것 때문이었다.
+                const recommendedMark = (typeof recommendRecyclingMarkByMaterial === 'function')
+                    ? recommendRecyclingMarkByMaterial(frmlc) : '';
                 if (recommendedMark) {
                     // UI가 렌더링된 후 자동 설정
                     waitForElement('recyclingMarkSelect', () => {
@@ -2822,7 +2839,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const nutritionPreview = document.getElementById('nutritionPreview');
         if (!nutritionPreview) return;
 
-        const displayUnit = data.displayUnit || 'unit';
+        // 모르는 기준이면 총 내용량당으로 본다. 표의 머리글에 "undefined" 가
+        // 찍히는 것보다는 낫고, 실제로 그 값이 대부분이다.
+        let displayUnit = data.displayUnit || 'total';
+        if (!['total', 'unit', '100g'].includes(displayUnit)) displayUnit = 'total';
         const servingUnit = data.servingUnit || 'g';
         const servingSize = data.servingSize || 100;
         const servingsPerPackage = data.servingsPerPackage || 1;
@@ -2971,47 +2991,37 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     /*
-     * 영양정보 표를 어디에 둘 것인가.
+     * 영양정보 표의 자리.
      *
-     * 실제 인쇄물은 남는 자리를 따라간다 — 표시사항이 세로로 길면 옆에 나란히
-     * 세우고, 가로로 넓으면 아래에 길게 깐다. 늘 아래에 붙이면 세로로 긴
-     * 라벨은 더 길어지기만 하고 옆의 빈 자리는 그대로 남는다.
+     * 지금은 표 아래에 붙는다. "표시사항이 세로로 길면 옆에 나란히" 를
+     * #previewContent 를 flex 로 바꿔 시도했다가 되돌렸다 — 그 안에는 머리
+     * 띠, 요약 줄, 절대 위치로 떠 있는 분리배출마크, 꼬리말이 함께 있어서
+     * 표와 영양정보만 나란히 세울 수가 없었다. 화면이 서로 겹쳐 버렸다.
      *
-     * 판정은 표시사항 표의 **가로세로 비**로 한다. 라벨의 가로 크기는
-     * 사용자가 정하지만 세로는 내용에 따라 자동으로 늘어나므로, 그 둘의 비가
-     * 곧 "지금 이 라벨이 세로로 긴가" 다.
+     * 제대로 하려면 표와 영양정보를 감싸는 칸을 따로 만들어야 하고, 그러면
+     * 인쇄물의 짜임새가 달라지므로 눈으로 보면서 맞춰야 한다. 그때까지는
+     * 아래에 둔다 — 겹쳐 보이는 것보다는 길어지는 편이 낫다.
      */
     function placeNutritionBlock() {
-        const box = document.getElementById('nutritionPreview');
         const content = document.getElementById('previewContent');
-        const table = document.querySelector('.preview-table');
-        if (!box || !content || !table) return;
-
-        if (box.style.display === 'none') {
-            content.classList.remove('pv-nutrition-side');
-            return;
-        }
-
-        // 표가 가로보다 눈에 띄게 길면 옆에 세운다. 1.2 는 "조금 긴" 정도가
-        // 아니라 확실히 세로로 긴 경우만 고르려고 둔 여유다.
-        const tall = table.offsetHeight > table.offsetWidth * 1.2;
-        content.classList.toggle('pv-nutrition-side', tall);
+        if (content) content.classList.remove('pv-nutrition-side');
     }
     window.placeNutritionBlock = placeNutritionBlock;
 
     // 영양성분 데이터 수신
     window.addEventListener('message', function(e) {
         if (e.data?.type === 'nutritionData') {
+            // 이 칸들은 영양성분 계산기 화면의 것이라 미리보기에는 없다.
+            // 그냥 부르면 null.value 로 죽고, 그 순간 표도 안 그려진다.
             const data = e.data.data;
             window.nutritionData = data;
-            document.getElementById('servingSizeDisplay').value = 
-                `${comma(data.servingSize)}${data.servingUnit}`;
-            document.getElementById('servingsPerPackageDisplay').value = 
-                `${comma(data.servingsPerPackage)}${data.servingUnitText}`;
-            document.getElementById('nutritionDisplayUnit').value = data.displayUnit;
+            safeSetElementValue('servingSizeDisplay',
+                `${comma(data.servingSize)}${data.servingUnit}`);
+            safeSetElementValue('servingsPerPackageDisplay',
+                `${comma(data.servingsPerPackage)}${data.servingUnitText}`);
+            safeSetElementValue('nutritionDisplayUnit', data.displayUnit);
             const naviTab = document.querySelector('[data-bs-target="#nutrition-tab"]');
-            const tabInstance = new bootstrap.Tab(naviTab);
-            tabInstance.show();
+            if (naviTab) bootstrap.Tab.getOrCreateInstance(naviTab).show();
             updateNutritionDisplay(data);
         }
    

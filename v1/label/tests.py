@@ -7134,15 +7134,20 @@ class LabelColumnFitsTests(TestCase):
         """'유통전문판매원' 은 기본 24mm 를 넘는다. 잘린 항목명은 틀린 표시다."""
         self.assertIn('항목명 칸 (mm, 최소)', self.html)
         head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
-        block = self.html[head:head + 900]
+        block = self.html[head:head + 1600]
         self.assertIn('Math.max(minPx', block)
         self.assertIn('cell.scrollWidth', block)
 
-    def test_재기_전에_칸을_풀어_둔다(self):
-        """좁혀 둔 채로 재면 이미 잘린 폭이 나온다."""
+    def test_좁혀_두고_잰다(self):
+        """
+        'auto' 로 풀고 재면 안 된다 — table-layout:fixed 에서 auto 는 남는 폭을
+        열끼리 나눠 갖는 것이라, scrollWidth 가 글자 폭이 아니라 표의 절반을
+        돌려준다. 그래서 항목명 칸이 통째로 넓어졌다.
+        """
         head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
-        block = self.html[head:head + 900]
-        self.assertIn("setProperty('--label-col-width', 'auto')", block)
+        block = self.html[head:head + 1400]
+        self.assertIn("setProperty('--label-col-width', '1px')", block)
+        self.assertNotIn("setProperty('--label-col-width', 'auto')", block)
 
 
 class AllergenBoxFlowsInlineTests(TestCase):
@@ -7455,7 +7460,17 @@ class DesignRepeatConflictTests(TestCase):
 
 
 class NutritionPlacementTests(TestCase):
-    """표시사항이 세로로 길면 영양정보를 옆에, 가로로 넓으면 아래에."""
+    """
+    영양정보 표의 자리.
+
+    "표시사항이 세로로 길면 옆에 나란히" 를 #previewContent 를 flex 로 바꿔
+    시도했다가 되돌렸다. 그 안에는 머리 띠, 요약 줄, 절대 위치로 떠 있는
+    분리배출마크, 꼬리말이 함께 있어서 표와 영양정보만 나란히 세울 수가 없었고
+    화면이 서로 겹쳤다. 제대로 하려면 둘을 감싸는 칸을 따로 만들어야 하고,
+    그러면 인쇄물의 짜임새가 달라져 눈으로 보면서 맞춰야 한다.
+
+    그때까지는 아래에 둔다 — 겹쳐 보이는 것보다는 길어지는 편이 낫다.
+    """
 
     def setUp(self):
         from pathlib import Path
@@ -7465,18 +7480,169 @@ class NutritionPlacementTests(TestCase):
         self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
         self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
 
-    def test_표의_모양으로_자리를_정한다(self):
-        self.assertIn('function placeNutritionBlock', self.js)
+    def test_겹쳐_보이던_배치가_남아_있지_않다(self):
+        self.assertNotIn('pv-nutrition-side', self.css)
         head = self.js.index('function placeNutritionBlock')
-        block = self.js[head:head + 1200]
-        self.assertIn('table.offsetHeight > table.offsetWidth', block)
-        self.assertIn("classList.toggle('pv-nutrition-side'", block)
+        self.assertIn("classList.remove('pv-nutrition-side')", self.js[head:head + 400])
 
-    def test_옆에_세우는_배치가_정의돼_있다(self):
-        self.assertIn('#previewContent.pv-nutrition-side {', self.css)
-        head = self.css.index('#previewContent.pv-nutrition-side {')
-        self.assertIn('display: flex', self.css[head:head + 200])
-
-    def test_켜고_끌_때마다_다시_정한다(self):
+    def test_켜고_끌_때마다_자리를_다시_정한다(self):
         """자리를 한 번만 정하면 항목을 지우거나 더한 뒤에 어긋난 채로 남는다."""
         self.assertGreaterEqual(self.js.count('placeNutritionBlock();'), 2)
+
+class CategoryLabelsCoverTests(TestCase):
+    """
+    검증 결과에 영어 키가 그대로 찍히면 안 된다.
+
+    화면은 카테고리 이름을 _CATEGORY_LABELS 에서 찾는데, 없으면 코드 이름을
+    그대로 쓴다. 그래서 "content_weight_basis", "rawmtrl_bracket",
+    "calorie_macros" 가 사용자에게 그대로 보였다. 검사가 늘 때마다 이름도
+    함께 늘어야 한다 — 그것을 사람이 기억할 수는 없으니 시험이 본다.
+    """
+
+    def test_모든_검사에_한글_이름이_있다(self):
+        from v1.label.services.ai_validation_service import _CATEGORY_LABELS
+        from v1.label.services.validation_service import _LEGAL_BASIS
+
+        missing = sorted(set(_LEGAL_BASIS) - set(_CATEGORY_LABELS))
+        self.assertEqual(missing, [], f'한글 이름이 없는 검사: {missing}')
+
+    def test_이름이_영어가_아니다(self):
+        from v1.label.services.ai_validation_service import _CATEGORY_LABELS
+
+        for code, name in _CATEGORY_LABELS.items():
+            self.assertNotEqual(code, name, f'{code} 의 이름이 코드 그대로다')
+
+
+class OneRootOneMessageTests(TestCase):
+    """
+    같은 원인에서 갈라져 나오는 지적은 한 번만 말한다.
+
+    영양성분 탭의 값이 100 g 당이 아닌 다른 기준으로 들어가면 세 검사가 한꺼번에
+    운다 — 병기 열량, 탄단지 계산, 총 내용량. 고칠 데는 하나인데 세 번 말하면
+    무엇부터 볼지 흐려지고, 하나를 고쳤을 때 나머지가 함께 사라지는 것도
+    설명이 안 된다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='root', password='x')
+
+    def test_원인을_짚었으면_자식_지적은_접는다(self):
+        from v1.label.services.validation_service import validate_label
+
+        # 라벨에 인쇄된 값(총 내용량 65 g 당 309 kcal)을 그대로 넣은 상태
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='브라우니',
+            content_weight='65 g (309 kcal)',
+            calories='309', carbohydrates='9', fats='4.5', proteins='1',
+            serving_size='100', units_per_package='1')
+
+        categories = [i['category'] for i in validate_label(label)['issues']]
+        self.assertIn('calorie_consistency', categories)
+        self.assertNotIn('calorie_macros', categories)
+        self.assertNotIn('content_weight_basis', categories)
+
+    def test_원인이_아닌_경우에는_그대로_말한다(self):
+        """접는 것은 원인을 짚었을 때뿐이다. 아니면 각자 할 말을 해야 한다."""
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='다른 라벨',
+            calories='309', carbohydrates='9', fats='4.5', proteins='1')
+        self.assertTrue(check_calorie_matches_macros(label))
+
+
+class SingleRecyclingMarkOwnerTests(TestCase):
+    """
+    분리배출마크 구현이 두 벌이라 마크가 두 개 그려졌다.
+
+    하나는 인라인 스크립트가 만든 것(여러 개·드래그·삭제·목록), 다른 하나는
+    label_preview.js 의 옛 구현(마크 하나, 드래그도 삭제도 없음)이다. 둘 다
+    돌아서 화면에 둘이 뜨고, 그중 하나는 꿈쩍도 하지 않았다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+
+    def test_주인이_정해져_있다(self):
+        self.assertIn("window.__recyclingMarkOwner = 'inline'", self.html)
+
+    def test_옛_구현은_비켜선다(self):
+        for name in ('function setRecyclingMark', 'function renderRecyclingMarkUI',
+                     'function removeRecyclingMarkUI'):
+            head = self.js.index(name)
+            self.assertIn("__recyclingMarkOwner === 'inline'", self.js[head:head + 500],
+                          f'{name} 이 비켜서지 않는다')
+
+    def test_없는_함수를_그냥_부르지_않는다(self):
+        """
+        인라인 스크립트에만 있는 함수를 여기서 부르면 ReferenceError 가 나고,
+        그 순간 핸들러가 통째로 멈춘다 — 마크를 옮기지도 지우지도 못하게 된
+        것이 이것 때문이었다.
+        """
+        head = self.js.index("const recommendedMark = (typeof recommendRecyclingMarkByMaterial")
+        self.assertIn("=== 'function'", self.js[head:head + 200])
+
+
+class NutritionBasisFieldTests(TestCase):
+    """
+    표의 기준은 basic_display_type 이다.
+
+    미리보기는 nutrition_display_unit 을 읽고 있었는데 그것은 표의 **모양**
+    (기본형/병행표시)이라, tabMap 에 없는 키가 되어 머리글이 "undefined" 로
+    찍혔다.
+    """
+
+    def test_뷰가_기준_칸을_넘긴다(self):
+        from django.contrib.auth.models import User
+
+        user = User.objects.create_user(username='basis', password='x')
+        label = MyLabel.objects.create(
+            user_id=user, my_label_name='기준',
+            basic_display_type='total', nutrition_display_unit='basic',
+            calories='309')
+        self.client.force_login(user)
+        resp = self.client.get(reverse('label:preview_popup'),
+                               {'label_id': label.my_label_id})
+        self.assertIn('"display_unit": "total"', resp.context['nutrition_data'])
+
+    def test_모르는_기준이면_총_내용량당으로_본다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.assertIn("if (!['total', 'unit', '100g'].includes(displayUnit)) displayUnit = 'total';", js)
+
+
+class LabelColumnMeasureTests(TestCase):
+    """
+    항목명 칸의 글자 폭을 재는 방법.
+
+    'auto' 로 풀고 재면 안 된다 — table-layout:fixed 에서 auto 는 남는 폭을
+    열끼리 나눠 갖는 것이라, scrollWidth 가 글자 폭이 아니라 표의 절반을
+    돌려준다. 그래서 항목명 칸이 통째로 넓어졌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        self.html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_좁혀_두고_잰다(self):
+        head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
+        block = self.html[head:head + 1400]
+        self.assertIn("setProperty('--label-col-width', '1px')", block)
+        self.assertNotIn("setProperty('--label-col-width', 'auto')", block)
+
+    def test_표의_절반을_넘지_않는다(self):
+        """항목명이 값보다 넓어지면 읽을 수가 없다 — 그때는 접히는 편이 낫다."""
+        head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
+        block = self.html[head:head + 1400]
+        self.assertIn('0.45', block)
+        self.assertIn('Math.min(capPx', block)

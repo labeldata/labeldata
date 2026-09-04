@@ -1106,34 +1106,3 @@ tbody.layout-vertical tr td {
     color: #5f6368;
 }
 
-/* ==================== 영양정보 표의 자리 ====================
- * 기본은 표 아래. 표시사항이 세로로 길면 옆에 나란히 세운다
- * (label_preview.js 의 placeNutritionBlock 이 클래스를 붙인다).
- * 세로로 긴 라벨에 아래로만 붙이면 라벨은 더 길어지고 옆자리는 빈다.
- */
-#previewContent.pv-nutrition-side {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-}
-
-#previewContent.pv-nutrition-side .preview-header-box {
-    /* 머리 띠는 두 단 위를 가로지른다 */
-    flex-basis: 100%;
-    order: -1;
-}
-
-#previewContent.pv-nutrition-side .preview-table {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-#previewContent.pv-nutrition-side .nutrition-preview {
-    flex: 0 0 40%;
-    max-width: 45%;
-    margin-top: 10px;
-}
-
-#previewContent.pv-nutrition-side .footer-text {
-    flex-basis: 100%;
-}

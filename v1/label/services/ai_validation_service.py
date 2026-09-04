@@ -47,6 +47,18 @@ _CATEGORY_LABELS = {
     'additive_display_name': '식품첨가물 표시명',
     'ingredient_order': '원재료 표시 순서',
     'name_ingredient_match': '제품명-원재료 일치성 (AI)',
+    # 아래는 이름이 빠져 있어 화면에 "content_weight_basis" 처럼 영어 키가
+    # 그대로 찍히고 있었다. 검사가 늘 때마다 여기도 함께 늘어야 한다 —
+    # 시험이 그것을 본다(CategoryLabelsCoverTests).
+    'content_weight_basis': '내용량-총 내용량 일치',
+    'rawmtrl_bracket': '원재료명 괄호',
+    'food_type_unknown': '식품유형 이름',
+    'allergen_vocabulary': '알레르기 표시 명칭',
+    'font_size': '활자 크기',
+    'calorie_macros': '열량-영양성분 계산',
+    'thawing_method': '해동방법 표시',
+    'exchange_notice': '제품 교환 안내',
+    'origin_emphasis': '원산지 강조 표시',
 }
 
 # "규정만 검증"(규칙 기반)에는 없고 AI검증에만 있는 항목들 — 사용자에게
