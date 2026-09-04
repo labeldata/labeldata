@@ -7001,3 +7001,162 @@ class DisplayCheckMigrationTests(TestCase):
         from v1.label.constants import PREVIEW_DISPLAY_FIELDS
 
         self.assertEqual(tuple(self.migration.FIELDS), PREVIEW_DISPLAY_FIELDS)
+
+class PreviewInitSurvivesMissingDataTests(TestCase):
+    """
+    미리보기 초기화가 영양성분 데이터 하나에 매달려 있었다.
+
+    DOMContentLoaded 본문에 이 코드가 그대로 있었다.
+
+        const nutritionData = safeLoadJsonData('nutrition-data', null, …);
+        …
+        if (!nutritionData) { return; }
+
+    그런데 이 화면에는 #nutrition-data 요소가 **아예 없었다.** 그래서 그 return
+    이 늘 걸렸고, 뒤에 있는 초기화가 통째로 실행되지 않았다 — PDF 저장·설정
+    저장 버튼 연결, 세로 길이 계산, 입력 하한, 저장된 설정 불러오기까지.
+
+    그동안 PDF 와 설정 저장이 동작한 것은 인라인 스크립트에 같은 함수가 한 벌
+    더 있어서였다. 그 사본을 걷어내자 결함이 드러나 PDF 가 아예 안 눌렸다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+
+    def test_영양성분_처리는_함수_안에_있다(self):
+        """return 이 DOMContentLoaded 전체를 끊으면 안 된다."""
+        self.assertIn('function initNutritionData', self.js)
+        head = self.js.index('function initNutritionData')
+        self.assertIn('if (!nutritionData) {', self.js[head:head + 800])
+
+    def test_초기화가_영양성분_뒤에_온다(self):
+        """순서가 뒤집히면 같은 사고가 다시 난다."""
+        nutrition = self.js.index('initNutritionData();')
+        pdf = self.js.index("safeAddEventListener('exportPdfBtn'")
+        self.assertLess(nutrition, pdf)
+
+    def test_영양성분_데이터를_실어_보낸다(self):
+        """뷰는 진작부터 넘기고 있었는데 화면에 그 자리가 없었다."""
+        self.assertIn('id="nutrition-data"', self.html)
+        self.assertIn('{{ nutrition_data|safe }}', self.html)
+
+    def test_뷰가_그_값을_준다(self):
+        from django.contrib.auth.models import User
+
+        user = User.objects.create_user(username='prev', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='미리보기',
+                                       calories='318', serving_size='65')
+        self.client.force_login(user)
+        resp = self.client.get(reverse('label:preview_popup'),
+                               {'label_id': label.my_label_id})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('nutrition_data', resp.context)
+        self.assertIn('318', resp.context['nutrition_data'])
+
+
+class RowToolsShowWhatWorksTests(TestCase):
+    """줄 도구는 지금 할 수 있는 것만 보여 준다."""
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+
+    def test_틈을_지나도_사라지지_않는다(self):
+        """
+        줄과 도구 사이가 6px 떨어져 있어서, 그 틈을 지나는 순간 마우스가 줄
+        밖으로 나가면서 도구가 사라졌다. 재빨리 움직여야 겨우 누를 수 있었다.
+        """
+        self.assertIn('function scheduleRowToolsHide', self.js)
+        self.assertIn('function cancelRowToolsHide', self.js)
+        self.assertIn("tools.addEventListener('mouseenter', cancelRowToolsHide)", self.js)
+
+    def test_세로_배치에서는_폭_버튼이_없다(self):
+        """한 줄에 한 항목이라 눌러도 아무 일이 없었다."""
+        head = self.js.index('function showRowTools')
+        block = self.js[head:head + 2500]
+        self.assertIn("fieldOrderData.layoutMode === 'horizontal'", block)
+        self.assertIn('widthBtn.hidden = !canWidth', block)
+
+    def test_숨긴_버튼은_자리를_차지하지_않는다(self):
+        self.assertIn('.pv-rowtools button[hidden] { display: none; }', self.css)
+
+
+class IssueNumbersTests(TestCase):
+    """부적합 항목이 몇 번 지적인지 표와 모달이 같은 번호로 말한다."""
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+
+    def test_번호를_매긴다(self):
+        self.assertIn('function numberValidationIssues', self.js)
+        self.assertIn('row._numbers', self.js)
+
+    def test_배지가_실제로_보인다(self):
+        """예전에는 표시를 만들어 놓고 CSS 에서 display:none 으로 죽여 뒀다."""
+        self.assertIn('pv-issue-badge', self.js)
+        head = self.css.index('.pv-issue-badge {')
+        rule = self.css[head:self.css.index('}', head)]
+        self.assertIn('display: inline-block', rule)
+        self.assertNotIn('display: none', rule)
+        # 인쇄물에는 들어가지 않는다
+        self.assertIn('.pv-exporting .pv-issue-badge { display: none !important; }', self.css)
+
+    def test_모달이_어느_줄인지_사람_말로_적는다(self):
+        self.assertIn('function tableRowName', self.js)
+        self.assertIn('vr-where', self.js)
+
+
+class LabelColumnFitsTests(TestCase):
+    """항목명이 칸을 넘으면 칸이 넓어진다."""
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        self.html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_설정값은_최소값이다(self):
+        """'유통전문판매원' 은 기본 24mm 를 넘는다. 잘린 항목명은 틀린 표시다."""
+        self.assertIn('항목명 칸 (mm, 최소)', self.html)
+        head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
+        block = self.html[head:head + 900]
+        self.assertIn('Math.max(minPx', block)
+        self.assertIn('cell.scrollWidth', block)
+
+    def test_재기_전에_칸을_풀어_둔다(self):
+        """좁혀 둔 채로 재면 이미 잘린 폭이 나온다."""
+        head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
+        block = self.html[head:head + 900]
+        self.assertIn("setProperty('--label-col-width', 'auto')", block)
+
+
+class AllergenBoxFlowsInlineTests(TestCase):
+    """알레르기 선언은 원재료명 끝에 이어 붙고, 자리가 없을 때만 내려간다."""
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        self.css = (Path(dj.BASE_DIR) / 'static/css/label_preview.css'
+                    ).read_text(encoding='utf-8')
+
+    def test_줄바꿈을_강제하지_않는다(self):
+        head = self.css.index('.pv-allergen-box {')
+        block = self.css[head:head + 700]
+        self.assertIn('display: inline-block;', block)
+        self.assertNotIn('display: block;', block)

@@ -1573,124 +1573,140 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // 영양성분 데이터 처리 - 중복 제거된 코드
-    try {
-        // 통합된 데이터 로드 함수 사용
-        if (!nutritionData) {
-            return;
-        }
-        
-        // 기본값 보장
-        if (!nutritionData.nutrients || Object.keys(nutritionData.nutrients).length === 0) {
-            // 기본 영양성분 데이터 설정
-            nutritionData.nutrients = {
-                calorie: { value: 0, unit: 'kcal' },
-                natrium: { value: 0, unit: 'mg' },
-                carbohydrate: { value: 0, unit: 'g' },
-                sugar: { value: 0, unit: 'g' },
-                afat: { value: 0.1, unit: 'g' },
-                transfat: { value: 0.1, unit: 'g' },
-                satufat: { value: 0.1, unit: 'g' },
-                cholesterol: { value: 0, unit: 'mg' },
-                protein: { value: 0, unit: 'g' }
-            };
-        }
-        
-        // 영양성분 UI 업데이트 (중복 제거된 코드)
-        if (nutritionData.serving_size && nutritionData.serving_size_unit) {
-            safeSetElementValue('servingSizeDisplay', `${nutritionData.serving_size}${nutritionData.serving_size_unit}`, true);
-        }
-        
-        if (nutritionData.units_per_package) {
-            safeSetElementValue('servingsPerPackageDisplay', nutritionData.units_per_package);
-        }
-        
-        if (nutritionData.display_unit) {
-            safeSetElementValue('nutritionDisplayUnit', nutritionData.display_unit);
-        }
-        
-        // 영양성분 데이터 구조화
-        const data = {
-            servingSize: nutritionData.serving_size,
-            servingUnit: nutritionData.serving_size_unit,
-            servingsPerPackage: nutritionData.units_per_package,
-            servingUnitText: nutritionData.serving_size_unit === 'ml' ? '개' : '개',
-            displayUnit: nutritionData.display_unit || 'unit',
-            totalWeight: nutritionData.serving_size * nutritionData.units_per_package,
-            values: []
-        };
-        
-        const nutrientOrder = [
-            'natrium', 'carbohydrate', 'sugar', 'afat', 'transfat', 'satufat', 'cholesterol', 'protein'
-        ];
-        const nutrientLabels = {
-            calorie: '열량', natrium: '나트륨', carbohydrate: '탄수화물', sugar: '당류', 
-            afat: '지방', transfat: '트랜스지방', satufat: '포화지방', cholesterol: '콜레스테롤', protein: '단백질'
-        };
-        const nutrientLimits = {
-            natrium: 2000, carbohydrate: 324, sugar: 100, afat: 54, satufat: 15, cholesterol: 300, protein: 55
-        };
-        
-        let calorieValue = null, calorieUnit = '';
-        if (nutritionData.nutrients && nutritionData.nutrients.calorie) {
-            calorieValue = nutritionData.nutrients.calorie.value;
-            calorieUnit = nutritionData.nutrients.calorie.unit || 'kcal';
-        }
-        
-        if (nutritionData.nutrients) {
-            for (const key of nutrientOrder) {
-                const n = nutritionData.nutrients[key] || {};
-                data.values.push({
-                    label: nutrientLabels[key] || key,
-                    value: (n.value !== undefined && n.value !== null) ? parseFloat(n.value) : 0,
-                    unit: n.unit || '',
-                    limit: nutrientLimits[key] || null
-                });
+    /*
+     * 영양성분 데이터 처리.
+     *
+     * **함수 안에 있어야 한다.** 예전에는 이 블록이 DOMContentLoaded 본문에
+     * 그대로 있었고 맨 앞이 `if (!nutritionData) return;` 이었다. 그런데 이
+     * 화면에는 #nutrition-data 요소가 아예 없어서 그 return 이 늘 걸렸고,
+     * **뒤에 있는 초기화가 통째로 실행되지 않았다** — PDF 저장·설정 저장
+     * 버튼 연결, 세로 길이 계산, 입력 하한, 저장된 설정 불러오기까지 전부.
+     *
+     * 그동안 PDF 와 설정 저장이 동작한 것은 label_preview.html 인라인
+     * 스크립트에 같은 함수가 한 벌 더 있어서 그쪽이 대신 붙여 줬기
+     * 때문이다. 그 사본을 걷어내자 이 결함이 드러났다.
+     */
+    function initNutritionData() {
+            try {
+            // 통합된 데이터 로드 함수 사용
+            if (!nutritionData) {
+                return;
             }
-        }
         
-        data.calorie = calorieValue;
-        data.calorieUnit = calorieUnit;
-        window.nutritionData = data;
-        updateNutritionDisplay(data);
+            // 기본값 보장
+            if (!nutritionData.nutrients || Object.keys(nutritionData.nutrients).length === 0) {
+                // 기본 영양성분 데이터 설정
+                nutritionData.nutrients = {
+                    calorie: { value: 0, unit: 'kcal' },
+                    natrium: { value: 0, unit: 'mg' },
+                    carbohydrate: { value: 0, unit: 'g' },
+                    sugar: { value: 0, unit: 'g' },
+                    afat: { value: 0.1, unit: 'g' },
+                    transfat: { value: 0.1, unit: 'g' },
+                    satufat: { value: 0.1, unit: 'g' },
+                    cholesterol: { value: 0, unit: 'mg' },
+                    protein: { value: 0, unit: 'g' }
+                };
+            }
         
-    // 영양성분은 영양성분 탭이 활성화될 때만 표시
-    } catch (e) {
-        console.error('영양성분 데이터 처리 중 오류:', e);
-    // 백업 데이터 로드 시도
+            // 영양성분 UI 업데이트 (중복 제거된 코드)
+            if (nutritionData.serving_size && nutritionData.serving_size_unit) {
+                safeSetElementValue('servingSizeDisplay', `${nutritionData.serving_size}${nutritionData.serving_size_unit}`, true);
+            }
         
-        // 오류 발생 시 백업 로직: DOM에서 직접 데이터 추출 (중복 제거된 코드)
-        try {
-            // 유틸리티 함수로 간소화된 백업 데이터 생성
-            const getElementValue = (id, defaultValue = '0') => document.getElementById(id)?.value || defaultValue;
-            
-            const backupData = {
-                serving_size: getElementValue('serving_size', '100'),
-                serving_size_unit: getElementValue('serving_size_unit', 'g'),
-                units_per_package: getElementValue('units_per_package', '1'),
-                display_unit: getElementValue('nutrition_display_unit', 'unit'),
-                nutrients: {
-                    calorie: { value: getElementValue('calories'), unit: 'kcal' },
-                    natrium: { value: getElementValue('natriums'), unit: 'mg' },
-                    carbohydrate: { value: getElementValue('carbohydrates'), unit: 'g' },
-                    sugar: { value: getElementValue('sugars'), unit: 'g' },
-                    afat: { value: getElementValue('fats'), unit: 'g' },
-                    transfat: { value: getElementValue('trans_fats'), unit: 'g' },
-                    satufat: { value: getElementValue('saturated_fats'), unit: 'g' },
-                    cholesterol: { value: getElementValue('cholesterols'), unit: 'mg' },
-                    protein: { value: getElementValue('proteins'), unit: 'g' }
-                }
+            if (nutritionData.units_per_package) {
+                safeSetElementValue('servingsPerPackageDisplay', nutritionData.units_per_package);
+            }
+        
+            if (nutritionData.display_unit) {
+                safeSetElementValue('nutritionDisplayUnit', nutritionData.display_unit);
+            }
+        
+            // 영양성분 데이터 구조화
+            const data = {
+                servingSize: nutritionData.serving_size,
+                servingUnit: nutritionData.serving_size_unit,
+                servingsPerPackage: nutritionData.units_per_package,
+                servingUnitText: nutritionData.serving_size_unit === 'ml' ? '개' : '개',
+                displayUnit: nutritionData.display_unit || 'unit',
+                totalWeight: nutritionData.serving_size * nutritionData.units_per_package,
+                values: []
             };
-            
-            // 백업 데이터로 UI 업데이트
-            safeSetElementValue('servingSizeDisplay', `${backupData.serving_size}${backupData.serving_size_unit}`);
-            
-        } catch (backupError) {
-            console.error('❌ 백업 데이터 로드도 실패:', backupError);
-        }
         
-    // 백업 데이터 로드 완료
+            const nutrientOrder = [
+                'natrium', 'carbohydrate', 'sugar', 'afat', 'transfat', 'satufat', 'cholesterol', 'protein'
+            ];
+            const nutrientLabels = {
+                calorie: '열량', natrium: '나트륨', carbohydrate: '탄수화물', sugar: '당류', 
+                afat: '지방', transfat: '트랜스지방', satufat: '포화지방', cholesterol: '콜레스테롤', protein: '단백질'
+            };
+            const nutrientLimits = {
+                natrium: 2000, carbohydrate: 324, sugar: 100, afat: 54, satufat: 15, cholesterol: 300, protein: 55
+            };
+        
+            let calorieValue = null, calorieUnit = '';
+            if (nutritionData.nutrients && nutritionData.nutrients.calorie) {
+                calorieValue = nutritionData.nutrients.calorie.value;
+                calorieUnit = nutritionData.nutrients.calorie.unit || 'kcal';
+            }
+        
+            if (nutritionData.nutrients) {
+                for (const key of nutrientOrder) {
+                    const n = nutritionData.nutrients[key] || {};
+                    data.values.push({
+                        label: nutrientLabels[key] || key,
+                        value: (n.value !== undefined && n.value !== null) ? parseFloat(n.value) : 0,
+                        unit: n.unit || '',
+                        limit: nutrientLimits[key] || null
+                    });
+                }
+            }
+        
+            data.calorie = calorieValue;
+            data.calorieUnit = calorieUnit;
+            window.nutritionData = data;
+            updateNutritionDisplay(data);
+        
+        // 영양성분은 영양성분 탭이 활성화될 때만 표시
+        } catch (e) {
+            console.error('영양성분 데이터 처리 중 오류:', e);
+        // 백업 데이터 로드 시도
+        
+            // 오류 발생 시 백업 로직: DOM에서 직접 데이터 추출 (중복 제거된 코드)
+            try {
+                // 유틸리티 함수로 간소화된 백업 데이터 생성
+                const getElementValue = (id, defaultValue = '0') => document.getElementById(id)?.value || defaultValue;
+            
+                const backupData = {
+                    serving_size: getElementValue('serving_size', '100'),
+                    serving_size_unit: getElementValue('serving_size_unit', 'g'),
+                    units_per_package: getElementValue('units_per_package', '1'),
+                    display_unit: getElementValue('nutrition_display_unit', 'unit'),
+                    nutrients: {
+                        calorie: { value: getElementValue('calories'), unit: 'kcal' },
+                        natrium: { value: getElementValue('natriums'), unit: 'mg' },
+                        carbohydrate: { value: getElementValue('carbohydrates'), unit: 'g' },
+                        sugar: { value: getElementValue('sugars'), unit: 'g' },
+                        afat: { value: getElementValue('fats'), unit: 'g' },
+                        transfat: { value: getElementValue('trans_fats'), unit: 'g' },
+                        satufat: { value: getElementValue('saturated_fats'), unit: 'g' },
+                        cholesterol: { value: getElementValue('cholesterols'), unit: 'mg' },
+                        protein: { value: getElementValue('proteins'), unit: 'g' }
+                    }
+                };
+            
+                // 백업 데이터로 UI 업데이트
+                safeSetElementValue('servingSizeDisplay', `${backupData.serving_size}${backupData.serving_size_unit}`);
+            
+            } catch (backupError) {
+                console.error('❌ 백업 데이터 로드도 실패:', backupError);
+            }
+        
+        // 백업 데이터 로드 완료
+        }
     }
+
+    initNutritionData();
 
     // 탭 전환 처리
     function handleTabSwitch() {
@@ -3195,32 +3211,66 @@ function validationEvidenceHtml(evidence) {
 }
 
 /*
- * 규정 검증 결과를 표의 해당 줄에 얹는다.
+ * 규정 검증 결과에 번호를 매긴다.
+ *
+ * 예전에는 표의 줄이 분홍색으로 물들기만 했다. 지적이 여럿이면 어느 것이 이
+ * 줄 이야기인지 이을 수가 없었다 — 모달과 표를 눈으로 대조해야 했다.
+ * 이제 모달의 지적과 표의 배지가 같은 번호를 쓴다.
  *
  * 서버가 지적마다 어느 칸의 이야기인지(fields)를 함께 준다. 그 값이 표의
  * data-field-row 와 같은 이름이라 행을 바로 찾을 수 있다.
  */
+function numberValidationIssues(categories) {
+    let n = 0;
+    (categories || []).forEach(function (row) {
+        row._numbers = [];
+        if (row.ok) return;
+        const count = (row.errors || []).length || 1;
+        for (let i = 0; i < count; i += 1) {
+            n += 1;
+            row._numbers.push(n);
+        }
+    });
+    return categories || [];
+}
+
 function markValidationOnTable(categories) {
+    document.querySelectorAll('.pv-issue-badge').forEach(function (el) { el.remove(); });
     document.querySelectorAll('[data-field-row]').forEach(function (row) {
         row.classList.remove('pv-row-issue');
-        row.removeAttribute('data-issue-count');
     });
 
-    const counts = {};
+    const byField = {};
     (categories || []).forEach(function (row) {
-        if (row.ok) return;
-        const n = (row.errors || []).length || 1;
+        if (row.ok || !row._numbers || !row._numbers.length) return;
         (row.fields || []).forEach(function (field) {
-            counts[field] = (counts[field] || 0) + n;
+            byField[field] = (byField[field] || []).concat(row._numbers);
         });
     });
 
-    Object.keys(counts).forEach(function (field) {
+    Object.keys(byField).forEach(function (field) {
+        const numbers = byField[field].sort(function (a, b) { return a - b; });
         document.querySelectorAll(`[data-field-row="${field}"]`).forEach(function (row) {
             row.classList.add('pv-row-issue');
-            row.setAttribute('data-issue-count', counts[field]);
+            // 배지는 항목명 칸에 붙인다. 2단 배치에서는 행이 아니라 칸이
+            // data-field-row 를 가지므로 그 칸 자신이 될 수도 있다.
+            const head = row.tagName === 'TH' ? row : row.querySelector('th');
+            if (!head || head.querySelector('.pv-issue-badge')) return;
+            const badge = document.createElement('span');
+            badge.className = 'pv-issue-badge';
+            badge.textContent = numbers.join(',');
+            badge.title = `규정 검증 ${numbers.join(', ')}번 지적`;
+            head.insertBefore(badge, head.firstChild);
         });
     });
+}
+
+/* 그 줄의 항목명. 모달에 "rawmtrl_nm_display" 라고 적어 봐야 소용이 없다. */
+function tableRowName(field) {
+    const row = document.querySelector(`[data-field-row="${field}"]`);
+    const head = row && (row.tagName === 'TH' ? row : row.querySelector('th'));
+    const text = head ? head.textContent.replace(/^\s*\d+(,\d+)*\s*/, '').trim() : '';
+    return text || field;
 }
 
 /* 그 줄로 데려가 잠깐 드러낸다. 스크롤만 하면 어느 줄인지 알기 어렵다. */
@@ -3248,22 +3298,27 @@ function showAiValidationModal(result, useAi) {
         ? '<span class="badge bg-success">적합</span>'
         : '<span class="badge bg-danger">확인 필요</span>';
 
-    // 지적을 표 위에 얹는다. 목록만 보여 주면 "어느 줄 이야기인지" 를 잇는 일이
-    // 사람 몫이 된다 — 열일곱 줄을 눈으로 훑으며 대조해야 했다.
-    markValidationOnTable(result.categories || []);
+    // 지적에 번호를 매기고 표 위에 얹는다. 목록만 보여 주면 "어느 줄 이야기인지"
+    // 를 잇는 일이 사람 몫이 된다 — 열일곱 줄을 눈으로 훑으며 대조해야 했다.
+    const categories = numberValidationIssues(result.categories || []);
+    markValidationOnTable(categories);
 
     let rowsHtml = '';
-    for (const row of (result.categories || [])) {
+    for (const row of categories) {
         const anchor = (row.fields || []).find(f => document.querySelector(`[data-field-row="${f}"]`));
         rowsHtml += `<tr${anchor ? ` class="vr-jump" data-jump="${anchor}" title="누르면 표의 그 줄로 갑니다"` : ''}>`;
-        rowsHtml += `<td>${row.label}</td>`;
+        rowsHtml += `<td>${row.label}${anchor ? '<div class="vr-where">표의 <strong>' + tableRowName(anchor) + '</strong> 줄</div>' : ''}</td>`;
         rowsHtml += row.ok
             ? '<td><span class="text-success">적합</span></td>'
-            : '<td><span class="text-danger">재검토</span></td>';
+            : `<td><span class="text-danger">재검토</span>${(row._numbers || []).map(n => `<span class="pv-issue-badge">${n}</span>`).join('')}</td>`;
 
         let msg = '';
         if (row.errors && row.errors.length > 0) {
-            msg += row.errors.map(e => e.includes('<strong>') ? e : `<strong>${e}</strong>`).join('<br>');
+            msg += row.errors.map(function (e, i) {
+                const num = (row._numbers || [])[i];
+                const tag = num ? `<span class="pv-issue-badge">${num}</span>` : '';
+                return tag + (e.includes('<strong>') ? e : `<strong>${e}</strong>`);
+            }).join('<br>');
         }
         if (row.suggestions && row.suggestions.length > 0) {
             if (msg) msg += '<br><br>';
@@ -4550,6 +4605,7 @@ function initializeLayoutButtons() {
  * 표의 높이 계산까지 흔든다.
  */
 let _rowToolsField = null;
+let _rowToolsTimer = null;
 
 function ensureRowTools() {
     let tools = document.getElementById('pvRowTools');
@@ -4571,6 +4627,10 @@ function ensureRowTools() {
         + '<button type="button" data-act="hide" title="이 항목을 표시하지 않기">'
         + '  <i class="fas fa-eye-slash"></i></button>';
     panel.appendChild(tools);
+
+    // 도구 위에 있는 동안에는 절대 사라지지 않는다
+    tools.addEventListener('mouseenter', cancelRowToolsHide);
+    tools.addEventListener('mouseleave', scheduleRowToolsHide);
 
     tools.addEventListener('click', function (e) {
         const btn = e.target.closest('button');
@@ -4594,20 +4654,55 @@ function showRowTools(row) {
     if (!tools || !panel) return;
 
     const field = row.dataset.fieldRow;
-    if (String(field).startsWith('custom_field_')) return;   // 맞춤항목은 여기서 못 고친다
+    if (!field || String(field).startsWith('custom_field_')) return;  // 맞춤항목은 여기서 못 고친다
+    cancelRowToolsHide();
     _rowToolsField = field;
 
+    /*
+     * 지금 할 수 있는 것만 보여 준다.
+     *
+     * 50/100 은 2단 배치에서만 뜻이 있다 — 세로 배치는 한 줄에 한 항목이라
+     * 눌러도 아무 일이 없었다. 값을 고치러 가는 것도 부모 화면(제품 화면 /
+     * 표시사항 작성 화면)이 있어야 한다.
+     */
+    const canWidth = fieldOrderData.layoutMode === 'horizontal';
+    const canEdit = !!(window.opener || (window.self !== window.top ? window.parent : null));
+    const widthBtn = tools.querySelector('[data-act="width"]');
+    const editBtn = tools.querySelector('[data-act="edit"]');
+    if (widthBtn) widthBtn.hidden = !canWidth;
+    if (editBtn) editBtn.hidden = !canEdit;
+
+    const label = tools.querySelector('.pv-rowtools-width');
+    if (label) label.textContent = (fieldOrderData.width[field] === '100%') ? '100' : '50';
+
+    /*
+     * 줄에 **붙여서** 띄운다.
+     *
+     * 예전에는 6px 떨어뜨려 뒀는데, 그 틈을 지나는 순간 마우스가 줄 밖으로
+     * 나가면서 도구가 사라졌다. 재빨리 움직여야 겨우 누를 수 있었다.
+     * 이제 줄과 도구가 맞닿아 있고, 벗어나도 잠깐 기다렸다가 사라진다.
+     */
     const box = row.getBoundingClientRect();
     const base = panel.getBoundingClientRect();
     tools.hidden = false;
     tools.style.top = (box.top - base.top + panel.scrollTop) + 'px';
-    tools.style.left = (box.right - base.left + panel.scrollLeft + 6) + 'px';
+    tools.style.left = (box.right - base.left + panel.scrollLeft) + 'px';
+}
 
-    const label = tools.querySelector('.pv-rowtools-width');
-    if (label) label.textContent = (fieldOrderData.width[field] === '100%') ? '100' : '50';
+function scheduleRowToolsHide() {
+    cancelRowToolsHide();
+    _rowToolsTimer = setTimeout(hideRowTools, 320);
+}
+
+function cancelRowToolsHide() {
+    if (_rowToolsTimer) {
+        clearTimeout(_rowToolsTimer);
+        _rowToolsTimer = null;
+    }
 }
 
 function hideRowTools() {
+    cancelRowToolsHide();
     const tools = document.getElementById('pvRowTools');
     if (tools) tools.hidden = true;
     _rowToolsField = null;
@@ -4631,12 +4726,14 @@ function openFieldEditor(field) {
 }
 
 document.addEventListener('mouseover', function (e) {
-    const row = e.target.closest && e.target.closest('[data-field-row]');
+    if (!e.target.closest) return;
+    if (e.target.closest('#pvRowTools')) { cancelRowToolsHide(); return; }
+    const row = e.target.closest('[data-field-row]');
     if (row) { showRowTools(row); return; }
-    if (!e.target.closest || !e.target.closest('#pvRowTools')) hideRowTools();
+    if (e.target.closest('#previewContent')) scheduleRowToolsHide();
 });
 
-/* 값을 누르면 그 입력칸으로. 표를 보다가 고칠 곳을 찾았을 때 가장 짧은 길이다. */
+/* 값을 두 번 누르면 그 입력칸으로. 표를 보다가 고칠 곳을 찾았을 때 가장 짧은 길이다. */
 document.addEventListener('dblclick', function (e) {
     const row = e.target.closest && e.target.closest('[data-field-row]');
     if (row && row.dataset.fieldRow) openFieldEditor(row.dataset.fieldRow);

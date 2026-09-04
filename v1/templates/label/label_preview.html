@@ -120,9 +120,9 @@
         </div>
         <div class="settings-row-pair">
           <div class="settings-row">
-            <label class="form-label" for="labelColWidthInput" style="font-size: 0.85rem; font-weight: 600;">항목명 칸 (mm)</label>
+            <label class="form-label" for="labelColWidthInput" style="font-size: 0.85rem; font-weight: 600;">항목명 칸 (mm, 최소)</label>
             <input type="number" class="form-control form-control-sm" id="labelColWidthInput" value="24" min="10" max="60" step="1"
-                   title="'유통전문판매원' 처럼 긴 이름이 접히면 표 높이가 늘어납니다. 그때 넓히세요.">
+                   title="최소 너비입니다. '유통전문판매원' 처럼 이 폭에 안 들어가는 이름이 있으면 자동으로 넓어집니다.">
           </div>
           <div class="settings-row">
             <label class="form-label" for="letterSpacingInput" style="font-size: 0.85rem; font-weight: 600;">자간 (%)</label>
@@ -284,6 +284,12 @@
       }
     }
   </script>
+  {% comment %}
+    영양성분 값. preview_popup 이 진작부터 context 로 넘기고 있었는데 이 자리가
+    없어서 화면이 읽을 수가 없었다. 그 탓에 초기화 코드가 통째로 멈춰 있었다
+    (label_preview.js 의 initNutritionData 주석 참고).
+  {% endcomment %}
+  <script id="nutrition-data" type="application/json">{{ nutrition_data|safe }}</script>
   <script id="country-mapping-data" type="application/json">{{ country_mapping|safe }}</script>
   <script id="country-list-data" type="application/json">{{ country_list|safe }}</script>
   <script id="expiry-recommendation-data" type="application/json">{{ expiry_recommendation_json|safe }}</script>
@@ -716,16 +722,27 @@
                반대로 짧은 이름만 쓰는 라벨에서는 값 칸을 잡아먹는다.
                사용자가 정하게 두고 그 값은 라벨에 저장한다. 실제로 열에
                먹이는 일은 colgroup 이 한다. */
+            /* 설정값은 **최소 너비**다. 거기 안 들어가는 이름이 있으면 넓힌다.
+               "유통전문판매원" 은 24mm 를 넘는데, 예전에는 그대로 잘리거나
+               삐져나갔다. 잘린 항목명은 인쇄물에서 그냥 틀린 표시가 된다. */
             const colMm = parseFloat(document.getElementById('labelColWidthInput')?.value) || 24;
-            previewContent.style.setProperty('--label-col-width',
-                `${(colMm / 10 * CM_TO_PX).toFixed(1)}px`);
+            const minPx = colMm / 10 * CM_TO_PX;
 
-            /* 항목명은 줄바꿈하지 않는다 — 접히면 표 높이가 늘어난다.
-               너비는 건드리지 않는다(colgroup 의 몫). */
-            previewContent.querySelectorAll('.preview-table th').forEach(cell => {
+            const headCells = previewContent.querySelectorAll('.preview-table th');
+            headCells.forEach(cell => {
                 cell.style.whiteSpace = 'nowrap';
                 cell.style.wordBreak = 'keep-all';
             });
+
+            /* 먼저 칸을 풀어 글자가 실제로 얼마나 넓은지 재고, 그 다음 정한다.
+               좁혀 둔 채로 재면 이미 잘린 폭이 나온다. */
+            previewContent.style.setProperty('--label-col-width', 'auto');
+            let neededPx = 0;
+            headCells.forEach(cell => {
+                neededPx = Math.max(neededPx, cell.scrollWidth);
+            });
+            previewContent.style.setProperty('--label-col-width',
+                `${Math.max(minPx, Math.ceil(neededPx) + 2).toFixed(1)}px`);
 
             // 복합재질 텍스트 기본 스타일 적용
             const recyclingTextElements = previewContent.querySelectorAll('.recycling-text-line');

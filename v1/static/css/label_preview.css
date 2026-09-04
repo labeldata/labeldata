@@ -965,16 +965,24 @@ tbody.layout-vertical tr td {
     box-shadow: inset 3px 0 0 #c5221f;
 }
 
-.pv-row-issue > th::after {
-    content: ' ' attr(data-issue-count);
-    display: none;
+/* 몇 번 지적인지. 모달의 번호와 같은 숫자다 — 없으면 지적이 여럿일 때
+   어느 것이 이 줄 이야기인지 이을 수가 없다. */
+.pv-issue-badge {
+    display: inline-block;
+    min-width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    border-radius: 7px;
+    background: #c5221f;
+    color: #fff;
+    font-size: 8pt;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+    vertical-align: 1px;
 }
 
-.pv-row-issue::after {
-    content: attr(data-issue-count);
-    position: absolute;
-    display: none;
-}
+.pv-exporting .pv-issue-badge { display: none !important; }
 
 /* 지적 줄로 데려갔을 때 잠깐 드러낸다 */
 .pv-row-flash > th,
@@ -999,16 +1007,19 @@ tbody.layout-vertical tr td {
    글자 크기는 본문을 따른다(inherit) — 예전에는 9pt 인라인이라 설정을 올려도
    이 줄만 작게 남았다. */
 .pv-allergen-box {
-    margin-top: 4px;
-    padding: 3px 8px;
+    /* 원재료명 끝에 **이어서** 붙는다. 자리가 모자랄 때만 다음 줄로 내려간다.
+       예전에는 display:block 이라 늘 한 줄을 통째로 차지했고, 좁은 라벨에서
+       그 한 줄이 표 높이를 그만큼 늘렸다. */
+    display: inline-block;
+    margin-left: 4px;
+    padding: 2px 6px;
     border-radius: 3px;
     background: #000;
     color: #fff;
     font-size: inherit;
     font-weight: 700;
-    text-align: right;
     word-break: keep-all;
-    white-space: normal;
+    white-space: nowrap;
 }
 
 /* ==================== 줄별 도구 ====================
@@ -1021,10 +1032,16 @@ tbody.layout-vertical tr td {
     gap: 2px;
     padding: 2px;
     border: 1px solid var(--border-light, #dadce0);
-    border-radius: 6px;
+    border-radius: 0 6px 6px 0;
     background: #fff;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
+
+/* 줄과 도구 사이에 틈이 없어야 한다 — 틈을 지나는 순간 마우스가 줄 밖으로
+   나가면서 도구가 사라졌다. 왼쪽으로 조금 겹쳐 둔다. */
+.pv-rowtools { margin-left: -1px; }
+
+.pv-rowtools button[hidden] { display: none; }
 
 .pv-rowtools button {
     width: 24px;
@@ -1077,11 +1094,14 @@ tbody.layout-vertical tr td {
     max-width: none;
 }
 
-/* GMO 표시도 같은 검은 박스를 쓰되 오른쪽에 붙는다 */
+/* GMO 표시도 같은 검은 박스를 쓴다 */
 .pv-gmo-box {
     display: inline-block;
-    float: right;
-    clear: both;
-    margin-top: 8px;
-    text-align: center;
+}
+
+/* 모달에서 "이 지적이 표의 어느 줄인지" */
+.vr-where {
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: #5f6368;
 }
