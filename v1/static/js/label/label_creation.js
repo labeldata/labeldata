@@ -1194,15 +1194,12 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    // 팝업이 데이터를 요청하면('requestPreviewData') 이 리스너가 응답합니다.
-    window.addEventListener('message', function handlePreviewRequest(e) {
-        // 이 메시지가 우리가 연 팝업(e.source)에서 온 것인지 확인
-        if (e.source !== popup || e.data.type !== 'requestPreviewData') {
-            return;
-        }
-
-  // Preview popup requested data; sending collected data
-
+    // 팝업에 지금 폼의 내용을 보낸다.
+    //
+    // 예전에는 첫 요청 한 번만 보내고 리스너를 지웠다. 눈 아이콘으로 표시
+    // 항목을 껐다 켜면 그 결과를 다시 보내야 하므로, 보내는 일을 함수로
+    // 떼어 두고 리스너는 남긴다.
+    function sendPreviewData() {
         const checkedData = {};
         
         // 체크박스 ID와 실제 데이터 필드의 name 속성을 1:1로 매핑
@@ -1212,6 +1209,7 @@ document.addEventListener('DOMContentLoaded', function () {
             'chk_prdlst_dcnm': 'prdlst_dcnm',
             'chk_prdlst_report_no': 'prdlst_report_no',
             'chk_content_weight': 'content_weight',
+            'chk_weight_calorie': 'weight_calorie',
             'chk_country_of_origin': 'country_of_origin',
             'chk_storage_method': 'storage_method',
             'chk_frmlc_mtrqlt': 'frmlc_mtrqlt',
@@ -1226,26 +1224,25 @@ document.addEventListener('DOMContentLoaded', function () {
             'chk_nutrition_text': 'nutrition_text'
         };
 
+        // 표에 줄이 생기는 기준은 체크 하나다. 값은 체크 여부와 무관하게
+        // 모두 보낸다 — 미리보기에서 다시 켤 때 무엇이 인쇄될지 바로 보여야
+        // 하고, 켜 두고 아직 안 채운 항목은 빈 줄로 드러나야 한다.
+        const displayChecked = {};
         document.querySelectorAll('input[type="checkbox"][id^="chk_"]').forEach(cb => {
-            if (cb.checked) {
-                const fieldName = fieldIdToNameMap[cb.id];
-                if (fieldName) {
-                    const inputElement = document.querySelector(`[name="${fieldName}"]`);
-                    if (inputElement) {
-                        let value = inputElement.value || '';
-                        
-                        // 원본 데이터를 그대로 전달 (미리보기 팝업에서 변환 처리)
-                        // 미리보기 페이지가 기대하는 표준 필드명을 키(key)로 사용
-                        checkedData[fieldName] = value;
-                        
-                        // pog_daycnt 필드의 경우 날짜 옵션도 함께 전달
-                        if (fieldName === 'pog_daycnt') {
-                            const dateOptionElement = document.querySelector('select[name="date_option_display"]');
-                            if (dateOptionElement) {
-                                checkedData['date_option'] = dateOptionElement.value || '소비기한';
-                            }
-                        }
-                    }
+            const fieldName = fieldIdToNameMap[cb.id];
+            if (!fieldName) return;
+            displayChecked[fieldName] = cb.checked;
+
+            const inputElement = document.querySelector(`[name="${fieldName}"]`);
+            // 원본 데이터를 그대로 전달 (미리보기 팝업에서 변환 처리)
+            // 미리보기 페이지가 기대하는 표준 필드명을 키(key)로 사용
+            checkedData[fieldName] = inputElement ? (inputElement.value || '') : '';
+
+            // pog_daycnt 필드의 경우 날짜 옵션도 함께 전달
+            if (fieldName === 'pog_daycnt' && cb.checked) {
+                const dateOptionElement = document.querySelector('select[name="date_option_display"]');
+                if (dateOptionElement) {
+                    checkedData['date_option'] = dateOptionElement.value || '소비기한';
                 }
             }
         });
@@ -1287,14 +1284,46 @@ document.addEventListener('DOMContentLoaded', function () {
         popup.postMessage({
             type: 'previewCheckedFields',
             checked: checkedData,
+            displayChecked: displayChecked,
             settings: previewSettings,
             customFields: customFields,
             allergens: allergens,
             update_datetime: new Date().toISOString().slice(0, 16).replace('T', ' ')
         }, '*');
 
-        // 이벤트 리스너를 한 번만 실행하고 제거하여 중복 호출 방지
-        window.removeEventListener('message', handlePreviewRequest);
+    }
+
+    window.addEventListener('message', function (e) {
+        if (e.source !== popup || !e.data) return;
+
+        if (e.data.type === 'requestPreviewData') {
+            sendPreviewData();
+            return;
+        }
+
+        /* 미리보기의 줄 도구에서 "이 항목의 입력칸으로" 를 눌렀을 때 */
+        if (e.data.type === 'focusLabelField' && e.data.field) {
+            const input = document.querySelector(`[name="${e.data.field}"]`);
+            if (input) {
+                window.focus();
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (typeof input.focus === 'function') input.focus({ preventScroll: true });
+            }
+            return;
+        }
+
+        /* 미리보기의 눈 아이콘 = 이 폼의 표시 항목 체크.
+           미리보기가 따로 저장하지 않고 여기로 넘긴다 — 저장은 이 화면의 저장
+           버튼이 한다. 스위치가 둘이면 어느 날 서로 다른 말을 한다. */
+        if (e.data.type === 'toggleDisplayItem' && e.data.field) {
+            const box = document.getElementById('chk_' + e.data.field);
+            if (box && !box.disabled) {
+                box.checked = !!e.data.checked;
+                box.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            // 바뀐 상태를 그대로 되돌려 준다 (못 바꿨으면 원래 상태가 간다)
+            sendPreviewData();
+        }
     });
   };
 

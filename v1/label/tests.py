@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from v1.label.models import (
@@ -6542,3 +6543,461 @@ class NutritionInputBasisTests(TestCase):
         """이 칸에 무엇을 넣을지 몰라 100 을 넣은 것이 이번 사고의 출발이었다."""
         self.assertIn('총 내용량 = 단위량 × 포장개수', self.html)
         self.assertIn('포장개수는 1 로 둡니다', self.html)
+
+
+class PrintedRowsFollowDisplayChecksTests(TestCase):
+    """
+    표에 줄이 생기는 기준은 표시 항목 체크(chckd_*) 하나다.
+
+    예전에는 "값이 있으면 나간다" 였다. 규정 검증은 체크를 근거로 판정하므로
+    두 화면이 서로 다른 말을 했다 — 끈 항목이 인쇄되고(체크 기본값이 'N' 인
+    원산지·보관방법 등), 켠 항목은 비어 있어도 아무 데도 안 보였다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='rows', password='x')
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='표 기준',
+            prdlst_nm='제품', country_of_origin='국내산',
+            chckd_prdlst_nm='Y', chckd_country_of_origin='N',
+        )
+
+    def _checked(self):
+        from v1.label.constants import preview_display_checked
+        return preview_display_checked(self.label)
+
+    def test_끈_항목은_값이_있어도_표에_안_나간다(self):
+        self.assertTrue(self._checked()['prdlst_nm'])
+        self.assertFalse(self._checked()['country_of_origin'])
+
+    def test_값은_끈_항목도_함께_보낸다(self):
+        """미리보기에서 다시 켤 수 있어야 하고, 켜는 순간 무엇이 인쇄될지 보여야 한다."""
+        from v1.label.constants import preview_display_data
+
+        data = preview_display_data(self.label)
+        self.assertEqual(data['country_of_origin'], '국내산')
+        # 켜 두고 비어 있는 항목도 자리를 만든다
+        self.assertEqual(data['storage_method'], '')
+
+    def test_인쇄_대상이_아닌_값은_애초에_빠진다(self):
+        """
+        라벨명은 내부에서 부르는 이름인데 표에 '라벨명' 줄로 인쇄되고 있었다.
+        원재료명(참고)도 '원재료명' 행을 하나 더 만들었다.
+        """
+        from v1.label.constants import preview_display_data
+
+        data = preview_display_data(self.label)
+        self.assertNotIn('my_label_name', data)
+        self.assertNotIn('rawmtrl_nm', data)
+        self.assertNotIn('nutrition_text', data)
+
+    def test_원재료명은_참고_칸으로_갈음한다(self):
+        """V2 기본정보 탭과 BOM 은 참고 쪽에 쓰는데 인쇄물에는 한 줄로 나가야 한다."""
+        from v1.label.constants import preview_display_data
+
+        self.label.rawmtrl_nm = '밀가루(밀:미국산), 설탕'
+        self.label.rawmtrl_nm_display = ''
+        self.assertEqual(
+            preview_display_data(self.label)['rawmtrl_nm_display'],
+            '밀가루(밀:미국산), 설탕')
+
+    def test_미리보기가_체크_상태를_함께_받는다(self):
+        self.client.force_login(self.user)
+        resp = self.client.get(
+            reverse('label:label_tab_json'), {'label_id': self.label.my_label_id})
+        body = resp.json()
+        self.assertTrue(body['success'])
+        self.assertTrue(body['display_checked']['prdlst_nm'])
+        self.assertFalse(body['display_checked']['country_of_origin'])
+        self.assertEqual(body['display_data']['prdlst_nm'], '제품')
+
+
+class FieldLayoutLivesOnLabelTests(TestCase):
+    """
+    항목 순서·폭·배치는 라벨에 저장한다.
+
+    지금까지 localStorage 의 'labelFieldOrder' 키 하나뿐이었다. 라벨별이 아니라
+    브라우저별이라, 한 라벨에서 맞춰 둔 순서가 다른 라벨에 그대로 얹혔고 옆자리
+    동료는 아예 다른 순서를 봤다. 인쇄물의 모양인데 그럴 수 없다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='layout', password='x')
+        self.label = MyLabel.objects.create(user_id=self.user, my_label_name='배치')
+        self.client.force_login(self.user)
+
+    def _save(self, payload):
+        return self.client.post(
+            reverse('label:save_preview_settings'),
+            data=json.dumps({'label_id': self.label.my_label_id, **payload}),
+            content_type='application/json')
+
+    def test_항목_배치가_라벨에_저장된다(self):
+        self._save({'field_layout': {
+            'order': ['prdlst_nm', 'content_weight'],
+            'width': {'prdlst_nm': '100%'},
+            'layoutMode': 'horizontal',
+        }})
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.prv_field_layout['order'],
+                         ['prdlst_nm', 'content_weight'])
+        self.assertEqual(self.label.prv_field_layout['layoutMode'], 'horizontal')
+
+    def test_안_보내면_건드리지_않는다(self):
+        """설정 창만 만진 저장에서 순서가 초기화되면 인쇄물 모양이 조용히 달라진다."""
+        self.label.prv_field_layout = {'order': ['prdlst_nm'], 'width': {},
+                                       'layoutMode': 'vertical'}
+        self.label.save()
+
+        self._save({'font_size': 11})
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.prv_field_layout['order'], ['prdlst_nm'])
+
+
+class PreviewSwitchesAreOneTests(TestCase):
+    """미리보기의 눈 아이콘과 표시 항목 체크는 같은 스위치여야 한다."""
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.creation = (base / 'static/js/label/label_creation.js').read_text(encoding='utf-8')
+        self.tab = (base / 'templates/products/_tab_label.html').read_text(encoding='utf-8')
+
+    def test_표가_체크를_본다(self):
+        self.assertIn('function isFieldShown', self.js)
+        self.assertIn('window.displayChecked[fieldKey] === true', self.js)
+        # 값 유무로 판정하던 자리가 남아 있으면 두 기준이 다시 갈린다
+        self.assertNotIn('fieldOrderData.visibility', self.js)
+
+    def test_눈_아이콘은_부모에게_넘긴다(self):
+        """이 창이 따로 저장하면 스위치가 둘이 되고 저장·권한도 두 벌이 된다."""
+        self.assertIn("type: 'toggleDisplayItem'", self.js)
+        self.assertIn("'toggleDisplayItem'", self.creation)
+        self.assertIn("'toggleDisplayItem'", self.tab)
+
+    def test_죽은_레이아웃이_없다(self):
+        """누르면 세로로 되돌아오던 '가로형' 과, 없는 요소를 읽던 layoutSelect."""
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        html = (Path(dj.BASE_DIR) / 'templates/label/label_preview.html'
+                ).read_text(encoding='utf-8')
+        self.assertNotIn('data-layout="grid"', html)
+        self.assertNotIn("getElementById('layoutSelect')", self.js)
+
+    def test_두_곳의_항목_목록이_같다(self):
+        """
+        서버(PREVIEW_DISPLAY_FIELDS)와 화면(DEFAULT_FIELDS)이 어긋나면, 서버가
+        보낸 항목을 화면이 못 알아보고 조용히 빠뜨린다. 한쪽만 고쳐지는 일이
+        잦은 자리라 시험으로 묶어 둔다.
+        """
+        import re
+        from v1.label.constants import PREVIEW_DISPLAY_FIELDS
+
+        block = self.js[self.js.index('const DEFAULT_FIELDS = {'):]
+        block = block[:block.index('\n};')]
+        keys = re.findall(r"^\s*'([a-z_]+)':", block, re.MULTILINE)
+        self.assertEqual(sorted(keys), sorted(PREVIEW_DISPLAY_FIELDS))
+
+class PreviewHasOneOfEachTests(TestCase):
+    """
+    미리보기의 기능은 한 벌만 있어야 한다.
+
+    label_preview.html 인라인 스크립트와 label_preview.js 에 같은 이름의 함수가
+    열일곱 개 있었고, 그중 exportToPDF 와 savePreviewSettings 는 **둘 다 같은
+    버튼에 붙어** 있었다. PDF 저장을 한 번 누르면 두 개가 내려받아졌고(크기
+    계산도 서로 달랐다), 설정 저장은 두 번 나가서 나중에 도착하는 쪽이 이겼다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+
+    def test_pdf_저장이_한_곳이다(self):
+        self.assertEqual(self.js.count('async function exportToPDF'), 1)
+        self.assertNotIn('function exportToPDF', self.html)
+        self.assertNotIn("exportPdfBtn')?.addEventListener", self.html)
+
+    def test_설정_저장이_한_곳이다(self):
+        self.assertEqual(self.js.count('function savePreviewSettings'), 1)
+        self.assertNotIn('function savePreviewSettings', self.html)
+
+    def test_pdf_가_문서함에도_올라간다(self):
+        """내려받기만 하던 사본이 이겨 버리면 문서함 등록이 조용히 사라진다."""
+        self.assertIn('/label/upload-label-pdf/', self.js)
+        self.assertIn('log-pdf-save', self.js)
+
+    def test_화면_전용_표시는_pdf_에_안_들어간다(self):
+        self.assertIn("previewContent.classList.add('pv-exporting')", self.js)
+        self.assertIn("classList.remove('pv-exporting')", self.js)
+
+
+class NutritionOnLabelTests(TestCase):
+    """
+    영양정보 표는 표시사항 미리보기에 함께 그려지고 PDF 도 한 장으로 나온다.
+
+    표를 만드는 코드는 있었는데 **그릴 자리(#nutritionPreview)가 템플릿에 아예
+    없었다.** 그래서 영양성분은 미리보기에도 PDF 에도 나오지 않았고, 영양성분
+    탭에는 PDF 기능이 없어 어디로도 나갈 수 없었다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+        self.editor = (base / 'templates/products/nutrition_editor.html').read_text(encoding='utf-8')
+
+    def test_그릴_자리가_있다(self):
+        self.assertIn('id="nutritionPreview"', self.html)
+        # previewContent 안에 있어야 PDF 캡처에 함께 들어간다
+        head = self.html.index('id="previewContent"')
+        tail = self.html.index('</section>', head)
+        self.assertIn('id="nutritionPreview"', self.html[head:tail])
+
+    def test_표시_항목_체크가_켜고_끈다(self):
+        self.assertIn('function isNutritionShown', self.js)
+        self.assertIn('window.displayChecked.nutrition_text', self.js)
+        # 예전에는 이 화면에 있지도 않은 탭("#nutrition-tab")이 활성화됐는지를
+        # 봤다. 그래서 늘 숨겨졌다.
+        head = self.js.index('function updateNutritionDisplay')
+        block = self.js[head:head + 6000]
+        self.assertNotIn("data-bs-target') === '#nutrition-tab'", block)
+
+    def test_세로_길이에_영양정보_높이가_들어간다(self):
+        """빼고 재면 인쇄물이 잘린다."""
+        head = self.js.index('function calculateHeight')
+        block = self.js[head:head + 900]
+        self.assertIn('nutritionHeight', block)
+
+    def test_영양성분_탭은_같은_길을_안내한다(self):
+        self.assertIn('한글표시사항도안', self.editor)
+        self.assertIn('openLabelTab', self.editor)
+        # 영양성분 탭이 따로 PDF 를 만들지 않는다 (생성기를 두 벌로 두지 않는다)
+        self.assertNotIn('jspdf', self.editor.lower())
+
+    def test_체크_상태에_영양성분이_실린다(self):
+        from v1.label.constants import preview_display_checked
+
+        user = User.objects.create_user(username='nutri', password='x')
+        label = MyLabel.objects.create(user_id=user, my_label_name='영양',
+                                       chckd_nutrition_text='Y')
+        self.assertTrue(preview_display_checked(label)['nutrition_text'])
+
+
+class TableIsARealTableTests(TestCase):
+    """2단 배치가 진짜 표 구조인가. 열 너비는 한 곳이 정하는가."""
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+
+    def test_tr_안에_div_를_넣지_않는다(self):
+        """화면·브라우저 인쇄·html2canvas 가 서로 다른 것을 그릴 여지가 있었다."""
+        head = self.js.index('function renderHorizontalLayout')
+        block = self.js[head:head + 12000]
+        self.assertNotIn('itemContainer', block)
+        self.assertIn('td.colSpan = 3', block)
+
+    def test_열_너비는_colgroup_이_정한다(self):
+        self.assertIn('function applyColumnGroup', self.js)
+        self.assertIn('pv-col-label', self.js)
+        self.assertIn('.preview-table col.pv-col-label', self.css)
+
+    def test_항목명_칸_너비를_사용자가_정한다(self):
+        self.assertIn('id="labelColWidthInput"', self.html)
+        self.assertIn('--label-col-width', self.html)
+        self.assertIn('labelColumnMm', self.js)
+
+    def test_알레르기_박스가_글자_크기를_따른다(self):
+        """인라인 9pt 로 박아 두면 설정을 올려도 이 줄만 미달로 인쇄된다."""
+        self.assertIn('pv-allergen-box', self.js)
+        self.assertNotIn('font-size: 9pt', self.js)
+
+
+class ValidationPointsAtRowsTests(TestCase):
+    """지적이 표의 어느 줄에 대한 말인지 서버가 함께 준다."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='vrow', password='x')
+
+    def test_지적에_필드가_실린다(self):
+        from v1.label.services.validation_service import check_forbidden_phrases
+
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='금지',
+                                       prdlst_nm='천연 사과주스')
+        issues = check_forbidden_phrases(label)
+        self.assertTrue(issues)
+        self.assertIn('prdlst_nm', issues[0]['fields'])
+
+    def test_묶어도_필드가_남는다(self):
+        from v1.label.services.ai_validation_service import group_issues_by_category
+        from v1.label.services.validation_service import _issue
+
+        rows = group_issues_by_category([_issue('recycling_mark', '어긋남', '고치세요')])
+        row = next(r for r in rows if not r['ok'])
+        self.assertEqual(row['fields'], ['frmlc_mtrqlt'])
+
+    def test_줄이_없는_지적도_있다(self):
+        """글자 크기는 표 설정이지 표의 한 줄이 아니다."""
+        from v1.label.services.validation_service import _issue
+
+        self.assertEqual(_issue('font_size', '작습니다')['fields'], [])
+
+    def test_표의_행이_자기_이름을_안다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        js = (Path(dj.BASE_DIR) / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.assertIn('tr.dataset.fieldRow = fieldKey', js)
+        self.assertIn('function markValidationOnTable', js)
+        self.assertIn('function jumpToTableRow', js)
+
+
+class FontSizeCheckTests(TestCase):
+    """
+    활자 크기 검사.
+
+    서버 검증이 생기면서 통째로 빠져 있었다 — 규정 도구가 규정 하나를 아예 안
+    보고 있었다. 화면 하한(enforceInputMinMax)은 타이핑할 때만 도는 것이라
+    예전에 저장해 둔 작은 값은 그대로 남는다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='font', password='x')
+
+    def _label(self, size):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='글자',
+                                      prv_font_size=size)
+
+    def test_하한보다_작으면_지적한다(self):
+        from v1.label.services.validation_service import check_font_size
+
+        issues = check_font_size(self._label('8'))
+        self.assertEqual(len(issues), 1)
+        self.assertIn('8 포인트', issues[0]['message'])
+        self.assertIn('10 포인트', issues[0]['message'])
+
+    def test_하한_이상이면_조용하다(self):
+        from v1.label.services.validation_service import check_font_size
+
+        self.assertEqual(check_font_size(self._label('10')), [])
+        self.assertEqual(check_font_size(self._label('12')), [])
+
+    def test_설정한_적_없으면_보지_않는다(self):
+        """저장한 적 없는 값을 근거로 지적하면 고칠 방법이 없는 경고가 된다."""
+        from v1.label.services.validation_service import check_font_size
+
+        self.assertEqual(check_font_size(self._label('')), [])
+
+    def test_전체_검증에_들어_있다(self):
+        from v1.label.services.validation_service import validate_label
+
+        result = validate_label(self._label('7'))
+        self.assertIn('font_size', [i['category'] for i in result['issues']])
+        self.assertTrue(any('활자 크기' in r for r in result['checked_regulations']))
+
+class DisplayCheckMigrationTests(TestCase):
+    """
+    0023 — 지금까지 인쇄되던 줄을 표시 항목 체크에 옮겨 적는다.
+
+    표에 줄이 생기는 기준이 "값이 있는가" 에서 "체크가 켜졌는가" 로 바뀌었다.
+    그런데 체크박스 기본값은 원산지·보관방법·유통전문판매원·소분원·수입원·
+    기타표시사항이 전부 'N' 이라, 그대로 두면 이미 만들어 둔 라벨에서 그 줄들이
+    말없이 사라진다. 이 마이그레이션이 그 구멍을 막는다.
+
+    (테스트는 마이그레이션을 실행하지 않으므로 — settings_test 참고 — 함수를
+    직접 부른다. 판정 논리가 여기 있고, 그것이 검사할 값어치가 있는 부분이다.)
+    """
+
+    def setUp(self):
+        import importlib
+
+        self.migration = importlib.import_module(
+            'v1.label.migrations.0023_display_check_matches_printed_rows')
+        self.user = User.objects.create_user(username='mig', password='x')
+
+    def _run(self):
+        class Apps:
+            def get_model(self, app_label, model_name):
+                return MyLabel
+
+        self.migration.turn_on_checks_for_filled_fields(Apps(), None)
+
+    def test_값이_있는데_꺼진_체크를_켠다(self):
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='이관',
+            country_of_origin='국내산', chckd_country_of_origin='N',
+            additional_info='부정불량식품 신고 1399', chckd_additional_info='N',
+        )
+        self._run()
+        label.refresh_from_db()
+        self.assertEqual(label.chckd_country_of_origin, 'Y')
+        self.assertEqual(label.chckd_additional_info, 'Y')
+
+    def test_원재료명은_참고_칸도_본다(self):
+        """V2 기본정보 탭과 BOM 은 참고 쪽에 쓰는데 인쇄물에는 나온다."""
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='원재료',
+            rawmtrl_nm='밀가루(밀:미국산), 설탕', rawmtrl_nm_display='',
+            chckd_rawmtrl_nm_display='N',
+        )
+        self._run()
+        label.refresh_from_db()
+        self.assertEqual(label.chckd_rawmtrl_nm_display, 'Y')
+
+    def test_켜졌는데_빈_항목은_끄지_않는다(self):
+        """그쪽은 "아직 안 채웠다" 는 뜻이고, 미리보기가 빈 줄로 보여 줄 몫이다."""
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='미입력',
+            storage_method='', chckd_storage_method='Y',
+        )
+        self._run()
+        label.refresh_from_db()
+        self.assertEqual(label.chckd_storage_method, 'Y')
+
+    def test_값이_없으면_켜지_않는다(self):
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='빈 라벨')
+        self._run()
+        label.refresh_from_db()
+        self.assertEqual(label.chckd_country_of_origin, 'N')
+
+    def test_영양성분을_적어_둔_라벨은_켠다(self):
+        """
+        이쪽은 "지금 인쇄되던 것" 이 아니다 — 영양정보 표를 그릴 자리가 화면에
+        아예 없어서 어디에도 나오지 않고 있었다. 값을 넣은 사람은 라벨에 나올
+        것으로 알고 넣었다.
+        """
+        label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='영양',
+            calories='318', natriums='230', chckd_nutrition_text='N',
+        )
+        self._run()
+        label.refresh_from_db()
+        self.assertEqual(label.chckd_nutrition_text, 'Y')
+
+    def test_영양성분이_없으면_켜지_않는다(self):
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='무영양')
+        self._run()
+        label.refresh_from_db()
+        self.assertEqual(label.chckd_nutrition_text, 'N')
+
+    def test_목록이_서버_상수와_같다(self):
+        """한쪽만 고쳐지면 새 항목이 이관에서 조용히 빠진다."""
+        from v1.label.constants import PREVIEW_DISPLAY_FIELDS
+
+        self.assertEqual(tuple(self.migration.FIELDS), PREVIEW_DISPLAY_FIELDS)

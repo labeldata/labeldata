@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 INGREDIENT_SEARCH_LIMIT = 50
 
 from .services import additive_search, list_sort
-from .constants import CATEGORY_CHOICES
+from .constants import CATEGORY_CHOICES, preview_display_checked, preview_display_data
 from .forms import LabelCreationForm, MyIngredientsForm
 from v1.label.services import product_search
 from .models import (AgriculturalProduct, CountryList, FoodAdditive, FoodItem, 
@@ -2341,8 +2341,6 @@ def preview_popup(request):
             ('additional_info', '기타표시사항')
         ]
 
-        label_data = {}
-
         for field, label_text in field_mappings:
             value = getattr(label, field)
             if value:
@@ -2355,12 +2353,18 @@ def preview_popup(request):
                     'label': label_text,
                     'value': value
                 })
-                label_data[field] = value
+
+        # 표에 그릴 값. **표시 항목 체크가 켜진 것만** 담는다.
+        #
+        # 예전에는 위 목록에서 값이 있는 것을 그대로 썼다. 그래서 끈 항목이
+        # 인쇄되고(체크 기본값이 'N' 인 원산지·보관방법 등), 라벨명이나
+        # 원재료명(참고)처럼 인쇄 대상이 아닌 값까지 줄이 됐다. 규정 검증은
+        # 체크를 근거로 판정하므로 두 화면이 서로 다른 말을 하고 있었다.
+        label_data = preview_display_data(label, format_cautions_text)
 
         # 영양성분 정보 구성
         nutrition_items = []
         if label.nutrition_text:
-            label_data['nutrition_text'] = label.nutrition_text
             nutrition_fields = [
                 ('calories', '열량', 'kcal'),
                 ('natriums', '나트륨', 'mg'),
@@ -2473,6 +2477,10 @@ def preview_popup(request):
             'expiry_recommendation_json': json.dumps(get_expiry_recommendations(), ensure_ascii=False),  # 소비기한 권장 데이터 추가
             'custom_fields': json.dumps(custom_fields, ensure_ascii=False),  # 맞춤항목 추가
             'label_data': json.dumps(label_data, ensure_ascii=False),
+            # 표의 항목 배치(순서·폭·세로/2단). 라벨에 붙어 있어야 다른 사람도
+            # 같은 모양을 본다 — 예전에는 브라우저 localStorage 에만 있었다.
+            'display_checked': json.dumps(preview_display_checked(label), ensure_ascii=False),
+            'field_layout': json.dumps(label.prv_field_layout or {}, ensure_ascii=False),
             'is_owner': is_owner,          # 설정 저장 버튼 표시 여부 결정
             'can_upload_pdf': can_upload_pdf,  # PDF 문서함 업로드 버튼 표시 여부
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
@@ -2583,6 +2591,10 @@ def label_tab_json(request):
             'success': True,
             'label_name': label.my_label_name or label.prdlst_nm or '',
             'preview_items': preview_items,
+            # 표에 나갈 줄. 화면에 표시 항목 체크가 있으면 그쪽이 우선이지만
+            # (저장 전 상태까지 보여야 한다), 없을 때 기댈 자리가 필요하다.
+            'display_data': preview_display_data(label, format_cautions_text),
+            'display_checked': preview_display_checked(label),
             'nutrition_items': nutrition_items,
             'nutrition_serving_size': label.serving_size or '',
             'nutrition_serving_unit': label.serving_size_unit or 'g',
@@ -2664,7 +2676,25 @@ def save_preview_settings(request):
         label.prv_font_size = data.get('font_size')
         label.prv_letter_spacing = data.get('letter_spacing')
         label.prv_line_spacing = data.get('line_spacing')
-        
+
+        # 표의 항목 배치. 보내지 않으면 건드리지 않는다 — 설정 창만 만진
+        # 저장에서 순서가 초기화되면 인쇄물의 모양이 조용히 달라진다.
+        layout = data.get('field_layout')
+        if isinstance(layout, dict):
+            try:
+                column_mm = float(layout.get('labelColumnMm') or 24)
+            except (TypeError, ValueError):
+                column_mm = 24
+            label.prv_field_layout = {
+                'order': [str(k) for k in (layout.get('order') or [])],
+                'width': {str(k): str(v) for k, v in (layout.get('width') or {}).items()},
+                'customVisibility': {str(k): bool(v)
+                                     for k, v in (layout.get('customVisibility') or {}).items()},
+                'layoutMode': layout.get('layoutMode') or 'vertical',
+                'labelColumnMm': min(60.0, max(10.0, column_mm)),
+            }
+
+
         # 분리배출마크 정보 저장 (첫 번째 마크만)
         recycling_mark = data.get('recycling_mark', {})
         if recycling_mark:

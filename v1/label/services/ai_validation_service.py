@@ -462,7 +462,11 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
     def blank(label):
         # evidence — 그 지적의 근거가 각 칸에 어떻게 적혀 있는지. 화면이 표로 그린다.
         # 메시지에 다 담으면 문장이 길어지고, 무엇이 어느 칸의 값인지 흐려진다.
-        return {'label': label, 'ok': True, 'errors': [], 'suggestions': [], 'evidence': []}
+        # fields — 그 지적이 표시사항의 어느 줄에 대한 말인지. 화면이 표의 그
+        # 행에 표시를 얹고, 지적을 누르면 그 행으로 데려간다. 없으면 빈 목록이고
+        # 그때는 목록으로만 보여 준다(예: 글자 크기는 표의 한 줄이 아니다).
+        return {'label': label, 'ok': True, 'errors': [], 'suggestions': [],
+                'evidence': [], 'fields': []}
 
     grouped: dict[str, dict] = {}
     for code, label in _CATEGORY_LABELS.items():
@@ -480,6 +484,9 @@ def group_issues_by_category(issues: list[dict]) -> list[dict]:
         if issue.get('evidence'):
             row['evidence'].append({'title': issue.get('evidence_title', ''),
                                     'rows': issue['evidence']})
+        for field in issue.get('fields') or ():
+            if field not in row['fields']:
+                row['fields'].append(field)
 
     # 검증하지 않은 항목(예: 원재료 순서 - percent 정보 부족)은 목록에서 제외해
     # "적합"으로 오인되지 않게 한다. 호출부에서 checked 플래그로 별도 안내.

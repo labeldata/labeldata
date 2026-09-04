@@ -225,3 +225,57 @@ RECYCLING_MARK_MATERIAL_KEYWORDS = {
     '비닐(기타)': ['비닐', '기타', 'other', 'pe', '폴리에틸렌', '필름', 'film',
                    'ny', '나일론', 'pa'],
 }
+
+# 표시사항 표에 인쇄되는 항목. 인쇄 순서와 같다.
+#
+# **표에 줄이 생기는 기준은 표시 항목 체크(chckd_*) 하나뿐이다.** 예전에는
+# "값이 있으면 나간다" 였는데, 규정 검증은 체크를 근거로 판정해서 두 화면이
+# 서로 다른 말을 했다 — 끈 항목이 인쇄되고, 켠 항목이 비어 있어도 아무 데도
+# 안 보였다.
+#
+# 여기 없는 값은 인쇄 대상이 아니다.
+#   my_label_name  라벨명은 내부에서 부르는 이름이지 라벨에 찍는 글자가 아니다
+#   rawmtrl_nm     원재료명(참고). 인쇄되는 것은 rawmtrl_nm_display 쪽이다
+#   nutrition_text 영양성분은 별도 표로 그린다 (chckd_nutrition_text 는 표시
+#                  여부와 규정 검증에만 쓰인다)
+PREVIEW_DISPLAY_FIELDS = (
+    'prdlst_dcnm', 'prdlst_nm', 'ingredient_info', 'content_weight',
+    'weight_calorie', 'prdlst_report_no', 'country_of_origin',
+    'storage_method', 'frmlc_mtrqlt', 'bssh_nm', 'distributor_address',
+    'repacker_address', 'importer_address', 'pog_daycnt',
+    'rawmtrl_nm_display', 'cautions', 'additional_info',
+)
+
+
+def preview_display_data(label, format_text=None):
+    """
+    표시사항 표에 넘길 {필드: 값}. 인쇄 대상 항목 **전부**를 담는다.
+
+    끈 항목의 값도 함께 보낸다 — 미리보기의 항목 목록에서 다시 켤 수 있어야
+    하고, 켜는 순간 무엇이 인쇄될지 그 자리에서 보여야 한다. 무엇이 실제로
+    표에 나가는지는 preview_display_checked 가 정한다.
+
+    원재료명(표시)이 비면 원재료명(참고)로 갈음한다. V2 기본정보 탭과 BOM
+    "기본정보로 복사" 가 참고 쪽에 쓰는데, 인쇄물에는 한 줄로 나가야 한다.
+    """
+    data = {}
+    for field in PREVIEW_DISPLAY_FIELDS:
+        value = getattr(label, field, '') or ''
+        if field == 'rawmtrl_nm_display' and not value:
+            value = getattr(label, 'rawmtrl_nm', '') or ''
+        if value and format_text and field in ('cautions', 'additional_info'):
+            value = format_text(value)
+        data[field] = value
+    return data
+
+
+# 표의 줄은 아니지만 같은 스위치로 켜고 끄는 것. 영양성분은 표 아래 별도
+# 블록(영양정보 표)으로 그려진다 — 자리는 다르지만 "인쇄할까" 를 정하는
+# 스위치는 chckd_nutrition_text 하나여야 한다.
+PREVIEW_EXTRA_CHECK_FIELDS = ('nutrition_text',)
+
+
+def preview_display_checked(label):
+    """{필드: 표시 항목 체크가 켜졌는가}. 미리보기에 무엇이 나갈지의 유일한 기준."""
+    return {field: (getattr(label, f'chckd_{field}', '') or '') == 'Y'
+            for field in PREVIEW_DISPLAY_FIELDS + PREVIEW_EXTRA_CHECK_FIELDS}

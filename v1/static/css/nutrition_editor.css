@@ -280,3 +280,26 @@ body {
     padding: 0;
     flex-shrink: 0;
 }
+
+/* 영양성분 PDF 안내 — PDF 는 표시사항 미리보기 한 곳에서만 만든다 */
+.nutrition-pdf-note {
+    margin: 0 0 8px;
+    padding: 8px 10px;
+    border: 1px solid #b3d9ff;
+    border-radius: 6px;
+    background: #e7f3ff;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #202124;
+}
+
+.nutrition-pdf-note .btn-link {
+    font-size: 12px;
+}
+
+.nutrition-pdf-note-off {
+    display: block;
+    margin-top: 4px;
+    color: #c5221f;
+    font-weight: 600;
+}

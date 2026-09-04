@@ -31,9 +31,10 @@
     </div>
     <div class="preview-actions" role="toolbar" aria-label="미리보기 도구">
       <div class="zoom-controls">
-        <button class="btn btn-outline-secondary btn-sm" id="zoomOutBtn" aria-label="축소"><i class="fas fa-search-minus"></i></button>
-        <span id="zoomDisplay">100%</span>
-        <button class="btn btn-outline-secondary btn-sm" id="zoomInBtn" aria-label="확대"><i class="fas fa-search-plus"></i></button>
+        <button class="btn btn-outline-secondary btn-sm" id="zoomOutBtn" aria-label="축소" title="축소 (Ctrl + 휠)"><i class="fas fa-search-minus"></i></button>
+        <button class="btn btn-link btn-sm zoom-value" id="zoomResetBtn" aria-label="배율 100%로" title="누르면 100% 로 되돌립니다"><span id="zoomDisplay">100%</span></button>
+        <button class="btn btn-outline-secondary btn-sm" id="zoomInBtn" aria-label="확대" title="확대 (Ctrl + 휠)"><i class="fas fa-search-plus"></i></button>
+        <button class="btn btn-outline-secondary btn-sm zoom-fit" id="zoomFitBtn" aria-label="창에 맞추기" title="창 너비에 맞춥니다">맞춤</button>
       </div>
       {% if not request.GET.readonly %}
       <button class="btn btn-outline-secondary btn-sm" id="ruleValidationBtn" aria-label="규정 검증" title="AI 없이 규정 검증 (무료·무제한)">
@@ -114,10 +115,15 @@
           </div>
           <div class="settings-row">
             <label class="form-label" for="fontSizeInput" style="font-size: 0.85rem; font-weight: 600;">기본 글자 크기 (pt)</label>
-            <input type="number" class="form-control form-control-sm" id="fontSizeInput" value="10" min="7" max="72" step="0.5">
+            <input type="number" class="form-control form-control-sm" id="fontSizeInput" value="10" min="10" max="72" step="0.5">
           </div>
         </div>
         <div class="settings-row-pair">
+          <div class="settings-row">
+            <label class="form-label" for="labelColWidthInput" style="font-size: 0.85rem; font-weight: 600;">항목명 칸 (mm)</label>
+            <input type="number" class="form-control form-control-sm" id="labelColWidthInput" value="24" min="10" max="60" step="1"
+                   title="'유통전문판매원' 처럼 긴 이름이 접히면 표 높이가 늘어납니다. 그때 넓히세요.">
+          </div>
           <div class="settings-row">
             <label class="form-label" for="letterSpacingInput" style="font-size: 0.85rem; font-weight: 600;">자간 (%)</label>
             <input type="number" class="form-control form-control-sm" id="letterSpacingInput" value="-5" min="-20" max="20" step="1">
@@ -147,15 +153,14 @@
               <i class="fas fa-columns"></i>
               <span>2단배치</span>
             </button>
-            <button class="layout-btn" data-layout="grid">
-              <i class="fas fa-th"></i>
-              <span>가로형</span>
-            </button>
+            {# "가로형"(grid) 은 뺐다 — 그리는 코드가 없어서 누르면 세로로 되돌아왔다 #}
           </div>
         </div>
         
         <p style="font-size: 0.75rem; color: #666; margin-bottom: 0.5rem;">
-          드래그 또는 버튼으로 순서 변경, 눈 아이콘으로 표시/숨김
+          드래그 또는 버튼으로 순서 변경, 눈 아이콘으로 표시/숨김.
+          <br>눈 아이콘은 <strong>표시 항목 체크</strong>와 같은 스위치입니다 —
+          끄면 인쇄되지 않고 규정 검증에서도 빠집니다.
         </p>
         
         <div class="mb-2" style="display: flex; gap: 4px;">
@@ -232,12 +237,27 @@
         <input type="hidden" name="label_id" value="{{ label.my_label_id }}">
         <input type="hidden" id="update_datetime" name="update_datetime" value="{{ label.update_datetime|date:'Y-m-d H:i' }}">
 
+        {% comment %}
+          표 위 한 줄 요약. 표에 무엇이 부족한지를 표 안에서만 알리면, 항목이
+          많은 라벨에서는 빈 줄을 놓치고 그대로 인쇄한다. 화면 전용이라
+          PDF 에는 들어가지 않는다(.pv-exporting).
+        {% endcomment %}
+        <div id="previewSummary" class="pv-summary" hidden></div>
+
         <table class="preview-table">
           <tbody id="previewTableBody" class="layout-vertical">
              <!-- Data will be rendered here by JavaScript -->
           </tbody>
         </table>
         
+        {% comment %}
+          영양정보 표. 표 아래에 붙는 별도 블록이라 previewTable 과 자리가 다르다.
+          #previewContent 안에 있으므로 PDF 로 뽑을 때 함께 캡처된다.
+          지금까지 이 자리가 아예 없어서, 표를 만드는 코드(updateNutritionDisplay)가
+          멀쩡히 있는데도 영양성분은 미리보기에도 PDF 에도 나오지 않았다.
+        {% endcomment %}
+        <div id="nutritionPreview" class="nutrition-preview" style="display:none;"></div>
+
         <div class="footer-text">
           ezlabeling.com 에서 관련법규에 따라 작성되었습니다.
           <span class="creator-info">[{{ label.update_datetime|date:"Y-m-d H:i" }}]</span>
@@ -270,6 +290,10 @@
   <script id="allergens-data" type="application/json">{{ allergens|safe }}</script>
   <script id="custom-fields-data" type="application/json">{{ custom_fields|safe }}</script>
     <script id="label-data" type="application/json">{{ label_data|safe }}</script>
+  {# 표에 줄이 생기는 기준. 값이 아니라 표시 항목 체크가 정한다. #}
+  <script id="display-checked-data" type="application/json">{{ display_checked|safe }}</script>
+  {# 표의 항목 배치(순서·폭·세로/2단). 라벨에 붙어 있다. #}
+  <script id="field-layout-data" type="application/json">{{ field_layout|safe }}</script>
   <script>
     // 백엔드 알레르기 데이터를 전역 변수로 설정
     try {
@@ -304,7 +328,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <!-- Label Preview JS -->
-  <script src="{% static 'js/label/label_preview.js' %}?v=85.5"></script>
+  <script src="{% static 'js/label/label_preview.js' %}?v=86.0"></script>
 
   <!-- 구글 스타일 Snackbar -->
   <div id="previewSnackbar" style="
@@ -670,60 +694,39 @@
                 table.style.width = '100%';
                 table.style.borderCollapse = 'collapse';
                 
-                // 인라인 스타일 추가로 첫 번째 열 너비 강제 고정
-                if (!document.getElementById('label-preview-column-style')) {
-                    const style = document.createElement('style');
-                    style.id = 'label-preview-column-style';
-                    style.textContent = `
-                        #previewContent table th:first-child,
-                        #previewContent table td:first-child,
-                        #previewContent .label-preview-first-column {
-                            width: 90px !important;
-                            min-width: 90px !important;
-                            max-width: 90px !important;
-                            overflow: visible !important;
-                            text-overflow: clip !important;
-                            white-space: nowrap !important;
-                            word-break: keep-all !important;
-                            padding: 2px 4px !important;
-                            box-sizing: border-box !important;
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
+                /* 열 너비는 <colgroup> 이 정한다 (applyColumnGroup).
+                   예전에는 여기서 th:first-child, td:first-child 에 90px 를
+                   !important 로 박았다. 2단 배치가 4열이 되면서 그 선택자는
+                   "왼쪽 값 칸" 까지 90px 로 눌러 버린다. */
             });
             
             const elementsToStyle = previewContent.querySelectorAll('th, td, .header-text, .footer-text');
             elementsToStyle.forEach(el => {
+                // 영양정보 표 아래의 안내 문구는 본문 활자가 아니다
+                if (el.classList.contains('nutrition-preview-footer-inside')) return;
                 el.style.fontSize = `${fontSizePt}pt`;
                 el.style.fontFamily = fontFamily;
                 el.style.letterSpacing = `${letterSpacingPercent / 100}em`;
                 el.style.lineHeight = lineHeight;
             });
             
-            // 항목명 열(첫 번째 열) 너비를 절대값으로 고정 - CSS 덮어쓰기 방지
-            const firstColumnCells = previewContent.querySelectorAll('th:first-child, td:first-child');
-            const fixedWidth = '90px'; // 가로사이즈 12cm일 때 7글자가 잘 보이는 고정 너비
-            firstColumnCells.forEach(cell => {
-                // 특별한 클래스 추가로 CSS 우선순위 확보
-                cell.classList.add('label-preview-first-column');
-                
-                // CSS 변수로 설정하여 다른 스타일 영향 차단
-                cell.style.cssText += `
-                    --column-width: ${fixedWidth};
-                    width: var(--column-width) !important;
-                    min-width: var(--column-width) !important;
-                    max-width: var(--column-width) !important;
-                    overflow: visible !important;
-                    text-overflow: clip !important;
-                    white-space: nowrap !important;
-                    word-break: keep-all !important;
-                    padding: 2px 4px !important;
-                    box-sizing: border-box !important;
-                    flex-shrink: 0 !important;
-                `;
+            /* 항목명 칸의 너비.
+               예전에는 90px 하드코딩이었다("가로 12cm 일 때 7글자"). 그런데
+               "유통전문판매원" 처럼 긴 이름은 접히면서 표 높이를 늘리고,
+               반대로 짧은 이름만 쓰는 라벨에서는 값 칸을 잡아먹는다.
+               사용자가 정하게 두고 그 값은 라벨에 저장한다. 실제로 열에
+               먹이는 일은 colgroup 이 한다. */
+            const colMm = parseFloat(document.getElementById('labelColWidthInput')?.value) || 24;
+            previewContent.style.setProperty('--label-col-width',
+                `${(colMm / 10 * CM_TO_PX).toFixed(1)}px`);
+
+            /* 항목명은 줄바꿈하지 않는다 — 접히면 표 높이가 늘어난다.
+               너비는 건드리지 않는다(colgroup 의 몫). */
+            previewContent.querySelectorAll('.preview-table th').forEach(cell => {
+                cell.style.whiteSpace = 'nowrap';
+                cell.style.wordBreak = 'keep-all';
             });
-            
+
             // 복합재질 텍스트 기본 스타일 적용
             const recyclingTextElements = previewContent.querySelectorAll('.recycling-text-line');
             recyclingTextElements.forEach(el => {
@@ -1276,10 +1279,46 @@
             });
         }
         
+        /*
+         * 확대/축소. 10 pt 실물 크기로 그리기 때문에 화면에서 읽기가 어렵다.
+         *
+         * 배율은 화면에서 보기 위한 것일 뿐이라 저장하지 않는다. PDF 를 뽑을
+         * 때는 label_preview.js 가 resetPreviewZoom() 으로 1 로 되돌린 뒤
+         * 캡처하고 restorePreviewZoom() 으로 돌려놓는다 — 확대해 둔 채로
+         * 뽑으면 인쇄물이 흐려진다.
+         */
+        const ZOOM_MIN = 0.5, ZOOM_MAX = 2;
+
         function updateZoom() {
             previewContent.style.transform = `scale(${currentZoom})`;
-            document.getElementById('zoomDisplay').textContent = `${Math.round(currentZoom * 100)}%`;
+            const display = document.getElementById('zoomDisplay');
+            if (display) display.textContent = `${Math.round(currentZoom * 100)}%`;
         }
+
+        function setZoom(value) {
+            currentZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+            updateZoom();
+        }
+
+        /* 창 너비에 맞춘다. 원재료명이 긴 라벨은 100% 로는 옆이 잘려 보인다. */
+        function fitZoomToPanel() {
+            const panel = previewContent.parentElement;
+            if (!panel) return;
+            const available = panel.clientWidth - 40;              // .preview-panel 의 좌우 여백
+            const natural = previewContent.offsetWidth || 1;       // 배율을 뺀 실제 너비
+            if (available > 0 && natural > 0) setZoom(available / natural);
+        }
+
+        let _zoomBeforeExport = null;
+        window.resetPreviewZoom = function () {
+            _zoomBeforeExport = currentZoom;
+            previewContent.style.transform = 'scale(1)';
+        };
+        window.restorePreviewZoom = function () {
+            if (_zoomBeforeExport !== null) currentZoom = _zoomBeforeExport;
+            _zoomBeforeExport = null;
+            updateZoom();
+        };
     
         function resetSettings() {
             widthInput.value = DEFAULT_SETTINGS.width;
@@ -1733,90 +1772,10 @@
             tbody.innerHTML = rowsHtml;
         }
     
-        async function exportToPDF() {
-            const pdfBtn = document.getElementById('exportPdfBtn');
-            if (pdfBtn) { pdfBtn.disabled = true; pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>PDF 생성 중...'; }
-            try {
-                // PDF 저장 로깅
-                const urlParams = new URLSearchParams(window.location.search);
-                const labelId = urlParams.get('label_id');
-                if (labelId) {
-                    try {
-                        await fetch('/label/log-pdf-save/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': getCookie('csrftoken')
-                            },
-                            body: JSON.stringify({ 
-                                label_id: labelId,
-                                source: 'preview'
-                            })
-                        });
-                    } catch (logError) {
-                        console.warn('로깅 실패:', logError);
-                    }
-                }
-
-                previewContent.style.transform = 'scale(1)';
-                const { jsPDF } = window.jspdf;
-                const canvas = await html2canvas(previewContent, { scale: 3, useCORS: true });
-                const imgData = canvas.toDataURL('image/png');
-                const widthCm  = parseFloat(widthInput.value);
-                const heightCm = parseFloat(heightInput.value.replace(' cm', ''));
-                const orientation = widthCm > heightCm ? 'l' : 'p';
-                const pdf = new jsPDF(orientation, 'cm', [widthCm, heightCm]);
-                pdf.addImage(imgData, 'PNG', 0, 0, widthCm, heightCm);
-
-                const productName = checkedFields.prdlst_nm || 'label';
-                const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-                const filename = `한글표시사항_${productName}_${date}.pdf`;
-
-                // 로컬 다운로드
-                pdf.save(filename);
-
-                // 서버 업로드 (문서함 등록) 라벨ID가 있는 경우만
-                if (labelId) {
-                    try {
-                        if (pdfBtn) { pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>문서함 등록 중...'; }
-
-                        const pdfBlob = pdf.output('blob');
-                        const formData = new FormData();
-                        formData.append('label_id', labelId);
-                        formData.append('pdf_file', pdfBlob, filename);
-
-                        const uploadRes = await fetch('/label/upload-label-pdf/', {
-                            method: 'POST',
-                            headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                            body: formData,
-                        });
-                        const uploadJson = await uploadRes.json();
-
-                        if (uploadJson.success) {
-                            const msg = uploadJson.updated
-                                ? `문서함에 한글표시사항도안이 업데이트되었습니다. (버전 ${uploadJson.version})`
-                                : '문서함에 한글표시사항도안이 등록되었습니다.';
-                            showPreviewToast(msg, 'success');
-                        } else {
-                            console.warn('문서함 등록 실패:', uploadJson.error);
-                            showPreviewToast('문서함 등록 실패: ' + (uploadJson.error || ''), 'warning');
-                        }
-                    } catch (uploadErr) {
-                        console.warn('문서함 업로드 에러:', uploadErr);
-                        showPreviewToast('문서함 등록 중 오류가 발생했습니다.', 'warning');
-                    }
-                } else {
-                    // label_id 없는 경우(팝업 직접 열기 등)는 다운로드 성공만 알림
-                    showPreviewToast('PDF가 저장되었습니다.', 'success');
-                }
-            } catch (error) {
-                console.error('PDF generation error:', error);
-                showPreviewToast('PDF 생성 중 오류가 발생했습니다.', 'error');
-            } finally {
-                updateZoom();
-                if (pdfBtn) { pdfBtn.disabled = false; pdfBtn.innerHTML = '<i class="fas fa-file-arrow-down me-1"></i>PDF 저장'; }
-            }
-        }
+        /* exportToPDF 는 label_preview.js 로 옮겼다.
+           같은 이름의 함수가 이 파일과 그 파일에 하나씩 있었고 **둘 다 같은
+           버튼에 붙어서**, PDF 저장을 한 번 누르면 두 개가 내려받아졌다.
+           크기 계산도 서로 달랐다(cm + 입력값 / pt + scrollHeight). */
 
         // 현재 분리배출마크 정보 수집 (개선된 버전)
         // 현재 분리배출마크 정보 수집 (다중 마크 지원)
@@ -1897,119 +1856,11 @@
         }
 
         // 설정 저장
-        function savePreviewSettings() {
+        /* savePreviewSettings 도 같은 이유로 label_preview.js 에만 둔다.
+           둘이 같은 버튼에 붙어 저장 요청이 두 번 나갔고, 이쪽 사본은
+           layout 을 'vertical' 로 못박고 항목 배치를 보내지 않아서
+           나중에 도착하는 쪽이 이기는 상태였다. */
 
-            
-            // labelId 찾기 시도 1: input 필드에서
-            const labelInput = document.querySelector('input[name="label_id"]');
-
-            const labelId = labelInput?.value;
-
-            
-            // labelId 찾기 시도 2: URL에서
-            let finalLabelId = labelId;
-            if (!finalLabelId) {
-                const urlParams = new URLSearchParams(window.location.search);
-                finalLabelId = urlParams.get('label_id');
-
-            }
-            
-            if (!finalLabelId) {
-                console.error('label_id를 찾을 수 없습니다. input:', labelInput, 'URL params:', new URLSearchParams(window.location.search).toString());
-                alert('라벨 ID를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
-                return;
-            }
-            
-
-
-            // 분리배출마크 정보 수집
-
-            const recyclingMarkInfo = getCurrentRecyclingMarkInfo();
-
-
-
-            // 세로 길이는 "22.6 cm" 형식이므로 숫자 부분만 추출
-            const heightValue = document.getElementById('heightInput')?.value || '10';
-            const heightNumber = parseFloat(heightValue.replace(/[^0-9.-]/g, '')) || 10;
-            
-            const data = {
-                label_id: finalLabelId,
-                layout: 'vertical', // 레이아웃은 항상 세로형으로 고정
-                width: parseFloat(widthInput?.value) || 10,
-                length: heightNumber,
-                font: document.getElementById('fontFamilySelect')?.value || "'Noto Sans KR'",
-                font_size: parseFloat(fontSizeInput?.value) || 10,
-                letter_spacing: parseInt(letterSpacingInput?.value) || -5,
-                line_spacing: parseFloat(document.getElementById('lineHeightInput')?.value) || 1.2,
-                recycling_mark: recyclingMarkInfo
-            };
-            
-            const csrfToken = getCookie('csrftoken') || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-
-
-            fetch('/label/save_preview_settings/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify(data)
-            })
-            .then(res => {
-
-                return res.json();
-            })
-            .then(res => {
-
-                if (res.success) {
-                    // 설정 저장 로깅
-                    if (typeof window.logPreviewAction === 'function') {
-                        window.logPreviewAction('preview_settings_save');
-                    }
-
-                    // 성공 메시지 표시
-                    const saveBtn = document.getElementById('saveSettingsBtn');
-                    if (saveBtn) {
-                        const originalText = saveBtn.innerHTML;
-                        saveBtn.innerHTML = '<i class="fas fa-check me-1"></i>저장완료';
-                        saveBtn.classList.remove('btn-outline-success');
-                        saveBtn.classList.add('btn-success');
-                        saveBtn.disabled = false;
-                        setTimeout(() => {
-                            saveBtn.innerHTML = originalText;
-                            saveBtn.classList.remove('btn-success');
-                            saveBtn.classList.add('btn-outline-success');
-                        }, 2000);
-                    }
-                    showPreviewToast('미리보기 설정이 저장되었습니다.', 'success');
-                    if (window.parent && window.parent !== window) {
-                        window.parent.postMessage({ type: 'previewSettingsSaved' }, '*');
-                    }
-                } else if (res.reason === 'not_owner') {
-                    // 공유 사용자는 설정 저장 불가 (정상 흐름)
-                    showPreviewToast('설정 저장은 라벨 소유자만 가능합니다.', 'warning');
-                    const saveBtn = document.getElementById('saveSettingsBtn');
-                    if (saveBtn) { saveBtn.disabled = false; }
-                } else {
-                    showPreviewToast('설정 저장 실패: ' + (res.error || ''), 'error');
-                    const saveBtn = document.getElementById('saveSettingsBtn');
-                    if (saveBtn) {
-                        saveBtn.disabled = false;
-                        saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>설정 저장';
-                    }
-                }
-            })
-            .catch(err => {
-                console.error('저장 에러:', err);
-                showPreviewToast('설정 저장 에러: ' + err, 'error');
-                const saveBtn = document.getElementById('saveSettingsBtn');
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = '<i class="fas fa-save me-1"></i>설정 저장';
-                }
-            });
-        }
-    
         // 분리배출마크 복원 (첫 번째 마크만)
         function restoreRecyclingMark(markData) {
             if (!markData || !markData.enabled) {
@@ -2159,19 +2010,26 @@
                 });
                 document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
                 // aiValidationBtn/ruleValidationBtn 이벤트 리스너는 label_preview.js에서 처리
-                const saveBtn = document.getElementById('saveSettingsBtn');
-                if (saveBtn) {
-                    saveBtn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        savePreviewSettings();
-                    });
-                }
+                /* 설정 저장 버튼도 label_preview.js 가 붙인다 (중복 등록 방지) */
             }
             
-            // 줌 및 PDF 내보내기는 readonly 모드에서도 동작
-            document.getElementById('exportPdfBtn')?.addEventListener('click', exportToPDF);
-            document.getElementById('zoomInBtn')?.addEventListener('click', () => { currentZoom = Math.min(2, currentZoom + 0.1); updateZoom(); });
-            document.getElementById('zoomOutBtn')?.addEventListener('click', () => { currentZoom = Math.max(0.5, currentZoom - 0.1); updateZoom(); });
+            // 줌은 readonly 모드에서도 동작한다.
+            // (PDF 버튼은 label_preview.js 가 붙인다 — 여기서도 붙이면 두 번 돈다)
+            document.getElementById('zoomInBtn')?.addEventListener('click', () => { setZoom(currentZoom + 0.1); });
+            document.getElementById('zoomOutBtn')?.addEventListener('click', () => { setZoom(currentZoom - 0.1); });
+            document.getElementById('zoomResetBtn')?.addEventListener('click', () => { setZoom(1); });
+            document.getElementById('zoomFitBtn')?.addEventListener('click', fitZoomToPanel);
+
+            /* Ctrl + 휠. 브라우저 기본 확대는 설정 패널까지 함께 키워서
+               라벨과 화면 크기의 관계를 잃는다 — 라벨만 키운다. */
+            const previewPanel = document.querySelector('.preview-panel');
+            if (previewPanel) {
+                previewPanel.addEventListener('wheel', function (e) {
+                    if (!e.ctrlKey && !e.metaKey) return;
+                    e.preventDefault();
+                    setZoom(currentZoom + (e.deltaY < 0 ? 0.1 : -0.1));
+                }, { passive: false });
+            }
             
             if (isReadonly) return; // readonly 모드에서는 나머지 이벤트 리스너 건너뛰기
             
@@ -2336,7 +2194,21 @@
 
                 dataLoaded = true;
                 checkedFields = e.data.checked;
-                
+
+                /* 표시 항목 체크 상태.
+                   표시사항 작성 화면은 예전부터 **체크된 항목만** 값으로 보내
+                   왔으므로(openPreviewPopup), 따로 알려 주지 않으면 키가 있다는
+                   것 자체가 체크됐다는 뜻이다. 제품 화면은 켜 두고 비어 있는
+                   항목까지 구별해야 해서 displayChecked 를 함께 보낸다. */
+                if (e.data.displayChecked && typeof e.data.displayChecked === 'object') {
+                    window.displayChecked = e.data.displayChecked;
+                } else {
+                    window.displayChecked = {};
+                    Object.keys(checkedFields || {}).forEach(function (key) {
+                        window.displayChecked[key] = true;
+                    });
+                }
+
                 // 부모창에서 전달된 알레르기 데이터 저장 (전역)
                 if (e.data.allergens && Array.isArray(e.data.allergens) && e.data.allergens.length > 0) {
                     window.parentAllergens = e.data.allergens;
@@ -2376,6 +2248,16 @@
             }
         } catch (e) {
             initialLabelData = null;
+        }
+
+        /* 표에 줄이 생기는 기준. 값이 아니라 표시 항목 체크가 정한다. */
+        try {
+            const checkedScript = document.getElementById('display-checked-data');
+            if (checkedScript && checkedScript.textContent) {
+                window.displayChecked = JSON.parse(checkedScript.textContent) || {};
+            }
+        } catch (e) {
+            window.displayChecked = window.displayChecked || {};
         }
 
         if (initialLabelData && Object.keys(initialLabelData).length > 0) {
@@ -2458,9 +2340,6 @@
         
         // 저장된 설정 로드
         loadSavedPreviewSettings();
-        
-        // 부모 프레임(탭 내장된 미리보기)에서 저장 버튼 클릭 시 호출 가능하도록 window에 노출
-        window.savePreviewSettings = savePreviewSettings;
         
         // 페이지 로드 완료 후 최종 면적 계산
         setTimeout(() => {

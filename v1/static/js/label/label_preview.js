@@ -644,7 +644,6 @@ document.addEventListener('DOMContentLoaded', function () {
         letterSpacingInput: document.getElementById('letterSpacingInput'),
         lineHeightInput: document.getElementById('lineHeightInput'),
         areaDisplay: document.getElementById('areaDisplay'),
-        layoutSelect: document.getElementById('layoutSelect'),
         previewContent: document.getElementById('previewContent'),
         fontFamilySelect: document.getElementById('fontFamilySelect')
     };
@@ -1881,19 +1880,9 @@ document.addEventListener('DOMContentLoaded', function () {
                             const allergens = allergenMatch[1].trim();
                             const allergenDiv = document.createElement('div');
                             allergenDiv.textContent = `${allergens} 함유`;
-                            allergenDiv.style.cssText = `
-                                background-color: #000 !important;
-                                color: #fff !important;
-                                padding: 4px 8px;
-                                font-size: 9pt;
-                                font-weight: bold;
-                                text-align: right;
-                                margin-top: 4px;
-                                display: block;
-                                border-radius: 2px;
-                                word-wrap: break-word;
-                                overflow-wrap: break-word;
-                            `;
+                            // 스타일은 CSS 클래스가 갖는다 — 인라인 9pt 로 박으면
+                            // 글자 크기 설정을 올려도 이 줄만 그대로 남는다.
+                            allergenDiv.className = 'pv-allergen-box';
                             container.appendChild(allergenDiv);
                         }
 
@@ -1902,19 +1891,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             const gmo = gmoMatch[1].trim();
                             const gmoDiv = document.createElement('div');
                             gmoDiv.textContent = `${gmo}(GMO)`;
-                            gmoDiv.style.cssText = `
-                                background-color: #000 !important;
-                                color: #fff !important;
-                                padding: 4px 8px;
-                                font-size: 9pt;
-                                font-weight: bold;
-                                text-align: center;
-                                margin-top: 8px;
-                                display: inline-block;
-                                float: right;
-                                clear: both;
-                                border-radius: 2px;
-                            `;
+                            gmoDiv.className = 'pv-allergen-box pv-gmo-box';
                             container.appendChild(gmoDiv);
                         }
 
@@ -2015,8 +1992,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const recyclingMarkInfo = getCurrentRecyclingMarkInfo();
 
         // 입력 요소들 확인
+        //
+        // layoutSelect 는 없앴다. 템플릿에 그런 요소가 없어서 늘 폴백('vertical')이
+        // 저장됐고, 2단배치를 골라 두고 저장해도 세로로 되돌아왔다. 레이아웃은
+        // 배치 버튼이 쥐고 있는 fieldOrderData.layoutMode 가 답이다.
         const elements = {
-            layoutSelect: document.getElementById('layoutSelect'),
             widthInput: document.getElementById('widthInput'),
             heightInput: document.getElementById('heightInput'),
             fontFamilySelect: document.getElementById('fontFamilySelect'),
@@ -2025,9 +2005,15 @@ document.addEventListener('DOMContentLoaded', function () {
             lineHeightInput: document.getElementById('lineHeightInput')
         };
 
+        const fieldLayout = typeof window.getFieldLayoutForSave === 'function'
+            ? window.getFieldLayoutForSave() : null;
+
         const data = {
             label_id: labelId,
-            layout: elements.layoutSelect?.value || 'vertical',
+            layout: (fieldLayout && fieldLayout.layoutMode) || 'vertical',
+            // 항목 순서·폭·배치. 지금까지 이것만 브라우저에 남아서, 라벨을 옮기면
+            // 순서가 따라오지 않고 동료는 다른 모양을 봤다.
+            field_layout: fieldLayout,
             width: parseFloat(elements.widthInput?.value) || 10,
             length: parseFloat(elements.heightInput?.value) || 10,
             font: elements.fontFamilySelect?.value || "'Noto Sans KR'",
@@ -2645,74 +2631,116 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-    // PDF 저장
+    /*
+     * PDF 저장 — 내려받고, 문서함의 "한글표시사항도안" 으로도 등록한다.
+     *
+     * 이 함수는 **한 벌만 있어야 한다.** 예전에는 이 파일과 label_preview.html
+     * 인라인 스크립트에 같은 이름으로 둘이 있었고, 둘 다 같은 버튼에 붙어서
+     * 한 번 누르면 PDF 가 두 개 내려받아졌다. 크기 계산도 서로 달랐고
+     * (pt + scrollHeight / cm + 입력값), 문서함 등록은 한쪽에만 있었다.
+     * 인라인 쪽을 걷어내고 여기로 모았다.
+     */
     async function exportToPDF() {
+        const pdfBtn = document.getElementById('exportPdfBtn');
+        const previewContent = document.getElementById('previewContent');
+        if (!previewContent) {
+            alert('미리보기 내용을 찾을 수 없습니다.');
+            return;
+        }
+
+        const labelId = new URLSearchParams(window.location.search).get('label_id');
+        const originalBtnHtml = pdfBtn ? pdfBtn.innerHTML : '';
+        if (pdfBtn) {
+            pdfBtn.disabled = true;
+            pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>PDF 생성 중...';
+        }
+
         try {
-            const { jsPDF } = window.jspdf;
-            const previewContent = document.getElementById('previewContent');
-            if (!previewContent) {
-                alert('미리보기 내용을 찾을 수 없습니다.');
-                return;
+            if (labelId) {
+                try {
+                    await fetch('/label/log-pdf-save/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({ label_id: labelId, source: 'preview' })
+                    });
+                } catch (logError) {
+                    console.warn('로깅 실패:', logError);
+                }
             }
 
-            // 현재 설정된 가로/세로 길이 가져오기
-            const width = parseFloat(document.getElementById('widthInput').value) || 10;
-            const height = parseFloat(document.getElementById('heightInput').value) || 11;
-            
-            // cm를 pt로 변환 (1cm = 28.35pt)
-            const widthPt = width * 28.35;
-            const heightPt = height * 28.35;
+            // 화면에서 확대해 둔 배율과 화면 전용 표시는 인쇄물에 들어가면 안 된다
+            if (typeof window.resetPreviewZoom === 'function') window.resetPreviewZoom();
+            previewContent.classList.add('pv-exporting');
 
-            // html2canvas 옵션 설정
+            const { jsPDF } = window.jspdf;
             const canvas = await html2canvas(previewContent, {
-                scale: 3, // 고해상도를 위해 스케일 증가
+                scale: 3,               // 고해상도
                 useCORS: true,
                 allowTaint: true,
                 backgroundColor: '#ffffff',
-                width: previewContent.scrollWidth,
-                height: previewContent.scrollHeight,
-                scrollX: 0,
-                scrollY: 0,
-                logging: false // 로깅 비활성화
+                logging: false
             });
-
             const imgData = canvas.toDataURL('image/png');
-            
-            // PDF 생성 (가로, 세로 방향 및 단위, 크기 설정)
-            const orientation = widthPt > heightPt ? 'l' : 'p'; // 가로가 길면 landscape
-            const pdf = new jsPDF(orientation, 'pt', [widthPt, heightPt]);
 
-            // PDF에 이미지 추가 (이미지를 PDF 크기에 맞춤)
-            pdf.addImage(imgData, 'PNG', 0, 0, widthPt, heightPt);
+            // 크기는 사용자가 정한 cm 를 그대로 쓴다. 세로는 "22.6 cm" 처럼
+            // 단위가 붙어 오므로 숫자만 뽑는다.
+            const widthCm = parseFloat(document.getElementById('widthInput')?.value) || 10;
+            const heightCm = parseFloat(
+                String(document.getElementById('heightInput')?.value || '').replace(/[^0-9.-]/g, '')) || 11;
 
-            // 파일명 생성
-            const today = new Date();
-            const year = today.getFullYear().toString();
-            const month = (today.getMonth() + 1).toString().padStart(2, '0');
-            const day = today.getDate().toString().padStart(2, '0');
-            const dateStr = `${year}${month}${day}`;
-            
-            // 제품명 가져오기 (checkedFields에서)
-            const productName = (checkedFields.prdlst_nm || '').trim();
-            
-            // 파일명 구성: 한글표시사항_제품명_연월일
-            let fileName = '한글표시사항';
-            
-            if (productName) {
-                fileName += `_${productName}`;
-            }
-            
-            fileName += `_${dateStr}.pdf`;
-            
-            // 파일명에서 특수문자 제거 (파일시스템에서 허용되지 않는 문자들)
-            fileName = fileName.replace(/[<>:"/\\|?*]/g, '_');
+            const pdf = new jsPDF(widthCm > heightCm ? 'l' : 'p', 'cm', [widthCm, heightCm]);
+            pdf.addImage(imgData, 'PNG', 0, 0, widthCm, heightCm);
 
-            // PDF 저장
+            const productName = String(checkedFields.prdlst_nm || '').trim();
+            const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            let fileName = '한글표시사항' + (productName ? `_${productName}` : '') + `_${dateStr}.pdf`;
+            fileName = fileName.replace(/[<>:"/\|?*]/g, '_');
+
             pdf.save(fileName);
 
+            if (!labelId) {
+                showPreviewToast('PDF가 저장되었습니다.', 'success');
+                return;
+            }
+
+            // 문서함 등록
+            if (pdfBtn) pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>문서함 등록 중...';
+            try {
+                const formData = new FormData();
+                formData.append('label_id', labelId);
+                formData.append('pdf_file', pdf.output('blob'), fileName);
+
+                const uploadRes = await fetch('/label/upload-label-pdf/', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    body: formData,
+                });
+                const uploadJson = await uploadRes.json();
+                if (uploadJson.success) {
+                    showPreviewToast(uploadJson.updated
+                        ? `문서함에 한글표시사항도안이 업데이트되었습니다. (버전 ${uploadJson.version})`
+                        : '문서함에 한글표시사항도안이 등록되었습니다.', 'success');
+                } else {
+                    console.warn('문서함 등록 실패:', uploadJson.error);
+                    showPreviewToast('문서함 등록 실패: ' + (uploadJson.error || ''), 'warning');
+                }
+            } catch (uploadErr) {
+                console.warn('문서함 업로드 에러:', uploadErr);
+                showPreviewToast('문서함 등록 중 오류가 발생했습니다.', 'warning');
+            }
         } catch (error) {
             console.error('PDF 저장 중 오류:', error);
-            alert('PDF 저장 중 오류가 발생했습니다: ' + error.message);
+            showPreviewToast('PDF 생성 중 오류가 발생했습니다: ' + error.message, 'error');
+        } finally {
+            previewContent.classList.remove('pv-exporting');
+            if (typeof window.restorePreviewZoom === 'function') window.restorePreviewZoom();
+            if (pdfBtn) {
+                pdfBtn.disabled = false;
+                pdfBtn.innerHTML = originalBtnHtml || '<i class="fas fa-file-arrow-down me-1"></i>PDF 저장';
+            }
         }
     }    // 천 단위 콤마
     function comma(x) {
@@ -2881,15 +2909,40 @@ document.addEventListener('DOMContentLoaded', function () {
         `;
 
         nutritionPreview.innerHTML = previewBox + tableHtml;
-        
-        // 현재 영양성분 탭이 활성화되어 있을 때만 표시
-        const activeTab = document.querySelector('.nav-link.active[data-bs-toggle="tab"]');
-        if (activeTab && activeTab.getAttribute('data-bs-target') === '#nutrition-tab') {
-            nutritionPreview.style.display = 'block';
-        } else {
-            nutritionPreview.style.display = 'none';
-        }
+
+        /*
+         * 표시 항목 체크가 정한다 — 표의 다른 줄과 같은 규칙이다.
+         *
+         * 예전에는 "#nutrition-tab 이 활성화되어 있을 때만" 이었는데, 이 화면에는
+         * 그런 탭이 없다. 그래서 항상 숨겨졌고 — 그리기 전에 이미 그릴 자리
+         * (#nutritionPreview)조차 없어서 영양성분은 미리보기에도 PDF 에도
+         * 나오지 않았다.
+         */
+        nutritionPreview.style.display = isNutritionShown() ? 'block' : 'none';
+        if (typeof calculateHeight === 'function') calculateHeight();
     }
+
+    /* 영양정보 표를 인쇄하는가. 값이 하나도 없으면 켜 두어도 그릴 것이 없다. */
+    function isNutritionShown() {
+        if (window.displayChecked && window.displayChecked.nutrition_text !== true) return false;
+        const data = window.nutritionData;
+        if (!data) return false;
+        const hasCalorie = data.calorie !== undefined && data.calorie !== null && data.calorie !== '';
+        const hasValue = (data.values || []).some(v => v.value || v.value === 0 ? Number(v.value) : 0);
+        return hasCalorie || hasValue;
+    }
+
+    /* 표시 항목 체크가 바뀌면 영양정보 표도 함께 켜고 끈다. */
+    window.refreshNutritionVisibility = function () {
+        const el = document.getElementById('nutritionPreview');
+        if (!el) return;
+        if (!el.innerHTML && window.nutritionData) {
+            updateNutritionDisplay(window.nutritionData);
+            return;
+        }
+        el.style.display = isNutritionShown() ? 'block' : 'none';
+        if (typeof calculateHeight === 'function') calculateHeight();
+    };
 
     // 영양성분 데이터 수신
     window.addEventListener('message', function(e) {
@@ -2923,7 +2976,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const letterSpacing = parseInt(document.getElementById('letterSpacingInput').value);
         const lineHeight = parseFloat(document.getElementById('lineHeightInput').value);
         const table = document.getElementById('previewTableBody');
-        const contentHeight = table.offsetHeight + 80;
+        // 영양정보 표는 표 아래에 따로 붙는다. 빼고 재면 인쇄물이 잘린다.
+        const nutrition = document.getElementById('nutritionPreview');
+        const nutritionHeight = (nutrition && nutrition.style.display !== 'none')
+            ? nutrition.offsetHeight : 0;
+        const contentHeight = table.offsetHeight + nutritionHeight + 80;
         const totalHeight = contentHeight / 28.35;
         const heightInput = document.getElementById('heightInput');
         heightInput.value = Math.ceil(totalHeight);
@@ -2950,6 +3007,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // 버튼 이벤트 리스너 설정 (중복 제거된 코드)
     safeAddEventListener('exportPdfBtn', 'click', exportToPDF);
     safeAddEventListener('saveSettingsBtn', 'click', savePreviewSettings);
+    // 부모 프레임(탭에 끼워 넣은 미리보기)이 부를 수 있게 노출한다
+    window.savePreviewSettings = savePreviewSettings;
     
     // 높이 계산 이벤트 리스너 설정 (중복 제거된 코드)
     const heightCalculationInputs = ['widthInput', 'fontSizeInput', 'letterSpacingInput', 'lineHeightInput'];
@@ -3135,6 +3194,44 @@ function validationEvidenceHtml(evidence) {
     }).join('');
 }
 
+/*
+ * 규정 검증 결과를 표의 해당 줄에 얹는다.
+ *
+ * 서버가 지적마다 어느 칸의 이야기인지(fields)를 함께 준다. 그 값이 표의
+ * data-field-row 와 같은 이름이라 행을 바로 찾을 수 있다.
+ */
+function markValidationOnTable(categories) {
+    document.querySelectorAll('[data-field-row]').forEach(function (row) {
+        row.classList.remove('pv-row-issue');
+        row.removeAttribute('data-issue-count');
+    });
+
+    const counts = {};
+    (categories || []).forEach(function (row) {
+        if (row.ok) return;
+        const n = (row.errors || []).length || 1;
+        (row.fields || []).forEach(function (field) {
+            counts[field] = (counts[field] || 0) + n;
+        });
+    });
+
+    Object.keys(counts).forEach(function (field) {
+        document.querySelectorAll(`[data-field-row="${field}"]`).forEach(function (row) {
+            row.classList.add('pv-row-issue');
+            row.setAttribute('data-issue-count', counts[field]);
+        });
+    });
+}
+
+/* 그 줄로 데려가 잠깐 드러낸다. 스크롤만 하면 어느 줄인지 알기 어렵다. */
+function jumpToTableRow(field) {
+    const row = document.querySelector(`[data-field-row="${field}"]`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.classList.add('pv-row-flash');
+    setTimeout(function () { row.classList.remove('pv-row-flash'); }, 1600);
+}
+
 function showAiValidationModal(result, useAi) {
     // 기존 실행 함수가 남긴 모달이 있으면 정리
     const legacy = document.getElementById('validationModal');
@@ -3151,9 +3248,14 @@ function showAiValidationModal(result, useAi) {
         ? '<span class="badge bg-success">적합</span>'
         : '<span class="badge bg-danger">확인 필요</span>';
 
+    // 지적을 표 위에 얹는다. 목록만 보여 주면 "어느 줄 이야기인지" 를 잇는 일이
+    // 사람 몫이 된다 — 열일곱 줄을 눈으로 훑으며 대조해야 했다.
+    markValidationOnTable(result.categories || []);
+
     let rowsHtml = '';
     for (const row of (result.categories || [])) {
-        rowsHtml += '<tr>';
+        const anchor = (row.fields || []).find(f => document.querySelector(`[data-field-row="${f}"]`));
+        rowsHtml += `<tr${anchor ? ` class="vr-jump" data-jump="${anchor}" title="누르면 표의 그 줄로 갑니다"` : ''}>`;
         rowsHtml += `<td>${row.label}</td>`;
         rowsHtml += row.ok
             ? '<td><span class="text-success">적합</span></td>'
@@ -3236,7 +3338,16 @@ function showAiValidationModal(result, useAi) {
     `;
 
     document.body.appendChild(modal);
+
+    // 지적 줄을 누르면 표의 그 행으로 데려간다. 모달은 닫는다 — 표를 가리고
+    // 있으면 데려가 봐야 보이지 않는다.
     const bsModal = new bootstrap.Modal(modal);
+    modal.addEventListener('click', function (e) {
+        const jump = e.target.closest('.vr-jump');
+        if (!jump) return;
+        bsModal.hide();
+        jumpToTableRow(jump.dataset.jump);
+    });
     bsModal.show();
 }
 
@@ -3722,13 +3833,34 @@ window.addEventListener('load', function() {
 
 // ==================== 필드 순서 조정 기능 ====================
 
-// 필드 순서 저장 (localStorage)
+/*
+ * 표의 항목 배치. 라벨에 저장된다(MyLabel.prv_field_layout).
+ *
+ * visibility 는 여기 없다. **표에 줄이 생기는 기준은 표시 항목 체크
+ * (chckd_*) 하나뿐이다** — 같은 것을 정하는 스위치가 둘이면 어느 날 서로 다른
+ * 말을 한다. 실제로 규정 검증은 체크를, 표는 값 유무를, 눈 아이콘은 또
+ * localStorage 를 보고 있었다.
+ *
+ * 맞춤항목만 예외로 customVisibility 를 쓴다. 맞춤항목에는 대응하는 체크박스가
+ * 아예 없어서 기댈 자리가 없다.
+ */
 let fieldOrderData = {
     order: [],
-    visibility: {},
+    customVisibility: {},
     width: {}, // '50%' or '100%'
-    layoutMode: 'vertical' // 'vertical', 'horizontal', 'grid', 'compact'
+    layoutMode: 'vertical' // 'vertical', 'horizontal'
 };
+
+/* 표시 항목 체크 상태 {필드: bool}. 서버가 주고, 눈 아이콘이 바꾼다. */
+window.displayChecked = window.displayChecked || {};
+
+/* 이 항목이 표에 나가는가. 맞춤항목은 체크박스가 없어 로컬 설정을 본다. */
+function isFieldShown(fieldKey) {
+    if (String(fieldKey).startsWith('custom_field_')) {
+        return fieldOrderData.customVisibility[fieldKey] !== false;
+    }
+    return window.displayChecked[fieldKey] === true;
+}
 
 // 기본 필드 정의 (실제 라벨 데이터에서 추출)
 const DEFAULT_FIELDS = {
@@ -3752,10 +3884,9 @@ const DEFAULT_FIELDS = {
        rawmtrl_nm_display 로 통일 처리. 별도 키가 있을 때 '원재료명' 행이 2개 생기는 버그 방지 */
     'cautions': '주의사항',
     'additional_info': '기타표시사항',
-    'etc_description': '기타표시사항',
-    'nutrition_text': '영양성분',
-    'my_label_name': '라벨명',
-    'allergies': '알레르기 성분',
+    /* 인쇄 항목이 아닌 것은 뺐다 (v1/label/constants.py 의 PREVIEW_DISPLAY_FIELDS 와 같은 목록).
+       my_label_name(라벨명)은 내부에서 부르는 이름인데 표에 '라벨명' 줄로 인쇄되고 있었다.
+       nutrition_text(영양성분)는 별도 표로 그린다. allergies·etc_description 은 쓰는 곳이 없었다. */
 };
 
 // 필드 정의 가져오기 (현재 라벨 데이터 기반)
@@ -3770,9 +3901,11 @@ function getFieldDefinitions() {
             if (key.startsWith('custom_field_')) return;
             // date_option은 pog_daycnt와 중복되므로 제외 (소비기한 표시는 pog_daycnt에서 처리)
             if (key === 'date_option') return;
-            
-            const value = window.currentLabelData[key];
-            const label = DEFAULT_FIELDS[key] || key;
+            // 이름을 모르는 키는 항목이 아니다. 예전에는 그대로 줄이 되어
+            // 표에 "rawmtrl_nm" 같은 머리글이 인쇄됐다.
+            if (!DEFAULT_FIELDS[key]) return;
+
+            const label = DEFAULT_FIELDS[key];
             if (!addedKeys.has(key)) {
                 fields.push({
                     key: key,
@@ -3836,120 +3969,85 @@ function getFieldDefinitions() {
 }
 
 // 필드 순서 초기화
-window.initializeFieldOrder = function() {
-    const savedOrder = localStorage.getItem('labelFieldOrder');
-    if (savedOrder) {
-        try {
-            const parsed = JSON.parse(savedOrder);
-            
-            // order에서 중복 제거
-            let cleanOrder = [];
-            if (parsed.order && Array.isArray(parsed.order)) {
-                const seenKeys = new Set();
-                parsed.order.forEach(key => {
-                    if (!seenKeys.has(key)) {
-                        cleanOrder.push(key);
-                        seenKeys.add(key);
-                    }
-                });
-            }
-            
-            // 필수 속성 확인 및 초기화
-            fieldOrderData = {
-                order: cleanOrder,
-                visibility: parsed.visibility || {},
-                width: parsed.width || {},
-                layoutMode: parsed.layoutMode || 'vertical'
-            };
-        } catch(e) {
-            fieldOrderData = {
-                order: [],
-                visibility: {},
-                width: {},
-                layoutMode: 'vertical'
-            };
-        }
+/*
+ * 배치를 읽어 온다. 순서는 **라벨에 저장된 것**이 먼저다.
+ *
+ * 예전에는 localStorage 의 'labelFieldOrder' 키 하나뿐이었다. 라벨별이 아니라
+ * 브라우저별이라, 한 라벨에서 맞춰 둔 순서가 다른 라벨에 그대로 얹혔고 옆자리
+ * 동료는 아예 다른 순서를 봤다. 인쇄물의 모양인데 그럴 수 없다.
+ *
+ * localStorage 는 아직 서버에 저장한 적 없는 라벨을 위한 폴백으로만 남긴다.
+ */
+function loadFieldLayout() {
+    const clean = (raw) => {
+        const seen = new Set();
+        const order = [];
+        (Array.isArray(raw && raw.order) ? raw.order : []).forEach(key => {
+            if (!seen.has(key)) { order.push(key); seen.add(key); }
+        });
+        return {
+            order: order,
+            customVisibility: (raw && raw.customVisibility) || {},
+            width: (raw && raw.width) || {},
+            layoutMode: (raw && raw.layoutMode) === 'horizontal' ? 'horizontal' : 'vertical',
+            labelColumnMm: parseFloat(raw && raw.labelColumnMm) || 24
+        };
+    };
+
+    const saved = safeLoadJsonData('field-layout-data', null, '표 항목 배치');
+    if (saved && Array.isArray(saved.order) && saved.order.length) {
+        fieldOrderData = clean(saved);
+        return;
     }
-    
-    // 필드 순서가 없으면 기본 순서로 초기화
-    if (!fieldOrderData.order || fieldOrderData.order.length === 0) {
-        const fields = getFieldDefinitions();
-        fieldOrderData.order = fields.map(f => f.key);
-        if (!fieldOrderData.visibility) fieldOrderData.visibility = {};
-        if (!fieldOrderData.width) fieldOrderData.width = {};
-        
-        // currentLabelData가 있는 경우에만 데이터 기반으로 visibility 설정
-        if (window.currentLabelData && typeof window.currentLabelData === 'object') {
-            fields.forEach(f => {
-                if (f.isCustomField) {
-                    fieldOrderData.visibility[f.key] = !!f.value;
-                } else if (window.currentLabelData[f.key]) {
-                    fieldOrderData.visibility[f.key] = true;
-                } else {
-                    fieldOrderData.visibility[f.key] = false;
-                }
-                fieldOrderData.width[f.key] = '50%';
-            });
-        } else {
-            // currentLabelData가 없으면 모든 항목 표시 (나중에 데이터 로드 시 업데이트됨)
-            fields.forEach(f => {
-                fieldOrderData.visibility[f.key] = true;
-                fieldOrderData.width[f.key] = '50%';
-            });
-        }
+    try {
+        const local = JSON.parse(localStorage.getItem('labelFieldOrder') || 'null');
+        fieldOrderData = clean(local);
+    } catch (e) {
+        fieldOrderData = clean(null);
+    }
+}
+
+window.initializeFieldOrder = function() {
+    loadFieldLayout();
+
+    // 저장된 항목명 칸 너비를 설정 칸에 되돌려 놓는다
+    const colInput = document.getElementById('labelColWidthInput');
+    if (colInput) {
+        colInput.value = fieldOrderData.labelColumnMm || 24;
+        colInput.addEventListener('change', function () {
+            fieldOrderData.labelColumnMm = parseFloat(this.value) || 24;
+            saveFieldOrder();
+            if (typeof window.updatePreviewStyles === 'function') window.updatePreviewStyles();
+        });
+    }
+
+    // 순서가 없으면 기본 순서로. 표시 여부는 여기서 정하지 않는다 —
+    // 그것은 표시 항목 체크(displayChecked)의 몫이다.
+    if (!fieldOrderData.order.length) {
+        fieldOrderData.order = getFieldDefinitions().map(f => f.key);
         saveFieldOrder();
     }
-    
+
     renderFieldOrderList();
     initializeLayoutButtons();
 };
 
-// 데이터 로드 후 새 필드 추가 (order에 없는 필드)
+// 데이터 로드 후 order 에 없는 필드를 뒤에 붙인다.
 window.updateFieldOrderFromData = function() {
     if (!window.currentLabelData) {
         return;
     }
-    
-    const currentFields = getFieldDefinitions();
-    
-    // order가 비어있거나 필드 수와 크게 차이나면 완전히 재초기화
-    if (!fieldOrderData.order || fieldOrderData.order.length === 0 || 
-        Math.abs(currentFields.length - fieldOrderData.order.length) > 5) {
-        fieldOrderData.order = currentFields.map(f => f.key);
-        fieldOrderData.visibility = {};
-        fieldOrderData.width = {};
-        
-        currentFields.forEach(field => {
-            if (field.isCustomField) {
-                fieldOrderData.visibility[field.key] = !!field.value;
-            } else {
-                fieldOrderData.visibility[field.key] = !!window.currentLabelData[field.key];
-            }
-            fieldOrderData.width[field.key] = '50%';
-        });
-        
-        saveFieldOrder();
-        renderFieldOrderList();
-        return;
-    }
-    
-    // 기존 order에 없는 필드만 추가
+
     const existingKeys = new Set(fieldOrderData.order);
     let hasNewFields = false;
-    
-    currentFields.forEach(field => {
+
+    getFieldDefinitions().forEach(field => {
         if (!existingKeys.has(field.key)) {
             fieldOrderData.order.push(field.key);
-            if (field.isCustomField) {
-                fieldOrderData.visibility[field.key] = !!field.value;
-            } else {
-                fieldOrderData.visibility[field.key] = !!window.currentLabelData[field.key];
-            }
-            fieldOrderData.width[field.key] = '50%';
             hasNewFields = true;
         }
     });
-    
+
     if (hasNewFields) {
         saveFieldOrder();
         renderFieldOrderList();
@@ -3977,16 +4075,12 @@ window.renderFieldOrderList = function() {
     fields.forEach(f => fieldMap[f.key] = f);
     
     // 필수 속성 초기화
-    if (!fieldOrderData.visibility) fieldOrderData.visibility = {};
+    if (!fieldOrderData.customVisibility) fieldOrderData.customVisibility = {};
     if (!fieldOrderData.width) fieldOrderData.width = {};
-    
+
     // order가 비어있으면 현재 필드로 초기화
     if (!fieldOrderData.order || fieldOrderData.order.length === 0) {
         fieldOrderData.order = fields.map(f => f.key);
-        fields.forEach(f => {
-            fieldOrderData.visibility[f.key] = true;
-            fieldOrderData.width[f.key] = '50%';
-        });
         saveFieldOrder();
     } else {
         // order에서 중복 제거
@@ -4009,7 +4103,7 @@ window.renderFieldOrderList = function() {
         const field = fieldMap[fieldKey];
         if (!field) return;
         
-        const isVisible = fieldOrderData.visibility[fieldKey] !== false;
+        const isVisible = isFieldShown(fieldKey);
         const width = fieldOrderData.width[fieldKey] || '50%';
         const isFullWidth = width === '100%';
         
@@ -4028,11 +4122,18 @@ window.renderFieldOrderList = function() {
             item.classList.add('half-width-item');
         }
         
+        // 켜 두었는데 아직 비어 있는 항목. 표에서는 빈 줄로 나가므로
+        // 목록에서도 같은 사실을 말해 준다 — 규정 검증까지 가서 알 일이 아니다.
+        const isEmpty = isVisible && !field.isCustomField
+            && !String((window.currentLabelData || {})[fieldKey] || '').trim();
+        if (isEmpty) item.classList.add('empty-field');
+
         item.innerHTML = `
             <i class="fas fa-grip-vertical drag-handle"></i>
             <span class="field-label">${field.label}</span>
+            ${isEmpty ? '<span class="field-empty" title="표시하기로 켰지만 아직 비어 있습니다">비어 있음</span>' : ''}
             <div class="field-controls">
-                <button class="width-toggle ${isFullWidth ? 'width-100' : 'width-50'}" 
+                <button class="width-toggle ${isFullWidth ? 'width-100' : 'width-50'}"
                         onclick="toggleFieldWidth('${fieldKey}')" 
                         title="${isFullWidth ? '50%로 변경' : '100%로 변경'}">
                     ${isFullWidth ? '100' : '50'}
@@ -4123,21 +4224,49 @@ window.moveFieldDown = function(fieldKey) {
     }
 };
 
+/*
+ * 눈 아이콘 = 표시 항목 체크.
+ *
+ * 체크박스를 가진 쪽(제품 화면의 오른쪽 패널 / 표시사항 작성 화면의 폼)에
+ * 알려서 거기서 켜고 끄게 한다. 이 창이 따로 저장하면 스위치가 둘이 되고,
+ * 두 화면이 서로 다른 말을 하는 지금 문제가 그대로 되돌아온다. 저장·권한도
+ * 이미 그쪽이 다룬다.
+ */
+function setFieldShown(fieldKey, shown) {
+    if (String(fieldKey).startsWith('custom_field_')) {
+        // 맞춤항목에는 대응하는 체크박스가 없다. 이것만 배치와 함께 저장한다.
+        fieldOrderData.customVisibility[fieldKey] = shown;
+        saveFieldOrder();
+        return true;
+    }
+
+    const target = window.opener || (window.self !== window.top ? window.parent : null);
+    if (!target) {
+        if (typeof showPreviewToast === 'function') {
+            showPreviewToast('표시 항목은 표시사항 작성 화면에서 켜고 끌 수 있습니다.', 'warning');
+        }
+        return false;
+    }
+    window.displayChecked[fieldKey] = shown;   // 화면은 바로 반영
+    target.postMessage({ type: 'toggleDisplayItem', field: fieldKey, checked: shown }, '*');
+    return true;
+}
+
 // 필드 표시/숨김 토글
 window.toggleFieldVisibility = function(fieldKey) {
-    fieldOrderData.visibility[fieldKey] = !(fieldOrderData.visibility[fieldKey] !== false);
-    saveFieldOrder();
+    if (!setFieldShown(fieldKey, !isFieldShown(fieldKey))) return;
     renderFieldOrderList();
     renderTableWithCurrentData();
 };
 
 // 전체 필드 표시/숨김 토글
 window.toggleAllFieldsVisibility = function() {
-    const allVisible = fieldOrderData.order.every(key => fieldOrderData.visibility[key] !== false);
+    const allVisible = fieldOrderData.order.every(isFieldShown);
+    let changed = false;
     fieldOrderData.order.forEach(key => {
-        fieldOrderData.visibility[key] = !allVisible;
+        if (setFieldShown(key, !allVisible)) changed = true;
     });
-    saveFieldOrder();
+    if (!changed) return;
     renderFieldOrderList();
     renderTableWithCurrentData();
 };
@@ -4204,8 +4333,8 @@ window.autoOptimizeLayout = function(options = {}) {
     
     // order에 있는 항목만 분석 및 최적화
     fieldOrderData.order.forEach(key => {
-        // 숨겨진 항목은 건너뛰기
-        if (fieldOrderData.visibility && fieldOrderData.visibility[key] === false) {
+        // 표에 안 나가는 항목은 건너뛰기
+        if (!isFieldShown(key)) {
             return;
         }
         
@@ -4259,9 +4388,7 @@ window.autoOptimizeLayout = function(options = {}) {
     
     // 가로 모드일 경우 마지막 항목이 홀수면 100%로 변경
     if (currentLayoutMode === 'horizontal') {
-        const visibleKeys = fieldOrderData.order.filter(key => 
-            fieldOrderData.visibility[key] !== false
-        );
+        const visibleKeys = fieldOrderData.order.filter(isFieldShown);
         
         const halfWidthKeys = visibleKeys.filter(key => 
             fieldOrderData.width[key] === '50%'
@@ -4312,16 +4439,15 @@ window.resetFieldOrder = function() {
         const fields = getFieldDefinitions();
         fieldOrderData = {
             order: fields.map(f => f.key),
-            visibility: {},
+            customVisibility: {},
             width: {},
             layoutMode: 'vertical'
         };
-        
+
         fields.forEach(f => {
-            fieldOrderData.visibility[f.key] = true;
             fieldOrderData.width[f.key] = '50%';
         });
-        
+
         saveFieldOrder();
         renderFieldOrderList();
         initializeLayoutButtons();
@@ -4353,8 +4479,23 @@ function saveFieldOrder() {
             fieldOrderData.order = uniqueOrder;
         }
     }
+    // 라벨에 저장하는 것은 "설정 저장" 이 한다(savePreviewSettings). 여기서는
+    // 창을 닫았다 열어도 방금 만진 배치가 남아 있게만 해 둔다.
     localStorage.setItem('labelFieldOrder', JSON.stringify(fieldOrderData));
 }
+
+/* "설정 저장" 이 서버로 보낼 배치. 표시 여부는 여기 없다 — chckd_* 가 갖는다. */
+window.getFieldLayoutForSave = function() {
+    const colInput = document.getElementById('labelColWidthInput');
+    return {
+        order: fieldOrderData.order || [],
+        width: fieldOrderData.width || {},
+        customVisibility: fieldOrderData.customVisibility || {},
+        layoutMode: fieldOrderData.layoutMode || 'vertical',
+        // 항목명 칸 너비(mm). 인쇄물의 모양이라 라벨에 붙어 있어야 한다.
+        labelColumnMm: parseFloat(colInput && colInput.value) || 24
+    };
+};
 
 // 현재 데이터로 테이블 재렌더링
 function renderTableWithCurrentData() {
@@ -4399,6 +4540,114 @@ function initializeLayoutButtons() {
 }
 
 // 레이아웃 적용하여 테이블 렌더링
+/* ==================== 표에서 바로 조작 ====================
+ *
+ * 눈은 표를 보는데 손은 늘 다른 데 있었다 — 순서·숨김·폭은 왼쪽 패널에서,
+ * 값은 다른 탭에서 고쳐야 했다. 줄 위에 마우스를 올리면 그 줄에 대한 도구가
+ * 따라온다.
+ *
+ * 도구 막대는 **#previewContent 밖에** 둔다. 안에 두면 PDF 캡처에 찍히고
+ * 표의 높이 계산까지 흔든다.
+ */
+let _rowToolsField = null;
+
+function ensureRowTools() {
+    let tools = document.getElementById('pvRowTools');
+    if (tools) return tools;
+
+    const panel = document.querySelector('.preview-panel');
+    if (!panel) return null;
+    if (getComputedStyle(panel).position === 'static') panel.style.position = 'relative';
+
+    tools = document.createElement('div');
+    tools.id = 'pvRowTools';
+    tools.className = 'pv-rowtools';
+    tools.hidden = true;
+    tools.innerHTML = ''
+        + '<button type="button" data-act="edit" title="이 항목의 입력칸으로">'
+        + '  <i class="fas fa-pen"></i></button>'
+        + '<button type="button" data-act="width" title="이 줄의 폭을 50% / 100% 로">'
+        + '  <span class="pv-rowtools-width">50</span></button>'
+        + '<button type="button" data-act="hide" title="이 항목을 표시하지 않기">'
+        + '  <i class="fas fa-eye-slash"></i></button>';
+    panel.appendChild(tools);
+
+    tools.addEventListener('click', function (e) {
+        const btn = e.target.closest('button');
+        if (!btn || !_rowToolsField) return;
+        const field = _rowToolsField;
+        if (btn.dataset.act === 'hide') {
+            window.toggleFieldVisibility(field);
+            hideRowTools();
+        } else if (btn.dataset.act === 'width') {
+            window.toggleFieldWidth(field);
+        } else if (btn.dataset.act === 'edit') {
+            openFieldEditor(field);
+        }
+    });
+    return tools;
+}
+
+function showRowTools(row) {
+    const tools = ensureRowTools();
+    const panel = document.querySelector('.preview-panel');
+    if (!tools || !panel) return;
+
+    const field = row.dataset.fieldRow;
+    if (String(field).startsWith('custom_field_')) return;   // 맞춤항목은 여기서 못 고친다
+    _rowToolsField = field;
+
+    const box = row.getBoundingClientRect();
+    const base = panel.getBoundingClientRect();
+    tools.hidden = false;
+    tools.style.top = (box.top - base.top + panel.scrollTop) + 'px';
+    tools.style.left = (box.right - base.left + panel.scrollLeft + 6) + 'px';
+
+    const label = tools.querySelector('.pv-rowtools-width');
+    if (label) label.textContent = (fieldOrderData.width[field] === '100%') ? '100' : '50';
+}
+
+function hideRowTools() {
+    const tools = document.getElementById('pvRowTools');
+    if (tools) tools.hidden = true;
+    _rowToolsField = null;
+}
+
+/*
+ * 그 항목의 입력칸으로 데려간다.
+ *
+ * 값은 이 창에 없다 — 제품 화면의 기본 정보 탭이나 표시사항 작성 화면의 폼에
+ * 있다. 그쪽에 부탁한다. 부모가 없으면(단독으로 연 경우) 할 수 있는 일이 없다.
+ */
+function openFieldEditor(field) {
+    const target = window.opener || (window.self !== window.top ? window.parent : null);
+    if (!target) {
+        if (typeof showPreviewToast === 'function') {
+            showPreviewToast('값은 표시사항 작성 화면에서 고칠 수 있습니다.', 'warning');
+        }
+        return;
+    }
+    target.postMessage({ type: 'focusLabelField', field: field }, '*');
+}
+
+document.addEventListener('mouseover', function (e) {
+    const row = e.target.closest && e.target.closest('[data-field-row]');
+    if (row) { showRowTools(row); return; }
+    if (!e.target.closest || !e.target.closest('#pvRowTools')) hideRowTools();
+});
+
+/* 값을 누르면 그 입력칸으로. 표를 보다가 고칠 곳을 찾았을 때 가장 짧은 길이다. */
+document.addEventListener('dblclick', function (e) {
+    const row = e.target.closest && e.target.closest('[data-field-row]');
+    if (row && row.dataset.fieldRow) openFieldEditor(row.dataset.fieldRow);
+});
+
+/* 요약 줄의 항목을 누르면 그 행으로 데려간다 (표는 매번 다시 그려지므로 위임) */
+document.addEventListener('click', function (e) {
+    const item = e.target.closest && e.target.closest('.pv-summary-item');
+    if (item) jumpToTableRow(item.dataset.jump);
+});
+
 window.renderTableWithLayout = function(data, layoutMode) {
     const tbody = document.getElementById('previewTableBody');
     if (!tbody || !data) return;
@@ -4406,15 +4655,16 @@ window.renderTableWithLayout = function(data, layoutMode) {
     window.currentLabelData = data;
     layoutMode = layoutMode || fieldOrderData.layoutMode || 'vertical';
     
-    // grid 모드는 지원 중단, vertical로 변경
-    if (layoutMode === 'grid') {
+    // 세로 아니면 2단. 셋째 모드는 그리는 코드가 없다.
+    if (layoutMode !== 'horizontal') {
         layoutMode = 'vertical';
         fieldOrderData.layoutMode = 'vertical';
     }
-    
+
     // tbody 초기화
     tbody.innerHTML = '';
     tbody.className = `layout-${layoutMode}`;
+    applyColumnGroup(tbody, layoutMode);
     
     // 필드 순서대로 렌더링
     const fields = getFieldDefinitions();
@@ -4427,11 +4677,77 @@ window.renderTableWithLayout = function(data, layoutMode) {
         renderHorizontalLayout(tbody, data, fieldMap);
     }
     
+    // 영양정보 표도 같은 스위치를 따른다
+    if (typeof window.refreshNutritionVisibility === 'function') {
+        window.refreshNutritionVisibility();
+    }
+
+    updatePreviewSummary();
+
     // 스타일 재적용
     if (typeof window.updatePreviewStyles === 'function') {
         window.updatePreviewStyles();
     }
 };
+
+/*
+ * 표 위 한 줄 요약 — "켰는데 아직 비어 있는" 항목이 몇 개인가.
+ *
+ * 빈 줄 표시는 그 줄에 붙어 있어서, 항목이 열일곱이면 스크롤 밖으로 나간다.
+ * 몇 개가 남았는지는 늘 보이는 자리에 있어야 확정 전에 알아챈다.
+ */
+function updatePreviewSummary() {
+    const box = document.getElementById('previewSummary');
+    if (!box) return;
+
+    const data = window.currentLabelData || {};
+    const empty = (fieldOrderData.order || []).filter(function (key) {
+        if (String(key).startsWith('custom_field_')) return false;
+        return isFieldShown(key) && !String(data[key] || '').trim();
+    });
+    const shown = (fieldOrderData.order || []).filter(isFieldShown).length;
+
+    if (!empty.length) {
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+    }
+
+    const names = empty.map(function (key) {
+        const el = document.querySelector(`[data-field-row="${key}"] th`);
+        return `<button type="button" class="pv-summary-item" data-jump="${key}">${el ? el.textContent : key}</button>`;
+    }).join('');
+
+    box.hidden = false;
+    box.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>'
+        + `표시 항목 ${shown}개 중 <strong>${empty.length}개가 비어 있습니다</strong> — `
+        + names;
+}
+
+/*
+ * 열 정의. table-layout: fixed 에서는 <colgroup> 이 열 너비의 주인이다.
+ *
+ * 세로 배치는 2열(항목명 | 값), 2단 배치는 4열(항목명 | 값 | 항목명 | 값).
+ * 항목명 칸의 너비는 --label-col-width 하나가 정한다 — 예전에는 CSS 변수와
+ * flex-basis 와 셀마다 박은 인라인 스타일 셋에 흩어져 있었다.
+ */
+function applyColumnGroup(tbody, layoutMode) {
+    const table = tbody.closest('table');
+    if (!table) return;
+
+    const old = table.querySelector('colgroup');
+    if (old) old.remove();
+
+    const group = document.createElement('colgroup');
+    const pairs = layoutMode === 'horizontal' ? 2 : 1;
+    for (let i = 0; i < pairs; i += 1) {
+        const label = document.createElement('col');
+        label.className = 'pv-col-label';
+        group.appendChild(label);
+        group.appendChild(document.createElement('col'));
+    }
+    table.insertBefore(group, table.firstChild);
+}
 
 // 세로 레이아웃
 function renderVerticalLayout(tbody, data, fieldMap) {
@@ -4446,9 +4762,8 @@ function renderVerticalLayout(tbody, data, fieldMap) {
     });
     
     allKeys.forEach(fieldKey => {
-        const isVisible = fieldOrderData.visibility[fieldKey] !== false;
-        if (!isVisible) return;
-        
+        if (!isFieldShown(fieldKey)) return;
+
         const field = fieldMap[fieldKey];
         if (!field) return;
         
@@ -4492,7 +4807,10 @@ function renderVerticalLayout(tbody, data, fieldMap) {
                     .map(a => a.trim()).filter(Boolean);
             }
             if (displayAllergens.length > 0) {
-                value = `${value}<div style="background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; margin-top: 4px; text-align: right; word-break: keep-all; white-space: normal;">${displayAllergens.join(', ')} 함유</div>`;
+                // 스타일은 CSS 클래스가 갖는다(.pv-allergen-box). 인라인 9pt 로
+                // 박아 두면 글자 크기 설정을 올려도 이 줄만 그대로 남아,
+                // 하한을 넘겼다고 생각한 라벨에서 이 문구만 미달로 인쇄된다.
+                value = `${value}<div class="pv-allergen-box">${displayAllergens.join(', ')} 함유</div>`;
             }
         }
         
@@ -4504,11 +4822,12 @@ function renderVerticalLayout(tbody, data, fieldMap) {
         // 날짜 항목: 한 칸에 줄로 쌓인 값을 줄마다 한 행으로 편다.
         // ("제조연월일: 별도 표기" + "소비기한: 제조일로부터 12개월")
         // DB 칸은 하나지만 인쇄물에는 두 줄로 나와야 한다.
-        if (fieldKey === 'pog_daycnt' && window.DateEntries) {
+        if (fieldKey === 'pog_daycnt' && window.DateEntries && String(value).trim()) {
             window.DateEntries.parse(value, data.date_option).forEach(entry => {
                 const dtr = document.createElement('tr');
                 const dth = document.createElement('th');
                 const dtd = document.createElement('td');
+                dtr.dataset.fieldRow = fieldKey;
                 dth.textContent = entry.type;
                 dtd.style.wordWrap = 'break-word';
                 dtd.style.overflowWrap = 'break-word';
@@ -4521,12 +4840,27 @@ function renderVerticalLayout(tbody, data, fieldMap) {
         }
 
         const tr = document.createElement('tr');
+        // 규정 검증 결과를 이 행에 얹으려면 행이 자기 이름을 알고 있어야 한다
+        tr.dataset.fieldRow = fieldKey;
         tr.innerHTML = `
             <th>${field.label}</th>
-            <td style="word-wrap: break-word; overflow-wrap: break-word;">${value}</td>
+            <td style="word-wrap: break-word; overflow-wrap: break-word;">${value}${emptyHintHtml(fieldKey, data)}</td>
         `;
         tbody.appendChild(tr);
     });
+}
+
+/*
+ * 켜 두었는데 비어 있는 줄에 붙이는 화면 전용 표시.
+ *
+ * 표에 나가는 기준이 표시 항목 체크가 되면서, 켜고 아직 안 채운 항목은 빈 줄로
+ * 나간다. 그 빈 줄이 "여기에 무엇이 들어갈 자리인지" 를 말하지 않으면 사용자는
+ * 실수로 빈칸을 인쇄한다. PDF 로 뽑을 때는 지운다(.pv-exporting).
+ */
+function emptyHintHtml(fieldKey, data) {
+    if (String(fieldKey).startsWith('custom_field_')) return '';
+    if (String((data || {})[fieldKey] || '').trim()) return '';
+    return '<span class="pv-empty-hint">표시하기로 켰지만 아직 비어 있습니다</span>';
 }
 
 // 가로 레이아웃 (동적 2열) - 2개씩 묶어서 행으로 렌더링
@@ -4544,9 +4878,8 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
     // 표시할 항목들만 수집
     const visibleItems = [];
     allKeys.forEach(fieldKey => {
-        const isVisible = fieldOrderData.visibility[fieldKey] !== false;
-        if (!isVisible) return;
-        
+        if (!isFieldShown(fieldKey)) return;
+
         const field = fieldMap[fieldKey];
         if (!field) return;
         
@@ -4586,7 +4919,7 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
                         .map(a => a.trim()).filter(Boolean);
                 }
                 if (displayAllergens.length > 0) {
-                    value = `${value}<div style="background-color: #000; color: #fff; padding: 3px 8px; font-size: 9pt; font-weight: bold; border-radius: 3px; margin-top: 4px; text-align: right; word-break: keep-all; white-space: normal;">${displayAllergens.join(', ')} 함유</div>`;
+                    value = `${value}<div class="pv-allergen-box">${displayAllergens.join(', ')} 함유</div>`;
                 }
             }
             
@@ -4598,7 +4931,7 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
         
         // 날짜 항목은 줄 수만큼 별개 항목이 된다. 가로 레이아웃은 항목을 둘씩
         // 짝지어 한 행으로 만들므로, 여기서 늘려 두면 그 규칙이 그대로 적용된다.
-        if (fieldKey === 'pog_daycnt' && window.DateEntries) {
+        if (fieldKey === 'pog_daycnt' && window.DateEntries && String(value).trim()) {
             window.DateEntries.parse(value, data.date_option).forEach(entry => {
                 visibleItems.push({
                     key: fieldKey,
@@ -4613,7 +4946,7 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
         visibleItems.push({
             key: fieldKey,
             label: field.label,
-            value: value,
+            value: value + (field.isCustomField ? '' : emptyHintHtml(fieldKey, data)),
             width: width
         });
     });
@@ -4672,40 +5005,52 @@ function renderHorizontalLayout(tbody, data, fieldMap) {
         orderedRows.push(currentRow);
     }
     
-    // 행별로 렌더링
+    /*
+     * 행별로 렌더링 — **진짜 표 구조**로.
+     *
+     * 예전에는 <tr> 안에 <div> 를 넣고 CSS 로 display 를 바꿔 2단을 만들었다.
+     * 표에서 유효하지 않은 구조라 화면·브라우저 인쇄·html2canvas 가 서로 다른
+     * 것을 그릴 여지가 있었고, 열 너비가 CSS 변수와 flex 에 흩어져 있어
+     * 항목명 칸을 조절할 자리도 없었다.
+     *
+     * 지금은 4열 표다.  항목명 | 값 | 항목명 | 값
+     * 한 줄을 통째로 쓰는 항목은 값 칸이 colspan=3 을 먹는다. 열 너비는
+     * <colgroup> 이 정한다(table-layout: fixed 에서 colgroup 이 우선이다).
+     */
     orderedRows.forEach(rowItems => {
+        const tr = document.createElement('tr');
+
         if (rowItems.length === 1) {
-            // 100% 너비 항목
             const item = rowItems[0];
-            const tr = document.createElement('tr');
             tr.classList.add('full-width-row');
-            tr.innerHTML = `
-                <th>${item.label}</th>
-                <td>${item.value}</td>
-            `;
-            tbody.appendChild(tr);
-        } else if (rowItems.length === 2) {
-            // 50% 너비 항목 2개를 하나의 tr로 렌더링
-            const containerTr = document.createElement('tr');
-            
-            // 각 항목을 50% 컸테이너로 감싸기
+            tr.dataset.fieldRow = item.key;
+
+            const th = document.createElement('th');
+            th.textContent = item.label;
+            const td = document.createElement('td');
+            td.colSpan = 3;
+            td.innerHTML = item.value;
+
+            tr.appendChild(th);
+            tr.appendChild(td);
+        } else {
             rowItems.forEach(item => {
-                const itemContainer = document.createElement('div');
-                itemContainer.style.cssText = 'display: flex; width: 50%; flex-shrink: 0;';
-                
                 const th = document.createElement('th');
                 th.textContent = item.label;
-                
+                // 2단 행에는 항목이 둘이라 <tr> 이 이름을 가질 수 없다.
+                // 지적을 얹고 줄 도구를 붙이는 단위는 항목이므로 칸이 갖는다.
+                th.dataset.fieldRow = item.key;
+
                 const td = document.createElement('td');
+                td.dataset.fieldRow = item.key;
                 td.innerHTML = item.value;
-                
-                itemContainer.appendChild(th);
-                itemContainer.appendChild(td);
-                containerTr.appendChild(itemContainer);
+
+                tr.appendChild(th);
+                tr.appendChild(td);
             });
-            
-            tbody.appendChild(containerTr);
         }
+
+        tbody.appendChild(tr);
     });
 }
 // CSRF 토큰 가져오기 함수

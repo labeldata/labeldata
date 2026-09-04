@@ -326,7 +326,19 @@ class MyLabel(models.Model):
     prv_font_size = models.CharField(max_length=10, verbose_name="글꼴 크기", null=True, blank=True)
     prv_letter_spacing = models.CharField(max_length=10, verbose_name="자간", null=True, blank=True)
     prv_line_spacing = models.CharField(max_length=10, verbose_name="행간", null=True, blank=True)
-    
+
+    # 표의 항목 배치 — {'order': [필드…], 'width': {필드: '50%'|'100%'}, 'layout': 'vertical'|'horizontal'}
+    #
+    # 지금까지 이것만 브라우저의 localStorage 에 있었다. 그것도 라벨별이 아니라
+    # 'labelFieldOrder' 키 하나에 담겨서, 한 라벨에서 맞춰 둔 순서가 다른 라벨에
+    # 그대로 얹혔고 옆자리 동료는 아예 다른 순서를 봤다. 인쇄물의 모양이라
+    # 라벨에 붙어 있어야 한다.
+    #
+    # 표시/숨김은 여기 없다. 그것은 표시 항목 체크(chckd_*)가 정한다 —
+    # 같은 것을 정하는 스위치가 둘이면 어느 날 서로 다른 말을 한다.
+    prv_field_layout = models.JSONField(verbose_name="표 항목 배치", null=True, blank=True)
+
+
     # 분리배출마크 설정
     prv_recycling_mark_enabled = models.CharField(max_length=1, verbose_name="분리배출마크 적용여부", default='N', null=True, blank=True)
     prv_recycling_mark_type = models.CharField(max_length=50, verbose_name="분리배출마크 종류", null=True, blank=True)

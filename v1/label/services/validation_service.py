@@ -153,13 +153,47 @@ _LEGAL_BASIS = {
     'rawmtrl_bracket': '「식품등의 표시기준」 원재료명 표시 규정(복합원재료의 하위 원료 표시)',
     'food_type_unknown': '「식품등의 표시기준」 식품유형별 표시사항 규정',
     'allergen_vocabulary': '「식품등의 표시기준」 알레르기 유발물질 표시 규정(표시 명칭)',
+    'font_size': '「식품등의 표시기준」 표시사항의 활자 크기 규정(10포인트 이상)',
 }
 
 
-def _issue(category: str, message: str, suggestion: str = '') -> dict:
+# 그 지적이 표시사항의 **어느 줄**에 대한 말인가.
+#
+# 지금까지 검증 결과에는 이 정보가 없었다. "원재료명 표시 순서가 어긋났습니다"
+# 라는 말만 받고 어느 칸을 열어야 하는지는 사용자가 짐작해야 했고, 미리보기의
+# 표에 지적을 얹을 수도 없었다. 필드 이름은 MyLabel 의 것을 그대로 쓴다 —
+# 미리보기의 표도 같은 이름을 키로 쓰므로 화면에서 바로 행을 찾을 수 있다.
+#
+# 줄이 없는 지적도 있다(글자 크기는 표 설정이지 표의 한 줄이 아니다). 그때는
+# 빈 목록이고, 화면은 표에 얹지 않고 목록으로만 보여 준다.
+_ISSUE_FIELDS = {
+    'calorie_consistency':   ('content_weight',),
+    'ingredient_order':      ('rawmtrl_nm_display',),
+    'content_weight':        ('content_weight',),
+    'farm_seafood':          ('ingredient_info', 'rawmtrl_nm_display'),
+    'allergen':              ('rawmtrl_nm_display',),
+    'recycling_mark':        ('frmlc_mtrqlt',),
+    'origin_missing':        ('rawmtrl_nm_display',),
+    'additive_display_name': ('rawmtrl_nm_display',),
+    'content_weight_basis':  ('content_weight',),
+    'rawmtrl_bracket':       ('rawmtrl_nm_display',),
+    'food_type_unknown':     ('prdlst_dcnm',),
+    'allergen_vocabulary':   ('rawmtrl_nm_display',),
+    'font_size':             (),
+    # forbidden_phrase / required_missing 은 지적마다 칸이 달라 그때그때 싣는다
+}
+
+
+def _issue(category: str, message: str, suggestion: str = '', fields=None) -> dict:
     basis = _LEGAL_BASIS.get(category)
     full_message = f'{message} (근거: {basis})' if basis else message
-    return {'category': category, 'message': full_message, 'suggestion': suggestion, 'legal_basis': basis}
+    return {
+        'category': category,
+        'message': full_message,
+        'suggestion': suggestion,
+        'legal_basis': basis,
+        'fields': list(fields if fields is not None else _ISSUE_FIELDS.get(category, ())),
+    }
 
 
 # 표시 여부 체크박스. 접두어 'chckd_' 를 떼면 그대로 MyLabel 필드명이 된다(18개 확인).
@@ -927,7 +961,7 @@ def check_forbidden_phrases(label) -> list[dict]:
                 suggestion = f'"{field_label}" 항목에 "{phrase}" 문구를 표시하려면 반드시 사용 조건에 맞게 표시하세요. {_NATURE_CONDITIONS_KO}'
             else:
                 suggestion = f'"{field_label}"에서 "{phrase}" 문구를 삭제하세요.'
-            issues.append(_issue('forbidden_phrase', message, suggestion))
+            issues.append(_issue('forbidden_phrase', message, suggestion, fields=(field,)))
     return issues
 
 
@@ -1334,6 +1368,38 @@ def _squeeze(text):
     return ''.join(str(text or '').split()).lower()
 
 
+def check_font_size(label) -> list[dict]:
+    """
+    인쇄될 글자 크기가 표시기준의 하한을 밑도는가.
+
+    이 검사는 서버 검증이 생기면서 통째로 빠져 있었다. 예전 화면 검증
+    (label_preview.js 의 validateSettings)에는 있었는데, 판정을 서버로 옮기면서
+    옮겨 오지 않았다. 그래서 설정 창의 글자 크기 하한이 7 pt 인 채로 규정 미달
+    설정이 아무 말 없이 저장되고 있었다 — 규정 도구가 규정 하나를 아예 안 보는
+    상태였다.
+
+    기준값은 constants.LABEL_REGULATIONS 한 곳에서 가져온다. 화면에도 같은
+    하한이 걸려 있지만(enforceInputMinMax), 그것은 **타이핑할 때만** 도는 것이라
+    예전에 저장해 둔 작은 값은 그대로 남는다. 판정은 저장된 값으로 해야 한다.
+    """
+    from v1.label.constants import LABEL_REGULATIONS
+
+    size = _number((getattr(label, 'prv_font_size', '') or '').strip())
+    if size is None or size <= 0:
+        return []   # 미리보기 설정을 아직 저장한 적이 없다
+
+    minimum = LABEL_REGULATIONS['font_size']['general']['min']
+    if size >= minimum:
+        return []
+
+    return [_issue(
+        'font_size',
+        f'인쇄될 글자 크기가 {size:g} 포인트로 표시기준의 하한({minimum} 포인트)보다 작습니다.',
+        f'미리보기의 표 설정에서 글자 크기를 {minimum} 포인트 이상으로 올리세요. '
+        f'표가 넘치면 가로 크기를 키우거나 항목을 2단으로 배치해 보세요.',
+    )]
+
+
 _CHECKS = [
     check_required_fields,
     check_calorie_consistency,
@@ -1350,6 +1416,7 @@ _CHECKS = [
     check_rawmtrl_brackets,
     check_food_type_known,
     check_allergen_vocabulary,
+    check_font_size,
 ]
 
 
