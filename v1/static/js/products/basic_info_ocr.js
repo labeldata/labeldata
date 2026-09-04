@@ -16,6 +16,22 @@
 (function () {
   'use strict';
 
+/*
+ * **대조 모드.**
+ *
+ * 같은 판독을 두 가지 뜻으로 쓴다.
+ *
+ *   채우기   빈 제품에 값을 넣는다 (표시사항을 만드는 단계)
+ *   대조     이미 확정한 값과 디자인 시안이 같은지 본다 (인쇄 전 검증 단계)
+ *
+ * 뒤엣것에 앞엣것을 쓰면 위험하다. 확인 창이 빈 칸을 미리 체크해 두므로,
+ * 무심코 "채우기" 를 누르면 **확정한 값 위에 시안에서 읽은 값이 덮인다.**
+ * 시안이 틀려서 대조하는 것인데 틀린 쪽을 정본으로 삼게 되는 셈이다.
+ *
+ * 그래서 대조 모드에서는 체크박스도 채우기 단추도 없다. 다른 곳만 보여 준다.
+ */
+  var compareMode = false;
+
   // OCR 항목 -> 기본 정보 탭의 입력칸 id
   // weight_calorie 는 이 탭에 칸이 없다(내용량에 함께 적는 항목이라 뺐다).
   // rawmtrl_nm 은 참고용이 아니라 인쇄되는 칸(rawmtrl_nm_display)으로 보낸다.
@@ -185,6 +201,39 @@
     return '<div class="ocr-cands' + (long ? ' ocr-cands-long' : '') + '">'
       + '<span class="ocr-cands-label">후보 ' + candidates.length + '개 — 눌러서 채우고, 채운 뒤에도 고칠 수 있습니다</span>'
       + items + '</div>';
+  }
+
+  /*
+   * 대조 결과 한 줄. 채우기 표와 달리 **고칠 칸도 체크박스도 없다.**
+   *
+   * 여기서 값을 고칠 수 있으면 "시안이 이렇다" 와 "내 값을 이렇게 바꾸겠다"
+   * 가 한 화면에서 섞인다. 대조는 무엇이 다른지 알아내는 일이고, 고치는 것은
+   * 원본 자료를 보고 결정할 일이다.
+   */
+  function compareRowHtml(field, item, meta) {
+    var target = document.getElementById(meta.id);
+    var mine = target ? (target.value || '').trim() : '';
+    var theirs = (item.value || '').trim();
+    var same = mine && theirs && mine === theirs;
+
+    var state, cls;
+    if (same) { state = '같음'; cls = 'ocr-state-same'; }
+    else if (!theirs) { state = '시안에 없음'; cls = 'ocr-state-replace'; }
+    else if (!mine) { state = '내 값이 없음'; cls = 'ocr-state-replace'; }
+    else { state = '다름'; cls = 'ocr-state-replace'; }
+
+    return ''
+      + '<div class="ocr-row cmp-row' + (same ? ' cmp-same' : ' cmp-diff') + '"'
+      + ' data-cmp-field="' + field + '" data-cmp-state="' + (same ? 'same' : 'diff') + '">'
+      + '  <div class="ocr-label">' + esc(meta.label) + '</div>'
+      + '  <div class="ocr-current" title="' + esc(mine) + '">'
+      + (mine ? esc(mine) : '<span class="ocr-empty">비어 있음</span>')
+      + '  </div>'
+      + '  <div class="ocr-arrow"><span class="' + cls + '">' + state + '</span></div>'
+      + '  <div class="ocr-control cmp-theirs">'
+      + (theirs ? esc(theirs) : '<span class="ocr-empty">읽히지 않음</span>')
+      + apiNoteHtml(item) + '</div>'
+      + '</div>';
   }
 
   function rowHtml(field, item, meta) {
@@ -423,6 +472,13 @@
     // "Cannot set properties of null" 로 죽는다.
     var modalEl = ensureModal();
     var body = modalEl.querySelector('#basicInfoOcrBody');
+
+    // 이번 판독이 대조였는지 여기서 한 번 읽고 깃발을 내린다. 남겨 두면
+    // 다음에 "채우기" 로 연 창이 대조 화면으로 뜬다.
+    var comparing = compareMode;
+    compareMode = false;
+    if (comparing) { showCompare(modalEl, body, data, photoFile, apiMatch); return; }
+
     var rows = [];
 
     Object.keys(FIELD_MAP).forEach(function (field) {
@@ -487,6 +543,15 @@
       refreshPickState();
     }
 
+    // 대조 창이 감춰 둔 것을 되돌린다 — 창은 한 벌이라 그대로 두면
+    // 다음 "채우기" 에서 반영 단추가 사라진 채로 뜬다.
+    var applyBtn = modalEl.querySelector('#basicInfoOcrApply');
+    if (applyBtn) applyBtn.style.display = '';
+    var foot = modalEl.querySelector('.modal-footer .me-auto');
+    if (foot) foot.textContent = '체크한 항목만 채웁니다. 저장은 아래 저장 버튼으로 하세요.';
+    var head = modalEl.querySelector('.modal-title');
+    if (head) head.innerHTML = '<i class="bi bi-camera me-2 text-primary"></i>사진에서 읽은 항목';
+
     var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     modalEl.querySelector('#basicInfoOcrApply').onclick = function () {
       // 하나도 안 골랐으면 닫지 않는다.
@@ -508,6 +573,75 @@
       modal.hide();
     };
     modal.show();
+  }
+
+  /*
+   * 대조 화면.
+   *
+   * 다른 것부터 위에 놓는다. 같은 것 열여섯 줄을 지나야 다른 두 줄이 나오면
+   * 대조하는 뜻이 없다.
+   */
+  function showCompare(modalEl, body, data, photoFile, apiMatch) {
+    var diff = [];
+    var same = [];
+
+    Object.keys(FIELD_MAP).forEach(function (field) {
+      var item = data[field];
+      var meta = FIELD_MAP[field];
+      var target = document.getElementById(meta.id);
+      var mine = target ? (target.value || '').trim() : '';
+      var theirs = (item && item.confidence !== 'none' && item.value)
+        ? String(item.value).trim() : '';
+
+      // 양쪽 다 비어 있으면 대조할 것이 없다
+      if (!mine && !theirs) return;
+
+      var html = compareRowHtml(field, item || {}, meta);
+      if (mine && theirs && mine === theirs) same.push(html);
+      else diff.push(html);
+    });
+
+    var head = ''
+      + '<div class="ocr-row ocr-head">'
+      + '  <div>항목</div><div>내 표시사항</div><div></div><div>시안에서 읽은 값</div>'
+      + '</div>';
+
+    var summary = ''
+      + '<div class="cmp-summary ' + (diff.length ? 'cmp-summary-diff' : 'cmp-summary-ok') + '">'
+      + (diff.length
+          ? '<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>' + diff.length
+            + '개 항목이 다릅니다.</strong> 어느 쪽이 맞는지는 원본 자료를 보고 정하세요 — '
+            + '이 창은 값을 고치지 않습니다.'
+          : '<i class="bi bi-check-circle-fill me-1"></i><strong>다른 항목이 없습니다.</strong> '
+            + '시안과 표시사항이 같습니다.')
+      + '</div>';
+
+    var table = summary
+      + apiMatchHtml(apiMatch)
+      + (diff.length
+          ? '<div class="cmp-group"><div class="cmp-group-title">다른 항목 ' + diff.length + '</div>'
+            + '<div class="ocr-table">' + head + diff.join('') + '</div></div>'
+          : '')
+      + (same.length
+          ? '<details class="cmp-group"><summary class="cmp-group-title">같은 항목 ' + same.length + '</summary>'
+            + '<div class="ocr-table">' + head + same.join('') + '</div></details>'
+          : '');
+
+    window.photoViewerLayout(body, photoFile, table);
+
+    // 채우는 창이 아니다 — 반영 단추를 숨긴다
+    var apply = modalEl.querySelector('#basicInfoOcrApply');
+    if (apply) apply.style.display = 'none';
+    var footNote = modalEl.querySelector('.modal-footer .me-auto');
+    if (footNote) {
+      footNote.textContent = '대조만 합니다. 값은 바뀌지 않습니다.';
+    }
+    var title = modalEl.querySelector('.modal-title');
+    if (title) {
+      title.innerHTML = '<i class="bi bi-git-compare me-2 text-primary"></i>디자인 시안 대조';
+    }
+
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
   }
 
   // 영양성분·분리배출은 기본 정보 탭에 칸이 없어 서버가 반영한다. 값은 이
@@ -1202,5 +1336,13 @@
 
   // 불러오기 모달이 부른다
   window.basicInfoOcrExtract = extract;
+  /* 같은 판독을 대조로 쓴다 (import_modal.js 의 '시안 대조' 입구) */
+  window.basicInfoOcrCompare = function (parts, sourceFile) {
+    compareMode = true;
+    return Promise.resolve(extract(parts, sourceFile)).catch(function (err) {
+      compareMode = false;      // 읽지 못했으면 깃발을 내려 둔다
+      throw err;
+    });
+  };
   window.basicInfoOcrShow = showModal;
 })();

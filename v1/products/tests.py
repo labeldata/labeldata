@@ -1752,3 +1752,72 @@ class LabelPhotoToDocumentTests(TestCase):
         # showModal 앞에서 부르되 await/then 으로 묶지 않는다
         at = js.index('saveSourcePhoto(sourceFile || parts[0].file);')
         self.assertLess(at, js.index('showModal(result.data || {}, file,'))
+
+class DesignCompareModeTests(TestCase):
+    """
+    ② 대조 모드 — 채우지 않고 다른 곳만 보여 준다.
+
+    같은 판독을 두 가지 뜻으로 쓴다.
+
+        채우기   빈 제품에 값을 넣는다 (표시사항을 만드는 단계)
+        대조     확정한 값과 디자인 시안이 같은지 본다 (인쇄 전 검증 단계)
+
+    뒤엣것에 앞엣것을 쓰면 위험하다. 확인 창이 빈 칸을 미리 체크해 두므로,
+    무심코 "채우기" 를 누르면 확정한 값 위에 시안에서 읽은 값이 덮인다.
+    시안이 틀려서 대조하는 것인데 틀린 쪽을 정본으로 삼게 되는 셈이다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.ocr = (base / 'static/js/products/basic_info_ocr.js').read_text(encoding='utf-8')
+        self.modal = (base / 'static/js/products/import_modal.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
+
+    def test_대조_입구가_따로_있다(self):
+        self.assertIn('window.basicInfoOcrCompare', self.ocr)
+        self.assertIn("side === 'compare'", self.modal)
+        self.assertIn('function compareZone', self.modal)
+
+    def test_대조_창에는_채우기가_없다(self):
+        """고칠 수 있으면 "시안이 이렇다" 와 "내 값을 바꾸겠다" 가 섞인다."""
+        head = self.ocr.index('function compareRowHtml')
+        block = self.ocr[head:head + 1600]
+        self.assertNotIn('ocr-pick', block)      # 체크박스
+        self.assertNotIn('ocr-value', block)     # 고칠 칸
+        self.assertIn('cmp-theirs', block)
+
+    def test_반영_단추를_감춘다(self):
+        head = self.ocr.index('function showCompare')
+        block = self.ocr[head:head + 3000]
+        self.assertIn("apply.style.display = 'none'", block)
+        self.assertIn('값은 바뀌지 않습니다', block)
+
+    def test_채우기_창은_원래대로_돌아온다(self):
+        """창이 한 벌이라, 되돌리지 않으면 다음 채우기에서 단추가 사라진다."""
+        self.assertIn("applyBtn.style.display = ''", self.ocr)
+        self.assertIn('체크한 항목만 채웁니다', self.ocr)
+
+    def test_깃발은_한_번만_쓴다(self):
+        """남겨 두면 다음에 채우기로 연 창이 대조 화면으로 뜬다."""
+        head = self.ocr.index('var comparing = compareMode;')
+        block = self.ocr[head:head + 300]
+        self.assertIn('compareMode = false;', block)
+
+    def test_읽지_못하면_깃발을_내린다(self):
+        head = self.ocr.index('window.basicInfoOcrCompare')
+        block = self.ocr[head:head + 500]
+        self.assertIn('compareMode = false;', block)
+
+    def test_다른_것부터_보여_준다(self):
+        """같은 것 열여섯 줄을 지나야 다른 두 줄이 나오면 대조하는 뜻이 없다."""
+        head = self.ocr.index('function showCompare')
+        block = self.ocr[head:head + 3000]
+        self.assertLess(block.index('다른 항목 '), block.index('같은 항목 '))
+
+    def test_채우는_칸과_색이_다르다(self):
+        """같아 보이면 인쇄 직전에 확정한 값을 시안으로 덮어쓰는 사고가 난다."""
+        self.assertIn('.import-zone-compare', self.css)
+        self.assertIn('.cmp-row.cmp-diff', self.css)

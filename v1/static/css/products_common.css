@@ -1300,3 +1300,48 @@ table th[title] {
     border-radius: 10px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
+
+/* ==================== 디자인 시안 대조 ====================
+ *
+ * 채우는 일과 뜻이 반대라 색과 자리를 다르게 둔다. 같아 보이면 인쇄 직전에
+ * 확정한 값을 시안으로 덮어쓰는 사고가 난다.
+ */
+.import-zone-compare {
+    background: #f8f9ff;
+    border-color: #c7d2fe !important;
+}
+
+.cmp-summary {
+    margin-bottom: 10px;
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    line-height: 1.6;
+}
+
+.cmp-summary-diff { background: #fce8e6; color: #c5221f; }
+.cmp-summary-ok   { background: #e6f4ea; color: #1e8e3e; }
+
+.cmp-group { margin-bottom: 12px; }
+
+.cmp-group-title {
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary, #5f6368);
+    cursor: pointer;
+}
+
+/* 대조 줄에는 고칠 칸이 없다 — 읽는 자리다 */
+.cmp-row .cmp-theirs {
+    font-size: 12.5px;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.cmp-row.cmp-diff {
+    background: #fffaf9;
+    box-shadow: inset 3px 0 0 #c5221f;
+}
+
+.cmp-row.cmp-same { opacity: 0.72; }
