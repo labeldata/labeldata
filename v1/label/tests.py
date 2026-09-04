@@ -7756,3 +7756,70 @@ class CalorieImpossibleValueTests(TestCase):
 
         self.assertEqual(check_calorie_matches_macros(self._label(
             calories='230', carbohydrates='30', fats='10', proteins='5')), [])
+
+class ValidationResultLayoutTests(TestCase):
+    """
+    검증 결과 창 — 적합은 이름만, 확인이 필요한 것만 펼친다.
+
+    예전에는 스무 항목을 전부 같은 크기의 표 행으로 늘어놓았다. 적합한 열여덟
+    줄이 화면을 다 차지해서, 정작 봐야 할 두 줄을 찾으려면 한참 스크롤해야
+    했다. 그리고 표에 얹힌 번호를 눌러도 그 지적이 무엇인지 볼 길이 없었다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/label_preview.css').read_text(encoding='utf-8')
+
+    def test_적합과_부적합을_다르게_그린다(self):
+        self.assertIn('function vrProblemsHtml', self.js)
+        self.assertIn('function vrPassedHtml', self.js)
+        # 적합은 칩 하나씩
+        head = self.js.index('function vrPassedHtml')
+        self.assertIn('vr-chip', self.js[head:head + 500])
+
+    def test_표로_늘어놓지_않는다(self):
+        """스무 줄짜리 표가 스크롤의 원인이었다."""
+        head = self.js.index('function showAiValidationModal')
+        block = self.js[head:head + 2500]
+        self.assertNotIn('<table class="table table-bordered">', block)
+        self.assertNotIn('검증 항목</th>', block)
+
+    def test_일반과_ai_가_같은_창을_쓴다(self):
+        """판정 방법이 다를 뿐 사용자가 읽는 것은 같은 종류의 결과다."""
+        self.assertEqual(self.js.count('function showAiValidationModal'), 1)
+        head = self.js.index('function showAiValidationModal')
+        block = self.js[head:head + 2500]
+        self.assertIn("useAi ? 'fa-robot' : 'fa-list-check'", block)
+
+    def test_번호를_누르면_그_지적으로_간다(self):
+        self.assertIn('function showValidationDetail', self.js)
+        self.assertIn('id="vr-issue-${num}"', self.js)
+        self.assertIn("closest('#previewContent .pv-issue-badge')", self.js)
+
+    def test_번호_배지가_눌러도_되는_것으로_보인다(self):
+        self.assertIn('pv-issue-badge-link', self.js)
+        self.assertIn('.pv-issue-badge-link { cursor: pointer; }', self.css)
+        self.assertIn("badge.setAttribute('role', 'button')", self.js)
+
+    def test_창_안의_배지까지_지우지_않는다(self):
+        """
+        다시 열 때 표의 배지만 지워야 한다. 범위를 안 좁히면 방금 그린 창의
+        번호까지 사라진다.
+        """
+        head = self.js.index('function markValidationOnTable')
+        block = self.js[head:head + 400]
+        self.assertIn("'#previewContent .pv-issue-badge'", block)
+
+    def test_권고와_재검토를_다른_색으로(self):
+        self.assertIn('vr-card-blocking', self.css)
+        self.assertIn('vr-card-advisory', self.css)
+
+    def test_확인하지_못한_항목은_그대로_보여_준다(self):
+        """규정 도구에서 "확인 안 됨" 이 "적합" 처럼 보이는 건 가장 나쁜 실패다."""
+        self.assertIn('function vrUncheckedHtml', self.js)
+        head = self.js.index('function vrUncheckedHtml')
+        self.assertIn('확인하지 못한 항목', self.js[head:head + 800])

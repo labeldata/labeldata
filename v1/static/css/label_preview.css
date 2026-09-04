@@ -1106,3 +1106,153 @@ tbody.layout-vertical tr td {
     color: #5f6368;
 }
 
+
+/* ==================== 규정 검증 결과 창 ====================
+ *
+ * 예전에는 스무 항목을 전부 같은 크기의 표 행으로 늘어놓았다. 적합한 열여덟
+ * 줄이 화면을 다 차지해서, 정작 봐야 할 두 줄을 찾으려면 한참 스크롤해야
+ * 했다. 적합은 이름만, 확인이 필요한 것만 펼친다.
+ *
+ * 규정 검증과 규정 검증(AI)이 같은 창을 쓴다 — 판정 방법이 다를 뿐 사용자가
+ * 읽는 것은 같은 종류의 결과다.
+ */
+.vr-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
+    font-size: 1rem;
+}
+
+.vr-body {
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+
+/* 지적 하나가 카드 하나 */
+.vr-card {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 8px;
+    background: #fff;
+}
+
+.vr-card-blocking { border-left: 4px solid #c5221f; background: #fffaf9; }
+.vr-card-advisory { border-left: 4px solid #f59e0b; background: #fffdf7; }
+
+.vr-card-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.vr-card-name { font-weight: 700; color: #202124; }
+
+.vr-tag {
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.vr-tag-blocking { background: #fce8e6; color: #c5221f; }
+.vr-tag-advisory { background: #fef3c7; color: #92400e; }
+
+/* "표의 원재료명 줄로" — 누르면 그 줄로 데려간다 */
+.vr-where-btn {
+    margin-left: auto;
+    padding: 1px 8px;
+    border: 1px solid var(--border-light, #dadce0);
+    border-radius: 10px;
+    background: #fff;
+    color: #1a73e8;
+    font-size: 0.72rem;
+    cursor: pointer;
+}
+
+.vr-where-btn:hover { background: #e8f0fe; }
+
+.vr-issue {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    margin-bottom: 4px;
+}
+
+.vr-issue-text { flex: 1; min-width: 0; }
+
+.vr-issue-flash { animation: vrIssueFlash 1.6s ease-out; }
+
+@keyframes vrIssueFlash {
+    0%, 40% { background: #fff3cd; }
+    100%    { background: transparent; }
+}
+
+.vr-suggest {
+    margin-top: 6px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: #f1f5ff;
+    color: #1f3d7a;
+    font-size: 0.8rem;
+}
+
+/* 적합 — 이름만 한 줄에 몰아서 */
+.vr-passed { margin-top: 12px; }
+
+.vr-passed > summary {
+    cursor: pointer;
+    color: #1e8e3e;
+    font-weight: 600;
+    font-size: 0.82rem;
+}
+
+.vr-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.vr-chip {
+    padding: 1px 8px;
+    border: 1px solid #ceead6;
+    border-radius: 10px;
+    background: #e6f4ea;
+    color: #1e8e3e;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.vr-empty {
+    padding: 14px;
+    border-radius: 8px;
+    background: #e6f4ea;
+    color: #1e8e3e;
+    font-weight: 600;
+    text-align: center;
+}
+
+.vr-summary {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-light, #e5e7eb);
+    color: #5f6368;
+    font-size: 0.78rem;
+    white-space: pre-line;
+}
+
+.vr-usage {
+    margin-top: 4px;
+    color: #9aa0a6;
+    font-size: 0.72rem;
+}
+
+.vr-unchecked { font-size: 0.82rem; }
+
+/* 표에 얹힌 번호는 눌러서 내용을 볼 수 있다 */
+.pv-issue-badge-link { cursor: pointer; }
+.pv-issue-badge-link:hover { outline: 2px solid #f28b82; }

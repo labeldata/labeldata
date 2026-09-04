@@ -3286,7 +3286,7 @@ function numberValidationIssues(categories) {
 }
 
 function markValidationOnTable(categories) {
-    document.querySelectorAll('.pv-issue-badge').forEach(function (el) { el.remove(); });
+    document.querySelectorAll('#previewContent .pv-issue-badge').forEach(function (el) { el.remove(); });
     document.querySelectorAll('[data-field-row]').forEach(function (row) {
         row.classList.remove('pv-row-issue');
     });
@@ -3308,9 +3308,11 @@ function markValidationOnTable(categories) {
             const head = row.tagName === 'TH' ? row : row.querySelector('th');
             if (!head || head.querySelector('.pv-issue-badge')) return;
             const badge = document.createElement('span');
-            badge.className = 'pv-issue-badge';
+            badge.className = 'pv-issue-badge pv-issue-badge-link';
             badge.textContent = numbers.join(',');
-            badge.title = `규정 검증 ${numbers.join(', ')}번 지적`;
+            badge.title = '누르면 이 지적의 내용을 봅니다';
+            badge.setAttribute('role', 'button');
+            badge.tabIndex = 0;
             head.insertBefore(badge, head.firstChild);
         });
     });
@@ -3333,134 +3335,201 @@ function jumpToTableRow(field) {
     setTimeout(function () { row.classList.remove('pv-row-flash'); }, 1600);
 }
 
+/* 지금 화면에 떠 있는 검증 결과. 표의 번호 배지를 눌렀을 때 다시 연다. */
+let _lastValidation = null;
+
+/*
+ * 검증 결과 창.
+ *
+ * 예전에는 스무 항목을 전부 같은 크기의 표 행으로 늘어놓았다. 적합한 열여덟
+ * 줄이 화면을 다 차지해서, 정작 봐야 할 두 줄을 찾으려면 한참 스크롤해야
+ * 했다. **적합은 이름만, 확인이 필요한 것만 펼친다.**
+ *
+ * 규정 검증과 규정 검증(AI)이 같은 창을 쓴다 — 판정 방법이 다를 뿐 사용자가
+ * 읽는 것은 같은 종류의 결과다.
+ */
 function showAiValidationModal(result, useAi) {
-    // 기존 실행 함수가 남긴 모달이 있으면 정리
     const legacy = document.getElementById('validationModal');
     if (legacy) legacy.remove();
-
-    const existingModal = document.getElementById('aiValidationModal');
-    if (existingModal) existingModal.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'aiValidationModal';
-    modal.className = 'modal fade';
-
-    const summaryBadge = result.ok
-        ? '<span class="badge bg-success">적합</span>'
-        : '<span class="badge bg-danger">확인 필요</span>';
+    const existing = document.getElementById('aiValidationModal');
+    if (existing) existing.remove();
 
     // 지적에 번호를 매기고 표 위에 얹는다. 목록만 보여 주면 "어느 줄 이야기인지"
     // 를 잇는 일이 사람 몫이 된다 — 열일곱 줄을 눈으로 훑으며 대조해야 했다.
     const categories = numberValidationIssues(result.categories || []);
     markValidationOnTable(categories);
+    _lastValidation = { result: result, useAi: useAi };
 
-    let rowsHtml = '';
-    for (const row of categories) {
-        const anchor = (row.fields || []).find(f => document.querySelector(`[data-field-row="${f}"]`));
-        rowsHtml += `<tr${anchor ? ` class="vr-jump" data-jump="${anchor}" title="누르면 표의 그 줄로 갑니다"` : ''}>`;
-        rowsHtml += `<td>${row.label}${anchor ? '<div class="vr-where">표의 <strong>' + tableRowName(anchor) + '</strong> 줄</div>' : ''}</td>`;
-        /* 권고는 "고치면 좋다" 이지 "틀렸다" 가 아니다. 확정도 막지 않는다.
-           같은 무게로 보이면 진짜 지적이 그 안에 묻힌다. */
-        const badges = (row._numbers || []).map(n => `<span class="pv-issue-badge">${n}</span>`).join('');
-        rowsHtml += row.ok
-            ? '<td><span class="text-success">적합</span></td>'
-            : (row.advisory
-                ? `<td><span class="text-warning-emphasis">권고</span>${badges}</td>`
-                : `<td><span class="text-danger">재검토</span>${badges}</td>`);
+    const problems = categories.filter(c => !c.ok);
+    const passed = categories.filter(c => c.ok);
+    const blocking = problems.filter(c => !c.advisory);
 
-        let msg = '';
-        if (row.errors && row.errors.length > 0) {
-            msg += row.errors.map(function (e, i) {
-                const num = (row._numbers || [])[i];
-                const tag = num ? `<span class="pv-issue-badge">${num}</span>` : '';
-                return tag + (e.includes('<strong>') ? e : `<strong>${e}</strong>`);
-            }).join('<br>');
-        }
-        if (row.suggestions && row.suggestions.length > 0) {
-            if (msg) msg += '<br><br>';
-            msg += '<strong style="color:#0066cc;">💡 제안:</strong><br>' +
-                row.suggestions.map(s => s.includes('<strong>') ? s : `<strong>${s}</strong>`).join('<br>');
-        }
-        msg += validationEvidenceHtml(row.evidence);
-        rowsHtml += `<td>${msg}</td>`;
-        rowsHtml += '</tr>';
-    }
-
-    // 안내 문구에 원문을 그대로 넣으므로 이스케이프한다
-    const escapeHtml = (str) => String(str == null ? '' : str)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    // 검증하지 못한 AI 항목을 사유와 함께 그대로 보여준다.
-    // 예전에는 원인과 무관하게 "함량(%)이 명시돼 있지 않아서" 라고만 안내해서,
-    // API 가 죽어 있어도 사용자는 자기 입력 탓인 줄 알았다. 규정 준수 도구에서
-    // "확인 안 됨" 이 "적합" 처럼 보이는 건 가장 나쁜 실패 방식이다.
-    const unchecked = result.unchecked || [];
-    let orderNotice = '';
-    if (unchecked.length > 0) {
-      const systemFailure = unchecked.some(u => u.system_failure);
-      const rows = unchecked
-        .map(u => `<li><strong>${escapeHtml(u.label)}</strong> — ${escapeHtml(u.message)}</li>`)
-        .join('');
-      orderNotice =
-        `<div class="alert ${systemFailure ? 'alert-warning' : 'alert-secondary'} py-2 px-3 mb-3" style="font-size:0.85rem;">` +
-        `<div class="mb-1"><strong>확인하지 못한 항목 ${unchecked.length}건</strong>` +
-        (systemFailure ? ' <span class="badge bg-warning text-dark">사용 횟수는 차감되지 않았습니다</span>' : '') +
-        `</div><ul class="mb-0 ps-3">${rows}</ul></div>`;
-    }
-
-    // 규정 검증(AI)일 때만 오늘 사용량 배지 표시 (규정 검증은 무제한·무료)
-    let usageBadge = '';
-    if (useAi && result.usage && typeof result.usage.daily_used === 'number') {
-        const u = result.usage;
-        usageBadge = ` <span class="badge bg-light text-dark border" title="오늘 규정 검증(AI) 사용 횟수">오늘 ${u.daily_used}/${u.daily_limit}회 사용${u.is_paid ? ' · 유료' : ''}</span>`;
-    }
-
-    const titleIcon = useAi ? '<i class="fas fa-robot me-2"></i>' : '<i class="fas fa-list-check me-2"></i>';
-    const titleText = useAi ? '규정 검증(AI) 결과' : '규정 검증 결과';
-
-    const summaryDiv = document.createElement('div');
-    summaryDiv.textContent = result.summary || '';
-
+    const modal = document.createElement('div');
+    modal.id = 'aiValidationModal';
+    modal.className = 'modal fade';
     modal.innerHTML = `
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">${titleIcon}${titleText} ${summaryBadge}${usageBadge}</h5>
+                    <h5 class="modal-title vr-title">
+                        <i class="fas ${useAi ? 'fa-robot' : 'fa-list-check'} me-2"></i>
+                        ${useAi ? '규정 검증(AI)' : '규정 검증'}
+                        ${vrCountsHtml(categories, blocking, problems)}
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="alert ${result.ok ? 'alert-success' : 'alert-warning'} mb-3" style="white-space: pre-line;">
-                        ${summaryDiv.innerHTML}
-                    </div>
-                    ${orderNotice}
-                    <table class="table table-bordered">
-                        <thead>
-                            <tr>
-                                <th style="width: 25%">검증 항목</th>
-                                <th style="width: 15%; white-space: nowrap;">상태</th>
-                                <th style="width: 60%">결과 및 제안</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rowsHtml}</tbody>
-                    </table>
+                <div class="modal-body vr-body">
+                    ${vrUncheckedHtml(result.unchecked || [])}
+                    ${vrProblemsHtml(problems)}
+                    ${vrPassedHtml(passed)}
+                    ${vrFooterHtml(result, useAi)}
                 </div>
             </div>
         </div>
     `;
-
     document.body.appendChild(modal);
 
-    // 지적 줄을 누르면 표의 그 행으로 데려간다. 모달은 닫는다 — 표를 가리고
-    // 있으면 데려가 봐야 보이지 않는다.
     const bsModal = new bootstrap.Modal(modal);
     modal.addEventListener('click', function (e) {
+        // 지적을 누르면 표의 그 줄로 데려간다. 창은 닫는다 — 표를 가리고
+        // 있으면 데려가 봐야 보이지 않는다.
         const jump = e.target.closest('.vr-jump');
         if (!jump) return;
+        e.preventDefault();
         bsModal.hide();
         jumpToTableRow(jump.dataset.jump);
     });
     bsModal.show();
+    return bsModal;
 }
+
+function vrCountsHtml(categories, blocking, problems) {
+    if (!problems.length) {
+        return `<span class="badge bg-success ms-2">${categories.length}개 항목 모두 적합</span>`;
+    }
+    const advisory = problems.length - blocking.length;
+    let html = '';
+    if (blocking.length) html += `<span class="badge bg-danger ms-2">재검토 ${blocking.length}</span>`;
+    if (advisory) html += `<span class="badge bg-warning text-dark ms-2">권고 ${advisory}</span>`;
+    html += `<span class="badge bg-light text-dark border ms-2">검증 ${categories.length}</span>`;
+    return html;
+}
+
+/*
+ * 확인이 필요한 항목만 펼친다.
+ *
+ * 지적 하나가 카드 하나다. 번호는 표에 얹힌 배지와 같은 숫자이고, 배지를
+ * 누르면 그 카드로 온다 — 그래서 지적마다 id 를 단다.
+ */
+function vrProblemsHtml(problems) {
+    if (!problems.length) {
+        return '<div class="vr-empty"><i class="fas fa-circle-check me-2"></i>확인이 필요한 항목이 없습니다.</div>';
+    }
+
+    return problems.map(function (row) {
+        const anchor = (row.fields || []).find(f => document.querySelector(`[data-field-row="${f}"]`));
+        const where = anchor
+            ? `<button type="button" class="vr-jump vr-where-btn" data-jump="${anchor}">표의 <strong>${tableRowName(anchor)}</strong> 줄로</button>`
+            : '';
+        /* 권고는 "고치면 좋다" 이지 "틀렸다" 가 아니다. 확정도 막지 않는다.
+           같은 무게로 보이면 진짜 지적이 그 안에 묻힌다. */
+        const tone = row.advisory ? 'vr-card-advisory' : 'vr-card-blocking';
+        const tag = row.advisory
+            ? '<span class="vr-tag vr-tag-advisory">권고</span>'
+            : '<span class="vr-tag vr-tag-blocking">재검토</span>';
+
+        const errors = (row.errors || []).map(function (text, i) {
+            const num = (row._numbers || [])[i];
+            const id = num ? ` id="vr-issue-${num}"` : '';
+            const badge = num ? `<span class="pv-issue-badge">${num}</span>` : '';
+            return `<div class="vr-issue"${id}>${badge}<span class="vr-issue-text">${text}</span></div>`;
+        }).join('');
+
+        const suggestions = (row.suggestions || []).length
+            ? `<div class="vr-suggest"><i class="fas fa-lightbulb me-1"></i>${row.suggestions.join('<br>')}</div>`
+            : '';
+
+        return `<div class="vr-card ${tone}">
+                    <div class="vr-card-head">${tag}<span class="vr-card-name">${row.label}</span>${where}</div>
+                    ${errors}${suggestions}${validationEvidenceHtml(row.evidence)}
+                </div>`;
+    }).join('');
+}
+
+/* 적합한 항목은 **이름만**. 스무 개를 표로 늘어놓으면 봐야 할 것이 묻힌다. */
+function vrPassedHtml(passed) {
+    if (!passed.length) return '';
+    const chips = passed.map(c => `<span class="vr-chip">${c.label}</span>`).join('');
+    return `<details class="vr-passed" open>
+                <summary>적합 ${passed.length}개</summary>
+                <div class="vr-chips">${chips}</div>
+            </details>`;
+}
+
+/*
+ * 확인하지 못한 항목.
+ *
+ * 규정 준수 도구에서 "확인 안 됨" 이 "적합" 처럼 보이는 건 가장 나쁜 실패
+ * 방식이다. 사유를 그대로 보여 준다.
+ */
+function vrUncheckedHtml(unchecked) {
+    if (!unchecked.length) return '';
+    const esc = (str) => String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const systemFailure = unchecked.some(u => u.system_failure);
+    const rows = unchecked
+        .map(u => `<li><strong>${esc(u.label)}</strong> — ${esc(u.message)}</li>`).join('');
+    return `<div class="alert ${systemFailure ? 'alert-warning' : 'alert-secondary'} py-2 px-3 mb-3 vr-unchecked">
+                <div class="mb-1"><strong>확인하지 못한 항목 ${unchecked.length}건</strong>
+                ${systemFailure ? '<span class="badge bg-warning text-dark ms-1">사용 횟수는 차감되지 않았습니다</span>' : ''}
+                </div><ul class="mb-0 ps-3">${rows}</ul>
+            </div>`;
+}
+
+/* 요약 문장과 AI 사용량. 맨 아래에 둔다 — 먼저 볼 것은 지적이다. */
+function vrFooterHtml(result, useAi) {
+    const parts = [];
+    if (result.summary) {
+        const box = document.createElement('div');
+        box.textContent = result.summary;
+        parts.push(`<div class="vr-summary">${box.innerHTML}</div>`);
+    }
+    if (useAi && result.usage && typeof result.usage.daily_used === 'number') {
+        const u = result.usage;
+        parts.push(`<div class="vr-usage">오늘 ${u.daily_used}/${u.daily_limit}회 사용${u.is_paid ? ' · 유료' : ''}</div>`);
+    }
+    return parts.join('');
+}
+
+/*
+ * 표에 얹힌 번호를 누르면 그 지적의 내용을 보여 준다.
+ *
+ * 번호만 있고 내용을 볼 길이 없으면 "몇 번이 뭐였더라" 를 창을 다시 열어
+ * 찾아야 한다. 방금 돌린 결과를 그대로 다시 펼치고 그 지적으로 데려간다.
+ */
+function showValidationDetail(number) {
+    if (!_lastValidation) {
+        if (typeof showPreviewToast === 'function') {
+            showPreviewToast('규정 검증을 먼저 돌려 주세요.', 'warning');
+        }
+        return;
+    }
+    showAiValidationModal(_lastValidation.result, _lastValidation.useAi);
+    setTimeout(function () {
+        const found = document.getElementById(`vr-issue-${number}`);
+        if (!found) return;
+        found.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        found.classList.add('vr-issue-flash');
+        setTimeout(function () { found.classList.remove('vr-issue-flash'); }, 1600);
+    }, 400);
+}
+
+document.addEventListener('click', function (e) {
+    const badge = e.target.closest && e.target.closest('#previewContent .pv-issue-badge');
+    if (!badge) return;
+    const first = String(badge.textContent || '').split(',')[0].trim();
+    if (first) showValidationDetail(first);
+});
 
 // 부모창으로부터 데이터 수신 리스너
 window.addEventListener('message', function(e) {
