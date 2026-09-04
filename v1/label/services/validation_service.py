@@ -1481,12 +1481,38 @@ def check_calorie_matches_macros(label) -> list[dict]:
     if gap <= max(25.0, computed * 0.3):
         return []
 
+    detail = (f'탄수화물 {macros["carbohydrates"]:g} g × 4 + '
+              f'지방 {macros["fats"]:g} g × 9 + '
+              f'단백질 {macros["proteins"]:g} g × 4')
+
+    # **기준이 어긋난 것인가, 값 자체가 틀린 것인가.**
+    #
+    # 둘은 고칠 데가 다르다. 기준 문제면 영양성분 탭에서 환산하면 되고, 값
+    # 문제면 표를 다시 계산해야 한다. 그런데 예전 문구는 늘 "기준을 확인
+    # 하세요" 라고만 해서, 기준을 맞춰도 경고가 안 사라지는 사용자가 어디를
+    # 봐야 할지 몰랐다.
+    #
+    # 가르는 법은 간단하다 — **탄단지가 낼 수 있는 최대 열량**(전부 지방이라
+    # 쳐도 g당 9 kcal)을 넘으면 기준을 어떻게 맞춰도 그 열량은 나올 수 없다.
+    # 기준 환산은 탄단지와 열량에 같은 배수를 곱하는 일이라 비율을 바꾸지
+    # 못하기 때문이다.
+    ceiling = sum(macros.values()) * 9.0
+    if calories > ceiling:
+        return [_issue(
+            'calorie_macros',
+            f'열량({calories:g} kcal)이 탄수화물·지방·단백질로는 나올 수 없는 값입니다 — '
+            f'{detail} = {computed:,.0f} kcal 이고, 이 성분이 전부 지방이라고 쳐도 '
+            f'{ceiling:,.0f} kcal 이 최대입니다.',
+            '기준(100 g 당 / 총 내용량당)을 맞추는 것으로는 해결되지 않습니다. '
+            '환산은 열량과 함량에 같은 배수를 곱하는 일이라 둘의 비율을 바꾸지 '
+            '못합니다. 표의 함량이나 열량 중 한쪽이 잘못 적힌 것이니 원본 '
+            '자료에서 다시 확인하세요.',
+        )]
+
     return [_issue(
         'calorie_macros',
         f'열량({calories:g} kcal)이 탄수화물·지방·단백질로 계산한 값'
-        f'({computed:,.0f} kcal)과 크게 다릅니다 — '
-        f'탄수화물 {macros["carbohydrates"]:g} g × 4 + 지방 {macros["fats"]:g} g × 9 + '
-        f'단백질 {macros["proteins"]:g} g × 4.',
+        f'({computed:,.0f} kcal)과 크게 다릅니다 — {detail}.',
         '한쪽만 다른 기준으로 적힌 경우가 많습니다. 영양성분 탭의 값이 모두 '
         '같은 기준(100 g 당)인지 확인하세요. 라벨에 인쇄된 값을 옮겨 적었다면 '
         '계산기의 "아래 값은" 에서 그 기준을 고르고 다시 넣으면 환산해 줍니다.',

@@ -3071,6 +3071,8 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // 버튼 이벤트 리스너 설정 (중복 제거된 코드)
     safeAddEventListener('exportPdfBtn', 'click', exportToPDF);
+    safeAddEventListener('copyTextBtn', 'click', copyLabelText);
+    safeAddEventListener('downloadTextBtn', 'click', downloadLabelText);
     safeAddEventListener('saveSettingsBtn', 'click', savePreviewSettings);
     // 부모 프레임(탭에 끼워 넣은 미리보기)이 부를 수 있게 노출한다
     window.savePreviewSettings = savePreviewSettings;
@@ -4649,6 +4651,133 @@ function initializeLayoutButtons() {
 }
 
 // 레이아웃 적용하여 테이블 렌더링
+/* ==================== 표시사항을 글자로 ====================
+ *
+ * PDF 는 화면을 이미지로 떠서 붙인 것이라 글자를 선택할 수 없다. 디자인
+ * 담당자는 원재료명 300자를 **손으로 다시 친다.** 검수에서 나온 "과당1"
+ * (원래는 "과당]")이 그 흔적이다 — 사람이 옮겨 적다 대괄호를 1로 쳤다.
+ *
+ * 붙여넣을 수 있는 글자를 내주면 그 단계가 통째로 사라진다.
+ */
+
+/* 인쇄될 그대로의 글자. 화면 전용 표시는 뺀다. */
+function labelTextLines() {
+    const lines = [];
+
+    const header = document.querySelector('.preview-header-box .header-text');
+    if (header) lines.push(header.textContent.trim(), '');
+
+    document.querySelectorAll('#previewTableBody [data-field-row]').forEach(function (row) {
+        // 2단 배치는 한 <tr> 에 항목이 둘이라 칸이 이름을 갖는다.
+        // 그때 <tr> 까지 세면 같은 줄이 두 번 나온다.
+        if (row.tagName === 'TR' && row.querySelector('[data-field-row]')) return;
+
+        const cells = row.tagName === 'TR'
+            ? [row.querySelector('th'), row.querySelector('td')]
+            : [row, row.nextElementSibling];
+        const head = cells[0];
+        const body = cells[1];
+        if (!head || !body) return;
+
+        lines.push(`${cleanCellText(head)}\t${cleanCellText(body)}`);
+    });
+
+    const nutrition = document.getElementById('nutritionPreview');
+    if (nutrition && nutrition.style.display !== 'none' && nutrition.textContent.trim()) {
+        lines.push('', '[영양정보]');
+        nutrition.querySelectorAll('tr').forEach(function (tr) {
+            const cells = Array.from(tr.children).map(cleanCellText).filter(Boolean);
+            if (cells.length) lines.push(cells.join('\t'));
+        });
+    }
+
+    return lines;
+}
+
+/* 화면에만 있는 것(미입력 안내·지적 번호)은 인쇄물의 글자가 아니다. */
+function cleanCellText(cell) {
+    if (!cell) return '';
+    const copy = cell.cloneNode(true);
+    copy.querySelectorAll('.pv-empty-hint, .pv-issue-badge').forEach(function (el) { el.remove(); });
+    // 알레르기 박스는 원재료명과 붙어 있으므로 한 칸 띄워 준다
+    copy.querySelectorAll('.pv-allergen-box').forEach(function (el) {
+        el.textContent = ' ' + el.textContent.trim();
+    });
+    return copy.textContent.replace(/\s+/g, ' ').trim();
+}
+
+/* 한 줄만 복사. 원재료명 하나만 넘겨 달라는 요청이 잦다. */
+async function copyOneRow(field) {
+    const row = document.querySelector(`[data-field-row="${field}"]`);
+    if (!row) return;
+    const cells = row.tagName === 'TR'
+        ? [row.querySelector('th'), row.querySelector('td')]
+        : [row, row.nextElementSibling];
+    const text = cleanCellText(cells[1]);
+    if (!text) {
+        showPreviewToast('이 줄은 아직 비어 있습니다.', 'warning');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(text);
+        showPreviewToast(`"${cleanCellText(cells[0])}" 을(를) 복사했습니다.`, 'success');
+    } catch (e) {
+        showPreviewToast('복사가 막혀 있습니다.', 'warning');
+    }
+}
+
+function labelFileName(extension) {
+    const name = String((window.checkedFields || {}).prdlst_nm || '').trim();
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return ('한글표시사항' + (name ? `_${name}` : '') + `_${date}.${extension}`)
+        .replace(/[<>:"/\|?*]/g, '_');
+}
+
+async function copyLabelText() {
+    const text = labelTextLines().join('\r\n');
+    if (!text.trim()) {
+        showPreviewToast('복사할 표시사항이 없습니다.', 'warning');
+        return;
+    }
+    try {
+        await navigator.clipboard.writeText(text);
+        showPreviewToast('표시사항을 글자로 복사했습니다. 워드·엑셀에 그대로 붙여넣으세요.', 'success');
+    } catch (e) {
+        // 클립보드 권한이 막힌 환경(구형 브라우저·비 HTTPS)에서는 골라 놓는다
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+        document.body.appendChild(area);
+        area.select();
+        try {
+            document.execCommand('copy');
+            showPreviewToast('표시사항을 글자로 복사했습니다.', 'success');
+        } catch (e2) {
+            showPreviewToast('복사가 막혀 있습니다. 옆의 파일 저장을 쓰세요.', 'warning');
+        }
+        area.remove();
+    }
+}
+
+function downloadLabelText() {
+    const text = labelTextLines().join('\r\n');   // 워드·메모장에서 줄이 붙지 않게
+    if (!text.trim()) {
+        showPreviewToast('저장할 표시사항이 없습니다.', 'warning');
+        return;
+    }
+    // 엑셀이 한글을 깨뜨리지 않게 BOM 을 붙인다
+    const blob = new Blob(['\ufeff' + text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = labelFileName('txt');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    showPreviewToast('텍스트 파일로 저장했습니다.', 'success');
+}
+
 /* ==================== 표에서 바로 조작 ====================
  *
  * 눈은 표를 보는데 손은 늘 다른 데 있었다 — 순서·숨김·폭은 왼쪽 패널에서,
@@ -4678,6 +4807,8 @@ function ensureRowTools() {
         + '  <i class="fas fa-pen"></i></button>'
         + '<button type="button" data-act="width" title="이 줄의 폭을 50% / 100% 로">'
         + '  <span class="pv-rowtools-width">50</span></button>'
+        + '<button type="button" data-act="copy" title="이 줄의 값만 복사">'
+        + '  <i class="fas fa-clipboard"></i></button>'
         + '<button type="button" data-act="hide" title="이 항목을 표시하지 않기">'
         + '  <i class="fas fa-eye-slash"></i></button>';
     panel.appendChild(tools);
@@ -4697,6 +4828,8 @@ function ensureRowTools() {
             window.toggleFieldWidth(field);
         } else if (btn.dataset.act === 'edit') {
             openFieldEditor(field);
+        } else if (btn.dataset.act === 'copy') {
+            copyOneRow(field);
         }
     });
     return tools;

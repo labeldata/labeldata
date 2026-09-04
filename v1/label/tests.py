@@ -7646,3 +7646,113 @@ class LabelColumnMeasureTests(TestCase):
         block = self.html[head:head + 1400]
         self.assertIn('0.45', block)
         self.assertIn('Math.min(capPx', block)
+
+class LabelTextExportTests(TestCase):
+    """
+    표시사항을 **붙여넣을 수 있는 글자**로 내준다.
+
+    지금까지 산출물은 PDF 하나였는데, 그것은 화면을 이미지로 떠서 붙인 것이라
+    글자를 선택할 수 없다. 받는 디자인 담당자는 원재료명 300자를 손으로 다시
+    친다 — 검수에서 나온 "과당1"(원래는 "과당]")이 그 흔적이다. 붙여넣을 수
+    있는 글자를 내주면 그 단계가 통째로 사라진다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/label_preview.js').read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+
+    def test_버튼이_있다(self):
+        self.assertIn('id="copyTextBtn"', self.html)
+        self.assertIn('id="downloadTextBtn"', self.html)
+        self.assertIn("safeAddEventListener('copyTextBtn', 'click', copyLabelText)", self.js)
+        self.assertIn("safeAddEventListener('downloadTextBtn', 'click', downloadLabelText)", self.js)
+
+    def test_항목명과_값을_탭으로_가른다(self):
+        """워드·엑셀에 붙여넣으면 그대로 표가 된다."""
+        head = self.js.index('function labelTextLines')
+        block = self.js[head:head + 2000]
+        self.assertIn(r"\t", block)
+
+    def test_화면_전용_표시는_빼고_복사한다(self):
+        """미입력 안내와 지적 번호는 인쇄물의 글자가 아니다."""
+        head = self.js.index('function cleanCellText')
+        block = self.js[head:head + 700]
+        self.assertIn('.pv-empty-hint', block)
+        self.assertIn('.pv-issue-badge', block)
+
+    def test_영양정보도_함께_나간다(self):
+        head = self.js.index('function labelTextLines')
+        block = self.js[head:head + 2000]
+        self.assertIn('nutritionPreview', block)
+        self.assertIn('[영양정보]', block)
+
+    def test_2단_배치에서_같은_줄이_두_번_나오지_않는다(self):
+        """한 <tr> 에 항목이 둘이면 칸이 이름을 갖는다. tr 까지 세면 겹친다."""
+        head = self.js.index('function labelTextLines')
+        block = self.js[head:head + 2000]
+        self.assertIn("row.tagName === 'TR' && row.querySelector('[data-field-row]')", block)
+
+    def test_한_줄만_복사할_수도_있다(self):
+        self.assertIn('function copyOneRow', self.js)
+        self.assertIn("data-act=\"copy\"", self.js)
+
+    def test_클립보드가_막힌_환경에도_길이_있다(self):
+        """비 HTTPS·구형 브라우저에서는 navigator.clipboard 가 없다."""
+        head = self.js.index('async function copyLabelText')
+        block = self.js[head:head + 1500]
+        self.assertIn('execCommand', block)
+
+
+class CalorieImpossibleValueTests(TestCase):
+    """
+    기준이 어긋난 것인가, 값 자체가 틀린 것인가.
+
+    둘은 고칠 데가 다르다. 기준 문제면 영양성분 탭에서 환산하면 되고, 값
+    문제면 표를 다시 계산해야 한다. 그런데 예전 문구는 늘 "기준을 확인하세요"
+    라고만 해서, 기준을 맞춰도 경고가 안 사라지는 사용자가 어디를 봐야 할지
+    몰랐다.
+
+    가르는 법은 간단하다 — 탄단지가 전부 지방이라고 쳐도(g당 9 kcal) 낼 수
+    없는 열량이면, 기준을 어떻게 맞춰도 그 값은 나오지 않는다. 환산은 열량과
+    함량에 같은 배수를 곱하는 일이라 둘의 비율을 바꾸지 못하기 때문이다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='kcal', password='x')
+
+    def _label(self, **kwargs):
+        return MyLabel.objects.create(user_id=self.user, my_label_name='열량', **kwargs)
+
+    def test_나올_수_없는_값이면_그렇게_말한다(self):
+        """
+        실제 도안: 탄 9 · 지 4.5 · 단 1 로는 최대 130 kcal 인데 475 가 적혀 있다.
+        기준을 맞춰도 안 맞는다 — 표 자체가 틀린 것이다.
+        """
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        issues = check_calorie_matches_macros(self._label(
+            calories='475', carbohydrates='9', fats='4.5', proteins='1'))
+        self.assertEqual(len(issues), 1)
+        self.assertIn('나올 수 없는 값', issues[0]['message'])
+        self.assertIn('130 kcal 이 최대', issues[0]['message'])
+        self.assertIn('해결되지 않습니다', issues[0]['suggestion'])
+
+    def test_기준만_어긋난_경우는_환산을_안내한다(self):
+        """탄 30 · 지 10 · 단 5 = 230 kcal. 300 은 나올 수 있는 범위다."""
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        issues = check_calorie_matches_macros(self._label(
+            calories='400', carbohydrates='30', fats='10', proteins='5'))
+        self.assertEqual(len(issues), 1)
+        self.assertNotIn('나올 수 없는 값', issues[0]['message'])
+        self.assertIn('기준', issues[0]['suggestion'])
+
+    def test_맞으면_조용하다(self):
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        self.assertEqual(check_calorie_matches_macros(self._label(
+            calories='230', carbohydrates='30', fats='10', proteins='5')), [])

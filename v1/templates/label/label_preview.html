@@ -49,6 +49,21 @@
       </button>
       {% endif %}
       {% endif %}
+      {% comment %}
+        디자인 담당자에게 넘길 **글자**. PDF 는 화면을 이미지로 떠서 붙인 것이라
+        글자를 선택할 수 없다 — 받는 사람이 원재료명 300자를 손으로 다시 치게
+        되고, 거기서 오타가 난다(검수에서 나온 "과당1"이 그 흔적이다).
+      {% endcomment %}
+      <div class="btn-group">
+        <button class="btn btn-outline-secondary btn-sm" id="copyTextBtn"
+                aria-label="글자 복사" title="표시사항을 글자로 복사합니다. 워드·엑셀에 그대로 붙여넣을 수 있습니다">
+          <i class="fas fa-clipboard me-1" aria-hidden="true"></i>글자 복사
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" id="downloadTextBtn"
+                aria-label="텍스트 파일 저장" title="표시사항을 텍스트 파일로 저장합니다">
+          <i class="fas fa-file-lines" aria-hidden="true"></i>
+        </button>
+      </div>
       {% if can_upload_pdf %}
       <button class="btn btn-primary btn-sm" id="exportPdfBtn" aria-label="PDF 저장">
         <i class="fas fa-file-arrow-down me-1" aria-hidden="true"></i>PDF 저장
