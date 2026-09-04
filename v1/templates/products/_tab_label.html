@@ -100,8 +100,14 @@
         _loaded = true;
         showFrame();  // 즉시 iframe 표시
 
+        // 다른 탭이 서버에 쓰고 있는 중이면 그것부터 끝내야 한다. 안 그러면
+        // 미리보기도 검증도 저장 전 값을 본다.
+        var ready = (typeof window.whenSavesSettled === 'function')
+            ? window.whenSavesSettled() : Promise.resolve();
+
+        ready.then(function () {
         // 백그라운드 fetch: postMessage 응답(previewCheckedFields)에 사용
-        fetch(API_URL, { credentials: 'same-origin' })
+        return fetch(API_URL, { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(data) {
                 if (!data || !data.success) return;
@@ -112,6 +118,7 @@
                 if (frame && frame.contentWindow) _sendPreviewData(frame.contentWindow);
             })
             .catch(function() {});
+        });
     }
 
     function showFrame() {

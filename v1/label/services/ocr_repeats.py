@@ -68,14 +68,32 @@ def amounts_in(text: str) -> set:
     return found
 
 
+# 영양정보 표에 늘 붙는 문구의 숫자. 이 제품의 값이 아니다.
+#
+#   "1일 영양성분 기준치에 대한 비율(%)은 2000 kcal 기준이므로 …"
+#
+# 이걸 세면 모든 라벨이 "앞면 박스와 열량이 다릅니다" 로 지적된다. 실제로
+# 그랬다 — 대조 결과 여덟 줄 중 하나가 이 문구였다.
+_BOILERPLATE_KCAL = frozenset({2000.0, 2500.0})
+
+
 def calories_in(text: str) -> set:
-    """원문에 적힌 열량 후보."""
+    """원문에 적힌 열량 후보. 상용 문구의 숫자는 세지 않는다."""
     found = set()
     for match in _KCAL_RE.finditer(text or ''):
         value = _number(match.group(1))
-        if value is not None and value > 0:
-            found.add(value)
+        if value is None or value <= 0:
+            continue
+        if value in _BOILERPLATE_KCAL and _near_daily_value(text, match.start()):
+            continue
+        found.add(value)
     return found
+
+
+def _near_daily_value(text: str, at: int) -> bool:
+    """그 숫자 둘레가 1일 기준치 안내인가."""
+    around = text[max(0, at - 40):at + 20]
+    return ('기준치' in around) or ('기준이' in around) or ('1일' in around)
 
 
 def _fmt_amount(pair) -> str:

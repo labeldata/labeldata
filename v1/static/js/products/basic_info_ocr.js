@@ -204,34 +204,126 @@
   }
 
   /*
+   * 두 값이 얼마나 다른가.
+   *
+   * 처음에는 문자열이 같은지만 봤다. 그랬더니 여덟 줄이 "다름" 으로 나왔는데
+   * 그중 절반이 **띄어쓰기 차이**였다.
+   *
+   *   내 값   준초콜릿[설탕, 가공유지(말레이시아산, 인도네시아산), …
+   *   시안    준초콜릿[설탕,가공유지(말레이시아산,인도네시아산),…
+   *
+   * 인쇄물에서 쉼표 뒤 공백은 조판이 정하는 것이지 표시 내용이 아니다. 이런
+   * 것이 "다름" 으로 쌓이면 진짜 다른 두 줄이 그 안에 묻힌다 — 대조하는 뜻이
+   * 없어진다.
+   *
+   * 그래서 등급을 넷으로 나눈다.
+   *
+   *   same     글자까지 같다
+   *   spacing  공백·기호만 다르다 (실질은 같다)
+   *   partial  한쪽이 다른 쪽에 통째로 들어 있다 (읽다 끊겼을 수 있다)
+   *   diff     정말 다르다
+   */
+  var COMPARE_GRADES = {
+    same:    { tag: '같음',            cls: 'ocr-state-same',    real: false },
+    spacing: { tag: '띄어쓰기만 다름',  cls: 'cmp-state-minor',   real: false },
+    partial: { tag: '일부만 읽힘',      cls: 'cmp-state-partial', real: true  },
+    diff:    { tag: '다름',            cls: 'ocr-state-replace', real: true  }
+  };
+
+  /*
+   * 견주기 위한 모양.
+   *
+   * 공백을 전부 지우고, 인쇄물에서 갈리는 기호를 하나로 모은다. 괄호는
+   * 종류가 여럿이고(（） ［］), 가운뎃점·물결표도 글꼴마다 다른 글자로 찍힌다.
+   */
+  function compareKey(text) {
+    return String(text || '')
+      .replace(/\s+/g, '')
+      .replace(/[（）]/g, function (c) { return c === '（' ? '(' : ')'; })
+      .replace(/[［］]/g, function (c) { return c === '［' ? '[' : ']'; })
+      .replace(/[·・ㆍ•]/g, '.')
+      .replace(/[～~]/g, '~')
+      .replace(/[‐‑‒–—―]/g, '-')
+      .toLowerCase();
+  }
+
+  function compareGrade(mine, theirs) {
+    if (!mine && !theirs) return 'same';
+    if (!mine || !theirs) return 'diff';
+    if (mine === theirs) return 'same';
+
+    var a = compareKey(mine);
+    var b = compareKey(theirs);
+    if (a === b) return 'spacing';
+    // 한쪽이 다른 쪽에 통째로 들어 있으면 읽다 끊긴 것일 때가 많다.
+    // 그때는 "다르다" 가 아니라 "덜 읽혔다" 고 말해야 고칠 데를 찾는다.
+    if (a.length > 12 && b.length > 12 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)) {
+      return 'partial';
+    }
+    return 'diff';
+  }
+
+  /*
+   * 어디가 다른지 글자로 짚어 준다.
+   *
+   * 300자짜리 원재료명 두 줄을 나란히 놓고 "다릅니다" 라고만 하면, 어디가
+   * 다른지는 사람이 눈으로 찾아야 한다. 앞뒤로 같은 부분을 잘라 내고 가운데
+   * 달라진 자리만 표시한다.
+   */
+  function markDifference(mine, theirs) {
+    var a = String(mine || '');
+    var b = String(theirs || '');
+    var head = 0;
+    while (head < a.length && head < b.length && a[head] === b[head]) head += 1;
+
+    var tail = 0;
+    while (tail < a.length - head && tail < b.length - head
+           && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail += 1;
+
+    var cut = function (text) {
+      var middle = text.slice(head, text.length - tail);
+      if (!middle) return esc(text);
+      return esc(text.slice(0, head))
+        + '<mark class="cmp-mark">' + esc(middle) + '</mark>'
+        + esc(text.slice(text.length - tail));
+    };
+    return { mine: cut(a), theirs: cut(b) };
+  }
+
+  /*
    * 대조 결과 한 줄. 채우기 표와 달리 **고칠 칸도 체크박스도 없다.**
    *
    * 여기서 값을 고칠 수 있으면 "시안이 이렇다" 와 "내 값을 이렇게 바꾸겠다"
    * 가 한 화면에서 섞인다. 대조는 무엇이 다른지 알아내는 일이고, 고치는 것은
    * 원본 자료를 보고 결정할 일이다.
    */
-  function compareRowHtml(field, item, meta) {
+  function compareRowHtml(field, item, meta, grade) {
     var target = document.getElementById(meta.id);
     var mine = target ? (target.value || '').trim() : '';
     var theirs = (item.value || '').trim();
-    var same = mine && theirs && mine === theirs;
 
-    var state, cls;
-    if (same) { state = '같음'; cls = 'ocr-state-same'; }
-    else if (!theirs) { state = '시안에 없음'; cls = 'ocr-state-replace'; }
-    else if (!mine) { state = '내 값이 없음'; cls = 'ocr-state-replace'; }
-    else { state = '다름'; cls = 'ocr-state-replace'; }
+    var state = COMPARE_GRADES[grade].tag;
+    var cls = COMPARE_GRADES[grade].cls;
+    if (grade === 'diff' && !theirs) state = '시안에서 못 읽음';
+    if (grade === 'diff' && !mine) state = '내 값이 없음';
+
+    // 둘 다 값이 있고 정말 다를 때만 어디가 다른지 짚는다. 한쪽이 비었으면
+    // 짚을 것이 없고, 띄어쓰기 차이는 짚어 봐야 눈만 어지럽다.
+    var shown = { mine: esc(mine), theirs: esc(theirs) };
+    if (mine && theirs && (grade === 'diff' || grade === 'partial')) {
+      shown = markDifference(mine, theirs);
+    }
 
     return ''
-      + '<div class="ocr-row cmp-row' + (same ? ' cmp-same' : ' cmp-diff') + '"'
-      + ' data-cmp-field="' + field + '" data-cmp-state="' + (same ? 'same' : 'diff') + '">'
+      + '<div class="ocr-row cmp-row cmp-' + grade + '"'
+      + ' data-cmp-field="' + field + '" data-cmp-state="' + grade + '">'
       + '  <div class="ocr-label">' + esc(meta.label) + '</div>'
       + '  <div class="ocr-current" title="' + esc(mine) + '">'
-      + (mine ? esc(mine) : '<span class="ocr-empty">비어 있음</span>')
+      + (mine ? shown.mine : '<span class="ocr-empty">비어 있음</span>')
       + '  </div>'
       + '  <div class="ocr-arrow"><span class="' + cls + '">' + state + '</span></div>'
       + '  <div class="ocr-control cmp-theirs">'
-      + (theirs ? esc(theirs) : '<span class="ocr-empty">읽히지 않음</span>')
+      + (theirs ? shown.theirs : '<span class="ocr-empty">읽히지 않음</span>')
       + apiNoteHtml(item) + '</div>'
       + '</div>';
   }
@@ -582,7 +674,8 @@
    * 대조하는 뜻이 없다.
    */
   function showCompare(modalEl, body, data, photoFile, apiMatch) {
-    var diff = [];
+    var diff = [];        // 정말 다른 것 — 사람이 봐야 한다
+    var minor = [];       // 띄어쓰기만 다른 것 — 접어 둔다
     var same = [];
     var record = [];      // 문서함에 남길 것 — 화면 HTML 이 아니라 값 자체다
 
@@ -597,12 +690,18 @@
       // 양쪽 다 비어 있으면 대조할 것이 없다
       if (!mine && !theirs) return;
 
-      var html = compareRowHtml(field, item || {}, meta);
-      if (mine && theirs && mine === theirs) {
+      var grade = compareGrade(mine, theirs);
+      var html = compareRowHtml(field, item || {}, meta, grade);
+
+      if (grade === 'same') {
         same.push(html);
+      } else if (grade === 'spacing') {
+        minor.push(html);
       } else {
         diff.push(html);
-        record.push({ field: field, label: meta.label, mine: mine, design: theirs });
+        record.push({
+          field: field, label: meta.label, mine: mine, design: theirs, grade: grade
+        });
       }
     });
 
@@ -611,27 +710,54 @@
       + '  <div>항목</div><div>내 표시사항</div><div></div><div>시안에서 읽은 값</div>'
       + '</div>';
 
+    var tally = '';
+    if (minor.length) tally += ' 띄어쓰기만 다른 것 ' + minor.length + '개는 아래에 접어 뒀습니다.';
+
+    /*
+     * 잘 못 읽은 것을 "다르다" 고 말하면 안 된다.
+     *
+     * 포장지 시안은 표시사항이 그림 한구석에 작게 들어 있다. 전체를 그대로
+     * 올리면 그 부분이 몇 픽셀로 줄어 절반만 읽힌다 — 실제로 "빵류(가열하지
+     * 않고 섭취하는 냉동식품)" 이 "냉동식품" 으로만 읽혔다.
+     *
+     * 그건 시안이 틀린 것이 아니라 우리가 덜 읽은 것이다. 그 낌새가 보이면
+     * 지적을 늘어놓기 전에 다시 읽으라고 말한다.
+     */
+    var thin = record.filter(function (r) {
+      return r.mine && (!r.design || r.design.length < r.mine.length * 0.6);
+    }).length;
+    var weak = record.length >= 3 && thin >= Math.ceil(record.length / 2);
+    var advice = weak
+      ? '<div class="cmp-advice"><i class="bi bi-crop me-1"></i>'
+        + '<strong>덜 읽힌 것으로 보입니다.</strong> ' + thin + '개 항목이 내 값보다 짧게 읽혔습니다 — '
+        + '시안 전체보다 <strong>표시사항 표 부분만 잘라</strong> 다시 올리면 훨씬 정확합니다. '
+        + '아래 결과는 그 상태로 견준 것입니다.</div>'
+      : '';
+
     var summary = ''
       + '<div class="cmp-summary ' + (diff.length ? 'cmp-summary-diff' : 'cmp-summary-ok') + '">'
       + (diff.length
           ? '<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>' + diff.length
-            + '개 항목이 다릅니다.</strong> 어느 쪽이 맞는지는 원본 자료를 보고 정하세요 — '
-            + '이 창은 값을 고치지 않습니다.'
-          : '<i class="bi bi-check-circle-fill me-1"></i><strong>다른 항목이 없습니다.</strong> '
-            + '시안과 표시사항이 같습니다.')
+            + '개 항목을 확인하세요.</strong> 어느 쪽이 맞는지는 원본 자료를 보고 정합니다 — '
+            + '이 창은 값을 고치지 않습니다.' + tally
+          : '<i class="bi bi-check-circle-fill me-1"></i><strong>확인할 항목이 없습니다.</strong> '
+            + '시안과 표시사항이 같습니다.' + tally)
       + '</div>'
       + '<div id="cmpRecordNote" class="cmp-record-note"></div>';
 
+    var group = function (rows, title, open) {
+      if (!rows.length) return '';
+      return '<details class="cmp-group"' + (open ? ' open' : '') + '>'
+        + '<summary class="cmp-group-title">' + title + ' ' + rows.length + '</summary>'
+        + '<div class="ocr-table">' + head + rows.join('') + '</div></details>';
+    };
+
     var table = summary
+      + advice
       + apiMatchHtml(apiMatch)
-      + (diff.length
-          ? '<div class="cmp-group"><div class="cmp-group-title">다른 항목 ' + diff.length + '</div>'
-            + '<div class="ocr-table">' + head + diff.join('') + '</div></div>'
-          : '')
-      + (same.length
-          ? '<details class="cmp-group"><summary class="cmp-group-title">같은 항목 ' + same.length + '</summary>'
-            + '<div class="ocr-table">' + head + same.join('') + '</div></details>'
-          : '');
+      + group(diff, '확인할 항목', true)
+      + group(minor, '띄어쓰기만 다른 항목', false)
+      + group(same, '같은 항목', false);
 
     window.photoViewerLayout(body, photoFile, table);
 

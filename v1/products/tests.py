@@ -1800,9 +1800,9 @@ class DesignCompareModeTests(TestCase):
 
     def test_반영_단추를_감춘다(self):
         head = self.ocr.index('function showCompare')
-        block = self.ocr[head:head + 3000]
+        block = self.ocr[head:head + 6000]
         self.assertIn("apply.style.display = 'none'", block)
-        self.assertIn('값은 바뀌지 않습니다', block)
+        self.assertIn('값을 고치지 않습니다', block)
 
     def test_채우기_창은_원래대로_돌아온다(self):
         """창이 한 벌이라, 되돌리지 않으면 다음 채우기에서 단추가 사라진다."""
@@ -1820,11 +1820,39 @@ class DesignCompareModeTests(TestCase):
         block = self.ocr[head:head + 500]
         self.assertIn('compareMode = false;', block)
 
-    def test_다른_것부터_보여_준다(self):
+    def test_확인할_것부터_보여_준다(self):
         """같은 것 열여섯 줄을 지나야 다른 두 줄이 나오면 대조하는 뜻이 없다."""
         head = self.ocr.index('function showCompare')
-        block = self.ocr[head:head + 3000]
-        self.assertLess(block.index('다른 항목 '), block.index('같은 항목 '))
+        block = self.ocr[head:head + 5000]
+        self.assertLess(block.index("'확인할 항목'"), block.index("'같은 항목'"))
+
+    def test_띄어쓰기만_다른_것은_따로_센다(self):
+        """
+        여덟 줄이 "다름" 으로 나왔는데 절반이 쉼표 뒤 공백 차이였다. 인쇄물에서
+        그것은 조판이 정하는 것이지 표시 내용이 아니다. 같은 무게로 쌓이면
+        진짜 다른 줄이 그 안에 묻힌다.
+        """
+        self.assertIn('function compareGrade', self.ocr)
+        self.assertIn('function compareKey', self.ocr)
+        head = self.ocr.index('function compareGrade')
+        block = self.ocr[head:head + 900]
+        self.assertIn("return 'spacing'", block)
+        self.assertIn("return 'partial'", block)
+
+    def test_어디가_다른지_짚어_준다(self):
+        """300자짜리 원재료명 두 줄을 눈으로 대조하게 두지 않는다."""
+        self.assertIn('function markDifference', self.ocr)
+        self.assertIn('cmp-mark', self.ocr)
+
+    def test_덜_읽힌_것을_다르다고_말하지_않는다(self):
+        """
+        시안은 표시사항이 그림 한구석에 작게 들어 있다. 전체를 올리면 절반만
+        읽히는데, 그건 시안이 틀린 것이 아니라 우리가 덜 읽은 것이다.
+        """
+        head = self.ocr.index('var thin = record.filter')
+        block = self.ocr[head:head + 900]
+        self.assertIn('cmp-advice', block)
+        self.assertIn('잘라', block)
 
     def test_다른_줄이_눈에_띈다(self):
         self.assertIn('.cmp-row.cmp-diff', self.css)
@@ -1838,7 +1866,9 @@ class DesignCompareModeTests(TestCase):
         self.assertIn('function recordCompare', self.ocr)
         self.assertIn('/design-compare/', self.ocr)
         # 화면 HTML 이 아니라 값 자체를 남긴다
-        self.assertIn("record.push({ field: field, label: meta.label", self.ocr)
+        head = self.ocr.index('record.push({')
+        self.assertIn('label: meta.label', self.ocr[head:head + 200])
+        self.assertIn('design: theirs', self.ocr[head:head + 200])
 
 class DesignCompareRecordTests(TestCase):
     """

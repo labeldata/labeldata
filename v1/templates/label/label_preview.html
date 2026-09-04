@@ -37,7 +37,12 @@
         <button class="btn btn-outline-secondary btn-sm zoom-fit" id="zoomFitBtn" aria-label="창에 맞추기" title="창 너비에 맞춥니다">맞춤</button>
       </div>
       {% if not request.GET.readonly %}
-      <button class="btn btn-outline-secondary btn-sm" id="ruleValidationBtn" aria-label="규정 검증" title="AI 없이 규정 검증 (무료·무제한)">
+      {% comment %}
+        규정 검증은 이 화면에서 가장 많이 누르는 단추다. 회색 테두리로 두면
+        보조 도구처럼 보여서, 정작 돌려 보지 않고 확정하는 일이 생긴다.
+      {% endcomment %}
+      <button class="btn btn-warning btn-sm btn-validate-emphasis" id="ruleValidationBtn"
+              aria-label="규정 검증" title="표시기준에 어긋나는 곳을 찾습니다 (무료·무제한)">
         <i class="fas fa-list-check me-1" aria-hidden="true"></i>규정 검증
       </button>
       {% comment %}
