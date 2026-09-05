@@ -9,7 +9,7 @@
     python manage.py refresh_product_intro --dry-run   # 계산만 하고 기록하지 않음
 
 매일 아침 수집 배치 뒤에 이어서 돌리면 된다
-(PYTHONANYWHERE_SCHEDULED_TASK_SETUP.md 참고).
+(DEPLOY.md 참고).
 """
 import time
 

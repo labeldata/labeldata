@@ -8236,8 +8236,17 @@ class CompanyRecheckTests(TestCase):
             {'bssh_nm': {'value': same}},
             [{'role': '제조원', 'name': '㈜샤니', 'address': '경기도 성남시'}])
         self.assertIn(same, out['bssh_nm']['candidates'])
-        self.assertEqual(out['bssh_nm']['confidence'], 'low')
-        self.assertTrue(out['bssh_nm']['warnings'])
+
+    def test_다시_읽었다는_말은_하지_않는다(self):
+        """
+        그건 우리 사정이지 사용자가 알아야 할 일이 아니다. 화면에 남아야 하는
+        것은 "이 칸에 무엇이 들어갔고 다른 후보가 무엇인가" 뿐이다.
+        """
+        out = self.C.apply_recheck(
+            {'bssh_nm': {'value': '주식회사 오뚜기 경기도 안양시'}},
+            [{'role': '제조원', 'name': '㈜샤니', 'address': '경기도 성남시'}])
+        for warning in (out['bssh_nm'].get('warnings') or []):
+            self.assertNotIn('다시 읽', warning)
 
     def test_같은_회사를_다시_읽었으면_건드리지_않는다(self):
         mine = '(주)샤니 경기도 성남시 중원구 둔촌대로457번길 13'
@@ -8307,28 +8316,49 @@ class RawmtrlBuilderIsWhereTheWorkIsTests(TestCase):
         self.assertIn('window.buildRawmtrlDisplay', self.html)
         self.assertIn("'/label/' + PRODUCT_ID + '/rawmtrl-display/'", self.html)
 
-    def test_덮어쓰기_전에_묻는다(self):
+    def test_만든_것을_바로_넣지_않는다(self):
+        """
+        이 칸은 법적 위험이 가장 큰 문구이고 손으로 다듬어 둔 것이 있을 수
+        있다. 무엇이 어떻게 달라지는지 나란히 놓고 사람이 정한다.
+        """
         head = self.html.index('window.buildRawmtrlDisplay')
-        block = self.html[head:head + 1200]
-        self.assertIn('confirm(', block)
-        self.assertIn('사라집니다', block)
+        block = self.html[head:head + 2200]
+        self.assertNotIn('target.value =', block)
+        self.assertIn("box.style.display = ''", block)
+        self.assertIn('id="rawmtrlBefore"', self.html)
+        self.assertIn('id="rawmtrlAfter"', self.html)
 
-    def test_저장하지_않는다(self):
-        # 값만 넣고 저장은 사용자가 저장 단추로 한다
-        head = self.html.index('window.buildRawmtrlDisplay')
-        block = self.html[head:head + 3000]
-        self.assertNotIn('UPDATE_URL', block)
+    def test_어디가_다른지_짚어_준다(self):
+        # 300자짜리 두 줄을 나란히 놓고 "다릅니다" 라고만 하면 소용이 없다
+        self.assertIn('function _rawmtrlMark', self.html)
+        self.assertIn('rawmtrl-mark', self.html)
+
+    def test_바꾸기를_눌러야_들어간다(self):
+        head = self.html.index('window.applyRawmtrlDisplay')
+        block = self.html[head:head + 1600]
+        self.assertIn('target.value = _rawmtrlBuilt.text', block)
         self.assertIn("dispatchEvent(new Event('input'", block)
+        # 저장은 사용자가 저장 단추로 한다
+        self.assertNotIn('UPDATE_URL', block)
 
-    def test_만든_뒤_인쇄되게_켠다(self):
+    def test_바꾼_뒤_인쇄되게_켠다(self):
         # 만들어 놓고 표시 체크가 꺼져 있으면 인쇄되지 않는다
+        head = self.html.index('window.applyRawmtrlDisplay')
+        self.assertIn('chckd_rawmtrl_nm_display', self.html[head:head + 1600])
+
+    def test_같은_값이면_창을_열지_않는다(self):
         head = self.html.index('window.buildRawmtrlDisplay')
-        block = self.html[head:head + 3000]
-        self.assertIn('chckd_rawmtrl_nm_display', block)
+        self.assertIn('지금 값과 같습니다', self.html[head:head + 2200])
+
+    def test_BOM_을_고치러_가는_길이_있다(self):
+        # 문구를 바꾸려면 BOM 을 고쳐야 한다. 그 길을 여기서 열어 준다.
+        self.assertIn('window.goToBomTabForRawmtrl', self.html)
+        self.assertIn('data-bs-target="#tab-bom"', self.html)
+        self.assertIn('BOM 탭에서 고치기', self.html)
 
     def test_직접_골라야_할_첨가물을_짚어_준다(self):
-        head = self.html.index('window.buildRawmtrlDisplay')
-        self.assertIn('needs_review', self.html[head:head + 3000])
+        self.assertIn('needs_review', self.html)
+        self.assertIn('표시명을 직접 골라야 하는 첨가물', self.html)
 
     def test_안내_문구가_거짓말을_하지_않는다(self):
         # "자동으로 연결됩니다" 라고 적혀 있었는데 아무것도 연결되지 않았다
@@ -8518,3 +8548,67 @@ class IngredientMergeScreenTests(TestCase):
 
     def test_다른_문서_창과_같은_껍데기를_쓴다(self):
         self.assertIn('class="modal fade doc-modal" id="dupModal"', self.html)
+
+
+class MergeButtonActuallyMergesTests(TestCase):
+    """
+    "고른 것으로 합치기" 를 눌렀는데 아무 일도 안 일어났다. 단추만 흐려지고
+    닫아 보면 건수가 그대로였다.
+
+    이 페이지의 `getCookie` 가 DOMContentLoaded 콜백 안에 있어서 바깥 스크립트
+    에서는 안 보인다. 불러 쓰면 ReferenceError 로 죽는데, onclick 안이라
+    화면에는 **아무 일도 안 일어난 것처럼** 보인다.
+    """
+
+    def setUp(self):
+        self.html = _src('templates/label/my_ingredient_list_combined.html')
+
+    def test_토큰을_스스로_읽는다(self):
+        head = self.html.index('window.mergeDupGroup')
+        block = self.html[head:head + 2000]
+        self.assertIn("'X-CSRFToken': csrf()", block)
+        self.assertNotIn("getCookie('csrftoken')", block)
+
+    def test_그_토큰_함수가_같은_묶음_안에_있다(self):
+        # 밖에 있으면 이번과 똑같은 일이 난다
+        start = self.html.index('var csrf = function ()')
+        self.assertLess(start, self.html.index('window.mergeDupGroup'))
+        self.assertIn('[name=csrfmiddlewaretoken]', self.html[start:start + 400])
+
+    def test_합친_뒤_화면을_다시_읽는다(self):
+        # "합쳤습니다" 라고 해 놓고 목록이 그대로면 된 것인지 알 수가 없다
+        self.assertIn("modalEl.addEventListener('hidden.bs.modal'", self.html)
+        self.assertIn('if (merged) window.location.reload();', self.html)
+
+    def test_합친_묶음은_눈에_띄게_끝난다(self):
+        head = self.html.index("box.classList.add('is-done')")
+        self.assertIn('actionBtn.remove()', self.html[head:head + 300])
+        self.assertIn('.dup-group.is-done', self.html)
+
+
+class AllergensStayAsPrintedTests(TestCase):
+    """
+    라벨에 "알류(달걀)" 이라고 찍혀 있으면 그대로 넣는다.
+
+    괄호는 무엇을 넣었는지 밝히는 부분이고 라벨에 그대로 인쇄된다. 그런데
+    판독이 "달걀" 로만 읽어 오면 표시 명칭 판정이 "알류" 로 바꿔 놓는다 —
+    괄호가 사라지고, 시안 대조에서 멀쩡한 값이 "다름" 으로 잡힌다.
+    """
+
+    def test_프롬프트가_그대로_옮기라고_말한다(self):
+        src = _src('label/services/ocr_service.py')
+        head = src.index('- allergens:')
+        block = src[head:head + 700]
+        self.assertIn('**적힌 그대로 옮긴다.**', block)
+        self.assertIn('괄호를 **빼지 마라.**', block)
+        self.assertIn('"알류(달걀)" 을 "알류" 나 "달걀" 로 줄이면 안 된다', block)
+
+    def test_괄호가_붙은_표기는_판정이_건드리지_않는다(self):
+        from v1.label.services.allergen_names import normalize
+        text, _ = normalize('알류(달걀),우유,대두,밀')
+        self.assertEqual(text, '알류(달걀), 우유, 대두, 밀')
+
+    def test_같은_물질이_두_표기로_오면_자세한_쪽을_남긴다(self):
+        from v1.label.services.allergen_names import normalize
+        text, _ = normalize('알류(달걀), 우유, 달걀')
+        self.assertEqual(text, '알류(달걀), 우유')

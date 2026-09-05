@@ -1522,3 +1522,58 @@ table th[title] {
     color: var(--ez-text-muted, #5f6368);
 }
 .rawmtrl-hint.is-bad { color: var(--ez-danger, #c5221f); font-weight: 600; }
+
+/* -------------------------
+   BOM 에서 만든 원재료명 — 전후를 나란히
+   -------------------------
+   이 칸은 라벨에서 법적 위험이 가장 큰 문구이고, 손으로 다듬어 둔 것이 있을
+   수 있다. 만든 것을 바로 밀어 넣지 않고 무엇이 어떻게 달라지는지 보여 준다.
+   ------------------------- */
+.rawmtrl-diff {
+    margin-top: 8px;
+    border: 1px solid var(--ez-border, #dadce0);
+    border-radius: 8px;
+    background: #fff;
+    overflow: hidden;
+}
+.rawmtrl-diff-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--ez-gray-50, #f8f9fa);
+    border-bottom: 1px solid var(--ez-border-light, #f1f3f4);
+}
+.rawmtrl-diff-title { font-size: 12px; font-weight: 700; color: var(--ez-gray-900, #202124); }
+.rawmtrl-diff-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1px;
+    background: var(--ez-border-light, #f1f3f4);
+}
+.rawmtrl-side { background: #fff; padding: 8px 12px; min-width: 0; }
+.rawmtrl-side.is-new { background: #f7fbf8; }
+.rawmtrl-side-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ez-text-muted, #5f6368);
+    margin-bottom: 4px;
+}
+.rawmtrl-side-text {
+    font-size: 12px;
+    line-height: 1.6;
+    word-break: break-word;
+    max-height: 190px;
+    overflow-y: auto;
+}
+.rawmtrl-mark { background: #fff3cd; padding: 0 1px; border-radius: 2px; }
+.rawmtrl-diff-foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--ez-border-light, #f1f3f4);
+}
+@media (max-width: 767px) {
+    .rawmtrl-diff-body { grid-template-columns: 1fr; }
+}

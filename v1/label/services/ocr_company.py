@@ -504,18 +504,13 @@ def apply_recheck(data, companies):
         if before and key(company_part(before)) == key(company_part(value)):
             continue          # 같은 회사다. 건드릴 것이 없다
         item = _as_item(out.get(field), value)
-        item['confidence'] = 'low'
+        item['confidence'] = 'medium'
         if before:
+            # 처음 읽은 값은 후보로 남긴다. 확인 창에서 되돌릴 수 있어야 한다.
+            #
+            # **다시 읽었다는 말은 하지 않는다.** 그건 우리 사정이지 사용자가
+            # 알아야 할 일이 아니다. 화면에 남아야 하는 것은 "이 칸에 무엇이
+            # 들어갔고 다른 후보가 무엇인가" 뿐이다.
             item = _add_candidate(item, before)
-            item = _warn(
-                item,
-                f'{ROLE_LABELS[field]} 줄만 다시 읽었습니다. 처음에는 '
-                f'"{before}" 로 읽었는데, 이 항목들은 서로 다른 회사라 그 자리를 '
-                f'다시 확인했습니다. 사진을 보고 맞는 쪽을 고르세요.')
-        else:
-            item = _warn(
-                item,
-                f'{ROLE_LABELS[field]} 줄만 다시 읽어 채웠습니다. 사진과 맞는지 '
-                f'확인하세요.')
         out[field] = item
     return out

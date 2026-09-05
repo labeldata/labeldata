@@ -429,6 +429,37 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                     <span id="buildRawmtrlHint" class="rawmtrl-hint" style="display:none;"></span>
                 </div>
 
+                {# 만든 것을 바로 넣지 않는다. 무엇이 어떻게 달라지는지 보고 정한다 #}
+                <div id="rawmtrlDiff" class="rawmtrl-diff" style="display:none;">
+                    <div class="rawmtrl-diff-head">
+                        <span class="rawmtrl-diff-title">BOM에서 만든 문구</span>
+                        <span class="rawmtrl-hint" id="rawmtrlDiffCount"></span>
+                    </div>
+                    <div class="rawmtrl-diff-body">
+                        <div class="rawmtrl-side">
+                            <div class="rawmtrl-side-label">지금 값</div>
+                            <div class="rawmtrl-side-text" id="rawmtrlBefore"></div>
+                        </div>
+                        <div class="rawmtrl-side is-new">
+                            <div class="rawmtrl-side-label">새로 만든 값</div>
+                            <div class="rawmtrl-side-text" id="rawmtrlAfter"></div>
+                        </div>
+                    </div>
+                    <div class="rawmtrl-diff-foot">
+                        <button type="button" class="btn btn-light border v2-btn-sm"
+                                onclick="goToBomTabForRawmtrl()">
+                            <i class="bi bi-diagram-3"></i>BOM 탭에서 고치기
+                        </button>
+                        <span class="flex-grow-1"></span>
+                        <button type="button" class="btn btn-light border v2-btn-sm"
+                                onclick="closeRawmtrlDiff()">취소</button>
+                        <button type="button" class="btn btn-primary v2-btn-sm"
+                                id="rawmtrlApplyBtn" onclick="applyRawmtrlDisplay()">
+                            <i class="bi bi-check2"></i>이 값으로 바꾸기
+                        </button>
+                    </div>
+                </div>
+
                 <!-- ── 알레르기 감지 패널 (Google Material Style) ── -->
                 <div class="allergen-panel-root mt-2">
 
@@ -1452,60 +1483,137 @@ function copyVerifiedDataInline() {
    **저장하지 않는다.** 칸에 넣기만 하고 저장은 사용자가 저장 단추로 한다 —
    말없이 덮어쓰면 손으로 다듬어 둔 문구가 조용히 사라진다.
  */
-window.buildRawmtrlDisplay = async function () {
-    var target = document.getElementById('field-rawmtrl-nm');
-    var hint = document.getElementById('buildRawmtrlHint');
-    var btn = document.getElementById('buildRawmtrlBtn');
-    if (!target || typeof PRODUCT_ID === 'undefined') return;
+var _rawmtrlBuilt = null;   // 만들어 두고 아직 넣지 않은 문구
 
-    if (target.value.trim() &&
-        !confirm('원재료명 표시명을 새로 만든 문구로 바꿉니다.\n\n지금 적혀 있는 것은 사라집니다. 계속할까요?')) {
-        return;
+function _rawmtrlHint(text, bad) {
+    var hint = document.getElementById('buildRawmtrlHint');
+    if (!hint) return;
+    hint.textContent = text;
+    hint.className = 'rawmtrl-hint' + (bad ? ' is-bad' : '');
+    hint.style.display = text ? '' : 'none';
+}
+
+window.closeRawmtrlDiff = function () {
+    _rawmtrlBuilt = null;
+    var box = document.getElementById('rawmtrlDiff');
+    if (box) box.style.display = 'none';
+};
+
+/* BOM 을 고쳐야 문구가 달라진다. 고치러 가는 길을 여기서 열어 준다. */
+window.goToBomTabForRawmtrl = function () {
+    var trigger = document.querySelector('button[data-bs-target="#tab-bom"]');
+    if (!trigger) return;
+    bootstrap.Tab.getOrCreateInstance(trigger).show();
+    _rawmtrlHint('BOM 을 고친 뒤 기본 정보 탭으로 돌아와 다시 만드세요.');
+};
+
+window.applyRawmtrlDisplay = function () {
+    var target = document.getElementById('field-rawmtrl-nm');
+    if (!target || _rawmtrlBuilt === null) return;
+
+    target.value = _rawmtrlBuilt.text;
+    // 알레르기 자동 감지와 저장 대상 수집이 이 신호를 듣는다
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+
+    // 만들어 놓고 인쇄되지 않으면 아무 소용이 없다
+    var check = document.querySelector('.display-item-check[name="chckd_rawmtrl_nm_display"]');
+    if (check && !check.checked) {
+        check.checked = true;
+        check.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    var show = function (text, bad) {
-        if (!hint) return;
-        hint.textContent = text;
-        hint.className = 'rawmtrl-hint' + (bad ? ' is-bad' : '');
-        hint.style.display = '';
-    };
+    var review = _rawmtrlBuilt.needs_review || [];
+    if (review.length) {
+        // 표4 첨가물인데 용도가 여럿이라 코드가 못 정한 것들.
+        // 어느 것을 봐야 하는지 짚어 주면 전부 다시 읽을 필요가 없다.
+        _rawmtrlHint('바꿨습니다. 표시명을 직접 골라야 하는 첨가물: '
+                     + review.join(', ') + ' — 확인하고 저장하세요.', true);
+    } else {
+        _rawmtrlHint('바꿨습니다. 확인하고 저장하세요.');
+    }
+    window.closeRawmtrlDiff();
+};
+
+/*
+   배합비에서 인쇄 문구를 만든다
+
+   서버에 조립기가 이미 있다(`build_display_text`) — 함량 내림차순, 첨가물
+   간략명, 복합원재료 괄호, 알레르기 문구가 규정대로 붙는다. AI 는 쓰지 않는다.
+   필요한 근거가 전부 DB 에 있기 때문이다.
+
+   **만든 것을 바로 넣지 않는다.** 이 칸은 라벨에서 법적 위험이 가장 큰
+   문구이고, 손으로 다듬어 둔 것이 있을 수 있다. 무엇이 어떻게 달라지는지
+   나란히 놓고 사용자가 정한다. 저장도 저장 단추로 따로 한다.
+ */
+window.buildRawmtrlDisplay = async function () {
+    var target = document.getElementById('field-rawmtrl-nm');
+    var btn = document.getElementById('buildRawmtrlBtn');
+    var box = document.getElementById('rawmtrlDiff');
+    if (!target || !box || typeof PRODUCT_ID === 'undefined') return;
 
     if (btn) btn.disabled = true;
+    _rawmtrlHint('');
     try {
         var res = await fetch('/label/' + PRODUCT_ID + '/rawmtrl-display/',
                               { credentials: 'same-origin' });
         var data = await res.json();
         if (!res.ok || !data.success) {
-            show(data.message || '문구를 만들지 못했습니다.', true);
+            _rawmtrlHint(data.message || '문구를 만들지 못했습니다.', true);
             return;
         }
 
-        target.value = data.text;
-        // 알레르기 자동 감지와 저장 대상 수집이 이 신호를 듣는다
-        target.dispatchEvent(new Event('input', { bubbles: true }));
-
-        // 만들어 놓고 인쇄되지 않으면 아무 소용이 없다
-        var check = document.querySelector('.display-item-check[name="chckd_rawmtrl_nm_display"]');
-        if (check && !check.checked) {
-            check.checked = true;
-            check.dispatchEvent(new Event('change', { bubbles: true }));
+        var before = (target.value || '').trim();
+        if (before && before === data.text.trim()) {
+            _rawmtrlHint('지금 값과 같습니다. 바꿀 것이 없습니다.');
+            window.closeRawmtrlDiff();
+            return;
         }
 
-        if (data.needs_review && data.needs_review.length) {
-            // 표4 첨가물인데 용도가 여럿이라 코드가 못 정한 것들.
-            // 어느 것을 봐야 하는지 짚어 주면 전부 다시 읽을 필요가 없다.
-            show('원료 ' + data.count + '개로 만들었습니다. 표시명을 직접 골라야 하는 첨가물: '
-                 + data.needs_review.join(', '), true);
-        } else {
-            show('원료 ' + data.count + '개로 만들었습니다. 확인하고 저장하세요.');
-        }
+        _rawmtrlBuilt = data;
+        document.getElementById('rawmtrlBefore').innerHTML =
+            before ? _rawmtrlMark(before, data.text) : '<em class="rawmtrl-hint">비어 있음</em>';
+        document.getElementById('rawmtrlAfter').innerHTML =
+            _rawmtrlMark(data.text, before);
+        document.getElementById('rawmtrlDiffCount').textContent =
+            '원료 ' + data.count + '개'
+            + (data.needs_review && data.needs_review.length
+                 ? ' · 표시명을 골라야 하는 첨가물 ' + data.needs_review.length + '개' : '');
+        box.style.display = '';
     } catch (err) {
         console.error(err);
-        show('문구 생성 중 오류가 발생했습니다.', true);
+        _rawmtrlHint('문구 생성 중 오류가 발생했습니다.', true);
     } finally {
         if (btn) btn.disabled = false;
     }
 };
+
+/*
+ * 어디가 다른지 짚는다.
+ *
+ * 원재료명은 300자가 넘는다. 두 줄을 나란히 놓고 "다릅니다" 라고만 하면 어디가
+ * 달라졌는지는 사람이 눈으로 찾아야 한다. 앞뒤로 같은 부분을 잘라 내고 가운데
+ * 달라진 자리만 표시한다 (시안 대조와 같은 방식).
+ */
+function _rawmtrlMark(mine, theirs) {
+    var esc = function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    };
+    if (!mine || !theirs) return esc(mine);
+
+    var head = 0;
+    while (head < mine.length && head < theirs.length && mine[head] === theirs[head]) head++;
+    var tail = 0;
+    while (tail < mine.length - head && tail < theirs.length - head
+           && mine[mine.length - 1 - tail] === theirs[theirs.length - 1 - tail]) tail++;
+
+    var mid = mine.slice(head, mine.length - tail);
+    if (!mid) return esc(mine);
+    return esc(mine.slice(0, head))
+         + '<mark class="rawmtrl-mark">' + esc(mid) + '</mark>'
+         + esc(mine.slice(mine.length - tail));
+}
 
 /*
    맞춤항목

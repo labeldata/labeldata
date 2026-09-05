@@ -1107,6 +1107,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .dup-used.is-used { color: var(--v2-blue, #1a73e8); font-weight: 700; }
 .dup-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
 .dup-note { font-size: 11px; color: var(--ez-text-muted, #9aa0a6); margin-top: 6px; }
+.dup-group.is-done { background: var(--ez-gray-50, #f8f9fa); opacity: .75; }
 </style>
 
 <script>
@@ -1122,6 +1123,19 @@ document.addEventListener('DOMContentLoaded', function() {
   var modalEl = document.getElementById('dupModal');
   var btn = document.getElementById('dupBtn');
   if (!modalEl || !btn) return;
+
+  /* 이 페이지의 getCookie 는 DOMContentLoaded 콜백 안에 있어 여기서 안 보인다.
+     불러 쓰면 ReferenceError 로 죽는데 onclick 안이라 화면에는 아무 일도 안
+     일어난 것처럼 보인다 — 실제로 그랬다. 필요한 것은 한 줄이니 여기서 읽는다. */
+  var csrf = function () {
+    var input = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (input && input.value) return input.value;
+    var hit = document.cookie.split(';').map(function (c) { return c.trim(); })
+      .filter(function (c) { return c.indexOf('csrftoken=') === 0; })[0];
+    return hit ? decodeURIComponent(hit.slice(10)) : '';
+  };
+
+  var merged = 0;   // 하나라도 합쳤으면 창을 닫을 때 목록을 다시 읽는다
 
   var esc = function (s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -1205,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', function() {
     fetch('/label/my-ingredients/merge/', {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
       body: JSON.stringify({ keep_id: keep, drop_ids: drop })
     })
       .then(function (r) { return r.json(); })
@@ -1217,7 +1231,10 @@ document.addEventListener('DOMContentLoaded', function() {
           actionBtn.disabled = false;
           return;
         }
+        merged += 1;
+        box.classList.add('is-done');
         box.querySelectorAll('input[type="radio"]').forEach(function (r) { r.disabled = true; });
+        actionBtn.remove();
         note.className = 'dup-note text-success';
         var text = data.dropped + '건을 합쳤습니다. 배합비 ' + data.moved + '곳을 옮겼습니다.';
         if (data.collisions && data.collisions.length) {
@@ -1233,6 +1250,12 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   btn.addEventListener('click', window.openDupModal);
+
+  /* 합친 뒤에는 뒤의 목록도 뱃지도 옛것이다. 창을 닫을 때 다시 읽는다 —
+     "합쳤습니다" 라고 해 놓고 화면이 그대로면 된 것인지 알 수가 없다. */
+  modalEl.addEventListener('hidden.bs.modal', function () {
+    if (merged) window.location.reload();
+  });
 
   /* 열어 보기 전에도 몇 건인지 알려 준다. 모르면 아무도 안 누른다. */
   fetch('/label/my-ingredients/duplicates/', { credentials: 'same-origin' })
