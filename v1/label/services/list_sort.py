@@ -96,21 +96,24 @@ MY_LABEL_DEFAULT = ('update_datetime', 'desc')
 #
 #   default  처음 열었을 때 보이는 칸
 #   min      끌 수 없는 칸. 원재료명이 없으면 무엇을 고르는지 알 수가 없다
+# weight 는 **다른 칸에 견준 몫**이다. 픽셀로 못 박으면 칸을 여럿 켰을 때
+# 표가 화면을 넘어 가로로 밀리는데, 그러면 오른쪽 칸은 있으나 마나다.
+# 고른 칸끼리 100% 를 나눠 갖는다 — 무엇을 켜든 한 화면에 들어온다.
 MY_INGREDIENT_ALL_COLUMNS = [
-    {'field': 'food_category', 'label': '분류', 'width': '90px', 'align': 'center', 'default': True},
-    {'field': 'prdlst_report_no', 'label': '품목보고번호', 'width': '150px', 'align': 'left', 'default': True},
-    {'field': 'prdlst_nm', 'label': '원재료명', 'width': '220px', 'align': 'left', 'default': True, 'min': True},
-    {'field': 'ingredient_display_name', 'label': '표시명', 'width': '200px', 'align': 'left'},
-    {'field': 'prdlst_dcnm', 'label': '식품유형', 'width': '150px', 'align': 'left', 'default': True},
-    {'field': 'bssh_nm', 'label': '제조사', 'width': '150px', 'align': 'left'},
-    {'field': 'rawmtrl_nm', 'label': '하위 원료', 'width': '260px', 'align': 'left'},
-    {'field': 'allergens', 'label': '알레르기', 'width': '130px', 'align': 'left'},
-    {'field': 'gmo', 'label': 'GMO', 'width': '110px', 'align': 'left'},
-    {'field': 'pog_daycnt', 'label': '소비기한', 'width': '130px', 'align': 'left'},
-    {'field': 'frmlc_mtrqlt', 'label': '포장재질', 'width': '140px', 'align': 'left'},
-    {'field': 'induty_cd_nm', 'label': '업종', 'width': '120px', 'align': 'left'},
-    {'field': 'prms_dt', 'label': '허가일자', 'width': '100px', 'align': 'center'},
-    {'field': 'update_datetime', 'label': '수정일', 'width': '100px', 'align': 'center'},
+    {'field': 'food_category', 'label': '분류', 'weight': 6, 'align': 'center', 'default': True},
+    {'field': 'prdlst_report_no', 'label': '품목보고번호', 'weight': 11, 'align': 'left', 'default': True},
+    {'field': 'prdlst_nm', 'label': '원재료명', 'weight': 16, 'align': 'left', 'default': True, 'min': True},
+    {'field': 'ingredient_display_name', 'label': '표시명', 'weight': 14, 'align': 'left'},
+    {'field': 'prdlst_dcnm', 'label': '식품유형', 'weight': 11, 'align': 'left', 'default': True},
+    {'field': 'bssh_nm', 'label': '제조사', 'weight': 11, 'align': 'left'},
+    {'field': 'rawmtrl_nm', 'label': '하위 원료', 'weight': 20, 'align': 'left'},
+    {'field': 'allergens', 'label': '알레르기', 'weight': 9, 'align': 'left'},
+    {'field': 'gmo', 'label': 'GMO', 'weight': 8, 'align': 'left'},
+    {'field': 'pog_daycnt', 'label': '소비기한', 'weight': 9, 'align': 'left'},
+    {'field': 'frmlc_mtrqlt', 'label': '포장재질', 'weight': 10, 'align': 'left'},
+    {'field': 'induty_cd_nm', 'label': '업종', 'weight': 8, 'align': 'left'},
+    {'field': 'prms_dt', 'label': '허가일자', 'weight': 7, 'align': 'center'},
+    {'field': 'update_datetime', 'label': '수정일', 'weight': 7, 'align': 'center'},
 ]
 
 MY_INGREDIENT_DEFAULT_FIELDS = tuple(
@@ -132,7 +135,13 @@ def ingredient_columns(chosen):
     if not picked & set(MY_INGREDIENT_DEFAULT_FIELDS) and not picked:
         picked = set(MY_INGREDIENT_DEFAULT_FIELDS)
     picked |= set(MY_INGREDIENT_REQUIRED_FIELDS)
-    return [c for c in MY_INGREDIENT_ALL_COLUMNS if c['field'] in picked]
+    shown = [dict(c) for c in MY_INGREDIENT_ALL_COLUMNS if c['field'] in picked]
+
+    # 몫을 백분율로. 체크칸(4%) 을 뺀 나머지를 나눈다.
+    total = sum(c['weight'] for c in shown) or 1
+    for column in shown:
+        column['width'] = '%.2f%%' % (96.0 * column['weight'] / total)
+    return shown
 
 
 MY_INGREDIENT_COLUMNS = [c for c in MY_INGREDIENT_ALL_COLUMNS if c.get('default')]

@@ -8921,3 +8921,77 @@ class IngredientListRendersTests(TestCase):
         body = self._get().content.decode('utf-8')
         self.assertIn('…', body)
         self.assertIn('title="%s"' % long_name, body)
+
+
+class ListFitsOneScreenTests(TestCase):
+    """
+    넓게 보기로 열었더니 칸마다 폭이 너무 넓어 오른쪽이 화면 밖으로 나갔다.
+    가로로 밀면 오른쪽 칸은 있으나 마나다 — 고른 칸끼리 100% 를 나눠 갖고,
+    좁아진 칸은 두 줄로 접는다.
+    """
+
+    def setUp(self):
+        self.html = _src('templates/label/my_ingredient_list_combined.html')
+
+    def test_고른_칸끼리_100퍼센트를_나눈다(self):
+        from v1.label.services.list_sort import ingredient_columns
+        for chosen in ([], ['prdlst_nm', 'bssh_nm'],
+                       [c['field'] for c in
+                        __import__('v1.label.services.list_sort', fromlist=['x'])
+                        .MY_INGREDIENT_ALL_COLUMNS]):
+            shown = ingredient_columns(chosen)
+            total = sum(float(c['width'].rstrip('%')) for c in shown)
+            self.assertAlmostEqual(total, 96.0, places=1, msg=str(chosen))
+
+    def test_가로로_밀지_않는다(self):
+        self.assertNotIn('width: max-content', self.html)
+
+    def test_두_줄까지_접는다(self):
+        self.assertIn('-webkit-line-clamp: 2', self.html)
+        self.assertIn('class="cell-clip"', self.html)
+
+    def test_접기는_칸이_아니라_안쪽_상자가_한다(self):
+        """td 에 display:-webkit-box 를 주면 table-cell 이 아니게 되어 표가 무너진다."""
+        head = self.html.index('.list-table td {')
+        block = self.html[head:head + 260]
+        self.assertNotIn('-webkit-box', block)
+
+    def test_전체는_말풍선으로_본다(self):
+        self.assertIn('title="{{ cell.title }}"', self.html)
+
+
+class ViewControlsAreSeparateTests(TestCase):
+    """
+    보는 방식을 정하는 것과 무언가를 하는 것은 다른 일이다. 한 줄에 섞여
+    있으면 "넓게 보기" 와 "업로드" 가 같은 무게로 보인다.
+    """
+
+    def setUp(self):
+        self.html = _src('templates/label/my_ingredient_list_combined.html')
+
+    def test_보기_설정은_따로_묶는다(self):
+        self.assertIn('class="ing-viewctl"', self.html)
+        head = self.html.index('class="ing-viewctl"')
+        block = self.html[head:self.html.index('class="toolbar-buttons"', head)]
+        self.assertIn('id="wideBtn"', block)
+        self.assertIn('칸 고르기', block)
+
+    def test_설정_단추는_색을_쓰지_않는다(self):
+        # 여기서 누른다고 자료가 바뀌지는 않는다
+        head = self.html.index('.ing-viewctl-btn {')
+        self.assertIn('background: transparent', self.html[head:head + 400])
+
+    def test_켜져_있으면_그렇게_보인다(self):
+        self.assertIn('#wideBtn.is-on', self.html)
+        self.assertIn("btn.classList.toggle('is-on', on)", self.html)
+
+    def test_몇_칸을_보고_있는지_적혀_있다(self):
+        self.assertIn('ing-viewctl-count', self.html)
+
+    def test_눈금은_식품첨가물_DB_와_맞춘다(self):
+        additive = _src('templates/label/food_additive_search.html')
+        for rule in ('font-size: 13px', 'border-bottom: 2px solid #e8eaed',
+                     'background: #f1f3f4'):
+            self.assertIn(rule.replace('background', 'background-color')
+                          if 'f1f3f4' in rule else rule, additive)
+            self.assertIn(rule, self.html)

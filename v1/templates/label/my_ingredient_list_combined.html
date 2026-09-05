@@ -232,14 +232,14 @@
         overflow: auto;
     }
 
-    /* 칸을 여럿 켜면 표가 패널보다 넓어진다. 줄이지 않고 가로로 민다 —
-       줄이면 어차피 못 읽고, 엑셀에서 하던 것도 가로로 미는 일이다. */
+    /* 칸을 여럿 켜도 **한 화면에 들어온다.** 고른 칸끼리 100% 를 나눠 갖고
+       (list_sort.ingredient_columns 가 몫을 계산한다), 좁아진 칸은 두 줄로
+       접는다. 가로로 밀면 오른쪽 칸은 있으나 마나다. */
     .list-table {
         width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
     }
-    .ingredient-content.is-wide .list-table { min-width: 100%; width: max-content; }
 
     /* ── 넓게 보기 ──
        목록과 상세를 반씩 나눠 쓰는데, 여러 건을 훑고 견줄 때는 상세 칸이
@@ -255,6 +255,51 @@
         width: 118px;
         flex-shrink: 0;
         font-size: 13px;
+    }
+
+    /* 보기 설정 — 무언가를 하는 단추와 갈라 둔다.
+       색을 쓰지 않는다. 여기서 누른다고 자료가 바뀌지는 않는다. */
+    .ing-viewctl {
+        display: inline-flex;
+        flex-shrink: 0;
+        border: 1px solid var(--google-gray-300);
+        border-radius: 20px;
+        background: var(--google-gray-50);
+        overflow: hidden;
+    }
+    .ing-viewctl .dropdown { display: flex; }
+    .ing-viewctl-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 14px;
+        border: 0;
+        background: transparent;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .ing-viewctl-btn + .dropdown > .ing-viewctl-btn,
+    .ing-viewctl > .dropdown + .dropdown > .ing-viewctl-btn {
+        border-left: 1px solid var(--google-gray-300);
+    }
+    .ing-viewctl-btn:hover { background: var(--google-gray-100); color: var(--text-primary); }
+    .ing-viewctl-btn .bi { font-size: 13px; }
+    .ing-viewctl-count {
+        min-width: 17px;
+        padding: 0 5px;
+        border-radius: 9px;
+        background: var(--google-gray-200);
+        font-size: 10.5px;
+        font-weight: 700;
+        text-align: center;
+    }
+    /* 켜져 있으면 그렇게 보여야 한다 */
+    #wideBtn.is-on {
+        background: var(--v2-blue-light, #e8f0fe);
+        color: var(--google-blue);
     }
 
     /* ── 칸 고르기 ── */
@@ -305,26 +350,28 @@
         z-index: 10;
     }
 
+    /* 눈금은 식품첨가물 DB(.additive-table)와 맞춘다 — 같은 성격의 목록이
+       화면마다 다른 크기로 보일 이유가 없다. */
     .list-table th {
-        padding: 10px 8px;
-        border-bottom: 1px solid var(--border-color);
-        font-size: 12px;
+        padding: 12px 8px;
+        border-bottom: 2px solid #e8eaed;
+        font-size: 13px;
         font-weight: 500;
-        color: var(--text-secondary);
+        letter-spacing: 0.3px;
+        color: #444746;
         text-align: center;
         white-space: nowrap;
         background: white;
     }
 
     .list-table tbody tr {
-        border-top: 1px solid #f0f0f0;
-        height: 44px;
+        border-bottom: 1px solid #f0f0f0;
         cursor: pointer;
         transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .list-table tbody tr:hover {
-        background: var(--google-gray-100);
+        background: #f1f3f4;
     }
 
     .list-table tbody tr.selected {
@@ -338,12 +385,26 @@
 
     .list-table td {
         padding: 8px;
-        font-size: 12px;
-        color: var(--text-primary);
+        font-size: 13px;
+        line-height: 1.45;
         vertical-align: middle;
+        color: #1f1f1f;
+    }
+
+    /* 폭이 좁아지면 잘라 버리는 대신 **두 줄까지 접어 보여 준다.**
+       칸 폭은 고른 칸 수에 따라 달라지므로 몇 글자에서 끊을지 서버가 정할 수
+       없다. 두 줄을 넘기면 말줄임하고, 전체는 마우스를 올려 보거나 옆의
+       상세 칸에서 본다.
+
+       접기는 **안쪽 상자**가 한다. td 에 display:-webkit-box 를 주면 칸이
+       table-cell 이 아니게 되어 표가 통째로 무너진다. */
+    .cell-clip {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
         overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        white-space: normal;
+        word-break: break-word;
     }
 
     /* 체크박스 열 */
@@ -645,15 +706,21 @@
             <option value="additive" {% if food_category == 'additive' %}selected{% endif %}>첨가물</option>
         </select>
 
-        <div class="toolbar-buttons">
-            {% if user.is_authenticated %}
-            <button class="v2-action-btn" id="newBtn"><i class="bi bi-plus-lg"></i>신규 원료</button>
-            {% endif %}
-            {# 엑셀처럼 필요한 칸을 자기가 정한다. 계정에 남는다. #}
-            <div class="dropdown d-inline-block">
-                <button class="v2-action-btn-outline" data-bs-toggle="dropdown"
+        {% comment %}
+          보는 방식을 정하는 것과 무언가를 하는 것은 다른 일이다. 한 줄에
+          섞여 있으면 "넓게 보기" 와 "업로드" 가 같은 무게로 보인다.
+          설정 쪽은 회색 묶음으로 붙여 두고, 하는 쪽만 색을 쓴다.
+        {% endcomment %}
+        <div class="ing-viewctl" role="group" aria-label="보기 설정">
+            <button type="button" class="ing-viewctl-btn" id="wideBtn"
+                    onclick="toggleWideList()" title="상세 칸을 접고 목록을 넓게 봅니다">
+                <i class="bi bi-arrows-angle-expand"></i><span id="wideBtnLabel">넓게 보기</span>
+            </button>
+            <div class="dropdown">
+                <button type="button" class="ing-viewctl-btn" data-bs-toggle="dropdown"
                         data-bs-auto-close="outside" title="목록에 보일 칸을 고릅니다">
                     <i class="bi bi-layout-three-columns"></i>칸 고르기
+                    <span class="ing-viewctl-count">{{ list_columns|length }}</span>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end ing-cols-menu">
                     <div class="ing-cols-head">목록에 보일 칸</div>
@@ -673,10 +740,12 @@
                     </div>
                 </div>
             </div>
-            <button class="v2-action-btn-outline" id="wideBtn" onclick="toggleWideList()"
-                    title="상세 칸을 접고 목록을 넓게 봅니다">
-                <i class="bi bi-arrows-angle-expand"></i><span id="wideBtnLabel">넓게 보기</span>
-            </button>
+        </div>
+
+        <div class="toolbar-buttons">
+            {% if user.is_authenticated %}
+            <button class="v2-action-btn" id="newBtn"><i class="bi bi-plus-lg"></i>신규 원료</button>
+            {% endif %}
             <button class="v2-action-btn-outline" id="dupBtn" title="같은 원료가 여러 벌 쌓인 것을 찾아 합칩니다">
                 <i class="bi bi-intersect"></i>중복 정리<span class="dup-badge" id="dupBadge"></span>
             </button>
@@ -733,7 +802,7 @@
                                 <input type="checkbox" class="ingredient-checkbox" data-id="{{ row.id }}">
                             </td>
                             {% for cell in row.cells %}
-                            <td style="text-align: {{ cell.align }};" title="{{ cell.title }}">{{ cell.text }}</td>
+                            <td style="text-align: {{ cell.align }};" title="{{ cell.title }}"><div class="cell-clip">{{ cell.text }}</div></td>
                             {% endfor %}
                         </tr>
                         {% empty %}
@@ -1058,6 +1127,8 @@ document.addEventListener('DOMContentLoaded', function() {
         var label = document.getElementById('wideBtnLabel');
         var icon = document.querySelector('#wideBtn .bi');
         if (content) content.classList.toggle('is-wide', on);
+        var btn = document.getElementById('wideBtn');
+        if (btn) btn.classList.toggle('is-on', on);
         if (label) label.textContent = on ? '나란히 보기' : '넓게 보기';
         if (icon) icon.className = 'bi ' + (on ? 'bi-arrows-angle-contract'
                                                : 'bi-arrows-angle-expand');
