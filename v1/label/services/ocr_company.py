@@ -429,11 +429,17 @@ RECHECK_PROMPT = """이 사진에서 **업소 항목만** 찾아 그대로 옮�
 {"companies": [{"role": "제조원", "name": "㈜샤니", "address": "경기도 …"}]}"""
 
 
-def needs_recheck(data):
+def needs_recheck(data, registered_name=''):
     """
     업소 항목을 다시 봐야 하는가. 이유를 돌려준다. 없으면 ''.
 
     다시 보는 데는 호출이 하나 더 든다. **틀린 낌새가 보일 때만** 본다.
+
+    registered_name 은 품목보고번호로 찾은 식약처 등록 업소명이다. 그것은
+    **제조원**이므로, 읽은 제조원과 다르면 자리를 잘못 짚은 것이다. 이건 값만
+    봐서는 알 수 없다 — 한 칸만 채워져 있어도 그 한 칸이 틀릴 수 있다.
+    실제로 그랬다: 제조원 칸에 유통전문판매원(오뚜기)이 혼자 들어와 있었고,
+    다른 칸은 비어 있어 아래 두 낌새에 걸리지 않았다.
     """
     if not isinstance(data, dict):
         return ''
@@ -441,6 +447,10 @@ def needs_recheck(data):
     filled = {f: v for f, v in filled.items() if v}
     if not filled:
         return ''
+
+    mine = filled.get('bssh_nm', '')
+    if registered_name and mine and             match_registered_name(mine, registered_name) < SAME_COMPANY:
+        return '등록 업소명("%s")과 읽은 제조원이 다릅니다' % registered_name
 
     # 두 칸에 같은 회사. 이 항목들은 대개 다른 회사이므로 적어도 한쪽은 틀렸다.
     keys = {}

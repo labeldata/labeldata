@@ -743,6 +743,23 @@ def company_recheck_enabled(use_recheck=None) -> bool:
     return bool(getattr(settings, 'OCR_COMPANY_RECHECK', True))
 
 
+def _registered_maker(data):
+    """
+    품목보고번호로 찾은 **등록 업소명**. 없으면 빈 문자열.
+
+    등록된 업소명은 제조원이다. 읽은 제조원과 다르면 자리를 잘못 짚은 것인데,
+    이건 값만 봐서는 알 수 없다 — 한 칸만 채워져 있어도 그 한 칸이 틀릴 수
+    있다. 조회는 DB 만 보므로 호출이 늘지 않는다.
+    """
+    try:
+        from v1.label.services.ocr_reconcile import find_food_item
+        item, _ = find_food_item(data)
+        return str(getattr(item, 'bssh_nm', '') or '').strip() if item else ''
+    except Exception:
+        logger.exception('등록 업소명 조회 실패')
+        return ''
+
+
 def _companies_rechecked(client, model, images, data, use_recheck=None):
     """
     업소 항목이 수상하면 **그 네 줄만** 다시 읽는다.
@@ -760,7 +777,7 @@ def _companies_rechecked(client, model, images, data, use_recheck=None):
     try:
         from v1.label.services.ocr_company import (
             RECHECK_PROMPT, apply_recheck, needs_recheck, tidy)
-        reason = needs_recheck(data)
+        reason = needs_recheck(data, _registered_maker(data))
         if not reason:
             return data
         logger.info('업소 항목을 다시 읽는다: %s', reason)

@@ -48,6 +48,53 @@ def group_key(ingredient):
     return ('name', name, normalize_name(ingredient.bssh_nm or ''))
 
 
+# 이름이 이만큼 닮았으면 같은 것으로 본다.
+#
+# 낮추면 "정제소금" 과 "정제설탕" 이 묶이고, 높이면 "강력밀가루 제빵용2" 와
+# "제빵용3" 이 갈린다. 실제 데이터에서 뒤엣것이 진짜 사본이었다.
+NAME_SAME = 80
+
+
+def _same_name(a, b):
+    """두 원료 이름이 같은 것을 말하는가."""
+    x, y = normalize_name(a), normalize_name(b)
+    if not x or not y:
+        return False
+    if x == y or x in y or y in x:
+        return True
+    try:
+        from rapidfuzz import fuzz
+    except ImportError:
+        return False
+    return fuzz.ratio(x, y) >= NAME_SAME
+
+
+def _split_by_name(items):
+    """
+    같은 통 안의 것들을 이름으로 다시 가른다.
+
+    품목보고번호가 같다는 것만으로 묶으면 이런 것이 한 통에 들어온다 —
+    실제 운영에서 나왔다.
+
+        설탕              대한제분(주) · 198301900201248
+        강력밀가루 제빵용3  대한제분(주) · 198301900201248
+        강력밀가루 제빵용2  대한제분(주) · 198301900201248
+
+    번호가 잘못 붙은 것이지 같은 원료가 아니다. 여기서 설탕과 밀가루를 합치면
+    배합비가 통째로 엉킨다. 이름이 딴판이면 가른다.
+    """
+    clusters = []
+    for item in items:
+        name = item.prdlst_nm or ''
+        for cluster in clusters:
+            if _same_name(cluster[0].prdlst_nm or '', name):
+                cluster.append(item)
+                break
+        else:
+            clusters.append([item])
+    return clusters
+
+
 def _usage_counts(ids):
     """원료마다 배합비에 몇 번 물려 있는지. 한 번에 세어 온다."""
     from django.db.models import Count
@@ -75,7 +122,13 @@ def duplicate_groups(user):
         if key:
             buckets.setdefault(key, []).append(row)
 
-    dupes = {k: v for k, v in buckets.items() if len(v) > 1}
+    dupes = {}
+    for key, items in buckets.items():
+        if len(items) < 2:
+            continue
+        for i, cluster in enumerate(_split_by_name(items)):
+            if len(cluster) > 1:
+                dupes[key + (i,)] = cluster
     if not dupes:
         return []
 
@@ -185,19 +238,38 @@ def merge(user, keep_id, drop_ids):
 
 
 def _repoint_others(loser, keep):
-    """배합비 말고 이 원료를 가리키던 것들. 실패해도 합치기는 끝나야 한다."""
+    """
+    배합비 말고 이 원료를 가리키던 것들. 실패해도 합치기는 끝나야 한다.
+
+    **각각을 세이브포인트로 감싼다.** 바깥이 atomic 인데 안에서 DB 오류를
+    잡아 삼키면 트랜잭션이 깨진 채로 남고, 그다음 질의가 통째로
+    TransactionManagementError 로 죽는다. 운영에서 그렇게 500 이 났다 —
+    화면에는 "합치는 중 오류가 발생했습니다" 만 떴고 원인은 여기였다.
+    """
     try:
-        from v1.bom.models import ProductBOM
-        ProductBOM.objects.filter(source_ingredient=loser).update(
-            source_ingredient=keep)
+        with transaction.atomic():
+            from v1.bom.models import ProductBOM
+            ProductBOM.objects.filter(source_ingredient=loser).update(
+                source_ingredient=keep)
     except Exception:
         logger.exception('[원료 합치기] BOM 연동 원료 이동 실패 (%s)',
                          loser.my_ingredient_id)
+
+    # 법령 매칭은 (뉴스, 사용자, 원료) 가 유일해야 한다. 같은 뉴스가 양쪽에
+    # 걸려 있으면 그대로 옮길 수가 없다 - 겹치는 것은 버린다. 다시 만들어지는
+    # 자료라 잃어도 큰일이 아니다.
     try:
-        from v1.regulatory.models import NewsIngredientMatch
-        NewsIngredientMatch.objects.filter(ingredient=loser).update(
-            ingredient=keep)
+        with transaction.atomic():
+            from v1.regulatory.models import NewsIngredientMatch
+            taken = set(NewsIngredientMatch.objects
+                        .filter(ingredient=keep).values_list('news_id', 'user_id'))
+            for row in NewsIngredientMatch.objects.filter(ingredient=loser):
+                if (row.news_id, row.user_id) in taken:
+                    row.delete()
+                else:
+                    row.ingredient = keep
+                    row.save(update_fields=['ingredient'])
+                    taken.add((row.news_id, row.user_id))
     except Exception:
-        # 법령 뉴스 매칭은 다시 만들어지는 것이라 잃어도 큰일이 아니다
         logger.exception('[원료 합치기] 법령 매칭 이동 실패 (%s)',
                          loser.my_ingredient_id)

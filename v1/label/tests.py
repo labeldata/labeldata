@@ -8280,7 +8280,7 @@ class CompanyRecheckWiringTests(TestCase):
     def test_틀린_낌새가_보일_때만_돈다(self):
         head = self.src.index('def _companies_rechecked')
         block = self.src[head:head + 2200]
-        self.assertIn('needs_recheck(data)', block)
+        self.assertIn('needs_recheck(data, _registered_maker(data))', block)
         self.assertIn('if not reason:', block)
 
     def test_전체_배치_한_장만_보낸다(self):
@@ -8612,3 +8612,137 @@ class AllergensStayAsPrintedTests(TestCase):
         from v1.label.services.allergen_names import normalize
         text, _ = normalize('알류(달걀), 우유, 달걀')
         self.assertEqual(text, '알류(달걀), 우유')
+
+
+class MergeSurvivesConstraintClashTests(TestCase):
+    """
+    운영에서 "합치는 중 오류가 발생했습니다" 가 났다. 서버는 500 이었다.
+
+    법령 매칭은 (뉴스, 사용자, 원료) 가 유일해야 한다. 같은 뉴스가 남길 것과
+    합칠 것 양쪽에 걸려 있으면 옮길 때 유일성이 깨진다. 그 오류를 잡아 삼켰는데
+    **바깥이 atomic 이라 트랜잭션이 깨진 채로 남았고**, 그다음 질의가 통째로
+    TransactionManagementError 로 죽었다.
+    """
+
+    def setUp(self):
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+        from v1.regulatory.models import NewsIngredientMatch, RegulatoryNews
+        self.Rel, self.Ing = LabelIngredientRelation, MyIngredient
+        self.Match, self.News = NewsIngredientMatch, RegulatoryNews
+        self.user = User.objects.create_user(username='clash', password='x')
+
+    def _ing(self, name):
+        return self.Ing.objects.create(user_id=self.user, prdlst_nm=name,
+                                       delete_YN='N')
+
+    def test_같은_뉴스가_양쪽에_걸려도_합쳐진다(self):
+        from v1.label.services.ingredient_merge import merge
+        keep, drop = self._ing('설탕'), self._ing('설탕')
+        news = self.News.objects.create(source='domestic', external_id='n1',
+                                        product_name='설탕 부적합')
+        for who in (keep, drop):
+            self.Match.objects.create(news=news, user=self.user, ingredient=who,
+                                      matched_keyword='설탕')
+
+        out = merge(self.user, keep.my_ingredient_id, [drop.my_ingredient_id])
+        self.assertEqual(out['dropped'], 1)
+        drop.refresh_from_db()
+        self.assertEqual(drop.delete_YN, 'Y')
+        # 겹치는 것은 버린다. 남길 쪽 것만 남는다.
+        self.assertEqual(self.Match.objects.filter(ingredient=keep).count(), 1)
+        self.assertEqual(self.Match.objects.filter(ingredient=drop).count(), 0)
+
+    def test_안_겹치는_매칭은_옮긴다(self):
+        from v1.label.services.ingredient_merge import merge
+        keep, drop = self._ing('설탕'), self._ing('설탕')
+        news = self.News.objects.create(source='domestic', external_id='n2',
+                                        product_name='설탕 부적합')
+        self.Match.objects.create(news=news, user=self.user, ingredient=drop,
+                                  matched_keyword='설탕')
+        merge(self.user, keep.my_ingredient_id, [drop.my_ingredient_id])
+        self.assertEqual(self.Match.objects.filter(ingredient=keep).count(), 1)
+
+    def test_BOM_연동_원료도_옮긴다(self):
+        from v1.bom.models import ProductBOM
+        from v1.label.services.ingredient_merge import merge
+        keep, drop = self._ing('설탕'), self._ing('설탕')
+        label = MyLabel.objects.create(user_id=self.user, my_label_name='제품')
+        ProductBOM.objects.create(parent_label=label, source_ingredient=drop,
+                                  ingredient_name='설탕')
+        merge(self.user, keep.my_ingredient_id, [drop.my_ingredient_id])
+        self.assertEqual(ProductBOM.objects.filter(source_ingredient=keep).count(), 1)
+
+
+class NumberAloneIsNotEnoughTests(TestCase):
+    """
+    품목보고번호가 같다는 것만으로 묶었더니 이런 통이 나왔다.
+
+        설탕              대한제분(주) · 198301900201248
+        강력밀가루 제빵용3  대한제분(주) · 198301900201248
+        강력밀가루 제빵용2  대한제분(주) · 198301900201248
+
+    번호가 잘못 붙은 것이지 같은 원료가 아니다. 여기서 설탕과 밀가루를 합치면
+    배합비가 통째로 엉킨다.
+    """
+
+    def setUp(self):
+        from v1.label.models import MyIngredient
+        self.Ing = MyIngredient
+        self.user = User.objects.create_user(username='samno', password='x')
+
+    def _ing(self, name, no='198301900201248'):
+        return self.Ing.objects.create(user_id=self.user, prdlst_nm=name,
+                                       bssh_nm='대한제분(주)',
+                                       prdlst_report_no=no, delete_YN='N')
+
+    def test_번호가_같아도_이름이_딴판이면_가른다(self):
+        from v1.label.services.ingredient_merge import duplicate_groups
+        self._ing('설탕')
+        self._ing('강력밀가루 제빵용3')
+        self._ing('강력밀가루 제빵용2')
+        groups = duplicate_groups(self.user)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(len(groups[0]['items']), 2)
+        self.assertTrue(all('밀가루' in i['name'] for i in groups[0]['items']))
+
+    def test_표기만_흔들린_것은_그대로_묶는다(self):
+        from v1.label.services.ingredient_merge import duplicate_groups
+        self._ing('정제소금')
+        self._ing('정제소금(수입)')
+        self.assertEqual(len(duplicate_groups(self.user)[0]['items']), 2)
+
+
+class RecheckUsesRegisteredMakerTests(TestCase):
+    """
+    제조원 칸에 유통전문판매원이 **혼자** 들어와 있으면 값만 봐서는 알 수 없다.
+    두 칸이 같은 것도 아니고 제조원이 빈 것도 아니라 낌새에 안 걸렸다.
+
+    등록된 업소명은 제조원이다. 그것과 다르면 자리를 잘못 짚은 것이다.
+    """
+
+    def setUp(self):
+        from v1.label.services import ocr_company
+        self.C = ocr_company
+
+    def test_등록_업소명과_다르면_다시_본다(self):
+        why = self.C.needs_recheck(
+            {'bssh_nm': {'value': '주식회사 오뚜기 경기도 안양시 흥안대로 405'}},
+            registered_name='(주)샤니')
+        self.assertIn('등록 업소명', why)
+
+    def test_같으면_다시_보지_않는다(self):
+        self.assertEqual('', self.C.needs_recheck(
+            {'bssh_nm': {'value': '(주)샤니 경기도 성남시 둔촌대로457번길 13'}},
+            registered_name='주식회사 샤니'))
+
+    def test_등록_정보가_없으면_예전_낌새만_본다(self):
+        self.assertEqual('', self.C.needs_recheck(
+            {'bssh_nm': {'value': '주식회사 오뚜기 경기도 안양시'}}))
+
+    def test_조회는_DB_만_본다(self):
+        # 호출을 늘리지 않는다
+        src = _src('label/services/ocr_service.py')
+        head = src.index('def _registered_maker')
+        block = src[head:src.index('def _companies_rechecked', head)]
+        self.assertIn('find_food_item(data)', block)
+        self.assertNotIn('client', block)
