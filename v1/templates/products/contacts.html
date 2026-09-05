@@ -29,22 +29,22 @@
         <div class="contacts-panel-header" style="flex-wrap:wrap;gap:6px;padding:8px 12px;">
             <div class="d-flex align-items-center gap-2" style="flex-shrink:0;">
                 <i class="bi bi-person-lines-fill text-primary"></i>
-                <span class="fw-semibold" style="font-size:13px;">연락처</span>
-                <span class="badge rounded-pill bg-primary" id="contactCount" style="font-size:11px;">{{ contacts_list|length }}</span>
+                <span class="fw-semibold ct-md">연락처</span>
+                <span class="badge rounded-pill bg-primary ct-xs" id="contactCount">{{ contacts_list|length }}</span>
             </div>
             {# ── 선택 시에만 표시되는 액션 바 ── #}
             <div id="selection-actions" class="d-none align-items-center" style="flex-shrink:0;">
-                <span class="badge bg-primary" style="font-size:11px;"><span id="selected-count">0</span>개</span>
-                <button class="btn v2-btn-sm btn-outline-danger" id="bulkDeleteBtn" style="font-size:12px;">
+                <span class="badge bg-primary ct-xs"><span id="selected-count">0</span>개</span>
+                <button class="btn v2-btn-sm btn-outline-danger ct-sm" id="bulkDeleteBtn">
                     <i class="bi bi-trash"></i>
                 </button>
-                <button class="btn v2-btn-sm btn-primary" id="bulkRequestBtn" style="font-size:12px;">
+                <button class="btn v2-btn-sm btn-primary ct-sm" id="bulkRequestBtn">
                     <i class="bi bi-envelope-paper me-1"></i>요청
                 </button>
             </div>
             {# ── 검색 (항상 표시) ── #}
             <div class="d-flex align-items-center" style="gap:6px;flex:1;min-width:180px;">
-                <select id="contactSearchField" class="form-select form-select-sm" style="width:80px;flex-shrink:0;font-size:12px;">
+                <select id="contactSearchField" class="form-select form-select-sm ct-sm" style="width:80px;flex-shrink:0">
                     <option value="all">전체</option>
                     <option value="email">이메일</option>
                     <option value="name">이름</option>
@@ -52,8 +52,8 @@
                     <option value="license_no">인허가</option>
                 </select>
                 <div class="input-group input-group-sm" style="flex:1;">
-                    <span class="input-group-text bg-white border-end-0 px-2"><i class="bi bi-search text-muted" style="font-size:11px;"></i></span>
-                    <input type="text" id="contactSearch" class="form-control border-start-0 ps-0" placeholder="검색..." autocomplete="off" style="font-size:12px;">
+                    <span class="input-group-text bg-white border-end-0 px-2"><i class="bi bi-search text-muted ct-xs"></i></span>
+                    <input type="text" id="contactSearch" class="form-control border-start-0 ps-0 ct-sm" placeholder="검색..." autocomplete="off">
                 </div>
             </div>
             <button class="contacts-icon-btn" id="addRowBtn" title="행 추가" style="flex-shrink:0;">
@@ -63,7 +63,7 @@
 
         <!-- 필터 바 -->
         <div id="contactsFilterBar" style="display:flex;align-items:center;gap:6px;padding:5px 12px;border-bottom:1px solid #e8eaed;background:#f8f9fa;flex-shrink:0;">
-            <span style="font-size:11px;color:#80868b;margin-right:2px;">필터</span>
+            <span class="ct-xs" style="color:#80868b;margin-right:2px">필터</span>
             <button class="contacts-filter-btn active" data-filter="all" onclick="setTableFilter('all',this)">전체</button>
             <button class="contacts-filter-btn" data-filter="requested" onclick="setTableFilter('requested',this)"><i class="bi bi-envelope-paper me-1"></i>요청 전송</button>
             <button class="contacts-filter-btn" data-filter="pending" onclick="setTableFilter('pending',this)"><i class="bi bi-clock-history me-1"></i>미회신</button>
@@ -71,9 +71,9 @@
             <span style="width:1px;background:#dadce0;height:16px;margin:0 2px;"></span>
             <button class="contacts-filter-btn" id="recvReqFilterBtn" onclick="showReceivedRequests(this)">
                 <i class="bi bi-inbox me-1"></i>받은 요청
-                <span id="recvReqBadge" class="d-none" style="background:#d93025;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;font-weight:700;margin-left:2px;"></span>
+                <span id="recvReqBadge" class="d-none ct-xs" style="background:#d93025;color:#fff;border-radius:8px;padding:0 5px;font-weight:700;margin-left:2px"></span>
             </button>
-            <span id="filterInfo" style="margin-left:auto;font-size:11px;color:#80868b;"></span>
+            <span class="ct-xs" id="filterInfo" style="margin-left:auto;color:#80868b"></span>
         </div>
 
         <!-- Handsontable 그리드 -->
@@ -97,18 +97,18 @@
         <!-- 선택 전 빈 상태 -->
         <div class="contacts-empty-state" id="emptyState">
             <i class="bi bi-arrow-left-circle" style="font-size:36px;color:#dadce0;"></i>
-            <p class="mt-3 text-muted" style="font-size:14px;">왼쪽에서 연락처를 선택하세요</p>
-            <p class="text-muted" style="font-size:12px;">연락처를 클릭하면 공유·자료요청 현황을,<br>체크박스로 복수 선택 후 <strong>자료 요청</strong>을 할 수 있습니다.</p>
+            <p class="mt-3 text-muted ct-lg">왼쪽에서 연락처를 선택하세요</p>
+            <p class="text-muted ct-sm">연락처를 클릭하면 공유·자료요청 현황을,<br>체크박스로 복수 선택 후 <strong>자료 요청</strong>을 할 수 있습니다.</p>
         </div>
 
         <!-- 받은 자료 요청 패널 -->
         <div class="d-none" id="receivedReqView" style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
             <div class="share-contact-header" style="flex-shrink:0;">
                 <div>
-                    <div style="font-size:15px;font-weight:600;color:#202124;">
+                    <div class="ct-lg" style="font-weight:600;color:#202124">
                         <i class="bi bi-inbox me-2 text-danger"></i>내가 받은 자료 요청
                     </div>
-                    <div class="text-muted mt-1" style="font-size:12px;">명의 담당자로서 처리해주세요</div>
+                    <div class="text-muted mt-1 ct-sm">명의 담당자로서 처리해주세요</div>
                 </div>
                 <button class="btn v2-btn-sm btn-light ms-auto" onclick="closeReceivedPanel()">
                     <i class="bi bi-x"></i>
@@ -128,10 +128,10 @@
             <!-- 헤더 -->
             <div class="share-contact-header">
                 <div style="display:flex;flex-direction:column;">
-                    <div style="font-size:15px;font-weight:600;color:#202124;">
+                    <div class="ct-lg" style="font-weight:600;color:#202124">
                         <i class="bi bi-envelope-paper me-2 text-primary"></i>자료 요청 보내기
                     </div>
-                    <div class="text-muted mt-1" style="font-size:12px;" id="docReqRecipientSummary">선택된 연락처 0명</div>
+                    <div class="text-muted mt-1 ct-sm" id="docReqRecipientSummary">선택된 연락처 0명</div>
                 </div>
                 <button class="btn v2-btn-sm btn-light ms-auto" onclick="closeDocRequestPanel()">
                     <i class="bi bi-x"></i>
@@ -142,14 +142,14 @@
 
                 <!-- 선택 연락처 칩 -->
                 <div class="mb-3">
-                    <div class="fw-semibold mb-2" style="font-size:12px;color:#5f6368;text-transform:uppercase;letter-spacing:.5px;">요청 대상</div>
+                    <div class="fw-semibold mb-2 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">요청 대상</div>
                     <div id="docReqChips" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
                 </div>
 
                 <!-- 문서 유형 선택 -->
                 <div class="mb-3">
-                    <div class="fw-semibold mb-1" style="font-size:12px;color:#5f6368;text-transform:uppercase;letter-spacing:.5px;">요청 문서 종류 <span class="text-danger">*</span></div>
-                    <div class="text-muted mb-2" style="font-size:11px;">✔ 체크한 문서를 <strong>수신자가 각 항목별로 업로드</strong>해야 하는 요청입니다. 요청 이력은 오른쪽 <strong>자료 요청</strong> 탭에서 확인할 수 있습니다.</div>
+                    <div class="fw-semibold mb-1 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">요청 문서 종류 <span class="text-danger">*</span></div>
+                    <div class="text-muted mb-2 ct-xs">✔ 체크한 문서를 <strong>수신자가 각 항목별로 업로드</strong>해야 하는 요청입니다. 요청 이력은 오른쪽 <strong>자료 요청</strong> 탭에서 확인할 수 있습니다.</div>
                     <div id="docTypeList">
                         <div class="text-center py-3 text-muted"><div class="spinner-border spinner-border-sm"></div> 불러오는 중...</div>
                     </div>
@@ -157,28 +157,28 @@
 
                 <!-- 메시지 -->
                 <div class="mb-3">
-                    <div class="fw-semibold mb-2" style="font-size:12px;color:#5f6368;text-transform:uppercase;letter-spacing:.5px;">메시지 (선택)</div>
-                    <textarea id="docReqMessage" rows="3" class="form-control" style="font-size:13px;resize:none;"
+                    <div class="fw-semibold mb-2 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">메시지 (선택)</div>
+                    <textarea id="docReqMessage" rows="3" class="form-control ct-md" style="resize:none"
                               placeholder="예) 수입통관을 위해 원산지 증명서 제출 부탁드립니다."></textarea>
                 </div>
 
                 <!-- 연결 제품 (선택) -->
                 <div class="mb-3">
-                    <div class="fw-semibold mb-1" style="font-size:12px;color:#5f6368;text-transform:uppercase;letter-spacing:.5px;">
+                    <div class="fw-semibold mb-1 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">
                         연결할 제품 <span class="text-muted fw-normal">(선택)</span>
                     </div>
-                    <div class="text-muted mb-2" style="font-size:11px;">
+                    <div class="text-muted mb-2 ct-xs">
                         선택하면 상대방이 파일을 제출했을 때 해당 제품의 문서함에 자동으로 등록됩니다.
                     </div>
-                    <select id="docReqLinkedLabel" class="form-select form-select-sm" style="font-size:13px;">
+                    <select id="docReqLinkedLabel" class="form-select form-select-sm ct-md">
                         <option value="">-- 연결 안 함 --</option>
                     </select>
                 </div>
 
                 <!-- 첨부 파일 -->
                 <div class="mb-2">
-                    <div class="fw-semibold mb-2" style="font-size:12px;color:#5f6368;text-transform:uppercase;letter-spacing:.5px;">첨부 파일 (선택)</div>
-                    <label class="d-flex align-items-center gap-2 p-2 rounded" style="border:1px dashed #dadce0;cursor:pointer;background:#fafafa;font-size:13px;">
+                    <div class="fw-semibold mb-2 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">첨부 파일 (선택)</div>
+                    <label class="d-flex align-items-center gap-2 p-2 rounded ct-md" style="border:1px dashed #dadce0;cursor:pointer;background:#fafafa">
                         <i class="bi bi-paperclip text-muted"></i>
                         <span id="docReqFileName" class="text-muted flex-grow-1">양식, 참고 파일 등 첨부 (클릭)</span>
                         <input type="file" id="docReqFile" style="display:none;" onchange="updateFileName(this)">
@@ -192,7 +192,7 @@
                 <button class="btn btn-primary w-100" id="sendDocReqBtn" onclick="sendDocRequest()">
                     <i class="bi bi-send me-2"></i>요청 보내기
                 </button>
-                <div class="text-muted text-center mt-2" style="font-size:11px;">
+                <div class="text-muted text-center mt-2 ct-xs">
                     이메일로 요청이 전달되며, 연락처 목록의 '자료요청' 열에서 현황을 확인할 수 있습니다.
                 </div>
             </div>
@@ -221,19 +221,19 @@
                 <li class="nav-item">
                     <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabSent" type="button">
                         <i class="bi bi-upload me-1"></i>내가 공유한 제품
-                        <span class="badge rounded-pill bg-primary ms-1" id="sentBadge" style="font-size:10px;">0</span>
+                        <span class="badge rounded-pill bg-primary ms-1 ct-xs" id="sentBadge">0</span>
                     </button>
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabReceived" type="button">
                         <i class="bi bi-download me-1"></i>받은 공유 제품
-                        <span class="badge rounded-pill bg-secondary ms-1" id="receivedBadge" style="font-size:10px;">0</span>
+                        <span class="badge rounded-pill bg-secondary ms-1 ct-xs" id="receivedBadge">0</span>
                     </button>
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDocReq" type="button">
                         <i class="bi bi-envelope-paper me-1"></i>자료 요청
-                        <span class="badge rounded-pill ms-1" id="docReqBadge" style="font-size:10px;background:#e37400;color:#fff;">0</span>
+                        <span class="badge rounded-pill ms-1 ct-xs" id="docReqBadge" style="background:#e37400;color:#fff">0</span>
                     </button>
                 </li>
             </ul>
@@ -250,21 +250,21 @@
                              style="background:#e8f0fe;border-bottom:1px solid #c8d8f8;">
                             <input type="checkbox" class="form-check-input" id="qsCheckAll" onchange="toggleQsAll(this)"
                                    style="width:15px;height:15px;flex-shrink:0;cursor:pointer;" title="전체 선택">
-                            <input type="text" id="qsProductSearch" class="form-control form-control-sm flex-grow-1"
+                            <input type="text" id="qsProductSearch" class="form-control form-control-sm flex-grow-1 ct-sm"
                                    placeholder="제품명 검색..." oninput="filterQsProducts()" autocomplete="off"
-                                   style="font-size:12px;">
-                            <span id="qsSelectedCount" style="font-size:12px;color:#1a73e8;font-weight:600;white-space:nowrap;">0개 선택</span>
+                                  >
+                            <span class="ct-sm" id="qsSelectedCount" style="color:#1a73e8;font-weight:600;white-space:nowrap">0개 선택</span>
                             <button class="btn v2-btn-sm btn-light border" onclick="closeInlineShare()" title="접기">
-                                <i class="bi bi-chevron-up" style="font-size:11px;"></i>
+                                <i class="bi bi-chevron-up ct-xs"></i>
                             </button>
                         </div>
                         <!-- 일괄 역할 변경 -->
                         <div class="d-flex align-items-center gap-2 px-3 py-2"
                              style="background:#edf2ff;border-bottom:1px solid #dce6fb;">
-                            <span style="font-size:11px;color:#5f6368;flex-shrink:0;white-space:nowrap;">
+                            <span class="ct-xs" style="color:#5f6368;flex-shrink:0;white-space:nowrap">
                                 <i class="bi bi-lightning-charge me-1 text-warning"></i>선택 항목 일괄 변경
                             </span>
-                            <select id="qsBulkRole" class="form-select form-select-sm" style="font-size:12px;">
+                            <select id="qsBulkRole" class="form-select form-select-sm ct-sm">
                                 <option value="">— 역할 선택 —</option>
                                 <option value="UPLOADER">자료 제출 (협력업체)</option>
                                 <option value="EDITOR">공동 편집 (팀원)</option>
@@ -272,21 +272,21 @@
                                 <option value="APPROVER">최종 승인 (임원)</option>
                                 <option value="VIEWER">뷰어 (읽기 전용)</option>
                             </select>
-                            <button class="btn v2-btn-sm btn-outline-primary" onclick="applyQsBulkRole()"
-                                    style="font-size:12px;white-space:nowrap;flex-shrink:0;">적용</button>
+                            <button class="btn v2-btn-sm btn-outline-primary ct-sm" onclick="applyQsBulkRole()"
+                                    style="white-space:nowrap;flex-shrink:0">적용</button>
                         </div>
                         <!-- 제품 목록 (체크박스 + 개별 역할 드롭다운) -->
                         <div id="qsProductList" style="max-height:220px;overflow-y:auto;"></div>
                         <!-- 만료일 + 오류 + 공유 버튼 -->
                         <div class="d-flex align-items-center gap-2 px-3 py-2"
                              style="border-top:1px solid #dce6fb;background:#f3f7ff;">
-                            <span style="font-size:12px;color:#5f6368;white-space:nowrap;flex-shrink:0;">
+                            <span class="ct-sm" style="color:#5f6368;white-space:nowrap;flex-shrink:0">
                                 <i class="bi bi-calendar3 me-1"></i>만료일
                             </span>
-                            <input type="date" id="qsExpiry" class="form-control form-control-sm"
-                                   style="font-size:12px;max-width:140px;flex-shrink:0;">
-                            <span class="text-muted" style="font-size:11px;white-space:nowrap;flex-shrink:0;">비워두면 무기한</span>
-                            <div id="qsError" class="text-danger d-none flex-grow-1" style="font-size:12px;"></div>
+                            <input type="date" id="qsExpiry" class="form-control form-control-sm ct-sm"
+                                   style="max-width:140px;flex-shrink:0">
+                            <span class="text-muted ct-xs" style="white-space:nowrap;flex-shrink:0">비워두면 무기한</span>
+                            <div id="qsError" class="text-danger d-none flex-grow-1 ct-sm"></div>
                             <button class="btn v2-btn-sm btn-primary ms-auto" id="qsSendBtn" onclick="doQuickShare()"
                                     style="white-space:nowrap;flex-shrink:0;">
                                 <i class="bi bi-share me-1"></i>공유하기
@@ -298,7 +298,7 @@
                     <div class="p-4">
                         <div id="sentLoading" class="text-center py-4 d-none">
                             <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                            <span class="ms-2 text-muted" style="font-size:13px;">불러오는 중...</span>
+                            <span class="ms-2 text-muted ct-md">불러오는 중...</span>
                         </div>
                         <div id="sentEmpty" class="text-center py-5 text-muted d-none">
                             <i class="bi bi-share" style="font-size:28px;display:block;margin-bottom:8px;"></i>
@@ -326,7 +326,7 @@
                 <div class="tab-pane fade p-4" id="tabReceived">
                     <div id="receivedLoading" class="text-center py-4 d-none">
                         <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-                        <span class="ms-2 text-muted" style="font-size:13px;">불러오는 중...</span>
+                        <span class="ms-2 text-muted ct-md">불러오는 중...</span>
                     </div>
                     <div id="receivedEmpty" class="text-center py-5 text-muted d-none">
                         <i class="bi bi-inbox" style="font-size:28px;display:block;margin-bottom:8px;"></i>
@@ -350,7 +350,7 @@
                 <div class="tab-pane fade p-4" id="tabDocReq">
                     <div id="docReqLoading" class="text-center py-4 d-none">
                         <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
-                        <span class="ms-2 text-muted" style="font-size:13px;">요청 이력 불러오는 중...</span>
+                        <span class="ms-2 text-muted ct-md">요청 이력 불러오는 중...</span>
                     </div>
                     <div id="docReqEmpty" class="text-center py-5 text-muted d-none">
                         <i class="bi bi-envelope-paper" style="font-size:28px;display:block;margin-bottom:8px;"></i>
@@ -373,7 +373,7 @@
 </div><!-- /.contacts-container -->
 
 {# ── 문서 등록 및 수락 모달 ── #}
-<div class="modal fade" id="submitDocModal" tabindex="-1" aria-labelledby="submitDocModalLabel" aria-hidden="true">
+<div class="modal fade doc-modal" id="submitDocModal" tabindex="-1" aria-labelledby="submitDocModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
@@ -543,10 +543,10 @@ async function loadReceivedDocRequests() {
         listEl.innerHTML = reqs.map(r => {
             const st   = STATUS_STYLE[r.status] || STATUS_STYLE.PENDING;
             const docs = (r.requested_documents || []).map(d =>
-                `<span style="background:#e8f0fe;color:#1a73e8;border-radius:8px;padding:1px 8px;font-size:11px;margin-right:3px;">${d.type_name}</span>`
+                `<span class="ct-xs" style="background:#e8f0fe;color:#1a73e8;border-radius:8px;padding:1px 8px;margin-right:3px">${d.type_name}</span>`
             ).join('');
             const attach = r.attachment_url
-                ? `<a href="${r.attachment_url}" target="_blank" class="btn v2-btn-sm btn-xs btn-outline-secondary ms-1" style="font-size:11px;">
+                ? `<a href="${r.attachment_url}" target="_blank" class="btn v2-btn-sm btn-xs btn-outline-secondary ms-1 ct-xs">
                         <i class="bi bi-paperclip me-1"></i>첨부파일
                    </a>` : '';
             const acceptBtn = r.status === 'PENDING'
@@ -558,26 +558,26 @@ async function loadReceivedDocRequests() {
                    </button>` : '';
             const submittedList = (r.submissions && r.submissions.length)
                 ? `<div class="mt-2">${r.submissions.map(s => `
-                    <div style="font-size:11px;background:#e6f4ea;border-radius:6px;padding:2px 8px;margin-bottom:2px;">
+                    <div class="ct-xs" style="background:#e6f4ea;border-radius:6px;padding:2px 8px;margin-bottom:2px">
                         <i class="bi bi-file-earmark-check me-1 text-success"></i>${s.document_type}:
                         <a href="${s.file_url}" target="_blank">${s.filename}</a>
                     </div>`).join('')}</div>` : '';
-            return `<div class="border rounded p-3 mb-2" style="font-size:13px;background:#fff;">
+            return `<div class="border rounded p-3 mb-2 ct-md" style="background:#fff">
                 <div class="d-flex align-items-start gap-2 mb-2">
-                    <div style="width:36px;height:36px;border-radius:50%;background:#f1f3f4;display:flex;align-items:center;justify-content:center;font-weight:700;color:#5f6368;flex-shrink:0;font-size:15px;">
+                    <div class="ct-lg" style="width:36px;height:36px;border-radius:50%;background:#f1f3f4;display:flex;align-items:center;justify-content:center;font-weight:700;color:#5f6368;flex-shrink:0">
                         ${(r.requester_name||'?').slice(0,1).toUpperCase()}
                     </div>
                     <div class="flex-grow-1">
                         <div class="fw-semibold">${r.requester_name}</div>
-                        <div class="text-muted" style="font-size:11px;">${r.requester_email}</div>
+                        <div class="text-muted ct-xs">${r.requester_email}</div>
                     </div>
-                    <span class="text-muted" style="font-size:11px;flex-shrink:0;">${r.created}</span>
+                    <span class="text-muted ct-xs" style="flex-shrink:0">${r.created}</span>
                 </div>
-                <div class="mb-2">${docs || '<span style="color:#bdc1c6;font-size:12px;">요청 문서 미지정</span>'}</div>
-                ${r.message ? `<div class="text-muted mb-2" style="font-size:12px;font-style:italic;">"${r.message}"</div>` : ''}
-                ${r.due_date ? `<div style="font-size:11px;color:#c5221f;margin-bottom:6px;"><i class="bi bi-calendar me-1"></i>마감: ${r.due_date}</div>` : ''}
+                <div class="mb-2">${docs || '<span class="ct-sm" style="color:#bdc1c6">요청 문서 미지정</span>'}</div>
+                ${r.message ? `<div class="text-muted mb-2 ct-sm" style="font-style:italic">"${r.message}"</div>` : ''}
+                ${r.due_date ? `<div class="ct-xs" style="color:#c5221f;margin-bottom:6px"><i class="bi bi-calendar me-1"></i>마감: ${r.due_date}</div>` : ''}
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span style="background:${st.bg};color:${st.color};border-radius:10px;padding:2px 10px;font-size:11px;font-weight:600;">
+                    <span class="ct-xs" style="background:${st.bg};color:${st.color};border-radius:10px;padding:2px 10px;font-weight:600">
                         <i class="bi ${st.icon} me-1"></i>${st.label}
                     </span>
                     ${attach}
@@ -587,7 +587,7 @@ async function loadReceivedDocRequests() {
             </div>`;
         }).join('');
     } catch(e) {
-        listEl.innerHTML = '<p class="text-danger p-3" style="font-size:13px;">불러오기 실패</p>';
+        listEl.innerHTML = '<p class="text-danger p-3 ct-md">불러오기 실패</p>';
     }
 }
 
@@ -619,7 +619,7 @@ function openSubmitModal(reqId, docTypesJson) {
     } else {
         body.innerHTML = docTypes.map(dt => `
             <div class="mb-3 p-3 border rounded">
-                <label class="fw-semibold mb-2 d-block" style="font-size:13px;">
+                <label class="fw-semibold mb-2 d-block ct-md">
                     <i class="bi bi-file-earmark me-1 text-primary"></i>${dt.type_name}
                     <small class="text-muted fw-normal ms-2">(선택 사항)</small>
                 </label>
@@ -761,12 +761,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         // "요청 1 + ✓ 접수 2" 한 줄 표시
                         const parts = [];
                         if (pending > 0) {
-                            parts.push(`<span style="background:#fce8b2;color:#e37400;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:500;white-space:nowrap;">요청 ${pending}</span>`);
+                            parts.push(`<span class="ct-xs" style="background:#fce8b2;color:#e37400;border-radius:6px;padding:1px 6px;font-weight:500;white-space:nowrap">요청 ${pending}</span>`);
                         }
                         if (received > 0) {
-                            parts.push(`<span style="background:#e6f4ea;color:#137333;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:500;white-space:nowrap;">✓ 접수 ${received}</span>`);
+                            parts.push(`<span class="ct-xs" style="background:#e6f4ea;color:#137333;border-radius:6px;padding:1px 6px;font-weight:500;white-space:nowrap">✓ 접수 ${received}</span>`);
                         }
-                        TD.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;flex-wrap:nowrap;">${parts.join('<span style="color:#bdc1c6;font-size:10px;">+</span>')}</div>`;
+                        TD.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;flex-wrap:nowrap;">${parts.join('<span class="ct-xs" style="color:#bdc1c6">+</span>')}</div>`;
                     }
                     TD.style.textAlign = 'center';
                     TD.style.verticalAlign = 'middle';
@@ -1086,7 +1086,7 @@ function openDocRequestPanel(contacts) {
     // 수신자 칩
     const chips = document.getElementById('docReqChips');
     chips.innerHTML = contacts.map(c =>
-        `<span style="background:#e8f0fe;color:#1a73e8;border-radius:12px;padding:2px 10px;font-size:12px;display:inline-flex;align-items:center;gap:4px;">
+        `<span class="ct-sm" style="background:#e8f0fe;color:#1a73e8;border-radius:12px;padding:2px 10px;display:inline-flex;align-items:center;gap:4px">
             <i class="bi bi-person-fill"></i>${c.name || c.email}
          </span>`
     ).join('');
@@ -1122,7 +1122,7 @@ async function loadDocTypes() {
         renderDocTypes(cachedDocTypes);
     } catch(e) {
         const el = document.getElementById('docTypeList');
-        if (el) el.innerHTML = `<p class="text-danger" style="font-size:13px;">문서 유형을 불러오지 못했습니다. (${e.message})</p>`;
+        if (el) el.innerHTML = `<p class="text-danger ct-md">문서 유형을 불러오지 못했습니다. (${e.message})</p>`;
         console.error('loadDocTypes 실패:', e);
     }
 }
@@ -1130,16 +1130,16 @@ async function loadDocTypes() {
 function renderDocTypes(types) {
     const el = document.getElementById('docTypeList');
     if (!types || !types.length) {
-        el.innerHTML = '<p class="text-muted" style="font-size:13px;">등록된 문서 유형이 없습니다.</p>';
+        el.innerHTML = '<p class="text-muted ct-md">등록된 문서 유형이 없습니다.</p>';
         return;
     }
     const items = types.map(t => `
-        <label class="d-flex align-items-center gap-2 p-2 rounded" style="cursor:pointer;border:1px solid #e8eaed;font-size:13px;"
+        <label class="d-flex align-items-center gap-2 p-2 rounded ct-md" style="cursor:pointer;border:1px solid #e8eaed"
                onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background=''">
             <input type="checkbox" class="doc-type-chk" value="${t.type_id}" style="width:15px;height:15px;flex-shrink:0;">
-            <i class="bi ${t.icon || 'bi-file-earmark'}" style="color:${t.color || '#6c757d'};font-size:15px;flex-shrink:0;"></i>
+            <i class="bi ${t.icon || 'bi-file-earmark'} ct-lg" style="color:${t.color || '#6c757d'};flex-shrink:0"></i>
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.type_name}</span>
-            ${t.required_yn ? '<span class="badge bg-danger ms-auto" style="font-size:10px;flex-shrink:0;">필수</span>' : ''}
+            ${t.required_yn ? '<span class="badge bg-danger ms-auto ct-xs" style="flex-shrink:0">필수</span>' : ''}
         </label>`
     ).join('');
     el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px;">${items}</div>`;
@@ -1294,10 +1294,10 @@ async function loadDocRequests(email) {
         listEl.innerHTML = reqs.map(r => {
             const st = STATUS_STYLE[r.status] || STATUS_STYLE.PENDING;
             const docs = (r.requested_documents || []).map(d =>
-                `<span style="background:#f1f3f4;border-radius:6px;padding:1px 7px;font-size:11px;">${d.type_name}</span>`
+                `<span class="ct-xs" style="background:#f1f3f4;border-radius:6px;padding:1px 7px">${d.type_name}</span>`
             ).join(' ');
             const cancelBtn = r.status === 'PENDING'
-                ? `<button class="btn v2-btn-sm btn-outline-danger" style="font-size:11px;flex-shrink:0;"
+                ? `<button class="btn v2-btn-sm btn-outline-danger ct-xs" style="flex-shrink:0"
                           onclick="cancelDocReq(${r.request_id}, this, '${email}')">취소</button>`
                 : '';
 
@@ -1305,22 +1305,22 @@ async function loadDocRequests(email) {
             const subs = r.submissions || [];
             const submissionsHtml = subs.length
                 ? `<div class="mt-2 pt-2" style="border-top:1px dashed #e8eaed;">
-                    <div style="font-size:11px;color:#5f6368;font-weight:600;margin-bottom:4px;">
+                    <div class="ct-xs" style="color:#5f6368;font-weight:600;margin-bottom:4px">
                         <i class="bi bi-paperclip me-1"></i>수신된 파일 (${subs.length}건)
                     </div>
                     ${subs.map(s => {
                         const kb = s.file_size > 0 ? (s.file_size >= 1048576
                             ? (s.file_size/1048576).toFixed(1)+' MB'
                             : Math.ceil(s.file_size/1024)+' KB') : '';
-                        return `<div class="d-flex align-items-center gap-1 mb-1 px-2 py-1 rounded"
-                                     style="background:#f0f7f0;font-size:12px;">
-                            <i class="bi bi-file-earmark-check text-success" style="flex-shrink:0;font-size:13px;"></i>
-                            <span style="font-size:11px;color:#137333;font-weight:600;flex-shrink:0;white-space:nowrap;">${s.document_type}</span>
-                            <span class="text-truncate text-muted" style="font-size:11px;flex:1;min-width:0;" title="${s.filename}">${s.filename}</span>
-                            ${kb ? `<span class="text-muted" style="font-size:10px;flex-shrink:0;">${kb}</span>` : ''}
+                        return `<div class="d-flex align-items-center gap-1 mb-1 px-2 py-1 rounded ct-sm"
+                                     style="background:#f0f7f0">
+                            <i class="bi bi-file-earmark-check text-success ct-md" style="flex-shrink:0"></i>
+                            <span class="ct-xs" style="color:#137333;font-weight:600;flex-shrink:0;white-space:nowrap">${s.document_type}</span>
+                            <span class="text-truncate text-muted ct-xs" style="flex:1;min-width:0" title="${s.filename}">${s.filename}</span>
+                            ${kb ? `<span class="text-muted ct-xs" style="flex-shrink:0">${kb}</span>` : ''}
                             <a href="${s.file_url}" download="${s.filename}"
-                               class="btn v2-btn-sm btn-outline-success"
-                               style="font-size:11px;flex-shrink:0;" title="파일 다운로드">
+                               class="btn v2-btn-sm btn-outline-success ct-xs"
+                               style="flex-shrink:0" title="파일 다운로드">
                                 <i class="bi bi-download"></i>
                             </a>
                         </div>`;
@@ -1328,48 +1328,48 @@ async function loadDocRequests(email) {
                    </div>`
                 : '';
 
-            return `<div class="border rounded mb-2 overflow-hidden" style="font-size:12px;">
+            return `<div class="border rounded mb-2 overflow-hidden ct-sm">
                 <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#fafafa;border-bottom:1px solid #f1f3f4;">
-                    <span style="background:${st.bg};color:${st.color};border-radius:10px;padding:1px 8px;font-size:11px;font-weight:500;flex-shrink:0;">
+                    <span class="ct-xs" style="background:${st.bg};color:${st.color};border-radius:10px;padding:1px 8px;font-weight:500;flex-shrink:0">
                         <i class="bi ${st.icon} me-1"></i>${st.label}
                     </span>
-                    <span class="text-muted" style="font-size:11px;flex-shrink:0;">${r.created}</span>
+                    <span class="text-muted ct-xs" style="flex-shrink:0">${r.created}</span>
                     <div style="flex:1;min-width:0;overflow:hidden;">${docs || '<span style="color:#bdc1c6;">문서 미지정</span>'}</div>
-                    ${r.due_date ? `<span style="font-size:11px;color:#c5221f;flex-shrink:0;">~${r.due_date}</span>` : ''}
+                    ${r.due_date ? `<span class="ct-xs" style="color:#c5221f;flex-shrink:0">~${r.due_date}</span>` : ''}
                     ${cancelBtn}
                 </div>
                 <div class="px-3 py-2">
-                    ${r.message ? `<div class="text-muted mb-2" style="font-size:11px;font-style:italic;">"${r.message}"</div>` : ''}
+                    ${r.message ? `<div class="text-muted mb-2 ct-xs" style="font-style:italic">"${r.message}"</div>` : ''}
                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <span style="font-size:11px;color:#5f6368;font-weight:600;flex-shrink:0;">
+                        <span class="ct-xs" style="color:#5f6368;font-weight:600;flex-shrink:0">
                             <i class="bi bi-link-45deg me-1"></i>연결 제품
                         </span>
-                        <span id="linked-label-text-${r.request_id}" style="font-size:12px;color:${r.linked_label_id ? '#1967d2' : '#bdc1c6'};">
+                        <span class="ct-sm" id="linked-label-text-${r.request_id}" style="color:${r.linked_label_id ? '#1967d2' : '#bdc1c6'}">
                             ${r.linked_label_name || '미연결'}
                         </span>
-                        <button class="btn v2-btn-sm btn-xs btn-light border" style="font-size:11px;"
+                        <button class="btn v2-btn-sm btn-xs btn-light border ct-xs"
                                 onclick="toggleLinkLabelSelect(${r.request_id})">
                             ${r.linked_label_id ? '변경' : '+ 연결'}
                         </button>
                     </div>
                     <div id="link-label-select-${r.request_id}" class="d-none mt-1">
                         <div class="position-relative">
-                            <input type="text" class="form-control form-control-sm"
+                            <input type="text" class="form-control form-control-sm ct-sm"
                                    id="link-label-search-${r.request_id}"
                                    placeholder="품목명 또는 유형으로 검색..."
-                                   style="font-size:12px;padding-right:28px;"
+                                   style="padding-right:28px"
                                    oninput="filterLabelOptions(${r.request_id}, this.value)"
                                    autocomplete="off">
-                            <i class="bi bi-search position-absolute" style="right:8px;top:50%;transform:translateY(-50%);color:#9aa0a6;font-size:11px;pointer-events:none;"></i>
+                            <i class="bi bi-search position-absolute ct-xs" style="right:8px;top:50%;transform:translateY(-50%);color:#9aa0a6;pointer-events:none"></i>
                         </div>
                         <div id="link-label-dropdown-${r.request_id}"
-                             class="border rounded mt-1 bg-white"
-                             style="max-height:180px;overflow-y:auto;font-size:12px;display:none;"></div>
+                             class="border rounded mt-1 bg-white ct-sm"
+                             style="max-height:180px;overflow-y:auto;display:none"></div>
                         <input type="hidden" id="link-label-val-${r.request_id}" value="">
                         <div class="d-flex gap-1 mt-1">
-                            <button class="btn v2-btn-sm btn-primary" style="font-size:11px;"
+                            <button class="btn v2-btn-sm btn-primary ct-xs"
                                     onclick="saveLinkLabel(${r.request_id})">저장</button>
-                            <button class="btn v2-btn-sm btn-light" style="font-size:11px;"
+                            <button class="btn v2-btn-sm btn-light ct-xs"
                                     onclick="toggleLinkLabelSelect(${r.request_id})">취소</button>
                         </div>
                     </div>
@@ -1406,7 +1406,7 @@ async function loadDocRequests(email) {
     } catch(e) {
         console.error('loadDocRequests 에러:', e);
         loadingEl.classList.add('d-none');
-        listEl.innerHTML = '<p class="text-danger" style="font-size:13px;">불러오기 실패: ' + e.message + '</p>';
+        listEl.innerHTML = '<p class="text-danger ct-md">불러오기 실패: ' + e.message + '</p>';
     }
 }
 
@@ -1452,7 +1452,7 @@ function filterLabelOptions(reqId, query) {
 
     if (!filtered.length) {
         dropdown.style.display = 'block';
-        dropdown.innerHTML = '<div class="px-3 py-2 text-muted" style="font-size:12px;">검색 결과가 없습니다</div>';
+        dropdown.innerHTML = '<div class="px-3 py-2 text-muted ct-sm">검색 결과가 없습니다</div>';
         return;
     }
     dropdown.style.display = 'block';
@@ -1464,7 +1464,7 @@ function filterLabelOptions(reqId, query) {
              data-lname="${(l.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
              onclick="selectLabelOption(${reqId}, this)">
             <div style="font-weight:600;">${l.name}</div>
-            ${l.prdlst_dcnm ? `<div style="font-size:11px;color:#5f6368;">${l.prdlst_dcnm}</div>` : ''}
+            ${l.prdlst_dcnm ? `<div class="ct-xs" style="color:#5f6368">${l.prdlst_dcnm}</div>` : ''}
         </div>`).join('');
 }
 
@@ -1536,8 +1536,8 @@ function renderShareTable(type, rows, tbodyId, loadingId, emptyId, tableId, badg
         return `<tr>
             <td><a href="${PRODUCT_DETAIL_URL}${r.label_id}/new/" class="text-decoration-none text-dark fw-medium">${r.label_name}</a></td>
             <td>${roleBadge}</td>
-            <td style="font-size:12px;color:#5f6368;">${r.created_at || '-'}</td>
-            <td style="font-size:12px;color:${r.share_end_date ? '#c5221f' : '#5f6368'};">${r.share_end_date || '무기한'}</td>
+            <td class="ct-sm" style="color:#5f6368">${r.created_at || '-'}</td>
+            <td class="ct-sm" style="color:${r.share_end_date ? '#c5221f' : '#5f6368'}">${r.share_end_date || '무기한'}</td>
             <td style="text-align:center;">${actionCell}</td>
         </tr>`;
     }).join('');
@@ -1610,14 +1610,14 @@ function closeInlineShare() {
 async function loadQsProducts() {
     const listEl = document.getElementById('qsProductList');
     if (_qsAllLabels !== null) { renderQsProducts(_qsAllLabels); return; }
-    listEl.innerHTML = '<div class="text-center py-4 text-muted" style="font-size:13px;"><div class="spinner-border spinner-border-sm"></div> 불러오는 중...</div>';
+    listEl.innerHTML = '<div class="text-center py-4 text-muted ct-md"><div class="spinner-border spinner-border-sm"></div> 불러오는 중...</div>';
     try {
         const res  = await fetch(MY_LABELS_API);
         const data = await res.json();
         _qsAllLabels = data.labels || [];
         renderQsProducts(_qsAllLabels);
     } catch(e) {
-        listEl.innerHTML = '<div class="text-center py-3 text-danger" style="font-size:13px;">제품 목록을 불러올 수 없습니다.</div>';
+        listEl.innerHTML = '<div class="text-center py-3 text-danger ct-md">제품 목록을 불러올 수 없습니다.</div>';
     }
 }
 
@@ -1632,7 +1632,7 @@ function filterQsProducts() {
 function renderQsProducts(labels, filtered) {
     const listEl = document.getElementById('qsProductList');
     if (!labels.length) {
-        listEl.innerHTML = '<div class="text-center py-4 text-muted" style="font-size:12px;">' +
+        listEl.innerHTML = '<div class="text-center py-4 text-muted ct-sm">' +
             (filtered ? '검색 결과 없음' : '공유할 수 있는 제품이 없습니다.') + '</div>';
         updateQsSelectionUI();
         return;
@@ -1647,15 +1647,15 @@ function renderQsProducts(labels, filtered) {
                    style="width:15px;height:15px;flex-shrink:0;cursor:pointer;"
                    onchange="onQsChkChange(this)">
             <div class="flex-grow-1" style="min-width:0;overflow:hidden;">
-                <div style="font-size:13px;font-weight:500;color:#202124;
-                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                <div class="ct-md" style="font-weight:500;color:#202124;
+                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
                      title="${escHtml(l.name)}">${escHtml(l.name)}</div>
                 ${l.prdlst_dcnm
-                    ? `<div style="font-size:11px;color:#80868b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(l.prdlst_dcnm)}</div>`
+                    ? `<div class="ct-xs" style="color:#80868b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(l.prdlst_dcnm)}</div>`
                     : ''}
             </div>
-            <select class="qs-role-sel form-select form-select-sm" data-id="${sid}"
-                    style="width:136px;flex-shrink:0;font-size:12px;"
+            <select class="qs-role-sel form-select form-select-sm ct-sm" data-id="${sid}"
+                    style="width:136px;flex-shrink:0"
                     onchange="onQsRoleChange(this)">
                 ${QS_ROLE_OPTIONS}
             </select>

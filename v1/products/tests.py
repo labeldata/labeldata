@@ -2318,3 +2318,56 @@ class DropKeepsTheChosenTypeTests(TestCase):
         # 이 전제가 깨지면 위 우회가 필요 없어진다 - 그때 같이 지워야 한다
         head = self.js.index('function openUploadModal')
         self.assertIn('resetUploadForm();', self.js[head:head + 400])
+
+
+class TypeScaleIsOneScaleTests(TestCase):
+    """
+    9px·10px 글씨가 하필 **가장 먼저 읽어야 하는 것**에 쓰이고 있었다.
+
+    권한 탭은 역할 이름이 9px 였고(열일곱 군데), 연락처 화면은 인라인
+    font-size 가 백 군데 가까이 흩어져 같은 성격의 글씨가 자리마다 달랐다.
+    이 저장소가 스스로 정해 둔 본문 최소치는 12px 이다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.perm = (base / 'templates/products/_tab_permissions.html'
+                     ).read_text(encoding='utf-8')
+        self.contacts = (base / 'templates/products/contacts.html'
+                         ).read_text(encoding='utf-8')
+        self.css = (base / 'static/css/contacts.css').read_text(encoding='utf-8')
+
+    def test_9px_글씨는_없앴다(self):
+        self.assertNotIn('font-size: 9px', self.perm)
+        self.assertNotIn('font-size:9px', self.perm)
+
+    def test_10px_도_없앴다(self):
+        for html in (self.perm, self.contacts):
+            self.assertNotIn('font-size:10px', html)
+            self.assertNotIn('font-size: 10px', html)
+
+    def test_눈금은_한_벌이다(self):
+        for rule in ('.pw-xs', '.pw-sm', '.pw-md', '.pw-lg'):
+            self.assertIn(rule, self.perm)
+        for rule in ('.ct-xs', '.ct-sm', '.ct-md', '.ct-lg'):
+            self.assertIn(rule, self.css)
+
+    def test_class_가_두_번_붙은_태그가_없다(self):
+        # 두 번 붙으면 HTML 은 앞의 것만 본다 — 뒤에 넣은 것이 조용히 사라진다
+        import re
+        pat = re.compile(r'<[a-zA-Z][^>]*?class="[^"]*"[^>]*?\sclass="')
+        for name, html in (('권한', self.perm), ('연락처', self.contacts)):
+            self.assertEqual(pat.findall(html), [], name)
+
+    def test_역할_뱃지는_문서함과_같은_결이다(self):
+        # 부트스트랩의 채운 색 다섯을 쓰다가 이 탭만 알록달록하게 남았다
+        self.assertIn('.role-tag', self.perm)
+        for role in ('role-owner', 'role-uploader', 'role-editor',
+                     'role-reviewer', 'role-approver', 'role-viewer'):
+            self.assertIn(role, self.perm)
+
+    def test_연락처_모달도_같은_껍데기를_쓴다(self):
+        self.assertIn('class="modal fade doc-modal" id="submitDocModal"',
+                      self.contacts)
