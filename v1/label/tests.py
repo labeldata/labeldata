@@ -8344,3 +8344,31 @@ class RawmtrlBuilderAllowsEditorsTests(TestCase):
         block = src[head:src.index('result = build_display_text(label)', head)]
         self.assertIn('_resolve_editable_label(request, label_id)', block)
         self.assertNotIn('user_id=request.user', block)
+
+
+class OneGetCookieTests(TestCase):
+    """
+    미리보기 화면에는 같은 이름의 함수가 템플릿과 .js 양쪽에 열네 쌍 있었다.
+    둘을 견줘 보니 **하나만 빼고 전부 내용이 다르다** — 복사본이 아니라 두
+    구현이다. 그래서 지우는 일이 아니라 어느 쪽이 맞는지 정하는 일이다.
+
+    `getCookie` 만 글자까지 같아서 지금 안전하게 합칠 수 있었다.
+    """
+
+    def setUp(self):
+        self.js = _src('static/js/label/label_preview.js')
+        self.html = _src('templates/label/label_preview.html')
+
+    def test_한_벌만_남는다(self):
+        self.assertEqual(self.js.count('function getCookie('), 1)
+        self.assertEqual(self.html.count('function getCookie('), 0)
+
+    def test_그래도_쓰는_쪽은_그대로다(self):
+        # 템플릿에서도 부른다. .js 가 언제나 함께 실리므로 전역으로 닿는다.
+        self.assertIn("<script src=\"{% static 'js/label/label_preview.js' %}",
+                      self.html)
+        self.assertGreater(self.html.count('getCookie('), 0)
+
+    def test_남은_쌍을_잊지_않게_적어_둔다(self):
+        head = self.html.index('getCookie 는 label_preview.js 에만 둔다')
+        self.assertIn('열세 쌍', self.html[head:head + 400])
