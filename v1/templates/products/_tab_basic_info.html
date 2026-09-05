@@ -417,8 +417,17 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                 {% endcomment %}
                 <textarea id="field-rawmtrl-nm" name="rawmtrl_nm_display"
                           class="form-control bg-light border-0 v2-field-input" rows="3"
-                          placeholder="BOM 탭에서 원재료를 등록하면 자동으로 연결됩니다. 직접 입력도 가능합니다."
+                          placeholder="BOM 탭에 원재료를 넣은 뒤 아래 &quot;BOM에서 만들기&quot; 를 누르세요. 직접 입력도 됩니다."
                          >{% firstof product.rawmtrl_nm_display product.rawmtrl_nm "" %}</textarea>
+                {# 조립기가 옛 작성 화면에만 있어 여기서는 손으로 적고 있었다 #}
+                <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                    <button type="button" class="btn btn-light border v2-btn-sm"
+                            id="buildRawmtrlBtn" onclick="buildRawmtrlDisplay()"
+                            title="BOM 의 배합비 순서·첨가물 표시명·복합원재료 괄호·알레르기 문구를 규정대로 조립합니다">
+                        <i class="bi bi-stars"></i>BOM에서 만들기
+                    </button>
+                    <span id="buildRawmtrlHint" class="rawmtrl-hint" style="display:none;"></span>
+                </div>
 
                 <!-- ── 알레르기 감지 패널 (Google Material Style) ── -->
                 <div class="allergen-panel-root mt-2">
@@ -1429,7 +1438,76 @@ function copyVerifiedDataInline() {
     _verifiedProductData = null;
 }
 
-/* 
+/*
+   배합비에서 인쇄 문구를 만든다
+
+   서버에 조립기가 이미 있다(`build_display_text`) — 함량 내림차순, 첨가물
+   간략명, 복합원재료 괄호, 알레르기 문구가 규정대로 붙는다. AI 는 쓰지 않는다.
+   필요한 근거가 전부 DB 에 있기 때문이다.
+
+   그런데 그 단추가 **옛 작성 화면(label_creation)에만** 있었다. 지금 실제로
+   쓰는 곳은 이 탭인데, 여기서는 사람이 참고용 요약을 옮겨 손으로 다듬고
+   있었다. 라벨에서 법적 위험이 가장 큰 문구가 그렇게 만들어지고 있었다.
+
+   **저장하지 않는다.** 칸에 넣기만 하고 저장은 사용자가 저장 단추로 한다 —
+   말없이 덮어쓰면 손으로 다듬어 둔 문구가 조용히 사라진다.
+ */
+window.buildRawmtrlDisplay = async function () {
+    var target = document.getElementById('field-rawmtrl-nm');
+    var hint = document.getElementById('buildRawmtrlHint');
+    var btn = document.getElementById('buildRawmtrlBtn');
+    if (!target || typeof PRODUCT_ID === 'undefined') return;
+
+    if (target.value.trim() &&
+        !confirm('원재료명 표시명을 새로 만든 문구로 바꿉니다.\n\n지금 적혀 있는 것은 사라집니다. 계속할까요?')) {
+        return;
+    }
+
+    var show = function (text, bad) {
+        if (!hint) return;
+        hint.textContent = text;
+        hint.className = 'rawmtrl-hint' + (bad ? ' is-bad' : '');
+        hint.style.display = '';
+    };
+
+    if (btn) btn.disabled = true;
+    try {
+        var res = await fetch('/label/' + PRODUCT_ID + '/rawmtrl-display/',
+                              { credentials: 'same-origin' });
+        var data = await res.json();
+        if (!res.ok || !data.success) {
+            show(data.message || '문구를 만들지 못했습니다.', true);
+            return;
+        }
+
+        target.value = data.text;
+        // 알레르기 자동 감지와 저장 대상 수집이 이 신호를 듣는다
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // 만들어 놓고 인쇄되지 않으면 아무 소용이 없다
+        var check = document.querySelector('.display-item-check[name="chckd_rawmtrl_nm_display"]');
+        if (check && !check.checked) {
+            check.checked = true;
+            check.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        if (data.needs_review && data.needs_review.length) {
+            // 표4 첨가물인데 용도가 여럿이라 코드가 못 정한 것들.
+            // 어느 것을 봐야 하는지 짚어 주면 전부 다시 읽을 필요가 없다.
+            show('원료 ' + data.count + '개로 만들었습니다. 표시명을 직접 골라야 하는 첨가물: '
+                 + data.needs_review.join(', '), true);
+        } else {
+            show('원료 ' + data.count + '개로 만들었습니다. 확인하고 저장하세요.');
+        }
+    } catch (err) {
+        console.error(err);
+        show('문구 생성 중 오류가 발생했습니다.', true);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+};
+
+/*
    맞춤항목
  */
 function initCustomFields() {

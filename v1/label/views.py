@@ -3327,7 +3327,11 @@ def generate_rawmtrl_display(request, label_id):
     저장은 사용자가 확인한 뒤 폼 저장으로 한다. 자동으로 덮어쓰면 손으로 다듬어
     둔 문구가 조용히 사라진다.
     """
-    label = get_object_or_404(MyLabel, my_label_id=label_id, user_id=request.user)
+    # 소유자만 부를 수 있었다. 그런데 이 단추는 제품 상세(V2)의 기본 정보 탭에
+    # 있고 거기서는 **편집 권한을 받은 사람**도 같은 칸에 같은 문구를 손으로
+    # 적는다. 손으로 적을 수 있는 것을 만들어 주지 못할 이유가 없다.
+    from v1.products.views import _resolve_editable_label
+    label = _resolve_editable_label(request, label_id)
     result = build_display_text(label)
 
     if not result['count']:

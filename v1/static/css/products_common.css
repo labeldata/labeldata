@@ -1514,3 +1514,11 @@ table th[title] {
     font-size: 13px;
     border-radius: var(--ez-radius-sm, 6px);
 }
+
+/* BOM 에서 만든 원재료명 문구의 안내 줄 */
+.rawmtrl-hint {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--ez-text-muted, #5f6368);
+}
+.rawmtrl-hint.is-bad { color: var(--ez-danger, #c5221f); font-weight: 600; }

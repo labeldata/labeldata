@@ -8288,3 +8288,59 @@ class CompanyRecheckWiringTests(TestCase):
         self.assertIn("getattr(settings, 'OCR_COMPANY_RECHECK', True)", self.src)
         self.assertIn('OCR_COMPANY_RECHECK',
                       _src('config/settings.py'))
+
+
+class RawmtrlBuilderIsWhereTheWorkIsTests(TestCase):
+    """
+    배합비에서 인쇄 문구를 만드는 조립기는 오래 전부터 있었다. 그런데 그
+    단추가 **옛 작성 화면에만** 있어서, 지금 실제로 쓰는 제품 상세 기본 정보
+    탭에서는 사람이 참고용 요약을 옮겨 손으로 다듬고 있었다.
+
+    라벨에서 법적 위험이 가장 큰 문구가 그렇게 만들어지고 있었다.
+    """
+
+    def setUp(self):
+        self.html = _src('templates/products/_tab_basic_info.html')
+
+    def test_지금_쓰는_화면에_단추가_있다(self):
+        self.assertIn('id="buildRawmtrlBtn"', self.html)
+        self.assertIn('window.buildRawmtrlDisplay', self.html)
+        self.assertIn("'/label/' + PRODUCT_ID + '/rawmtrl-display/'", self.html)
+
+    def test_덮어쓰기_전에_묻는다(self):
+        head = self.html.index('window.buildRawmtrlDisplay')
+        block = self.html[head:head + 1200]
+        self.assertIn('confirm(', block)
+        self.assertIn('사라집니다', block)
+
+    def test_저장하지_않는다(self):
+        # 값만 넣고 저장은 사용자가 저장 단추로 한다
+        head = self.html.index('window.buildRawmtrlDisplay')
+        block = self.html[head:head + 3000]
+        self.assertNotIn('UPDATE_URL', block)
+        self.assertIn("dispatchEvent(new Event('input'", block)
+
+    def test_만든_뒤_인쇄되게_켠다(self):
+        # 만들어 놓고 표시 체크가 꺼져 있으면 인쇄되지 않는다
+        head = self.html.index('window.buildRawmtrlDisplay')
+        block = self.html[head:head + 3000]
+        self.assertIn('chckd_rawmtrl_nm_display', block)
+
+    def test_직접_골라야_할_첨가물을_짚어_준다(self):
+        head = self.html.index('window.buildRawmtrlDisplay')
+        self.assertIn('needs_review', self.html[head:head + 3000])
+
+    def test_안내_문구가_거짓말을_하지_않는다(self):
+        # "자동으로 연결됩니다" 라고 적혀 있었는데 아무것도 연결되지 않았다
+        self.assertNotIn('BOM 탭에서 원재료를 등록하면 자동으로 연결됩니다', self.html)
+
+
+class RawmtrlBuilderAllowsEditorsTests(TestCase):
+    """편집 권한자가 손으로 적을 수 있는 것을 만들어 주지 못할 이유가 없다."""
+
+    def test_편집_권한_판정을_함께_쓴다(self):
+        src = _src('label/views.py')
+        head = src.index('def generate_rawmtrl_display')
+        block = src[head:src.index('result = build_display_text(label)', head)]
+        self.assertIn('_resolve_editable_label(request, label_id)', block)
+        self.assertNotIn('user_id=request.user', block)
