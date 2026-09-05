@@ -229,14 +229,73 @@
 
     .list-table-wrapper {
         flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
+        overflow: auto;
     }
 
+    /* 칸을 여럿 켜면 표가 패널보다 넓어진다. 줄이지 않고 가로로 민다 —
+       줄이면 어차피 못 읽고, 엑셀에서 하던 것도 가로로 미는 일이다. */
     .list-table {
         width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
+    }
+    .ingredient-content.is-wide .list-table { min-width: 100%; width: max-content; }
+
+    /* ── 넓게 보기 ──
+       목록과 상세를 반씩 나눠 쓰는데, 여러 건을 훑고 견줄 때는 상세 칸이
+       자리만 먹는다. 접었다가 한 건을 고르면 다시 편다. */
+    .ingredient-content.is-wide .ingredient-list-panel {
+        flex: 1 1 100%;
+        border-right: 0;
+    }
+    .ingredient-content.is-wide .ingredient-detail-panel { display: none; }
+
+    /* ── 툴바 ── */
+    .ing-filter {
+        width: 118px;
+        flex-shrink: 0;
+        font-size: 13px;
+    }
+
+    /* ── 칸 고르기 ── */
+    .ing-cols-menu {
+        min-width: 210px;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 8px;
+    }
+    .ing-cols-head {
+        padding: 2px 6px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: .5px;
+    }
+    .ing-cols-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 6px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+    }
+    .ing-cols-item:hover { background: var(--google-gray-100); }
+    .ing-cols-item.is-fixed { cursor: default; opacity: .7; }
+    .ing-cols-item > em {
+        margin-left: auto;
+        font-style: normal;
+        font-size: 10px;
+        color: var(--text-secondary);
+    }
+    .ing-cols-foot {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+        padding: 8px 6px 2px;
+        margin-top: 4px;
+        border-top: 1px solid var(--google-gray-200);
     }
 
     .list-table thead {
@@ -577,10 +636,47 @@
                        style="font-size:13px;">
             </div>
         </div>
+        {# 80건에서는 견디지만 500건에서는 못 쓴다 #}
+        <select id="categoryFilter" class="form-select form-select-sm ing-filter"
+                onchange="runIngredientSearch()" title="분류로 거르기">
+            <option value="">분류 전체</option>
+            <option value="processed" {% if food_category == 'processed' %}selected{% endif %}>가공식품</option>
+            <option value="agricultural" {% if food_category == 'agricultural' %}selected{% endif %}>농산물</option>
+            <option value="additive" {% if food_category == 'additive' %}selected{% endif %}>첨가물</option>
+        </select>
+
         <div class="toolbar-buttons">
             {% if user.is_authenticated %}
             <button class="v2-action-btn" id="newBtn"><i class="bi bi-plus-lg"></i>신규 원료</button>
             {% endif %}
+            {# 엑셀처럼 필요한 칸을 자기가 정한다. 계정에 남는다. #}
+            <div class="dropdown d-inline-block">
+                <button class="v2-action-btn-outline" data-bs-toggle="dropdown"
+                        data-bs-auto-close="outside" title="목록에 보일 칸을 고릅니다">
+                    <i class="bi bi-layout-three-columns"></i>칸 고르기
+                </button>
+                <div class="dropdown-menu dropdown-menu-end ing-cols-menu">
+                    <div class="ing-cols-head">목록에 보일 칸</div>
+                    {% for col in column_choices %}
+                    <label class="ing-cols-item{% if col.fixed %} is-fixed{% endif %}">
+                        <input type="checkbox" class="ing-col-check" value="{{ col.field }}"
+                               {% if col.on %}checked{% endif %}{% if col.fixed %} disabled checked{% endif %}>
+                        <span>{{ col.label }}</span>
+                        {% if col.fixed %}<em>고정</em>{% endif %}
+                    </label>
+                    {% endfor %}
+                    <div class="ing-cols-foot">
+                        <button type="button" class="btn btn-light border v2-btn-sm"
+                                onclick="resetIngredientColumns()">기본값</button>
+                        <button type="button" class="btn btn-primary v2-btn-sm"
+                                onclick="saveIngredientColumns()">적용</button>
+                    </div>
+                </div>
+            </div>
+            <button class="v2-action-btn-outline" id="wideBtn" onclick="toggleWideList()"
+                    title="상세 칸을 접고 목록을 넓게 봅니다">
+                <i class="bi bi-arrows-angle-expand"></i><span id="wideBtnLabel">넓게 보기</span>
+            </button>
             <button class="v2-action-btn-outline" id="dupBtn" title="같은 원료가 여러 벌 쌓인 것을 찾아 합칩니다">
                 <i class="bi bi-intersect"></i>중복 정리<span class="dup-badge" id="dupBadge"></span>
             </button>
@@ -600,6 +696,9 @@
                     <span class="selection-badge"><span id="ing-selected-count">0</span>개 선택</span>
                     <button class="act-btn" id="bulkCopyBtn" title="선택한 원료를 복사합니다">
                         <i class="bi bi-files"></i> 복사
+                    </button>
+                    <button class="act-btn" id="bulkExportBtn" title="선택한 원료만 엑셀로 내려받습니다">
+                        <i class="bi bi-download"></i> 내려받기
                     </button>
                     <button class="act-btn danger" id="bulkDeleteBtn" title="선택한 원료를 삭제합니다">
                         <i class="bi bi-trash"></i> 삭제
@@ -628,21 +727,18 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for ingredient in page_obj %}
-                        <tr class="ingredient-row" data-id="{{ ingredient.my_ingredient_id }}">
+                        {% for row in rows %}
+                        <tr class="ingredient-row" data-id="{{ row.id }}">
                             <td onclick="event.stopPropagation()" style="cursor: default;">
-                                <input type="checkbox" class="ingredient-checkbox" data-id="{{ ingredient.my_ingredient_id }}">
+                                <input type="checkbox" class="ingredient-checkbox" data-id="{{ row.id }}">
                             </td>
-                            <td title="{% if ingredient.food_category == 'additive' %}식품첨가물{% elif ingredient.food_category == 'agricultural' %}농산물{% elif ingredient.food_category == 'processed' %}가공식품{% else %}미분류{% endif %}">
-                                {% if ingredient.food_category == 'additive' %}첨가물{% elif ingredient.food_category == 'agricultural' %}농산물{% elif ingredient.food_category == 'processed' %}가공식품{% else %}미분류{% endif %}
-                            </td>
-                            <td title="{{ ingredient.prdlst_report_no|default:'' }}">{{ ingredient.prdlst_report_no|default:'' }}</td>
-                            <td title="{{ ingredient.prdlst_nm|default:'' }}">{{ ingredient.prdlst_nm|default:'' }}</td>
-                            <td title="{{ ingredient.prdlst_dcnm|default:'' }}">{{ ingredient.prdlst_dcnm|default:'' }}</td>
+                            {% for cell in row.cells %}
+                            <td style="text-align: {{ cell.align }};" title="{{ cell.title }}">{{ cell.text }}</td>
+                            {% endfor %}
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="list-empty">
+                            <td colspan="{{ list_columns|length|add:1 }}" class="list-empty">
                                 <i class="bi bi-inbox"></i>
                                 <p style="margin-top: 8px;">등록된 원료가 없습니다.</p>
                             </td>
@@ -739,6 +835,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 원료 설정 로드: HTML을 innerHTML로 설정하고,
     // 인라인 JS스크립트(json_script 제외)를 실행한 후 reinit() 호출
     function loadIngredientDetail(container, html) {
+        unwideForDetail();
         container.innerHTML = html;
         // application/json 타입 제외한 인라인 스크립트만 실행
         container.querySelectorAll('script:not([src]):not([type])').forEach(function(old) {
@@ -928,9 +1025,104 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             params.delete('search_field');
         }
+        // 분류 거르개. 주소에 실어야 새로고침·뒤로가기에서도 남는다.
+        const catEl = document.getElementById('categoryFilter');
+        if (catEl && catEl.value) {
+            params.set('food_category', catEl.value);
+        } else {
+            params.delete('food_category');
+        }
         params.delete('page');
         window.location.search = params.toString();
     };
+
+    /*
+     * 넓게 보기.
+     *
+     * 목록과 상세를 반씩 나눠 쓰는데, 사용자들은 엑셀에서 하던 대로 **여러
+     * 건을 훑고 견주는** 일을 먼저 한다. 그때는 상세 칸이 자리만 먹는다.
+     * 접어 두었다가 한 건을 고르면 다시 편다.
+     *
+     * 보는 방식이라 브라우저에 남긴다 — 칸 고르기와 달리 자리를 옮기면
+     * 달라지는 것이 자연스럽다.
+     */
+    var WIDE_KEY = 'ingredient-list-wide';
+    /* "기본값" 단추가 되돌릴 목록. 서버의 default 표시를 그대로 받아 온다 —
+       두 벌로 적어 두면 어느 날 한쪽만 고쳐진다. */
+    var DEFAULT_COLUMNS = [
+        {% for col in column_choices %}{% if col.default %}'{{ col.field }}',{% endif %}{% endfor %}
+    ];
+
+    function applyWide(on) {
+        var content = document.querySelector('.ingredient-content');
+        var label = document.getElementById('wideBtnLabel');
+        var icon = document.querySelector('#wideBtn .bi');
+        if (content) content.classList.toggle('is-wide', on);
+        if (label) label.textContent = on ? '나란히 보기' : '넓게 보기';
+        if (icon) icon.className = 'bi ' + (on ? 'bi-arrows-angle-contract'
+                                               : 'bi-arrows-angle-expand');
+    }
+
+    window.toggleWideList = function () {
+        var on = !document.querySelector('.ingredient-content').classList.contains('is-wide');
+        try { localStorage.setItem(WIDE_KEY, on ? '1' : '0'); } catch (e) {}
+        applyWide(on);
+    };
+
+    try { applyWide(localStorage.getItem(WIDE_KEY) === '1'); } catch (e) {}
+
+    /* 한 건을 고르면 상세를 봐야 하니 저절로 펴 준다 */
+    function unwideForDetail() {
+        var content = document.querySelector('.ingredient-content');
+        if (!content || !content.classList.contains('is-wide')) return;
+        try { localStorage.setItem(WIDE_KEY, '0'); } catch (e) {}
+        applyWide(false);
+    }
+
+    /* ── 칸 고르기 ── */
+    function pickedColumns() {
+        return Array.prototype.map.call(
+            document.querySelectorAll('.ing-col-check:checked'),
+            function (c) { return c.value; });
+    }
+
+    window.saveIngredientColumns = function () {
+        var columns = pickedColumns();
+        if (!columns.length) { alert('칸을 하나 이상 고르세요.'); return; }
+        fetch('/label/my-ingredients/columns/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json',
+                       'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ columns: columns })
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) window.location.reload();
+                else alert(data.error || '저장하지 못했습니다.');
+            })
+            .catch(function () { alert('저장 중 오류가 발생했습니다.'); });
+    };
+
+    window.resetIngredientColumns = function () {
+        document.querySelectorAll('.ing-col-check').forEach(function (c) {
+            if (!c.disabled) c.checked = DEFAULT_COLUMNS.indexOf(c.value) >= 0;
+        });
+    };
+
+    /* ── 고른 것만 내려받기 ── */
+    var bulkExportBtn = document.getElementById('bulkExportBtn');
+    if (bulkExportBtn) {
+        bulkExportBtn.addEventListener('click', function () {
+            var ids = getCheckedBoxes().map(function (cb) { return cb.dataset.id; });
+            if (!ids.length) return;
+            // 지금 보고 있는 조건은 그대로 두고 고른 것만 좁힌다
+            var params = new URLSearchParams(window.location.search);
+            params.delete('page');
+            params.set('ids', ids.join(','));
+            window.location.href = '/label/my-ingredients/download/?' + params.toString();
+        });
+    }
 
     // 신규 원료 - 우측 패널에 AJAX로 등록 폼 로드
     if (newBtn) {

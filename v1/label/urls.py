@@ -60,6 +60,7 @@ urlpatterns = [
     path('delete-my-ingredient/<int:ingredient_id>/', views.delete_my_ingredient, name='delete_my_ingredient'),
     path('bulk-delete-my-ingredients/', views.bulk_delete_my_ingredients, name='bulk_delete_my_ingredients'),
     # 같은 원료가 여러 벌 쌓인 것 — 찾아 보여 주고, 사용자가 고른 한 벌로 합친다
+    path('my-ingredients/columns/', views.ingredient_columns_save, name='ingredient_columns_save'),
     path('my-ingredients/duplicates/', views.ingredient_duplicates, name='ingredient_duplicates'),
     path('my-ingredients/merge/', views.ingredient_merge_apply, name='ingredient_merge_apply'),
     path('bulk-copy-my-ingredients/', views.bulk_copy_my_ingredients, name='bulk_copy_my_ingredients'),

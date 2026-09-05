@@ -27,6 +27,16 @@ class UserProfile(models.Model):
     manufacturer_name = models.CharField(max_length=200, blank=True, verbose_name="제조원")
     manufacturer_address = models.CharField(max_length=300, blank=True, verbose_name="제조원 소재지")
 
+    # 목록 화면에서 사용자가 정한 것 (어느 칸을 볼지 등).
+    #
+    # 사용자들은 원료를 엑셀로 관리하다 여기로 온다. 그쪽에서는 필요한 열을
+    # 자기가 정해 놓고 보는데, 여기는 정해진 네 칸뿐이라 나머지를 보려면
+    # 한 건씩 눌러야 했다. 무엇을 볼지는 사람마다 다르고 **한 번 정하면
+    # 바뀌지 않는다** — 브라우저가 아니라 계정에 남긴다.
+    #
+    # 화면마다 열쇠를 나눠 쓴다: {"my_ingredient": {"columns": [...]}, ...}
+    list_prefs = models.JSONField(default=dict, blank=True, verbose_name="목록 화면 설정")
+
     def __str__(self):
         return f"Profile of {self.user.username}"
 

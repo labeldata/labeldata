@@ -8766,3 +8766,158 @@ class RecheckUsesRegisteredMakerTests(TestCase):
         block = src[head:src.index('def _companies_rechecked', head)]
         self.assertIn('find_food_item(data)', block)
         self.assertNotIn('client', block)
+
+
+class IngredientColumnsTests(TestCase):
+    """
+    사용자들은 원료를 엑셀로 관리하다 여기로 온다. 그쪽에서는 필요한 열을
+    자기가 정해 놓고 보는데, 여기는 네 칸으로 고정이라 나머지를 보려면 한 건씩
+    눌러야 했다 — 화면 절반을 목록에 쓰면서 정보는 엑셀보다 적었다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='cols', password='x')
+        self.client.force_login(self.user)
+
+    def test_고른_적이_없으면_기본값이다(self):
+        from v1.label.services.list_sort import (ingredient_columns,
+                                                 MY_INGREDIENT_DEFAULT_FIELDS)
+        fields = [c['field'] for c in ingredient_columns([])]
+        self.assertEqual(fields, list(MY_INGREDIENT_DEFAULT_FIELDS))
+
+    def test_고른_칸만_나온다(self):
+        from v1.label.services.list_sort import ingredient_columns
+        fields = [c['field'] for c in ingredient_columns(['bssh_nm', 'allergens'])]
+        self.assertIn('bssh_nm', fields)
+        self.assertIn('allergens', fields)
+        self.assertNotIn('prdlst_dcnm', fields)
+
+    def test_원재료명은_끌_수_없다(self):
+        # 없으면 무엇을 고르는지 알 수가 없다
+        from v1.label.services.list_sort import ingredient_columns
+        fields = [c['field'] for c in ingredient_columns(['bssh_nm'])]
+        self.assertIn('prdlst_nm', fields)
+
+    def test_순서는_선언_순서를_따른다(self):
+        # 사람마다 칸 순서가 다르면 화면을 설명할 수가 없다
+        from v1.label.services.list_sort import (ingredient_columns,
+                                                 MY_INGREDIENT_ALL_COLUMNS)
+        fields = [c['field'] for c in ingredient_columns(
+            ['update_datetime', 'food_category', 'prdlst_nm'])]
+        order = [c['field'] for c in MY_INGREDIENT_ALL_COLUMNS]
+        self.assertEqual(fields, sorted(fields, key=order.index))
+
+    def test_계정에_남는다(self):
+        # 브라우저가 아니라 계정이다. 회사 PC 와 집 PC 가 달라지면 성가시다
+        res = self.client.post(reverse('label:ingredient_columns_save'),
+                               data=json.dumps({'columns': ['prdlst_nm', 'bssh_nm']}),
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.list_prefs['my_ingredient']['columns'],
+                         ['prdlst_nm', 'bssh_nm'])
+
+    def test_모르는_칸은_버린다(self):
+        res = self.client.post(reverse('label:ingredient_columns_save'),
+                               data=json.dumps({'columns': ['prdlst_nm', 'password']}),
+                               content_type='application/json')
+        self.assertEqual(res.json()['columns'], ['prdlst_nm'])
+
+    def test_하나도_안_고르면_거절한다(self):
+        res = self.client.post(reverse('label:ingredient_columns_save'),
+                               data=json.dumps({'columns': []}),
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 400)
+
+    def test_정렬은_안_보이는_칸으로도_받는다(self):
+        # 칸을 껐다고 그 정렬로 들어온 주소가 깨지면 안 된다
+        from v1.label.services import list_sort
+        field, active, order = list_sort.my_ingredient('bssh_nm', 'desc')
+        self.assertEqual(active, 'bssh_nm')
+
+
+class IngredientListScreenTests(TestCase):
+    """엑셀 대신 여기서 보려면 화면이 그만큼은 해 줘야 한다."""
+
+    def setUp(self):
+        self.html = _src('templates/label/my_ingredient_list_combined.html')
+
+    def test_넓게_보기가_있다(self):
+        self.assertIn('id="wideBtn"', self.html)
+        self.assertIn('.ingredient-content.is-wide .ingredient-detail-panel', self.html)
+
+    def test_한_건을_고르면_다시_펴진다(self):
+        self.assertIn('function unwideForDetail', self.html)
+        head = self.html.index('function loadIngredientDetail')
+        self.assertIn('unwideForDetail();', self.html[head:head + 300])
+
+    def test_칸_고르기가_있다(self):
+        self.assertIn('window.saveIngredientColumns', self.html)
+        self.assertIn("'/label/my-ingredients/columns/'", self.html)
+        self.assertIn('{% for col in column_choices %}', self.html)
+
+    def test_기본값_목록은_서버에서_받는다(self):
+        # 두 벌로 적어 두면 어느 날 한쪽만 고쳐진다
+        head = self.html.index('var DEFAULT_COLUMNS')
+        self.assertIn('{% if col.default %}', self.html[head:head + 300])
+
+    def test_분류_거르개가_주소에_실린다(self):
+        self.assertIn('id="categoryFilter"', self.html)
+        self.assertIn("params.set('food_category', catEl.value)", self.html)
+
+    def test_고른_것만_내려받는다(self):
+        self.assertIn('id="bulkExportBtn"', self.html)
+        self.assertIn("params.set('ids', ids.join(','))", self.html)
+        self.assertIn("'/label/my-ingredients/download/?'", self.html)
+
+    def test_표는_고른_칸으로_그린다(self):
+        # 칸을 하나 더할 때마다 템플릿을 고쳐야 하면 어느 날 한쪽만 고쳐진다
+        self.assertIn('{% for cell in row.cells %}', self.html)
+        self.assertNotIn("{% for ingredient in page_obj %}", self.html)
+
+
+class IngredientListRendersTests(TestCase):
+    """고른 칸으로 실제로 그려지는가. 틀만 고쳐 놓고 깨뜨리면 소용이 없다."""
+
+    def setUp(self):
+        from v1.label.models import MyIngredient
+        self.user = User.objects.create_user(username='render', password='x')
+        self.client.force_login(self.user)
+        MyIngredient.objects.create(
+            user_id=self.user, prdlst_nm='정제소금', bssh_nm='한국소금',
+            prdlst_dcnm='식염', food_category='processed',
+            prdlst_report_no='20240101', allergens='대두', delete_YN='N')
+
+    def _get(self):
+        return self.client.get(reverse('label:my_ingredient_list_combined'))
+
+    def test_기본_칸으로_열린다(self):
+        res = self._get()
+        self.assertEqual(res.status_code, 200)
+        body = res.content.decode('utf-8')
+        self.assertIn('정제소금', body)
+        self.assertIn('가공식품', body)
+        self.assertNotIn('한국소금', body)      # 제조사는 기본이 아니다
+
+    def test_고른_칸이_목록에_나온다(self):
+        profile = self.user.profile
+        profile.list_prefs = {'my_ingredient': {'columns': ['prdlst_nm', 'bssh_nm']}}
+        profile.save()
+        body = self._get().content.decode('utf-8')
+        self.assertIn('한국소금', body)
+
+    def test_분류로_거를_수_있다(self):
+        url = reverse('label:my_ingredient_list_combined')
+        self.assertIn('정제소금', self.client.get(
+            url, {'food_category': 'processed'}).content.decode('utf-8'))
+        self.assertNotIn('정제소금', self.client.get(
+            url, {'food_category': 'additive'}).content.decode('utf-8'))
+
+    def test_긴_값은_잘라_보여_주고_전체는_말풍선에(self):
+        from v1.label.models import MyIngredient
+        long_name = '아주' * 60
+        MyIngredient.objects.create(user_id=self.user, prdlst_nm=long_name,
+                                    delete_YN='N')
+        body = self._get().content.decode('utf-8')
+        self.assertIn('…', body)
+        self.assertIn('title="%s"' % long_name, body)

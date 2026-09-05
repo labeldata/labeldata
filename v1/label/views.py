@@ -1334,12 +1334,18 @@ def my_ingredient_list_combined(request):
     has_search_conditions = any(search_values.values()) or food_category
     search_result_count = total_count if has_search_conditions else None
 
+    # 어느 칸을 볼지는 사람이 정하고 계정에 남는다
+    chosen = ingredient_column_prefs(request.user)
+    shown = list_sort.ingredient_columns(chosen)
+    shown_fields = [c['field'] for c in shown]
+
     context = {
         'page_obj': page_obj,
         'paginator': paginator,
         'page_range': page_range,
         'search_query': search_q,
         'search_field': search_field,
+        'food_category': food_category,
         'items_per_page': items_per_page,
         'sort_field': sort_field.lstrip('-'),
         'sort_order': sort_order,
@@ -1350,7 +1356,12 @@ def my_ingredient_list_combined(request):
         'total_count': total_count,
         'search_result_count': search_result_count,
             # 정렬 헤더 (제품 조회·식품첨가물과 같은 토글 방식)
-        "list_columns": list_sort.columns(list_sort.MY_INGREDIENT_COLUMNS, active_sort, sort_order),
+        "list_columns": list_sort.columns(shown, active_sort, sort_order),
+        "column_choices": [
+            dict(c, on=c['field'] in shown_fields, fixed=bool(c.get('min')))
+            for c in list_sort.MY_INGREDIENT_ALL_COLUMNS
+        ],
+        "rows": [ingredient_row(item, shown) for item in page_obj],
         "querystring_base": get_querystring_without(request, ["page", "sort", "order"]),
 }
     return render(request, _get_template(request, 'label/my_ingredient_list_combined.html'), context)
@@ -3803,6 +3814,15 @@ def download_my_ingredients_excel(request):
     food_category = request.GET.get('food_category', '').strip()
     if food_category:
         search_conditions &= Q(food_category=food_category)
+
+    # 목록에서 고른 것만. 없으면 지금 조건에 걸린 전부.
+    #
+    # 엑셀로 관리하던 사람은 필요한 몇 건만 뽑아 쓰는 일이 잦은데, 여태 전체
+    # 아니면 아무것도 없었다.
+    picked = [i for i in (request.GET.get('ids') or '').split(',') if i.strip().isdigit()]
+    if picked:
+        search_conditions &= Q(my_ingredient_id__in=picked)
+
     queryset = MyIngredient.objects.filter(search_conditions).order_by('prdlst_nm')
 
     workbook = openpyxl.Workbook()
@@ -4714,3 +4734,88 @@ def ingredient_merge_apply(request):
                              'error': '합치는 중 오류가 발생했습니다.'}, status=500)
 
     return JsonResponse({'success': True, **result})
+
+
+# ── 원료 목록: 어느 칸을 볼 것인가 ────────────────────────────────────────
+#
+# 사용자들은 원료를 엑셀로 관리하다 여기로 온다. 그쪽에서는 필요한 열을 자기가
+# 정해 놓고 보는데, 여기는 네 칸으로 고정이라 나머지를 보려면 한 건씩 눌러야
+# 했다 — 화면 절반을 목록에 쓰면서 정보는 엑셀보다 적었다.
+
+_CATEGORY_LABELS = {
+    'additive': '첨가물',
+    'agricultural': '농산물',
+    'processed': '가공식품',
+}
+
+# 표 안에서는 긴 값을 잘라 보여 준다. 전체는 title 로 붙여 마우스로 보게 한다.
+_CELL_LIMIT = 60
+
+
+def ingredient_column_prefs(user):
+    """이 사용자가 골라 둔 칸. 고른 적이 없으면 빈 목록(=기본값)."""
+    try:
+        prefs = (getattr(user, 'profile', None).list_prefs or {})
+        chosen = (prefs.get('my_ingredient') or {}).get('columns')
+        return [str(f) for f in chosen] if isinstance(chosen, list) else []
+    except Exception:
+        # 프로필이 없거나 값이 깨졌다. 기본값으로 여는 것이 맞다.
+        return []
+
+
+def ingredient_row(item, columns):
+    """
+    한 줄을 고른 칸만큼 만든다.
+
+    표시용 문자열을 여기서 만든다 — 템플릿에서 항목마다 if 를 늘어놓으면
+    칸을 하나 더할 때마다 템플릿을 고쳐야 하고, 어느 날 한쪽만 고쳐진다.
+    """
+    cells = []
+    for column in columns:
+        field = column['field']
+        raw = getattr(item, field, '') or ''
+        if field == 'food_category':
+            text = _CATEGORY_LABELS.get(raw, '미분류')
+            full = text
+        elif field == 'update_datetime':
+            text = full = raw.strftime('%y.%m.%d') if raw else ''
+        elif field == 'prms_dt' and len(str(raw)) == 8:
+            text = full = '%s.%s.%s' % (str(raw)[2:4], str(raw)[4:6], str(raw)[6:8])
+        else:
+            full = str(raw)
+            text = full if len(full) <= _CELL_LIMIT else full[:_CELL_LIMIT] + '…'
+        cells.append({'text': text, 'title': full, 'align': column['align']})
+    return {'id': item.my_ingredient_id, 'cells': cells}
+
+
+@login_required
+@require_POST
+def ingredient_columns_save(request):
+    """
+    목록에서 볼 칸을 저장한다.
+
+    브라우저가 아니라 **계정**에 남긴다. 한 번 정하면 잘 바뀌지 않는 것이고,
+    회사 PC 와 집 PC 에서 다르게 보이면 그것대로 성가시다.
+    """
+    try:
+        payload = json.loads(request.body or '{}')
+        fields = [str(f) for f in (payload.get('columns') or [])]
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
+                            status=400)
+
+    known = {c['field'] for c in list_sort.MY_INGREDIENT_ALL_COLUMNS}
+    fields = [f for f in fields if f in known]
+    if not fields:
+        return JsonResponse({'success': False, 'error': '칸을 하나 이상 고르세요.'},
+                            status=400)
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return JsonResponse({'success': False, 'error': '프로필이 없습니다.'},
+                            status=400)
+    prefs = dict(profile.list_prefs or {})
+    prefs['my_ingredient'] = dict(prefs.get('my_ingredient') or {}, columns=fields)
+    profile.list_prefs = prefs
+    profile.save(update_fields=['list_prefs'])
+    return JsonResponse({'success': True, 'columns': fields})

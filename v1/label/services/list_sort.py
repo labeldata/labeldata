@@ -86,12 +86,56 @@ MY_LABEL_COLUMNS = [
 MY_LABEL_DEFAULT = ('update_datetime', 'desc')
 
 # 내원료 관리 (MyIngredient)
-MY_INGREDIENT_COLUMNS = [
-    {'field': 'food_category', 'label': '분류', 'width': '12%', 'align': 'center'},
-    {'field': 'prdlst_report_no', 'label': '품목보고번호', 'width': '20%', 'align': 'left'},
-    {'field': 'prdlst_nm', 'label': '원재료명', 'width': '35%', 'align': 'left'},
-    {'field': 'prdlst_dcnm', 'label': '식품유형', 'width': '28%', 'align': 'left'},
+# 원료 목록에 놓을 수 있는 칸 전부.
+#
+# 사용자들은 원료를 엑셀로 관리하다 여기로 온다. 그쪽에서는 필요한 열을 자기가
+# 정해 놓고 보는데, 여기는 네 칸으로 고정이라 나머지를 보려면 **한 건씩 눌러야**
+# 했다. 화면 절반을 목록에 쓰면서 정보는 엑셀보다 적었다.
+#
+# 무엇을 볼지는 사람마다 다르다. 고를 수 있게 하고 계정에 남긴다.
+#
+#   default  처음 열었을 때 보이는 칸
+#   min      끌 수 없는 칸. 원재료명이 없으면 무엇을 고르는지 알 수가 없다
+MY_INGREDIENT_ALL_COLUMNS = [
+    {'field': 'food_category', 'label': '분류', 'width': '90px', 'align': 'center', 'default': True},
+    {'field': 'prdlst_report_no', 'label': '품목보고번호', 'width': '150px', 'align': 'left', 'default': True},
+    {'field': 'prdlst_nm', 'label': '원재료명', 'width': '220px', 'align': 'left', 'default': True, 'min': True},
+    {'field': 'ingredient_display_name', 'label': '표시명', 'width': '200px', 'align': 'left'},
+    {'field': 'prdlst_dcnm', 'label': '식품유형', 'width': '150px', 'align': 'left', 'default': True},
+    {'field': 'bssh_nm', 'label': '제조사', 'width': '150px', 'align': 'left'},
+    {'field': 'rawmtrl_nm', 'label': '하위 원료', 'width': '260px', 'align': 'left'},
+    {'field': 'allergens', 'label': '알레르기', 'width': '130px', 'align': 'left'},
+    {'field': 'gmo', 'label': 'GMO', 'width': '110px', 'align': 'left'},
+    {'field': 'pog_daycnt', 'label': '소비기한', 'width': '130px', 'align': 'left'},
+    {'field': 'frmlc_mtrqlt', 'label': '포장재질', 'width': '140px', 'align': 'left'},
+    {'field': 'induty_cd_nm', 'label': '업종', 'width': '120px', 'align': 'left'},
+    {'field': 'prms_dt', 'label': '허가일자', 'width': '100px', 'align': 'center'},
+    {'field': 'update_datetime', 'label': '수정일', 'width': '100px', 'align': 'center'},
 ]
+
+MY_INGREDIENT_DEFAULT_FIELDS = tuple(
+    c['field'] for c in MY_INGREDIENT_ALL_COLUMNS if c.get('default'))
+MY_INGREDIENT_REQUIRED_FIELDS = tuple(
+    c['field'] for c in MY_INGREDIENT_ALL_COLUMNS if c.get('min'))
+
+
+def ingredient_columns(chosen):
+    """
+    고른 칸을 **선언 순서대로** 돌려준다.
+
+    사용자가 고른 순서가 아니라 선언 순서를 따른다. 목록의 칸 순서가 사람마다
+    다르면 화면을 설명할 수가 없고, 순서를 바꾸고 싶다는 요구는 아직 없었다.
+
+    끌 수 없는 칸은 무엇을 고르든 들어간다. 하나도 안 고르면 기본값으로.
+    """
+    picked = set(chosen or ())
+    if not picked & set(MY_INGREDIENT_DEFAULT_FIELDS) and not picked:
+        picked = set(MY_INGREDIENT_DEFAULT_FIELDS)
+    picked |= set(MY_INGREDIENT_REQUIRED_FIELDS)
+    return [c for c in MY_INGREDIENT_ALL_COLUMNS if c['field'] in picked]
+
+
+MY_INGREDIENT_COLUMNS = [c for c in MY_INGREDIENT_ALL_COLUMNS if c.get('default')]
 MY_INGREDIENT_DEFAULT = ('prdlst_nm', 'asc')
 
 
@@ -100,4 +144,7 @@ def my_label(sort_param, order_param):
 
 
 def my_ingredient(sort_param, order_param):
-    return resolve(MY_INGREDIENT_COLUMNS, MY_INGREDIENT_DEFAULT, sort_param, order_param)
+    # 정렬은 **보이는 칸이 아니라 있는 칸 전부**로 받는다. 칸을 껐다고 그
+    # 정렬로 들어온 주소가 깨지면 안 된다.
+    return resolve(MY_INGREDIENT_ALL_COLUMNS, MY_INGREDIENT_DEFAULT,
+                   sort_param, order_param)
