@@ -1067,6 +1067,10 @@ document.addEventListener('DOMContentLoaded', function() {
           남길 것을 고르고 합칩니다. 나머지는 지운 표시만 하고 행은 남겨 둡니다.
         </span>
         <button type="button" class="btn btn-light v2-btn" data-bs-dismiss="modal">닫기</button>
+        <button type="button" class="btn btn-primary v2-btn" id="dupRunBtn"
+                onclick="mergeDupPicked()" disabled>
+          <i class="bi bi-intersect"></i>고른 묶음 합치기
+        </button>
       </div>
     </div>
   </div>
@@ -1162,13 +1166,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     return ''
       + '<div class="dup-group" data-group="' + gi + '">'
-      + '  <div class="dup-group-title">' + esc(g.label)
-      +      ' <span class="dup-meta">' + g.items.length + '벌</span></div>'
+      + '  <label class="dup-group-title">'
+      + '    <input type="checkbox" class="dup-pick" data-group="' + gi + '"'
+      +        ' onclick="event.stopPropagation(); syncDupPicks();">'
+      + '    <span>' + esc(g.label) + '</span>'
+      + '    <span class="dup-meta">' + g.items.length + '벌</span>'
+      + '  </label>'
       + rows
       + '  <div class="dup-actions">'
-      + '    <button type="button" class="btn btn-primary v2-btn-sm"'
+      + '    <button type="button" class="btn btn-light border v2-btn-sm"'
       + '            onclick="mergeDupGroup(' + gi + ', this)">'
-      + '      <i class="bi bi-intersect"></i>고른 것으로 합치기</button>'
+      + '      <i class="bi bi-intersect"></i>이 묶음만 합치기</button>'
       + '  </div>'
       + '  <div class="dup-note"></div>'
       + '</div>';
@@ -1194,29 +1202,40 @@ document.addEventListener('DOMContentLoaded', function() {
             + '<i class="bi bi-check-circle fs-4 d-block mb-2"></i>겹치는 원료가 없습니다.</div>';
           return;
         }
-        body.innerHTML = data.groups.map(groupHtml).join('');
+        body.innerHTML = ''
+          + '<label class="dup-all">'
+          + '  <input type="checkbox" id="dupAll" onclick="toggleDupAll(this)">'
+          + '  <span>모두 고르기</span>'
+          + '  <span class="dup-meta" id="dupPicked">0개 선택</span>'
+          + '</label>'
+          + data.groups.map(groupHtml).join('');
       })
       .catch(function () {
         body.innerHTML = '<div class="text-danger">불러오지 못했습니다.</div>';
       });
   };
 
+  /* 일괄 실행이 하나씩 기다릴 수 있게 약속을 돌려준다 */
   window.mergeDupGroup = function (gi, actionBtn) {
     var box = modalEl.querySelector('.dup-group[data-group="' + gi + '"]');
-    if (!box) return;
+    if (!box) return Promise.resolve();
     var picked = box.querySelector('input[type="radio"]:checked');
-    if (!picked) return;
+    if (!picked) return Promise.resolve();
 
     var all = Array.prototype.map.call(
       box.querySelectorAll('input[type="radio"]'), function (r) { return Number(r.value); });
     var keep = Number(picked.value);
     var drop = all.filter(function (id) { return id !== keep; });
 
-    if (!confirm('고른 한 벌로 ' + drop.length + '건을 합칩니다.\n\n'
-               + '배합비는 남길 원료로 옮겨집니다. 계속할까요?')) return;
+    // 일괄 실행이 부를 때는 이미 한 번 물었다
+    if (!box.dataset.bulk
+        && !confirm('고른 한 벌로 ' + drop.length + '건을 합칩니다.\n\n'
+                  + '배합비는 남길 원료로 옮겨집니다. 계속할까요?')) {
+      return Promise.resolve();
+    }
 
     actionBtn.disabled = true;
-    fetch('/label/my-ingredients/merge/', {
+    return fetch('/label/my-ingredients/merge/', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
@@ -1247,6 +1266,57 @@ document.addEventListener('DOMContentLoaded', function() {
         note.textContent = text;
       })
       .catch(function () { actionBtn.disabled = false; });
+  };
+
+  window.toggleDupAll = function (box) {
+    modalEl.querySelectorAll('.dup-group:not(.is-done) .dup-pick')
+      .forEach(function (c) { c.checked = box.checked; });
+    syncDupPicks();
+  };
+
+  window.syncDupPicks = function () {
+    var picked = modalEl.querySelectorAll('.dup-group:not(.is-done) .dup-pick:checked');
+    var all = modalEl.querySelectorAll('.dup-group:not(.is-done) .dup-pick');
+    var count = document.getElementById('dupPicked');
+    if (count) count.textContent = picked.length + '개 선택';
+    var head = document.getElementById('dupAll');
+    if (head) {
+      head.checked = all.length > 0 && picked.length === all.length;
+      head.indeterminate = picked.length > 0 && picked.length < all.length;
+    }
+    var run = document.getElementById('dupRunBtn');
+    if (run) {
+      run.disabled = !picked.length;
+      run.innerHTML = '<i class="bi bi-intersect"></i>고른 '
+        + (picked.length || '') + '개 묶음 합치기';
+    }
+  };
+
+  /*
+   * 고른 묶음을 한꺼번에 합친다.
+   *
+   * **한 번에 하나씩 보낸다.** 한 요청에 몰아넣으면 중간에 하나가 실패했을 때
+   * 앞엣것이 됐는지 안 됐는지 알 수가 없다. 하나씩 보내면 묶음마다 결과가
+   * 그 자리에 남는다 — 실제로 법령 매칭이 겹쳐 한 묶음만 실패한 적이 있다.
+   */
+  window.mergeDupPicked = async function () {
+    var picked = Array.prototype.slice.call(
+      modalEl.querySelectorAll('.dup-group:not(.is-done) .dup-pick:checked'));
+    if (!picked.length) return;
+    if (!confirm('고른 ' + picked.length + '개 묶음을 합칩니다. '
+               + '묶음마다 선택된 원료를 남기고 나머지를 합칩니다. 계속할까요?')) return;
+
+    var run = document.getElementById('dupRunBtn');
+    if (run) run.disabled = true;
+    for (var i = 0; i < picked.length; i++) {
+      var gi = picked[i].dataset.group;
+      var box = modalEl.querySelector('.dup-group[data-group="' + gi + '"]');
+      var one = box && box.querySelector('.dup-actions button');
+      if (!one) continue;
+      box.dataset.bulk = '1';
+      await window.mergeDupGroup(Number(gi), one);
+    }
+    syncDupPicks();
   };
 
   btn.addEventListener('click', window.openDupModal);

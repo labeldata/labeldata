@@ -1577,3 +1577,21 @@ table th[title] {
 @media (max-width: 767px) {
     .rawmtrl-diff-body { grid-template-columns: 1fr; }
 }
+
+/* 중복 원료 정리 — 여러 묶음을 한꺼번에 */
+.dup-all {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 10px;
+    border: 1px solid var(--ez-border, #dadce0);
+    border-radius: 8px;
+    background: var(--ez-gray-50, #f8f9fa);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.dup-all .dup-meta { margin-left: auto; font-weight: 500; }
+.dup-group-title { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.dup-group-title > span:first-of-type { font-weight: 700; }

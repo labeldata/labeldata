@@ -8540,7 +8540,27 @@ class IngredientMergeScreenTests(TestCase):
 
     def test_남길_것은_사람이_고른다(self):
         self.assertIn("name=\"dup-keep-", self.html)
-        self.assertIn('고른 것으로 합치기', self.html)
+        self.assertIn('이 묶음만 합치기', self.html)
+
+    def test_여러_묶음을_한꺼번에_고를_수_있다(self):
+        # 열두 묶음을 하나씩 누르게 하면 아무도 끝까지 안 한다
+        self.assertIn('id="dupAll"', self.html)
+        self.assertIn('window.mergeDupPicked', self.html)
+        self.assertIn('id="dupRunBtn"', self.html)
+
+    def test_일괄이라도_한_번에_하나씩_보낸다(self):
+        """
+        한 요청에 몰아넣으면 중간에 하나가 실패했을 때 앞엣것이 됐는지 안
+        됐는지 알 수가 없다. 실제로 법령 매칭이 겹쳐 한 묶음만 실패했다.
+        """
+        head = self.html.index('window.mergeDupPicked')
+        block = self.html[head:head + 1200]
+        self.assertIn('for (var i = 0; i < picked.length; i++)', block)
+        self.assertIn('await window.mergeDupGroup', block)
+
+    def test_일괄일_때는_묶음마다_묻지_않는다(self):
+        self.assertIn("box.dataset.bulk = '1'", self.html)
+        self.assertIn('if (!box.dataset.bulk', self.html)
 
     def test_배합비가_겹친_곳을_알린다(self):
         head = self.html.index('data.collisions')
