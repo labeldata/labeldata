@@ -370,10 +370,6 @@
         transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .list-table tbody tr:hover {
-        background: #f1f3f4;
-    }
-
     .list-table tbody tr.selected {
         background: rgba(26, 115, 232, 0.12) !important;
     }
@@ -391,21 +387,33 @@
         color: #1f1f1f;
     }
 
-    /* 폭이 좁아지면 잘라 버리는 대신 **두 줄까지 접어 보여 준다.**
+    /* 폭이 좁아지면 잘라 버리는 대신 **세 줄까지 접어 보여 준다.**
        칸 폭은 고른 칸 수에 따라 달라지므로 몇 글자에서 끊을지 서버가 정할 수
-       없다. 두 줄을 넘기면 말줄임하고, 전체는 마우스를 올려 보거나 옆의
-       상세 칸에서 본다.
+       없다.
 
        접기는 **안쪽 상자**가 한다. td 에 display:-webkit-box 를 주면 칸이
        table-cell 이 아니게 되어 표가 통째로 무너진다. */
     .cell-clip {
         display: -webkit-box;
-        -webkit-line-clamp: 2;
+        -webkit-line-clamp: 3;
         -webkit-box-orient: vertical;
         overflow: hidden;
         white-space: normal;
         word-break: break-word;
     }
+
+    /* 지나가는 줄은 **그 자리에서 펴진다.**
+       접힌 것을 보려고 한 건씩 눌러 상세를 여는 것이 원래 불편이었다.
+       마우스를 올린 동안만 전부 보이고, 지나가면 다시 접힌다. */
+    .list-table tbody tr:hover .cell-clip {
+        -webkit-line-clamp: unset;
+        display: block;
+    }
+    .list-table tbody tr:hover {
+        background: #e8f0fe;
+        box-shadow: inset 3px 0 0 var(--google-blue);
+    }
+    .list-table tbody tr:hover td { vertical-align: top; }
 
     /* 체크박스 열 */
     .list-table td:first-child,

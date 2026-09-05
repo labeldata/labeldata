@@ -8913,13 +8913,14 @@ class IngredientListRendersTests(TestCase):
         self.assertNotIn('정제소금', self.client.get(
             url, {'food_category': 'additive'}).content.decode('utf-8'))
 
-    def test_긴_값은_잘라_보여_주고_전체는_말풍선에(self):
+    def test_긴_값도_통째로_실려_나간다(self):
+        # 지나가면 그 줄이 펴지므로, 잘라 보내면 펴 봐야 "…" 로 끝난다
         from v1.label.models import MyIngredient
-        long_name = '아주' * 60
+        long_name = '아주' * 200
         MyIngredient.objects.create(user_id=self.user, prdlst_nm=long_name,
                                     delete_YN='N')
         body = self._get().content.decode('utf-8')
-        self.assertIn('…', body)
+        self.assertIn('<div class="cell-clip">%s</div>' % long_name, body)
         self.assertIn('title="%s"' % long_name, body)
 
 
@@ -8946,9 +8947,22 @@ class ListFitsOneScreenTests(TestCase):
     def test_가로로_밀지_않는다(self):
         self.assertNotIn('width: max-content', self.html)
 
-    def test_두_줄까지_접는다(self):
-        self.assertIn('-webkit-line-clamp: 2', self.html)
+    def test_세_줄까지_접는다(self):
+        self.assertIn('-webkit-line-clamp: 3', self.html)
         self.assertIn('class="cell-clip"', self.html)
+
+    def test_지나가면_그_줄이_펴진다(self):
+        """
+        접힌 것을 보려고 한 건씩 눌러 상세를 여는 것이 원래 불편이었다.
+        마우스를 올린 동안만 전부 보이고, 지나가면 다시 접힌다.
+        """
+        head = self.html.index('.list-table tbody tr:hover .cell-clip')
+        block = self.html[head:head + 200]
+        self.assertIn('-webkit-line-clamp: unset', block)
+
+    def test_지나가는_줄은_한_벌만_정한다(self):
+        # 같은 규칙이 두 벌이면 어느 날 한쪽만 고쳐진다
+        self.assertEqual(self.html.count('.list-table tbody tr:hover {'), 1)
 
     def test_접기는_칸이_아니라_안쪽_상자가_한다(self):
         """td 에 display:-webkit-box 를 주면 table-cell 이 아니게 되어 표가 무너진다."""
@@ -8956,8 +8970,22 @@ class ListFitsOneScreenTests(TestCase):
         block = self.html[head:head + 260]
         self.assertNotIn('-webkit-box', block)
 
-    def test_전체는_말풍선으로_본다(self):
+    def test_전체는_말풍선으로도_본다(self):
         self.assertIn('title="{{ cell.title }}"', self.html)
+
+    def test_값을_잘라_보내지_않는다(self):
+        """
+        전체 값은 어차피 title 로 실려 나간다. 자른 사본을 하나 더 담고 있었을
+        뿐 아낀 것이 없었고, 지나가면 펴지는데 잘린 값은 "…" 로 끝난다.
+        """
+        from v1.label.models import MyIngredient
+        from v1.label.services.list_sort import ingredient_columns
+        from v1.label.views import ingredient_row
+        long_name = '아주' * 400
+        item = MyIngredient(my_ingredient_id=1, prdlst_nm=long_name)
+        row = ingredient_row(item, ingredient_columns(['prdlst_nm']))
+        self.assertEqual(row['cells'][0]['text'], long_name)
+        self.assertNotIn('…', row['cells'][0]['text'])
 
 
 class ViewControlsAreSeparateTests(TestCase):

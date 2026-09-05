@@ -4748,14 +4748,13 @@ _CATEGORY_LABELS = {
     'processed': '가공식품',
 }
 
-# 표 안에서 잘라 보내는 길이.
+# 자르지 않고 그대로 보낸다.
 #
-# **보이는 길이는 여기서 정하지 않는다.** 칸 폭은 고른 칸에 따라 달라지므로
-# 두 줄까지 보여 주고 넘치면 말줄임하는 일은 CSS 가 한다(-webkit-line-clamp).
-# 여기서 자르는 것은 하위 원료처럼 수천 자짜리가 통째로 실려 나가는 것을
-# 막기 위해서다. 전체는 title 에 붙여 마우스로 보게 하고, 그래도 모자라면
-# 옆의 상세 칸에서 본다.
-_CELL_LIMIT = 300
+# 처음에는 300자에서 끊었는데, **전체 값은 어차피 title 에 실려 나간다.**
+# 자른 사본을 하나 더 담고 있었을 뿐 아낀 것이 없었다. 게다가 줄을 지나가면
+# 그 줄이 펴지도록 하고 나니, 잘린 값은 펴 봐야 "…" 로 끝난다.
+#
+# 보이는 길이는 CSS 가 정한다 — 평소 세 줄, 지나갈 때는 전부.
 
 
 def ingredient_column_prefs(user):
@@ -4788,8 +4787,7 @@ def ingredient_row(item, columns):
         elif field == 'prms_dt' and len(str(raw)) == 8:
             text = full = '%s.%s.%s' % (str(raw)[2:4], str(raw)[4:6], str(raw)[6:8])
         else:
-            full = str(raw)
-            text = full if len(full) <= _CELL_LIMIT else full[:_CELL_LIMIT] + '…'
+            text = full = str(raw)
         cells.append({'text': text, 'title': full, 'align': column['align']})
     return {'id': item.my_ingredient_id, 'cells': cells}
 
