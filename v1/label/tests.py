@@ -8372,3 +8372,149 @@ class OneGetCookieTests(TestCase):
     def test_남은_쌍을_잊지_않게_적어_둔다(self):
         head = self.html.index('getCookie 는 label_preview.js 에만 둔다')
         self.assertIn('열세 쌍', self.html[head:head + 400])
+
+
+class IngredientMergeTests(TestCase):
+    """
+    운영 실측으로 원료 548건 중 여분이 108건(19.7%)이었다. 검색 쪽은 막았지만
+    **이미 쌓인 것은 그대로**고, 지우면 배합비가 끊기니 사용자가 손을 못 댄다.
+    """
+
+    def setUp(self):
+        from v1.label.models import LabelIngredientRelation, MyIngredient
+        self.Rel, self.Ing = LabelIngredientRelation, MyIngredient
+        self.user = User.objects.create_user(username='merger', password='x')
+
+    def _ing(self, name, maker='', report_no=''):
+        return self.Ing.objects.create(
+            user_id=self.user, prdlst_nm=name, bssh_nm=maker,
+            prdlst_report_no=report_no, delete_YN='N')
+
+    def _label(self, name='제품'):
+        return MyLabel.objects.create(user_id=self.user, my_label_name=name)
+
+    def _use(self, label, ing, ratio):
+        rel = self.Rel(label=label, ingredient=ing, ingredient_ratio=ratio)
+        rel.save()
+        return rel
+
+    # ── 찾기 ──────────────────────────────────────────────────────────────
+    def test_같은_이름_같은_제조사면_한_묶음(self):
+        from v1.label.services.ingredient_merge import duplicate_groups
+        self._ing('정제소금', '한국소금')
+        self._ing('정제 소금', '한국소금')      # 띄어쓰기만 다르다
+        groups = duplicate_groups(self.user)
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(len(groups[0]['items']), 2)
+
+    def test_제조사가_다르면_다른_원료다(self):
+        # 같은 이름이라도 회사가 다르면 규격서가 다르고 그것이 곧 다른 서류다
+        from v1.label.services.ingredient_merge import duplicate_groups
+        self._ing('정제소금', '한국소금')
+        self._ing('정제소금', '대한소금')
+        self.assertEqual(duplicate_groups(self.user), [])
+
+    def test_품목보고번호가_같으면_이름이_달라도_한_묶음(self):
+        from v1.label.services.ingredient_merge import duplicate_groups
+        self._ing('정제소금', '한국소금', '20240101')
+        self._ing('정제소금(수입)', '한국소금(주)', '20240101')
+        self.assertEqual(len(duplicate_groups(self.user)), 1)
+
+    def test_배합비에_많이_물린_것이_먼저_온다(self):
+        from v1.label.services.ingredient_merge import duplicate_groups
+        a1, a2 = self._ing('설탕'), self._ing('설탕')
+        self._ing('밀가루'), self._ing('밀가루')
+        self._use(self._label(), a1, 30)
+        groups = duplicate_groups(self.user)
+        self.assertEqual(groups[0]['label'], '설탕')
+        # 그룹 안에서도 쓰인 것이 먼저다 - 그쪽을 남기면 옮길 것이 적다
+        self.assertEqual(groups[0]['items'][0]['id'], a1.my_ingredient_id)
+
+    def test_지운_것은_세지_않는다(self):
+        from v1.label.services.ingredient_merge import duplicate_groups
+        self._ing('설탕')
+        gone = self._ing('설탕')
+        gone.delete_YN = 'Y'
+        gone.save()
+        self.assertEqual(duplicate_groups(self.user), [])
+
+    # ── 합치기 ────────────────────────────────────────────────────────────
+    def test_배합비를_남길_원료로_옮긴다(self):
+        from v1.label.services.ingredient_merge import merge
+        keep, drop = self._ing('설탕'), self._ing('설탕')
+        label = self._label()
+        self._use(label, drop, 30)
+        out = merge(self.user, keep.my_ingredient_id, [drop.my_ingredient_id])
+        self.assertEqual(out['moved'], 1)
+        self.assertTrue(self.Rel.objects.filter(
+            label=label, ingredient=keep, ingredient_ratio=30).exists())
+        self.assertFalse(self.Rel.objects.filter(ingredient=drop).exists())
+
+    def test_합친_것은_지운_표시만_한다(self):
+        # 잘못 합쳤을 때 되돌릴 수 있어야 한다
+        from v1.label.services.ingredient_merge import merge
+        keep, drop = self._ing('설탕'), self._ing('설탕')
+        merge(self.user, keep.my_ingredient_id, [drop.my_ingredient_id])
+        drop.refresh_from_db()
+        self.assertEqual(drop.delete_YN, 'Y')
+        self.assertTrue(self.Ing.objects.filter(pk=drop.pk).exists())
+
+    def test_한_제품에_둘_다_있으면_더하지_않는다(self):
+        """
+        같은 원료를 두 번 적은 것인지 정말 두 몫인지 우리가 알 수 없다.
+        더하면 배합비가 조용히 늘어난다. 큰 쪽을 남기고 **알린다.**
+        """
+        from v1.label.services.ingredient_merge import merge
+        keep, drop = self._ing('설탕'), self._ing('설탕')
+        label = self._label()
+        self._use(label, keep, 20)
+        self._use(label, drop, 30)
+        out = merge(self.user, keep.my_ingredient_id, [drop.my_ingredient_id])
+        self.assertEqual(len(out['collisions']), 1)
+        self.assertEqual(out['collisions'][0]['kept'], 30.0)
+        rel = self.Rel.objects.get(label=label, ingredient=keep)
+        self.assertEqual(float(rel.ingredient_ratio), 30.0)
+        self.assertEqual(self.Rel.objects.filter(label=label).count(), 1)
+
+    def test_남의_원료는_건드리지_않는다(self):
+        from v1.label.services.ingredient_merge import merge
+        other = User.objects.create_user(username='남', password='x')
+        theirs = self.Ing.objects.create(user_id=other, prdlst_nm='설탕',
+                                         delete_YN='N')
+        keep = self._ing('설탕')
+        with self.assertRaises(ValueError):
+            merge(self.user, keep.my_ingredient_id, [theirs.my_ingredient_id])
+        theirs.refresh_from_db()
+        self.assertEqual(theirs.delete_YN, 'N')
+
+    def test_남길_원료가_없으면_거절한다(self):
+        from v1.label.services.ingredient_merge import merge
+        drop = self._ing('설탕')
+        with self.assertRaises(ValueError):
+            merge(self.user, 999999, [drop.my_ingredient_id])
+
+
+class IngredientMergeScreenTests(TestCase):
+    """열어 보기 전에 몇 건인지 모르면 아무도 안 누른다."""
+
+    def setUp(self):
+        self.html = _src('templates/label/my_ingredient_list_combined.html')
+
+    def test_목록_툴바에_단추가_있다(self):
+        self.assertIn('id="dupBtn"', self.html)
+        self.assertIn('중복 정리', self.html)
+
+    def test_안_눌러도_건수를_보여_준다(self):
+        self.assertIn('id="dupBadge"', self.html)
+        self.assertIn("badge.classList.add('on')", self.html)
+
+    def test_남길_것은_사람이_고른다(self):
+        self.assertIn("name=\"dup-keep-", self.html)
+        self.assertIn('고른 것으로 합치기', self.html)
+
+    def test_배합비가_겹친_곳을_알린다(self):
+        head = self.html.index('data.collisions')
+        self.assertIn('배합비를 확인하세요', self.html[head:head + 500])
+
+    def test_다른_문서_창과_같은_껍데기를_쓴다(self):
+        self.assertIn('class="modal fade doc-modal" id="dupModal"', self.html)

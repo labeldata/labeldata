@@ -581,6 +581,9 @@
             {% if user.is_authenticated %}
             <button class="v2-action-btn" id="newBtn"><i class="bi bi-plus-lg"></i>신규 원료</button>
             {% endif %}
+            <button class="v2-action-btn-outline" id="dupBtn" title="같은 원료가 여러 벌 쌓인 것을 찾아 합칩니다">
+                <i class="bi bi-intersect"></i>중복 정리<span class="dup-badge" id="dupBadge"></span>
+            </button>
             <button class="v2-action-btn-outline" id="downloadBtn"><i class="bi bi-download"></i>다운로드</button>
             <button class="v2-action-btn-outline" id="uploadBtn"><i class="bi bi-upload"></i>업로드</button>
             <input type="file" id="excelFileInput" accept=".xlsx,.xls">
@@ -1042,4 +1045,207 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script src="{% static 'js/label/my_ingredient_detail_partial.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+{# 중복 원료 정리 — 어느 것을 남길지는 사람이 정한다 #}
+<div class="modal fade doc-modal" id="dupModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title"><i class="bi bi-intersect me-2 text-primary"></i>중복 원료 정리</h5>
+          <p class="modal-subtitle" id="dupSummary">찾는 중…</p>
+        </div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body" id="dupBody">
+        <div class="text-center py-4 text-muted">
+          <div class="spinner-border spinner-border-sm me-2"></div>불러오는 중…
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="me-auto text-muted" style="font-size:12px;">
+          남길 것을 고르고 합칩니다. 나머지는 지운 표시만 하고 행은 남겨 둡니다.
+        </span>
+        <button type="button" class="btn btn-light v2-btn" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.dup-badge {
+    display: none;
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--ez-danger, #ea4335);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+.dup-badge.on { display: inline-block; }
+.dup-group {
+    border: 1px solid var(--ez-border, #dadce0);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+.dup-group-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.dup-row {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 110px 90px;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 2px;
+    font-size: 12.5px;
+    border-top: 1px solid var(--ez-border-light, #f1f3f4);
+}
+.dup-row:first-of-type { border-top: 0; }
+.dup-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dup-meta { font-size: 11px; color: var(--ez-text-muted, #9aa0a6); }
+.dup-used { font-size: 11px; color: var(--ez-text-muted, #5f6368); text-align: right; }
+.dup-used.is-used { color: var(--v2-blue, #1a73e8); font-weight: 700; }
+.dup-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.dup-note { font-size: 11px; color: var(--ez-text-muted, #9aa0a6); margin-top: 6px; }
+</style>
+
+<script>
+/*
+ * 중복 원료 정리.
+ *
+ * 화면은 묶어 보여 주기만 하고 **고르는 것은 사람이 한다.** 이름이 같아도
+ * 제조사가 다르면 다른 원료이고, 배합비가 물려 있는 쪽이 정본일 때도 나중에
+ * 만든 쪽이 정확할 때도 있다. 기본 선택은 배합비에 가장 많이 물린 것으로
+ * 두되(그쪽을 남기면 옮길 것이 가장 적다) 바꿀 수 있게 둔다.
+ */
+(function () {
+  var modalEl = document.getElementById('dupModal');
+  var btn = document.getElementById('dupBtn');
+  if (!modalEl || !btn) return;
+
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+
+  function groupHtml(g, gi) {
+    var rows = g.items.map(function (it, i) {
+      return ''
+        + '<label class="dup-row">'
+        + '  <input type="radio" name="dup-keep-' + gi + '" value="' + it.id + '"'
+        +      (i === 0 ? ' checked' : '') + '>'
+        + '  <span>'
+        + '    <span class="dup-name">' + esc(it.name) + '</span>'
+        + '    <span class="dup-meta">' + (it.maker ? esc(it.maker) : '제조사 없음')
+        +        (it.report_no ? ' · ' + esc(it.report_no) : '') + '</span>'
+        + '  </span>'
+        + '  <span class="dup-used' + (it.used ? ' is-used' : '') + '">'
+        +      (it.used ? '배합비 ' + it.used + '곳' : '쓰인 곳 없음') + '</span>'
+        + '  <span class="dup-meta">' + esc(it.updated) + '</span>'
+        + '</label>';
+    }).join('');
+
+    return ''
+      + '<div class="dup-group" data-group="' + gi + '">'
+      + '  <div class="dup-group-title">' + esc(g.label)
+      +      ' <span class="dup-meta">' + g.items.length + '벌</span></div>'
+      + rows
+      + '  <div class="dup-actions">'
+      + '    <button type="button" class="btn btn-primary v2-btn-sm"'
+      + '            onclick="mergeDupGroup(' + gi + ', this)">'
+      + '      <i class="bi bi-intersect"></i>고른 것으로 합치기</button>'
+      + '  </div>'
+      + '  <div class="dup-note"></div>'
+      + '</div>';
+  }
+
+  window.openDupModal = function () {
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    var body = document.getElementById('dupBody');
+    var head = document.getElementById('dupSummary');
+    body.innerHTML = '<div class="text-center py-4 text-muted">'
+      + '<div class="spinner-border spinner-border-sm me-2"></div>불러오는 중…</div>';
+
+    fetch('/label/my-ingredients/duplicates/', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.success) { body.innerHTML = '<div class="text-danger">불러오지 못했습니다.</div>'; return; }
+        var s = data.summary;
+        head.textContent = s.extra
+          ? '원료 ' + s.total + '건 가운데 ' + s.groups + '개 묶음에 여분 ' + s.extra + '건이 있습니다.'
+          : '원료 ' + s.total + '건. 겹치는 것이 없습니다.';
+        if (!data.groups.length) {
+          body.innerHTML = '<div class="text-center py-4 text-muted">'
+            + '<i class="bi bi-check-circle fs-4 d-block mb-2"></i>겹치는 원료가 없습니다.</div>';
+          return;
+        }
+        body.innerHTML = data.groups.map(groupHtml).join('');
+      })
+      .catch(function () {
+        body.innerHTML = '<div class="text-danger">불러오지 못했습니다.</div>';
+      });
+  };
+
+  window.mergeDupGroup = function (gi, actionBtn) {
+    var box = modalEl.querySelector('.dup-group[data-group="' + gi + '"]');
+    if (!box) return;
+    var picked = box.querySelector('input[type="radio"]:checked');
+    if (!picked) return;
+
+    var all = Array.prototype.map.call(
+      box.querySelectorAll('input[type="radio"]'), function (r) { return Number(r.value); });
+    var keep = Number(picked.value);
+    var drop = all.filter(function (id) { return id !== keep; });
+
+    if (!confirm('고른 한 벌로 ' + drop.length + '건을 합칩니다.\n\n'
+               + '배합비는 남길 원료로 옮겨집니다. 계속할까요?')) return;
+
+    actionBtn.disabled = true;
+    fetch('/label/my-ingredients/merge/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({ keep_id: keep, drop_ids: drop })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var note = box.querySelector('.dup-note');
+        if (!data.success) {
+          note.className = 'dup-note text-danger';
+          note.textContent = data.error || '합치지 못했습니다.';
+          actionBtn.disabled = false;
+          return;
+        }
+        box.querySelectorAll('input[type="radio"]').forEach(function (r) { r.disabled = true; });
+        note.className = 'dup-note text-success';
+        var text = data.dropped + '건을 합쳤습니다. 배합비 ' + data.moved + '곳을 옮겼습니다.';
+        if (data.collisions && data.collisions.length) {
+          // 한 라벨에 둘 다 들어 있었다. 더하지 않고 큰 쪽을 남겼다 - 조용히
+          // 넘기면 배합비가 바뀐 것을 아무도 모른다.
+          text += ' 같은 제품에 둘 다 들어 있던 ' + data.collisions.length
+                + '곳은 비율이 큰 쪽만 남겼습니다 — 그 제품의 배합비를 확인하세요.';
+          note.className = 'dup-note text-danger';
+        }
+        note.textContent = text;
+      })
+      .catch(function () { actionBtn.disabled = false; });
+  };
+
+  btn.addEventListener('click', window.openDupModal);
+
+  /* 열어 보기 전에도 몇 건인지 알려 준다. 모르면 아무도 안 누른다. */
+  fetch('/label/my-ingredients/duplicates/', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.success || !data.summary.extra) return;
+      var badge = document.getElementById('dupBadge');
+      badge.textContent = data.summary.extra;
+      badge.classList.add('on');
+      btn.title = '같은 원료가 여러 벌 쌓여 있습니다 — 여분 ' + data.summary.extra + '건';
+    })
+    .catch(function () {});
+})();
+</script>
+
 {% endblock %}

@@ -4646,3 +4646,71 @@ def get_food_group(request):
     if row is None:
         return JsonResponse({'success': False, 'error': '식품유형을 찾을 수 없습니다.'})
     return JsonResponse({'success': True, 'food_group': row.food_group})
+
+
+# ── 같은 원료가 여러 벌 쌓인 것 ────────────────────────────────────────────
+
+
+@login_required
+@require_GET
+def ingredient_duplicates(request):
+    """
+    겹치는 원료를 찾아 보여 준다. **아무것도 고치지 않는다.**
+
+    운영 실측으로 다섯에 하나가 사본이었다. 검색 쪽은 막았지만 이미 쌓인 것은
+    그대로고, 지우면 배합비가 끊기니 사용자가 손을 못 댄다.
+    """
+    from v1.label.services.ingredient_merge import duplicate_groups, summary
+
+    groups = duplicate_groups(request.user)
+    return JsonResponse({
+        'success': True,
+        'summary': summary(request.user),
+        'groups': [{
+            'key': g['key'],
+            'label': g['label'],
+            'items': [{
+                'id': i['id'], 'name': i['name'], 'maker': i['maker'],
+                'report_no': i['report_no'], 'used': i['used'],
+                'updated': i['updated'].strftime('%Y-%m-%d') if i['updated'] else '',
+            } for i in g['items']],
+        } for g in groups],
+    })
+
+
+@login_required
+@require_POST
+def ingredient_merge_apply(request):
+    """
+    고른 한 벌로 나머지를 합친다.
+
+    **어느 것을 남길지는 화면에서 사람이 정한다.** 이름이 같아도 제조사가
+    다르면 다른 원료이고, 우리가 고르면 틀린 쪽을 정본으로 삼을 수 있다.
+    """
+    from v1.label.services.ingredient_merge import merge
+
+    if request.user.username == 'guest@labeasylabel.com':
+        return JsonResponse({'success': False,
+                             'error': '게스트 계정은 사용할 수 없습니다.'}, status=403)
+    try:
+        payload = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
+                            status=400)
+
+    try:
+        keep_id = int(payload.get('keep_id'))
+        drop_ids = [int(x) for x in (payload.get('drop_ids') or [])]
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': '원료를 고르세요.'}, status=400)
+
+    try:
+        result = merge(request.user, keep_id, drop_ids)
+    except ValueError as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=400)
+    except Exception:
+        logger.exception('[원료 합치기] 실패 (keep=%s)', keep_id)
+        return JsonResponse({'success': False,
+                             'error': '합치는 중 오류가 발생했습니다.'}, status=500)
+
+    return JsonResponse({'success': True, **result})
