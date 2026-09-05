@@ -597,7 +597,20 @@ class ProductShare(models.Model):
 
 
 class SharePermission(models.Model):
-    """공유 권한 설정"""
+    """
+    공유 권한 설정.
+
+    권한은 **제품 단위**다. 그런데 문서함은 그 안에 여러 회사의 서류가 함께
+    쌓이는 자리라, 제품 단위 하나로는 부족하다.
+
+    시험성적서 하나 내라고 부른 협력업체가 그 제품 문서함의 **모든 것**을
+    받을 수 있었다 — 다른 협력업체의 규격서, 아직 안 나온 포장지 도안,
+    품목제조보고서, HACCP 인증서. 다섯 역할이 전부 can_download_documents=True
+    였고 내려받기 검사는 문서를 아예 보지 않았다.
+
+    내부 팀(EDITOR·REVIEWER·APPROVER)에는 맞는 설계다. **바깥 사람에게는
+    아니다.** can_view_all_documents 가 그 경계다.
+    """
     ROLE_CHOICES = [
         ('VIEWER', '단순 조회'),
         ('UPLOADER', '자료 제출'),
@@ -608,6 +621,7 @@ class SharePermission(models.Model):
     ROLE_DEFAULTS = {
         'VIEWER': {
             'can_view': True,
+            'can_view_all_documents': True,
             'can_comment': True,
             'can_suggest': False,
             'can_use_as_ingredient': False,
@@ -619,6 +633,7 @@ class SharePermission(models.Model):
         },
         'UPLOADER': {
             'can_view': True,
+            'can_view_all_documents': False,
             'can_comment': False,
             'can_suggest': False,
             'can_use_as_ingredient': False,
@@ -630,6 +645,7 @@ class SharePermission(models.Model):
         },
         'EDITOR': {
             'can_view': True,
+            'can_view_all_documents': True,
             'can_comment': True,
             'can_suggest': True,
             'can_use_as_ingredient': True,
@@ -641,6 +657,7 @@ class SharePermission(models.Model):
         },
         'REVIEWER': {
             'can_view': True,
+            'can_view_all_documents': True,
             'can_comment': True,
             'can_suggest': False,
             'can_use_as_ingredient': False,
@@ -652,6 +669,7 @@ class SharePermission(models.Model):
         },
         'APPROVER': {
             'can_view': True,
+            'can_view_all_documents': True,
             'can_comment': True,
             'can_suggest': False,
             'can_use_as_ingredient': True,
@@ -674,6 +692,9 @@ class SharePermission(models.Model):
     can_approve = models.BooleanField(default=False, verbose_name="승인")
     can_use_as_ingredient = models.BooleanField(default=True, verbose_name="원료로 사용", help_text="BOM에서 이 제품을 원료로 추가할 수 있는지")
     can_download_documents = models.BooleanField(default=True, verbose_name="문서 다운로드")
+    can_view_all_documents = models.BooleanField(
+        default=True, verbose_name="문서함 전체 보기",
+        help_text="끄면 본인이 올린 문서만 보이고 받을 수 있다. 자료 제출(협력업체)의 기본값이 꺼짐이다")
 
     class Meta:
         db_table = "v2_share_permission"

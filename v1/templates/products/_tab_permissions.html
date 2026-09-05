@@ -65,7 +65,7 @@
                             onclick="selectPerson(this)" 
                             data-email="{{ share.recipient_email }}" 
                             data-username="{{ share.display_name }}" 
-                            {% if share.share_id %}data-share-id="{{ share.share_id }}"{% endif %}
+                            {% if share.share_id %}data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}"{% endif %}
                             {% if share.permission_record %}data-role="{{ share.permission_record.role_code }}"{% else %}data-role=""{% endif %}
                             data-name="{{ share.recipient_name|default:'' }}" 
                             data-company="{{ share.recipient_company|default:'' }}"
@@ -102,7 +102,7 @@
                 <div class="tab-pane fade" id="palette-recent">
                     <div class="palette-list" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
                         {% for share in shares|slice:":5" %}
-                        <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)" data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}" data-share-id="{{ share.share_id }}" data-role="{{ share.permission_record.role_code }}" data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
+                        <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)" data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}" data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="{{ share.permission_record.role_code }}" data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
                             <div class="avatar bg-primary text-white">
                                 {{ share.display_name|slice:":1"|upper }}
                             </div>
@@ -167,7 +167,7 @@
                         {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'EDITOR' %}
                         <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                             data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
-                            data-share-id="{{ share.share_id }}" data-role="EDITOR"
+                            data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="EDITOR"
                             data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
                             <div class="avatar bg-success text-white">{{ share.display_name|slice:":1"|upper }}</div>
                             <div class="person-info">
@@ -201,7 +201,7 @@
                     {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'UPLOADER' %}
                     <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                         data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
-                        data-share-id="{{ share.share_id }}" data-role="UPLOADER"
+                        data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="UPLOADER"
                         data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
                         <div class="avatar bg-primary text-white">{{ share.display_name|slice:":1"|upper }}</div>
                         <div class="person-info">
@@ -234,7 +234,7 @@
                     {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'REVIEWER' %}
                     <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                         data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
-                        data-share-id="{{ share.share_id }}" data-role="REVIEWER"
+                        data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="REVIEWER"
                         data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
                         <div class="avatar bg-warning text-dark">{{ share.display_name|slice:":1"|upper }}</div>
                         <div class="person-info">
@@ -267,7 +267,7 @@
                     {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'APPROVER' %}
                     <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                         data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
-                        data-share-id="{{ share.share_id }}" data-role="APPROVER"
+                        data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="APPROVER"
                         data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
                         <div class="avatar bg-danger text-white">{{ share.display_name|slice:":1"|upper }}</div>
                         <div class="person-info">
@@ -299,7 +299,7 @@
                     {% for share in shares %}{% if share.permission_record and share.permission_record.role_code == 'VIEWER' %}
                     <div class="person-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="selectPerson(this)"
                         data-email="{{ share.recipient_email }}" data-username="{{ share.display_name }}"
-                        data-share-id="{{ share.share_id }}" data-role="VIEWER"
+                        data-share-id="{{ share.share_id }}" data-see-all="{{ share.permission_record.can_view_all_documents|yesno:'true,false' }}" data-role="VIEWER"
                         data-name="{{ share.recipient_name|default:'' }}" data-company="{{ share.recipient_company|default:'' }}">
                         <div class="avatar bg-info text-white">{{ share.display_name|slice:":1"|upper }}</div>
                         <div class="person-info">
@@ -357,7 +357,7 @@
                     <input type="text" class="form-control form-control-sm pw-sm" id="detail-license-no-input" placeholder="영업허가번호 또는 품목제조보고번호">
                 </div>
 
-                <div class="mb-4">
+                <div class="mb-3">
                     <label class="form-label">역할</label>
                     <select class="form-select form-select-sm pw-sm" id="detail-role-select">
                         <option value="UPLOADER">자료 제출 (협력업체)</option>
@@ -366,6 +366,22 @@
                         <option value="APPROVER">최종 승인 (임원)</option>
                         <option value="VIEWER">뷰어 (읽기 전용)</option>
                     </select>
+                </div>
+
+                {# 문서함은 여러 회사의 서류가 함께 쌓이는 자리다 #}
+                <div class="mb-4">
+                    <label class="form-label">문서함</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="detail-see-all-docs">
+                        <label class="form-check-label pw-sm" for="detail-see-all-docs">
+                            문서함 전체 보기
+                        </label>
+                    </div>
+                    <div class="pw-xs pw-muted mt-1">
+                        끄면 <strong>본인이 올린 문서만</strong> 보이고 받을 수 있습니다.
+                        협력업체에는 끄는 것이 기본입니다 — 같은 문서함에 다른 회사의
+                        규격서와 아직 안 나온 도안이 함께 있습니다.
+                    </div>
                 </div>
 
                 <div class="d-grid gap-2">
@@ -859,6 +875,25 @@ function dropPersonToPalette(event) {
 
 /* ── 인물 상세 패널 ── */
 
+/*
+ * 역할마다 문서함을 전부 보여 줄 것인가.
+ *
+ * 자료 제출(협력업체)만 꺼짐이다. 문서함은 여러 회사의 서류가 함께 쌓이는
+ * 자리라, 시험성적서 하나 내라고 부른 곳에 다른 회사의 규격서와 아직 안 나온
+ * 도안까지 보일 이유가 없다. 서버의 ROLE_DEFAULTS 와 같은 값이고, 어긋나지
+ * 않는지는 시험이 지킨다.
+ */
+function _seeAllDefault(role) {
+    return role !== 'UPLOADER';
+}
+
+/* 역할을 다시 고르면 그 역할의 기본값으로 돌아간다. 고른 뒤 손으로 켤 수 있다. */
+document.addEventListener('change', function (e) {
+    if (!e.target || e.target.id !== 'detail-role-select') return;
+    var seeAllEl = document.getElementById('detail-see-all-docs');
+    if (seeAllEl) seeAllEl.checked = _seeAllDefault(e.target.value);
+});
+
 function selectPerson(card) {
     document.querySelectorAll('.person-card').forEach(function(c) { c.classList.remove('selected'); });
     card.classList.add('selected');
@@ -887,6 +922,14 @@ function selectPerson(card) {
     el = document.getElementById('detail-company-input');   if (el) el.value = company;
     el = document.getElementById('detail-license-no-input');if (el) el.value = licenseNo;
     el = document.getElementById('detail-role-select');     if (el) el.value = role;
+
+    // 문서함 전체 보기. 카드에 실린 지금 값이 있으면 그것을, 없으면 역할 기본값을.
+    var seeAllEl = document.getElementById('detail-see-all-docs');
+    if (seeAllEl) {
+        var stored = card.dataset.seeAll;
+        seeAllEl.checked = (stored === 'true' || stored === 'false')
+            ? stored === 'true' : _seeAllDefault(role);
+    }
 
     // 현재 사용자가 이 카드를 편집할 수 있는지 판단
     //  - 정보(이름·회사·인허가번호) 수정: OWNER만 가능 (소유자 카드 제외)
@@ -939,8 +982,10 @@ function savePersonDetails() {
     var company   = (document.getElementById('detail-company-input')    || {}).value || '';
     var licenseNo = (document.getElementById('detail-license-no-input') || {}).value || '';
     var role      = (document.getElementById('detail-role-select')      || {}).value || '';
+    var seeAllEl  = document.getElementById('detail-see-all-docs');
+    var seeAll    = seeAllEl ? (seeAllEl.checked ? 'true' : 'false') : '';
 
-    _permPost('/products/share/' + shareId + '/update-info/', { name: name, company: company, license_no: licenseNo, role: role })
+    _permPost('/products/share/' + shareId + '/update-info/', { name: name, company: company, license_no: licenseNo, role: role, see_all_documents: seeAll })
     .then(function(data) {
         if (data.success) _reloadToPermissions();
         else showSnackbar(data.error || '저장에 실패했습니다.', 'error');

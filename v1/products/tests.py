@@ -2371,3 +2371,129 @@ class TypeScaleIsOneScaleTests(TestCase):
     def test_연락처_모달도_같은_껍데기를_쓴다(self):
         self.assertIn('class="modal fade doc-modal" id="submitDocModal"',
                       self.contacts)
+
+
+class SupplierSeesOnlyOwnDocumentsTests(TestCase):
+    """
+    시험성적서 하나 내라고 부른 협력업체가 그 제품 문서함의 **모든 것**을
+    받을 수 있었다 — 다른 협력업체의 규격서, 아직 안 나온 포장지 도안,
+    품목제조보고서, HACCP 인증서.
+
+    권한은 제품 단위였고 다섯 역할이 전부 can_download_documents=True 였다.
+    내려받기 검사는 문서를 아예 보지 않았다.
+    """
+
+    def setUp(self):
+        from v1.products.models import (DocumentType, ProductDocument,
+                                        ProductShare, SharePermission)
+        self.Doc, self.Share, self.Perm = ProductDocument, ProductShare, SharePermission
+        self.owner = User.objects.create_user(username='주인', password='x',
+                                              email='owner@x.com')
+        self.supplier = User.objects.create_user(username='협력사', password='x',
+                                                 email='sup@x.com')
+        self.label = MyLabel.objects.create(user_id=self.owner,
+                                            my_label_name='브라우니')
+        dtype = DocumentType.objects.create(type_code='T', type_name='성적서')
+        self.mine = ProductDocument.objects.create(
+            label=self.label, document_type=dtype, file='v2/product_documents/a.pdf',
+            original_filename='내가올린것.pdf', uploaded_by=self.supplier)
+        self.theirs = ProductDocument.objects.create(
+            label=self.label, document_type=dtype, file='v2/product_documents/b.pdf',
+            original_filename='남의규격서.pdf', uploaded_by=self.owner)
+
+    def _share(self, role):
+        share = self.Share.objects.create(
+            label=self.label, recipient_email=self.supplier.email,
+            recipient_user=self.supplier, share_mode='PRIVATE',
+            active_yn=True, created_by=self.owner)
+        perm = self.Perm.objects.create(share=share)
+        perm.apply_role_defaults(role_code=role, save=True)
+        return share, perm
+
+    def test_자료_제출자는_자기_것만_받는다(self):
+        from v1.common.media_access import user_can_download_label_files
+        self._share('UPLOADER')
+        self.assertTrue(user_can_download_label_files(
+            self.supplier, self.label, self.mine))
+        self.assertFalse(user_can_download_label_files(
+            self.supplier, self.label, self.theirs))
+
+    def test_목록에서도_남의_것은_안_보인다(self):
+        # 파일을 못 받아도 목록에 보이면 거래처와 서류 종류가 드러난다
+        from v1.common.media_access import visible_documents
+        self._share('UPLOADER')
+        seen = visible_documents(self.supplier, self.label,
+                                 self.Doc.objects.filter(label=self.label))
+        self.assertEqual([d.document_id for d in seen], [self.mine.document_id])
+
+    def test_내부_팀은_전부_본다(self):
+        from v1.common.media_access import (user_can_download_label_files,
+                                            visible_documents)
+        for role in ('EDITOR', 'REVIEWER', 'APPROVER'):
+            self.Share.objects.filter(label=self.label).delete()
+            self._share(role)
+            self.assertTrue(user_can_download_label_files(
+                self.supplier, self.label, self.theirs), role)
+            self.assertEqual(visible_documents(
+                self.supplier, self.label,
+                self.Doc.objects.filter(label=self.label)).count(), 2, role)
+
+    def test_주인은_언제나_전부_본다(self):
+        from v1.common.media_access import user_can_download_label_files
+        self.assertTrue(user_can_download_label_files(
+            self.owner, self.label, self.theirs))
+
+    def test_문서를_안_주면_전체_보기가_아닌_사람에게는_거짓이다(self):
+        # "이 제품에서 무엇이든 받을 수 있는가" 를 묻는 것이라 참이면 안 된다
+        from v1.common.media_access import user_can_download_label_files
+        self._share('UPLOADER')
+        self.assertFalse(user_can_download_label_files(self.supplier, self.label))
+
+    def test_소유자가_켜_주면_전부_본다(self):
+        from v1.common.media_access import user_can_download_label_files
+        share, perm = self._share('UPLOADER')
+        perm.can_view_all_documents = True
+        perm.save()
+        self.assertTrue(user_can_download_label_files(
+            self.supplier, self.label, self.theirs))
+
+    def test_공유가_없으면_아무것도_못_받는다(self):
+        from v1.common.media_access import user_can_download_label_files
+        stranger = User.objects.create_user(username='남', password='x',
+                                            email='no@x.com')
+        self.assertFalse(user_can_download_label_files(
+            stranger, self.label, self.mine))
+
+
+class SeeAllDefaultsMatchTests(TestCase):
+    """역할 기본값이 서버와 화면 두 곳에 있다. 어긋나면 화면이 거짓말을 한다."""
+
+    def test_협력업체만_꺼짐이다(self):
+        from v1.products.models import SharePermission
+        for role, defaults in SharePermission.ROLE_DEFAULTS.items():
+            self.assertIn('can_view_all_documents', defaults, role)
+            self.assertEqual(defaults['can_view_all_documents'],
+                             role != 'UPLOADER', role)
+
+    def test_화면도_같은_규칙을_쓴다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        html = (Path(dj.BASE_DIR) / 'templates/products/_tab_permissions.html'
+                ).read_text(encoding='utf-8')
+        head = html.index('function _seeAllDefault')
+        self.assertIn("return role !== 'UPLOADER';", html[head:head + 200])
+
+    def test_모든_호출처가_문서를_넘긴다(self):
+        # 문서를 안 넘기면 예전과 똑같이 통째로 열린다
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        for rel in ('products/views.py', 'common/media_access.py'):
+            src = (base / rel).read_text(encoding='utf-8')
+            for line in src.splitlines():
+                if 'user_can_download_label_files(' not in line:
+                    continue
+                if 'def user_can_download_label_files' in line:
+                    continue
+                if 'document.label)' in line or ', doc.label)' in line:
+                    self.fail('%s: 문서를 안 넘긴다 — %s' % (rel, line.strip()))

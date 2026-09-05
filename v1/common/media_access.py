@@ -30,16 +30,8 @@ logger = logging.getLogger(__name__)
 # 공유 권한 확인
 # ─────────────────────────────────────────────────────────────────────────────
 
-def user_can_download_label_files(user, label) -> bool:
-    """
-    해당 표시사항(label)의 첨부 파일을 내려받을 수 있는가.
-    소유자이거나, 유효한 공유에서 can_download_documents 를 가진 경우.
-    """
-    if label is None or not user.is_authenticated:
-        return False
-    if label.user_id_id == user.id:
-        return True
-
+def _live_shares(user, label):
+    """이 사용자가 이 표시사항에 대해 갖고 있는 살아 있는 공유."""
     from v1.products.models import ProductShare
     return ProductShare.objects.filter(
         label=label,
@@ -50,7 +42,59 @@ def user_can_download_label_files(user, label) -> bool:
         Q(recipient_user=user) | Q(recipient_email__iexact=user.email)
     ).filter(
         Q(share_end_date__isnull=True) | Q(share_end_date__gt=timezone.now())
-    ).exists()
+    )
+
+
+def user_can_download_label_files(user, label, document=None) -> bool:
+    """
+    해당 표시사항(label)의 첨부 파일을 내려받을 수 있는가.
+
+    **문서를 함께 넘겨라.** 문서함은 여러 회사의 서류가 함께 쌓이는 자리다.
+    예전에는 이 함수에 문서 인자가 아예 없어서, 시험성적서 하나 내라고 부른
+    협력업체가 그 제품의 **모든 것**을 받을 수 있었다 — 다른 협력업체의
+    규격서, 아직 안 나온 포장지 도안, 품목제조보고서.
+
+    document 를 안 주면 "이 제품에서 무엇이든 받을 수 있는가" 를 묻는 것이라,
+    문서함 전체 보기가 꺼진 사람에게는 거짓이 된다. 한 건을 판정할 때는 반드시
+    그 문서를 넘겨야 한다.
+    """
+    if label is None or not user.is_authenticated:
+        return False
+    if label.user_id_id == user.id:
+        return True
+
+    shares = list(_live_shares(user, label).select_related('permission')[:5])
+    if not shares:
+        return False
+    if any(getattr(s.permission, 'can_view_all_documents', True) for s in shares):
+        return True
+
+    # 전체 보기가 꺼진 사람 — 자기가 올린 것만
+    if document is None:
+        return False
+    return getattr(document, 'uploaded_by_id', None) == user.id
+
+
+def visible_documents(user, label, queryset):
+    """
+    이 사용자에게 보여도 되는 문서만 남긴다.
+
+    목록에서 거르지 않으면 파일은 못 받아도 **무엇이 있는지는 다 보인다.**
+    거래처 이름과 서류 종류가 그대로 드러나므로 그것만으로도 새는 것이다.
+    """
+    if label is None or not user.is_authenticated:
+        return queryset.none()
+    if label.user_id_id == user.id:
+        return queryset
+
+    shares = list(_live_shares(user, label).select_related('permission')[:5])
+    if any(getattr(s.permission, 'can_view_all_documents', True) for s in shares):
+        return queryset
+    if not shares:
+        # 내려받기 권한이 아예 없는 공유(뷰어 등)는 여기서 거르지 않는다.
+        # 목록을 보는 것과 파일을 받는 것은 다른 문이고, 그 문은 위 함수가 지킨다.
+        return queryset
+    return queryset.filter(uploaded_by=user)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,7 +110,7 @@ def _check_product_document(request, path) -> bool:
            .first())
     if not doc:
         return False
-    return user_can_download_label_files(request.user, doc.label)
+    return user_can_download_label_files(request.user, doc.label, doc)
 
 
 def _check_doc_submission(request, path) -> bool:

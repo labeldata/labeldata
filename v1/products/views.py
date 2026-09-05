@@ -5,7 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.contrib import messages
-from v1.common.media_access import user_can_download_label_files, downloadable_label_ids
+from v1.common.media_access import (
+    downloadable_label_ids, user_can_download_label_files, visible_documents)
 from django.http import JsonResponse
 from django.conf import settings
 from django.db.models import Q, Count, Prefetch, Sum, Case, When, IntegerField
@@ -678,6 +679,9 @@ def product_detail(request, product_id):
         active_yn=True
     ).select_related('document_type', 'uploaded_by', 'uploaded_by__profile').order_by('document_type__display_order', '-uploaded_datetime')
     
+    # 남의 서류가 목록에 보이면 파일을 못 받아도 거래처와 서류 종류가 드러난다
+    documents = visible_documents(request.user, label, documents)
+
     # 같은 문서의 여러 판을 한 줄로
     document_groups = version_stacks(documents)
 
@@ -3276,6 +3280,17 @@ def share_update_info(request, share_id):
     if role_code and role_code in dict(SharePermission.ROLE_CHOICES):
         permission, _ = SharePermission.objects.get_or_create(share=share)
         permission.apply_role_defaults(role_code=role_code, save=True)
+
+    # 문서함 전체 보기 — 역할 기본값을 덮어쓴다.
+    #
+    # 자료 제출(협력업체)은 기본이 꺼짐이다. 다른 회사 서류가 같은 문서함에
+    # 쌓이기 때문이다. 그래도 켜야 할 때가 있어(협력사가 검토도 맡는 경우)
+    # 소유자가 여기서 켠다. **역할을 다시 고르면 기본값으로 돌아간다.**
+    see_all = request.POST.get('see_all_documents', '')
+    if see_all in ('true', 'false'):
+        permission, _ = SharePermission.objects.get_or_create(share=share)
+        permission.can_view_all_documents = (see_all == 'true')
+        permission.save(update_fields=['can_view_all_documents'])
     
     # 활동 로그 생성
     from .models import ProductActivityLog
@@ -3892,10 +3907,12 @@ def bulk_download_version(request, label_id):
     if not user_can_download_label_files(request.user, label):
         raise Http404("표시사항을 찾을 수 없습니다.")
     
-    documents = ProductDocument.objects.filter(
+    # 한 건씩 묻는 자리가 아니다. 받을 수 있는 것만 담는다 —
+    # 못 받는 것이 섞이면 ZIP 이 그대로 새는 통로가 된다.
+    documents = visible_documents(request.user, label, ProductDocument.objects.filter(
         label=label,
         active_yn=True
-    ).select_related('document_type')
+    ).select_related('document_type'))
     
     if not documents.exists():
         return JsonResponse({
@@ -3948,7 +3965,7 @@ def document_detail(request, document_id):
         ProductDocument.objects.select_related('label', 'document_type', 'uploaded_by'),
         document_id=document_id,
     )
-    if not user_can_download_label_files(request.user, document.label):
+    if not user_can_download_label_files(request.user, document.label, document):
         raise Http404("문서를 찾을 수 없습니다.")
     
     context = {
@@ -3971,7 +3988,7 @@ def document_download(request, document_id):
         document_id=document_id,
         active_yn=True
     )
-    if not user_can_download_label_files(request.user, document.label):
+    if not user_can_download_label_files(request.user, document.label, document):
         raise Http404("문서를 찾을 수 없습니다.")
     
     try:
