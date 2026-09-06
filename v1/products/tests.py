@@ -3917,3 +3917,86 @@ class 걷어도_되는_것과_아닌_것(TestCase):
         block = self.base_v2[head:self.base_v2.index('</nav>', head)]
         self.assertIn('개인정보처리방침', block)
         self.assertIn('이용약관', block)
+
+
+class 몇_줄이_필요한지_묻지_않는다(TestCase):
+    """
+    연락처 표에는 "행 추가" 단추가 있었고, 누르면 **몇 줄을 만들지 물었다.**
+
+        prompt('추가할 행 수를 입력하세요', '1')
+
+    엑셀에서는 그냥 다음 줄에 치면 늘어난다. 몇 줄이 필요한지 미리 아는
+    사람은 없다. minSpareRows 가 같은 일을 한다 — 마지막 줄을 채우면 아래에
+    빈 줄이 다시 생긴다. 필터 중에는 단추를 잠가야 했던 예외도 사라진다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.contacts = (base / 'templates/products/contacts.html').read_text(encoding='utf-8')
+        self.bom = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+
+    def test_행_추가_단추가_없다(self):
+        self.assertNotIn('addRowBtn', self.contacts)
+        self.assertNotIn('추가할 행 수를 입력하세요', self.contacts)
+
+    def test_줄이_저절로_늘어난다(self):
+        self.assertIn('minSpareRows: 3,', self.contacts)
+
+    def test_배합비도_같다(self):
+        # 두 표가 다르게 굴면 쓰는 사람이 매번 다시 배운다
+        self.assertIn('minSpareRows: 3,', self.bom)
+
+    def test_사이에_끼워_넣는_길은_남긴다(self):
+        # 맨 아래에 붙이는 것과 사이에 끼우는 것은 다른 일이다
+        self.assertIn("row_above:  { name: '위에 행 추가' }", self.contacts)
+
+
+class 연락처에도_비고를_둔다(TestCase):
+    """
+    엑셀에는 전화번호·주소·부서처럼 우리 표에 자리가 없는 열이 늘 따라온다.
+    자리가 없다고 지우면 그 연락처가 누구인지 알 길이 없어진다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.contacts = (base / 'templates/products/contacts.html').read_text(encoding='utf-8')
+
+    def test_표에_칸이_있다(self):
+        self.assertIn("'인허가번호', '비고']", self.contacts)
+        self.assertIn("{ data: 'memo', type: 'text', className: 'htMiddle' },", self.contacts)
+
+    def test_자리_없는_열이_비고로_간다(self):
+        self.assertIn("carry: '비고',", self.contacts)
+
+    def test_고치면_서버에_저장된다(self):
+        # infoProps 에 없으면 화면에만 남고 새로고침하면 사라진다
+        self.assertIn("new Set(['email', 'name', 'company', 'license_no', 'memo'])",
+                      self.contacts)
+
+    def test_모델에도_자리가_있다(self):
+        from v1.products.models import UserContact
+        self.assertTrue(UserContact._meta.get_field('memo').null)
+
+    def test_엑셀_양식에도_있다(self):
+        from v1.common.sheet_template import CONTACT_HEADERS, CONTACT_SAMPLE
+        self.assertEqual(CONTACT_HEADERS[-1], '비고')
+        self.assertEqual(len(CONTACT_SAMPLE), len(CONTACT_HEADERS))
+
+    def test_저장하고_다시_읽는다(self):
+        from django.contrib.auth.models import User
+        from v1.products.models import UserContact
+
+        user = User.objects.create_user(username='ct1', password='x')
+        self.client.force_login(user)
+        res = self.client.post('/products/contacts/api/add/', {
+            'email': 'a@b.com', 'name': '홍길동',
+            'memo': '품질팀 · 02-000-0000',
+        })
+        self.assertTrue(res.json()['success'])
+        self.assertEqual(
+            UserContact.objects.get(owner=user, email='a@b.com').memo,
+            '품질팀 · 02-000-0000')

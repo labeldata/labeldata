@@ -570,6 +570,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                 { data: 'notes', editor: 'text' }
             ],
             stretchH: 'all',
+            /* 마지막 줄을 채우면 아래에 빈 줄이 다시 생긴다. 스무 줄짜리
+               배합비에서 줄이 모자라 우클릭 메뉴를 찾게 하지 않는다. */
+            minSpareRows: 3,
             colWidths: getBomColWidths(),
             height: 'auto',
             autoRowSize: { syncLimit: 300 },

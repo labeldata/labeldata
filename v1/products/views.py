@@ -4895,6 +4895,7 @@ def contacts(request):
                 'name': uc.name or '',
                 'company': uc.company or '',
                 'license_no': uc.license_no or '',
+                'memo': uc.memo or '',
                 'sent': 0,
                 'received': 0,
             }
@@ -4979,6 +4980,7 @@ def contacts_api_list(request):
                 'name': uc.name or '',
                 'company': uc.company or '',
                 'license_no': uc.license_no or '',
+                'memo': uc.memo or '',
             }
 
     data = sorted(contact_map.values(), key=lambda x: x['email'])
@@ -4994,6 +4996,7 @@ def contacts_api_update(request):
     name = request.POST.get('name', '').strip()
     company = request.POST.get('company', '').strip()
     license_no = request.POST.get('license_no', '').strip()
+    memo = request.POST.get('memo', '').strip()
 
     if not old_email or not new_email:
         return JsonResponse({'success': False, 'error': '이메일이 필요합니다.'}, status=400)
@@ -5032,6 +5035,7 @@ def contacts_api_update(request):
             name=name or None,
             company=company or None,
             license_no=license_no or None,
+            memo=memo or None,
         )
     else:
         # 이메일은 같고 다른 정보만 수정
@@ -5039,6 +5043,7 @@ def contacts_api_update(request):
             name=name or None,
             company=company or None,
             license_no=license_no or None,
+            memo=memo or None,
         )
 
     return JsonResponse({'success': True, 'updated': updated})
@@ -5052,6 +5057,7 @@ def contacts_api_add(request):
     name = request.POST.get('name', '').strip()
     company = request.POST.get('company', '').strip()
     license_no = request.POST.get('license_no', '').strip()
+    memo = request.POST.get('memo', '').strip()
 
     if not email:
         return JsonResponse({'success': False, 'error': '이메일이 필요합니다.'}, status=400)
@@ -5071,6 +5077,7 @@ def contacts_api_add(request):
             'name': name or None,
             'company': company or None,
             'license_no': license_no or None,
+            'memo': memo or None,
         },
     )
     return JsonResponse({'success': True, 'created': created})

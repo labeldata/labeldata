@@ -971,6 +971,9 @@ class UserContact(models.Model):
     name = models.CharField(max_length=100, null=True, blank=True, verbose_name='이름')
     company = models.CharField(max_length=200, null=True, blank=True, verbose_name='회사명')
     license_no = models.CharField(max_length=100, null=True, blank=True, verbose_name='인허가번호')
+    # 엑셀에는 전화번호·주소·부서처럼 우리 표에 자리가 없는 열이 늘 따라온다.
+    # 자리가 없다고 지우면 그 연락처가 누구인지 알 길이 없어진다 — 여기 모은다.
+    memo = models.TextField(null=True, blank=True, verbose_name='비고')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='생성일시')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='수정일시')
 
