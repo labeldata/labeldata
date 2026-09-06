@@ -312,6 +312,17 @@ OCR_HYBRID_DROP_TILES = config('OCR_HYBRID_DROP_TILES', default=False, cast=bool
 # needs_recheck). 값이 멀쩡하면 한 번도 돌지 않아 평소 비용은 그대로다.
 OCR_COMPANY_RECHECK = config('OCR_COMPANY_RECHECK', default=True, cast=bool)
 
+# 업소 항목을 **늘** 한 번 더 읽는다.
+#
+# 위의 RECHECK 는 "수상할 때만" 이다. 그것으로는 지어낸 주소를 못 잡는다 —
+# 회사 이름은 맞고 주소만 틀리면 어떤 규칙에도 안 걸린다. 실제로 "안양시
+# 동안구 흥안대로 405" 가 "양주시 도하로 405" 로 나왔는데, 형식도 멀쩡하고
+# 그런 도로명도 실제로 있어서 값만 보고는 알 수가 없었다.
+#
+# 두 번 읽어 견주는 것이 지금 할 수 있는 유일한 확인이다. 판독 한 번에
+# 네 줄만 묻는 짧은 호출이 하나 더 붙는다 — 비용이 문제가 되면 끈다.
+OCR_COMPANY_VERIFY = config('OCR_COMPANY_VERIFY', default=True, cast=bool)
+
 # ── 한도 ──────────────────────────────────────────────────────────────
 #
 # 두 가지를 섞지 않는다.

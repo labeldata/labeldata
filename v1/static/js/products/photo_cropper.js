@@ -73,6 +73,35 @@
       hint: '어느 면인지 가리지 않고 표시사항 전반을 읽습니다' }
   ];
 
+  /*
+   * 모델이 보는 크기.
+   *
+   * detail:high 는 사진을 2048 상자에 맞춘 뒤 **짧은 변을 768px 로** 맞춘다.
+   * 그러니 짧은 변이 3000px 인 사진을 통째로 보내면 라벨 글자가 1/4 로 줄어
+   * 든다. 12pt 글자 한 줄이 5px 가 되면 읽을 수가 없고, 모델은 읽을 수 없는
+   * 자리를 **지어낸다.**
+   *
+   * 면마다 잘라 보내면 그 768px 이 전부 그 면에 배정된다. 이 함수는 그 차이를
+   * 숫자로 말해 주려고 있다 — "면마다 고르세요" 라고만 하면 왜인지 모른다.
+   */
+  var MODEL_SHORT_SIDE = 768;
+
+  function shrinkOf(w, h) {
+    var short = Math.min(w, h);
+    if (!short) return 1;
+    return Math.min(1, MODEL_SHORT_SIDE / short);
+  }
+
+  function shrinkText(w, h) {
+    var r = shrinkOf(w, h);
+    if (r >= 0.99) return '';
+    return '글자가 약 1/' + (1 / r).toFixed(1) + ' 로 줄어 모델에 갑니다';
+  }
+
+  // 이보다 더 줄어들면 라벨 본문이 뭉갠다. 실측이 아니라 눈금이다 —
+  // 1/3 이면 12pt 한 줄이 4px 안팎이 된다.
+  var SHRINK_WARN = 1 / 3;
+
   // 고른 순서대로 돌려 쓰는 상자 색. 어느 줄이 어느 상자인지 눈으로 잇는다.
   var COLORS = ['#8ab4f8', '#81c995', '#fdd663', '#f28b82', '#c58af9', '#78d9ec'];
 
@@ -149,6 +178,12 @@
       + '          <div class="crop-frame">'
       + '            <canvas class="crop-canvas"></canvas>'
       + '          </div>'
+      + '        </div>'
+      + '        <div class="crop-why text-muted mt-2" style="font-size:12px;">'
+      + '          <i class="bi bi-lightbulb text-warning me-1"></i>'
+      + '          <b>면마다 하나씩</b> 고르면 그 면에 주의가 전부 갑니다. '
+      + '          한 장으로 통째로 읽으면 작은 글자(원재료명·주소)를 '
+      + '          <b>지어낼 수 있습니다.</b>'
       + '        </div>'
       + '        <div class="crop-picks mt-2"></div>'
       + '        <div class="crop-info text-muted mt-2" style="font-size:12px;"></div>'
@@ -389,9 +424,23 @@
               : '영역을 고르지 않으면 "전체 사용" 으로 사진 전체를 읽습니다.';
             return;
           }
+          var worst = 1;
+          picks.forEach(function (p) {
+            var scale = parseFloat(canvas.dataset.scale) || 1;
+            worst = Math.min(worst, shrinkOf(p.w / scale, p.h / scale));
+          });
+          if (worst < SHRINK_WARN) {
+            info.className = 'crop-info text-warning mt-2';
+          }
           info.textContent = picks.length + '개 영역을 읽습니다. '
             + '표시면 이름을 골라 두면 그 면에서 찾을 항목을 짚어 읽습니다.'
-            + (masks.length ? ' 제외 영역 ' + masks.length + '곳은 흰색으로 지워 보냅니다.' : '');
+            + (masks.length ? ' 제외 영역 ' + masks.length + '곳은 흰색으로 지워 보냅니다.' : '')
+            /* 가장 많이 줄어드는 영역을 기준으로 말한다. 하나라도 뭉개지면
+               그 면의 값은 못 믿는다. */
+            + (worst < SHRINK_WARN
+                ? ' 가장 작은 영역은 ' + '글자가 약 1/' + (1 / worst).toFixed(1)
+                  + ' 로 줄어듭니다 — 더 좁게 잘라 주세요.'
+                : '');
         }
 
         function setMode(next) {
@@ -584,6 +633,24 @@
           if (!btn) return;
 
           if (btn.dataset.crop === 'whole') {
+            /* 통째로 읽으면 무엇을 잃는지 **그 자리에서** 말한다.
+               지금까지는 아무 말 없이 갔고, 그래서 원재료명 앞부분이 빠지고
+               주소가 지어내진 채로 저장됐다. 막지는 않는다 — 한 면짜리
+               사진도 있다. 한 번 말하고, 다시 누르면 보낸다. */
+            var big = shrinkOf(loaded.img.naturalWidth, loaded.img.naturalHeight);
+            if (big < SHRINK_WARN && !btn.dataset.warned) {
+              btn.dataset.warned = '1';
+              btn.textContent = '그래도 전체로 읽기';
+              btn.className = 'btn btn-outline-warning v2-btn-sm';
+              info.className = 'crop-info text-warning mt-2';
+              info.textContent =
+                '이 사진은 ' + loaded.img.naturalWidth + '×'
+                + loaded.img.naturalHeight + ' 입니다. 통째로 보내면 '
+                + shrinkText(loaded.img.naturalWidth, loaded.img.naturalHeight)
+                + ' — 원재료명·주소처럼 작은 글자를 지어낼 수 있습니다. '
+                + '일괄표시면·원재료명·영양성분표를 따로 고르면 훨씬 정확합니다.';
+              return;
+            }
             // 회전도 제외 영역도 없으면 원본 그대로. 둘 중 하나라도 있으면
             // 그것을 반영한 사진을 새로 만들어 보낸다.
             if (deg % 360 === 0 && !masks.length) { finish([{ file: file, role: 'whole' }]); return; }

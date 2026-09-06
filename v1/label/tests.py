@@ -9400,14 +9400,26 @@ class 주소는_값만_보고는_틀린_줄_모른다(TestCase):
         self.assertEqual(out['bssh_nm']['confidence'], 'high')
         self.assertFalse(out['bssh_nm'].get('candidates'))
 
-    def test_시안_대조일_때만_한_번_더_읽는다(self):
-        """평소 판독까지 두 번 읽으면 값이 나가는 자리가 배가 된다."""
+    def test_사진을_읽는_모든_자리에서_돈다(self):
+        """
+        처음에는 시안 대조에서만 돌렸다. 그런데 틀린 주소가 들어가는 시점은
+        **처음 채울 때**다 — 대조는 그걸 뒤늦게 발견하는 자리일 뿐이고,
+        대조를 안 하고 인쇄하는 제품도 있다.
+        """
         from pathlib import Path
         from django.conf import settings as dj
         base = Path(dj.BASE_DIR)
         service = (base / 'label/services/ocr_service.py').read_text(encoding='utf-8')
         views = (base / 'label/views.py').read_text(encoding='utf-8')
-        self.assertIn('always=False', service)
         self.assertIn('if not reason and not always:', service)
-        self.assertIn("verify = (feature == 'ocr_compare')", views)
-        self.assertIn('verify_companies=verify', views)
+        self.assertIn('always = company_verify_enabled()', service)
+        # 통로에서 대조인지 따지지 않는다
+        self.assertNotIn("verify = (feature == 'ocr_compare')", views)
+
+    def test_비용이_문제가_되면_끌_수_있다(self):
+        from django.test import override_settings
+        from v1.label.services.ocr_service import company_verify_enabled
+
+        self.assertTrue(company_verify_enabled())
+        with override_settings(OCR_COMPANY_VERIFY=False):
+            self.assertFalse(company_verify_enabled())

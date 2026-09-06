@@ -735,6 +735,16 @@ def _companies_tidied(data):
         return data
 
 
+def company_verify_enabled() -> bool:
+    """
+    업소 항목을 **늘** 한 번 더 읽을 것인가.
+
+    끄면 "수상할 때만" 으로 돌아간다 — 자리 뒤바뀜은 계속 잡지만 지어낸
+    주소는 못 잡는다.
+    """
+    return bool(getattr(settings, 'OCR_COMPANY_VERIFY', True))
+
+
 def company_recheck_enabled(use_recheck=None) -> bool:
     """
     업소 항목이 수상할 때 그 네 줄만 다시 볼 것인가. 기본은 **켬**.
@@ -766,19 +776,27 @@ def _registered_maker(data):
 
 
 def _companies_rechecked(client, model, images, data, use_recheck=None,
-                         always=False):
+                         always=None):
     """
     업소 항목이 수상하면 **그 네 줄만** 다시 읽는다.
 
-    always=True 면 수상하지 않아도 읽는다. 시안 대조가 그렇게 부른다 —
-    주소는 **값만 보고는 틀린 줄 알 수 없다.** 자리를 잘못 짚은 것은 두 칸에
-    같은 회사가 들어오는 식으로 티가 나지만, "흥안대로 405" 를 "도하로 405"
-    로 지어낸 것은 그 자리에서 아무 티도 안 난다. 형식도 멀쩡하고 그런
-    도로명도 실제로 있다.
+always=True 면 수상하지 않아도 읽는다. **사진을 읽는 모든 자리가 그렇게
+    부른다** — 표시사항 판독도, 시안 대조도, 원료 사진도.
+
+    주소는 **값만 보고는 틀린 줄 알 수 없기** 때문이다. 자리를 잘못 짚은 것은
+    두 칸에 같은 회사가 들어오는 식으로 티가 나지만, "흥안대로 405" 를
+    "도하로 405" 로 지어낸 것은 그 자리에서 아무 티도 안 난다. 형식도 멀쩡하고
+    그런 도로명도 실제로 있다.
 
     한 번 더 읽어 **두 읽기를 견주는 것**이 지금 할 수 있는 유일한 확인이다.
-    두 번 다 같으면 믿을 만하고, 다르면 사람이 봐야 한다. 인쇄 직전에 한 번
-    도는 일이라 비용도 그만큼만 든다.
+    두 번 다 같으면 믿을 만하고, 다르면 사람이 봐야 한다.
+
+    처음에는 시안 대조에서만 돌렸다. 그런데 틀린 주소가 들어가는 시점은
+    **처음 채울 때**다 — 대조는 그걸 뒤늦게 발견하는 자리일 뿐이고, 대조를
+    안 하고 인쇄하는 제품도 있다. 값이 들어오는 자리에서 막는다.
+
+    호출 하나가 더 든다(네 줄만 묻는 짧은 호출이다). 비용이 문제가 되면
+    settings.OCR_COMPANY_VERIFY 로 끈다.
 
     서른 항목을 한 번에 읽는 프롬프트에서 이 네 줄에 갈 주의는 얼마 없다.
     게다가 넷이 전부 "업체명 + 주소" 라 값만 보고는 어느 칸의 것인지 알 수
@@ -790,6 +808,8 @@ def _companies_rechecked(client, model, images, data, use_recheck=None,
     """
     if not company_recheck_enabled(use_recheck) or not images:
         return data
+    if always is None:
+        always = company_verify_enabled()
     try:
         from v1.label.services.ocr_company import (
             RECHECK_PROMPT, apply_recheck, needs_recheck, tidy)
@@ -1074,7 +1094,7 @@ def region_instructions(regions):
 def extract_label_from_parts(parts, model=None, prompt_version=None,
                              use_hints=True, layout='grid', read_freetext=None,
                              use_ground=None, use_hybrid=None, drop_tiles=None,
-                             verify_companies=False):
+                             verify_companies=None):
     """
     표시면별로 잘라 온 사진들에서 한 번에 필드를 뽑는다.
 
@@ -1181,7 +1201,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 def extract_label_from_image(image_file, model=None, prompt_version=None,
                              use_hints=True, want_boxes=False, layout='grid',
                              read_freetext=None, use_ground=None, use_hybrid=None,
-                             drop_tiles=None, verify_companies=False):
+                             drop_tiles=None, verify_companies=None):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
 

@@ -4000,3 +4000,55 @@ class 연락처에도_비고를_둔다(TestCase):
         self.assertEqual(
             UserContact.objects.get(owner=user, email='a@b.com').memo,
             '품질팀 · 02-000-0000')
+
+
+class 통째로_읽으면_무엇을_잃는가(TestCase):
+    """
+    detail:high 는 사진을 2048 상자에 맞춘 뒤 **짧은 변을 768px 로** 맞춘다.
+    짧은 변이 3000px 인 사진을 통째로 보내면 라벨 글자가 1/4 로 줄고, 12pt
+    한 줄이 5px 가 된다. 읽을 수 없는 자리를 모델은 **지어낸다.**
+
+    그런데 "전체 사용" 을 누르면 아무 말 없이 그대로 갔다. 그 선택이 무엇을
+    잃는지 화면 어디에도 없었다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.js = (Path(dj.BASE_DIR) / 'static/js/products/photo_cropper.js'
+                   ).read_text(encoding='utf-8')
+
+    def test_모델이_보는_크기를_잣대로_쓴다(self):
+        self.assertIn('var MODEL_SHORT_SIDE = 768;', self.js)
+        self.assertIn('function shrinkOf(w, h)', self.js)
+
+    def test_얼마나_줄어드는지_숫자로_말한다(self):
+        # "면마다 고르세요" 라고만 하면 왜인지 모른다
+        self.assertIn("'글자가 약 1/' + (1 / r).toFixed(1)", self.js)
+
+    def test_전체_사용을_한_번_말린다(self):
+        head = self.js.index("if (btn.dataset.crop === 'whole')")
+        block = self.js[head:head + 1400]
+        self.assertIn('btn.dataset.warned', block)
+        self.assertIn('그래도 전체로 읽기', block)
+        self.assertIn('지어낼 수 있습니다', block)
+
+    def test_막지는_않는다(self):
+        # 한 면짜리 사진도 있다. 한 번 말하고, 다시 누르면 보낸다
+        head = self.js.index("if (btn.dataset.crop === 'whole')")
+        block = self.js[head:head + 1400]
+        self.assertIn('&& !btn.dataset.warned', block)
+
+    def test_작은_사진은_말리지_않는다(self):
+        # 이미 768px 안팎이면 잘라 봐야 나아지지 않는다
+        head = self.js.index("if (btn.dataset.crop === 'whole')")
+        block = self.js[head:head + 1400]
+        self.assertIn('big < SHRINK_WARN', block)
+
+    def test_고른_영역도_재_준다(self):
+        self.assertIn('worst = Math.min(worst, shrinkOf(', self.js)
+        self.assertIn('더 좁게 잘라 주세요', self.js)
+
+    def test_왜_나눠_고르는지_창에_적혀_있다(self):
+        self.assertIn('crop-why', self.js)
+        self.assertIn('<b>면마다 하나씩</b>', self.js)
