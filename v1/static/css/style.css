@@ -917,7 +917,7 @@ body {
 #regulationPanel .nav-tabs .nav-link {
     font-size: 0.85rem;
     color: #888 !important;
-    background: #f8f9fa;
+    background: var(--ez-gray-50, #f8f9fa);
     border: 1px solid #dee2e6;
     border-bottom: none;
     margin-bottom: -1px;
@@ -1636,12 +1636,12 @@ select.form-control.select2-date-option {
     cursor:        pointer;
 }
 
-.ocr-cand:hover { background: #f1f3f4; }
+.ocr-cand:hover { background: var(--ez-gray-100, #f1f3f4); }
 
 /* 지금 칸에 들어가 있는 후보 */
 .ocr-cand-on {
     border-color: #1a5fb4;
-    background:   #e8f0fe;
+    background:   var(--ez-info-bg, #e8f0fe);
     color:        #1a5fb4;
     font-weight:  600;
 }

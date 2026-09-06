@@ -205,7 +205,7 @@
 }
 .v2-topbar-search .form-control::placeholder {
     font-size: 13px;
-    color:     #80868b;
+    color:     var(--ez-gray-600, #80868b);
 }
 
 /* -------------------------
@@ -216,7 +216,7 @@
     width:           var(--v2-avatar-size);
     height:          var(--v2-avatar-size);
     border-radius:   50%;
-    background:      #5f6368;
+    background:      var(--ez-gray-700, #5f6368);
     color:           #fff;
     display:         flex;
     align-items:     center;
@@ -249,18 +249,18 @@
     align-items: center;
 }
 .v2-topbar-icon {
-    color:       #1a73e8;
+    color:       var(--ez-info, #1a73e8);
     font-size:   18px;
     flex-shrink: 0;
 }
 .v2-topbar-title {
     font-size:   17px;
     font-weight: 500;
-    color:       #202124;
+    color:       var(--ez-gray-900, #202124);
 }
 .v2-topbar-subtitle {
     font-size: 12px;
-    color:     #5f6368;
+    color:     var(--ez-gray-700, #5f6368);
 }
 
 /* -------------------------
@@ -274,7 +274,7 @@
 .crop-stage {
     position:   relative;
     display:    flex;
-    background: #202124;
+    background: var(--ez-gray-900, #202124);
     border-radius: 8px;
     overflow:   auto;
     padding:    8px;
@@ -299,7 +299,7 @@
 /* 확대 배율 표시와 도구 사이 칸막이 */
 .crop-zoom-level {
     font-size:   12px;
-    color:       #5f6368;
+    color:       var(--ez-gray-700, #5f6368);
     min-width:   42px;
     text-align:  center;
     font-variant-numeric: tabular-nums;
@@ -307,7 +307,7 @@
 .crop-tool-divider {
     width:      1px;
     height:     18px;
-    background: #dadce0;
+    background: var(--ez-gray-300, #dadce0);
     margin:     0 2px;
 }
 /* 영역은 여러 개가 동시에 놓인다. 예전에는 하나뿐이라 바깥을 통째로 어둡게
@@ -337,7 +337,7 @@
     font-weight: 700;
     line-height: 1.5;
     padding:     0 5px;
-    color:       #202124;
+    color:       var(--ez-gray-900, #202124);
     white-space: nowrap;
     border-radius: 0 0 3px 0;
 }
@@ -347,14 +347,14 @@
 .crop-pick-row    { display: flex; align-items: center; gap: 8px; }
 .crop-pick-dot    { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
 .crop-pick-role   { width: 150px; flex: 0 0 auto; }
-.crop-pick-hint   { font-size: 11px; color: #5f6368; flex: 1 1 auto;
+.crop-pick-hint   { font-size: 11px; color: var(--ez-gray-700, #5f6368); flex: 1 1 auto;
                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .crop-pick-size   { font-size: 11px; white-space: nowrap; flex: 0 0 auto; }
 .crop-pick-del    { flex: 0 0 auto; }
 /* 제외 영역 줄 — 표시면 선택 칸이 없으므로 그 자리만큼 이름표를 둔다 */
 .crop-pick-row--mask     { opacity: 0.95; }
 .crop-pick-mask-name     { width: 150px; flex: 0 0 auto; font-size: 12px;
-                           font-weight: 600; color: #c5221f; }
+                           font-weight: 600; color: var(--ez-danger, #c5221f); }
 
 /* -------------------------
    확인 창의 사진 뷰어
@@ -407,7 +407,7 @@
     overflow:   hidden;
     height:     70vh;
     min-height: 320px;
-    background: #202124;
+    background: var(--ez-gray-900, #202124);
     border-radius: 8px;
     display:    flex;
     align-items:     center;
@@ -494,9 +494,9 @@
     border-radius: 999px;
     white-space:   nowrap;
 }
-.ocr-state-same    { background: #f1f3f4; color: #5f6368; }
-.ocr-state-replace { background: #fef7e0; color: #b06000; }
-.ocr-state-new     { background: #e6f4ea; color: #1e8e3e; }
+.ocr-state-same    { background: var(--ez-gray-100, #f1f3f4); color: var(--ez-gray-700, #5f6368); }
+.ocr-state-replace { background: var(--ez-warning-bg, #fef7e0); color: #b06000; }
+.ocr-state-new     { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 
 .ocr-control .form-control,
 .ocr-control .form-select { font-size: 12.5px; padding: 3px 8px; }
@@ -506,11 +506,11 @@
     font-size:     10px;
     padding:       0 5px;
     border-radius: 999px;
-    background:    #f1f3f4;
-    color:         #5f6368;
+    background:    var(--ez-gray-100, #f1f3f4);
+    color:         var(--ez-gray-700, #5f6368);
     white-space:   nowrap;
 }
-.ocr-flag-warn { background: #fef7e0; color: #b06000; }
+.ocr-flag-warn { background: var(--ez-warning-bg, #fef7e0); color: #b06000; }
 
 /* ── 확인 창의 선택 상태 ─────────────────────────────────────
    이미 값이 있는 칸은 덮어쓰지 않으려고 체크를 꺼 두는데, 그걸 못 보고
@@ -532,9 +532,9 @@
     font-size: 12px; line-height: 1.55;
     padding: 7px 10px; border-radius: 8px; margin-bottom: 8px;
 }
-.ocr-note-ok     { background: #e6f4ea; color: #1a7336; }
-.ocr-note-warn   { background: #fef7e0; color: #96540b; }
-.ocr-note-danger { background: #fce8e6; color: #b31412; }
+.ocr-note-ok     { background: var(--ez-success-bg, #e6f4ea); color: #1a7336; }
+.ocr-note-warn   { background: var(--ez-warning-bg, #fef7e0); color: #96540b; }
+.ocr-note-danger { background: var(--ez-danger-bg, #fce8e6); color: #b31412; }
 
 /* 아무것도 안 고른 채 눌렀을 때 — 창을 닫지 않고 여기를 흔든다 */
 @keyframes ocrNoteShake {
@@ -559,8 +559,8 @@
 }
 /* 식약처 등록 정보와 대조한 결과. 일치는 눈에 덜 띄게, 불일치는 눈에 띄게 —
    확인해야 하는 것은 다른 줄뿐이다. */
-.ocr-flag-ok   { background: #e6f4ea; color: #1e8e3e; }
-.ocr-flag-api  { background: #e8f0fe; color: #1a5fb4; }
+.ocr-flag-ok   { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
+.ocr-flag-api  { background: var(--ez-info-bg, #e8f0fe); color: #1a5fb4; }
 
 .ocr-api-note {
     margin-top: 3px;
@@ -617,7 +617,7 @@
 }
 .import-drop:hover,
 .import-drop-over {
-    background:   #e8f0fe;
+    background:   var(--ez-info-bg, #e8f0fe);
     border-color: var(--ez-primary, #1a73e8) !important;
 }
 
@@ -695,7 +695,7 @@
 .v2-notif-empty {
     padding:    32px 16px;
     text-align: center;
-    color:      #9aa0a6;
+    color:      var(--ez-gray-500, #9aa0a6);
     font-size:  13px;
 }
 .v2-notif-empty .bi-bell-slash {
@@ -709,12 +709,12 @@
     display:       flex;
     gap:           10px;
     padding:       12px 16px;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--ez-gray-100, #f1f3f4);
     cursor:        pointer;
     transition:    background .15s;
     background:    #fff;
 }
-.notif-item:hover { background: #f8f9fa; }
+.notif-item:hover { background: var(--ez-gray-50, #f8f9fa); }
 .notif-item.is-unread { background: #f0f4ff; }
 .notif-item__dot {
     width:       8px;
@@ -735,7 +735,7 @@
 }
 .notif-item__meta {
     font-size:  11px;
-    color:      #9aa0a6;
+    color:      var(--ez-gray-500, #9aa0a6);
     margin-top: 3px;
 }
 
@@ -939,34 +939,34 @@ body {
 .v2-sidebar-footer {
     flex-shrink: 0;
     padding: 12px 8px 4px;
-    border-top: 1px solid #e8eaed;
+    border-top: 1px solid var(--ez-gray-200, #e8eaed);
 }
 .v2-sf-copy {
     margin: 0 0 4px;
     font-size: 11px;
-    color: #80868b;
+    color: var(--ez-gray-600, #80868b);
     font-weight: 400;
     letter-spacing: 0;
 }
 .v2-sf-links {
     margin: 0;
     font-size: 11px;
-    color: #80868b;
+    color: var(--ez-gray-600, #80868b);
     display: flex;
     align-items: center;
     gap: 4px;
     flex-wrap: wrap;
 }
 .v2-sf-links a {
-    color: #80868b;
+    color: var(--ez-gray-600, #80868b);
     text-decoration: none;
 }
 .v2-sf-links a:hover {
     text-decoration: underline;
-    color: #1a73e8;
+    color: var(--ez-info, #1a73e8);
 }
 .v2-sf-dot {
-    color: #bdc1c6;
+    color: var(--ez-gray-400, #bdc1c6);
     font-size: 10px;
 }
 
@@ -1242,8 +1242,8 @@ body.in-iframe .v2-content   { padding: 0; overflow: hidden; }
     color:           var(--v2-blue);
 }
 /* 색상 변형 */
-.addon-card-icon--green  { background: #e6f4ea; color: #137333; }
-.addon-card-icon--yellow { background: #fef7e0; color: #ea8600; }
+.addon-card-icon--green  { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success-hover, #137333); }
+.addon-card-icon--yellow { background: var(--ez-warning-bg, #fef7e0); color: #ea8600; }
 .addon-card-body { padding: 20px; }
 
 table thead th {
@@ -1299,7 +1299,7 @@ table th[title] {
     background:    var(--v2-border);
     border-radius: 10px;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--ez-gray-400, #bdc1c6); }
 
 /* ==================== 디자인 시안 대조 ====================
  *
@@ -1319,8 +1319,8 @@ table th[title] {
     line-height: 1.6;
 }
 
-.cmp-summary-diff { background: #fce8e6; color: #c5221f; }
-.cmp-summary-ok   { background: #e6f4ea; color: #1e8e3e; }
+.cmp-summary-diff { background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f); }
+.cmp-summary-ok   { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 
 .cmp-group { margin-bottom: 12px; }
 
@@ -1341,7 +1341,7 @@ table th[title] {
 
 .cmp-row.cmp-diff {
     background: #fffaf9;
-    box-shadow: inset 3px 0 0 #c5221f;
+    box-shadow: inset 3px 0 0 var(--ez-danger, #c5221f);
 }
 
 .cmp-row.cmp-same { opacity: 0.72; }

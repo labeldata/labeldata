@@ -69,13 +69,13 @@
 }
 
 /* 활성 상태별 테두리·배경 */
-.status-card.active-all        { border-color: #5f6368;  background: #f1f3f4; }
-.status-card.active-DRAFT      { border-color: #1a73e8;  background: #e8f0fe; }
-.status-card.active-REQUESTING { border-color: #f9ab00;  background: #fef7e0; }
-.status-card.active-SUBMITTED  { border-color: #0f9d58;  background: #e6f4ea; }
+.status-card.active-all        { border-color: var(--ez-gray-700, #5f6368);  background: var(--ez-gray-100, #f1f3f4); }
+.status-card.active-DRAFT      { border-color: var(--ez-info, #1a73e8);  background: var(--ez-info-bg, #e8f0fe); }
+.status-card.active-REQUESTING { border-color: #f9ab00;  background: var(--ez-warning-bg, #fef7e0); }
+.status-card.active-SUBMITTED  { border-color: #0f9d58;  background: var(--ez-success-bg, #e6f4ea); }
 .status-card.active-REVIEW     { border-color: #9334e9;  background: #f3e8fd; }
 .status-card.active-PENDING    { border-color: #e37400;  background: #fff0e0; }
-.status-card.active-CONFIRMED  { border-color: #1e8e3e;  background: #e6f4ea; }
+.status-card.active-CONFIRMED  { border-color: var(--ez-success, #1e8e3e);  background: var(--ez-success-bg, #e6f4ea); }
 
 /* 카드 내부 아이콘 원 */
 .status-icon {
@@ -88,13 +88,13 @@
     font-size:     16px;
     flex-shrink:   0;
 }
-.si-all        { background: #f1f3f4; color: #5f6368; }
-.si-draft      { background: #e8f0fe; color: #1967d2; }
-.si-requesting { background: #fef7e0; color: #c77700; }
-.si-submitted  { background: #e6f4ea; color: #0f9d58; }
+.si-all        { background: var(--ez-gray-100, #f1f3f4); color: var(--ez-gray-700, #5f6368); }
+.si-draft      { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.si-requesting { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
+.si-submitted  { background: var(--ez-success-bg, #e6f4ea); color: #0f9d58; }
 .si-review     { background: #f3e8fd; color: #9334e9; }
 .si-pending    { background: #fff0e0; color: #e37400; }
-.si-confirmed  { background: #e6f4ea; color: #1e8e3e; }
+.si-confirmed  { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 
 .status-card-count { font-size: 18px; font-weight: 700; color: var(--v2-text);     line-height: 1; }
 .status-card-label { font-size: 11px; font-weight: 500; color: var(--v2-text-sub); margin-top: 1px; }
@@ -119,7 +119,7 @@
     flex-shrink:     0;
     width:           24px;
     position:        relative;
-    color:           #bdc1c6;
+    color:           var(--ez-gray-400, #bdc1c6);
 }
 .status-arrow::before,
 .status-arrow::after {
@@ -234,7 +234,7 @@
     font-size:     15px;
 }
 .product-name { font-weight: 500; font-size: 14px; color: var(--v2-text); }
-.product-code { font-size: 11px; color: #80868b; }
+.product-code { font-size: 11px; color: var(--ez-gray-600, #80868b); }
 
 /* ── 상태 뱃지 ────────────────────────────────────────────── */
 .status-badge {
@@ -247,12 +247,12 @@
     font-weight: 600;
     white-space: nowrap;
 }
-.status-DRAFT      { background: #e8f0fe; color: #1967d2; }
-.status-REQUESTING { background: #fef7e0; color: #c77700; }
-.status-SUBMITTED  { background: #e6f4ea; color: #0f9d58; }
+.status-DRAFT      { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.status-REQUESTING { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
+.status-SUBMITTED  { background: var(--ez-success-bg, #e6f4ea); color: #0f9d58; }
 .status-REVIEW     { background: #f3e8fd; color: #9334e9; }
 .status-PENDING    { background: #fff0e0; color: #e37400; }
-.status-CONFIRMED  { background: #e6f4ea; color: #1e8e3e; }
+.status-CONFIRMED  { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 
 /* ── 역할 뱃지 ────────────────────────────────────────────── */
 .role-badge {
@@ -264,9 +264,9 @@
     white-space: nowrap;
 }
 .role-VIEWER   { background: var(--v2-gray-100); color: var(--v2-text-sub);  border: 1px solid var(--v2-border); }
-.role-UPLOADER { background: #e8f0fe; color: #1967d2; border: 1px solid #c5d8fc; }
-.role-EDITOR   { background: #e6f4ea; color: #1e8e3e; border: 1px solid #ceead6; }
-.role-REVIEWER { background: #fef7e0; color: #c77700; border: 1px solid #fde68a; }
+.role-UPLOADER { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; border: 1px solid #c5d8fc; }
+.role-EDITOR   { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); border: 1px solid var(--ez-success-border, #ceead6); }
+.role-REVIEWER { background: var(--ez-warning-bg, #fef7e0); color: #c77700; border: 1px solid var(--ez-warning-border, #fde68a); }
 .role-APPROVER { background: #f3e8fd; color: #9334e9; border: 1px solid #ddb6f8; }
 
 /* ── 빈 상태 ──────────────────────────────────────────────── */
@@ -313,8 +313,8 @@
     font-size:       11px;
     font-weight:     600;
     border:          1px solid #e0e2e0;
-    background:      #f8f9fa;
-    color:           #5f6368;
+    background:      var(--ez-gray-50, #f8f9fa);
+    color:           var(--ez-gray-700, #5f6368);
     cursor:          pointer;
     white-space:     nowrap;
     text-decoration: none;
@@ -324,13 +324,13 @@
 .status-flow-item:first-child           { border-radius: 16px 0 0 16px; }
 .status-flow-item:last-child            { border-radius: 0 16px 16px 0; }
 .status-flow-item:not(:first-child)     { margin-left: -1px; }
-.status-flow-item:hover                 { z-index: 1; background: #e8eaed; color: #202124; }
-.status-flow-item.active                { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; z-index: 2; }
-.status-flow-item.active.st-requesting  { background: #fef7e0; border-color: #c77700; color: #c77700; }
-.status-flow-item.active.st-submitted   { background: #e6f4ea; border-color: #0f9d58; color: #0f9d58; }
+.status-flow-item:hover                 { z-index: 1; background: var(--ez-gray-200, #e8eaed); color: var(--ez-gray-900, #202124); }
+.status-flow-item.active                { background: var(--ez-info-bg, #e8f0fe); border-color: var(--ez-info, #1a73e8); color: var(--ez-info, #1a73e8); z-index: 2; }
+.status-flow-item.active.st-requesting  { background: var(--ez-warning-bg, #fef7e0); border-color: #c77700; color: #c77700; }
+.status-flow-item.active.st-submitted   { background: var(--ez-success-bg, #e6f4ea); border-color: #0f9d58; color: #0f9d58; }
 .status-flow-item.active.st-review      { background: #f3e8fd; border-color: #9334e9; color: #9334e9; }
 .status-flow-item.active.st-pending     { background: #fff0e0; border-color: #e37400; color: #e37400; }
-.status-flow-item.active.st-confirmed   { background: #e6f4ea; border-color: #1e8e3e; color: #1e8e3e; }
+.status-flow-item.active.st-confirmed   { background: var(--ez-success-bg, #e6f4ea); border-color: var(--ez-success, #1e8e3e); color: var(--ez-success, #1e8e3e); }
 
 .status-count-badge {
     background:    #ffffff;
@@ -352,7 +352,7 @@
     margin-right:  4px;
 }
 .role-pills .nav-link.active             { background-color: #c2e7ff; border-color: #c2e7ff; color: #001d35; }
-.role-pills .nav-link:hover:not(.active) { background-color: #f1f3f4; }
+.role-pills .nav-link:hover:not(.active) { background-color: var(--ez-gray-100, #f1f3f4); }
 
 .inbox-table { table-layout: fixed; background: #ffffff; }
 .inbox-table thead {
@@ -362,7 +362,7 @@
     z-index:    10;
 }
 .inbox-table thead th {
-    border-bottom: 2px solid #e8eaed;
+    border-bottom: 2px solid var(--ez-gray-200, #e8eaed);
     border-left:   none !important;
     border-right:  none !important;
     font-weight:   500;
@@ -374,7 +374,7 @@
     background:    #ffffff;
 }
 .inbox-table tbody tr                { cursor: pointer; transition: background-color 0.15s; height: 52px; }
-.inbox-table tbody tr:hover          { background-color: #f1f3f4; }
+.inbox-table tbody tr:hover          { background-color: var(--ez-gray-100, #f1f3f4); }
 .inbox-table tbody td {
     padding:        8px;
     font-size:      13px;
@@ -406,20 +406,20 @@
 .custom-scrollbar::-webkit-scrollbar       { width: 8px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background:      #dadce0;
+    background:      var(--ez-gray-300, #dadce0);
     border-radius:   8px;
     border:          2px solid transparent;
     background-clip: padding-box;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background:      #bdc1c6;
+    background:      var(--ez-gray-400, #bdc1c6);
     background-clip: padding-box;
 }
 
 .bottom-bar {
     flex-shrink:     0;
     background:      #ffffff;
-    border-top:      1px solid #e8eaed;
+    border-top:      1px solid var(--ez-gray-200, #e8eaed);
     padding:         8px 20px;
     display:         flex;
     align-items:     center;
@@ -460,7 +460,7 @@
 .inbox-stats-strip {
     flex-shrink:   0;
     border-bottom: 1px solid #e0e2e0;
-    background:    #f8f9fa;
+    background:    var(--ez-gray-50, #f8f9fa);
     overflow-x:    auto;
     overflow-y:    hidden;
     scrollbar-width: none;
@@ -505,33 +505,33 @@
 
 /* 단계별 아이콘 색상 */
 .isc-icon-draft      { background: var(--v2-blue-light, #e8f0fe); color: #1967d2; }
-.isc-icon-requesting { background: #fef7e0; color: #c77700; }
-.isc-icon-submitted  { background: #e6f4ea; color: #0f9d58; }
+.isc-icon-requesting { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
+.isc-icon-submitted  { background: var(--ez-success-bg, #e6f4ea); color: #0f9d58; }
 .isc-icon-review     { background: #f3e8fd; color: #9334e9; }
 .isc-icon-pending    { background: #fff0e0; color: #e37400; }
-.isc-icon-confirmed  { background: #e6f4ea; color: #1e8e3e; }
+.isc-icon-confirmed  { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 
 /* 활성(선택) 상태별 카드 테두리·배경 */
-.isc-active-all                                 { border-color: #5f6368; background: var(--v2-gray-100, #f1f3f4); }
-.isc-active-all .stat-card-count               { color: #202124; }
-.isc-active-DRAFT                              { border-color: #1a73e8; background: var(--v2-blue-light, #e8f0fe); }
-.isc-active-DRAFT .isc-icon-draft             { background: #1a73e8; color: #fff; }
-.isc-active-REQUESTING                         { border-color: #c77700; background: #fef7e0; }
+.isc-active-all                                 { border-color: var(--ez-gray-700, #5f6368); background: var(--v2-gray-100, #f1f3f4); }
+.isc-active-all .stat-card-count               { color: var(--ez-gray-900, #202124); }
+.isc-active-DRAFT                              { border-color: var(--ez-info, #1a73e8); background: var(--v2-blue-light, #e8f0fe); }
+.isc-active-DRAFT .isc-icon-draft             { background: var(--ez-info, #1a73e8); color: #fff; }
+.isc-active-REQUESTING                         { border-color: #c77700; background: var(--ez-warning-bg, #fef7e0); }
 .isc-active-REQUESTING .isc-icon-requesting   { background: #c77700; color: #fff; }
-.isc-active-SUBMITTED                          { border-color: #0f9d58; background: #e6f4ea; }
+.isc-active-SUBMITTED                          { border-color: #0f9d58; background: var(--ez-success-bg, #e6f4ea); }
 .isc-active-SUBMITTED .isc-icon-submitted     { background: #0f9d58; color: #fff; }
 .isc-active-REVIEW                             { border-color: #9334e9; background: #f3e8fd; }
 .isc-active-REVIEW .isc-icon-review           { background: #9334e9; color: #fff; }
 .isc-active-PENDING                            { border-color: #e37400; background: #fff0e0; }
 .isc-active-PENDING .isc-icon-pending         { background: #e37400; color: #fff; }
-.isc-active-CONFIRMED                          { border-color: #1e8e3e; background: #e6f4ea; }
-.isc-active-CONFIRMED .isc-icon-confirmed     { background: #1e8e3e; color: #fff; }
+.isc-active-CONFIRMED                          { border-color: var(--ez-success, #1e8e3e); background: var(--ez-success-bg, #e6f4ea); }
+.isc-active-CONFIRMED .isc-icon-confirmed     { background: var(--ez-success, #1e8e3e); color: #fff; }
 
 /* 단계 구분선 (전체 카드와 첫 단계 사이) */
 .inbox-stage-sep {
     width:        1px;
     height:       36px;
-    background:   #dadce0;
+    background:   var(--ez-gray-300, #dadce0);
     flex-shrink:  0;
     margin:       0 6px;
 }

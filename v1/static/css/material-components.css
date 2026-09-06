@@ -9,7 +9,7 @@
    ===================================================================== */
 :root {
     --md-primary:       var(--ez-info,          #1a73e8);
-    --md-primary-dark:  var(--ez-info-hover,     #1557b0);
+    --md-primary-dark:  var(--ez-info-hover,     #1765cc);
     --md-primary-light: #4285f4;
     --md-secondary:     var(--ez-gray-700,       #5f6368);
     --md-surface:       #ffffff;
@@ -366,7 +366,7 @@
     gap: 6px;
     padding: 6px 12px;
     background: var(--md-background);
-    border: 1px solid #dadce0;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     border-radius: 16px;
     font-size: 13px;
     color: var(--md-secondary);
@@ -374,30 +374,30 @@
 }
 
 .chip:hover {
-    background: #e8eaed;
+    background: var(--ez-gray-200, #e8eaed);
 }
 
 .chip.chip-primary {
-    background: #e8f0fe;
-    border-color: #e8f0fe;
+    background: var(--ez-info-bg, #e8f0fe);
+    border-color: var(--ez-info-bg, #e8f0fe);
     color: var(--md-primary);
 }
 
 .chip.chip-success {
-    background: #e6f4ea;
-    border-color: #e6f4ea;
+    background: var(--ez-success-bg, #e6f4ea);
+    border-color: var(--ez-success-bg, #e6f4ea);
     color: var(--md-success);
 }
 
 .chip.chip-warning {
-    background: #fef7e0;
-    border-color: #fef7e0;
+    background: var(--ez-warning-bg, #fef7e0);
+    border-color: var(--ez-warning-bg, #fef7e0);
     color: #b06000;
 }
 
 .chip.chip-error {
-    background: #fce8e6;
-    border-color: #fce8e6;
+    background: var(--ez-danger-bg, #fce8e6);
+    border-color: var(--ez-danger-bg, #fce8e6);
     color: var(--md-error);
 }
 
@@ -430,14 +430,14 @@
 
 .empty-state-icon {
     font-size: 64px;
-    color: #dadce0;
+    color: var(--ez-gray-300, #dadce0);
     margin-bottom: 16px;
 }
 
 .empty-state-title {
     font-size: 20px;
     font-weight: 500;
-    color: #202124;
+    color: var(--ez-gray-900, #202124);
     margin-bottom: 8px;
 }
 

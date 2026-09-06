@@ -521,7 +521,7 @@ body {
     color: #666;
     margin-bottom: 10px;
     padding: 8px;
-    background: #f8f9fa;
+    background: var(--ez-gray-50, #f8f9fa);
     border-radius: 4px;
     text-align: center;
 }
@@ -583,7 +583,7 @@ body {
     /* max-height 제거: 부모 section 이 overflow-y:auto 로 스크롤 처리 */
     overflow-y: visible;
     padding: 0.25rem;
-    background: #f8f9fa;
+    background: var(--ez-gray-50, #f8f9fa);
     border-radius: 6px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -612,7 +612,7 @@ body {
 
 .field-order-item.hidden-field {
     opacity: 0.5;
-    background: #f8f9fa;
+    background: var(--ez-gray-50, #f8f9fa);
 }
 
 .field-order-item.disabled-field {
@@ -725,14 +725,14 @@ body {
 
 .order-btn:hover:not(:disabled) {
     border-color: #667eea;
-    background: #f8f9fa;
+    background: var(--ez-gray-50, #f8f9fa);
     color: #667eea;
 }
 
 .order-btn:disabled {
     opacity: 0.3;
     cursor: not-allowed;
-    background: #f8f9fa;
+    background: var(--ez-gray-50, #f8f9fa);
 }
 
 .field-order-item .visibility-toggle {
@@ -752,7 +752,7 @@ body {
 
 .field-order-item .visibility-toggle:hover:not(:disabled) {
     border-color: #667eea;
-    background: #f8f9fa;
+    background: var(--ez-gray-50, #f8f9fa);
 }
 
 .field-order-item .visibility-toggle:disabled {
@@ -817,7 +817,7 @@ tbody.layout-horizontal tr td {
 
 tbody.layout-horizontal tr th {
     font-weight: 500;
-    background-color: #f8f9fa;
+    background-color: var(--ez-gray-50, #f8f9fa);
     text-align: center;
 }
 
@@ -850,8 +850,8 @@ tbody.layout-vertical tr td {
     display: inline-block;
     padding: 1px 6px;
     border-radius: 3px;
-    background: #fce8e6;
-    color: #c5221f;
+    background: var(--ez-danger-bg, #fce8e6);
+    color: var(--ez-danger, #c5221f);
     font-size: 8pt;
     font-weight: 600;
     white-space: nowrap;
@@ -870,8 +870,8 @@ tbody.layout-vertical tr td {
     flex-shrink: 0;
     padding: 0 5px;
     border-radius: 3px;
-    background: #fce8e6;
-    color: #c5221f;
+    background: var(--ez-danger-bg, #fce8e6);
+    color: var(--ez-danger, #c5221f);
     font-size: 0.7rem;
     font-weight: 600;
     white-space: nowrap;
@@ -948,8 +948,8 @@ tbody.layout-vertical tr td {
     margin: 0 0 8px;
     padding: 6px 10px;
     border-radius: 6px;
-    background: #fce8e6;
-    color: #c5221f;
+    background: var(--ez-danger-bg, #fce8e6);
+    color: var(--ez-danger, #c5221f);
     font-size: 8.5pt;
     line-height: 1.7;
 }
@@ -960,14 +960,14 @@ tbody.layout-vertical tr td {
     border: 1px solid #f28b82;
     border-radius: 10px;
     background: #fff;
-    color: #c5221f;
+    color: var(--ez-danger, #c5221f);
     font-size: 8pt;
     font-weight: 600;
     cursor: pointer;
 }
 
 .pv-summary-item:hover {
-    background: #c5221f;
+    background: var(--ez-danger, #c5221f);
     color: #fff;
 }
 
@@ -978,7 +978,7 @@ tbody.layout-vertical tr td {
 }
 
 .pv-row-issue > th {
-    box-shadow: inset 3px 0 0 #c5221f;
+    box-shadow: inset 3px 0 0 var(--ez-danger, #c5221f);
 }
 
 /* 몇 번 지적인지. 모달의 번호와 같은 숫자다 — 없으면 지적이 여럿일 때
@@ -989,7 +989,7 @@ tbody.layout-vertical tr td {
     height: 14px;
     margin-right: 4px;
     border-radius: 7px;
-    background: #c5221f;
+    background: var(--ez-danger, #c5221f);
     color: #fff;
     font-size: 8pt;
     font-weight: 700;
@@ -1013,7 +1013,7 @@ tbody.layout-vertical tr td {
 
 /* 모달의 지적 줄 — 누르면 표의 그 행으로 간다 */
 .vr-jump { cursor: pointer; }
-.vr-jump:hover > td { background: #f1f3f4; }
+.vr-jump:hover > td { background: var(--ez-gray-100, #f1f3f4); }
 
 .pv-exporting .pv-summary { display: none !important; }
 .pv-exporting .pv-row-issue > th,
@@ -1066,15 +1066,15 @@ tbody.layout-vertical tr td {
     border: 0;
     border-radius: 4px;
     background: transparent;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     font-size: 0.72rem;
     line-height: 1;
     cursor: pointer;
 }
 
 .pv-rowtools button:hover {
-    background: #f1f3f4;
-    color: #1a73e8;
+    background: var(--ez-gray-100, #f1f3f4);
+    color: var(--ez-info, #1a73e8);
 }
 
 .pv-rowtools-width {
@@ -1085,7 +1085,7 @@ tbody.layout-vertical tr td {
 /* 줄에 마우스를 올리면 그 줄이라는 것을 드러낸다 */
 #previewContent [data-field-row]:hover > th,
 #previewContent [data-field-row]:hover > td {
-    background: #f8f9fa;
+    background: var(--ez-gray-50, #f8f9fa);
 }
 
 .pv-exporting [data-field-row]:hover > th,
@@ -1119,7 +1119,7 @@ tbody.layout-vertical tr td {
 .vr-where {
     margin-top: 2px;
     font-size: 0.75rem;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
 }
 
 
@@ -1154,7 +1154,7 @@ tbody.layout-vertical tr td {
     background: #fff;
 }
 
-.vr-card-blocking { border-left: 4px solid #c5221f; background: #fffaf9; }
+.vr-card-blocking { border-left: 4px solid var(--ez-danger, #c5221f); background: #fffaf9; }
 .vr-card-advisory { border-left: 4px solid #f59e0b; background: #fffdf7; }
 
 .vr-card-head {
@@ -1165,7 +1165,7 @@ tbody.layout-vertical tr td {
     margin-bottom: 6px;
 }
 
-.vr-card-name { font-weight: 700; color: #202124; }
+.vr-card-name { font-weight: 700; color: var(--ez-gray-900, #202124); }
 
 .vr-tag {
     padding: 1px 7px;
@@ -1174,7 +1174,7 @@ tbody.layout-vertical tr td {
     font-weight: 700;
 }
 
-.vr-tag-blocking { background: #fce8e6; color: #c5221f; }
+.vr-tag-blocking { background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f); }
 .vr-tag-advisory { background: #fef3c7; color: #92400e; }
 
 /* "표의 원재료명 줄로" — 누르면 그 줄로 데려간다 */
@@ -1184,12 +1184,12 @@ tbody.layout-vertical tr td {
     border: 1px solid var(--border-light, #dadce0);
     border-radius: 10px;
     background: #fff;
-    color: #1a73e8;
+    color: var(--ez-info, #1a73e8);
     font-size: 0.72rem;
     cursor: pointer;
 }
 
-.vr-where-btn:hover { background: #e8f0fe; }
+.vr-where-btn:hover { background: var(--ez-info-bg, #e8f0fe); }
 
 .vr-issue {
     display: flex;
@@ -1221,7 +1221,7 @@ tbody.layout-vertical tr td {
 
 .vr-passed > summary {
     cursor: pointer;
-    color: #1e8e3e;
+    color: var(--ez-success, #1e8e3e);
     font-weight: 600;
     font-size: 0.82rem;
 }
@@ -1235,10 +1235,10 @@ tbody.layout-vertical tr td {
 
 .vr-chip {
     padding: 1px 8px;
-    border: 1px solid #ceead6;
+    border: 1px solid var(--ez-success-border, #ceead6);
     border-radius: 10px;
-    background: #e6f4ea;
-    color: #1e8e3e;
+    background: var(--ez-success-bg, #e6f4ea);
+    color: var(--ez-success, #1e8e3e);
     font-size: 0.75rem;
     white-space: nowrap;
 }
@@ -1246,8 +1246,8 @@ tbody.layout-vertical tr td {
 .vr-empty {
     padding: 14px;
     border-radius: 8px;
-    background: #e6f4ea;
-    color: #1e8e3e;
+    background: var(--ez-success-bg, #e6f4ea);
+    color: var(--ez-success, #1e8e3e);
     font-weight: 600;
     text-align: center;
 }
@@ -1256,14 +1256,14 @@ tbody.layout-vertical tr td {
     margin-top: 12px;
     padding-top: 10px;
     border-top: 1px solid var(--border-light, #e5e7eb);
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     font-size: 0.78rem;
     white-space: pre-line;
 }
 
 .vr-usage {
     margin-top: 4px;
-    color: #9aa0a6;
+    color: var(--ez-gray-500, #9aa0a6);
     font-size: 0.72rem;
 }
 
@@ -1292,7 +1292,7 @@ tbody.layout-vertical tr td {
 }
 
 .vr-export-menu .dropdown-item:hover .export-note {
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
 }
 
 /* ==================== 왼쪽 설정 패널 ====================

@@ -251,11 +251,11 @@ a.hero-app-badge:hover {
    눈이 안 간다. */
 .feature-card-new { border-color: #c4a7e7; box-shadow: 0 0 0 3px rgba(196,167,231,.14); }
 
-.fc-badge-blue   { background: #e8f0fe; color: #1558b0; }
-.fc-badge-green  { background: #e6f4ea; color: #1a7336; }
-.fc-badge-yellow { background: #fef7e0; color: #b06000; }
+.fc-badge-blue   { background: var(--ez-info-bg, #e8f0fe); color: #1558b0; }
+.fc-badge-green  { background: var(--ez-success-bg, #e6f4ea); color: #1a7336; }
+.fc-badge-yellow { background: var(--ez-warning-bg, #fef7e0); color: #b06000; }
 .fc-badge-purple { background: #f3e8fd; color: #7b2fbe; }
-.fc-badge-red    { background: #fce8e6; color: #b31412; }
+.fc-badge-red    { background: var(--ez-danger-bg, #fce8e6); color: #b31412; }
 .fc-badge-teal   { background: #e0f7f4; color: #007b6e; }
 /* 하위 호환 (로그인 사용자 features) */
 .fc-badge:not([class*='fc-badge-']) { background: var(--v2-blue-light); color: var(--v2-blue); }
@@ -334,7 +334,7 @@ a.hero-app-badge:hover {
     flex-shrink: 0;
 }
 .pn-green  .pipe-node-icon { background: #e8f5e9; color: #1b7c3b; }
-.pn-blue   .pipe-node-icon { background: #e8f0fe; color: #1967d2; }
+.pn-blue   .pipe-node-icon { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
 .pn-purple .pipe-node-icon { background: #f3e8fd; color: #7b2fbe; }
 .pn-orange .pipe-node-icon { background: #fff0e0; color: #c05e00; }
 
@@ -355,7 +355,7 @@ a.hero-app-badge:hover {
     width: fit-content;
 }
 .pn-green  .pipe-node-badge { background: #e8f5e9; color: #1b7c3b; }
-.pn-blue   .pipe-node-badge { background: #e8f0fe; color: #1967d2; }
+.pn-blue   .pipe-node-badge { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
 .pn-purple .pipe-node-badge { background: #f3e8fd; color: #7b2fbe; }
 .pn-orange .pipe-node-badge { background: #fff0e0; color: #c05e00; }
 
@@ -369,7 +369,7 @@ a.hero-app-badge:hover {
 }
 .pipe-node-list li {
     font-size: 11px;
-    color: #3c4043;
+    color: var(--ez-gray-800, #3c4043);
     line-height: 1.4;
     display: flex;
     align-items: flex-start;
@@ -392,7 +392,7 @@ a.hero-app-badge:hover {
     justify-content: center;
     padding: 0 8px;
     padding-top: 48px; /* 아이콘 높이 맞춤 */
-    color: #bdc1c6;
+    color: var(--ez-gray-400, #bdc1c6);
     font-size: 22px;
     flex-shrink: 0;
 }
@@ -428,13 +428,13 @@ a.hero-app-badge:hover {
 }
 .pipeline-cta .hero-btn-outline {
     background: #fff;
-    color: #3c4043;
+    color: var(--ez-gray-800, #3c4043);
     border-color: var(--v2-border);
 }
 .pipeline-cta .hero-btn-outline:hover {
     background: var(--v2-gray-50);
     color: var(--v2-text);
-    border-color: #bdc1c6;
+    border-color: var(--ez-gray-400, #bdc1c6);
 }
 
 /* ── 컴팩트 대시보드 헤더 스트립 ─────────────────────────── */
@@ -479,15 +479,15 @@ a.hero-app-badge:hover {
     gap: 4px;
     padding: 2px 10px;
     border-radius: 12px;
-    background: #fce8e6;
+    background: var(--ez-danger-bg, #fce8e6);
     border: 1px solid #f4c7c3;
-    color: #c5221f;
+    color: var(--ez-danger, #c5221f);
     font-size: 11px;
     font-weight: 600;
     text-decoration: none;
     white-space: nowrap;
 }
-.dash-alert-chip:hover { background: #f4c7c3; color: #c5221f; text-decoration: none; }
+.dash-alert-chip:hover { background: #f4c7c3; color: var(--ez-danger, #c5221f); text-decoration: none; }
 
 .dash-notif-chip {
     display: inline-flex;
@@ -495,15 +495,15 @@ a.hero-app-badge:hover {
     gap: 4px;
     padding: 2px 10px;
     border-radius: 12px;
-    background: #fef7e0;
-    border: 1px solid #fde68a;
+    background: var(--ez-warning-bg, #fef7e0);
+    border: 1px solid var(--ez-warning-border, #fde68a);
     color: #c77700;
     font-size: 11px;
     font-weight: 600;
     text-decoration: none;
     white-space: nowrap;
 }
-.dash-notif-chip:hover { background: #fde68a; color: #c77700; text-decoration: none; }
+.dash-notif-chip:hover { background: var(--ez-warning-border, #fde68a); color: #c77700; text-decoration: none; }
 
 .dash-hero-right {
     display: flex;
@@ -555,9 +555,9 @@ a.hero-app-badge:hover {
 
 /* 아이콘 색상 변형 */
 .si-blue   { background: var(--v2-blue-light); color: #1967d2; }
-.si-green  { background: #e6f4ea; color: #1e8e3e; }
-.si-yellow { background: #fef7e0; color: #c77700; }
-.si-red    { background: #fce8e6; color: #c5221f; }
+.si-green  { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
+.si-yellow { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
+.si-red    { background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f); }
 .si-purple { background: #f3e8fd; color: #9334e9; }
 
 .stat-val { font-size: 26px; font-weight: 700; color: var(--v2-text); line-height: 1; }
@@ -657,7 +657,7 @@ a.hero-app-badge:hover {
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--ez-gray-100, #f1f3f4);
 }
 .role-icon {
     width: 42px; height: 42px;
@@ -693,8 +693,8 @@ a.hero-app-badge:hover {
     flex-shrink: 0;
     margin-top: 2px;
 }
-.role-step-text { font-size: 12px; color: #3c4043; line-height: 1.55; flex: 1; }
-.role-step-sep { display: flex; padding-left: 4px; color: #bdc1c6; font-size: 11px; }
+.role-step-text { font-size: 12px; color: var(--ez-gray-800, #3c4043); line-height: 1.55; flex: 1; }
+.role-step-sep { display: flex; padding-left: 4px; color: var(--ez-gray-400, #bdc1c6); font-size: 11px; }
 
 /* 역할별 색상 테마 */
 .rc-uploader .role-card-header { background: #f6fff8; }
@@ -703,9 +703,9 @@ a.hero-app-badge:hover {
 .rc-uploader .role-step-num    { background: #e8f5e9; color: #1b7c3b; }
 
 .rc-editor .role-card-header   { background: #f8f9ff; }
-.rc-editor .role-icon          { background: #e8f0fe; color: #1967d2; }
-.rc-editor .role-perm-badge    { background: #e8f0fe; color: #1967d2; }
-.rc-editor .role-step-num      { background: #e8f0fe; color: #1967d2; }
+.rc-editor .role-icon          { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.rc-editor .role-perm-badge    { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.rc-editor .role-step-num      { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
 
 .rc-reviewer .role-card-header { background: #fbf5ff; }
 .rc-reviewer .role-icon        { background: #f3e8fd; color: #8430ce; }
@@ -771,18 +771,18 @@ a.hero-app-badge:hover {
     font-size: 13px; font-weight: 500;
     text-decoration: none;
     border: 1px solid var(--v2-border);
-    background: #fff; color: #3c4043;
+    background: #fff; color: var(--ez-gray-800, #3c4043);
     transition: all 0.15s;
 }
 .qa-btn:hover {
-    background: var(--v2-gray-50); border-color: #bdc1c6;
+    background: var(--v2-gray-50); border-color: var(--ez-gray-400, #bdc1c6);
     color: var(--v2-text); text-decoration: none;
     box-shadow: 0 1px 4px rgba(0,0,0,.08);
 }
 .qa-btn.primary { background: var(--v2-blue); border-color: var(--v2-blue); color: #fff; }
 .qa-btn.primary:hover { background: var(--v2-blue-hover); color: #fff; }
-.qa-btn.qa-btn-alert { background: #fce8e6; border-color: #f28b82; color: #c5221f; }
-.qa-btn.qa-btn-alert:hover { background: #f28b82; border-color: #c5221f; color: #fff; }
+.qa-btn.qa-btn-alert { background: var(--ez-danger-bg, #fce8e6); border-color: #f28b82; color: var(--ez-danger, #c5221f); }
+.qa-btn.qa-btn-alert:hover { background: #f28b82; border-color: var(--ez-danger, #c5221f); color: #fff; }
 
 /* ── 퀵 액션 여백 축소 ────────────────────────────────────── */
 /* (dash-hero 내부에 통합됨 — .quick-actions 단독 섹션 불필요) */
@@ -801,12 +801,12 @@ a.hero-app-badge:hover {
     display: flex; align-items: center; gap: 10px;
 }
 .gnb-login-btn {
-    font-size: 13px; font-weight: 500; color: #3c4043;
+    font-size: 13px; font-weight: 500; color: var(--ez-gray-800, #3c4043);
     text-decoration: none; padding: 6px 14px;
     border-radius: 6px;
     transition: background .15s;
 }
-.gnb-login-btn:hover { background: #f1f3f4; color: #1967d2; text-decoration: none; }
+.gnb-login-btn:hover { background: var(--ez-gray-100, #f1f3f4); color: #1967d2; text-decoration: none; }
 .gnb-signup-btn {
     font-size: 13px; font-weight: 600;
     background: #1967d2; color: #fff;
@@ -856,7 +856,7 @@ a.hero-app-badge:hover {
 }
 .pipe-connector-label {
     font-size: 9px; font-weight: 600;
-    color: #5f6368; white-space: nowrap;
+    color: var(--ez-gray-700, #5f6368); white-space: nowrap;
     letter-spacing: .02em;
     margin-top: 2px;
 }
@@ -939,10 +939,10 @@ a.hero-app-badge:hover {
     gap: 10px;
     padding: 9px 18px 9px 15px;
     border-radius: 10px;
-    background: #202124;
+    background: var(--ez-gray-900, #202124);
     color: #fff;
     text-decoration: none;
-    border: 1px solid #3c4043;
+    border: 1px solid var(--ez-gray-800, #3c4043);
     transition: background .18s, transform .18s, box-shadow .18s;
     white-space: nowrap;
 }
@@ -1021,7 +1021,7 @@ a.hero-app-badge:hover {
     width: 160px; height: 160px; display: block;
 }
 .app-promo-qr span {
-    font-size: 10px; font-weight: 600; color: #5f6368;
+    font-size: 10px; font-weight: 600; color: var(--ez-gray-700, #5f6368);
     display: flex; align-items: center;
 }
 
@@ -1037,7 +1037,7 @@ a.hero-app-badge:hover {
 .upd-strip {
     background: #fff;
     border: 1px solid var(--v2-border, #dadce0);
-    border-left: 4px solid #1a73e8;
+    border-left: 4px solid var(--ez-info, #1a73e8);
     border-radius: 12px;
     padding: 14px 18px;
     margin-bottom: 16px;
@@ -1052,22 +1052,22 @@ a.hero-app-badge:hover {
 .upd-strip-tag {
     flex-shrink: 0;
     font-size: 9.5px; font-weight: 800; letter-spacing: .06em;
-    background: #e8f0fe; color: #1a5fb4;
+    background: var(--ez-info-bg, #e8f0fe); color: #1a5fb4;
     padding: 3px 7px; border-radius: 5px;
 }
 .upd-strip-title { font-size: 14px; font-weight: 700; color: #1f1f1f; }
 .upd-strip-desc {
-    font-size: 12.5px; line-height: 1.65; color: #5f6368;
+    font-size: 12.5px; line-height: 1.65; color: var(--ez-gray-700, #5f6368);
     margin-bottom: 12px;
 }
-.upd-strip-desc strong { color: #3c4043; }
+.upd-strip-desc strong { color: var(--ez-gray-800, #3c4043); }
 
 .upd-strip-close {
     position: absolute; top: 10px; right: 10px;
-    border: 0; background: none; color: #9aa0a6;
+    border: 0; background: none; color: var(--ez-gray-500, #9aa0a6);
     width: 26px; height: 26px; border-radius: 6px; line-height: 1;
 }
-.upd-strip-close:hover { color: #3c4043; background: #f1f3f4; }
+.upd-strip-close:hover { color: var(--ez-gray-800, #3c4043); background: var(--ez-gray-100, #f1f3f4); }
 
 /* 세 걸음 — 무엇이 자동이고 어디서 사람이 확인하는지가 한눈에 보여야 한다 */
 .upd-steps {
@@ -1076,25 +1076,25 @@ a.hero-app-badge:hover {
 }
 .upd-step {
     display: flex; align-items: center; gap: 8px;
-    background: #f8f9fa; border-radius: 8px;
+    background: var(--ez-gray-50, #f8f9fa); border-radius: 8px;
     padding: 8px 12px; flex: 1 1 200px; min-width: 0;
 }
 .upd-step-no {
     flex-shrink: 0;
     width: 20px; height: 20px; border-radius: 50%;
-    background: #1a73e8; color: #fff;
+    background: var(--ez-info, #1a73e8); color: #fff;
     font-size: 11px; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
 }
 .upd-step b { display: block; font-size: 12.5px; color: #1f1f1f; font-weight: 600; }
 .upd-step em {
     display: block; font-style: normal;
-    font-size: 11px; color: #5f6368; line-height: 1.45; margin-top: 1px;
+    font-size: 11px; color: var(--ez-gray-700, #5f6368); line-height: 1.45; margin-top: 1px;
 }
 .upd-step-arrow { color: #c0c4c9; font-size: 12px; flex-shrink: 0; }
 
 .upd-strip-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.upd-strip-note { font-size: 11.5px; color: #80868b; line-height: 1.5; flex: 1 1 260px; }
+.upd-strip-note { font-size: 11.5px; color: var(--ez-gray-600, #80868b); line-height: 1.5; flex: 1 1 260px; }
 
 @media (max-width: 767px) {
     .upd-step-arrow { display: none; }
@@ -1164,7 +1164,7 @@ a.hero-app-badge:hover {
 .app-strip-qr-pop img { width: 160px; height: 160px; display: block; }  /* 스캔 가능한 최소 크기 이상 */
 .app-strip-qr-pop em {
     font-style: normal; font-size: 10px; font-weight: 600;
-    color: #5f6368; line-height: 1.2; white-space: nowrap;
+    color: var(--ez-gray-700, #5f6368); line-height: 1.2; white-space: nowrap;
 }
 
 .app-strip-close {

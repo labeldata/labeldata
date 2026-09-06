@@ -311,8 +311,7 @@
         text-align: center;
     }
     /* 켜져 있으면 그렇게 보여야 한다 */
-    #wideBtn.is-on,
-    #peekBtn.is-on {
+    #wideBtn.is-on {
         background: var(--v2-blue-light, #e8f0fe);
         color: var(--google-blue);
     }
@@ -679,12 +678,7 @@
                     onclick="toggleWideList()" title="상세 칸을 접고 목록을 넓게 봅니다">
                 <i class="bi bi-arrows-angle-expand"></i><span id="wideBtnLabel">넓게 보기</span>
             </button>
-            <button type="button" class="ing-viewctl-btn" id="peekBtn"
-                    onclick="togglePeekMode()"
-                    title="긴 값을 볼 때 줄을 펼지, 옆에 겹쳐 띄울지">
-                <i class="bi bi-arrows-expand"></i><span id="peekBtnLabel">줄 펴기</span>
-            </button>
-            <div class="dropdown">
+<div class="dropdown">
                 <button type="button" class="ing-viewctl-btn" data-bs-toggle="dropdown"
                         data-bs-auto-close="outside" title="목록에 보일 칸을 고릅니다">
                     <i class="bi bi-layout-three-columns"></i>칸 고르기
@@ -1110,37 +1104,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     try { applyWide(localStorage.getItem(WIDE_KEY) === '1'); } catch (e) {}
 
-    /*
-     * 긴 값을 어떻게 볼 것인가.
-     *
-     *   줄 펴기   지나가는 줄이 그 자리에서 커진다. 한눈에 다 보이지만
-     *             **아래 줄들이 밀린다** — 훑어 내려가는 중에는 거슬린다.
-     *   겹쳐 보기 지나가는 칸 하나만 제 자리 위로 떠오른다. 표가 흔들리지
-     *             않지만 옆 칸을 가린다.
-     *
-     * 어느 쪽이 나은지는 써 봐야 안다. 골라 쓰게 두고 브라우저에 남긴다.
-     */
-    var PEEK_KEY = 'ingredient-list-peek';
-
-    function applyPeek(on) {
-        var wrap = document.querySelector('.list-wrap');
-        var label = document.getElementById('peekBtnLabel');
-        var icon = document.querySelector('#peekBtn .bi');
-        var btn = document.getElementById('peekBtn');
-        if (wrap) wrap.classList.toggle('is-peek', on);
-        if (label) label.textContent = on ? '겹쳐 보기' : '줄 펴기';
-        if (icon) icon.className = 'bi ' + (on ? 'bi-layers' : 'bi-arrows-expand');
-        if (btn) btn.classList.toggle('is-on', on);
-    }
-
-    window.togglePeekMode = function () {
-        var wrap = document.querySelector('.list-wrap');
-        var on = !(wrap && wrap.classList.contains('is-peek'));
-        try { localStorage.setItem(PEEK_KEY, on ? '1' : '0'); } catch (e) {}
-        applyPeek(on);
-    };
-
-    try { applyPeek(localStorage.getItem(PEEK_KEY) === '1'); } catch (e) {}
 
     /* 한 건을 고르면 상세를 봐야 하니 저절로 펴 준다 */
     function unwideForDetail() {

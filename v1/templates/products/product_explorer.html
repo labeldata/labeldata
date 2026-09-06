@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/list_common.css' %}?v={{ STATIC_BUILD_DATE }}">
 <link rel="stylesheet" href="{% static 'css/product_explorer.css' %}?v={{ STATIC_BUILD_DATE }}">
 {% endblock %}
 
@@ -190,7 +191,7 @@
             </button>
         </div>
         {% if products_data %}
-        <table class="table table-hover align-middle mb-0 product-table">
+        <table class="table table-hover align-middle mb-0 product-table ez-list-table">
             <thead>
                 <tr class="text-muted">
                     {# 머리글 정렬은 본문 칸과 같아야 한다. 긴 텍스트인 제품명만 왼쪽. #}

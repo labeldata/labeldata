@@ -28,7 +28,7 @@
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid #e8eaed;
+    border-right: 1px solid var(--ez-gray-200, #e8eaed);
     background: #fff;
     overflow: hidden;
 }
@@ -38,8 +38,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    border-bottom: 1px solid #e8eaed;
-    background: #f8f9fa;
+    border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
+    background: var(--ez-gray-50, #f8f9fa);
     flex-shrink: 0;
     flex-wrap: wrap;
     gap: 6px;
@@ -51,7 +51,7 @@
     align-items: center;
     gap: 8px;
     padding: 8px 14px;
-    border-bottom: 1px solid #e8eaed;
+    border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
     background: #fff;
     flex-shrink: 0;
 }
@@ -61,7 +61,7 @@
     border: none;
     outline: none;
     font-size: 13px;
-    color: #202124;
+    color: var(--ez-gray-900, #202124);
     background: transparent;
 }
 
@@ -96,12 +96,12 @@
 .contacts-table thead th {
     position: sticky;
     top: 0;
-    background: #f8f9fa;
-    border-bottom: 2px solid #e8eaed;
+    background: var(--ez-gray-50, #f8f9fa);
+    border-bottom: 2px solid var(--ez-gray-200, #e8eaed);
     padding: 8px 10px;
     font-size: 11px;
     font-weight: 600;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     text-transform: uppercase;
     letter-spacing: 0.4px;
     white-space: nowrap;
@@ -109,18 +109,18 @@
 }
 
 .contacts-table tbody tr {
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--ez-gray-100, #f1f3f4);
     cursor: pointer;
     transition: background 0.1s;
 }
 
-.contacts-table tbody tr:hover  { background: #f8f9fa; }
-.contacts-table tbody tr.selected { background: #e8f0fe !important; }
+.contacts-table tbody tr:hover  { background: var(--ez-gray-50, #f8f9fa); }
+.contacts-table tbody tr.selected { background: var(--ez-info-bg, #e8f0fe) !important; }
 .contacts-table tbody tr.new-row  { background: #fff8e1; }
 
 .contacts-table td {
     padding: 8px 10px;
-    color: #202124;
+    color: var(--ez-gray-900, #202124);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -133,7 +133,7 @@
 
 .cell-input {
     width: 100%;
-    border: 1px solid #1a73e8;
+    border: 1px solid var(--ez-info, #1a73e8);
     border-radius: 4px;
     padding: 2px 6px;
     font-size: 13px;
@@ -146,13 +146,13 @@
 
 .badge-sent {
     display: inline-block;
-    background: #e8f0fe; color: #1967d2;
+    background: var(--ez-info-bg, #e8f0fe); color: #1967d2;
     border-radius: 10px; padding: 1px 7px;
     font-size: 11px; font-weight: 600;
 }
 .badge-recv {
     display: inline-block;
-    background: #e6f4ea; color: #1e8e3e;
+    background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e);
     border-radius: 10px; padding: 1px 7px;
     font-size: 11px; font-weight: 600;
 }
@@ -160,10 +160,10 @@
 /* ── 하단 상태바 ── */
 .contacts-statusbar {
     padding: 6px 14px;
-    background: #f8f9fa;
-    border-top: 1px solid #e8eaed;
+    background: var(--ez-gray-50, #f8f9fa);
+    border-top: 1px solid var(--ez-gray-200, #e8eaed);
     font-size: 11px;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     flex-shrink: 0;
 }
 
@@ -175,7 +175,7 @@
     border-radius: 6px;
     cursor: pointer;
     font-size: 15px;
-    color: #3c4043;
+    color: var(--ez-gray-800, #3c4043);
     line-height: 1;
     transition: background 0.15s;
     text-decoration: none;
@@ -183,7 +183,7 @@
     align-items: center;
     justify-content: center;
 }
-.contacts-icon-btn:hover:not(:disabled) { background: #f1f3f4; }
+.contacts-icon-btn:hover:not(:disabled) { background: var(--ez-gray-100, #f1f3f4); }
 .contacts-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ─────────────────────────────────────────────
@@ -191,12 +191,12 @@
 ────────────────────────────────────────────── */
 .contacts-resizer {
     width: 5px;
-    background: #e8eaed;
+    background: var(--ez-gray-200, #e8eaed);
     cursor: col-resize;
     flex-shrink: 0;
     transition: background 0.15s;
 }
-.contacts-resizer:hover { background: #1a73e8; }
+.contacts-resizer:hover { background: var(--ez-info, #1a73e8); }
 
 /* ─────────────────────────────────────────────
    오른쪽 패널 - 공유 현황
@@ -217,7 +217,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: #80868b;
+    color: var(--ez-gray-600, #80868b);
 }
 
 /* ── 공유 현황 뷰 ── */
@@ -235,24 +235,24 @@
     align-items: center;
     gap: 16px;
     padding: 16px 24px;
-    border-bottom: 1px solid #e8eaed;
-    background: #f8f9fa;
+    border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
+    background: var(--ez-gray-50, #f8f9fa);
     flex-shrink: 0;
 }
 
 .share-contact-avatar {
     width: 48px; height: 48px;
     border-radius: 50%;
-    background: #1a73e8;
+    background: var(--ez-info, #1a73e8);
     color: #fff;
     display: flex; align-items: center; justify-content: center;
     font-size: 20px; font-weight: 700;
     flex-shrink: 0;
 }
 
-.share-contact-name    { font-size: 16px; font-weight: 600; color: #202124; }
-.share-contact-email   { font-size: 13px; color: #5f6368; margin-top: 2px; }
-.share-contact-company { font-size: 12px; color: #80868b; margin-top: 1px; }
+.share-contact-name    { font-size: 16px; font-weight: 600; color: var(--ez-gray-900, #202124); }
+.share-contact-email   { font-size: 13px; color: var(--ez-gray-700, #5f6368); margin-top: 2px; }
+.share-contact-company { font-size: 12px; color: var(--ez-gray-600, #80868b); margin-top: 1px; }
 
 /* ── 공유 테이블 ── */
 .share-table {
@@ -262,12 +262,12 @@
 }
 
 .share-table thead th {
-    background: #f8f9fa;
-    border-bottom: 2px solid #e8eaed;
+    background: var(--ez-gray-50, #f8f9fa);
+    border-bottom: 2px solid var(--ez-gray-200, #e8eaed);
     padding: 8px 12px;
     font-size: 11px;
     font-weight: 600;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     text-transform: uppercase;
     letter-spacing: 0.4px;
     position: sticky;
@@ -276,12 +276,12 @@
 }
 
 .share-table tbody tr {
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--ez-gray-100, #f1f3f4);
     transition: background 0.1s;
 }
-.share-table tbody tr:hover { background: #f8f9fa; }
+.share-table tbody tr:hover { background: var(--ez-gray-50, #f8f9fa); }
 
-.share-table td { padding: 9px 12px; color: #202124; vertical-align: middle; }
+.share-table td { padding: 9px 12px; color: var(--ez-gray-900, #202124); vertical-align: middle; }
 
 /* ── 역할 칩 ── */
 .role-chip {
@@ -293,25 +293,25 @@
     white-space: nowrap;
 }
 .role-owner     { background: #f3e8fd; color: #9334e9; }
-.role-editor    { background: #e8f0fe; color: #1967d2; }
-.role-reviewer  { background: #e6f4ea; color: #1e8e3e; }
-.role-approver  { background: #fef7e0; color: #c77700; }
-.role-viewer    { background: #f1f3f4; color: #5f6368; }
-.role-requester { background: #fce8e6; color: #c5221f; }
-.role-none      { background: #f1f3f4; color: #9aa0a6; }
+.role-editor    { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.role-reviewer  { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
+.role-approver  { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
+.role-viewer    { background: var(--ez-gray-100, #f1f3f4); color: var(--ez-gray-700, #5f6368); }
+.role-requester { background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f); }
+.role-none      { background: var(--ez-gray-100, #f1f3f4); color: var(--ez-gray-500, #9aa0a6); }
 
 /* ── 내비 탭 커스텀 ── */
 #shareTabs .nav-link {
     font-size: 13px;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     border: none;
     border-bottom: 2px solid transparent;
     border-radius: 0;
     padding: 10px 16px;
 }
 #shareTabs .nav-link.active {
-    color: #1a73e8;
-    border-bottom-color: #1a73e8;
+    color: var(--ez-info, #1a73e8);
+    border-bottom-color: var(--ez-info, #1a73e8);
     font-weight: 600;
     background: transparent;
 }
@@ -322,23 +322,23 @@
     align-items: center;
     gap: 3px;
     padding: 2px 10px;
-    border: 1px solid #dadce0;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     border-radius: 12px;
     background: #fff;
     font-size: 11px;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     cursor: pointer;
     transition: background .15s, color .15s, border-color .15s;
     white-space: nowrap;
 }
 .contacts-filter-btn:hover {
-    background: #f1f3f4;
-    border-color: #bdc1c6;
+    background: var(--ez-gray-100, #f1f3f4);
+    border-color: var(--ez-gray-400, #bdc1c6);
 }
 .contacts-filter-btn.active {
-    background: #e8f0fe;
-    border-color: #1a73e8;
-    color: #1a73e8;
+    background: var(--ez-info-bg, #e8f0fe);
+    border-color: var(--ez-info, #1a73e8);
+    color: var(--ez-info, #1a73e8);
     font-weight: 600;
 }
 .contacts-filter-btn:disabled {
@@ -382,20 +382,20 @@
 }
 
 #selection-actions .btn:hover {
-    background-color: #f1f3f4;
+    background-color: var(--ez-gray-100, #f1f3f4);
     border-color: #c0c4c7;
 }
 
 #selection-actions .btn-outline-danger {
     border-color: #f28b82;
-    color: #c5221f;
+    color: var(--ez-danger, #c5221f);
     background: #ffffff;
 }
 
 #selection-actions .btn-outline-danger:hover {
-    background-color: #fce8e6;
+    background-color: var(--ez-danger-bg, #fce8e6);
     border-color: #f28b82;
-    color: #c5221f;
+    color: var(--ez-danger, #c5221f);
 }
 
 #selection-actions .btn-primary {

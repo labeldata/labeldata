@@ -240,8 +240,8 @@ body {
 .basis-hint {
   margin-bottom: 20px;
   padding: 9px 12px;
-  background: #e8f0fe;
-  border: 1px solid #c5d9f9;
+  background: var(--ez-info-bg, #e8f0fe);
+  border: 1px solid var(--ez-info-border, #c5d9f9);
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.7;
@@ -256,7 +256,7 @@ body {
   justify-content: center;
   width: 14px; height: 14px;
   border-radius: 50%;
-  background: #e8f0fe;
+  background: var(--ez-info-bg, #e8f0fe);
   color: #1558b0;
   font-size: 10px;
   font-weight: 700;
@@ -273,12 +273,12 @@ body {
   flex-wrap: wrap;
   margin-bottom: 6px;
   font-size: 12.5px;
-  color: #3c4043;
+  color: var(--ez-gray-800, #3c4043);
 }
 .input-basis-row label { margin: 0; font-weight: 600; }
 .input-basis-row select {
   padding: 4px 8px;
-  border: 1px solid #1a73e8;
+  border: 1px solid var(--ez-info, #1a73e8);
   border-radius: 6px;
   font-size: 12.5px;
   color: #1558b0;
@@ -289,7 +289,7 @@ body {
   display: none;
   margin-bottom: 10px;
   padding: 7px 10px;
-  background: #fef7e0;
+  background: var(--ez-warning-bg, #fef7e0);
   border: 1px solid #fadf9a;
   border-radius: 6px;
   font-size: 11.5px;
@@ -883,7 +883,7 @@ body {
 }
 
 .emphasis-validation-header {
-  background: #f8f9fa;
+  background: var(--ez-gray-50, #f8f9fa);
   padding: 10px 15px;
   border-bottom: 1px solid #dee2e6;
 }

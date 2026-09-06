@@ -2497,3 +2497,66 @@ class SeeAllDefaultsMatchTests(TestCase):
                     continue
                 if 'document.label)' in line or ', doc.label)' in line:
                     self.fail('%s: 문서를 안 넘긴다 — %s' % (rel, line.strip()))
+
+
+class ColoursComeFromTokensTests(TestCase):
+    """
+    variables.css 머리에 "개별 파일에서 동일한 값을 하드코딩하지 마세요" 라고
+    적혀 있는데 지켜지지 않았다. 열한 개 CSS 중 여덟이 토큰을 한 번도 쓰지
+    않고 같은 회색을 저마다 적어 두고 있었다 — #5f6368 이 서른다섯 개 파일에.
+
+    한 색을 바꾸려면 서른 곳을 고쳐야 했다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.dir = Path(dj.BASE_DIR) / 'static' / 'css'
+        self.tokens = dict(__import__('re').findall(
+            r'(--ez-[\w-]+):\s*(#[0-9a-fA-F]{3,6})',
+            (self.dir / 'variables.css').read_text(encoding='utf-8')))
+
+    #  :root 블록은 세지 않는다. 화면별 CSS 가 제 변수를 선언해 두고 쓰는
+    #  자리인데, 그 선언을 ez 토큰으로 갈아 끼우는 것은 값이 아니라 **구조**를
+    #  바꾸는 일이라 따로 봐야 한다(계획서 G-2 다음 걸음).
+    _ROOT = r':root[^{]*\{[^}]*\}'
+    _VAR = r'var\(\s*--[\w-]+\s*(?:,[^()]*)?\)'
+
+    def _bare_colours(self, path):
+        import re
+        text = re.sub(self._ROOT, '', path.read_text(encoding='utf-8'), flags=re.S)
+        return {c.lower() for c in re.findall(r'#[0-9a-fA-F]{6}', re.sub(self._VAR, '', text))}
+
+    def test_토큰이_있는_색은_토큰으로_적는다(self):
+        known = {v.lower() for v in self.tokens.values()}
+        offenders = []
+        for path in sorted(self.dir.glob('*.css')):
+            if path.name in ('variables.css', 'bootstrap.min.css',
+                             'label_creation_modern.css'):
+                continue      # 4,651줄짜리는 무엇이 살아 있는지부터 재야 한다
+            hits = self._bare_colours(path) & known
+            if hits:
+                offenders.append('%s: %s' % (path.name, ', '.join(sorted(hits))))
+        self.assertEqual(offenders, [], '토큰이 있는데 직접 적었다')
+
+    def test_대체값은_토큰_값과_같아야_한다(self):
+        """
+        var(--ez-gray-700, #444746) 처럼 대체값이 토큰과 다르면 파일이 거짓말을
+        한다 — 토큰이 정의돼 있으니 실제로 쓰이는 것은 토큰 값이다.
+        """
+        import re
+        wrong = []
+        for path in sorted(self.dir.glob('*.css')):
+            if path.name == 'label_creation_modern.css':
+                # 이 파일은 ez 토큰 이름에 제 팔레트를 대체값으로 달아 뒀다.
+                # 토큰이 정의돼 있으니 실제로는 ez 색이 나간다 — 뜻하지 않은
+                # 일이지만 4,651줄을 훑어야 정리된다(계획서 G-4).
+                continue
+            text = path.read_text(encoding='utf-8')
+            for name, fallback in re.findall(
+                    r'var\(\s*(--ez-[\w-]+)\s*,\s*(#[0-9a-fA-F]{6})\s*\)', text):
+                real = self.tokens.get(name)
+                if real and real.lower() != fallback.lower():
+                    wrong.append('%s: %s -> %s (토큰은 %s)'
+                                 % (path.name, name, fallback, real))
+        self.assertEqual(wrong, [])

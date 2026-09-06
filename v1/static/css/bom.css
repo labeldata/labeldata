@@ -390,7 +390,7 @@ body.in-iframe .bom-main-column {
     background:    var(--v2-border);
     border-radius: 10px;
 }
-.palette-list::-webkit-scrollbar-thumb:hover { background: #bdc1c6; }
+.palette-list::-webkit-scrollbar-thumb:hover { background: var(--ez-gray-400, #bdc1c6); }
 
 /* ── 반응형 ───────────────────────────────────────────────── */
 @media (max-width: 991px) {

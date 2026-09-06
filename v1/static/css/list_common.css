@@ -36,14 +36,14 @@
 }
 .rf-listctl-label {
     font-size: 11.5px;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     white-space: nowrap;
 }
 .rf-listctl-select {
     font-size: 12.5px;
-    color: #3c4043;
+    color: var(--ez-gray-800, #3c4043);
     background: #fff;
-    border: 1px solid #dadce0;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     border-radius: 8px;
     padding: 4px 8px;
     cursor: pointer;
@@ -56,12 +56,12 @@
     width: 30px;
     height: 28px;
     background: #fff;
-    border: 1px solid #dadce0;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     border-radius: 8px;
-    color: #5f6368;
+    color: var(--ez-gray-700, #5f6368);
     cursor: pointer;
 }
-.rf-listctl-dir:hover { border-color: #1967d2; color: #1558b0; background: #e8f0fe; }
+.rf-listctl-dir:hover { border-color: #1967d2; color: #1558b0; background: var(--ez-info-bg, #e8f0fe); }
 
 
 /* ── 부적합·처분 알림과의 관계 ──────────────────────────────────
@@ -83,16 +83,16 @@
 .rd-alert-summary { padding: 0; }
 .rd-as-lead {
     display: flex; align-items: center; gap: 7px;
-    font-size: 12.5px; color: #5f6368;
+    font-size: 12.5px; color: var(--ez-gray-700, #5f6368);
     padding-bottom: 14px;
 }
-.rd-as-lead .bi { font-size: 15px; color: #9aa0a6; }
+.rd-as-lead .bi { font-size: 15px; color: var(--ez-gray-500, #9aa0a6); }
 
 /* 미조치 알림 줄 — 눌러서 바로 그 조건으로 */
 .rd-as-todo {
     display: flex; align-items: center; gap: 7px;
     padding: 10px 13px; margin-bottom: 14px;
-    background: #fef7e0; border: 1px solid #fadf9a; border-radius: 10px;
+    background: var(--ez-warning-bg, #fef7e0); border: 1px solid #fadf9a; border-radius: 10px;
     font-size: 12.5px; color: #7a5b06; text-decoration: none;
 }
 .rd-as-todo:hover { background: #feefc3; color: #5f4405; text-decoration: none; }
@@ -105,46 +105,46 @@
 .rd-as-head {
     display: flex; align-items: center; justify-content: space-between;
     padding: 11px 14px;
-    background: #f8f9fa; border-bottom: 1px solid #e8eaed;
-    font-size: 12.5px; font-weight: 700; color: #3c4043;
+    background: var(--ez-gray-50, #f8f9fa); border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
+    font-size: 12.5px; font-weight: 700; color: var(--ez-gray-800, #3c4043);
 }
 .rd-as-head .bi { color: #1967d2; margin-right: 5px; }
 .rd-as-edit {
-    border: 1px solid #dadce0; background: #fff; color: #5f6368;
+    border: 1px solid var(--ez-gray-300, #dadce0); background: #fff; color: var(--ez-gray-700, #5f6368);
     border-radius: 16px; padding: 3px 11px; font-size: 11.5px;
     display: inline-flex; align-items: center; gap: 4px;
 }
-.rd-as-edit:hover { border-color: #1967d2; color: #1558b0; background: #e8f0fe; }
+.rd-as-edit:hover { border-color: #1967d2; color: #1558b0; background: var(--ez-info-bg, #e8f0fe); }
 .rd-as-edit .bi { color: inherit; margin: 0; }
 
-.rd-as-sec { padding: 12px 14px; border-bottom: 1px solid #f1f3f4; }
+.rd-as-sec { padding: 12px 14px; border-bottom: 1px solid var(--ez-gray-100, #f1f3f4); }
 .rd-as-sec:last-of-type { border-bottom: none; }
 .rd-as-sec-title {
     display: flex; align-items: center; gap: 6px;
-    font-size: 11.5px; font-weight: 700; color: #5f6368;
+    font-size: 11.5px; font-weight: 700; color: var(--ez-gray-700, #5f6368);
     margin-bottom: 8px;
 }
 .rd-as-count {
-    background: #e8f0fe; color: #1558b0;
+    background: var(--ez-info-bg, #e8f0fe); color: #1558b0;
     font-size: 10px; font-weight: 700;
     border-radius: 9px; padding: 1px 6px;
 }
 .rd-as-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.rd-as-empty { font-size: 11.5px; color: #80868b; line-height: 1.65; }
+.rd-as-empty { font-size: 11.5px; color: var(--ez-gray-600, #80868b); line-height: 1.65; }
 .rd-as-kv { display: flex; flex-direction: column; gap: 5px; }
 .rd-as-kv > div { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; }
-.rd-as-k { flex-shrink: 0; width: 66px; color: #80868b; font-size: 11.5px; }
-.rd-as-v { color: #3c4043; font-weight: 600; word-break: break-all; }
+.rd-as-k { flex-shrink: 0; width: 66px; color: var(--ez-gray-600, #80868b); font-size: 11.5px; }
+.rd-as-v { color: var(--ez-gray-800, #3c4043); font-weight: 600; word-break: break-all; }
 .rd-as-note {
     margin-top: 9px; padding: 7px 10px;
-    background: #f8f9fa; border-radius: 7px;
-    font-size: 11px; color: #5f6368; line-height: 1.6;
+    background: var(--ez-gray-50, #f8f9fa); border-radius: 7px;
+    font-size: 11px; color: var(--ez-gray-700, #5f6368); line-height: 1.6;
 }
-.rd-as-note b { color: #3c4043; }
+.rd-as-note b { color: var(--ez-gray-800, #3c4043); }
 .rd-as-foot {
     padding: 9px 14px;
-    border-top: 1px solid #f1f3f4;
-    font-size: 11px; color: #9aa0a6;
+    border-top: 1px solid var(--ez-gray-100, #f1f3f4);
+    font-size: 11px; color: var(--ez-gray-500, #9aa0a6);
 }
 .rd-as-foot .bi { margin-right: 4px; }
 
@@ -162,7 +162,7 @@
    예전에는 여기서 ::after 로 빨간 점을 하나 더 찍었다. 목록이 표로 바뀌면서
    줄이 <tr> 이 되어 그 점이 붙을 자리가 없어졌고, 점은 이제 이름 칸 안의
    .rs-unread-dot 하나뿐이다. */
-.rs-item--insp-unread .rs-item-name { font-weight: 700; color: #202124; }
+.rs-item--insp-unread .rs-item-name { font-weight: 700; color: var(--ez-gray-900, #202124); }
 
 
 /* ── 정렬(좌우 배치) 규칙 ───────────────────────────────────────
@@ -207,13 +207,13 @@
     font-size: var(--ez-font-size-sm, 13px);
     font-weight: 500;
     letter-spacing: .3px;
-    color: var(--ez-gray-700, #444746);
+    color: var(--ez-gray-700, #5f6368);
     text-align: center;
     white-space: nowrap;
 }
 
 .ez-list-table tbody tr {
-    border-bottom: 1px solid var(--ez-gray-100, #f0f0f0);
+    border-bottom: 1px solid var(--ez-gray-100, #f1f3f4);
     cursor: pointer;
     transition: background-color .15s cubic-bezier(.4, 0, .2, 1);
 }
@@ -224,7 +224,7 @@
     font-size: var(--ez-font-size-sm, 13px);
     line-height: 1.45;
     vertical-align: middle;
-    color: var(--ez-gray-900, #1f1f1f);
+    color: var(--ez-gray-900, #202124);
 }
 
 /* 긴 값은 접어 둔다. 몇 글자에서 끊을지는 칸 폭에 달렸으므로 서버가
@@ -238,35 +238,20 @@
     word-break: break-word;
 }
 
-/* 지나가는 줄. 두 가지 방식을 골라 쓴다 —
-     기본     그 줄이 제자리에서 펴진다. 아래 줄들이 밀린다.
-     is-peek  지나가는 칸 하나만 떠오른다. 표가 흔들리지 않는다. */
+/* 지나가는 줄은 **그 자리에서 펴진다.**
+   접힌 것을 보려고 한 건씩 눌러 상세를 여는 것이 원래 불편이었다. 마우스를
+   올린 동안만 전부 보이고, 지나가면 다시 접힌다.
+
+   겹쳐 띄우는 방식(칸 하나만 떠오르게)도 만들어 견줘 봤다. 줄이 밀리는 것보다
+   옆 칸을 가리는 쪽이 더 불편했다. 골라 쓰게 두면 둘 다 어중간하게 남으므로
+   하나만 남긴다. */
 .ez-list-wrap .ez-list-table tbody tr:hover {
     background: var(--ez-info-bg, #e8f0fe);
     box-shadow: inset 3px 0 0 var(--ez-info, #1a73e8);
 }
 .ez-list-wrap .ez-list-table tbody tr:hover td { vertical-align: top; }
 
-.ez-list-wrap:not(.is-peek) .ez-list-table tbody tr:hover .cell-clip {
+.ez-list-wrap .ez-list-table tbody tr:hover .cell-clip {
     display: block;
-    -webkit-line-clamp: unset;
-}
-
-.ez-list-wrap.is-peek .ez-list-table tbody td { position: relative; }
-.ez-list-wrap.is-peek .ez-list-table tbody td:hover .cell-clip {
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 20;
-    display: block;
-    min-width: 100%;
-    max-width: 460px;
-    max-height: 280px;
-    overflow-y: auto;
-    padding: 8px 10px;
-    border: 1px solid var(--ez-border, #dadce0);
-    border-radius: var(--ez-radius-md, 8px);
-    background: #fff;
-    box-shadow: var(--ez-shadow-lg, 0 4px 14px rgba(60, 64, 67, .25));
     -webkit-line-clamp: unset;
 }

@@ -545,7 +545,7 @@
 .emphasis-review-section {
   margin-top: 20px !important;
   padding: 15px !important;
-  background-color: #f8f9fa !important;
+  background-color: var(--ez-gray-50, #f8f9fa) !important;
   border: 1px solid #dee2e6 !important;
   border-radius: 5px !important;
   font-family: 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif !important;
@@ -628,7 +628,7 @@
 @media print {
   .emphasis-review-section {
     page-break-inside: avoid !important;
-    background-color: #f8f9fa !important;
+    background-color: var(--ez-gray-50, #f8f9fa) !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }

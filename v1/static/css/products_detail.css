@@ -233,7 +233,7 @@ body { background: var(--google-bg-light); }
     color:         var(--text-secondary);
     transition:    background 0.2s ease;
 }
-.btn-icon:hover { background-color: #f1f3f4; color: var(--text-primary); }
+.btn-icon:hover { background-color: var(--ez-gray-100, #f1f3f4); color: var(--text-primary); }
 
 /* 패널 토글 */
 .panel-toggle-btn {
@@ -272,11 +272,11 @@ body { background: var(--google-bg-light); }
 .btn-outline-primary       { border-color: var(--google-border); color: var(--google-blue); font-weight: 500; border-radius: 4px; transition: all 0.2s ease; }
 .btn-outline-primary:hover { background: rgba(26,115,232,0.08); border-color: var(--google-blue); color: var(--google-blue); }
 
-.btn-success       { background: #1e8e3e; border-color: #1e8e3e; font-weight: 500; border-radius: 4px; }
-.btn-success:hover { background: #137333; border-color: #137333; }
+.btn-success       { background: var(--ez-success, #1e8e3e); border-color: var(--ez-success, #1e8e3e); font-weight: 500; border-radius: 4px; }
+.btn-success:hover { background: var(--ez-success-hover, #137333); border-color: var(--ez-success-hover, #137333); }
 
 .btn-danger        { background: #d93025; border-color: #d93025; font-weight: 500; border-radius: 4px; }
-.btn-danger:hover  { background: #c5221f; border-color: #c5221f; }
+.btn-danger:hover  { background: var(--ez-danger, #c5221f); border-color: var(--ez-danger, #c5221f); }
 
 .btn-outline-danger       { border-color: var(--google-border); color: #d93025; font-weight: 500; border-radius: 4px; }
 .btn-outline-danger:hover { background: rgba(217,48,37,0.08); border-color: #d93025; color: #d93025; }
@@ -290,10 +290,10 @@ body { background: var(--google-bg-light); }
 /* Badge */
 .badge { font-weight: 500; border-radius: 4px; padding: 4px 8px; font-size: 12px; }
 .badge.bg-primary   { background: var(--google-blue) !important; }
-.badge.bg-success   { background: #1e8e3e !important; }
-.badge.bg-warning   { background: #f9ab00 !important; color: #202124 !important; }
+.badge.bg-success   { background: var(--ez-success, #1e8e3e) !important; }
+.badge.bg-warning   { background: #f9ab00 !important; color: var(--ez-gray-900, #202124) !important; }
 .badge.bg-danger    { background: #d93025 !important; }
-.badge.bg-info      { background: #1a73e8 !important; }
+.badge.bg-info      { background: var(--ez-info, #1a73e8) !important; }
 .badge.bg-light     { background: var(--google-bg-light) !important; color: var(--text-secondary) !important; border: 1px solid var(--google-border); }
 .badge.bg-secondary { background: var(--text-secondary) !important; }
 
@@ -456,21 +456,21 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 .workflow-container { display: flex; gap: 16px; width: 100%; padding: 4px; }
 .workflow-card      { flex: 1; min-width: 0; border-radius: 8px; position: relative; transition: all 0.2s cubic-bezier(0.4,0,0.2,1); display: flex; flex-direction: column; min-height: 140px; }
 
-.step-empty       { background-color: #f8f9fa; border: 1px dashed #dadce0; color: #5f6368; }
-.step-empty:hover { background-color: #f1f3f4; border-color: #1a73e8; color: #1a73e8; cursor: pointer; }
+.step-empty       { background-color: var(--ez-gray-50, #f8f9fa); border: 1px dashed var(--ez-gray-300, #dadce0); color: var(--ez-gray-700, #5f6368); }
+.step-empty:hover { background-color: var(--ez-gray-100, #f1f3f4); border-color: var(--ez-info, #1a73e8); color: var(--ez-info, #1a73e8); cursor: pointer; }
 .step-empty .card-header { border-bottom: none; background: transparent; padding: 12px 12px 0; opacity: 0.7; }
 .step-empty .card-body   { display: flex; align-items: center; justify-content: center; opacity: 0.7; flex-direction: column; }
 
-.step-filled       { background-color: #ffffff; border: 1px solid #dadce0; box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); overflow: hidden; }
+.step-filled       { background-color: #ffffff; border: 1px solid var(--ez-gray-300, #dadce0); box-shadow: 0 1px 2px rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); overflow: hidden; }
 .step-filled:hover { box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15); transform: translateY(-1px); }
 
 /* 역할별 상단 컬러바 */
-.accent-top-draft    { border-top: 4px solid #5f6368; }
-.accent-top-uploader { border-top: 4px solid #1a73e8; }
-.accent-top-editor   { border-top: 4px solid #1e8e3e; }
+.accent-top-draft    { border-top: 4px solid var(--ez-gray-700, #5f6368); }
+.accent-top-uploader { border-top: 4px solid var(--ez-info, #1a73e8); }
+.accent-top-editor   { border-top: 4px solid var(--ez-success, #1e8e3e); }
 .accent-top-reviewer { border-top: 4px solid #f9ab00; }
 .accent-top-approver { border-top: 4px solid #d93025; }
-.accent-top-confirm  { border-top: 4px solid #202124; }
+.accent-top-confirm  { border-top: 4px solid var(--ez-gray-900, #202124); }
 .accent-top-viewer   { border-top: 4px solid #0dcaf0; }
 
 /* ── 권한 워크스페이스 ──────────────────────────────────────── */
@@ -549,16 +549,16 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 
 /* Nav Pills */
 .nav-pills .nav-link        { border-radius: 8px; font-size: 12px; padding: 8px 12px; }
-.nav-pills .nav-link.active { background-color: #1a73e8; }
+.nav-pills .nav-link.active { background-color: var(--ez-info, #1a73e8); }
 
 /* Notification Options */
 .notification-options .form-check-input         { width: 48px; height: 24px; margin-top: 0; }
-.notification-options .form-check-input:checked { background-color: #1a73e8; border-color: #1a73e8; }
+.notification-options .form-check-input:checked { background-color: var(--ez-info, #1a73e8); border-color: var(--ez-info, #1a73e8); }
 .notification-options .form-check               { padding-left: 3.5rem; }
 .notification-options .form-check-label         { cursor: pointer; }
 
 /* 화살표 아이콘 */
-.step-arrow { position: absolute; top: 50%; right: -14px; transform: translateY(-50%); z-index: 2; color: #dadce0; background: white; border-radius: 50%; }
+.step-arrow { position: absolute; top: 50%; right: -14px; transform: translateY(-50%); z-index: 2; color: var(--ez-gray-300, #dadce0); background: white; border-radius: 50%; }
 
 /* ── 활동 로그 타임라인 ─────────────────────────────────────── */
 .timeline { position: relative; padding-left: 30px; }
@@ -647,7 +647,7 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 
 /* 문서 행 */
 .document-row { transition: background-color 0.15s ease; cursor: default; }
-.document-row:hover { background-color: #f8f9fa !important; }
+.document-row:hover { background-color: var(--ez-gray-50, #f8f9fa) !important; }
 
 /* 버전 이력 모달 */
 #versionHistoryModal .table-primary { background-color: #e3f2fd; }
@@ -663,9 +663,9 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 }
 
 /* Toast */
-.toast-notification { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); background: #202124; color: white; padding: 14px 24px; border-radius: 8px; box-shadow: 0 4px 12px 0 rgba(0,0,0,0.3); z-index: 2000; display: none; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; animation: toastIn 0.3s ease-out; }
+.toast-notification { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); background: var(--ez-gray-900, #202124); color: white; padding: 14px 24px; border-radius: 8px; box-shadow: 0 4px 12px 0 rgba(0,0,0,0.3); z-index: 2000; display: none; align-items: center; gap: 12px; font-size: 14px; font-weight: 500; animation: toastIn 0.3s ease-out; }
 .toast-notification.show    { display: flex; }
-.toast-notification.success { background: #1e8e3e; }
+.toast-notification.success { background: var(--ez-success, #1e8e3e); }
 .toast-notification.error   { background: #d93025; }
 
 @keyframes toastIn {
@@ -684,9 +684,9 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 .skeleton-card  { height: 120px; margin-bottom: 16px; }
 
 /* 목차 (TOC) */
-#navbar-toc .nav-link        { color: #5f6368; transition: all 0.2s; }
-#navbar-toc .nav-link:hover  { color: #202124; background-color: #f1f3f4; border-radius: 0 4px 4px 0; }
-#navbar-toc .nav-link.active { color: #1a73e8; border-left-color: #1a73e8 !important; background-color: #e8f0fe; font-weight: 600; border-radius: 0 4px 4px 0; }
+#navbar-toc .nav-link        { color: var(--ez-gray-700, #5f6368); transition: all 0.2s; }
+#navbar-toc .nav-link:hover  { color: var(--ez-gray-900, #202124); background-color: var(--ez-gray-100, #f1f3f4); border-radius: 0 4px 4px 0; }
+#navbar-toc .nav-link.active { color: var(--ez-info, #1a73e8); border-left-color: var(--ez-info, #1a73e8) !important; background-color: var(--ez-info-bg, #e8f0fe); font-weight: 600; border-radius: 0 4px 4px 0; }
 
 /* 커스텀 스크롤바 */
 .custom-scrollbar::-webkit-scrollbar       { width: 6px; }
@@ -711,10 +711,10 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 .form-control.is-invalid ~ .invalid-feedback,
 .form-select.is-invalid ~ .invalid-feedback { display: block; }
 .form-control.is-valid,
-.form-select.is-valid    { border-color: #1e8e3e; }
+.form-select.is-valid    { border-color: var(--ez-success, #1e8e3e); }
 .form-control.is-valid:focus,
-.form-select.is-valid:focus { border-color: #1e8e3e; box-shadow: 0 0 0 2px rgba(30,142,62,0.1); }
-.valid-feedback          { display: none; font-size: 12px; color: #1e8e3e; margin-top: 4px; }
+.form-select.is-valid:focus { border-color: var(--ez-success, #1e8e3e); box-shadow: 0 0 0 2px rgba(30,142,62,0.1); }
+.valid-feedback          { display: none; font-size: 12px; color: var(--ez-success, #1e8e3e); margin-top: 4px; }
 .form-control.is-valid ~ .valid-feedback,
 .form-select.is-valid ~ .valid-feedback { display: block; }
 
@@ -929,7 +929,7 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 .sidebar-permission-name  { font-size: 13px; }
 .sidebar-permission-email { font-size: 11px; }
 .no-comment-permission    { font-size: 11px; }
-.sidebar-person-icon      { font-size: 14px; color: #1a73e8; }
+.sidebar-person-icon      { font-size: 14px; color: var(--ez-info, #1a73e8); }
 
 /* ==================== 탭은 업무 순서다 ====================
  *

@@ -8965,39 +8965,40 @@ class ListFitsOneScreenTests(TestCase):
         접힌 것을 보려고 한 건씩 눌러 상세를 여는 것이 원래 불편이었다.
         마우스를 올린 동안만 전부 보이고, 지나가면 다시 접힌다.
         """
-        head = self.css.index('.ez-list-wrap:not(.is-peek) .ez-list-table tbody tr:hover .cell-clip')
+        head = self.css.index('.ez-list-wrap .ez-list-table tbody tr:hover .cell-clip')
         block = self.css[head:head + 200]
         self.assertIn('-webkit-line-clamp: unset', block)
 
-    def test_겹쳐_보기도_고를_수_있다(self):
+    def test_겹쳐_보기는_남기지_않는다(self):
         """
-        줄이 커지면 아래 줄들이 밀린다. 훑어 내려가는 중에는 거슬릴 수 있어서
-        겹쳐 띄우는 방식도 둔다. 어느 쪽이 나은지는 써 봐야 안다.
+        칸 하나만 떠오르게 하는 방식도 만들어 견줘 봤다. 줄이 밀리는 것보다
+        옆 칸을 가리는 쪽이 더 불편했다. 골라 쓰게 두면 둘 다 어중간하게
+        남으므로 하나만 남긴다.
         """
-        self.assertIn('id="peekBtn"', self.html)
-        self.assertIn('window.togglePeekMode', self.html)
-        head = self.css.index('.ez-list-wrap.is-peek .ez-list-table tbody td:hover .cell-clip')
-        block = self.css[head:head + 600]
-        self.assertIn('position: absolute', block)
-        self.assertIn('box-shadow', block)
+        for gone in ('peekBtn', 'togglePeekMode', 'PEEK_KEY'):
+            self.assertNotIn(gone, self.html)
+        self.assertNotIn('is-peek', self.css)
 
-    def test_두_방식이_함께_돌지_않는다(self):
-        # 겹쳐 보기일 때는 줄을 펴지 않는다
-        self.assertIn('.ez-list-wrap:not(.is-peek)', self.css)
-
-    def test_고른_방식은_브라우저에_남는다(self):
-        self.assertIn("localStorage.getItem(PEEK_KEY)", self.html)
-
-    def test_두_목록_화면이_같은_껍데기를_쓴다(self):
+    def test_목록_화면들이_같은_껍데기를_쓴다(self):
         """
-        원료 관리와 식품첨가물 DB 가 같은 표를 각자 그리고 있었다. 글자
-        12px/13px, 머리글 밑줄 1px/2px, 줄 높이 44px/48px.
+        같은 성격의 목록인데 눈금이 달랐다 — 글자 12/13/14px, 머리글 밑줄
+        1/2px, 줄 높이 44/48/56px.
         """
         self.assertIn('ez-list-table', self.html)
-        self.assertIn('ez-list-table', _src('templates/label/food_additive_search.html'))
+        for rel in ('templates/label/food_additive_search.html',
+                    'templates/products/product_explorer.html'):
+            self.assertIn('ez-list-table', _src(rel), rel)
         # 껍데기를 제 화면에 다시 적어 두지 않는다
         self.assertNotIn('.list-table th {', self.html)
         self.assertNotIn('.cell-clip {', self.html)
+        self.assertNotIn('.product-table thead {', _src('static/css/product_explorer.css'))
+
+    def test_공용_css_를_싣는다(self):
+        # class 만 붙이고 파일을 안 실으면 아무 일도 안 일어난다
+        for rel in ('templates/label/food_additive_search.html',
+                    'templates/products/product_explorer.html',
+                    'templates/label/my_ingredient_list_combined.html'):
+            self.assertIn("css/list_common.css", _src(rel), rel)
 
     def test_접기는_칸이_아니라_안쪽_상자가_한다(self):
         """td 에 display:-webkit-box 를 주면 table-cell 이 아니게 되어 표가 무너진다."""

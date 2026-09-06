@@ -72,9 +72,9 @@
     white-space:     nowrap;
 }
 .action-btn.edit          { color: var(--v2-blue);  border-color: #c2d7f8; background: #fff; }
-.action-btn.edit:hover    { background: #e8f0fe; }
-.action-btn.delete        { color: #d93025; border-color: #f5c6c3; background: #fff; }
-.action-btn.delete:hover  { background: #fce8e6; }
+.action-btn.edit:hover    { background: var(--ez-info-bg, #e8f0fe); }
+.action-btn.delete        { color: #d93025; border-color: var(--ez-danger-border, #f5c6c3); background: #fff; }
+.action-btn.delete:hover  { background: var(--ez-danger-bg, #fce8e6); }
 
 /* 폼 탑바 제목 (form.html) */
 .page-title {
@@ -145,7 +145,7 @@
     color:       #fff;
     transition:  background .18s;
 }
-.del-btn:hover { background: #c5221f; }
+.del-btn:hover { background: var(--ez-danger, #c5221f); }
 
 /* 저장/등록 버튼 (edit_comment / detail 댓글 폼) */
 .save-btn,
@@ -264,8 +264,8 @@
     transition:      all 0.15s;
 }
 .comment-action-btn:hover          { background: var(--v2-gray-100); }
-.comment-action-btn.danger         { color: #d93025; border-color: #f5c6c3; }
-.comment-action-btn.danger:hover   { background: #fce8e6; }
+.comment-action-btn.danger         { color: #d93025; border-color: var(--ez-danger-border, #f5c6c3); }
+.comment-action-btn.danger:hover   { background: var(--ez-danger-bg, #fce8e6); }
 .comment-empty { padding: 32px 24px; text-align: center; color: var(--v2-text-sub); font-size: 13px; }
 
 /* 답변 작성 폼 */
@@ -434,16 +434,16 @@
 .filter-tab.default.active { background: var(--v2-gray-100); border-color: var(--v2-text-sub); color: var(--v2-text); }
 .filter-tab.my             { color: #0b57d0; border-color: #c2d7f8; background: #fff; }
 .filter-tab.my:hover,
-.filter-tab.my.active      { background: #e8f0fe; }
+.filter-tab.my.active      { background: var(--ez-info-bg, #e8f0fe); }
 .filter-tab.waiting        { color: #795500; border-color: #f6d676; background: #fff; }
 .filter-tab.waiting:hover,
 .filter-tab.waiting.active { background: #fef9e2; }
-.filter-tab.answered       { color: #137333; border-color: #a8d5b5; background: #fff; }
+.filter-tab.answered       { color: var(--ez-success-hover, #137333); border-color: #a8d5b5; background: #fff; }
 .filter-tab.answered:hover,
-.filter-tab.answered.active{ background: #e6f4ea; }
+.filter-tab.answered.active{ background: var(--ez-success-bg, #e6f4ea); }
 .filter-tab.notice         { color: var(--v2-blue); border-color: #c2d7f8; background: #fff; }
 .filter-tab.notice:hover,
-.filter-tab.notice.active  { background: #e8f0fe; }
+.filter-tab.notice.active  { background: var(--ez-info-bg, #e8f0fe); }
 
 /* 도구 버튼 */
 .toolbar-btn {
@@ -497,18 +497,18 @@
 
 /* 배지 */
 .badge-category         { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; white-space: nowrap; }
-.badge-category.feature { background: #e8f0fe; color: #1a73e8; }
-.badge-category.error   { background: #fce8e6; color: #d93025; }
-.badge-category.partner { background: #e6f4ea; color: #137333; }
-.badge-category.notice  { background: #e8f0fe; color: #1a73e8; font-weight: 600; }
+.badge-category.feature { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info, #1a73e8); }
+.badge-category.error   { background: var(--ez-danger-bg, #fce8e6); color: #d93025; }
+.badge-category.partner { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success-hover, #137333); }
+.badge-category.notice  { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info, #1a73e8); font-weight: 600; }
 .badge-category.none    { background: var(--v2-gray-100); color: var(--v2-text-sub); }
 
 .badge-status      { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
-.badge-status.done { background: #e6f4ea; color: #137333; }
+.badge-status.done { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success-hover, #137333); }
 .badge-status.wait { background: #fef9e2; color: #795500; }
 
 .badge-count { background: var(--v2-blue); color: #fff;               font-size: 10px; padding: 1px 6px; border-radius: 8px; }
-.badge-new   { background: #fce8e6;         color: #d93025;            font-size: 10px; padding: 1px 6px; border-radius: 8px; }
+.badge-new   { background: var(--ez-danger-bg, #fce8e6);         color: #d93025;            font-size: 10px; padding: 1px 6px; border-radius: 8px; }
 .badge-mine  { background: var(--board-gray-200); color: var(--v2-text-sub); font-size: 10px; padding: 1px 6px; border-radius: 8px; }
 
 /* 페이지네이션 */
@@ -548,7 +548,7 @@
 
 /* ── 공통 유틸리티 클래스 ─────────────────────────────────── */
 /* detail.html */
-.board-notice-badge   { background: #e8f0fe; color: var(--v2-blue); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+.board-notice-badge   { background: var(--ez-info-bg, #e8f0fe); color: var(--v2-blue); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
 .board-attachment-img { max-width: 100%; max-height: 500px; border-radius: 6px; }
 .board-icon-accent    { color: var(--v2-blue); }
 .board-icon-lock    { color: var(--v2-muted); font-size: 13px; }
