@@ -2728,11 +2728,32 @@ class SheetPasteIsOneRuleTests(TestCase):
             self.assertIn("js/sheet_paste.js", html, rel)
             self.assertIn('window.attachSheetPaste(hot', html, rel)
 
-    def test_머리글_줄을_버린다(self):
-        head = self.js.index('function looksLikeHeader')
-        block = self.js[head:head + 500]
-        # 한 칸만 보면 "원료명" 이라는 이름의 원료를 머리글로 오해한다
-        self.assertIn('hit >= 2', block)
+    def test_머리글로_열을_맞춘다(self):
+        """
+        쓰던 양식은 열 순서가 다르고 우리에게 없는 열도 있다. 자리로만 넣으면
+        배합비 자리에 식품유형이 들어간다. 머리글 줄은 어차피 버리려고 이미
+        읽고 있었으니, 버리는 대신 쓴다.
+        """
+        self.assertIn('function planColumns', self.js)
+        # 두 칸 이상 짝이 지어져야 머리글이다 — 한 칸만 보면 "원료명" 이라는
+        # 이름의 원료를 머리글로 오해한다
+        self.assertIn('names.length < 2', self.js)
+
+    def test_AI_를_쓰지_않는다(self):
+        # 이름을 견주는 사전 대조다. 결과가 늘 같고 호출 비용이 없다.
+        for word in ('fetch(', 'openai', 'gpt'):
+            self.assertNotIn(word, self.js.lower())
+        self.assertIn('aliases', self.js)
+
+    def test_긴_이름이_이긴다(self):
+        """
+        "원재료명 및 함량 / 성분" 에는 "원재료명"(원료명)도
+        "원재료명및함량"(원재료 표시명)도 들어 있다. 긴 쪽이 더 구체적이다.
+        """
+        head = self.js.index('function matchColumn')
+        block = self.js[head:head + 800]
+        self.assertIn('score > best.score', block)
+        self.assertIn('1000 + a.length', block)   # 글자까지 같으면 그것으로
 
     def test_체크박스_칸으로_밀리지_않는다(self):
         self.assertIn('firstCol', self.js)
@@ -2740,12 +2761,31 @@ class SheetPasteIsOneRuleTests(TestCase):
         head = contacts.index('window.attachSheetPaste(hot')
         self.assertIn('firstCol: 1', contacts[head:head + 400])
 
-    def test_몇_줄이_들어갔는지_말해_준다(self):
+    def test_무엇을_어떻게_맞췄는지_말해_준다(self):
+        self.assertIn('window.sheetPasteMessage', self.js)
+        head = self.js.index('window.sheetPasteMessage')
+        block = self.js[head:head + 700]
+        self.assertIn('줄을 넣었습니다', block)
+        self.assertIn('열을 머리글로 맞췄습니다', block)
+        self.assertIn('쓰지 않았습니다', block)      # 버린 열
         for rel in ('templates/products/bom_detail.html',
                     'templates/products/contacts.html'):
-            html = self._read(rel)
-            head = html.index('window.attachSheetPaste(hot')
-            self.assertIn("줄을 넣었습니다", html[head:head + 900], rel)
+            self.assertIn('window.sheetPasteMessage(info', self._read(rel), rel)
+
+    def test_실제_쓰는_양식이_제자리를_찾는다(self):
+        """
+        쓰시는 열 순서 —
+          순서 · 원재료/원료명 · 배합비율/원료함량 · 식품유형 · 업체명 ·
+          원재료명 및 함량 / 성분 · 비고
+        """
+        bom = self._read('templates/products/bom_detail.html')
+        head = bom.index('const BOM_SHEET_ALIASES')
+        block = bom[head:bom.index('};', head)]
+        for name in ('원재료/원료명', '배합비율/원료함량', '업체명',
+                     '원재료명 및 함량 / 성분'):
+            self.assertIn(name, block, name)
+        # "순서" 는 어느 칸에도 없다 — 버려야 한다
+        self.assertNotIn("'순서'", block)
 
     def test_머리글은_한_곳에서만_정한다(self):
         """화면 머리글이자 엑셀 양식의 머리글이고, 머리글 줄을 알아보는 잣대다."""

@@ -361,6 +361,26 @@ body.in-iframe .bom-page-header { display: none !important; }
         const BOM_SHEET_HEADERS = ['원료명', '원재료 표시명', '식품유형',
                                    '배합비(%)', '제조사/수입사', '비고'];
 
+        /* 엑셀에서 실제로 쓰는 이름들. 회사마다 다르게 부르므로, 열 순서가
+           달라도 머리글만 있으면 제자리를 찾아간다.
+
+           AI 를 쓰지 않는다. 이름을 견주는 사전 대조라 결과가 늘 같고,
+           무엇을 어떻게 맞췄는지 그대로 말해 줄 수 있다. 새 이름이 나오면
+           여기 한 줄을 더한다. */
+        const BOM_SHEET_ALIASES = {
+            '원료명':        ['원료명', '원재료명', '원재료/원료명', '원재료',
+                             '품명', '재료명', '원료'],
+            '원재료 표시명': ['원재료 표시명', '표시명', '표시용 원료명',
+                             '원재료명 및 함량', '원재료명 및 함량 / 성분',
+                             '원재료명및함량', '성분'],
+            '식품유형':      ['식품유형', '유형', '품목유형', '분류'],
+            '배합비(%)':     ['배합비(%)', '배합비율', '원료함량',
+                             '배합비율/원료함량', '배합비', '함량', '비율'],
+            '제조사/수입사': ['제조사/수입사', '업체명', '제조사', '수입사',
+                             '제조업체', '제조원', '공급사', '거래처'],
+            '비고':          ['비고', '메모', '참고', '비고사항']
+        };
+
         hot = new Handsontable(container, {
             data: data,
             licenseKey: 'non-commercial-and-evaluation',
@@ -472,16 +492,12 @@ body.in-iframe .bom-page-header { display: none !important; }
         if (window.attachSheetPaste) {
             window.attachSheetPaste(hot, {
                 headers: BOM_SHEET_HEADERS,
-                onReport: function (added, dropped, why) {
-                    if (!added) {
-                        showSnackbar('넣을 줄이 없습니다. 머리글만 붙여넣으셨나요?', 'warning');
-                        return;
-                    }
+                aliases: BOM_SHEET_ALIASES,
+                onReport: function (info) {
                     showSnackbar(
-                        added + '줄을 넣었습니다.'
-                        + (dropped ? ' (' + why.join(', ') + ' 은 뺐습니다)' : '')
-                        + ' 확인하고 저장하세요.',
-                        dropped ? 'warning' : 'success');
+                        window.sheetPasteMessage(info, '확인하고 저장하세요.'),
+                        !info.added ? 'warning'
+                            : (info.dropped || info.unused.length) ? 'warning' : 'success');
                 }
             });
         }

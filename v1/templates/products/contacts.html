@@ -707,6 +707,17 @@ document.addEventListener('DOMContentLoaded', function () {
        체크박스·공유·요청 칸은 사람이 넣는 것이 아니라 여기 없다. */
     const CONTACT_SHEET_HEADERS = ['이메일', '이름', '회사명', '인허가번호'];
 
+    /* 엑셀에서 실제로 쓰는 이름들. 배합비 화면과 같은 방식이다(AI 아님).
+       새 이름이 나오면 여기 한 줄을 더한다. */
+    const CONTACT_SHEET_ALIASES = {
+        '이메일':     ['이메일', '메일', 'email', 'e-mail', '이메일주소', '메일주소'],
+        '이름':       ['이름', '성명', '담당자', '담당자명', '수신자'],
+        '회사명':     ['회사명', '업체명', '상호', '회사', '거래처', '거래처명',
+                      '제조사', '공급사'],
+        '인허가번호': ['인허가번호', '영업허가번호', '허가번호', '신고번호',
+                      '품목제조보고번호', '사업자번호']
+    };
+
     hot = new Handsontable(container, {
         data: tableData,
         licenseKey: 'non-commercial-and-evaluation',
@@ -979,17 +990,13 @@ document.addEventListener('DOMContentLoaded', function () {
     if (window.attachSheetPaste) {
         window.attachSheetPaste(hot, {
             headers: CONTACT_SHEET_HEADERS,
+            aliases: CONTACT_SHEET_ALIASES,
             firstCol: 1,
-            onReport: function (added, dropped, why) {
-                if (!added) {
-                    showSnackbar('넣을 줄이 없습니다. 머리글만 붙여넣으셨나요?', 'warning');
-                    return;
-                }
+            onReport: function (info) {
                 showSnackbar(
-                    added + '줄을 넣었습니다.'
-                    + (dropped ? ' (' + why.join(', ') + ' 은 뺐습니다)' : '')
-                    + ' 이메일이 있는 줄만 저장됩니다.',
-                    dropped ? 'warning' : 'success');
+                    window.sheetPasteMessage(info, '이메일이 있는 줄만 저장됩니다.'),
+                    !info.added ? 'warning'
+                        : (info.dropped || info.unused.length) ? 'warning' : 'success');
             }
         });
     }

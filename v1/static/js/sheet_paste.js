@@ -9,23 +9,31 @@
  *      생긴다.** 사람은 표를 통째로 드래그하지 열만 골라 잡지 않는다.
  *   2. 연락처 표는 첫 칸이 체크박스다. 왼쪽 끝에 붙여넣으면 이메일이
  *      체크박스 칸으로 들어가고 한 칸씩 밀린다.
- *   3. 엑셀에는 우리가 안 쓰는 열이 딸려 온다. 그게 마지막 칸을 덮는다.
+ *   3. **열 순서가 다르다.** 쓰던 양식이 이렇다.
+ *
+ *        순서 · 원재료/원료명 · 배합비율/원료함량 · 식품유형 · 업체명 ·
+ *        원재료명 및 함량 / 성분 · 비고
+ *
+ *      우리 표와 순서도 다르고, "순서" 처럼 우리에게 없는 열도 있다.
+ *      자리로만 넣으면 배합비 자리에 식품유형이 들어간다.
  *   4. 몇 줄이 들어갔는지 아무 말이 없다. 스물세 줄을 붙였는데 스물이
  *      들어갔어도 모른다.
  *
- * 여기서 넷을 한 번에 맡는다. 두 화면이 같은 규칙으로 움직여야 하므로 한
- * 곳에 둔다 — 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+ * **머리글을 읽어 맞춘다.** 머리글 줄은 어차피 버리려고 이미 읽고 있었다 —
+ * 버리는 대신 쓰면 열 순서를 맞출 수 있다. AI 를 쓰지 않는다. 이름 목록과
+ * 견주는 사전 대조라 결과가 늘 같고, 무엇을 어떻게 맞췄는지 그대로 말해 줄
+ * 수 있다.
  *
- * **양식은 우리가 정한다.** 열 순서를 맞춰 온다는 전제이고, 그래서 화면마다
- * "양식 내려받기" 를 함께 둔다. 열 이름을 보고 알아서 맞추는 것은 다음 일이다.
+ * 두 화면이 같은 규칙으로 움직여야 하므로 한 곳에 둔다 — 두 벌로 두면 어느 날
+ * 한쪽만 고쳐진다.
  */
 (function () {
   'use strict';
 
-  /** 견줄 때만 쓰는 형태. 띄어쓰기·괄호·단위 표기를 지운다. */
+  /** 견줄 때만 쓰는 형태. 띄어쓰기·괄호·구분기호·단위 표기를 지운다. */
   function key(text) {
     return String(text == null ? '' : text)
-      .replace(/[\s()（）[\]/·.%]/g, '')
+      .replace(/[\s()（）[\]{}/\\|·・,.\-_%]/g, '')
       .toLowerCase();
   }
 
@@ -36,54 +44,145 @@
   }
 
   /**
+   * 머리글 한 칸이 우리 어느 칸을 말하는가.
+   *
+   * 글자까지 같으면 그것으로 정한다. 아니면 **가장 긴 이름이 들어 있는**
+   * 칸을 고른다 — "원재료명 및 함량 / 성분" 에는 "원재료명"(원료명)도
+   * "원재료명및함량"(원재료 표시명)도 들어 있는데, 긴 쪽이 더 구체적이다.
+   *
+   * Returns: {col, score} 또는 null
+   */
+  function matchColumn(text, aliases) {
+    var want = key(text);
+    if (!want) return null;
+    var best = null;
+    Object.keys(aliases).forEach(function (col) {
+      aliases[col].forEach(function (alias) {
+        var a = key(alias);
+        if (!a) return;
+        var score = want === a ? 1000 + a.length
+                  : want.indexOf(a) >= 0 ? a.length
+                  : 0;
+        if (score && (!best || score > best.score)) {
+          best = { col: col, score: score };
+        }
+      });
+    });
+    return best;
+  }
+
+  /**
+   * 머리글 줄로 열 짝을 짓는다.
+   *
+   * Returns: {map, names, unused} 또는 null (머리글이 아니면)
+   *   map[가져온 칸 번호] = 우리 칸 번호
+   *   names  사람에게 보여 줄 짝 목록
+   *   unused 짝을 못 지은 머리글 이름 (버릴 열)
+   */
+  function planColumns(row, headers, aliases) {
+    if (!row) return null;
+    var map = {}, names = [], unused = [], taken = {};
+
+    row.forEach(function (cell, j) {
+      var hit = matchColumn(cell, aliases);
+      var label = String(cell == null ? '' : cell).trim();
+      if (!hit) {
+        if (label) unused.push(label);
+        return;
+      }
+      var col = headers.indexOf(hit.col);
+      if (col < 0) return;
+      // 같은 칸을 두 열이 가리키면 더 확실한 쪽을 남긴다
+      if (taken[col] && taken[col].score >= hit.score) {
+        unused.push(label);
+        return;
+      }
+      if (taken[col]) {
+        delete map[taken[col].j];
+        unused.push(taken[col].label);
+      }
+      taken[col] = { score: hit.score, j: j, label: label };
+      map[j] = col;
+      names.push(label + ' → ' + hit.col);
+    });
+
+    // 두 칸 이상 짝이 지어져야 머리글로 본다. 한 칸만 보면 "원료명" 이라는
+    // 이름의 원료를 머리글로 오해한다.
+    if (names.length < 2) return null;
+    return { map: map, names: names, unused: unused };
+  }
+
+  /**
    * 붙여넣기를 우리 양식에 맞춘다.
    *
    * hot      Handsontable 인스턴스
    * options
-   *   headers    양식의 열 이름 (머리글 줄을 알아보는 데 쓴다)
+   *   headers    우리 열 이름 (자리 순서대로)
+   *   aliases    {우리 열 이름: [엑셀에서 쓰는 이름들]}
    *   firstCol   자료가 시작하는 칸 번호. 연락처는 0 번이 체크박스라 1
-   *   onReport   function(넣은 줄 수, 버린 줄 수, 버린 이유들)
+   *   onReport   function({added, dropped, why, matched, unused})
    */
   window.attachSheetPaste = function (hot, options) {
-    var headers = (options.headers || []).map(key);
+    var headers = options.headers || [];
+    var aliases = options.aliases || {};
     var firstCol = options.firstCol || 0;
     var report = options.onReport || function () {};
 
     hot.addHook('beforePaste', function (data, coords) {
-      var dropped = [];
+      var why = [], matched = null, unused = [];
 
-      // ① 머리글 줄을 알아보고 버린다.
-      //    표를 통째로 드래그하는 것이 사람의 기본 동작이다.
-      while (data.length && looksLikeHeader(data[0], headers)) {
+      // ① 머리글 줄이 있으면 그것으로 열을 맞춘다.
+      var plan = planColumns(data[0], headers, aliases);
+      if (plan) {
         data.shift();
-        dropped.push('머리글');
+        matched = plan.names;
+        unused = plan.unused;
+        for (var r = 0; r < data.length; r++) {
+          var row = new Array(headers.length).fill('');
+          data[r].forEach(function (cell, j) {
+            if (plan.map[j] !== undefined) row[plan.map[j]] = cell;
+          });
+          data[r] = row;
+        }
+        // 맞춰 놓았으니 자료가 시작하는 칸부터 넣는다
+        coords.forEach(function (range) {
+          range.endCol += firstCol - range.startCol;
+          range.startCol = firstCol;
+        });
       }
 
       // ② 빈 줄을 버린다. 엑셀은 선택 영역 아래를 빈 줄로 채워 준다.
+      var blanks = 0;
       for (var i = data.length - 1; i >= 0; i--) {
         if (isBlankRow(data[i])) {
           data.splice(i, 1);
-          dropped.push('빈 줄');
+          blanks += 1;
         }
       }
+      if (blanks) why.push('빈 줄 ' + blanks + '개');
 
       if (!data.length) {
-        report(0, dropped.length, dropped);
+        report({ added: 0, dropped: blanks, why: why,
+                 matched: matched, unused: unused });
         return false;       // 넣을 것이 없으면 표를 건드리지 않는다
       }
 
-      // ③ 우리가 안 쓰는 열이 딸려 오면 잘라 낸다. 안 그러면 마지막 칸을 덮는다.
-      var room = hot.countCols() - Math.max(coords[0].startCol, firstCol);
-      var extra = 0;
-      data.forEach(function (row) {
-        if (row.length > room) {
-          extra += row.length - room;
-          row.length = room;
-        }
-      });
-      if (extra) dropped.push('빈 칸 밖의 값 ' + extra + '개');
+      // ③ 머리글이 없어 자리로 넣는 경우. 남는 칸 밖의 값은 잘라 낸다 —
+      //    안 그러면 마지막 칸을 덮는다.
+      if (!plan) {
+        var room = hot.countCols() - Math.max(coords[0].startCol, firstCol);
+        var extra = 0;
+        data.forEach(function (row) {
+          if (row.length > room) {
+            extra += row.length - room;
+            row.length = room;
+          }
+        });
+        if (extra) why.push('빈 칸 밖의 값 ' + extra + '개');
+      }
 
-      report(data.length, dropped.length, dropped);
+      report({ added: data.length, dropped: blanks, why: why,
+               matched: matched, unused: unused });
     });
 
     // ④ 자료가 시작하는 칸보다 왼쪽에 붙이면 한 칸씩 밀린다. 자리를 옮겨 준다.
@@ -100,20 +199,23 @@
     }
   };
 
-  /**
-   * 이 줄이 머리글인가.
-   *
-   * 두 칸 이상이 양식의 열 이름과 같으면 머리글로 본다. 한 칸만 보면
-   * "원료명" 이라는 이름의 원료를 머리글로 오해할 수 있다.
-   */
-  function looksLikeHeader(row, headers) {
-    if (!row || !headers.length) return false;
-    var hit = 0;
-    row.forEach(function (cell) {
-      if (headers.indexOf(key(cell)) >= 0) hit += 1;
-    });
-    return hit >= 2;
-  }
+  /** 무엇을 어떻게 맞췄는지 한 줄로. 화면 둘이 같은 말을 쓰게 한다. */
+  window.sheetPasteMessage = function (info, tail) {
+    if (!info.added) {
+      return '넣을 줄이 없습니다. 머리글만 붙여넣으셨나요?';
+    }
+    var parts = [info.added + '줄을 넣었습니다.'];
+    if (info.matched) {
+      parts.push('열을 머리글로 맞췄습니다 — ' + info.matched.join(', ') + '.');
+      if (info.unused.length) {
+        parts.push('"' + info.unused.join('", "') + '" 은(는) 쓰지 않았습니다.');
+      }
+    }
+    if (info.why.length) parts.push('(' + info.why.join(', ') + ' 은 뺐습니다)');
+    if (tail) parts.push(tail);
+    return parts.join(' ');
+  };
 
-  window.sheetPasteKey = key;   // 시험이 쓴다
+  window.sheetPasteKey = key;               // 시험이 쓴다
+  window.sheetPastePlan = planColumns;      // 시험이 쓴다
 })();
