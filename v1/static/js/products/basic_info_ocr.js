@@ -1314,6 +1314,10 @@
     });
     form.append('csrfmiddlewaretoken', csrfToken());
 
+    // 같은 통로로 두 가지 일이 간다 — 처음 읽는 것과, 확정한 값을 시안과
+    // 견주는 것. 값이 나가는 곳이 다르니 서버가 따로 셀 수 있게 알려 준다.
+    form.append('purpose', compareMode ? 'compare' : 'label');
+
     // 확인 창에 나란히 띄우는 사진. 영역을 여럿 골랐으면 **원본**을 보여 준다 —
     // 조각 하나만 띄우면 다른 면에서 읽어 온 값을 눈으로 대조할 수가 없다.
     var file = (parts.length > 1 && sourceFile) ? sourceFile : parts[0].file;

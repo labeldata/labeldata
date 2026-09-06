@@ -6069,6 +6069,7 @@ def ingredient_photo_upload(request, label_id):
     document_ingredient_photo_to_bom 이 맡는다 - OCR 은 틀리고, 틀린 원료가
     BOM 에 들어가면 배합비·알레르기·표시 문구가 전부 그 위에 쌓인다.
     """
+    from v1.common import quota
     from v1.products.services.ingredient_photo import (
         parse_ingredient_photo, read_document_image,
     )
@@ -6076,6 +6077,7 @@ def ingredient_photo_upload(request, label_id):
 
     label = _resolve_editable_label(request, label_id)
 
+    # 읽는 데 돈이 나간다. 사진이 있는지부터 보고 나서 센다
     uploaded = request.FILES.get('image')
     if not uploaded:
         return JsonResponse({'success': False, 'error': '사진이 없습니다.'}, status=400)
@@ -6084,6 +6086,12 @@ def ingredient_photo_upload(request, label_id):
             'success': False,
             'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {uploaded.size / 1024 / 1024:.1f}MB).',
         }, status=400)
+
+    # 검사에 걸릴 요청까지 세면 잘못 올린 파일 하나가 그날 몫을 깎는다
+    allowed, usage = quota.check_and_charge(request.user, 'ocr_ingredient')
+    if not allowed:
+        return JsonResponse({'success': False, 'error': usage['message'],
+                             'usage': usage}, status=429)
 
     doc_type = DocumentType.objects.filter(type_code='INGREDIENT_LABEL').first()
     if doc_type is None:

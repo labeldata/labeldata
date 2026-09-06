@@ -312,6 +312,27 @@ OCR_HYBRID_DROP_TILES = config('OCR_HYBRID_DROP_TILES', default=False, cast=bool
 # needs_recheck). 값이 멀쩡하면 한 번도 돌지 않아 평소 비용은 그대로다.
 OCR_COMPANY_RECHECK = config('OCR_COMPANY_RECHECK', default=True, cast=bool)
 
+# ── 한도 ──────────────────────────────────────────────────────────────
+#
+# 두 가지를 섞지 않는다.
+#
+#   서버 보호 한도   등급과 무관하다. 돈을 낸다고 서버가 더 견디지는 않는다
+#   요금 한도        등급별로 다르다. v1/common/quota.py 가 본다
+
+# 한 번에 붙여넣어 받을 수 있는 줄 수. 서버 보호 한도다.
+PASTE_MAX_ROWS = config('PASTE_MAX_ROWS', default=2000, cast=int)
+
+# 기능별 요금 한도를 코드를 고치지 않고 덮어쓰는 자리.
+# 기본값은 quota.FEATURES 에 있고, 지금은 쓰는 사람을 막지 않도록 넉넉하다.
+# 요금제를 실제로 열 때 여기에 적어 내리면 배포 없이 바뀐다.
+#
+#   QUOTA_LIMITS = {
+#       'ingredient':  {'free': 300,  'paid': 20000},
+#       'ocr_label':   {'free': 5,    'paid': 300},
+#       'ocr_compare': {'free': 2,    'paid': 100},
+#   }
+QUOTA_LIMITS = {}
+
 # OpenAI 의 분당 토큰 한도(TPM). 정답지 측정이 판독 사이를 얼마나 쉴지 계산하는
 # 데 쓴다 (ocr_lab.pace_seconds).
 #

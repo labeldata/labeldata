@@ -148,6 +148,13 @@ urlpatterns = [
     # 오늘 AI검증 사용량 조회 (계정 단위, label_id 불필요)
     path('ai-validation-usage/', views.ai_validation_usage, name='ai_validation_usage'),
 
+    # 돈이 드는 기능의 남은 양. 단추를 누르기 전에 보여 준다
+    path('quota/', views.quota_usage, name='quota_usage'),
+
+    # 엑셀에서 붙여넣은 표를 원료로 (미리 세어 보기 + 묶음 저장)
+    path('my-ingredients/paste/', views.my_ingredient_paste,
+         name='my_ingredient_paste'),
+
     # 식품첨가물/혼합제제 필드 설정
     path('get-additive-field-settings/', views.get_additive_field_settings, name='get_additive_field_settings'),
 

@@ -49,6 +49,9 @@ from .utils import ALLERGEN_LIST, GMO_LIST, get_expiry_recommendations, get_sear
 from .services import food_type_settings as fts
 from .services.validation_service import validate_label
 from .services.ai_validation_service import check_ingredient_order, run_full_review, group_issues_by_category
+from v1.common import quota
+from .services import ingredient_paste
+from .services.allergen_names import HEADER_NAMES as _ALLERGEN_HEADER_NAMES
 from .services.ai_rate_limit import check_rate_limit, get_usage as get_ai_usage
 from .services.ingredient_matching import get_or_create_my_ingredient
 from .services.ingredient_display import build_display_text, build_reference_text
@@ -1363,6 +1366,8 @@ def my_ingredient_list_combined(request):
         ],
         "rows": [ingredient_row(item, shown) for item in page_obj],
         "querystring_base": get_querystring_without(request, ["page", "sort", "order"]),
+        # 붙여넣기가 "계란 O" 같은 표를 알아보는 데 쓰는 말들
+        "allergen_header_names": _ALLERGEN_HEADER_NAMES,
 }
     return render(request, _get_template(request, 'label/my_ingredient_list_combined.html'), context)
 
@@ -2801,6 +2806,18 @@ def ocr_extract(request):
     roles = (roles + ['whole'] * len(image_files))[:len(image_files)]
     parts = list(zip(image_files, roles))
 
+    # 판독은 부를 때마다 돈이 나간다. 여기서 한도를 본다 — 위의 검사에
+    # 걸릴 요청까지 세면, 잘못 올린 파일 하나가 그날 몫을 깎는다.
+    #
+    # 같은 통로로 두 가지 일이 온다. 표시사항을 처음 읽는 것과, 이미 확정한
+    # 값을 시안과 견주는 것. 값이 나가는 곳이 다르니 따로 센다.
+    purpose = (request.POST.get('purpose') or '').strip()
+    feature = 'ocr_compare' if purpose == 'compare' else 'ocr_label'
+    allowed, usage = quota.check_and_charge(request.user, feature)
+    if not allowed:
+        return JsonResponse({'success': False, 'error': usage['message'],
+                             'usage': usage}, status=429)
+
     from .services.ocr_service import (extract_label_from_image,
                                        extract_label_from_parts, failure)
     try:
@@ -3426,6 +3443,81 @@ def validate_label_ai(request, label_id):
     result = check_ingredient_order(label)
     result['usage'] = usage
     return JsonResponse(result)
+
+
+@login_required
+@require_GET
+def quota_usage(request):
+    """
+    이 계정이 쓸 수 있는 양. 단추를 누르기 전에 보여 주려고 따로 둔다.
+
+    한도가 있다는 것을 다 쓰고 나서야 알면 화가 난다.
+    """
+    from v1.common import quota
+    return JsonResponse({'success': True, 'quota': quota.usage_all(request.user),
+                         'paste_max_rows': ingredient_paste.max_rows()})
+
+
+@login_required
+@require_POST
+def my_ingredient_paste(request):
+    """
+    엑셀에서 붙여넣은 표를 원료로 만든다.
+
+    두 번 부른다.
+
+        commit 없이   무엇이 들어가고 무엇이 걸러지는지만 세어 돌려준다
+        commit=true   200줄씩 끊어 보낸 묶음을 실제로 만든다
+
+    **왜 끊어 보내나.** 쿼리를 줄여 놓으면 2000줄도 한 번에 들어간다. 그래도
+    끊는 이유는 셋이다 — 진행률을 보여 줄 수 있고, 요청 시간 제한에 걸리지
+    않고, 중간에 끊겨도 어디까지 들어갔는지 안다. 묶음 하나가 트랜잭션
+    하나라 그 묶음은 통째로 들어갔거나 통째로 안 들어갔다.
+    """
+    from v1.common import quota
+
+    try:
+        payload = json.loads(request.body.decode('utf-8') or '{}')
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'success': False, 'error': '읽을 수 없는 요청입니다.'},
+                            status=400)
+
+    rows = payload.get('rows') or []
+    if not isinstance(rows, list):
+        return JsonResponse({'success': False, 'error': '표가 없습니다.'}, status=400)
+
+    # 서버 보호 한도. 등급과 무관하다 — 돈을 낸다고 서버가 더 견디지는 않는다
+    cap = ingredient_paste.max_rows()
+    if len(rows) > cap:
+        return JsonResponse({
+            'success': False,
+            'error': f'한 번에 {cap}줄까지 넣을 수 있습니다 (보낸 줄 {len(rows)}). '
+                     f'나눠서 붙여넣어 주세요.',
+        }, status=400)
+
+    rows = [r for r in rows if isinstance(r, dict)]
+    made = ingredient_paste.plan(request.user, rows)
+    fresh = len(made['fresh'])
+
+    # 만들 것이 몇 건인지 알아야 한도를 볼 수 있다. 세어 본 뒤에 묻는다
+    allowed, usage = quota.check(request.user, 'ingredient', amount=fresh)
+    counts = {'fresh': fresh, 'existing': made['existing'],
+              'repeated': made['repeated'], 'blank': made['blank'],
+              'total': made['total']}
+
+    if not allowed:
+        return JsonResponse({'success': False, 'error': usage['message'],
+                             'counts': counts, 'quota': usage}, status=429)
+
+    if not payload.get('commit'):
+        return JsonResponse({'success': True, 'committed': False,
+                             'counts': counts, 'quota': usage,
+                             'max_rows': cap})
+
+    result = ingredient_paste.create(request.user, rows)
+    log_user_activity(request, 'ingredient', 'ingredient_paste', None)
+    return JsonResponse({'success': True, 'committed': True, 'counts': result,
+                         'quota': quota.usage(request.user, 'ingredient')})
 
 
 @login_required

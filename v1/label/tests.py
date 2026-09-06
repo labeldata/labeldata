@@ -2897,18 +2897,18 @@ class AiUsageCounterTests(TestCase):
         self.assertEqual(self._usage()['daily_used'], 3)
 
     def test_하루에_한_행만_쓴다(self):
-        from v1.common.models import AiValidationUsage
+        from v1.common.models import FeatureUsage
 
         for _ in range(3):
             self._check()
-        rows = AiValidationUsage.objects.filter(user=self.user)
+        rows = FeatureUsage.objects.filter(user=self.user, feature='ai_validation')
         self.assertEqual(rows.count(), 1)
         self.assertEqual(rows.first().count, 3)
 
     def test_한도를_넘으면_막는다(self):
-        from v1.label.services.ai_rate_limit import _free_daily_limit
+        from v1.label.services.ai_rate_limit import _daily_limit_for
 
-        limit = _free_daily_limit()
+        limit = _daily_limit_for(self.user)
         for _ in range(limit):
             self.assertTrue(self._check()[0])
 
@@ -2929,10 +2929,11 @@ class AiUsageCounterTests(TestCase):
     def test_어제_사용량은_오늘에_안_섞인다(self):
         from datetime import timedelta
         from django.utils import timezone
-        from v1.common.models import AiValidationUsage
+        from v1.common.models import FeatureUsage
 
-        AiValidationUsage.objects.create(
-            user=self.user, used_date=timezone.localdate() - timedelta(days=1), count=9)
+        FeatureUsage.objects.create(
+            user=self.user, feature='ai_validation',
+            used_date=timezone.localdate() - timedelta(days=1), count=9)
         self.assertEqual(self._usage()['daily_used'], 0)
 
     def test_사용자끼리_섞이지_않는다(self):
@@ -2951,12 +2952,10 @@ class AiUsageCounterTests(TestCase):
         로그에 남긴다.
         """
         from unittest.mock import patch
-        from v1.label.services import ai_rate_limit
 
-        with patch.object(ai_rate_limit, 'AiValidationUsage', create=True):
-            with patch('v1.common.models.AiValidationUsage.objects') as objs:
-                objs.filter.side_effect = RuntimeError('DB 장애')
-                self.assertEqual(self._usage()['daily_used'], 0)
+        with patch('v1.common.models.FeatureUsage.objects') as objs:
+            objs.filter.side_effect = RuntimeError('DB 장애')
+            self.assertEqual(self._usage()['daily_used'], 0)
 
 
 class TempLabelNumberingTests(TestCase):
@@ -9087,3 +9086,196 @@ class NarrowScreenTests(TestCase):
         head = self.html.index('.search-box {')
         block = self.html[head:head + 250]
         self.assertIn('min-width: 200px', block)
+
+
+class 한도를_한곳에서_정한다(TestCase):
+    """
+    한도가 AI 검증 하나에만 걸려 있었다. 판독도 시안 대조도 부를 때마다 돈이
+    나가는데 아무 제한이 없었고, 기능마다 세는 자리를 따로 만들면 요금제를
+    만들 수 없다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='q1', password='x')
+
+    def test_흐름과_저량을_섞지_않는다(self):
+        """
+        하루에 몇 번(판독)과 통틀어 몇 건(원료)은 세는 법도, 다 썼을 때 할
+        말도 다르다.
+        """
+        from v1.common import quota
+        self.assertEqual(quota.feature('ocr_label').kind, quota.FLOW)
+        self.assertEqual(quota.feature('ingredient').kind, quota.STOCK)
+
+    def test_저량은_실제로_있는_것을_센다(self):
+        from v1.common import quota
+        from v1.label.models import MyIngredient
+
+        for i in range(3):
+            MyIngredient.objects.create(user_id=self.user, prdlst_nm='원료%d' % i,
+                                        delete_YN='N')
+        MyIngredient.objects.create(user_id=self.user, prdlst_nm='지운것',
+                                    delete_YN='Y')
+        self.assertEqual(quota.used(self.user, 'ingredient'), 3)
+
+    def test_저량은_차감하지_않는다(self):
+        # 실제로 만든 행이 곧 사용량이다. 따로 세면 두 숫자가 갈린다
+        from v1.common import quota
+        from v1.common.models import FeatureUsage
+
+        quota.check_and_charge(self.user, 'ingredient', amount=5)
+        self.assertFalse(FeatureUsage.objects.filter(feature='ingredient').exists())
+
+    def test_판독은_기능마다_따로_센다(self):
+        from v1.common import quota
+
+        quota.charge(self.user, 'ocr_label')
+        quota.charge(self.user, 'ocr_label')
+        quota.charge(self.user, 'ocr_compare')
+        self.assertEqual(quota.used(self.user, 'ocr_label'), 2)
+        self.assertEqual(quota.used(self.user, 'ocr_compare'), 1)
+
+    def test_한도를_넘으면_막고_이유를_말한다(self):
+        from django.test import override_settings
+        from v1.common import quota
+
+        with override_settings(QUOTA_LIMITS={'ocr_label': {'free': 1}}):
+            self.assertTrue(quota.check_and_charge(self.user, 'ocr_label')[0])
+            ok, info = quota.check_and_charge(self.user, 'ocr_label')
+            self.assertFalse(ok)
+            self.assertIn('내일', info['message'])
+            self.assertEqual(info['used'], 1, '막힌 요청은 차감하지 않는다')
+
+    def test_저량이_다_차면_다른_말을_한다(self):
+        # 흐름은 "내일 다시", 저량은 "지우거나 올리세요" 다
+        from django.test import override_settings
+        from v1.common import quota
+
+        with override_settings(QUOTA_LIMITS={'ingredient': {'free': 0}}):
+            ok, info = quota.check(self.user, 'ingredient', amount=1)
+            self.assertFalse(ok)
+            self.assertNotIn('내일', info['message'])
+            self.assertIn('지우거나', info['message'])
+
+    def test_설정으로_내릴_수_있다(self):
+        # 요금제를 열 때 코드를 고치지 않고 서버 설정만으로 돌린다
+        from django.test import override_settings
+        from v1.common import quota
+
+        with override_settings(QUOTA_LIMITS={'ocr_label': {'free': 3, 'paid': 7}}):
+            self.assertEqual(quota.limit_for(self.user, 'ocr_label'), 3)
+
+    def test_지금_숫자는_쓰는_사람을_막지_않는다(self):
+        """
+        실측(2026-08-30)으로 한 계정에 원료가 548건 있었다. 무료 한도를
+        500 으로 두면 배포하는 순간 그 사람은 원료를 하나도 못 넣는다.
+        """
+        from v1.common import quota
+        self.assertGreaterEqual(quota.limit_for(self.user, 'ingredient'), 1000)
+
+
+class 붙여넣기로_원료를_넣는다(TestCase):
+    """
+    옛 엑셀 업로드는 줄마다 exists() 로 묻고 줄마다 create() 했다. 1000줄이면
+    DB 왕복 2000번이고, 시간 제한에 걸리면 절반만 들어간 채로 끊겼다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='p1', password='x')
+        self.client.force_login(self.user)
+
+    def _rows(self, n, start=0):
+        return [{'prdlst_nm': '원료%d' % i, 'bssh_nm': '가나다'}
+                for i in range(start, start + n)]
+
+    def _post(self, rows, commit=False):
+        import json
+        return self.client.post(
+            '/label/my-ingredients/paste/',
+            data=json.dumps({'rows': rows, 'commit': commit}),
+            content_type='application/json')
+
+    def test_세어_보기는_아무것도_만들지_않는다(self):
+        from v1.label.models import MyIngredient
+
+        res = self._post(self._rows(5))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['counts']['fresh'], 5)
+        self.assertFalse(res.json()['committed'])
+        self.assertEqual(MyIngredient.objects.count(), 0)
+
+    def test_줄마다_묻지_않는다(self):
+        """이 검사가 이 작업의 이유다. 줄 수가 늘어도 쿼리는 거의 그대로다."""
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        from v1.label.services import ingredient_paste
+
+        with CaptureQueriesContext(connection) as few:
+            ingredient_paste.create(self.user, self._rows(10))
+        with CaptureQueriesContext(connection) as many:
+            ingredient_paste.create(self.user, self._rows(200, start=100))
+
+        self.assertLess(len(many.captured_queries), len(few.captured_queries) + 10,
+                        '줄이 20배가 되어도 쿼리는 몇 개만 는다')
+
+    def test_이미_있는_것은_건드리지_않는다(self):
+        from v1.label.models import MyIngredient
+
+        self._post(self._rows(3), commit=True)
+        MyIngredient.objects.filter(prdlst_nm='원료0').update(
+            ingredient_display_name='손으로 고친 표시명')
+
+        res = self._post(self._rows(3), commit=True)
+        self.assertEqual(res.json()['counts']['created'], 0)
+        self.assertEqual(res.json()['counts']['existing'], 3)
+        self.assertEqual(
+            MyIngredient.objects.get(prdlst_nm='원료0').ingredient_display_name,
+            '손으로 고친 표시명', '덮어쓰면 손으로 고친 값이 옛 엑셀로 돌아간다')
+
+    def test_붙여넣기_안의_사본도_센다(self):
+        rows = self._rows(2) + self._rows(2)
+        counts = self._post(rows).json()['counts']
+        self.assertEqual(counts['fresh'], 2)
+        self.assertEqual(counts['repeated'], 2)
+
+    def test_품목보고번호가_있으면_그것이_먼저다(self):
+        # 이름이 달라도 번호가 같으면 같은 원료다
+        self._post([{'prdlst_nm': '정제소금', 'prdlst_report_no': '19990000000'}],
+                   commit=True)
+        counts = self._post(
+            [{'prdlst_nm': '정제염', 'prdlst_report_no': '19990000000'}]).json()['counts']
+        self.assertEqual(counts['fresh'], 0)
+        self.assertEqual(counts['existing'], 1)
+
+    def test_원료명이_없으면_넣지_않는다(self):
+        counts = self._post([{'bssh_nm': '가나다'}, {'prdlst_nm': '  '}]).json()['counts']
+        self.assertEqual(counts['fresh'], 0)
+        self.assertEqual(counts['blank'], 2)
+
+    def test_상한을_넘으면_거절한다(self):
+        """
+        서버 보호 한도다. 등급과 무관하다 — 돈을 낸다고 서버가 더 견디지는
+        않는다.
+        """
+        from django.test import override_settings
+
+        with override_settings(PASTE_MAX_ROWS=5):
+            res = self._post(self._rows(6))
+            self.assertEqual(res.status_code, 400)
+            self.assertIn('5줄까지', res.json()['error'])
+
+    def test_한도를_넘으면_하나도_넣지_않는다(self):
+        # 넘치는 만큼만 잘라 넣으면 무엇이 빠졌는지 아무도 모른다
+        from django.test import override_settings
+        from v1.label.models import MyIngredient
+
+        with override_settings(QUOTA_LIMITS={'ingredient': {'free': 2}}):
+            res = self._post(self._rows(5), commit=True)
+            self.assertEqual(res.status_code, 429)
+            self.assertEqual(MyIngredient.objects.count(), 0)
+
+    def test_남은_양을_같이_알려_준다(self):
+        # 다 쓰고 나서야 한도를 알면 화가 난다
+        res = self._post(self._rows(1))
+        self.assertIn('quota', res.json())
+        self.assertIn('limit', res.json()['quota'])

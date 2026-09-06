@@ -711,6 +711,14 @@
             <button class="v2-action-btn-outline" id="dupBtn" title="같은 원료가 여러 벌 쌓인 것을 찾아 합칩니다">
                 <i class="bi bi-intersect"></i>중복 정리<span class="dup-badge" id="dupBadge"></span>
             </button>
+            {% comment %}
+              사람들은 원료 목록을 엑셀로 관리하다가 우리 화면에 옮겨 적고
+              있었다. 배합비에서 하던 붙여넣기를 여기에도 둔다.
+            {% endcomment %}
+            <button class="v2-action-btn-outline" id="pasteBtn"
+                    title="엑셀에서 복사한 표를 그대로 붙여넣어 한꺼번에 등록합니다">
+                <i class="bi bi-clipboard-plus"></i>엑셀 붙여넣기
+            </button>
             <button class="v2-action-btn-outline" id="downloadBtn"><i class="bi bi-download"></i>다운로드</button>
             <button class="v2-action-btn-outline" id="uploadBtn"><i class="bi bi-upload"></i>업로드</button>
             <input type="file" id="excelFileInput" accept=".xlsx,.xls">
@@ -1268,9 +1276,54 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block extra_js %}
 <script src="{% static 'js/list_common.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{# 붙여넣기 규칙은 배합비·연락처와 한 벌을 쓴다. 두 벌로 두면 한쪽만 고쳐진다 #}
+<link href="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
+<script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{{ allergen_header_names|json_script:"allergen-header-data" }}
+<script>
+  {# "계란 O" 처럼 항목마다 표를 쳐 오는 양식을 알아보는 데 쓴다 #}
+  try {
+    window.ALLERGEN_HEADER_NAMES = JSON.parse(
+      document.getElementById('allergen-header-data').textContent) || {};
+  } catch (e) { window.ALLERGEN_HEADER_NAMES = {}; }
+</script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script src="{% static 'js/label/my_ingredient_detail_partial.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+
+{% comment %}
+  엑셀 붙여넣기.
+
+  **저장 전에 무엇이 들어가는지 보여 준다.** 말없이 1000건을 밀어 넣으면
+  중복 정리를 다시 해야 한다. 세어 본 숫자를 보고 사용자가 누른다.
+{% endcomment %}
+<div class="modal fade doc-modal" id="pasteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title"><i class="bi bi-clipboard-plus me-2 text-primary"></i>엑셀 붙여넣기</h5>
+          <p class="modal-subtitle" id="pasteHint">
+            엑셀에서 머리글 줄까지 함께 복사해 아래 표에 붙여넣으세요(Ctrl+V).
+          </p>
+        </div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <div id="paste-grid" class="paste-grid"></div>
+        <div class="paste-report" id="pasteReport"></div>
+      </div>
+      <div class="modal-footer">
+        <span class="paste-quota me-auto" id="pasteQuota"></span>
+        <button type="button" class="btn btn-light border" data-bs-dismiss="modal">닫기</button>
+        <button type="button" class="btn btn-primary" id="pasteRunBtn" disabled>
+          <i class="bi bi-check2 me-1"></i>등록하기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 {# 중복 원료 정리 — 어느 것을 남길지는 사람이 정한다 #}
 <div class="modal fade doc-modal" id="dupModal" tabindex="-1" aria-hidden="true">
@@ -1564,6 +1617,232 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.title = '같은 원료가 여러 벌 쌓여 있습니다 — 여분 ' + data.summary.extra + '건';
     })
     .catch(function () {});
+})();
+</script>
+
+<style>
+/* 붙여넣기 창 */
+.paste-grid { width: 100%; min-height: 300px; max-height: 46vh; overflow: auto; }
+.paste-report {
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: var(--ez-gray-700, #5f6368);
+    min-height: 20px;
+}
+.paste-report b { color: var(--ez-gray-900, #202124); }
+.paste-report .warn { color: var(--ez-warning-on-bg, #b06000); }
+.paste-quota { font-size: 12px; color: var(--ez-gray-600, #80868b); }
+.paste-quota.tight { color: var(--ez-danger, #d93025); font-weight: 600; }
+</style>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────
+   엑셀 붙여넣기로 원료를 한꺼번에 등록한다
+
+   사람들은 원료 목록을 엑셀로 관리하다가 우리 화면에 옮겨 적고 있었다.
+   양식을 맞추라고 하지 않는다 — 붙여넣은 표의 **머리글을 읽어** 우리 칸에
+   맞춘다. 규칙은 배합비·연락처와 한 벌(sheet_paste.js)이다.
+
+   **저장 전에 세어 보여 준다.** 말없이 1000건을 밀어 넣으면 중복 정리를
+   다시 해야 한다.
+
+   **묶음으로 나눠 보낸다.** 서버 쿼리를 줄여 놨으니 한 번에도 들어가지만,
+   끊어 보내야 진행률을 보여 줄 수 있고 중간에 끊겨도 어디까지 갔는지 안다.
+   ───────────────────────────────────────────────────────────────────── */
+(function () {
+  var btn = document.getElementById('pasteBtn');
+  var modalEl = document.getElementById('pasteModal');
+  if (!btn || !modalEl || !window.Handsontable) return;
+
+  var HEADERS = ['원료명', '원료 표시명', '식품유형', '식품구분', '제조사',
+                 '품목보고번호', '알레르기 성분', 'GMO', '하위 원료'];
+  var FIELDS = ['prdlst_nm', 'ingredient_display_name', 'prdlst_dcnm',
+                'food_category', 'bssh_nm', 'prdlst_report_no',
+                'allergens', 'gmo', 'rawmtrl_nm'];
+
+  /* 회사마다 부르는 이름이 다르다. 사전 대조다 — AI 를 쓰지 않는다 */
+  var ALIASES = {
+    '원료명': ['원료명', '원재료명', '품명', '제품명', '원료', '원자재명', '재료명'],
+    '원료 표시명': ['원료표시명', '표시명', '원재료 표시명', '원재료명 및 함량', '성분'],
+    '식품유형': ['식품유형', '유형', '품목유형'],
+    '식품구분': ['식품구분', '구분', '분류'],
+    '제조사': ['제조사', '제조원', '업체명', '제조업체', '거래처', '공급사', '제조사/수입사'],
+    '품목보고번호': ['품목보고번호', '품목제조보고번호', '보고번호', '품목번호'],
+    '알레르기 성분': ['알레르기', '알레르기성분', '알러지', '알레르기 유발물질'],
+    'GMO': ['gmo', '유전자변형', '유전자재조합'],
+    '하위 원료': ['하위원료', '세부원재료', '원재료', '배합', '원료구성']
+  };
+
+  /* 항목명마다 O 로 체크해 오는 양식은 O 인 것만 모아 한 칸에 넣는다 */
+  var MARKS = { into: '알레르기 성분', names: window.ALLERGEN_HEADER_NAMES || {} };
+
+  var hot = null;
+  var maxRows = 2000;
+  var lastCounts = null;
+  var modal = new bootstrap.Modal(modalEl);
+
+  function el(id) { return document.getElementById(id); }
+
+  function csrf() {
+    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function rowsFromGrid() {
+    var out = [];
+    (hot.getSourceData() || []).forEach(function (row) {
+      if (!row) return;
+      var item = {}, any = false;
+      FIELDS.forEach(function (f) {
+        var v = (row[f] === null || row[f] === undefined) ? '' : String(row[f]).trim();
+        item[f] = v;
+        if (v) any = true;
+      });
+      if (any) out.push(item);
+    });
+    return out;
+  }
+
+  function say(html) { el('pasteReport').innerHTML = html; }
+
+  function showQuota(q) {
+    var box = el('pasteQuota');
+    if (!box || !q) return;
+    box.textContent = '등록한 원료 ' + q.used + ' / ' + q.limit + q.unit;
+    box.classList.toggle('tight', q.left <= 0);
+  }
+
+  /* 서버에 세어 보게 한다. 아무것도 만들지 않는다 */
+  function preview() {
+    var rows = rowsFromGrid();
+    el('pasteRunBtn').disabled = true;
+    if (!rows.length) { say(''); return; }
+    if (rows.length > maxRows) {
+      say('<span class="warn">한 번에 ' + maxRows + '줄까지 넣을 수 있습니다 '
+          + '(지금 ' + rows.length + '줄). 나눠서 붙여넣어 주세요.</span>');
+      return;
+    }
+    return fetch('/label/my-ingredients/paste/', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+      body: JSON.stringify({ rows: rows })
+    }).then(function (r) { return r.json(); }).then(function (data) {
+      showQuota(data.quota);
+      if (!data.success) { say('<span class="warn">' + (data.error || '') + '</span>'); return; }
+      lastCounts = data.counts;
+      maxRows = data.max_rows || maxRows;
+      var c = data.counts;
+      var parts = ['붙여넣은 <b>' + c.total + '</b>줄 → 새로 만들 것 <b>' + c.fresh + '</b>건'];
+      if (c.existing) parts.push('이미 있는 것 ' + c.existing + '건');
+      if (c.repeated) parts.push('붙여넣기 안에서 겹친 것 ' + c.repeated + '건');
+      if (c.blank) parts.push('원료명 없음 ' + c.blank + '건');
+      say(parts.join(' · '));
+      el('pasteRunBtn').disabled = c.fresh === 0;
+    }).catch(function () {
+      say('<span class="warn">세어 보지 못했습니다. 잠시 후 다시 시도해 주세요.</span>');
+    });
+  }
+
+  /* 200줄씩. 묶음 하나가 트랜잭션 하나다 */
+  var CHUNK = 200;
+
+  function commit() {
+    var rows = rowsFromGrid();
+    if (!rows.length) return;
+    var run = el('pasteRunBtn');
+    run.disabled = true;
+    var made = 0, skipped = 0, at = 0;
+
+    function next() {
+      if (at >= rows.length) {
+        say('원료 <b>' + made + '</b>건을 등록했습니다.'
+            + (skipped ? ' (건너뛴 것 ' + skipped + '건)' : '')
+            + ' 창을 닫으면 목록을 다시 읽습니다.');
+        window.__pasteMade = made;
+        return;
+      }
+      var slice = rows.slice(at, at + CHUNK);
+      say('등록하는 중… ' + Math.min(at + slice.length, rows.length)
+          + ' / ' + rows.length);
+      return fetch('/label/my-ingredients/paste/', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+        body: JSON.stringify({ rows: slice, commit: true })
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        showQuota(data.quota);
+        if (!data.success) {
+          say('<span class="warn">' + (data.error || '등록하지 못했습니다.')
+              + '</span> 여기까지 ' + made + '건이 들어갔습니다.');
+          window.__pasteMade = made;
+          return;
+        }
+        made += data.counts.created;
+        skipped += data.counts.existing + data.counts.repeated + data.counts.blank;
+        at += CHUNK;
+        return next();
+      }).catch(function () {
+        say('<span class="warn">연결이 끊겼습니다.</span> 여기까지 ' + made
+            + '건이 들어갔습니다. 창을 닫고 다시 붙여넣으면 나머지만 들어갑니다.');
+        window.__pasteMade = made;
+      });
+    }
+    next();
+  }
+
+  function build() {
+    if (hot) return;
+    hot = new Handsontable(el('paste-grid'), {
+      data: Array.from({ length: 20 }, function () { return {}; }),
+      licenseKey: 'non-commercial-and-evaluation',
+      rowHeaders: true,
+      colHeaders: HEADERS,
+      columns: FIELDS.map(function (f) { return { data: f, editor: 'text' }; }),
+      stretchH: 'all',
+      height: 300,
+      minSpareRows: 3,
+      contextMenu: ['row_above', 'row_below', 'remove_row', '---------', 'undo', 'redo'],
+      afterChange: function (changes, source) {
+        if (!changes || source === 'loadData') return;
+        clearTimeout(window.__pasteTimer);
+        window.__pasteTimer = setTimeout(preview, 300);
+      }
+    });
+
+    if (window.attachSheetPaste) {
+      window.attachSheetPaste(hot, {
+        headers: HEADERS, aliases: ALIASES, marks: MARKS,
+        onReport: function (info) {
+          var tail = window.sheetPasteMessage ? window.sheetPasteMessage(info, '') : '';
+          if (tail) el('pasteHint').textContent = tail;
+        }
+      });
+    }
+  }
+
+  btn.addEventListener('click', function () {
+    modal.show();
+    build();
+    /* 창이 열린 뒤에 크기를 잡아야 한다. 숨어 있을 때는 폭이 0 이다 */
+    setTimeout(function () { hot.render(); }, 200);
+    fetch('/label/quota/', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.success) return;
+        maxRows = data.paste_max_rows || maxRows;
+        showQuota(data.quota.ingredient);
+        el('pasteHint').textContent =
+          '엑셀에서 머리글 줄까지 함께 복사해 표에 붙여넣으세요(Ctrl+V). '
+          + '한 번에 ' + maxRows + '줄까지 됩니다.';
+      })
+      .catch(function () {});
+  });
+
+  el('pasteRunBtn').addEventListener('click', commit);
+
+  /* 등록해 놓고 화면이 그대로면 된 것인지 알 수가 없다 */
+  modalEl.addEventListener('hidden.bs.modal', function () {
+    if (window.__pasteMade) window.location.reload();
+  });
 })();
 </script>
 

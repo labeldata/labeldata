@@ -69,9 +69,16 @@ class AdministrativeAction(models.Model):
         return f"{self.company_name} - {self.action_name} ({self.action_date})"
 
 
-class AiValidationUsage(models.Model):
+class FeatureUsage(models.Model):
     """
-    AI검증 일일 사용량. 사용자·날짜마다 한 행.
+    돈이 드는 기능의 하루 사용량. 사용자·기능·날짜마다 한 행.
+
+    처음에는 AI 검증 하나만 셌다(`ai_validation_usage`). 판독·시안 대조도
+    부를 때마다 돈이 나가는데 한도가 없었고, 기능마다 세는 자리를 따로
+    만들면 요금제를 만들 수 없다. 표 하나에 `feature` 를 붙여 넓힌다.
+
+    무엇을 얼마나 쓸 수 있는지는 `v1/common/quota.py` 가 정한다. 여기는
+    센 값을 담아 두는 자리일 뿐이다.
 
     원래 파일 캐시에 있었다. CACHES['default'] 는 항목이 MAX_ENTRIES 를 넘으면
     Django 가 1/3 을 잘라내는데(FileBasedCache._cull), 그때 카운터가 같이 날아가면
@@ -89,7 +96,10 @@ class AiValidationUsage(models.Model):
     마이그레이션을 만들면 그것까지 함께 담긴다.
     """
     user = models.ForeignKey(User, on_delete=models.CASCADE,
-                             related_name='ai_validation_usage', verbose_name='사용자')
+                             related_name='feature_usage', verbose_name='사용자')
+    # quota.FEATURES 의 열쇠. 옛 행은 전부 AI 검증이라 그것을 기본값으로 둔다
+    feature = models.CharField(max_length=32, default='ai_validation',
+                               verbose_name='기능')
     used_date = models.DateField(verbose_name='사용일',
                                  help_text='서버 시간대 기준 날짜')
     count = models.PositiveIntegerField(default=0, verbose_name='사용 횟수')
@@ -98,19 +108,19 @@ class AiValidationUsage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'ai_validation_usage'
-        verbose_name = 'AI검증 사용량'
-        verbose_name_plural = 'AI검증 사용량'
+        db_table = 'feature_usage'
+        verbose_name = '기능 사용량'
+        verbose_name_plural = '기능 사용량'
         constraints = [
-            models.UniqueConstraint(fields=['user', 'used_date'],
-                                    name='uniq_ai_usage_user_date'),
+            models.UniqueConstraint(fields=['user', 'feature', 'used_date'],
+                                    name='uniq_feature_usage'),
         ]
         indexes = [
-            models.Index(fields=['used_date'], name='idx_ai_usage_date'),
+            models.Index(fields=['used_date'], name='idx_feature_usage_date'),
         ]
 
     def __str__(self):
-        return f'{self.user} {self.used_date} {self.count}회'
+        return f'{self.user} {self.feature} {self.used_date} {self.count}회'
 
 
 class OcrCorrection(models.Model):

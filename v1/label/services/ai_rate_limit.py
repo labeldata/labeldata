@@ -1,20 +1,20 @@
 """
 AI검증(OpenAI 호출) 비용 관리 — 동일 요청 캐싱 + 계정별 요청 제한.
 
-세 가지 메커니즘을 분리해서 둔다:
+**일일 한도를 세는 일은 여기 없다.** `v1/common/quota.py` 가 한다 — 판독,
+시안 대조, 원료 등록 건수도 같은 틀로 센다. 기능마다 세는 자리를 따로
+만들면 요금제를 만들 수가 없다. 여기 남은 것은 이 기능에만 있는 두 가지다.
+
   1. 콘텐츠 해시 캐싱: 라벨 내용이 그대로인데 다시 누르면 OpenAI를
      재호출하지 않고 최근 결과를 그대로 반환한다 — 사용자가 결과 보고
      그냥 다시 눌러보는 흔한 패턴에서 비용이 0이 된다.
-  2. 계정별 일일 한도: 무료/유료 등급별로 다르게 적용 (UserProfile.paid_yn
-     이미 존재하는 필드 — 지금까지 어떤 기능도 이 필드로 게이팅하지 않고
-     있었는데, 이 기능이 첫 사용처가 된다. 유료 요금제가 따로 생기면
-     PAID_DAILY_LIMIT만 상향하면 됨).
-  3. 분당 한도: 사용자에게 직접 노출하는 지표는 아니고, 실수로 여러 번
+  2. 분당 한도: 사용자에게 직접 노출하는 지표는 아니고, 실수로 여러 번
      연타했을 때를 대비한 조용한 안전장치.
 
-기존 프로젝트 관례(MOBILE_MAX_NOTIFICATIONS 등, settings.py 상수 +
-config() 환경변수 오버라이드)를 그대로 따랐고, 저장소는 이미 설정된
-파일 기반 캐시(CACHES['default'])를 재사용해 별도 인프라가 필요 없다.
+어디에 무엇을 두는지
+    일일 한도 -> DB(FeatureUsage).  사라지면 안 된다.
+    분당 한도 -> 캐시. 연타를 막는 안전장치라 사라져도 일일 한도가 남는다.
+    검증 결과 -> 캐시. 사라져도 OpenAI 를 한 번 더 부를 뿐이다.
 """
 import hashlib
 import logging
@@ -23,17 +23,18 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from v1.common import quota
+
 logger = logging.getLogger(__name__)
 
-# 기본값은 settings.py에서 오버라이드 가능.
+FEATURE = 'ai_validation'
+
 # 분당 한도는 사용자에게 노출하는 지표가 아니라 자동화 남용을 걸러내기
 # 위한 조용한 안전장치라, 정상적인 사용(짧은 시간에 라벨 여러 개 검증)
 # 에서는 절대 먼저 걸리지 않도록 일일 한도보다 넉넉하게 잡는다 — 실제로
 # 이 값이 무료 일일 한도(10)보다 낮으면 "일일 10회"가 아니라 "요청이
 # 너무 많다"는 엉뚱한 메시지가 먼저 뜨는 걸 테스트로 확인했음.
 _DEFAULT_MINUTE_LIMIT = 15
-_DEFAULT_FREE_DAILY_LIMIT = 10
-_DEFAULT_PAID_DAILY_LIMIT = 50
 _DEFAULT_RESULT_CACHE_TTL = 60 * 15  # 15분
 
 
@@ -41,85 +42,26 @@ def _minute_limit() -> int:
     return getattr(settings, 'AI_VALIDATION_MINUTE_LIMIT', _DEFAULT_MINUTE_LIMIT)
 
 
-def _free_daily_limit() -> int:
-    return getattr(settings, 'AI_VALIDATION_FREE_DAILY_LIMIT', _DEFAULT_FREE_DAILY_LIMIT)
-
-
-def _paid_daily_limit() -> int:
-    return getattr(settings, 'AI_VALIDATION_PAID_DAILY_LIMIT', _DEFAULT_PAID_DAILY_LIMIT)
-
-
 def _result_cache_ttl() -> int:
     return getattr(settings, 'AI_VALIDATION_RESULT_CACHE_TTL', _DEFAULT_RESULT_CACHE_TTL)
 
 
 def is_paid_user(user) -> bool:
-    """UserProfile.paid_yn 안전 조회 (프로필 없는 예외적 계정 대비)."""
-    try:
-        return bool(hasattr(user, 'profile') and user.profile.paid_yn)
-    except Exception:
-        return False
+    """등급 판정도 한 곳에서만 한다."""
+    return quota.is_paid(user)
 
 
 def _daily_limit_for(user) -> int:
-    return _paid_daily_limit() if is_paid_user(user) else _free_daily_limit()
-
-
-# ── 일일 카운터: DB ────────────────────────────────────────────────────────
-#
-# 원래 파일 캐시에 있었다. CACHES['default'] 는 항목이 MAX_ENTRIES 를 넘으면
-# Django 가 1/3 을 잘라내는데(FileBasedCache._cull), 그때 카운터가 같이 날아가면
-# 한도가 조용히 초기화된다. 유료 기능의 사용량이 캐시 정리에 좌우되면 안 된다.
-#
-# 어디에 무엇을 두는지
-#   일일 한도 -> DB.   사라지면 안 된다.
-#   분당 한도 -> 캐시. 연타를 막는 안전장치라 사라져도 일일 한도가 남는다.
-#   검증 결과 -> 캐시. 사라져도 OpenAI 를 한 번 더 부를 뿐이다.
-
-
-def _today():
-    """서버 시간대 기준 오늘 날짜."""
-    return timezone.localdate()
+    return quota.limit_for(user, FEATURE)
 
 
 def _daily_used(user) -> int:
     """오늘 실제로 차감된 횟수."""
-    from v1.common.models import AiValidationUsage
-
-    try:
-        row = AiValidationUsage.objects.filter(user=user, used_date=_today()).first()
-        return row.count if row else 0
-    except Exception:
-        # 조회에 실패하면 막지 않는다. 사용자를 막는 것보다 몇 번 더 나가는 쪽이
-        # 낫다 - 대신 로그에 남긴다.
-        logger.exception('[AI검증 한도] 사용량 조회 실패 (user=%s)', getattr(user, 'id', None))
-        return 0
+    return quota.used(user, FEATURE)
 
 
 def _charge(user) -> None:
-    """
-    1회 소비를 기록한다.
-
-    행을 읽어 +1 해서 저장하면 동시 요청에서 하나가 묻힌다. DB 가 더하게 한다.
-    """
-    from django.db.models import F
-    from v1.common.models import AiValidationUsage
-
-    today = _today()
-    updated = (AiValidationUsage.objects
-               .filter(user=user, used_date=today)
-               .update(count=F('count') + 1))
-    if not updated:
-        # 오늘 첫 사용. 동시에 둘이 들어오면 하나는 IntegrityError 가 나는데,
-        # 그때는 이미 만들어진 행을 올리면 된다.
-        from django.db import IntegrityError, transaction
-        try:
-            with transaction.atomic():
-                AiValidationUsage.objects.create(user=user, used_date=today, count=1)
-        except IntegrityError:
-            (AiValidationUsage.objects
-             .filter(user=user, used_date=today)
-             .update(count=F('count') + 1))
+    quota.charge(user, FEATURE)
 
 
 def get_usage(user) -> dict:
