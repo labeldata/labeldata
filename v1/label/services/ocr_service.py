@@ -20,6 +20,10 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 - prdlst_dcnm: 식품유형 (예: 과자류, 음료류, 즉석섭취식품)
 - content_weight: 내용량. 열량이 괄호로 함께 적혀 있으면 **그대로 포함**한다
     예: "139 g(182 kcal)", "200g", "500mL"
+    **영양정보 표 머리의 "총 내용량 65 g" 은 여기가 아니다.** 그건
+    nutrition_basis 다. 내용량은 앞면(주표시면)이나 표시사항 표에 적힌 값이다.
+    한 도안에 둘 다 있으면 **열량이 괄호로 함께 적힌 쪽**을 쓴다 —
+    앞면의 "65 g (309 kcal)" 이 맞고 영양표의 "총 내용량 65 g" 이 아니다.
 - weight_calorie: 내용량과 별도 칸에 열량만 따로 적혀 있을 때만
     예: 100kcal/100g. 내용량 칸에 함께 있으면 여기는 none
 - prdlst_report_no: 품목보고번호 (예: 20240123456789, 20170415080-1271)
@@ -80,6 +84,7 @@ SYSTEM_PROMPT = """당신은 한국 식품 표시사항 이미지에서 정보�
 영양정보(영양성분표)가 있으면 아래도 채운다. 표에 적힌 **숫자와 단위를 그대로**
 옮긴다. 1일 영양성분 기준치 비율(%)은 빼고 값만 적는다.
 - nutrition_basis: 표의 기준 표기. 예: "총 내용량 139 g", "100 g당", "1회 제공량 30 g"
+    이 값은 **영양정보 표 안에서만** 가져온다. content_weight 와 헷갈리지 마시오.
 - calories: 열량. 예: "182 kcal"
 - natriums: 나트륨. 예: "630 mg"
 - carbohydrates: 탄수화물. 예: "10 g"
@@ -705,8 +710,8 @@ def _repeats_checked(data, text):
     if not text:
         return data
     try:
-        from v1.label.services.ocr_repeats import attach
-        return attach(data, text)
+        from v1.label.services.ocr_repeats import attach, content_weight_fixed
+        return attach(content_weight_fixed(data, text), text)
     except Exception:
         # 얹는 것이다. 실패해도 판독 결과는 그대로 나가야 한다.
         logger.exception('도안 안의 중복 표기 대조 실패')
@@ -760,9 +765,20 @@ def _registered_maker(data):
         return ''
 
 
-def _companies_rechecked(client, model, images, data, use_recheck=None):
+def _companies_rechecked(client, model, images, data, use_recheck=None,
+                         always=False):
     """
     업소 항목이 수상하면 **그 네 줄만** 다시 읽는다.
+
+    always=True 면 수상하지 않아도 읽는다. 시안 대조가 그렇게 부른다 —
+    주소는 **값만 보고는 틀린 줄 알 수 없다.** 자리를 잘못 짚은 것은 두 칸에
+    같은 회사가 들어오는 식으로 티가 나지만, "흥안대로 405" 를 "도하로 405"
+    로 지어낸 것은 그 자리에서 아무 티도 안 난다. 형식도 멀쩡하고 그런
+    도로명도 실제로 있다.
+
+    한 번 더 읽어 **두 읽기를 견주는 것**이 지금 할 수 있는 유일한 확인이다.
+    두 번 다 같으면 믿을 만하고, 다르면 사람이 봐야 한다. 인쇄 직전에 한 번
+    도는 일이라 비용도 그만큼만 든다.
 
     서른 항목을 한 번에 읽는 프롬프트에서 이 네 줄에 갈 주의는 얼마 없다.
     게다가 넷이 전부 "업체명 + 주소" 라 값만 보고는 어느 칸의 것인지 알 수
@@ -778,9 +794,9 @@ def _companies_rechecked(client, model, images, data, use_recheck=None):
         from v1.label.services.ocr_company import (
             RECHECK_PROMPT, apply_recheck, needs_recheck, tidy)
         reason = needs_recheck(data, _registered_maker(data))
-        if not reason:
+        if not reason and not always:
             return data
-        logger.info('업소 항목을 다시 읽는다: %s', reason)
+        logger.info('업소 항목을 다시 읽는다: %s', reason or '시안 대조')
 
         content = [
             {"type": "image_url",
@@ -1057,7 +1073,8 @@ def region_instructions(regions):
 
 def extract_label_from_parts(parts, model=None, prompt_version=None,
                              use_hints=True, layout='grid', read_freetext=None,
-                             use_ground=None, use_hybrid=None, drop_tiles=None):
+                             use_ground=None, use_hybrid=None, drop_tiles=None,
+                             verify_companies=False):
     """
     표시면별로 잘라 온 사진들에서 한 번에 필드를 뽑는다.
 
@@ -1145,7 +1162,8 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
         result = _repeats_checked(result, ocr_text)
         result = _companies_tidied(result)
         result = _companies_rechecked(
-            client, model, [r['b64'] for r in regions], result)
+            client, model, [r['b64'] for r in regions], result,
+            always=verify_companies)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 
@@ -1163,7 +1181,7 @@ def extract_label_from_parts(parts, model=None, prompt_version=None,
 def extract_label_from_image(image_file, model=None, prompt_version=None,
                              use_hints=True, want_boxes=False, layout='grid',
                              read_freetext=None, use_ground=None, use_hybrid=None,
-                             drop_tiles=None):
+                             drop_tiles=None, verify_companies=False):
     """
     GPT-4o mini를 사용해 표시사항 이미지에서 필드를 추출합니다.
 
@@ -1272,7 +1290,8 @@ def extract_label_from_image(image_file, model=None, prompt_version=None,
         result, ground_report = _grounded(result, ocr_text, use_ground)
         result = _repeats_checked(result, ocr_text)
         result = _companies_tidied(result)
-        result = _companies_rechecked(client, model, images, result)
+        result = _companies_rechecked(client, model, images, result,
+                                      always=verify_companies)
         result = drop_freetext(
             drop_inferred_origin(strip_design_suffix(result)), read_freetext)
 

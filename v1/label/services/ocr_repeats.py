@@ -157,3 +157,89 @@ def attach(data: dict, text: str) -> dict:
             data[field] = item
         item['warnings'] = list(item.get('warnings') or []) + messages
     return data
+# ─────────────────────────────────────────────────────────────────────────────
+# 내용량 칸에 영양표 머리가 들어오는 일
+#
+# 한 도안에 "내용량" 처럼 보이는 글자가 두 군데 있다.
+#
+#     주표시면      65 g (309 kcal)      ← 내용량은 이것이다
+#     영양정보 머리  총 내용량 65 g       ← 이건 표의 기준(nutrition_basis)이다
+#
+# 판독이 뒤엣것을 내용량 칸에 옮겨 적으면 **열량이 통째로 빠진다.** 그러면
+# 시안 대조가 "다름" 이라고 하는데, 실제로 도안이 틀린 것이 아니라 우리가
+# 다른 자리를 읽은 것이다. 실제 라벨에서 그렇게 났다.
+#
+# 이 모듈의 다른 검사는 값을 고치지 않는다 — 어느 쪽이 맞는지 모르기 때문이다.
+# **여기는 다르다.** 값이 갈리는 문제가 아니라 자리를 잘못 짚은 것이고, 어느
+# 자리가 맞는지는 규정이 정해 놓았다. 그래서 여기서는 되돌린다. 대신 처음
+# 읽은 값을 후보로 남긴다.
+
+_BASIS_HEAD = re.compile(r'^\s*총\s*내용량')
+
+# "65 g (309 kcal)" — 양과 열량이 붙어 있는 형태. 이것이 내용량이다.
+_WEIGHT_KCAL_RE = re.compile(
+    r'(\d[\d,]*(?:\.\d+)?)\s*(mL|ml|kg|g|L|l)\s*'
+    r'[(（]\s*(\d[\d,]*(?:\.\d+)?)\s*(?:k\s*cal|㎉|㎈)\s*[)）]',
+    re.IGNORECASE)
+
+
+def _amount_of(text):
+    """그 글자에서 첫 번째 (값, 단위). 없으면 None."""
+    for match in _AMOUNT_RE.finditer(text or ''):
+        unit = _UNIT_CANON.get(match.group(2).lower())
+        if unit in _AMOUNT_UNITS:
+            return (_number(match.group(1)), unit)
+    return None
+
+
+def content_weight_fixed(data: dict, text: str) -> dict:
+    """
+    내용량이 영양표 머리에서 온 것이면 주표시면 값으로 되돌린다.
+
+    되돌리는 조건은 셋이다. 하나라도 어긋나면 손대지 않는다.
+
+      1. 읽어 온 내용량이 "총 내용량 …" 으로 시작하거나 표의 기준과 같다
+      2. 원문에 "65 g (309 kcal)" 꼴이 있다
+      3. 그 양이 읽어 온 양과 **같다** — 다르면 값이 갈리는 문제이지
+         자리 문제가 아니다. 그건 repeated_conflicts 가 알린다.
+    """
+    if not isinstance(data, dict) or not text:
+        return data
+    item = data.get('content_weight')
+    now = str((item or {}).get('value') if isinstance(item, dict)
+              else (item or '')).strip()
+    if not now:
+        return data
+
+    basis = data.get('nutrition_basis')
+    basis_text = str((basis or {}).get('value') if isinstance(basis, dict)
+                     else (basis or '')).strip()
+    from_basis = bool(_BASIS_HEAD.search(now)) or (
+        bool(basis_text) and now.replace(' ', '') == basis_text.replace(' ', ''))
+    if not from_basis:
+        return data
+
+    mine = _amount_of(now)
+    for match in _WEIGHT_KCAL_RE.finditer(text):
+        unit = _UNIT_CANON.get(match.group(2).lower())
+        if unit not in _AMOUNT_UNITS:
+            continue
+        if mine and (_number(match.group(1)), unit) != mine:
+            continue          # 양이 다르다. 자리 문제가 아니라 값 문제다
+        better = match.group(0).strip()
+        if not isinstance(item, dict):
+            item = {'value': now, 'confidence': 'medium'}
+        fixed = dict(item)
+        fixed['value'] = better
+        fixed['confidence'] = 'medium'
+        cands = [c for c in (fixed.get('candidates') or []) if c]
+        if now not in cands:
+            cands.append(now)
+        fixed['candidates'] = cands
+        fixed['warnings'] = list(fixed.get('warnings') or []) + [
+            '영양정보 표의 "%s" 대신 주표시면의 "%s" 를 내용량으로 읽었습니다.'
+            % (now, better)]
+        out = dict(data)
+        out['content_weight'] = fixed
+        return out
+    return data

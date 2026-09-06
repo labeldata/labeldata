@@ -512,7 +512,22 @@ def apply_recheck(data, companies):
     for field, value in fresh.items():
         before = _value_of(out.get(field))
         if before and key(company_part(before)) == key(company_part(value)):
-            continue          # 같은 회사다. 건드릴 것이 없다
+            # 회사는 같다. 그런데 **주소가 다르면 그냥 넘어가면 안 된다.**
+            #
+            # 자리를 잘못 짚은 것은 두 칸에 같은 회사가 들어오는 식으로 티가
+            # 난다. 하지만 "흥안대로 405" 를 "도하로 405" 로 지어낸 것은 그
+            # 자리에서 아무 티도 안 난다 — 형식도 멀쩡하고 그런 도로명도
+            # 실제로 있다. 값만 보고는 알 수 없다.
+            #
+            # 두 번 읽어 다르게 나왔다는 사실이 지금 가진 유일한 신호다.
+            # 값은 처음 것을 그대로 두고(뒤엣것이 옳다는 근거는 없다),
+            # 다른 읽기를 후보로 남기고 확신도를 내린다 — 확인 창이 그 줄을
+            # 붉게 짚어 사람이 거기만 보게 한다.
+            if key(before) != key(value):
+                item = _as_item(out.get(field), before)
+                item['confidence'] = 'low'
+                out[field] = _add_candidate(item, value)
+            continue
         item = _as_item(out.get(field), value)
         item['confidence'] = 'medium'
         if before:

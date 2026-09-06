@@ -8247,13 +8247,20 @@ class CompanyRecheckTests(TestCase):
         for warning in (out['bssh_nm'].get('warnings') or []):
             self.assertNotIn('다시 읽', warning)
 
-    def test_같은_회사를_다시_읽었으면_건드리지_않는다(self):
+    def test_같은_회사면_값을_바꾸지_않는다(self):
+        """
+        회사가 같으면 값은 그대로 둔다. 다만 **주소가 갈리면** 확신도를
+        내리고 다른 읽기를 후보로 남긴다 — 지어낸 주소는 값만 보고는 틀린
+        줄 알 수 없어서, 두 번 읽어 다르게 나온 것이 유일한 신호다.
+        """
         mine = '(주)샤니 경기도 성남시 중원구 둔촌대로457번길 13'
         out = self.C.apply_recheck(
             {'bssh_nm': {'value': mine, 'confidence': 'high'}},
             [{'role': '제조원', 'name': '주식회사 샤니', 'address': '경기도 성남시'}])
         self.assertEqual(out['bssh_nm']['value'], mine)
-        self.assertEqual(out['bssh_nm']['confidence'], 'high')
+        self.assertEqual(out['bssh_nm']['confidence'], 'low')
+        self.assertIn('경기도 성남시',
+                      ' '.join(out['bssh_nm'].get('candidates') or []))
 
     def test_회사도_주소도_아닌_것은_안_받는다(self):
         out = self.C.apply_recheck(
@@ -8280,7 +8287,8 @@ class CompanyRecheckWiringTests(TestCase):
         head = self.src.index('def _companies_rechecked')
         block = self.src[head:head + 2200]
         self.assertIn('needs_recheck(data, _registered_maker(data))', block)
-        self.assertIn('if not reason:', block)
+        # 예외는 하나 — 시안 대조는 낌새가 없어도 한 번 더 읽는다(always)
+        self.assertIn('if not reason and not always:', block)
 
     def test_전체_배치_한_장만_보낸다(self):
         head = self.src.index('def _companies_rechecked')
@@ -9279,3 +9287,127 @@ class 붙여넣기로_원료를_넣는다(TestCase):
         res = self._post(self._rows(1))
         self.assertIn('quota', res.json())
         self.assertIn('limit', res.json()['quota'])
+
+
+class 내용량을_영양표에서_가져왔다(TestCase):
+    """
+    한 도안에 "내용량" 처럼 보이는 글자가 두 군데 있다.
+
+        주표시면       65 g (309 kcal)   ← 내용량은 이것이다
+        영양정보 머리   총 내용량 65 g     ← 표의 기준(nutrition_basis)이다
+
+    뒤엣것을 내용량 칸에 옮겨 적으면 열량이 통째로 빠진다. 그러면 시안 대조가
+    "다름" 이라고 하는데, 도안이 틀린 것이 아니라 우리가 다른 자리를 읽은 것이다.
+    """
+
+    TEXT = ('겉바속쫀 브라우니 케이크\n'
+            '-18℃이하 냉동보관  65 g (309 kcal)\n'
+            '영양정보  총 내용량 65 g   65 g 당 309 kcal\n'
+            '나트륨 30 mg  탄수화물 9 g  당류 3.6 g  지방 4.5 g\n')
+
+    def _fix(self, weight, basis='총 내용량 65 g', text=None):
+        from v1.label.services.ocr_repeats import content_weight_fixed
+        out = content_weight_fixed(
+            {'content_weight': {'value': weight, 'confidence': 'high'},
+             'nutrition_basis': {'value': basis}},
+            text if text is not None else self.TEXT)
+        return out['content_weight']
+
+    def test_주표시면_값으로_되돌린다(self):
+        item = self._fix('총 내용량 65g')
+        self.assertEqual(item['value'], '65 g (309 kcal)')
+
+    def test_처음_읽은_값을_후보로_남긴다(self):
+        # 우리가 고른 것이 틀릴 수도 있다. 되돌릴 길을 남긴다
+        item = self._fix('총 내용량 65g')
+        self.assertIn('총 내용량 65g', item['candidates'])
+        self.assertTrue(item['warnings'])
+
+    def test_제대로_읽었으면_건드리지_않는다(self):
+        item = self._fix('65 g (309 kcal)')
+        self.assertEqual(item['value'], '65 g (309 kcal)')
+        self.assertFalse(item.get('warnings'))
+
+    def test_양이_다르면_손대지_않는다(self):
+        """
+        그건 자리 문제가 아니라 값이 갈리는 문제다. 어느 쪽이 맞는지 모르므로
+        고치지 않는다 — repeated_conflicts 가 알린다.
+        """
+        item = self._fix('총 내용량 100 g', basis='총 내용량 100 g')
+        self.assertEqual(item['value'], '총 내용량 100 g')
+
+    def test_원문에_열량_병기가_없으면_그대로_둔다(self):
+        item = self._fix('총 내용량 65g', text='영양정보 총 내용량 65 g')
+        self.assertEqual(item['value'], '총 내용량 65g')
+
+    def test_프롬프트가_두_자리를_갈라_말한다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        src = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py').read_text(
+            encoding='utf-8')
+        self.assertIn('영양정보 표 머리의 "총 내용량 65 g" 은 여기가 아니다', src)
+        self.assertIn('열량이 괄호로 함께 적힌 쪽', src)
+
+
+class 주소는_값만_보고는_틀린_줄_모른다(TestCase):
+    """
+    자리를 잘못 짚은 것은 두 칸에 같은 회사가 들어오는 식으로 티가 난다.
+    하지만 "흥안대로 405" 를 "도하로 405" 로 지어낸 것은 그 자리에서 아무 티도
+    안 난다 — 형식도 멀쩡하고 그런 도로명도 실제로 있다.
+
+    한 번 더 읽어 **두 읽기를 견주는 것**이 지금 할 수 있는 유일한 확인이다.
+    """
+
+    FIRST = {
+        'bssh_nm': {'value': '(주)샤니 경기도 성남시 중원구 둔천로 457번길 13 (상대원동)',
+                    'confidence': 'high'},
+        'distributor_address': {'value': '(주)오뚜기 경기도 양주시 도하로 405',
+                                'confidence': 'high'},
+    }
+    AGAIN = [
+        {'role': '제조원', 'name': '(주)샤니',
+         'address': '경기도 성남시 중원구 둔촌대로457번길 13(상대원동)'},
+        {'role': '유통전문판매원', 'name': '주식회사 오뚜기',
+         'address': '경기도 안양시 동안구 흥안대로 405'},
+    ]
+
+    def test_옛_규칙으로는_다시_읽지_않았다(self):
+        from v1.label.services.ocr_company import needs_recheck
+        self.assertEqual(needs_recheck(self.FIRST), '',
+                         '자리는 멀쩡하다. 그래서 주소가 틀려도 안 걸렸다')
+
+    def test_주소가_갈리면_확신도를_내린다(self):
+        from v1.label.services.ocr_company import apply_recheck
+        out = apply_recheck(self.FIRST, self.AGAIN)
+        for field in ('bssh_nm', 'distributor_address'):
+            self.assertEqual(out[field]['confidence'], 'low', field)
+
+    def test_다른_읽기를_후보로_남긴다(self):
+        # 뒤엣것이 옳다는 근거는 없다. 값은 그대로 두고 사람이 고르게 한다
+        from v1.label.services.ocr_company import apply_recheck
+        out = apply_recheck(self.FIRST, self.AGAIN)
+        self.assertIn('경기도 안양시 동안구 흥안대로 405',
+                      ' '.join(out['distributor_address']['candidates']))
+        self.assertEqual(out['distributor_address']['value'],
+                         self.FIRST['distributor_address']['value'])
+
+    def test_두_읽기가_같으면_조용하다(self):
+        from v1.label.services.ocr_company import apply_recheck
+        same = {'bssh_nm': {
+            'value': '(주)샤니 경기도 성남시 중원구 둔촌대로457번길 13(상대원동)',
+            'confidence': 'high'}}
+        out = apply_recheck(same, [self.AGAIN[0]])
+        self.assertEqual(out['bssh_nm']['confidence'], 'high')
+        self.assertFalse(out['bssh_nm'].get('candidates'))
+
+    def test_시안_대조일_때만_한_번_더_읽는다(self):
+        """평소 판독까지 두 번 읽으면 값이 나가는 자리가 배가 된다."""
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        service = (base / 'label/services/ocr_service.py').read_text(encoding='utf-8')
+        views = (base / 'label/views.py').read_text(encoding='utf-8')
+        self.assertIn('always=False', service)
+        self.assertIn('if not reason and not always:', service)
+        self.assertIn("verify = (feature == 'ocr_compare')", views)
+        self.assertIn('verify_companies=verify', views)

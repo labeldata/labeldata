@@ -2823,10 +2823,14 @@ def ocr_extract(request):
     try:
         # 영역을 하나만, 그것도 구분 없이 보냈으면 예전 경로 그대로 간다.
         # 그동안 그 경로로 맞춰 온 판독 품질을 건드릴 이유가 없다.
+        # 시안 대조는 인쇄 직전의 확인이다. 주소처럼 값만 보고는 틀린 줄
+        # 알 수 없는 자리를 한 번 더 읽어 두 읽기를 견준다.
+        verify = (feature == 'ocr_compare')
         if len(parts) == 1 and parts[0][1] in ('whole', ''):
-            result = extract_label_from_image(image_files[0])
+            result = extract_label_from_image(image_files[0],
+                                              verify_companies=verify)
         else:
-            result = extract_label_from_parts(parts)
+            result = extract_label_from_parts(parts, verify_companies=verify)
     except Exception as exc:
         logger.exception('OCR 처리 중 예외 (user=%s, file=%s, 영역=%s)',
                          request.user, name, len(parts))
