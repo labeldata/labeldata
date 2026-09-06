@@ -13,7 +13,7 @@
   --text-muted: #9ca3af;
   --text-white: #ffffff;
   --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
+  --bg-secondary: var(--ez-gray-50, #f8f9fa);
   --bg-muted: #e5e7eb;
   --bg-light: #f1f5f9;
   --border-color: #d1d5db;

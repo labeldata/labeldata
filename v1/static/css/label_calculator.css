@@ -14,7 +14,7 @@
   --text-secondary: #6b7280;
   --text-muted: #9ca3af;
   --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
+  --bg-secondary: var(--ez-gray-50, #f8f9fa);
   --bg-muted: #e5e7eb;
   --border-color: #d1d5db;
   --border-light: #e5e7eb;

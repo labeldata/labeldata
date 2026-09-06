@@ -2588,6 +2588,10 @@ class RepeatedInlineStylesAreClassesTests(TestCase):
                 'style="font-size:7px;vertical-align:middle;"'],
             'templates/regulatory/news_list.html': [
                 'style="font-size:10px;color:#bbb;"'],
+            'templates/products/contacts.html': [
+                'style="flex-shrink:0"', 'style="flex-shrink:0;"',
+                'style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px"',
+                'style="color:#bdc1c6;"', 'style="cursor:pointer;"'],
         }
         for rel, patterns in gone.items():
             html = self._read(rel)
@@ -2601,13 +2605,26 @@ class RepeatedInlineStylesAreClassesTests(TestCase):
         reg = self._read('static/css/regulatory.css')
         for rule in ('.rg-dot', '.rg-note'):
             self.assertIn(rule, reg)
+        contacts = self._read('static/css/contacts.css')
+        for rule in ('.ct-eyebrow', '.ct-fix', '.ct-faint', '.ct-click'):
+            self.assertIn(rule, contacts)
+
+    def test_class_가_두_번_붙은_태그가_없다(self):
+        # 두 번 붙으면 HTML 은 앞의 것만 본다 — 뒤에 넣은 것이 조용히 사라진다
+        import re
+        pat = re.compile(r'<[a-zA-Z][^>]*?class="[^"]*"[^>]*?\sclass="')
+        for rel in ('templates/products/contacts.html',
+                    'templates/products/product_explorer.html',
+                    'templates/regulatory/_news_detail_panel.html'):
+            self.assertEqual(pat.findall(self._read(rel)), [], rel)
 
     def test_7px_는_글자가_아니라_표시다(self):
         # 등급 앞의 점. 열여덟 군데에 7px 로 적혀 있었다.
         reg = self._read('static/css/regulatory.css')
         head = reg.index('.rg-dot')
         self.assertIn('font-size: 7px', reg[head:head + 120])
-        self.assertIn('class="rg-dot"',
+        # class 가 이미 있던 태그라 그 뒤에 붙었다
+        self.assertIn('rg-dot"',
                       self._read('templates/regulatory/_news_detail_panel.html'))
 
 
@@ -2634,31 +2651,33 @@ class BootstrapGreysAreGoneTests(TestCase):
         return self._var.sub('', path.read_text(encoding='utf-8')).lower()
 
     def test_테두리와_글자의_부트스트랩_회색은_사라졌다(self):
+        import re
+        root = re.compile(r':root[^{]*\{[^}]*\}', re.S)
         left = {}
         for path in sorted(self.dir.glob('*.css')):
             if path.name == 'bootstrap.min.css':
                 continue
-            text = self._bare(path)
+            text = root.sub('', self._bare(path))
             for colour in ('#dee2e6', '#495057', '#e0e2e0', '#f0f0f0'):
                 if colour in text:
                     left.setdefault(colour, []).append(path.name)
         self.assertEqual(left, {})
 
-    def test_단추_바탕은_그대로_뒀다(self):
+    def test_부트스트랩_회색이_하나도_안_남았다(self):
         """
-        #6c757d 를 background 로 쓰는 자리는 남긴다. 글자를 진하게 하는 잣대로
-        넓은 면을 칠하면 화면이 어두워진다.
+        넓은 면을 칠하는 두 곳은 잣대가 달라 미뤄 뒀다가, 하나씩 보고 정했다.
+
+          단추 바탕      흰 글자를 얹는다 -> --ez-gray-700 (대비 4.69 -> 6.05)
+                         바로 아래 테두리와 같은 색이 된다
+          스크롤 손잡이   글자가 안 얹힌다 -> 옆 회색과 같은 계열로
         """
-        import re
-        found = 0
+        left = []
         for path in sorted(self.dir.glob('*.css')):
             if path.name == 'bootstrap.min.css':
                 continue
-            for line in self._bare(path).splitlines():
-                if '#6c757d' in line:
-                    self.assertRegex(line, r'background(-color)?\s*:')
-                    found += 1
-        self.assertEqual(found, 2)
+            if '#6c757d' in self._bare(path):
+                left.append(path.name)
+        self.assertEqual(left, [])
 
     def test_글자는_대비가_오르는_쪽으로_갔다(self):
         """#6c757d 는 흰 바탕 대비 4.69 로 본문 기준(4.5)에 아슬아슬했다."""

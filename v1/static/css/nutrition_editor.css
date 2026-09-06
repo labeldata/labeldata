@@ -8,14 +8,14 @@
    products_common.css를 로드하지 않으므로 필요한 변수를 자체 정의합니다. */
 :root {
     --primary-color: #3b82f6;   /* 영양성분 편집기 강조 색 */
-    --bg-gray:       #f8f9fa;
+    --bg-gray: var(--ez-gray-50, #f8f9fa);
     --border-color:  #e5e7eb;
     /* V2 공통 토큰 (products_common.css 미로드 대비) */
-    --v2-blue:       #1a73e8;
-    --v2-border:     #dadce0;
-    --v2-text:       #202124;
-    --v2-text-sub:   #5f6368;
-    --v2-gray-50:    #f8f9fa;
+    --v2-blue: var(--ez-info, #1a73e8);
+    --v2-border: var(--ez-gray-300, #dadce0);
+    --v2-text: var(--ez-gray-900, #202124);
+    --v2-text-sub: var(--ez-gray-700, #5f6368);
+    --v2-gray-50: var(--ez-gray-50, #f8f9fa);
 }
 
 /* ── 전역 초기화 (독립 팝업 전용) ────────────────────────── */

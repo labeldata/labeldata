@@ -27,13 +27,13 @@
 
         <!-- 패널 헤더 -->
         <div class="contacts-panel-header" style="flex-wrap:wrap;gap:6px;padding:8px 12px;">
-            <div class="d-flex align-items-center gap-2" style="flex-shrink:0;">
+            <div class="d-flex align-items-center gap-2 ct-fix">
                 <i class="bi bi-person-lines-fill text-primary"></i>
                 <span class="fw-semibold ct-md">연락처</span>
                 <span class="badge rounded-pill bg-primary ct-xs" id="contactCount">{{ contacts_list|length }}</span>
             </div>
             {# ── 선택 시에만 표시되는 액션 바 ── #}
-            <div id="selection-actions" class="d-none align-items-center" style="flex-shrink:0;">
+            <div id="selection-actions" class="d-none align-items-center ct-fix">
                 <span class="badge bg-primary ct-xs"><span id="selected-count">0</span>개</span>
                 <button class="btn v2-btn-sm btn-outline-danger ct-sm" id="bulkDeleteBtn">
                     <i class="bi bi-trash"></i>
@@ -56,7 +56,7 @@
                     <input type="text" id="contactSearch" class="form-control border-start-0 ps-0 ct-sm" placeholder="검색..." autocomplete="off">
                 </div>
             </div>
-            <button class="contacts-icon-btn" id="addRowBtn" title="행 추가" style="flex-shrink:0;">
+            <button class="contacts-icon-btn ct-fix" id="addRowBtn" title="행 추가">
                 <i class="bi bi-person-plus"></i>
             </button>
         </div>
@@ -103,9 +103,9 @@
 
         <!-- 받은 자료 요청 패널 -->
         <div class="d-none" id="receivedReqView" style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
-            <div class="share-contact-header" style="flex-shrink:0;">
+            <div class="share-contact-header ct-fix">
                 <div>
-                    <div class="ct-lg" style="font-weight:600;color:#202124">
+                    <div class="ct-lg ct-strong">
                         <i class="bi bi-inbox me-2 text-danger"></i>내가 받은 자료 요청
                     </div>
                     <div class="text-muted mt-1 ct-sm">명의 담당자로서 처리해주세요</div>
@@ -128,7 +128,7 @@
             <!-- 헤더 -->
             <div class="share-contact-header">
                 <div style="display:flex;flex-direction:column;">
-                    <div class="ct-lg" style="font-weight:600;color:#202124">
+                    <div class="ct-lg ct-strong">
                         <i class="bi bi-envelope-paper me-2 text-primary"></i>자료 요청 보내기
                     </div>
                     <div class="text-muted mt-1 ct-sm" id="docReqRecipientSummary">선택된 연락처 0명</div>
@@ -142,13 +142,13 @@
 
                 <!-- 선택 연락처 칩 -->
                 <div class="mb-3">
-                    <div class="fw-semibold mb-2 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">요청 대상</div>
+                    <div class="fw-semibold mb-2 ct-sm ct-eyebrow">요청 대상</div>
                     <div id="docReqChips" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
                 </div>
 
                 <!-- 문서 유형 선택 -->
                 <div class="mb-3">
-                    <div class="fw-semibold mb-1 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">요청 문서 종류 <span class="text-danger">*</span></div>
+                    <div class="fw-semibold mb-1 ct-sm ct-eyebrow">요청 문서 종류 <span class="text-danger">*</span></div>
                     <div class="text-muted mb-2 ct-xs">✔ 체크한 문서를 <strong>수신자가 각 항목별로 업로드</strong>해야 하는 요청입니다. 요청 이력은 오른쪽 <strong>자료 요청</strong> 탭에서 확인할 수 있습니다.</div>
                     <div id="docTypeList">
                         <div class="text-center py-3 text-muted"><div class="spinner-border spinner-border-sm"></div> 불러오는 중...</div>
@@ -157,14 +157,14 @@
 
                 <!-- 메시지 -->
                 <div class="mb-3">
-                    <div class="fw-semibold mb-2 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">메시지 (선택)</div>
+                    <div class="fw-semibold mb-2 ct-sm ct-eyebrow">메시지 (선택)</div>
                     <textarea id="docReqMessage" rows="3" class="form-control ct-md" style="resize:none"
                               placeholder="예) 수입통관을 위해 원산지 증명서 제출 부탁드립니다."></textarea>
                 </div>
 
                 <!-- 연결 제품 (선택) -->
                 <div class="mb-3">
-                    <div class="fw-semibold mb-1 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">
+                    <div class="fw-semibold mb-1 ct-sm ct-eyebrow">
                         연결할 제품 <span class="text-muted fw-normal">(선택)</span>
                     </div>
                     <div class="text-muted mb-2 ct-xs">
@@ -177,7 +177,7 @@
 
                 <!-- 첨부 파일 -->
                 <div class="mb-2">
-                    <div class="fw-semibold mb-2 ct-sm" style="color:#5f6368;text-transform:uppercase;letter-spacing:.5px">첨부 파일 (선택)</div>
+                    <div class="fw-semibold mb-2 ct-sm ct-eyebrow">첨부 파일 (선택)</div>
                     <label class="d-flex align-items-center gap-2 p-2 rounded ct-md" style="border:1px dashed #dadce0;cursor:pointer;background:#fafafa">
                         <i class="bi bi-paperclip text-muted"></i>
                         <span id="docReqFileName" class="text-muted flex-grow-1">양식, 참고 파일 등 첨부 (클릭)</span>
@@ -188,7 +188,7 @@
             </div>
 
             <!-- 전송 버튼 -->
-            <div class="p-3 border-top" style="flex-shrink:0;">
+            <div class="p-3 border-top ct-fix">
                 <button class="btn btn-primary w-100" id="sendDocReqBtn" onclick="sendDocRequest()">
                     <i class="bi bi-send me-2"></i>요청 보내기
                 </button>
@@ -248,8 +248,8 @@
                         <!-- 헤더: 검색 + 전체선택 + 닫기 -->
                         <div class="d-flex align-items-center gap-2 px-3 py-2"
                              style="background:#e8f0fe;border-bottom:1px solid #c8d8f8;">
-                            <input type="checkbox" class="form-check-input" id="qsCheckAll" onchange="toggleQsAll(this)"
-                                   style="width:15px;height:15px;flex-shrink:0;cursor:pointer;" title="전체 선택">
+                            <input type="checkbox" class="form-check-input ct-check" id="qsCheckAll" onchange="toggleQsAll(this)"
+                                   title="전체 선택">
                             <input type="text" id="qsProductSearch" class="form-control form-control-sm flex-grow-1 ct-sm"
                                    placeholder="제품명 검색..." oninput="filterQsProducts()" autocomplete="off"
                                   >
@@ -272,8 +272,8 @@
                                 <option value="APPROVER">최종 승인 (임원)</option>
                                 <option value="VIEWER">뷰어 (읽기 전용)</option>
                             </select>
-                            <button class="btn v2-btn-sm btn-outline-primary ct-sm" onclick="applyQsBulkRole()"
-                                    style="white-space:nowrap;flex-shrink:0">적용</button>
+                            <button class="btn v2-btn-sm btn-outline-primary ct-sm ct-fix ct-nowrap" onclick="applyQsBulkRole()"
+                                   >적용</button>
                         </div>
                         <!-- 제품 목록 (체크박스 + 개별 역할 드롭다운) -->
                         <div id="qsProductList" style="max-height:220px;overflow-y:auto;"></div>
@@ -285,7 +285,7 @@
                             </span>
                             <input type="date" id="qsExpiry" class="form-control form-control-sm ct-sm"
                                    style="max-width:140px;flex-shrink:0">
-                            <span class="text-muted ct-xs" style="white-space:nowrap;flex-shrink:0">비워두면 무기한</span>
+                            <span class="text-muted ct-xs ct-fix ct-nowrap">비워두면 무기한</span>
                             <div id="qsError" class="text-danger d-none flex-grow-1 ct-sm"></div>
                             <button class="btn v2-btn-sm btn-primary ms-auto" id="qsSendBtn" onclick="doQuickShare()"
                                     style="white-space:nowrap;flex-shrink:0;">
@@ -301,7 +301,7 @@
                             <span class="ms-2 text-muted ct-md">불러오는 중...</span>
                         </div>
                         <div id="sentEmpty" class="text-center py-5 text-muted d-none">
-                            <i class="bi bi-share" style="font-size:28px;display:block;margin-bottom:8px;"></i>
+                            <i class="bi bi-share ct-bigicon"></i>
                             <div>이 연락처에게 공유한 제품이 없습니다.</div>
                             <button class="btn v2-btn-sm btn-outline-primary mt-3" onclick="openInlineShare()">
                                 <i class="bi bi-share me-1"></i>첫 번째 제품 공유하기
@@ -329,7 +329,7 @@
                         <span class="ms-2 text-muted ct-md">불러오는 중...</span>
                     </div>
                     <div id="receivedEmpty" class="text-center py-5 text-muted d-none">
-                        <i class="bi bi-inbox" style="font-size:28px;display:block;margin-bottom:8px;"></i>
+                        <i class="bi bi-inbox ct-bigicon"></i>
                         이 연락처로부터 받은 공유 제품이 없습니다.
                     </div>
                     <table class="share-table d-none" id="receivedTable">
@@ -353,7 +353,7 @@
                         <span class="ms-2 text-muted ct-md">요청 이력 불러오는 중...</span>
                     </div>
                     <div id="docReqEmpty" class="text-center py-5 text-muted d-none">
-                        <i class="bi bi-envelope-paper" style="font-size:28px;display:block;margin-bottom:8px;"></i>
+                        <i class="bi bi-envelope-paper ct-bigicon"></i>
                         이 연락처에게 보낸 자료 요청이 없습니다.
                     </div>
                     <div id="docReqList"></div>
@@ -529,7 +529,7 @@ async function loadReceivedDocRequests() {
         }
 
         if (!reqs.length) {
-            listEl.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-inbox" style="font-size:28px;display:block;margin-bottom:8px;"></i>받은 자료 요청이 없습니다.</div>';
+            listEl.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-inbox ct-bigicon"></i>받은 자료 요청이 없습니다.</div>';
             return;
         }
 
@@ -571,10 +571,10 @@ async function loadReceivedDocRequests() {
                         <div class="fw-semibold">${r.requester_name}</div>
                         <div class="text-muted ct-xs">${r.requester_email}</div>
                     </div>
-                    <span class="text-muted ct-xs" style="flex-shrink:0">${r.created}</span>
+                    <span class="text-muted ct-xs ct-fix">${r.created}</span>
                 </div>
-                <div class="mb-2">${docs || '<span class="ct-sm" style="color:#bdc1c6">요청 문서 미지정</span>'}</div>
-                ${r.message ? `<div class="text-muted mb-2 ct-sm" style="font-style:italic">"${r.message}"</div>` : ''}
+                <div class="mb-2">${docs || '<span class="ct-sm ct-faint">요청 문서 미지정</span>'}</div>
+                ${r.message ? `<div class="text-muted mb-2 ct-sm ct-italic">"${r.message}"</div>` : ''}
                 ${r.due_date ? `<div class="ct-xs" style="color:#c5221f;margin-bottom:6px"><i class="bi bi-calendar me-1"></i>마감: ${r.due_date}</div>` : ''}
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="ct-xs" style="background:${st.bg};color:${st.color};border-radius:10px;padding:2px 10px;font-weight:600">
@@ -701,7 +701,7 @@ document.addEventListener('DOMContentLoaded', function () {
         licenseKey: 'non-commercial-and-evaluation',
         rowHeaders: false,
         colHeaders: [
-            '<input type="checkbox" id="checkAll" title="전체 선택" style="cursor:pointer;">',
+            '<input type="checkbox" id="checkAll" title="전체 선택" class="ct-click">',
             '이메일', '이름', '회사명', '인허가번호', '공유', '요청/접수'
         ],
         columns: [
@@ -737,7 +737,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     TD.innerHTML = [
                         s > 0 ? `<span class="badge-sent">↑${s}</span>` : '',
                         r > 0 ? `<span class="badge-recv">↓${r}</span>` : '',
-                        (s === 0 && r === 0) ? '<span style="color:#bdc1c6;">-</span>' : ''
+                        (s === 0 && r === 0) ? '<span class="ct-faint">-</span>' : ''
                     ].join(' ');
                     TD.style.textAlign = 'center';
                     TD.style.verticalAlign = 'middle';
@@ -756,7 +756,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const received = sent - pending;  // 접수 = 전체 - 요청
                     
                     if (sent === 0) {
-                        TD.innerHTML = '<span style="color:#bdc1c6;">-</span>';
+                        TD.innerHTML = '<span class="ct-faint">-</span>';
                     } else {
                         // "요청 1 + ✓ 접수 2" 한 줄 표시
                         const parts = [];
@@ -766,7 +766,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (received > 0) {
                             parts.push(`<span class="ct-xs" style="background:#e6f4ea;color:#137333;border-radius:6px;padding:1px 6px;font-weight:500;white-space:nowrap">✓ 접수 ${received}</span>`);
                         }
-                        TD.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;flex-wrap:nowrap;">${parts.join('<span class="ct-xs" style="color:#bdc1c6">+</span>')}</div>`;
+                        TD.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;flex-wrap:nowrap;">${parts.join('<span class="ct-xs ct-faint">+</span>')}</div>`;
                     }
                     TD.style.textAlign = 'center';
                     TD.style.verticalAlign = 'middle';
@@ -1139,7 +1139,7 @@ function renderDocTypes(types) {
             <input type="checkbox" class="doc-type-chk" value="${t.type_id}" style="width:15px;height:15px;flex-shrink:0;">
             <i class="bi ${t.icon || 'bi-file-earmark'} ct-lg" style="color:${t.color || '#6c757d'};flex-shrink:0"></i>
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.type_name}</span>
-            ${t.required_yn ? '<span class="badge bg-danger ms-auto ct-xs" style="flex-shrink:0">필수</span>' : ''}
+            ${t.required_yn ? '<span class="badge bg-danger ms-auto ct-xs ct-fix">필수</span>' : ''}
         </label>`
     ).join('');
     el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px;">${items}</div>`;
@@ -1297,7 +1297,7 @@ async function loadDocRequests(email) {
                 `<span class="ct-xs" style="background:#f1f3f4;border-radius:6px;padding:1px 7px">${d.type_name}</span>`
             ).join(' ');
             const cancelBtn = r.status === 'PENDING'
-                ? `<button class="btn v2-btn-sm btn-outline-danger ct-xs" style="flex-shrink:0"
+                ? `<button class="btn v2-btn-sm btn-outline-danger ct-xs ct-fix"
                           onclick="cancelDocReq(${r.request_id}, this, '${email}')">취소</button>`
                 : '';
 
@@ -1314,13 +1314,13 @@ async function loadDocRequests(email) {
                             : Math.ceil(s.file_size/1024)+' KB') : '';
                         return `<div class="d-flex align-items-center gap-1 mb-1 px-2 py-1 rounded ct-sm"
                                      style="background:#f0f7f0">
-                            <i class="bi bi-file-earmark-check text-success ct-md" style="flex-shrink:0"></i>
+                            <i class="bi bi-file-earmark-check text-success ct-md ct-fix"></i>
                             <span class="ct-xs" style="color:#137333;font-weight:600;flex-shrink:0;white-space:nowrap">${s.document_type}</span>
                             <span class="text-truncate text-muted ct-xs" style="flex:1;min-width:0" title="${s.filename}">${s.filename}</span>
-                            ${kb ? `<span class="text-muted ct-xs" style="flex-shrink:0">${kb}</span>` : ''}
+                            ${kb ? `<span class="text-muted ct-xs ct-fix">${kb}</span>` : ''}
                             <a href="${s.file_url}" download="${s.filename}"
-                               class="btn v2-btn-sm btn-outline-success ct-xs"
-                               style="flex-shrink:0" title="파일 다운로드">
+                               class="btn v2-btn-sm btn-outline-success ct-xs ct-fix"
+                               title="파일 다운로드">
                                 <i class="bi bi-download"></i>
                             </a>
                         </div>`;
@@ -1333,13 +1333,13 @@ async function loadDocRequests(email) {
                     <span class="ct-xs" style="background:${st.bg};color:${st.color};border-radius:10px;padding:1px 8px;font-weight:500;flex-shrink:0">
                         <i class="bi ${st.icon} me-1"></i>${st.label}
                     </span>
-                    <span class="text-muted ct-xs" style="flex-shrink:0">${r.created}</span>
-                    <div style="flex:1;min-width:0;overflow:hidden;">${docs || '<span style="color:#bdc1c6;">문서 미지정</span>'}</div>
+                    <span class="text-muted ct-xs ct-fix">${r.created}</span>
+                    <div style="flex:1;min-width:0;overflow:hidden;">${docs || '<span class="ct-faint">문서 미지정</span>'}</div>
                     ${r.due_date ? `<span class="ct-xs" style="color:#c5221f;flex-shrink:0">~${r.due_date}</span>` : ''}
                     ${cancelBtn}
                 </div>
                 <div class="px-3 py-2">
-                    ${r.message ? `<div class="text-muted mb-2 ct-xs" style="font-style:italic">"${r.message}"</div>` : ''}
+                    ${r.message ? `<div class="text-muted mb-2 ct-xs ct-italic">"${r.message}"</div>` : ''}
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <span class="ct-xs" style="color:#5f6368;font-weight:600;flex-shrink:0">
                             <i class="bi bi-link-45deg me-1"></i>연결 제품
@@ -1457,14 +1457,14 @@ function filterLabelOptions(reqId, query) {
     }
     dropdown.style.display = 'block';
     dropdown.innerHTML = filtered.slice(0, 50).map(l => `
-        <div class="px-3 py-2 border-bottom label-option"
-             style="cursor:pointer;"
+        <div class="px-3 py-2 border-bottom label-option ct-click"
+            
              onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background=''"
              data-lid="${l.id}"
              data-lname="${(l.name || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}"
              onclick="selectLabelOption(${reqId}, this)">
             <div style="font-weight:600;">${l.name}</div>
-            ${l.prdlst_dcnm ? `<div class="ct-xs" style="color:#5f6368">${l.prdlst_dcnm}</div>` : ''}
+            ${l.prdlst_dcnm ? `<div class="ct-xs ct-dim">${l.prdlst_dcnm}</div>` : ''}
         </div>`).join('');
 }
 
@@ -1536,7 +1536,7 @@ function renderShareTable(type, rows, tbodyId, loadingId, emptyId, tableId, badg
         return `<tr>
             <td><a href="${PRODUCT_DETAIL_URL}${r.label_id}/new/" class="text-decoration-none text-dark fw-medium">${r.label_name}</a></td>
             <td>${roleBadge}</td>
-            <td class="ct-sm" style="color:#5f6368">${r.created_at || '-'}</td>
+            <td class="ct-sm ct-dim">${r.created_at || '-'}</td>
             <td class="ct-sm" style="color:${r.share_end_date ? '#c5221f' : '#5f6368'}">${r.share_end_date || '무기한'}</td>
             <td style="text-align:center;">${actionCell}</td>
         </tr>`;
@@ -1643,8 +1643,8 @@ function renderQsProducts(labels, filtered) {
         return `
         <div class="qs-product-row d-flex align-items-center gap-2 px-3 py-2"
              style="border-bottom:1px solid #f0f0f0;" data-id="${sid}">
-            <input type="checkbox" class="qs-chk form-check-input" data-id="${sid}" ${checked}
-                   style="width:15px;height:15px;flex-shrink:0;cursor:pointer;"
+            <input type="checkbox" class="qs-chk form-check-input ct-check" data-id="${sid}" ${checked}
+                  
                    onchange="onQsChkChange(this)">
             <div class="flex-grow-1" style="min-width:0;overflow:hidden;">
                 <div class="ct-md" style="font-weight:500;color:#202124;

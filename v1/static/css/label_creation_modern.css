@@ -36,22 +36,22 @@ select {
 
 /* CSS 변수 정의 — 공유 토큰(variables.css)을 기반으로 매핑 */
 :root {
-  --modern-primary:       var(--ez-info,          #3b82f6);
-  --modern-primary-hover: var(--ez-info-hover,    #2563eb);
+  --modern-primary:       var(--ez-info,          #1a73e8);
+  --modern-primary-hover: var(--ez-info-hover,    #1765cc);
   --modern-success:       var(--ez-success,       #1e8e3e);
   --modern-success-hover: var(--ez-success-hover, #137333);
   --modern-info:          #06b6d4;
   --modern-info-hover:    #0891b2;
-  --modern-gray-50:  var(--ez-gray-50,  #f9fafb);
-  --modern-gray-100: var(--ez-gray-100, #f3f4f6);
-  --modern-gray-200: var(--ez-gray-200, #e5e7eb);
-  --modern-gray-300: var(--ez-gray-300, #d1d5db);
-  --modern-gray-400: var(--ez-gray-400, #9ca3af);
-  --modern-gray-500: var(--ez-gray-500, #6b7280);
-  --modern-gray-600: var(--ez-gray-600, #4b5563);
-  --modern-gray-700: var(--ez-gray-700, #374151);
-  --modern-gray-800: var(--ez-gray-800, #1f2937);
-  --modern-gray-900: var(--ez-gray-900, #111827);
+  --modern-gray-50:  var(--ez-gray-50,  #f8f9fa);
+  --modern-gray-100: var(--ez-gray-100, #f1f3f4);
+  --modern-gray-200: var(--ez-gray-200, #e8eaed);
+  --modern-gray-300: var(--ez-gray-300, #dadce0);
+  --modern-gray-400: var(--ez-gray-400, #bdc1c6);
+  --modern-gray-500: var(--ez-gray-500, #9aa0a6);
+  --modern-gray-600: var(--ez-gray-600, #80868b);
+  --modern-gray-700: var(--ez-gray-700, #5f6368);
+  --modern-gray-800: var(--ez-gray-800, #3c4043);
+  --modern-gray-900: var(--ez-gray-900, #202124);
   --modern-shadow:    var(--ez-shadow-xs);
   --modern-shadow-md: var(--ez-shadow-md);
   --modern-shadow-lg: var(--ez-shadow-lg);
@@ -2344,7 +2344,9 @@ textarea:focus {
 .btn-outline-secondary:focus,
 .btn-outline-secondary:active {
   color: #fff !important;
-  background-color: #6c757d !important;
+  /* 흰 글자를 얹는 바탕이다. 대비 4.69 -> 6.05 로 오르고, 바로 아래 테두리와
+     같은 색이 된다 — 지금은 미묘하게 달라서 단추에 테가 진 것처럼 보였다. */
+  background-color: var(--ez-gray-700, #5f6368) !important;
   border-color: var(--ez-gray-700, #5f6368) !important;
 }
 

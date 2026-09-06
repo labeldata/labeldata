@@ -14,15 +14,15 @@
     --google-border:     var(--v2-border);
     --text-primary:      var(--v2-text);
     --text-secondary:    var(--v2-text-sub);
-    --text-hint:         #9aa0a6;   /* 전용 색상, products_common.css 미정의 */
+    --text-hint: var(--ez-gray-500, #9aa0a6);   /* 전용 색상, products_common.css 미정의 */
 
     /* Semantic Colors */
-    --status-success-bg:   #e6f4ea;
-    --status-success-text: #137333;
-    --status-warning-bg:   #fef7e0;
+    --status-success-bg: var(--ez-success-bg, #e6f4ea);
+    --status-success-text: var(--ez-success-hover, #137333);
+    --status-warning-bg: var(--ez-warning-bg, #fef7e0);
     --status-warning-text: #ea8600;
-    --status-error-bg:     #fce8e6;
-    --status-error-text:   #c5221f;
+    --status-error-bg: var(--ez-danger-bg, #fce8e6);
+    --status-error-text: var(--ez-danger, #c5221f);
 
     /* Shadows & Radius */
     --shadow-card:  0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
