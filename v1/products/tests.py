@@ -3086,9 +3086,36 @@ class BomLayoutFollowsTheWorkTests(TestCase):
                         self.html.index('bom-right-panel'))
         self.assertIn('.bom-rowdetail.is-open', self.css)
 
-    def test_고르면_펴지고_비우면_접힌다(self):
-        self.assertIn("rowDetail.classList.add('is-open')", self.html)
-        self.assertIn("closing.classList.remove('is-open')", self.html)
+    def test_고른_줄_바로_아래에_뜬다(self):
+        """
+        표 밑에 따로 두었더니 줄을 고르면 화면 맨 아래로 내려가서, 어느 줄의
+        상세인지 눈으로 이어 보기가 어려웠다.
+        """
+        self.assertIn('function openRowDetail', self.html)
+        head = self.html.index('function openRowDetail')
+        block = self.html[head:head + 900]
+        self.assertIn('hot.getCell(rowIndex, 0)', block)
+        self.assertIn("panel.style.top", block)
+        self.assertIn('.bom-grid-card { position: relative; }', self.css)
+        self.assertIn('position: absolute', self.css)
+
+    def test_고르는_칸에서만_편다(self):
+        # 모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다
+        self.assertIn("PICKER_PROPS = new Set(['allergens', 'gmo'])", self.html)
+        self.assertIn('PICKER_PROPS.has(this.colToProp(col))', self.html)
+
+    def test_어느_줄의_것인지_적혀_있다(self):
+        # 표 위에 떠 있으니 이름이 없으면 헷갈린다
+        self.assertIn('id="bom-rowdetail-name"', self.html)
+        self.assertIn('closeRowDetail()', self.html)
+
+    def test_밖을_누르거나_Esc_로_닫는다(self):
+        self.assertIn("if (e.key === 'Escape') closeRowDetail();", self.html)
+        self.assertIn('card.contains(e.target)', self.html)
+
+    def test_품목보고번호를_두_곳에서_고치지_않는다(self):
+        # 표에 칸이 있다. 두 곳에서 고치면 어느 쪽이 맞는지 알 수 없다
+        self.assertIn('<input type="hidden" id="field-report-no">', self.html)
 
     def test_요약은_표의_칸을_먼저_본다(self):
         """알레르기·GMO 에 칸이 생겼으니 표가 먼저다."""

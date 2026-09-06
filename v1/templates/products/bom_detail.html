@@ -127,18 +127,24 @@ body.in-iframe .bom-page-header { display: none !important; }
                 </div>
             </details>
 
-            <div class="bom-grid-card shadow-sm">
-                <div id="bom-grid" class="hot-container"></div>
-            </div>
-
             {% comment %}
-              고른 줄의 상세. 표의 아홉 칸이 이미 대부분을 덮으니 여기에는
-              나머지만 둔다 — 원산지·복합원재료·첨가물 용도.
+              고른 줄의 상세를 **그 줄 바로 아래**에 띄운다.
 
-              오른쪽에 있을 때는 보관함과 탭을 나눠 써서, 상세를 보려면
-              보관함이 사라졌다. 원료를 이어서 넣을 수가 없었다.
+              표 밑에 따로 두었더니 줄을 고르면 화면 맨 아래로 내려가서,
+              어느 줄의 상세인지 눈으로 이어 보기가 어려웠다. 스무 줄짜리
+              배합비에서는 고른 줄과 상세가 화면 두 개만큼 떨어진다.
+
+              표의 아홉 칸이 이미 대부분을 덮으니 여기에는 **칸에서 치기
+              어려운 것**만 둔다 — 알레르기·GMO 처럼 목록에서 골라야 하는 것.
             {% endcomment %}
-            <div class="bom-rowdetail" id="bom-rowdetail">
+            <div class="bom-grid-card shadow-sm" id="bom-grid-card">
+                <div id="bom-grid" class="hot-container"></div>
+                <div class="bom-rowdetail" id="bom-rowdetail">
+                    <div class="bom-rowdetail-head">
+                        <span id="bom-rowdetail-name">원료</span>
+                        <button type="button" class="btn-close ms-auto"
+                                onclick="closeRowDetail()" aria-label="닫기"></button>
+                    </div>
                 <div class="card-body p-3" id="context-panel">
                                 <div id="context-empty" class="text-center bom-context-placeholder mt-5">
                                     <i class="bi bi-cursor fs-1 text-muted" style="opacity: 0.3;"></i>
@@ -220,14 +226,13 @@ body.in-iframe .bom-page-header { display: none !important; }
                                         </div>
                                         <div class="mt-1 text-muted" style="font-size: 10px;">원재료 요약 시 표시명으로 사용할 기준을 선택합니다.</div>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="bom-field-label mb-2">품목보고번호</label>
-                                        <input type="text" class="form-control form-control-sm" id="field-report-no" style="font-size: 12px;">
-                                    </div>
+                                    {# 품목보고번호는 표에 칸이 있다. 두 곳에서 고치면 어느 쪽이 맞는지 알 수 없다 #}
+                                    <input type="hidden" id="field-report-no">
                                     <input type="hidden" id="field-source-label-id">
                                     <input type="hidden" id="field-summary-type" value="식품유형">
                                 </div>
                             </div>
+            </div>
             </div>
 
         </div>
@@ -518,7 +523,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                 
                 const rowData = this.getSourceDataAtRow(row);
                 currentRowIndex = row;
-                updateContextPanel(rowData, row);
+                /* 목록에서 골라야 하는 칸을 눌렀을 때만 그 줄 아래에 편다.
+                   모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다. */
+                updateContextPanel(rowData, row, PICKER_PROPS.has(this.colToProp(col)));
             },
             afterChange: function(changes, source) {
                 if (!changes || source === 'loadData' || source === 'palette' || source === 'syncPanel') {
@@ -803,7 +810,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         if (!rawMaterialName) {
             setRowProp(rowIndex, 'raw_material_name', value);
         }
-        updateContextPanel(hot.getSourceDataAtRow(rowIndex), rowIndex);
+        updateContextPanel(hot.getSourceDataAtRow(rowIndex), rowIndex, true);
         // 자동완성 선택 후 요약 패널 갱신 (setRowProps는 source='syncPanel'로 afterChange 건너뜀)
         setTimeout(generateBomSummary, 50);
     }
@@ -964,7 +971,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             const mergedData = Object.assign({}, rowData, updatedData);
             
             // context panel에 병합된 데이터 전달
-            updateContextPanel(mergedData, rowIndex);
+            updateContextPanel(mergedData, rowIndex, true);
             scheduleDraftSave();
         } catch (error) {
             console.error('원료 상세 불러오기 실패:', error);
@@ -1004,7 +1011,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         }
 
         hot.selectCell(targetRow, 0);
-        updateContextPanel(hot.getSourceDataAtRow(targetRow), targetRow);
+        updateContextPanel(hot.getSourceDataAtRow(targetRow), targetRow, true);
         scheduleDraftSave();
         // 팔레트 드롭 후 요약 갱신 (source='palette'로 afterChange 건너뜀)
         setTimeout(generateBomSummary, 50);
@@ -1367,6 +1374,66 @@ body.in-iframe .bom-page-header { display: none !important; }
     }
 
     /* ── BOM 원재료 요약 생성 ─────────────────────────────────────────── */
+    /*
+     * 상세를 **고른 줄 바로 아래**에 띄운다.
+     *
+     * 표 밑에 따로 두었더니 줄을 고르면 화면 맨 아래로 내려가서, 어느 줄의
+     * 상세인지 눈으로 이어 보기가 어려웠다. 스무 줄짜리 배합비에서는 고른
+     * 줄과 상세가 화면 두 개만큼 떨어진다.
+     *
+     * 표 안에 자리를 잡으므로 줄을 옮기면 따라 움직인다.
+     */
+    function openRowDetail(rowIndex) {
+        const panel = document.getElementById('bom-rowdetail');
+        const card = document.getElementById('bom-grid-card');
+        if (!panel || !card || !hot) return;
+
+        const cell = hot.getCell(rowIndex, 0);
+        if (!cell) return;          // 화면 밖의 줄. 고른 줄은 보통 보인다.
+
+        const cardBox = card.getBoundingClientRect();
+        const cellBox = cell.getBoundingClientRect();
+        panel.style.top = (cellBox.bottom - cardBox.top) + 'px';
+        const name = document.getElementById('bom-rowdetail-name');
+        if (name) {
+            const row = hot.getSourceDataAtRow(rowIndex) || {};
+            name.textContent = (row.ingredient_name || '').trim()
+                || ((rowIndex + 1) + '번째 줄');
+        }
+        panel.classList.add('is-open');
+        panel.dataset.row = rowIndex;
+    }
+
+    function closeRowDetail() {
+        const panel = document.getElementById('bom-rowdetail');
+        if (panel) {
+            panel.classList.remove('is-open');
+            delete panel.dataset.row;
+        }
+    }
+    window.closeRowDetail = closeRowDetail;
+
+    /* 줄 높이가 바뀌거나 창이 바뀌면 자리를 다시 잡는다 */
+    window.addEventListener('resize', function () {
+        const panel = document.getElementById('bom-rowdetail');
+        if (panel && panel.classList.contains('is-open') && panel.dataset.row) {
+            openRowDetail(Number(panel.dataset.row));
+        }
+    });
+
+    /* 표 밖을 누르면 닫는다. 표 안을 누르면 그 줄로 옮겨 간다. */
+    document.addEventListener('mousedown', function (e) {
+        const panel = document.getElementById('bom-rowdetail');
+        const card = document.getElementById('bom-grid-card');
+        if (!panel || !card || !panel.classList.contains('is-open')) return;
+        if (card.contains(e.target)) return;
+        closeRowDetail();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeRowDetail();
+    });
+
     function generateBomSummary() {
         if (!hot) return;
 
@@ -1495,7 +1562,12 @@ body.in-iframe .bom-page-header { display: none !important; }
         }, '*');
     }
 
-    function updateContextPanel(data, rowIndex) {
+    /* 상세를 저절로 펴는 칸.
+       모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다. 목록에서
+       골라야 하는 칸 — 손으로 치기 어려운 것 — 에서만 편다. */
+    const PICKER_PROPS = new Set(['allergens', 'gmo']);
+
+    function updateContextPanel(data, rowIndex, openPanel) {
         const emptyEl = document.getElementById('context-empty');
         const formEl = document.getElementById('context-form');
         const viewEl = document.getElementById('context-view');
@@ -1504,18 +1576,11 @@ body.in-iframe .bom-page-header { display: none !important; }
             formEl.classList.add('d-none');
             viewEl.classList.add('d-none');
             currentRowIndex = null;
-            const closing = document.getElementById('bom-rowdetail');
-            if (closing) closing.classList.remove('is-open');
+            closeRowDetail();
             return;
         }
 
-        /* 상세는 이제 고른 줄 아래에 있다. 탭을 띄우는 대신 그 자리로
-           스크롤해 준다 — 표가 길면 화면 밖에 있을 수 있다. */
-        const rowDetail = document.getElementById('bom-rowdetail');
-        if (rowDetail) {
-            rowDetail.classList.add('is-open');
-            rowDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
+        if (openPanel) openRowDetail(rowIndex);
 
         emptyEl.classList.add('d-none');
         formEl.classList.remove('d-none');
