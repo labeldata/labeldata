@@ -243,12 +243,7 @@
        다만 **칸마다 최소 폭이 있다.** 열네 칸을 45% 짜리 패널에 넣으면
        한 글자짜리 칸이 되어 글자가 세로로 쌓인다 — 실제로 그렇게 나왔다.
        좁으면 그 패널만 가로로 밀고, 넓게 보기로 열면 전부 들어온다. */
-    .list-table {
-        width: 100%;
-        min-width: var(--list-min-width, 0);
-        border-collapse: collapse;
-        table-layout: fixed;
-    }
+    .list-table { min-width: var(--list-min-width, 0); }
 
     /* ── 넓게 보기 ──
        목록과 상세를 반씩 나눠 쓰는데, 여러 건을 훑고 견줄 때는 상세 칸이
@@ -363,33 +358,6 @@
         border-top: 1px solid var(--google-gray-200);
     }
 
-    .list-table thead {
-        position: sticky;
-        top: 0;
-        background: white;
-        z-index: 10;
-    }
-
-    /* 눈금은 식품첨가물 DB(.additive-table)와 맞춘다 — 같은 성격의 목록이
-       화면마다 다른 크기로 보일 이유가 없다. */
-    .list-table th {
-        padding: 12px 8px;
-        border-bottom: 2px solid #e8eaed;
-        font-size: 13px;
-        font-weight: 500;
-        letter-spacing: 0.3px;
-        color: #444746;
-        text-align: center;
-        white-space: nowrap;
-        background: white;
-    }
-
-    .list-table tbody tr {
-        border-bottom: 1px solid #f0f0f0;
-        cursor: pointer;
-        transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
     .list-table tbody tr.selected {
         background: rgba(26, 115, 232, 0.12) !important;
     }
@@ -399,67 +367,8 @@
         font-weight: 500;
     }
 
-    .list-table td {
-        padding: 8px;
-        font-size: 13px;
-        line-height: 1.45;
-        vertical-align: middle;
-        color: #1f1f1f;
-    }
-
-    /* 폭이 좁아지면 잘라 버리는 대신 **세 줄까지 접어 보여 준다.**
-       칸 폭은 고른 칸 수에 따라 달라지므로 몇 글자에서 끊을지 서버가 정할 수
-       없다.
-
-       접기는 **안쪽 상자**가 한다. td 에 display:-webkit-box 를 주면 칸이
-       table-cell 이 아니게 되어 표가 통째로 무너진다. */
-    .cell-clip {
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        white-space: normal;
-        word-break: break-word;
-    }
-
-    /* 지나가는 줄은 **그 자리에서 펴진다.**
-       접힌 것을 보려고 한 건씩 눌러 상세를 여는 것이 원래 불편이었다.
-       마우스를 올린 동안만 전부 보이고, 지나가면 다시 접힌다.
-
-       다만 줄이 커지면 **아래 줄들이 밀린다.** 훑어 내려가는 중에는 그것이
-       거슬릴 수 있어서, 겹쳐 띄우는 방식도 둔다. 어느 쪽이 나은지는 실제로
-       써 봐야 알 일이라 골라 쓰게 한다(보기 설정의 "줄 펴기 / 겹쳐 보기").
-
-       peek 방식에서는 칸이 밀리지 않는다 — 지나가는 칸 하나만 제 자리 위로
-       떠올라 전부를 보여 준다. */
-    .list-wrap:not(.is-peek) .list-table tbody tr:hover .cell-clip {
-        -webkit-line-clamp: unset;
-        display: block;
-    }
-
-    .list-wrap.is-peek .list-table td { position: relative; }
-    .list-wrap.is-peek .list-table td:hover .cell-clip {
-        position: absolute;
-        left: 0;
-        top: 0;
-        z-index: 20;
-        min-width: 100%;
-        max-width: 460px;
-        max-height: 280px;
-        overflow-y: auto;
-        padding: 8px 10px;
-        border: 1px solid var(--google-gray-300);
-        border-radius: 8px;
-        background: #fff;
-        box-shadow: 0 4px 14px rgba(60, 64, 67, .25);
-        -webkit-line-clamp: unset;
-        display: block;
-    }
-    .list-table tbody tr:hover {
-        background: #e8f0fe;
-        box-shadow: inset 3px 0 0 var(--google-blue);
-    }
-    .list-table tbody tr:hover td { vertical-align: top; }
+/* 지나가는 줄이 펴지는 것과 겹쳐 뜨는 것은 list_common.css 의
+       .ez-list-wrap 이 갖는다 — 다른 목록 화면도 같이 쓴다. */
 
     /* 체크박스 열 */
     .list-table td:first-child,
@@ -836,9 +745,9 @@
                     </button>
                 </div>
             </div>
-            <div class="list-table-wrapper list-wrap">
+            <div class="list-table-wrapper list-wrap ez-list-wrap">
                 {% include "label/_list_column_align.html" with align_table=".list-table" align_offset=1 %}
-                <table class="list-table" style="--list-min-width: {{ list_columns|length }}00px;">
+                <table class="list-table ez-list-table" style="--list-min-width: {{ list_columns|length }}00px;">
                     <thead>
                         <tr>
                             <th style="width: 38px;"><input type="checkbox" class="ingredient-check-all" id="checkAllIngredients"></th>

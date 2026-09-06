@@ -175,3 +175,98 @@
 
    전부 왼쪽에 붙여 두면 성격이 다른 것이 한 덩어리로 보인다. */
 .rf-push-right { margin-left: auto; }
+
+/* ── 목록 표 껍데기 (.ez-list-table) ─────────────────────────────
+   원료 관리와 식품첨가물 DB 가 같은 표를 각자 그리고 있었다. 글자
+   12px/13px, 머리글 밑줄 1px/2px, 줄 높이 44px/48px — 같은 성격의
+   목록이 화면마다 다른 크기로 보였다.
+
+   여기 있는 규칙은 어느 화면에서 고쳐도 전부에 반영된다. 색은 토큰을
+   쓴다(variables.css) — 같은 회색을 파일마다 적어 두면 어느 날 한쪽만
+   고쳐진다.
+   ──────────────────────────────────────────────────────────────── */
+.ez-list-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    background: #fff;
+}
+
+.ez-list-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fff;
+}
+
+.ez-list-table thead th {
+    padding: 12px 8px;
+    border: 0;
+    border-bottom: 2px solid var(--ez-gray-200, #e8eaed);
+    background: #fff;
+    font-size: var(--ez-font-size-sm, 13px);
+    font-weight: 500;
+    letter-spacing: .3px;
+    color: var(--ez-gray-700, #444746);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.ez-list-table tbody tr {
+    border-bottom: 1px solid var(--ez-gray-100, #f0f0f0);
+    cursor: pointer;
+    transition: background-color .15s cubic-bezier(.4, 0, .2, 1);
+}
+
+.ez-list-table tbody td {
+    padding: 8px;
+    border: 0;
+    font-size: var(--ez-font-size-sm, 13px);
+    line-height: 1.45;
+    vertical-align: middle;
+    color: var(--ez-gray-900, #1f1f1f);
+}
+
+/* 긴 값은 접어 둔다. 몇 글자에서 끊을지는 칸 폭에 달렸으므로 서버가
+   정할 수 없다 — 줄 수로 정한다. 기본 세 줄. */
+.ez-list-table .cell-clip {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* 지나가는 줄. 두 가지 방식을 골라 쓴다 —
+     기본     그 줄이 제자리에서 펴진다. 아래 줄들이 밀린다.
+     is-peek  지나가는 칸 하나만 떠오른다. 표가 흔들리지 않는다. */
+.ez-list-wrap .ez-list-table tbody tr:hover {
+    background: var(--ez-info-bg, #e8f0fe);
+    box-shadow: inset 3px 0 0 var(--ez-info, #1a73e8);
+}
+.ez-list-wrap .ez-list-table tbody tr:hover td { vertical-align: top; }
+
+.ez-list-wrap:not(.is-peek) .ez-list-table tbody tr:hover .cell-clip {
+    display: block;
+    -webkit-line-clamp: unset;
+}
+
+.ez-list-wrap.is-peek .ez-list-table tbody td { position: relative; }
+.ez-list-wrap.is-peek .ez-list-table tbody td:hover .cell-clip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 20;
+    display: block;
+    min-width: 100%;
+    max-width: 460px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 8px 10px;
+    border: 1px solid var(--ez-border, #dadce0);
+    border-radius: var(--ez-radius-md, 8px);
+    background: #fff;
+    box-shadow: var(--ez-shadow-lg, 0 4px 14px rgba(60, 64, 67, .25));
+    -webkit-line-clamp: unset;
+}

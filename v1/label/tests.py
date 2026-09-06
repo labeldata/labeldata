@@ -8933,6 +8933,7 @@ class ListFitsOneScreenTests(TestCase):
 
     def setUp(self):
         self.html = _src('templates/label/my_ingredient_list_combined.html')
+        self.css = _src('static/css/list_common.css')
 
     def test_고른_칸끼리_100퍼센트를_나눈다(self):
         from v1.label.services.list_sort import ingredient_columns
@@ -8956,7 +8957,7 @@ class ListFitsOneScreenTests(TestCase):
         self.assertIn('--list-min-width: {{ list_columns|length }}00px', self.html)
 
     def test_세_줄까지_접는다(self):
-        self.assertIn('-webkit-line-clamp: 3', self.html)
+        self.assertIn('-webkit-line-clamp: 3', self.css)
         self.assertIn('class="cell-clip"', self.html)
 
     def test_지나가면_그_줄이_펴진다(self):
@@ -8964,8 +8965,8 @@ class ListFitsOneScreenTests(TestCase):
         접힌 것을 보려고 한 건씩 눌러 상세를 여는 것이 원래 불편이었다.
         마우스를 올린 동안만 전부 보이고, 지나가면 다시 접힌다.
         """
-        head = self.html.index('.list-wrap:not(.is-peek) .list-table tbody tr:hover .cell-clip')
-        block = self.html[head:head + 200]
+        head = self.css.index('.ez-list-wrap:not(.is-peek) .ez-list-table tbody tr:hover .cell-clip')
+        block = self.css[head:head + 200]
         self.assertIn('-webkit-line-clamp: unset', block)
 
     def test_겹쳐_보기도_고를_수_있다(self):
@@ -8975,26 +8976,33 @@ class ListFitsOneScreenTests(TestCase):
         """
         self.assertIn('id="peekBtn"', self.html)
         self.assertIn('window.togglePeekMode', self.html)
-        head = self.html.index('.list-wrap.is-peek .list-table td:hover .cell-clip')
-        block = self.html[head:head + 500]
+        head = self.css.index('.ez-list-wrap.is-peek .ez-list-table tbody td:hover .cell-clip')
+        block = self.css[head:head + 600]
         self.assertIn('position: absolute', block)
         self.assertIn('box-shadow', block)
 
     def test_두_방식이_함께_돌지_않는다(self):
         # 겹쳐 보기일 때는 줄을 펴지 않는다
-        self.assertIn('.list-wrap:not(.is-peek)', self.html)
+        self.assertIn('.ez-list-wrap:not(.is-peek)', self.css)
 
     def test_고른_방식은_브라우저에_남는다(self):
         self.assertIn("localStorage.getItem(PEEK_KEY)", self.html)
 
-    def test_지나가는_줄은_한_벌만_정한다(self):
-        # 같은 규칙이 두 벌이면 어느 날 한쪽만 고쳐진다
-        self.assertEqual(self.html.count('.list-table tbody tr:hover {'), 1)
+    def test_두_목록_화면이_같은_껍데기를_쓴다(self):
+        """
+        원료 관리와 식품첨가물 DB 가 같은 표를 각자 그리고 있었다. 글자
+        12px/13px, 머리글 밑줄 1px/2px, 줄 높이 44px/48px.
+        """
+        self.assertIn('ez-list-table', self.html)
+        self.assertIn('ez-list-table', _src('templates/label/food_additive_search.html'))
+        # 껍데기를 제 화면에 다시 적어 두지 않는다
+        self.assertNotIn('.list-table th {', self.html)
+        self.assertNotIn('.cell-clip {', self.html)
 
     def test_접기는_칸이_아니라_안쪽_상자가_한다(self):
         """td 에 display:-webkit-box 를 주면 table-cell 이 아니게 되어 표가 무너진다."""
-        head = self.html.index('.list-table td {')
-        block = self.html[head:head + 260]
+        head = self.css.index('.ez-list-table tbody td {')
+        block = self.css[head:head + 300]
         self.assertNotIn('-webkit-box', block)
 
     def test_전체는_말풍선으로도_본다(self):
@@ -9043,13 +9051,13 @@ class ViewControlsAreSeparateTests(TestCase):
     def test_몇_칸을_보고_있는지_적혀_있다(self):
         self.assertIn('ing-viewctl-count', self.html)
 
-    def test_눈금은_식품첨가물_DB_와_맞춘다(self):
-        additive = _src('templates/label/food_additive_search.html')
-        for rule in ('font-size: 13px', 'border-bottom: 2px solid #e8eaed',
-                     'background: #f1f3f4'):
-            self.assertIn(rule.replace('background', 'background-color')
-                          if 'f1f3f4' in rule else rule, additive)
-            self.assertIn(rule, self.html)
+    def test_껍데기는_한_곳에_있다(self):
+        css = _src('static/css/list_common.css')
+        self.assertIn('.ez-list-table thead th', css)
+        self.assertIn('.ez-list-table tbody td', css)
+        # 색은 토큰으로 — 같은 회색을 파일마다 적어 두면 한쪽만 고쳐진다
+        head = css.index('.ez-list-table thead th')
+        self.assertIn('var(--ez-', css[head:head + 400])
 
 
 class NarrowScreenTests(TestCase):

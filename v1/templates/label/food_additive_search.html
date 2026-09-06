@@ -47,31 +47,12 @@
         gap: 16px;
     }
 
-    /* 제품 테이블 - M3 스타일 */
-    .additive-table {
-        table-layout: fixed;
-        background: #ffffff;
-    }
-
-    .additive-table thead {
-        position: sticky;
-        top: 0;
-        background: #ffffff;
-        z-index: 10;
-    }
-
+    /* 표 껍데기는 list_common.css 의 .ez-list-table 이 갖는다 —
+       원료 관리와 같은 눈금이어야 한다. 여기는 이 화면에만 있는 것만. */
     .additive-table thead th {
-        border-bottom: 2px solid #e8eaed;
         border-left: none !important;
         border-right: none !important;
-        font-weight: 500;
-        font-size: 13px;
-        letter-spacing: 0.3px;
-        color: #444746;
-        padding: 12px 8px;
         text-align: center !important;
-        white-space: nowrap;
-        background: #ffffff;
     }
 
     .additive-table thead th:first-child {
@@ -79,28 +60,7 @@
         width: 4%;
     }
 
-    .additive-table tbody tr {
-        cursor: pointer;
-        transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-        border-bottom: none;
-        height: 48px;
-    }
-
-    .additive-table tbody tr:hover {
-        background-color: #f1f3f4;
-    }
-
-    .additive-table tbody td {
-        padding: 8px;
-        font-size: 13px;
-        color: #1f1f1f;
-        border-top: none;
-        border-left: none;
-        border-right: none;
-        border-bottom-color: #f0f0f0;
-        text-align: center;
-        vertical-align: middle;
-    }
+    .additive-table tbody td { text-align: center; }
 
     .additive-table tbody td:first-child {
         text-align: center;
@@ -391,7 +351,7 @@
     <div class="flex-grow-1 overflow-auto custom-scrollbar">
         {% if page_obj %}
         {% if user.is_authenticated %}{% include "label/_list_column_align.html" with align_table=".additive-table" align_offset=1 %}{% else %}{% include "label/_list_column_align.html" with align_table=".additive-table" align_offset=0 %}{% endif %}
-        <table class="table table-hover align-middle mb-0 additive-table">
+        <table class="table table-hover align-middle mb-0 additive-table ez-list-table">
             <thead>
                 <tr>
                     {% if user.is_authenticated %}
