@@ -439,6 +439,21 @@ body.in-iframe .bom-main-column {
     border-radius: var(--ez-radius-md, 8px);
     background: #f8f9ff;
 }
+
+/* 표를 내리면 요약이 화면 밖으로 사라졌다. 결과물인데 만드는 동안 안 보인다.
+   붙여 둔다 — Handsontable 이 제 머리글을 z-index 101 로 띄우므로 그 위에. */
+.bom-summary.is-stuck {
+    position: sticky;
+    top: 0;
+    z-index: 150;
+    box-shadow: 0 2px 6px rgba(60, 64, 67, .12);
+}
+.bom-summary-note {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--ez-warning-on-bg, #b06000);
+}
+.bom-summary-note:empty { display: none; }
 .bom-summary-head {
     display: flex;
     align-items: center;
@@ -619,6 +634,31 @@ body.in-iframe .bom-main-column {
 */
 .pick-group { margin-bottom: 10px; }
 .pick-group:last-of-type { margin-bottom: 0; }
+
+/* 항목명 · 칩 · 전체선택을 한 줄에 둔다.
+   항목명이 제 줄을 차지하면 세 덩이가 여섯 줄이 되고, 줄 아래에 뜨는 창이
+   그만큼 표를 가린다. 칩은 남는 폭에서 접힌다. */
+.pick-row {
+    display:     flex;
+    align-items: flex-start;
+    gap:         8px;
+}
+.pick-row .pick-label {
+    padding-top: 3px;
+    width:       52px;
+    flex:        none;
+    cursor:      help;
+}
+.pick-row .pick-chips { flex: 1 1 auto; min-width: 0; }
+.pick-row .pick-chosen { flex: 0 1 auto; padding-top: 3px; }
+.pick-row .pick-all { margin-top: 1px; }
+.pick-tip {
+    flex:      none;
+    font-size: 11px;
+    color:     var(--ez-gray-600, #80868b);
+    padding-top: 3px;
+}
+
 .pick-head {
     display:       flex;
     align-items:   center;
@@ -693,3 +733,48 @@ body.in-iframe .bom-main-column {
 }
 /* 화면 최대화 — 위쪽 띠가 사라진 만큼 보관함도 더 길어진다 */
 html.v2-max .bom-right-panel { max-height: 100vh; }
+
+/* ── 무엇을 하는 화면인가 ─────────────────────────────────── */
+/*
+   안내가 두 곳에 흩어져 있었고 둘 다 "셀 더블클릭" 같은 조작법이었다.
+   처음 여는 사람이 알아야 하는 것은 조작법이 아니라 순서다.
+*/
+.bom-guide {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    border-radius: var(--ez-radius-md, 8px);
+    background: var(--ez-gray-50, #f8f9fa);
+}
+.bom-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.bom-steps li {
+    flex: 1 1 210px;
+    min-width: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ez-gray-900, #202124);
+}
+.bom-steps li b:first-child {
+    color: var(--ez-info, #1a73e8);
+    margin-right: 3px;
+}
+.bom-steps span {
+    display: block;
+    margin-top: 2px;
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--ez-gray-700, #5f6368);
+}
+.bom-steps span b { font-weight: 600; color: var(--ez-gray-900, #202124); }
+
+@media (max-width: 991px) {
+    .bom-steps li { flex: 1 1 100%; }
+}

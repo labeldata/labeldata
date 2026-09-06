@@ -3148,13 +3148,22 @@ class 고르는_자리를_낮춘다(TestCase):
         self.assertNotIn('background-color: #f8f9fa;', self._form())
         self.assertNotIn('border: 1px solid #dadce0;', self._form())
 
-    def test_라벨과_고른_것과_전체선택이_한_줄이다(self):
+    def test_항목명과_칩과_전체선택이_한_줄이다(self):
+        """
+        항목명이 제 줄을 차지하면 세 덩이가 여섯 줄이 되고, 줄 아래에 뜨는
+        창이 그만큼 표를 가린다.
+        """
         form = self._form()
-        for name in ('allergenSelectedDisplay', 'gmoSelectedDisplay'):
-            head = form.index('class="pick-head"')
-            self.assertIn(name, form[head:form.index('</div>', head)])
-            form = form[form.index('class="pick-head"', head) + 10:]
-        self.assertIn('.pick-head', self.css)
+        for name in ('allergen-quick-buttons', 'gmoBtnList'):
+            head = form.index('class="pick-group pick-row"')
+            block = form[head:form.index('</div>' + chr(10), head) + 400]
+            self.assertIn('pick-label', block)
+            self.assertIn(name, block)
+            self.assertIn('pick-all', block)
+            form = form[head + 20:]
+        self.assertIn('.pick-row {', self.css)
+        self.assertIn('.pick-row .pick-chips { flex: 1 1 auto; min-width: 0; }',
+                      self.css)
 
     def test_고른_것이_없으면_적지_않는다(self):
         # 칩이 그대로 보여 준다. 자리만 차지하는 말이었다
@@ -3279,7 +3288,7 @@ class 표시명_기준을_위에서_고른다(TestCase):
 
     def test_그_줄만_다르게_할_수_있다(self):
         # 상세의 토글은 남는다. 위에서 고른 것과 다르게 갈 때 쓴다
-        self.assertIn('<span class="pick-label">이 원료만</span>', self.html)
+        self.assertIn('>이 원료만</span>', self.html)
         self.assertIn("setRowProp(currentRowIndex, 'summary_type', value, 'syncPanel');",
                       self.html)
 
@@ -3480,3 +3489,97 @@ class 배합비는_소수점_세_자리다(TestCase):
         from v1.bom.models import ProductBOM
         self.assertEqual(
             ProductBOM._meta.get_field('usage_ratio').decimal_places, 4)
+
+
+class 요약이_화면_밖으로_사라졌다(TestCase):
+    """
+    요약은 이 화면의 결과물인데, 표를 내리면 위로 사라졌다. 만드는 동안
+    보이지 않으면 무엇을 만들고 있는지 알 수 없다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_요약만_붙여_둔다(self):
+        self.assertIn('class="bom-summary is-stuck"', self.html)
+        head = self.css.index('.bom-summary.is-stuck')
+        block = self.css[head:head + 260]
+        self.assertIn('position: sticky;', block)
+
+    def test_표의_머리글보다_위에_그린다(self):
+        import re
+        # Handsontable 이 제 머리글을 z-index 101 로 띄운다
+        head = self.css.index('.bom-summary.is-stuck')
+        block = self.css[head:head + 260]
+        z = int(re.search(r'z-index:\s*(\d+)', block).group(1))
+        self.assertGreater(z, 101)
+
+
+class 왜_안_바뀌는지_말해_준다(TestCase):
+    """
+    표시명 기준을 눌러도 요약이 그대로일 때가 있다 — 식품유형 칸이 비어
+    있으면 두 기준의 결과가 같기 때문이다. 화면이 아무 말도 하지 않으면
+    단추가 고장 난 것으로 보인다. 실제로 그렇게 신고가 왔다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_같아지는_줄을_세어_알린다(self):
+        self.assertIn('id="bom-summary-note"', self.html)
+        head = self.html.index("getElementById('bom-summary-note')")
+        block = self.html[head:head + 700]
+        self.assertIn('r.byFoodType && !r.foodType', block)
+        self.assertIn('원재료명으로 표시됩니다', block)
+
+    def test_할_말이_없으면_자리를_차지하지_않는다(self):
+        self.assertIn('.bom-summary-note:empty { display: none; }', self.css)
+
+
+class 무엇을_하는_화면인가(TestCase):
+    """
+    안내가 두 곳에 흩어져 있었고 둘 다 "셀 더블클릭" 같은 조작법이었다.
+    처음 여는 사람이 알아야 하는 것은 조작법이 아니라 순서다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_네_걸음이_순서대로_있다(self):
+        head = self.html.index('class="bom-steps"')
+        block = self.html[head:self.html.index('</ol>', head)]
+        for step in ('원료를 넣습니다', '표를 채웁니다',
+                     '요약을 확인합니다', '기본정보로 보냅니다'):
+            self.assertIn(step, block)
+
+    def test_걸음마다_어떻게_하는지_적는다(self):
+        head = self.html.index('class="bom-steps"')
+        block = self.html[head:self.html.index('</ol>', head)]
+        # 이름만 있으면 순서는 알아도 방법을 모른다
+        self.assertGreaterEqual(block.count('<span>'), 4)
+        self.assertIn('Ctrl+V', block)
+        self.assertIn('기본정보로 복사', block)
+
+    def test_안내가_한_곳에_모였다(self):
+        # 두 곳에 흩어져 있으면 어느 날 한쪽만 고쳐진다
+        self.assertEqual(
+            self.html.count('셀 더블 클릭해 수정할 수 있고'), 0)
+        self.assertIn('.bom-steps', self.css)
+
+    def test_고르는_자리마다_무엇인지_적는다(self):
+        for tip in ('이 원료에 든 알레르기 물질을 누릅니다',
+                    '유전자변형 농산물을 원료로 쓴 경우에 누릅니다',
+                    '위쪽 표시명 기준과 다르게 가고 싶을 때만 씁니다'):
+            self.assertIn(tip, self.html)

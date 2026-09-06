@@ -63,8 +63,26 @@ body.in-iframe .bom-page-header { display: none !important; }
                 {% endif %}
             </div>
         </div>
-        <div class="small text-muted mb-3">
-            셀을 더블 클릭해 수정할 수 있고, 우클릭 메뉴에서 행 추가/삭제 및 복사/되돌리기를 사용할 수 있습니다.
+        {% comment %}
+          안내가 두 곳에 흩어져 있었고 둘 다 "셀 더블클릭" 같은 조작법이었다.
+          처음 여는 사람이 알아야 하는 것은 조작법이 아니라 **순서**다 —
+          어디서 시작해 어디서 끝나는지.
+        {% endcomment %}
+        <div class="bom-guide">
+            <ol class="bom-steps">
+                <li><b>①</b> 원료를 넣습니다
+                    <span>오른쪽 보관함에서 끌어다 놓거나, 원료명 칸에 치면 자동완성됩니다.
+                          엑셀 배합비는 표에 그대로 붙여넣으세요(Ctrl+V).</span></li>
+                <li><b>②</b> 표를 채웁니다
+                    <span>배합비·식품유형·제조사를 칸에서 바로 칩니다.
+                          알레르기·GMO 는 칸을 누르면 아래에 고르는 자리가 펴집니다.</span></li>
+                <li><b>③</b> 요약을 확인합니다
+                    <span>위의 <b>원재료 요약</b>이 표를 고칠 때마다 다시 만들어집니다.
+                          표시 순서는 배합비 내림차순입니다.</span></li>
+                <li><b>④</b> 기본정보로 보냅니다
+                    <span>요약을 펴서 <b>기본정보로 복사</b>를 누르면 표시사항의
+                          원재료명 칸으로 들어갑니다. 저장은 <b>저장하기</b>로.</span></li>
+            </ol>
         </div>
     </div>
 
@@ -73,7 +91,8 @@ body.in-iframe .bom-page-header { display: none !important; }
             <div class="d-flex justify-content-between align-items-center mb-2 px-1">
                 <div class="small text-muted">
                     <i class="bi bi-info-circle me-1"></i>
-                    셀 더블클릭으로 수정 &middot; 우클릭 메뉴에서 행 추가/삭제 &middot; 원료명 입력 시 자동완성 지원 &middot; 원료 보관함에서 끌어다 놓을 수 있습니다.
+                    더블클릭으로 수정 &middot; 우클릭으로 행 추가·삭제·되돌리기 &middot;
+                    머리글을 끌어 칸 순서를 바꿀 수 있습니다
                 </div>
                 <div class="d-flex align-items-center gap-2 ms-3 text-nowrap">
                     {% comment %}
@@ -82,10 +101,12 @@ body.in-iframe .bom-page-header { display: none !important; }
                       누르게 하지 않는다 — 위에서 한 번 누르면 모든 줄에 넣는다.
                       그 줄만 다르게 하려면 상세에서 다시 고른다.
                     {% endcomment %}
-                    <span class="small text-muted">표시명 기준:</span>
+                    <span class="small text-muted" title="요약에 원료 이름 대신 무엇을 적을지 정합니다. 모든 줄에 함께 걸립니다.">표시명 기준:</span>
                     <div class="sheet-pick" id="sheet-summary-type">
-                        <button type="button" class="sheet-pick-btn is-on" data-value="식품유형">식품유형</button>
-                        <button type="button" class="sheet-pick-btn" data-value="원재료명">원재료명</button>
+                        <button type="button" class="sheet-pick-btn is-on" data-value="식품유형"
+                                title="요약에 식품유형을 적습니다. 예) 정제소금 → 정제소금">식품유형</button>
+                        <button type="button" class="sheet-pick-btn" data-value="원재료명"
+                                title="요약에 원재료 표시명을 적습니다">원재료명</button>
                     </div>
                     <span class="small text-muted ms-2">총 배합비:</span>
                     <span id="total-ratio-display" class="fw-semibold text-primary">0.000%</span>
@@ -98,7 +119,7 @@ body.in-iframe .bom-page-header { display: none !important; }
 
               한 줄로 접어 위에 둔다. 자세히 볼 때만 편다.
             {% endcomment %}
-            <details class="bom-summary" id="bom-summary-panel" open>
+            <details class="bom-summary is-stuck" id="bom-summary-panel" open>
                 <summary class="bom-summary-head">
                     <span class="bom-summary-title">
                         <i class="bi bi-list-ul"></i>원재료 요약
@@ -114,6 +135,8 @@ body.in-iframe .bom-page-header { display: none !important; }
                         <div id="bom-summary-rawmtrl" class="bom-summary-value">
                             <span class="text-muted">BOM에 원료를 입력하면 자동으로 생성됩니다.</span>
                         </div>
+                        {# 왜 안 바뀌는지 말해 준다 — 식품유형이 비어 있으면 둘이 같다 #}
+                        <div class="bom-summary-note" id="bom-summary-note"></div>
                         <button type="button" class="btn btn-light border v2-btn-sm flex-shrink-0"
                                 onclick="copyRawmtrlToBasicInfo()">
                             <i class="bi bi-arrow-left-circle"></i>기본정보로 복사
@@ -180,19 +203,18 @@ body.in-iframe .bom-page-header { display: none !important; }
                                 </div>
                                 <div id="context-form" class="d-none">
                                     {% comment %}
-                                      알레르기·GMO 가 각각 라벨 한 줄, 테두리 상자, 그 안의 "선택된 항목
-                                      없음" 한 줄을 따로 차지했다. 같은 모양이 셋 쌓이니 창이 길어져서,
-                                      줄 아래에 띄우면 표를 통째로 가렸다.
+                                      이 창은 고른 줄 **바로 아래**에 뜬다. 길면 그만큼 표를 가린다.
 
-                                      상자를 없앤다 — 창 자체가 이미 상자다. 라벨·고른 것·전체선택은 한
-                                      줄로 모은다. 고른 것이 없다는 말은 적지 않는다. 칩이 그대로 보여 준다.
+                                      처음에는 덩이마다 라벨 한 줄, 테두리 상자, 그 안의 "선택된 항목
+                                      없음" 한 줄이 따로 있었다. 상자를 없애고(창 자체가 이미 상자다),
+                                      다음에는 항목명·칩·전체선택을 **한 줄**로 합쳤다. 셋이 각자
+                                      줄머리를 차지하면 여섯 줄이 되고 표가 그만큼 사라진다.
+
+                                      항목명에는 무엇을 고르는 자리인지 말풍선을 단다 — 표에도 같은
+                                      이름의 칸이 있어서, 여기가 무엇인지가 한눈에 보이지 않는다.
                                     {% endcomment %}
-                                    <div class="pick-group">
-                                        <div class="pick-head">
-                                            <span class="pick-label">알레르기</span>
-                                            <span id="allergenSelectedDisplay" class="pick-chosen"></span>
-                                            <button type="button" class="pick-all" id="allergenToggleBtn">전체선택</button>
-                                        </div>
+                                    <div class="pick-group pick-row">
+                                        <span class="pick-label" title="이 원료에 든 알레르기 물질을 누릅니다. 요약의 알레르기 문구에 모입니다.">알레르기</span>
                                         <div id="allergen-quick-buttons" class="pick-chips">
                                             <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="알류">알류</button>
                                             <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="우유">우유</button>
@@ -214,26 +236,31 @@ body.in-iframe .bom-page-header { display: none !important; }
                                             <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="오징어">오징어</button>
                                             <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="조개류">조개류</button>
                                         </div>
+                                        <span id="allergenSelectedDisplay" class="pick-chosen"></span>
+                                        <button type="button" class="pick-all" id="allergenToggleBtn"
+                                                title="열아홉 가지를 모두 켜거나 끕니다">전체선택</button>
                                         <input type="hidden" id="field-allergens">
                                     </div>
-                                    <div class="pick-group">
-                                        <div class="pick-head">
-                                            <span class="pick-label">GMO</span>
-                                            <span id="gmoSelectedDisplay" class="pick-chosen"></span>
-                                            <button type="button" class="pick-all" id="gmoToggleBtn">전체선택</button>
-                                        </div>
+                                    <div class="pick-group pick-row">
+                                        <span class="pick-label" title="유전자변형 농산물을 원료로 쓴 경우에 누릅니다">GMO</span>
                                         <div id="gmoBtnList" class="pick-chips">
                                             {% for gmo in gmo_list %}
                                             <button type="button" class="btn btn-outline-secondary gmo-btn" data-gmo="{{ gmo }}">{{ gmo }}</button>
                                             {% endfor %}
                                         </div>
+                                        <span id="gmoSelectedDisplay" class="pick-chosen"></span>
+                                        <button type="button" class="pick-all" id="gmoToggleBtn"
+                                                title="여섯 가지를 모두 켜거나 끕니다">전체선택</button>
                                         <input type="hidden" id="field-gmo" value="">
                                     </div>
                                     {# 위에서 고른 것과 다르게 갈 때만 쓴다. 이 줄에만 걸린다 #}
-                                    <div class="pick-group pick-line">
-                                        <span class="pick-label">이 원료만</span>
-                                        <button type="button" class="btn summary-type-btn" data-value="식품유형" id="summaryTypeFoodType">식품유형</button>
-                                        <button type="button" class="btn summary-type-btn" data-value="원재료명" id="summaryTypeIngredientName">원재료명</button>
+                                    <div class="pick-group pick-row">
+                                        <span class="pick-label" title="위쪽 표시명 기준과 다르게 가고 싶을 때만 씁니다. 이 줄에만 걸립니다.">이 원료만</span>
+                                        <div class="pick-chips">
+                                            <button type="button" class="btn summary-type-btn" data-value="식품유형" id="summaryTypeFoodType">식품유형</button>
+                                            <button type="button" class="btn summary-type-btn" data-value="원재료명" id="summaryTypeIngredientName">원재료명</button>
+                                        </div>
+                                        <span class="pick-tip">요약에 이 원료를 무엇으로 적을지</span>
                                     </div>
                                     {# 품목보고번호는 표에 칸이 있다. 두 곳에서 고치면 어느 쪽이 맞는지 알 수 없다 #}
                                     <input type="hidden" id="field-report-no">
@@ -255,7 +282,7 @@ body.in-iframe .bom-page-header { display: none !important; }
               고치는 동안에는 자리만 차지한다 — 접을 수 있게 한다.
             {% endcomment %}
             <div class="side-tabs">
-                <div class="side-panel-head">
+                <div class="side-panel-head" title="원료를 끌어다 왼쪽 표에 놓으면 그 줄이 채워집니다">
                     <i class="bi bi-box-seam"></i>
                     <span class="side-panel-title">원료 보관함</span>
                     <button type="button" class="side-panel-toggle" id="paletteToggle"
@@ -1497,11 +1524,16 @@ body.in-iframe .bom-page-header { display: none !important; }
             const meta      = rowMetadata.get(idx) || {};
             const summType  = (meta.summary_type || '식품유형').trim();
             const foodType  = (row.food_type || '').trim();
-            /* \ud45c\uc2dc\uba85 \uacb0\uc815: '\uc2dd\ud488\uc720\ud615' \uc120\ud0dd \uc2dc foodType \uc6b0\uc120, \uc5c6\uc73c\uba74 rawName \ud3f4\ubc31 */
+            /* 표시명을 무엇으로 적을까. '식품유형' 이면 식품유형을 쓰고, 그
+               칸이 비어 있으면 원재료명으로 떨어진다 — 그래서 식품유형을
+               안 채운 표에서는 기준을 바꿔도 요약이 그대로다. 아래에서 그
+               사실을 화면에 적어 준다. */
             const displayName = (summType === '\uc6d0\uc7ac\ub8cc\uba85') ? rawName : (foodType || rawName);
             validRows.push({
                 displayName,
                 ratio,
+                byFoodType: summType !== '원재료명',
+                foodType,
                 /* 표에 칸이 생겼으니 표가 먼저다. 상세 패널에만 넣어 둔
                    옛 자료는 뒤에서 받쳐 준다. */
                 allergens: (row.allergens || meta.allergens || meta.allergen || ''),
@@ -1511,6 +1543,18 @@ body.in-iframe .bom-page-header { display: none !important; }
 
         /* 배합비 내림차순 정렬 */
         validRows.sort((a, b) => b.ratio - a.ratio);
+
+        /* 표시명 기준을 바꿔도 요약이 그대로일 때가 있다 — 식품유형 칸이
+           비어 있으면 두 기준의 결과가 같기 때문이다. 화면이 아무 말도 하지
+           않으면 단추가 고장 난 것으로 보인다. */
+        const noteEl = document.getElementById('bom-summary-note');
+        if (noteEl) {
+            const short = validRows.filter(r => r.byFoodType && !r.foodType).length;
+            noteEl.textContent = short
+                ? `식품유형이 비어 있는 ${short}줄은 원재료명으로 표시됩니다 — `
+                  + `표의 식품유형 칸을 채우면 기준이 반영됩니다.`
+                : '';
+        }
 
         /* 원재료명 표시명 */
         const rawmtrlText = validRows.map(r => r.displayName).join(', ');
