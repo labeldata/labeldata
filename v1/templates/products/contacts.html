@@ -38,7 +38,12 @@
                 <button class="btn v2-btn-sm btn-outline-danger ct-sm" id="bulkDeleteBtn">
                     <i class="bi bi-trash"></i>
                 </button>
-                <button class="btn v2-btn-sm btn-primary ct-sm" id="bulkRequestBtn">
+                <a class="btn v2-btn-sm btn-light border ct-sm"
+               href="{% url 'products:contact_sheet_template' %}"
+               title="엑셀 양식을 받아 채운 뒤 표에 그대로 붙여넣으세요">
+                <i class="bi bi-file-earmark-arrow-down me-1"></i>붙여넣기 양식
+            </a>
+            <button class="btn v2-btn-sm btn-primary ct-sm" id="bulkRequestBtn">
                     <i class="bi bi-envelope-paper me-1"></i>요청
                 </button>
             </div>
@@ -399,6 +404,7 @@
 {# ── Django → JS 데이터 전달 (json_script 안전 방식) ── #}
 {{ contacts_list|json_script:"contacts-init-data" }}
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
+<script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
 const CONTACTS_API_LIST   = '{% url "products:contacts_api_list" %}';
@@ -696,14 +702,18 @@ document.addEventListener('DOMContentLoaded', function () {
     while (tableData.length < 20) tableData.push(emptyRow());
     allRows = initRows; // 원본 보관 (필터용)
 
+    /* 양식의 열 이름. 화면 머리글이자 엑셀 양식의 머리글이고, 붙여넣기가
+       머리글 줄을 알아보는 잣대이기도 하다. 한 곳에서만 정한다.
+       체크박스·공유·요청 칸은 사람이 넣는 것이 아니라 여기 없다. */
+    const CONTACT_SHEET_HEADERS = ['이메일', '이름', '회사명', '인허가번호'];
+
     hot = new Handsontable(container, {
         data: tableData,
         licenseKey: 'non-commercial-and-evaluation',
         rowHeaders: false,
         colHeaders: [
-            '<input type="checkbox" id="checkAll" title="전체 선택" class="ct-click">',
-            '이메일', '이름', '회사명', '인허가번호', '공유', '요청/접수'
-        ],
+            '<input type="checkbox" id="checkAll" title="전체 선택" class="ct-click">'
+        ].concat(CONTACT_SHEET_HEADERS, ['공유', '요청/접수']),
         columns: [
             {
                 data: '_checked',
@@ -960,6 +970,29 @@ document.addEventListener('DOMContentLoaded', function () {
             // (이전: 기존 이메일은 수정 불가 → 현재: 모두 수정 가능)
         }
     });
+
+    /* 엑셀에서 붙여넣기. 규칙은 BOM 화면과 한 벌을 쓴다
+       (static/js/sheet_paste.js) — 두 벌로 두면 어느 날 한쪽만 고쳐진다.
+
+       이 표는 **첫 칸이 체크박스**다. 왼쪽 끝에 붙여넣으면 이메일이 그 칸으로
+       들어가고 전부 한 칸씩 밀린다. firstCol 로 자리를 옮겨 준다. */
+    if (window.attachSheetPaste) {
+        window.attachSheetPaste(hot, {
+            headers: CONTACT_SHEET_HEADERS,
+            firstCol: 1,
+            onReport: function (added, dropped, why) {
+                if (!added) {
+                    showSnackbar('넣을 줄이 없습니다. 머리글만 붙여넣으셨나요?', 'warning');
+                    return;
+                }
+                showSnackbar(
+                    added + '줄을 넣었습니다.'
+                    + (dropped ? ' (' + why.join(', ') + ' 은 뺐습니다)' : '')
+                    + ' 이메일이 있는 줄만 저장됩니다.',
+                    dropped ? 'warning' : 'success');
+            }
+        });
+    }
 
     // 반응형 컬럼 너비
     if (window.ResizeObserver) {

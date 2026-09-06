@@ -2697,3 +2697,107 @@ class BootstrapGreysAreGoneTests(TestCase):
 
         for old, token in (('#6c757d', '--ez-gray-700'), ('#495057', '--ez-gray-800')):
             self.assertGreater(contrast(tokens[token]), contrast(old), old)
+
+
+class SheetPasteIsOneRuleTests(TestCase):
+    """
+    배합비도 연락처도 엑셀로 관리하다 여기로 온다. 두 화면 모두 표로 만들어
+    뒀는데 붙여넣기가 **자리로만** 들어갔다.
+
+      1. 머리글까지 긁어 오면 "원료명" 이라는 원료가 한 줄 생긴다
+      2. 연락처 표는 첫 칸이 체크박스라 왼쪽 끝에 붙이면 전부 한 칸씩 밀린다
+      3. 안 쓰는 열이 딸려 오면 마지막 칸을 덮는다
+      4. 몇 줄이 들어갔는지 아무 말이 없다
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.base = Path(dj.BASE_DIR)
+        self.js = (self.base / 'static/js/sheet_paste.js').read_text(encoding='utf-8')
+
+    def _read(self, rel):
+        return (self.base / rel).read_text(encoding='utf-8')
+
+    def test_규칙은_한_곳에_있다(self):
+        # 두 벌로 두면 어느 날 한쪽만 고쳐진다
+        self.assertIn('window.attachSheetPaste', self.js)
+        for rel in ('templates/products/bom_detail.html',
+                    'templates/products/contacts.html'):
+            html = self._read(rel)
+            self.assertIn("js/sheet_paste.js", html, rel)
+            self.assertIn('window.attachSheetPaste(hot', html, rel)
+
+    def test_머리글_줄을_버린다(self):
+        head = self.js.index('function looksLikeHeader')
+        block = self.js[head:head + 500]
+        # 한 칸만 보면 "원료명" 이라는 이름의 원료를 머리글로 오해한다
+        self.assertIn('hit >= 2', block)
+
+    def test_체크박스_칸으로_밀리지_않는다(self):
+        self.assertIn('firstCol', self.js)
+        contacts = self._read('templates/products/contacts.html')
+        head = contacts.index('window.attachSheetPaste(hot')
+        self.assertIn('firstCol: 1', contacts[head:head + 400])
+
+    def test_몇_줄이_들어갔는지_말해_준다(self):
+        for rel in ('templates/products/bom_detail.html',
+                    'templates/products/contacts.html'):
+            html = self._read(rel)
+            head = html.index('window.attachSheetPaste(hot')
+            self.assertIn("줄을 넣었습니다", html[head:head + 900], rel)
+
+    def test_머리글은_한_곳에서만_정한다(self):
+        """화면 머리글이자 엑셀 양식의 머리글이고, 머리글 줄을 알아보는 잣대다."""
+        from v1.common import sheet_template
+        bom = self._read('templates/products/bom_detail.html')
+        self.assertIn('const BOM_SHEET_HEADERS', bom)
+        self.assertIn('colHeaders: BOM_SHEET_HEADERS', bom)
+        for name in sheet_template.BOM_HEADERS:
+            self.assertIn("'%s'" % name, bom)
+
+        contacts = self._read('templates/products/contacts.html')
+        self.assertIn('const CONTACT_SHEET_HEADERS', contacts)
+        for name in sheet_template.CONTACT_HEADERS:
+            self.assertIn("'%s'" % name, contacts)
+
+
+class SheetTemplateDownloadTests(TestCase):
+    """
+    붙여넣기는 열 순서를 맞춰 와야 하는데, 사용자 엑셀의 열 순서를 우리가 알
+    방법이 없다. 그래서 양식을 우리가 준다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='sheet', password='x')
+        self.client.force_login(self.user)
+
+    def _open(self, url):
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('spreadsheetml', res['Content-Type'])
+        import io
+        from openpyxl import load_workbook
+        return load_workbook(io.BytesIO(res.content)).active
+
+    def test_배합비_양식(self):
+        from v1.common.sheet_template import BOM_HEADERS
+        sheet = self._open(reverse('bom:bom_sheet_template'))
+        head = [c.value for c in sheet[2]]
+        self.assertEqual(head, BOM_HEADERS)
+
+    def test_연락처_양식(self):
+        from v1.common.sheet_template import CONTACT_HEADERS
+        sheet = self._open(reverse('products:contact_sheet_template'))
+        head = [c.value for c in sheet[2]]
+        self.assertEqual(head, CONTACT_HEADERS)
+
+    def test_안내와_보기_줄이_있다(self):
+        # 파일만 보고도 쓰는 법을 알아야 한다
+        sheet = self._open(reverse('bom:bom_sheet_template'))
+        self.assertIn('붙여넣', sheet['A1'].value)
+        self.assertEqual(sheet['A3'].value, '정제수')
+
+    def test_자료는_세_번째_줄부터다(self):
+        sheet = self._open(reverse('products:contact_sheet_template'))
+        self.assertEqual(sheet.freeze_panes, 'A3')

@@ -799,3 +799,21 @@ def bom_autocomplete(request):
 
     return JsonResponse({'results': results})
 
+
+@login_required
+def bom_sheet_template(request):
+    """
+    배합비 붙여넣기 양식(엑셀).
+
+    붙여넣기는 열 순서를 맞춰 와야 하는데, 사용자 엑셀의 열 순서를 우리가 알
+    방법이 없다. 그래서 양식을 우리가 준다 — 내려받아 채우고 그대로 긁어
+    붙이면 된다.
+    """
+    from django.http import HttpResponse
+    from v1.common.sheet_template import bom_template
+
+    response = HttpResponse(
+        bom_template(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="bom_template.xlsx"'
+    return response

@@ -6806,3 +6806,15 @@ def product_export_api(request):
         'updated_datetime': row.update_datetime.strftime('%Y-%m-%d %H:%M:%S') if row.update_datetime else '',
     }
     return JsonResponse({'data': data})
+
+
+@login_required
+def contact_sheet_template(request):
+    """연락처 붙여넣기 양식(엑셀). 배합비와 같은 방식이다."""
+    from v1.common.sheet_template import contact_template
+
+    response = HttpResponse(
+        contact_template(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="contact_template.xlsx"'
+    return response

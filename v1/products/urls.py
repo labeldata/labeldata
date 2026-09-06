@@ -101,6 +101,7 @@ urlpatterns = [
 
     # ==================== 연락처 관리 (Contacts) ====================
     path('contacts/', views.contacts, name='contacts'),
+    path('contacts/sheet-template/', views.contact_sheet_template, name='contact_sheet_template'),
     path('contacts/api/list/', views.contacts_api_list, name='contacts_api_list'),
     path('contacts/api/update/', views.contacts_api_update, name='contacts_api_update'),
     path('contacts/api/add/',    views.contacts_api_add,    name='contacts_api_add'),

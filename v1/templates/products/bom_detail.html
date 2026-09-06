@@ -45,6 +45,11 @@ body.in-iframe .bom-page-header { display: none !important; }
                 <button class="btn btn-outline-dark v2-btn-sm" data-bs-toggle="modal" data-bs-target="#loadLabelModal">
                     <i class="bi bi-card-text"></i> 라벨 정보 불러오기
                 </button>
+                {# 엑셀로 관리하던 배합비를 그대로 옮겨 오는 길 #}
+                <a class="btn btn-outline-dark v2-btn-sm" href="{% url 'bom:bom_sheet_template' %}"
+                   title="엑셀 양식을 받아 채운 뒤 이 표에 그대로 붙여넣으세요">
+                    <i class="bi bi-file-earmark-arrow-down"></i> 붙여넣기 양식
+                </a>
             </div>
             <div>
                 <span class="me-3 small text-muted">총 배합비</span>
@@ -287,6 +292,7 @@ body.in-iframe .bom-page-header { display: none !important; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
+<script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script>
     const container = document.getElementById('bom-grid');
     const CSRF_TOKEN = '{{ csrf_token }}';
@@ -350,11 +356,16 @@ body.in-iframe .bom-page-header { display: none !important; }
             data = Array.from({ length: 15 }, () => ({}));
         }
 
+        /* 양식의 열 이름. 화면 머리글이자 엑셀 양식의 머리글이고, 붙여넣기가
+           머리글 줄을 알아보는 잣대이기도 하다. 한 곳에서만 정한다. */
+        const BOM_SHEET_HEADERS = ['원료명', '원재료 표시명', '식품유형',
+                                   '배합비(%)', '제조사/수입사', '비고'];
+
         hot = new Handsontable(container, {
             data: data,
             licenseKey: 'non-commercial-and-evaluation',
             rowHeaders: true,
-            colHeaders: ['원료명', '원재료 표시명', '식품유형', '배합비(%)', '제조사/수입사', '비고'],
+            colHeaders: BOM_SHEET_HEADERS,
             manualRowMove: CAN_EDIT,
             manualColumnResize: true,
             contextMenu: CAN_EDIT ? {
@@ -455,6 +466,25 @@ body.in-iframe .bom-page-header { display: none !important; }
                 scheduleDraftSave();
             }
         });
+
+        /* 엑셀에서 붙여넣기. 규칙은 연락처 화면과 한 벌을 쓴다
+           (static/js/sheet_paste.js) — 두 벌로 두면 어느 날 한쪽만 고쳐진다. */
+        if (window.attachSheetPaste) {
+            window.attachSheetPaste(hot, {
+                headers: BOM_SHEET_HEADERS,
+                onReport: function (added, dropped, why) {
+                    if (!added) {
+                        showSnackbar('넣을 줄이 없습니다. 머리글만 붙여넣으셨나요?', 'warning');
+                        return;
+                    }
+                    showSnackbar(
+                        added + '줄을 넣었습니다.'
+                        + (dropped ? ' (' + why.join(', ') + ' 은 뺐습니다)' : '')
+                        + ' 확인하고 저장하세요.',
+                        dropped ? 'warning' : 'success');
+                }
+            });
+        }
 
         // 컨테이너 크기 변경 시 콜너비 자동 재계산 (반응형)
         const bomGrid = document.getElementById('bom-grid');

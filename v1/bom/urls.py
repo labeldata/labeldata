@@ -17,6 +17,8 @@ urlpatterns = [
     path('api/label/<int:label_id>/load-from-label/', views.bom_load_from_label_api, name='bom_load_from_label'),
     path('api/label/<int:label_id>/load/', views.api_load_from_label, name='api_load_from_label'),
     path('api/ingredients/search/', views.api_ingredient_search, name='api_ingredient_search'),
+    # 붙여넣기 양식 — 열 순서를 맞춰 오게 하는 기준
+    path('sheet-template/', views.bom_sheet_template, name='bom_sheet_template'),
     path('api/ingredients/<int:ingredient_id>/', views.api_ingredient_detail, name='api_ingredient_detail'),
     path('api/palette/', views.api_palette_list, name='api_palette_list'),
     path('api/label/<int:label_id>/nutrition/', views.bom_calculate_nutrition, name='bom_calculate_nutrition'),
