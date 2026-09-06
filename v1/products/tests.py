@@ -2843,9 +2843,12 @@ class SheetTemplateDownloadTests(TestCase):
 
     def test_안내와_보기_줄이_있다(self):
         # 파일만 보고도 쓰는 법을 알아야 한다
+        from v1.common.sheet_template import BOM_SAMPLE
         sheet = self._open(reverse('bom:bom_sheet_template'))
         self.assertIn('붙여넣', sheet['A1'].value)
-        self.assertEqual(sheet['A3'].value, '정제수')
+        self.assertEqual(sheet['A3'].value, BOM_SAMPLE[0])
+        # 알레르기를 열로 나눠 O 로 체크한 표도 받는다는 것을 파일이 말해 준다
+        self.assertIn('O 로 체크', sheet['A1'].value)
 
     def test_자료는_세_번째_줄부터다(self):
         sheet = self._open(reverse('products:contact_sheet_template'))
@@ -2946,3 +2949,98 @@ class GridOrderIsRememberedTests(TestCase):
     def test_남긴_적이_없으면_기본_순서다(self):
         from v1.common.views import grid_order
         self.assertEqual(grid_order(self.user, 'bom_grid'), [])
+
+
+class AllergenMarksAreGatheredTests(TestCase):
+    """
+    엑셀로 배합비를 관리하는 사람들은 알레르기를 이렇게 적는다.
+
+        계란  우유  밀  대두
+         O    X    X   O
+
+    열 이름 자체가 값이다. 그대로 붙여넣으면 "계란" 이라는 칸이 우리 표에
+    없으니 통째로 버려진다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.base = Path(dj.BASE_DIR)
+        self.js = (self.base / 'static/js/sheet_paste.js').read_text(encoding='utf-8')
+        self.bom = (self.base / 'templates/products/bom_detail.html'
+                    ).read_text(encoding='utf-8')
+
+    def test_체크_열을_모아_한_칸으로(self):
+        self.assertIn('checks[j] = { col: marks.into', self.js)
+        self.assertIn('BOM_SHEET_MARKS', self.bom)
+        self.assertIn("into: '알레르기 성분'", self.bom)
+
+    def test_애매한_것은_없다로_본다(self):
+        """없는 알레르기를 적으면 라벨이 틀린다. 빠뜨린 것은 요약이 잡아 준다."""
+        head = self.js.index('var MARK_ON')
+        block = self.js[head:head + 400]
+        for on in ("'o'", "'○'", "'v'", "'예'", "'1'"):
+            self.assertIn(on, block)
+        for off in ("'x'", "'무'", "'0'", "'no'"):
+            self.assertNotIn(off, block)
+
+    def test_이름_목록은_판정과_같은_자리에서_온다(self):
+        """
+        판정용 키워드 전체를 쓰면 "간장"·"두부" 같은 원료 이름까지 알레르기
+        열로 오해한다. 열 머리에 실제로 적는 말만 추린 목록이 따로 있다.
+        """
+        from v1.label.services.allergen_names import CANONICAL_NAMES, HEADER_NAMES
+        self.assertEqual(set(HEADER_NAMES), set(CANONICAL_NAMES))
+        self.assertIn('계란', HEADER_NAMES['알류'])
+        # 원료 이름은 없어야 한다
+        flat = [name for names in HEADER_NAMES.values() for name in names]
+        for wrong in ('간장', '두부', '레시틴', '젤라틴', '분유'):
+            self.assertNotIn(wrong, flat)
+        self.assertIn('allergen_header_names', self._views())
+
+    def _views(self):
+        return (self.base / '..' / 'v1' / 'bom' / 'views.py').read_text(encoding='utf-8')
+
+    def test_사람이_적은_것을_덮지_않는다(self):
+        # 알레르기 칸을 따로 채워 왔으면 그쪽이 더 확실하다
+        head = self.js.index('if (checkSeat >= 0')
+        self.assertIn('!row[checkSeat]', self.js[head:head + 200])
+
+    def test_같은_물질은_한_번만(self):
+        head = self.js.index('found.indexOf(plan.checks[j].value)')
+        self.assertIn('< 0', self.js[head:head + 80])
+
+
+class BomGridHasTheRestTests(TestCase):
+    """
+    알레르기·GMO·품목보고번호는 오른쪽 상세 패널에서만 넣을 수 있었다.
+    원료를 하나씩 골라 들어가야 해서, 엑셀로 관리하던 사람은 옮길 방법이
+    없었다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.bom = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                    ).read_text(encoding='utf-8')
+
+    def test_표에_칸이_있다(self):
+        for name in ('알레르기 성분', 'GMO', '품목보고번호'):
+            self.assertIn("'%s'" % name, self.bom)
+        for field in ("data: 'allergens'", "data: 'gmo'", "data: 'report_no'"):
+            self.assertIn(field, self.bom)
+
+    def test_머리글_이름과_칸_수가_맞는다(self):
+        import re
+        head = self.bom.index('const BOM_SHEET_HEADERS')
+        names = re.findall(r"'([^']+)'", self.bom[head:self.bom.index('];', head)])
+        self.assertEqual(len(names), 9)
+        head = self.bom.index('const ratios')
+        ratios = re.findall(r'0\.\d+', self.bom[head:head + 200])
+        self.assertEqual(len(ratios), 9)
+
+    def test_붙여넣기도_그_칸을_안다(self):
+        head = self.bom.index('const BOM_SHEET_ALIASES')
+        block = self.bom[head:self.bom.index('};', head)]
+        for name in ('알레르기', 'gmo', '품목보고번호'):
+            self.assertIn(name, block.lower())

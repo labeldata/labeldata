@@ -37,6 +37,27 @@
       .toLowerCase();
   }
 
+  /*
+   * 이 칸이 "있다" 는 표시인가.
+   *
+   * 엑셀로 배합비를 관리하는 사람들은 알레르기를 이렇게 적는 일이 흔하다.
+   *
+   *     계란  우유  밀  대두
+   *      O    X    X   O
+   *
+   * 무엇을 "있다" 로 볼지는 사람마다 다르다 — O, ○, V, ✓, 1, 예, 유.
+   * 없다는 쪽(X, -, 0, 무, 빈칸)은 세지 않는다. **애매한 것은 없다로 본다** —
+   * 없는 알레르기를 적으면 라벨이 틀리고, 빠뜨린 것은 요약이 다시 잡아 준다.
+   */
+  var MARK_ON = ['o', 'ㅇ', '○', '◯', '●', 'v', '√', '✓', '✔', 'y', 'yes',
+                 '예', '유', '함유', '1', 'true', 't'];
+
+  function isMarked(cell) {
+    var text = String(cell == null ? '' : cell).trim().toLowerCase();
+    if (!text) return false;
+    return MARK_ON.indexOf(text) >= 0;
+  }
+
   function isBlankRow(row) {
     return !row || row.every(function (cell) {
       return cell == null || String(cell).trim() === '';
@@ -79,13 +100,26 @@
    *   names  사람에게 보여 줄 짝 목록
    *   unused 짝을 못 지은 머리글 이름 (버릴 열)
    */
-  function planColumns(row, headers, aliases) {
+  function planColumns(row, headers, aliases, marks) {
     if (!row) return null;
     var map = {}, names = [], unused = [], taken = {};
+    // 체크 열: {가져온 칸 번호: {col: 넣을 칸, value: 적을 말}}
+    var checks = {}, checkNames = [];
 
     row.forEach(function (cell, j) {
       var hit = matchColumn(cell, aliases);
       var label = String(cell == null ? '' : cell).trim();
+
+      // 우리 칸 이름이 아니면 체크 열인지 본다. 열 이름 자체가 값인 경우다.
+      if (!hit && marks) {
+        var mark = matchColumn(cell, marks.names);
+        if (mark) {
+          checks[j] = { col: marks.into, value: mark.col };
+          checkNames.push(label);
+          return;
+        }
+      }
+
       if (!hit) {
         if (label) unused.push(label);
         return;
@@ -109,7 +143,8 @@
     // 두 칸 이상 짝이 지어져야 머리글로 본다. 한 칸만 보면 "원료명" 이라는
     // 이름의 원료를 머리글로 오해한다.
     if (names.length < 2) return null;
-    return { map: map, names: names, unused: unused };
+    return { map: map, names: names, unused: unused,
+             checks: checks, checkNames: checkNames };
   }
 
   /**
@@ -132,7 +167,7 @@
       var why = [], matched = null, unused = [];
 
       // ① 머리글 줄이 있으면 그것으로 열을 맞춘다.
-      var plan = planColumns(data[0], headers, aliases);
+      var plan = planColumns(data[0], headers, aliases, options.marks);
       if (plan) {
         data.shift();
         matched = plan.names;
@@ -148,12 +183,40 @@
           if (visual >= firstCol) seat[j] = visual - firstCol;
         });
 
+        // 체크 열이 넣을 칸도 화면 자리로 찾아 둔다
+        var checkSeat = -1;
+        if (options.marks && plan.checkNames.length) {
+          var i = headers.indexOf(options.marks.into);
+          if (i >= 0) {
+            var v = typeof hot.toVisualColumn === 'function'
+                ? hot.toVisualColumn(firstCol + i) : firstCol + i;
+            if (v >= firstCol) checkSeat = v - firstCol;
+          }
+        }
+
         for (var r = 0; r < data.length; r++) {
           var row = new Array(headers.length).fill('');
+          var found = [];
           data[r].forEach(function (cell, j) {
             if (seat[j] !== undefined) row[seat[j]] = cell;
+            if (plan.checks[j] && isMarked(cell)) {
+              // 같은 물질을 두 열이 가리켜도 한 번만 적는다
+              if (found.indexOf(plan.checks[j].value) < 0) {
+                found.push(plan.checks[j].value);
+              }
+            }
           });
+          // 체크로 모은 것이 있으면 그 칸에 적는다. 그 칸을 따로 채워 온
+          // 경우에는 덮지 않는다 — 사람이 적은 것이 더 확실하다.
+          if (checkSeat >= 0 && found.length && !row[checkSeat]) {
+            row[checkSeat] = found.join(', ');
+          }
           data[r] = row;
+        }
+        if (plan.checkNames.length) {
+          matched = matched.concat([
+            plan.checkNames.join('·') + ' 열의 O 를 모아 ' + options.marks.into
+          ]);
         }
         // 맞춰 놓았으니 자료가 시작하는 칸부터 넣는다
         coords.forEach(function (range) {
@@ -303,5 +366,6 @@
   };
 
   window.sheetPasteKey = key;               // 시험이 쓴다
+  window.sheetPasteMarked = isMarked;       // 시험이 쓴다
   window.sheetPastePlan = planColumns;      // 시험이 쓴다
 })();

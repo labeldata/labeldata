@@ -294,6 +294,7 @@ body.in-iframe .bom-page-header { display: none !important; }
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
 <script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {{ grid_order|json_script:"grid-order-data" }}
+{{ allergen_header_names|json_script:"allergen-header-data" }}
 <script>
   /* 지난번에 놓아 둔 칸 순서. 붙여넣기가 정한 것이든 손으로 옮긴 것이든
      계정에 남는다 — 회사 엑셀의 열 순서는 그 사람이 일하는 방식이라 자리를
@@ -302,6 +303,10 @@ body.in-iframe .bom-page-header { display: none !important; }
     window.GRID_ORDER = JSON.parse(
       document.getElementById('grid-order-data').textContent) || [];
   } catch (e) { window.GRID_ORDER = []; }
+  try {
+    window.ALLERGEN_HEADER_NAMES = JSON.parse(
+      document.getElementById('allergen-header-data').textContent) || {};
+  } catch (e) { window.ALLERGEN_HEADER_NAMES = {}; }
 </script>
 <script>
     const container = document.getElementById('bom-grid');
@@ -352,8 +357,12 @@ body.in-iframe .bom-page-header { display: none !important; }
         const bomGrid = document.getElementById('bom-grid');
         const containerW = (bomGrid && bomGrid.clientWidth > 10) ? bomGrid.clientWidth : 800;
         const ROW_HEADER_W = 52; // Handsontable 행 번호 열 기본 너비
-        const w = Math.max(300, containerW - ROW_HEADER_W);
-        const ratios = [0.17, 0.38, 0.12, 0.09, 0.15, 0.09];
+        // 아홉 칸이 다 읽히려면 최소 폭이 있어야 한다. 좁으면 가로로 민다.
+        const w = Math.max(1080, containerW - ROW_HEADER_W);
+        /* 원료명 · 표시명 · 식품유형 · 배합비 · 제조사 · 알레르기 · GMO ·
+           품목보고번호 · 비고. 아홉 칸이 되면서 좁아졌으니 표가 화면보다
+           넓어질 수 있다 — 그때는 표 안에서 가로로 민다. */
+        const ratios = [0.13, 0.20, 0.09, 0.07, 0.11, 0.11, 0.07, 0.11, 0.11];
         // 각 컬럼 너비를 floor 후 나머지 픽셀을 마지막 컬럼(비고)에 합산 → 합계 = w 보장
         const widths = ratios.map(r => Math.floor(w * r));
         const sum = widths.reduce((a, b) => a + b, 0);
@@ -369,7 +378,8 @@ body.in-iframe .bom-page-header { display: none !important; }
         /* 양식의 열 이름. 화면 머리글이자 엑셀 양식의 머리글이고, 붙여넣기가
            머리글 줄을 알아보는 잣대이기도 하다. 한 곳에서만 정한다. */
         const BOM_SHEET_HEADERS = ['원료명', '원재료 표시명', '식품유형',
-                                   '배합비(%)', '제조사/수입사', '비고'];
+                                   '배합비(%)', '제조사/수입사',
+                                   '알레르기 성분', 'GMO', '품목보고번호', '비고'];
 
         /* 엑셀에서 실제로 쓰는 이름들. 회사마다 다르게 부르므로, 열 순서가
            달라도 머리글만 있으면 제자리를 찾아간다.
@@ -388,7 +398,23 @@ body.in-iframe .bom-page-header { display: none !important; }
                              '배합비율/원료함량', '배합비', '함량', '비율'],
             '제조사/수입사': ['제조사/수입사', '업체명', '제조사', '수입사',
                              '제조업체', '제조원', '공급사', '거래처'],
+            '알레르기 성분': ['알레르기 성분', '알레르기', '알러지', '알레르겐',
+                             '알레르기유발물질', '알레르기 유발물질'],
+            'GMO':          ['gmo', 'gmo성분', '유전자변형', '유전자재조합',
+                             'gmo여부'],
+            '품목보고번호':   ['품목보고번호', '보고번호', '품목번호',
+                             '품목제조보고번호'],
             '비고':          ['비고', '메모', '참고', '비고사항']
+        };
+
+        /* 열 이름 자체가 값인 경우. 알레르기를 이렇게 적는 표가 흔하다.
+               계란  우유  밀  대두
+                O    X    X   O
+           이름 목록은 서버가 준다 — 표시 명칭 판정과 같은 자리에서 온다
+           (allergen_names.HEADER_NAMES). */
+        const BOM_SHEET_MARKS = {
+            into: '알레르기 성분',
+            names: window.ALLERGEN_HEADER_NAMES || {}
         };
 
         hot = new Handsontable(container, {
@@ -457,6 +483,12 @@ body.in-iframe .bom-page-header { display: none !important; }
                     numericFormat: { pattern: '0.00' }
                 },
                 { data: 'manufacturer', editor: 'text' },
+                /* 여태 오른쪽 상세 패널에서만 넣을 수 있었다. 원료를 하나씩
+                   골라 들어가야 해서, 엑셀로 관리하던 사람은 옮길 방법이
+                   없었다. 표에 칸을 둔다 — 붙여넣기도 여기로 들어온다. */
+                { data: 'allergens', editor: 'text' },
+                { data: 'gmo', editor: 'text' },
+                { data: 'report_no', editor: 'text' },
                 { data: 'notes', editor: 'text' }
             ],
             stretchH: 'all',
@@ -506,6 +538,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             window.attachSheetPaste(hot, {
                 headers: BOM_SHEET_HEADERS,
                 aliases: BOM_SHEET_ALIASES,
+                marks: BOM_SHEET_MARKS,
                 onReport: function (info) {
                     /* 붙여넣은 열 순서대로 화면을 늘어놓는다.
                        쓰던 엑셀의 순서가 그 사람이 일하는 순서다. 값만 제자리에
