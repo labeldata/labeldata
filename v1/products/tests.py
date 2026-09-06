@@ -3882,3 +3882,38 @@ class 자리가_없는_열을_버리지_않는다(TestCase):
         block = self.js[head:head + 400]
         self.assertIn("+ ' 은 ' + options.carry + ' 로'", block)
         self.assertIn('unused = [];', block)
+
+
+class 걷어도_되는_것과_아닌_것(TestCase):
+    """
+    옛 화면으로 가는 길이 위(홈 전환)와 아래(기존 사이트 이동) 두 곳에 있었다.
+    아래 하나로 모았다. 공지사항은 메뉴의 게시판과 겹쳐서 걷었다.
+
+    **개인정보처리방침·이용약관은 남긴다.** 가입 화면에도 링크가 있지만 그건
+    가입할 때 한 번 보는 자리이고, 로그인한 뒤에 다시 찾아볼 길은 여기뿐이다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.base_v2 = (base / 'templates/base_v2.html').read_text(encoding='utf-8')
+        self.topbar = (base / 'templates/includes/_topbar_account.html'
+                       ).read_text(encoding='utf-8')
+
+    def test_홈_전환은_걷었다(self):
+        self.assertNotIn('home-switch-btn', self.topbar)
+
+    def test_옛_화면으로_가는_길은_한_곳이다(self):
+        self.assertEqual(self.base_v2.count("url 'main:home_v1'"), 1)
+
+    def test_공지사항은_메뉴의_게시판과_겹쳤다(self):
+        head = self.base_v2.index('v2-sidebar-footer')
+        block = self.base_v2[head:self.base_v2.index('</nav>', head)]
+        self.assertNotIn('공지사항', block)
+
+    def test_약관은_상시로_볼_수_있어야_한다(self):
+        head = self.base_v2.index('v2-sidebar-footer')
+        block = self.base_v2[head:self.base_v2.index('</nav>', head)]
+        self.assertIn('개인정보처리방침', block)
+        self.assertIn('이용약관', block)

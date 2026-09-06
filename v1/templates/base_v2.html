@@ -131,16 +131,21 @@
             </div>
 
             {% comment %}
-              왼쪽 아래에는 "기존 사이트 이동" 하나만 남긴다.
+              걷어도 되는 것과 아닌 것이 있다.
 
-              공지사항은 메뉴에 게시판이 이미 있어서 두 번 있었다. 개인정보
-              처리방침·이용약관은 가입 화면(signup.html)에도 링크가 있으니
-              길이 끊기지는 않는다 — 다만 **로그인한 뒤에는 여기가 유일한
-              길이었다.** 필요하면 이 블록을 풀어 되살린다.
+              공지사항은 메뉴에 게시판이 이미 있어 두 번 있었다 — 걷는다.
+              **개인정보처리방침·이용약관은 남긴다.** 가입 화면에도 링크가
+              있지만 그건 가입할 때 한 번 보는 자리이고, 로그인한 뒤에 다시
+              찾아볼 길은 여기뿐이다. 상시로 볼 수 있어야 하는 고지다.
             {% endcomment %}
             <div class="v2-sidebar-footer">
                 <p class="v2-sf-copy">&copy; 2026 Lab.E.L.</p>
                 <p class="v2-sf-links">
+                    <a href="{% url 'user_management:privacy_policy' %}" target="_blank">개인정보처리방침</a>
+                    <span class="v2-sf-dot">&middot;</span>
+                    <a href="{% url 'user_management:terms_of_service' %}" target="_blank">이용약관</a>
+                </p>
+                <p class="v2-sf-links" style="margin-top:3px;">
                     <a href="{% url 'main:home_v1' %}">기존 사이트 이동</a>
                 </p>
             </div>
