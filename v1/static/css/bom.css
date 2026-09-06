@@ -498,7 +498,10 @@ body.in-iframe .bom-main-column {
     position: absolute;
     left: 0;
     right: 0;
-    z-index: 30;
+    /* Handsontable 은 행 번호 열을 본체 위에 겹쳐 그린다(.ht_clone_*,
+       z-index 100~180). 30 으로 두었더니 그 겹침판이 상세의 왼쪽 52px 을
+       덮어서, 원료 이름도 첫 칩도 잘려 보였다. 그 위로 올린다. */
+    z-index: 200;
     max-height: 340px;
     overflow-y: auto;
     border: 1px solid var(--ez-info, #1a73e8);
@@ -599,4 +602,34 @@ body.in-iframe .bom-main-column {
     display:     flex;
     align-items: center;
     gap:         6px;
+}
+
+/* ── 위쪽 표시명 기준 ─────────────────────────────────────── */
+/*
+   원료마다 따로 두는 값이지만 한 배합비 안에서는 대개 하나로 간다.
+   줄을 고를 때마다 상세를 열어 다시 누르지 않도록 위에 둔다.
+*/
+.sheet-pick {
+    display:       inline-flex;
+    border:        1px solid var(--ez-gray-300, #dadce0);
+    border-radius: 14px;
+    overflow:      hidden;
+    background:    #fff;
+}
+.sheet-pick-btn {
+    border:      0;
+    background:  transparent;
+    font-size:   11.5px;
+    font-weight: 600;
+    padding:     2px 10px;
+    color:       var(--ez-gray-700, #5f6368);
+    line-height: 1.6;
+}
+.sheet-pick-btn + .sheet-pick-btn {
+    border-left: 1px solid var(--ez-gray-300, #dadce0);
+}
+.sheet-pick-btn:hover { background-color: rgba(60, 64, 67, .08); }
+.sheet-pick-btn.is-on {
+    background: var(--ez-info, #1a73e8);
+    color:      #fff;
 }

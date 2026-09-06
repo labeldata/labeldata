@@ -3165,3 +3165,139 @@ class 고르는_자리를_낮춘다(TestCase):
         head = self.css.index('.quick-allergen-btn {')
         self.assertNotIn('margin-bottom', self.css[head:head + 260])
         self.assertIn('gap:       3px;', self.css)
+
+
+class 표의_칸이_반쪽이었다(TestCase):
+    """
+    알레르기·GMO·품목보고번호에 표의 칸을 만들어 놓고, 불러오는 쪽도
+    저장하는 쪽도 고치지 않았다. 칸은 늘 비어 있었고, 칸에 친 값은
+    저장되지 않고 사라졌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_불러올_때_칸을_채운다(self):
+        head = self.html.index('const data = (result.data || []).map')
+        block = self.html[head:head + 900]
+        for line in ("allergens: item.allergens || item.allergen || ''",
+                     "gmo: item.gmo || ''",
+                     "report_no: item.report_no || ''"):
+            self.assertIn(line, block)
+
+    def test_저장할_때_칸을_먼저_본다(self):
+        head = self.html.index('const rowAllergens =')
+        block = self.html[head:head + 1400]
+        self.assertIn("row.allergens || metadata.allergens", block)
+        self.assertIn('allergens: rowAllergens,', block)
+        self.assertIn('gmo: rowGmo,', block)
+        self.assertIn("report_no: row.report_no || metadata.report_no", block)
+
+    def test_칩을_누르면_칸에_들어간다(self):
+        # gridColumnProps 에 없으면 rowMetadata 로만 가고 표는 비어 있다
+        head = self.html.index('const gridColumnProps = new Set([')
+        block = self.html[head:head + 400]
+        for prop in ("'allergens'", "'gmo'", "'report_no'"):
+            self.assertIn(prop, block)
+
+    def test_표시명_기준은_칸이_없다(self):
+        """
+        Handsontable 은 columns 에 없는 prop 의 자리를 찾지 못한다.
+        summary_type 은 rowMetadata 에만 둔다.
+        """
+        head = self.html.index('const gridColumnProps = new Set([')
+        self.assertNotIn("'summary_type'", self.html[head:head + 400])
+
+
+class 비고에_적어_온_성분(TestCase):
+    """
+    엑셀에서 알레르기·GMO 를 따로 두지 않고 비고에 "밀,우유,대두" 처럼 몰아
+    적어 오는 곳이 많다. 그대로 두면 요약에도 표시사항에도 들어가지 않는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.html = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_비고를_고치면_떼어_낸다(self):
+        self.assertIn("if (prop === 'notes' && source !== 'remark-split')", self.html)
+        self.assertIn('spillRemark(row, value);', self.html)
+
+    def test_알아본_것이_없으면_건드리지_않는다(self):
+        # "대두유 사용" 같은 말까지 옮기면 비고가 사라진다
+        head = self.html.index('function splitRemark(text)')
+        block = self.html[head:self.html.index('function spillRemark')]
+        self.assertIn('if (!allergens.length && !gmo.length) return null;', block)
+        self.assertIn('rest.push(t);', block)
+
+    def test_이름표로_대두를_가른다(self):
+        # 대두는 알레르기이면서 GMO 다. "GMO:" 가 앞에 붙으면 GMO 로 본다
+        head = self.html.index('function splitRemark(text)')
+        block = self.html[head:self.html.index('function spillRemark')]
+        self.assertIn("bucket = /gmo|유전자/i.test(label[1]) ? 'gmo' : 'allergen';", block)
+        self.assertIn("if (bucket === 'gmo' && g) {", block)
+
+    def test_GMO_이름을_화면으로_넘긴다(self):
+        self.assertIn('{{ gmo_list|json_script:"gmo-name-data" }}', self.html)
+        self.assertIn('window.GMO_NAMES', self.html)
+
+    def test_이미_있는_것은_그대로_둔다(self):
+        head = self.html.index('function spillRemark')
+        block = self.html[head:head + 1200]
+        self.assertIn('if (had.indexOf(n) < 0) had.push(n);', block)
+
+
+class 표시명_기준을_위에서_고른다(TestCase):
+    """
+    원료마다 따로 두는 값이지만 한 배합비 안에서는 대개 하나로 간다.
+    줄을 고를 때마다 상세를 열어 다시 누르게 하지 않는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_표보다_위에_있다(self):
+        self.assertLess(self.html.index('id="sheet-summary-type"'),
+                        self.html.index('id="bom-grid"'))
+        self.assertIn('.sheet-pick-btn.is-on', self.css)
+
+    def test_한_번_누르면_모든_줄에_들어간다(self):
+        head = self.html.index('function bindSheetSummaryType')
+        block = self.html[head:head + 1200]
+        self.assertIn('const rows = hot.countRows();', block)
+        self.assertIn("setRowProp(r, 'summary_type', value, 'syncPanel');", block)
+
+    def test_그_줄만_다르게_할_수_있다(self):
+        # 상세의 토글은 남는다. 위에서 고른 것과 다르게 갈 때 쓴다
+        self.assertIn('<span class="pick-label">이 원료만</span>', self.html)
+        self.assertIn("setRowProp(currentRowIndex, 'summary_type', value, 'syncPanel');",
+                      self.html)
+
+
+class 상세가_행_번호에_가렸다(TestCase):
+    """
+    Handsontable 은 행 번호 열을 본체 위에 겹쳐 그린다(z-index 100~180).
+    상세를 30 으로 두었더니 그 겹침판이 왼쪽 52px 을 덮어서, 원료 이름도
+    첫 칩도 잘려 보였다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.css = (Path(dj.BASE_DIR) / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_겹침판보다_위에_그린다(self):
+        head = self.css.index('.bom-rowdetail {')
+        block = self.css[head:head + 800]
+        self.assertIn('z-index: 200;', block)
+        self.assertNotIn('z-index: 30;', block)

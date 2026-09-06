@@ -76,7 +76,18 @@ body.in-iframe .bom-page-header { display: none !important; }
                     셀 더블클릭으로 수정 &middot; 우클릭 메뉴에서 행 추가/삭제 &middot; 원료명 입력 시 자동완성 지원 &middot; 원료 보관함에서 끌어다 놓을 수 있습니다.
                 </div>
                 <div class="d-flex align-items-center gap-2 ms-3 text-nowrap">
-                    <span class="small text-muted">총 배합비:</span>
+                    {% comment %}
+                      표시명 기준은 원료마다 따로 두지만, 한 배합비 안에서는
+                      대개 하나로 간다. 줄을 고를 때마다 상세를 열어 다시
+                      누르게 하지 않는다 — 위에서 한 번 누르면 모든 줄에 넣는다.
+                      그 줄만 다르게 하려면 상세에서 다시 고른다.
+                    {% endcomment %}
+                    <span class="small text-muted">표시명 기준:</span>
+                    <div class="sheet-pick" id="sheet-summary-type">
+                        <button type="button" class="sheet-pick-btn is-on" data-value="식품유형">식품유형</button>
+                        <button type="button" class="sheet-pick-btn" data-value="원재료명">원재료명</button>
+                    </div>
+                    <span class="small text-muted ms-2">총 배합비:</span>
                     <span id="total-ratio-display" class="fw-semibold text-primary">0.00%</span>
                 </div>
             </div>
@@ -218,9 +229,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                                         </div>
                                         <input type="hidden" id="field-gmo" value="">
                                     </div>
-                                    {# 요약에 쓸 표시명 기준. 두 개뿐이라 라벨과 같은 줄에 둔다 #}
+                                    {# 위에서 고른 것과 다르게 갈 때만 쓴다. 이 줄에만 걸린다 #}
                                     <div class="pick-group pick-line">
-                                        <span class="pick-label">표시명 기준</span>
+                                        <span class="pick-label">이 원료만</span>
                                         <button type="button" class="btn summary-type-btn" data-value="식품유형" id="summaryTypeFoodType">식품유형</button>
                                         <button type="button" class="btn summary-type-btn" data-value="원재료명" id="summaryTypeIngredientName">원재료명</button>
                                     </div>
@@ -311,6 +322,7 @@ body.in-iframe .bom-page-header { display: none !important; }
 <script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {{ grid_order|json_script:"grid-order-data" }}
 {{ allergen_header_names|json_script:"allergen-header-data" }}
+{{ gmo_list|json_script:"gmo-name-data" }}
 <script>
   /* 지난번에 놓아 둔 칸 순서. 붙여넣기가 정한 것이든 손으로 옮긴 것이든
      계정에 남는다 — 회사 엑셀의 열 순서는 그 사람이 일하는 방식이라 자리를
@@ -323,6 +335,11 @@ body.in-iframe .bom-page-header { display: none !important; }
     window.ALLERGEN_HEADER_NAMES = JSON.parse(
       document.getElementById('allergen-header-data').textContent) || {};
   } catch (e) { window.ALLERGEN_HEADER_NAMES = {}; }
+  /* 비고에 적어 온 성분을 알아보는 데 쓴다 */
+  try {
+    window.GMO_NAMES = JSON.parse(
+      document.getElementById('gmo-name-data').textContent) || [];
+  } catch (e) { window.GMO_NAMES = []; }
 </script>
 <script>
     const container = document.getElementById('bom-grid');
@@ -364,6 +381,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         bindPaletteSearch();
         bindQuickAllergenButtons();
         bindGmoButtons();
+        bindSheetSummaryType();
     });
 
     // 컨테이너 너비 기준 비율 콜너비 계산
@@ -536,6 +554,10 @@ body.in-iframe .bom-page-header { display: none !important; }
                     if (prop === 'ingredient_name') {
                         applyIngredientSelection(row, value);
                     }
+                    /* 비고에 알레르기·GMO 를 적어 오는 사람이 있다 */
+                    if (prop === 'notes' && source !== 'remark-split') {
+                        spillRemark(row, value);
+                    }
                 });
                 if (changes.some(change => change[1] === 'mixing_ratio')) {
                     calculateTotal();  // calculateTotal 내부에서 generateBomSummary 호출
@@ -654,12 +676,18 @@ body.in-iframe .bom-page-header { display: none !important; }
         'shared_owner'
     ]);
 
+    /* 표에 칸이 있는 것. 여기 없는 것은 rowMetadata 로만 남는다.
+       알레르기·GMO·품목보고번호에 칸이 생겼는데 이 목록을 안 고쳐서,
+       칩을 눌러도 표의 칸은 비어 있었다. */
     const gridColumnProps = new Set([
         'ingredient_name',
         'raw_material_name',
         'food_type',
         'mixing_ratio',
         'manufacturer',
+        'allergens',
+        'gmo',
+        'report_no',
         'notes'
     ]);
 
@@ -1244,6 +1272,11 @@ body.in-iframe .bom-page-header { display: none !important; }
                     food_type: item.food_type || '',
                     mixing_ratio: item.content_ratio || item.mixing_ratio || null,
                     manufacturer: item.manufacturer || '',
+                    /* 칸을 만들어 놓고 채우지 않아서, 저장된 값이 있는데도
+                       표는 늘 비어 있었다. */
+                    allergens: item.allergens || item.allergen || '',
+                    gmo: item.gmo || '',
+                    report_no: item.report_no || '',
                     notes: item.notes || ''
                 };
                 
@@ -1279,6 +1312,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 hot.loadData(data);
             }
             hot.render();
+            syncSheetSummaryType();
             calculateTotal();  // 내부에서 generateBomSummary 호출
         } catch (error) {
             console.error('BOM 데이터 로드 실패:', error);
@@ -1560,6 +1594,148 @@ body.in-iframe .bom-page-header { display: none !important; }
         }, '*');
     }
 
+    /* -----------------------------------------------------------------
+       표시명 기준은 위에서 한 번 고른다
+
+       원료마다 따로 두는 값이지만 한 배합비 안에서는 대개 하나로 간다.
+       줄을 고를 때마다 상세를 열어 다시 누르게 하지 않는다 — 위에서 한 번
+       누르면 모든 줄에 넣는다. 그 줄만 다르게 하려면 상세에서 다시 고른다.
+
+       화면에 칸은 없다. rowMetadata 에만 둔다.
+       ----------------------------------------------------------------- */
+    function markSheetSummaryType(value) {
+        document.querySelectorAll('#sheet-summary-type .sheet-pick-btn')
+            .forEach(function (b) {
+                b.classList.toggle('is-on', b.dataset.value === value);
+            });
+    }
+
+    /* 불러온 줄들이 이미 고른 값을 위에도 비춰 준다 */
+    function syncSheetSummaryType() {
+        if (!hot) return;
+        const rows = hot.getSourceData() || [];
+        for (let i = 0; i < rows.length; i++) {
+            if (!(rows[i] || {}).ingredient_name) continue;
+            markSheetSummaryType((rowMetadata.get(i) || {}).summary_type || '식품유형');
+            return;
+        }
+    }
+
+    function bindSheetSummaryType() {
+        const box = document.getElementById('sheet-summary-type');
+        if (!box) return;
+        box.querySelectorAll('.sheet-pick-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const value = btn.dataset.value;
+                markSheetSummaryType(value);
+                if (!CAN_EDIT || !hot) return;
+                const rows = hot.countRows();
+                for (let r = 0; r < rows; r++) {
+                    setRowProp(r, 'summary_type', value, 'syncPanel');
+                }
+                const field = document.getElementById('field-summary-type');
+                if (field) field.value = value;
+                document.querySelectorAll('.summary-type-btn').forEach(function (b) {
+                    b.classList.toggle('btn-primary', b.dataset.value === value);
+                    b.classList.toggle('btn-outline-secondary', b.dataset.value !== value);
+                });
+                setTimeout(generateBomSummary, 50);
+                scheduleDraftSave();
+            });
+        });
+    }
+
+    /* -----------------------------------------------------------------
+       비고에 적어 온 성분을 제 칸으로 옮긴다
+
+       엑셀에서 알레르기·GMO 를 따로 칸으로 두지 않고 비고에 "밀,우유,대두"
+       처럼 몰아 적어 오는 곳이 많다. 그대로 두면 요약에도, 표시사항에도
+       들어가지 않는다 — 사람 눈에는 적혀 있는데 기계에는 없는 값이다.
+
+       알아볼 수 있는 이름만 떼어 옮기고 나머지는 비고에 그대로 둔다.
+       "대두유 사용" 같은 말은 이름이 아니므로 건드리지 않는다.
+       ----------------------------------------------------------------- */
+    function remarkKey(s) {
+        return String(s == null ? '' : s).toLowerCase()
+            .replace(/[\s()（）\[\]{}\/\\|·・,.\-_%]/g, '');
+    }
+
+    const REMARK_ALLERGEN = (function () {
+        const map = {};
+        const names = window.ALLERGEN_HEADER_NAMES || {};
+        Object.keys(names).forEach(function (canon) {
+            map[remarkKey(canon)] = canon;
+            (names[canon] || []).forEach(function (alias) {
+                map[remarkKey(alias)] = canon;
+            });
+        });
+        return map;
+    })();
+
+    const REMARK_GMO = (function () {
+        const map = {};
+        (window.GMO_NAMES || []).forEach(function (n) { map[remarkKey(n)] = n; });
+        return map;
+    })();
+
+    /* 알아본 것이 하나도 없으면 null 을 돌려준다 — 비고를 건드리지 않는다 */
+    function splitRemark(text) {
+        const raw = String(text == null ? '' : text).trim();
+        if (!raw) return null;
+        const allergens = [], gmo = [], rest = [];
+        let bucket = '';
+        raw.split(/[,;\/·・|\n\r]+/).forEach(function (piece) {
+            let t = piece.trim();
+            if (!t) return;
+            /* "알레르기: 밀, 우유" 처럼 이름표를 달아 오는 경우. 대두처럼
+               알레르기이면서 GMO 이기도 한 말은 이름표로 가른다. */
+            const label = t.match(/^(알레르기[^:：]*|gmo[^:：]*|유전자[^:：]*)[:：]\s*/i);
+            if (label) {
+                bucket = /gmo|유전자/i.test(label[1]) ? 'gmo' : 'allergen';
+                t = t.slice(label[0].length).trim();
+                if (!t) return;
+            }
+            const k = remarkKey(t.replace(/(함유|포함)$/, ''));
+            const a = REMARK_ALLERGEN[k];
+            const g = REMARK_GMO[k];
+            if (bucket === 'gmo' && g) {
+                if (gmo.indexOf(g) < 0) gmo.push(g);
+            } else if (a) {
+                if (allergens.indexOf(a) < 0) allergens.push(a);
+            } else if (g) {
+                if (gmo.indexOf(g) < 0) gmo.push(g);
+            } else {
+                rest.push(t);
+            }
+        });
+        if (!allergens.length && !gmo.length) return null;
+        return { allergens: allergens, gmo: gmo, rest: rest.join(',') };
+    }
+
+    function spillRemark(rowIndex, text) {
+        if (!CAN_EDIT || !hot) return;
+        const found = splitRemark(text);
+        if (!found) return;
+        const row = hot.getSourceDataAtRow(rowIndex) || {};
+        /* 이미 칸에 있는 것은 그대로 두고 없는 것만 보탠다 */
+        const add = function (prop, names) {
+            if (!names.length) return;
+            const had = String(row[prop] || '').split(',')
+                .map(function (s) { return s.trim(); }).filter(Boolean);
+            names.forEach(function (n) { if (had.indexOf(n) < 0) had.push(n); });
+            hot.setDataAtRowProp(rowIndex, prop, had.join(','), 'remark-split');
+        };
+        /* afterChange 안에서 바로 고치면 되짚어 들어간다. 한 박자 뒤에 넣는다 */
+        setTimeout(function () {
+            add('allergens', found.allergens);
+            add('gmo', found.gmo);
+            hot.setDataAtRowProp(rowIndex, 'notes', found.rest, 'remark-split');
+            if (currentRowIndex === rowIndex) {
+                updateContextPanel(hot.getSourceDataAtRow(rowIndex), rowIndex, false);
+            }
+        }, 0);
+    }
+
     /* 상세를 저절로 펴는 칸.
        모든 칸에서 펴면 셀 하나 누를 때마다 아래 줄들이 가려진다. 목록에서
        골라야 하는 칸 — 손으로 치기 어려운 것 — 에서만 편다. */
@@ -1599,15 +1775,19 @@ body.in-iframe .bom-page-header { display: none !important; }
             viewBadge.classList.add('bg-secondary');
         }
         
-        // 메타데이터에서 allergens, gmo 등을 읽어옴
-        document.getElementById('field-allergens').value = metadata.allergens || metadata.allergen || '';
-        document.getElementById('field-gmo').value = metadata.gmo || '';
-        document.getElementById('field-report-no').value = metadata.report_no || '';
+        /* 표에 칸이 생겼으니 표를 먼저 본다. 메타데이터는 칸이 없던 시절의
+           자료를 뒤에서 받쳐 줄 뿐이다. */
+        const allergenText = rowData.allergens || metadata.allergens || metadata.allergen || '';
+        const gmoText      = rowData.gmo || metadata.gmo || '';
+        const reportText   = rowData.report_no || metadata.report_no || '';
+        document.getElementById('field-allergens').value = allergenText;
+        document.getElementById('field-gmo').value = gmoText;
+        document.getElementById('field-report-no').value = reportText;
         document.getElementById('field-source-label-id').value = metadata.source_label_id || '';
 
-        document.getElementById('view-allergens').textContent = metadata.allergens || metadata.allergen || '-';
-        document.getElementById('view-gmo').textContent = metadata.gmo || '-';
-        document.getElementById('view-report-no').textContent = metadata.report_no || '-';
+        document.getElementById('view-allergens').textContent = allergenText || '-';
+        document.getElementById('view-gmo').textContent = gmoText || '-';
+        document.getElementById('view-report-no').textContent = reportText || '-';
 
         // 표시명 기준 버튼 상태 업데이트
         const summaryType = metadata.summary_type || '식품유형';
@@ -1619,8 +1799,8 @@ body.in-iframe .bom-page-header { display: none !important; }
         });
         
         // 알레르기 버튼 상태 업데이트
-        updateAllergenButtons(metadata.allergens || metadata.allergen || '');
-        updateGmoButtons(metadata.gmo || '');
+        updateAllergenButtons(allergenText);
+        updateGmoButtons(gmoText);
         
         currentRowIndex = rowIndex;
     }
@@ -1720,22 +1900,26 @@ body.in-iframe .bom-page-header { display: none !important; }
                 const metadata = rowMetadata.get(index) || {};
                 
                 if (row && row.ingredient_name && row.ingredient_name.toString().trim() !== '') {
+                    /* 표에 칸이 생겼으니 표가 먼저다. 칸에 친 값이 metadata
+                       에는 없어서 저장되지 않고 그대로 사라졌다. */
+                    const rowAllergens = row.allergens || metadata.allergens || metadata.allergen || '';
+                    const rowGmo = row.gmo || metadata.gmo || '';
                     const itemData = {
                         ingredient_name: row.ingredient_name,
                         mixing_ratio: row.mixing_ratio || null,
                         origin: metadata.origin || '',
-                        allergen: metadata.allergens || metadata.allergen || '',
+                        allergen: rowAllergens,
                         raw_material_name: row.raw_material_name || '',
                         sub_ingredients: metadata.sub_ingredients || '',
-                        allergens: metadata.allergens || metadata.allergen || '',
-                        gmo: metadata.gmo || '',
+                        allergens: rowAllergens,
+                        gmo: rowGmo,
                         origin_detail: metadata.origin_detail || '',
                         food_type: row.food_type || '',
                         summary_type: metadata.summary_type || '식품유형',
                         additive_yn: !!metadata.additive_yn,
                         additive_role: metadata.additive_role || '',
-                        gmo_yn: !!metadata.gmo_yn,
-                        report_no: metadata.report_no || '',
+                        gmo_yn: Boolean(rowGmo) || !!metadata.gmo_yn,
+                        report_no: row.report_no || metadata.report_no || '',
                         manufacturer: row.manufacturer || '',
                         source_label_id: metadata.source_label_id || null,
                         notes: row.notes || '',
