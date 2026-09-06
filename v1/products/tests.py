@@ -3699,3 +3699,88 @@ class 단추_명부(TestCase):
         for name in ('quick-allergen-btn', 'gmo-btn', 'summary-type-btn'):
             self.assertIn(name, checks._OWN_SIZED_BUTTONS)
             self.assertIn(name, checks._SIZED_BY_CLASS)
+
+
+class 함유는_한_번만_쓴다(TestCase):
+    """
+    물질마다 "밀 함유" "우유 함유" 로 따로 적고 있었다. 표시사항에 들어가는
+    문구는 그렇게 쓰지 않는다 — 물질을 모두 늘어놓고 함유는 맨 뒤에 한 번이다.
+
+        밀 함유  우유 함유  대두 함유
+        →  알류(달걀), 우유, 대두, 밀 함유
+
+    그래야 여기 보이는 것과 라벨에 인쇄될 것이 같아진다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+        self.tokens = (base / 'static/css/variables.css').read_text(encoding='utf-8')
+
+    def test_물질을_모두_늘어놓고_끝에_한_번(self):
+        head = self.html.index('const allergenText = Array.from(allergenSet)')
+        block = self.html[head:head + 500]
+        self.assertIn("Array.from(allergenSet).join(', ')", block)
+        self.assertIn('${allergenText} 함유', block)
+
+    def test_물질마다_따로_적지_않는다(self):
+        # 옛 모습: .map(a => `… ${a} 함유`)
+        self.assertNotIn('${a} \uD568\uC720', self.html)
+        self.assertNotIn('${a} 함유', self.html)
+
+    def test_복사에도_같은_문구가_간다(self):
+        # 두 벌로 두면 화면과 복사본이 갈라진다
+        self.assertIn('window._bomSummaryAllergenText', self.html)
+        head = self.html.index('window._bomSummaryAllergenText')
+        self.assertIn("allergenText + ' 함유'", self.html[head:head + 200])
+
+    def test_GMO_가_같은_줄에_있다(self):
+        head = self.html.index('class="bom-summary-row bom-summary-pair"')
+        block = self.html[head:self.html.index('</details>', head)]
+        self.assertIn('id="bom-summary-allergens"', block)
+        self.assertIn('id="bom-summary-gmo"', block)
+        self.assertIn('.bom-summary-pair', self.css)
+
+    def test_한_덩이로_보여_준다(self):
+        # 조각조각 뱃지로 흩으면 인쇄될 문구가 안 보인다
+        self.assertIn('.bom-tag--allergen', self.css)
+        self.assertNotIn('badge bg-warning text-dark me-1 mb-1', self.html)
+
+    def test_옅은_바탕_위의_글자색이_토큰이다(self):
+        """
+        파랑에는 --ez-info-on-bg 가 있는데 노랑·초록에는 없어서 fallback 으로만
+        살아 있었다 — 토큰을 고쳐도 안 따라온다.
+        """
+        self.assertIn('--ez-warning-on-bg:', self.tokens)
+        self.assertIn('--ez-success-on-bg:', self.tokens)
+
+    def test_대비를_재_보고_골랐다(self):
+        """#e67700 도 #b06000 도 옅은 노랑 위에서 4.5:1 에 모자랐다."""
+        import re
+
+        def lum(hexcolor):
+            parts = [int(hexcolor[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+            parts = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4
+                     for x in parts]
+            return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]
+
+        def ratio(a, b):
+            hi, lo = sorted((lum(a), lum(b)), reverse=True)
+            return (hi + 0.05) / (lo + 0.05)
+
+        def token(name):
+            return re.search(r'--%s:\s*(#[0-9a-f]{6})' % name, self.tokens).group(1)
+
+        self.assertGreaterEqual(
+            ratio(token('ez-warning-on-bg'), token('ez-warning-bg')), 4.5)
+        self.assertGreaterEqual(
+            ratio(token('ez-success-on-bg'), token('ez-success-bg')), 4.5)
+
+    def test_공통_영역이_좁아졌다(self):
+        # 요약은 표 위에 붙어 있다. 여기서 쓰는 높이가 곧 표가 잃는 높이다
+        self.assertIn('.bom-summary-body { padding: 0 10px 6px; }', self.css)
+        head = self.css.index('.bom-summary-head {')
+        self.assertIn('padding: 5px 10px;', self.css[head:head + 200])

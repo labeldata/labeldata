@@ -142,19 +142,22 @@ body.in-iframe .bom-page-header { display: none !important; }
                             <i class="bi bi-arrow-left-circle"></i>기본정보로 복사
                         </button>
                     </div>
-                    <div class="bom-summary-row">
+                    {% comment %}
+                      알레르기와 GMO 를 한 줄에 둔다. 둘 다 짧은 값인데 줄을
+                      하나씩 차지해서, 요약이 표 위에 붙어 있는 만큼 표가
+                      그만큼 밀렸다.
+                    {% endcomment %}
+                    <div class="bom-summary-row bom-summary-pair">
                         <span class="bom-summary-label">
                             <i class="bi bi-exclamation-triangle-fill text-warning"></i>알레르기
                         </span>
                         <div id="bom-summary-allergens" class="bom-summary-value">
                             <span class="text-muted">-</span>
                         </div>
-                    </div>
-                    <div class="bom-summary-row">
-                        <span class="bom-summary-label">
+                        <span class="bom-summary-label bom-summary-label--gmo">
                             <i class="bi bi-dna text-success"></i>GMO
                         </span>
-                        <div id="bom-summary-gmo" class="bom-summary-value">
+                        <div id="bom-summary-gmo" class="bom-summary-value bom-summary-value--gmo">
                             <span class="text-muted">-</span>
                         </div>
                     </div>
@@ -1593,31 +1596,34 @@ body.in-iframe .bom-page-header { display: none !important; }
             row.gmo.split(',').map(g => g.trim()).filter(Boolean).forEach(g => gmoSet.add(g));
         });
 
-        /* 알레르기 표시 */
+        /* 알레르기 표시.
+
+           물질마다 "밀 함유" "우유 함유" 로 따로 적고 있었다. 표시사항에
+           들어가는 문구는 그렇게 쓰지 않는다 — 물질을 모두 늘어놓고 **함유는
+           맨 뒤에 한 번**이다.
+
+               밀 함유  우유 함유  대두 함유
+               →  알류(달걀), 우유, 대두, 밀 함유
+
+           그래야 여기 보이는 것과 라벨에 인쇄될 것이 같아진다. */
+        const allergenText = Array.from(allergenSet).join(', ');
         if (allergensEl) {
-            if (allergenSet.size > 0) {
-                allergensEl.innerHTML = Array.from(allergenSet)
-                    .map(a => `<span class="badge bg-warning text-dark me-1 mb-1">${a} \uD568\uC720</span>`)
-                    .join('');
-            } else {
-                allergensEl.innerHTML = '<span class="text-muted">\uC5C6\uC74C</span>';
-            }
+            allergensEl.innerHTML = allergenText
+                ? `<span class="bom-tag bom-tag--allergen">${allergenText} 함유</span>`
+                : '<span class="text-muted">없음</span>';
         }
 
-        /* GMO 표시 */
         if (gmoEl) {
-            if (gmoSet.size > 0) {
-                gmoEl.innerHTML = Array.from(gmoSet)
-                    .map(g => `<span class="badge bg-success text-white me-1 mb-1">${g}</span>`)
-                    .join('');
-            } else {
-                gmoEl.innerHTML = '<span class="text-muted">\uC5C6\uC74C</span>';
-            }
+            gmoEl.innerHTML = gmoSet.size
+                ? `<span class="bom-tag bom-tag--gmo">${Array.from(gmoSet).join(', ')}</span>`
+                : '<span class="text-muted">없음</span>';
         }
 
         /* 복사용 전역 저장 */
         window._bomSummaryRawmtrl  = rawmtrlText;
         window._bomSummaryAllergens = Array.from(allergenSet);
+        /* 화면에 보이는 것과 같은 문구. 두 벌로 두면 갈라진다 */
+        window._bomSummaryAllergenText = allergenText ? allergenText + ' 함유' : '';
         window._bomSummaryGmo       = Array.from(gmoSet);
 
         /* 접어 뒀을 때 보이는 한 줄.

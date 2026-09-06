@@ -11,6 +11,9 @@
   --ez-success-hover:  #137333;
   --ez-success-bg:     #e6f4ea;
   --ez-success-border: #ceead6;
+  /* 옅은 초록 바탕 위의 글자. #1e8e3e 는 대비가 모자란다.
+     #e6f4ea 위에서 5.24:1 (--ez-info-on-bg 와 같은 결) */
+  --ez-success-on-bg:  #137333;
 
   --ez-danger:         #c5221f;
   --ez-danger-hover:   #a50e0e;
@@ -23,6 +26,9 @@
   --ez-warning-hover:  #b85e00;
   --ez-warning-bg:     #fef7e0;
   --ez-warning-border: #fde68a;
+  /* 옅은 노랑 바탕 위의 글자. #e67700(4.22:1)도 #b06000(4.34:1)도
+     본문 기준 4.5:1 에 모자란다. 재 보고 고른 값이다 — #fef7e0 위에서 5.12:1 */
+  --ez-warning-on-bg:  #a35400;
 
   --ez-info:           #1a73e8;
   --ez-info-hover:     #1765cc;
