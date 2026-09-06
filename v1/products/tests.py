@@ -3123,3 +3123,45 @@ class BomLayoutFollowsTheWorkTests(TestCase):
         block = self.html[head:head + 200]
         self.assertIn('meta.allergens', block)      # 옛 자료는 뒤에서 받쳐 준다
         self.assertIn('row.gmo || meta.gmo', block)
+
+
+class 고르는_자리를_낮춘다(TestCase):
+    """
+    알레르기·GMO 가 각각 라벨 한 줄, 테두리 상자, 그 안의 "선택된 항목 없음"
+    한 줄을 따로 차지했다. 같은 모양이 셋 쌓이니 창이 길어져서, 고른 줄
+    아래에 띄우면 표를 통째로 가렸다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def _form(self):
+        head = self.html.index('id="context-form"')
+        return self.html[head:self.html.index('id="field-summary-type"', head)]
+
+    def test_상자_안에_상자를_두지_않는다(self):
+        # 창 자체가 이미 상자다
+        self.assertNotIn('background-color: #f8f9fa;', self._form())
+        self.assertNotIn('border: 1px solid #dadce0;', self._form())
+
+    def test_라벨과_고른_것과_전체선택이_한_줄이다(self):
+        form = self._form()
+        for name in ('allergenSelectedDisplay', 'gmoSelectedDisplay'):
+            head = form.index('class="pick-head"')
+            self.assertIn(name, form[head:form.index('</div>', head)])
+            form = form[form.index('class="pick-head"', head) + 10:]
+        self.assertIn('.pick-head', self.css)
+
+    def test_고른_것이_없으면_적지_않는다(self):
+        # 칩이 그대로 보여 준다. 자리만 차지하는 말이었다
+        self.assertNotIn('선택된 항목 없음', self.html)
+
+    def test_칩_간격은_한_곳에서_준다(self):
+        # 낱개 margin 을 걷고 .pick-chips 의 gap 하나로 모은다
+        head = self.css.index('.quick-allergen-btn {')
+        self.assertNotIn('margin-bottom', self.css[head:head + 260])
+        self.assertIn('gap:       3px;', self.css)
