@@ -1426,7 +1426,7 @@ div.input-container-modern textarea#rawmtrl_nm {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
   font-weight: 400 !important;
   letter-spacing: normal !important;
-  color: #495057 !important;
+  color: var(--ez-gray-800, #3c4043) !important;
   padding: 8px 12px !important;
 }
 
@@ -2336,8 +2336,8 @@ textarea:focus {
 /* btn-success는 위쪽 통합된 정의 사용 */
 
 .btn-outline-secondary {
-  color: #6c757d !important;
-  border-color: #6c757d !important;
+  color: var(--ez-gray-700, #5f6368) !important;
+  border-color: var(--ez-gray-700, #5f6368) !important;
 }
 
 .btn-outline-secondary:hover,
@@ -2345,7 +2345,7 @@ textarea:focus {
 .btn-outline-secondary:active {
   color: #fff !important;
   background-color: #6c757d !important;
-  border-color: #6c757d !important;
+  border-color: var(--ez-gray-700, #5f6368) !important;
 }
 
 .btn-outline-success {
@@ -2639,7 +2639,7 @@ textarea:focus {
 }
 
 .phrases-header {
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--ez-gray-300, #dadce0);
     padding-bottom: 10px;
     margin-bottom: 15px;
     display: flex;
@@ -2653,7 +2653,7 @@ textarea:focus {
 
 .category-title {
     font-weight: 500;
-    color: #495057;
+    color: var(--ez-gray-800, #3c4043);
     margin-bottom: 0;
     font-size: 0.9rem;
     min-width: 90px;
@@ -2671,7 +2671,7 @@ textarea:focus {
 }
 
 .phrase-item .phrase-name {
-    color: #495057;
+    color: var(--ez-gray-800, #3c4043);
     font-size: 0.95rem;
 }
 
@@ -2688,7 +2688,7 @@ textarea:focus {
 }
 
 .new-phrase-form {
-    border-top: 2px solid #dee2e6;
+    border-top: 2px solid var(--ez-gray-300, #dadce0);
     margin-top: 20px;
     padding-top: 15px;
 }
@@ -2696,7 +2696,7 @@ textarea:focus {
 .new-phrase-form .form-label {
     font-weight: 600;
     font-size: 0.9rem;
-    color: #495057;
+    color: var(--ez-gray-800, #3c4043);
 }
 
 .new-phrase-form .form-control {
@@ -3617,7 +3617,7 @@ select[name="food_subtype"],
 .settings-panel {
   flex: 0 0 300px;
   padding: 20px;
-  border-right: 1px solid #dee2e6;
+  border-right: 1px solid var(--ez-gray-300, #dadce0);
   overflow-y: auto;
   background-color: var(--ez-gray-50, #f8f9fa);
 }
@@ -4028,7 +4028,7 @@ html body .btn-sm { padding: 0.35rem 0.65rem !important; font-size: 0.85rem !imp
 .preview-content-modern th,
 .preview-content-modern td {
   padding: 4px 8px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--ez-gray-300, #dadce0);
   vertical-align: middle;
   word-break: break-all;
   overflow-wrap: break-word;

@@ -389,7 +389,7 @@ body {
 
 .unit-label {
   font-size: 0.8rem;
-  color: #6c757d;
+  color: var(--ez-gray-700, #5f6368);
   margin-left: 4px;
   flex-shrink: 0;
 }
@@ -584,7 +584,7 @@ body {
 .result-display {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--ez-gray-300, #dadce0);
   border-radius: 4px;
   padding: 10px;
   background: #ffffff;
@@ -595,7 +595,7 @@ body {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #6c757d;
+  color: var(--ez-gray-700, #5f6368);
   font-style: italic;
 }
 
@@ -877,7 +877,7 @@ body {
 /* 4. 강조표시 스타일 */
 .emphasis-validation-container {
   margin-bottom: 15px;
-  border: 1px solid #dee2e6;
+  border: 1px solid var(--ez-gray-300, #dadce0);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -885,13 +885,13 @@ body {
 .emphasis-validation-header {
   background: var(--ez-gray-50, #f8f9fa);
   padding: 10px 15px;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--ez-gray-300, #dadce0);
 }
 
 .emphasis-validation-header h6 {
   margin: 0;
   font-size: 0.9rem;
-  color: #495057;
+  color: var(--ez-gray-800, #3c4043);
 }
 
 .emphasis-validation-content {
@@ -959,7 +959,7 @@ body {
 }
 
 .emphasis-threshold {
-  color: #6c757d;
+  color: var(--ez-gray-700, #5f6368);
   font-size: 0.75rem;
   margin-left: 5px;
 }
@@ -1211,7 +1211,7 @@ body {
 
 .nutrition-style-parallel .nutrition-table thead th.right-section {
   width: 35%; /* 3,4번 컬럼 비율에 맞춰 조정 (20% + 15% = 35%) */
-  background-color: #f0f0f0;
+  background-color: var(--ez-gray-100, #f1f3f4);
 }
 
 .nutrition-style-parallel .nutrition-table thead th .header-flex {
@@ -1256,7 +1256,7 @@ body {
 
 .nutrition-style-parallel .nutrition-table thead th.section-divider {
   border-right: none;
-  background-color: #f0f0f0; /* 병행되는 영역 배경 */
+  background-color: var(--ez-gray-100, #f1f3f4); /* 병행되는 영역 배경 */
 }
 
 /* 2.3. 표 본문 (Body) */
@@ -1296,16 +1296,16 @@ body {
 
 .nutrition-style-parallel .nutrition-table tbody td:nth-child(3) {
   border-right: none;
-  background-color: #f0f0f0; /* 병행되는 영역 배경 */
+  background-color: var(--ez-gray-100, #f1f3f4); /* 병행되는 영역 배경 */
 }
 
 /* 병행표시 오른쪽 영역 배경 */
 .nutrition-style-parallel .nutrition-table tbody td.parallel-section {
-  background-color: #f0f0f0;
+  background-color: var(--ez-gray-100, #f1f3f4);
 }
 
 .nutrition-style-parallel .nutrition-table thead th.parallel-section {
-  background-color: #f0f0f0;
+  background-color: var(--ez-gray-100, #f1f3f4);
 }
 
 /* 열량(Calories) 행 특별 스타일 */

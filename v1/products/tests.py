@@ -2609,3 +2609,72 @@ class RepeatedInlineStylesAreClassesTests(TestCase):
         self.assertIn('font-size: 7px', reg[head:head + 120])
         self.assertIn('class="rg-dot"',
                       self._read('templates/regulatory/_news_detail_panel.html'))
+
+
+class BootstrapGreysAreGoneTests(TestCase):
+    """
+    부트스트랩 회색이 구글 팔레트와 섞여 있었다. 값이 달라서 기계적으로는
+    못 바꾸고, 쓰임에 따라 잣대를 나눠 정했다.
+
+      테두리·배경   사람 눈 기준 차이(CIE ΔE*ab)가 4 아래면 바꾼다
+      글자          ΔE 로 정하지 않는다. **같은 방향으로 진해져 대비가
+                    오르는** 토큰을 고른다 — 바뀌는 것이 "더 잘 읽힌다"
+                    쪽이면 되돌릴 이유가 없다
+      넓은 면       손대지 않는다. 단추 바탕은 글자용 잣대가 안 맞는다
+    """
+
+    def setUp(self):
+        import re
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.dir = Path(dj.BASE_DIR) / 'static' / 'css'
+        self._var = re.compile(r'var\(\s*--[\w-]+\s*(?:,[^()]*)?\)')
+
+    def _bare(self, path):
+        return self._var.sub('', path.read_text(encoding='utf-8')).lower()
+
+    def test_테두리와_글자의_부트스트랩_회색은_사라졌다(self):
+        left = {}
+        for path in sorted(self.dir.glob('*.css')):
+            if path.name == 'bootstrap.min.css':
+                continue
+            text = self._bare(path)
+            for colour in ('#dee2e6', '#495057', '#e0e2e0', '#f0f0f0'):
+                if colour in text:
+                    left.setdefault(colour, []).append(path.name)
+        self.assertEqual(left, {})
+
+    def test_단추_바탕은_그대로_뒀다(self):
+        """
+        #6c757d 를 background 로 쓰는 자리는 남긴다. 글자를 진하게 하는 잣대로
+        넓은 면을 칠하면 화면이 어두워진다.
+        """
+        import re
+        found = 0
+        for path in sorted(self.dir.glob('*.css')):
+            if path.name == 'bootstrap.min.css':
+                continue
+            for line in self._bare(path).splitlines():
+                if '#6c757d' in line:
+                    self.assertRegex(line, r'background(-color)?\s*:')
+                    found += 1
+        self.assertEqual(found, 2)
+
+    def test_글자는_대비가_오르는_쪽으로_갔다(self):
+        """#6c757d 는 흰 바탕 대비 4.69 로 본문 기준(4.5)에 아슬아슬했다."""
+        import re
+        tokens = dict(re.findall(r'(--ez-[\w-]+):\s*(#[0-9a-fA-F]{6})',
+                      (self.dir / 'variables.css').read_text(encoding='utf-8')))
+
+        def lum(h):
+            def lin(c):
+                c = int(h.lstrip('#')[c:c + 2], 16) / 255
+                return c / 12.92 if c <= .04045 else ((c + .055) / 1.055) ** 2.4
+            return .2126 * lin(0) + .7152 * lin(2) + .0722 * lin(4)
+
+        def contrast(fg):
+            a, b = sorted((lum(fg), lum('#ffffff')), reverse=True)
+            return (a + .05) / (b + .05)
+
+        for old, token in (('#6c757d', '--ez-gray-700'), ('#495057', '--ez-gray-800')):
+            self.assertGreater(contrast(tokens[token]), contrast(old), old)

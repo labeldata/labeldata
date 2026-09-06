@@ -340,10 +340,10 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
     padding-bottom: 0 !important;
     /* 얇은 스크롤바: 스크롤 가능 상태 인지 */
     scrollbar-width: thin;
-    scrollbar-color: #dee2e6 transparent;
+    scrollbar-color: var(--ez-gray-300, #dadce0) transparent;
 }
 #workspaceTab::-webkit-scrollbar       { height: 3px; }
-#workspaceTab::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 3px; }
+#workspaceTab::-webkit-scrollbar-thumb { background: var(--ez-gray-300, #dadce0); border-radius: 3px; }
 #workspaceTab::-webkit-scrollbar-track { background: transparent; }
 
 /* li: 탭 자체는 절대 줄어들거나 wrap되지 않도록 */
@@ -374,7 +374,7 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 }
 #workspaceTab .nav-link.active {
     background: #ffffff !important;
-    border-color: #dee2e6 #dee2e6 #ffffff !important;
+    border-color: var(--ez-gray-300, #dadce0) var(--ez-gray-300, #dadce0) #ffffff !important;
     color: var(--google-blue) !important;
     font-weight: 600 !important;
 }
@@ -674,7 +674,7 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
 }
 
 /* Skeleton Loading */
-.skeleton-loader { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: skeletonLoading 1.5s infinite; border-radius: 8px; }
+.skeleton-loader { background: linear-gradient(90deg, var(--ez-gray-100, #f1f3f4) 25%, #e0e0e0 50%, var(--ez-gray-100, #f1f3f4) 75%); background-size: 200% 100%; animation: skeletonLoading 1.5s infinite; border-radius: 8px; }
 @keyframes skeletonLoading {
     0%   { background-position:  200% 0; }
     100% { background-position: -200% 0; }
@@ -774,7 +774,7 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
         flex:          0 0 100% !important;
         width:         100%     !important;
         height:        44px     !important;   /* h-100 무력화 */
-        border-bottom: 1px solid #dee2e6;     /* 탭 아래 구분선(활성탭 흰색으로 덮음) */
+        border-bottom: 1px solid var(--ez-gray-300, #dadce0);     /* 탭 아래 구분선(활성탭 흰색으로 덮음) */
         padding-left:  12px;
         overflow-x:    auto;
         overflow-y:    visible;
@@ -795,7 +795,7 @@ textarea.form-control { resize: vertical; min-height: 90px; line-height: 1.5; }
     }
     /* 배지 스크롤바 숨김 (존재는 하되 UI에서 안 보임) */
     #toolbar-badges::-webkit-scrollbar { height: 3px; }
-    #toolbar-badges::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 3px; }
+    #toolbar-badges::-webkit-scrollbar-thumb { background: var(--ez-gray-300, #dadce0); border-radius: 3px; }
 }
 #save-status            { font-size: 0.8rem; transition: opacity 0.4s ease; }
 

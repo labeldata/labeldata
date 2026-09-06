@@ -538,7 +538,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 0.25rem 0.5rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     background: white;
     border-radius: 4px;
     cursor: pointer;
@@ -550,12 +550,12 @@ body {
 
 .layout-btn i {
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--ez-gray-700, #5f6368);
 }
 
 .layout-btn span {
     font-weight: 500;
-    color: #495057;
+    color: var(--ez-gray-800, #3c4043);
 }
 
 .layout-btn:hover {
@@ -593,7 +593,7 @@ body {
 
 .field-order-item {
     background: white;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     border-radius: 6px;
     padding: 0.5rem;
     display: flex;
@@ -668,7 +668,7 @@ body {
 .field-order-item.half-width-item .field-label::after {
     content: ' (50%)';
     font-size: 0.85em;
-    color: #6c757d;
+    color: var(--ez-gray-700, #5f6368);
     font-weight: normal;
 }
 
@@ -682,13 +682,13 @@ body {
     width: 24px;
     height: 24px;
     padding: 0;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     background: white;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s;
     font-size: 0.7rem;
-    color: #495057;
+    color: var(--ez-gray-800, #3c4043);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -710,7 +710,7 @@ body {
 .order-btn {
     width: 24px;
     height: 24px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     background: white;
     border-radius: 4px;
     cursor: pointer;
@@ -738,7 +738,7 @@ body {
 .field-order-item .visibility-toggle {
     width: 28px;
     height: 28px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     background: white;
     border-radius: 4px;
     cursor: pointer;
@@ -806,7 +806,7 @@ body {
 tbody.layout-horizontal tr th,
 tbody.layout-horizontal tr td {
     padding: 6px 10px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     line-height: 1.4;
     word-wrap: break-word;
     word-break: break-word;

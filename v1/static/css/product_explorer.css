@@ -30,7 +30,7 @@
     overflow-x: auto;
     overflow-y: hidden;
     flex-shrink: 0;
-    border-bottom: 1px solid #e0e2e0;
+    border-bottom: 1px solid var(--ez-gray-300, #dadce0);
     background: var(--v2-gray-50);
     padding: 16px 0;
 }
@@ -87,7 +87,7 @@
 /* ── 필터 툴바 ────────────────────────────────────────────── */
 .filter-toolbar {
     flex-shrink: 0;
-    border-bottom: 1px solid #e0e2e0;
+    border-bottom: 1px solid var(--ez-gray-300, #dadce0);
     background: #ffffff;
     min-height: 64px;
 }
@@ -132,7 +132,7 @@
     border-top: none;
     border-left: none;
     border-right: none;
-    border-bottom-color: #f0f0f0;
+    border-bottom-color: var(--ez-gray-100, #f1f3f4);
 }
 
 .product-row.selected { background-color: var(--v2-blue-light) !important; }
@@ -147,7 +147,7 @@
 #selection-actions {
     animation: slideIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     background: #ffffff;
-    border: 1px solid #e0e2e0;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     border-radius: 28px;
     padding: 6px 16px;
     box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);

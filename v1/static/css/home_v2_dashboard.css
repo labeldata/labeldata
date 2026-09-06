@@ -301,7 +301,7 @@ a.hero-app-badge:hover {
 
 .pipe-node {
     border-radius: 14px;
-    border: 1.5px solid #e0e2e0;
+    border: 1.5px solid var(--ez-gray-300, #dadce0);
     overflow: visible; /* 원형 배지 돌출 허용 */
     display: flex;
     flex-direction: column;

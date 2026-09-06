@@ -456,12 +456,12 @@ body {
 .btn-icon {
     border: none;
     background: none;
-    color: #6c757d;
+    color: var(--ez-gray-700, #5f6368);
     padding: 2px 4px;
     line-height: 1;
 }
 .btn-icon:hover {
-    color: #495057;
+    color: var(--ez-gray-800, #3c4043);
     background-color: rgba(108, 117, 125, 0.1);
 }
 /* ====================================================
@@ -854,7 +854,7 @@ body {
 .container .card .card-body .d-flex.align-items-center.mb-2 .select2-container--default .select2-selection--single {
     font-size: 0.85rem !important;
     font-weight: 400 !important;
-    color: #495057 !important;
+    color: var(--ez-gray-800, #3c4043) !important;
 }
 .container .card .card-body .d-flex.align-items-center.mb-2 input.form-control::placeholder,
 .container .card .card-body .d-flex.align-items-center.mb-2 textarea.form-control::placeholder {
@@ -918,7 +918,7 @@ body {
     font-size: 0.85rem;
     color: #888 !important;
     background: var(--ez-gray-50, #f8f9fa);
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ez-gray-300, #dadce0);
     border-bottom: none;
     margin-bottom: -1px;
     transition: color 0.2s, background 0.2s;
@@ -927,11 +927,11 @@ body {
 #regulationPanel .nav-tabs .nav-link:focus {
     color: #0d6efd !important;
     background: #fff;
-    border-color: #dee2e6 #dee2e6 #fff;
+    border-color: var(--ez-gray-300, #dadce0) var(--ez-gray-300, #dadce0) #fff;
     z-index: 2;
 }
 #regulationPanel .nav-tabs .nav-link:not(.active):hover {
-    color: #495057 !important;
+    color: var(--ez-gray-800, #3c4043) !important;
     background: #f1f3f5;
 }
 /* 1.2 상세입력(좌측) 영역 내 버튼(좌측 패널) 스타일 원복: 기존 .btn, .btn-outline-primary, .btn-outline-secondary, .btn-outline-cancel 등만 적용 */
@@ -1103,7 +1103,7 @@ select.form-control.select2-date-option {
 #rawmtrl_nm_section .disabled-textarea {
     font-size: 0.85rem !important;
     font-weight: 400 !important;
-    color: #495057 !important;
+    color: var(--ez-gray-800, #3c4043) !important;
 }
 
 /* 카드 스타일 개선 */
@@ -1292,7 +1292,7 @@ select.form-control.select2-date-option {
     transition: all 0.2s ease;
     font-size: 0.7rem;
     line-height: 1;
-    color: #6c757d;
+    color: var(--ez-gray-700, #5f6368);
     background-color: rgba(108, 117, 125, 0.08);
     border: 1px solid rgba(108, 117, 125, 0.15);
 }

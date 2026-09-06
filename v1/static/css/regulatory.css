@@ -75,7 +75,7 @@
   display: flex; align-items: center; gap: 12px;
   padding: 14px 24px;
   background: var(--c-bg-page);
-  border-bottom: 1px solid #e0e2e0;
+  border-bottom: 1px solid var(--ez-gray-300, #dadce0);
   overflow-x: auto; overflow-y: hidden;
 }
 .reg-stat {
@@ -116,7 +116,7 @@
 /* ── 1-2. 필터 툴바 (제품 관리 .filter-toolbar 과 같은 규격) ─────── */
 .reg-toolbar {
   flex-shrink: 0; background: #fff;
-  border-bottom: 1px solid #e0e2e0;
+  border-bottom: 1px solid var(--ez-gray-300, #dadce0);
   position: relative; z-index: var(--z-filter);
 }
 .reg-tb-row {
@@ -296,7 +296,7 @@
 .reg-table thead th.tc { text-align: center; }
 .reg-table tbody tr.rs-item {
   height: 44px; cursor: pointer;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--ez-gray-100, #f1f3f4);
   transition: background var(--ez-transition-fast);
 }
 .reg-table tbody tr.rs-item:hover { background: var(--c-border-light); }
@@ -716,7 +716,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .rkb-chip-del:hover   { color: #e53935; }
 
 /* 키워드 추가 폼 */
-.kw-add-section  { border-top: 1px solid #f0f0f0; padding-top: 12px; }
+.kw-add-section  { border-top: 1px solid var(--ez-gray-100, #f1f3f4); padding-top: 12px; }
 .kw-add-form     { display: flex; gap: 6px; align-items: stretch; }
 .kw-select       { flex: 0 0 110px; }
 .kw-select-match { flex: 0 0 72px; }

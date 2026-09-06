@@ -28,7 +28,7 @@
     overflow-x:    auto;
     overflow-y:    hidden;
     flex-shrink:   0;
-    border-bottom: 1px solid #e0e2e0;
+    border-bottom: 1px solid var(--ez-gray-300, #dadce0);
     background:    var(--v2-gray-50);
     padding:       10px 0;
     scrollbar-width: none;
@@ -149,7 +149,7 @@
 /* ── 역할 필터 툴바 ───────────────────────────────────────── */
 .filter-toolbar {
     flex-shrink:   0;
-    border-bottom: 1px solid #e0e2e0;
+    border-bottom: 1px solid var(--ez-gray-300, #dadce0);
     background:    #ffffff;
     min-height:    52px;
     display:       flex;
@@ -215,7 +215,7 @@
     border-top:     none;
     border-left:    none;
     border-right:   none;
-    border-bottom:  1px solid #f0f0f0;
+    border-bottom:  1px solid var(--ez-gray-100, #f1f3f4);
     vertical-align: middle;
 }
 
@@ -292,7 +292,7 @@
 
 .filter-toolbar {
     flex-shrink:   0;
-    border-bottom: 1px solid #e0e2e0;
+    border-bottom: 1px solid var(--ez-gray-300, #dadce0);
     background:    #ffffff;
     min-height:    56px;
     display:       flex;
@@ -312,7 +312,7 @@
     padding:         4px 10px;
     font-size:       11px;
     font-weight:     600;
-    border:          1px solid #e0e2e0;
+    border:          1px solid var(--ez-gray-300, #dadce0);
     background:      var(--ez-gray-50, #f8f9fa);
     color:           var(--ez-gray-700, #5f6368);
     cursor:          pointer;
@@ -348,7 +348,7 @@
     border-radius: 16px;
     color:         #444746;
     background:    transparent;
-    border:        1px solid #e0e2e0;
+    border:        1px solid var(--ez-gray-300, #dadce0);
     margin-right:  4px;
 }
 .role-pills .nav-link.active             { background-color: #c2e7ff; border-color: #c2e7ff; color: #001d35; }
@@ -382,7 +382,7 @@
     border-top:     none;
     border-left:    none;
     border-right:   none;
-    border-bottom:  1px solid #f0f0f0;
+    border-bottom:  1px solid var(--ez-gray-100, #f1f3f4);
     text-align:     center;
     vertical-align: middle;
 }
@@ -459,7 +459,7 @@
 /* 스트립 컨테이너 */
 .inbox-stats-strip {
     flex-shrink:   0;
-    border-bottom: 1px solid #e0e2e0;
+    border-bottom: 1px solid var(--ez-gray-300, #dadce0);
     background:    var(--ez-gray-50, #f8f9fa);
     overflow-x:    auto;
     overflow-y:    hidden;
@@ -554,7 +554,7 @@
     gap:           8px;
     padding:       8px 20px;
     background:    #ffffff;
-    border-bottom: 1px solid #e0e2e0;
+    border-bottom: 1px solid var(--ez-gray-300, #dadce0);
     flex-shrink:   0;
     min-height:    48px;
     overflow-x:    auto;
