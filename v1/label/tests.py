@@ -8947,6 +8947,14 @@ class ListFitsOneScreenTests(TestCase):
     def test_가로로_밀지_않는다(self):
         self.assertNotIn('width: max-content', self.html)
 
+    def test_칸마다_최소_폭이_있다(self):
+        """
+        열네 칸을 45% 짜리 패널에 넣으면 한 글자짜리 칸이 되어 글자가 세로로
+        쌓인다. 실제로 그렇게 나왔다.
+        """
+        self.assertIn('min-width: var(--list-min-width, 0)', self.html)
+        self.assertIn('--list-min-width: {{ list_columns|length }}00px', self.html)
+
     def test_세_줄까지_접는다(self):
         self.assertIn('-webkit-line-clamp: 3', self.html)
         self.assertIn('class="cell-clip"', self.html)
@@ -8956,9 +8964,28 @@ class ListFitsOneScreenTests(TestCase):
         접힌 것을 보려고 한 건씩 눌러 상세를 여는 것이 원래 불편이었다.
         마우스를 올린 동안만 전부 보이고, 지나가면 다시 접힌다.
         """
-        head = self.html.index('.list-table tbody tr:hover .cell-clip')
+        head = self.html.index('.list-wrap:not(.is-peek) .list-table tbody tr:hover .cell-clip')
         block = self.html[head:head + 200]
         self.assertIn('-webkit-line-clamp: unset', block)
+
+    def test_겹쳐_보기도_고를_수_있다(self):
+        """
+        줄이 커지면 아래 줄들이 밀린다. 훑어 내려가는 중에는 거슬릴 수 있어서
+        겹쳐 띄우는 방식도 둔다. 어느 쪽이 나은지는 써 봐야 안다.
+        """
+        self.assertIn('id="peekBtn"', self.html)
+        self.assertIn('window.togglePeekMode', self.html)
+        head = self.html.index('.list-wrap.is-peek .list-table td:hover .cell-clip')
+        block = self.html[head:head + 500]
+        self.assertIn('position: absolute', block)
+        self.assertIn('box-shadow', block)
+
+    def test_두_방식이_함께_돌지_않는다(self):
+        # 겹쳐 보기일 때는 줄을 펴지 않는다
+        self.assertIn('.list-wrap:not(.is-peek)', self.html)
+
+    def test_고른_방식은_브라우저에_남는다(self):
+        self.assertIn("localStorage.getItem(PEEK_KEY)", self.html)
 
     def test_지나가는_줄은_한_벌만_정한다(self):
         # 같은 규칙이 두 벌이면 어느 날 한쪽만 고쳐진다
@@ -9023,3 +9050,31 @@ class ViewControlsAreSeparateTests(TestCase):
             self.assertIn(rule.replace('background', 'background-color')
                           if 'f1f3f4' in rule else rule, additive)
             self.assertIn(rule, self.html)
+
+
+class NarrowScreenTests(TestCase):
+    """작은 화면에서 단추가 밀려 나가고 목록이 한 글자씩 세로로 쌓였다."""
+
+    def setUp(self):
+        self.html = _src('templates/label/my_ingredient_list_combined.html')
+
+    def test_칸_고르기_메뉴가_잘리지_않는다(self):
+        """
+        overflow:hidden 을 걸었더니 드롭다운이 그 상자에 잘렸다. 단추는
+        눌렸는데 메뉴가 안 보여서 고장 난 것처럼 보였다.
+        """
+        head = self.html.index('.ing-viewctl {')
+        block = self.html[head:head + 300]
+        self.assertNotIn('overflow: hidden', block)
+        # 모서리는 안쪽 단추를 깎아서 만든다
+        self.assertIn('border-radius: 20px 0 0 20px', self.html)
+
+    def test_툴바는_줄을_바꿔_쌓는다(self):
+        head = self.html.index('.ingredient-toolbar {')
+        block = self.html[head:head + 400]
+        self.assertIn('flex-wrap: wrap', block)
+
+    def test_검색칸은_줄어들_수_있다(self):
+        head = self.html.index('.search-box {')
+        block = self.html[head:head + 250]
+        self.assertIn('min-width: 200px', block)

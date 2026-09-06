@@ -52,18 +52,25 @@
     }
 
     /* ===== 상단 툴바 ===== */
+    /* 좁은 화면에서 단추가 오른쪽으로 밀려 나갔다. 줄을 바꿔 쌓는다 —
+       가로로 밀면 있는지도 모르는 단추가 생긴다. */
     .ingredient-toolbar {
         flex-shrink: 0;
         background: white;
         border-bottom: 1px solid var(--border-color);
-        padding: 16px 24px;
+        padding: 12px 16px;
         display: flex;
         align-items: center;
-        gap: 16px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    @media (max-width: 1200px) {
+        .ingredient-toolbar .toolbar-buttons { margin-left: 0; }
     }
 
     .search-box {
-        flex: 1;
+        flex: 1 1 260px;
+        min-width: 200px;
         max-width: 500px;
         display: flex;
         align-items: center;
@@ -232,11 +239,13 @@
         overflow: auto;
     }
 
-    /* 칸을 여럿 켜도 **한 화면에 들어온다.** 고른 칸끼리 100% 를 나눠 갖고
-       (list_sort.ingredient_columns 가 몫을 계산한다), 좁아진 칸은 두 줄로
-       접는다. 가로로 밀면 오른쪽 칸은 있으나 마나다. */
+    /* 고른 칸끼리 100% 를 나눠 갖는다(list_sort.ingredient_columns).
+       다만 **칸마다 최소 폭이 있다.** 열네 칸을 45% 짜리 패널에 넣으면
+       한 글자짜리 칸이 되어 글자가 세로로 쌓인다 — 실제로 그렇게 나왔다.
+       좁으면 그 패널만 가로로 밀고, 넓게 보기로 열면 전부 들어온다. */
     .list-table {
         width: 100%;
+        min-width: var(--list-min-width, 0);
         border-collapse: collapse;
         table-layout: fixed;
     }
@@ -259,15 +268,25 @@
 
     /* 보기 설정 — 무언가를 하는 단추와 갈라 둔다.
        색을 쓰지 않는다. 여기서 누른다고 자료가 바뀌지는 않는다. */
+    /* overflow:hidden 을 걸었더니 **드롭다운이 이 상자에 잘렸다.** 단추는
+       눌렸는데 메뉴가 안 보여서 고장 난 것처럼 보였다. 모서리는 안쪽 단추를
+       깎아서 만든다. */
     .ing-viewctl {
         display: inline-flex;
         flex-shrink: 0;
         border: 1px solid var(--google-gray-300);
         border-radius: 20px;
         background: var(--google-gray-50);
-        overflow: hidden;
     }
     .ing-viewctl .dropdown { display: flex; }
+    .ing-viewctl > *:first-child .ing-viewctl-btn,
+    .ing-viewctl > .ing-viewctl-btn:first-child {
+        border-radius: 20px 0 0 20px;
+    }
+    .ing-viewctl > *:last-child .ing-viewctl-btn,
+    .ing-viewctl > .ing-viewctl-btn:last-child {
+        border-radius: 0 20px 20px 0;
+    }
     .ing-viewctl-btn {
         display: inline-flex;
         align-items: center;
@@ -297,7 +316,8 @@
         text-align: center;
     }
     /* 켜져 있으면 그렇게 보여야 한다 */
-    #wideBtn.is-on {
+    #wideBtn.is-on,
+    #peekBtn.is-on {
         background: var(--v2-blue-light, #e8f0fe);
         color: var(--google-blue);
     }
@@ -404,8 +424,34 @@
 
     /* 지나가는 줄은 **그 자리에서 펴진다.**
        접힌 것을 보려고 한 건씩 눌러 상세를 여는 것이 원래 불편이었다.
-       마우스를 올린 동안만 전부 보이고, 지나가면 다시 접힌다. */
-    .list-table tbody tr:hover .cell-clip {
+       마우스를 올린 동안만 전부 보이고, 지나가면 다시 접힌다.
+
+       다만 줄이 커지면 **아래 줄들이 밀린다.** 훑어 내려가는 중에는 그것이
+       거슬릴 수 있어서, 겹쳐 띄우는 방식도 둔다. 어느 쪽이 나은지는 실제로
+       써 봐야 알 일이라 골라 쓰게 한다(보기 설정의 "줄 펴기 / 겹쳐 보기").
+
+       peek 방식에서는 칸이 밀리지 않는다 — 지나가는 칸 하나만 제 자리 위로
+       떠올라 전부를 보여 준다. */
+    .list-wrap:not(.is-peek) .list-table tbody tr:hover .cell-clip {
+        -webkit-line-clamp: unset;
+        display: block;
+    }
+
+    .list-wrap.is-peek .list-table td { position: relative; }
+    .list-wrap.is-peek .list-table td:hover .cell-clip {
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: 20;
+        min-width: 100%;
+        max-width: 460px;
+        max-height: 280px;
+        overflow-y: auto;
+        padding: 8px 10px;
+        border: 1px solid var(--google-gray-300);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(60, 64, 67, .25);
         -webkit-line-clamp: unset;
         display: block;
     }
@@ -724,6 +770,11 @@
                     onclick="toggleWideList()" title="상세 칸을 접고 목록을 넓게 봅니다">
                 <i class="bi bi-arrows-angle-expand"></i><span id="wideBtnLabel">넓게 보기</span>
             </button>
+            <button type="button" class="ing-viewctl-btn" id="peekBtn"
+                    onclick="togglePeekMode()"
+                    title="긴 값을 볼 때 줄을 펼지, 옆에 겹쳐 띄울지">
+                <i class="bi bi-arrows-expand"></i><span id="peekBtnLabel">줄 펴기</span>
+            </button>
             <div class="dropdown">
                 <button type="button" class="ing-viewctl-btn" data-bs-toggle="dropdown"
                         data-bs-auto-close="outside" title="목록에 보일 칸을 고릅니다">
@@ -785,9 +836,9 @@
                     </button>
                 </div>
             </div>
-            <div class="list-table-wrapper">
+            <div class="list-table-wrapper list-wrap">
                 {% include "label/_list_column_align.html" with align_table=".list-table" align_offset=1 %}
-                <table class="list-table">
+                <table class="list-table" style="--list-min-width: {{ list_columns|length }}00px;">
                     <thead>
                         <tr>
                             <th style="width: 38px;"><input type="checkbox" class="ingredient-check-all" id="checkAllIngredients"></th>
@@ -1149,6 +1200,38 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     try { applyWide(localStorage.getItem(WIDE_KEY) === '1'); } catch (e) {}
+
+    /*
+     * 긴 값을 어떻게 볼 것인가.
+     *
+     *   줄 펴기   지나가는 줄이 그 자리에서 커진다. 한눈에 다 보이지만
+     *             **아래 줄들이 밀린다** — 훑어 내려가는 중에는 거슬린다.
+     *   겹쳐 보기 지나가는 칸 하나만 제 자리 위로 떠오른다. 표가 흔들리지
+     *             않지만 옆 칸을 가린다.
+     *
+     * 어느 쪽이 나은지는 써 봐야 안다. 골라 쓰게 두고 브라우저에 남긴다.
+     */
+    var PEEK_KEY = 'ingredient-list-peek';
+
+    function applyPeek(on) {
+        var wrap = document.querySelector('.list-wrap');
+        var label = document.getElementById('peekBtnLabel');
+        var icon = document.querySelector('#peekBtn .bi');
+        var btn = document.getElementById('peekBtn');
+        if (wrap) wrap.classList.toggle('is-peek', on);
+        if (label) label.textContent = on ? '겹쳐 보기' : '줄 펴기';
+        if (icon) icon.className = 'bi ' + (on ? 'bi-layers' : 'bi-arrows-expand');
+        if (btn) btn.classList.toggle('is-on', on);
+    }
+
+    window.togglePeekMode = function () {
+        var wrap = document.querySelector('.list-wrap');
+        var on = !(wrap && wrap.classList.contains('is-peek'));
+        try { localStorage.setItem(PEEK_KEY, on ? '1' : '0'); } catch (e) {}
+        applyPeek(on);
+    };
+
+    try { applyPeek(localStorage.getItem(PEEK_KEY) === '1'); } catch (e) {}
 
     /* 한 건을 고르면 상세를 봐야 하니 저절로 펴 준다 */
     function unwideForDetail() {
