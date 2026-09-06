@@ -181,7 +181,7 @@
       + '        </div>'
       + '        <div class="crop-why text-muted mt-2" style="font-size:12px;">'
       + '          <i class="bi bi-lightbulb text-warning me-1"></i>'
-      + '          <b>면마다 하나씩</b> 고르면 그 면에 주의가 전부 갑니다. '
+      + '          <b>면마다 하나씩</b> 고르면 그 면에 표시된 항목의 인식률이 높아집니다. '
       + '          한 장으로 통째로 읽으면 작은 글자(원재료명·주소)를 '
       + '          <b>지어낼 수 있습니다.</b>'
       + '        </div>'

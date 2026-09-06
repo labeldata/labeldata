@@ -12,7 +12,13 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/board.css' %}">
+{% comment %}
+  목록 표는 제품 조회·식품첨가물 DB·원료 관리와 **같은 껍데기**를 쓴다.
+  게시판만 글자 13px 에 머리글이 대문자였고 줄 높이도 달라서, 같은 성격의
+  목록이 화면마다 다르게 보였다.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'css/list_common.css' %}?v={{ STATIC_BUILD_DATE }}">
+<link rel="stylesheet" href="{% static 'css/board.css' %}?v={{ STATIC_BUILD_DATE }}">
 {% endblock %}
 
 {% block content %}
@@ -47,15 +53,15 @@
                 <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}sort=views{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" {% if current_sort == 'views' %}selected{% endif %}>조회순</option>
                 <option value="?{% if search_query %}q={{ search_query }}&{% endif %}{% if current_filter != 'all' %}filter={{ current_filter }}&{% endif %}sort=comments{% if per_page != '10' %}&per_page={{ per_page }}{% endif %}" {% if current_sort == 'comments' %}selected{% endif %}>댓글순</option>
             </select>
-            <button class="toolbar-btn icon-only" onclick="location.href='{% url 'board:list' %}'" title="새로고침"><i class="bi bi-arrow-clockwise"></i></button>
+            <button class="btn btn-light border v2-btn-icon" onclick="location.href='{% url 'board:list' %}'" title="새로고침"><i class="bi bi-arrow-clockwise"></i></button>
         </div>
     </div>
 </div>
 
 <div class="board-content">
     <!-- 게시판 테이블 -->
-    <div class="board-table-wrapper">
-        <table class="board-table">
+    <div class="board-table-wrapper ez-list-wrap">
+        <table class="board-table ez-list-table">
             <thead>
                 <tr>
                     <th class="col-num">번호</th>

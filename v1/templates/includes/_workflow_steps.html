@@ -1,0 +1,67 @@
+{% comment %}
+  표시사항 하나를 끝내는 데 거치는 다섯 걸음.
+
+  홈에는 기능이 아홉 장 카드로 늘어서 있었다. 무엇이 되는지는 알겠는데
+  **어디서 시작해 어디서 끝나는지**가 안 보였다 — 처음 온 사람도, 쓰던
+  사람도 매번 "그래서 뭐부터 하지" 로 시작한다.
+
+  걸음 하나가 곧 화면 하나다. 손님(is_guest)에게는 같은 흐름을 보여 주되
+  들어가는 문은 가입으로 보낸다.
+
+  쓰는 곳: main/home_v2_dashboard.html (손님·회원 양쪽)
+{% endcomment %}
+<div class="wf-steps" role="list">
+    <a class="wf-step" role="listitem"
+       href="{% if is_guest %}{% url 'user_management:signup' %}{% else %}{% url 'label:my_ingredient_list_combined' %}{% endif %}">
+        <span class="wf-no">1</span>
+        <span class="wf-body">
+            <b>원료 모으기</b>
+            <em>쓰던 엑셀을 표에 그대로 붙여넣거나, 원료 사진을 읽어 등록합니다.</em>
+        </span>
+        <i class="bi bi-box-seam wf-icon"></i>
+    </a>
+    <i class="bi bi-chevron-right wf-arrow" aria-hidden="true"></i>
+
+    <a class="wf-step" role="listitem"
+       href="{% if is_guest %}{% url 'user_management:signup' %}{% else %}{% url 'products:product_explorer' %}{% endif %}">
+        <span class="wf-no">2</span>
+        <span class="wf-body">
+            <b>배합비 구성</b>
+            <em>원료를 끌어다 놓고 알레르기·GMO 를 표에서 바로 칩니다.</em>
+        </span>
+        <i class="bi bi-diagram-3 wf-icon"></i>
+    </a>
+    <i class="bi bi-chevron-right wf-arrow" aria-hidden="true"></i>
+
+    <a class="wf-step" role="listitem"
+       href="{% if is_guest %}{% url 'user_management:signup' %}{% else %}{% url 'products:product_create' %}{% endif %}">
+        <span class="wf-no">3</span>
+        <span class="wf-body">
+            <b>표시사항 만들기</b>
+            <em>원재료명이 함량 순서로 조립되고 영양성분이 계산됩니다.</em>
+        </span>
+        <i class="bi bi-file-earmark-text wf-icon"></i>
+    </a>
+    <i class="bi bi-chevron-right wf-arrow" aria-hidden="true"></i>
+
+    <a class="wf-step" role="listitem"
+       href="{% if is_guest %}{% url 'user_management:signup' %}{% else %}{% url 'products:product_explorer' %}{% endif %}">
+        <span class="wf-no">4</span>
+        <span class="wf-body">
+            <b>규정 검증</b>
+            <em>표시기준에 어긋난 자리를 근거 규정과 함께 짚어 줍니다.</em>
+        </span>
+        <i class="bi bi-shield-check wf-icon"></i>
+    </a>
+    <i class="bi bi-chevron-right wf-arrow" aria-hidden="true"></i>
+
+    <a class="wf-step wf-step--last" role="listitem"
+       href="{% if is_guest %}{% url 'user_management:signup' %}{% else %}{% url 'products:product_explorer' %}{% endif %}">
+        <span class="wf-no">5</span>
+        <span class="wf-body">
+            <b>시안 대조 · 출력</b>
+            <em>인쇄 시안과 확정값을 글자 단위로 견주고 PDF 로 내보냅니다.</em>
+        </span>
+        <i class="bi bi-printer wf-icon"></i>
+    </a>
+</div>

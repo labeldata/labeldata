@@ -1183,3 +1183,107 @@ a.hero-app-badge:hover {
     .app-strip .app-store-btn { order: 3; }
     .app-strip-close { position: absolute; top: 8px; right: 8px; }
 }
+/* ── 업무 흐름 다섯 걸음 ──────────────────────────────────────
+   홈에 기능이 아홉 장 카드로 늘어서 있었다. 무엇이 되는지는 알겠는데
+   **어디서 시작해 어디서 끝나는지**가 안 보였다 — 처음 온 사람도, 쓰던
+   사람도 매번 "그래서 뭐부터 하지" 로 시작한다.
+
+   손님 화면과 회원 화면이 같은 것을 쓴다. 가입 전에 본 순서와 가입 뒤에
+   쓰는 순서가 다르면 안 된다.
+   ─────────────────────────────────────────────────────────── */
+.wf-band {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    border-radius: var(--ez-radius-md, 8px);
+    background: #fff;
+}
+.wf-band--guest { background: var(--ez-gray-50, #f8f9fa); }
+.wf-band-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ez-gray-900, #202124);
+}
+.wf-band-head .bi { color: var(--ez-info, #1a73e8); margin-right: 5px; }
+.wf-band-head span {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--ez-gray-600, #80868b);
+}
+
+.wf-steps {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+}
+.wf-step {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    border-radius: var(--ez-radius-md, 8px);
+    background: #fff;
+    text-decoration: none;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.wf-step:hover {
+    border-color: var(--ez-info, #1a73e8);
+    box-shadow: 0 1px 3px rgba(60, 64, 67, .18);
+    transform: translateY(-1px);
+    text-decoration: none;
+}
+.wf-no {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--ez-info-bg, #e8f0fe);
+    color: var(--ez-info-on-bg, #1967d2);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 20px;
+    text-align: center;
+}
+.wf-body { min-width: 0; flex: 1; }
+.wf-body b {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ez-gray-900, #202124);
+}
+.wf-body em {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    font-style: normal;
+    line-height: 1.45;
+    color: var(--ez-gray-700, #5f6368);
+}
+.wf-icon {
+    flex: none;
+    font-size: 15px;
+    color: var(--ez-gray-400, #bdc1c6);
+}
+.wf-step:hover .wf-icon { color: var(--ez-info, #1a73e8); }
+
+/* 걸음 사이의 화살표. 좁아지면 흐름이 세로로 서므로 감춘다 */
+.wf-arrow {
+    align-self: center;
+    flex: none;
+    font-size: 11px;
+    color: var(--ez-gray-400, #bdc1c6);
+}
+
+@media (max-width: 1100px) {
+    .wf-steps { flex-wrap: wrap; }
+    .wf-step { flex: 1 1 240px; }
+    .wf-arrow { display: none; }
+}

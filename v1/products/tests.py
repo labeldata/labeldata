@@ -4052,3 +4052,105 @@ class 통째로_읽으면_무엇을_잃는가(TestCase):
     def test_왜_나눠_고르는지_창에_적혀_있다(self):
         self.assertIn('crop-why', self.js)
         self.assertIn('<b>면마다 하나씩</b>', self.js)
+
+
+class 홈은_순서를_먼저_말한다(TestCase):
+    """
+    홈에 기능이 아홉 장 카드로 늘어서 있었고, 로그인하면 여섯 개짜리 단추
+    줄이 있었다. 무엇이 되는지는 알겠는데 **어디서 시작해 어디서 끝나는지**가
+    안 보였다. 단추 줄은 왼쪽 메뉴를 한 번 더 적은 것이었다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.home = (base / 'templates/main/home_v2_dashboard.html').read_text(encoding='utf-8')
+        self.steps = (base / 'templates/includes/_workflow_steps.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/home_v2_dashboard.css').read_text(encoding='utf-8')
+
+    def test_다섯_걸음이_순서대로_있다(self):
+        for step in ('원료 모으기', '배합비 구성', '표시사항 만들기',
+                     '규정 검증', '시안 대조 · 출력'):
+            self.assertIn(step, self.steps)
+
+    def test_손님과_회원이_같은_흐름을_본다(self):
+        """가입 전에 본 순서와 가입 뒤에 쓰는 순서가 다르면 안 된다."""
+        self.assertEqual(
+            self.home.count('{% include "includes/_workflow_steps.html" %}'), 2)
+
+    def test_손님은_가입으로_보낸다(self):
+        self.assertIn("{% if is_guest %}{% url 'user_management:signup' %}", self.steps)
+
+    def test_흐름이_기능_목록보다_먼저_온다(self):
+        self.assertLess(self.home.index('wf-band--guest'),
+                        self.home.index('features-section'))
+
+    def test_메뉴를_한_번_더_적지_않는다(self):
+        # 왼쪽 메뉴에 다 있는 이름이 순서 없이 늘어서 있었다
+        head = self.home.index('class="dash-hero-right"')
+        block = self.home[head:self.home.index('</div>' + chr(10) + '    </div>', head)]
+        self.assertNotIn('제품 목록', block)
+        self.assertNotIn('표시사항 생성', block)
+        self.assertNotIn('원료 관리', block)
+        # 시작하는 단추는 남는다
+        self.assertIn('신규 제품 등록', block)
+
+    def test_걸음마다_무엇을_하는지_적는다(self):
+        # 이름만 있으면 순서는 알아도 방법을 모른다
+        self.assertGreaterEqual(self.steps.count('<em>'), 5)
+        self.assertIn('엑셀', self.steps)
+
+    def test_좁아지면_세로로_선다(self):
+        head = self.css.index('.wf-steps {')
+        block = self.css[head:]
+        self.assertIn('@media (max-width: 1100px)', block)
+        self.assertIn('.wf-arrow { display: none; }', block)
+
+
+class 게시판도_같은_목록_껍데기를_쓴다(TestCase):
+    """
+    게시판만 글자 13px 에 머리글이 대문자였고 줄 높이도 달라서, 같은 성격의
+    목록이 화면마다 다르게 보였다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/board/list.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/board.css').read_text(encoding='utf-8')
+
+    def test_공용_껍데기를_싣는다(self):
+        self.assertIn("css/list_common.css", self.html)
+        self.assertIn('class="board-table ez-list-table"', self.html)
+        self.assertIn('board-table-wrapper ez-list-wrap', self.html)
+
+    def test_표_규칙을_두_벌로_두지_않는다(self):
+        # 글자 크기·머리글 밑줄·줄 높이는 공용이 한 번만 정한다
+        self.assertNotIn('.board-table thead th {', self.css)
+        self.assertNotIn('text-transform:  uppercase;', self.css)
+
+    def test_게시판에만_있는_것은_남긴다(self):
+        self.assertIn('.board-table .row-notice', self.css)
+
+    def test_도구_단추도_공용이다(self):
+        self.assertNotIn('class="toolbar-btn', self.html)
+        self.assertNotIn('.toolbar-btn {', self.css)
+        self.assertIn('v2-btn-icon', self.html)
+
+    def test_명부에서도_지웠다(self):
+        from v1.common import checks
+        self.assertNotIn('toolbar-btn', checks._OWN_SIZED_BUTTONS)
+
+
+class 안내_문구가_말이_되어야_한다(TestCase):
+    """"그 면에 주의가 전부 갑니다" 는 우리끼리 쓰던 말이다."""
+
+    def test_영역_안내를_사람_말로_적는다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        js = (Path(dj.BASE_DIR) / 'static/js/products/photo_cropper.js'
+              ).read_text(encoding='utf-8')
+        self.assertNotIn('주의가 전부 갑니다', js)
+        self.assertIn('표시된 항목의 인식률이 높아집니다', js)

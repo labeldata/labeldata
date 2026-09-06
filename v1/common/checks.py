@@ -112,7 +112,7 @@ _BS_SIZE_CLASS = re.compile(r'(?<!-)\bbtn-(?:sm|lg|xs)\b')
 _OWN_SIZED_BUTTONS = frozenset({
     # 게시판 구판
     'comment-action-btn', 'del-btn', 'form-action-btn', 'save-btn',
-    'submit-btn', 'toolbar-btn',
+    'submit-btn',
     # 상단 계정·알림
     'v2-account-logout-btn', 'v2-notif-mark-all',
     # 표시사항·원료·미리보기
