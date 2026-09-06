@@ -17,6 +17,7 @@ from django.conf import settings
 from django.http import Http404
 from django.core.exceptions import PermissionDenied
 from django.contrib.auth.decorators import login_required  # 추가
+from django.views.decorators.http import require_POST
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import logout
 from django.contrib import messages
@@ -872,3 +873,62 @@ def show_403_page(request):
 def show_500_page(request):
     """500 에러 페이지 직접 표시 (개발용)"""
     return render(request, '500.html', status=500)
+
+
+# ── 표 화면의 칸 순서 ──────────────────────────────────────────────────────
+
+
+@login_required
+@require_POST
+def grid_order_save(request):
+    """
+    이 사용자가 표의 칸을 어느 순서로 보는지 남긴다.
+
+    **브라우저가 아니라 계정에 남긴다.** 회사 엑셀의 열 순서는 그 사람의 일하는
+    방식이라 자리를 옮긴다고 달라지지 않는다. 원료 목록의 "칸 고르기" 와 같은
+    자리(UserProfile.list_prefs)를 화면별 열쇠로 나눠 쓴다.
+
+    무엇이 올바른 순서인지는 서버가 모른다 — 칸 이름 목록을 그대로 받아 두고,
+    화면이 그것을 읽어 제 순서로 쓴다. 서버가 아는 것은 "이 사람의 것" 이라는
+    사실뿐이다.
+    """
+    import json
+
+    from django.http import JsonResponse
+
+    try:
+        payload = json.loads(request.body or '{}')
+        screen = str(payload.get('screen') or '').strip()
+        order = [str(name) for name in (payload.get('order') or [])]
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
+                            status=400)
+
+    if not screen or not order:
+        return JsonResponse({'success': False, 'error': '화면과 순서가 필요합니다.'},
+                            status=400)
+    if len(order) > 40 or any(len(name) > 40 for name in order):
+        # 화면이 보내는 것은 칸 이름 몇 개뿐이다. 그보다 크면 잘못 온 것이다.
+        return JsonResponse({'success': False, 'error': '순서가 너무 깁니다.'},
+                            status=400)
+
+    profile = getattr(request.user, 'profile', None)
+    if profile is None:
+        return JsonResponse({'success': False, 'error': '프로필이 없습니다.'},
+                            status=400)
+    prefs = dict(profile.list_prefs or {})
+    prefs[screen] = dict(prefs.get(screen) or {}, order=order)
+    profile.list_prefs = prefs
+    profile.save(update_fields=['list_prefs'])
+    return JsonResponse({'success': True, 'order': order})
+
+
+def grid_order(user, screen):
+    """이 사용자가 이 화면의 칸을 어느 순서로 보는지. 없으면 빈 목록."""
+    try:
+        prefs = (getattr(user, 'profile', None).list_prefs or {})
+        order = (prefs.get(screen) or {}).get('order')
+        return [str(name) for name in order] if isinstance(order, list) else []
+    except Exception:
+        # 프로필이 없거나 값이 깨졌다. 기본 순서로 여는 것이 맞다.
+        return []

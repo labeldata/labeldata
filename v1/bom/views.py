@@ -65,6 +65,8 @@ def bom_workspace(request, label_id):
         delete_YN='N'
     ).order_by('-update_datetime')
 
+    from v1.common.views import grid_order
+
     context = {
         'label': label,
         'product': label,
@@ -72,6 +74,8 @@ def bom_workspace(request, label_id):
         'gmo_list': GMO_LIST,
         'can_edit': can_edit,
         'is_owner': is_owner,
+        # 지난번에 놓아 둔 칸 순서. 붙여넣기가 정한 것이든 손으로 옮긴 것이든.
+        'grid_order': grid_order(request.user, 'bom_grid'),
     }
 
     log_activity(request, 'bom', 'bom_view', label_id)

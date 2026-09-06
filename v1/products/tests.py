@@ -2740,9 +2740,18 @@ class SheetPasteIsOneRuleTests(TestCase):
         self.assertIn('names.length < 2', self.js)
 
     def test_AI_를_쓰지_않는다(self):
-        # 이름을 견주는 사전 대조다. 결과가 늘 같고 호출 비용이 없다.
-        for word in ('fetch(', 'openai', 'gpt'):
+        """
+        이름을 견주는 사전 대조다. 결과가 늘 같고 호출 비용이 없다.
+
+        열을 짝짓는 자리에는 **바깥을 부르는 것이 하나도 없어야** 한다.
+        (칸 순서를 계정에 남기는 fetch 는 짝짓기와 무관한 다른 일이다.)
+        """
+        for word in ('openai', 'gpt', 'anthropic', '/ai'):
             self.assertNotIn(word, self.js.lower())
+        head = self.js.index('function matchColumn')
+        block = self.js[head:self.js.index('window.attachSheetPaste', head)]
+        for word in ('fetch', 'XMLHttpRequest', 'await'):
+            self.assertNotIn(word, block)
         self.assertIn('aliases', self.js)
 
     def test_긴_이름이_이긴다(self):
@@ -2841,3 +2850,99 @@ class SheetTemplateDownloadTests(TestCase):
     def test_자료는_세_번째_줄부터다(self):
         sheet = self._open(reverse('products:contact_sheet_template'))
         self.assertEqual(sheet.freeze_panes, 'A3')
+
+
+class GridFollowsThePastedOrderTests(TestCase):
+    """
+    쓰던 엑셀의 열 순서는 그 사람이 일하는 순서다. 값만 제자리에 들어가고
+    화면은 우리 순서로 남아 있으면, 붙여넣은 것을 눈으로 견주기가 어렵다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.base = Path(dj.BASE_DIR)
+        self.js = (self.base / 'static/js/sheet_paste.js').read_text(encoding='utf-8')
+
+    def _read(self, rel):
+        return (self.base / rel).read_text(encoding='utf-8')
+
+    def test_붙여넣은_순서대로_늘어놓는다(self):
+        self.assertIn('window.sheetPasteReorder', self.js)
+        for rel in ('templates/products/bom_detail.html',
+                    'templates/products/contacts.html'):
+            html = self._read(rel)
+            self.assertIn('window.sheetPasteReorder(hot', html, rel)
+            self.assertIn('manualColumnMove: true', html, rel)
+
+    def test_엑셀에_없던_칸은_뒤로_보낸다(self):
+        # 지우지 않는다 — 그 칸을 안 쓰는 것과 그 엑셀에 없던 것은 다른 일이다
+        head = self.js.index('window.sheetPasteReorder')
+        block = self.js[head:head + 1200]
+        self.assertIn('if (wanted.indexOf(c) < 0) wanted.push(c);', block)
+
+    def test_이미_그_순서면_건드리지_않는다(self):
+        head = self.js.index('window.sheetPasteReorder')
+        self.assertIn("now.join() === wanted.join()", self.js[head:head + 1400])
+
+    def test_값은_화면에_보이는_자리로_들어간다(self):
+        """칸을 옮겨 둔 뒤에는 논리 자리와 화면 자리가 다르다."""
+        head = self.js.index('var seat = {}')
+        block = self.js[head:head + 500]
+        self.assertIn('hot.toVisualColumn(logical)', block)
+
+    def test_손으로_옮긴_것도_남긴다(self):
+        for rel in ('templates/products/bom_detail.html',
+                    'templates/products/contacts.html'):
+            self.assertIn("afterColumnMove", self._read(rel), rel)
+
+
+class GridOrderIsRememberedTests(TestCase):
+    """
+    회사 엑셀의 열 순서는 그 사람이 일하는 방식이라 자리를 옮긴다고 달라지지
+    않는다. 브라우저가 아니라 계정에 남긴다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='grid', password='x')
+        self.client.force_login(self.user)
+
+    def _save(self, screen, order):
+        return self.client.post(
+            reverse('v1.common:grid_order_save'),
+            data=json.dumps({'screen': screen, 'order': order}),
+            content_type='application/json')
+
+    def test_계정에_남는다(self):
+        res = self._save('bom_grid', ['원료명', '배합비(%)', '식품유형'])
+        self.assertEqual(res.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.list_prefs['bom_grid']['order'],
+                         ['원료명', '배합비(%)', '식품유형'])
+
+    def test_화면마다_따로_남는다(self):
+        self._save('bom_grid', ['원료명'])
+        self._save('contact_grid', ['이메일'])
+        self.user.profile.refresh_from_db()
+        prefs = self.user.profile.list_prefs
+        self.assertEqual(prefs['bom_grid']['order'], ['원료명'])
+        self.assertEqual(prefs['contact_grid']['order'], ['이메일'])
+
+    def test_빈_요청은_거절한다(self):
+        self.assertEqual(self._save('bom_grid', []).status_code, 400)
+        self.assertEqual(self._save('', ['원료명']).status_code, 400)
+
+    def test_터무니없이_긴_것은_받지_않는다(self):
+        # 화면이 보내는 것은 칸 이름 몇 개뿐이다
+        self.assertEqual(self._save('bom_grid', ['x'] * 100).status_code, 400)
+        self.assertEqual(self._save('bom_grid', ['x' * 200]).status_code, 400)
+
+    def test_다음에_열_때_그대로_연다(self):
+        from v1.common.views import grid_order
+        self._save('bom_grid', ['비고', '원료명'])
+        self.user.profile.refresh_from_db()
+        self.assertEqual(grid_order(self.user, 'bom_grid'), ['비고', '원료명'])
+
+    def test_남긴_적이_없으면_기본_순서다(self):
+        from v1.common.views import grid_order
+        self.assertEqual(grid_order(self.user, 'bom_grid'), [])

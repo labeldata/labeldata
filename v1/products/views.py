@@ -4930,8 +4930,11 @@ def contacts(request):
         c['doc_pending']  = dr.get('pending', 0)
         c['doc_received'] = dr_recv_map.get(c['email'], 0)  # 이 연락처로부터 받은 요청
 
+    from v1.common.views import grid_order
+
     context = {
         'contacts_list': contacts_list,
+        'grid_order': grid_order(request.user, 'contact_grid'),
     }
     return render(request, 'products/contacts.html', context)
 

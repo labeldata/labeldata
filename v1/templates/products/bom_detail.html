@@ -293,6 +293,16 @@ body.in-iframe .bom-page-header { display: none !important; }
 
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
 <script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{{ grid_order|json_script:"grid-order-data" }}
+<script>
+  /* 지난번에 놓아 둔 칸 순서. 붙여넣기가 정한 것이든 손으로 옮긴 것이든
+     계정에 남는다 — 회사 엑셀의 열 순서는 그 사람이 일하는 방식이라 자리를
+     옮긴다고 달라지지 않는다. */
+  try {
+    window.GRID_ORDER = JSON.parse(
+      document.getElementById('grid-order-data').textContent) || [];
+  } catch (e) { window.GRID_ORDER = []; }
+</script>
 <script>
     const container = document.getElementById('bom-grid');
     const CSRF_TOKEN = '{{ csrf_token }}';
@@ -388,6 +398,9 @@ body.in-iframe .bom-page-header { display: none !important; }
             colHeaders: BOM_SHEET_HEADERS,
             manualRowMove: CAN_EDIT,
             manualColumnResize: true,
+            /* 칸을 끌어다 옮길 수 있게. 붙여넣기가 열 순서를 따라가는 데도
+               이 기능을 쓴다(sheet_paste.js). */
+            manualColumnMove: true,
             contextMenu: CAN_EDIT ? {
                 items: {
                     row_above: { name: '위에 행 추가' },
@@ -494,11 +507,41 @@ body.in-iframe .bom-page-header { display: none !important; }
                 headers: BOM_SHEET_HEADERS,
                 aliases: BOM_SHEET_ALIASES,
                 onReport: function (info) {
+                    /* 붙여넣은 열 순서대로 화면을 늘어놓는다.
+                       쓰던 엑셀의 순서가 그 사람이 일하는 순서다. 값만 제자리에
+                       들어가고 화면은 우리 순서로 남아 있으면, 붙여넣은 것을
+                       눈으로 견주기가 어렵다. */
+                    var tail = '확인하고 저장하세요.';
+                    if (info.added && info.plan) {
+                        var order = window.sheetPasteReorder(hot, info.plan, {
+                            headers: BOM_SHEET_HEADERS
+                        });
+                        if (order) {
+                            tail = '칸을 붙여넣은 순서로 놓았습니다. ' + tail;
+                            window.sheetPasteSaveOrder('bom_grid', order, getCsrfToken());
+                        }
+                    }
                     showSnackbar(
-                        window.sheetPasteMessage(info, '확인하고 저장하세요.'),
+                        window.sheetPasteMessage(info, tail),
                         !info.added ? 'warning'
                             : (info.dropped || info.unused.length) ? 'warning' : 'success');
                 }
+            });
+
+            /* 지난번에 놓아 둔 순서가 있으면 그대로 연다 */
+            if (window.GRID_ORDER && window.GRID_ORDER.length) {
+                window.sheetPasteApplyOrder(hot, window.GRID_ORDER, {
+                    headers: BOM_SHEET_HEADERS
+                });
+            }
+
+            /* 손으로 끌어다 옮긴 것도 남긴다 — 붙여넣기로 놓은 것과 같은 자리 */
+            hot.addHook('afterColumnMove', function () {
+                var order = [];
+                for (var v = 0; v < BOM_SHEET_HEADERS.length; v++) {
+                    order.push(BOM_SHEET_HEADERS[hot.toPhysicalColumn(v)]);
+                }
+                window.sheetPasteSaveOrder('bom_grid', order, getCsrfToken());
             });
         }
 

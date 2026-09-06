@@ -405,6 +405,13 @@
 {{ contacts_list|json_script:"contacts-init-data" }}
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
 <script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{{ grid_order|json_script:"grid-order-data" }}
+<script>
+  try {
+    window.GRID_ORDER = JSON.parse(
+      document.getElementById('grid-order-data').textContent) || [];
+  } catch (e) { window.GRID_ORDER = []; }
+</script>
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
 const CONTACTS_API_LIST   = '{% url "products:contacts_api_list" %}';
@@ -725,6 +732,8 @@ document.addEventListener('DOMContentLoaded', function () {
         colHeaders: [
             '<input type="checkbox" id="checkAll" title="전체 선택" class="ct-click">'
         ].concat(CONTACT_SHEET_HEADERS, ['공유', '요청/접수']),
+        /* 칸을 끌어다 옮길 수 있게. 붙여넣기가 열 순서를 따라가는 데도 쓴다. */
+        manualColumnMove: true,
         columns: [
             {
                 data: '_checked',
@@ -993,11 +1002,36 @@ document.addEventListener('DOMContentLoaded', function () {
             aliases: CONTACT_SHEET_ALIASES,
             firstCol: 1,
             onReport: function (info) {
+                var tail = '이메일이 있는 줄만 저장됩니다.';
+                if (info.added && info.plan) {
+                    var order = window.sheetPasteReorder(hot, info.plan, {
+                        headers: CONTACT_SHEET_HEADERS, firstCol: 1
+                    });
+                    if (order) {
+                        tail = '칸을 붙여넣은 순서로 놓았습니다. ' + tail;
+                        window.sheetPasteSaveOrder('contact_grid', order, CSRF_TOKEN);
+                    }
+                }
                 showSnackbar(
-                    window.sheetPasteMessage(info, '이메일이 있는 줄만 저장됩니다.'),
+                    window.sheetPasteMessage(info, tail),
                     !info.added ? 'warning'
                         : (info.dropped || info.unused.length) ? 'warning' : 'success');
             }
+        });
+
+        if (window.GRID_ORDER && window.GRID_ORDER.length) {
+            window.sheetPasteApplyOrder(hot, window.GRID_ORDER, {
+                headers: CONTACT_SHEET_HEADERS, firstCol: 1
+            });
+        }
+
+        hot.addHook('afterColumnMove', function () {
+            var order = [];
+            for (var v = 1; v <= CONTACT_SHEET_HEADERS.length; v++) {
+                var p = hot.toPhysicalColumn(v) - 1;
+                if (CONTACT_SHEET_HEADERS[p]) order.push(CONTACT_SHEET_HEADERS[p]);
+            }
+            window.sheetPasteSaveOrder('contact_grid', order, CSRF_TOKEN);
         });
     }
 

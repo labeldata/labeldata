@@ -137,10 +137,21 @@
         data.shift();
         matched = plan.names;
         unused = plan.unused;
+
+        // 칸을 끌어다 옮겨 둔 사람이 있다. 값은 **화면에 보이는 자리**로
+        // 들어가야 한다 — 논리 자리로 넣으면 옮겨 둔 만큼 어긋난다.
+        var seat = {};
+        Object.keys(plan.map).forEach(function (j) {
+          var logical = firstCol + plan.map[j];
+          var visual = typeof hot.toVisualColumn === 'function'
+              ? hot.toVisualColumn(logical) : logical;
+          if (visual >= firstCol) seat[j] = visual - firstCol;
+        });
+
         for (var r = 0; r < data.length; r++) {
           var row = new Array(headers.length).fill('');
           data[r].forEach(function (cell, j) {
-            if (plan.map[j] !== undefined) row[plan.map[j]] = cell;
+            if (seat[j] !== undefined) row[seat[j]] = cell;
           });
           data[r] = row;
         }
@@ -163,7 +174,7 @@
 
       if (!data.length) {
         report({ added: 0, dropped: blanks, why: why,
-                 matched: matched, unused: unused });
+                 matched: matched, unused: unused, plan: plan });
         return false;       // 넣을 것이 없으면 표를 건드리지 않는다
       }
 
@@ -182,7 +193,7 @@
       }
 
       report({ added: data.length, dropped: blanks, why: why,
-               matched: matched, unused: unused });
+               matched: matched, unused: unused, plan: plan });
     });
 
     // ④ 자료가 시작하는 칸보다 왼쪽에 붙이면 한 칸씩 밀린다. 자리를 옮겨 준다.
@@ -197,6 +208,81 @@
         });
       });
     }
+  };
+
+  /**
+   * 붙여넣은 열 순서대로 화면의 칸을 늘어놓는다.
+   *
+   * 쓰던 엑셀의 열 순서는 그 사람이 일하는 순서다. 값만 제자리에 들어가고
+   * 화면은 우리 순서로 남아 있으면, 붙여넣은 것을 눈으로 견주기가 어렵다.
+   *
+   * 엑셀에 없던 칸은 뒤로 보낸다. 지우지 않는다 — 그 칸을 안 쓰는 것과
+   * 그 엑셀에 없던 것은 다른 일이다.
+   *
+   * Returns: 늘어놓은 칸 이름들. 바꿀 것이 없었으면 null.
+   */
+  window.sheetPasteReorder = function (hot, plan, options) {
+    var headers = options.headers || [];
+    var firstCol = options.firstCol || 0;
+    var plugin = hot.getPlugin && hot.getPlugin('manualColumnMove');
+    if (!plugin || !plugin.isEnabled || !plugin.isEnabled()) return null;
+
+    var wanted = [];
+    Object.keys(plan.map).map(Number).sort(function (a, b) { return a - b; })
+      .forEach(function (j) {
+        var logical = firstCol + plan.map[j];
+        if (wanted.indexOf(logical) < 0) wanted.push(logical);
+      });
+    for (var c = firstCol; c < firstCol + headers.length; c++) {
+      if (wanted.indexOf(c) < 0) wanted.push(c);
+    }
+
+    var now = [];
+    for (var v = firstCol; v < firstCol + headers.length; v++) {
+      now.push(hot.toPhysicalColumn ? hot.toPhysicalColumn(v) : v);
+    }
+    if (now.join() === wanted.join()) return null;   // 이미 그 순서다
+
+    plugin.moveColumns(wanted.map(function (logical) {
+      return hot.toVisualColumn ? hot.toVisualColumn(logical) : logical;
+    }), firstCol);
+    hot.render();
+    return wanted.map(function (logical) { return headers[logical - firstCol]; });
+  };
+
+  /**
+   * 칸 순서를 계정에 남긴다. **브라우저가 아니라 계정이다** — 회사 엑셀의
+   * 열 순서는 그 사람이 일하는 방식이라 자리를 옮긴다고 달라지지 않는다.
+   */
+  window.sheetPasteSaveOrder = function (screen, order, csrf) {
+    if (!order || !order.length) return;
+    fetch('/common/grid-order/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify({ screen: screen, order: order })
+    }).catch(function () {});   // 남기지 못해도 이번 화면은 이미 바뀌었다
+  };
+
+  /** 남겨 둔 순서대로 칸을 늘어놓는다. 화면을 열 때 부른다. */
+  window.sheetPasteApplyOrder = function (hot, order, options) {
+    var headers = options.headers || [];
+    var firstCol = options.firstCol || 0;
+    var plugin = hot.getPlugin && hot.getPlugin('manualColumnMove');
+    if (!plugin || !order || !order.length) return;
+
+    var wanted = [];
+    order.forEach(function (name) {
+      var i = headers.indexOf(name);
+      if (i >= 0 && wanted.indexOf(firstCol + i) < 0) wanted.push(firstCol + i);
+    });
+    for (var c = firstCol; c < firstCol + headers.length; c++) {
+      if (wanted.indexOf(c) < 0) wanted.push(c);
+    }
+    plugin.moveColumns(wanted.map(function (logical) {
+      return hot.toVisualColumn ? hot.toVisualColumn(logical) : logical;
+    }), firstCol);
+    hot.render();
   };
 
   /** 무엇을 어떻게 맞췄는지 한 줄로. 화면 둘이 같은 말을 쓰게 한다. */
