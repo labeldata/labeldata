@@ -247,13 +247,21 @@ body.in-iframe .bom-page-header { display: none !important; }
         </div>
         <div class="bom-right-panel border-start bg-white">
             {% comment %}
-              보관함은 **가져오는 곳**이라 늘 열려 있어야 한다. 상세와 탭을
+              보관함은 **가져오는 곳**이라 탭 뒤에 숨기지 않는다. 상세와 탭을
               나눠 쓸 때는 상세를 보려면 보관함이 사라져서, 원료를 이어서
               넣을 수가 없었다. 상세는 고른 줄 아래로 옮겼다.
+
+              다만 늘 280px 을 물고 있을 필요는 없다. 원료를 다 넣고 표를
+              고치는 동안에는 자리만 차지한다 — 접을 수 있게 한다.
             {% endcomment %}
             <div class="side-tabs">
                 <div class="side-panel-head">
-                    <i class="bi bi-box-seam me-1"></i>원료 보관함
+                    <i class="bi bi-box-seam"></i>
+                    <span class="side-panel-title">원료 보관함</span>
+                    <button type="button" class="side-panel-toggle" id="paletteToggle"
+                            aria-label="원료 보관함 접기">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </button>
                 </div>
                 <div class="side-tab-body custom-scrollbar" id="sideTabContent">
                     <div id="side-palette">
@@ -382,6 +390,7 @@ body.in-iframe .bom-page-header { display: none !important; }
         bindQuickAllergenButtons();
         bindGmoButtons();
         bindSheetSummaryType();
+        bindPaletteToggle();
     });
 
     // 컨테이너 너비 기준 비율 콜너비 계산
@@ -1592,6 +1601,37 @@ body.in-iframe .bom-page-header { display: none !important; }
             allergens: window._bomSummaryAllergens || [],
             gmo:       window._bomSummaryGmo       || []
         }, '*');
+    }
+
+    /* -----------------------------------------------------------------
+       원료 보관함을 접는다
+
+       가져오는 곳이라 탭 뒤에 숨기지는 않지만, 원료를 다 넣고 표를 고치는
+       동안에는 280px 이 자리만 차지한다. 접으면 표가 그만큼 넓어진다 —
+       칸 너비는 #bom-grid 의 ResizeObserver 가 알아서 다시 잡는다.
+       ----------------------------------------------------------------- */
+    function bindPaletteToggle() {
+        const KEY = 'bomPaletteClosed';
+        const panel = document.querySelector('.bom-right-panel');
+        const btn = document.getElementById('paletteToggle');
+        if (!panel || !btn) return;
+
+        function mark(closed) {
+            panel.classList.toggle('is-closed', closed);
+            btn.setAttribute('aria-label',
+                closed ? '원료 보관함 펴기' : '원료 보관함 접기');
+        }
+
+        let closed = false;
+        try { closed = localStorage.getItem(KEY) === '1'; } catch (e) {}
+        mark(closed);
+
+        btn.addEventListener('click', function () {
+            const next = !panel.classList.contains('is-closed');
+            mark(next);
+            try { localStorage.setItem(KEY, next ? '1' : '0'); } catch (e) {}
+            window.dispatchEvent(new Event('resize'));
+        });
     }
 
     /* -----------------------------------------------------------------

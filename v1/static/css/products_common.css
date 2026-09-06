@@ -1595,3 +1595,45 @@ table th[title] {
 .dup-all .dup-meta { margin-left: auto; font-weight: 500; }
 .dup-group-title { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .dup-group-title > span:first-of-type { font-weight: 700; }
+
+/* ── 화면 최대화 ──────────────────────────────────────────────
+   왼쪽 메뉴(250px)와 위쪽 띠(64px)를 한 번에 접는다. 표가 넓은 화면에서
+   되찾는 폭이 크다.
+
+   상태는 <html> 에 건다 — #v2Wrapper 는 <head> 시점에 아직 없어서,
+   거기 걸면 펼친 화면이 한 번 그려졌다가 접힌다.
+   ------------------------------------------------------------ */
+html.v2-max .v2-sidebar {
+    width:        0 !important;
+    min-width:    0;
+    padding:      0 !important;
+    border-right: 0;
+    overflow:     hidden;
+}
+html.v2-max .v2-topbar { display: none; }
+html.v2-max .v2-content { padding: 12px; }
+
+/* 최대화하면 위쪽 띠가 사라진다. 되돌릴 자리는 남겨 둔다 */
+.v2-max-exit {
+    display:         none;
+    position:        fixed;
+    top:             8px;
+    right:           12px;
+    z-index:         1055;
+    width:           32px;
+    height:          32px;
+    align-items:     center;
+    justify-content: center;
+    border:          1px solid var(--ez-gray-300, #dadce0);
+    border-radius:   50%;
+    background:      rgba(255, 255, 255, .82);
+    color:           var(--ez-gray-700, #5f6368);
+    font-size:       15px;
+    cursor:          pointer;
+    box-shadow:      0 1px 3px rgba(60, 64, 67, .2);
+}
+html.v2-max .v2-max-exit { display: flex; }
+.v2-max-exit:hover {
+    background: #ffffff;
+    color:      var(--ez-info, #1a73e8);
+}

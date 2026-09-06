@@ -34,6 +34,15 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     <script>
     /* 사이드바 주수에서 transition 없이 초기 상태 적용 — FOUC 방지 */
+    /* 화면 최대화. #v2Wrapper 는 여기서 아직 없으므로 <html> 에 건다 —
+       wrapper 에 걸면 펼친 화면이 한 번 그려졌다가 접힌다. */
+    (function () {
+        try {
+            if (localStorage.getItem('v2Maximized') === '1') {
+                document.documentElement.classList.add('v2-max');
+            }
+        } catch (e) { /* 시크릿 창 등 */ }
+    })();
     (function () {
         var saved = localStorage.getItem('v2SbCollapsed');
         var autoCollapse = window.innerWidth < 1100 && window.innerWidth > 768;
@@ -49,6 +58,11 @@
 </head>
 <body>
     <div class="v2-overlay" id="v2Overlay"></div>
+    {# 최대화하면 위쪽 띠가 사라진다. 되돌릴 자리는 남겨 둔다 #}
+    <button class="v2-max-exit" id="v2MaxExit" title="화면 되돌리기 (Esc)"
+            aria-label="화면 되돌리기">
+        <i class="bi bi-fullscreen-exit"></i>
+    </button>
     <div class="v2-wrapper" id="v2Wrapper">
         <nav class="v2-sidebar" id="v2Sidebar">
             <div class="px-2">
@@ -135,6 +149,15 @@
             <header class="v2-topbar">
                 <button class="v2-sidebar-toggle" id="v2SidebarToggle" aria-label="사이드바 열기/닫기">
                     <i class="bi bi-list"></i>
+                </button>
+                {% comment %}
+                  왼쪽 메뉴와 이 띠를 한 번에 접는다. 표가 넓은 화면(배합비,
+                  원료 목록, 제품 조회)에서는 314px 을 되찾는 것이 크다.
+                  접힌 뒤에는 이 단추가 같이 사라지므로 떠 있는 단추로 되돌린다.
+                {% endcomment %}
+                <button class="v2-sidebar-toggle" id="v2MaxToggle"
+                        title="화면 최대화 (Esc 로 되돌리기)" aria-label="화면 최대화">
+                    <i class="bi bi-arrows-fullscreen"></i>
                 </button>
                 {% block topbar %}
                 <form class="input-group v2-topbar-search" style="max-width: 600px;" method="get" action="{% url 'products:product_explorer' %}">
@@ -227,6 +250,40 @@
                 if (cell) setTooltip(cell);
             }
         }, { passive: true });
+    })();
+    </script>
+
+    <script>
+    /* ── 화면 최대화 ────────────────────────────────────────────────
+       왼쪽 메뉴와 위쪽 띠를 한 번에 접는다. 표가 넓은 화면에서 되찾는
+       폭이 크다 — 메뉴 250px + 띠 64px.
+
+       상태는 <html> 에 걸어 두어야 다음 화면도 접힌 채로 열린다. 화면마다
+       다시 누르게 하면 최대화가 아니라 그냥 접기다.
+       ---------------------------------------------------------------- */
+    (function () {
+        var KEY  = 'v2Maximized';
+        var root = document.documentElement;
+
+        function apply(on) {
+            root.classList.toggle('v2-max', on);
+            try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {}
+            /* 표는 폭이 바뀌면 칸을 다시 잡는다. ResizeObserver 를 깨운다 */
+            window.dispatchEvent(new Event('resize'));
+        }
+
+        var on  = document.getElementById('v2MaxToggle');
+        var off = document.getElementById('v2MaxExit');
+        if (on)  on.addEventListener('click', function () { apply(true); });
+        if (off) off.addEventListener('click', function () { apply(false); });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            if (!root.classList.contains('v2-max')) return;
+            /* 창이 떠 있으면 그것부터 닫는다 */
+            if (document.querySelector('.modal.show')) return;
+            apply(false);
+        });
     })();
     </script>
 

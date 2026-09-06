@@ -3301,3 +3301,95 @@ class 상세가_행_번호에_가렸다(TestCase):
         block = self.css[head:head + 800]
         self.assertIn('z-index: 200;', block)
         self.assertNotIn('z-index: 30;', block)
+
+
+class 화면_최대화(TestCase):
+    """
+    왼쪽 메뉴(250px)와 위쪽 띠(64px)가 늘 펼쳐져 있었다. 표가 넓은 화면에서는
+    그 314px 이 아깝다. base_v2 를 쓰는 모든 화면이 함께 얻는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.base = (base / 'templates/base_v2.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
+
+    def test_모든_v2_화면이_함께_얻는다(self):
+        # 화면마다 따로 달면 어느 날 한쪽만 남는다
+        self.assertIn('id="v2MaxToggle"', self.base)
+
+    def test_첫_그림부터_접힌_채로_연다(self):
+        """
+        #v2Wrapper 는 <head> 시점에 아직 없다. 거기 걸면 펼친 화면이 한 번
+        그려졌다가 접힌다.
+        """
+        head = self.base.index("localStorage.getItem('v2Maximized')")
+        self.assertLess(head, self.base.index('<body>'))
+        self.assertIn("document.documentElement.classList.add('v2-max')", self.base)
+        self.assertIn('html.v2-max .v2-sidebar', self.css)
+        self.assertIn('html.v2-max .v2-topbar { display: none; }', self.css)
+
+    def test_되돌릴_자리를_남긴다(self):
+        # 최대화하면 위쪽 띠와 함께 그 단추도 사라진다
+        self.assertIn('id="v2MaxExit"', self.base)
+        self.assertIn('html.v2-max .v2-max-exit { display: flex; }', self.css)
+        self.assertIn('.v2-max-exit {', self.css)
+        self.assertIn("if (e.key !== 'Escape') return;", self.base)
+
+    def test_창이_떠_있으면_Esc_가_창을_먼저_닫는다(self):
+        head = self.base.index("if (e.key !== 'Escape') return;")
+        self.assertIn("document.querySelector('.modal.show')",
+                      self.base[head:head + 400])
+
+    def test_다음_화면도_접힌_채로_열린다(self):
+        # 화면마다 다시 누르게 하면 최대화가 아니라 그냥 접기다
+        self.assertIn("localStorage.setItem(KEY, on ? '1' : '0')", self.base)
+
+    def test_표가_칸_너비를_다시_잡는다(self):
+        head = self.base.index('function apply(on)')
+        self.assertIn("window.dispatchEvent(new Event('resize'))",
+                      self.base[head:head + 500])
+
+
+class 원료_보관함을_접는다(TestCase):
+    """
+    가져오는 곳이라 탭 뒤에 숨기지는 않지만, 원료를 다 넣고 표를 고치는
+    동안에는 280px 이 자리만 차지한다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_머리에_접는_단추가_있다(self):
+        head = self.html.index('class="side-panel-head"')
+        block = self.html[head:head + 500]
+        self.assertIn('id="paletteToggle"', block)
+        self.assertIn('side-panel-title', block)
+
+    def test_접히면_세로_글씨만_남는다(self):
+        # 무엇이 접혀 있는지 모르면 다시 펴지 못한다
+        self.assertIn('.bom-right-panel.is-closed .side-tab-body { display: none; }', self.css)
+        self.assertIn('writing-mode: vertical-rl;', self.css)
+
+    def test_다음에_열_때도_접힌_채로(self):
+        head = self.html.index('function bindPaletteToggle')
+        block = self.html[head:head + 1200]
+        self.assertIn("const KEY = 'bomPaletteClosed';", block)
+        self.assertIn("localStorage.setItem(KEY, next ? '1' : '0')", block)
+
+    def test_표가_칸_너비를_다시_잡는다(self):
+        head = self.html.index('function bindPaletteToggle')
+        self.assertIn("window.dispatchEvent(new Event('resize'))",
+                      self.html[head:head + 1200])
+
+    def test_세로로_쌓이는_폭에서는_접지_않는다(self):
+        # 되찾을 자리가 없다
+        head = self.css.index('@media (max-width: 991px)')
+        block = self.css[head:head + 900]
+        self.assertIn('.side-panel-toggle { display: none; }', block)
