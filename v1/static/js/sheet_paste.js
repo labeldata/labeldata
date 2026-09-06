@@ -147,6 +147,73 @@
              checks: checks, checkNames: checkNames };
   }
 
+  /*
+   * 머리글이 두 줄인 양식.
+   *
+   * 회사 양식은 위 칸을 병합해 큰 이름을 쓰고 아래 줄에 낱개 이름을 적는
+   * 일이 흔하다.
+   *
+   *     ├──────────── 알레르기 ────────────┤
+   *     │ 알류 │ 우유 │ 메밀 │ 대두 │ 밀 │ … │
+   *
+   * 병합한 칸은 붙여넣으면 **첫 칸에만 글자가 있고 나머지는 빈칸**이다.
+   * 그래서 위 줄만 보면 알레르기 열 열아홉 개가 통째로 안 보이고, 아래
+   * 줄은 자료 한 줄로 들어간다. 실제 양식으로 확인했다 — O/X 열 열아홉
+   * 개가 전부 버려지고 "알류 우유 메밀 …" 이라는 원료가 한 줄 생겼다.
+   *
+   * 합칠 때는 **아래 줄을 먼저 쓴다.** 낱개 이름이 더 구체적이다.
+   */
+  function mergeHeader(top, sub) {
+    var n = Math.max((top || []).length, (sub || []).length);
+    var out = new Array(n);
+    for (var i = 0; i < n; i++) {
+      var below = String(sub && sub[i] != null ? sub[i] : '').trim();
+      out[i] = below || (top && top[i] != null ? top[i] : '');
+    }
+    return out;
+  }
+
+  /*
+   * 아래 줄이 머리글인가, 자료인가.
+   *
+   * "밀가루" 는 알레르기 "밀" 을 품는다. 자료 줄을 머리글로 잘못 합치면
+   * 없는 체크 열이 생긴다.
+   *
+   * 가르는 자리는 **위 줄의 빈칸**이다. 병합한 머리글이라면 아래 줄의
+   * 글자가 위 줄이 비어 있는 자리에 온다. 실제 양식에서 열아홉 칸 중
+   * 열여덟 칸이 그랬고, 자료 줄은 여섯 칸 중 한 칸도 그렇지 않았다.
+   */
+  function looksLikeSubHeader(top, sub) {
+    if (!top || !sub) return false;
+    var filled = 0, underGap = 0;
+    for (var i = 0; i < sub.length; i++) {
+      if (String(sub[i] == null ? '' : sub[i]).trim() === '') continue;
+      filled += 1;
+      if (String(top[i] == null ? '' : top[i]).trim() === '') underGap += 1;
+    }
+    return filled >= 2 && underGap >= 2 && underGap >= filled * 0.6;
+  }
+
+  /** 짝지은 열이 몇 개인가. 두 줄을 합칠지 고르는 잣대다. */
+  function planSize(plan) {
+    return plan ? plan.names.length + plan.checkNames.length : -1;
+  }
+
+  /**
+   * 머리글을 읽는다. 한 줄일 수도, 두 줄일 수도 있다.
+   *
+   * Returns: {plan, rows} 또는 null
+   */
+  function readHeader(data, headers, aliases, marks) {
+    var one = planColumns(data[0], headers, aliases, marks);
+    if (data.length > 1 && looksLikeSubHeader(data[0], data[1])) {
+      var two = planColumns(mergeHeader(data[0], data[1]),
+                            headers, aliases, marks);
+      if (planSize(two) > planSize(one)) return { plan: two, rows: 2 };
+    }
+    return one ? { plan: one, rows: 1 } : null;
+  }
+
   /**
    * 붙여넣기를 우리 양식에 맞춘다.
    *
@@ -166,12 +233,16 @@
     hot.addHook('beforePaste', function (data, coords) {
       var why = [], matched = null, unused = [];
 
-      // ① 머리글 줄이 있으면 그것으로 열을 맞춘다.
-      var plan = planColumns(data[0], headers, aliases, options.marks);
+      // ① 머리글 줄이 있으면 그것으로 열을 맞춘다. 두 줄일 수도 있다.
+      var head = readHeader(data, headers, aliases, options.marks);
+      var plan = head && head.plan;
       if (plan) {
-        data.shift();
+        for (var h = 0; h < head.rows; h++) data.shift();
         matched = plan.names;
         unused = plan.unused;
+        if (head.rows > 1) {
+          matched = matched.concat(['머리글 두 줄을 합쳐 읽었습니다']);
+        }
 
         // 칸을 끌어다 옮겨 둔 사람이 있다. 값은 **화면에 보이는 자리**로
         // 들어가야 한다 — 논리 자리로 넣으면 옮겨 둔 만큼 어긋난다.
@@ -368,4 +439,6 @@
   window.sheetPasteKey = key;               // 시험이 쓴다
   window.sheetPasteMarked = isMarked;       // 시험이 쓴다
   window.sheetPastePlan = planColumns;      // 시험이 쓴다
+  window.sheetPasteHeader = readHeader;     // 시험이 쓴다
+  window.sheetPasteSubHeader = looksLikeSubHeader;   // 시험이 쓴다
 })();

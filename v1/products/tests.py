@@ -3393,3 +3393,90 @@ class 원료_보관함을_접는다(TestCase):
         head = self.css.index('@media (max-width: 991px)')
         block = self.css[head:head + 900]
         self.assertIn('.side-panel-toggle { display: none; }', block)
+
+
+class 머리글이_두_줄인_양식(TestCase):
+    """
+    회사 양식은 위 칸을 병합해 큰 이름을 쓰고 아래 줄에 낱개 이름을 적는 일이
+    흔하다.
+
+        ├──────────── 알레르기 ────────────┤
+        │ 알류 │ 우유 │ 메밀 │ 대두 │ 밀 │ … │
+
+    병합한 칸은 붙여넣으면 첫 칸에만 글자가 있고 나머지는 빈칸이다. 위 줄만
+    보면 O/X 열 열아홉 개가 통째로 버려지고 "알류 우유 메밀 …" 이라는 원료가
+    한 줄 생긴다. 실제 양식에서 그렇게 났다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.js = (Path(dj.BASE_DIR) / 'static/js/sheet_paste.js').read_text(
+            encoding='utf-8')
+
+    def test_두_줄을_합쳐_읽는다(self):
+        self.assertIn('function mergeHeader(top, sub)', self.js)
+        self.assertIn('function readHeader(data, headers, aliases, marks)', self.js)
+        head = self.js.index('var head = readHeader(')
+        block = self.js[head:head + 400]
+        self.assertIn('for (var h = 0; h < head.rows; h++) data.shift();', block,
+                      '두 줄을 읽었으면 두 줄을 버려야 한다')
+
+    def test_아래_줄이_더_구체적이다(self):
+        # "알레르기"(병합) 보다 "알류"(낱개)가 맞는 이름이다
+        head = self.js.index('function mergeHeader')
+        block = self.js[head:head + 500]
+        self.assertIn("out[i] = below || (top && top[i] != null ? top[i] : '');",
+                      block)
+
+    def test_자료_줄을_머리글로_보지_않는다(self):
+        """
+        "밀가루" 는 알레르기 "밀" 을 품는다. 자료 줄을 합치면 없는 체크 열이
+        생긴다. 가르는 자리는 위 줄의 빈칸이다.
+        """
+        head = self.js.index('function looksLikeSubHeader')
+        block = self.js[head:head + 700]
+        self.assertIn('underGap >= filled * 0.6', block)
+        self.assertIn('filled >= 2 && underGap >= 2', block)
+
+    def test_짝이_더_많이_지어질_때만_합친다(self):
+        head = self.js.index('function readHeader')
+        block = self.js[head:head + 500]
+        self.assertIn('planSize(two) > planSize(one)', block)
+
+    def test_합쳤다고_말해_준다(self):
+        # 무엇을 어떻게 맞췄는지 말하지 않으면 틀렸을 때 알 수 없다
+        self.assertIn("matched = matched.concat(['머리글 두 줄을 합쳐 읽었습니다'])",
+                      self.js)
+
+
+class 배합비는_소수점_세_자리다(TestCase):
+    """
+    44.528 처럼 적어 온다. 두 자리로 자르면 44.53 이 되고, 열 줄이면 합계가
+    100 에서 눈에 띄게 어긋난다. DB(usage_ratio)는 원래 네 자리였다 —
+    자르고 있던 것은 화면뿐이었다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.html = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_표의_칸이_세_자리를_보여_준다(self):
+        self.assertIn("numericFormat: { pattern: '0.000' }", self.html)
+        self.assertNotIn("numericFormat: { pattern: '0.00' }", self.html)
+
+    def test_합계도_세_자리다(self):
+        self.assertIn('${total.toFixed(3)}%', self.html)
+        self.assertNotIn('${total.toFixed(2)}%', self.html)
+
+    def test_처음_그릴_때도_같은_자리다(self):
+        # 0.00% 로 그려 두면 값이 들어오는 순간 자릿수가 바뀐다
+        self.assertNotIn('>0.00%<', self.html)
+        self.assertIn('>0.000%<', self.html)
+
+    def test_DB_는_이미_네_자리였다(self):
+        from v1.bom.models import ProductBOM
+        self.assertEqual(
+            ProductBOM._meta.get_field('usage_ratio').decimal_places, 4)

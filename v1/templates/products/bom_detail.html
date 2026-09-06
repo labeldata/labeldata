@@ -53,7 +53,7 @@ body.in-iframe .bom-page-header { display: none !important; }
             </div>
             <div>
                 <span class="me-3 small text-muted">총 배합비</span>
-                <span id="total-ratio" class="fw-semibold">0.00%</span>
+                <span id="total-ratio" class="fw-semibold">0.000%</span>
                 {% if can_edit %}
                 <button class="btn btn-primary v2-btn" id="save-btn" onclick="saveData()">
                     <i class="bi bi-cloud-arrow-up me-1"></i> 저장하기
@@ -88,7 +88,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                         <button type="button" class="sheet-pick-btn" data-value="원재료명">원재료명</button>
                     </div>
                     <span class="small text-muted ms-2">총 배합비:</span>
-                    <span id="total-ratio-display" class="fw-semibold text-primary">0.00%</span>
+                    <span id="total-ratio-display" class="fw-semibold text-primary">0.000%</span>
                 </div>
             </div>
             {% comment %}
@@ -523,7 +523,10 @@ body.in-iframe .bom-page-header { display: none !important; }
                 {
                     data: 'mixing_ratio',
                     type: 'numeric',
-                    numericFormat: { pattern: '0.00' }
+                    /* 배합비는 소수점 세 자리까지 쓴다. 44.528 처럼 적어
+                       오는데 두 자리로 자르면 44.53 이 되고, 합계가 100 에서
+                       어긋난다. DB(usage_ratio)는 원래 네 자리다. */
+                    numericFormat: { pattern: '0.000' }
                 },
                 { data: 'manufacturer', editor: 'text' },
                 /* 여태 오른쪽 상세 패널에서만 넣을 수 있었다. 원료를 하나씩
@@ -1382,7 +1385,7 @@ body.in-iframe .bom-page-header { display: none !important; }
                 total += value;
             }
         });
-        const totalText = `${total.toFixed(2)}%`;
+        const totalText = `${total.toFixed(3)}%`;
         
         // 상단 총 배합비 업데이트 (있으면)
         if (totalEl) {
