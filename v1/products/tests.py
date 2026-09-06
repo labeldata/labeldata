@@ -4070,8 +4070,8 @@ class 홈은_순서를_먼저_말한다(TestCase):
         self.css = (base / 'static/css/home_v2_dashboard.css').read_text(encoding='utf-8')
 
     def test_다섯_걸음이_순서대로_있다(self):
-        for step in ('원료 모으기', '배합비 구성', '표시사항 만들기',
-                     '규정 검증', '시안 대조 · 출력'):
+        for step in ('원료·제품 입력', '배합비 구성', '원재료명 자동 표시',
+                     '규정 검증', '시안 검증'):
             self.assertIn(step, self.steps)
 
     def test_손님과_회원이_같은_흐름을_본다(self):

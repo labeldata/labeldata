@@ -15,8 +15,8 @@
        href="{% if is_guest %}{% url 'user_management:signup' %}{% else %}{% url 'label:my_ingredient_list_combined' %}{% endif %}">
         <span class="wf-no">1</span>
         <span class="wf-body">
-            <b>원료 모으기</b>
-            <em>쓰던 엑셀을 표에 그대로 붙여넣거나, 원료 사진을 읽어 등록합니다.</em>
+            <b>원료·제품 입력</b>
+            <em>원료를 엑셀 형식으로 그대로 복사해서 입력하고, 제품은 사진으로 입력합니다.</em>
         </span>
         <i class="bi bi-box-seam wf-icon"></i>
     </a>
@@ -27,7 +27,7 @@
         <span class="wf-no">2</span>
         <span class="wf-body">
             <b>배합비 구성</b>
-            <em>원료를 끌어다 놓고 알레르기·GMO 를 표에서 바로 칩니다.</em>
+            <em>배합비(BOM)를 입력하고 원료 정보를 확인합니다.</em>
         </span>
         <i class="bi bi-diagram-3 wf-icon"></i>
     </a>
@@ -37,8 +37,8 @@
        href="{% if is_guest %}{% url 'user_management:signup' %}{% else %}{% url 'products:product_create' %}{% endif %}">
         <span class="wf-no">3</span>
         <span class="wf-body">
-            <b>표시사항 만들기</b>
-            <em>원재료명이 함량 순서로 조립되고 영양성분이 계산됩니다.</em>
+            <b>원재료명 자동 표시</b>
+            <em>원재료명이 함량 순서로 자동 표시됩니다.</em>
         </span>
         <i class="bi bi-file-earmark-text wf-icon"></i>
     </a>
@@ -49,7 +49,7 @@
         <span class="wf-no">4</span>
         <span class="wf-body">
             <b>규정 검증</b>
-            <em>표시기준에 어긋난 자리를 근거 규정과 함께 짚어 줍니다.</em>
+            <em>관련 규정에 맞는지 검증할 수 있습니다.</em>
         </span>
         <i class="bi bi-shield-check wf-icon"></i>
     </a>
@@ -59,9 +59,9 @@
        href="{% if is_guest %}{% url 'user_management:signup' %}{% else %}{% url 'products:product_explorer' %}{% endif %}">
         <span class="wf-no">5</span>
         <span class="wf-body">
-            <b>시안 대조 · 출력</b>
-            <em>인쇄 시안과 확정값을 글자 단위로 견주고 PDF 로 내보냅니다.</em>
+            <b>시안 검증</b>
+            <em>디자인 시안을 최종 데이터와 검증합니다.</em>
         </span>
-        <i class="bi bi-printer wf-icon"></i>
+        <i class="bi bi-git-compare wf-icon"></i>
     </a>
 </div>
