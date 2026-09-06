@@ -783,7 +783,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 .rs-insp-status           { display: inline-block; font-size: 10.5px; font-weight: 600;
                              padding: 2px 7px; border-radius: var(--r-sm); white-space: nowrap; }
 .rs-insp-status--recv     { background: var(--ez-gray-100, #f1f3f4); color: var(--ez-gray-700, #5f6368); }                    /* 접수 */
-.rs-insp-status--prog     { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }                    /* 검사 중 */
+.rs-insp-status--prog     { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }                    /* 검사 중 */
 .rs-insp-status--ok       { background: var(--c-ok-bg); color: var(--c-ok-text); }    /* 적합 */
 .rs-insp-status--fail     { background: var(--c-danger-bg); color: var(--c-danger-text); } /* 부적합 */
 
@@ -1120,7 +1120,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   padding: 0 5px; border-radius: 4px;
   background: var(--c-border-light, #f1f3f4); color: var(--c-text-secondary);
 }
-.rs-src-tag--imp { background: var(--ez-info-bg, #e8f0fe); color: #1558b0; }
+.rs-src-tag--imp { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-strong, #1558b0); }
 
 /* 적용 중인 필터 요약 — 조건이 여기저기 흩어져 있어 "왜 이것만 보이지?" 하기 쉽다.
    몇 개가 걸려 있는지 알려주고 한 번에 지울 수 있게 한다. */
@@ -1137,7 +1137,7 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   color: #fff; background: var(--c-primary);
   border-radius: 10px; padding: 1px 7px; white-space: nowrap;
 }
-.rs-filter-reset:hover { background: #1558b0; color: #fff; text-decoration: none; }
+.rs-filter-reset:hover { background: var(--ez-info-strong, #1558b0); color: #fff; text-decoration: none; }
 
 /* ================================================================
    내 알림 / 일반 알림 가르기
@@ -1164,3 +1164,11 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
 #regPage.reg-page--insp .rs-scope-bar { display: none !important; }
 
 /* 고정 블록 머리 */
+
+/* ── 되풀이되던 인라인 style 을 여기로 ──────────────────────────
+   등급 앞의 점은 글자가 아니라 표시다. 열여덟 군데에 7px 로 적혀 있었다. */
+.rg-dot   { font-size: 7px; vertical-align: middle; }
+/* 날짜 뒤의 "(수거)" 같은 덧말. #bbb 로 적혀 있던 것을 토큰으로 맞췄다 —
+   눈으로는 구별되지 않고, 회색을 파일마다 새로 정하지 않게 된다. */
+.rg-note  { font-size: 10px; color: var(--ez-gray-400, #bdc1c6); }
+.rg-muted { color: var(--ez-gray-500, #9aa0a6); }

@@ -146,7 +146,7 @@
 
 .badge-sent {
     display: inline-block;
-    background: var(--ez-info-bg, #e8f0fe); color: #1967d2;
+    background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2);
     border-radius: 10px; padding: 1px 7px;
     font-size: 11px; font-weight: 600;
 }
@@ -293,7 +293,7 @@
     white-space: nowrap;
 }
 .role-owner     { background: #f3e8fd; color: #9334e9; }
-.role-editor    { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.role-editor    { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
 .role-reviewer  { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 .role-approver  { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
 .role-viewer    { background: var(--ez-gray-100, #f1f3f4); color: var(--ez-gray-700, #5f6368); }
@@ -366,7 +366,7 @@
     font-weight: 500;
     padding: 5px 12px;
     border-radius: 12px;
-    background-color: #1967d2 !important;
+    background-color: var(--ez-info-on-bg, #1967d2) !important;
     color: #ffffff;
 }
 
@@ -399,14 +399,14 @@
 }
 
 #selection-actions .btn-primary {
-    background-color: #1967d2;
-    border-color: #1967d2;
+    background-color: var(--ez-info-on-bg, #1967d2);
+    border-color: var(--ez-info-on-bg, #1967d2);
     color: #ffffff;
 }
 
 #selection-actions .btn-primary:hover {
-    background-color: #1558b0;
-    border-color: #1558b0;
+    background-color: var(--ez-info-strong, #1558b0);
+    border-color: var(--ez-info-strong, #1558b0);
     color: #ffffff;
 }
 

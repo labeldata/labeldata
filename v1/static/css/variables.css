@@ -14,6 +14,8 @@
 
   --ez-danger:         #c5221f;
   --ez-danger-hover:   #a50e0e;
+  /* 아이콘·테두리처럼 넓지 않은 자리의 빨강. #c5221f 보다 밝다. */
+  --ez-danger-bright:  #d93025;
   --ez-danger-bg:      #fce8e6;
   --ez-danger-border:  #f5c6c3;
 
@@ -26,6 +28,11 @@
   --ez-info-hover:     #1765cc;
   --ez-info-bg:        #e8f0fe;
   --ez-info-border:    #c5d9f9;
+  /* 옅은 파랑 바탕 위의 글자. #1a73e8 은 대비가 모자란다.
+     일곱 개 파일에서 마흔두 번 쓰고 있었다. */
+  --ez-info-on-bg:     #1967d2;
+  /* 그보다 더 진한 것 — 눌린 상태·강조 링크 */
+  --ez-info-strong:    #1558b0;
 
   /* ── 공통 회색 팔레트 ────────────────────────────────────── */
   --ez-gray-50:   #f8f9fa;

@@ -245,7 +245,7 @@ body {
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.7;
-  color: #1558b0;
+  color: var(--ez-info-strong, #1558b0);
 }
 .basis-hint strong { color: #0b3d91; }
 
@@ -257,7 +257,7 @@ body {
   width: 14px; height: 14px;
   border-radius: 50%;
   background: var(--ez-info-bg, #e8f0fe);
-  color: #1558b0;
+  color: var(--ez-info-strong, #1558b0);
   font-size: 10px;
   font-weight: 700;
   cursor: help;
@@ -281,7 +281,7 @@ body {
   border: 1px solid var(--ez-info, #1a73e8);
   border-radius: 6px;
   font-size: 12.5px;
-  color: #1558b0;
+  color: var(--ez-info-strong, #1558b0);
   background: #fff;
   cursor: pointer;
 }

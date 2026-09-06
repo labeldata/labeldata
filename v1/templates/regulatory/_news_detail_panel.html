@@ -31,13 +31,13 @@
       {% elif vtype %}<span class="rh-badge rh-vtype">기타</span>
       {% endif %}
       {% if matches %}{% with top=matches|first %}
-        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>중요</span>
-        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>관심</span>
-        {% else %}<span class="rh-badge rh-risk-L"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>일반</span>{% endif %}
+        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H"><i class="bi bi-circle-fill me-1" class="rg-dot"></i>중요</span>
+        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M"><i class="bi bi-circle-fill me-1" class="rg-dot"></i>관심</span>
+        {% else %}<span class="rh-badge rh-risk-L"><i class="bi bi-circle-fill me-1" class="rg-dot"></i>일반</span>{% endif %}
       {% endwith %}{% elif ing_matches %}{% with top=ing_matches|first %}
-        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H rh-risk-ing"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>중요·원료</span>
-        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M rh-risk-ing"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>관심·원료</span>
-        {% else %}<span class="rh-badge rh-risk-L rh-risk-ing"><i class="bi bi-circle-fill me-1" style="font-size:7px;vertical-align:middle;"></i>일반·원료</span>{% endif %}
+        {% if top.risk_level == 'HIGH' %}<span class="rh-badge rh-risk-H rh-risk-ing"><i class="bi bi-circle-fill me-1" class="rg-dot"></i>중요·원료</span>
+        {% elif top.risk_level == 'MED' %}<span class="rh-badge rh-risk-M rh-risk-ing"><i class="bi bi-circle-fill me-1" class="rg-dot"></i>관심·원료</span>
+        {% else %}<span class="rh-badge rh-risk-L rh-risk-ing"><i class="bi bi-circle-fill me-1" class="rg-dot"></i>일반·원료</span>{% endif %}
       {% endwith %}{% elif kw_logs %}
         <span class="rh-badge rh-risk-kw"><i class="bi bi-bell me-1"></i>키워드 알림</span>
       {% endif %}
@@ -45,7 +45,7 @@
         <span class="rd-hdr-date">
           {% if news.event_date %}
             {% if news.event_date > today %}{{ today|date:"Y.m.d" }}<span style="font-size:10px;color:#f9a825;" title="원본 날짜: {{ news.event_date|date:'Y.m.d' }}"> (날짜 보정)</span>
-            {% else %}{{ news.event_date|date:"Y.m.d" }}<span style="font-size:10px;color:#bbb;"> (발생)</span>{% endif %}
+            {% else %}{{ news.event_date|date:"Y.m.d" }}<span class="rg-note"> (발생)</span>{% endif %}
           {% else %}
             {% if news.collected_date > today %}{{ today|date:"Y.m.d" }}<span style="font-size:10px;color:#f9a825;" title="원본 날짜: {{ news.collected_date|date:'Y.m.d' }}"> (날짜 보정)</span>
             {% else %}{{ news.collected_date|date:"Y.m.d" }}{% endif %}
@@ -223,25 +223,25 @@
     <div class="rd-crit-body">
       {% if news.api_source == 'I2640' %}
       <div class="rd-crit-row"><span class="rd-crit-src">국내 농산물</span>
-        <span class="rh-cH"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>중요</span><span>원료명+원산지 일치</span>
-        <span class="rh-cM"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>관심</span><span>원료명+식품유형 일치</span>
-        <span class="rh-cL"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>일반</span><span>원료명만 일치</span>
+        <span class="rh-cH"><i class="bi bi-circle-fill" class="rg-dot"></i>중요</span><span>원료명+원산지 일치</span>
+        <span class="rh-cM"><i class="bi bi-circle-fill" class="rg-dot"></i>관심</span><span>원료명+식품유형 일치</span>
+        <span class="rh-cL"><i class="bi bi-circle-fill" class="rg-dot"></i>일반</span><span>원료명만 일치</span>
       </div>
       {% elif news.api_source == 'import' or news.api_source == 'imp_insp' %}
       <div class="rd-crit-row"><span class="rd-crit-src">수입식품</span>
-        <span class="rh-cH"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>중요</span><span>원산지/식품유형/제조사 2개+ 일치</span>
-        <span class="rh-cM"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>관심</span><span>1개 일치</span>
-        <span class="rh-cL"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>일반</span><span>원료명만 일치</span>
+        <span class="rh-cH"><i class="bi bi-circle-fill" class="rg-dot"></i>중요</span><span>원산지/식품유형/제조사 2개+ 일치</span>
+        <span class="rh-cM"><i class="bi bi-circle-fill" class="rg-dot"></i>관심</span><span>1개 일치</span>
+        <span class="rh-cL"><i class="bi bi-circle-fill" class="rg-dot"></i>일반</span><span>원료명만 일치</span>
       </div>
       {% elif news.api_source == 'I0470' or news.api_source == 'I0480' or news.api_source == 'I0482' %}
       <div class="rd-crit-row"><span class="rd-crit-src">행정처분</span>
-        <span class="rh-cM"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>관심</span><span>처분업체명 = 내 원료 제조사</span>
+        <span class="rh-cM"><i class="bi bi-circle-fill" class="rg-dot"></i>관심</span><span>처분업체명 = 내 원료 제조사</span>
       </div>
       {% else %}
       <div class="rd-crit-row"><span class="rd-crit-src">국내가공</span>
-        <span class="rh-cH"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>중요</span><span>제조사+제품명 동일</span>
-        <span class="rh-cM"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>관심</span><span>식품유형+(제조사 or 원산지) 일치</span>
-        <span class="rh-cL"><i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>일반</span><span>원료명만 일치</span>
+        <span class="rh-cH"><i class="bi bi-circle-fill" class="rg-dot"></i>중요</span><span>제조사+제품명 동일</span>
+        <span class="rh-cM"><i class="bi bi-circle-fill" class="rg-dot"></i>관심</span><span>식품유형+(제조사 or 원산지) 일치</span>
+        <span class="rh-cL"><i class="bi bi-circle-fill" class="rg-dot"></i>일반</span><span>원료명만 일치</span>
       </div>
       {% endif %}
       <div class="rd-crit-note">• SAFE: 원산지 확실 불일치 시 제외&nbsp;&nbsp;• 중요·관심은 원료명 일치가 기본 조건</div>
@@ -260,7 +260,7 @@
     {% for m in matches %}
     <div class="rd-item" id="match-{{ m.id }}">
       <div class="rd-item-head">
-        <i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>
+        <i class="bi bi-circle-fill" class="rg-dot"></i>
         <span class="rd-item-name" title="{{ m.product.my_label_name|default:m.product.prdlst_nm }}">
           {{ m.product.my_label_name|default:m.product.prdlst_nm }}
         </span>
@@ -294,7 +294,7 @@
         <button class="rd-act-btn" onclick="toggleMemo('pm-{{ m.id }}')"><i class="bi bi-pencil me-1"></i>메모</button>
         <span class="rd-act-spacer"></span>
         <a href="/products/{{ m.product.my_label_id }}/" class="rd-item-link">제품 워크스페이스 <i class="bi bi-arrow-right-short"></i></a>
-        <button class="rd-act-btn" style="color:#9aa0a6;" onclick="markFalsePositive({{ m.id }})">오탐지</button>
+        <button class="rd-act-btn" class="rg-muted" onclick="markFalsePositive({{ m.id }})">오탐지</button>
       </div>
       <div class="rd-memo-area" id="pm-{{ m.id }}">
         <textarea placeholder="메모 내용 입력..."></textarea>
@@ -318,7 +318,7 @@
     {% for im in ing_matches %}
     <div class="rd-item" id="ing-match-{{ im.id }}" style="border-color:#ffd54f;">
       <div class="rd-item-head">
-        <i class="bi bi-circle-fill" style="font-size:7px;vertical-align:middle;"></i>
+        <i class="bi bi-circle-fill" class="rg-dot"></i>
         <span class="rd-item-name">{{ im.ingredient.prdlst_nm|default:im.ingredient.ingredient_display_name }}</span>
         <span class="rd-item-lv lv-{{ im.risk_level }}">{% if im.risk_level == 'HIGH' %}중요{% elif im.risk_level == 'MED' %}관심{% else %}일반{% endif %}</span>
       </div>
@@ -329,7 +329,7 @@
         <div class="rd-bom-label">사용 제품:</div>
         {% for bom in bom_list %}
         <div class="rd-bom-item">
-          <i class="bi bi-tag" style="color:#9aa0a6;"></i>
+          <i class="bi bi-tag" class="rg-muted"></i>
           <a href="/products/{{ bom.parent_label.my_label_id }}/" style="color:#1a73e8;text-decoration:none;font-size:11px;">{{ bom.parent_label.my_label_name|default:"(이름 없음)" }}</a>
           <span style="color:#9aa0a6;font-size:10px;">({{ bom.ingredient_name }})</span>
         </div>

@@ -26,7 +26,7 @@
     grid-template-columns: 1fr 340px;
     gap: 24px;
     align-items: center;
-    background: linear-gradient(135deg, #1a2744 0%, #1967d2 60%, #2196f3 100%);
+    background: linear-gradient(135deg, #1a2744 0%, var(--ez-info-on-bg, #1967d2) 60%, #2196f3 100%);
     border-radius: 16px;
     padding: 24px 32px 24px 36px;
     margin-bottom: 14px;
@@ -129,7 +129,7 @@ a.hero-app-badge:hover {
     font-size: 14px;
     font-weight: 700;
     background: #ffffff;
-    color: #1967d2;
+    color: var(--ez-info-on-bg, #1967d2);
     text-decoration: none;
     border: none;
     transition: all 0.18s;
@@ -137,7 +137,7 @@ a.hero-app-badge:hover {
 }
 .hero-btn-primary:hover {
     background: #f0f4ff;
-    color: #1558b0;
+    color: var(--ez-info-strong, #1558b0);
     transform: translateY(-1px);
     box-shadow: 0 4px 14px rgba(0,0,0,0.22);
     text-decoration: none;
@@ -251,7 +251,7 @@ a.hero-app-badge:hover {
    눈이 안 간다. */
 .feature-card-new { border-color: #c4a7e7; box-shadow: 0 0 0 3px rgba(196,167,231,.14); }
 
-.fc-badge-blue   { background: var(--ez-info-bg, #e8f0fe); color: #1558b0; }
+.fc-badge-blue   { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-strong, #1558b0); }
 .fc-badge-green  { background: var(--ez-success-bg, #e6f4ea); color: #1a7336; }
 .fc-badge-yellow { background: var(--ez-warning-bg, #fef7e0); color: #b06000; }
 .fc-badge-purple { background: #f3e8fd; color: #7b2fbe; }
@@ -294,7 +294,7 @@ a.hero-app-badge:hover {
         min-width: unset;
         width: 60px; margin: 4px auto;
     }
-    .pipe-connector-line { width: 2px; height: 40px; background: linear-gradient(180deg, #c6d4e8 0%, #1967d2 100%); }
+    .pipe-connector-line { width: 2px; height: 40px; background: linear-gradient(180deg, #c6d4e8 0%, var(--ez-info-on-bg, #1967d2) 100%); }
     .pipe-connector-arrow { transform: rotate(90deg); margin-top: 0; margin-left: -6px; }
     .pipe-connector-label { display: none; }
 }
@@ -321,7 +321,7 @@ a.hero-app-badge:hover {
     color: rgba(255,255,255,0.85);
 }
 .pn-green  .pipe-step-label { background: #1b7c3b; }
-.pn-blue   .pipe-step-label { background: #1967d2; }
+.pn-blue   .pipe-step-label { background: var(--ez-info-on-bg, #1967d2); }
 .pn-purple .pipe-step-label { background: #7b2fbe; }
 .pn-orange .pipe-step-label { background: #c05e00; }
 
@@ -334,7 +334,7 @@ a.hero-app-badge:hover {
     flex-shrink: 0;
 }
 .pn-green  .pipe-node-icon { background: #e8f5e9; color: #1b7c3b; }
-.pn-blue   .pipe-node-icon { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.pn-blue   .pipe-node-icon { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
 .pn-purple .pipe-node-icon { background: #f3e8fd; color: #7b2fbe; }
 .pn-orange .pipe-node-icon { background: #fff0e0; color: #c05e00; }
 
@@ -355,7 +355,7 @@ a.hero-app-badge:hover {
     width: fit-content;
 }
 .pn-green  .pipe-node-badge { background: #e8f5e9; color: #1b7c3b; }
-.pn-blue   .pipe-node-badge { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.pn-blue   .pipe-node-badge { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
 .pn-purple .pipe-node-badge { background: #f3e8fd; color: #7b2fbe; }
 .pn-orange .pipe-node-badge { background: #fff0e0; color: #c05e00; }
 
@@ -381,7 +381,7 @@ a.hero-app-badge:hover {
     flex-shrink: 0;
 }
 .pn-green  .pipe-node-list li i { color: #1b7c3b; }
-.pn-blue   .pipe-node-list li i { color: #1967d2; }
+.pn-blue   .pipe-node-list li i { color: var(--ez-info-on-bg, #1967d2); }
 .pn-purple .pipe-node-list li i { color: #7b2fbe; }
 .pn-orange .pipe-node-list li i { color: #c05e00; }
 
@@ -418,12 +418,12 @@ a.hero-app-badge:hover {
     margin-right: 4px;
 }
 .pipeline-cta .hero-btn-primary {
-    background: #1967d2;
+    background: var(--ez-info-on-bg, #1967d2);
     color: #fff;
     box-shadow: 0 2px 6px rgba(25,103,210,0.35);
 }
 .pipeline-cta .hero-btn-primary:hover {
-    background: #1558b0;
+    background: var(--ez-info-strong, #1558b0);
     color: #fff;
 }
 .pipeline-cta .hero-btn-outline {
@@ -554,7 +554,7 @@ a.hero-app-badge:hover {
 }
 
 /* 아이콘 색상 변형 */
-.si-blue   { background: var(--v2-blue-light); color: #1967d2; }
+.si-blue   { background: var(--v2-blue-light); color: var(--ez-info-on-bg, #1967d2); }
 .si-green  { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); }
 .si-yellow { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
 .si-red    { background: var(--ez-danger-bg, #fce8e6); color: var(--ez-danger, #c5221f); }
@@ -622,7 +622,7 @@ a.hero-app-badge:hover {
 
 .ri-icon {
     width: 36px; height: 36px; border-radius: 8px;
-    background: var(--v2-blue-light); color: #1967d2;
+    background: var(--v2-blue-light); color: var(--ez-info-on-bg, #1967d2);
     display: flex; align-items: center; justify-content: center;
     font-size: 16px; flex-shrink: 0;
 }
@@ -703,9 +703,9 @@ a.hero-app-badge:hover {
 .rc-uploader .role-step-num    { background: #e8f5e9; color: #1b7c3b; }
 
 .rc-editor .role-card-header   { background: #f8f9ff; }
-.rc-editor .role-icon          { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
-.rc-editor .role-perm-badge    { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
-.rc-editor .role-step-num      { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.rc-editor .role-icon          { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
+.rc-editor .role-perm-badge    { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
+.rc-editor .role-step-num      { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
 
 .rc-reviewer .role-card-header { background: #fbf5ff; }
 .rc-reviewer .role-icon        { background: #f3e8fd; color: #8430ce; }
@@ -796,7 +796,7 @@ a.hero-app-badge:hover {
     color: #1a3a5c; text-decoration: none;
     letter-spacing: -0.01em;
 }
-.guest-gnb-logo:hover { color: #1967d2; text-decoration: none; }
+.guest-gnb-logo:hover { color: var(--ez-info-on-bg, #1967d2); text-decoration: none; }
 .guest-gnb-actions {
     display: flex; align-items: center; gap: 10px;
 }
@@ -806,10 +806,10 @@ a.hero-app-badge:hover {
     border-radius: 6px;
     transition: background .15s;
 }
-.gnb-login-btn:hover { background: var(--ez-gray-100, #f1f3f4); color: #1967d2; text-decoration: none; }
+.gnb-login-btn:hover { background: var(--ez-gray-100, #f1f3f4); color: var(--ez-info-on-bg, #1967d2); text-decoration: none; }
 .gnb-signup-btn {
     font-size: 13px; font-weight: 600;
-    background: #1967d2; color: #fff;
+    background: var(--ez-info-on-bg, #1967d2); color: #fff;
     text-decoration: none; padding: 6px 16px;
     border-radius: 6px;
     transition: background .15s;
@@ -831,7 +831,7 @@ a.hero-app-badge:hover {
     z-index: 2;
 }
 .pn-green-badge  { background: #1b7c3b; }
-.pn-blue-badge   { background: #1967d2; }
+.pn-blue-badge   { background: var(--ez-info-on-bg, #1967d2); }
 .pn-purple-badge { background: #7b2fbe; }
 .pn-orange-badge { background: #c05e00; }
 
@@ -847,11 +847,11 @@ a.hero-app-badge:hover {
 }
 .pipe-connector-line {
     flex: 1; height: 2px;
-    background: linear-gradient(90deg, #c6d4e8 0%, #1967d2 100%);
+    background: linear-gradient(90deg, #c6d4e8 0%, var(--ez-info-on-bg, #1967d2) 100%);
     border-radius: 2px;
 }
 .pipe-connector-arrow {
-    color: #1967d2; font-size: 14px;
+    color: var(--ez-info-on-bg, #1967d2); font-size: 14px;
     margin-left: -3px; flex-shrink: 0;
 }
 .pipe-connector-label {

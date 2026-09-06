@@ -702,7 +702,7 @@
               {% endif %}
               <div class="ms-auto">
                 {% if selected_insp.inspection.tkawydtm %}
-                <span class="rd-hdr-date">{{ selected_insp.inspection.tkawydtm|slice:":4" }}.{{ selected_insp.inspection.tkawydtm|slice:"4:6" }}.{{ selected_insp.inspection.tkawydtm|slice:"6:8" }}<span style="font-size:10px;color:#bbb;"> (수거)</span></span>
+                <span class="rd-hdr-date">{{ selected_insp.inspection.tkawydtm|slice:":4" }}.{{ selected_insp.inspection.tkawydtm|slice:"4:6" }}.{{ selected_insp.inspection.tkawydtm|slice:"6:8" }}<span class="rg-note"> (수거)</span></span>
                 {% endif %}
                 <a href="https://www.foodsafetykorea.go.kr/portal/healthyfoodlife/collectionInspectionList.do" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식약처 수거검사</a>
               </div>
@@ -785,7 +785,7 @@
               {% endif %}
               <div class="ms-auto">
                 {% if selected_pub_insp.tkawydtm %}
-                <span class="rd-hdr-date">{{ selected_pub_insp.tkawydtm|slice:":4" }}.{{ selected_pub_insp.tkawydtm|slice:"4:6" }}.{{ selected_pub_insp.tkawydtm|slice:"6:8" }}<span style="font-size:10px;color:#bbb;"> (수거)</span></span>
+                <span class="rd-hdr-date">{{ selected_pub_insp.tkawydtm|slice:":4" }}.{{ selected_pub_insp.tkawydtm|slice:"4:6" }}.{{ selected_pub_insp.tkawydtm|slice:"6:8" }}<span class="rg-note"> (수거)</span></span>
                 {% endif %}
                 <a href="https://www.foodsafetykorea.go.kr/portal/healthyfoodlife/collectionInspectionList.do" target="_blank" rel="noopener" class="rd-src-link"><i class="bi bi-box-arrow-up-right"></i> 식약처 수거검사</a>
               </div>

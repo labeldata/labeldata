@@ -2560,3 +2560,52 @@ class ColoursComeFromTokensTests(TestCase):
                     wrong.append('%s: %s -> %s (토큰은 %s)'
                                  % (path.name, name, fallback, real))
         self.assertEqual(wrong, [])
+
+
+class RepeatedInlineStylesAreClassesTests(TestCase):
+    """
+    같은 선언이 템플릿 곳곳에 흩어져 있으면 크기 하나 바꾸는 데 열 곳을
+    고쳐야 하고, 어느 날 한쪽만 고쳐진다.
+
+    폭(width)처럼 그 자리에서만 쓰는 배치값은 그대로 둔다 — 클래스로 옮겨
+    봐야 이름만 늘어난다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.base = Path(dj.BASE_DIR)
+
+    def _read(self, rel):
+        return (self.base / rel).read_text(encoding='utf-8')
+
+    def test_되풀이되던_선언이_사라졌다(self):
+        gone = {
+            'templates/products/product_explorer.html': [
+                'style="font-size:11px;"', 'style="cursor:pointer;"',
+                'style="cursor: pointer;"', 'style="padding:2px 8px;font-size:11px;"'],
+            'templates/regulatory/_news_detail_panel.html': [
+                'style="font-size:7px;vertical-align:middle;"'],
+            'templates/regulatory/news_list.html': [
+                'style="font-size:10px;color:#bbb;"'],
+        }
+        for rel, patterns in gone.items():
+            html = self._read(rel)
+            for pattern in patterns:
+                self.assertNotIn(pattern, html, '%s: %s' % (rel, pattern))
+
+    def test_대신_클래스가_있다(self):
+        explorer = self._read('static/css/product_explorer.css')
+        for rule in ('.pe-meta', '.pe-chip', '.pe-click'):
+            self.assertIn(rule, explorer)
+        reg = self._read('static/css/regulatory.css')
+        for rule in ('.rg-dot', '.rg-note'):
+            self.assertIn(rule, reg)
+
+    def test_7px_는_글자가_아니라_표시다(self):
+        # 등급 앞의 점. 열여덟 군데에 7px 로 적혀 있었다.
+        reg = self._read('static/css/regulatory.css')
+        head = reg.index('.rg-dot')
+        self.assertIn('font-size: 7px', reg[head:head + 120])
+        self.assertIn('class="rg-dot"',
+                      self._read('templates/regulatory/_news_detail_panel.html'))

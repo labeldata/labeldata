@@ -173,14 +173,14 @@
     <div class="flex-grow-1 overflow-auto custom-scrollbar px-4">
         <!-- 선택시 액션 바 (테이블 위) -->
         <div id="selection-actions" class="d-none align-items-center gap-1 py-2 border-bottom" style="min-height: 38px;">
-            <span class="badge bg-primary me-1" style="font-size:11px;"><span id="selected-count">0</span>개 선택됨</span>
-            <button class="btn v2-btn-sm btn-xs btn-outline-success" onclick="openExcelDownloadModal()" title="엑셀 다운로드" style="padding:2px 8px;font-size:11px;">
+            <span class="badge bg-primary me-1" class="pe-meta"><span id="selected-count">0</span>개 선택됨</span>
+            <button class="btn v2-btn-sm btn-xs btn-outline-success" onclick="openExcelDownloadModal()" title="엑셀 다운로드" class="pe-chip">
                 <i class="bi bi-file-earmark-excel"></i> 엑셀다운로드
             </button>
-            <button class="btn v2-btn-sm btn-xs btn-outline-secondary" onclick="copySelected()" title="복사" style="padding:2px 8px;font-size:11px;">
+            <button class="btn v2-btn-sm btn-xs btn-outline-secondary" onclick="copySelected()" title="복사" class="pe-chip">
                 <i class="bi bi-files"></i> 복사
             </button>
-            <button class="btn v2-btn-sm btn-xs btn-outline-danger" onclick="deleteSelected()" title="삭제" style="padding:2px 8px;font-size:11px;">
+            <button class="btn v2-btn-sm btn-xs btn-outline-danger" onclick="deleteSelected()" title="삭제" class="pe-chip">
                 <i class="bi bi-trash"></i> 삭제
             </button>
             <button id="dismiss-badges-btn" class="btn v2-btn-sm btn-xs btn-outline-warning" onclick="dismissSelectedBadges()" title="선택한 제품의 원료 업데이트 알림을 해제합니다" style="padding:2px 8px;font-size:11px;display:none;">
@@ -248,10 +248,10 @@
                         {% endif %}
                         {% endwith %}
                     </td>
-                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#documents'; event.stopPropagation();" style="cursor: pointer;">
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#documents'; event.stopPropagation();" class="pe-click">
                         <div>
                             <div class="text-muted">{{ item.document_stats.total }}건</div>
-                            <div class="text-muted" style="font-size: 12px;">
+                            <div class="text-muted" class="pe-note">
                                 {% if item.document_stats.rate >= 100 %}
                                 <span class="text-success">✓ {{ item.document_stats.rate|floatformat:0 }}%</span>
                                 {% elif item.document_stats.rate >= 70 %}
@@ -262,10 +262,10 @@
                             </div>
                         </div>
                     </td>
-                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#bom'; event.stopPropagation();" style="cursor: pointer;">
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#bom'; event.stopPropagation();" class="pe-click">
                         <div>
                             <div class="text-muted">{{ item.bom_stats.count }}개</div>
-                            <div class="text-muted" style="font-size: 12px;">
+                            <div class="text-muted" class="pe-note">
                                 {% if item.bom_stats.ratio > 100 %}
                                 <span class="text-danger">{{ item.bom_stats.ratio|floatformat:1 }}%</span>
                                 {% elif item.bom_stats.complete %}
@@ -276,21 +276,21 @@
                             </div>
                         </div>
                     </td>
-                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#labeling'; event.stopPropagation();" style="cursor: pointer;">
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#labeling'; event.stopPropagation();" class="pe-click">
                         {% if item.label_checked %}
                         <i class="bi bi-check-circle-fill text-success" title="PDF 저장 또는 규정 검증 완료"></i>
                         {% else %}
                         <i class="bi bi-dash-circle text-muted" title="미완료"></i>
                         {% endif %}
                     </td>
-                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#nutrition'; event.stopPropagation();" style="cursor: pointer;">
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#nutrition'; event.stopPropagation();" class="pe-click">
                         {% if item.has_nutrition %}
                         <i class="bi bi-check-circle-fill text-success" title="입력 완료"></i>
                         {% else %}
                         <i class="bi bi-dash-circle text-muted" title="미입력"></i>
                         {% endif %}
                     </td>
-                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#permissions'; event.stopPropagation();" style="cursor: pointer;">
+                    <td class="text-center" onclick="window.location.href='{% url 'products:product_detail_new' item.label.my_label_id %}#permissions'; event.stopPropagation();" class="pe-click">
                         {% if item.is_owned %}
                             {% if item.permission_count > 0 %}
                             <span class="text-muted">{{ item.permission_count }}명</span>
@@ -298,7 +298,7 @@
                             <span class="text-muted">-</span>
                             {% endif %}
                         {% else %}
-                            <span class="text-muted" style="font-size:11px;">-</span>
+                            <span class="text-muted" class="pe-meta">-</span>
                         {% endif %}
                     </td>
                     <td class="text-center" onclick="event.stopPropagation();">
@@ -428,39 +428,39 @@
             </div>
             <div class="modal-body py-3 px-4">
                 <div class="d-flex flex-column gap-2">
-                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" class="pe-click">
                         <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="basic" checked>
                         <div>
                             <div class="fw-semibold small">기본정보</div>
-                            <div class="text-muted" style="font-size:11px;">제품코드, 제품명, 식품유형, 상태, 수정일, 폴더</div>
+                            <div class="text-muted" class="pe-meta">제품코드, 제품명, 식품유형, 상태, 수정일, 폴더</div>
                         </div>
                     </label>
-                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" class="pe-click">
                         <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="label">
                         <div>
                             <div class="fw-semibold small">표시사항</div>
-                            <div class="text-muted" style="font-size:11px;">품목보고번호, 원재료명, 내용량, 원산지, 보관방법 등 표시사항 전체</div>
+                            <div class="text-muted" class="pe-meta">품목보고번호, 원재료명, 내용량, 원산지, 보관방법 등 표시사항 전체</div>
                         </div>
                     </label>
-                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" class="pe-click">
                         <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="nutrition">
                         <div>
                             <div class="fw-semibold small">영양성분</div>
-                            <div class="text-muted" style="font-size:11px;">열량, 탄수화물, 당류, 단백질, 지방, 포화지방, 트랜스지방, 콜레스테롤, 나트륨</div>
+                            <div class="text-muted" class="pe-meta">열량, 탄수화물, 당류, 단백질, 지방, 포화지방, 트랜스지방, 콜레스테롤, 나트륨</div>
                         </div>
                     </label>
-                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" class="pe-click">
                         <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="bom">
                         <div>
                             <div class="fw-semibold small">BOM (원재료 구성)</div>
-                            <div class="text-muted" style="font-size:11px;">원재료명, 함량, 원산지, 알레르기, 식품첨가물</div>
+                            <div class="text-muted" class="pe-meta">원재료명, 함량, 원산지, 알레르기, 식품첨가물</div>
                         </div>
                     </label>
-                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" style="cursor:pointer;">
+                    <label class="d-flex align-items-start gap-3 p-3 border rounded-2 cursor-pointer excel-tab-option" class="pe-click">
                         <input type="checkbox" class="form-check-input mt-0 flex-shrink-0 excel-tab-cb" value="documents">
                         <div>
                             <div class="fw-semibold small">문서함</div>
-                            <div class="text-muted" style="font-size:11px;">문서 구분, 파일명, 발행일, 만료일, 상태, 등록자</div>
+                            <div class="text-muted" class="pe-meta">문서 구분, 파일명, 발행일, 만료일, 상태, 등록자</div>
                         </div>
                     </label>
                 </div>

@@ -544,7 +544,7 @@
 }
 .ocr-note-shake { animation: ocrNoteShake .45s ease; }
 @media (prefers-reduced-motion: reduce) {
-    .ocr-note-shake { animation: none; outline: 2px solid #d93025; }
+    .ocr-note-shake { animation: none; outline: 2px solid var(--ez-danger-bright, #d93025); }
 }
 
 /* 고른 줄은 배경으로, 그중 기존 값을 덮어쓰는 줄은 주황 띠로 구분한다 */
@@ -913,7 +913,7 @@ body {
     text-decoration: none;
     letter-spacing: -0.01em;
 }
-.v2-sidebar-logo:hover { color: #1967d2; text-decoration: none; }
+.v2-sidebar-logo:hover { color: var(--ez-info-on-bg, #1967d2); text-decoration: none; }
 
 .v2-sidebar .nav-link {
     display:       flex;

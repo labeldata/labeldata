@@ -21,10 +21,10 @@
     gap: 4px;
     white-space: nowrap;
 }
-.pv-sort:hover { color: #1558b0; text-decoration: none; }
+.pv-sort:hover { color: var(--ez-info-strong, #1558b0); text-decoration: none; }
 .pv-sort .bi { font-size: 9px; opacity: .35; }
 .pv-sort:hover .bi { opacity: .8; }
-.pv-sort--on { color: #1558b0; font-weight: 700; }
+.pv-sort--on { color: var(--ez-info-strong, #1558b0); font-weight: 700; }
 .pv-sort--on .bi { opacity: 1; font-size: 10px; }
 
 /* ── 목록 조작 바 (카드형 화면의 정렬·페이지당 개수) ───────────── */
@@ -48,7 +48,7 @@
     padding: 4px 8px;
     cursor: pointer;
 }
-.rf-listctl-select:hover { border-color: #1967d2; }
+.rf-listctl-select:hover { border-color: var(--ez-info-on-bg, #1967d2); }
 .rf-listctl-dir {
     display: inline-flex;
     align-items: center;
@@ -61,7 +61,7 @@
     color: var(--ez-gray-700, #5f6368);
     cursor: pointer;
 }
-.rf-listctl-dir:hover { border-color: #1967d2; color: #1558b0; background: var(--ez-info-bg, #e8f0fe); }
+.rf-listctl-dir:hover { border-color: var(--ez-info-on-bg, #1967d2); color: var(--ez-info-strong, #1558b0); background: var(--ez-info-bg, #e8f0fe); }
 
 
 /* ── 부적합·처분 알림과의 관계 ──────────────────────────────────
@@ -108,13 +108,13 @@
     background: var(--ez-gray-50, #f8f9fa); border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
     font-size: 12.5px; font-weight: 700; color: var(--ez-gray-800, #3c4043);
 }
-.rd-as-head .bi { color: #1967d2; margin-right: 5px; }
+.rd-as-head .bi { color: var(--ez-info-on-bg, #1967d2); margin-right: 5px; }
 .rd-as-edit {
     border: 1px solid var(--ez-gray-300, #dadce0); background: #fff; color: var(--ez-gray-700, #5f6368);
     border-radius: 16px; padding: 3px 11px; font-size: 11.5px;
     display: inline-flex; align-items: center; gap: 4px;
 }
-.rd-as-edit:hover { border-color: #1967d2; color: #1558b0; background: var(--ez-info-bg, #e8f0fe); }
+.rd-as-edit:hover { border-color: var(--ez-info-on-bg, #1967d2); color: var(--ez-info-strong, #1558b0); background: var(--ez-info-bg, #e8f0fe); }
 .rd-as-edit .bi { color: inherit; margin: 0; }
 
 .rd-as-sec { padding: 12px 14px; border-bottom: 1px solid var(--ez-gray-100, #f1f3f4); }
@@ -125,7 +125,7 @@
     margin-bottom: 8px;
 }
 .rd-as-count {
-    background: var(--ez-info-bg, #e8f0fe); color: #1558b0;
+    background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-strong, #1558b0);
     font-size: 10px; font-weight: 700;
     border-radius: 9px; padding: 1px 6px;
 }

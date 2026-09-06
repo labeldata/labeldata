@@ -1384,7 +1384,7 @@ input[name="prdlst_report_no"] {
 /* 영양성분과 원재료명(참고) 필드 - 클릭 전용 스타일 */
 div.input-container-modern textarea#nutrition_text,
 div.input-container-modern textarea#rawmtrl_nm {
-  background-color: #f8f9fa !important;
+  background-color: var(--ez-gray-50, #f8f9fa) !important;
   cursor: pointer !important;
   transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
   border: 2px solid var(--modern-gray-200) !important;
@@ -2678,7 +2678,7 @@ textarea:focus {
 .phrase-item .phrase-content {
     font-size: 0.85rem;
     line-height: 1.4;
-    background: #f8f9fa !important;
+    background: var(--ez-gray-50, #f8f9fa) !important;
     border: 1px solid #e9ecef;
 }
 
@@ -3619,7 +3619,7 @@ select[name="food_subtype"],
   padding: 20px;
   border-right: 1px solid #dee2e6;
   overflow-y: auto;
-  background-color: #f8f9fa;
+  background-color: var(--ez-gray-50, #f8f9fa);
 }
 
 /* 설정 항목 한 줄 레이아웃 */
@@ -3996,7 +3996,7 @@ html body .btn-sm { padding: 0.35rem 0.65rem !important; font-size: 0.85rem !imp
 
 /* Preview table / cell classes used by JS when building preview */
 .preview-table { width: 100%; border-collapse: collapse; }
-.preview-cell { background: #f8f9fa; text-align: center; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100px; min-width: 100px; max-width: 100px; }
+.preview-cell { background: var(--ez-gray-50, #f8f9fa); text-align: center; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100px; min-width: 100px; max-width: 100px; }
 
 /* Text block sizing controlled via CSS variable (fallback to 10pt) */
 .preview-text { font-size: var(--preview-text-size, 10pt); }
@@ -4041,7 +4041,7 @@ html body .btn-sm { padding: 0.35rem 0.65rem !important; font-size: 0.85rem !imp
 }
 
 .preview-content-modern .preview-header {
-  background-color: #f8f9fa;
+  background-color: var(--ez-gray-50, #f8f9fa);
   text-align: center;
   font-weight: 500;
   white-space: nowrap;

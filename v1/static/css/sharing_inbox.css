@@ -89,7 +89,7 @@
     flex-shrink:   0;
 }
 .si-all        { background: var(--ez-gray-100, #f1f3f4); color: var(--ez-gray-700, #5f6368); }
-.si-draft      { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.si-draft      { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
 .si-requesting { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
 .si-submitted  { background: var(--ez-success-bg, #e6f4ea); color: #0f9d58; }
 .si-review     { background: #f3e8fd; color: #9334e9; }
@@ -227,7 +227,7 @@
     border-radius: 8px;
     flex-shrink:   0;
     background:    var(--v2-blue-light);
-    color:         #1967d2;
+    color:         var(--ez-info-on-bg, #1967d2);
     display:       flex;
     align-items:   center;
     justify-content: center;
@@ -247,7 +247,7 @@
     font-weight: 600;
     white-space: nowrap;
 }
-.status-DRAFT      { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; }
+.status-DRAFT      { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
 .status-REQUESTING { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
 .status-SUBMITTED  { background: var(--ez-success-bg, #e6f4ea); color: #0f9d58; }
 .status-REVIEW     { background: #f3e8fd; color: #9334e9; }
@@ -264,7 +264,7 @@
     white-space: nowrap;
 }
 .role-VIEWER   { background: var(--v2-gray-100); color: var(--v2-text-sub);  border: 1px solid var(--v2-border); }
-.role-UPLOADER { background: var(--ez-info-bg, #e8f0fe); color: #1967d2; border: 1px solid #c5d8fc; }
+.role-UPLOADER { background: var(--ez-info-bg, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); border: 1px solid #c5d8fc; }
 .role-EDITOR   { background: var(--ez-success-bg, #e6f4ea); color: var(--ez-success, #1e8e3e); border: 1px solid var(--ez-success-border, #ceead6); }
 .role-REVIEWER { background: var(--ez-warning-bg, #fef7e0); color: #c77700; border: 1px solid var(--ez-warning-border, #fde68a); }
 .role-APPROVER { background: #f3e8fd; color: #9334e9; border: 1px solid #ddb6f8; }
@@ -392,7 +392,7 @@
     display: flex; align-items: center; justify-content: center;
     border-radius: 8px;
     background: var(--v2-blue-light, #e8f0fe);
-    font-size: 18px; color: #1967d2;
+    font-size: 18px; color: var(--ez-info-on-bg, #1967d2);
     flex-shrink: 0;
 }
 
@@ -504,7 +504,7 @@
 .inbox-stat-card:active { transform: scale(0.98); }
 
 /* 단계별 아이콘 색상 */
-.isc-icon-draft      { background: var(--v2-blue-light, #e8f0fe); color: #1967d2; }
+.isc-icon-draft      { background: var(--v2-blue-light, #e8f0fe); color: var(--ez-info-on-bg, #1967d2); }
 .isc-icon-requesting { background: var(--ez-warning-bg, #fef7e0); color: #c77700; }
 .isc-icon-submitted  { background: var(--ez-success-bg, #e6f4ea); color: #0f9d58; }
 .isc-icon-review     { background: #f3e8fd; color: #9334e9; }
