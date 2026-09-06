@@ -3044,3 +3044,55 @@ class BomGridHasTheRestTests(TestCase):
         block = self.bom[head:self.bom.index('};', head)]
         for name in ('알레르기', 'gmo', '품목보고번호'):
             self.assertIn(name, block.lower())
+
+
+class BomLayoutFollowsTheWorkTests(TestCase):
+    """
+    세 가지가 어긋나 있었다.
+
+      1. 요약이 표 아래라 스크롤해야 보였다. 요약은 이 화면의 결과물이라
+         표를 고치는 내내 봐야 한다.
+      2. 오른쪽 탭 둘의 성격이 다르다. 보관함은 가져오는 곳이라 늘 열려
+         있어야 하는데, 상세와 탭을 나눠 써서 상세를 보면 보관함이 사라졌다.
+      3. 표에 칸을 아홉 개 넣고 나니 오른쪽 상세와 겹친다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.html = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+
+    def test_요약이_표_위에_있다(self):
+        self.assertLess(self.html.index('id="bom-summary-panel"'),
+                        self.html.index('id="bom-grid"'))
+
+    def test_접혀도_알레르기가_보인다(self):
+        # 이 화면에서 가장 자주 확인하는 값이다
+        self.assertIn('id="bom-summary-peek"', self.html)
+        head = self.html.index("getElementById('bom-summary-peek')")
+        self.assertIn('알레르기', self.html[head:head + 600])
+
+    def test_오른쪽은_보관함만이다(self):
+        self.assertNotIn('data-bs-target="#side-detail"', self.html)
+        self.assertIn('side-panel-head', self.html)
+        self.assertIn('원료 보관함', self.html)
+
+    def test_상세는_고른_줄_아래에_있다(self):
+        self.assertIn('id="bom-rowdetail"', self.html)
+        self.assertIn('id="context-panel"', self.html)
+        self.assertLess(self.html.index('id="bom-rowdetail"'),
+                        self.html.index('bom-right-panel'))
+        self.assertIn('.bom-rowdetail.is-open', self.css)
+
+    def test_고르면_펴지고_비우면_접힌다(self):
+        self.assertIn("rowDetail.classList.add('is-open')", self.html)
+        self.assertIn("closing.classList.remove('is-open')", self.html)
+
+    def test_요약은_표의_칸을_먼저_본다(self):
+        """알레르기·GMO 에 칸이 생겼으니 표가 먼저다."""
+        head = self.html.index('allergens: (row.allergens')
+        block = self.html[head:head + 200]
+        self.assertIn('meta.allergens', block)      # 옛 자료는 뒤에서 받쳐 준다
+        self.assertIn('row.gmo || meta.gmo', block)

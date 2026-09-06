@@ -80,97 +80,66 @@ body.in-iframe .bom-page-header { display: none !important; }
                     <span id="total-ratio-display" class="fw-semibold text-primary">0.00%</span>
                 </div>
             </div>
+            {% comment %}
+              요약은 이 화면의 결과물이다. 표를 고치는 내내 보여야 하는데
+              표 아래에 있어서 스크롤해야 보였다 — 알레르기를 하나 넣고
+              요약이 어떻게 바뀌는지 보려면 매번 내려갔다 올라와야 했다.
+
+              한 줄로 접어 위에 둔다. 자세히 볼 때만 편다.
+            {% endcomment %}
+            <details class="bom-summary" id="bom-summary-panel" open>
+                <summary class="bom-summary-head">
+                    <span class="bom-summary-title">
+                        <i class="bi bi-list-ul"></i>원재료 요약
+                    </span>
+                    <span class="bom-summary-peek" id="bom-summary-peek">
+                        BOM에 원료를 넣으면 여기에 만들어집니다.
+                    </span>
+                    <span class="bom-summary-toggle"><i class="bi bi-chevron-down"></i></span>
+                </summary>
+                <div class="bom-summary-body">
+                    <div class="bom-summary-row">
+                        <span class="bom-summary-label">원재료명 표시명</span>
+                        <div id="bom-summary-rawmtrl" class="bom-summary-value">
+                            <span class="text-muted">BOM에 원료를 입력하면 자동으로 생성됩니다.</span>
+                        </div>
+                        <button type="button" class="btn btn-light border v2-btn-sm flex-shrink-0"
+                                onclick="copyRawmtrlToBasicInfo()">
+                            <i class="bi bi-arrow-left-circle"></i>기본정보로 복사
+                        </button>
+                    </div>
+                    <div class="bom-summary-row">
+                        <span class="bom-summary-label">
+                            <i class="bi bi-exclamation-triangle-fill text-warning"></i>알레르기
+                        </span>
+                        <div id="bom-summary-allergens" class="bom-summary-value">
+                            <span class="text-muted">-</span>
+                        </div>
+                    </div>
+                    <div class="bom-summary-row">
+                        <span class="bom-summary-label">
+                            <i class="bi bi-dna text-success"></i>GMO
+                        </span>
+                        <div id="bom-summary-gmo" class="bom-summary-value">
+                            <span class="text-muted">-</span>
+                        </div>
+                    </div>
+                </div>
+            </details>
+
             <div class="bom-grid-card shadow-sm">
                 <div id="bom-grid" class="hot-container"></div>
             </div>
 
-            <!-- ── BOM 원재료 요약 패널 ── -->
-            <div class="card border-0 mt-3" id="bom-summary-panel"
-                 style="border-radius:10px; background:#f8f9ff; border:1px solid #c7d4f0 !important;">
-                <div class="card-body p-3">
-                    <div class="d-flex align-items-center justify-content-between mb-2">
-                        <h6 class="mb-0 fw-semibold" style="font-size:13px; color:#333;">
-                            <i class="bi bi-list-ul text-primary me-1"></i>원재료 표시명 요약
-                        </h6>
-                        <button type="button" class="btn btn-primary v2-btn-sm"
-                                onclick="copyRawmtrlToBasicInfo()"
-                                style="font-size:11px; padding:3px 12px; border-radius:6px;">
-                            <i class="bi bi-arrow-left-circle me-1"></i>기본정보 탭 원재료 표시명으로 복사
-                        </button>
-                    </div>
-                    <div class="mb-2">
-                        <span class="text-muted" style="font-size:11px; font-weight:600;">원재료명 표시명</span>
-                        <div id="bom-summary-rawmtrl"
-                             class="mt-1 p-2 bg-white rounded border"
-                             style="font-size:12px; line-height:1.7; min-height:36px; color:#333; word-break:break-all;">
-                            <span class="text-muted">BOM에 원료를 입력하면 자동으로 생성됩니다.</span>
-                        </div>
-                    </div>
-                    <div class="row g-2 mt-1">
-                        <div class="col-12 col-md-6">
-                            <span class="text-muted" style="font-size:11px; font-weight:600;"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>알레르기 성분</span>
-                            <div id="bom-summary-allergens" class="mt-1" style="font-size:12px; line-height:1.8;">
-                                <span class="text-muted">-</span>
-                            </div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            <span class="text-muted" style="font-size:11px; font-weight:600;"><i class="bi bi-dna text-success me-1"></i>GMO 성분</span>
-                            <div id="bom-summary-gmo" class="mt-1" style="font-size:12px; line-height:1.8;">
-                                <span class="text-muted">-</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- ── /BOM 원재료 요약 패널 ── -->
+            {% comment %}
+              고른 줄의 상세. 표의 아홉 칸이 이미 대부분을 덮으니 여기에는
+              나머지만 둔다 — 원산지·복합원재료·첨가물 용도.
 
-        </div>
-        <div class="bom-right-panel border-start bg-white">
-            <div class="side-tabs">
-                <ul class="nav nav-tabs nav-fill small" id="sideTab" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active py-2" data-bs-toggle="tab" data-bs-target="#side-palette" type="button">원료 보관함</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link py-2" data-bs-toggle="tab" data-bs-target="#side-detail" type="button">원료 상세 정보</button>
-                    </li>
-                </ul>
-                <div class="tab-content side-tab-body custom-scrollbar" id="sideTabContent">
-                    <div class="tab-pane fade show active" id="side-palette">
-                        <div class="palette-panel border-0 shadow-none">
-                            <div class="palette-header">
-                                <div class="input-group input-group-sm">
-                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
-                                    <input type="text" class="form-control bg-light border-start-0" id="palette-search" placeholder="원료명 검색...">
-                                </div>
-                            </div>
-                            <ul class="nav nav-tabs nav-fill small palette-tabs" id="paletteTab" role="tablist">
-                                <li class="nav-item">
-                                    <button class="nav-link active py-2" data-bs-toggle="tab" data-bs-target="#tab-recent" type="button">최근</button>
-                                </li>
-                                <li class="nav-item">
-                                    <button class="nav-link py-2" data-bs-toggle="tab" data-bs-target="#tab-my" type="button">내 원료</button>
-                                </li>
-                                <li class="nav-item">
-                                    <button class="nav-link py-2" data-bs-toggle="tab" data-bs-target="#tab-shared" type="button">공유됨</button>
-                                </li>
-                            </ul>
-                            <div class="tab-content flex-grow-1 overflow-auto bg-light" id="paletteTabContent">
-                                <div class="tab-pane fade show active" id="tab-recent">
-                                    <div class="palette-list" id="palette-recent"></div>
-                                </div>
-                                <div class="tab-pane fade" id="tab-my">
-                                    <div class="palette-list" id="palette-my"></div>
-                                </div>
-                                <div class="tab-pane fade" id="tab-shared">
-                                    <div class="palette-list" id="palette-shared"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tab-pane fade" id="side-detail">
-                        <div class="bom-sidebar border-0 bg-transparent">
-                            <div class="card-body p-3" id="context-panel">
+              오른쪽에 있을 때는 보관함과 탭을 나눠 써서, 상세를 보려면
+              보관함이 사라졌다. 원료를 이어서 넣을 수가 없었다.
+            {% endcomment %}
+            <div class="bom-rowdetail" id="bom-rowdetail">
+                <div class="card-body p-3" id="context-panel">
                                 <div id="context-empty" class="text-center bom-context-placeholder mt-5">
                                     <i class="bi bi-cursor fs-1 text-muted" style="opacity: 0.3;"></i>
                                     <p class="mt-3 text-muted small">원료를 선택하면<br>상세 정보가 표시됩니다.</p>
@@ -257,6 +226,50 @@ body.in-iframe .bom-page-header { display: none !important; }
                                     </div>
                                     <input type="hidden" id="field-source-label-id">
                                     <input type="hidden" id="field-summary-type" value="식품유형">
+                                </div>
+                            </div>
+            </div>
+
+        </div>
+        <div class="bom-right-panel border-start bg-white">
+            {% comment %}
+              보관함은 **가져오는 곳**이라 늘 열려 있어야 한다. 상세와 탭을
+              나눠 쓸 때는 상세를 보려면 보관함이 사라져서, 원료를 이어서
+              넣을 수가 없었다. 상세는 고른 줄 아래로 옮겼다.
+            {% endcomment %}
+            <div class="side-tabs">
+                <div class="side-panel-head">
+                    <i class="bi bi-box-seam me-1"></i>원료 보관함
+                </div>
+                <div class="side-tab-body custom-scrollbar" id="sideTabContent">
+                    <div id="side-palette">
+                        <div class="palette-panel border-0 shadow-none">
+                            <div class="palette-header">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                                    <input type="text" class="form-control bg-light border-start-0" id="palette-search" placeholder="원료명 검색...">
+                                </div>
+                            </div>
+                            <ul class="nav nav-tabs nav-fill small palette-tabs" id="paletteTab" role="tablist">
+                                <li class="nav-item">
+                                    <button class="nav-link active py-2" data-bs-toggle="tab" data-bs-target="#tab-recent" type="button">최근</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link py-2" data-bs-toggle="tab" data-bs-target="#tab-my" type="button">내 원료</button>
+                                </li>
+                                <li class="nav-item">
+                                    <button class="nav-link py-2" data-bs-toggle="tab" data-bs-target="#tab-shared" type="button">공유됨</button>
+                                </li>
+                            </ul>
+                            <div class="tab-content flex-grow-1 overflow-auto bg-light" id="paletteTabContent">
+                                <div class="tab-pane fade show active" id="tab-recent">
+                                    <div class="palette-list" id="palette-recent"></div>
+                                </div>
+                                <div class="tab-pane fade" id="tab-my">
+                                    <div class="palette-list" id="palette-my"></div>
+                                </div>
+                                <div class="tab-pane fade" id="tab-shared">
+                                    <div class="palette-list" id="palette-shared"></div>
                                 </div>
                             </div>
                         </div>
@@ -1378,8 +1391,10 @@ body.in-iframe .bom-page-header { display: none !important; }
             validRows.push({
                 displayName,
                 ratio,
-                allergens: meta.allergens || meta.allergen || '',
-                gmo:       meta.gmo || ''
+                /* 표에 칸이 생겼으니 표가 먼저다. 상세 패널에만 넣어 둔
+                   옛 자료는 뒤에서 받쳐 준다. */
+                allergens: (row.allergens || meta.allergens || meta.allergen || ''),
+                gmo:       (row.gmo || meta.gmo || '')
             });
         });
 
@@ -1447,6 +1462,23 @@ body.in-iframe .bom-page-header { display: none !important; }
         window._bomSummaryRawmtrl  = rawmtrlText;
         window._bomSummaryAllergens = Array.from(allergenSet);
         window._bomSummaryGmo       = Array.from(gmoSet);
+
+        /* 접어 뒀을 때 보이는 한 줄.
+           요약은 표를 고치는 내내 봐야 하는 것이라, 접혀 있어도 알레르기가
+           몇 가지인지는 보여야 한다 — 그게 이 화면에서 가장 자주 확인하는
+           값이다. */
+        const peekEl = document.getElementById('bom-summary-peek');
+        if (peekEl) {
+            if (!validRows.length) {
+                peekEl.textContent = 'BOM에 원료를 넣으면 여기에 만들어집니다.';
+            } else {
+                const bits = ['원료 ' + validRows.length + '개'];
+                bits.push('알레르기 ' + (allergenSet.size
+                    ? Array.from(allergenSet).join('·') : '없음'));
+                if (gmoSet.size) bits.push('GMO ' + Array.from(gmoSet).join('·'));
+                peekEl.textContent = bits.join('  ·  ');
+            }
+        }
     }
 
     /* 기본정보 탭 원재료 표시명으로 복사 (postMessage) */
@@ -1472,13 +1504,17 @@ body.in-iframe .bom-page-header { display: none !important; }
             formEl.classList.add('d-none');
             viewEl.classList.add('d-none');
             currentRowIndex = null;
+            const closing = document.getElementById('bom-rowdetail');
+            if (closing) closing.classList.remove('is-open');
             return;
         }
 
-        const detailTabTrigger = document.querySelector('[data-bs-target="#side-detail"]');
-        if (detailTabTrigger) {
-            const detailTab = bootstrap.Tab.getOrCreateInstance(detailTabTrigger);
-            detailTab.show();
+        /* 상세는 이제 고른 줄 아래에 있다. 탭을 띄우는 대신 그 자리로
+           스크롤해 준다 — 표가 길면 화면 밖에 있을 수 있다. */
+        const rowDetail = document.getElementById('bom-rowdetail');
+        if (rowDetail) {
+            rowDetail.classList.add('is-open');
+            rowDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         emptyEl.classList.add('d-none');

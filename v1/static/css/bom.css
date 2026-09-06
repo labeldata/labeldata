@@ -417,3 +417,99 @@ body.in-iframe .bom-main-column {
     box-shadow: 0 1px 2px 0 rgba(60,64,67,.3);
     transform:  translateY(0);
 }
+
+/* -------------------------------------------------------------
+   요약은 표 위에, 한 줄로
+
+   요약은 이 화면의 결과물이다. 표를 고치는 내내 보여야 하는데 표 아래에
+   있어서 스크롤해야 보였다 — 알레르기를 하나 넣고 요약이 어떻게 바뀌는지
+   보려면 매번 내려갔다 올라와야 했다.
+   ------------------------------------------------------------- */
+.bom-summary {
+    margin-bottom: 10px;
+    border: 1px solid var(--ez-info-border, #c5d9f9);
+    border-radius: var(--ez-radius-md, 8px);
+    background: #f8f9ff;
+}
+.bom-summary-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    list-style: none;
+}
+.bom-summary-head::-webkit-details-marker { display: none; }
+.bom-summary-title {
+    flex-shrink: 0;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ez-gray-900, #202124);
+}
+.bom-summary-title .bi { color: var(--ez-info, #1a73e8); margin-right: 4px; }
+/* 접혀 있어도 알레르기가 몇 가지인지는 보여야 한다 */
+.bom-summary-peek {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--ez-gray-700, #5f6368);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.bom-summary[open] .bom-summary-peek { visibility: hidden; }
+.bom-summary-toggle { flex-shrink: 0; color: var(--ez-gray-500, #9aa0a6); font-size: 11px; }
+.bom-summary[open] .bom-summary-toggle .bi { transform: rotate(180deg); }
+
+.bom-summary-body { padding: 0 12px 10px; }
+.bom-summary-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 0;
+    border-top: 1px solid var(--ez-info-border, #c5d9f9);
+}
+.bom-summary-label {
+    flex: 0 0 96px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ez-gray-700, #5f6368);
+    padding-top: 2px;
+}
+.bom-summary-value {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--ez-gray-900, #202124);
+    word-break: break-all;
+    max-height: 96px;
+    overflow-y: auto;
+}
+
+/* -------------------------------------------------------------
+   고른 줄의 상세
+
+   오른쪽에 있을 때는 보관함과 탭을 나눠 써서, 상세를 보려면 보관함이
+   사라졌다 — 원료를 이어서 넣을 수가 없었다. 고른 줄 아래로 옮긴다.
+   ------------------------------------------------------------- */
+.bom-rowdetail {
+    margin-top: 10px;
+    border: 1px solid var(--ez-gray-300, #dadce0);
+    border-radius: var(--ez-radius-md, 8px);
+    background: #fff;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .2s ease;
+}
+.bom-rowdetail.is-open { max-height: 900px; overflow-y: auto; }
+
+/* 오른쪽은 보관함만 — 가져오는 곳이라 늘 열려 있어야 한다 */
+.side-panel-head {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--ez-gray-200, #e8eaed);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--ez-gray-900, #202124);
+    background: var(--ez-gray-50, #f8f9fa);
+}
