@@ -102,10 +102,10 @@ body.in-iframe .bom-page-header { display: none !important; }
                       그 줄만 다르게 하려면 상세에서 다시 고른다.
                     {% endcomment %}
                     <span class="small text-muted" title="요약에 원료 이름 대신 무엇을 적을지 정합니다. 모든 줄에 함께 걸립니다.">표시명 기준:</span>
-                    <div class="sheet-pick" id="sheet-summary-type">
-                        <button type="button" class="sheet-pick-btn is-on" data-value="식품유형"
+                    <div class="v2-seg" id="sheet-summary-type">
+                        <button type="button" class="v2-seg-btn is-on" data-value="식품유형"
                                 title="요약에 식품유형을 적습니다. 예) 정제소금 → 정제소금">식품유형</button>
-                        <button type="button" class="sheet-pick-btn" data-value="원재료명"
+                        <button type="button" class="v2-seg-btn" data-value="원재료명"
                                 title="요약에 원재료 표시명을 적습니다">원재료명</button>
                     </div>
                     <span class="small text-muted ms-2">총 배합비:</span>
@@ -237,7 +237,8 @@ body.in-iframe .bom-page-header { display: none !important; }
                                             <button type="button" class="btn btn-outline-secondary quick-allergen-btn" data-allergen="조개류">조개류</button>
                                         </div>
                                         <span id="allergenSelectedDisplay" class="pick-chosen"></span>
-                                        <button type="button" class="pick-all" id="allergenToggleBtn"
+                                        <button type="button" class="btn btn-outline-secondary v2-btn-sm"
+                                                id="allergenToggleBtn"
                                                 title="열아홉 가지를 모두 켜거나 끕니다">전체선택</button>
                                         <input type="hidden" id="field-allergens">
                                     </div>
@@ -249,7 +250,8 @@ body.in-iframe .bom-page-header { display: none !important; }
                                             {% endfor %}
                                         </div>
                                         <span id="gmoSelectedDisplay" class="pick-chosen"></span>
-                                        <button type="button" class="pick-all" id="gmoToggleBtn"
+                                        <button type="button" class="btn btn-outline-secondary v2-btn-sm"
+                                                id="gmoToggleBtn"
                                                 title="여섯 가지를 모두 켜거나 끕니다">전체선택</button>
                                         <input type="hidden" id="field-gmo" value="">
                                     </div>
@@ -1691,7 +1693,7 @@ body.in-iframe .bom-page-header { display: none !important; }
        화면에 칸은 없다. rowMetadata 에만 둔다.
        ----------------------------------------------------------------- */
     function markSheetSummaryType(value) {
-        document.querySelectorAll('#sheet-summary-type .sheet-pick-btn')
+        document.querySelectorAll('#sheet-summary-type .v2-seg-btn')
             .forEach(function (b) {
                 b.classList.toggle('is-on', b.dataset.value === value);
             });
@@ -1711,7 +1713,7 @@ body.in-iframe .bom-page-header { display: none !important; }
     function bindSheetSummaryType() {
         const box = document.getElementById('sheet-summary-type');
         if (!box) return;
-        box.querySelectorAll('.sheet-pick-btn').forEach(function (btn) {
+        box.querySelectorAll('.v2-seg-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 const value = btn.dataset.value;
                 markSheetSummaryType(value);

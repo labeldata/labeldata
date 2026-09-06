@@ -1614,26 +1614,58 @@ html.v2-max .v2-topbar { display: none; }
 html.v2-max .v2-content { padding: 12px; }
 
 /* 최대화하면 위쪽 띠가 사라진다. 되돌릴 자리는 남겨 둔다 */
+/* 모양은 .v2-sidebar-toggle 에서 물려받는다. 여기서는 **어디에 뜨는지**만
+   정한다 — 크기와 색을 다시 적으면 사이드바 단추와 갈라진다. */
 .v2-max-exit {
-    display:         none;
-    position:        fixed;
-    top:             8px;
-    right:           12px;
-    z-index:         1055;
-    width:           32px;
-    height:          32px;
-    align-items:     center;
-    justify-content: center;
-    border:          1px solid var(--ez-gray-300, #dadce0);
-    border-radius:   50%;
-    background:      rgba(255, 255, 255, .82);
-    color:           var(--ez-gray-700, #5f6368);
-    font-size:       15px;
-    cursor:          pointer;
-    box-shadow:      0 1px 3px rgba(60, 64, 67, .2);
+    display:       none;
+    position:      fixed;
+    top:           8px;
+    right:         12px;
+    z-index:       1055;
+    width:         32px;
+    height:        32px;
+    font-size:     15px;
+    border:        1px solid var(--ez-gray-300, #dadce0);
+    border-radius: 50%;
+    background:    rgba(255, 255, 255, .82);
+    box-shadow:    0 1px 3px rgba(60, 64, 67, .2);
 }
 html.v2-max .v2-max-exit { display: flex; }
-.v2-max-exit:hover {
-    background: #ffffff;
-    color:      var(--ez-info, #1a73e8);
+.v2-max-exit:hover { color: var(--ez-info, #1a73e8); }
+
+/* ── 세그먼트 토글 (둘 중 하나) ───────────────────────────────
+   "식품유형 / 원재료명" 처럼 **둘 중 하나만 켜지는** 자리. 부트스트랩의
+   btn-group 은 단추 여럿을 나란히 두는 것이라 켜진 쪽이 눈에 덜 띄고,
+   크기도 공용 3단계와 어긋난다.
+
+   처음에는 BOM 화면에만 .sheet-pick 이라는 이름으로 두었다. 그러면 같은
+   모양이 필요한 다음 화면이 또 제 이름으로 만든다 — 여기로 올린다.
+
+   켜진 것은 .is-on 이다(.active 는 부트스트랩이 이미 쓴다).
+   ------------------------------------------------------------- */
+.v2-seg {
+    display:       inline-flex;
+    border:        1px solid var(--ez-gray-300, #dadce0);
+    border-radius: var(--ez-radius-pill, 20px);
+    overflow:      hidden;
+    background:    #ffffff;
+}
+.v2-seg-btn {
+    border:      0;
+    background:  transparent;
+    padding:     3px 12px;
+    font-size:   12px;
+    font-weight: 600;
+    line-height: 1.5;
+    color:       var(--ez-gray-700, #5f6368);
+    cursor:      pointer;
+    white-space: nowrap;
+}
+.v2-seg-btn + .v2-seg-btn {
+    border-left: 1px solid var(--ez-gray-300, #dadce0);
+}
+.v2-seg-btn:hover { background-color: rgba(60, 64, 67, .08); }
+.v2-seg-btn.is-on {
+    background: var(--ez-info, #1a73e8);
+    color:      #ffffff;
 }

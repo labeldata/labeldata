@@ -3154,16 +3154,20 @@ class 고르는_자리를_낮춘다(TestCase):
         창이 그만큼 표를 가린다.
         """
         form = self._form()
-        for name in ('allergen-quick-buttons', 'gmoBtnList'):
+        for chips, toggle in (('allergen-quick-buttons', 'allergenToggleBtn'),
+                              ('gmoBtnList', 'gmoToggleBtn')):
             head = form.index('class="pick-group pick-row"')
-            block = form[head:form.index('</div>' + chr(10), head) + 400]
+            block = form[head:form.index('id="' + toggle + '"', head) + 40]
             self.assertIn('pick-label', block)
-            self.assertIn(name, block)
-            self.assertIn('pick-all', block)
+            self.assertIn(chips, block)
+            # 전체선택은 공용 단추다
+            self.assertIn('v2-btn-sm', block)
             form = form[head + 20:]
         self.assertIn('.pick-row {', self.css)
         self.assertIn('.pick-row .pick-chips { flex: 1 1 auto; min-width: 0; }',
                       self.css)
+        # 전체선택은 공용 단추다. 크기를 여기서 다시 적지 않는다
+        self.assertNotIn('.pick-all {', self.css)
 
     def test_고른_것이_없으면_적지_않는다(self):
         # 칩이 그대로 보여 준다. 자리만 차지하는 말이었다
@@ -3278,7 +3282,12 @@ class 표시명_기준을_위에서_고른다(TestCase):
     def test_표보다_위에_있다(self):
         self.assertLess(self.html.index('id="sheet-summary-type"'),
                         self.html.index('id="bom-grid"'))
-        self.assertIn('.sheet-pick-btn.is-on', self.css)
+        # 세그먼트 토글은 공용으로 올렸다 (products_common.css)
+        from pathlib import Path
+        from django.conf import settings as dj
+        common = (Path(dj.BASE_DIR) / 'static/css/products_common.css'
+                  ).read_text(encoding='utf-8')
+        self.assertIn('.v2-seg-btn.is-on', common)
 
     def test_한_번_누르면_모든_줄에_들어간다(self):
         head = self.html.index('function bindSheetSummaryType')
@@ -3583,3 +3592,110 @@ class 무엇을_하는_화면인가(TestCase):
                     '유전자변형 농산물을 원료로 쓴 경우에 누릅니다',
                     '위쪽 표시명 기준과 다르게 가고 싶을 때만 씁니다'):
             self.assertIn(tip, self.html)
+
+
+class 새_단추를_만들지_않는다(TestCase):
+    """
+    공용 3단계가 있는데도 새 단추를 만들었다 — BOM 의 "전체선택"(.pick-all)과
+    화면 되돌리기(.v2-max-exit). W001 은 인라인 크기와 btn-sm 만 보므로 그냥
+    통과했다. **검사를 통과한 것과 결이 맞는 것은 다른 일이다.**
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.bom = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.base_v2 = (base / 'templates/base_v2.html').read_text(encoding='utf-8')
+        self.bom_css = (base / 'static/css/bom.css').read_text(encoding='utf-8')
+        self.common = (base / 'static/css/products_common.css').read_text(encoding='utf-8')
+
+    def test_전체선택은_공용_단추다(self):
+        self.assertNotIn('class="pick-all"', self.bom)
+        self.assertEqual(self.bom.count('v2-btn-sm"' + chr(10)
+                                        + ' ' * 48 + 'id="allergenToggleBtn"'), 1)
+        self.assertIn('id="gmoToggleBtn"', self.bom)
+        self.assertNotIn('.pick-all {', self.bom_css)
+
+    def test_되돌리기는_사이드바_단추와_같은_모양이다(self):
+        # 크기와 색을 다시 적으면 둘이 갈라진다
+        self.assertIn('class="v2-sidebar-toggle v2-max-exit"', self.base_v2)
+        head = self.common.index('.v2-max-exit {')
+        block = self.common[head:head + 400]
+        self.assertNotIn('cursor:', block, '모양은 물려받는다')
+        self.assertIn('position:      fixed;', block, '자리만 정한다')
+
+    def test_세그먼트_토글은_공용이다(self):
+        """
+        BOM 에만 두면 같은 모양이 필요한 다음 화면이 또 제 이름으로 만든다.
+        """
+        self.assertIn('.v2-seg-btn {', self.common)
+        self.assertIn('.v2-seg-btn.is-on', self.common)
+        self.assertNotIn('.sheet-pick-btn', self.bom_css)
+        self.assertIn('class="v2-seg"', self.bom)
+        self.assertIn("querySelectorAll('#sheet-summary-type .v2-seg-btn')", self.bom)
+
+
+class 단추_명부(TestCase):
+    """
+    새로 만든 단추를 사람이 아니라 검사가 잡게 한다. 여기 적는 일이 번거로운
+    것이 명부의 목적이다 — 새 단추를 만들 때 "공용으로 되나?" 를 한 번 묻게
+    한다.
+    """
+
+    def test_지금은_한_건도_안_걸린다(self):
+        # 켤 때 기존 것을 전부 쏟으면 아무도 안 본다
+        from v1.common.checks import check_button_component_registry
+        found = check_button_component_registry(None)
+        self.assertEqual([w.msg for w in found], [])
+
+    def test_명부에_없는_단추를_잡는다(self):
+        from unittest.mock import patch
+        from v1.common import checks
+
+        fake = [('products/시험.html', 'C:/x/시험.html',
+                 '<button class="my-shiny-new-btn">시험</button>')]
+        with patch.object(checks, '_v2_templates', return_value=fake):
+            found = checks.check_button_component_registry(None)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].id, 'products.W002')
+        self.assertIn('my-shiny-new-btn', found[0].msg)
+        self.assertIn('_OWN_SIZED_BUTTONS', found[0].hint)
+
+    def test_공용_단추는_그냥_지나간다(self):
+        from unittest.mock import patch
+        from v1.common import checks
+
+        ok = ('<button class="btn btn-primary v2-btn-sm">저장</button>'
+              '<button class="v2-seg-btn is-on">식품유형</button>'
+              '<button class="v2-sidebar-toggle v2-max-exit"></button>')
+        with patch.object(checks, '_v2_templates',
+                          return_value=[('a.html', 'C:/a.html', ok)]):
+            self.assertEqual(checks.check_button_component_registry(None), [])
+
+    def test_클래스_안의_장고_태그에_속지_않는다(self):
+        # class="rs-vtab {% if x %}active{% endif %}" 같은 것이 실제로 있다
+        from unittest.mock import patch
+        from v1.common import checks
+
+        html = '<button class="rs-vtab {% if x %}rs-vtab--active{% endif %}">가</button>'
+        with patch.object(checks, '_v2_templates',
+                          return_value=[('a.html', 'C:/a.html', html)]):
+            self.assertEqual(checks.check_button_component_registry(None), [])
+
+    def test_이름이_없으면_보지_않는다(self):
+        # 무엇을 등록하라고 할지가 없다
+        from unittest.mock import patch
+        from v1.common import checks
+
+        with patch.object(checks, '_v2_templates',
+                          return_value=[('a.html', 'C:/a.html',
+                                         '<button onclick="x()">가</button>')]):
+            self.assertEqual(checks.check_button_component_registry(None), [])
+
+    def test_두_검사가_한_명부를_본다(self):
+        # 두 벌로 두면 어느 날 한쪽만 고쳐진다
+        from v1.common import checks
+        for name in ('quick-allergen-btn', 'gmo-btn', 'summary-type-btn'):
+            self.assertIn(name, checks._OWN_SIZED_BUTTONS)
+            self.assertIn(name, checks._SIZED_BY_CLASS)

@@ -92,24 +92,62 @@ _BTN_TAG = re.compile(r'<(?:button|a)\b[^>]*\bclass="[^"]*\bbtn\b[^"]*"[^>]*>', 
 _SIZE_IN_STYLE = re.compile(r'style="[^"]*\b(?:font-size|padding)\s*:', re.I)
 # 크기를 담당하는 부트스트랩 클래스 (v2-btn-sm 안의 btn-sm 은 제외하려고 경계를 씀)
 _BS_SIZE_CLASS = re.compile(r'(?<!-)\bbtn-(?:sm|lg|xs)\b')
-# 자체 CSS 로 크기를 정하는 컴포넌트들. 공통 3단계와 별개의 크기 체계를 갖는다
-# (조밀한 칩·아이콘 버튼). 이들에 btn-sm 을 겹쳐 쓰면 오히려 두 규칙이 싸운다.
-_SIZED_BY_CLASS = (
-    'v2-btn', 'v2-chip-btn', 'v2-link-btn',
-    'product-quick-text-btn',    # 상용문구 칩
-    'quick-allergen-btn',        # BOM 알레르기 칩
-    'gmo-btn',                   # BOM GMO 칩
-    'summary-type-btn',          # BOM 요약 방식 선택
-    'contacts-icon-btn',         # 연락처 아이콘 버튼
-    'allergy-btn',               # 원료 상세 알레르기 칩
-    'ag-toggle-btn',             # 원료 상세 알레르기·GMO 토글
-    'kw-add-btn',                # 키워드 추가 (regulatory.css)
-    'rd-act-btn',                # 부적합 상세 조치 버튼
-    'rd-ab-btn',                 # 부적합 일괄 조치 버튼
-    'rd-cond-submit',            # 목록 검색 조건 적용 (list_common.css)
-    'home-switch-btn',           # V1↔V2 전환
-    'v2-auth-btn',               # 로그인·회원가입
-)
+# ─────────────────────────────────────────────────────────────────────────────
+# 단추 명부
+#
+# **제 크기 체계를 갖는 단추들의 이름**이다. 공용 3단계(.v2-btn / .v2-btn-sm /
+# .v2-btn-icon)로 안 되는 자리가 있다 — 조밀한 칩, 아이콘 하나짜리, 세로 탭.
+# 그런 것은 여기 적는다.
+#
+# 두 검사가 같은 명부를 본다.
+#
+#   W001  "제 크기가 있으니 btn-sm 을 겹치지 마라" — 겹치면 두 규칙이 싸운다
+#   W002  "명부에 있으니 새로 만든 것이 아니다"
+#
+# **여기 적는 일이 번거로운 것이 이 명부의 목적이다.** 새 단추를 만들 때
+# "공용으로 되나?" 를 한 번 묻게 한다. 실제로 BOM 의 "전체선택"(.pick-all)과
+# 화면 되돌리기(.v2-max-exit)가 공용으로 충분한데 새로 만들어졌고, W001 은
+# 인라인 크기와 btn-sm 만 보므로 그냥 통과했다. 검사를 통과한 것과 결이 맞는
+# 것은 다른 일이다.
+_OWN_SIZED_BUTTONS = frozenset({
+    # 게시판 구판
+    'comment-action-btn', 'del-btn', 'form-action-btn', 'save-btn',
+    'submit-btn', 'toolbar-btn',
+    # 상단 계정·알림
+    'v2-account-logout-btn', 'v2-notif-mark-all',
+    # 표시사항·원료·미리보기
+    'allergy-btn', 'ag-toggle-btn', 'disp-opt', 'ing-viewctl-btn',
+    'panel-btn', 'pv-cond-add', 'pv-cond-clear', 'pv-cond-toggle',
+    # 홈
+    'app-strip-close', 'upd-strip-close', 'home-switch-btn', 'v2-auth-btn',
+    # 제품·문서·BOM·연락처
+    'allergen-add-btn', 'allergen-chip', 'allergen-icon-btn',
+    'allergen-selectall-btn', 'btn-apply', 'btn-storage-badge',
+    'contacts-filter-btn', 'contacts-icon-btn', 'di-name', 'doc-ver-btn',
+    'dr-tab-btn', 'gmo-btn', 'panel-toggle-btn', 'product-quick-text-btn',
+    'quick-allergen-btn', 'side-panel-toggle', 'summary-type-btn',
+    # 부적합·처분 알림
+    'kw-add-btn', 'rd-ab-btn', 'rd-act-btn', 'rd-as-edit', 'rd-cond-submit',
+    'rd-insp-dismiss-btn', 'rd-insp-guide-btn', 'rd-memo-submit',
+    'reg-cond-toggle', 'rf-listctl-dir', 'rkb-chip-del', 'rs-day-btn',
+    'rs-quick-resolve', 'rs-risk-chip', 'rs-search-x', 'rs-settings-btn',
+    'rs-vtab',
+    # 내 정보
+    'g-btn-danger', 'g-btn-primary', 'g-btn-secondary',
+})
+
+# 크기를 공용이 정해 주는 것들. 이 이름이 붙어 있으면 새로 만든 단추가 아니다.
+_SHARED_BUTTON_CLASSES = frozenset({
+    'btn',                       # 부트스트랩 + .v2-btn 계열
+    'v2-action-btn', 'v2-action-btn-outline', 'v2-sidebar-toggle',
+    'v2-seg-btn', 'act-btn',
+    # 부트스트랩이 제 컴포넌트로 크기를 주는 것
+    'btn-close', 'nav-link', 'accordion-button', 'navbar-toggler',
+    'page-link', 'dropdown-item', 'dropdown-toggle', 'list-group-item',
+})
+
+_SIZED_BY_CLASS = ('v2-btn', 'v2-chip-btn', 'v2-link-btn') + tuple(
+    sorted(_OWN_SIZED_BUTTONS))
 
 
 def _v2_templates():
@@ -165,6 +203,46 @@ def check_product_button_sizing(app_configs, **kwargs):
             ))
     return warnings
 
+
+_BUTTON_TAG = re.compile(r'<button\b[^>]*>', re.I)
+_CLASS_ATTR = re.compile(r'\bclass="([^"]*)"', re.I)
+_DJANGO_TAG = re.compile(r'{%.*?%}|{{.*?}}', re.S)
+
+
+@register()
+def check_button_component_registry(app_configs, **kwargs):
+    """
+    공용 단추도 아니고 명부에도 없는 단추를 찾는다.
+
+    이름이 아예 없는 <button> 은 보지 않는다 — 무엇을 등록하라고 할지가 없다.
+    """
+    warnings = []
+    for rel, path, text in _v2_templates():
+        for m in _BUTTON_TAG.finditer(text):
+            attr = _CLASS_ATTR.search(m.group(0))
+            if not attr:
+                continue
+            # 클래스 안에 {% if %} 가 섞여 온다. 태그를 걷고 이름만 본다
+            names = [w for w in _DJANGO_TAG.sub(' ', attr.group(1)).split()
+                     if w and not w.startswith(('{', '}'))]
+            if not names:
+                continue
+            known = set(names)
+            if known & _SHARED_BUTTON_CLASSES or known & _OWN_SIZED_BUTTONS:
+                continue
+            line = text.count('\n', 0, m.start()) + 1
+            warnings.append(Warning(
+                f'{rel}:{line} "{names[0]}" 는 공용 단추도, 명부에 오른 것도 '
+                f'아닙니다.',
+                hint='products_common.css 의 .v2-btn / .v2-btn-sm / '
+                     '.v2-btn-icon / .v2-seg-btn 중 하나를 쓰세요. 제 크기 '
+                     '체계가 꼭 필요하면 v1/common/checks.py 의 '
+                     '_OWN_SIZED_BUTTONS 에 이름을 적으세요 — 적기 번거로운 '
+                     '것이 그 명부의 목적입니다.',
+                obj=str(path),
+                id='products.W002',
+            ))
+    return warnings
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CSS 캐시 무효화 문자열
