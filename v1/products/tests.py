@@ -3253,8 +3253,19 @@ class 비고에_적어_온_성분(TestCase):
         # 대두는 알레르기이면서 GMO 다. "GMO:" 가 앞에 붙으면 GMO 로 본다
         head = self.html.index('function splitRemark(text)')
         block = self.html[head:self.html.index('function spillRemark')]
-        self.assertIn("bucket = /gmo|유전자/i.test(label[1]) ? 'gmo' : 'allergen';", block)
+        self.assertIn("if (/알레르기|알러지/.test(head)) {", block)
+        self.assertIn("} else if (/gmo|유전자/i.test(head)) {", block)
         self.assertIn("if (bucket === 'gmo' && g) {", block)
+
+    def test_모르는_이름표는_건드리지_않는다(self):
+        """
+        "ERP 원재료: SPC삼립전용분" 처럼 우리 표에 자리가 없어 비고로 옮겨
+        둔 값이다. 성분으로 보면 알레르기 칸으로 새고 비고에서는 사라진다.
+        """
+        head = self.html.index('function splitRemark(text)')
+        block = self.html[head:self.html.index('function spillRemark')]
+        self.assertIn('const label = t.match(/^([^:：]{1,24})[:：]', block)
+        self.assertIn('rest.push(t);', block)
 
     def test_GMO_이름을_화면으로_넘긴다(self):
         self.assertIn('{{ gmo_list|json_script:"gmo-name-data" }}', self.html)
@@ -3784,3 +3795,90 @@ class 함유는_한_번만_쓴다(TestCase):
         self.assertIn('.bom-summary-body { padding: 0 10px 6px; }', self.css)
         head = self.css.index('.bom-summary-head {')
         self.assertIn('padding: 5px 10px;', self.css[head:head + 200])
+
+
+class 붙여넣는_도중에_칸을_옮겼다(TestCase):
+    """
+    배합비 열의 값이 알레르기 칸으로 들어가고, 짝 못 지은 열은 사라졌다.
+
+    beforePaste 안에서 곧바로 알리면, 그 말을 들은 화면이 칸을 옮긴다. 그런데
+    Handsontable 은 그 함수가 **끝난 뒤에** 값을 써 넣는다. 값은 옮기기 전
+    자리를 기준으로 만들어 놓고, 쓰기는 옮긴 뒤 자리에 들어간다 — 옮긴 만큼
+    통째로 어긋난다.
+
+    지난번 붙여넣기와 열 이름이 같을 때는 옮길 것이 없어(moveColumns 가 돌지
+    않아) 멀쩡했다. 그래서 한동안 안 드러났다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/sheet_paste.js').read_text(encoding='utf-8')
+        self.bom = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+
+    def test_값이_다_들어간_뒤에_알린다(self):
+        self.assertIn("hot.addHook('afterPaste', function () {", self.js)
+        head = self.js.index("hot.addHook('afterPaste'")
+        block = self.js[head:head + 300]
+        self.assertIn('report(info);', block)
+
+    def test_beforePaste_안에서는_알리지_않는다(self):
+        # 여기서 알리면 화면이 칸을 옮기고, 값은 그 뒤에 들어간다
+        head = self.js.index("hot.addHook('beforePaste'")
+        block = self.js[head:self.js.index("if (firstCol > 0)", head)]
+        self.assertIn('pending = { added: data.length', block)
+        self.assertEqual(block.count('report({ added: data.length'), 0)
+
+    def test_넣을_것이_없으면_바로_알린다(self):
+        # 표를 건드리지 않으면 afterPaste 가 오지 않는다
+        head = self.js.index('if (!data.length) {')
+        block = self.js[head:head + 400]
+        self.assertIn('report({ added: 0', block)
+        self.assertIn('return false;', block)
+
+
+class 자리가_없는_열을_버리지_않는다(TestCase):
+    """
+    ERP 원재료·원료코드·품목제조보고서 기타설명처럼 우리 표에 자리가 없는
+    열이 그 회사에서는 원료를 찾는 열쇠다. 지우면 어디서 온 원료인지 알 수
+    없어진다.
+
+        비고  ERP 원재료: SPC삼립전용분(20kg) · 원료코드: 250521
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/sheet_paste.js').read_text(encoding='utf-8')
+        self.bom = (base / 'templates/products/bom_detail.html').read_text(encoding='utf-8')
+        self.ing = (base / 'templates/label/my_ingredient_list_combined.html'
+                    ).read_text(encoding='utf-8')
+
+    def test_어느_열이었는지_기억한다(self):
+        # 이름만 알면 값을 못 찾는다. 자리도 같이 남긴다
+        self.assertIn('unusedCols.push({ j: j, label:', self.js)
+        self.assertIn('unusedCols: unusedCols', self.js)
+
+    def test_이름을_달아_모은다(self):
+        head = self.js.index('if (carrySeat >= 0) {')
+        block = self.js[head:head + 700]
+        self.assertIn("u.label + ': '", block)
+        self.assertIn("extra.join(' · ')", block)
+
+    def test_원래_비고를_덮지_않는다(self):
+        head = self.js.index('if (carrySeat >= 0) {')
+        block = self.js[head:head + 700]
+        self.assertIn('[row[carrySeat], extra.join', block)
+        self.assertIn('.filter(Boolean).join', block)
+
+    def test_두_화면_모두_옮길_곳을_정해_뒀다(self):
+        self.assertIn("carry: '비고',", self.bom)
+        self.assertIn("carry: '하위 원료',", self.ing)
+
+    def test_버린_것이_아니라_옮겼다고_말한다(self):
+        head = self.js.index('if (carrySeat >= 0 && carryCols.length) {')
+        block = self.js[head:head + 400]
+        self.assertIn("+ ' 은 ' + options.carry + ' 로'", block)
+        self.assertIn('unused = [];', block)

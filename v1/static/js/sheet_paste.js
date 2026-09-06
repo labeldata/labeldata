@@ -102,7 +102,9 @@
    */
   function planColumns(row, headers, aliases, marks) {
     if (!row) return null;
-    var map = {}, names = [], unused = [], taken = {};
+    // unused 는 사람에게 보여 줄 이름, unusedCols 는 그 열이 몇 번째였는지.
+    // 값을 버리지 않고 비고로 옮기려면 자리를 알아야 한다.
+    var map = {}, names = [], unused = [], unusedCols = [], taken = {};
     // 체크 열: {가져온 칸 번호: {col: 넣을 칸, value: 적을 말}}
     var checks = {}, checkNames = [];
 
@@ -121,7 +123,10 @@
       }
 
       if (!hit) {
-        if (label) unused.push(label);
+        if (label) {
+          unused.push(label);
+          unusedCols.push({ j: j, label: label.replace(/\s+/g, ' ').trim() });
+        }
         return;
       }
       var col = headers.indexOf(hit.col);
@@ -143,7 +148,7 @@
     // 두 칸 이상 짝이 지어져야 머리글로 본다. 한 칸만 보면 "원료명" 이라는
     // 이름의 원료를 머리글로 오해한다.
     if (names.length < 2) return null;
-    return { map: map, names: names, unused: unused,
+    return { map: map, names: names, unused: unused, unusedCols: unusedCols,
              checks: checks, checkNames: checkNames };
   }
 
@@ -230,6 +235,28 @@
     var firstCol = options.firstCol || 0;
     var report = options.onReport || function () {};
 
+    /*
+     * **알린 뒤에 옮긴다.**
+     *
+     * beforePaste 안에서 곧바로 알리면, 그 말을 들은 쪽(화면)이 칸을 옮긴다.
+     * 그런데 Handsontable 은 이 함수가 끝난 **뒤에** 값을 써 넣는다. 그러니
+     * 값은 옮기기 전 자리를 기준으로 만들어 놓고, 쓰기는 옮긴 뒤 자리에
+     * 들어간다 — 옮긴 만큼 통째로 어긋난다.
+     *
+     * 실제로 그렇게 났다. 배합비 열이 알레르기 칸으로 들어가고, 짝을 못 지은
+     * 열은 사라졌다. 지난번 붙여넣기와 열 이름이 같을 때는 옮길 것이 없어서
+     * (moveColumns 가 돌지 않아서) 멀쩡했고, 그래서 한동안 안 드러났다.
+     *
+     * 값이 다 들어간 뒤에 알린다.
+     */
+    var pending = null;
+    hot.addHook('afterPaste', function () {
+      if (!pending) return;
+      var info = pending;
+      pending = null;
+      report(info);
+    });
+
     hot.addHook('beforePaste', function (data, coords) {
       var why = [], matched = null, unused = [];
 
@@ -255,14 +282,26 @@
         });
 
         // 체크 열이 넣을 칸도 화면 자리로 찾아 둔다
-        var checkSeat = -1;
-        if (options.marks && plan.checkNames.length) {
-          var i = headers.indexOf(options.marks.into);
-          if (i >= 0) {
-            var v = typeof hot.toVisualColumn === 'function'
-                ? hot.toVisualColumn(firstCol + i) : firstCol + i;
-            if (v >= firstCol) checkSeat = v - firstCol;
-          }
+        var seatOf = function (name) {
+          var i = headers.indexOf(name);
+          if (i < 0) return -1;
+          var v = typeof hot.toVisualColumn === 'function'
+              ? hot.toVisualColumn(firstCol + i) : firstCol + i;
+          return v >= firstCol ? v - firstCol : -1;
+        };
+        var checkSeat = (options.marks && plan.checkNames.length)
+            ? seatOf(options.marks.into) : -1;
+
+        /* 짝을 못 지은 열도 **값이 있으면 버리지 않는다.**
+           ERP 원재료·원료코드·품목제조보고서 기타설명처럼 우리 표에 자리가
+           없는 것들이 그 회사에서는 원료를 찾는 열쇠다. 지우면 어디서 온
+           원료인지 알 수 없어진다. 이름을 달아 비고에 모은다.
+
+               ERP 원재료: SPC삼립전용분(20kg) · 원료코드: 250521 */
+        var carrySeat = -1, carryCols = [];
+        if (options.carry && plan.unusedCols.length) {
+          carrySeat = seatOf(options.carry);
+          if (carrySeat >= 0) carryCols = plan.unusedCols;
         }
 
         for (var r = 0; r < data.length; r++) {
@@ -282,12 +321,32 @@
           if (checkSeat >= 0 && found.length && !row[checkSeat]) {
             row[checkSeat] = found.join(', ');
           }
+          // 짝 못 지은 열의 값을 비고 뒤에 붙인다. 원래 비고를 덮지 않는다.
+          if (carrySeat >= 0) {
+            var extra = [];
+            carryCols.forEach(function (u) {
+              var v = data[r][u.j];
+              if (v == null || String(v).trim() === '') return;
+              extra.push(u.label + ': ' + String(v).replace(/\s+/g, ' ').trim());
+            });
+            if (extra.length) {
+              row[carrySeat] = [row[carrySeat], extra.join(' · ')]
+                  .filter(Boolean).join(' · ');
+            }
+          }
           data[r] = row;
         }
         if (plan.checkNames.length) {
           matched = matched.concat([
             plan.checkNames.join('·') + ' 열의 O 를 모아 ' + options.marks.into
           ]);
+        }
+        if (carrySeat >= 0 && carryCols.length) {
+          matched = matched.concat([
+            carryCols.map(function (u) { return u.label; }).join('·')
+              + ' 은 ' + options.carry + ' 로'
+          ]);
+          unused = [];      // 버린 것이 아니라 옮긴 것이다
         }
         // 맞춰 놓았으니 자료가 시작하는 칸부터 넣는다
         coords.forEach(function (range) {
@@ -307,9 +366,10 @@
       if (blanks) why.push('빈 줄 ' + blanks + '개');
 
       if (!data.length) {
+        // 넣을 것이 없으면 afterPaste 가 오지 않는다. 여기서 바로 알린다
         report({ added: 0, dropped: blanks, why: why,
                  matched: matched, unused: unused, plan: plan });
-        return false;       // 넣을 것이 없으면 표를 건드리지 않는다
+        return false;       // 표를 건드리지 않는다
       }
 
       // ③ 머리글이 없어 자리로 넣는 경우. 남는 칸 밖의 값은 잘라 낸다 —
@@ -326,8 +386,8 @@
         if (extra) why.push('빈 칸 밖의 값 ' + extra + '개');
       }
 
-      report({ added: data.length, dropped: blanks, why: why,
-               matched: matched, unused: unused, plan: plan });
+      pending = { added: data.length, dropped: blanks, why: why,
+                  matched: matched, unused: unused, plan: plan };
     });
 
     // ④ 자료가 시작하는 칸보다 왼쪽에 붙이면 한 칸씩 밀린다. 자리를 옮겨 준다.

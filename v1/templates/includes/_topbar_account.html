@@ -3,12 +3,11 @@
 <div class="v2-topbar-account">
 
 {% if user.is_authenticated %}
-    <!-- 홈 전환 버튼 (→ V1 기존홈) -->
-    <a href="{% url 'main:home_v1' %}"
-       class="btn btn-outline-secondary me-2 d-flex align-items-center home-switch-btn"
-       title="V1 기존홈으로 전환">
-        <i class="bi bi-arrow-left-right"></i><span class="home-switch-text ms-1">홈 전환</span>
-    </a>
+    {% comment %}
+      홈 전환은 걷었다. 옛 화면으로 돌아갈 길은 왼쪽 아래 "기존 사이트 이동"
+      한 곳으로 모은다 — 두 곳에 두면 어느 쪽이 정본인지 흐려진다.
+      되돌리려면 이 블록을 풀면 된다.
+    {% endcomment %}
     {# ── 알림 버튼 ── #}
     <div class="dropdown" id="notificationDropdown">
         <button class="btn btn-light rounded-circle position-relative v2-notif-bell" type="button"

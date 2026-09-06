@@ -623,6 +623,9 @@ body.in-iframe .bom-page-header { display: none !important; }
                 headers: BOM_SHEET_HEADERS,
                 aliases: BOM_SHEET_ALIASES,
                 marks: BOM_SHEET_MARKS,
+                /* 우리 표에 자리가 없는 열도 버리지 않는다. ERP 원재료·
+                   원료코드처럼 그 회사에서 원료를 찾는 열쇠들이다. */
+                carry: '비고',
                 onReport: function (info) {
                     /* 붙여넣은 열 순서대로 화면을 늘어놓는다.
                        쓰던 엑셀의 순서가 그 사람이 일하는 순서다. 값만 제자리에
@@ -1784,9 +1787,20 @@ body.in-iframe .bom-page-header { display: none !important; }
             if (!t) return;
             /* "알레르기: 밀, 우유" 처럼 이름표를 달아 오는 경우. 대두처럼
                알레르기이면서 GMO 이기도 한 말은 이름표로 가른다. */
-            const label = t.match(/^(알레르기[^:：]*|gmo[^:：]*|유전자[^:：]*)[:：]\s*/i);
+            const label = t.match(/^([^:：]{1,24})[:：]\s*/);
             if (label) {
-                bucket = /gmo|유전자/i.test(label[1]) ? 'gmo' : 'allergen';
+                const head = label[1];
+                if (/알레르기|알러지/.test(head)) {
+                    bucket = 'allergen';
+                } else if (/gmo|유전자/i.test(head)) {
+                    bucket = 'gmo';
+                } else {
+                    /* 모르는 이름표다 — "ERP 원재료: SPC삼립전용분" 처럼 우리
+                       표에 자리가 없어 비고로 옮겨 둔 값이다. 성분으로 보면
+                       그 값이 알레르기 칸으로 새고, 비고에서는 사라진다. */
+                    rest.push(t);
+                    return;
+                }
                 t = t.slice(label[0].length).trim();
                 if (!t) return;
             }

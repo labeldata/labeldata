@@ -1811,6 +1811,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.attachSheetPaste) {
       window.attachSheetPaste(hot, {
         headers: HEADERS, aliases: ALIASES, marks: MARKS,
+        carry: '하위 원료',      // 자리가 없는 열도 버리지 않는다
         onReport: function (info) {
           var tail = window.sheetPasteMessage ? window.sheetPasteMessage(info, '') : '';
           if (tail) el('pasteHint').textContent = tail;
