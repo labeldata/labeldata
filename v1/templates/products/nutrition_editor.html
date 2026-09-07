@@ -80,7 +80,11 @@
                     <label class="config-label">허용오차</label>
                     <input type="text" class="form-control form-control-sm" id="nutrition_tolerance" value="15" style="width: 56px;">
                     <span class="unit-label">%</span>
-                    <span class="unit-label" title="오른쪽 '적용값' 칸이 그 자리에서 따라갑니다">→ 적용값 칸에 반영</span>
+                    <label class="config-label" style="font-weight:400;cursor:pointer;"
+                           title="켜면 적용값이 표와 저장에 쓰입니다. 끄면 계산값 그대로입니다">
+                        <input type="checkbox" id="use_tolerance" checked>
+                        표와 저장에 적용값 쓰기
+                    </label>
                 </div>
                 <div class="config-item" id="hiengItem">
                     <label class="config-label">고열량·저영양</label>
@@ -422,6 +426,8 @@ function getNumericValue(value) {
     return Number.isNaN(parsed) ? null : parsed;
 }
 
+/* 표의 계산값 그대로. **미리보기·저장은 이것을 쓰지 않는다** — appliedValues()
+   가 그 자리다. 남겨 두는 것은 판정에 쓰던 옛 자리 때문이다. */
 function getGridNutritionInputs() {
     const data = hot.getData();
     const nutritionInputs = {};
@@ -497,7 +503,8 @@ function bindPreviewControls() {
 
 // 강조표시 판정 결과를 Handsontable 다섯 번째 열에 업데이트
 function updateEmphasisColumn() {
-    const nutritionInputs = getGridNutritionInputs();
+    // 강조표시 판정도 **인쇄될 값**으로 본다
+    const nutritionInputs = appliedValues();
     
     ALL_NUTRIENTS.forEach((nutrient, index) => {
         const value = nutritionInputs[nutrient.field] || 0;
@@ -539,7 +546,9 @@ function calculateAndPreview() {
     const baseAmount = parseFloat(document.getElementById('serving_size').value.replace(/,/g, '')) || 100;
     const servingsPerPackage = parseFloat(document.getElementById('units_per_package').value.replace(/,/g, '')) || 1;
     const style = document.getElementById('nutrition_display_unit').value || 'basic';
-    const nutritionInputs = getGridNutritionInputs();
+    /* **미리보기도 적용값으로 그린다.** 표에는 계산값을 그리고 저장은
+       적용값으로 하면, 화면에서 본 표와 라벨에 인쇄될 값이 달라진다. */
+    const nutritionInputs = appliedValues();
     
     // 강조표시 판정 항상 업데이트
     updateEmphasisColumn();
@@ -684,7 +693,8 @@ async function saveData() {
             hieng_kind: document.getElementById('hieng_kind').value || '',
             nutrition_source: document.getElementById('nutrition_source').value || '',
             nutrition_source_note: (document.getElementById('nutrition_source_note').value || '').trim(),
-            nutrition_tolerance: appliedTolerance,
+            // 안 쓰기로 했으면 물린 적이 없는 것이다
+            nutrition_tolerance: useApplied() ? appliedTolerance : '',
             /* 계산값도 남긴다. 저장 칸에는 적용값이 들어가므로, 이것을 안
                남기면 다시 열었을 때 내가 넣은 값이 사라진다. */
             nutrition_calc_values: JSON.stringify(gridValues()),
@@ -763,13 +773,26 @@ function toleranceSetting() {
 }
 
 /**
+ * 적용값을 실제로 **쓸 것인가.**
+ *
+ * 오차를 물린 값을 보여만 주고 표와 저장에는 안 쓰면, 화면에 그려진 표와
+ * 라벨에 인쇄될 값이 서로 다르다 — 그것이 이 앱이 여러 번 겪은 사고다.
+ * 그래서 쓸지 말지를 사람이 한 번 고르게 하고, 고른 대로 **표도 저장도**
+ * 같은 값을 쓴다.
+ */
+function useApplied() {
+    const box = document.getElementById('use_tolerance');
+    return !box || box.checked;
+}
+
+/**
  * 라벨에 인쇄될 값. **늘 계산값에서 출발한다** — 적용값에 다시 물리면 두 번
  * 곱해진다(입력 기준 환산이 309 를 475 로, 다시 731 로 만든 그 자리다).
  */
 function appliedValues() {
     const base = gridValues();
     const rate = toleranceSetting();
-    if (!rate || !window.nutritionCalc) return base;
+    if (!rate || !useApplied() || !window.nutritionCalc) return base;
     const out = window.nutritionCalc.applyTolerance(base, rate, 'up');
     /* 열량은 오차를 곱하지 않고 보정한 탄단지로 다시 계산한다 */
     const kcal = window.nutritionCalc.caloriesFromMacros(out);
@@ -801,7 +824,10 @@ function refreshApplied() {
     const limit = (window.NUTRITION_RULES || {}).toleranceLimit || 20;
     note.textContent = '적용값은 계산값에 ' + rate + '% 를 물린 값입니다 — '
         + '당류·지방·포화지방·트랜스지방·콜레스테롤·나트륨만 올리고, 열량은 '
-        + '보정한 탄단지로 다시 계산합니다. 저장되는 것은 적용값입니다.'
+        + '보정한 탄단지로 다시 계산합니다. '
+        + (useApplied()
+            ? '오른쪽 표와 저장에 이 값이 쓰입니다.'
+            : '지금은 계산값을 그대로 씁니다 — "적용값 쓰기" 를 켜면 바뀝니다.')
         + (rate > limit ? ' 규정이 준 폭은 ' + limit + '% 입니다.' : '');
     note.className = rate > limit ? 'calc-note is-warn' : 'calc-note';
     note.style.display = 'block';
@@ -866,6 +892,11 @@ function bindCalcSource() {
     if (source) { source.addEventListener('change', paint); paint(); }
 
     /* 오차율·산출 방법을 고치면 적용값 칸이 그 자리에서 따라간다 */
+    const useBox = document.getElementById('use_tolerance');
+    if (useBox) useBox.addEventListener('change', function () {
+        refreshApplied();
+        calculateAndPreview();
+    });
     ['nutrition_tolerance', 'nutrition_source'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
