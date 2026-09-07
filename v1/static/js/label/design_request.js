@@ -261,9 +261,13 @@
 
     /* 워드는 칸 너비를 안 주면 넷으로 똑같이 나눈다. 표시사항 내용에는 원재료명
        300자가 들어가고 표시장소는 이름 한 줄이라, 균등하면 원재료명이 스무 줄로
-       접히고 오른쪽은 텅 빈다. <colgroup> 으로 자리를 정해 준다. */
-    var cols = '<colgroup><col style="width:88px;"><col style="width:96px;">'
-             + '<col style="width:400px;"><col style="width:140px;"></colgroup>';
+       접히고 오른쪽은 텅 빈다.
+
+       **픽셀로 적으면 안 된다.** A4 세로에 여백을 빼면 쓸 수 있는 폭이 16 cm
+       남짓인데 픽셀 합이 그보다 크면 오른쪽 비고 칸이 종이 밖으로 잘려 나간다.
+       실제로 그렇게 났다. 백분율로 적어 폭이 얼마든 안에 들어가게 한다. */
+    var cols = '<colgroup><col style="width:12%;"><col style="width:13%;">'
+             + '<col style="width:56%;"><col style="width:19%;"></colgroup>';
 
     return '<html xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
          + '<meta charset="utf-8"><title>표시 디자인 의뢰서</title></head><body>'
@@ -272,7 +276,7 @@
          + (title ? title + ' · ' : '')
          + new Date().toISOString().slice(0, 10) + '</p>'
          + '<table cellspacing="0" cellpadding="0" '
-         + 'style="border-collapse:collapse;table-layout:fixed;width:724px;">'
+         + 'style="border-collapse:collapse;table-layout:fixed;width:100%;">'
          + cols
          + '<tr><td style="' + head + '">표시장소</td><td style="' + head + '">표시사항</td>'
          + '<td style="' + head + '">표시사항 내용</td><td style="' + head + '">비고</td></tr>'

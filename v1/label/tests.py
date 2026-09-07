@@ -9996,3 +9996,32 @@ class 표에_당_표기가_없을_때(TestCase):
         views = (Path(dj.BASE_DIR) / 'products/views.py').read_text(encoding='utf-8')
         self.assertNotIn("data.get('serving_size', '') or '100'", views)
         self.assertIn("data.get('serving_size') or label.serving_size", views)
+
+
+class 의뢰서가_종이_안에_들어간다(TestCase):
+    """
+    칸 너비를 픽셀로 적었더니 **오른쪽 비고 칸이 잘려 나갔다.** A4 세로에
+    여백을 빼면 쓸 수 있는 폭이 16 cm 남짓인데 픽셀 합이 그보다 컸다.
+
+    백분율로 적으면 종이 폭이 얼마든 안에 들어간다. 균등 분할로 돌아가면
+    안 된다 — 원재료명 300자가 스무 줄로 접히고 오른쪽은 텅 빈다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.js = (Path(dj.BASE_DIR) / 'static/js/label/design_request.js'
+                   ).read_text(encoding='utf-8')
+
+    def test_너비를_픽셀로_적지_않는다(self):
+        head = self.js.index('var cols =')
+        block = self.js[head:head + 300]
+        self.assertNotIn('px;', block)
+        for share in ('12%', '13%', '56%', '19%'):
+            self.assertIn(share, block, share)
+
+    def test_표는_종이_폭을_따른다(self):
+        self.assertIn('table-layout:fixed;width:100%', self.js)
+        self.assertNotIn('width:724px', self.js)
