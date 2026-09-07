@@ -10126,6 +10126,25 @@ class 문구함을_쓰는_자리에서_고친다(TestCase):
         self.assertIn('data-my-phrases="additional_info"', tab)
         self.assertIn('my_phrases.js', tab)
 
+    def test_한_번_누르면_한_번_들어간다(self):
+        """
+        문구를 그릴 때마다 버튼 묶는 함수를 다시 부른다. 칸이 둘이니 한 화면에
+        두 번 이상 불렀고, 이미 매인 버튼에 또 매어 **한 번 누르면 넣고 빼기가
+        같이 일어났다** — 눌러도 아무 일도 안 하는 것처럼 보였다.
+        """
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tab = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+               ).read_text(encoding='utf-8')
+        head = tab.index('function initProductQuickTextButtons')
+        block = tab[head:head + 1500]
+        self.assertIn('quickBound', block)
+        # 이미 매어 둔 버튼은 건너뛴다
+        guard = block.index('dataset.quickBound')
+        self.assertLess(guard, block.index("addEventListener('click'"))
+
 
 class 계산값을_덮지_않는다(TestCase):
     """

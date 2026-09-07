@@ -1744,6 +1744,13 @@ function initProductQuickTextButtons() {
                 btn.classList.remove('btn-outline-secondary', 'btn-outline-danger', 'btn-outline-info', 'btn-outline-success', 'btn-outline-primary');
             }
         }
+        /* **두 번 매어 두면 한 번 누른 것이 두 번 도로 감긴다.**
+           내 문구를 그릴 때마다 이 함수를 다시 부르는데(문구함이 두 칸이므로
+           한 화면에서 두 번 이상), 그때 이미 매어 둔 버튼에 또 매었다. 넣고
+           빼기가 한 번에 일어나 눌러도 아무 일도 안 하는 것처럼 보였다 —
+           고치기를 눌러 그 칸만 다시 그리면 그제야 들어갔던 까닭이다. */
+        if (btn.dataset.quickBound) return;
+        btn.dataset.quickBound = '1';
         btn.addEventListener('click', function() { toggleProductQuickText(this); });
     });
 }
