@@ -79,7 +79,7 @@
          몸짓이어야 한다. 여기만 다르면 손이 헷갈린다. */
       var use = document.createElement('button');
       use.type = 'button';
-      use.className = 'btn btn-outline-dark btn-sm'
+      use.className = 'btn btn-outline-secondary btn-sm'
           + ((opts && opts.onPick) ? '' : ' product-quick-text-btn');
       use.setAttribute('data-field', field);
       use.setAttribute('data-text', phrase.content || phrase.text || '');
@@ -103,7 +103,7 @@
         edit.className = 'my-phrase-act';
         edit.title = '문구 고치기';
         // 아이콘 글꼴이 없는 화면에서는 빈 네모만 보인다. 글자로 그린다
-        edit.textContent = '고침';
+        edit.textContent = '수정';
         edit.addEventListener('click', function () { rename(field, phrase, box); });
 
         var drop = document.createElement('button');

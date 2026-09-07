@@ -4611,3 +4611,34 @@ class 쓰고_있는_양을_올리기_전에_보여_준다(TestCase):
 
         with override_settings(QUOTA_LIMITS={'storage': {'free': 100}}):
             self.assertEqual(quota.limit_for(self.user, 'storage'), 100)
+
+
+class 끼워_넣다_남의_규칙을_가르지_않는다(TestCase):
+    """
+    내 문구 조각의 CSS 를 넣다가 하필 이 자리를 갈랐다.
+
+        .btn-storage-badge,
+        .v2-chip-check > label { … }      <- 두 줄이 한 규칙이다
+
+    가운데에 새 규칙을 끼우니 `.btn-storage-badge` 가 엉뚱한 규칙에 붙었고,
+    보관방법 버튼(냉동·냉장·실온·상온)이 칩 모양을 잃었다. 쉼표로 이어진
+    선택자 사이는 **한 규칙의 한가운데**다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.tab = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+                    ).read_text(encoding='utf-8')
+
+    def test_보관방법_버튼이_칩_규칙을_그대로_쓴다(self):
+        self.assertIn('.btn-storage-badge,\n.v2-chip-check > label {', self.tab)
+
+    def test_내_문구_규칙은_그_뒤에_있다(self):
+        self.assertLess(self.tab.index('.btn-storage-badge,\n.v2-chip-check > label {'),
+                        self.tab.index('.my-phrase-chip {'))
+
+    def test_같은_칩_모양을_쓴다(self):
+        """여기만 각지고 회색이면 같은 줄에 선 기본 문구 버튼과 따로 논다."""
+        head = self.tab.index('.my-phrase-act:last-child')
+        self.assertIn('border-radius: 0 16px 16px 0', self.tab[head:head + 200])

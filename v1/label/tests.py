@@ -10207,7 +10207,7 @@ class 문구는_한_자리에서만_관리한다(TestCase):
         """아이콘 글꼴이 없는 화면에서는 빈 네모만 보였다."""
         self.assertNotIn('fa-pen', self.chips)
         self.assertNotIn('fa-times', self.chips)
-        self.assertIn("edit.textContent = '고침'", self.chips)
+        self.assertIn("edit.textContent = '수정'", self.chips)
 
 
 class 화면에_그린_표와_저장이_같아야_한다(TestCase):

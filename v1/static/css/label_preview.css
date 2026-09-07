@@ -1530,28 +1530,6 @@ tbody.layout-vertical tr td {
   font-size: 10.5px;
   color: var(--ez-gray-600, #80868b);
 }
-/* 기본정보 탭의 빠른 입력 줄과 같은 모양이어야 한다 — 손이 헷갈리지 않게 */
-.dr-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  max-height: 92px;
-  overflow-y: auto;
-}
-.dr-chips .my-phrase-chip { display: inline-flex; align-items: stretch; }
-.dr-chips .my-phrase-chip .btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.dr-chips .my-phrase-act {
-  border: 1px solid var(--ez-gray-300, #dadce0);
-  border-left: 0;
-  background: #fff;
-  color: var(--ez-gray-700, #5f6368);
-  font-size: 11px;
-  line-height: 1;
-  padding: 0 7px;
-  cursor: pointer;
-}
-.dr-chips .my-phrase-act:last-child { border-radius: 0 4px 4px 0; }
-.dr-chips .my-phrase-add { border-style: dashed; }
 /* 줄 빼기 단추. 비고 칸 오른쪽 끝에 붙는다 */
 .dr-note { position: relative; }
 .dr-note input { padding-right: 22px; }
