@@ -402,12 +402,18 @@
 {{ contacts_list|json_script:"contacts-init-data" }}
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
 <script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/sheet_widths.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {{ grid_order|json_script:"grid-order-data" }}
+{{ grid_widths|json_script:"grid-widths-data" }}
 <script>
   try {
     window.GRID_ORDER = JSON.parse(
       document.getElementById('grid-order-data').textContent) || [];
   } catch (e) { window.GRID_ORDER = []; }
+  try {
+    window.GRID_WIDTHS = JSON.parse(
+      document.getElementById('grid-widths-data').textContent) || {};
+  } catch (e) { window.GRID_WIDTHS = {}; }
 </script>
 <script>
 const CSRF_TOKEN = '{{ csrf_token }}';
@@ -681,18 +687,20 @@ async function submitDocFiles() {
         btn.innerHTML = '<i class="bi bi-upload me-1"></i>제출 및 수락';
     }
 }
-function getColWidths() {
-    const wrap = document.getElementById('contactsGrid');
-    const total = wrap ? wrap.clientWidth : 800;
-    const CHK      = 28;  // 체크박스
-    const DOC_REQ  = 110; // 요청/접수 고정 최소 너비
-    const rest = total - CHK - DOC_REQ;
-    // 이메일 · 이름 · 회사명 · 인허가번호 · 비고 · 공유
-    const ratios = [0.24, 0.15, 0.17, 0.15, 0.15, 0.14];
-    const widths = ratios.map(r => Math.max(Math.floor(rest * r), 40));
-    /* 비고는 남는 폭을 가져간다 — 엑셀에서 옮겨 온 값이 길다 */
-    return [CHK, ...widths, DOC_REQ];
-}
+/* 칸 성격. 너비를 정하는 일은 공용이 한다(static/js/sheet_widths.js) —
+   배합비·원료 붙여넣기와 같은 규칙으로 움직여야 한다. 자리 비율로 정하던
+   것을 걷었다: 칸을 옮기면 너비가 엉뚱한 칸에 남았고, 하나를 넓히면 고르지도
+   않은 칸이 따라 줄었다. */
+const CONTACT_COL_WIDTH = {
+    '이메일':     { weight: 20, min: 160, max: 300 },
+    '이름':       { weight: 10, min: 80,  max: 150 },
+    '회사명':     { weight: 14, min: 110, max: 240 },
+    '인허가번호': { weight: 10, min: 96,  max: 160 },
+    '비고':       { weight: 18, min: 120, max: 320 },
+    '공유':       { weight: 7,  min: 64,  max: 96 },
+    '요청/접수':  { weight: 8,  min: 96,  max: 120 },
+};
+let contactWidths = null;
 
 document.addEventListener('DOMContentLoaded', function () {
     const container = document.getElementById('contactsGrid');
@@ -805,8 +813,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         ],
-        colWidths: getColWidths(),
-        stretchH: 'last',
+        /* 늘린 만큼 표가 넓어질 뿐 다른 칸을 줄이지 않는다. 너비는
+           attachSheetWidths 가 정한다(static/js/sheet_widths.js). */
+        stretchH: 'none',
         height: '100%',
         manualColumnResize: true,
         manualRowMove: true,
@@ -1040,15 +1049,20 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // 반응형 컬럼 너비
-    if (window.ResizeObserver) {
-        let timer;
-        new ResizeObserver(() => {
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-                if (hot) { hot.updateSettings({ colWidths: getColWidths() }); hot.render(); }
-            }, 60);
-        }).observe(container);
+    /* 칸 너비 — 규칙도 저장도 공용이 한다(static/js/sheet_widths.js).
+       끌어서 조절한 것은 계정에 남고, 칸을 옮겨도 이름을 따라간다.
+       내용이 없는 칸은 최소로 접힌다. */
+    if (window.attachSheetWidths) {
+        contactWidths = window.attachSheetWidths(hot, {
+            headers: CONTACT_SHEET_HEADERS.concat(['공유', '요청/접수']),
+            rules: CONTACT_COL_WIDTH,
+            firstCol: 1,          // 첫 칸은 체크박스다
+            fixed: [28],
+            container: 'contactsGrid',
+            screen: 'contact_grid',
+            csrf: CSRF_TOKEN,
+            saved: window.GRID_WIDTHS || {}
+        });
     }
 
     // 전체 체크박스는 afterRender에서 직접 DOM에 바인딩 처리됨
@@ -1888,7 +1902,7 @@ function showQsError(msg) {
         const newW = Math.max(320, Math.min(startW + diff, window.innerWidth - 300));
         left.style.width = newW + 'px';
         left.style.flex  = 'none';
-        if (hot) { hot.updateSettings({ colWidths: getColWidths() }); hot.render(); }
+        if (contactWidths) contactWidths.redraw();
     });
     document.addEventListener('mouseup', () => { isDown = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; });
 })();

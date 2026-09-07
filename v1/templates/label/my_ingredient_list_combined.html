@@ -1280,6 +1280,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <link href="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
 <script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/sheet_widths.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {{ allergen_header_names|json_script:"allergen-header-data" }}
 <script>
   {# "계란 O" 처럼 항목마다 표를 쳐 오는 양식을 알아보는 데 쓴다 #}
@@ -1660,6 +1661,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 'food_category', 'bssh_nm', 'prdlst_report_no',
                 'allergens', 'gmo', 'rawmtrl_nm'];
 
+  /* 칸 성격. 너비를 정하는 일은 공용이 한다(static/js/sheet_widths.js) —
+     배합비·연락처와 같은 규칙이다. 제조사·품목보고번호처럼 붙여넣을 때 잘
+     안 채우는 칸은 좁게 두고, 비어 있으면 최소로 접힌다. */
+  var COL_WIDTH = {
+    '원료명':        { weight: 14, min: 110, max: 240 },
+    '원료 표시명':   { weight: 20, min: 160, max: 380 },
+    '식품유형':      { weight: 9,  min: 76,  max: 130 },
+    '식품구분':      { weight: 8,  min: 72,  max: 120 },
+    '제조사':        { weight: 8,  min: 76,  max: 160 },
+    '품목보고번호':   { weight: 7,  min: 78,  max: 140 },
+    '알레르기 성분': { weight: 9,  min: 84,  max: 190 },
+    'GMO':          { weight: 5,  min: 56,  max: 90 },
+    '하위 원료':     { weight: 16, min: 120, max: 360 }
+  };
+
   /* 회사마다 부르는 이름이 다르다. 사전 대조다 — AI 를 쓰지 않는다 */
   var ALIASES = {
     '원료명': ['원료명', '원재료명', '품명', '제품명', '원료', '원자재명', '재료명'],
@@ -1797,7 +1813,9 @@ document.addEventListener('DOMContentLoaded', function() {
       rowHeaders: true,
       colHeaders: HEADERS,
       columns: FIELDS.map(function (f) { return { data: f, editor: 'text' }; }),
-      stretchH: 'all',
+      /* 늘린 만큼 표가 넓어질 뿐 다른 칸을 줄이지 않는다. 'all' 이면 한 칸을
+         넓힐 때 고르지도 않은 칸이 따라 줄어든다 */
+      stretchH: 'none',
       height: 300,
       minSpareRows: 3,
       contextMenu: ['row_above', 'row_below', 'remove_row', '---------', 'undo', 'redo'],
@@ -1807,6 +1825,12 @@ document.addEventListener('DOMContentLoaded', function() {
         window.__pasteTimer = setTimeout(preview, 300);
       }
     });
+
+    if (window.attachSheetWidths) {
+      window.attachSheetWidths(hot, {
+        headers: HEADERS, rules: COL_WIDTH, container: 'paste-grid'
+      });
+    }
 
     if (window.attachSheetPaste) {
       window.attachSheetPaste(hot, {

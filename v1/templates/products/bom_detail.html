@@ -367,7 +367,9 @@ body.in-iframe .bom-page-header { display: none !important; }
 
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
 <script src="{% static 'js/sheet_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+<script src="{% static 'js/sheet_widths.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {{ grid_order|json_script:"grid-order-data" }}
+{{ grid_widths|json_script:"grid-widths-data" }}
 {{ allergen_header_names|json_script:"allergen-header-data" }}
 {{ gmo_list|json_script:"gmo-name-data" }}
 <script>
@@ -378,6 +380,11 @@ body.in-iframe .bom-page-header { display: none !important; }
     window.GRID_ORDER = JSON.parse(
       document.getElementById('grid-order-data').textContent) || [];
   } catch (e) { window.GRID_ORDER = []; }
+  /* 끌어서 조절해 둔 칸 너비. 이것도 자리가 아니라 이름에 붙는다 */
+  try {
+    window.GRID_WIDTHS = JSON.parse(
+      document.getElementById('grid-widths-data').textContent) || {};
+  } catch (e) { window.GRID_WIDTHS = {}; }
   try {
     window.ALLERGEN_HEADER_NAMES = JSON.parse(
       document.getElementById('allergen-header-data').textContent) || {};
@@ -489,39 +496,23 @@ body.in-iframe .bom-page-header { display: none !important; }
      *           원재료 표시명·비고는 문장이 들어온다
      */
     const BOM_COL_WIDTH = {
-        '원료명':        { weight: 13, min: 110, max: 240 },
-        '원재료 표시명': { weight: 24, min: 200, max: 460 },
-        '식품유형':      { weight: 9,  min: 84,  max: 150 },
+        '원료명':        { weight: 14, min: 110, max: 240 },
+        '원재료 표시명': { weight: 28, min: 220, max: 520 },
+        '식품유형':      { weight: 8,  min: 76,  max: 130 },
         '배합비(%)':     { weight: 7,  min: 78,  max: 108 },
-        '제조사/수입사': { weight: 11, min: 96,  max: 220 },
-        '알레르기 성분': { weight: 10, min: 96,  max: 220 },
-        'GMO':          { weight: 6,  min: 64,  max: 110 },
-        '품목보고번호':   { weight: 9,  min: 96,  max: 170 },
-        '비고':          { weight: 11, min: 110, max: 340 },
+        /* 제조사·품목보고번호는 배합비를 짜는 동안에는 잘 안 쓴다. 좁게 두고,
+           비어 있으면 공용이 최소로 접는다(sheet_widths.js). */
+        '제조사/수입사': { weight: 8,  min: 76,  max: 160 },
+        '알레르기 성분': { weight: 9,  min: 84,  max: 190 },
+        'GMO':          { weight: 5,  min: 56,  max: 90 },
+        '품목보고번호':   { weight: 7,  min: 78,  max: 140 },
+        '비고':          { weight: 14, min: 120, max: 360 },
     };
 
-    // rowHeaders(행 번호 열) 너비 ~52px를 제외하고 계산해야 스크롤 방지
-    function getBomColWidths() {
-        const bomGrid = document.getElementById('bom-grid');
-        const containerW = (bomGrid && bomGrid.clientWidth > 10) ? bomGrid.clientWidth : 800;
-        const ROW_HEADER_W = 52; // Handsontable 행 번호 열 기본 너비
-        // 아홉 칸이 다 읽히려면 최소 폭이 있어야 한다. 좁으면 가로로 민다.
-        const w = Math.max(1080, containerW - ROW_HEADER_W);
-
-        const rule = name => BOM_COL_WIDTH[name] || { weight: 10, min: 90, max: 260 };
-        const total = BOM_SHEET_HEADERS.reduce((sum, name) => sum + rule(name).weight, 0);
-
-        /* 화면에 보이는 순서대로 돌려준다. 칸을 옮겨 뒀으면(붙여넣기·손으로
-           끌기) 그 자리에 **지금 놓여 있는 칸**의 너비여야 한다. */
-        const widths = [];
-        for (let v = 0; v < BOM_SHEET_HEADERS.length; v++) {
-            const physical = (hot && hot.toPhysicalColumn) ? hot.toPhysicalColumn(v) : v;
-            const spec = rule(BOM_SHEET_HEADERS[physical]);
-            const share = Math.floor(w * spec.weight / total);
-            widths.push(Math.max(spec.min, Math.min(spec.max, share)));
-        }
-        return widths;
-    }
+    /* 너비를 실제로 정하는 일은 공용이 한다(static/js/sheet_widths.js) —
+       배합비·원료 붙여넣기·연락처·영양성분이 같은 규칙으로 움직여야 한다.
+       여기서는 이 표의 칸 성격만 적어 둔다. */
+    let bomWidths = null;
 
     function initGrid(data = []) {
         if (!data.length) {
@@ -549,7 +540,14 @@ body.in-iframe .bom-page-header { display: none !important; }
                     redo: { name: '다시 실행' },
                     separator_3: '---------',
                     copy: { name: '복사' },
-                    cut: { name: '잘라내기' }
+                    cut: { name: '잘라내기' },
+                    separator_4: '---------',
+                    /* 끌다가 어긋나면 되돌릴 길이 있어야 한다. 계정에 남는
+                       값이라 다시 열어도 그대로이기 때문이다. */
+                    reset_widths: {
+                        name: '칸 너비 되돌리기',
+                        callback: function () { if (bomWidths) bomWidths.reset(); }
+                    }
                 }
             } : {
                 items: { copy: { name: '복사' } }
@@ -605,11 +603,13 @@ body.in-iframe .bom-page-header { display: none !important; }
                 { data: 'report_no', editor: 'text' },
                 { data: 'notes', editor: 'text' }
             ],
-            stretchH: 'all',
+            /* 늘린 만큼 표가 넓어질 뿐 다른 칸을 줄이지 않는다. 'all' 이면
+               한 칸을 넓힐 때 고르지도 않은 칸이 따라 줄어든다. 너비는
+               attachSheetWidths 가 정한다(static/js/sheet_widths.js). */
+            stretchH: 'none',
             /* 마지막 줄을 채우면 아래에 빈 줄이 다시 생긴다. 스무 줄짜리
                배합비에서 줄이 모자라 우클릭 메뉴를 찾게 하지 않는다. */
             minSpareRows: 3,
-            colWidths: getBomColWidths(),
             height: 'auto',
             autoRowSize: { syncLimit: 300 },
             readOnly: !CAN_EDIT,
@@ -692,15 +692,11 @@ body.in-iframe .bom-page-header { display: none !important; }
                 window.sheetPasteApplyOrder(hot, window.GRID_ORDER, {
                     headers: BOM_SHEET_HEADERS
                 });
-                // 아래 afterColumnMove 를 아직 달기 전이라 여기서 한 번 잡는다
-                hot.updateSettings({ colWidths: getBomColWidths() });
             }
 
             /* 손으로 끌어다 옮긴 것도 남긴다 — 붙여넣기로 놓은 것과 같은 자리.
-               너비도 다시 잡는다. 칸이 옮겨 갔는데 너비가 자리에 남아 있으면
-               배합비 칸이 넓고 원재료 표시명이 좁아진다. */
+               너비는 공용이 따라 옮긴다(attachSheetWidths). */
             hot.addHook('afterColumnMove', function () {
-                hot.updateSettings({ colWidths: getBomColWidths() });
                 var order = [];
                 for (var v = 0; v < BOM_SHEET_HEADERS.length; v++) {
                     order.push(BOM_SHEET_HEADERS[hot.toPhysicalColumn(v)]);
@@ -730,20 +726,18 @@ body.in-iframe .bom-page-header { display: none !important; }
             clearAllRows({ ask: false });
         });
 
-        // 컨테이너 크기 변경 시 콜너비 자동 재계산 (반응형)
-        const bomGrid = document.getElementById('bom-grid');
-        if (bomGrid && window.ResizeObserver) {
-            let bomResizeTimer;
-            const bomResizeObserver = new ResizeObserver(() => {
-                clearTimeout(bomResizeTimer);
-                bomResizeTimer = setTimeout(() => {
-                    if (hot) {
-                        hot.updateSettings({ colWidths: getBomColWidths() });
-                        hot.render();
-                    }
-                }, 50);
+        /* 칸 너비 — 규칙도 저장도 공용이 한다(static/js/sheet_widths.js).
+           끌어서 조절한 것은 계정에 남고, 칸을 옮겨도 이름을 따라간다.
+           내용이 없는 칸은 최소로 접힌다. */
+        if (window.attachSheetWidths) {
+            bomWidths = window.attachSheetWidths(hot, {
+                headers: BOM_SHEET_HEADERS,
+                rules: BOM_COL_WIDTH,
+                container: 'bom-grid',
+                screen: 'bom_grid',
+                csrf: getCsrfToken(),
+                saved: window.GRID_WIDTHS || {}
             });
-            bomResizeObserver.observe(bomGrid);
         }
     }
 

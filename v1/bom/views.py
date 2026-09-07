@@ -65,7 +65,7 @@ def bom_workspace(request, label_id):
         delete_YN='N'
     ).order_by('-update_datetime')
 
-    from v1.common.views import grid_order
+    from v1.common.views import grid_order, grid_widths
     from v1.label.services.allergen_names import HEADER_NAMES
 
     context = {
@@ -77,6 +77,8 @@ def bom_workspace(request, label_id):
         'is_owner': is_owner,
         # 지난번에 놓아 둔 칸 순서. 붙여넣기가 정한 것이든 손으로 옮긴 것이든.
         'grid_order': grid_order(request.user, 'bom_grid'),
+        # 끌어서 조절해 둔 칸 너비. 자리가 아니라 이름에 붙는다.
+        'grid_widths': grid_widths(request.user, 'bom_grid'),
         # 표에서 열 이름으로 쓰는 알레르기 말들. "계란 O" 를 알아보는 데 쓴다.
         'allergen_header_names': HEADER_NAMES,
     }

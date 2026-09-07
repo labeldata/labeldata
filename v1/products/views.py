@@ -2743,11 +2743,15 @@ def nutrition_workspace(request, label_id):
         perm = getattr(shared_share, 'permission', None)
         can_edit = bool(perm and perm.can_edit_label)
 
+    from v1.common.views import grid_widths
+
     context = {
         'label': label,
         'LABEL_ID': label.my_label_id,
         'STATIC_BUILD_DATE': datetime.now().strftime('%Y%m%d%H%M%S'),
         'can_edit': can_edit,
+        # 끌어서 조절해 둔 칸 너비. 표 쓰는 화면이 다 같은 자리에 남긴다.
+        'grid_widths': grid_widths(request.user, 'nutrition_grid'),
     }
     log_activity(request, 'product', 'nutrition_view', label_id)
     return render(request, 'products/nutrition_editor.html', context)
@@ -4941,11 +4945,12 @@ def contacts(request):
         c['doc_pending']  = dr.get('pending', 0)
         c['doc_received'] = dr_recv_map.get(c['email'], 0)  # 이 연락처로부터 받은 요청
 
-    from v1.common.views import grid_order
+    from v1.common.views import grid_order, grid_widths
 
     context = {
         'contacts_list': contacts_list,
         'grid_order': grid_order(request.user, 'contact_grid'),
+        'grid_widths': grid_widths(request.user, 'contact_grid'),
     }
     return render(request, 'products/contacts.html', context)
 

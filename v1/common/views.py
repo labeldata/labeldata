@@ -900,11 +900,12 @@ def grid_order_save(request):
         payload = json.loads(request.body or '{}')
         screen = str(payload.get('screen') or '').strip()
         order = [str(name) for name in (payload.get('order') or [])]
+        widths = payload.get('widths')
     except (ValueError, TypeError):
         return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
                             status=400)
 
-    if not screen or not order:
+    if not screen or not (order or isinstance(widths, dict)):
         return JsonResponse({'success': False, 'error': '화면과 순서가 필요합니다.'},
                             status=400)
     if len(order) > 40 or any(len(name) > 40 for name in order):
@@ -917,10 +918,27 @@ def grid_order_save(request):
         return JsonResponse({'success': False, 'error': '프로필이 없습니다.'},
                             status=400)
     prefs = dict(profile.list_prefs or {})
-    prefs[screen] = dict(prefs.get(screen) or {}, order=order)
+    saved = dict(prefs.get(screen) or {})
+    if order:
+        saved['order'] = order
+    # 끌어서 조절한 칸 너비. 자리가 아니라 **이름**에 붙는다 — 칸을 옮겨도
+    # 따라가야 하기 때문이다. 화면이 보내는 것은 칸 몇 개의 픽셀 수뿐이라,
+    # 그 모양이 아니면 받지 않는다.
+    if isinstance(widths, dict):
+        clean = {}
+        for name, value in list(widths.items())[:40]:
+            try:
+                px = int(float(value))
+            except (TypeError, ValueError):
+                continue
+            if len(str(name)) <= 40 and 20 <= px <= 1200:
+                clean[str(name)] = px
+        saved['widths'] = clean
+    prefs[screen] = saved
     profile.list_prefs = prefs
     profile.save(update_fields=['list_prefs'])
-    return JsonResponse({'success': True, 'order': order})
+    return JsonResponse({'success': True, 'order': saved.get('order', []),
+                         'widths': saved.get('widths', {})})
 
 
 def grid_order(user, screen):
@@ -932,3 +950,21 @@ def grid_order(user, screen):
     except Exception:
         # 프로필이 없거나 값이 깨졌다. 기본 순서로 여는 것이 맞다.
         return []
+
+
+def grid_widths(user, screen):
+    """
+    끌어서 조절해 둔 칸 너비. {칸 이름: 픽셀}. 없으면 빈 사전.
+
+    **자리가 아니라 이름에 붙는다.** 붙여넣기가 칸을 엑셀 순서로 옮겨 놓아도
+    그 사람이 정한 너비는 그 칸을 따라가야 한다.
+    """
+    try:
+        prefs = (getattr(user, 'profile', None).list_prefs or {})
+        widths = (prefs.get(screen) or {}).get('widths')
+        if not isinstance(widths, dict):
+            return {}
+        return {str(name): int(px) for name, px in widths.items()
+                if str(px).lstrip('-').isdigit()}
+    except Exception:
+        return {}

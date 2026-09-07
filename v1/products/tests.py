@@ -3076,18 +3076,21 @@ class BomGridHasTheRestTests(TestCase):
         for name in names:
             self.assertIn("'%s':" % name, block, name)
         # 성격이 다른 칸은 폭도 달라야 한다
-        self.assertLess(block.index("'배합비(%)'"), len(block))
-        self.assertIn('max: 108', block)      # 숫자 네 자리면 끝이다
-        self.assertIn('min: 200', block)      # 원재료 표시명은 문장이 온다
+        self.assertIn('max: 108', block)      # 배합비는 숫자 네 자리면 끝이다
+        self.assertIn('min: 220', block)      # 원재료 표시명은 문장이 온다
 
-    def test_칸을_옮기면_너비도_따라간다(self):
-        head = self.bom.index('function getBomColWidths')
-        block = self.bom[head:head + 1200]
-        self.assertIn('hot.toPhysicalColumn(v)', block)
-        self.assertIn('Math.max(spec.min, Math.min(spec.max, share))', block)
-        # 옮긴 뒤 다시 잡아 주지 않으면 자리와 너비가 어긋난 채로 남는다
-        head = self.bom.index("hot.addHook('afterColumnMove'")
-        self.assertIn('colWidths: getBomColWidths()', self.bom[head:head + 400])
+    def test_너비는_공용_규칙으로_간다(self):
+        """배합비·원료 붙여넣기·연락처·영양성분이 같은 규칙으로 움직여야 한다."""
+        self.assertIn('sheet_widths.js', self.bom)
+        self.assertIn('window.attachSheetWidths(hot', self.bom)
+        # 자리 비율로 정하던 것은 걷었다
+        self.assertNotIn('function getBomColWidths', self.bom)
+        self.assertNotIn('const ratios', self.bom)
+
+    def test_늘려도_다른_칸이_줄지_않는다(self):
+        """stretchH: 'all' 이면 한 칸을 넓힐 때 고르지도 않은 칸이 따라 준다."""
+        self.assertIn("stretchH: 'none'", self.bom)
+        self.assertNotIn("stretchH: 'all'", self.bom)
 
     def test_붙여넣기도_그_칸을_안다(self):
         head = self.bom.index('const BOM_SHEET_ALIASES')
@@ -4090,9 +4093,6 @@ class BOM을_통째로_지운다(TestCase):
         """sheet_paste.js 를 못 실어도 지우기는 살아 있어야 한다."""
         self.assertLess(self.bom.index('if (window.attachSheetPaste)'),
                         self.bom.index("hot.addHook('beforeKeyDown'"))
-        paste_block_end = self.bom.index('// 컨테이너 크기 변경 시')
-        head = self.bom.index("hot.addHook('beforeKeyDown'")
-        self.assertLess(head, paste_block_end)
         # 여덟 칸 들여쓰기 = 붙여넣기 if 문 밖이다
         self.assertIn("\n        hot.addHook('beforeKeyDown'", self.bom)
 
@@ -4391,3 +4391,82 @@ class 안내_문구가_말이_되어야_한다(TestCase):
               ).read_text(encoding='utf-8')
         self.assertNotIn('주의가 전부 갑니다', js)
         self.assertIn('표시된 항목의 인식률이 높아집니다', js)
+
+
+class 칸_너비는_한_규칙으로(TestCase):
+    """
+    표 쓰는 화면 넷이 저마다 너비를 정했고 셋이 `stretchH: 'all'` 이었다.
+
+      1. 끌어서 넓히면 **고르지도 않은 칸이 따라 줄었다.** stretch 가 칸 전체를
+         컨테이너 폭에 맞춰 다시 나눠 주기 때문이다.
+      2. 여러 칸을 골라 함께 조절해도 그 자리에서 되돌아갔다.
+      3. 자리로 정한 너비는 붙여넣기가 칸을 옮기면 엉뚱한 칸에 남았다.
+      4. 너비가 바뀌었는데 줄 높이를 다시 재지 않아 행 번호와 내용이 어긋났다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/sheet_widths.js').read_text(encoding='utf-8')
+        self.screens = {
+            '배합비': base / 'templates/products/bom_detail.html',
+            '연락처': base / 'templates/products/contacts.html',
+            '원료 붙여넣기': base / 'templates/label/my_ingredient_list_combined.html',
+            '영양성분': base / 'templates/products/nutrition_editor.html',
+        }
+
+    def test_네_화면이_같은_파일을_쓴다(self):
+        for name, path in self.screens.items():
+            text = path.read_text(encoding='utf-8')
+            self.assertIn('sheet_widths.js', text, name)
+            self.assertIn('attachSheetWidths', text, name)
+
+    def test_어디에도_stretch_가_남지_않았다(self):
+        for name, path in self.screens.items():
+            self.assertNotIn("stretchH: 'all'", path.read_text(encoding='utf-8'), name)
+
+    def test_너비는_이름에_붙는다(self):
+        """칸을 옮겨도 그 칸의 너비여야 한다."""
+        head = self.js.index('function nameAt')
+        self.assertIn('hot.toPhysicalColumn', self.js[head:head + 300])
+        self.assertIn("hot.addHook('afterColumnMove', redraw)", self.js)
+
+    def test_끌어서_정한_것이_가장_세다(self):
+        head = self.js.index('function compute')
+        block = self.js[head:head + 1400]
+        self.assertIn('overrides[name]', block)
+
+    def test_여러_칸을_함께_조절해도_남는다(self):
+        """
+        인자로 온 칸 하나만 보면 함께 조절한 나머지가 빠진다. 지금 그려진
+        너비를 통째로 읽어 이름에 붙인다.
+        """
+        head = self.js.index("hot.addHook('afterColumnResize'")
+        block = self.js[head:head + 700]
+        self.assertIn('for (var v = firstCol;', block)
+        self.assertIn('hot.getColWidth(v)', block)
+
+    def test_내용이_없으면_최소로_접는다(self):
+        self.assertIn('function hasContent', self.js)
+        head = self.js.index('function compute')
+        self.assertIn('hasContent(hot, firstCol + i)', self.js[head:head + 1400])
+
+    def test_너비가_바뀌면_줄_높이를_다시_잰다(self):
+        """재 둔 값이 남아 있으면 행 번호와 내용이 어긋난 채로 그려진다."""
+        head = self.js.index('function redraw')
+        block = self.js[head:head + 500]
+        self.assertIn("getPlugin('autoRowSize')", block)
+        self.assertIn('clearCache', block)
+        self.assertIn('hot.render()', block)
+
+    def test_계정에_남는다(self):
+        """브라우저가 아니라 계정이다 — 다른 자리에서 열어도 같은 표여야 한다."""
+        self.assertIn("'/common/grid-order/'", self.js)
+        from pathlib import Path
+        from django.conf import settings as dj
+        common = (Path(dj.BASE_DIR) / 'common/views.py').read_text(encoding='utf-8')
+        self.assertIn('def grid_widths(user, screen)', common)
+        self.assertIn("saved['widths'] = clean", common)
+        # 화면이 보내는 것은 칸 몇 개의 픽셀 수뿐이다
+        self.assertIn('20 <= px <= 1200', common)
