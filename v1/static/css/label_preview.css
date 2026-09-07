@@ -278,8 +278,13 @@ body {
 .preview-table td {
   /* 너비는 colgroup 이 정한다 */
   word-wrap: break-word;
-  overflow-wrap: break-word;
+  /* 원재료명에는 띄어쓰기 없이 이어지는 긴 토막이 있다
+     ("[에스테르화유:팜올레인유(말레이시아산),…"). break-word 는 그 안에서
+     끊지 못해 글자가 칸을 넘쳐 표 밖으로 흐른다. anywhere 는 끊는다. */
+  overflow-wrap: anywhere;
   hyphens: auto;
+  /* 좁은 폭에서 칸이 제 너비를 지키게 한다 */
+  max-width: 0;
 }
 
 .preview-table th, .preview-table td { 
@@ -809,10 +814,12 @@ tbody.layout-horizontal tr td {
     border: 1px solid var(--ez-gray-300, #dadce0);
     line-height: 1.4;
     word-wrap: break-word;
-    word-break: break-word;
+    /* 2단은 칸이 좁다. 안 끊기는 긴 토막이 표 밖으로 흐르지 않게 한다 */
+    overflow-wrap: anywhere;
     white-space: normal;
     vertical-align: middle;
     box-sizing: border-box;
+    max-width: 0;
 }
 
 tbody.layout-horizontal tr th {
@@ -1508,7 +1515,43 @@ tbody.layout-vertical tr td {
   border-top: 1px solid var(--ez-gray-200, #e8eaed);
   background: var(--ez-gray-50, #f8f9fa);
 }
-.dr-add { display: flex; align-items: center; gap: 6px; flex: 1 1 320px; }
+.dr-add { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 100%; }
+.dr-add-label {
+  flex: 0 0 auto;
+  padding-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ez-gray-700, #5f6368);
+  line-height: 1.4;
+}
+.dr-add-label small {
+  display: block;
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--ez-gray-600, #80868b);
+}
+/* 기본정보 탭의 빠른 입력 줄과 같은 모양이어야 한다 — 손이 헷갈리지 않게 */
+.dr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 92px;
+  overflow-y: auto;
+}
+.dr-chips .my-phrase-chip { display: inline-flex; align-items: stretch; }
+.dr-chips .my-phrase-chip .btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.dr-chips .my-phrase-act {
+  border: 1px solid var(--ez-gray-300, #dadce0);
+  border-left: 0;
+  background: #fff;
+  color: var(--ez-gray-700, #5f6368);
+  font-size: 11px;
+  line-height: 1;
+  padding: 0 7px;
+  cursor: pointer;
+}
+.dr-chips .my-phrase-act:last-child { border-radius: 0 4px 4px 0; }
+.dr-chips .my-phrase-add { border-style: dashed; }
 /* 줄 빼기 단추. 비고 칸 오른쪽 끝에 붙는다 */
 .dr-note { position: relative; }
 .dr-note input { padding-right: 22px; }
