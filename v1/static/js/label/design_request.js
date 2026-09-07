@@ -277,12 +277,6 @@
     if (cancel) cancel.addEventListener('click', close);
     var save = el('drDownloadBtn');
     if (save) save.addEventListener('click', download);
-    var reset = el('drResetBtn');
-    if (reset) reset.addEventListener('click', function () {
-      window.DESIGN_REQUEST.notes = (window.DESIGN_REQUEST_DEFAULT_NOTES
-                                     || window.DESIGN_REQUEST.notes);
-      draw();
-    });
     /* 줄 빼기 — 창 안에서만 뺀다. 표시사항 자체를 지우는 것이 아니다 */
     var body = el('drRows');
     if (body) body.addEventListener('click', function (event) {

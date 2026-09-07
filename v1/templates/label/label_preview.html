@@ -350,7 +350,6 @@
             <small>문구를 더하거나 고치려면 기본정보 탭에서 하세요.</small></span>
         </div>
         <div class="dr-actions">
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="drResetBtn">규정 기본값</button>
           <button type="button" class="btn btn-sm btn-secondary" id="drCancelBtn">닫기</button>
           <button type="button" class="btn btn-sm btn-primary" id="drDownloadBtn">
             <i class="fas fa-file-word me-1"></i>워드로 내보내기
@@ -441,8 +440,6 @@
     } catch (e) {
       window.DESIGN_REQUEST = { notes: { main: [], info: [] }, mainFields: [] };
     }
-    window.DESIGN_REQUEST_DEFAULT_NOTES =
-      JSON.parse(JSON.stringify(window.DESIGN_REQUEST.notes || {}));
   </script>
 
   <!-- 구글 스타일 Snackbar -->
