@@ -126,9 +126,11 @@ class OCRProcessor {
             return;
         }
         
-        // 파일 크기 검증 (카메라: 5MB, 파일: 10MB)
-        const maxSize = type === 'file' ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
-        const maxSizeText = type === 'file' ? '10MB' : '5MB';
+        // 파일 크기 검증 — 한도는 서버와 같다
+        // 서버와 같은 한도를 쓴다(common/uploads.MAX_UPLOAD_MB). 화면이 더
+        // 빡빡하면 서버 한도를 올려도 사용자는 못 올린다
+        const maxSize = (window.MAX_UPLOAD_MB || 30) * 1024 * 1024;
+        const maxSizeText = (window.MAX_UPLOAD_MB || 30) + 'MB';
         
         if (file.size > maxSize) {
             this.showError(`파일 크기는 ${maxSizeText} 이하여야 합니다.`);

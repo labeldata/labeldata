@@ -340,9 +340,13 @@
       </div>
       <div class="dr-foot">
         <div class="dr-add">
-          <select id="drPhrase"><option value="">문구함에서 고르기…</option></select>
+          {# 여럿 골라 한꺼번에 넣는다. 하나씩이면 다섯 개에 다섯 번이다 #}
+          <select id="drPhrase" multiple size="3"
+                  title="Ctrl(또는 Shift)을 누른 채 여럿 고를 수 있습니다"></select>
           <input type="text" id="drPhraseText" placeholder="문구를 직접 적어 더하기">
           <button type="button" class="btn btn-sm btn-outline-secondary" id="drAddPhraseBtn">추가</button>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="drKeepPhraseBtn"
+                  title="적은 문구를 문구함에 담아 다음에도 씁니다">문구함에 담기</button>
         </div>
         <div class="dr-actions">
           <button type="button" class="btn btn-sm btn-outline-secondary" id="drResetBtn">규정 기본값</button>

@@ -51,6 +51,7 @@ from .services.validation_service import validate_label
 from .services.ai_validation_service import check_ingredient_order, run_full_review, group_issues_by_category
 from v1.common import quota
 from .services import ingredient_paste
+from v1.common.uploads import MAX_UPLOAD_BYTES as _UPLOAD_BYTES, MAX_UPLOAD_MB as _UPLOAD_MB
 from .services.allergen_names import HEADER_NAMES as _ALLERGEN_HEADER_NAMES
 from .services.design_request import (
     MAIN_PANEL_FIELDS,
@@ -2812,7 +2813,7 @@ def ocr_extract(request):
         }, status=400)
 
     total_size = sum(f.size for f in image_files)
-    if total_size > 20 * 1024 * 1024:
+    if total_size > _UPLOAD_BYTES * 2:      # 여러 장을 한 번에 올리는 자리
         return JsonResponse({
             'success': False,
             'error': f'사진 용량 합계는 20MB 이하여야 합니다 (현재 {total_size / 1024 / 1024:.1f}MB).',
@@ -2820,10 +2821,11 @@ def ocr_extract(request):
 
     name = ''
     for image_file in image_files:
-        if image_file.size > 10 * 1024 * 1024:
+        if image_file.size > _UPLOAD_BYTES:
             return JsonResponse({
                 'success': False,
-                'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {image_file.size / 1024 / 1024:.1f}MB).',
+                'error': f'파일 하나는 {_UPLOAD_MB} MB 까지 올릴 수 있습니다 '
+                         f'(지금 {image_file.size / 1024 / 1024:.1f} MB).',
             }, status=400)
 
         # content_type 이 없는 업로드가 있다 (일부 브라우저·자동화 도구).
@@ -2955,9 +2957,11 @@ def upload_label_pdf(request):
         if not label_id or not pdf_file:
             return JsonResponse({'success': False, 'error': 'label_id와 pdf_file이 필요합니다.'})
 
-        # 파일 크기 제한 (20MB)
-        if pdf_file.size > 20 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': 'PDF 파일 크기는 20MB를 초과할 수 없습니다.'})
+        # 파일 크기 제한 — 한곳에서 정한다(common/uploads.py)
+        if pdf_file.size > _UPLOAD_BYTES:
+            return JsonResponse({
+                'success': False,
+                'error': f'PDF 파일 크기는 {_UPLOAD_MB} MB 를 초과할 수 없습니다.'})
 
         # 오너 우선 조회, 실패 시 공유 사용자 확인
         label = None
@@ -4977,3 +4981,59 @@ def design_request_prefs(request):
         return JsonResponse({'success': False, 'error': '남길 것이 없습니다.'},
                             status=400)
     return JsonResponse({'success': True, 'notes': saved})
+
+
+@login_required
+@require_POST
+def phrase_save_api(request):
+    """
+    문구를 문구함에 담는다.
+
+    자주 쓰는 문구는 이미 문구함에 있는데 **담는 길이 화면에 없었다.** 관리
+    화면에서만 만들 수 있으니, 의뢰서를 짜다가 "이건 다음에도 쓰겠다" 싶은
+    문구를 그 자리에서 담을 수가 없었다.
+
+    이름을 안 주면 내용 앞머리를 이름으로 쓴다 — 이름을 짓느라 멈추게 하지
+    않는다.
+    """
+    import json as _json
+
+    from v1.label.constants import CATEGORY_CHOICES
+
+    try:
+        payload = _json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
+                            status=400)
+
+    content = str(payload.get('content') or '').strip()[:1000]
+    if not content:
+        return JsonResponse({'success': False, 'error': '문구가 비어 있습니다.'},
+                            status=400)
+    name = str(payload.get('name') or '').strip()[:200] or content[:30]
+    category = str(payload.get('category') or 'additional')
+    if category not in dict(CATEGORY_CHOICES):
+        category = 'additional'
+
+    phrase = MyPhrase.objects.create(
+        user_id=request.user, my_phrase_name=name,
+        category_name=category, comment_content=content,
+        note=str(payload.get('note') or '')[:200])
+    return JsonResponse({'success': True, 'id': phrase.my_phrase_id,
+                         'name': phrase.my_phrase_name,
+                         'content': phrase.comment_content,
+                         'category': phrase.category_name})
+
+
+@login_required
+@require_POST
+def phrase_delete_api(request, phrase_id):
+    """문구함에서 뺀다. 지운 것은 지운 날짜만 남기고 자료는 두고 본다."""
+    try:
+        phrase = MyPhrase.objects.get(my_phrase_id=phrase_id,
+                                      user_id=request.user, delete_YN='N')
+    except MyPhrase.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '없는 문구입니다.'},
+                            status=404)
+    phrase.soft_delete()
+    return JsonResponse({'success': True})

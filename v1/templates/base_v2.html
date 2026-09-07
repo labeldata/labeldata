@@ -210,6 +210,8 @@
     <script>
     (function(){
       let _t = null;
+      {# 화면이 서버와 같은 파일 크기 한도를 쓴다 #}
+      window.MAX_UPLOAD_MB = {{ MAX_UPLOAD_MB|default:30 }};
       window.showSnackbar = function(message, type) {
         /* type: 'success'|'error'|'warning'|'info' */
         var el  = document.getElementById('v2Snackbar');

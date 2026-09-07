@@ -4470,3 +4470,96 @@ class 칸_너비는_한_규칙으로(TestCase):
         self.assertIn("saved['widths'] = clean", common)
         # 화면이 보내는 것은 칸 몇 개의 픽셀 수뿐이다
         self.assertIn('20 <= px <= 1200', common)
+
+
+class 화면이_부르는_도우미는_그_화면에_있다(TestCase):
+    """
+    BOM 화면이 `getCsrfToken()` 을 부르는데 그 함수가 없었다. 부모 화면
+    (product_detail.html)에 같은 이름이 있어서 있는 줄 알았는데, BOM 은
+    iframe 안에서 돌고 iframe 은 제 창을 쓴다.
+
+    없는 함수를 부른 자리가 셋이었고 그 하나가 initGrid 안이라 **초기화가
+    통째로 멈췄다** — 원료 보관함 접기, 칸 너비, 붙여넣기 안내가 다 같이
+    죽었고, 칸을 끌어다 옮기면 제자리로 돌아간 것처럼 보였다(afterColumnMove
+    에서 예외가 나면 Handsontable 이 그 뒤의 render 를 건너뛴다).
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.bom = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                    ).read_text(encoding='utf-8')
+
+    def test_csrf_도우미가_이_화면에_있다(self):
+        self.assertIn('getCsrfToken()', self.bom)
+        self.assertIn('function getCsrfToken()', self.bom)
+
+    def test_붙여넣기_안내는_무슨_일이_나도_나온다(self):
+        """몇 줄이 들어갔는지 못 보면 붙여넣기가 안 된 줄 알게 된다."""
+        head = self.bom.index("onReport: function (info)")
+        block = self.bom[head:head + 1400]
+        self.assertIn('try {', block)
+        self.assertLess(block.index('try {'), block.index('sheetPasteSaveOrder'))
+        self.assertIn('showSnackbar(', block)
+
+    def test_칸을_옮기는_훅이_통째로_죽지_않는다(self):
+        head = self.bom.index("hot.addHook('afterColumnMove'")
+        block = self.bom[head:head + 700]
+        self.assertIn('try {', block)
+        self.assertIn('catch (e) {}', block)
+
+
+class 파일_크기는_한곳에서_정한다(TestCase):
+    """
+    한도가 화면마다 달랐다 — 문서함 50 MB, 표시사항 사진 10 MB, 원료 사진
+    10 MB, 시안 20 MB, 판독 실험실 10 MB. 같은 성적서를 문서함에는 올릴 수
+    있는데 사진으로는 못 올렸고, 왜 안 되는지 화면마다 다른 말을 했다.
+
+    한 파일의 상한은 서버 보호 값이라 등급과 무관하고(30 MB), 한 사람이
+    통틀어 쓰는 용량은 쌓여 있는 동안 자리를 차지하므로 저량 한도로 센다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='uploader', password='x')
+
+    def test_한_파일은_30MB_까지(self):
+        from v1.common.uploads import MAX_UPLOAD_MB
+
+        self.assertEqual(MAX_UPLOAD_MB, 30)
+
+    def test_큰_파일은_왜_안_되는지_말해_준다(self):
+        """"파일이 큽니다" 만으로는 무엇을 해야 하는지 모른다."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from v1.common.uploads import check
+
+        big = SimpleUploadedFile('big.pdf', b'x')
+        big.size = 40 * 1024 * 1024
+        message = check(self.user, big, '파일')
+        self.assertIn('30 MB', message)
+        self.assertIn('40.0 MB', message)
+        self.assertIn('나눠', message)
+
+    def test_한도_안이면_받는다(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from v1.common.uploads import check
+
+        ok = SimpleUploadedFile('ok.pdf', b'x')
+        ok.size = 12 * 1024 * 1024
+        self.assertIsNone(check(self.user, ok, '파일'))
+
+    def test_한_사람이_쓰는_용량도_센다(self):
+        from v1.common import quota
+
+        usage = quota.usage(self.user, 'storage')
+        self.assertEqual(usage['unit'], 'MB')
+        self.assertEqual(usage['kind'], quota.STOCK)
+        self.assertGreater(usage['limit'], 0)
+
+    def test_화면마다_다른_숫자를_적어_두지_않는다(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+
+        for rel in ('products/views.py', 'label/views.py', 'label/views_ocr_lab.py'):
+            text = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
+            self.assertNotIn('10 * 1024 * 1024', text, rel)
+            self.assertNotIn('50 * 1024 * 1024', text, rel)

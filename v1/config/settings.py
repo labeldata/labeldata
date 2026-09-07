@@ -81,6 +81,7 @@ TEMPLATES = [
                 'v1.common.context_processors.board_notifications',
                 'v1.common.context_processors.ui_mode',
                 'v1.common.context_processors.regulatory_alerts',
+                'v1.common.context_processors.upload_limit',
             ],
         },
     },

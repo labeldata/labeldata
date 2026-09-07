@@ -52,6 +52,12 @@ def _count_ingredients(user):
     return MyIngredient.objects.filter(user_id=user, delete_YN='N').count()
 
 
+def _count_storage(user):
+    """올려 둔 파일의 합(MB). 성적서·시안·사진이 다 여기 쌓인다."""
+    from v1.common.uploads import stored_bytes
+    return int(round(stored_bytes(user) / 1024.0 / 1024.0))
+
+
 # 지금 넣는 숫자는 **넉넉하게** 잡는다.
 #
 # 한도를 거는 목적은 나중에 유료로 돌릴 자리를 만들어 두는 것이지, 오늘
@@ -74,6 +80,11 @@ FEATURES = {
     'ingredient': Feature(
         STOCK, '등록한 원료', free=2000, paid=20000, unit='건',
         counter=_count_ingredients),
+    # 파일은 올린 순간부터 디스크를 차지한다. 한 파일의 상한(30 MB)은 등급과
+    # 무관한 서버 보호 값이라 여기 없다 — common/uploads.MAX_UPLOAD_MB 다.
+    'storage': Feature(
+        STOCK, '올린 파일', free=2000, paid=20000, unit='MB',
+        counter=_count_storage),
 }
 
 

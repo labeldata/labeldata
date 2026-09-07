@@ -94,6 +94,10 @@ urlpatterns = [
     path('api/recent-usage/', views.get_recent_usage_api, name='recent_usage_api'),
     path('api/auto-fill/', views.auto_fill_api, name='auto_fill_api'),
     path('api/phrases/', views.phrases_api, name='phrases_api'),
+    # 문구함에 담기·빼기. 쓰던 자리에서 바로 담을 수 있어야 한다
+    path('api/phrases/save/', views.phrase_save_api, name='phrase_save_api'),
+    path('api/phrases/<int:phrase_id>/delete/', views.phrase_delete_api,
+         name='phrase_delete_api'),
     
     # 연결된 원료 조회
     path('linked-labels-count/<int:ingredient_id>/', views.linked_labels_count, name='linked_labels_count'), #삭제했던 url 다시 추가 (원료 관리에서 연결된 표시사항 갯수 확인 용도)

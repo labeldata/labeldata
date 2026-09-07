@@ -104,7 +104,9 @@ def truth_create(request):
     image = request.FILES.get('image')
     if not image:
         return JsonResponse({'success': False, 'error': '사진을 올려주세요.'}, status=400)
-    if image.size > 10 * 1024 * 1024:
+    from v1.common.uploads import MAX_UPLOAD_BYTES
+
+    if image.size > MAX_UPLOAD_BYTES:
         return JsonResponse({'success': False, 'error': '사진은 10MB 이하여야 합니다.'},
                             status=400)
 

@@ -250,9 +250,11 @@ body.in-iframe .bom-main-column {
     font-size: 13px !important;
 }
 
+/* 표는 제 높이 안에서 스크롤된다(initGrid 의 gridHeight). 그래야 머리글이
+   그 자리에 남고 가로 스크롤막대도 화면 안에 있다 — 'auto' 로 두면 페이지가
+   길어져서 끝까지 내려야 막대가 보였다. */
 #bom-grid {
     width:    100%;
-    height:   auto !important;
     overflow: hidden;
 }
 .hot-container {

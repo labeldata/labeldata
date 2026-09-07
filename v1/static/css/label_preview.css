@@ -1509,6 +1509,23 @@ tbody.layout-vertical tr td {
   background: var(--ez-gray-50, #f8f9fa);
 }
 .dr-add { display: flex; align-items: center; gap: 6px; flex: 1 1 320px; }
+/* 줄 빼기 단추. 비고 칸 오른쪽 끝에 붙는다 */
+.dr-note { position: relative; }
+.dr-note input { padding-right: 22px; }
+.dr-drop {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: 0;
+  background: none;
+  color: var(--ez-gray-500, #9aa0a6);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dr-drop:hover { color: var(--ez-danger, #c5221f); }
+
+.dr-add select[multiple] { min-width: 180px; }
 .dr-add select, .dr-add input {
   border: 1px solid var(--ez-gray-300, #dadce0);
   border-radius: 6px;

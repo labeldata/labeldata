@@ -1522,3 +1522,21 @@ body {
 .text-bold {
   font-weight: bold !important;
 }
+/* 영양성분 탭(nutrition_editor)의 산출 방법 줄 */
+.calc-source-row { margin-top: 6px; }
+.calc-note {
+  display: none;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--ez-gray-50, #f8f9fa);
+  border: 1px solid var(--ez-gray-200, #e8eaed);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ez-gray-700, #5f6368);
+}
+.calc-note.is-warn {
+  background: var(--ez-warning-bg, #fef7e0);
+  border-color: #fadf9a;
+  color: #7a5b06;
+}

@@ -38,6 +38,22 @@ from v1.label.services.label_naming import next_temp_label_name
 
 from .forms import ProductForm
 from v1.activity_log.utils import log_activity
+# 올릴 수 있는 파일 크기는 한곳에서 정한다(화면마다 다른 숫자를 적어 두면
+# 같은 파일이 여기서는 되고 저기서는 안 된다)
+from v1.common.uploads import (
+    MAX_UPLOAD_BYTES as _UPLOAD_BYTES,
+    MAX_UPLOAD_MB as _UPLOAD_MB,
+    check as upload_check,
+)
+
+
+def upload_limit_bytes():
+    return _UPLOAD_BYTES
+
+
+def upload_limit_mb():
+    return _UPLOAD_MB
+
 
 
 # ==================== 공통 알림·이메일 헬퍼 ====================
@@ -2744,6 +2760,11 @@ def nutrition_workspace(request, label_id):
         can_edit = bool(perm and perm.can_edit_label)
 
     from v1.common.views import grid_widths
+    from v1.label.constants import (
+        CALORIE_FACTORS, HIENG_LNTRT_CRITERIA, HIENG_LNTRT_KIND_NAMES,
+        HIENG_LNTRT_SODIUM_NOODLE, NUTRITION_TOLERANCE_DEFAULT,
+        NUTRITION_TOLERANCE_LIMIT, NUTRITION_TOLERANCE_UP,
+    )
 
     context = {
         'label': label,
@@ -2752,6 +2773,18 @@ def nutrition_workspace(request, label_id):
         'can_edit': can_edit,
         # 끌어서 조절해 둔 칸 너비. 표 쓰는 화면이 다 같은 자리에 남긴다.
         'grid_widths': grid_widths(request.user, 'nutrition_grid'),
+        # 허용오차·열량 계수·고열량저영양 기준. 화면이 같은 계산을 하되
+        # 숫자는 서버 상수 한 곳에서 온다.
+        'nutrition_rules': {
+            'toleranceUp': list(NUTRITION_TOLERANCE_UP),
+            'toleranceDefault': NUTRITION_TOLERANCE_DEFAULT,
+            'toleranceLimit': NUTRITION_TOLERANCE_LIMIT,
+            'calorieFactors': CALORIE_FACTORS,
+            'hieng': {kind: [[list(cond) for cond in rule] for rule in rules]
+                      for kind, rules in HIENG_LNTRT_CRITERIA.items()},
+            'hiengNames': HIENG_LNTRT_KIND_NAMES,
+            'hiengNoodleSodium': HIENG_LNTRT_SODIUM_NOODLE,
+        },
     }
     log_activity(request, 'product', 'nutrition_view', label_id)
     return render(request, 'products/nutrition_editor.html', context)
@@ -2786,7 +2819,14 @@ def nutrition_data_api(request, label_id):
         'nutrition_display_unit': label.nutrition_display_unit or 'basic',
         'basic_display_type': label.basic_display_type or '',
         'parallel_display_type': label.parallel_display_type or '',
-        
+        # 이론치로 만든 표인지, 무엇으로 어떻게 냈는지. 1회 섭취참고량은
+        # 고열량·저영양 판정의 분모다.
+        'serving_reference': label.serving_reference or '',
+        'hieng_kind': label.hieng_kind or '',
+        'nutrition_source': label.nutrition_source or '',
+        'nutrition_source_note': label.nutrition_source_note or '',
+        'nutrition_tolerance': label.nutrition_tolerance or '',
+
         # 필수 영양성분 9가지
         'calories': label.calories or '',
         'natriums': label.natriums or '',
@@ -2850,9 +2890,14 @@ def nutrition_save_api(request, label_id):
         data = json.loads(request.body)
         
         # 기본 설정
-        label.serving_size = data.get('serving_size', '') or '100'
+        #
+        # **빈 값을 100 으로 바꾸지 않는다.** 화면이 단위량을 못 받았을 때
+        # 100 을 넣으면 라벨에 "총 내용량 100 g" 이 찍힌다 — 133 g 짜리
+        # 제품의 표가 통째로 100 g 당으로 그려지고, 사진과 다른 표가 된다.
+        # 모르면 지금 저장된 값을 지키는 것이 맞다.
+        label.serving_size = data.get('serving_size') or label.serving_size or ''
         label.serving_size_unit = data.get('serving_size_unit', 'g') or 'g'
-        label.units_per_package = data.get('units_per_package', '') or '1'
+        label.units_per_package = data.get('units_per_package') or label.units_per_package or '1'
         label.nutrition_display_unit = data.get('nutrition_display_unit', 'basic') or 'basic'
         label.basic_display_type = data.get('basic_display_type', 'total') or 'total'
         label.parallel_display_type = data.get('parallel_display_type', 'unit_total') or 'unit_total'
@@ -3495,12 +3540,9 @@ def document_upload_api(request, label_id):
                 'error': '파일을 선택해주세요.'
             }, status=400)
         
-        # 파일 크기 제한 (50MB)
-        if uploaded_file.size > 50 * 1024 * 1024:
-            return JsonResponse({
-                'success': False,
-                'error': '파일 크기는 50MB를 초과할 수 없습니다.'
-            }, status=400)
+        problem = upload_check(request.user, uploaded_file, '파일')
+        if problem:
+            return JsonResponse({'success': False, 'error': problem}, status=400)
         
         # 슬롯 정보 조회 (있는 경우)
         slot = None
@@ -5998,13 +6040,11 @@ def label_photo_upload(request, label_id):
     label = _resolve_editable_label(request, label_id)
 
     uploaded = request.FILES.get('image')
-    if not uploaded:
-        return JsonResponse({'success': False, 'error': '사진이 없습니다.'}, status=400)
-    if uploaded.size > 10 * 1024 * 1024:
-        return JsonResponse({
-            'success': False,
-            'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {uploaded.size / 1024 / 1024:.1f}MB).',
-        }, status=400)
+    # 한도는 한곳에서 본다 — 화면마다 다른 숫자를 적어 두면 같은 파일이
+    # 여기서는 되고 저기서는 안 된다(common/uploads.py)
+    problem = upload_check(request.user, uploaded, '사진')
+    if problem:
+        return JsonResponse({'success': False, 'error': problem}, status=400)
 
     doc_type, _ = DocumentType.objects.get_or_create(
         type_code='LABEL_DESIGN',
@@ -6101,13 +6141,9 @@ def ingredient_photo_upload(request, label_id):
 
     # 읽는 데 돈이 나간다. 사진이 있는지부터 보고 나서 센다
     uploaded = request.FILES.get('image')
-    if not uploaded:
-        return JsonResponse({'success': False, 'error': '사진이 없습니다.'}, status=400)
-    if uploaded.size > 10 * 1024 * 1024:
-        return JsonResponse({
-            'success': False,
-            'error': f'파일 크기는 10MB 이하여야 합니다 (현재 {uploaded.size / 1024 / 1024:.1f}MB).',
-        }, status=400)
+    problem = upload_check(request.user, uploaded, '사진')
+    if problem:
+        return JsonResponse({'success': False, 'error': problem}, status=400)
 
     # 검사에 걸릴 요청까지 세면 잘못 올린 파일 하나가 그날 몫을 깎는다
     allowed, usage = quota.check_and_charge(request.user, 'ocr_ingredient')
@@ -6391,8 +6427,10 @@ def design_compare_record(request, label_id):
 
     document = None
     if design_file:
-        if design_file.size > 20 * 1024 * 1024:
-            return JsonResponse({'success': False, 'error': '파일 크기는 20MB 를 초과할 수 없습니다.'},
+        if design_file.size > upload_limit_bytes():
+            return JsonResponse({'success': False,
+                                 'error': '파일 크기는 %d MB 를 초과할 수 없습니다.'
+                                          % upload_limit_mb()},
                                 status=400)
         latest = ProductDocument.objects.filter(
             label=label, document_type=doc_type, active_yn=True,

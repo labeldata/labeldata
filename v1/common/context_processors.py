@@ -154,3 +154,13 @@ def regulatory_alerts(request):
     cache.set(cache_key, count, timeout=60)
     return {'regulatory_alert_count': count}
 
+
+def upload_limit(request):
+    """
+    올릴 수 있는 파일 크기. 화면이 서버보다 먼저 막지 않도록 같은 값을 준다.
+
+    한도를 화면에 따로 적어 두면 서버 한도를 올려도 사용자는 못 올린다 —
+    실제로 그랬다(서버 50 MB, 화면 10 MB).
+    """
+    from v1.common.uploads import MAX_UPLOAD_MB
+    return {'MAX_UPLOAD_MB': MAX_UPLOAD_MB}

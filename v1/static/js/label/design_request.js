@@ -144,11 +144,15 @@
     body.innerHTML = html || '<tr><td colspan="4">표시사항이 비어 있습니다.</td></tr>';
   }
 
+  /* 줄마다 지우는 단추. 의뢰서에 안 넣을 항목이 늘 몇 개 있는데(그 제품에
+     해당 없는 문구), 지울 길이 없으면 워드에서 다시 지워야 한다. */
   function rowCells(row) {
     return '<td class="dr-name">' + (row.name || '') + '</td>'
          + '<td class="dr-body">' + row.html + '</td>'
          + '<td class="dr-note"><input type="text" data-note="' + row.key
-         + '" value="' + String(row.note || '').replace(/"/g, '&quot;') + '"></td>';
+         + '" value="' + String(row.note || '').replace(/"/g, '&quot;') + '">'
+         + '<button type="button" class="dr-drop" title="이 줄을 의뢰서에서 뺍니다"'
+         + ' aria-label="줄 빼기">&times;</button></td>';
   }
 
   /** 화면에서 고친 것을 읽어 온다 */
@@ -190,8 +194,7 @@
       .then(function (data) {
         var list = (data && (data.phrases || data.data)) || [];
         if (!list.length) return;
-        pick.innerHTML = '<option value="">문구함에서 고르기…</option>'
-          + list.map(function (p, i) {
+        pick.innerHTML = list.map(function (p, i) {
               return '<option value="' + i + '">' + (p.name || '') + '</option>';
             }).join('');
         pick.dataset.loaded = '1';
@@ -220,9 +223,17 @@
     var list = rows();
     var title = (window.checkedFields || {}).prdlst_nm || '';
 
+    /* 창에서 뺀 줄은 의뢰서에도 없어야 한다 */
+    var kept = {};
+    document.querySelectorAll('#drRows [data-note]').forEach(function (input) {
+      kept[input.getAttribute('data-note')] = true;
+    });
+
     var body = '';
     ['main', 'info'].forEach(function (panel) {
-      var mine = list.filter(function (row) { return row.panel === panel; });
+      var mine = list.filter(function (row) {
+        return row.panel === panel && kept[row.key];
+      });
       if (!mine.length) return;
       var name = panel === 'main' ? '주표시면' : '정보표시면';
       var notes = (got.notes[panel] || []).filter(Boolean)
@@ -230,11 +241,11 @@
           .join('');
       mine.forEach(function (row, i) {
         body += '<tr>'
-             + (i === 0 ? '<td style="' + head + 'width:110px;" rowspan="' + mine.length
+             + (i === 0 ? '<td style="' + head + '" rowspan="' + mine.length
                           + '"><b>' + name + '</b>' + notes + '</td>' : '')
-             + '<td style="' + head + 'width:110px;">' + (row.name || '') + '</td>'
+             + '<td style="' + head + '">' + (row.name || '') + '</td>'
              + '<td style="' + cell + '">' + row.html + '</td>'
-             + '<td style="' + cell + 'width:120px;">'
+             + '<td style="' + cell + '">'
              + (got.marks[row.key] || '') + '</td></tr>';
       });
     });
@@ -248,13 +259,21 @@
            + '</td><td style="' + cell + '">' + note.value + '</td></tr>';
     });
 
+    /* 워드는 칸 너비를 안 주면 넷으로 똑같이 나눈다. 표시사항 내용에는 원재료명
+       300자가 들어가고 표시장소는 이름 한 줄이라, 균등하면 원재료명이 스무 줄로
+       접히고 오른쪽은 텅 빈다. <colgroup> 으로 자리를 정해 준다. */
+    var cols = '<colgroup><col style="width:88px;"><col style="width:96px;">'
+             + '<col style="width:400px;"><col style="width:140px;"></colgroup>';
+
     return '<html xmlns:w="urn:schemas-microsoft-com:office:word"><head>'
          + '<meta charset="utf-8"><title>표시 디자인 의뢰서</title></head><body>'
          + '<h3 style="margin:0 0 4px;">표시 디자인 의뢰서</h3>'
          + '<p style="margin:0 0 10px;font-size:9pt;color:#555;">'
          + (title ? title + ' · ' : '')
          + new Date().toISOString().slice(0, 10) + '</p>'
-         + '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;">'
+         + '<table cellspacing="0" cellpadding="0" '
+         + 'style="border-collapse:collapse;table-layout:fixed;width:724px;">'
+         + cols
          + '<tr><td style="' + head + '">표시장소</td><td style="' + head + '">표시사항</td>'
          + '<td style="' + head + '">표시사항 내용</td><td style="' + head + '">비고</td></tr>'
          + body + '</table></body></html>';
@@ -302,20 +321,64 @@
                                      || window.DESIGN_REQUEST.notes);
       draw();
     });
+    /* 고른 것을 **한꺼번에** 넣는다. 하나씩 넣게 하면 문구가 다섯이면 다섯 번
+       같은 일을 한다 */
     var add = el('drAddPhraseBtn');
     if (add) add.addEventListener('click', function () {
       var pick = el('drPhrase');
       var text = el('drPhraseText');
-      if (pick && pick.value !== '' && pick.__list) {
-        var chosen = pick.__list[Number(pick.value)];
-        addPhraseRow(chosen && (chosen.content || chosen.text));
-        pick.value = '';
-        return;
+      var added = 0;
+      if (pick && pick.__list) {
+        Array.prototype.forEach.call(pick.selectedOptions || [], function (opt) {
+          var chosen = pick.__list[Number(opt.value)];
+          if (chosen) {
+            addPhraseRow(chosen.content || chosen.text);
+            added += 1;
+          }
+          opt.selected = false;
+        });
       }
-      if (text && text.value.trim()) {
+      if (!added && text && text.value.trim()) {
         addPhraseRow(text.value.trim());
         text.value = '';
       }
+    });
+
+    /* 쓰던 자리에서 문구함에 담는다. 관리 화면까지 가야 담을 수 있으면
+       "다음에도 쓰겠다" 싶은 순간을 놓친다. */
+    var keep = el('drKeepPhraseBtn');
+    if (keep) keep.addEventListener('click', function () {
+      var text = el('drPhraseText');
+      var content = text ? text.value.trim() : '';
+      if (!content) return;
+      var csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value;
+      fetch('/label/api/phrases/save/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf || '' },
+        body: JSON.stringify({ content: content, category: 'additional' })
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        if (!data || !data.success) return;
+        addPhraseRow(content);
+        text.value = '';
+        var pick = el('drPhrase');
+        if (pick) {                       // 담은 것을 목록에도 바로 올린다
+          pick.__list = (pick.__list || []).concat([data]);
+          var opt = document.createElement('option');
+          opt.value = String(pick.__list.length - 1);
+          opt.textContent = data.name || content.slice(0, 30);
+          pick.appendChild(opt);
+        }
+      }).catch(function () {});
+    });
+
+    /* 줄 빼기 — 창 안에서만 뺀다. 표시사항 자체를 지우는 것이 아니다 */
+    var body = el('drRows');
+    if (body) body.addEventListener('click', function (event) {
+      var btn = event.target.closest('.dr-drop');
+      if (!btn) return;
+      var tr = btn.closest('tr');
+      if (tr) tr.remove();
     });
   });
 

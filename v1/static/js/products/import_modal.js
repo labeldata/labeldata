@@ -253,8 +253,8 @@
   }
 
   function handleFile(side, file, modalEl) {
-    if (file.size > 10 * 1024 * 1024) {
-      note('파일 크기는 10MB 이하여야 합니다.', 'error');
+    if (file.size > (window.MAX_UPLOAD_MB || 30) * 1024 * 1024) {
+      note('파일 크기는 ' + (window.MAX_UPLOAD_MB || 30) + 'MB 이하여야 합니다.', 'error');
       return;
     }
 

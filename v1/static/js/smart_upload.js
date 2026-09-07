@@ -435,9 +435,10 @@ function handleSlotDrop(event, slotId, docTypeName) {
     
     const file = files[0];
     
-    // 파일 크기 체크 (50MB)
-    if (file.size > 50 * 1024 * 1024) {
-        showSnackbar('파일 크기는 50MB를 초과할 수 없습니다.', 'warning');
+    // 파일 크기 체크 — 한도는 서버와 같다
+    if (file.size > (window.MAX_UPLOAD_MB || 30) * 1024 * 1024) {
+        showSnackbar('파일 크기는 ' + (window.MAX_UPLOAD_MB || 30)
+                     + 'MB 를 초과할 수 없습니다.', 'warning');
         return;
     }
     

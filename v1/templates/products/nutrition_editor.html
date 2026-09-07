@@ -51,8 +51,57 @@
                     <input type="text" class="form-control form-control-sm" id="units_per_package" placeholder="1" style="width: 70px;">
                     <span class="unit-label">개</span>
                 </div>
-                
+
+                {# 1회 섭취참고량 — 단위량과 다른 값이다. 고열량·저영양 판정의 분모다 #}
+                <div class="config-item">
+                    <label class="config-label" title="식품유형별로 정해진 '한 번에 먹는 양'">1회 섭취참고량</label>
+                    <input type="text" class="form-control form-control-sm" id="serving_reference" placeholder="예: 30" style="width: 70px;">
+                    <span class="unit-label" id="servingReferenceUnit">g</span>
+                </div>
+
             </div>
+
+            {% comment %}
+              계산값 -> 적용값. 성적서 없이 레시피로 계산해 표를 만드는 일이
+              흔한데, 그때 사람들은 엑셀에서 계산값에 오차를 물려 표시값을
+              만든다. 그 걸음을 여기로 옮긴다 — 규정이 정한 방향대로 물리고
+              열량은 보정한 탄단지로 다시 계산한다.
+            {% endcomment %}
+            <div class="config-row calc-source-row">
+                <div class="config-item">
+                    <label class="config-label">이 값은</label>
+                    <select class="form-select form-select-sm" id="nutrition_source" style="width: 130px;">
+                        <option value="">고르지 않음</option>
+                        <option value="lab">공인기관 성적서</option>
+                        <option value="theory">이론치 계산</option>
+                    </select>
+                </div>
+                <div class="config-item" id="toleranceItem" style="display:none;">
+                    <label class="config-label">허용오차</label>
+                    <input type="text" class="form-control form-control-sm" id="nutrition_tolerance" value="15" style="width: 56px;">
+                    <span class="unit-label">%</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="applyToleranceBtn"
+                            title="계산값에 오차를 물려 표시할 값으로 바꿉니다">오차 반영</button>
+                </div>
+                <div class="config-item" id="hiengItem">
+                    <label class="config-label">고열량·저영양</label>
+                    <select class="form-select form-select-sm" id="hieng_kind" style="width: 110px;">
+                        <option value="">판정 안 함</option>
+                        <option value="snack">간식용</option>
+                        <option value="meal">식사대용</option>
+                    </select>
+                </div>
+            </div>
+            <div class="config-row" id="sourceNoteRow" style="display:none;">
+                <div class="config-item" style="flex:1;">
+                    <label class="config-label">근거</label>
+                    <input type="text" class="form-control form-control-sm" id="nutrition_source_note"
+                           placeholder="예: OO영양분석 프로그램, 2026-09-01 산출">
+                </div>
+            </div>
+            <div id="servingNote" class="calc-note is-warn" style="display:none;"></div>
+            <div id="calcNote" class="calc-note"></div>
+            <div id="hiengResult" class="hieng-result" style="display:none;"></div>
         </div>
         
         <!-- Handsontable 그리드 -->
@@ -153,6 +202,15 @@
 
 <!-- 표 화면 공용: 칸 너비 규칙 (배합비·원료·연락처와 한 벌) -->
 <script src="{% static 'js/sheet_widths.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{# 규정 숫자는 서버 상수(label/constants.py)에서 온다. 계산 파일보다 먼저 놓는다 #}
+{{ nutrition_rules|json_script:"nutrition-rules-data" }}
+<script>
+  try {
+    window.NUTRITION_RULES = JSON.parse(
+      document.getElementById('nutrition-rules-data').textContent);
+  } catch (e) { window.NUTRITION_RULES = {}; }
+</script>
+<script src="{% static 'js/label/nutrition_calc.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 {{ grid_widths|json_script:"grid-widths-data" }}
 <script>
   try {
@@ -518,7 +576,26 @@ async function loadData() {
         updateStatus('✅ 데이터 수신 완료');
         
         // 기본 설정
-        document.getElementById('serving_size').value = data.serving_size || '100';
+        document.getElementById('serving_size').value = data.serving_size || '';
+        /* 산출 방법·1회 섭취참고량·판정 구분. **오차는 되살리지 않는다** —
+           저장된 값에는 이미 물려 있어서, 다시 물리면 열 때마다 부푼다. */
+        ['serving_reference', 'hieng_kind', 'nutrition_source',
+         'nutrition_source_note'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el && data[id]) el.value = data[id];
+        });
+        appliedTolerance = String(data.nutrition_tolerance || '');
+        if (appliedTolerance) {
+            const note = document.getElementById('calcNote');
+            const btn = document.getElementById('applyToleranceBtn');
+            if (note) {
+                note.textContent = '이 값에는 지난번에 물린 ' + appliedTolerance
+                    + '% 가 이미 들어 있습니다. 다시 누르면 두 번 곱해집니다.';
+                note.style.display = 'block';
+            }
+            if (btn) { btn.disabled = true; btn.textContent = '반영됨'; }
+        }
+        try { bindCalcSource(); } catch (e) {}
         document.getElementById('serving_size_unit').value = data.serving_size_unit || 'g';
         document.getElementById('units_per_package').value = data.units_per_package || '1';
         document.getElementById('nutrition_display_unit').value = data.nutrition_display_unit || 'basic';
@@ -568,12 +645,22 @@ async function saveData() {
 
         const payload = {
             label_id: LABEL_ID,
-            serving_size: isNaN(rawServingSize) ? '100' : String(rawServingSize),
+            /* 빈 칸을 100 으로 바꾸지 않는다. 모르는 것을 아는 척하면
+               라벨에 "총 내용량 100 g" 이 찍힌다 — 서버는 빈 값을 받으면
+               지금 저장된 값을 지킨다(nutrition_save_api). */
+            serving_size: isNaN(rawServingSize) ? '' : String(rawServingSize),
             serving_size_unit: document.getElementById('serving_size_unit').value || 'g',
             units_per_package: isNaN(rawUnits) ? '1' : String(rawUnits),
             nutrition_display_unit: document.getElementById('nutrition_display_unit').value || 'basic',
             basic_display_type: document.getElementById('basic_display_type').value || 'total',
             parallel_display_type: document.getElementById('parallel_display_type').value || 'unit_total',
+            /* 이론치로 만든 표는 그 자체가 감사 대상이다. 무엇으로 어떻게 냈는지가
+               값과 함께 남아야 한다. 1회 섭취참고량은 판정의 분모다. */
+            serving_reference: (document.getElementById('serving_reference').value || '').trim(),
+            hieng_kind: document.getElementById('hieng_kind').value || '',
+            nutrition_source: document.getElementById('nutrition_source').value || '',
+            nutrition_source_note: (document.getElementById('nutrition_source_note').value || '').trim(),
+            nutrition_tolerance: appliedTolerance,
             ...nutritionData
         };
         
@@ -614,6 +701,145 @@ async function saveData() {
 }
 
 // CSRF 토큰 가져오기
+/* ─────────────────────────────────────────────────────────────────────────
+   계산값 → 적용값 → 표시될 값
+
+   규정은 실측값이 표시량에서 얼마나 벌어져도 되는지를 **한쪽 방향으로만**
+   정해 두었다. 그래서 안전한 쪽이 성분마다 반대다(nutrition_calc.js).
+   [오차 반영] 을 누르면 지금 표에 적힌 계산값에 그 방향대로 물려 넣는다.
+
+   **한 번 누르면 값이 바뀐다.** 두 번 누르면 두 번 곱해지므로, 물린 뒤에는
+   단추를 잠그고 무엇을 얼마나 물렸는지 적어 둔다.
+   ───────────────────────────────────────────────────────────────────────── */
+let appliedTolerance = '';      // 이 표에 이미 물려 있는 오차(%)
+
+function gridValues() {
+    const data = hot.getData();
+    const out = {};
+    ALL_NUTRIENTS.forEach((nutrient, index) => {
+        if (index >= data.length) return;
+        const value = getNumericValue(data[index][1]);
+        if (value !== null) out[nutrient.field] = value;
+    });
+    return out;
+}
+
+function writeGridValues(values) {
+    const changes = [];
+    ALL_NUTRIENTS.forEach((nutrient, index) => {
+        if (values[nutrient.field] === undefined) return;
+        changes.push([index, 1, Math.round(values[nutrient.field] * 100) / 100]);
+    });
+    if (changes.length) hot.setDataAtCell(changes, 'tolerance');
+}
+
+function applyToleranceToGrid() {
+    if (!window.nutritionCalc) return;
+    const rate = parseFloat(document.getElementById('nutrition_tolerance').value);
+    if (!(rate > 0)) return;
+    const limit = (window.NUTRITION_RULES || {}).toleranceLimit || 20;
+
+    const before = gridValues();
+    const after = window.nutritionCalc.applyTolerance(before, rate, 'up');
+    /* 열량은 오차를 곱하지 않고 **보정한 탄단지로 다시 계산한다.** 따로 부풀리면
+       표 안이 서로 맞지 않는다. */
+    const kcal = window.nutritionCalc.caloriesFromMacros(after);
+    if (kcal !== null) after.calories = kcal;
+    writeGridValues(after);
+
+    appliedTolerance = String(rate);
+    const moved = Object.keys(after).filter(
+        key => Math.abs((after[key] || 0) - (before[key] || 0)) > 1e-9);
+    const note = document.getElementById('calcNote');
+    if (note) {
+        note.textContent = rate + '% 를 물렸습니다 — '
+            + moved.map(key => {
+                const info = ALL_NUTRIENTS.find(n => n.field === key) || {};
+                return (info.label || key) + ' ' + before[key] + '→'
+                     + (Math.round(after[key] * 100) / 100);
+              }).join(', ')
+            + '. 다시 누르면 두 번 곱해지므로 한 번만 누르세요.'
+            + (rate > limit ? ' 규정이 준 폭은 ' + limit + '% 입니다.' : '');
+        note.style.display = 'block';
+    }
+    const btn = document.getElementById('applyToleranceBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '반영됨'; }
+    calculateAndPreview();
+    refreshHiengPanel();
+}
+
+/* 고열량·저영양 판정. **1회 제공량 기준**이라 1회 섭취참고량이 있어야 한다.
+   모르는 것과 아닌 것은 다르다 — 값이 비면 아니라고 말하지 않는다. */
+function refreshHiengPanel() {
+    const box = document.getElementById('hiengResult');
+    if (!box || !window.nutritionCalc) return;
+    const kind = document.getElementById('hieng_kind').value;
+    if (!kind) { box.style.display = 'none'; return; }
+
+    box.style.display = 'block';
+    const reference = parseFloat(
+        String(document.getElementById('serving_reference').value || '').replace(/,/g, ''));
+    if (!(reference > 0)) {
+        box.className = 'hieng-result is-unknown';
+        box.textContent = '1회 섭취참고량을 넣어 주세요. 이 판정은 1회 제공량 기준이라 '
+            + '그 양을 모르면 할 수 없습니다.';
+        return;
+    }
+    const per = window.nutritionCalc.perServing(gridValues(), 100, reference);
+    const result = window.nutritionCalc.hiengLntrt(per || {}, kind);
+    const unit = document.getElementById('serving_size_unit').value || 'g';
+    const head = '1회 섭취참고량 ' + reference + unit + ' 기준 · ' + (result.kind || '');
+    if (result.verdict === true) {
+        box.className = 'hieng-result is-hit';
+        box.innerHTML = '<b>고열량·저영양 식품에 해당합니다.</b><br>' + head
+            + '<ul><li>' + result.hits.join('</li><li>') + '</li></ul>';
+    } else if (result.verdict === false) {
+        box.className = 'hieng-result is-ok';
+        box.innerHTML = '<b>고열량·저영양 식품이 아닙니다.</b><br>' + head;
+    } else {
+        box.className = 'hieng-result is-unknown';
+        box.textContent = result.why || '판정할 수 없습니다.';
+    }
+}
+
+/* 단위량이 비어 있으면 표는 100 g 당으로 그려진다 — 그 사실을 말해 준다.
+   말하지 않으면 사진과 다른 표를 보고도 어디가 틀렸는지 알 수 없다. */
+function warnMissingServingSize() {
+    const note = document.getElementById('servingNote');
+    if (!note) return;
+    const value = parseFloat(
+        String(document.getElementById('serving_size').value || '').replace(/,/g, ''));
+    if (value > 0) { note.style.display = 'none'; return; }
+    note.textContent = '단위량이 비어 있습니다. 아래 표는 100 g 당으로 그려집니다 — '
+        + '라벨의 "총 내용량"(예: 133 g)을 넣어 주세요.';
+    note.style.display = 'block';
+}
+
+function bindCalcSource() {
+    const source = document.getElementById('nutrition_source');
+    const tolerance = document.getElementById('toleranceItem');
+    const noteRow = document.getElementById('sourceNoteRow');
+    function paint() {
+        const theory = source.value === 'theory';
+        if (tolerance) tolerance.style.display = theory ? '' : 'none';
+        if (noteRow) noteRow.style.display = source.value ? '' : 'none';
+    }
+    if (source) { source.addEventListener('change', paint); paint(); }
+
+    const apply = document.getElementById('applyToleranceBtn');
+    if (apply) apply.addEventListener('click', applyToleranceToGrid);
+    ['hieng_kind', 'serving_reference'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', refreshHiengPanel);
+        if (el) el.addEventListener('input', refreshHiengPanel);
+    });
+    const unit = document.getElementById('serving_size_unit');
+    if (unit) unit.addEventListener('change', function () {
+        const label = document.getElementById('servingReferenceUnit');
+        if (label) label.textContent = unit.value || 'g';
+    });
+}
+
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -642,8 +868,10 @@ document.addEventListener('DOMContentLoaded', function() {
     updateLabelIdDisplay();
     updateStatus('⏳ 초기화 중...');
     
-    // 기본값으로 입력 필드 초기화 (placeholder가 아닌 실제 값)
-    document.getElementById('serving_size').value = '100';
+    /* **단위량을 100 으로 미리 채우지 않는다.**
+       라벨에 "총 내용량 133 g" 이라고 적혀 있어도 이 칸이 100 인 채로
+       저장되면 표가 100 g 당으로 그려진다 — 사진과 다른 표가 나오는 그
+       자리다. 비어 있으면 비어 있다고 말하고, 사람이 넣게 한다. */
     document.getElementById('units_per_package').value = '1';
 
     try {
@@ -663,16 +891,22 @@ document.addEventListener('DOMContentLoaded', function() {
     ['serving_size', 'units_per_package'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
-            el.addEventListener('input', () => calculateAndPreview());
-            el.addEventListener('change', () => calculateAndPreview());
+            el.addEventListener('input', () => { calculateAndPreview(); warnMissingServingSize(); });
+            el.addEventListener('change', () => { calculateAndPreview(); warnMissingServingSize(); });
         }
     });
+
+    try { bindCalcSource(); } catch (error) { /* 계산 도우미가 없어도 표는 쓴다 */ }
     
     try {
         loadData();
     } catch (error) {
         updateStatus('❌ 데이터 로드 오류: ' + error.message);
     }
+    setTimeout(function () {
+        warnMissingServingSize();
+        refreshHiengPanel();
+    }, 400);
 });
 </script>
 

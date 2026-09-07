@@ -439,6 +439,19 @@ body.in-iframe .bom-page-header { display: none !important; }
         bindPaletteToggle();
     });
 
+    /* 이 화면은 iframe 안에서 돈다. 부모(product_detail.html)에 같은 이름의
+       도우미가 있어서 있는 줄 알았는데, iframe 은 제 창을 쓴다 — 없는 함수를
+       부르다 initGrid 가 통째로 멈췄고, 그 뒤에 붙어야 할 것들(보관함 접기·
+       칸 너비·붙여넣기 안내)이 다 같이 죽었다. 여기에 둔다. */
+    function getCsrfToken() {
+        var input = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (input && input.value) return input.value;
+        var hit = document.cookie.split('; ').find(function (row) {
+            return row.indexOf('csrftoken=') === 0;
+        });
+        return hit ? hit.split('=')[1] : '';
+    }
+
     /* 양식의 열 이름. 화면 머리글이자 엑셀 양식의 머리글이고, 붙여넣기가
        머리글 줄을 알아보는 잣대이기도 하다. 한 곳에서만 정한다. */
     const BOM_SHEET_HEADERS = ['원료명', '원재료 표시명', '식품유형',
@@ -513,6 +526,15 @@ body.in-iframe .bom-page-header { display: none !important; }
        배합비·원료 붙여넣기·연락처·영양성분이 같은 규칙으로 움직여야 한다.
        여기서는 이 표의 칸 성격만 적어 둔다. */
     let bomWidths = null;
+
+    /* 표가 차지할 높이. 위에 있는 것(머리띠·도구 줄·요약)이 얼마든 그 아래를
+       화면 끝까지 쓴다. 아래쪽에 조금 남겨 두는 것은 가로 스크롤막대 자리다. */
+    function gridHeight() {
+        var box = document.getElementById('bom-grid');
+        if (!box) return 480;
+        var top = box.getBoundingClientRect().top;
+        return Math.max(320, Math.round(window.innerHeight - top - 28));
+    }
 
     function initGrid(data = []) {
         if (!data.length) {
@@ -610,7 +632,12 @@ body.in-iframe .bom-page-header { display: none !important; }
             /* 마지막 줄을 채우면 아래에 빈 줄이 다시 생긴다. 스무 줄짜리
                배합비에서 줄이 모자라 우클릭 메뉴를 찾게 하지 않는다. */
             minSpareRows: 3,
-            height: 'auto',
+            /* 표에 제 높이를 준다.
+               'auto' 면 표가 통째로 늘어나 **페이지**가 스크롤된다. 그래서
+               아래로 내리면 머리글이 위로 사라지고, 가로 스크롤막대는 표
+               맨 끝에 있어 끝까지 내려야 보였다. 높이를 주면 표 안에서
+               스크롤되므로 머리글이 그 자리에 남고 가로막대도 늘 보인다. */
+            height: gridHeight(),
             autoRowSize: { syncLimit: 300 },
             readOnly: !CAN_EDIT,
             enterBeginsEditing: true,
@@ -671,15 +698,20 @@ body.in-iframe .bom-page-header { display: none !important; }
                        들어가고 화면은 우리 순서로 남아 있으면, 붙여넣은 것을
                        눈으로 견주기가 어렵다. */
                     var tail = '확인하고 저장하세요.';
-                    if (info.added && info.plan) {
-                        var order = window.sheetPasteReorder(hot, info.plan, {
-                            headers: BOM_SHEET_HEADERS
-                        });
-                        if (order) {
-                            tail = '칸을 붙여넣은 순서로 놓았습니다. ' + tail;
-                            window.sheetPasteSaveOrder('bom_grid', order, getCsrfToken());
+                    /* 칸을 옮기다 무슨 일이 나도 **안내는 나와야 한다.**
+                       예전에는 여기서 죽어 "몇 줄이 들어갔는지" 를 아무도
+                       못 봤다 — 붙여넣기가 안 된 줄 알게 된다. */
+                    try {
+                        if (info.added && info.plan) {
+                            var order = window.sheetPasteReorder(hot, info.plan, {
+                                headers: BOM_SHEET_HEADERS
+                            });
+                            if (order) {
+                                tail = '칸을 붙여넣은 순서로 놓았습니다. ' + tail;
+                                window.sheetPasteSaveOrder('bom_grid', order, getCsrfToken());
+                            }
                         }
-                    }
+                    } catch (e) { /* 자리를 못 옮겨도 값은 이미 들어갔다 */ }
                     showSnackbar(
                         window.sheetPasteMessage(info, tail),
                         !info.added ? 'warning'
@@ -697,11 +729,16 @@ body.in-iframe .bom-page-header { display: none !important; }
             /* 손으로 끌어다 옮긴 것도 남긴다 — 붙여넣기로 놓은 것과 같은 자리.
                너비는 공용이 따라 옮긴다(attachSheetWidths). */
             hot.addHook('afterColumnMove', function () {
-                var order = [];
-                for (var v = 0; v < BOM_SHEET_HEADERS.length; v++) {
-                    order.push(BOM_SHEET_HEADERS[hot.toPhysicalColumn(v)]);
-                }
-                window.sheetPasteSaveOrder('bom_grid', order, getCsrfToken());
+                /* 이 훅에서 예외가 나면 Handsontable 이 그 뒤의 render 를
+                   건너뛴다 — 끌어다 놓은 칸이 제자리로 돌아간 것처럼 보인다.
+                   실제로 그렇게 났다. */
+                try {
+                    var order = [];
+                    for (var v = 0; v < BOM_SHEET_HEADERS.length; v++) {
+                        order.push(BOM_SHEET_HEADERS[hot.toPhysicalColumn(v)]);
+                    }
+                    window.sheetPasteSaveOrder('bom_grid', order, getCsrfToken());
+                } catch (e) {}
             });
         }
 
@@ -729,6 +766,14 @@ body.in-iframe .bom-page-header { display: none !important; }
         /* 칸 너비 — 규칙도 저장도 공용이 한다(static/js/sheet_widths.js).
            끌어서 조절한 것은 계정에 남고, 칸을 옮겨도 이름을 따라간다.
            내용이 없는 칸은 최소로 접힌다. */
+        /* 창을 줄이거나 보관함을 접으면 표가 쓸 높이도 달라진다 */
+        window.addEventListener('resize', function () {
+            clearTimeout(window.__bomHeightTimer);
+            window.__bomHeightTimer = setTimeout(function () {
+                if (hot) hot.updateSettings({ height: gridHeight() });
+            }, 80);
+        });
+
         if (window.attachSheetWidths) {
             bomWidths = window.attachSheetWidths(hot, {
                 headers: BOM_SHEET_HEADERS,
