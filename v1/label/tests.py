@@ -10025,3 +10025,82 @@ class 의뢰서가_종이_안에_들어간다(TestCase):
     def test_표는_종이_폭을_따른다(self):
         self.assertIn('table-layout:fixed;width:100%', self.js)
         self.assertNotIn('width:724px', self.js)
+
+
+class 문구함을_쓰는_자리에서_고친다(TestCase):
+    """
+    빠른 입력 버튼은 있었는데 **고정 목록이라 손댈 수가 없었다.** 회사마다
+    쓰는 문장이 다르고, 기본 목록에 들어 있던 상담 전화는 한 회사 번호였다
+    (다른 회사 라벨에 그 번호가 인쇄된다).
+
+    같은 자리에 내 문구를 둔다 — 담고, 고치고, 지운다. 담은 것은 표시사항
+    작성 화면에도 의뢰서 창에도 같이 나온다(문구함 한 곳에 있다).
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='phraser', password='x')
+        self.client.force_login(self.user)
+
+    def _save(self, content='본 제품은 ○○공장에서 만듭니다.', name='우리 공장'):
+        import json
+        return self.client.post('/label/api/phrases/save/',
+                                data=json.dumps({'content': content, 'name': name,
+                                                 'category': 'cautions'}),
+                                content_type='application/json')
+
+    def test_담고_고치고_뺀다(self):
+        import json
+
+        from v1.label.models import MyPhrase
+
+        res = self._save()
+        self.assertEqual(res.status_code, 200)
+        phrase_id = res.json()['id']
+
+        res = self.client.post('/label/api/phrases/%s/update/' % phrase_id,
+                               data=json.dumps({'content': '고친 문장', 'name': '새 이름'}),
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(MyPhrase.objects.get(pk=phrase_id).comment_content, '고친 문장')
+
+        res = self.client.post('/label/api/phrases/%s/delete/' % phrase_id)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(MyPhrase.objects.get(pk=phrase_id).delete_YN, 'Y')
+
+    def test_남의_문구는_손대지_못한다(self):
+        import json
+
+        from v1.label.models import MyPhrase
+
+        other = User.objects.create_user(username='남', password='x')
+        self.client.force_login(other)
+        mine = MyPhrase.objects.create(user_id=self.user, my_phrase_name='내 것',
+                                       category_name='cautions', comment_content='내 문장')
+        res = self.client.post('/label/api/phrases/%s/update/' % mine.my_phrase_id,
+                               data=json.dumps({'content': '바꿔치기'}),
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_이름을_안_주면_앞부분을_쓴다(self):
+        """이름을 짓느라 멈추게 하지 않는다."""
+        res = self._save(content='개봉 후 냉장 보관하시고 빨리 드십시오.', name='')
+        self.assertIn('개봉 후', res.json()['name'])
+
+    def test_기본_문구에_한_회사_전화번호를_두지_않는다(self):
+        from v1.label.services.label_phrases import PHRASES
+
+        flat = ' '.join(text for group in PHRASES.values()
+                        for (_chip, text, _title, _icon, _tone) in group)
+        self.assertNotIn('1577-1255', flat)
+        self.assertIn('(전화번호)', flat)      # 자리만 남긴다
+
+    def test_쓰는_자리에_담는_길이_있다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tab = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+               ).read_text(encoding='utf-8')
+        self.assertIn('data-my-phrases="cautions"', tab)
+        self.assertIn('data-my-phrases="additional_info"', tab)
+        self.assertIn('my_phrases.js', tab)

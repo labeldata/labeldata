@@ -96,6 +96,8 @@ urlpatterns = [
     path('api/phrases/', views.phrases_api, name='phrases_api'),
     # 문구함에 담기·빼기. 쓰던 자리에서 바로 담을 수 있어야 한다
     path('api/phrases/save/', views.phrase_save_api, name='phrase_save_api'),
+    path('api/phrases/<int:phrase_id>/update/', views.phrase_update_api,
+         name='phrase_update_api'),
     path('api/phrases/<int:phrase_id>/delete/', views.phrase_delete_api,
          name='phrase_delete_api'),
     

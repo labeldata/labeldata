@@ -13,6 +13,22 @@
    :checked 로 값을 읽는 코드(.grp-preservation / .grp-processing)가 여러 곳에
    있어서, 마크업을 버튼으로 바꾸면 전부 손봐야 한다. */
 .btn-storage-badge,
+/* 내 문구 조각 — 쓰는 단추와 고치기·빼기가 한 덩이로 붙는다 */
+.my-phrase-chip { display: inline-flex; align-items: stretch; }
+.my-phrase-chip .product-quick-text-btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.my-phrase-act {
+    border: 1px solid #dadce0;
+    border-left: 0;
+    background: #fff;
+    color: #80868b;
+    font-size: 10px;
+    padding: 0 6px;
+    cursor: pointer;
+}
+.my-phrase-act:last-child { border-radius: 0 4px 4px 0; }
+.my-phrase-act:hover { background: #f1f3f4; color: #202124; }
+.my-phrase-add { border-style: dashed; }
+
 .v2-chip-check > label {
     display: inline-block;
     border: 1.5px solid #dee2e6;
@@ -778,6 +794,13 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                             <i class="{{ phrase.icon }} me-1"></i>{{ phrase.chip }}</button>
                         {% endfor %}
                     </div>
+                    {% comment %}
+                      내 문구. 기본 문구는 고칠 수 없다(판독이 기다리는 문장이라
+                      흔들면 안 된다). 회사마다 다른 문장은 여기에 담아 쓴다 —
+                      담고 고치고 지우는 자리가 여기다.
+                    {% endcomment %}
+                    <div class="d-flex flex-wrap gap-1 mt-2 pt-2 border-top"
+                         data-my-phrases="cautions"></div>
                 </div>
             </div>
             <div class="col-12">
@@ -812,6 +835,13 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
                             <i class="{{ phrase.icon }} me-1"></i>{{ phrase.chip }}</button>
                         {% endfor %}
                     </div>
+                    {% comment %}
+                      내 문구. 기본 문구는 고칠 수 없다(판독이 기다리는 문장이라
+                      흔들면 안 된다). 회사마다 다른 문장은 여기에 담아 쓴다 —
+                      담고 고치고 지우는 자리가 여기다.
+                    {% endcomment %}
+                    <div class="d-flex flex-wrap gap-1 mt-2 pt-2 border-top"
+                         data-my-phrases="additional_info"></div>
                 </div>
             </div>
         </div>
@@ -846,6 +876,8 @@ product 가 있을 때만 보인다. 신규 등록 화면에는 아직 제품이
   묶음보다 일찍 돈다. 저장값을 읽어 태그를 만드는 것이 그 자리다.
 {% endcomment %}
 <script src="{% static 'js/label/allergen_names.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+{# 내 문구 — 기본 버튼 옆에 담고 고치고 지운다(문구함 MyPhrase) #}
+<script src="{% static 'js/label/my_phrases.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 <script>
 /* ── 식품유형(표시용) 자동 생성 ─────────────────────────────── */
 function updatePrdlstDcnm(force) {

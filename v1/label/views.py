@@ -5037,3 +5037,33 @@ def phrase_delete_api(request, phrase_id):
                             status=404)
     phrase.soft_delete()
     return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def phrase_update_api(request, phrase_id):
+    """문구함의 문장을 고친다. 회사마다 쓰는 말이 조금씩 다르다."""
+    import json as _json
+
+    try:
+        payload = _json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
+                            status=400)
+    try:
+        phrase = MyPhrase.objects.get(my_phrase_id=phrase_id,
+                                      user_id=request.user, delete_YN='N')
+    except MyPhrase.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '없는 문구입니다.'},
+                            status=404)
+
+    content = str(payload.get('content') or '').strip()[:1000]
+    if not content:
+        return JsonResponse({'success': False, 'error': '문구가 비어 있습니다.'},
+                            status=400)
+    phrase.comment_content = content
+    phrase.my_phrase_name = str(payload.get('name') or '').strip()[:200] or content[:30]
+    phrase.save(update_fields=['comment_content', 'my_phrase_name', 'update_datetime'])
+    return JsonResponse({'success': True, 'id': phrase.my_phrase_id,
+                         'name': phrase.my_phrase_name,
+                         'content': phrase.comment_content})
