@@ -56,6 +56,7 @@ _CATEGORY_LABELS = {
     'allergen_vocabulary': '알레르기 표시 명칭',
     'font_size': '활자 크기',
     'calorie_macros': '열량-영양성분 계산',
+    'calorie_macros_advice': '열량-영양성분 계산(권고)',
     'thawing_method': '해동방법 표시',
     'exchange_notice': '제품 교환 안내',
     'origin_emphasis': '원산지 강조 표시',

@@ -7352,14 +7352,39 @@ class HumanReviewFindingsTests(TestCase):
 
     def test_반올림_폭으로는_지적하지_않는다(self):
         """
-        표시기준의 반올림만으로도 몇 kcal 는 벌어진다. 그런 폭으로 울면
-        정상인 라벨이 계속 지적된다.
+        표시기준의 반올림만으로도 몇 kcal 는 벌어진다(열량 5 kcal 단위, 탄수·
+        단백 1 g, 지방 0.1 g). 그런 폭으로 울면 정상인 라벨이 계속 지적된다.
         """
         from v1.label.services.validation_service import check_calorie_matches_macros
 
-        # 계산값 100, 적어 둔 값 120 — 20 kcal 차이
+        # 계산값 105, 적어 둔 값 109 — 반올림으로도 날 수 있는 폭이다
         self.assertEqual(check_calorie_matches_macros(self._label(
-            calories='120', carbohydrates='10', fats='5', proteins='5')), [])
+            calories='109', carbohydrates='10', fats='5', proteins='5')), [])
+
+    def test_기준이_어긋난_것은_아닌데_표_안이_안_맞으면_권고한다(self):
+        """
+        현장에서는 반올림한 탄단지로 열량을 다시 계산해 표 안을 맞춘다
+        (300.325 -> 64·5·2.6 -> 299.4). 그 걸음을 건너뛰면 열량만 조금 떠
+        있는다. **막지는 않는다** — 어느 쪽이 맞는지는 사람이 봐야 안다.
+        """
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        # 계산값 105, 적어 둔 값 120 — 반올림 폭보다 크고 자릿수 오류는 아니다
+        issues = check_calorie_matches_macros(self._label(
+            calories='120', carbohydrates='10', fats='5', proteins='5'))
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0]['category'], 'calorie_macros_advice')
+        self.assertTrue(issues[0]['advisory'])      # 확정을 막지 않는다
+
+    def test_식이섬유는_계수가_달라_그만큼_빼고_센다(self):
+        """규정은 식이섬유 2 kcal/g 다. 4 로 세면 없는 어긋남이 생긴다."""
+        from v1.label.services.validation_service import check_calorie_matches_macros
+
+        # 탄수화물 20(식이섬유 10 포함) · 지방 0 · 단백질 0
+        #   규정대로: 10 x 4 + 10 x 2 = 60
+        self.assertEqual(check_calorie_matches_macros(self._label(
+            calories='60', carbohydrates='20', fats='0', proteins='0',
+            dietary_fiber='10')), [])
 
     def test_값이_없으면_계산하지_않는다(self):
         from v1.label.services.validation_service import check_calorie_matches_macros

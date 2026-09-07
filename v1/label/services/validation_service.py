@@ -156,6 +156,7 @@ _LEGAL_BASIS = {
     'allergen_vocabulary': '「식품등의 표시기준」 알레르기 유발물질 표시 규정(표시 명칭)',
     'font_size': '「식품등의 표시기준」 표시사항의 활자 크기 규정(10포인트 이상)',
     'calorie_macros': '「식품등의 표시기준」 영양성분 표시 규정(열량 산출 방법 — 탄수화물·단백질 4 kcal/g, 지방 9 kcal/g)',
+    'calorie_macros_advice': '「식품등의 표시기준」 영양성분 표시 규정(열량 산출 방법 — 탄수화물·단백질 4, 지방 9, 식이섬유 2, 당알코올 2.4 kcal/g)',
     'thawing_method': '「식품등의 표시기준」 냉동식품의 조리·해동방법 표시 규정',
     'exchange_notice': '「소비자기본법」 소비자분쟁해결기준에 따른 제품 교환 안내',
     'origin_emphasis': '「농수산물의 원산지 표시 등에 관한 법률 시행규칙」 원산지 표시 방법(포장재 바탕색과 구분되는 색·굵기)',
@@ -206,7 +207,8 @@ _ISSUE_FIELDS = {
 #                     사용자가 고칠 방법이 없는 지적이 될 수 있다.
 #
 # 둘 다 규정 검증 결과에는 그대로 나온다 — 사람이 검수에서 짚는 항목들이다.
-_ADVISORY_CATEGORIES = frozenset({'exchange_notice', 'origin_emphasis'})
+_ADVISORY_CATEGORIES = frozenset({'exchange_notice', 'origin_emphasis',
+                                  'calorie_macros_advice'})
 
 
 def _issue(category: str, message: str, suggestion: str = '', fields=None) -> dict:
@@ -1445,8 +1447,16 @@ def check_font_size(label) -> list[dict]:
 # 영양정보 표의 머리글 표기는 검증이 아니라 표를 그리는 쪽에서 고쳤다.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# 열량 환산 계수. 「식품등의 표시기준」의 열량 산출 방법.
+# 열량 환산 계수는 nutrition_calc 가 갖고 있다 — 규정은 탄단지 말고도 식이섬유
+# 2, 당알코올 2.4, 유기산 3, 알코올 7 을 정하고, 앞의 둘은 탄수화물 안에 들어
+# 있으면서 계수가 다르다. 여기서 다시 적으면 두 벌이 된다.
 _ATWATER = {'carbohydrates': 4.0, 'proteins': 4.0, 'fats': 9.0}
+
+# 표시 반올림만으로도 열량은 몇 kcal 벌어진다(열량 5 kcal 단위, 탄수·단백 1 g,
+# 지방 0.1 g). 그 폭으로 울면 멀쩡한 라벨이 계속 지적된다. 그보다 크면서 아직
+# 기준이 어긋난 수준은 아닌 것 — 그것이 권고다.
+_CALORIE_ADVICE_GAP = 10.0
+_CALORIE_ADVICE_RATIO = 0.05
 
 
 def check_calorie_matches_macros(label) -> list[dict]:
@@ -1477,13 +1487,20 @@ def check_calorie_matches_macros(label) -> list[dict]:
             return []       # 하나라도 없으면 계산할 수 없다
         macros[field] = value
 
-    computed = sum(macros[f] * factor for f, factor in _ATWATER.items())
-    if computed <= 0:
+    # 식이섬유·당알코올이 있으면 계수가 다르다. 규정대로 세는 자리는 한 곳이다
+    from v1.label.services.nutrition_calc import calories_from_macros
+
+    values = dict(macros)
+    fiber = _number((getattr(label, 'dietary_fiber', '') or '').strip())
+    if fiber is not None:
+        values['dietary_fiber'] = fiber
+    computed = calories_from_macros(values)
+    if not computed or computed <= 0:
         return []
 
     gap = abs(calories - computed)
     if gap <= max(25.0, computed * 0.3):
-        return []
+        return _calorie_advice(calories, computed, gap, macros)
 
     detail = (f'탄수화물 {macros["carbohydrates"]:g} g × 4 + '
               f'지방 {macros["fats"]:g} g × 9 + '
@@ -1520,6 +1537,29 @@ def check_calorie_matches_macros(label) -> list[dict]:
         '한쪽만 다른 기준으로 적힌 경우가 많습니다. 영양성분 탭의 값이 모두 '
         '같은 기준(100 g 당)인지 확인하세요. 라벨에 인쇄된 값을 옮겨 적었다면 '
         '계산기의 "아래 값은" 에서 그 기준을 고르고 다시 넣으면 환산해 줍니다.',
+    )]
+
+
+def _calorie_advice(calories, computed, gap, macros) -> list[dict]:
+    """
+    기준이 어긋난 것은 아닌데 표 안이 서로 안 맞는다.
+
+    현장에서 표를 만들 때는 **반올림한 탄단지로 열량을 다시 계산해** 표 안을
+    맞춘다(받은 엑셀이 그렇게 한다: 300.325 -> 반올림 64·5·2.6 -> 299.4).
+    그 걸음을 건너뛰면 인쇄된 표 안에서 열량만 조금 떠 있게 된다.
+
+    **막지는 않는다.** 어느 쪽이 맞는지는 사람이 봐야 알고, 반올림 폭 안에서
+    조금 뜨는 것은 흔한 일이다. 권고로 알린다.
+    """
+    if gap <= max(_CALORIE_ADVICE_GAP, computed * _CALORIE_ADVICE_RATIO):
+        return []
+    return [_issue(
+        'calorie_macros_advice',
+        f'표의 열량({calories:g} kcal)이 탄수화물·지방·단백질로 계산한 값'
+        f'({computed:,.1f} kcal)과 {gap:,.1f} kcal 차이 납니다.',
+        '표시 반올림만으로 벌어지는 폭보다 큽니다. 영양성분 계산기에서 '
+        '반올림한 탄수화물·지방·단백질로 열량을 다시 계산하면 표 안이 맞습니다. '
+        '식이섬유·당알코올이 있는 제품이면 그 값도 함께 넣어 주세요.',
     )]
 
 
