@@ -285,6 +285,20 @@ body {
   background: #fff;
   cursor: pointer;
 }
+/* 엑셀에서 그대로 붙여넣을 수 있다는 것을 붙여넣는 자리에 적어 둔다.
+   기능이 있어도 있는 줄 모르면 없는 것과 같다. */
+.paste-hint {
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--ez-gray-50, #f8f9fa);
+  border: 1px dashed var(--ez-gray-300, #dadce0);
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ez-gray-700, #5f6368);
+}
+.paste-hint strong { color: var(--ez-gray-800, #3c4043); }
+
 .input-basis-note {
   display: none;
   margin-bottom: 10px;

@@ -735,11 +735,23 @@ function loadExistingData(data) {
       if (typeof window.updateInputBasisNote === 'function') window.updateInputBasisNote();
     }
 
-    // 표시기준 로드
+    /* 표시기준 로드.
+     *
+     * **모르는 이름을 그대로 넣으면 고른 것이 없어진다.** <select> 는 없는
+     * 값을 넣으면 value 가 '' 가 되고 아무 항목도 안 눌린 채로 보인다.
+     * 저장돼 있는 이름은 'per_100g' / 'per_serving' 인 라벨이 있다 —
+     * 그러면 기준 칸이 빈칸으로 열리고, 표는 조용히 총량당으로 그려진다.
+     * 사용자에게는 "100g당으로 해 뒀는데 다르게 나온다" 로 보인다.
+     *
+     * 보내는 쪽은 이미 이름을 맞춰 두었다(sendNutritionDataToParent).
+     * 읽는 쪽도 같은 함수를 쓴다 — 모르는 이름은 예전과 같이 총량당이고,
+     * 이제는 그것이 화면에 **보인다.**
+     */
     if (data.basic_display_type) {
       const basicDisplayElement = document.getElementById('basic_display_type');
       if (basicDisplayElement) {
-        basicDisplayElement.value = data.basic_display_type;
+        basicDisplayElement.value =
+          normalizeBasicDisplayType(data.basic_display_type);
       }
     }
     

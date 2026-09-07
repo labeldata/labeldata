@@ -1141,6 +1141,93 @@ class AllergenDeclarationMatchTests(TestCase):
             self.assertIn(name, issues[0]['message'])
 
 
+class 영양성분을_붙여넣는다(TestCase):
+    """
+    배합비는 표로 붙여넣게 해 뒀는데(sheet_paste.js) 영양성분은 칸마다 손으로
+    옮겨 적어야 했다. 사람들이 가진 것은 대개 이런 표다.
+
+        나트륨    660 mg   33 %
+        탄수화물  1 g       0 %
+
+    **항목명을 읽어 맞춘다.** 자리로 넣으면 순서가 다른 표에서 값이 통째로
+    어긋난다. 표의 머리("총 내용량 100 g", "총 내용량당")도 함께 읽는다 —
+    여기가 빠지면 숫자만 맞고 뜻이 틀린다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/nutrition_paste.js').read_text(
+            encoding='utf-8')
+        self.html = (base / 'templates/label/nutrition_calculator_popup.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_팝업이_싣는다(self):
+        self.assertIn('nutrition_paste.js', self.html)
+        # 붙여넣을 수 있다는 것을 붙여넣는 자리에 적어 둔다
+        self.assertIn('paste-hint', self.html)
+        self.assertIn('nutritionPasteReport', self.html)
+
+    def test_항목명으로_맞춘다(self):
+        """순서를 몰라도 된다. 어느 표는 당류가 지방 뒤에 있다."""
+        self.assertIn('function matchName', self.js)
+        head = self.js.index('function matchName')
+        block = self.js[head:head + 900]
+        self.assertIn('1000 + a.length', block)      # 글자까지 같으면 그것으로
+        self.assertIn('score > best.score', block)   # 긴 이름이 이긴다
+
+    def test_짧은_이름은_글자까지_같을_때만_본다(self):
+        """인(P)·철(Fe)을 품는지로 보면 "인공감미료" 가 인이 된다."""
+        head = self.js.index('function matchName')
+        self.assertIn('least', self.js[head:head + 900])
+
+    def test_이름_안의_숫자를_값으로_보지_않는다(self):
+        """"비타민B6" 의 6 을 1.5 mg 대신 넣으면 안 된다."""
+        self.assertIn('function stripName', self.js)
+
+    def test_표의_머리도_읽는다(self):
+        self.assertIn('function readHead', self.js)
+        for word in ('총\\s*내용량', '1회\\s*제공량', '100'):
+            self.assertIn(word, self.js, word)
+
+    def test_열_머리가_총_내용량_표기보다_세다(self):
+        """
+        "총 내용량 500 g / 100 g당" 에서 앞의 것을 집으면 이미 100 g 당인
+        값을 다시 500 으로 나눈다. 서버도 같은 규칙이다(ocr_apply.basis_kind).
+        """
+        self.assertIn('function saysPer100', self.js)
+        self.assertIn('BASIS_HEAD_RE', self.js)
+
+    def test_기준을_두_곳에_넣는다(self):
+        """
+        입력 기준(넣은 값을 100 g 당으로 환산할 때)과 표시기준(다시 표를 그릴
+        때). 둘이 어긋나면 인쇄된 값과 다른 숫자가 나온다.
+        """
+        head = self.js.index('function apply(head, rows)')
+        block = self.js[head:head + 1600]
+        self.assertIn("setValue('nutrition_input_basis'", block)
+        self.assertIn("setValue('basic_display_type', head.kind)", block)
+
+    def test_한_칸짜리는_가로채지_않는다(self):
+        """값 하나를 붙여넣는 것은 그냥 그 칸에 들어가야 한다."""
+        head = self.js.index("document.addEventListener('paste'")
+        block = self.js[head:head + 900]
+        self.assertIn("text.indexOf('\\t') < 0 && text.indexOf('\\n') < 0", block)
+
+    def test_우리_표가_아니면_손대지_않는다(self):
+        head = self.js.index("document.addEventListener('paste'")
+        block = self.js[head:head + 1200]
+        self.assertIn('if (!read.labels.length && !head.kind', block)
+
+    def test_어림한_표기는_숫자로_보지_않는다(self):
+        """"5kcal 미만" 을 5 로 넣으면 라벨에 "5 kcal" 이 찍힌다."""
+        self.assertIn('VAGUE_RE', self.js)
+        self.assertIn('미만|이하|이상|초과', self.js)
+
+
 class OcrNutritionBasisTests(TestCase):
     """
     사진에서 읽은 영양성분표를 **어떤 기준으로 저장하는가.**
@@ -3335,6 +3422,43 @@ class OcrApplyExtrasTests(TestCase):
         self.assertEqual(parse_nutrition_basis('100 g당'), ('100', 'g'))
         self.assertEqual(parse_nutrition_basis('1회 제공량 200 mL'), ('200', 'mL'))
         self.assertEqual(parse_nutrition_basis('알 수 없음'), (None, None))
+
+    def test_무엇_당인지를_읽는다(self):
+        """
+        숫자만 옮기고 이걸 빼면 뜻이 틀어진다. 저장 칸은 언제나 100 g 당이라
+        무엇 당인지를 알아야 환산도 하고, 다시 표를 그릴 때 인쇄된 값을
+        되살릴 수도 있다.
+        """
+        from v1.label.services.ocr_apply import basis_kind
+
+        self.assertEqual(basis_kind('총 내용량 100 g 당'), 'total')
+        self.assertEqual(basis_kind('총 내용량당'), 'total')
+        self.assertEqual(basis_kind('100 g당'), 'per_100')
+        self.assertEqual(basis_kind('1회 제공량 30 g당'), 'unit')
+        self.assertEqual(basis_kind('알 수 없음'), '')
+        self.assertEqual(basis_kind(''), '')
+
+    def test_열_머리가_총_내용량_표기보다_세다(self):
+        """
+            영양정보   총 내용량 500 g      <- 봉지에 든 양
+            100 g당    1일 영양성분 …       <- 아래 숫자들은 이것 당이다
+
+        앞의 숫자를 기준으로 보면 500 으로 나누게 되고, 이미 100 g 당인
+        값들이 다섯 배로 틀어진다.
+        """
+        from v1.label.services.ocr_apply import basis_kind, parse_nutrition_basis
+
+        text = '총 내용량 500 g / 100 g당'
+        self.assertEqual(basis_kind(text), 'per_100')
+        self.assertEqual(parse_nutrition_basis(text), ('100', 'g'))
+
+    def test_대문자로_읽혀도_알아본다(self):
+        """사진에서는 100 G 로도 읽힌다. 못 읽으면 환산이 통째로 빠진다."""
+        from v1.label.services.ocr_apply import basis_kind, parse_nutrition_basis
+
+        self.assertEqual(parse_nutrition_basis('총 내용량 139 G'), ('139', 'g'))
+        self.assertEqual(parse_nutrition_basis('1회 제공량 200 ML'), ('200', 'mL'))
+        self.assertEqual(basis_kind('100 G 당'), 'per_100')
 
     def test_분리배출_표기를_저장용_종류로_바꾼다(self):
         from v1.label.services.ocr_apply import map_recycling_mark
@@ -6081,6 +6205,21 @@ class NutritionHeaderTests(TestCase):
         head = self.js.index('function normalizeBasicDisplayType')
         block = self.js[head:head + 260]
         self.assertIn("return 'total';", block)
+
+    def test_열_때도_이름을_맞춘다(self):
+        """
+        **모르는 이름을 <select> 에 그대로 넣으면 고른 것이 없어진다.**
+        value 가 '' 가 되고 아무 항목도 안 눌린 채로 열린다. 그러면 기준
+        칸은 빈칸인데 표는 총량당으로 그려진다 — 사용자에게는 "100g당으로
+        해 뒀는데 다르게 나온다" 로 보인다.
+
+        보내는 쪽은 이미 맞춰 두었다. 읽는 쪽도 같은 함수를 쓴다.
+        """
+        head = self.js.index('// [개선] 데이터를 부모 창으로 전송')
+        self.assertIn('normalizeBasicDisplayType(', self.js[head:head + 900])
+        load = self.js.index('if (data.basic_display_type) {')
+        self.assertIn('normalizeBasicDisplayType(data.basic_display_type)',
+                      self.js[load:load + 300])
 
 
 class OcrNutritionBasisTests(TestCase):

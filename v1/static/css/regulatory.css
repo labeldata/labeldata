@@ -1020,6 +1020,15 @@ details[open] .rd-raw-sum::after { content: "⌄"; font-size: 12px; }
   cursor: pointer;
 }
 .rd-insp-guide-btn:hover { background: #d46b08; }
+.rd-insp-guide-btn { text-decoration: none; }
+/* 둘째 단추. 등록은 이미 돼 있으므로 "고치기" 는 한 발 뒤에 선다 */
+.rd-insp-guide-btn--ghost {
+  margin-top: 8px;
+  background: #fff;
+  color: #d46b08;
+  border: 1px solid #ffd591;
+}
+.rd-insp-guide-btn--ghost:hover { background: #fff7e6; color: #d46b08; }
 
 /* ── 수거검사 공개 목록 기간 필터 ──────────────────────── */
 .rs-pub-day-btn.active { background: var(--c-primary); color: #fff; border-color: var(--c-primary); }

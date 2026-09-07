@@ -6256,7 +6256,7 @@ def ocr_apply_extras(request, label_id):
     항목을 빈 값으로 덮으므로 여기서 쓸 수 없다 - 사진에 없던 성분이 지워진다.
     """
     from v1.label.services.ocr_apply import (
-        apply_nutrition, apply_recycling_mark, basis_is_total,
+        apply_nutrition, apply_recycling_mark, basis_is_total, basis_kind,
         parse_nutrition_basis, to_per_100,
     )
 
@@ -6275,22 +6275,38 @@ def ocr_apply_extras(request, label_id):
     # 검증은 "열량이 맞지 않습니다" 라고 했다. 사진에도 라벨에도 318 인데도.
     basis_text = payload.get('nutrition_basis')
     basis_value, basis_unit = parse_nutrition_basis(basis_text)
+    kind = basis_kind(basis_text)
 
     nutrition = payload.get('nutrition') or []
     applied = apply_nutrition(label, to_per_100(nutrition, basis_value))
 
-    # 표의 기준(총 내용량 / 100g당)이 읽혔으면 함께 맞춘다. 기준이 어긋나면
-    # 수치는 맞는데 표시가 틀린다.
-    if basis_value:
+    fields = []
+
+    # **무엇 당인지도 함께 넣는다.** 값을 100 g 당으로 바꿔 저장해 놓고 표시기준을
+    # 그대로 두면, 표를 다시 그릴 때 인쇄된 값과 다른 숫자가 나온다 - 저장값에
+    # 표시기준의 배수를 곱해 그리기 때문이다("100 g당" 표를 총량당으로 그리면
+    # 총량이 500 g 일 때 다섯 배가 된다). 사진에서 읽은 기준을 그대로 쓴다.
+    if kind:
+        label.basic_display_type = '100g' if kind == 'per_100' else kind
+        fields.append('basic_display_type')
+
+    # 표의 기준량이 읽혔으면 단위량도 맞춘다.
+    #
+    # **"100 g당" 의 100 은 내용량이 아니다.** 표를 읽는 잣대일 뿐이라, 그것을
+    # 단위량에 넣으면 65 g 짜리 제품에 "총 내용량 100 g" 이 인쇄된다. 한 오류를
+    # 다른 오류로 바꾸는 셈이다. 그때 내용량은 표시사항의 내용량 칸에서 온다.
+    if basis_value and kind != 'per_100':
         label.serving_size = basis_value
         label.serving_size_unit = basis_unit or label.serving_size_unit or 'g'
-        fields = ['serving_size', 'serving_size_unit']
+        fields += ['serving_size', 'serving_size_unit']
         # 표의 기준이 총 내용량이면 단위량이 곧 총량이다. 포장개수가 예전 값으로
         # 남아 있으면(2 등) 표의 총량이 그 배수가 되고, 인쇄된 내용량과 영양정보
         # 표의 머리가 서로 다른 총량을 말한다.
         if basis_is_total(basis_text):
             label.units_per_package = '1'
             fields.append('units_per_package')
+
+    if fields:
         label.save(update_fields=fields)
         applied += fields
 

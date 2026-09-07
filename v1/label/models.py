@@ -722,7 +722,7 @@ def backfill_inspection_on_label_save(sender, instance, created, update_fields, 
             alert_phase=InspectionMatch.PHASE_COLLECTION,
         ).delete()
         # 웹 요청 안이므로 FCM 발송은 백그라운드로 넘긴다(저장 응답 지연 방지).
-        backfill_inspection_matches(instance.user_id, days=30, push_async=True)
+        backfill_inspection_matches(instance.user_id, push_async=True)
     except Exception:
         import logging
         logging.getLogger(__name__).exception('[I0460 소급] MyLabel 트리거 오류')

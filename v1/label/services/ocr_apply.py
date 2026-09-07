@@ -209,9 +209,71 @@ def basis_is_total(text):
     return ('총내용량' in raw) or ('총량' in raw)
 
 
+# 표의 값이 **무엇 당**인지. 라벨에 적히는 말은 셋뿐이다.
+#
+#     100 g당            그대로 저장한다(저장 칸이 100 g 당이다)
+#     총 내용량당        총량으로 나눠 100 g 당으로 만든다
+#     1회 제공량당       1회량으로 나눈다
+#
+# 이걸 모르면 숫자만 옮겨지고 뜻이 틀어진다. 다시 표를 그릴 때 인쇄된 값과
+# 다른 숫자가 나오고, 사용자는 어디를 고쳐야 하는지 알 수가 없다.
+_PER_100 = re.compile(r'100\s*(?:g|㎖|ml|mL|그램)\s*당', re.IGNORECASE)
+_TOTAL = re.compile(r'총\s*내용량')
+_UNIT = re.compile(r'1회\s*제공량|1회\s*섭취참고량|단위\s*내용량')
+
+# "100 g당" 바로 앞에 이 말이 있으면, 그 100 g 은 그 기준의 양이다.
+# "총 내용량 100 g 당" 은 100 g 당 표가 아니라 총 내용량이 100 g 인 표다.
+_BASIS_HEAD = re.compile(r'(총\s*내용량|1회\s*제공량|1회\s*섭취참고량|단위\s*내용량)\s*$')
+
+# 숫자 + 단위. \b 를 쓰면 "100 g당" 이 안 잡힌다 - 한글은 단어 문자라 g 와
+# 당 사이에 경계가 없다. 뒤에 영문이 이어지지만 않으면 된다.
+# kg 를 g 보다, mL 를 L 보다 먼저 본다. 사진에서는 대문자로도 읽힌다(100 G).
+_AMOUNT = re.compile(r'([\d.,]+)\s*(kg|ml|㎖|g|l)(?![a-zA-Z])', re.IGNORECASE)
+
+_UNIT_FORM = {'kg': 'kg', 'ml': 'mL', '㎖': 'mL', 'g': 'g', 'l': 'L'}
+
+
+def basis_kind(text):
+    """
+    표의 값이 무엇 당인가. 'per_100' / 'total' / 'unit', 모르면 ''.
+
+    **"100 g당" 이 "총 내용량 500 g" 보다 세다.** 이런 표가 흔하다.
+
+        영양정보   총 내용량 500 g      <- 봉지에 든 양
+        100 g당    1일 영양성분 …       <- 아래 숫자들은 이것 당이다
+
+    총 내용량을 기준으로 보면 500 으로 나누게 되고 모든 수치가 다섯 배로
+    틀어진다. 기준은 열 머리에서, 기준량은 "총 내용량 500 g" 에서 온다.
+    """
+    raw = str(text or '')
+    if not raw.strip():
+        return ''
+    # "100 g당" 이 홀로 선 말일 때만 그 기준이다. "총 내용량 100 g 당" 은
+    # 총 내용량이 마침 100 g 이라는 말이지 100 g 당 표가 아니다.
+    for hit in _PER_100.finditer(raw):
+        if not _BASIS_HEAD.search(raw[:hit.start()]):
+            return 'per_100'
+    if _TOTAL.search(raw):
+        return 'total'
+    if _UNIT.search(raw):
+        return 'unit'
+    return ''
+
+
+def _amount_after(raw, marker):
+    """그 말 뒤에 붙은 숫자+단위. "총 내용량 139 g" 의 139 g."""
+    at = marker.search(raw)
+    m = _AMOUNT.search(raw, at.end() if at else 0)
+    return m
+
+
 def parse_nutrition_basis(text):
     """
     "총 내용량 139 g" -> ('139', 'g'). 표의 기준이 1회 제공량이면 그 값을 쓴다.
+
+    **그 기준을 말하는 숫자를 고른다.** "총 내용량 500 g / 100 g당" 처럼 두
+    숫자가 함께 적힌 표에서 앞의 것을 집으면, 이미 100 g 당인 값을 다시 5 로
+    나눈다.
 
     못 읽으면 (None, None). 그때는 기존 값을 그대로 둔다 - 기준을 잘못 바꾸면
     모든 수치의 뜻이 달라진다.
@@ -219,14 +281,19 @@ def parse_nutrition_basis(text):
     raw = (text or '').strip()
     if not raw:
         return None, None
-    # \b 를 쓰면 "100 g당" 이 안 잡힌다 - 한글은 단어 문자라 g 와 당 사이에
-    # 경계가 없다. 뒤에 영문이 이어지지만 않으면 된다.
-    # kg 를 g 보다, mL 를 L 보다 먼저 본다.
-    m = re.search(r'([\d.,]+)\s*(kg|mL|ml|㎖|g|L)(?![a-zA-Z])', raw)
+
+    kind = basis_kind(raw)
+    if kind == 'per_100':
+        m = _AMOUNT.search(_PER_100.search(raw).group(0))
+    elif kind == 'total':
+        m = _amount_after(raw, _TOTAL)
+    elif kind == 'unit':
+        m = _amount_after(raw, _UNIT)
+    else:
+        m = _AMOUNT.search(raw)
     if not m:
         return None, None
-    unit = m.group(2)
-    return m.group(1).replace(',', ''), 'mL' if unit.lower() in ('ml', '㎖') else unit
+    return m.group(1).replace(',', ''), _UNIT_FORM.get(m.group(2).lower(), m.group(2))
 
 
 # ── 사진값에서 화면 버튼 상태를 유도한다 ────────────────────────────────────

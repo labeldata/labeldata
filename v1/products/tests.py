@@ -1219,6 +1219,36 @@ class OcrApplyExtrasEndpointTests(TestCase):
         self.label.refresh_from_db()
         self.assertEqual(self.label.serving_size, '100')
 
+    def test_무엇_당인지도_함께_저장된다(self):
+        """
+        값만 옮기고 **표시기준을 안 옮기면** 다시 표를 그릴 때 인쇄된 값과
+        다른 숫자가 나온다. 저장값은 100 g 당인데, 표는 표시기준의 배수를
+        곱해 그리기 때문이다.
+        """
+        self._post(nutrition=[{'field': 'calories', 'raw': '96 kcal'}],
+                   nutrition_basis='총 내용량 100 g 당')
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.basic_display_type, 'total')
+        self.assertEqual(self.label.serving_size, '100')
+        # 표의 기준이 총 내용량이면 단위량이 곧 총량이다
+        self.assertEqual(self.label.units_per_package, '1')
+
+    def test_100g당_표는_100을_내용량에_넣지_않는다(self):
+        """
+        "100 g당" 의 100 은 표를 읽는 잣대일 뿐 내용량이 아니다. 단위량에
+        넣으면 65 g 짜리 제품에 "총 내용량 100 g" 이 인쇄된다 — 한 오류를
+        다른 오류로 바꾸는 셈이다.
+        """
+        self.label.serving_size = '65'
+        self.label.save(update_fields=['serving_size'])
+        self._post(nutrition=[{'field': 'calories', 'raw': '96 kcal'}],
+                   nutrition_basis='총 내용량 500 g / 100 g당')
+        self.label.refresh_from_db()
+        self.assertEqual(self.label.serving_size, '65')       # 그대로다
+        self.assertEqual(self.label.basic_display_type, '100g')
+        # 이미 100 g 당인 값이라 환산하지 않는다
+        self.assertEqual(self.label.calories, '96')
+
     def test_분리배출_문구가_종류로_바뀌어_저장된다(self):
         res = self._post(recycling_mark_text='비닐류 PP / 띠지:PP, 리드지:PET')
         self.assertEqual(res.json()['recycling_type'], '비닐(PP)')
@@ -3826,7 +3856,7 @@ class 붙여넣는_도중에_칸을_옮겼다(TestCase):
     def test_beforePaste_안에서는_알리지_않는다(self):
         # 여기서 알리면 화면이 칸을 옮기고, 값은 그 뒤에 들어간다
         head = self.js.index("hot.addHook('beforePaste'")
-        block = self.js[head:self.js.index("if (firstCol > 0)", head)]
+        block = self.js[head:self.js.index('function aim(wantCol)', head)]
         self.assertIn('pending = { added: data.length', block)
         self.assertEqual(block.count('report({ added: data.length'), 0)
 
@@ -3882,6 +3912,193 @@ class 자리가_없는_열을_버리지_않는다(TestCase):
         block = self.js[head:head + 400]
         self.assertIn("+ ' 은 ' + options.carry + ' 로'", block)
         self.assertIn('unused = [];', block)
+
+    def test_자리를_잃은_열도_옮긴다(self):
+        """
+        짝을 못 지은 열만 옮기고 있었다. 그런데 실제 양식에서 사라진 열들은
+        **짝을 짓고도 진** 열이다.
+
+            품목제조보고서 원재료명       -> 원료명   (이겼다)
+            품목제조보고서 원재료 기타설명 -> 원료명   (졌다 — "원재료" 를 품어서)
+            ERP 원재료                   -> 원료명   (졌다)
+            원료코드                     -> 원료명   (졌다)
+
+        진 쪽은 이름만 "쓰지 않았습니다" 로 적히고 값은 사라졌다. 하필 그
+        회사에서 원료를 찾는 열쇠들 — carry 를 만든 바로 그 열들이다.
+        """
+        head = self.js.index('function planColumns')
+        block = self.js[head:self.js.index('function mergeHeader', head)]
+        # 이름과 자리를 한 곳에서 남긴다. 세 갈래가 따로 적으면 또 어긋난다
+        self.assertIn('function lose(j, label)', block)
+        self.assertEqual(block.count('unusedCols.push('), 1)
+        self.assertEqual(block.count('unused.push('), 1)
+        self.assertIn('lose(taken[col].j, taken[col].label);', block)
+
+
+class 붙여넣은_것이_줄_수와_자리를_정한다(TestCase):
+    """
+    열여덟 줄을 붙였는데 스물한 줄이 들어갔다. 열여덟 줄 뒤로는 **앞 줄들이
+    되풀이돼서** 붙었다.
+
+    Handsontable 은 잡아 둔 자리의 왼쪽 위부터 넣고, 넣을 것이 그 자리보다
+    작으면 모자란 만큼 앞에서부터 되풀이해 채운다(populateValues 의
+    `o.length % n`). 그리고 붙여넣고 나면 들어간 자리를 통째로 잡아 준다.
+
+    우리는 머리글 줄과 빈 줄과 합계 줄을 덜어 낸다. 그래서 **두 번째
+    붙여넣기부터는 잡힌 자리가 넣을 것보다 늘 크다.**
+
+    beforePaste 가 받는 coords 로는 못 고친다. 그것은 복사용 자리
+    (CopyPaste.copyableRanges)이고, 붙는 자리는 그때 잡혀 있는 선택 영역에서
+    온다 — 고쳐 봐야 아무 일도 일어나지 않는다. 잡아 둔 자리를 한 칸으로
+    좁힌다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.js = (Path(dj.BASE_DIR) / 'static/js/sheet_paste.js').read_text(
+            encoding='utf-8')
+
+    def test_잡아_둔_자리를_한_칸으로_좁힌다(self):
+        head = self.js.index('function aim(wantCol)')
+        block = self.js[head:head + 800]
+        self.assertIn('hot.getSelectedRangeLast()', block)
+        self.assertIn('hot.selectCell(row, col, row, col)', block)
+
+    def test_coords_를_고치지_않는다(self):
+        # 복사용 자리다. 고쳐도 붙는 자리는 꿈쩍하지 않는다
+        self.assertNotIn('range.startCol = firstCol;', self.js)
+        self.assertNotIn('range.endCol +=', self.js)
+
+    def test_머리글로_맞춘_줄은_커서가_어디_있든_첫_칸부터(self):
+        head = self.js.index('var startCol = aim(')
+        self.assertIn('aim(plan ? firstCol : -1)', self.js[head:head + 120])
+
+    def test_자료가_시작하는_칸보다_왼쪽에는_붙지_않는다(self):
+        # 연락처 표는 첫 칸이 체크박스다
+        head = self.js.index('function aim(wantCol)')
+        self.assertIn('Math.max(at ? at.col : firstCol, firstCol)',
+                      self.js[head:head + 800])
+
+    def test_넣을_것이_없으면_자리를_건드리지_않는다(self):
+        # 표를 안 건드리는데 커서만 옮길 이유가 없다
+        self.assertLess(self.js.index('return false;'),
+                        self.js.index('var startCol = aim('))
+
+
+class 합계_줄은_원료가_아니다(TestCase):
+    """
+    회사 배합비 엑셀은 맨 아래에 마무리 줄을 둔다.
+
+             정제수         0.000    5.342
+                  합  계  100.000  100.000
+
+    그대로 넣으면 원료가 한 줄 늘고 **배합비 합계가 200% 가 된다.** 열여덟
+    줄을 붙였는데 열아홉 줄이 들어갔다.
+
+    "합계" 는 우리 표에 자리가 없는 열에 적혀 있는 일이 흔하다(위 예에서는
+    ERP 원재료 칸이다). 한 칸만 보지 않고 줄 전체를 본다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.js = (Path(dj.BASE_DIR) / 'static/js/sheet_paste.js').read_text(
+            encoding='utf-8')
+
+    def test_합계_소계_총계를_안다(self):
+        head = self.js.index('var TOTAL_WORDS')
+        block = self.js[head:head + 200]
+        for word in ('합계', '소계', '총계', 'total'):
+            self.assertIn(word, block, word)
+
+    def test_이름이_있는_줄은_건드리지_않는다(self):
+        """이름이 있는데 버리면 원료 한 줄이 소리 없이 사라진다."""
+        head = self.js.index('function isTotalRow')
+        block = self.js[head:head + 500]
+        self.assertIn("if (name != null && String(name).trim() !== '') return false;",
+                      block)
+
+    def test_이름_칸을_모르면_버리지_않는다(self):
+        head = self.js.index('var totals = 0;')
+        block = self.js[head:head + 400]
+        self.assertIn('nameCols.length ? data.length - 1 : -1', block)
+
+    def test_가져온_칸_그대로일_때_본다(self):
+        # 우리 양식으로 옮기고 나면 "합  계" 가 비고 뒤에 붙어 안 보인다
+        self.assertLess(self.js.index('var totals = 0;'),
+                        self.js.index('var seat = {};'))
+
+    def test_몇_줄을_뺐는지_말해_준다(self):
+        self.assertIn("why.push('합계 줄 ' + totals + '개')", self.js)
+        self.assertIn('dropped: blanks + totals', self.js)
+
+
+class BOM을_통째로_지운다(TestCase):
+    """
+    잘못 붙여넣었을 때 되돌릴 길이 우클릭 → 행 삭제뿐이었다. 스무 줄이면
+    스무 번이다. 사람들은 표 왼쪽 위 모서리를 눌러 전체를 고르고 DEL 을
+    누른다 — 엑셀에서 그렇게 하기 때문이다.
+
+    **칸만 비우면 반이 남는다.** 알레르기·GMO·어디서 온 원료인지는 표에 칸이
+    없어 rowMetadata 에만 있다. 칸을 지워도 그것들은 그대로 남아 다음 저장에
+    다시 실려 간다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+        from django.conf import settings as dj
+        self.bom = (Path(dj.BASE_DIR) / 'templates/products/bom_detail.html'
+                    ).read_text(encoding='utf-8')
+
+    def test_단추가_있다(self):
+        self.assertIn('onclick="clearAllRows()"', self.bom)
+        self.assertIn('전체 지우기', self.bom)
+        # 읽기 전용으로 열린 사람에게는 보이지 않는다
+        head = self.bom.index('onclick="clearAllRows()"')
+        self.assertIn('{% if can_edit %}', self.bom[head - 400:head])
+
+    def test_전체를_고르고_DEL_로도_지운다(self):
+        head = self.bom.index("hot.addHook('beforeKeyDown'")
+        block = self.bom[head:head + 900]
+        self.assertIn("event.key !== 'Delete' && event.key !== 'Backspace'", block)
+        # 전체를 골랐을 때만이다. 칸 하나를 지우는 것은 그대로 둔다
+        self.assertIn('to.row < hot.countRows() - 1', block)
+        self.assertIn('clearAllRows({ ask: false })', block)
+
+    def test_붙여넣기가_없어도_지울_수_있다(self):
+        """sheet_paste.js 를 못 실어도 지우기는 살아 있어야 한다."""
+        self.assertLess(self.bom.index('if (window.attachSheetPaste)'),
+                        self.bom.index("hot.addHook('beforeKeyDown'"))
+        paste_block_end = self.bom.index('// 컨테이너 크기 변경 시')
+        head = self.bom.index("hot.addHook('beforeKeyDown'")
+        self.assertLess(head, paste_block_end)
+        # 여덟 칸 들여쓰기 = 붙여넣기 if 문 밖이다
+        self.assertIn("\n        hot.addHook('beforeKeyDown'", self.bom)
+
+    def test_숨은_것도_함께_지운다(self):
+        head = self.bom.index('function clearAllRows(options)')
+        block = self.bom[head:head + 1600]
+        self.assertIn('rowMetadata.clear();', block)
+        self.assertIn('currentRowIndex = null;', block)
+
+    def test_합계와_요약을_다시_그린다(self):
+        """loadData 로 넣은 값은 afterChange 가 무시한다(source === 'loadData')."""
+        head = self.bom.index('function clearAllRows(options)')
+        block = self.bom[head:head + 1600]
+        self.assertIn('calculateTotal();', block)
+
+    def test_묻고_지운다(self):
+        head = self.bom.index('function clearAllRows(options)')
+        block = self.bom[head:head + 1600]
+        self.assertIn('confirm(', block)
+        # DEL 은 묻지 않는다 — 엑셀에서 그렇게 하기 때문이다
+        self.assertIn('options.ask !== false', block)
+
+    def test_저장_전에는_서버_자료가_그대로다(self):
+        """지우는 것은 화면뿐이다. 그 말을 해 주지 않으면 겁이 난다."""
+        head = self.bom.index('function clearAllRows(options)')
+        self.assertIn('저장하기를 누르기 전에는', self.bom[head:head + 1600])
 
 
 class 걷어도_되는_것과_아닌_것(TestCase):

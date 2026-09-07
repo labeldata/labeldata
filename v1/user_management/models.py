@@ -118,7 +118,7 @@ def backfill_inspection_on_profile_save(sender, instance, created, update_fields
         # 변경된 키워드 기준으로 완전히 재매칭하므로 기존 매칭 전체 삭제
         InspectionMatch.objects.filter(user=instance.user).delete()
         # 웹 요청 안이므로 FCM 발송은 백그라운드로 넘긴다(저장 응답 지연 방지).
-        backfill_inspection_matches(instance.user, days=30, push_async=True)
+        backfill_inspection_matches(instance.user, push_async=True)
     except Exception:
         import logging
         logging.getLogger(__name__).exception('[I0460 소급] UserProfile 트리거 오류')

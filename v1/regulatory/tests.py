@@ -459,3 +459,65 @@ class RegulatoryLayoutTests(TestCase):
         for source in (self.tpl, panel):
             self.assertIn(".querySelector('.rs-status-cell')", source)
             self.assertNotIn('.badge-status-no', source)
+
+
+class 등록했는데_안_걸렸을_때(TestCase):
+    """
+    수거검사 알림에 회사명을 넣어 둔 사람이 오른쪽 패널에서 이 말을 봤다.
+
+        내 정보가 등록되지 않았습니다.
+
+    등록은 돼 있었다. 그 회사명으로 최근 30일 안에 걸린 검사가 없었을 뿐이다.
+    **등록을 안 한 것과 등록했는데 안 걸린 것은 다르다.** 같은 말을 하면
+    사람은 저장이 안 된 줄 알고 같은 값을 다시 넣는다.
+    """
+
+    def setUp(self):
+        from v1.user_management.models import UserProfile
+
+        cache.clear()
+        self.user = User.objects.create_user(username='insp-empty', password='x')
+        self.client.force_login(self.user)
+        self.profile = UserProfile.objects.filter(user=self.user).first()
+        if self.profile is None:
+            self.profile = UserProfile.objects.create(user=self.user)
+
+    def _html(self):
+        return self.client.get('/regulatory/?tab=insp').content.decode('utf-8')
+
+    def test_아무것도_안_넣었으면_등록하라고_한다(self):
+        html = self._html()
+        self.assertIn('내 정보가 등록되지 않았습니다', html)
+        self.assertIn('내 정보 등록하기', html)
+
+    def test_넣어_뒀으면_등록됐다고_말한다(self):
+        self.profile.company_name = '비알코리아'
+        self.profile.save(update_fields=['company_name'])
+
+        html = self._html()
+        self.assertNotIn('내 정보가 등록되지 않았습니다', html)
+        self.assertIn('등록은 되어 있습니다', html)
+        # 무엇으로 맞춰 봤는지 그 값을 보여 준다
+        self.assertIn('비알코리아', html)
+
+    def test_어디까지_맞춰_봤는지_말한다(self):
+        """
+        거슬러 맞춰 보는 기간은 서버가 정한다. 화면이 다른 숫자를 적으면
+        어느 날 한쪽만 고쳐진다.
+        """
+        from v1.regulatory.services.collector import INSPECTION_BACKFILL_DAYS
+
+        self.profile.license_number = '19630364001'
+        self.profile.save(update_fields=['license_number'])
+
+        html = self._html()
+        self.assertIn(f'최근 {INSPECTION_BACKFILL_DAYS}일치', html)
+        self.assertIn('19630364001', html)
+
+    def test_전체_목록에서_찾아볼_길을_준다(self):
+        """소급 기간 밖의 것은 공개 목록에서 회사명으로 찾을 수 있다."""
+        self.profile.company_name = '비알코리아'
+        self.profile.save(update_fields=['company_name'])
+
+        html = self._html()
+        self.assertIn('tab=insp&amp;q=%EB%B9%84%EC%95%8C%EC%BD%94%EB%A6%AC%EC%95%84', html)

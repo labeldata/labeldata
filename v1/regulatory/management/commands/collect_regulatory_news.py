@@ -158,7 +158,7 @@ class Command(BaseCommand):
         total = 0
         for user in users:
             InspectionMatch.objects.filter(user=user).delete()
-            result = backfill_inspection_matches(user, days=30)
+            result = backfill_inspection_matches(user)
             matched = result.get('matched', 0)
             if matched:
                 self.stdout.write(f'  {user.username}: {matched}건 매칭')

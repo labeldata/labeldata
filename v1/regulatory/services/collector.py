@@ -739,7 +739,16 @@ def _row_to_text(row: dict, label: str = '') -> str:
 
 # ── 수거검사(I0460) ────────────────────────────────────────────────────────────
 
-def backfill_inspection_matches(user, days: int = 30, push_async: bool = False) -> dict:
+# 내 정보(인허가번호·회사명)나 제품을 새로 등록했을 때 **거슬러 맞춰 보는 기간**.
+#
+# 이 숫자를 화면도 말해 준다 - 등록해 놓고 아무것도 안 뜨면 사람은 "등록이 안
+# 됐나" 로 읽는다. 실제로는 그 기간 안에 걸린 검사가 없는 것뿐이다. 그 말을
+# 하려면 화면이 이 기간을 알아야 하므로 여기 한 곳에서 정한다.
+INSPECTION_BACKFILL_DAYS = 30
+
+
+def backfill_inspection_matches(user, days: int = INSPECTION_BACKFILL_DAYS,
+                                push_async: bool = False) -> dict:
     """
     사용자가 인허가번호·회사명·품목보고번호를 신규 등록할 때 호출.
     최근 N일치 InspectionResult를 소급 매칭하고 InspectionMatch를 생성한다.

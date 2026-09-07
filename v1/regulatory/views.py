@@ -23,6 +23,7 @@ from django.views.decorators.http import require_POST
 
 from v1.regulatory import selectors
 from v1.regulatory.services import news_search
+from v1.regulatory.services.collector import INSPECTION_BACKFILL_DAYS
 from v1.regulatory.models import (
     NewsIngredientMatch, NewsProductMatch, RegulatoryMatchAction, RegulatoryNews,
     InspectionResult, InspectionMatch, judgment_status_of,
@@ -736,6 +737,8 @@ def news_list(request):
         'recent_insp_paginator':   recent_insp_paginator,
         'recent_insp_total':       recent_insp_total,
         'user_profile':            UserProfile.objects.filter(user=request.user).first(),
+        # 등록해 놓고 아무것도 안 뜰 때, 거슬러 맞춰 본 기간을 화면이 말해 준다
+        'insp_backfill_days':      INSPECTION_BACKFILL_DAYS,
     })
 
 

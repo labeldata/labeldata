@@ -113,6 +113,18 @@
       </div>
       <div class="input-basis-note" id="inputBasisNote"></div>
 
+      <!--
+        엑셀에서 그대로 붙여넣기. 배합비는 표로 붙여넣게 해 뒀는데(sheet_paste.js)
+        영양성분은 칸마다 손으로 옮겨 적어야 했다. 항목명을 함께 복사해 오면
+        순서가 달라도 이름을 보고 제자리를 찾아간다(js/label/nutrition_paste.js).
+      -->
+      <div class="paste-hint">
+        엑셀·라벨에서 <strong>항목명과 값을 함께</strong> 복사해 붙여넣으면(Ctrl+V)
+        순서가 달라도 제자리에 들어갑니다. "총 내용량 100 g", "총 내용량당" 같은
+        <strong>표의 머리</strong>도 함께 읽어 위 기준에 넣습니다.
+      </div>
+      <div class="input-basis-note" id="nutritionPasteReport"></div>
+
       <div class="nutrition-header" onclick="toggleNutritionSection()">
         <span class="panel-title">🥄 영양성분</span>
         <span class="toggle-text">
@@ -174,6 +186,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
   <script src="{% static 'js/label/constants.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
   <script src="{% static 'js/label/nutrition_calculator_popup.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+  <script src="{% static 'js/label/nutrition_paste.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
 </body>
 </html>
 <script>
