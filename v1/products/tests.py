@@ -4563,3 +4563,47 @@ class 파일_크기는_한곳에서_정한다(TestCase):
             text = (Path(dj.BASE_DIR) / rel).read_text(encoding='utf-8')
             self.assertNotIn('10 * 1024 * 1024', text, rel)
             self.assertNotIn('50 * 1024 * 1024', text, rel)
+
+
+class 쓰고_있는_양을_올리기_전에_보여_준다(TestCase):
+    """
+    한도가 있다는 것을 **다 쓰고 나서 알면 화가 난다.** 파일을 올리려는데
+    "한도에 닿았습니다" 만 나오면, 얼마나 썼는지도 무엇을 지워야 하는지도
+    모른 채 막힌다.
+
+    요금제를 여는 날 이 자리가 그대로 안내가 된다 — 등급은 UserProfile.paid_yn
+    하나뿐이고, 한도는 quota.FEATURES 한 곳에 있다.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='usage', password='x',
+                                             email='usage@example.com')
+        self.client.force_login(self.user)
+
+    def test_내_정보에_사용량이_있다(self):
+        res = self.client.get('/user-management/profile/')
+        self.assertEqual(res.status_code, 200)
+        html = res.content.decode('utf-8')
+        self.assertIn('사용량', html)
+        self.assertIn('올린 파일', html)      # 저장 용량
+        self.assertIn('등록한 원료', html)     # 저량 한도
+        self.assertIn('30 MB', html)          # 한 파일 상한
+
+    def test_흐름과_저량을_가려_말한다(self):
+        """
+        하루에 몇 번(판독)과 통틀어 몇 건(원료·파일)은 세는 법도 다 썼을 때
+        할 말도 다르다 — "내일 다시" 와 "지우거나 올리세요".
+        """
+        res = self.client.get('/user-management/profile/')
+        html = res.content.decode('utf-8')
+        self.assertIn('(오늘)', html)
+        self.assertIn('지우면 그만큼 자리가 돌아옵니다', html)
+
+    def test_한도는_한_곳에서_온다(self):
+        """요금제를 손볼 때 코드를 고치지 않고 settings 로도 내릴 수 있어야 한다."""
+        from django.test import override_settings
+
+        from v1.common import quota
+
+        with override_settings(QUOTA_LIMITS={'storage': {'free': 100}}):
+            self.assertEqual(quota.limit_for(self.user, 'storage'), 100)

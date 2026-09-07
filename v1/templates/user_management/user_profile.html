@@ -121,6 +121,20 @@
 .icon-green { background: #e6f4ea; color: #1e8e3e; }
 .icon-orange{ background: #fce8e6; color: #c5221f; }
 .profile-card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.usage-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.usage-table td { padding: 6px 4px; vertical-align: middle; }
+.usage-name { width: 140px; color: var(--text-primary); }
+.usage-bar-cell { padding-right: 12px !important; }
+.usage-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: #e8eaed;
+    overflow: hidden;
+}
+.usage-bar span { display: block; height: 100%; background: #1a73e8; }
+.usage-num { width: 150px; text-align: right; color: var(--text-secondary); white-space: nowrap; }
+.usage-hint { color: #9aa0a6; font-size: 11px; }
+.usage-note { margin-top: 10px; font-size: 12px; line-height: 1.7; color: var(--text-secondary); }
 .profile-card-desc  { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
 .profile-card-body  { padding: 24px 28px; }
 
@@ -409,6 +423,49 @@ details[open] .upload-section summary::before { content: '\2212'; }
     </div>
 
     {# ══ 3. 알림 키워드 관리 ══ #}
+    {% comment %}
+      쓰고 있는 양. 한도가 있다는 것을 **다 쓰고 나서 알면 화가 난다** —
+      올리기 전에 보이는 자리가 있어야 한다. 요금제를 여는 날 이 자리가
+      그대로 안내가 된다(등급은 UserProfile.paid_yn 하나뿐이다).
+    {% endcomment %}
+    <div class="profile-card" id="section-usage">
+        <div class="profile-card-header">
+            <div class="profile-card-header-icon" style="background:#e8f0fe;color:#1a73e8;"><i class="bi bi-hdd"></i></div>
+            <div style="flex:1;">
+                <div class="profile-card-title">사용량</div>
+                <div class="profile-card-desc">
+                    {% if is_paid %}유료 요금제{% else %}무료 요금제{% endif %} ·
+                    파일 하나는 {{ max_upload_mb }} MB 까지 올릴 수 있습니다
+                </div>
+            </div>
+        </div>
+        <div class="profile-card-body">
+            <table class="usage-table">
+                <tbody>
+                {% for key, item in quota_all.items %}
+                <tr>
+                    <td class="usage-name">{{ item.label }}</td>
+                    <td class="usage-bar-cell">
+                        <div class="usage-bar">
+                            <span style="width: {% widthratio item.used item.limit 100 %}%;"></span>
+                        </div>
+                    </td>
+                    <td class="usage-num">
+                        {{ item.used|floatformat:0 }} / {{ item.limit }} {{ item.unit }}
+                        {% if item.kind == 'flow' %}<span class="usage-hint">(오늘)</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <div class="usage-note">
+                올린 파일은 지우면 그만큼 자리가 돌아옵니다. 하루에 몇 번 쓰는 것
+                (판독·검증)은 날마다 0 으로 돌아가고, 쌓이는 것(원료·파일)은
+                지우기 전에는 줄지 않습니다.
+            </div>
+        </div>
+    </div>
+
     <div class="profile-card" id="section-keywords">
         <div class="profile-card-header">
             <div class="profile-card-header-icon" style="background:#fffbea;color:#e6a817;"><i class="bi bi-bell-fill"></i></div>

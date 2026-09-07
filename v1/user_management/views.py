@@ -592,6 +592,11 @@ def user_profile(request):
         AlertRule.objects.filter(user=request.user, is_active=True).order_by('category', 'keyword')
     )
 
+    # 얼마나 쓰고 있는지. **다 쓰고 나서 알면 화가 난다** — 올리기 전에
+    # 보이는 자리가 있어야 하고, 요금제를 여는 날 이 자리가 그 안내가 된다.
+    from v1.common import quota
+    from v1.common.uploads import MAX_UPLOAD_MB
+
     return render(request, 'user_management/user_profile.html', {
         'profile': profile,
         'documents': documents,
@@ -601,6 +606,10 @@ def user_profile(request):
         'pw_form': pw_form,
         'is_guest': is_guest,
         'alert_rules': unique_alert_rules,
+        'quota_all': quota.usage_all(request.user),
+        'quota_storage': quota.usage(request.user, 'storage'),
+        'max_upload_mb': MAX_UPLOAD_MB,
+        'is_paid': quota.is_paid(request.user),
     })
 
 
