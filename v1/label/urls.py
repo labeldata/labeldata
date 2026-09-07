@@ -35,6 +35,9 @@ urlpatterns = [
     path('duplicate/<int:label_id>/', views.duplicate_label, name='duplicate_label'),
     path('delete/<int:label_id>/', views.delete_label, name='delete_label'),
     path('preview/', views.preview_popup, name='preview_popup'),
+    # 디자인 의뢰서의 규정 메모(글자 크기·자간·장평)를 계정에 남긴다
+    path('design-request/prefs/', views.design_request_prefs,
+         name='design_request_prefs'),
     path('tab-json/', views.label_tab_json, name='label_tab_json'),  
     path('food-types-by-group/', views.food_types_by_group, name='food_types_by_group'),
     # 식품유형 선택용 검색 (농수축산물 1만 건을 화면에 통째로 싣지 않기 위한 것)

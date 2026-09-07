@@ -9830,3 +9830,104 @@ class 계산값에서_표시값까지_한_줄로(TestCase):
         for field in ('serving_reference', 'hieng_kind', 'nutrition_source',
                       'nutrition_source_note', 'nutrition_tolerance'):
             self.assertIn("label.%s = data.get(" % field, views, field)
+
+
+class 디자인_의뢰서로_넘긴다(TestCase):
+    """
+    표시사항을 다 만들고 나면 디자인 담당자에게 넘긴다. 지금은 그 문서를
+    엑셀·워드로 손수 짠다 — 우리 표에 있는 값을 다시 옮겨 적고, 규정(10p
+    이상·자간·장평)을 왼쪽에 적고, 비고에 지시를 단다.
+
+    우리 내보내기가 주던 것은 정보표시면 표 한 장이라 셋이 없었다.
+
+        표시장소 구분 · 규정 메모 · 비고 열
+
+    셋을 채워 그대로 워드로 낸다. 다만 **한 번 보여 주고 낸다** — 비고는
+    그때그때 다르고 규정 메모는 회사마다 조금씩 다르다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/design_request.js').read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/label_preview.html').read_text(encoding='utf-8')
+        self.user = User.objects.create_user(username='designer', password='x')
+        self.client.force_login(self.user)
+        self.label = MyLabel.objects.create(
+            user_id=self.user, my_label_name='알찬밤만쥬', prdlst_nm='알찬밤만쥬',
+            content_weight='750 g(2,243 kcal)', prdlst_dcnm='과자')
+
+    def test_화면이_열린다(self):
+        res = self.client.get('/label/preview/?label_id=%s' % self.label.my_label_id)
+        self.assertEqual(res.status_code, 200)
+        html = res.content.decode('utf-8')
+        self.assertIn('designRequestModal', html)
+        self.assertIn('디자인 의뢰서', html)
+        self.assertIn('design-request-data', html)
+
+    def test_규정은_표시기준에서_온다(self):
+        """두 벌로 적어 두면 어느 날 한쪽만 고쳐진다."""
+        from v1.label.constants import LABEL_REGULATIONS
+        from v1.label.services.design_request import default_notes
+
+        notes = default_notes()
+        letter = LABEL_REGULATIONS['spacing']['letter']['default']
+        word = LABEL_REGULATIONS['spacing']['word']['min']
+        self.assertIn('자간: %d%% 이상' % letter, notes['info'])
+        self.assertIn('장평: %d%% 이상' % word, notes['info'])
+
+    def test_소면적_완화값을_기본으로_쓴다(self):
+        """받은 의뢰서가 그 기준이었다 — 제품명·내용량 10p."""
+        from v1.label.services.design_request import default_notes
+
+        self.assertIn('제품명·내용량: 10p 이상', default_notes()['main'])
+        self.assertIn('10p 이상', default_notes()['info'])
+        # 특정성분은 소면적이어도 줄지 않는다
+        self.assertIn('특정성분: 14p 이상', default_notes()['main'])
+
+    def test_고친_규정은_계정에_남는다(self):
+        """사내 기준은 그 사람이 일하는 방식이라 매번 다시 적게 하면 안 된다."""
+        import json
+
+        res = self.client.post(
+            '/label/design-request/prefs/',
+            data=json.dumps({'notes': {'main': ['제품명: 12p 이상'],
+                                       'info': ['9p 이상']}}),
+            content_type='application/json')
+        self.assertEqual(res.status_code, 200)
+
+        from v1.label.services.design_request import notes_for
+        # 프로필은 인스턴스에 캐시된다. 저장된 것을 보려면 다시 읽어야 한다
+        fresh = User.objects.get(pk=self.user.pk)
+        self.assertEqual(notes_for(fresh)['main'], ['제품명: 12p 이상'])
+        self.assertEqual(notes_for(fresh)['info'], ['9p 이상'])
+
+    def test_주표시면과_정보표시면을_가른다(self):
+        from v1.label.services.design_request import MAIN_PANEL_FIELDS
+
+        for field in ('prdlst_nm', 'content_weight', 'ingredient_info'):
+            self.assertIn(field, MAIN_PANEL_FIELDS, field)
+        self.assertIn("mainFields.indexOf(field) >= 0 ? main : info", self.js)
+
+    def test_주의사항은_줄마다_한_항목이다(self):
+        """디자이너가 어느 문구를 어디에 넣을지 짚을 수 있어야 한다."""
+        self.assertIn("var SPLIT_FIELDS = ['cautions', 'additional_info']", self.js)
+
+    def test_원산지_굵게와_알레르기_박스를_살려_보낸다(self):
+        """규정이 요구하는 표시라 글자만 뽑으면 안 된다."""
+        self.assertIn('window.cellHtmlForDoc', self.js)
+        self.assertIn('원산지 굵게', self.js)
+
+    def test_자주_쓰는_문구를_불러온다(self):
+        self.assertIn('/label/api/phrases/?category=all', self.js)
+        self.assertIn('drAddPhraseBtn', self.js)
+        self.assertIn('drPhrase', self.html)
+
+    def test_내보내기_메뉴에_있다(self):
+        head = self.html.index('exportMenuBtn')
+        block = self.html[head:head + 1600]
+        self.assertIn('exportDesignRequestBtn', block)
+        self.assertIn('디자인 의뢰서', block)

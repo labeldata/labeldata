@@ -52,6 +52,11 @@ from .services.ai_validation_service import check_ingredient_order, run_full_rev
 from v1.common import quota
 from .services import ingredient_paste
 from .services.allergen_names import HEADER_NAMES as _ALLERGEN_HEADER_NAMES
+from .services.design_request import (
+    MAIN_PANEL_FIELDS,
+    notes_for as design_notes_for,
+    save_notes as design_save_notes,
+)
 from .services.ai_rate_limit import check_rate_limit, get_usage as get_ai_usage
 from .services.ingredient_matching import get_or_create_my_ingredient
 from .services.ingredient_display import build_display_text, build_reference_text
@@ -2533,6 +2538,12 @@ def preview_popup(request):
             'show_ai_validation': getattr(settings, 'SHOW_AI_VALIDATION', False),
             'is_owner': is_owner,          # 설정 저장 버튼 표시 여부 결정
             'can_upload_pdf': can_upload_pdf,  # PDF 문서함 업로드 버튼 표시 여부
+            # 디자인 의뢰서 — 표시장소마다 디자이너가 지켜야 하는 것.
+            # 규정 숫자는 서버 상수에서 오고, 고친 것은 계정에 남는다.
+            'design_request': json.dumps({
+                'notes': design_notes_for(request.user),
+                'mainFields': list(MAIN_PANEL_FIELDS),
+            }, ensure_ascii=False),
             # 프론트엔드 상수들은 /static/js/constants.js 파일에서 직접 로드됨
         }
         
@@ -4942,3 +4953,27 @@ def ingredient_columns_save(request):
     profile.list_prefs = prefs
     profile.save(update_fields=['list_prefs'])
     return JsonResponse({'success': True, 'columns': fields})
+
+
+@login_required
+@require_POST
+def design_request_prefs(request):
+    """
+    디자인 의뢰서의 규정 메모를 계정에 남긴다.
+
+    회사마다 사내 기준이 조금씩 다르다. 기본값은 표시기준에서 오지만, 한 번
+    고쳐 두면 다음 의뢰서부터 그 값으로 열린다.
+    """
+    import json as _json
+
+    try:
+        payload = _json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': '요청을 읽지 못했습니다.'},
+                            status=400)
+
+    saved = design_save_notes(request.user, payload.get('notes'))
+    if saved is None:
+        return JsonResponse({'success': False, 'error': '남길 것이 없습니다.'},
+                            status=400)
+    return JsonResponse({'success': True, 'notes': saved})

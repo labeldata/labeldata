@@ -92,6 +92,10 @@
             <span class="export-note">인쇄용 도안 · 문서함에도 등록</span>
           </button></li>
           {% endif %}
+          <li><button class="dropdown-item" type="button" id="exportDesignRequestBtn">
+            <i class="fas fa-pen-ruler me-2 text-warning"></i>디자인 의뢰서
+            <span class="export-note">표시장소·규정·비고까지 · 담당자에게 그대로</span>
+          </button></li>
           <li><button class="dropdown-item" type="button" id="downloadDocBtn">
             <i class="fas fa-file-word me-2 text-primary"></i>워드 (.doc)
             <span class="export-note">표 그대로 열린다 · 글자를 고칠 수 있다</span>
@@ -313,6 +317,44 @@
     </section>
   </main>
 
+  {% comment %}
+    디자인 의뢰서. 내보내기 전에 한 번 보여 주는 이유는 두 가지다 — 비고는
+    그때그때 다르고("무광매트 날인 확인"), 규정 메모는 회사마다 조금씩 다르다.
+    고친 규정 메모는 계정에 남아 다음 의뢰서부터 그 값으로 열린다.
+  {% endcomment %}
+  <div class="dr-modal" id="designRequestModal" aria-hidden="true">
+    <div class="dr-sheet" role="dialog" aria-label="표시 디자인 의뢰서">
+      <div class="dr-head">
+        <b>표시 디자인 의뢰서</b>
+        <span class="dr-sub">담당자에게 넘길 문서입니다. 비고와 규정은 여기서 고치세요.</span>
+        <button type="button" class="dr-x" id="drCloseBtn" aria-label="닫기">&times;</button>
+      </div>
+      <div class="dr-body">
+        <table class="dr-table">
+          <thead>
+            <tr><th style="width:120px;">표시장소</th><th style="width:110px;">표시사항</th>
+                <th>표시사항 내용</th><th style="width:150px;">비고</th></tr>
+          </thead>
+          <tbody id="drRows"></tbody>
+        </table>
+      </div>
+      <div class="dr-foot">
+        <div class="dr-add">
+          <select id="drPhrase"><option value="">문구함에서 고르기…</option></select>
+          <input type="text" id="drPhraseText" placeholder="문구를 직접 적어 더하기">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="drAddPhraseBtn">추가</button>
+        </div>
+        <div class="dr-actions">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="drResetBtn">규정 기본값</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="drCancelBtn">닫기</button>
+          <button type="button" class="btn btn-sm btn-primary" id="drDownloadBtn">
+            <i class="fas fa-file-word me-1"></i>워드로 내보내기
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Hidden data passed from backend -->
   <script id="preview-settings-data" type="application/json">
     {
@@ -343,6 +385,8 @@
   <script id="allergens-data" type="application/json">{{ allergens|safe }}</script>
   <script id="custom-fields-data" type="application/json">{{ custom_fields|safe }}</script>
     <script id="label-data" type="application/json">{{ label_data|safe }}</script>
+  {# 디자인 의뢰서 — 표시장소마다 지켜야 하는 규정. 고친 것은 계정에 남는다 #}
+  <script id="design-request-data" type="application/json">{{ design_request|safe }}</script>
   {# 표에 줄이 생기는 기준. 값이 아니라 표시 항목 체크가 정한다. #}
   <script id="display-checked-data" type="application/json">{{ display_checked|safe }}</script>
   {# 표의 항목 배치(순서·폭·세로/2단). 라벨에 붙어 있다. #}
@@ -382,6 +426,19 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <!-- Label Preview JS -->
   <script src="{% static 'js/label/label_preview.js' %}?v=86.0"></script>
+  {# 디자인 의뢰서 — 미리보기 표에서 값을 가져오므로 그 뒤에 싣는다 #}
+  <script src="{% static 'js/label/design_request.js' %}?v={{ STATIC_BUILD_DATE }}"></script>
+  <script>
+    window.DESIGN_REQUEST_SAVE_URL = '{% url "label:design_request_prefs" %}';
+    try {
+      window.DESIGN_REQUEST = JSON.parse(
+        document.getElementById('design-request-data').textContent);
+    } catch (e) {
+      window.DESIGN_REQUEST = { notes: { main: [], info: [] }, mainFields: [] };
+    }
+    window.DESIGN_REQUEST_DEFAULT_NOTES =
+      JSON.parse(JSON.stringify(window.DESIGN_REQUEST.notes || {}));
+  </script>
 
   <!-- 구글 스타일 Snackbar -->
   <div id="previewSnackbar" style="
