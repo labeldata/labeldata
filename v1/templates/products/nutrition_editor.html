@@ -80,8 +80,7 @@
                     <label class="config-label">허용오차</label>
                     <input type="text" class="form-control form-control-sm" id="nutrition_tolerance" value="15" style="width: 56px;">
                     <span class="unit-label">%</span>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="applyToleranceBtn"
-                            title="계산값에 오차를 물려 표시할 값으로 바꿉니다">오차 반영</button>
+                    <span class="unit-label" title="오른쪽 '적용값' 칸이 그 자리에서 따라갑니다">→ 적용값 칸에 반영</span>
                 </div>
                 <div class="config-item" id="hiengItem">
                     <label class="config-label">고열량·저영양</label>
@@ -297,10 +296,11 @@ const ALL_NUTRIENTS = [
 /* 칸 성격. 너비를 정하는 일은 공용이 한다(static/js/sheet_widths.js) —
    배합비·원료·연락처와 같은 규칙이다. 자리 비율로 정하던 것을 걷었다. */
 const NUTRITION_COL_WIDTH = {
-    '영양성분':      { weight: 26, min: 120, max: 220 },
-    '함량 (100g당)': { weight: 24, min: 96,  max: 170 },
-    '단위':          { weight: 16, min: 70,  max: 110 },
-    '강조표시 판정': { weight: 34, min: 110, max: 300 },
+    '영양성분':       { weight: 22, min: 110, max: 200 },
+    '계산값 (100g당)': { weight: 20, min: 96,  max: 160 },
+    '단위':           { weight: 12, min: 62,  max: 90 },
+    '적용값':         { weight: 16, min: 84,  max: 140 },
+    '강조표시 판정':  { weight: 30, min: 110, max: 280 },
 };
 let nutritionWidths = null;
 
@@ -318,7 +318,12 @@ function initGrid() {
     
     hot = new Handsontable(container, {
         data: data,
-        colHeaders: ['영양성분', '함량 (100g당)', '단위', '강조표시 판정'],
+        {% comment %}
+          적용값을 따로 세운다. 예전에는 [오차 반영] 이 입력값을 덮어썼다 —
+          내가 넣은 계산값이 사라지니 무엇이 어떻게 바뀐 것인지 알 수가 없다.
+          계산값은 그대로 두고, 오차를 물린 값은 옆 칸에 보여 준다.
+        {% endcomment %}
+        colHeaders: ['영양성분', '계산값 (100g당)', '단위', '적용값', '강조표시 판정'],
         readOnly: !CAN_EDIT,
         columns: [
             {
@@ -338,6 +343,13 @@ function initGrid() {
                     process(nutrient.unitOptions);
                 },
                 readOnly: !CAN_EDIT
+            },
+            {
+                /* 적용값 — 라벨에 인쇄될 값. 계산값에 오차를 물린 것이고,
+                   오차를 안 쓰면 계산값과 같다. 손으로 고치는 칸이 아니다 */
+                type: 'text',
+                readOnly: true,
+                className: 'nutri-applied'
             },
             {
                 type: 'text',
@@ -361,6 +373,7 @@ function initGrid() {
             if (source === 'loadData' || source === 'internal') {
                 return;
             }
+            refreshApplied();
             calculateAndPreview();
         }
     });
@@ -368,7 +381,7 @@ function initGrid() {
     /* 칸 너비 — 규칙도 저장도 공용이 한다. 끌어서 조절한 것은 계정에 남는다 */
     if (window.attachSheetWidths) {
         nutritionWidths = window.attachSheetWidths(hot, {
-            headers: ['영양성분', '함량 (100g당)', '단위', '강조표시 판정'],
+            headers: ['영양성분', '계산값 (100g당)', '단위', '적용값', '강조표시 판정'],
             rules: NUTRITION_COL_WIDTH,
             container: 'grid-container',
             screen: 'nutrition_grid',
@@ -380,14 +393,17 @@ function initGrid() {
 
 // 그리드 데이터를 영양성분 객체로 변환
 function getGridNutritionData() {
+    // **저장되는 것은 적용값이다.** 표의 첫 칸은 계산값이고, 라벨에 인쇄될
+    // 값은 거기에 오차를 물린 쪽이다. 오차를 안 쓰면 둘이 같다.
+    const applied = appliedValues();
     const data = hot.getData();
     const nutritionData = {};
     
     ALL_NUTRIENTS.forEach((nutrient, index) => {
         if (index < data.length) {
-            // 숫자로 변환해서 저장
-            const numericValue = getNumericValue(data[index][1]);
-            if (numericValue !== null) {
+            const numericValue = applied[nutrient.field] !== undefined
+                ? applied[nutrient.field] : getNumericValue(data[index][1]);
+            if (numericValue !== null && numericValue !== undefined) {
                 nutritionData[nutrient.field] = Math.round(numericValue * 100) / 100;
             } else {
                 nutritionData[nutrient.field] = ''; // 빈 값이면 빈 문자열
@@ -424,12 +440,13 @@ function getGridNutritionInputs() {
 
 // 영양성분 객체를 그리드에 로드
 function setGridNutritionData(nutritionData) {
-    // 각 영양성분을 위한 새로운 데이터 배열 생성 (4개 열 포함)
+    // 다섯 칸: 이름 · 계산값 · 단위 · 적용값 · 강조표시 판정
     const data = ALL_NUTRIENTS.map(nutrient => [
         nutrient.label + (nutrient.required ? ' *' : ''),
-        nutritionData[nutrient.field] || '',  // value 컬럼 (있으면 로드, 없으면 빈 문자열)
+        nutritionData[nutrient.field] || '',
         nutrient.unit,
-        ''  // 강조표시 판정 (초기에는 비움, calculateAndPreview에서 업데이트)
+        '',   // 적용값 (refreshApplied 가 채운다)
+        ''    // 강조표시 판정 (calculateAndPreview 에서 채운다)
     ]);
     
     hot.loadData(data);
@@ -478,7 +495,7 @@ function bindPreviewControls() {
     });
 }
 
-// 강조표시 판정 결과를 Handsontable 4번째 열에 업데이트
+// 강조표시 판정 결과를 Handsontable 다섯 번째 열에 업데이트
 function updateEmphasisColumn() {
     const nutritionInputs = getGridNutritionInputs();
     
@@ -512,8 +529,8 @@ function updateEmphasisColumn() {
         
         const emphasisLabel = emphasisLabels.join(', ');
         
-        // 4번째 열(index 3)에 각 셀을 개별적으로 업데이트
-        hot.setDataAtCell(index, 3, emphasisLabel, 'internal');
+        // 다섯 번째 칸(index 4). 적용값 칸이 앞에 하나 늘었다
+        hot.setDataAtCell(index, 4, emphasisLabel, 'internal');
     });
 }
 
@@ -586,14 +603,8 @@ async function loadData() {
         });
         appliedTolerance = String(data.nutrition_tolerance || '');
         if (appliedTolerance) {
-            const note = document.getElementById('calcNote');
-            const btn = document.getElementById('applyToleranceBtn');
-            if (note) {
-                note.textContent = '이 값에는 지난번에 물린 ' + appliedTolerance
-                    + '% 가 이미 들어 있습니다. 다시 누르면 두 번 곱해집니다.';
-                note.style.display = 'block';
-            }
-            if (btn) { btn.disabled = true; btn.textContent = '반영됨'; }
+            const box = document.getElementById('nutrition_tolerance');
+            if (box) box.value = appliedTolerance;
         }
         try { bindCalcSource(); } catch (e) {}
         document.getElementById('serving_size_unit').value = data.serving_size_unit || 'g';
@@ -616,9 +627,22 @@ async function loadData() {
 
         updateStatus('✅ 기본 설정 완료');
         
-        // 그리드에 영양성분 데이터 로드
-        setGridNutritionData(data);
+        /* 그리드에 넣는 것은 **계산값**이다.
+           저장 칸에는 적용값(오차를 물린 값)이 들어 있으므로, 계산값을 따로
+           남겨 둔 것이 있으면 그것을 표에 넣는다 — 안 그러면 다시 열 때마다
+           내가 넣은 값이 사라지고 부푼 값만 남는다. */
+        let gridSource = data;
+        if (data.nutrition_calc_values) {
+            try {
+                const saved = JSON.parse(data.nutrition_calc_values);
+                if (saved && typeof saved === 'object') {
+                    gridSource = Object.assign({}, data, saved);
+                }
+            } catch (e) { /* 깨졌으면 저장 칸의 값으로 연다 */ }
+        }
+        setGridNutritionData(gridSource);
         updateStatus('✅ 그리드 데이터 로드 완료');
+        setTimeout(refreshApplied, 100);
         
         // 스타일 설정 및 미리보기 계산 (데이터 로드 후 한 번만)
         setPreviewStyle(document.getElementById('nutrition_display_unit').value || 'basic');
@@ -661,6 +685,9 @@ async function saveData() {
             nutrition_source: document.getElementById('nutrition_source').value || '',
             nutrition_source_note: (document.getElementById('nutrition_source_note').value || '').trim(),
             nutrition_tolerance: appliedTolerance,
+            /* 계산값도 남긴다. 저장 칸에는 적용값이 들어가므로, 이것을 안
+               남기면 다시 열었을 때 내가 넣은 값이 사라진다. */
+            nutrition_calc_values: JSON.stringify(gridValues()),
             ...nutritionData
         };
         
@@ -706,13 +733,15 @@ async function saveData() {
 
    규정은 실측값이 표시량에서 얼마나 벌어져도 되는지를 **한쪽 방향으로만**
    정해 두었다. 그래서 안전한 쪽이 성분마다 반대다(nutrition_calc.js).
-   [오차 반영] 을 누르면 지금 표에 적힌 계산값에 그 방향대로 물려 넣는다.
 
-   **한 번 누르면 값이 바뀐다.** 두 번 누르면 두 번 곱해지므로, 물린 뒤에는
-   단추를 잠그고 무엇을 얼마나 물렸는지 적어 둔다.
+   **계산값은 덮지 않는다.** 예전에는 [오차 반영] 이 입력 칸을 바꿔 버려서,
+   내가 넣은 값이 사라지고 무엇이 어떻게 바뀐 것인지 알 수 없었다. 계산값은
+   그대로 두고 적용값을 옆 칸에 세운다 — 라벨에 인쇄되는 것은 적용값이고,
+   저장도 그것으로 한다.
    ───────────────────────────────────────────────────────────────────────── */
-let appliedTolerance = '';      // 이 표에 이미 물려 있는 오차(%)
+let appliedTolerance = '';      // 지금 화면에 물려 있는 오차(%)
 
+/** 지금 표에 적힌 계산값 */
 function gridValues() {
     const data = hot.getData();
     const out = {};
@@ -724,48 +753,58 @@ function gridValues() {
     return out;
 }
 
-function writeGridValues(values) {
-    const changes = [];
-    ALL_NUTRIENTS.forEach((nutrient, index) => {
-        if (values[nutrient.field] === undefined) return;
-        changes.push([index, 1, Math.round(values[nutrient.field] * 100) / 100]);
-    });
-    if (changes.length) hot.setDataAtCell(changes, 'tolerance');
+/** 지금 고른 오차. 이론치일 때만 물린다 */
+function toleranceSetting() {
+    const source = document.getElementById('nutrition_source');
+    if (!source || source.value !== 'theory') return 0;
+    const rate = parseFloat(
+        String(document.getElementById('nutrition_tolerance').value || '').replace(/,/g, ''));
+    return rate > 0 ? rate : 0;
 }
 
-function applyToleranceToGrid() {
-    if (!window.nutritionCalc) return;
-    const rate = parseFloat(document.getElementById('nutrition_tolerance').value);
-    if (!(rate > 0)) return;
-    const limit = (window.NUTRITION_RULES || {}).toleranceLimit || 20;
+/**
+ * 라벨에 인쇄될 값. **늘 계산값에서 출발한다** — 적용값에 다시 물리면 두 번
+ * 곱해진다(입력 기준 환산이 309 를 475 로, 다시 731 로 만든 그 자리다).
+ */
+function appliedValues() {
+    const base = gridValues();
+    const rate = toleranceSetting();
+    if (!rate || !window.nutritionCalc) return base;
+    const out = window.nutritionCalc.applyTolerance(base, rate, 'up');
+    /* 열량은 오차를 곱하지 않고 보정한 탄단지로 다시 계산한다 */
+    const kcal = window.nutritionCalc.caloriesFromMacros(out);
+    if (kcal !== null) out.calories = kcal;
+    return out;
+}
 
-    const before = gridValues();
-    const after = window.nutritionCalc.applyTolerance(before, rate, 'up');
-    /* 열량은 오차를 곱하지 않고 **보정한 탄단지로 다시 계산한다.** 따로 부풀리면
-       표 안이 서로 맞지 않는다. */
-    const kcal = window.nutritionCalc.caloriesFromMacros(after);
-    if (kcal !== null) after.calories = kcal;
-    writeGridValues(after);
+/** 적용값 칸을 다시 그린다. 계산값을 고치면 그 자리에서 따라온다 */
+function refreshApplied() {
+    if (!hot) return;
+    const base = gridValues();
+    const applied = appliedValues();
+    const rate = toleranceSetting();
+    appliedTolerance = rate ? String(rate) : '';
 
-    appliedTolerance = String(rate);
-    const moved = Object.keys(after).filter(
-        key => Math.abs((after[key] || 0) - (before[key] || 0)) > 1e-9);
+    const changes = [];
+    ALL_NUTRIENTS.forEach((nutrient, index) => {
+        const value = applied[nutrient.field];
+        if (value === undefined) { changes.push([index, 3, '']); return; }
+        const shown = Math.round(value * 100) / 100;
+        const moved = Math.abs(value - (base[nutrient.field] || 0)) > 1e-9;
+        changes.push([index, 3, moved ? String(shown) + ' ←' : String(shown)]);
+    });
+    if (changes.length) hot.setDataAtCell(changes, 'internal');
+
     const note = document.getElementById('calcNote');
-    if (note) {
-        note.textContent = rate + '% 를 물렸습니다 — '
-            + moved.map(key => {
-                const info = ALL_NUTRIENTS.find(n => n.field === key) || {};
-                return (info.label || key) + ' ' + before[key] + '→'
-                     + (Math.round(after[key] * 100) / 100);
-              }).join(', ')
-            + '. 다시 누르면 두 번 곱해지므로 한 번만 누르세요.'
-            + (rate > limit ? ' 규정이 준 폭은 ' + limit + '% 입니다.' : '');
-        note.style.display = 'block';
-    }
-    const btn = document.getElementById('applyToleranceBtn');
-    if (btn) { btn.disabled = true; btn.textContent = '반영됨'; }
-    calculateAndPreview();
-    refreshHiengPanel();
+    if (!note) return;
+    if (!rate) { note.style.display = 'none'; return; }
+    const limit = (window.NUTRITION_RULES || {}).toleranceLimit || 20;
+    note.textContent = '적용값은 계산값에 ' + rate + '% 를 물린 값입니다 — '
+        + '당류·지방·포화지방·트랜스지방·콜레스테롤·나트륨만 올리고, 열량은 '
+        + '보정한 탄단지로 다시 계산합니다. 저장되는 것은 적용값입니다.'
+        + (rate > limit ? ' 규정이 준 폭은 ' + limit + '% 입니다.' : '');
+    note.className = rate > limit ? 'calc-note is-warn' : 'calc-note';
+    note.style.display = 'block';
 }
 
 /* 고열량·저영양 판정. **1회 제공량 기준**이라 1회 섭취참고량이 있어야 한다.
@@ -785,7 +824,7 @@ function refreshHiengPanel() {
             + '그 양을 모르면 할 수 없습니다.';
         return;
     }
-    const per = window.nutritionCalc.perServing(gridValues(), 100, reference);
+    const per = window.nutritionCalc.perServing(appliedValues(), 100, reference);
     const result = window.nutritionCalc.hiengLntrt(per || {}, kind);
     const unit = document.getElementById('serving_size_unit').value || 'g';
     const head = '1회 섭취참고량 ' + reference + unit + ' 기준 · ' + (result.kind || '');
@@ -826,8 +865,14 @@ function bindCalcSource() {
     }
     if (source) { source.addEventListener('change', paint); paint(); }
 
-    const apply = document.getElementById('applyToleranceBtn');
-    if (apply) apply.addEventListener('click', applyToleranceToGrid);
+    /* 오차율·산출 방법을 고치면 적용값 칸이 그 자리에서 따라간다 */
+    ['nutrition_tolerance', 'nutrition_source'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => { refreshApplied(); calculateAndPreview(); });
+            el.addEventListener('change', () => { refreshApplied(); calculateAndPreview(); });
+        }
+    });
     ['hieng_kind', 'serving_reference'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', refreshHiengPanel);

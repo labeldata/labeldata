@@ -200,6 +200,9 @@ class MyLabel(models.Model):
     nutrition_source = models.CharField(max_length=20, verbose_name="영양성분 산출 방법", null=True, blank=True)
     nutrition_source_note = models.TextField(max_length=500, verbose_name="영양성분 산출 근거", null=True, blank=True)
     nutrition_tolerance = models.CharField(max_length=10, verbose_name="적용한 허용오차(%)", null=True, blank=True)
+    # 오차를 물리기 전의 계산값(이론치). 저장 칸에는 적용값이 들어가므로 이것을
+    # 안 남기면 다시 열 때 사람이 넣은 값이 사라진다.
+    nutrition_calc_values = models.TextField(verbose_name="영양성분 계산값(JSON)", null=True, blank=True)
     nutrition_display_unit = models.CharField(max_length=10, verbose_name="영양성분 표시 단위", null=True, blank=True)
     basic_display_type = models.CharField(max_length=20, verbose_name="기본형 표시 기준", null=True, blank=True)
     parallel_display_type = models.CharField(max_length=20, verbose_name="병렬형 표시 기준", null=True, blank=True)

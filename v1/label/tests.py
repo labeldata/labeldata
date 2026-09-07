@@ -10104,3 +10104,48 @@ class 문구함을_쓰는_자리에서_고친다(TestCase):
         self.assertIn('data-my-phrases="cautions"', tab)
         self.assertIn('data-my-phrases="additional_info"', tab)
         self.assertIn('my_phrases.js', tab)
+
+
+class 계산값을_덮지_않는다(TestCase):
+    """
+    [오차 반영] 이 입력 칸을 바꿔 버렸다. 내가 넣은 계산값이 사라지니 무엇이
+    어떻게 바뀐 것인지 알 수가 없고, 다시 누르면 두 번 곱해졌다.
+
+    계산값은 그대로 두고 **적용값을 옆 칸에 세운다.** 라벨에 인쇄되는 것은
+    적용값이고 저장도 그것으로 하되, 계산값은 따로 남겨 다시 열 때 그대로
+    보이게 한다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.editor = (Path(dj.BASE_DIR) / 'templates/products/nutrition_editor.html'
+                       ).read_text(encoding='utf-8')
+
+    def test_적용값_칸이_따로_있다(self):
+        self.assertIn("'계산값 (100g당)', '단위', '적용값'", self.editor)
+        self.assertIn('function refreshApplied', self.editor)
+        # 덮어쓰던 것은 걷었다
+        self.assertNotIn('function applyToleranceToGrid', self.editor)
+        self.assertNotIn('function writeGridValues', self.editor)
+
+    def test_늘_계산값에서_출발한다(self):
+        head = self.editor.index('function appliedValues')
+        block = self.editor[head:head + 600]
+        self.assertIn('gridValues()', block)
+        self.assertIn('caloriesFromMacros', block)
+
+    def test_저장되는_것은_적용값이다(self):
+        head = self.editor.index('function getGridNutritionData')
+        block = self.editor[head:head + 900]
+        self.assertIn('appliedValues()', block)
+
+    def test_계산값도_함께_남긴다(self):
+        """안 남기면 다시 열 때 사람이 넣은 값이 사라지고 부푼 값만 남는다."""
+        self.assertIn('nutrition_calc_values: JSON.stringify(gridValues())', self.editor)
+        self.assertIn('data.nutrition_calc_values', self.editor)
+
+        from v1.label.models import MyLabel
+        self.assertTrue(hasattr(MyLabel, 'nutrition_calc_values'))

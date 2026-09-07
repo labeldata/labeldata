@@ -2826,6 +2826,7 @@ def nutrition_data_api(request, label_id):
         'nutrition_source': label.nutrition_source or '',
         'nutrition_source_note': label.nutrition_source_note or '',
         'nutrition_tolerance': label.nutrition_tolerance or '',
+        'nutrition_calc_values': label.nutrition_calc_values or '',
 
         # 필수 영양성분 9가지
         'calories': label.calories or '',
@@ -2909,6 +2910,7 @@ def nutrition_save_api(request, label_id):
         label.nutrition_source = data.get('nutrition_source', '') or ''
         label.nutrition_source_note = data.get('nutrition_source_note', '') or ''
         label.nutrition_tolerance = data.get('nutrition_tolerance', '') or ''
+        label.nutrition_calc_values = data.get('nutrition_calc_values', '') or ''
         
         # 필수 영양성분 9가지
         label.calories = data.get('calories', '')
@@ -2943,7 +2945,7 @@ def nutrition_save_api(request, label_id):
             'serving_size', 'serving_size_unit', 'units_per_package',
             'nutrition_display_unit', 'basic_display_type', 'parallel_display_type',
             'serving_reference', 'hieng_kind', 'nutrition_source',
-            'nutrition_source_note', 'nutrition_tolerance',
+            'nutrition_source_note', 'nutrition_tolerance', 'nutrition_calc_values',
             'calories', 'natriums', 'carbohydrates', 'sugars', 'fats',
             'trans_fats', 'saturated_fats', 'cholesterols', 'proteins',
             'dietary_fiber', 'calcium', 'iron', 'magnesium', 'phosphorus',
