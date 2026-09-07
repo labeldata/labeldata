@@ -183,36 +183,6 @@
     }).catch(function () {});   // 못 남겨도 이번 의뢰서는 이미 그 값이다
   }
 
-  /* ── 문구함 ──────────────────────────────────────────────────────────── */
-
-  /** 자주 쓰는 문구를 불러와 고르게 한다. 매번 다시 치지 않도록 */
-  function loadPhrases() {
-    var pick = el('drPhrase');
-    if (!pick || pick.dataset.loaded) return;
-    fetch('/label/api/phrases/?category=all', { credentials: 'same-origin' })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        var list = (data && (data.phrases || data.data)) || [];
-        if (!list.length) return;
-        pick.innerHTML = list.map(function (p, i) {
-              return '<option value="' + i + '">' + (p.name || '') + '</option>';
-            }).join('');
-        pick.dataset.loaded = '1';
-        pick.__list = list;
-      })
-      .catch(function () {});
-  }
-
-  function addPhraseRow(text) {
-    if (!text) return;
-    var body = el('drRows');
-    if (!body) return;
-    var tr = document.createElement('tr');
-    tr.innerHTML = '<td class="dr-panel"></td>' + rowCells(
-      { name: '', html: '* ' + text, note: '', key: 'extra:' + Date.now() });
-    body.appendChild(tr);
-  }
-
   /* ── 워드로 ──────────────────────────────────────────────────────────── */
 
   function docHtml() {
@@ -248,15 +218,6 @@
              + '<td style="' + cell + '">'
              + (got.marks[row.key] || '') + '</td></tr>';
       });
-    });
-
-    // 창에서 손으로 더한 줄(문구함에서 고른 것)도 함께 나간다
-    document.querySelectorAll('#drRows tr').forEach(function (tr) {
-      var note = tr.querySelector('[data-note^="extra:"]');
-      if (!note) return;
-      body += '<tr><td style="' + head + '"></td><td style="' + head + '"></td>'
-           + '<td style="' + cell + '">' + tr.querySelector('.dr-body').innerHTML
-           + '</td><td style="' + cell + '">' + note.value + '</td></tr>';
     });
 
     /* 워드는 칸 너비를 안 주면 넷으로 똑같이 나눈다. 표시사항 내용에는 원재료명
@@ -309,10 +270,7 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     var open_btn = el('exportDesignRequestBtn');
-    if (open_btn) open_btn.addEventListener('click', function () {
-      open();
-      loadPhrases();
-    });
+    if (open_btn) open_btn.addEventListener('click', open);
     var closeBtn = el('drCloseBtn');
     if (closeBtn) closeBtn.addEventListener('click', close);
     var cancel = el('drCancelBtn');
@@ -325,57 +283,6 @@
                                      || window.DESIGN_REQUEST.notes);
       draw();
     });
-    /* 고른 것을 **한꺼번에** 넣는다. 하나씩 넣게 하면 문구가 다섯이면 다섯 번
-       같은 일을 한다 */
-    var add = el('drAddPhraseBtn');
-    if (add) add.addEventListener('click', function () {
-      var pick = el('drPhrase');
-      var text = el('drPhraseText');
-      var added = 0;
-      if (pick && pick.__list) {
-        Array.prototype.forEach.call(pick.selectedOptions || [], function (opt) {
-          var chosen = pick.__list[Number(opt.value)];
-          if (chosen) {
-            addPhraseRow(chosen.content || chosen.text);
-            added += 1;
-          }
-          opt.selected = false;
-        });
-      }
-      if (!added && text && text.value.trim()) {
-        addPhraseRow(text.value.trim());
-        text.value = '';
-      }
-    });
-
-    /* 쓰던 자리에서 문구함에 담는다. 관리 화면까지 가야 담을 수 있으면
-       "다음에도 쓰겠다" 싶은 순간을 놓친다. */
-    var keep = el('drKeepPhraseBtn');
-    if (keep) keep.addEventListener('click', function () {
-      var text = el('drPhraseText');
-      var content = text ? text.value.trim() : '';
-      if (!content) return;
-      var csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value;
-      fetch('/label/api/phrases/save/', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf || '' },
-        body: JSON.stringify({ content: content, category: 'additional' })
-      }).then(function (r) { return r.json(); }).then(function (data) {
-        if (!data || !data.success) return;
-        addPhraseRow(content);
-        text.value = '';
-        var pick = el('drPhrase');
-        if (pick) {                       // 담은 것을 목록에도 바로 올린다
-          pick.__list = (pick.__list || []).concat([data]);
-          var opt = document.createElement('option');
-          opt.value = String(pick.__list.length - 1);
-          opt.textContent = data.name || content.slice(0, 30);
-          pick.appendChild(opt);
-        }
-      }).catch(function () {});
-    });
-
     /* 줄 빼기 — 창 안에서만 뺀다. 표시사항 자체를 지우는 것이 아니다 */
     var body = el('drRows');
     if (body) body.addEventListener('click', function (event) {

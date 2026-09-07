@@ -4358,9 +4358,28 @@ def phrases_api(request):
                 'order': phrase.display_order
             })
         
+        # 기본 문구도 함께 준다. 두 화면(표시사항 작성·디자인 의뢰서)이 **같은
+        # 목록을 같은 모양으로** 보여야 한다 — 한쪽은 버튼이고 한쪽은 목록이면
+        # 같은 문구를 두 번 관리하는 것처럼 보인다.
+        defaults = []
+        if request.GET.get('defaults'):
+            from v1.label.services.label_phrases import phrases_for
+
+            fields = (['cautions', 'additional_info'] if category == 'all'
+                      else [{'cautions': 'cautions',
+                             'additional': 'additional_info'}.get(category, category)])
+            for field in fields:
+                for phrase in phrases_for(field):
+                    defaults.append({
+                        'name': phrase['chip'], 'content': phrase['text'],
+                        'text': phrase['text'], 'title': phrase['title'],
+                        'tone': phrase['tone'], 'field': field,
+                    })
+
         return JsonResponse({
             'success': True,
             'phrases': phrases,
+            'defaults': defaults,
             'data': phrases,  # recommendation_system.js에서 data 속성도 확인
             'category': category,
             'field': field_name,
