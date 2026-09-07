@@ -1987,6 +1987,13 @@ def nutrition_calculator_popup(request):
             nutrition_data['serving_size_unit'] = label.serving_size_unit or 'g'
             nutrition_data['units_per_package'] = label.units_per_package or '1'
             nutrition_data['display_unit'] = label.nutrition_display_unit or 'unit'
+            # 이론치로 만든 표인지, 무엇으로 어떻게 냈는지. 값과 함께 남아야
+            # 하는 것들이라 계산기가 열릴 때 함께 싣는다.
+            nutrition_data['serving_reference'] = label.serving_reference or ''
+            nutrition_data['hieng_kind'] = label.hieng_kind or ''
+            nutrition_data['nutrition_source'] = label.nutrition_source or ''
+            nutrition_data['nutrition_source_note'] = label.nutrition_source_note or ''
+            nutrition_data['nutrition_tolerance'] = label.nutrition_tolerance or ''
             nutrition_data['nutrients'] = {}
             for field, unit_field in nutrition_fields:
                 value = getattr(label, field, '')
@@ -2010,8 +2017,26 @@ def nutrition_calculator_popup(request):
         for key, value in nutrient_data.items():
             if value is None:
                 nutrient_data[key] = ''
+    # 규정 숫자는 서버 상수 한 곳에서 온다. 화면이 같은 계산을 하되(사용자가
+    # 값을 넣는 동안 서버를 부를 수 없다) 숫자를 두 벌로 적어 두지는 않는다.
+    from v1.label.constants import (
+        CALORIE_FACTORS, HIENG_LNTRT_CRITERIA, HIENG_LNTRT_KIND_NAMES,
+        HIENG_LNTRT_SODIUM_NOODLE, NUTRITION_TOLERANCE_DEFAULT,
+        NUTRITION_TOLERANCE_LIMIT, NUTRITION_TOLERANCE_UP,
+    )
+
     context = {
-        'nutrition_data': json.dumps(nutrition_data)
+        'nutrition_data': json.dumps(nutrition_data),
+        'nutrition_rules': json.dumps({
+            'toleranceUp': list(NUTRITION_TOLERANCE_UP),
+            'toleranceDefault': NUTRITION_TOLERANCE_DEFAULT,
+            'toleranceLimit': NUTRITION_TOLERANCE_LIMIT,
+            'calorieFactors': CALORIE_FACTORS,
+            'hieng': {kind: [[list(cond) for cond in rule] for rule in rules]
+                      for kind, rules in HIENG_LNTRT_CRITERIA.items()},
+            'hiengNames': HIENG_LNTRT_KIND_NAMES,
+            'hiengNoodleSodium': HIENG_LNTRT_SODIUM_NOODLE,
+        }, ensure_ascii=False),
     }
     return render(request, 'label/nutrition_calculator_popup.html', context)
 

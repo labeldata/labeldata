@@ -2852,6 +2852,14 @@ def nutrition_save_api(request, label_id):
         label.nutrition_display_unit = data.get('nutrition_display_unit', 'basic') or 'basic'
         label.basic_display_type = data.get('basic_display_type', 'total') or 'total'
         label.parallel_display_type = data.get('parallel_display_type', 'unit_total') or 'unit_total'
+
+        # 이론치로 만든 표는 그 자체가 감사 대상이다. 무엇으로 어떻게 냈는지가
+        # 값과 함께 남아야 한다. 1회 섭취참고량은 고열량·저영양 판정의 분모다.
+        label.serving_reference = data.get('serving_reference', '') or ''
+        label.hieng_kind = data.get('hieng_kind', '') or ''
+        label.nutrition_source = data.get('nutrition_source', '') or ''
+        label.nutrition_source_note = data.get('nutrition_source_note', '') or ''
+        label.nutrition_tolerance = data.get('nutrition_tolerance', '') or ''
         
         # 필수 영양성분 9가지
         label.calories = data.get('calories', '')
@@ -2885,6 +2893,8 @@ def nutrition_save_api(request, label_id):
         label.save(update_fields=[
             'serving_size', 'serving_size_unit', 'units_per_package',
             'nutrition_display_unit', 'basic_display_type', 'parallel_display_type',
+            'serving_reference', 'hieng_kind', 'nutrition_source',
+            'nutrition_source_note', 'nutrition_tolerance',
             'calories', 'natriums', 'carbohydrates', 'sugars', 'fats',
             'trans_fats', 'saturated_fats', 'cholesterols', 'proteins',
             'dietary_fiber', 'calcium', 'iron', 'magnesium', 'phosphorus',

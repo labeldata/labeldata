@@ -230,7 +230,8 @@ body {
 
 .basic-info-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 칸이 셋이 됐다(단위량·포장개수·1회 섭취참고량). 좁으면 접힌다 */
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -285,6 +286,123 @@ body {
   background: #fff;
   cursor: pointer;
 }
+/* ── 계산값 → 적용값 → 표시될 값 ──────────────────────────────
+   이 화면이 무엇을 어떤 순서로 하는지 한 줄로 보여 준다. 순서를 모르면
+   "내가 넣은 숫자가 왜 다르게 찍히지" 가 된다. */
+.calc-source {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: var(--ez-gray-50, #f8f9fa);
+  border: 1px solid var(--ez-gray-200, #e8eaed);
+  border-radius: 8px;
+}
+.calc-source-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--ez-gray-800, #3c4043);
+}
+.calc-source-row + .calc-source-row { margin-top: 6px; }
+.calc-source-row label { margin: 0; font-weight: 600; white-space: nowrap; }
+.calc-source-row select,
+.calc-source-row input {
+  padding: 3px 8px;
+  border: 1px solid var(--ez-gray-300, #dadce0);
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: #fff;
+}
+.calc-source-row #nutrition_source_note { flex: 1 1 220px; }
+.calc-source-note {
+  flex: 1 1 100%;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ez-gray-600, #80868b);
+}
+.calc-source-note.is-warn { color: #a94442; font-weight: 600; }
+
+.calc-flow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 10px 0 6px;
+  font-size: 11.5px;
+  color: var(--ez-gray-600, #80868b);
+}
+.cf-step {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 3px 9px;
+  border: 1px solid var(--ez-gray-300, #dadce0);
+  border-radius: 999px;
+  background: #fff;
+  line-height: 1.3;
+}
+.cf-step small { font-size: 10px; opacity: .75; }
+.cf-step.is-on {
+  border-color: var(--ez-info, #1a73e8);
+  color: var(--ez-info-strong, #1558b0);
+  font-weight: 700;
+}
+.cf-arrow { font-style: normal; opacity: .5; }
+
+/* 성분 줄 오른쪽에 붙는 파생값. 계산값 옆에서 바로 견줄 수 있어야 한다 */
+.nutrient-derived {
+  font-size: 11.5px;
+  color: var(--ez-gray-600, #80868b);
+  white-space: nowrap;
+}
+.nutrient-derived .nd-adj { color: #a2620a; font-weight: 600; }
+.nutrient-derived .nd-show { color: var(--ez-gray-800, #3c4043); font-weight: 700; }
+.nutrient-derived .nd-arrow { font-style: normal; opacity: .5; margin: 0 2px; }
+
+/* ── 고열량·저영양 판정 ───────────────────────────────────────
+   1회 제공량 기준이라 1회 섭취참고량이 있어야 한다. 모르는 것과 아닌 것은
+   다르다 — 값이 비면 "아니다" 라고 말하지 않는다. */
+.hieng-panel {
+  margin-bottom: 10px;
+  border: 1px solid var(--ez-gray-200, #e8eaed);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.hieng-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--ez-gray-50, #f8f9fa);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ez-gray-800, #3c4043);
+}
+.hieng-head select {
+  padding: 3px 8px;
+  border: 1px solid var(--ez-gray-300, #dadce0);
+  border-radius: 6px;
+  font-size: 12px;
+  background: #fff;
+}
+.hieng-result {
+  padding: 9px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ez-gray-700, #5f6368);
+}
+.hieng-result ul { margin: 6px 0 0; padding-left: 18px; }
+.hieng-result.is-ok {
+  background: var(--ez-success-bg, #e6f4ea);
+  color: var(--ez-success-on-bg, #137333);
+}
+.hieng-result.is-hit {
+  background: var(--ez-danger-bg, #fce8e6);
+  color: var(--ez-danger-hover, #a50e0e);
+}
+.hieng-result.is-unknown { background: var(--ez-warning-bg, #fef7e0); color: #7a5b06; }
+
 /* 엑셀에서 그대로 붙여넣을 수 있다는 것을 붙여넣는 자리에 적어 둔다.
    기능이 있어도 있는 줄 모르면 없는 것과 같다. */
 .paste-hint {

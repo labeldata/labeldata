@@ -8,6 +8,10 @@
 // 전역 변수
 let currentNutritionData = {};
 
+/* 지난번에 물려 저장한 오차(%). **값에 이미 들어 있는 것**이라 다시 물리지
+   않는다. 화면에 적어 주고, 새로 물리지 않았으면 저장할 때 그대로 남긴다. */
+let savedTolerance = '';
+
 // ===== 유틸리티 함수들 =====
 
 // 숫자에 쉼표 추가
@@ -176,6 +180,12 @@ function calculateDailyValuePercent(key, processedValue, originalValue) {
  * 사진 판독은 표의 기준을 읽어 이미 이 환산을 한다(ocr_apply.to_per_100).
  * 손으로 넣는 쪽도 같은 일을 하게 한다.
  */
+/** 칸에 적힌 글자 그대로. 없으면 빈 문자열 */
+function valueOf(id) {
+  var el = document.getElementById(id);
+  return el ? String(el.value || '').trim() : '';
+}
+
 function numberFrom(id, fallback) {
   var el = document.getElementById(id);
   var value = el ? parseFloat(String(el.value || '').replace(/,/g, '')) : NaN;
@@ -237,17 +247,16 @@ function getNutritionInputsFromDOM() {
   // (예전에는 환산이 아예 없어서, 라벨의 "65 g 당 309 kcal" 을 그대로 넣으면
   //  표가 309 x 65/100 = 200 kcal 로 그려졌다. 사용자는 단위량을 100 으로
   //  바꿔 표를 맞췄고, 그러면 총 내용량이 100 g 으로 찍혔다.)
+  // **저장되는 것은 적용값이다.** 화면의 칸에 적힌 것은 계산값이고, 라벨에
+  // 인쇄될 값은 거기에 오차를 물린 것이다. 오차를 안 쓰면 둘이 같다.
   const factor = inputBasisFactor();
+  const adjusted = adjustedNutritionValues();
   const nutritionInputs = {};
-  Object.keys(NUTRITION_DATA).forEach(key => {
-    const input = document.getElementById(key);
-    if (input && input.value && input.value.trim() !== '') {
-      // 쉼표 제거 후 숫자로 변환
-      const numericValue = parseFloat(input.value.replace(/,/g, ''));
-      if (!isNaN(numericValue) && numericValue >= 0) {
-        // 소수점 2자리까지 반올림
-        nutritionInputs[key] = Math.round(numericValue * factor * 100) / 100;
-      }
+  Object.keys(adjusted).forEach(key => {
+    const numericValue = parseFloat(adjusted[key]);
+    if (!isNaN(numericValue) && numericValue >= 0) {
+      // 소수점 2자리까지 반올림
+      nutritionInputs[key] = Math.round(numericValue * factor * 100) / 100;
     }
   });
   return nutritionInputs;
@@ -276,6 +285,7 @@ function buildInputForm() {
         <label for="${key}" class="${data.indent ? 'indent' : ''}">${data.label}</label>
         <input type="text" inputmode="decimal" id="${key}" name="${key}" placeholder="0" data-nutrition-key="${key}">
         <span class="unit-label">${data.unit}</span>
+        <span class="nutrient-derived" data-derived="${key}"></span>
       `;
       basicContainer.appendChild(div);
     });
@@ -291,6 +301,7 @@ function buildInputForm() {
         <label for="${key}">${data.label}</label>
         <input type="text" inputmode="decimal" id="${key}" name="${key}" placeholder="0" data-nutrition-key="${key}">
         <span class="unit-label">${data.unit}</span>
+        <span class="nutrient-derived" data-derived="${key}"></span>
       `;
       additionalContainer.appendChild(div);
     });
@@ -301,6 +312,13 @@ function buildInputForm() {
   // 환산 예시("열량 309 -> 475")를 열량 칸에 맞춰 갱신한다
   var caloriesInput = document.getElementById('calories');
   if (caloriesInput) caloriesInput.addEventListener('input', updateInputBasisNote);
+
+  // 계산값을 고치면 적용값·표시될 값이 그 자리에서 따라간다
+  Object.keys(NUTRITION_DATA).forEach(function (key) {
+    var input = document.getElementById(key);
+    if (input) input.addEventListener('input', refreshDerived);
+  });
+  refreshDerived();
 }
 
 // 쉼표 포맷팅 공통 함수
@@ -510,7 +528,17 @@ function sendNutritionDataToParent() {
         units_per_package: servingsPerPackage,
         nutrition_display_unit: style,
         basic_display_type: basicDisplayType,
-        parallel_display_type: parallelDisplayType
+        parallel_display_type: parallelDisplayType,
+        /* 이론치로 만든 표는 그 자체가 감사 대상이다. 무엇으로 어떻게 냈는지가
+           값과 함께 남아야 한다. 1회 섭취참고량은 고열량·저영양 판정의 분모다. */
+        serving_reference: valueOf('serving_reference'),
+        hieng_kind: valueOf('hieng_kind'),
+        nutrition_source: valueOf('nutrition_source'),
+        nutrition_source_note: valueOf('nutrition_source_note'),
+        nutrition_tolerance: (valueOf('nutrition_source') === 'theory')
+            ? (toleranceSetting().rate > 0
+                ? String(toleranceSetting().rate) : savedTolerance)
+            : ''
       },
       html: document.getElementById('resultDisplay').innerHTML
     }
@@ -734,6 +762,28 @@ function loadExistingData(data) {
       inputBasisEl.value = 'per_100';
       if (typeof window.updateInputBasisNote === 'function') window.updateInputBasisNote();
     }
+
+    /* 산출 방법·1회 섭취참고량·판정 구분을 되살린다.
+     *
+     * **오차는 되살리지 않는다.** 저장된 값은 이미 오차를 물린 적용값이라,
+     * 그 값에 다시 물리면 열 때마다 부푼다(309 -> 475 -> 731 을 낸 것과 같은
+     * 자리다). 지난번에 얼마를 물렸는지는 기억해 두었다가 화면에 적어 주고,
+     * 저장할 때 그대로 다시 남긴다. 새로 물리는 것은 사용자가 오차율을 고쳐
+     * 넣었을 때뿐이다.
+     */
+    [['serving_reference', data.serving_reference],
+     ['hieng_kind', data.hieng_kind],
+     ['nutrition_source', data.nutrition_source],
+     ['nutrition_source_note', data.nutrition_source_note]].forEach(function (pair) {
+      const el = document.getElementById(pair[0]);
+      if (el && pair[1] !== undefined && pair[1] !== null && pair[1] !== '') {
+        el.value = pair[1];
+      }
+    });
+    savedTolerance = String(data.nutrition_tolerance || '');
+    const toleranceInput = document.getElementById('nutrition_tolerance');
+    if (toleranceInput) toleranceInput.value = '0';
+    if (typeof window.updateCalcSource === 'function') window.updateCalcSource();
 
     /* 표시기준 로드.
      *
@@ -1502,6 +1552,211 @@ function normalizeBasicDisplayType(value) {
   return 'total';
 }
 window.normalizeBasicDisplayType = normalizeBasicDisplayType;
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   계산값 → 적용값 → 표시될 값
+
+   사람들이 가진 것은 레시피로 뽑은 **계산값**이다. 규정은 실측값이 표시량에서
+   얼마나 벌어져도 되는지를 한쪽 방향으로만 정해 두었으므로, 안전한 쪽이 성분
+   마다 반대다. 그 방향대로 오차를 물린 것이 **적용값**이고, 표시 단위로
+   반올림해 라벨에 인쇄되는 것이 **표시될 값**이다.
+
+   세 값을 한 줄에 나란히 보여 준다. 어느 것이 어디서 왔는지 눈으로 따라갈 수
+   있어야 사람이 그 표를 책임질 수 있다. 계산은 nutrition_calc.js 가 하고
+   규정 숫자는 서버가 내려준다 — 여기서는 화면에 놓기만 한다.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/** 지금 칸에 적힌 계산값들 (환산·오차 전) */
+function rawNutritionValues() {
+  var out = {};
+  Object.keys(NUTRITION_DATA).forEach(function (key) {
+    var input = document.getElementById(key);
+    if (!input) return;
+    var text = String(input.value || '').replace(/,/g, '').trim();
+    if (text === '') return;
+    var value = parseFloat(text);
+    if (!isNaN(value) && value >= 0) out[key] = value;
+  });
+  return out;
+}
+
+/** 지금 고른 오차. 이론치일 때만 물린다 */
+function toleranceSetting() {
+  var source = document.getElementById('nutrition_source');
+  if (!source || source.value !== 'theory') return { rate: 0, mode: 'up' };
+  var rate = numberFrom('nutrition_tolerance', 0);
+  var mode = document.getElementById('tolerance_mode');
+  return { rate: rate, mode: mode ? mode.value : 'up' };
+}
+
+/**
+ * 계산값에 오차를 물린 값. **늘 계산값에서 출발한다.**
+ *
+ * 적용값에 다시 물리면 두 번 곱해진다 — 입력 기준 환산이 예전에 그렇게 나서
+ * 309 가 475 가 되고 731 이 됐다.
+ */
+function adjustedNutritionValues() {
+  var raw = rawNutritionValues();
+  var setting = toleranceSetting();
+  var out = (window.nutritionCalc && setting.rate)
+      ? window.nutritionCalc.applyTolerance(raw, setting.rate, setting.mode)
+      : Object.assign({}, raw);
+  /* 열량은 오차를 곱하지 않고 **보정한 탄단지로 다시 계산한다.** 따로 부풀리면
+     표 안이 서로 맞지 않는다. 탄단지가 다 있을 때만 손댄다 — 열량만 아는
+     사람의 값을 지우면 안 된다. */
+  if (window.nutritionCalc && setting.rate) {
+    var kcal = window.nutritionCalc.caloriesFromMacros(out);
+    if (kcal !== null) out.calories = kcal;
+  }
+  return out;
+}
+
+/** 성분 줄마다 "→ 적용값 → 표시될 값" 을 적는다 */
+function refreshDerived() {
+  var setting = toleranceSetting();
+  var adjusted = adjustedNutritionValues();
+  var raw = rawNutritionValues();
+  var flow = document.getElementById('cfAdjusted');
+  if (flow) flow.classList.toggle('is-on', setting.rate > 0);
+
+  document.querySelectorAll('[data-derived]').forEach(function (slot) {
+    var key = slot.getAttribute('data-derived');
+    var info = NUTRITION_DATA[key] || {};
+    if (raw[key] === undefined && adjusted[key] === undefined) {
+      slot.innerHTML = '';
+      return;
+    }
+    var value = adjusted[key];
+    var shown = window.processNutritionValue(key, value);
+    var moved = setting.rate > 0 && Math.abs((value || 0) - (raw[key] || 0)) > 1e-9;
+    var mid = moved
+        ? '<b class="nd-adj">' + (Math.round(value * 100) / 100) + '</b>'
+        : '';
+    slot.innerHTML = (mid ? mid + ' <i class="nd-arrow">→</i> ' : '')
+        + '<b class="nd-show">' + shown
+        + (String(shown).indexOf('미만') < 0 ? ' ' + (info.unit || '') : '') + '</b>';
+    slot.title = moved
+        ? '계산값 ' + raw[key] + ' → 오차 반영 ' + value + ' → 표시 ' + shown
+        : '표시될 값 ' + shown;
+  });
+
+  updateToleranceNote(setting);
+  refreshHieng();
+}
+window.refreshDerived = refreshDerived;
+
+/* 규정이 준 폭은 20% 다. 그보다 크게 잡으면 표시값이 사실에서 멀어진다 —
+   허용오차는 표시를 부풀리라고 있는 것이 아니라 측정과 배치의 흔들림을
+   감싸는 폭이다. */
+function updateToleranceNote(setting) {
+  var note = document.getElementById('toleranceNote');
+  if (!note) return;
+  var limit = (window.NUTRITION_RULES || {}).toleranceLimit || 20;
+  if (setting.rate > limit) {
+    note.textContent = '규정이 준 폭은 ' + limit + '% 입니다. 그보다 크게 잡으면 '
+        + '표시값이 사실에서 멀어집니다.';
+    note.className = 'calc-source-note is-warn';
+    return;
+  }
+  if (!setting.rate && savedTolerance) {
+    note.textContent = '아래 값에는 지난번에 물린 ' + savedTolerance
+        + '% 가 이미 들어 있습니다. 다시 물리지 않습니다 — '
+        + '계산값부터 새로 하려면 계산값을 넣고 오차율을 적으세요.';
+    note.className = 'calc-source-note';
+    return;
+  }
+  note.textContent = setting.mode === 'both'
+      ? '이하 성분은 올리고, 이상 성분(탄수화물·단백질 등)은 낮춥니다.'
+      : '당류·지방·포화지방·트랜스지방·콜레스테롤·나트륨만 올립니다. '
+        + '열량은 보정한 탄단지로 다시 계산합니다.';
+  note.className = 'calc-source-note';
+}
+
+/** 산출 방법을 고르면 그에 딸린 칸만 보인다 */
+function updateCalcSource() {
+  var source = document.getElementById('nutrition_source');
+  var theory = source && source.value === 'theory';
+  var toleranceRow = document.getElementById('toleranceRow');
+  var noteRow = document.getElementById('sourceNoteRow');
+  if (toleranceRow) toleranceRow.style.display = theory ? '' : 'none';
+  if (noteRow) noteRow.style.display = (source && source.value) ? '' : 'none';
+  refreshDerived();
+}
+window.updateCalcSource = updateCalcSource;
+
+/**
+ * 고열량·저영양 판정. **1회 제공량 기준**이라 1회 섭취참고량이 있어야 한다.
+ *
+ * 모르는 것과 아닌 것은 다르다 — 값이 비면 아니라고 말하지 않는다.
+ */
+function refreshHieng() {
+  var panel = document.getElementById('hiengPanel');
+  var box = document.getElementById('hiengResult');
+  if (!panel || !box || !window.nutritionCalc) return;
+  panel.style.display = '';
+
+  var kindEl = document.getElementById('hieng_kind');
+  var kind = kindEl ? kindEl.value : '';
+  if (!kind) {
+    box.className = 'hieng-result';
+    box.textContent = '간식용·식사대용을 고르면 「어린이 식생활안전관리 특별법」 '
+        + '기준으로 판정합니다.';
+    return;
+  }
+
+  var reference = numberFrom('serving_reference', 0);
+  if (!(reference > 0)) {
+    box.className = 'hieng-result is-unknown';
+    box.textContent = '1회 섭취참고량을 넣어 주세요. 이 판정은 1회 제공량 기준이라 '
+        + '그 양을 모르면 할 수 없습니다.';
+    return;
+  }
+
+  /* 칸의 값은 입력 기준(아래 값은 …당)을 따른다. 100 g 당으로 맞춘 뒤
+     1회 섭취참고량으로 환산해야 기준과 같은 자리에서 견줄 수 있다. */
+  var factor = inputBasisFactor();
+  var per100 = {};
+  var adjusted = adjustedNutritionValues();
+  Object.keys(adjusted).forEach(function (key) {
+    per100[key] = adjusted[key] * factor;
+  });
+  var perServing = window.nutritionCalc.perServing(per100, 100, reference);
+  var result = window.nutritionCalc.hiengLntrt(perServing || {}, kind);
+
+  var unit = (document.getElementById('serving_size_unit') || {}).value || 'g';
+  var head = '1회 섭취참고량 ' + reference + unit + ' 기준 · ' + (result.kind || '');
+  if (result.verdict === true) {
+    box.className = 'hieng-result is-hit';
+    box.innerHTML = '<b>고열량·저영양 식품에 해당합니다.</b><br>' + head
+        + '<ul><li>' + result.hits.join('</li><li>') + '</li></ul>';
+  } else if (result.verdict === false) {
+    box.className = 'hieng-result is-ok';
+    box.innerHTML = '<b>고열량·저영양 식품이 아닙니다.</b><br>' + head;
+  } else {
+    box.className = 'hieng-result is-unknown';
+    box.textContent = result.why || '판정할 수 없습니다.';
+  }
+}
+window.refreshHieng = refreshHieng;
+
+/* 오차율·기준량을 고치면 그 자리에서 다시 그린다 */
+document.addEventListener('DOMContentLoaded', function () {
+  ['nutrition_tolerance', 'serving_reference', 'serving_size',
+   'units_per_package'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', refreshDerived);
+  });
+  var basis = document.getElementById('nutrition_input_basis');
+  if (basis) basis.addEventListener('change', refreshDerived);
+  var unit = document.getElementById('serving_size_unit');
+  if (unit) {
+    unit.addEventListener('change', function () {
+      var label = document.getElementById('servingReferenceUnit');
+      if (label) label.textContent = unit.value || 'g';
+    });
+  }
+});
 
 window.processNutritionValue = processNutritionValue;
 window.calculateDailyValuePercent = calculateDailyValuePercent;

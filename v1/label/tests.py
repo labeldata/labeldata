@@ -6651,7 +6651,8 @@ class NutritionInputBasisTests(TestCase):
         self.assertIn('inputBasisFactor()', block)
         self.assertIn('numericValue * factor', block)
         # 환산 함수를 부르는 곳은 그 한 곳과 안내 문구뿐이다
-        self.assertEqual(self.js.count('inputBasisFactor()'), 3)   # 정의 + 안내 + 수집
+        # 저장·안내·예시에 더해 고열량·저영양 판정도 같은 환산을 쓴다
+        self.assertEqual(self.js.count('inputBasisFactor()'), 4)
 
     def test_기준량을_모르면_환산하지_않는다(self):
         """분모를 모르면서 곱하면 모든 수치의 뜻이 바뀐다."""
@@ -9723,3 +9724,109 @@ class 고열량_저영양_식품인가(TestCase):
         self.assertIsNone(hieng_lntrt({'calories': 260}, 'snack')['verdict'])
         self.assertIsNone(hieng_lntrt({'proteins': 1}, 'snack')['verdict'])
         self.assertIsNone(hieng_lntrt({'calories': 100}, '')['verdict'])
+
+
+class 계산값에서_표시값까지_한_줄로(TestCase):
+    """
+    사람들이 가진 것은 레시피로 뽑은 계산값이다. 라벨에 인쇄되는 것은 거기에
+    오차를 물리고 반올림한 값이다. 그 사이가 엑셀 안에 있어서, 화면에서는
+    무엇이 어디서 왔는지 볼 수 없었다.
+
+        계산값  ──오차──▶  적용값  ──반올림──▶  표시될 값  ──▶  미리보기
+
+    네 걸음을 화면에 그대로 놓는다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.js = (base / 'static/js/label/nutrition_calc.js').read_text(encoding='utf-8')
+        self.popup = (base / 'static/js/label/nutrition_calculator_popup.js'
+                      ).read_text(encoding='utf-8')
+        self.html = (base / 'templates/label/nutrition_calculator_popup.html'
+                     ).read_text(encoding='utf-8')
+
+    def test_순서를_화면에_적어_둔다(self):
+        for word in ('계산값', '적용값', '표시될 값', '미리보기'):
+            self.assertIn(word, self.html, word)
+        self.assertIn('class="calc-flow"', self.html)
+
+    def test_규정_숫자는_서버에서_온다(self):
+        """두 벌로 적어 두면 어느 날 한쪽만 고쳐진다."""
+        self.assertIn('nutrition-rules-data', self.html)
+        self.assertIn('window.NUTRITION_RULES', self.html)
+        self.assertIn('window.NUTRITION_RULES', self.js)
+        # 계산 파일보다 먼저 놓여야 한다
+        self.assertLess(self.html.index('nutrition-rules-data'),
+                        self.html.index('nutrition_calc.js'))
+        # 규정 숫자를 파일 안에 다시 적어 두지 않는다
+        self.assertNotIn("'sugars', 'fats'", self.js)
+
+    def test_화면과_서버가_같은_계산을_한다(self):
+        """
+        사용자가 값을 넣는 동안 서버를 부를 수 없어 계산이 두 곳에 있다.
+        이름이 같아야 다음 사람이 둘을 함께 고친다.
+        """
+        for name in ('applyTolerance', 'caloriesFromMacros', 'perServing',
+                     'hiengLntrt'):
+            self.assertIn(name, self.js, name)
+        self.assertIn('services/nutrition_calc.py', self.js)
+
+    def test_열량은_탄단지로_다시_계산한다(self):
+        head = self.popup.index('function adjustedNutritionValues')
+        block = self.popup[head:head + 1200]
+        self.assertIn('caloriesFromMacros', block)
+
+    def test_저장되는_것은_적용값이다(self):
+        head = self.popup.index('function getNutritionInputsFromDOM')
+        block = self.popup[head:head + 1200]
+        self.assertIn('adjustedNutritionValues()', block)
+
+    def test_오차를_두_번_물리지_않는다(self):
+        """
+        저장된 값은 이미 적용값이다. 열 때 다시 물리면 열 때마다 부푼다 —
+        입력 기준 환산이 309 를 475 로, 다시 731 로 만든 그 자리다.
+        """
+        self.assertIn('let savedTolerance', self.popup)
+        head = self.popup.index('savedTolerance = String(data.nutrition_tolerance')
+        block = self.popup[head:head + 300]
+        self.assertIn("toleranceInput.value = '0'", block)
+
+    def test_규정이_준_폭을_넘으면_말해_준다(self):
+        head = self.popup.index('function updateToleranceNote')
+        block = self.popup[head:head + 900]
+        self.assertIn('toleranceLimit', block)
+        self.assertIn('사실에서 멀어집니다', block)
+
+    def test_판정은_1회_섭취참고량이_있어야_한다(self):
+        self.assertIn('serving_reference', self.html)
+        head = self.popup.index('function refreshHieng')
+        block = self.popup[head:head + 1600]
+        self.assertIn("numberFrom('serving_reference'", block)
+        self.assertIn('1회 제공량 기준', block)
+
+    def test_모르는_것과_아닌_것을_가른다(self):
+        head = self.popup.index('function refreshHieng')
+        block = self.popup[head:head + 2200]
+        self.assertIn("result.verdict === false", block)
+        self.assertIn('is-unknown', block)
+
+    def test_산출_근거를_함께_저장한다(self):
+        """이론치로 만든 표는 그 자체가 감사 대상이다."""
+        for field in ('nutrition_source', 'nutrition_source_note',
+                      'nutrition_tolerance', 'serving_reference', 'hieng_kind'):
+            self.assertIn(field, self.popup, field)
+            self.assertIn(field, self.html, field)
+
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        views = (Path(dj.BASE_DIR).parent / 'v1/products/views.py').read_text(
+            encoding='utf-8')
+        for field in ('serving_reference', 'hieng_kind', 'nutrition_source',
+                      'nutrition_source_note', 'nutrition_tolerance'):
+            self.assertIn("label.%s = data.get(" % field, views, field)
