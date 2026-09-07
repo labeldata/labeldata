@@ -4430,7 +4430,11 @@ class 칸_너비는_한_규칙으로(TestCase):
         """칸을 옮겨도 그 칸의 너비여야 한다."""
         head = self.js.index('function nameAt')
         self.assertIn('hot.toPhysicalColumn', self.js[head:head + 300])
-        self.assertIn("hot.addHook('afterColumnMove', redraw)", self.js)
+        # 훅 안에서 다시 그리면 Handsontable 이 이동 뒤에 하려던 render 를
+        # 못 한다 — 끌어다 놓은 칸이 제자리로 돌아간 것처럼 보인다
+        self.assertIn("hot.addHook('afterColumnMove', later_redraw)", self.js)
+        self.assertIn('function later_redraw', self.js)
+        self.assertIn('setTimeout(redraw, 0)', self.js)
 
     def test_끌어서_정한_것이_가장_세다(self):
         head = self.js.index('function compute')

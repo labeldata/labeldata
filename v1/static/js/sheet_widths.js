@@ -134,6 +134,21 @@
       hot.render();
     }
 
+    /*
+     * **훅 안에서 다시 그리지 않는다.**
+     *
+     * Handsontable 은 칸을 옮기고 나서 제 손으로 render 와 크기 맞추기를 한다
+     * (dragColumns -> 훅 -> persistentStateSave -> render -> adjustElementsSize).
+     * 그 한가운데서 updateSettings 를 부르면 설정이 통째로 다시 세워지면서
+     * 뒤에 오던 render 가 어그러진다 — **끌어다 놓은 칸이 제자리로 돌아간 것
+     * 처럼 보인다.** 여러 칸을 골라 옮길 때 특히 그렇다.
+     *
+     * 한 박자 뒤로 미룬다. 그때는 옮기기가 끝나 있다.
+     */
+    function later_redraw() {
+      setTimeout(redraw, 0);
+    }
+
     /* 늘린 만큼 표가 넓어질 뿐, 다른 칸은 그대로 둔다. stretchH 가 켜져
        있으면 조절한 그 자리에서 되돌아간다. */
     hot.updateSettings({
@@ -170,11 +185,11 @@
       }
       remember();
       cache = [];        // 끌어 놓은 값을 반드시 다시 반영한다
-      redraw();
+      later_redraw();
     });
 
     // 칸을 옮기면 너비도 따라간다. 자리에 남아 있으면 배합비가 넓어진다
-    hot.addHook('afterColumnMove', redraw);
+    hot.addHook('afterColumnMove', later_redraw);
 
     // 값이 들어오고 나가면 "비어 있는 칸" 이 달라진다
     var dataTimer = null;
