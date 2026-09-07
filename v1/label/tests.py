@@ -10229,7 +10229,7 @@ class 화면에_그린_표와_저장이_같아야_한다(TestCase):
 
     def test_고르는_자리가_있다(self):
         self.assertIn('id="use_tolerance"', self.editor)
-        self.assertIn('표와 저장에 적용값 쓰기', self.editor)
+        self.assertIn('적용값 사용', self.editor)
         self.assertIn('function useApplied', self.editor)
 
     def test_미리보기도_같은_값으로_그린다(self):
@@ -10246,3 +10246,51 @@ class 화면에_그린_표와_저장이_같아야_한다(TestCase):
     def test_안_쓰기로_하면_물린_적이_없는_것이다(self):
         self.assertIn("nutrition_tolerance: useApplied() ? appliedTolerance : ''",
                       self.editor)
+
+
+class 설정을_성격별로_묶는다(TestCase):
+    """
+    한 줄에 단위량·포장개수·1회 섭취참고량·산출 방법·오차·판정이 섞여 있었고
+    그 아래에 안내가 세 줄 쌓여 표를 밀어냈다. 무엇이 무엇에 영향을 주는지
+    보이지 않았다.
+
+        ① 제품 규격   표를 그리는 분모다 (총 내용량 = 단위량 × 포장개수)
+        ② 값의 출처   성적서인가 이론치인가. 이론치면 오차가 따라온다
+        ③ 판정        결과이므로 값 넣는 쪽이 아니라 보는 쪽에 둔다
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.editor = (base / 'templates/products/nutrition_editor.html').read_text(
+            encoding='utf-8')
+        self.css = (base / 'static/css/nutrition_editor.css').read_text(encoding='utf-8')
+
+    def test_세_묶음으로_나뉜다(self):
+        self.assertIn('① 제품 규격', self.editor)
+        self.assertIn('② 값의 출처', self.editor)
+        self.assertIn('class="cfg-group"', self.editor)
+        self.assertIn('.cfg-group {', self.css)
+
+    def test_판정은_보는_쪽에_있다(self):
+        """결과가 표에서 멀면 눈이 오간다."""
+        self.assertLess(self.editor.index('id="grid-container"'),
+                        self.editor.index('id="hieng_kind"'))
+
+    def test_총_내용량을_그_자리에서_보여_준다(self):
+        """이 값이 표의 분모다 — 사람이 곱해 보지 않아도 되게 적어 준다."""
+        self.assertIn('id="totalAmountHint"', self.editor)
+        head = self.editor.index('function warnMissingServingSize')
+        self.assertIn('총 내용량 ', self.editor[head:head + 900])
+
+    def test_긴_설명은_물음표에_둔다(self):
+        """안내가 길면 표가 밀려나고 아무도 안 읽는다."""
+        self.assertIn('class="cfg-why"', self.editor)
+        head = self.editor.index('function refreshApplied')
+        block = self.editor[head:head + 1800]
+        self.assertIn('표와 저장에 적용값', block)
+        # 긴 규정 설명은 화면에 늘어놓지 않는다
+        self.assertNotIn('트랜스지방·콜레스테롤·나트륨만 올리고', block)

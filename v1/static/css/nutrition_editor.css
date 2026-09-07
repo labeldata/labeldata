@@ -62,13 +62,140 @@ body {
     margin-bottom: 12px;
 }
 
-/* ── 설정 섹션 ────────────────────────────────────────────── */
+/* ── 설정 섹션 ──────────────────────────────────────────────
+   성격이 다른 것을 한 줄에 늘어놓으면 무엇이 무엇에 영향을 주는지 안 보인다.
+   묶음마다 띠를 두르고 이름을 붙인다 — ① 제품 규격 ② 값의 출처.
+   판정(③)은 결과라 오른쪽 미리보기 쪽에 있다. */
 .config-section {
-    background: var(--bg-gray);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.cfg-group {
+    flex: 1 1 320px;
+    min-width: 0;
+    background: #fff;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 6px 8px;
-    margin-bottom: 6px;
+    padding: 8px 10px 9px;
+}
+.cfg-legend {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ez-gray-700, #5f6368);
+}
+.cfg-why {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--ez-info-bg, #e8f0fe);
+    color: var(--ez-info-strong, #1558b0);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: help;
+}
+.cfg-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.cfg-row + .cfg-row { margin-top: 6px; }
+.cfg-item { display: inline-flex; align-items: center; gap: 6px; }
+.cfg-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #374151;
+    white-space: nowrap;
+    margin: 0;
+}
+.cfg-num { width: 74px; text-align: right; }
+.cfg-num-sm { width: 52px; text-align: right; }
+.cfg-unit { width: 62px; }
+.cfg-unit-text { font-size: 12.5px; color: #6b7280; }
+.cfg-op { color: var(--ez-gray-500, #9aa0a6); font-size: 12.5px; }
+.cfg-grow { flex: 1 1 200px; min-width: 0; }
+/* 총 내용량은 사람이 곱해 볼 필요가 없다 — 그 자리에서 보여 준다 */
+.cfg-total {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ez-info-strong, #1558b0);
+    white-space: nowrap;
+}
+.cfg-hint { font-size: 11px; color: var(--ez-gray-500, #9aa0a6); }
+.cfg-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 400;
+    color: #374151;
+    cursor: pointer;
+}
+/* 안내는 그 묶음 안에서, 필요할 때만 한 줄 */
+.cfg-note {
+    display: none;
+    margin-top: 7px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: var(--ez-gray-50, #f8f9fa);
+    border: 1px solid var(--ez-gray-200, #e8eaed);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--ez-gray-700, #5f6368);
+}
+.cfg-note.is-warn {
+    background: var(--ez-warning-bg, #fef7e0);
+    border-color: #fadf9a;
+    color: #7a5b06;
+}
+
+/* ③ 판정 — 보는 쪽에 둔다 */
+.hieng-box {
+    margin-top: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.hieng-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--bg-gray);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #374151;
+}
+.hieng-result {
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--ez-gray-700, #5f6368);
+}
+.hieng-result ul { margin: 5px 0 0; padding-left: 18px; }
+.hieng-result.is-ok {
+    background: var(--ez-success-bg, #e6f4ea);
+    color: var(--ez-success-on-bg, #137333);
+}
+.hieng-result.is-hit {
+    background: var(--ez-danger-bg, #fce8e6);
+    color: var(--ez-danger-hover, #a50e0e);
+}
+.hieng-result.is-unknown {
+    background: var(--ez-warning-bg, #fef7e0);
+    color: #7a5b06;
 }
 
 .config-row {
@@ -100,7 +227,9 @@ body {
 }
 
 .config-section .form-control,
-.config-section .form-select {
+.config-section .form-select,
+.cfg-group .form-control,
+.cfg-group .form-select {
     height: 28px;
     min-height: 28px;
     padding: 0 6px;
