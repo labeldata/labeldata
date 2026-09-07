@@ -7270,11 +7270,15 @@ class LabelColumnFitsTests(TestCase):
                      ).read_text(encoding='utf-8')
 
     def test_설정값은_최소값이다(self):
-        """'유통전문판매원' 은 기본 24mm 를 넘는다. 잘린 항목명은 틀린 표시다."""
+        """
+        '유통전문판매원' 은 기본 24mm 를 넘는다. 잘린 항목명은 틀린 표시다.
+        다만 **칸이 담을 수 있는 만큼까지만**이다 — 좁은 라벨에 2단이면
+        설정값 두 칸만으로 표가 넘친다.
+        """
         self.assertIn('항목명 칸 (mm, 최소)', self.html)
         head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
-        block = self.html[head:head + 1600]
-        self.assertIn('Math.max(minPx', block)
+        block = self.html[head:head + 2400]
+        self.assertIn('Math.min(minPx, capPx)', block)
         self.assertIn('cell.scrollWidth', block)
 
     def test_좁혀_두고_잰다(self):
@@ -7807,9 +7811,20 @@ class LabelColumnMeasureTests(TestCase):
     def test_표의_절반을_넘지_않는다(self):
         """항목명이 값보다 넓어지면 읽을 수가 없다 — 그때는 접히는 편이 낫다."""
         head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
-        block = self.html[head:head + 1400]
+        block = self.html[head:head + 2400]
         self.assertIn('0.45', block)
         self.assertIn('Math.min(capPx', block)
+
+    def test_2단_배치는_항목명_칸이_둘이다(self):
+        """
+        하나에 45% 를 주면 둘이 90% 를 가져가고 값 칸 둘이 남은 10% 를 나눈다.
+        글자가 칸을 넘쳐 **표 틀 밖으로 흘렀다** — 폭을 줄일수록 심해진다.
+        """
+        head = self.html.index('const minPx = colMm / 10 * CM_TO_PX;')
+        block = self.html[head:head + 2400]
+        self.assertIn("tbody.layout-horizontal') ? 2 : 1", block)
+        self.assertIn('0.22', block)
+        self.assertIn('usable / pairs', block)
 
 class LabelTextExportTests(TestCase):
     """
@@ -9946,10 +9961,16 @@ class 디자인_의뢰서로_넘긴다(TestCase):
         self.assertIn('window.cellHtmlForDoc', self.js)
         self.assertIn('원산지 굵게', self.js)
 
-    def test_자주_쓰는_문구를_불러온다(self):
-        self.assertIn('/label/api/phrases/?category=all', self.js)
-        self.assertIn('drAddPhraseBtn', self.js)
-        self.assertIn('drPhrase', self.html)
+    def test_여기서는_문구를_고르지_않는다(self):
+        """
+        의뢰서는 표시사항에 **이미 들어간 것**을 담당자에게 넘기려고 한 번
+        확인하는 자리다. 문구를 고르고 담는 일은 기본정보 탭에서 한다 —
+        같은 일을 두 화면에 두면 어느 쪽이 진짜인지 알 수 없게 된다.
+        """
+        self.assertNotIn('phraseChips', self.js)
+        self.assertNotIn('drPhraseChips', self.html)
+        self.assertNotIn('drPhrase" multiple', self.html)
+        self.assertIn('기본정보 탭에서', self.html)
 
     def test_내보내기_메뉴에_있다(self):
         head = self.html.index('exportMenuBtn')
@@ -10149,3 +10170,79 @@ class 계산값을_덮지_않는다(TestCase):
 
         from v1.label.models import MyLabel
         self.assertTrue(hasattr(MyLabel, 'nutrition_calc_values'))
+
+
+class 문구는_한_자리에서만_관리한다(TestCase):
+    """
+    담기·고치기·빼기를 두 화면에서 할 수 있게 해 두면 어디서 무엇을 고쳤는지
+    사람이 좇지 못한다. 표시사항은 기본정보 탭에서 쓰므로 문구도 거기서만
+    관리하고, 의뢰서 창에서는 **고르기만** 한다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        base = Path(dj.BASE_DIR)
+        self.chips = (base / 'static/js/label/my_phrases.js').read_text(encoding='utf-8')
+        self.request_js = (base / 'static/js/label/design_request.js').read_text(
+            encoding='utf-8')
+
+    def test_의뢰서에는_문구_고르는_자리가_없다(self):
+        self.assertNotIn('phraseChips', self.request_js)
+
+    def test_기본정보_탭에서는_그대로_관리한다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        tab = (Path(dj.BASE_DIR) / 'templates/products/_tab_basic_info.html'
+               ).read_text(encoding='utf-8')
+        self.assertIn('data-my-phrases="cautions"', tab)
+        # 관리를 끄지 않았으므로 고침·빼기·추가가 그려진다
+        self.assertNotIn('manage: false', tab)
+
+    def test_아이콘_글꼴에_기대지_않는다(self):
+        """아이콘 글꼴이 없는 화면에서는 빈 네모만 보였다."""
+        self.assertNotIn('fa-pen', self.chips)
+        self.assertNotIn('fa-times', self.chips)
+        self.assertIn("edit.textContent = '고침'", self.chips)
+
+
+class 화면에_그린_표와_저장이_같아야_한다(TestCase):
+    """
+    적용값을 보여만 주고 표에는 계산값을 그렸다. 저장은 적용값으로 하니 화면에서
+    본 표와 라벨에 인쇄될 값이 서로 달랐다 — 이 앱이 여러 번 겪은 사고다
+    (입력 기준 환산, 표시기준 이름, 단위량 100).
+
+    쓸지 말지를 사람이 한 번 고르고, 고른 대로 **표도 저장도 같은 값**을 쓴다.
+    """
+
+    def setUp(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        self.editor = (Path(dj.BASE_DIR) / 'templates/products/nutrition_editor.html'
+                       ).read_text(encoding='utf-8')
+
+    def test_고르는_자리가_있다(self):
+        self.assertIn('id="use_tolerance"', self.editor)
+        self.assertIn('표와 저장에 적용값 쓰기', self.editor)
+        self.assertIn('function useApplied', self.editor)
+
+    def test_미리보기도_같은_값으로_그린다(self):
+        head = self.editor.index('function calculateAndPreview')
+        block = self.editor[head:head + 1200]
+        self.assertIn('appliedValues()', block)
+        self.assertNotIn('getGridNutritionInputs()', block)
+
+    def test_강조표시_판정도_인쇄될_값으로_본다(self):
+        head = self.editor.index('function updateEmphasisColumn')
+        block = self.editor[head:head + 500]
+        self.assertIn('appliedValues()', block)
+
+    def test_안_쓰기로_하면_물린_적이_없는_것이다(self):
+        self.assertIn("nutrition_tolerance: useApplied() ? appliedTolerance : ''",
+                      self.editor)
