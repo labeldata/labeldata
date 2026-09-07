@@ -9956,3 +9956,43 @@ class 디자인_의뢰서로_넘긴다(TestCase):
         block = self.html[head:head + 1600]
         self.assertIn('exportDesignRequestBtn', block)
         self.assertIn('디자인 의뢰서', block)
+
+
+class 표에_당_표기가_없을_때(TestCase):
+    """
+    성분을 두 줄로 나눠 적는 가로형 영양정보에는 "…당" 열 머리가 아예 없다.
+    표 머리의 "총 내용량 133 g / 182 kcal" 이 기준의 전부다.
+
+    그걸 못 읽으면 단위량이 비고, 화면이 그 빈 칸을 100 으로 메우면 133 g
+    짜리 제품의 표가 통째로 100 g 당으로 그려진다 — 사진과 다른 표가 나온다.
+    """
+
+    def test_총_내용량만_적힌_표도_기준으로_읽는다(self):
+        from v1.label.services.ocr_apply import basis_kind, parse_nutrition_basis
+
+        self.assertEqual(basis_kind('총 내용량 133 g'), 'total')
+        self.assertEqual(parse_nutrition_basis('총 내용량 133 g'), ('133', 'g'))
+
+    def test_판독이_그렇게_적도록_일러둔다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        prompt = (Path(dj.BASE_DIR) / 'label/services/ocr_service.py').read_text(
+            encoding='utf-8')
+        self.assertIn('"…당" 이 아예 없는 표', prompt)
+        self.assertIn('비워 두지 마시오', prompt)
+
+    def test_빈_단위량을_100으로_메우지_않는다(self):
+        from pathlib import Path
+
+        from django.conf import settings as dj
+
+        editor = (Path(dj.BASE_DIR) / 'templates/products/nutrition_editor.html'
+                  ).read_text(encoding='utf-8')
+        self.assertNotIn("document.getElementById('serving_size').value = '100'", editor)
+        self.assertIn("data.serving_size || ''", editor)
+
+        views = (Path(dj.BASE_DIR) / 'products/views.py').read_text(encoding='utf-8')
+        self.assertNotIn("data.get('serving_size', '') or '100'", views)
+        self.assertIn("data.get('serving_size') or label.serving_size", views)
