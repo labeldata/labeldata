@@ -214,11 +214,26 @@
       }
     }
 
-    /** 끌어서 만든 너비를 지우고 규칙대로 되돌린다 */
+    /**
+     * 끌어서 만든 너비를 지우고 규칙대로 되돌린다.
+     *
+     * **Handsontable 도 그 값을 따로 쥐고 있다.** manualColumnResize 플러그인이
+     * modifyColWidth 훅에서 제가 저장한 너비를 돌려주는데, 그것이 우리
+     * colWidths 보다 뒤에 온다 — 우리 쪽만 비우면 화면은 그대로다. 실제로
+     * "되돌리기를 눌러도 너비는 안 돌아온다" 는 신고가 그것이었다.
+     */
     return {
       reset: function () {
         overrides = {};
+        var plugin = hot.getPlugin && hot.getPlugin('manualColumnResize');
+        if (plugin && typeof plugin.clearManualSize === 'function') {
+          for (var v = 0; v < hot.countCols(); v++) plugin.clearManualSize(v);
+          if (typeof plugin.saveManualColumnWidths === 'function') {
+            plugin.saveManualColumnWidths();
+          }
+        }
         remember();
+        cache = [];          // 규칙값으로 반드시 다시 그린다
         redraw();
       },
       redraw: redraw,
